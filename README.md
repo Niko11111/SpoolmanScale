@@ -1,37 +1,65 @@
-# OpenSpoolScale
+# SpoolmanScale
 
-> ⚠️ **Work in Progress** – This project is in early development. Updates are coming.
+> ⚠️ **Work in Progress** – Hardware complete, firmware in Beta. Public release coming soon.
 
-**OpenSpoolScale** is an open-source ESP32-based device that combines a filament scale and NFC reader into a single unit, integrating directly with [Spoolman](https://github.com/Donkie/Spoolman).
+**SpoolmanScale** is an open-source ESP32-based filament scale with NFC reader, integrating directly with [Spoolman](https://github.com/Donkie/Spoolman).
 
-Place a spool on the scale, it reads the NFC tag, pulls the spool data from Spoolman, and lets you update the remaining weight or log a drying date – all from a 3.5" touchscreen, no phone needed.
+Place a spool on the scale – it reads the NFC tag, pulls the spool data from Spoolman, and lets you update the remaining weight, log a drying date, or archive empty spools. All from a 3.5" touchscreen. No phone needed.
 
 ---
 
-## Planned Features
+## Status
 
-- 🏷️ Automatic NFC tag reading (PN532) – supports Bambu Lab NFC tags
-- ⚖️ Live weight measurement (HX711 + load cell)
-- 📡 Direct Spoolman REST API integration
-- 📱 On-device touchscreen UI (LVGL on WT32-SC01 Plus)
-- ⚙️ On-screen configuration (Wi-Fi, server URL, scale calibration)
+The hardware is complete: enclosure printed, all components installed, fully assembled and working.
+The firmware is stable. A few important backend features are missing before I'll publish a public beta (see roadmap below).
+
+---
+
+## Features so far
+
+- 🏷️ **Bambu Lab NFC tags** – automatic read & KDF decryption, material/color/vendor shown instantly
+- 🔗 **Third-party spool linking** – place any NTAG sticker → select spool from on-screen list → linked in Spoolman via `extra.tag`
+- ⚖️ **Live weight (NAU7802)** – moving average filter, TARE, live diff vs. Spoolman remaining weight
+- 📡 **Spoolman REST API** – log drying date, update remaining weight, set initial weight, set spool weight (per spool / filament / vendor), archive spools
+- 📱 **Touchscreen UI (LVGL 8.3, 480×320)** – settings menu, confirmation popups, sleep/wake, no-tag timer
+- ⚙️ **On-device settings** – Spoolman IP:Port, scale calibration, bag weight (stored in NVS)
+- 🌙 **Power management** – display dimming after 5 min, deep sleep after 20 min, wake via touch
+
+---
+
+## Hardware
+
+| Component | Model |
+|---|---|
+| MCU + Display | WT32-SC01 Plus (ESP32-S3, 480×320, ST7796) |
+| NFC Reader | PN532 |
+| Scale ADC | NAU7802 (Adafruit) |
+| Touch Controller | FT6336U (built-in) |
+
+---
+
+## Before Public Beta (remaining work)
+
+- [ ] **Wi-Fi setup via UI** – scan networks, enter credentials on-device (currently hardcoded)
+- [ ] **OTA firmware updates** – browser-based upload + partition table restructure
+- [ ] **Info/firmware screen** – version number, instructions
+- [ ] **DE/EN language support**
 
 ---
 
 ## Roadmap
 
-**V1** – Primarily focused on Bambu Lab spools with existing NFC tags
-
-**V2** – Support for writing universal NFC tags (for third-party filaments)
+**V2 (planned after release)**
+- UI overhaul – layout, typography, icons
+- GitHub OTA auto-check
 
 ---
 
 ## Inspiration
 
-This project is inspired by:
-- [PandaBalance 2](https://makerworld.com) by the Makerworld community
+- [PandaBalance 2](https://makerworld.com) by the Makerworld community  
 - [SpoolEase](https://github.com/yanshay/SpoolEase) by yanshay
 
 ---
 
-*Hardware list, wiring diagrams, and firmware coming soon.*
+*Full wiring diagrams, BOM, and build guide will be published with the first public beta.*
