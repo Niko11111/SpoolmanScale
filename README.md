@@ -13,6 +13,12 @@ Place a spool on the scale – it reads the NFC tag, pulls the spool data from S
 The hardware is complete: enclosure printed, all components installed, fully assembled and working.
 The firmware is stable. A few important backend features are missing before I'll publish a public beta (see roadmap below).
 
+<p>
+  <img src="images/SpoolmanScale_1.jpeg" width="48%">
+  <img src="images/SpoolmanScale_2.jpeg" width="48%">
+</p>
+
+
 ---
 
 ## Features so far
