@@ -69,3 +69,5 @@ The firmware is stable. A few important backend features are missing before I'll
 ---
 
 *Full wiring diagrams, BOM, and build guide will be published with the first public beta.*
+
+SpoolmanScale requires a running Spoolman instance accessible on your local network – this is what stores all your spool data.
