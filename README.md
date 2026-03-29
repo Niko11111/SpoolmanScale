@@ -90,6 +90,21 @@ Public beta is planned for **mid-April 2026** – right now I'm on family vacati
 
 ---
 
+## Spoolman Setup
+
+SpoolmanScale uses Spoolman's **extra fields** to store NFC tag UIDs and drying dates.
+The following extra fields need to be defined in your Spoolman settings:
+
+| Field | Type | Used for |
+|---|---|---|
+| `tag` | Text | NFC tag UID (Bambu UUID or NTAG UID) |
+| `last_dryed` | DateTime | Last drying date |
+
+**Recommended add-on: [OpenSpoolMan](https://github.com/drndos/openspoolman)**
+OpenSpoolMan connects to your Bambu printer via MQTT and reads which filament is loaded in which AMS tray. It uses the same `extra.tag` field to identify spools – so if your Bambu spools are already linked in SpoolmanScale, OpenSpoolMan will recognize them instantly without any additional setup. Both tools run alongside each other and complement each other well.
+
+---
+
 ## Inspiration
 
 - [PandaBalance 2](https://makerworld.com) by the Makerworld community
