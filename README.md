@@ -58,6 +58,12 @@ The firmware is stable at **Beta_0.4.38**. A few backend features are missing be
 - 9× M2.5×5 self-tapping screws, 2–4× M2×4.4 self-tapping screws ([something like this](https://a.aliexpress.com/_EyCD3rS))
     - Self-tapping screws are recommended, but standard machine screws (M2.5×5, M2×4) will likely work as well if you have them on hand.
 
+
+## 3D Files
+
+The printable enclosure files will be available soon on MakerWorld:
+👉 [makerworld.com/@FormFollowsF](https://makerworld.com/@FormFollowsF)
+
 ---
 
 ## Before Public Beta (remaining work)
@@ -67,6 +73,11 @@ The firmware is stable at **Beta_0.4.38**. A few backend features are missing be
 - [ ] **Web Flasher** – first-time flash via browser, no IDE needed (USB → GitHub Pages → done)
 - [ ] **Info/firmware screen** – version number, update button, instructions
 - [ ] **DE/EN language support**
+
+
+## Timeline
+
+Public beta is planned for **mid-April 2026** – right now I'm on family vacation 😄
 
 ---
 
