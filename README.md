@@ -98,7 +98,7 @@ The following extra fields need to be defined in your Spoolman settings:
 | Field | Type | Used for |
 |---|---|---|
 | `tag` | Text | NFC tag UID (Bambu UUID or NTAG UID) |
-| `last_dryed` | DateTime | Last drying date |
+| `last_dried` | DateTime | Last drying date |
 
 **Recommended add-on: [OpenSpoolMan](https://github.com/drndos/openspoolman)**
 OpenSpoolMan connects to your Bambu printer via MQTT and reads which filament is loaded in which AMS tray. It uses the same `extra.tag` field to identify spools – so if your Bambu spools are already linked in SpoolmanScale, OpenSpoolMan will recognize them instantly without any additional setup. Both tools run alongside each other and complement each other well.
