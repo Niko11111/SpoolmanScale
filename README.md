@@ -112,6 +112,8 @@ OpenSpoolMan connects to your Bambu printer via MQTT and reads which filament is
 
 ---
 
+💬 **Community & Support:** [Join Discord](https://discord.gg/sWrSQ4Pxj)
+
 *Not affiliated with Spoolman. Uses the Spoolman REST API.*
 
 *Full wiring diagrams, BOM, and build guide will be published with the first public beta.*
