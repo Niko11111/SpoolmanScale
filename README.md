@@ -50,7 +50,7 @@ The firmware is stable at **Beta_0.4.38**. A few backend features are missing be
 | Load Cell | YZC-133 2 kg beam cell (5 kg works as well) | [AliExpress](https://a.aliexpress.com/_EuhhVF2) |
 | Connector Cables | STEMMA QT / JST cables | [AliExpress](https://a.aliexpress.com/_Ezjg6fQ) |
 | Connector Cables (recommended) | Micro JST 1.0 SH 5-pin – for easier assembly and maintenance | [Amazon](https://amzn.eu/d/0aKJ4Va9) |
-| USB-C Extension | 90°, 30 cm | [AliExpress](https://a.aliexpress.com/_EJXbJk8) |
+| USB-C Extension | 90°, 30 cm | still testing a few versions, so all USB-C standards will work |
 
 **Additional materials:**
 - Thin stranded wire in 5 different colors (black, red, yellow, white,~30–40 cm each)
