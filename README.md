@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/logo_2.jpeg" width="300">
+</p>
+
 # SpoolmanScale
 
 > ⚠️ **Work in Progress** – Hardware complete, firmware in Beta. Public release coming soon.
@@ -50,7 +54,7 @@ The firmware is stable at **Beta_0.4.38**. A few backend features are missing be
 | Load Cell | YZC-133 2 kg beam cell (5 kg works as well) | [AliExpress](https://a.aliexpress.com/_EuhhVF2) |
 | Connector Cables | STEMMA QT / JST cables | [AliExpress](https://a.aliexpress.com/_Ezjg6fQ) |
 | Connector Cables (recommended) | Micro JST 1.0 SH 5-pin – for easier assembly and maintenance | [Amazon](https://amzn.eu/d/0aKJ4Va9) |
-| USB-C Extension | 90°, 30 cm | still testing a few versions, so all USB-C standards will work |
+| USB-C Panel Mount 90° Extension | 90°, 30 cm | *still testing – some panel mount extensions lack USB-C PD or data support; more options coming soon* |
 
 **Additional materials:**
 - Thin stranded wire in 5 different colors (black, red, yellow, white,~30–40 cm each)
@@ -118,4 +122,4 @@ OpenSpoolMan connects to your Bambu printer via MQTT and reads which filament is
 
 *Full wiring diagrams, BOM, and build guide will be published with the first public beta.*
 
-💛 **If you find this project useful: You can bye me a coffee** [ko-fi.com/formfollowsfunction](https://ko-fi.com/formfollowsfunction)
+💛 **If you find this project useful: You can buy me a coffee** [ko-fi.com/formfollowsfunction](https://ko-fi.com/formfollowsfunction)
