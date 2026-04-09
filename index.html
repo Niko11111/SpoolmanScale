@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SpoolmanScale – Web Flasher</title>
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #06080f;
+      color: #e8f0ff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .card {
+      background: #0d1525;
+      border: 1px solid #1a3060;
+      border-radius: 16px;
+      padding: 48px 40px;
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 32px;
+      font-weight: 700;
+      color: #28d49a;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+
+    .tagline {
+      color: #4a6fa0;
+      font-size: 15px;
+      margin-bottom: 40px;
+    }
+
+    .steps {
+      text-align: left;
+      margin-bottom: 36px;
+      background: #080d1a;
+      border-radius: 10px;
+      padding: 20px 24px;
+    }
+
+    .steps h3 {
+      color: #c8d8f0;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 14px;
+    }
+
+    .steps ol {
+      padding-left: 20px;
+      color: #4a6fa0;
+      font-size: 14px;
+      line-height: 2;
+    }
+
+    .steps ol li span {
+      color: #c8d8f0;
+    }
+
+    esp-web-install-button {
+      display: block;
+      margin-bottom: 16px;
+    }
+
+    esp-web-install-button::part(button) {
+      background: #1a3020;
+      color: #40c080;
+      border: 1px solid #2a5030;
+      border-radius: 10px;
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.15s;
+    }
+
+    esp-web-install-button::part(button):hover {
+      background: #2a5030;
+    }
+
+    .warning {
+      background: #1a1a08;
+      border: 1px solid #3a2800;
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #f0b838;
+      font-size: 13px;
+      margin-bottom: 28px;
+      text-align: left;
+      line-height: 1.6;
+    }
+
+    .warning strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-top: 28px;
+      flex-wrap: wrap;
+    }
+
+    .links a {
+      color: #4a6fa0;
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.15s;
+    }
+
+    .links a:hover {
+      color: #28d49a;
+    }
+
+    .version {
+      color: #2a4060;
+      font-size: 12px;
+      margin-top: 24px;
+    }
+
+    @media (max-width: 480px) {
+      .card { padding: 32px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">SpoolmanScale</div>
+    <div class="tagline">Filament-Waage mit NFC &amp; Spoolman-Integration</div>
+
+    <div class="steps">
+      <h3>Vor dem Flashen</h3>
+      <ol>
+        <li><span>USB-Kabel</span> an PC anschließen</li>
+        <li>Debug-Board <span>(ZXACC-ESPDB)</span> abstecken</li>
+        <li>Unten auf <span>"Installieren"</span> klicken</li>
+        <li>Port auswählen &amp; bestätigen</li>
+        <li>Nach dem Flash: <span>WiFi einrichten</span> über den Welcome Screen</li>
+      </ol>
+    </div>
+
+    <div class="warning">
+      <strong>⚠ Hinweis zum ersten Flash</strong>
+      Der erste Flash löscht alle gespeicherten Einstellungen (WiFi, Kalibrierung).
+      Diese können danach über das Gerät neu eingegeben werden.
+    </div>
+
+    <esp-web-install-button manifest="manifest.json">
+      <span slot="unsupported">
+        Dieser Browser unterstützt kein WebUSB.<br>
+        Bitte <strong>Chrome</strong> oder <strong>Edge</strong> verwenden.
+      </span>
+      <span slot="not-allowed">
+        Kein USB-Zugriff. Seite über <strong>HTTPS</strong> oder
+        <strong>localhost</strong> aufrufen.
+      </span>
+    </esp-web-install-button>
+
+    <div class="links">
+      <a href="https://github.com/Niko11111/SpoolmanScale" target="_blank">GitHub</a>
+      <a href="https://github.com/Niko11111/SpoolmanScale/releases" target="_blank">Releases</a>
+      <a href="https://ko-fi.com/formfollowsfunction" target="_blank">Ko-fi ☕</a>
+      <a href="https://discord.gg/sWrSQ4Pxj" target="_blank">Discord</a>
+    </div>
+
+    <div class="version">Firmware Beta_0.4.46 &nbsp;·&nbsp; ESP32-S3</div>
+  </div>
+</body>
+</html>
