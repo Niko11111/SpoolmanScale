@@ -17,7 +17,7 @@ Place a spool on the scale – it reads the NFC tag, pulls the spool data from S
 ## Status
 
 The hardware is complete: enclosure printed, all components installed, fully assembled and working.
-The firmware is stable at **Beta_0.4.38**. A few backend features are missing before I'll publish a public beta (see roadmap below).
+The firmware is stable at **Beta_0.4.46**. Public beta is planned for **mid-April 2026**.
 
 ---
 
@@ -32,13 +32,16 @@ The firmware is stable at **Beta_0.4.38**. A few backend features are missing be
 
 ---
 
-## Features so far
+## Features
+
 - 🏷️ **Bambu Lab NFC tags** – automatic read & KDF decryption, material/color/vendor shown instantly
-- 🔗 **Third-party spool linking** – place any NTAG (NFC) sticker → select spool from on-screen list → linked in Spoolman via `extra.tag`
+- 🔗 **Third-party spool linking** – place any NTAG sticker → select spool from on-screen list → linked in Spoolman via `extra.tag`
 - ⚖️ **Live weight (NAU7802)** – moving average filter, TARE, live diff vs. Spoolman remaining weight
 - 📡 **Spoolman REST API** – update remaining weight, set initial weight, set spool weight (per spool / filament / vendor), log drying date, archive spools
 - 📱 **Touchscreen UI (LVGL 8.3, 480×320)** – settings menu, confirmation popups, sleep/wake, no-tag timer
-- ⚙️ **On-device settings** – Spoolman IP:Port, scale calibration, bag weight (stored in NVS)
+- ⚙️ **On-device Wi-Fi setup** – scan networks, enter credentials and Spoolman IP directly on the touchscreen
+- 🔄 **OTA firmware updates** – upload new firmware via browser, no IDE needed
+- ⚡ **Web Flasher** – first-time flash via browser over USB, no IDE needed (link coming soon)
 - 🌙 **Power management** – display dimming, deep sleep, wake via touch
 
 ---
@@ -72,16 +75,17 @@ The printable enclosure files will be available soon on MakerWorld:
 
 ## Before Public Beta (remaining work)
 
-- [ ] **Wi-Fi setup via UI** – scan networks, enter credentials and Spoolman IP on-device (currently hardcoded)
-- [ ] **OTA firmware updates** – browser-based upload + partition table restructure
-- [ ] **Web Flasher** – first-time flash via browser, no IDE needed (USB → GitHub Pages → done)
-- [ ] **Info/firmware screen** – version number, update button, instructions
-- [ ] **DE/EN language support**
+- [ ] **USB-C panel mount extension** – currently testing options; many cables lack full USB-C PD and data support, waiting for the right one
+- [ ] **Enclosure revision** – final adjustments to the case once the USB-C extension is confirmed
+- [ ] **Assembly & wiring guide** – write documentation for hardware assembly, wiring, first flash and basic usage
+- [ ] **Final FW testing** – last round of testing before release
+- [ ] **GitHub Release** – publish `.bin` files and tag the first public release
+- [ ] **maybe DE/EN language support - but probably only german for the first round of public beta**
 
 
 ## Timeline
 
-Public beta is planned for **mid-April 2026** – right now I'm on family vacation 😄
+Public beta is planned for **mid-April 2026**
 
 ---
 
