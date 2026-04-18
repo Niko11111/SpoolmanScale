@@ -4,7 +4,7 @@
 
 # SpoolmanScale
 
-> ⚠️ **Work in Progress** – Hardware complete, firmware in Beta. Public release coming soon.
+> ⚠️ **Work in Progress** – Hardware complete, firmware in Beta. Public release coming soon - **late April 2026**.
 
 **SpoolmanScale** is an open-source ESP32-based filament scale with NFC reader, integrating directly with [Spoolman](https://github.com/Donkie/Spoolman).
 
@@ -16,8 +16,7 @@ Place a spool on the scale – it reads the NFC tag, pulls the spool data from S
 
 ## Status
 
-The hardware is complete: enclosure printed, all components installed, fully assembled and working.
-The firmware is stable at **Beta_0.4.46**. Public beta is planned for **mid-April 2026**.
+Public beta is planned for **late April 2026** – still waiting for a suitable USB-C panel mount extension and making some final firmware improvements.
 
 ---
 
@@ -35,7 +34,9 @@ The firmware is stable at **Beta_0.4.46**. Public beta is planned for **mid-Apri
 ## Features
 
 - 🏷️ **Bambu Lab NFC tags** – automatic read & KDF decryption, material/color/vendor shown instantly
-- 🔗 **Third-party spool linking** – place any NTAG sticker → select spool from on-screen list → linked in Spoolman via `extra.tag`
+- 🔗 **Spool linking** – place any unlinked NFC tag on the scale and SpoolmanScale will guide you through linking it to a spool in your Spoolman library. Browse the filtered spool list right on the touchscreen, tap to confirm, and the tag is linked instantly – material, vendor and color are pulled automatically from Spoolman. You can also enter the Spoolman ID directly.
+  - **Bambu Lab tags** – the spool list is filtered by unlinked spools and matching material type, so you always see the most relevant options first
+  - **Third-party NTAG stickers** – filtered by unlinked spools, with vendor selection available on-screen to help narrow things down
 - ⚖️ **Live weight (NAU7802)** – moving average filter, TARE, live diff vs. Spoolman remaining weight
 - 📡 **Spoolman REST API** – update remaining weight, set initial weight, set spool weight (per spool / filament / vendor), log drying date, archive spools
 - 📱 **Touchscreen UI (LVGL 8.3, 480×320)** – settings menu, confirmation popups, sleep/wake, no-tag timer
@@ -80,12 +81,11 @@ The printable enclosure files will be available soon on MakerWorld:
 - [ ] **Assembly & wiring guide** – write documentation for hardware assembly, wiring, first flash and basic usage
 - [ ] **Final FW testing** – last round of testing before release
 - [ ] **GitHub Release** – publish `.bin` files and tag the first public release
-- [ ] **maybe DE/EN language support - but probably only german for the first round of public beta**
-
+- [ ] **DE/EN language support** – initial beta will be German only; English will follow once the first users have had a chance to test and give feedback
 
 ## Timeline
 
-Public beta is planned for **mid-April 2026**
+Public beta is planned for **late April 2026** – still waiting for a suitable USB-C panel mount extension and making some final firmware improvements.
 
 ---
 
