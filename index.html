@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -142,34 +142,35 @@
 </head>
 <body>
   <div class="card">
+    <img src="Logo_300x300.png" alt="SpoolmanScale Logo" width="150" height="150" style="margin-bottom: 16px; border-radius: 12px;">
     <div class="logo">SpoolmanScale</div>
-    <div class="tagline">Filament-Waage mit NFC &amp; Spoolman-Integration</div>
+    <div class="tagline">Filament Scale with NFC &amp; Spoolman Integration</div>
 
     <div class="steps">
-      <h3>Vor dem Flashen</h3>
+      <h3>Before Flashing</h3>
       <ol>
-        <li><span>USB-Kabel</span> an PC anschließen</li>
-        <li>Debug-Board <span>(ZXACC-ESPDB)</span> abstecken</li>
-        <li>Unten auf <span>"Installieren"</span> klicken</li>
-        <li>Port auswählen &amp; bestätigen</li>
-        <li>Nach dem Flash: <span>WiFi einrichten</span> über den Welcome Screen</li>
+        <li>Connect <span>USB cable</span> to PC</li>
+        <li>Disconnect debug board <span>(ZXACC-ESPDB)</span></li>
+        <li>Click <span>"Install"</span> below</li>
+        <li>Select port &amp; confirm</li>
+        <li>After flashing: <span>set up WiFi</span> via the Welcome Screen</li>
       </ol>
     </div>
 
     <div class="warning">
-      <strong>⚠ Hinweis zum ersten Flash</strong>
-      Der erste Flash löscht alle gespeicherten Einstellungen (WiFi, Kalibrierung).
-      Diese können danach über das Gerät neu eingegeben werden.
+      <strong>⚠ Note on First Flash</strong>
+      The first flash will erase all saved settings (WiFi, calibration).
+      These can be re-entered on the device afterwards.
     </div>
 
     <esp-web-install-button manifest="manifest.json">
       <span slot="unsupported">
-        Dieser Browser unterstützt kein WebUSB.<br>
-        Bitte <strong>Chrome</strong> oder <strong>Edge</strong> verwenden.
+        This browser does not support WebUSB.<br>
+        Please use <strong>Chrome</strong> or <strong>Edge</strong>.
       </span>
       <span slot="not-allowed">
-        Kein USB-Zugriff. Seite über <strong>HTTPS</strong> oder
-        <strong>localhost</strong> aufrufen.
+        No USB access. Open this page via <strong>HTTPS</strong> or
+        <strong>localhost</strong>.
       </span>
     </esp-web-install-button>
 
@@ -180,7 +181,7 @@
       <a href="https://discord.gg/sWrSQ4Pxj" target="_blank">Discord</a>
     </div>
 
-    <div class="version">Firmware Beta_0.4.46 &nbsp;·&nbsp; ESP32-S3</div>
+    <div class="version">Firmware Beta_0.5.0 &nbsp;·&nbsp; ESP32-S3</div>
   </div>
 </body>
 </html>
