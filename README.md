@@ -4,7 +4,7 @@
 
 # SpoolmanScale
 
-> ⚠️ **Work in Progress** – Hardware complete, firmware in Beta. Public release coming soon - **late April 2026**.
+> ⚠️ **Work in Progress** – Hardware complete, Public Beta firmware ready. Public Beta release coming soon - **late April 2026**.
 
 **SpoolmanScale** is an open-source ESP32-based filament scale with NFC reader, integrating directly with [Spoolman](https://github.com/Donkie/Spoolman).
 
@@ -16,8 +16,7 @@ Place a spool on the scale – it reads the NFC tag, pulls the spool data from S
 
 ## Status
 
-Public beta is planned for **late April 2026** – still waiting for a suitable USB-C panel mount extension and making some final firmware improvements.
-
+Public beta is planned for **late April 2026** – still waiting for a suitable USB-C panel mount extension. The firmware has seen massive progress over the past days – DE/EN language support, a completely redesigned main screen, guided first-boot setup, and automatic Spoolman extra field configuration are all done. The public beta is close.
 ---
 
 
@@ -39,11 +38,16 @@ Public beta is planned for **late April 2026** – still waiting for a suitable 
   - **Third-party NTAG stickers** – filtered by unlinked spools, with vendor selection available on-screen to help narrow things down
 - ⚖️ **Live weight (NAU7802)** – moving average filter, TARE, live diff vs. Spoolman remaining weight
 - 📡 **Spoolman REST API** – update remaining weight, set initial weight, set spool weight (per spool / filament / vendor), log drying date, archive spools
-- 📱 **Touchscreen UI (LVGL 8.3, 480×320)** – settings menu, confirmation popups, sleep/wake, no-tag timer
+- 📱 **Redesigned touchscreen UI (LVGL 8.3, 480×320)** – new 5-zone main screen layout with detailed filament info, color swatch, live weight zones, and a "More Info" filament screen
+- 🌐 **DE/EN language support** – full interface in German and English, switchable at any time in settings
+  - The language system is built to be extensible – additional languages can be contributed by the community
+- 🚀 **Guided first-boot setup** – on first power-on, SpoolmanScale walks you through language selection, Wi-Fi, Spoolman IP, and scale calibration step by step
+- 🔧 **Automatic Spoolman extra field setup** – SpoolmanScale checks if the required extra fields exist in Spoolman and adds them automatically if not
 - ⚙️ **On-device Wi-Fi setup** – scan networks, enter credentials and Spoolman IP directly on the touchscreen
 - 🔄 **OTA firmware updates** – upload new firmware via browser, no IDE needed
-- ⚡ **Web Flasher** – first-time flash via browser over USB, no IDE needed (link coming soon)
+- ⚡ **Web Flasher** – first-time flash via browser over USB, no IDE needed ([niko11111.github.io/SpoolmanScale](https://niko11111.github.io/SpoolmanScale))
 - 🌙 **Power management** – display dimming, deep sleep, wake via touch
+
 
 ---
 
@@ -78,10 +82,9 @@ The printable enclosure files will be available soon on MakerWorld:
 
 - [ ] **USB-C panel mount extension** – currently testing options; many cables lack full USB-C PD and data support, waiting for the right one
 - [ ] **Enclosure revision** – final adjustments to the case once the USB-C extension is confirmed
-- [ ] **Assembly & wiring guide** – write documentation for hardware assembly, wiring, first flash and basic usage
-- [ ] **Final FW testing** – last round of testing before release
+- [ ] **Assembly & wiring guide** – documentation for hardware assembly, wiring, first flash and basic usage
+- [ ] **Final firmware testing** – last round of testing before release
 - [ ] **GitHub Release** – publish `.bin` files and tag the first public release
-- [ ] **DE/EN language support** – initial beta will be German only; English will follow once the first users have had a chance to test and give feedback
 
 ## Timeline
 
@@ -89,19 +92,36 @@ Public beta is planned for **late April 2026** – still waiting for a suitable 
 
 ---
 
+## 🙋 Early Adopters & Feedback
+
+If you're one of the first to build and test SpoolmanScale, I'd love to hear your feedback! I only have one non-Bambu spool myself, and all my Bambu spools were already linked in Spoolman – so I'm especially curious how well the spool linking flow works with a larger number of unlinked spools, both Bambu Lab and third-party via NFC tag stickers. If you have many unlinked spools, your feedback would be incredibly valuable.
+
+👉 Join the [Discord](https://discord.gg/sWrSQ4Pxj) and share your experience!
+
+---
+
+## Known Issues
+
+These are known limitations in the current beta – nothing critical, but worth being aware of:
+
+- **Occasional reboots when navigating between screens** – related to the LVGL overlay architecture and the ESP32 watchdog timer. Happens rarely and the device recovers on its own.
+- **Crash when wrong Spoolman IP is entered** – the HTTP client blocks the UI loop long enough for the watchdog to trigger. Workaround: make sure the correct IP is entered before proceeding past the setup screen. A proper fix is planned for a post-release update.
+
+---
+
 ## Roadmap
 
-**V1.x (planned after release)**
-- Non-Bambu spools linked via standard NFC tag are already working – even deeper integration is planned
-- UI overhaul – layout, typography, icons
+**V0.x (planned after release)**
 - GitHub OTA auto-check
+- FW and UI tweaks
+- User feedback might bring up things I did not think about
 
 ---
 
 ## Spoolman Setup
 
 SpoolmanScale uses Spoolman's **extra fields** to store NFC tag UIDs and drying dates.
-The following extra fields need to be defined in your Spoolman settings:
+The required extra fields are created automatically on first connection – no manual setup needed.
 
 | Field | Type | Used for |
 |---|---|---|
