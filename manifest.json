@@ -1,6 +1,6 @@
 {
   "name": "SpoolmanScale",
-  "version": "0.5.0-beta",
+  "version": "0.5.2-beta",
   "home_assistant_domain": null,
   "funding_url": "https://ko-fi.com/formfollowsfunction",
   "new_install_prompt_erase": true,
