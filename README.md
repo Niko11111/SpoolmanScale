@@ -184,6 +184,11 @@ Connect the four wires of the YZC-133 load cell to the NAU7802 screw terminals:
 
 > If the scale shows negative values, the signal wires are reversed — swap A+ and A−.
 
+### USB-C Plug
+
+The USB-C panel mount extension needs to be trimmed before installation. Using a utility knife, carefully shorten the connector housing little by little until it no longer protrudes beyond the edge of the display. Take your time – small cuts at a time. Once flush, it will fit cleanly into the enclosure.
+
+### Pictures
 
 <img src="images/spoolmanscale_assembly_1.jpeg" width="400"> <img src="images/spoolmanscale_assembly_2.jpeg" width="400">
 <img src="images/spoolmanscale_assembly_3.jpeg" width="400"> <img src="images/spoolmanscale_assembly_4.jpeg" width="400">
