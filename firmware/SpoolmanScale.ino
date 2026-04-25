@@ -1,7 +1,7 @@
 // ============================================================
 //  SpoolmanScale – Bambu NFC Tag Reader & Decoder
 //  Board:   WT32-SC01 Plus (ESP32-S3)
-//  Version: v0.5.1-beta
+//  Version: v0.5.2-beta
 //
 //  Reads Bambu Lab MIFARE Classic tags, derives keys via KDF
 //  (HKDF/SHA256, master key from Bambu-Research-Group/RFID-Tag-Guide),
@@ -38,6 +38,22 @@
 #include <WebServer.h>
 #include <Update.h>
 #include <ArduinoJson.h>
+
+// PSRAM allocator for ArduinoJson — used for large JSON documents (Spoolman spool list)
+// Frees internal RAM for LVGL, WiFi stack, and other allocations
+struct SpiRamAllocator : ArduinoJson::Allocator {
+  void* allocate(size_t size) override {
+    void* ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
+    if (!ptr) ptr = malloc(size);  // fallback to internal RAM if PSRAM fails
+    return ptr;
+  }
+  void deallocate(void* pointer) override { heap_caps_free(pointer); }
+  void* reallocate(void* ptr, size_t new_size) override {
+    void* p = heap_caps_realloc(ptr, new_size, MALLOC_CAP_SPIRAM);
+    if (!p) p = realloc(ptr, new_size);  // fallback
+    return p;
+  }
+};
 #include <time.h>
 #include <esp_sleep.h>
 #include <Preferences.h>
@@ -52,6 +68,7 @@ void resetActivityTimer();
 void isoToDe(const char* iso, char* out, size_t len);
 void driedDisplayStr(const char* de_date, char* out, size_t len);
 void querySpoolman(const char* tray_uuid);
+void querySpoolmanById(int spool_id);
 void closeConfirmPopup();
 void patchSpoolWeight(float spool_w);
 void patchFilamentSpoolWeight(float spool_w);
@@ -154,7 +171,7 @@ static int     bright_normal   = BRIGHT_NORMAL_DEFAULT;
 static int     dim_timeout_ms  = DIM_TIMEOUT_DEFAULT;
 static int     sleep_timeout_ms = SLEEP_TIMEOUT_DEFAULT;
 #define TOUCH_INT_PIN       7   // FT6336U INT fuer Wake-Up
-#define FW_VERSION  "v0.5.1-beta"
+#define FW_VERSION  "v0.5.2-beta"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // NAU7802 calibration
@@ -4983,8 +5000,19 @@ void fetchAllSpoolsForLink() {
   String payload = http.getString();
   http.end();
 
-  DynamicJsonDocument doc(65536);
-  if (deserializeJson(doc, payload)) return;
+  StaticJsonDocument<384> filterL;
+  JsonArray filterL_arr = filterL.to<JsonArray>();
+  JsonObject fL = filterL_arr.createNestedObject();
+  fL["id"] = true;
+  fL["remaining_weight"] = true;
+  fL["extra"]["tag"] = true;
+  fL["filament"]["name"] = true;
+  fL["filament"]["material"] = true;
+  fL["filament"]["weight"] = true;
+  fL["filament"]["color_hex"] = true;
+  fL["filament"]["vendor"]["name"] = true;
+  DynamicJsonDocument doc(32768);
+  if (deserializeJson(doc, payload, DeserializationOption::Filter(filterL))) return;
 
   JsonArray spools = doc.as<JsonArray>();
   for (JsonObject spool : spools) {
@@ -5076,16 +5104,16 @@ void doLinkPatch(int spool_id, bool is_bambu) {
   if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
   if (scr_link_list)   { lv_obj_del(scr_link_list);   scr_link_list   = nullptr; }
 
-  // Re-query Spoolman
-  link_popup_dismissed = false;  // nach erfolgreicher Verknuepfung zuruecksetzen
+  // Re-query Spoolman — use single-spool endpoint since we know the ID
+  link_popup_dismissed = false;
   if (is_bambu) {
     spoolman_queried_uid[0] = '\0';
-    querySpoolman(g_tag.tray_uuid);
+    querySpoolmanById(spool_id);
   } else {
     strncpy(g_tag.uid_str, link_tag_uid, sizeof(g_tag.uid_str)-1);
     strncpy(g_tag.tray_uuid, link_tag_uid, sizeof(g_tag.tray_uuid)-1);
     spoolman_queried_uid[0] = '\0';
-    querySpoolman(link_tag_uid);
+    querySpoolmanById(spool_id);
   }
   Serial.printf("Linking complete! ID=%d\n", spool_id);
 }
@@ -7849,6 +7877,147 @@ void wifiConnect() {
 }
 
 // ============================================================
+//  SPOOLMAN QUERY BY ID
+//  Used after link-flow — fetches only one spool by ID.
+//  Fills same globals and labels as querySpoolman().
+// ============================================================
+void querySpoolmanById(int spool_id) {
+  if (!wifi_ok) return;
+  Serial.printf("querySpoolmanById: ID=%d\n", spool_id);
+
+  HTTPClient http;
+  http.begin(String(cfg_spoolman_base) + "/api/v1/spool/" + spool_id);
+  http.setTimeout(8000);
+  int code = http.GET();
+  if (code != 200) {
+    Serial.printf("querySpoolmanById HTTP error: %d\n", code);
+    http.end();
+    return;
+  }
+  String payload = http.getString();
+  http.end();
+
+  DynamicJsonDocument doc(8192);
+  if (deserializeJson(doc, payload)) {
+    Serial.println("querySpoolmanById: JSON error");
+    return;
+  }
+
+  JsonObject spool = doc.as<JsonObject>();
+  bool is_bambu_tag = (strlen(g_tag.material) > 0);
+
+  sm_found        = true;
+  sm_id           = spool["id"] | 0;
+  sm_filament_id  = spool["filament"]["id"] | 0;
+  sm_vendor_id    = spool["filament"]["vendor"]["id"] | 0;
+  sm_remaining    = spool["remaining_weight"] | 0.0f;
+  sm_total        = spool["filament"]["weight"] | 1000.0f;
+  sm_spool_weight = spool["spool_weight"] | 0.0f;
+
+  String art_nr = spool["filament"]["article_number"] | "";
+  art_nr.trim();
+  strncpy(sm_article_nr, art_nr.c_str(), sizeof(sm_article_nr)-1);
+
+  String fil_name = spool["filament"]["name"] | String("");
+  fil_name.trim();
+  strncpy(sm_filament_name, fil_name.c_str(), sizeof(sm_filament_name)-1);
+
+  // last_dried
+  sm_last_dried[0] = '\0';
+  if (spool.containsKey("extra") && spool["extra"].containsKey("last_dried")) {
+    String dried = spool["extra"]["last_dried"].as<String>();
+    dried.replace("\"", "");
+    String iso = dried.substring(0, 10);
+    char de_date[12];
+    isoToDe(iso.c_str(), de_date, sizeof(de_date));
+    strncpy(sm_last_dried, de_date, sizeof(sm_last_dried)-1);
+  } else {
+    strncpy(sm_last_dried, "-", sizeof(sm_last_dried)-1);
+  }
+
+  // Material, vendor, color — only for NTAG (Bambu has it from tag itself)
+  String sm_material = spool["filament"]["material"] | String("");
+  sm_material.trim();
+  String sm_vendor_name = "";
+  if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull()) {
+    sm_vendor_name = spool["filament"]["vendor"]["name"] | String("");
+    sm_vendor_name.trim();
+  }
+  String sm_color = spool["filament"]["color_hex"] | String("");
+  sm_color.trim();
+
+  bool is_ntag = !is_bambu_tag;
+  if (is_ntag) {
+    lv_label_set_text(lbl_material, sm_material.length() > 0 ? sm_material.c_str() : "-");
+    lv_label_set_text(lbl_vendor,   sm_vendor_name.length() > 0 ? sm_vendor_name.c_str() : "-");
+    strncpy(sm_material_global, sm_material.c_str(), sizeof(sm_material_global)-1);
+    sm_material_global[sizeof(sm_material_global)-1] = '\0';
+    strncpy(sm_color_global, sm_color.c_str(), sizeof(sm_color_global)-1);
+    sm_color_global[sizeof(sm_color_global)-1] = '\0';
+    if (sm_color.length() >= 6) {
+      String hex = sm_color;
+      if (hex.startsWith("#")) hex = hex.substring(1);
+      unsigned int r, g, b;
+      sscanf(hex.c_str(), "%02X%02X%02X", &r, &g, &b);
+      uint32_t col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+      lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(col), 0);
+    }
+  }
+
+  // Update display labels
+  char weight_str[32];
+  snprintf(weight_str, sizeof(weight_str), "%.0f g", sm_remaining);
+  lv_label_set_text(lbl_spoolman_weight, weight_str);
+  float pct = (sm_total > 0) ? (sm_remaining / sm_total) * 100.0f : 0;
+  uint32_t pct_color;
+  if (pct <= 10.0f)      pct_color = 0xe04040;
+  else if (pct <= 30.0f) pct_color = 0xf0b838;
+  else                   pct_color = 0x28d49a;
+  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(pct_color), 0);
+
+  char pct_str[16];
+  snprintf(pct_str, sizeof(pct_str), "%.1f %%", pct);
+  lv_label_set_text(lbl_spoolman_pct, pct_str);
+  lv_obj_set_style_text_color(lbl_spoolman_pct, lv_color_hex(pct_color), 0);
+
+  if (lbl_scale_diff) {
+    int bar_w = (int)((pct / 100.0f) * 190.0f);
+    if (bar_w < 0) bar_w = 0;
+    if (bar_w > 190) bar_w = 190;
+    lv_obj_set_width(lbl_scale_diff, bar_w);
+    lv_obj_set_style_bg_color(lbl_scale_diff, lv_color_hex(pct_color), 0);
+  }
+
+  char sm_id_str[16];
+  snprintf(sm_id_str, sizeof(sm_id_str), "%d", sm_id);
+  lv_label_set_text(lbl_spoolman_id, sm_id_str);
+  lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0x28d49a), 0);
+
+  char dried_display[48];
+  driedDisplayStr(sm_last_dried, dried_display, sizeof(dried_display));
+  lv_label_set_text(lbl_spoolman_dried_val, dried_display);
+
+  lv_label_set_text(lbl_detail,        strlen(sm_article_nr)    > 0 ? sm_article_nr    : "-");
+  lv_label_set_text(lbl_filament_name, strlen(sm_filament_name) > 0 ? sm_filament_name : "-");
+
+  // last_used
+  if (spool.containsKey("last_used") && !spool["last_used"].isNull()) {
+    String lu = spool["last_used"].as<String>();
+    char de_lu[12];
+    isoToDe(lu.substring(0, 10).c_str(), de_lu, sizeof(de_lu));
+    strncpy(sm_last_used, de_lu, sizeof(sm_last_used)-1);
+  } else {
+    strncpy(sm_last_used, "-", sizeof(sm_last_used)-1);
+  }
+  char last_used_display[48];
+  lastUsedDisplayStr(sm_last_used, last_used_display, sizeof(last_used_display));
+  lv_label_set_text(lbl_last_used, last_used_display);
+
+  Serial.printf("querySpoolmanById OK: ID=%d %.1fg dried=%s\n", sm_id, sm_remaining, sm_last_dried);
+  updateLinkButton();
+}
+
+// ============================================================
 //  SPOOLMAN QUERY
 //  Finds spool by tray_uuid in extra.tag field
 // ============================================================
@@ -7889,6 +8058,7 @@ void querySpoolman(const char* tray_uuid) {
   lv_timer_handler();
 
   HTTPClient http;
+  Serial.printf("DBG free heap: %d bytes  free PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
   http.begin(String(cfg_spoolman_base) + "/api/v1/spool");
   http.setTimeout(8000);
   int code = http.GET();
@@ -7899,11 +8069,37 @@ void querySpoolman(const char* tray_uuid) {
     return;
   }
 
-  String payload = http.getString();
-  http.end();
+  // Filter: only parse needed fields — reduces RAM, works with 100+ spools
+  // Filter must be Array-wrapped to match the API array response structure
+  StaticJsonDocument<512> filter;
+  JsonArray filter_arr = filter.to<JsonArray>();
+  JsonObject filter_spool = filter_arr.createNestedObject();
+  filter_spool["id"] = true;
+  filter_spool["archived"] = true;
+  filter_spool["remaining_weight"] = true;
+  filter_spool["spool_weight"] = true;
+  filter_spool["last_used"] = true;
+  filter_spool["extra"]["tag"] = true;
+  filter_spool["extra"]["last_dried"] = true;
+  filter_spool["filament"]["id"] = true;
+  filter_spool["filament"]["name"] = true;
+  filter_spool["filament"]["material"] = true;
+  filter_spool["filament"]["weight"] = true;
+  filter_spool["filament"]["article_number"] = true;
+  filter_spool["filament"]["color_hex"] = true;
+  filter_spool["filament"]["vendor"]["id"] = true;
+  filter_spool["filament"]["vendor"]["name"] = true;
 
-  DynamicJsonDocument doc(65536);
-  if (deserializeJson(doc, payload)) {
+  // Stream directly from HTTP — avoids allocating a 40KB+ String in RAM
+  WiFiClient* stream = http.getStreamPtr();
+  // Use PSRAM for this document — frees internal RAM for LVGL
+  SpiRamAllocator psram_alloc;
+  JsonDocument doc(&psram_alloc);
+  DeserializationError err = deserializeJson(doc, *stream, DeserializationOption::Filter(filter));
+  http.end();
+  Serial.printf("DBG free heap after parse: %d bytes  free PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
+  if (err) {
+    Serial.printf("Spoolman JSON error: %s\n", err.c_str());
     lv_label_set_text(lbl_spoolman_weight, T(STR_LINK_JSON_ERR));
     return;
   }
@@ -8053,10 +8249,15 @@ void querySpoolman(const char* tray_uuid) {
   http2.setTimeout(8000);
   int code2 = http2.GET();
   if (code2 == 200) {
-    String payload2 = http2.getString();
-    http2.end();
-    DynamicJsonDocument doc2(65536);
-    if (!deserializeJson(doc2, payload2)) {
+    DynamicJsonDocument doc2(16384);
+    StaticJsonDocument<256> filter2;
+    JsonArray filter2_arr = filter2.to<JsonArray>();
+    JsonObject f2 = filter2_arr.createNestedObject();
+    f2["id"] = true;
+    f2["archived"] = true;
+    f2["extra"]["tag"] = true;
+    WiFiClient* stream2 = http2.getStreamPtr();
+    if (!deserializeJson(doc2, *stream2, DeserializationOption::Filter(filter2))) {
       JsonArray spools2 = doc2.as<JsonArray>();
       for (JsonObject spool : spools2) {
         // Only check truly archived spools (explicit bool cast needed for JsonVariant)
@@ -8086,6 +8287,7 @@ void querySpoolman(const char* tray_uuid) {
         return;
       }
     }
+    http2.end();
   } else {
     http2.end();
   }
@@ -8133,7 +8335,7 @@ void handlePowerManagement() {
 void setup() {
   Serial.begin(115200);
   delay(500);
-  Serial.println("=== SpoolmanScale v0.5.1-beta ===");
+  Serial.println("=== SpoolmanScale " FW_VERSION " ===");
   Serial.println("KDF Master: 9a759cf2c4f7caff222cb9769b41bc96");
   Serial.println("Context:    RFID-B");
 
