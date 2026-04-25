@@ -40,7 +40,8 @@ Currently tested with a Spoolman library of 150+ active spools and running stabl
 * 📡 **Spoolman REST API** – update remaining weight, set initial weight, set spool weight (per spool / filament / vendor), log drying date, archive spools
 * 📱 **Touchscreen UI (LVGL 8.3, 480×320)** – settings menu, confirmation popups, sleep/wake, no-tag timer
 * ⚙️ **On-device Wi-Fi setup** – scan networks, enter credentials and Spoolman IP directly on the touchscreen
-* 🔄 **OTA firmware updates** – upload new firmware via browser, or update directly from GitHub releases – no IDE needed
+* 🔄 **Automatic firmware updates (OTA)**
+SpoolmanScale checks for new firmware releases on GitHub automatically. If an update is available, you'll see a notification on the device and can install it with a single tap, or upload it via browser – no IDE, no cables, no computer needed.
 * ⚡ **Web Flasher** – first-time flash via browser over USB, no IDE needed: [niko11111.github.io/SpoolmanScale](https://niko11111.github.io/SpoolmanScale)
 * 🌍 **DE / EN language support** – language selection on first boot, switchable in settings
 * 🌙 **Power management** – display dimming, deep sleep, wake via touch
