@@ -1,7 +1,7 @@
 // ============================================================
 //  SpoolmanScale – Bambu NFC Tag Reader & Decoder
 //  Board:   WT32-SC01 Plus (ESP32-S3)
-//  Version: v0.5.0-beta
+//  Version: v0.5.1-beta
 //
 //  Reads Bambu Lab MIFARE Classic tags, derives keys via KDF
 //  (HKDF/SHA256, master key from Bambu-Research-Group/RFID-Tag-Guide),
@@ -154,7 +154,7 @@ static int     bright_normal   = BRIGHT_NORMAL_DEFAULT;
 static int     dim_timeout_ms  = DIM_TIMEOUT_DEFAULT;
 static int     sleep_timeout_ms = SLEEP_TIMEOUT_DEFAULT;
 #define TOUCH_INT_PIN       7   // FT6336U INT fuer Wake-Up
-#define FW_VERSION  "v0.5.0-beta"
+#define FW_VERSION  "v0.5.1-beta"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // NAU7802 calibration
@@ -248,6 +248,7 @@ static lv_color_t disp_buf[480 * 10];
 
 Adafruit_PN532 nfc(-1, 12, &I2C_EXT);  // IRQ=nicht verdrahtet, RST=GPIO12, Bus=I2C_EXT
 bool nfc_ok = false;
+bool scl_ok = false;          // NAU7802 scale connected
 
 // Parsed tag data
 struct BambuTagData {
@@ -470,6 +471,7 @@ lv_obj_t *lbl_spoolman_dried_val;  // NEU: Wert unter dem Titel
 lv_obj_t *lbl_nfc_dot;            // Status dot before status line (green/yellow)
 lv_obj_t *lbl_hdr_wifi;          // Header: WiFi-Symbol (Farbe je RSSI)
 lv_obj_t *lbl_hdr_nfc;           // Header: NFC status (green/red)
+lv_obj_t *lbl_hdr_scl = nullptr; // Header: Scale/NAU7802 status (green/red)
 lv_obj_t *lbl_hdr_scans;         // Header: scan counter (dim)
 lv_obj_t *lbl_hdr_sm = nullptr;  // Header: Spoolman reachability status
 lv_obj_t *lbl_bag_sm_diff = nullptr; // Zone 4: ohne-Beutel vs SM diff
@@ -6772,6 +6774,13 @@ void updateHeaderStatus() {
       nfc_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
   }
 
+  // SCL: green if NAU7802 connected, red if not
+  if (lbl_hdr_scl) {
+    lv_label_set_text(lbl_hdr_scl, scl_ok ? "SCL" : "SCL!");
+    lv_obj_set_style_text_color(lbl_hdr_scl,
+      scl_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
+  }
+
   // Fix 10: Spoolman reachability
   if (lbl_hdr_sm) {
     lv_obj_set_style_text_color(lbl_hdr_sm,
@@ -6818,20 +6827,26 @@ void buildUI() {
   lv_label_set_text(lbl_hdr_wifi, LV_SYMBOL_WIFI);
   lv_obj_set_style_text_color(lbl_hdr_wifi, lv_color_hex(0x606060), 0);
   lv_obj_set_style_text_font(lbl_hdr_wifi, &lv_font_montserrat_12, 0);
-  lv_obj_align(lbl_hdr_wifi, LV_ALIGN_RIGHT_MID, -82, 0);
+  lv_obj_align(lbl_hdr_wifi, LV_ALIGN_RIGHT_MID, -100, 0);
 
   lbl_hdr_nfc = lv_label_create(hdr);
   lv_label_set_text(lbl_hdr_nfc, "NFC");
   lv_obj_set_style_text_color(lbl_hdr_nfc, lv_color_hex(0x606060), 0);
   lv_obj_set_style_text_font(lbl_hdr_nfc, &lv_font_montserrat_12, 0);
-  lv_obj_align(lbl_hdr_nfc, LV_ALIGN_RIGHT_MID, -50, 0);
+  lv_obj_align(lbl_hdr_nfc, LV_ALIGN_RIGHT_MID, -68, 0);
+
+  lbl_hdr_scl = lv_label_create(hdr);
+  lv_label_set_text(lbl_hdr_scl, "SCL");
+  lv_obj_set_style_text_color(lbl_hdr_scl, lv_color_hex(0x606060), 0);
+  lv_obj_set_style_text_font(lbl_hdr_scl, &lv_font_montserrat_12, 0);
+  lv_obj_align(lbl_hdr_scl, LV_ALIGN_RIGHT_MID, -36, 0);
 
   // Fix 10: Spoolman reachability indicator
   lbl_hdr_sm = lv_label_create(hdr);
   lv_label_set_text(lbl_hdr_sm, "SPM");
   lv_obj_set_style_text_color(lbl_hdr_sm, lv_color_hex(0x606060), 0);
   lv_obj_set_style_text_font(lbl_hdr_sm, &lv_font_montserrat_12, 0);
-  lv_obj_align(lbl_hdr_sm, LV_ALIGN_RIGHT_MID, -18, 0);
+  lv_obj_align(lbl_hdr_sm, LV_ALIGN_RIGHT_MID, -4, 0);
 
   // ── ZONE 2: Status bar y=26..47 (22px) ──────────────────
   // dot + status text centered | #scan_count right
@@ -8118,7 +8133,7 @@ void handlePowerManagement() {
 void setup() {
   Serial.begin(115200);
   delay(500);
-  Serial.println("=== SpoolmanScale v0.5.0-beta ===");
+  Serial.println("=== SpoolmanScale v0.5.1-beta ===");
   Serial.println("KDF Master: 9a759cf2c4f7caff222cb9769b41bc96");
   Serial.println("Context:    RFID-B");
 
@@ -8161,6 +8176,7 @@ void setup() {
 
   Serial.print("Looking for NAU7802... ");
   if (nau.begin(&I2C_EXT)) {
+    scl_ok = true;
     nau.setLDO(NAU7802_3V0);
     nau.setGain(NAU7802_GAIN_128);
     nau.setRate(NAU7802_RATE_10SPS);
@@ -8368,6 +8384,18 @@ void loop() {
       bool was_reachable = sm_reachable;
       sm_reachable = (code == 200);
       if (sm_reachable != was_reachable) updateHeaderStatus();
+    }
+  }
+
+  // Periodic NAU7802 I2C ping every 5s (independent of WiFi)
+  {
+    static unsigned long last_scl_check_ms = 0;
+    if (millis() - last_scl_check_ms >= 5000) {
+      last_scl_check_ms = millis();
+      I2C_EXT.beginTransmission(0x2A);
+      bool prev = scl_ok;
+      scl_ok = (I2C_EXT.endTransmission() == 0);
+      if (scl_ok != prev) updateHeaderStatus();
     }
   }
 
