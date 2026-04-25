@@ -1,8 +1,10 @@
+<div align="center">
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="images/logo_1.jpeg">
   <source media="(prefers-color-scheme: dark)" srcset="images/logo_2.jpeg">
   <img src="images/logo_2.jpeg" width="400">
 </picture>
+</div>
 
 # SpoolmanScale
 
