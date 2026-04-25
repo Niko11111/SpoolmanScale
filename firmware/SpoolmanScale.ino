@@ -1,7 +1,7 @@
 // ============================================================
 //  SpoolmanScale – Bambu NFC Tag Reader & Decoder
 //  Board:   WT32-SC01 Plus (ESP32-S3)
-//  Version: v0.5.2-beta
+//  Version: v0.5.3-beta
 //
 //  Reads Bambu Lab MIFARE Classic tags, derives keys via KDF
 //  (HKDF/SHA256, master key from Bambu-Research-Group/RFID-Tag-Guide),
@@ -38,6 +38,10 @@
 #include <WebServer.h>
 #include <Update.h>
 #include <ArduinoJson.h>
+#include <SD.h>
+#include <SPI.h>
+#include <stdarg.h>
+#include <esp_system.h>
 
 // PSRAM allocator for ArduinoJson — used for large JSON documents (Spoolman spool list)
 // Frees internal RAM for LVGL, WiFi stack, and other allocations
@@ -171,7 +175,7 @@ static int     bright_normal   = BRIGHT_NORMAL_DEFAULT;
 static int     dim_timeout_ms  = DIM_TIMEOUT_DEFAULT;
 static int     sleep_timeout_ms = SLEEP_TIMEOUT_DEFAULT;
 #define TOUCH_INT_PIN       7   // FT6336U INT fuer Wake-Up
-#define FW_VERSION  "v0.5.2-beta"
+#define FW_VERSION  "v0.5.3-beta"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // NAU7802 calibration
@@ -187,6 +191,31 @@ TwoWire I2C_EXT   = TwoWire(1);
 
 // NAU7802 scale (on I2C_EXT, address 0x2A)
 Adafruit_NAU7802 nau;
+
+// ============================================================
+//  SD CARD LOGGING (v0.5.3+)
+//  MicroSD slot is on dedicated SPI bus (no conflict with display)
+//  Pins per WT32-SC01 Plus schematic
+// ============================================================
+#define SD_CS    41
+#define SD_SCK   39   // CLK
+#define SD_MOSI  40   // CMD
+#define SD_MISO  38   // D0
+
+static SPIClass spiSD(HSPI);          // dedicated SPI bus for SD
+static bool sd_available = false;     // SD card detected at boot
+static bool sd_verbose   = false;     // verbose.txt found in root
+static char sd_log_filename[32] = ""; // current day's log file path
+static unsigned long sd_log_size = 0; // bytes written today (rough cap)
+#define SD_LOG_MAX_SIZE  (1024UL * 1024UL)  // 1 MB per day cap
+
+// Forward declarations for logger
+void logSD(const char* msg);
+void logSDf(const char* fmt, ...);
+void initSD();
+void cleanOldLogs();
+void writeBootBlock(const char* boot_or_reboot);
+String getCurrentLogFilename();
 
 // ============================================================
 //  WIFI + SPOOLMAN CONFIGURATION
@@ -702,6 +731,7 @@ void scanTag(uint8_t *uid, uint8_t uid_len) {
     uid[0], uid[1], uid[2], uid[3]);
 
   Serial.printf("\n=== Tag gefunden: %s ===\n", g_tag.uid_str);
+  logSDf("NFC: Bambu tag found UID=%s", g_tag.uid_str);
 
   // Derive keys
   Serial.println("Deriving keys...");
@@ -716,10 +746,19 @@ void scanTag(uint8_t *uid, uint8_t uid_len) {
       g_tag.keys[i][0], g_tag.keys[i][1], g_tag.keys[i][2],
       g_tag.keys[i][3], g_tag.keys[i][4], g_tag.keys[i][5]);
   }
+  if (sd_verbose) {
+    for (int i = 0; i < 16; i++) {
+      logSDf("[verbose] KDF key %2d: %02X%02X%02X%02X%02X%02X", i,
+        g_tag.keys[i][0], g_tag.keys[i][1], g_tag.keys[i][2],
+        g_tag.keys[i][3], g_tag.keys[i][4], g_tag.keys[i][5]);
+    }
+  }
 
   // Read all 16 sectors
   Serial.println("Reading sectors...");
   int success_count = 0;
+  // Build a compact verbose summary string: "0:OK 1:OK 2:FAIL ..."
+  char sector_summary[160] = "";
   for (int sector = 0; sector < 16; sector++) {
     uint8_t sec_blocks[4][16];
     bool ok = readSector(sector, g_tag.keys[sector], uid, sec_blocks);
@@ -732,9 +771,16 @@ void scanTag(uint8_t *uid, uint8_t uid_len) {
       }
     }
     Serial.printf("Sector %2d: %s\n", sector, ok ? "OK" : "FAIL");
+    if (sd_verbose) {
+      char tmp[12];
+      snprintf(tmp, sizeof(tmp), "%d:%s ", sector, ok ? "OK" : "FAIL");
+      strncat(sector_summary, tmp, sizeof(sector_summary) - strlen(sector_summary) - 1);
+    }
   }
+  if (sd_verbose) logSDf("[verbose] sectors: %s", sector_summary);
 
   Serial.printf("%d/48 blocks read\n", success_count);
+  logSDf("NFC: %d/48 blocks read", success_count);
 
   // Sector 0, block 0 is always readable (manufacturer data)
   uint8_t block0[16];
@@ -761,6 +807,7 @@ void scanTag(uint8_t *uid, uint8_t uid_len) {
 //  Writes current date as last_dried to Spoolman
 // ============================================================
 void btn_dried_cb(lv_event_t *e) {
+  logSD("UI: Button -> Dried Today");
   if (!wifi_ok) {
     lv_label_set_text(lbl_spoolman_dried_val, "No WiFi!");
     return;
@@ -938,8 +985,23 @@ void addCloseButton(lv_obj_t *parent) {
 
 // Helper: go back to main screen
 void hideAllOverlays() {
+  // ── Verbose tracing: count visible overlays + log which one is being deleted ──
+  if (sd_verbose) {
+    int visible_count = 0;
+    if (scr_settings && !lv_obj_has_flag(scr_settings, LV_OBJ_FLAG_HIDDEN)) visible_count++;
+    if (scr_connection && !lv_obj_has_flag(scr_connection, LV_OBJ_FLAG_HIDDEN)) visible_count++;
+    if (scr_scale_sub && !lv_obj_has_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN)) visible_count++;
+    if (scr_display && !lv_obj_has_flag(scr_display, LV_OBJ_FLAG_HIDDEN)) visible_count++;
+    if (scr_system && !lv_obj_has_flag(scr_system, LV_OBJ_FLAG_HIDDEN)) visible_count++;
+    logSDf("[verbose] hideAllOverlays: %d visible, more_info=%s",
+      visible_count, scr_more_info ? "yes(will delete)" : "no");
+  }
   // More info screen is always rebuilt, so delete it
-  if (scr_more_info) { lv_obj_del(scr_more_info); scr_more_info = nullptr; }
+  if (scr_more_info) {
+    if (sd_verbose) logSD("[verbose] hideAllOverlays: deleting scr_more_info");
+    lv_obj_del(scr_more_info); scr_more_info = nullptr;
+    if (sd_verbose) logSD("[verbose] hideAllOverlays: scr_more_info deleted OK");
+  }
   if (scr_settings)      lv_obj_add_flag(scr_settings,      LV_OBJ_FLAG_HIDDEN);
   if (scr_wifi)          lv_obj_add_flag(scr_wifi,          LV_OBJ_FLAG_HIDDEN);
   if (scr_spoolman)      lv_obj_add_flag(scr_spoolman,      LV_OBJ_FLAG_HIDDEN);
@@ -964,11 +1026,13 @@ void hideAllOverlays() {
 }
 
 void showMainScreen() {
+  logSD("UI: Screen -> Main");
   hideAllOverlays();
   resetActivityTimer();
 }
 
 void showSettingsScreen() {
+  logSD("UI: Screen -> Settings");
   hideAllOverlays();
   if (!scr_settings) {
     buildSettingsScreen();
@@ -981,6 +1045,7 @@ void showSettingsScreen() {
 //  WELCOME SCREEN (first boot — SSID empty)
 // ============================================================
 void showWelcomeScreen() {
+  logSD("UI: Screen -> Welcome");
   hideAllOverlays();
   if (!scr_welcome) buildWelcomeScreen();
   lv_obj_clear_flag(scr_welcome, LV_OBJ_FLAG_HIDDEN);
@@ -1104,6 +1169,7 @@ void buildWelcomeScreen() {
 //  FIRST BOOT SCREEN (very first launch — before language selection)
 // ============================================================
 void showFirstBootScreen() {
+  logSD("UI: Screen -> FirstBoot");
   hideAllOverlays();
   if (!scr_first_boot) buildFirstBootScreen();
   lv_obj_clear_flag(scr_first_boot, LV_OBJ_FLAG_HIDDEN);
@@ -1206,6 +1272,7 @@ static const char* REQUIRED_EXTRA_FIELDS_BASE[] = { "tag", "last_dried" };
 static const int   REQUIRED_EXTRA_FIELDS_BASE_COUNT = 2;
 
 void showExtraFieldsScreen(bool is_setup_flow) {
+  logSDf("UI: Screen -> ExtraFields (setup=%d)", is_setup_flow ? 1 : 0);
   hideAllOverlays();
   extra_fields_setup_flow = is_setup_flow;
   if (scr_extra_fields) { lv_obj_del(scr_extra_fields); scr_extra_fields = nullptr; }
@@ -1632,6 +1699,7 @@ void checkAndCreateExtraFields(bool create_missing) {
 //  CALIBRATION REMINDER SCREEN (end of first setup)
 // ============================================================
 void showCalReminderScreen() {
+  logSD("UI: Screen -> CalReminder");
   hideAllOverlays();
   if (scr_cal_reminder) { lv_obj_del(scr_cal_reminder); scr_cal_reminder = nullptr; }
   buildCalReminderScreen();
@@ -1729,6 +1797,7 @@ void buildCalReminderScreen() {
 //  WIFI SETUP: STEP 1 — Network scan + selection
 // ============================================================
 void showWifiSetupScreen() {
+  logSD("UI: Screen -> WifiSetup");
   hideAllOverlays();
   if (scr_wifi_setup) { lv_obj_del(scr_wifi_setup); scr_wifi_setup = nullptr; }
   // Null global pointers — otherwise they point to deleted objects
@@ -1911,6 +1980,7 @@ void doWifiScan() {
 //  WIFI SETUP: STEP 2 — Password entry
 // ============================================================
 void showWifiPassScreen() {
+  logSD("UI: Screen -> WifiPass");
   hideAllOverlays();
   if (scr_wifi_pass) { lv_obj_del(scr_wifi_pass); scr_wifi_pass = nullptr; }
   ta_wifi_pass = nullptr;
@@ -1984,6 +2054,7 @@ void buildWifiPassScreen() {
 //  WIFI SETUP: STEP 3 — Connect + result
 // ============================================================
 void showWifiConnectingScreen() {
+  logSD("UI: Screen -> WifiConnecting");
   hideAllOverlays();
   if (scr_wifi_connecting) { lv_obj_del(scr_wifi_connecting); scr_wifi_connecting = nullptr; }
   buildWifiConnectingScreen();
@@ -2328,6 +2399,7 @@ void buildSpoolmanScreen() {
 //  SPOOLMAN CONNECTION FAILED SCREEN
 // ============================================================
 void showSpoolmanFailScreen(bool is_setup_flow) {
+  logSDf("UI: Screen -> SpoolmanFail (setup=%d)", is_setup_flow ? 1 : 0);
   spoolman_fail_is_setup = is_setup_flow;
   hideAllOverlays();
   if (scr_spoolman_fail) { lv_obj_del(scr_spoolman_fail); scr_spoolman_fail = nullptr; }
@@ -2449,6 +2521,7 @@ static lv_obj_t *lbl_factor_display = nullptr;  // rebuilt on each open
 static lv_obj_t *lbl_factor_cal_weight = nullptr; // live weight display in cal screen
 
 void showFactorScreen() {
+  logSD("UI: Screen -> Calibration");
   // Null loop-update pointers first (loop checks these)
   lbl_factor_display    = nullptr;
   lbl_factor_result     = nullptr;
@@ -2880,6 +2953,7 @@ lv_obj_t* buildOverlayScreen() {
 //  SETTINGS MAIN SCREEN — 2x2 tiles (no TARE button)
 // ============================================================
 void buildSettingsScreen() {
+  if (sd_verbose) logSD("[verbose] buildSettingsScreen: start");
   scr_settings = buildOverlayScreen();
 
   // Title
@@ -2949,19 +3023,23 @@ void buildSettingsScreen() {
       intptr_t idx = (intptr_t)lv_event_get_user_data(e);
       switch (idx) {
         case 0:
+          logSD("UI: Tile -> Connection");
           if (scr_connection) { lv_obj_del(scr_connection); scr_connection = nullptr; }
           buildConnectionScreen();
           hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
           break;
         case 1:
+          logSD("UI: Tile -> Scale");
           if (!scr_scale_sub) buildScaleSubScreen();
           hideAllOverlays(); lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
           break;
         case 2:
+          logSD("UI: Tile -> Display");
           if (!scr_display) buildDisplayScreen();
           hideAllOverlays(); lv_obj_clear_flag(scr_display, LV_OBJ_FLAG_HIDDEN);
           break;
         case 3:
+          logSD("UI: Tile -> System");
           if (!scr_system) buildSystemScreen();
           hideAllOverlays(); lv_obj_clear_flag(scr_system, LV_OBJ_FLAG_HIDDEN);
           break;
@@ -2977,12 +3055,14 @@ void buildSettingsScreen() {
   lv_obj_set_style_text_font(lbl_system_badge, &lv_font_montserrat_18, 0);
   lv_obj_set_pos(lbl_system_badge, 456, 186);
   if (!update_available) lv_obj_add_flag(lbl_system_badge, LV_OBJ_FLAG_HIDDEN);
+  if (sd_verbose) logSD("[verbose] buildSettingsScreen: done");
 }
 
 // ============================================================
 //  SUBMENU: CONNECTION (WiFi + Spoolman IP + Extra Fields)
 // ============================================================
 void buildConnectionScreen() {
+  if (sd_verbose) logSD("[verbose] buildConnectionScreen: start");
   scr_connection = buildOverlayScreen();
   buildSubHeader(scr_connection, T(STR_TILE_CONNECTION),
     [](lv_event_t *e){ showSettingsScreen(); });
@@ -3084,6 +3164,7 @@ void buildConnectionScreen() {
   lv_obj_add_event_cb(btn_ef, [](lv_event_t *e){
     showExtraFieldsScreen(false);
   }, LV_EVENT_CLICKED, NULL);
+  if (sd_verbose) logSD("[verbose] buildConnectionScreen: done");
 }
 
 // Update the Last used/weighed cap label on the mainscreen
@@ -3184,6 +3265,7 @@ void buildLastUsedScreen() {
 //  SUBMENU: SCALE (bag weight + calibration + last used mode)
 // ============================================================
 void buildScaleSubScreen() {
+  if (sd_verbose) logSD("[verbose] buildScaleSubScreen: start");
   scr_scale_sub = buildOverlayScreen();
   buildSubHeader(scr_scale_sub, T(STR_SCALE_TITLE),
     [](lv_event_t *e){ showSettingsScreen(); });
@@ -3288,12 +3370,14 @@ void buildScaleSubScreen() {
     hideAllOverlays();
     lv_obj_clear_flag(scr_lastused, LV_OBJ_FLAG_HIDDEN);
   }, LV_EVENT_CLICKED, NULL);
+  if (sd_verbose) logSD("[verbose] buildScaleSubScreen: done");
 }
 
 // ============================================================
 //  SUBMENU: DISPLAY (brightness + timeouts)
 // ============================================================
 void buildDisplayScreen() {
+  if (sd_verbose) logSD("[verbose] buildDisplayScreen: start");
   scr_display = buildOverlayScreen();
   buildSubHeader(scr_display, T(STR_DISPLAY_TITLE),
     [](lv_event_t *e){ showSettingsScreen(); });
@@ -3418,6 +3502,7 @@ void buildDisplayScreen() {
   lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(hint, 440);
   lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
+  if (sd_verbose) logSD("[verbose] buildDisplayScreen: done");
 }
 
 // ============================================================
@@ -3467,6 +3552,31 @@ void startOtaServer() {
       "cursor:pointer;transition:background .2s}"
       ".btn-flash:hover{background:#2a5030}"
       ".hint{font-size:12px;color:#2a4060;margin-top:10px;text-align:center}"
+      ".log-row{display:flex;align-items:center;justify-content:space-between;"
+      "padding:10px 12px;background:#06080f;border:1px solid #1a3060;border-radius:8px;"
+      "margin-bottom:8px}"
+      ".log-name{color:#c8d8f0;font-size:14px;font-family:monospace}"
+      ".log-actions{display:flex;gap:6px}"
+      ".log-btn{padding:6px 14px;background:#0a1828;color:#28d49a;border:1px solid #1a3060;"
+      "border-radius:6px;font-size:13px;text-decoration:none;cursor:pointer}"
+      ".log-btn:hover{background:#1a3060}"
+      ".log-btn-del{color:#ff8080;border-color:#3a1010}"
+      ".log-btn-del:hover{background:#3a1010}"
+      ".verbose-row{display:flex;align-items:center;justify-content:space-between;"
+      "padding:10px 12px;background:#06080f;border:1px solid #1a3060;border-radius:8px;"
+      "margin-bottom:12px}"
+      ".verbose-label{color:#c8d8f0;font-size:14px}"
+      ".verbose-state{display:inline-block;padding:3px 10px;border-radius:4px;"
+      "font-size:12px;font-weight:600;margin-left:8px}"
+      ".verbose-on{background:#1a3020;color:#40c080;border:1px solid #2a5030}"
+      ".verbose-off{background:#1a1828;color:#4a6fa0;border:1px solid #2a3050}"
+      ".btn-toggle{padding:6px 14px;background:#0a1828;color:#28d49a;border:1px solid #1a3060;"
+      "border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit}"
+      ".btn-toggle:hover{background:#1a3060}"
+      ".section-divider{height:1px;background:#1a3060;margin:12px 0}"
+      ".no-sd{text-align:center;padding:24px 16px}"
+      ".no-sd-title{color:#c8d8f0;font-size:15px;font-weight:600;margin-bottom:6px}"
+      ".no-sd-hint{color:#4a6fa0;font-size:13px;line-height:1.5}"
       ".links{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:480px}"
       ".link-btn{display:flex;align-items:center;justify-content:center;gap:8px;"
       "padding:12px 16px;border-radius:10px;text-decoration:none;"
@@ -3492,6 +3602,51 @@ void startOtaServer() {
       "</form>"
       "<p class='hint'>Select SpoolmanScale vX.Y.Z.bin &mdash; device restarts automatically</p>"
       "</div>"
+
+      // SD-Logs Card
+      "<div class='card'>"
+      "<h2>SD Card Logs</h2>"
+      "<div id='log-list'><div class='no-sd'><div class='no-sd-hint'>Loading...</div></div></div>"
+      "</div>"
+      "<script>"
+      "function loadLogs(){"
+      "fetch('/logs').then(r=>r.json()).then(d=>{"
+      "var c=document.getElementById('log-list');"
+      "if(!d.sd){c.innerHTML="
+      "\"<div class='no-sd'>\"+"
+      "\"<div class='no-sd-title'>No SD card detected</div>\"+"
+      "\"<div class='no-sd-hint'>Insert a FAT32-formatted SD card<br>\"+"
+      "\"to enable diagnostic logging.</div>\"+"
+      "\"</div>\";return;}"
+      "var h=\"<div class='verbose-row'>\"+"
+      "\"<div><span class='verbose-label'>Verbose Logging</span>\"+"
+      "\"<span class='verbose-state \"+(d.verbose?'verbose-on':'verbose-off')+\"'>\"+"
+      "(d.verbose?'ON':'OFF')+\"</span></div>\"+"
+      "\"<button class='btn-toggle' onclick='toggleVerbose()'>Toggle</button>\"+"
+      "\"</div>\";"
+      "if(d.files.length===0){"
+      "h+=\"<div class='no-sd'>\"+"
+      "\"<div class='no-sd-title'>No log files yet</div>\"+"
+      "\"<div class='no-sd-hint'>Logs will appear here as you use the device.</div>\"+"
+      "\"</div>\";"
+      "}else{h+=\"<div class='section-divider'></div>\";"
+      "d.files.forEach(f=>{"
+      "h+=\"<div class='log-row'><span class='log-name'>\"+f.name+\"</span>\"+"
+      "\"<div class='log-actions'>\"+"
+      "\"<a class='log-btn' href='/log?file=\"+encodeURIComponent(f.name)+\"' download='\"+f.name+\"'>Download</a>\"+"
+      "\"<a class='log-btn log-btn-del' href='#' onclick=\\\"delLog('\"+f.name+\"');return false;\\\">Delete</a>\"+"
+      "\"</div></div>\";});}"
+      "c.innerHTML=h;});}"
+      "function delLog(n){if(!confirm('Delete '+n+'?'))return;"
+      "fetch('/deletelog?file='+encodeURIComponent(n),{method:'POST'}).then(()=>loadLogs());}"
+      "function toggleVerbose(){"
+      "fetch('/verbose',{method:'POST'}).then(r=>r.json()).then(d=>{"
+      "loadLogs();"
+      "if(d.verbose)alert('Verbose logging ENABLED. Reboot device for full effect.');"
+      "else alert('Verbose logging DISABLED.');"
+      "});}"
+      "loadLogs();setInterval(loadLogs,30000);"
+      "</script>"
 
       // Links
       "<div class='links'>"
@@ -3538,6 +3693,7 @@ void startOtaServer() {
           T(STR_OTA_SUCCESS));
         lv_timer_handler();
         delay(1500);
+        logSD("Reboot: OTA browser update success");
         ESP.restart();
       } else {
         if (lbl_ota_status) lv_label_set_text(lbl_ota_status,
@@ -3569,6 +3725,117 @@ void startOtaServer() {
     }
   );
 
+  // ── SD-Card Log endpoints ─────────────────────────────────
+  // GET /logs -> JSON list of available log files
+  ota_server.on("/logs", HTTP_GET, []() {
+    if (!sd_available) {
+      ota_server.send(200, "application/json", "{\"sd\":false,\"verbose\":false,\"files\":[]}");
+      return;
+    }
+    String json = "{\"sd\":true,\"verbose\":";
+    json += sd_verbose ? "true" : "false";
+    json += ",\"files\":[";
+    File root = SD.open("/");
+    bool first = true;
+    if (root && root.isDirectory()) {
+      File entry = root.openNextFile();
+      while (entry) {
+        if (!entry.isDirectory()) {
+          String name = entry.name();
+          if (name.startsWith("/")) name = name.substring(1);
+          if (name.startsWith("log_") && name.endsWith(".txt")) {
+            if (!first) json += ",";
+            json += "{\"name\":\"";
+            json += name;
+            json += "\",\"size\":";
+            json += String((unsigned long)entry.size());
+            json += "}";
+            first = false;
+          }
+        }
+        entry = root.openNextFile();
+      }
+      root.close();
+    }
+    json += "]}";
+    ota_server.send(200, "application/json", json);
+  });
+
+  // GET /log?file=<filename> -> serve log file content
+  ota_server.on("/log", HTTP_GET, []() {
+    if (!sd_available) { ota_server.send(404, "text/plain", "No SD card"); return; }
+    if (!ota_server.hasArg("file")) {
+      ota_server.send(400, "text/plain", "Missing file param");
+      return;
+    }
+    String fname = ota_server.arg("file");
+    // basic sanitization: only allow log_*.txt names
+    if (!fname.startsWith("log_") || !fname.endsWith(".txt") || fname.indexOf("..") >= 0) {
+      ota_server.send(400, "text/plain", "Invalid filename");
+      return;
+    }
+    String path = "/" + fname;
+    if (!SD.exists(path.c_str())) {
+      ota_server.send(404, "text/plain", "Not found");
+      return;
+    }
+    File f = SD.open(path.c_str(), FILE_READ);
+    if (!f) { ota_server.send(500, "text/plain", "Open failed"); return; }
+    ota_server.streamFile(f, "text/plain");
+    f.close();
+  });
+
+  // POST /deletelog?file=<name> -> delete a log file
+  ota_server.on("/deletelog", HTTP_POST, []() {
+    if (!sd_available) { ota_server.send(404, "text/plain", "No SD card"); return; }
+    if (!ota_server.hasArg("file")) {
+      ota_server.send(400, "text/plain", "Missing file param");
+      return;
+    }
+    String fname = ota_server.arg("file");
+    if (!fname.startsWith("log_") || !fname.endsWith(".txt") || fname.indexOf("..") >= 0) {
+      ota_server.send(400, "text/plain", "Invalid filename");
+      return;
+    }
+    String path = "/" + fname;
+    if (SD.remove(path.c_str())) {
+      logSDf("Log file deleted via web: %s", fname.c_str());
+      ota_server.send(200, "text/plain", "OK");
+    } else {
+      ota_server.send(500, "text/plain", "Delete failed");
+    }
+  });
+
+  // POST /verbose -> toggle verbose.txt on SD root
+  ota_server.on("/verbose", HTTP_POST, []() {
+    if (!sd_available) {
+      ota_server.send(404, "application/json", "{\"error\":\"No SD card\"}");
+      return;
+    }
+    if (sd_verbose) {
+      // currently ON -> remove file
+      if (SD.remove("/verbose.txt")) {
+        sd_verbose = false;
+        logSD("Verbose logging: DISABLED via web");
+        ota_server.send(200, "application/json", "{\"verbose\":false}");
+      } else {
+        ota_server.send(500, "application/json", "{\"error\":\"Failed to remove verbose.txt\"}");
+      }
+    } else {
+      // currently OFF -> create file
+      File f = SD.open("/verbose.txt", FILE_WRITE);
+      if (f) {
+        f.println("Verbose logging marker. Delete this file to disable verbose mode.");
+        f.close();
+        sd_verbose = true;
+        logSD("Verbose logging: ENABLED via web");
+        ota_server.send(200, "application/json", "{\"verbose\":true}");
+      } else {
+        ota_server.send(500, "application/json", "{\"error\":\"Failed to create verbose.txt\"}");
+      }
+    }
+  });
+
   ota_server.begin();
   ota_server_running = true;
   Serial.printf("OTA server started: http://%s/\n", WiFi.localIP().toString().c_str());
@@ -3576,6 +3843,7 @@ void startOtaServer() {
 
 // OTA selection screen (browser / GitHub)
 void showOtaScreen() {
+  logSD("UI: Screen -> OTA Selection");
   hideAllOverlays();
   if (!scr_ota) buildOtaScreen();
   lv_obj_clear_flag(scr_ota, LV_OBJ_FLAG_HIDDEN);
@@ -3667,6 +3935,7 @@ void buildOtaScreen() {
 
 // OTA browser upload screen
 void showOtaBrowserScreen() {
+  logSD("UI: Screen -> OTA Browser");
   hideAllOverlays();
   stopOtaServer();  // alten Server stoppen falls noch aktiv
   lbl_ota_status = nullptr;
@@ -4026,6 +4295,7 @@ void doGithubOtaFlash(const char* version) {
 }
 
 void showOtaGithubScreen() {
+  logSD("UI: Screen -> OTA GitHub");
   // Reset UI state but keep version info if background check already found an update
   lbl_gh_status     = nullptr;
   lbl_gh_installed  = nullptr;
@@ -4146,6 +4416,7 @@ void buildOtaGithubScreen() {
 void showLanguageScreen();  // Forward
 
 void buildSystemScreen() {
+  if (sd_verbose) logSD("[verbose] buildSystemScreen: start");
   scr_system = buildOverlayScreen();
   buildSubHeader(scr_system, T(STR_SYSTEM_TITLE),
     [](lv_event_t *e){ showSettingsScreen(); });
@@ -4248,6 +4519,7 @@ void buildSystemScreen() {
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
   lv_obj_add_event_cb(btn_info, [](lv_event_t *e){ showInfoScreen(); }, LV_EVENT_CLICKED, NULL);
+  if (sd_verbose) logSD("[verbose] buildSystemScreen: done");
 }
 
 
@@ -4256,6 +4528,7 @@ void buildSystemScreen() {
 //  REBOOT POPUP (language/date format change)
 // ============================================================
 void showRebootPopup() {
+  logSD("UI: Screen -> RebootPopup");
   lv_obj_t *pop = lv_obj_create(lv_scr_act());
   lv_obj_set_size(pop, 480, 320); lv_obj_set_pos(pop, 0, 0);
   lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
@@ -4296,7 +4569,7 @@ void showRebootPopup() {
   lv_obj_set_style_radius(btn_rb, 8, 0);
   lv_obj_set_style_shadow_width(btn_rb, 0, 0);
   lv_obj_set_style_border_width(btn_rb, 0, 0);
-  lv_obj_add_event_cb(btn_rb, [](lv_event_t *e){ ESP.restart(); }, LV_EVENT_CLICKED, NULL);
+  lv_obj_add_event_cb(btn_rb, [](lv_event_t *e){ logSD("Reboot: user (language/date change)"); ESP.restart(); }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *rb_lbl = lv_label_create(btn_rb);
   lv_label_set_text(rb_lbl, T(STR_REBOOT_BTN));
   lv_obj_set_style_text_color(rb_lbl, lv_color_hex(0x40c080), 0);
@@ -4329,6 +4602,7 @@ void showRebootPopup() {
 //  LANGUAGE SCREEN (System > Language)
 // ============================================================
 void showLanguageScreen() {
+  logSD("UI: Screen -> Language");
   lv_obj_t *scr = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr, 480, 320);
   lv_obj_set_pos(scr, 0, 0);
@@ -4533,6 +4807,8 @@ static const char* getQRDesc(int idx) {
 }
 
 void showQRPopup(int idx) {
+  const char* names[4] = {"Ko-fi", "GitHub", "Discord", "MakerWorld"};
+  logSDf("UI: Screen -> QR Popup (%s)", (idx >= 0 && idx < 4) ? names[idx] : "?");
   lv_obj_t *popup = lv_obj_create(lv_scr_act());
   lv_obj_set_size(popup, 480, 320);
   lv_obj_set_pos(popup, 0, 0);
@@ -4606,12 +4882,21 @@ void showQRPopup(int idx) {
   lv_obj_align(lbl_url, LV_ALIGN_TOP_MID, 0, 84);
 
   // QR-Code — 160x160, centered, y-offset -8 from bottom (not flush to edge)
+  // Diagnostic logs around QR generation (always-on, not verbose-gated)
+  // because intermittent QR freezes are hard to catch with verbose-only logs.
+  size_t url_len = strlen(QR_URLS[idx]);
+  logSDf("QR: %s about to create url_len=%u heap=%d PSRAM=%d",
+    names[idx], (unsigned)url_len, ESP.getFreeHeap(), ESP.getFreePsram());
   lv_obj_t *qr = lv_qrcode_create(popup, 160, lv_color_hex(0x000000), lv_color_hex(0xffffff));
-  lv_qrcode_update(qr, QR_URLS[idx], strlen(QR_URLS[idx]));
+  logSDf("QR: %s create OK heap=%d", names[idx], ESP.getFreeHeap());
+  lv_res_t qr_res = lv_qrcode_update(qr, QR_URLS[idx], url_len);
+  logSDf("QR: %s update done res=%d heap=%d", names[idx], (int)qr_res, ESP.getFreeHeap());
   lv_obj_align(qr, LV_ALIGN_BOTTOM_MID, 0, -20);
+  logSDf("QR: %s align done", names[idx]);
 }
 
 void showInfoScreen() {
+  logSD("UI: Screen -> Info");
   if (scr_info) { lv_obj_del(scr_info); scr_info = nullptr; }
   scr_info = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_info, 480, 320);
@@ -4837,6 +5122,7 @@ void patchSpoolmanWeight(float remaining) {
   Serial.printf("PATCH weight: %.1fg -> %s\n", remaining, body);
   int code = http.PATCH(String(body));
   http.end();
+  logSDf("PATCH weight=%.1fg ID=%d HTTP %d", remaining, sm_id, code);
   if (code == 200) {
     sm_remaining = remaining;
     char w_str[16]; snprintf(w_str, sizeof(w_str), "%.0f g", sm_remaining);
@@ -5083,6 +5369,7 @@ void patchSpoolTag(int spool_id, const char *uuid) {
   int code = http.PATCH(body);
   http.end();
   Serial.printf("patchSpoolTag: HTTP %d\n", code);
+  logSDf("PATCH tag ID=%d HTTP %d", spool_id, code);
 }
 
 // ============================================================
@@ -6377,6 +6664,7 @@ void patchSpoolWeight(float spool_w) {
   Serial.printf("PATCH spool_weight: %.1fg -> %s\n", spool_w, body);
   int code = http.PATCH(String(body));
   http.end();
+  logSDf("PATCH spool_weight=%.1fg ID=%d HTTP %d", spool_w, sm_id, code);
   if (code == 200) {
     sm_spool_weight = spool_w;
     Serial.printf("spool_weight OK: %.1fg\n", spool_w);
@@ -6402,6 +6690,7 @@ void patchFilamentSpoolWeight(float spool_w) {
   int code = http.PATCH(String(body));
   http.end();
   Serial.printf("patchFilamentSpoolWeight: HTTP %d\n", code);
+  logSDf("PATCH filament_spool_weight=%.1fg fil_ID=%d HTTP %d", spool_w, sm_filament_id, code);
 }
 
 // ============================================================
@@ -6421,6 +6710,7 @@ void patchVendorSpoolWeight(float spool_w) {
   int code = http.PATCH(String(body));
   http.end();
   Serial.printf("patchVendorSpoolWeight: HTTP %d\n", code);
+  logSDf("PATCH vendor_empty_spool=%.1fg vendor_ID=%d HTTP %d", spool_w, sm_vendor_id, code);
 }
 
 void closeConfirmPopup() {
@@ -7240,6 +7530,7 @@ void buildUI() {
   lv_obj_set_style_radius(btn_tare, 8, 0);
   lv_obj_set_style_shadow_width(btn_tare, 0, 0);
   lv_obj_add_event_cb(btn_tare, [](lv_event_t *e) {
+    logSD("UI: Button -> TARE (main)");
     if (scale_ready) {
       int32_t raw = nau.read();
       saveTareOffset(raw);
@@ -7248,6 +7539,9 @@ void buildUI() {
       scale_filter_idx = 0; scale_filter_full = false;
       lv_label_set_text(lbl_scale_weight, "0 g");
       Serial.println("TARE (main)");
+      logSDf("TARE applied (raw=%d)", raw);
+    } else {
+      logSD("TARE: scale not ready");
     }
   }, LV_EVENT_CLICKED, NULL);
   // Icon top, text bottom — both centered
@@ -7294,6 +7588,7 @@ void buildUI() {
   lv_obj_set_style_radius(btn_weight_main, 8, 0);
   lv_obj_set_style_shadow_width(btn_weight_main, 0, 0);
   lv_obj_add_event_cb(btn_weight_main, [](lv_event_t *e) {
+    logSD("UI: Button -> Update Weight");
     showConfirmPopup(T(STR_POPUP_WEIGHT_Q), 2);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_wm = lv_label_create(btn_weight_main);
@@ -7314,6 +7609,7 @@ void buildUI() {
   lv_obj_set_style_radius(btn_dried, 8, 0);
   lv_obj_set_style_shadow_width(btn_dried, 0, 0);
   lv_obj_add_event_cb(btn_dried, [](lv_event_t *e) {
+    logSD("UI: Button -> Dried (popup)");
     if (!sm_found || sm_id == 0) { btn_dried_cb(nullptr); return; }
     showConfirmPopup(T(STR_POPUP_DRIED_Q), 1);
   }, LV_EVENT_CLICKED, NULL);
@@ -7336,6 +7632,7 @@ void buildUI() {
   lv_obj_set_style_shadow_width(btn_link, 0, 0);
   lv_obj_add_flag(btn_link, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_event_cb(btn_link, [](lv_event_t *e) {
+    logSD("UI: Button -> Link Spool");
     link_popup_dismissed = false;
     showLinkEntryPopup(strlen(g_tag.tray_uuid) == 32);
   }, LV_EVENT_CLICKED, NULL);
@@ -7355,7 +7652,7 @@ void buildUI() {
   lv_obj_set_style_border_color(btn_menu, lv_color_hex(0x1a2840), 0);
   lv_obj_set_style_radius(btn_menu, 8, 0);
   lv_obj_set_style_shadow_width(btn_menu, 0, 0);
-  lv_obj_add_event_cb(btn_menu, [](lv_event_t *e){ showSettingsScreen(); }, LV_EVENT_CLICKED, NULL);
+  lv_obj_add_event_cb(btn_menu, [](lv_event_t *e){ logSD("UI: Button -> Burger Menu"); showSettingsScreen(); }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_menu = lv_label_create(btn_menu);
   lv_label_set_text(lbl_menu, LV_SYMBOL_LIST);
   lv_obj_set_style_text_color(lbl_menu, lv_color_hex(0x4a6fa0), 0);
@@ -7402,6 +7699,7 @@ void updateLinkButton() {
 //  Always rebuilt on open. Only one close button (X).
 // ============================================================
 void showMoreInfoScreen() {
+  logSD("UI: Screen -> MoreInfo");
   // Delete old instance if exists
   if (scr_more_info) { lv_obj_del(scr_more_info); scr_more_info = nullptr; }
   buildMoreInfoScreen();
@@ -7853,6 +8151,13 @@ void wifiConnect() {
       Serial.printf("WiFi OK! IP: %s\n", WiFi.localIP().toString().c_str());
       updateHeaderStatus();
       syncNTP();
+      // SD logging: write boot block once time is available
+      if (sd_available) {
+        cleanOldLogs();   // requires synced time
+        writeBootBlock("Boot");
+        logSDf("WiFi connected: %s | RSSI: %d dBm",
+          cfg_wifi_ssid, WiFi.RSSI());
+      }
       // Fix 2: immediate Spoolman health check after WiFi connect
       if (strlen(cfg_spoolman_base) > 4) {
         HTTPClient hc;
@@ -7862,6 +8167,8 @@ void wifiConnect() {
         int code = hc.GET();
         hc.end();
         sm_reachable = (code == 200);
+        logSDf("Spoolman health check: HTTP %d -> %s",
+          code, sm_reachable ? "OK" : "FAIL");
       }
       updateHeaderStatus();
       lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));
@@ -7871,6 +8178,7 @@ void wifiConnect() {
     }
   }
   Serial.println("WiFi FAILED – continuing without Spoolman");
+  logSD("WiFi connection FAILED");
   updateHeaderStatus();
   lv_label_set_text(lbl_spoolman_weight, T(STR_NO_WIFI));
   lv_timer_handler();
@@ -7884,6 +8192,9 @@ void wifiConnect() {
 void querySpoolmanById(int spool_id) {
   if (!wifi_ok) return;
   Serial.printf("querySpoolmanById: ID=%d\n", spool_id);
+  logSDf("Spoolman: query by ID=%d", spool_id);
+  if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (before byID GET)",
+    ESP.getFreeHeap(), ESP.getFreePsram());
 
   HTTPClient http;
   http.begin(String(cfg_spoolman_base) + "/api/v1/spool/" + spool_id);
@@ -7891,15 +8202,19 @@ void querySpoolmanById(int spool_id) {
   int code = http.GET();
   if (code != 200) {
     Serial.printf("querySpoolmanById HTTP error: %d\n", code);
+    logSDf("Spoolman byID: HTTP error %d", code);
     http.end();
     return;
   }
   String payload = http.getString();
   http.end();
+  if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (after byID parse, payload=%dB)",
+    ESP.getFreeHeap(), ESP.getFreePsram(), payload.length());
 
   DynamicJsonDocument doc(8192);
   if (deserializeJson(doc, payload)) {
     Serial.println("querySpoolmanById: JSON error");
+    logSD("Spoolman byID: JSON error");
     return;
   }
 
@@ -7913,6 +8228,7 @@ void querySpoolmanById(int spool_id) {
   sm_remaining    = spool["remaining_weight"] | 0.0f;
   sm_total        = spool["filament"]["weight"] | 1000.0f;
   sm_spool_weight = spool["spool_weight"] | 0.0f;
+  logSDf("Spoolman: byID OK ID=%d remaining=%.1fg", sm_id, sm_remaining);
 
   String art_nr = spool["filament"]["article_number"] | "";
   art_nr.trim();
@@ -8023,6 +8339,7 @@ void querySpoolmanById(int spool_id) {
 // ============================================================
 void querySpoolman(const char* tray_uuid) {
   if (!wifi_ok) return;
+  logSDf("Spoolman: query tray_uuid=%.16s...", tray_uuid ? tray_uuid : "");
 
   // Reset all Spoolman labels before new query
   lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT));
@@ -8059,11 +8376,14 @@ void querySpoolman(const char* tray_uuid) {
 
   HTTPClient http;
   Serial.printf("DBG free heap: %d bytes  free PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
+  if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (before Spoolman GET)",
+    ESP.getFreeHeap(), ESP.getFreePsram());
   http.begin(String(cfg_spoolman_base) + "/api/v1/spool");
   http.setTimeout(8000);
   int code = http.GET();
   if (code != 200) {
     Serial.printf("Spoolman HTTP error: %d\n", code);
+    logSDf("Spoolman: HTTP error %d", code);
     lv_label_set_text(lbl_spoolman_weight, T(STR_API_ERROR));
     http.end();
     return;
@@ -8098,6 +8418,8 @@ void querySpoolman(const char* tray_uuid) {
   DeserializationError err = deserializeJson(doc, *stream, DeserializationOption::Filter(filter));
   http.end();
   Serial.printf("DBG free heap after parse: %d bytes  free PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
+  if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (after Spoolman parse)",
+    ESP.getFreeHeap(), ESP.getFreePsram());
   if (err) {
     Serial.printf("Spoolman JSON error: %s\n", err.c_str());
     lv_label_set_text(lbl_spoolman_weight, T(STR_LINK_JSON_ERR));
@@ -8124,6 +8446,8 @@ void querySpoolman(const char* tray_uuid) {
     sm_remaining = spool["remaining_weight"] | 0.0f;
     sm_total    = spool["filament"]["weight"] | 1000.0f;
     sm_spool_weight = spool["spool_weight"] | 0.0f;
+    logSDf("Spoolman: found ID=%d remaining=%.1fg total=%.0fg",
+      sm_id, sm_remaining, sm_total);
     String art_nr = spool["filament"]["article_number"] | "";
     art_nr.trim();
     strncpy(sm_article_nr, art_nr.c_str(), sizeof(sm_article_nr)-1);
@@ -8294,6 +8618,7 @@ void querySpoolman(const char* tray_uuid) {
 
   // Truly not found
   Serial.println("Spoolman: spool not found");
+  logSD("Spoolman: spool not found");
   lv_label_set_text(lbl_spoolman_weight, T(STR_NOT_IN_SPOOLMAN));
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
   sm_found = false;
@@ -8317,6 +8642,7 @@ void handlePowerManagement() {
 
   if (elapsed >= sleep_timeout_ms) {
     Serial.println("Deep sleep...");
+    logSD("Deep sleep: entering");
     tft.setBrightness(0);
     esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_INT_PIN, 0);
     delay(100);
@@ -8326,6 +8652,196 @@ void handlePowerManagement() {
   if (!is_dimmed && elapsed >= dim_timeout_ms) {
     tft.setBrightness(BRIGHT_DIM_DEFAULT);
     is_dimmed = true;
+  }
+}
+
+// ============================================================
+//  SD CARD LOGGER IMPLEMENTATION (v0.5.3+)
+// ============================================================
+
+// Get current day's log filename (e.g. "/log_2026-04-25.txt")
+String getCurrentLogFilename() {
+  struct tm t;
+  if (!getLocalTime(&t)) {
+    // Time not yet synced -> use a fallback filename
+    return String("/log_pre_ntp.txt");
+  }
+  char buf[32];
+  snprintf(buf, sizeof(buf), "/log_%04d-%02d-%02d.txt",
+    t.tm_year + 1900, t.tm_mon + 1, t.tm_mday);
+  return String(buf);
+}
+
+// Append a single line to today's log file
+void logSD(const char* msg) {
+  if (!sd_available) return;
+  if (sd_log_size > SD_LOG_MAX_SIZE) return;  // daily cap reached
+
+  // Timestamp (use ?? if NTP not synced yet)
+  char timestamp[10];
+  struct tm t;
+  if (getLocalTime(&t)) {
+    snprintf(timestamp, sizeof(timestamp), "%02d:%02d:%02d",
+      t.tm_hour, t.tm_min, t.tm_sec);
+  } else {
+    strncpy(timestamp, "??:??:??", sizeof(timestamp));
+  }
+
+  String fname = getCurrentLogFilename();
+  File f = SD.open(fname.c_str(), FILE_APPEND);
+  if (!f) return;
+  size_t written = f.printf("[%s] %s\n", timestamp, msg);
+  f.close();
+  sd_log_size += written;
+}
+
+// Variadic format-string variant
+void logSDf(const char* fmt, ...) {
+  if (!sd_available) return;
+  char buf[256];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, args);
+  va_end(args);
+  logSD(buf);
+}
+
+// Write a boot/reboot separator block
+// Helper: Convert ESP reset reason to human-readable string
+const char* resetReasonStr() {
+  esp_reset_reason_t r = esp_reset_reason();
+  switch (r) {
+    case ESP_RST_UNKNOWN:    return "UNKNOWN";
+    case ESP_RST_POWERON:    return "POWERON (cold boot)";
+    case ESP_RST_EXT:        return "EXT (external pin)";
+    case ESP_RST_SW:         return "SW (ESP.restart)";
+    case ESP_RST_PANIC:      return "PANIC (exception/abort)";
+    case ESP_RST_INT_WDT:    return "INT_WDT (interrupt watchdog)";
+    case ESP_RST_TASK_WDT:   return "TASK_WDT (task watchdog)";
+    case ESP_RST_WDT:        return "WDT (other watchdog)";
+    case ESP_RST_DEEPSLEEP:  return "DEEPSLEEP (wake from sleep)";
+    case ESP_RST_BROWNOUT:   return "BROWNOUT (voltage drop)";
+    case ESP_RST_SDIO:       return "SDIO";
+    default:                 return "OTHER";
+  }
+}
+
+void writeBootBlock(const char* boot_or_reboot) {
+  if (!sd_available) return;
+
+  String fname = getCurrentLogFilename();
+  File f = SD.open(fname.c_str(), FILE_APPEND);
+  if (!f) return;
+
+  char dt_buf[32];
+  struct tm t;
+  if (getLocalTime(&t)) {
+    snprintf(dt_buf, sizeof(dt_buf), "%02d.%02d.%04d %02d:%02d:%02d",
+      t.tm_mday, t.tm_mon + 1, t.tm_year + 1900,
+      t.tm_hour, t.tm_min, t.tm_sec);
+  } else {
+    strncpy(dt_buf, "(time not synced)", sizeof(dt_buf));
+  }
+
+  f.println("=====================================");
+  f.printf("SpoolmanScale %s\n", FW_VERSION);
+  f.printf("%s: %s\n", boot_or_reboot, dt_buf);
+  f.printf("Reset reason: %s\n", resetReasonStr());
+  if (wifi_ok) {
+    f.printf("WiFi: %s | IP: %s\n",
+      cfg_wifi_ssid, WiFi.localIP().toString().c_str());
+  } else {
+    f.println("WiFi: (not connected)");
+  }
+  f.printf("Free heap: %d | PSRAM: %d\n",
+    ESP.getFreeHeap(), ESP.getFreePsram());
+  if (sd_verbose) f.println("Verbose logging: ON");
+  f.println("=====================================");
+  f.close();
+}
+
+// Delete log files older than 7 days
+void cleanOldLogs() {
+  if (!sd_available) return;
+
+  struct tm now;
+  if (!getLocalTime(&now)) {
+    Serial.println("cleanOldLogs: no time -> skip");
+    return;
+  }
+
+  // Compute cutoff: today - 7 days
+  time_t now_t = mktime(&now);
+  time_t cutoff = now_t - (7 * 24 * 3600);
+
+  File root = SD.open("/");
+  if (!root || !root.isDirectory()) {
+    Serial.println("cleanOldLogs: cannot open root");
+    return;
+  }
+
+  int deleted = 0;
+  File entry = root.openNextFile();
+  while (entry) {
+    String name = entry.name();
+    if (entry.isDirectory()) {
+      entry = root.openNextFile();
+      continue;
+    }
+    // Match pattern "log_YYYY-MM-DD.txt"
+    // entry.name() may return name without leading slash on some cores
+    String fname = name;
+    if (!fname.startsWith("/")) fname = "/" + fname;
+
+    if (fname.startsWith("/log_") && fname.endsWith(".txt") && fname.length() == 19) {
+      // Parse date from filename: /log_YYYY-MM-DD.txt
+      int yyyy = fname.substring(5, 9).toInt();
+      int mm   = fname.substring(10, 12).toInt();
+      int dd   = fname.substring(13, 15).toInt();
+      if (yyyy >= 2024 && mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
+        struct tm filedate = {};
+        filedate.tm_year = yyyy - 1900;
+        filedate.tm_mon  = mm - 1;
+        filedate.tm_mday = dd;
+        filedate.tm_hour = 12;  // noon for safety
+        time_t file_t = mktime(&filedate);
+        if (file_t < cutoff) {
+          entry.close();
+          if (SD.remove(fname.c_str())) {
+            deleted++;
+            Serial.printf("cleanOldLogs: removed %s\n", fname.c_str());
+          }
+          entry = root.openNextFile();
+          continue;
+        }
+      }
+    }
+    entry = root.openNextFile();
+  }
+  root.close();
+  if (deleted > 0) Serial.printf("cleanOldLogs: %d file(s) deleted\n", deleted);
+}
+
+// Initialize SD card on dedicated SPI bus
+void initSD() {
+  spiSD.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+  if (SD.begin(SD_CS, spiSD)) {
+    sd_available = true;
+    sd_verbose = SD.exists("/verbose.txt");
+    uint8_t cardType = SD.cardType();
+    const char* typeStr = "UNKNOWN";
+    switch (cardType) {
+      case CARD_MMC:  typeStr = "MMC";  break;
+      case CARD_SD:   typeStr = "SDSC"; break;
+      case CARD_SDHC: typeStr = "SDHC"; break;
+      case CARD_NONE: typeStr = "NONE"; break;
+    }
+    uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+    Serial.printf("SD OK: type=%s size=%lluMB verbose=%s\n",
+      typeStr, cardSize, sd_verbose ? "yes" : "no");
+  } else {
+    Serial.println("SD: not available (card missing or init failed)");
+    sd_available = false;
   }
 }
 
@@ -8340,6 +8856,10 @@ void setup() {
   Serial.println("Context:    RFID-B");
 
   loadPrefs();
+
+  // SD card init (early so logs can capture boot sequence)
+  // Note: cleanOldLogs() is deferred until after NTP sync (in wifiConnect)
+  initSD();
 
   I2C_TOUCH.begin(TOUCH_SDA, TOUCH_SCL, 400000);
   tft.init();
@@ -8372,8 +8892,10 @@ void setup() {
     nfc_ok = true;
     nfc.SAMConfig();
     Serial.printf("OK (FW %d.%d)\n", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
+    logSDf("NFC ready (PN532 FW %d.%d)", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
   } else {
     Serial.println("ERROR!");
+    logSD("NFC init FAILED");
   }
 
   Serial.print("Looking for NAU7802... ");
@@ -8389,8 +8911,10 @@ void setup() {
     }
     scale_ready = true;
     Serial.printf("OK! cal_factor=%.4f  zero_offset=%d\n", cal_factor, zero_offset);
+    logSDf("Scale ready (cal=%.4f zero=%d)", cal_factor, zero_offset);
   } else {
     Serial.println("ERROR! NAU7802 not found (address 0x2A)");
+    logSD("Scale init FAILED");
   }
 
   buildUI();
@@ -8427,6 +8951,17 @@ void loop() {
   lv_tick_inc(5);
   lv_timer_handler();
   handlePowerManagement();
+
+  // ── Loop heartbeat (every 5s, verbose only) ──────────────
+  // Helps diagnose freezes: last heartbeat timestamp = roughly when loop stopped
+  static unsigned long last_heartbeat_ms = 0;
+  static uint32_t heartbeat_count = 0;
+  if (sd_verbose && millis() - last_heartbeat_ms >= 5000) {
+    last_heartbeat_ms = millis();
+    heartbeat_count++;
+    logSDf("[verbose] heartbeat #%u heap=%d PSRAM=%d uptime=%lus",
+      heartbeat_count, ESP.getFreeHeap(), ESP.getFreePsram(), millis() / 1000);
+  }
 
   // OTA web server bedienen wenn aktiv
   if (ota_server_running) ota_server.handleClient();
@@ -8689,6 +9224,9 @@ void loop() {
 
         Serial.printf("NFC: NTAG UID=%s\n", uid_str);
 
+        bool uid_changed_ntag_log = (strcmp(uid_str, g_tag.uid_str) != 0);
+        if (uid_changed_ntag_log) logSDf("NFC: NTAG UID=%s", uid_str);
+
         lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
         lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
 
@@ -8754,6 +9292,7 @@ void loop() {
         // No tag found
         if (tag_present) {
           Serial.println("NFC: tag removed");
+          logSD("NFC: tag removed");
           tag_present = false;
           nfc_retry_count = 0;
           last_tag_seen_ms = millis();
