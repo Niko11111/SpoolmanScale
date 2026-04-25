@@ -1,4 +1,8 @@
-<img src="images/logo_2.jpeg" width="400">
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="images/logo_1.jpeg">
+  <source media="(prefers-color-scheme: dark)" srcset="images/logo_2.jpeg">
+  <img src="images/logo_2.jpeg" width="400">
+</picture>
 
 # SpoolmanScale
 
@@ -14,9 +18,11 @@ Place a spool on the scale – it reads the NFC tag, pulls the spool data from S
 
 ## Status
 
-🎉 **Public Beta is live!** Firmware **v0.5.2-beta** is released and available via the [Web Flasher](https://niko11111.github.io/SpoolmanScale) or as a direct download from [Releases](https://github.com/Niko11111/SpoolmanScale/releases).
+🎉 **Public Beta is live!** Firmware **v0.5.3-beta** is released and available via the [Web Flasher](https://niko11111.github.io/SpoolmanScale) or as a direct download from [Releases](https://github.com/Niko11111/SpoolmanScale/releases).
 
-> **Please note:** This is a beta release. A full assembly and wiring guide is currently being written and will be published soon. The 3D files will be available on MakerWorld shortly. If you run into issues in the meantime, join the [Discord](https://discord.gg/GzQzGa5pBG) – happy to help.
+> **Please note:** This is a beta release. A more detailed guide is in the works, but this README already covers all the essential steps to get your SpoolmanScale up and running. If you run into issues, join the [Discord](https://discord.gg/GzQzGa5pBG) – happy to help.
+
+Currently tested with a Spoolman library of 150+ active spools and running stable. If you have an even larger collection – I'd love to hear how it holds up!
 
 ---
 
@@ -38,6 +44,7 @@ Place a spool on the scale – it reads the NFC tag, pulls the spool data from S
 * ⚡ **Web Flasher** – first-time flash via browser over USB, no IDE needed: [niko11111.github.io/SpoolmanScale](https://niko11111.github.io/SpoolmanScale)
 * 🌍 **DE / EN language support** – language selection on first boot, switchable in settings
 * 🌙 **Power management** – display dimming, deep sleep, wake via touch
+* 🪵 **SD card logging** – Insert a microSD card and SpoolmanScale logs all events automatically. Download logs via browser – no disassembly needed. Useful for diagnosing issues and tracking device behavior during beta phase.
 
 ---
 
