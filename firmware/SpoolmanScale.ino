@@ -1,7 +1,7 @@
 // ============================================================
 //  SpoolmanScale – Bambu NFC Tag Reader & Decoder
 //  Board:   WT32-SC01 Plus (ESP32-S3)
-//  Version: v0.5.3-beta
+//  Version: v0.5.4
 //
 //  Reads Bambu Lab MIFARE Classic tags, derives keys via KDF
 //  (HKDF/SHA256, master key from Bambu-Research-Group/RFID-Tag-Guide),
@@ -61,6 +61,7 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 #include <time.h>
 #include <esp_sleep.h>
 #include <Preferences.h>
+#include <nvs_flash.h>
 // LVGL built-in QR-Code: LV_USE_QRCODE muss in lv_conf.h auf 1 gesetzt sein!
 #include "extra/libs/qrcode/lv_qrcode.h"
 #include "lang.h"
@@ -91,7 +92,7 @@ void closeIdInputPopup();
 void linkIdLookupAndPatch(int entered_id, bool is_bambu);
 void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu, const char* link_uuid);
 void showWarnPopupB(int spool_id, bool is_bambu);
-void fetchAllSpoolsForLink();
+void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter);
 void doLinkPatch(int spool_id, bool is_bambu);
 void showVendorList();
 void showMaterialList(const char* vendor_name);
@@ -175,7 +176,7 @@ static int     bright_normal   = BRIGHT_NORMAL_DEFAULT;
 static int     dim_timeout_ms  = DIM_TIMEOUT_DEFAULT;
 static int     sleep_timeout_ms = SLEEP_TIMEOUT_DEFAULT;
 #define TOUCH_INT_PIN       7   // FT6336U INT fuer Wake-Up
-#define FW_VERSION  "v0.5.3-beta"
+#define FW_VERSION  "v0.5.4"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // NAU7802 calibration
@@ -236,6 +237,13 @@ static bool extra_fields_setup_flow = false;         // true = called from setup
 static bool spoolman_fail_is_setup  = false;         // for spoolman fail screen
 static bool spoolman_test_pending   = false;         // HTTP test queued for loop
 static bool spoolman_test_in_setup  = false;         // context for test result
+static bool extra_fields_check_pending = false;      // deferred from event callback to loop
+static bool extra_fields_create_pending = false;     // deferred create from event callback
+static bool skip_setup_pending = false;  // deferred from skip button callback
+static bool cal_reminder_pending = false;            // deferred showCalReminderScreen from callback
+static bool show_bag_pending    = false;             // deferred showBagScreen from scale_sub callback
+static bool show_factor_pending = false;             // deferred showFactorScreen from scale_sub callback
+static bool lang_selected_no_reboot = false;         // EN selected on welcome screen — go to firstboot without reboot
 static uint8_t last_used_mode = 0;                   // 0=OpenSpoolMan, 1=Last Weighed
 Preferences prefs;
 
@@ -442,8 +450,8 @@ static char  sm_last_used[32] = "";
 static int nfc_retry_count = 0;
 #define NFC_MAX_RETRIES  5
 
-// ── Third-party tag linking ──────────────────────────────────
-#define LINK_MAX_SPOOLS  50
+// Set to 1 to enable touch coordinate debug output on Serial
+#define TOUCH_DEBUG 0
 
 // Tag type enum — declared globally so all functions can use it
 enum TagType { TAG_BAMBU, TAG_SPOOLSCALE, TAG_BLANK, TAG_UNKNOWN };
@@ -458,8 +466,8 @@ struct UnlinkedSpool {
   float total;         // filament.weight
   char  existing_tag[48]; // extra.tag falls gesetzt (fuer Ueberschreib-Check)
 };
-static UnlinkedSpool link_spools[LINK_MAX_SPOOLS];
-static int           link_spool_count = 0;
+static UnlinkedSpool* link_spools = nullptr;  // PSRAM-allocated at fetch time, freed after link flow
+static int            link_spool_count = 0;
 static char          link_tag_uid[24] = "";   // UID of the tag to be linked
 static lv_obj_t     *scr_link_list = nullptr; // Spool selection overlay (old, kept for compatibility)
 
@@ -564,11 +572,13 @@ void lvgl_touch(lv_indev_drv_t *drv, lv_indev_data_t *data) {
     data->state = LV_INDEV_STATE_PR;
     data->point.x = x; data->point.y = y;
     resetActivityTimer();
+    #if TOUCH_DEBUG
     static unsigned long last_log = 0;
     if (millis() - last_log > 200) {
       Serial.printf("TOUCH x=%d y=%d\n", x, y);
       last_log = millis();
     }
+    #endif
   } else {
     data->state = LV_INDEV_STATE_REL;
   }
@@ -996,47 +1006,88 @@ void hideAllOverlays() {
     logSDf("[verbose] hideAllOverlays: %d visible, more_info=%s",
       visible_count, scr_more_info ? "yes(will delete)" : "no");
   }
-  // More info screen is always rebuilt, so delete it
+  // scr_more_info is always rebuilt — safe to delete here
   if (scr_more_info) {
     if (sd_verbose) logSD("[verbose] hideAllOverlays: deleting scr_more_info");
     lv_obj_del(scr_more_info); scr_more_info = nullptr;
     if (sd_verbose) logSD("[verbose] hideAllOverlays: scr_more_info deleted OK");
   }
-  if (scr_settings)      lv_obj_add_flag(scr_settings,      LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi)          lv_obj_add_flag(scr_wifi,          LV_OBJ_FLAG_HIDDEN);
-  if (scr_spoolman)      lv_obj_add_flag(scr_spoolman,      LV_OBJ_FLAG_HIDDEN);
+  // All other screens: hidden only. Deleting here causes PANIC because
+  // callbacks call hideAllOverlays() while still running inside the screen's
+  // event context. Safe deletion happens in showMainScreen() and showSettingsScreen().
+  if (scr_settings)    lv_obj_add_flag(scr_settings,    LV_OBJ_FLAG_HIDDEN);
+  if (scr_connection)  lv_obj_add_flag(scr_connection,  LV_OBJ_FLAG_HIDDEN);
+  if (scr_scale_sub)   lv_obj_add_flag(scr_scale_sub,   LV_OBJ_FLAG_HIDDEN);
+  if (scr_display)     lv_obj_add_flag(scr_display,     LV_OBJ_FLAG_HIDDEN);
+  if (scr_system)      lv_obj_add_flag(scr_system,      LV_OBJ_FLAG_HIDDEN);
+  if (scr_ota)         lv_obj_add_flag(scr_ota,         LV_OBJ_FLAG_HIDDEN);
+  if (scr_ota_browser) lv_obj_add_flag(scr_ota_browser, LV_OBJ_FLAG_HIDDEN);
+  if (scr_ota_github)  lv_obj_add_flag(scr_ota_github,  LV_OBJ_FLAG_HIDDEN);
+  if (scr_factor)      lv_obj_add_flag(scr_factor,      LV_OBJ_FLAG_HIDDEN);
+  if (scr_bag)         lv_obj_add_flag(scr_bag,         LV_OBJ_FLAG_HIDDEN);
+  if (scr_lastused)    lv_obj_add_flag(scr_lastused,    LV_OBJ_FLAG_HIDDEN);
   if (scr_spoolman_fail) lv_obj_add_flag(scr_spoolman_fail, LV_OBJ_FLAG_HIDDEN);
-  if (scr_factor)        lv_obj_add_flag(scr_factor,        LV_OBJ_FLAG_HIDDEN);
-  if (scr_bag)           lv_obj_add_flag(scr_bag,           LV_OBJ_FLAG_HIDDEN);
-  if (scr_lastused)      lv_obj_add_flag(scr_lastused,      LV_OBJ_FLAG_HIDDEN);
-  if (scr_connection)    lv_obj_add_flag(scr_connection,    LV_OBJ_FLAG_HIDDEN);
-  if (scr_scale_sub)     lv_obj_add_flag(scr_scale_sub,     LV_OBJ_FLAG_HIDDEN);
-  if (scr_display)       lv_obj_add_flag(scr_display,       LV_OBJ_FLAG_HIDDEN);
-  if (scr_system)        lv_obj_add_flag(scr_system,        LV_OBJ_FLAG_HIDDEN);
-  if (scr_ota)           lv_obj_add_flag(scr_ota,           LV_OBJ_FLAG_HIDDEN);
-  if (scr_ota_browser)   lv_obj_add_flag(scr_ota_browser,   LV_OBJ_FLAG_HIDDEN);
-  if (scr_ota_github)    lv_obj_add_flag(scr_ota_github,    LV_OBJ_FLAG_HIDDEN);
-  if (scr_welcome)       lv_obj_add_flag(scr_welcome,       LV_OBJ_FLAG_HIDDEN);
-  if (scr_first_boot)    lv_obj_add_flag(scr_first_boot,    LV_OBJ_FLAG_HIDDEN);
-  if (scr_extra_fields)  lv_obj_add_flag(scr_extra_fields,  LV_OBJ_FLAG_HIDDEN);
-  if (scr_cal_reminder)  lv_obj_add_flag(scr_cal_reminder,  LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi_setup)    lv_obj_add_flag(scr_wifi_setup,    LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi_pass)     lv_obj_add_flag(scr_wifi_pass,     LV_OBJ_FLAG_HIDDEN);
+  if (scr_wifi)        lv_obj_add_flag(scr_wifi,        LV_OBJ_FLAG_HIDDEN);
+  if (scr_spoolman)    lv_obj_add_flag(scr_spoolman,    LV_OBJ_FLAG_HIDDEN);
+  if (scr_welcome)     lv_obj_add_flag(scr_welcome,     LV_OBJ_FLAG_HIDDEN);
+  if (scr_first_boot)  lv_obj_add_flag(scr_first_boot,  LV_OBJ_FLAG_HIDDEN);
+  if (scr_extra_fields) lv_obj_add_flag(scr_extra_fields, LV_OBJ_FLAG_HIDDEN);
+  if (scr_cal_reminder) lv_obj_add_flag(scr_cal_reminder, LV_OBJ_FLAG_HIDDEN);
+  if (scr_wifi_setup)  lv_obj_add_flag(scr_wifi_setup,  LV_OBJ_FLAG_HIDDEN);
+  if (scr_wifi_pass)   lv_obj_add_flag(scr_wifi_pass,   LV_OBJ_FLAG_HIDDEN);
   if (scr_wifi_connecting) lv_obj_add_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN);
+  // Free PSRAM spool list if link flow was aborted
+  if (link_spools) { heap_caps_free(link_spools); link_spools = nullptr; link_spool_count = 0; }
 }
 
 void showMainScreen() {
   logSD("UI: Screen -> Main");
   hideAllOverlays();
+  // Safe to delete all menu screens here — no screen callbacks are active
+  if (scr_settings)    { lv_obj_del(scr_settings);    scr_settings    = nullptr; }
+  if (scr_connection)  { lv_obj_del(scr_connection);  scr_connection  = nullptr; }
+  if (scr_scale_sub)   { lv_obj_del(scr_scale_sub);   scr_scale_sub   = nullptr; }
+  if (scr_display)     { lv_obj_del(scr_display);     scr_display     = nullptr; }
+  if (scr_system)      { lv_obj_del(scr_system);      scr_system      = nullptr; }
+  if (scr_ota)         { lv_obj_del(scr_ota);         scr_ota         = nullptr; }
+  if (scr_ota_browser) { lv_obj_del(scr_ota_browser); scr_ota_browser = nullptr; }
+  if (scr_ota_github)  { lv_obj_del(scr_ota_github);  scr_ota_github  = nullptr; }
+  if (scr_factor)      { lv_obj_del(scr_factor);      scr_factor      = nullptr; }
+  if (scr_bag)         { lv_obj_del(scr_bag);         scr_bag         = nullptr; }
+  if (scr_lastused)    { lv_obj_del(scr_lastused);    scr_lastused    = nullptr; }
+  if (scr_spoolman_fail){ lv_obj_del(scr_spoolman_fail); scr_spoolman_fail = nullptr; }
+  if (scr_welcome)     { lv_obj_del(scr_welcome);     scr_welcome     = nullptr; }
+  if (scr_first_boot)  { lv_obj_del(scr_first_boot);  scr_first_boot  = nullptr; }
+  if (scr_extra_fields){ lv_obj_del(scr_extra_fields); scr_extra_fields = nullptr;
+                         lbl_extra_fields_status = nullptr;
+                         btn_extra_fields_create = nullptr;
+                         btn_extra_fields_next   = nullptr; }
+  if (scr_cal_reminder){ lv_obj_del(scr_cal_reminder); scr_cal_reminder = nullptr; }
   resetActivityTimer();
 }
 
 void showSettingsScreen() {
   logSD("UI: Screen -> Settings");
+  // Free setup screens if still in memory
+  if (scr_welcome)    { lv_obj_del(scr_welcome);    scr_welcome    = nullptr; }
+  if (scr_first_boot) { lv_obj_del(scr_first_boot); scr_first_boot = nullptr; }
+  if (scr_wifi_setup) { lv_obj_del(scr_wifi_setup); scr_wifi_setup = nullptr; }
+  if (scr_wifi_pass)  { lv_obj_del(scr_wifi_pass);  scr_wifi_pass  = nullptr; }
   hideAllOverlays();
-  if (!scr_settings) {
-    buildSettingsScreen();
-  }
+  // Safe to delete sub-screens here — no sub-screen callbacks are active
+  if (scr_settings)    { lv_obj_del(scr_settings);    scr_settings    = nullptr; }
+  if (scr_connection)  { lv_obj_del(scr_connection);  scr_connection  = nullptr; }
+  if (scr_scale_sub)   { lv_obj_del(scr_scale_sub);   scr_scale_sub   = nullptr; }
+  if (scr_display)     { lv_obj_del(scr_display);     scr_display     = nullptr; }
+  if (scr_system)      { lv_obj_del(scr_system);      scr_system      = nullptr; }
+  if (scr_ota)         { lv_obj_del(scr_ota);         scr_ota         = nullptr; }
+  if (scr_ota_browser) { lv_obj_del(scr_ota_browser); scr_ota_browser = nullptr; }
+  if (scr_ota_github)  { lv_obj_del(scr_ota_github);  scr_ota_github  = nullptr; }
+  if (scr_factor)      { lv_obj_del(scr_factor);      scr_factor      = nullptr; }
+  if (scr_bag)         { lv_obj_del(scr_bag);         scr_bag         = nullptr; }
+  if (scr_lastused)    { lv_obj_del(scr_lastused);    scr_lastused    = nullptr; }
+  if (scr_spoolman_fail){ lv_obj_del(scr_spoolman_fail); scr_spoolman_fail = nullptr; }
+  buildSettingsScreen();
   lv_obj_clear_flag(scr_settings, LV_OBJ_FLAG_HIDDEN);
   resetActivityTimer();
 }
@@ -1122,13 +1173,16 @@ void buildWelcomeScreen() {
   lv_obj_set_style_text_font(lbl_en, &lv_font_montserrat_18, 0);
   lv_obj_center(lbl_en);
   lv_obj_add_event_cb(btn_en, [](lv_event_t *e){
-    g_lang = LANG_EN;
     Preferences p; p.begin("spoolscale", false);
     p.putUChar("lang", 1);
     p.putBool("lang_set", true);
-    p.putBool("first_boot", true);  // show welcome screen after restart
+    p.putBool("first_boot", true);
     p.end();
-    ESP.restart();
+    g_lang = LANG_EN;
+    cfg_lang_set = true;
+    cfg_first_boot = true;
+    // EN is default — no reboot needed, defer screen switch to loop
+    lang_selected_no_reboot = true;
   }, LV_EVENT_CLICKED, NULL);
 
   // DE button (rechts)
@@ -1236,10 +1290,10 @@ void buildFirstBootScreen() {
     lv_obj_center(lbl_cx);
   }
 
-  // Get started button
+  // Get started button (links) + Skip button (rechts), symmetrisch
   lv_obj_t *btn_start = lv_btn_create(scr_first_boot);
-  lv_obj_set_size(btn_start, 240, 52);
-  lv_obj_align(btn_start, LV_ALIGN_BOTTOM_MID, 0, -28);
+  lv_obj_set_size(btn_start, 226, 48);
+  lv_obj_set_pos(btn_start, 12, 252);
   lv_obj_set_style_bg_color(btn_start, lv_color_hex(0x1a3020), 0);
   lv_obj_set_style_bg_color(btn_start, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_start, 10, 0);
@@ -1247,19 +1301,40 @@ void buildFirstBootScreen() {
   lv_obj_set_style_border_width(btn_start, 1, 0);
   lv_obj_set_style_border_color(btn_start, lv_color_hex(0x2a5030), 0);
   lv_obj_add_event_cb(btn_start, [](lv_event_t *e) {
-    // Mark first boot as done
     Preferences p; p.begin("spoolscale", false);
     p.putBool("first_boot", false);
     p.end();
     cfg_first_boot = false;
-    // Go to WiFi setup
     showWifiSetupScreen();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_start = lv_label_create(btn_start);
   lv_label_set_text(lbl_start, T(STR_FIRSTBOOT_BTN));
   lv_obj_set_style_text_color(lbl_start, lv_color_hex(0x40c080), 0);
-  lv_obj_set_style_text_font(lbl_start, &lv_font_montserrat_18, 0);
-  lv_obj_center(lbl_start);
+  lv_obj_set_style_text_font(lbl_start, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_align(lbl_start, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(lbl_start, LV_ALIGN_CENTER, 0, 0);
+
+  // Skip setup button (rechts)
+  lv_obj_t *btn_skip = lv_btn_create(scr_first_boot);
+  lv_obj_set_size(btn_skip, 226, 48);
+  lv_obj_set_pos(btn_skip, 242, 252);
+  lv_obj_set_style_bg_color(btn_skip, lv_color_hex(0x0a1828), 0);
+  lv_obj_set_style_bg_color(btn_skip, lv_color_hex(0x1a2840), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_skip, 10, 0);
+  lv_obj_set_style_shadow_width(btn_skip, 0, 0);
+  lv_obj_set_style_border_width(btn_skip, 1, 0);
+  lv_obj_set_style_border_color(btn_skip, lv_color_hex(0x1a2840), 0);
+  lv_obj_add_event_cb(btn_skip, [](lv_event_t *e) {
+    skip_setup_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lbl_skip = lv_label_create(btn_skip);
+  char skip_buf[32];
+  strncpy(skip_buf, T(STR_BTN_SKIP_SETUP), sizeof(skip_buf)-1);
+  lv_label_set_text(lbl_skip, skip_buf);
+  lv_obj_set_style_text_color(lbl_skip, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(lbl_skip, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_align(lbl_skip, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(lbl_skip, LV_ALIGN_CENTER, 0, 0);
 }
 
 // ============================================================
@@ -1303,33 +1378,12 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
         lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
       });
   } else {
-    // Setup flow: title + Back (→ Spoolman IP) + X (→ main screen)
+    // Setup flow: title only + X (→ main screen), no back button
     lv_obj_t *lbl_title = lv_label_create(scr_extra_fields);
     lv_label_set_text(lbl_title, T(STR_EXTRA_FIELDS_TITLE));
     lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
     lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_18, 0);
     lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 12);
-
-    // Back → Spoolman IP screen
-    lv_obj_t *btn_bk = lv_btn_create(scr_extra_fields);
-    lv_obj_set_size(btn_bk, 44, 44);
-    lv_obj_set_pos(btn_bk, 4, 2);
-    lv_obj_set_style_bg_color(btn_bk, lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_bg_color(btn_bk, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(btn_bk, 8, 0);
-    lv_obj_set_style_shadow_width(btn_bk, 0, 0);
-    lv_obj_set_style_border_width(btn_bk, 0, 0);
-    lv_obj_add_event_cb(btn_bk, [](lv_event_t *e){
-      hideAllOverlays();
-      if (scr_spoolman) { lv_obj_del(scr_spoolman); scr_spoolman = nullptr; }
-      buildSpoolmanScreen();
-      lv_obj_clear_flag(scr_spoolman, LV_OBJ_FLAG_HIDDEN);
-    }, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *lbl_bk = lv_label_create(btn_bk);
-    lv_label_set_text(lbl_bk, LV_SYMBOL_LEFT);
-    lv_obj_set_style_text_color(lbl_bk, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(lbl_bk, &lv_font_montserrat_18, 0);
-    lv_obj_center(lbl_bk);
 
     // X → main screen (exit setup)
     lv_obj_t *btn_x = lv_btn_create(scr_extra_fields);
@@ -1369,7 +1423,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_set_style_border_width(btn_check, 1, 0);
   lv_obj_set_style_border_color(btn_check, lv_color_hex(0x1a3060), 0);
   lv_obj_add_event_cb(btn_check, [](lv_event_t *e) {
-    checkAndCreateExtraFields(false);
+    extra_fields_check_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_check = lv_label_create(btn_check);
   lv_label_set_text(lbl_check, T(STR_EXTRA_FIELDS_CHECK_BTN));
@@ -1449,7 +1503,8 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
       lv_obj_t *box_obj = lv_obj_get_parent(lv_event_get_target(e));
       lv_obj_t *pop_obj = lv_obj_get_parent(box_obj);
       lv_obj_del(pop_obj);
-      checkAndCreateExtraFields(true);
+      // Defer HTTP call to loop — never call HTTP directly from LVGL event callback
+      extra_fields_create_pending = true;
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_conf = lv_label_create(btn_conf);
     lv_label_set_text(lbl_conf, T(STR_CONFIRM));
@@ -1496,10 +1551,12 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_set_style_border_width(btn_skip_bottom, 1, 0);
   lv_obj_set_style_border_color(btn_skip_bottom, lv_color_hex(0x1a2840), 0);
   lv_obj_add_event_cb(btn_skip_bottom, [](lv_event_t *e) {
-    if (extra_fields_setup_flow) showCalReminderScreen();
-    else {
+    if (extra_fields_setup_flow) {
+      // Defer to loop — never call showCalReminderScreen directly from LVGL callback
+      cal_reminder_pending = true;
+    } else {
       if (!scr_connection) buildConnectionScreen();
-      hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
+      if (!scr_connection) buildConnectionScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
     }
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_skip_b = lv_label_create(btn_skip_bottom);
@@ -1577,16 +1634,21 @@ void checkAndCreateExtraFields(bool create_missing) {
   lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0x4a6fa0), 0);
   if (btn_extra_fields_create) lv_obj_add_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
   lv_timer_handler();
+  yield();
 
   // GET /api/v1/field/spool — list all existing extra fields
   HTTPClient http;
   String url = String(cfg_spoolman_base) + "/api/v1/field/spool";
   http.begin(url);
-  http.setTimeout(1500);
+  http.setTimeout(4000);
   int code = http.GET();
+  yield();
+  lv_timer_handler();
   String payload = "";
   if (code == 200) payload = http.getString();
   http.end();
+  yield();
+  lv_timer_handler();
 
   Serial.printf("Extra fields GET: %d\n", code);
 
@@ -1663,19 +1725,24 @@ void checkAndCreateExtraFields(bool create_missing) {
   lv_label_set_text(lbl_extra_fields_status, T(STR_EXTRA_FIELDS_CREATING));
   lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0x4a6fa0), 0);
   lv_timer_handler();
+  yield();
 
   char fail_fields[64] = "";
   int fail_count = 0;
   for (int i = 0; i < ef_count; i++) {
     if (field_exists[i]) continue;
+    lv_timer_handler();  // keep LVGL alive between HTTP calls
+    yield();             // feed watchdog
     HTTPClient http2;
     String create_url = String(cfg_spoolman_base) + "/api/v1/field/spool/" + REQUIRED_EXTRA_FIELDS_BASE[i];
     http2.begin(create_url);
     http2.addHeader("Content-Type", "application/json");
-    http2.setTimeout(1500);
+    http2.setTimeout(3000);
     String body = "{\"name\":\"" + String(REQUIRED_EXTRA_FIELDS_BASE[i]) + "\",\"field_type\":\"text\",\"default_value\":\"\\\"\\\"\" }";
     int c2 = http2.POST(body);
     http2.end();
+    lv_timer_handler();  // update display after each POST
+    yield();
     Serial.printf("Create field '%s': %d\n", REQUIRED_EXTRA_FIELDS_BASE[i], c2);
     if (c2 != 200 && c2 != 201) {
       if (fail_count > 0) strncat(fail_fields, ", ", sizeof(fail_fields)-1);
@@ -1691,7 +1758,9 @@ void checkAndCreateExtraFields(bool create_missing) {
     lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
   } else {
     if (btn_extra_fields_create) lv_obj_add_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
-    checkAndCreateExtraFields(false);
+    yield();
+    lv_timer_handler();
+    checkAndCreateExtraFields(false);  // verify fields were created
   }
 }
 
@@ -1699,15 +1768,36 @@ void checkAndCreateExtraFields(bool create_missing) {
 //  CALIBRATION REMINDER SCREEN (end of first setup)
 // ============================================================
 void showCalReminderScreen() {
-  logSD("UI: Screen -> CalReminder");
+  logSD("UI: Screen -> CalReminder: start");
+  Serial.println("showCalReminderScreen: start");
+  // Free all setup screens to release LVGL heap before building
+  if (scr_welcome)       { lv_obj_del(scr_welcome);       scr_welcome       = nullptr; }
+  if (scr_first_boot)    { lv_obj_del(scr_first_boot);    scr_first_boot    = nullptr; }
+  if (scr_wifi_setup)    { lv_obj_del(scr_wifi_setup);    scr_wifi_setup    = nullptr; }
+  if (scr_wifi_pass)     { lv_obj_del(scr_wifi_pass);     scr_wifi_pass     = nullptr; }
+  if (scr_spoolman)      { lv_obj_del(scr_spoolman);      scr_spoolman      = nullptr; }
+  if (scr_extra_fields)  { lv_obj_del(scr_extra_fields);  scr_extra_fields  = nullptr;
+                           lbl_extra_fields_status = nullptr;
+                           btn_extra_fields_create = nullptr;
+                           btn_extra_fields_next   = nullptr; }
   hideAllOverlays();
+  logSD("UI: Screen -> CalReminder: hideAllOverlays done");
+  Serial.println("showCalReminderScreen: hideAllOverlays done");
   if (scr_cal_reminder) { lv_obj_del(scr_cal_reminder); scr_cal_reminder = nullptr; }
+  logSD("UI: Screen -> CalReminder: building");
+  Serial.println("showCalReminderScreen: building");
   buildCalReminderScreen();
+  logSD("UI: Screen -> CalReminder: build done");
+  Serial.println("showCalReminderScreen: build done");
   lv_obj_clear_flag(scr_cal_reminder, LV_OBJ_FLAG_HIDDEN);
+  logSD("UI: Screen -> CalReminder: visible");
+  Serial.println("showCalReminderScreen: visible OK");
 }
 
 void buildCalReminderScreen() {
+  Serial.println("buildCalReminderScreen: start");
   scr_cal_reminder = lv_obj_create(lv_scr_act());
+  Serial.println("buildCalReminderScreen: obj created");
   lv_obj_set_size(scr_cal_reminder, 480, 320);
   lv_obj_set_pos(scr_cal_reminder, 0, 0);
   lv_obj_add_flag(scr_cal_reminder, LV_OBJ_FLAG_HIDDEN);
@@ -1717,12 +1807,13 @@ void buildCalReminderScreen() {
   lv_obj_clear_flag(scr_cal_reminder, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_bg_color(scr_cal_reminder, lv_color_hex(0x0a1020), 0);
 
-  // Copy strings to RAM buffers
-  char buf_title[48], buf_msg[256], buf_later[32], buf_now[48];
+  // Static buffers — must outlive the function since LVGL holds pointers to them
+  static char buf_title[48], buf_msg[256], buf_later[32], buf_now[48];
   strncpy(buf_title, T(STR_CAL_REMINDER_TITLE), sizeof(buf_title)-1); buf_title[sizeof(buf_title)-1]=0;
   strncpy(buf_msg,   T(STR_CAL_REMINDER_MSG),   sizeof(buf_msg)-1);   buf_msg[sizeof(buf_msg)-1]=0;
   strncpy(buf_later, T(STR_CAL_REMINDER_LATER), sizeof(buf_later)-1); buf_later[sizeof(buf_later)-1]=0;
   strncpy(buf_now,   T(STR_CAL_REMINDER_NOW),   sizeof(buf_now)-1);   buf_now[sizeof(buf_now)-1]=0;
+  Serial.println("buildCalReminderScreen: strings copied");
 
   // Title
   lv_obj_t *lbl_title = lv_label_create(scr_cal_reminder);
@@ -1731,10 +1822,7 @@ void buildCalReminderScreen() {
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_18, 0);
   lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 20);
 
-  // Back → extra fields screen
-  addBackButton(scr_cal_reminder, [](lv_event_t *e){
-    showExtraFieldsScreen(true);
-  });
+  // No back button in setup flow — CalReminder is the last setup step
   addCloseButton(scr_cal_reminder);
 
   // Icon
@@ -1754,43 +1842,24 @@ void buildCalReminderScreen() {
   lv_obj_set_width(lbl_msg, 440);
   lv_obj_align(lbl_msg, LV_ALIGN_TOP_MID, 0, 88);
 
-  // Later button
-  lv_obj_t *btn_later = lv_btn_create(scr_cal_reminder);
-  lv_obj_set_size(btn_later, 200, 48);
-  lv_obj_align(btn_later, LV_ALIGN_BOTTOM_LEFT, 16, -20);
-  lv_obj_set_style_bg_color(btn_later, lv_color_hex(0x1a2030), 0);
-  lv_obj_set_style_bg_color(btn_later, lv_color_hex(0x2a3040), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_later, 8, 0);
-  lv_obj_set_style_shadow_width(btn_later, 0, 0);
-  lv_obj_set_style_border_width(btn_later, 1, 0);
-  lv_obj_set_style_border_color(btn_later, lv_color_hex(0x1a2840), 0);
-  lv_obj_add_event_cb(btn_later, [](lv_event_t *e) {
+  // Single "Got it" button — centers, leads to main screen
+  lv_obj_t *btn_got = lv_btn_create(scr_cal_reminder);
+  lv_obj_set_size(btn_got, 280, 48);
+  lv_obj_align(btn_got, LV_ALIGN_BOTTOM_MID, 0, -20);
+  lv_obj_set_style_bg_color(btn_got, lv_color_hex(0x1a3020), 0);
+  lv_obj_set_style_bg_color(btn_got, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_got, 8, 0);
+  lv_obj_set_style_shadow_width(btn_got, 0, 0);
+  lv_obj_set_style_border_width(btn_got, 1, 0);
+  lv_obj_set_style_border_color(btn_got, lv_color_hex(0x2a5030), 0);
+  lv_obj_add_event_cb(btn_got, [](lv_event_t *e) {
     showMainScreen();
   }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_later = lv_label_create(btn_later);
-  lv_label_set_text(lbl_later, buf_later);
-  lv_obj_set_style_text_color(lbl_later, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_later, &lv_font_montserrat_16, 0);
-  lv_obj_center(lbl_later);
-
-  // Calibrate now button
-  lv_obj_t *btn_cal = lv_btn_create(scr_cal_reminder);
-  lv_obj_set_size(btn_cal, 220, 48);
-  lv_obj_align(btn_cal, LV_ALIGN_BOTTOM_RIGHT, -16, -20);
-  lv_obj_set_style_bg_color(btn_cal, lv_color_hex(0x1a3020), 0);
-  lv_obj_set_style_bg_color(btn_cal, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_cal, 8, 0);
-  lv_obj_set_style_shadow_width(btn_cal, 0, 0);
-  lv_obj_set_style_border_width(btn_cal, 1, 0);
-  lv_obj_set_style_border_color(btn_cal, lv_color_hex(0x2a5030), 0);
-  lv_obj_add_event_cb(btn_cal, [](lv_event_t *e) {
-    showFactorScreen();
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_cal = lv_label_create(btn_cal);
-  lv_label_set_text(lbl_cal, buf_now);
-  lv_obj_set_style_text_color(lbl_cal, lv_color_hex(0x40c080), 0);
-  lv_obj_set_style_text_font(lbl_cal, &lv_font_montserrat_16, 0);
-  lv_obj_center(lbl_cal);
+  lv_obj_t *lbl_got = lv_label_create(btn_got);
+  lv_label_set_text(lbl_got, buf_later);
+  lv_obj_set_style_text_color(lbl_got, lv_color_hex(0x40c080), 0);
+  lv_obj_set_style_text_font(lbl_got, &lv_font_montserrat_16, 0);
+  lv_obj_center(lbl_got);
 }
 
 // ============================================================
@@ -1830,7 +1899,9 @@ void buildWifiSetupScreen() {
     if (strlen(cfg_wifi_ssid) == 0) {
       showWelcomeScreen();
     } else {
-      showSettingsScreen();
+      hideAllOverlays();
+      buildConnectionScreen();
+      lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
     }
   });
 
@@ -2213,7 +2284,7 @@ void buildWifiScreen() {
   lv_obj_set_width(lbl_wifi_info, 380);
   lv_obj_set_style_text_align(lbl_wifi_info, LV_TEXT_ALIGN_LEFT, 0);
 
-  addBackButton(scr_wifi, [](lv_event_t *e){ if (!scr_connection) buildConnectionScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN); });
+  addBackButton(scr_wifi, [](lv_event_t *e){ if (!scr_connection) buildConnectionScreen(); if (!scr_connection) buildConnectionScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN); });
   addCloseButton(scr_wifi);
 }
 
@@ -2245,6 +2316,8 @@ void updateWifiInfo() {
 // Input buffer for Spoolman IP
 static char sp_ip_input[64] = "";
 static lv_obj_t *lbl_sp_ip_display = nullptr;
+static lv_obj_t *lbl_sp_test_result = nullptr;  // test result label on IP screen
+static lv_obj_t *btn_sp_extra_fields = nullptr;  // Extra Fields button on IP screen
 
 void buildSpoolmanScreen() {
   scr_spoolman = lv_obj_create(lv_scr_act());
@@ -2263,21 +2336,27 @@ void buildSpoolmanScreen() {
       if (sp_ip_input[0]) saveSpoolmanIP(sp_ip_input);
       if (scr_connection) { lv_obj_del(scr_connection); scr_connection = nullptr; }
       buildConnectionScreen();
-      hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
+      if (!scr_connection) buildConnectionScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
     });
 
-  // Hint
+  // Hint: port info, font10, y=54 (between subheader and input)
   lv_obj_t *lbl_hint = lv_label_create(scr_spoolman);
-  lv_label_set_text(lbl_hint, T(STR_SPOOLMAN_HINT));
-  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_14, 0);
-  lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 56);
+  lv_label_set_text(lbl_hint, "192.168.x.x:7912");
+  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_10, 0);
+  lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 54);
 
-  // Input field (breit, zeigt aktuellen Wert oder Eingabe)
-  strncpy(sp_ip_input, cfg_spoolman_ip, sizeof(sp_ip_input)-1);
+  // Pre-fill with "192.168." if empty — user only needs to add last two octets + port
+  if (cfg_spoolman_ip[0] == '\0') {
+    strncpy(sp_ip_input, "192.168.", sizeof(sp_ip_input)-1);
+  } else {
+    strncpy(sp_ip_input, cfg_spoolman_ip, sizeof(sp_ip_input)-1);
+  }
+  sp_ip_input[sizeof(sp_ip_input)-1] = '\0';
   lv_obj_t *input_box = lv_obj_create(scr_spoolman);
-  lv_obj_set_size(input_box, 420, 42);
-  lv_obj_align(input_box, LV_ALIGN_TOP_MID, 0, 76);
+  lv_obj_set_size(input_box, 420, 34);
+  lv_obj_align(input_box, LV_ALIGN_TOP_MID, 0, 68);
   lv_obj_set_style_bg_color(input_box, lv_color_hex(0x0a1828), 0);
   lv_obj_set_style_border_color(input_box, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_border_width(input_box, 1, 0);
@@ -2292,15 +2371,10 @@ void buildSpoolmanScreen() {
   lv_obj_set_style_text_align(lbl_sp_ip_display, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_center(lbl_sp_ip_display);
 
-  // ── Numpad: 4 rows, 3 columns ──
-  // Row 1: 1 2 3
-  // Row 2: 4 5 6
-  // Row 3: 7 8 9
-  // Row 4: . 0 :
-  // Row 5: [⌫ delete] [✓ save] (half width each)
-  const int NP_W = 130, NP_H = 34, NP_GAP = 4;
-  const int NP_PAD_X = (480 - 3*NP_W - 2*NP_GAP) / 2;  // = 23
-  const int NP_START_Y = 126;
+  // Numpad: NP_H=32, NP_GAP=3, start y=104 — larger than before
+  const int NP_W = 130, NP_H = 32, NP_GAP = 3;
+  const int NP_PAD_X = (480 - 3*NP_W - 2*NP_GAP) / 2;
+  const int NP_START_Y = 104;
 
   const char* np_labels[] = {
     "1","2","3",
@@ -2379,20 +2453,120 @@ void buildSpoolmanScreen() {
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
     if (!sp_ip_input[0]) return;
     saveSpoolmanIP(sp_ip_input);
-    bool in_setup = (strlen(cfg_wifi_ssid) > 0 && scr_connection == nullptr);
-    if (in_setup) {
-      showExtraFieldsScreen(true);
-    } else {
-      if (scr_connection) { lv_obj_del(scr_connection); scr_connection = nullptr; }
-      buildConnectionScreen();
-      hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
+
+    // Show testing status
+    if (lbl_sp_test_result) {
+      lv_label_set_text(lbl_sp_test_result, "Connecting...");
+      lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x4a6fa0), 0);
     }
+    if (btn_sp_extra_fields) lv_obj_add_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
+    lv_timer_handler();
+
+    // Health check
+    HTTPClient hc;
+    hc.begin(String(cfg_spoolman_base) + "/api/v1/health");
+    hc.setTimeout(4000);
+    int hcode = hc.GET();
+    hc.end();
+    sm_reachable = (hcode == 200);
+
+    if (!sm_reachable) {
+      if (lbl_sp_test_result) {
+        char buf[48];
+        snprintf(buf, sizeof(buf), "Error: HTTP %d", hcode);
+        lv_label_set_text(lbl_sp_test_result, buf);
+        lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0xff8080), 0);
+      }
+      logSDf("Spoolman IP test FAIL: HTTP %d ip=%s", hcode, sp_ip_input);
+      Serial.printf("Spoolman IP test FAIL: HTTP %d ip=%s\n", hcode, sp_ip_input);
+      return;
+    }
+
+    // Fetch version from /api/v1/info
+    char sm_ver[32] = "?";
+    HTTPClient hci;
+    hci.begin(String(cfg_spoolman_base) + "/api/v1/info");
+    hci.setTimeout(3000);
+    if (hci.GET() == 200) {
+      StaticJsonDocument<256> idoc;
+      if (!deserializeJson(idoc, hci.getString())) {
+        strncpy(sm_ver, idoc["version"] | "?", sizeof(sm_ver)-1);
+      }
+    }
+    hci.end();
+
+    // Count spools by matching '"filament":' — exactly 1 per spool, avoids counting nested ids
+    int spool_count = 0;
+    HTTPClient hcs;
+    hcs.begin(String(cfg_spoolman_base) + "/api/v1/spool?allow_archived=false");
+    hcs.setTimeout(6000);
+    if (hcs.GET() == 200) {
+      WiFiClient* stream = hcs.getStreamPtr();
+      char buf[11] = {0};
+      while (hcs.connected() && stream->available()) {
+        char c = stream->read();
+        memmove(buf, buf+1, 9);
+        buf[9] = c;
+        if (memcmp(buf, "\"filament\"", 10) == 0) spool_count++;
+      }
+    }
+    hcs.end();
+
+    // Show result on screen
+    char result_buf[64];
+    snprintf(result_buf, sizeof(result_buf), "v%s | %d spools", sm_ver, spool_count);
+    if (lbl_sp_test_result) {
+      lv_label_set_text(lbl_sp_test_result, result_buf);
+      lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x40c080), 0);
+    }
+    // Show Extra Fields button
+    if (btn_sp_extra_fields) lv_obj_clear_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
+
+    logSDf("Spoolman IP test OK: %s | %d spools", sm_ver, spool_count);
+    Serial.printf("Spoolman IP test OK: %s | %d spools\n", sm_ver, spool_count);
+    updateHeaderStatus();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
   lv_label_set_text(lbl_ok, T(STR_BTN_SAVE));
   lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0x40c080), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_16, 0);
   lv_obj_center(lbl_ok);
+
+  // Bottom area: test result info (left) + Extra Fields button (right)
+  // numpad bottom = NP_START_Y + 4*(NP_H+NP_GAP) + NP_H = 104+4*35+32 = 276
+  // bottom row y=281, h=32, bottom=313 (7px margin)
+  const int BOT_Y = 281, BOT_H = 32;
+
+  // Test result label — left side, y=281
+  lbl_sp_test_result = lv_label_create(scr_spoolman);
+  lv_label_set_text(lbl_sp_test_result, "");
+  lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(lbl_sp_test_result, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_align(lbl_sp_test_result, LV_TEXT_ALIGN_LEFT, 0);
+  lv_obj_set_size(lbl_sp_test_result, 260, BOT_H);
+  lv_obj_set_pos(lbl_sp_test_result, NP_PAD_X, BOT_Y + 4);
+
+  // Extra Fields button — right side, 170px wide
+  btn_sp_extra_fields = lv_btn_create(scr_spoolman);
+  lv_obj_set_size(btn_sp_extra_fields, 170, BOT_H);
+  lv_obj_set_pos(btn_sp_extra_fields, 480 - NP_PAD_X - 170, BOT_Y);
+  lv_obj_set_style_bg_color(btn_sp_extra_fields, lv_color_hex(0x0a1e30), 0);
+  lv_obj_set_style_bg_color(btn_sp_extra_fields, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_sp_extra_fields, 8, 0);
+  lv_obj_set_style_shadow_width(btn_sp_extra_fields, 0, 0);
+  lv_obj_set_style_border_width(btn_sp_extra_fields, 1, 0);
+  lv_obj_set_style_border_color(btn_sp_extra_fields, lv_color_hex(0x1a3060), 0);
+  bool in_setup_flow = (strlen(cfg_wifi_ssid) > 0 && scr_connection == nullptr);
+  if (in_setup_flow) lv_obj_add_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_event_cb(btn_sp_extra_fields, [](lv_event_t *e) {
+    bool in_setup = (strlen(cfg_wifi_ssid) > 0 && scr_connection == nullptr);
+    showExtraFieldsScreen(in_setup);
+  }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lbl_ef = lv_label_create(btn_sp_extra_fields);
+  lv_label_set_text(lbl_ef, "Extra Fields  " LV_SYMBOL_RIGHT);
+  lv_obj_set_style_text_color(lbl_ef, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_font(lbl_ef, &lv_font_montserrat_14, 0);
+  lv_obj_align(lbl_ef, LV_ALIGN_CENTER, 0, 0);
 }
 
 // ============================================================
@@ -2505,7 +2679,7 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
     } else {
       if (scr_connection) { lv_obj_del(scr_connection); scr_connection = nullptr; }
       buildConnectionScreen();
-      hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
+      if (!scr_connection) buildConnectionScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
     }
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_c = lv_label_create(btn_cont);
@@ -2522,11 +2696,12 @@ static lv_obj_t *lbl_factor_cal_weight = nullptr; // live weight display in cal 
 
 void showFactorScreen() {
   logSD("UI: Screen -> Calibration");
-  // Null loop-update pointers first (loop checks these)
+  // Null all loop-update pointers BEFORE deleting scr_factor
+  // Loop checks these pointers — must be null before del to avoid dangling access
   lbl_factor_display    = nullptr;
   lbl_factor_result     = nullptr;
   lbl_factor_cal_weight = nullptr;
-  // Always delete and rebuild — ensures clean state
+  // Now safe to delete
   if (scr_factor) { lv_obj_del(scr_factor); scr_factor = nullptr; }
   buildFactorScreen();
   // Show it (hideAllOverlays would hide it again, so show directly)
@@ -2570,7 +2745,11 @@ void buildFactorScreen() {
   factor_input[0]    = '\0';
 
   buildSubHeader(scr_factor, T(STR_CAL_TITLE),
-    [](lv_event_t *e){ if (!scr_scale_sub) buildScaleSubScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN); });
+    [](lv_event_t *e){
+      hideAllOverlays();
+      if (!scr_scale_sub) buildScaleSubScreen();
+      lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
+    });
 
   // Description / hint — single line, compact
   lv_obj_t *lbl_desc = lv_label_create(scr_factor);
@@ -2982,10 +3161,10 @@ void buildSettingsScreen() {
   // 2x2 grid — y=60 top row, height=118, gap=8 → second row y=186, bottom y=304
   // Horizontal: x=8 and x=242, tile width=226, gap=8
   struct { const char *icon; const char *label; const char *sub; uint32_t col; } tiles[] = {
-    { LV_SYMBOL_WIFI,     T(STR_TILE_CONNECTION), T(STR_TILE_CONN_SUB),    0x0d2a1a },
+    { LV_SYMBOL_WIFI,     T(STR_TILE_CONNECTION), T(STR_TILE_CONN_SUB),    0x0a1e30 },
     { LV_SYMBOL_DRIVE,    T(STR_TILE_SCALE),      T(STR_TILE_SCALE_SUB),   0x0a1e30 },
-    { LV_SYMBOL_IMAGE,    T(STR_TILE_DISPLAY),    T(STR_TILE_DISPLAY_SUB), 0x1a1a0a },
-    { LV_SYMBOL_SETTINGS, T(STR_TILE_SYSTEM),     T(STR_TILE_SYSTEM_SUB),  0x1a0a1a },
+    { LV_SYMBOL_IMAGE,    T(STR_TILE_DISPLAY),    T(STR_TILE_DISPLAY_SUB), 0x0a1e30 },
+    { LV_SYMBOL_SETTINGS, T(STR_TILE_SYSTEM),     T(STR_TILE_SYSTEM_SUB),  0x0a1e30 },
   };
   int tx[] = { 8, 242, 8, 242 };
   int ty[] = { 60, 60, 186, 186 };
@@ -3026,12 +3205,12 @@ void buildSettingsScreen() {
           logSD("UI: Tile -> Connection");
           if (scr_connection) { lv_obj_del(scr_connection); scr_connection = nullptr; }
           buildConnectionScreen();
-          hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
+          if (!scr_connection) buildConnectionScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
           break;
         case 1:
           logSD("UI: Tile -> Scale");
           if (!scr_scale_sub) buildScaleSubScreen();
-          hideAllOverlays(); lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
+          if (!scr_scale_sub) buildScaleSubScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
           break;
         case 2:
           logSD("UI: Tile -> Display");
@@ -3076,12 +3255,12 @@ void buildConnectionScreen() {
   lv_obj_t *btn_wifi = lv_btn_create(scr_connection);
   lv_obj_set_size(btn_wifi, BTN_W, BTN_H);
   lv_obj_set_pos(btn_wifi, BTN_X, BTN_Y[0]);
-  lv_obj_set_style_bg_color(btn_wifi, lv_color_hex(0x0d2a1a), 0);
-  lv_obj_set_style_bg_color(btn_wifi, lv_color_hex(0x1a4030), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_wifi, lv_color_hex(0x0a1e30), 0);
+  lv_obj_set_style_bg_color(btn_wifi, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_wifi, 10, 0);
   lv_obj_set_style_shadow_width(btn_wifi, 0, 0);
   lv_obj_set_style_border_width(btn_wifi, 1, 0);
-  lv_obj_set_style_border_color(btn_wifi, lv_color_hex(0x1a4030), 0);
+  lv_obj_set_style_border_color(btn_wifi, lv_color_hex(0x1a3050), 0);
   { lv_obj_t *ico = lv_label_create(btn_wifi);
     lv_label_set_text(ico, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
@@ -3138,12 +3317,12 @@ void buildConnectionScreen() {
   lv_obj_t *btn_ef = lv_btn_create(scr_connection);
   lv_obj_set_size(btn_ef, BTN_W, BTN_H);
   lv_obj_set_pos(btn_ef, BTN_X, BTN_Y[2]);
-  lv_obj_set_style_bg_color(btn_ef, lv_color_hex(0x0a1a0a), 0);
-  lv_obj_set_style_bg_color(btn_ef, lv_color_hex(0x1a3020), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_ef, lv_color_hex(0x0a1e30), 0);
+  lv_obj_set_style_bg_color(btn_ef, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ef, 10, 0);
   lv_obj_set_style_shadow_width(btn_ef, 0, 0);
   lv_obj_set_style_border_width(btn_ef, 1, 0);
-  lv_obj_set_style_border_color(btn_ef, lv_color_hex(0x1a3020), 0);
+  lv_obj_set_style_border_color(btn_ef, lv_color_hex(0x1a3050), 0);
   { lv_obj_t *ico = lv_label_create(btn_ef);
     lv_label_set_text(ico, LV_SYMBOL_LIST);
     lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
@@ -3299,21 +3478,19 @@ void buildScaleSubScreen() {
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(sub, LV_ALIGN_CENTER, 0, 24); }
   lv_obj_add_event_cb(btn_bag, [](lv_event_t *e){
-    if (!scr_bag) buildBagScreen();
-    hideAllOverlays();
-    lv_obj_clear_flag(scr_bag, LV_OBJ_FLAG_HIDDEN);
+    show_bag_pending = true;
   }, LV_EVENT_CLICKED, NULL);
 
   // Calibration button (y=140)
   lv_obj_t *btn_cal = lv_btn_create(scr_scale_sub);
   lv_obj_set_size(btn_cal, 456, 74);
   lv_obj_set_pos(btn_cal, 12, 140);
-  lv_obj_set_style_bg_color(btn_cal, lv_color_hex(0x1a1a0a), 0);
-  lv_obj_set_style_bg_color(btn_cal, lv_color_hex(0x2a2a1a), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_cal, lv_color_hex(0x0a1e30), 0);
+  lv_obj_set_style_bg_color(btn_cal, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_cal, 10, 0);
   lv_obj_set_style_shadow_width(btn_cal, 0, 0);
   lv_obj_set_style_border_width(btn_cal, 1, 0);
-  lv_obj_set_style_border_color(btn_cal, lv_color_hex(0x2a2a1a), 0);
+  lv_obj_set_style_border_color(btn_cal, lv_color_hex(0x1a3050), 0);
   { lv_obj_t *ico = lv_label_create(btn_cal);
     lv_label_set_text(ico, LV_SYMBOL_EDIT);
     lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
@@ -3333,19 +3510,19 @@ void buildScaleSubScreen() {
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(sub, LV_ALIGN_CENTER, 0, 24); }
   lv_obj_add_event_cb(btn_cal, [](lv_event_t *e){
-    showFactorScreen();
+    show_factor_pending = true;
   }, LV_EVENT_CLICKED, NULL);
 
   // Last Used Mode button (y=222)
   lv_obj_t *btn_lu = lv_btn_create(scr_scale_sub);
   lv_obj_set_size(btn_lu, 456, 74);
   lv_obj_set_pos(btn_lu, 12, 222);
-  lv_obj_set_style_bg_color(btn_lu, lv_color_hex(0x0a1e18), 0);
-  lv_obj_set_style_bg_color(btn_lu, lv_color_hex(0x1a3028), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_lu, lv_color_hex(0x0a1e30), 0);
+  lv_obj_set_style_bg_color(btn_lu, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_lu, 10, 0);
   lv_obj_set_style_shadow_width(btn_lu, 0, 0);
   lv_obj_set_style_border_width(btn_lu, 1, 0);
-  lv_obj_set_style_border_color(btn_lu, lv_color_hex(0x1a3028), 0);
+  lv_obj_set_style_border_color(btn_lu, lv_color_hex(0x1a3050), 0);
   { lv_obj_t *ico = lv_label_create(btn_lu);
     lv_label_set_text(ico, LV_SYMBOL_SAVE);
     lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
@@ -3562,6 +3739,8 @@ void startOtaServer() {
       ".log-btn:hover{background:#1a3060}"
       ".log-btn-del{color:#ff8080;border-color:#3a1010}"
       ".log-btn-del:hover{background:#3a1010}"
+      ".sd-info-box{background:#090c0a;border-left:2px solid #1a3020;border-radius:0 4px 4px 0;"
+      "padding:5px 10px;margin-bottom:10px;font-size:11px;color:#2a5040;line-height:1.5}"
       ".verbose-row{display:flex;align-items:center;justify-content:space-between;"
       "padding:10px 12px;background:#06080f;border:1px solid #1a3060;border-radius:8px;"
       "margin-bottom:12px}"
@@ -3616,9 +3795,12 @@ void startOtaServer() {
       "\"<div class='no-sd'>\"+"
       "\"<div class='no-sd-title'>No SD card detected</div>\"+"
       "\"<div class='no-sd-hint'>Insert a FAT32-formatted SD card<br>\"+"
-      "\"to enable diagnostic logging.</div>\"+"
+      "\"to enable diagnostic logging.<br>\"+"
+      "\"<span style='font-size:11px;color:#2a5a40'>* Booting with SD card increases startup time by ~20 seconds.</span></div>\"+"
       "\"</div>\";return;}"
-      "var h=\"<div class='verbose-row'>\"+"
+      "var h=\"<div class='sd-info-box'>\"+"
+      "\"&#9432; SD card increases boot time by ~20 seconds. Use without SD for normal operation, insert only for debugging.</div>\"+"
+      "\"<div class='verbose-row'>\"+"
       "\"<div><span class='verbose-label'>Verbose Logging</span>\"+"
       "\"<span class='verbose-state \"+(d.verbose?'verbose-on':'verbose-off')+\"'>\"+"
       "(d.verbose?'ON':'OFF')+\"</span></div>\"+"
@@ -3852,7 +4034,11 @@ void showOtaScreen() {
 void buildOtaScreen() {
   scr_ota = buildOverlayScreen();
   buildSubHeader(scr_ota, T(STR_OTA_TITLE),
-    [](lv_event_t *e){ showSettingsScreen(); /* via System */ });
+    [](lv_event_t *e){
+      hideAllOverlays();
+      buildSystemScreen();
+      lv_obj_clear_flag(scr_system, LV_OBJ_FLAG_HIDDEN);
+    });
 
   // Browser upload button
   lv_obj_t *btn_browser = lv_btn_create(scr_ota);
@@ -3963,9 +4149,17 @@ void buildOtaBrowserScreen() {
     return;
   }
 
-  // Show IP address
+  // Show IP address — wait briefly for valid DHCP if needed
   char ip_buf[64];
-  snprintf(ip_buf, sizeof(ip_buf), "http://%s/", WiFi.localIP().toString().c_str());
+  IPAddress ip = WiFi.localIP();
+  if (ip == IPAddress(0,0,0,0) && wifi_ok) {
+    unsigned long t = millis();
+    while (WiFi.localIP() == IPAddress(0,0,0,0) && millis()-t < 3000) {
+      delay(100); lv_timer_handler();
+    }
+    ip = WiFi.localIP();
+  }
+  snprintf(ip_buf, sizeof(ip_buf), "http://%s/", ip.toString().c_str());
 
   lv_obj_t *lbl_hint = lv_label_create(scr_ota_browser);
   lv_label_set_text(lbl_hint, T(STR_OTA_OPEN_BROWSER));
@@ -4421,9 +4615,8 @@ void buildSystemScreen() {
   buildSubHeader(scr_system, T(STR_SYSTEM_TITLE),
     [](lv_event_t *e){ showSettingsScreen(); });
 
-  // 3 buttons: same layout as Connection / Scale submenu
-  // 3 * 80px + 2 * 8px gap = 256px, start y=52 -> ends at 308
-  const int BTN_W = 456, BTN_H = 80, BTN_GAP = 8, BTN_X = 12, BTN_Y0 = 52;
+  // 3 main buttons 62px + 1 reset button 44px, gap=5, y0=52
+  const int BTN_W = 456, BTN_H = 62, RESET_H = 44, BTN_GAP = 5, BTN_X = 12, BTN_Y0 = 52;
 
   // ── Button 1: Language ──
   lv_obj_t *btn_lang = lv_btn_create(scr_system);
@@ -4439,48 +4632,48 @@ void buildSystemScreen() {
     lv_label_set_text(ico, LV_SYMBOL_LIST);
     lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
     lv_obj_set_style_text_font(ico, &lv_font_montserrat_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
+    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -18);
     lv_obj_t *lbl = lv_label_create(btn_lang);
     lv_label_set_text(lbl, T(STR_LANG_TITLE));
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
     lv_obj_t *sub = lv_label_create(btn_lang);
     lv_label_set_text(sub, T(STR_BTN_LANG_SUB));
     lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(sub, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
+    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 22); }
   lv_obj_add_event_cb(btn_lang, [](lv_event_t *e){ showLanguageScreen(); }, LV_EVENT_CLICKED, NULL);
 
   // ── Button 2: Firmware update ──
   lv_obj_t *btn_upd = lv_btn_create(scr_system);
   lv_obj_set_size(btn_upd, BTN_W, BTN_H);
   lv_obj_set_pos(btn_upd, BTN_X, BTN_Y0 + BTN_H + BTN_GAP);
-  lv_obj_set_style_bg_color(btn_upd, lv_color_hex(0x1a1a2a), 0);
-  lv_obj_set_style_bg_color(btn_upd, lv_color_hex(0x2a2a40), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_upd, lv_color_hex(0x0a1a2a), 0);
+  lv_obj_set_style_bg_color(btn_upd, lv_color_hex(0x1a2a40), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_upd, 10, 0);
   lv_obj_set_style_shadow_width(btn_upd, 0, 0);
   lv_obj_set_style_border_width(btn_upd, 1, 0);
-  lv_obj_set_style_border_color(btn_upd, lv_color_hex(0x2a2a40), 0);
+  lv_obj_set_style_border_color(btn_upd, lv_color_hex(0x1a2a40), 0);
   { lv_obj_t *ico = lv_label_create(btn_upd);
     lv_label_set_text(ico, LV_SYMBOL_DOWNLOAD);
     lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
     lv_obj_set_style_text_font(ico, &lv_font_montserrat_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
+    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -18);
     lv_obj_t *lbl = lv_label_create(btn_upd);
     lv_label_set_text(lbl, T(STR_BTN_FW_UPDATE));
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
     lv_obj_t *sub = lv_label_create(btn_upd);
     lv_label_set_text(sub, T(STR_BTN_FW_SUB));
     lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(sub, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
+    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 22); }
   lv_obj_add_event_cb(btn_upd, [](lv_event_t *e){ showOtaScreen(); }, LV_EVENT_CLICKED, NULL);
 
   // Yellow badge top-right of firmware update button
@@ -4488,7 +4681,7 @@ void buildSystemScreen() {
   lv_label_set_text(lbl_fw_badge, LV_SYMBOL_BULLET);
   lv_obj_set_style_text_color(lbl_fw_badge, lv_color_hex(0xf0b838), 0);
   lv_obj_set_style_text_font(lbl_fw_badge, &lv_font_montserrat_18, 0);
-  lv_obj_set_pos(lbl_fw_badge, 456, 142);
+  lv_obj_set_pos(lbl_fw_badge, 456, BTN_Y0 + BTN_H + BTN_GAP);
   if (!update_available) lv_obj_add_flag(lbl_fw_badge, LV_OBJ_FLAG_HIDDEN);
 
   // ── Button 3: Info & support ──
@@ -4505,20 +4698,135 @@ void buildSystemScreen() {
     lv_label_set_text(ico, LV_SYMBOL_BELL);
     lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
     lv_obj_set_style_text_font(ico, &lv_font_montserrat_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
+    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -18);
     lv_obj_t *lbl = lv_label_create(btn_info);
     lv_label_set_text(lbl, T(STR_BTN_INFO));
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
     lv_obj_t *sub = lv_label_create(btn_info);
     lv_label_set_text(sub, T(STR_BTN_INFO_SUB));
     lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(sub, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
+    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 22); }
   lv_obj_add_event_cb(btn_info, [](lv_event_t *e){ showInfoScreen(); }, LV_EVENT_CLICKED, NULL);
+
+  // ── Button 4: Factory Reset (kleinere Hoehe, roetlich) ──
+  int reset_y = BTN_Y0 + 3*(BTN_H + BTN_GAP);
+  lv_obj_t *btn_reset = lv_btn_create(scr_system);
+  lv_obj_set_size(btn_reset, BTN_W, RESET_H);
+  lv_obj_set_pos(btn_reset, BTN_X, reset_y);
+  lv_obj_set_style_bg_color(btn_reset, lv_color_hex(0x0a1a2a), 0);
+  lv_obj_set_style_bg_color(btn_reset, lv_color_hex(0x1a2a40), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_reset, 8, 0);
+  lv_obj_set_style_shadow_width(btn_reset, 0, 0);
+  lv_obj_set_style_border_width(btn_reset, 2, 0);
+  lv_obj_set_style_border_color(btn_reset, lv_color_hex(0x3a1010), 0);
+  { lv_obj_t *lbl = lv_label_create(btn_reset);
+    char buf[32]; strncpy(buf, T(STR_BTN_FACTORY_RESET), sizeof(buf)-1);
+    lv_label_set_text(lbl, buf);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(0xff6060), 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, -7);
+    lv_obj_t *sub = lv_label_create(btn_reset);
+    char sub_buf[48]; strncpy(sub_buf, T(STR_BTN_FACTORY_RESET_SUB), sizeof(sub_buf)-1);
+    lv_label_set_text(sub, sub_buf);
+    lv_obj_set_style_text_color(sub, lv_color_hex(0x804040), 0);
+    lv_obj_set_style_text_font(sub, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 9); }
+  lv_obj_add_event_cb(btn_reset, [](lv_event_t *e) {
+    // Confirmation popup
+    lv_obj_t *pop = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(pop, 480, 320);
+    lv_obj_set_pos(pop, 0, 0);
+    lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(pop, LV_OPA_80, 0);
+    lv_obj_set_style_border_width(pop, 0, 0);
+    lv_obj_set_style_radius(pop, 0, 0);
+    lv_obj_set_style_pad_all(pop, 0, 0);
+    lv_obj_clear_flag(pop, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *box = lv_obj_create(pop);
+    lv_obj_set_size(box, 440, 240);
+    lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(box, lv_color_hex(0x1a0808), 0);
+    lv_obj_set_style_border_color(box, lv_color_hex(0x602020), 0);
+    lv_obj_set_style_border_width(box, 2, 0);
+    lv_obj_set_style_radius(box, 12, 0);
+    lv_obj_set_style_pad_all(box, 0, 0);
+    lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *lbl_t = lv_label_create(box);
+    char buf_t[48]; strncpy(buf_t, T(STR_FACTORY_RESET_TITLE), sizeof(buf_t)-1);
+    lv_label_set_text(lbl_t, buf_t);
+    lv_obj_set_style_text_color(lbl_t, lv_color_hex(0xff6060), 0);
+    lv_obj_set_style_text_font(lbl_t, &lv_font_montserrat_18, 0);
+    lv_obj_align(lbl_t, LV_ALIGN_TOP_MID, 0, 16);
+
+    lv_obj_t *lbl_m = lv_label_create(box);
+    char buf_m[256]; strncpy(buf_m, T(STR_FACTORY_RESET_MSG), sizeof(buf_m)-1);
+    lv_label_set_text(lbl_m, buf_m);
+    lv_obj_set_style_text_color(lbl_m, lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_font(lbl_m, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_align(lbl_m, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(lbl_m, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(lbl_m, 400);
+    lv_obj_align(lbl_m, LV_ALIGN_TOP_MID, 0, 50);
+
+    // Cancel button (links)
+    lv_obj_t *btn_c = lv_btn_create(box);
+    lv_obj_set_size(btn_c, 180, 44);
+    lv_obj_set_pos(btn_c, 12, 184);
+    lv_obj_set_style_bg_color(btn_c, lv_color_hex(0x0a1828), 0);
+    lv_obj_set_style_bg_color(btn_c, lv_color_hex(0x1a2840), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btn_c, 8, 0);
+    lv_obj_set_style_shadow_width(btn_c, 0, 0);
+    lv_obj_set_style_border_width(btn_c, 1, 0);
+    lv_obj_set_style_border_color(btn_c, lv_color_hex(0x1a2840), 0);
+    lv_obj_add_event_cb(btn_c, [](lv_event_t *e){
+      lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e))));
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_c = lv_label_create(btn_c);
+    char buf_c[32]; strncpy(buf_c, T(STR_CANCEL), sizeof(buf_c)-1);
+    lv_label_set_text(lbl_c, buf_c);
+    lv_obj_set_style_text_color(lbl_c, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(lbl_c, &lv_font_montserrat_14, 0);
+    lv_obj_align(lbl_c, LV_ALIGN_CENTER, 0, 0);
+
+    // Confirm button (rechts, rot)
+    lv_obj_t *btn_ok = lv_btn_create(box);
+    lv_obj_set_size(btn_ok, 228, 44);
+    lv_obj_set_pos(btn_ok, 200, 184);
+    lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x3a1010), 0);
+    lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x602020), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btn_ok, 8, 0);
+    lv_obj_set_style_shadow_width(btn_ok, 0, 0);
+    lv_obj_set_style_border_width(btn_ok, 1, 0);
+    lv_obj_set_style_border_color(btn_ok, lv_color_hex(0x602020), 0);
+    lv_obj_add_event_cb(btn_ok, [](lv_event_t *e){
+      logSD("Factory Reset: erasing NVS flash partition");
+      Serial.println("Factory Reset: erasing NVS flash partition");
+      // Close SD logging before erase to avoid corruption
+      if (sd_available) SD.end();
+      delay(100);
+      // Full NVS partition erase — more reliable than p.clear()
+      nvs_flash_erase();
+      nvs_flash_init();
+      delay(200);
+      ESP.restart();
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_ok = lv_label_create(btn_ok);
+    char buf_ok[48]; strncpy(buf_ok, T(STR_FACTORY_RESET_CONFIRM), sizeof(buf_ok)-1);
+    lv_label_set_text(lbl_ok, buf_ok);
+    lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_14, 0);
+    lv_obj_align(lbl_ok, LV_ALIGN_CENTER, 0, 0);
+  }, LV_EVENT_CLICKED, NULL);
+
   if (sd_verbose) logSD("[verbose] buildSystemScreen: done");
 }
 
@@ -5273,9 +5581,13 @@ void generateUUID(char *out, size_t len) {
 //  SPOOLMAN: LOAD ALL SPOOLS (for new link flow)
 //  Loads all active spools including extra.tag status
 // ============================================================
-void fetchAllSpoolsForLink() {
+void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter) {
+  // Free any previous allocation
+  if (link_spools) { heap_caps_free(link_spools); link_spools = nullptr; }
   link_spool_count = 0;
   if (!wifi_ok) return;
+
+  logSDf("link fetch: is_bambu=%d material_filter='%s'", is_bambu, material_filter ? material_filter : "");
 
   HTTPClient http;
   http.begin(String(cfg_spoolman_base) + "/api/v1/spool?allow_archived=false");
@@ -5297,62 +5609,137 @@ void fetchAllSpoolsForLink() {
   fL["filament"]["weight"] = true;
   fL["filament"]["color_hex"] = true;
   fL["filament"]["vendor"]["name"] = true;
-  DynamicJsonDocument doc(32768);
+  SpiRamAllocator psram_alloc;
+  JsonDocument doc(&psram_alloc);
   if (deserializeJson(doc, payload, DeserializationOption::Filter(filterL))) return;
 
   JsonArray spools = doc.as<JsonArray>();
+  int total_in_api = 0;
+  int skipped_tag = 0, skipped_vendor = 0, skipped_material = 0;
+  int count_bambu = 0, count_linked = 0;
+
+  // ── Pass 1: count matching spools (pre-filter) ──────────────
+  int matched = 0;
   for (JsonObject spool : spools) {
-    if (link_spool_count >= LINK_MAX_SPOOLS) break;
+    total_in_api++;
+
+    // Skip already-linked spools
+    String existing_tag = "";
+    if (spool.containsKey("extra") && spool["extra"].containsKey("tag")) {
+      existing_tag = spool["extra"]["tag"].as<String>();
+      existing_tag.replace("\"",""); existing_tag.trim();
+    }
+    if (existing_tag.length() > 0) { skipped_tag++; count_linked++; continue; }
+
+    String vname = "";
+    if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
+      vname = spool["filament"]["vendor"]["name"] | String("");
+    vname.trim();
+    bool bambu_vendor = (strncasecmp(vname.c_str(), "Bambu", 5) == 0);
+    if (bambu_vendor) count_bambu++;
+
+    if (is_bambu) {
+      if (!bambu_vendor) { skipped_vendor++; continue; }
+      if (material_filter && material_filter[0]) {
+        String mat = spool["filament"]["material"] | String("");
+        mat.trim();
+        if (strncasecmp(mat.c_str(), material_filter, 3) != 0) { skipped_material++; continue; }
+      }
+    } else {
+      if (bambu_vendor) { skipped_vendor++; continue; }
+    }
+    matched++;
+  }
+
+  logSDf("Spoolman inventory: %d total | %d linked | %d unlinked | %d Bambu",
+    total_in_api, count_linked, total_in_api - count_linked, count_bambu);
+  Serial.printf("Spoolman inventory: %d total | %d linked | %d unlinked | %d Bambu\n",
+    total_in_api, count_linked, total_in_api - count_linked, count_bambu);
+  logSDf("link fetch: total=%d matched=%d (skip_tag=%d skip_vendor=%d skip_mat=%d)",
+    total_in_api, matched, skipped_tag, skipped_vendor, skipped_material);
+  Serial.printf("link fetch: total=%d matched=%d (skip_tag=%d skip_vendor=%d skip_mat=%d)\n",
+    total_in_api, matched, skipped_tag, skipped_vendor, skipped_material);
+
+  if (matched == 0) return;
+
+  // ── Allocate exactly the needed size in PSRAM ───────────────
+  link_spools = (UnlinkedSpool*)heap_caps_malloc(matched * sizeof(UnlinkedSpool), MALLOC_CAP_SPIRAM);
+  if (!link_spools) {
+    // Fallback: internal RAM
+    link_spools = (UnlinkedSpool*)malloc(matched * sizeof(UnlinkedSpool));
+    logSD("link fetch: PSRAM alloc failed, using internal RAM");
+  }
+  if (!link_spools) { logSD("link fetch: alloc failed completely"); return; }
+
+  // ── Pass 2: fill array (same filter) ────────────────────────
+  for (JsonObject spool : spools) {
+    if (link_spool_count >= matched) break;
+
+    String existing_tag = "";
+    if (spool.containsKey("extra") && spool["extra"].containsKey("tag")) {
+      existing_tag = spool["extra"]["tag"].as<String>();
+      existing_tag.replace("\"",""); existing_tag.trim();
+    }
+    if (existing_tag.length() > 0) continue;
+
+    String vname = "";
+    if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
+      vname = spool["filament"]["vendor"]["name"] | String("");
+    vname.trim();
+    bool bambu_vendor = (strncasecmp(vname.c_str(), "Bambu", 5) == 0);
+
+    if (is_bambu) {
+      if (!bambu_vendor) continue;
+      if (material_filter && material_filter[0]) {
+        String mat = spool["filament"]["material"] | String("");
+        mat.trim();
+        if (strncasecmp(mat.c_str(), material_filter, 3) != 0) continue;
+      }
+    } else {
+      if (bambu_vendor) continue;
+    }
 
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = spool["id"] | 0;
 
-    // extra.tag auslesen (fuer Ueberschreib-Check)
-    s.existing_tag[0] = '\0';
-    if (spool.containsKey("extra")) {
-      JsonObject extra = spool["extra"];
-      if (extra.containsKey("tag")) {
-        String tv = extra["tag"].as<String>();
-        tv.replace("\"",""); tv.trim();
-        strncpy(s.existing_tag, tv.c_str(), sizeof(s.existing_tag)-1);
-      }
-    }
+    strncpy(s.existing_tag, existing_tag.c_str(), sizeof(s.existing_tag)-1);
+    s.existing_tag[sizeof(s.existing_tag)-1] = '\0';
 
-    // Filament name
     String fname = spool["filament"]["name"] | String("?");
     fname.trim();
     strncpy(s.name, fname.c_str(), sizeof(s.name)-1);
+    s.name[sizeof(s.name)-1] = '\0';
 
-    // Vendor
-    String vname = "";
-    if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull()) {
-      vname = spool["filament"]["vendor"]["name"] | String("");
-    }
-    vname.trim();
     strncpy(s.vendor, vname.c_str(), sizeof(s.vendor)-1);
+    s.vendor[sizeof(s.vendor)-1] = '\0';
 
-    // Material
     String mat = spool["filament"]["material"] | String("");
     mat.trim();
     strncpy(s.material, mat.c_str(), sizeof(s.material)-1);
+    s.material[sizeof(s.material)-1] = '\0';
 
-    // Farbe
     String col = spool["filament"]["color_hex"] | String("");
     col.trim();
     if (col.length() > 0 && col[0] != '#') col = "#" + col;
     strncpy(s.color_hex, col.c_str(), sizeof(s.color_hex)-1);
+    s.color_hex[sizeof(s.color_hex)-1] = '\0';
 
-    // Gewichte
     s.remaining = spool["remaining_weight"] | 0.0f;
     s.total = spool["filament"]["weight"] | 1000.0f;
 
+    if (sd_verbose) {
+      logSDf("[verbose] link spool %d: vendor='%s' mat='%s' name='%s'",
+        s.id, s.vendor, s.material, s.name);
+    }
+
     link_spool_count++;
   }
-  Serial.printf("fetchAllSpoolsForLink: %d spools loaded\n", link_spool_count);
+  Serial.printf("fetchAllSpoolsForLink: %d spools loaded (PSRAM)\n", link_spool_count);
+  logSDf("link fetch done: %d spools in list", link_spool_count);
 }
 
 // Legacy wrapper for compatibility
-void fetchUnlinkedSpools() { fetchAllSpoolsForLink(); }
+void fetchUnlinkedSpools() { fetchAllSpoolsForLink(false, ""); }
 
 // ============================================================
 //  SPOOLMAN: SAVE TAG UUID (extra.tag)
@@ -5390,6 +5777,9 @@ void doLinkPatch(int spool_id, bool is_bambu) {
   if (scr_link_mat)    { lv_obj_del(scr_link_mat);    scr_link_mat    = nullptr; }
   if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
   if (scr_link_list)   { lv_obj_del(scr_link_list);   scr_link_list   = nullptr; }
+  // Free PSRAM spool list
+  if (link_spools) { heap_caps_free(link_spools); link_spools = nullptr; }
+  link_spool_count = 0;
 
   // Re-query Spoolman — use single-spool endpoint since we know the ID
   link_popup_dismissed = false;
@@ -5725,7 +6115,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
   for (int i = 0; i < link_spool_count; i++) {
     if (link_spools[i].id == entered_id) { found_in_list = true; break; }
   }
-  if (!found_in_list && link_spool_count < LINK_MAX_SPOOLS) {
+  if (!found_in_list) {
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = entered_id;
     strncpy(s.existing_tag, existing.c_str(), sizeof(s.existing_tag)-1);
@@ -5951,13 +6341,31 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix)
 
   scr_link_spools = buildLinkOverlay();
 
+  // Count matching spools for title
+  int display_count = 0;
+  for (int i = 0; i < link_spool_count; i++) {
+    UnlinkedSpool &sc = link_spools[i];
+    if (sc.existing_tag[0] != '\0') continue;
+    bool bv = (strncasecmp(sc.vendor, "Bambu", 5) == 0);
+    if (link_flow_is_bambu) {
+      if (!bv) continue;
+      if (material_prefix[0] && strncasecmp(sc.material, material_prefix, strlen(material_prefix)) != 0) continue;
+    } else {
+      if (bv) continue;
+      if (vendor_name[0] && strncasecmp(sc.vendor, vendor_name, strlen(vendor_name)) != 0) continue;
+      if (material_prefix[0] && strncasecmp(sc.material, material_prefix, strlen(material_prefix)) != 0) continue;
+    }
+    display_count++;
+  }
+
   char title_buf[48];
   if (link_flow_is_bambu) {
-    snprintf(title_buf, sizeof(title_buf), T(STR_SPOOLS_BAMBU));
+    snprintf(title_buf, sizeof(title_buf), "Bambu %s - %d",
+      g_tag.material[0] ? g_tag.material : "", display_count);
   } else if (material_prefix[0]) {
-    snprintf(title_buf, sizeof(title_buf), "%.8s %.4s", vendor_name, material_prefix);
+    snprintf(title_buf, sizeof(title_buf), "%.8s %.4s - %d", vendor_name, material_prefix, display_count);
   } else {
-    snprintf(title_buf, sizeof(title_buf), T(STR_SPOOLS_ALL));
+    snprintf(title_buf, sizeof(title_buf), "%s - %d", T(STR_SPOOLS_ALL), display_count);
   }
   lv_obj_t *lbl_title = lv_label_create(scr_link_spools);
   lv_label_set_text(lbl_title, title_buf);
@@ -6570,12 +6978,12 @@ void showLinkEntryPopup(bool is_bambu) {
   lv_obj_set_style_border_width(btn2, 1, 0);
   lv_obj_set_style_border_color(btn2, lv_color_hex(0x1a3060), 0);
   lv_obj_add_event_cb(btn2, [](lv_event_t *e) {
-    // Spulen laden und passenden Flow starten
-    fetchAllSpoolsForLink();
+    // Load and pre-filter spools, then start appropriate flow
+    fetchAllSpoolsForLink(link_flow_is_bambu, link_flow_is_bambu ? g_tag.material : "");
     if (link_flow_is_bambu) {
-      showFilteredSpoolList("", "");  // Flow A: direkt Spulen-Liste (Bambu, Material-gefiltert)
+      showFilteredSpoolList("", "");  // Flow A: direct list (already material-filtered)
     } else {
-      showVendorList();               // Flow B: 3-stufig
+      showVendorList();               // Flow B: 3-step
     }
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *l2 = lv_label_create(btn2);
@@ -7185,8 +7593,8 @@ void buildUI() {
   lv_obj_align(lbl_nfc_dot, LV_ALIGN_LEFT_MID, 6, 0);
 
   lbl_status = lv_label_create(status_bar);
-  lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+  lv_label_set_text(lbl_status, T(STR_BOOTING));
+  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x5090e0), 0);
   lv_obj_set_style_text_font(lbl_status, &lv_font_montserrat_14, 0);
   lv_obj_align(lbl_status, LV_ALIGN_LEFT_MID, 22, 0);
 
@@ -7973,7 +8381,115 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_font(v_uuid, &lv_font_montserrat_16, 0);
   lv_obj_set_pos(v_uuid, 10, 264);
   lv_label_set_long_mode(v_uuid, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(v_uuid, 444);
+  lv_obj_set_width(v_uuid, 330);  // shortened to make room for Unlink button
+
+  // Unlink button — bottom right, only visible when spool is linked (sm_found && sm_id > 0)
+  if (sm_found && sm_id > 0) {
+    lv_obj_t *btn_unlink = lv_btn_create(box);
+    lv_obj_set_size(btn_unlink, 104, 34);
+    lv_obj_set_pos(btn_unlink, 350, 258);
+    lv_obj_set_style_bg_color(btn_unlink, lv_color_hex(0x3a1010), 0);
+    lv_obj_set_style_bg_color(btn_unlink, lv_color_hex(0x602020), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btn_unlink, 8, 0);
+    lv_obj_set_style_shadow_width(btn_unlink, 0, 0);
+    lv_obj_set_style_border_width(btn_unlink, 1, 0);
+    lv_obj_set_style_border_color(btn_unlink, lv_color_hex(0x601010), 0);
+    lv_obj_add_event_cb(btn_unlink, [](lv_event_t *e) {
+      // Build confirmation popup on lv_scr_act() so it sits above more_info
+      lv_obj_t *pop = lv_obj_create(lv_scr_act());
+      lv_obj_set_size(pop, 480, 320);
+      lv_obj_set_pos(pop, 0, 0);
+      lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
+      lv_obj_set_style_bg_opa(pop, LV_OPA_80, 0);
+      lv_obj_set_style_border_width(pop, 0, 0);
+      lv_obj_set_style_radius(pop, 0, 0);
+      lv_obj_set_style_pad_all(pop, 0, 0);
+      lv_obj_clear_flag(pop, LV_OBJ_FLAG_SCROLLABLE);
+
+      lv_obj_t *box2 = lv_obj_create(pop);
+      lv_obj_set_size(box2, 420, 210);
+      lv_obj_align(box2, LV_ALIGN_CENTER, 0, 0);
+      lv_obj_set_style_bg_color(box2, lv_color_hex(0x1a0808), 0);
+      lv_obj_set_style_border_color(box2, lv_color_hex(0x602020), 0);
+      lv_obj_set_style_border_width(box2, 2, 0);
+      lv_obj_set_style_radius(box2, 12, 0);
+      lv_obj_set_style_pad_all(box2, 0, 0);
+      lv_obj_clear_flag(box2, LV_OBJ_FLAG_SCROLLABLE);
+
+      lv_obj_t *lbl_t = lv_label_create(box2);
+      char buf_t[48]; strncpy(buf_t, T(STR_UNLINK_TITLE), sizeof(buf_t)-1);
+      lv_label_set_text(lbl_t, buf_t);
+      lv_obj_set_style_text_color(lbl_t, lv_color_hex(0xff8080), 0);
+      lv_obj_set_style_text_font(lbl_t, &lv_font_montserrat_18, 0);
+      lv_obj_align(lbl_t, LV_ALIGN_TOP_MID, 0, 16);
+
+      lv_obj_t *lbl_m = lv_label_create(box2);
+      char buf_m[192]; strncpy(buf_m, T(STR_UNLINK_MSG), sizeof(buf_m)-1);
+      lv_label_set_text(lbl_m, buf_m);
+      lv_obj_set_style_text_color(lbl_m, lv_color_hex(0xc8d8f0), 0);
+      lv_obj_set_style_text_font(lbl_m, &lv_font_montserrat_14, 0);
+      lv_obj_set_style_text_align(lbl_m, LV_TEXT_ALIGN_CENTER, 0);
+      lv_label_set_long_mode(lbl_m, LV_LABEL_LONG_WRAP);
+      lv_obj_set_width(lbl_m, 380);
+      lv_obj_align(lbl_m, LV_ALIGN_TOP_MID, 0, 48);
+
+      // Cancel (links)
+      lv_obj_t *btn_no = lv_btn_create(box2);
+      lv_obj_set_size(btn_no, 170, 44);
+      lv_obj_set_pos(btn_no, 12, 154);
+      lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x0a1828), 0);
+      lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x1a2840), LV_STATE_PRESSED);
+      lv_obj_set_style_radius(btn_no, 8, 0);
+      lv_obj_set_style_shadow_width(btn_no, 0, 0);
+      lv_obj_set_style_border_width(btn_no, 1, 0);
+      lv_obj_set_style_border_color(btn_no, lv_color_hex(0x1a2840), 0);
+      lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
+        lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e))));
+      }, LV_EVENT_CLICKED, NULL);
+      lv_obj_t *lbl_no = lv_label_create(btn_no);
+      char buf_no[32]; strncpy(buf_no, T(STR_CANCEL), sizeof(buf_no)-1);
+      lv_label_set_text(lbl_no, buf_no);
+      lv_obj_set_style_text_color(lbl_no, lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_14, 0);
+      lv_obj_align(lbl_no, LV_ALIGN_CENTER, 0, 0);
+
+      // Confirm unlink (rechts, rot)
+      lv_obj_t *btn_yes = lv_btn_create(box2);
+      lv_obj_set_size(btn_yes, 220, 44);
+      lv_obj_set_pos(btn_yes, 190, 154);
+      lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x3a1010), 0);
+      lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x602020), LV_STATE_PRESSED);
+      lv_obj_set_style_radius(btn_yes, 8, 0);
+      lv_obj_set_style_shadow_width(btn_yes, 0, 0);
+      lv_obj_set_style_border_width(btn_yes, 1, 0);
+      lv_obj_set_style_border_color(btn_yes, lv_color_hex(0x602020), 0);
+      lv_obj_add_event_cb(btn_yes, [](lv_event_t *e) {
+        // Close popup
+        lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e))));
+        // Patch tag field to empty string
+        patchSpoolTag(sm_id, "");
+        logSDf("Unlink spool ID=%d", sm_id);
+        Serial.printf("Unlink spool ID=%d\n", sm_id);
+        // Close More Info and reset display — NFC will re-scan and find no match
+        if (scr_more_info) { lv_obj_del(scr_more_info); scr_more_info = nullptr; }
+        clearTagDisplay();
+        showMainScreen();
+      }, LV_EVENT_CLICKED, NULL);
+      lv_obj_t *lbl_yes = lv_label_create(btn_yes);
+      char buf_yes[48]; strncpy(buf_yes, T(STR_UNLINK_CONFIRM), sizeof(buf_yes)-1);
+      lv_label_set_text(lbl_yes, buf_yes);
+      lv_obj_set_style_text_color(lbl_yes, lv_color_hex(0xff8080), 0);
+      lv_obj_set_style_text_font(lbl_yes, &lv_font_montserrat_14, 0);
+      lv_obj_align(lbl_yes, LV_ALIGN_CENTER, 0, 0);
+    }, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *lbl_unlink = lv_label_create(btn_unlink);
+    char buf_ul[16]; strncpy(buf_ul, T(STR_UNLINK_BTN), sizeof(buf_ul)-1);
+    lv_label_set_text(lbl_unlink, buf_ul);
+    lv_obj_set_style_text_color(lbl_unlink, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_font(lbl_unlink, &lv_font_montserrat_14, 0);
+    lv_obj_align(lbl_unlink, LV_ALIGN_CENTER, 0, 0);
+  }
 }
 
 // ============================================================
@@ -8142,6 +8658,14 @@ String getTodayISO() {
 // ============================================================
 void wifiConnect() {
   Serial.printf("WiFi: %s\n", cfg_wifi_ssid);
+  // Update status bar — may already be set from setup(), but ensure it's shown
+  if (lbl_status) {
+    char wifi_buf[32];
+    strncpy(wifi_buf, T(STR_WIFI_CONNECTING_BOOT), sizeof(wifi_buf)-1);
+    lv_label_set_text(lbl_status, wifi_buf);
+    lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x5090e0), 0);
+    lv_timer_handler();
+  }
   WiFi.mode(WIFI_STA);
   WiFi.begin(cfg_wifi_ssid, cfg_wifi_password);
   for (int i = 0; i < 20; i++) {
@@ -8169,11 +8693,33 @@ void wifiConnect() {
         sm_reachable = (code == 200);
         logSDf("Spoolman health check: HTTP %d -> %s",
           code, sm_reachable ? "OK" : "FAIL");
+        Serial.printf("Spoolman health: HTTP %d -> %s\n", code, sm_reachable ? "OK" : "FAIL");
+        // Fetch Spoolman version from /api/v1/info
+        if (sm_reachable) {
+          HTTPClient hci;
+          hci.begin(String(cfg_spoolman_base) + "/api/v1/info");
+          hci.setTimeout(3000);
+          int ic = hci.GET();
+          if (ic == 200) {
+            String info = hci.getString();
+            hci.end();
+            StaticJsonDocument<256> idoc;
+            if (!deserializeJson(idoc, info)) {
+              const char* ver = idoc["version"] | "?";
+              logSDf("Spoolman version: %s", ver);
+              Serial.printf("Spoolman version: %s\n", ver);
+            }
+          } else {
+            hci.end();
+          }
+        }
       }
       updateHeaderStatus();
       lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));
+      lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
+      lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
       lv_timer_handler();
-      silent_ota_check_pending = true;  // background OTA check after WiFi up
+      silent_ota_check_pending = true;
       return;
     }
   }
@@ -8181,6 +8727,8 @@ void wifiConnect() {
   logSD("WiFi connection FAILED");
   updateHeaderStatus();
   lv_label_set_text(lbl_spoolman_weight, T(STR_NO_WIFI));
+  lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
+  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
   lv_timer_handler();
 }
 
@@ -8882,6 +9430,12 @@ void setup() {
   indev_drv.read_cb = lvgl_touch;
   lv_indev_drv_register(&indev_drv);
 
+  // Build UI immediately after display init — user sees screen right away
+  // lbl_status shows STR_BOOTING until wifiConnect() completes
+  buildUI();
+  lv_timer_handler();
+  updateHeaderStatus();
+
   delay(500);
 
   Serial.print("Looking for PN532... ");
@@ -8908,6 +9462,8 @@ void setup() {
     while (!nau.calibrate(NAU7802_CALMOD_INTERNAL)) {
       Serial.print(".");
       delay(100);
+      lv_tick_inc(100);
+      lv_timer_handler();  // keep display alive during calibration
     }
     scale_ready = true;
     Serial.printf("OK! cal_factor=%.4f  zero_offset=%d\n", cal_factor, zero_offset);
@@ -8917,8 +9473,6 @@ void setup() {
     logSD("Scale init FAILED");
   }
 
-  buildUI();
-  lv_timer_handler();
   updateHeaderStatus();
   Serial.println("Ready. Hold spool near reader...");
 
@@ -8975,6 +9529,41 @@ void loop() {
       ota_check_trigger_ms = 0;
       doGithubOtaCheckSilent();
     }
+  }
+
+  // Extra fields check/create — deferred from LVGL event callback to loop
+  if (extra_fields_check_pending) {
+    extra_fields_check_pending = false;
+    checkAndCreateExtraFields(false);
+  }
+  if (extra_fields_create_pending) {
+    extra_fields_create_pending = false;
+    checkAndCreateExtraFields(true);
+  }
+  if (cal_reminder_pending) {
+    cal_reminder_pending = false;
+    showCalReminderScreen();
+  }
+  if (show_bag_pending) {
+    show_bag_pending = false;
+    if (!scr_bag) buildBagScreen();
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_bag, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_factor_pending) {
+    show_factor_pending = false;
+    showFactorScreen();
+  }
+  if (skip_setup_pending) {
+    skip_setup_pending = false;
+    if (scr_welcome)    { lv_obj_del(scr_welcome);    scr_welcome    = nullptr; }
+    if (scr_first_boot) { lv_obj_del(scr_first_boot); scr_first_boot = nullptr; }
+    showMainScreen();
+  }
+  if (lang_selected_no_reboot) {
+    lang_selected_no_reboot = false;
+    if (scr_welcome) { lv_obj_del(scr_welcome); scr_welcome = nullptr; }
+    showFirstBootScreen();
   }
   // Hide tare confirmation
   if (tare_msg_ms > 0 && millis() - tare_msg_ms > 800) {

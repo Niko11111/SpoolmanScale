@@ -364,10 +364,10 @@ const char* const STRINGS[STR_COUNT][2] = {
   // Calibration reminder screen
   { "Waage kalibrieren",
     "Calibrate scale"                             },  // STR_CAL_REMINDER_TITLE
-  { "Fuer genaue Messungen muss die Waage\nkalibriert werden.\n\nLege ein bekanntes Gewicht auf\nund gehe zu Einstellungen > Waage\n> Kalibrierung.",
-    "For accurate measurements the scale\nneeds to be calibrated.\n\nPlace a known weight on the scale\nand go to Settings > Scale\n> Calibration."  },  // STR_CAL_REMINDER_MSG
-  { "Spaeter",
-    "Later"                                       },  // STR_CAL_REMINDER_LATER
+  { "Fuer genaue Messungen muss die Waage\nkalibriert werden.\n\nLege ein bekanntes Gewicht auf\nund gehe zu Einstellungen > Waage\n> Kalibrierung.\n\nDies kann auch spaeter gemacht werden.",
+    "For accurate measurements the scale\nneeds to be calibrated.\n\nPlace a known weight on the scale\nand go to Settings > Scale > Calibration.\n\nYou can also do this later."  },  // STR_CAL_REMINDER_MSG
+  { "Verstanden",
+    "Got it!"                                     },  // STR_CAL_REMINDER_LATER
   { LV_SYMBOL_EDIT "  Jetzt kalibrieren",
     LV_SYMBOL_EDIT "  Calibrate now"              },  // STR_CAL_REMINDER_NOW
 
@@ -443,4 +443,19 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Wird das 'Last Used' Feld in Spoolman nicht aktiv von dir genutzt, dann benutzt SpoolmanScale dieses Feld, um das Datum des letzten Gewichtsupdates zu speichern. Der Hauptscreen zeigt dann 'Zuletzt gewogen' statt 'Zuletzt benutzt'.",
     "If you don't actively use the 'Last Used' field in Spoolman, SpoolmanScale will use it to store the date of the last weight update. The main screen will then show 'Last Weighed' instead of 'Last Used'."
                                                                           },  // STR_LASTUSED_DESC_WEIGHED
+  { "Werkseinstellungen",       "Factory Reset"              },  // STR_BTN_FACTORY_RESET
+  { "Alle Einstellungen loeschen", "Erase all settings"      },  // STR_BTN_FACTORY_RESET_SUB
+  { "Werkseinstellungen?",      "Factory Reset?"             },  // STR_FACTORY_RESET_TITLE
+  { "Alle Einstellungen werden geloescht:\nWiFi, Spoolman IP, Kalibrierung,\nSprache und alle anderen Daten.\nDanach startet das Geraet neu.",
+    "All settings will be erased:\nWiFi, Spoolman IP, calibration,\nlanguage and all other data.\nThe device will restart afterwards." },  // STR_FACTORY_RESET_MSG
+  { "Ja, alles loeschen",       "Yes, erase everything"      },  // STR_FACTORY_RESET_CONFIRM
+  { "Setup ueberspringen",      "Skip setup"                 },  // STR_BTN_SKIP_SETUP
+  { "Unlink",                   "Unlink"                     },  // STR_UNLINK_BTN
+  { "Spule unlinken?",          "Unlink spool?"              },  // STR_UNLINK_TITLE
+  { "Loescht den Eintrag im Tag-Feld in Spoolman.\nDie Spule bleibt erhalten.",
+    "Clears the tag field entry in Spoolman.\nThe spool itself is kept." },  // STR_UNLINK_MSG
+  { "Ja, unlinken",             "Yes, unlink"                },  // STR_UNLINK_CONFIRM
+  { "Waage initialisiert...",   "Scale calibrating..."       },  // STR_SCALE_CALIBRATING
+  { "Verbinde mit WiFi...",     "Connecting to WiFi..."      },  // STR_WIFI_CONNECTING_BOOT
+  { "Waage und WiFi werden gestartet...", "Starting up, please wait..." },  // STR_BOOTING
 };
