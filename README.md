@@ -83,7 +83,7 @@ Currently tested with a Spoolman library of 260+ active spools and running stabl
 The 3D printable enclosure is available on MakerWorld:
 👉 [makerworld.com/@FormFollowsF](https://makerworld.com/de/models/2713675-spoolmanscale#profileId-3005075)
 
-📖 **Full build guide (wiring, assembly, calibration):** [BUILDING.md](BUILDING.md)
+📖 A detailed build guide, wiring diagrams, and setup instructions are available in the **[SpoolmanScale Documentation](https://niko11111.github.io/SpoolmanScale-Docs/)** *(work in progress)*
 
 ---
 ## Getting Started
@@ -95,7 +95,7 @@ Order from the hardware list and print the enclosure while you wait for shipping
 Before assembling, flash via the [Web Flasher](https://niko11111.github.io/SpoolmanScale). Verify it works before wiring.
 
 **3. Wire & assemble**
-Full wiring tables and assembly tips: [BUILDING.md](BUILDING.md)
+Full wiring tables and assembly tips: **[SpoolmanScale Documentation](https://niko11111.github.io/SpoolmanScale-Docs/)** *(work in progress)*
 
 **4. Calibrate**
 Settings → Scale → Calibration. Done.
