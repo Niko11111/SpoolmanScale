@@ -1,0 +1,16 @@
+# PlatformIO
+.pio
+libdeps
+.pioinit
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
