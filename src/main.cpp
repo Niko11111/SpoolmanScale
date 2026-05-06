@@ -1,7 +1,7 @@
 // ============================================================
 //  SpoolmanScale – Bambu NFC Tag Reader & Decoder
 //  Board:   WT32-SC01 Plus (ESP32-S3)
-//  Version: v0.5.9-beta
+//  Version: v0.5.10-beta
 //
 //  Reads Bambu Lab MIFARE Classic tags, derives keys via KDF
 //  (HKDF/SHA256, master key from Bambu-Research-Group/RFID-Tag-Guide),
@@ -186,7 +186,7 @@ static int     bright_normal   = BRIGHT_NORMAL_DEFAULT;
 static int     dim_timeout_ms  = DIM_TIMEOUT_DEFAULT;
 static int     sleep_timeout_ms = SLEEP_TIMEOUT_DEFAULT;
 #define TOUCH_INT_PIN       7   // FT6336U INT fuer Wake-Up
-#define FW_VERSION  "v0.5.9-beta"
+#define FW_VERSION  "v0.5.10-beta"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // NAU7802 calibration
