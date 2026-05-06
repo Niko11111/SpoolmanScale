@@ -1,25 +1,20 @@
 name: Build and Release
-
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     strategy:
       matrix:
         env: [wt32-sc01-plus]
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Cache PlatformIO
         uses: actions/cache@v4
         with:
@@ -27,24 +22,19 @@ jobs:
             ~/.cache/pip
             ~/.platformio/.cache
           key: ${{ runner.os }}-pio-${{ hashFiles('**/platformio.ini') }}
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Install PlatformIO
         run: pip install --upgrade platformio
-
       - name: Build ${{ matrix.env }}
         run: pio run -e ${{ matrix.env }}
-
       - name: Read version from main.cpp
         id: version
         run: |
           VERSION=$(grep '#define FW_VERSION' src/main.cpp | sed 's/.*"\(.*\)"/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Prepare binaries
         run: |
           VERSION=${{ steps.version.outputs.version }}
@@ -52,20 +42,18 @@ jobs:
           cp .pio/build/${{ matrix.env }}/partitions.bin  webflasher/partitions.bin
           cp .pio/build/${{ matrix.env }}/firmware.bin    webflasher/SpoolmanScale.bin
           cp .pio/build/${{ matrix.env }}/firmware.bin    SpoolmanScale_${VERSION}.bin
-
-      - name: Update manifest.json version
+      - name: Update manifest.json + index.html
         run: |
           VERSION=${{ steps.version.outputs.version }}
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" manifest.json
-
-      - name: Commit webflasher + manifest
+          sed -i "s/Firmware v[0-9]*\.[0-9]*\.[0-9]*-beta/Firmware $VERSION/" index.html
+      - name: Commit webflasher + manifest + index
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add webflasher/bootloader.bin webflasher/partitions.bin webflasher/SpoolmanScale.bin manifest.json
-          git diff --cached --quiet || git commit -m "CI: update webflasher + manifest for ${{ steps.version.outputs.version }}"
+          git add webflasher/bootloader.bin webflasher/partitions.bin webflasher/SpoolmanScale.bin manifest.json index.html
+          git diff --cached --quiet || git commit -m "CI: update webflasher + manifest + index for ${{ steps.version.outputs.version }}"
           git push origin HEAD:main
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
