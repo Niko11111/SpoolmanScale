@@ -147,10 +147,8 @@ The USB-C panel mount extension needs to be trimmed before installation. Using a
 
 ## Assembly Photos
 
-<div align="center">
-<img src="images/spoolmanscale_assembly_1.jpeg" width="500"> <img src="images/spoolmanscale_assembly_2.jpeg" width="500">
-<img src="images/spoolmanscale_assembly_3.jpeg" width="500"> <img src="images/spoolmanscale_assembly_4.jpeg" width="500">
-<img src="images/spoolmanscale_assembly_5.jpeg" width="500"> <img src="images/spoolmanscale_assembly_6.jpeg" width="500">
-<img src="images/spoolmanscale_assembly_7.jpeg" width="500"> <img src="images/spoolmanscale_assembly_8.jpeg" width="500">
-<img src="images/spoolmanscale_assembly_9.jpeg" width="500">
-</div>
+[![](images/spoolmanscale_assembly_1.jpeg)](images/spoolmanscale_assembly_1.jpeg) [![](images/spoolmanscale_assembly_2.jpeg)](images/spoolmanscale_assembly_2.jpeg)
+[![](images/spoolmanscale_assembly_3.jpeg)](images/spoolmanscale_assembly_3.jpeg) [![](images/spoolmanscale_assembly_4.jpeg)](images/spoolmanscale_assembly_4.jpeg)
+[![](images/spoolmanscale_assembly_5.jpeg)](images/spoolmanscale_assembly_5.jpeg) [![](images/spoolmanscale_assembly_6.jpeg)](images/spoolmanscale_assembly_6.jpeg)
+[![](images/spoolmanscale_assembly_7.jpeg)](images/spoolmanscale_assembly_7.jpeg) [![](images/spoolmanscale_assembly_8.jpeg)](images/spoolmanscale_assembly_8.jpeg)
+[![](images/spoolmanscale_assembly_9.jpeg)](images/spoolmanscale_assembly_9.jpeg)

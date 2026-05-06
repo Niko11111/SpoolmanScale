@@ -1,7 +1,7 @@
 // ============================================================
 //  SpoolmanScale – Bambu NFC Tag Reader & Decoder
 //  Board:   WT32-SC01 Plus (ESP32-S3)
-//  Version: v0.5.8-beta
+//  Version: v0.5.9-beta
 //
 //  Reads Bambu Lab MIFARE Classic tags, derives keys via KDF
 //  (HKDF/SHA256, master key from Bambu-Research-Group/RFID-Tag-Guide),
@@ -65,6 +65,7 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 // LVGL built-in QR-Code: LV_USE_QRCODE muss in lv_conf.h auf 1 gesetzt sein!
 #include "extra/libs/qrcode/lv_qrcode.h"
 #include "lang.h"
+#include "bambu_blacklist.h"
 
 // ============================================================
 //  FORWARD DECLARATIONS
@@ -160,7 +161,7 @@ void checkAndCreateExtraFields(bool create_missing);
 void showCopyEntryPopup();
 void closeCopyEntryPopup();
 void showCopyIdInputPopup();
-void fetchSpoolsForCopy(bool archived, const char* material_filter);
+void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bambu_tag = false);
 void showCopySpoolList();
 void showCopyConfirmPopup(int template_id, const char* template_name, float template_remaining, float template_initial, float template_spool_w);
 void doCopySpoolCreate(int template_filament_id, float template_initial, float template_spool_w);
@@ -185,7 +186,7 @@ static int     bright_normal   = BRIGHT_NORMAL_DEFAULT;
 static int     dim_timeout_ms  = DIM_TIMEOUT_DEFAULT;
 static int     sleep_timeout_ms = SLEEP_TIMEOUT_DEFAULT;
 #define TOUCH_INT_PIN       7   // FT6336U INT fuer Wake-Up
-#define FW_VERSION  "v0.5.8-beta"
+#define FW_VERSION  "v0.5.9-beta"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // NAU7802 calibration
@@ -259,6 +260,7 @@ static bool show_system_pending = false;             // deferred return-to-syste
 static bool show_ota_pending    = false;             // deferred showOtaScreen from system tile callback
 static bool show_info_pending   = false;             // deferred showInfoScreen from system tile callback
 static bool show_location_picker_pending = false;    // deferred showLocationPicker from More Info button
+static bool show_drying_reminder_pending = false;     // deferred showDryingReminderScreen
 static bool show_more_info_pending = false;          // deferred buildMoreInfoScreen after location change
 static bool fetch_locations_pending = false;         // deferred HTTP fetch for location picker
 static lv_obj_t *loc_list_obj = nullptr;             // location picker list container
@@ -386,7 +388,8 @@ lv_obj_t *scr_bag        = nullptr;
 lv_obj_t *scr_lastused   = nullptr;  // Last Used Mode screen
 // Submenu screens
 lv_obj_t *scr_connection = nullptr;  // Connection (WiFi + Spoolman IP)
-lv_obj_t *scr_scale_sub  = nullptr;  // Scale (bag weight + calibration)
+lv_obj_t *scr_scale_sub  = nullptr;
+lv_obj_t *scr_drying_reminder = nullptr;  // Scale (bag weight + calibration)
 lv_obj_t *scr_display    = nullptr;  // Display (brightness + timeouts)
 lv_obj_t *scr_system     = nullptr;  // System (update + info/donate)
 lv_obj_t *scr_ota        = nullptr;  // OTA selection (browser / GitHub)
@@ -466,6 +469,9 @@ static bool g_whole_gram = false;
 
 // Auto-Weight: Gewicht automatisch speichern bei 3s Stabilität
 static bool g_auto_weight = false;               // Toggle-Status (Standard: aus)
+static bool g_auto_loc_popup = false;             // Auto location popup on tag removal
+static int  g_loc_popup_shown_for_id = -1;         // sm_id for which loc popup was last shown
+static bool g_loc_picker_from_popup = false;        // true = picker opened from tag-removal popup
 static float auto_weight_last_val = -9999.0f;    // letzter Vergleichswert
 static unsigned long auto_weight_stable_ms = 0;  // Zeitpunkt, seit dem stabil
 static lv_obj_t *lbl_auto_weight_btn = nullptr;  // Label des Toggle-Buttons im Popup
@@ -985,6 +991,7 @@ void loadPrefs() {
   last_used_mode =   prefs.getUChar("lu_mode",  0);  // 0=OpenSpoolMan, 1=Last Weighed
   g_whole_gram   =   prefs.getBool("whole_gram", false);
   g_auto_weight  =   prefs.getBool("auto_weight", false);
+  g_auto_loc_popup =  prefs.getBool("auto_loc_popup", false);
   prefs.end();
   Serial.printf("Prefs: SSID=%s Spoolman=%s\n", cfg_wifi_ssid, cfg_spoolman_base);
   Serial.printf("Scale: cal_factor=%.4f  zero_offset=%d  bag_weight=%.1fg\n",
@@ -1104,6 +1111,7 @@ void hideAllOverlays() {
   if (scr_settings)    lv_obj_add_flag(scr_settings,    LV_OBJ_FLAG_HIDDEN);
   if (scr_connection)  lv_obj_add_flag(scr_connection,  LV_OBJ_FLAG_HIDDEN);
   if (scr_scale_sub)   lv_obj_add_flag(scr_scale_sub,   LV_OBJ_FLAG_HIDDEN);
+  if (scr_drying_reminder) lv_obj_add_flag(scr_drying_reminder, LV_OBJ_FLAG_HIDDEN);
   if (scr_display)     lv_obj_add_flag(scr_display,     LV_OBJ_FLAG_HIDDEN);
   if (scr_system)      lv_obj_add_flag(scr_system,      LV_OBJ_FLAG_HIDDEN);
   if (scr_ota)         lv_obj_add_flag(scr_ota,         LV_OBJ_FLAG_HIDDEN);
@@ -1135,6 +1143,7 @@ void showMainScreen() {
   if (scr_settings)    { lv_obj_del(scr_settings);    scr_settings    = nullptr; }
   if (scr_connection)  { lv_obj_del(scr_connection);  scr_connection  = nullptr; }
   if (scr_scale_sub)   { lv_obj_del(scr_scale_sub);   scr_scale_sub   = nullptr; }
+  if (scr_drying_reminder) { lv_obj_del(scr_drying_reminder); scr_drying_reminder = nullptr; }
   if (scr_display)     { lv_obj_del(scr_display);     scr_display     = nullptr; }
   if (scr_system)      { lv_obj_del(scr_system);      scr_system      = nullptr; }
   if (scr_ota)         { lv_obj_del(scr_ota);         scr_ota         = nullptr; }
@@ -3588,7 +3597,10 @@ void buildLastUsedScreen() {
 }
 
 // ============================================================
-//  SUBMENU: SCALE (bag weight + calibration + last used mode)
+//  SUBMENU: SCALE — 2x2 grid + full-width bottom row
+//  Row 1: [Calibrate] [Bag Weight]
+//  Row 2: [Last Used] [Drying Reminder]
+//  Row 3: [Location Popup Toggle — full width]
 // ============================================================
 void buildScaleSubScreen() {
   logSD("BUILD: ScaleSubScreen");
@@ -3597,106 +3609,138 @@ void buildScaleSubScreen() {
   buildSubHeader(scr_scale_sub, T(STR_SCALE_TITLE),
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
 
-  // Bag weight button (y=58)
-  lv_obj_t *btn_bag = lv_btn_create(scr_scale_sub);
-  lv_obj_set_size(btn_bag, 456, 74);
-  lv_obj_set_pos(btn_bag, 12, 58);
-  lv_obj_set_style_bg_color(btn_bag, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_bag, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_bag, 10, 0);
-  lv_obj_set_style_shadow_width(btn_bag, 0, 0);
-  lv_obj_set_style_border_width(btn_bag, 1, 0);
-  lv_obj_set_style_border_color(btn_bag, lv_color_hex(0x1a3050), 0);
-  { lv_obj_t *ico = lv_label_create(btn_bag);
-    lv_label_set_text(ico, LV_SYMBOL_DRIVE);
+  // Tile builder lambda - 2x2 layout
+  // Tile: 224x100px. Col1 x=12, Col2 x=244. Row1 y=57, Row2 y=165. Bag y=271 h=44.
+  auto makeTile = [&](int x, int y, const char* ico_sym, const char* title, const char* sub) -> lv_obj_t* {
+    lv_obj_t *btn = lv_btn_create(scr_scale_sub);
+    lv_obj_set_size(btn, 224, 100);
+    lv_obj_set_pos(btn, x, y);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a1e30), 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btn, 10, 0);
+    lv_obj_set_style_shadow_width(btn, 0, 0);
+    lv_obj_set_style_border_width(btn, 1, 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(0x1a3050), 0);
+    lv_obj_t *ico = lv_label_create(btn);
+    lv_label_set_text(ico, ico_sym);
     lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -20);
-    lv_obj_t *lbl = lv_label_create(btn_bag);
-    lv_label_set_text(lbl, T(STR_BTN_BAGWEIGHT));
+    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
+    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -22);
+    lv_obj_t *lbl = lv_label_create(btn);
+    lv_label_set_text(lbl, title);
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
-    char buf[24]; snprintf(buf, sizeof(buf), T(STR_BAG_CURRENT), bag_weight_g);
-    lv_obj_t *sub = lv_label_create(btn_bag);
-    lv_label_set_text(sub, buf);
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 24); }
-  lv_obj_add_event_cb(btn_bag, [](lv_event_t *e){
-    logSD("BTN: Scale-Sub -> Bag Weight");
-    show_bag_pending = true;
-  }, LV_EVENT_CLICKED, NULL);
+    lv_obj_set_width(lbl, 216);
+    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 10);
+    lv_obj_t *slbl = lv_label_create(btn);
+    lv_label_set_text(slbl, sub);
+    lv_obj_set_style_text_color(slbl, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(slbl, &lv_font_montserrat_ext_12, 0);
+    lv_obj_set_style_text_align(slbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(slbl, 216);
+    lv_obj_align(slbl, LV_ALIGN_CENTER, 0, 30);
+    return btn;
+  };
 
-  // Calibration button (y=140)
-  lv_obj_t *btn_cal = lv_btn_create(scr_scale_sub);
-  lv_obj_set_size(btn_cal, 456, 74);
-  lv_obj_set_pos(btn_cal, 12, 140);
-  lv_obj_set_style_bg_color(btn_cal, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_cal, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_cal, 10, 0);
-  lv_obj_set_style_shadow_width(btn_cal, 0, 0);
-  lv_obj_set_style_border_width(btn_cal, 1, 0);
-  lv_obj_set_style_border_color(btn_cal, lv_color_hex(0x1a3050), 0);
-  { lv_obj_t *ico = lv_label_create(btn_cal);
-    lv_label_set_text(ico, LV_SYMBOL_EDIT);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -20);
-    lv_obj_t *lbl = lv_label_create(btn_cal);
-    lv_label_set_text(lbl, T(STR_BTN_CALIBRATE));
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
-    char buf[32]; snprintf(buf, sizeof(buf), T(STR_CAL_FACTOR_SHORT), cal_factor);
-    lv_obj_t *sub = lv_label_create(btn_cal);
-    lv_label_set_text(sub, buf);
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 24); }
+  // [1] Calibration - top left
+  char cal_sub[32]; snprintf(cal_sub, sizeof(cal_sub), T(STR_CAL_FACTOR_SHORT), cal_factor);
+  lv_obj_t *btn_cal = makeTile(12, 57, LV_SYMBOL_EDIT, T(STR_BTN_CALIBRATE), cal_sub);
   lv_obj_add_event_cb(btn_cal, [](lv_event_t *e){
     logSD("BTN: Scale-Sub -> Calibration");
     show_factor_pending = true;
   }, LV_EVENT_CLICKED, NULL);
 
-  // Last Used Mode button (y=222)
-  lv_obj_t *btn_lu = lv_btn_create(scr_scale_sub);
-  lv_obj_set_size(btn_lu, 456, 74);
-  lv_obj_set_pos(btn_lu, 12, 222);
-  lv_obj_set_style_bg_color(btn_lu, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_lu, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_lu, 10, 0);
-  lv_obj_set_style_shadow_width(btn_lu, 0, 0);
-  lv_obj_set_style_border_width(btn_lu, 1, 0);
-  lv_obj_set_style_border_color(btn_lu, lv_color_hex(0x1a3050), 0);
-  { lv_obj_t *ico = lv_label_create(btn_lu);
-    lv_label_set_text(ico, LV_SYMBOL_SAVE);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -20);
-    lv_obj_t *lbl = lv_label_create(btn_lu);
-    char buf_t[32]; strncpy(buf_t, T(STR_BTN_LASTUSED_MODE), sizeof(buf_t)-1);
+  // [2] Last Used Mode - top right
+  { char buf_t[32]; strncpy(buf_t, T(STR_BTN_LASTUSED_MODE), sizeof(buf_t)-1);
+    char buf_s[48]; strncpy(buf_s, T(STR_BTN_LASTUSED_MODE_SUB), sizeof(buf_s)-1);
+    lv_obj_t *btn_lu = makeTile(244, 57, LV_SYMBOL_SAVE, buf_t, buf_s);
+    lv_obj_add_event_cb(btn_lu, [](lv_event_t *e){
+      logSD("BTN: Scale-Sub -> Last Used Mode");
+      show_lastused_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
+  // [3] Drying Reminder - bottom left
+  { char buf_t[40]; strncpy(buf_t, T(STR_BTN_DRYING_REMINDER), sizeof(buf_t)-1);
+    char buf_s[40]; strncpy(buf_s, T(STR_BTN_DRYING_REMINDER_SUB), sizeof(buf_s)-1);
+    lv_obj_t *btn_dry = makeTile(12, 165, LV_SYMBOL_WARNING, buf_t, buf_s);
+    lv_obj_add_event_cb(btn_dry, [](lv_event_t *e){
+      logSD("BTN: Scale-Sub -> Drying Reminder");
+      show_drying_reminder_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
+  // [4] Bag Weight - bottom right tile
+  { char bag_sub[24]; snprintf(bag_sub, sizeof(bag_sub), T(STR_BAG_CURRENT), bag_weight_g);
+    lv_obj_t *btn_bag = makeTile(244, 165, LV_SYMBOL_DRIVE, T(STR_BTN_BAGWEIGHT), bag_sub);
+    lv_obj_add_event_cb(btn_bag, [](lv_event_t *e){
+      logSD("BTN: Scale-Sub -> Bag Weight");
+      show_bag_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
+  // [5] Location Popup Toggle - full width bottom
+  { lv_obj_t *btn_loc_tog = lv_btn_create(scr_scale_sub);
+    lv_obj_set_size(btn_loc_tog, 456, 44);
+    lv_obj_set_pos(btn_loc_tog, 12, 271);
+    lv_obj_set_style_bg_color(btn_loc_tog, g_auto_loc_popup ? lv_color_hex(0x0a1e30) : lv_color_hex(0x0a1828), 0);
+    lv_obj_set_style_bg_color(btn_loc_tog, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(btn_loc_tog, g_auto_loc_popup ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3050), 0);
+    lv_obj_set_style_border_width(btn_loc_tog, 1, 0);
+    lv_obj_set_style_radius(btn_loc_tog, 10, 0);
+    lv_obj_set_style_shadow_width(btn_loc_tog, 0, 0);
+    lv_obj_t *ico = lv_label_create(btn_loc_tog);
+    lv_label_set_text(ico, LV_SYMBOL_GPS);
+    lv_obj_set_style_text_color(ico, g_auto_loc_popup ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
+    lv_obj_align(ico, LV_ALIGN_LEFT_MID, 12, 0);
+    lv_obj_t *lbl = lv_label_create(btn_loc_tog);
+    char buf_t[40]; strncpy(buf_t, T(STR_BTN_AUTO_LOC_POPUP), sizeof(buf_t)-1);
     lv_label_set_text(lbl, buf_t);
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
-    lv_obj_t *sub = lv_label_create(btn_lu);
-    char buf_s[48]; strncpy(buf_s, T(STR_BTN_LASTUSED_MODE_SUB), sizeof(buf_s)-1);
-    lv_label_set_text(sub, buf_s);
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 24); }
-  lv_obj_add_event_cb(btn_lu, [](lv_event_t *e){
-    logSD("BTN: Scale-Sub -> Last Used Mode");
-    show_lastused_pending = true;
-  }, LV_EVENT_CLICKED, NULL);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
+    lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 48, 0);
+    lv_obj_t *state_lbl = lv_label_create(btn_loc_tog);
+    lv_label_set_text(state_lbl, g_auto_loc_popup ? "ON" : "OFF");
+    lv_obj_set_style_text_color(state_lbl, g_auto_loc_popup ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(state_lbl, &lv_font_montserrat_ext_16, 0);
+    lv_obj_align(state_lbl, LV_ALIGN_RIGHT_MID, -16, 0);
+    lv_obj_add_event_cb(btn_loc_tog, [](lv_event_t *e){
+      logSD("BTN: Scale-Sub -> Auto Location Popup Toggle");
+      g_auto_loc_popup = !g_auto_loc_popup;
+      Preferences prefs; prefs.begin("spoolscale", false);
+      prefs.putBool("auto_loc_popup", g_auto_loc_popup);
+      prefs.end();
+      if (scr_scale_sub) { lv_obj_del(scr_scale_sub); scr_scale_sub = nullptr; }
+      buildScaleSubScreen();
+      lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
+    }, LV_EVENT_CLICKED, NULL); }
+
+
+
+
+
   if (sd_verbose) logSD("[verbose] buildScaleSubScreen: done");
+}
+
+// ============================================================
+//  DRYING REMINDER SCREEN (coming soon placeholder)
+// ============================================================
+void showDryingReminderScreen() {
+  logSD("SHOW: DryingReminderScreen");
+  if (scr_drying_reminder) { lv_obj_del(scr_drying_reminder); scr_drying_reminder = nullptr; }
+  scr_drying_reminder = buildOverlayScreen();
+  buildSubHeader(scr_drying_reminder, T(STR_DRYING_REMINDER_TITLE),
+    [](lv_event_t *e){ logSD("BTN: Back -> Scale");
+      if (scr_drying_reminder) { lv_obj_del(scr_drying_reminder); scr_drying_reminder = nullptr; }
+      if (!scr_scale_sub) buildScaleSubScreen();
+      lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
+    });
+  lv_obj_t *lbl_cs = lv_label_create(scr_drying_reminder);
+  char buf[48]; strncpy(buf, T(STR_DRYING_REMINDER_COMING_SOON), sizeof(buf)-1);
+  lv_label_set_text(lbl_cs, buf);
+  lv_obj_set_style_text_color(lbl_cs, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(lbl_cs, &lv_font_montserrat_ext_18, 0);
+  lv_obj_set_style_text_align(lbl_cs, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(lbl_cs, LV_ALIGN_CENTER, 0, 0);
 }
 
 // ============================================================
@@ -3937,6 +3981,7 @@ void startOtaServer() {
       "<h2>SD Card Logs</h2>"
       "<div id='log-list'><div class='no-sd'><div class='no-sd-hint'>Loading...</div></div></div>"
       "</div>"
+      "<style>#log-entries{max-height:184px;overflow-y:auto}</style>"
       "<script>"
       "function loadLogs(){"
       "fetch('/logs').then(r=>r.json()).then(d=>{"
@@ -3961,13 +4006,13 @@ void startOtaServer() {
       "\"<div class='no-sd-title'>No log files yet</div>\"+"
       "\"<div class='no-sd-hint'>Logs will appear here as you use the device.</div>\"+"
       "\"</div>\";"
-      "}else{h+=\"<div class='section-divider'></div>\";"
+      "}else{h+=\"<div class='section-divider'></div><div id='log-entries'>\";"
       "d.files.forEach(f=>{"
       "h+=\"<div class='log-row'><span class='log-name'>\"+f.name+\"</span>\"+"
       "\"<div class='log-actions'>\"+"
       "\"<a class='log-btn' href='/log?file=\"+encodeURIComponent(f.name)+\"' download='\"+f.name+\"'>Download</a>\"+"
       "\"<a class='log-btn log-btn-del' href='#' onclick=\\\"delLog('\"+f.name+\"');return false;\\\">Delete</a>\"+"
-      "\"</div></div>\";});}"
+      "\"</div></div>\";});h+=\"</div>\";}"
       "c.innerHTML=h;});}"
       "function delLog(n){if(!confirm('Delete '+n+'?'))return;"
       "fetch('/deletelog?file='+encodeURIComponent(n),{method:'POST'}).then(()=>loadLogs());}"
@@ -5637,6 +5682,7 @@ void clearTagDisplay() {
   sm_found = false; sm_id = 0; sm_filament_id = 0; sm_vendor_id = 0; sm_spool_weight = 0;
   sm_last_dried[0] = '\0'; sm_article_nr[0] = '\0';
   sm_filament_name[0] = '\0'; sm_material_global[0] = '\0'; sm_color_global[0] = '\0'; sm_last_used[0] = '\0';
+  sm_location_name[0] = '\0';
   tag_present = false;
   nfc_retry_count = 0;
   g_tag.uid_str[0] = '\0';
@@ -5830,6 +5876,8 @@ void generateUUID(char *out, size_t len) {
 //  e.g. "PLA-CF" -> "CF", "PETG-HF" -> "HF", "PLA Matte" -> "Matte"
 //  Returns true if a subtype keyword was found and stored in out_kw.
 // ============================================================
+// Returns true if material has a known technical subtype (from BAMBU_PLA_SUBTYPE_BLACKLIST)
+// and stores it in out_kw. "Basic", "Support for ..." etc. return false -> no subtype filter.
 static bool extractBambuSubtype(const char* material, char* out_kw, size_t out_size) {
   if (!material || !material[0]) return false;
   const char *sep = nullptr;
@@ -5839,10 +5887,27 @@ static bool extractBambuSubtype(const char* material, char* out_kw, size_t out_s
   if (!sep || !*sep) return false;
   strncpy(out_kw, sep, out_size - 1);
   out_kw[out_size - 1] = '\0';
-  // Trim trailing spaces/nulls
   int len = strlen(out_kw);
-  while (len > 0 && (out_kw[len-1] == ' ' || out_kw[len-1] == '\0')) out_kw[--len] = '\0';
-  return len > 0;
+  while (len > 0 && out_kw[len-1] == ' ') out_kw[--len] = '\0';
+  if (len == 0) return false;
+  // Only filter by subtype if it is a known technical subtype (see bambu_blacklist.h)
+  for (int i = 0; BAMBU_PLA_SUBTYPE_BLACKLIST[i]; i++) {
+    if (strcasecmp(out_kw, BAMBU_PLA_SUBTYPE_BLACKLIST[i]) == 0) return true;
+  }
+  return false;
+}
+
+// Returns true if material_filter starts with "Support" (case-insensitive).
+// In that case, matching is done against Spoolman materials ending in "-S".
+static bool isSupportMaterial(const char* material_filter) {
+  return material_filter && strncasecmp(material_filter, "Support", 7) == 0;
+}
+
+// Returns true if the Spoolman material string is a support filament ("-S" suffix).
+static bool isSupportSpoolmanMat(const char* mat) {
+  if (!mat) return false;
+  size_t len = strlen(mat);
+  return len >= 2 && mat[len-2] == '-' && (mat[len-1] == 'S' || mat[len-1] == 's');
 }
 
 // Case-insensitive substring search (like strcasestr, not always available on ESP32)
@@ -5951,22 +6016,31 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
       if (material_filter && material_filter[0]) {
         String mat = spool["filament"]["material"] | String("");
         mat.trim();
-        if (strncasecmp(mat.c_str(), material_filter, 3) != 0) { skipped_material++; continue; }
-        // Subtype filter: if tag has e.g. "PLA-CF", also filter by "CF" in name+material
-        char subkw[16];
-        if (extractBambuSubtype(material_filter, subkw, sizeof(subkw))) {
-          String fname = spool["filament"]["name"] | String("");
-          if (!containsIgnoreCase(mat.c_str(), subkw) && !containsIgnoreCase(fname.c_str(), subkw)) {
-            logSDf("link fetch: subtype skip mat='%s' name='%.20s' kw='%s'", mat.c_str(), fname.c_str(), subkw);
-            skipped_material++; continue;
+        // Support materials: match Spoolman materials ending in "-S" (e.g. PLA-S, ABS-S)
+        if (isSupportMaterial(material_filter)) {
+          if (!isSupportSpoolmanMat(mat.c_str())) { skipped_material++; continue; }
+          // No color filter for support filaments (always natural/white)
+        } else {
+          // Standard 3-char material prefix match (e.g. "PLA", "PET", "ABS")
+          if (strncasecmp(mat.c_str(), material_filter, 3) != 0) { skipped_material++; continue; }
+          // Exclude support materials from non-support filter (e.g. ABS-GF must not show ABS-S)
+          if (isSupportSpoolmanMat(mat.c_str())) { skipped_material++; continue; }
+          // Subtype filter: only for known technical subtypes (see bambu_blacklist.h)
+          char subkw[16];
+          if (extractBambuSubtype(material_filter, subkw, sizeof(subkw))) {
+            String fname = spool["filament"]["name"] | String("");
+            if (!containsIgnoreCase(mat.c_str(), subkw) && !containsIgnoreCase(fname.c_str(), subkw)) {
+              logSDf("link fetch: subtype skip mat='%s' name='%.20s' kw='%s'", mat.c_str(), fname.c_str(), subkw);
+              skipped_material++; continue;
+            }
           }
-        }
-        // Color filter: if tag has a color, skip spools with very different color
-        if (g_tag.color_hex[0] == '#') {
-          String col = spool["filament"]["color_hex"] | String("");
-          char col_buf[8]; snprintf(col_buf, sizeof(col_buf), "#%s", col.c_str());
-          int dist = colorDistance(g_tag.color_hex, col_buf);
-          if (dist > 120) { skipped_material++; continue; }
+          // Color filter: if tag has a color, skip spools with very different color
+          if (g_tag.color_hex[0] == '#') {
+            String col = spool["filament"]["color_hex"] | String("");
+            char col_buf[8]; snprintf(col_buf, sizeof(col_buf), "#%s", col.c_str());
+            int dist = colorDistance(g_tag.color_hex, col_buf);
+            if (dist > 120) { skipped_material++; continue; }
+          }
         }
       }
     } else {
@@ -6030,16 +6104,22 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
       if (material_filter && material_filter[0]) {
         String mat = spool["filament"]["material"] | String("");
         mat.trim();
-        if (strncasecmp(mat.c_str(), material_filter, 3) != 0) continue;
-        char subkw[16];
-        if (extractBambuSubtype(material_filter, subkw, sizeof(subkw))) {
-          String fname2 = spool["filament"]["name"] | String("");
-          if (!containsIgnoreCase(mat.c_str(), subkw) && !containsIgnoreCase(fname2.c_str(), subkw)) continue;
-        }
-        if (g_tag.color_hex[0] == '#') {
-          String col = spool["filament"]["color_hex"] | String("");
-          char col_buf[8]; snprintf(col_buf, sizeof(col_buf), "#%s", col.c_str());
-          if (colorDistance(g_tag.color_hex, col_buf) > 120) continue;
+        if (isSupportMaterial(material_filter)) {
+          if (!isSupportSpoolmanMat(mat.c_str())) continue;
+          // No color filter for support filaments
+        } else {
+          if (strncasecmp(mat.c_str(), material_filter, 3) != 0) continue;
+          if (isSupportSpoolmanMat(mat.c_str())) continue;
+          char subkw[16];
+          if (extractBambuSubtype(material_filter, subkw, sizeof(subkw))) {
+            String fname2 = spool["filament"]["name"] | String("");
+            if (!containsIgnoreCase(mat.c_str(), subkw) && !containsIgnoreCase(fname2.c_str(), subkw)) continue;
+          }
+          if (g_tag.color_hex[0] == '#') {
+            String col = spool["filament"]["color_hex"] | String("");
+            char col_buf[8]; snprintf(col_buf, sizeof(col_buf), "#%s", col.c_str());
+            if (colorDistance(g_tag.color_hex, col_buf) > 120) continue;
+          }
         }
       }
     } else {
@@ -6775,7 +6855,14 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     bool bv = (strncasecmp(sc.vendor, "Bambu", 5) == 0);
     if (link_flow_is_bambu) {
       if (!bv) continue;
-      if (material_prefix[0] && strncasecmp(sc.material, material_prefix, strlen(material_prefix)) != 0) continue;
+      if (g_tag.material[0] && sc.material[0]) {
+        if (isSupportMaterial(g_tag.material)) {
+          if (!isSupportSpoolmanMat(sc.material)) continue;
+        } else {
+          if (material_prefix[0] && strncasecmp(sc.material, material_prefix, strlen(material_prefix)) != 0) continue;
+          if (isSupportSpoolmanMat(sc.material)) continue;
+        }
+      }
     } else {
       if (bv) continue;
       if (vendor_name[0] && strncasecmp(sc.vendor, vendor_name, strlen(vendor_name)) != 0) continue;
@@ -6898,7 +6985,14 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
       // Bambu-Flow: vendor muss Bambu enthalten, Material muss passen
       if (!bambu_vendor) continue;
       if (g_tag.material[0] && s.material[0]) {
-        if (strncasecmp(s.material, g_tag.material, 3) != 0) continue;
+        if (isSupportMaterial(g_tag.material)) {
+          // Support tags: match Spoolman materials ending in "-S"
+          if (!isSupportSpoolmanMat(s.material)) continue;
+        } else {
+          if (strncasecmp(s.material, g_tag.material, 3) != 0) continue;
+          // Exclude support materials from non-support display
+          if (isSupportSpoolmanMat(s.material)) continue;
+        }
       }
     } else {
       // Flow B: vendor und material prefix filtern
@@ -9150,7 +9244,7 @@ void showCopyConfirmPopup(int template_filament_id, const char* template_name,
 
 // Fetch spools for copy list (active or archived, material-filtered)
 // Uses PSRAM allocator. Max COPY_SPOOL_LIMIT entries shown.
-void fetchSpoolsForCopy(bool archived, const char* material_filter) {
+void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bambu_tag) {
   // Free previous list
   if (link_spools) { free(link_spools); link_spools = nullptr; link_spool_count = 0; }
 
@@ -9175,19 +9269,30 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter) {
   for (JsonObject spool : arr) {
     bool is_archived = spool["archived"] | false;
     if (is_archived != archived) continue;
+    // Bambu tag: only show Bambu Lab spools
+    if (is_bambu_tag) {
+      const char* vname = spool["filament"]["vendor"]["name"] | "";
+      if (strncasecmp(vname, "Bambu", 5) != 0) continue;
+    }
     const char* mat = spool["filament"]["material"] | "";
     if (material_filter && strlen(material_filter) > 0) {
-      int flen = strlen(material_filter) < 3 ? (int)strlen(material_filter) : 3;
-      if (strncasecmp(mat, material_filter, flen) != 0) continue;
-      char subkw[16];
-      if (extractBambuSubtype(material_filter, subkw, sizeof(subkw))) {
-        const char* fname = spool["filament"]["name"] | "";
-        if (!containsIgnoreCase(mat, subkw) && !containsIgnoreCase(fname, subkw)) continue;
-      }
-      if (g_tag.color_hex[0] == '#') {
-        const char* col = spool["filament"]["color_hex"] | "";
-        char col_buf[8]; snprintf(col_buf, sizeof(col_buf), "#%s", col);
-        if (colorDistance(g_tag.color_hex, col_buf) > 120) continue;
+      if (isSupportMaterial(material_filter)) {
+        if (!isSupportSpoolmanMat(mat)) continue;
+        // No color filter for support filaments
+      } else {
+        int flen = strlen(material_filter) < 3 ? (int)strlen(material_filter) : 3;
+        if (strncasecmp(mat, material_filter, flen) != 0) continue;
+        if (isSupportSpoolmanMat(mat)) continue;
+        char subkw[16];
+        if (extractBambuSubtype(material_filter, subkw, sizeof(subkw))) {
+          const char* fname = spool["filament"]["name"] | "";
+          if (!containsIgnoreCase(mat, subkw) && !containsIgnoreCase(fname, subkw)) continue;
+        }
+        if (g_tag.color_hex[0] == '#') {
+          const char* col = spool["filament"]["color_hex"] | "";
+          char col_buf[8]; snprintf(col_buf, sizeof(col_buf), "#%s", col);
+          if (colorDistance(g_tag.color_hex, col_buf) > 120) continue;
+        }
       }
     }
     count++;
@@ -9206,19 +9311,30 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter) {
     if (idx >= alloc_count) break;
     bool is_archived = spool["archived"] | false;
     if (is_archived != archived) continue;
+    // Bambu tag: only show Bambu Lab spools
+    if (is_bambu_tag) {
+      const char* vname = spool["filament"]["vendor"]["name"] | "";
+      if (strncasecmp(vname, "Bambu", 5) != 0) continue;
+    }
     const char* mat = spool["filament"]["material"] | "";
     if (material_filter && strlen(material_filter) > 0) {
-      int flen = strlen(material_filter) < 3 ? (int)strlen(material_filter) : 3;
-      if (strncasecmp(mat, material_filter, flen) != 0) continue;
-      char subkw[16];
-      if (extractBambuSubtype(material_filter, subkw, sizeof(subkw))) {
-        const char* fname2 = spool["filament"]["name"] | "";
-        if (!containsIgnoreCase(mat, subkw) && !containsIgnoreCase(fname2, subkw)) continue;
-      }
-      if (g_tag.color_hex[0] == '#') {
-        const char* col2 = spool["filament"]["color_hex"] | "";
-        char col_buf2[8]; snprintf(col_buf2, sizeof(col_buf2), "#%s", col2);
-        if (colorDistance(g_tag.color_hex, col_buf2) > 120) continue;
+      if (isSupportMaterial(material_filter)) {
+        if (!isSupportSpoolmanMat(mat)) continue;
+        // No color filter for support filaments
+      } else {
+        int flen = strlen(material_filter) < 3 ? (int)strlen(material_filter) : 3;
+        if (strncasecmp(mat, material_filter, flen) != 0) continue;
+        if (isSupportSpoolmanMat(mat)) continue;
+        char subkw[16];
+        if (extractBambuSubtype(material_filter, subkw, sizeof(subkw))) {
+          const char* fname2 = spool["filament"]["name"] | "";
+          if (!containsIgnoreCase(mat, subkw) && !containsIgnoreCase(fname2, subkw)) continue;
+        }
+        if (g_tag.color_hex[0] == '#') {
+          const char* col2 = spool["filament"]["color_hex"] | "";
+          char col_buf2[8]; snprintf(col_buf2, sizeof(col_buf2), "#%s", col2);
+          if (colorDistance(g_tag.color_hex, col_buf2) > 120) continue;
+        }
       }
     }
     UnlinkedSpool& s = link_spools[idx];
@@ -9646,7 +9762,7 @@ void showCopyEntryPopup() {
     bool is_bambu_tag = (strlen(g_tag.tray_uuid) == 32);
     if (is_bambu_tag) {
       // Bambu: use material filter if available, else show all
-      fetchSpoolsForCopy(false, strlen(g_tag.material) > 0 ? g_tag.material : "");
+      fetchSpoolsForCopy(false, strlen(g_tag.material) > 0 ? g_tag.material : "", true);
       showCopySpoolList();
     } else {
       // NTAG: always go via 4-stage vendor/material picker
@@ -9682,7 +9798,7 @@ void showCopyEntryPopup() {
     copy_flow_archived = true;
     bool is_bambu_tag = (strlen(g_tag.tray_uuid) == 32);
     if (is_bambu_tag) {
-      fetchSpoolsForCopy(true, strlen(g_tag.material) > 0 ? g_tag.material : "");
+      fetchSpoolsForCopy(true, strlen(g_tag.material) > 0 ? g_tag.material : "", true);
       showCopySpoolList();
     } else {
       // NTAG: always go via 4-stage vendor/material picker (archived only)
@@ -9781,7 +9897,7 @@ void showLocationPicker() {
   lv_label_set_text(lbl_title, title_buf);
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
-  lv_obj_align(lbl_title, LV_ALIGN_LEFT_MID, 10, 0);
+  lv_obj_align(lbl_title, LV_ALIGN_CENTER, 0, 0);
 
   lv_obj_t *btn_x = lv_btn_create(hdr);
   lv_obj_set_size(btn_x, 40, 40);
@@ -9794,6 +9910,8 @@ void showLocationPicker() {
   lv_obj_set_style_shadow_width(btn_x, 0, 0);
   lv_obj_add_event_cb(btn_x, [](lv_event_t *e) {
     if (scr_location_picker) { lv_obj_del(scr_location_picker); scr_location_picker = nullptr; }
+    if (g_loc_picker_from_popup) { showMainScreen(); }
+    else { showMoreInfoScreen(); }
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_x = lv_label_create(btn_x);
   lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
@@ -9915,8 +10033,8 @@ void fetchAndFillLocationList() {
       sm_location_name[0] = '\0';
     }
     if (scr_location_picker) { lv_obj_del(scr_location_picker); scr_location_picker = nullptr; }
-    if (scr_more_info) { lv_obj_del(scr_more_info); scr_more_info = nullptr; }
-    show_more_info_pending = true;
+    if (g_loc_picker_from_popup) { showMainScreen(); }
+    else { showMoreInfoScreen(); }
   }, LV_EVENT_CLICKED, NULL);
 
   // Location rows — API gibt Array von Strings zurück
@@ -9962,8 +10080,8 @@ void fetchAndFillLocationList() {
       }
       http.end();
       if (scr_location_picker) { lv_obj_del(scr_location_picker); scr_location_picker = nullptr; }
-      if (scr_more_info) { lv_obj_del(scr_more_info); scr_more_info = nullptr; }
-      show_more_info_pending = true;
+      if (g_loc_picker_from_popup) { showMainScreen(); }
+      else { showMoreInfoScreen(); }
     }, LV_EVENT_CLICKED, NULL);
   }
   // Hinweis: leere Lagerorte werden nicht angezeigt
@@ -10025,7 +10143,7 @@ void buildMoreInfoScreen() {
   lv_label_set_text(lbl_title, "Filament");
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_16, 0);
-  lv_obj_align(lbl_title, LV_ALIGN_LEFT_MID, 10, 0);
+  lv_obj_align(lbl_title, LV_ALIGN_CENTER, 0, 0);
 
   // Close X button — Fix 10: 44x44px proper size
   lv_obj_t *btn_x = lv_btn_create(hdr);
@@ -10228,8 +10346,8 @@ void buildMoreInfoScreen() {
 
   // Location button — bottom right of row 3 (replaces duplicate Spoolman ID)
   lv_obj_t *btn_loc = lv_btn_create(box);
-  lv_obj_set_size(btn_loc, 220, 42);
-  lv_obj_set_pos(btn_loc, CB - 10, 206);
+  lv_obj_set_size(btn_loc, 220, 46);
+  lv_obj_set_pos(btn_loc, CB - 10, 204);
   lv_obj_set_style_bg_color(btn_loc, lv_color_hex(0x0d2040), 0);
   lv_obj_set_style_bg_color(btn_loc, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
   lv_obj_set_style_border_color(btn_loc, lv_color_hex(0x1a3060), 0);
@@ -10237,28 +10355,31 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_radius(btn_loc, 8, 0);
   lv_obj_set_style_shadow_width(btn_loc, 0, 0);
   lv_obj_set_style_pad_all(btn_loc, 0, 0);
-  // Cap label
+  // Cap label — centered, shifted 2px up from center
   lv_obj_t *btn_loc_cap = lv_label_create(btn_loc);
   char loc_cap_buf[32];
   strncpy(loc_cap_buf, T(STR_BTN_LOCATION), sizeof(loc_cap_buf)-1);
   lv_label_set_text(btn_loc_cap, loc_cap_buf);
   lv_obj_set_style_text_color(btn_loc_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(btn_loc_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(btn_loc_cap, 8, 4);
-  // Value label
+  lv_obj_set_style_text_align(btn_loc_cap, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(btn_loc_cap, LV_ALIGN_CENTER, 0, -11);
+  // Value label — centered
   lv_obj_t *btn_loc_val = lv_label_create(btn_loc);
   char loc_val_buf[48];
   strncpy(loc_val_buf, sm_location_name[0] ? sm_location_name : "-", sizeof(loc_val_buf)-1);
   lv_label_set_text(btn_loc_val, loc_val_buf);
   lv_obj_set_style_text_color(btn_loc_val, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(btn_loc_val, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(btn_loc_val, 8, 20);
-  lv_label_set_long_mode(btn_loc_val, LV_LABEL_LONG_DOT);
+  lv_obj_set_style_text_align(btn_loc_val, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_width(btn_loc_val, 204);
+  lv_label_set_long_mode(btn_loc_val, LV_LABEL_LONG_DOT);
+  lv_obj_align(btn_loc_val, LV_ALIGN_CENTER, 0, 7);
   lv_obj_add_event_cb(btn_loc, [](lv_event_t *e) {
     if (!WiFi.isConnected()) {
       return;
     }
+    g_loc_picker_from_popup = false;
     show_location_picker_pending = true;
   }, LV_EVENT_CLICKED, NULL);
 
@@ -10923,6 +11044,7 @@ void querySpoolman(const char* tray_uuid) {
     sm_spool_weight = spool["spool_weight"] | 0.0f;
     logSDf("Spoolman: found ID=%d remaining=%.1fg total=%.0fg",
       sm_id, sm_remaining, sm_total);
+    if (g_loc_popup_shown_for_id != sm_id) g_loc_popup_shown_for_id = -1;  // Reset only for new spool
     String art_nr = spool["filament"]["article_number"] | "";
     art_nr.trim();
     strncpy(sm_article_nr, art_nr.c_str(), sizeof(sm_article_nr)-1);
@@ -11569,6 +11691,11 @@ void loop() {
     show_factor_pending = false;
     showFactorScreen();
   }
+  if (show_drying_reminder_pending) {
+    show_drying_reminder_pending = false;
+    showDryingReminderScreen();
+    lv_obj_clear_flag(scr_drying_reminder, LV_OBJ_FLAG_HIDDEN);
+  }
   if (show_lastused_pending) {
     show_lastused_pending = false;
     // Always rebuild for fresh button states (active mode highlighting)
@@ -12043,6 +12170,12 @@ void loop() {
           lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
           lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+          // Auto location popup: if enabled, spool is linked, and not shown for this spool yet
+          if (g_auto_loc_popup && sm_found && sm_id > 0 && wifi_ok && g_loc_popup_shown_for_id != sm_id) {
+            g_loc_popup_shown_for_id = sm_id;
+            g_loc_picker_from_popup = true;
+            show_location_picker_pending = true;
+          }
           // Do NOT close list — user should be able to select spool
           // even if tag is temporarily removed
         }

@@ -87,7 +87,7 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Verbindung",             "Connection"        },  // STR_TILE_CONNECTION
   { "WiFi & Spoolman",        "WiFi & Spoolman"   },  // STR_TILE_CONN_SUB
   { "Waage",                  "Scale"             },  // STR_TILE_SCALE
-  { "Kalibrierung & Tare",    "Calibration & Tare" },  // STR_TILE_SCALE_SUB
+  { "Cal. | Bag | Mehr",     "Cal. | Bag | More"  },  // STR_TILE_SCALE_SUB
   { "Display",                "Display"           },  // STR_TILE_DISPLAY
   { "Helligkeit & Timeout",   "Brightness & Timeout" },  // STR_TILE_DISPLAY_SUB
   { "System",                 "System"            },  // STR_TILE_SYSTEM
@@ -237,7 +237,7 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Keine Spulen ohne Tag\nin Spoolman gefunden.",
     "No unlinked spools\nfound in Spoolman."    },  // STR_NO_VENDORS
   { "Keine Materialien gefunden.", "No materials found." },  // STR_NO_MATERIALS
-  { "Keine passenden Spulen.",  "No matching spools." },  // STR_NO_SPOOLS
+  { "Keine passenden Spulen.\nBitte per ID verlinken.",  "No matching spools.\nPlease link via ID." },  // STR_NO_SPOOLS
   { "Verknüpfen?",             "Link this spool?"    },  // STR_CONFIRM_LINK
   { LV_SYMBOL_OK "  Verknüpfen", LV_SYMBOL_OK "  Link"      },  // STR_LINK_OK
   { "Fehler beim Verknüpfen",  "Error linking"       },  // STR_LINK_FAIL
@@ -503,4 +503,13 @@ const char* const STRINGS[STR_COUNT][2] = {
     "No Spoolman locations found"                                          },  // STR_LOCATION_NO_LOCATIONS
   { "Leere Lagerorte werden nicht angezeigt",
     "Empty locations are not shown"                                        },  // STR_LOCATION_HINT_EMPTY
+  { "Bitte per ID verlinken",        "Please link via ID"                 },  // STR_NO_SPOOLS_HINT
+  { "Ort bei Entnahme",              "Location on removal"                },  // STR_BTN_AUTO_LOC_POPUP
+  { "Lagerort-Auswahl automatisch",  "Auto location picker"               },  // STR_BTN_AUTO_LOC_POPUP_SUB
+  { "Lagerort speichern?",           "Save location?"                     },  // STR_AUTO_LOC_POPUP_TITLE
+  { "Wo wird die Spule gelagert?",   "Where is the spool stored?"         },  // STR_AUTO_LOC_POPUP_MSG
+  { "Trocknungserinnerung",          "Drying Reminder"                    },  // STR_BTN_DRYING_REMINDER
+  { "Ampelsystem",                   "Alert system"                       },  // STR_BTN_DRYING_REMINDER_SUB
+  { "Trocknungserinnerung",          "Drying Reminder"                    },  // STR_DRYING_REMINDER_TITLE
+  { "Kommt bald",                    "Coming soon"                        },  // STR_DRYING_REMINDER_COMING_SOON
 };

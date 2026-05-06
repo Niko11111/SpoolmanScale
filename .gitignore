@@ -1,16 +1,20 @@
-# PlatformIO
-.pio
-libdeps
-.pioinit
+# Alles ignorieren
+*
 
-# IDE
-.vscode/*
-!.vscode/extensions.json
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
+# Nur diese explizit erlauben
+!src/
+!src/**
+!webflasher/
+!webflasher/**
+!.github/
+!.github/**
+!images/
+!images/**
+!platformio.ini
+!partitions.csv
+!copy_release.py
+!manifest.json
+!README.md
+!BUILDING.md
+!index.html
+!.gitignore
