@@ -9,15 +9,15 @@
       "chipFamily": "ESP32-S3",
       "parts": [
         {
-          "path": "firmware/bootloader.bin",
+          "path": "webflasher/bootloader.bin",
           "offset": 0
         },
         {
-          "path": "firmware/partitions.bin",
+          "path": "webflasher/partitions.bin",
           "offset": 32768
         },
         {
-          "path": "firmware/SpoolmanScale.bin",
+          "path": "webflasher/SpoolmanScale.bin",
           "offset": 65536
         }
       ]
