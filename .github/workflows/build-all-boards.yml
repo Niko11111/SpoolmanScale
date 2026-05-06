@@ -1,35 +1,87 @@
-name: Build All Boards
+name: Build and Release
 
-on: [push, pull_request]
+on:
+  push:
+    tags:
+      - 'v*'          # Nur bei Tags wie v0.5.9-beta
+  workflow_dispatch:  # Manueller Start über GitHub UI
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Nötig für Release + webflasher commit
+
     strategy:
       matrix:
-        env: [wt32-sc01-plus]  # List your envs here
+        env: [wt32-sc01-plus]
+
     steps:
-    - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - uses: actions/cache@v5
-      with:
-        path: |
-          ~/.cache/pip
-          ~/.platformio/.cache
-        key: ${{ runner.os }}-pio-${{ hashFiles('**/platformio.ini') }}
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio/.cache
+          key: ${{ runner.os }}-pio-${{ hashFiles('**/platformio.ini') }}
 
-    - uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-    - name: Install PlatformIO Core
-      run: pip install --upgrade platformio
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
 
-    - name: Build ${{ matrix.env }}
-      run: pio run -e ${{ matrix.env }}
+      - name: Build ${{ matrix.env }}
+        run: pio run -e ${{ matrix.env }}
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: firmware-${{ matrix.env }}
-        path: .pio/build/${{ matrix.env }}/firmware.bin
+      - name: Read version from main.cpp
+        id: version
+        run: |
+          VERSION=$(grep '#define FW_VERSION' src/main.cpp | sed 's/.*"\(.*\)"/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Copy binaries to webflasher/
+        run: |
+          cp .pio/build/${{ matrix.env }}/bootloader.bin webflasher/bootloader.bin
+          cp .pio/build/${{ matrix.env }}/partitions.bin webflasher/partitions.bin
+          cp .pio/build/${{ matrix.env }}/firmware.bin   webflasher/SpoolmanScale.bin
+
+      - name: Update manifest.json version
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" manifest.json
+
+      - name: Commit webflasher + manifest back to repo
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add webflasher/bootloader.bin webflasher/partitions.bin webflasher/SpoolmanScale.bin manifest.json
+          git diff --cached --quiet || git commit -m "CI: update webflasher binaries + manifest for ${{ steps.version.outputs.version }}"
+          git push origin HEAD:main
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: SpoolmanScale ${{ steps.version.outputs.version }}
+          prerelease: true
+          files: |
+            .pio/build/${{ matrix.env }}/firmware.bin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload versionierte Browser-OTA Binary als Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: .pio/build/${{ matrix.env }}/firmware.bin
+          name: SpoolmanScale ${{ steps.version.outputs.version }}
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
