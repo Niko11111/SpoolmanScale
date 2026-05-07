@@ -232,7 +232,7 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Tag:      %s\nSpoolman: %s  (#%d)\n\nFalsche ID? Bitte nochmal prüfen.",
     "Tag:      %s\nSpoolman: %s  (#%d)\n\nWrong ID? Please double-check." },  // STR_WARN_B_DETAILS
   { "Hersteller wählen  (%d Spulen)", "Choose vendor  (%d spools)" },  // STR_VENDOR_TITLE
-  { "Material waehlen",         "Choose material"     },  // STR_MAT_TITLE
+  { "Material wählen",         "Choose material"     },  // STR_MAT_TITLE
   { "Spule auswählen  (%d)",   "Select spool  (%d)"  },  // STR_SPOOLS_TITLE
   { "Keine Spulen ohne Tag\nin Spoolman gefunden.",
     "No unlinked spools\nfound in Spoolman."    },  // STR_NO_VENDORS
@@ -426,6 +426,8 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Installed: %s"                                                       },  // STR_GH_OTA_INSTALLED
   { "Aktuell: %s",
     "Latest: %s"                                                          },  // STR_GH_OTA_LATEST
+  { "Pre-release",
+    "Pre-release"                                                         },  // STR_GH_OTA_PRERELEASE
 
   { "Last Used Modus",
     "Last Used Mode"                                                      },  // STR_BTN_LASTUSED_MODE
@@ -503,6 +505,8 @@ const char* const STRINGS[STR_COUNT][2] = {
     "No Spoolman locations found"                                          },  // STR_LOCATION_NO_LOCATIONS
   { "Leere Lagerorte werden nicht angezeigt",
     "Empty locations are not shown"                                        },  // STR_LOCATION_HINT_EMPTY
+  { "Zu viele Lagerorte - nicht alle angezeigt",
+    "Too many locations - not all shown"                                   },  // STR_LOCATION_LIMIT_HIT
   { "Bitte per ID verlinken",        "Please link via ID"                 },  // STR_NO_SPOOLS_HINT
   { "Ort bei Entnahme",              "Location on removal"                },  // STR_BTN_AUTO_LOC_POPUP
   { "Lagerort-Auswahl automatisch",  "Auto location picker"               },  // STR_BTN_AUTO_LOC_POPUP_SUB

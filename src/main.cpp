@@ -1,7 +1,7 @@
 // ============================================================
 //  SpoolmanScale – Bambu NFC Tag Reader & Decoder
 //  Board:   WT32-SC01 Plus (ESP32-S3)
-//  Version: v0.5.10-beta
+//  Version: v0.5.11-beta
 //
 //  Reads Bambu Lab MIFARE Classic tags, derives keys via KDF
 //  (HKDF/SHA256, master key from Bambu-Research-Group/RFID-Tag-Guide),
@@ -186,7 +186,7 @@ static int     bright_normal   = BRIGHT_NORMAL_DEFAULT;
 static int     dim_timeout_ms  = DIM_TIMEOUT_DEFAULT;
 static int     sleep_timeout_ms = SLEEP_TIMEOUT_DEFAULT;
 #define TOUCH_INT_PIN       7   // FT6336U INT fuer Wake-Up
-#define FW_VERSION  "v0.5.10-beta"
+#define FW_VERSION  "v0.5.11-beta"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // NAU7802 calibration
@@ -409,6 +409,7 @@ static lv_obj_t *btn_gh_update      = nullptr;
 static lv_obj_t *lbl_gh_update_btn  = nullptr;
 static char gh_latest_version[32]   = "";
 bool update_available = false;   // set by silent background check
+bool gh_prerelease    = false;   // include pre-releases in update check (NVS: "gh_prerelease")
 static bool silent_ota_check_pending = false;  // trigger once after WiFi connect
 static bool ota_upload_active = false;         // true while browser OTA upload is running
 static lv_obj_t *lbl_burger_badge   = nullptr; // yellow dot on burger button (mainscreen)
@@ -472,6 +473,7 @@ static bool g_auto_weight = false;               // Toggle-Status (Standard: aus
 static bool g_auto_loc_popup = false;             // Auto location popup on tag removal
 static int  g_loc_popup_shown_for_id = -1;         // sm_id for which loc popup was last shown
 static bool g_loc_picker_from_popup = false;        // true = picker opened from tag-removal popup
+static int  loc_popup_pending_id = -1;              // debounced popup: sm_id scheduled, fires after 1500ms
 static float auto_weight_last_val = -9999.0f;    // letzter Vergleichswert
 static unsigned long auto_weight_stable_ms = 0;  // Zeitpunkt, seit dem stabil
 static lv_obj_t *lbl_auto_weight_btn = nullptr;  // Label des Toggle-Buttons im Popup
@@ -489,6 +491,7 @@ static char  sm_last_used[32] = "";
 
 // NFC retry: counter for re-scan attempts when tray_uuid is empty
 static int nfc_retry_count = 0;
+static int nfc_absent_count = 0;   // consecutive "not found" reads before tag_present = false
 #define NFC_MAX_RETRIES  5
 
 // Set to 1 to enable touch coordinate debug output on Serial
@@ -992,6 +995,7 @@ void loadPrefs() {
   g_whole_gram   =   prefs.getBool("whole_gram", false);
   g_auto_weight  =   prefs.getBool("auto_weight", false);
   g_auto_loc_popup =  prefs.getBool("auto_loc_popup", false);
+  gh_prerelease    =  prefs.getBool("gh_prerelease",  false);
   prefs.end();
   Serial.printf("Prefs: SSID=%s Spoolman=%s\n", cfg_wifi_ssid, cfg_spoolman_base);
   Serial.printf("Scale: cal_factor=%.4f  zero_offset=%d  bag_weight=%.1fg\n",
@@ -1131,7 +1135,7 @@ void hideAllOverlays() {
   if (scr_wifi_pass)   lv_obj_add_flag(scr_wifi_pass,   LV_OBJ_FLAG_HIDDEN);
   if (scr_wifi_connecting) lv_obj_add_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN);
   // Free PSRAM spool list if link flow was aborted
-  if (link_spools) { heap_caps_free(link_spools); link_spools = nullptr; link_spool_count = 0; }
+  if (link_spools) { free(link_spools); link_spools = nullptr; link_spool_count = 0; }
 }
 
 void showMainScreen() {
@@ -2455,13 +2459,13 @@ void buildSpoolmanScreen() {
       show_connection_from_spoolman_pending = true;
     });
 
-  // Hint: port info, font10, y=54 (between subheader and input)
+  // Hint: port info, font14, y=52
   lv_obj_t *lbl_hint = lv_label_create(scr_spoolman);
   lv_label_set_text(lbl_hint, "192.168.x.x:7912");
-  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x2a4060), 0);
-  lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_10, 0);
+  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 54);
+  lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 52);
 
   // Pre-fill with "192.168." if empty — user only needs to add last two octets + port
   if (cfg_spoolman_ip[0] == '\0') {
@@ -2657,10 +2661,10 @@ void buildSpoolmanScreen() {
   lbl_sp_test_result = lv_label_create(scr_spoolman);
   lv_label_set_text(lbl_sp_test_result, "");
   lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_sp_test_result, &lv_font_montserrat_ext_12, 0);
+  lv_obj_set_style_text_font(lbl_sp_test_result, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_sp_test_result, LV_TEXT_ALIGN_LEFT, 0);
   lv_obj_set_size(lbl_sp_test_result, 260, BOT_H);
-  lv_obj_set_pos(lbl_sp_test_result, NP_PAD_X, BOT_Y + 4);
+  lv_obj_set_pos(lbl_sp_test_result, NP_PAD_X, BOT_Y);
 
   // Extra Fields button — right side, 170px wide
   btn_sp_extra_fields = lv_btn_create(scr_spoolman);
@@ -4501,7 +4505,11 @@ void doGithubOtaCheckSilent() {
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
-  http.begin(client, "https://api.github.com/repos/Niko11111/SpoolmanScale/releases");
+  // Pre-release mode: fetch all releases array; normal: fetch latest only
+  String url = gh_prerelease
+    ? "https://api.github.com/repos/Niko11111/SpoolmanScale/releases"
+    : "https://api.github.com/repos/Niko11111/SpoolmanScale/releases/latest";
+  http.begin(client, url);
   http.addHeader("User-Agent", "SpoolmanScale-ESP32");
   http.setTimeout(8000);
   int code = http.GET();
@@ -4510,14 +4518,24 @@ void doGithubOtaCheckSilent() {
   String payload = http.getString();
   http.end();
 
-  DynamicJsonDocument doc(4096);
-  doc.clear();
-  if (deserializeJson(doc, payload)) return;
+  const char* tag = "";
+  if (gh_prerelease) {
+    DynamicJsonDocument doc(8192);
+    doc.clear();
+    if (deserializeJson(doc, payload)) return;
+    JsonArray arr = doc.as<JsonArray>();
+    for (JsonObject rel : arr) {
+      if (rel["draft"] | false) continue;
+      tag = rel["tag_name"] | "";
+      if (tag[0] != '\0') break;
+    }
+  } else {
+    DynamicJsonDocument doc(2048);
+    doc.clear();
+    if (deserializeJson(doc, payload)) return;
+    tag = doc["tag_name"] | "";
+  }
 
-  JsonArray arr = doc.as<JsonArray>();
-  if (arr.size() == 0) return;
-
-  const char* tag = arr[0]["tag_name"] | "";
   if (tag[0] == '\0') return;
 
   strncpy(gh_latest_version, tag, sizeof(gh_latest_version)-1);
@@ -4553,7 +4571,10 @@ void doGithubOtaCheck() {
   WiFiClientSecure client;
   client.setInsecure();  // skip cert check — connection is still encrypted
   HTTPClient http;
-  http.begin(client, "https://api.github.com/repos/Niko11111/SpoolmanScale/releases/latest");
+  String url = gh_prerelease
+    ? "https://api.github.com/repos/Niko11111/SpoolmanScale/releases"
+    : "https://api.github.com/repos/Niko11111/SpoolmanScale/releases/latest";
+  http.begin(client, url);
   http.addHeader("User-Agent", "SpoolmanScale-ESP32");
   http.setTimeout(8000);
   int code = http.GET();
@@ -4571,15 +4592,32 @@ void doGithubOtaCheck() {
   http.end();
 
   // Parse tag_name
-  DynamicJsonDocument doc(2048);
-  doc.clear();
-  if (deserializeJson(doc, payload)) {
-    lv_label_set_text(lbl_gh_status, "JSON error");
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-    return;
+  const char* tag = "";
+  if (gh_prerelease) {
+    DynamicJsonDocument doc(8192);
+    doc.clear();
+    if (deserializeJson(doc, payload)) {
+      lv_label_set_text(lbl_gh_status, "JSON error");
+      lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
+      return;
+    }
+    JsonArray arr = doc.as<JsonArray>();
+    for (JsonObject rel : arr) {
+      if (rel["draft"] | false) continue;
+      tag = rel["tag_name"] | "";
+      if (tag[0] != '\0') break;
+    }
+  } else {
+    DynamicJsonDocument doc(2048);
+    doc.clear();
+    if (deserializeJson(doc, payload)) {
+      lv_label_set_text(lbl_gh_status, "JSON error");
+      lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
+      return;
+    }
+    tag = doc["tag_name"] | "";
   }
 
-  const char* tag = doc["tag_name"] | "";
   if (tag[0] == '\0') {
     lv_label_set_text(lbl_gh_status, "No release found");
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
@@ -4810,10 +4848,39 @@ void buildOtaGithubScreen() {
   lv_obj_align(lbl_gh_latest, LV_ALIGN_TOP_MID, 0, 170);
   lv_obj_add_flag(lbl_gh_latest, LV_OBJ_FLAG_HIDDEN);
 
+  // ── Pre-release toggle (bottom left) ──
+  lv_obj_t *btn_pre = lv_btn_create(scr_ota_github);
+  lv_obj_set_size(btn_pre, 140, 48);
+  lv_obj_align(btn_pre, LV_ALIGN_BOTTOM_LEFT, 12, -24);
+  lv_obj_set_style_bg_color(btn_pre, gh_prerelease ? lv_color_hex(0x0a2040) : lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(btn_pre, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_pre, 8, 0);
+  lv_obj_set_style_shadow_width(btn_pre, 0, 0);
+  lv_obj_set_style_border_width(btn_pre, 1, 0);
+  lv_obj_set_style_border_color(btn_pre, gh_prerelease ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a2030), 0);
+  lv_obj_add_event_cb(btn_pre, [](lv_event_t *e) {
+    gh_prerelease = !gh_prerelease;
+    Preferences p; p.begin("spool", false);
+    p.putBool("gh_prerelease", gh_prerelease); p.end();
+    // Rebuild screen to reflect new state
+    if (scr_ota_github) { lv_obj_del(scr_ota_github); scr_ota_github = nullptr; }
+    buildOtaGithubScreen();
+    if (scr_ota_github) lv_obj_clear_flag(scr_ota_github, LV_OBJ_FLAG_HIDDEN);
+  }, LV_EVENT_CLICKED, NULL);
+  // Label: "Pre-release" + state indicator
+  lv_obj_t *lbl_pre = lv_label_create(btn_pre);
+  char pre_buf[32];
+  snprintf(pre_buf, sizeof(pre_buf), "%s\n%s", T(STR_GH_OTA_PRERELEASE), gh_prerelease ? "[ ON ]" : "[ OFF ]");
+  lv_label_set_text(lbl_pre, pre_buf);
+  lv_obj_set_style_text_color(lbl_pre, gh_prerelease ? lv_color_hex(0x28d49a) : lv_color_hex(0x2a3848), 0);
+  lv_obj_set_style_text_font(lbl_pre, &lv_font_montserrat_ext_12, 0);
+  lv_obj_set_style_text_align(lbl_pre, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(lbl_pre, LV_ALIGN_CENTER, 0, 0);
+
   // ── Update button — always visible, greyed out until update available ──
   btn_gh_update = lv_btn_create(scr_ota_github);
-  lv_obj_set_size(btn_gh_update, 280, 48);
-  lv_obj_align(btn_gh_update, LV_ALIGN_BOTTOM_MID, 0, -24);
+  lv_obj_set_size(btn_gh_update, 310, 48);
+  lv_obj_align(btn_gh_update, LV_ALIGN_BOTTOM_RIGHT, -12, -24);
   lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x111820), 0);
   lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x111820), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_gh_update, 8, 0);
@@ -5684,7 +5751,7 @@ void clearTagDisplay() {
   sm_filament_name[0] = '\0'; sm_material_global[0] = '\0'; sm_color_global[0] = '\0'; sm_last_used[0] = '\0';
   sm_location_name[0] = '\0';
   tag_present = false;
-  nfc_retry_count = 0;
+  nfc_retry_count = 0; nfc_absent_count = 0;
   g_tag.uid_str[0] = '\0';
   g_tag.tray_uuid[0] = '\0';
   g_tag.material[0] = '\0';   // CRITICAL: otherwise is_ntag=false remains after Bambu scan
@@ -5939,7 +6006,7 @@ static int colorDistance(const char* hex_a, const char* hex_b) {
 // ============================================================
 void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool archived_only) {
   // Free any previous allocation
-  if (link_spools) { heap_caps_free(link_spools); link_spools = nullptr; }
+  if (link_spools) { free(link_spools); link_spools = nullptr; }
   link_spool_count = 0;
   if (!wifi_ok) return;
 
@@ -6043,8 +6110,6 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
           }
         }
       }
-    } else {
-      if (bambu_vendor) { skipped_vendor++; continue; }
     }
     matched++;
   }
@@ -6122,8 +6187,6 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
           }
         }
       }
-    } else {
-      if (bambu_vendor) continue;
     }
 
     UnlinkedSpool &s = link_spools[link_spool_count];
@@ -6208,7 +6271,7 @@ void doLinkPatch(int spool_id, bool is_bambu) {
   if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
   if (scr_link_list)   { lv_obj_del(scr_link_list);   scr_link_list   = nullptr; }
   // Free PSRAM spool list
-  if (link_spools) { heap_caps_free(link_spools); link_spools = nullptr; }
+  if (link_spools) { free(link_spools); link_spools = nullptr; }
   link_spool_count = 0;
 
   // Re-query Spoolman — use single-spool endpoint since we know the ID
@@ -6996,7 +7059,6 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
       }
     } else {
       // Flow B: vendor und material prefix filtern
-      if (bambu_vendor) continue;  // Bambu-Spulen ausblenden
       if (vendor_name[0] && strncasecmp(s.vendor, vendor_name, strlen(vendor_name)) != 0) continue;
       if (material_prefix[0] && strncasecmp(s.material, material_prefix, strlen(material_prefix)) != 0) continue;
       // Stage 3: full material name match (exact, case-insensitive)
@@ -7297,7 +7359,6 @@ void showMaterialList(const char* vendor_name) {
     UnlinkedSpool &s = link_spools[i];
     if (s.existing_tag[0] != '\0' && !(copy_flow_via_list && copy_flow_archived)) continue;
     if (strncasecmp(s.vendor, vendor_name, strlen(vendor_name)) != 0) continue;
-    if (strncasecmp(s.vendor, "Bambu", 5) == 0) continue;
     if (!s.material[0]) continue;
     char prefix[4]; strncpy(prefix, s.material, 3); prefix[3] = '\0';
     bool found = false;
@@ -7379,7 +7440,6 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
     UnlinkedSpool &s = link_spools[i];
     if (s.existing_tag[0] != '\0' && !(copy_flow_via_list && copy_flow_archived)) continue;
     if (strncasecmp(s.vendor, vendor_name, strlen(vendor_name)) != 0) continue;
-    if (strncasecmp(s.vendor, "Bambu", 5) == 0) continue;
     if (!s.material[0]) continue;
     if (strncasecmp(s.material, material_prefix, strlen(material_prefix)) != 0) continue;
 
@@ -7534,11 +7594,10 @@ void showVendorList() {
 
   scr_link_vendor = buildLinkOverlay();
 
-  // Zaehle Spulen gesamt (ohne Bambu, ohne bereits verknuepft)
+  // Zaehle Spulen gesamt (ohne bereits verknuepft)
   int total_unlinked = 0;
   for (int i = 0; i < link_spool_count; i++) {
     if (link_spools[i].existing_tag[0] != '\0' && !(copy_flow_via_list && copy_flow_archived)) continue;
-    if (strncasecmp(link_spools[i].vendor, "Bambu", 5) == 0) continue;
     total_unlinked++;
   }
 
@@ -7609,7 +7668,7 @@ void showVendorList() {
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_scroll_dir(list, LV_DIR_VER);
 
-  // Dedupliziere Vendors (ohne Bambu)
+  // Dedupliziere Vendors
   static char seen_vendors[20][32] = {};
   static int  vendor_counts[20]    = {};
   static int  seen_v               = 0;
@@ -7621,7 +7680,6 @@ void showVendorList() {
   for (int i = 0; i < link_spool_count; i++) {
     UnlinkedSpool &s = link_spools[i];
     if (s.existing_tag[0] != '\0' && !(copy_flow_via_list && copy_flow_archived)) continue;
-    if (strncasecmp(s.vendor, "Bambu", 5) == 0) continue;
     const char* vn = s.vendor[0] ? s.vendor : "Unbekannt";
     bool found = false;
     for (int j = 0; j < seen_v; j++) {
@@ -7745,14 +7803,14 @@ void showLinkEntryPopup(bool is_bambu) {
   lv_obj_set_style_radius(btn1, 10, 0);
   lv_obj_set_style_shadow_width(btn1, 0, 0);
   lv_obj_set_style_border_width(btn1, 1, 0);
-  lv_obj_set_style_border_color(btn1, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_border_color(btn1, lv_color_hex(0x1a3060), 0);
   lv_obj_add_event_cb(btn1, [](lv_event_t *e) {
     link_id_input[0] = '\0';
     showIdInputPopup(link_flow_is_bambu);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *l1 = lv_label_create(btn1);
   lv_label_set_text(l1, T(STR_BTN_ENTER_ID));
-  lv_obj_set_style_text_color(l1, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(l1, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(l1, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(l1);
 
@@ -9736,12 +9794,12 @@ void showCopyEntryPopup() {
   lv_obj_set_style_radius(btn1, 10, 0);
   lv_obj_set_style_shadow_width(btn1, 0, 0);
   lv_obj_set_style_border_width(btn1, 1, 0);
-  lv_obj_set_style_border_color(btn1, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_border_color(btn1, lv_color_hex(0x1a3060), 0);
   lv_obj_add_event_cb(btn1, [](lv_event_t *e) { link_id_input[0] = '\0'; showIdInputPopup(strlen(g_tag.tray_uuid) == 32, true); }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn1);
     char b[40]; strncpy(b, T(STR_COPY_ID_BTN), sizeof(b)-1);
     lv_label_set_text(l, b);
-    lv_obj_set_style_text_color(l, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
     lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(l, LV_ALIGN_CENTER, 0, 0); }
@@ -9814,7 +9872,7 @@ void showCopyEntryPopup() {
   { lv_obj_t *l = lv_label_create(btn3);
     char b[40]; strncpy(b, T(STR_COPY_ARCHIVED_BTN), sizeof(b)-1);
     lv_label_set_text(l, b);
-    lv_obj_set_style_text_color(l, lv_color_hex(0x808080), 0);
+    lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
     lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(l, LV_ALIGN_CENTER, 0, 0); }
@@ -10038,7 +10096,10 @@ void fetchAndFillLocationList() {
   }, LV_EVENT_CLICKED, NULL);
 
   // Location rows — API gibt Array von Strings zurück
+  int loc_shown = 0;
+  bool loc_limit_hit = false;
   for (JsonVariant v : locs) {
+    if (loc_shown >= 50) { loc_limit_hit = true; break; }
     char loc_name[48];
     strncpy(loc_name, v.as<const char*>() ? v.as<const char*>() : "-", sizeof(loc_name)-1);
     loc_name[sizeof(loc_name)-1] = '\0';
@@ -10077,12 +10138,36 @@ void fetchAndFillLocationList() {
       if (code == 200) {
         strncpy(sm_location_name, sel_name, sizeof(sm_location_name)-1);
         sm_location_id = 0;
+        // Mark popup as shown so it doesn't re-trigger on next tag-remove
+        g_loc_popup_shown_for_id = sm_id;
+        logSDf("[verbose] LOC: location saved '%s' id=%d from_popup=%d", sel_name, sm_id, (int)g_loc_picker_from_popup);
       }
       http.end();
       if (scr_location_picker) { lv_obj_del(scr_location_picker); scr_location_picker = nullptr; }
       if (g_loc_picker_from_popup) { showMainScreen(); }
       else { showMoreInfoScreen(); }
     }, LV_EVENT_CLICKED, NULL);
+    loc_shown++;
+  }
+  // Hinweis: Limit erreicht
+  if (loc_limit_hit) {
+    lv_obj_t *limit_row = lv_obj_create(loc_list_obj);
+    lv_obj_set_size(limit_row, 360, 40);
+    lv_obj_set_style_bg_color(limit_row, lv_color_hex(0x1a0808), 0);
+    lv_obj_set_style_radius(limit_row, 6, 0);
+    lv_obj_set_style_border_width(limit_row, 1, 0);
+    lv_obj_set_style_border_color(limit_row, lv_color_hex(0x3a1010), 0);
+    lv_obj_set_style_pad_all(limit_row, 0, 0);
+    lv_obj_clear_flag(limit_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t *limit_lbl = lv_label_create(limit_row);
+    char limit_buf[64]; strncpy(limit_buf, T(STR_LOCATION_LIMIT_HIT), sizeof(limit_buf)-1);
+    lv_label_set_text(limit_lbl, limit_buf);
+    lv_obj_set_style_text_color(limit_lbl, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_font(limit_lbl, &lv_font_montserrat_ext_12, 0);
+    lv_obj_set_style_text_align(limit_lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(limit_lbl, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(limit_lbl, 350);
+    lv_obj_center(limit_lbl);
   }
   // Hinweis: leere Lagerorte werden nicht angezeigt
   lv_obj_t *hint_row = lv_obj_create(loc_list_obj);
@@ -11044,7 +11129,7 @@ void querySpoolman(const char* tray_uuid) {
     sm_spool_weight = spool["spool_weight"] | 0.0f;
     logSDf("Spoolman: found ID=%d remaining=%.1fg total=%.0fg",
       sm_id, sm_remaining, sm_total);
-    if (g_loc_popup_shown_for_id != sm_id) g_loc_popup_shown_for_id = -1;  // Reset only for new spool
+    logSDf("[verbose] LOC: querySpoolman id=%d shown_for=%d", sm_id, g_loc_popup_shown_for_id);
     String art_nr = spool["filament"]["article_number"] | "";
     art_nr.trim();
     strncpy(sm_article_nr, art_nr.c_str(), sizeof(sm_article_nr)-1);
@@ -11616,9 +11701,17 @@ void loop() {
     // Delete old numpad BEFORE showIdInputPopup — prevents residual touch events
     // from firing the confirm callback during lv_obj_del inside showIdInputPopup
     if (scr_link_id) { lv_obj_del(scr_link_id); scr_link_id = nullptr; }
-    // Pump LVGL once to dispatch any residual events from the deleted screen
+    // Free the single-slot link_spools buffer allocated during the failed lookup
+    // so the next lookup starts with a clean slate and no out-of-bounds risk
+    if (link_spools != nullptr) {
+      free(link_spools);
+      link_spools = nullptr;
+    }
+    link_spool_count = 0;
+    // Pump LVGL twice to flush all residual events from the deleted screen
     lv_timer_handler();
-    // Now clear pending flags — any residual confirm-callback events have fired
+    lv_timer_handler();
+    // Clear all pending flags AFTER pump — residual confirm-callbacks may have re-set them
     link_id_lookup_pending = 0;
     copy_id_lookup_pending = 0;
     showIdInputPopup(link_flow_is_bambu);
@@ -11735,7 +11828,26 @@ void loop() {
   }
   if (show_location_picker_pending) {
     show_location_picker_pending = false;
+    logSDf("[verbose] LOC: show_location_picker_pending fired from_popup=%d id=%d", (int)g_loc_picker_from_popup, sm_id);
     showLocationPicker();
+  }
+  // Debounced auto-location popup — fires 2500ms after tag removal, only if tag still absent
+  if (loc_popup_pending_id > 0 && !tag_present && (millis() - last_tag_seen_ms) >= 2500) {
+    int pending_id = loc_popup_pending_id;
+    loc_popup_pending_id = -1;
+    if (g_loc_popup_shown_for_id != pending_id && sm_id == pending_id) {
+      logSDf("[verbose] LOC: debounce fired, showing popup id=%d", pending_id);
+      g_loc_popup_shown_for_id = pending_id;
+      g_loc_picker_from_popup = true;
+      show_location_picker_pending = true;
+    } else {
+      logSDf("[verbose] LOC: debounce cancelled id=%d shown_for=%d sm_id=%d", pending_id, g_loc_popup_shown_for_id, sm_id);
+    }
+  }
+  // Cancel pending popup if tag came back
+  if (loc_popup_pending_id > 0 && tag_present) {
+    logSDf("[verbose] LOC: debounce cancelled — tag back id=%d", loc_popup_pending_id);
+    loc_popup_pending_id = -1;
   }
   if (fetch_locations_pending) {
     fetch_locations_pending = false;
@@ -12028,7 +12140,7 @@ void loop() {
     if (millis() - last_nfc_check_ms >= 500) {
       last_nfc_check_ms = millis();
       uint8_t uid[7], uidLen = 0;
-      bool found = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen, 100);
+      bool found = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen, 150);
 
       if (found && uidLen == 4) {
         // ── MIFARE Classic (Bambu) ────────────────────────────
@@ -12045,7 +12157,7 @@ void loop() {
 
         if (uid_changed) {
           Serial.printf("NFC: New Bambu UID %s\n", uid_str);
-          nfc_retry_count = 0;
+          nfc_retry_count = 0; nfc_absent_count = 0;
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
           lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
@@ -12159,11 +12271,15 @@ void loop() {
       } else {
         // No tag found
         if (tag_present) {
+          nfc_absent_count++;
+          if (nfc_absent_count < 4) return;  // wait for 4 consecutive misses (2s) before declaring removed
+          nfc_absent_count = 0;
           Serial.println("NFC: tag removed");
           logSD("NFC: tag removed");
           tag_present = false;
-          nfc_retry_count = 0;
+          nfc_retry_count = 0; nfc_absent_count = 0;
           last_tag_seen_ms = millis();
+          spoolman_queried_uid[0] = '\0';  // allow re-query when same tag is placed again
           link_popup_dismissed = false;   // Reset flag → next spool can show popup
           link_tag_first_seen_ms = 0;
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
@@ -12171,10 +12287,12 @@ void loop() {
           lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
           // Auto location popup: if enabled, spool is linked, and not shown for this spool yet
+          // Debounce: only trigger after 1500ms — avoids spurious remove during NTAG read
           if (g_auto_loc_popup && sm_found && sm_id > 0 && wifi_ok && g_loc_popup_shown_for_id != sm_id) {
-            g_loc_popup_shown_for_id = sm_id;
-            g_loc_picker_from_popup = true;
-            show_location_picker_pending = true;
+            loc_popup_pending_id = sm_id;  // schedule — will fire after debounce in loop
+            logSDf("[verbose] LOC: tag removed, popup scheduled id=%d (debounce 2500ms)", sm_id);
+          } else if (g_auto_loc_popup) {
+            logSDf("[verbose] LOC: tag removed, popup suppressed id=%d shown_for=%d sm_found=%d wifi=%d", sm_id, g_loc_popup_shown_for_id, (int)sm_found, (int)wifi_ok);
           }
           // Do NOT close list — user should be able to select spool
           // even if tag is temporarily removed
