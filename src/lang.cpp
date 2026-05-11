@@ -516,4 +516,27 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Ampelsystem",                   "Alert system"                       },  // STR_BTN_DRYING_REMINDER_SUB
   { "Trocknungserinnerung",          "Drying Reminder"                    },  // STR_DRYING_REMINDER_TITLE
   { "Kommt bald",                    "Coming soon"                        },  // STR_DRYING_REMINDER_COMING_SOON
+
+  // Drying Reminder Screen
+  { "Aus",                           "Off"                                },  // STR_DRY_MODE_OFF
+  { "Material",                      "Material"                           },  // STR_DRY_MODE_MATERIAL
+  { "Manuell",                       "Manual"                             },  // STR_DRY_MODE_MANUAL
+  { "Kein Ampelsignal aktiv.\n\nMaterial: Schwellwerte pro Filamenttyp\n(konfigurierbar im Browser).\n\nManuell: Eigene Grenzwerte in Tagen.",
+    "No alert signal active.\n\nMaterial: Thresholds per filament type\n(configurable in browser).\n\nManual: Custom limits in days."
+  },  // STR_DRY_OFF_DESC
+  { "Schwellwerte im Browser editierbar.", "Thresholds editable in browser." },  // STR_DRY_MAT_HINT
+  { "Material",                      "Material"                           },  // STR_DRY_MAT_HDR_MAT
+  { "Gelb (Tage)",                   "Yellow (days)"                      },  // STR_DRY_MAT_HDR_YELLOW
+  { "Rot (Tage)",                    "Red (days)"                         },  // STR_DRY_MAT_HDR_RED
+  { "Vers.*",                        "Mult.*"                             },  // STR_DRY_MAT_HDR_MULT
+  { "* Multiplikator fuer luftdicht","* Multiplier for airtight storage"  },  // STR_DRY_MAT_FOOTNOTE
+  { "Gelb ab",                       "Yellow from"                        },  // STR_DRY_MAN_YELLOW_LBL
+  { "Rot ab",                        "Red from"                           },  // STR_DRY_MAN_RED_LBL
+  { "Tippen zum Bearbeiten",         "Tap to edit"                        },  // STR_DRY_MAN_EDIT_HINT
+  { "Grenzwerte gelten fuer alle Materialien.", "Limits apply to all materials." },  // STR_DRY_MAN_INFO
+  { "Tage",                          "days"                               },  // STR_DRY_DAYS_UNIT
+  { "Gelb-Schwellwert",              "Yellow threshold"                   },  // STR_DRY_NUMPAD_YELLOW_TITLE
+  { "Rot-Schwellwert",               "Red threshold"                      },  // STR_DRY_NUMPAD_RED_TITLE
+  { "Effektive Werte (%.1fx Multiplikator eingerechnet)", "Effective values (%.1fx multiplier included)" },  // STR_DRY_MAT_EFF_NOTE
+  { "Versiegelt",                    "Sealed"                             },  // STR_DRY_SEALED_HDR
 };
