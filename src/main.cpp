@@ -1,7 +1,7 @@
 // ============================================================
 //  SpoolmanScale – Bambu NFC Tag Reader & Decoder
 //  Board:   WT32-SC01 Plus (ESP32-S3)
-//  Version: v0.5.11-beta
+//  Version: v0.5.12-beta
 //
 //  Reads Bambu Lab MIFARE Classic tags, derives keys via KDF
 //  (HKDF/SHA256, master key from Bambu-Research-Group/RFID-Tag-Guide),
@@ -73,6 +73,8 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 void resetActivityTimer();
 void isoToDe(const char* iso, char* out, size_t len);
 void driedDisplayStr(const char* de_date, char* out, size_t len);
+static int  dryingAlertLevel(const char* last_dried_local);
+static void applyDriedLabel(lv_obj_t* lbl_val, lv_obj_t* lbl_sym, const char* de_date);
 void querySpoolman(const char* tray_uuid);
 void querySpoolmanById(int spool_id);
 void closeConfirmPopup();
@@ -186,7 +188,7 @@ static int     bright_normal   = BRIGHT_NORMAL_DEFAULT;
 static int     dim_timeout_ms  = DIM_TIMEOUT_DEFAULT;
 static int     sleep_timeout_ms = SLEEP_TIMEOUT_DEFAULT;
 #define TOUCH_INT_PIN       7   // FT6336U INT fuer Wake-Up
-#define FW_VERSION  "v0.5.11-beta"
+#define FW_VERSION  "v0.5.12-beta"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // NAU7802 calibration
@@ -471,6 +473,21 @@ static bool g_whole_gram = false;
 // Auto-Weight: Gewicht automatisch speichern bei 3s Stabilität
 static bool g_auto_weight = false;               // Toggle-Status (Standard: aus)
 static bool g_auto_loc_popup = false;             // Auto location popup on tag removal
+
+// ── Drying Reminder ──────────────────────────────────────────
+static uint8_t g_dry_mode       = 0;   // 0=Aus, 1=Material, 2=Manuell
+static int     g_dry_man_yellow = 30;  // Manuell: Gelb-Schwellwert (Tage)
+static int     g_dry_man_red    = 90;  // Manuell: Rot-Schwellwert (Tage)
+
+// Material-Schwellwerte [7]: PLA, PETG, ABS, ASA, TPU, PA, PC
+static const char* DRY_MAT_NAMES[]     = { "PLA","PETG","ABS","ASA","TPU","PA","PC" };
+static const int   DRY_MAT_DEF_YELLOW[]= { 180,  90,  90,  90,  30,   7,  30 };
+static const int   DRY_MAT_DEF_RED[]   = { 365, 180, 180, 180,  90,  30,  90 };
+static const int   DRY_MAT_COUNT = 7;
+static int  g_dry_mat_yellow[7];        // editierbar via Webserver
+static int  g_dry_mat_red[7];
+static bool g_dry_mat_sealed[7];        // pro Material: luftdicht gelagert (Multiplikator aktiv)
+static float g_dry_mult_sealed = 2.0f;  // Multiplikator fuer luftdichte Lagerung, editierbar via Webserver
 static int  g_loc_popup_shown_for_id = -1;         // sm_id for which loc popup was last shown
 static bool g_loc_picker_from_popup = false;        // true = picker opened from tag-removal popup
 static int  loc_popup_pending_id = -1;              // debounced popup: sm_id scheduled, fires after 1500ms
@@ -561,7 +578,8 @@ static char  copy_template_name[64]    = "";
 // btn_copy: global for show/hide alongside btn_link
 static lv_obj_t *btn_copy = nullptr;
 // Configurable list limit — loaded from NVS, adjustable via webserver /listlimit
-static int spool_list_limit = 16;  // default 30, range 5-100
+static int spool_list_limit   = 16;  // range 5-100, editable via webserver
+static int location_list_limit = 30;  // range 5-100, editable via webserver
 
 // Popup control: prevents immediate re-display after cancel
 static bool id_popup_is_bambu = false;  // shared between numpad lambdas
@@ -604,6 +622,11 @@ lv_obj_t *lbl_lu_cap = nullptr;  // Last used/weighed cap label — updated on m
 lv_obj_t *lbl_spoolman_pct;
 lv_obj_t *lbl_spoolman_dried;
 lv_obj_t *lbl_spoolman_dried_val;  // NEU: Wert unter dem Titel
+lv_obj_t *lbl_dried_sym = nullptr; // Ampel-Symbol neben last_dried
+static int  s_dry_numpad_target = 0;
+static int  s_dry_numpad_value  = 0;
+static lv_obj_t* s_dry_numpad_scr = nullptr;  // Numpad-Screen fuer Drying Manual
+static lv_obj_t* s_dry_numpad_lbl = nullptr;  // Wert-Anzeige im Numpad
 lv_obj_t *lbl_nfc_dot;            // Status dot before status line (green/yellow)
 lv_obj_t *lbl_hdr_wifi;          // Header: WiFi-Symbol (Farbe je RSSI)
 lv_obj_t *lbl_hdr_nfc;           // Header: NFC status (green/red)
@@ -944,9 +967,7 @@ void btn_dried_cb(lv_event_t *e) {
     char de_date[12];
     isoToDe(today.c_str(), de_date, sizeof(de_date));
     strncpy(sm_last_dried, de_date, sizeof(sm_last_dried)-1);
-    char dried_display[48];
-    driedDisplayStr(de_date, dried_display, sizeof(dried_display));
-    lv_label_set_text(lbl_spoolman_dried_val, dried_display);
+    applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, de_date);
     Serial.println("last_dried set!");
   } else {
     Serial.printf("PATCH error: %d\n", code);
@@ -978,9 +999,12 @@ void loadPrefs() {
   cal_factor  = prefs.getFloat("cal_factor",   CAL_FACTOR_DEFAULT);
   zero_offset = prefs.getInt("zero_offset", 0);
   bag_weight_g = prefs.getFloat("bag_weight", 50.0f);
-  spool_list_limit = (int)prefs.getUChar("list_limit", 16);
-  if (spool_list_limit < 5)  spool_list_limit = 5;
-  if (spool_list_limit > 100) spool_list_limit = 100;
+  spool_list_limit   = (int)prefs.getUChar("list_limit",  16);
+  if (spool_list_limit < 5)   spool_list_limit = 5;
+  if (spool_list_limit > 100)  spool_list_limit = 100;
+  location_list_limit = (int)prefs.getUChar("loc_limit", 30);
+  if (location_list_limit < 5)   location_list_limit = 5;
+  if (location_list_limit > 100)  location_list_limit = 100;
   // Display-Einstellungen laden
   bright_normal    = prefs.getUChar("bright",    BRIGHT_NORMAL_DEFAULT);
   int dim_min      = prefs.getUInt("dim_min",    DIM_TIMEOUT_DEFAULT / 60000);
@@ -996,6 +1020,21 @@ void loadPrefs() {
   g_auto_weight  =   prefs.getBool("auto_weight", false);
   g_auto_loc_popup =  prefs.getBool("auto_loc_popup", false);
   gh_prerelease    =  prefs.getBool("gh_prerelease",  false);
+  // Drying Reminder
+  g_dry_mode       = prefs.getUChar("dry_mode", 0);
+  g_dry_man_yellow = (int)prefs.getInt("dry_man_y", 30);
+  g_dry_man_red    = (int)prefs.getInt("dry_man_r", 90);
+  g_dry_mult_sealed = prefs.getFloat("dry_mult_s", 2.0f);
+  { char key[16];
+    for (int i = 0; i < DRY_MAT_COUNT; i++) {
+      snprintf(key, sizeof(key), "dry_y_%s", DRY_MAT_NAMES[i]);
+      g_dry_mat_yellow[i] = (int)prefs.getInt(key, DRY_MAT_DEF_YELLOW[i]);
+      snprintf(key, sizeof(key), "dry_r_%s", DRY_MAT_NAMES[i]);
+      g_dry_mat_red[i]    = (int)prefs.getInt(key, DRY_MAT_DEF_RED[i]);
+      snprintf(key, sizeof(key), "dry_s_%s", DRY_MAT_NAMES[i]);
+      g_dry_mat_sealed[i] = prefs.getBool(key, false);
+    }
+  }
   prefs.end();
   Serial.printf("Prefs: SSID=%s Spoolman=%s\n", cfg_wifi_ssid, cfg_spoolman_base);
   Serial.printf("Scale: cal_factor=%.4f  zero_offset=%d  bag_weight=%.1fg\n",
@@ -1148,6 +1187,9 @@ void showMainScreen() {
   if (scr_connection)  { lv_obj_del(scr_connection);  scr_connection  = nullptr; }
   if (scr_scale_sub)   { lv_obj_del(scr_scale_sub);   scr_scale_sub   = nullptr; }
   if (scr_drying_reminder) { lv_obj_del(scr_drying_reminder); scr_drying_reminder = nullptr; }
+  if (s_dry_numpad_scr)    { lv_obj_del(s_dry_numpad_scr);    s_dry_numpad_scr    = nullptr; }
+  // lbl_dried_sym bleibt gueltig (lebt auf Hauptscreen, wird nicht geloescht)
+  s_dry_numpad_lbl = nullptr;
   if (scr_display)     { lv_obj_del(scr_display);     scr_display     = nullptr; }
   if (scr_system)      { lv_obj_del(scr_system);      scr_system      = nullptr; }
   if (scr_ota)         { lv_obj_del(scr_ota);         scr_ota         = nullptr; }
@@ -3097,7 +3139,13 @@ void buildBagScreen() {
   snprintf(bag_input, sizeof(bag_input), "%.1f", bag_weight_g);
 
   buildSubHeader(scr_bag, T(STR_BTN_BAGWEIGHT),
-    [](lv_event_t *e){ if (!scr_scale_sub) buildScaleSubScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN); });
+    [](lv_event_t *e){
+      logSD("BTN: Back -> Scale (from Bag)");
+      hideAllOverlays();
+      if (scr_scale_sub) { lv_obj_del(scr_scale_sub); scr_scale_sub = nullptr; }
+      buildScaleSubScreen();
+      lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
+    });
 
   // Beschreibung — einzeilig
   lv_obj_t *lbl_desc = lv_label_create(scr_bag);
@@ -3606,6 +3654,48 @@ void buildLastUsedScreen() {
 //  Row 2: [Last Used] [Drying Reminder]
 //  Row 3: [Location Popup Toggle — full width]
 // ============================================================
+// ============================================================
+//  HELPER: scrollable list button (volle Breite, icon + titel + sub)
+// ============================================================
+static lv_obj_t* makeListBtn(lv_obj_t* parent, lv_obj_t* list,
+                              const char* ico_sym, const char* title, const char* sub,
+                              bool toggle_active = false) {
+  lv_obj_t *btn = lv_btn_create(list);
+  lv_obj_set_size(btn, 456, 64);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a1e30), 0);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn, 10, 0);
+  lv_obj_set_style_shadow_width(btn, 0, 0);
+  lv_obj_set_style_border_width(btn, 1, 0);
+  lv_obj_set_style_border_color(btn, toggle_active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3050), 0);
+  lv_obj_set_style_pad_all(btn, 0, 0);
+  lv_obj_t *ico = lv_label_create(btn);
+  lv_label_set_text(ico, ico_sym);
+  lv_obj_set_style_text_color(ico, toggle_active ? lv_color_hex(0x28d49a) : lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
+  lv_obj_align(ico, LV_ALIGN_LEFT_MID, 14, 0);
+  lv_obj_t *lbl = lv_label_create(btn);
+  lv_label_set_text(lbl, title);
+  lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
+  lv_obj_set_width(lbl, 320);
+  lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 52, sub && strlen(sub) > 0 ? -10 : 0);
+  if (sub && strlen(sub) > 0) {
+    lv_obj_t *slbl = lv_label_create(btn);
+    lv_label_set_text(slbl, sub);
+    lv_obj_set_style_text_color(slbl, toggle_active ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(slbl, &lv_font_montserrat_ext_12, 0);
+    lv_obj_set_width(slbl, 320);
+    lv_obj_align(slbl, LV_ALIGN_LEFT_MID, 52, 12);
+  }
+  lv_obj_t *arr = lv_label_create(btn);
+  lv_label_set_text(arr, LV_SYMBOL_RIGHT);
+  lv_obj_set_style_text_color(arr, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_font(arr, &lv_font_montserrat_ext_16, 0);
+  lv_obj_align(arr, LV_ALIGN_RIGHT_MID, -14, 0);
+  return btn;
+}
+
 void buildScaleSubScreen() {
   logSD("BUILD: ScaleSubScreen");
   if (sd_verbose) logSD("[verbose] buildScaleSubScreen: start");
@@ -3613,101 +3703,54 @@ void buildScaleSubScreen() {
   buildSubHeader(scr_scale_sub, T(STR_SCALE_TITLE),
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
 
-  // Tile builder lambda - 2x2 layout
-  // Tile: 224x100px. Col1 x=12, Col2 x=244. Row1 y=57, Row2 y=165. Bag y=271 h=44.
-  auto makeTile = [&](int x, int y, const char* ico_sym, const char* title, const char* sub) -> lv_obj_t* {
-    lv_obj_t *btn = lv_btn_create(scr_scale_sub);
-    lv_obj_set_size(btn, 224, 100);
-    lv_obj_set_pos(btn, x, y);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a1e30), 0);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(btn, 10, 0);
-    lv_obj_set_style_shadow_width(btn, 0, 0);
-    lv_obj_set_style_border_width(btn, 1, 0);
-    lv_obj_set_style_border_color(btn, lv_color_hex(0x1a3050), 0);
-    lv_obj_t *ico = lv_label_create(btn);
-    lv_label_set_text(ico, ico_sym);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -22);
-    lv_obj_t *lbl = lv_label_create(btn);
-    lv_label_set_text(lbl, title);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_width(lbl, 216);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 10);
-    lv_obj_t *slbl = lv_label_create(btn);
-    lv_label_set_text(slbl, sub);
-    lv_obj_set_style_text_color(slbl, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(slbl, &lv_font_montserrat_ext_12, 0);
-    lv_obj_set_style_text_align(slbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_width(slbl, 216);
-    lv_obj_align(slbl, LV_ALIGN_CENTER, 0, 30);
-    return btn;
-  };
+  // Scrollbare Liste unter Header (y=57, h=263 -> letzter btn leicht angeschnitten)
+  lv_obj_t *list = lv_obj_create(scr_scale_sub);
+  lv_obj_set_size(list, 480, 263);
+  lv_obj_set_pos(list, 0, 57);
+  lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_width(list, 0, 0);
+  lv_obj_set_style_pad_left(list, 12, 0);
+  lv_obj_set_style_pad_right(list, 12, 0);
+  lv_obj_set_style_pad_top(list, 6, 0);
+  lv_obj_set_style_pad_bottom(list, 6, 0);
+  lv_obj_set_style_pad_row(list, 6, 0);
+  lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_scroll_dir(list, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
+  lv_obj_clear_flag(list, LV_OBJ_FLAG_SCROLL_ELASTIC);
 
-  // [1] Calibration - top left
-  char cal_sub[32]; snprintf(cal_sub, sizeof(cal_sub), T(STR_CAL_FACTOR_SHORT), cal_factor);
-  lv_obj_t *btn_cal = makeTile(12, 57, LV_SYMBOL_EDIT, T(STR_BTN_CALIBRATE), cal_sub);
-  lv_obj_add_event_cb(btn_cal, [](lv_event_t *e){
-    logSD("BTN: Scale-Sub -> Calibration");
-    show_factor_pending = true;
-  }, LV_EVENT_CLICKED, NULL);
-
-  // [2] Last Used Mode - top right
-  { char buf_t[32]; strncpy(buf_t, T(STR_BTN_LASTUSED_MODE), sizeof(buf_t)-1);
-    char buf_s[48]; strncpy(buf_s, T(STR_BTN_LASTUSED_MODE_SUB), sizeof(buf_s)-1);
-    lv_obj_t *btn_lu = makeTile(244, 57, LV_SYMBOL_SAVE, buf_t, buf_s);
-    lv_obj_add_event_cb(btn_lu, [](lv_event_t *e){
-      logSD("BTN: Scale-Sub -> Last Used Mode");
-      show_lastused_pending = true;
-    }, LV_EVENT_CLICKED, NULL); }
-
-  // [3] Drying Reminder - bottom left
-  { char buf_t[40]; strncpy(buf_t, T(STR_BTN_DRYING_REMINDER), sizeof(buf_t)-1);
-    char buf_s[40]; strncpy(buf_s, T(STR_BTN_DRYING_REMINDER_SUB), sizeof(buf_s)-1);
-    lv_obj_t *btn_dry = makeTile(12, 165, LV_SYMBOL_WARNING, buf_t, buf_s);
-    lv_obj_add_event_cb(btn_dry, [](lv_event_t *e){
-      logSD("BTN: Scale-Sub -> Drying Reminder");
-      show_drying_reminder_pending = true;
-    }, LV_EVENT_CLICKED, NULL); }
-
-  // [4] Bag Weight - bottom right tile
-  { char bag_sub[24]; snprintf(bag_sub, sizeof(bag_sub), T(STR_BAG_CURRENT), bag_weight_g);
-    lv_obj_t *btn_bag = makeTile(244, 165, LV_SYMBOL_DRIVE, T(STR_BTN_BAGWEIGHT), bag_sub);
-    lv_obj_add_event_cb(btn_bag, [](lv_event_t *e){
+  // [1] Beutelgewicht
+  { char bag_sub[32]; snprintf(bag_sub, sizeof(bag_sub), T(STR_BAG_CURRENT), bag_weight_g);
+    lv_obj_t *btn = makeListBtn(scr_scale_sub, list, LV_SYMBOL_DRIVE, T(STR_BTN_BAGWEIGHT), bag_sub);
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Scale-Sub -> Bag Weight");
       show_bag_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
-  // [5] Location Popup Toggle - full width bottom
-  { lv_obj_t *btn_loc_tog = lv_btn_create(scr_scale_sub);
-    lv_obj_set_size(btn_loc_tog, 456, 44);
-    lv_obj_set_pos(btn_loc_tog, 12, 271);
-    lv_obj_set_style_bg_color(btn_loc_tog, g_auto_loc_popup ? lv_color_hex(0x0a1e30) : lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_bg_color(btn_loc_tog, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(btn_loc_tog, g_auto_loc_popup ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3050), 0);
-    lv_obj_set_style_border_width(btn_loc_tog, 1, 0);
-    lv_obj_set_style_radius(btn_loc_tog, 10, 0);
-    lv_obj_set_style_shadow_width(btn_loc_tog, 0, 0);
-    lv_obj_t *ico = lv_label_create(btn_loc_tog);
-    lv_label_set_text(ico, LV_SYMBOL_GPS);
-    lv_obj_set_style_text_color(ico, g_auto_loc_popup ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
-    lv_obj_align(ico, LV_ALIGN_LEFT_MID, 12, 0);
-    lv_obj_t *lbl = lv_label_create(btn_loc_tog);
-    char buf_t[40]; strncpy(buf_t, T(STR_BTN_AUTO_LOC_POPUP), sizeof(buf_t)-1);
-    lv_label_set_text(lbl, buf_t);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
-    lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 48, 0);
-    lv_obj_t *state_lbl = lv_label_create(btn_loc_tog);
-    lv_label_set_text(state_lbl, g_auto_loc_popup ? "ON" : "OFF");
-    lv_obj_set_style_text_color(state_lbl, g_auto_loc_popup ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(state_lbl, &lv_font_montserrat_ext_16, 0);
-    lv_obj_align(state_lbl, LV_ALIGN_RIGHT_MID, -16, 0);
-    lv_obj_add_event_cb(btn_loc_tog, [](lv_event_t *e){
+  // [2] Trocknungs-Erinnerung
+  { char buf_t[40]; strncpy(buf_t, T(STR_BTN_DRYING_REMINDER), sizeof(buf_t)-1);
+    // Sub-Label zeigt aktiven Modus
+    char buf_s[24];
+    const char* mode_lbl[] = { T(STR_DRY_MODE_OFF), T(STR_DRY_MODE_MATERIAL), T(STR_DRY_MODE_MANUAL) };
+    strncpy(buf_s, mode_lbl[g_dry_mode < 3 ? g_dry_mode : 0], sizeof(buf_s)-1);
+    lv_obj_t *btn = makeListBtn(scr_scale_sub, list, LV_SYMBOL_WARNING, buf_t, buf_s);
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      logSD("BTN: Scale-Sub -> Drying Reminder");
+      show_drying_reminder_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
+  // [3] Auto Location Popup (Toggle) — kein Pfeil, ON/OFF rechts
+  { char buf_t[40]; strncpy(buf_t, T(STR_BTN_AUTO_LOC_POPUP), sizeof(buf_t)-1);
+    char buf_s[8]; strncpy(buf_s, g_auto_loc_popup ? "ON" : "OFF", sizeof(buf_s)-1);
+    lv_obj_t *btn = makeListBtn(scr_scale_sub, list, LV_SYMBOL_GPS, buf_t, buf_s, g_auto_loc_popup);
+    // Pfeil-Label (letztes Child) durch ON/OFF ersetzen
+    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
+    if (arr_lbl) {
+      lv_label_set_text(arr_lbl, g_auto_loc_popup ? "ON" : "OFF");
+      lv_obj_set_style_text_color(arr_lbl, g_auto_loc_popup ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
+    }
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Scale-Sub -> Auto Location Popup Toggle");
       g_auto_loc_popup = !g_auto_loc_popup;
       Preferences prefs; prefs.begin("spoolscale", false);
@@ -3718,16 +3761,126 @@ void buildScaleSubScreen() {
       lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
     }, LV_EVENT_CLICKED, NULL); }
 
+  // [4] Last Used Mode
+  { char buf_t[32]; strncpy(buf_t, T(STR_BTN_LASTUSED_MODE), sizeof(buf_t)-1);
+    char buf_s[48]; strncpy(buf_s, T(STR_BTN_LASTUSED_MODE_SUB), sizeof(buf_s)-1);
+    lv_obj_t *btn = makeListBtn(scr_scale_sub, list, LV_SYMBOL_SAVE, buf_t, buf_s);
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      logSD("BTN: Scale-Sub -> Last Used Mode");
+      show_lastused_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
 
-
-
+  // [5] Kalibrierung
+  { char cal_sub[32]; snprintf(cal_sub, sizeof(cal_sub), T(STR_CAL_FACTOR_SHORT), cal_factor);
+    lv_obj_t *btn = makeListBtn(scr_scale_sub, list, LV_SYMBOL_EDIT, T(STR_BTN_CALIBRATE), cal_sub);
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      logSD("BTN: Scale-Sub -> Calibration");
+      show_factor_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
 
   if (sd_verbose) logSD("[verbose] buildScaleSubScreen: done");
 }
 
 // ============================================================
-//  DRYING REMINDER SCREEN (coming soon placeholder)
+//  DRYING REMINDER SCREEN
+//  Modi: 0=Aus  1=Material  2=Manuell
+//  Manuell-Werte per Numpad editierbar; Material-Werte per Webserver
 // ============================================================
+
+// Numpad-Subscreen fuer Schwellwert-Eingabe
+// target: 0=Manuell-Gelb, 1=Manuell-Rot
+static void buildDryNumpadScreen(int target) {
+  logSDf("BUILD: DryNumpadScreen target=%d", target);
+  s_dry_numpad_target = target;
+  s_dry_numpad_value  = (target == 0) ? g_dry_man_yellow : g_dry_man_red;
+  if (s_dry_numpad_scr) { lv_obj_del(s_dry_numpad_scr); s_dry_numpad_scr = nullptr; }
+  s_dry_numpad_scr = buildOverlayScreen();
+  // Header
+  char title_buf[32];
+  strncpy(title_buf, (target == 0) ? T(STR_DRY_NUMPAD_YELLOW_TITLE) : T(STR_DRY_NUMPAD_RED_TITLE), sizeof(title_buf)-1);
+  const char* title_str = title_buf;
+  buildSubHeader(s_dry_numpad_scr, title_str, [](lv_event_t *e){
+    if (s_dry_numpad_scr) { lv_obj_del(s_dry_numpad_scr); s_dry_numpad_scr = nullptr; }
+    show_drying_reminder_pending = true;
+  });
+  // Wert-Anzeige
+  lv_obj_t *val_box = lv_obj_create(s_dry_numpad_scr);
+  lv_obj_set_size(val_box, 380, 44);
+  lv_obj_set_pos(val_box, 50, 68);
+  lv_obj_set_style_bg_color(val_box, lv_color_hex(0x050f1e), 0);
+  lv_obj_set_style_border_color(val_box, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_border_width(val_box, 1, 0);
+  lv_obj_set_style_radius(val_box, 8, 0);
+  s_dry_numpad_lbl = lv_label_create(val_box);
+  char vbuf[16]; snprintf(vbuf, sizeof(vbuf), "%d %s", s_dry_numpad_value, T(STR_DRY_DAYS_UNIT));
+  lv_label_set_text(s_dry_numpad_lbl, vbuf);
+  lv_obj_set_style_text_color(s_dry_numpad_lbl, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_font(s_dry_numpad_lbl, &lv_font_montserrat_ext_24, 0);
+  lv_obj_align(s_dry_numpad_lbl, LV_ALIGN_CENTER, 0, 0);
+
+  // Numpad 3x4 Grid: 1-9, DEL, 0, SAVE (standard pattern)
+  // Row4: [DEL][0][SAVE] — SAVE replaces separate button below
+  const int NP_W = 136, NP_H = 36, NP_GAP = 4;
+  const int NP_X0 = (480 - 3*NP_W - 2*NP_GAP) / 2;
+  const int NP_Y0 = 122;
+  static const char* keys[] = { "1","2","3","4","5","6","7","8","9","DEL","0","OK" };
+  int kx = 0, ky = 0, kw = NP_W, kh = NP_H, gap = NP_GAP;  // unused vars kept for compat
+  for (int i = 0; i < 12; i++) {
+    int col = i % 3, row = i / 3;
+    int bx = NP_X0 + col * (NP_W + NP_GAP);
+    int by = NP_Y0 + row * (NP_H + NP_GAP);
+    bool is_del = (strcmp(keys[i], "DEL") == 0);
+    bool is_ok  = (strcmp(keys[i], "OK")  == 0);
+    lv_obj_t *kb = lv_btn_create(s_dry_numpad_scr);
+    lv_obj_set_size(kb, NP_W, NP_H);
+    lv_obj_set_pos(kb, bx, by);
+    lv_obj_set_style_bg_color(kb, is_del ? lv_color_hex(0x1a1020) :
+                                  is_ok  ? lv_color_hex(0x1a4030) :
+                                           lv_color_hex(0x0a1828), 0);
+    lv_obj_set_style_bg_color(kb, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(kb, 6, 0);
+    lv_obj_set_style_shadow_width(kb, 0, 0);
+    lv_obj_set_style_border_width(kb, 1, 0);
+    lv_obj_set_style_border_color(kb, is_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3050), 0);
+    lv_obj_t *kl = lv_label_create(kb);
+    lv_label_set_text(kl, is_ok ? LV_SYMBOL_OK : keys[i]);
+    lv_obj_set_style_text_color(kl, is_del ? lv_color_hex(0xe04040) :
+                                     is_ok  ? lv_color_hex(0x28d49a) :
+                                              lv_color_hex(0xe8f0ff), 0);
+    lv_obj_set_style_text_font(kl, &lv_font_montserrat_ext_18, 0);
+    lv_obj_align(kl, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_user_data(kb, (void*)keys[i]);
+    lv_obj_add_event_cb(kb, [](lv_event_t *e){
+      const char* k = (const char*)lv_obj_get_user_data(lv_event_get_target(e));
+      if (!k || !s_dry_numpad_lbl) return;
+      if (strcmp(k, "DEL") == 0) {
+        s_dry_numpad_value /= 10;
+      } else if (strcmp(k, "OK") == 0) {
+        // Speichern (gleiche Logik wie Save-Button)
+        if (s_dry_numpad_value < 1) s_dry_numpad_value = 1;
+        if (s_dry_numpad_target == 0) g_dry_man_yellow = s_dry_numpad_value;
+        else                           g_dry_man_red    = s_dry_numpad_value;
+        logSDf("Drying Reminder: manual yellow=%d red=%d", g_dry_man_yellow, g_dry_man_red);
+        Preferences prefs; prefs.begin("spoolscale", false);
+        prefs.putInt("dry_man_y", g_dry_man_yellow);
+        prefs.putInt("dry_man_r", g_dry_man_red);
+        prefs.end();
+        if (s_dry_numpad_scr) { lv_obj_del(s_dry_numpad_scr); s_dry_numpad_scr = nullptr; }
+        show_drying_reminder_pending = true;
+        return;
+      } else {
+        int digit = k[0] - '0';
+        if (s_dry_numpad_value < 999)
+          s_dry_numpad_value = s_dry_numpad_value * 10 + digit;
+      }
+      char vb[16]; snprintf(vb, sizeof(vb), "%d %s", s_dry_numpad_value, T(STR_DRY_DAYS_UNIT));
+      lv_label_set_text(s_dry_numpad_lbl, vb);
+    }, LV_EVENT_CLICKED, NULL);
+  }
+
+  // Save is now handled by OK key in numpad grid
+}
+
 void showDryingReminderScreen() {
   logSD("SHOW: DryingReminderScreen");
   if (scr_drying_reminder) { lv_obj_del(scr_drying_reminder); scr_drying_reminder = nullptr; }
@@ -3735,16 +3888,212 @@ void showDryingReminderScreen() {
   buildSubHeader(scr_drying_reminder, T(STR_DRYING_REMINDER_TITLE),
     [](lv_event_t *e){ logSD("BTN: Back -> Scale");
       if (scr_drying_reminder) { lv_obj_del(scr_drying_reminder); scr_drying_reminder = nullptr; }
-      if (!scr_scale_sub) buildScaleSubScreen();
+      if (scr_scale_sub) { lv_obj_del(scr_scale_sub); scr_scale_sub = nullptr; }
+      buildScaleSubScreen();
       lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
     });
-  lv_obj_t *lbl_cs = lv_label_create(scr_drying_reminder);
-  char buf[48]; strncpy(buf, T(STR_DRYING_REMINDER_COMING_SOON), sizeof(buf)-1);
-  lv_label_set_text(lbl_cs, buf);
-  lv_obj_set_style_text_color(lbl_cs, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_cs, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_style_text_align(lbl_cs, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_cs, LV_ALIGN_CENTER, 0, 0);
+
+  // ── Modi-Toggle-Buttons ──────────────────────────────────
+  // Drei Buttons nebeneinander: Aus / Material / Manuell
+  char ml0[16],ml1[16],ml2[16];
+  strncpy(ml0,T(STR_DRY_MODE_OFF),sizeof(ml0)-1);
+  strncpy(ml1,T(STR_DRY_MODE_MATERIAL),sizeof(ml1)-1);
+  strncpy(ml2,T(STR_DRY_MODE_MANUAL),sizeof(ml2)-1);
+  const char* mode_labels[] = { ml0, ml1, ml2 };
+  int btn_w = 144, btn_h = 36, btn_y = 64, btn_gap = 6;
+  int total_w = 3*btn_w + 2*btn_gap;
+  int btn_x0 = (480 - total_w) / 2;
+  for (int m = 0; m < 3; m++) {
+    bool active = (g_dry_mode == m);
+    lv_obj_t *mb = lv_btn_create(scr_drying_reminder);
+    lv_obj_set_size(mb, btn_w, btn_h);
+    lv_obj_set_pos(mb, btn_x0 + m*(btn_w+btn_gap), btn_y);
+    lv_obj_set_style_bg_color(mb, active ? lv_color_hex(0x0d2e1a) : lv_color_hex(0x0a1828), 0);
+    lv_obj_set_style_bg_color(mb, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(mb, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3050), 0);
+    lv_obj_set_style_border_width(mb, 1, 0);
+    lv_obj_set_style_radius(mb, 8, 0);
+    lv_obj_set_style_shadow_width(mb, 0, 0);
+    lv_obj_t *ml = lv_label_create(mb);
+    lv_label_set_text(ml, mode_labels[m]);
+    lv_obj_set_style_text_color(ml, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(ml, &lv_font_montserrat_ext_16, 0);
+    lv_obj_align(ml, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_user_data(mb, (void*)(intptr_t)m);
+    lv_obj_add_event_cb(mb, [](lv_event_t *e){
+      uint8_t new_mode = (uint8_t)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
+      if (g_dry_mode == new_mode) return;
+      g_dry_mode = new_mode;
+      logSDf("Drying Reminder: mode set to %d", g_dry_mode);
+      Preferences prefs; prefs.begin("spoolscale", false);
+      prefs.putUChar("dry_mode", g_dry_mode);
+      prefs.end();
+      show_drying_reminder_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+  }
+
+  // ── Inhaltsbereich je nach Modus ────────────────────────
+  int content_y = 112;
+
+  if (g_dry_mode == 0) {
+    // Aus: Erklaerungstext
+    lv_obj_t *lbl = lv_label_create(scr_drying_reminder);
+    { char dbuf[200]; strncpy(dbuf, T(STR_DRY_OFF_DESC), sizeof(dbuf)-1);
+      lv_label_set_text(lbl, dbuf); }
+    lv_obj_set_style_text_color(lbl, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
+    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(lbl, 440);
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
+    lv_obj_align(lbl, LV_ALIGN_TOP_MID, 0, content_y);
+
+  } else if (g_dry_mode == 1) {
+    // Material: Tabelle der Schwellwerte (read-only)
+    lv_obj_t *hint = lv_label_create(scr_drying_reminder);
+    { char hbuf[64]; strncpy(hbuf, T(STR_DRY_MAT_HINT), sizeof(hbuf)-1); lv_label_set_text(hint, hbuf); }
+    lv_obj_set_style_text_color(hint, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
+    lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(hint, 440);
+    lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, content_y);
+    content_y += 20;
+
+    // Scrollbare Tabelle
+    lv_obj_t *tbl_cont = lv_obj_create(scr_drying_reminder);
+    lv_obj_set_size(tbl_cont, 456, 162);
+    lv_obj_set_pos(tbl_cont, 12, content_y + 4);
+    lv_obj_set_style_bg_color(tbl_cont, lv_color_hex(0x050f1e), 0);
+    lv_obj_set_style_border_color(tbl_cont, lv_color_hex(0x1a3050), 0);
+    lv_obj_set_style_border_width(tbl_cont, 1, 0);
+    lv_obj_set_style_radius(tbl_cont, 8, 0);
+    lv_obj_set_style_pad_all(tbl_cont, 6, 0);
+    lv_obj_set_style_pad_row(tbl_cont, 3, 0);
+    lv_obj_set_flex_flow(tbl_cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_scroll_dir(tbl_cont, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(tbl_cont, LV_SCROLLBAR_MODE_AUTO);
+    // Header-Zeile
+    { lv_obj_t *row = lv_obj_create(tbl_cont);
+      lv_obj_set_size(row, 430, 24);
+      lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
+      lv_obj_set_style_border_width(row, 0, 0);
+      lv_obj_set_style_pad_all(row, 0, 0);
+      auto hdr = [&](const char* t, int x, int w){
+        lv_obj_t *l = lv_label_create(row);
+        lv_label_set_text(l, t);
+        lv_obj_set_style_text_color(l, lv_color_hex(0x4a6fa0), 0);
+        lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_12, 0);
+        lv_obj_set_width(l, w);
+        lv_obj_set_pos(l, x, 4);
+      };
+      { char h0[24],h1[24],h2[24];
+      strncpy(h0,T(STR_DRY_MAT_HDR_MAT),sizeof(h0)-1);
+      strncpy(h1,T(STR_DRY_MAT_HDR_YELLOW),sizeof(h1)-1);
+      strncpy(h2,T(STR_DRY_MAT_HDR_RED),sizeof(h2)-1);
+      hdr(h0,0,72); hdr(h1,80,120); hdr(h2,210,120);
+      lv_obj_t *h4l = lv_label_create(row);
+      lv_label_set_text(h4l, T(STR_DRY_SEALED_HDR));
+      lv_obj_set_style_text_color(h4l, lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_font(h4l, &lv_font_montserrat_ext_12, 0);
+      lv_obj_set_width(h4l, 50); lv_obj_set_pos(h4l, 366, 4); }
+    }
+    // Daten-Zeilen
+    for (int i = 0; i < DRY_MAT_COUNT; i++) {
+      lv_obj_t *row = lv_obj_create(tbl_cont);
+      lv_obj_set_size(row, 430, 24);
+      lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
+      lv_obj_set_style_border_width(row, 0, 0);
+      lv_obj_set_style_pad_all(row, 0, 0);
+      auto cell = [&](const char* t, int x, int w, uint32_t col){
+        lv_obj_t *l = lv_label_create(row);
+        lv_label_set_text(l, t);
+        lv_obj_set_style_text_color(l, lv_color_hex(col), 0);
+        lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
+        lv_obj_set_width(l, w);
+        lv_obj_set_pos(l, x, 2);
+      };
+      // Effektive Schwellwerte (mit Multiplikator wenn sealed)
+      float eff_mult = g_dry_mat_sealed[i] ? g_dry_mult_sealed : 1.0f;
+      int eff_y = (int)(g_dry_mat_yellow[i] * eff_mult);
+      int eff_r = (int)(g_dry_mat_red[i]    * eff_mult);
+      char y_buf[10], r_buf[10];
+      snprintf(y_buf, sizeof(y_buf), "%d T.", eff_y);
+      snprintf(r_buf, sizeof(r_buf), "%d T.", eff_r);
+      cell(DRY_MAT_NAMES[i], 0,  72, 0xe8f0ff);
+      cell(y_buf,            80, 120, 0xf0b838);
+      cell(r_buf,           210, 120, 0xe04040);
+      // Sealed-Symbol
+      lv_obj_t *seal_lbl = lv_label_create(row);
+      lv_label_set_text(seal_lbl, g_dry_mat_sealed[i] ? LV_SYMBOL_OK : "-");
+      lv_obj_set_style_text_color(seal_lbl, g_dry_mat_sealed[i] ? lv_color_hex(0x28d49a) : lv_color_hex(0x2a4060), 0);
+      lv_obj_set_style_text_font(seal_lbl, &lv_font_montserrat_ext_14, 0);
+      lv_obj_set_pos(seal_lbl, 370, 2);
+    }
+    // Fussnote
+    lv_obj_t *fn = lv_label_create(scr_drying_reminder);
+    { char fnbuf[80]; snprintf(fnbuf, sizeof(fnbuf), T(STR_DRY_MAT_EFF_NOTE), g_dry_mult_sealed); lv_label_set_text(fn, fnbuf); }
+    lv_obj_set_style_text_color(fn, lv_color_hex(0x2a4060), 0);
+    lv_obj_set_style_text_font(fn, &lv_font_montserrat_ext_12, 0);
+    lv_obj_align(fn, LV_ALIGN_BOTTOM_MID, 0, -4);
+
+  } else {
+    // Manuell: zwei Zeilen, Gelb + Rot, per Numpad editierbar
+    auto makeThreshRow = [&](const char* label, int value, uint32_t color, int y, int target){
+      lv_obj_t *row_btn = lv_btn_create(scr_drying_reminder);
+      lv_obj_set_size(row_btn, 456, 56);
+      lv_obj_set_pos(row_btn, 12, y);
+      lv_obj_set_style_bg_color(row_btn, lv_color_hex(0x0a1e30), 0);
+      lv_obj_set_style_bg_color(row_btn, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+      lv_obj_set_style_radius(row_btn, 10, 0);
+      lv_obj_set_style_shadow_width(row_btn, 0, 0);
+      lv_obj_set_style_border_width(row_btn, 1, 0);
+      lv_obj_set_style_border_color(row_btn, lv_color_hex(color), 0);
+      lv_obj_set_style_pad_all(row_btn, 0, 0);
+      // Farbindikator-Balken links
+      lv_obj_t *bar = lv_obj_create(row_btn);
+      lv_obj_set_size(bar, 6, 40);
+      lv_obj_set_pos(bar, 8, 8);
+      lv_obj_set_style_bg_color(bar, lv_color_hex(color), 0);
+      lv_obj_set_style_border_width(bar, 0, 0);
+      lv_obj_set_style_radius(bar, 3, 0);
+      // Label
+      lv_obj_t *lbl = lv_label_create(row_btn);
+      lv_label_set_text(lbl, label);
+      lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
+      lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
+      lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 24, -8);
+      // Untertitel
+      lv_obj_t *slbl = lv_label_create(row_btn);
+      { char ehbuf[32]; strncpy(ehbuf, T(STR_DRY_MAN_EDIT_HINT), sizeof(ehbuf)-1); lv_label_set_text(slbl, ehbuf); }
+      lv_obj_set_style_text_color(slbl, lv_color_hex(0x2a4060), 0);
+      lv_obj_set_style_text_font(slbl, &lv_font_montserrat_ext_12, 0);
+      lv_obj_align(slbl, LV_ALIGN_LEFT_MID, 24, 10);
+      // Wert rechts
+      char vbuf[16]; snprintf(vbuf, sizeof(vbuf), "%d %s", value, T(STR_DRY_DAYS_UNIT));
+      lv_obj_t *vlbl = lv_label_create(row_btn);
+      lv_label_set_text(vlbl, vbuf);
+      lv_obj_set_style_text_color(vlbl, lv_color_hex(color), 0);
+      lv_obj_set_style_text_font(vlbl, &lv_font_montserrat_ext_20, 0);
+      lv_obj_align(vlbl, LV_ALIGN_RIGHT_MID, -16, 0);
+      lv_obj_set_user_data(row_btn, (void*)(intptr_t)target);
+      lv_obj_add_event_cb(row_btn, [](lv_event_t *e){
+        int tgt = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
+        if (scr_drying_reminder) { lv_obj_del(scr_drying_reminder); scr_drying_reminder = nullptr; }
+        buildDryNumpadScreen(tgt);
+        lv_obj_clear_flag(s_dry_numpad_scr, LV_OBJ_FLAG_HIDDEN);
+      }, LV_EVENT_CLICKED, NULL);
+    };
+    { char ybuf[16]; strncpy(ybuf, T(STR_DRY_MAN_YELLOW_LBL), sizeof(ybuf)-1); makeThreshRow(ybuf, g_dry_man_yellow, 0xf0b838, content_y,      0); }
+    { char rbuf[16]; strncpy(rbuf, T(STR_DRY_MAN_RED_LBL),    sizeof(rbuf)-1); makeThreshRow(rbuf, g_dry_man_red,    0xe04040, content_y + 68, 1); }
+
+    // Info-Text
+    lv_obj_t *info = lv_label_create(scr_drying_reminder);
+    { char ibuf[64]; strncpy(ibuf, T(STR_DRY_MAN_INFO), sizeof(ibuf)-1); lv_label_set_text(info, ibuf); }
+    lv_obj_set_style_text_color(info, lv_color_hex(0x2a4060), 0);
+    lv_obj_set_style_text_font(info, &lv_font_montserrat_ext_12, 0);
+    lv_obj_set_style_text_align(info, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(info, 440);
+    lv_obj_align(info, LV_ALIGN_BOTTOM_MID, 0, -4);
+  }
 }
 
 // ============================================================
@@ -3970,6 +4319,17 @@ void startOtaServer() {
       "<img src='data:image/jpeg;base64,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' style='width:120px;height:120px;border-radius:12px;margin-bottom:8px'>"
       "<div class='version'>" + version + " &nbsp;|&nbsp; Firmware Update</div>"
 
+      "<div class='links' style='margin-bottom:20px'>"
+      "<a class='link-btn link-kofi' href='https://ko-fi.com/formfollowsfunction' target='_blank'>"
+      "&#9749; Ko-fi</a>"
+      "<a class='link-btn link-github' href='https://github.com/Niko11111/SpoolmanScale' target='_blank'>"
+      "&#9873; GitHub</a>"
+      "<a class='link-btn link-discord' href='https://discord.gg/GzQzGa5pBG' target='_blank'>"
+      "&#128172; Discord</a>"
+      "<a class='link-btn link-maker' href='https://makerworld.com/de/@FormFollowsF/upload' target='_blank'>"
+      "&#11088; MakerWorld</a>"
+      "</div>"
+
       // Upload-Card
       "<div class='card'>"
       "<h2>Upload Firmware</h2>"
@@ -4029,39 +4389,150 @@ void startOtaServer() {
       "loadLogs();setInterval(loadLogs,30000);"
       "</script>"
 
-      // List limit card
+      // List limits — combined, moved to end via JS or just keep at end
+      // Drying Reminder card
       "<div class='card'>"
-      "<h2>Spool List Limit</h2>"
-      "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>Max entries in link/copy list. Lower = more stable. Default: 16. Increase carefully.</p>"
-      "<div style='display:flex;gap:10px;align-items:center'>"
-      "<input id='ll-in' type='number' min='5' max='100' value='"+String(spool_list_limit)+"'"
+      "<h2>Drying Reminder - Material Thresholds</h2>"
+      "<p style='font-size:12px;color:#4a6fa0;margin-bottom:6px'>Days until Yellow / Red warning per material. Sealed multiplier applies when storage is airtight.</p>"
+      "<table id='dry-tbl' style='width:100%;border-collapse:collapse;font-size:14px;margin-bottom:14px'>"
+      "<tr style='color:#4a6fa0;font-size:12px'><th style='text-align:left;padding:4px 6px'>Material</th>"
+      "<th style='text-align:center;padding:4px 6px'>Yellow</th><th style='text-align:center;padding:4px 6px'>Red</th>"
+      "<th style='text-align:center;padding:4px 6px'>Storage</th></tr>"
+      // PLA
+      "<tr><td style='padding:4px 6px;color:#e8f0ff'>PLA</td>"
+      "<td><input class='dry-in' name='y_PLA' type='number' min='1' value='"+String(g_dry_mat_yellow[0])+"'></td>"
+      "<td><input class='dry-in' name='r_PLA' type='number' min='1' value='"+String(g_dry_mat_red[0])+"'></td>"
+      "<td style='text-align:center;white-space:nowrap'>"
+      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
+      "<input type='radio' name='s_PLA' value='open' "+String(g_dry_mat_sealed[0]?"":"checked")+"> Open</label>"
+      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
+      "<input type='radio' name='s_PLA' value='sealed' "+String(g_dry_mat_sealed[0]?"checked":"")+"> Sealed</label>"
+      "</td></tr>"
+      "<tr><td style='padding:4px 6px;color:#e8f0ff'>PETG</td>"
+      "<td><input class='dry-in' name='y_PETG' type='number' min='1' value='"+String(g_dry_mat_yellow[1])+"'></td>"
+      "<td><input class='dry-in' name='r_PETG' type='number' min='1' value='"+String(g_dry_mat_red[1])+"'></td>"
+      "<td style='text-align:center;white-space:nowrap'>"
+      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
+      "<input type='radio' name='s_PETG' value='open' "+String(g_dry_mat_sealed[1]?"":"checked")+"> Open</label>"
+      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
+      "<input type='radio' name='s_PETG' value='sealed' "+String(g_dry_mat_sealed[1]?"checked":"")+"> Sealed</label>"
+      "</td></tr>"
+      "<tr><td style='padding:4px 6px;color:#e8f0ff'>ABS</td>"
+      "<td><input class='dry-in' name='y_ABS' type='number' min='1' value='"+String(g_dry_mat_yellow[2])+"'></td>"
+      "<td><input class='dry-in' name='r_ABS' type='number' min='1' value='"+String(g_dry_mat_red[2])+"'></td>"
+      "<td style='text-align:center;white-space:nowrap'>"
+      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
+      "<input type='radio' name='s_ABS' value='open' "+String(g_dry_mat_sealed[2]?"":"checked")+"> Open</label>"
+      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
+      "<input type='radio' name='s_ABS' value='sealed' "+String(g_dry_mat_sealed[2]?"checked":"")+"> Sealed</label>"
+      "</td></tr>"
+      "<tr><td style='padding:4px 6px;color:#e8f0ff'>ASA</td>"
+      "<td><input class='dry-in' name='y_ASA' type='number' min='1' value='"+String(g_dry_mat_yellow[3])+"'></td>"
+      "<td><input class='dry-in' name='r_ASA' type='number' min='1' value='"+String(g_dry_mat_red[3])+"'></td>"
+      "<td style='text-align:center;white-space:nowrap'>"
+      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
+      "<input type='radio' name='s_ASA' value='open' "+String(g_dry_mat_sealed[3]?"":"checked")+"> Open</label>"
+      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
+      "<input type='radio' name='s_ASA' value='sealed' "+String(g_dry_mat_sealed[3]?"checked":"")+"> Sealed</label>"
+      "</td></tr>"
+      "<tr><td style='padding:4px 6px;color:#e8f0ff'>TPU</td>"
+      "<td><input class='dry-in' name='y_TPU' type='number' min='1' value='"+String(g_dry_mat_yellow[4])+"'></td>"
+      "<td><input class='dry-in' name='r_TPU' type='number' min='1' value='"+String(g_dry_mat_red[4])+"'></td>"
+      "<td style='text-align:center;white-space:nowrap'>"
+      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
+      "<input type='radio' name='s_TPU' value='open' "+String(g_dry_mat_sealed[4]?"":"checked")+"> Open</label>"
+      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
+      "<input type='radio' name='s_TPU' value='sealed' "+String(g_dry_mat_sealed[4]?"checked":"")+"> Sealed</label>"
+      "</td></tr>"
+      "<tr><td style='padding:4px 6px;color:#e8f0ff'>PA</td>"
+      "<td><input class='dry-in' name='y_PA' type='number' min='1' value='"+String(g_dry_mat_yellow[5])+"'></td>"
+      "<td><input class='dry-in' name='r_PA' type='number' min='1' value='"+String(g_dry_mat_red[5])+"'></td>"
+      "<td style='text-align:center;white-space:nowrap'>"
+      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
+      "<input type='radio' name='s_PA' value='open' "+String(g_dry_mat_sealed[5]?"":"checked")+"> Open</label>"
+      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
+      "<input type='radio' name='s_PA' value='sealed' "+String(g_dry_mat_sealed[5]?"checked":"")+"> Sealed</label>"
+      "</td></tr>"
+      "<tr><td style='padding:4px 6px;color:#e8f0ff'>PC</td>"
+      "<td><input class='dry-in' name='y_PC' type='number' min='1' value='"+String(g_dry_mat_yellow[6])+"'></td>"
+      "<td><input class='dry-in' name='r_PC' type='number' min='1' value='"+String(g_dry_mat_red[6])+"'></td>"
+      "<td style='text-align:center;white-space:nowrap'>"
+      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
+      "<input type='radio' name='s_PC' value='open' "+String(g_dry_mat_sealed[6]?"":"checked")+"> Open</label>"
+      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
+      "<input type='radio' name='s_PC' value='sealed' "+String(g_dry_mat_sealed[6]?"checked":"")+"> Sealed</label>"
+      "</td></tr>"
+      "</table>"
+      "<div style='display:flex;gap:10px;align-items:center;margin-bottom:10px'>"
+      "<label style='font-size:13px;color:#c8d8f0'>Sealed multiplier:</label>"
+      "<input id='dry-mult' type='number' min='1' max='10' step='0.1' value='"+String(g_dry_mult_sealed,1)+"'"
       " style='width:72px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
-      "border-radius:8px;padding:8px 10px;font-size:16px'>"
-      "<button class='btn-toggle' onclick='setLL()'>Save</button>"
-      "<span id='ll-s' style='font-size:12px;color:#28d49a'></span>"
+      "border-radius:8px;padding:6px 10px;font-size:15px'>"
+      "<span style='font-size:12px;color:#4a6fa0'>x (airtight storage)</span>"
+      "</div>"
+      "<div style='display:flex;gap:10px'>"
+      "<button class='btn-toggle' onclick='saveDry()'>Save</button>"
+      "<button class='btn-toggle' style='background:#1a0a0a;border-color:#402020;color:#e04040' onclick='resetDry()'>Reset to Defaults</button>"
+      "<span id='dry-s' style='font-size:12px;color:#28d49a;line-height:36px;display:inline-block'></span>"
       "</div></div>"
+      "<style>.dry-in{width:64px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
+      "border-radius:6px;padding:4px 8px;font-size:14px;text-align:center}</style>"
       "<script>"
-      "function setLL(){"
+      "function setLocL(){""var v=parseInt(document.getElementById('locl-in').value);""if(v<5)v=5;if(v>100)v=100;""fetch('/loclimit',{method:'POST',body:String(v)})"".then(r=>r.json()).then(d=>{""document.getElementById('locl-s').textContent='Saved: '+d.limit;""setTimeout(()=>{document.getElementById('locl-s').textContent='';},3000);""});}""function setLL(){"
       "var v=parseInt(document.getElementById('ll-in').value);"
       "if(v<5)v=5;if(v>100)v=100;"
       "fetch('/listlimit',{method:'POST',body:String(v)})"
       ".then(r=>r.json()).then(d=>{"
       "document.getElementById('ll-s').textContent='Saved: '+d.limit;"
       "setTimeout(()=>{document.getElementById('ll-s').textContent='';},3000);"
-      "});}"  
+      "});}"
+      "function saveDry(){"
+      "var mats=['PLA','PETG','ABS','ASA','TPU','PA','PC'];"
+      "var arr=mats.map(function(m){"
+      "var sr=document.querySelector('[name=s_'+m+'][value=sealed]');"
+      "return{name:m,"
+      "yellow:parseInt(document.querySelector('[name=y_'+m+']').value)||1,"
+      "red:parseInt(document.querySelector('[name=r_'+m+']').value)||1,"
+      "sealed:sr?sr.checked:false};"
+      "});"
+      "var mult=parseFloat(document.getElementById('dry-mult').value)||1;"
+      "fetch('/drying',{method:'POST',"
+      "headers:{'Content-Type':'application/json'},"
+      "body:JSON.stringify({mult_sealed:mult,materials:arr})})"
+      ".then(r=>r.json()).then(d=>{"
+      "document.getElementById('dry-s').textContent=d.ok?'Saved!':'Error';"
+      "setTimeout(()=>{document.getElementById('dry-s').textContent='';},3000);"
+      "});}"
+      "function resetDry(){"
+      "fetch('/drying/reset',{method:'POST'})"
+      ".then(r=>r.json()).then(d=>{"
+      "document.getElementById('dry-s').textContent='Reset!';"
+      "setTimeout(()=>location.reload(),1500);"
+      "});}"
       "</script>"
       // Links
-      "<div class='links'>"
-      "<a class='link-btn link-kofi' href='https://ko-fi.com/formfollowsfunction' target='_blank'>"
-      "&#9749; Ko-fi</a>"
-      "<a class='link-btn link-github' href='https://github.com/Niko11111/SpoolmanScale' target='_blank'>"
-      "&#9873; GitHub</a>"
-      "<a class='link-btn link-discord' href='https://discord.gg/GzQzGa5pBG' target='_blank'>"
-      "&#128172; Discord</a>"
-      "<a class='link-btn link-maker' href='https://makerworld.com/de/@FormFollowsF/upload' target='_blank'>"
-      "&#11088; MakerWorld</a>"
-      "</div>"
-
+      // List Limits combined card — at bottom
+      "<div class='card'>"
+      "<h2>List Limits</h2>"
+      "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>Controls how many items are shown in picker lists. Increase carefully.</p>"
+      "<div style='margin-bottom:12px'>"
+      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>Spool list (link/copy) &mdash; Default: 16</label>"
+      "<div style='display:flex;gap:10px;align-items:center'>"
+      "<input id='ll-in' type='number' min='5' max='100' value='"+String(spool_list_limit)+"'"
+      " style='width:72px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
+      "border-radius:8px;padding:8px 10px;font-size:16px'>"
+      "<button class='btn-toggle' onclick='setLL()'>Save</button>"
+      "<span id='ll-s' style='font-size:12px;color:#28d49a;line-height:36px'></span>"
+      "</div></div>"
+      "<div>"
+      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>Location list &mdash; Default: 30 (too many may cause reboot)</label>"
+      "<div style='display:flex;gap:10px;align-items:center'>"
+      "<input id='locl-in' type='number' min='5' max='100' value='"+String(location_list_limit)+"'"
+      " style='width:72px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
+      "border-radius:8px;padding:8px 10px;font-size:16px'>"
+      "<button class='btn-toggle' onclick='setLocL()'>Save</button>"
+      "<span id='locl-s' style='font-size:12px;color:#28d49a;line-height:36px'></span>"
+      "</div></div></div>"
       "<div class='footer'>Not affiliated with Spoolman &mdash; Open Source Project</div>"
       "</body></html>";
     ota_server.send(200, "text/html", html);
@@ -4260,6 +4731,120 @@ void startOtaServer() {
     char json[32]; snprintf(json, sizeof(json), "{\"limit\":%d}", spool_list_limit);
     logSDf("Webserver: list_limit set to %d", spool_list_limit);
     ota_server.send(200, "application/json", json);
+  });
+
+  ota_server.on("/loclimit", HTTP_GET, []() {
+    char json[32];
+    snprintf(json, sizeof(json), "{\"limit\":%d}", location_list_limit);
+    ota_server.send(200, "application/json", json);
+  });
+  ota_server.on("/loclimit", HTTP_POST, []() {
+    if (!ota_server.hasArg("plain")) { ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
+    int val = ota_server.arg("plain").toInt();
+    if (val < 5) val = 5;
+    if (val > 100) val = 100;
+    location_list_limit = val;
+    prefs.begin("spoolscale", false);
+    prefs.putUChar("loc_limit", (uint8_t)val);
+    prefs.end();
+    char json[32]; snprintf(json, sizeof(json), "{\"limit\":%d}", location_list_limit);
+    logSDf("Webserver: loc_limit set to %d", location_list_limit);
+    ota_server.send(200, "application/json", json);
+  });
+
+  // ── Drying Reminder: Material-Schwellwerte lesen ──────────
+  ota_server.on("/drying", HTTP_GET, []() {
+    String json = "{";
+    json += "\"mode\":" + String(g_dry_mode) + ",";
+    json += "\"man_yellow\":" + String(g_dry_man_yellow) + ",";
+    json += "\"man_red\":" + String(g_dry_man_red) + ",";
+    json += "\"mult_sealed\":" + String(g_dry_mult_sealed, 1) + ",";
+    json += "\"materials\":[";
+    for (int i = 0; i < DRY_MAT_COUNT; i++) {
+      if (i > 0) json += ",";
+      json += "{\"name\":\"" + String(DRY_MAT_NAMES[i]) + "\",";
+      json += "\"yellow\":" + String(g_dry_mat_yellow[i]) + ",";
+      json += "\"red\":" + String(g_dry_mat_red[i]) + ",";
+      json += "\"sealed\":" + String(g_dry_mat_sealed[i] ? "true" : "false") + "}";
+    }
+    json += "]}";
+    ota_server.send(200, "application/json", json);
+  });
+
+  // ── Drying Reminder: Material-Schwellwerte speichern ──────
+  // Body: JSON {"mult_sealed":3.0,"materials":[{"name":"PLA","yellow":180,"red":365},...]}
+  ota_server.on("/drying", HTTP_POST, []() {
+    if (!ota_server.hasArg("plain")) {
+      ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return;
+    }
+    StaticJsonDocument<1024> doc;
+    DeserializationError err = deserializeJson(doc, ota_server.arg("plain"));
+    if (err) {
+      ota_server.send(400, "application/json", "{\"error\":\"json parse\"}"); return;
+    }
+    prefs.begin("spoolscale", false);
+    if (doc.containsKey("mult_sealed")) {
+      g_dry_mult_sealed = doc["mult_sealed"].as<float>();
+      if (g_dry_mult_sealed < 1.0f) g_dry_mult_sealed = 1.0f;
+      if (g_dry_mult_sealed > 10.0f) g_dry_mult_sealed = 10.0f;
+      prefs.putFloat("dry_mult_s", g_dry_mult_sealed);
+    }
+    if (doc.containsKey("materials")) {
+      JsonArray arr = doc["materials"].as<JsonArray>();
+      for (JsonObject obj : arr) {
+        const char* nm = obj["name"] | "";
+        for (int i = 0; i < DRY_MAT_COUNT; i++) {
+          if (strcasecmp(nm, DRY_MAT_NAMES[i]) == 0) {
+            char key[16];
+            if (obj.containsKey("yellow")) {
+              g_dry_mat_yellow[i] = max(1, (int)obj["yellow"]);
+              snprintf(key, sizeof(key), "dry_y_%s", DRY_MAT_NAMES[i]);
+              prefs.putInt(key, g_dry_mat_yellow[i]);
+            }
+            if (obj.containsKey("red")) {
+              g_dry_mat_red[i] = max(1, (int)obj["red"]);
+              snprintf(key, sizeof(key), "dry_r_%s", DRY_MAT_NAMES[i]);
+              prefs.putInt(key, g_dry_mat_red[i]);
+            }
+            if (obj["sealed"].is<bool>()) {
+              g_dry_mat_sealed[i] = obj["sealed"].as<bool>();
+              snprintf(key, sizeof(key), "dry_s_%s", DRY_MAT_NAMES[i]);
+              prefs.putBool(key, g_dry_mat_sealed[i]);
+            }
+            break;
+          }
+        }
+      }
+    }
+    prefs.end();
+    logSD("Webserver: drying thresholds updated");
+    ota_server.send(200, "application/json", "{\"ok\":true}");
+  });
+
+  // ── Drying Reminder: Reset auf Defaults ───────────────────
+  ota_server.on("/drying/reset", HTTP_POST, []() {
+    g_dry_mult_sealed = 2.0f;
+    g_dry_man_yellow  = 30;
+    g_dry_man_red     = 90;
+    prefs.begin("spoolscale", false);
+    prefs.putFloat("dry_mult_s", g_dry_mult_sealed);
+    prefs.putInt("dry_man_y",  g_dry_man_yellow);
+    prefs.putInt("dry_man_r",  g_dry_man_red);
+    char key[16];
+    for (int i = 0; i < DRY_MAT_COUNT; i++) {
+      g_dry_mat_yellow[i] = DRY_MAT_DEF_YELLOW[i];
+      g_dry_mat_red[i]    = DRY_MAT_DEF_RED[i];
+      g_dry_mat_sealed[i] = false;
+      snprintf(key, sizeof(key), "dry_y_%s", DRY_MAT_NAMES[i]);
+      prefs.putInt(key, g_dry_mat_yellow[i]);
+      snprintf(key, sizeof(key), "dry_r_%s", DRY_MAT_NAMES[i]);
+      prefs.putInt(key, g_dry_mat_red[i]);
+      snprintf(key, sizeof(key), "dry_s_%s", DRY_MAT_NAMES[i]);
+      prefs.putBool(key, false);
+    }
+    prefs.end();
+    logSD("Webserver: drying thresholds reset to defaults");
+    ota_server.send(200, "application/json", "{\"ok\":true,\"reset\":true}");
   });
 
   ota_server.begin();
@@ -8746,8 +9331,15 @@ void buildUI() {
   lv_obj_set_style_text_font(lbl_spoolman_dried_val, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_pos(lbl_spoolman_dried_val, 244, 158);  // Fix 3
   lv_label_set_long_mode(lbl_spoolman_dried_val, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_spoolman_dried_val, 228);
+  lv_obj_set_width(lbl_spoolman_dried_val, 210);
   lbl_spoolman_dried = lbl_spoolman_dried_val;
+  // Ampel-Symbol (WARNING) rechts vom Datum, standardmaessig versteckt
+  lbl_dried_sym = lv_label_create(lv_scr_act());
+  lv_label_set_text(lbl_dried_sym, LV_SYMBOL_WARNING);
+  lv_obj_set_style_text_color(lbl_dried_sym, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_font(lbl_dried_sym, &lv_font_montserrat_ext_16, 0);
+  lv_obj_set_pos(lbl_dried_sym, 456, 158);
+  lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
 
   // Unused labels still needed by updateDisplay / querySpoolman
   // lbl_uid, lbl_tray_uuid, lbl_detail, lbl_date — hidden dummy labels
@@ -10099,7 +10691,7 @@ void fetchAndFillLocationList() {
   int loc_shown = 0;
   bool loc_limit_hit = false;
   for (JsonVariant v : locs) {
-    if (loc_shown >= 50) { loc_limit_hit = true; break; }
+    if (loc_shown >= location_list_limit) { loc_limit_hit = true; break; }
     char loc_name[48];
     strncpy(loc_name, v.as<const char*>() ? v.as<const char*>() : "-", sizeof(loc_name)-1);
     loc_name[sizeof(loc_name)-1] = '\0';
@@ -10724,6 +11316,70 @@ void driedDisplayStr(const char* de_date, char* out, size_t len) {
 }
 
 // Same logic for last used
+// ── Ampel: last_dried Label mit Farbe + Symbol setzen ────────
+// Ruft driedDisplayStr + dryingAlertLevel auf und setzt Farbe/Symbol.
+// lbl_sym darf nullptr sein (kein Symbol-Label).
+static void applyDriedLabel(lv_obj_t* lbl_val, lv_obj_t* lbl_sym, const char* de_date) {
+  if (!lbl_val) return;
+  // Text
+  char disp[56];
+  driedDisplayStr(de_date, disp, sizeof(disp));
+  lv_label_set_text(lbl_val, disp);
+  // Ampel-Level
+  int level = dryingAlertLevel(de_date);
+  if (sd_verbose) logSDf("[verbose] applyDriedLabel: date=%s level=%d mode=%d", de_date, level, g_dry_mode);
+  uint32_t col;
+  if      (level == 2) col = 0xe04040;  // rot
+  else if (level == 1) col = 0xf0b838;  // gelb
+  else if (level == 0) col = 0x28d49a;  // gruen
+  else                 col = 0x5090e0;  // kein Modus / kein Datum -> neutral blau
+  lv_obj_set_style_text_color(lbl_val, lv_color_hex(col), 0);
+  // Symbol (nur bei Warnung/Alarm)
+  if (lbl_sym) {
+    if (level == 1 || level == 2) {
+      lv_label_set_text(lbl_sym, LV_SYMBOL_WARNING);
+      lv_obj_set_style_text_color(lbl_sym, lv_color_hex(col), 0);
+      lv_obj_clear_flag(lbl_sym, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(lbl_sym, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+}
+
+// ============================================================
+//  HELPER: Ampel-Level fuer last_dried (0=gruen,1=gelb,2=rot,-1=kein Datum)
+// ============================================================
+static int dryingAlertLevel(const char* last_dried_local) {
+  if (g_dry_mode == 0) return -1;
+  if (!last_dried_local || strlen(last_dried_local) < 8 || strcmp(last_dried_local, "-") == 0)
+    return -1;
+  int days = daysSince(last_dried_local);
+  if (sd_verbose) logSDf("[verbose] dryingAlertLevel: date=%s days=%d mode=%d mat=%s", last_dried_local, days, g_dry_mode, sm_material_global);
+  if (days < 0) return -1;
+  int yellow_thresh = g_dry_man_yellow;
+  int red_thresh    = g_dry_man_red;
+  if (g_dry_mode == 1) {
+    int mat_idx = -1;
+    for (int i = 0; i < DRY_MAT_COUNT; i++) {
+      if (strncasecmp(sm_material_global, DRY_MAT_NAMES[i], strlen(DRY_MAT_NAMES[i])) == 0) {
+        mat_idx = i; break;
+      }
+    }
+    if (mat_idx >= 0) {
+      float mult = g_dry_mat_sealed[mat_idx] ? g_dry_mult_sealed : 1.0f;
+      yellow_thresh = (int)(g_dry_mat_yellow[mat_idx] * mult);
+      red_thresh    = (int)(g_dry_mat_red[mat_idx]    * mult);
+    } else {
+      // Unbekanntes Material im Material-Mode -> kein Signal
+      if (sd_verbose) logSDf("[verbose] dryingAlertLevel: material '%s' not in list -> no alert", sm_material_global);
+      return -1;
+    }
+  }
+  if (days >= red_thresh)    return 2;
+  if (days >= yellow_thresh) return 1;
+  return 0;
+}
+
 // Sync NTP time (after WiFi connection)
 void syncNTP() {
   configTime(3600, 3600, "pool.ntp.org", "time.nist.gov"); // UTC+1 + Sommerzeit
@@ -10923,14 +11579,21 @@ void querySpoolmanById(int spool_id) {
     sm_material_global[sizeof(sm_material_global)-1] = '\0';
     strncpy(sm_color_global, sm_color.c_str(), sizeof(sm_color_global)-1);
     sm_color_global[sizeof(sm_color_global)-1] = '\0';
-    if (sm_color.length() >= 6) {
-      String hex = sm_color;
-      if (hex.startsWith("#")) hex = hex.substring(1);
-      unsigned int r, g, b;
-      sscanf(hex.c_str(), "%02X%02X%02X", &r, &g, &b);
-      uint32_t col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-      lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(col), 0);
+  } else {
+    // Bambu-Tag: Material aus g_tag.material in sm_material_global schreiben
+    // damit dryingAlertLevel() das Material korrekt auflösen kann
+    if (g_tag.material[0]) {
+      strncpy(sm_material_global, g_tag.material, sizeof(sm_material_global)-1);
+      sm_material_global[sizeof(sm_material_global)-1] = '\0';
     }
+  }
+  if (is_ntag && sm_color.length() >= 6) {
+    String hex = sm_color;
+    if (hex.startsWith("#")) hex = hex.substring(1);
+    unsigned int r, g, b;
+    sscanf(hex.c_str(), "%02X%02X%02X", &r, &g, &b);
+    uint32_t col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+    lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(col), 0);
   }
 
   // Update display labels
@@ -10964,7 +11627,7 @@ void querySpoolmanById(int spool_id) {
 
   char dried_display[48];
   driedDisplayStr(sm_last_dried, dried_display, sizeof(dried_display));
-  lv_label_set_text(lbl_spoolman_dried_val, dried_display);
+  applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, sm_last_dried);
 
   lv_label_set_text(lbl_detail,        strlen(sm_article_nr)    > 0 ? sm_article_nr    : "-");
   lv_label_set_text(lbl_filament_name, strlen(sm_filament_name) > 0 ? sm_filament_name : "-");
@@ -10999,6 +11662,7 @@ void querySpoolman(const char* tray_uuid) {
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
   lv_label_set_text(lbl_spoolman_pct, "");
   lv_label_set_text(lbl_spoolman_dried_val, "");
+  if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
   lv_label_set_text(lbl_detail, "-");
   lv_label_set_text(lbl_filament_name, "-");
   lv_label_set_text(lbl_last_used, "-");
@@ -11230,7 +11894,7 @@ void querySpoolman(const char* tray_uuid) {
     // Last drying: set value with "N days ago"
     char dried_display[48];
     driedDisplayStr(sm_last_dried, dried_display, sizeof(dried_display));
-    lv_label_set_text(lbl_spoolman_dried_val, dried_display);
+    applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, sm_last_dried);
 
     lv_label_set_text(lbl_detail, strlen(sm_article_nr) > 0 ? sm_article_nr : "-");
     lv_label_set_text(lbl_filament_name, strlen(sm_filament_name) > 0 ? sm_filament_name : "-");
@@ -11287,6 +11951,7 @@ void querySpoolman(const char* tray_uuid) {
         lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x808080), 0);
         lv_label_set_text(lbl_spoolman_pct, "");
         lv_label_set_text(lbl_spoolman_dried_val, "-");
+        if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
         lv_label_set_text(lbl_last_used, "-");
         lv_label_set_text(lbl_detail, "-");
         lv_label_set_text(lbl_filament_name, "-");
@@ -12235,6 +12900,7 @@ void loop() {
           lv_label_set_text(lbl_detail, "-");
           lv_label_set_text(lbl_last_used, "-");
           lv_label_set_text(lbl_spoolman_dried_val, "-");
+        if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
           lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
