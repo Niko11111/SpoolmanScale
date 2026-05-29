@@ -10,16 +10,20 @@ def copy_release_files(source, target, env):
     project_dir = env.subst("$PROJECT_DIR")
     src_dir = os.path.join(project_dir, "src")
 
-    # Versionsnummer aus main.cpp lesen
-    main_cpp = os.path.join(src_dir, "main.cpp")
+    # Versionsnummer aus main.cpp/app_config.h lesen
     version = "unknown"
-    if os.path.exists(main_cpp):
-        with open(main_cpp, "r") as f:
+    for version_file in ["app_config.h", "main.cpp"]:
+        path = os.path.join(src_dir, version_file)
+        if not os.path.exists(path):
+            continue
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
             for line in f:
                 m = re.search(r'#define FW_VERSION\s+"([^"]+)"', line)
                 if m:
                     version = m.group(1)
                     break
+        if version != "unknown":
+            break
 
     print(f"copy_release: version = {version}")
 
@@ -29,9 +33,8 @@ def copy_release_files(source, target, env):
     ota_github_dir  = os.path.join(release_base, "ota_github")
     ota_browser_dir = os.path.join(release_base, "ota_browser")
     source_dir      = os.path.join(release_base, "source")
-    fonts_dir       = os.path.join(source_dir, "fonts")
 
-    for d in [webflasher_dir, ota_github_dir, ota_browser_dir, source_dir, fonts_dir]:
+    for d in [webflasher_dir, ota_github_dir, ota_browser_dir, source_dir]:
         os.makedirs(d, exist_ok=True)
 
     # Webflasher — alle drei Binaries
@@ -62,11 +65,15 @@ def copy_release_files(source, target, env):
         print(f"copy_release: -> ota_browser/{browser_filename}")
 
     # Quellcode
-    for f in ["main.cpp", "lang.cpp", "lang.h", "lv_conf.h"]:
-        src = os.path.join(src_dir, f)
-        if os.path.exists(src):
-            shutil.copy2(src, os.path.join(source_dir, f))
-            print(f"copy_release: -> source/{f}")
+    if os.path.exists(src_dir):
+        for name in os.listdir(source_dir):
+            path = os.path.join(source_dir, name)
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            else:
+                os.remove(path)
+        shutil.copytree(src_dir, source_dir, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__"))
+        print("copy_release: -> source/")
 
     # Build-Scripts + Config
     for f in ["platformio.ini", "copy_release.py", "partitions.csv"]:
@@ -74,16 +81,6 @@ def copy_release_files(source, target, env):
         if os.path.exists(src):
             shutil.copy2(src, os.path.join(source_dir, f))
             print(f"copy_release: -> source/{f}")
-
-    # Custom Fonts
-    lvgl_fonts_src = os.path.join(src_dir, "fonts")
-    if os.path.exists(lvgl_fonts_src):
-        copied = 0
-        for f in os.listdir(lvgl_fonts_src):
-            if f.endswith(".c") or f.endswith(".h"):
-                shutil.copy2(os.path.join(lvgl_fonts_src, f), os.path.join(fonts_dir, f))
-                copied += 1
-        print(f"copy_release: -> source/fonts/ ({copied} files)")
 
     # manifest.json updaten + in Release-Ordner kopieren
     manifest_path = os.path.join(project_dir, "manifest.json")

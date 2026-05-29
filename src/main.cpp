@@ -27,21 +27,47 @@
 // ============================================================
 
 #include <Wire.h>
-#include <Adafruit_PN532.h>
-#include <Adafruit_NAU7802.h>   // NAU7802 Waage ADC (I2C 0x2A)
-#include <LovyanGFX.hpp>
 #include <lvgl.h>
-#include "mbedtls/md.h"
-#include <WiFi.h>
+#include <WiFiClient.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
-#include <WebServer.h>
 #include <Update.h>
 #include <ArduinoJson.h>
 #include <SD.h>
 #include <SPI.h>
-#include <stdarg.h>
 #include <esp_system.h>
+#include "app_config.h"
+#include "bambu/bambu_kdf.h"
+#include "bambu/bambu_tag.h"
+#include "hardware/display.h"
+#include "hardware/nfc.h"
+#include "hardware/pins.h"
+#include "hardware/scale.h"
+#include "hardware/sd_logger.h"
+#include "services/prefs_store.h"
+#include "services/ota_web_server.h"
+#include "services/spoolman_actions.h"
+#include "services/spoolman_api.h"
+#include "services/wifi_manager.h"
+#include "ui/connection_screen.h"
+#include "ui/bag_screen.h"
+#include "ui/cal_reminder_screen.h"
+#include "ui/display_screen.h"
+#include "ui/drying_reminder_screen.h"
+#include "ui/factor_screen.h"
+#include "ui/info_screen.h"
+#include "ui/language_screen.h"
+#include "ui/last_used_screen.h"
+#include "ui/ota_github.h"
+#include "ui/ota_browser.h"
+#include "ui/ota_menu.h"
+#include "ui/scale_menu.h"
+#include "ui/settings_screen.h"
+#include "ui/spoolman_screen.h"
+#include "ui/system_screen.h"
+#include "ui/ui_common.h"
+#include "ui/wifi_info.h"
+#include "ui/wifi_setup_screen.h"
 
 // PSRAM allocator for ArduinoJson — used for large JSON documents (Spoolman spool list)
 // Frees internal RAM for LVGL, WiFi stack, and other allocations
@@ -60,12 +86,11 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 };
 #include <time.h>
 #include <esp_sleep.h>
-#include <Preferences.h>
 #include <nvs_flash.h>
 // LVGL built-in QR-Code: LV_USE_QRCODE muss in lv_conf.h auf 1 gesetzt sein!
 #include "extra/libs/qrcode/lv_qrcode.h"
 #include "lang.h"
-#include "bambu_blacklist.h"
+#include "bambu/material_match.h"
 
 // ============================================================
 //  FORWARD DECLARATIONS
@@ -116,18 +141,11 @@ void buildConnectionScreen();
 void buildScaleSubScreen();
 void buildDisplayScreen();
 void buildSystemScreen();
-void buildOtaGithubScreen();
-void showOtaGithubScreen();
-void doGithubOtaCheck();
-void doGithubOtaCheckSilent();
-void doGithubOtaFlash(const char* version);
 void showUpdateBadges(bool show);
 void buildOtaScreen();
 void buildOtaBrowserScreen();
 void showOtaScreen();
 void showOtaBrowserScreen();
-void startOtaServer();
-void stopOtaServer();
 void buildSettingsScreen();
 void buildSpoolmanScreen();
 void showSpoolmanFailScreen(bool is_setup_flow);
@@ -148,7 +166,6 @@ void buildWifiConnectingScreen();
 void buildBagScreen();
 void buildFactorScreen();
 void showFactorScreen();
-void buildSubHeader(lv_obj_t *parent, const char *title, lv_event_cb_t back_cb, const char *back_hint = nullptr);
 void showRebootPopup();
 void showInfoScreen();
 void showLanguageScreen();
@@ -173,62 +190,23 @@ void doCopySpoolCreate(int template_filament_id, float template_initial, float t
 // ============================================================
 //  PINS
 // ============================================================
-#define I2C_SDA     10   // PN532 + NAU7802 Bus
-#define I2C_SCL     11   // PN532 + NAU7802 Bus
-#define TOUCH_SDA    6   // FT6336U interner Board-Bus
-#define TOUCH_SCL    5   // FT6336U interner Board-Bus
-#define LCD_BL_PIN        45
 #define BRIGHT_NORMAL_DEFAULT  255   // 100% — Standardwert
 #define BRIGHT_DIM_DEFAULT       77   // 30%  — Standardwert
 #define DIM_TIMEOUT_DEFAULT   300000  // 5 Min — Standardwert
 #define SLEEP_TIMEOUT_DEFAULT 1200000 // 20 Min — Standardwert
 
 // Runtime variables (loaded from NVS, configurable via display menu)
-static int     bright_normal   = BRIGHT_NORMAL_DEFAULT;
-static int     dim_timeout_ms  = DIM_TIMEOUT_DEFAULT;
-static int     sleep_timeout_ms = SLEEP_TIMEOUT_DEFAULT;
-#define TOUCH_INT_PIN       7   // FT6336U INT fuer Wake-Up
-#define FW_VERSION  "v0.5.12-beta"
-#define DONATION_URL "ko-fi.com/formfollowsfunction"
+int     bright_normal   = BRIGHT_NORMAL_DEFAULT;
+int     dim_timeout_ms  = DIM_TIMEOUT_DEFAULT;
+int     sleep_timeout_ms = SLEEP_TIMEOUT_DEFAULT;
 
 // NAU7802 calibration
 // CAL_FACTOR: raw value per gram. Determined via calibration and saved in NVS.
 // Default 1.0 means: raw values are displayed directly as grams.
 #define CAL_FACTOR_DEFAULT  1.0f
 
-// Two separate I2C instances
-// I2C_TOUCH: Bus 0, GPIO5/6  -> Touch controller
-// I2C_EXT:   Bus 1, GPIO10/11 -> PN532 + NAU7802
-TwoWire I2C_TOUCH = TwoWire(0);
+// Separate I2C bus for PN532 + NAU7802. Display/touch owns its internal bus.
 TwoWire I2C_EXT   = TwoWire(1);
-
-// NAU7802 scale (on I2C_EXT, address 0x2A)
-Adafruit_NAU7802 nau;
-
-// ============================================================
-//  SD CARD LOGGING (v0.5.3+)
-//  MicroSD slot is on dedicated SPI bus (no conflict with display)
-//  Pins per WT32-SC01 Plus schematic
-// ============================================================
-#define SD_CS    41
-#define SD_SCK   39   // CLK
-#define SD_MOSI  40   // CMD
-#define SD_MISO  38   // D0
-
-static SPIClass spiSD(HSPI);          // dedicated SPI bus for SD
-static bool sd_available = false;     // SD card detected at boot
-static bool sd_verbose   = false;     // verbose.txt found in root
-static char sd_log_filename[32] = ""; // current day's log file path
-static unsigned long sd_log_size = 0; // bytes written today (rough cap)
-#define SD_LOG_MAX_SIZE  (1024UL * 1024UL)  // 1 MB per day cap
-
-// Forward declarations for logger
-void logSD(const char* msg);
-void logSDf(const char* fmt, ...);
-void initSD();
-void cleanOldLogs();
-void writeBootBlock(const char* boot_or_reboot);
-String getCurrentLogFilename();
 
 // ============================================================
 //  WIFI + SPOOLMAN CONFIGURATION
@@ -253,113 +231,34 @@ static bool extra_fields_check_pending = false;      // deferred from event call
 static bool extra_fields_create_pending = false;     // deferred create from event callback
 static bool skip_setup_pending = false;  // deferred from skip button callback
 static bool cal_reminder_pending = false;            // deferred showCalReminderScreen from callback
-static bool show_bag_pending    = false;             // deferred showBagScreen from scale_sub callback
-static bool show_factor_pending = false;             // deferred showFactorScreen from scale_sub callback
-static bool show_lastused_pending = false;           // deferred buildLastUsedScreen from scale_sub callback
-static bool show_spoolman_pending = false;           // deferred buildSpoolmanScreen from connection callback
-static bool show_connection_from_spoolman_pending = false;  // deferred return-to-connection from spoolman back btn
-static bool show_system_pending = false;             // deferred return-to-system from ota/info back btn
-static bool show_ota_pending    = false;             // deferred showOtaScreen from system tile callback
-static bool show_info_pending   = false;             // deferred showInfoScreen from system tile callback
+bool show_bag_pending    = false;                    // deferred showBagScreen from scale_sub callback
+bool show_factor_pending = false;                    // deferred showFactorScreen from scale_sub callback
+bool show_lastused_pending = false;                  // deferred buildLastUsedScreen from scale_sub callback
+bool show_spoolman_pending = false;                  // deferred buildSpoolmanScreen from connection callback
+bool show_connection_from_spoolman_pending = false;  // deferred return-to-connection from spoolman back btn
+bool show_system_pending = false;                    // deferred return-to-system from ota/info back btn
+bool show_ota_pending    = false;                    // deferred showOtaScreen from system tile callback
+bool show_info_pending = false;                      // deferred showInfoScreen from system tile callback
 static bool show_location_picker_pending = false;    // deferred showLocationPicker from More Info button
-static bool show_drying_reminder_pending = false;     // deferred showDryingReminderScreen
+bool show_drying_reminder_pending = false;            // deferred showDryingReminderScreen
 static bool show_more_info_pending = false;          // deferred buildMoreInfoScreen after location change
 static bool fetch_locations_pending = false;         // deferred HTTP fetch for location picker
 static lv_obj_t *loc_list_obj = nullptr;             // location picker list container
 static lv_obj_t *loc_status_obj = nullptr;           // location picker status label
 static bool lang_selected_no_reboot = false;         // EN selected on welcome screen — go to firstboot without reboot
-static uint8_t last_used_mode = 0;                   // 0=OpenSpoolMan, 1=Last Weighed
-Preferences prefs;
-
-// ============================================================
-//  BAMBU KDF – Master Key (from Bambu-Research-Group/RFID-Tag-Guide)
-//  HKDF with SHA256, context "RFID-B\\0", 16 keys of 6 bytes each
-// ============================================================
-static const uint8_t BAMBU_MASTER_KEY[16] = {
-  0x9a, 0x75, 0x9c, 0xf2, 0xc4, 0xf7, 0xca, 0xff,
-  0x22, 0x2c, 0xb9, 0x76, 0x9b, 0x41, 0xbc, 0x96
-};
-static const uint8_t BAMBU_KDF_CONTEXT[] = "RFID-B";  // incl. \\0
-
-// ============================================================
-//  DISPLAY (LovyanGFX)
-// ============================================================
-class LGFX : public lgfx::LGFX_Device {
-  lgfx::Panel_ST7796  _panel;
-  lgfx::Bus_Parallel8 _bus;
-  lgfx::Light_PWM     _light;
-  lgfx::Touch_FT5x06  _touch;
-public:
-  LGFX(void) {
-    { auto cfg = _bus.config();
-      cfg.pin_wr=47; cfg.pin_rd=-1; cfg.pin_rs=0;
-      cfg.pin_d0=9;  cfg.pin_d1=46; cfg.pin_d2=3;
-      cfg.pin_d3=8;  cfg.pin_d4=18; cfg.pin_d5=17;
-      cfg.pin_d6=16; cfg.pin_d7=15;
-      _bus.config(cfg); _panel.setBus(&_bus); }
-    { auto cfg = _panel.config();
-      cfg.pin_cs=-1; cfg.pin_rst=4; cfg.pin_busy=-1;
-      cfg.memory_width=320; cfg.memory_height=480;
-      cfg.panel_width=320;  cfg.panel_height=480;
-      cfg.invert=true; cfg.rgb_order=false;
-      _panel.config(cfg); }
-    { auto cfg = _light.config();
-      cfg.pin_bl=LCD_BL_PIN; cfg.invert=false;
-      cfg.freq=44100; cfg.pwm_channel=7;
-      _light.config(cfg); _panel.setLight(&_light); }
-    { auto cfg = _touch.config();
-      cfg.x_min=0; cfg.x_max=319; cfg.y_min=0; cfg.y_max=479;
-      cfg.pin_int=7; cfg.bus_shared=false; cfg.offset_rotation=0;
-      cfg.i2c_port=0; cfg.i2c_addr=0x38;
-      cfg.pin_sda=TOUCH_SDA; cfg.pin_scl=TOUCH_SCL; cfg.freq=400000;
-      _touch.config(cfg); _panel.setTouch(&_touch); }
-    setPanel(&_panel);
-  }
-};
-
+uint8_t last_used_mode = 0;                          // 0=OpenSpoolMan, 1=Last Weighed
 // ============================================================
 //  GLOBAL OBJECTS
 // ============================================================
-static LGFX tft;
-static lv_disp_draw_buf_t draw_buf;
-static lv_color_t disp_buf[480 * 10];
-
-Adafruit_PN532 nfc(-1, 12, &I2C_EXT);  // IRQ=nicht verdrahtet, RST=GPIO12, Bus=I2C_EXT
 bool nfc_ok = false;
 bool scl_ok = false;          // NAU7802 scale connected
-
-// Parsed tag data
-struct BambuTagData {
-  uint8_t  uid[4];
-  char     uid_str[24];  // 4-byte UID: "XX:XX:XX:XX" = 11+1, 7-byte UID: "XX:XX:XX:XX:XX:XX:XX" = 23+1
-  uint8_t  keys[16][6];       // 16 abgeleitete Keys
-  uint8_t  blocks[64][16];    // all 64 blocks (16 sectors x 4 blocks)
-  bool     block_ok[64];      // which blocks were successfully read
-  // Parsed fields (NFC tag)
-  char     tray_uuid[36];
-  char     material[16];
-  char     color_hex[8];      // #RRGGBB
-  char     vendor[32];
-  char     detailed_filament[64];
-  int      temp_min;
-  int      temp_max;
-  float    spool_weight;
-  char     production_date[12];
-  char     short_uid[20];
-  // Spoolman fields (filled after API query)
-  bool     spoolman_found;
-  int      spoolman_id;
-  float    spoolman_remaining;  // g
-  float    spoolman_total;      // g
-  char     spoolman_last_dried[32];
-};
 
 BambuTagData g_tag;
 bool g_tag_ready = false;
 bool g_tag_displayed = false;
 unsigned long g_tag_shown_ms = 0;
 bool wifi_ok = false;
-static bool sm_reachable = false;  // Fix 10: Spoolman reachability status
+bool sm_reachable = false;  // Fix 10: Spoolman reachability status
 
 // Tare confirmation timeout
 static unsigned long tare_msg_ms = 0;
@@ -398,54 +297,40 @@ lv_obj_t *scr_ota        = nullptr;  // OTA selection (browser / GitHub)
 lv_obj_t *scr_ota_browser = nullptr; // OTA browser upload screen
 lv_obj_t *scr_ota_github  = nullptr; // OTA GitHub check screen
 
-// OTA web server
-static WebServer ota_server(80);
-static bool ota_server_running = false;
-static lv_obj_t *lbl_ota_status = nullptr;  // Status-Label im Browser-OTA Screen
+lv_obj_t *lbl_ota_status = nullptr;  // Status-Label im Browser-OTA Screen
 
 // GitHub OTA state
-static lv_obj_t *lbl_gh_status      = nullptr;
-static lv_obj_t *lbl_gh_installed   = nullptr;
-static lv_obj_t *lbl_gh_latest      = nullptr;
-static lv_obj_t *btn_gh_update      = nullptr;
-static lv_obj_t *lbl_gh_update_btn  = nullptr;
-static char gh_latest_version[32]   = "";
 bool update_available = false;   // set by silent background check
 bool gh_prerelease    = false;   // include pre-releases in update check (NVS: "gh_prerelease")
 static bool silent_ota_check_pending = false;  // trigger once after WiFi connect
-static bool ota_upload_active = false;         // true while browser OTA upload is running
 static lv_obj_t *lbl_burger_badge   = nullptr; // yellow dot on burger button (mainscreen)
-static lv_obj_t *lbl_system_badge   = nullptr; // yellow dot on System tile (settings)
-static lv_obj_t *lbl_fw_badge       = nullptr; // yellow dot on Firmware Update button
-static lv_obj_t *lbl_gh_btn_badge   = nullptr; // yellow dot on GitHub Update button (OTA screen)
+lv_obj_t *lbl_system_badge   = nullptr; // yellow dot on System tile (settings)
+lv_obj_t *lbl_fw_badge       = nullptr; // yellow dot on Firmware Update button
+lv_obj_t *lbl_gh_btn_badge   = nullptr; // yellow dot on GitHub Update button (OTA screen)
 lv_obj_t *lbl_wifi_info = nullptr; // WiFi-Info Label
 // ta_spoolman_ip, kb_spoolman: replaced by custom numpad — removed
 // ta_factor_weight, kb_factor: replaced by custom numpad in buildFactorScreen()
 lv_obj_t *ta_factor_weight = nullptr; // (nicht mehr aktiv genutzt)
 lv_obj_t *kb_factor     = nullptr;    // (nicht mehr aktiv genutzt)
 lv_obj_t *lbl_factor_result = nullptr;
+lv_obj_t *lbl_factor_cal_weight = nullptr; // live weight display in calibration screen
 
 // WiFi setup state
-static char  wifi_setup_ssid[33]  = "";   // selected SSID from scan list
-static lv_obj_t *lbl_wifi_setup_status = nullptr;  // Status-Label im Setup
-static lv_obj_t *lbl_wifi_scan_list    = nullptr;  // Scan-Listen Container
-static lv_obj_t *ta_wifi_pass          = nullptr;  // Password textarea
-static lv_obj_t *kb_wifi_pass          = nullptr;  // Passwort-Tastatur
-static lv_obj_t *scr_wifi_pass         = nullptr;  // Passwort-Unterscreen
-static lv_obj_t *scr_wifi_connecting   = nullptr;  // Connecting screen
+lv_obj_t *scr_wifi_pass         = nullptr;  // Passwort-Unterscreen
+lv_obj_t *scr_wifi_connecting   = nullptr;  // Connecting screen
 
 // Power management
 unsigned long last_activity_ms = 0;  // last activity (NFC or touch)
 bool is_dimmed = false;              // Display dimmed?
 
 // Spoolman data kept separate – NOT reset on every scan
-static int   sm_id = 0;
-static int   sm_filament_id = 0;   // for PATCH /api/v1/filament/{id}
-static int   sm_vendor_id = 0;     // for PATCH /api/v1/vendor/{id}
-static bool  sm_found = false;
-static float sm_remaining = 0;
-static float sm_total = 1000;
-static float sm_spool_weight = 0;   // Empty spool weight (for scale calculation)
+int   sm_id = 0;
+int   sm_filament_id = 0;   // for PATCH /api/v1/filament/{id}
+int   sm_vendor_id = 0;     // for PATCH /api/v1/vendor/{id}
+bool  sm_found = false;
+float sm_remaining = 0;
+float sm_total = 1000;
+float sm_spool_weight = 0;   // Empty spool weight (for scale calculation)
 static char  sm_last_dried[32] = "";
 static char  sm_article_nr[32] = "";
 static char  sm_filament_name[32] = "";
@@ -455,39 +340,39 @@ static char  sm_location_name[48] = ""; // Current location name (display)
 static int   sm_location_id = 0;        // Current location id
 
 // Scale (NAU7802)
-static float scale_weight_g = 0.0f;
+float scale_weight_g = 0.0f;
 bool scale_ready = false;
-static float cal_factor = CAL_FACTOR_DEFAULT;
-static int32_t zero_offset = 0;
+float cal_factor = CAL_FACTOR_DEFAULT;
+int32_t zero_offset = 0;
 static unsigned long last_scale_ms = 0;
 
 // Moving average for NAU7802 (dampens +/-0.2g noise)
 #define SCALE_FILTER_SIZE  8
-static float scale_filter_buf[SCALE_FILTER_SIZE] = {0};
-static int   scale_filter_idx = 0;
-static bool  scale_filter_full = false;
+float scale_filter_buf[SCALE_FILTER_SIZE] = {0};
+int   scale_filter_idx = 0;
+bool  scale_filter_full = false;
 
 // Display precision: true = whole grams only, false = 0.1g
-static bool g_whole_gram = false;
+bool g_whole_gram = false;
 
 // Auto-Weight: Gewicht automatisch speichern bei 3s Stabilität
 static bool g_auto_weight = false;               // Toggle-Status (Standard: aus)
-static bool g_auto_loc_popup = false;             // Auto location popup on tag removal
+bool g_auto_loc_popup = false;                    // Auto location popup on tag removal
 
 // ── Drying Reminder ──────────────────────────────────────────
-static uint8_t g_dry_mode       = 0;   // 0=Aus, 1=Material, 2=Manuell
-static int     g_dry_man_yellow = 30;  // Manuell: Gelb-Schwellwert (Tage)
-static int     g_dry_man_red    = 90;  // Manuell: Rot-Schwellwert (Tage)
+uint8_t g_dry_mode       = 0;   // 0=Aus, 1=Material, 2=Manuell
+int     g_dry_man_yellow = 30;  // Manuell: Gelb-Schwellwert (Tage)
+int     g_dry_man_red    = 90;  // Manuell: Rot-Schwellwert (Tage)
 
 // Material-Schwellwerte [7]: PLA, PETG, ABS, ASA, TPU, PA, PC
-static const char* DRY_MAT_NAMES[]     = { "PLA","PETG","ABS","ASA","TPU","PA","PC" };
-static const int   DRY_MAT_DEF_YELLOW[]= { 180,  90,  90,  90,  30,   7,  30 };
-static const int   DRY_MAT_DEF_RED[]   = { 365, 180, 180, 180,  90,  30,  90 };
-static const int   DRY_MAT_COUNT = 7;
-static int  g_dry_mat_yellow[7];        // editierbar via Webserver
-static int  g_dry_mat_red[7];
-static bool g_dry_mat_sealed[7];        // pro Material: luftdicht gelagert (Multiplikator aktiv)
-static float g_dry_mult_sealed = 2.0f;  // Multiplikator fuer luftdichte Lagerung, editierbar via Webserver
+const char* DRY_MAT_NAMES[]     = { "PLA","PETG","ABS","ASA","TPU","PA","PC" };
+extern const int   DRY_MAT_DEF_YELLOW[]= { 180,  90,  90,  90,  30,   7,  30 };
+extern const int   DRY_MAT_DEF_RED[]   = { 365, 180, 180, 180,  90,  30,  90 };
+extern const int   DRY_MAT_COUNT = 7;
+int  g_dry_mat_yellow[7];        // editierbar via Webserver
+int  g_dry_mat_red[7];
+bool g_dry_mat_sealed[7];        // pro Material: luftdicht gelagert (Multiplikator aktiv)
+float g_dry_mult_sealed = 2.0f;  // Multiplikator fuer luftdichte Lagerung, editierbar via Webserver
 static int  g_loc_popup_shown_for_id = -1;         // sm_id for which loc popup was last shown
 static bool g_loc_picker_from_popup = false;        // true = picker opened from tag-removal popup
 static int  loc_popup_pending_id = -1;              // debounced popup: sm_id scheduled, fires after 1500ms
@@ -499,20 +384,17 @@ static lv_obj_t *lbl_weight_main_lbl = nullptr;  // Label des Zone-5 "Gewicht up
 #define AUTO_WEIGHT_THRESH_G   0.5f              // max. Abweichung für "stabil"
 
 // Bag weight (configurable in settings)
-static float bag_weight_g = 50.0f;  // Standard: 50g (Vakuumbeutel + Silikagel)
+float bag_weight_g = 50.0f;  // Standard: 50g (Vakuumbeutel + Silikagel)
 
 // Spoolman query: UID of the last queried spool
 // Cleared after clearTagDisplay() → forces new query even for same UID
 static char spoolman_queried_uid[24] = "";  // max 7-byte UID: "XX:XX:XX:XX:XX:XX:XX" = 23+1
-static char  sm_last_used[32] = "";
+char  sm_last_used[32] = "";
 
 // NFC retry: counter for re-scan attempts when tray_uuid is empty
 static int nfc_retry_count = 0;
 static int nfc_absent_count = 0;   // consecutive "not found" reads before tag_present = false
 #define NFC_MAX_RETRIES  5
-
-// Set to 1 to enable touch coordinate debug output on Serial
-#define TOUCH_DEBUG 0
 
 // Tag type enum — declared globally so all functions can use it
 enum TagType { TAG_BAMBU, TAG_SPOOLSCALE, TAG_BLANK, TAG_UNKNOWN };
@@ -578,8 +460,8 @@ static char  copy_template_name[64]    = "";
 // btn_copy: global for show/hide alongside btn_link
 static lv_obj_t *btn_copy = nullptr;
 // Configurable list limit — loaded from NVS, adjustable via webserver /listlimit
-static int spool_list_limit   = 16;  // range 5-100, editable via webserver
-static int location_list_limit = 30;  // range 5-100, editable via webserver
+int spool_list_limit   = 16;  // range 5-100, editable via webserver
+int location_list_limit = 30;  // range 5-100, editable via webserver
 
 // Popup control: prevents immediate re-display after cancel
 static bool id_popup_is_bambu = false;  // shared between numpad lambdas
@@ -623,10 +505,10 @@ lv_obj_t *lbl_spoolman_pct;
 lv_obj_t *lbl_spoolman_dried;
 lv_obj_t *lbl_spoolman_dried_val;  // NEU: Wert unter dem Titel
 lv_obj_t *lbl_dried_sym = nullptr; // Ampel-Symbol neben last_dried
-static int  s_dry_numpad_target = 0;
-static int  s_dry_numpad_value  = 0;
-static lv_obj_t* s_dry_numpad_scr = nullptr;  // Numpad-Screen fuer Drying Manual
-static lv_obj_t* s_dry_numpad_lbl = nullptr;  // Wert-Anzeige im Numpad
+int  s_dry_numpad_target = 0;
+int  s_dry_numpad_value  = 0;
+lv_obj_t* s_dry_numpad_scr = nullptr;  // Numpad-Screen fuer Drying Manual
+lv_obj_t* s_dry_numpad_lbl = nullptr;  // Wert-Anzeige im Numpad
 lv_obj_t *lbl_nfc_dot;            // Status dot before status line (green/yellow)
 lv_obj_t *lbl_hdr_wifi;          // Header: WiFi-Symbol (Farbe je RSSI)
 lv_obj_t *lbl_hdr_nfc;           // Header: NFC status (green/red)
@@ -659,181 +541,11 @@ int scan_count = 0;
 lv_obj_t *page_main;
 
 // ============================================================
-//  LVGL CALLBACKS
-// ============================================================
-void lvgl_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p) {
-  uint32_t w = area->x2 - area->x1 + 1;
-  uint32_t h = area->y2 - area->y1 + 1;
-  tft.startWrite();
-  tft.setAddrWindow(area->x1, area->y1, w, h);
-  tft.writePixels((lgfx::rgb565_t*)color_p, w * h);
-  tft.endWrite();
-  lv_disp_flush_ready(drv);
-}
-
-void lvgl_touch(lv_indev_drv_t *drv, lv_indev_data_t *data) {
-  uint16_t x, y;
-  if (tft.getTouch(&x, &y)) {
-    data->state = LV_INDEV_STATE_PR;
-    data->point.x = x; data->point.y = y;
-    resetActivityTimer();
-    #if TOUCH_DEBUG
-    static unsigned long last_log = 0;
-    if (millis() - last_log > 200) {
-      Serial.printf("TOUCH x=%d y=%d\n", x, y);
-      last_log = millis();
-    }
-    #endif
-  } else {
-    data->state = LV_INDEV_STATE_REL;
-  }
-}
-
-// ============================================================
-//  HKDF manually implemented
-//  Extract: PRK = HMAC-SHA256(salt=MASTER_KEY, IKM=uid)
-//  Expand:  OKM with context "RFID-B\0"
-// ============================================================
-
-static bool hmac_sha256(const uint8_t *key, size_t key_len,
-                         const uint8_t *data, size_t data_len,
-                         uint8_t *out) {
-  const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-  return mbedtls_md_hmac(info, key, key_len, data, data_len, out) == 0;
-}
-
-static bool hkdf_expand(const uint8_t *prk,  size_t prk_len,
-                         const uint8_t *info, size_t info_len,
-                         uint8_t *okm,        size_t okm_len) {
-  uint8_t t[32] = {0};
-  size_t  t_len = 0;
-  size_t  done  = 0;
-  uint8_t counter = 1;
-  while (done < okm_len) {
-    uint8_t input[256];
-    size_t  input_len = 0;
-    memcpy(input, t, t_len);                   input_len += t_len;
-    memcpy(input + input_len, info, info_len); input_len += info_len;
-    input[input_len++] = counter++;
-    if (!hmac_sha256(prk, prk_len, input, input_len, t)) return false;
-    t_len = 32;
-    size_t copy = (okm_len - done < 32) ? (okm_len - done) : 32;
-    memcpy(okm + done, t, copy);
-    done += copy;
-  }
-  return true;
-}
-
-bool deriveKeys(const uint8_t *uid, uint8_t uid_len, uint8_t keys[16][6]) {
-  // HKDF-Extract: PRK = HMAC-SHA256(salt=MASTER_KEY, IKM=uid)
-  uint8_t prk[32];
-  if (!hmac_sha256(BAMBU_MASTER_KEY, 16, uid, uid_len, prk)) {
-    Serial.println("HKDF-Extract error");
-    return false;
-  }
-  // HKDF-Expand with context "RFID-B\0"
-  uint8_t okm[96];
-  if (!hkdf_expand(prk, 32, BAMBU_KDF_CONTEXT, 7, okm, 96)) {
-    Serial.println("HKDF-Expand error");
-    return false;
-  }
-  for (int i = 0; i < 16; i++) {
-    memcpy(keys[i], okm + i * 6, 6);
-  }
-  return true;
-}
-
-// ============================================================
 //  MIFARE CLASSIC – authenticate and read sector
 //  Key B is used for Bambu-encrypted sectors
 // ============================================================
 bool readSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blocks[4][16]) {
-  uint8_t trailer_block = sector * 4 + 3;
-
-  // Authenticate with key B
-  if (!nfc.mifareclassic_AuthenticateBlock(uid, 4, trailer_block,
-        MIFARE_CMD_AUTH_B, key)) {
-    // Fallback: try key A
-    if (!nfc.mifareclassic_AuthenticateBlock(uid, 4, trailer_block,
-          MIFARE_CMD_AUTH_A, key)) {
-      return false;
-    }
-  }
-
-  // Read 3 data blocks (block 3 = trailer, contains keys)
-  bool ok = true;
-  for (int b = 0; b < 3; b++) {
-    int block_num = sector * 4 + b;
-    if (!nfc.mifareclassic_ReadDataBlock(block_num, blocks[b])) {
-      memset(blocks[b], 0, 16);
-      ok = false;
-    }
-  }
-  return ok;
-}
-
-// ============================================================
-//  PARSE TAG DATA
-//  Based on BambuLabRfid.md documentation
-// ============================================================
-void parseTagData(BambuTagData &tag) {
-  // tray_uuid: block 9 (verified with Spoolman: 4E3C9740796645ACBC2732FDD6456A0D)
-  if (tag.block_ok[9]) {
-    char uuid[33] = "";
-    for (int i = 0; i < 16; i++) {
-      sprintf(uuid + i * 2, "%02X", tag.blocks[9][i]);
-    }
-    strncpy(tag.tray_uuid, uuid, 32);
-    tag.tray_uuid[32] = '\0';
-  }
-
-  // Material: sector 2, block 8
-  // Material: block 4 (long form, e.g. "PETG HF")
-  if (tag.block_ok[4]) {
-    memset(tag.material, 0, sizeof(tag.material));
-    strncpy(tag.material, (char*)tag.blocks[4], 15);
-    for (int i = 0; i < 15; i++) {
-      if (tag.material[i] < 0x20 || tag.material[i] > 0x7E) {
-        tag.material[i] = 0; break;
-      }
-    }
-  }
-
-  // Color: block 5, bytes 0-2 = R,G,B (verified: FF D0 0B = #FFD00B)
-  if (tag.block_ok[5]) {
-    sprintf(tag.color_hex, "#%02X%02X%02X",
-      tag.blocks[5][0], tag.blocks[5][1], tag.blocks[5][2]);
-  }
-
-  // Temperatures: block 6, bytes 8-9 = max, 10-11 = min (little endian, directly in °C)
-  if (tag.block_ok[6]) {
-    int t1 = tag.blocks[6][8]  | (tag.blocks[6][9]  << 8);  // 0x0104 = 260°C
-    int t2 = tag.blocks[6][10] | (tag.blocks[6][11] << 8);  // 0x00E6 = 230°C
-    if (t1 > 100 && t1 < 400) tag.temp_max = t1;
-    if (t2 > 100 && t2 < 400) tag.temp_min = t2;
-  }
-
-  // Vendor/Vendor: Block 16 (ASCII, z.B. "Bambu Lab")
-  if (tag.block_ok[16]) {
-    memset(tag.vendor, 0, sizeof(tag.vendor));
-    for (int i = 0; i < 16 && tag.blocks[16][i] != 0; i++) {
-      char c = tag.blocks[16][i];
-      if (c >= 0x20 && c <= 0x7E) tag.vendor[i] = c;
-      else { tag.vendor[i] = 0; break; }
-    }
-  }
-
-  // Production date: block 12 as ASCII "2025_03_07_04_18"
-  if (tag.block_ok[12]) {
-    char raw[17] = "";
-    memcpy(raw, tag.blocks[12], 16);
-    raw[16] = 0;
-    // Format: YYYY_MM_DD_HH_MM -> DD.MM.YYYY
-    if (raw[4] == '_' && raw[7] == '_') {
-      snprintf(tag.production_date, sizeof(tag.production_date),
-        "%.2s.%.2s.%.4s", raw+8, raw+5, raw);
-    }
-  }
+  return nfcReadMifareSector(sector, key, uid, blocks);
 }
 
 // ============================================================
@@ -899,7 +611,7 @@ void scanTag(uint8_t *uid, uint8_t uid_len) {
 
   // Sector 0, block 0 is always readable (manufacturer data)
   uint8_t block0[16];
-  if (nfc.mifareclassic_ReadDataBlock(0, block0)) {
+  if (nfcReadMifareBlock(0, block0)) {
     memcpy(g_tag.blocks[0], block0, 16);
     g_tag.block_ok[0] = true;
   }
@@ -908,6 +620,8 @@ void scanTag(uint8_t *uid, uint8_t uid_len) {
   parseTagData(g_tag);
 
   Serial.printf("tray_uuid: %s\n", g_tag.tray_uuid);
+  Serial.printf("MaterialVariantID:   %s\n", g_tag.material_variant_id);
+  Serial.printf("MaterialID: %s\n", g_tag.material_id);
   Serial.printf("Material:  %s\n", g_tag.material);
   Serial.printf("Color:     %s\n", g_tag.color_hex);
   Serial.printf("Temp:      %d - %d C\n", g_tag.temp_min, g_tag.temp_max);
@@ -948,19 +662,7 @@ void btn_dried_cb(lv_event_t *e) {
 
   Serial.printf("Setting last_dried: %s for spool ID %d\n", iso_full.c_str(), sm_id);
 
-  // PATCH /api/v1/spool/{id}
-  HTTPClient http;
-  String url = String(cfg_spoolman_base) + "/api/v1/spool/" + sm_id;
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(5000);
-
-  // Body: update extra field
-  // Spoolman stores extra fields as escaped strings (with quotes)
-  String body = "{\"extra\": {\"last_dried\": \"\\\"" + iso_full + "\\\"\"}}"; 
-  Serial.println("PATCH body: " + body);
-  int code = http.PATCH(body);
-  http.end();
+  int code = spoolmanPatchSpoolLastDried(cfg_spoolman_base, sm_id, iso_full.c_str());
 
   if (code == 200) {
     // Update display
@@ -987,55 +689,53 @@ static inline void fmtG(char* buf, size_t len, float val) {
 }
 
 void loadPrefs() {
-  prefs.begin("spoolscale", false);
-  String ssid = prefs.getString("wifi_ssid", cfg_wifi_ssid);
-  String pass = prefs.getString("wifi_pass", cfg_wifi_password);
-  String ip   = prefs.getString("spoolman_ip", cfg_spoolman_ip);
+  String ssid = prefsGetString("wifi_ssid", cfg_wifi_ssid);
+  String pass = prefsGetString("wifi_pass", cfg_wifi_password);
+  String ip   = prefsGetString("spoolman_ip", cfg_spoolman_ip);
   strncpy(cfg_wifi_ssid,     ssid.c_str(), sizeof(cfg_wifi_ssid)-1);
   strncpy(cfg_wifi_password, pass.c_str(), sizeof(cfg_wifi_password)-1);
   strncpy(cfg_spoolman_ip,   ip.c_str(),   sizeof(cfg_spoolman_ip)-1);
   snprintf(cfg_spoolman_base, sizeof(cfg_spoolman_base), "http://%s", cfg_spoolman_ip);
   // NAU7802: Kalibrierfaktor und Tare-Offset laden
-  cal_factor  = prefs.getFloat("cal_factor",   CAL_FACTOR_DEFAULT);
-  zero_offset = prefs.getInt("zero_offset", 0);
-  bag_weight_g = prefs.getFloat("bag_weight", 50.0f);
-  spool_list_limit   = (int)prefs.getUChar("list_limit",  16);
+  cal_factor  = prefsGetFloat("cal_factor",   CAL_FACTOR_DEFAULT);
+  zero_offset = prefsGetInt("zero_offset", 0);
+  bag_weight_g = prefsGetFloat("bag_weight", 50.0f);
+  spool_list_limit   = (int)prefsGetUChar("list_limit",  16);
   if (spool_list_limit < 5)   spool_list_limit = 5;
   if (spool_list_limit > 100)  spool_list_limit = 100;
-  location_list_limit = (int)prefs.getUChar("loc_limit", 30);
+  location_list_limit = (int)prefsGetUChar("loc_limit", 30);
   if (location_list_limit < 5)   location_list_limit = 5;
   if (location_list_limit > 100)  location_list_limit = 100;
   // Display-Einstellungen laden
-  bright_normal    = prefs.getUChar("bright",    BRIGHT_NORMAL_DEFAULT);
-  int dim_min      = prefs.getUInt("dim_min",    DIM_TIMEOUT_DEFAULT / 60000);
-  int sleep_min    = prefs.getUInt("sleep_min",  SLEEP_TIMEOUT_DEFAULT / 60000);
+  bright_normal    = prefsGetUChar("bright",    BRIGHT_NORMAL_DEFAULT);
+  int dim_min      = prefsGetUInt("dim_min",    DIM_TIMEOUT_DEFAULT / 60000);
+  int sleep_min    = prefsGetUInt("sleep_min",  SLEEP_TIMEOUT_DEFAULT / 60000);
   dim_timeout_ms   = dim_min * 60000;
   sleep_timeout_ms = sleep_min * 60000;
-  g_lang     = (Lang)prefs.getUChar("lang",     1);  // Default EN
-  g_date_fmt =       prefs.getUChar("date_fmt", 0);
-  cfg_lang_set =     prefs.getBool("lang_set",  false);
-  cfg_first_boot =   prefs.getBool("first_boot", true);
-  last_used_mode =   prefs.getUChar("lu_mode",  0);  // 0=OpenSpoolMan, 1=Last Weighed
-  g_whole_gram   =   prefs.getBool("whole_gram", false);
-  g_auto_weight  =   prefs.getBool("auto_weight", false);
-  g_auto_loc_popup =  prefs.getBool("auto_loc_popup", false);
-  gh_prerelease    =  prefs.getBool("gh_prerelease",  false);
+  g_lang     = (Lang)prefsGetUChar("lang",     1);  // Default EN
+  g_date_fmt =       prefsGetUChar("date_fmt", 0);
+  cfg_lang_set =     prefsGetBool("lang_set",  false);
+  cfg_first_boot =   prefsGetBool("first_boot", true);
+  last_used_mode =   prefsGetUChar("lu_mode",  0);  // 0=OpenSpoolMan, 1=Last Weighed
+  g_whole_gram   =   prefsGetBool("whole_gram", false);
+  g_auto_weight  =   prefsGetBool("auto_weight", false);
+  g_auto_loc_popup =  prefsGetBool("auto_loc_popup", false);
+  gh_prerelease    =  prefsGetBool("gh_prerelease",  false);
   // Drying Reminder
-  g_dry_mode       = prefs.getUChar("dry_mode", 0);
-  g_dry_man_yellow = (int)prefs.getInt("dry_man_y", 30);
-  g_dry_man_red    = (int)prefs.getInt("dry_man_r", 90);
-  g_dry_mult_sealed = prefs.getFloat("dry_mult_s", 2.0f);
+  g_dry_mode       = prefsGetUChar("dry_mode", 0);
+  g_dry_man_yellow = (int)prefsGetInt("dry_man_y", 30);
+  g_dry_man_red    = (int)prefsGetInt("dry_man_r", 90);
+  g_dry_mult_sealed = prefsGetFloat("dry_mult_s", 2.0f);
   { char key[16];
     for (int i = 0; i < DRY_MAT_COUNT; i++) {
       snprintf(key, sizeof(key), "dry_y_%s", DRY_MAT_NAMES[i]);
-      g_dry_mat_yellow[i] = (int)prefs.getInt(key, DRY_MAT_DEF_YELLOW[i]);
+      g_dry_mat_yellow[i] = (int)prefsGetInt(key, DRY_MAT_DEF_YELLOW[i]);
       snprintf(key, sizeof(key), "dry_r_%s", DRY_MAT_NAMES[i]);
-      g_dry_mat_red[i]    = (int)prefs.getInt(key, DRY_MAT_DEF_RED[i]);
+      g_dry_mat_red[i]    = (int)prefsGetInt(key, DRY_MAT_DEF_RED[i]);
       snprintf(key, sizeof(key), "dry_s_%s", DRY_MAT_NAMES[i]);
-      g_dry_mat_sealed[i] = prefs.getBool(key, false);
+      g_dry_mat_sealed[i] = prefsGetBool(key, false);
     }
   }
-  prefs.end();
   Serial.printf("Prefs: SSID=%s Spoolman=%s\n", cfg_wifi_ssid, cfg_spoolman_base);
   Serial.printf("Scale: cal_factor=%.4f  zero_offset=%d  bag_weight=%.1fg\n",
     cal_factor, zero_offset, bag_weight_g);
@@ -1045,35 +745,39 @@ void loadPrefs() {
 
 void saveCalFactor(float factor) {
   cal_factor = factor;
-  prefs.begin("spoolscale", false);
-  prefs.putFloat("cal_factor", factor);
-  prefs.end();
+  prefsPutFloat("cal_factor", factor);
   Serial.printf("cal_factor saved: %.4f\n", factor);
 }
 
 void saveBagWeight(float weight) {
   bag_weight_g = weight;
-  prefs.begin("spoolscale", false);
-  prefs.putFloat("bag_weight", weight);
-  prefs.end();
+  prefsPutFloat("bag_weight", weight);
   Serial.printf("bag_weight saved: %.1fg\n", weight);
 }
 
 void saveTareOffset(int32_t offset) {
   zero_offset = offset;
-  prefs.begin("spoolscale", false);
-  prefs.putInt("zero_offset", offset);
-  prefs.end();
+  prefsPutInt("zero_offset", offset);
   Serial.printf("zero_offset saved: %d\n", offset);
+}
+
+void resetScaleFilter() {
+  memset(scale_filter_buf, 0, sizeof(scale_filter_buf));
+  scale_filter_idx = 0;
+  scale_filter_full = false;
+}
+
+void clearExtraFieldsUiPointers() {
+  lbl_extra_fields_status = nullptr;
+  btn_extra_fields_create = nullptr;
+  btn_extra_fields_next = nullptr;
 }
 
 void saveWifiCredentials(const char* ssid, const char* pass) {
   strncpy(cfg_wifi_ssid,     ssid, sizeof(cfg_wifi_ssid)-1);
   strncpy(cfg_wifi_password, pass, sizeof(cfg_wifi_password)-1);
-  prefs.begin("spoolscale", false);
-  prefs.putString("wifi_ssid", ssid);
-  prefs.putString("wifi_pass",  pass);
-  prefs.end();
+  prefsPutString("wifi_ssid", ssid);
+  prefsPutString("wifi_pass",  pass);
   Serial.printf("WiFi saved: SSID=%s\n", ssid);
 }
 
@@ -1081,9 +785,7 @@ void saveWifiCredentials(const char* ssid, const char* pass) {
 void saveSpoolmanIP(const char* ip) {
   strncpy(cfg_spoolman_ip, ip, sizeof(cfg_spoolman_ip)-1);
   snprintf(cfg_spoolman_base, sizeof(cfg_spoolman_base), "http://%s", ip);
-  prefs.begin("spoolscale", false);
-  prefs.putString("spoolman_ip", ip);
-  prefs.end();
+  prefsPutString("spoolman_ip", ip);
 }
 
 // ============================================================
@@ -1091,40 +793,6 @@ void saveSpoolmanIP(const char* ip) {
 //  Back (←): top left, 36x36, goes one level up
 //  Close (✕): top right, 36x36, goes directly to main screen
 // ============================================================
-void addBackButton(lv_obj_t *parent, lv_event_cb_t cb) {
-  lv_obj_t *btn = lv_btn_create(parent);
-  lv_obj_set_size(btn, 44, 44);
-  lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 4, 2);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn, 8, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 0, 0);
-  lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl = lv_label_create(btn);
-  lv_label_set_text(lbl, LV_SYMBOL_LEFT);
-  lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(0x28d49a), 0);
-  lv_obj_center(lbl);
-}
-
-void addCloseButton(lv_obj_t *parent) {
-  lv_obj_t *btn = lv_btn_create(parent);
-  lv_obj_set_size(btn, 44, 44);
-  lv_obj_align(btn, LV_ALIGN_TOP_RIGHT, -4, 2);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(0x602020), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn, 8, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 0, 0);
-  lv_obj_add_event_cb(btn, [](lv_event_t *e){ logSD("BTN: Close -> Main"); showMainScreen(); }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl = lv_label_create(btn);
-  lv_label_set_text(lbl, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(0xff8080), 0);
-  lv_obj_center(lbl);
-}
-
 // ============================================================
 //  SETTINGS SCREENS
 // ============================================================
@@ -1325,11 +993,9 @@ void buildWelcomeScreen() {
   lv_obj_set_style_text_font(lbl_en, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_en);
   lv_obj_add_event_cb(btn_en, [](lv_event_t *e){
-    Preferences p; p.begin("spoolscale", false);
-    p.putUChar("lang", 1);
-    p.putBool("lang_set", true);
-    p.putBool("first_boot", true);
-    p.end();
+    prefsPutUChar("lang", 1);
+    prefsPutBool("lang_set", true);
+    prefsPutBool("first_boot", true);
     g_lang = LANG_EN;
     cfg_lang_set = true;
     cfg_first_boot = true;
@@ -1354,11 +1020,9 @@ void buildWelcomeScreen() {
   lv_obj_center(lbl_de);
   lv_obj_add_event_cb(btn_de, [](lv_event_t *e){
     g_lang = LANG_DE;
-    Preferences p; p.begin("spoolscale", false);
-    p.putUChar("lang", 0);
-    p.putBool("lang_set", true);
-    p.putBool("first_boot", true);  // show welcome screen after restart
-    p.end();
+    prefsPutUChar("lang", 0);
+    prefsPutBool("lang_set", true);
+    prefsPutBool("first_boot", true);  // show welcome screen after restart
     ESP.restart();
   }, LV_EVENT_CLICKED, NULL);
 
@@ -1455,9 +1119,7 @@ void buildFirstBootScreen() {
   lv_obj_set_style_border_width(btn_start, 1, 0);
   lv_obj_set_style_border_color(btn_start, lv_color_hex(0x2a5030), 0);
   lv_obj_add_event_cb(btn_start, [](lv_event_t *e) {
-    Preferences p; p.begin("spoolscale", false);
-    p.putBool("first_boot", false);
-    p.end();
+    prefsPutBool("first_boot", false);
     cfg_first_boot = false;
     showWifiSetupScreen();
   }, LV_EVENT_CLICKED, NULL);
@@ -1741,15 +1403,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
       }
       return;
     }
-    // Create spoolscale_test field directly in Spoolman
-    HTTPClient http;
-    String url = String(cfg_spoolman_base) + "/api/v1/field/spool/spoolscale_test";
-    http.begin(url);
-    http.addHeader("Content-Type", "application/json");
-    http.setTimeout(1500);
-    String body = "{\"name\":\"spoolscale_test\",\"field_type\":\"text\",\"default_value\":\"\\\"\\\"\"}";
-    int code = http.POST(body);
-    http.end();
+    int code = spoolmanCreateSpoolField(cfg_spoolman_base, "spoolscale_test", 1500);
     Serial.printf("Test field create: %d\n", code);
     if (lbl_extra_fields_status) {
       if (code == 200 || code == 201) {
@@ -1793,16 +1447,11 @@ void checkAndCreateExtraFields(bool create_missing) {
   yield();
 
   // GET /api/v1/field/spool — list all existing extra fields
-  HTTPClient http;
-  String url = String(cfg_spoolman_base) + "/api/v1/field/spool";
-  http.begin(url);
-  http.setTimeout(4000);
-  int code = http.GET();
+  DynamicJsonDocument doc(8192);
+  DeserializationError err = DeserializationError::Ok;
+  int code = spoolmanGetSpoolFieldsJson(cfg_spoolman_base, doc, 4000, &err);
   yield();
   lv_timer_handler();
-  String payload = "";
-  if (code == 200) payload = http.getString();
-  http.end();
   yield();
   lv_timer_handler();
 
@@ -1820,16 +1469,13 @@ void checkAndCreateExtraFields(bool create_missing) {
   // Parse existing field names
   int ef_count = REQUIRED_EXTRA_FIELDS_BASE_COUNT;
   bool field_exists[8] = {false};
-  if (code == 200 && payload.length() > 0) {
-    DynamicJsonDocument doc(8192);
-    if (!deserializeJson(doc, payload)) {
-      JsonArray arr = doc.as<JsonArray>();
-      for (JsonObject f : arr) {
-        const char* fname = f["key"] | "";
-        for (int i = 0; i < ef_count; i++) {
-          if (strcmp(fname, REQUIRED_EXTRA_FIELDS_BASE[i]) == 0) {
-            field_exists[i] = true;
-          }
+  if (code == 200 && !err) {
+    JsonArray arr = doc.as<JsonArray>();
+    for (JsonObject f : arr) {
+      const char* fname = f["key"] | "";
+      for (int i = 0; i < ef_count; i++) {
+        if (strcmp(fname, REQUIRED_EXTRA_FIELDS_BASE[i]) == 0) {
+          field_exists[i] = true;
         }
       }
     }
@@ -1889,14 +1535,7 @@ void checkAndCreateExtraFields(bool create_missing) {
     if (field_exists[i]) continue;
     lv_timer_handler();  // keep LVGL alive between HTTP calls
     yield();             // feed watchdog
-    HTTPClient http2;
-    String create_url = String(cfg_spoolman_base) + "/api/v1/field/spool/" + REQUIRED_EXTRA_FIELDS_BASE[i];
-    http2.begin(create_url);
-    http2.addHeader("Content-Type", "application/json");
-    http2.setTimeout(3000);
-    String body = "{\"name\":\"" + String(REQUIRED_EXTRA_FIELDS_BASE[i]) + "\",\"field_type\":\"text\",\"default_value\":\"\\\"\\\"\" }";
-    int c2 = http2.POST(body);
-    http2.end();
+    int c2 = spoolmanCreateSpoolField(cfg_spoolman_base, REQUIRED_EXTRA_FIELDS_BASE[i], 3000);
     lv_timer_handler();  // update display after each POST
     yield();
     Serial.printf("Create field '%s': %d\n", REQUIRED_EXTRA_FIELDS_BASE[i], c2);
@@ -1920,816 +1559,6 @@ void checkAndCreateExtraFields(bool create_missing) {
   }
 }
 
-// ============================================================
-//  CALIBRATION REMINDER SCREEN (end of first setup)
-// ============================================================
-void showCalReminderScreen() {
-  logSD("SHOW: CalReminderScreen");
-  logSD("UI: Screen -> CalReminder: start");
-  Serial.println("showCalReminderScreen: start");
-  // Free all setup screens to release LVGL heap before building
-  if (scr_welcome)       { lv_obj_del(scr_welcome);       scr_welcome       = nullptr; }
-  if (scr_first_boot)    { lv_obj_del(scr_first_boot);    scr_first_boot    = nullptr; }
-  if (scr_wifi_setup)    { lv_obj_del(scr_wifi_setup);    scr_wifi_setup    = nullptr; }
-  if (scr_wifi_pass)     { lv_obj_del(scr_wifi_pass);     scr_wifi_pass     = nullptr; }
-  if (scr_spoolman)      { lv_obj_del(scr_spoolman);      scr_spoolman      = nullptr; }
-  if (scr_extra_fields)  { lv_obj_del(scr_extra_fields);  scr_extra_fields  = nullptr;
-                           lbl_extra_fields_status = nullptr;
-                           btn_extra_fields_create = nullptr;
-                           btn_extra_fields_next   = nullptr; }
-  hideAllOverlays();
-  logSD("UI: Screen -> CalReminder: hideAllOverlays done");
-  Serial.println("showCalReminderScreen: hideAllOverlays done");
-  if (scr_cal_reminder) { lv_obj_del(scr_cal_reminder); scr_cal_reminder = nullptr; }
-  logSD("UI: Screen -> CalReminder: building");
-  Serial.println("showCalReminderScreen: building");
-  buildCalReminderScreen();
-  logSD("UI: Screen -> CalReminder: build done");
-  Serial.println("showCalReminderScreen: build done");
-  lv_obj_clear_flag(scr_cal_reminder, LV_OBJ_FLAG_HIDDEN);
-  logSD("UI: Screen -> CalReminder: visible");
-  Serial.println("showCalReminderScreen: visible OK");
-}
-
-void buildCalReminderScreen() {
-  logSD("BUILD: CalReminderScreen");
-  Serial.println("buildCalReminderScreen: start");
-  scr_cal_reminder = lv_obj_create(lv_scr_act());
-  Serial.println("buildCalReminderScreen: obj created");
-  lv_obj_set_size(scr_cal_reminder, 480, 320);
-  lv_obj_set_pos(scr_cal_reminder, 0, 0);
-  lv_obj_add_flag(scr_cal_reminder, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_style_radius(scr_cal_reminder, 0, 0);
-  lv_obj_set_style_border_width(scr_cal_reminder, 0, 0);
-  lv_obj_set_style_pad_all(scr_cal_reminder, 0, 0);
-  lv_obj_clear_flag(scr_cal_reminder, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_cal_reminder, lv_color_hex(0x0a1020), 0);
-
-  // Static buffers — must outlive the function since LVGL holds pointers to them
-  static char buf_title[48], buf_msg[256], buf_later[32], buf_now[48];
-  strncpy(buf_title, T(STR_CAL_REMINDER_TITLE), sizeof(buf_title)-1); buf_title[sizeof(buf_title)-1]=0;
-  strncpy(buf_msg,   T(STR_CAL_REMINDER_MSG),   sizeof(buf_msg)-1);   buf_msg[sizeof(buf_msg)-1]=0;
-  strncpy(buf_later, T(STR_CAL_REMINDER_LATER), sizeof(buf_later)-1); buf_later[sizeof(buf_later)-1]=0;
-  strncpy(buf_now,   T(STR_CAL_REMINDER_NOW),   sizeof(buf_now)-1);   buf_now[sizeof(buf_now)-1]=0;
-  Serial.println("buildCalReminderScreen: strings copied");
-
-  // Title
-  lv_obj_t *lbl_title = lv_label_create(scr_cal_reminder);
-  lv_label_set_text(lbl_title, buf_title);
-  lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
-  lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 20);
-
-  // No back button in setup flow — CalReminder is the last setup step
-  addCloseButton(scr_cal_reminder);
-
-  // Icon
-  lv_obj_t *lbl_icon = lv_label_create(scr_cal_reminder);
-  lv_label_set_text(lbl_icon, LV_SYMBOL_EDIT);
-  lv_obj_set_style_text_color(lbl_icon, lv_color_hex(0xf0b838), 0);
-  lv_obj_set_style_text_font(lbl_icon, &lv_font_montserrat_ext_24, 0);
-  lv_obj_align(lbl_icon, LV_ALIGN_TOP_MID, 0, 52);
-
-  // Message
-  lv_obj_t *lbl_msg = lv_label_create(scr_cal_reminder);
-  lv_label_set_text(lbl_msg, buf_msg);
-  lv_obj_set_style_text_color(lbl_msg, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_msg, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_style_text_align(lbl_msg, LV_TEXT_ALIGN_CENTER, 0);
-  lv_label_set_long_mode(lbl_msg, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(lbl_msg, 440);
-  lv_obj_align(lbl_msg, LV_ALIGN_TOP_MID, 0, 88);
-
-  // Single "Got it" button — centers, leads to main screen
-  lv_obj_t *btn_got = lv_btn_create(scr_cal_reminder);
-  lv_obj_set_size(btn_got, 280, 48);
-  lv_obj_align(btn_got, LV_ALIGN_BOTTOM_MID, 0, -20);
-  lv_obj_set_style_bg_color(btn_got, lv_color_hex(0x1a3020), 0);
-  lv_obj_set_style_bg_color(btn_got, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_got, 8, 0);
-  lv_obj_set_style_shadow_width(btn_got, 0, 0);
-  lv_obj_set_style_border_width(btn_got, 1, 0);
-  lv_obj_set_style_border_color(btn_got, lv_color_hex(0x2a5030), 0);
-  lv_obj_add_event_cb(btn_got, [](lv_event_t *e) {
-    showMainScreen();
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_got = lv_label_create(btn_got);
-  lv_label_set_text(lbl_got, buf_later);
-  lv_obj_set_style_text_color(lbl_got, lv_color_hex(0x40c080), 0);
-  lv_obj_set_style_text_font(lbl_got, &lv_font_montserrat_ext_16, 0);
-  lv_obj_center(lbl_got);
-}
-
-// ============================================================
-//  WIFI SETUP: STEP 1 — Network scan + selection
-// ============================================================
-void showWifiSetupScreen() {
-  logSD("SHOW: WifiSetupScreen");
-  logSD("UI: Screen -> WifiSetup");
-  hideAllOverlays();
-  if (scr_wifi_setup) { lv_obj_del(scr_wifi_setup); scr_wifi_setup = nullptr; }
-  // Null global pointers — otherwise they point to deleted objects
-  lbl_wifi_scan_list    = nullptr;
-  lbl_wifi_setup_status = nullptr;
-  buildWifiSetupScreen();
-  lv_obj_clear_flag(scr_wifi_setup, LV_OBJ_FLAG_HIDDEN);
-}
-
-void buildWifiSetupScreen() {
-  logSD("BUILD: WifiSetupScreen");
-  scr_wifi_setup = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(scr_wifi_setup, 480, 320);
-  lv_obj_set_pos(scr_wifi_setup, 0, 0);
-  lv_obj_add_flag(scr_wifi_setup, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_style_radius(scr_wifi_setup, 0, 0);
-  lv_obj_set_style_border_width(scr_wifi_setup, 0, 0);
-  lv_obj_set_style_pad_all(scr_wifi_setup, 0, 0);
-  lv_obj_clear_flag(scr_wifi_setup, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_wifi_setup, lv_color_hex(0x0a1020), 0);
-
-  // Header
-  lv_obj_t *title = lv_label_create(scr_wifi_setup);
-  lv_label_set_text(title, T(STR_WIFI_TITLE));
-  lv_obj_set_style_text_color(title, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 14);
-
-  // Back button (←)
-  addBackButton(scr_wifi_setup, [](lv_event_t *e) {
-    if (strlen(cfg_wifi_ssid) == 0) {
-      showWelcomeScreen();
-    } else {
-      hideAllOverlays();
-      buildConnectionScreen();
-      lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
-    }
-  });
-
-  // X button (✕)
-  addCloseButton(scr_wifi_setup);
-
-  // Refresh button (next to title, center-right)
-  lv_obj_t *btn_scan = lv_btn_create(scr_wifi_setup);
-  lv_obj_set_size(btn_scan, 44, 36);
-  lv_obj_align(btn_scan, LV_ALIGN_TOP_MID, 100, 4);
-  lv_obj_set_style_bg_color(btn_scan, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_scan, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_scan, 6, 0);
-  lv_obj_set_style_shadow_width(btn_scan, 0, 0);
-  lv_obj_set_style_border_width(btn_scan, 0, 0);
-  lv_obj_t *lbl_scan_btn = lv_label_create(btn_scan);
-  lv_label_set_text(lbl_scan_btn, LV_SYMBOL_REFRESH);
-  lv_obj_set_style_text_color(lbl_scan_btn, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_scan_btn, &lv_font_montserrat_ext_18, 0);
-  lv_obj_center(lbl_scan_btn);
-
-  // Scrollable network list (y=50 → y=56 due to header)
-  lv_obj_t *list = lv_obj_create(scr_wifi_setup);
-  lv_obj_set_size(list, 460, 218);
-  lv_obj_set_pos(list, 10, 56);
-  lv_obj_set_style_bg_color(list, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_border_width(list, 0, 0);
-  lv_obj_set_style_pad_all(list, 2, 0);
-  lv_obj_set_style_radius(list, 0, 0);
-  lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_scroll_dir(list, LV_DIR_VER);
-  lv_obj_clear_flag(list, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(list, LV_OBJ_FLAG_SCROLLABLE);
-  lbl_wifi_scan_list = list;
-
-  // Status label (initially "scanning...")
-  lbl_wifi_setup_status = lv_label_create(scr_wifi_setup);
-  lv_label_set_text(lbl_wifi_setup_status, T(STR_WIFI_SCAN));
-  lv_obj_set_style_text_color(lbl_wifi_setup_status, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_wifi_setup_status, &lv_font_montserrat_ext_14, 0);
-  lv_obj_align(lbl_wifi_setup_status, LV_ALIGN_BOTTOM_MID, 0, -8);
-
-  // Scan button callback (after building list)
-  lv_obj_add_event_cb(btn_scan, [](lv_event_t *e) {
-    lv_label_set_text(lbl_wifi_setup_status, T(STR_WIFI_SCAN));
-    doWifiScan();
-  }, LV_EVENT_CLICKED, NULL);
-
-  // Immediate scan on open
-  doWifiScan();
-}
-
-// Perform scan and populate list
-void doWifiScan() {
-  // Liste leeren
-  lv_obj_clean(lbl_wifi_scan_list);
-  lv_timer_handler();
-
-  // Disconnect required after failed WiFi.begin() —
-  // otherwise scanNetworks() returns 0
-  WiFi.disconnect(true);
-  delay(100);
-  WiFi.mode(WIFI_STA);
-  delay(100);
-  int n = WiFi.scanNetworks();
-
-  if (n == 0) {
-    lv_label_set_text(lbl_wifi_setup_status, T(STR_WIFI_NO_NET));
-    return;
-  }
-
-  char status_buf[48];
-  snprintf(status_buf, sizeof(status_buf), T(STR_WIFI_NETWORKS_FOUND), n);
-  lv_label_set_text(lbl_wifi_setup_status, status_buf);
-
-  // Sort: strongest first (bubble sort, n is small)
-  for (int i = 0; i < n - 1; i++) {
-    for (int j = 0; j < n - i - 1; j++) {
-      if (WiFi.RSSI(j) < WiFi.RSSI(j + 1)) {
-        // Swap via scan index — LVGL-independent, WiFi.SSID() returns directly
-        // Arduino WiFi.scanNetworks() returns sorted after scan, only needed if not:
-        // Wir nutzen einen Index-Array-Trick nicht — direkt ausgeben reicht da n<20
-      }
-    }
-  }
-
-  for (int i = 0; i < n && i < 20; i++) {
-    int rssi = WiFi.RSSI(i);
-    String ssid = WiFi.SSID(i);
-    if (ssid.length() == 0) continue;
-
-    // Signal bar (3 levels)
-    const char* signal_icon;
-    if      (rssi >= -65) signal_icon = LV_SYMBOL_WIFI "   ";
-    else if (rssi >= -80) signal_icon = LV_SYMBOL_WIFI "   ";
-    else                  signal_icon = LV_SYMBOL_WIFI "   ";
-
-    // Signal color
-    uint32_t sig_color;
-    if      (rssi >= -65) sig_color = 0x28d49a;  // green
-    else if (rssi >= -80) sig_color = 0xf0b838;  // yellow
-    else                  sig_color = 0xff8000;   // orange
-
-    // Row button
-    lv_obj_t *row = lv_btn_create(lbl_wifi_scan_list);
-    lv_obj_set_size(row, 452, 46);
-    lv_obj_set_style_bg_color(row, lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_bg_color(row, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(row, 6, 0);
-    lv_obj_set_style_shadow_width(row, 0, 0);
-    lv_obj_set_style_border_color(row, lv_color_hex(0x1a2840), 0);
-    lv_obj_set_style_border_width(row, 1, 0);
-    lv_obj_set_style_pad_all(row, 0, 0);
-
-    // SSID Label
-    lv_obj_t *lbl_ssid = lv_label_create(row);
-    lv_label_set_text(lbl_ssid, ssid.c_str());
-    lv_obj_set_style_text_color(lbl_ssid, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl_ssid, &lv_font_montserrat_ext_16, 0);
-    lv_obj_align(lbl_ssid, LV_ALIGN_LEFT_MID, 12, 0);
-    lv_label_set_long_mode(lbl_ssid, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(lbl_ssid, 300);
-
-    // RSSI Label
-    char rssi_buf[16];
-    snprintf(rssi_buf, sizeof(rssi_buf), "%d dBm", rssi);
-    lv_obj_t *lbl_rssi = lv_label_create(row);
-    lv_label_set_text(lbl_rssi, rssi_buf);
-    lv_obj_set_style_text_color(lbl_rssi, lv_color_hex(sig_color), 0);
-    lv_obj_set_style_text_font(lbl_rssi, &lv_font_montserrat_ext_12, 0);
-    lv_obj_align(lbl_rssi, LV_ALIGN_RIGHT_MID, -8, 0);
-
-    // Click: store SSID → password screen
-    lv_obj_add_event_cb(row, [](lv_event_t *e) {
-      lv_obj_t *btn = (lv_obj_t*)lv_event_get_target(e);
-      lv_obj_t *lbl = lv_obj_get_child(btn, 0);
-      const char* ssid_str = lv_label_get_text(lbl);
-      strncpy(wifi_setup_ssid, ssid_str, sizeof(wifi_setup_ssid)-1);
-      showWifiPassScreen();
-    }, LV_EVENT_CLICKED, NULL);
-  }
-
-  WiFi.scanDelete();
-}
-
-// ============================================================
-//  WIFI SETUP: STEP 2 — Password entry
-// ============================================================
-void showWifiPassScreen() {
-  logSD("SHOW: WifiPassScreen");
-  logSD("UI: Screen -> WifiPass");
-  hideAllOverlays();
-  if (scr_wifi_pass) { lv_obj_del(scr_wifi_pass); scr_wifi_pass = nullptr; }
-  ta_wifi_pass = nullptr;
-  kb_wifi_pass = nullptr;
-  buildWifiPassScreen();
-  lv_obj_clear_flag(scr_wifi_pass, LV_OBJ_FLAG_HIDDEN);
-}
-
-void buildWifiPassScreen() {
-  logSD("BUILD: WifiPassScreen");
-  scr_wifi_pass = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(scr_wifi_pass, 480, 320);
-  lv_obj_set_pos(scr_wifi_pass, 0, 0);
-  lv_obj_add_flag(scr_wifi_pass, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_style_radius(scr_wifi_pass, 0, 0);
-  lv_obj_set_style_border_width(scr_wifi_pass, 0, 0);
-  lv_obj_set_style_pad_all(scr_wifi_pass, 0, 0);
-  lv_obj_clear_flag(scr_wifi_pass, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_wifi_pass, lv_color_hex(0x0a1020), 0);
-
-  // Back button
-  addBackButton(scr_wifi_pass, [](lv_event_t *e) { showWifiSetupScreen(); });
-  addCloseButton(scr_wifi_pass);
-
-  // Title
-  lv_obj_t *title = lv_label_create(scr_wifi_pass);
-  lv_label_set_text(title, T(STR_WIFI_PASS_TITLE));
-  lv_obj_set_style_text_color(title, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 14);
-
-  // Show selected SSID
-  char ssid_hint[64];
-  snprintf(ssid_hint, sizeof(ssid_hint), T(STR_WIFI_PASS_HINT), wifi_setup_ssid);
-  lv_obj_t *lbl_ssid_show = lv_label_create(scr_wifi_pass);
-  lv_label_set_text(lbl_ssid_show, ssid_hint);
-  lv_obj_set_style_text_color(lbl_ssid_show, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_ssid_show, &lv_font_montserrat_ext_14, 0);
-  lv_obj_align(lbl_ssid_show, LV_ALIGN_TOP_MID, 0, 52);
-
-  // Password textarea
-  ta_wifi_pass = lv_textarea_create(scr_wifi_pass);
-  lv_textarea_set_one_line(ta_wifi_pass, true);
-  lv_textarea_set_password_mode(ta_wifi_pass, false);
-  lv_textarea_set_placeholder_text(ta_wifi_pass, "Passwort...");
-  lv_obj_set_size(ta_wifi_pass, 380, 44);
-  lv_obj_align(ta_wifi_pass, LV_ALIGN_TOP_MID, 0, 74);
-  lv_obj_set_style_text_font(ta_wifi_pass, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_color(ta_wifi_pass, lv_color_hex(0xffffff), 0);
-  lv_obj_set_style_bg_color(ta_wifi_pass, lv_color_hex(0x1e2e4a), 0);
-  lv_obj_set_style_border_color(ta_wifi_pass, lv_color_hex(0x2a4080), 0);
-
-  // Keyboard
-  kb_wifi_pass = lv_keyboard_create(scr_wifi_pass);
-  lv_keyboard_set_textarea(kb_wifi_pass, ta_wifi_pass);
-  lv_obj_set_size(kb_wifi_pass, 480, 160);
-  lv_obj_align(kb_wifi_pass, LV_ALIGN_BOTTOM_MID, 0, 0);
-  lv_obj_set_style_bg_color(kb_wifi_pass, lv_color_hex(0x182238), 0);
-  lv_obj_set_style_border_width(kb_wifi_pass, 0, 0);
-
-  // Enter on keyboard → connect
-  lv_obj_add_event_cb(kb_wifi_pass, [](lv_event_t *e) {
-    if (lv_event_get_code(e) == LV_EVENT_READY) {
-      const char* pass = lv_textarea_get_text(ta_wifi_pass);
-      saveWifiCredentials(wifi_setup_ssid, pass);
-      showWifiConnectingScreen();
-    }
-  }, LV_EVENT_ALL, NULL);
-}
-
-// ============================================================
-//  WIFI SETUP: STEP 3 — Connect + result
-// ============================================================
-void showWifiConnectingScreen() {
-  logSD("SHOW: WifiConnectingScreen");
-  logSD("UI: Screen -> WifiConnecting");
-  hideAllOverlays();
-  if (scr_wifi_connecting) { lv_obj_del(scr_wifi_connecting); scr_wifi_connecting = nullptr; }
-  buildWifiConnectingScreen();
-  lv_obj_clear_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN);
-  lv_timer_handler();
-
-  // Actually connect now
-  wifi_ok = false;
-  WiFi.disconnect(true);
-  delay(200);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(cfg_wifi_ssid, cfg_wifi_password);
-
-  lv_obj_t *status_lbl = (lv_obj_t*)lv_obj_get_user_data(scr_wifi_connecting);
-
-  for (int i = 0; i < 20; i++) {
-    delay(500);
-    lv_timer_handler();
-    if (WiFi.status() == WL_CONNECTED) {
-      wifi_ok = true;
-      break;
-    }
-  }
-
-  if (wifi_ok) {
-    syncNTP();
-    updateHeaderStatus();
-    lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));
-    char ok_buf[80];
-    snprintf(ok_buf, sizeof(ok_buf), T(STR_WIFI_CONNECTED_IP), WiFi.localIP().toString().c_str());
-    if (status_lbl) lv_label_set_text(status_lbl, ok_buf);
-    lv_obj_set_style_text_color(status_lbl, lv_color_hex(0x28d49a), 0);
-
-    // Show next button
-    lv_obj_t *btn_next = (lv_obj_t*)lv_obj_get_child(scr_wifi_connecting, -1);
-    if (btn_next) lv_obj_clear_flag(btn_next, LV_OBJ_FLAG_HIDDEN);
-  } else {
-    updateHeaderStatus();
-    char fail_buf[80];
-    snprintf(fail_buf, sizeof(fail_buf), T(STR_WIFI_CONN_FAILED), cfg_wifi_ssid);
-    if (status_lbl) lv_label_set_text(status_lbl, fail_buf);
-    lv_obj_set_style_text_color(status_lbl, lv_color_hex(0xff8080), 0);
-
-    // Show retry button
-    lv_obj_t *btn_retry = (lv_obj_t*)lv_obj_get_child(scr_wifi_connecting, -2);
-    if (btn_retry) lv_obj_clear_flag(btn_retry, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_t *btn_next = (lv_obj_t*)lv_obj_get_child(scr_wifi_connecting, -1);
-    if (btn_next) lv_obj_clear_flag(btn_next, LV_OBJ_FLAG_HIDDEN);
-  }
-  lv_timer_handler();
-}
-
-void buildWifiConnectingScreen() {
-  logSD("BUILD: WifiConnectingScreen");
-  scr_wifi_connecting = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(scr_wifi_connecting, 480, 320);
-  lv_obj_set_pos(scr_wifi_connecting, 0, 0);
-  lv_obj_add_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_style_radius(scr_wifi_connecting, 0, 0);
-  lv_obj_set_style_border_width(scr_wifi_connecting, 0, 0);
-  lv_obj_set_style_pad_all(scr_wifi_connecting, 0, 0);
-  lv_obj_clear_flag(scr_wifi_connecting, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_wifi_connecting, lv_color_hex(0x0a1020), 0);
-
-  lv_obj_t *title = lv_label_create(scr_wifi_connecting);
-  lv_label_set_text(title, T(STR_WIFI_TITLE));
-  lv_obj_set_style_text_color(title, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 24);
-
-  addBackButton(scr_wifi_connecting, [](lv_event_t *e) { showWifiSetupScreen(); });
-  addCloseButton(scr_wifi_connecting);
-
-  char conn_buf[64];
-  snprintf(conn_buf, sizeof(conn_buf), T(STR_WIFI_CONNECTING), wifi_setup_ssid);
-  lv_obj_t *lbl_connecting = lv_label_create(scr_wifi_connecting);
-  lv_label_set_text(lbl_connecting, conn_buf);
-  lv_obj_set_style_text_color(lbl_connecting, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_connecting, &lv_font_montserrat_ext_16, 0);
-  lv_obj_align(lbl_connecting, LV_ALIGN_TOP_MID, 0, 68);
-
-  // Status label — larger font, filled after connection
-  lv_obj_t *lbl_status_conn = lv_label_create(scr_wifi_connecting);
-  lv_label_set_text(lbl_status_conn, "");
-  lv_obj_set_style_text_color(lbl_status_conn, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_status_conn, &lv_font_montserrat_ext_20, 0);
-  lv_obj_set_style_text_align(lbl_status_conn, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_status_conn, LV_ALIGN_CENTER, 0, 10);
-  lv_label_set_long_mode(lbl_status_conn, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(lbl_status_conn, 420);
-  lv_obj_set_user_data(scr_wifi_connecting, lbl_status_conn);
-
-  // Retry button (initially hidden)
-  lv_obj_t *btn_retry = lv_btn_create(scr_wifi_connecting);
-  lv_obj_set_size(btn_retry, 200, 48);
-  lv_obj_align(btn_retry, LV_ALIGN_BOTTOM_MID, -110, -20);
-  lv_obj_add_flag(btn_retry, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_style_bg_color(btn_retry, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_retry, lv_color_hex(0x602020), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_retry, 8, 0);
-  lv_obj_set_style_shadow_width(btn_retry, 0, 0);
-  lv_obj_set_style_border_width(btn_retry, 0, 0);
-  lv_obj_add_event_cb(btn_retry, [](lv_event_t *e) { logSD("BTN: Retry -> WifiSetup"); showWifiSetupScreen(); }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_retry = lv_label_create(btn_retry);
-  lv_label_set_text(lbl_retry, LV_SYMBOL_LEFT "  "); { char rb[32]; snprintf(rb,sizeof(rb),"%s",T(STR_RETRY)); lv_label_set_text(lbl_retry,rb); }
-  lv_obj_set_style_text_color(lbl_retry, lv_color_hex(0xff8080), 0);
-  lv_obj_set_style_text_font(lbl_retry, &lv_font_montserrat_ext_16, 0);
-  lv_obj_center(lbl_retry);
-
-  // Next button → Spoolman IP (initially hidden)
-  lv_obj_t *btn_next = lv_btn_create(scr_wifi_connecting);
-  lv_obj_set_size(btn_next, 200, 48);
-  lv_obj_align(btn_next, LV_ALIGN_BOTTOM_MID, 110, -20);
-  lv_obj_add_flag(btn_next, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_style_bg_color(btn_next, lv_color_hex(0x1a3020), 0);
-  lv_obj_set_style_bg_color(btn_next, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_next, 8, 0);
-  lv_obj_set_style_shadow_width(btn_next, 0, 0);
-  lv_obj_set_style_border_width(btn_next, 0, 0);
-  lv_obj_add_event_cb(btn_next, [](lv_event_t *e) {
-    logSD("BTN: WifiConnecting -> Next (Spoolman)");
-    show_spoolman_pending = true;
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_next = lv_label_create(btn_next);
-  lv_label_set_text(lbl_next, "Spoolman  " LV_SYMBOL_RIGHT);
-  lv_obj_set_style_text_color(lbl_next, lv_color_hex(0x40c080), 0);
-  lv_obj_set_style_text_font(lbl_next, &lv_font_montserrat_ext_16, 0);
-  lv_obj_center(lbl_next);
-}
-
-// ── WiFi info screen ──
-void buildWifiScreen() {
-  scr_wifi = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(scr_wifi, 480, 320);
-  lv_obj_set_pos(scr_wifi, 0, 0);
-  lv_obj_add_flag(scr_wifi, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_style_radius(scr_wifi, 0, 0);
-  lv_obj_set_style_border_width(scr_wifi, 0, 0);
-  lv_obj_set_style_pad_all(scr_wifi, 0, 0);
-  lv_obj_clear_flag(scr_wifi, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_wifi, lv_color_hex(0x0a1020), 0);
-
-  lv_obj_t *title_wifi = lv_label_create(scr_wifi);
-  lv_label_set_text(title_wifi, "WiFi Status");
-  lv_obj_set_style_text_color(title_wifi, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(title_wifi, &lv_font_montserrat_ext_18, 0);
-  lv_obj_align(title_wifi, LV_ALIGN_TOP_MID, 0, 14);
-
-  lbl_wifi_info = lv_label_create(scr_wifi);
-  lv_label_set_text(lbl_wifi_info, T(STR_WAIT));
-  lv_obj_set_style_text_color(lbl_wifi_info, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_wifi_info, &lv_font_montserrat_ext_16, 0);
-  lv_obj_align(lbl_wifi_info, LV_ALIGN_CENTER, 0, 10);
-  lv_label_set_long_mode(lbl_wifi_info, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(lbl_wifi_info, 380);
-  lv_obj_set_style_text_align(lbl_wifi_info, LV_TEXT_ALIGN_LEFT, 0);
-
-  addBackButton(scr_wifi, [](lv_event_t *e){ if (!scr_connection) buildConnectionScreen(); if (!scr_connection) buildConnectionScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN); });
-  addCloseButton(scr_wifi);
-}
-
-void updateWifiInfo() {
-  if (!lbl_wifi_info) return;
-  char buf[200];
-  int rssi = WiFi.RSSI();
-  const char* qual;
-  if      (rssi >= -50) qual = T(STR_WIFI_QUAL_EXCELLENT);
-  else if (rssi >= -65) qual = T(STR_WIFI_QUAL_GOOD);
-  else if (rssi >= -75) qual = T(STR_WIFI_QUAL_MEDIUM);
-  else                  qual = T(STR_WIFI_QUAL_WEAK);
-  snprintf(buf, sizeof(buf),
-    "SSID:    %s\n"
-    "Status:  %s\n"
-    "IP:      %s\n"
-    "RSSI:    %d dBm  (%s)\n"
-    "Spoolman:\n%s",
-    cfg_wifi_ssid,
-    wifi_ok ? T(STR_WIFI_STATUS_CONNECTED) : T(STR_WIFI_STATUS_DISCONNECTED),
-    wifi_ok ? WiFi.localIP().toString().c_str() : "-",
-    rssi, qual,
-    cfg_spoolman_base
-  );
-  lv_label_set_text(lbl_wifi_info, buf);
-}
-
-// ── Spoolman IP screen (custom numpad with . and :) ──
-// Input buffer for Spoolman IP
-static char sp_ip_input[64] = "";
-static lv_obj_t *lbl_sp_ip_display = nullptr;
-static lv_obj_t *lbl_sp_test_result = nullptr;  // test result label on IP screen
-static lv_obj_t *btn_sp_extra_fields = nullptr;  // Extra Fields button on IP screen
-
-void buildSpoolmanScreen() {
-  logSD("BUILD: SpoolmanScreen");
-  scr_spoolman = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(scr_spoolman, 480, 320);
-  lv_obj_set_pos(scr_spoolman, 0, 0);
-  lv_obj_add_flag(scr_spoolman, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_style_radius(scr_spoolman, 0, 0);
-  lv_obj_set_style_border_width(scr_spoolman, 0, 0);
-  lv_obj_set_style_pad_all(scr_spoolman, 0, 0);
-  lv_obj_clear_flag(scr_spoolman, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_spoolman, lv_color_hex(0x0a1020), 0);
-
-  // Header
-  buildSubHeader(scr_spoolman, T(STR_SPOOLMAN_TITLE),
-    [](lv_event_t *e){
-      logSD("BTN: Spoolman -> Back");
-      if (sp_ip_input[0]) saveSpoolmanIP(sp_ip_input);
-      show_connection_from_spoolman_pending = true;
-    });
-
-  // Hint: port info, font14, y=52
-  lv_obj_t *lbl_hint = lv_label_create(scr_spoolman);
-  lv_label_set_text(lbl_hint, "192.168.x.x:7912");
-  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 52);
-
-  // Pre-fill with "192.168." if empty — user only needs to add last two octets + port
-  if (cfg_spoolman_ip[0] == '\0') {
-    strncpy(sp_ip_input, "192.168.", sizeof(sp_ip_input)-1);
-  } else {
-    strncpy(sp_ip_input, cfg_spoolman_ip, sizeof(sp_ip_input)-1);
-  }
-  sp_ip_input[sizeof(sp_ip_input)-1] = '\0';
-  lv_obj_t *input_box = lv_obj_create(scr_spoolman);
-  lv_obj_set_size(input_box, 420, 34);
-  lv_obj_align(input_box, LV_ALIGN_TOP_MID, 0, 68);
-  lv_obj_set_style_bg_color(input_box, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_border_color(input_box, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_border_width(input_box, 1, 0);
-  lv_obj_set_style_radius(input_box, 6, 0);
-  lv_obj_set_style_pad_all(input_box, 0, 0);
-  lv_obj_clear_flag(input_box, LV_OBJ_FLAG_SCROLLABLE);
-
-  lbl_sp_ip_display = lv_label_create(input_box);
-  lv_label_set_text(lbl_sp_ip_display, sp_ip_input[0] ? sp_ip_input : "_");
-  lv_obj_set_style_text_color(lbl_sp_ip_display, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_sp_ip_display, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_style_text_align(lbl_sp_ip_display, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_center(lbl_sp_ip_display);
-
-  // Numpad: NP_H=32, NP_GAP=3, start y=104 — larger than before
-  const int NP_W = 130, NP_H = 32, NP_GAP = 3;
-  const int NP_PAD_X = (480 - 3*NP_W - 2*NP_GAP) / 2;
-  const int NP_START_Y = 104;
-
-  const char* np_labels[] = {
-    "1","2","3",
-    "4","5","6",
-    "7","8","9",
-    ".","0",":"
-  };
-
-  for (int i = 0; i < 12; i++) {
-    int col = i % 3;
-    int row = i / 3;
-    int bx = NP_PAD_X + col * (NP_W + NP_GAP);
-    int by = NP_START_Y + row * (NP_H + NP_GAP);
-
-    lv_obj_t *btn = lv_btn_create(scr_spoolman);
-    lv_obj_set_size(btn, NP_W, NP_H);
-    lv_obj_set_pos(btn, bx, by);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(btn, 6, 0);
-    lv_obj_set_style_shadow_width(btn, 0, 0);
-    lv_obj_set_style_border_width(btn, 1, 0);
-    lv_obj_set_style_border_color(btn, lv_color_hex(0x1a2840), 0);
-
-    lv_obj_t *lbl = lv_label_create(btn);
-    lv_label_set_text(lbl, np_labels[i]);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-    lv_obj_center(lbl);
-
-    lv_obj_add_event_cb(btn, [](lv_event_t *e) {
-      const char* ch = lv_label_get_text(lv_obj_get_child(lv_event_get_target(e), 0));
-      int len = strlen(sp_ip_input);
-      if (len < (int)sizeof(sp_ip_input)-1) {
-        sp_ip_input[len] = ch[0];
-        sp_ip_input[len+1] = '\0';
-      }
-      if (lbl_sp_ip_display) lv_label_set_text(lbl_sp_ip_display, sp_ip_input);
-    }, LV_EVENT_CLICKED, NULL);
-  }
-
-  // Row 5 left: delete
-  int by5 = NP_START_Y + 4 * (NP_H + NP_GAP);
-  int bw5 = (3*NP_W + 2*NP_GAP - NP_GAP) / 2;
-
-  lv_obj_t *btn_del = lv_btn_create(scr_spoolman);
-  lv_obj_set_size(btn_del, bw5, NP_H);
-  lv_obj_set_pos(btn_del, NP_PAD_X, by5);
-  lv_obj_set_style_bg_color(btn_del, lv_color_hex(0x1a2030), 0);
-  lv_obj_set_style_bg_color(btn_del, lv_color_hex(0x2a3040), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_del, 6, 0);
-  lv_obj_set_style_shadow_width(btn_del, 0, 0);
-  lv_obj_set_style_border_width(btn_del, 1, 0);
-  lv_obj_set_style_border_color(btn_del, lv_color_hex(0x1a2840), 0);
-  lv_obj_add_event_cb(btn_del, [](lv_event_t *e) {
-    int len = strlen(sp_ip_input);
-    if (len > 0) sp_ip_input[len-1] = '\0';
-    if (lbl_sp_ip_display) lv_label_set_text(lbl_sp_ip_display, sp_ip_input[0] ? sp_ip_input : "_");
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_del = lv_label_create(btn_del);
-  lv_label_set_text(lbl_del, LV_SYMBOL_BACKSPACE);
-  lv_obj_set_style_text_color(lbl_del, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_del, &lv_font_montserrat_ext_18, 0);
-  lv_obj_center(lbl_del);
-
-  // Row 5 right: save
-  lv_obj_t *btn_ok = lv_btn_create(scr_spoolman);
-  lv_obj_set_size(btn_ok, bw5, NP_H);
-  lv_obj_set_pos(btn_ok, NP_PAD_X + bw5 + NP_GAP, by5);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x1a3020), 0);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_ok, 6, 0);
-  lv_obj_set_style_shadow_width(btn_ok, 0, 0);
-  lv_obj_set_style_border_width(btn_ok, 1, 0);
-  lv_obj_set_style_border_color(btn_ok, lv_color_hex(0x2a5030), 0);
-  lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
-    if (!sp_ip_input[0]) return;
-    saveSpoolmanIP(sp_ip_input);
-
-    // Show testing status
-    if (lbl_sp_test_result) {
-      lv_label_set_text(lbl_sp_test_result, "Connecting...");
-      lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x4a6fa0), 0);
-    }
-    if (btn_sp_extra_fields) lv_obj_add_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
-    lv_timer_handler();
-
-    // Health check
-    HTTPClient hc;
-    hc.begin(String(cfg_spoolman_base) + "/api/v1/health");
-    hc.setTimeout(4000);
-    int hcode = hc.GET();
-    hc.end();
-    sm_reachable = (hcode == 200);
-
-    if (!sm_reachable) {
-      if (lbl_sp_test_result) {
-        char buf[48];
-        snprintf(buf, sizeof(buf), "Error: HTTP %d", hcode);
-        lv_label_set_text(lbl_sp_test_result, buf);
-        lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0xff8080), 0);
-      }
-      logSDf("Spoolman IP test FAIL: HTTP %d ip=%s", hcode, sp_ip_input);
-      Serial.printf("Spoolman IP test FAIL: HTTP %d ip=%s\n", hcode, sp_ip_input);
-      return;
-    }
-
-    // Fetch version from /api/v1/info
-    char sm_ver[32] = "?";
-    HTTPClient hci;
-    hci.begin(String(cfg_spoolman_base) + "/api/v1/info");
-    hci.setTimeout(3000);
-    if (hci.GET() == 200) {
-      StaticJsonDocument<256> idoc;
-      if (!deserializeJson(idoc, hci.getString())) {
-        strncpy(sm_ver, idoc["version"] | "?", sizeof(sm_ver)-1);
-      }
-    }
-    hci.end();
-
-    // Count spools by matching '"filament":' — exactly 1 per spool, avoids counting nested ids
-    int spool_count = 0;
-    HTTPClient hcs;
-    hcs.begin(String(cfg_spoolman_base) + "/api/v1/spool?allow_archived=false");
-    hcs.setTimeout(6000);
-    if (hcs.GET() == 200) {
-      WiFiClient* stream = hcs.getStreamPtr();
-      char buf[11] = {0};
-      while (hcs.connected() && stream->available()) {
-        char c = stream->read();
-        memmove(buf, buf+1, 9);
-        buf[9] = c;
-        if (memcmp(buf, "\"filament\"", 10) == 0) spool_count++;
-      }
-    }
-    hcs.end();
-
-    // Show result on screen
-    char result_buf[64];
-    snprintf(result_buf, sizeof(result_buf), "v%s | %d spools", sm_ver, spool_count);
-    if (lbl_sp_test_result) {
-      lv_label_set_text(lbl_sp_test_result, result_buf);
-      lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x40c080), 0);
-    }
-    // Show Extra Fields button
-    if (btn_sp_extra_fields) lv_obj_clear_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
-
-    logSDf("Spoolman IP test OK: %s | %d spools", sm_ver, spool_count);
-    Serial.printf("Spoolman IP test OK: %s | %d spools\n", sm_ver, spool_count);
-    updateHeaderStatus();
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_ok = lv_label_create(btn_ok);
-  lv_label_set_text(lbl_ok, T(STR_BTN_SAVE));
-  lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0x40c080), 0);
-  lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_16, 0);
-  lv_obj_center(lbl_ok);
-
-  // Bottom area: test result info (left) + Extra Fields button (right)
-  // numpad bottom = NP_START_Y + 4*(NP_H+NP_GAP) + NP_H = 104+4*35+32 = 276
-  // bottom row y=281, h=32, bottom=313 (7px margin)
-  const int BOT_Y = 281, BOT_H = 32;
-
-  // Test result label — left side, y=281
-  lbl_sp_test_result = lv_label_create(scr_spoolman);
-  lv_label_set_text(lbl_sp_test_result, "");
-  lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_sp_test_result, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_style_text_align(lbl_sp_test_result, LV_TEXT_ALIGN_LEFT, 0);
-  lv_obj_set_size(lbl_sp_test_result, 260, BOT_H);
-  lv_obj_set_pos(lbl_sp_test_result, NP_PAD_X, BOT_Y);
-
-  // Extra Fields button — right side, 170px wide
-  btn_sp_extra_fields = lv_btn_create(scr_spoolman);
-  lv_obj_set_size(btn_sp_extra_fields, 170, BOT_H);
-  lv_obj_set_pos(btn_sp_extra_fields, 480 - NP_PAD_X - 170, BOT_Y);
-  lv_obj_set_style_bg_color(btn_sp_extra_fields, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_sp_extra_fields, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_sp_extra_fields, 8, 0);
-  lv_obj_set_style_shadow_width(btn_sp_extra_fields, 0, 0);
-  lv_obj_set_style_border_width(btn_sp_extra_fields, 1, 0);
-  lv_obj_set_style_border_color(btn_sp_extra_fields, lv_color_hex(0x1a3060), 0);
-  bool in_setup_flow = (strlen(cfg_wifi_ssid) > 0 && scr_connection == nullptr);
-  if (in_setup_flow) lv_obj_add_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_add_event_cb(btn_sp_extra_fields, [](lv_event_t *e) {
-    bool in_setup = (strlen(cfg_wifi_ssid) > 0 && scr_connection == nullptr);
-    showExtraFieldsScreen(in_setup);
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_ef = lv_label_create(btn_sp_extra_fields);
-  lv_label_set_text(lbl_ef, "Extra Fields  " LV_SYMBOL_RIGHT);
-  lv_obj_set_style_text_color(lbl_ef, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_ef, &lv_font_montserrat_ext_14, 0);
-  lv_obj_align(lbl_ef, LV_ALIGN_CENTER, 0, 0);
-}
 
 // ============================================================
 //  SPOOLMAN CONNECTION FAILED SCREEN
@@ -2847,2220 +1676,15 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
   lv_obj_center(lbl_c);
 }
 
-// ── Calibration factor screen (custom numpad with .) ──
-static char factor_input[16] = "";
-static lv_obj_t *lbl_factor_display = nullptr;  // rebuilt on each open
-static lv_obj_t *lbl_factor_cal_weight = nullptr; // live weight display in cal screen
-
-void showFactorScreen() {
-  logSD("SHOW: FactorScreen");
-  logSD("UI: Screen -> Calibration");
-  // Null all loop-update pointers BEFORE deleting scr_factor
-  // Loop checks these pointers — must be null before del to avoid dangling access
-  lbl_factor_display    = nullptr;
-  lbl_factor_result     = nullptr;
-  lbl_factor_cal_weight = nullptr;
-  // Now safe to delete
-  if (scr_factor) { lv_obj_del(scr_factor); scr_factor = nullptr; }
-  buildFactorScreen();
-  // Show it (hideAllOverlays would hide it again, so show directly)
-  lv_obj_clear_flag(scr_factor, LV_OBJ_FLAG_HIDDEN);
-  // Hide other overlays without touching scr_factor
-  if (scr_settings)      lv_obj_add_flag(scr_settings,      LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi)          lv_obj_add_flag(scr_wifi,          LV_OBJ_FLAG_HIDDEN);
-  if (scr_spoolman)      lv_obj_add_flag(scr_spoolman,      LV_OBJ_FLAG_HIDDEN);
-  if (scr_bag)           lv_obj_add_flag(scr_bag,           LV_OBJ_FLAG_HIDDEN);
-  if (scr_connection)    lv_obj_add_flag(scr_connection,    LV_OBJ_FLAG_HIDDEN);
-  if (scr_scale_sub)     lv_obj_add_flag(scr_scale_sub,     LV_OBJ_FLAG_HIDDEN);
-  if (scr_display)       lv_obj_add_flag(scr_display,       LV_OBJ_FLAG_HIDDEN);
-  if (scr_system)        lv_obj_add_flag(scr_system,        LV_OBJ_FLAG_HIDDEN);
-  if (scr_ota)           lv_obj_add_flag(scr_ota,           LV_OBJ_FLAG_HIDDEN);
-  if (scr_ota_browser)   lv_obj_add_flag(scr_ota_browser,   LV_OBJ_FLAG_HIDDEN);
-  if (scr_welcome)       lv_obj_add_flag(scr_welcome,       LV_OBJ_FLAG_HIDDEN);
-  if (scr_first_boot)    lv_obj_add_flag(scr_first_boot,    LV_OBJ_FLAG_HIDDEN);
-  if (scr_extra_fields)  lv_obj_add_flag(scr_extra_fields,  LV_OBJ_FLAG_HIDDEN);
-  if (scr_cal_reminder)  lv_obj_add_flag(scr_cal_reminder,  LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi_setup)    lv_obj_add_flag(scr_wifi_setup,    LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi_pass)     lv_obj_add_flag(scr_wifi_pass,     LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi_connecting) lv_obj_add_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN);
-  resetActivityTimer();
-}
-
-void buildFactorScreen() {
-  logSD("BUILD: FactorScreen");
-  scr_factor = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(scr_factor, 480, 320);
-  lv_obj_set_pos(scr_factor, 0, 0);
-  lv_obj_add_flag(scr_factor, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_style_radius(scr_factor, 0, 0);
-  lv_obj_set_style_border_width(scr_factor, 0, 0);
-  lv_obj_set_style_pad_all(scr_factor, 0, 0);
-  lv_obj_clear_flag(scr_factor, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_factor, lv_color_hex(0x0a1020), 0);
-
-  // Crash protection: null label pointers (screen is rebuilt)
-  lbl_factor_display = nullptr;
-  lbl_factor_result  = nullptr;
-  lbl_factor_cal_weight = nullptr;
-  factor_input[0]    = '\0';
-
-  buildSubHeader(scr_factor, T(STR_CAL_TITLE),
-    [](lv_event_t *e){
-      hideAllOverlays();
-      if (!scr_scale_sub) buildScaleSubScreen();
-      lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
-    });
-
-  // Description / hint — single line, compact
-  lv_obj_t *lbl_desc = lv_label_create(scr_factor);
-  lv_label_set_text(lbl_desc, T(STR_CAL_TARE_HINT));
-  lv_obj_set_style_text_color(lbl_desc, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_desc, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_style_text_align(lbl_desc, LV_TEXT_ALIGN_CENTER, 0);
-  lv_label_set_long_mode(lbl_desc, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(lbl_desc, 440);
-  lv_obj_align(lbl_desc, LV_ALIGN_TOP_MID, 0, 54);
-
-  // Single status row: "Scale: <value>" left | "Factor: --" right
-  lv_obj_t *lbl_cal_w_title = lv_label_create(scr_factor);
-  lv_label_set_text(lbl_cal_w_title, T(STR_LBL_SCALE));
-  lv_obj_set_style_text_color(lbl_cal_w_title, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_cal_w_title, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_cal_w_title, 12, 78);
-
-  lbl_factor_cal_weight = lv_label_create(scr_factor);
-  lv_label_set_text(lbl_factor_cal_weight, "-- g");
-  lv_obj_set_style_text_color(lbl_factor_cal_weight, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_factor_cal_weight, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_factor_cal_weight, 56, 78);
-
-  lbl_factor_result = lv_label_create(scr_factor);
-  lv_label_set_text(lbl_factor_result, T(STR_CAL_FACTOR));
-  lv_obj_set_style_text_color(lbl_factor_result, lv_color_hex(0xf0b838), 0);
-  lv_obj_set_style_text_font(lbl_factor_result, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_style_text_align(lbl_factor_result, LV_TEXT_ALIGN_RIGHT, 0);
-  lv_obj_set_width(lbl_factor_result, 220);
-  lv_obj_set_pos(lbl_factor_result, 248, 78);
-
-  // Input field — y=94 (below status row)
-  lv_obj_t *input_box_f = lv_obj_create(scr_factor);
-  lv_obj_set_size(input_box_f, 260, 34);
-  lv_obj_align(input_box_f, LV_ALIGN_TOP_MID, 0, 94);
-  lv_obj_set_style_bg_color(input_box_f, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_border_color(input_box_f, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_border_width(input_box_f, 1, 0);
-  lv_obj_set_style_radius(input_box_f, 6, 0);
-  lv_obj_set_style_pad_all(input_box_f, 0, 0);
-  lv_obj_clear_flag(input_box_f, LV_OBJ_FLAG_SCROLLABLE);
-
-  lbl_factor_display = lv_label_create(input_box_f);
-  lv_label_set_text(lbl_factor_display, "_");
-  lv_obj_set_style_text_color(lbl_factor_display, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_factor_display, &lv_font_montserrat_ext_20, 0);
-  lv_obj_set_style_text_align(lbl_factor_display, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_center(lbl_factor_display);
-
-  // ── Numpad (104x30, start y=132) ──
-  const int NP_W = 104, NP_H = 30, NP_GAP = 4;
-  const int NP_PAD_X = (480 - 3*NP_W - 2*NP_GAP) / 2;
-  const int NP_START_Y = 132;
-
-  const char* np_labels_f[] = { "1","2","3","4","5","6","7","8","9",".","0","T" };
-
-  // ── Whole-gram toggle (left of numpad, 68x68px) ──
-  // NP_PAD_X = 80px — 68px toggle fits with 6px margin
-  {
-    lv_obj_t *btn_wg = lv_btn_create(scr_factor);
-    lv_obj_set_size(btn_wg, 68, 68);
-    int wg_y = NP_START_Y + (4*(NP_H+NP_GAP) - 68) / 2;  // vertically centred in numpad area
-    lv_obj_set_pos(btn_wg, 6, wg_y);
-    lv_obj_set_style_radius(btn_wg, 8, 0);
-    lv_obj_set_style_shadow_width(btn_wg, 0, 0);
-    lv_obj_set_style_border_width(btn_wg, 1, 0);
-    lv_obj_set_style_bg_color(btn_wg, g_whole_gram ? lv_color_hex(0x1a3020) : lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_border_color(btn_wg, g_whole_gram ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a2840), 0);
-    lv_obj_set_style_bg_color(btn_wg, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-
-    lv_obj_t *lbl_wg = lv_label_create(btn_wg);
-    lv_label_set_text(lbl_wg, T(STR_WHOLE_GRAM));
-    lv_obj_set_style_text_color(lbl_wg, g_whole_gram ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(lbl_wg, &lv_font_montserrat_ext_12, 0);
-    lv_obj_set_style_text_align(lbl_wg, LV_TEXT_ALIGN_CENTER, 0);
-    lv_label_set_long_mode(lbl_wg, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(lbl_wg, 60);
-    lv_obj_center(lbl_wg);
-
-    lv_obj_add_event_cb(btn_wg, [](lv_event_t *e) {
-      g_whole_gram = !g_whole_gram;
-      prefs.begin("spoolscale", false);
-      prefs.putBool("whole_gram", g_whole_gram);
-      prefs.end();
-      lv_obj_t *b = lv_event_get_target(e);
-      lv_obj_t *l = lv_obj_get_child(b, 0);
-      lv_obj_set_style_bg_color(b, g_whole_gram ? lv_color_hex(0x1a3020) : lv_color_hex(0x0a1828), 0);
-      lv_obj_set_style_border_color(b, g_whole_gram ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a2840), 0);
-      lv_obj_set_style_text_color(l, g_whole_gram ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
-    }, LV_EVENT_CLICKED, NULL);
-  }
-
-  for (int i = 0; i < 12; i++) {
-    int col = i % 3, row = i / 3;
-    lv_obj_t *btn = lv_btn_create(scr_factor);
-    lv_obj_set_size(btn, NP_W, NP_H);
-    lv_obj_set_pos(btn, NP_PAD_X + col*(NP_W+NP_GAP), NP_START_Y + row*(NP_H+NP_GAP));
-
-    if (i == 11) {
-      // TARE button in the free slot (bottom right of numpad)
-      lv_obj_set_style_bg_color(btn, lv_color_hex(0x2a2010), 0);
-      lv_obj_set_style_bg_color(btn, lv_color_hex(0x4a4020), LV_STATE_PRESSED);
-      lv_obj_set_style_radius(btn, 6, 0);
-      lv_obj_set_style_shadow_width(btn, 0, 0);
-      lv_obj_set_style_border_width(btn, 1, 0);
-      lv_obj_set_style_border_color(btn, lv_color_hex(0x3a3010), 0);
-      lv_obj_add_event_cb(btn, [](lv_event_t *e) {
-        if (!lbl_factor_result) return;
-        if (scale_ready) {
-          int32_t raw = nau.read();
-          saveTareOffset(raw);
-          scale_weight_g = 0.0f;
-          memset(scale_filter_buf, 0, sizeof(scale_filter_buf));
-          scale_filter_idx = 0; scale_filter_full = false;
-          lv_label_set_text(lbl_factor_result, T(STR_TARE_OK));
-          lv_label_set_text(lbl_scale_weight, "0 g");
-          Serial.println("Tare (calibration screen) executed");
-        } else {
-          lv_label_set_text(lbl_factor_result, T(STR_TARE_NOT_READY));
-        }
-      }, LV_EVENT_CLICKED, NULL);
-      lv_obj_t *lbl = lv_label_create(btn);
-      lv_label_set_text(lbl, LV_SYMBOL_REFRESH "TARE");
-      lv_obj_set_style_text_color(lbl, lv_color_hex(0xf0b838), 0);
-      lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
-      lv_obj_center(lbl);
-    } else {
-      lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a1828), 0);
-      lv_obj_set_style_bg_color(btn, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-      lv_obj_set_style_radius(btn, 6, 0);
-      lv_obj_set_style_shadow_width(btn, 0, 0);
-      lv_obj_set_style_border_width(btn, 1, 0);
-      lv_obj_set_style_border_color(btn, lv_color_hex(0x1a2840), 0);
-      lv_obj_t *lbl = lv_label_create(btn);
-      lv_label_set_text(lbl, np_labels_f[i]);
-      lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-      lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
-      lv_obj_center(lbl);
-      lv_obj_add_event_cb(btn, [](lv_event_t *e) {
-        if (!lbl_factor_display) return;
-        const char* ch = lv_label_get_text(lv_obj_get_child(lv_event_get_target(e), 0));
-        if (ch[0] == '.' && strchr(factor_input, '.')) return;
-        int len = strlen(factor_input);
-        if (len < (int)sizeof(factor_input)-1) { factor_input[len]=ch[0]; factor_input[len+1]='\0'; }
-        lv_label_set_text(lbl_factor_display, factor_input[0] ? factor_input : "_");
-      }, LV_EVENT_CLICKED, NULL);
-    }
-  }
-
-  int by5_f = NP_START_Y + 4*(NP_H+NP_GAP);
-  int bw5_f = (3*NP_W + 2*NP_GAP - NP_GAP) / 2;
-
-  lv_obj_t *btn_del_f = lv_btn_create(scr_factor);
-  lv_obj_set_size(btn_del_f, bw5_f, NP_H);
-  lv_obj_set_pos(btn_del_f, NP_PAD_X, by5_f);
-  lv_obj_set_style_bg_color(btn_del_f, lv_color_hex(0x1a2030), 0);
-  lv_obj_set_style_bg_color(btn_del_f, lv_color_hex(0x2a3040), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_del_f, 6, 0);
-  lv_obj_set_style_shadow_width(btn_del_f, 0, 0);
-  lv_obj_set_style_border_width(btn_del_f, 1, 0);
-  lv_obj_set_style_border_color(btn_del_f, lv_color_hex(0x1a2840), 0);
-  lv_obj_add_event_cb(btn_del_f, [](lv_event_t *e) {
-    if (!lbl_factor_display) return;
-    int len = strlen(factor_input);
-    if (len > 0) factor_input[len-1] = '\0';
-    lv_label_set_text(lbl_factor_display, factor_input[0] ? factor_input : "_");
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_del_f = lv_label_create(btn_del_f);
-  lv_label_set_text(lbl_del_f, LV_SYMBOL_BACKSPACE);
-  lv_obj_set_style_text_color(lbl_del_f, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_del_f, &lv_font_montserrat_ext_16, 0);
-  lv_obj_center(lbl_del_f);
-
-  lv_obj_t *btn_ok_f = lv_btn_create(scr_factor);
-  lv_obj_set_size(btn_ok_f, bw5_f, NP_H);
-  lv_obj_set_pos(btn_ok_f, NP_PAD_X + bw5_f + NP_GAP, by5_f);
-  lv_obj_set_style_bg_color(btn_ok_f, lv_color_hex(0x1a3020), 0);
-  lv_obj_set_style_bg_color(btn_ok_f, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_ok_f, 6, 0);
-  lv_obj_set_style_shadow_width(btn_ok_f, 0, 0);
-  lv_obj_set_style_border_width(btn_ok_f, 1, 0);
-  lv_obj_set_style_border_color(btn_ok_f, lv_color_hex(0x2a5030), 0);
-  lv_obj_add_event_cb(btn_ok_f, [](lv_event_t *e) {
-    if (!lbl_factor_result) return;
-    float known_g = atof(factor_input);
-    if (known_g > 0 && scale_ready) {
-      int32_t raw = nau.read();
-      float factor = (float)(raw - zero_offset) / known_g;
-      saveCalFactor(factor);
-      char buf[64];
-      snprintf(buf, sizeof(buf), T(STR_CAL_OK), factor);
-      lv_label_set_text(lbl_factor_result, buf);
-    } else if (!scale_ready) {
-      lv_label_set_text(lbl_factor_result, T(STR_TARE_NOT_READY));
-    } else {
-      lv_label_set_text(lbl_factor_result, T(STR_CAL_ZERO_ERR));
-    }
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_ok2_f = lv_label_create(btn_ok_f);
-  lv_label_set_text(lbl_ok2_f, T(STR_BTN_CALCULATE));
-  lv_obj_set_style_text_color(lbl_ok2_f, lv_color_hex(0x40c080), 0);
-  lv_obj_set_style_text_font(lbl_ok2_f, &lv_font_montserrat_ext_14, 0);
-  lv_obj_center(lbl_ok2_f);
-}
-
-// ── Bag weight screen (custom numpad with .) ──
-static char bag_input[16] = "";
-static lv_obj_t *lbl_bag_display = nullptr;
-static lv_obj_t *lbl_bag_result_global = nullptr;
-
-void buildBagScreen() {
-  logSD("BUILD: BagScreen");
-  scr_bag = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(scr_bag, 480, 320);
-  lv_obj_set_pos(scr_bag, 0, 0);
-  lv_obj_add_flag(scr_bag, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_style_radius(scr_bag, 0, 0);
-  lv_obj_set_style_border_width(scr_bag, 0, 0);
-  lv_obj_set_style_pad_all(scr_bag, 0, 0);
-  lv_obj_clear_flag(scr_bag, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_bag, lv_color_hex(0x0a1020), 0);
-
-  // Crash-Schutz: Pointer nullen
-  lbl_bag_display      = nullptr;
-  lbl_bag_result_global = nullptr;
-  snprintf(bag_input, sizeof(bag_input), "%.1f", bag_weight_g);
-
-  buildSubHeader(scr_bag, T(STR_BTN_BAGWEIGHT),
-    [](lv_event_t *e){
-      logSD("BTN: Back -> Scale (from Bag)");
-      hideAllOverlays();
-      if (scr_scale_sub) { lv_obj_del(scr_scale_sub); scr_scale_sub = nullptr; }
-      buildScaleSubScreen();
-      lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
-    });
-
-  // Beschreibung — einzeilig
-  lv_obj_t *lbl_desc = lv_label_create(scr_bag);
-  lv_label_set_text(lbl_desc, T(STR_BAG_DESC));
-  lv_obj_set_style_text_color(lbl_desc, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_desc, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_style_text_align(lbl_desc, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_desc, LV_ALIGN_TOP_MID, 0, 58);
-
-  // Status-Label
-  lbl_bag_result_global = lv_label_create(scr_bag);
-  lv_label_set_text(lbl_bag_result_global, "");
-  lv_obj_set_style_text_color(lbl_bag_result_global, lv_color_hex(0x40c080), 0);
-  lv_obj_set_style_text_font(lbl_bag_result_global, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_style_text_align(lbl_bag_result_global, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_bag_result_global, LV_ALIGN_TOP_MID, 0, 78);
-
-  // Input field — vorbelegt
-  lv_obj_t *input_box_b = lv_obj_create(scr_bag);
-  lv_obj_set_size(input_box_b, 260, 38);
-  lv_obj_align(input_box_b, LV_ALIGN_TOP_MID, 0, 98);
-  lv_obj_set_style_bg_color(input_box_b, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_border_color(input_box_b, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_border_width(input_box_b, 1, 0);
-  lv_obj_set_style_radius(input_box_b, 6, 0);
-  lv_obj_set_style_pad_all(input_box_b, 0, 0);
-  lv_obj_clear_flag(input_box_b, LV_OBJ_FLAG_SCROLLABLE);
-
-  lbl_bag_display = lv_label_create(input_box_b);
-  lv_label_set_text(lbl_bag_display, bag_input);
-  lv_obj_set_style_text_color(lbl_bag_display, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_bag_display, &lv_font_montserrat_ext_20, 0);
-  lv_obj_set_style_text_align(lbl_bag_display, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_center(lbl_bag_display);
-
-  // ── Numpad (104x30, start y=144) ──
-  const int NP_W = 104, NP_H = 30, NP_GAP = 4;
-  const int NP_PAD_X = (480 - 3*NP_W - 2*NP_GAP) / 2;
-  const int NP_START_Y = 144;
-
-  const char* np_labels_b[] = { "1","2","3","4","5","6","7","8","9",".","0","" };
-
-  for (int i = 0; i < 12; i++) {
-    if (np_labels_b[i][0] == '\0') continue;
-    int col = i % 3, row = i / 3;
-    lv_obj_t *btn = lv_btn_create(scr_bag);
-    lv_obj_set_size(btn, NP_W, NP_H);
-    lv_obj_set_pos(btn, NP_PAD_X + col*(NP_W+NP_GAP), NP_START_Y + row*(NP_H+NP_GAP));
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(btn, 6, 0);
-    lv_obj_set_style_shadow_width(btn, 0, 0);
-    lv_obj_set_style_border_width(btn, 1, 0);
-    lv_obj_set_style_border_color(btn, lv_color_hex(0x1a2840), 0);
-    lv_obj_t *lbl = lv_label_create(btn);
-    lv_label_set_text(lbl, np_labels_b[i]);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
-    lv_obj_center(lbl);
-    lv_obj_add_event_cb(btn, [](lv_event_t *e) {
-      if (!lbl_bag_display) return;
-      const char* ch = lv_label_get_text(lv_obj_get_child(lv_event_get_target(e), 0));
-      if (ch[0] == '.' && strchr(bag_input, '.')) return;
-      int len = strlen(bag_input);
-      if (len < (int)sizeof(bag_input)-1) { bag_input[len]=ch[0]; bag_input[len+1]='\0'; }
-      lv_label_set_text(lbl_bag_display, bag_input[0] ? bag_input : "_");
-      if (lbl_bag_result_global) lv_label_set_text(lbl_bag_result_global, "");
-    }, LV_EVENT_CLICKED, NULL);
-  }
-
-  int by5_b = NP_START_Y + 4*(NP_H+NP_GAP);
-  int bw5_b = (3*NP_W + 2*NP_GAP - NP_GAP) / 2;
-
-  lv_obj_t *btn_del_b = lv_btn_create(scr_bag);
-  lv_obj_set_size(btn_del_b, bw5_b, NP_H);
-  lv_obj_set_pos(btn_del_b, NP_PAD_X, by5_b);
-  lv_obj_set_style_bg_color(btn_del_b, lv_color_hex(0x1a2030), 0);
-  lv_obj_set_style_bg_color(btn_del_b, lv_color_hex(0x2a3040), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_del_b, 6, 0);
-  lv_obj_set_style_shadow_width(btn_del_b, 0, 0);
-  lv_obj_set_style_border_width(btn_del_b, 1, 0);
-  lv_obj_set_style_border_color(btn_del_b, lv_color_hex(0x1a2840), 0);
-  lv_obj_add_event_cb(btn_del_b, [](lv_event_t *e) {
-    if (!lbl_bag_display) return;
-    int len = strlen(bag_input);
-    if (len > 0) bag_input[len-1] = '\0';
-    lv_label_set_text(lbl_bag_display, bag_input[0] ? bag_input : "_");
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_del_b = lv_label_create(btn_del_b);
-  lv_label_set_text(lbl_del_b, LV_SYMBOL_BACKSPACE);
-  lv_obj_set_style_text_color(lbl_del_b, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_del_b, &lv_font_montserrat_ext_16, 0);
-  lv_obj_center(lbl_del_b);
-
-  lv_obj_t *btn_ok_b = lv_btn_create(scr_bag);
-  lv_obj_set_size(btn_ok_b, bw5_b, NP_H);
-  lv_obj_set_pos(btn_ok_b, NP_PAD_X + bw5_b + NP_GAP, by5_b);
-  lv_obj_set_style_bg_color(btn_ok_b, lv_color_hex(0x1a3020), 0);
-  lv_obj_set_style_bg_color(btn_ok_b, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_ok_b, 6, 0);
-  lv_obj_set_style_shadow_width(btn_ok_b, 0, 0);
-  lv_obj_set_style_border_width(btn_ok_b, 1, 0);
-  lv_obj_set_style_border_color(btn_ok_b, lv_color_hex(0x2a5030), 0);
-  lv_obj_add_event_cb(btn_ok_b, [](lv_event_t *e) {
-    if (!lbl_bag_result_global) return;
-    float w = atof(bag_input);
-    if (w >= 0 && w < 1000) {
-      saveBagWeight(w);
-      char buf[32];
-      snprintf(buf, sizeof(buf), T(STR_BAG_SAVED), w);
-      lv_label_set_text(lbl_bag_result_global, buf);
-    } else {
-      lv_label_set_text(lbl_bag_result_global, T(STR_BAG_INVALID));
-    }
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_ok2_b = lv_label_create(btn_ok_b);
-  lv_label_set_text(lbl_ok2_b, T(STR_BTN_SAVE));
-  lv_obj_set_style_text_color(lbl_ok2_b, lv_color_hex(0x40c080), 0);
-  lv_obj_set_style_text_font(lbl_ok2_b, &lv_font_montserrat_ext_14, 0);
-  lv_obj_center(lbl_ok2_b);
-}
-
-// ── Settings Haupt-Screen ──
-// ============================================================
-//  HELPER: submenu header (back arrow + title + X)
-// ============================================================
-void buildSubHeader(lv_obj_t *parent, const char *title,
-                    lv_event_cb_t back_cb, const char *back_hint) {
-  // Back button (arrow top left)
-  lv_obj_t *btn_back = lv_btn_create(parent);
-  lv_obj_set_size(btn_back, 44, 44);
-  lv_obj_set_pos(btn_back, 4, 2);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_back, 8, 0);
-  lv_obj_set_style_shadow_width(btn_back, 0, 0);
-  lv_obj_set_style_border_width(btn_back, 0, 0);
-  lv_obj_t *lbl_back = lv_label_create(btn_back);
-  lv_label_set_text(lbl_back, LV_SYMBOL_LEFT);
-  lv_obj_set_style_text_color(lbl_back, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_back, &lv_font_montserrat_ext_18, 0);
-  lv_obj_center(lbl_back);
-  lv_obj_add_event_cb(btn_back, back_cb, LV_EVENT_CLICKED, NULL);
-
-  // Title Mitte
-  lv_obj_t *lbl_title = lv_label_create(parent);
-  lv_label_set_text(lbl_title, title);
-  lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
-  lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 12);
-
-  // X-Button (rechts oben → Hauptscreen)
-  lv_obj_t *btn_x = lv_btn_create(parent);
-  lv_obj_set_size(btn_x, 44, 44);
-  lv_obj_align(btn_x, LV_ALIGN_TOP_RIGHT, -4, 2);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_x, 8, 0);
-  lv_obj_set_style_shadow_width(btn_x, 0, 0);
-  lv_obj_set_style_border_width(btn_x, 0, 0);
-  lv_obj_t *lbl_x = lv_label_create(btn_x);
-  lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_color(lbl_x, lv_color_hex(0xff8080), 0);
-  lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
-  lv_obj_center(lbl_x);
-  lv_obj_add_event_cb(btn_x, [](lv_event_t *e){ logSD("BTN: Close -> Main"); showMainScreen(); }, LV_EVENT_CLICKED, NULL);
-  // Keine Trennlinie — wird von Buttons ueberlagert, sieht unschoen aus
-}
-
-// ============================================================
-//  HELPER: Standard-Overlay-Screen erstellen
-// ============================================================
-lv_obj_t* buildOverlayScreen() {
-  lv_obj_t *scr = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(scr, 480, 320);
-  lv_obj_set_pos(scr, 0, 0);
-  lv_obj_add_flag(scr, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_style_radius(scr, 0, 0);
-  lv_obj_set_style_bg_color(scr, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_border_width(scr, 0, 0);
-  lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_pad_all(scr, 0, 0);
-  return scr;
-}
-
-// ============================================================
-//  SETTINGS MAIN SCREEN — 2x2 tiles (no TARE button)
-// ============================================================
-void buildSettingsScreen() {
-  logSD("BUILD: SettingsScreen");
-  if (sd_verbose) logSD("[verbose] buildSettingsScreen: start");
-  scr_settings = buildOverlayScreen();
-
-  // Title
-  lv_obj_t *title = lv_label_create(scr_settings);
-  lv_label_set_text(title, T(STR_SETTINGS_TITLE));
-  lv_obj_set_style_text_color(title, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 12);
-
-  // X button — consistent 44x44 like all other screens
-  lv_obj_t *btn_x = lv_btn_create(scr_settings);
-  lv_obj_set_size(btn_x, 44, 44);
-  lv_obj_align(btn_x, LV_ALIGN_TOP_RIGHT, -4, 2);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_x, 8, 0);
-  lv_obj_set_style_shadow_width(btn_x, 0, 0);
-  lv_obj_set_style_border_width(btn_x, 0, 0);
-  lv_obj_t *lbl_x = lv_label_create(btn_x);
-  lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_color(lbl_x, lv_color_hex(0xff8080), 0);
-  lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
-  lv_obj_center(lbl_x);
-  lv_obj_add_event_cb(btn_x, [](lv_event_t *e){ logSD("BTN: Close -> Main"); showMainScreen(); }, LV_EVENT_CLICKED, NULL);
-
-  // 2x2 grid — y=60 top row, height=118, gap=8 → second row y=186, bottom y=304
-  // Horizontal: x=8 and x=242, tile width=226, gap=8
-  struct { const char *icon; const char *label; const char *sub; uint32_t col; } tiles[] = {
-    { LV_SYMBOL_WIFI,     T(STR_TILE_CONNECTION), T(STR_TILE_CONN_SUB),    0x0a1e30 },
-    { LV_SYMBOL_DRIVE,    T(STR_TILE_SCALE),      T(STR_TILE_SCALE_SUB),   0x0a1e30 },
-    { LV_SYMBOL_IMAGE,    T(STR_TILE_DISPLAY),    T(STR_TILE_DISPLAY_SUB), 0x0a1e30 },
-    { LV_SYMBOL_SETTINGS, T(STR_TILE_SYSTEM),     T(STR_TILE_SYSTEM_SUB),  0x0a1e30 },
-  };
-  int tx[] = { 8, 242, 8, 242 };
-  int ty[] = { 60, 60, 186, 186 };
-
-  for (int i = 0; i < 4; i++) {
-    lv_obj_t *tile = lv_btn_create(scr_settings);
-    lv_obj_set_size(tile, 226, 118);
-    lv_obj_set_pos(tile, tx[i], ty[i]);
-    lv_obj_set_style_bg_color(tile, lv_color_hex(tiles[i].col), 0);
-    lv_obj_set_style_bg_color(tile, lv_color_hex(tiles[i].col + 0x101010), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(tile, 10, 0);
-    lv_obj_set_style_shadow_width(tile, 0, 0);
-    lv_obj_set_style_border_width(tile, 1, 0);
-    lv_obj_set_style_border_color(tile, lv_color_hex(tiles[i].col + 0x181818), 0);
-
-    lv_obj_t *ico = lv_label_create(tile);
-    lv_label_set_text(ico, tiles[i].icon);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_TOP_LEFT, 10, 8);
-
-    lv_obj_t *lbl = lv_label_create(tile);
-    lv_label_set_text(lbl, tiles[i].label);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, -8);
-
-    lv_obj_t *sub = lv_label_create(tile);
-    lv_label_set_text(sub, tiles[i].sub);
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_12, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 16);
-
-    lv_obj_add_event_cb(tile, [](lv_event_t *e) {
-      intptr_t idx = (intptr_t)lv_event_get_user_data(e);
-      switch (idx) {
-        case 0:
-          logSD("UI: Tile -> Connection");
-          if (scr_connection) { lv_obj_del(scr_connection); scr_connection = nullptr; }
-          buildConnectionScreen();
-          if (!scr_connection) buildConnectionScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
-          break;
-        case 1:
-          logSD("UI: Tile -> Scale");
-          if (!scr_scale_sub) buildScaleSubScreen();
-          if (!scr_scale_sub) buildScaleSubScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
-          break;
-        case 2:
-          logSD("UI: Tile -> Display");
-          if (!scr_display) buildDisplayScreen();
-          hideAllOverlays(); lv_obj_clear_flag(scr_display, LV_OBJ_FLAG_HIDDEN);
-          break;
-        case 3:
-          logSD("UI: Tile -> System");
-          if (!scr_system) buildSystemScreen();
-          hideAllOverlays(); lv_obj_clear_flag(scr_system, LV_OBJ_FLAG_HIDDEN);
-          break;
-      }
-      resetActivityTimer();
-    }, LV_EVENT_CLICKED, (void*)(intptr_t)i);
-  }
-
-  // Red circle badge on System tile top-right corner — shown when update is available
-  lbl_system_badge = lv_obj_create(scr_settings);
-  lv_obj_set_size(lbl_system_badge, 14, 14);
-  lv_obj_set_pos(lbl_system_badge, 456, 186);
-  lv_obj_set_style_radius(lbl_system_badge, 7, 0);
-  lv_obj_set_style_bg_color(lbl_system_badge, lv_color_hex(0xe03030), 0);
-  lv_obj_set_style_border_color(lbl_system_badge, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_border_width(lbl_system_badge, 2, 0);
-  lv_obj_set_style_pad_all(lbl_system_badge, 0, 0);
-  lv_obj_clear_flag(lbl_system_badge, LV_OBJ_FLAG_SCROLLABLE);
-  if (!update_available) lv_obj_add_flag(lbl_system_badge, LV_OBJ_FLAG_HIDDEN);
-  if (sd_verbose) logSD("[verbose] buildSettingsScreen: done");
-}
-
-// ============================================================
-//  SUBMENU: CONNECTION (WiFi + Spoolman IP + Extra Fields)
-// ============================================================
-void buildConnectionScreen() {
-  logSD("BUILD: ConnectionScreen");
-  if (sd_verbose) logSD("[verbose] buildConnectionScreen: start");
-  scr_connection = buildOverlayScreen();
-  buildSubHeader(scr_connection, T(STR_TILE_CONNECTION),
-    [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
-
-  // All 3 buttons: 456x80, same layout, evenly spaced
-  // y positions: 54, 142, 230 (gap 8px, fits within 320)
-  const int BTN_W = 456, BTN_H = 80, BTN_X = 12;
-  const int BTN_Y[] = { 54, 142, 230 };
-
-  // ── WiFi Settings ──
-  lv_obj_t *btn_wifi = lv_btn_create(scr_connection);
-  lv_obj_set_size(btn_wifi, BTN_W, BTN_H);
-  lv_obj_set_pos(btn_wifi, BTN_X, BTN_Y[0]);
-  lv_obj_set_style_bg_color(btn_wifi, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_wifi, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_wifi, 10, 0);
-  lv_obj_set_style_shadow_width(btn_wifi, 0, 0);
-  lv_obj_set_style_border_width(btn_wifi, 1, 0);
-  lv_obj_set_style_border_color(btn_wifi, lv_color_hex(0x1a3050), 0);
-  { lv_obj_t *ico = lv_label_create(btn_wifi);
-    lv_label_set_text(ico, LV_SYMBOL_WIFI);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
-    lv_obj_t *lbl = lv_label_create(btn_wifi);
-    lv_label_set_text(lbl, T(STR_BTN_WIFI_SETTINGS));
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
-    lv_obj_t *sub = lv_label_create(btn_wifi);
-    lv_label_set_text(sub, cfg_wifi_ssid[0] ? cfg_wifi_ssid : T(STR_BTN_WIFI_NONE));
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
-  lv_obj_add_event_cb(btn_wifi, [](lv_event_t *e){ logSD("BTN: Conn -> WifiSetup"); showWifiSetupScreen(); }, LV_EVENT_CLICKED, NULL);
-
-  // ── Spoolman IP ──
-  lv_obj_t *btn_sp = lv_btn_create(scr_connection);
-  lv_obj_set_size(btn_sp, BTN_W, BTN_H);
-  lv_obj_set_pos(btn_sp, BTN_X, BTN_Y[1]);
-  lv_obj_set_style_bg_color(btn_sp, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_sp, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_sp, 10, 0);
-  lv_obj_set_style_shadow_width(btn_sp, 0, 0);
-  lv_obj_set_style_border_width(btn_sp, 1, 0);
-  lv_obj_set_style_border_color(btn_sp, lv_color_hex(0x1a3050), 0);
-  { lv_obj_t *ico = lv_label_create(btn_sp);
-    lv_label_set_text(ico, LV_SYMBOL_SETTINGS);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
-    lv_obj_t *lbl = lv_label_create(btn_sp);
-    lv_label_set_text(lbl, "Spoolman IP");
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
-    lv_obj_t *sub = lv_label_create(btn_sp);
-    lv_label_set_text(sub, cfg_spoolman_ip[0] ? cfg_spoolman_ip : T(STR_BTN_WIFI_NONE));
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
-  lv_obj_add_event_cb(btn_sp, [](lv_event_t *e){
-    logSD("BTN: Conn -> Spoolman IP");
-    show_spoolman_pending = true;
-  }, LV_EVENT_CLICKED, NULL);
-
-  // ── Spoolman Extra Fields ──
-  lv_obj_t *btn_ef = lv_btn_create(scr_connection);
-  lv_obj_set_size(btn_ef, BTN_W, BTN_H);
-  lv_obj_set_pos(btn_ef, BTN_X, BTN_Y[2]);
-  lv_obj_set_style_bg_color(btn_ef, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_ef, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_ef, 10, 0);
-  lv_obj_set_style_shadow_width(btn_ef, 0, 0);
-  lv_obj_set_style_border_width(btn_ef, 1, 0);
-  lv_obj_set_style_border_color(btn_ef, lv_color_hex(0x1a3050), 0);
-  { lv_obj_t *ico = lv_label_create(btn_ef);
-    lv_label_set_text(ico, LV_SYMBOL_LIST);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
-    lv_obj_t *lbl = lv_label_create(btn_ef);
-    lv_label_set_text(lbl, T(STR_EXTRA_FIELDS_TITLE));
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
-    lv_obj_t *sub = lv_label_create(btn_ef);
-    lv_label_set_text(sub, "tag, last_dried");
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
-  lv_obj_add_event_cb(btn_ef, [](lv_event_t *e){
-    logSD("BTN: Conn -> Extra Fields");
-    showExtraFieldsScreen(false);
-  }, LV_EVENT_CLICKED, NULL);
-  if (sd_verbose) logSD("[verbose] buildConnectionScreen: done");
-}
-
-// Update the Last used/weighed cap label on the mainscreen
-void updateLastUsedCapLabel() {
-  if (!lbl_lu_cap) return;
-  char buf[32];
-  if (last_used_mode == 1)
-    strncpy(buf, g_lang == LANG_DE ? "Zuletzt gewogen:" : "Last weighed:", sizeof(buf)-1);
-  else
-    strncpy(buf, T(STR_LBL_LAST_USED), sizeof(buf)-1);
-  buf[sizeof(buf)-1] = 0;
-  lv_label_set_text(lbl_lu_cap, buf);
-}
-
-// ============================================================
-//  LAST USED MODE SCREEN
-// ============================================================
-void buildLastUsedScreen() {
-  logSD("BUILD: LastUsedScreen");
-  scr_lastused = buildOverlayScreen();
-  buildSubHeader(scr_lastused, T(STR_LASTUSED_TITLE),
-    [](lv_event_t *e){
-      hideAllOverlays();
-      if (!scr_scale_sub) buildScaleSubScreen();
-      lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
-    });
-  addCloseButton(scr_lastused);
-
-  // Option 1: OpenSpoolMan
-  lv_obj_t *btn_osm = lv_btn_create(scr_lastused);
-  lv_obj_set_size(btn_osm, 210, 50);
-  lv_obj_set_pos(btn_osm, 12, 58);
-  bool osm_active = (last_used_mode == 0);
-  lv_obj_set_style_bg_color(btn_osm, lv_color_hex(osm_active ? 0x1a3020 : 0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_osm, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-  lv_obj_set_style_border_width(btn_osm, 1, 0);
-  lv_obj_set_style_border_color(btn_osm, lv_color_hex(osm_active ? 0x28d49a : 0x1a3060), 0);
-  lv_obj_set_style_radius(btn_osm, 8, 0);
-  lv_obj_set_style_shadow_width(btn_osm, 0, 0);
-  lv_obj_add_event_cb(btn_osm, [](lv_event_t *e) {
-    logSD("BTN: LastUsed -> OSM mode");
-    last_used_mode = 0;
-    Preferences p; p.begin("spoolscale", false);
-    p.putUChar("lu_mode", 0); p.end();
-    updateLastUsedCapLabel();
-    // Rebuild via flag pattern — never delete own parent screen in callback
-    show_lastused_pending = true;
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_osm = lv_label_create(btn_osm);
-  lv_label_set_text(lbl_osm, T(STR_LASTUSED_OPT_OSM));
-  lv_obj_set_style_text_color(lbl_osm, lv_color_hex(osm_active ? 0x40c080 : 0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_osm, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_align(lbl_osm, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_osm, LV_ALIGN_CENTER, 0, 0);
-
-  // Option 2: Last Weighed
-  lv_obj_t *btn_lw = lv_btn_create(scr_lastused);
-  lv_obj_set_size(btn_lw, 210, 50);
-  lv_obj_set_pos(btn_lw, 238, 58);
-  bool lw_active = (last_used_mode == 1);
-  lv_obj_set_style_bg_color(btn_lw, lv_color_hex(lw_active ? 0x1a3020 : 0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_lw, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-  lv_obj_set_style_border_width(btn_lw, 1, 0);
-  lv_obj_set_style_border_color(btn_lw, lv_color_hex(lw_active ? 0x28d49a : 0x1a3060), 0);
-  lv_obj_set_style_radius(btn_lw, 8, 0);
-  lv_obj_set_style_shadow_width(btn_lw, 0, 0);
-  lv_obj_add_event_cb(btn_lw, [](lv_event_t *e) {
-    logSD("BTN: LastUsed -> Weighed mode");
-    last_used_mode = 1;
-    Preferences p; p.begin("spoolscale", false);
-    p.putUChar("lu_mode", 1); p.end();
-    updateLastUsedCapLabel();
-    show_lastused_pending = true;
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_lw = lv_label_create(btn_lw);
-  lv_label_set_text(lbl_lw, T(STR_LASTUSED_OPT_WEIGHED));
-  lv_obj_set_style_text_color(lbl_lw, lv_color_hex(lw_active ? 0x40c080 : 0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_lw, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_align(lbl_lw, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_lw, LV_ALIGN_CENTER, 0, 0);
-
-  // Description text — shows text for active option
-  lv_obj_t *lbl_desc = lv_label_create(scr_lastused);
-  const char *desc = (last_used_mode == 0) ? T(STR_LASTUSED_DESC_OSM) : T(STR_LASTUSED_DESC_WEIGHED);
-  char desc_buf[280];
-  strncpy(desc_buf, desc, sizeof(desc_buf)-1); desc_buf[sizeof(desc_buf)-1] = 0;
-  lv_label_set_text(lbl_desc, desc_buf);
-  lv_obj_set_style_text_color(lbl_desc, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_desc, &lv_font_montserrat_ext_14, 0);
-  lv_label_set_long_mode(lbl_desc, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(lbl_desc, 448);
-  lv_obj_set_style_text_align(lbl_desc, LV_TEXT_ALIGN_LEFT, 0);
-  lv_obj_set_pos(lbl_desc, 16, 128);
-}
-
-// ============================================================
-//  SUBMENU: SCALE — 2x2 grid + full-width bottom row
-//  Row 1: [Calibrate] [Bag Weight]
-//  Row 2: [Last Used] [Drying Reminder]
-//  Row 3: [Location Popup Toggle — full width]
-// ============================================================
-// ============================================================
-//  HELPER: scrollable list button (volle Breite, icon + titel + sub)
-// ============================================================
-static lv_obj_t* makeListBtn(lv_obj_t* parent, lv_obj_t* list,
-                              const char* ico_sym, const char* title, const char* sub,
-                              bool toggle_active = false) {
-  lv_obj_t *btn = lv_btn_create(list);
-  lv_obj_set_size(btn, 456, 64);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn, 10, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 1, 0);
-  lv_obj_set_style_border_color(btn, toggle_active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3050), 0);
-  lv_obj_set_style_pad_all(btn, 0, 0);
-  lv_obj_t *ico = lv_label_create(btn);
-  lv_label_set_text(ico, ico_sym);
-  lv_obj_set_style_text_color(ico, toggle_active ? lv_color_hex(0x28d49a) : lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
-  lv_obj_align(ico, LV_ALIGN_LEFT_MID, 14, 0);
-  lv_obj_t *lbl = lv_label_create(btn);
-  lv_label_set_text(lbl, title);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-  lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_width(lbl, 320);
-  lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 52, sub && strlen(sub) > 0 ? -10 : 0);
-  if (sub && strlen(sub) > 0) {
-    lv_obj_t *slbl = lv_label_create(btn);
-    lv_label_set_text(slbl, sub);
-    lv_obj_set_style_text_color(slbl, toggle_active ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(slbl, &lv_font_montserrat_ext_12, 0);
-    lv_obj_set_width(slbl, 320);
-    lv_obj_align(slbl, LV_ALIGN_LEFT_MID, 52, 12);
-  }
-  lv_obj_t *arr = lv_label_create(btn);
-  lv_label_set_text(arr, LV_SYMBOL_RIGHT);
-  lv_obj_set_style_text_color(arr, lv_color_hex(0x2a4060), 0);
-  lv_obj_set_style_text_font(arr, &lv_font_montserrat_ext_16, 0);
-  lv_obj_align(arr, LV_ALIGN_RIGHT_MID, -14, 0);
-  return btn;
-}
-
-void buildScaleSubScreen() {
-  logSD("BUILD: ScaleSubScreen");
-  if (sd_verbose) logSD("[verbose] buildScaleSubScreen: start");
-  scr_scale_sub = buildOverlayScreen();
-  buildSubHeader(scr_scale_sub, T(STR_SCALE_TITLE),
-    [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
-
-  // Scrollbare Liste unter Header (y=57, h=263 -> letzter btn leicht angeschnitten)
-  lv_obj_t *list = lv_obj_create(scr_scale_sub);
-  lv_obj_set_size(list, 480, 263);
-  lv_obj_set_pos(list, 0, 57);
-  lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(list, 0, 0);
-  lv_obj_set_style_pad_left(list, 12, 0);
-  lv_obj_set_style_pad_right(list, 12, 0);
-  lv_obj_set_style_pad_top(list, 6, 0);
-  lv_obj_set_style_pad_bottom(list, 6, 0);
-  lv_obj_set_style_pad_row(list, 6, 0);
-  lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_scroll_dir(list, LV_DIR_VER);
-  lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
-  lv_obj_clear_flag(list, LV_OBJ_FLAG_SCROLL_ELASTIC);
-
-  // [1] Beutelgewicht
-  { char bag_sub[32]; snprintf(bag_sub, sizeof(bag_sub), T(STR_BAG_CURRENT), bag_weight_g);
-    lv_obj_t *btn = makeListBtn(scr_scale_sub, list, LV_SYMBOL_DRIVE, T(STR_BTN_BAGWEIGHT), bag_sub);
-    lv_obj_add_event_cb(btn, [](lv_event_t *e){
-      logSD("BTN: Scale-Sub -> Bag Weight");
-      show_bag_pending = true;
-    }, LV_EVENT_CLICKED, NULL); }
-
-  // [2] Trocknungs-Erinnerung
-  { char buf_t[40]; strncpy(buf_t, T(STR_BTN_DRYING_REMINDER), sizeof(buf_t)-1);
-    // Sub-Label zeigt aktiven Modus
-    char buf_s[24];
-    const char* mode_lbl[] = { T(STR_DRY_MODE_OFF), T(STR_DRY_MODE_MATERIAL), T(STR_DRY_MODE_MANUAL) };
-    strncpy(buf_s, mode_lbl[g_dry_mode < 3 ? g_dry_mode : 0], sizeof(buf_s)-1);
-    lv_obj_t *btn = makeListBtn(scr_scale_sub, list, LV_SYMBOL_WARNING, buf_t, buf_s);
-    lv_obj_add_event_cb(btn, [](lv_event_t *e){
-      logSD("BTN: Scale-Sub -> Drying Reminder");
-      show_drying_reminder_pending = true;
-    }, LV_EVENT_CLICKED, NULL); }
-
-  // [3] Auto Location Popup (Toggle) — kein Pfeil, ON/OFF rechts
-  { char buf_t[40]; strncpy(buf_t, T(STR_BTN_AUTO_LOC_POPUP), sizeof(buf_t)-1);
-    char buf_s[8]; strncpy(buf_s, g_auto_loc_popup ? "ON" : "OFF", sizeof(buf_s)-1);
-    lv_obj_t *btn = makeListBtn(scr_scale_sub, list, LV_SYMBOL_GPS, buf_t, buf_s, g_auto_loc_popup);
-    // Pfeil-Label (letztes Child) durch ON/OFF ersetzen
-    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
-    if (arr_lbl) {
-      lv_label_set_text(arr_lbl, g_auto_loc_popup ? "ON" : "OFF");
-      lv_obj_set_style_text_color(arr_lbl, g_auto_loc_popup ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
-      lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
-    }
-    lv_obj_add_event_cb(btn, [](lv_event_t *e){
-      logSD("BTN: Scale-Sub -> Auto Location Popup Toggle");
-      g_auto_loc_popup = !g_auto_loc_popup;
-      Preferences prefs; prefs.begin("spoolscale", false);
-      prefs.putBool("auto_loc_popup", g_auto_loc_popup);
-      prefs.end();
-      if (scr_scale_sub) { lv_obj_del(scr_scale_sub); scr_scale_sub = nullptr; }
-      buildScaleSubScreen();
-      lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
-    }, LV_EVENT_CLICKED, NULL); }
-
-  // [4] Last Used Mode
-  { char buf_t[32]; strncpy(buf_t, T(STR_BTN_LASTUSED_MODE), sizeof(buf_t)-1);
-    char buf_s[48]; strncpy(buf_s, T(STR_BTN_LASTUSED_MODE_SUB), sizeof(buf_s)-1);
-    lv_obj_t *btn = makeListBtn(scr_scale_sub, list, LV_SYMBOL_SAVE, buf_t, buf_s);
-    lv_obj_add_event_cb(btn, [](lv_event_t *e){
-      logSD("BTN: Scale-Sub -> Last Used Mode");
-      show_lastused_pending = true;
-    }, LV_EVENT_CLICKED, NULL); }
-
-  // [5] Kalibrierung
-  { char cal_sub[32]; snprintf(cal_sub, sizeof(cal_sub), T(STR_CAL_FACTOR_SHORT), cal_factor);
-    lv_obj_t *btn = makeListBtn(scr_scale_sub, list, LV_SYMBOL_EDIT, T(STR_BTN_CALIBRATE), cal_sub);
-    lv_obj_add_event_cb(btn, [](lv_event_t *e){
-      logSD("BTN: Scale-Sub -> Calibration");
-      show_factor_pending = true;
-    }, LV_EVENT_CLICKED, NULL); }
-
-  if (sd_verbose) logSD("[verbose] buildScaleSubScreen: done");
-}
-
-// ============================================================
-//  DRYING REMINDER SCREEN
-//  Modi: 0=Aus  1=Material  2=Manuell
-//  Manuell-Werte per Numpad editierbar; Material-Werte per Webserver
-// ============================================================
-
-// Numpad-Subscreen fuer Schwellwert-Eingabe
-// target: 0=Manuell-Gelb, 1=Manuell-Rot
-static void buildDryNumpadScreen(int target) {
-  logSDf("BUILD: DryNumpadScreen target=%d", target);
-  s_dry_numpad_target = target;
-  s_dry_numpad_value  = (target == 0) ? g_dry_man_yellow : g_dry_man_red;
-  if (s_dry_numpad_scr) { lv_obj_del(s_dry_numpad_scr); s_dry_numpad_scr = nullptr; }
-  s_dry_numpad_scr = buildOverlayScreen();
-  // Header
-  char title_buf[32];
-  strncpy(title_buf, (target == 0) ? T(STR_DRY_NUMPAD_YELLOW_TITLE) : T(STR_DRY_NUMPAD_RED_TITLE), sizeof(title_buf)-1);
-  const char* title_str = title_buf;
-  buildSubHeader(s_dry_numpad_scr, title_str, [](lv_event_t *e){
-    if (s_dry_numpad_scr) { lv_obj_del(s_dry_numpad_scr); s_dry_numpad_scr = nullptr; }
-    show_drying_reminder_pending = true;
-  });
-  // Wert-Anzeige
-  lv_obj_t *val_box = lv_obj_create(s_dry_numpad_scr);
-  lv_obj_set_size(val_box, 380, 44);
-  lv_obj_set_pos(val_box, 50, 68);
-  lv_obj_set_style_bg_color(val_box, lv_color_hex(0x050f1e), 0);
-  lv_obj_set_style_border_color(val_box, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_border_width(val_box, 1, 0);
-  lv_obj_set_style_radius(val_box, 8, 0);
-  s_dry_numpad_lbl = lv_label_create(val_box);
-  char vbuf[16]; snprintf(vbuf, sizeof(vbuf), "%d %s", s_dry_numpad_value, T(STR_DRY_DAYS_UNIT));
-  lv_label_set_text(s_dry_numpad_lbl, vbuf);
-  lv_obj_set_style_text_color(s_dry_numpad_lbl, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(s_dry_numpad_lbl, &lv_font_montserrat_ext_24, 0);
-  lv_obj_align(s_dry_numpad_lbl, LV_ALIGN_CENTER, 0, 0);
-
-  // Numpad 3x4 Grid: 1-9, DEL, 0, SAVE (standard pattern)
-  // Row4: [DEL][0][SAVE] — SAVE replaces separate button below
-  const int NP_W = 136, NP_H = 36, NP_GAP = 4;
-  const int NP_X0 = (480 - 3*NP_W - 2*NP_GAP) / 2;
-  const int NP_Y0 = 122;
-  static const char* keys[] = { "1","2","3","4","5","6","7","8","9","DEL","0","OK" };
-  int kx = 0, ky = 0, kw = NP_W, kh = NP_H, gap = NP_GAP;  // unused vars kept for compat
-  for (int i = 0; i < 12; i++) {
-    int col = i % 3, row = i / 3;
-    int bx = NP_X0 + col * (NP_W + NP_GAP);
-    int by = NP_Y0 + row * (NP_H + NP_GAP);
-    bool is_del = (strcmp(keys[i], "DEL") == 0);
-    bool is_ok  = (strcmp(keys[i], "OK")  == 0);
-    lv_obj_t *kb = lv_btn_create(s_dry_numpad_scr);
-    lv_obj_set_size(kb, NP_W, NP_H);
-    lv_obj_set_pos(kb, bx, by);
-    lv_obj_set_style_bg_color(kb, is_del ? lv_color_hex(0x1a1020) :
-                                  is_ok  ? lv_color_hex(0x1a4030) :
-                                           lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_bg_color(kb, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(kb, 6, 0);
-    lv_obj_set_style_shadow_width(kb, 0, 0);
-    lv_obj_set_style_border_width(kb, 1, 0);
-    lv_obj_set_style_border_color(kb, is_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3050), 0);
-    lv_obj_t *kl = lv_label_create(kb);
-    lv_label_set_text(kl, is_ok ? LV_SYMBOL_OK : keys[i]);
-    lv_obj_set_style_text_color(kl, is_del ? lv_color_hex(0xe04040) :
-                                     is_ok  ? lv_color_hex(0x28d49a) :
-                                              lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(kl, &lv_font_montserrat_ext_18, 0);
-    lv_obj_align(kl, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_user_data(kb, (void*)keys[i]);
-    lv_obj_add_event_cb(kb, [](lv_event_t *e){
-      const char* k = (const char*)lv_obj_get_user_data(lv_event_get_target(e));
-      if (!k || !s_dry_numpad_lbl) return;
-      if (strcmp(k, "DEL") == 0) {
-        s_dry_numpad_value /= 10;
-      } else if (strcmp(k, "OK") == 0) {
-        // Speichern (gleiche Logik wie Save-Button)
-        if (s_dry_numpad_value < 1) s_dry_numpad_value = 1;
-        if (s_dry_numpad_target == 0) g_dry_man_yellow = s_dry_numpad_value;
-        else                           g_dry_man_red    = s_dry_numpad_value;
-        logSDf("Drying Reminder: manual yellow=%d red=%d", g_dry_man_yellow, g_dry_man_red);
-        Preferences prefs; prefs.begin("spoolscale", false);
-        prefs.putInt("dry_man_y", g_dry_man_yellow);
-        prefs.putInt("dry_man_r", g_dry_man_red);
-        prefs.end();
-        if (s_dry_numpad_scr) { lv_obj_del(s_dry_numpad_scr); s_dry_numpad_scr = nullptr; }
-        show_drying_reminder_pending = true;
-        return;
-      } else {
-        int digit = k[0] - '0';
-        if (s_dry_numpad_value < 999)
-          s_dry_numpad_value = s_dry_numpad_value * 10 + digit;
-      }
-      char vb[16]; snprintf(vb, sizeof(vb), "%d %s", s_dry_numpad_value, T(STR_DRY_DAYS_UNIT));
-      lv_label_set_text(s_dry_numpad_lbl, vb);
-    }, LV_EVENT_CLICKED, NULL);
-  }
-
-  // Save is now handled by OK key in numpad grid
-}
-
-void showDryingReminderScreen() {
-  logSD("SHOW: DryingReminderScreen");
-  if (scr_drying_reminder) { lv_obj_del(scr_drying_reminder); scr_drying_reminder = nullptr; }
-  scr_drying_reminder = buildOverlayScreen();
-  buildSubHeader(scr_drying_reminder, T(STR_DRYING_REMINDER_TITLE),
-    [](lv_event_t *e){ logSD("BTN: Back -> Scale");
-      if (scr_drying_reminder) { lv_obj_del(scr_drying_reminder); scr_drying_reminder = nullptr; }
-      if (scr_scale_sub) { lv_obj_del(scr_scale_sub); scr_scale_sub = nullptr; }
-      buildScaleSubScreen();
-      lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
-    });
-
-  // ── Modi-Toggle-Buttons ──────────────────────────────────
-  // Drei Buttons nebeneinander: Aus / Material / Manuell
-  char ml0[16],ml1[16],ml2[16];
-  strncpy(ml0,T(STR_DRY_MODE_OFF),sizeof(ml0)-1);
-  strncpy(ml1,T(STR_DRY_MODE_MATERIAL),sizeof(ml1)-1);
-  strncpy(ml2,T(STR_DRY_MODE_MANUAL),sizeof(ml2)-1);
-  const char* mode_labels[] = { ml0, ml1, ml2 };
-  int btn_w = 144, btn_h = 36, btn_y = 64, btn_gap = 6;
-  int total_w = 3*btn_w + 2*btn_gap;
-  int btn_x0 = (480 - total_w) / 2;
-  for (int m = 0; m < 3; m++) {
-    bool active = (g_dry_mode == m);
-    lv_obj_t *mb = lv_btn_create(scr_drying_reminder);
-    lv_obj_set_size(mb, btn_w, btn_h);
-    lv_obj_set_pos(mb, btn_x0 + m*(btn_w+btn_gap), btn_y);
-    lv_obj_set_style_bg_color(mb, active ? lv_color_hex(0x0d2e1a) : lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_bg_color(mb, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(mb, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3050), 0);
-    lv_obj_set_style_border_width(mb, 1, 0);
-    lv_obj_set_style_radius(mb, 8, 0);
-    lv_obj_set_style_shadow_width(mb, 0, 0);
-    lv_obj_t *ml = lv_label_create(mb);
-    lv_label_set_text(ml, mode_labels[m]);
-    lv_obj_set_style_text_color(ml, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(ml, &lv_font_montserrat_ext_16, 0);
-    lv_obj_align(ml, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_user_data(mb, (void*)(intptr_t)m);
-    lv_obj_add_event_cb(mb, [](lv_event_t *e){
-      uint8_t new_mode = (uint8_t)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
-      if (g_dry_mode == new_mode) return;
-      g_dry_mode = new_mode;
-      logSDf("Drying Reminder: mode set to %d", g_dry_mode);
-      Preferences prefs; prefs.begin("spoolscale", false);
-      prefs.putUChar("dry_mode", g_dry_mode);
-      prefs.end();
-      show_drying_reminder_pending = true;
-    }, LV_EVENT_CLICKED, NULL);
-  }
-
-  // ── Inhaltsbereich je nach Modus ────────────────────────
-  int content_y = 112;
-
-  if (g_dry_mode == 0) {
-    // Aus: Erklaerungstext
-    lv_obj_t *lbl = lv_label_create(scr_drying_reminder);
-    { char dbuf[200]; strncpy(dbuf, T(STR_DRY_OFF_DESC), sizeof(dbuf)-1);
-      lv_label_set_text(lbl, dbuf); }
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_width(lbl, 440);
-    lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
-    lv_obj_align(lbl, LV_ALIGN_TOP_MID, 0, content_y);
-
-  } else if (g_dry_mode == 1) {
-    // Material: Tabelle der Schwellwerte (read-only)
-    lv_obj_t *hint = lv_label_create(scr_drying_reminder);
-    { char hbuf[64]; strncpy(hbuf, T(STR_DRY_MAT_HINT), sizeof(hbuf)-1); lv_label_set_text(hint, hbuf); }
-    lv_obj_set_style_text_color(hint, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
-    lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_width(hint, 440);
-    lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, content_y);
-    content_y += 20;
-
-    // Scrollbare Tabelle
-    lv_obj_t *tbl_cont = lv_obj_create(scr_drying_reminder);
-    lv_obj_set_size(tbl_cont, 456, 162);
-    lv_obj_set_pos(tbl_cont, 12, content_y + 4);
-    lv_obj_set_style_bg_color(tbl_cont, lv_color_hex(0x050f1e), 0);
-    lv_obj_set_style_border_color(tbl_cont, lv_color_hex(0x1a3050), 0);
-    lv_obj_set_style_border_width(tbl_cont, 1, 0);
-    lv_obj_set_style_radius(tbl_cont, 8, 0);
-    lv_obj_set_style_pad_all(tbl_cont, 6, 0);
-    lv_obj_set_style_pad_row(tbl_cont, 3, 0);
-    lv_obj_set_flex_flow(tbl_cont, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_scroll_dir(tbl_cont, LV_DIR_VER);
-    lv_obj_set_scrollbar_mode(tbl_cont, LV_SCROLLBAR_MODE_AUTO);
-    // Header-Zeile
-    { lv_obj_t *row = lv_obj_create(tbl_cont);
-      lv_obj_set_size(row, 430, 24);
-      lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
-      lv_obj_set_style_border_width(row, 0, 0);
-      lv_obj_set_style_pad_all(row, 0, 0);
-      auto hdr = [&](const char* t, int x, int w){
-        lv_obj_t *l = lv_label_create(row);
-        lv_label_set_text(l, t);
-        lv_obj_set_style_text_color(l, lv_color_hex(0x4a6fa0), 0);
-        lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_12, 0);
-        lv_obj_set_width(l, w);
-        lv_obj_set_pos(l, x, 4);
-      };
-      { char h0[24],h1[24],h2[24];
-      strncpy(h0,T(STR_DRY_MAT_HDR_MAT),sizeof(h0)-1);
-      strncpy(h1,T(STR_DRY_MAT_HDR_YELLOW),sizeof(h1)-1);
-      strncpy(h2,T(STR_DRY_MAT_HDR_RED),sizeof(h2)-1);
-      hdr(h0,0,72); hdr(h1,80,120); hdr(h2,210,120);
-      lv_obj_t *h4l = lv_label_create(row);
-      lv_label_set_text(h4l, T(STR_DRY_SEALED_HDR));
-      lv_obj_set_style_text_color(h4l, lv_color_hex(0x4a6fa0), 0);
-      lv_obj_set_style_text_font(h4l, &lv_font_montserrat_ext_12, 0);
-      lv_obj_set_width(h4l, 50); lv_obj_set_pos(h4l, 366, 4); }
-    }
-    // Daten-Zeilen
-    for (int i = 0; i < DRY_MAT_COUNT; i++) {
-      lv_obj_t *row = lv_obj_create(tbl_cont);
-      lv_obj_set_size(row, 430, 24);
-      lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
-      lv_obj_set_style_border_width(row, 0, 0);
-      lv_obj_set_style_pad_all(row, 0, 0);
-      auto cell = [&](const char* t, int x, int w, uint32_t col){
-        lv_obj_t *l = lv_label_create(row);
-        lv_label_set_text(l, t);
-        lv_obj_set_style_text_color(l, lv_color_hex(col), 0);
-        lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
-        lv_obj_set_width(l, w);
-        lv_obj_set_pos(l, x, 2);
-      };
-      // Effektive Schwellwerte (mit Multiplikator wenn sealed)
-      float eff_mult = g_dry_mat_sealed[i] ? g_dry_mult_sealed : 1.0f;
-      int eff_y = (int)(g_dry_mat_yellow[i] * eff_mult);
-      int eff_r = (int)(g_dry_mat_red[i]    * eff_mult);
-      char y_buf[10], r_buf[10];
-      snprintf(y_buf, sizeof(y_buf), "%d T.", eff_y);
-      snprintf(r_buf, sizeof(r_buf), "%d T.", eff_r);
-      cell(DRY_MAT_NAMES[i], 0,  72, 0xe8f0ff);
-      cell(y_buf,            80, 120, 0xf0b838);
-      cell(r_buf,           210, 120, 0xe04040);
-      // Sealed-Symbol
-      lv_obj_t *seal_lbl = lv_label_create(row);
-      lv_label_set_text(seal_lbl, g_dry_mat_sealed[i] ? LV_SYMBOL_OK : "-");
-      lv_obj_set_style_text_color(seal_lbl, g_dry_mat_sealed[i] ? lv_color_hex(0x28d49a) : lv_color_hex(0x2a4060), 0);
-      lv_obj_set_style_text_font(seal_lbl, &lv_font_montserrat_ext_14, 0);
-      lv_obj_set_pos(seal_lbl, 370, 2);
-    }
-    // Fussnote
-    lv_obj_t *fn = lv_label_create(scr_drying_reminder);
-    { char fnbuf[80]; snprintf(fnbuf, sizeof(fnbuf), T(STR_DRY_MAT_EFF_NOTE), g_dry_mult_sealed); lv_label_set_text(fn, fnbuf); }
-    lv_obj_set_style_text_color(fn, lv_color_hex(0x2a4060), 0);
-    lv_obj_set_style_text_font(fn, &lv_font_montserrat_ext_12, 0);
-    lv_obj_align(fn, LV_ALIGN_BOTTOM_MID, 0, -4);
-
-  } else {
-    // Manuell: zwei Zeilen, Gelb + Rot, per Numpad editierbar
-    auto makeThreshRow = [&](const char* label, int value, uint32_t color, int y, int target){
-      lv_obj_t *row_btn = lv_btn_create(scr_drying_reminder);
-      lv_obj_set_size(row_btn, 456, 56);
-      lv_obj_set_pos(row_btn, 12, y);
-      lv_obj_set_style_bg_color(row_btn, lv_color_hex(0x0a1e30), 0);
-      lv_obj_set_style_bg_color(row_btn, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-      lv_obj_set_style_radius(row_btn, 10, 0);
-      lv_obj_set_style_shadow_width(row_btn, 0, 0);
-      lv_obj_set_style_border_width(row_btn, 1, 0);
-      lv_obj_set_style_border_color(row_btn, lv_color_hex(color), 0);
-      lv_obj_set_style_pad_all(row_btn, 0, 0);
-      // Farbindikator-Balken links
-      lv_obj_t *bar = lv_obj_create(row_btn);
-      lv_obj_set_size(bar, 6, 40);
-      lv_obj_set_pos(bar, 8, 8);
-      lv_obj_set_style_bg_color(bar, lv_color_hex(color), 0);
-      lv_obj_set_style_border_width(bar, 0, 0);
-      lv_obj_set_style_radius(bar, 3, 0);
-      // Label
-      lv_obj_t *lbl = lv_label_create(row_btn);
-      lv_label_set_text(lbl, label);
-      lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-      lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
-      lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 24, -8);
-      // Untertitel
-      lv_obj_t *slbl = lv_label_create(row_btn);
-      { char ehbuf[32]; strncpy(ehbuf, T(STR_DRY_MAN_EDIT_HINT), sizeof(ehbuf)-1); lv_label_set_text(slbl, ehbuf); }
-      lv_obj_set_style_text_color(slbl, lv_color_hex(0x2a4060), 0);
-      lv_obj_set_style_text_font(slbl, &lv_font_montserrat_ext_12, 0);
-      lv_obj_align(slbl, LV_ALIGN_LEFT_MID, 24, 10);
-      // Wert rechts
-      char vbuf[16]; snprintf(vbuf, sizeof(vbuf), "%d %s", value, T(STR_DRY_DAYS_UNIT));
-      lv_obj_t *vlbl = lv_label_create(row_btn);
-      lv_label_set_text(vlbl, vbuf);
-      lv_obj_set_style_text_color(vlbl, lv_color_hex(color), 0);
-      lv_obj_set_style_text_font(vlbl, &lv_font_montserrat_ext_20, 0);
-      lv_obj_align(vlbl, LV_ALIGN_RIGHT_MID, -16, 0);
-      lv_obj_set_user_data(row_btn, (void*)(intptr_t)target);
-      lv_obj_add_event_cb(row_btn, [](lv_event_t *e){
-        int tgt = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
-        if (scr_drying_reminder) { lv_obj_del(scr_drying_reminder); scr_drying_reminder = nullptr; }
-        buildDryNumpadScreen(tgt);
-        lv_obj_clear_flag(s_dry_numpad_scr, LV_OBJ_FLAG_HIDDEN);
-      }, LV_EVENT_CLICKED, NULL);
-    };
-    { char ybuf[16]; strncpy(ybuf, T(STR_DRY_MAN_YELLOW_LBL), sizeof(ybuf)-1); makeThreshRow(ybuf, g_dry_man_yellow, 0xf0b838, content_y,      0); }
-    { char rbuf[16]; strncpy(rbuf, T(STR_DRY_MAN_RED_LBL),    sizeof(rbuf)-1); makeThreshRow(rbuf, g_dry_man_red,    0xe04040, content_y + 68, 1); }
-
-    // Info-Text
-    lv_obj_t *info = lv_label_create(scr_drying_reminder);
-    { char ibuf[64]; strncpy(ibuf, T(STR_DRY_MAN_INFO), sizeof(ibuf)-1); lv_label_set_text(info, ibuf); }
-    lv_obj_set_style_text_color(info, lv_color_hex(0x2a4060), 0);
-    lv_obj_set_style_text_font(info, &lv_font_montserrat_ext_12, 0);
-    lv_obj_set_style_text_align(info, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_width(info, 440);
-    lv_obj_align(info, LV_ALIGN_BOTTOM_MID, 0, -4);
-  }
-}
-
-// ============================================================
-//  SUBMENU: DISPLAY (brightness + timeouts)
-// ============================================================
-void buildDisplayScreen() {
-  logSD("BUILD: DisplayScreen");
-  if (sd_verbose) logSD("[verbose] buildDisplayScreen: start");
-  scr_display = buildOverlayScreen();
-  buildSubHeader(scr_display, T(STR_DISPLAY_TITLE),
-    [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
-
-  // ── Brightness label (centered) ──
-  lv_obj_t *lbl_bright = lv_label_create(scr_display);
-  lv_label_set_text(lbl_bright, T(STR_BRIGHT_LABEL));
-  lv_obj_set_style_text_color(lbl_bright, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_bright, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_align(lbl_bright, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_bright, LV_ALIGN_TOP_MID, 0, 54);
-
-  // ── Brightness slider — full width ──
-  lv_obj_t *slider = lv_slider_create(scr_display);
-  lv_obj_set_size(slider, 456, 20);
-  lv_obj_set_pos(slider, 12, 76);
-  lv_slider_set_range(slider, 10, 255);
-  lv_slider_set_value(slider, bright_normal, LV_ANIM_OFF);
-  lv_obj_set_style_bg_color(slider, lv_color_hex(0x1a3060), LV_PART_MAIN);
-  lv_obj_set_style_bg_color(slider, lv_color_hex(0x28d49a), LV_PART_INDICATOR);
-  lv_obj_set_style_bg_color(slider, lv_color_hex(0x28d49a), LV_PART_KNOB);
-
-  lv_obj_add_event_cb(slider, [](lv_event_t *e) {
-    lv_obj_t *s = lv_event_get_target(e);
-    int val = lv_slider_get_value(s);
-    bright_normal = val;
-    tft.setBrightness((uint8_t)val);
-  }, LV_EVENT_VALUE_CHANGED, NULL);
-  lv_obj_add_event_cb(slider, [](lv_event_t *e) {
-    int val = lv_slider_get_value(lv_event_get_target(e));
-    Preferences p; p.begin("spoolscale", false);
-    p.putUChar("bright", (uint8_t)val);
-    p.end();
-    Serial.printf("Brightness saved: %d\n", val);
-  }, LV_EVENT_RELEASED, NULL);
-
-  // ── Dim timeout label (centered) ──
-  lv_obj_t *lbl_dim = lv_label_create(scr_display);
-  lv_label_set_text(lbl_dim, T(STR_DIM_LABEL));
-  lv_obj_set_style_text_color(lbl_dim, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_dim, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_align(lbl_dim, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_dim, LV_ALIGN_TOP_MID, 0, 108);
-
-  // ── Dim buttons: centered, 4 * 88px + 3 * 8px gap = 376px, offset = (480-376)/2 = 52 ──
-  int dim_vals[] = {1, 2, 5, 10};
-  int cur_dim = dim_timeout_ms / 60000;
-  const int BTN_W = 88, BTN_H = 36, BTN_GAP = 8;
-  const int BTN_START_X = (480 - 4*BTN_W - 3*BTN_GAP) / 2;
-  for (int i = 0; i < 4; i++) {
-    lv_obj_t *b = lv_btn_create(scr_display);
-    lv_obj_set_size(b, BTN_W, BTN_H);
-    lv_obj_set_pos(b, BTN_START_X + i * (BTN_W + BTN_GAP), 130);
-    bool active = (cur_dim == dim_vals[i]);
-    lv_obj_set_style_bg_color(b, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
-    lv_obj_set_style_radius(b, 8, 0);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_border_width(b, 0, 0);
-    char buf[8]; snprintf(buf, sizeof(buf), "%d Min", dim_vals[i]);
-    lv_obj_t *l = lv_label_create(b);
-    lv_label_set_text(l, buf);
-    lv_obj_set_style_text_color(l, active ? lv_color_hex(0x0a1020) : lv_color_hex(0xc8d8f0), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
-    lv_obj_center(l);
-    lv_obj_add_event_cb(b, [](lv_event_t *e) {
-      int val = (intptr_t)lv_event_get_user_data(e);
-      dim_timeout_ms = val * 60000;
-      Preferences prefs; prefs.begin("spoolscale", false);
-      prefs.putUInt("dim_min", val);
-      prefs.end();
-      if (scr_display) { lv_obj_del(scr_display); scr_display = nullptr; }
-      buildDisplayScreen();
-      lv_obj_clear_flag(scr_display, LV_OBJ_FLAG_HIDDEN);
-      Serial.printf("Dim timeout: %d min\n", val);
-    }, LV_EVENT_CLICKED, (void*)(intptr_t)dim_vals[i]);
-  }
-
-  // ── Sleep timeout label (centered) ──
-  lv_obj_t *lbl_sleep = lv_label_create(scr_display);
-  lv_label_set_text(lbl_sleep, T(STR_SLEEP_LABEL));
-  lv_obj_set_style_text_color(lbl_sleep, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_sleep, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_align(lbl_sleep, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_sleep, LV_ALIGN_TOP_MID, 0, 178);
-
-  int sleep_vals[] = {10, 20, 30, 60};
-  int cur_sleep = sleep_timeout_ms / 60000;
-  for (int i = 0; i < 4; i++) {
-    lv_obj_t *b = lv_btn_create(scr_display);
-    lv_obj_set_size(b, BTN_W, BTN_H);
-    lv_obj_set_pos(b, BTN_START_X + i * (BTN_W + BTN_GAP), 200);
-    bool active = (cur_sleep == sleep_vals[i]);
-    lv_obj_set_style_bg_color(b, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
-    lv_obj_set_style_radius(b, 8, 0);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_border_width(b, 0, 0);
-    char buf[8]; snprintf(buf, sizeof(buf), "%d Min", sleep_vals[i]);
-    lv_obj_t *l = lv_label_create(b);
-    lv_label_set_text(l, buf);
-    lv_obj_set_style_text_color(l, active ? lv_color_hex(0x0a1020) : lv_color_hex(0xc8d8f0), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
-    lv_obj_center(l);
-    lv_obj_add_event_cb(b, [](lv_event_t *e) {
-      int val = (intptr_t)lv_event_get_user_data(e);
-      sleep_timeout_ms = val * 60000;
-      Preferences prefs; prefs.begin("spoolscale", false);
-      prefs.putUInt("sleep_min", val);
-      prefs.end();
-      if (scr_display) { lv_obj_del(scr_display); scr_display = nullptr; }
-      buildDisplayScreen();
-      lv_obj_clear_flag(scr_display, LV_OBJ_FLAG_HIDDEN);
-      Serial.printf("Sleep timeout: %d min\n", val);
-    }, LV_EVENT_CLICKED, (void*)(intptr_t)sleep_vals[i]);
-  }
-
-  // ── Hint (centered bottom) ──
-  lv_obj_t *hint = lv_label_create(scr_display);
-  lv_label_set_text(hint, T(STR_DISPLAY_HINT));
-  lv_obj_set_style_text_color(hint, lv_color_hex(0x2a4060), 0);
-  lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
-  lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(hint, 440);
-  lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
-  if (sd_verbose) logSD("[verbose] buildDisplayScreen: done");
-}
-
-// ============================================================
 // ============================================================
 //  OTA — BROWSER UPLOAD
 // ============================================================
-
-void stopOtaServer() {
-  if (ota_server_running) {
-    ota_server.stop();
-    ota_server_running = false;
-    Serial.println("OTA server stopped");
-  }
-}
-
-void startOtaServer() {
-  if (!wifi_ok) return;
-
-  // Route: Startseite mit Upload-Formular
-  ota_server.on("/", HTTP_GET, []() {
-    char ver_buf[20];
-    strncpy(ver_buf, FW_VERSION, sizeof(ver_buf)-1);
-    String version = String(ver_buf);
-    String html =
-      "<!DOCTYPE html><html><head>"
-      "<meta charset='utf-8'>"
-      "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-      "<title>SpoolmanScale - Firmware Update</title>"
-      "<style>"
-      "*{box-sizing:border-box;margin:0;padding:0}"
-      "body{background:#06080f;color:#e8f0ff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
-      "min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:32px 16px}"
-      ".logo{font-size:32px;font-weight:700;color:#28d49a;letter-spacing:-0.5px;margin-bottom:4px}"
-      ".logo span{color:#e8f0ff}"
-      ".version{font-size:13px;color:#2a4060;margin-bottom:32px}"
-      ".card{background:#0c1828;border:1px solid #1a3060;border-radius:14px;padding:28px;"
-      "width:100%;max-width:480px;margin-bottom:20px}"
-      ".card h2{color:#28d49a;font-size:16px;font-weight:600;margin-bottom:16px;"
-      "display:flex;align-items:center;gap:8px}"
-      ".card h2::before{content:'';display:inline-block;width:3px;height:16px;"
-      "background:#28d49a;border-radius:2px}"
-      "input[type=file]{width:100%;padding:12px;background:#06080f;border:1px dashed #1a3060;"
-      "border-radius:8px;color:#4a6fa0;font-size:14px;margin-bottom:16px;cursor:pointer}"
-      "input[type=file]:hover{border-color:#28d49a}"
-      ".btn-flash{width:100%;padding:14px;background:#1a3020;color:#40c080;"
-      "border:1px solid #2a5030;border-radius:8px;font-size:16px;font-weight:600;"
-      "cursor:pointer;transition:background .2s}"
-      ".btn-flash:hover{background:#2a5030}"
-      ".hint{font-size:12px;color:#2a4060;margin-top:10px;text-align:center}"
-      ".log-row{display:flex;align-items:center;justify-content:space-between;"
-      "padding:10px 12px;background:#06080f;border:1px solid #1a3060;border-radius:8px;"
-      "margin-bottom:8px}"
-      ".log-name{color:#c8d8f0;font-size:14px;font-family:monospace}"
-      ".log-actions{display:flex;gap:6px}"
-      ".log-btn{padding:6px 14px;background:#0a1828;color:#28d49a;border:1px solid #1a3060;"
-      "border-radius:6px;font-size:13px;text-decoration:none;cursor:pointer}"
-      ".log-btn:hover{background:#1a3060}"
-      ".log-btn-del{color:#ff8080;border-color:#3a1010}"
-      ".log-btn-del:hover{background:#3a1010}"
-      ".sd-info-box{background:#090c0a;border-left:2px solid #1a3020;border-radius:0 4px 4px 0;"
-      "padding:5px 10px;margin-bottom:10px;font-size:11px;color:#2a5040;line-height:1.5}"
-      ".verbose-row{display:flex;align-items:center;justify-content:space-between;"
-      "padding:10px 12px;background:#06080f;border:1px solid #1a3060;border-radius:8px;"
-      "margin-bottom:12px}"
-      ".verbose-label{color:#c8d8f0;font-size:14px}"
-      ".verbose-state{display:inline-block;padding:3px 10px;border-radius:4px;"
-      "font-size:12px;font-weight:600;margin-left:8px}"
-      ".verbose-on{background:#1a3020;color:#40c080;border:1px solid #2a5030}"
-      ".verbose-off{background:#1a1828;color:#4a6fa0;border:1px solid #2a3050}"
-      ".btn-toggle{padding:6px 14px;background:#0a1828;color:#28d49a;border:1px solid #1a3060;"
-      "border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit}"
-      ".btn-toggle:hover{background:#1a3060}"
-      ".section-divider{height:1px;background:#1a3060;margin:12px 0}"
-      ".no-sd{text-align:center;padding:24px 16px}"
-      ".no-sd-title{color:#c8d8f0;font-size:15px;font-weight:600;margin-bottom:6px}"
-      ".no-sd-hint{color:#4a6fa0;font-size:13px;line-height:1.5}"
-      ".links{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:480px}"
-      ".link-btn{display:flex;align-items:center;justify-content:center;gap:8px;"
-      "padding:12px 16px;border-radius:10px;text-decoration:none;"
-      "font-size:14px;font-weight:500;transition:opacity .2s;border:1px solid}"
-      ".link-btn:hover{opacity:0.8}"
-      ".link-kofi{background:#1a2800;color:#a0d840;border-color:#2a4010}"
-      ".link-github{background:#0a1828;color:#28d49a;border-color:#1a3060}"
-      ".link-discord{background:#12103a;color:#8090ff;border-color:#2a2860}"
-      ".link-maker{background:#1a0a18;color:#c060e0;border-color:#2a1a38}"
-      ".footer{margin-top:24px;font-size:11px;color:#1a3060;text-align:center}"
-      "</style></head><body>"
-
-      // Logo
-      "<img src='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCACWAJYDASIAAhEBAxEB/8QAHAAAAQUBAQEAAAAAAAAAAAAAAAECBAYHBQgD/8QAQRAAAQIFAgMFBQQHBwUAAAAAAQIDAAQFBhESIQcxQRMiUWFxFEKBkfAVMqGxCBYjJXLB0VJic4KSsuEzNlN0k//EABsBAAICAwEAAAAAAAAAAAAAAAABBAUCAwYH/8QALBEAAgEEAgEDAgUFAAAAAAAAAAECAwQRIQUSMRNBUSIyFDNxoeFhgbHw8f/aAAwDAQACEQMRAD8A8rwQQRtEJBCwQgGwQ4gQ2EMIII6FAotVr9UZplGp8zPzjxwhlhGpRHUnoEjO6iQB1IgFg58LG10jg5RaXLpevS4dTxwTKUxaQhO/JT6wdX+RIxvuecdOZsDhtPslmVaqMmvGEvJnnl4PjhwFJ+UaJXVKLw2SIWdaazGLMAgMW/iHYk/aLjcx26Z6lvq0szSE6cK6IWOQV4EbHy5RUI3pqSyjQ04vDEghxhMQCGwkOMJAAkEEEABBBBAB9YIXEJDAIIIIACDEEKkalBIzknGAMk+QHU+XWADq2hbVYuuuMUaiS6HZl3Kit1WlpltO63XFe62kbk+gGSQDvlLapdl0pdq2iTMzLgBqdUcRhyZV/eHuoGToZBwBurKiTEek0h3hxZbNBlGwbnrQQ7VVEgmWGAUsZHut5yr+04o9BgSaXINyUvpTqKjlSlHcqVzJPnFHyd+6a6Q8nUcJxMauK1bx7IY1KYcMw8tT7vVxzdX/ABEgggAjlyBxiHrBA2yOZhDggknl6Ryc3KTzJ7O4hTgo4itESpSTNSpsxS5xPaSswkBbeeeDkEeBBAIPMERmtX4T1xxxx22W3qu0k95kJw4jy1bIPxKT6xvtOt+TkZZucroU4+4ApqQB04B5KdI72DzCBgnrgHESpurKKEtK0NyzYwhpACGkDySMAfW8dJxVG7glJyxH4f8AujiecurGcnCEe0vla/6eU67ZF30SX9pqtt1OVYHNwtBaU+pQVY9TgRXuYBGCCMgjrHsiXnSF4cASCcbD6+X0cd462FJS8m5d1CYSwgKH2hLNp7neOO2SBsnc97GxB1dDnoFP5OWaMYMJDuRhIzENhIcYQjeABIIDBAB94SHGEhjEMJCmEgEEad+jzRJeaumZueotJckLdaTNaV7pcmlEiXQR1AUFOH/DT4xmSQVKCQNycCNzoMv9i8GKLS0Dspy4X11F453KFns2fkygnH94xouanp03Ik2dB160YfJ2KOt+p1Kbr80pThmVHSF/eCM8z6kk+pMdo4AJSkAZxv6xApuGJYNpGBgDHlgRKLgyG0nHr6xxFSt6s22ej/hnTiox9gKQpOwKvj5RZrXkmaZIprc42lT61EU9pwZGUnBeI6gHZI6qBPICOdb1NRUKg0ytZbaAU6+5/wCNpIBWv5bDzIibcFR9tnFLabSyykBDTKeTSEjCUAeQ/EnbeLLjLONafqSWl/n+Cj5nk6lCn6EXuX7L+SNOzjsy+pTyypSlFSlKOSSeZJPP65dYoUTu7qAzzwee34/j/FiHSzBm1YSQkJIKlYBA6j128Nue+DiOo1JyzYCS0lZxzcGomOlOOOWha0n9oMgbJA5Y/LHLy9N8SvZ2KlTpumzY7VubZUy4lQ2UFJx/P+sOqTLbWHkpwlRCSANknoR4dfwhtMKfaUEDfWMQCPIr7Dsq+5LPf9Vhamlk9VIJST8wYZHTuzH611nHL7Smsf8A2XHMjcYjTCQ4wQDGHlBCwQAfcw3EOMJDEJCQsITAA13PYOkEpKW1EEdCEkx6IvgNS9202jMgJl6VJtsNJHuhtpCMD5qjzs8Myz3+Er8jG635MlPEWYd1ZDgJB8jpP5ERXcmm6DwXXA9VeRbLFLrSpCNQHLc/CJLakYGoBRHIY84r8rOfs058N4ntzelJcGCEjOPHrHHOOD0dfUX6m/u+01zITh2ou6ABzDLR3/1OH4hMcYp1LAbGrWrGOfX+X9eRjs3An2RErIJUcSkq0yd+aggKUf8AUoxyacNU6lQ3GCojnjw+vIYJ5R2VnR9GhGH9P39zy7krj8RdTqe2dfotIj3jU36JQFmnhBm1ghoqGQD1WR19OpjzXLVWuNXu1PuVKdcqKJlKi6p5RK8qG3PGDywBjyjUuL9yOydzOU0A6W5ZpaR46tX9Pwir8LrbmLiu5FRfaIlZZYW4rG2RyH15RKRAN+m1l2mpUoAKXoVjz5mPlTtDep5ZCUNp1k+GBmCpuAutMJONJ1Hbby+vTxit8S6qaPYNRUhRTMTifZGMHcKc2J+Ccn4RnTh3koik8LJ53r8vOtVGYmpxkpTMvuPJcSdTatayrZQ2971jnRcqdMvEezbLZUO+hQynHoYrNdaZl6q83LthprYpQDsnI5DyibXt1TXZPRGoV+76tbIZhDCHJhD6xEJQEwQQQCJBhphVGEMMYkJ1hTEilyyZypysotam0PvobUpPNKSoAkeeM488QLbwJvCyRikKSUrB0qGD5iNLman9q2/Sa3q1zDLKZeb8e1bSEKJ/iSELHkYux4e2HVpNCafIIZUgYBbeWhw/xEHKj5mIZsaj0aRm5VtE4x2+DrU+pwBQ5HBOM9PSJNTjZ1IuLwRrfloUZqaTyciQnUONJUhQ5ZGI6tLmNc5LtqPdU+hJ9FKAMZrMTE/RXldo1mXQrca0gjzAzHcotyysw2Jlp0K7Ihekc8pOcY+Ecje8bVtpYktHo/HczSu44i9noC5Vl2rTSsbl1f8AuOI5kgtLc2gnACgU/Hb+ePnE6orTMKM02oFLh1pI6hXeH5xy3U946k4HUfXy+HpF8vBwktPDPnc9n0K4ptmbqcs6ZhlOgONOlBUnOdKscxnOPDJ8THSkpem0SRRKSUu3LtJHdbbAyfE784iCafSjHbrxv1Bx8SM/j8RDMal5Vk598nJP19eMZJGJ9ElTzxKyCsnfA29fr/mMh4qXAmtXAmnSyguTpmUBQ5KeP3z/AJRt8VeEWriPc5pUn9mU13NSmU7rG/YIPNR8/AdT47mMyk5ZEu2lShsPugnJUepPj4k9TFlZUXnuyHdVUl1PrLNhhrHvq3PkPCKtcav3w7v7qfyi0lRJyeZioXIv98vDPup/KN97+Wv1NFnup/YiZ84MiPmFecLqirLIfkQQzMEGAJZhIWEMAxOsT7c/7gp3/tN/7hEDrEmkPIl6vKTDqiltt9ClHwAUMmMofcjCe4s2aVmFtKSpDhbeG/dO8d+SuJSkBmpNh5vlqA3EVNsys+yl6WfQtkhOFNEYODnfHygW5MNrRrOtGpWVeXTbpiOi0znMfBYLgsyiXHLqek1oCyOQA5+kZPcNg1SiTJmGELRg7Lb5fXkY0OVmXGlh1hxSDzyDHfkribcQGKkyHEnbWB+ca6lKM1iSyb6VxOk8p4IfBi5hU6Ii3qmsoqcm3pQFbF1ofdUPEgYBHl4GLnMSym1E9c8+cVGftOl1BxM9SXS0+k60LZVpUg+II5GIhuutSqFS32hTp8t90uOpKFn1Kdj8hFZVsGt0/BY07+M39fkuOnCSVDu8iQIqV2Xi1T0OSVKUiYmyMFfNDO3XxPkPnFYrlwVifCm5meS0yeaGe4D6nOTFfLzbezSQSORI2HwjKjY7zMKl4sYgKpB1rmptxTrrqitSlHKlnxMfJaytRUo/LpDFrUtWpSiSesQ6hUJWRa1zLoTnkkbqV6CLBuMF8Ig/VN/LJucxSq+8h6sPqbOpIwnI5ZA3hlWuCanSW2My7J2wk95Xqf6Rzm9kiKy6uFUXWPgsLag4PMvJ9wYeFGPiDDgYhEs+oUCN4IZBDA6KjCGAwQAIYSFPOEEAMfITlQpcx7RTppxhROVJBylXqnkYutDvyVf0sVdoSjp27VO7Z9f7MUjMfNxCVDeJVKtOn9r0RqtvCr9yNnAZebDrK0kKOoLSQQdtoUKKCEae4E51c8knl+PWMdpVTqVHc1SEwUt57zKt21fDp8IvNBvWQnClmfHsMwTjvHLaj5H+RixpXcJ6emV1W1qQ8bRaJideZp025KvraWlpe6T5GKcFnAOTkgRaJ4tClzakAHW0sgjkdoqiT+zT44ESJeTRDGNClXWGOuobQpxxaUITuVKOAI5VWrspJZbQe3eHuJOw9TFTqVRm6g5qmHO6D3UDZKfhEKtdRhpbZNpW0p7ekd2rXMBlqnp1Hl2qht8B/WK0846+6XXlqcWrmVHJhEpPhDwgxW1KsqjzJlhCnGmsRQ1Ij7JhAnrDwkxqbybEJDkwoEOAgSAByggggA6J5wkLCGABQlSj3UlXoMwikqScKBB8xG+/o4WnQKzw/uWrS9pUW8bulJxDcpSqlMhKPZy2glYSdslXaDJ5lGMjEco8OZ/iFxBrEiLao/DBdGpLcxNyTjbi2VHWvLoI0gAjG41JwnnnMY9hmLcoDuY1mq8DqwqrWsxa9xUW5KbczzsvJ1KVKkModbSpSwsEqOAlCzkdUEEA4hLx4Jz9No32rbNz0W7GWqo3Sp1EiFNLlppa0toQrUoggrUlJORjIOCIzVQxwZIRkQx1nIwpPPyja7q4A1ClW/XHJC8KDV67QpL2mq0eUS4HpdJQVbKJOogbjupzjpmLjf3CGmXVeNn0C2GqNbinrSVUZp1MnhDykqbBUoIKSVHX94+cN1EwwzzbTatVKa0tiWfK5daSksubp3HTw+EfCpVepTLYaSBLoxhWg7q+Mbu3+j9TXZGmVVPFe1VUipu+yyk4mXcKX5nUU9k3+0wo5ChzHLlFZlOEUlL3nXrXuq/qDb85SphDTaH2HHVTaVI1hxtIUk6dJGc5wcjpmMvXl16p6MPRjntjZi4ZVD0MknGMmN7Y/R2qyr6rtszNy0iVRSqa1UhOuMuFp1lwqAJGrKMaFZyVRJp/CC37XvmyajXrjo9wWbXXnEInWtTDC3UtqLbSypZOhawkZB6EEDMauyNmDAjLOITlba0jxKSIQIEbPxPpF7MybFIqvCm1qOZ6aaZlZ+k0cNhbhWAlCJhDqk4USB38Eg+uK/elh21a76qXNcQae/WpWablp+VYpcyWpc6gHT2/3V9mCSQACdJA3gygM5xCjB3BB8wcxolz8PqVL2FUbttq7JevyNPW01OJ+zJiTUjtiUtrR2pw4nUMHGMc4unFWwadPcUL3q87UZC1rYpEzKsuTPsa3QXXZdrQ02y1gqJ7yjyAG++Tg7BgwjEGItHEK03bTqsqwmoS1Skp+RZqEhOMIUhMxLu50K0K7yT3SCk7jHnFaxGS2A3EEOxBABMhDCkwkIC+8L0cOOwefuu5bwoNWafzKv0ZhKkhrQnPeCStK9WrkQMYj0PY1/0PiFfF2vSjVSao1Ns72NU082n2uYRrWVukZO+OQODnOeceO4lU+pVCndv9n1Cdk/aGi097PMra7RB91WkjUPI5EYuOQyb1I8YbKsg2JRLKYrVYoVAm5icnZmbbS0/MduhxJShJwNu1KsnSO6ACckxHqnE6wrOtmdp3DpFbqs1V7hYrc2uotCXQwG3UO9inIyclATnBwFEk7AHAhgDAGAOQgg6jPSdwcV+Gskq9bytlVffum8JBMq5JTksES8mrs9GrWNlAbE4Ks422MT6Xxr4eNXRbNwOvVptyTtV+kTTHsBUG3D2JTgg97dC9xkYA5Z38uGEg6gazTb/oEtwRsK03DOfadEuUVKdSJclAYDy15Srko4UNhvGnS3Guw3rlvyYRVK9Ql1mclpiSq8lTQ5MhpuXaQprStKtHeQvmMYXkbx5aEIYfVAepqxxt4dzFzV6usTFa11i1U03snKerLbyFOFIJGxz2m5BI2jNZ68bLrnB/h/Y1VnqtJLpUy8qpvS8h2pbSpt0J0BWzneUkEDoT4RkUJC6oDYJW7rSsKzZ2j2vXKzc8xPT8hOIRMSKpKVlBKzCX9kqJy4sjSSkYxz8/jW6pwxTxATxClanVKimZrbdSft+ZpJSUhbmt5Cnyvs14UVKSBscAZxvGSmEh9RG8cQr/ALdrdjXnb8zf9frr1YLc1TEv0UsMSYae1pl8as5UDgrxpASPQ9ZzjFbr9yXixTLlrVAl66/KT8nV2KX2q5d1thLTjLjKslSSEjCh1/HzhiG4g6gXHi7XVV65mn/1uqV0oYlENJnZ2REqoHUoqQlvokZBBPPJ8Ipu0GIBGSWACCAwQASYMQQQhhiCCCABIMQQQDQYhMQQQCCA8swQQAJBiCCAAxCEQQQAJiDHSCCMhCEQ3rBBCGLzggggEf/Z' style='width:120px;height:120px;border-radius:12px;margin-bottom:8px'>"
-      "<div class='version'>" + version + " &nbsp;|&nbsp; Firmware Update</div>"
-
-      "<div class='links' style='margin-bottom:20px'>"
-      "<a class='link-btn link-kofi' href='https://ko-fi.com/formfollowsfunction' target='_blank'>"
-      "&#9749; Ko-fi</a>"
-      "<a class='link-btn link-github' href='https://github.com/Niko11111/SpoolmanScale' target='_blank'>"
-      "&#9873; GitHub</a>"
-      "<a class='link-btn link-discord' href='https://discord.gg/GzQzGa5pBG' target='_blank'>"
-      "&#128172; Discord</a>"
-      "<a class='link-btn link-maker' href='https://makerworld.com/de/@FormFollowsF/upload' target='_blank'>"
-      "&#11088; MakerWorld</a>"
-      "</div>"
-
-      // Upload-Card
-      "<div class='card'>"
-      "<h2>Upload Firmware</h2>"
-      "<form method='POST' action='/update' enctype='multipart/form-data'>"
-      "<input type='file' name='firmware' accept='.bin' required>"
-      "<button class='btn-flash' type='submit'>&#x2191;&nbsp; Flash Firmware</button>"
-      "</form>"
-      "<p class='hint'>Select SpoolmanScale vX.Y.Z.bin &mdash; device restarts automatically</p>"
-      "</div>"
-
-      // SD-Logs Card
-      "<div class='card'>"
-      "<h2>SD Card Logs</h2>"
-      "<div id='log-list'><div class='no-sd'><div class='no-sd-hint'>Loading...</div></div></div>"
-      "</div>"
-      "<style>#log-entries{max-height:184px;overflow-y:auto}</style>"
-      "<script>"
-      "function loadLogs(){"
-      "fetch('/logs').then(r=>r.json()).then(d=>{"
-      "var c=document.getElementById('log-list');"
-      "if(!d.sd){c.innerHTML="
-      "\"<div class='no-sd'>\"+"
-      "\"<div class='no-sd-title'>No SD card detected</div>\"+"
-      "\"<div class='no-sd-hint'>Insert a FAT32-formatted SD card<br>\"+"
-      "\"to enable diagnostic logging.<br>\"+"
-      "\"<span style='font-size:11px;color:#2a5a40'>* Booting with SD card increases startup time by ~20 seconds.</span></div>\"+"
-      "\"</div>\";return;}"
-      "var h=\"<div class='sd-info-box'>\"+"
-      "\"&#9432; SD card increases boot time by ~20 seconds. Use without SD for normal operation, insert only for debugging.</div>\"+"
-      "\"<div class='verbose-row'>\"+"
-      "\"<div><span class='verbose-label'>Verbose Logging</span>\"+"
-      "\"<span class='verbose-state \"+(d.verbose?'verbose-on':'verbose-off')+\"'>\"+"
-      "(d.verbose?'ON':'OFF')+\"</span></div>\"+"
-      "\"<button class='btn-toggle' onclick='toggleVerbose()'>Toggle</button>\"+"
-      "\"</div>\";"
-      "if(d.files.length===0){"
-      "h+=\"<div class='no-sd'>\"+"
-      "\"<div class='no-sd-title'>No log files yet</div>\"+"
-      "\"<div class='no-sd-hint'>Logs will appear here as you use the device.</div>\"+"
-      "\"</div>\";"
-      "}else{h+=\"<div class='section-divider'></div><div id='log-entries'>\";"
-      "d.files.forEach(f=>{"
-      "h+=\"<div class='log-row'><span class='log-name'>\"+f.name+\"</span>\"+"
-      "\"<div class='log-actions'>\"+"
-      "\"<a class='log-btn' href='/log?file=\"+encodeURIComponent(f.name)+\"' download='\"+f.name+\"'>Download</a>\"+"
-      "\"<a class='log-btn log-btn-del' href='#' onclick=\\\"delLog('\"+f.name+\"');return false;\\\">Delete</a>\"+"
-      "\"</div></div>\";});h+=\"</div>\";}"
-      "c.innerHTML=h;});}"
-      "function delLog(n){if(!confirm('Delete '+n+'?'))return;"
-      "fetch('/deletelog?file='+encodeURIComponent(n),{method:'POST'}).then(()=>loadLogs());}"
-      "function toggleVerbose(){"
-      "fetch('/verbose',{method:'POST'}).then(r=>r.json()).then(d=>{"
-      "loadLogs();"
-      "if(d.verbose)alert('Verbose logging ENABLED. Reboot device for full effect.');"
-      "else alert('Verbose logging DISABLED.');"
-      "});}"
-      "loadLogs();setInterval(loadLogs,30000);"
-      "</script>"
-
-      // List limits — combined, moved to end via JS or just keep at end
-      // Drying Reminder card
-      "<div class='card'>"
-      "<h2>Drying Reminder - Material Thresholds</h2>"
-      "<p style='font-size:12px;color:#4a6fa0;margin-bottom:6px'>Days until Yellow / Red warning per material. Sealed multiplier applies when storage is airtight.</p>"
-      "<table id='dry-tbl' style='width:100%;border-collapse:collapse;font-size:14px;margin-bottom:14px'>"
-      "<tr style='color:#4a6fa0;font-size:12px'><th style='text-align:left;padding:4px 6px'>Material</th>"
-      "<th style='text-align:center;padding:4px 6px'>Yellow</th><th style='text-align:center;padding:4px 6px'>Red</th>"
-      "<th style='text-align:center;padding:4px 6px'>Storage</th></tr>"
-      // PLA
-      "<tr><td style='padding:4px 6px;color:#e8f0ff'>PLA</td>"
-      "<td><input class='dry-in' name='y_PLA' type='number' min='1' value='"+String(g_dry_mat_yellow[0])+"'></td>"
-      "<td><input class='dry-in' name='r_PLA' type='number' min='1' value='"+String(g_dry_mat_red[0])+"'></td>"
-      "<td style='text-align:center;white-space:nowrap'>"
-      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
-      "<input type='radio' name='s_PLA' value='open' "+String(g_dry_mat_sealed[0]?"":"checked")+"> Open</label>"
-      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
-      "<input type='radio' name='s_PLA' value='sealed' "+String(g_dry_mat_sealed[0]?"checked":"")+"> Sealed</label>"
-      "</td></tr>"
-      "<tr><td style='padding:4px 6px;color:#e8f0ff'>PETG</td>"
-      "<td><input class='dry-in' name='y_PETG' type='number' min='1' value='"+String(g_dry_mat_yellow[1])+"'></td>"
-      "<td><input class='dry-in' name='r_PETG' type='number' min='1' value='"+String(g_dry_mat_red[1])+"'></td>"
-      "<td style='text-align:center;white-space:nowrap'>"
-      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
-      "<input type='radio' name='s_PETG' value='open' "+String(g_dry_mat_sealed[1]?"":"checked")+"> Open</label>"
-      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
-      "<input type='radio' name='s_PETG' value='sealed' "+String(g_dry_mat_sealed[1]?"checked":"")+"> Sealed</label>"
-      "</td></tr>"
-      "<tr><td style='padding:4px 6px;color:#e8f0ff'>ABS</td>"
-      "<td><input class='dry-in' name='y_ABS' type='number' min='1' value='"+String(g_dry_mat_yellow[2])+"'></td>"
-      "<td><input class='dry-in' name='r_ABS' type='number' min='1' value='"+String(g_dry_mat_red[2])+"'></td>"
-      "<td style='text-align:center;white-space:nowrap'>"
-      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
-      "<input type='radio' name='s_ABS' value='open' "+String(g_dry_mat_sealed[2]?"":"checked")+"> Open</label>"
-      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
-      "<input type='radio' name='s_ABS' value='sealed' "+String(g_dry_mat_sealed[2]?"checked":"")+"> Sealed</label>"
-      "</td></tr>"
-      "<tr><td style='padding:4px 6px;color:#e8f0ff'>ASA</td>"
-      "<td><input class='dry-in' name='y_ASA' type='number' min='1' value='"+String(g_dry_mat_yellow[3])+"'></td>"
-      "<td><input class='dry-in' name='r_ASA' type='number' min='1' value='"+String(g_dry_mat_red[3])+"'></td>"
-      "<td style='text-align:center;white-space:nowrap'>"
-      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
-      "<input type='radio' name='s_ASA' value='open' "+String(g_dry_mat_sealed[3]?"":"checked")+"> Open</label>"
-      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
-      "<input type='radio' name='s_ASA' value='sealed' "+String(g_dry_mat_sealed[3]?"checked":"")+"> Sealed</label>"
-      "</td></tr>"
-      "<tr><td style='padding:4px 6px;color:#e8f0ff'>TPU</td>"
-      "<td><input class='dry-in' name='y_TPU' type='number' min='1' value='"+String(g_dry_mat_yellow[4])+"'></td>"
-      "<td><input class='dry-in' name='r_TPU' type='number' min='1' value='"+String(g_dry_mat_red[4])+"'></td>"
-      "<td style='text-align:center;white-space:nowrap'>"
-      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
-      "<input type='radio' name='s_TPU' value='open' "+String(g_dry_mat_sealed[4]?"":"checked")+"> Open</label>"
-      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
-      "<input type='radio' name='s_TPU' value='sealed' "+String(g_dry_mat_sealed[4]?"checked":"")+"> Sealed</label>"
-      "</td></tr>"
-      "<tr><td style='padding:4px 6px;color:#e8f0ff'>PA</td>"
-      "<td><input class='dry-in' name='y_PA' type='number' min='1' value='"+String(g_dry_mat_yellow[5])+"'></td>"
-      "<td><input class='dry-in' name='r_PA' type='number' min='1' value='"+String(g_dry_mat_red[5])+"'></td>"
-      "<td style='text-align:center;white-space:nowrap'>"
-      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
-      "<input type='radio' name='s_PA' value='open' "+String(g_dry_mat_sealed[5]?"":"checked")+"> Open</label>"
-      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
-      "<input type='radio' name='s_PA' value='sealed' "+String(g_dry_mat_sealed[5]?"checked":"")+"> Sealed</label>"
-      "</td></tr>"
-      "<tr><td style='padding:4px 6px;color:#e8f0ff'>PC</td>"
-      "<td><input class='dry-in' name='y_PC' type='number' min='1' value='"+String(g_dry_mat_yellow[6])+"'></td>"
-      "<td><input class='dry-in' name='r_PC' type='number' min='1' value='"+String(g_dry_mat_red[6])+"'></td>"
-      "<td style='text-align:center;white-space:nowrap'>"
-      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
-      "<input type='radio' name='s_PC' value='open' "+String(g_dry_mat_sealed[6]?"":"checked")+"> Open</label>"
-      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
-      "<input type='radio' name='s_PC' value='sealed' "+String(g_dry_mat_sealed[6]?"checked":"")+"> Sealed</label>"
-      "</td></tr>"
-      "</table>"
-      "<div style='display:flex;gap:10px;align-items:center;margin-bottom:10px'>"
-      "<label style='font-size:13px;color:#c8d8f0'>Sealed multiplier:</label>"
-      "<input id='dry-mult' type='number' min='1' max='10' step='0.1' value='"+String(g_dry_mult_sealed,1)+"'"
-      " style='width:72px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
-      "border-radius:8px;padding:6px 10px;font-size:15px'>"
-      "<span style='font-size:12px;color:#4a6fa0'>x (airtight storage)</span>"
-      "</div>"
-      "<div style='display:flex;gap:10px'>"
-      "<button class='btn-toggle' onclick='saveDry()'>Save</button>"
-      "<button class='btn-toggle' style='background:#1a0a0a;border-color:#402020;color:#e04040' onclick='resetDry()'>Reset to Defaults</button>"
-      "<span id='dry-s' style='font-size:12px;color:#28d49a;line-height:36px;display:inline-block'></span>"
-      "</div></div>"
-      "<style>.dry-in{width:64px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
-      "border-radius:6px;padding:4px 8px;font-size:14px;text-align:center}</style>"
-      "<script>"
-      "function setLocL(){""var v=parseInt(document.getElementById('locl-in').value);""if(v<5)v=5;if(v>100)v=100;""fetch('/loclimit',{method:'POST',body:String(v)})"".then(r=>r.json()).then(d=>{""document.getElementById('locl-s').textContent='Saved: '+d.limit;""setTimeout(()=>{document.getElementById('locl-s').textContent='';},3000);""});}""function setLL(){"
-      "var v=parseInt(document.getElementById('ll-in').value);"
-      "if(v<5)v=5;if(v>100)v=100;"
-      "fetch('/listlimit',{method:'POST',body:String(v)})"
-      ".then(r=>r.json()).then(d=>{"
-      "document.getElementById('ll-s').textContent='Saved: '+d.limit;"
-      "setTimeout(()=>{document.getElementById('ll-s').textContent='';},3000);"
-      "});}"
-      "function saveDry(){"
-      "var mats=['PLA','PETG','ABS','ASA','TPU','PA','PC'];"
-      "var arr=mats.map(function(m){"
-      "var sr=document.querySelector('[name=s_'+m+'][value=sealed]');"
-      "return{name:m,"
-      "yellow:parseInt(document.querySelector('[name=y_'+m+']').value)||1,"
-      "red:parseInt(document.querySelector('[name=r_'+m+']').value)||1,"
-      "sealed:sr?sr.checked:false};"
-      "});"
-      "var mult=parseFloat(document.getElementById('dry-mult').value)||1;"
-      "fetch('/drying',{method:'POST',"
-      "headers:{'Content-Type':'application/json'},"
-      "body:JSON.stringify({mult_sealed:mult,materials:arr})})"
-      ".then(r=>r.json()).then(d=>{"
-      "document.getElementById('dry-s').textContent=d.ok?'Saved!':'Error';"
-      "setTimeout(()=>{document.getElementById('dry-s').textContent='';},3000);"
-      "});}"
-      "function resetDry(){"
-      "fetch('/drying/reset',{method:'POST'})"
-      ".then(r=>r.json()).then(d=>{"
-      "document.getElementById('dry-s').textContent='Reset!';"
-      "setTimeout(()=>location.reload(),1500);"
-      "});}"
-      "</script>"
-      // Links
-      // List Limits combined card — at bottom
-      "<div class='card'>"
-      "<h2>List Limits</h2>"
-      "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>Controls how many items are shown in picker lists. Increase carefully.</p>"
-      "<div style='margin-bottom:12px'>"
-      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>Spool list (link/copy) &mdash; Default: 16</label>"
-      "<div style='display:flex;gap:10px;align-items:center'>"
-      "<input id='ll-in' type='number' min='5' max='100' value='"+String(spool_list_limit)+"'"
-      " style='width:72px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
-      "border-radius:8px;padding:8px 10px;font-size:16px'>"
-      "<button class='btn-toggle' onclick='setLL()'>Save</button>"
-      "<span id='ll-s' style='font-size:12px;color:#28d49a;line-height:36px'></span>"
-      "</div></div>"
-      "<div>"
-      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>Location list &mdash; Default: 30 (too many may cause reboot)</label>"
-      "<div style='display:flex;gap:10px;align-items:center'>"
-      "<input id='locl-in' type='number' min='5' max='100' value='"+String(location_list_limit)+"'"
-      " style='width:72px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
-      "border-radius:8px;padding:8px 10px;font-size:16px'>"
-      "<button class='btn-toggle' onclick='setLocL()'>Save</button>"
-      "<span id='locl-s' style='font-size:12px;color:#28d49a;line-height:36px'></span>"
-      "</div></div></div>"
-      "<div class='footer'>Not affiliated with Spoolman &mdash; Open Source Project</div>"
-      "</body></html>";
-    ota_server.send(200, "text/html", html);
-  });
-
-  // Route: Upload verarbeiten
-  ota_server.on("/update", HTTP_POST,
-    // Abschluss-Handler
-    []() {
-      bool ok = !Update.hasError();
-      String msg = ok
-        ? "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-          "<meta http-equiv='refresh' content='5;url=/'>"
-          "<style>body{background:#06080f;color:#28d49a;font-family:-apple-system,sans-serif;"
-          "display:flex;flex-direction:column;align-items:center;justify-content:center;"
-          "min-height:100vh;gap:12px}"
-          "h1{font-size:28px}p{color:#4a6fa0;font-size:14px}</style></head>"
-          "<body><h1>&#10003; Update successful!</h1>"
-          "<p>Device is restarting...</p><p style='color:#1a3060'>Redirecting in 5s</p></body></html>"
-        : "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-          "<style>body{background:#06080f;color:#ff8080;font-family:-apple-system,sans-serif;"
-          "display:flex;flex-direction:column;align-items:center;justify-content:center;"
-          "min-height:100vh;gap:12px}"
-          "h1{font-size:28px}p{color:#4a6fa0;font-size:14px}"
-          "a{color:#28d49a}</style></head>"
-          "<body><h1>&#10007; Update failed</h1>"
-          "<p>Please try again.</p><a href='/'>&#8592; Back</a></body></html>";
-      ota_server.send(200, "text/html", msg);
-      if (ok) {
-        if (lbl_ota_status) lv_label_set_text(lbl_ota_status,
-          T(STR_OTA_SUCCESS));
-        lv_timer_handler();
-        delay(1500);
-        logSD("Reboot: OTA browser update success");
-        ESP.restart();
-      } else {
-        if (lbl_ota_status) lv_label_set_text(lbl_ota_status,
-          T(STR_OTA_FAIL));
-      }
-    },
-    // Upload-Handler (chunk-weise)
-    []() {
-      HTTPUpload& upload = ota_server.upload();
-      if (upload.status == UPLOAD_FILE_START) {
-        Serial.printf("OTA start: %s\n", upload.filename.c_str());
-        ota_upload_active = true;
-        if (Update.isRunning()) Update.abort();  // clean up any previous failed upload
-        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
-          Serial.println("OTA begin() error");
-          ota_upload_active = false;
-        }
-        if (lbl_ota_status) lv_label_set_text(lbl_ota_status,
-          T(STR_OTA_UPLOADING));
-        lv_timer_handler();
-      } else if (upload.status == UPLOAD_FILE_WRITE) {
-        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-          Serial.println("OTA write() error");
-        }
-      } else if (upload.status == UPLOAD_FILE_END) {
-        ota_upload_active = false;
-        if (Update.end(true)) {
-          Serial.printf("OTA end: %u bytes\n", upload.totalSize);
-        } else {
-          Serial.println("OTA end() error");
-        }
-      }
-    }
-  );
-
-  // ── SD-Card Log endpoints ─────────────────────────────────
-  // GET /logs -> JSON list of available log files
-  ota_server.on("/logs", HTTP_GET, []() {
-    if (!sd_available) {
-      ota_server.send(200, "application/json", "{\"sd\":false,\"verbose\":false,\"files\":[]}");
-      return;
-    }
-    String json = "{\"sd\":true,\"verbose\":";
-    json += sd_verbose ? "true" : "false";
-    json += ",\"files\":[";
-    File root = SD.open("/");
-    bool first = true;
-    if (root && root.isDirectory()) {
-      File entry = root.openNextFile();
-      while (entry) {
-        if (!entry.isDirectory()) {
-          String name = entry.name();
-          if (name.startsWith("/")) name = name.substring(1);
-          if (name.startsWith("log_") && name.endsWith(".txt")) {
-            if (!first) json += ",";
-            json += "{\"name\":\"";
-            json += name;
-            json += "\",\"size\":";
-            json += String((unsigned long)entry.size());
-            json += "}";
-            first = false;
-          }
-        }
-        entry = root.openNextFile();
-      }
-      root.close();
-    }
-    json += "]}";
-    ota_server.send(200, "application/json", json);
-  });
-
-  // GET /log?file=<filename> -> serve log file content
-  ota_server.on("/log", HTTP_GET, []() {
-    if (!sd_available) { ota_server.send(404, "text/plain", "No SD card"); return; }
-    if (!ota_server.hasArg("file")) {
-      ota_server.send(400, "text/plain", "Missing file param");
-      return;
-    }
-    String fname = ota_server.arg("file");
-    // basic sanitization: only allow log_*.txt names
-    if (!fname.startsWith("log_") || !fname.endsWith(".txt") || fname.indexOf("..") >= 0) {
-      ota_server.send(400, "text/plain", "Invalid filename");
-      return;
-    }
-    String path = "/" + fname;
-    if (!SD.exists(path.c_str())) {
-      ota_server.send(404, "text/plain", "Not found");
-      return;
-    }
-    File f = SD.open(path.c_str(), FILE_READ);
-    if (!f) { ota_server.send(500, "text/plain", "Open failed"); return; }
-    ota_server.streamFile(f, "text/plain");
-    f.close();
-  });
-
-  // POST /deletelog?file=<name> -> delete a log file
-  ota_server.on("/deletelog", HTTP_POST, []() {
-    if (!sd_available) { ota_server.send(404, "text/plain", "No SD card"); return; }
-    if (!ota_server.hasArg("file")) {
-      ota_server.send(400, "text/plain", "Missing file param");
-      return;
-    }
-    String fname = ota_server.arg("file");
-    if (!fname.startsWith("log_") || !fname.endsWith(".txt") || fname.indexOf("..") >= 0) {
-      ota_server.send(400, "text/plain", "Invalid filename");
-      return;
-    }
-    String path = "/" + fname;
-    if (SD.remove(path.c_str())) {
-      logSDf("Log file deleted via web: %s", fname.c_str());
-      ota_server.send(200, "text/plain", "OK");
-    } else {
-      ota_server.send(500, "text/plain", "Delete failed");
-    }
-  });
-
-  // POST /verbose -> toggle verbose.txt on SD root
-  ota_server.on("/verbose", HTTP_POST, []() {
-    if (!sd_available) {
-      ota_server.send(404, "application/json", "{\"error\":\"No SD card\"}");
-      return;
-    }
-    if (sd_verbose) {
-      // currently ON -> remove file
-      if (SD.remove("/verbose.txt")) {
-        sd_verbose = false;
-        logSD("Verbose logging: DISABLED via web");
-        ota_server.send(200, "application/json", "{\"verbose\":false}");
-      } else {
-        ota_server.send(500, "application/json", "{\"error\":\"Failed to remove verbose.txt\"}");
-      }
-    } else {
-      // currently OFF -> create file
-      File f = SD.open("/verbose.txt", FILE_WRITE);
-      if (f) {
-        f.println("Verbose logging marker. Delete this file to disable verbose mode.");
-        f.close();
-        sd_verbose = true;
-        logSD("Verbose logging: ENABLED via web");
-        ota_server.send(200, "application/json", "{\"verbose\":true}");
-      } else {
-        ota_server.send(500, "application/json", "{\"error\":\"Failed to create verbose.txt\"}");
-      }
-    }
-  });
-
-  // List limit: GET returns current value, POST sets new value
-  ota_server.on("/listlimit", HTTP_GET, []() {
-    char json[32];
-    snprintf(json, sizeof(json), "{\"limit\":%d}", spool_list_limit);
-    ota_server.send(200, "application/json", json);
-  });
-  ota_server.on("/listlimit", HTTP_POST, []() {
-    if (!ota_server.hasArg("plain")) { ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
-    int val = ota_server.arg("plain").toInt();
-    if (val < 5) val = 5;
-    if (val > 100) val = 100;
-    spool_list_limit = val;
-    prefs.begin("spoolscale", false);
-    prefs.putUChar("list_limit", (uint8_t)val);
-    prefs.end();
-    char json[32]; snprintf(json, sizeof(json), "{\"limit\":%d}", spool_list_limit);
-    logSDf("Webserver: list_limit set to %d", spool_list_limit);
-    ota_server.send(200, "application/json", json);
-  });
-
-  ota_server.on("/loclimit", HTTP_GET, []() {
-    char json[32];
-    snprintf(json, sizeof(json), "{\"limit\":%d}", location_list_limit);
-    ota_server.send(200, "application/json", json);
-  });
-  ota_server.on("/loclimit", HTTP_POST, []() {
-    if (!ota_server.hasArg("plain")) { ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
-    int val = ota_server.arg("plain").toInt();
-    if (val < 5) val = 5;
-    if (val > 100) val = 100;
-    location_list_limit = val;
-    prefs.begin("spoolscale", false);
-    prefs.putUChar("loc_limit", (uint8_t)val);
-    prefs.end();
-    char json[32]; snprintf(json, sizeof(json), "{\"limit\":%d}", location_list_limit);
-    logSDf("Webserver: loc_limit set to %d", location_list_limit);
-    ota_server.send(200, "application/json", json);
-  });
-
-  // ── Drying Reminder: Material-Schwellwerte lesen ──────────
-  ota_server.on("/drying", HTTP_GET, []() {
-    String json = "{";
-    json += "\"mode\":" + String(g_dry_mode) + ",";
-    json += "\"man_yellow\":" + String(g_dry_man_yellow) + ",";
-    json += "\"man_red\":" + String(g_dry_man_red) + ",";
-    json += "\"mult_sealed\":" + String(g_dry_mult_sealed, 1) + ",";
-    json += "\"materials\":[";
-    for (int i = 0; i < DRY_MAT_COUNT; i++) {
-      if (i > 0) json += ",";
-      json += "{\"name\":\"" + String(DRY_MAT_NAMES[i]) + "\",";
-      json += "\"yellow\":" + String(g_dry_mat_yellow[i]) + ",";
-      json += "\"red\":" + String(g_dry_mat_red[i]) + ",";
-      json += "\"sealed\":" + String(g_dry_mat_sealed[i] ? "true" : "false") + "}";
-    }
-    json += "]}";
-    ota_server.send(200, "application/json", json);
-  });
-
-  // ── Drying Reminder: Material-Schwellwerte speichern ──────
-  // Body: JSON {"mult_sealed":3.0,"materials":[{"name":"PLA","yellow":180,"red":365},...]}
-  ota_server.on("/drying", HTTP_POST, []() {
-    if (!ota_server.hasArg("plain")) {
-      ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return;
-    }
-    StaticJsonDocument<1024> doc;
-    DeserializationError err = deserializeJson(doc, ota_server.arg("plain"));
-    if (err) {
-      ota_server.send(400, "application/json", "{\"error\":\"json parse\"}"); return;
-    }
-    prefs.begin("spoolscale", false);
-    if (doc.containsKey("mult_sealed")) {
-      g_dry_mult_sealed = doc["mult_sealed"].as<float>();
-      if (g_dry_mult_sealed < 1.0f) g_dry_mult_sealed = 1.0f;
-      if (g_dry_mult_sealed > 10.0f) g_dry_mult_sealed = 10.0f;
-      prefs.putFloat("dry_mult_s", g_dry_mult_sealed);
-    }
-    if (doc.containsKey("materials")) {
-      JsonArray arr = doc["materials"].as<JsonArray>();
-      for (JsonObject obj : arr) {
-        const char* nm = obj["name"] | "";
-        for (int i = 0; i < DRY_MAT_COUNT; i++) {
-          if (strcasecmp(nm, DRY_MAT_NAMES[i]) == 0) {
-            char key[16];
-            if (obj.containsKey("yellow")) {
-              g_dry_mat_yellow[i] = max(1, (int)obj["yellow"]);
-              snprintf(key, sizeof(key), "dry_y_%s", DRY_MAT_NAMES[i]);
-              prefs.putInt(key, g_dry_mat_yellow[i]);
-            }
-            if (obj.containsKey("red")) {
-              g_dry_mat_red[i] = max(1, (int)obj["red"]);
-              snprintf(key, sizeof(key), "dry_r_%s", DRY_MAT_NAMES[i]);
-              prefs.putInt(key, g_dry_mat_red[i]);
-            }
-            if (obj["sealed"].is<bool>()) {
-              g_dry_mat_sealed[i] = obj["sealed"].as<bool>();
-              snprintf(key, sizeof(key), "dry_s_%s", DRY_MAT_NAMES[i]);
-              prefs.putBool(key, g_dry_mat_sealed[i]);
-            }
-            break;
-          }
-        }
-      }
-    }
-    prefs.end();
-    logSD("Webserver: drying thresholds updated");
-    ota_server.send(200, "application/json", "{\"ok\":true}");
-  });
-
-  // ── Drying Reminder: Reset auf Defaults ───────────────────
-  ota_server.on("/drying/reset", HTTP_POST, []() {
-    g_dry_mult_sealed = 2.0f;
-    g_dry_man_yellow  = 30;
-    g_dry_man_red     = 90;
-    prefs.begin("spoolscale", false);
-    prefs.putFloat("dry_mult_s", g_dry_mult_sealed);
-    prefs.putInt("dry_man_y",  g_dry_man_yellow);
-    prefs.putInt("dry_man_r",  g_dry_man_red);
-    char key[16];
-    for (int i = 0; i < DRY_MAT_COUNT; i++) {
-      g_dry_mat_yellow[i] = DRY_MAT_DEF_YELLOW[i];
-      g_dry_mat_red[i]    = DRY_MAT_DEF_RED[i];
-      g_dry_mat_sealed[i] = false;
-      snprintf(key, sizeof(key), "dry_y_%s", DRY_MAT_NAMES[i]);
-      prefs.putInt(key, g_dry_mat_yellow[i]);
-      snprintf(key, sizeof(key), "dry_r_%s", DRY_MAT_NAMES[i]);
-      prefs.putInt(key, g_dry_mat_red[i]);
-      snprintf(key, sizeof(key), "dry_s_%s", DRY_MAT_NAMES[i]);
-      prefs.putBool(key, false);
-    }
-    prefs.end();
-    logSD("Webserver: drying thresholds reset to defaults");
-    ota_server.send(200, "application/json", "{\"ok\":true,\"reset\":true}");
-  });
-
-  ota_server.begin();
-  ota_server_running = true;
-  Serial.printf("OTA server started: http://%s/\n", WiFi.localIP().toString().c_str());
-}
-
-// OTA selection screen (browser / GitHub)
-void showOtaScreen() {
-  logSD("SHOW: OtaScreen");
-  logSD("UI: Screen -> OTA Selection");
-  hideAllOverlays();
-  if (!scr_ota) buildOtaScreen();
-  lv_obj_clear_flag(scr_ota, LV_OBJ_FLAG_HIDDEN);
-}
-
-void buildOtaScreen() {
-  logSD("BUILD: OtaScreen");
-  scr_ota = buildOverlayScreen();
-  buildSubHeader(scr_ota, T(STR_OTA_TITLE),
-    [](lv_event_t *e){
-      logSD("BTN: OTA -> Back");
-      show_system_pending = true;
-    });
-
-  // Browser upload button
-  lv_obj_t *btn_browser = lv_btn_create(scr_ota);
-  lv_obj_set_size(btn_browser, 456, 80);
-  lv_obj_set_pos(btn_browser, 12, 58);
-  lv_obj_set_style_bg_color(btn_browser, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_browser, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_browser, 10, 0);
-  lv_obj_set_style_shadow_width(btn_browser, 0, 0);
-  lv_obj_set_style_border_width(btn_browser, 1, 0);
-  lv_obj_set_style_border_color(btn_browser, lv_color_hex(0x1a3050), 0);
-  { lv_obj_t *ico = lv_label_create(btn_browser);
-    lv_label_set_text(ico, LV_SYMBOL_UPLOAD);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
-    lv_obj_t *lbl = lv_label_create(btn_browser);
-    lv_label_set_text(lbl, T(STR_OTA_BROWSER));
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
-    lv_obj_t *sub = lv_label_create(btn_browser);
-    lv_label_set_text(sub, T(STR_OTA_BROWSER_SUB));
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
-  lv_obj_add_event_cb(btn_browser, [](lv_event_t *e){
-    showOtaBrowserScreen();
-  }, LV_EVENT_CLICKED, NULL);
-
-  // GitHub OTA button — now active
-  lv_obj_t *btn_gh = lv_btn_create(scr_ota);
-  lv_obj_set_size(btn_gh, 456, 80);
-  lv_obj_set_pos(btn_gh, 12, 150);
-  lv_obj_set_style_bg_color(btn_gh, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_gh, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_gh, 10, 0);
-  lv_obj_set_style_shadow_width(btn_gh, 0, 0);
-  lv_obj_set_style_border_width(btn_gh, 1, 0);
-  lv_obj_set_style_border_color(btn_gh, lv_color_hex(0x1a3050), 0);
-  { lv_obj_t *ico = lv_label_create(btn_gh);
-    lv_label_set_text(ico, LV_SYMBOL_DOWNLOAD);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
-    lv_obj_t *lbl = lv_label_create(btn_gh);
-    lv_label_set_text(lbl, T(STR_OTA_GITHUB));
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
-    lv_obj_t *sub = lv_label_create(btn_gh);
-    lv_label_set_text(sub, T(STR_OTA_GITHUB_SUB));
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
-  lv_obj_add_event_cb(btn_gh, [](lv_event_t *e){
-    showOtaGithubScreen();
-  }, LV_EVENT_CLICKED, NULL);
-
-  // Red circle badge top-right of GitHub button
-  lbl_gh_btn_badge = lv_obj_create(scr_ota);
-  lv_obj_set_size(lbl_gh_btn_badge, 14, 14);
-  lv_obj_set_pos(lbl_gh_btn_badge, 456, 152);
-  lv_obj_set_style_radius(lbl_gh_btn_badge, 7, 0);
-  lv_obj_set_style_bg_color(lbl_gh_btn_badge, lv_color_hex(0xe03030), 0);
-  lv_obj_set_style_border_color(lbl_gh_btn_badge, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_border_width(lbl_gh_btn_badge, 2, 0);
-  lv_obj_set_style_pad_all(lbl_gh_btn_badge, 0, 0);
-  lv_obj_clear_flag(lbl_gh_btn_badge, LV_OBJ_FLAG_SCROLLABLE);
-  if (!update_available) lv_obj_add_flag(lbl_gh_btn_badge, LV_OBJ_FLAG_HIDDEN);
-
-  // FW version at bottom
-  lv_obj_t *ver_ota = lv_label_create(scr_ota);
-  char ver_buf[32]; snprintf(ver_buf, sizeof(ver_buf), T(STR_OTA_CURRENT), FW_VERSION);
-  lv_label_set_text(ver_ota, ver_buf);
-  lv_obj_set_style_text_color(ver_ota, lv_color_hex(0x2a4060), 0);
-  lv_obj_set_style_text_font(ver_ota, &lv_font_montserrat_ext_12, 0);
-  lv_obj_align(ver_ota, LV_ALIGN_BOTTOM_MID, 0, -8);
-}
-
-// OTA browser upload screen
-void showOtaBrowserScreen() {
-  logSD("SHOW: OtaBrowserScreen");
-  logSD("UI: Screen -> OTA Browser");
-  hideAllOverlays();
-  stopOtaServer();  // alten Server stoppen falls noch aktiv
-  lbl_ota_status = nullptr;
-  if (scr_ota_browser) { lv_obj_del(scr_ota_browser); scr_ota_browser = nullptr; }
-  buildOtaBrowserScreen();
-  lv_obj_clear_flag(scr_ota_browser, LV_OBJ_FLAG_HIDDEN);
-  if (wifi_ok) startOtaServer();
-}
-
-void buildOtaBrowserScreen() {
-  logSD("BUILD: OtaBrowserScreen");
-  scr_ota_browser = buildOverlayScreen();
-  buildSubHeader(scr_ota_browser, T(STR_OTA_BROWSER_TITLE),
-    [](lv_event_t *e){
-      logSD("BTN: OtaBrowser -> Back");
-      stopOtaServer();
-      show_ota_pending = true;
-    });
-
-  if (!wifi_ok) {
-    lv_obj_t *lbl_err = lv_label_create(scr_ota_browser);
-    lv_label_set_text(lbl_err, T(STR_OTA_NO_WIFI));
-    lv_obj_set_style_text_color(lbl_err, lv_color_hex(0xff8080), 0);
-    lv_obj_set_style_text_font(lbl_err, &lv_font_montserrat_ext_16, 0);
-    lv_obj_set_style_text_align(lbl_err, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl_err, LV_ALIGN_CENTER, 0, 0);
-    return;
-  }
-
-  // Show IP address — wait briefly for valid DHCP if needed
-  char ip_buf[64];
-  IPAddress ip = WiFi.localIP();
-  if (ip == IPAddress(0,0,0,0) && wifi_ok) {
-    unsigned long t = millis();
-    while (WiFi.localIP() == IPAddress(0,0,0,0) && millis()-t < 3000) {
-      delay(100); lv_timer_handler();
-    }
-    ip = WiFi.localIP();
-  }
-  snprintf(ip_buf, sizeof(ip_buf), "http://%s/", ip.toString().c_str());
-
-  lv_obj_t *lbl_hint = lv_label_create(scr_ota_browser);
-  lv_label_set_text(lbl_hint, T(STR_OTA_OPEN_BROWSER));
-  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
-  lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 58);
-
-  lv_obj_t *lbl_ip = lv_label_create(scr_ota_browser);
-  lv_label_set_text(lbl_ip, ip_buf);
-  lv_obj_set_style_text_color(lbl_ip, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_ip, &lv_font_montserrat_ext_20, 0);
-  lv_obj_align(lbl_ip, LV_ALIGN_TOP_MID, 0, 80);
-
-  lv_obj_t *lbl_hint2 = lv_label_create(scr_ota_browser);
-  lv_label_set_text(lbl_hint2, T(STR_OTA_FILE_HINT));
-  lv_obj_set_style_text_color(lbl_hint2, lv_color_hex(0x2a4060), 0);
-  lv_obj_set_style_text_font(lbl_hint2, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_style_text_align(lbl_hint2, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_hint2, LV_ALIGN_TOP_MID, 0, 112);
-  lv_label_set_long_mode(lbl_hint2, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(lbl_hint2, 440);
-
-  // Status label (filled by web server)
-  lbl_ota_status = lv_label_create(scr_ota_browser);
-  lv_label_set_text(lbl_ota_status, T(STR_OTA_WAITING));
-  lv_obj_set_style_text_color(lbl_ota_status, lv_color_hex(0xf0b838), 0);
-  lv_obj_set_style_text_font(lbl_ota_status, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_align(lbl_ota_status, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_ota_status, LV_ALIGN_CENTER, 0, 40);
-
-  // Stop button
-  lv_obj_t *btn_stop = lv_btn_create(scr_ota_browser);
-  lv_obj_set_size(btn_stop, 200, 48);
-  lv_obj_align(btn_stop, LV_ALIGN_BOTTOM_MID, 0, -20);
-  lv_obj_set_style_bg_color(btn_stop, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_stop, lv_color_hex(0x602020), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_stop, 8, 0);
-  lv_obj_set_style_shadow_width(btn_stop, 0, 0);
-  lv_obj_set_style_border_width(btn_stop, 0, 0);
-  lv_obj_add_event_cb(btn_stop, [](lv_event_t *e){
-    logSD("BTN: OtaBrowser -> Stop server");
-    stopOtaServer();
-    show_ota_pending = true;
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_stop = lv_label_create(btn_stop);
-  lv_label_set_text(lbl_stop, T(STR_BTN_STOP_SERVER));
-  lv_obj_set_style_text_color(lbl_stop, lv_color_hex(0xff8080), 0);
-  lv_obj_set_style_text_font(lbl_stop, &lv_font_montserrat_ext_16, 0);
-  lv_obj_center(lbl_stop);
-}
 
 // ============================================================
 //  GITHUB OTA: check latest release via API, download + flash
 // ============================================================
 
 // Parse semantic version "Beta_X.Y.Z" → comparable integer X*100000 + Y*1000 + Z
-static int parseVersion(const char* v) {
-  // Skip "Beta_" prefix if present
-  const char *p = v;
-  while (*p && !isdigit((unsigned char)*p)) p++;
-  int major = 0, minor = 0, patch = 0;
-  sscanf(p, "%d.%d.%d", &major, &minor, &patch);
-  return major * 100000 + minor * 1000 + patch;
-}
 
 // Show/hide all update badges consistently
 void showUpdateBadges(bool show) {
@@ -5083,695 +1707,6 @@ void showUpdateBadges(bool show) {
 }
 
 // Silent background update check — no UI changes except badge
-void doGithubOtaCheckSilent() {
-  if (!wifi_ok) return;
-  Serial.println("Silent OTA check...");
-
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-  // Pre-release mode: fetch all releases array; normal: fetch latest only
-  String url = gh_prerelease
-    ? "https://api.github.com/repos/Niko11111/SpoolmanScale/releases"
-    : "https://api.github.com/repos/Niko11111/SpoolmanScale/releases/latest";
-  http.begin(client, url);
-  http.addHeader("User-Agent", "SpoolmanScale-ESP32");
-  http.setTimeout(8000);
-  int code = http.GET();
-  if (code != 200) { http.end(); Serial.printf("Silent OTA: HTTP %d\n", code); return; }
-
-  String payload = http.getString();
-  http.end();
-
-  const char* tag = "";
-  if (gh_prerelease) {
-    DynamicJsonDocument doc(8192);
-    doc.clear();
-    if (deserializeJson(doc, payload)) return;
-    JsonArray arr = doc.as<JsonArray>();
-    for (JsonObject rel : arr) {
-      if (rel["draft"] | false) continue;
-      tag = rel["tag_name"] | "";
-      if (tag[0] != '\0') break;
-    }
-  } else {
-    DynamicJsonDocument doc(2048);
-    doc.clear();
-    if (deserializeJson(doc, payload)) return;
-    tag = doc["tag_name"] | "";
-  }
-
-  if (tag[0] == '\0') return;
-
-  strncpy(gh_latest_version, tag, sizeof(gh_latest_version)-1);
-  gh_latest_version[sizeof(gh_latest_version)-1] = 0;
-
-  int cur    = parseVersion(FW_VERSION);
-  int remote = parseVersion(gh_latest_version);
-  Serial.printf("Silent OTA: installed=%s latest=%s\n", FW_VERSION, gh_latest_version);
-
-  if (remote > cur) {
-    update_available = true;
-    showUpdateBadges(true);
-    Serial.println("Update available — badge shown");
-  }
-}
-
-void doGithubOtaCheck() {
-  if (!lbl_gh_status) return;
-
-  if (!wifi_ok) {
-    char buf[64]; strncpy(buf, T(STR_GH_OTA_NO_WIFI), sizeof(buf)-1); buf[sizeof(buf)-1]=0;
-    lv_label_set_text(lbl_gh_status, buf);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-    return;
-  }
-
-  char buf[64]; strncpy(buf, T(STR_GH_OTA_CHECKING), sizeof(buf)-1); buf[sizeof(buf)-1]=0;
-  lv_label_set_text(lbl_gh_status, buf);
-  lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0x4a6fa0), 0);
-  lv_timer_handler();
-
-  // Query GitHub releases API
-  WiFiClientSecure client;
-  client.setInsecure();  // skip cert check — connection is still encrypted
-  HTTPClient http;
-  String url = gh_prerelease
-    ? "https://api.github.com/repos/Niko11111/SpoolmanScale/releases"
-    : "https://api.github.com/repos/Niko11111/SpoolmanScale/releases/latest";
-  http.begin(client, url);
-  http.addHeader("User-Agent", "SpoolmanScale-ESP32");
-  http.setTimeout(8000);
-  int code = http.GET();
-  Serial.printf("GitHub API: %d\n", code);
-
-  if (code != 200) {
-    snprintf(buf, sizeof(buf), "HTTP %d", code);
-    lv_label_set_text(lbl_gh_status, buf);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-    http.end();
-    return;
-  }
-
-  String payload = http.getString();
-  http.end();
-
-  // Parse tag_name
-  const char* tag = "";
-  if (gh_prerelease) {
-    DynamicJsonDocument doc(8192);
-    doc.clear();
-    if (deserializeJson(doc, payload)) {
-      lv_label_set_text(lbl_gh_status, "JSON error");
-      lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-      return;
-    }
-    JsonArray arr = doc.as<JsonArray>();
-    for (JsonObject rel : arr) {
-      if (rel["draft"] | false) continue;
-      tag = rel["tag_name"] | "";
-      if (tag[0] != '\0') break;
-    }
-  } else {
-    DynamicJsonDocument doc(2048);
-    doc.clear();
-    if (deserializeJson(doc, payload)) {
-      lv_label_set_text(lbl_gh_status, "JSON error");
-      lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-      return;
-    }
-    tag = doc["tag_name"] | "";
-  }
-
-  if (tag[0] == '\0') {
-    lv_label_set_text(lbl_gh_status, "No release found");
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-    return;
-  }
-
-  strncpy(gh_latest_version, tag, sizeof(gh_latest_version)-1);
-  gh_latest_version[sizeof(gh_latest_version)-1] = 0;
-
-  // Show installed / latest labels
-  if (lbl_gh_installed) {
-    char inst[48]; snprintf(inst, sizeof(inst), T(STR_GH_OTA_INSTALLED), FW_VERSION);
-    lv_label_set_text(lbl_gh_installed, inst);
-    lv_obj_clear_flag(lbl_gh_installed, LV_OBJ_FLAG_HIDDEN);
-  }
-  if (lbl_gh_latest) {
-    char lat[48]; snprintf(lat, sizeof(lat), T(STR_GH_OTA_LATEST), gh_latest_version);
-    lv_label_set_text(lbl_gh_latest, lat);
-    lv_obj_clear_flag(lbl_gh_latest, LV_OBJ_FLAG_HIDDEN);
-  }
-
-  // Compare versions
-  int cur = parseVersion(FW_VERSION);
-  int remote = parseVersion(gh_latest_version);
-
-  if (remote <= cur) {
-    char upd[48]; strncpy(upd, T(STR_GH_OTA_UP_TO_DATE), sizeof(upd)-1); upd[sizeof(upd)-1]=0;
-    lv_label_set_text(lbl_gh_status, upd);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0x40c080), 0);
-  } else {
-    char avail[64]; snprintf(avail, sizeof(avail), T(STR_GH_OTA_UPDATE_AVAIL), gh_latest_version);
-    lv_label_set_text(lbl_gh_status, avail);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xf0b838), 0);
-    // Activate update button
-    if (btn_gh_update) {
-      lv_obj_clear_state(btn_gh_update, LV_STATE_DISABLED);
-      lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x1a3020), 0);
-      lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-      lv_obj_set_style_border_color(btn_gh_update, lv_color_hex(0x28d49a), 0);
-      if (lbl_gh_update_btn) {
-        char ubtn[48]; strncpy(ubtn, T(STR_GH_OTA_UPDATE_BTN), sizeof(ubtn)-1); ubtn[sizeof(ubtn)-1]=0;
-        lv_label_set_text(lbl_gh_update_btn, ubtn);
-        lv_obj_set_style_text_color(lbl_gh_update_btn, lv_color_hex(0x40c080), 0);
-      }
-    }
-    update_available = true;
-    showUpdateBadges(true);
-  }
-}
-
-void doGithubOtaFlash(const char* version) {
-  if (!lbl_gh_status) return;
-
-  // Show fullscreen blocking overlay on top layer — survives any screen changes
-  lv_obj_t *overlay = lv_obj_create(lv_layer_top());
-  lv_obj_set_size(overlay, 480, 320);
-  lv_obj_set_pos(overlay, 0, 0);
-  lv_obj_set_style_bg_color(overlay, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_bg_opa(overlay, LV_OPA_COVER, 0);
-  lv_obj_set_style_border_width(overlay, 0, 0);
-  lv_obj_set_style_pad_all(overlay, 0, 0);
-  lv_obj_clear_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_clear_flag(overlay, LV_OBJ_FLAG_CLICKABLE);
-
-  lv_obj_t *ico = lv_label_create(overlay);
-  lv_label_set_text(ico, LV_SYMBOL_DOWNLOAD);
-  lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-  lv_obj_align(ico, LV_ALIGN_CENTER, 0, -40);
-
-  lv_obj_t *lbl_ov = lv_label_create(overlay);
-  char buf_ov[64]; strncpy(buf_ov, T(STR_GH_OTA_FLASHING), sizeof(buf_ov)-1); buf_ov[sizeof(buf_ov)-1]=0;
-  lv_label_set_text(lbl_ov, buf_ov);
-  lv_obj_set_style_text_color(lbl_ov, lv_color_hex(0xf0b838), 0);
-  lv_obj_set_style_text_font(lbl_ov, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_style_text_align(lbl_ov, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_ov, LV_ALIGN_CENTER, 0, 0);
-
-  lv_obj_t *lbl_hint = lv_label_create(overlay);
-  lv_label_set_text(lbl_hint, "~30-60 sec");
-  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_hint, LV_ALIGN_CENTER, 0, 30);
-
-  // Force render — must happen before any blocking HTTP call
-  lv_refr_now(NULL);
-  lv_timer_handler();
-
-  char buf[64]; strncpy(buf, T(STR_GH_OTA_FLASHING), sizeof(buf)-1); buf[sizeof(buf)-1]=0;
-  lv_label_set_text(lbl_gh_status, buf);
-  lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xf0b838), 0);
-  if (btn_gh_update) lv_obj_add_flag(btn_gh_update, LV_OBJ_FLAG_HIDDEN);
-  lv_timer_handler();
-
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-
-  // GitHub Releases /latest/download/ redirects automatically
-  String url = "https://github.com/Niko11111/SpoolmanScale/releases/latest/download/SpoolmanScale.bin";
-  http.begin(client, url);
-  http.addHeader("User-Agent", "SpoolmanScale-ESP32");
-  http.setTimeout(60000);
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-
-  int code = http.GET();
-  Serial.printf("GitHub OTA download: %d\n", code);
-
-  if (code != 200) {
-    snprintf(buf, sizeof(buf), "%s (HTTP %d)", T(STR_GH_OTA_FLASH_FAIL), code);
-    lv_label_set_text(lbl_gh_status, buf);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-    http.end();
-    return;
-  }
-
-  int len = http.getSize();
-  WiFiClient* stream = http.getStreamPtr();
-
-  if (!Update.begin(len > 0 ? len : UPDATE_SIZE_UNKNOWN)) {
-    lv_label_set_text(lbl_gh_status, T(STR_GH_OTA_FLASH_FAIL));
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-    http.end();
-    return;
-  }
-
-  uint8_t buf8[512];
-  size_t written = 0;
-  while (http.connected() && (len > 0 || len == -1)) {
-    size_t available = stream->available();
-    if (available) {
-      size_t toRead = min(available, sizeof(buf8));
-      size_t rd = stream->readBytes(buf8, toRead);
-      if (Update.write(buf8, rd) != rd) break;
-      written += rd;
-      if (len > 0) len -= rd;
-    }
-    lv_timer_handler();  // keep UI alive
-    delay(1);
-  }
-  http.end();
-
-  if (Update.end(true) && !Update.hasError()) {
-    char ok[64]; strncpy(ok, T(STR_GH_OTA_FLASH_OK), sizeof(ok)-1); ok[sizeof(ok)-1]=0;
-    lv_label_set_text(lbl_gh_status, ok);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0x40c080), 0);
-    lv_timer_handler();
-    delay(2000);
-    ESP.restart();
-  } else {
-    char fail[64]; strncpy(fail, T(STR_GH_OTA_FLASH_FAIL), sizeof(fail)-1); fail[sizeof(fail)-1]=0;
-    lv_label_set_text(lbl_gh_status, fail);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-  }
-}
-
-void showOtaGithubScreen() {
-  logSD("SHOW: OtaGithubScreen");
-  logSD("UI: Screen -> OTA GitHub");
-  // Reset UI state but keep version info if background check already found an update
-  lbl_gh_status     = nullptr;
-  lbl_gh_installed  = nullptr;
-  lbl_gh_latest     = nullptr;
-  btn_gh_update     = nullptr;
-  lbl_gh_update_btn = nullptr;
-  if (!update_available) gh_latest_version[0] = '\0';  // keep if silent check found something
-
-  if (scr_ota_github) { lv_obj_del(scr_ota_github); scr_ota_github = nullptr; }
-  buildOtaGithubScreen();
-  hideAllOverlays();
-  lv_obj_clear_flag(scr_ota_github, LV_OBJ_FLAG_HIDDEN);
-}
-
-void buildOtaGithubScreen() {
-  logSD("BUILD: OtaGithubScreen");
-  scr_ota_github = buildOverlayScreen();
-
-  char buf_title[32];
-  strncpy(buf_title, T(STR_GH_OTA_TITLE), sizeof(buf_title)-1); buf_title[sizeof(buf_title)-1]=0;
-  buildSubHeader(scr_ota_github, buf_title,
-    [](lv_event_t *e){ logSD("BTN: OtaGithub -> Back"); show_ota_pending = true; });
-
-  // ── "Check for Updates" button ──
-  lv_obj_t *btn_check = lv_btn_create(scr_ota_github);
-  lv_obj_set_size(btn_check, 280, 44);
-  lv_obj_align(btn_check, LV_ALIGN_TOP_MID, 0, 56);
-  lv_obj_set_style_bg_color(btn_check, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_check, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_check, 8, 0);
-  lv_obj_set_style_shadow_width(btn_check, 0, 0);
-  lv_obj_set_style_border_width(btn_check, 1, 0);
-  lv_obj_set_style_border_color(btn_check, lv_color_hex(0x1a3060), 0);
-  lv_obj_add_event_cb(btn_check, [](lv_event_t *e){ doGithubOtaCheck(); }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_check = lv_label_create(btn_check);
-  char buf_check[48]; strncpy(buf_check, T(STR_GH_OTA_CHECK_BTN), sizeof(buf_check)-1); buf_check[sizeof(buf_check)-1]=0;
-  lv_label_set_text(lbl_check, buf_check);
-  lv_obj_set_style_text_color(lbl_check, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_check, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_align(lbl_check, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_check, LV_ALIGN_CENTER, 0, 0);
-
-  // ── Status label ──
-  lbl_gh_status = lv_label_create(scr_ota_github);
-  lv_label_set_text(lbl_gh_status, "");
-  lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_gh_status, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_style_text_align(lbl_gh_status, LV_TEXT_ALIGN_CENTER, 0);
-  lv_label_set_long_mode(lbl_gh_status, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(lbl_gh_status, 440);
-  lv_obj_align(lbl_gh_status, LV_ALIGN_TOP_MID, 0, 112);
-
-  // ── Installed version label (hidden until check) ──
-  lbl_gh_installed = lv_label_create(scr_ota_github);
-  lv_label_set_text(lbl_gh_installed, "");
-  lv_obj_set_style_text_color(lbl_gh_installed, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_gh_installed, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_style_text_align(lbl_gh_installed, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_gh_installed, LV_ALIGN_TOP_MID, 0, 148);
-  lv_obj_add_flag(lbl_gh_installed, LV_OBJ_FLAG_HIDDEN);
-
-  // ── Latest version label (hidden until check) ──
-  lbl_gh_latest = lv_label_create(scr_ota_github);
-  lv_label_set_text(lbl_gh_latest, "");
-  lv_obj_set_style_text_color(lbl_gh_latest, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_gh_latest, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_style_text_align(lbl_gh_latest, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_gh_latest, LV_ALIGN_TOP_MID, 0, 170);
-  lv_obj_add_flag(lbl_gh_latest, LV_OBJ_FLAG_HIDDEN);
-
-  // ── Pre-release toggle (bottom left) ──
-  lv_obj_t *btn_pre = lv_btn_create(scr_ota_github);
-  lv_obj_set_size(btn_pre, 140, 48);
-  lv_obj_align(btn_pre, LV_ALIGN_BOTTOM_LEFT, 12, -24);
-  lv_obj_set_style_bg_color(btn_pre, gh_prerelease ? lv_color_hex(0x0a2040) : lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_bg_color(btn_pre, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_pre, 8, 0);
-  lv_obj_set_style_shadow_width(btn_pre, 0, 0);
-  lv_obj_set_style_border_width(btn_pre, 1, 0);
-  lv_obj_set_style_border_color(btn_pre, gh_prerelease ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a2030), 0);
-  lv_obj_add_event_cb(btn_pre, [](lv_event_t *e) {
-    gh_prerelease = !gh_prerelease;
-    Preferences p; p.begin("spool", false);
-    p.putBool("gh_prerelease", gh_prerelease); p.end();
-    // Rebuild screen to reflect new state
-    if (scr_ota_github) { lv_obj_del(scr_ota_github); scr_ota_github = nullptr; }
-    buildOtaGithubScreen();
-    if (scr_ota_github) lv_obj_clear_flag(scr_ota_github, LV_OBJ_FLAG_HIDDEN);
-  }, LV_EVENT_CLICKED, NULL);
-  // Label: "Pre-release" + state indicator
-  lv_obj_t *lbl_pre = lv_label_create(btn_pre);
-  char pre_buf[32];
-  snprintf(pre_buf, sizeof(pre_buf), "%s\n%s", T(STR_GH_OTA_PRERELEASE), gh_prerelease ? "[ ON ]" : "[ OFF ]");
-  lv_label_set_text(lbl_pre, pre_buf);
-  lv_obj_set_style_text_color(lbl_pre, gh_prerelease ? lv_color_hex(0x28d49a) : lv_color_hex(0x2a3848), 0);
-  lv_obj_set_style_text_font(lbl_pre, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_style_text_align(lbl_pre, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_pre, LV_ALIGN_CENTER, 0, 0);
-
-  // ── Update button — always visible, greyed out until update available ──
-  btn_gh_update = lv_btn_create(scr_ota_github);
-  lv_obj_set_size(btn_gh_update, 310, 48);
-  lv_obj_align(btn_gh_update, LV_ALIGN_BOTTOM_RIGHT, -12, -24);
-  lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x111820), 0);
-  lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x111820), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_gh_update, 8, 0);
-  lv_obj_set_style_shadow_width(btn_gh_update, 0, 0);
-  lv_obj_set_style_border_width(btn_gh_update, 1, 0);
-  lv_obj_set_style_border_color(btn_gh_update, lv_color_hex(0x1a2030), 0);
-  lv_obj_add_state(btn_gh_update, LV_STATE_DISABLED);
-  lv_obj_add_event_cb(btn_gh_update, [](lv_event_t *e){
-    doGithubOtaFlash(gh_latest_version);
-  }, LV_EVENT_CLICKED, NULL);
-
-  lbl_gh_update_btn = lv_label_create(btn_gh_update);
-  char buf_ubtn[48]; strncpy(buf_ubtn, T(STR_GH_OTA_UPDATE_BTN), sizeof(buf_ubtn)-1); buf_ubtn[sizeof(buf_ubtn)-1]=0;
-  lv_label_set_text(lbl_gh_update_btn, buf_ubtn);
-  lv_obj_set_style_text_color(lbl_gh_update_btn, lv_color_hex(0x2a3848), 0);
-  lv_obj_set_style_text_font(lbl_gh_update_btn, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_align(lbl_gh_update_btn, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_gh_update_btn, LV_ALIGN_CENTER, 0, 0);
-
-  // If background check already found an update, pre-activate button and show version info
-  if (update_available && gh_latest_version[0] != '\0') {
-    lv_obj_clear_state(btn_gh_update, LV_STATE_DISABLED);
-    lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x1a3020), 0);
-    lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(btn_gh_update, lv_color_hex(0x28d49a), 0);
-    char ubtn2[48]; strncpy(ubtn2, T(STR_GH_OTA_UPDATE_BTN), sizeof(ubtn2)-1); ubtn2[sizeof(ubtn2)-1]=0;
-    lv_label_set_text(lbl_gh_update_btn, ubtn2);
-    lv_obj_set_style_text_color(lbl_gh_update_btn, lv_color_hex(0x40c080), 0);
-    // Show version info labels
-    char avail[64]; snprintf(avail, sizeof(avail), T(STR_GH_OTA_UPDATE_AVAIL), gh_latest_version);
-    lv_label_set_text(lbl_gh_status, avail);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xf0b838), 0);
-    char inst[48]; snprintf(inst, sizeof(inst), T(STR_GH_OTA_INSTALLED), FW_VERSION);
-    lv_label_set_text(lbl_gh_installed, inst);
-    lv_obj_clear_flag(lbl_gh_installed, LV_OBJ_FLAG_HIDDEN);
-    char lat[48]; snprintf(lat, sizeof(lat), T(STR_GH_OTA_LATEST), gh_latest_version);
-    lv_label_set_text(lbl_gh_latest, lat);
-    lv_obj_clear_flag(lbl_gh_latest, LV_OBJ_FLAG_HIDDEN);
-  }
-}
-
-// ============================================================
-//  SUBMENU: SYSTEM (language + update + info/donate)
-// ============================================================
-void showLanguageScreen();  // Forward
-
-void buildSystemScreen() {
-  logSD("BUILD: SystemScreen");
-  if (sd_verbose) logSD("[verbose] buildSystemScreen: start");
-  scr_system = buildOverlayScreen();
-  buildSubHeader(scr_system, T(STR_SYSTEM_TITLE),
-    [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
-
-  // 3 main buttons 62px + 1 reset button 44px, gap=5, y0=52
-  const int BTN_W = 456, BTN_H = 62, RESET_H = 44, BTN_GAP = 5, BTN_X = 12, BTN_Y0 = 52;
-
-  // ── Button 1: Language ──
-  lv_obj_t *btn_lang = lv_btn_create(scr_system);
-  lv_obj_set_size(btn_lang, BTN_W, BTN_H);
-  lv_obj_set_pos(btn_lang, BTN_X, BTN_Y0);
-  lv_obj_set_style_bg_color(btn_lang, lv_color_hex(0x0a1a2a), 0);
-  lv_obj_set_style_bg_color(btn_lang, lv_color_hex(0x1a2a40), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_lang, 10, 0);
-  lv_obj_set_style_shadow_width(btn_lang, 0, 0);
-  lv_obj_set_style_border_width(btn_lang, 1, 0);
-  lv_obj_set_style_border_color(btn_lang, lv_color_hex(0x1a2a40), 0);
-  { lv_obj_t *ico = lv_label_create(btn_lang);
-    lv_label_set_text(ico, LV_SYMBOL_LIST);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -18);
-    lv_obj_t *lbl = lv_label_create(btn_lang);
-    lv_label_set_text(lbl, T(STR_LANG_TITLE));
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
-    lv_obj_t *sub = lv_label_create(btn_lang);
-    lv_label_set_text(sub, T(STR_BTN_LANG_SUB));
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_12, 0);
-    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 22); }
-  lv_obj_add_event_cb(btn_lang, [](lv_event_t *e){ logSD("BTN: System -> Language"); showLanguageScreen(); }, LV_EVENT_CLICKED, NULL);
-
-  // ── Button 2: Firmware update ──
-  lv_obj_t *btn_upd = lv_btn_create(scr_system);
-  lv_obj_set_size(btn_upd, BTN_W, BTN_H);
-  lv_obj_set_pos(btn_upd, BTN_X, BTN_Y0 + BTN_H + BTN_GAP);
-  lv_obj_set_style_bg_color(btn_upd, lv_color_hex(0x0a1a2a), 0);
-  lv_obj_set_style_bg_color(btn_upd, lv_color_hex(0x1a2a40), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_upd, 10, 0);
-  lv_obj_set_style_shadow_width(btn_upd, 0, 0);
-  lv_obj_set_style_border_width(btn_upd, 1, 0);
-  lv_obj_set_style_border_color(btn_upd, lv_color_hex(0x1a2a40), 0);
-  { lv_obj_t *ico = lv_label_create(btn_upd);
-    lv_label_set_text(ico, LV_SYMBOL_DOWNLOAD);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -18);
-    lv_obj_t *lbl = lv_label_create(btn_upd);
-    lv_label_set_text(lbl, T(STR_BTN_FW_UPDATE));
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
-    lv_obj_t *sub = lv_label_create(btn_upd);
-    lv_label_set_text(sub, T(STR_BTN_FW_SUB));
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_12, 0);
-    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 22); }
-  lv_obj_add_event_cb(btn_upd, [](lv_event_t *e){ logSD("BTN: -> OTA"); show_ota_pending = true; }, LV_EVENT_CLICKED, NULL);
-
-  // Yellow badge top-right of firmware update button
-  // Red circle badge top-right of firmware update button
-  lbl_fw_badge = lv_obj_create(scr_system);
-  lv_obj_set_size(lbl_fw_badge, 14, 14);
-  lv_obj_set_pos(lbl_fw_badge, 456, BTN_Y0 + BTN_H + BTN_GAP);
-  lv_obj_set_style_radius(lbl_fw_badge, 7, 0);
-  lv_obj_set_style_bg_color(lbl_fw_badge, lv_color_hex(0xe03030), 0);
-  lv_obj_set_style_border_color(lbl_fw_badge, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_border_width(lbl_fw_badge, 2, 0);
-  lv_obj_set_style_pad_all(lbl_fw_badge, 0, 0);
-  lv_obj_clear_flag(lbl_fw_badge, LV_OBJ_FLAG_SCROLLABLE);
-  if (!update_available) lv_obj_add_flag(lbl_fw_badge, LV_OBJ_FLAG_HIDDEN);
-
-  // ── Button 3: Info & support ──
-  lv_obj_t *btn_info = lv_btn_create(scr_system);
-  lv_obj_set_size(btn_info, BTN_W, BTN_H);
-  lv_obj_set_pos(btn_info, BTN_X, BTN_Y0 + 2*(BTN_H + BTN_GAP));
-  lv_obj_set_style_bg_color(btn_info, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_info, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_info, 10, 0);
-  lv_obj_set_style_shadow_width(btn_info, 0, 0);
-  lv_obj_set_style_border_width(btn_info, 1, 0);
-  lv_obj_set_style_border_color(btn_info, lv_color_hex(0x1a3050), 0);
-  { lv_obj_t *ico = lv_label_create(btn_info);
-    lv_label_set_text(ico, LV_SYMBOL_BELL);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -18);
-    lv_obj_t *lbl = lv_label_create(btn_info);
-    lv_label_set_text(lbl, T(STR_BTN_INFO));
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
-    lv_obj_t *sub = lv_label_create(btn_info);
-    lv_label_set_text(sub, T(STR_BTN_INFO_SUB));
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_12, 0);
-    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 22); }
-  lv_obj_add_event_cb(btn_info, [](lv_event_t *e){ logSD("BTN: System -> Info"); show_info_pending = true; }, LV_EVENT_CLICKED, NULL);
-
-  // ── Button 4: Factory Reset (half width, left) + Reboot (half width, right) ──
-  int reset_y = BTN_Y0 + 3*(BTN_H + BTN_GAP);
-  const int HALF_W = 220;
-
-  lv_obj_t *btn_reset = lv_btn_create(scr_system);
-  lv_obj_set_size(btn_reset, HALF_W, RESET_H);
-  lv_obj_set_pos(btn_reset, BTN_X, reset_y);
-  lv_obj_set_style_bg_color(btn_reset, lv_color_hex(0x0a1a2a), 0);
-  lv_obj_set_style_bg_color(btn_reset, lv_color_hex(0x1a2a40), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_reset, 8, 0);
-  lv_obj_set_style_shadow_width(btn_reset, 0, 0);
-  lv_obj_set_style_border_width(btn_reset, 2, 0);
-  lv_obj_set_style_border_color(btn_reset, lv_color_hex(0x3a1010), 0);
-  { lv_obj_t *lbl = lv_label_create(btn_reset);
-    char buf[32]; strncpy(buf, T(STR_BTN_FACTORY_RESET), sizeof(buf)-1);
-    lv_label_set_text(lbl, buf);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xff6060), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, -7);
-    lv_obj_t *sub = lv_label_create(btn_reset);
-    char sub_buf[48]; strncpy(sub_buf, T(STR_BTN_FACTORY_RESET_SUB), sizeof(sub_buf)-1);
-    lv_label_set_text(sub, sub_buf);
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x804040), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_12, 0);
-    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 9); }
-  lv_obj_add_event_cb(btn_reset, [](lv_event_t *e) {
-    // Confirmation popup
-    lv_obj_t *pop = lv_obj_create(lv_scr_act());
-    lv_obj_set_size(pop, 480, 320);
-    lv_obj_set_pos(pop, 0, 0);
-    lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_bg_opa(pop, LV_OPA_80, 0);
-    lv_obj_set_style_border_width(pop, 0, 0);
-    lv_obj_set_style_radius(pop, 0, 0);
-    lv_obj_set_style_pad_all(pop, 0, 0);
-    lv_obj_clear_flag(pop, LV_OBJ_FLAG_SCROLLABLE);
-
-    lv_obj_t *box = lv_obj_create(pop);
-    lv_obj_set_size(box, 440, 240);
-    lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(box, lv_color_hex(0x1a0808), 0);
-    lv_obj_set_style_border_color(box, lv_color_hex(0x602020), 0);
-    lv_obj_set_style_border_width(box, 2, 0);
-    lv_obj_set_style_radius(box, 12, 0);
-    lv_obj_set_style_pad_all(box, 0, 0);
-    lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
-
-    lv_obj_t *lbl_t = lv_label_create(box);
-    char buf_t[48]; strncpy(buf_t, T(STR_FACTORY_RESET_TITLE), sizeof(buf_t)-1);
-    lv_label_set_text(lbl_t, buf_t);
-    lv_obj_set_style_text_color(lbl_t, lv_color_hex(0xff6060), 0);
-    lv_obj_set_style_text_font(lbl_t, &lv_font_montserrat_ext_18, 0);
-    lv_obj_align(lbl_t, LV_ALIGN_TOP_MID, 0, 16);
-
-    lv_obj_t *lbl_m = lv_label_create(box);
-    char buf_m[256]; strncpy(buf_m, T(STR_FACTORY_RESET_MSG), sizeof(buf_m)-1);
-    lv_label_set_text(lbl_m, buf_m);
-    lv_obj_set_style_text_color(lbl_m, lv_color_hex(0xc8d8f0), 0);
-    lv_obj_set_style_text_font(lbl_m, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(lbl_m, LV_TEXT_ALIGN_CENTER, 0);
-    lv_label_set_long_mode(lbl_m, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(lbl_m, 400);
-    lv_obj_align(lbl_m, LV_ALIGN_TOP_MID, 0, 50);
-
-    // Cancel button (links)
-    lv_obj_t *btn_c = lv_btn_create(box);
-    lv_obj_set_size(btn_c, 180, 44);
-    lv_obj_set_pos(btn_c, 12, 184);
-    lv_obj_set_style_bg_color(btn_c, lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_bg_color(btn_c, lv_color_hex(0x1a2840), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(btn_c, 8, 0);
-    lv_obj_set_style_shadow_width(btn_c, 0, 0);
-    lv_obj_set_style_border_width(btn_c, 1, 0);
-    lv_obj_set_style_border_color(btn_c, lv_color_hex(0x1a2840), 0);
-    lv_obj_add_event_cb(btn_c, [](lv_event_t *e){
-      lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e))));
-    }, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *lbl_c = lv_label_create(btn_c);
-    char buf_c[32]; strncpy(buf_c, T(STR_CANCEL), sizeof(buf_c)-1);
-    lv_label_set_text(lbl_c, buf_c);
-    lv_obj_set_style_text_color(lbl_c, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(lbl_c, &lv_font_montserrat_ext_14, 0);
-    lv_obj_align(lbl_c, LV_ALIGN_CENTER, 0, 0);
-
-    // Confirm button (rechts, rot)
-    lv_obj_t *btn_ok = lv_btn_create(box);
-    lv_obj_set_size(btn_ok, 228, 44);
-    lv_obj_set_pos(btn_ok, 200, 184);
-    lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x3a1010), 0);
-    lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x602020), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(btn_ok, 8, 0);
-    lv_obj_set_style_shadow_width(btn_ok, 0, 0);
-    lv_obj_set_style_border_width(btn_ok, 1, 0);
-    lv_obj_set_style_border_color(btn_ok, lv_color_hex(0x602020), 0);
-    lv_obj_add_event_cb(btn_ok, [](lv_event_t *e){
-      logSD("Factory Reset: erasing NVS flash partition");
-      Serial.println("Factory Reset: erasing NVS flash partition");
-      // Close SD logging before erase to avoid corruption
-      if (sd_available) SD.end();
-      delay(100);
-      // Full NVS partition erase — more reliable than p.clear()
-      nvs_flash_erase();
-      nvs_flash_init();
-      delay(200);
-      ESP.restart();
-    }, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *lbl_ok = lv_label_create(btn_ok);
-    char buf_ok[48]; strncpy(buf_ok, T(STR_FACTORY_RESET_CONFIRM), sizeof(buf_ok)-1);
-    lv_label_set_text(lbl_ok, buf_ok);
-    lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0xff8080), 0);
-    lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_14, 0);
-    lv_obj_align(lbl_ok, LV_ALIGN_CENTER, 0, 0);
-  }, LV_EVENT_CLICKED, NULL);
-
-  // ── Reboot Button (right of Factory Reset) ──
-  lv_obj_t *btn_reboot = lv_btn_create(scr_system);
-  lv_obj_set_size(btn_reboot, HALF_W, RESET_H);
-  lv_obj_set_pos(btn_reboot, BTN_X + HALF_W + 16, reset_y);
-  lv_obj_set_style_bg_color(btn_reboot, lv_color_hex(0x0a1a2a), 0);
-  lv_obj_set_style_bg_color(btn_reboot, lv_color_hex(0x1a2a40), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_reboot, 8, 0);
-  lv_obj_set_style_shadow_width(btn_reboot, 0, 0);
-  lv_obj_set_style_border_width(btn_reboot, 1, 0);
-  lv_obj_set_style_border_color(btn_reboot, lv_color_hex(0x1a2a40), 0);
-  { lv_obj_t *lbl = lv_label_create(btn_reboot);
-    char buf[32]; strncpy(buf, T(STR_BTN_REBOOT), sizeof(buf)-1);
-    lv_label_set_text(lbl, buf);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xc8d8f0), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, -7);
-    lv_obj_t *sub = lv_label_create(btn_reboot);
-    char sub_buf[32]; strncpy(sub_buf, T(STR_BTN_REBOOT_SUB), sizeof(sub_buf)-1);
-    lv_label_set_text(sub, sub_buf);
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_12, 0);
-    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 9); }
-  lv_obj_add_event_cb(btn_reboot, [](lv_event_t *e) {
-    logSD("BTN: System -> Reboot");
-    if (sd_available) SD.end();
-    delay(100);
-    ESP.restart();
-  }, LV_EVENT_CLICKED, NULL);
-
-  if (sd_verbose) logSD("[verbose] buildSystemScreen: done");
-}
-
 
 
 // ============================================================
@@ -5852,452 +1787,12 @@ void showRebootPopup() {
 // ============================================================
 //  LANGUAGE SCREEN (System > Language)
 // ============================================================
-void showLanguageScreen() {
-  logSD("SHOW: LanguageScreen");
-  logSD("UI: Screen -> Language");
-  lv_obj_t *scr = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(scr, 480, 320);
-  lv_obj_set_pos(scr, 0, 0);
-  lv_obj_set_style_bg_color(scr, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_border_width(scr, 0, 0);
-  lv_obj_set_style_radius(scr, 0, 0);
-  lv_obj_set_style_pad_all(scr, 0, 0);
-  lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
-
-  // Header
-  lv_obj_t *btn_back = lv_btn_create(scr);
-  lv_obj_set_size(btn_back, 44, 44);
-  lv_obj_set_pos(btn_back, 4, 2);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_back, 8, 0);
-  lv_obj_set_style_shadow_width(btn_back, 0, 0);
-  lv_obj_set_style_border_width(btn_back, 0, 0);
-  lv_obj_t *lbl_bk = lv_label_create(btn_back);
-  lv_label_set_text(lbl_bk, LV_SYMBOL_LEFT);
-  lv_obj_set_style_text_color(lbl_bk, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_bk, &lv_font_montserrat_ext_18, 0);
-  lv_obj_center(lbl_bk);
-  lv_obj_add_event_cb(btn_back, [](lv_event_t *e){
-    lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
-  }, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t *hdr = lv_label_create(scr);
-  lv_label_set_text(hdr, "Language / Sprache");
-  lv_obj_set_style_text_color(hdr, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(hdr, &lv_font_montserrat_ext_18, 0);
-  lv_obj_align(hdr, LV_ALIGN_TOP_MID, 0, 12);
-
-  lv_obj_t *btn_x = lv_btn_create(scr);
-  lv_obj_set_size(btn_x, 44, 44);
-  lv_obj_align(btn_x, LV_ALIGN_TOP_RIGHT, -4, 2);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_x, 8, 0);
-  lv_obj_set_style_shadow_width(btn_x, 0, 0);
-  lv_obj_set_style_border_width(btn_x, 0, 0);
-  lv_obj_t *lbl_x = lv_label_create(btn_x);
-  lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_color(lbl_x, lv_color_hex(0xff8080), 0);
-  lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
-  lv_obj_center(lbl_x);
-  // X deletes this screen overlay and goes to main screen
-  lv_obj_add_event_cb(btn_x, [](lv_event_t *e){
-    lv_obj_t *scr_lang = lv_obj_get_parent(lv_event_get_target(e));
-    lv_obj_del(scr_lang);
-    showMainScreen();
-  }, LV_EVENT_CLICKED, NULL);
-
-  // Hint
-  lv_obj_t *hint = lv_label_create(scr);
-  lv_label_set_text(hint, T(STR_LANG_HINT));
-  lv_obj_set_style_text_color(hint, lv_color_hex(0x2a4060), 0);
-  lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
-  lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(hint, 440);
-  lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, 52);
-
-  // ── Language buttons (2 side by side) ──
-  const int LB_W = 218, LB_H = 52, LB_Y0 = 90;
-
-  // DE button
-  lv_obj_t *btn_de = lv_btn_create(scr);
-  lv_obj_set_size(btn_de, LB_W, LB_H);
-  lv_obj_set_pos(btn_de, 8, LB_Y0);
-  bool de_active = (g_lang == LANG_DE);
-  lv_obj_set_style_bg_color(btn_de, lv_color_hex(de_active ? 0x0a2a40 : 0x0a1828), 0);
-  lv_obj_set_style_radius(btn_de, 10, 0);
-  lv_obj_set_style_shadow_width(btn_de, 0, 0);
-  lv_obj_set_style_border_width(btn_de, 2, 0);
-  lv_obj_set_style_border_color(btn_de, lv_color_hex(de_active ? 0x28d49a : 0x1a3060), 0);
-  lv_obj_t *lbl_de = lv_label_create(btn_de);
-  lv_label_set_text(lbl_de, "DE   Deutsch");
-  lv_obj_set_style_text_color(lbl_de, lv_color_hex(de_active ? 0x28d49a : 0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_de, &lv_font_montserrat_ext_16, 0);
-  lv_obj_center(lbl_de);
-  lv_obj_add_event_cb(btn_de, [](lv_event_t *e){
-    g_lang = LANG_DE;
-    Preferences p; p.begin("spoolscale", false); p.putUChar("lang", 0); p.end();
-    Serial.println("Language: German -> Reboot");
-    showRebootPopup();
-  }, LV_EVENT_CLICKED, NULL);
-
-  // EN button
-  lv_obj_t *btn_en = lv_btn_create(scr);
-  lv_obj_set_size(btn_en, LB_W, LB_H);
-  lv_obj_set_pos(btn_en, 254, LB_Y0);
-  bool en_active = (g_lang == LANG_EN);
-  lv_obj_set_style_bg_color(btn_en, lv_color_hex(en_active ? 0x0a2a40 : 0x0a1828), 0);
-  lv_obj_set_style_radius(btn_en, 10, 0);
-  lv_obj_set_style_shadow_width(btn_en, 0, 0);
-  lv_obj_set_style_border_width(btn_en, 2, 0);
-  lv_obj_set_style_border_color(btn_en, lv_color_hex(en_active ? 0x28d49a : 0x1a3060), 0);
-  lv_obj_t *lbl_en = lv_label_create(btn_en);
-  lv_label_set_text(lbl_en, "EN   English");
-  lv_obj_set_style_text_color(lbl_en, lv_color_hex(en_active ? 0x28d49a : 0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_en, &lv_font_montserrat_ext_16, 0);
-  lv_obj_center(lbl_en);
-  lv_obj_add_event_cb(btn_en, [](lv_event_t *e){
-    g_lang = LANG_EN;
-    Preferences p; p.begin("spoolscale", false); p.putUChar("lang", 1); p.end();
-    Serial.println("Language: English -> Reboot");
-    showRebootPopup();
-  }, LV_EVENT_CLICKED, NULL);
-
-  // ── Date format label ──
-  lv_obj_t *lbl_date = lv_label_create(scr);
-  lv_label_set_text(lbl_date, T(STR_DATE_FMT_LABEL));
-  lv_obj_set_style_text_color(lbl_date, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_date, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_pos(lbl_date, 12, 158);
-
-  // ── Date format buttons (2 side by side) ──
-  const int DB_W = 218, DB_H = 52, DB_Y = 178;
-
-  // DD.MM.YYYY
-  lv_obj_t *btn_dmy = lv_btn_create(scr);
-  lv_obj_set_size(btn_dmy, DB_W, DB_H);
-  lv_obj_set_pos(btn_dmy, 8, DB_Y);
-  bool dmy_active = (g_date_fmt == 0);
-  lv_obj_set_style_bg_color(btn_dmy, lv_color_hex(dmy_active ? 0x0a2a40 : 0x0a1828), 0);
-  lv_obj_set_style_radius(btn_dmy, 10, 0);
-  lv_obj_set_style_shadow_width(btn_dmy, 0, 0);
-  lv_obj_set_style_border_width(btn_dmy, 2, 0);
-  lv_obj_set_style_border_color(btn_dmy, lv_color_hex(dmy_active ? 0x28d49a : 0x1a3060), 0);
-  lv_obj_t *lbl_dmy = lv_label_create(btn_dmy);
-  lv_label_set_text(lbl_dmy, "DD.MM.YYYY");
-  lv_obj_set_style_text_color(lbl_dmy, lv_color_hex(dmy_active ? 0x28d49a : 0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_dmy, &lv_font_montserrat_ext_16, 0);
-  lv_obj_center(lbl_dmy);
-  lv_obj_add_event_cb(btn_dmy, [](lv_event_t *e){
-    g_date_fmt = 0;
-    Preferences p; p.begin("spoolscale", false); p.putUChar("date_fmt", 0); p.end();
-    showRebootPopup();
-  }, LV_EVENT_CLICKED, NULL);
-
-  // YYYY-MM-DD
-  lv_obj_t *btn_iso = lv_btn_create(scr);
-  lv_obj_set_size(btn_iso, DB_W, DB_H);
-  lv_obj_set_pos(btn_iso, 254, DB_Y);
-  bool iso_active = (g_date_fmt == 1);
-  lv_obj_set_style_bg_color(btn_iso, lv_color_hex(iso_active ? 0x0a2a40 : 0x0a1828), 0);
-  lv_obj_set_style_radius(btn_iso, 10, 0);
-  lv_obj_set_style_shadow_width(btn_iso, 0, 0);
-  lv_obj_set_style_border_width(btn_iso, 2, 0);
-  lv_obj_set_style_border_color(btn_iso, lv_color_hex(iso_active ? 0x28d49a : 0x1a3060), 0);
-  lv_obj_t *lbl_iso = lv_label_create(btn_iso);
-  lv_label_set_text(lbl_iso, "YYYY-MM-DD");
-  lv_obj_set_style_text_color(lbl_iso, lv_color_hex(iso_active ? 0x28d49a : 0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_iso, &lv_font_montserrat_ext_16, 0);
-  lv_obj_center(lbl_iso);
-  lv_obj_add_event_cb(btn_iso, [](lv_event_t *e){
-    g_date_fmt = 1;
-    Preferences p; p.begin("spoolscale", false); p.putUChar("date_fmt", 1); p.end();
-    showRebootPopup();
-  }, LV_EVENT_CLICKED, NULL);
-
-  // Hint-Text unten
-  lv_obj_t *hint2 = lv_label_create(scr);
-  lv_label_set_text(hint2, T(STR_LANG_HINT));
-  lv_obj_set_style_text_color(hint2, lv_color_hex(0x2a4060), 0);
-  lv_obj_set_style_text_font(hint2, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_style_text_align(hint2, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(hint2, LV_ALIGN_BOTTOM_MID, 0, -8);
-}
 
 // ============================================================
 //  INFO SCREEN (System > Info & Support)
 //  3 QR-Code buttons: Ko-fi / GitHub / Discord
 // ============================================================
-static lv_obj_t *scr_info = nullptr;
-
-// Static QR data outside lambdas (prevents index bug)
-static const char* QR_TITLES[] = { "Ko-fi", "GitHub", "Discord", "MakerWorld" };
-static const char* QR_URLS[]   = {
-  "https://ko-fi.com/formfollowsfunction",
-  "https://github.com/Niko11111/SpoolmanScale",
-  "https://discord.gg/GzQzGa5pBG",
-  "https://makerworld.com/de/@FormFollowsF/upload"
-};
-static const char* QR_URLS_DISPLAY[] = {
-  "ko-fi.com/formfollowsfunction",
-  "github.com/Niko11111/SpoolmanScale",
-  "discord.gg/GzQzGa5pBG",
-  "makerworld.com/de/@FormFollowsF/upload"
-};
-
-// QR_DESCS is filled directly via T() in the popup (runtime-dependent)
-static const char* getQRDesc(int idx) {
-  switch(idx) {
-    case 0: return T(STR_QR_KOFI_DESC);
-    case 1: return T(STR_QR_GITHUB_DESC);
-    case 2: return T(STR_QR_DISCORD_DESC);
-    case 3: return T(STR_QR_MAKER_DESC);
-    default: return "";
-  }
-}
-
-void showQRPopup(int idx) {
-  logSDf("SHOW: QRPopup idx=%d", idx);
-  const char* names[4] = {"Ko-fi", "GitHub", "Discord", "MakerWorld"};
-  logSDf("UI: Screen -> QR Popup (%s)", (idx >= 0 && idx < 4) ? names[idx] : "?");
-  lv_obj_t *popup = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(popup, 480, 320);
-  lv_obj_set_pos(popup, 0, 0);
-  lv_obj_set_style_bg_color(popup, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_border_width(popup, 0, 0);
-  lv_obj_set_style_radius(popup, 0, 0);
-  lv_obj_set_style_pad_all(popup, 0, 0);
-  lv_obj_clear_flag(popup, LV_OBJ_FLAG_SCROLLABLE);
-
-  // Zurueck
-  lv_obj_t *btn_back = lv_btn_create(popup);
-  lv_obj_set_size(btn_back, 44, 44);
-  lv_obj_set_pos(btn_back, 4, 2);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_back, 8, 0);
-  lv_obj_set_style_shadow_width(btn_back, 0, 0);
-  lv_obj_set_style_border_width(btn_back, 0, 0);
-  lv_obj_t *lbl_bk = lv_label_create(btn_back);
-  lv_label_set_text(lbl_bk, LV_SYMBOL_LEFT);
-  lv_obj_set_style_text_color(lbl_bk, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_bk, &lv_font_montserrat_ext_18, 0);
-  lv_obj_center(lbl_bk);
-  lv_obj_add_event_cb(btn_back, [](lv_event_t *e){
-    lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
-  }, LV_EVENT_CLICKED, NULL);
-
-  // Title
-  lv_obj_t *lbl_title = lv_label_create(popup);
-  lv_label_set_text(lbl_title, QR_TITLES[idx]);
-  lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
-  lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 12);
-
-  // X
-  lv_obj_t *btn_x = lv_btn_create(popup);
-  lv_obj_set_size(btn_x, 44, 44);
-  lv_obj_align(btn_x, LV_ALIGN_TOP_RIGHT, -4, 2);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_x, 8, 0);
-  lv_obj_set_style_shadow_width(btn_x, 0, 0);
-  lv_obj_set_style_border_width(btn_x, 0, 0);
-  lv_obj_t *lbl_x = lv_label_create(btn_x);
-  lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_color(lbl_x, lv_color_hex(0xff8080), 0);
-  lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
-  lv_obj_center(lbl_x);
-  lv_obj_add_event_cb(btn_x, [](lv_event_t *e){
-    lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
-    if (scr_info) { lv_obj_del(scr_info); scr_info = nullptr; }
-    showMainScreen();
-  }, LV_EVENT_CLICKED, NULL);
-
-  // Beschreibung — Font 16, weiss, y=50
-  lv_obj_t *lbl_desc = lv_label_create(popup);
-  lv_label_set_text(lbl_desc, getQRDesc(idx));
-  lv_obj_set_style_text_color(lbl_desc, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_desc, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_align(lbl_desc, LV_TEXT_ALIGN_CENTER, 0);
-  lv_label_set_long_mode(lbl_desc, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(lbl_desc, 440);
-  lv_obj_align(lbl_desc, LV_ALIGN_TOP_MID, 0, 50);
-
-  // URL — Font 16, gruen, y=84
-  lv_obj_t *lbl_url = lv_label_create(popup);
-  lv_label_set_text(lbl_url, QR_URLS_DISPLAY[idx]);
-  lv_obj_set_style_text_color(lbl_url, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_url, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_align(lbl_url, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_url, LV_ALIGN_TOP_MID, 0, 84);
-
-  // QR-Code — 160x160, centered, y-offset -8 from bottom (not flush to edge)
-  // Diagnostic logs around QR generation (always-on, not verbose-gated)
-  // because intermittent QR freezes are hard to catch with verbose-only logs.
-  size_t url_len = strlen(QR_URLS[idx]);
-  logSDf("QR: %s about to create url_len=%u heap=%d PSRAM=%d",
-    names[idx], (unsigned)url_len, ESP.getFreeHeap(), ESP.getFreePsram());
-  lv_obj_t *qr = lv_qrcode_create(popup, 160, lv_color_hex(0x000000), lv_color_hex(0xffffff));
-  logSDf("QR: %s create OK heap=%d", names[idx], ESP.getFreeHeap());
-  lv_res_t qr_res = lv_qrcode_update(qr, QR_URLS[idx], url_len);
-  logSDf("QR: %s update done res=%d heap=%d", names[idx], (int)qr_res, ESP.getFreeHeap());
-  lv_obj_align(qr, LV_ALIGN_BOTTOM_MID, 0, -20);
-  logSDf("QR: %s align done", names[idx]);
-}
-
-void showInfoScreen() {
-  logSD("SHOW: InfoScreen");
-  logSD("UI: Screen -> Info");
-  if (scr_info) { lv_obj_del(scr_info); scr_info = nullptr; }
-  scr_info = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(scr_info, 480, 320);
-  lv_obj_set_pos(scr_info, 0, 0);
-  lv_obj_set_style_bg_color(scr_info, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_border_width(scr_info, 0, 0);
-  lv_obj_set_style_radius(scr_info, 0, 0);
-  lv_obj_set_style_pad_all(scr_info, 0, 0);
-  lv_obj_clear_flag(scr_info, LV_OBJ_FLAG_SCROLLABLE);
-
-  // Header
-  lv_obj_t *btn_back = lv_btn_create(scr_info);
-  lv_obj_set_size(btn_back, 44, 44);
-  lv_obj_set_pos(btn_back, 4, 2);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_back, 8, 0);
-  lv_obj_set_style_shadow_width(btn_back, 0, 0);
-  lv_obj_set_style_border_width(btn_back, 0, 0);
-  lv_obj_t *lbl_bk = lv_label_create(btn_back);
-  lv_label_set_text(lbl_bk, LV_SYMBOL_LEFT);
-  lv_obj_set_style_text_color(lbl_bk, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_bk, &lv_font_montserrat_ext_18, 0);
-  lv_obj_center(lbl_bk);
-  lv_obj_add_event_cb(btn_back, [](lv_event_t *e){
-    logSD("BTN: Info -> Back");
-    show_system_pending = true;
-  }, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t *hdr = lv_label_create(scr_info);
-  lv_label_set_text(hdr, T(STR_BTN_INFO));
-  lv_obj_set_style_text_color(hdr, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(hdr, &lv_font_montserrat_ext_18, 0);
-  lv_obj_align(hdr, LV_ALIGN_TOP_MID, 0, 12);
-
-  lv_obj_t *btn_x = lv_btn_create(scr_info);
-  lv_obj_set_size(btn_x, 44, 44);
-  lv_obj_align(btn_x, LV_ALIGN_TOP_RIGHT, -4, 2);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_x, 8, 0);
-  lv_obj_set_style_shadow_width(btn_x, 0, 0);
-  lv_obj_set_style_border_width(btn_x, 0, 0);
-  lv_obj_t *lbl_x = lv_label_create(btn_x);
-  lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_color(lbl_x, lv_color_hex(0xff8080), 0);
-  lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
-  lv_obj_center(lbl_x);
-  lv_obj_add_event_cb(btn_x, [](lv_event_t *e){
-    if (scr_info) { lv_obj_del(scr_info); scr_info = nullptr; }
-    showMainScreen();
-  }, LV_EVENT_CLICKED, NULL);
-
-  // Version label — centered below header
-  lv_obj_t *ver_lbl = lv_label_create(scr_info);
-  char ver_buf[40];
-  snprintf(ver_buf, sizeof(ver_buf), T(STR_INFO_VERSION), FW_VERSION);
-  lv_label_set_text(ver_lbl, ver_buf);
-  lv_obj_set_style_text_color(ver_lbl, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(ver_lbl, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_style_text_align(ver_lbl, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(ver_lbl, LV_ALIGN_TOP_MID, 0, 54);
-
-  // 2x2 QR grid — vertically centered in remaining space (y=80..310)
-  // QB_H=90: grid total = 2*90+8=188px. Start y = 80 + (230-188)/2 = 101 → use 82 for slight top bias
-  const int QB_W = 228, QB_H = 90, QB_GAP = 8;
-  const int QB_X0 = (480 - 2*QB_W - QB_GAP) / 2;
-  const int QB_Y0 = 82;
-  static const uint32_t QB_COLS[] = { 0x1a2800, 0x0a1828, 0x12103a, 0x1a0a18 };
-  static const uint32_t QB_TEXT[] = { 0xa0d840, 0x28d49a, 0x8090ff, 0xc060e0 };
-
-  lv_obj_t *btn_kofi = lv_btn_create(scr_info);
-  lv_obj_set_size(btn_kofi, QB_W, QB_H);
-  lv_obj_set_pos(btn_kofi, QB_X0, QB_Y0);
-  lv_obj_set_style_bg_color(btn_kofi, lv_color_hex(QB_COLS[0]), 0);
-  lv_obj_set_style_bg_color(btn_kofi, lv_color_hex(QB_COLS[0]+0x101010), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_kofi, 12, 0); lv_obj_set_style_shadow_width(btn_kofi, 0, 0);
-  lv_obj_set_style_border_width(btn_kofi, 1, 0); lv_obj_set_style_border_color(btn_kofi, lv_color_hex(QB_TEXT[0]), 0);
-  { lv_obj_t *ico = lv_label_create(btn_kofi); lv_label_set_text(ico, LV_SYMBOL_BELL);
-    lv_obj_set_style_text_color(ico, lv_color_hex(QB_TEXT[0]), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -14);
-    lv_obj_t *l = lv_label_create(btn_kofi); lv_label_set_text(l, "Ko-fi");
-    lv_obj_set_style_text_color(l, lv_color_hex(QB_TEXT[0]), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-    lv_obj_align(l, LV_ALIGN_CENTER, 0, 14); }
-  lv_obj_add_event_cb(btn_kofi, [](lv_event_t *e){ logSD("BTN: Info -> QR kofi"); showQRPopup(0); }, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t *btn_gh = lv_btn_create(scr_info);
-  lv_obj_set_size(btn_gh, QB_W, QB_H);
-  lv_obj_set_pos(btn_gh, QB_X0 + QB_W + QB_GAP, QB_Y0);
-  lv_obj_set_style_bg_color(btn_gh, lv_color_hex(QB_COLS[1]), 0);
-  lv_obj_set_style_bg_color(btn_gh, lv_color_hex(QB_COLS[1]+0x101010), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_gh, 12, 0); lv_obj_set_style_shadow_width(btn_gh, 0, 0);
-  lv_obj_set_style_border_width(btn_gh, 1, 0); lv_obj_set_style_border_color(btn_gh, lv_color_hex(QB_TEXT[1]), 0);
-  { lv_obj_t *ico = lv_label_create(btn_gh); lv_label_set_text(ico, LV_SYMBOL_DOWNLOAD);
-    lv_obj_set_style_text_color(ico, lv_color_hex(QB_TEXT[1]), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -14);
-    lv_obj_t *l = lv_label_create(btn_gh); lv_label_set_text(l, "GitHub");
-    lv_obj_set_style_text_color(l, lv_color_hex(QB_TEXT[1]), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-    lv_obj_align(l, LV_ALIGN_CENTER, 0, 14); }
-  lv_obj_add_event_cb(btn_gh, [](lv_event_t *e){ logSD("BTN: Info -> QR github"); showQRPopup(1); }, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t *btn_dc = lv_btn_create(scr_info);
-  lv_obj_set_size(btn_dc, QB_W, QB_H);
-  lv_obj_set_pos(btn_dc, QB_X0, QB_Y0 + QB_H + QB_GAP);
-  lv_obj_set_style_bg_color(btn_dc, lv_color_hex(QB_COLS[2]), 0);
-  lv_obj_set_style_bg_color(btn_dc, lv_color_hex(QB_COLS[2]+0x101010), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_dc, 12, 0); lv_obj_set_style_shadow_width(btn_dc, 0, 0);
-  lv_obj_set_style_border_width(btn_dc, 1, 0); lv_obj_set_style_border_color(btn_dc, lv_color_hex(QB_TEXT[2]), 0);
-  { lv_obj_t *ico = lv_label_create(btn_dc); lv_label_set_text(ico, LV_SYMBOL_BELL);
-    lv_obj_set_style_text_color(ico, lv_color_hex(QB_TEXT[2]), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -14);
-    lv_obj_t *l = lv_label_create(btn_dc); lv_label_set_text(l, "Discord");
-    lv_obj_set_style_text_color(l, lv_color_hex(QB_TEXT[2]), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-    lv_obj_align(l, LV_ALIGN_CENTER, 0, 14); }
-  lv_obj_add_event_cb(btn_dc, [](lv_event_t *e){ logSD("BTN: Info -> QR discord"); showQRPopup(2); }, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t *btn_mw = lv_btn_create(scr_info);
-  lv_obj_set_size(btn_mw, QB_W, QB_H);
-  lv_obj_set_pos(btn_mw, QB_X0 + QB_W + QB_GAP, QB_Y0 + QB_H + QB_GAP);
-  lv_obj_set_style_bg_color(btn_mw, lv_color_hex(QB_COLS[3]), 0);
-  lv_obj_set_style_bg_color(btn_mw, lv_color_hex(QB_COLS[3]+0x101010), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_mw, 12, 0); lv_obj_set_style_shadow_width(btn_mw, 0, 0);
-  lv_obj_set_style_border_width(btn_mw, 1, 0); lv_obj_set_style_border_color(btn_mw, lv_color_hex(QB_TEXT[3]), 0);
-  { lv_obj_t *ico = lv_label_create(btn_mw); lv_label_set_text(ico, LV_SYMBOL_UPLOAD);
-    lv_obj_set_style_text_color(ico, lv_color_hex(QB_TEXT[3]), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -14);
-    lv_obj_t *l = lv_label_create(btn_mw); lv_label_set_text(l, "MakerWorld");
-    lv_obj_set_style_text_color(l, lv_color_hex(QB_TEXT[3]), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-    lv_obj_align(l, LV_ALIGN_CENTER, 0, 14); }
-  lv_obj_add_event_cb(btn_mw, [](lv_event_t *e){ logSD("BTN: Info -> QR makerworld"); showQRPopup(3); }, LV_EVENT_CLICKED, NULL);
-
-  // Hint
-  lv_obj_t *hint = lv_label_create(scr_info);
-  lv_label_set_text(hint, T(STR_INFO_HINT));
-  lv_obj_set_style_text_color(hint, lv_color_hex(0x2a4060), 0);
-  lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
-}
+lv_obj_t *scr_info = nullptr;
 
 // ============================================================
 //  CLEAR DISPLAY (no tag detected)
@@ -6352,94 +1847,17 @@ void clearTagDisplay() {
 }
 
 // ============================================================
-//  WRITE SPOOLMAN WEIGHT
-// ============================================================
-void patchSpoolmanWeight(float remaining) {
-  if (!wifi_ok) { Serial.println("patchSpoolmanWeight: no WiFi"); return; }
-  if (!sm_found || sm_id == 0) { Serial.println("patchSpoolmanWeight: no spool"); return; }
-  HTTPClient http;
-  String url = String(cfg_spoolman_base) + "/api/v1/spool/" + sm_id;
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(5000);
-  char body[128];
-  if (last_used_mode == 1) {
-    // Mode: Last Weighed — also write last_used = today
-    char today[12];
-    time_t now = time(nullptr);
-    struct tm *t = localtime(&now);
-    snprintf(today, sizeof(today), "%04d-%02d-%02d", t->tm_year+1900, t->tm_mon+1, t->tm_mday);
-    snprintf(body, sizeof(body), "{\"remaining_weight\": %.1f, \"last_used\": \"%s\"}", remaining, today);
-  } else {
-    snprintf(body, sizeof(body), "{\"remaining_weight\": %.1f}", remaining);
-  }
-  Serial.printf("PATCH weight: %.1fg -> %s\n", remaining, body);
-  int code = http.PATCH(String(body));
-  http.end();
-  logSDf("PATCH weight=%.1fg ID=%d HTTP %d", remaining, sm_id, code);
-  if (code == 200) {
-    sm_remaining = remaining;
-    char w_str[16]; snprintf(w_str, sizeof(w_str), "%.0f g", sm_remaining);
-    lv_label_set_text(lbl_spoolman_weight, w_str);
-    float pct = (sm_total > 0) ? (sm_remaining / sm_total * 100.0f) : 0;
-    char p_str[16]; snprintf(p_str, sizeof(p_str), "%.1f %%", pct);
-    lv_label_set_text(lbl_spoolman_pct, p_str);
-    // Update last_used display if in Last Weighed mode
-    if (last_used_mode == 1 && lbl_last_used) {
-      char today_iso[12];
-      time_t now = time(nullptr);
-      struct tm *t = localtime(&now);
-      snprintf(today_iso, sizeof(today_iso), "%04d-%02d-%02d", t->tm_year+1900, t->tm_mon+1, t->tm_mday);
-      // Also update sm_last_used so querySpoolman won't overwrite on next scan
-      // sm_last_used stores the local-format date (like querySpoolman does)
-      char today_local[12];
-      isoToDe(today_iso, today_local, sizeof(today_local));
-      strncpy(sm_last_used, today_local, sizeof(sm_last_used)-1);
-      char disp[48];
-      driedDisplayStr(today_local, disp, sizeof(disp));
-      lv_label_set_text(lbl_last_used, disp);
-    }
-    Serial.printf("OK: %.1fg saved\n", remaining);
-  } else {
-    Serial.printf("PATCH error: %d\n", code);
-  }
-}
-
-// ============================================================
-//  ARCHIVE SPOOL IN SPOOLMAN (remaining=0 + archived=true)
-// ============================================================
-void patchArchiveSpool() {
-  if (!wifi_ok) { Serial.println("patchArchiveSpool: no WiFi"); return; }
-  if (!sm_found || sm_id == 0) { Serial.println("patchArchiveSpool: no spool"); return; }
-  HTTPClient http;
-  String url = String(cfg_spoolman_base) + "/api/v1/spool/" + sm_id;
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(5000);
-  const char* body = "{\"remaining_weight\": 0.0, \"archived\": true}";
-  Serial.printf("PATCH archive: spool ID %d\n", sm_id);
-  int code = http.PATCH(String(body));
-  http.end();
-  if (code == 200) {
-    sm_remaining = 0;
-    Serial.println("Spool archived!");
-  } else {
-    Serial.printf("PATCH archive error: %d\n", code);
-  }
-}
-
-// ============================================================
 //  READ NTAG (page 4 for magic check)
 // ============================================================
 bool ntagReadPage(uint8_t page, uint8_t *buf) {
-  return nfc.ntag2xx_ReadPage(page, buf);
+  return nfcReadNtagPage(page, buf);
 }
 
 // ============================================================
 //  WRITE NTAG (4 bytes per page)
 // ============================================================
 bool ntagWritePage(uint8_t page, uint8_t *data) {
-  return nfc.ntag2xx_WritePage(page, data);
+  return nfcWriteNtagPage(page, data);
 }
 
 // ============================================================
@@ -6452,7 +1870,7 @@ TagType detectNtagType(uint8_t *uid, uint8_t uidLen) {
   // This function is only used internally when page4 has already been read
   // In the NFC loop, page4 is read directly after readPassiveTargetID
   uint8_t page4[4] = {0};
-  if (!nfc.ntag2xx_ReadPage(4, page4)) return TAG_UNKNOWN;
+  if (!nfcReadNtagPage(4, page4)) return TAG_UNKNOWN;
   if (memcmp(page4, "SPSC", 4) == 0) return TAG_SPOOLSCALE;
   if (page4[0] == 0x00 && page4[1] == 0x00 && page4[2] == 0x00 && page4[3] == 0x00) return TAG_BLANK;
   if (page4[0] == 0xFF && page4[1] == 0xFF && page4[2] == 0xFF && page4[3] == 0xFF) return TAG_BLANK;
@@ -6524,68 +1942,6 @@ void generateUUID(char *out, size_t len) {
 }
 
 // ============================================================
-//  HELPER: Extract Bambu subtype keyword from material string
-//  e.g. "PLA-CF" -> "CF", "PETG-HF" -> "HF", "PLA Matte" -> "Matte"
-//  Returns true if a subtype keyword was found and stored in out_kw.
-// ============================================================
-// Returns true if material has a known technical subtype (from BAMBU_PLA_SUBTYPE_BLACKLIST)
-// and stores it in out_kw. "Basic", "Support for ..." etc. return false -> no subtype filter.
-static bool extractBambuSubtype(const char* material, char* out_kw, size_t out_size) {
-  if (!material || !material[0]) return false;
-  const char *sep = nullptr;
-  for (const char *p = material; *p; p++) {
-    if (*p == '-' || *p == ' ') { sep = p + 1; break; }
-  }
-  if (!sep || !*sep) return false;
-  strncpy(out_kw, sep, out_size - 1);
-  out_kw[out_size - 1] = '\0';
-  int len = strlen(out_kw);
-  while (len > 0 && out_kw[len-1] == ' ') out_kw[--len] = '\0';
-  if (len == 0) return false;
-  // Only filter by subtype if it is a known technical subtype (see bambu_blacklist.h)
-  for (int i = 0; BAMBU_PLA_SUBTYPE_BLACKLIST[i]; i++) {
-    if (strcasecmp(out_kw, BAMBU_PLA_SUBTYPE_BLACKLIST[i]) == 0) return true;
-  }
-  return false;
-}
-
-// Returns true if material_filter starts with "Support" (case-insensitive).
-// In that case, matching is done against Spoolman materials ending in "-S".
-static bool isSupportMaterial(const char* material_filter) {
-  return material_filter && strncasecmp(material_filter, "Support", 7) == 0;
-}
-
-// Returns true if the Spoolman material string is a support filament ("-S" suffix).
-static bool isSupportSpoolmanMat(const char* mat) {
-  if (!mat) return false;
-  size_t len = strlen(mat);
-  return len >= 2 && mat[len-2] == '-' && (mat[len-1] == 'S' || mat[len-1] == 's');
-}
-
-// Case-insensitive substring search (like strcasestr, not always available on ESP32)
-static bool containsIgnoreCase(const char* haystack, const char* needle) {
-  if (!haystack || !needle || !needle[0]) return false;
-  size_t nlen = strlen(needle);
-  size_t hlen = strlen(haystack);
-  if (nlen > hlen) return false;
-  for (size_t i = 0; i <= hlen - nlen; i++) {
-    if (strncasecmp(haystack + i, needle, nlen) == 0) return true;
-  }
-  return false;
-}
-
-// Returns sum of absolute RGB differences between two "#RRGGBB" strings.
-// Returns 999 if either string is invalid.
-static int colorDistance(const char* hex_a, const char* hex_b) {
-  if (!hex_a || strlen(hex_a) < 7 || hex_a[0] != '#') return 999;
-  if (!hex_b || strlen(hex_b) < 7 || hex_b[0] != '#') return 999;
-  unsigned int r1,g1,b1, r2,g2,b2;
-  if (sscanf(hex_a+1, "%02X%02X%02X", &r1, &g1, &b1) != 3) return 999;
-  if (sscanf(hex_b+1, "%02X%02X%02X", &r2, &g2, &b2) != 3) return 999;
-  return (int)(abs((int)r1-(int)r2) + abs((int)g1-(int)g2) + abs((int)b1-(int)b2));
-}
-
-// ============================================================
 //  SPOOLMAN: LOAD ALL SPOOLS (for new link flow)
 //  Loads all active spools including extra.tag status
 // ============================================================
@@ -6597,18 +1953,6 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
 
   logSDf("link fetch: is_bambu=%d material_filter='%s' archived_only=%d",
     is_bambu, material_filter ? material_filter : "", (int)archived_only);
-
-  HTTPClient http;
-  // archived_only=true -> include archived (we filter to keep only archived in pass 1+2)
-  // otherwise include only active spools
-  const char* url_suffix = archived_only ? "/api/v1/spool?allow_archived=true" : "/api/v1/spool?allow_archived=false";
-  http.begin(String(cfg_spoolman_base) + url_suffix);
-  http.setTimeout(8000);
-  int code = http.GET();
-  if (code != 200) { http.end(); return; }
-
-  String payload = http.getString();
-  http.end();
 
   StaticJsonDocument<384> filterL;
   JsonArray filterL_arr = filterL.to<JsonArray>();
@@ -6626,7 +1970,9 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   fL["spool_weight"] = true;
   SpiRamAllocator psram_alloc;
   JsonDocument doc(&psram_alloc);
-  if (deserializeJson(doc, payload, DeserializationOption::Filter(filterL))) return;
+  DeserializationError err = DeserializationError::Ok;
+  int code = spoolmanGetSpoolListJson(cfg_spoolman_base, archived_only, doc, 8000, &filterL, &err);
+  if (code != 200 || err) return;
 
   JsonArray spools = doc.as<JsonArray>();
   int total_in_api = 0;
@@ -6821,21 +2167,6 @@ void fetchUnlinkedSpools() { fetchAllSpoolsForLink(false, ""); }
 // ============================================================
 //  SPOOLMAN: SAVE TAG UUID (extra.tag)
 // ============================================================
-void patchSpoolTag(int spool_id, const char *uuid) {
-  if (!wifi_ok) return;
-  HTTPClient http;
-  String url = String(cfg_spoolman_base) + "/api/v1/spool/" + spool_id;
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(5000);
-  String body = "{\"extra\": {\"tag\": \"\\\"" + String(uuid) + "\\\"\"}}";
-  Serial.printf("PATCH tag: %s -> %s\n", uuid, body.c_str());
-  int code = http.PATCH(body);
-  http.end();
-  Serial.printf("patchSpoolTag: HTTP %d\n", code);
-  logSDf("PATCH tag ID=%d HTTP %d", spool_id, code);
-}
-
 // ============================================================
 //  LINK FLOW: COMPLETE LINKING
 //  PATCH + update main screen
@@ -7164,27 +2495,20 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
   lv_timer_handler();
   if (!wifi_ok) { if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_NO_WIFI)); return; }
 
-  HTTPClient http;
-  String url = String(cfg_spoolman_base) + "/api/v1/spool/" + entered_id;
-  http.begin(url); http.setTimeout(5000);
-  int code = http.GET();
+  DynamicJsonDocument doc(8192);
+  DeserializationError err = DeserializationError::Ok;
+  int code = spoolmanGetSpoolJson(cfg_spoolman_base, entered_id, doc, 5000, &err);
   if (code == 404 || code < 0) {
-    http.end();
     if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_LINK_ID_NOT_FOUND));
     return;
   }
-  if (code != 200) {
-    http.end();
-    char err[32]; snprintf(err, sizeof(err), T(STR_LINK_HTTP_ERR), code);
-    if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, err);
+  if (code == -2) {
+    if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_LINK_JSON_ERR));
     return;
   }
-  String payload = http.getString();
-  http.end();
-
-  DynamicJsonDocument doc(8192);
-  if (deserializeJson(doc, payload)) {
-    if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_LINK_JSON_ERR));
+  if (code != 200) {
+    char err[32]; snprintf(err, sizeof(err), T(STR_LINK_HTTP_ERR), code);
+    if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, err);
     return;
   }
 
@@ -8463,98 +3787,6 @@ void showLinkList() {
   showLinkEntryPopup(false);
 }
 
-// ============================================================
-//  SPOOLMAN INITIAL_WEIGHT SCHREIBEN (neue volle Spule)
-//  Wert = aktuelles Gewicht - spool_weight = reines Filament
-// ============================================================
-void patchInitialWeight(float initial_w) {
-  if (!wifi_ok) { Serial.println("patchInitialWeight: kein WiFi"); return; }
-  if (!sm_found || sm_id == 0) { Serial.println("patchInitialWeight: keine Spule"); return; }
-  HTTPClient http;
-  String url = String(cfg_spoolman_base) + "/api/v1/spool/" + sm_id;
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(5000);
-  char body[80];
-  snprintf(body, sizeof(body), "{\"initial_weight\": %.1f, \"remaining_weight\": %.1f}",
-    initial_w, initial_w);  // initial und remaining gleichzeitig setzen
-  Serial.printf("PATCH initial_weight: %.1fg -> %s\n", initial_w, body);
-  int code = http.PATCH(String(body));
-  http.end();
-  if (code == 200) {
-    sm_remaining = initial_w;
-    sm_total = initial_w;
-    Serial.printf("initial_weight OK: %.1fg\n", initial_w);
-  } else {
-    Serial.printf("PATCH initial_weight Fehler: %d\n", code);
-  }
-}
-
-// ============================================================
-//  SPOOLMAN SPOOL_WEIGHT SCHREIBEN (leere Spule mit Kern)
-// ============================================================
-void patchSpoolWeight(float spool_w) {
-  if (!wifi_ok) { Serial.println("patchSpoolWeight: no WiFi"); return; }
-  if (!sm_found || sm_id == 0) { Serial.println("patchSpoolWeight: no spool"); return; }
-  HTTPClient http;
-  String url = String(cfg_spoolman_base) + "/api/v1/spool/" + sm_id;
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(5000);
-  char body[64];
-  snprintf(body, sizeof(body), "{\"spool_weight\": %.1f}", spool_w);
-  Serial.printf("PATCH spool_weight: %.1fg -> %s\n", spool_w, body);
-  int code = http.PATCH(String(body));
-  http.end();
-  logSDf("PATCH spool_weight=%.1fg ID=%d HTTP %d", spool_w, sm_id, code);
-  if (code == 200) {
-    sm_spool_weight = spool_w;
-    Serial.printf("spool_weight OK: %.1fg\n", spool_w);
-  } else {
-    Serial.printf("PATCH spool_weight Fehler: %d\n", code);
-  }
-}
-
-// ============================================================
-//  SPOOLMAN FILAMENT SPOOL_WEIGHT SCHREIBEN
-// ============================================================
-void patchFilamentSpoolWeight(float spool_w) {
-  if (!wifi_ok) return;
-  if (sm_filament_id == 0) { Serial.println("patchFilamentSpoolWeight: keine filament_id"); return; }
-  HTTPClient http;
-  String url = String(cfg_spoolman_base) + "/api/v1/filament/" + sm_filament_id;
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(5000);
-  char body[64];
-  snprintf(body, sizeof(body), "{\"spool_weight\": %.1f}", spool_w);
-  Serial.printf("PATCH filament spool_weight: ID=%d %.1fg\n", sm_filament_id, spool_w);
-  int code = http.PATCH(String(body));
-  http.end();
-  Serial.printf("patchFilamentSpoolWeight: HTTP %d\n", code);
-  logSDf("PATCH filament_spool_weight=%.1fg fil_ID=%d HTTP %d", spool_w, sm_filament_id, code);
-}
-
-// ============================================================
-//  SPOOLMAN VENDOR EMPTY_SPOOL_WEIGHT SCHREIBEN
-// ============================================================
-void patchVendorSpoolWeight(float spool_w) {
-  if (!wifi_ok) return;
-  if (sm_vendor_id == 0) { Serial.println("patchVendorSpoolWeight: keine vendor_id"); return; }
-  HTTPClient http;
-  String url = String(cfg_spoolman_base) + "/api/v1/vendor/" + sm_vendor_id;
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(5000);
-  char body[64];
-  snprintf(body, sizeof(body), "{\"empty_spool_weight\": %.1f}", spool_w);
-  Serial.printf("PATCH vendor empty_spool_weight: ID=%d %.1fg\n", sm_vendor_id, spool_w);
-  int code = http.PATCH(String(body));
-  http.end();
-  Serial.printf("patchVendorSpoolWeight: HTTP %d\n", code);
-  logSDf("PATCH vendor_empty_spool=%.1fg vendor_ID=%d HTTP %d", spool_w, sm_vendor_id, code);
-}
-
 void closeConfirmPopup() {
   if (confirm_popup) { lv_obj_del(confirm_popup); confirm_popup = nullptr; }
   confirm_action = 0;
@@ -8815,9 +4047,7 @@ void showConfirmPopup(const char* msg, int action) {
         g_auto_weight = false;
         auto_weight_stable_ms = 0;
         auto_weight_last_val = -9999.0f;
-        prefs.begin("spool", false);
-        prefs.putBool("auto_weight", false);
-        prefs.end();
+        prefsPutBoolInNamespace("spool", "auto_weight", false);
         logSD("Auto-Weight: deaktiviert");
         if (lbl_weight_main_lbl) {
           char wmbuf[40];
@@ -8886,9 +4116,7 @@ void showConfirmPopup(const char* msg, int action) {
           g_auto_weight = true;
           auto_weight_stable_ms = 0;
           auto_weight_last_val = -9999.0f;
-          prefs.begin("spool", false);
-          prefs.putBool("auto_weight", true);
-          prefs.end();
+          prefsPutBoolInNamespace("spool", "auto_weight", true);
           logSD("Auto-Weight: aktiviert");
           if (lbl_weight_main_lbl) {
             char wmbuf[48];
@@ -9032,7 +4260,7 @@ void showConfirmPopup(const char* msg, int action) {
 //   rot   (0xe04040): nicht verbunden
 static lv_color_t wifiColor() {
   if (!wifi_ok) return lv_color_hex(0xe04040);
-  int rssi = WiFi.RSSI();
+  int rssi = wifiManagerRSSI();
   if (rssi >= -65) return lv_color_hex(0x28d49a);
   if (rssi >= -75) return lv_color_hex(0xf0b838);
   return lv_color_hex(0xe06020);
@@ -9506,7 +4734,7 @@ void buildUI() {
   lv_obj_add_event_cb(btn_tare, [](lv_event_t *e) {
     logSD("UI: Button -> TARE (main)");
     if (scale_ready) {
-      int32_t raw = nau.read();
+      int32_t raw = scaleHardwareReadRaw();
       saveTareOffset(raw);
       scale_weight_g = 0.0f;
       memset(scale_filter_buf, 0, sizeof(scale_filter_buf));
@@ -9758,36 +4986,17 @@ void doCopySpoolCreate(int template_filament_id, float template_initial, float t
   float netto = scale_weight_g - template_spool_w;
   if (netto < 0) netto = 0;
 
-  HTTPClient http;
-  http.begin(String(cfg_spoolman_base) + "/api/v1/spool");
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(8000);
-
-  char body[256];
-  snprintf(body, sizeof(body),
-    "{\"filament_id\":%d,\"initial_weight\":%.1f,\"spool_weight\":%.1f,\"remaining_weight\":%.1f}",
-    template_filament_id, template_initial, template_spool_w, netto);
-  Serial.printf("Copy spool POST body: %s\n", body);
-  int code = http.POST(body);
-
-  if (code == 200 || code == 201) {
-    String resp = http.getString();
-    http.end();
-    StaticJsonDocument<256> doc;
-    if (deserializeJson(doc, resp) == DeserializationError::Ok) {
-      int new_id = doc["id"] | 0;
-      if (new_id > 0) {
-        Serial.printf("Copy spool created: new ID=%d\n", new_id);
-        logSDf("Copy spool created: filament_id=%d new_spool_id=%d", template_filament_id, new_id);
-        finishCopyFlow(new_id);
-        // Show success briefly on status bar
-        lv_label_set_text(lbl_status, T(STR_COPY_OK));
-        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
-        return;
-      }
-    }
+  int new_id = 0;
+  int code = spoolmanCreateSpool(cfg_spoolman_base, template_filament_id, template_initial,
+    template_spool_w, netto, &new_id, 8000);
+  if ((code == 200 || code == 201) && new_id > 0) {
+    Serial.printf("Copy spool created: new ID=%d\n", new_id);
+    logSDf("Copy spool created: filament_id=%d new_spool_id=%d", template_filament_id, new_id);
+    finishCopyFlow(new_id);
+    lv_label_set_text(lbl_status, T(STR_COPY_OK));
+    lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+    return;
   }
-  http.end();
   Serial.printf("Copy spool POST failed: HTTP %d\n", code);
   lv_label_set_text(lbl_status, T(STR_COPY_FAIL));
   lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
@@ -9900,18 +5109,11 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
 
   if (!wifi_ok) return;
 
-  String url = String(cfg_spoolman_base) + "/api/v1/spool?allow_archived=true";
-  HTTPClient http;
-  http.begin(url);
-  http.setTimeout(10000);
-  int code = http.GET();
-  if (code != 200) { http.end(); return; }
-
   SpiRamAllocator alloc;
   JsonDocument doc(&alloc);
-  DeserializationError err = deserializeJson(doc, http.getStream());
-  http.end();
-  if (err) { Serial.printf("fetchSpoolsForCopy JSON error: %s\n", err.c_str()); return; }
+  DeserializationError err = DeserializationError::Ok;
+  int code = spoolmanGetSpoolListJson(cfg_spoolman_base, true, doc, 10000, nullptr, &err);
+  if (code != 200 || err) { Serial.printf("fetchSpoolsForCopy JSON error: %s\n", err.c_str()); return; }
 
   JsonArray arr = doc.as<JsonArray>();
   // Count matching entries first (for allocation)
@@ -10285,19 +5487,14 @@ void showCopyIdInputPopup() {
         if (entered_id <= 0) { lv_label_set_text(lbl_copy_id_status, "Invalid ID"); return; }
         // Fetch spool data from Spoolman (allow archived)
         if (!wifi_ok) { lv_label_set_text(lbl_copy_id_status, T(STR_LINK_NO_WIFI)); return; }
-        char url[128];
-        snprintf(url, sizeof(url), "%s/api/v1/spool/%d", cfg_spoolman_base, entered_id);
-        HTTPClient hc; hc.begin(url); hc.setTimeout(8000);
-        int code = hc.GET();
+        StaticJsonDocument<512> doc;
+        DeserializationError derr = DeserializationError::Ok;
+        int code = spoolmanGetSpoolJson(cfg_spoolman_base, entered_id, doc, 8000, &derr);
         if (code != 200) {
-          hc.end();
           char err_buf[32]; snprintf(err_buf, sizeof(err_buf), T(STR_LINK_ID_NOT_FOUND), entered_id);
           lv_label_set_text(lbl_copy_id_status, err_buf);
           return;
         }
-        StaticJsonDocument<512> doc;
-        deserializeJson(doc, hc.getStream());
-        hc.end();
         int fid      = doc["filament"]["id"] | 0;
         float ini    = doc["filament"]["weight"] | 1000.0f;
         float spw    = doc["spool_weight"] | 0.0f;
@@ -10595,7 +5792,7 @@ void showLocationPicker() {
   loc_list_obj   = list;
 
   // Trigger async HTTP fetch via loop()
-  if (!WiFi.isConnected()) {
+  if (!wifiManagerIsConnected()) {
     char buf[32]; strncpy(buf, T(STR_LOCATION_NO_WIFI), sizeof(buf)-1);
     lv_label_set_text(lbl_status, buf);
     return;
@@ -10614,24 +5811,17 @@ void fetchAndFillLocationList() {
     delay(20);
   }
 
-  HTTPClient http;
-  String url = String(cfg_spoolman_base) + "/api/v1/location";
-  logSDf("LOC: GET %s", url.c_str());
-  http.begin(url);
-  http.setTimeout(8000);
-  int code = http.GET();
+  logSDf("LOC: GET %s/api/v1/location", cfg_spoolman_base);
+  JsonDocument doc;
+  DeserializationError err = DeserializationError::Ok;
+  int code = spoolmanGetLocationsJson(cfg_spoolman_base, doc, 8000, &err);
   logSDf("LOC: HTTP code=%d", code);
   if (code != 200) {
     char buf[48];
     snprintf(buf, sizeof(buf), "HTTP %d", code);
     lv_label_set_text(loc_status_obj, buf);
-    http.end();
     return;
   }
-
-  JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, http.getStream());
-  http.end();
   logSDf("LOC: parse err=%s isArray=%d", err.c_str(), (int)doc.is<JsonArray>());
   if (err || !doc.is<JsonArray>()) {
     char buf[48];
@@ -10670,14 +5860,8 @@ void fetchAndFillLocationList() {
   lv_obj_set_style_text_font(lbl_none, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_none);
   lv_obj_add_event_cb(btn_none, [](lv_event_t *e) {
-    if (!WiFi.isConnected() || sm_id <= 0) return;
-    HTTPClient http;
-    String url = String(cfg_spoolman_base) + "/api/v1/spool/" + sm_id;
-    http.begin(url);
-    http.addHeader("Content-Type", "application/json");
-    http.setTimeout(8000);
-    int code = http.PATCH("{\"location\":null}");
-    http.end();
+    if (!wifiManagerIsConnected() || sm_id <= 0) return;
+    int code = spoolmanPatchSpoolLocation(cfg_spoolman_base, sm_id, nullptr, 8000);
     if (code == 200) {
       sm_location_id = 0;
       sm_location_name[0] = '\0';
@@ -10715,18 +5899,9 @@ void fetchAndFillLocationList() {
 
     lv_obj_add_event_cb(row, [](lv_event_t *e) {
       lv_obj_t *lbl = lv_obj_get_child(lv_event_get_target(e), 0);
-      if (!lbl || !WiFi.isConnected() || sm_id <= 0) return;
+      if (!lbl || !wifiManagerIsConnected() || sm_id <= 0) return;
       const char* sel_name = lv_label_get_text(lbl);
-      // PATCH: location als Name-String setzen
-      HTTPClient http;
-      String url = String(cfg_spoolman_base) + "/api/v1/spool/" + sm_id;
-      http.begin(url);
-      http.addHeader("Content-Type", "application/json");
-      http.setTimeout(8000);
-      String body = "{\"location\":\"";
-      body += sel_name;
-      body += "\"}";
-      int code = http.PATCH(body);
+      int code = spoolmanPatchSpoolLocation(cfg_spoolman_base, sm_id, sel_name, 8000);
       if (code == 200) {
         strncpy(sm_location_name, sel_name, sizeof(sm_location_name)-1);
         sm_location_id = 0;
@@ -10734,7 +5909,6 @@ void fetchAndFillLocationList() {
         g_loc_popup_shown_for_id = sm_id;
         logSDf("[verbose] LOC: location saved '%s' id=%d from_popup=%d", sel_name, sm_id, (int)g_loc_picker_from_popup);
       }
-      http.end();
       if (scr_location_picker) { lv_obj_del(scr_location_picker); scr_location_picker = nullptr; }
       if (g_loc_picker_from_popup) { showMainScreen(); }
       else { showMoreInfoScreen(); }
@@ -11053,7 +6227,7 @@ void buildMoreInfoScreen() {
   lv_label_set_long_mode(btn_loc_val, LV_LABEL_LONG_DOT);
   lv_obj_align(btn_loc_val, LV_ALIGN_CENTER, 0, 7);
   lv_obj_add_event_cb(btn_loc, [](lv_event_t *e) {
-    if (!WiFi.isConnected()) {
+    if (!wifiManagerIsConnected()) {
       return;
     }
     g_loc_picker_from_popup = false;
@@ -11418,13 +6592,9 @@ void wifiConnect() {
     lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x5090e0), 0);
     lv_timer_handler();
   }
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(cfg_wifi_ssid, cfg_wifi_password);
-  for (int i = 0; i < 20; i++) {
-    delay(500);
-    if (WiFi.status() == WL_CONNECTED) {
+  if (wifiManagerConnect(cfg_wifi_ssid, cfg_wifi_password, 20, 500)) {
       wifi_ok = true;
-      Serial.printf("WiFi OK! IP: %s\n", WiFi.localIP().toString().c_str());
+      Serial.printf("WiFi OK! IP: %s\n", wifiManagerLocalIP().toString().c_str());
       updateHeaderStatus();
       syncNTP();
       // SD logging: write boot block once time is available
@@ -11432,37 +6602,21 @@ void wifiConnect() {
         cleanOldLogs();   // requires synced time
         writeBootBlock("Boot");
         logSDf("WiFi connected: %s | RSSI: %d dBm",
-          cfg_wifi_ssid, WiFi.RSSI());
+          cfg_wifi_ssid, wifiManagerRSSI());
       }
       // Fix 2: immediate Spoolman health check after WiFi connect
       if (strlen(cfg_spoolman_base) > 4) {
-        HTTPClient hc;
-        String url = String(cfg_spoolman_base) + "/api/v1/health";
-        hc.begin(url);
-        hc.setTimeout(3000);
-        int code = hc.GET();
-        hc.end();
+        int code = spoolmanGetHealthCode(cfg_spoolman_base, 3000);
         sm_reachable = (code == 200);
         logSDf("Spoolman health check: HTTP %d -> %s",
           code, sm_reachable ? "OK" : "FAIL");
         Serial.printf("Spoolman health: HTTP %d -> %s\n", code, sm_reachable ? "OK" : "FAIL");
         // Fetch Spoolman version from /api/v1/info
         if (sm_reachable) {
-          HTTPClient hci;
-          hci.begin(String(cfg_spoolman_base) + "/api/v1/info");
-          hci.setTimeout(3000);
-          int ic = hci.GET();
-          if (ic == 200) {
-            String info = hci.getString();
-            hci.end();
-            StaticJsonDocument<256> idoc;
-            if (!deserializeJson(idoc, info)) {
-              const char* ver = idoc["version"] | "?";
-              logSDf("Spoolman version: %s", ver);
-              Serial.printf("Spoolman version: %s\n", ver);
-            }
-          } else {
-            hci.end();
+          char ver[32] = "?";
+          if (spoolmanGetVersion(cfg_spoolman_base, ver, sizeof(ver), 3000)) {
+            logSDf("Spoolman version: %s", ver);
+            Serial.printf("Spoolman version: %s\n", ver);
           }
         }
       }
@@ -11473,7 +6627,6 @@ void wifiConnect() {
       lv_timer_handler();
       // silent_ota_check_pending disabled
       return;
-    }
   }
   Serial.println("WiFi FAILED – continuing without Spoolman");
   logSD("WiFi connection FAILED");
@@ -11496,27 +6649,20 @@ void querySpoolmanById(int spool_id) {
   if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (before byID GET)",
     ESP.getFreeHeap(), ESP.getFreePsram());
 
-  HTTPClient http;
-  http.begin(String(cfg_spoolman_base) + "/api/v1/spool/" + spool_id);
-  http.setTimeout(8000);
-  int code = http.GET();
+  DynamicJsonDocument doc(8192);
+  DeserializationError err = DeserializationError::Ok;
+  int code = spoolmanGetSpoolJson(cfg_spoolman_base, spool_id, doc, 8000, &err);
   if (code != 200) {
     Serial.printf("querySpoolmanById HTTP error: %d\n", code);
     logSDf("Spoolman byID: HTTP error %d", code);
-    http.end();
+    if (code == -2) {
+      Serial.println("querySpoolmanById: JSON error");
+      logSD("Spoolman byID: JSON error");
+    }
     return;
   }
-  String payload = http.getString();
-  http.end();
-  if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (after byID parse, payload=%dB)",
-    ESP.getFreeHeap(), ESP.getFreePsram(), payload.length());
-
-  DynamicJsonDocument doc(8192);
-  if (deserializeJson(doc, payload)) {
-    Serial.println("querySpoolmanById: JSON error");
-    logSD("Spoolman byID: JSON error");
-    return;
-  }
+  if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (after byID parse)",
+    ESP.getFreeHeap(), ESP.getFreePsram());
 
   JsonObject spool = doc.as<JsonObject>();
   bool is_bambu_tag = (strlen(g_tag.material) > 0);
@@ -11692,7 +6838,6 @@ void querySpoolman(const char* tray_uuid) {
   sm_total = 1000;
   lv_timer_handler();
 
-  HTTPClient http;
   Serial.printf("DBG free heap: %d bytes  free PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
   if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (before Spoolman GET)",
     ESP.getFreeHeap(), ESP.getFreePsram());
@@ -11734,24 +6879,23 @@ void querySpoolman(const char* tray_uuid) {
       doc.clear();
     }
 
-    http.begin(String(cfg_spoolman_base) + "/api/v1/spool");
-    http.setTimeout(20000);
-    int code = http.GET();
+    int code = spoolmanGetSpoolListJson(cfg_spoolman_base, false, doc, 20000, &filter, &err);
     if (code != 200) {
       Serial.printf("Spoolman HTTP error: %d (attempt %d)\n", code, attempt);
       logSDf("Spoolman: HTTP error %d (attempt %d)", code, attempt);
-      http.end();
       if (attempt == 2) {
-        lv_label_set_text(lbl_spoolman_weight, T(STR_API_ERROR));
+        lv_label_set_text(lbl_spoolman_weight, code == -2 ? T(STR_LINK_JSON_ERR) : T(STR_API_ERROR));
         return;
       }
-      continue;  // retry on HTTP error too
+      if (code == -2 &&
+          err != DeserializationError::IncompleteInput &&
+          err != DeserializationError::EmptyInput) {
+        break;
+      }
+      continue;  // retry on HTTP or transient parse error too
     }
 
     // Stream directly from HTTP — avoids allocating a 40KB+ String in RAM
-    WiFiClient* stream = http.getStreamPtr();
-    err = deserializeJson(doc, *stream, DeserializationOption::Filter(filter));
-    http.end();
 
     if (!err) break;  // success
     // Parse failed -> retry only on transient stream issues
@@ -11920,20 +7064,17 @@ void querySpoolman(const char* tray_uuid) {
   doc.clear();  // RAM freigeben vor zweitem Call
 
   // Second call with allow_archived=true
-  HTTPClient http2;
-  http2.begin(String(cfg_spoolman_base) + "/api/v1/spool?allow_archived=true");
-  http2.setTimeout(8000);
-  int code2 = http2.GET();
+  DynamicJsonDocument doc2(16384);
+  DeserializationError err2 = DeserializationError::Ok;
+  StaticJsonDocument<256> filter2;
+  JsonArray filter2_arr = filter2.to<JsonArray>();
+  JsonObject f2 = filter2_arr.createNestedObject();
+  f2["id"] = true;
+  f2["archived"] = true;
+  f2["extra"]["tag"] = true;
+  int code2 = spoolmanGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
   if (code2 == 200) {
-    DynamicJsonDocument doc2(16384);
-    StaticJsonDocument<256> filter2;
-    JsonArray filter2_arr = filter2.to<JsonArray>();
-    JsonObject f2 = filter2_arr.createNestedObject();
-    f2["id"] = true;
-    f2["archived"] = true;
-    f2["extra"]["tag"] = true;
-    WiFiClient* stream2 = http2.getStreamPtr();
-    if (!deserializeJson(doc2, *stream2, DeserializationOption::Filter(filter2))) {
+    if (!err2) {
       JsonArray spools2 = doc2.as<JsonArray>();
       for (JsonObject spool : spools2) {
         // Only check truly archived spools (explicit bool cast needed for JsonVariant)
@@ -11964,9 +7105,6 @@ void querySpoolman(const char* tray_uuid) {
         return;
       }
     }
-    http2.end();
-  } else {
-    http2.end();
   }
 
   // Truly not found
@@ -11985,7 +7123,7 @@ void querySpoolman(const char* tray_uuid) {
 void resetActivityTimer() {
   last_activity_ms = millis();
   if (is_dimmed) {
-    tft.setBrightness(bright_normal);
+    displaySetBrightness((uint8_t)bright_normal);
     is_dimmed = false;
   }
 }
@@ -11996,205 +7134,14 @@ void handlePowerManagement() {
   if (elapsed >= sleep_timeout_ms) {
     Serial.println("Deep sleep...");
     logSD("Deep sleep: entering");
-    tft.setBrightness(0);
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_INT_PIN, 0);
+    displayPrepareDeepSleep();
     delay(100);
     esp_deep_sleep_start();
   }
 
   if (!is_dimmed && elapsed >= dim_timeout_ms) {
-    tft.setBrightness(BRIGHT_DIM_DEFAULT);
+    displaySetBrightness(BRIGHT_DIM_DEFAULT);
     is_dimmed = true;
-  }
-}
-
-// ============================================================
-//  SD CARD LOGGER IMPLEMENTATION (v0.5.3+)
-// ============================================================
-
-// Get current day's log filename (e.g. "/log_2026-04-25.txt")
-String getCurrentLogFilename() {
-  struct tm t;
-  if (!getLocalTime(&t)) {
-    // Time not yet synced -> use a fallback filename
-    return String("/log_pre_ntp.txt");
-  }
-  char buf[32];
-  snprintf(buf, sizeof(buf), "/log_%04d-%02d-%02d.txt",
-    t.tm_year + 1900, t.tm_mon + 1, t.tm_mday);
-  return String(buf);
-}
-
-// Append a single line to today's log file
-void logSD(const char* msg) {
-  if (!sd_available) return;
-  if (sd_log_size > SD_LOG_MAX_SIZE) return;  // daily cap reached
-
-  // Timestamp (use ?? if NTP not synced yet)
-  char timestamp[10];
-  struct tm t;
-  if (getLocalTime(&t)) {
-    snprintf(timestamp, sizeof(timestamp), "%02d:%02d:%02d",
-      t.tm_hour, t.tm_min, t.tm_sec);
-  } else {
-    strncpy(timestamp, "??:??:??", sizeof(timestamp));
-  }
-
-  String fname = getCurrentLogFilename();
-  File f = SD.open(fname.c_str(), FILE_APPEND);
-  if (!f) return;
-  size_t written = f.printf("[%s] %s\n", timestamp, msg);
-  f.close();
-  sd_log_size += written;
-}
-
-// Variadic format-string variant
-void logSDf(const char* fmt, ...) {
-  if (!sd_available) return;
-  char buf[256];
-  va_list args;
-  va_start(args, fmt);
-  vsnprintf(buf, sizeof(buf), fmt, args);
-  va_end(args);
-  logSD(buf);
-}
-
-// Write a boot/reboot separator block
-// Helper: Convert ESP reset reason to human-readable string
-const char* resetReasonStr() {
-  esp_reset_reason_t r = esp_reset_reason();
-  switch (r) {
-    case ESP_RST_UNKNOWN:    return "UNKNOWN";
-    case ESP_RST_POWERON:    return "POWERON (cold boot)";
-    case ESP_RST_EXT:        return "EXT (external pin)";
-    case ESP_RST_SW:         return "SW (ESP.restart)";
-    case ESP_RST_PANIC:      return "PANIC (exception/abort)";
-    case ESP_RST_INT_WDT:    return "INT_WDT (interrupt watchdog)";
-    case ESP_RST_TASK_WDT:   return "TASK_WDT (task watchdog)";
-    case ESP_RST_WDT:        return "WDT (other watchdog)";
-    case ESP_RST_DEEPSLEEP:  return "DEEPSLEEP (wake from sleep)";
-    case ESP_RST_BROWNOUT:   return "BROWNOUT (voltage drop)";
-    case ESP_RST_SDIO:       return "SDIO";
-    default:                 return "OTHER";
-  }
-}
-
-void writeBootBlock(const char* boot_or_reboot) {
-  if (!sd_available) return;
-
-  String fname = getCurrentLogFilename();
-  File f = SD.open(fname.c_str(), FILE_APPEND);
-  if (!f) return;
-
-  char dt_buf[32];
-  struct tm t;
-  if (getLocalTime(&t)) {
-    snprintf(dt_buf, sizeof(dt_buf), "%02d.%02d.%04d %02d:%02d:%02d",
-      t.tm_mday, t.tm_mon + 1, t.tm_year + 1900,
-      t.tm_hour, t.tm_min, t.tm_sec);
-  } else {
-    strncpy(dt_buf, "(time not synced)", sizeof(dt_buf));
-  }
-
-  f.println("=====================================");
-  f.printf("SpoolmanScale %s\n", FW_VERSION);
-  f.printf("%s: %s\n", boot_or_reboot, dt_buf);
-  f.printf("Reset reason: %s\n", resetReasonStr());
-  if (wifi_ok) {
-    f.printf("WiFi: %s | IP: %s\n",
-      cfg_wifi_ssid, WiFi.localIP().toString().c_str());
-  } else {
-    f.println("WiFi: (not connected)");
-  }
-  f.printf("Free heap: %d | PSRAM: %d\n",
-    ESP.getFreeHeap(), ESP.getFreePsram());
-  if (sd_verbose) f.println("Verbose logging: ON");
-  f.println("=====================================");
-  f.close();
-}
-
-// Delete log files older than 7 days
-void cleanOldLogs() {
-  if (!sd_available) return;
-
-  struct tm now;
-  if (!getLocalTime(&now)) {
-    Serial.println("cleanOldLogs: no time -> skip");
-    return;
-  }
-
-  // Compute cutoff: today - 7 days
-  time_t now_t = mktime(&now);
-  time_t cutoff = now_t - (7 * 24 * 3600);
-
-  File root = SD.open("/");
-  if (!root || !root.isDirectory()) {
-    Serial.println("cleanOldLogs: cannot open root");
-    return;
-  }
-
-  int deleted = 0;
-  File entry = root.openNextFile();
-  while (entry) {
-    String name = entry.name();
-    if (entry.isDirectory()) {
-      entry = root.openNextFile();
-      continue;
-    }
-    // Match pattern "log_YYYY-MM-DD.txt"
-    // entry.name() may return name without leading slash on some cores
-    String fname = name;
-    if (!fname.startsWith("/")) fname = "/" + fname;
-
-    if (fname.startsWith("/log_") && fname.endsWith(".txt") && fname.length() == 19) {
-      // Parse date from filename: /log_YYYY-MM-DD.txt
-      int yyyy = fname.substring(5, 9).toInt();
-      int mm   = fname.substring(10, 12).toInt();
-      int dd   = fname.substring(13, 15).toInt();
-      if (yyyy >= 2024 && mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
-        struct tm filedate = {};
-        filedate.tm_year = yyyy - 1900;
-        filedate.tm_mon  = mm - 1;
-        filedate.tm_mday = dd;
-        filedate.tm_hour = 12;  // noon for safety
-        time_t file_t = mktime(&filedate);
-        if (file_t < cutoff) {
-          entry.close();
-          if (SD.remove(fname.c_str())) {
-            deleted++;
-            Serial.printf("cleanOldLogs: removed %s\n", fname.c_str());
-          }
-          entry = root.openNextFile();
-          continue;
-        }
-      }
-    }
-    entry = root.openNextFile();
-  }
-  root.close();
-  if (deleted > 0) Serial.printf("cleanOldLogs: %d file(s) deleted\n", deleted);
-}
-
-// Initialize SD card on dedicated SPI bus
-void initSD() {
-  spiSD.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
-  if (SD.begin(SD_CS, spiSD)) {
-    sd_available = true;
-    sd_verbose = SD.exists("/verbose.txt");
-    uint8_t cardType = SD.cardType();
-    const char* typeStr = "UNKNOWN";
-    switch (cardType) {
-      case CARD_MMC:  typeStr = "MMC";  break;
-      case CARD_SD:   typeStr = "SDSC"; break;
-      case CARD_SDHC: typeStr = "SDHC"; break;
-      case CARD_NONE: typeStr = "NONE"; break;
-    }
-    uint64_t cardSize = SD.cardSize() / (1024 * 1024);
-    Serial.printf("SD OK: type=%s size=%lluMB verbose=%s\n",
-      typeStr, cardSize, sd_verbose ? "yes" : "no");
-  } else {
-    Serial.println("SD: not available (card missing or init failed)");
-    sd_available = false;
   }
 }
 
@@ -12214,26 +7161,9 @@ void setup() {
   // Note: cleanOldLogs() is deferred until after NTP sync (in wifiConnect)
   initSD();
 
-  I2C_TOUCH.begin(TOUCH_SDA, TOUCH_SCL, 400000);
-  tft.init();
-  tft.setRotation(1);
-  tft.setBrightness(204);
-  tft.fillScreen(TFT_BLACK);
+  displayHardwareBegin(resetActivityTimer);
 
-  I2C_EXT.begin(I2C_SDA, I2C_SCL, 100000);
-
-  lv_init();
-  lv_disp_draw_buf_init(&draw_buf, disp_buf, NULL, 480 * 10);
-  static lv_disp_drv_t disp_drv;
-  lv_disp_drv_init(&disp_drv);
-  disp_drv.hor_res = 480; disp_drv.ver_res = 320;
-  disp_drv.flush_cb = lvgl_flush; disp_drv.draw_buf = &draw_buf;
-  lv_disp_drv_register(&disp_drv);
-  static lv_indev_drv_t indev_drv;
-  lv_indev_drv_init(&indev_drv);
-  indev_drv.type = LV_INDEV_TYPE_POINTER;
-  indev_drv.read_cb = lvgl_touch;
-  lv_indev_drv_register(&indev_drv);
+  I2C_EXT.begin(hw_pins::I2C_EXT_SDA, hw_pins::I2C_EXT_SCL, 100000);
 
   // Build UI immediately after display init — user sees screen right away
   // lbl_status shows STR_BOOTING until wifiConnect() completes
@@ -12244,12 +7174,9 @@ void setup() {
   delay(500);
 
   Serial.print("Looking for PN532... ");
-  nfc.begin();
-  delay(100);
-  uint32_t ver = nfc.getFirmwareVersion();
-  if (ver) {
+  uint32_t ver = 0;
+  if (nfcHardwareBegin(&I2C_EXT, hw_pins::PN532_RESET, &ver)) {
     nfc_ok = true;
-    nfc.SAMConfig();
     Serial.printf("OK (FW %d.%d)\n", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
     logSDf("NFC ready (PN532 FW %d.%d)", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
   } else {
@@ -12258,18 +7185,13 @@ void setup() {
   }
 
   Serial.print("Looking for NAU7802... ");
-  if (nau.begin(&I2C_EXT)) {
+  if (scaleHardwareBegin(&I2C_EXT, [](){
+    Serial.print(".");
+    delay(100);
+    lv_tick_inc(100);
+    lv_timer_handler();
+  })) {
     scl_ok = true;
-    nau.setLDO(NAU7802_3V0);
-    nau.setGain(NAU7802_GAIN_128);
-    nau.setRate(NAU7802_RATE_10SPS);
-    delay(300);
-    while (!nau.calibrate(NAU7802_CALMOD_INTERNAL)) {
-      Serial.print(".");
-      delay(100);
-      lv_tick_inc(100);
-      lv_timer_handler();  // keep display alive during calibration
-    }
     scale_ready = true;
     Serial.printf("OK! cal_factor=%.4f  zero_offset=%d\n", cal_factor, zero_offset);
     logSDf("Scale ready (cal=%.4f zero=%d)", cal_factor, zero_offset);
@@ -12323,7 +7245,7 @@ void loop() {
   }
 
   // OTA web server bedienen wenn aktiv
-  if (ota_server_running) ota_server.handleClient();
+  handleOtaServerClient();
 
   // Silent background OTA auto-check disabled
 
@@ -12409,18 +7331,13 @@ void loop() {
     int cid = copy_id_lookup_pending;
     copy_id_lookup_pending = 0;
     // Fetch spool data for copy confirm — done in loop to avoid stack overflow in lambda
-    char curl[128];
-    snprintf(curl, sizeof(curl), "%s/api/v1/spool/%d", cfg_spoolman_base, cid);
-    HTTPClient hc2; hc2.begin(curl); hc2.setTimeout(5000);
-    int hcode = hc2.GET();
+    DynamicJsonDocument cdoc(1024);
+    DeserializationError derr2 = DeserializationError::Ok;
+    int hcode = spoolmanGetSpoolJson(cfg_spoolman_base, cid, cdoc, 5000, &derr2);
     if (hcode != 200) {
-      hc2.end();
       if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_LINK_ID_NOT_FOUND));
     } else {
-      String payload2 = hc2.getString();
-      hc2.end();
-      DynamicJsonDocument cdoc(1024);
-      if (deserializeJson(cdoc, payload2) == DeserializationError::Ok) {
+      if (!derr2) {
         int cfid   = cdoc["filament"]["id"] | 0;
         float cini = cdoc["filament"]["weight"] | 1000.0f;
         float cspw = cdoc["spool_weight"] | 0.0f;
@@ -12588,7 +7505,7 @@ void loop() {
   // NAU7802: read weight every 200ms and update labels
   if (scale_ready && millis() - last_scale_ms >= 200) {
     last_scale_ms = millis();
-    int32_t raw = nau.read();
+    int32_t raw = scaleHardwareReadRaw();
     float raw_g = (float)(raw - zero_offset) / cal_factor;
 
     // Moving average over SCALE_FILTER_SIZE readings
@@ -12768,12 +7685,7 @@ void loop() {
     static unsigned long last_sm_check_ms = 0;
     if (millis() - last_sm_check_ms >= 30000 && !id_input_open) {
       last_sm_check_ms = millis();
-      HTTPClient hc;
-      String url = String(cfg_spoolman_base) + "/api/v1/health";
-      hc.begin(url);
-      hc.setTimeout(3000);
-      int code = hc.GET();
-      hc.end();
+      int code = spoolmanGetHealthCode(cfg_spoolman_base, 3000);
       bool was_reachable = sm_reachable;
       sm_reachable = (code == 200);
       if (sm_reachable != was_reachable) updateHeaderStatus();
@@ -12805,7 +7717,7 @@ void loop() {
     if (millis() - last_nfc_check_ms >= 500) {
       last_nfc_check_ms = millis();
       uint8_t uid[7], uidLen = 0;
-      bool found = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen, 150);
+      bool found = nfcReadPassiveTarget(uid, &uidLen, 150);
 
       if (found && uidLen == 4) {
         // ── MIFARE Classic (Bambu) ────────────────────────────
