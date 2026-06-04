@@ -51,6 +51,7 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Nicht in Spoolman",      "Not in Spoolman"            },  // STR_NOT_IN_SPOOLMAN
   { "Archiviert",             "Archived"                   },  // STR_ARCHIVED
   { "Lese Tag...",            "Reading tag..."             },  // STR_READING_TAG
+  { "Lese Bambu Sektor %02d...", "Reading Bambu sector %02d..." },  // STR_READING_BAMBU_SECTOR
 
   // Mainscreen Buttons
   { "Gewicht updaten",        "Update Weight"     },  // STR_BTN_WEIGHT

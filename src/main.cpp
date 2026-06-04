@@ -391,7 +391,7 @@ float bag_weight_g = 50.0f;  // Standard: 50g (Vakuumbeutel + Silikagel)
 static char spoolman_queried_uid[24] = "";  // max 7-byte UID: "XX:XX:XX:XX:XX:XX:XX" = 23+1
 char  sm_last_used[32] = "";
 
-// NFC retry: counter for re-scan attempts when tray_uuid is empty
+// NFC retry: counter for re-scan attempts when Bambu content is incomplete
 static int nfc_retry_count = 0;
 static int nfc_absent_count = 0;   // consecutive "not found" reads before tag_present = false
 #define NFC_MAX_RETRIES  5
@@ -548,6 +548,27 @@ bool readSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blocks[4][16
   return nfcReadMifareSector(sector, key, uid, blocks);
 }
 
+static void showBambuSectorReadStatus(int sector) {
+  if (!lbl_status) return;
+
+  char status_buf[64];
+  snprintf(status_buf, sizeof(status_buf), T(STR_READING_BAMBU_SECTOR), sector);
+  lv_label_set_text(lbl_status, status_buf);
+  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+  lv_timer_handler();
+  lv_refr_now(NULL);
+}
+
+static int countBambuDataBlocksRead(const BambuTagData& tag) {
+  int count = 0;
+  for (int sector = 0; sector < 16; sector++) {
+    for (int b = 0; b < 3; b++) {
+      if (tag.block_ok[sector * 4 + b]) count++;
+    }
+  }
+  return count;
+}
+
 // ============================================================
 //  FULL TAG SCAN
 // ============================================================
@@ -587,6 +608,7 @@ void scanTag(uint8_t *uid, uint8_t uid_len) {
   // Build a compact verbose summary string: "0:OK 1:OK 2:FAIL ..."
   char sector_summary[160] = "";
   for (int sector = 0; sector < 16; sector++) {
+    showBambuSectorReadStatus(sector);
     uint8_t sec_blocks[4][16];
     bool ok = readSector(sector, g_tag.keys[sector], uid, sec_blocks);
     for (int b = 0; b < 3; b++) {
@@ -7730,7 +7752,9 @@ void loop() {
           uid[0], uid[1], uid[2], uid[3]);
 
         bool uid_changed = (strcmp(uid_str, g_tag.uid_str) != 0);
+        int bambu_blocks_read = countBambuDataBlocksRead(g_tag);
         bool uuid_missing = (strlen(g_tag.tray_uuid) < 32);
+        bool contents_incomplete = (bambu_blocks_read < 48);
 
         if (uid_changed) {
           Serial.printf("NFC: New Bambu UID %s\n", uid_str);
@@ -7740,16 +7764,20 @@ void loop() {
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
           scanTag(uid, uidLen);
-        } else if (uuid_missing && nfc_retry_count < NFC_MAX_RETRIES) {
+        } else if ((uuid_missing || contents_incomplete) && nfc_retry_count < NFC_MAX_RETRIES) {
           nfc_retry_count++;
-          Serial.printf("NFC: tray_uuid empty, retry %d/%d\n", nfc_retry_count, NFC_MAX_RETRIES);
+          Serial.printf("NFC: Bambu contents incomplete (%d/48 blocks, tray_uuid %s), retry %d/%d\n",
+            bambu_blocks_read,
+            uuid_missing ? "missing" : "present",
+            nfc_retry_count,
+            NFC_MAX_RETRIES);
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
           lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
           scanTag(uid, uidLen);
         } else {
-          if (uuid_missing && nfc_retry_count >= NFC_MAX_RETRIES) {
+          if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES) {
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
             lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
             lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));

@@ -6,7 +6,7 @@
 #include "mbedtls/md.h"
 
 // Master key from Bambu-Research-Group/RFID-Tag-Guide.
-// HKDF with SHA256, context "RFID-B\0", 16 keys of 6 bytes each.
+// HKDF with SHA256, context "RFID-B\0", 16 MIFARE Classic B-keys of 6 bytes each.
 static const uint8_t BAMBU_MASTER_KEY[16] = {
   0x9a, 0x75, 0x9c, 0xf2, 0xc4, 0xf7, 0xca, 0xff,
   0x22, 0x2c, 0xb9, 0x76, 0x9b, 0x41, 0xbc, 0x96

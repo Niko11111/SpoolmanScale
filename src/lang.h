@@ -52,6 +52,7 @@ enum StringID {
   STR_NOT_IN_SPOOLMAN,
   STR_ARCHIVED,
   STR_READING_TAG,
+  STR_READING_BAMBU_SECTOR,
 
   // Mainscreen Buttons
   STR_BTN_WEIGHT,
