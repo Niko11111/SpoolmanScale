@@ -11,17 +11,16 @@
 #include "app_config.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/ota_state.h"
 #include "services/prefs_store.h"
+#include "update_badges.h"
 #include "ui_common.h"
 
 extern bool wifi_ok;
 extern bool show_ota_pending;
-extern bool update_available;
-extern bool gh_prerelease;
 extern lv_obj_t *scr_ota_github;
 
 void hideAllOverlays();
-void showUpdateBadges(bool show);
 
 static lv_obj_t *lbl_gh_status      = nullptr;
 static lv_obj_t *lbl_gh_installed   = nullptr;

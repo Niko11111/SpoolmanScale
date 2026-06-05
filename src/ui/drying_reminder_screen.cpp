@@ -7,19 +7,11 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "scale_menu.h"
+#include "services/drying_config.h"
 #include "services/prefs_store.h"
 #include "ui_common.h"
 
 extern bool show_drying_reminder_pending;
-extern uint8_t g_dry_mode;
-extern int g_dry_man_yellow;
-extern int g_dry_man_red;
-extern const char* DRY_MAT_NAMES[];
-extern const int DRY_MAT_COUNT;
-extern int g_dry_mat_yellow[];
-extern int g_dry_mat_red[];
-extern bool g_dry_mat_sealed[];
-extern float g_dry_mult_sealed;
 extern int s_dry_numpad_target;
 extern int s_dry_numpad_value;
 extern lv_obj_t *s_dry_numpad_scr;

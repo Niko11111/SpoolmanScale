@@ -6,13 +6,14 @@
 #include <cstring>
 
 #include "hardware/scale.h"
+#include "hardware/scale_state.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "scale_menu.h"
 #include "services/prefs_store.h"
+#include "services/user_options.h"
 #include "ui_common.h"
 
-extern bool g_whole_gram;
 extern bool scale_ready;
 extern float scale_weight_g;
 extern float cal_factor;
@@ -41,9 +42,6 @@ extern lv_obj_t *lbl_scale_weight;
 
 void hideAllOverlays();
 void resetActivityTimer();
-void saveCalFactor(float factor);
-void saveTareOffset(int32_t offset);
-void resetScaleFilter();
 
 static char factor_input[16] = "";
 static lv_obj_t *lbl_factor_display = nullptr;

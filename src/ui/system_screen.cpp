@@ -7,11 +7,11 @@
 
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/ota_state.h"
 #include "ui_common.h"
 
 extern bool show_ota_pending;
 extern bool show_info_pending;
-extern bool update_available;
 extern lv_obj_t *scr_system;
 extern lv_obj_t *lbl_fw_badge;
 

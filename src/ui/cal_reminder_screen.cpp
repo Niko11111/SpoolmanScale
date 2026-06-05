@@ -4,6 +4,7 @@
 #include <lvgl.h>
 #include <cstring>
 
+#include "extra_fields_screen.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "ui_common.h"
@@ -18,7 +19,6 @@ extern lv_obj_t *scr_cal_reminder;
 
 void hideAllOverlays();
 void showMainScreen();
-void clearExtraFieldsUiPointers();
 
 // ============================================================
 //  CALIBRATION REMINDER SCREEN (end of first setup)
@@ -34,7 +34,7 @@ void showCalReminderScreen() {
   if (scr_wifi_pass)     { lv_obj_del(scr_wifi_pass);     scr_wifi_pass     = nullptr; }
   if (scr_spoolman)      { lv_obj_del(scr_spoolman);      scr_spoolman      = nullptr; }
   if (scr_extra_fields)  { lv_obj_del(scr_extra_fields);  scr_extra_fields  = nullptr;
-                           clearExtraFieldsUiPointers(); }
+                           resetExtraFieldsScreenState(); }
   hideAllOverlays();
   logSD("UI: Screen -> CalReminder: hideAllOverlays done");
   Serial.println("showCalReminderScreen: hideAllOverlays done");
@@ -117,4 +117,3 @@ void buildCalReminderScreen() {
   lv_obj_set_style_text_font(lbl_got, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_got);
 }
-

@@ -8,10 +8,10 @@
 #include "lang.h"
 #include "scale_menu.h"
 #include "services/prefs_store.h"
+#include "services/user_options.h"
 #include "ui_common.h"
 
 extern bool show_lastused_pending;
-extern uint8_t last_used_mode;
 extern lv_obj_t *lbl_lu_cap;
 extern lv_obj_t *scr_lastused;
 extern lv_obj_t *scr_scale_sub;

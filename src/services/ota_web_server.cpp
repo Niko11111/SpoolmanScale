@@ -9,28 +9,15 @@
 #include <strings.h>
 
 #include "app_config.h"
+#include "drying_config.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "list_limits.h"
 #include "prefs_store.h"
 #include "wifi_manager.h"
 
 extern bool wifi_ok;
 extern lv_obj_t *lbl_ota_status;
-
-extern int spool_list_limit;
-extern int location_list_limit;
-
-extern uint8_t g_dry_mode;
-extern int g_dry_man_yellow;
-extern int g_dry_man_red;
-extern const char* DRY_MAT_NAMES[];
-extern const int DRY_MAT_DEF_YELLOW[];
-extern const int DRY_MAT_DEF_RED[];
-extern const int DRY_MAT_COUNT;
-extern int g_dry_mat_yellow[7];
-extern int g_dry_mat_red[7];
-extern bool g_dry_mat_sealed[7];
-extern float g_dry_mult_sealed;
 
 static WebServer ota_server(80);
 static bool ota_server_running = false;

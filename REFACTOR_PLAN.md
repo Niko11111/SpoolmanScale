@@ -56,6 +56,7 @@ The exact folder names can change if PlatformIO include behavior or Arduino buil
 - [x] Move SD logger code into `hardware/sd_logger.*`.
 - [x] Move Bambu KDF helpers into `bambu/bambu_kdf.*`.
 - [x] Move Bambu tag parsing helpers into `bambu/bambu_tag.*`.
+- [x] Move Bambu NFC scan/read helpers into `bambu/bambu_scan.*`.
 - [x] Move material/color matching helpers into `bambu/material_match.*`.
 - [ ] Add focused tests or small host-build checks where practical for pure helpers. Deferred until pure modules stabilize and host-build setup is worthwhile.
 
@@ -64,22 +65,73 @@ The exact folder names can change if PlatformIO include behavior or Arduino buil
 - [x] Introduce `services/spoolman_api.*` for HTTP calls and response parsing.
 - [x] Introduce `services/spoolman_actions.*` for Spoolman operations that still update app state/UI while delegating HTTP to `spoolman_api.*`.
 - [x] Introduce `services/prefs_store.*` for `Preferences` load/save logic.
+- [x] Introduce `services/app_settings.*` for app-specific settings load/save wrappers.
+- [x] Introduce `services/drying_config.*` for drying reminder thresholds and material defaults.
+- [x] Introduce `services/list_limits.*` for Spoolman/location list limits.
+- [x] Introduce `services/auto_weight_state.*` for auto-weight toggles and timing state.
+- [x] Introduce `services/user_options.*` for display precision and Last Used mode.
+- [x] Introduce `services/ota_state.*` for update availability and GitHub pre-release state.
+- [ ] Introduce `services/location_state.*` for location popup debounce/shared state. Pending validation.
 - [x] Introduce `services/wifi_manager.*` for WiFi connect/scan/status behavior.
+- [x] Introduce `services/time_service.*` for NTP sync and date helpers.
 - [x] Introduce `services/ota_web_server.*` for browser OTA upload and web settings routes.
 - [x] Keep existing UI callbacks calling these services through narrow functions.
 
 ### Phase 3: Hardware Boundaries
 
 - [x] Move display/touch initialization into `hardware/display.*`.
-- [ ] Move NAU7802 scale setup/read/tare helpers into `hardware/scale.*`. Started with NAU7802 ownership, setup, calibration, and raw reads.
+- [x] Move display activity/dim/sleep handling into `hardware/display_power.*`.
+- [x] Move NAU7802 scale setup/read/tare helpers into `hardware/scale.*`. NAU7802 hardware path verified on device.
+- [x] Move scale calibration/bag/tare persistence and filter reset helpers into `hardware/scale_state.*`.
 - [x] Move PN532 setup/read helpers into `hardware/nfc.*`.
 - [x] Keep pin definitions centralized or grouped by hardware module.
 
 ### Phase 4: UI Structure
 
-- [x] Extract shared UI helpers for buttons, labels, overlays, headers, and safe screen cleanup.
-- [ ] Split standalone screens first: WiFi info, OTA browser, OTA GitHub, display settings. Display settings verified in `ui/display_screen.*`; OTA menu verified in `ui/ota_menu.*`; Browser OTA screen verified in `ui/ota_browser.*`; GitHub OTA screen/check/pre-release toggle verified in `ui/ota_github.*`; Info/support screen verified in `ui/info_screen.*`; Language screen verified in `ui/language_screen.*`; System screen verified in `ui/system_screen.*`; WiFi info screen moved to `ui/wifi_info.*` but not wired to an active UI path; GitHub flash path not tested because current version matches latest release.
-- [ ] Split complex flows later: link flow, copy flow, Spoolman settings, main screen. Settings main screen verified in `ui/settings_screen.*`; Connection screen verified in `ui/connection_screen.*`; Scale submenu verified in `ui/scale_menu.*`; Last Used mode screen verified in `ui/last_used_screen.*`; Bag Weight screen verified in `ui/bag_screen.*`; Calibration screen verified in `ui/factor_screen.*`; Drying Reminder screen verified in `ui/drying_reminder_screen.*`; Calibration Reminder screen verified in `ui/cal_reminder_screen.*`; WiFi setup flow verified in `ui/wifi_setup_screen.*`; Spoolman IP screen moved to `ui/spoolman_screen.*` pending validation.
+Verified extractions:
+
+- [x] Shared UI helpers for buttons, labels, overlays, headers, and safe screen cleanup.
+- [x] Display settings screen in `ui/display_screen.*`.
+- [x] OTA menu in `ui/ota_menu.*`.
+- [x] Browser OTA screen in `ui/ota_browser.*`.
+- [x] GitHub OTA screen, update check, and pre-release toggle in `ui/ota_github.*`.
+- [x] Info/support screen in `ui/info_screen.*`.
+- [x] Language screen in `ui/language_screen.*`.
+- [x] System screen in `ui/system_screen.*`.
+- [x] Settings main screen in `ui/settings_screen.*`.
+- [x] Connection screen in `ui/connection_screen.*`.
+- [x] Scale submenu in `ui/scale_menu.*`.
+- [x] Last Used mode screen in `ui/last_used_screen.*`.
+- [x] Bag Weight screen in `ui/bag_screen.*`.
+- [x] Calibration screen in `ui/factor_screen.*`.
+- [x] Drying Reminder screen in `ui/drying_reminder_screen.*`.
+- [x] Calibration Reminder screen in `ui/cal_reminder_screen.*`.
+- [x] WiFi setup flow in `ui/wifi_setup_screen.*`.
+- [x] WiFi password placeholder localized through `lang.*`.
+- [x] Spoolman IP screen in `ui/spoolman_screen.*`.
+- [x] Welcome/first-boot setup screens in `ui/setup_welcome_screen.*`, verified with factory-reset welcome and Skip Setup path.
+- [x] Extra Fields screen in `ui/extra_fields_screen.*`, verified for setup check/all-present path.
+- [x] More Info/location picker in `ui/more_info_screen.*`.
+- [x] Confirm/weight popup in `ui/confirm_popup.*`.
+- [x] Main button visibility helper in `ui/main_screen_helpers.*`.
+- [x] Update badges in `ui/update_badges.*`.
+- [x] Clear tag display in `ui/tag_display.*`.
+- [x] Header status in `ui/header_status.*`.
+- [x] Date/drying label display helpers in `ui/date_display.*`.
+- [x] Dried Today action in `ui/dried_action.*`.
+
+Pending validation:
+
+- [ ] Main screen construction and tag display refresh in `ui/main_screen.*`.
+- [ ] Spoolman failure screen in `ui/spoolman_screen.*`.
+- [ ] Reboot popup in `ui/reboot_popup.*`.
+- [ ] Weight display formatter in `ui/weight_format.*`.
+
+Deferred or not actively wired:
+
+- [ ] WiFi info screen moved to `ui/wifi_info.*`, but not wired to an active UI path.
+- [ ] GitHub flash/install path not tested because the current firmware version matches the latest release.
+- [ ] Split remaining complex flows: link flow, copy flow, Spoolman query/update display, and main screen construction.
 
 ### Verified Fixes During Refactor
 

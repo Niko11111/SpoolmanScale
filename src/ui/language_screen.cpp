@@ -6,9 +6,9 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/prefs_store.h"
+#include "reboot_popup.h"
 
 void showMainScreen();
-void showRebootPopup();
 
 void showLanguageScreen() {
   logSD("SHOW: LanguageScreen");

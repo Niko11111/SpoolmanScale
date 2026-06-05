@@ -6,6 +6,8 @@
 
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/auto_weight_state.h"
+#include "services/drying_config.h"
 #include "services/prefs_store.h"
 #include "ui_common.h"
 
@@ -13,8 +15,6 @@ extern bool show_bag_pending;
 extern bool show_factor_pending;
 extern bool show_lastused_pending;
 extern bool show_drying_reminder_pending;
-extern bool g_auto_loc_popup;
-extern uint8_t g_dry_mode;
 extern float bag_weight_g;
 extern float cal_factor;
 extern lv_obj_t *scr_scale_sub;

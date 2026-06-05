@@ -5,9 +5,13 @@
 #include <cstring>
 
 #include "connection_screen.h"
+#include "header_status.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/app_settings.h"
+#include "services/time_service.h"
 #include "services/wifi_manager.h"
+#include "setup_welcome_screen.h"
 #include "ui_common.h"
 
 extern bool wifi_ok;
@@ -21,10 +25,6 @@ extern lv_obj_t *scr_wifi_connecting;
 extern lv_obj_t *lbl_spoolman_weight;
 
 void hideAllOverlays();
-void showWelcomeScreen();
-void saveWifiCredentials(const char* ssid, const char* pass);
-void syncNTP();
-void updateHeaderStatus();
 
 static char  wifi_setup_ssid[33]  = "";
 static lv_obj_t *lbl_wifi_setup_status = nullptr;
@@ -266,7 +266,7 @@ void buildWifiPassScreen() {
   ta_wifi_pass = lv_textarea_create(scr_wifi_pass);
   lv_textarea_set_one_line(ta_wifi_pass, true);
   lv_textarea_set_password_mode(ta_wifi_pass, false);
-  lv_textarea_set_placeholder_text(ta_wifi_pass, "Passwort...");
+  lv_textarea_set_placeholder_text(ta_wifi_pass, T(STR_WIFI_PASS_PLACEHOLDER));
   lv_obj_set_size(ta_wifi_pass, 380, 44);
   lv_obj_align(ta_wifi_pass, LV_ALIGN_TOP_MID, 0, 74);
   lv_obj_set_style_text_font(ta_wifi_pass, &lv_font_montserrat_ext_16, 0);
@@ -418,4 +418,3 @@ void buildWifiConnectingScreen() {
   lv_obj_set_style_text_font(lbl_next, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_next);
 }
-

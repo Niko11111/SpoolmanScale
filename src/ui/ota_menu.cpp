@@ -6,11 +6,11 @@
 #include "app_config.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/ota_state.h"
 #include "ui_common.h"
 
 extern lv_obj_t *scr_ota;
 extern lv_obj_t *lbl_gh_btn_badge;
-extern bool update_available;
 extern bool show_system_pending;
 
 void hideAllOverlays();

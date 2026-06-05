@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <lvgl.h>
 
+#include "extra_fields_screen.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "ui_common.h"
@@ -14,7 +15,6 @@ extern lv_obj_t *scr_connection;
 
 void showSettingsScreen();
 void showWifiSetupScreen();
-void showExtraFieldsScreen(bool is_setup_flow);
 
 void buildConnectionScreen() {
   logSD("BUILD: ConnectionScreen");

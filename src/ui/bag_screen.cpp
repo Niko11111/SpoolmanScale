@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "hardware/scale_state.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "scale_menu.h"
@@ -15,7 +16,6 @@ extern lv_obj_t *scr_bag;
 extern lv_obj_t *scr_scale_sub;
 
 void hideAllOverlays();
-void saveBagWeight(float weight);
 
 static char bag_input[16] = "";
 static lv_obj_t *lbl_bag_display = nullptr;

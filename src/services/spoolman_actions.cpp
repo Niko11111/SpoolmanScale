@@ -7,10 +7,11 @@
 
 #include "spoolman_api.h"
 #include "hardware/sd_logger.h"
+#include "user_options.h"
+#include "ui/date_display.h"
 
 extern bool wifi_ok;
 extern char cfg_spoolman_base[80];
-extern uint8_t last_used_mode;
 
 extern int sm_id;
 extern int sm_filament_id;
@@ -24,9 +25,6 @@ extern char sm_last_used[32];
 extern lv_obj_t* lbl_spoolman_weight;
 extern lv_obj_t* lbl_spoolman_pct;
 extern lv_obj_t* lbl_last_used;
-
-void isoToDe(const char* iso, char* out, size_t len);
-void driedDisplayStr(const char* de_date, char* out, size_t len);
 
 void patchSpoolmanWeight(float remaining) {
   if (!wifi_ok) { Serial.println("patchSpoolmanWeight: no WiFi"); return; }

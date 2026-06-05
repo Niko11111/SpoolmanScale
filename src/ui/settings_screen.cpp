@@ -8,10 +8,10 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "scale_menu.h"
+#include "services/ota_state.h"
 #include "system_screen.h"
 #include "ui_common.h"
 
-extern bool update_available;
 extern lv_obj_t *scr_settings;
 extern lv_obj_t *scr_connection;
 extern lv_obj_t *scr_scale_sub;
