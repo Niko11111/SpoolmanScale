@@ -1,4 +1,7 @@
 #include "scale_menu.h"
+#include "navigation.h"
+#include "app/app_state.h"
+#include "app/deferred_actions.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -11,15 +14,7 @@
 #include "services/prefs_store.h"
 #include "ui_common.h"
 
-extern bool show_bag_pending;
-extern bool show_factor_pending;
-extern bool show_lastused_pending;
-extern bool show_drying_reminder_pending;
-extern float bag_weight_g;
-extern float cal_factor;
-extern lv_obj_t *scr_scale_sub;
 
-void showSettingsScreen();
 
 static lv_obj_t* makeListBtn(lv_obj_t* list,
                               const char* ico_sym, const char* title, const char* sub,

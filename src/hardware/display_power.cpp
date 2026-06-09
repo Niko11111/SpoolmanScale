@@ -1,4 +1,5 @@
 #include "display_power.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <esp_sleep.h>
@@ -7,9 +8,6 @@
 #include "display.h"
 #include "sd_logger.h"
 
-extern int bright_normal;
-extern int dim_timeout_ms;
-extern int sleep_timeout_ms;
 
 static unsigned long last_activity_ms = 0;
 static bool is_dimmed = false;

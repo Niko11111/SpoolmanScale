@@ -1,4 +1,6 @@
 #include "wifi_info.h"
+#include "navigation.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -8,14 +10,7 @@
 #include "services/wifi_manager.h"
 #include "ui_common.h"
 
-extern bool wifi_ok;
-extern char cfg_wifi_ssid[33];
-extern char cfg_spoolman_base[80];
-extern lv_obj_t *scr_wifi;
-extern lv_obj_t *scr_connection;
-extern lv_obj_t *lbl_wifi_info;
 
-void hideAllOverlays();
 
 void buildWifiScreen() {
   scr_wifi = lv_obj_create(lv_scr_act());

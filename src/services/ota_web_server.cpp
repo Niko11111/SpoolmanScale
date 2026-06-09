@@ -1,4 +1,5 @@
 #include "ota_web_server.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -16,8 +17,6 @@
 #include "prefs_store.h"
 #include "wifi_manager.h"
 
-extern bool wifi_ok;
-extern lv_obj_t *lbl_ota_status;
 
 static WebServer ota_server(80);
 static bool ota_server_running = false;

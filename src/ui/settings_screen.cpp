@@ -1,4 +1,6 @@
 #include "settings_screen.h"
+#include "navigation.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -12,15 +14,7 @@
 #include "system_screen.h"
 #include "ui_common.h"
 
-extern lv_obj_t *scr_settings;
-extern lv_obj_t *scr_connection;
-extern lv_obj_t *scr_scale_sub;
-extern lv_obj_t *scr_display;
-extern lv_obj_t *scr_system;
-extern lv_obj_t *lbl_system_badge;
 
-void showMainScreen();
-void hideAllOverlays();
 void resetActivityTimer();
 
 void buildSettingsScreen() {

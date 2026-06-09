@@ -1,4 +1,7 @@
 #include "extra_fields_screen.h"
+#include "navigation.h"
+#include "app/app_state.h"
+#include "app/deferred_actions.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -11,14 +14,7 @@
 #include "lang.h"
 #include "ui_common.h"
 
-extern bool wifi_ok;
-extern bool cal_reminder_pending;
-extern char cfg_spoolman_base[80];
-extern lv_obj_t *scr_connection;
-extern lv_obj_t *scr_extra_fields;
 
-void hideAllOverlays();
-void showMainScreen();
 
 static lv_obj_t *lbl_extra_fields_status = nullptr;
 static lv_obj_t *btn_extra_fields_create = nullptr;

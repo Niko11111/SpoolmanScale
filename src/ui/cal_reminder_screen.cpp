@@ -1,4 +1,6 @@
 #include "cal_reminder_screen.h"
+#include "navigation.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -9,16 +11,7 @@
 #include "lang.h"
 #include "ui_common.h"
 
-extern lv_obj_t *scr_welcome;
-extern lv_obj_t *scr_first_boot;
-extern lv_obj_t *scr_wifi_setup;
-extern lv_obj_t *scr_wifi_pass;
-extern lv_obj_t *scr_spoolman;
-extern lv_obj_t *scr_extra_fields;
-extern lv_obj_t *scr_cal_reminder;
 
-void hideAllOverlays();
-void showMainScreen();
 
 // ============================================================
 //  CALIBRATION REMINDER SCREEN (end of first setup)

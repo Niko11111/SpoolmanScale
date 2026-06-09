@@ -1,4 +1,6 @@
 #include "display_screen.h"
+#include "navigation.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -10,12 +12,7 @@
 #include "services/prefs_store.h"
 #include "ui_common.h"
 
-extern int bright_normal;
-extern int dim_timeout_ms;
-extern int sleep_timeout_ms;
-extern lv_obj_t *scr_display;
 
-void showSettingsScreen();
 
 static void rebuildDisplayScreen() {
   if (scr_display) {

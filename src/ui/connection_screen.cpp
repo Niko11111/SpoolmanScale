@@ -1,4 +1,7 @@
 #include "connection_screen.h"
+#include "navigation.h"
+#include "app/app_state.h"
+#include "app/deferred_actions.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -8,12 +11,7 @@
 #include "lang.h"
 #include "ui_common.h"
 
-extern char cfg_wifi_ssid[33];
-extern char cfg_spoolman_ip[64];
-extern bool show_spoolman_pending;
-extern lv_obj_t *scr_connection;
 
-void showSettingsScreen();
 void showWifiSetupScreen();
 
 void buildConnectionScreen() {

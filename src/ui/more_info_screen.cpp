@@ -1,4 +1,6 @@
 #include "more_info_screen.h"
+#include "navigation.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -15,20 +17,7 @@
 #include "lang.h"
 #include "tag_display.h"
 
-extern BambuTagData g_tag;
-extern bool sm_found;
-extern int sm_id;
-extern int sm_location_id;
-extern float sm_spool_weight;
-extern char cfg_spoolman_base[80];
-extern char sm_article_nr[32];
-extern char sm_filament_name[32];
-extern char sm_material_global[32];
-extern char sm_color_global[16];
-extern char sm_location_name[48];
-extern lv_obj_t *scr_more_info;
 
-void showMainScreen();
 void showLocationPicker();
 void buildMoreInfoScreen();
 void fetchAndFillLocationList();

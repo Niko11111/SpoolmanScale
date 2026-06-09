@@ -1,4 +1,7 @@
 #include "last_used_screen.h"
+#include "navigation.h"
+#include "app/app_state.h"
+#include "app/deferred_actions.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -11,12 +14,7 @@
 #include "services/user_options.h"
 #include "ui_common.h"
 
-extern bool show_lastused_pending;
-extern lv_obj_t *lbl_lu_cap;
-extern lv_obj_t *scr_lastused;
-extern lv_obj_t *scr_scale_sub;
 
-void hideAllOverlays();
 
 void updateLastUsedCapLabel() {
   if (!lbl_lu_cap) return;
