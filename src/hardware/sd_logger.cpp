@@ -1,4 +1,5 @@
 #include "sd_logger.h"
+#include "app/app_state.h"
 
 #include "pins.h"
 
@@ -12,8 +13,6 @@
 #include "../app_config.h"
 
 // WiFi state is still owned by main.cpp during this phase.
-extern bool wifi_ok;
-extern char cfg_wifi_ssid[33];
 
 static SPIClass spiSD(HSPI);
 bool sd_available = false;

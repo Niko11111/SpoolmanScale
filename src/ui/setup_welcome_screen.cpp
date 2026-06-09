@@ -1,4 +1,7 @@
 #include "setup_welcome_screen.h"
+#include "navigation.h"
+#include "app/app_state.h"
+#include "app/deferred_actions.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -10,16 +13,7 @@
 #include "ui_common.h"
 #include "wifi_setup_screen.h"
 
-extern bool cfg_lang_set;
-extern bool cfg_first_boot;
-extern bool skip_setup_pending;
-extern bool lang_selected_no_reboot;
-extern char cfg_wifi_ssid[33];
-extern lv_obj_t *scr_welcome;
-extern lv_obj_t *scr_first_boot;
 
-void hideAllOverlays();
-void showMainScreen();
 
 void showWelcomeScreen() {
   logSD("SHOW: WelcomeScreen");

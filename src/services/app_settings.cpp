@@ -1,4 +1,5 @@
 #include "app_settings.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <cstring>
@@ -12,18 +13,6 @@
 #include "prefs_store.h"
 #include "user_options.h"
 
-extern int bright_normal;
-extern int dim_timeout_ms;
-extern int sleep_timeout_ms;
-extern float cal_factor;
-extern int32_t zero_offset;
-extern float bag_weight_g;
-extern bool cfg_lang_set;
-extern bool cfg_first_boot;
-extern char cfg_wifi_ssid[33];
-extern char cfg_wifi_password[65];
-extern char cfg_spoolman_ip[64];
-extern char cfg_spoolman_base[80];
 
 void loadPrefs() {
   String ssid = prefsGetString("wifi_ssid", cfg_wifi_ssid);

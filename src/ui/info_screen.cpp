@@ -1,4 +1,7 @@
 #include "info_screen.h"
+#include "navigation.h"
+#include "app/app_state.h"
+#include "app/deferred_actions.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -8,10 +11,7 @@
 #include "lang.h"
 #include "extra/libs/qrcode/lv_qrcode.h"
 
-extern bool show_system_pending;
-extern lv_obj_t *scr_info;
 
-void showMainScreen();
 
 static const char* QR_TITLES[] = { "Ko-fi", "GitHub", "Discord", "MakerWorld" };
 static const char* QR_URLS[]   = {

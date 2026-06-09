@@ -1,4 +1,5 @@
 #include "dried_action.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <cstring>
@@ -9,13 +10,6 @@
 #include "services/spoolman_api.h"
 #include "lang.h"
 
-extern bool wifi_ok;
-extern bool sm_found;
-extern int sm_id;
-extern char cfg_spoolman_base[80];
-extern char sm_last_dried[32];
-extern lv_obj_t *lbl_spoolman_dried_val;
-extern lv_obj_t *lbl_dried_sym;
 
 void btn_dried_cb(lv_event_t *e) {
   logSD("UI: Button -> Dried Today");

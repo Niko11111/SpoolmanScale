@@ -119,10 +119,16 @@ Verified extractions:
 - [x] Header status in `ui/header_status.*`.
 - [x] Date/drying label display helpers in `ui/date_display.*`.
 - [x] Dried Today action in `ui/dried_action.*`.
+- [x] Main screen construction and tag display refresh in `ui/main_screen.*`.
+- [x] Link and copy spool flows in `ui/spool_flow.*`.
+- [x] Spoolman lookup and main-screen result display in `ui/spoolman_lookup.*`.
+- [x] Runtime loop orchestration in `app/app_loop.*`.
+- [x] Boot/setup and WiFi connect orchestration in `app/app_boot.*`.
+- [x] Main/settings navigation helpers in `ui/navigation.*`.
 
 Pending validation:
 
-- [ ] Main screen construction and tag display refresh in `ui/main_screen.*`.
+- [ ] Deferred UI navigation flags in `app/deferred_actions.*`.
 - [ ] Spoolman failure screen in `ui/spoolman_screen.*`.
 - [ ] Reboot popup in `ui/reboot_popup.*`.
 - [ ] Weight display formatter in `ui/weight_format.*`.
@@ -131,7 +137,7 @@ Deferred or not actively wired:
 
 - [ ] WiFi info screen moved to `ui/wifi_info.*`, but not wired to an active UI path.
 - [ ] GitHub flash/install path not tested because the current firmware version matches the latest release.
-- [ ] Split remaining complex flows: link flow, copy flow, Spoolman query/update display, and main screen construction.
+- [ ] Split `ui/spool_flow.*` into separate link and copy flow modules after current behavior is stable.
 
 ### Verified Fixes During Refactor
 
@@ -140,7 +146,8 @@ Deferred or not actively wired:
 
 ### Phase 5: State Cleanup
 
-- [ ] Group globals into state structs where ownership is clear.
+- [x] Move global app state definitions from `main.cpp` into `app/app_state.*`.
+- [ ] Split `app/app_state.*` into domain state modules where ownership is clear.
 - [ ] Replace reused fields and temporary storage with explicit types.
 - [ ] Reduce cross-module mutable globals by passing state references where practical.
 - [ ] Revisit deferred flags and event handling once screens are modular.

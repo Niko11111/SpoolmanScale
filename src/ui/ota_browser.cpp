@@ -1,4 +1,7 @@
 #include "ota_browser.h"
+#include "navigation.h"
+#include "app/app_state.h"
+#include "app/deferred_actions.h"
 
 #include <Arduino.h>
 #include <IPAddress.h>
@@ -10,12 +13,7 @@
 #include "services/wifi_manager.h"
 #include "ui_common.h"
 
-extern bool wifi_ok;
-extern bool show_ota_pending;
-extern lv_obj_t *scr_ota_browser;
-extern lv_obj_t *lbl_ota_status;
 
-void hideAllOverlays();
 void showOtaBrowserScreen() {
   logSD("SHOW: OtaBrowserScreen");
   logSD("UI: Screen -> OTA Browser");

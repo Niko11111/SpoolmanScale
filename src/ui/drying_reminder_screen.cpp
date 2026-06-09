@@ -1,4 +1,6 @@
 #include "drying_reminder_screen.h"
+#include "app/app_state.h"
+#include "app/deferred_actions.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -11,13 +13,6 @@
 #include "services/prefs_store.h"
 #include "ui_common.h"
 
-extern bool show_drying_reminder_pending;
-extern int s_dry_numpad_target;
-extern int s_dry_numpad_value;
-extern lv_obj_t *s_dry_numpad_scr;
-extern lv_obj_t *s_dry_numpad_lbl;
-extern lv_obj_t *scr_drying_reminder;
-extern lv_obj_t *scr_scale_sub;
 
 // ============================================================
 //  DRYING REMINDER SCREEN

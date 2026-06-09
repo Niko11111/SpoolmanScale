@@ -1,4 +1,6 @@
 #include "bag_screen.h"
+#include "navigation.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -11,11 +13,7 @@
 #include "scale_menu.h"
 #include "ui_common.h"
 
-extern float bag_weight_g;
-extern lv_obj_t *scr_bag;
-extern lv_obj_t *scr_scale_sub;
 
-void hideAllOverlays();
 
 static char bag_input[16] = "";
 static lv_obj_t *lbl_bag_display = nullptr;

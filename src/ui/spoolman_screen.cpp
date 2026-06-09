@@ -1,4 +1,7 @@
 #include "spoolman_screen.h"
+#include "navigation.h"
+#include "app/app_state.h"
+#include "app/deferred_actions.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -13,18 +16,7 @@
 #include "lang.h"
 #include "ui_common.h"
 
-extern bool sm_reachable;
-extern bool show_spoolman_pending;
-extern bool show_connection_from_spoolman_pending;
-extern bool spoolman_fail_is_setup;
-extern char cfg_wifi_ssid[33];
-extern char cfg_spoolman_ip[64];
-extern char cfg_spoolman_base[80];
-extern lv_obj_t *scr_connection;
-extern lv_obj_t *scr_spoolman;
-extern lv_obj_t *scr_spoolman_fail;
 
-void hideAllOverlays();
 
 // Input buffer for Spoolman IP
 static char sp_ip_input[64] = "";

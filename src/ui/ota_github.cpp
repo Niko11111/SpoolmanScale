@@ -1,4 +1,7 @@
 #include "ota_github.h"
+#include "navigation.h"
+#include "app/app_state.h"
+#include "app/deferred_actions.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -16,11 +19,7 @@
 #include "update_badges.h"
 #include "ui_common.h"
 
-extern bool wifi_ok;
-extern bool show_ota_pending;
-extern lv_obj_t *scr_ota_github;
 
-void hideAllOverlays();
 
 static lv_obj_t *lbl_gh_status      = nullptr;
 static lv_obj_t *lbl_gh_installed   = nullptr;

@@ -1,4 +1,7 @@
 #include "ota_menu.h"
+#include "navigation.h"
+#include "app/app_state.h"
+#include "app/deferred_actions.h"
 
 #include <lvgl.h>
 #include <stdio.h>
@@ -9,11 +12,7 @@
 #include "services/ota_state.h"
 #include "ui_common.h"
 
-extern lv_obj_t *scr_ota;
-extern lv_obj_t *lbl_gh_btn_badge;
-extern bool show_system_pending;
 
-void hideAllOverlays();
 void showOtaBrowserScreen();
 void showOtaGithubScreen();
 

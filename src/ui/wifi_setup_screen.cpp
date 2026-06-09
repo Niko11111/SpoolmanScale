@@ -1,4 +1,7 @@
 #include "wifi_setup_screen.h"
+#include "navigation.h"
+#include "app/app_state.h"
+#include "app/deferred_actions.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -14,17 +17,7 @@
 #include "setup_welcome_screen.h"
 #include "ui_common.h"
 
-extern bool wifi_ok;
-extern bool show_spoolman_pending;
-extern char cfg_wifi_ssid[33];
-extern char cfg_wifi_password[65];
-extern lv_obj_t *scr_connection;
-extern lv_obj_t *scr_wifi_setup;
-extern lv_obj_t *scr_wifi_pass;
-extern lv_obj_t *scr_wifi_connecting;
-extern lv_obj_t *lbl_spoolman_weight;
 
-void hideAllOverlays();
 
 static char  wifi_setup_ssid[33]  = "";
 static lv_obj_t *lbl_wifi_setup_status = nullptr;
