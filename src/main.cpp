@@ -196,10 +196,9 @@ static int     sleep_timeout_ms = SLEEP_TIMEOUT_DEFAULT;
 // Default 1.0 means: raw values are displayed directly as grams.
 #define CAL_FACTOR_DEFAULT  1.0f
 
-// Two separate I2C instances
-// I2C_TOUCH: Bus 0, GPIO5/6  -> Touch controller
-// I2C_EXT:   Bus 1, GPIO10/11 -> PN532 + NAU7802
-TwoWire I2C_TOUCH = TwoWire(0);
+// I2C_EXT: Bus 1, GPIO10/11 -> PN532 + NAU7802
+// Touch-Controller (Bus 0, GPIO5/6) wird direkt von LovyanGFX verwaltet (siehe LGFX::_touch config),
+// kein eigenes TwoWire-Objekt dafuer - sonst Konflikt durch doppelte I2C-Port-0-Initialisierung
 TwoWire I2C_EXT   = TwoWire(1);
 
 // NAU7802 scale (on I2C_EXT, address 0x2A)
@@ -531,6 +530,7 @@ struct UnlinkedSpool {
 };
 static UnlinkedSpool* link_spools = nullptr;  // PSRAM-allocated at fetch time, freed after link flow
 static int            link_spool_count = 0;
+static int            link_spools_capacity = 0; // aktuell allozierte Anzahl Elemente in link_spools
 static char          link_tag_uid[24] = "";   // UID of the tag to be linked
 static lv_obj_t     *scr_link_list = nullptr; // Spool selection overlay (old, kept for compatibility)
 
@@ -1174,7 +1174,7 @@ void hideAllOverlays() {
   if (scr_wifi_pass)   lv_obj_add_flag(scr_wifi_pass,   LV_OBJ_FLAG_HIDDEN);
   if (scr_wifi_connecting) lv_obj_add_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN);
   // Free PSRAM spool list if link flow was aborted
-  if (link_spools) { free(link_spools); link_spools = nullptr; link_spool_count = 0; }
+  if (link_spools) { free(link_spools); link_spools = nullptr; link_spool_count = 0; link_spools_capacity = 0; }
 }
 
 void showMainScreen() {
@@ -1484,6 +1484,7 @@ void buildFirstBootScreen() {
   lv_obj_t *lbl_skip = lv_label_create(btn_skip);
   char skip_buf[32];
   strncpy(skip_buf, T(STR_BTN_SKIP_SETUP), sizeof(skip_buf)-1);
+  skip_buf[sizeof(skip_buf)-1] = '\0';
   lv_label_set_text(lbl_skip, skip_buf);
   lv_obj_set_style_text_color(lbl_skip, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_skip, &lv_font_montserrat_ext_14, 0);
@@ -2128,6 +2129,12 @@ void doWifiScan() {
   delay(100);
   int n = WiFi.scanNetworks();
 
+  if (n < 0) {
+    // WIFI_SCAN_FAILED (-2) or WIFI_SCAN_RUNNING (-1)
+    lv_label_set_text(lbl_wifi_setup_status, T(STR_WIFI_NO_NET));
+    WiFi.scanDelete();
+    return;
+  }
   if (n == 0) {
     lv_label_set_text(lbl_wifi_setup_status, T(STR_WIFI_NO_NET));
     return;
@@ -2137,18 +2144,24 @@ void doWifiScan() {
   snprintf(status_buf, sizeof(status_buf), T(STR_WIFI_NETWORKS_FOUND), n);
   lv_label_set_text(lbl_wifi_setup_status, status_buf);
 
-  // Sort: strongest first (bubble sort, n is small)
-  for (int i = 0; i < n - 1; i++) {
-    for (int j = 0; j < n - i - 1; j++) {
-      if (WiFi.RSSI(j) < WiFi.RSSI(j + 1)) {
-        // Swap via scan index — LVGL-independent, WiFi.SSID() returns directly
-        // Arduino WiFi.scanNetworks() returns sorted after scan, only needed if not:
-        // Wir nutzen einen Index-Array-Trick nicht — direkt ausgeben reicht da n<20
+  // Sort: strongest first (bubble sort over a scan-index array, n is small)
+  static int idx[64];
+  int sort_n = n < 64 ? n : 64;
+  for (int i = 0; i < sort_n; i++) idx[i] = i;
+  for (int i = 0; i < sort_n - 1; i++) {
+    for (int j = 0; j < sort_n - i - 1; j++) {
+      if (WiFi.RSSI(idx[j]) < WiFi.RSSI(idx[j + 1])) {
+        int tmp = idx[j]; idx[j] = idx[j + 1]; idx[j + 1] = tmp;
       }
     }
   }
 
-  for (int i = 0; i < n && i < 20; i++) {
+  // Full SSID per displayed row (LV_LABEL_LONG_DOT truncates the on-screen text,
+  // so the click handler must read the SSID back from here, not from the label)
+  static char wifi_row_ssid[20][33];
+
+  for (int disp = 0; disp < sort_n && disp < 20; disp++) {
+    int i = idx[disp];
     int rssi = WiFi.RSSI(i);
     String ssid = WiFi.SSID(i);
     if (ssid.length() == 0) continue;
@@ -2176,6 +2189,12 @@ void doWifiScan() {
     lv_obj_set_style_border_width(row, 1, 0);
     lv_obj_set_style_pad_all(row, 0, 0);
 
+    // Full SSID, indexed by display slot — click handler reads this instead
+    // of the (potentially "..."-truncated) label text
+    strncpy(wifi_row_ssid[disp], ssid.c_str(), sizeof(wifi_row_ssid[disp])-1);
+    wifi_row_ssid[disp][sizeof(wifi_row_ssid[disp])-1] = '\0';
+    lv_obj_set_user_data(row, wifi_row_ssid[disp]);
+
     // SSID Label
     lv_obj_t *lbl_ssid = lv_label_create(row);
     lv_label_set_text(lbl_ssid, ssid.c_str());
@@ -2197,9 +2216,10 @@ void doWifiScan() {
     // Click: store SSID → password screen
     lv_obj_add_event_cb(row, [](lv_event_t *e) {
       lv_obj_t *btn = (lv_obj_t*)lv_event_get_target(e);
-      lv_obj_t *lbl = lv_obj_get_child(btn, 0);
-      const char* ssid_str = lv_label_get_text(lbl);
+      const char* ssid_str = (const char*)lv_obj_get_user_data(btn);
+      if (!ssid_str) return;
       strncpy(wifi_setup_ssid, ssid_str, sizeof(wifi_setup_ssid)-1);
+      wifi_setup_ssid[sizeof(wifi_setup_ssid)-1] = '\0';
       showWifiPassScreen();
     }, LV_EVENT_CLICKED, NULL);
   }
@@ -2863,26 +2883,13 @@ void showFactorScreen() {
   // Now safe to delete
   if (scr_factor) { lv_obj_del(scr_factor); scr_factor = nullptr; }
   buildFactorScreen();
-  // Show it (hideAllOverlays would hide it again, so show directly)
+  // Hide every other overlay via the canonical hideAllOverlays() — a manually
+  // duplicated list here had drifted out of sync (missing scr_lastused,
+  // scr_spoolman_fail, scr_drying_reminder, scr_ota_github, link-flow screens).
+  // scr_factor is created HIDDEN (see buildFactorScreen), so re-hiding it here
+  // is a no-op; it is shown explicitly right after.
+  hideAllOverlays();
   lv_obj_clear_flag(scr_factor, LV_OBJ_FLAG_HIDDEN);
-  // Hide other overlays without touching scr_factor
-  if (scr_settings)      lv_obj_add_flag(scr_settings,      LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi)          lv_obj_add_flag(scr_wifi,          LV_OBJ_FLAG_HIDDEN);
-  if (scr_spoolman)      lv_obj_add_flag(scr_spoolman,      LV_OBJ_FLAG_HIDDEN);
-  if (scr_bag)           lv_obj_add_flag(scr_bag,           LV_OBJ_FLAG_HIDDEN);
-  if (scr_connection)    lv_obj_add_flag(scr_connection,    LV_OBJ_FLAG_HIDDEN);
-  if (scr_scale_sub)     lv_obj_add_flag(scr_scale_sub,     LV_OBJ_FLAG_HIDDEN);
-  if (scr_display)       lv_obj_add_flag(scr_display,       LV_OBJ_FLAG_HIDDEN);
-  if (scr_system)        lv_obj_add_flag(scr_system,        LV_OBJ_FLAG_HIDDEN);
-  if (scr_ota)           lv_obj_add_flag(scr_ota,           LV_OBJ_FLAG_HIDDEN);
-  if (scr_ota_browser)   lv_obj_add_flag(scr_ota_browser,   LV_OBJ_FLAG_HIDDEN);
-  if (scr_welcome)       lv_obj_add_flag(scr_welcome,       LV_OBJ_FLAG_HIDDEN);
-  if (scr_first_boot)    lv_obj_add_flag(scr_first_boot,    LV_OBJ_FLAG_HIDDEN);
-  if (scr_extra_fields)  lv_obj_add_flag(scr_extra_fields,  LV_OBJ_FLAG_HIDDEN);
-  if (scr_cal_reminder)  lv_obj_add_flag(scr_cal_reminder,  LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi_setup)    lv_obj_add_flag(scr_wifi_setup,    LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi_pass)     lv_obj_add_flag(scr_wifi_pass,     LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi_connecting) lv_obj_add_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN);
   resetActivityTimer();
 }
 
@@ -3563,6 +3570,7 @@ void updateLastUsedCapLabel() {
     strncpy(buf, g_lang == LANG_DE ? "Zuletzt gewogen:" : "Last weighed:", sizeof(buf)-1);
   else
     strncpy(buf, T(STR_LBL_LAST_USED), sizeof(buf)-1);
+    buf[sizeof(buf)-1] = '\0';
   buf[sizeof(buf)-1] = 0;
   lv_label_set_text(lbl_lu_cap, buf);
 }
@@ -3728,7 +3736,7 @@ void buildScaleSubScreen() {
     }, LV_EVENT_CLICKED, NULL); }
 
   // [2] Trocknungs-Erinnerung
-  { char buf_t[40]; strncpy(buf_t, T(STR_BTN_DRYING_REMINDER), sizeof(buf_t)-1);
+  { char buf_t[40]; strncpy(buf_t, T(STR_BTN_DRYING_REMINDER), sizeof(buf_t)-1); buf_t[sizeof(buf_t)-1] = '\0';
     // Sub-Label zeigt aktiven Modus
     char buf_s[24];
     const char* mode_lbl[] = { T(STR_DRY_MODE_OFF), T(STR_DRY_MODE_MATERIAL), T(STR_DRY_MODE_MANUAL) };
@@ -3740,7 +3748,7 @@ void buildScaleSubScreen() {
     }, LV_EVENT_CLICKED, NULL); }
 
   // [3] Auto Location Popup (Toggle) — kein Pfeil, ON/OFF rechts
-  { char buf_t[40]; strncpy(buf_t, T(STR_BTN_AUTO_LOC_POPUP), sizeof(buf_t)-1);
+  { char buf_t[40]; strncpy(buf_t, T(STR_BTN_AUTO_LOC_POPUP), sizeof(buf_t)-1); buf_t[sizeof(buf_t)-1] = '\0';
     char buf_s[8]; strncpy(buf_s, g_auto_loc_popup ? "ON" : "OFF", sizeof(buf_s)-1);
     lv_obj_t *btn = makeListBtn(scr_scale_sub, list, LV_SYMBOL_GPS, buf_t, buf_s, g_auto_loc_popup);
     // Pfeil-Label (letztes Child) durch ON/OFF ersetzen
@@ -3762,8 +3770,8 @@ void buildScaleSubScreen() {
     }, LV_EVENT_CLICKED, NULL); }
 
   // [4] Last Used Mode
-  { char buf_t[32]; strncpy(buf_t, T(STR_BTN_LASTUSED_MODE), sizeof(buf_t)-1);
-    char buf_s[48]; strncpy(buf_s, T(STR_BTN_LASTUSED_MODE_SUB), sizeof(buf_s)-1);
+  { char buf_t[32]; strncpy(buf_t, T(STR_BTN_LASTUSED_MODE), sizeof(buf_t)-1); buf_t[sizeof(buf_t)-1] = '\0';
+    char buf_s[48]; strncpy(buf_s, T(STR_BTN_LASTUSED_MODE_SUB), sizeof(buf_s)-1); buf_s[sizeof(buf_s)-1] = '\0';
     lv_obj_t *btn = makeListBtn(scr_scale_sub, list, LV_SYMBOL_SAVE, buf_t, buf_s);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Scale-Sub -> Last Used Mode");
@@ -3897,8 +3905,11 @@ void showDryingReminderScreen() {
   // Drei Buttons nebeneinander: Aus / Material / Manuell
   char ml0[16],ml1[16],ml2[16];
   strncpy(ml0,T(STR_DRY_MODE_OFF),sizeof(ml0)-1);
+  ml0[sizeof(ml0)-1] = '\0';
   strncpy(ml1,T(STR_DRY_MODE_MATERIAL),sizeof(ml1)-1);
+  ml1[sizeof(ml1)-1] = '\0';
   strncpy(ml2,T(STR_DRY_MODE_MANUAL),sizeof(ml2)-1);
+  ml2[sizeof(ml2)-1] = '\0';
   const char* mode_labels[] = { ml0, ml1, ml2 };
   int btn_w = 144, btn_h = 36, btn_y = 64, btn_gap = 6;
   int total_w = 3*btn_w + 2*btn_gap;
@@ -3938,7 +3949,7 @@ void showDryingReminderScreen() {
   if (g_dry_mode == 0) {
     // Aus: Erklaerungstext
     lv_obj_t *lbl = lv_label_create(scr_drying_reminder);
-    { char dbuf[200]; strncpy(dbuf, T(STR_DRY_OFF_DESC), sizeof(dbuf)-1);
+    { char dbuf[200]; strncpy(dbuf, T(STR_DRY_OFF_DESC), sizeof(dbuf)-1); dbuf[sizeof(dbuf)-1] = '\0';
       lv_label_set_text(lbl, dbuf); }
     lv_obj_set_style_text_color(lbl, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
@@ -3950,7 +3961,7 @@ void showDryingReminderScreen() {
   } else if (g_dry_mode == 1) {
     // Material: Tabelle der Schwellwerte (read-only)
     lv_obj_t *hint = lv_label_create(scr_drying_reminder);
-    { char hbuf[64]; strncpy(hbuf, T(STR_DRY_MAT_HINT), sizeof(hbuf)-1); lv_label_set_text(hint, hbuf); }
+    { char hbuf[64]; strncpy(hbuf, T(STR_DRY_MAT_HINT), sizeof(hbuf)-1); hbuf[sizeof(hbuf)-1] = '\0'; lv_label_set_text(hint, hbuf); }
     lv_obj_set_style_text_color(hint, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
@@ -3987,8 +3998,11 @@ void showDryingReminderScreen() {
       };
       { char h0[24],h1[24],h2[24];
       strncpy(h0,T(STR_DRY_MAT_HDR_MAT),sizeof(h0)-1);
+      h0[sizeof(h0)-1] = '\0';
       strncpy(h1,T(STR_DRY_MAT_HDR_YELLOW),sizeof(h1)-1);
+      h1[sizeof(h1)-1] = '\0';
       strncpy(h2,T(STR_DRY_MAT_HDR_RED),sizeof(h2)-1);
+      h2[sizeof(h2)-1] = '\0';
       hdr(h0,0,72); hdr(h1,80,120); hdr(h2,210,120);
       lv_obj_t *h4l = lv_label_create(row);
       lv_label_set_text(h4l, T(STR_DRY_SEALED_HDR));
@@ -4063,7 +4077,7 @@ void showDryingReminderScreen() {
       lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 24, -8);
       // Untertitel
       lv_obj_t *slbl = lv_label_create(row_btn);
-      { char ehbuf[32]; strncpy(ehbuf, T(STR_DRY_MAN_EDIT_HINT), sizeof(ehbuf)-1); lv_label_set_text(slbl, ehbuf); }
+      { char ehbuf[32]; strncpy(ehbuf, T(STR_DRY_MAN_EDIT_HINT), sizeof(ehbuf)-1); ehbuf[sizeof(ehbuf)-1] = '\0'; lv_label_set_text(slbl, ehbuf); }
       lv_obj_set_style_text_color(slbl, lv_color_hex(0x2a4060), 0);
       lv_obj_set_style_text_font(slbl, &lv_font_montserrat_ext_12, 0);
       lv_obj_align(slbl, LV_ALIGN_LEFT_MID, 24, 10);
@@ -4082,12 +4096,12 @@ void showDryingReminderScreen() {
         lv_obj_clear_flag(s_dry_numpad_scr, LV_OBJ_FLAG_HIDDEN);
       }, LV_EVENT_CLICKED, NULL);
     };
-    { char ybuf[16]; strncpy(ybuf, T(STR_DRY_MAN_YELLOW_LBL), sizeof(ybuf)-1); makeThreshRow(ybuf, g_dry_man_yellow, 0xf0b838, content_y,      0); }
-    { char rbuf[16]; strncpy(rbuf, T(STR_DRY_MAN_RED_LBL),    sizeof(rbuf)-1); makeThreshRow(rbuf, g_dry_man_red,    0xe04040, content_y + 68, 1); }
+    { char ybuf[16]; strncpy(ybuf, T(STR_DRY_MAN_YELLOW_LBL), sizeof(ybuf)-1); ybuf[sizeof(ybuf)-1] = '\0'; makeThreshRow(ybuf, g_dry_man_yellow, 0xf0b838, content_y,      0); }
+    { char rbuf[16]; strncpy(rbuf, T(STR_DRY_MAN_RED_LBL),    sizeof(rbuf)-1); rbuf[sizeof(rbuf)-1] = '\0'; makeThreshRow(rbuf, g_dry_man_red,    0xe04040, content_y + 68, 1); }
 
     // Info-Text
     lv_obj_t *info = lv_label_create(scr_drying_reminder);
-    { char ibuf[64]; strncpy(ibuf, T(STR_DRY_MAN_INFO), sizeof(ibuf)-1); lv_label_set_text(info, ibuf); }
+    { char ibuf[64]; strncpy(ibuf, T(STR_DRY_MAN_INFO), sizeof(ibuf)-1); ibuf[sizeof(ibuf)-1] = '\0'; lv_label_set_text(info, ibuf); }
     lv_obj_set_style_text_color(info, lv_color_hex(0x2a4060), 0);
     lv_obj_set_style_text_font(info, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(info, LV_TEXT_ALIGN_CENTER, 0);
@@ -5636,14 +5650,14 @@ void buildSystemScreen() {
   lv_obj_set_style_border_width(btn_reset, 2, 0);
   lv_obj_set_style_border_color(btn_reset, lv_color_hex(0x3a1010), 0);
   { lv_obj_t *lbl = lv_label_create(btn_reset);
-    char buf[32]; strncpy(buf, T(STR_BTN_FACTORY_RESET), sizeof(buf)-1);
+    char buf[32]; strncpy(buf, T(STR_BTN_FACTORY_RESET), sizeof(buf)-1); buf[sizeof(buf)-1] = '\0';
     lv_label_set_text(lbl, buf);
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xff6060), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl, LV_ALIGN_CENTER, 0, -7);
     lv_obj_t *sub = lv_label_create(btn_reset);
-    char sub_buf[48]; strncpy(sub_buf, T(STR_BTN_FACTORY_RESET_SUB), sizeof(sub_buf)-1);
+    char sub_buf[48]; strncpy(sub_buf, T(STR_BTN_FACTORY_RESET_SUB), sizeof(sub_buf)-1); sub_buf[sizeof(sub_buf)-1] = '\0';
     lv_label_set_text(sub, sub_buf);
     lv_obj_set_style_text_color(sub, lv_color_hex(0x804040), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_12, 0);
@@ -5672,14 +5686,14 @@ void buildSystemScreen() {
     lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *lbl_t = lv_label_create(box);
-    char buf_t[48]; strncpy(buf_t, T(STR_FACTORY_RESET_TITLE), sizeof(buf_t)-1);
+    char buf_t[48]; strncpy(buf_t, T(STR_FACTORY_RESET_TITLE), sizeof(buf_t)-1); buf_t[sizeof(buf_t)-1] = '\0';
     lv_label_set_text(lbl_t, buf_t);
     lv_obj_set_style_text_color(lbl_t, lv_color_hex(0xff6060), 0);
     lv_obj_set_style_text_font(lbl_t, &lv_font_montserrat_ext_18, 0);
     lv_obj_align(lbl_t, LV_ALIGN_TOP_MID, 0, 16);
 
     lv_obj_t *lbl_m = lv_label_create(box);
-    char buf_m[256]; strncpy(buf_m, T(STR_FACTORY_RESET_MSG), sizeof(buf_m)-1);
+    char buf_m[256]; strncpy(buf_m, T(STR_FACTORY_RESET_MSG), sizeof(buf_m)-1); buf_m[sizeof(buf_m)-1] = '\0';
     lv_label_set_text(lbl_m, buf_m);
     lv_obj_set_style_text_color(lbl_m, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(lbl_m, &lv_font_montserrat_ext_14, 0);
@@ -5702,7 +5716,7 @@ void buildSystemScreen() {
       lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e))));
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_c = lv_label_create(btn_c);
-    char buf_c[32]; strncpy(buf_c, T(STR_CANCEL), sizeof(buf_c)-1);
+    char buf_c[32]; strncpy(buf_c, T(STR_CANCEL), sizeof(buf_c)-1); buf_c[sizeof(buf_c)-1] = '\0';
     lv_label_set_text(lbl_c, buf_c);
     lv_obj_set_style_text_color(lbl_c, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(lbl_c, &lv_font_montserrat_ext_14, 0);
@@ -5731,7 +5745,7 @@ void buildSystemScreen() {
       ESP.restart();
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_ok = lv_label_create(btn_ok);
-    char buf_ok[48]; strncpy(buf_ok, T(STR_FACTORY_RESET_CONFIRM), sizeof(buf_ok)-1);
+    char buf_ok[48]; strncpy(buf_ok, T(STR_FACTORY_RESET_CONFIRM), sizeof(buf_ok)-1); buf_ok[sizeof(buf_ok)-1] = '\0';
     lv_label_set_text(lbl_ok, buf_ok);
     lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0xff8080), 0);
     lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_14, 0);
@@ -5749,14 +5763,14 @@ void buildSystemScreen() {
   lv_obj_set_style_border_width(btn_reboot, 1, 0);
   lv_obj_set_style_border_color(btn_reboot, lv_color_hex(0x1a2a40), 0);
   { lv_obj_t *lbl = lv_label_create(btn_reboot);
-    char buf[32]; strncpy(buf, T(STR_BTN_REBOOT), sizeof(buf)-1);
+    char buf[32]; strncpy(buf, T(STR_BTN_REBOOT), sizeof(buf)-1); buf[sizeof(buf)-1] = '\0';
     lv_label_set_text(lbl, buf);
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl, LV_ALIGN_CENTER, 0, -7);
     lv_obj_t *sub = lv_label_create(btn_reboot);
-    char sub_buf[32]; strncpy(sub_buf, T(STR_BTN_REBOOT_SUB), sizeof(sub_buf)-1);
+    char sub_buf[32]; strncpy(sub_buf, T(STR_BTN_REBOOT_SUB), sizeof(sub_buf)-1); sub_buf[sizeof(sub_buf)-1] = '\0';
     lv_label_set_text(sub, sub_buf);
     lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_12, 0);
@@ -6593,6 +6607,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   // Free any previous allocation
   if (link_spools) { free(link_spools); link_spools = nullptr; }
   link_spool_count = 0;
+  link_spools_capacity = 0;
   if (!wifi_ok) return;
 
   logSDf("link fetch: is_bambu=%d material_filter='%s' archived_only=%d",
@@ -6723,6 +6738,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     logSD("link fetch: PSRAM alloc failed, using internal RAM");
   }
   if (!link_spools) { logSD("link fetch: alloc failed completely"); return; }
+  link_spools_capacity = alloc_count;
 
   // ── Pass 2: fill array (same filter) ────────────────────────
   for (JsonObject spool : spools) {
@@ -6858,6 +6874,7 @@ void doLinkPatch(int spool_id, bool is_bambu) {
   // Free PSRAM spool list
   if (link_spools) { free(link_spools); link_spools = nullptr; }
   link_spool_count = 0;
+  link_spools_capacity = 0;
 
   // Re-query Spoolman — use single-spool endpoint since we know the ID
   link_popup_dismissed = false;
@@ -7199,13 +7216,22 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     link_spools = (UnlinkedSpool*)heap_caps_malloc(sizeof(UnlinkedSpool), MALLOC_CAP_SPIRAM);
     if (!link_spools) link_spools = (UnlinkedSpool*)malloc(sizeof(UnlinkedSpool));
     link_spool_count = 0;
+    link_spools_capacity = link_spools ? 1 : 0;
   }
   bool found_in_list = false;
   for (int i = 0; i < link_spool_count; i++) {
     if (link_spools[i].id == entered_id) { found_in_list = true; break; }
   }
-  if (!found_in_list && link_spools != nullptr) {
-    // Allocate one extra slot if needed (link_spools may be nullptr if no list was loaded)
+  // Grow the buffer by one slot if it is already full — link_spools may have been
+  // allocated with an exact fit by fetchAllSpoolsForLink()/fetchSpoolsForCopy(),
+  // so writing at link_spool_count without this check was a heap buffer overflow.
+  if (!found_in_list && link_spool_count >= link_spools_capacity) {
+    int new_capacity = link_spools_capacity + 1;
+    UnlinkedSpool* grown = (UnlinkedSpool*)heap_caps_realloc(link_spools, new_capacity * sizeof(UnlinkedSpool), MALLOC_CAP_SPIRAM);
+    if (!grown) grown = (UnlinkedSpool*)realloc(link_spools, new_capacity * sizeof(UnlinkedSpool));
+    if (grown) { link_spools = grown; link_spools_capacity = new_capacity; }
+  }
+  if (!found_in_list && link_spools != nullptr && link_spool_count < link_spools_capacity) {
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = entered_id;
     strncpy(s.existing_tag, existing.c_str(), sizeof(s.existing_tag)-1);
@@ -7705,8 +7731,9 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     uint32_t swatch_col = 0x333333;  // Fallback grau
     if (s.color_hex[0] == '#' && strlen(s.color_hex) >= 7) {
       unsigned int r, g, b;
-      sscanf(s.color_hex + 1, "%02X%02X%02X", &r, &g, &b);
-      swatch_col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+      if (sscanf(s.color_hex + 1, "%02X%02X%02X", &r, &g, &b) == 3) {
+        swatch_col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+      }
     }
     lv_obj_set_style_bg_color(swatch, lv_color_hex(swatch_col), 0);
 
@@ -7951,7 +7978,8 @@ void showMaterialList(const char* vendor_name) {
       if (strncasecmp(seen_mats[j], prefix, 3) == 0) { mat_counts[j]++; found = true; break; }
     }
     if (!found) {
-      if (seen_count >= spool_list_limit) { mat_limit_hit = true; continue; }
+      // seen_mats/mat_counts are fixed at 20 slots — never write past that, regardless of spool_list_limit (5-100)
+      if (seen_count >= 20 || seen_count >= spool_list_limit) { mat_limit_hit = true; continue; }
       strncpy(seen_mats[seen_count], prefix, 3);
       mat_counts[seen_count] = 1;
       seen_count++;
@@ -8033,7 +8061,8 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
       if (strcasecmp(seen_full[j], s.material) == 0) { full_counts[j]++; found = true; break; }
     }
     if (!found) {
-      if (full_seen_count >= spool_list_limit) { full_limit_hit = true; continue; }
+      // seen_full/full_counts are fixed at 20 slots — never write past that, regardless of spool_list_limit (5-100)
+      if (full_seen_count >= 20 || full_seen_count >= spool_list_limit) { full_limit_hit = true; continue; }
       strncpy(seen_full[full_seen_count], s.material, sizeof(seen_full[0])-1);
       full_counts[full_seen_count] = 1;
       full_seen_count++;
@@ -8271,7 +8300,8 @@ void showVendorList() {
       if (strcasecmp(seen_vendors[j], vn) == 0) { vendor_counts[j]++; found = true; break; }
     }
     if (!found) {
-      if (seen_v >= spool_list_limit) { vendor_limit_hit = true; continue; }
+      // seen_vendors/vendor_counts are fixed at 20 slots — never write past that, regardless of spool_list_limit (5-100)
+      if (seen_v >= 20 || seen_v >= spool_list_limit) { vendor_limit_hit = true; continue; }
       strncpy(seen_vendors[seen_v], vn, 31);
       vendor_counts[seen_v] = 1;
       seen_v++;
@@ -9304,6 +9334,7 @@ void buildUI() {
     strncpy(lu_cap_buf, g_lang == LANG_DE ? "Zuletzt gewogen:" : "Last weighed:", sizeof(lu_cap_buf)-1);
   else {
     strncpy(lu_cap_buf, T(STR_LBL_LAST_USED), sizeof(lu_cap_buf)-1);
+    lu_cap_buf[sizeof(lu_cap_buf)-1] = '\0';
   }
   lu_cap_buf[sizeof(lu_cap_buf)-1] = 0;
   lv_label_set_text(lbl_lu_cap, lu_cap_buf);
@@ -9623,7 +9654,7 @@ void buildUI() {
     showLinkEntryPopup(strlen(g_tag.tray_uuid) == 32);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_lk = lv_label_create(btn_link);
-  char lbl_lk_buf[32]; strncpy(lbl_lk_buf, T(STR_BTN_LINK), sizeof(lbl_lk_buf)-1);
+  char lbl_lk_buf[32]; strncpy(lbl_lk_buf, T(STR_BTN_LINK), sizeof(lbl_lk_buf)-1); lbl_lk_buf[sizeof(lbl_lk_buf)-1] = '\0';
   lv_label_set_text(lbl_lk, lbl_lk_buf);
   lv_obj_set_style_text_color(lbl_lk, lv_color_hex(0xb8e030), 0);
   lv_obj_set_style_text_font(lbl_lk, &lv_font_montserrat_ext_16, 0);
@@ -9647,7 +9678,7 @@ void buildUI() {
     showCopyEntryPopup();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_cp = lv_label_create(btn_copy);
-  char lbl_cp_buf[32]; strncpy(lbl_cp_buf, T(STR_BTN_COPY_SPOOL), sizeof(lbl_cp_buf)-1);
+  char lbl_cp_buf[32]; strncpy(lbl_cp_buf, T(STR_BTN_COPY_SPOOL), sizeof(lbl_cp_buf)-1); lbl_cp_buf[sizeof(lbl_cp_buf)-1] = '\0';
   lv_label_set_text(lbl_cp, lbl_cp_buf);
   lv_obj_set_style_text_color(lbl_cp, lv_color_hex(0x20d8f8), 0);
   lv_obj_set_style_text_font(lbl_cp, &lv_font_montserrat_ext_16, 0);
@@ -9823,7 +9854,7 @@ void showCopyConfirmPopup(int template_filament_id, const char* template_name,
 
   // Title
   lv_obj_t *lbl_title = lv_label_create(box);
-  char title_buf[32]; strncpy(title_buf, T(STR_COPY_CONFIRM_TITLE), sizeof(title_buf)-1);
+  char title_buf[32]; strncpy(title_buf, T(STR_COPY_CONFIRM_TITLE), sizeof(title_buf)-1); title_buf[sizeof(title_buf)-1] = '\0';
   lv_label_set_text(lbl_title, title_buf);
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_16, 0);
@@ -9863,7 +9894,7 @@ void showCopyConfirmPopup(int template_filament_id, const char* template_name,
     doCopySpoolCreate(fid, ini, spw);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
-  char ok_buf[32]; strncpy(ok_buf, T(STR_BTN_CONFIRMED), sizeof(ok_buf)-1);
+  char ok_buf[32]; strncpy(ok_buf, T(STR_BTN_CONFIRMED), sizeof(ok_buf)-1); ok_buf[sizeof(ok_buf)-1] = '\0';
   lv_label_set_text(lbl_ok, ok_buf);
   lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0x80ffb0), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_16, 0);
@@ -9884,7 +9915,7 @@ void showCopyConfirmPopup(int template_filament_id, const char* template_name,
     if (scr_copy_list) lv_obj_clear_flag(scr_copy_list, LV_OBJ_FLAG_HIDDEN);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_no = lv_label_create(btn_no);
-  char no_buf[32]; strncpy(no_buf, T(STR_CANCEL), sizeof(no_buf)-1);
+  char no_buf[32]; strncpy(no_buf, T(STR_CANCEL), sizeof(no_buf)-1); no_buf[sizeof(no_buf)-1] = '\0';
   lv_label_set_text(lbl_no, no_buf);
   lv_obj_set_style_text_color(lbl_no, lv_color_hex(0xff8080), 0);
   lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_16, 0);
@@ -9897,6 +9928,7 @@ void showCopyConfirmPopup(int template_filament_id, const char* template_name,
 void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bambu_tag) {
   // Free previous list
   if (link_spools) { free(link_spools); link_spools = nullptr; link_spool_count = 0; }
+  link_spools_capacity = 0;
 
   if (!wifi_ok) return;
 
@@ -9955,6 +9987,7 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
   link_spools = (UnlinkedSpool*)heap_caps_malloc(alloc_count * sizeof(UnlinkedSpool), MALLOC_CAP_SPIRAM);
   if (!link_spools) link_spools = (UnlinkedSpool*)malloc(alloc_count * sizeof(UnlinkedSpool));
   if (!link_spools) { link_spool_count = 0; return; }
+  link_spools_capacity = alloc_count;
 
   int idx = 0;
   for (JsonObject spool : arr) {
@@ -10034,7 +10067,7 @@ void showCopySpoolList() {
 
   // Header: 52px, Back left, Cancel/X right, title center
   char title_buf[48];
-  char title_str[32]; strncpy(title_str, T(STR_COPY_TITLE), sizeof(title_str)-1);
+  char title_str[32]; strncpy(title_str, T(STR_COPY_TITLE), sizeof(title_str)-1); title_str[sizeof(title_str)-1] = '\0';
   snprintf(title_buf, sizeof(title_buf), "%s - %d", title_str, link_spool_count);
 
   lv_obj_t *hdr = lv_obj_create(scr_copy_list);
@@ -10100,7 +10133,7 @@ void showCopySpoolList() {
 
   if (link_spool_count == 0) {
     lv_obj_t *lbl_empty = lv_label_create(scr_copy_list);
-    char empty_buf[48]; strncpy(empty_buf, T(STR_COPY_NO_SPOOLS), sizeof(empty_buf)-1);
+    char empty_buf[48]; strncpy(empty_buf, T(STR_COPY_NO_SPOOLS), sizeof(empty_buf)-1); empty_buf[sizeof(empty_buf)-1] = '\0';
     lv_label_set_text(lbl_empty, empty_buf);
     lv_obj_set_style_text_color(lbl_empty, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(lbl_empty, &lv_font_montserrat_ext_16, 0);
@@ -10169,8 +10202,9 @@ void showCopySpoolList() {
     uint32_t swatch_col = 0x333333;
     if (s.color_hex[0] == '#' && strlen(s.color_hex) >= 7) {
       unsigned int r, g, b;
-      sscanf(s.color_hex + 1, "%02X%02X%02X", &r, &g, &b);
-      swatch_col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+      if (sscanf(s.color_hex + 1, "%02X%02X%02X", &r, &g, &b) == 3) {
+        swatch_col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+      }
     }
     lv_obj_set_style_bg_color(swatch, lv_color_hex(swatch_col), 0);
 
@@ -10230,7 +10264,7 @@ void showCopyIdInputPopup() {
   addBackButton(scr_copy_id, [](lv_event_t *e) { closeCopyIdInputPopup(); });
 
   lv_obj_t *lbl_title = lv_label_create(scr_copy_id);
-  char title_buf[32]; strncpy(title_buf, T(STR_COPY_ID_BTN), sizeof(title_buf)-1);
+  char title_buf[32]; strncpy(title_buf, T(STR_COPY_ID_BTN), sizeof(title_buf)-1); title_buf[sizeof(title_buf)-1] = '\0';
   lv_label_set_text(lbl_title, title_buf);
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
@@ -10340,7 +10374,7 @@ void showCopyEntryPopup() {
 
   // Title
   lv_obj_t *lbl_title = lv_label_create(scr_copy_entry);
-  char title_buf[32]; strncpy(title_buf, T(STR_COPY_TITLE), sizeof(title_buf)-1);
+  char title_buf[32]; strncpy(title_buf, T(STR_COPY_TITLE), sizeof(title_buf)-1); title_buf[sizeof(title_buf)-1] = '\0';
   lv_label_set_text(lbl_title, title_buf);
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
@@ -10389,7 +10423,7 @@ void showCopyEntryPopup() {
   lv_obj_set_style_border_color(btn1, lv_color_hex(0x1a3060), 0);
   lv_obj_add_event_cb(btn1, [](lv_event_t *e) { link_id_input[0] = '\0'; showIdInputPopup(strlen(g_tag.tray_uuid) == 32, true); }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn1);
-    char b[40]; strncpy(b, T(STR_COPY_ID_BTN), sizeof(b)-1);
+    char b[40]; strncpy(b, T(STR_COPY_ID_BTN), sizeof(b)-1); b[sizeof(b)-1] = '\0';
     lv_label_set_text(l, b);
     lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
@@ -10426,7 +10460,7 @@ void showCopyEntryPopup() {
     }
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn2);
-    char b[40]; strncpy(b, T(STR_COPY_ACTIVE_BTN), sizeof(b)-1);
+    char b[40]; strncpy(b, T(STR_COPY_ACTIVE_BTN), sizeof(b)-1); b[sizeof(b)-1] = '\0';
     lv_label_set_text(l, b);
     lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
@@ -10462,7 +10496,7 @@ void showCopyEntryPopup() {
     }
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn3);
-    char b[40]; strncpy(b, T(STR_COPY_ARCHIVED_BTN), sizeof(b)-1);
+    char b[40]; strncpy(b, T(STR_COPY_ARCHIVED_BTN), sizeof(b)-1); b[sizeof(b)-1] = '\0';
     lv_label_set_text(l, b);
     lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
@@ -10480,7 +10514,7 @@ void showCopyEntryPopup() {
   lv_obj_set_style_border_width(btn4, 0, 0);
   lv_obj_add_event_cb(btn4, [](lv_event_t *e) { closeCopyEntryPopup(); }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn4);
-    char b[16]; strncpy(b, T(STR_CANCEL), sizeof(b)-1);
+    char b[16]; strncpy(b, T(STR_CANCEL), sizeof(b)-1); b[sizeof(b)-1] = '\0';
     lv_label_set_text(l, b);
     lv_obj_set_style_text_color(l, lv_color_hex(0xff8080), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
@@ -10544,6 +10578,7 @@ void showLocationPicker() {
   lv_obj_t *lbl_title = lv_label_create(hdr);
   char title_buf[48];
   strncpy(title_buf, T(STR_LOCATION_TITLE), sizeof(title_buf)-1);
+  title_buf[sizeof(title_buf)-1] = '\0';
   lv_label_set_text(lbl_title, title_buf);
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
@@ -10573,6 +10608,7 @@ void showLocationPicker() {
   lv_obj_t *lbl_status = lv_label_create(box);
   char status_buf[48];
   strncpy(status_buf, T(STR_LOCATION_LOADING), sizeof(status_buf)-1);
+  status_buf[sizeof(status_buf)-1] = '\0';
   lv_label_set_text(lbl_status, status_buf);
   lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_status, &lv_font_montserrat_ext_16, 0);
@@ -10596,7 +10632,7 @@ void showLocationPicker() {
 
   // Trigger async HTTP fetch via loop()
   if (!WiFi.isConnected()) {
-    char buf[32]; strncpy(buf, T(STR_LOCATION_NO_WIFI), sizeof(buf)-1);
+    char buf[32]; strncpy(buf, T(STR_LOCATION_NO_WIFI), sizeof(buf)-1); buf[sizeof(buf)-1] = '\0';
     lv_label_set_text(lbl_status, buf);
     return;
   }
@@ -10643,7 +10679,7 @@ void fetchAndFillLocationList() {
   JsonArray locs = doc.as<JsonArray>();
   logSDf("LOC: locs.size()=%d", (int)locs.size());
   if (locs.size() == 0) {
-    char buf[48]; strncpy(buf, T(STR_LOCATION_NO_LOCATIONS), sizeof(buf)-1);
+    char buf[48]; strncpy(buf, T(STR_LOCATION_NO_LOCATIONS), sizeof(buf)-1); buf[sizeof(buf)-1] = '\0';
     lv_label_set_text(loc_status_obj, buf);
     return;
   }
@@ -10664,7 +10700,7 @@ void fetchAndFillLocationList() {
   lv_obj_set_style_shadow_width(btn_none, 0, 0);
   lv_obj_set_style_pad_bottom(btn_none, 4, 0);
   lv_obj_t *lbl_none = lv_label_create(btn_none);
-  char none_buf[48]; strncpy(none_buf, T(STR_LOCATION_NONE), sizeof(none_buf)-1);
+  char none_buf[48]; strncpy(none_buf, T(STR_LOCATION_NONE), sizeof(none_buf)-1); none_buf[sizeof(none_buf)-1] = '\0';
   lv_label_set_text(lbl_none, none_buf);
   lv_obj_set_style_text_color(lbl_none, lv_color_hex(0x8ab0d8), 0);
   lv_obj_set_style_text_font(lbl_none, &lv_font_montserrat_ext_16, 0);
@@ -10752,7 +10788,7 @@ void fetchAndFillLocationList() {
     lv_obj_set_style_pad_all(limit_row, 0, 0);
     lv_obj_clear_flag(limit_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     lv_obj_t *limit_lbl = lv_label_create(limit_row);
-    char limit_buf[64]; strncpy(limit_buf, T(STR_LOCATION_LIMIT_HIT), sizeof(limit_buf)-1);
+    char limit_buf[64]; strncpy(limit_buf, T(STR_LOCATION_LIMIT_HIT), sizeof(limit_buf)-1); limit_buf[sizeof(limit_buf)-1] = '\0';
     lv_label_set_text(limit_lbl, limit_buf);
     lv_obj_set_style_text_color(limit_lbl, lv_color_hex(0xff8080), 0);
     lv_obj_set_style_text_font(limit_lbl, &lv_font_montserrat_ext_12, 0);
@@ -10771,7 +10807,7 @@ void fetchAndFillLocationList() {
   lv_obj_set_style_pad_all(hint_row, 0, 0);
   lv_obj_clear_flag(hint_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
   lv_obj_t *hint_lbl = lv_label_create(hint_row);
-  char hint_buf[64]; strncpy(hint_buf, T(STR_LOCATION_HINT_EMPTY), sizeof(hint_buf)-1);
+  char hint_buf[64]; strncpy(hint_buf, T(STR_LOCATION_HINT_EMPTY), sizeof(hint_buf)-1); hint_buf[sizeof(hint_buf)-1] = '\0';
   lv_label_set_text(hint_lbl, hint_buf);
   lv_obj_set_style_text_color(hint_lbl, lv_color_hex(0xf0b838), 0);
   lv_obj_set_style_text_font(hint_lbl, &lv_font_montserrat_ext_14, 0);
@@ -10872,8 +10908,11 @@ void buildMoreInfoScreen() {
   if (swatch_hex) {
     const char* h = (swatch_hex[0] == '#') ? swatch_hex + 1 : swatch_hex;
     unsigned int r, g, b;
-    sscanf(h, "%02X%02X%02X", &r, &g, &b);
-    lv_obj_set_style_bg_color(swatch, lv_color_hex(((uint32_t)r<<16)|((uint32_t)g<<8)|b), 0);
+    if (sscanf(h, "%02X%02X%02X", &r, &g, &b) == 3) {
+      lv_obj_set_style_bg_color(swatch, lv_color_hex(((uint32_t)r<<16)|((uint32_t)g<<8)|b), 0);
+    } else {
+      lv_obj_set_style_bg_color(swatch, lv_color_hex(0x333333), 0);
+    }
   } else {
     lv_obj_set_style_bg_color(swatch, lv_color_hex(0x333333), 0);
   }
@@ -11036,6 +11075,7 @@ void buildMoreInfoScreen() {
   lv_obj_t *btn_loc_cap = lv_label_create(btn_loc);
   char loc_cap_buf[32];
   strncpy(loc_cap_buf, T(STR_BTN_LOCATION), sizeof(loc_cap_buf)-1);
+  loc_cap_buf[sizeof(loc_cap_buf)-1] = '\0';
   lv_label_set_text(btn_loc_cap, loc_cap_buf);
   lv_obj_set_style_text_color(btn_loc_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(btn_loc_cap, &lv_font_montserrat_ext_12, 0);
@@ -11109,14 +11149,14 @@ void buildMoreInfoScreen() {
       lv_obj_clear_flag(box2, LV_OBJ_FLAG_SCROLLABLE);
 
       lv_obj_t *lbl_t = lv_label_create(box2);
-      char buf_t[48]; strncpy(buf_t, T(STR_UNLINK_TITLE), sizeof(buf_t)-1);
+      char buf_t[48]; strncpy(buf_t, T(STR_UNLINK_TITLE), sizeof(buf_t)-1); buf_t[sizeof(buf_t)-1] = '\0';
       lv_label_set_text(lbl_t, buf_t);
       lv_obj_set_style_text_color(lbl_t, lv_color_hex(0xff8080), 0);
       lv_obj_set_style_text_font(lbl_t, &lv_font_montserrat_ext_18, 0);
       lv_obj_align(lbl_t, LV_ALIGN_TOP_MID, 0, 16);
 
       lv_obj_t *lbl_m = lv_label_create(box2);
-      char buf_m[192]; strncpy(buf_m, T(STR_UNLINK_MSG), sizeof(buf_m)-1);
+      char buf_m[192]; strncpy(buf_m, T(STR_UNLINK_MSG), sizeof(buf_m)-1); buf_m[sizeof(buf_m)-1] = '\0';
       lv_label_set_text(lbl_m, buf_m);
       lv_obj_set_style_text_color(lbl_m, lv_color_hex(0xc8d8f0), 0);
       lv_obj_set_style_text_font(lbl_m, &lv_font_montserrat_ext_14, 0);
@@ -11139,7 +11179,7 @@ void buildMoreInfoScreen() {
         lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e))));
       }, LV_EVENT_CLICKED, NULL);
       lv_obj_t *lbl_no = lv_label_create(btn_no);
-      char buf_no[32]; strncpy(buf_no, T(STR_CANCEL), sizeof(buf_no)-1);
+      char buf_no[32]; strncpy(buf_no, T(STR_CANCEL), sizeof(buf_no)-1); buf_no[sizeof(buf_no)-1] = '\0';
       lv_label_set_text(lbl_no, buf_no);
       lv_obj_set_style_text_color(lbl_no, lv_color_hex(0x4a6fa0), 0);
       lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_14, 0);
@@ -11168,7 +11208,7 @@ void buildMoreInfoScreen() {
         showMainScreen();
       }, LV_EVENT_CLICKED, NULL);
       lv_obj_t *lbl_yes = lv_label_create(btn_yes);
-      char buf_yes[48]; strncpy(buf_yes, T(STR_UNLINK_CONFIRM), sizeof(buf_yes)-1);
+      char buf_yes[48]; strncpy(buf_yes, T(STR_UNLINK_CONFIRM), sizeof(buf_yes)-1); buf_yes[sizeof(buf_yes)-1] = '\0';
       lv_label_set_text(lbl_yes, buf_yes);
       lv_obj_set_style_text_color(lbl_yes, lv_color_hex(0xff8080), 0);
       lv_obj_set_style_text_font(lbl_yes, &lv_font_montserrat_ext_14, 0);
@@ -11176,7 +11216,7 @@ void buildMoreInfoScreen() {
     }, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *lbl_unlink = lv_label_create(btn_unlink);
-    char buf_ul[16]; strncpy(buf_ul, T(STR_UNLINK_BTN), sizeof(buf_ul)-1);
+    char buf_ul[16]; strncpy(buf_ul, T(STR_UNLINK_BTN), sizeof(buf_ul)-1); buf_ul[sizeof(buf_ul)-1] = '\0';
     lv_label_set_text(lbl_unlink, buf_ul);
     lv_obj_set_style_text_color(lbl_unlink, lv_color_hex(0xff8080), 0);
     lv_obj_set_style_text_font(lbl_unlink, &lv_font_montserrat_ext_14, 0);
@@ -11213,9 +11253,10 @@ void updateDisplay() {
     strlen(g_tag.color_hex) > 1 ? g_tag.color_hex : "-");
   if (strlen(g_tag.color_hex) == 7) {
     unsigned int r, g, b;
-    sscanf(g_tag.color_hex + 1, "%02X%02X%02X", &r, &g, &b);
-    uint32_t col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-    lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(col), 0);
+    if (sscanf(g_tag.color_hex + 1, "%02X%02X%02X", &r, &g, &b) == 3) {
+      uint32_t col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+      lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(col), 0);
+    }
   }
 
   // Temp (Zone 3 Row B)
@@ -11223,7 +11264,8 @@ void updateDisplay() {
   if (g_tag.temp_min > 0 && g_tag.temp_max > 0) {
     snprintf(temp_str, sizeof(temp_str), "%d - %d C", g_tag.temp_min, g_tag.temp_max);
   } else {
-    strncpy(temp_str, T(STR_UNKNOWN), sizeof(temp_str));
+    strncpy(temp_str, T(STR_UNKNOWN), sizeof(temp_str)-1);
+    temp_str[sizeof(temp_str)-1] = '\0';
   }
   lv_label_set_text(lbl_temp, temp_str);
 
@@ -11414,6 +11456,7 @@ void wifiConnect() {
   if (lbl_status) {
     char wifi_buf[32];
     strncpy(wifi_buf, T(STR_WIFI_CONNECTING_BOOT), sizeof(wifi_buf)-1);
+    wifi_buf[sizeof(wifi_buf)-1] = '\0';
     lv_label_set_text(lbl_status, wifi_buf);
     lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x5090e0), 0);
     lv_timer_handler();
@@ -11591,9 +11634,10 @@ void querySpoolmanById(int spool_id) {
     String hex = sm_color;
     if (hex.startsWith("#")) hex = hex.substring(1);
     unsigned int r, g, b;
-    sscanf(hex.c_str(), "%02X%02X%02X", &r, &g, &b);
-    uint32_t col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-    lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(col), 0);
+    if (sscanf(hex.c_str(), "%02X%02X%02X", &r, &g, &b) == 3) {
+      uint32_t col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+      lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(col), 0);
+    }
   }
 
   // Update display labels
@@ -11850,10 +11894,11 @@ void querySpoolman(const char* tray_uuid) {
         String hex = sm_color;
         if (hex.startsWith("#")) hex = hex.substring(1);
         unsigned int r, g, b;
-        sscanf(hex.c_str(), "%02X%02X%02X", &r, &g, &b);
-        uint32_t col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-        lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(col), 0);
-        Serial.printf("Color set: #%06X\n", col);
+        if (sscanf(hex.c_str(), "%02X%02X%02X", &r, &g, &b) == 3) {
+          uint32_t col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+          lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(col), 0);
+          Serial.printf("Color set: #%06X\n", col);
+        }
       }
     }
 
@@ -12214,7 +12259,6 @@ void setup() {
   // Note: cleanOldLogs() is deferred until after NTP sync (in wifiConnect)
   initSD();
 
-  I2C_TOUCH.begin(TOUCH_SDA, TOUCH_SCL, 400000);
   tft.init();
   tft.setRotation(1);
   tft.setBrightness(204);
@@ -12264,15 +12308,24 @@ void setup() {
     nau.setGain(NAU7802_GAIN_128);
     nau.setRate(NAU7802_RATE_10SPS);
     delay(300);
-    while (!nau.calibrate(NAU7802_CALMOD_INTERNAL)) {
+    const int CAL_MAX_ATTEMPTS = 30; // ~3s at 100ms/attempt — avoid an infinite boot hang on a flaky/defective load cell
+    int cal_attempts = 0;
+    bool cal_ok = false;
+    while (cal_attempts < CAL_MAX_ATTEMPTS) {
+      if (nau.calibrate(NAU7802_CALMOD_INTERNAL)) { cal_ok = true; break; }
       Serial.print(".");
       delay(100);
-      lv_tick_inc(100);
-      lv_timer_handler();  // keep display alive during calibration
+      lv_timer_handler();  // keep display alive during calibration; tick now runs off millis() (LV_TICK_CUSTOM)
+      cal_attempts++;
     }
-    scale_ready = true;
-    Serial.printf("OK! cal_factor=%.4f  zero_offset=%d\n", cal_factor, zero_offset);
-    logSDf("Scale ready (cal=%.4f zero=%d)", cal_factor, zero_offset);
+    scale_ready = cal_ok;
+    if (cal_ok) {
+      Serial.printf("OK! cal_factor=%.4f  zero_offset=%d\n", cal_factor, zero_offset);
+      logSDf("Scale ready (cal=%.4f zero=%d)", cal_factor, zero_offset);
+    } else {
+      Serial.println("ERROR! NAU7802 calibration timed out");
+      logSD("Scale init FAILED: calibration timed out");
+    }
   } else {
     Serial.println("ERROR! NAU7802 not found (address 0x2A)");
     logSD("Scale init FAILED");
@@ -12307,7 +12360,8 @@ unsigned long last_counter_ms = 0;
 int loop_count = 0;
 
 void loop() {
-  lv_tick_inc(5);
+  // LVGL tick now runs off millis() automatically (LV_TICK_CUSTOM in lv_conf.h) —
+  // no manual lv_tick_inc() needed, so timing stays correct even during long blocking calls.
   lv_timer_handler();
   handlePowerManagement();
 
@@ -12373,6 +12427,7 @@ void loop() {
       link_spools = nullptr;
     }
     link_spool_count = 0;
+    link_spools_capacity = 0;
     // Pump LVGL twice to flush all residual events from the deleted screen
     lv_timer_handler();
     lv_timer_handler();
@@ -12568,7 +12623,8 @@ void loop() {
     updateDisplay();
     if (!id_input_open && strlen(g_tag.tray_uuid) == 32 && strcmp(g_tag.uid_str, spoolman_queried_uid) != 0) {
       querySpoolman(g_tag.tray_uuid);
-      strncpy(spoolman_queried_uid, g_tag.uid_str, sizeof(spoolman_queried_uid));
+      strncpy(spoolman_queried_uid, g_tag.uid_str, sizeof(spoolman_queried_uid)-1);
+      spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';
       if (!sm_found && wifi_ok) {
         link_tag_first_seen_ms = millis();
         link_popup_dismissed = false;
