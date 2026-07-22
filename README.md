@@ -184,3 +184,101 @@ Have a feature request? Post it in the [Discord](https://discord.gg/GzQzGa5pBG) 
 ---
 
 *Not affiliated with Spoolman. Uses the Spoolman REST API.*
+
+
+## Verdrahtungsplan
+
+# Verdrahtung SpoolmanScale (main.cpp)
+
+Board: **WT32-SC01 Plus (ESP32-S3)** — Display, Touch, SD-Karte sind bereits onboard verdrahtet (fest verlötet). Extern angeschlossen sind nur **PN532** und **NAU7802**.
+
+## 1. Display (ST7796, Parallel8-Bus, onboard)
+
+| Signal | GPIO | Funktion |
+|--------|------|----------|
+| WR   | 47 | Write-Strobe |
+| RD   | -1 | nicht verwendet |
+| RS   | 0  | Register-Select (D/C) |
+| D0   | 9  | Datenbus Bit 0 |
+| D1   | 46 | Datenbus Bit 1 |
+| D2   | 3  | Datenbus Bit 2 |
+| D3   | 8  | Datenbus Bit 3 |
+| D4   | 18 | Datenbus Bit 4 |
+| D5   | 17 | Datenbus Bit 5 |
+| D6   | 16 | Datenbus Bit 6 |
+| D7   | 15 | Datenbus Bit 7 |
+| CS   | -1 | nicht verwendet |
+| RST  | 4  | Display-Reset |
+| BUSY | -1 | nicht verwendet |
+| BL   | 45 | Backlight (PWM, Kanal 7, 44,1 kHz) |
+
+Panel: 320×480, invert=true, rgb_order=false
+
+## 2. Touch-Controller (FT5x06/FT6336U, I2C Bus 0, onboard)
+
+| Signal | GPIO | Funktion |
+|--------|------|----------|
+| SDA | 6 | Touch-I2C Data |
+| SCL | 5 | Touch-I2C Clock |
+| INT | 7 | Interrupt / Wake-Up |
+
+I2C-Adresse: 0x38, 400 kHz. Wird direkt von LovyanGFX verwaltet (`LGFX::_touch`-Konfiguration, `cfg.i2c_port=0`), kein eigenes `TwoWire`-Objekt dafür.
+
+## 3. SD-Karte (SPI/HSPI, onboard)
+
+| Signal | GPIO | Funktion |
+|--------|------|----------|
+| CS   | 41 | Chip-Select |
+| SCK  | 39 | Clock (CLK) |
+| MOSI | 40 | CMD |
+| MISO | 38 | D0 |
+
+Eigener SPI-Bus (`spiSD`, HSPI) — kein Konflikt mit dem Display-Parallel-Bus.
+
+## 4. PN532 (NFC-Reader, extern, I2C-Modus)
+
+| PN532-Pin | Ziel | Funktion |
+|-----------|------|----------|
+| VCC (Pin 1) | +5V | Versorgung |
+| GND (Pin 2) | GND | Masse |
+| SDA (Pin 3) | GPIO 10 | I2C Data (Bus `I2C_EXT`) |
+| SCL (Pin 4) | GPIO 11 | I2C Clock (Bus `I2C_EXT`) |
+| RST (Pin 5) | GPIO 12 | Reset |
+
+**DIP-Schalter PN532:** SW1=ON, SW2=OFF → I2C-Modus
+
+IRQ-Pin ist **nicht verdrahtet** (`Adafruit_PN532 nfc(-1, 12, &I2C_EXT)` → IRQ=-1)
+
+## 5. NAU7802 (Wägezellen-ADC, extern, I2C)
+
+| Signal | GPIO | Funktion |
+|--------|------|----------|
+| SDA | 10 | I2C Data (Bus `I2C_EXT`, gemeinsam mit PN532) |
+| SCL | 11 | I2C Clock (Bus `I2C_EXT`, gemeinsam mit PN532) |
+
+I2C-Adresse: 0x2A. NAU7802 und PN532 teilen sich denselben externen I2C-Bus (`I2C_EXT`, `TwoWire(1)`), GPIO10/11.
+
+## Übersicht I2C-Busse
+
+| Bus-Objekt | SDA | SCL | Geräte |
+|------------|-----|-----|--------|
+| Touch (LovyanGFX-intern, Bus 0) | GPIO 6 | GPIO 5 | Touch-Controller (onboard) |
+| `I2C_EXT` (Bus 1) | GPIO 10 | GPIO 11 | PN532 (0x24), NAU7802 (0x2A) — extern |
+
+## Extended-IO-Stecker (offizielle Wireless-Tag-Pinbelegung)
+
+Quelle: WT32-SC01-Plus-Datasheet (Wireless-Tag/Smart Panlee), Tabelle "Extended IO Interface" — am Board mit "扩展IO接口 / Extended IO Interface" beschriftet.
+
+| Pin | Bezeichnung | GPIO | Aderfarbe (dieses Kabel) | Verwendung |
+|-----|-------------|------|--------------------------|------------|
+| 1 | +5V | – | – | Stromversorgung PN532 + NAU7802 |
+| 2 | GND | – | – | Masse PN532 + NAU7802 |
+| 3 | EXT_IO1 | GPIO 10 | gelb | I2C SDA (`I2C_EXT`) |
+| 4 | EXT_IO2 | GPIO 11 | grün | I2C SCL (`I2C_EXT`) |
+| 5 | EXT_IO3 | GPIO 12 | blau | PN532 RST |
+| 6 | EXT_IO4 | GPIO 13 | weiß | nicht genutzt |
+| 7 | EXT_IO5 | GPIO 14 | braun | nicht genutzt |
+| 8 | EXT_IO6 | GPIO 21 | – | nicht genutzt |
+
+**Hinweis:** Die einzige tatsächliche externe Verkabelung im Aufbau betrifft den PN532 (5 Adern: VCC, GND, SDA, SCL, RST auf GPIO10/11/12). Die NAU7802-Wägezelle hängt am selben `I2C_EXT`-Bus (GPIO10/11), eine feste Ladezellen-Verkabelung (E+/E-/A+/A-) ist im Code nicht ersichtlich (steckt im NAU7802-Breakout selbst).
+
