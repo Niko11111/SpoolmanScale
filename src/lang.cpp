@@ -539,4 +539,12 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Rot-Schwellwert",               "Red threshold"                      },  // STR_DRY_NUMPAD_RED_TITLE
   { "Effektive Werte (%.1fx Multiplikator eingerechnet)", "Effective values (%.1fx multiplier included)" },  // STR_DRY_MAT_EFF_NOTE
   { "Versiegelt",                    "Sealed"                             },  // STR_DRY_SEALED_HDR
+
+  { "Waage - Spule",                 "Scale - Spool"                      },  // STR_LBL_SCALE_SPOOL_CAP
+  { "Gesamt:",                       "Total:"                             },  // STR_LBL_TOTAL_CAP
+  { "o. Beutel:",                    "w/o Bag:"                           },  // STR_LBL_WO_BAG_CAP
+  { "Farbe",                         "Hex Color"                          },  // STR_LBL_HEX_COLOR
+  { "Produktionsdatum",              "Production date"                    },  // STR_LBL_PRODUCTION_DATE
+  { "Artikelnr.",                    "Article no."                        },  // STR_LBL_ARTICLE_NO_SHORT
+  { "Leergewicht Spule",             "Spool weight (empty)"               },  // STR_LBL_SPOOL_WEIGHT_EMPTY
 };

@@ -628,6 +628,7 @@ static int  s_dry_numpad_value  = 0;
 static lv_obj_t* s_dry_numpad_scr = nullptr;  // Numpad-Screen fuer Drying Manual
 static lv_obj_t* s_dry_numpad_lbl = nullptr;  // Wert-Anzeige im Numpad
 lv_obj_t *lbl_nfc_dot;            // Status dot before status line (green/yellow)
+lv_obj_t *lbl_hdr_name = nullptr; // Header: Name+Version (+ IP sobald WiFi verbunden)
 lv_obj_t *lbl_hdr_wifi;          // Header: WiFi-Symbol (Farbe je RSSI)
 lv_obj_t *lbl_hdr_nfc;           // Header: NFC status (green/red)
 lv_obj_t *lbl_hdr_scl = nullptr; // Header: Scale/NAU7802 status (green/red)
@@ -3566,12 +3567,12 @@ void buildConnectionScreen() {
 void updateLastUsedCapLabel() {
   if (!lbl_lu_cap) return;
   char buf[32];
-  if (last_used_mode == 1)
-    strncpy(buf, g_lang == LANG_DE ? "Zuletzt gewogen:" : "Last weighed:", sizeof(buf)-1);
-  else
+  if (last_used_mode == 1) {
+    snprintf(buf, sizeof(buf), "%s:", T(STR_LASTUSED_OPT_WEIGHED));
+  } else {
     strncpy(buf, T(STR_LBL_LAST_USED), sizeof(buf)-1);
     buf[sizeof(buf)-1] = '\0';
-  buf[sizeof(buf)-1] = 0;
+  }
   lv_label_set_text(lbl_lu_cap, buf);
 }
 
@@ -8922,7 +8923,7 @@ void showConfirmPopup(const char* msg, int action) {
           logSD("Auto-Weight: aktiviert");
           if (lbl_weight_main_lbl) {
             char wmbuf[48];
-            snprintf(wmbuf, sizeof(wmbuf), "%s (A)", g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight");
+            snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
             lv_label_set_text(lbl_weight_main_lbl, wmbuf);
             lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x28d49a), 0);
           }
@@ -9074,6 +9075,19 @@ void updateHeaderStatus() {
   // WiFi-Symbol: Farbe je nach Verbindung + RSSI
   lv_obj_set_style_text_color(lbl_hdr_wifi, wifiColor(), 0);
 
+  // Name+Version — IP-Adresse anhaengen sobald WiFi verbunden
+  if (lbl_hdr_name) {
+    char name_buf[64];
+    if (wifi_ok) {
+      snprintf(name_buf, sizeof(name_buf), "SpoolmanScale " FW_VERSION "  %s",
+               WiFi.localIP().toString().c_str());
+    } else {
+      strncpy(name_buf, "SpoolmanScale " FW_VERSION, sizeof(name_buf)-1);
+      name_buf[sizeof(name_buf)-1] = '\0';
+    }
+    lv_label_set_text(lbl_hdr_name, name_buf);
+  }
+
   // NFC: green if OK, red if error
   if (lbl_hdr_nfc) {
     lv_label_set_text(lbl_hdr_nfc, nfc_ok ? "NFC" : "NFC!");
@@ -9124,11 +9138,11 @@ void buildUI() {
   lv_obj_set_style_pad_all(hdr, 0, 0);
   lv_obj_clear_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
 
-  lv_obj_t *hdr_lbl = lv_label_create(hdr);
-  lv_label_set_text(hdr_lbl, "SpoolmanScale " FW_VERSION);
-  lv_obj_set_style_text_color(hdr_lbl, lv_color_hex(0x2a4060), 0);
-  lv_obj_set_style_text_font(hdr_lbl, &lv_font_montserrat_ext_12, 0);
-  lv_obj_align(hdr_lbl, LV_ALIGN_LEFT_MID, 6, 0);
+  lbl_hdr_name = lv_label_create(hdr);
+  lv_label_set_text(lbl_hdr_name, "SpoolmanScale " FW_VERSION);
+  lv_obj_set_style_text_color(lbl_hdr_name, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_font(lbl_hdr_name, &lv_font_montserrat_ext_12, 0);
+  lv_obj_align(lbl_hdr_name, LV_ALIGN_LEFT_MID, 6, 0);
 
   // SD card indicator in header — only visible when sd_available
   lv_obj_t *lbl_sd_hdr = lv_label_create(hdr);
@@ -9312,7 +9326,7 @@ void buildUI() {
   lv_obj_set_style_shadow_width(btn_more, 0, 0);
   lv_obj_add_event_cb(btn_more, [](lv_event_t *e){ logSD("BTN: Main -> MoreInfo"); showMoreInfoScreen(); }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_more = lv_label_create(btn_more);
-  lv_label_set_text(lbl_more, g_lang == LANG_DE ? "Mehr Info" : "More info");
+  lv_label_set_text(lbl_more, T(STR_BTN_MORE_INFO));
   lv_obj_set_style_text_color(lbl_more, lv_color_hex(0x28d49a), 0);  // teal text
   lv_obj_set_style_text_font(lbl_more, &lv_font_montserrat_ext_12, 0);
   lv_obj_center(lbl_more);
@@ -9330,13 +9344,12 @@ void buildUI() {
   lbl_lu_cap = lv_label_create(lv_scr_act());
   // Cap text depends on last_used_mode
   char lu_cap_buf[32];
-  if (last_used_mode == 1)
-    strncpy(lu_cap_buf, g_lang == LANG_DE ? "Zuletzt gewogen:" : "Last weighed:", sizeof(lu_cap_buf)-1);
-  else {
+  if (last_used_mode == 1) {
+    snprintf(lu_cap_buf, sizeof(lu_cap_buf), "%s:", T(STR_LASTUSED_OPT_WEIGHED));
+  } else {
     strncpy(lu_cap_buf, T(STR_LBL_LAST_USED), sizeof(lu_cap_buf)-1);
     lu_cap_buf[sizeof(lu_cap_buf)-1] = '\0';
   }
-  lu_cap_buf[sizeof(lu_cap_buf)-1] = 0;
   lv_label_set_text(lbl_lu_cap, lu_cap_buf);
   lv_obj_set_style_text_color(lbl_lu_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_lu_cap, &lv_font_montserrat_ext_14, 0);  // Fix 5
@@ -9456,7 +9469,7 @@ void buildUI() {
 
   // Scale filament netto caption — Fix 3: "Waage - Spule" / "Scale - Spool"
   lv_obj_t *lbl_sc_cap = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_sc_cap, g_lang == LANG_DE ? "Waage - Spule" : "Scale - Spool");
+  lv_label_set_text(lbl_sc_cap, T(STR_LBL_SCALE_SPOOL_CAP));
   lv_obj_set_style_text_color(lbl_sc_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_sc_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(lbl_sc_cap, 218, 188);
@@ -9483,7 +9496,7 @@ void buildUI() {
 
   // Fix 1: "Gesamt" / "Total" — Fix 4: value x same as o.Beutel value
   lv_obj_t *lbl_live_cap = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_live_cap, g_lang == LANG_DE ? "Gesamt:" : "Total:");
+  lv_label_set_text(lbl_live_cap, T(STR_LBL_TOTAL_CAP));
   lv_obj_set_style_text_color(lbl_live_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_live_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(lbl_live_cap, 218, 228);
@@ -9496,7 +9509,7 @@ void buildUI() {
 
   // Fix 2: "o. Beutel" / "w/o Bag"
   lv_obj_t *lbl_bag_cap = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_bag_cap, g_lang == LANG_DE ? "o. Beutel:" : "w/o Bag:");
+  lv_label_set_text(lbl_bag_cap, T(STR_LBL_WO_BAG_CAP));
   lv_obj_set_style_text_color(lbl_bag_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_bag_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(lbl_bag_cap, 218, 246);
@@ -9601,7 +9614,7 @@ void buildUI() {
   {
     char wmbuf[48];
     if (g_auto_weight)
-      snprintf(wmbuf, sizeof(wmbuf), "%s (A)", g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight");
+      snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
     else {
       strncpy(wmbuf, T(STR_BTN_WEIGHT), sizeof(wmbuf)-1);
       wmbuf[sizeof(wmbuf)-1] = '\0';
@@ -10983,7 +10996,7 @@ void buildMoreInfoScreen() {
   const int VF = 18; // gap from cap to value
 
   // Row 1 Left: Fix 11 — Hex Color / Color — Fix 6: larger
-  const char *hex_cap = g_lang == LANG_DE ? "Farbe" : "Hex Color";
+  const char *hex_cap = T(STR_LBL_HEX_COLOR);
   lv_obj_t *c1 = lv_label_create(box);
   lv_label_set_text(c1, hex_cap);
   lv_obj_set_style_text_color(c1, lv_color_hex(0x4a6fa0), 0);
@@ -10998,7 +11011,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_pos(v1, CA, 114 + VF);
 
   // Row 1 Right: Production date — Fix 6
-  const char *prod_cap = g_lang == LANG_DE ? "Produktionsdatum" : "Production date";
+  const char *prod_cap = T(STR_LBL_PRODUCTION_DATE);
   lv_obj_t *c2 = lv_label_create(box);
   lv_label_set_text(c2, prod_cap);
   lv_obj_set_style_text_color(c2, lv_color_hex(0x4a6fa0), 0);
@@ -11011,7 +11024,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_pos(v2, CB, 114 + VF);
 
   // Row 2 Left: Article no. — Fix 6: larger — Fix 2: more space (y=160)
-  const char *art_cap = g_lang == LANG_DE ? "Artikelnr." : "Article no.";
+  const char *art_cap = T(STR_LBL_ARTICLE_NO_SHORT);
   lv_obj_t *c3 = lv_label_create(box);
   lv_label_set_text(c3, art_cap);
   lv_obj_set_style_text_color(c3, lv_color_hex(0x4a6fa0), 0);
@@ -11024,7 +11037,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_pos(v3, CA, 158 + VF);
 
   // Row 2 Right: Spool weight (empty)
-  const char *sw_cap = g_lang == LANG_DE ? "Leergewicht Spule" : "Spool weight (empty)";
+  const char *sw_cap = T(STR_LBL_SPOOL_WEIGHT_EMPTY);
   lv_obj_t *c4 = lv_label_create(box);
   lv_label_set_text(c4, sw_cap);
   lv_obj_set_style_text_color(c4, lv_color_hex(0x4a6fa0), 0);
@@ -12746,8 +12759,7 @@ void loop() {
       aw_last_shown_s = -1;
       if (lbl_weight_main_lbl) {
         char wmbuf[48];
-        snprintf(wmbuf, sizeof(wmbuf), "%s (A)",
-          g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight");
+        snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
         lv_label_set_text(lbl_weight_main_lbl, wmbuf);
         lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x28d49a), 0);
       }
@@ -12772,8 +12784,7 @@ void loop() {
         // Haekchen im Button — bleibt bis Spule abgenommen wird
         if (lbl_weight_main_lbl) {
           char wmbuf[48];
-          snprintf(wmbuf, sizeof(wmbuf), "%s " LV_SYMBOL_OK,
-            g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight");
+          snprintf(wmbuf, sizeof(wmbuf), "%s " LV_SYMBOL_OK, T(STR_BTN_WEIGHT));
           lv_label_set_text(lbl_weight_main_lbl, wmbuf);
           lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x40ff80), 0);
         }
@@ -12789,8 +12800,7 @@ void loop() {
         if (rem != aw_last_shown_s && lbl_weight_main_lbl) {
           aw_last_shown_s = rem;
           char wmbuf[48];
-          snprintf(wmbuf, sizeof(wmbuf), "%s %ds",
-            g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight", rem);
+          snprintf(wmbuf, sizeof(wmbuf), "%s %ds", T(STR_BTN_WEIGHT), rem);
           lv_label_set_text(lbl_weight_main_lbl, wmbuf);
           lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x60f0c0), 0);
         }
@@ -12805,8 +12815,7 @@ void loop() {
       if (aw_last_shown_s != 0 && lbl_weight_main_lbl) {
         aw_last_shown_s = 0;
         char wmbuf[48];
-        snprintf(wmbuf, sizeof(wmbuf), "%s (A)",
-          g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight");
+        snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
         lv_label_set_text(lbl_weight_main_lbl, wmbuf);
         lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x28d49a), 0);
       }

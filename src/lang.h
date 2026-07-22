@@ -449,6 +449,15 @@ enum StringID {
   STR_DRY_MAT_EFF_NOTE,
   STR_DRY_SEALED_HDR,
 
+  // Mainscreen detail box labels (Fix 11 grid + scale/total/bag captions)
+  STR_LBL_SCALE_SPOOL_CAP,
+  STR_LBL_TOTAL_CAP,
+  STR_LBL_WO_BAG_CAP,
+  STR_LBL_HEX_COLOR,
+  STR_LBL_PRODUCTION_DATE,
+  STR_LBL_ARTICLE_NO_SHORT,
+  STR_LBL_SPOOL_WEIGHT_EMPTY,
+
   STR_COUNT
 };
 
