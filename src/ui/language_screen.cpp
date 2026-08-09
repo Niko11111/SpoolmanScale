@@ -1,4 +1,5 @@
 #include "language_screen.h"
+#include "navigation.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -8,7 +9,6 @@
 #include "services/prefs_store.h"
 #include "reboot_popup.h"
 
-void showMainScreen();
 
 void showLanguageScreen() {
   logSD("SHOW: LanguageScreen");

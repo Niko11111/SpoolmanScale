@@ -1,4 +1,5 @@
 #include "bambu_scan.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <cstring>
@@ -9,9 +10,6 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 
-extern BambuTagData g_tag;
-extern bool g_tag_ready;
-extern lv_obj_t *lbl_status;
 
 static bool readSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blocks[4][16]) {
   return nfcReadMifareSector(sector, key, uid, blocks);

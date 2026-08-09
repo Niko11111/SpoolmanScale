@@ -1,0 +1,606 @@
+#include "app_loop.h"
+
+#include <Arduino.h>
+#include <Wire.h>
+#include <lvgl.h>
+#include <cmath>
+#include <cstring>
+
+#include "app_config.h"
+#include "app/app_boot.h"
+#include "app/app_state.h"
+#include "app/deferred_actions.h"
+#include "bambu/bambu_scan.h"
+#include "bambu/bambu_tag.h"
+#include "hardware/display_power.h"
+#include "hardware/nfc.h"
+#include "hardware/scale.h"
+#include "hardware/sd_logger.h"
+#include "hardware/spoolscale_tag.h"
+#include "services/auto_weight_state.h"
+#include "services/location_state.h"
+#include "services/ota_web_server.h"
+#include "services/spoolman_actions.h"
+#include "services/spoolman_api.h"
+#include "ui/bag_screen.h"
+#include "ui/cal_reminder_screen.h"
+#include "ui/confirm_popup.h"
+#include "ui/connection_screen.h"
+#include "ui/drying_reminder_screen.h"
+#include "ui/extra_fields_screen.h"
+#include "ui/factor_screen.h"
+#include "ui/header_status.h"
+#include "ui/info_screen.h"
+#include "ui/last_used_screen.h"
+#include "ui/main_screen.h"
+#include "ui/main_screen_helpers.h"
+#include "ui/more_info_screen.h"
+#include "ui/navigation.h"
+#include "ui/ota_menu.h"
+#include "ui/scale_menu.h"
+#include "ui/settings_screen.h"
+#include "ui/setup_welcome_screen.h"
+#include "ui/spool_flow.h"
+#include "ui/spoolman_lookup.h"
+#include "ui/spoolman_screen.h"
+#include "ui/system_screen.h"
+#include "ui/tag_display.h"
+#include "ui/weight_format.h"
+#include "lang.h"
+
+namespace {
+constexpr unsigned long NO_TAG_CLEAR_MS = 60000;
+constexpr int NFC_MAX_RETRIES = 5;
+}
+
+static unsigned long tare_msg_ms = 0;
+lv_obj_t *lbl_ok_ptr = nullptr;
+
+static unsigned long last_tag_seen_ms = 0;    // last NFC detection
+static unsigned long last_scale_ms = 0;
+static int  loc_popup_pending_id = -1;              // debounced popup: sm_id scheduled, fires after 1500ms
+
+void appLoop() {
+  lv_tick_inc(5);
+  lv_timer_handler();
+  handlePowerManagement();
+
+  // ── Loop heartbeat (every 5s, verbose only) ──────────────
+  // Helps diagnose freezes: last heartbeat timestamp = roughly when loop stopped
+  static unsigned long last_heartbeat_ms = 0;
+  static uint32_t heartbeat_count = 0;
+  if (sd_verbose && millis() - last_heartbeat_ms >= 5000) {
+    last_heartbeat_ms = millis();
+    heartbeat_count++;
+    logSDf("[verbose] heartbeat #%u heap=%d PSRAM=%d uptime=%lus",
+      heartbeat_count, ESP.getFreeHeap(), ESP.getFreePsram(), millis() / 1000);
+  }
+
+  // OTA web server bedienen wenn aktiv
+  handleOtaServerClient();
+
+  // Silent background OTA auto-check disabled
+
+  // Extra fields check/create — deferred from LVGL event callback to loop
+  handleExtraFieldsDeferredActions();
+  if (cal_reminder_pending) {
+    cal_reminder_pending = false;
+    showCalReminderScreen();
+  }
+  handleSpoolFlowDeferredActions();
+  if (show_bag_pending) {
+    show_bag_pending = false;
+    if (!scr_bag) buildBagScreen();
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_bag, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_factor_pending) {
+    show_factor_pending = false;
+    showFactorScreen();
+  }
+  if (show_drying_reminder_pending) {
+    show_drying_reminder_pending = false;
+    showDryingReminderScreen();
+    lv_obj_clear_flag(scr_drying_reminder, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_lastused_pending) {
+    show_lastused_pending = false;
+    // Always rebuild for fresh button states (active mode highlighting)
+    if (scr_lastused) { lv_obj_del(scr_lastused); scr_lastused = nullptr; }
+    buildLastUsedScreen();
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_lastused, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_spoolman_pending) {
+    show_spoolman_pending = false;
+    // Always rebuild — sp_ip_input is reset on entry
+    if (scr_spoolman) { lv_obj_del(scr_spoolman); scr_spoolman = nullptr; }
+    if (scr_spoolman_fail) { lv_obj_del(scr_spoolman_fail); scr_spoolman_fail = nullptr; }
+    buildSpoolmanScreen();
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_spoolman, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_connection_from_spoolman_pending) {
+    show_connection_from_spoolman_pending = false;
+    if (scr_spoolman)   { lv_obj_del(scr_spoolman);   scr_spoolman   = nullptr; }
+    if (scr_connection) { lv_obj_del(scr_connection); scr_connection = nullptr; }
+    buildConnectionScreen();
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_ota_pending) {
+    show_ota_pending = false;
+    if (scr_ota) { lv_obj_del(scr_ota); scr_ota = nullptr; }
+    buildOtaScreen();
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_ota, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_info_pending) {
+    show_info_pending = false;
+    if (scr_info) { lv_obj_del(scr_info); scr_info = nullptr; }
+    showInfoScreen();  // builds + shows scr_info
+  }
+  handleMoreInfoDeferredActions();
+  // Debounced auto-location popup — fires 2500ms after tag removal, only if tag still absent
+  if (loc_popup_pending_id > 0 && !tag_present && (millis() - last_tag_seen_ms) >= 2500) {
+    int pending_id = loc_popup_pending_id;
+    loc_popup_pending_id = -1;
+    if (g_loc_popup_shown_for_id != pending_id && sm_id == pending_id) {
+      logSDf("[verbose] LOC: debounce fired, showing popup id=%d", pending_id);
+      g_loc_popup_shown_for_id = pending_id;
+      requestLocationPicker(true);
+    } else {
+      logSDf("[verbose] LOC: debounce cancelled id=%d shown_for=%d sm_id=%d", pending_id, g_loc_popup_shown_for_id, sm_id);
+    }
+  }
+  // Cancel pending popup if tag came back
+  if (loc_popup_pending_id > 0 && tag_present) {
+    logSDf("[verbose] LOC: debounce cancelled — tag back id=%d", loc_popup_pending_id);
+    loc_popup_pending_id = -1;
+  }
+  if (show_system_pending) {
+    show_system_pending = false;
+    // Coming back from OTA / Info / Language to System screen
+    if (scr_ota)         { lv_obj_del(scr_ota);         scr_ota         = nullptr; }
+    if (scr_ota_browser) { lv_obj_del(scr_ota_browser); scr_ota_browser = nullptr; }
+    if (scr_ota_github)  { lv_obj_del(scr_ota_github);  scr_ota_github  = nullptr; }
+    if (scr_info)        { lv_obj_del(scr_info);        scr_info        = nullptr; }
+    if (scr_system)      { lv_obj_del(scr_system);      scr_system      = nullptr; }
+    buildSystemScreen();
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_system, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (skip_setup_pending) {
+    skip_setup_pending = false;
+    if (scr_welcome)    { lv_obj_del(scr_welcome);    scr_welcome    = nullptr; }
+    if (scr_first_boot) { lv_obj_del(scr_first_boot); scr_first_boot = nullptr; }
+    showMainScreen();
+  }
+  if (lang_selected_no_reboot) {
+    lang_selected_no_reboot = false;
+    if (scr_welcome) { lv_obj_del(scr_welcome); scr_welcome = nullptr; }
+    showFirstBootScreen();
+  }
+  // Hide tare confirmation
+  if (tare_msg_ms > 0 && millis() - tare_msg_ms > 800) {
+    if (lbl_ok_ptr) { lv_obj_del(lbl_ok_ptr); lbl_ok_ptr = nullptr; }
+    tare_msg_ms = 0;
+  }
+
+  // No-tag timer: clear display if no tag detected for too long
+  // Only clear if truly no tag present (tag_present=false)
+  if (!tag_present && sm_found &&
+      last_tag_seen_ms > 0 && millis() - last_tag_seen_ms > NO_TAG_CLEAR_MS) {
+    clearTagDisplay();
+    last_tag_seen_ms = 0;
+    spoolman_queried_uid[0] = '\0';
+  }
+
+  // Fill display with new tag data
+  if (g_tag_ready) {
+    g_tag_ready = false;
+    g_tag_displayed = true;
+    g_tag_shown_ms = millis();
+    updateDisplay();
+    if (!isSpoolFlowIdInputOpen() && strlen(g_tag.tray_uuid) == 32 && strcmp(g_tag.uid_str, spoolman_queried_uid) != 0) {
+      querySpoolman(g_tag.tray_uuid);
+      strncpy(spoolman_queried_uid, g_tag.uid_str, sizeof(spoolman_queried_uid));
+      if (!sm_found && wifi_ok) {
+        link_tag_first_seen_ms = millis();
+        link_popup_dismissed = false;
+      }
+    }
+  }
+
+  // After 10s reset status line to "searching" (data stays visible!)
+  if (g_tag_displayed && millis() - g_tag_shown_ms > 10000) {
+    g_tag_displayed = false;
+    lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
+    lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);  // yellow
+    lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
+    lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+  }
+
+  // NAU7802: read weight every 200ms and update labels
+  if (scale_ready && millis() - last_scale_ms >= 200) {
+    last_scale_ms = millis();
+    int32_t raw = scaleHardwareReadRaw();
+    float raw_g = (float)(raw - zero_offset) / cal_factor;
+
+    // Moving average over SCALE_FILTER_SIZE readings
+    scale_filter_buf[scale_filter_idx] = raw_g;
+    scale_filter_idx = (scale_filter_idx + 1) % SCALE_FILTER_SIZE;
+    if (scale_filter_idx == 0) scale_filter_full = true;
+    int count = scale_filter_full ? SCALE_FILTER_SIZE : scale_filter_idx;
+    float sum = 0;
+    for (int i = 0; i < count; i++) sum += scale_filter_buf[i];
+    scale_weight_g = sum / count;
+
+    char w_str[16];
+    // Fix 4: show filament netto (without spool) as big scale value
+    if (sm_spool_weight > 0) {
+      float netto = scale_weight_g - sm_spool_weight;
+      if (netto < 0) netto = 0;
+      fmtG(w_str, sizeof(w_str), netto);
+    } else {
+      fmtG(w_str, sizeof(w_str), scale_weight_g);
+    }
+    lv_label_set_text(lbl_scale_weight, w_str);
+    // Also update live weight in calibration screen if open
+    if (lbl_factor_cal_weight && scr_factor && !lv_obj_has_flag(scr_factor, LV_OBJ_FLAG_HIDDEN)) {
+      char cal_str[16];
+      fmtG(cal_str, sizeof(cal_str), scale_weight_g);  // Fix 6: raw weight
+      lv_label_set_text(lbl_factor_cal_weight, cal_str);
+    }
+
+    // Fix 4: update live/bag below, SM diff next to netto
+    if (sm_found && sm_spool_weight > 0) {
+      float netto = scale_weight_g - sm_spool_weight;
+      if (netto < 0) netto = 0;
+
+      // SM diff: filament netto vs Spoolman remaining
+      if (lbl_raw_info && sm_remaining > 0) {
+        float sm_diff = netto - sm_remaining;
+        char sd_str[16];
+        snprintf(sd_str, sizeof(sd_str), sm_diff >= 0 ? "+%.0f g" : "%.0f g", sm_diff);
+        lv_label_set_text(lbl_raw_info, sd_str);
+        lv_obj_set_style_text_color(lbl_raw_info,
+          sm_diff >= 0 ? lv_color_hex(0x40c080) : lv_color_hex(0xe04040), 0);
+      }
+
+      // Live total (with spool)
+      if (lbl_spoolman_dried) {
+        char lt_str[16];
+        fmtG(lt_str, sizeof(lt_str), scale_weight_g);
+        lv_label_set_text(lbl_spoolman_dried, lt_str);
+        lv_obj_set_style_text_color(lbl_spoolman_dried, lv_color_hex(0x8ab0d8), 0);
+      }
+
+      // Fix 4: ohne Beutel = live - spool - bag; fixed color like scale netto; diff green/red
+      if (lbl_keys) {
+        float ohne_beutel = scale_weight_g - sm_spool_weight - bag_weight_g;
+        if (ohne_beutel < 0) ohne_beutel = 0;
+        char b_str[16];
+        fmtG(b_str, sizeof(b_str), ohne_beutel);
+        lv_label_set_text(lbl_keys, b_str);
+        lv_obj_set_style_text_color(lbl_keys, lv_color_hex(0xf0b838), 0);  // same as scale netto
+
+        // bag SM diff
+        if (lbl_bag_sm_diff && sm_remaining > 0) {
+          float bag_diff = ohne_beutel - sm_remaining;
+          char bd_str[16];
+          snprintf(bd_str, sizeof(bd_str), bag_diff >= 0 ? "+%.0f g" : "%.0f g", bag_diff);
+          lv_label_set_text(lbl_bag_sm_diff, bd_str);
+          lv_obj_set_style_text_color(lbl_bag_sm_diff,
+            bag_diff >= 0 ? lv_color_hex(0x40c080) : lv_color_hex(0xe04040), 0);
+        }
+      }
+    } else if (sm_found) {
+      if (lbl_raw_info) lv_label_set_text(lbl_raw_info, "");
+      if (lbl_bag_sm_diff) lv_label_set_text(lbl_bag_sm_diff, "");
+      if (lbl_spoolman_dried) {
+        char lt_str[16];
+        fmtG(lt_str, sizeof(lt_str), scale_weight_g);
+        lv_label_set_text(lbl_spoolman_dried, lt_str);
+      }
+      if (lbl_keys) lv_label_set_text(lbl_keys, "");
+    } else {
+      if (lbl_raw_info) lv_label_set_text(lbl_raw_info, "");
+      if (lbl_bag_sm_diff) lv_label_set_text(lbl_bag_sm_diff, "");
+      if (lbl_spoolman_dried) lv_label_set_text(lbl_spoolman_dried, "");
+      if (lbl_keys) lv_label_set_text(lbl_keys, "");
+    }
+  }
+
+  // aw_done: einmal gespeichert -> kein weiterer Patch bis Spule abgenommen
+  if (g_auto_weight) {
+    static int  aw_last_shown_s = -1;  // verhindert unnoetige Label-Updates
+    static bool aw_done = false;       // diese Spule bereits gespeichert?
+
+    // Spule abgenommen -> Reset fuer naechste Spule
+    if (!tag_present && aw_done) {
+      aw_done = false;
+      auto_weight_stable_ms = 0;
+      auto_weight_last_val = -9999.0f;
+      aw_last_shown_s = -1;
+      if (lbl_weight_main_lbl) {
+        char wmbuf[48];
+        snprintf(wmbuf, sizeof(wmbuf), "%s (A)",
+          g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight");
+        lv_label_set_text(lbl_weight_main_lbl, wmbuf);
+        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x28d49a), 0);
+      }
+    }
+
+    if (!aw_done && !isConfirmPopupOpen() && sm_found && sm_id > 0 && scale_ready && tag_present) {
+      float cur = scale_weight_g;
+      if (fabsf(cur - auto_weight_last_val) > AUTO_WEIGHT_THRESH_G) {
+        // Gewicht bewegt sich -> Timer neu starten
+        auto_weight_last_val = cur;
+        auto_weight_stable_ms = millis();
+        aw_last_shown_s = -1;
+      } else if (auto_weight_stable_ms > 0 &&
+                 millis() - auto_weight_stable_ms >= AUTO_WEIGHT_STABLE_MS) {
+        // 3 Sekunden stabil -> einmalig speichern
+        aw_done = true;
+        auto_weight_stable_ms = 0;
+        aw_last_shown_s = -1;
+        float netto = cur - (float)sm_spool_weight;
+        if (netto < 0) netto = 0;
+        // Haekchen im Button — bleibt bis Spule abgenommen wird
+        if (lbl_weight_main_lbl) {
+          char wmbuf[48];
+          snprintf(wmbuf, sizeof(wmbuf), "%s " LV_SYMBOL_OK,
+            g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight");
+          lv_label_set_text(lbl_weight_main_lbl, wmbuf);
+          lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x40ff80), 0);
+        }
+        patchSpoolmanWeight(netto);
+      } else if (auto_weight_stable_ms == 0) {
+        auto_weight_last_val = cur;
+        auto_weight_stable_ms = millis();
+      } else {
+        // Countdown: sekuendlich Button-Text aktualisieren
+        unsigned long elapsed = millis() - auto_weight_stable_ms;
+        int rem = (int)((AUTO_WEIGHT_STABLE_MS - elapsed) / 1000) + 1;
+        if (rem < 1) rem = 1;
+        if (rem != aw_last_shown_s && lbl_weight_main_lbl) {
+          aw_last_shown_s = rem;
+          char wmbuf[48];
+          snprintf(wmbuf, sizeof(wmbuf), "%s %ds",
+            g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight", rem);
+          lv_label_set_text(lbl_weight_main_lbl, wmbuf);
+          lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x60f0c0), 0);
+        }
+      }
+    } else if (!aw_done && !tag_present) {
+      // Kein Tag, kein Countdown -> Idle-Text "(A)"
+      if (auto_weight_stable_ms > 0) {
+        auto_weight_stable_ms = 0;
+        auto_weight_last_val = -9999.0f;
+        aw_last_shown_s = -1;
+      }
+      if (aw_last_shown_s != 0 && lbl_weight_main_lbl) {
+        aw_last_shown_s = 0;
+        char wmbuf[48];
+        snprintf(wmbuf, sizeof(wmbuf), "%s (A)",
+          g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight");
+        lv_label_set_text(lbl_weight_main_lbl, wmbuf);
+        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x28d49a), 0);
+      }
+    }
+  } else {
+    // Auto AUS: Timer sauber halten
+    if (auto_weight_stable_ms > 0) {
+      auto_weight_stable_ms = 0;
+      auto_weight_last_val = -9999.0f;
+    }
+  }
+
+  // Fix 10: Spoolman health check every 30s
+  if (wifi_ok) {
+    static unsigned long last_sm_check_ms = 0;
+    if (millis() - last_sm_check_ms >= 30000 && !isSpoolFlowIdInputOpen()) {
+      last_sm_check_ms = millis();
+      int code = spoolmanGetHealthCode(cfg_spoolman_base, 3000);
+      bool was_reachable = sm_reachable;
+      sm_reachable = (code == 200);
+      if (sm_reachable != was_reachable) updateHeaderStatus();
+    }
+  }
+
+  // Periodic NAU7802 I2C ping every 5s (independent of WiFi)
+  {
+    static unsigned long last_scl_check_ms = 0;
+    if (millis() - last_scl_check_ms >= 5000) {
+      last_scl_check_ms = millis();
+      I2C_EXT.beginTransmission(0x2A);
+      bool prev = scl_ok;
+      scl_ok = (I2C_EXT.endTransmission() == 0);
+      if (scl_ok != prev) updateHeaderStatus();
+    }
+  }
+
+  // ============================================================
+  //  NFC SCAN LOGIC (0.4.21)
+  //  - uidLen==4: MIFARE Classic → Bambu flow (unchanged)
+  //  - uidLen==7: NTAG detected:
+  //      "SPSC" magic → SpoolScale tag → querySpoolman by ID
+  //      Blank (0x00) → show spool list + link
+  //      Unknown      → ignore
+  // ============================================================
+  if (nfc_ok) {
+    static unsigned long last_nfc_check_ms = 0;
+    if (millis() - last_nfc_check_ms >= 500) {
+      last_nfc_check_ms = millis();
+      uint8_t uid[7], uidLen = 0;
+      bool found = nfcReadPassiveTarget(uid, &uidLen, 150);
+
+      if (found && uidLen == 4) {
+        // ── MIFARE Classic (Bambu) ────────────────────────────
+        last_tag_seen_ms = millis();
+        tag_present = true;
+        resetActivityTimer();
+
+        char uid_str[24];
+        snprintf(uid_str, sizeof(uid_str), "%02X:%02X:%02X:%02X",
+          uid[0], uid[1], uid[2], uid[3]);
+
+        bool uid_changed = (strcmp(uid_str, g_tag.uid_str) != 0);
+        int bambu_blocks_read = countBambuDataBlocksRead(g_tag);
+        bool uuid_missing = (strlen(g_tag.tray_uuid) < 32);
+        bool contents_incomplete = (bambu_blocks_read < 48);
+
+        if (uid_changed) {
+          Serial.printf("NFC: New Bambu UID %s\n", uid_str);
+          nfc_retry_count = 0; nfc_absent_count = 0;
+          lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
+          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+          lv_label_set_text(lbl_status, T(STR_READING_TAG));
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+          scanTag(uid, uidLen);
+        } else if ((uuid_missing || contents_incomplete) && nfc_retry_count < NFC_MAX_RETRIES) {
+          nfc_retry_count++;
+          Serial.printf("NFC: Bambu contents incomplete (%d/48 blocks, tray_uuid %s), retry %d/%d\n",
+            bambu_blocks_read,
+            uuid_missing ? "missing" : "present",
+            nfc_retry_count,
+            NFC_MAX_RETRIES);
+          lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
+          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+          lv_label_set_text(lbl_status, T(STR_READING_TAG));
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+          scanTag(uid, uidLen);
+        } else {
+          if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES) {
+            lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
+            lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
+            lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+          } else {
+            // tray_uuid present — query Spoolman if not done yet
+            if (!isSpoolFlowIdInputOpen() && strcmp(g_tag.uid_str, spoolman_queried_uid) != 0 && strlen(g_tag.tray_uuid) == 32) {
+              querySpoolman(g_tag.tray_uuid);
+              strncpy(spoolman_queried_uid, g_tag.uid_str, sizeof(spoolman_queried_uid)-1);
+              if (!sm_found && wifi_ok) {
+                link_tag_first_seen_ms = millis();  // Start timer
+                link_popup_dismissed = false;
+              }
+            } else if (!sm_found && !link_popup_dismissed && !isSpoolFlowLinkEntryOpen() &&
+                       wifi_ok && strlen(g_tag.tray_uuid) == 32) {
+              // Auto-popup disabled — user uses the Link/Copy buttons in Zone 5
+              (void)link_tag_first_seen_ms;
+            }
+            lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+            lv_label_set_text(lbl_status, sm_found ? T(STR_TAG_FOUND) : T(STR_NOT_IN_SPOOLMAN));
+            lv_obj_set_style_text_color(lbl_status,
+              sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
+          }
+        }
+
+      } else if (found && uidLen == 7) {
+        // ── NTAG detected ──────────────────────────────────────
+        last_tag_seen_ms = millis();
+        tag_present = true;
+        resetActivityTimer();
+
+        char uid_str[24];
+        snprintf(uid_str, sizeof(uid_str), "%02X:%02X:%02X:%02X:%02X:%02X:%02X",
+          uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6]);
+
+        Serial.printf("NFC: NTAG UID=%s\n", uid_str);
+
+        bool uid_changed_ntag_log = (strcmp(uid_str, g_tag.uid_str) != 0);
+        if (uid_changed_ntag_log) logSDf("NFC: NTAG UID=%s", uid_str);
+
+        lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
+        lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+
+        bool uid_changed_ntag = (strcmp(uid_str, g_tag.uid_str) != 0);
+
+        if (uid_changed_ntag) {
+          // New UID — clear old tag data
+          strncpy(g_tag.uid_str, uid_str, sizeof(g_tag.uid_str)-1);
+          g_tag.tray_uuid[0] = '\0';
+          g_tag.material[0] = '\0';
+          g_tag.color_hex[0] = '\0';
+          g_tag.vendor[0] = '\0';
+          spoolman_queried_uid[0] = '\0';
+          lv_label_set_text(lbl_uid, uid_str);
+          lv_label_set_text(lbl_tray_uuid, "-");
+          lv_label_set_text(lbl_material, "-");
+          lv_label_set_text(lbl_filament_name, "-");
+          lv_label_set_text(lbl_vendor, "-");
+          lv_label_set_text(lbl_detail, "-");
+          lv_label_set_text(lbl_last_used, "-");
+          lv_label_set_text(lbl_spoolman_dried_val, "-");
+        if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
+          lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
+          lv_label_set_text(lbl_status, T(STR_READING_TAG));
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+          lv_timer_handler();
+
+          if (wifi_ok && !isSpoolFlowIdInputOpen()) {
+            querySpoolman(uid_str);
+            strncpy(spoolman_queried_uid, uid_str, sizeof(spoolman_queried_uid)-1);
+
+            if (!sm_found) {
+              Serial.println("NTAG: not in Spoolman -> waiting for delay");
+              strncpy(link_tag_uid, uid_str, sizeof(link_tag_uid)-1);
+              link_tag_first_seen_ms = millis();
+              link_popup_dismissed = false;
+            } else {
+              lv_label_set_text(lbl_status, T(STR_TAG_FOUND));
+              lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+              strncpy(g_tag.tray_uuid, uid_str, sizeof(g_tag.tray_uuid)-1);
+              updateLinkButton();
+            }
+          } else {
+            lv_label_set_text(lbl_status, T(STR_TAG_FOUND));
+            lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+          }
+        } else {
+          // Same UID — show popup after delay if not dismissed
+          // Auto-popup disabled — user uses the Link/Copy buttons in Zone 5
+          (void)link_tag_first_seen_ms;
+          lv_label_set_text(lbl_status, sm_found ? T(STR_TAG_FOUND) : T(STR_NOT_IN_SPOOLMAN));
+          lv_obj_set_style_text_color(lbl_status,
+            sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
+        }
+
+      } else {
+        // No tag found
+        if (tag_present) {
+          nfc_absent_count++;
+          if (nfc_absent_count < 4) return;  // wait for 4 consecutive misses (2s) before declaring removed
+          nfc_absent_count = 0;
+          Serial.println("NFC: tag removed");
+          logSD("NFC: tag removed");
+          tag_present = false;
+          nfc_retry_count = 0; nfc_absent_count = 0;
+          last_tag_seen_ms = millis();
+          spoolman_queried_uid[0] = '\0';  // allow re-query when same tag is placed again
+          link_popup_dismissed = false;   // Reset flag → next spool can show popup
+          link_tag_first_seen_ms = 0;
+          lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
+          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
+          lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+          // Auto location popup: if enabled, spool is linked, and not shown for this spool yet
+          // Debounce: only trigger after 1500ms — avoids spurious remove during NTAG read
+          if (g_auto_loc_popup && sm_found && sm_id > 0 && wifi_ok && g_loc_popup_shown_for_id != sm_id) {
+            loc_popup_pending_id = sm_id;  // schedule — will fire after debounce in loop
+            logSDf("[verbose] LOC: tag removed, popup scheduled id=%d (debounce 2500ms)", sm_id);
+          } else if (g_auto_loc_popup) {
+            logSDf("[verbose] LOC: tag removed, popup suppressed id=%d shown_for=%d sm_found=%d wifi=%d", sm_id, g_loc_popup_shown_for_id, (int)sm_found, (int)wifi_ok);
+          }
+          // Do NOT close list — user should be able to select spool
+          // even if tag is temporarily removed
+        }
+      }
+    }
+  }
+
+  delay(5);
+}

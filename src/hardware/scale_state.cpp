@@ -1,4 +1,5 @@
 #include "scale_state.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <cstring>
@@ -6,12 +7,6 @@
 #include "app_config.h"
 #include "services/prefs_store.h"
 
-extern float cal_factor;
-extern int32_t zero_offset;
-extern float bag_weight_g;
-extern float scale_filter_buf[SCALE_FILTER_SIZE];
-extern int scale_filter_idx;
-extern bool scale_filter_full;
 
 void saveCalFactor(float factor) {
   cal_factor = factor;

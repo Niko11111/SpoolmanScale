@@ -1,8 +1,8 @@
 #include "ui_common.h"
+#include "navigation.h"
 
 #include "hardware/sd_logger.h"
 
-void showMainScreen();
 
 void addBackButton(lv_obj_t *parent, lv_event_cb_t cb) {
   lv_obj_t *btn = lv_btn_create(parent);

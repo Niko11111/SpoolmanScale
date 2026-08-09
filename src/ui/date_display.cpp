@@ -1,4 +1,5 @@
 #include "date_display.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <cstring>
@@ -7,9 +8,6 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/drying_config.h"
-
-extern uint8_t g_date_fmt;
-extern char sm_material_global[32];
 
 static int dryingAlertLevel(const char* last_dried_local);
 

@@ -1,13 +1,8 @@
 #include "main_screen_helpers.h"
+#include "app/app_state.h"
 
 #include <lvgl.h>
-
-extern bool tag_present;
-extern bool sm_found;
-extern lv_obj_t *btn_dried;
-extern lv_obj_t *btn_link;
-extern lv_obj_t *btn_weight_main;
-extern lv_obj_t *btn_copy;
+#include "ui/spool_flow.h"
 
 void updateLinkButton() {
   if (!btn_dried || !btn_link || !btn_weight_main || !btn_copy) return;

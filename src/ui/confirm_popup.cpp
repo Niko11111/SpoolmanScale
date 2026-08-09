@@ -1,4 +1,5 @@
 #include "confirm_popup.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -11,10 +12,6 @@
 #include "dried_action.h"
 #include "lang.h"
 
-extern float scale_weight_g;
-extern float sm_spool_weight;
-extern float bag_weight_g;
-extern lv_obj_t *lbl_weight_main_lbl;
 
 static lv_obj_t *confirm_popup = nullptr;
 static int confirm_action = 0;

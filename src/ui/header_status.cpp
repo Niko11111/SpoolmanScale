@@ -1,20 +1,11 @@
 #include "header_status.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
 
 #include "services/wifi_manager.h"
 
-extern bool wifi_ok;
-extern bool nfc_ok;
-extern bool scl_ok;
-extern bool sm_reachable;
-extern int scan_count;
-extern lv_obj_t *lbl_hdr_wifi;
-extern lv_obj_t *lbl_hdr_nfc;
-extern lv_obj_t *lbl_hdr_scl;
-extern lv_obj_t *lbl_hdr_scans;
-extern lv_obj_t *lbl_hdr_sm;
 
 static lv_color_t wifiColor() {
   if (!wifi_ok) return lv_color_hex(0xe04040);

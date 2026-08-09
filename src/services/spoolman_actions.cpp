@@ -1,4 +1,5 @@
 #include "spoolman_actions.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -10,21 +11,8 @@
 #include "user_options.h"
 #include "ui/date_display.h"
 
-extern bool wifi_ok;
-extern char cfg_spoolman_base[80];
 
-extern int sm_id;
-extern int sm_filament_id;
-extern int sm_vendor_id;
-extern bool sm_found;
-extern float sm_remaining;
-extern float sm_total;
-extern float sm_spool_weight;
-extern char sm_last_used[32];
 
-extern lv_obj_t* lbl_spoolman_weight;
-extern lv_obj_t* lbl_spoolman_pct;
-extern lv_obj_t* lbl_last_used;
 
 void patchSpoolmanWeight(float remaining) {
   if (!wifi_ok) { Serial.println("patchSpoolmanWeight: no WiFi"); return; }

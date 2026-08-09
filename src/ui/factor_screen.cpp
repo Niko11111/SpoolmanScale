@@ -1,4 +1,6 @@
 #include "factor_screen.h"
+#include "navigation.h"
+#include "app/app_state.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -14,33 +16,7 @@
 #include "services/user_options.h"
 #include "ui_common.h"
 
-extern bool scale_ready;
-extern float scale_weight_g;
-extern float cal_factor;
-extern int32_t zero_offset;
-extern lv_obj_t *scr_factor;
-extern lv_obj_t *scr_settings;
-extern lv_obj_t *scr_wifi;
-extern lv_obj_t *scr_spoolman;
-extern lv_obj_t *scr_bag;
-extern lv_obj_t *scr_connection;
-extern lv_obj_t *scr_scale_sub;
-extern lv_obj_t *scr_display;
-extern lv_obj_t *scr_system;
-extern lv_obj_t *scr_ota;
-extern lv_obj_t *scr_ota_browser;
-extern lv_obj_t *scr_welcome;
-extern lv_obj_t *scr_first_boot;
-extern lv_obj_t *scr_extra_fields;
-extern lv_obj_t *scr_cal_reminder;
-extern lv_obj_t *scr_wifi_setup;
-extern lv_obj_t *scr_wifi_pass;
-extern lv_obj_t *scr_wifi_connecting;
-extern lv_obj_t *lbl_factor_result;
-extern lv_obj_t *lbl_factor_cal_weight;
-extern lv_obj_t *lbl_scale_weight;
 
-void hideAllOverlays();
 void resetActivityTimer();
 
 static char factor_input[16] = "";
