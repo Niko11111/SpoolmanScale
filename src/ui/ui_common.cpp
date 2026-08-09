@@ -52,6 +52,12 @@ void buildSubHeader(lv_obj_t *parent, const char *title,
   addCloseButton(parent);
 }
 
+void releaseScreen(lv_obj_t **scr) {
+  if (!scr || !*scr) return;
+  lv_obj_del_async(*scr);
+  *scr = nullptr;
+}
+
 lv_obj_t* buildOverlayScreen() {
   lv_obj_t *scr = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr, 480, 320);

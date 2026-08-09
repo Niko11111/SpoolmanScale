@@ -19,6 +19,7 @@ void showLanguageScreen();
 void buildSystemScreen() {
   logSD("BUILD: SystemScreen");
   if (sd_verbose) logSD("[verbose] buildSystemScreen: start");
+  releaseScreen(&scr_system);
   scr_system = buildOverlayScreen();
   buildSubHeader(scr_system, T(STR_SYSTEM_TITLE),
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });

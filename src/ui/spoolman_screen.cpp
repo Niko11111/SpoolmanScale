@@ -36,6 +36,7 @@ void buildSpoolmanScreen() {
       (unsigned)lv_mem.free_size, (unsigned)lv_mem.free_biggest_size,
       (unsigned)lv_mem.used_pct);
   }
+  releaseScreen(&scr_spoolman);
   scr_spoolman = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_spoolman, 480, 320);
   lv_obj_set_pos(scr_spoolman, 0, 0);

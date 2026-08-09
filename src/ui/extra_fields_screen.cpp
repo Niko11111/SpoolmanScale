@@ -67,6 +67,7 @@ void showExtraFieldsScreen(bool is_setup_flow) {
 
 void buildExtraFieldsScreen(bool is_setup_flow) {
   logSD("BUILD: ExtraFieldsScreen");
+  releaseScreen(&scr_extra_fields);
   scr_extra_fields = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_extra_fields, 480, 320);
   lv_obj_set_pos(scr_extra_fields, 0, 0);

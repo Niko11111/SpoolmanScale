@@ -59,6 +59,7 @@ void showFactorScreen() {
 
 void buildFactorScreen() {
   logSD("BUILD: FactorScreen");
+  releaseScreen(&scr_factor);
   scr_factor = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_factor, 480, 320);
   lv_obj_set_pos(scr_factor, 0, 0);

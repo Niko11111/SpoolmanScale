@@ -31,6 +31,7 @@ void showOtaBrowserScreen() {
 
 void buildOtaBrowserScreen() {
   logSD("BUILD: OtaBrowserScreen");
+  releaseScreen(&scr_ota_browser);
   scr_ota_browser = buildOverlayScreen();
   buildSubHeader(scr_ota_browser, T(STR_OTA_BROWSER_TITLE),
     [](lv_event_t *e){

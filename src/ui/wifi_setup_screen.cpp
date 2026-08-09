@@ -42,6 +42,7 @@ void showWifiSetupScreen() {
 
 void buildWifiSetupScreen() {
   logSD("BUILD: WifiSetupScreen");
+  releaseScreen(&scr_wifi_setup);
   scr_wifi_setup = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_wifi_setup, 480, 320);
   lv_obj_set_pos(scr_wifi_setup, 0, 0);
@@ -65,10 +66,6 @@ void buildWifiSetupScreen() {
       showWelcomeScreen();
     } else {
       hideAllOverlays();
-      // buildConnectionScreen() overwrites scr_connection without freeing the
-      // previous object. Deleting it first prevents leaking a full screen into
-      // the LVGL pool on every WiFi setup -> back navigation.
-      if (scr_connection) { lv_obj_del(scr_connection); scr_connection = nullptr; }
       buildConnectionScreen();
       lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
     }
@@ -229,6 +226,7 @@ void showWifiPassScreen() {
 
 void buildWifiPassScreen() {
   logSD("BUILD: WifiPassScreen");
+  releaseScreen(&scr_wifi_pass);
   scr_wifi_pass = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_wifi_pass, 480, 320);
   lv_obj_set_pos(scr_wifi_pass, 0, 0);
@@ -340,6 +338,7 @@ void showWifiConnectingScreen() {
 
 void buildWifiConnectingScreen() {
   logSD("BUILD: WifiConnectingScreen");
+  releaseScreen(&scr_wifi_connecting);
   scr_wifi_connecting = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_wifi_connecting, 480, 320);
   lv_obj_set_pos(scr_wifi_connecting, 0, 0);

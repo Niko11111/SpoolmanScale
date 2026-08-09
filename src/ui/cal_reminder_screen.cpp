@@ -45,6 +45,7 @@ void showCalReminderScreen() {
 void buildCalReminderScreen() {
   logSD("BUILD: CalReminderScreen");
   Serial.println("buildCalReminderScreen: start");
+  releaseScreen(&scr_cal_reminder);
   scr_cal_reminder = lv_obj_create(lv_scr_act());
   Serial.println("buildCalReminderScreen: obj created");
   lv_obj_set_size(scr_cal_reminder, 480, 320);

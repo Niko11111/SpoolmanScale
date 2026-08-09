@@ -321,6 +321,7 @@ void showOtaGithubScreen() {
 
 void buildOtaGithubScreen() {
   logSD("BUILD: OtaGithubScreen");
+  releaseScreen(&scr_ota_github);
   scr_ota_github = buildOverlayScreen();
 
   char buf_title[32];

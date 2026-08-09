@@ -26,6 +26,7 @@ static void rebuildDisplayScreen() {
 void buildDisplayScreen() {
   logSD("BUILD: DisplayScreen");
   if (sd_verbose) logSD("[verbose] buildDisplayScreen: start");
+  releaseScreen(&scr_display);
   scr_display = buildOverlayScreen();
   buildSubHeader(scr_display, T(STR_DISPLAY_TITLE),
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
