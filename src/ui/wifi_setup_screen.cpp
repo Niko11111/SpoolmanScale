@@ -65,6 +65,10 @@ void buildWifiSetupScreen() {
       showWelcomeScreen();
     } else {
       hideAllOverlays();
+      // buildConnectionScreen() overwrites scr_connection without freeing the
+      // previous object. Deleting it first prevents leaking a full screen into
+      // the LVGL pool on every WiFi setup -> back navigation.
+      if (scr_connection) { lv_obj_del(scr_connection); scr_connection = nullptr; }
       buildConnectionScreen();
       lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
     }

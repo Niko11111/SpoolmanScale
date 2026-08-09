@@ -72,8 +72,16 @@ void appLoop() {
   if (sd_verbose && millis() - last_heartbeat_ms >= 5000) {
     last_heartbeat_ms = millis();
     heartbeat_count++;
-    logSDf("[verbose] heartbeat #%u heap=%d PSRAM=%d uptime=%lus",
-      heartbeat_count, ESP.getFreeHeap(), ESP.getFreePsram(), millis() / 1000);
+    // LVGL runs on its own pool (LV_MEM_SIZE), separate from the ESP heap.
+    // Exhausting it triggers LV_ASSERT_MALLOC, which halts in while(1) with
+    // no reboot and no panic output. Log it so screen leaks become visible.
+    lv_mem_monitor_t lv_mem;
+    lv_mem_monitor(&lv_mem);
+    logSDf("[verbose] heartbeat #%u heap=%d PSRAM=%d uptime=%lus "
+           "lv_free=%u lv_biggest=%u lv_used=%u%% lv_frag=%u%%",
+      heartbeat_count, ESP.getFreeHeap(), ESP.getFreePsram(), millis() / 1000,
+      (unsigned)lv_mem.free_size, (unsigned)lv_mem.free_biggest_size,
+      (unsigned)lv_mem.used_pct, (unsigned)lv_mem.frag_pct);
   }
 
   // OTA web server bedienen wenn aktiv

@@ -26,6 +26,16 @@ static lv_obj_t *btn_sp_extra_fields = nullptr;  // Extra Fields button on IP sc
 
 void buildSpoolmanScreen() {
   logSD("BUILD: SpoolmanScreen");
+  // This is the most object-heavy screen in the project (numpad + header,
+  // ~40 LVGL objects). Log the LVGL pool state before allocating so an
+  // exhausted pool is visible in the log instead of an unexplained halt.
+  if (sd_verbose) {
+    lv_mem_monitor_t lv_mem;
+    lv_mem_monitor(&lv_mem);
+    logSDf("[verbose] buildSpoolmanScreen: lv_free=%u lv_biggest=%u lv_used=%u%%",
+      (unsigned)lv_mem.free_size, (unsigned)lv_mem.free_biggest_size,
+      (unsigned)lv_mem.used_pct);
+  }
   scr_spoolman = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_spoolman, 480, 320);
   lv_obj_set_pos(scr_spoolman, 0, 0);
