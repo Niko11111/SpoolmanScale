@@ -20,6 +20,7 @@ void resetActivityTimer();
 void buildSettingsScreen() {
   logSD("BUILD: SettingsScreen");
   if (sd_verbose) logSD("[verbose] buildSettingsScreen: start");
+  releaseScreen(&scr_settings);
   scr_settings = buildOverlayScreen();
 
   lv_obj_t *title = lv_label_create(scr_settings);

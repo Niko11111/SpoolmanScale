@@ -1,6 +1,7 @@
 #include "app_loop.h"
 
 #include <Arduino.h>
+#include <WiFi.h>
 #include <Wire.h>
 #include <lvgl.h>
 #include <cmath>
@@ -51,6 +52,33 @@
 namespace {
 constexpr unsigned long NO_TAG_CLEAR_MS = 60000;
 constexpr int NFC_MAX_RETRIES = 5;
+constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
+}
+
+// The WiFi setup screen scans for networks, and wifiManagerPrepareScan() calls
+// WiFi.disconnect(true) first because scanNetworks() returns 0 after a failed
+// WiFi.begin(). Nothing reconnects unless the user completes the whole setup
+// flow, so merely opening that screen left the device offline until the next
+// reboot and every Spoolman call failed with HTTPC_ERROR_CONNECTION_REFUSED.
+// This watchdog restores the connection. WiFi.begin() is non-blocking, the
+// association happens in the background and is picked up on a later pass.
+// It stays out of the way while any WiFi setup screen is on display.
+static void handleWifiReconnect() {
+  if (cfg_wifi_ssid[0] == '\0') return;
+  if (WiFi.status() == WL_CONNECTED) return;
+
+  bool wifi_ui_visible =
+    (scr_wifi_setup     && !lv_obj_has_flag(scr_wifi_setup,     LV_OBJ_FLAG_HIDDEN)) ||
+    (scr_wifi_pass      && !lv_obj_has_flag(scr_wifi_pass,      LV_OBJ_FLAG_HIDDEN)) ||
+    (scr_wifi_connecting && !lv_obj_has_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN));
+  if (wifi_ui_visible) return;
+
+  static unsigned long last_retry_ms = 0;
+  if (last_retry_ms != 0 && millis() - last_retry_ms < WIFI_RETRY_INTERVAL_MS) return;
+  last_retry_ms = millis();
+
+  logSDf("WiFi: connection lost, reconnecting to %s", cfg_wifi_ssid);
+  WiFi.begin(cfg_wifi_ssid, cfg_wifi_password);
 }
 
 static unsigned long tare_msg_ms = 0;
@@ -72,9 +100,21 @@ void appLoop() {
   if (sd_verbose && millis() - last_heartbeat_ms >= 5000) {
     last_heartbeat_ms = millis();
     heartbeat_count++;
-    logSDf("[verbose] heartbeat #%u heap=%d PSRAM=%d uptime=%lus",
-      heartbeat_count, ESP.getFreeHeap(), ESP.getFreePsram(), millis() / 1000);
+    // LVGL runs on its own pool (LV_MEM_SIZE), separate from the ESP heap.
+    // Exhausting it triggers LV_ASSERT_MALLOC, which halts in while(1) with
+    // no reboot and no panic output. Log it so screen leaks become visible.
+    lv_mem_monitor_t lv_mem;
+    lv_mem_monitor(&lv_mem);
+    bool wifi_up = (WiFi.status() == WL_CONNECTED);
+    logSDf("[verbose] heartbeat #%u heap=%d PSRAM=%d uptime=%lus "
+           "lv_free=%u lv_biggest=%u lv_used=%u%% lv_frag=%u%% wifi=%s rssi=%d",
+      heartbeat_count, ESP.getFreeHeap(), ESP.getFreePsram(), millis() / 1000,
+      (unsigned)lv_mem.free_size, (unsigned)lv_mem.free_biggest_size,
+      (unsigned)lv_mem.used_pct, (unsigned)lv_mem.frag_pct,
+      wifi_up ? "up" : "DOWN", wifi_up ? WiFi.RSSI() : 0);
   }
+
+  handleWifiReconnect();
 
   // OTA web server bedienen wenn aktiv
   handleOtaServerClient();

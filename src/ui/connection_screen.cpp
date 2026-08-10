@@ -17,6 +17,7 @@ void showWifiSetupScreen();
 void buildConnectionScreen() {
   logSD("BUILD: ConnectionScreen");
   if (sd_verbose) logSD("[verbose] buildConnectionScreen: start");
+  releaseScreen(&scr_connection);
   scr_connection = buildOverlayScreen();
   buildSubHeader(scr_connection, T(STR_TILE_CONNECTION),
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });

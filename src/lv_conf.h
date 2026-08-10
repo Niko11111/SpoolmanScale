@@ -49,7 +49,14 @@
 #define LV_MEM_CUSTOM 0
 #if LV_MEM_CUSTOM == 0
     /*Size of the memory available for `lv_mem_alloc()` in bytes (>= 2kB)*/
-    #define LV_MEM_SIZE (48U * 1024U)          /*[bytes]*/
+    /* 48 kB was too small for this UI. Overlay screens are hidden but never
+     * freed, so every visited screen stays resident. The main screen alone
+     * needs ~19 kB and the drying reminder table another ~20 kB, which fills
+     * the old pool before any leak is involved. Running out halts the CPU in
+     * LV_ASSERT_HANDLER (while(1)), which looks like a freeze and heats the
+     * board. Raising this to 96 kB fits all screens at once with headroom;
+     * static RAM use goes from ~35% to ~50%. */
+    #define LV_MEM_SIZE (96U * 1024U)          /*[bytes]*/
 
     /*Set an address for the memory pool instead of allocating it as a normal array. Can be in external SRAM too.*/
     #define LV_MEM_ADR 0     /*0: unused*/

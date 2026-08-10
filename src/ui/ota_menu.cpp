@@ -26,6 +26,7 @@ void showOtaScreen() {
 
 void buildOtaScreen() {
   logSD("BUILD: OtaScreen");
+  releaseScreen(&scr_ota);
   scr_ota = buildOverlayScreen();
   buildSubHeader(scr_ota, T(STR_OTA_TITLE),
     [](lv_event_t *e){

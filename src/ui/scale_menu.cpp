@@ -62,6 +62,7 @@ static lv_obj_t* makeListBtn(lv_obj_t* list,
 void buildScaleSubScreen() {
   logSD("BUILD: ScaleSubScreen");
   if (sd_verbose) logSD("[verbose] buildScaleSubScreen: start");
+  releaseScreen(&scr_scale_sub);
   scr_scale_sub = buildOverlayScreen();
   buildSubHeader(scr_scale_sub, T(STR_SCALE_TITLE),
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });

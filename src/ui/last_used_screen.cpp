@@ -29,6 +29,7 @@ void updateLastUsedCapLabel() {
 
 void buildLastUsedScreen() {
   logSD("BUILD: LastUsedScreen");
+  releaseScreen(&scr_lastused);
   scr_lastused = buildOverlayScreen();
   buildSubHeader(scr_lastused, T(STR_LASTUSED_TITLE),
     [](lv_event_t *e){

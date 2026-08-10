@@ -21,6 +21,7 @@ static lv_obj_t *lbl_bag_result_global = nullptr;
 
 void buildBagScreen() {
   logSD("BUILD: BagScreen");
+  releaseScreen(&scr_bag);
   scr_bag = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_bag, 480, 320);
   lv_obj_set_pos(scr_bag, 0, 0);

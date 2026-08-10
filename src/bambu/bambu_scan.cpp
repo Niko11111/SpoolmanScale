@@ -15,16 +15,10 @@ static bool readSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t block
   return nfcReadMifareSector(sector, key, uid, blocks);
 }
 
-static void showBambuSectorReadStatus(int sector) {
-  if (!lbl_status) return;
-
-  char status_buf[64];
-  snprintf(status_buf, sizeof(status_buf), T(STR_READING_BAMBU_SECTOR), sector);
-  lv_label_set_text(lbl_status, status_buf);
-  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
-  lv_timer_handler();
-  lv_refr_now(NULL);
-}
+// NOTE: Per-sector status display was removed here on purpose. Forcing
+// lv_timer_handler() + lv_refr_now() between sector reads slows the scan
+// down and the parallel display bus activity disturbs the PN532 RF
+// communication, causing sector read failures (regression vs v0.5.12-beta).
 
 int countBambuDataBlocksRead(const BambuTagData& tag) {
   int count = 0;
@@ -68,7 +62,6 @@ void scanTag(uint8_t *uid, uint8_t uid_len) {
   int success_count = 0;
   char sector_summary[160] = "";
   for (int sector = 0; sector < 16; sector++) {
-    showBambuSectorReadStatus(sector);
     uint8_t sec_blocks[4][16];
     bool ok = readSector(sector, g_tag.keys[sector], uid, sec_blocks);
     for (int b = 0; b < 3; b++) {

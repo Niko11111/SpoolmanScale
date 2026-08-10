@@ -25,6 +25,7 @@ void showWelcomeScreen() {
 
 void buildWelcomeScreen() {
   logSD("BUILD: WelcomeScreen");
+  releaseScreen(&scr_welcome);
   scr_welcome = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_welcome, 480, 320);
   lv_obj_set_pos(scr_welcome, 0, 0);
@@ -139,6 +140,7 @@ void showFirstBootScreen() {
 
 void buildFirstBootScreen() {
   logSD("BUILD: FirstBootScreen");
+  releaseScreen(&scr_first_boot);
   scr_first_boot = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_first_boot, 480, 320);
   lv_obj_set_pos(scr_first_boot, 0, 0);
