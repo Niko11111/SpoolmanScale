@@ -1,0 +1,16 @@
+#pragma once
+
+#include <Arduino.h>
+#include <IPAddress.h>
+#include <stdint.h>
+
+void wifiManagerPrepareScan();
+int wifiManagerScanNetworks();
+String wifiManagerScannedSSID(int index);
+int wifiManagerScannedRSSI(int index);
+void wifiManagerClearScan();
+
+bool wifiManagerConnect(const char* ssid, const char* password, int attempts = 20, uint32_t interval_ms = 500);
+bool wifiManagerIsConnected();
+IPAddress wifiManagerLocalIP();
+int wifiManagerRSSI();

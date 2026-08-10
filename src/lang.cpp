@@ -51,6 +51,7 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Nicht in Spoolman",      "Not in Spoolman"            },  // STR_NOT_IN_SPOOLMAN
   { "Archiviert",             "Archived"                   },  // STR_ARCHIVED
   { "Lese Tag...",            "Reading tag..."             },  // STR_READING_TAG
+  { "Lese Bambu Sektor %02d...", "Reading Bambu sector %02d..." },  // STR_READING_BAMBU_SECTOR
 
   // Mainscreen Buttons
   { "Gewicht updaten",        "Update Weight"     },  // STR_BTN_WEIGHT
@@ -72,6 +73,7 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Keine Netzwerke gefunden", "No networks found" },  // STR_WIFI_NO_NET
   { "WiFi Passwort",          "WiFi Password"     },  // STR_WIFI_PASS_TITLE
   { "Passwort für: %s",      "Password for: %s"  },  // STR_WIFI_PASS_HINT
+  { "Passwort...",             "Password..."       },  // STR_WIFI_PASS_PLACEHOLDER
   { "Verbinde mit %s...",     "Connecting to %s..." },  // STR_WIFI_CONNECTING
   { "Verbunden!",             "Connected!"        },  // STR_WIFI_SUCCESS
   { "Verbindung fehlgeschlagen", "Connection failed" },  // STR_WIFI_FAIL
