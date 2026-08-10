@@ -22,7 +22,7 @@
 #include "services/location_state.h"
 #include "services/ota_web_server.h"
 #include "services/spoolman_actions.h"
-#include "services/spoolman_api.h"
+#include "services/backend_api.h"
 #include "ui/bag_screen.h"
 #include "ui/cal_reminder_screen.h"
 #include "ui/confirm_popup.h"
@@ -442,7 +442,7 @@ void appLoop() {
     static unsigned long last_sm_check_ms = 0;
     if (millis() - last_sm_check_ms >= 30000 && !isSpoolFlowIdInputOpen()) {
       last_sm_check_ms = millis();
-      int code = spoolmanGetHealthCode(cfg_spoolman_base, 3000);
+      int code = backendGetHealthCode(cfg_spoolman_base, 3000);
       bool was_reachable = sm_reachable;
       sm_reachable = (code == 200);
       if (sm_reachable != was_reachable) updateHeaderStatus();

@@ -11,7 +11,7 @@
 #include "extra_fields_screen.h"
 #include "hardware/sd_logger.h"
 #include "services/app_settings.h"
-#include "services/spoolman_api.h"
+#include "services/backend_api.h"
 #include "header_status.h"
 #include "lang.h"
 #include "ui_common.h"
@@ -179,7 +179,7 @@ void buildSpoolmanScreen() {
     lv_timer_handler();
 
     // Health check
-    int hcode = spoolmanGetHealthCode(cfg_spoolman_base, 4000);
+    int hcode = backendGetHealthCode(cfg_spoolman_base, 4000);
     sm_reachable = (hcode == 200);
 
     if (!sm_reachable) {
@@ -196,10 +196,10 @@ void buildSpoolmanScreen() {
 
     // Fetch version from /api/v1/info
     char sm_ver[32] = "?";
-    spoolmanGetVersion(cfg_spoolman_base, sm_ver, sizeof(sm_ver), 3000);
+    backendGetVersion(cfg_spoolman_base, sm_ver, sizeof(sm_ver), 3000);
 
     // Count spools by matching '"filament":' — exactly 1 per spool, avoids counting nested ids
-    int spool_count = spoolmanCountActiveSpools(cfg_spoolman_base, 6000);
+    int spool_count = backendCountActiveSpools(cfg_spoolman_base, 6000);
     if (spool_count < 0) spool_count = 0;
 
     // Show result on screen

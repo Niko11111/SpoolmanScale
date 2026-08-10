@@ -14,7 +14,7 @@
 #include "lang.h"
 #include "services/list_limits.h"
 #include "services/spoolman_actions.h"
-#include "services/spoolman_api.h"
+#include "services/backend_api.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/spoolman_lookup.h"
 #include "ui/ui_common.h"
@@ -146,7 +146,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   SpiRamAllocator psram_alloc;
   JsonDocument doc(&psram_alloc);
   DeserializationError err = DeserializationError::Ok;
-  int code = spoolmanGetSpoolListJson(cfg_spoolman_base, archived_only, doc, 8000, &filterL, &err);
+  int code = backendGetSpoolListJson(cfg_spoolman_base, archived_only, doc, 8000, &filterL, &err);
   if (code != 200 || err) return;
 
   JsonArray spools = doc.as<JsonArray>();
@@ -672,7 +672,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
 
   DynamicJsonDocument doc(8192);
   DeserializationError err = DeserializationError::Ok;
-  int code = spoolmanGetSpoolJson(cfg_spoolman_base, entered_id, doc, 5000, &err);
+  int code = backendGetSpoolJson(cfg_spoolman_base, entered_id, doc, 5000, &err);
   if (code == 404 || code < 0) {
     if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_LINK_ID_NOT_FOUND));
     return;
@@ -2016,7 +2016,7 @@ void doCopySpoolCreate(int template_filament_id, float template_initial, float t
   if (netto < 0) netto = 0;
 
   int new_id = 0;
-  int code = spoolmanCreateSpool(cfg_spoolman_base, template_filament_id, template_initial,
+  int code = backendCreateSpool(cfg_spoolman_base, template_filament_id, template_initial,
     template_spool_w, netto, &new_id, 8000);
   if ((code == 200 || code == 201) && new_id > 0) {
     Serial.printf("Copy spool created: new ID=%d\n", new_id);
@@ -2141,7 +2141,7 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
   SpiRamAllocator alloc;
   JsonDocument doc(&alloc);
   DeserializationError err = DeserializationError::Ok;
-  int code = spoolmanGetSpoolListJson(cfg_spoolman_base, true, doc, 10000, nullptr, &err);
+  int code = backendGetSpoolListJson(cfg_spoolman_base, true, doc, 10000, nullptr, &err);
   if (code != 200 || err) { Serial.printf("fetchSpoolsForCopy JSON error: %s\n", err.c_str()); return; }
 
   JsonArray arr = doc.as<JsonArray>();
@@ -2518,7 +2518,7 @@ void showCopyIdInputPopup() {
         if (!wifi_ok) { lv_label_set_text(lbl_copy_id_status, T(STR_LINK_NO_WIFI)); return; }
         StaticJsonDocument<512> doc;
         DeserializationError derr = DeserializationError::Ok;
-        int code = spoolmanGetSpoolJson(cfg_spoolman_base, entered_id, doc, 8000, &derr);
+        int code = backendGetSpoolJson(cfg_spoolman_base, entered_id, doc, 8000, &derr);
         if (code != 200) {
           char err_buf[32]; snprintf(err_buf, sizeof(err_buf), T(STR_LINK_ID_NOT_FOUND), entered_id);
           lv_label_set_text(lbl_copy_id_status, err_buf);
@@ -2797,7 +2797,7 @@ void handleSpoolFlowDeferredActions() {
     // Fetch spool data for copy confirm — done in loop to avoid stack overflow in lambda.
     DynamicJsonDocument cdoc(1024);
     DeserializationError derr2 = DeserializationError::Ok;
-    int hcode = spoolmanGetSpoolJson(cfg_spoolman_base, cid, cdoc, 5000, &derr2);
+    int hcode = backendGetSpoolJson(cfg_spoolman_base, cid, cdoc, 5000, &derr2);
     if (hcode != 200) {
       if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_LINK_ID_NOT_FOUND));
     } else {

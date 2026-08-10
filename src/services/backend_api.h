@@ -1,0 +1,67 @@
+#pragma once
+
+#include <ArduinoJson.h>
+#include <stddef.h>
+#include <stdint.h>
+
+// ============================================================
+//  BACKEND API DISPATCH
+//
+//  Same call surface as spoolman_api, but routed to whichever
+//  backend is active. UI and state code calls only this header,
+//  never spoolman_api or filaman_api directly.
+//
+//  In Spoolman mode every function forwards one to one, so the
+//  behaviour is byte for byte the one that shipped in v0.5.12.
+//  Functions with no FilaMan equivalent return BACKEND_NOT_SUPPORTED
+//  there, they never silently do nothing.
+//
+//  Two functions from spoolman_api are deliberately absent because
+//  nothing calls them: spoolmanGetJson and spoolmanIsReachable.
+// ============================================================
+
+// --- reading -------------------------------------------------
+int  backendGetSpoolJson(const char* base_url, int spool_id, JsonDocument& doc,
+       uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr);
+int  backendGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocument& doc,
+       uint32_t timeout_ms = 8000, JsonDocument* filter = nullptr, DeserializationError* out_err = nullptr);
+int  backendGetLocationsJson(const char* base_url, JsonDocument& doc,
+       uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr);
+int  backendGetSpoolFieldsJson(const char* base_url, JsonDocument& doc,
+       uint32_t timeout_ms = 4000, DeserializationError* out_err = nullptr);
+int  backendGetHealthCode(const char* base_url, uint32_t timeout_ms = 3000);
+bool backendGetVersion(const char* base_url, char* out_version, size_t out_size,
+       uint32_t timeout_ms = 3000);
+int  backendCountActiveSpools(const char* base_url, uint32_t timeout_ms = 6000);
+
+// --- creating ------------------------------------------------
+int  backendCreateSpool(const char* base_url, int filament_id, float initial_weight,
+       float spool_weight, float remaining_weight, int* out_spool_id = nullptr,
+       uint32_t timeout_ms = 8000);
+int  backendCreateSpoolField(const char* base_url, const char* field_name,
+       uint32_t timeout_ms = 3000);
+
+// --- writing -------------------------------------------------
+int  backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
+       uint32_t timeout_ms = 5000);
+
+// tag_uuid is unused in Spoolman mode. FilaMan reports weight through its
+// device API, which identifies the spool by id or by tag, so the parameter
+// is already in the signature to avoid touching call sites again later.
+int  backendPatchSpoolRemaining(const char* base_url, int spool_id, float remaining,
+       const char* last_used_iso = nullptr, const char* tag_uuid = nullptr,
+       uint32_t timeout_ms = 5000);
+
+int  backendPatchInitialWeight(const char* base_url, int spool_id, float initial_weight,
+       uint32_t timeout_ms = 5000);
+int  backendPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeout_ms = 5000);
+int  backendPatchSpoolWeight(const char* base_url, int spool_id, float spool_weight,
+       uint32_t timeout_ms = 5000);
+int  backendPatchFilamentSpoolWeight(const char* base_url, int filament_id, float spool_weight,
+       uint32_t timeout_ms = 5000);
+int  backendPatchVendorEmptySpoolWeight(const char* base_url, int vendor_id, float spool_weight,
+       uint32_t timeout_ms = 5000);
+int  backendPatchSpoolLocation(const char* base_url, int spool_id,
+       const char* location_name = nullptr, uint32_t timeout_ms = 8000);
+int  backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* iso_datetime,
+       uint32_t timeout_ms = 5000);

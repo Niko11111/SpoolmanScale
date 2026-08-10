@@ -10,7 +10,7 @@
 
 #include "connection_screen.h"
 #include "hardware/sd_logger.h"
-#include "services/spoolman_api.h"
+#include "services/backend_api.h"
 #include "lang.h"
 #include "ui_common.h"
 
@@ -294,7 +294,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
       }
       return;
     }
-    int code = spoolmanCreateSpoolField(cfg_spoolman_base, "spoolscale_test", 1500);
+    int code = backendCreateSpoolField(cfg_spoolman_base, "spoolscale_test", 1500);
     Serial.printf("Test field create: %d\n", code);
     if (lbl_extra_fields_status) {
       if (code == 200 || code == 201) {
@@ -340,7 +340,7 @@ void checkAndCreateExtraFields(bool create_missing) {
   // GET /api/v1/field/spool — list all existing extra fields
   DynamicJsonDocument doc(8192);
   DeserializationError err = DeserializationError::Ok;
-  int code = spoolmanGetSpoolFieldsJson(cfg_spoolman_base, doc, 4000, &err);
+  int code = backendGetSpoolFieldsJson(cfg_spoolman_base, doc, 4000, &err);
   yield();
   lv_timer_handler();
   yield();
@@ -426,7 +426,7 @@ void checkAndCreateExtraFields(bool create_missing) {
     if (field_exists[i]) continue;
     lv_timer_handler();  // keep LVGL alive between HTTP calls
     yield();             // feed watchdog
-    int c2 = spoolmanCreateSpoolField(cfg_spoolman_base, REQUIRED_EXTRA_FIELDS_BASE[i], 3000);
+    int c2 = backendCreateSpoolField(cfg_spoolman_base, REQUIRED_EXTRA_FIELDS_BASE[i], 3000);
     lv_timer_handler();  // update display after each POST
     yield();
     Serial.printf("Create field '%s': %d\n", REQUIRED_EXTRA_FIELDS_BASE[i], c2);

@@ -1,0 +1,137 @@
+#include "backend_api.h"
+
+#include "hardware/sd_logger.h"
+#include "services/backend.h"
+#include "services/spoolman_api.h"
+
+// Logged once per unimplemented call so a missing FilaMan path shows up in
+// the SD log instead of looking like a silent failure.
+static int notSupported(const char* fn) {
+  logSDf("Backend: %s has no FilaMan implementation yet", fn);
+  return BACKEND_NOT_SUPPORTED;
+}
+
+// ============================================================
+//  READING
+// ============================================================
+
+int backendGetSpoolJson(const char* base_url, int spool_id, JsonDocument& doc,
+                        uint32_t timeout_ms, DeserializationError* out_err) {
+  if (backendIsFilaMan()) return notSupported("GetSpoolJson");
+  return spoolmanGetSpoolJson(base_url, spool_id, doc, timeout_ms, out_err);
+}
+
+int backendGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocument& doc,
+                            uint32_t timeout_ms, JsonDocument* filter,
+                            DeserializationError* out_err) {
+  if (backendIsFilaMan()) return notSupported("GetSpoolListJson");
+  return spoolmanGetSpoolListJson(base_url, allow_archived, doc, timeout_ms, filter, out_err);
+}
+
+int backendGetLocationsJson(const char* base_url, JsonDocument& doc,
+                            uint32_t timeout_ms, DeserializationError* out_err) {
+  if (backendIsFilaMan()) return notSupported("GetLocationsJson");
+  return spoolmanGetLocationsJson(base_url, doc, timeout_ms, out_err);
+}
+
+int backendGetSpoolFieldsJson(const char* base_url, JsonDocument& doc,
+                              uint32_t timeout_ms, DeserializationError* out_err) {
+  // FilaMan equivalent is /api/v1/system-extra-fields, different shape.
+  if (backendIsFilaMan()) return notSupported("GetSpoolFieldsJson");
+  return spoolmanGetSpoolFieldsJson(base_url, doc, timeout_ms, out_err);
+}
+
+int backendGetHealthCode(const char* base_url, uint32_t timeout_ms) {
+  if (backendIsFilaMan()) return notSupported("GetHealthCode");
+  return spoolmanGetHealthCode(base_url, timeout_ms);
+}
+
+bool backendGetVersion(const char* base_url, char* out_version, size_t out_size,
+                       uint32_t timeout_ms) {
+  if (backendIsFilaMan()) { notSupported("GetVersion"); return false; }
+  return spoolmanGetVersion(base_url, out_version, out_size, timeout_ms);
+}
+
+int backendCountActiveSpools(const char* base_url, uint32_t timeout_ms) {
+  if (backendIsFilaMan()) return notSupported("CountActiveSpools");
+  return spoolmanCountActiveSpools(base_url, timeout_ms);
+}
+
+// ============================================================
+//  CREATING
+// ============================================================
+
+int backendCreateSpool(const char* base_url, int filament_id, float initial_weight,
+                       float spool_weight, float remaining_weight, int* out_spool_id,
+                       uint32_t timeout_ms) {
+  if (backendIsFilaMan()) return notSupported("CreateSpool");
+  return spoolmanCreateSpool(base_url, filament_id, initial_weight, spool_weight,
+                             remaining_weight, out_spool_id, timeout_ms);
+}
+
+int backendCreateSpoolField(const char* base_url, const char* field_name,
+                            uint32_t timeout_ms) {
+  // Creating system extra fields in FilaMan appears to need admin rights,
+  // so this may stay unsupported on purpose. See integration doc.
+  if (backendIsFilaMan()) return notSupported("CreateSpoolField");
+  return spoolmanCreateSpoolField(base_url, field_name, timeout_ms);
+}
+
+// ============================================================
+//  WRITING
+// ============================================================
+
+int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
+                         uint32_t timeout_ms) {
+  if (backendIsFilaMan()) return notSupported("PatchSpoolTag");
+  return spoolmanPatchSpoolTag(base_url, spool_id, uuid, timeout_ms);
+}
+
+int backendPatchSpoolRemaining(const char* base_url, int spool_id, float remaining,
+                               const char* last_used_iso, const char* tag_uuid,
+                               uint32_t timeout_ms) {
+  if (backendIsFilaMan()) return notSupported("PatchSpoolRemaining");
+  (void)tag_uuid;   // Spoolman identifies the spool by id only
+  return spoolmanPatchSpoolRemaining(base_url, spool_id, remaining, last_used_iso, timeout_ms);
+}
+
+int backendPatchInitialWeight(const char* base_url, int spool_id, float initial_weight,
+                              uint32_t timeout_ms) {
+  if (backendIsFilaMan()) return notSupported("PatchInitialWeight");
+  return spoolmanPatchInitialWeight(base_url, spool_id, initial_weight, timeout_ms);
+}
+
+int backendPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeout_ms) {
+  if (backendIsFilaMan()) return notSupported("PatchArchiveSpool");
+  return spoolmanPatchArchiveSpool(base_url, spool_id, timeout_ms);
+}
+
+int backendPatchSpoolWeight(const char* base_url, int spool_id, float spool_weight,
+                            uint32_t timeout_ms) {
+  if (backendIsFilaMan()) return notSupported("PatchSpoolWeight");
+  return spoolmanPatchSpoolWeight(base_url, spool_id, spool_weight, timeout_ms);
+}
+
+int backendPatchFilamentSpoolWeight(const char* base_url, int filament_id, float spool_weight,
+                                    uint32_t timeout_ms) {
+  if (backendIsFilaMan()) return notSupported("PatchFilamentSpoolWeight");
+  return spoolmanPatchFilamentSpoolWeight(base_url, filament_id, spool_weight, timeout_ms);
+}
+
+int backendPatchVendorEmptySpoolWeight(const char* base_url, int vendor_id, float spool_weight,
+                                       uint32_t timeout_ms) {
+  if (backendIsFilaMan()) return notSupported("PatchVendorEmptySpoolWeight");
+  return spoolmanPatchVendorEmptySpoolWeight(base_url, vendor_id, spool_weight, timeout_ms);
+}
+
+int backendPatchSpoolLocation(const char* base_url, int spool_id, const char* location_name,
+                              uint32_t timeout_ms) {
+  if (backendIsFilaMan()) return notSupported("PatchSpoolLocation");
+  return spoolmanPatchSpoolLocation(base_url, spool_id, location_name, timeout_ms);
+}
+
+int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* iso_datetime,
+                               uint32_t timeout_ms) {
+  if (backendIsFilaMan()) return notSupported("PatchSpoolLastDried");
+  return spoolmanPatchSpoolLastDried(base_url, spool_id, iso_datetime, timeout_ms);
+}

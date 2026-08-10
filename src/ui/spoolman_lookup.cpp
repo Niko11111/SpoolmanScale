@@ -10,7 +10,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/location_state.h"
-#include "services/spoolman_api.h"
+#include "services/backend_api.h"
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
 
@@ -48,7 +48,7 @@ void querySpoolmanById(int spool_id) {
 
   DynamicJsonDocument doc(8192);
   DeserializationError err = DeserializationError::Ok;
-  int code = spoolmanGetSpoolJson(cfg_spoolman_base, spool_id, doc, 8000, &err);
+  int code = backendGetSpoolJson(cfg_spoolman_base, spool_id, doc, 8000, &err);
   if (code != 200) {
     Serial.printf("querySpoolmanById HTTP error: %d\n", code);
     logSDf("Spoolman byID: HTTP error %d", code);
@@ -276,7 +276,7 @@ void querySpoolman(const char* tray_uuid) {
       doc.clear();
     }
 
-    int code = spoolmanGetSpoolListJson(cfg_spoolman_base, false, doc, 20000, &filter, &err);
+    int code = backendGetSpoolListJson(cfg_spoolman_base, false, doc, 20000, &filter, &err);
     if (code != 200) {
       Serial.printf("Spoolman HTTP error: %d (attempt %d)\n", code, attempt);
       logSDf("Spoolman: HTTP error %d (attempt %d)", code, attempt);
@@ -469,7 +469,7 @@ void querySpoolman(const char* tray_uuid) {
   f2["id"] = true;
   f2["archived"] = true;
   f2["extra"]["tag"] = true;
-  int code2 = spoolmanGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
+  int code2 = backendGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
   if (code2 == 200) {
     if (!err2) {
       JsonArray spools2 = doc2.as<JsonArray>();

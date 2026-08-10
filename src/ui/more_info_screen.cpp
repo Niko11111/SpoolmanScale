@@ -12,7 +12,7 @@
 #include "services/list_limits.h"
 #include "services/location_state.h"
 #include "services/spoolman_actions.h"
-#include "services/spoolman_api.h"
+#include "services/backend_api.h"
 #include "services/wifi_manager.h"
 #include "lang.h"
 #include "tag_display.h"
@@ -179,7 +179,7 @@ void fetchAndFillLocationList() {
   logSDf("LOC: GET %s/api/v1/location", cfg_spoolman_base);
   JsonDocument doc;
   DeserializationError err = DeserializationError::Ok;
-  int code = spoolmanGetLocationsJson(cfg_spoolman_base, doc, 8000, &err);
+  int code = backendGetLocationsJson(cfg_spoolman_base, doc, 8000, &err);
   logSDf("LOC: HTTP code=%d", code);
   if (code != 200) {
     char buf[48];
@@ -226,7 +226,7 @@ void fetchAndFillLocationList() {
   lv_obj_center(lbl_none);
   lv_obj_add_event_cb(btn_none, [](lv_event_t *e) {
     if (!wifiManagerIsConnected() || sm_id <= 0) return;
-    int code = spoolmanPatchSpoolLocation(cfg_spoolman_base, sm_id, nullptr, 8000);
+    int code = backendPatchSpoolLocation(cfg_spoolman_base, sm_id, nullptr, 8000);
     if (code == 200) {
       sm_location_id = 0;
       sm_location_name[0] = '\0';
@@ -266,7 +266,7 @@ void fetchAndFillLocationList() {
       lv_obj_t *lbl = lv_obj_get_child(lv_event_get_target(e), 0);
       if (!lbl || !wifiManagerIsConnected() || sm_id <= 0) return;
       const char* sel_name = lv_label_get_text(lbl);
-      int code = spoolmanPatchSpoolLocation(cfg_spoolman_base, sm_id, sel_name, 8000);
+      int code = backendPatchSpoolLocation(cfg_spoolman_base, sm_id, sel_name, 8000);
       if (code == 200) {
         strncpy(sm_location_name, sel_name, sizeof(sm_location_name)-1);
         sm_location_id = 0;

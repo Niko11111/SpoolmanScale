@@ -7,7 +7,7 @@
 
 #include "date_display.h"
 #include "hardware/sd_logger.h"
-#include "services/spoolman_api.h"
+#include "services/backend_api.h"
 #include "lang.h"
 
 
@@ -36,7 +36,7 @@ void btn_dried_cb(lv_event_t *e) {
 
   Serial.printf("Setting last_dried: %s for spool ID %d\n", iso_full.c_str(), sm_id);
 
-  int code = spoolmanPatchSpoolLastDried(cfg_spoolman_base, sm_id, iso_full.c_str());
+  int code = backendPatchSpoolLastDried(cfg_spoolman_base, sm_id, iso_full.c_str());
 
   if (code == 200) {
     char de_date[12];

@@ -14,7 +14,8 @@
 #include "hardware/scale.h"
 #include "hardware/sd_logger.h"
 #include "services/app_settings.h"
-#include "services/spoolman_api.h"
+#include "services/backend.h"
+#include "services/backend_api.h"
 #include "services/time_service.h"
 #include "services/wifi_manager.h"
 #include "ui/header_status.h"
@@ -50,7 +51,7 @@ void wifiConnect() {
       }
       // Fix 2: immediate Spoolman health check after WiFi connect
       if (strlen(cfg_spoolman_base) > 4) {
-        int code = spoolmanGetHealthCode(cfg_spoolman_base, 3000);
+        int code = backendGetHealthCode(cfg_spoolman_base, 3000);
         sm_reachable = (code == 200);
         logSDf("Spoolman health check: HTTP %d -> %s",
           code, sm_reachable ? "OK" : "FAIL");
@@ -58,7 +59,7 @@ void wifiConnect() {
         // Fetch Spoolman version from /api/v1/info
         if (sm_reachable) {
           char ver[32] = "?";
-          if (spoolmanGetVersion(cfg_spoolman_base, ver, sizeof(ver), 3000)) {
+          if (backendGetVersion(cfg_spoolman_base, ver, sizeof(ver), 3000)) {
             logSDf("Spoolman version: %s", ver);
             Serial.printf("Spoolman version: %s\n", ver);
           }
@@ -98,6 +99,11 @@ void appSetup() {
   // SD card init (early so logs can capture boot sequence)
   // Note: cleanOldLogs() is deferred until after NTP sync (in wifiConnect)
   initSD();
+
+  // Which backend is active, plus FilaMan credentials. Runs after initSD()
+  // so the line lands in the log, and well before the first backend_api call
+  // in wifiConnect(). Logs only whether tokens are present, never their values.
+  backendLoadSettings();
 
   displayHardwareBegin(resetActivityTimer);
 
