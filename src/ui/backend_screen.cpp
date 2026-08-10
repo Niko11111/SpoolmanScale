@@ -136,9 +136,13 @@ void buildBackendScreen() {
     strncpy(host_buf, (h && h[0]) ? h : T(STR_BTN_WIFI_NONE), sizeof(host_buf) - 1);
     host_buf[sizeof(host_buf) - 1] = '\0';
 
+    // An address without a port silently goes to port 80. FilaMan listens on
+    // 8002 by default, so flag a missing port in amber rather than green.
+    const bool port_missing = h && h[0] && !strchr(h, ':');
+
     lv_obj_t *s = lv_label_create(row);
     lv_label_set_text(s, host_buf);
-    lv_obj_set_style_text_color(s, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(s, lv_color_hex(port_missing ? 0xf0b838 : 0x28d49a), 0);
     lv_obj_set_style_text_font(s, &lv_font_montserrat_ext_14, 0);
     lv_obj_align(s, LV_ALIGN_LEFT_MID, 8, 12);
 

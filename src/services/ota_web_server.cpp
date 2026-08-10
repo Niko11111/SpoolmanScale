@@ -7,6 +7,7 @@
 #include <Update.h>
 #include <WebServer.h>
 #include <lvgl.h>
+#include <string.h>
 #include <strings.h>
 
 #include "app_config.h"
@@ -573,10 +574,19 @@ void startOtaServer() {
     int rc = filamanRegisterDevice(backendBaseUrl(), code.c_str(),
                                    token, sizeof(token), errmsg, sizeof(errmsg));
     if (rc != 200 || !token[0]) {
-      String msg = String("Failed (HTTP ") + rc + ")";
-      if (errmsg[0]) msg += String(": ") + errmsg;
-      if (rc == 404) msg += " - codes are single use, create a new device or rotate the token in FilaMan";
-      if (rc == 403) msg += " - this device already has a token, rotate it in FilaMan to get a fresh code";
+      // Always name the URL that was actually contacted. A missing port
+      // silently sends the request to whatever runs on port 80, and the
+      // answer then looks like a FilaMan problem when it is not.
+      String msg = String("Failed (HTTP ") + rc + ") calling "
+                 + backendBaseUrl() + "/api/v1/devices/register";
+      if (errmsg[0]) msg += String(" - ") + errmsg;
+      if (!strchr(backendHost(), ':')) {
+        msg += " - the address has no port, FilaMan usually runs on :8002";
+      } else if (rc == 404) {
+        msg += " - codes are single use, create a new device or rotate the token in FilaMan";
+      } else if (rc == 403) {
+        msg += " - this device already has a token, rotate it in FilaMan to get a fresh code";
+      }
       ota_server.send(200, "text/plain", msg);
       return;
     }

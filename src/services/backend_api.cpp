@@ -4,9 +4,21 @@
 #include "services/backend.h"
 #include "services/spoolman_api.h"
 
-// Logged once per unimplemented call so a missing FilaMan path shows up in
-// the SD log instead of looking like a silent failure.
+// A missing FilaMan path must show up in the log instead of looking like a
+// silent failure, but the periodic health check would repeat the same line
+// every 30 seconds and bury everything else. Each call site is therefore
+// logged only once per boot. The names are string literals, so comparing
+// pointers is enough to tell them apart.
 static int notSupported(const char* fn) {
+  static const char* logged[24] = { nullptr };
+  static uint8_t logged_count = 0;
+
+  for (uint8_t i = 0; i < logged_count; i++) {
+    if (logged[i] == fn) return BACKEND_NOT_SUPPORTED;
+  }
+  if (logged_count < (sizeof(logged) / sizeof(logged[0]))) {
+    logged[logged_count++] = fn;
+  }
   logSDf("Backend: %s has no FilaMan implementation yet", fn);
   return BACKEND_NOT_SUPPORTED;
 }
