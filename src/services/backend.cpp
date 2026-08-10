@@ -5,16 +5,28 @@
 
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
+#include "services/app_settings.h"
 #include "services/prefs_store.h"
 
 // NVS keys. Kept short, NVS limits key length to 15 characters.
 #define NVS_BACKEND_MODE    "backend_mode"
 #define NVS_FILAMAN_KEY     "filaman_key"
 #define NVS_FILAMAN_DEVICE  "filaman_dev"
+#define NVS_FILAMAN_HOST    "filaman_host"
 
 static BackendMode s_mode = BACKEND_SPOOLMAN;
 static char s_api_key[80]      = "";
 static char s_device_token[80] = "";
+static char s_filaman_host[64] = "";
+static char s_filaman_base[80] = "";
+
+static void rebuildFilamanBase() {
+  if (s_filaman_host[0]) {
+    snprintf(s_filaman_base, sizeof(s_filaman_base), "http://%s", s_filaman_host);
+  } else {
+    s_filaman_base[0] = '\0';
+  }
+}
 
 void backendLoadSettings() {
   uint8_t raw = prefsGetUChar(NVS_BACKEND_MODE, BACKEND_SPOOLMAN);
@@ -28,9 +40,15 @@ void backendLoadSettings() {
   strncpy(s_device_token, dev.c_str(), sizeof(s_device_token) - 1);
   s_device_token[sizeof(s_device_token) - 1] = '\0';
 
+  String host = prefsGetString(NVS_FILAMAN_HOST, "");
+  strncpy(s_filaman_host, host.c_str(), sizeof(s_filaman_host) - 1);
+  s_filaman_host[sizeof(s_filaman_host) - 1] = '\0';
+  rebuildFilamanBase();
+
   // Never log the tokens themselves, only whether they are present.
-  logSDf("Backend: mode=%s key=%s device=%s",
+  logSDf("Backend: mode=%s host=%s key=%s device=%s",
     s_mode == BACKEND_FILAMAN ? "FilaMan" : "Spoolman",
+    s_filaman_host[0] ? s_filaman_host : "-",
     s_api_key[0] ? "set" : "empty",
     s_device_token[0] ? "set" : "empty");
 }
@@ -45,10 +63,24 @@ void backendSetMode(BackendMode mode) {
 }
 
 const char* backendBaseUrl() {
-  // Both backends currently share cfg_spoolman_base. For FilaMan the user
-  // enters the host including port, e.g. 192.168.4.100:8002, so the stored
-  // "http://<value>" is already the correct API root.
-  return cfg_spoolman_base;
+  return backendIsFilaMan() ? s_filaman_base : cfg_spoolman_base;
+}
+
+const char* backendHost() {
+  return backendIsFilaMan() ? s_filaman_host : cfg_spoolman_ip;
+}
+
+void backendSetHost(const char* host) {
+  if (!host) return;
+  if (!backendIsFilaMan()) {
+    saveSpoolmanIP(host);   // unchanged path, same NVS key as before
+    return;
+  }
+  strncpy(s_filaman_host, host, sizeof(s_filaman_host) - 1);
+  s_filaman_host[sizeof(s_filaman_host) - 1] = '\0';
+  rebuildFilamanBase();
+  prefsPutString(NVS_FILAMAN_HOST, s_filaman_host);
+  logSDf("Backend: FilaMan host -> %s", s_filaman_host);
 }
 
 const char* filamanApiKey()      { return s_api_key; }
@@ -71,7 +103,7 @@ void filamanSetDeviceToken(const char* token) {
 }
 
 bool backendIsConfigured() {
-  if (strlen(cfg_spoolman_base) <= 7) return false;   // longer than "http://"
+  if (strlen(backendBaseUrl()) <= 7) return false;   // longer than "http://"
   if (!backendIsFilaMan()) return true;
   return s_api_key[0] != '\0' && s_device_token[0] != '\0';
 }

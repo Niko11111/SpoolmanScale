@@ -12,6 +12,8 @@
 #include "app_config.h"
 #include "drying_config.h"
 #include "hardware/sd_logger.h"
+#include "services/backend.h"
+#include "services/filaman_api.h"
 #include "lang.h"
 #include "list_limits.h"
 #include "prefs_store.h"
@@ -298,7 +300,50 @@ void startOtaServer() {
       "setTimeout(()=>location.reload(),1500);"
       "});}"
       "</script>"
-      // Links
+      // FilaMan credentials. Only emitted in FilaMan mode, so the block is
+      // not merely hidden but never built and never sent. Saves heap on the
+      // ESP32 and keeps the page free of options that do not apply.
+      + (backendIsFilaMan() ? String(
+      "<div class='card'>"
+      "<h2>FilaMan</h2>"
+      "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>"
+      "FilaMan has no per-device permissions, so it needs both a device token "
+      "and an API key. Create a dedicated user with a limited role instead of "
+      "using the admin account.</p>"
+      "<div style='margin-bottom:12px'>"
+      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>"
+      "API key &mdash; create it in FilaMan under API keys</label>"
+      "<div style='display:flex;gap:10px;align-items:center'>"
+      "<input id='fm-key' type='password' placeholder='uak.1....' value='"
+      + String(filamanApiKey()[0] ? "________________" : "") + "'"
+      " style='flex:1;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
+      "border-radius:8px;padding:8px 10px;font-size:14px'>"
+      "<button class='btn-toggle' onclick='setKey()'>Save</button>"
+      "</div>"
+      "<span id='fm-key-s' style='font-size:12px;color:#28d49a'></span>"
+      "</div>"
+      "<div>"
+      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>"
+      "Device code &mdash; 6 characters from FilaMan admin. Current token: "
+      + String(filamanDeviceToken()[0] ? "set" : "missing") + "</label>"
+      "<div style='display:flex;gap:10px;align-items:center'>"
+      "<input id='fm-code' type='text' maxlength='6' placeholder='AA5354'"
+      " style='width:110px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
+      "border-radius:8px;padding:8px 10px;font-size:16px;letter-spacing:2px'>"
+      "<button class='btn-toggle' onclick='reg()'>Register device</button>"
+      "</div>"
+      "<span id='fm-reg-s' style='font-size:12px;color:#28d49a'></span>"
+      "</div></div>"
+      "<script>"
+      "function setKey(){var v=document.getElementById('fm-key').value;"
+      "if(v.indexOf('_')===0){return;}"
+      "fetch('/filaman/key',{method:'POST',body:v})"
+      ".then(r=>r.text()).then(t=>{document.getElementById('fm-key-s').textContent=t;});}"
+      "function reg(){var c=document.getElementById('fm-code').value;"
+      "document.getElementById('fm-reg-s').textContent='Registering...';"
+      "fetch('/filaman/register',{method:'POST',body:c})"
+      ".then(r=>r.text()).then(t=>{document.getElementById('fm-reg-s').textContent=t;});}"
+      "</script>") : String("")) +
       // List Limits combined card — at bottom
       "<div class='card'>"
       "<h2>List Limits</h2>"
@@ -502,6 +547,32 @@ void startOtaServer() {
   });
 
   // List limit: GET returns current value, POST sets new value
+  // FilaMan: store the API key. The value is never echoed back to the page,
+  // the input shows a placeholder when one is already stored.
+  ota_server.on("/filaman/key", HTTP_POST, []() {
+    String key = ota_server.arg("plain");
+    key.trim();
+    if (key.length() < 8) { ota_server.send(400, "text/plain", "Key too short"); return; }
+    filamanSetApiKey(key.c_str());
+    ota_server.send(200, "text/plain", "Saved");
+  });
+
+  // FilaMan: exchange the 6 character device code for a device token.
+  ota_server.on("/filaman/register", HTTP_POST, []() {
+    String code = ota_server.arg("plain");
+    code.trim();
+    if (code.length() < 4) { ota_server.send(400, "text/plain", "Code too short"); return; }
+
+    char token[80] = "";
+    int rc = filamanRegisterDevice(backendBaseUrl(), code.c_str(), token, sizeof(token));
+    if (rc != 200 || !token[0]) {
+      ota_server.send(200, "text/plain", String("Failed, HTTP ") + rc);
+      return;
+    }
+    filamanSetDeviceToken(token);
+    ota_server.send(200, "text/plain", "Device registered");
+  });
+
   ota_server.on("/listlimit", HTTP_GET, []() {
     char json[32];
     snprintf(json, sizeof(json), "{\"limit\":%d}", spool_list_limit);

@@ -23,6 +23,7 @@
 #include "services/ota_web_server.h"
 #include "services/spoolman_actions.h"
 #include "services/backend_api.h"
+#include "ui/backend_screen.h"
 #include "ui/bag_screen.h"
 #include "ui/cal_reminder_screen.h"
 #include "ui/confirm_popup.h"
@@ -150,6 +151,12 @@ void appLoop() {
     buildLastUsedScreen();
     hideAllOverlays();
     lv_obj_clear_flag(scr_lastused, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_backend_pending) {
+    show_backend_pending = false;
+    buildBackendScreen();          // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_backend, LV_OBJ_FLAG_HIDDEN);
   }
   if (show_spoolman_pending) {
     show_spoolman_pending = false;

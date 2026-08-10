@@ -8,6 +8,7 @@
 
 #include "extra_fields_screen.h"
 #include "hardware/sd_logger.h"
+#include "services/backend.h"
 #include "lang.h"
 #include "ui_common.h"
 
@@ -67,22 +68,40 @@ void buildConnectionScreen() {
     lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
     lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
     lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
+    char buf_backend[32];
+    strncpy(buf_backend, T(STR_BACKEND_TITLE), sizeof(buf_backend)-1);
+    buf_backend[sizeof(buf_backend)-1] = '\0';
     lv_obj_t *lbl = lv_label_create(btn_sp);
-    lv_label_set_text(lbl, "Spoolman IP");
+    lv_label_set_text(lbl, buf_backend);
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
+    // Shows which backend is active and where it lives, so the user does
+    // not have to open the screen to find out.
+    char buf_sub[80];
+    const char *host = backendHost();
+    snprintf(buf_sub, sizeof(buf_sub), "%s  %s",
+      backendIsFilaMan() ? "FilaMan" : "Spoolman",
+      (host && host[0]) ? host : T(STR_BTN_WIFI_NONE));
     lv_obj_t *sub = lv_label_create(btn_sp);
-    lv_label_set_text(sub, cfg_spoolman_ip[0] ? cfg_spoolman_ip : T(STR_BTN_WIFI_NONE));
+    lv_label_set_text(sub, buf_sub);
     lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
   lv_obj_add_event_cb(btn_sp, [](lv_event_t *e){
-    logSD("BTN: Conn -> Spoolman IP");
-    show_spoolman_pending = true;
+    logSD("BTN: Conn -> Backend");
+    show_backend_pending = true;
   }, LV_EVENT_CLICKED, NULL);
+
+  // Extra Fields only exist in Spoolman. FilaMan calls them system extra
+  // fields, they live behind a different endpoint and need admin rights,
+  // so the tile is not offered there.
+  if (backendIsFilaMan()) {
+    if (sd_verbose) logSD("[verbose] buildConnectionScreen: done (FilaMan, no extra fields tile)");
+    return;
+  }
 
   lv_obj_t *btn_ef = lv_btn_create(scr_connection);
   lv_obj_set_size(btn_ef, BTN_W, BTN_H);

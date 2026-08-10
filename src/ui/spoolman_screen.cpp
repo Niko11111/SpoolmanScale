@@ -11,6 +11,7 @@
 #include "extra_fields_screen.h"
 #include "hardware/sd_logger.h"
 #include "services/app_settings.h"
+#include "services/backend.h"
 #include "services/backend_api.h"
 #include "header_status.h"
 #include "lang.h"
@@ -47,27 +48,38 @@ void buildSpoolmanScreen() {
   lv_obj_clear_flag(scr_spoolman, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_bg_color(scr_spoolman, lv_color_hex(0x0a1020), 0);
 
-  // Header
-  buildSubHeader(scr_spoolman, T(STR_SPOOLMAN_TITLE),
+  // Header. The product name is not translated, so it is composed here
+  // instead of living in lang.cpp twice.
+  char buf_title[32];
+  snprintf(buf_title, sizeof(buf_title), "%s Server",
+           backendIsFilaMan() ? "FilaMan" : "Spoolman");
+  buildSubHeader(scr_spoolman, buf_title,
     [](lv_event_t *e){
       logSD("BTN: Spoolman -> Back");
-      if (sp_ip_input[0]) saveSpoolmanIP(sp_ip_input);
-      show_connection_from_spoolman_pending = true;
+      if (sp_ip_input[0]) backendSetHost(sp_ip_input);
+      // Return to wherever we came from. The Backend screen exists only
+      // when the user navigated through it, the setup flow does not.
+      if (scr_backend) show_backend_pending = true;
+      else             show_connection_from_spoolman_pending = true;
     });
 
-  // Hint: port info, font14, y=52
+  // Hint: default port of the active backend, font14, y=52
+  char buf_hint[32];
+  snprintf(buf_hint, sizeof(buf_hint), "192.168.x.x:%s",
+           backendIsFilaMan() ? "8002" : "7912");
   lv_obj_t *lbl_hint = lv_label_create(scr_spoolman);
-  lv_label_set_text(lbl_hint, "192.168.x.x:7912");
+  lv_label_set_text(lbl_hint, buf_hint);
   lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 52);
 
   // Pre-fill with "192.168." if empty — user only needs to add last two octets + port
-  if (cfg_spoolman_ip[0] == '\0') {
+  const char* cur_host = backendHost();
+  if (!cur_host || cur_host[0] == '\0') {
     strncpy(sp_ip_input, "192.168.", sizeof(sp_ip_input)-1);
   } else {
-    strncpy(sp_ip_input, cfg_spoolman_ip, sizeof(sp_ip_input)-1);
+    strncpy(sp_ip_input, cur_host, sizeof(sp_ip_input)-1);
   }
   sp_ip_input[sizeof(sp_ip_input)-1] = '\0';
   lv_obj_t *input_box = lv_obj_create(scr_spoolman);
@@ -168,7 +180,7 @@ void buildSpoolmanScreen() {
   lv_obj_set_style_border_color(btn_ok, lv_color_hex(0x2a5030), 0);
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
     if (!sp_ip_input[0]) return;
-    saveSpoolmanIP(sp_ip_input);
+    backendSetHost(sp_ip_input);
 
     // Show testing status
     if (lbl_sp_test_result) {

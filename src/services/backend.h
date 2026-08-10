@@ -39,8 +39,19 @@ bool        backendIsFilaMan();
 
 // Base URL of the active backend, always without a trailing slash.
 // In Spoolman mode this is cfg_spoolman_base, so existing behaviour
-// is unchanged.
+// is unchanged. In FilaMan mode it is built from the separate FilaMan
+// host, which lets the user switch back and forth without retyping
+// an address every time.
 const char* backendBaseUrl();
+
+// Host of the active backend as the user typed it, "ip" or "ip:port",
+// without the http:// prefix. Empty when unset.
+const char* backendHost();
+
+// Stores the host for the currently active backend and rebuilds its
+// base URL. In Spoolman mode this delegates to saveSpoolmanIP() so the
+// existing behaviour and NVS key stay exactly as they were.
+void backendSetHost(const char* host);
 
 // FilaMan credentials. Empty strings when unset.
 const char* filamanApiKey();

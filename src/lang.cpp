@@ -541,4 +541,15 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Rot-Schwellwert",               "Red threshold"                      },  // STR_DRY_NUMPAD_RED_TITLE
   { "Effektive Werte (%.1fx Multiplikator eingerechnet)", "Effective values (%.1fx multiplier included)" },  // STR_DRY_MAT_EFF_NOTE
   { "Versiegelt",                    "Sealed"                             },  // STR_DRY_SEALED_HDR
+
+  // Backend selection. "Spoolman" and "FilaMan" are product names and stay
+  // untranslated, so they are not in this table.
+  { "Backend",                       "Backend"                            },  // STR_BACKEND_TITLE
+  { "Server und Zugangsdaten",       "Server and credentials"             },  // STR_BACKEND_TILE_SUB
+  { "Adresse",                       "Address"                            },  // STR_BACKEND_ADDRESS
+  { "API-Key",                       "API key"                            },  // STR_BACKEND_APIKEY
+  { "Device-Token",                  "Device token"                       },  // STR_BACKEND_DEVICE_TOKEN
+  { "gesetzt",                       "set"                                },  // STR_BACKEND_SET
+  { "fehlt",                         "missing"                            },  // STR_BACKEND_MISSING
+  { "Zugangsdaten im Browser eingeben", "Enter credentials in browser"    },  // STR_BACKEND_BROWSER_HINT
 };
