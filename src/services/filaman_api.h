@@ -18,8 +18,14 @@
 // Exchanges the 6 character code from the FilaMan admin for a device
 // token. Returns the HTTP status code, 200 on success, and copies the
 // token into out_token. The token is never logged.
+//
+// Device codes are single use. A consumed code answers 404 "Invalid device
+// code", a code belonging to an already registered device answers 403. On
+// failure the server's own message is copied into out_error when given, so
+// the user sees why instead of a bare status number.
 int filamanRegisterDevice(const char* base_url, const char* device_code,
                           char* out_token, size_t out_size,
+                          char* out_error = nullptr, size_t err_size = 0,
                           uint32_t timeout_ms = 8000);
 
 // Presence ping. FilaMan marks a device offline after 180 seconds

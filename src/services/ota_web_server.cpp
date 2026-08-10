@@ -561,12 +561,23 @@ void startOtaServer() {
   ota_server.on("/filaman/register", HTTP_POST, []() {
     String code = ota_server.arg("plain");
     code.trim();
+    code.toUpperCase();   // codes are shown uppercase in the FilaMan admin
     if (code.length() < 4) { ota_server.send(400, "text/plain", "Code too short"); return; }
+    if (strlen(backendBaseUrl()) <= 7) {
+      ota_server.send(200, "text/plain", "Set the FilaMan address on the device first");
+      return;
+    }
 
     char token[80] = "";
-    int rc = filamanRegisterDevice(backendBaseUrl(), code.c_str(), token, sizeof(token));
+    char errmsg[96] = "";
+    int rc = filamanRegisterDevice(backendBaseUrl(), code.c_str(),
+                                   token, sizeof(token), errmsg, sizeof(errmsg));
     if (rc != 200 || !token[0]) {
-      ota_server.send(200, "text/plain", String("Failed, HTTP ") + rc);
+      String msg = String("Failed (HTTP ") + rc + ")";
+      if (errmsg[0]) msg += String(": ") + errmsg;
+      if (rc == 404) msg += " - codes are single use, create a new device or rotate the token in FilaMan";
+      if (rc == 403) msg += " - this device already has a token, rotate it in FilaMan to get a fresh code";
+      ota_server.send(200, "text/plain", msg);
       return;
     }
     filamanSetDeviceToken(token);

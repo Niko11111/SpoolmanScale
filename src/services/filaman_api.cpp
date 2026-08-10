@@ -13,21 +13,36 @@ static bool hasBaseUrl(const char* base_url) {
 
 int filamanRegisterDevice(const char* base_url, const char* device_code,
                           char* out_token, size_t out_size,
+                          char* out_error, size_t err_size,
                           uint32_t timeout_ms) {
   if (out_token && out_size > 0) out_token[0] = '\0';
+  if (out_error && err_size > 0) out_error[0] = '\0';
   if (!hasBaseUrl(base_url) || !device_code || !device_code[0]) return -1;
   if (!out_token || out_size == 0) return -1;
 
+  String url = String(base_url) + "/api/v1/devices/register";
+  logSDf("FilaMan: registering device at %s", url.c_str());
+
   HTTPClient http;
-  http.begin(String(base_url) + "/api/v1/devices/register");
+  http.begin(url);
   http.setTimeout(timeout_ms);
   http.addHeader("X-Device-Code", device_code);
   http.addHeader("Content-Type", "application/json");
   int code = http.POST("");
 
   if (code != 200) {
+    // FilaMan answers with {"detail":{"code":"...","message":"..."}}.
+    // Pass that message on, a bare status number helps nobody.
+    String body = http.getString();
     http.end();
-    logSDf("FilaMan: device register failed, HTTP %d", code);
+    if (out_error && err_size > 0) {
+      StaticJsonDocument<256> edoc;
+      const char* msg = nullptr;
+      if (!deserializeJson(edoc, body)) msg = edoc["detail"]["message"] | (const char*)nullptr;
+      strncpy(out_error, msg ? msg : body.c_str(), err_size - 1);
+      out_error[err_size - 1] = '\0';
+    }
+    logSDf("FilaMan: device register failed, HTTP %d: %s", code, body.c_str());
     return code;
   }
 
