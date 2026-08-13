@@ -23,6 +23,9 @@
 #include "services/ota_web_server.h"
 #include "services/spoolman_actions.h"
 #include "services/backend_api.h"
+#include "services/wifi_manager.h"
+#include "services/filaman_api.h"
+#include "services/backend.h"
 #include "ui/backend_screen.h"
 #include "ui/bag_screen.h"
 #include "ui/cal_reminder_screen.h"
@@ -449,10 +452,29 @@ void appLoop() {
     static unsigned long last_sm_check_ms = 0;
     if (millis() - last_sm_check_ms >= 30000 && !isSpoolFlowIdInputOpen()) {
       last_sm_check_ms = millis();
-      int code = backendGetHealthCode(cfg_spoolman_base, 3000);
+      int code = backendGetHealthCode(backendBaseUrl(), 3000);
       bool was_reachable = sm_reachable;
       sm_reachable = (code == 200);
       if (sm_reachable != was_reachable) updateHeaderStatus();
+    }
+  }
+
+  // FilaMan presence. The server marks a device offline after 180 seconds
+  // without a heartbeat, so this runs once a minute. Only sent when a device
+  // token exists, otherwise it would fail on every pass.
+  if (wifi_ok && backendIsFilaMan() && filamanDeviceToken()[0]) {
+    static unsigned long last_hb_ms = 0;
+    static bool last_hb_ok = false;
+    if (last_hb_ms == 0 || millis() - last_hb_ms >= 60000) {
+      last_hb_ms = millis();
+      int code = filamanHeartbeat(backendBaseUrl(), filamanDeviceToken(),
+                                  wifiManagerLocalIP().toString().c_str(), 4000);
+      bool ok = (code == 200);
+      // Only log on change, a line every minute would drown the log.
+      if (ok != last_hb_ok) {
+        logSDf("FilaMan: heartbeat %s (HTTP %d)", ok ? "OK" : "FAILED", code);
+        last_hb_ok = ok;
+      }
     }
   }
 

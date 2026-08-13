@@ -2,6 +2,7 @@
 
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
+#include "services/filaman_api.h"
 #include "services/spoolman_api.h"
 
 // A missing FilaMan path must show up in the log instead of looking like a
@@ -54,7 +55,9 @@ int backendGetSpoolFieldsJson(const char* base_url, JsonDocument& doc,
 }
 
 int backendGetHealthCode(const char* base_url, uint32_t timeout_ms) {
-  if (backendIsFilaMan()) return notSupported("GetHealthCode");
+  // FilaMan serves /health outside the /api/v1 prefix and needs no
+  // credentials for it, so this works before any token is stored.
+  if (backendIsFilaMan()) return filamanGetHealthCode(backendBaseUrl(), timeout_ms);
   return spoolmanGetHealthCode(base_url, timeout_ms);
 }
 
