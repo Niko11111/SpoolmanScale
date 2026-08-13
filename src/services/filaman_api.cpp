@@ -239,7 +239,14 @@ int filamanPatchRfidUid(const char* base_url, const char* api_key, int spool_id,
                         const char* uuid, uint32_t timeout_ms) {
   if (spool_id <= 0) return -1;
   JsonDocument body;
-  body["rfid_uid"] = uuid ? uuid : "";
+  if (uuid && uuid[0]) {
+    body["rfid_uid"] = uuid;
+  } else {
+    // Unlink. An empty string is not the same as no value here: FilaMan
+    // answers {"rfid_uid": ""} with HTTP 500 and keeps the old tag, while
+    // null clears it. Verified against a live 1.2.36 instance.
+    body["rfid_uid"] = nullptr;
+  }
   String payload;
   serializeJson(body, payload);
   return patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
