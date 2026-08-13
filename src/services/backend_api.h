@@ -34,6 +34,14 @@ bool backendGetVersion(const char* base_url, char* out_version, size_t out_size,
        uint32_t timeout_ms = 3000);
 int  backendCountActiveSpools(const char* base_url, uint32_t timeout_ms = 6000);
 
+// Server side tag lookup. FilaMan can filter by tag, which turns a scan into
+// one small answer instead of the full inventory. Returns an array in the
+// Spoolman shape, usually with a single entry.
+// Spoolman has no equivalent and returns BACKEND_NOT_SUPPORTED, callers then
+// keep using the existing full list scan.
+int  backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocument& doc,
+       uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr);
+
 // --- creating ------------------------------------------------
 int  backendCreateSpool(const char* base_url, int filament_id, float initial_weight,
        float spool_weight, float remaining_weight, int* out_spool_id = nullptr,

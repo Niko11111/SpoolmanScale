@@ -3,6 +3,7 @@
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/filaman_api.h"
+#include "services/list_limits.h"
 #include "services/spoolman_api.h"
 
 // A missing FilaMan path must show up in the log instead of looking like a
@@ -30,15 +31,38 @@ static int notSupported(const char* fn) {
 
 int backendGetSpoolJson(const char* base_url, int spool_id, JsonDocument& doc,
                         uint32_t timeout_ms, DeserializationError* out_err) {
-  if (backendIsFilaMan()) return notSupported("GetSpoolJson");
+  if (backendIsFilaMan()) {
+    return filamanGetSpoolJson(backendBaseUrl(), filamanApiKey(), spool_id,
+                               doc, timeout_ms, out_err);
+  }
   return spoolmanGetSpoolJson(base_url, spool_id, doc, timeout_ms, out_err);
 }
 
 int backendGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocument& doc,
                             uint32_t timeout_ms, JsonDocument* filter,
                             DeserializationError* out_err) {
-  if (backendIsFilaMan()) return notSupported("GetSpoolListJson");
+  if (backendIsFilaMan()) {
+    // The Spoolman JSON filter does not apply, FilaMan is translated field by
+    // field and only the keys the UI reads are produced anyway.
+    (void)filter;
+    return filamanGetSpoolListJson(backendBaseUrl(), filamanApiKey(), allow_archived,
+                                   doc, nullptr, spool_list_limit > 100 ? spool_list_limit : 100,
+                                   timeout_ms, out_err);
+  }
   return spoolmanGetSpoolListJson(base_url, allow_archived, doc, timeout_ms, filter, out_err);
+}
+
+int backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocument& doc,
+                          uint32_t timeout_ms, DeserializationError* out_err) {
+  if (backendIsFilaMan()) {
+    // FilaMan filters server side, so a scan costs one small answer instead
+    // of the whole inventory.
+    return filamanGetSpoolListJson(backendBaseUrl(), filamanApiKey(), false,
+                                   doc, tag_uuid, 20, timeout_ms, out_err);
+  }
+  // Spoolman has no such search, the caller keeps using the full list.
+  (void)tag_uuid;
+  return BACKEND_NOT_SUPPORTED;
 }
 
 int backendGetLocationsJson(const char* base_url, JsonDocument& doc,
