@@ -1,5 +1,6 @@
 #include "header_status.h"
 #include "app/app_state.h"
+#include "services/backend.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -33,6 +34,9 @@ void updateHeaderStatus() {
   }
 
   if (lbl_hdr_sm) {
+    // Label follows the active backend. Set here rather than only at build
+    // time, because the backend can be switched while the main screen exists.
+    lv_label_set_text(lbl_hdr_sm, backendIsFilaMan() ? "FLM" : "SPM");
     lv_obj_set_style_text_color(lbl_hdr_sm,
       sm_reachable ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
   }

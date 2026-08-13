@@ -1,6 +1,7 @@
 #include "main_screen.h"
 #include "navigation.h"
 #include "app/app_state.h"
+#include "services/backend.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -134,7 +135,7 @@ void buildUI() {
 
   // Fix 10: Spoolman reachability indicator
   lbl_hdr_sm = lv_label_create(hdr);
-  lv_label_set_text(lbl_hdr_sm, "SPM");
+  lv_label_set_text(lbl_hdr_sm, backendIsFilaMan() ? "FLM" : "SPM");
   lv_obj_set_style_text_color(lbl_hdr_sm, lv_color_hex(0x606060), 0);
   lv_obj_set_style_text_font(lbl_hdr_sm, &lv_font_montserrat_ext_12, 0);
   lv_obj_align(lbl_hdr_sm, LV_ALIGN_RIGHT_MID, -4, 0);
