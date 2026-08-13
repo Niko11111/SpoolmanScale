@@ -8,6 +8,7 @@
 #include "app/deferred_actions.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
+#include "header_status.h"
 #include "lang.h"
 #include "navigation.h"
 #include "ui_common.h"
@@ -22,6 +23,12 @@ static void applyPendingModeChange() {
   if (!s_mode_change_pending) return;
   s_mode_change_pending = false;
   backendSetMode(s_pending_mode);
+
+  // The header abbreviation and the caption above the database weight name
+  // the backend. Without this they would only catch up on the next
+  // reachability change, which can be half a minute away, or on reboot.
+  sm_reachable = false;          // unknown until the new backend answers
+  updateHeaderStatus();
 }
 
 // Small status row: label on the left, value on the right in green or amber.

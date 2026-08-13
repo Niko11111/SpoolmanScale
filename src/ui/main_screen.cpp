@@ -380,9 +380,11 @@ void buildUI() {
   // Right (x=210..424): Scale filament netto (big) + SM diff | live total | live -bag
   // Far right (x=425..479): TARE
 
-  // Spoolman section — caption
-  lv_obj_t *lbl_sm_cap = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_sm_cap, T(STR_LBL_SPOOLMAN));
+  // Backend section — caption. Kept in a global so the text can follow a
+  // backend switch without rebuilding the main screen. The product names are
+  // not translated, and STR_LBL_SPOOLMAN is identical in both languages.
+  lbl_sm_cap = lv_label_create(lv_scr_act());
+  lv_label_set_text(lbl_sm_cap, backendIsFilaMan() ? "FilaMan:" : "Spoolman:");
   lv_obj_set_style_text_color(lbl_sm_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_sm_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(lbl_sm_cap, 8, 188);

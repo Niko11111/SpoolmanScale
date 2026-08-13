@@ -33,12 +33,16 @@ void updateHeaderStatus() {
       scl_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
   }
 
+  // Both labels follow the active backend. Set here rather than only at build
+  // time, because the backend can be switched while the main screen exists.
   if (lbl_hdr_sm) {
-    // Label follows the active backend. Set here rather than only at build
-    // time, because the backend can be switched while the main screen exists.
     lv_label_set_text(lbl_hdr_sm, backendIsFilaMan() ? "FLM" : "SPM");
     lv_obj_set_style_text_color(lbl_hdr_sm,
       sm_reachable ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
+  }
+
+  if (lbl_sm_cap) {
+    lv_label_set_text(lbl_sm_cap, backendIsFilaMan() ? "FilaMan:" : "Spoolman:");
   }
 
   if (lbl_hdr_scans) {

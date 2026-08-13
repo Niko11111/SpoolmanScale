@@ -132,6 +132,7 @@ extern lv_obj_t *lbl_hdr_nfc;
 extern lv_obj_t *lbl_hdr_scl;
 extern lv_obj_t *lbl_hdr_scans;
 extern lv_obj_t *lbl_hdr_sm;
+extern lv_obj_t *lbl_sm_cap;   // "Spoolman:" / "FilaMan:" above the database weight
 extern lv_obj_t *lbl_bag_sm_diff;
 
 extern lv_obj_t *btn_dried;
