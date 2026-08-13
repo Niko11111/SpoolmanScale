@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
+#include <math.h>
 #include <string.h>
 
 #include "hardware/sd_logger.h"
@@ -35,6 +36,14 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 
 static bool hasBaseUrl(const char* base_url) {
   return base_url && strlen(base_url) > 7;   // longer than "http://"
+}
+
+// FilaMan's API accepts fractional grams, its edit forms do not: they reject
+// a value with decimals. A load cell has no meaningful accuracy below a gram
+// anyway, so everything sent in grams is rounded. Spoolman keeps receiving
+// the unrounded value, its behaviour is unchanged.
+static float roundGrams(float g) {
+  return roundf(g);
 }
 
 // ============================================================
@@ -307,7 +316,7 @@ int filamanReportWeight(const char* base_url, const char* device_token,
   JsonDocument body;
   if (spool_id > 0)                 body["spool_id"] = spool_id;
   else                              body["tag_uuid"] = tag_uuid;
-  body["measured_weight_g"] = measured_g;
+  body["measured_weight_g"] = roundGrams(measured_g);
   String payload;
   serializeJson(body, payload);
 
@@ -352,7 +361,7 @@ int filamanPatchSpoolFloat(const char* base_url, const char* api_key, int spool_
                            const char* field, float value, uint32_t timeout_ms) {
   if (spool_id <= 0 || !field) return -1;
   JsonDocument body;
-  body[field] = value;
+  body[field] = roundGrams(value);
   String payload;
   serializeJson(body, payload);
   return patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
@@ -363,7 +372,7 @@ int filamanPatchFilamentFloat(const char* base_url, const char* api_key, int fil
                               const char* field, float value, uint32_t timeout_ms) {
   if (filament_id <= 0 || !field) return -1;
   JsonDocument body;
-  body[field] = value;
+  body[field] = roundGrams(value);
   String payload;
   serializeJson(body, payload);
   return patchSpool(base_url, api_key, (String("/api/v1/filaments/") + filament_id).c_str(),
