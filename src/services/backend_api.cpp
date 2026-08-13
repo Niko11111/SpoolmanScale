@@ -54,6 +54,10 @@ int backendGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocum
 
 int backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocument& doc,
                           uint32_t timeout_ms, DeserializationError* out_err) {
+  // Without a tag the search parameter would be dropped and the call would
+  // quietly turn into a full inventory fetch, which callers would then treat
+  // as a successful lookup.
+  if (!tag_uuid || !tag_uuid[0]) return BACKEND_NOT_SUPPORTED;
   if (backendIsFilaMan()) {
     // FilaMan filters server side, so a scan costs one small answer instead
     // of the whole inventory.

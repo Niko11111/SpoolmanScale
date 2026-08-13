@@ -27,6 +27,12 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 
 }  // namespace
 
+// FilaMan caps page_size at 200 and answers larger values with a validation
+// error. The page ceiling is a safety net so a misbehaving server cannot
+// spin the loop forever; 20 pages is 4000 spools.
+#define FILAMAN_PAGE_MAX    200
+#define FILAMAN_MAX_PAGES    20
+
 static bool hasBaseUrl(const char* base_url) {
   return base_url && strlen(base_url) > 7;   // longer than "http://"
 }
@@ -227,44 +233,80 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
   if (out_err) *out_err = DeserializationError::Ok;
   if (!hasBaseUrl(base_url)) return -1;
 
-  String url = String(base_url) + "/api/v1/spools?page_size=" + page_size;
-  if (include_archived) url += "&include_archived=true";
-  if (search_term && search_term[0]) {
-    url += "&search=";
-    url += search_term;
-  }
-
-  HTTPClient http;
-  http.begin(url);
-  http.setTimeout(timeout_ms);
-  addApiKey(http, api_key);
-  int code = http.GET();
-  if (code != 200) { http.end(); return code; }
-
-  SpiRamAllocator alloc;
-  JsonDocument raw(&alloc);
-  DeserializationError err = deserializeJson(raw, http.getStream());
-  http.end();
-  if (err) {
-    if (out_err) *out_err = err;
-    logSDf("FilaMan: spool list parse error: %s", err.c_str());
-    return -2;
-  }
-
-  // FilaMan wraps lists in {items, page, page_size, total}, Spoolman returns
-  // a bare array. Unwrap here so callers see what they expect.
-  JsonArrayConst items = raw["items"].isNull() ? raw.as<JsonArrayConst>()
-                                               : raw["items"].as<JsonArrayConst>();
-  int total = raw["total"] | (int)items.size();
-  if (total > page_size) {
-    logSDf("FilaMan: %d spools total, only %d fetched - raise the page size",
-           total, page_size);
-  }
+  // FilaMan rejects page_size above 200 with a validation error, so an
+  // inventory larger than that has to be fetched page by page. Spoolman
+  // returns everything in one go, which is why nothing upstream expects
+  // paging.
+  if (page_size <= 0 || page_size > FILAMAN_PAGE_MAX) page_size = FILAMAN_PAGE_MAX;
 
   out_doc.clear();
   JsonArray dst = out_doc.to<JsonArray>();
-  for (JsonVariantConst v : items) {
-    mapSpool(v.as<JsonObjectConst>(), dst.add<JsonObject>());
+
+  int page = 1;
+  int fetched = 0;
+  int total = -1;
+
+  // timeout_ms applies to the whole call, not to each page. Without this a
+  // 20 second timeout over 20 pages could block the loop for minutes with
+  // LVGL never being serviced.
+  const uint32_t started_ms = millis();
+
+  while (true) {
+    String url = String(base_url) + "/api/v1/spools?page=" + page
+               + "&page_size=" + page_size;
+    if (include_archived) url += "&include_archived=true";
+    if (search_term && search_term[0]) {
+      url += "&search=";
+      url += search_term;
+    }
+
+    uint32_t elapsed = millis() - started_ms;
+    if (elapsed >= timeout_ms) {
+      logSDf("FilaMan: spool list timed out after %d of %d spools", fetched, total);
+      break;   // keep what was fetched, the caller sees a shorter list
+    }
+
+    HTTPClient http;
+    http.begin(url);
+    http.setTimeout(timeout_ms - elapsed);
+    addApiKey(http, api_key);
+    int code = http.GET();
+    if (code != 200) { http.end(); out_doc.clear(); return code; }
+
+    SpiRamAllocator alloc;
+    JsonDocument raw(&alloc);
+    DeserializationError err = deserializeJson(raw, http.getStream());
+    http.end();
+    if (err) {
+      if (out_err) *out_err = err;
+      logSDf("FilaMan: spool list page %d parse error: %s", page, err.c_str());
+      out_doc.clear();
+      return -2;
+    }
+
+    // FilaMan wraps lists in {items, page, page_size, total}, Spoolman
+    // returns a bare array. Unwrap so callers see what they expect.
+    JsonArrayConst items = raw["items"].isNull() ? raw.as<JsonArrayConst>()
+                                                 : raw["items"].as<JsonArrayConst>();
+    if (total < 0) total = raw["total"] | (int)items.size();
+
+    for (JsonVariantConst v : items) {
+      mapSpool(v.as<JsonObjectConst>(), dst.add<JsonObject>());
+    }
+    fetched += (int)items.size();
+
+    // A search is expected to be small, one page is enough.
+    if (search_term && search_term[0]) break;
+    if (items.size() == 0) break;
+    if (total >= 0 && fetched >= total) break;
+    if (page >= FILAMAN_MAX_PAGES) {
+      logSDf("FilaMan: stopped after %d pages, %d of %d spools fetched",
+             page, fetched, total);
+      break;
+    }
+    page++;
   }
+
+  if (page > 1) logSDf("FilaMan: fetched %d spools over %d pages", fetched, page);
   return 200;
 }

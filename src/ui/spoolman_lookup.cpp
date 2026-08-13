@@ -10,6 +10,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/location_state.h"
+#include "services/backend.h"
 #include "services/backend_api.h"
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
@@ -266,9 +267,46 @@ void querySpoolman(const char* tray_uuid) {
   JsonDocument doc(&psram_alloc);
   DeserializationError err = DeserializationError::Ok;
 
+  // Fast path: FilaMan can filter by tag server side, so one small answer
+  // replaces the whole inventory. Spoolman has no such search and returns
+  // BACKEND_NOT_SUPPORTED, which falls through to the loop below unchanged.
+  //
+  // An empty result is not proof of absence: the search only covers
+  // rfid_uid, not custom_fields, so spools imported from Spoolman are
+  // invisible here until their UID has been migrated. Those are found by
+  // the full scan below.
+  bool have_result = false;
+  {
+    int fcode = backendFindSpoolByTag(cfg_spoolman_base, tray_uuid, doc, 8000, &err);
+    if (fcode == 200 && !err) {
+      // The server side search is a text filter, not an exact tag match. A
+      // substring hit on some other spool must not suppress the full scan,
+      // otherwise a spool whose UID still lives in custom_fields would be
+      // reported as unknown. Only accept the short cut on a real match.
+      for (JsonObjectConst s : doc.as<JsonArrayConst>()) {
+        String t = s["extra"]["tag"].as<String>();
+        t.replace("\"", "");
+        t.trim();
+        if (t.equalsIgnoreCase(tray_uuid)) { have_result = true; break; }
+      }
+      if (have_result) {
+        logSDf("Backend: tag search hit, %d spool(s) returned",
+               (int)doc.as<JsonArrayConst>().size());
+      }
+    } else if (fcode != BACKEND_NOT_SUPPORTED) {
+      // Spoolman answers NOT_SUPPORTED by design, anything else is a real
+      // failure and should not disappear silently.
+      logSDf("Backend: tag search failed, code=%d err=%s", fcode, err.c_str());
+    }
+    if (!have_result) {
+      doc.clear();
+      err = DeserializationError::Ok;
+    }
+  }
+
   // Up to 2 attempts: first try, then 1 retry on IncompleteInput / connection issues.
   // 20s timeout is generous for large Spoolman datasets (200+ spools over WiFi).
-  for (int attempt = 1; attempt <= 2; attempt++) {
+  for (int attempt = 1; !have_result && attempt <= 2; attempt++) {
     if (attempt > 1) {
       Serial.printf("Spoolman: retry attempt %d after %s\n", attempt, err.c_str());
       logSDf("Spoolman: retry attempt %d (prev err=%s)", attempt, err.c_str());
@@ -460,8 +498,12 @@ void querySpoolman(const char* tray_uuid) {
   Serial.println("Spoolman: not in active spools, checking archive...");
   doc.clear();  // RAM freigeben vor zweitem Call
 
-  // Second call with allow_archived=true
-  DynamicJsonDocument doc2(16384);
+  // Second call with allow_archived=true.
+  // DynamicJsonDocument is the deprecated v6 shim in ArduinoJson 7: the
+  // capacity argument is ignored and it allocates from the internal heap
+  // without limit. With a large FilaMan archive that is a way to run the
+  // internal RAM dry, so this one uses PSRAM like the active list above.
+  JsonDocument doc2(&psram_alloc);
   DeserializationError err2 = DeserializationError::Ok;
   StaticJsonDocument<256> filter2;
   JsonArray filter2_arr = filter2.to<JsonArray>();
