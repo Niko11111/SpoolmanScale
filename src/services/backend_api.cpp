@@ -1,5 +1,6 @@
 #include "backend_api.h"
 
+#include "app/app_state.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/filaman_api.h"
@@ -126,38 +127,61 @@ int backendCreateSpoolField(const char* base_url, const char* field_name,
 
 int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
                          uint32_t timeout_ms) {
-  if (backendIsFilaMan()) return notSupported("PatchSpoolTag");
+  if (backendIsFilaMan()) {
+    // Both tag types go into the native rfid_uid. An empty uuid unlinks.
+    return filamanPatchRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, uuid, timeout_ms);
+  }
   return spoolmanPatchSpoolTag(base_url, spool_id, uuid, timeout_ms);
 }
 
 int backendPatchSpoolRemaining(const char* base_url, int spool_id, float remaining,
                                const char* last_used_iso, const char* tag_uuid,
-                               uint32_t timeout_ms) {
-  if (backendIsFilaMan()) return notSupported("PatchSpoolRemaining");
-  (void)tag_uuid;   // Spoolman identifies the spool by id only
+                               float measured_g, uint32_t timeout_ms) {
+  if (backendIsFilaMan()) {
+    // FilaMan does the arithmetic on its side. Handing it the remaining
+    // weight would subtract the empty spool weight a second time.
+    float gross = (measured_g >= 0.0f) ? measured_g : (remaining + sm_spool_weight);
+    (void)last_used_iso;   // FilaMan stamps last_used_at itself
+    return filamanReportWeight(backendBaseUrl(), filamanDeviceToken(),
+                               spool_id, tag_uuid, gross, timeout_ms);
+  }
+  (void)tag_uuid;    // Spoolman identifies the spool by id only
+  (void)measured_g;
   return spoolmanPatchSpoolRemaining(base_url, spool_id, remaining, last_used_iso, timeout_ms);
 }
 
 int backendPatchInitialWeight(const char* base_url, int spool_id, float initial_weight,
                               uint32_t timeout_ms) {
-  if (backendIsFilaMan()) return notSupported("PatchInitialWeight");
+  if (backendIsFilaMan()) {
+    return filamanPatchSpoolFloat(backendBaseUrl(), filamanApiKey(), spool_id,
+                                  "initial_total_weight_g", initial_weight, timeout_ms);
+  }
   return spoolmanPatchInitialWeight(base_url, spool_id, initial_weight, timeout_ms);
 }
 
 int backendPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeout_ms) {
-  if (backendIsFilaMan()) return notSupported("PatchArchiveSpool");
+  if (backendIsFilaMan()) {
+    // Not a PATCH in FilaMan, archiving has its own endpoint.
+    return filamanSetStatus(backendBaseUrl(), filamanApiKey(), spool_id, "archived", timeout_ms);
+  }
   return spoolmanPatchArchiveSpool(base_url, spool_id, timeout_ms);
 }
 
 int backendPatchSpoolWeight(const char* base_url, int spool_id, float spool_weight,
                             uint32_t timeout_ms) {
-  if (backendIsFilaMan()) return notSupported("PatchSpoolWeight");
+  if (backendIsFilaMan()) {
+    return filamanPatchSpoolFloat(backendBaseUrl(), filamanApiKey(), spool_id,
+                                  "empty_spool_weight_g", spool_weight, timeout_ms);
+  }
   return spoolmanPatchSpoolWeight(base_url, spool_id, spool_weight, timeout_ms);
 }
 
 int backendPatchFilamentSpoolWeight(const char* base_url, int filament_id, float spool_weight,
                                     uint32_t timeout_ms) {
-  if (backendIsFilaMan()) return notSupported("PatchFilamentSpoolWeight");
+  if (backendIsFilaMan()) {
+    return filamanPatchFilamentFloat(backendBaseUrl(), filamanApiKey(), filament_id,
+                                     "default_spool_weight_g", spool_weight, timeout_ms);
+  }
   return spoolmanPatchFilamentSpoolWeight(base_url, filament_id, spool_weight, timeout_ms);
 }
 
@@ -175,6 +199,11 @@ int backendPatchSpoolLocation(const char* base_url, int spool_id, const char* lo
 
 int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* iso_datetime,
                                uint32_t timeout_ms) {
-  if (backendIsFilaMan()) return notSupported("PatchSpoolLastDried");
+  if (backendIsFilaMan()) {
+    // The only write that needs a read first: a PATCH on custom_fields
+    // replaces the whole object rather than merging.
+    return filamanPatchCustomField(backendBaseUrl(), filamanApiKey(), spool_id,
+                                   "last_dried", iso_datetime, timeout_ms);
+  }
   return spoolmanPatchSpoolLastDried(base_url, spool_id, iso_datetime, timeout_ms);
 }

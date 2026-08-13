@@ -53,12 +53,18 @@ int  backendCreateSpoolField(const char* base_url, const char* field_name,
 int  backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
        uint32_t timeout_ms = 5000);
 
-// tag_uuid is unused in Spoolman mode. FilaMan reports weight through its
-// device API, which identifies the spool by id or by tag, so the parameter
-// is already in the signature to avoid touching call sites again later.
+// Weight update. The two backends want different numbers:
+//   Spoolman takes the finished remaining weight
+//   FilaMan takes the measured gross weight and subtracts the empty spool
+//           weight itself, so passing remaining would subtract it twice
+// measured_g must therefore be supplied by the caller, which is the only
+// place that knows what the scale actually showed. Pass a negative value to
+// let it be reconstructed as remaining + sm_spool_weight.
+// tag_uuid is unused in Spoolman mode; FilaMan can identify the spool by id
+// or by tag.
 int  backendPatchSpoolRemaining(const char* base_url, int spool_id, float remaining,
        const char* last_used_iso = nullptr, const char* tag_uuid = nullptr,
-       uint32_t timeout_ms = 5000);
+       float measured_g = -1.0f, uint32_t timeout_ms = 5000);
 
 int  backendPatchInitialWeight(const char* base_url, int spool_id, float initial_weight,
        uint32_t timeout_ms = 5000);

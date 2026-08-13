@@ -70,7 +70,13 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
     JsonVariantConst cf = src["custom_fields"];
     const char* legacy = cf["spoolmanscale_tag"] | (const char*)nullptr;
     if (!legacy) legacy = cf["spoolman_extra"]["tag"] | (const char*)nullptr;
-    if (legacy && legacy[0]) extra["tag"] = legacy;
+    if (legacy && legacy[0]) {
+      extra["tag"] = legacy;
+      // Marks where the tag came from. Only these spools need migrating, and
+      // without the flag a failed tag search would look the same and trigger
+      // a pointless PATCH on every single scan.
+      extra["tag_legacy"] = true;
+    }
   }
 
   const char* dried = src["custom_fields"]["last_dried"] | (const char*)nullptr;
@@ -192,6 +198,176 @@ int filamanGetHealthCode(const char* base_url, uint32_t timeout_ms) {
   int code = http.GET();
   http.end();
   return code;
+}
+
+// ============================================================
+//  WRITING
+// ============================================================
+
+// Shared PATCH helper. Returns the HTTP status, or -1 when the request
+// could not be built at all.
+static int patchSpool(const char* base_url, const char* api_key, const char* path,
+                      const String& body, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url)) return -1;
+
+  HTTPClient http;
+  http.begin(String(base_url) + path);
+  http.setTimeout(timeout_ms);
+  addApiKey(http, api_key);
+  http.addHeader("Content-Type", "application/json");
+  int code = http.PATCH(body);
+  // Any 2xx counts. Treating only 200 as success would turn a 201 or 204 into
+  // a failure for every caller.
+  if (code < 200 || code >= 300) {
+    String resp = http.getString();
+    logSDf("FilaMan: PATCH %s -> HTTP %d: %s", path, code, resp.substring(0, 120).c_str());
+  }
+  http.end();
+  return (code >= 200 && code < 300) ? 200 : code;
+}
+
+int filamanPatchRfidUid(const char* base_url, const char* api_key, int spool_id,
+                        const char* uuid, uint32_t timeout_ms) {
+  if (spool_id <= 0) return -1;
+  JsonDocument body;
+  body["rfid_uid"] = uuid ? uuid : "";
+  String payload;
+  serializeJson(body, payload);
+  return patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
+                    payload, timeout_ms);
+}
+
+int filamanPatchCustomField(const char* base_url, const char* api_key, int spool_id,
+                            const char* key, const char* value, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || !key || !key[0]) return -1;
+
+  // A PATCH on custom_fields replaces the whole object instead of merging,
+  // so everything already there has to be read and sent back along with the
+  // new value. Verified on a live instance: without this, last_dried and the
+  // Spoolman import data would be wiped on the first write.
+  HTTPClient get;
+  get.begin(String(base_url) + "/api/v1/spools/" + spool_id);
+  get.setTimeout(timeout_ms);
+  addApiKey(get, api_key);
+  int gcode = get.GET();
+  if (gcode != 200) {
+    get.end();
+    logSDf("FilaMan: custom field GET failed, HTTP %d", gcode);
+    return gcode;
+  }
+
+  SpiRamAllocator alloc;
+  JsonDocument raw(&alloc);
+  DeserializationError err = deserializeJson(raw, get.getStream());
+  get.end();
+  if (err) {
+    logSDf("FilaMan: custom field GET parse error: %s", err.c_str());
+    return -2;
+  }
+
+  // Same PSRAM allocator as the source document. With the default allocator
+  // a large custom_fields object could fail to fit in internal RAM, and
+  // ArduinoJson would then drop members silently, which is precisely the data
+  // loss this read-modify-write exists to prevent.
+  JsonDocument body(&alloc);
+  JsonObject cf = body["custom_fields"].to<JsonObject>();
+  JsonObjectConst existing = raw["custom_fields"];
+  if (!existing.isNull()) {
+    for (JsonPairConst kv : existing) {
+      if (strcmp(kv.key().c_str(), key) == 0) continue;   // replaced below
+      cf[kv.key()] = kv.value();
+    }
+  } else if (!raw["custom_fields"].isNull()) {
+    logSD("FilaMan: custom_fields is not an object, existing values may be lost");
+  }
+  cf[key] = value ? value : "";
+
+  if (body.overflowed()) {
+    logSD("FilaMan: custom_fields copy overflowed, PATCH aborted to avoid data loss");
+    return -2;
+  }
+
+  String payload;
+  serializeJson(body, payload);
+  return patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
+                    payload, timeout_ms);
+}
+
+int filamanReportWeight(const char* base_url, const char* device_token,
+                        int spool_id, const char* tag_uuid, float measured_g,
+                        uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url)) return -1;
+  if (!device_token || !device_token[0]) {
+    // Distinct from -1 so the caller can tell "not set up" from "call failed".
+    logSD("FilaMan: no device token, weight not reported");
+    return FILAMAN_NO_DEVICE_TOKEN;
+  }
+  if (spool_id <= 0 && (!tag_uuid || !tag_uuid[0])) return -1;
+
+  JsonDocument body;
+  if (spool_id > 0)                 body["spool_id"] = spool_id;
+  else                              body["tag_uuid"] = tag_uuid;
+  body["measured_weight_g"] = measured_g;
+  String payload;
+  serializeJson(body, payload);
+
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/devices/scale/weight");
+  http.setTimeout(timeout_ms);
+  http.addHeader("Authorization", String("Device ") + device_token);
+  http.addHeader("Content-Type", "application/json");
+  int code = http.POST(payload);
+  if (code < 200 || code >= 300) {
+    String resp = http.getString();
+    logSDf("FilaMan: weight report -> HTTP %d: %s", code, resp.substring(0, 120).c_str());
+  }
+  http.end();
+  return (code >= 200 && code < 300) ? 200 : code;
+}
+
+int filamanSetStatus(const char* base_url, const char* api_key, int spool_id,
+                     const char* status_key, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || !status_key) return -1;
+
+  JsonDocument body;
+  body["status"] = status_key;
+  String payload;
+  serializeJson(body, payload);
+
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/spools/" + spool_id + "/status");
+  http.setTimeout(timeout_ms);
+  addApiKey(http, api_key);
+  http.addHeader("Content-Type", "application/json");
+  int code = http.POST(payload);
+  if (code < 200 || code >= 300) {
+    String resp = http.getString();
+    logSDf("FilaMan: status change -> HTTP %d: %s", code, resp.substring(0, 120).c_str());
+  }
+  http.end();
+  return (code >= 200 && code < 300) ? 200 : code;
+}
+
+int filamanPatchSpoolFloat(const char* base_url, const char* api_key, int spool_id,
+                           const char* field, float value, uint32_t timeout_ms) {
+  if (spool_id <= 0 || !field) return -1;
+  JsonDocument body;
+  body[field] = value;
+  String payload;
+  serializeJson(body, payload);
+  return patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
+                    payload, timeout_ms);
+}
+
+int filamanPatchFilamentFloat(const char* base_url, const char* api_key, int filament_id,
+                              const char* field, float value, uint32_t timeout_ms) {
+  if (filament_id <= 0 || !field) return -1;
+  JsonDocument body;
+  body[field] = value;
+  String payload;
+  serializeJson(body, payload);
+  return patchSpool(base_url, api_key, (String("/api/v1/filaments/") + filament_id).c_str(),
+                    payload, timeout_ms);
 }
 
 // ============================================================

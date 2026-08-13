@@ -365,6 +365,21 @@ void querySpoolman(const char* tray_uuid) {
     // FOUND
     sm_found    = true;
     sm_id       = spool["id"] | 0;
+
+    // One-off migration for spools imported from Spoolman. Their UID lives in
+    // custom_fields, where FilaMan's ?search= cannot see it, so every scan
+    // would pull the whole inventory. Writing it to the native rfid_uid once
+    // puts the spool on the fast path for good. Silent by design, the user
+    // has nothing to decide here.
+    //
+    // Keyed off the flag the reader set, not off which path found the spool:
+    // a failed tag search also lands here, and re-patching an already correct
+    // rfid_uid on every scan would be a pointless write and a needless stall.
+    if (backendIsFilaMan() && sm_id > 0 && (spool["extra"]["tag_legacy"] | false)) {
+      int mc = backendPatchSpoolTag(cfg_spoolman_base, sm_id, tag_val.c_str(), 4000);
+      logSDf("FilaMan: migrated tag of spool %d to rfid_uid, HTTP %d", sm_id, mc);
+    }
+
     sm_filament_id = spool["filament"]["id"] | 0;
     sm_vendor_id   = spool["filament"]["vendor"]["id"] | 0;
     sm_remaining = spool["remaining_weight"] | 0.0f;

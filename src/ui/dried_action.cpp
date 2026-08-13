@@ -7,9 +7,18 @@
 
 #include "date_display.h"
 #include "hardware/sd_logger.h"
+#include "services/backend.h"
 #include "services/backend_api.h"
 #include "lang.h"
 
+// The write itself is deferred to appLoop(). In FilaMan mode it costs two
+// sequential HTTP calls, a GET to read custom_fields and a PATCH to write
+// them back, because a PATCH replaces the whole object. Up to sixteen
+// seconds inside an LVGL callback would freeze the display and can trip the
+// watchdog, so the callback only records what to do and returns.
+static bool  s_dried_pending = false;
+static int   s_dried_spool_id = 0;
+static char  s_dried_iso[32]  = "";
 
 void btn_dried_cb(lv_event_t *e) {
   logSD("UI: Button -> Dried Today");
@@ -31,21 +40,46 @@ void btn_dried_cb(lv_event_t *e) {
       utc->tm_year+1900, utc->tm_mon+1, utc->tm_mday,
       utc->tm_hour, utc->tm_min, utc->tm_sec);
   }
-  String iso_full = String(iso_full_buf);
-  String today = iso_full.substring(0, 10);
 
-  Serial.printf("Setting last_dried: %s for spool ID %d\n", iso_full.c_str(), sm_id);
+  strncpy(s_dried_iso, iso_full_buf, sizeof(s_dried_iso)-1);
+  s_dried_iso[sizeof(s_dried_iso)-1] = '\0';
+  s_dried_spool_id = sm_id;
+  s_dried_pending  = true;
 
-  int code = backendPatchSpoolLastDried(cfg_spoolman_base, sm_id, iso_full.c_str());
+  // Immediate feedback, the result replaces this on the next loop pass.
+  lv_label_set_text(lbl_spoolman_dried_val, "...");
+  Serial.printf("Queued last_dried: %s for spool ID %d\n", s_dried_iso, s_dried_spool_id);
+}
+
+void handleDriedDeferredAction() {
+  if (!s_dried_pending) return;
+  s_dried_pending = false;
+
+  int   spool_id = s_dried_spool_id;
+  char  iso[32];
+  strncpy(iso, s_dried_iso, sizeof(iso));
+  iso[sizeof(iso)-1] = '\0';
+
+  int code = backendPatchSpoolLastDried(cfg_spoolman_base, spool_id, iso);
+
+  // The spool may have been swapped while the request was in flight.
+  if (spool_id != sm_id) {
+    logSDf("Dried: spool changed during write (%d -> %d), display not touched",
+           spool_id, sm_id);
+    return;
+  }
 
   if (code == 200) {
+    char today[11];
+    strncpy(today, iso, 10);
+    today[10] = '\0';
     char de_date[12];
-    isoToDe(today.c_str(), de_date, sizeof(de_date));
+    isoToDe(today, de_date, sizeof(de_date));
     strncpy(sm_last_dried, de_date, sizeof(sm_last_dried)-1);
     applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, de_date);
-    Serial.println("last_dried set!");
+    logSDf("Dried: last_dried set for spool %d", spool_id);
   } else {
-    Serial.printf("PATCH error: %d\n", code);
+    logSDf("Dried: write failed for spool %d, HTTP %d", spool_id, code);
     lv_label_set_text(lbl_spoolman_dried_val, T(STR_ERR_SAVE));
   }
 }

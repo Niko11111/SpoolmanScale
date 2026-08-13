@@ -24,7 +24,12 @@ void patchSpoolmanWeight(float remaining) {
     snprintf(today, sizeof(today), "%04d-%02d-%02d", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday);
   }
   Serial.printf("PATCH weight: %.1fg\n", remaining);
-  int code = backendPatchSpoolRemaining(cfg_spoolman_base, sm_id, remaining, today[0] ? today : nullptr);
+  // FilaMan wants the gross weight and subtracts the empty spool weight
+  // itself. The callers computed remaining as scale minus sm_spool_weight,
+  // so adding it back gives exactly what the scale showed.
+  float measured = remaining + sm_spool_weight;
+  int code = backendPatchSpoolRemaining(cfg_spoolman_base, sm_id, remaining,
+                                        today[0] ? today : nullptr, nullptr, measured);
   logSDf("PATCH weight=%.1fg ID=%d HTTP %d", remaining, sm_id, code);
   if (code == 200) {
     sm_remaining = remaining;

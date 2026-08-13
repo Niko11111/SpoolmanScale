@@ -31,6 +31,7 @@
 #include "ui/cal_reminder_screen.h"
 #include "ui/confirm_popup.h"
 #include "ui/connection_screen.h"
+#include "ui/dried_action.h"
 #include "ui/drying_reminder_screen.h"
 #include "ui/extra_fields_screen.h"
 #include "ui/factor_screen.h"
@@ -127,6 +128,7 @@ void appLoop() {
 
   // Extra fields check/create — deferred from LVGL event callback to loop
   handleExtraFieldsDeferredActions();
+  handleDriedDeferredAction();
   if (cal_reminder_pending) {
     cal_reminder_pending = false;
     showCalReminderScreen();

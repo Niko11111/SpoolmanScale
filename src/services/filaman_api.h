@@ -53,6 +53,46 @@ int filamanGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
                         JsonDocument& out_doc, uint32_t timeout_ms = 8000,
                         DeserializationError* out_err = nullptr);
 
+// Returned when FilaMan is selected but no device token has been registered.
+// Distinct from -1 so a caller can tell "not set up yet" from "call failed".
+#define FILAMAN_NO_DEVICE_TOKEN  (-91)
+
+// ---------- writing ----------
+//
+// Only custom_fields needs the read-modify-write dance: a PATCH replaces the
+// whole object, verified against a live instance. Every other field can be
+// patched on its own.
+
+// Sets rfid_uid. Used for link, and with an empty uuid for unlink.
+int filamanPatchRfidUid(const char* base_url, const char* api_key, int spool_id,
+                        const char* uuid, uint32_t timeout_ms = 5000);
+
+// Writes one key inside custom_fields while preserving the others.
+// Costs a GET before the PATCH, which is why nothing else uses this path.
+int filamanPatchCustomField(const char* base_url, const char* api_key, int spool_id,
+                            const char* key, const char* value,
+                            uint32_t timeout_ms = 8000);
+
+// Reports a measured weight through the device API. FilaMan works out the
+// remaining filament itself, so the empty spool weight must NOT be
+// subtracted beforehand. Identifies the spool by id, or by tag when id is 0.
+int filamanReportWeight(const char* base_url, const char* device_token,
+                        int spool_id, const char* tag_uuid, float measured_g,
+                        uint32_t timeout_ms = 8000);
+
+// Status change, for example archiving. Uses its own endpoint rather than a
+// PATCH, see /api/v1/spools/{id}/status.
+int filamanSetStatus(const char* base_url, const char* api_key, int spool_id,
+                     const char* status_key, uint32_t timeout_ms = 5000);
+
+// Single numeric fields on the spool.
+int filamanPatchSpoolFloat(const char* base_url, const char* api_key, int spool_id,
+                           const char* field, float value, uint32_t timeout_ms = 5000);
+
+// Single numeric field on a filament, for the default empty spool weight.
+int filamanPatchFilamentFloat(const char* base_url, const char* api_key, int filament_id,
+                              const char* field, float value, uint32_t timeout_ms = 5000);
+
 // Spool list. Result is a plain array like Spoolman's /api/v1/spool, with
 // FilaMan's {items,page,page_size,total} envelope already unwrapped.
 // When search_term is given, the server filters and usually returns a single
