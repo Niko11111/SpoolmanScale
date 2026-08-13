@@ -379,6 +379,50 @@ int filamanPatchFilamentFloat(const char* base_url, const char* api_key, int fil
                     payload, timeout_ms);
 }
 
+int filamanCreateSpool(const char* base_url, const char* api_key, int filament_id,
+                       float initial_weight, float spool_weight, float remaining_weight,
+                       const char* rfid_uid, int* out_spool_id, uint32_t timeout_ms) {
+  if (out_spool_id) *out_spool_id = 0;
+  if (!hasBaseUrl(base_url) || filament_id <= 0) return -1;
+
+  JsonDocument body;
+  body["filament_id"]            = filament_id;
+  body["initial_total_weight_g"] = roundGrams(initial_weight);
+  body["empty_spool_weight_g"]   = roundGrams(spool_weight);
+  body["remaining_weight_g"]     = roundGrams(remaining_weight);
+  // 2 = opened. A spool that lands on the scale has been unwrapped, and
+  // FilaMan would otherwise leave it at its own default.
+  body["status_id"] = 2;
+  // Creating and linking in one request saves a round trip and avoids a spool
+  // existing untagged if the follow-up PATCH were to fail.
+  if (rfid_uid && rfid_uid[0]) body["rfid_uid"] = rfid_uid;
+
+  String payload;
+  serializeJson(body, payload);
+
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/spools");
+  http.setTimeout(timeout_ms);
+  addApiKey(http, api_key);
+  http.addHeader("Content-Type", "application/json");
+  int code = http.POST(payload);
+
+  if (code >= 200 && code < 300) {
+    JsonDocument doc;
+    if (!deserializeJson(doc, http.getString()) && out_spool_id) {
+      *out_spool_id = doc["id"] | 0;
+    }
+    http.end();
+    logSDf("FilaMan: spool created, id=%d", out_spool_id ? *out_spool_id : 0);
+    return 200;
+  }
+
+  String resp = http.getString();
+  http.end();
+  logSDf("FilaMan: create spool -> HTTP %d: %s", code, resp.substring(0, 120).c_str());
+  return code;
+}
+
 // ============================================================
 //  READING
 // ============================================================

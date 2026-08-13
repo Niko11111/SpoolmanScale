@@ -108,7 +108,13 @@ int backendCountActiveSpools(const char* base_url, uint32_t timeout_ms) {
 int backendCreateSpool(const char* base_url, int filament_id, float initial_weight,
                        float spool_weight, float remaining_weight, int* out_spool_id,
                        uint32_t timeout_ms) {
-  if (backendIsFilaMan()) return notSupported("CreateSpool");
+  if (backendIsFilaMan()) {
+    // The tag is attached by the caller in a separate step, same as with
+    // Spoolman, so the flow stays identical for both backends.
+    return filamanCreateSpool(backendBaseUrl(), filamanApiKey(), filament_id,
+                              initial_weight, spool_weight, remaining_weight,
+                              nullptr, out_spool_id, timeout_ms);
+  }
   return spoolmanCreateSpool(base_url, filament_id, initial_weight, spool_weight,
                              remaining_weight, out_spool_id, timeout_ms);
 }

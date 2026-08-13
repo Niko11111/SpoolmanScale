@@ -93,6 +93,14 @@ int filamanPatchSpoolFloat(const char* base_url, const char* api_key, int spool_
 int filamanPatchFilamentFloat(const char* base_url, const char* api_key, int filament_id,
                               const char* field, float value, uint32_t timeout_ms = 5000);
 
+// Creates a spool. Only filament_id is mandatory. The new id is written to
+// out_spool_id, which the copy flow needs in order to link the tag right
+// afterwards. rfid_uid may be passed to create and link in one request.
+int filamanCreateSpool(const char* base_url, const char* api_key, int filament_id,
+                       float initial_weight, float spool_weight, float remaining_weight,
+                       const char* rfid_uid = nullptr, int* out_spool_id = nullptr,
+                       uint32_t timeout_ms = 8000);
+
 // Spool list. Result is a plain array like Spoolman's /api/v1/spool, with
 // FilaMan's {items,page,page_size,total} envelope already unwrapped.
 // When search_term is given, the server filters and usually returns a single
