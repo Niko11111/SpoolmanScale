@@ -9,11 +9,11 @@
 #include "app_config.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "ota_browser.h"
 #include "services/ota_state.h"
 #include "ui_common.h"
 
 
-void showOtaBrowserScreen();
 void showOtaGithubScreen();
 
 void showOtaScreen() {

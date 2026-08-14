@@ -157,9 +157,11 @@ void appSetup() {
     showWelcomeScreen();
   } else if (cfg_first_boot && strlen(cfg_wifi_ssid) == 0) {
     Serial.println("First boot -> welcome screen (language already set)");
+    setup_active = true;
     showFirstBootScreen();
   } else if (strlen(cfg_wifi_ssid) == 0) {
     Serial.println("SSID empty -> WiFi setup");
+    setup_active = true;
     showWifiSetupScreen();
   } else {
     wifiConnect();

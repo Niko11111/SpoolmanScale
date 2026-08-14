@@ -21,6 +21,7 @@
 #include "services/auto_weight_state.h"
 #include "services/location_state.h"
 #include "services/ota_web_server.h"
+#include "ui/ota_browser.h"
 #include "services/spoolman_actions.h"
 #include "services/backend_api.h"
 #include "services/wifi_manager.h"
@@ -123,6 +124,9 @@ void appLoop() {
 
   // OTA web server bedienen wenn aktiv
   handleOtaServerClient();
+  // While the credential screen is open the user types into the browser, so
+  // the two rows have to follow along without a keypress on the device.
+  refreshWebCredentialRows();
 
   // Silent background OTA auto-check disabled
 
@@ -226,6 +230,11 @@ void appLoop() {
     skip_setup_pending = false;
     if (scr_welcome)    { lv_obj_del(scr_welcome);    scr_welcome    = nullptr; }
     if (scr_first_boot) { lv_obj_del(scr_first_boot); scr_first_boot = nullptr; }
+    showMainScreen();
+  }
+  if (finish_setup_pending) {
+    finish_setup_pending = false;
+    stopOtaServer();
     showMainScreen();
   }
   if (lang_selected_no_reboot) {

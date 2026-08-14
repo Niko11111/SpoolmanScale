@@ -465,6 +465,14 @@ enum StringID {
   STR_BACKEND_MISSING,
   STR_BACKEND_BROWSER_HINT,
 
+  // Web interface, shared by the firmware upload and the credential entry
+  STR_WEB_TITLE,
+  STR_WEB_SETUP_HINT,
+  STR_BTN_WEB_SETUP,
+  STR_BTN_FINISH,
+  STR_BTN_NEXT,
+  STR_SETUP_BACKEND_HINT,
+
   STR_COUNT
 };
 

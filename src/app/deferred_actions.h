@@ -1,6 +1,7 @@
 #pragma once
 
 extern bool skip_setup_pending;
+extern bool finish_setup_pending;
 extern bool cal_reminder_pending;
 extern bool show_bag_pending;
 extern bool show_factor_pending;

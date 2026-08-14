@@ -21,6 +21,14 @@ extern bool cfg_lang_set;
 extern bool cfg_first_boot;
 extern bool spoolman_fail_is_setup;
 
+// True while the user is walking through the first time setup chain
+// (language, WiFi, backend, address, credentials). Screens that appear in
+// both the setup and the settings menu use it to decide which way "back"
+// goes and what to hide. Previously this was guessed from whether the
+// connection screen happened to exist, which broke as soon as a new step was
+// inserted. Cleared by showMainScreen(), which every exit path goes through.
+extern bool setup_active;
+
 extern bool nfc_ok;
 extern bool scl_ok;
 

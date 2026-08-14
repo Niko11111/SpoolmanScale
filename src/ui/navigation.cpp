@@ -60,6 +60,9 @@ void hideAllOverlays() {
 void showMainScreen() {
   logSD("SHOW: MainScreen");
   logSD("UI: Screen -> Main");
+  // Every way out of the setup chain ends here, whether the user finished it,
+  // skipped it or closed it, so this is the one place the flag has to clear.
+  setup_active = false;
   setSpoolFlowIdInputOpen(false);
   hideAllOverlays();
 

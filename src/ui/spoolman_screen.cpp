@@ -9,6 +9,7 @@
 
 #include "connection_screen.h"
 #include "extra_fields_screen.h"
+#include "ota_browser.h"
 #include "hardware/sd_logger.h"
 #include "services/app_settings.h"
 #include "services/backend.h"
@@ -221,8 +222,11 @@ void buildSpoolmanScreen() {
       lv_label_set_text(lbl_sp_test_result, result_buf);
       lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x40c080), 0);
     }
-    // Show Extra Fields button
-    if (btn_sp_extra_fields) lv_obj_clear_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
+    // Reveal the button again. In FilaMan it only leads somewhere during the
+    // setup, where it is the step to the credentials.
+    if (btn_sp_extra_fields && (setup_active || !backendIsFilaMan())) {
+      lv_obj_clear_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
+    }
 
     logSDf("Spoolman IP test OK: %s | %d spools", sm_ver, spool_count);
     Serial.printf("Spoolman IP test OK: %s | %d spools\n", sm_ver, spool_count);
@@ -258,14 +262,26 @@ void buildSpoolmanScreen() {
   lv_obj_set_style_shadow_width(btn_sp_extra_fields, 0, 0);
   lv_obj_set_style_border_width(btn_sp_extra_fields, 1, 0);
   lv_obj_set_style_border_color(btn_sp_extra_fields, lv_color_hex(0x1a3060), 0);
-  bool in_setup_flow = (strlen(cfg_wifi_ssid) > 0 && scr_connection == nullptr);
-  if (in_setup_flow) lv_obj_add_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
+  // This button doubles as the step onward during setup, which is why it
+  // starts hidden there and only appears once the connection test passed.
+  // FilaMan needs no extra fields at all, it accepts custom_fields keys
+  // without a prior definition, so outside the setup it has nothing to do.
+  if (setup_active || backendIsFilaMan()) {
+    lv_obj_add_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
+  }
   lv_obj_add_event_cb(btn_sp_extra_fields, [](lv_event_t *e) {
-    bool in_setup = (strlen(cfg_wifi_ssid) > 0 && scr_connection == nullptr);
-    showExtraFieldsScreen(in_setup);
+    if (backendIsFilaMan()) {
+      // Next comes the credential step, and those are entered in a browser.
+      showOtaBrowserScreen(WEB_CTX_SETUP);
+    } else {
+      showExtraFieldsScreen(setup_active);
+    }
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ef = lv_label_create(btn_sp_extra_fields);
-  lv_label_set_text(lbl_ef, "Extra Fields  " LV_SYMBOL_RIGHT);
+  { char ef_buf[32];
+    if (backendIsFilaMan()) snprintf(ef_buf, sizeof(ef_buf), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_NEXT));
+    else                    snprintf(ef_buf, sizeof(ef_buf), "Extra Fields  " LV_SYMBOL_RIGHT);
+    lv_label_set_text(lbl_ef, ef_buf); }
   lv_obj_set_style_text_color(lbl_ef, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_ef, &lv_font_montserrat_ext_14, 0);
   lv_obj_align(lbl_ef, LV_ALIGN_CENTER, 0, 0);

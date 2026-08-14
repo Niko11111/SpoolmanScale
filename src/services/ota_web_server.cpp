@@ -128,7 +128,7 @@ void startOtaServer() {
       "<input type='file' name='firmware' accept='.bin' required>"
       "<button class='btn-flash' type='submit'>&#x2191;&nbsp; Flash Firmware</button>"
       "</form>"
-      "<p class='hint'>Select SpoolmanScale vX.Y.Z.bin &mdash; device restarts automatically</p>"
+      "<p class='hint'>Select SpoolmanScale vX.Y.Z.bin - device restarts automatically</p>"
       "</div>"
 
       // SD-Logs Card
@@ -313,7 +313,7 @@ void startOtaServer() {
       "using the admin account.</p>"
       "<div style='margin-bottom:12px'>"
       "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>"
-      "API key &mdash; create it in FilaMan under API keys</label>"
+      "API key - create it in FilaMan under API keys</label>"
       "<div style='display:flex;gap:10px;align-items:center'>"
       "<input id='fm-key' type='password' placeholder='uak.1....' value='"
       + String(filamanApiKey()[0] ? "________________" : "") + "'"
@@ -325,7 +325,7 @@ void startOtaServer() {
       "</div>"
       "<div>"
       "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>"
-      "Device code &mdash; 6 characters from FilaMan admin. Current token: "
+      "Device code - 6 characters from FilaMan admin. Current token: "
       + String(filamanDeviceToken()[0] ? "set" : "missing") + "</label>"
       "<div style='display:flex;gap:10px;align-items:center'>"
       "<input id='fm-code' type='text' maxlength='6' placeholder='AA5354'"
@@ -350,7 +350,7 @@ void startOtaServer() {
       "<h2>List Limits</h2>"
       "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>Controls how many items are shown in picker lists. Increase carefully.</p>"
       "<div style='margin-bottom:12px'>"
-      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>Spool list (link/copy) &mdash; Default: 16</label>"
+      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>Spool list (link/copy) - Default: 16</label>"
       "<div style='display:flex;gap:10px;align-items:center'>"
       "<input id='ll-in' type='number' min='5' max='100' value='"+String(spool_list_limit)+"'"
       " style='width:72px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
@@ -359,7 +359,7 @@ void startOtaServer() {
       "<span id='ll-s' style='font-size:12px;color:#28d49a;line-height:36px'></span>"
       "</div></div>"
       "<div>"
-      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>Location list &mdash; Default: 30 (too many may cause reboot)</label>"
+      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>Location list - Default: 30 (too many may cause reboot)</label>"
       "<div style='display:flex;gap:10px;align-items:center'>"
       "<input id='locl-in' type='number' min='5' max='100' value='"+String(location_list_limit)+"'"
       " style='width:72px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
@@ -367,7 +367,7 @@ void startOtaServer() {
       "<button class='btn-toggle' onclick='setLocL()'>Save</button>"
       "<span id='locl-s' style='font-size:12px;color:#28d49a;line-height:36px'></span>"
       "</div></div></div>"
-      "<div class='footer'>Not affiliated with " + String(backendName()) + " &mdash; Open Source Project</div>"
+      "<div class='footer'>Not affiliated with " + String(backendName()) + " - Open Source Project</div>"
       "</body></html>";
     ota_server.send(200, "text/html", html);
   });

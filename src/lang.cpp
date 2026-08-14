@@ -564,4 +564,17 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "gesetzt",                       "set"                                },  // STR_BACKEND_SET
   { "fehlt",                         "missing"                            },  // STR_BACKEND_MISSING
   { "Zugangsdaten im Browser eingeben", "Enter credentials in browser"    },  // STR_BACKEND_BROWSER_HINT
+
+  // Web interface. The same server serves the firmware upload and the
+  // FilaMan credentials, so the screen title stays neutral.
+  { "Weboberfläche",                 "Web interface"                      },  // STR_WEB_TITLE
+  { "Adresse am Rechner im Browser öffnen und dort API-Key und Gerätecode eintragen. Der Status unten aktualisiert sich von selbst.",
+    "Open this address in a browser on your computer and enter the API key and device code there. The status below updates on its own."
+                                                                          },  // STR_WEB_SETUP_HINT
+  { "Im Browser einrichten",         "Set up in browser"                  },  // STR_BTN_WEB_SETUP
+  { "Fertig",                        "Done"                               },  // STR_BTN_FINISH
+  { "Weiter",                        "Next"                               },  // STR_BTN_NEXT
+  { "Welchen Server benutzt du? Das lässt sich später jederzeit im Menü ändern.",
+    "Which server do you use? This can be changed in the menu at any time."
+                                                                          },  // STR_SETUP_BACKEND_HINT
 };

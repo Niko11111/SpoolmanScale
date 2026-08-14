@@ -11,6 +11,7 @@
 #include "header_status.h"
 #include "lang.h"
 #include "navigation.h"
+#include "ota_browser.h"
 #include "ui_common.h"
 
 // Switching the mode has to happen outside this screen's own event callback,
@@ -66,10 +67,39 @@ void buildBackendScreen() {
   buf_title[sizeof(buf_title) - 1] = '\0';
 
   scr_backend = buildOverlayScreen();
-  buildSubHeader(scr_backend, buf_title, [](lv_event_t *e) {
-    logSD("BTN: Backend -> Back");
-    show_connection_from_spoolman_pending = true;
-  });
+
+  // During the first time setup this is a step, not a settings page: there is
+  // no settings menu to go back to, and the way onward is the address screen.
+  if (setup_active) {
+    lv_obj_t *lbl_title = lv_label_create(scr_backend);
+    lv_label_set_text(lbl_title, buf_title);
+    lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
+    lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 12);
+
+    lv_obj_t *btn_x = lv_btn_create(scr_backend);
+    lv_obj_set_size(btn_x, 44, 44);
+    lv_obj_align(btn_x, LV_ALIGN_TOP_RIGHT, -4, 2);
+    lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
+    lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btn_x, 8, 0);
+    lv_obj_set_style_shadow_width(btn_x, 0, 0);
+    lv_obj_set_style_border_width(btn_x, 0, 0);
+    lv_obj_add_event_cb(btn_x, [](lv_event_t *e){
+      logSD("BTN: Backend setup -> Close");
+      finish_setup_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_x = lv_label_create(btn_x);
+    lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
+    lv_obj_set_style_text_color(lbl_x, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
+    lv_obj_center(lbl_x);
+  } else {
+    buildSubHeader(scr_backend, buf_title, [](lv_event_t *e) {
+      logSD("BTN: Backend -> Back");
+      show_connection_from_spoolman_pending = true;
+    });
+  }
 
   // --- mode selector: two segments side by side -----------------
   const int SEG_W = 216, SEG_H = 54, SEG_Y = 54;
@@ -110,6 +140,44 @@ void buildBackendScreen() {
       s_mode_change_pending = true;
       show_backend_pending = true;                  // rebuild from appLoop()
     }, LV_EVENT_CLICKED, NULL);
+  }
+
+  // In setup the address is the next step of its own, so this screen asks the
+  // one question it is here for and gets out of the way.
+  if (setup_active) {
+    char buf_hint[160];
+    strncpy(buf_hint, T(STR_SETUP_BACKEND_HINT), sizeof(buf_hint) - 1);
+    buf_hint[sizeof(buf_hint) - 1] = '\0';
+
+    lv_obj_t *hint = lv_label_create(scr_backend);
+    lv_label_set_text(hint, buf_hint);
+    lv_obj_set_style_text_color(hint, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_14, 0);
+    lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(hint, 440);
+    lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, 138);
+
+    lv_obj_t *btn_next = lv_btn_create(scr_backend);
+    lv_obj_set_size(btn_next, 200, 48);
+    lv_obj_align(btn_next, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_set_style_bg_color(btn_next, lv_color_hex(0x1a3020), 0);
+    lv_obj_set_style_bg_color(btn_next, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btn_next, 8, 0);
+    lv_obj_set_style_shadow_width(btn_next, 0, 0);
+    lv_obj_set_style_border_width(btn_next, 0, 0);
+    lv_obj_add_event_cb(btn_next, [](lv_event_t *e) {
+      logSD("BTN: Backend setup -> Address");
+      show_spoolman_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_next = lv_label_create(btn_next);
+    char next_buf[32];
+    snprintf(next_buf, sizeof(next_buf), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_NEXT));
+    lv_label_set_text(lbl_next, next_buf);
+    lv_obj_set_style_text_color(lbl_next, lv_color_hex(0x40c080), 0);
+    lv_obj_set_style_text_font(lbl_next, &lv_font_montserrat_ext_16, 0);
+    lv_obj_center(lbl_next);
+    return;
   }
 
   // --- address row, opens the existing numpad screen -------------
@@ -170,16 +238,30 @@ void buildBackendScreen() {
     addStatusRow(scr_backend, 228, T(STR_BACKEND_DEVICE_TOKEN),
                  filamanDeviceToken()[0] != '\0');
 
-    char buf_hint[64];
-    strncpy(buf_hint, T(STR_BACKEND_BROWSER_HINT), sizeof(buf_hint) - 1);
-    buf_hint[sizeof(buf_hint) - 1] = '\0';
+    // The hint used to only say "enter them in the browser" without offering
+    // a way there. This starts the device web server and shows its address.
+    lv_obj_t *btn_web = lv_btn_create(scr_backend);
+    lv_obj_set_size(btn_web, 300, 44);
+    lv_obj_align(btn_web, LV_ALIGN_TOP_MID, 0, 262);
+    lv_obj_set_style_bg_color(btn_web, lv_color_hex(0x0a1e30), 0);
+    lv_obj_set_style_bg_color(btn_web, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btn_web, 8, 0);
+    lv_obj_set_style_shadow_width(btn_web, 0, 0);
+    lv_obj_set_style_border_width(btn_web, 1, 0);
+    lv_obj_set_style_border_color(btn_web, lv_color_hex(0x1a3060), 0);
+    lv_obj_add_event_cb(btn_web, [](lv_event_t *e) {
+      logSD("BTN: Backend -> Web interface");
+      // Safe to call directly: this only hides the backend screen, the one
+      // it deletes and rebuilds is the web screen.
+      showOtaBrowserScreen(WEB_CTX_BACKEND);
+    }, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *hint = lv_label_create(scr_backend);
-    lv_label_set_text(hint, buf_hint);
-    lv_obj_set_style_text_color(hint, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_width(hint, 440);
-    lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, 268);
+    lv_obj_t *lbl_web = lv_label_create(btn_web);
+    char buf_web[40];
+    snprintf(buf_web, sizeof(buf_web), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_WEB_SETUP));
+    lv_label_set_text(lbl_web, buf_web);
+    lv_obj_set_style_text_color(lbl_web, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_font(lbl_web, &lv_font_montserrat_ext_16, 0);
+    lv_obj_center(lbl_web);
   }
 }

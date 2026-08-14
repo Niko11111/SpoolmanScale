@@ -13,6 +13,7 @@ char cfg_spoolman_base[80] = "";
 bool cfg_lang_set          = false;
 bool cfg_first_boot        = true;
 bool spoolman_fail_is_setup  = false;
+bool setup_active            = false;
 
 bool nfc_ok = false;
 bool scl_ok = false;

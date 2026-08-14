@@ -1,6 +1,7 @@
 #include "deferred_actions.h"
 
 bool skip_setup_pending = false;
+bool finish_setup_pending = false;
 bool cal_reminder_pending = false;
 bool show_bag_pending = false;
 bool show_factor_pending = false;

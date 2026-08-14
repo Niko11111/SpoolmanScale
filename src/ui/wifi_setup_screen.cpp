@@ -406,11 +406,24 @@ void buildWifiConnectingScreen() {
   lv_obj_set_style_shadow_width(btn_next, 0, 0);
   lv_obj_set_style_border_width(btn_next, 0, 0);
   lv_obj_add_event_cb(btn_next, [](lv_event_t *e) {
-    logSD("BTN: WifiConnecting -> Next (Spoolman)");
-    show_spoolman_pending = true;
+    // The backend choice comes before the address, because the address is
+    // only meaningful once we know which server it points at. Outside the
+    // setup this button keeps leading straight to the address screen.
+    if (setup_active) {
+      logSD("BTN: WifiConnecting -> Next (Backend)");
+      show_backend_pending = true;
+    } else {
+      logSD("BTN: WifiConnecting -> Next (Address)");
+      show_spoolman_pending = true;
+    }
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_next = lv_label_create(btn_next);
-  { char nb[32]; snprintf(nb, sizeof(nb), "%s  " LV_SYMBOL_RIGHT, backendName());
+  { char nb[32];
+    if (setup_active) strncpy(nb, T(STR_BTN_NEXT), sizeof(nb) - 1);
+    else              strncpy(nb, backendName(), sizeof(nb) - 1);
+    nb[sizeof(nb) - 1] = '\0';
+    size_t n = strlen(nb);
+    snprintf(nb + n, sizeof(nb) - n, "  " LV_SYMBOL_RIGHT);
     lv_label_set_text(lbl_next, nb); }
   lv_obj_set_style_text_color(lbl_next, lv_color_hex(0x40c080), 0);
   lv_obj_set_style_text_font(lbl_next, &lv_font_montserrat_ext_16, 0);
