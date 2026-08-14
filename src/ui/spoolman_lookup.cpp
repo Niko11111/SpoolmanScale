@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include <lvgl.h>
 #include <cstring>
+#include <ctime>
 
 #include "bambu/bambu_tag.h"
 #include "hardware/sd_logger.h"
@@ -32,6 +33,43 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
   }
 };
 
+}
+
+// Reduces an ISO timestamp to the day it falls on, in local time.
+//
+// FilaMan answers in UTC with a trailing Z. Simply cutting after ten
+// characters would show the previous day for anything weighed late in the
+// evening, which is exactly when spools get weighed. Spoolman's date is
+// already local, written by this scale, and carries no Z, so it passes
+// through unchanged.
+// Epoch seconds for a UTC date and time. There is no timegm() in the ESP32
+// toolchain, and mktime() would apply the local offset, which is exactly the
+// error this is meant to avoid. Days from civil, after Howard Hinnant.
+static time_t utcToEpoch(int y, int mo, int d, int h, int mi, int s) {
+  y -= (mo <= 2);
+  int era = (y >= 0 ? y : y - 399) / 400;
+  unsigned yoe = (unsigned)(y - era * 400);
+  unsigned doy = (153u * (unsigned)(mo + (mo > 2 ? -3 : 9)) + 2u) / 5u + (unsigned)d - 1u;
+  unsigned doe = yoe * 365u + yoe / 4u - yoe / 100u + doy;
+  long long days = (long long)era * 146097LL + (long long)doe - 719468LL;
+  return (time_t)(days * 86400LL + h * 3600LL + mi * 60LL + s);
+}
+
+static void isoDayLocal(const char* iso, char* out_day, size_t out_size) {
+  int y, mo, d, h, mi, s;
+  if (strchr(iso, 'Z') &&
+      sscanf(iso, "%4d-%2d-%2dT%2d:%2d:%2d", &y, &mo, &d, &h, &mi, &s) == 6) {
+    time_t stamp = utcToEpoch(y, mo, d, h, mi, s);
+    struct tm* local = localtime(&stamp);
+    if (local) {
+      snprintf(out_day, out_size, "%04d-%02d-%02d",
+               local->tm_year + 1900, local->tm_mon + 1, local->tm_mday);
+      return;
+    }
+  }
+  strncpy(out_day, iso, out_size - 1);
+  out_day[out_size - 1] = '\0';
+  if (strlen(out_day) > 10) out_day[10] = '\0';
 }
 
 // Resolves the date shown next to "last used" / "last weighed" and writes it
@@ -67,8 +105,7 @@ static void applyLastUsed(const char* native_iso, int spool_id) {
 
   if (iso[0]) {
     char day[11];
-    strncpy(day, iso, 10);
-    day[10] = '\0';
+    isoDayLocal(iso, day, sizeof(day));
     char de[12];
     isoToDe(day, de, sizeof(de));
     strncpy(sm_last_used, de, sizeof(sm_last_used) - 1);
