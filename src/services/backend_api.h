@@ -34,6 +34,12 @@ bool backendGetVersion(const char* base_url, char* out_version, size_t out_size,
        uint32_t timeout_ms = 3000);
 int  backendCountActiveSpools(const char* base_url, uint32_t timeout_ms = 6000);
 
+// Date of the last weighing, taken from FilaMan's spool event log. Spoolman
+// keeps no such history and answers false, there the scale writes the date
+// into last_used itself.
+bool backendGetLastWeighedAt(const char* base_url, int spool_id,
+       char* out_iso, size_t out_size, uint32_t timeout_ms = 6000);
+
 // Server side tag lookup. FilaMan can filter by tag, which turns a scan into
 // one small answer instead of the full inventory. Returns an array in the
 // Spoolman shape, usually with a single entry.

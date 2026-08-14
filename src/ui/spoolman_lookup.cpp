@@ -12,6 +12,7 @@
 #include "services/location_state.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/user_options.h"
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
 
@@ -33,7 +34,53 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 
 }
 
+// Resolves the date shown next to "last used" / "last weighed" and writes it
+// to sm_last_used and the label.
+//
+// Spoolman has a single field for both meanings, so there the mode only
+// decides what the scale writes into it and the value is already in the spool
+// object. FilaMan separates the two: last_used_at holds real print
+// consumption and stays empty without a printer integration, while every
+// weighing lands in the spool event log, including the ones this scale
+// reports. native_iso is the value from the spool object, or null.
+static void applyLastUsed(const char* native_iso, int spool_id) {
+  char iso[40] = "";
+  if (native_iso && native_iso[0]) {
+    strncpy(iso, native_iso, sizeof(iso) - 1);
+    iso[sizeof(iso) - 1] = '\0';
+  }
 
+  // In weighed mode the event log is the only correct source. In last used
+  // mode it serves as a fallback, so the line is not simply empty until a
+  // printer reports consumption for the first time.
+  if (backendIsFilaMan() && (last_used_mode == 1 || !iso[0])) {
+    char measured[40];
+    if (backendGetLastWeighedAt(cfg_spoolman_base, spool_id, measured, sizeof(measured))) {
+      strncpy(iso, measured, sizeof(iso) - 1);
+      iso[sizeof(iso) - 1] = '\0';
+    } else if (last_used_mode == 1) {
+      // Showing a consumption date under a "last weighed" label would be
+      // wrong, so nothing is better than the native value here.
+      iso[0] = '\0';
+    }
+  }
+
+  if (iso[0]) {
+    char day[11];
+    strncpy(day, iso, 10);
+    day[10] = '\0';
+    char de[12];
+    isoToDe(day, de, sizeof(de));
+    strncpy(sm_last_used, de, sizeof(sm_last_used) - 1);
+  } else {
+    strncpy(sm_last_used, "-", sizeof(sm_last_used) - 1);
+  }
+  sm_last_used[sizeof(sm_last_used) - 1] = '\0';
+
+  char display[48];
+  driedDisplayStr(sm_last_used, display, sizeof(display));
+  lv_label_set_text(lbl_last_used, display);
+}
 
 // ============================================================
 //  SPOOLMAN QUERY BY ID
@@ -176,18 +223,7 @@ void querySpoolmanById(int spool_id) {
   lv_label_set_text(lbl_detail,        strlen(sm_article_nr)    > 0 ? sm_article_nr    : "-");
   lv_label_set_text(lbl_filament_name, strlen(sm_filament_name) > 0 ? sm_filament_name : "-");
 
-  // last_used
-  if (spool.containsKey("last_used") && !spool["last_used"].isNull()) {
-    String lu = spool["last_used"].as<String>();
-    char de_lu[12];
-    isoToDe(lu.substring(0, 10).c_str(), de_lu, sizeof(de_lu));
-    strncpy(sm_last_used, de_lu, sizeof(sm_last_used)-1);
-  } else {
-    strncpy(sm_last_used, "-", sizeof(sm_last_used)-1);
-  }
-  char last_used_display[48];
-  driedDisplayStr(sm_last_used, last_used_display, sizeof(last_used_display));
-  lv_label_set_text(lbl_last_used, last_used_display);
+  applyLastUsed(spool["last_used"] | (const char*)nullptr, sm_id);
 
   Serial.printf("querySpoolmanById OK: ID=%d %.1fg dried=%s\n", sm_id, sm_remaining, sm_last_dried);
   updateLinkButton();
@@ -494,16 +530,7 @@ void querySpoolman(const char* tray_uuid) {
     lv_label_set_text(lbl_filament_name, strlen(sm_filament_name) > 0 ? sm_filament_name : "-");
 
     // last_used is directly in the spool object (not in extra!)
-    if (spool.containsKey("last_used") && !spool["last_used"].isNull()) {
-      String lu = spool["last_used"].as<String>();
-      char de_lu[12]; isoToDe(lu.substring(0, 10).c_str(), de_lu, sizeof(de_lu));
-      strncpy(sm_last_used, de_lu, sizeof(sm_last_used)-1);
-    } else {
-      strncpy(sm_last_used, "-", sizeof(sm_last_used)-1);
-    }
-    char last_used_display[48];
-    driedDisplayStr(sm_last_used, last_used_display, sizeof(last_used_display));
-    lv_label_set_text(lbl_last_used, last_used_display);
+    applyLastUsed(spool["last_used"] | (const char*)nullptr, sm_id);
 
     updateLinkButton();
     return;

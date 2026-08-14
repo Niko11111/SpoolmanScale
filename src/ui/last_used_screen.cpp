@@ -58,7 +58,10 @@ void buildLastUsedScreen() {
     show_lastused_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_osm = lv_label_create(btn_osm);
-  lv_label_set_text(lbl_osm, T(STR_LASTUSED_OPT_OSM));
+  // OpenSpoolMan is a Spoolman companion and means nothing in FilaMan mode,
+  // where the same option reads FilaMan's own consumption field.
+  lv_label_set_text(lbl_osm, backendIsFilaMan() ? T(STR_LASTUSED_OPT_FILAMAN)
+                                                : T(STR_LASTUSED_OPT_OSM));
   lv_obj_set_style_text_color(lbl_osm, lv_color_hex(osm_active ? 0x40c080 : 0xc8d8f0), 0);
   lv_obj_set_style_text_font(lbl_osm, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_osm, LV_TEXT_ALIGN_CENTER, 0);
@@ -90,7 +93,8 @@ void buildLastUsedScreen() {
 
   lv_obj_t *lbl_desc = lv_label_create(scr_lastused);
   const char *desc = backendIsFilaMan()
-                       ? T(STR_LASTUSED_DESC_FILAMAN)
+                       ? ((last_used_mode == 0) ? T(STR_LASTUSED_DESC_FILAMAN_USED)
+                                                : T(STR_LASTUSED_DESC_FILAMAN_WEIGHED))
                        : ((last_used_mode == 0) ? T(STR_LASTUSED_DESC_OSM)
                                                 : T(STR_LASTUSED_DESC_WEIGHED));
   char desc_buf[280];

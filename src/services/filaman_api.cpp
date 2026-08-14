@@ -366,6 +366,51 @@ int filamanCountActiveSpools(const char* base_url, const char* api_key,
   return doc["total"] | -1;
 }
 
+// How many events to look at when searching for the last measurement. The log
+// is newest first, and status changes, drying and manual corrections sit
+// between measurements, so a single entry is not enough.
+#define FILAMAN_EVENT_SCAN  5
+
+bool filamanGetLastMeasuredAt(const char* base_url, const char* api_key, int spool_id,
+                              char* out_iso, size_t out_size, uint32_t timeout_ms) {
+  if (out_iso && out_size > 0) out_iso[0] = '\0';
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || !out_iso || out_size == 0) return false;
+
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/spools/" + spool_id +
+             "/events?page_size=" + FILAMAN_EVENT_SCAN);
+  http.setTimeout(timeout_ms);
+  addApiKey(http, api_key);
+  if (http.GET() != 200) { http.end(); return false; }
+
+  // Only the two keys that matter are parsed. Each event otherwise carries
+  // colours, manufacturer and material, none of which are needed here.
+  JsonDocument filter;
+  JsonObject fi = filter["items"].to<JsonArray>().add<JsonObject>();
+  fi["event_type"] = true;
+  fi["event_at"]   = true;
+
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, http.getStream(),
+                                             DeserializationOption::Filter(filter));
+  http.end();
+  if (err) {
+    logSDf("FilaMan: event log parse error: %s", err.c_str());
+    return false;
+  }
+
+  for (JsonObjectConst e : doc["items"].as<JsonArrayConst>()) {
+    const char* type = e["event_type"] | "";
+    if (strcmp(type, "measurement") != 0) continue;
+    const char* at = e["event_at"] | (const char*)nullptr;
+    if (!at || !at[0]) continue;
+    strncpy(out_iso, at, out_size - 1);
+    out_iso[out_size - 1] = '\0';
+    return true;
+  }
+  return false;
+}
+
 // ============================================================
 //  WRITING
 // ============================================================

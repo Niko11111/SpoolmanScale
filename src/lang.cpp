@@ -447,12 +447,18 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Wird das 'Last Used' Feld in Spoolman nicht aktiv von dir genutzt, dann benutzt SpoolmanScale dieses Feld, um das Datum des letzten Gewichtsupdates zu speichern. Der Hauptscreen zeigt dann 'Zuletzt gewogen' statt 'Zuletzt benutzt'.",
     "If you don't actively use the 'Last Used' field in Spoolman, SpoolmanScale will use it to store the date of the last weight update. The main screen will then show 'Last Weighed' instead of 'Last Used'."
                                                                           },  // STR_LASTUSED_DESC_WEIGHED
-  // FilaMan keeps last_used_at itself and does not accept it in a write, so
-  // neither option above applies there. Saying so is more honest than
-  // showing a setting that quietly does nothing.
-  { "FilaMan pflegt 'Zuletzt benutzt' selbst und traegt dort echten Druckverbrauch ein, z.B. ueber seine Druckeranbindung. Die Waage kann das Feld nicht beschreiben, diese Auswahl hat im FilaMan-Modus daher keine Wirkung.",
-    "FilaMan maintains 'Last Used' itself and records real print consumption there, e.g. through its printer integration. The scale cannot write the field, so this choice has no effect in FilaMan mode."
-                                                                          },  // STR_LASTUSED_DESC_FILAMAN
+  // FilaMan keeps both values itself, so the wording differs from Spoolman:
+  // nothing is written, the scale only picks which source it reads.
+  { "FilaMan",
+    "FilaMan"                                                             },  // STR_LASTUSED_OPT_FILAMAN
+  { "FilaMan pflegt 'Zuletzt benutzt' selbst und trägt dort echten Druckverbrauch ein, z.B. über seine Druckeranbindung. Solange noch kein Druck erfasst wurde, zeigt der Hauptscreen ersatzweise die letzte Wägung an.",
+    "FilaMan maintains 'Last Used' itself and records real print consumption there, e.g. through its printer integration. Until a print has been recorded, the main screen falls back to the last weighing."
+                                                                          },  // STR_LASTUSED_DESC_FILAMAN_USED
+  { "FilaMan protokolliert jede Wägung mit Zeitstempel, auch die von dieser Waage. Der Hauptscreen zeigt dann 'Zuletzt gewogen' und damit, wann du die Spule zuletzt in der Hand hattest. Es wird nichts zusätzlich gespeichert.",
+    "FilaMan logs every weighing with a timestamp, including the ones from this scale. The main screen then shows 'Last Weighed', i.e. when you last handled the spool. Nothing extra is stored."
+                                                                          },  // STR_LASTUSED_DESC_FILAMAN_WEIGHED
+  { "Druckverbrauch oder Wägung",
+    "Print usage or weighing"                                             },  // STR_BTN_LASTUSED_MODE_SUB_FM
   { "Werkseinstellungen",       "Factory Reset"              },  // STR_BTN_FACTORY_RESET
   { "Alle Einstellungen löschen", "Erase all settings"      },  // STR_BTN_FACTORY_RESET_SUB
   { "Werkseinstellungen?",      "Factory Reset?"             },  // STR_FACTORY_RESET_TITLE

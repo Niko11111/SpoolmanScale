@@ -10,6 +10,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/auto_weight_state.h"
+#include "services/backend.h"
 #include "services/drying_config.h"
 #include "services/prefs_store.h"
 #include "ui_common.h"
@@ -118,7 +119,10 @@ void buildScaleSubScreen() {
     }, LV_EVENT_CLICKED, NULL); }
 
   { char buf_t[32]; strncpy(buf_t, T(STR_BTN_LASTUSED_MODE), sizeof(buf_t)-1);
-    char buf_s[48]; strncpy(buf_s, T(STR_BTN_LASTUSED_MODE_SUB), sizeof(buf_s)-1);
+    // The subtitle names the two sources, and they differ per backend.
+    char buf_s[48]; strncpy(buf_s, backendIsFilaMan() ? T(STR_BTN_LASTUSED_MODE_SUB_FM)
+                                                      : T(STR_BTN_LASTUSED_MODE_SUB),
+                            sizeof(buf_s)-1);
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_SAVE, buf_t, buf_s);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Scale-Sub -> Last Used Mode");

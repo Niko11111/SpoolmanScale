@@ -49,6 +49,20 @@ bool filamanGetVersion(const char* base_url, char* out_version, size_t out_size,
 int filamanCountActiveSpools(const char* base_url, const char* api_key,
                              uint32_t timeout_ms = 6000);
 
+// Timestamp of the most recent weighing, read from the spool event log.
+// FilaMan records every measurement itself, including the ones this scale
+// reports, so nothing has to be written to get a "last weighed" date.
+//
+// last_used_at on the spool only fills from real print consumption and stays
+// empty without a printer integration, which is why the event log is the
+// better source for "when did I last handle this spool".
+//
+// A few events are fetched rather than one, because a status change or a
+// manual correction in between would otherwise hide the last measurement.
+// Writes an ISO timestamp to out_iso. Returns false if there is none.
+bool filamanGetLastMeasuredAt(const char* base_url, const char* api_key, int spool_id,
+                              char* out_iso, size_t out_size, uint32_t timeout_ms = 6000);
+
 // ---------- reading, translated to the Spoolman shape ----------
 //
 // FilaMan uses different field names than Spoolman. Rather than teach the

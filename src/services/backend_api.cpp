@@ -108,6 +108,19 @@ int backendCountActiveSpools(const char* base_url, uint32_t timeout_ms) {
   return spoolmanCountActiveSpools(base_url, timeout_ms);
 }
 
+bool backendGetLastWeighedAt(const char* base_url, int spool_id,
+                             char* out_iso, size_t out_size, uint32_t timeout_ms) {
+  if (out_iso && out_size > 0) out_iso[0] = '\0';
+  if (backendIsFilaMan()) {
+    return filamanGetLastMeasuredAt(backendBaseUrl(), filamanApiKey(), spool_id,
+                                    out_iso, out_size, timeout_ms);
+  }
+  // Spoolman has no event log. In weighed mode the scale writes the date into
+  // last_used on every weight update, so it is already in the spool object.
+  (void)base_url; (void)spool_id; (void)timeout_ms;
+  return false;
+}
+
 // ============================================================
 //  CREATING
 // ============================================================
