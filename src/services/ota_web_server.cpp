@@ -180,7 +180,7 @@ void startOtaServer() {
       "loadLogs();setInterval(loadLogs,30000);"
       "</script>"
 
-      // List limits — combined, moved to end via JS or just keep at end
+      // List limits - combined, moved to end via JS or just keep at end
       // Drying Reminder card
       "<div class='card'>"
       "<h2>Drying Reminder - Material Thresholds</h2>"
@@ -345,7 +345,7 @@ void startOtaServer() {
       "fetch('/filaman/register',{method:'POST',body:c})"
       ".then(r=>r.text()).then(t=>{document.getElementById('fm-reg-s').textContent=t;});}"
       "</script>") : String("")) +
-      // List Limits combined card — at bottom
+      // List Limits combined card - at bottom
       "<div class='card'>"
       "<h2>List Limits</h2>"
       "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>Controls how many items are shown in picker lists. Increase carefully.</p>"
