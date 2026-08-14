@@ -10,6 +10,9 @@
 #include "hardware/sd_logger.h"
 #include "user_options.h"
 #include "ui/date_display.h"
+#include "lang.h"
+#include "services/backend.h"
+#include "ui/main_screen_helpers.h"
 
 
 
@@ -63,12 +66,38 @@ void patchArchiveSpool() {
   if (!sm_found || sm_id == 0) { Serial.println("patchArchiveSpool: no spool"); return; }
   Serial.printf("PATCH archive: spool ID %d\n", sm_id);
   int code = backendPatchArchiveSpool(cfg_spoolman_base, sm_id);
-  if (code == 200) {
-    sm_remaining = 0;
-    Serial.println("Spool archived!");
-  } else {
+  logSDf("PATCH archive ID=%d HTTP %d", sm_id, code);
+  if (code != 200) {
     Serial.printf("PATCH archive error: %d\n", code);
+    lv_label_set_text(lbl_spoolman_weight, T(STR_ERR_SAVE));
+    return;
   }
+
+  Serial.println("Spool archived!");
+  sm_remaining = 0;
+
+  // Show the archived state straight away. Without this the labels kept the
+  // values from before and only caught up when the tag was scanned again.
+  // Mirrors what the scan path shows for an archived spool, so both routes
+  // end up looking the same.
+  char arch_buf[32];
+  backendText(T(STR_ARCHIVED), arch_buf, sizeof(arch_buf));
+  lv_label_set_text(lbl_spoolman_weight, arch_buf);
+  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x808080), 0);
+  lv_label_set_text(lbl_spoolman_pct, "");
+  lv_label_set_text(lbl_spoolman_dried_val, "-");
+  if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
+  lv_label_set_text(lbl_last_used, "-");
+  lv_label_set_text(lbl_detail, "-");
+  lv_label_set_text(lbl_filament_name, "-");
+  if (lbl_scale_diff)      lv_obj_set_width(lbl_scale_diff, 0);
+  if (lbl_spoolman_dried)  lv_label_set_text(lbl_spoolman_dried, "");
+  if (lbl_keys)            lv_label_set_text(lbl_keys, "");
+
+  // The spool is out of the active inventory, so a further weight update or
+  // dried action would target something that is no longer there.
+  sm_found = false;
+  updateLinkButton();
 }
 
 void patchSpoolTag(int spool_id, const char* uuid) {
