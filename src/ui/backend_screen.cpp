@@ -105,7 +105,7 @@ void buildBackendScreen() {
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
       BackendMode m = (BackendMode)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
       if (m == backendMode()) return;               // already active, nothing to do
-      logSDf("BTN: Backend -> %s", m == BACKEND_FILAMAN ? "FilaMan" : "Spoolman");
+      logSDf("BTN: Backend -> %s", m == BACKEND_FILAMAN ? "FilaMan" : "Spoolman");  // m, not the active mode
       s_pending_mode = m;
       s_mode_change_pending = true;
       show_backend_pending = true;                  // rebuild from appLoop()

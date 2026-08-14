@@ -199,7 +199,7 @@ void fetchAndFillLocationList() {
   JsonArray locs = doc.as<JsonArray>();
   logSDf("LOC: locs.size()=%d", (int)locs.size());
   if (locs.size() == 0) {
-    char buf[48]; strncpy(buf, T(STR_LOCATION_NO_LOCATIONS), sizeof(buf)-1);
+    char buf[48]; backendText(T(STR_LOCATION_NO_LOCATIONS), buf, sizeof(buf));
     lv_label_set_text(loc_status_obj, buf);
     return;
   }
@@ -605,7 +605,7 @@ void buildMoreInfoScreen() {
 
   // Spoolman UUID — shifted down (y=246)
   lv_obj_t *c_uuid = lv_label_create(box);
-  lv_label_set_text(c_uuid, "Spoolman UUID");
+  { char ub[32]; snprintf(ub, sizeof(ub), "%s UUID", backendName()); lv_label_set_text(c_uuid, ub); }
   lv_obj_set_style_text_color(c_uuid, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(c_uuid, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_pos(c_uuid, 10, 248);
@@ -659,7 +659,7 @@ void buildMoreInfoScreen() {
       lv_obj_align(lbl_t, LV_ALIGN_TOP_MID, 0, 16);
 
       lv_obj_t *lbl_m = lv_label_create(box2);
-      char buf_m[192]; strncpy(buf_m, T(STR_UNLINK_MSG), sizeof(buf_m)-1);
+      char buf_m[192]; backendText(T(STR_UNLINK_MSG), buf_m, sizeof(buf_m));
       lv_label_set_text(lbl_m, buf_m);
       lv_obj_set_style_text_color(lbl_m, lv_color_hex(0xc8d8f0), 0);
       lv_obj_set_style_text_font(lbl_m, &lv_font_montserrat_ext_14, 0);

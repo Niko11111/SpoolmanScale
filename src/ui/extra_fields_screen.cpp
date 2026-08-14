@@ -13,6 +13,7 @@
 #include "services/backend_api.h"
 #include "lang.h"
 #include "ui_common.h"
+#include "services/backend.h"
 
 
 
@@ -80,7 +81,8 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
 
   // Header: back goes to connection screen (if from settings), or back to Spoolman IP (setup flow)
   if (!is_setup_flow) {
-    buildSubHeader(scr_extra_fields, T(STR_EXTRA_FIELDS_TITLE),
+    char hdr_b[40]; backendText(T(STR_EXTRA_FIELDS_TITLE), hdr_b, sizeof(hdr_b));
+    buildSubHeader(scr_extra_fields, hdr_b,
       [](lv_event_t *e) {
         if (!scr_connection) buildConnectionScreen();
         hideAllOverlays();
@@ -89,7 +91,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   } else {
     // Setup flow: title only + X (→ main screen), no back button
     lv_obj_t *lbl_title = lv_label_create(scr_extra_fields);
-    lv_label_set_text(lbl_title, T(STR_EXTRA_FIELDS_TITLE));
+    { char tb[40]; backendText(T(STR_EXTRA_FIELDS_TITLE), tb, sizeof(tb)); lv_label_set_text(lbl_title, tb); }
     lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
     lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
     lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 12);
@@ -298,10 +300,10 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     Serial.printf("Test field create: %d\n", code);
     if (lbl_extra_fields_status) {
       if (code == 200 || code == 201) {
-        lv_label_set_text(lbl_extra_fields_status, T(STR_EF_TEST_CREATED));
+        { char sb[96]; backendText(T(STR_EF_TEST_CREATED), sb, sizeof(sb)); lv_label_set_text(lbl_extra_fields_status, sb); }
         lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
       } else if (code == 409) {
-        lv_label_set_text(lbl_extra_fields_status, T(STR_EF_TEST_EXISTS));
+        { char sb[96]; backendText(T(STR_EF_TEST_EXISTS), sb, sizeof(sb)); lv_label_set_text(lbl_extra_fields_status, sb); }
         lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
       } else {
         lv_label_set_text(lbl_extra_fields_status, T(STR_EF_TEST_FAIL));
@@ -326,7 +328,7 @@ void checkAndCreateExtraFields(bool create_missing) {
     return;
   }
   if (cfg_spoolman_base[0] == '\0' || strcmp(cfg_spoolman_base, "http://") == 0) {
-    lv_label_set_text(lbl_extra_fields_status, T(STR_EXTRA_FIELDS_NO_SPOOLMAN));
+    { char sb[64]; backendText(T(STR_EXTRA_FIELDS_NO_SPOOLMAN), sb, sizeof(sb)); lv_label_set_text(lbl_extra_fields_status, sb); }
     lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
     return;
   }
@@ -351,7 +353,7 @@ void checkAndCreateExtraFields(bool create_missing) {
   // Spoolman not reachable
   if (code < 0 || (code != 200 && code != 0)) {
     char buf[96];
-    strncpy(buf, T(STR_SPOOLMAN_FAIL), sizeof(buf)-1); buf[sizeof(buf)-1]=0;
+    backendText(T(STR_SPOOLMAN_FAIL), buf, sizeof(buf));
     lv_label_set_text(lbl_extra_fields_status, buf);
     lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
     return;

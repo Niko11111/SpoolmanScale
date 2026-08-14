@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 // ============================================================
@@ -62,3 +63,22 @@ void        filamanSetDeviceToken(const char* token);   // persists
 // True when the active backend has everything it needs to talk to
 // its server. Spoolman only needs a base URL.
 bool backendIsConfigured();
+
+// Product name of the active backend, "Spoolman" or "FilaMan".
+const char* backendName();
+
+// Copies a UI string into a RAM buffer and replaces the word "Spoolman"
+// with the active backend's name on the way. Two jobs in one call:
+//
+//   1. T() returns a pointer into Flash which LVGL cannot read, so every
+//      string has to be copied into a local buffer anyway.
+//   2. Roughly two dozen strings name Spoolman explicitly. Rather than
+//      litter lang.cpp with %s placeholders, which would break the
+//      argument order of the strings that already take format arguments,
+//      the substitution happens here.
+//
+// "SpoolmanScale" is left alone, that is the product name of this device.
+// In Spoolman mode the function is a plain copy.
+//
+// Usage:  char buf[64]; backendText(T(STR_X), buf, sizeof(buf));
+void backendText(const char* src, char* out, size_t out_size);

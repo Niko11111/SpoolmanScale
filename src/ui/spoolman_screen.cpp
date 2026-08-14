@@ -283,8 +283,8 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
 
   // Copy all strings to RAM buffers — T() returns Flash pointers which LVGL can't read directly
   char buf_title[32], buf_msg[96], buf_retry[48], buf_skip[48];
-  strncpy(buf_title, T(STR_SPOOLMAN_TITLE), sizeof(buf_title)-1); buf_title[sizeof(buf_title)-1]=0;
-  strncpy(buf_msg,   T(STR_SPOOLMAN_FAIL),  sizeof(buf_msg)-1);   buf_msg[sizeof(buf_msg)-1]=0;
+  backendText(T(STR_SPOOLMAN_TITLE), buf_title, sizeof(buf_title));
+  backendText(T(STR_SPOOLMAN_FAIL), buf_msg, sizeof(buf_msg));
   strncpy(buf_retry, T(STR_SPOOLMAN_RETRY), sizeof(buf_retry)-1); buf_retry[sizeof(buf_retry)-1]=0;
   strncpy(buf_skip,  T(STR_SPOOLMAN_SKIP),  sizeof(buf_skip)-1);  buf_skip[sizeof(buf_skip)-1]=0;
 

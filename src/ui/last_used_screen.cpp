@@ -13,6 +13,7 @@
 #include "services/prefs_store.h"
 #include "services/user_options.h"
 #include "ui_common.h"
+#include "services/backend.h"
 
 
 
@@ -88,7 +89,10 @@ void buildLastUsedScreen() {
   lv_obj_align(lbl_lw, LV_ALIGN_CENTER, 0, 0);
 
   lv_obj_t *lbl_desc = lv_label_create(scr_lastused);
-  const char *desc = (last_used_mode == 0) ? T(STR_LASTUSED_DESC_OSM) : T(STR_LASTUSED_DESC_WEIGHED);
+  const char *desc = backendIsFilaMan()
+                       ? T(STR_LASTUSED_DESC_FILAMAN)
+                       : ((last_used_mode == 0) ? T(STR_LASTUSED_DESC_OSM)
+                                                : T(STR_LASTUSED_DESC_WEIGHED));
   char desc_buf[280];
   strncpy(desc_buf, desc, sizeof(desc_buf)-1); desc_buf[sizeof(desc_buf)-1] = 0;
   lv_label_set_text(lbl_desc, desc_buf);

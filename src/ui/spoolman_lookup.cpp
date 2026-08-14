@@ -564,7 +564,7 @@ void querySpoolman(const char* tray_uuid) {
   // Truly not found
   Serial.println("Spoolman: spool not found");
   logSD("Spoolman: spool not found");
-  lv_label_set_text(lbl_spoolman_weight, T(STR_NOT_IN_SPOOLMAN));
+  { char nb[40]; backendText(T(STR_NOT_IN_SPOOLMAN), nb, sizeof(nb)); lv_label_set_text(lbl_spoolman_weight, nb); }
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
   sm_found = false;
   updateLinkButton();

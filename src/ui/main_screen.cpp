@@ -571,7 +571,7 @@ void buildUI() {
   lv_obj_set_style_shadow_width(btn_weight_main, 0, 0);
   lv_obj_add_event_cb(btn_weight_main, [](lv_event_t *e) {
     logSD("UI: Button -> Update Weight");
-    showConfirmPopup(T(STR_POPUP_WEIGHT_Q), 2);
+    { char qb[64]; backendText(T(STR_POPUP_WEIGHT_Q), qb, sizeof(qb)); showConfirmPopup(qb, 2); }
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_wm = lv_label_create(btn_weight_main);
   lbl_weight_main_lbl = lbl_wm;

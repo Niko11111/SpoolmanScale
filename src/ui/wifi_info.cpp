@@ -9,6 +9,7 @@
 #include "lang.h"
 #include "services/wifi_manager.h"
 #include "ui_common.h"
+#include "services/backend.h"
 
 
 
@@ -63,12 +64,12 @@ void updateWifiInfo() {
     "Status:  %s\n"
     "IP:      %s\n"
     "RSSI:    %d dBm  (%s)\n"
-    "Spoolman:\n%s",
+    "%s:\n%s",   // backendName() is passed as the first argument
     cfg_wifi_ssid,
     wifi_ok ? T(STR_WIFI_STATUS_CONNECTED) : T(STR_WIFI_STATUS_DISCONNECTED),
     wifi_ok ? wifiManagerLocalIP().toString().c_str() : "-",
     rssi, qual,
-    cfg_spoolman_base
+    backendName(), backendBaseUrl()
   );
   lv_label_set_text(lbl_wifi_info, buf);
 }

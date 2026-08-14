@@ -447,6 +447,12 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Wird das 'Last Used' Feld in Spoolman nicht aktiv von dir genutzt, dann benutzt SpoolmanScale dieses Feld, um das Datum des letzten Gewichtsupdates zu speichern. Der Hauptscreen zeigt dann 'Zuletzt gewogen' statt 'Zuletzt benutzt'.",
     "If you don't actively use the 'Last Used' field in Spoolman, SpoolmanScale will use it to store the date of the last weight update. The main screen will then show 'Last Weighed' instead of 'Last Used'."
                                                                           },  // STR_LASTUSED_DESC_WEIGHED
+  // FilaMan keeps last_used_at itself and does not accept it in a write, so
+  // neither option above applies there. Saying so is more honest than
+  // showing a setting that quietly does nothing.
+  { "FilaMan pflegt 'Zuletzt benutzt' selbst und traegt dort echten Druckverbrauch ein, z.B. ueber seine Druckeranbindung. Die Waage kann das Feld nicht beschreiben, diese Auswahl hat im FilaMan-Modus daher keine Wirkung.",
+    "FilaMan maintains 'Last Used' itself and records real print consumption there, e.g. through its printer integration. The scale cannot write the field, so this choice has no effect in FilaMan mode."
+                                                                          },  // STR_LASTUSED_DESC_FILAMAN
   { "Werkseinstellungen",       "Factory Reset"              },  // STR_BTN_FACTORY_RESET
   { "Alle Einstellungen löschen", "Erase all settings"      },  // STR_BTN_FACTORY_RESET_SUB
   { "Werkseinstellungen?",      "Factory Reset?"             },  // STR_FACTORY_RESET_TITLE

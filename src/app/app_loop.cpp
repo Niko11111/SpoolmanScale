@@ -564,7 +564,7 @@ void appLoop() {
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
             lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
-            lv_label_set_text(lbl_status, sm_found ? T(STR_TAG_FOUND) : T(STR_NOT_IN_SPOOLMAN));
+            { char sb[48]; backendText(sm_found ? T(STR_TAG_FOUND) : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb)); lv_label_set_text(lbl_status, sb); }
             lv_obj_set_style_text_color(lbl_status,
               sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
           }
@@ -635,7 +635,7 @@ void appLoop() {
           // Same UID — show popup after delay if not dismissed
           // Auto-popup disabled — user uses the Link/Copy buttons in Zone 5
           (void)link_tag_first_seen_ms;
-          lv_label_set_text(lbl_status, sm_found ? T(STR_TAG_FOUND) : T(STR_NOT_IN_SPOOLMAN));
+          { char sb[48]; backendText(sm_found ? T(STR_TAG_FOUND) : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb)); lv_label_set_text(lbl_status, sb); }
           lv_obj_set_style_text_color(lbl_status,
             sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
         }

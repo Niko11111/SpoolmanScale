@@ -12,6 +12,7 @@
 #include "lang.h"
 #include "services/ota_state.h"
 #include "ui_common.h"
+#include "services/backend.h"
 
 
 void showLanguageScreen();
@@ -184,7 +185,7 @@ void buildSystemScreen() {
     lv_obj_align(lbl_t, LV_ALIGN_TOP_MID, 0, 16);
 
     lv_obj_t *lbl_m = lv_label_create(box);
-    char buf_m[256]; strncpy(buf_m, T(STR_FACTORY_RESET_MSG), sizeof(buf_m)-1);
+    char buf_m[256]; backendText(T(STR_FACTORY_RESET_MSG), buf_m, sizeof(buf_m));
     lv_label_set_text(lbl_m, buf_m);
     lv_obj_set_style_text_color(lbl_m, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(lbl_m, &lv_font_montserrat_ext_14, 0);

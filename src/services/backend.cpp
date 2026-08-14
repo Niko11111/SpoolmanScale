@@ -102,6 +102,43 @@ void filamanSetDeviceToken(const char* token) {
   logSDf("Backend: FilaMan device token %s", s_device_token[0] ? "stored" : "cleared");
 }
 
+const char* backendName() {
+  return backendIsFilaMan() ? "FilaMan" : "Spoolman";
+}
+
+void backendText(const char* src, char* out, size_t out_size) {
+  if (!out || out_size == 0) return;
+  out[0] = '\0';
+  if (!src) return;
+
+  // In Spoolman mode nothing changes, so take the cheap path.
+  if (!backendIsFilaMan()) {
+    strncpy(out, src, out_size - 1);
+    out[out_size - 1] = '\0';
+    return;
+  }
+
+  static const char  kNeedle[] = "Spoolman";
+  static const size_t kNeedleLen = sizeof(kNeedle) - 1;
+  const char* name = backendName();
+  const size_t name_len = strlen(name);
+
+  size_t o = 0;
+  for (const char* p = src; *p && o < out_size - 1; ) {
+    if (strncmp(p, kNeedle, kNeedleLen) == 0 &&
+        strncmp(p + kNeedleLen, "Scale", 5) != 0) {   // never touch SpoolmanScale
+      size_t room = out_size - 1 - o;
+      size_t n = (name_len < room) ? name_len : room;
+      memcpy(out + o, name, n);
+      o += n;
+      p += kNeedleLen;
+      continue;
+    }
+    out[o++] = *p++;
+  }
+  out[o] = '\0';
+}
+
 bool backendIsConfigured() {
   if (strlen(backendBaseUrl()) <= 7) return false;   // longer than "http://"
   if (!backendIsFilaMan()) return true;

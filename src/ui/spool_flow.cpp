@@ -18,6 +18,7 @@
 #include "ui/main_screen_helpers.h"
 #include "ui/spoolman_lookup.h"
 #include "ui/ui_common.h"
+#include "services/backend.h"
 
 namespace {
 
@@ -593,7 +594,8 @@ void showWarnPopupB(int spool_id, bool is_bambu) {
   for (int i = 0; i < link_spool_count; i++) {
     if (link_spools[i].id == spool_id) { sm_mat = link_spools[i].material; break; }
   }
-  snprintf(mat_buf, sizeof(mat_buf), T(STR_WARN_B_DETAILS),
+  char fmt_b[160]; backendText(T(STR_WARN_B_DETAILS), fmt_b, sizeof(fmt_b));
+  snprintf(mat_buf, sizeof(mat_buf), fmt_b,
     g_tag.material[0] ? g_tag.material : "?", sm_mat, spool_id);
   lv_obj_t *lbl_info = lv_label_create(box);
   lv_label_set_text(lbl_info, mat_buf);
@@ -753,7 +755,7 @@ void showIdInputPopup(bool is_bambu, bool is_copy) {
   // ── Header like settings menu ───────────────────────────
   // Title zentriert
   lv_obj_t *lbl_title = lv_label_create(scr_link_id);
-  lv_label_set_text(lbl_title, T(STR_LINK_ID_TITLE));
+  { char tb[40]; backendText(T(STR_LINK_ID_TITLE), tb, sizeof(tb)); lv_label_set_text(lbl_title, tb); }
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 12);
@@ -915,7 +917,7 @@ void showIdInputPopup(bool is_bambu, bool is_copy) {
 
       if (is_ok_btn) {
         if (strlen(link_id_input) == 0) {
-          if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_LINK_ID_TITLE));
+          if (lbl_link_id_status) { char tb[40]; backendText(T(STR_LINK_ID_TITLE), tb, sizeof(tb)); lv_label_set_text(lbl_link_id_status, tb); }
           return;
         }
         int entered_id = atoi(link_id_input);
@@ -1812,7 +1814,7 @@ void showVendorList() {
 
   if (seen_v == 0) {
     lv_obj_t *lbl_empty = lv_label_create(scr_link_vendor);
-    lv_label_set_text(lbl_empty, T(STR_NO_VENDORS));
+    { char eb[80]; backendText(T(STR_NO_VENDORS), eb, sizeof(eb)); lv_label_set_text(lbl_empty, eb); }
     lv_obj_set_style_text_color(lbl_empty, lv_color_hex(0xf0b838), 0);
     lv_obj_set_style_text_font(lbl_empty, &lv_font_montserrat_ext_16, 0);
     lv_obj_set_style_text_align(lbl_empty, LV_TEXT_ALIGN_CENTER, 0);
@@ -1861,7 +1863,8 @@ void showLinkEntryPopup(bool is_bambu) {
   lv_obj_t *lbl_ctx = lv_label_create(scr_link_entry);
   char ctx_buf[56];
   if (is_bambu) {
-    snprintf(ctx_buf, sizeof(ctx_buf), T(STR_LINK_CTX_NOT_IN_SM),
+    char fmt_c[48]; backendText(T(STR_LINK_CTX_NOT_IN_SM), fmt_c, sizeof(fmt_c));
+    snprintf(ctx_buf, sizeof(ctx_buf), fmt_c,
       g_tag.material[0] ? g_tag.material : "Bambu Tag");
   } else {
     snprintf(ctx_buf, sizeof(ctx_buf), "UID: %s", link_tag_uid);
@@ -2461,7 +2464,7 @@ void showCopyIdInputPopup() {
   addBackButton(scr_copy_id, [](lv_event_t *e) { closeCopyIdInputPopup(); });
 
   lv_obj_t *lbl_title = lv_label_create(scr_copy_id);
-  char title_buf[32]; strncpy(title_buf, T(STR_COPY_ID_BTN), sizeof(title_buf)-1);
+  char title_buf[32]; backendText(T(STR_COPY_ID_BTN), title_buf, sizeof(title_buf));
   lv_label_set_text(lbl_title, title_buf);
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
@@ -2585,7 +2588,8 @@ void showCopyEntryPopup() {
   lv_obj_t *lbl_ctx = lv_label_create(scr_copy_entry);
   char ctx_buf[56];
   if (strlen(g_tag.material) > 0) {
-    snprintf(ctx_buf, sizeof(ctx_buf), T(STR_LINK_CTX_NOT_IN_SM), g_tag.material);
+    char fmt_c[48]; backendText(T(STR_LINK_CTX_NOT_IN_SM), fmt_c, sizeof(fmt_c));
+    snprintf(ctx_buf, sizeof(ctx_buf), fmt_c, g_tag.material);
   } else if (strlen(link_tag_uid) > 0) {
     snprintf(ctx_buf, sizeof(ctx_buf), "UID: %s", link_tag_uid);
   } else {
@@ -2615,7 +2619,7 @@ void showCopyEntryPopup() {
   lv_obj_set_style_border_color(btn1, lv_color_hex(0x1a3060), 0);
   lv_obj_add_event_cb(btn1, [](lv_event_t *e) { link_id_input[0] = '\0'; showIdInputPopup(strlen(g_tag.tray_uuid) == 32, true); }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn1);
-    char b[40]; strncpy(b, T(STR_COPY_ID_BTN), sizeof(b)-1);
+    char b[40]; backendText(T(STR_COPY_ID_BTN), b, sizeof(b));
     lv_label_set_text(l, b);
     lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);

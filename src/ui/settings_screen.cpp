@@ -13,6 +13,7 @@
 #include "services/ota_state.h"
 #include "system_screen.h"
 #include "ui_common.h"
+#include "services/backend.h"
 
 
 void resetActivityTimer();
@@ -44,8 +45,11 @@ void buildSettingsScreen() {
   lv_obj_center(lbl_x);
   lv_obj_add_event_cb(btn_x, [](lv_event_t *e){ logSD("BTN: Close -> Main"); showMainScreen(); }, LV_EVENT_CLICKED, NULL);
 
+  // Names the active backend, so it is copied through backendText first.
+  char conn_sub[40];
+  backendText(T(STR_TILE_CONN_SUB), conn_sub, sizeof(conn_sub));
   struct { const char *icon; const char *label; const char *sub; uint32_t col; } tiles[] = {
-    { LV_SYMBOL_WIFI,     T(STR_TILE_CONNECTION), T(STR_TILE_CONN_SUB),    0x0a1e30 },
+    { LV_SYMBOL_WIFI,     T(STR_TILE_CONNECTION), conn_sub,                0x0a1e30 },
     { LV_SYMBOL_DRIVE,    T(STR_TILE_SCALE),      T(STR_TILE_SCALE_SUB),   0x0a1e30 },
     { LV_SYMBOL_IMAGE,    T(STR_TILE_DISPLAY),    T(STR_TILE_DISPLAY_SUB), 0x0a1e30 },
     { LV_SYMBOL_SETTINGS, T(STR_TILE_SYSTEM),     T(STR_TILE_SYSTEM_SUB),  0x0a1e30 },

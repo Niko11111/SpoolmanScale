@@ -82,7 +82,7 @@ void buildConnectionScreen() {
     char buf_sub[80];
     const char *host = backendHost();
     snprintf(buf_sub, sizeof(buf_sub), "%s  %s",
-      backendIsFilaMan() ? "FilaMan" : "Spoolman",
+      backendName(),
       (host && host[0]) ? host : T(STR_BTN_WIFI_NONE));
     lv_obj_t *sub = lv_label_create(btn_sp);
     lv_label_set_text(sub, buf_sub);
@@ -118,7 +118,7 @@ void buildConnectionScreen() {
     lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
     lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
     lv_obj_t *lbl = lv_label_create(btn_ef);
-    lv_label_set_text(lbl, T(STR_EXTRA_FIELDS_TITLE));
+    { char eb[40]; backendText(T(STR_EXTRA_FIELDS_TITLE), eb, sizeof(eb)); lv_label_set_text(lbl, eb); }
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);

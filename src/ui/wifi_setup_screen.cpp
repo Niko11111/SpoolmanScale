@@ -16,6 +16,7 @@
 #include "services/wifi_manager.h"
 #include "setup_welcome_screen.h"
 #include "ui_common.h"
+#include "services/backend.h"
 
 
 
@@ -409,7 +410,8 @@ void buildWifiConnectingScreen() {
     show_spoolman_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_next = lv_label_create(btn_next);
-  lv_label_set_text(lbl_next, "Spoolman  " LV_SYMBOL_RIGHT);
+  { char nb[32]; snprintf(nb, sizeof(nb), "%s  " LV_SYMBOL_RIGHT, backendName());
+    lv_label_set_text(lbl_next, nb); }
   lv_obj_set_style_text_color(lbl_next, lv_color_hex(0x40c080), 0);
   lv_obj_set_style_text_font(lbl_next, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_next);

@@ -367,7 +367,7 @@ void startOtaServer() {
       "<button class='btn-toggle' onclick='setLocL()'>Save</button>"
       "<span id='locl-s' style='font-size:12px;color:#28d49a;line-height:36px'></span>"
       "</div></div></div>"
-      "<div class='footer'>Not affiliated with Spoolman &mdash; Open Source Project</div>"
+      "<div class='footer'>Not affiliated with " + String(backendName()) + " &mdash; Open Source Project</div>"
       "</body></html>";
     ota_server.send(200, "text/html", html);
   });
