@@ -196,7 +196,12 @@ int backendPatchFilamentSpoolWeight(const char* base_url, int filament_id, float
 
 int backendPatchVendorEmptySpoolWeight(const char* base_url, int vendor_id, float spool_weight,
                                        uint32_t timeout_ms) {
-  if (backendIsFilaMan()) return notSupported("PatchVendorEmptySpoolWeight");
+  if (backendIsFilaMan()) {
+    // Spoolman's vendor is FilaMan's manufacturer, the field name is the same
+    // apart from the unit suffix.
+    return filamanPatchManufacturerFloat(backendBaseUrl(), filamanApiKey(), vendor_id,
+                                         "empty_spool_weight_g", spool_weight, timeout_ms);
+  }
   return spoolmanPatchVendorEmptySpoolWeight(base_url, vendor_id, spool_weight, timeout_ms);
 }
 

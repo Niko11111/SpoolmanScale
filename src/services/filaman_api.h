@@ -93,6 +93,11 @@ int filamanPatchSpoolFloat(const char* base_url, const char* api_key, int spool_
 int filamanPatchFilamentFloat(const char* base_url, const char* api_key, int filament_id,
                               const char* field, float value, uint32_t timeout_ms = 5000);
 
+// Single numeric field on a manufacturer. FilaMan calls them manufacturers,
+// Spoolman calls them vendors, and both keep an empty spool weight there.
+int filamanPatchManufacturerFloat(const char* base_url, const char* api_key, int manufacturer_id,
+                                  const char* field, float value, uint32_t timeout_ms = 5000);
+
 // Creates a spool. Only filament_id is mandatory. The new id is written to
 // out_spool_id, which the copy flow needs in order to link the tag right
 // afterwards. rfid_uid may be passed to create and link in one request.

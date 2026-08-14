@@ -476,6 +476,18 @@ int filamanPatchFilamentFloat(const char* base_url, const char* api_key, int fil
                     payload, timeout_ms);
 }
 
+int filamanPatchManufacturerFloat(const char* base_url, const char* api_key, int manufacturer_id,
+                                  const char* field, float value, uint32_t timeout_ms) {
+  if (manufacturer_id <= 0 || !field) return -1;
+  JsonDocument body;
+  body[field] = roundGrams(value);
+  String payload;
+  serializeJson(body, payload);
+  return patchSpool(base_url, api_key,
+                    (String("/api/v1/manufacturers/") + manufacturer_id).c_str(),
+                    payload, timeout_ms);
+}
+
 int filamanCreateSpool(const char* base_url, const char* api_key, int filament_id,
                        float initial_weight, float spool_weight, float remaining_weight,
                        const char* rfid_uid, int* out_spool_id, uint32_t timeout_ms) {
