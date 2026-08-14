@@ -56,7 +56,10 @@ static void addApiKey(HTTPClient& http, const char* api_key);
 //  the list on every spool read, it is kept here and refreshed lazily. The
 //  list is short and changes rarely.
 // ------------------------------------------------------------
-#define FILAMAN_LOC_MAX      32
+// Matches the ceiling the web interface allows for location_list_limit, so
+// the cache can never be the narrower of the two. 100 x 40 bytes is 4 kB of
+// static RAM, deliberately not heap: this sits in the scan path.
+#define FILAMAN_LOC_MAX      100
 #define FILAMAN_LOC_NAME_LEN 40
 #define FILAMAN_LOC_TTL_MS   300000UL   // 5 minutes
 
@@ -104,6 +107,7 @@ static bool fetchLocations(const char* base_url, const char* api_key, bool force
 
   JsonArrayConst items = doc["items"].isNull() ? doc.as<JsonArrayConst>()
                                                : doc["items"].as<JsonArrayConst>();
+  int total = doc["total"] | (int)items.size();
   s_loc_count = 0;
   for (JsonObjectConst l : items) {
     if (s_loc_count >= FILAMAN_LOC_MAX) break;
@@ -113,7 +117,14 @@ static bool fetchLocations(const char* base_url, const char* api_key, bool force
     if (s_loc_id[s_loc_count] > 0 && s_loc_name[s_loc_count][0]) s_loc_count++;
   }
   s_loc_fetched_ms = millis();
-  logSDf("FilaMan: %d locations cached", s_loc_count);
+  if (total > s_loc_count) {
+    // Truncation must not be silent: a location past the cut cannot be
+    // resolved and would be refused on write.
+    logSDf("FilaMan: %d of %d locations cached, the rest cannot be assigned",
+           s_loc_count, total);
+  } else {
+    logSDf("FilaMan: %d locations cached", s_loc_count);
+  }
   return true;
 }
 

@@ -12,6 +12,7 @@
 #include "services/list_limits.h"
 #include "services/location_state.h"
 #include "services/spoolman_actions.h"
+#include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/wifi_manager.h"
 #include "lang.h"
@@ -300,7 +301,12 @@ void fetchAndFillLocationList() {
     lv_obj_set_width(limit_lbl, 350);
     lv_obj_center(limit_lbl);
   }
-  // Hinweis: leere Lagerorte werden nicht angezeigt
+  // Hint that empty locations are hidden. Only true for Spoolman, which
+  // derives its location list from the spools themselves, so a location
+  // without spools does not exist there. FilaMan keeps locations as their
+  // own objects and returns them all, empty or not.
+  if (backendIsFilaMan()) return;
+
   lv_obj_t *hint_row = lv_obj_create(loc_list_obj);
   lv_obj_set_size(hint_row, 360, 40);
   lv_obj_set_style_bg_color(hint_row, lv_color_hex(0x1a1a08), 0);
