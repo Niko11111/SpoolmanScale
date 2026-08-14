@@ -46,6 +46,77 @@ static float roundGrams(float g) {
   return roundf(g);
 }
 
+// Defined further down, next to the other request helpers.
+static void addApiKey(HTTPClient& http, const char* api_key);
+
+// ------------------------------------------------------------
+//  LOCATION CACHE
+//
+//  Spools carry a location_id, the UI works with names. Rather than fetch
+//  the list on every spool read, it is kept here and refreshed lazily. The
+//  list is short and changes rarely.
+// ------------------------------------------------------------
+#define FILAMAN_LOC_MAX      32
+#define FILAMAN_LOC_NAME_LEN 40
+#define FILAMAN_LOC_TTL_MS   300000UL   // 5 minutes
+
+static int           s_loc_id[FILAMAN_LOC_MAX];
+static char          s_loc_name[FILAMAN_LOC_MAX][FILAMAN_LOC_NAME_LEN];
+static int           s_loc_count = 0;
+static unsigned long s_loc_fetched_ms = 0;
+
+static const char* locationNameById(int id) {
+  if (id <= 0) return nullptr;
+  for (int i = 0; i < s_loc_count; i++) {
+    if (s_loc_id[i] == id) return s_loc_name[i];
+  }
+  return nullptr;
+}
+
+static int locationIdByName(const char* name) {
+  if (!name || !name[0]) return 0;
+  for (int i = 0; i < s_loc_count; i++) {
+    if (strcasecmp(s_loc_name[i], name) == 0) return s_loc_id[i];
+  }
+  return 0;
+}
+
+// Fetches the location list into the cache. force skips the age check, which
+// matters when a name could not be resolved and the cache may be stale.
+static bool fetchLocations(const char* base_url, const char* api_key, bool force) {
+  if (!hasBaseUrl(base_url)) return false;
+  if (!force && s_loc_count > 0 &&
+      (millis() - s_loc_fetched_ms) < FILAMAN_LOC_TTL_MS) return true;
+
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/locations?page_size=" + FILAMAN_LOC_MAX);
+  http.setTimeout(6000);
+  addApiKey(http, api_key);
+  if (http.GET() != 200) { http.end(); return false; }
+
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, http.getStream());
+  http.end();
+  if (err) {
+    logSDf("FilaMan: location list parse error: %s", err.c_str());
+    return false;
+  }
+
+  JsonArrayConst items = doc["items"].isNull() ? doc.as<JsonArrayConst>()
+                                               : doc["items"].as<JsonArrayConst>();
+  s_loc_count = 0;
+  for (JsonObjectConst l : items) {
+    if (s_loc_count >= FILAMAN_LOC_MAX) break;
+    s_loc_id[s_loc_count] = l["id"] | 0;
+    strncpy(s_loc_name[s_loc_count], l["name"] | "", FILAMAN_LOC_NAME_LEN - 1);
+    s_loc_name[s_loc_count][FILAMAN_LOC_NAME_LEN - 1] = '\0';
+    if (s_loc_id[s_loc_count] > 0 && s_loc_name[s_loc_count][0]) s_loc_count++;
+  }
+  s_loc_fetched_ms = millis();
+  logSDf("FilaMan: %d locations cached", s_loc_count);
+  return true;
+}
+
 // ============================================================
 //  TRANSLATION: FilaMan spool  ->  Spoolman spool
 //
@@ -62,8 +133,16 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   // FilaMan has no boolean, archived is status id 6.
   dst["archived"] = ((src["status_id"] | 0) == 6);
 
+  // FilaMan maintains last_used_at itself and does not accept it in a PATCH.
+  // It reflects real consumption, tracked through its printer integration.
   const char* last_used = src["last_used_at"] | (const char*)nullptr;
   if (last_used) dst["last_used"] = last_used;
+
+  // Spoolman carries the location as a plain string, FilaMan as an id.
+  // Resolved from the cache; if it is cold the field stays unset and the UI
+  // guards against that already.
+  const char* loc = locationNameById(src["location_id"] | 0);
+  if (loc) dst["location"] = loc;
 
   // Spoolman keeps the tag in extra.tag, FilaMan in the native rfid_uid.
   // Spoolman stores extra values JSON encoded, so the reader strips quotes
@@ -430,6 +509,52 @@ int filamanCreateSpool(const char* base_url, const char* api_key, int filament_i
   return code;
 }
 
+int filamanGetLocationsJson(const char* base_url, const char* api_key,
+                            JsonDocument& out_doc, uint32_t timeout_ms,
+                            DeserializationError* out_err) {
+  (void)timeout_ms;
+  if (out_err) *out_err = DeserializationError::Ok;
+  if (!hasBaseUrl(base_url)) return -1;
+
+  // Always fresh here: the picker is exactly where a location just added in
+  // the browser should show up.
+  if (!fetchLocations(base_url, api_key, true)) return -2;
+
+  // Spoolman answers with a plain array of names, so that is what the picker
+  // gets. The ids stay in the cache for the write direction.
+  out_doc.clear();
+  JsonArray arr = out_doc.to<JsonArray>();
+  for (int i = 0; i < s_loc_count; i++) arr.add(s_loc_name[i]);
+  return 200;
+}
+
+int filamanPatchSpoolLocation(const char* base_url, const char* api_key, int spool_id,
+                              const char* location_name, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
+
+  JsonDocument body;
+  if (!location_name || !location_name[0]) {
+    body["location_id"] = nullptr;      // clear, same reasoning as rfid_uid
+  } else {
+    int id = locationIdByName(location_name);
+    if (id <= 0) {
+      // Cache cold or the location was created after the last fetch.
+      fetchLocations(base_url, api_key, true);
+      id = locationIdByName(location_name);
+    }
+    if (id <= 0) {
+      logSDf("FilaMan: unknown location '%s', not written", location_name);
+      return -1;
+    }
+    body["location_id"] = id;
+  }
+
+  String payload;
+  serializeJson(body, payload);
+  return patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
+                    payload, timeout_ms);
+}
+
 // ============================================================
 //  READING
 // ============================================================
@@ -457,6 +582,10 @@ int filamanGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
     return -2;
   }
 
+  // Warms the location cache so mapSpool can turn location_id into a name.
+  // Cheap: at most one extra request every five minutes.
+  fetchLocations(base_url, api_key, false);
+
   out_doc.clear();
   mapSpool(raw.as<JsonObjectConst>(), out_doc.to<JsonObject>());
   return 200;
@@ -477,6 +606,9 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
 
   out_doc.clear();
   JsonArray dst = out_doc.to<JsonArray>();
+
+  // Warms the location cache so mapSpool can turn location_id into a name.
+  fetchLocations(base_url, api_key, false);
 
   int page = 1;
   int fetched = 0;

@@ -72,7 +72,10 @@ int backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocume
 
 int backendGetLocationsJson(const char* base_url, JsonDocument& doc,
                             uint32_t timeout_ms, DeserializationError* out_err) {
-  if (backendIsFilaMan()) return notSupported("GetLocationsJson");
+  if (backendIsFilaMan()) {
+    return filamanGetLocationsJson(backendBaseUrl(), filamanApiKey(), doc,
+                                   timeout_ms, out_err);
+  }
   return spoolmanGetLocationsJson(base_url, doc, timeout_ms, out_err);
 }
 
@@ -199,7 +202,11 @@ int backendPatchVendorEmptySpoolWeight(const char* base_url, int vendor_id, floa
 
 int backendPatchSpoolLocation(const char* base_url, int spool_id, const char* location_name,
                               uint32_t timeout_ms) {
-  if (backendIsFilaMan()) return notSupported("PatchSpoolLocation");
+  if (backendIsFilaMan()) {
+    // FilaMan stores a location_id, so the name is resolved on the way out.
+    return filamanPatchSpoolLocation(backendBaseUrl(), filamanApiKey(), spool_id,
+                                     location_name, timeout_ms);
+  }
   return spoolmanPatchSpoolLocation(base_url, spool_id, location_name, timeout_ms);
 }
 

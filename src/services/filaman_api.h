@@ -101,6 +101,20 @@ int filamanCreateSpool(const char* base_url, const char* api_key, int filament_i
                        const char* rfid_uid = nullptr, int* out_spool_id = nullptr,
                        uint32_t timeout_ms = 8000);
 
+// Locations. Spoolman has them as plain strings on the spool, FilaMan as
+// objects with an id. These translate in both directions using a small cache
+// that is refreshed as a side effect of reading spools.
+
+// Result is an array of name strings, matching Spoolman's /api/v1/location.
+int filamanGetLocationsJson(const char* base_url, const char* api_key,
+                            JsonDocument& out_doc, uint32_t timeout_ms = 8000,
+                            DeserializationError* out_err = nullptr);
+
+// Takes a location name and resolves it to an id. An empty or null name
+// clears the location.
+int filamanPatchSpoolLocation(const char* base_url, const char* api_key, int spool_id,
+                              const char* location_name, uint32_t timeout_ms = 8000);
+
 // Spool list. Result is a plain array like Spoolman's /api/v1/spool, with
 // FilaMan's {items,page,page_size,total} envelope already unwrapped.
 // When search_term is given, the server filters and usually returns a single
