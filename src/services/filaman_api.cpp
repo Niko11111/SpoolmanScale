@@ -299,6 +299,73 @@ int filamanGetHealthCode(const char* base_url, uint32_t timeout_ms) {
   return code;
 }
 
+bool filamanGetVersion(const char* base_url, char* out_version, size_t out_size,
+                       uint32_t timeout_ms) {
+  if (out_version && out_size > 0) out_version[0] = '\0';
+  if (!hasBaseUrl(base_url) || !out_version || out_size == 0) return false;
+
+  HTTPClient http;
+  http.begin(String(base_url) + "/openapi.json");
+  http.setTimeout(timeout_ms);
+  int code = http.GET();
+  if (code != 200) { http.end(); return false; }
+
+  // The document starts with
+  //   {"openapi":"3.1.0","info":{"title":"FilaMan","version":"1.2.36"},...
+  // A Range header is ignored by the server, so instead only the head of the
+  // stream is read and the connection is then closed, which stops the rest
+  // from being transferred.
+  char head[256];
+  size_t got = 0;
+  WiFiClient* stream = http.getStreamPtr();
+  uint32_t started = millis();
+  while (got < sizeof(head) - 1 && (millis() - started) < timeout_ms) {
+    if (!stream->available()) {
+      if (!http.connected()) break;
+      delay(5);
+      continue;
+    }
+    int r = stream->read((uint8_t*)head + got, sizeof(head) - 1 - got);
+    if (r <= 0) break;
+    got += r;
+  }
+  head[got] = '\0';
+  http.end();
+
+  // First "version" key in the document belongs to info; the one before it is
+  // "openapi", a different key.
+  const char* p = strstr(head, "\"version\"");
+  if (!p) return false;
+  p = strchr(p + 9, '"');
+  if (!p) return false;
+  p++;
+  const char* end = strchr(p, '"');
+  if (!end || end <= p) return false;
+
+  size_t n = (size_t)(end - p);
+  if (n > out_size - 1) n = out_size - 1;
+  memcpy(out_version, p, n);
+  out_version[n] = '\0';
+  return true;
+}
+
+int filamanCountActiveSpools(const char* base_url, const char* api_key,
+                             uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url)) return -1;
+
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/spools?page_size=1");
+  http.setTimeout(timeout_ms);
+  addApiKey(http, api_key);
+  if (http.GET() != 200) { http.end(); return -1; }
+
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, http.getStream());
+  http.end();
+  if (err) return -1;
+  return doc["total"] | -1;
+}
+
 // ============================================================
 //  WRITING
 // ============================================================

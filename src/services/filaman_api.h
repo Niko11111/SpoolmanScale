@@ -37,6 +37,18 @@ int filamanHeartbeat(const char* base_url, const char* device_token,
 // GET /health, which sits outside /api/v1 unlike Spoolman's.
 int filamanGetHealthCode(const char* base_url, uint32_t timeout_ms = 3000);
 
+// Server version. FilaMan has no version endpoint that works without admin
+// rights, but /openapi.json carries it in info.version and needs no
+// credentials. That document is 240 kB, so only its first bytes are read and
+// the connection is dropped: the version sits within the first 60.
+bool filamanGetVersion(const char* base_url, char* out_version, size_t out_size,
+                       uint32_t timeout_ms = 5000);
+
+// Number of spools not archived. Taken from the "total" of a one item page
+// rather than counting, which keeps the answer small.
+int filamanCountActiveSpools(const char* base_url, const char* api_key,
+                             uint32_t timeout_ms = 6000);
+
 // ---------- reading, translated to the Spoolman shape ----------
 //
 // FilaMan uses different field names than Spoolman. Rather than teach the

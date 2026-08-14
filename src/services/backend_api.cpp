@@ -95,12 +95,16 @@ int backendGetHealthCode(const char* base_url, uint32_t timeout_ms) {
 
 bool backendGetVersion(const char* base_url, char* out_version, size_t out_size,
                        uint32_t timeout_ms) {
-  if (backendIsFilaMan()) { notSupported("GetVersion"); return false; }
+  if (backendIsFilaMan()) {
+    return filamanGetVersion(backendBaseUrl(), out_version, out_size, timeout_ms);
+  }
   return spoolmanGetVersion(base_url, out_version, out_size, timeout_ms);
 }
 
 int backendCountActiveSpools(const char* base_url, uint32_t timeout_ms) {
-  if (backendIsFilaMan()) return notSupported("CountActiveSpools");
+  if (backendIsFilaMan()) {
+    return filamanCountActiveSpools(backendBaseUrl(), filamanApiKey(), timeout_ms);
+  }
   return spoolmanCountActiveSpools(base_url, timeout_ms);
 }
 
