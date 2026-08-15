@@ -1,7 +1,7 @@
 // ============================================================
 //  SpoolmanScale – Bambu NFC Tag Reader & Decoder
 //  Board:   WT32-SC01 Plus (ESP32-S3)
-//  Version: v0.5.13-beta.28
+//  Version: v0.5.13-beta.29
 //
 //  Reads Bambu Lab MIFARE Classic tags, derives keys via KDF
 //  (HKDF/SHA256, master key from Bambu-Research-Group/RFID-Tag-Guide),
@@ -29,6 +29,15 @@
 #include <Arduino.h>
 #include "app/app_boot.h"
 #include "app/app_loop.h"
+
+// The Arduino loop task defaults to 8 kB. Everything in this firmware runs on
+// it, and the deepest paths are LVGL button callbacks: loop() calls
+// lv_timer_handler(), which dispatches touch input, which calls the callback,
+// which may build a whole screen or do HTTP with JSON parsing. That nesting
+// has overflowed the stack before, see the deferred lookups in spool_flow.cpp.
+// Doubling it costs internal RAM once and removes a whole class of panic
+// reboots. The heartbeat logs the watermark so the real usage stays visible.
+SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 
 void setup() {
   appSetup();

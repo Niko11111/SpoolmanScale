@@ -99,6 +99,30 @@ void appLoop() {
   lv_timer_handler();
   handlePowerManagement();
 
+  // ── Stack watermark of the loop task ─────────────────────
+  // uxTaskGetStackHighWaterMark reports the lowest free stack seen since
+  // boot, in bytes. That is exactly what is needed here: the deepest moment
+  // happens inside an LVGL callback, and by the time any logging runs the
+  // stack is shallow again. The watermark still remembers it.
+  //
+  // The warning is deliberately outside the verbose guard. Running out of
+  // stack is a panic reboot, not a detail, so it must show up in a normal log
+  // as well. It fires once per new low so it cannot flood the file.
+  static unsigned long last_stack_check_ms = 0;
+  static uint32_t stack_min_bytes = 0xFFFFFFFF;
+  if (millis() - last_stack_check_ms >= 2000) {
+    last_stack_check_ms = millis();
+    uint32_t free_stack = (uint32_t)uxTaskGetStackHighWaterMark(NULL);
+    if (free_stack < stack_min_bytes) {
+      bool was_ok = (stack_min_bytes >= 3072);
+      stack_min_bytes = free_stack;
+      if (free_stack < 3072) {
+        logSDf("%s loop task stack down to %u bytes free",
+               was_ok ? "STACK WARNING:" : "STACK:", (unsigned)free_stack);
+      }
+    }
+  }
+
   // ── Loop heartbeat (every 5s, verbose only) ──────────────
   // Helps diagnose freezes: last heartbeat timestamp = roughly when loop stopped
   static unsigned long last_heartbeat_ms = 0;
@@ -113,10 +137,12 @@ void appLoop() {
     lv_mem_monitor(&lv_mem);
     bool wifi_up = (WiFi.status() == WL_CONNECTED);
     logSDf("[verbose] heartbeat #%u heap=%d PSRAM=%d uptime=%lus "
-           "lv_free=%u lv_biggest=%u lv_used=%u%% lv_frag=%u%% wifi=%s rssi=%d",
+           "lv_free=%u lv_biggest=%u lv_used=%u%% lv_frag=%u%% "
+           "stack_min=%u wifi=%s rssi=%d",
       heartbeat_count, ESP.getFreeHeap(), ESP.getFreePsram(), millis() / 1000,
       (unsigned)lv_mem.free_size, (unsigned)lv_mem.free_biggest_size,
       (unsigned)lv_mem.used_pct, (unsigned)lv_mem.frag_pct,
+      (unsigned)stack_min_bytes,
       wifi_up ? "up" : "DOWN", wifi_up ? WiFi.RSSI() : 0);
   }
 
