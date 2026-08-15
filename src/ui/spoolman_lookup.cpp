@@ -340,17 +340,19 @@ void querySpoolman(const char* tray_uuid) {
   JsonDocument doc(&psram_alloc);
   DeserializationError err = DeserializationError::Ok;
 
-  // Fast path: FilaMan can filter by tag server side, so one small answer
-  // replaces the whole inventory. Spoolman has no such search and returns
-  // BACKEND_NOT_SUPPORTED, which falls through to the loop below unchanged.
+  // Fast path: both backends can filter by tag server side, so one small
+  // answer replaces the whole inventory. With 268 spools that is under 1 kB
+  // instead of 176 kB.
   //
-  // An empty result is not proof of absence: the search only covers
-  // rfid_uid, not custom_fields, so spools imported from Spoolman are
-  // invisible here until their UID has been migrated. Those are found by
-  // the full scan below.
+  // An empty result is not proof of absence. In FilaMan the search only
+  // covers rfid_uid, not custom_fields, so spools imported from Spoolman
+  // stay invisible until their UID has been migrated. In Spoolman an older
+  // server ignores the filter and answers with everything. Both cases are
+  // caught by requiring an exact match below and otherwise falling through
+  // to the full scan.
   bool have_result = false;
   {
-    int fcode = backendFindSpoolByTag(cfg_spoolman_base, tray_uuid, doc, 8000, &err);
+    int fcode = backendFindSpoolByTag(cfg_spoolman_base, tray_uuid, doc, 8000, &err, &filter);
     if (fcode == 200 && !err) {
       // The server side search is a text filter, not an exact tag match. A
       // substring hit on some other spool must not suppress the full scan,

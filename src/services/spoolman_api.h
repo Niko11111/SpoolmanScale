@@ -22,6 +22,14 @@ int spoolmanCreateSpool(const char* base_url, int filament_id, float initial_wei
   float spool_weight, float remaining_weight, int* out_spool_id = nullptr, uint32_t timeout_ms = 8000);
 int spoolmanCreateSpoolField(const char* base_url, const char* field_name, uint32_t timeout_ms = 3000);
 int spoolmanPatchSpoolTag(const char* base_url, int spool_id, const char* uuid, uint32_t timeout_ms = 5000);
+// Server side tag search. Result has the same shape as the spool list, but
+// usually holds a single entry. The match is partial and case insensitive,
+// so the caller must still verify the tag exactly. An older Spoolman ignores
+// the parameter and returns everything, which the caller's own scan handles.
+int spoolmanFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocument& doc,
+                           uint32_t timeout_ms = 8000, JsonDocument* filter = nullptr,
+                           DeserializationError* out_err = nullptr);
+
 int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remaining, const char* last_used_iso = nullptr, uint32_t timeout_ms = 5000);
 int spoolmanPatchInitialWeight(const char* base_url, int spool_id, float initial_weight, uint32_t timeout_ms = 5000);
 int spoolmanPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeout_ms = 5000);

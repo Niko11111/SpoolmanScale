@@ -76,6 +76,47 @@ int spoolmanGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocu
     doc, timeout_ms, filter, out_err);
 }
 
+// Percent-encodes everything outside [A-Za-z0-9]. Tag UIDs are hex in
+// practice, but the value ends up in a URL and a stray character there would
+// break the query rather than just miss.
+static String urlEncode(const char* s) {
+  String out;
+  for (const char* p = s; *p; p++) {
+    unsigned char c = (unsigned char)*p;
+    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+      out += (char)c;
+    } else {
+      char buf[4];
+      snprintf(buf, sizeof(buf), "%%%02X", c);
+      out += buf;
+    }
+  }
+  return out;
+}
+
+int spoolmanFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocument& doc,
+                           uint32_t timeout_ms, JsonDocument* filter,
+                           DeserializationError* out_err) {
+  if (!tag_uuid || !tag_uuid[0]) return -1;
+
+  // Spoolman filters on extra fields server side, in SQL. The parameter is
+  // not listed in openapi.json because extra fields are user defined and
+  // cannot appear in a generated schema, but spool.find() takes
+  // extra_field_filters and has since at least v0.26.1.
+  //
+  // Three properties of this filter matter here, all verified against a live
+  // instance:
+  //   - it is a partial, case insensitive match, so the caller must still
+  //     compare the returned tag exactly. Never trust the first hit.
+  //   - an empty value means "spools with no tag" and would return most of
+  //     the inventory, hence the guard above.
+  //   - an unknown parameter is ignored, so an older Spoolman simply answers
+  //     with the full list and the caller's scan finds the spool anyway.
+  //     That is the whole fallback: no version check, no second code path.
+  String path = "/api/v1/spool?allow_archived=false&extra.tag=" + urlEncode(tag_uuid);
+  return spoolmanGetJson(base_url, path.c_str(), doc, timeout_ms, filter, out_err);
+}
+
 int spoolmanGetLocationsJson(const char* base_url, JsonDocument& doc,
                              uint32_t timeout_ms, DeserializationError* out_err) {
   return spoolmanGetJson(base_url, "/api/v1/location", doc, timeout_ms, nullptr, out_err);

@@ -54,20 +54,28 @@ int backendGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocum
 }
 
 int backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocument& doc,
-                          uint32_t timeout_ms, DeserializationError* out_err) {
-  // Without a tag the search parameter would be dropped and the call would
-  // quietly turn into a full inventory fetch, which callers would then treat
-  // as a successful lookup.
+                          uint32_t timeout_ms, DeserializationError* out_err,
+                          JsonDocument* filter) {
+  // Without a tag both backends would drop the search term and answer with
+  // the whole inventory, which callers would then treat as a successful
+  // lookup. Spoolman is worse still: an empty value there means "spools with
+  // no tag" and matches most of the library.
   if (!tag_uuid || !tag_uuid[0]) return BACKEND_NOT_SUPPORTED;
+
   if (backendIsFilaMan()) {
     // FilaMan filters server side, so a scan costs one small answer instead
-    // of the whole inventory.
+    // of the whole inventory. The translation only produces the keys the UI
+    // reads, so the caller's field filter does not apply.
+    (void)filter;
     return filamanGetSpoolListJson(backendBaseUrl(), filamanApiKey(), false,
                                    doc, tag_uuid, 20, timeout_ms, out_err);
   }
-  // Spoolman has no such search, the caller keeps using the full list.
-  (void)tag_uuid;
-  return BACKEND_NOT_SUPPORTED;
+
+  // Spoolman can do the same through an extra field filter. The field filter
+  // is passed along because an older server ignores the query parameter and
+  // answers with everything: that case still works, and this keeps it from
+  // costing more memory than the normal full scan would.
+  return spoolmanFindSpoolByTag(base_url, tag_uuid, doc, timeout_ms, filter, out_err);
 }
 
 int backendGetLocationsJson(const char* base_url, JsonDocument& doc,

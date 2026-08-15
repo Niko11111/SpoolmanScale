@@ -46,7 +46,8 @@ bool backendGetLastWeighedAt(const char* base_url, int spool_id,
 // Spoolman has no equivalent and returns BACKEND_NOT_SUPPORTED, callers then
 // keep using the existing full list scan.
 int  backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocument& doc,
-       uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr);
+       uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr,
+       JsonDocument* filter = nullptr);
 
 // --- creating ------------------------------------------------
 int  backendCreateSpool(const char* base_url, int filament_id, float initial_weight,
