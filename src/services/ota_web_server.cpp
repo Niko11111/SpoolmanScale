@@ -386,7 +386,11 @@ void startOtaServer() {
       "<button class='btn-toggle' onclick='setLocL()'>Save</button>"
       "<span id='locl-s' style='font-size:12px;color:#28d49a;line-height:36px'></span>"
       "</div></div></div>"
-      "<div class='footer'>Not affiliated with " + String(backendName()) + " - Open Source Project</div>"
+      // Both are named regardless of the active mode. This device is called
+      // SpoolmanScale, so in FilaMan mode a disclaimer that mentions only
+      // FilaMan would leave out the very name that could suggest an
+      // affiliation. Not a place to be clever with backendName().
+      "<div class='footer'>Not affiliated with Spoolman or FilaMan - Open Source Project</div>"
       "</body></html>";
     ota_server.send(200, "text/html", html);
   });

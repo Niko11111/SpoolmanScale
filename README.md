@@ -183,4 +183,4 @@ Have a feature request? Post it in the [Discord](https://discord.gg/GzQzGa5pBG) 
 
 ---
 
-*Not affiliated with Spoolman. Uses the Spoolman REST API.*
+*Not affiliated with Spoolman or FilaMan. Uses the Spoolman and FilaMan REST APIs.*
