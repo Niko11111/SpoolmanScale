@@ -211,13 +211,21 @@ void buildSpoolmanScreen() {
     char sm_ver[32] = "?";
     backendGetVersion(cfg_spoolman_base, sm_ver, sizeof(sm_ver), 3000);
 
-    // Count spools by matching '"filament":' — exactly 1 per spool, avoids counting nested ids
     int spool_count = backendCountActiveSpools(cfg_spoolman_base, 6000);
-    if (spool_count < 0) spool_count = 0;
 
-    // Show result on screen
+    // A negative count means the question could not be answered, not that
+    // there are no spools. In FilaMan that is the normal case during setup,
+    // because counting needs the API key and it is entered a step later.
+    // Printing "0 spools" there would look like an empty database.
     char result_buf[64];
-    snprintf(result_buf, sizeof(result_buf), "v%s | %d spools", sm_ver, spool_count);
+    if (spool_count < 0) {
+      char conn_buf[24];
+      strncpy(conn_buf, T(STR_CONNECTED), sizeof(conn_buf) - 1);
+      conn_buf[sizeof(conn_buf) - 1] = '\0';
+      snprintf(result_buf, sizeof(result_buf), "v%s | %s", sm_ver, conn_buf);
+    } else {
+      snprintf(result_buf, sizeof(result_buf), "v%s | %d spools", sm_ver, spool_count);
+    }
     if (lbl_sp_test_result) {
       lv_label_set_text(lbl_sp_test_result, result_buf);
       lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x40c080), 0);

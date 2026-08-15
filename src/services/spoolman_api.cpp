@@ -127,25 +127,29 @@ bool spoolmanGetVersion(const char* base_url, char* out_version, size_t out_size
 int spoolmanCountActiveSpools(const char* base_url, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url)) return -1;
 
+  // Spoolman reports the total in a header, so asking for a single spool is
+  // enough: about 1 kB instead of the whole inventory, which is 176 kB with
+  // 268 spools.
+  //
+  // This used to count occurrences of "filament" while streaming the full
+  // list, and the read loop ended as soon as available() returned 0 for a
+  // moment. That happens at every TCP packet boundary, so it counted the
+  // first packet and stopped, which is why a large library reported a
+  // handful of spools.
   HTTPClient http;
-  http.begin(String(base_url) + "/api/v1/spool?allow_archived=false");
+  http.begin(String(base_url) + "/api/v1/spool?allow_archived=false&limit=1");
   http.setTimeout(timeout_ms);
+  const char* collect[] = { "x-total-count" };
+  http.collectHeaders(collect, 1);
   if (http.GET() != 200) {
     http.end();
     return -1;
   }
 
-  int spool_count = 0;
-  WiFiClient* stream = http.getStreamPtr();
-  char buf[11] = {0};
-  while (http.connected() && stream->available()) {
-    char c = stream->read();
-    memmove(buf, buf + 1, 9);
-    buf[9] = c;
-    if (memcmp(buf, "\"filament\"", 10) == 0) spool_count++;
-  }
+  String total = http.header("x-total-count");
   http.end();
-  return spool_count;
+  if (total.length() == 0) return -1;   // older Spoolman without the header
+  return total.toInt();
 }
 
 int spoolmanCreateSpool(const char* base_url, int filament_id, float initial_weight,

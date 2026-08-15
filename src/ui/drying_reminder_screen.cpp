@@ -8,6 +8,7 @@
 
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "ota_browser.h"
 #include "scale_menu.h"
 #include "services/drying_config.h"
 #include "services/prefs_store.h"
@@ -179,13 +180,38 @@ void showDryingReminderScreen() {
   } else if (g_dry_mode == 1) {
     // Material: Tabelle der Schwellwerte (read-only)
     lv_obj_t *hint = lv_label_create(scr_drying_reminder);
-    { char hbuf[64]; strncpy(hbuf, T(STR_DRY_MAT_HINT), sizeof(hbuf)-1); lv_label_set_text(hint, hbuf); }
+    { char hbuf[64]; strncpy(hbuf, T(STR_DRY_MAT_HINT), sizeof(hbuf)-1); hbuf[sizeof(hbuf)-1]=0;
+      lv_label_set_text(hint, hbuf); }
     lv_obj_set_style_text_color(hint, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
-    lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_width(hint, 440);
-    lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, content_y);
-    content_y += 20;
+    lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_width(hint, 300);
+    lv_obj_set_pos(hint, 12, content_y);
+
+    // The hint said the thresholds are editable in the browser but left the
+    // user to find the way there through the update menu. LVGL labels have no
+    // clickable words, so the link is a small button next to the text.
+    lv_obj_t *btn_web = lv_btn_create(scr_drying_reminder);
+    lv_obj_set_size(btn_web, 150, 26);
+    lv_obj_set_pos(btn_web, 318, content_y - 6);
+    lv_obj_set_style_bg_color(btn_web, lv_color_hex(0x0a1e30), 0);
+    lv_obj_set_style_bg_color(btn_web, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btn_web, 6, 0);
+    lv_obj_set_style_shadow_width(btn_web, 0, 0);
+    lv_obj_set_style_border_width(btn_web, 1, 0);
+    lv_obj_set_style_border_color(btn_web, lv_color_hex(0x1a3060), 0);
+    lv_obj_add_event_cb(btn_web, [](lv_event_t *e) {
+      logSD("BTN: Drying -> Web interface");
+      showOtaBrowserScreen(WEB_CTX_DRYING);
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_web = lv_label_create(btn_web);
+    { char wbuf[32]; snprintf(wbuf, sizeof(wbuf), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_OPEN_BROWSER));
+      lv_label_set_text(lbl_web, wbuf); }
+    lv_obj_set_style_text_color(lbl_web, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_font(lbl_web, &lv_font_montserrat_ext_12, 0);
+    lv_obj_center(lbl_web);
+
+    content_y += 24;
 
     // Scrollbare Tabelle
     lv_obj_t *tbl_cont = lv_obj_create(scr_drying_reminder);

@@ -25,8 +25,17 @@ static WebScreenContext s_web_ctx = WEB_CTX_FIRMWARE;
 static lv_obj_t *s_lbl_key_val   = nullptr;
 static lv_obj_t *s_lbl_token_val = nullptr;
 
+// Only the two FilaMan entry points need the credential rows. The drying
+// thresholds are edited in the browser as well, but have nothing to do with
+// tokens, so that context just shows the address.
 static bool showsCredentials() {
-  return s_web_ctx != WEB_CTX_FIRMWARE;
+  return s_web_ctx == WEB_CTX_BACKEND || s_web_ctx == WEB_CTX_SETUP;
+}
+
+// Everything except the firmware upload uses the neutral title and skips the
+// .bin hint and the stop button.
+static bool isFirmwareContext() {
+  return s_web_ctx == WEB_CTX_FIRMWARE;
 }
 
 void showOtaBrowserScreen(WebScreenContext ctx) {
@@ -127,7 +136,7 @@ void buildOtaBrowserScreen() {
   scr_ota_browser = buildOverlayScreen();
 
   char title_buf[40];
-  strncpy(title_buf, showsCredentials() ? T(STR_WEB_TITLE) : T(STR_OTA_BROWSER_TITLE),
+  strncpy(title_buf, isFirmwareContext() ? T(STR_OTA_BROWSER_TITLE) : T(STR_WEB_TITLE),
           sizeof(title_buf) - 1);
   title_buf[sizeof(title_buf) - 1] = '\0';
 
@@ -145,8 +154,11 @@ void buildOtaBrowserScreen() {
         logSD("BTN: Web interface -> Back");
         stopOtaServer();
         // Back goes where the user came from, not always to the update menu.
-        if (s_web_ctx == WEB_CTX_BACKEND) show_backend_pending = true;
-        else                              show_ota_pending     = true;
+        switch (s_web_ctx) {
+          case WEB_CTX_BACKEND: show_backend_pending         = true; break;
+          case WEB_CTX_DRYING:  show_drying_reminder_pending  = true; break;
+          default:              show_ota_pending              = true; break;
+        }
       });
   }
 
@@ -232,6 +244,11 @@ void buildOtaBrowserScreen() {
     }
     return;
   }
+
+  // Only the firmware context continues below: the .bin hint, the upload
+  // status and the stop button make no sense when the browser is opened to
+  // edit drying thresholds.
+  if (!isFirmwareContext()) return;
 
   lv_obj_t *lbl_hint2 = lv_label_create(scr_ota_browser);
   char file_buf[160];

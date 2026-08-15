@@ -101,11 +101,12 @@ void buildScaleSubScreen() {
     }, LV_EVENT_CLICKED, NULL); }
 
   { char buf_t[40]; strncpy(buf_t, T(STR_BTN_AUTO_LOC_POPUP), sizeof(buf_t)-1);
-    char buf_s[8]; strncpy(buf_s, g_auto_loc_popup ? "ON" : "OFF", sizeof(buf_s)-1);
+    char buf_s[8]; strncpy(buf_s, T(g_auto_loc_popup ? STR_ON : STR_OFF), sizeof(buf_s)-1);
+    buf_s[sizeof(buf_s)-1] = '\0';
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_GPS, buf_t, buf_s, g_auto_loc_popup);
     lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
     if (arr_lbl) {
-      lv_label_set_text(arr_lbl, g_auto_loc_popup ? "ON" : "OFF");
+      lv_label_set_text(arr_lbl, buf_s);
       lv_obj_set_style_text_color(arr_lbl, g_auto_loc_popup ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
       lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
     }

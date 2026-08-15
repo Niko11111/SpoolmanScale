@@ -324,10 +324,12 @@ const char* const STRINGS[STR_COUNT][2] = {
   // First boot welcome screen
   { "Willkommen!",
     "Welcome!"                                    },  // STR_FIRSTBOOT_TITLE
-  { "Dein SpoolmanScale ist bereit.",
-    "Your SpoolmanScale is ready."                },  // STR_FIRSTBOOT_SUB
-  { "In wenigen Schritten richten wir\nWiFi, Spoolman und die Waage ein.",
-    "In a few steps we will set up\nWiFi, Spoolman and the scale."  },  // STR_FIRSTBOOT_HINT
+  { "Deine SpoolmanScale ist fast bereit.",
+    "Your SpoolmanScale is almost ready."         },  // STR_FIRSTBOOT_SUB
+  // Both backends are named here because this screen appears before the user
+  // has chosen one. It must therefore not go through backendText().
+  { "In wenigen Schritten richten wir\nWiFi, Spoolman/FilaMan und die Waage ein.",
+    "In a few steps we will set up\nWiFi, Spoolman/FilaMan and the scale."  },  // STR_FIRSTBOOT_HINT
   { LV_SYMBOL_RIGHT "  Los geht's",
     LV_SYMBOL_RIGHT "  Get started"               },  // STR_FIRSTBOOT_BTN
 
@@ -522,7 +524,7 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Zu viele Lagerorte - nicht alle angezeigt",
     "Too many locations - not all shown"                                   },  // STR_LOCATION_LIMIT_HIT
   { "Bitte per ID verlinken",        "Please link via ID"                 },  // STR_NO_SPOOLS_HINT
-  { "Ort bei Entnahme",              "Location on removal"                },  // STR_BTN_AUTO_LOC_POPUP
+  { "Ortsabfrage bei Entnahme",      "Location on removal"                },  // STR_BTN_AUTO_LOC_POPUP
   { "Lagerort-Auswahl automatisch",  "Auto location picker"               },  // STR_BTN_AUTO_LOC_POPUP_SUB
   { "Lagerort speichern?",           "Save location?"                     },  // STR_AUTO_LOC_POPUP_TITLE
   { "Wo wird die Spule gelagert?",   "Where is the spool stored?"         },  // STR_AUTO_LOC_POPUP_MSG
@@ -577,4 +579,10 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Welchen Server benutzt du? Das lässt sich später jederzeit im Menü ändern.",
     "Which server do you use? This can be changed in the menu at any time."
                                                                           },  // STR_SETUP_BACKEND_HINT
+  // Shown instead of a spool count when the server answered but the number
+  // could not be asked for yet, which is the normal FilaMan setup case.
+  { "verbunden",                     "connected"                          },  // STR_CONNECTED
+  { "AN",                            "ON"                                 },  // STR_ON
+  { "AUS",                           "OFF"                                },  // STR_OFF
+  { "Im Browser öffnen",             "Open in browser"                    },  // STR_BTN_OPEN_BROWSER
 };

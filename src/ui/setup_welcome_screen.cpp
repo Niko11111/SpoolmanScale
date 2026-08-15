@@ -172,7 +172,11 @@ void buildFirstBootScreen() {
   lv_obj_align(lbl_sub, LV_ALIGN_TOP_MID, 0, 104);
 
   lv_obj_t *lbl_hint = lv_label_create(scr_first_boot);
-  { char hb[128]; backendText(T(STR_FIRSTBOOT_HINT), hb, sizeof(hb)); lv_label_set_text(lbl_hint, hb); }
+  // No backendText() here: at this point no backend has been chosen, and the
+  // text deliberately names both. Substituting would turn it into
+  // "FilaMan/FilaMan" once a mode is stored.
+  { char hb[128]; strncpy(hb, T(STR_FIRSTBOOT_HINT), sizeof(hb) - 1); hb[sizeof(hb) - 1] = '\0';
+    lv_label_set_text(lbl_hint, hb); }
   lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
