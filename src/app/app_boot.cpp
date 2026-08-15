@@ -7,6 +7,7 @@
 
 #include "app_config.h"
 #include "app/app_state.h"
+#include "app/setup_flow.h"
 #include "hardware/display.h"
 #include "hardware/display_power.h"
 #include "hardware/nfc.h"
@@ -153,17 +154,23 @@ void appSetup() {
   // 3. lang_set=true, first_boot=false, SSID empty: WiFi setup
   // 4. lang_set=true, SSID set: normal start
   if (!cfg_lang_set) {
-    Serial.println("First install -> language selection");
+    // The language screen is the first step of the setup, not something
+    // outside it. Choosing German restarts the device and lands in branch 2,
+    // choosing English continues without a restart, and that path used to
+    // leave the flag unset for the whole rest of the chain.
+    setSetupActive(true, "boot: no language yet");
+    logSetupBootState("language");
     showWelcomeScreen();
   } else if (cfg_first_boot && strlen(cfg_wifi_ssid) == 0) {
-    Serial.println("First boot -> welcome screen (language already set)");
-    setup_active = true;
+    setSetupActive(true, "boot: first boot, no SSID");
+    logSetupBootState("firstboot");
     showFirstBootScreen();
   } else if (strlen(cfg_wifi_ssid) == 0) {
-    Serial.println("SSID empty -> WiFi setup");
-    setup_active = true;
+    setSetupActive(true, "boot: no SSID");
+    logSetupBootState("wifisetup");
     showWifiSetupScreen();
   } else {
+    logSetupBootState("normal");
     wifiConnect();
   }
 }

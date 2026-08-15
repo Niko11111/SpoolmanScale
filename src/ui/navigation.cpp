@@ -1,5 +1,6 @@
 #include "navigation.h"
 #include "app/app_state.h"
+#include "app/setup_flow.h"
 
 #include <lvgl.h>
 
@@ -62,7 +63,9 @@ void showMainScreen() {
   logSD("UI: Screen -> Main");
   // Every way out of the setup chain ends here, whether the user finished it,
   // skipped it or closed it, so this is the one place the flag has to clear.
-  setup_active = false;
+  // Logged, because an unexpected call from somewhere in the middle of the
+  // chain would silently drop the setup back to menu behaviour.
+  setSetupActive(false, "main screen shown");
   setSpoolFlowIdInputOpen(false);
   hideAllOverlays();
 
