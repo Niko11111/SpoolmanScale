@@ -558,8 +558,12 @@ const char* const STRINGS[STR_COUNT][2] = {
 
   // Backend selection. "Spoolman" and "FilaMan" are product names and stay
   // untranslated, so they are not in this table.
-  { "Backend",                       "Backend"                            },  // STR_BACKEND_TITLE
-  { "Server und Zugangsdaten",       "Server and credentials"             },  // STR_BACKEND_TILE_SUB
+  // "Server" described the technology, not the purpose. Both Spoolman and
+  // FilaMan manage a filament inventory, and that is what the user picks
+  // here. The address screen keeps "Server", because a server address is
+  // literally what gets typed in there.
+  { "Filamentverwaltung",            "Filament manager"                   },  // STR_BACKEND_TITLE
+  { "Programm und Zugangsdaten",     "Application and credentials"        },  // STR_BACKEND_TILE_SUB
   { "Adresse",                       "Address"                            },  // STR_BACKEND_ADDRESS
   { "API-Key",                       "API key"                            },  // STR_BACKEND_APIKEY
   { "Device-Token",                  "Device token"                       },  // STR_BACKEND_DEVICE_TOKEN
@@ -576,8 +580,8 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Im Browser einrichten",         "Set up in browser"                  },  // STR_BTN_WEB_SETUP
   { "Fertig",                        "Done"                               },  // STR_BTN_FINISH
   { "Weiter",                        "Next"                               },  // STR_BTN_NEXT
-  { "Welchen Server benutzt du? Das lässt sich später jederzeit im Menü ändern.",
-    "Which server do you use? This can be changed in the menu at any time."
+  { "Welche Filamentverwaltung benutzt du? Das lässt sich später jederzeit im Menü ändern.",
+    "Which filament manager do you use? This can be changed in the menu at any time."
                                                                           },  // STR_SETUP_BACKEND_HINT
   // Shown instead of a spool count when the server answered but the number
   // could not be asked for yet, which is the normal FilaMan setup case.
