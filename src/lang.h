@@ -476,6 +476,7 @@ enum StringID {
   STR_ON,
   STR_OFF,
   STR_BTN_OPEN_BROWSER,
+  STR_NOT_AFFILIATED,
 
   STR_COUNT
 };

@@ -589,4 +589,8 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "AN",                            "ON"                                 },  // STR_ON
   { "AUS",                           "OFF"                                },  // STR_OFF
   { "Im Browser öffnen",             "Open in browser"                    },  // STR_BTN_OPEN_BROWSER
+  // Names both products in both languages and in every backend mode. Not
+  // passed through backendText(), see the comment at the call site.
+  { "Nicht mit Spoolman oder FilaMan verbunden",
+    "Not affiliated with Spoolman or FilaMan"                             },  // STR_NOT_AFFILIATED
 };

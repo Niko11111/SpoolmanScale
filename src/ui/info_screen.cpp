@@ -259,10 +259,22 @@ void showInfoScreen() {
     lv_obj_align(l, LV_ALIGN_CENTER, 0, 14); }
   lv_obj_add_event_cb(btn_mw, [](lv_event_t *e){ logSD("BTN: Info -> QR makerworld"); showQRPopup(3); }, LV_EVENT_CLICKED, NULL);
 
+  // The disclaimer only existed in the web interface and the README, so
+  // anyone who never opened either never saw it. The device is called
+  // SpoolmanScale, which is exactly why it needs to say this somewhere the
+  // user actually looks. Both names appear regardless of the active backend.
+  lv_obj_t *disc = lv_label_create(scr_info);
+  { char db[64]; strncpy(db, T(STR_NOT_AFFILIATED), sizeof(db) - 1); db[sizeof(db) - 1] = '\0';
+    lv_label_set_text(disc, db); }
+  lv_obj_set_style_text_color(disc, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_font(disc, &lv_font_montserrat_ext_10, 0);
+  lv_obj_set_style_text_align(disc, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(disc, LV_ALIGN_BOTTOM_MID, 0, -6);
+
   lv_obj_t *hint = lv_label_create(scr_info);
   lv_label_set_text(hint, T(STR_INFO_HINT));
   lv_obj_set_style_text_color(hint, lv_color_hex(0x2a4060), 0);
   lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
+  lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -22);
 }
