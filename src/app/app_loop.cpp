@@ -606,6 +606,13 @@ void appLoop() {
         // ── MIFARE Classic (Bambu) ────────────────────────────
         last_tag_seen_ms = millis();
         tag_present = true;
+        // A successful read means zero consecutive misses, by definition.
+        // This used to be reset only when the UID changed, so after the very
+        // first read of a spool the counter never went back to zero. The
+        // "4 consecutive misses" below then counted misses that were minutes
+        // apart, and the fifth glitch of a session declared the spool removed
+        // while it was still lying on the scale.
+        nfc_absent_count = 0;
         resetActivityTimer();
 
         char uid_str[24];
@@ -669,6 +676,7 @@ void appLoop() {
         // ── NTAG detected ──────────────────────────────────────
         last_tag_seen_ms = millis();
         tag_present = true;
+        nfc_absent_count = 0;   // see the comment in the Bambu branch above
         resetActivityTimer();
 
         char uid_str[24];
