@@ -30,10 +30,25 @@ jobs:
         run: pip install --upgrade platformio
       - name: Build ${{ matrix.env }}
         run: pio run -e ${{ matrix.env }}
-      - name: Read version from main.cpp
+      - name: Read version from app_config.h
         id: version
         run: |
-          VERSION=$(grep '#define FW_VERSION' src/main.cpp | sed 's/.*"\(.*\)"/\1/')
+          # FW_VERSION moved out of main.cpp into app_config.h during the
+          # refactor. The old grep silently returned an empty string, which
+          # would have produced a release named "SpoolmanScale " with an empty
+          # version in manifest.json instead of failing.
+          VERSION=$(grep '#define FW_VERSION' src/app_config.h | sed 's/.*"\(.*\)"/\1/')
+          if [ -z "$VERSION" ]; then
+            echo "::error::FW_VERSION not found in src/app_config.h"
+            exit 1
+          fi
+          # Only on a tag push. A manual workflow_dispatch run has a branch
+          # name in GITHUB_REF_NAME and must not be held to this.
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match FW_VERSION $VERSION"
+            exit 1
+          fi
+          echo "Building $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       - name: Prepare binaries
         run: |
