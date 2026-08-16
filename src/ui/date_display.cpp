@@ -55,10 +55,18 @@ int daysSince(const char* local_date) {
   then.tm_mon  = month - 1;
   then.tm_year = year - 1900;
   then.tm_hour = 12; then.tm_min = 0; then.tm_sec = 0;
-  time_t t_then = mktime(&then);
+  // tm_isdst must be -1, "work it out yourself". A zeroed struct means 0,
+  // which claims standard time, and during summer time mktime then places
+  // noon one hour off. The other timestamp comes from getLocalTime() and has
+  // the flag set correctly, so the two disagree by 3600 seconds. A gap of one
+  // full day becomes 23 hours, and the integer division below floors that to
+  // zero: yesterday is reported as today, all summer long.
+  then.tm_isdst = -1;
   // Heute Mittag
   struct tm today = ti;
   today.tm_hour = 12; today.tm_min = 0; today.tm_sec = 0;
+  today.tm_isdst = -1;
+  time_t t_then = mktime(&then);
   time_t t_today = mktime(&today);
   if (t_then < 0 || t_today < 0) return -1;
   int days = (int)((t_today - t_then) / 86400);
