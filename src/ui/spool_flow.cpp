@@ -59,6 +59,27 @@ struct UnlinkedSpool {
 // the end as soon as a library had more than 20 vendors or materials.
 #define LINK_GROUP_MAX 20
 
+// Sort order of the link and copy lists: vendor, material, name, id, all
+// case insensitive except the id. Spools without a vendor go last rather
+// than first, because they are shown as "unknown" and belong at the end of
+// a list, not at the top of it.
+static int compareLinkSpools(const void* a, const void* b) {
+  const UnlinkedSpool* x = (const UnlinkedSpool*)a;
+  const UnlinkedSpool* y = (const UnlinkedSpool*)b;
+
+  const bool xv = (x->vendor[0] != '\0');
+  const bool yv = (y->vendor[0] != '\0');
+  if (xv != yv) return xv ? -1 : 1;
+
+  int c = strcasecmp(x->vendor, y->vendor);
+  if (c != 0) return c;
+  c = strcasecmp(x->material, y->material);
+  if (c != 0) return c;
+  c = strcasecmp(x->name, y->name);
+  if (c != 0) return c;
+  return (x->id > y->id) - (x->id < y->id);
+}
+
 static UnlinkedSpool* link_spools = nullptr;  // PSRAM-allocated at fetch time, freed after link flow
 static int            link_spool_count = 0;
 char          link_tag_uid[24] = "";   // UID of the tag to be linked
@@ -339,7 +360,18 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
 
     link_spool_count++;
   }
-  Serial.printf("fetchAllSpoolsForLink: %d spools loaded (PSRAM)\n", link_spool_count);
+  // One sort puts all three levels of the link flow in order. The vendor and
+  // material lists are built from the order of first appearance in this
+  // array, so they inherit whatever order it has, and that used to be
+  // whatever the server happened to return. Spoolman answers in database
+  // order, FilaMan in its own, and neither is meaningful to a user.
+  //
+  // vendor, then material, then name, then id. Where the name is already
+  // fixed, which is the case in the final list, that leaves plain ascending
+  // ids.
+  qsort(link_spools, link_spool_count, sizeof(UnlinkedSpool), compareLinkSpools);
+
+  Serial.printf("fetchAllSpoolsForLink: %d spools loaded (PSRAM, sorted)\n", link_spool_count);
   logSDf("link fetch done: %d spools in list", link_spool_count);
 }
 
