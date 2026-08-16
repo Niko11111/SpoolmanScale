@@ -593,4 +593,6 @@ const char* const STRINGS[STR_COUNT][2] = {
   // passed through backendText(), see the comment at the call site.
   { "Nicht mit Spoolman oder FilaMan verbunden",
     "Not affiliated with Spoolman or FilaMan"                             },  // STR_NOT_AFFILIATED
+  { "Kein Tag erkannt, bitte neu auflegen",
+    "No tag detected, place it again"                                    },  // STR_LINK_NO_TAG
 };

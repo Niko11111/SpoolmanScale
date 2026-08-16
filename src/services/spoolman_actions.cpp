@@ -102,10 +102,15 @@ void patchArchiveSpool() {
 
 void patchSpoolTag(int spool_id, const char* uuid) {
   if (!wifi_ok) return;
-  Serial.printf("PATCH tag: %s\n", uuid);
+  const bool clearing = (!uuid || !uuid[0]);
+  Serial.printf("PATCH tag: '%s'%s\n", uuid ? uuid : "", clearing ? "  (UNLINK)" : "");
   int code = backendPatchSpoolTag(cfg_spoolman_base, spool_id, uuid);
   Serial.printf("patchSpoolTag: HTTP %d\n", code);
-  logSDf("PATCH tag ID=%d HTTP %d", spool_id, code);
+  // The uuid is part of the log line on purpose. An empty one is a valid
+  // unlink and a silent disaster for a link, and the old line could not tell
+  // the two apart afterwards.
+  logSDf("PATCH tag ID=%d uuid='%s'%s HTTP %d",
+         spool_id, uuid ? uuid : "", clearing ? " UNLINK" : "", code);
 }
 
 void patchInitialWeight(float initial_w) {

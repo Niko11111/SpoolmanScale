@@ -343,16 +343,9 @@ void fetchUnlinkedSpools() { fetchAllSpoolsForLink(false, ""); }
 // ============================================================
 //  SPOOLMAN: SAVE TAG UUID (extra.tag)
 // ============================================================
-// ============================================================
-//  LINK FLOW: COMPLETE LINKING
-//  PATCH + update main screen
-// ============================================================
-void doLinkPatch(int spool_id, bool is_bambu) {
-  const char* link_uuid = is_bambu ? g_tag.tray_uuid : link_tag_uid;
-  Serial.printf("doLinkPatch: ID=%d uuid=%s\n", spool_id, link_uuid);
-  patchSpoolTag(spool_id, link_uuid);
-
-  // Close all link overlays
+// Tears down every screen of the link flow and frees the PSRAM spool list.
+// Both the successful and the aborted path need exactly this.
+static void closeLinkOverlays() {
   if (scr_link_entry)  { lv_obj_del(scr_link_entry);  scr_link_entry  = nullptr; }
   if (scr_link_id)     { lv_obj_del(scr_link_id);     scr_link_id     = nullptr; }
   if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
@@ -362,9 +355,43 @@ void doLinkPatch(int spool_id, bool is_bambu) {
   if (scr_link_mat_sub){ lv_obj_del(scr_link_mat_sub);scr_link_mat_sub= nullptr; }
   if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
   if (scr_link_list)   { lv_obj_del(scr_link_list);   scr_link_list   = nullptr; }
-  // Free PSRAM spool list
   if (link_spools) { free(link_spools); link_spools = nullptr; }
   link_spool_count = 0;
+}
+
+// ============================================================
+//  LINK FLOW: COMPLETE LINKING
+//  PATCH + update main screen
+// ============================================================
+void doLinkPatch(int spool_id, bool is_bambu) {
+  const char* link_uuid = is_bambu ? g_tag.tray_uuid : link_tag_uid;
+  Serial.printf("doLinkPatch: ID=%d uuid='%s'\n", spool_id, link_uuid ? link_uuid : "");
+
+  // Linking without a UID must never reach patchSpoolTag. An empty value is
+  // the unlink signal there: FilaMan is sent rfid_uid null, Spoolman an empty
+  // extra.tag, and both answer 200. The screen afterwards reloads the spool
+  // by id, so it looks linked while the tag field is in fact empty.
+  //
+  // The UID comes from a buffer that is cleared whenever the tag display is
+  // reset, so it can legitimately be gone by the time the user finishes
+  // picking a spool. That is a failed link, not an unlink.
+  if (!link_uuid || !link_uuid[0]) {
+    logSDf("LINK ABORT: no tag UID for spool %d (bambu=%d)", spool_id, is_bambu ? 1 : 0);
+    Serial.println("doLinkPatch: aborted, no tag UID");
+    if (lbl_status) {
+      char buf[48];
+      strncpy(buf, T(STR_LINK_NO_TAG), sizeof(buf) - 1);
+      buf[sizeof(buf) - 1] = '\0';
+      lv_label_set_text(lbl_status, buf);
+      lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
+    }
+    closeLinkOverlays();
+    return;
+  }
+
+  patchSpoolTag(spool_id, link_uuid);
+
+  closeLinkOverlays();
 
   // Re-query Spoolman — use single-spool endpoint since we know the ID
   link_popup_dismissed = false;
