@@ -57,6 +57,34 @@
 
 namespace {
 constexpr unsigned long NO_TAG_CLEAR_MS = 60000;
+
+// ── Weight cross-check for the location-on-removal popup ────────
+//
+// The NFC reader loses an NTAG now and then even when the spool has not
+// moved, and every one of those glitches used to look like a removal. The
+// scale is a second, independent witness: if the spool is still sitting on
+// it, the weight has not changed, and there was no removal no matter what
+// the reader says.
+//
+// Below this the scale carries nothing meaningful, so it cannot testify
+// either way and the timer alone decides, exactly as before.
+constexpr float LOC_WEIGHT_MIN_G = 50.0f;
+// Noise of the moving average plus a nudge of the table.
+constexpr float LOC_WEIGHT_TOLERANCE_G = 30.0f;
+// Losing more than half the reference is unambiguous: nothing but taking the
+// spool off does that. Then the popup need not wait for the full debounce.
+constexpr float LOC_WEIGHT_GONE_FRACTION = 0.5f;
+constexpr unsigned long LOC_DEBOUNCE_MS = 2500;
+// The filter averages 8 samples at 200 ms, so after 1200 ms it has taken in
+// six readings of the new weight. That is far more than enough to tell a
+// removed spool from a flickering tag.
+constexpr unsigned long LOC_DEBOUNCE_FAST_MS = 1200;
+
+// Weight while the tag was last actually readable. Frozen at the first miss,
+// not at the point where the tag counts as removed: by then the spool may
+// already be off the scale and the reference would have followed it down.
+static float loc_weight_ref   = 0.0f;
+static bool  loc_weight_valid = false;
 constexpr int NFC_MAX_RETRIES = 5;
 constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
 }
@@ -223,16 +251,40 @@ void appLoop() {
     showInfoScreen();  // builds + shows scr_info
   }
   handleMoreInfoDeferredActions();
-  // Debounced auto-location popup — fires 2500ms after tag removal, only if tag still absent
-  if (loc_popup_pending_id > 0 && !tag_present && (millis() - last_tag_seen_ms) >= 2500) {
-    int pending_id = loc_popup_pending_id;
-    loc_popup_pending_id = -1;
-    if (g_loc_popup_shown_for_id != pending_id && sm_id == pending_id) {
-      logSDf("[verbose] LOC: debounce fired, showing popup id=%d", pending_id);
-      g_loc_popup_shown_for_id = pending_id;
-      requestLocationPicker(true);
-    } else {
-      logSDf("[verbose] LOC: debounce cancelled id=%d shown_for=%d sm_id=%d", pending_id, g_loc_popup_shown_for_id, sm_id);
+  // Debounced auto-location popup, cross-checked against the scale.
+  if (loc_popup_pending_id > 0 && !tag_present) {
+    const unsigned long since = millis() - last_tag_seen_ms;
+    const float drop = loc_weight_ref - scale_weight_g;
+    // Only meaningful when there was something on the scale to begin with.
+    const bool weight_speaks = loc_weight_valid && (loc_weight_ref >= LOC_WEIGHT_MIN_G);
+    const bool weight_says_gone = weight_speaks && (drop > loc_weight_ref * LOC_WEIGHT_GONE_FRACTION);
+    const bool weight_says_stay = weight_speaks &&
+                                  (drop < LOC_WEIGHT_TOLERANCE_G) && (drop > -LOC_WEIGHT_TOLERANCE_G);
+
+    // A clear drop needs no further waiting, the spool is demonstrably off.
+    const bool due = (since >= LOC_DEBOUNCE_MS) ||
+                     (weight_says_gone && since >= LOC_DEBOUNCE_FAST_MS);
+
+    if (due) {
+      int pending_id = loc_popup_pending_id;
+      loc_popup_pending_id = -1;
+
+      if (weight_says_stay) {
+        // The reader lost the tag but the spool never moved. Typical for
+        // NTAGs. Not a removal, so no popup and no note that it was already
+        // shown: the real removal later still deserves one.
+        logSDf("LOC: popup suppressed, weight unchanged (%.0fg vs %.0fg), spool still on the scale",
+               scale_weight_g, loc_weight_ref);
+      } else if (g_loc_popup_shown_for_id != pending_id && sm_id == pending_id) {
+        logSDf("LOC: fired after %lums id=%d (weight %.0fg -> %.0fg%s)",
+               since, pending_id, loc_weight_ref, scale_weight_g,
+               weight_says_gone ? ", removal confirmed" : ", no weight signal");
+        g_loc_popup_shown_for_id = pending_id;
+        requestLocationPicker(true);
+      } else {
+        logSDf("[verbose] LOC: debounce cancelled id=%d shown_for=%d sm_id=%d",
+               pending_id, g_loc_popup_shown_for_id, sm_id);
+      }
     }
   }
   // Cancel pending popup if tag came back
@@ -322,6 +374,14 @@ void appLoop() {
     float sum = 0;
     for (int i = 0; i < count; i++) sum += scale_filter_buf[i];
     scale_weight_g = sum / count;
+
+    // Keep the reference fresh only while the tag is genuinely being read.
+    // nfc_absent_count > 0 means the reader has already missed it once, and
+    // from that moment the weight may be on its way down.
+    if (tag_present && nfc_absent_count == 0) {
+      loc_weight_ref   = scale_weight_g;
+      loc_weight_valid = scale_filter_full;   // only once the average is filled
+    }
 
     char w_str[16];
     // Fix 4: show filament netto (without spool) as big scale value
