@@ -53,6 +53,12 @@ struct UnlinkedSpool {
   int   filament_id;   // filament.id (for copy flow)
   float spool_weight;  // spool_weight (for copy flow)
 };
+// Upper bound of the deduplicated group lists below. They are fixed size
+// arrays, while spool_list_limit is user configurable up to 100 through the
+// web interface. Guarding those loops with spool_list_limit alone wrote past
+// the end as soon as a library had more than 20 vendors or materials.
+#define LINK_GROUP_MAX 20
+
 static UnlinkedSpool* link_spools = nullptr;  // PSRAM-allocated at fetch time, freed after link flow
 static int            link_spool_count = 0;
 char          link_tag_uid[24] = "";   // UID of the tag to be linked
@@ -1460,8 +1466,8 @@ void showMaterialList(const char* vendor_name) {
   lv_obj_set_scroll_dir(list, LV_DIR_VER);
 
   // Deduplicate material prefixes (3 chars) for the selected vendor
-  static char seen_mats[20][4] = {};
-  static int  mat_counts[20]   = {};
+  static char seen_mats[LINK_GROUP_MAX][4] = {};
+  static int  mat_counts[LINK_GROUP_MAX]   = {};
   static int  seen_count       = 0;
   seen_count = 0;
   memset(seen_mats, 0, sizeof(seen_mats));
@@ -1479,7 +1485,7 @@ void showMaterialList(const char* vendor_name) {
       if (strncasecmp(seen_mats[j], prefix, 3) == 0) { mat_counts[j]++; found = true; break; }
     }
     if (!found) {
-      if (seen_count >= spool_list_limit) { mat_limit_hit = true; continue; }
+      if (seen_count >= LINK_GROUP_MAX || seen_count >= spool_list_limit) { mat_limit_hit = true; continue; }
       strncpy(seen_mats[seen_count], prefix, 3);
       mat_counts[seen_count] = 1;
       seen_count++;
@@ -1541,8 +1547,8 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
   logSDf("SHOW: MaterialSubList vendor=%s mat=%s", vendor_name, material_prefix);
 
   // First pass: collect unique full material names + counts
-  static char seen_full[20][32] = {};
-  static int  full_counts[20]   = {};
+  static char seen_full[LINK_GROUP_MAX][32] = {};
+  static int  full_counts[LINK_GROUP_MAX]   = {};
   static int  full_seen_count   = 0;
   full_seen_count = 0;
   memset(seen_full, 0, sizeof(seen_full));
@@ -1561,7 +1567,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
       if (strcasecmp(seen_full[j], s.material) == 0) { full_counts[j]++; found = true; break; }
     }
     if (!found) {
-      if (full_seen_count >= spool_list_limit) { full_limit_hit = true; continue; }
+      if (full_seen_count >= LINK_GROUP_MAX || full_seen_count >= spool_list_limit) { full_limit_hit = true; continue; }
       strncpy(seen_full[full_seen_count], s.material, sizeof(seen_full[0])-1);
       full_counts[full_seen_count] = 1;
       full_seen_count++;
@@ -1782,8 +1788,8 @@ void showVendorList() {
   lv_obj_set_scroll_dir(list, LV_DIR_VER);
 
   // Dedupliziere Vendors
-  static char seen_vendors[20][32] = {};
-  static int  vendor_counts[20]    = {};
+  static char seen_vendors[LINK_GROUP_MAX][32] = {};
+  static int  vendor_counts[LINK_GROUP_MAX]    = {};
   static int  seen_v               = 0;
   seen_v = 0;
   memset(seen_vendors, 0, sizeof(seen_vendors));
@@ -1799,7 +1805,7 @@ void showVendorList() {
       if (strcasecmp(seen_vendors[j], vn) == 0) { vendor_counts[j]++; found = true; break; }
     }
     if (!found) {
-      if (seen_v >= spool_list_limit) { vendor_limit_hit = true; continue; }
+      if (seen_v >= LINK_GROUP_MAX || seen_v >= spool_list_limit) { vendor_limit_hit = true; continue; }
       strncpy(seen_vendors[seen_v], vn, 31);
       vendor_counts[seen_v] = 1;
       seen_v++;

@@ -437,6 +437,62 @@ static int patchSpool(const char* base_url, const char* api_key, const char* pat
   return (code >= 200 && code < 300) ? 200 : code;
 }
 
+// Removes the tag from the places an imported spool can still carry it.
+//
+// Unlink used to clear rfid_uid only. The reader falls back to
+// custom_fields.spoolmanscale_tag and custom_fields.spoolman_extra.tag for
+// spools imported from Spoolman, so the very next scan found the spool again
+// through the old value and the migration wrote it straight back into
+// rfid_uid. From the outside the unlink simply did not stick.
+//
+// Costs a GET before the PATCH, like every custom_fields write, but unlink is
+// a rare and deliberate action. Returns 200 when there was nothing to clear.
+static int filamanClearLegacyTag(const char* base_url, const char* api_key, int spool_id,
+                                 uint32_t timeout_ms) {
+  HTTPClient get;
+  get.begin(String(base_url) + "/api/v1/spools/" + spool_id);
+  get.setTimeout(timeout_ms);
+  addApiKey(get, api_key);
+  if (get.GET() != 200) { get.end(); return 200; }   // nothing readable, nothing to clear
+
+  SpiRamAllocator alloc;
+  JsonDocument raw(&alloc);
+  DeserializationError err = deserializeJson(raw, get.getStream());
+  get.end();
+  if (err) return 200;
+
+  JsonObjectConst existing = raw["custom_fields"];
+  if (existing.isNull()) return 200;
+
+  const char* direct = existing["spoolmanscale_tag"] | (const char*)nullptr;
+  const char* nested = existing["spoolman_extra"]["tag"] | (const char*)nullptr;
+  if ((!direct || !direct[0]) && (!nested || !nested[0])) return 200;
+
+  // A PATCH replaces the whole object, so everything is copied over and only
+  // the two tag values are blanked.
+  JsonDocument body(&alloc);
+  JsonObject cf = body["custom_fields"].to<JsonObject>();
+  for (JsonPairConst kv : existing) {
+    if (strcmp(kv.key().c_str(), "spoolmanscale_tag") == 0) { cf["spoolmanscale_tag"] = ""; continue; }
+    cf[kv.key()] = kv.value();
+  }
+  if (nested && nested[0] && cf["spoolman_extra"].is<JsonObject>()) {
+    cf["spoolman_extra"]["tag"] = "";
+  }
+
+  if (body.overflowed()) {
+    logSD("FilaMan: legacy tag copy overflowed, PATCH aborted to avoid data loss");
+    return -2;
+  }
+
+  String payload;
+  serializeJson(body, payload);
+  int code = patchSpool(base_url, api_key,
+                        (String("/api/v1/spools/") + spool_id).c_str(), payload, timeout_ms);
+  logSDf("FilaMan: cleared legacy tag of spool %d, HTTP %d", spool_id, code);
+  return code;
+}
+
 int filamanPatchRfidUid(const char* base_url, const char* api_key, int spool_id,
                         const char* uuid, uint32_t timeout_ms) {
   if (spool_id <= 0) return -1;
@@ -451,8 +507,15 @@ int filamanPatchRfidUid(const char* base_url, const char* api_key, int spool_id,
   }
   String payload;
   serializeJson(body, payload);
-  return patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
-                    payload, timeout_ms);
+  int code = patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
+                        payload, timeout_ms);
+
+  // On unlink the old value in custom_fields has to go as well, otherwise the
+  // next scan finds the spool through it and the migration links it again.
+  if (code == 200 && !(uuid && uuid[0])) {
+    filamanClearLegacyTag(base_url, api_key, spool_id, timeout_ms);
+  }
+  return code;
 }
 
 int filamanPatchCustomField(const char* base_url, const char* api_key, int spool_id,
