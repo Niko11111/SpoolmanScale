@@ -50,6 +50,50 @@ jobs:
           fi
           echo "Building $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Refuse a tag that is not newer than what is published
+        if: github.ref_type == 'tag'
+        run: |
+          # The check above only compares the tag against FW_VERSION, so two
+          # matching but too low numbers pass it. Since the firmware now
+          # compares itself against version.json, a tag ranking below the
+          # published one would put a red dot on every device and offer them a
+          # downgrade. The ranking must stay identical to
+          # src/services/version_compare.cpp.
+          python3 - "${{ steps.version.outputs.version }}" <<'PY'
+          import json, re, sys
+
+          def rank(v):
+              if not v:
+                  return -1
+              m = re.search(r"(\d+)\.(\d+)\.(\d+)", v)
+              if not m:
+                  return -1
+              major, minor, patch = (int(g) for g in m.groups())
+              beta = 999                  # no "beta" in the tag: final release
+              b = v.find("beta")
+              if b != -1:
+                  beta = 0                # "-beta": the public release
+                  m2 = re.match(r"\.(\d+)", v[b + 4:])
+                  if m2:
+                      beta = int(m2.group(1))
+              return major * 10**9 + minor * 10**6 + patch * 10**3 + beta
+
+          tag = sys.argv[1]
+          try:
+              with open("version.json") as f:
+                  data = json.load(f)
+          except FileNotFoundError:
+              print("no version.json yet, nothing to compare against")
+              sys.exit(0)
+
+          published = max((data.get("stable") or "", data.get("prerelease") or ""),
+                          key=rank)
+          if rank(tag) <= rank(published):
+              print(f"::error::Tag {tag} does not rank above the published "
+                    f"{published}. Every device would be offered a downgrade.")
+              sys.exit(1)
+          print(f"{tag} ranks above {published}, ok")
+          PY
       - name: Prepare binaries
         run: |
           VERSION=${{ steps.version.outputs.version }}
@@ -107,7 +151,12 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: SpoolmanScale ${{ steps.version.outputs.version }}
-          prerelease: true
+          # Only internal builds carrying a beta counter are pre-releases.
+          # A public tag has to become the real "latest", because the update
+          # button downloads from releases/latest/download/ and that path skips
+          # pre-releases. Marked wrong, the device would announce the new
+          # version and then install the previous binary.
+          prerelease: ${{ contains(github.ref_name, '-beta.') }}
           files: |
             webflasher/SpoolmanScale.bin
             SpoolmanScale_${{ steps.version.outputs.version }}.bin
