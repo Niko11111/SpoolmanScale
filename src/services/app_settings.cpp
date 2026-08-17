@@ -49,6 +49,8 @@ void loadPrefs() {
   g_auto_weight = prefsGetBool("auto_weight", false);
   g_auto_loc_popup = prefsGetBool("auto_loc_popup", false);
   gh_prerelease = prefsGetBool("gh_prerelease", false);
+  g_upd_autocheck = prefsGetBool("upd_check", true);
+  g_upd_last_epoch = prefsGetUInt("upd_last", 0);
 
   g_dry_mode = prefsGetUChar("dry_mode", 0);
   g_dry_man_yellow = (int)prefsGetInt("dry_man_y", 30);

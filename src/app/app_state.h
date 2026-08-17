@@ -106,6 +106,18 @@ extern char sm_last_used[32];
 extern int nfc_retry_count;
 extern int nfc_absent_count;
 
+// Fast re-poll state and read statistics (v0.6.1-beta).
+// nfc_fast_polls counts the consecutive short-interval retries inside the
+// current detection gap. The stat counters are cumulative since boot and are
+// dumped to the SD log as an aggregate, never per event.
+extern int nfc_fast_polls;
+extern int nfc_miss_streak;
+extern unsigned long nfc_stat_scans;
+extern unsigned long nfc_stat_misses;
+extern unsigned long nfc_stat_recovered;
+extern unsigned long nfc_stat_removals;
+extern unsigned long nfc_stat_reinits;
+
 extern lv_obj_t *lbl_status;
 extern lv_obj_t *lbl_uid;
 extern lv_obj_t *lbl_tray_uuid;

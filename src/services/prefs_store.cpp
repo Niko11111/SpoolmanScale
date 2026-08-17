@@ -93,10 +93,3 @@ void prefsPutBool(const char* key, bool value) {
   prefs.putBool(key, value);
   prefs.end();
 }
-
-void prefsPutBoolInNamespace(const char* ns, const char* key, bool value) {
-  Preferences prefs;
-  prefs.begin(ns, false);
-  prefs.putBool(key, value);
-  prefs.end();
-}

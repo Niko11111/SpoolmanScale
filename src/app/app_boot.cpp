@@ -18,6 +18,7 @@
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/time_service.h"
+#include "services/update_check.h"
 #include "services/wifi_manager.h"
 #include "ui/header_status.h"
 #include "ui/main_screen.h"
@@ -71,7 +72,6 @@ void wifiConnect() {
       lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
       lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
       lv_timer_handler();
-      // silent_ota_check_pending disabled
       return;
   }
   Serial.println("WiFi FAILED - continuing without Spoolman");
@@ -173,4 +173,9 @@ void appSetup() {
     logSetupBootState("normal");
     wifiConnect();
   }
+
+  // Arm the background update check. Scheduled for every boot path, including
+  // the setup screens: the check itself waits for wifi_ok, so a device that
+  // only gets on the network later still picks it up without a restart.
+  updateCheckScheduleFirstRun();
 }

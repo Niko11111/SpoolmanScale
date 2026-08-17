@@ -16,6 +16,8 @@
 #include "lang.h"
 #include "services/ota_state.h"
 #include "services/prefs_store.h"
+#include "services/update_check.h"
+#include "services/version_compare.h"
 #include "update_badges.h"
 #include "ui_common.h"
 
@@ -26,67 +28,14 @@ static lv_obj_t *lbl_gh_installed   = nullptr;
 static lv_obj_t *lbl_gh_latest      = nullptr;
 static lv_obj_t *btn_gh_update      = nullptr;
 static lv_obj_t *lbl_gh_update_btn  = nullptr;
-static char gh_latest_version[32]   = "";
 
-static int parseVersion(const char* v) {
-  const char *p = v;
-  while (*p && !isdigit((unsigned char)*p)) p++;
-  int major = 0, minor = 0, patch = 0;
-  sscanf(p, "%d.%d.%d", &major, &minor, &patch);
-  return major * 100000 + minor * 1000 + patch;
-}
+// The silent variant that used to live here is gone. It ran blocking in the
+// boot path and now lives in services/update_check.cpp, in its own task.
+// gh_latest_version moved to ota_state.h because both checks write it.
 
-void doGithubOtaCheckSilent() {
-  if (!wifi_ok) return;
-  Serial.println("Silent OTA check...");
-
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-  String url = gh_prerelease
-    ? "https://api.github.com/repos/Niko11111/SpoolmanScale/releases"
-    : "https://api.github.com/repos/Niko11111/SpoolmanScale/releases/latest";
-  http.begin(client, url);
-  http.addHeader("User-Agent", "SpoolmanScale-ESP32");
-  http.setTimeout(8000);
-  int code = http.GET();
-  if (code != 200) { http.end(); Serial.printf("Silent OTA: HTTP %d\n", code); return; }
-
-  String payload = http.getString();
-  http.end();
-
-  const char* tag = "";
-  if (gh_prerelease) {
-    DynamicJsonDocument doc(8192);
-    doc.clear();
-    if (deserializeJson(doc, payload)) return;
-    JsonArray arr = doc.as<JsonArray>();
-    for (JsonObject rel : arr) {
-      if (rel["draft"] | false) continue;
-      tag = rel["tag_name"] | "";
-      if (tag[0] != '\0') break;
-    }
-  } else {
-    DynamicJsonDocument doc(2048);
-    doc.clear();
-    if (deserializeJson(doc, payload)) return;
-    tag = doc["tag_name"] | "";
-  }
-
-  if (tag[0] == '\0') return;
-
-  strncpy(gh_latest_version, tag, sizeof(gh_latest_version)-1);
-  gh_latest_version[sizeof(gh_latest_version)-1] = 0;
-
-  int cur    = parseVersion(FW_VERSION);
-  int remote = parseVersion(gh_latest_version);
-  Serial.printf("Silent OTA: installed=%s latest=%s\n", FW_VERSION, gh_latest_version);
-
-  if (remote > cur) {
-    update_available = true;
-    showUpdateBadges(true);
-    Serial.println("Update available - badge shown");
-  }
+bool otaGithubScreenVisible() {
+  return scr_ota_github != nullptr &&
+         !lv_obj_has_flag(scr_ota_github, LV_OBJ_FLAG_HIDDEN);
 }
 
 void doGithubOtaCheck() {
@@ -173,8 +122,8 @@ void doGithubOtaCheck() {
     lv_obj_clear_flag(lbl_gh_latest, LV_OBJ_FLAG_HIDDEN);
   }
 
-  int cur = parseVersion(FW_VERSION);
-  int remote = parseVersion(gh_latest_version);
+  uint64_t cur = parseVersion(FW_VERSION);
+  uint64_t remote = parseVersion(gh_latest_version);
 
   if (remote <= cur) {
     char upd[48]; strncpy(upd, T(STR_GH_OTA_UP_TO_DATE), sizeof(upd)-1); upd[sizeof(upd)-1]=0;
@@ -244,6 +193,10 @@ void doGithubOtaFlash(const char* version) {
   if (btn_gh_update) lv_obj_add_flag(btn_gh_update, LV_OBJ_FLAG_HIDDEN);
   lv_timer_handler();
 
+  // Keeps the background check from opening a second TLS connection while the
+  // image is being written. Cleared on every exit path below.
+  gh_flash_active = true;
+
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
@@ -262,6 +215,7 @@ void doGithubOtaFlash(const char* version) {
     lv_label_set_text(lbl_gh_status, buf);
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
     http.end();
+    gh_flash_active = false;
     return;
   }
 
@@ -272,6 +226,7 @@ void doGithubOtaFlash(const char* version) {
     lv_label_set_text(lbl_gh_status, T(STR_GH_OTA_FLASH_FAIL));
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
     http.end();
+    gh_flash_active = false;
     return;
   }
 
@@ -297,6 +252,7 @@ void doGithubOtaFlash(const char* version) {
     delay(2000);
     ESP.restart();
   } else {
+    gh_flash_active = false;
     char fail[64]; strncpy(fail, T(STR_GH_OTA_FLASH_FAIL), sizeof(fail)-1); fail[sizeof(fail)-1]=0;
     lv_label_set_text(lbl_gh_status, fail);
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
@@ -372,6 +328,46 @@ void buildOtaGithubScreen() {
   lv_obj_align(lbl_gh_latest, LV_ALIGN_TOP_MID, 0, 170);
   lv_obj_add_flag(lbl_gh_latest, LV_OBJ_FLAG_HIDDEN);
 
+  // ── Automatic background check ──
+  // Sits with the pre-release switch because both decide what the device looks
+  // for, not what it does right now.
+  lv_obj_t *btn_auto = lv_btn_create(scr_ota_github);
+  lv_obj_set_size(btn_auto, 280, 36);
+  lv_obj_align(btn_auto, LV_ALIGN_TOP_MID, 0, 200);
+  lv_obj_set_style_bg_color(btn_auto, g_upd_autocheck ? lv_color_hex(0x0a2040) : lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(btn_auto, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_auto, 8, 0);
+  lv_obj_set_style_shadow_width(btn_auto, 0, 0);
+  lv_obj_set_style_border_width(btn_auto, 1, 0);
+  lv_obj_set_style_border_color(btn_auto, g_upd_autocheck ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a2030), 0);
+  lv_obj_add_event_cb(btn_auto, [](lv_event_t *e) {
+    g_upd_autocheck = !g_upd_autocheck;
+    prefsPutBool("upd_check", g_upd_autocheck);
+    if (g_upd_autocheck) {
+      // Someone who just switched this on wants to see a result, not to wait
+      // out the daily window. The zeroed timestamp makes the next check due.
+      g_upd_last_epoch = 0;
+      prefsPutUInt("upd_last", 0);
+      updateCheckScheduleIn(5000);
+    } else {
+      update_available = false;
+      showUpdateBadges(false);
+    }
+    if (scr_ota_github) { lv_obj_del(scr_ota_github); scr_ota_github = nullptr; }
+    buildOtaGithubScreen();
+    if (scr_ota_github) lv_obj_clear_flag(scr_ota_github, LV_OBJ_FLAG_HIDDEN);
+  }, LV_EVENT_CLICKED, NULL);
+
+  lv_obj_t *lbl_auto = lv_label_create(btn_auto);
+  char auto_buf[64];
+  snprintf(auto_buf, sizeof(auto_buf), "%s  %s", T(STR_GH_OTA_AUTOCHECK),
+           g_upd_autocheck ? "[ ON ]" : "[ OFF ]");
+  lv_label_set_text(lbl_auto, auto_buf);
+  lv_obj_set_style_text_color(lbl_auto, g_upd_autocheck ? lv_color_hex(0x28d49a) : lv_color_hex(0x2a3848), 0);
+  lv_obj_set_style_text_font(lbl_auto, &lv_font_montserrat_ext_12, 0);
+  lv_obj_set_style_text_align(lbl_auto, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(lbl_auto, LV_ALIGN_CENTER, 0, 0);
+
   lv_obj_t *btn_pre = lv_btn_create(scr_ota_github);
   lv_obj_set_size(btn_pre, 140, 48);
   lv_obj_align(btn_pre, LV_ALIGN_BOTTOM_LEFT, 12, -24);
@@ -383,7 +379,9 @@ void buildOtaGithubScreen() {
   lv_obj_set_style_border_color(btn_pre, gh_prerelease ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a2030), 0);
   lv_obj_add_event_cb(btn_pre, [](lv_event_t *e) {
     gh_prerelease = !gh_prerelease;
-    prefsPutBoolInNamespace("spool", "gh_prerelease", gh_prerelease);
+    // Was written to the "spool" namespace while loadPrefs() reads from
+    // "spoolscale", so the setting silently reverted on every reboot.
+    prefsPutBool("gh_prerelease", gh_prerelease);
     if (scr_ota_github) { lv_obj_del(scr_ota_github); scr_ota_github = nullptr; }
     buildOtaGithubScreen();
     if (scr_ota_github) lv_obj_clear_flag(scr_ota_github, LV_OBJ_FLAG_HIDDEN);

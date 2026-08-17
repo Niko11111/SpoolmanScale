@@ -100,6 +100,13 @@ char  sm_last_used[32] = "";
 
 int nfc_retry_count = 0;
 int nfc_absent_count = 0;
+int nfc_fast_polls = 0;
+int nfc_miss_streak = 0;
+unsigned long nfc_stat_scans = 0;
+unsigned long nfc_stat_misses = 0;
+unsigned long nfc_stat_recovered = 0;
+unsigned long nfc_stat_removals = 0;
+unsigned long nfc_stat_reinits = 0;
 
 lv_obj_t *lbl_status;
 lv_obj_t *lbl_uid;

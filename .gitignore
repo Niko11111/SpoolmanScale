@@ -10,10 +10,16 @@
 !.github/**
 !images/
 !images/**
+# Re-excluded after the whitelist above: macOS drops .DS_Store into any folder
+# opened in Finder, and Affinity leaves a lock file next to an open document.
+# Without these two lines both would show up as commit candidates in images/.
+images/.DS_Store
+images/*~lock~
 !platformio.ini
 !partitions.csv
 !copy_release.py
 !manifest.json
+!version.json
 !README.md
 !BUILDING.md
 !REFACTOR_PLAN.md

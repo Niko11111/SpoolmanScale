@@ -432,6 +432,8 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Latest: %s"                                                          },  // STR_GH_OTA_LATEST
   { "Pre-release",
     "Pre-release"                                                         },  // STR_GH_OTA_PRERELEASE
+  { "Autom. Suche",
+    "Auto check"                                                          },  // STR_GH_OTA_AUTOCHECK
 
   { "Last Used Modus",
     "Last Used Mode"                                                      },  // STR_BTN_LASTUSED_MODE

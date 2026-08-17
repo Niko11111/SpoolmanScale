@@ -62,12 +62,44 @@ jobs:
           VERSION=${{ steps.version.outputs.version }}
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" manifest.json
           sed -i "s/Firmware v[0-9]*\.[0-9]*\.[0-9]*-beta/Firmware $VERSION/" index.html
-      - name: Commit webflasher + manifest + index
+      - name: Update version.json
+        run: |
+          # Read by the firmware's background update check. Deliberately a
+          # static file on Pages rather than api.github.com: that API allows
+          # 60 requests per hour and IP, which users behind carrier grade NAT
+          # share, and its release list runs to over a hundred kilobytes.
+          #
+          # A tag carrying a beta counter (v0.6.0-beta.3) is an internal build
+          # and only ever lands in "prerelease". A public tag (v0.6.0-beta)
+          # updates both, so devices with pre-releases switched off see it too.
+          VERSION=${{ steps.version.outputs.version }}
+          python3 - "$VERSION" <<'PY'
+          import json, re, sys
+          version = sys.argv[1]
+          data = {
+              "stable": "",
+              "prerelease": "",
+              "url": "https://github.com/Niko11111/SpoolmanScale/releases/latest",
+          }
+          try:
+              with open("version.json") as f:
+                  data.update(json.load(f))
+          except FileNotFoundError:
+              pass
+          data["prerelease"] = version
+          if not re.search(r"-beta\.\d+$", version):
+              data["stable"] = version
+          with open("version.json", "w") as f:
+              json.dump(data, f, indent=2)
+              f.write("\n")
+          print("version.json:", data)
+          PY
+      - name: Commit webflasher + manifest + index + version
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add webflasher/bootloader.bin webflasher/partitions.bin webflasher/SpoolmanScale.bin manifest.json index.html
-          git diff --cached --quiet || git commit -m "CI: update webflasher + manifest + index for ${{ steps.version.outputs.version }}"
+          git add webflasher/bootloader.bin webflasher/partitions.bin webflasher/SpoolmanScale.bin manifest.json index.html version.json
+          git diff --cached --quiet || git commit -m "CI: update webflasher + manifest + index + version for ${{ steps.version.outputs.version }}"
           git pull origin main --rebase
           git push origin HEAD:main
       - name: Create GitHub Release

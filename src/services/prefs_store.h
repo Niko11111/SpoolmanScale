@@ -16,4 +16,3 @@ void prefsPutInt(const char* key, int value);
 void prefsPutUInt(const char* key, uint32_t value);
 void prefsPutUChar(const char* key, uint8_t value);
 void prefsPutBool(const char* key, bool value);
-void prefsPutBoolInNamespace(const char* ns, const char* key, bool value);

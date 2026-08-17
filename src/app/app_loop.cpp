@@ -21,6 +21,7 @@
 #include "services/auto_weight_state.h"
 #include "services/location_state.h"
 #include "services/ota_web_server.h"
+#include "services/update_check.h"
 #include "ui/ota_browser.h"
 #include "services/spoolman_actions.h"
 #include "services/backend_api.h"
@@ -87,6 +88,48 @@ static float loc_weight_ref   = 0.0f;
 static bool  loc_weight_valid = false;
 constexpr int NFC_MAX_RETRIES = 5;
 constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
+
+// ── NFC polling (v0.6.1-beta) ──────────────────────────────────────────────
+// A single missed read used to count as a miss straight away. NTAG couples
+// more weakly than Bambu's MIFARE Classic, so those single dropouts are common
+// even when the spool has not moved. Instead of retrying inside the same loop
+// pass - which would block lv_timer_handler() for twice the timeout - a miss
+// shortens the next poll interval. Every retry is therefore a separate loop
+// pass and the UI keeps running between them.
+constexpr unsigned long NFC_POLL_SLOW_MS   = 500;
+constexpr unsigned long NFC_POLL_FAST_MS   = 60;
+constexpr uint16_t      NFC_TIMEOUT_SLOW_MS = 150;
+constexpr uint16_t      NFC_TIMEOUT_FAST_MS = 100;
+// Raised from 5 to 7 after hardware testing: three of four recovered dropouts
+// needed all five attempts and ran 1.2 to 1.4 s, so the old limit was only
+// just sufficient. Costs nothing when reads succeed.
+constexpr int           NFC_FAST_POLL_MAX   = 7;
+
+// Removal is decided on elapsed time, not on a miss count. With a variable
+// poll interval a count no longer maps to a fixed duration.
+constexpr unsigned long NFC_ABSENT_BAMBU_MS = 1500;
+constexpr unsigned long NFC_ABSENT_NTAG_MS  = 2500;
+
+// An idle reader misses continuously because there is simply no tag, so a
+// blind re-init after N misses would fire every few seconds while the scale
+// sits empty. Probe first, and only re-init when the probe fails.
+constexpr int NFC_HEALTHCHECK_AFTER_MISSES = 60;
+
+// Aggregate NFC statistics go to the SD log on this interval, and only when
+// verbose logging is on. Per-event lines stay on Serial.
+constexpr unsigned long NFC_STATS_LOG_INTERVAL_MS = 300000;
+
+// A Bambu tag that will not authenticate used to be retried back to back, and
+// a full failing scan takes several seconds. Five of those in a row froze the
+// UI for roughly 17 seconds. Hammering a tag that is not responding does not
+// help it, so the retries are spaced out.
+constexpr unsigned long NFC_BAMBU_RETRY_BACKOFF_MS = 1500;
+
+// A tag that has used up its retries must stay given up on. Clearing the retry
+// counter on every removal let a tag that never authenticates restart the
+// count each time and re-scan forever. The counter is only cleared once the
+// tag has really been gone for a while, or when a different tag shows up.
+constexpr unsigned long NFC_RETRY_RESET_ABSENT_MS = 10000;
 }
 
 // The WiFi setup screen scans for networks, and wifiManagerPrepareScan() calls
@@ -119,6 +162,9 @@ static unsigned long tare_msg_ms = 0;
 lv_obj_t *lbl_ok_ptr = nullptr;
 
 static unsigned long last_tag_seen_ms = 0;    // last NFC detection
+static unsigned long last_bambu_retry_ms = 0; // backoff between Bambu re-scans
+static unsigned long first_miss_ms = 0;       // start of the current detection gap
+static unsigned long tag_absent_since_ms = 0; // when the last removal was declared
 static unsigned long last_scale_ms = 0;
 static int  loc_popup_pending_id = -1;              // debounced popup: sm_id scheduled, fires after 1500ms
 
@@ -182,7 +228,9 @@ void appLoop() {
   // the two rows have to follow along without a keypress on the device.
   refreshWebCredentialRows();
 
-  // Silent background OTA auto-check disabled
+  // Background update check. Cheap: a few comparisons per pass, and the actual
+  // request happens in its own task on the other core.
+  updateCheckTick();
 
   // Extra fields check/create — deferred from LVGL event callback to loop
   handleExtraFieldsDeferredActions();
@@ -326,9 +374,13 @@ void appLoop() {
     tare_msg_ms = 0;
   }
 
-  // No-tag timer: clear display if no tag detected for too long
-  // Only clear if truly no tag present (tag_present=false)
-  if (!tag_present && sm_found &&
+  // No-tag timer: clear display if no tag detected for too long.
+  // Only clear if truly no tag present (tag_present=false).
+  // This used to require sm_found, so a spool that is not in the backend left
+  // its data on screen indefinitely. The timer applies to every tag now,
+  // linked or not, and regardless of which backend is active. Setting
+  // last_tag_seen_ms to 0 below keeps this a one-shot until the next tag.
+  if (!tag_present &&
       last_tag_seen_ms > 0 && millis() - last_tag_seen_ms > NO_TAG_CLEAR_MS) {
     clearTagDisplay();
     last_tag_seen_ms = 0;
@@ -360,8 +412,11 @@ void appLoop() {
     lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
   }
 
-  // NAU7802: read weight every 200ms and update labels
-  if (scale_ready && millis() - last_scale_ms >= 200) {
+  // NAU7802: read weight every 200ms and update labels.
+  // The availability check matters when the loop stalls, for example during a
+  // long NFC scan: without it the same ADC sample is read twice and counted
+  // twice in the moving average below.
+  if (scale_ready && millis() - last_scale_ms >= 200 && scaleHardwareAvailable()) {
     last_scale_ms = millis();
     int32_t raw = scaleHardwareReadRaw();
     float raw_g = (float)(raw - zero_offset) / cal_factor;
@@ -597,10 +652,49 @@ void appLoop() {
   // ============================================================
   if (nfc_ok) {
     static unsigned long last_nfc_check_ms = 0;
-    if (millis() - last_nfc_check_ms >= 500) {
+    static unsigned long last_nfc_stats_ms = 0;
+    static uint8_t last_uid_len = 0;   // 4 = Bambu, 7 = NTAG, for the removal delay
+
+    // Fast re-poll only makes sense while a tag is believed to be on the
+    // reader. With nothing on the scale the slow interval is the right one.
+    const bool fast_mode = (tag_present && nfc_fast_polls > 0);
+    const unsigned long poll_interval = fast_mode ? NFC_POLL_FAST_MS : NFC_POLL_SLOW_MS;
+    const uint16_t poll_timeout = fast_mode ? NFC_TIMEOUT_FAST_MS : NFC_TIMEOUT_SLOW_MS;
+
+    if (millis() - last_nfc_check_ms >= poll_interval) {
       last_nfc_check_ms = millis();
       uint8_t uid[7], uidLen = 0;
-      bool found = nfcReadPassiveTarget(uid, &uidLen, 150);
+      bool found = nfcReadPassiveTarget(uid, &uidLen, poll_timeout);
+
+      nfc_stat_scans++;
+      if (found) {
+        last_uid_len = uidLen;
+        // Only a genuinely long absence earns a fresh set of retries. Without
+        // this a tag that keeps failing to authenticate would be re-scanned
+        // indefinitely, five seconds per attempt.
+        if (tag_absent_since_ms != 0) {
+          if (millis() - tag_absent_since_ms > NFC_RETRY_RESET_ABSENT_MS) nfc_retry_count = 0;
+          tag_absent_since_ms = 0;
+        }
+        if (nfc_fast_polls > 0) {
+          nfc_stat_recovered++;
+          Serial.printf("NFC: recovered after %d fast re-poll(s) (%u ms gap)\n",
+            nfc_fast_polls, (unsigned)(millis() - first_miss_ms));
+          nfc_fast_polls = 0;
+        }
+        nfc_miss_streak = 0;
+      } else {
+        nfc_stat_misses++;
+        nfc_miss_streak++;
+      }
+
+      // Aggregate statistics to SD, verbose only.
+      if (sd_verbose && millis() - last_nfc_stats_ms >= NFC_STATS_LOG_INTERVAL_MS) {
+        last_nfc_stats_ms = millis();
+        logSDf("[verbose] NFC stats: scans=%lu misses=%lu recovered=%lu removals=%lu reinits=%lu",
+          nfc_stat_scans, nfc_stat_misses, nfc_stat_recovered,
+          nfc_stat_removals, nfc_stat_reinits);
+      }
 
       if (found && uidLen == 4) {
         // ── MIFARE Classic (Bambu) ────────────────────────────
@@ -627,12 +721,15 @@ void appLoop() {
         if (uid_changed) {
           Serial.printf("NFC: New Bambu UID %s\n", uid_str);
           nfc_retry_count = 0; nfc_absent_count = 0;
+          last_bambu_retry_ms = 0;
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
           lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
           scanTag(uid, uidLen);
-        } else if ((uuid_missing || contents_incomplete) && nfc_retry_count < NFC_MAX_RETRIES) {
+        } else if ((uuid_missing || contents_incomplete) && nfc_retry_count < NFC_MAX_RETRIES &&
+                   millis() - last_bambu_retry_ms >= NFC_BAMBU_RETRY_BACKOFF_MS) {
+          last_bambu_retry_ms = millis();
           nfc_retry_count++;
           Serial.printf("NFC: Bambu contents incomplete (%d/48 blocks, tray_uuid %s), retry %d/%d\n",
             bambu_blocks_read,
@@ -746,13 +843,34 @@ void appLoop() {
       } else {
         // No tag found
         if (tag_present) {
-          nfc_absent_count++;
-          if (nfc_absent_count < 4) return;  // wait for 4 consecutive misses (2s) before declaring removed
-          nfc_absent_count = 0;
-          Serial.println("NFC: tag removed");
+          // First close the gap with a few short-interval retries. Most NTAG
+          // dropouts are a single missed read and come back on the next one.
+          if (nfc_fast_polls < NFC_FAST_POLL_MAX) {
+            if (nfc_fast_polls == 0) first_miss_ms = millis();
+            nfc_fast_polls++;
+            return;   // next poll follows in NFC_POLL_FAST_MS
+          }
+          // Retries exhausted. NTAG gets the longer grace period because it is
+          // the flakier of the two protocols.
+          //
+          // The grace period is measured from the first missed read, not from
+          // the last successful one. A full Bambu scan blocks for about five
+          // seconds, and last_tag_seen_ms does not advance while it runs, so
+          // measuring from there declared every tag removed the moment the
+          // scan returned - which restarted the retry counter and looped
+          // forever on a tag that would not authenticate.
+          const unsigned long absent_limit =
+            (last_uid_len == 7) ? NFC_ABSENT_NTAG_MS : NFC_ABSENT_BAMBU_MS;
+          if (millis() - first_miss_ms < absent_limit) return;
+
+          nfc_stat_removals++;
+          nfc_fast_polls = 0;
+          Serial.printf("NFC: tag removed (gap %u ms, %d fast re-polls exhausted)\n",
+            (unsigned)(millis() - first_miss_ms), NFC_FAST_POLL_MAX);
           logSD("NFC: tag removed");
           tag_present = false;
-          nfc_retry_count = 0; nfc_absent_count = 0;
+          tag_absent_since_ms = millis();
+          nfc_absent_count = 0;
           last_tag_seen_ms = millis();
           spoolman_queried_uid[0] = '\0';  // allow re-query when same tag is placed again
           link_popup_dismissed = false;   // Reset flag → next spool can show popup
@@ -771,6 +889,26 @@ void appLoop() {
           }
           // Do NOT close list — user should be able to select spool
           // even if tag is temporarily removed
+        }
+
+        // ── Reader watchdog ───────────────────────────────────────────────
+        // A long miss streak is normal with an empty scale, so it is not by
+        // itself evidence of a problem. Probe the reader instead: a PN532 that
+        // has locked up stops answering GetFirmwareVersion, and because it
+        // shares I2C_EXT with the NAU7802 it would take the scale down too.
+        if (nfc_miss_streak >= NFC_HEALTHCHECK_AFTER_MISSES) {
+          nfc_miss_streak = 0;
+          if (!nfcHardwarePing()) {
+            uint32_t ver = 0;
+            bool recovered = nfcHardwareReinit(&ver);
+            nfc_stat_reinits++;
+            Serial.printf("NFC: reader not responding, re-init %s (fw 0x%08lX)\n",
+              recovered ? "ok" : "FAILED", (unsigned long)ver);
+            logSDf("NFC: reader re-init %s (fw 0x%08lX)",
+              recovered ? "ok" : "failed", (unsigned long)ver);
+            nfc_ok = recovered;
+            updateHeaderStatus();
+          }
         }
       }
     }

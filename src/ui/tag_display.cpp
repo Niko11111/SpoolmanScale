@@ -47,7 +47,7 @@ void clearTagDisplay() {
   sm_filament_name[0] = '\0'; sm_material_global[0] = '\0'; sm_color_global[0] = '\0'; sm_last_used[0] = '\0';
   sm_location_name[0] = '\0';
   tag_present = false;
-  nfc_retry_count = 0; nfc_absent_count = 0;
+  nfc_retry_count = 0; nfc_absent_count = 0; nfc_fast_polls = 0;
   g_tag.uid_str[0] = '\0';
   g_tag.tray_uuid[0] = '\0';
   g_tag.material[0] = '\0';   // CRITICAL: otherwise is_ntag=false remains after Bambu scan

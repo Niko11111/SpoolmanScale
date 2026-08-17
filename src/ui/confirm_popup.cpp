@@ -281,7 +281,9 @@ void showConfirmPopup(const char* msg, int action) {
         g_auto_weight = false;
         auto_weight_stable_ms = 0;
         auto_weight_last_val = -9999.0f;
-        prefsPutBoolInNamespace("spool", "auto_weight", false);
+        // Was written to the "spool" namespace while loadPrefs() reads from
+        // "spoolscale", so the setting silently reverted on every reboot.
+        prefsPutBool("auto_weight", false);
         logSD("Auto-Weight: deaktiviert");
         if (lbl_weight_main_lbl) {
           char wmbuf[40];
@@ -350,7 +352,7 @@ void showConfirmPopup(const char* msg, int action) {
           g_auto_weight = true;
           auto_weight_stable_ms = 0;
           auto_weight_last_val = -9999.0f;
-          prefsPutBoolInNamespace("spool", "auto_weight", true);
+          prefsPutBool("auto_weight", true);
           logSD("Auto-Weight: aktiviert");
           if (lbl_weight_main_lbl) {
             char wmbuf[48];

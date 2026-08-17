@@ -772,3 +772,7 @@ void startOtaServer() {
 void handleOtaServerClient() {
   if (ota_server_running) ota_server.handleClient();
 }
+
+bool otaWebUploadActive() {
+  return ota_upload_active;
+}

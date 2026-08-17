@@ -23,6 +23,13 @@ bool scaleHardwareBegin(TwoWire* wire, void (*calibration_wait_cb)()) {
   return true;
 }
 
+// True once the ADC has finished a new conversion. Reading without checking
+// returns the previous sample again, which then enters the moving average a
+// second time and weights it twice.
+bool scaleHardwareAvailable() {
+  return nau.available();
+}
+
 int32_t scaleHardwareReadRaw() {
   return nau.read();
 }
