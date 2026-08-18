@@ -43,8 +43,15 @@ void handlePowerManagement() {
     esp_deep_sleep_start();
   }
 
+  // Dim to the lowest the panel is driven at, not to a fixed level of its own.
+  // That fixed level was 77, so anyone running below it watched the display get
+  // brighter when it went idle and darker again on the next touch - exactly
+  // backwards. Going to the minimum is dimmer than any setting by definition.
+  //
+  // Only reachable since the saved brightness actually arrives at the panel.
+  // Before that every boot ran at a hardcoded 204 and 204 -> 77 was a real dim.
   if (!is_dimmed && elapsed >= (unsigned long)dim_timeout_ms) {
-    displaySetBrightness(BRIGHT_DIM_DEFAULT);
+    displaySetBrightness(BRIGHT_MIN);
     is_dimmed = true;
   }
 }

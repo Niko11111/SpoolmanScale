@@ -1,10 +1,18 @@
 #pragma once
 
-#define FW_VERSION  "v0.6.1-beta.13"
+#define FW_VERSION  "v0.6.1-beta.14"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
-#define BRIGHT_NORMAL_DEFAULT  255
-#define BRIGHT_DIM_DEFAULT       77
+// Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
+// percentage: 255 is full output.
+//
+// Min and max describe what the panel is driven at, the default only describes
+// what a fresh device starts with. They happen to share the value 255 today,
+// which is exactly why they stay separate: tying the slider to the default
+// would silently cap it if that default ever changed.
+#define BRIGHT_MIN                10   // not 0: the screen has to stay usable
+#define BRIGHT_MAX               255
+#define BRIGHT_NORMAL_DEFAULT    255
 #define DIM_TIMEOUT_DEFAULT   300000
 #define SLEEP_TIMEOUT_DEFAULT 1200000
 

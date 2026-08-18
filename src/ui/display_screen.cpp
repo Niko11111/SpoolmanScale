@@ -41,7 +41,7 @@ void buildDisplayScreen() {
   lv_obj_t *slider = lv_slider_create(scr_display);
   lv_obj_set_size(slider, 456, 20);
   lv_obj_set_pos(slider, 12, 76);
-  lv_slider_set_range(slider, 10, 255);
+  lv_slider_set_range(slider, BRIGHT_MIN, BRIGHT_MAX);
   lv_slider_set_value(slider, bright_normal, LV_ANIM_OFF);
   lv_obj_set_style_bg_color(slider, lv_color_hex(0x1a3060), LV_PART_MAIN);
   lv_obj_set_style_bg_color(slider, lv_color_hex(0x28d49a), LV_PART_INDICATOR);
