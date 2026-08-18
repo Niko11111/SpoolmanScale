@@ -100,6 +100,8 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Verbindung",             "Connection"        },  // STR_CONN_TITLE
   { "WiFi Einstellungen",     "WiFi Settings"     },  // STR_BTN_WIFI_SETTINGS
   { "Nicht konfiguriert",     "Not configured"    },  // STR_BTN_WIFI_NONE
+  { "WLAN Status",            "WiFi Status"       },  // STR_BTN_WIFI_STATUS
+  { "Nicht verbunden",        "Not connected"     },  // STR_BTN_WIFI_STATUS_SUB
   { "Spoolman Server",        "Spoolman Server"   },  // STR_BTN_SPOOLMAN
 
   // Scale

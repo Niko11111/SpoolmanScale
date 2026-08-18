@@ -41,11 +41,19 @@ void buildWifiScreen() {
 
   addBackButton(scr_wifi, [](lv_event_t *e) {
     if (!scr_connection) buildConnectionScreen();
-    if (!scr_connection) buildConnectionScreen();
     hideAllOverlays();
     lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
   });
   addCloseButton(scr_wifi);
+}
+
+// The screen and its updater existed but nothing ever called them, so the
+// device had no way to show its own IP. Entry point for the Connection screen.
+void showWifiStatusScreen() {
+  if (!scr_wifi) buildWifiScreen();
+  hideAllOverlays();
+  updateWifiInfo();
+  lv_obj_clear_flag(scr_wifi, LV_OBJ_FLAG_HIDDEN);
 }
 
 void updateWifiInfo() {
