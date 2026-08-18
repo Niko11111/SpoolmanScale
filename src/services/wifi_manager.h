@@ -13,4 +13,6 @@ void wifiManagerClearScan();
 bool wifiManagerConnect(const char* ssid, const char* password, int attempts = 20, uint32_t interval_ms = 500);
 bool wifiManagerIsConnected();
 IPAddress wifiManagerLocalIP();
+IPAddress wifiManagerGatewayIP();
+IPAddress wifiManagerDNSIP();
 int wifiManagerRSSI();

@@ -43,6 +43,14 @@ IPAddress wifiManagerLocalIP() {
   return WiFi.localIP();
 }
 
+IPAddress wifiManagerGatewayIP() {
+  return WiFi.gatewayIP();
+}
+
+IPAddress wifiManagerDNSIP() {
+  return WiFi.dnsIP();
+}
+
 int wifiManagerRSSI() {
   return WiFi.RSSI();
 }
