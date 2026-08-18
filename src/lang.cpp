@@ -608,4 +608,8 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Produktionsdatum",              "Production date"                    },  // STR_LBL_PRODUCTION_DATE
   { "Artikelnr.",                    "Article no."                        },  // STR_LBL_ARTICLE_NO_SHORT
   { "Leergewicht Spule",             "Spool weight (empty)"               },  // STR_LBL_SPOOL_WEIGHT_EMPTY
+
+  // Status bar address selector
+  { "Im Statusbalken zeigen",        "Show in status bar"                 },  // STR_BTN_IP_STATUSBAR
+  { "Gerät",                         "Device"                             },  // STR_IP_BAR_DEVICE
 };

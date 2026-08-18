@@ -161,6 +161,20 @@ void buildUI() {
   lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x5090e0), 0);
   lv_obj_set_style_text_font(lbl_status, &lv_font_montserrat_ext_14, 0);
   lv_obj_align(lbl_status, LV_ALIGN_LEFT_MID, 22, 0);
+  // Bounded so a longer translation can never run into the address on the
+  // right. Today's longest status ends well clear of it, but that is not
+  // something to leave to chance.
+  lv_label_set_long_mode(lbl_status, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(lbl_status, 320);
+
+  // Optional address, left of the scan counter. Filled by updateHeaderStatus()
+  // according to g_ip_bar_mode, hidden while the mode is off.
+  lbl_hdr_ip = lv_label_create(status_bar);
+  lv_label_set_text(lbl_hdr_ip, "");
+  lv_obj_set_style_text_color(lbl_hdr_ip, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_font(lbl_hdr_ip, &lv_font_montserrat_ext_12, 0);
+  lv_obj_align(lbl_hdr_ip, LV_ALIGN_RIGHT_MID, -44, 0);
+  lv_obj_add_flag(lbl_hdr_ip, LV_OBJ_FLAG_HIDDEN);
 
   // Scan counter: right side of status bar
   lbl_hdr_scans = lv_label_create(status_bar);

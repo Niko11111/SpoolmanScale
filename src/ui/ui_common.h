@@ -27,3 +27,19 @@ void releaseScreen(lv_obj_t **scr);
 // call sites used to run sscanf without checking its result, which left r/g/b
 // uninitialised and gave the swatch a random colour off the stack.
 lv_color_t swatchColorFromHex(const char* hex);
+
+// Two column info row: a muted label on the left, the value on the right.
+// Used by the WiFi status screen and by the summary on the WiFi connecting
+// screen, so both stay in step. Returns the value label so the caller can
+// update it later.
+//
+// The value ellipsises instead of wrapping: a long SSID must not push the rows
+// below it off their baselines.
+#define INFO_ROW_LABEL_X  28
+#define INFO_ROW_VALUE_X  172
+#define INFO_ROW_VALUE_W  288   // 172 + 288 = 460, leaving a 20px margin
+
+// out_label, when given, receives the label object so a caller can hide or
+// restyle the whole row by name instead of hunting for it by child index.
+lv_obj_t* addInfoRow(lv_obj_t* parent, int y, const char* label,
+                     lv_obj_t** out_label = nullptr);

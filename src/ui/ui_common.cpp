@@ -18,6 +18,25 @@ lv_color_t swatchColorFromHex(const char* hex) {
 }
 
 
+lv_obj_t* addInfoRow(lv_obj_t* parent, int y, const char* label,
+                     lv_obj_t** out_label) {
+  lv_obj_t *l = lv_label_create(parent);
+  lv_label_set_text(l, label);
+  lv_obj_set_style_text_color(l, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
+  lv_obj_set_pos(l, INFO_ROW_LABEL_X, y + 3);
+  if (out_label) *out_label = l;
+
+  lv_obj_t *v = lv_label_create(parent);
+  lv_label_set_text(v, "-");
+  lv_obj_set_style_text_color(v, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_font(v, &lv_font_montserrat_ext_16, 0);
+  lv_label_set_long_mode(v, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(v, INFO_ROW_VALUE_W);
+  lv_obj_set_pos(v, INFO_ROW_VALUE_X, y);
+  return v;
+}
+
 void addBackButton(lv_obj_t *parent, lv_event_cb_t cb) {
   lv_obj_t *btn = lv_btn_create(parent);
   lv_obj_set_size(btn, 44, 44);

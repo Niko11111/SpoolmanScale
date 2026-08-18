@@ -6,7 +6,6 @@
 #include <Arduino.h>
 #include <lvgl.h>
 
-#include "extra_fields_screen.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "lang.h"
@@ -58,8 +57,12 @@ void buildConnectionScreen() {
   buildSubHeader(scr_connection, T(STR_TILE_CONNECTION),
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
 
-  const int BTN_W = 456, BTN_H = 60, BTN_X = 12;
-  const int BTN_Y[] = { 54, 120, 186, 252 };
+  // Back to the 80px tiles this screen always had. They only ever got squeezed
+  // to make room for a fourth tile; with extra fields moved to the filament
+  // manager screen there are three again in both backend modes, and three at
+  // 80px end at 310 of 320.
+  const int BTN_W = 456, BTN_H = 80, BTN_X = 12;
+  const int BTN_Y[] = { 54, 142, 230 };
 
   lv_obj_t *btn_wifi = lv_btn_create(scr_connection);
   lv_obj_set_size(btn_wifi, BTN_W, BTN_H);
@@ -74,19 +77,19 @@ void buildConnectionScreen() {
     lv_label_set_text(ico, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
     lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -18);
+    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
     lv_obj_t *lbl = lv_label_create(btn_wifi);
     lv_label_set_text(lbl, T(STR_BTN_WIFI_SETTINGS));
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 3);
+    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
     lv_obj_t *sub = lv_label_create(btn_wifi);
     lv_label_set_text(sub, cfg_wifi_ssid[0] ? cfg_wifi_ssid : T(STR_BTN_WIFI_NONE));
     lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 21); }
+    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
   lv_obj_add_event_cb(btn_wifi, [](lv_event_t *e){ logSD("BTN: Conn -> WifiSetup"); showWifiSetupScreen(); }, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *btn_ws = lv_btn_create(scr_connection);
@@ -102,20 +105,20 @@ void buildConnectionScreen() {
     lv_label_set_text(ico, LV_SYMBOL_GPS);
     lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
     lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -18);
+    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
     lv_obj_t *lbl = lv_label_create(btn_ws);
     lv_label_set_text(lbl, T(STR_BTN_WIFI_STATUS));
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 3);
+    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
     lv_obj_t *sub = lv_label_create(btn_ws);
     lbl_wifi_ip = sub;
     { char ipbuf[24]; wifiIpText(ipbuf, sizeof(ipbuf)); lv_label_set_text(sub, ipbuf); }
     lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 21); }
+    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
   lv_obj_add_event_cb(btn_ws, [](lv_event_t *e){
     logSD("BTN: Conn -> WiFi Status");
     showWifiStatusScreen();
@@ -138,7 +141,7 @@ void buildConnectionScreen() {
     lv_label_set_text(ico, LV_SYMBOL_SETTINGS);
     lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
     lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -18);
+    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
     char buf_backend[32];
     strncpy(buf_backend, T(STR_BACKEND_TITLE), sizeof(buf_backend)-1);
     buf_backend[sizeof(buf_backend)-1] = '\0';
@@ -147,7 +150,7 @@ void buildConnectionScreen() {
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 3);
+    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
     // Shows which backend is active and where it lives, so the user does
     // not have to open the screen to find out.
     char buf_sub[80];
@@ -160,49 +163,11 @@ void buildConnectionScreen() {
     lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 21); }
+    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
   lv_obj_add_event_cb(btn_sp, [](lv_event_t *e){
     logSD("BTN: Conn -> Backend");
     show_backend_pending = true;
   }, LV_EVENT_CLICKED, NULL);
 
-  // Extra Fields only exist in Spoolman. FilaMan calls them system extra
-  // fields, they live behind a different endpoint and need admin rights,
-  // so the tile is not offered there.
-  if (backendIsFilaMan()) {
-    if (sd_verbose) logSD("[verbose] buildConnectionScreen: done (FilaMan, no extra fields tile)");
-    return;
-  }
-
-  lv_obj_t *btn_ef = lv_btn_create(scr_connection);
-  lv_obj_set_size(btn_ef, BTN_W, BTN_H);
-  lv_obj_set_pos(btn_ef, BTN_X, BTN_Y[3]);
-  lv_obj_set_style_bg_color(btn_ef, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_ef, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_ef, 10, 0);
-  lv_obj_set_style_shadow_width(btn_ef, 0, 0);
-  lv_obj_set_style_border_width(btn_ef, 1, 0);
-  lv_obj_set_style_border_color(btn_ef, lv_color_hex(0x1a3050), 0);
-  { lv_obj_t *ico = lv_label_create(btn_ef);
-    lv_label_set_text(ico, LV_SYMBOL_LIST);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -18);
-    lv_obj_t *lbl = lv_label_create(btn_ef);
-    { char eb[40]; backendText(T(STR_EXTRA_FIELDS_TITLE), eb, sizeof(eb)); lv_label_set_text(lbl, eb); }
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 3);
-    lv_obj_t *sub = lv_label_create(btn_ef);
-    lv_label_set_text(sub, "tag, last_dried");
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
-    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 21); }
-  lv_obj_add_event_cb(btn_ef, [](lv_event_t *e){
-    logSD("BTN: Conn -> Extra Fields");
-    showExtraFieldsScreen(false);
-  }, LV_EVENT_CLICKED, NULL);
   if (sd_verbose) logSD("[verbose] buildConnectionScreen: done");
 }

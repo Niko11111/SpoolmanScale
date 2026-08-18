@@ -142,6 +142,7 @@ lv_obj_t *lbl_hdr_wifi;
 lv_obj_t *lbl_hdr_nfc;
 lv_obj_t *lbl_hdr_scl = nullptr;
 lv_obj_t *lbl_hdr_scans;
+lv_obj_t *lbl_hdr_ip = nullptr;
 lv_obj_t *lbl_hdr_sm = nullptr;
 lv_obj_t *lbl_sm_cap = nullptr;
 lv_obj_t *lbl_bag_sm_diff = nullptr;

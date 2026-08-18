@@ -54,3 +54,7 @@ IPAddress wifiManagerDNSIP() {
 int wifiManagerRSSI() {
   return WiFi.RSSI();
 }
+
+String wifiManagerMacAddress() {
+  return WiFi.macAddress();
+}

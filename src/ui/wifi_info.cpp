@@ -6,7 +6,12 @@
 #include <lvgl.h>
 
 #include "connection_screen.h"
+#include "hardware/sd_logger.h"
+#include "header_status.h"
 #include "lang.h"
+#include "services/backend.h"
+#include "services/prefs_store.h"
+#include "services/user_options.h"
 #include "services/wifi_manager.h"
 #include "ui_common.h"
 
@@ -17,11 +22,15 @@
 // gone: the Connection screen has a dedicated filament-manager tile sitting
 // directly beside the one that opens this screen, so repeating the backend
 // address here was duplication.
-static const int ROW_Y0   = 62;
-static const int ROW_STEP = 42;
-static const int LABEL_X  = 28;
-static const int VALUE_X  = 172;
-static const int VALUE_W  = 288;   // 172 + 288 = 460, leaving a 20px margin
+// Row labels stay as plain literals: SSID, Status, IP, Gateway, DNS, MAC and
+// Signal read identically in German and English, so putting them through the
+// string table would add fourteen entries without translating anything.
+static const int ROW_Y0   = 58;   // sub-header back button ends at ~46
+static const int ROW_STEP = 30;
+static const int ROW_COUNT = 7;
+
+// Bottom of the last row is ~258, leaving room for the selector below.
+static const int SELECTOR_Y = 266;
 
 // Same reasoning as the Connection tile: the screen is populated on entry, so
 // without a timer it would keep showing whatever the link looked like at that
@@ -33,27 +42,38 @@ static lv_obj_t *val_state = nullptr;
 static lv_obj_t *val_ip    = nullptr;
 static lv_obj_t *val_gw    = nullptr;
 static lv_obj_t *val_dns   = nullptr;
+static lv_obj_t *val_mac   = nullptr;
 static lv_obj_t *val_rssi  = nullptr;
 
+static lv_obj_t *lbl_ipbar_mode = nullptr;   // ON/OFF style text of the selector
+static lv_obj_t *btn_ipbar      = nullptr;   // border colour follows the mode
+
 static lv_obj_t* addRow(int index, const char *label) {
-  const int y = ROW_Y0 + index * ROW_STEP;
+  return addInfoRow(scr_wifi, ROW_Y0 + index * ROW_STEP, label);
+}
 
-  lv_obj_t *l = lv_label_create(scr_wifi);
-  lv_label_set_text(l, label);
-  lv_obj_set_style_text_color(l, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(l, LABEL_X, y + 5);
+// Third state labels itself with the live backend name, so the button says
+// "Spoolman" or "FilaMan" rather than a vague "Backend" and the user can see
+// what they are about to get.
+static void ipBarModeText(char *buf, size_t len) {
+  if (g_ip_bar_mode == IP_BAR_DEVICE)       strncpy(buf, T(STR_IP_BAR_DEVICE), len - 1);
+  else if (g_ip_bar_mode == IP_BAR_BACKEND) strncpy(buf, backendName(), len - 1);
+  else                                      strncpy(buf, T(STR_OFF), len - 1);
+  buf[len - 1] = '\0';
+}
 
-  lv_obj_t *v = lv_label_create(scr_wifi);
-  lv_label_set_text(v, "-");
-  lv_obj_set_style_text_color(v, lv_color_hex(0xe8f0ff), 0);
-  lv_obj_set_style_text_font(v, &lv_font_montserrat_ext_20, 0);
-  // Ellipsis rather than wrap: a long SSID must not push the rows below it
-  // off their baselines.
-  lv_label_set_long_mode(v, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(v, VALUE_W);
-  lv_obj_set_pos(v, VALUE_X, y);
-  return v;
+static void refreshIpBarButton() {
+  if (!btn_ipbar || !lv_obj_is_valid(btn_ipbar)) return;
+  const bool on = (g_ip_bar_mode != IP_BAR_OFF);
+  lv_obj_set_style_border_color(btn_ipbar,
+    lv_color_hex(on ? 0x28d49a : 0x1a3050), 0);
+  if (lbl_ipbar_mode) {
+    char buf[24];
+    ipBarModeText(buf, sizeof(buf));
+    lv_label_set_text(lbl_ipbar_mode, buf);
+    lv_obj_set_style_text_color(lbl_ipbar_mode,
+      lv_color_hex(on ? 0x28d49a : 0x4a6fa0), 0);
+  }
 }
 
 static void refreshWifiInfo(lv_timer_t *t) {
@@ -61,9 +81,51 @@ static void refreshWifiInfo(lv_timer_t *t) {
   updateWifiInfo();
 }
 
+// Styled like the list buttons in scale_menu.cpp: title on the left, current
+// state on the right, green border while active. Tapping cycles off -> device
+// -> backend -> off, the same way the drying mode button cycles.
+static void buildIpBarSelector() {
+  btn_ipbar = lv_btn_create(scr_wifi);
+  lv_obj_set_size(btn_ipbar, 456, 44);
+  lv_obj_set_pos(btn_ipbar, 12, SELECTOR_Y);
+  lv_obj_set_style_bg_color(btn_ipbar, lv_color_hex(0x0a1e30), 0);
+  lv_obj_set_style_bg_color(btn_ipbar, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_ipbar, 10, 0);
+  lv_obj_set_style_shadow_width(btn_ipbar, 0, 0);
+  lv_obj_set_style_border_width(btn_ipbar, 1, 0);
+  lv_obj_set_style_pad_all(btn_ipbar, 0, 0);
+
+  lv_obj_t *title = lv_label_create(btn_ipbar);
+  { char buf[40];
+    strncpy(buf, T(STR_BTN_IP_STATUSBAR), sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    lv_label_set_text(title, buf); }
+  lv_obj_set_style_text_color(title, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_16, 0);
+  lv_obj_align(title, LV_ALIGN_LEFT_MID, 12, 0);
+
+  lbl_ipbar_mode = lv_label_create(btn_ipbar);
+  lv_obj_set_style_text_font(lbl_ipbar_mode, &lv_font_montserrat_ext_16, 0);
+  lv_obj_align(lbl_ipbar_mode, LV_ALIGN_RIGHT_MID, -14, 0);
+
+  lv_obj_add_event_cb(btn_ipbar, [](lv_event_t *e) {
+    g_ip_bar_mode = (g_ip_bar_mode + 1) % IP_BAR_COUNT;
+    prefsPutUChar("ip_bar_mode", g_ip_bar_mode);
+    logSDf("BTN: WiFi Status -> IP bar mode %d", (int)g_ip_bar_mode);
+    refreshIpBarButton();
+    // The status bar belongs to the main screen, which is still alive behind
+    // this overlay, so the change shows the moment the user goes back.
+    updateHeaderStatus();
+  }, LV_EVENT_CLICKED, NULL);
+
+  refreshIpBarButton();
+}
+
 void buildWifiScreen() {
   if (wifi_info_timer) { lv_timer_del(wifi_info_timer); wifi_info_timer = nullptr; }
   val_ssid = nullptr;
+  btn_ipbar = nullptr;
+  lbl_ipbar_mode = nullptr;
   releaseScreen(&scr_wifi);
   scr_wifi = buildOverlayScreen();
   buildSubHeader(scr_wifi, T(STR_BTN_WIFI_STATUS), [](lv_event_t *e) {
@@ -77,7 +139,12 @@ void buildWifiScreen() {
   val_ip    = addRow(2, "IP");
   val_gw    = addRow(3, "Gateway");
   val_dns   = addRow(4, "DNS");
-  val_rssi  = addRow(5, "Signal");
+  // The one field a router needs to hand out a fixed address, which is the
+  // usual answer to "the scale's IP keeps moving".
+  val_mac   = addRow(5, "MAC");
+  val_rssi  = addRow(6, "Signal");
+
+  buildIpBarSelector();
 
   wifi_info_timer = lv_timer_create(refreshWifiInfo, 2000, nullptr);
 }
@@ -94,12 +161,21 @@ void showWifiStatusScreen() {
 void updateWifiInfo() {
   if (!val_ssid) return;
 
+  // This is the configured SSID, not a connected one. While the link is down
+  // it is muted to the label colour so the row cannot be read as "connected to
+  // this" - the value still matters, it says which network is set up.
   lv_label_set_text(val_ssid, cfg_wifi_ssid[0] ? cfg_wifi_ssid : "-");
+  lv_obj_set_style_text_color(val_ssid,
+    lv_color_hex(wifi_ok ? 0xe8f0ff : 0x4a6fa0), 0);
 
   lv_label_set_text(val_state, wifi_ok ? T(STR_WIFI_STATUS_CONNECTED)
                                        : T(STR_WIFI_STATUS_DISCONNECTED));
   lv_obj_set_style_text_color(val_state,
     lv_color_hex(wifi_ok ? 0x40c080 : 0xff8080), 0);
+
+  // The MAC belongs to the radio, not to the link, so it stays readable while
+  // disconnected - that is exactly when someone is setting up a reservation.
+  lv_label_set_text(val_mac, wifiManagerMacAddress().c_str());
 
   if (!wifi_ok) {
     lv_label_set_text(val_ip,   "-");

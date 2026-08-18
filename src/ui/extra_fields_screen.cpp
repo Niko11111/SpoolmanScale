@@ -8,7 +8,6 @@
 #include <lvgl.h>
 #include <cstring>
 
-#include "connection_screen.h"
 #include "hardware/sd_logger.h"
 #include "services/backend_api.h"
 #include "lang.h"
@@ -79,14 +78,15 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_clear_flag(scr_extra_fields, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_bg_color(scr_extra_fields, lv_color_hex(0x0a1020), 0);
 
-  // Header: back goes to connection screen (if from settings), or back to Spoolman IP (setup flow)
+  // Header: back returns to the filament manager screen, which is where this
+  // screen is now reached from. Setup flow gets a title and an X instead.
   if (!is_setup_flow) {
     char hdr_b[40]; backendText(T(STR_EXTRA_FIELDS_TITLE), hdr_b, sizeof(hdr_b));
     buildSubHeader(scr_extra_fields, hdr_b,
       [](lv_event_t *e) {
-        if (!scr_connection) buildConnectionScreen();
-        hideAllOverlays();
-        lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
+        // Deferred: the backend screen is built from appLoop(), never from
+        // inside the callback of the screen it is about to replace.
+        show_backend_pending = true;
       });
   } else {
     // Setup flow: title only + X (→ main screen), no back button
@@ -251,6 +251,10 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_center(lbl_create);
 
   // Bottom row (y=276): Test field (left, 210px) | Skip/Next (right, 210px)
+  // Skip and its confirm variant only belong to the setup chain, where they are
+  // the way onwards. Reached from the filament manager screen there is nothing
+  // to skip to - the back button already leads out - so it is not built at all.
+  if (is_setup_flow) {
   btn_extra_fields_next = lv_btn_create(scr_extra_fields);
   lv_obj_t *btn_skip_bottom = btn_extra_fields_next;
   lv_obj_set_size(btn_skip_bottom, 210, 40);
@@ -262,13 +266,9 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_set_style_border_width(btn_skip_bottom, 1, 0);
   lv_obj_set_style_border_color(btn_skip_bottom, lv_color_hex(0x1a2840), 0);
   lv_obj_add_event_cb(btn_skip_bottom, [](lv_event_t *e) {
-    if (extra_fields_setup_flow) {
-      // Defer to loop — never call showCalReminderScreen directly from LVGL callback
-      cal_reminder_pending = true;
-    } else {
-      if (!scr_connection) buildConnectionScreen();
-      if (!scr_connection) buildConnectionScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
-    }
+    // Only reachable in the setup chain now, so there is one way onwards.
+    // Deferred: never call showCalReminderScreen from an LVGL callback.
+    cal_reminder_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_skip_b = lv_label_create(btn_skip_bottom);
   char skip_buf[32];
@@ -277,6 +277,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_set_style_text_color(lbl_skip_b, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_skip_b, &lv_font_montserrat_ext_14, 0);
   lv_obj_center(lbl_skip_b);
+  }
 
   // Generate test field button (left, fixed y)
   lv_obj_t *btn_test = lv_btn_create(scr_extra_fields);

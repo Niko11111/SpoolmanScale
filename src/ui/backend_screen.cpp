@@ -11,6 +11,7 @@
 #include "header_status.h"
 #include "lang.h"
 #include "navigation.h"
+#include "extra_fields_screen.h"
 #include "ota_browser.h"
 #include "ui_common.h"
 
@@ -30,6 +31,43 @@ static void applyPendingModeChange() {
   // reachability change, which can be half a minute away, or on reboot.
   sm_reachable = false;          // unknown until the new backend answers
   updateHeaderStatus();
+}
+
+// Full width row that opens another screen: title on top, a value line under
+// it and an arrow on the right. Shared by the address row and the extra fields
+// row, which are the same shape.
+static lv_obj_t* addNavRow(lv_obj_t *parent, int y, const char *title,
+                           const char *value, uint32_t value_color,
+                           lv_event_cb_t cb) {
+  lv_obj_t *row = lv_btn_create(parent);
+  lv_obj_set_size(row, 448, 56);
+  lv_obj_set_pos(row, 16, y);
+  lv_obj_set_style_bg_color(row, lv_color_hex(0x0a1e30), 0);
+  lv_obj_set_style_bg_color(row, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(row, 10, 0);
+  lv_obj_set_style_shadow_width(row, 0, 0);
+  lv_obj_set_style_border_width(row, 1, 0);
+  lv_obj_set_style_border_color(row, lv_color_hex(0x1a3050), 0);
+  lv_obj_add_event_cb(row, cb, LV_EVENT_CLICKED, NULL);
+
+  lv_obj_t *l = lv_label_create(row);
+  lv_label_set_text(l, title);
+  lv_obj_set_style_text_color(l, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+  lv_obj_align(l, LV_ALIGN_LEFT_MID, 8, -11);
+
+  lv_obj_t *s = lv_label_create(row);
+  lv_label_set_text(s, value);
+  lv_obj_set_style_text_color(s, lv_color_hex(value_color), 0);
+  lv_obj_set_style_text_font(s, &lv_font_montserrat_ext_14, 0);
+  lv_obj_align(s, LV_ALIGN_LEFT_MID, 8, 12);
+
+  lv_obj_t *a = lv_label_create(row);
+  lv_label_set_text(a, LV_SYMBOL_RIGHT);
+  lv_obj_set_style_text_color(a, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(a, &lv_font_montserrat_ext_18, 0);
+  lv_obj_align(a, LV_ALIGN_RIGHT_MID, -10, 0);
+  return row;
 }
 
 // Small status row: label on the left, value on the right in green or amber.
@@ -181,30 +219,10 @@ void buildBackendScreen() {
   }
 
   // --- address row, opens the existing numpad screen -------------
-  lv_obj_t *row = lv_btn_create(scr_backend);
-  lv_obj_set_size(row, 448, 56);
-  lv_obj_set_pos(row, 16, 122);
-  lv_obj_set_style_bg_color(row, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(row, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(row, 10, 0);
-  lv_obj_set_style_shadow_width(row, 0, 0);
-  lv_obj_set_style_border_width(row, 1, 0);
-  lv_obj_set_style_border_color(row, lv_color_hex(0x1a3050), 0);
-  lv_obj_add_event_cb(row, [](lv_event_t *e) {
-    logSD("BTN: Backend -> Address");
-    show_spoolman_pending = true;
-  }, LV_EVENT_CLICKED, NULL);
-
   {
     char buf_addr[24];
     strncpy(buf_addr, T(STR_BACKEND_ADDRESS), sizeof(buf_addr) - 1);
     buf_addr[sizeof(buf_addr) - 1] = '\0';
-
-    lv_obj_t *l = lv_label_create(row);
-    lv_label_set_text(l, buf_addr);
-    lv_obj_set_style_text_color(l, lv_color_hex(0xe8f0ff), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-    lv_obj_align(l, LV_ALIGN_LEFT_MID, 8, -11);
 
     char host_buf[64];
     const char *h = backendHost();
@@ -215,17 +233,28 @@ void buildBackendScreen() {
     // 8002 by default, so flag a missing port in amber rather than green.
     const bool port_missing = h && h[0] && !strchr(h, ':');
 
-    lv_obj_t *s = lv_label_create(row);
-    lv_label_set_text(s, host_buf);
-    lv_obj_set_style_text_color(s, lv_color_hex(port_missing ? 0xf0b838 : 0x28d49a), 0);
-    lv_obj_set_style_text_font(s, &lv_font_montserrat_ext_14, 0);
-    lv_obj_align(s, LV_ALIGN_LEFT_MID, 8, 12);
+    addNavRow(scr_backend, 122, buf_addr, host_buf,
+              port_missing ? 0xf0b838 : 0x28d49a,
+              [](lv_event_t *e) {
+                logSD("BTN: Backend -> Address");
+                show_spoolman_pending = true;
+              });
+  }
 
-    lv_obj_t *a = lv_label_create(row);
-    lv_label_set_text(a, LV_SYMBOL_RIGHT);
-    lv_obj_set_style_text_color(a, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(a, &lv_font_montserrat_ext_18, 0);
-    lv_obj_align(a, LV_ALIGN_RIGHT_MID, -10, 0);
+  // --- extra fields, Spoolman only -------------------------------
+  // Moved here from the connection screen: extra fields are a property of the
+  // filament manager, not of the network connection, and this screen has the
+  // room in Spoolman mode because the two credential rows below are FilaMan
+  // only. FilaMan calls them system extra fields, they sit behind a different
+  // endpoint and need admin rights, so they are not offered there.
+  if (!is_filaman) {
+    char buf_ef[40];
+    backendText(T(STR_EXTRA_FIELDS_TITLE), buf_ef, sizeof(buf_ef));
+    addNavRow(scr_backend, 186, buf_ef, "tag, last_dried", 0x4a6fa0,
+              [](lv_event_t *e) {
+                logSD("BTN: Backend -> Extra Fields");
+                showExtraFieldsScreen(false);
+              });
   }
 
   // --- FilaMan credentials, shown only in FilaMan mode -----------

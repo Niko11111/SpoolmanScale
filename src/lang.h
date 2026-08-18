@@ -492,6 +492,11 @@ enum StringID {
   STR_LBL_ARTICLE_NO_SHORT,
   STR_LBL_SPOOL_WEIGHT_EMPTY,
 
+  // Status bar address selector on the WiFi status screen. The third state
+  // labels itself with backendName() and needs no entry of its own.
+  STR_BTN_IP_STATUSBAR,
+  STR_IP_BAR_DEVICE,
+
   STR_COUNT
 };
 

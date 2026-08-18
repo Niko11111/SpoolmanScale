@@ -16,3 +16,5 @@ IPAddress wifiManagerLocalIP();
 IPAddress wifiManagerGatewayIP();
 IPAddress wifiManagerDNSIP();
 int wifiManagerRSSI();
+// Station MAC, the address a router needs for a fixed DHCP reservation.
+String wifiManagerMacAddress();

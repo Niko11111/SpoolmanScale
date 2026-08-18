@@ -28,6 +28,25 @@
 // only matters in places dense enough to see more than this many APs at once.
 #define WIFI_SCAN_SORT_MAX  64
 
+// Held by name rather than looked up with lv_obj_get_child(screen, -1/-2).
+// The index form silently pointed at the wrong widget as soon as anything new
+// was added after the buttons, which is exactly what the summary block below
+// does.
+static lv_obj_t *btn_conn_retry = nullptr;
+static lv_obj_t *btn_conn_next  = nullptr;
+static lv_obj_t *lbl_conn_status = nullptr;
+
+// Summary rows, filled once the link is up. Built hidden so the failure path
+// looks exactly as it did before.
+static lv_obj_t *conn_val_ssid = nullptr;
+static lv_obj_t *conn_val_ip   = nullptr;
+static lv_obj_t *conn_val_gw   = nullptr;
+static lv_obj_t *conn_val_rssi = nullptr;
+static lv_obj_t *conn_lbl_ssid = nullptr;
+static lv_obj_t *conn_lbl_ip   = nullptr;
+static lv_obj_t *conn_lbl_gw   = nullptr;
+static lv_obj_t *conn_lbl_rssi = nullptr;
+
 static char  wifi_setup_ssid[33]  = "";
 static lv_obj_t *lbl_wifi_setup_status = nullptr;
 static lv_obj_t *lbl_wifi_scan_list = nullptr;
@@ -320,6 +339,19 @@ void buildWifiPassScreen() {
 // ============================================================
 //  WIFI SETUP: STEP 3 — Connect + result
 // ============================================================
+// The rows are four label pairs rather than one container, so visibility is
+// toggled over the value labels and their siblings. Built hidden and only
+// revealed once a link actually exists.
+static void setConnSummaryHidden(bool hidden) {
+  lv_obj_t *objs[] = { conn_val_ssid, conn_val_ip, conn_val_gw, conn_val_rssi,
+                       conn_lbl_ssid, conn_lbl_ip, conn_lbl_gw, conn_lbl_rssi };
+  for (lv_obj_t *o : objs) {
+    if (!o) continue;
+    if (hidden) lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+    else        lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
 void showWifiConnectingScreen() {
   logSD("SHOW: WifiConnectingScreen");
   logSD("UI: Screen -> WifiConnecting");
@@ -332,7 +364,7 @@ void showWifiConnectingScreen() {
   // Actually connect now
   wifi_ok = false;
 
-  lv_obj_t *status_lbl = (lv_obj_t*)lv_obj_get_user_data(scr_wifi_connecting);
+  lv_obj_t *status_lbl = lbl_conn_status;
 
   wifiManagerPrepareScan();
   wifi_ok = wifiManagerConnect(cfg_wifi_ssid, cfg_wifi_password, 20, 500);
@@ -342,14 +374,31 @@ void showWifiConnectingScreen() {
     syncNTP();
     updateHeaderStatus();
     lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));
-    char ok_buf[80];
-    snprintf(ok_buf, sizeof(ok_buf), T(STR_WIFI_CONNECTED_IP), wifiManagerLocalIP().toString().c_str());
+    // The IP used to be crammed into this line; it now has a row of its own
+    // below, so the headline is just the result.
+    char ok_buf[48];
+    snprintf(ok_buf, sizeof(ok_buf), LV_SYMBOL_OK "  %s", T(STR_WIFI_SUCCESS));
     if (status_lbl) lv_label_set_text(status_lbl, ok_buf);
     lv_obj_set_style_text_color(status_lbl, lv_color_hex(0x28d49a), 0);
 
+    if (conn_val_ssid) {
+      lv_label_set_text(conn_val_ssid, cfg_wifi_ssid[0] ? cfg_wifi_ssid : "-");
+      lv_label_set_text(conn_val_ip,   wifiManagerLocalIP().toString().c_str());
+      lv_label_set_text(conn_val_gw,   wifiManagerGatewayIP().toString().c_str());
+      const int rssi = wifiManagerRSSI();
+      const char *qual;
+      if      (rssi >= -50) qual = T(STR_WIFI_QUAL_EXCELLENT);
+      else if (rssi >= -65) qual = T(STR_WIFI_QUAL_GOOD);
+      else if (rssi >= -75) qual = T(STR_WIFI_QUAL_MEDIUM);
+      else                  qual = T(STR_WIFI_QUAL_WEAK);
+      char rssi_buf[48];
+      snprintf(rssi_buf, sizeof(rssi_buf), "%d dBm  (%s)", rssi, qual);
+      lv_label_set_text(conn_val_rssi, rssi_buf);
+      setConnSummaryHidden(false);
+    }
+
     // Show next button
-    lv_obj_t *btn_next = (lv_obj_t*)lv_obj_get_child(scr_wifi_connecting, -1);
-    if (btn_next) lv_obj_clear_flag(btn_next, LV_OBJ_FLAG_HIDDEN);
+    if (btn_conn_next) lv_obj_clear_flag(btn_conn_next, LV_OBJ_FLAG_HIDDEN);
   } else {
     updateHeaderStatus();
     char fail_buf[80];
@@ -358,16 +407,19 @@ void showWifiConnectingScreen() {
     lv_obj_set_style_text_color(status_lbl, lv_color_hex(0xff8080), 0);
 
     // Show retry button
-    lv_obj_t *btn_retry = (lv_obj_t*)lv_obj_get_child(scr_wifi_connecting, -2);
-    if (btn_retry) lv_obj_clear_flag(btn_retry, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_t *btn_next = (lv_obj_t*)lv_obj_get_child(scr_wifi_connecting, -1);
-    if (btn_next) lv_obj_clear_flag(btn_next, LV_OBJ_FLAG_HIDDEN);
+    if (btn_conn_retry) lv_obj_clear_flag(btn_conn_retry, LV_OBJ_FLAG_HIDDEN);
+    if (btn_conn_next)  lv_obj_clear_flag(btn_conn_next,  LV_OBJ_FLAG_HIDDEN);
   }
   lv_timer_handler();
 }
 
 void buildWifiConnectingScreen() {
   logSD("BUILD: WifiConnectingScreen");
+  // Cleared before the old screen goes away, so nothing can be touched between
+  // the delete and the rebuild below.
+  btn_conn_retry = btn_conn_next = lbl_conn_status = nullptr;
+  conn_val_ssid = conn_val_ip = conn_val_gw = conn_val_rssi = nullptr;
+  conn_lbl_ssid = conn_lbl_ip = conn_lbl_gw = conn_lbl_rssi = nullptr;
   releaseScreen(&scr_wifi_connecting);
   scr_wifi_connecting = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_wifi_connecting, 480, 320);
@@ -397,18 +449,31 @@ void buildWifiConnectingScreen() {
   lv_obj_align(lbl_connecting, LV_ALIGN_TOP_MID, 0, 68);
 
   // Status label — larger font, filled after connection
-  lv_obj_t *lbl_status_conn = lv_label_create(scr_wifi_connecting);
+  lbl_conn_status = lv_label_create(scr_wifi_connecting);
+  lv_obj_t *lbl_status_conn = lbl_conn_status;
   lv_label_set_text(lbl_status_conn, "");
   lv_obj_set_style_text_color(lbl_status_conn, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(lbl_status_conn, &lv_font_montserrat_ext_20, 0);
   lv_obj_set_style_text_align(lbl_status_conn, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_status_conn, LV_ALIGN_CENTER, 0, 10);
+  lv_obj_align(lbl_status_conn, LV_ALIGN_TOP_MID, 0, 100);
   lv_label_set_long_mode(lbl_status_conn, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(lbl_status_conn, 420);
-  lv_obj_set_user_data(scr_wifi_connecting, lbl_status_conn);
+
+  // Summary of the link that was just established. The screen used to show a
+  // single centred line in an otherwise empty 480x320, which told the user
+  // nothing beyond "it worked". Same two column rows as the WiFi status
+  // screen, so the two read alike.
+  // Last row ends at ~244, the buttons start at 252 (48px tall, 20px off the
+  // bottom edge), so the block stops just clear of them.
+  conn_val_ssid = addInfoRow(scr_wifi_connecting, 134, "SSID",    &conn_lbl_ssid);
+  conn_val_ip   = addInfoRow(scr_wifi_connecting, 164, "IP",      &conn_lbl_ip);
+  conn_val_gw   = addInfoRow(scr_wifi_connecting, 194, "Gateway", &conn_lbl_gw);
+  conn_val_rssi = addInfoRow(scr_wifi_connecting, 224, "Signal",  &conn_lbl_rssi);
+  setConnSummaryHidden(true);
 
   // Retry button (initially hidden)
-  lv_obj_t *btn_retry = lv_btn_create(scr_wifi_connecting);
+  btn_conn_retry = lv_btn_create(scr_wifi_connecting);
+  lv_obj_t *btn_retry = btn_conn_retry;
   lv_obj_set_size(btn_retry, 200, 48);
   lv_obj_align(btn_retry, LV_ALIGN_BOTTOM_MID, -110, -20);
   lv_obj_add_flag(btn_retry, LV_OBJ_FLAG_HIDDEN);
@@ -425,7 +490,8 @@ void buildWifiConnectingScreen() {
   lv_obj_center(lbl_retry);
 
   // Next button → Spoolman IP (initially hidden)
-  lv_obj_t *btn_next = lv_btn_create(scr_wifi_connecting);
+  btn_conn_next = lv_btn_create(scr_wifi_connecting);
+  lv_obj_t *btn_next = btn_conn_next;
   lv_obj_set_size(btn_next, 200, 48);
   lv_obj_align(btn_next, LV_ALIGN_BOTTOM_MID, 110, -20);
   lv_obj_add_flag(btn_next, LV_OBJ_FLAG_HIDDEN);

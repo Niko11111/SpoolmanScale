@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.6.1-beta.3"
+#define FW_VERSION  "v0.6.1-beta.6"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 #define BRIGHT_NORMAL_DEFAULT  255
