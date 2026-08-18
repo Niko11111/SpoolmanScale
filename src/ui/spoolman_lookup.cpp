@@ -16,6 +16,7 @@
 #include "services/user_options.h"
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
+#include "ui_common.h"
 
 namespace {
 
@@ -161,10 +162,12 @@ void querySpoolmanById(int spool_id) {
   String art_nr = spool["filament"]["article_number"] | "";
   art_nr.trim();
   strncpy(sm_article_nr, art_nr.c_str(), sizeof(sm_article_nr)-1);
+  sm_article_nr[sizeof(sm_article_nr)-1] = '\0';
 
   String fil_name = spool["filament"]["name"] | String("");
   fil_name.trim();
   strncpy(sm_filament_name, fil_name.c_str(), sizeof(sm_filament_name)-1);
+  sm_filament_name[sizeof(sm_filament_name)-1] = '\0';
 
   // Location — Spoolman gibt location als einfachen String zurück
   sm_location_id = 0;
@@ -173,6 +176,7 @@ void querySpoolmanById(int spool_id) {
     String loc_name = spool["location"] | String("");
     loc_name.trim();
     strncpy(sm_location_name, loc_name.c_str(), sizeof(sm_location_name)-1);
+    sm_location_name[sizeof(sm_location_name)-1] = '\0';
   }
 
   // last_dried
@@ -184,6 +188,7 @@ void querySpoolmanById(int spool_id) {
     char de_date[12];
     isoToDe(iso.c_str(), de_date, sizeof(de_date));
     strncpy(sm_last_dried, de_date, sizeof(sm_last_dried)-1);
+    sm_last_dried[sizeof(sm_last_dried)-1] = '\0';
   } else {
     strncpy(sm_last_dried, "-", sizeof(sm_last_dried)-1);
   }
@@ -216,12 +221,7 @@ void querySpoolmanById(int spool_id) {
     }
   }
   if (is_ntag && sm_color.length() >= 6) {
-    String hex = sm_color;
-    if (hex.startsWith("#")) hex = hex.substring(1);
-    unsigned int r, g, b;
-    sscanf(hex.c_str(), "%02X%02X%02X", &r, &g, &b);
-    uint32_t col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-    lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(col), 0);
+    lv_obj_set_style_bg_color(lbl_color_swatch, swatchColorFromHex(sm_color.c_str()), 0);
   }
 
   // Update display labels
@@ -466,9 +466,11 @@ void querySpoolman(const char* tray_uuid) {
     String art_nr = spool["filament"]["article_number"] | "";
     art_nr.trim();
     strncpy(sm_article_nr, art_nr.c_str(), sizeof(sm_article_nr)-1);
+    sm_article_nr[sizeof(sm_article_nr)-1] = '\0';
     String fil_name = spool["filament"]["name"] | String("");
     fil_name.trim();
     strncpy(sm_filament_name, fil_name.c_str(), sizeof(sm_filament_name)-1);
+    sm_filament_name[sizeof(sm_filament_name)-1] = '\0';
 
     // Location — einfacher String in Spoolman
     sm_location_name[0] = '\0';
@@ -476,6 +478,7 @@ void querySpoolman(const char* tray_uuid) {
       String loc = spool["location"] | String("");
       loc.trim();
       strncpy(sm_location_name, loc.c_str(), sizeof(sm_location_name)-1);
+      sm_location_name[sizeof(sm_location_name)-1] = '\0';
     }
     if (extra.containsKey("last_dried")) {
       String dried = extra["last_dried"].as<String>();
@@ -484,6 +487,7 @@ void querySpoolman(const char* tray_uuid) {
       char de_date[12];
       isoToDe(iso.c_str(), de_date, sizeof(de_date));
       strncpy(sm_last_dried, de_date, sizeof(sm_last_dried)-1);
+      sm_last_dried[sizeof(sm_last_dried)-1] = '\0';
     } else {
       strncpy(sm_last_dried, "-", sizeof(sm_last_dried)-1);
     }
@@ -516,13 +520,10 @@ void querySpoolman(const char* tray_uuid) {
       sm_color_global[sizeof(sm_color_global)-1] = '\0';
       // Color swatch from Spoolman color_hex (#RRGGBB or RRGGBB)
       if (sm_color.length() >= 6) {
-        String hex = sm_color;
-        if (hex.startsWith("#")) hex = hex.substring(1);
-        unsigned int r, g, b;
-        sscanf(hex.c_str(), "%02X%02X%02X", &r, &g, &b);
-        uint32_t col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-        lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(col), 0);
-        Serial.printf("Color set: #%06X\n", col);
+        lv_obj_set_style_bg_color(lbl_color_swatch, swatchColorFromHex(sm_color.c_str()), 0);
+        // Logs the raw server value rather than the parsed one, so a malformed
+        // colour is visible in the log instead of silently reading as grey.
+        Serial.printf("Color set: %s\n", sm_color.c_str());
       }
     }
 

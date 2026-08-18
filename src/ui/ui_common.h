@@ -17,3 +17,13 @@ lv_obj_t* buildOverlayScreen();
 // No-op when the pointer is already null, so callers that clean up on their
 // own stay correct.
 void releaseScreen(lv_obj_t **scr);
+
+// Neutral grey for a colour swatch with no usable colour behind it.
+#define SWATCH_FALLBACK_COLOR 0x333333
+
+// Parse "#RRGGBB" or "RRGGBB" into a swatch colour, falling back to
+// SWATCH_FALLBACK_COLOR when the string is absent, too short or malformed.
+// Both Spoolman and FilaMan hand out empty and truncated colour fields, and the
+// call sites used to run sscanf without checking its result, which left r/g/b
+// uninitialised and gave the swatch a random colour off the stack.
+lv_color_t swatchColorFromHex(const char* hex);

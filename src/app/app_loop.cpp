@@ -169,7 +169,8 @@ static unsigned long last_scale_ms = 0;
 static int  loc_popup_pending_id = -1;              // debounced popup: sm_id scheduled, fires after 1500ms
 
 void appLoop() {
-  lv_tick_inc(5);
+  // No lv_tick_inc() here: the tick comes from millis() via LV_TICK_CUSTOM, so
+  // LVGL keeps correct time even while a blocking call holds up this loop.
   lv_timer_handler();
   handlePowerManagement();
 
@@ -395,7 +396,8 @@ void appLoop() {
     updateDisplay();
     if (!isSpoolFlowIdInputOpen() && strlen(g_tag.tray_uuid) == 32 && strcmp(g_tag.uid_str, spoolman_queried_uid) != 0) {
       querySpoolman(g_tag.tray_uuid);
-      strncpy(spoolman_queried_uid, g_tag.uid_str, sizeof(spoolman_queried_uid));
+      strncpy(spoolman_queried_uid, g_tag.uid_str, sizeof(spoolman_queried_uid)-1);
+      spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';
       if (!sm_found && wifi_ok) {
         link_tag_first_seen_ms = millis();
         link_popup_dismissed = false;
@@ -527,8 +529,7 @@ void appLoop() {
       aw_last_shown_s = -1;
       if (lbl_weight_main_lbl) {
         char wmbuf[48];
-        snprintf(wmbuf, sizeof(wmbuf), "%s (A)",
-          g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight");
+        snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
         lv_label_set_text(lbl_weight_main_lbl, wmbuf);
         lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x28d49a), 0);
       }
@@ -552,8 +553,7 @@ void appLoop() {
         // Haekchen im Button — bleibt bis Spule abgenommen wird
         if (lbl_weight_main_lbl) {
           char wmbuf[48];
-          snprintf(wmbuf, sizeof(wmbuf), "%s " LV_SYMBOL_OK,
-            g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight");
+          snprintf(wmbuf, sizeof(wmbuf), "%s " LV_SYMBOL_OK, T(STR_BTN_WEIGHT));
           lv_label_set_text(lbl_weight_main_lbl, wmbuf);
           lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x40ff80), 0);
         }
@@ -569,8 +569,7 @@ void appLoop() {
         if (rem != aw_last_shown_s && lbl_weight_main_lbl) {
           aw_last_shown_s = rem;
           char wmbuf[48];
-          snprintf(wmbuf, sizeof(wmbuf), "%s %ds",
-            g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight", rem);
+          snprintf(wmbuf, sizeof(wmbuf), "%s %ds", T(STR_BTN_WEIGHT), rem);
           lv_label_set_text(lbl_weight_main_lbl, wmbuf);
           lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x60f0c0), 0);
         }
@@ -585,8 +584,7 @@ void appLoop() {
       if (aw_last_shown_s != 0 && lbl_weight_main_lbl) {
         aw_last_shown_s = 0;
         char wmbuf[48];
-        snprintf(wmbuf, sizeof(wmbuf), "%s (A)",
-          g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight");
+        snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
         lv_label_set_text(lbl_weight_main_lbl, wmbuf);
         lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x28d49a), 0);
       }
@@ -752,6 +750,7 @@ void appLoop() {
             if (!isSpoolFlowIdInputOpen() && strcmp(g_tag.uid_str, spoolman_queried_uid) != 0 && strlen(g_tag.tray_uuid) == 32) {
               querySpoolman(g_tag.tray_uuid);
               strncpy(spoolman_queried_uid, g_tag.uid_str, sizeof(spoolman_queried_uid)-1);
+              spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';
               if (!sm_found && wifi_ok) {
                 link_tag_first_seen_ms = millis();  // Start timer
                 link_popup_dismissed = false;
@@ -793,6 +792,7 @@ void appLoop() {
         if (uid_changed_ntag) {
           // New UID — clear old tag data
           strncpy(g_tag.uid_str, uid_str, sizeof(g_tag.uid_str)-1);
+          g_tag.uid_str[sizeof(g_tag.uid_str)-1] = '\0';
           g_tag.tray_uuid[0] = '\0';
           g_tag.material[0] = '\0';
           g_tag.color_hex[0] = '\0';
@@ -815,16 +815,19 @@ void appLoop() {
           if (wifi_ok && !isSpoolFlowIdInputOpen()) {
             querySpoolman(uid_str);
             strncpy(spoolman_queried_uid, uid_str, sizeof(spoolman_queried_uid)-1);
+            spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';
 
             if (!sm_found) {
               Serial.println("NTAG: not in Spoolman -> waiting for delay");
               strncpy(link_tag_uid, uid_str, sizeof(link_tag_uid)-1);
+              link_tag_uid[sizeof(link_tag_uid)-1] = '\0';
               link_tag_first_seen_ms = millis();
               link_popup_dismissed = false;
             } else {
               lv_label_set_text(lbl_status, T(STR_TAG_FOUND));
               lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
               strncpy(g_tag.tray_uuid, uid_str, sizeof(g_tag.tray_uuid)-1);
+              g_tag.tray_uuid[sizeof(g_tag.tray_uuid)-1] = '\0';
               updateLinkButton();
             }
           } else {

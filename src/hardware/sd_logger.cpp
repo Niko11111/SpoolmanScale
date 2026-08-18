@@ -42,7 +42,7 @@ void logSD(const char* msg) {
     snprintf(timestamp, sizeof(timestamp), "%02d:%02d:%02d",
       t.tm_hour, t.tm_min, t.tm_sec);
   } else {
-    strncpy(timestamp, "??:??:??", sizeof(timestamp));
+    strncpy(timestamp, "??:??:??", sizeof(timestamp)-1);
   }
 
   String fname = getCurrentLogFilename();
@@ -95,7 +95,7 @@ void writeBootBlock(const char* boot_or_reboot) {
       t.tm_mday, t.tm_mon + 1, t.tm_year + 1900,
       t.tm_hour, t.tm_min, t.tm_sec);
   } else {
-    strncpy(dt_buf, "(time not synced)", sizeof(dt_buf));
+    strncpy(dt_buf, "(time not synced)", sizeof(dt_buf)-1);
   }
 
   f.println("=====================================");

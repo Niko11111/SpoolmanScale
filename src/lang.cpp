@@ -597,4 +597,13 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Not affiliated with Spoolman or FilaMan"                             },  // STR_NOT_AFFILIATED
   { "Kein Tag erkannt, bitte neu auflegen",
     "No tag detected, place it again"                                    },  // STR_LINK_NO_TAG
+
+  // Main screen weight box and More-info detail grid
+  { "Waage - Spule",                 "Scale - Spool"                      },  // STR_LBL_SCALE_SPOOL_CAP
+  { "Gesamt:",                       "Total:"                             },  // STR_LBL_TOTAL_CAP
+  { "o. Beutel:",                    "w/o Bag:"                           },  // STR_LBL_WO_BAG_CAP
+  { "Farbe",                         "Hex Color"                          },  // STR_LBL_HEX_COLOR
+  { "Produktionsdatum",              "Production date"                    },  // STR_LBL_PRODUCTION_DATE
+  { "Artikelnr.",                    "Article no."                        },  // STR_LBL_ARTICLE_NO_SHORT
+  { "Leergewicht Spule",             "Spool weight (empty)"               },  // STR_LBL_SPOOL_WEIGHT_EMPTY
 };

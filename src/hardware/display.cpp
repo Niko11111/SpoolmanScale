@@ -3,14 +3,16 @@
 #include "pins.h"
 
 #include <LovyanGFX.hpp>
-#include <Wire.h>
 #include <esp_sleep.h>
 #include <lvgl.h>
 
 // Set to 1 to enable touch coordinate debug output on Serial.
 #define TOUCH_DEBUG 0
 
-static TwoWire i2c_touch = TwoWire(0);
+// No TwoWire object for the touch bus. LovyanGFX owns it: the Touch_FT5x06
+// config below carries the port, both pins and the frequency, and bus_shared is
+// false. A second TwoWire(0) used to be created and begun here and then never
+// read or written, which initialised I2C port 0 twice over the same pins.
 static void (*touch_activity_callback)() = nullptr;
 
 class LGFX : public lgfx::LGFX_Device {
@@ -82,8 +84,7 @@ static void lvgl_touch(lv_indev_drv_t *drv, lv_indev_data_t *data) {
 bool displayHardwareBegin(void (*touch_activity_cb)()) {
   touch_activity_callback = touch_activity_cb;
 
-  i2c_touch.begin(hw_pins::TOUCH_SDA, hw_pins::TOUCH_SCL, 400000);
-  tft.init();
+  tft.init();  // brings up the touch I2C bus as configured in LGFX::_touch
   tft.setRotation(1);
   tft.setBrightness(204);
   tft.fillScreen(TFT_BLACK);

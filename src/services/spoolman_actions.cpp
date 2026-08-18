@@ -51,6 +51,7 @@ void patchSpoolmanWeight(float remaining) {
       char today_local[12];
       isoToDe(today_iso, today_local, sizeof(today_local));
       strncpy(sm_last_used, today_local, sizeof(sm_last_used) - 1);
+      sm_last_used[sizeof(sm_last_used)-1] = '\0';
       char disp[48];
       driedDisplayStr(today_local, disp, sizeof(disp));
       lv_label_set_text(lbl_last_used, disp);

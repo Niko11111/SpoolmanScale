@@ -32,6 +32,7 @@ static void buildDryNumpadScreen(int target) {
   // Header
   char title_buf[32];
   strncpy(title_buf, (target == 0) ? T(STR_DRY_NUMPAD_YELLOW_TITLE) : T(STR_DRY_NUMPAD_RED_TITLE), sizeof(title_buf)-1);
+  title_buf[sizeof(title_buf)-1] = '\0';
   const char* title_str = title_buf;
   buildSubHeader(s_dry_numpad_scr, title_str, [](lv_event_t *e){
     if (s_dry_numpad_scr) { lv_obj_del(s_dry_numpad_scr); s_dry_numpad_scr = nullptr; }

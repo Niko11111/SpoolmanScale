@@ -40,6 +40,7 @@ void startOtaServer() {
   ota_server.on("/", HTTP_GET, []() {
     char ver_buf[20];
     strncpy(ver_buf, FW_VERSION, sizeof(ver_buf)-1);
+    ver_buf[sizeof(ver_buf)-1] = '\0';
     String version = String(ver_buf);
     String html =
       "<!DOCTYPE html><html><head>"

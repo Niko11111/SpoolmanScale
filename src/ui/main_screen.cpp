@@ -22,6 +22,7 @@
 #include "ui/more_info_screen.h"
 #include "ui/settings_screen.h"
 #include "ui/spool_flow.h"
+#include "ui_common.h"
 
 // ============================================================
 //  FILL DISPLAY WITH TAG DATA
@@ -51,10 +52,7 @@ void updateDisplay() {
   lv_label_set_text(lbl_color,
     strlen(g_tag.color_hex) > 1 ? g_tag.color_hex : "-");
   if (strlen(g_tag.color_hex) == 7) {
-    unsigned int r, g, b;
-    sscanf(g_tag.color_hex + 1, "%02X%02X%02X", &r, &g, &b);
-    uint32_t col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-    lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(col), 0);
+    lv_obj_set_style_bg_color(lbl_color_swatch, swatchColorFromHex(g_tag.color_hex), 0);
   }
 
   // Temp (Zone 3 Row B)
@@ -62,7 +60,7 @@ void updateDisplay() {
   if (g_tag.temp_min > 0 && g_tag.temp_max > 0) {
     snprintf(temp_str, sizeof(temp_str), "%d - %d C", g_tag.temp_min, g_tag.temp_max);
   } else {
-    strncpy(temp_str, T(STR_UNKNOWN), sizeof(temp_str));
+    strncpy(temp_str, T(STR_UNKNOWN), sizeof(temp_str)-1);
   }
   lv_label_set_text(lbl_temp, temp_str);
 
@@ -289,7 +287,9 @@ void buildUI() {
   lv_obj_set_style_shadow_width(btn_more, 0, 0);
   lv_obj_add_event_cb(btn_more, [](lv_event_t *e){ logSD("BTN: Main -> MoreInfo"); showMoreInfoScreen(); }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_more = lv_label_create(btn_more);
-  lv_label_set_text(lbl_more, g_lang == LANG_DE ? "Mehr Info" : "More info");
+  char more_buf[24]; strncpy(more_buf, T(STR_BTN_MORE_INFO), sizeof(more_buf)-1);
+  more_buf[sizeof(more_buf)-1] = '\0';
+  lv_label_set_text(lbl_more, more_buf);
   lv_obj_set_style_text_color(lbl_more, lv_color_hex(0x28d49a), 0);  // teal text
   lv_obj_set_style_text_font(lbl_more, &lv_font_montserrat_ext_12, 0);
   lv_obj_center(lbl_more);
@@ -307,12 +307,12 @@ void buildUI() {
   lbl_lu_cap = lv_label_create(lv_scr_act());
   // Cap text depends on last_used_mode
   char lu_cap_buf[32];
+  // The weighed variant reuses the option label, which carries no colon
   if (last_used_mode == 1)
-    strncpy(lu_cap_buf, g_lang == LANG_DE ? "Zuletzt gewogen:" : "Last weighed:", sizeof(lu_cap_buf)-1);
-  else {
+    snprintf(lu_cap_buf, sizeof(lu_cap_buf), "%s:", T(STR_LASTUSED_OPT_WEIGHED));
+  else
     strncpy(lu_cap_buf, T(STR_LBL_LAST_USED), sizeof(lu_cap_buf)-1);
-  }
-  lu_cap_buf[sizeof(lu_cap_buf)-1] = 0;
+  lu_cap_buf[sizeof(lu_cap_buf)-1] = '\0';
   lv_label_set_text(lbl_lu_cap, lu_cap_buf);
   lv_obj_set_style_text_color(lbl_lu_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_lu_cap, &lv_font_montserrat_ext_14, 0);  // Fix 5
@@ -434,7 +434,9 @@ void buildUI() {
 
   // Scale filament netto caption — Fix 3: "Waage - Spule" / "Scale - Spool"
   lv_obj_t *lbl_sc_cap = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_sc_cap, g_lang == LANG_DE ? "Waage - Spule" : "Scale - Spool");
+  char sc_cap_buf[24]; strncpy(sc_cap_buf, T(STR_LBL_SCALE_SPOOL_CAP), sizeof(sc_cap_buf)-1);
+  sc_cap_buf[sizeof(sc_cap_buf)-1] = '\0';
+  lv_label_set_text(lbl_sc_cap, sc_cap_buf);
   lv_obj_set_style_text_color(lbl_sc_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_sc_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(lbl_sc_cap, 218, 188);
@@ -461,7 +463,9 @@ void buildUI() {
 
   // Fix 1: "Gesamt" / "Total" — Fix 4: value x same as o.Beutel value
   lv_obj_t *lbl_live_cap = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_live_cap, g_lang == LANG_DE ? "Gesamt:" : "Total:");
+  char live_cap_buf[16]; strncpy(live_cap_buf, T(STR_LBL_TOTAL_CAP), sizeof(live_cap_buf)-1);
+  live_cap_buf[sizeof(live_cap_buf)-1] = '\0';
+  lv_label_set_text(lbl_live_cap, live_cap_buf);
   lv_obj_set_style_text_color(lbl_live_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_live_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(lbl_live_cap, 218, 228);
@@ -474,7 +478,9 @@ void buildUI() {
 
   // Fix 2: "o. Beutel" / "w/o Bag"
   lv_obj_t *lbl_bag_cap = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_bag_cap, g_lang == LANG_DE ? "o. Beutel:" : "w/o Bag:");
+  char bag_cap_buf[16]; strncpy(bag_cap_buf, T(STR_LBL_WO_BAG_CAP), sizeof(bag_cap_buf)-1);
+  bag_cap_buf[sizeof(bag_cap_buf)-1] = '\0';
+  lv_label_set_text(lbl_bag_cap, bag_cap_buf);
   lv_obj_set_style_text_color(lbl_bag_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_bag_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(lbl_bag_cap, 218, 246);
@@ -578,7 +584,7 @@ void buildUI() {
   {
     char wmbuf[48];
     if (g_auto_weight)
-      snprintf(wmbuf, sizeof(wmbuf), "%s (A)", g_lang == LANG_DE ? "Gewicht updaten" : "Update Weight");
+      snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
     else {
       strncpy(wmbuf, T(STR_BTN_WEIGHT), sizeof(wmbuf)-1);
       wmbuf[sizeof(wmbuf)-1] = '\0';

@@ -19,8 +19,11 @@ void loadPrefs() {
   String pass = prefsGetString("wifi_pass", cfg_wifi_password);
   String ip   = prefsGetString("spoolman_ip", cfg_spoolman_ip);
   strncpy(cfg_wifi_ssid, ssid.c_str(), sizeof(cfg_wifi_ssid) - 1);
+  cfg_wifi_ssid[sizeof(cfg_wifi_ssid)-1] = '\0';
   strncpy(cfg_wifi_password, pass.c_str(), sizeof(cfg_wifi_password) - 1);
+  cfg_wifi_password[sizeof(cfg_wifi_password)-1] = '\0';
   strncpy(cfg_spoolman_ip, ip.c_str(), sizeof(cfg_spoolman_ip) - 1);
+  cfg_spoolman_ip[sizeof(cfg_spoolman_ip)-1] = '\0';
   snprintf(cfg_spoolman_base, sizeof(cfg_spoolman_base), "http://%s", cfg_spoolman_ip);
 
   cal_factor = prefsGetFloat("cal_factor", CAL_FACTOR_DEFAULT);
@@ -75,7 +78,9 @@ void loadPrefs() {
 
 void saveWifiCredentials(const char* ssid, const char* pass) {
   strncpy(cfg_wifi_ssid, ssid, sizeof(cfg_wifi_ssid) - 1);
+  cfg_wifi_ssid[sizeof(cfg_wifi_ssid)-1] = '\0';
   strncpy(cfg_wifi_password, pass, sizeof(cfg_wifi_password) - 1);
+  cfg_wifi_password[sizeof(cfg_wifi_password)-1] = '\0';
   prefsPutString("wifi_ssid", ssid);
   prefsPutString("wifi_pass", pass);
   Serial.printf("WiFi saved: SSID=%s\n", ssid);
@@ -83,6 +88,7 @@ void saveWifiCredentials(const char* ssid, const char* pass) {
 
 void saveSpoolmanIP(const char* ip) {
   strncpy(cfg_spoolman_ip, ip, sizeof(cfg_spoolman_ip) - 1);
+  cfg_spoolman_ip[sizeof(cfg_spoolman_ip)-1] = '\0';
   snprintf(cfg_spoolman_base, sizeof(cfg_spoolman_base), "http://%s", ip);
   prefsPutString("spoolman_ip", ip);
 }

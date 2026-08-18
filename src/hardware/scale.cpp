@@ -4,6 +4,15 @@
 
 static Adafruit_NAU7802 nau;
 
+// Give up on the internal calibration after roughly three seconds. This used
+// to retry forever, which hung the whole boot on a defective load cell or a
+// loose cable: no display, no WiFi, no web interface, nothing but a device that
+// looks dead. Returning false instead lets app_boot.cpp carry on without the
+// scale, so display, NFC and the filament manager still work and the red SCL!
+// in the header says what is wrong. Do not turn this back into a bare while.
+#define CAL_MAX_ATTEMPTS  30
+#define CAL_RETRY_DELAY_MS 100
+
 bool scaleHardwareBegin(TwoWire* wire, void (*calibration_wait_cb)()) {
   if (!nau.begin(wire)) return false;
 
@@ -12,15 +21,17 @@ bool scaleHardwareBegin(TwoWire* wire, void (*calibration_wait_cb)()) {
   nau.setRate(NAU7802_RATE_10SPS);
 
   delay(300);
-  while (!nau.calibrate(NAU7802_CALMOD_INTERNAL)) {
+  for (int attempt = 0; attempt < CAL_MAX_ATTEMPTS; attempt++) {
+    if (nau.calibrate(NAU7802_CALMOD_INTERNAL)) return true;
     if (calibration_wait_cb) {
       calibration_wait_cb();
     } else {
       Serial.println("Calibrate retry...");
-      delay(100);
+      delay(CAL_RETRY_DELAY_MS);
     }
   }
-  return true;
+  Serial.println("NAU7802 calibration timed out");
+  return false;
 }
 
 // True once the ADC has finished a new conversion. Reading without checking

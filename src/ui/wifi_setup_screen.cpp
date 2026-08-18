@@ -20,6 +20,14 @@
 
 
 
+// Rows rendered in the scan list, and therefore the number of full SSIDs kept
+// for the click handler. The scan itself may return more; anything past this is
+// not shown and not selectable.
+#define WIFI_SCAN_ROWS_MAX  20
+// Entries the RSSI sort covers. Networks beyond this stay in scan order, which
+// only matters in places dense enough to see more than this many APs at once.
+#define WIFI_SCAN_SORT_MAX  64
+
 static char  wifi_setup_ssid[33]  = "";
 static lv_obj_t *lbl_wifi_setup_status = nullptr;
 static lv_obj_t *lbl_wifi_scan_list = nullptr;
@@ -132,8 +140,13 @@ void doWifiScan() {
   wifiManagerPrepareScan();
   int n = wifiManagerScanNetworks();
 
-  if (n == 0) {
+  // Negative means WIFI_SCAN_FAILED (-2) or WIFI_SCAN_RUNNING (-1). Checking
+  // only for 0 let those fall through into "-2 networks found" above an empty
+  // list. Both branches release the scan results, which the empty one forgot.
+  if (n <= 0) {
+    if (n < 0) logSDf("WiFi scan failed (rc=%d)", n);
     lv_label_set_text(lbl_wifi_setup_status, T(STR_WIFI_NO_NET));
+    wifiManagerClearScan();
     return;
   }
 
@@ -141,21 +154,35 @@ void doWifiScan() {
   snprintf(status_buf, sizeof(status_buf), T(STR_WIFI_NETWORKS_FOUND), n);
   lv_label_set_text(lbl_wifi_setup_status, status_buf);
 
-  // Sort: strongest first (bubble sort, n is small)
-  for (int i = 0; i < n - 1; i++) {
-    for (int j = 0; j < n - i - 1; j++) {
-      if (wifiManagerScannedRSSI(j) < wifiManagerScannedRSSI(j + 1)) {
-        // Swap via scan index — LVGL-independent, WiFi.SSID() returns directly
-        // Arduino WiFi.scanNetworks() returns sorted after scan, only needed if not:
-        // Wir nutzen einen Index-Array-Trick nicht — direkt ausgeben reicht da n<20
+  // Sort strongest first. The body of this loop used to be empty - only
+  // comments - so the list came out in scan order. Sorting an index array keeps
+  // the scan results themselves untouched, so the accessors below still work.
+  int sort_n = n < WIFI_SCAN_SORT_MAX ? n : WIFI_SCAN_SORT_MAX;
+  static int idx[WIFI_SCAN_SORT_MAX];
+  for (int i = 0; i < sort_n; i++) idx[i] = i;
+  for (int i = 0; i < sort_n - 1; i++) {
+    for (int j = 0; j < sort_n - i - 1; j++) {
+      if (wifiManagerScannedRSSI(idx[j]) < wifiManagerScannedRSSI(idx[j + 1])) {
+        int tmp = idx[j]; idx[j] = idx[j + 1]; idx[j + 1] = tmp;
       }
     }
   }
 
-  for (int i = 0; i < n && i < 20; i++) {
+  // Full SSID per rendered row. The label is LV_LABEL_LONG_DOT at 300 px, so
+  // reading the SSID back out of it returned "LongNetworkNam..." and the
+  // connection failed for no visible reason. The click handler reads this instead.
+  static char row_ssid[WIFI_SCAN_ROWS_MAX][33];
+
+  int row_count = 0;
+  for (int disp = 0; disp < sort_n && row_count < WIFI_SCAN_ROWS_MAX; disp++) {
+    int i = idx[disp];
     int rssi = wifiManagerScannedRSSI(i);
     String ssid = wifiManagerScannedSSID(i);
     if (ssid.length() == 0) continue;
+
+    int slot = row_count++;
+    strncpy(row_ssid[slot], ssid.c_str(), sizeof(row_ssid[slot])-1);
+    row_ssid[slot][sizeof(row_ssid[slot])-1] = '\0';
 
     // Signal bar (3 levels)
     const char* signal_icon;
@@ -179,6 +206,7 @@ void doWifiScan() {
     lv_obj_set_style_border_color(row, lv_color_hex(0x1a2840), 0);
     lv_obj_set_style_border_width(row, 1, 0);
     lv_obj_set_style_pad_all(row, 0, 0);
+    lv_obj_set_user_data(row, row_ssid[slot]);
 
     // SSID Label
     lv_obj_t *lbl_ssid = lv_label_create(row);
@@ -201,9 +229,10 @@ void doWifiScan() {
     // Click: store SSID → password screen
     lv_obj_add_event_cb(row, [](lv_event_t *e) {
       lv_obj_t *btn = (lv_obj_t*)lv_event_get_target(e);
-      lv_obj_t *lbl = lv_obj_get_child(btn, 0);
-      const char* ssid_str = lv_label_get_text(lbl);
+      const char* ssid_str = (const char*)lv_obj_get_user_data(btn);
+      if (!ssid_str) return;
       strncpy(wifi_setup_ssid, ssid_str, sizeof(wifi_setup_ssid)-1);
+      wifi_setup_ssid[sizeof(wifi_setup_ssid)-1] = '\0';
       showWifiPassScreen();
     }, LV_EVENT_CLICKED, NULL);
   }

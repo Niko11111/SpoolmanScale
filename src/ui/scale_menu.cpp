@@ -94,6 +94,7 @@ void buildScaleSubScreen() {
     char buf_s[24];
     const char* mode_lbl[] = { T(STR_DRY_MODE_OFF), T(STR_DRY_MODE_MATERIAL), T(STR_DRY_MODE_MANUAL) };
     strncpy(buf_s, mode_lbl[g_dry_mode < 3 ? g_dry_mode : 0], sizeof(buf_s)-1);
+    buf_s[sizeof(buf_s)-1] = '\0';
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_WARNING, buf_t, buf_s);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Scale-Sub -> Drying Reminder");

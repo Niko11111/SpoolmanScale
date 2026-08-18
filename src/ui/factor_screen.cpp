@@ -34,26 +34,14 @@ void showFactorScreen() {
   // Now safe to delete
   if (scr_factor) { lv_obj_del(scr_factor); scr_factor = nullptr; }
   buildFactorScreen();
-  // Show it (hideAllOverlays would hide it again, so show directly)
+  // hideAllOverlays() is the authoritative list. A hand maintained copy used to
+  // live here and had drifted: scr_backend, scr_drying_reminder, scr_lastused,
+  // scr_more_info, scr_ota_github and scr_spoolman_fail were missing, so coming
+  // here from any of them left the old screen standing. Order matters - it also
+  // hides scr_factor, which buildFactorScreen() created hidden anyway, so the
+  // screen is shown right afterwards.
+  hideAllOverlays();
   lv_obj_clear_flag(scr_factor, LV_OBJ_FLAG_HIDDEN);
-  // Hide other overlays without touching scr_factor
-  if (scr_settings)      lv_obj_add_flag(scr_settings,      LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi)          lv_obj_add_flag(scr_wifi,          LV_OBJ_FLAG_HIDDEN);
-  if (scr_spoolman)      lv_obj_add_flag(scr_spoolman,      LV_OBJ_FLAG_HIDDEN);
-  if (scr_bag)           lv_obj_add_flag(scr_bag,           LV_OBJ_FLAG_HIDDEN);
-  if (scr_connection)    lv_obj_add_flag(scr_connection,    LV_OBJ_FLAG_HIDDEN);
-  if (scr_scale_sub)     lv_obj_add_flag(scr_scale_sub,     LV_OBJ_FLAG_HIDDEN);
-  if (scr_display)       lv_obj_add_flag(scr_display,       LV_OBJ_FLAG_HIDDEN);
-  if (scr_system)        lv_obj_add_flag(scr_system,        LV_OBJ_FLAG_HIDDEN);
-  if (scr_ota)           lv_obj_add_flag(scr_ota,           LV_OBJ_FLAG_HIDDEN);
-  if (scr_ota_browser)   lv_obj_add_flag(scr_ota_browser,   LV_OBJ_FLAG_HIDDEN);
-  if (scr_welcome)       lv_obj_add_flag(scr_welcome,       LV_OBJ_FLAG_HIDDEN);
-  if (scr_first_boot)    lv_obj_add_flag(scr_first_boot,    LV_OBJ_FLAG_HIDDEN);
-  if (scr_extra_fields)  lv_obj_add_flag(scr_extra_fields,  LV_OBJ_FLAG_HIDDEN);
-  if (scr_cal_reminder)  lv_obj_add_flag(scr_cal_reminder,  LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi_setup)    lv_obj_add_flag(scr_wifi_setup,    LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi_pass)     lv_obj_add_flag(scr_wifi_pass,     LV_OBJ_FLAG_HIDDEN);
-  if (scr_wifi_connecting) lv_obj_add_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN);
   resetActivityTimer();
 }
 

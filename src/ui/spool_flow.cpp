@@ -82,6 +82,37 @@ static int compareLinkSpools(const void* a, const void* b) {
 
 static UnlinkedSpool* link_spools = nullptr;  // PSRAM-allocated at fetch time, freed after link flow
 static int            link_spool_count = 0;
+// Slots actually allocated in link_spools. The fetch functions allocate an
+// exact fit for what they load, so anything appending afterwards has to grow
+// the block first instead of writing at link_spool_count.
+static int            link_spools_capacity = 0;
+
+// Release the spool list and reset both counters together. Splitting these up
+// is how the capacity drifted out of sync with the allocation in the first place.
+static void linkSpoolsFree() {
+  if (link_spools) { free(link_spools); link_spools = nullptr; }
+  link_spool_count    = 0;
+  link_spools_capacity = 0;
+}
+
+// Grow link_spools to hold at least `needed` entries. PSRAM first, internal
+// RAM as fallback, same order the fetch functions use. Returns false if the
+// list could not be grown, in which case the caller must not append.
+static bool linkSpoolsEnsureCapacity(int needed) {
+  if (link_spools && link_spools_capacity >= needed) return true;
+
+  size_t bytes = (size_t)needed * sizeof(UnlinkedSpool);
+  UnlinkedSpool* grown = (UnlinkedSpool*)heap_caps_realloc(link_spools, bytes, MALLOC_CAP_SPIRAM);
+  if (!grown) grown = (UnlinkedSpool*)realloc(link_spools, bytes);
+  if (!grown) {
+    logSDf("link spools: grow to %d entries failed", needed);
+    return false;
+  }
+  link_spools          = grown;
+  link_spools_capacity = needed;
+  return true;
+}
+
 char          link_tag_uid[24] = "";   // UID of the tag to be linked
 static lv_obj_t     *scr_link_list = nullptr; // Spool selection overlay (old, kept for compatibility)
 
@@ -150,8 +181,7 @@ unsigned long link_tag_first_seen_ms = 0;       // time of first detection
 // ============================================================
 void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool archived_only) {
   // Free any previous allocation
-  if (link_spools) { free(link_spools); link_spools = nullptr; }
-  link_spool_count = 0;
+  linkSpoolsFree();
   if (!wifi_ok) return;
 
   logSDf("link fetch: is_bambu=%d material_filter='%s' archived_only=%d",
@@ -272,6 +302,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     logSD("link fetch: PSRAM alloc failed, using internal RAM");
   }
   if (!link_spools) { logSD("link fetch: alloc failed completely"); return; }
+  link_spools_capacity = alloc_count;
 
   // ── Pass 2: fill array (same filter) ────────────────────────
   for (JsonObject spool : spools) {
@@ -393,8 +424,7 @@ static void closeLinkOverlays() {
   if (scr_link_mat_sub){ lv_obj_del(scr_link_mat_sub);scr_link_mat_sub= nullptr; }
   if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
   if (scr_link_list)   { lv_obj_del(scr_link_list);   scr_link_list   = nullptr; }
-  if (link_spools) { free(link_spools); link_spools = nullptr; }
-  link_spool_count = 0;
+  linkSpoolsFree();
 }
 
 // ============================================================
@@ -438,7 +468,9 @@ void doLinkPatch(int spool_id, bool is_bambu) {
     querySpoolmanById(spool_id);
   } else {
     strncpy(g_tag.uid_str, link_tag_uid, sizeof(g_tag.uid_str)-1);
+    g_tag.uid_str[sizeof(g_tag.uid_str)-1] = '\0';
     strncpy(g_tag.tray_uuid, link_tag_uid, sizeof(g_tag.tray_uuid)-1);
+    g_tag.tray_uuid[sizeof(g_tag.tray_uuid)-1] = '\0';
     spoolman_queried_uid[0] = '\0';
     querySpoolmanById(spool_id);
   }
@@ -760,31 +792,34 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     existing.replace("\"",""); existing.trim();
   }
 
-  // Ensure link_spools has room for this spool (may be nullptr if no list was loaded)
-  if (link_spools == nullptr) {
-    link_spools = (UnlinkedSpool*)heap_caps_malloc(sizeof(UnlinkedSpool), MALLOC_CAP_SPIRAM);
-    if (!link_spools) link_spools = (UnlinkedSpool*)malloc(sizeof(UnlinkedSpool));
-    link_spool_count = 0;
-  }
   bool found_in_list = false;
   for (int i = 0; i < link_spool_count; i++) {
     if (link_spools[i].id == entered_id) { found_in_list = true; break; }
   }
-  if (!found_in_list && link_spools != nullptr) {
-    // Allocate one extra slot if needed (link_spools may be nullptr if no list was loaded)
+  // A hand entered ID is appended to the list so the rest of the flow can look
+  // it up like any other spool. The list is either absent (no list loaded) or
+  // allocated to an exact fit by the fetch functions, so it has to be grown
+  // first - writing at link_spool_count without that was a heap overflow of one
+  // UnlinkedSpool past the end of the block.
+  if (!found_in_list && linkSpoolsEnsureCapacity(link_spool_count + 1)) {
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = entered_id;
     strncpy(s.existing_tag, existing.c_str(), sizeof(s.existing_tag)-1);
+    s.existing_tag[sizeof(s.existing_tag)-1] = '\0';
     String mat = doc["filament"]["material"] | String("");
     mat.trim(); strncpy(s.material, mat.c_str(), sizeof(s.material)-1);
+    s.material[sizeof(s.material)-1] = '\0';
     String fname = doc["filament"]["name"] | String("?");
     fname.trim(); strncpy(s.name, fname.c_str(), sizeof(s.name)-1);
+    s.name[sizeof(s.name)-1] = '\0';
     String vnd = doc["filament"]["vendor"]["name"] | String("");
     vnd.trim(); strncpy(s.vendor, vnd.c_str(), sizeof(s.vendor)-1);
+    s.vendor[sizeof(s.vendor)-1] = '\0';
     String col = doc["filament"]["color_hex"] | String("");
     col.trim();
     if (col.length() > 0 && col[0] != '#') col = "#" + col;
     strncpy(s.color_hex, col.c_str(), sizeof(s.color_hex)-1);
+    s.color_hex[sizeof(s.color_hex)-1] = '\0';
     link_spool_count++;
   }
 
@@ -1268,13 +1303,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     lv_obj_set_style_pad_all(swatch, 0, 0);
     lv_obj_clear_flag(swatch, LV_OBJ_FLAG_SCROLLABLE);
     // Farbe setzen
-    uint32_t swatch_col = 0x333333;  // Fallback grau
-    if (s.color_hex[0] == '#' && strlen(s.color_hex) >= 7) {
-      unsigned int r, g, b;
-      sscanf(s.color_hex + 1, "%02X%02X%02X", &r, &g, &b);
-      swatch_col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-    }
-    lv_obj_set_style_bg_color(swatch, lv_color_hex(swatch_col), 0);
+    lv_obj_set_style_bg_color(swatch, swatchColorFromHex(s.color_hex), 0);
 
     // Gewicht neben Kachel
     lv_obj_t *lbl_rest = lv_label_create(row);
@@ -1424,6 +1453,7 @@ void showMaterialList(const char* vendor_name) {
   logSDf("SHOW: MaterialList vendor=%s", vendor_name);
   if (scr_link_mat) { lv_obj_del(scr_link_mat); scr_link_mat = nullptr; }
   strncpy(link_selected_vendor, vendor_name, sizeof(link_selected_vendor)-1);
+  link_selected_vendor[sizeof(link_selected_vendor)-1] = '\0';
   link_selected_material_full[0] = 0;  // reset on entry — set fresh in stage 3
   link_stage3_shown = false;
 
@@ -1551,6 +1581,7 @@ void showMaterialList(const char* vendor_name) {
     lv_obj_add_event_cb(row, [](lv_event_t *e) {
       int idx = (intptr_t)lv_event_get_user_data(e);
       strncpy(link_selected_material, seen_mats[idx], sizeof(link_selected_material)-1);
+      link_selected_material[sizeof(link_selected_material)-1] = '\0';
       link_selected_material_full[0] = 0;  // reset for new branch
       if (scr_link_mat) { lv_obj_del(scr_link_mat); scr_link_mat = nullptr; }
       showMaterialSubList(link_selected_vendor, link_selected_material);
@@ -1610,6 +1641,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
   if (full_seen_count == 1 && !full_limit_hit) {
     logSDf("MaterialSubList auto-skip: only %s", seen_full[0]);
     strncpy(link_selected_material_full, seen_full[0], sizeof(link_selected_material_full)-1);
+    link_selected_material_full[sizeof(link_selected_material_full)-1] = '\0';
     link_stage3_shown = false;  // not actually rendered — back from stage 4 must skip stage 3
     showFilteredSpoolList(vendor_name, material_prefix, link_selected_material_full);
     return;
@@ -1719,6 +1751,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
     lv_obj_add_event_cb(row, [](lv_event_t *e) {
       int idx = (intptr_t)lv_event_get_user_data(e);
       strncpy(link_selected_material_full, seen_full[idx], sizeof(link_selected_material_full)-1);
+      link_selected_material_full[sizeof(link_selected_material_full)-1] = '\0';
       if (scr_link_mat_sub) { lv_obj_del(scr_link_mat_sub); scr_link_mat_sub = nullptr; }
       showFilteredSpoolList(link_selected_vendor, link_selected_material, link_selected_material_full);
     }, LV_EVENT_CLICKED, (void*)(intptr_t)m);
@@ -2107,6 +2140,7 @@ void showCopyConfirmPopup(int template_filament_id, const char* template_name,
   copy_template_initial      = template_initial;
   copy_template_spool_w      = template_spool_w;
   strncpy(copy_template_name, template_name, sizeof(copy_template_name)-1);
+  copy_template_name[sizeof(copy_template_name)-1] = '\0';
 
   scr_copy_confirm = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_copy_confirm, 480, 320);
@@ -2202,7 +2236,7 @@ void showCopyConfirmPopup(int template_filament_id, const char* template_name,
 // Uses PSRAM allocator. Max COPY_SPOOL_LIMIT entries shown.
 void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bambu_tag) {
   // Free previous list
-  if (link_spools) { free(link_spools); link_spools = nullptr; link_spool_count = 0; }
+  linkSpoolsFree();
 
   if (!wifi_ok) return;
 
@@ -2254,6 +2288,7 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
   link_spools = (UnlinkedSpool*)heap_caps_malloc(alloc_count * sizeof(UnlinkedSpool), MALLOC_CAP_SPIRAM);
   if (!link_spools) link_spools = (UnlinkedSpool*)malloc(alloc_count * sizeof(UnlinkedSpool));
   if (!link_spools) { link_spool_count = 0; return; }
+  link_spools_capacity = alloc_count;
 
   int idx = 0;
   for (JsonObject spool : arr) {
@@ -2291,8 +2326,11 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
     // Store filament_id in existing_tag field (reuse struct field)
     snprintf(s.existing_tag, sizeof(s.existing_tag), "%d", (int)(spool["filament"]["id"] | 0));
     strncpy(s.name,     spool["filament"]["name"]           | "", sizeof(s.name)-1);
+    s.name[sizeof(s.name)-1] = '\0';
     strncpy(s.vendor,   spool["filament"]["vendor"]["name"] | "", sizeof(s.vendor)-1);
+    s.vendor[sizeof(s.vendor)-1] = '\0';
     strncpy(s.material, mat,                                      sizeof(s.material)-1);
+    s.material[sizeof(s.material)-1] = '\0';
     const char* col = spool["filament"]["color_hex"] | "333333";
     snprintf(s.color_hex, sizeof(s.color_hex), "#%s", col);
     s.total     = spool["filament"]["weight"]  | 1000.0f;
@@ -2465,13 +2503,7 @@ void showCopySpoolList() {
     lv_obj_set_style_border_color(swatch, lv_color_hex(0x2a4060), 0);
     lv_obj_set_style_pad_all(swatch, 0, 0);
     lv_obj_clear_flag(swatch, LV_OBJ_FLAG_SCROLLABLE);
-    uint32_t swatch_col = 0x333333;
-    if (s.color_hex[0] == '#' && strlen(s.color_hex) >= 7) {
-      unsigned int r, g, b;
-      sscanf(s.color_hex + 1, "%02X%02X%02X", &r, &g, &b);
-      swatch_col = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-    }
-    lv_obj_set_style_bg_color(swatch, lv_color_hex(swatch_col), 0);
+    lv_obj_set_style_bg_color(swatch, swatchColorFromHex(s.color_hex), 0);
 
     lv_obj_t *lbl_rest = lv_label_create(row);
     char rest_buf[24];
@@ -2504,6 +2536,7 @@ void showCopySpoolList() {
       copy_confirm_initial = sel.total;
       copy_confirm_spool_w = spw;
       strncpy(copy_confirm_name, tmpl_name, sizeof(copy_confirm_name)-1);
+      copy_confirm_name[sizeof(copy_confirm_name)-1] = '\0';
     }, LV_EVENT_CLICKED, NULL);
   }
   if (link_spool_count > spool_list_limit) {
@@ -2784,7 +2817,7 @@ void showCopyEntryPopup() {
 }
 
 void hideSpoolFlowOverlays() {
-  if (link_spools) { free(link_spools); link_spools = nullptr; link_spool_count = 0; }
+  linkSpoolsFree();
 }
 
 void deleteSpoolFlowOverlays() {
@@ -2821,13 +2854,9 @@ void handleSpoolFlowDeferredActions() {
     // Delete old numpad BEFORE showIdInputPopup; prevents residual touch events
     // from firing the confirm callback during lv_obj_del inside showIdInputPopup.
     if (scr_link_id) { lv_obj_del(scr_link_id); scr_link_id = nullptr; }
-    // Free the single-slot link_spools buffer allocated during the failed lookup
-    // so the next lookup starts with a clean slate and no out-of-bounds risk.
-    if (link_spools != nullptr) {
-      free(link_spools);
-      link_spools = nullptr;
-    }
-    link_spool_count = 0;
+    // Free the link_spools buffer grown during the failed lookup so the next
+    // lookup starts with a clean slate and no out-of-bounds risk.
+    linkSpoolsFree();
     // Pump LVGL twice to flush all residual events from the deleted screen.
     lv_timer_handler();
     lv_timer_handler();

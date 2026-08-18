@@ -133,15 +133,17 @@ void appSetup() {
   if (scaleHardwareBegin(&I2C_EXT, [](){
     Serial.print(".");
     delay(100);
-    lv_tick_inc(100);
-    lv_timer_handler();
+    lv_timer_handler();  // tick runs off millis(), see LV_TICK_CUSTOM in lv_conf.h
   })) {
     scl_ok = true;
     scale_ready = true;
     Serial.printf("OK! cal_factor=%.4f  zero_offset=%d\n", cal_factor, zero_offset);
     logSDf("Scale ready (cal=%.4f zero=%d)", cal_factor, zero_offset);
   } else {
-    Serial.println("ERROR! NAU7802 not found (address 0x2A)");
+    // Two ways to land here: the chip did not answer on 0x2A at all, or it
+    // answered but never finished calibrating. scaleHardwareBegin() prints
+    // which one, so this must not claim a cause of its own.
+    Serial.println("ERROR! Scale unavailable (NAU7802 on 0x2A)");
     logSD("Scale init FAILED");
   }
 

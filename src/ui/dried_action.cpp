@@ -57,7 +57,7 @@ void handleDriedDeferredAction() {
 
   int   spool_id = s_dried_spool_id;
   char  iso[32];
-  strncpy(iso, s_dried_iso, sizeof(iso));
+  strncpy(iso, s_dried_iso, sizeof(iso)-1);
   iso[sizeof(iso)-1] = '\0';
 
   int code = backendPatchSpoolLastDried(cfg_spoolman_base, spool_id, iso);
@@ -76,6 +76,7 @@ void handleDriedDeferredAction() {
     char de_date[12];
     isoToDe(today, de_date, sizeof(de_date));
     strncpy(sm_last_dried, de_date, sizeof(sm_last_dried)-1);
+    sm_last_dried[sizeof(sm_last_dried)-1] = '\0';
     applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, de_date);
     logSDf("Dried: last_dried set for spool %d", spool_id);
   } else {

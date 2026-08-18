@@ -20,11 +20,12 @@
 void updateLastUsedCapLabel() {
   if (!lbl_lu_cap) return;
   char buf[32];
+  // Same two captions as the main screen, kept in step with it
   if (last_used_mode == 1)
-    strncpy(buf, g_lang == LANG_DE ? "Zuletzt gewogen:" : "Last weighed:", sizeof(buf)-1);
+    snprintf(buf, sizeof(buf), "%s:", T(STR_LASTUSED_OPT_WEIGHED));
   else
     strncpy(buf, T(STR_LBL_LAST_USED), sizeof(buf)-1);
-  buf[sizeof(buf)-1] = 0;
+  buf[sizeof(buf)-1] = '\0';
   lv_label_set_text(lbl_lu_cap, buf);
 }
 

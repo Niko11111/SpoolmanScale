@@ -17,6 +17,7 @@
 #include "services/wifi_manager.h"
 #include "lang.h"
 #include "tag_display.h"
+#include "ui_common.h"
 
 
 void showLocationPicker();
@@ -270,6 +271,7 @@ void fetchAndFillLocationList() {
       int code = backendPatchSpoolLocation(cfg_spoolman_base, sm_id, sel_name, 8000);
       if (code == 200) {
         strncpy(sm_location_name, sel_name, sizeof(sm_location_name)-1);
+        sm_location_name[sizeof(sm_location_name)-1] = '\0';
         sm_location_id = 0;
         // Mark popup as shown so it doesn't re-trigger on next tag-remove
         g_loc_popup_shown_for_id = sm_id;
@@ -414,20 +416,14 @@ void buildMoreInfoScreen() {
   // Swatch color: prefer tag color (Bambu), fall back to Spoolman color (NTAG)
   const char* swatch_hex = (strlen(g_tag.color_hex) == 7) ? g_tag.color_hex :
                            (strlen(sm_color_global) >= 6 ? sm_color_global : nullptr);
-  if (swatch_hex) {
-    const char* h = (swatch_hex[0] == '#') ? swatch_hex + 1 : swatch_hex;
-    unsigned int r, g, b;
-    sscanf(h, "%02X%02X%02X", &r, &g, &b);
-    lv_obj_set_style_bg_color(swatch, lv_color_hex(((uint32_t)r<<16)|((uint32_t)g<<8)|b), 0);
-  } else {
-    lv_obj_set_style_bg_color(swatch, lv_color_hex(0x333333), 0);
-  }
+  // swatchColorFromHex() handles the nullptr and malformed cases itself
+  lv_obj_set_style_bg_color(swatch, swatchColorFromHex(swatch_hex), 0);
 
   // SM-ID value
   lv_obj_t *lbl_id = lv_label_create(box);
   char id_buf[12];
   if (sm_found && sm_id > 0) snprintf(id_buf, sizeof(id_buf), "%d", sm_id);
-  else strncpy(id_buf, "?", sizeof(id_buf));
+  else strncpy(id_buf, "?", sizeof(id_buf)-1);
   lv_label_set_text(lbl_id, id_buf);
   lv_obj_set_style_text_color(lbl_id,
     (sm_found && sm_id > 0) ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
@@ -488,7 +484,8 @@ void buildMoreInfoScreen() {
   const int VF = 18; // gap from cap to value
 
   // Row 1 Left: Fix 11 — Hex Color / Color — Fix 6: larger
-  const char *hex_cap = g_lang == LANG_DE ? "Farbe" : "Hex Color";
+  char hex_cap[24]; strncpy(hex_cap, T(STR_LBL_HEX_COLOR), sizeof(hex_cap)-1);
+  hex_cap[sizeof(hex_cap)-1] = '\0';
   lv_obj_t *c1 = lv_label_create(box);
   lv_label_set_text(c1, hex_cap);
   lv_obj_set_style_text_color(c1, lv_color_hex(0x4a6fa0), 0);
@@ -503,7 +500,8 @@ void buildMoreInfoScreen() {
   lv_obj_set_pos(v1, CA, 114 + VF);
 
   // Row 1 Right: Production date — Fix 6
-  const char *prod_cap = g_lang == LANG_DE ? "Produktionsdatum" : "Production date";
+  char prod_cap[24]; strncpy(prod_cap, T(STR_LBL_PRODUCTION_DATE), sizeof(prod_cap)-1);
+  prod_cap[sizeof(prod_cap)-1] = '\0';
   lv_obj_t *c2 = lv_label_create(box);
   lv_label_set_text(c2, prod_cap);
   lv_obj_set_style_text_color(c2, lv_color_hex(0x4a6fa0), 0);
@@ -516,7 +514,8 @@ void buildMoreInfoScreen() {
   lv_obj_set_pos(v2, CB, 114 + VF);
 
   // Row 2 Left: Article no. — Fix 6: larger — Fix 2: more space (y=160)
-  const char *art_cap = g_lang == LANG_DE ? "Artikelnr." : "Article no.";
+  char art_cap[24]; strncpy(art_cap, T(STR_LBL_ARTICLE_NO_SHORT), sizeof(art_cap)-1);
+  art_cap[sizeof(art_cap)-1] = '\0';
   lv_obj_t *c3 = lv_label_create(box);
   lv_label_set_text(c3, art_cap);
   lv_obj_set_style_text_color(c3, lv_color_hex(0x4a6fa0), 0);
@@ -529,7 +528,8 @@ void buildMoreInfoScreen() {
   lv_obj_set_pos(v3, CA, 158 + VF);
 
   // Row 2 Right: Spool weight (empty)
-  const char *sw_cap = g_lang == LANG_DE ? "Leergewicht Spule" : "Spool weight (empty)";
+  char sw_cap[24]; strncpy(sw_cap, T(STR_LBL_SPOOL_WEIGHT_EMPTY), sizeof(sw_cap)-1);
+  sw_cap[sizeof(sw_cap)-1] = '\0';
   lv_obj_t *c4 = lv_label_create(box);
   lv_label_set_text(c4, sw_cap);
   lv_obj_set_style_text_color(c4, lv_color_hex(0x4a6fa0), 0);
@@ -538,7 +538,7 @@ void buildMoreInfoScreen() {
   lv_obj_t *v4 = lv_label_create(box);
   char sw_buf[16];
   if (sm_spool_weight > 0) snprintf(sw_buf, sizeof(sw_buf), "%.0f g", sm_spool_weight);
-  else strncpy(sw_buf, "-", sizeof(sw_buf));
+  else strncpy(sw_buf, "-", sizeof(sw_buf)-1);
   lv_label_set_text(v4, sw_buf);
   lv_obj_set_style_text_color(v4, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(v4, &lv_font_montserrat_ext_18, 0);
@@ -589,6 +589,7 @@ void buildMoreInfoScreen() {
   lv_obj_t *btn_loc_val = lv_label_create(btn_loc);
   char loc_val_buf[48];
   strncpy(loc_val_buf, sm_location_name[0] ? sm_location_name : "-", sizeof(loc_val_buf)-1);
+  loc_val_buf[sizeof(loc_val_buf)-1] = '\0';
   lv_label_set_text(btn_loc_val, loc_val_buf);
   lv_obj_set_style_text_color(btn_loc_val, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(btn_loc_val, &lv_font_montserrat_ext_16, 0);

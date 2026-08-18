@@ -1,7 +1,21 @@
 #include "ui_common.h"
 #include "navigation.h"
 
+#include <cstdio>
+#include <cstring>
+
 #include "hardware/sd_logger.h"
+
+
+lv_color_t swatchColorFromHex(const char* hex) {
+  if (!hex) return lv_color_hex(SWATCH_FALLBACK_COLOR);
+  const char* h = (hex[0] == '#') ? hex + 1 : hex;
+  if (strlen(h) < 6) return lv_color_hex(SWATCH_FALLBACK_COLOR);
+
+  unsigned int r, g, b;
+  if (sscanf(h, "%02X%02X%02X", &r, &g, &b) != 3) return lv_color_hex(SWATCH_FALLBACK_COLOR);
+  return lv_color_hex(((uint32_t)r << 16) | ((uint32_t)g << 8) | b);
+}
 
 
 void addBackButton(lv_obj_t *parent, lv_event_cb_t cb) {

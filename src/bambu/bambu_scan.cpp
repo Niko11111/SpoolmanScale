@@ -51,6 +51,7 @@ void scanTag(uint8_t *uid, uint8_t uid_len) {
   memset(&scan_buf, 0, sizeof(scan_buf));
   memcpy(scan_buf.uid, uid, 4);
   strncpy(scan_buf.uid_str, uid_str, sizeof(scan_buf.uid_str) - 1);
+  scan_buf.uid_str[sizeof(scan_buf.uid_str)-1] = '\0';
 
   Serial.printf("\n=== Tag gefunden: %s ===\n", scan_buf.uid_str);
   logSDf("NFC: Bambu tag found UID=%s", scan_buf.uid_str);
