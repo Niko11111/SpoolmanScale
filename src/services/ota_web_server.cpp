@@ -15,6 +15,7 @@
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/filaman_api.h"
+#include "services/remote_link.h"
 #include "lang.h"
 #include "list_limits.h"
 #include "prefs_store.h"
@@ -22,22 +23,109 @@
 
 
 static WebServer ota_server(80);
-static bool ota_server_running = false;
-static bool ota_upload_active = false;
+static bool ota_server_running  = false;
+static bool ota_upload_active   = false;
+static bool ota_routes_enabled  = false;
+static bool routes_registered   = false;
+
+// The OTA, log and settings routes answer only while the web screen is open.
+// The socket itself can outlive that screen, because FilaMan triggers the
+// remote link on port 80 and expects a listener at any time. So the routes
+// are gated rather than removed: WebServer has no way to unregister a
+// handler once it is added.
+static bool otaRoutesOpen() { return ota_routes_enabled; }
+
+// True while the scale has to stay reachable for FilaMan's write-tag
+// trigger. In Spoolman mode this is never true and nothing changes.
+static bool remoteLinkNeedsServer() {
+  return wifi_ok && backendIsFilaMan() && filamanDeviceToken()[0];
+}
+
+static void registerRoutes();
+
+static void serverEnsureRunning() {
+  if (ota_server_running) return;
+  registerRoutes();
+  ota_server.begin();
+  ota_server_running = true;
+  Serial.printf("Web server listening: http://%s/\n",
+                wifiManagerLocalIP().toString().c_str());
+}
+
+static void serverEnsureStopped() {
+  if (!ota_server_running) return;
+  ota_server.stop();
+  ota_server_running = false;
+  Serial.println("Web server stopped");
+}
 
 void stopOtaServer() {
-  if (ota_server_running) {
-    ota_server.stop();
-    ota_server_running = false;
-    Serial.println("OTA server stopped");
-  }
+  ota_routes_enabled = false;
+  // Keep the socket up when the remote link still needs it. The routes are
+  // closed either way, so nothing becomes reachable that was not before.
+  if (!remoteLinkNeedsServer()) serverEnsureStopped();
 }
 
 void startOtaServer() {
   if (!wifi_ok) return;
+  ota_routes_enabled = true;
+  serverEnsureRunning();
+}
+
+// Idempotent, called once a second from appLoop(). Picking the state up from
+// the conditions rather than from events means a backend switch, a freshly
+// entered device token and a returning WiFi connection all take effect
+// without anyone having to remember to call something.
+void webServerSyncState() {
+  if (remoteLinkNeedsServer())      serverEnsureRunning();
+  else if (!ota_routes_enabled)     serverEnsureStopped();
+}
+
+// Registered exactly once. This used to run on every visit to the web
+// screen, which appended another 15 handlers to WebServer's list each time
+// and never freed the previous ones.
+static void registerRoutes() {
+  if (routes_registered) return;
+  routes_registered = true;
+
+  // FilaMan remote link trigger. Deliberately not behind otaRoutesOpen():
+  // this one has to answer whenever the scale is awake, that is the whole
+  // point of keeping the socket up.
+  //
+  // FilaMan sends this fire and forget and waits five seconds, so nothing
+  // here may block. The request is only parked, appLoop() picks it up.
+  // Nothing is ever written to the tag, the trigger is read as "the spool on
+  // the scale belongs to this id".
+  ota_server.on("/api/v1/rfid/write", HTTP_POST, []() {
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, ota_server.arg("plain"));
+    if (err) {
+      ota_server.send(400, "application/json", "{\"status\":\"error\"}");
+      return;
+    }
+
+    const int spool_id    = doc["spool_id"]    | 0;
+    const int location_id = doc["location_id"] | 0;
+
+    if (spool_id > 0) {
+      remoteLinkSetPending(spool_id);
+      ota_server.send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+    if (location_id > 0) {
+      // Locations are a FilaMan concept the scale does not handle yet.
+      // Turning the request down beats ignoring it: the web UI would
+      // otherwise poll for a full minute before its own timeout.
+      remote_link_reject_pending = true;
+      ota_server.send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+    ota_server.send(400, "application/json", "{\"status\":\"error\"}");
+  });
 
   // Route: Startseite mit Upload-Formular
   ota_server.on("/", HTTP_GET, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     char ver_buf[20];
     strncpy(ver_buf, FW_VERSION, sizeof(ver_buf)-1);
     ver_buf[sizeof(ver_buf)-1] = '\0';
@@ -421,6 +509,7 @@ void startOtaServer() {
   ota_server.on("/update", HTTP_POST,
     // Abschluss-Handler
     []() {
+      if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
       bool ok = !Update.hasError();
       String msg = ok
         ? "<!DOCTYPE html><html><head><meta charset='utf-8'>"
@@ -454,6 +543,7 @@ void startOtaServer() {
     },
     // Upload-Handler (chunk-weise)
     []() {
+      if (!otaRoutesOpen()) return;
       HTTPUpload& upload = ota_server.upload();
       if (upload.status == UPLOAD_FILE_START) {
         Serial.printf("OTA start: %s\n", upload.filename.c_str());
@@ -484,6 +574,7 @@ void startOtaServer() {
   // ── SD-Card Log endpoints ─────────────────────────────────
   // GET /logs -> JSON list of available log files
   ota_server.on("/logs", HTTP_GET, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     if (!sd_available) {
       ota_server.send(200, "application/json", "{\"sd\":false,\"verbose\":false,\"files\":[]}");
       return;
@@ -519,6 +610,7 @@ void startOtaServer() {
 
   // GET /log?file=<filename> -> serve log file content
   ota_server.on("/log", HTTP_GET, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     if (!sd_available) { ota_server.send(404, "text/plain", "No SD card"); return; }
     if (!ota_server.hasArg("file")) {
       ota_server.send(400, "text/plain", "Missing file param");
@@ -543,6 +635,7 @@ void startOtaServer() {
 
   // POST /deletelog?file=<name> -> delete a log file
   ota_server.on("/deletelog", HTTP_POST, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     if (!sd_available) { ota_server.send(404, "text/plain", "No SD card"); return; }
     if (!ota_server.hasArg("file")) {
       ota_server.send(400, "text/plain", "Missing file param");
@@ -564,6 +657,7 @@ void startOtaServer() {
 
   // POST /verbose -> toggle verbose.txt on SD root
   ota_server.on("/verbose", HTTP_POST, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     if (!sd_available) {
       ota_server.send(404, "application/json", "{\"error\":\"No SD card\"}");
       return;
@@ -596,6 +690,7 @@ void startOtaServer() {
   // FilaMan: store the API key. The value is never echoed back to the page,
   // the input shows a placeholder when one is already stored.
   ota_server.on("/filaman/key", HTTP_POST, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     String key = ota_server.arg("plain");
     key.trim();
     if (key.length() < 8) { ota_server.send(400, "text/plain", "Key too short"); return; }
@@ -605,6 +700,7 @@ void startOtaServer() {
 
   // FilaMan: exchange the 6 character device code for a device token.
   ota_server.on("/filaman/register", HTTP_POST, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     String code = ota_server.arg("plain");
     code.trim();
     code.toUpperCase();   // codes are shown uppercase in the FilaMan admin
@@ -640,11 +736,13 @@ void startOtaServer() {
   });
 
   ota_server.on("/listlimit", HTTP_GET, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     char json[32];
     snprintf(json, sizeof(json), "{\"limit\":%d}", spool_list_limit);
     ota_server.send(200, "application/json", json);
   });
   ota_server.on("/listlimit", HTTP_POST, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     if (!ota_server.hasArg("plain")) { ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
     int val = ota_server.arg("plain").toInt();
     if (val < 5) val = 5;
@@ -657,11 +755,13 @@ void startOtaServer() {
   });
 
   ota_server.on("/loclimit", HTTP_GET, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     char json[32];
     snprintf(json, sizeof(json), "{\"limit\":%d}", location_list_limit);
     ota_server.send(200, "application/json", json);
   });
   ota_server.on("/loclimit", HTTP_POST, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     if (!ota_server.hasArg("plain")) { ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
     int val = ota_server.arg("plain").toInt();
     if (val < 5) val = 5;
@@ -675,6 +775,7 @@ void startOtaServer() {
 
   // ── Drying Reminder: Material-Schwellwerte lesen ──────────
   ota_server.on("/drying", HTTP_GET, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     String json = "{";
     json += "\"mode\":" + String(g_dry_mode) + ",";
     json += "\"man_yellow\":" + String(g_dry_man_yellow) + ",";
@@ -695,6 +796,7 @@ void startOtaServer() {
   // ── Drying Reminder: Material-Schwellwerte speichern ──────
   // Body: JSON {"mult_sealed":3.0,"materials":[{"name":"PLA","yellow":180,"red":365},...]}
   ota_server.on("/drying", HTTP_POST, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     if (!ota_server.hasArg("plain")) {
       ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return;
     }
@@ -742,6 +844,7 @@ void startOtaServer() {
 
   // ── Drying Reminder: Reset auf Defaults ───────────────────
   ota_server.on("/drying/reset", HTTP_POST, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     g_dry_mult_sealed = 2.0f;
     g_dry_man_yellow  = 30;
     g_dry_man_red     = 90;
@@ -764,9 +867,6 @@ void startOtaServer() {
     ota_server.send(200, "application/json", "{\"ok\":true,\"reset\":true}");
   });
 
-  ota_server.begin();
-  ota_server_running = true;
-  Serial.printf("OTA server started: http://%s/\n", wifiManagerLocalIP().toString().c_str());
 }
 
 

@@ -43,3 +43,10 @@ lv_color_t swatchColorFromHex(const char* hex);
 // restyle the whole row by name instead of hunting for it by child index.
 lv_obj_t* addInfoRow(lv_obj_t* parent, int y, const char* label,
                      lv_obj_t** out_label = nullptr);
+
+// Row in a settings list: icon, title, optional subtitle and an arrow on the
+// right. Toggles replace that arrow with ON/OFF and pass toggle_active so the
+// border and subtitle turn green. Shared by the scale menu and the FilaMan
+// options, which is what moved it out of scale_menu.cpp.
+lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
+                      const char* sub, bool toggle_active = false);

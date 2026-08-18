@@ -573,7 +573,6 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Device-Token",                  "Device token"                       },  // STR_BACKEND_DEVICE_TOKEN
   { "gesetzt",                       "set"                                },  // STR_BACKEND_SET
   { "fehlt",                         "missing"                            },  // STR_BACKEND_MISSING
-  { "Zugangsdaten im Browser eingeben", "Enter credentials in browser"    },  // STR_BACKEND_BROWSER_HINT
 
   // Web interface. The same server serves the firmware upload and the
   // FilaMan credentials, so the screen title stays neutral.
@@ -612,4 +611,28 @@ const char* const STRINGS[STR_COUNT][2] = {
   // Status bar address selector
   { "Im Statusbalken zeigen",        "Show in status bar"                 },  // STR_BTN_IP_STATUSBAR
   { "Gerät",                         "Device"                             },  // STR_IP_BAR_DEVICE
+
+  // Remote link. Deliberately not passed through backendText(): this only
+  // ever happens in FilaMan mode, so naming it outright is clearer than a
+  // substitution that can never differ.
+  { "FilaMan: Spule verknüpfen?",   "FilaMan: link spool?"                },  // STR_REMOTE_LINK_TITLE
+  { "Aufliegenden Tag mit dieser Spule verknüpfen?",
+    "Link the tag on the scale to this spool?"                            },  // STR_REMOTE_LINK_QUESTION
+  { "Verknüpfen",                   "Link"                                },  // STR_REMOTE_LINK_CONFIRM
+  { "Material weicht ab: Tag %s, Spule %s",
+    "Material mismatch: tag %s, spool %s"                                 },  // STR_REMOTE_LINK_MISMATCH
+  { "Details nicht abrufbar",        "Details unavailable"                },  // STR_REMOTE_LINK_NO_DETAILS
+  { "Verknüpfung abgelaufen",       "Link request timed out"              },  // STR_REMOTE_LINK_TIMEOUT
+  { "Aus",                           "Off"                                },  // STR_SLEEP_OFF
+
+  // Tag versus spool comparison
+  { "Tag",                           "Tag"                                },  // STR_REMOTE_LINK_COL_TAG
+  { "Spule",                         "Spool"                              },  // STR_REMOTE_LINK_COL_SPOOL
+  { "Material",                      "Material"                           },  // STR_REMOTE_LINK_ROW_MATERIAL
+  { "Farbe",                         "Colour"                             },  // STR_REMOTE_LINK_ROW_COLOR
+
+  // FilaMan options sub screen
+  { "Weitere Optionen",              "More options"                       },  // STR_BTN_MORE_OPTIONS
+  { "Ohne Nachfrage verknüpfen",     "Link without asking"                },  // STR_FLM_AUTOLINK
+  { "wenn die Spule schon aufliegt", "when the spool is already on"       },  // STR_FLM_AUTOLINK_SUB
 };

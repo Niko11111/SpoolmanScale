@@ -13,6 +13,7 @@
 #include "services/ota_state.h"
 #include "system_screen.h"
 #include "ui_common.h"
+#include "update_badges.h"
 #include "services/backend.h"
 
 
@@ -57,8 +58,12 @@ void buildSettingsScreen() {
   int tx[] = { 8, 242, 8, 242 };
   int ty[] = { 60, 60, 186, 186 };
 
+  // Kept so the update dot can be anchored to it after the loop.
+  lv_obj_t *tile_system = nullptr;
+
   for (int i = 0; i < 4; i++) {
     lv_obj_t *tile = lv_btn_create(scr_settings);
+    if (i == 3) tile_system = tile;
     lv_obj_set_size(tile, 226, 118);
     lv_obj_set_pos(tile, tx[i], ty[i]);
     lv_obj_set_style_bg_color(tile, lv_color_hex(tiles[i].col), 0);
@@ -121,16 +126,7 @@ void buildSettingsScreen() {
     }, LV_EVENT_CLICKED, (void*)(intptr_t)i);
   }
 
-  lbl_system_badge = lv_obj_create(scr_settings);
-  lv_obj_set_size(lbl_system_badge, 14, 14);
-  lv_obj_set_pos(lbl_system_badge, 456, 186);
-  lv_obj_set_style_radius(lbl_system_badge, 7, 0);
-  lv_obj_set_style_bg_color(lbl_system_badge, lv_color_hex(0xe03030), 0);
-  lv_obj_set_style_border_color(lbl_system_badge, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_border_width(lbl_system_badge, 2, 0);
-  lv_obj_set_style_pad_all(lbl_system_badge, 0, 0);
-  lv_obj_clear_flag(lbl_system_badge, LV_OBJ_FLAG_SCROLLABLE);
-  if (!update_available) lv_obj_add_flag(lbl_system_badge, LV_OBJ_FLAG_HIDDEN);
+  lbl_system_badge = createUpdateBadge(scr_settings, tile_system);
 
   if (sd_verbose) logSD("[verbose] buildSettingsScreen: done");
 }

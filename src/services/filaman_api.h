@@ -106,6 +106,23 @@ int filamanReportWeight(const char* base_url, const char* device_token,
                         int spool_id, const char* tag_uuid, float measured_g,
                         uint32_t timeout_ms = 8000);
 
+// Result of a remotely triggered tag operation, answering a trigger that
+// arrived on /api/v1/rfid/write. Authenticated with the device token, not the
+// API key, exactly like the heartbeat.
+//
+// This is the write path of the remote link, and it is used instead of
+// filamanPatchRfidUid on purpose. The server clears the UID from every other
+// spool first, archived ones included, which a plain PATCH would not do: the
+// column is UNIQUE, so a UID still sitting on an old spool would make the
+// PATCH fail. It also resolves the "pending" state the web UI polls, which is
+// why a failure has to be reported just as reliably as a success.
+//
+// error_message may be null when success is true. spool_id is echoed back so
+// the server knows which spool the UID belongs to.
+int filamanRfidResult(const char* base_url, const char* device_token,
+                      bool success, const char* tag_uuid, int spool_id,
+                      const char* error_message, uint32_t timeout_ms = 6000);
+
 // Status change, for example archiving. Uses its own endpoint rather than a
 // PATCH, see /api/v1/spools/{id}/status.
 int filamanSetStatus(const char* base_url, const char* api_key, int spool_id,

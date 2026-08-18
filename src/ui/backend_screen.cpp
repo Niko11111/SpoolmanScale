@@ -70,29 +70,41 @@ static lv_obj_t* addNavRow(lv_obj_t *parent, int y, const char *title,
   return row;
 }
 
-// Small status row: label on the left, value on the right in green or amber.
-static void addStatusRow(lv_obj_t *parent, int y, const char *label,
-                         bool present) {
-  char lbl_buf[32];
-  strncpy(lbl_buf, label, sizeof(lbl_buf) - 1);
-  lbl_buf[sizeof(lbl_buf) - 1] = '\0';
+// Credentials, one column each: label on top, state under it. The two used to
+// sit side by side with their values pushed to column edges, which put the
+// first "set" ten pixels from the *other* label and read as belonging to it.
+// Stacking is the strongest grouping there is, and it matches the address row
+// right above - same label size and colour, same offset to the value.
+static void addCredentialsRow(lv_obj_t *parent, int y,
+                              const char *label_a, bool present_a,
+                              const char *label_b, bool present_b) {
+  const char *labels[2]  = { label_a, label_b };
+  const bool  present[2] = { present_a, present_b };
 
-  lv_obj_t *l = lv_label_create(parent);
-  lv_label_set_text(l, lbl_buf);
-  lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(l, 24, y);
+  for (int i = 0; i < 2; i++) {
+    const int x = (i == 0) ? 24 : 250;
 
-  char val_buf[24];
-  strncpy(val_buf, present ? T(STR_BACKEND_SET) : T(STR_BACKEND_MISSING),
-          sizeof(val_buf) - 1);
-  val_buf[sizeof(val_buf) - 1] = '\0';
+    char lbl_buf[32];
+    strncpy(lbl_buf, labels[i], sizeof(lbl_buf) - 1);
+    lbl_buf[sizeof(lbl_buf) - 1] = '\0';
 
-  lv_obj_t *v = lv_label_create(parent);
-  lv_label_set_text(v, val_buf);
-  lv_obj_set_style_text_color(v, lv_color_hex(present ? 0x40c080 : 0xf0b838), 0);
-  lv_obj_set_style_text_font(v, &lv_font_montserrat_ext_16, 0);
-  lv_obj_align(v, LV_ALIGN_TOP_RIGHT, -24, y);
+    lv_obj_t *l = lv_label_create(parent);
+    lv_label_set_text(l, lbl_buf);
+    lv_obj_set_style_text_color(l, lv_color_hex(0xe8f0ff), 0);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+    lv_obj_set_pos(l, x, y);
+
+    char val_buf[24];
+    strncpy(val_buf, present[i] ? T(STR_BACKEND_SET) : T(STR_BACKEND_MISSING),
+            sizeof(val_buf) - 1);
+    val_buf[sizeof(val_buf) - 1] = '\0';
+
+    lv_obj_t *v = lv_label_create(parent);
+    lv_label_set_text(v, val_buf);
+    lv_obj_set_style_text_color(v, lv_color_hex(present[i] ? 0x40c080 : 0xf0b838), 0);
+    lv_obj_set_style_text_font(v, &lv_font_montserrat_ext_14, 0);
+    lv_obj_set_pos(v, x, y + 22);
+  }
 }
 
 void buildBackendScreen() {
@@ -262,16 +274,38 @@ void buildBackendScreen() {
   // Both are entered in the browser, a 49 character key cannot be typed
   // on a numpad that only has digits, dot and colon.
   if (is_filaman) {
-    addStatusRow(scr_backend, 196, T(STR_BACKEND_APIKEY),
-                 filamanApiKey()[0] != '\0');
-    addStatusRow(scr_backend, 228, T(STR_BACKEND_DEVICE_TOKEN),
-                 filamanDeviceToken()[0] != '\0');
+    addCredentialsRow(scr_backend, 190,
+                      T(STR_BACKEND_APIKEY),       filamanApiKey()[0] != '\0',
+                      T(STR_BACKEND_DEVICE_TOKEN), filamanDeviceToken()[0] != '\0');
 
     // The hint used to only say "enter them in the browser" without offering
     // a way there. This starts the device web server and shows its address.
+    // Left of the browser button: the FilaMan only settings, which are
+    // expected to grow and therefore live behind their own screen.
+    lv_obj_t *btn_opts = lv_btn_create(scr_backend);
+    lv_obj_set_size(btn_opts, 216, 44);
+    lv_obj_set_pos(btn_opts, 16, 244);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(0x0a1e30), 0);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btn_opts, 8, 0);
+    lv_obj_set_style_shadow_width(btn_opts, 0, 0);
+    lv_obj_set_style_border_width(btn_opts, 1, 0);
+    lv_obj_set_style_border_color(btn_opts, lv_color_hex(0x1a3060), 0);
+    lv_obj_add_event_cb(btn_opts, [](lv_event_t *e) {
+      logSD("BTN: Backend -> FilaMan options");
+      show_filaman_options_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_opts = lv_label_create(btn_opts);
+    { char ob[40];
+      snprintf(ob, sizeof(ob), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_MORE_OPTIONS));
+      lv_label_set_text(lbl_opts, ob); }
+    lv_obj_set_style_text_color(lbl_opts, lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_font(lbl_opts, &lv_font_montserrat_ext_16, 0);
+    lv_obj_center(lbl_opts);
+
     lv_obj_t *btn_web = lv_btn_create(scr_backend);
-    lv_obj_set_size(btn_web, 300, 44);
-    lv_obj_align(btn_web, LV_ALIGN_TOP_MID, 0, 262);
+    lv_obj_set_size(btn_web, 216, 44);
+    lv_obj_set_pos(btn_web, 248, 244);
     lv_obj_set_style_bg_color(btn_web, lv_color_hex(0x0a1e30), 0);
     lv_obj_set_style_bg_color(btn_web, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_web, 8, 0);

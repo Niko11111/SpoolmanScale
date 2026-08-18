@@ -32,7 +32,10 @@ void resetActivityTimer() {
 void handlePowerManagement() {
   unsigned long elapsed = millis() - last_activity_ms;
 
-  if (elapsed >= (unsigned long)sleep_timeout_ms) {
+  // A sleep timeout of zero means never. Without the first test the
+  // comparison would be true on the very first pass and the scale would drop
+  // into deep sleep right after booting.
+  if (sleep_timeout_ms > 0 && elapsed >= (unsigned long)sleep_timeout_ms) {
     Serial.println("Deep sleep...");
     logSD("Deep sleep: entering");
     displayPrepareDeepSleep();

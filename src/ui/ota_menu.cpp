@@ -12,6 +12,7 @@
 #include "ota_browser.h"
 #include "services/ota_state.h"
 #include "ui_common.h"
+#include "update_badges.h"
 
 
 void showOtaGithubScreen();
@@ -94,16 +95,7 @@ void buildOtaScreen() {
     showOtaGithubScreen();
   }, LV_EVENT_CLICKED, NULL);
 
-  lbl_gh_btn_badge = lv_obj_create(scr_ota);
-  lv_obj_set_size(lbl_gh_btn_badge, 14, 14);
-  lv_obj_set_pos(lbl_gh_btn_badge, 456, 152);
-  lv_obj_set_style_radius(lbl_gh_btn_badge, 7, 0);
-  lv_obj_set_style_bg_color(lbl_gh_btn_badge, lv_color_hex(0xe03030), 0);
-  lv_obj_set_style_border_color(lbl_gh_btn_badge, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_border_width(lbl_gh_btn_badge, 2, 0);
-  lv_obj_set_style_pad_all(lbl_gh_btn_badge, 0, 0);
-  lv_obj_clear_flag(lbl_gh_btn_badge, LV_OBJ_FLAG_SCROLLABLE);
-  if (!update_available) lv_obj_add_flag(lbl_gh_btn_badge, LV_OBJ_FLAG_HIDDEN);
+  lbl_gh_btn_badge = createUpdateBadge(scr_ota, btn_gh);
 
   lv_obj_t *ver_ota = lv_label_create(scr_ota);
   char ver_buf[32]; snprintf(ver_buf, sizeof(ver_buf), T(STR_OTA_CURRENT), FW_VERSION);

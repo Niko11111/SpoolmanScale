@@ -288,6 +288,37 @@ int filamanHeartbeat(const char* base_url, const char* device_token,
   return code;
 }
 
+int filamanRfidResult(const char* base_url, const char* device_token,
+                      bool success, const char* tag_uuid, int spool_id,
+                      const char* error_message, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || !device_token || !device_token[0]) return -1;
+
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/devices/rfid-result");
+  http.setTimeout(timeout_ms);
+  http.addHeader("Authorization", String("Device ") + device_token);
+  http.addHeader("Content-Type", "application/json");
+
+  JsonDocument body;
+  body["success"] = success;
+  if (tag_uuid && tag_uuid[0]) body["tag_uuid"] = tag_uuid;
+  if (spool_id > 0)            body["spool_id"] = spool_id;
+  if (error_message && error_message[0]) body["error_message"] = error_message;
+
+  String payload;
+  serializeJson(body, payload);
+
+  int code = http.POST(payload);
+  http.end();
+
+  // Worth a line either way: this is the only signal the web UI gets, so a
+  // link that looks done on the display but never reached the server has to
+  // be visible in the log.
+  logSDf("FilaMan: rfid-result success=%d spool=%d (HTTP %d)",
+         success ? 1 : 0, spool_id, code);
+  return code;
+}
+
 int filamanGetHealthCode(const char* base_url, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url)) return -1;
 

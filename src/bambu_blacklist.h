@@ -27,5 +27,11 @@ static const char* const BAMBU_PLA_SUBTYPE_BLACKLIST[] = {
   "Galaxy",
   "Metal",
   "Marble",
+  // Bambu's newer PLA line. Added from the naming pattern of the entries
+  // above, not from a tag that was actually read - unlike the rest of this
+  // list. If the tag turns out to say something else, this entry simply never
+  // matches and the colour filter narrows the list on its own, exactly as it
+  // does today.
+  "Pure",
   nullptr  // End marker – do not remove!
 };

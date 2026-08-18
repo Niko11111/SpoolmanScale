@@ -18,6 +18,7 @@
 #include "services/user_options.h"
 #include "ui/confirm_popup.h"
 #include "ui/dried_action.h"
+#include "ui/update_badges.h"
 #include "ui/header_status.h"
 #include "ui/more_info_screen.h"
 #include "ui/settings_screen.h"
@@ -699,18 +700,10 @@ void buildUI() {
   lv_obj_set_style_text_font(lbl_menu, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_menu);
 
-  // Red circle badge on burger button — iOS-style notification dot, shown when update available
-  // Position: on the top-right border radius of btn_menu (x=429,y=273 absolute → dot center x=464, y=266)
-  lbl_burger_badge = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(lbl_burger_badge, 14, 14);
-  lv_obj_set_pos(lbl_burger_badge, 457, 263);
-  lv_obj_set_style_radius(lbl_burger_badge, 7, 0);
-  lv_obj_set_style_bg_color(lbl_burger_badge, lv_color_hex(0xe03030), 0);
-  lv_obj_set_style_border_color(lbl_burger_badge, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_border_width(lbl_burger_badge, 2, 0);
-  lv_obj_set_style_pad_all(lbl_burger_badge, 0, 0);
-  lv_obj_clear_flag(lbl_burger_badge, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(lbl_burger_badge, LV_OBJ_FLAG_HIDDEN);
+  // Notification dot on the burger button. It hangs on the screen rather than
+  // on the button bar, because a child of the bar would be clipped at the bar's
+  // edge and half of this dot sits outside it.
+  lbl_burger_badge = createUpdateBadge(lv_scr_act(), btn_menu);
 
   page_main = lv_scr_act();
   // lbl_raw_info points to SM diff label on main screen (see above)

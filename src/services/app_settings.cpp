@@ -50,6 +50,7 @@ void loadPrefs() {
   last_used_mode = prefsGetUChar("lu_mode", 0);
   g_whole_gram = prefsGetBool("whole_gram", false);
   g_ip_bar_mode = prefsGetUChar("ip_bar_mode", IP_BAR_OFF);
+  g_flm_autolink = prefsGetBool("flm_autolink", false);
   g_auto_weight = prefsGetBool("auto_weight", false);
   g_auto_loc_popup = prefsGetBool("auto_loc_popup", false);
   gh_prerelease = prefsGetBool("gh_prerelease", false);

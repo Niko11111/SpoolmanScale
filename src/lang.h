@@ -466,7 +466,6 @@ enum StringID {
   STR_BACKEND_DEVICE_TOKEN,
   STR_BACKEND_SET,
   STR_BACKEND_MISSING,
-  STR_BACKEND_BROWSER_HINT,
 
   // Web interface, shared by the firmware upload and the credential entry
   STR_WEB_TITLE,
@@ -496,6 +495,26 @@ enum StringID {
   // labels itself with backendName() and needs no entry of its own.
   STR_BTN_IP_STATUSBAR,
   STR_IP_BAR_DEVICE,
+
+  // Remote link, triggered from the FilaMan web UI
+  STR_REMOTE_LINK_TITLE,
+  STR_REMOTE_LINK_QUESTION,
+  STR_REMOTE_LINK_CONFIRM,
+  STR_REMOTE_LINK_MISMATCH,
+  STR_REMOTE_LINK_NO_DETAILS,
+  STR_REMOTE_LINK_TIMEOUT,
+  STR_SLEEP_OFF,
+
+  // Tag versus spool comparison, shown in the remote link popup on a mismatch
+  STR_REMOTE_LINK_COL_TAG,
+  STR_REMOTE_LINK_COL_SPOOL,
+  STR_REMOTE_LINK_ROW_MATERIAL,
+  STR_REMOTE_LINK_ROW_COLOR,
+
+  // FilaMan options sub screen
+  STR_BTN_MORE_OPTIONS,
+  STR_FLM_AUTOLINK,
+  STR_FLM_AUTOLINK_SUB,
 
   STR_COUNT
 };

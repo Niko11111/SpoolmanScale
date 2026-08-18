@@ -21,14 +21,17 @@
 #include "services/auto_weight_state.h"
 #include "services/location_state.h"
 #include "services/ota_web_server.h"
+#include "services/remote_link.h"
 #include "services/update_check.h"
 #include "ui/ota_browser.h"
+#include "ui/remote_link_popup.h"
 #include "services/spoolman_actions.h"
 #include "services/backend_api.h"
 #include "services/wifi_manager.h"
 #include "services/filaman_api.h"
 #include "services/backend.h"
 #include "ui/backend_screen.h"
+#include "ui/filaman_options_screen.h"
 #include "ui/bag_screen.h"
 #include "ui/cal_reminder_screen.h"
 #include "ui/confirm_popup.h"
@@ -270,6 +273,12 @@ void appLoop() {
     hideAllOverlays();
     lv_obj_clear_flag(scr_backend, LV_OBJ_FLAG_HIDDEN);
   }
+  if (show_filaman_options_pending) {
+    show_filaman_options_pending = false;
+    buildFilaManOptionsScreen();   // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_filaman_options, LV_OBJ_FLAG_HIDDEN);
+  }
   if (show_spoolman_pending) {
     show_spoolman_pending = false;
     // Always rebuild — sp_ip_input is reset on entry
@@ -341,6 +350,36 @@ void appLoop() {
     logSDf("[verbose] LOC: debounce cancelled — tag back id=%d", loc_popup_pending_id);
     loc_popup_pending_id = -1;
   }
+
+  // ── FilaMan remote link ──────────────────────────────────
+  // A trigger arrived on /api/v1/rfid/write and is waiting for a tag. The web
+  // handler only parked it, everything that talks HTTP or touches LVGL has to
+  // happen here.
+  if (remote_link_reject_pending) {
+    remote_link_reject_pending = false;
+    remoteLinkReportUnsupported("locations are not supported by this device");
+  }
+  if (remoteLinkPendingActive()) {
+    if (isRemoteLinkPopupOpen()) {
+      // The user is looking at the question. No timeout while they decide,
+      // the answer reports the outcome either way. FilaMan's own frontend
+      // stops polling after a minute regardless.
+    } else if (remoteLinkPendingAgeMs() >= REMOTE_LINK_TIMEOUT_MS) {
+      logSD("RemoteLink: timed out waiting for a tag");
+      remoteLinkReport(false, nullptr, "timed out waiting for a tag");
+      if (lbl_status) {
+        char buf[48];
+        strncpy(buf, T(STR_REMOTE_LINK_TIMEOUT), sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+        lv_label_set_text(lbl_status, buf);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+      }
+    } else if (tag_present && !isConfirmPopupOpen() &&
+               !isSpoolFlowIdInputOpen() && !isSpoolFlowLinkEntryOpen()) {
+      showRemoteLinkPopup(remoteLinkPendingSpoolId());
+    }
+  }
+  handleRemoteLinkDeferredActions();
   if (show_system_pending) {
     show_system_pending = false;
     // Coming back from OTA / Info / Language to System screen
@@ -625,6 +664,17 @@ void appLoop() {
         logSDf("FilaMan: heartbeat %s (HTTP %d)", ok ? "OK" : "FAILED", code);
         last_hb_ok = ok;
       }
+    }
+  }
+
+  // The web server has to be up whenever FilaMan might trigger a link, and
+  // has to stay down in Spoolman mode. Derived from the conditions once a
+  // second so a backend switch or a returning WiFi needs no extra wiring.
+  {
+    static unsigned long last_web_sync_ms = 0;
+    if (millis() - last_web_sync_ms >= 1000) {
+      last_web_sync_ms = millis();
+      webServerSyncState();
     }
   }
 

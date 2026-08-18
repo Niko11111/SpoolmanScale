@@ -37,6 +37,48 @@ lv_obj_t* addInfoRow(lv_obj_t* parent, int y, const char* label,
   return v;
 }
 
+lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
+                      const char* sub, bool toggle_active) {
+  lv_obj_t *btn = lv_btn_create(list);
+  lv_obj_set_size(btn, 456, 64);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a1e30), 0);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn, 10, 0);
+  lv_obj_set_style_shadow_width(btn, 0, 0);
+  lv_obj_set_style_border_width(btn, 1, 0);
+  lv_obj_set_style_border_color(btn, toggle_active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3050), 0);
+  lv_obj_set_style_pad_all(btn, 0, 0);
+
+  lv_obj_t *ico = lv_label_create(btn);
+  lv_label_set_text(ico, ico_sym);
+  lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
+  lv_obj_align(ico, LV_ALIGN_LEFT_MID, 14, 0);
+
+  lv_obj_t *lbl = lv_label_create(btn);
+  lv_label_set_text(lbl, title);
+  lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
+  lv_obj_set_width(lbl, 320);
+  lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 52, sub && strlen(sub) > 0 ? -10 : 0);
+
+  if (sub && strlen(sub) > 0) {
+    lv_obj_t *slbl = lv_label_create(btn);
+    lv_label_set_text(slbl, sub);
+    lv_obj_set_style_text_color(slbl, toggle_active ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(slbl, &lv_font_montserrat_ext_12, 0);
+    lv_obj_set_width(slbl, 320);
+    lv_obj_align(slbl, LV_ALIGN_LEFT_MID, 52, 12);
+  }
+
+  lv_obj_t *arr = lv_label_create(btn);
+  lv_label_set_text(arr, LV_SYMBOL_RIGHT);
+  lv_obj_set_style_text_color(arr, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_font(arr, &lv_font_montserrat_ext_16, 0);
+  lv_obj_align(arr, LV_ALIGN_RIGHT_MID, -14, 0);
+  return btn;
+}
+
 void addBackButton(lv_obj_t *parent, lv_event_cb_t cb) {
   lv_obj_t *btn = lv_btn_create(parent);
   lv_obj_set_size(btn, 44, 44);

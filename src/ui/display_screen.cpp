@@ -101,18 +101,29 @@ void buildDisplayScreen() {
   lv_obj_set_style_text_align(lbl_sleep, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_sleep, LV_ALIGN_TOP_MID, 0, 178);
 
-  int sleep_vals[] = {10, 20, 30, 60};
+  // 0 means never sleep. Needed for the FilaMan remote link: in deep sleep
+  // the ESP32 is off, so the scale drops out of FilaMan after 180 seconds and
+  // the write-tag trigger cannot reach it at all.
+  int sleep_vals[] = {10, 20, 30, 60, 0};
+  const int SLEEP_BTN_GAP = 4;   // five buttons need a tighter gap than four
+  const int SLEEP_START_X = (480 - 5*BTN_W - 4*SLEEP_BTN_GAP) / 2;
   int cur_sleep = sleep_timeout_ms / 60000;
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 5; i++) {
     lv_obj_t *b = lv_btn_create(scr_display);
     lv_obj_set_size(b, BTN_W, BTN_H);
-    lv_obj_set_pos(b, BTN_START_X + i * (BTN_W + BTN_GAP), 200);
+    lv_obj_set_pos(b, SLEEP_START_X + i * (BTN_W + SLEEP_BTN_GAP), 200);
     bool active = (cur_sleep == sleep_vals[i]);
     lv_obj_set_style_bg_color(b, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
     lv_obj_set_style_radius(b, 8, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, 0, 0);
-    char buf[8]; snprintf(buf, sizeof(buf), "%d Min", sleep_vals[i]);
+    char buf[16];
+    if (sleep_vals[i] == 0) {
+      strncpy(buf, T(STR_SLEEP_OFF), sizeof(buf) - 1);
+      buf[sizeof(buf) - 1] = '\0';
+    } else {
+      snprintf(buf, sizeof(buf), "%d Min", sleep_vals[i]);
+    }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);
     lv_obj_set_style_text_color(l, active ? lv_color_hex(0x0a1020) : lv_color_hex(0xc8d8f0), 0);

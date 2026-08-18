@@ -12,6 +12,7 @@
 #include "lang.h"
 #include "services/ota_state.h"
 #include "ui_common.h"
+#include "update_badges.h"
 #include "services/backend.h"
 
 
@@ -86,18 +87,7 @@ void buildSystemScreen() {
     lv_obj_align(sub, LV_ALIGN_CENTER, 0, 22); }
   lv_obj_add_event_cb(btn_upd, [](lv_event_t *e){ logSD("BTN: -> OTA"); show_ota_pending = true; }, LV_EVENT_CLICKED, NULL);
 
-  // Yellow badge top-right of firmware update button
-  // Red circle badge top-right of firmware update button
-  lbl_fw_badge = lv_obj_create(scr_system);
-  lv_obj_set_size(lbl_fw_badge, 14, 14);
-  lv_obj_set_pos(lbl_fw_badge, 456, BTN_Y0 + BTN_H + BTN_GAP);
-  lv_obj_set_style_radius(lbl_fw_badge, 7, 0);
-  lv_obj_set_style_bg_color(lbl_fw_badge, lv_color_hex(0xe03030), 0);
-  lv_obj_set_style_border_color(lbl_fw_badge, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_border_width(lbl_fw_badge, 2, 0);
-  lv_obj_set_style_pad_all(lbl_fw_badge, 0, 0);
-  lv_obj_clear_flag(lbl_fw_badge, LV_OBJ_FLAG_SCROLLABLE);
-  if (!update_available) lv_obj_add_flag(lbl_fw_badge, LV_OBJ_FLAG_HIDDEN);
+  lbl_fw_badge = createUpdateBadge(scr_system, btn_upd);
 
   // ── Button 3: Info & support ──
   lv_obj_t *btn_info = lv_btn_create(scr_system);

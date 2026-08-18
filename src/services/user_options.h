@@ -16,3 +16,8 @@ enum IpBarMode : uint8_t {
   IP_BAR_COUNT   = 3
 };
 extern uint8_t g_ip_bar_mode;
+
+// Skip the confirmation popup for a FilaMan remote link, but only when the
+// spool was already on the scale when the request came in. A material or
+// colour mismatch always asks regardless - see showRemoteLinkPopup().
+extern bool g_flm_autolink;

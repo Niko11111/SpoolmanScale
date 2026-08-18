@@ -31,6 +31,7 @@ lv_obj_t *scr_main   = nullptr;
 lv_obj_t *scr_settings   = nullptr;
 lv_obj_t *scr_wifi       = nullptr;
 lv_obj_t *scr_backend    = nullptr;
+lv_obj_t *scr_filaman_options = nullptr;
 lv_obj_t *scr_spoolman   = nullptr;
 lv_obj_t *scr_spoolman_fail = nullptr;
 lv_obj_t *scr_welcome    = nullptr;

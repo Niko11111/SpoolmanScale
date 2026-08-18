@@ -7,6 +7,7 @@ extern bool show_bag_pending;
 extern bool show_factor_pending;
 extern bool show_lastused_pending;
 extern bool show_backend_pending;
+extern bool show_filaman_options_pending;
 extern bool show_spoolman_pending;
 extern bool show_connection_from_spoolman_pending;
 extern bool show_system_pending;
