@@ -107,6 +107,9 @@ void appSetup() {
   backendLoadSettings();
 
   displayHardwareBegin(resetActivityTimer);
+  // Apply the stored brightness and arm the idle timer from a real
+  // millis() reading, not from 0.
+  displayPowerInit();
 
   I2C_EXT.begin(hw_pins::I2C_EXT_SDA, hw_pins::I2C_EXT_SCL, 100000);
 

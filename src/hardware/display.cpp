@@ -1,5 +1,6 @@
 #include "display.h"
 
+#include "app_config.h"
 #include "pins.h"
 
 #include <LovyanGFX.hpp>
@@ -33,6 +34,11 @@ public:
       cfg.invert=true; cfg.rgb_order=false;
       _panel.config(cfg); }
     { auto cfg = _light.config();
+      // invert stays false: GPIO45 drives the WT32-SC01 Plus backlight
+      // active-high, so duty 255 is full output. Flipping this to true does
+      // not brighten a dim panel, it blacks it out -- and it would also turn
+      // the backlight fully ON in deep sleep, where displayPrepareDeepSleep()
+      // asks for brightness 0.
       cfg.pin_bl=hw_pins::LCD_BACKLIGHT; cfg.invert=false;
       cfg.freq=44100; cfg.pwm_channel=7;
       _light.config(cfg); _panel.setLight(&_light); }
@@ -85,7 +91,12 @@ bool displayHardwareBegin(void (*touch_activity_cb)()) {
   i2c_touch.begin(hw_pins::TOUCH_SDA, hw_pins::TOUCH_SCL, 400000);
   tft.init();
   tft.setRotation(1);
-  tft.setBrightness(204);
+  // Full output until displayPowerInit() applies the user's saved level. This
+  // used to be a hardcoded 204, which meant every device ran the panel at 80%
+  // while the settings slider sat at its 255 default and reported full
+  // brightness -- the panel looked dim "at maximum" and dragging the slider to
+  // a value it already held fired no LV_EVENT_VALUE_CHANGED to correct it.
+  tft.setBrightness(BRIGHT_NORMAL_DEFAULT);
   tft.fillScreen(TFT_BLACK);
 
   lv_init();
