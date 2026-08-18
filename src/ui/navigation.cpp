@@ -2,6 +2,7 @@
 #include "app/app_state.h"
 #include "ui_common.h"
 #include "theme_screen.h"
+#include "web_screen.h"
 #include "app/setup_flow.h"
 
 #include <lvgl.h>
@@ -45,6 +46,7 @@ void hideAllOverlays() {
   if (scr_display)     lv_obj_add_flag(scr_display,     LV_OBJ_FLAG_HIDDEN);
   if (scr_system)      lv_obj_add_flag(scr_system,      LV_OBJ_FLAG_HIDDEN);
   if (scr_theme)       lv_obj_add_flag(scr_theme,       LV_OBJ_FLAG_HIDDEN);
+  if (scr_web)         lv_obj_add_flag(scr_web,         LV_OBJ_FLAG_HIDDEN);
   if (scr_ota)         lv_obj_add_flag(scr_ota,         LV_OBJ_FLAG_HIDDEN);
   if (scr_ota_browser) lv_obj_add_flag(scr_ota_browser, LV_OBJ_FLAG_HIDDEN);
   if (scr_ota_github)  lv_obj_add_flag(scr_ota_github,  LV_OBJ_FLAG_HIDDEN);

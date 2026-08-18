@@ -13,6 +13,7 @@
 #include "services/ota_state.h"
 #include "ui_common.h"
 #include "update_badges.h"
+#include "web_screen.h"
 #include "services/backend.h"
 #include "theme.h"
 
@@ -23,12 +24,12 @@ void buildSystemScreen() {
   logSD("BUILD: SystemScreen");
   if (sd_verbose) logSD("[verbose] buildSystemScreen: start");
   releaseScreen(&scr_system);
-  scr_system = buildOverlayScreen();
+  scr_system = buildOverlayScreen(&scr_system);
   buildSubHeader(scr_system, T(STR_SYSTEM_TITLE),
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
 
   // 3 main buttons 62px + 1 reset button 44px, gap=5, y0=52
-  const int BTN_W = 456, BTN_H = 62, RESET_H = 44, BTN_GAP = 5, BTN_X = 12, BTN_Y0 = 52;
+  const int BTN_W = 456, BTN_H = 52, RESET_H = 44, BTN_GAP = 3, BTN_X = 12, BTN_Y0 = 52;
 
   // ── Button 1: Language ──
   lv_obj_t *btn_lang = lv_btn_create(scr_system);
@@ -43,20 +44,20 @@ void buildSystemScreen() {
   { lv_obj_t *ico = lv_label_create(btn_lang);
     lv_label_set_text(ico, LV_SYMBOL_LIST);
     lv_obj_set_style_text_color(ico, tc(TH_ACCENT), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -18);
+    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_18, 0);
+    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -17);
     lv_obj_t *lbl = lv_label_create(btn_lang);
     lv_label_set_text(lbl, T(STR_LANG_TITLE));
     lv_obj_set_style_text_color(lbl, tc(TH_TEXT_BRIGHT), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
+    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 3);
     lv_obj_t *sub = lv_label_create(btn_lang);
     lv_label_set_text(sub, T(STR_BTN_LANG_SUB));
     lv_obj_set_style_text_color(sub, tc(TH_TEXT_MUTED), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 22); }
+    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 20); }
   lv_obj_add_event_cb(btn_lang, [](lv_event_t *e){ logSD("BTN: System -> Language"); showLanguageScreen(); }, LV_EVENT_CLICKED, NULL);
 
   // ── Button 2: Firmware update ──
@@ -72,20 +73,20 @@ void buildSystemScreen() {
   { lv_obj_t *ico = lv_label_create(btn_upd);
     lv_label_set_text(ico, LV_SYMBOL_DOWNLOAD);
     lv_obj_set_style_text_color(ico, tc(TH_ACCENT), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -18);
+    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_18, 0);
+    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -17);
     lv_obj_t *lbl = lv_label_create(btn_upd);
     lv_label_set_text(lbl, T(STR_BTN_FW_UPDATE));
     lv_obj_set_style_text_color(lbl, tc(TH_TEXT_BRIGHT), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
+    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 3);
     lv_obj_t *sub = lv_label_create(btn_upd);
     lv_label_set_text(sub, T(STR_BTN_FW_SUB));
     lv_obj_set_style_text_color(sub, tc(TH_TEXT_MUTED), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 22); }
+    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 20); }
   lv_obj_add_event_cb(btn_upd, [](lv_event_t *e){ logSD("BTN: -> OTA"); show_ota_pending = true; }, LV_EVENT_CLICKED, NULL);
 
   lbl_fw_badge = createUpdateBadge(scr_system, btn_upd);
@@ -103,24 +104,56 @@ void buildSystemScreen() {
   { lv_obj_t *ico = lv_label_create(btn_info);
     lv_label_set_text(ico, LV_SYMBOL_BELL);
     lv_obj_set_style_text_color(ico, tc(TH_ACCENT), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -18);
+    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_18, 0);
+    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -17);
     lv_obj_t *lbl = lv_label_create(btn_info);
     lv_label_set_text(lbl, T(STR_BTN_INFO));
     lv_obj_set_style_text_color(lbl, tc(TH_TEXT_BRIGHT), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
+    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 3);
     lv_obj_t *sub = lv_label_create(btn_info);
     lv_label_set_text(sub, T(STR_BTN_INFO_SUB));
     lv_obj_set_style_text_color(sub, tc(TH_TEXT_MUTED), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 22); }
+    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 20); }
   lv_obj_add_event_cb(btn_info, [](lv_event_t *e){ logSD("BTN: System -> Info"); show_info_pending = true; }, LV_EVENT_CLICKED, NULL);
 
-  // ── Button 4: Factory Reset (half width, left) + Reboot (half width, right) ──
-  int reset_y = BTN_Y0 + 3*(BTN_H + BTN_GAP);
+  // ── Button 4: Web interface ──
+  lv_obj_t *btn_web = lv_btn_create(scr_system);
+  lv_obj_set_size(btn_web, BTN_W, BTN_H);
+  lv_obj_set_pos(btn_web, BTN_X, BTN_Y0 + 3*(BTN_H + BTN_GAP));
+  lv_obj_set_style_bg_color(btn_web, tc(TH_TILE_BG), 0);
+  lv_obj_set_style_bg_color(btn_web, tc(TH_BORDER), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_web, 10, 0);
+  lv_obj_set_style_shadow_width(btn_web, 0, 0);
+  lv_obj_set_style_border_width(btn_web, 1, 0);
+  lv_obj_set_style_border_color(btn_web, tc(TH_BORDER), 0);
+  { lv_obj_t *ico = lv_label_create(btn_web);
+    lv_label_set_text(ico, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_color(ico, tc(TH_ACCENT), 0);
+    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_18, 0);
+    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -17);
+    lv_obj_t *lbl = lv_label_create(btn_web);
+    lv_label_set_text(lbl, T(STR_WEB_TITLE));
+    lv_obj_set_style_text_color(lbl, tc(TH_TEXT_BRIGHT), 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
+    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 3);
+    lv_obj_t *sub = lv_label_create(btn_web);
+    lv_label_set_text(sub, T(STR_BTN_WEB_SUB));
+    lv_obj_set_style_text_color(sub, tc(TH_TEXT_MUTED), 0);
+    lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_12, 0);
+    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 20); }
+  lv_obj_add_event_cb(btn_web, [](lv_event_t *e){
+    logSD("BTN: System -> Web");
+    showWebScreen();
+  }, LV_EVENT_CLICKED, NULL);
+
+  // ── Button 5: Factory Reset (half width, left) + Reboot (half width, right) ──
+  int reset_y = BTN_Y0 + 4*(BTN_H + BTN_GAP);
   const int HALF_W = 220;
 
   lv_obj_t *btn_reset = lv_btn_create(scr_system);

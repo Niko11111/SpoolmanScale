@@ -22,6 +22,7 @@
 #include "services/location_state.h"
 #include "services/ota_web_server.h"
 #include "services/remote_link.h"
+#include "services/web_access.h"
 #include "ui/theme.h"
 #include "ui/theme_screen.h"
 #include "services/update_check.h"
@@ -231,6 +232,7 @@ void appLoop() {
 
   // OTA web server bedienen wenn aktiv
   handleOtaServerClient();
+  webServerTick();
 
   // A palette change arrives on the web server's turn, which runs in this same
   // loop, but the repaint is done here so all LVGL work stays in one place.

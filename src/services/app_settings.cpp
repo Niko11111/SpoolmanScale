@@ -11,6 +11,7 @@
 #include "list_limits.h"
 #include "ota_state.h"
 #include "prefs_store.h"
+#include "web_access.h"
 #include "hardware/display.h"
 #include "ui/theme.h"
 #include "user_options.h"
@@ -42,6 +43,7 @@ void loadPrefs() {
   bright_normal = prefsGetUChar("bright", BRIGHT_NORMAL_DEFAULT);
 
   themeLoad();
+  webAccessLoad();
   // Safe this early: displaySetUiGain() only builds its lookup tables and
   // skips the LVGL repaint until a display exists.
   displaySetUiGain((uint16_t)prefsGetUInt("ui_gain", 100));

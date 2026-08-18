@@ -102,12 +102,22 @@ const char* const STRINGS[][2] = {
   { "Nicht konfiguriert",     "Not configured"    },  // STR_BTN_WIFI_NONE
   { "WLAN Status",            "WiFi Status"       },  // STR_BTN_WIFI_STATUS
   { "Nicht verbunden",        "Not connected"     },  // STR_BTN_WIFI_STATUS_SUB
+  { "Server, OTA, Theme",     "Server, OTA, theme"},  // STR_BTN_WEB_SUB
   { "Design",                 "Theme"             },  // STR_THEME_TITLE
   { "Voreinstellung",         "Preset"            },  // STR_THEME_PRESET
   { "Eigenes",                "Custom"            },  // STR_THEME_CUSTOM
   { "UI-Helligkeit",          "UI brightness"     },  // STR_THEME_GAIN
   { "Einzelne Farben werden im Browser bearbeitet. Theme-Editor unter System > Weboberfläche aktivieren.",
     "Individual colours are edited from a browser. Enable the theme editor under System > Web interface." },  // STR_THEME_HINT
+  { "Webserver",              "Web server"        },  // STR_WEB_SERVER
+  { "Setup, Firmware, Logs",  "Setup, firmware, logs" },  // STR_WEB_MAINT
+  { "Theme-Editor",           "Theme editor"      },  // STR_WEB_THEME_EDITOR
+  { "Aus: Port 80 antwortet nicht.",
+    "Off: nothing answers on port 80." },  // STR_WEB_SERVER_HINT
+  { "Liefert /ota, /logs und die Konfiguration. Standardmäßig aus: schreibt Firmware und ändert Einstellungen, ohne Passwort.",
+    "Serves /ota, /logs, FilaMan pairing and the config endpoints. Off by default: these write firmware and change settings, with no password." },  // STR_WEB_MAINT_HINT
+  { "Liefert /theme zum Bearbeiten der Farben im Browser. Die Startseite bleibt immer erreichbar.",
+    "Serves /theme, for editing colours from a browser. The landing page stays reachable whatever these are set to." },  // STR_WEB_THEME_HINT
   { "Spoolman Server",        "Spoolman Server"   },  // STR_BTN_SPOOLMAN
 
   // Scale

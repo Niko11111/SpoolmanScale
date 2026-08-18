@@ -1,6 +1,6 @@
-# Theming
+# Theming and the web UI
 
-How to keep new screens working with the runtime theme. Written for
+How to keep new screens and pages working with the runtime theme. Written for
 whoever adds the next feature.
 
 ---
@@ -118,6 +118,12 @@ silently, because C++ offers no way to assert the inner dimension of a 2D array.
 Add a colour to *all* `THEME_PRESET_COUNT` rows by hand or the new token renders
 black on every preset except whichever row you did update.
 
+**Bump the share-string tag** in `theme_web.cpp` when the token list changes:
+`SMS1` becomes `SMS2`. The format is positional — `TAG:<6 hex per token>:<gain>`
+— so a string written by a build with a different token list would otherwise be
+applied to the wrong slots. The length check derives from the token count, so
+the tag is what distinguishes an incompatible layout from a corrupt string.
+
 ---
 
 ### Checking a palette is readable
@@ -150,11 +156,68 @@ backgrounds, so solve for the worst pair, not the one you noticed.
 
 ---
 
-## 5. Gotchas worth knowing
+## 5. Adding a web page
+
+Use the shared shell so the page carries the same logo, palette, tabs, community
+links and disclaimer as everything else:
+
+```cpp
+#include "web_shell.h"
+
+String myPage() {
+  String h;
+  h += webShellHead("My Page");     // doctype, CSS, logo, version line
+  h += F("<style>/* page-specific only */</style>");
+  h += webShellNav("/mypage");      // tab strip, highlights the current path
+  h += webShellLinks();             // Ko-fi / GitHub / Discord / MakerWorld
+  h += F("<div class='card'><h2>Title</h2>...</div>");
+  h += webShellFoot();              // disclaimer, </body></html>
+  return h;
+}
+```
+
+Then add the path and label to the arrays in `webShellNav()`
+(`src/services/web_shell.cpp`) so it appears as a tab.
+
+**Pages get clean URLs, data goes under `/api/`.** `/logs` is a page;
+`/api/logs` is the JSON it fetches. They used to collide, and browsing `/logs`
+returned raw JSON.
+
+**Gate it.** Every handler checks its gate at request time, because
+`WebServer::stop()` does not free handlers so route sets cannot be swapped by
+re-registering:
+
+```cpp
+srv.on("/mypage", HTTP_GET, [&srv]() {
+  if (!webMaintenanceEnabled()) {
+    webSendDisabled(srv, "My page", "Settings > System > Web interface");
+    return;
+  }
+  srv.send(200, "text/html", myPage());
+});
+```
+
+Three levels exist: the master switch (port 80 at all), the maintenance gate
+(`/ota`, `/update`, logs, FilaMan, limits, drying) and the theme gate
+(`/theme`). All three live on **Settings → System → Web interface** on the
+device. Anything that writes firmware or changes settings belongs behind a gate;
+read-only status does not.
+
+Also note `startOtaServer()` registers routes once, guarded by
+`routes_registered`. It is called every time the OTA screen opens, and handlers
+are never freed, so re-registering would pile up allocations.
+
+---
+
+## 6. Gotchas worth knowing
 
 **LVGL line heights exceed the nominal size.** `lv_font_montserrat_ext_12` needs
 about 16px. A row at y=86 in a 100px container gets its descenders clipped.
 Budget by line height, not font size.
+
+**The shell caps content at 480px.** Right for a status page, wrong for a wide
+editor. `/theme` overrides `.nav,.links,.card{max-width:1180px}` locally rather
+than changing the shell for everyone.
 
 **Balance your tags.** An unclosed `<div>` inside the 2-column `.links` grid
 turns every card that follows into a grid cell. Worth a quick

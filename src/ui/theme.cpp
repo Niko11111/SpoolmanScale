@@ -5,6 +5,7 @@
 
 #include "app/app_state.h"
 #include "ui_common.h"
+#include "web_screen.h"
 #include "services/prefs_store.h"
 
 // Positional, in ThemeColor order. Kept positional rather than using
