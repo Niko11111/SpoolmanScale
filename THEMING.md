@@ -103,26 +103,38 @@ with no restart.
 
 ## 4. Adding a theme token
 
-Six places. Five are enforced by `static_assert` in `theme.cpp`, so a forgotten
-one is a build error naming the array:
+Five places. All but one are enforced by `static_assert` in `theme.cpp`, so a
+forgotten one is a build error naming the array:
 
 1. the `ThemeColor` enum in `theme.h`
 2. `g_theme[]` default
 3. `TOKEN_ID[]` — short id, used as the web form field name
 4. `TOKEN_LABEL[]` — human label
 5. every row of `PRESETS[][]` — **not enforced**, see below
-6. bump the share-string tag
 
 **The one the compiler cannot catch:** a short `PRESETS` row zero-fills
 silently, because C++ offers no way to assert the inner dimension of a 2D array.
 Add a colour to *all* `THEME_PRESET_COUNT` rows by hand or the new token renders
 black on every preset except whichever row you did update.
 
-**Bump the share-string tag** in `theme_web.cpp` when the token list changes:
-`SMS1` becomes `SMS2`. The format is positional — `TAG:<6 hex per token>:<gain>`
-— so a string written by a build with a different token list would otherwise be
-applied to the wrong slots. The length check derives from the token count, so
-the tag is what distinguishes an incompatible layout from a corrupt string.
+**The share string needs nothing when you add a token.** It is keyed by name and
+carries the build that wrote it:
+
+```
+SMS5:fw=v0.6.1-beta.6,bg=0a1020,accent=28d49a,...,gain=100
+```
+
+A string from an older build still applies. The colours it names are set, the
+ones it does not mention keep their current value, and names this build no
+longer has are ignored. The import line says which of those happened and names
+both versions when they differ, so a partial apply cannot be mistaken for a full
+one.
+
+`fw` and `gain` are reserved — do not add a token with either short id.
+
+Only bump the tag if the *format* changes: the separators, or the meaning of a
+field. An earlier version of this was positional and had to be bumped on every
+token change, which meant every shared palette stopped working on upgrade.
 
 ---
 

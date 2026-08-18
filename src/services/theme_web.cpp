@@ -1,4 +1,5 @@
 #include "theme_web.h"
+#include "app_config.h"
 
 #include <Arduino.h>
 
@@ -133,8 +134,9 @@ static String themePage() {
          "<button class='tbtn' onclick='copyStr()'>Copy</button>"
          "<button class='tbtn' onclick='impStr()'>Apply pasted</button></div>"
          "<p class='hint' style='text-align:left'>Paste someone else's string and press Apply. "
-         "The order is fixed, so a string from a build with different tokens is rejected rather "
-         "than silently mangled.</p></div>"
+         "Colours are keyed by name and the string carries the version it came from, so one "
+         "written by a different build still applies: anything it does not mention keeps its "
+         "current value, and you are told what was left alone.</p></div>"
          "</div></div>");
 
   h += F("<div class='card'><h2>Colours</h2><div class='cgrid'>");
@@ -153,7 +155,8 @@ static String themePage() {
          "<button class='tbtn' onclick='doRestart()'>Restart device</button></div>"
          "<div id='msg'></div></div>");
 
-  h += F("<script>const IDS=[");
+  h += "<script>const FW='" + String(FW_VERSION) + "';";
+  h += F("const IDS=[");
   for (int i = 0; i < TH_COUNT; i++) {
     if (i) h += ",";
     h += "'" + String(themeTokenId(i)) + "'";
@@ -201,18 +204,34 @@ static String themePage() {
          "p.append('gain',st.gain);"
          "await fetch('/theme/set',{method:'POST',body:p});"
          "g('msg').textContent='applied to panel (not saved yet)'}"
-         "function expStr(){let s='SMS4:';for(const i of IDS)"
-         "s+=(st.colors[i]||'#000000').replace('#','');return s+':'+st.gain}"
+         "function expStr(){return 'SMS5:fw='+FW+','+IDS.map(function(i){"
+         "return i+'='+(st.colors[i]||'#000000').replace('#','')}).join(',')"
+         "+',gain='+st.gain}"
          "function copyStr(){const e=g('io');e.select();"
          "try{document.execCommand('copy');g('msg').textContent='copied'}"
          "catch(x){g('msg').textContent='select and copy manually'}}"
-         "function impStr(){const m=g('io').value.trim()"
-         ".match(new RegExp('^SMS4:([0-9a-fA-F]{' + (IDS.length*6) + '}):(\\\\d{2,3})$'));"
-         "if(!m){g('msg').textContent='not a valid theme string for this build';return}"
-         "for(let k=0;k<IDS.length;k++)"
-         "st.colors[IDS[k]]='#'+m[1].substr(k*6,6).toLowerCase();"
-         "st.gain=Math.min(300,Math.max(100,+m[2]));fill();send();"
-         "g('msg').textContent='imported - press Save to keep it'}"
+         "function impStr(){const t=g('io').value.trim();"
+         "if(t.slice(0,5)!=='SMS5:'){"
+         "g('msg').textContent='not a theme string (expects SMS5:...)';return}"
+         "const seen={},named={};let bad=0,unk=0,from='';"
+         "for(const part of t.slice(5).split(',')){"
+         "const e=part.indexOf('=');if(e<0){if(part.trim())bad++;continue}"
+         "const k=part.slice(0,e).trim(),v=part.slice(e+1).trim();"
+         "if(k==='fw'){from=v;continue}"
+         "if(k==='gain'){st.gain=Math.min(300,Math.max(100,parseInt(v,10)||100));continue}"
+         "if(IDS.indexOf(k)<0){unk++;continue}"
+         "named[k]=1;const n=norm(v);if(!n){bad++;continue}"
+         "st.colors[k]=n;seen[k]=1}"
+         "const miss=IDS.filter(function(i){return !named[i]}).length;"
+         "fill();send();"
+         "const notes=[];"
+         "if(from&&from!==FW)notes.push('written by '+from+', this device runs '+FW);"
+         "if(!from)notes.push('no version in the string');"
+         "if(miss)notes.push(miss+' colour(s) it does not mention, left as they were');"
+         "if(unk)notes.push(unk+' name(s) this build does not have, ignored');"
+         "if(bad)notes.push(bad+' unreadable');"
+         "g('msg').textContent='imported'+(notes.length?' - '+notes.join('; '):'')"
+         "+' - press Save to keep it'}"
          "async function preset(i){"
          "await fetch('/theme/preset',{method:'POST',"
          "body:new URLSearchParams({i:i})});await load();"
