@@ -1,4 +1,6 @@
 #include "ui_common.h"
+
+#include <Arduino.h>
 #include "navigation.h"
 
 #include <cstdio>
@@ -145,4 +147,48 @@ lv_obj_t* buildOverlayScreen() {
   lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_bg_color(scr, tc(TH_BG), 0);
   return scr;
+}
+
+// ---------------------------------------------------------------- registry
+//
+// Slots, not screens: the screen behind a slot is replaced constantly, so the
+// registry stores the address of the pointer and reads it when it is needed.
+// Registering the same slot twice is a no-op, so calling buildOverlayScreen()
+// on every open costs nothing.
+static lv_obj_t **s_slots[40];
+static int s_slot_count = 0;
+
+void overlayRegister(lv_obj_t **slot) {
+  if (!slot) return;
+  for (int i = 0; i < s_slot_count; i++) {
+    if (s_slots[i] == slot) return;
+  }
+  if (s_slot_count >= (int)(sizeof(s_slots) / sizeof(s_slots[0]))) {
+    // Silently dropping a screen here would resurrect exactly the bugs this
+    // registry exists to prevent, so make it loud.
+    Serial.println("overlayRegister: slot table full, raise the size");
+    return;
+  }
+  s_slots[s_slot_count++] = slot;
+}
+
+lv_obj_t* buildOverlayScreen(lv_obj_t **slot) {
+  lv_obj_t *scr = buildOverlayScreen();
+  if (slot) {
+    *slot = scr;
+    overlayRegister(slot);
+  }
+  return scr;
+}
+
+void overlayHideAll() {
+  for (int i = 0; i < s_slot_count; i++) {
+    if (*s_slots[i]) lv_obj_add_flag(*s_slots[i], LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
+void overlayDropAll() {
+  for (int i = 0; i < s_slot_count; i++) {
+    if (*s_slots[i]) { lv_obj_del(*s_slots[i]); *s_slots[i] = nullptr; }
+  }
 }

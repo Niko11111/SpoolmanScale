@@ -23,5 +23,8 @@ images/*~lock~
 !README.md
 !BUILDING.md
 !REFACTOR_PLAN.md
+!THEMING.md
+!tools/
+!tools/**
 !index.html
 !.gitignore

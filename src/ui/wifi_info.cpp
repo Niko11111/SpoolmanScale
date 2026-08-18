@@ -128,7 +128,7 @@ void buildWifiScreen() {
   btn_ipbar = nullptr;
   lbl_ipbar_mode = nullptr;
   releaseScreen(&scr_wifi);
-  scr_wifi = buildOverlayScreen();
+  scr_wifi = buildOverlayScreen(&scr_wifi);
   buildSubHeader(scr_wifi, T(STR_BTN_WIFI_STATUS), [](lv_event_t *e) {
     if (!scr_connection) buildConnectionScreen();
     hideAllOverlays();

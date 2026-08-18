@@ -54,7 +54,7 @@ void buildConnectionScreen() {
   lbl_wifi_ip = nullptr;
   if (sd_verbose) logSD("[verbose] buildConnectionScreen: start");
   releaseScreen(&scr_connection);
-  scr_connection = buildOverlayScreen();
+  scr_connection = buildOverlayScreen(&scr_connection);
   buildSubHeader(scr_connection, T(STR_TILE_CONNECTION),
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
 

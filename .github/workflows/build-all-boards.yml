@@ -28,6 +28,9 @@ jobs:
           python-version: '3.12'
       - name: Install PlatformIO
         run: pip install --upgrade platformio
+      - name: Check theme contrast
+        run: python3 tools/check_theme_contrast.py --allow Default
+
       - name: Build ${{ matrix.env }}
         run: pio run -e ${{ matrix.env }}
       - name: Read version from app_config.h

@@ -29,7 +29,7 @@ static void buildDryNumpadScreen(int target) {
   s_dry_numpad_target = target;
   s_dry_numpad_value  = (target == 0) ? g_dry_man_yellow : g_dry_man_red;
   if (s_dry_numpad_scr) { lv_obj_del(s_dry_numpad_scr); s_dry_numpad_scr = nullptr; }
-  s_dry_numpad_scr = buildOverlayScreen();
+  s_dry_numpad_scr = buildOverlayScreen(&s_dry_numpad_scr);
   // Header
   char title_buf[32];
   strncpy(title_buf, (target == 0) ? T(STR_DRY_NUMPAD_YELLOW_TITLE) : T(STR_DRY_NUMPAD_RED_TITLE), sizeof(title_buf)-1);
@@ -118,7 +118,7 @@ static void buildDryNumpadScreen(int target) {
 void showDryingReminderScreen() {
   logSD("SHOW: DryingReminderScreen");
   if (scr_drying_reminder) { lv_obj_del(scr_drying_reminder); scr_drying_reminder = nullptr; }
-  scr_drying_reminder = buildOverlayScreen();
+  scr_drying_reminder = buildOverlayScreen(&scr_drying_reminder);
   buildSubHeader(scr_drying_reminder, T(STR_DRYING_REMINDER_TITLE),
     [](lv_event_t *e){ logSD("BTN: Back -> Scale");
       if (scr_drying_reminder) { lv_obj_del(scr_drying_reminder); scr_drying_reminder = nullptr; }

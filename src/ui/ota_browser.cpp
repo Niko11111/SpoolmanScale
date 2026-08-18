@@ -134,7 +134,7 @@ void buildOtaBrowserScreen() {
   releaseScreen(&scr_ota_browser);
   s_lbl_key_val = nullptr;
   s_lbl_token_val = nullptr;
-  scr_ota_browser = buildOverlayScreen();
+  scr_ota_browser = buildOverlayScreen(&scr_ota_browser);
 
   char title_buf[40];
   strncpy(title_buf, isFirmwareContext() ? T(STR_OTA_BROWSER_TITLE) : T(STR_WEB_TITLE),

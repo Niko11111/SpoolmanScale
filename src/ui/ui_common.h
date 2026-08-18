@@ -8,6 +8,22 @@ void buildSubHeader(lv_obj_t *parent, const char *title,
                     lv_event_cb_t back_cb, const char *back_hint = nullptr);
 lv_obj_t* buildOverlayScreen();
 
+// Preferred form: pass the pointer the screen is stored in and it registers
+// itself, so it is hidden by hideAllOverlays() and dropped by
+// themeInvalidateScreens() without the author having to remember either.
+//
+// Both were previously hand-maintained lists in two different files. Forgetting
+// the first made the corner X look broken (the main screen appears underneath
+// while the overlay stays on top); forgetting the second left the screen on the
+// old palette forever. Neither failure points at the missing line.
+lv_obj_t* buildOverlayScreen(lv_obj_t **slot);
+
+// For screens that build their own container instead of calling the helper.
+void overlayRegister(lv_obj_t **slot);
+
+void overlayHideAll();   // hide every registered screen
+void overlayDropAll();   // delete and null every registered screen
+
 // Frees a screen object that is about to be replaced and clears the pointer.
 // Call at the top of every build*Screen() function: without it the previous
 // object is orphaned in the LVGL pool (LV_MEM_SIZE) and never reclaimed.

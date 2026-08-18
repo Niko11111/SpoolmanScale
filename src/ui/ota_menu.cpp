@@ -29,7 +29,7 @@ void showOtaScreen() {
 void buildOtaScreen() {
   logSD("BUILD: OtaScreen");
   releaseScreen(&scr_ota);
-  scr_ota = buildOverlayScreen();
+  scr_ota = buildOverlayScreen(&scr_ota);
   buildSubHeader(scr_ota, T(STR_OTA_TITLE),
     [](lv_event_t *e){
       logSD("BTN: OTA -> Back");

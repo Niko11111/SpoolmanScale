@@ -24,7 +24,7 @@ void buildSettingsScreen() {
   logSD("BUILD: SettingsScreen");
   if (sd_verbose) logSD("[verbose] buildSettingsScreen: start");
   releaseScreen(&scr_settings);
-  scr_settings = buildOverlayScreen();
+  scr_settings = buildOverlayScreen(&scr_settings);
 
   lv_obj_t *title = lv_label_create(scr_settings);
   lv_label_set_text(title, T(STR_SETTINGS_TITLE));

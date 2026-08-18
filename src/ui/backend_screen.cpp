@@ -117,7 +117,7 @@ void buildBackendScreen() {
   strncpy(buf_title, T(STR_BACKEND_TITLE), sizeof(buf_title) - 1);
   buf_title[sizeof(buf_title) - 1] = '\0';
 
-  scr_backend = buildOverlayScreen();
+  scr_backend = buildOverlayScreen(&scr_backend);
 
   // During the first time setup this is a step, not a settings page: there is
   // no settings menu to go back to, and the way onward is the address screen.

@@ -22,6 +22,8 @@
 #include "services/location_state.h"
 #include "services/ota_web_server.h"
 #include "services/remote_link.h"
+#include "ui/theme.h"
+#include "ui/theme_screen.h"
 #include "services/update_check.h"
 #include "ui/ota_browser.h"
 #include "ui/remote_link_popup.h"
@@ -229,6 +231,20 @@ void appLoop() {
 
   // OTA web server bedienen wenn aktiv
   handleOtaServerClient();
+
+  // A palette change arrives on the web server's turn, which runs in this same
+  // loop, but the repaint is done here so all LVGL work stays in one place.
+  if (theme_dirty_pending) {
+    theme_dirty_pending = false;
+    themeInvalidateScreens();
+    if (themeScreenVisible()) {
+      themeScreenRepaint();
+    } else {
+      // Dropping the cached overlays can delete whatever the user was looking
+      // at, so land somewhere that is guaranteed to exist.
+      showMainScreen();
+    }
+  }
   // While the credential screen is open the user types into the browser, so
   // the two rows have to follow along without a keypress on the device.
   refreshWebCredentialRows();

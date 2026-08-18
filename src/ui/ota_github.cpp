@@ -279,7 +279,7 @@ void showOtaGithubScreen() {
 void buildOtaGithubScreen() {
   logSD("BUILD: OtaGithubScreen");
   releaseScreen(&scr_ota_github);
-  scr_ota_github = buildOverlayScreen();
+  scr_ota_github = buildOverlayScreen(&scr_ota_github);
 
   char buf_title[32];
   strncpy(buf_title, T(STR_GH_OTA_TITLE), sizeof(buf_title)-1); buf_title[sizeof(buf_title)-1]=0;

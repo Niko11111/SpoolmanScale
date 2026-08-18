@@ -10,6 +10,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/prefs_store.h"
+#include "theme_screen.h"
 #include "ui_common.h"
 #include "theme.h"
 
@@ -28,7 +29,7 @@ void buildDisplayScreen() {
   logSD("BUILD: DisplayScreen");
   if (sd_verbose) logSD("[verbose] buildDisplayScreen: start");
   releaseScreen(&scr_display);
-  scr_display = buildOverlayScreen();
+  scr_display = buildOverlayScreen(&scr_display);
   buildSubHeader(scr_display, T(STR_DISPLAY_TITLE),
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
 
@@ -138,6 +139,26 @@ void buildDisplayScreen() {
       Serial.printf("Sleep timeout: %d min\n", val);
     }, LV_EVENT_CLICKED, (void*)(intptr_t)sleep_vals[i]);
   }
+
+  lv_obj_t *btn_theme = lv_btn_create(scr_display);
+  // Right column of the row under the sleep buttons; the wake-on-load toggle
+  // takes the left one.
+  lv_obj_set_size(btn_theme, 224, 34);
+  lv_obj_set_pos(btn_theme, 244, 244);
+  lv_obj_set_style_bg_color(btn_theme, tc(TH_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_theme, tc(TH_ACCENT), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_theme, 8, 0);
+  lv_obj_set_style_shadow_width(btn_theme, 0, 0);
+  lv_obj_set_style_border_width(btn_theme, 0, 0);
+  lv_obj_add_event_cb(btn_theme, [](lv_event_t *e) {
+    logSD("BTN: Display -> Theme");
+    showThemeScreen();
+  }, LV_EVENT_CLICKED, NULL);
+  { lv_obj_t *l = lv_label_create(btn_theme);
+    lv_label_set_text(l, "THEME");
+    lv_obj_set_style_text_color(l, tc(TH_TEXT), 0);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
+    lv_obj_center(l); }
 
   lv_obj_t *hint = lv_label_create(scr_display);
   lv_label_set_text(hint, T(STR_DISPLAY_HINT));
