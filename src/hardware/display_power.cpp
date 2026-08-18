@@ -12,6 +12,15 @@
 static unsigned long last_activity_ms = 0;
 static bool is_dimmed = false;
 
+void displayPowerInit() {
+  last_activity_ms = millis();
+  is_dimmed = false;
+  // loadPrefs() has already restored bright_normal from NVS by this point;
+  // nothing else pushed it to the hardware, so the saved level only took
+  // effect after the first dim/wake cycle.
+  displaySetBrightness((uint8_t)bright_normal);
+}
+
 void resetActivityTimer() {
   last_activity_ms = millis();
   if (is_dimmed) {
