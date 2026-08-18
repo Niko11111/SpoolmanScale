@@ -17,8 +17,41 @@
 
 void showWifiSetupScreen();
 
+// The address is read when the tile is built, so a Connection screen opened
+// while WiFi is still negotiating would otherwise show 0.0.0.0 for as long as
+// it stayed open. A timer re-reads it so the tile tracks the address appearing,
+// changing or going away.
+static lv_obj_t   *lbl_wifi_ip   = nullptr;
+static lv_timer_t *wifi_ip_timer = nullptr;
+
+static void wifiIpText(char *buf, size_t n) {
+  if (wifi_ok && wifiManagerIsConnected()) {
+    IPAddress ip = wifiManagerLocalIP();
+    if (ip != IPAddress(0, 0, 0, 0)) {
+      snprintf(buf, n, "%s", ip.toString().c_str());
+      return;
+    }
+  }
+  snprintf(buf, n, "%s", T(STR_BTN_WIFI_STATUS_SUB));
+}
+
+static void refreshWifiIp(lv_timer_t *t) {
+  // The screen can be torn down between ticks; lv_obj_is_valid keeps this from
+  // writing through a dangling pointer.
+  if (!lbl_wifi_ip || !lv_obj_is_valid(lbl_wifi_ip)) return;
+  char buf[24];
+  wifiIpText(buf, sizeof(buf));
+  if (strcmp(lv_label_get_text(lbl_wifi_ip), buf) != 0) {
+    lv_label_set_text(lbl_wifi_ip, buf);
+  }
+}
+
 void buildConnectionScreen() {
   logSD("BUILD: ConnectionScreen");
+  // Drop the previous screen's timer before the new one is built, so the two
+  // never race over lbl_wifi_ip when releaseScreen() deletes asynchronously.
+  if (wifi_ip_timer) { lv_timer_del(wifi_ip_timer); wifi_ip_timer = nullptr; }
+  lbl_wifi_ip = nullptr;
   if (sd_verbose) logSD("[verbose] buildConnectionScreen: start");
   releaseScreen(&scr_connection);
   scr_connection = buildOverlayScreen();
@@ -77,8 +110,8 @@ void buildConnectionScreen() {
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 3);
     lv_obj_t *sub = lv_label_create(btn_ws);
-    lv_label_set_text(sub, wifi_ok ? wifiManagerLocalIP().toString().c_str()
-                                   : T(STR_BTN_WIFI_STATUS_SUB));
+    lbl_wifi_ip = sub;
+    { char ipbuf[24]; wifiIpText(ipbuf, sizeof(ipbuf)); lv_label_set_text(sub, ipbuf); }
     lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
@@ -87,6 +120,10 @@ void buildConnectionScreen() {
     logSD("BTN: Conn -> WiFi Status");
     showWifiStatusScreen();
   }, LV_EVENT_CLICKED, NULL);
+
+  // Created here rather than at the end of the function: the FilaMan path
+  // returns early, and the tile needs refreshing on both backends.
+  wifi_ip_timer = lv_timer_create(refreshWifiIp, 2000, nullptr);
 
   lv_obj_t *btn_sp = lv_btn_create(scr_connection);
   lv_obj_set_size(btn_sp, BTN_W, BTN_H);

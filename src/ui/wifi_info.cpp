@@ -23,6 +23,11 @@ static const int LABEL_X  = 28;
 static const int VALUE_X  = 172;
 static const int VALUE_W  = 288;   // 172 + 288 = 460, leaving a 20px margin
 
+// Same reasoning as the Connection tile: the screen is populated on entry, so
+// without a timer it would keep showing whatever the link looked like at that
+// moment for as long as it stayed open.
+static lv_timer_t *wifi_info_timer = nullptr;
+
 static lv_obj_t *val_ssid  = nullptr;
 static lv_obj_t *val_state = nullptr;
 static lv_obj_t *val_ip    = nullptr;
@@ -51,7 +56,14 @@ static lv_obj_t* addRow(int index, const char *label) {
   return v;
 }
 
+static void refreshWifiInfo(lv_timer_t *t) {
+  if (!val_ssid || !lv_obj_is_valid(val_ssid)) return;
+  updateWifiInfo();
+}
+
 void buildWifiScreen() {
+  if (wifi_info_timer) { lv_timer_del(wifi_info_timer); wifi_info_timer = nullptr; }
+  val_ssid = nullptr;
   releaseScreen(&scr_wifi);
   scr_wifi = buildOverlayScreen();
   buildSubHeader(scr_wifi, T(STR_BTN_WIFI_STATUS), [](lv_event_t *e) {
@@ -66,6 +78,8 @@ void buildWifiScreen() {
   val_gw    = addRow(3, "Gateway");
   val_dns   = addRow(4, "DNS");
   val_rssi  = addRow(5, "Signal");
+
+  wifi_info_timer = lv_timer_create(refreshWifiInfo, 2000, nullptr);
 }
 
 // The screen and its updater existed but nothing ever called them, so the
