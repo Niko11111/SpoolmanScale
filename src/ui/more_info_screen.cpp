@@ -536,9 +536,17 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_font(c4, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_pos(c4, CB, 158);
   lv_obj_t *v4 = lv_label_create(box);
-  char sw_buf[16];
-  if (sm_spool_weight > 0) snprintf(sw_buf, sizeof(sw_buf), "%.0f g", sm_spool_weight);
-  else strncpy(sw_buf, "-", sizeof(sw_buf)-1);
+  // An inherited tare is marked, so a number that came from the brand default
+  // is not mistaken for one measured off this spool.
+  char sw_buf[32];
+  if (sm_spool_weight > 0) {
+    const char *from = (sm_tare_source == TARE_FILAMENT) ? T(STR_TARE_FROM_FILAMENT)
+                     : (sm_tare_source == TARE_VENDOR)   ? T(STR_TARE_FROM_BRAND)
+                     : "";
+    snprintf(sw_buf, sizeof(sw_buf), "%.0f g%s", sm_spool_weight, from);
+  } else {
+    strncpy(sw_buf, "-", sizeof(sw_buf)-1);
+  }
   lv_label_set_text(v4, sw_buf);
   lv_obj_set_style_text_color(v4, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(v4, &lv_font_montserrat_ext_18, 0);

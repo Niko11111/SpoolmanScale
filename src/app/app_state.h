@@ -83,7 +83,17 @@ extern int sm_vendor_id;
 extern bool sm_found;
 extern float sm_remaining;
 extern float sm_total;
+// Which level supplied the empty-spool weight. An inherited value is a
+// reasonable starting point, not a measurement, and the UI says so.
+enum TareSource : uint8_t {
+  TARE_NONE = 0,   // nothing known, the spool counts as 0 g
+  TARE_SPOOL,      // measured for this spool
+  TARE_FILAMENT,   // default for this filament
+  TARE_VENDOR      // default for the brand
+};
+
 extern float sm_spool_weight;
+extern uint8_t sm_tare_source;
 extern char sm_last_dried[32];
 extern char sm_article_nr[32];
 extern char sm_filament_name[32];
