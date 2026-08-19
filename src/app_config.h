@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.6.3-beta.3"
+#define FW_VERSION  "v0.6.3-beta.4"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -23,3 +23,14 @@
 // seconds the FilaMan frontend polls for a result, so both sides give up at
 // the same time instead of one waiting on the other.
 #define REMOTE_LINK_TIMEOUT_MS  60000
+
+// Deriving the empty-spool weight from a brand new spool: the reading minus
+// the nominal filament weight. Outside these bounds the reading is not a full
+// spool of the expected filament - a half-used one, or a nominal weight that
+// is wrong - and a derived tare would be nonsense written to a filament or an
+// entire brand.
+#define NEW_SPOOL_TARE_MIN_G     30.0f
+#define NEW_SPOOL_TARE_MAX_G    600.0f
+// Below this the stored tare and the derived one agree well enough to leave
+// alone, and the flow stays exactly as it was.
+#define NEW_SPOOL_TARE_TOL_G     10.0f

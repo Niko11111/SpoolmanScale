@@ -637,4 +637,6 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "wenn die Spule schon aufliegt", "when the spool is already on"       },  // STR_FLM_AUTOLINK_SUB
   { " (Filament)",                   " (filament)"                        },  // STR_TARE_FROM_FILAMENT
   { " (Hersteller)",                 " (brand)"                           },  // STR_TARE_FROM_BRAND
+  { "Ohne Beutel wiegen - sonst %.0f g zu viel",
+    "Weigh without the bag - %.0f g too much otherwise" },  // STR_SPOOL_WEIGHT_BAG_HINT
 };

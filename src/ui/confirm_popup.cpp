@@ -1,4 +1,5 @@
 #include "confirm_popup.h"
+#include <math.h>
 #include "app/app_state.h"
 
 #include <Arduino.h>
@@ -26,6 +27,150 @@ void closeConfirmPopup() {
   confirm_action = 0;
   lbl_auto_weight_btn = nullptr;  // Pointer ungültig nach lv_obj_del
 }
+
+
+// The weight the scope buttons below will store. Normally whatever is on the
+// pad, but a brand new spool can derive it instead -- see the New spool button.
+static float s_tare_prompt_g = 0.0f;
+static bool  s_tare_then_new = false;
+
+// After a tare is stored from the New spool flow the initial weight follows
+// from it: what is left of the reading once the spool itself is taken off.
+// Done here rather than in the caller so the two writes stay in the order that
+// makes the second one correct.
+static void tareFollowUp() {
+  if (!s_tare_then_new) return;
+  s_tare_then_new = false;
+  // The tare was derived as reading minus nominal, so what is left of the
+  // reading once the spool comes off is the nominal weight itself. Reading
+  // scale_weight_g again here would use a value that has moved on since the
+  // popup opened - the pad drifts, someone leans on the bench - and leave the
+  // tare and the initial weight contradicting each other, which is the exact
+  // thing deriving the tare is meant to prevent.
+  patchInitialWeight(sm_total);
+}
+
+// Whether New spool will derive the tare from this reading instead of
+// trusting the stored one, and what it would store. A full spool has a known
+// filament weight, which makes the tare the only unknown in the reading, and
+// this is the only moment it can be measured without emptying the spool first.
+// Asked in two places - the button label and its handler - so that the label
+// can never promise a different number than the press writes.
+static bool newSpoolDerivesTare(float* out_tare) {
+  const float derived = scale_weight_g - sm_total;
+  const bool plausible = (sm_total > 0.0f) &&
+                         (derived >= NEW_SPOOL_TARE_MIN_G) &&
+                         (derived <= NEW_SPOOL_TARE_MAX_G);
+  const bool disagrees = (sm_spool_weight <= 0.0f) ||
+                         (fabsf(derived - (float)sm_spool_weight) >= NEW_SPOOL_TARE_TOL_G);
+  if (!plausible || !disagrees) return false;
+  if (out_tare) *out_tare = derived;
+  return true;
+}
+
+static void showSpoolWeightPopup(float grams, bool then_new_spool) {
+  s_tare_prompt_g = grams;
+  s_tare_then_new = then_new_spool;
+
+      // Sub-popup: where should the spool weight be written?
+      const float w = s_tare_prompt_g;
+
+      lv_obj_t *popup = lv_obj_create(lv_scr_act());
+      lv_obj_set_size(popup, 480, 320);
+      lv_obj_set_pos(popup, 0, 0);
+      lv_obj_set_style_bg_color(popup, lv_color_hex(0x0a1020), 0);
+      lv_obj_set_style_bg_opa(popup, LV_OPA_COVER, 0);
+      lv_obj_set_style_border_width(popup, 0, 0);
+      lv_obj_set_style_pad_all(popup, 0, 0);
+      lv_obj_clear_flag(popup, LV_OBJ_FLAG_SCROLLABLE);
+
+      // Title
+      lv_obj_t *title = lv_label_create(popup);
+      char title_buf[48];
+      snprintf(title_buf, sizeof(title_buf), T(STR_SPOOL_WEIGHT_TITLE), w);
+      lv_label_set_text(title, title_buf);
+      lv_obj_set_style_text_color(title, lv_color_hex(0x28d49a), 0);
+      lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_14, 0);
+      lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+
+      // Button 1: this spool
+      lv_obj_t *b1 = lv_btn_create(popup);
+      lv_obj_set_size(b1, 460, 60); lv_obj_set_pos(b1, 10, 36);
+      lv_obj_set_style_bg_color(b1, lv_color_hex(0x0a2040), 0);
+      lv_obj_set_style_radius(b1, 8, 0); lv_obj_set_style_shadow_width(b1, 0, 0);
+      { lv_obj_t *l = lv_label_create(b1);
+        lv_label_set_text(l, T(STR_BTN_THIS_SPOOL));
+        lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
+        lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_center(l); }
+      lv_obj_add_event_cb(b1, [](lv_event_t *e) {
+        patchSpoolWeight(s_tare_prompt_g); tareFollowUp();
+        lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
+      }, LV_EVENT_CLICKED, NULL);
+
+      // Button 2: this filament
+      lv_obj_t *b2 = lv_btn_create(popup);
+      lv_obj_set_size(b2, 460, 60); lv_obj_set_pos(b2, 10, 106);
+      lv_obj_set_style_bg_color(b2, lv_color_hex(0x0a2820), 0);
+      lv_obj_set_style_radius(b2, 8, 0); lv_obj_set_style_shadow_width(b2, 0, 0);
+      { lv_obj_t *l = lv_label_create(b2);
+        lv_label_set_text(l, T(STR_BTN_THIS_FILAMENT));
+        lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
+        lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_center(l); }
+      lv_obj_add_event_cb(b2, [](lv_event_t *e) {
+        patchFilamentSpoolWeight(s_tare_prompt_g); tareFollowUp();
+        lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
+      }, LV_EVENT_CLICKED, NULL);
+
+      // Button 3: vendor
+      lv_obj_t *b3 = lv_btn_create(popup);
+      lv_obj_set_size(b3, 460, 60); lv_obj_set_pos(b3, 10, 176);
+      lv_obj_set_style_bg_color(b3, lv_color_hex(0x281a00), 0);
+      lv_obj_set_style_radius(b3, 8, 0); lv_obj_set_style_shadow_width(b3, 0, 0);
+      { lv_obj_t *l = lv_label_create(b3);
+        lv_label_set_text(l, T(STR_BTN_THIS_VENDOR));
+        lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
+        lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_center(l); }
+      lv_obj_add_event_cb(b3, [](lv_event_t *e) {
+        patchVendorSpoolWeight(s_tare_prompt_g); tareFollowUp();
+        lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
+      }, LV_EVENT_CLICKED, NULL);
+
+      // Button 4: cancel
+      lv_obj_t *b4 = lv_btn_create(popup);
+      lv_obj_set_size(b4, 460, 40); lv_obj_set_pos(b4, 10, 256);
+      lv_obj_set_style_bg_color(b4, lv_color_hex(0x3a1010), 0);
+      lv_obj_set_style_radius(b4, 8, 0); lv_obj_set_style_shadow_width(b4, 0, 0);
+      { lv_obj_t *l = lv_label_create(b4);
+        lv_label_set_text(l, T(STR_CANCEL));
+        lv_obj_set_style_text_color(l, lv_color_hex(0xff8080), 0);
+        lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
+        lv_obj_center(l); }
+      lv_obj_add_event_cb(b4, [](lv_event_t *e) {
+        s_tare_then_new = false;
+        lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
+      }, LV_EVENT_CLICKED, NULL);
+
+      // A bag on the pad is counted into the reading, and this number may be
+      // written to an entire brand. The device cannot tell whether one is
+      // there, so it says so rather than silently subtracting a weight that
+      // might not be on the scale at all.
+      if (bag_weight_g > 0.0f) {
+        lv_obj_t *bag_hint = lv_label_create(popup);
+        char bag_buf[64];
+        snprintf(bag_buf, sizeof(bag_buf), T(STR_SPOOL_WEIGHT_BAG_HINT), bag_weight_g);
+        lv_label_set_text(bag_hint, bag_buf);
+        lv_obj_set_style_text_color(bag_hint, lv_color_hex(0xf0b838), 0);
+        lv_obj_set_style_text_font(bag_hint, &lv_font_montserrat_ext_12, 0);
+        lv_obj_align(bag_hint, LV_ALIGN_TOP_MID, 0, 300);
+      }
+
+    }
 
 void showConfirmPopup(const char* msg, int action) {
   closeConfirmPopup();
@@ -147,13 +292,23 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_set_style_shadow_width(btn3, 0, 0);
     lv_obj_add_event_cb(btn3, [](lv_event_t *e) {
       closeConfirmPopup();
+      float derived = 0.0f;
+      if (newSpoolDerivesTare(&derived)) {
+        showSpoolWeightPopup(derived, true);   // stores the tare, then the initial
+        return;
+      }
       float initial = scale_weight_g - (float)sm_spool_weight;
       if (initial < 0) initial = 0;
       patchInitialWeight(initial);
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l3 = lv_label_create(btn3);
     char buf3[56];
-    snprintf(buf3, sizeof(buf3), T(STR_BTN_NEW_SPOOL_VAL), netto_plain);
+    // Name the weight the button will really write. Where the tare is derived
+    // that is the nominal filament weight, not the reading minus a tare that
+    // is about to be replaced - and those two differ by the whole spool.
+    float new_spool_shown = netto_plain;
+    if (newSpoolDerivesTare(nullptr)) new_spool_shown = sm_total;
+    snprintf(buf3, sizeof(buf3), T(STR_BTN_NEW_SPOOL_VAL), new_spool_shown);
     lv_label_set_text(l3, buf3);
     lv_obj_set_style_text_color(l3, lv_color_hex(0x80c8ff), 0);
     lv_obj_set_style_text_font(l3, &lv_font_montserrat_ext_14, 0);
@@ -170,89 +325,7 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_set_style_shadow_width(btn4, 0, 0);
     lv_obj_add_event_cb(btn4, [](lv_event_t *e) {
       closeConfirmPopup();
-      // Sub-popup: where should the spool weight be written?
-      float w = scale_weight_g;
-
-      lv_obj_t *popup = lv_obj_create(lv_scr_act());
-      lv_obj_set_size(popup, 480, 320);
-      lv_obj_set_pos(popup, 0, 0);
-      lv_obj_set_style_bg_color(popup, lv_color_hex(0x0a1020), 0);
-      lv_obj_set_style_bg_opa(popup, LV_OPA_COVER, 0);
-      lv_obj_set_style_border_width(popup, 0, 0);
-      lv_obj_set_style_pad_all(popup, 0, 0);
-      lv_obj_clear_flag(popup, LV_OBJ_FLAG_SCROLLABLE);
-
-      // Title
-      lv_obj_t *title = lv_label_create(popup);
-      char title_buf[48];
-      snprintf(title_buf, sizeof(title_buf), T(STR_SPOOL_WEIGHT_TITLE), w);
-      lv_label_set_text(title, title_buf);
-      lv_obj_set_style_text_color(title, lv_color_hex(0x28d49a), 0);
-      lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_14, 0);
-      lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
-
-      // Button 1: this spool
-      lv_obj_t *b1 = lv_btn_create(popup);
-      lv_obj_set_size(b1, 460, 60); lv_obj_set_pos(b1, 10, 36);
-      lv_obj_set_style_bg_color(b1, lv_color_hex(0x0a2040), 0);
-      lv_obj_set_style_radius(b1, 8, 0); lv_obj_set_style_shadow_width(b1, 0, 0);
-      { lv_obj_t *l = lv_label_create(b1);
-        lv_label_set_text(l, T(STR_BTN_THIS_SPOOL));
-        lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
-        lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_center(l); }
-      lv_obj_add_event_cb(b1, [](lv_event_t *e) {
-        patchSpoolWeight(scale_weight_g);
-        lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
-      }, LV_EVENT_CLICKED, NULL);
-
-      // Button 2: this filament
-      lv_obj_t *b2 = lv_btn_create(popup);
-      lv_obj_set_size(b2, 460, 60); lv_obj_set_pos(b2, 10, 106);
-      lv_obj_set_style_bg_color(b2, lv_color_hex(0x0a2820), 0);
-      lv_obj_set_style_radius(b2, 8, 0); lv_obj_set_style_shadow_width(b2, 0, 0);
-      { lv_obj_t *l = lv_label_create(b2);
-        lv_label_set_text(l, T(STR_BTN_THIS_FILAMENT));
-        lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
-        lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_center(l); }
-      lv_obj_add_event_cb(b2, [](lv_event_t *e) {
-        patchFilamentSpoolWeight(scale_weight_g);
-        lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
-      }, LV_EVENT_CLICKED, NULL);
-
-      // Button 3: vendor
-      lv_obj_t *b3 = lv_btn_create(popup);
-      lv_obj_set_size(b3, 460, 60); lv_obj_set_pos(b3, 10, 176);
-      lv_obj_set_style_bg_color(b3, lv_color_hex(0x281a00), 0);
-      lv_obj_set_style_radius(b3, 8, 0); lv_obj_set_style_shadow_width(b3, 0, 0);
-      { lv_obj_t *l = lv_label_create(b3);
-        lv_label_set_text(l, T(STR_BTN_THIS_VENDOR));
-        lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
-        lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_center(l); }
-      lv_obj_add_event_cb(b3, [](lv_event_t *e) {
-        patchVendorSpoolWeight(scale_weight_g);
-        lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
-      }, LV_EVENT_CLICKED, NULL);
-
-      // Button 4: cancel
-      lv_obj_t *b4 = lv_btn_create(popup);
-      lv_obj_set_size(b4, 460, 40); lv_obj_set_pos(b4, 10, 256);
-      lv_obj_set_style_bg_color(b4, lv_color_hex(0x3a1010), 0);
-      lv_obj_set_style_radius(b4, 8, 0); lv_obj_set_style_shadow_width(b4, 0, 0);
-      { lv_obj_t *l = lv_label_create(b4);
-        lv_label_set_text(l, T(STR_CANCEL));
-        lv_obj_set_style_text_color(l, lv_color_hex(0xff8080), 0);
-        lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
-        lv_obj_center(l); }
-      lv_obj_add_event_cb(b4, [](lv_event_t *e) {
-        lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
-      }, LV_EVENT_CLICKED, NULL);
-
+      showSpoolWeightPopup(scale_weight_g, false);
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l4 = lv_label_create(btn4);
     char buf4[56];
