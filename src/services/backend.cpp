@@ -45,12 +45,13 @@ void backendLoadSettings() {
   s_filaman_host[sizeof(s_filaman_host) - 1] = '\0';
   rebuildFilamanBase();
 
-  // Never log the tokens themselves, only whether they are present.
-  logSDf("Backend: mode=%s host=%s key=%s device=%s",
-    s_mode == BACKEND_FILAMAN ? "FilaMan" : "Spoolman",
-    s_filaman_host[0] ? s_filaman_host : "-",
-    s_api_key[0] ? "set" : "empty",
-    s_device_token[0] ? "set" : "empty");
+  // Both channels, so the active backend is visible in a serial monitor as
+  // well and not only on the card. writeBootBlock() repeats the same line
+  // inside the daily log file, which is the one a user actually sends in.
+  char line[160];
+  backendStatusLine(line, sizeof(line));
+  logSDf("Backend: %s", line);
+  Serial.printf("Backend: %s\n", line);
 }
 
 BackendMode backendMode() { return s_mode; }
@@ -104,6 +105,28 @@ void filamanSetDeviceToken(const char* token) {
 
 const char* backendName() {
   return backendIsFilaMan() ? "FilaMan" : "Spoolman";
+}
+
+void backendStatusLine(char* out, size_t out_size) {
+  if (!out || out_size == 0) return;
+
+  // backendHost() picks the host of the active mode, so a leftover FilaMan
+  // address never shows up while Spoolman is selected, and the other way round.
+  const char* host = backendHost();
+
+  if (backendIsFilaMan()) {
+    snprintf(out, out_size, "%s | host=%s | key=%s | device=%s | configured=%s",
+      backendName(),
+      host[0] ? host : "-",
+      s_api_key[0] ? "set" : "empty",
+      s_device_token[0] ? "set" : "empty",
+      backendIsConfigured() ? "yes" : "no");
+  } else {
+    snprintf(out, out_size, "%s | host=%s | configured=%s",
+      backendName(),
+      host[0] ? host : "-",
+      backendIsConfigured() ? "yes" : "no");
+  }
 }
 
 void backendText(const char* src, char* out, size_t out_size) {

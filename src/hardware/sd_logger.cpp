@@ -1,5 +1,6 @@
 #include "sd_logger.h"
 #include "app/app_state.h"
+#include "services/backend.h"
 
 #include "pins.h"
 
@@ -108,6 +109,12 @@ void writeBootBlock(const char* boot_or_reboot) {
   } else {
     f.println("WiFi: (not connected)");
   }
+  // Which backend the device talks to. Without this a log tells nobody
+  // whether Spoolman or FilaMan is in play, which is the first thing needed
+  // to read the rest of the file.
+  char backend_line[160];
+  backendStatusLine(backend_line, sizeof(backend_line));
+  f.printf("Backend: %s\n", backend_line);
   f.printf("Free heap: %d | PSRAM: %d\n",
     ESP.getFreeHeap(), ESP.getFreePsram());
   if (sd_verbose) f.println("Verbose logging: ON");

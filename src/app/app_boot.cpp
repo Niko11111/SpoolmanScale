@@ -51,21 +51,32 @@ void wifiConnect() {
         logSDf("WiFi connected: %s | RSSI: %d dBm",
           cfg_wifi_ssid, wifiManagerRSSI());
       }
-      // Fix 2: immediate Spoolman health check after WiFi connect
-      if (strlen(cfg_spoolman_base) > 4) {
-        int code = backendGetHealthCode(cfg_spoolman_base, 3000);
+      // Fix 2: immediate health check after WiFi connect, against whichever
+      // backend is active. The URL comes from backendBaseUrl() and the label
+      // from backendName(), so a log never claims the wrong product. The gate
+      // is deliberately not backendIsConfigured(): FilaMan serves /health
+      // without credentials, and a device missing its tokens is exactly the
+      // one where this line is worth having.
+      const char* backend_name = backendName();
+      if (strlen(backendBaseUrl()) > 7) {   // longer than "http://"
+        int code = backendGetHealthCode(backendBaseUrl(), 3000);
         sm_reachable = (code == 200);
-        logSDf("Spoolman health check: HTTP %d -> %s",
-          code, sm_reachable ? "OK" : "FAIL");
-        Serial.printf("Spoolman health: HTTP %d -> %s\n", code, sm_reachable ? "OK" : "FAIL");
-        // Fetch Spoolman version from /api/v1/info
+        logSDf("%s health check: HTTP %d -> %s",
+          backend_name, code, sm_reachable ? "OK" : "FAIL");
+        Serial.printf("%s health: HTTP %d -> %s\n",
+          backend_name, code, sm_reachable ? "OK" : "FAIL");
+        // Server version, from /api/v1/info on Spoolman and /openapi.json on FilaMan
         if (sm_reachable) {
           char ver[32] = "?";
-          if (backendGetVersion(cfg_spoolman_base, ver, sizeof(ver), 3000)) {
-            logSDf("Spoolman version: %s", ver);
-            Serial.printf("Spoolman version: %s\n", ver);
+          if (backendGetVersion(backendBaseUrl(), ver, sizeof(ver), 3000)) {
+            logSDf("%s version: %s", backend_name, ver);
+            Serial.printf("%s version: %s\n", backend_name, ver);
           }
         }
+      } else {
+        sm_reachable = false;
+        logSDf("%s health check skipped: no host configured", backend_name);
+        Serial.printf("%s health check skipped: no host configured\n", backend_name);
       }
       updateHeaderStatus();
       lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));

@@ -67,6 +67,16 @@ bool backendIsConfigured();
 // Product name of the active backend, "Spoolman" or "FilaMan".
 const char* backendName();
 
+// One line summary of the active backend for boot logs and diagnostics.
+//
+//   Spoolman | host=192.168.1.50 | configured=yes
+//   FilaMan | host=192.168.1.50 | key=set | device=set | configured=yes
+//
+// The credential fields only appear in FilaMan mode, Spoolman has none.
+// The tokens themselves are never part of the output, only whether they
+// are present. 160 bytes are enough for the longest possible line.
+void backendStatusLine(char* out, size_t out_size);
+
 // Copies a UI string into a RAM buffer and replaces the word "Spoolman"
 // with the active backend's name on the way. Two jobs in one call:
 //
