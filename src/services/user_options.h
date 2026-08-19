@@ -21,3 +21,9 @@ extern uint8_t g_ip_bar_mode;
 // spool was already on the scale when the request came in. A material or
 // colour mismatch always asks regardless - see showRemoteLinkPopup().
 extern bool g_flm_autolink;
+
+// Adopt a remotely linked spool for weighing when no tag turns up. The spool
+// was chosen deliberately in the web UI, so the useful answer to "no tag" is
+// to weigh it anyway rather than report a failure. Nothing is written to any
+// tag and no binding is stored; it lasts until the next scan.
+extern bool g_flm_tagless;

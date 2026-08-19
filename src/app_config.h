@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.6.3-beta.4"
+#define FW_VERSION  "v0.6.3-beta.5"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -34,3 +34,8 @@
 // Below this the stored tare and the derived one agree well enough to leave
 // alone, and the flow stays exactly as it was.
 #define NEW_SPOOL_TARE_TOL_G     10.0f
+// How long a remote link waits for a tag before falling back to adopting the
+// spool for weighing only. Long enough that someone reaching for a tag is not
+// cut off, far short of the full timeout, which otherwise ends in a failure
+// for a spool that simply has no tag on it.
+#define REMOTE_LINK_TAGLESS_MS  10000

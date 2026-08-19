@@ -639,4 +639,7 @@ const char* const STRINGS[STR_COUNT][2] = {
   { " (Hersteller)",                 " (brand)"                           },  // STR_TARE_FROM_BRAND
   { "Ohne Beutel wiegen - sonst %.0f g zu viel",
     "Weigh without the bag - %.0f g too much otherwise" },  // STR_SPOOL_WEIGHT_BAG_HINT
+  { "Ohne Tag wiegen",              "Weigh without a tag"                },  // STR_FLM_TAGLESS
+  { "wenn kein Tag aufgelegt wird", "when no tag is presented"           },  // STR_FLM_TAGLESS_SUB
+  { "Spule gewählt - jetzt wiegen", "Spool selected - weigh it now"      },  // STR_REMOTE_LINK_WEIGH
 };

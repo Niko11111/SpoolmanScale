@@ -22,6 +22,7 @@
 #include "services/location_state.h"
 #include "services/ota_web_server.h"
 #include "services/remote_link.h"
+#include "services/user_options.h"
 #include "services/update_check.h"
 #include "ui/ota_browser.h"
 #include "ui/remote_link_popup.h"
@@ -377,6 +378,25 @@ void appLoop() {
     } else if (tag_present && !isConfirmPopupOpen() &&
                !isSpoolFlowIdInputOpen() && !isSpoolFlowLinkEntryOpen()) {
       showRemoteLinkPopup(remoteLinkPendingSpoolId());
+    } else if (g_flm_tagless && !tag_present &&
+               remoteLinkPendingAgeMs() >= REMOTE_LINK_TAGLESS_MS &&
+               !isConfirmPopupOpen() && !isSpoolFlowIdInputOpen() &&
+               !isSpoolFlowLinkEntryOpen()) {
+      // No tag turned up. The spool was picked deliberately in the web UI, so
+      // load it and let the scale weigh it instead of reporting a failure for
+      // a spool that simply has no tag on it. Nothing is bound: this lasts
+      // until the next scan, which is the same lifetime a scanned tag has.
+      const int id = remoteLinkPendingSpoolId();
+      logSDf("RemoteLink: no tag, adopting spool %d for weighing", id);
+      remoteLinkReport(true, nullptr, nullptr);
+      querySpoolmanById(id);
+      if (lbl_status) {
+        char buf[48];
+        strncpy(buf, T(STR_REMOTE_LINK_WEIGH), sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+        lv_label_set_text(lbl_status, buf);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+      }
     }
   }
   handleRemoteLinkDeferredActions();
