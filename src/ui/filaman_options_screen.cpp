@@ -36,6 +36,14 @@ void buildFilaManOptionsScreen() {
   lv_obj_set_style_pad_top(list, 6, 0);
   lv_obj_set_style_pad_bottom(list, 6, 0);
   lv_obj_set_style_pad_row(list, 6, 0);
+  // makeListBtn() never positions its button, it relies on the parent's
+  // layout. Without a flex flow every entry lands on the content origin and
+  // only the last one added is visible - invisible with a single entry, which
+  // is why it went unnoticed. Same four lines as scale_menu.cpp.
+  lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_scroll_dir(list, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
+  lv_obj_clear_flag(list, LV_OBJ_FLAG_SCROLL_ELASTIC);
 
   // Link without asking. The subtitle carries the condition, because the
   // setting only ever acts when the spool was already on the scale.
