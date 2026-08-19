@@ -1,7 +1,6 @@
 #include "display_screen.h"
 #include "navigation.h"
 #include "app/app_state.h"
-#include "services/user_options.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -35,11 +34,13 @@ void buildDisplayScreen() {
   buildSubHeader(scr_display, T(STR_DISPLAY_TITLE),
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
 
-  // Everything below the header lives in a scrolling body. The screen itself
-  // is 320 px and buildOverlayScreen() clears SCROLLABLE on it, so content
-  // that outgrows the panel is clipped rather than reachable - and the idle
-  // stages alone want more rows than fit. Positions stay absolute inside the
-  // body; LVGL derives the scroll extent from the children.
+  // Everything below the header sits in one frame, purely so the row
+  // coordinates below can be read against a common origin instead of against
+  // the header. It does NOT scroll: "no scrollbars outside lists, everything
+  // fits on one page" is the first rule in the design guide, and the four rows
+  // end at 256 of the 270 px this frame has. A row added later that does not
+  // fit will be visibly clipped, which forces a real decision rather than
+  // quietly reintroducing a scrolling settings page.
   lv_obj_t *body = lv_obj_create(scr_display);
   lv_obj_set_size(body, 480, 270);
   lv_obj_set_pos(body, 0, 50);
@@ -47,9 +48,7 @@ void buildDisplayScreen() {
   lv_obj_set_style_border_width(body, 0, 0);
   lv_obj_set_style_radius(body, 0, 0);
   lv_obj_set_style_pad_all(body, 0, 0);
-  lv_obj_set_scroll_dir(body, LV_DIR_VER);
-  lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_AUTO);
-  lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLL_ELASTIC);
+  lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE);
 
   // Row coordinates in one place: a stage is a label plus a button row 22 px
   // under it. Collected here so adding a stage does not mean re-deriving every
@@ -58,8 +57,6 @@ void buildDisplayScreen() {
   const int Y_DIM_LBL    = 58,  Y_DIM_ROW       = 80;
   const int Y_OFF_LBL    = 128, Y_OFF_ROW       = 150;
   const int Y_SLEEP_LBL  = 198, Y_SLEEP_ROW     = 220;
-  const int Y_WAKE_ROW   = 268;
-  const int Y_HINT       = 314;
 
   lv_obj_t *lbl_bright = lv_label_create(body);
   lv_label_set_text(lbl_bright, T(STR_BRIGHT_LABEL));
@@ -224,7 +221,7 @@ void buildDisplayScreen() {
     lv_obj_set_style_border_width(b, 0, 0);
     char buf[16];
     if (sleep_vals[i] == 0) {
-      strncpy(buf, T(STR_SLEEP_OFF), sizeof(buf) - 1);
+      strncpy(buf, T(STR_SCREENOFF_NEVER), sizeof(buf) - 1);
       buf[sizeof(buf) - 1] = '\0';
     } else {
       snprintf(buf, sizeof(buf), "%d Min", sleep_vals[i]);
@@ -245,43 +242,5 @@ void buildDisplayScreen() {
     }, LV_EVENT_CLICKED, (void*)(intptr_t)sleep_vals[i]);
   }
 
-  // Sits under the sleep row because it decides what may end the idle period,
-  // which is the same subject as the timers above it. Full width: the upstream
-  // PR made it half to pair with a theme button from another branch that is
-  // not in this tree, and a lone half-width button reads as a missing one.
-  {
-    lv_obj_t *b = lv_btn_create(body);
-    lv_obj_set_size(b, 456, 34);
-    lv_obj_set_pos(b, 12, Y_WAKE_ROW);
-    lv_obj_set_style_bg_color(b, g_wake_on_load ? lv_color_hex(0x28d49a)
-                                                : lv_color_hex(0x1a3060), 0);
-    lv_obj_set_style_radius(b, 8, 0);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_border_width(b, 0, 0);
-    lv_obj_t *l = lv_label_create(b);
-    char wbuf[40];
-    snprintf(wbuf, sizeof(wbuf), "%s: %s", T(STR_WAKE_ON_LOAD),
-             T(g_wake_on_load ? STR_ON : STR_OFF));
-    lv_label_set_text(l, wbuf);
-    lv_obj_set_style_text_color(l, g_wake_on_load ? lv_color_hex(0x0a1020)
-                                                  : lv_color_hex(0xc8d8f0), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
-    lv_obj_center(l);
-    lv_obj_add_event_cb(b, [](lv_event_t *e) {
-      g_wake_on_load = !g_wake_on_load;
-      prefsPutBool("wake_load", g_wake_on_load);
-      rebuildDisplayScreen();
-      Serial.printf("Wake on load: %s\n", g_wake_on_load ? "on" : "off");
-    }, LV_EVENT_CLICKED, NULL);
-  }
-
-  lv_obj_t *hint = lv_label_create(body);
-  lv_label_set_text(hint, T(STR_DISPLAY_HINT));
-  lv_obj_set_style_text_color(hint, lv_color_hex(0x2a4060), 0);
-  lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
-  lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(hint, 440);
-  lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, Y_HINT);
   if (sd_verbose) logSD("[verbose] buildDisplayScreen: done");
 }
