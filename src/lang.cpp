@@ -635,4 +635,7 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Weitere Optionen",              "More options"                       },  // STR_BTN_MORE_OPTIONS
   { "Ohne Nachfrage verknüpfen",     "Link without asking"                },  // STR_FLM_AUTOLINK
   { "wenn die Spule schon aufliegt", "when the spool is already on"       },  // STR_FLM_AUTOLINK_SUB
+  { "Ohne Tag wiegen",              "Weigh without a tag"                },  // STR_FLM_TAGLESS
+  { "wenn kein Tag aufgelegt wird", "when no tag is presented"           },  // STR_FLM_TAGLESS_SUB
+  { "Spule gewaehlt - jetzt wiegen","Spool selected - weigh it now"      },  // STR_REMOTE_LINK_WEIGH
 };

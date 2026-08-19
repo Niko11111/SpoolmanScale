@@ -65,4 +65,32 @@ void buildFilaManOptionsScreen() {
       buildFilaManOptionsScreen();
       lv_obj_clear_flag(scr_filaman_options, LV_OBJ_FLAG_HIDDEN);
     }, LV_EVENT_CLICKED, NULL); }
+
+  // Weigh without a tag. Sits under auto link because both decide what happens
+  // when a remote link arrives; this one covers the case where no tag exists.
+  { char buf_t[40]; strncpy(buf_t, T(STR_FLM_TAGLESS), sizeof(buf_t)-1);
+    buf_t[sizeof(buf_t)-1] = '\0';
+    char buf_s[40]; strncpy(buf_s, T(STR_FLM_TAGLESS_SUB), sizeof(buf_s)-1);
+    buf_s[sizeof(buf_s)-1] = '\0';
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_OK, buf_t, buf_s, g_flm_tagless);
+
+    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
+    if (arr_lbl) {
+      char buf_v[8]; strncpy(buf_v, T(g_flm_tagless ? STR_ON : STR_OFF), sizeof(buf_v)-1);
+      buf_v[sizeof(buf_v)-1] = '\0';
+      lv_label_set_text(arr_lbl, buf_v);
+      lv_obj_set_style_text_color(arr_lbl,
+        g_flm_tagless ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
+    }
+
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      g_flm_tagless = !g_flm_tagless;
+      prefsPutBool("flm_tagless", g_flm_tagless);
+      logSDf("BTN: FilaMan Options -> weigh without tag %s", g_flm_tagless ? "ON" : "OFF");
+      if (scr_filaman_options) { lv_obj_del(scr_filaman_options); scr_filaman_options = nullptr; }
+      buildFilaManOptionsScreen();
+      lv_obj_clear_flag(scr_filaman_options, LV_OBJ_FLAG_HIDDEN);
+    }, LV_EVENT_CLICKED, NULL); }
+
 }

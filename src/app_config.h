@@ -23,3 +23,9 @@
 // seconds the FilaMan frontend polls for a result, so both sides give up at
 // the same time instead of one waiting on the other.
 #define REMOTE_LINK_TIMEOUT_MS  60000
+
+// How long a remote link waits for a tag before falling back to adopting the
+// spool for weighing only. Long enough that someone reaching for a tag is not
+// cut off, far short of the full timeout, which otherwise ends in a failure
+// for a spool that simply has no tag on it.
+#define REMOTE_LINK_TAGLESS_MS  10000
