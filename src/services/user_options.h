@@ -21,3 +21,9 @@ extern uint8_t g_ip_bar_mode;
 // spool was already on the scale when the request came in. A material or
 // colour mismatch always asks regardless - see showRemoteLinkPopup().
 extern bool g_flm_autolink;
+
+// Wake the panel when the load on the scale changes. On by default: putting a
+// spool down is the action the device exists to answer, so having to touch the
+// screen first to read the result is the wrong way round. Switchable for a
+// scale that shares a bench with something that knocks it.
+extern bool g_wake_on_load;

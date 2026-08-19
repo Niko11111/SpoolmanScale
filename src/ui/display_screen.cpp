@@ -1,6 +1,7 @@
 #include "display_screen.h"
 #include "navigation.h"
 #include "app/app_state.h"
+#include "services/user_options.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -136,6 +137,37 @@ void buildDisplayScreen() {
       rebuildDisplayScreen();
       Serial.printf("Sleep timeout: %d min\n", val);
     }, LV_EVENT_CLICKED, (void*)(intptr_t)sleep_vals[i]);
+  }
+
+
+  // Sits under the sleep row because it decides what may end the idle period,
+  // which is the same subject as the two timers above it.
+  {
+    lv_obj_t *b = lv_btn_create(scr_display);
+    // Left column of the row under the sleep buttons; the theme entry takes
+    // the right one.
+    lv_obj_set_size(b, 224, 34);
+    lv_obj_set_pos(b, 12, 244);
+    lv_obj_set_style_bg_color(b, g_wake_on_load ? lv_color_hex(0x28d49a)
+                                                : lv_color_hex(0x1a3060), 0);
+    lv_obj_set_style_radius(b, 8, 0);
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_set_style_border_width(b, 0, 0);
+    lv_obj_t *l = lv_label_create(b);
+    char wbuf[40];
+    snprintf(wbuf, sizeof(wbuf), "%s: %s", T(STR_WAKE_ON_LOAD),
+             T(g_wake_on_load ? STR_ON : STR_OFF));
+    lv_label_set_text(l, wbuf);
+    lv_obj_set_style_text_color(l, g_wake_on_load ? lv_color_hex(0x0a1020)
+                                                  : lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
+    lv_obj_center(l);
+    lv_obj_add_event_cb(b, [](lv_event_t *e) {
+      g_wake_on_load = !g_wake_on_load;
+      prefsPutBool("wake_load", g_wake_on_load);
+      rebuildDisplayScreen();
+      Serial.printf("Wake on load: %s\n", g_wake_on_load ? "on" : "off");
+    }, LV_EVENT_CLICKED, NULL);
   }
 
   lv_obj_t *hint = lv_label_create(scr_display);

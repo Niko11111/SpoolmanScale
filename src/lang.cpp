@@ -635,4 +635,5 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Weitere Optionen",              "More options"                       },  // STR_BTN_MORE_OPTIONS
   { "Ohne Nachfrage verknüpfen",     "Link without asking"                },  // STR_FLM_AUTOLINK
   { "wenn die Spule schon aufliegt", "when the spool is already on"       },  // STR_FLM_AUTOLINK_SUB
+  { "Wecken bei Auflage",           "Wake on load"                       },  // STR_WAKE_ON_LOAD
 };
