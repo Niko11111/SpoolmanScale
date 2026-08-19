@@ -8,13 +8,14 @@
 
 #include "services/user_options.h"
 #include "services/wifi_manager.h"
+#include "theme.h"
 
 
 static lv_color_t wifiColor() {
   if (!wifi_ok) return lv_color_hex(0xe04040);
   int rssi = wifiManagerRSSI();
-  if (rssi >= -65) return lv_color_hex(0x28d49a);
-  if (rssi >= -75) return lv_color_hex(0xf0b838);
+  if (rssi >= -65) return tc(TH_ACCENT);
+  if (rssi >= -75) return tc(TH_WARNING);
   return lv_color_hex(0xe06020);
 }
 
@@ -26,13 +27,13 @@ void updateHeaderStatus() {
   if (lbl_hdr_nfc) {
     lv_label_set_text(lbl_hdr_nfc, nfc_ok ? "NFC" : "NFC!");
     lv_obj_set_style_text_color(lbl_hdr_nfc,
-      nfc_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
+      nfc_ok ? tc(TH_ACCENT) : lv_color_hex(0xe04040), 0);
   }
 
   if (lbl_hdr_scl) {
     lv_label_set_text(lbl_hdr_scl, scl_ok ? "SCL" : "SCL!");
     lv_obj_set_style_text_color(lbl_hdr_scl,
-      scl_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
+      scl_ok ? tc(TH_ACCENT) : lv_color_hex(0xe04040), 0);
   }
 
   // Both labels follow the active backend. Set here rather than only at build
@@ -40,7 +41,7 @@ void updateHeaderStatus() {
   if (lbl_hdr_sm) {
     lv_label_set_text(lbl_hdr_sm, backendIsFilaMan() ? "FLM" : "SPM");
     lv_obj_set_style_text_color(lbl_hdr_sm,
-      sm_reachable ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
+      sm_reachable ? tc(TH_ACCENT) : lv_color_hex(0xe04040), 0);
   }
 
   if (lbl_sm_cap) {

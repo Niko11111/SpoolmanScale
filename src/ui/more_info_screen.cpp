@@ -18,6 +18,7 @@
 #include "lang.h"
 #include "tag_display.h"
 #include "ui_common.h"
+#include "theme.h"
 
 
 void showLocationPicker();
@@ -77,7 +78,7 @@ void showLocationPicker() {
   scr_location_picker = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_location_picker, 480, 320);
   lv_obj_set_pos(scr_location_picker, 0, 0);
-  lv_obj_set_style_bg_color(scr_location_picker, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(scr_location_picker, tc(TH_BLACK), 0);
   lv_obj_set_style_bg_opa(scr_location_picker, LV_OPA_70, 0);
   lv_obj_set_style_border_width(scr_location_picker, 0, 0);
   lv_obj_set_style_radius(scr_location_picker, 0, 0);
@@ -89,7 +90,7 @@ void showLocationPicker() {
   lv_obj_set_size(box, 400, 280);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
   lv_obj_set_style_bg_color(box, lv_color_hex(0x0b1525), 0);
-  lv_obj_set_style_border_color(box, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_border_color(box, tc(TH_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, 10, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
@@ -99,7 +100,7 @@ void showLocationPicker() {
   lv_obj_t *hdr = lv_obj_create(box);
   lv_obj_set_size(hdr, 400, 44);
   lv_obj_set_pos(hdr, 0, 0);
-  lv_obj_set_style_bg_color(hdr, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(hdr, tc(TH_BG), 0);
   lv_obj_set_style_border_width(hdr, 0, 0);
   lv_obj_set_style_radius(hdr, 0, 0);
   lv_obj_set_style_pad_all(hdr, 0, 0);
@@ -109,15 +110,15 @@ void showLocationPicker() {
   char title_buf[48];
   strncpy(title_buf, T(STR_LOCATION_TITLE), sizeof(title_buf)-1);
   lv_label_set_text(lbl_title, title_buf);
-  lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_title, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(lbl_title, LV_ALIGN_CENTER, 0, 0);
 
   lv_obj_t *btn_x = lv_btn_create(hdr);
   lv_obj_set_size(btn_x, 40, 40);
   lv_obj_align(btn_x, LV_ALIGN_RIGHT_MID, -4, 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_x, tc(TH_DANGER_BG), 0);
+  lv_obj_set_style_bg_color(btn_x, tc(TH_DANGER_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_x, 1, 0);
   lv_obj_set_style_border_color(btn_x, lv_color_hex(0x601010), 0);
   lv_obj_set_style_radius(btn_x, 8, 0);
@@ -129,7 +130,7 @@ void showLocationPicker() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_x = lv_label_create(btn_x);
   lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_color(lbl_x, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_color(lbl_x, tc(TH_DANGER_TEXT), 0);
   lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_x);
 
@@ -138,7 +139,7 @@ void showLocationPicker() {
   char status_buf[48];
   strncpy(status_buf, T(STR_LOCATION_LOADING), sizeof(status_buf)-1);
   lv_label_set_text(lbl_status, status_buf);
-  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_status, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(lbl_status, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(lbl_status, LV_ALIGN_CENTER, 0, 10);
 
@@ -214,7 +215,7 @@ void fetchAndFillLocationList() {
   lv_obj_t *btn_none = lv_btn_create(list);
   lv_obj_set_size(btn_none, 370, 44);
   lv_obj_set_style_bg_color(btn_none, lv_color_hex(0x0d2040), 0);
-  lv_obj_set_style_bg_color(btn_none, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_none, tc(TH_SURFACE_2), LV_STATE_PRESSED);
   lv_obj_set_style_border_color(btn_none, lv_color_hex(0x0f1e30), 0);
   lv_obj_set_style_border_width(btn_none, 1, 0);
   lv_obj_set_style_radius(btn_none, 6, 0);
@@ -251,8 +252,8 @@ void fetchAndFillLocationList() {
     lv_obj_set_size(row, 370, 44);
     bool is_current = (strlen(sm_location_name) > 0 && strcmp(loc_name, sm_location_name) == 0);
     lv_obj_set_style_bg_color(row, is_current ? lv_color_hex(0x0d3020) : lv_color_hex(0x0d2040), 0);
-    lv_obj_set_style_bg_color(row, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(row, is_current ? lv_color_hex(0x28d49a) : lv_color_hex(0x0f1e30), 0);
+    lv_obj_set_style_bg_color(row, tc(TH_SURFACE_2), LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(row, is_current ? tc(TH_ACCENT) : lv_color_hex(0x0f1e30), 0);
     lv_obj_set_style_border_width(row, 1, 0);
     lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_shadow_width(row, 0, 0);
@@ -260,7 +261,7 @@ void fetchAndFillLocationList() {
 
     lv_obj_t *lbl_row = lv_label_create(row);
     lv_label_set_text(lbl_row, loc_name);
-    lv_obj_set_style_text_color(lbl_row, is_current ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0f0f0), 0);
+    lv_obj_set_style_text_color(lbl_row, is_current ? tc(TH_ACCENT) : lv_color_hex(0xf0f0f0), 0);
     lv_obj_set_style_text_font(lbl_row, &lv_font_montserrat_ext_16, 0);
     lv_obj_center(lbl_row);
 
@@ -290,13 +291,13 @@ void fetchAndFillLocationList() {
     lv_obj_set_style_bg_color(limit_row, lv_color_hex(0x1a0808), 0);
     lv_obj_set_style_radius(limit_row, 6, 0);
     lv_obj_set_style_border_width(limit_row, 1, 0);
-    lv_obj_set_style_border_color(limit_row, lv_color_hex(0x3a1010), 0);
+    lv_obj_set_style_border_color(limit_row, tc(TH_DANGER_BG), 0);
     lv_obj_set_style_pad_all(limit_row, 0, 0);
     lv_obj_clear_flag(limit_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     lv_obj_t *limit_lbl = lv_label_create(limit_row);
     char limit_buf[64]; strncpy(limit_buf, T(STR_LOCATION_LIMIT_HIT), sizeof(limit_buf)-1);
     lv_label_set_text(limit_lbl, limit_buf);
-    lv_obj_set_style_text_color(limit_lbl, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_color(limit_lbl, tc(TH_DANGER_TEXT), 0);
     lv_obj_set_style_text_font(limit_lbl, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(limit_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(limit_lbl, LV_LABEL_LONG_WRAP);
@@ -320,7 +321,7 @@ void fetchAndFillLocationList() {
   lv_obj_t *hint_lbl = lv_label_create(hint_row);
   char hint_buf[64]; strncpy(hint_buf, T(STR_LOCATION_HINT_EMPTY), sizeof(hint_buf)-1);
   lv_label_set_text(hint_lbl, hint_buf);
-  lv_obj_set_style_text_color(hint_lbl, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(hint_lbl, tc(TH_WARNING), 0);
   lv_obj_set_style_text_font(hint_lbl, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(hint_lbl, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(hint_lbl, LV_LABEL_LONG_WRAP);
@@ -334,7 +335,7 @@ void buildMoreInfoScreen() {
   scr_more_info = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_more_info, 480, 320);
   lv_obj_set_pos(scr_more_info, 0, 0);
-  lv_obj_set_style_bg_color(scr_more_info, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(scr_more_info, tc(TH_BLACK), 0);
   lv_obj_set_style_bg_opa(scr_more_info, LV_OPA_50, 0);
   lv_obj_set_style_border_width(scr_more_info, 0, 0);
   lv_obj_set_style_radius(scr_more_info, 0, 0);
@@ -346,7 +347,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_size(box, 464, 300);
   lv_obj_set_pos(box, 8, 10);
   lv_obj_set_style_bg_color(box, lv_color_hex(0x0b1525), 0);
-  lv_obj_set_style_border_color(box, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_border_color(box, tc(TH_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, 10, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
@@ -356,7 +357,7 @@ void buildMoreInfoScreen() {
   lv_obj_t *hdr = lv_obj_create(box);
   lv_obj_set_size(hdr, 464, 52);
   lv_obj_set_pos(hdr, 0, 0);
-  lv_obj_set_style_bg_color(hdr, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(hdr, tc(TH_BG), 0);
   lv_obj_set_style_border_width(hdr, 0, 0);
   lv_obj_set_style_radius(hdr, 0, 0);
   lv_obj_set_style_pad_all(hdr, 0, 0);
@@ -365,7 +366,7 @@ void buildMoreInfoScreen() {
   // Title — Fix 12: always "More info filament" in both languages
   lv_obj_t *lbl_title = lv_label_create(hdr);
   lv_label_set_text(lbl_title, "Filament");
-  lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_title, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(lbl_title, LV_ALIGN_CENTER, 0, 0);
 
@@ -373,8 +374,8 @@ void buildMoreInfoScreen() {
   lv_obj_t *btn_x = lv_btn_create(hdr);
   lv_obj_set_size(btn_x, 44, 44);
   lv_obj_align(btn_x, LV_ALIGN_RIGHT_MID, -4, 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_x, tc(TH_DANGER_BG), 0);
+  lv_obj_set_style_bg_color(btn_x, tc(TH_DANGER_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_x, 1, 0);
   lv_obj_set_style_border_color(btn_x, lv_color_hex(0x601010), 0);
   lv_obj_set_style_radius(btn_x, 8, 0);
@@ -384,7 +385,7 @@ void buildMoreInfoScreen() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_x = lv_label_create(btn_x);
   lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_color(lbl_x, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_color(lbl_x, tc(TH_DANGER_TEXT), 0);
   lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_x);
 
@@ -392,7 +393,7 @@ void buildMoreInfoScreen() {
   lv_obj_t *hdiv = lv_obj_create(box);
   lv_obj_set_size(hdiv, 464, 1);
   lv_obj_set_pos(hdiv, 0, 52);
-  lv_obj_set_style_bg_color(hdiv, lv_color_hex(0x1a3060), 0);
+  lv_obj_set_style_bg_color(hdiv, tc(TH_SURFACE_2), 0);
   lv_obj_set_style_border_width(hdiv, 0, 0);
   lv_obj_set_style_radius(hdiv, 0, 0);
   lv_obj_set_style_pad_all(hdiv, 0, 0);
@@ -401,7 +402,7 @@ void buildMoreInfoScreen() {
   // Cap: ID
   lv_obj_t *mi_id_cap = lv_label_create(box);
   lv_label_set_text(mi_id_cap, "ID");
-  lv_obj_set_style_text_color(mi_id_cap, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_color(mi_id_cap, tc(TH_TEXT_DIM), 0);
   lv_obj_set_style_text_font(mi_id_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(mi_id_cap, 60, 55);
 
@@ -409,7 +410,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_size(swatch, 42, 42);
   lv_obj_set_pos(swatch, 10, 60);
   lv_obj_set_style_radius(swatch, 6, 0);
-  lv_obj_set_style_border_color(swatch, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_border_color(swatch, tc(TH_TEXT_DIM), 0);
   lv_obj_set_style_border_width(swatch, 1, 0);
   lv_obj_set_style_pad_all(swatch, 0, 0);
   lv_obj_clear_flag(swatch, LV_OBJ_FLAG_SCROLLABLE);
@@ -426,14 +427,14 @@ void buildMoreInfoScreen() {
   else strncpy(id_buf, "?", sizeof(id_buf)-1);
   lv_label_set_text(lbl_id, id_buf);
   lv_obj_set_style_text_color(lbl_id,
-    (sm_found && sm_id > 0) ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
+    (sm_found && sm_id > 0) ? tc(TH_ACCENT) : tc(TH_WARNING), 0);
   lv_obj_set_style_text_font(lbl_id, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_pos(lbl_id, 60, 70);
 
   // Cap: Material
   lv_obj_t *mi_mat_cap = lv_label_create(box);
   lv_label_set_text(mi_mat_cap, "Material");
-  lv_obj_set_style_text_color(mi_mat_cap, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_color(mi_mat_cap, tc(TH_TEXT_DIM), 0);
   lv_obj_set_style_text_font(mi_mat_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(mi_mat_cap, 98, 55);
 
@@ -451,7 +452,7 @@ void buildMoreInfoScreen() {
   // Cap: Filament
   lv_obj_t *mi_fn_cap = lv_label_create(box);
   lv_label_set_text(mi_fn_cap, "Filament");
-  lv_obj_set_style_text_color(mi_fn_cap, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_color(mi_fn_cap, tc(TH_TEXT_DIM), 0);
   lv_obj_set_style_text_font(mi_fn_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(mi_fn_cap, 264, 55);
 
@@ -488,7 +489,7 @@ void buildMoreInfoScreen() {
   hex_cap[sizeof(hex_cap)-1] = '\0';
   lv_obj_t *c1 = lv_label_create(box);
   lv_label_set_text(c1, hex_cap);
-  lv_obj_set_style_text_color(c1, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(c1, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(c1, &lv_font_montserrat_ext_14, 0);  // Fix 6: 12→14
   lv_obj_set_pos(c1, CA, 114);
   lv_obj_t *v1 = lv_label_create(box);
@@ -504,7 +505,7 @@ void buildMoreInfoScreen() {
   prod_cap[sizeof(prod_cap)-1] = '\0';
   lv_obj_t *c2 = lv_label_create(box);
   lv_label_set_text(c2, prod_cap);
-  lv_obj_set_style_text_color(c2, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(c2, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(c2, &lv_font_montserrat_ext_14, 0);  // Fix 6
   lv_obj_set_pos(c2, CB, 114);
   lv_obj_t *v2 = lv_label_create(box);
@@ -518,12 +519,12 @@ void buildMoreInfoScreen() {
   art_cap[sizeof(art_cap)-1] = '\0';
   lv_obj_t *c3 = lv_label_create(box);
   lv_label_set_text(c3, art_cap);
-  lv_obj_set_style_text_color(c3, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(c3, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(c3, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_pos(c3, CA, 158);
   lv_obj_t *v3 = lv_label_create(box);
   lv_label_set_text(v3, strlen(sm_article_nr) > 0 ? sm_article_nr : "-");
-  lv_obj_set_style_text_color(v3, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(v3, tc(TH_TEXT), 0);
   lv_obj_set_style_text_font(v3, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_pos(v3, CA, 158 + VF);
 
@@ -532,7 +533,7 @@ void buildMoreInfoScreen() {
   sw_cap[sizeof(sw_cap)-1] = '\0';
   lv_obj_t *c4 = lv_label_create(box);
   lv_label_set_text(c4, sw_cap);
-  lv_obj_set_style_text_color(c4, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(c4, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(c4, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_pos(c4, CB, 158);
   lv_obj_t *v4 = lv_label_create(box);
@@ -540,7 +541,7 @@ void buildMoreInfoScreen() {
   if (sm_spool_weight > 0) snprintf(sw_buf, sizeof(sw_buf), "%.0f g", sm_spool_weight);
   else strncpy(sw_buf, "-", sizeof(sw_buf)-1);
   lv_label_set_text(v4, sw_buf);
-  lv_obj_set_style_text_color(v4, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(v4, tc(TH_TEXT), 0);
   lv_obj_set_style_text_font(v4, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_pos(v4, CB, 158 + VF);
 
@@ -556,12 +557,12 @@ void buildMoreInfoScreen() {
   // Fix 7: UID left + Spoolman ID right — shifted down (y=206)
   lv_obj_t *c_uid = lv_label_create(box);
   lv_label_set_text(c_uid, "UID");
-  lv_obj_set_style_text_color(c_uid, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(c_uid, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(c_uid, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(c_uid, 10, 206);
   lv_obj_t *v_uid = lv_label_create(box);
   lv_label_set_text(v_uid, strlen(g_tag.uid_str) > 0 ? g_tag.uid_str : "-");
-  lv_obj_set_style_text_color(v_uid, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(v_uid, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(v_uid, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_pos(v_uid, 10, 206 + 13);
 
@@ -570,8 +571,8 @@ void buildMoreInfoScreen() {
   lv_obj_set_size(btn_loc, 220, 46);
   lv_obj_set_pos(btn_loc, CB - 10, 204);
   lv_obj_set_style_bg_color(btn_loc, lv_color_hex(0x0d2040), 0);
-  lv_obj_set_style_bg_color(btn_loc, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-  lv_obj_set_style_border_color(btn_loc, lv_color_hex(0x1a3060), 0);
+  lv_obj_set_style_bg_color(btn_loc, tc(TH_SURFACE_2), LV_STATE_PRESSED);
+  lv_obj_set_style_border_color(btn_loc, tc(TH_SURFACE_2), 0);
   lv_obj_set_style_border_width(btn_loc, 1, 0);
   lv_obj_set_style_radius(btn_loc, 8, 0);
   lv_obj_set_style_shadow_width(btn_loc, 0, 0);
@@ -581,7 +582,7 @@ void buildMoreInfoScreen() {
   char loc_cap_buf[32];
   strncpy(loc_cap_buf, T(STR_BTN_LOCATION), sizeof(loc_cap_buf)-1);
   lv_label_set_text(btn_loc_cap, loc_cap_buf);
-  lv_obj_set_style_text_color(btn_loc_cap, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(btn_loc_cap, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(btn_loc_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(btn_loc_cap, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(btn_loc_cap, LV_ALIGN_CENTER, 0, -11);
@@ -591,7 +592,7 @@ void buildMoreInfoScreen() {
   strncpy(loc_val_buf, sm_location_name[0] ? sm_location_name : "-", sizeof(loc_val_buf)-1);
   loc_val_buf[sizeof(loc_val_buf)-1] = '\0';
   lv_label_set_text(btn_loc_val, loc_val_buf);
-  lv_obj_set_style_text_color(btn_loc_val, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(btn_loc_val, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(btn_loc_val, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(btn_loc_val, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_width(btn_loc_val, 204);
@@ -607,7 +608,7 @@ void buildMoreInfoScreen() {
   // Spoolman UUID — shifted down (y=246)
   lv_obj_t *c_uuid = lv_label_create(box);
   { char ub[32]; snprintf(ub, sizeof(ub), "%s UUID", backendName()); lv_label_set_text(c_uuid, ub); }
-  lv_obj_set_style_text_color(c_uuid, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(c_uuid, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(c_uuid, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_pos(c_uuid, 10, 248);
   lv_obj_t *v_uuid = lv_label_create(box);
@@ -624,8 +625,8 @@ void buildMoreInfoScreen() {
     lv_obj_t *btn_unlink = lv_btn_create(box);
     lv_obj_set_size(btn_unlink, 104, 34);
     lv_obj_set_pos(btn_unlink, 348, 258);
-    lv_obj_set_style_bg_color(btn_unlink, lv_color_hex(0x3a1010), 0);
-    lv_obj_set_style_bg_color(btn_unlink, lv_color_hex(0x602020), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_unlink, tc(TH_DANGER_BG), 0);
+    lv_obj_set_style_bg_color(btn_unlink, tc(TH_DANGER_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_unlink, 8, 0);
     lv_obj_set_style_shadow_width(btn_unlink, 0, 0);
     lv_obj_set_style_border_width(btn_unlink, 1, 0);
@@ -635,7 +636,7 @@ void buildMoreInfoScreen() {
       lv_obj_t *pop = lv_obj_create(lv_scr_act());
       lv_obj_set_size(pop, 480, 320);
       lv_obj_set_pos(pop, 0, 0);
-      lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
+      lv_obj_set_style_bg_color(pop, tc(TH_BLACK), 0);
       lv_obj_set_style_bg_opa(pop, LV_OPA_80, 0);
       lv_obj_set_style_border_width(pop, 0, 0);
       lv_obj_set_style_radius(pop, 0, 0);
@@ -646,7 +647,7 @@ void buildMoreInfoScreen() {
       lv_obj_set_size(box2, 420, 210);
       lv_obj_align(box2, LV_ALIGN_CENTER, 0, 0);
       lv_obj_set_style_bg_color(box2, lv_color_hex(0x1a0808), 0);
-      lv_obj_set_style_border_color(box2, lv_color_hex(0x602020), 0);
+      lv_obj_set_style_border_color(box2, tc(TH_DANGER_PRESSED), 0);
       lv_obj_set_style_border_width(box2, 2, 0);
       lv_obj_set_style_radius(box2, 12, 0);
       lv_obj_set_style_pad_all(box2, 0, 0);
@@ -655,14 +656,14 @@ void buildMoreInfoScreen() {
       lv_obj_t *lbl_t = lv_label_create(box2);
       char buf_t[48]; strncpy(buf_t, T(STR_UNLINK_TITLE), sizeof(buf_t)-1);
       lv_label_set_text(lbl_t, buf_t);
-      lv_obj_set_style_text_color(lbl_t, lv_color_hex(0xff8080), 0);
+      lv_obj_set_style_text_color(lbl_t, tc(TH_DANGER_TEXT), 0);
       lv_obj_set_style_text_font(lbl_t, &lv_font_montserrat_ext_18, 0);
       lv_obj_align(lbl_t, LV_ALIGN_TOP_MID, 0, 16);
 
       lv_obj_t *lbl_m = lv_label_create(box2);
       char buf_m[192]; backendText(T(STR_UNLINK_MSG), buf_m, sizeof(buf_m));
       lv_label_set_text(lbl_m, buf_m);
-      lv_obj_set_style_text_color(lbl_m, lv_color_hex(0xc8d8f0), 0);
+      lv_obj_set_style_text_color(lbl_m, tc(TH_TEXT), 0);
       lv_obj_set_style_text_font(lbl_m, &lv_font_montserrat_ext_14, 0);
       lv_obj_set_style_text_align(lbl_m, LV_TEXT_ALIGN_CENTER, 0);
       lv_label_set_long_mode(lbl_m, LV_LABEL_LONG_WRAP);
@@ -673,19 +674,19 @@ void buildMoreInfoScreen() {
       lv_obj_t *btn_no = lv_btn_create(box2);
       lv_obj_set_size(btn_no, 170, 44);
       lv_obj_set_pos(btn_no, 12, 154);
-      lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x0a1828), 0);
-      lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x1a2840), LV_STATE_PRESSED);
+      lv_obj_set_style_bg_color(btn_no, tc(TH_SURFACE), 0);
+      lv_obj_set_style_bg_color(btn_no, tc(TH_SURFACE_3), LV_STATE_PRESSED);
       lv_obj_set_style_radius(btn_no, 8, 0);
       lv_obj_set_style_shadow_width(btn_no, 0, 0);
       lv_obj_set_style_border_width(btn_no, 1, 0);
-      lv_obj_set_style_border_color(btn_no, lv_color_hex(0x1a2840), 0);
+      lv_obj_set_style_border_color(btn_no, tc(TH_SURFACE_3), 0);
       lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
         lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e))));
       }, LV_EVENT_CLICKED, NULL);
       lv_obj_t *lbl_no = lv_label_create(btn_no);
       char buf_no[32]; strncpy(buf_no, T(STR_CANCEL), sizeof(buf_no)-1);
       lv_label_set_text(lbl_no, buf_no);
-      lv_obj_set_style_text_color(lbl_no, lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_color(lbl_no, tc(TH_TEXT_MUTED), 0);
       lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_14, 0);
       lv_obj_align(lbl_no, LV_ALIGN_CENTER, 0, 0);
 
@@ -693,12 +694,12 @@ void buildMoreInfoScreen() {
       lv_obj_t *btn_yes = lv_btn_create(box2);
       lv_obj_set_size(btn_yes, 220, 44);
       lv_obj_set_pos(btn_yes, 190, 154);
-      lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x3a1010), 0);
-      lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x602020), LV_STATE_PRESSED);
+      lv_obj_set_style_bg_color(btn_yes, tc(TH_DANGER_BG), 0);
+      lv_obj_set_style_bg_color(btn_yes, tc(TH_DANGER_PRESSED), LV_STATE_PRESSED);
       lv_obj_set_style_radius(btn_yes, 8, 0);
       lv_obj_set_style_shadow_width(btn_yes, 0, 0);
       lv_obj_set_style_border_width(btn_yes, 1, 0);
-      lv_obj_set_style_border_color(btn_yes, lv_color_hex(0x602020), 0);
+      lv_obj_set_style_border_color(btn_yes, tc(TH_DANGER_PRESSED), 0);
       lv_obj_add_event_cb(btn_yes, [](lv_event_t *e) {
         // Close popup
         lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e))));
@@ -714,7 +715,7 @@ void buildMoreInfoScreen() {
       lv_obj_t *lbl_yes = lv_label_create(btn_yes);
       char buf_yes[48]; strncpy(buf_yes, T(STR_UNLINK_CONFIRM), sizeof(buf_yes)-1);
       lv_label_set_text(lbl_yes, buf_yes);
-      lv_obj_set_style_text_color(lbl_yes, lv_color_hex(0xff8080), 0);
+      lv_obj_set_style_text_color(lbl_yes, tc(TH_DANGER_TEXT), 0);
       lv_obj_set_style_text_font(lbl_yes, &lv_font_montserrat_ext_14, 0);
       lv_obj_align(lbl_yes, LV_ALIGN_CENTER, 0, 0);
     }, LV_EVENT_CLICKED, NULL);
@@ -722,7 +723,7 @@ void buildMoreInfoScreen() {
     lv_obj_t *lbl_unlink = lv_label_create(btn_unlink);
     char buf_ul[16]; strncpy(buf_ul, T(STR_UNLINK_BTN), sizeof(buf_ul)-1);
     lv_label_set_text(lbl_unlink, buf_ul);
-    lv_obj_set_style_text_color(lbl_unlink, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_color(lbl_unlink, tc(TH_DANGER_TEXT), 0);
     lv_obj_set_style_text_font(lbl_unlink, &lv_font_montserrat_ext_14, 0);
     lv_obj_align(lbl_unlink, LV_ALIGN_CENTER, 0, 0);
   }

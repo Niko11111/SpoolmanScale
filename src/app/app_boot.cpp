@@ -25,6 +25,7 @@
 #include "ui/setup_welcome_screen.h"
 #include "ui/wifi_setup_screen.h"
 #include "lang.h"
+#include "ui/theme.h"
 
 // ============================================================
 //  CONNECT WIFI
@@ -70,7 +71,7 @@ void wifiConnect() {
       updateHeaderStatus();
       lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));
       lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-      lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+      lv_obj_set_style_text_color(lbl_status, tc(TH_WARNING), 0);
       lv_timer_handler();
       return;
   }
@@ -79,7 +80,7 @@ void wifiConnect() {
   updateHeaderStatus();
   lv_label_set_text(lbl_spoolman_weight, T(STR_NO_WIFI));
   lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_status, tc(TH_WARNING), 0);
   lv_timer_handler();
 }
 

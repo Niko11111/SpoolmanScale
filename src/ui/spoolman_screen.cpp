@@ -17,6 +17,7 @@
 #include "header_status.h"
 #include "lang.h"
 #include "ui_common.h"
+#include "theme.h"
 
 
 
@@ -47,7 +48,7 @@ void buildSpoolmanScreen() {
   lv_obj_set_style_border_width(scr_spoolman, 0, 0);
   lv_obj_set_style_pad_all(scr_spoolman, 0, 0);
   lv_obj_clear_flag(scr_spoolman, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_spoolman, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(scr_spoolman, tc(TH_BG), 0);
 
   // Header. The product name is not translated, so it is composed here
   // instead of living in lang.cpp twice.
@@ -70,7 +71,7 @@ void buildSpoolmanScreen() {
            backendIsFilaMan() ? "8002" : "7912");
   lv_obj_t *lbl_hint = lv_label_create(scr_spoolman);
   lv_label_set_text(lbl_hint, buf_hint);
-  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_hint, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 52);
@@ -86,8 +87,8 @@ void buildSpoolmanScreen() {
   lv_obj_t *input_box = lv_obj_create(scr_spoolman);
   lv_obj_set_size(input_box, 420, 34);
   lv_obj_align(input_box, LV_ALIGN_TOP_MID, 0, 68);
-  lv_obj_set_style_bg_color(input_box, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_border_color(input_box, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_bg_color(input_box, tc(TH_SURFACE), 0);
+  lv_obj_set_style_border_color(input_box, tc(TH_ACCENT), 0);
   lv_obj_set_style_border_width(input_box, 1, 0);
   lv_obj_set_style_radius(input_box, 6, 0);
   lv_obj_set_style_pad_all(input_box, 0, 0);
@@ -95,7 +96,7 @@ void buildSpoolmanScreen() {
 
   lbl_sp_ip_display = lv_label_create(input_box);
   lv_label_set_text(lbl_sp_ip_display, sp_ip_input[0] ? sp_ip_input : "_");
-  lv_obj_set_style_text_color(lbl_sp_ip_display, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_sp_ip_display, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_sp_ip_display, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_style_text_align(lbl_sp_ip_display, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_center(lbl_sp_ip_display);
@@ -121,16 +122,16 @@ void buildSpoolmanScreen() {
     lv_obj_t *btn = lv_btn_create(scr_spoolman);
     lv_obj_set_size(btn, NP_W, NP_H);
     lv_obj_set_pos(btn, bx, by);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn, tc(TH_SURFACE), 0);
+    lv_obj_set_style_bg_color(btn, tc(TH_SURFACE_2), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn, 6, 0);
     lv_obj_set_style_shadow_width(btn, 0, 0);
     lv_obj_set_style_border_width(btn, 1, 0);
-    lv_obj_set_style_border_color(btn, lv_color_hex(0x1a2840), 0);
+    lv_obj_set_style_border_color(btn, tc(TH_SURFACE_3), 0);
 
     lv_obj_t *lbl = lv_label_create(btn);
     lv_label_set_text(lbl, np_labels[i]);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
+    lv_obj_set_style_text_color(lbl, tc(TH_TEXT_BRIGHT), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
     lv_obj_center(lbl);
 
@@ -152,12 +153,12 @@ void buildSpoolmanScreen() {
   lv_obj_t *btn_del = lv_btn_create(scr_spoolman);
   lv_obj_set_size(btn_del, bw5, NP_H);
   lv_obj_set_pos(btn_del, NP_PAD_X, by5);
-  lv_obj_set_style_bg_color(btn_del, lv_color_hex(0x1a2030), 0);
+  lv_obj_set_style_bg_color(btn_del, tc(TH_SURFACE_DARK), 0);
   lv_obj_set_style_bg_color(btn_del, lv_color_hex(0x2a3040), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_del, 6, 0);
   lv_obj_set_style_shadow_width(btn_del, 0, 0);
   lv_obj_set_style_border_width(btn_del, 1, 0);
-  lv_obj_set_style_border_color(btn_del, lv_color_hex(0x1a2840), 0);
+  lv_obj_set_style_border_color(btn_del, tc(TH_SURFACE_3), 0);
   lv_obj_add_event_cb(btn_del, [](lv_event_t *e) {
     int len = strlen(sp_ip_input);
     if (len > 0) sp_ip_input[len-1] = '\0';
@@ -165,7 +166,7 @@ void buildSpoolmanScreen() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_del = lv_label_create(btn_del);
   lv_label_set_text(lbl_del, LV_SYMBOL_BACKSPACE);
-  lv_obj_set_style_text_color(lbl_del, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_del, tc(TH_TEXT), 0);
   lv_obj_set_style_text_font(lbl_del, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_del);
 
@@ -173,12 +174,12 @@ void buildSpoolmanScreen() {
   lv_obj_t *btn_ok = lv_btn_create(scr_spoolman);
   lv_obj_set_size(btn_ok, bw5, NP_H);
   lv_obj_set_pos(btn_ok, NP_PAD_X + bw5 + NP_GAP, by5);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x1a3020), 0);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_ok, tc(TH_OK_BG), 0);
+  lv_obj_set_style_bg_color(btn_ok, tc(TH_SUCCESS_BG), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ok, 6, 0);
   lv_obj_set_style_shadow_width(btn_ok, 0, 0);
   lv_obj_set_style_border_width(btn_ok, 1, 0);
-  lv_obj_set_style_border_color(btn_ok, lv_color_hex(0x2a5030), 0);
+  lv_obj_set_style_border_color(btn_ok, tc(TH_SUCCESS_BG), 0);
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
     if (!sp_ip_input[0]) return;
     backendSetHost(sp_ip_input);
@@ -186,7 +187,7 @@ void buildSpoolmanScreen() {
     // Show testing status
     if (lbl_sp_test_result) {
       lv_label_set_text(lbl_sp_test_result, "Connecting...");
-      lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_color(lbl_sp_test_result, tc(TH_TEXT_MUTED), 0);
     }
     if (btn_sp_extra_fields) lv_obj_add_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
     lv_timer_handler();
@@ -200,7 +201,7 @@ void buildSpoolmanScreen() {
         char buf[48];
         snprintf(buf, sizeof(buf), "Error: HTTP %d", hcode);
         lv_label_set_text(lbl_sp_test_result, buf);
-        lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0xff8080), 0);
+        lv_obj_set_style_text_color(lbl_sp_test_result, tc(TH_DANGER_TEXT), 0);
       }
       logSDf("Spoolman IP test FAIL: HTTP %d ip=%s", hcode, sp_ip_input);
       Serial.printf("Spoolman IP test FAIL: HTTP %d ip=%s\n", hcode, sp_ip_input);
@@ -228,7 +229,7 @@ void buildSpoolmanScreen() {
     }
     if (lbl_sp_test_result) {
       lv_label_set_text(lbl_sp_test_result, result_buf);
-      lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x40c080), 0);
+      lv_obj_set_style_text_color(lbl_sp_test_result, tc(TH_SUCCESS_TEXT), 0);
     }
     // Reveal the button again. In FilaMan it only leads somewhere during the
     // setup, where it is the step to the credentials.
@@ -242,7 +243,7 @@ void buildSpoolmanScreen() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
   lv_label_set_text(lbl_ok, T(STR_BTN_SAVE));
-  lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0x40c080), 0);
+  lv_obj_set_style_text_color(lbl_ok, tc(TH_SUCCESS_TEXT), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_ok);
 
@@ -254,7 +255,7 @@ void buildSpoolmanScreen() {
   // Test result label — left side, y=281
   lbl_sp_test_result = lv_label_create(scr_spoolman);
   lv_label_set_text(lbl_sp_test_result, "");
-  lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_sp_test_result, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(lbl_sp_test_result, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_sp_test_result, LV_TEXT_ALIGN_LEFT, 0);
   lv_obj_set_size(lbl_sp_test_result, 260, BOT_H);
@@ -264,12 +265,12 @@ void buildSpoolmanScreen() {
   btn_sp_extra_fields = lv_btn_create(scr_spoolman);
   lv_obj_set_size(btn_sp_extra_fields, 170, BOT_H);
   lv_obj_set_pos(btn_sp_extra_fields, 480 - NP_PAD_X - 170, BOT_Y);
-  lv_obj_set_style_bg_color(btn_sp_extra_fields, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_sp_extra_fields, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_sp_extra_fields, tc(TH_TILE_BG), 0);
+  lv_obj_set_style_bg_color(btn_sp_extra_fields, tc(TH_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_sp_extra_fields, 8, 0);
   lv_obj_set_style_shadow_width(btn_sp_extra_fields, 0, 0);
   lv_obj_set_style_border_width(btn_sp_extra_fields, 1, 0);
-  lv_obj_set_style_border_color(btn_sp_extra_fields, lv_color_hex(0x1a3060), 0);
+  lv_obj_set_style_border_color(btn_sp_extra_fields, tc(TH_SURFACE_2), 0);
   // This button doubles as the step onward during setup, which is why it
   // starts hidden there and only appears once the connection test passed.
   // FilaMan needs no extra fields at all, it accepts custom_fields keys
@@ -290,7 +291,7 @@ void buildSpoolmanScreen() {
     if (backendIsFilaMan()) snprintf(ef_buf, sizeof(ef_buf), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_NEXT));
     else                    snprintf(ef_buf, sizeof(ef_buf), "Extra Fields  " LV_SYMBOL_RIGHT);
     lv_label_set_text(lbl_ef, ef_buf); }
-  lv_obj_set_style_text_color(lbl_ef, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_ef, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_ef, &lv_font_montserrat_ext_14, 0);
   lv_obj_align(lbl_ef, LV_ALIGN_CENTER, 0, 0);
 }
@@ -319,12 +320,12 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
   lv_obj_set_style_border_width(scr_spoolman_fail, 0, 0);
   lv_obj_set_style_pad_all(scr_spoolman_fail, 0, 0);
   lv_obj_clear_flag(scr_spoolman_fail, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_spoolman_fail, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(scr_spoolman_fail, tc(TH_BG), 0);
 
   // Title
   lv_obj_t *lbl_title = lv_label_create(scr_spoolman_fail);
   lv_label_set_text(lbl_title, buf_title);
-  lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_title, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 20);
 
@@ -339,7 +340,7 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
   // Warning icon
   lv_obj_t *lbl_icon = lv_label_create(scr_spoolman_fail);
   lv_label_set_text(lbl_icon, LV_SYMBOL_WARNING);
-  lv_obj_set_style_text_color(lbl_icon, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_color(lbl_icon, tc(TH_DANGER_TEXT), 0);
   lv_obj_set_style_text_font(lbl_icon, &lv_font_montserrat_ext_24, 0);
   lv_obj_align(lbl_icon, LV_ALIGN_TOP_MID, 0, 60);
 
@@ -348,7 +349,7 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
   snprintf(ip_buf, sizeof(ip_buf), "http://%s", cfg_spoolman_ip);
   lv_obj_t *lbl_ip = lv_label_create(scr_spoolman_fail);
   lv_label_set_text(lbl_ip, ip_buf);
-  lv_obj_set_style_text_color(lbl_ip, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_ip, tc(TH_WARNING), 0);
   lv_obj_set_style_text_font(lbl_ip, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_ip, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_ip, LV_LABEL_LONG_DOT);
@@ -358,7 +359,7 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
   // Error message (from RAM buffer)
   lv_obj_t *lbl_msg = lv_label_create(scr_spoolman_fail);
   lv_label_set_text(lbl_msg, buf_msg);
-  lv_obj_set_style_text_color(lbl_msg, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_color(lbl_msg, tc(TH_DANGER_TEXT), 0);
   lv_obj_set_style_text_font(lbl_msg, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_msg, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_msg, LV_LABEL_LONG_WRAP);
@@ -369,8 +370,8 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
   lv_obj_t *btn_retry = lv_btn_create(scr_spoolman_fail);
   lv_obj_set_size(btn_retry, 210, 50);
   lv_obj_set_pos(btn_retry, 16, 248);
-  lv_obj_set_style_bg_color(btn_retry, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_retry, lv_color_hex(0x602020), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_retry, tc(TH_DANGER_BG), 0);
+  lv_obj_set_style_bg_color(btn_retry, tc(TH_DANGER_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_retry, 8, 0);
   lv_obj_set_style_shadow_width(btn_retry, 0, 0);
   lv_obj_set_style_border_width(btn_retry, 0, 0);
@@ -380,7 +381,7 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_r = lv_label_create(btn_retry);
   lv_label_set_text(lbl_r, buf_retry);
-  lv_obj_set_style_text_color(lbl_r, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_color(lbl_r, tc(TH_DANGER_TEXT), 0);
   lv_obj_set_style_text_font(lbl_r, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_r);
 
@@ -388,7 +389,7 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
   lv_obj_t *btn_cont = lv_btn_create(scr_spoolman_fail);
   lv_obj_set_size(btn_cont, 210, 50);
   lv_obj_set_pos(btn_cont, 254, 248);
-  lv_obj_set_style_bg_color(btn_cont, lv_color_hex(0x1a2030), 0);
+  lv_obj_set_style_bg_color(btn_cont, tc(TH_SURFACE_DARK), 0);
   lv_obj_set_style_bg_color(btn_cont, lv_color_hex(0x2a3040), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_cont, 8, 0);
   lv_obj_set_style_shadow_width(btn_cont, 0, 0);
@@ -406,7 +407,7 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_c = lv_label_create(btn_cont);
   lv_label_set_text(lbl_c, buf_skip);
-  lv_obj_set_style_text_color(lbl_c, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_c, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(lbl_c, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_c);
 }
