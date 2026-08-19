@@ -643,4 +643,7 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "wenn kein Tag aufgelegt wird", "when no tag is presented"           },  // STR_FLM_TAGLESS_SUB
   { "Spule gewählt - jetzt wiegen", "Spool selected - weigh it now"      },  // STR_REMOTE_LINK_WEIGH
   { "Wecken bei Auflage",           "Wake on load"                       },  // STR_WAKE_ON_LOAD
+  { LV_SYMBOL_EYE_CLOSE "  Bildschirm aus nach (Min.)",
+    LV_SYMBOL_EYE_CLOSE "  Screen off after (min.)"        },  // STR_SCREENOFF_LABEL
+  { "Nie",                           "Never"                              },  // STR_SCREENOFF_NEVER
 };

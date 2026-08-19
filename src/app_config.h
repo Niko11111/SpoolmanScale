@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.6.3-beta.7"
+#define FW_VERSION  "v0.6.3-beta.8"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -15,6 +15,7 @@
 #define BRIGHT_NORMAL_DEFAULT    255
 #define DIM_TIMEOUT_DEFAULT   300000
 #define SLEEP_TIMEOUT_DEFAULT 1200000
+#define OFF_TIMEOUT_DEFAULT        0   // 0 = stage skipped
 
 #define CAL_FACTOR_DEFAULT  1.0f
 #define SCALE_FILTER_SIZE   8

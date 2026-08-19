@@ -13,10 +13,12 @@
 
 static unsigned long last_activity_ms = 0;
 static bool is_dimmed = false;
+static bool is_off = false;
 
 void displayPowerInit() {
   last_activity_ms = millis();
   is_dimmed = false;
+  is_off = false;
   // loadPrefs() has already restored bright_normal from NVS by this point;
   // nothing else pushed it to the hardware, so the saved level only took
   // effect after the first dim/wake cycle.
@@ -25,10 +27,13 @@ void displayPowerInit() {
 
 void resetActivityTimer() {
   last_activity_ms = millis();
-  if (is_dimmed) {
+  if (is_off) {
+    displayBacklightOn((uint8_t)bright_normal);
+  } else if (is_dimmed) {
     displaySetBrightness((uint8_t)bright_normal);
-    is_dimmed = false;
   }
+  is_dimmed = false;
+  is_off = false;
 }
 
 
@@ -74,8 +79,19 @@ void handlePowerManagement() {
   //
   // Only reachable since the saved brightness actually arrives at the panel.
   // Before that every boot ran at a hardcoded 204 and 204 -> 77 was a real dim.
-  if (!is_dimmed && elapsed >= (unsigned long)dim_timeout_ms) {
+  if (!is_dimmed && dim_timeout_ms > 0 &&
+      elapsed >= (unsigned long)dim_timeout_ms) {
     displaySetBrightness(BRIGHT_MIN);
     is_dimmed = true;
+  }
+
+  // Backlight off, everything else still running, so the device stays
+  // reachable. No wake source needed: nothing slept.
+  if (!is_off && off_timeout_ms > 0 &&
+      elapsed >= (unsigned long)off_timeout_ms) {
+    displayBacklightOff();
+    is_off = true;
+    is_dimmed = true;
+    logSD("Screen off: panel dark, device still online");
   }
 }

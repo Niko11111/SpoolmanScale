@@ -56,9 +56,10 @@ void buildDisplayScreen() {
   // offset below it by hand.
   const int Y_BRIGHT_LBL = 4,   Y_BRIGHT_SLIDER = 26;
   const int Y_DIM_LBL    = 58,  Y_DIM_ROW       = 80;
-  const int Y_SLEEP_LBL  = 128, Y_SLEEP_ROW     = 150;
-  const int Y_WAKE_ROW   = 198;
-  const int Y_HINT       = 244;
+  const int Y_OFF_LBL    = 128, Y_OFF_ROW       = 150;
+  const int Y_SLEEP_LBL  = 198, Y_SLEEP_ROW     = 220;
+  const int Y_WAKE_ROW   = 268;
+  const int Y_HINT       = 314;
 
   lv_obj_t *lbl_bright = lv_label_create(body);
   lv_label_set_text(lbl_bright, T(STR_BRIGHT_LABEL));
@@ -88,6 +89,12 @@ void buildDisplayScreen() {
     Serial.printf("Brightness saved: %d\n", val);
   }, LV_EVENT_RELEASED, NULL);
 
+  // Stages must stay in order: dim, screen off, sleep. Values that would
+  // break it are drawn disabled below. 0 = never, so it never conflicts.
+  const int cur_dim   = dim_timeout_ms / 60000;
+  const int cur_off   = off_timeout_ms / 60000;
+  const int cur_sleep = sleep_timeout_ms / 60000;
+
   lv_obj_t *lbl_dim = lv_label_create(body);
   lv_label_set_text(lbl_dim, T(STR_DIM_LABEL));
   lv_obj_set_style_text_color(lbl_dim, lv_color_hex(0xc8d8f0), 0);
@@ -95,23 +102,37 @@ void buildDisplayScreen() {
   lv_obj_set_style_text_align(lbl_dim, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_dim, LV_ALIGN_TOP_MID, 0, Y_DIM_LBL);
 
-  int dim_vals[] = {1, 2, 5, 10};
-  int cur_dim = dim_timeout_ms / 60000;
-  const int BTN_W = 88, BTN_H = 36, BTN_GAP = 8;
-  const int BTN_START_X = (480 - 4*BTN_W - 3*BTN_GAP) / 2;
-  for (int i = 0; i < 4; i++) {
+  int dim_vals[] = {1, 2, 5, 10, 0};
+  const int BTN_W = 88, BTN_H = 36, BTN_GAP = 4;   // five buttons now, same spacing as the other rows
+  const int BTN_START_X = (480 - 5*BTN_W - 4*BTN_GAP) / 2;
+  for (int i = 0; i < 5; i++) {
     lv_obj_t *b = lv_btn_create(body);
     lv_obj_set_size(b, BTN_W, BTN_H);
     lv_obj_set_pos(b, BTN_START_X + i * (BTN_W + BTN_GAP), Y_DIM_ROW);
     bool active = (cur_dim == dim_vals[i]);
+    const bool allowed = dim_vals[i] == 0 ||
+                         ((cur_off == 0 || dim_vals[i] < cur_off) &&
+                          (cur_sleep == 0 || dim_vals[i] < cur_sleep));
     lv_obj_set_style_bg_color(b, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
+    if (!allowed) {
+      lv_obj_set_style_bg_opa(b, LV_OPA_40, 0);
+      lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
+    }
     lv_obj_set_style_radius(b, 8, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, 0, 0);
-    char buf[8]; snprintf(buf, sizeof(buf), "%d Min", dim_vals[i]);
+    char buf[16];
+    if (dim_vals[i] == 0) {
+      strncpy(buf, T(STR_SCREENOFF_NEVER), sizeof(buf) - 1);
+      buf[sizeof(buf) - 1] = '\0';
+    } else {
+      snprintf(buf, sizeof(buf), "%d Min", dim_vals[i]);
+    }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);
-    lv_obj_set_style_text_color(l, active ? lv_color_hex(0x0a1020) : lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_color(l, active ? lv_color_hex(0x0a1020)
+                                 : (allowed ? lv_color_hex(0xc8d8f0)
+                                            : lv_color_hex(0x2a4060)), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
@@ -121,6 +142,55 @@ void buildDisplayScreen() {
       rebuildDisplayScreen();
       Serial.printf("Dim timeout: %d min\n", val);
     }, LV_EVENT_CLICKED, (void*)(intptr_t)dim_vals[i]);
+  }
+
+  lv_obj_t *lbl_off = lv_label_create(body);
+  lv_label_set_text(lbl_off, T(STR_SCREENOFF_LABEL));
+  lv_obj_set_style_text_color(lbl_off, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_font(lbl_off, &lv_font_montserrat_ext_16, 0);
+  lv_obj_set_style_text_align(lbl_off, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(lbl_off, LV_ALIGN_TOP_MID, 0, Y_OFF_LBL);
+
+  int off_vals[] = {2, 5, 10, 15, 0};
+  const int OFF_BTN_GAP = 4;   // five buttons, same tighter gap as sleep
+  const int OFF_START_X = (480 - 5*BTN_W - 4*OFF_BTN_GAP) / 2;
+  for (int i = 0; i < 5; i++) {
+    lv_obj_t *b = lv_btn_create(body);
+    lv_obj_set_size(b, BTN_W, BTN_H);
+    lv_obj_set_pos(b, OFF_START_X + i * (BTN_W + OFF_BTN_GAP), Y_OFF_ROW);
+    bool active = (cur_off == off_vals[i]);
+    const bool allowed = off_vals[i] == 0 ||
+                         ((cur_dim == 0 || off_vals[i] > cur_dim) &&
+                          (cur_sleep == 0 || off_vals[i] < cur_sleep));
+    lv_obj_set_style_bg_color(b, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
+    if (!allowed) {
+      lv_obj_set_style_bg_opa(b, LV_OPA_40, 0);
+      lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
+    }
+    lv_obj_set_style_radius(b, 8, 0);
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_set_style_border_width(b, 0, 0);
+    char buf[16];
+    if (off_vals[i] == 0) {
+      strncpy(buf, T(STR_SCREENOFF_NEVER), sizeof(buf) - 1);
+      buf[sizeof(buf) - 1] = '\0';
+    } else {
+      snprintf(buf, sizeof(buf), "%d Min", off_vals[i]);
+    }
+    lv_obj_t *l = lv_label_create(b);
+    lv_label_set_text(l, buf);
+    lv_obj_set_style_text_color(l, active ? lv_color_hex(0x0a1020)
+                                 : (allowed ? lv_color_hex(0xc8d8f0)
+                                            : lv_color_hex(0x2a4060)), 0);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
+    lv_obj_center(l);
+    lv_obj_add_event_cb(b, [](lv_event_t *e) {
+      int val = (intptr_t)lv_event_get_user_data(e);
+      off_timeout_ms = val * 60000;
+      prefsPutUInt("off_min", val);
+      rebuildDisplayScreen();
+      Serial.printf("Screen-off timeout: %d min\n", val);
+    }, LV_EVENT_CLICKED, (void*)(intptr_t)off_vals[i]);
   }
 
   lv_obj_t *lbl_sleep = lv_label_create(body);
@@ -136,13 +206,19 @@ void buildDisplayScreen() {
   int sleep_vals[] = {10, 20, 30, 60, 0};
   const int SLEEP_BTN_GAP = 4;   // five buttons need a tighter gap than four
   const int SLEEP_START_X = (480 - 5*BTN_W - 4*SLEEP_BTN_GAP) / 2;
-  int cur_sleep = sleep_timeout_ms / 60000;
   for (int i = 0; i < 5; i++) {
     lv_obj_t *b = lv_btn_create(body);
     lv_obj_set_size(b, BTN_W, BTN_H);
     lv_obj_set_pos(b, SLEEP_START_X + i * (BTN_W + SLEEP_BTN_GAP), Y_SLEEP_ROW);
     bool active = (cur_sleep == sleep_vals[i]);
+    const bool allowed = sleep_vals[i] == 0 ||
+                         ((cur_dim == 0 || sleep_vals[i] > cur_dim) &&
+                          (cur_off == 0 || sleep_vals[i] > cur_off));
     lv_obj_set_style_bg_color(b, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
+    if (!allowed) {
+      lv_obj_set_style_bg_opa(b, LV_OPA_40, 0);
+      lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
+    }
     lv_obj_set_style_radius(b, 8, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, 0, 0);
@@ -155,7 +231,9 @@ void buildDisplayScreen() {
     }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);
-    lv_obj_set_style_text_color(l, active ? lv_color_hex(0x0a1020) : lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_color(l, active ? lv_color_hex(0x0a1020)
+                                 : (allowed ? lv_color_hex(0xc8d8f0)
+                                            : lv_color_hex(0x2a4060)), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
