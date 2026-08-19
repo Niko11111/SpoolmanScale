@@ -125,6 +125,41 @@ static void applyLastUsed(const char* native_iso, int spool_id) {
 //  Used after link-flow — fetches only one spool by ID.
 //  Fills same globals and labels as querySpoolman().
 // ============================================================
+
+// The empty-spool weight can be recorded at three levels, and only the spool
+// level was read. A blank tare is treated as zero, which counts the spool
+// itself as filament -- 130 to 250 g on a nominal 1 kg spool.
+//
+// Both backends arrive here in the same shape: the FilaMan adapter already
+// maps default_spool_weight_g onto filament.spool_weight and the manufacturer
+// onto vendor.empty_spool_weight, so one chain serves both.
+//
+// Reports which level answered, because an inherited default can be well off a
+// measured one (a Sunlu spool measured at 130 g against a 180 g brand default),
+// and the difference should be visible rather than silently applied.
+static float resolveTare(JsonVariantConst spool, uint8_t *source) {
+  float w = spool["spool_weight"] | 0.0f;
+  if (w > 0) { *source = TARE_SPOOL; return w; }
+
+  w = spool["filament"]["spool_weight"] | 0.0f;
+  if (w > 0) { *source = TARE_FILAMENT; return w; }
+
+  w = spool["filament"]["vendor"]["empty_spool_weight"] | 0.0f;
+  if (w > 0) { *source = TARE_VENDOR; return w; }
+
+  *source = TARE_NONE;
+  return 0.0f;
+}
+
+static const char* tareSourceName(uint8_t s) {
+  switch (s) {
+    case TARE_SPOOL:    return "spool";
+    case TARE_FILAMENT: return "filament";
+    case TARE_VENDOR:   return "vendor";
+    default:            return "none";
+  }
+}
+
 void querySpoolmanById(int spool_id) {
   if (!wifi_ok) return;
   Serial.printf("querySpoolmanById: ID=%d\n", spool_id);
@@ -156,8 +191,9 @@ void querySpoolmanById(int spool_id) {
   sm_vendor_id    = spool["filament"]["vendor"]["id"] | 0;
   sm_remaining    = spool["remaining_weight"] | 0.0f;
   sm_total        = spool["filament"]["weight"] | 1000.0f;
-  sm_spool_weight = spool["spool_weight"] | 0.0f;
-  logSDf("Spoolman: byID OK ID=%d remaining=%.1fg", sm_id, sm_remaining);
+  sm_spool_weight = resolveTare(spool, &sm_tare_source);
+  logSDf("Spoolman: byID OK ID=%d remaining=%.1fg tare=%.0fg (%s)",
+    sm_id, sm_remaining, sm_spool_weight, tareSourceName(sm_tare_source));
 
   String art_nr = spool["filament"]["article_number"] | "";
   art_nr.trim();
@@ -333,7 +369,11 @@ void querySpoolman(const char* tray_uuid) {
   filter_spool["filament"]["article_number"] = true;
   filter_spool["filament"]["color_hex"] = true;
   filter_spool["filament"]["vendor"]["id"] = true;
+  filter_spool["filament"]["spool_weight"] = true;
   filter_spool["filament"]["vendor"]["name"] = true;
+  // Fetched so a spool with no tare of its own can fall back to the
+  // filament or brand default instead of being weighed as if empty.
+  filter_spool["filament"]["vendor"]["empty_spool_weight"] = true;
 
   // Use PSRAM for this document — frees internal RAM for LVGL
   SpiRamAllocator psram_alloc;
@@ -459,7 +499,7 @@ void querySpoolman(const char* tray_uuid) {
     sm_vendor_id   = spool["filament"]["vendor"]["id"] | 0;
     sm_remaining = spool["remaining_weight"] | 0.0f;
     sm_total    = spool["filament"]["weight"] | 1000.0f;
-    sm_spool_weight = spool["spool_weight"] | 0.0f;
+    sm_spool_weight = resolveTare(spool, &sm_tare_source);
     logSDf("Spoolman: found ID=%d remaining=%.1fg total=%.0fg",
       sm_id, sm_remaining, sm_total);
     logSDf("[verbose] LOC: querySpoolman id=%d shown_for=%d", sm_id, g_loc_popup_shown_for_id);

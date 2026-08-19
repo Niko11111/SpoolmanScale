@@ -75,6 +75,7 @@ bool  sm_found = false;
 float sm_remaining = 0;
 float sm_total = 1000;
 float sm_spool_weight = 0;
+uint8_t sm_tare_source = TARE_NONE;
 char  sm_last_dried[32] = "";
 char  sm_article_nr[32] = "";
 char  sm_filament_name[32] = "";

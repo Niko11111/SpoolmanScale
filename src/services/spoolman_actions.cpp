@@ -136,6 +136,10 @@ void patchSpoolWeight(float spool_w) {
   logSDf("PATCH spool_weight=%.1fg ID=%d HTTP %d", spool_w, sm_id, code);
   if (code == 200) {
     sm_spool_weight = spool_w;
+    // The value now comes from this spool, so drop any inherited source.
+    // Without this the details screen keeps claiming "(filament)" over a
+    // number that was just measured here.
+    sm_tare_source = TARE_SPOOL;
     Serial.printf("spool_weight OK: %.1fg\n", spool_w);
   } else {
     Serial.printf("PATCH spool_weight Fehler: %d\n", code);

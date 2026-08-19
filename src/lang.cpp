@@ -635,4 +635,6 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Weitere Optionen",              "More options"                       },  // STR_BTN_MORE_OPTIONS
   { "Ohne Nachfrage verknüpfen",     "Link without asking"                },  // STR_FLM_AUTOLINK
   { "wenn die Spule schon aufliegt", "when the spool is already on"       },  // STR_FLM_AUTOLINK_SUB
+  { " (Filament)",                   " (filament)"                        },  // STR_TARE_FROM_FILAMENT
+  { " (Hersteller)",                 " (brand)"                           },  // STR_TARE_FROM_BRAND
 };
