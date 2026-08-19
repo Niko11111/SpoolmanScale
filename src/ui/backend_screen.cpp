@@ -168,7 +168,7 @@ void buildBackendScreen() {
     lv_obj_t *b = lv_btn_create(scr_backend);
     lv_obj_set_size(b, SEG_W, SEG_H);
     lv_obj_set_pos(b, segs[i].x, SEG_Y);
-    lv_obj_set_style_bg_color(b, lv_color_hex(active ? 0x14402e : g_theme[TH_SURFACE]), 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(active ? g_theme[TH_OK_BG] : g_theme[TH_SURFACE]), 0);
     lv_obj_set_style_bg_color(b, tc(TH_SURFACE_2), LV_STATE_PRESSED);
     lv_obj_set_style_radius(b, 10, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);

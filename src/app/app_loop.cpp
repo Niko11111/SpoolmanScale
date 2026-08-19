@@ -858,7 +858,7 @@ void appLoop() {
           lv_label_set_text(lbl_last_used, "-");
           lv_label_set_text(lbl_spoolman_dried_val, "-");
         if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
-          lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
+          lv_obj_set_style_bg_color(lbl_color_swatch, tc(TH_SURFACE_3), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
           lv_obj_set_style_text_color(lbl_status, tc(TH_ACCENT), 0);
           lv_timer_handler();

@@ -196,7 +196,7 @@ void showRemoteLinkPopup(int spool_id) {
   scr_remote_link = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_remote_link, 480, 320);
   lv_obj_set_pos(scr_remote_link, 0, 0);
-  lv_obj_set_style_bg_color(scr_remote_link, tc(TH_BLACK), 0);
+  lv_obj_set_style_bg_color(scr_remote_link, tc(TH_POPUP_BG), 0);
   lv_obj_set_style_bg_opa(scr_remote_link, LV_OPA_80, 0);
   lv_obj_set_style_border_width(scr_remote_link, 0, 0);
   lv_obj_set_style_radius(scr_remote_link, 0, 0);
@@ -208,7 +208,7 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_t *box = lv_obj_create(scr_remote_link);
   lv_obj_set_size(box, 440, mismatch ? 300 : 260);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
+  lv_obj_set_style_bg_color(box, tc(TH_SURFACE), 0);
   lv_obj_set_style_border_color(box,
     mismatch ? tc(TH_DANGER_TEXT) : tc(TH_ACCENT), 0);
   lv_obj_set_style_border_width(box, 2, 0);
@@ -371,9 +371,9 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_set_size(btn_ok, 420, 48);
   lv_obj_align(btn_ok, LV_ALIGN_TOP_MID, 0, y_after_head);
   lv_obj_set_style_bg_color(btn_ok,
-    mismatch ? tc(TH_DANGER_BG) : lv_color_hex(0x0d3d2e), 0);
+    mismatch ? tc(TH_DANGER_BG) : tc(TH_OK_BG), 0);
   lv_obj_set_style_bg_color(btn_ok,
-    mismatch ? tc(TH_DANGER_PRESSED) : lv_color_hex(0x18705a), LV_STATE_PRESSED);
+    mismatch ? tc(TH_DANGER_PRESSED) : tc(TH_SUCCESS_BG), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ok, 8, 0);
   lv_obj_set_style_shadow_width(btn_ok, 0, 0);
   lv_obj_set_style_border_width(btn_ok, 0, 0);

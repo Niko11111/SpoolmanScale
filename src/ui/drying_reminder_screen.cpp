@@ -43,7 +43,7 @@ static void buildDryNumpadScreen(int target) {
   lv_obj_t *val_box = lv_obj_create(s_dry_numpad_scr);
   lv_obj_set_size(val_box, 380, 44);
   lv_obj_set_pos(val_box, 50, 68);
-  lv_obj_set_style_bg_color(val_box, lv_color_hex(0x050f1e), 0);
+  lv_obj_set_style_bg_color(val_box, tc(TH_BG), 0);
   lv_obj_set_style_border_color(val_box, tc(TH_ACCENT), 0);
   lv_obj_set_style_border_width(val_box, 1, 0);
   lv_obj_set_style_radius(val_box, 8, 0);
@@ -70,8 +70,8 @@ static void buildDryNumpadScreen(int target) {
     lv_obj_t *kb = lv_btn_create(s_dry_numpad_scr);
     lv_obj_set_size(kb, NP_W, NP_H);
     lv_obj_set_pos(kb, bx, by);
-    lv_obj_set_style_bg_color(kb, is_del ? lv_color_hex(0x1a1020) :
-                                  is_ok  ? lv_color_hex(0x1a4030) :
+    lv_obj_set_style_bg_color(kb, is_del ? tc(TH_BG) :
+                                  is_ok  ? lv_color_hex(g_theme[TH_OK_BG]) :
                                            tc(TH_SURFACE), 0);
     lv_obj_set_style_bg_color(kb, tc(TH_BORDER), LV_STATE_PRESSED);
     lv_obj_set_style_radius(kb, 6, 0);
@@ -142,7 +142,7 @@ void showDryingReminderScreen() {
     lv_obj_t *mb = lv_btn_create(scr_drying_reminder);
     lv_obj_set_size(mb, btn_w, btn_h);
     lv_obj_set_pos(mb, btn_x0 + m*(btn_w+btn_gap), btn_y);
-    lv_obj_set_style_bg_color(mb, active ? lv_color_hex(0x0d2e1a) : tc(TH_SURFACE), 0);
+    lv_obj_set_style_bg_color(mb, active ? tc(TH_OK_BG) : tc(TH_SURFACE), 0);
     lv_obj_set_style_bg_color(mb, tc(TH_BORDER), LV_STATE_PRESSED);
     lv_obj_set_style_border_color(mb, active ? tc(TH_ACCENT) : tc(TH_BORDER), 0);
     lv_obj_set_style_border_width(mb, 1, 0);
@@ -219,7 +219,7 @@ void showDryingReminderScreen() {
     lv_obj_t *tbl_cont = lv_obj_create(scr_drying_reminder);
     lv_obj_set_size(tbl_cont, 456, 162);
     lv_obj_set_pos(tbl_cont, 12, content_y + 4);
-    lv_obj_set_style_bg_color(tbl_cont, lv_color_hex(0x050f1e), 0);
+    lv_obj_set_style_bg_color(tbl_cont, tc(TH_BG), 0);
     lv_obj_set_style_border_color(tbl_cont, tc(TH_BORDER), 0);
     lv_obj_set_style_border_width(tbl_cont, 1, 0);
     lv_obj_set_style_radius(tbl_cont, 8, 0);

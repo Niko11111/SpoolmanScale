@@ -294,7 +294,7 @@ void querySpoolman(const char* tray_uuid) {
   if (!is_bambu_tag) {
     lv_label_set_text(lbl_material, "-");
     lv_label_set_text(lbl_vendor, "-");
-    lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
+    lv_obj_set_style_bg_color(lbl_color_swatch, tc(TH_SURFACE_3), 0);
   }
   sm_last_dried[0] = '\0';
   sm_article_nr[0] = '\0';

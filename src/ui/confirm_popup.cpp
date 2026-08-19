@@ -35,7 +35,7 @@ void showConfirmPopup(const char* msg, int action) {
   confirm_popup = lv_obj_create(lv_scr_act());
   lv_obj_set_size(confirm_popup, 480, 320);
   lv_obj_set_pos(confirm_popup, 0, 0);
-  lv_obj_set_style_bg_color(confirm_popup, tc(TH_BLACK), 0);
+  lv_obj_set_style_bg_color(confirm_popup, tc(TH_POPUP_BG), 0);
   lv_obj_set_style_bg_opa(confirm_popup, LV_OPA_70, 0);
   lv_obj_set_style_border_width(confirm_popup, 0, 0);
   lv_obj_set_style_radius(confirm_popup, 0, 0);
@@ -43,8 +43,8 @@ void showConfirmPopup(const char* msg, int action) {
   lv_obj_clear_flag(confirm_popup, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *box = lv_obj_create(confirm_popup);
-  lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
-  lv_obj_set_style_border_color(box, lv_color_hex(0x2a4080), 0);
+  lv_obj_set_style_bg_color(box, tc(TH_SURFACE), 0);
+  lv_obj_set_style_border_color(box, tc(TH_SURFACE_2), 0);
   lv_obj_set_style_border_width(box, 2, 0);
   lv_obj_set_style_radius(box, 12, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
@@ -96,8 +96,8 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_t *btn1 = lv_btn_create(box);
     lv_obj_set_size(btn1, BW2, H_ROW1);
     lv_obj_set_pos(btn1, XL, Y1);
-    lv_obj_set_style_bg_color(btn1, lv_color_hex(0x1a4020), 0);
-    lv_obj_set_style_bg_color(btn1, lv_color_hex(0x2a7030), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn1, tc(TH_OK_BG), 0);
+    lv_obj_set_style_bg_color(btn1, tc(TH_SUCCESS_BG), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn1, 8, 0);
     lv_obj_set_style_shadow_width(btn1, 0, 0);
     lv_obj_add_event_cb(btn1, [](lv_event_t *e) {
@@ -110,7 +110,7 @@ void showConfirmPopup(const char* msg, int action) {
     char buf1[48];
     snprintf(buf1, sizeof(buf1), T(STR_BTN_NO_BAG_VAL), netto_plain);
     lv_label_set_text(l1, buf1);
-    lv_obj_set_style_text_color(l1, lv_color_hex(0x80ffb0), 0);
+    lv_obj_set_style_text_color(l1, tc(TH_SUCCESS_TEXT), 0);
     lv_obj_set_style_text_font(l1, &lv_font_montserrat_ext_16, 0);
     lv_obj_set_style_text_align(l1, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(l1);
@@ -119,8 +119,8 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_t *btn2 = lv_btn_create(box);
     lv_obj_set_size(btn2, BW2, H_ROW1);
     lv_obj_set_pos(btn2, XR, Y1);
-    lv_obj_set_style_bg_color(btn2, lv_color_hex(0x1a3a20), 0);
-    lv_obj_set_style_bg_color(btn2, lv_color_hex(0x2a6030), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn2, tc(TH_OK_BG), 0);
+    lv_obj_set_style_bg_color(btn2, tc(TH_SUCCESS_BG), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn2, 8, 0);
     lv_obj_set_style_shadow_width(btn2, 0, 0);
     lv_obj_add_event_cb(btn2, [](lv_event_t *e) {
@@ -133,7 +133,7 @@ void showConfirmPopup(const char* msg, int action) {
     char buf2[56];
     snprintf(buf2, sizeof(buf2), T(STR_BTN_WITH_BAG_VAL), netto_plain, bag_weight_g);
     lv_label_set_text(l2, buf2);
-    lv_obj_set_style_text_color(l2, lv_color_hex(0x80ffb0), 0);
+    lv_obj_set_style_text_color(l2, tc(TH_SUCCESS_TEXT), 0);
     lv_obj_set_style_text_font(l2, &lv_font_montserrat_ext_16, 0);
     lv_obj_set_style_text_align(l2, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(l2);
@@ -142,8 +142,8 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_t *btn3 = lv_btn_create(box);
     lv_obj_set_size(btn3, BW2, H_ROW2);
     lv_obj_set_pos(btn3, XL, Y2);
-    lv_obj_set_style_bg_color(btn3, lv_color_hex(0x102040), 0);
-    lv_obj_set_style_bg_color(btn3, lv_color_hex(0x1a3870), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn3, tc(TH_TILE_BG), 0);
+    lv_obj_set_style_bg_color(btn3, tc(TH_SURFACE_2), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn3, 8, 0);
     lv_obj_set_style_shadow_width(btn3, 0, 0);
     lv_obj_add_event_cb(btn3, [](lv_event_t *e) {
@@ -156,7 +156,7 @@ void showConfirmPopup(const char* msg, int action) {
     char buf3[56];
     snprintf(buf3, sizeof(buf3), T(STR_BTN_NEW_SPOOL_VAL), netto_plain);
     lv_label_set_text(l3, buf3);
-    lv_obj_set_style_text_color(l3, lv_color_hex(0x80c8ff), 0);
+    lv_obj_set_style_text_color(l3, tc(TH_TEXT_BRIGHT), 0);
     lv_obj_set_style_text_font(l3, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(l3, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(l3);
@@ -165,7 +165,7 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_t *btn4 = lv_btn_create(box);
     lv_obj_set_size(btn4, BW2, H_ROW2);
     lv_obj_set_pos(btn4, XR, Y2);
-    lv_obj_set_style_bg_color(btn4, lv_color_hex(0x1a2a40), 0);
+    lv_obj_set_style_bg_color(btn4, tc(TH_SURFACE_3), 0);
     lv_obj_set_style_bg_color(btn4, tc(TH_TEXT_DIM), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn4, 8, 0);
     lv_obj_set_style_shadow_width(btn4, 0, 0);
@@ -195,7 +195,7 @@ void showConfirmPopup(const char* msg, int action) {
       // Button 1: this spool
       lv_obj_t *b1 = lv_btn_create(popup);
       lv_obj_set_size(b1, 460, 60); lv_obj_set_pos(b1, 10, 36);
-      lv_obj_set_style_bg_color(b1, lv_color_hex(0x0a2040), 0);
+      lv_obj_set_style_bg_color(b1, tc(TH_TILE_BG), 0);
       lv_obj_set_style_radius(b1, 8, 0); lv_obj_set_style_shadow_width(b1, 0, 0);
       { lv_obj_t *l = lv_label_create(b1);
         lv_label_set_text(l, T(STR_BTN_THIS_SPOOL));
@@ -211,7 +211,7 @@ void showConfirmPopup(const char* msg, int action) {
       // Button 2: this filament
       lv_obj_t *b2 = lv_btn_create(popup);
       lv_obj_set_size(b2, 460, 60); lv_obj_set_pos(b2, 10, 106);
-      lv_obj_set_style_bg_color(b2, lv_color_hex(0x0a2820), 0);
+      lv_obj_set_style_bg_color(b2, tc(TH_OK_BG), 0);
       lv_obj_set_style_radius(b2, 8, 0); lv_obj_set_style_shadow_width(b2, 0, 0);
       { lv_obj_t *l = lv_label_create(b2);
         lv_label_set_text(l, T(STR_BTN_THIS_FILAMENT));
@@ -227,7 +227,7 @@ void showConfirmPopup(const char* msg, int action) {
       // Button 3: vendor
       lv_obj_t *b3 = lv_btn_create(popup);
       lv_obj_set_size(b3, 460, 60); lv_obj_set_pos(b3, 10, 176);
-      lv_obj_set_style_bg_color(b3, lv_color_hex(0x281a00), 0);
+      lv_obj_set_style_bg_color(b3, tc(TH_WARNING_BG), 0);
       lv_obj_set_style_radius(b3, 8, 0); lv_obj_set_style_shadow_width(b3, 0, 0);
       { lv_obj_t *l = lv_label_create(b3);
         lv_label_set_text(l, T(STR_BTN_THIS_VENDOR));
@@ -259,7 +259,7 @@ void showConfirmPopup(const char* msg, int action) {
     char buf4[56];
     snprintf(buf4, sizeof(buf4), T(STR_BTN_EMPTY_SPOOL), scale_weight_g);
     lv_label_set_text(l4, buf4);
-    lv_obj_set_style_text_color(l4, lv_color_hex(0x80c0ff), 0);
+    lv_obj_set_style_text_color(l4, tc(TH_TEXT_BRIGHT), 0);
     lv_obj_set_style_text_font(l4, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(l4, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(l4);
@@ -270,8 +270,8 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_t *btn5 = lv_btn_create(box);
     lv_obj_set_size(btn5, BW2, H_ROW3);
     lv_obj_set_pos(btn5, XL, Y3);
-    lv_obj_set_style_bg_color(btn5, g_auto_weight ? tc(TH_OK_BG) : lv_color_hex(0x101820), 0);
-    lv_obj_set_style_bg_color(btn5, g_auto_weight ? tc(TH_SUCCESS_BG) : lv_color_hex(0x1a2a38), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn5, g_auto_weight ? tc(TH_OK_BG) : tc(TH_SURFACE), 0);
+    lv_obj_set_style_bg_color(btn5, g_auto_weight ? tc(TH_SUCCESS_BG) : tc(TH_SURFACE_3), LV_STATE_PRESSED);
     lv_obj_set_style_border_width(btn5, 1, 0);
     lv_obj_set_style_border_color(btn5, g_auto_weight ? tc(TH_ACCENT) : tc(TH_SURFACE_3), 0);
     lv_obj_set_style_radius(btn5, 8, 0);
@@ -301,7 +301,7 @@ void showConfirmPopup(const char* msg, int action) {
         lv_obj_t *apop = lv_obj_create(lv_scr_act());
         lv_obj_set_size(apop, 480, 320);
         lv_obj_set_pos(apop, 0, 0);
-        lv_obj_set_style_bg_color(apop, tc(TH_BLACK), 0);
+        lv_obj_set_style_bg_color(apop, tc(TH_POPUP_BG), 0);
         lv_obj_set_style_bg_opa(apop, LV_OPA_70, 0);
         lv_obj_set_style_border_width(apop, 0, 0);
         lv_obj_set_style_radius(apop, 0, 0);
@@ -311,8 +311,8 @@ void showConfirmPopup(const char* msg, int action) {
         lv_obj_t *abox = lv_obj_create(apop);
         lv_obj_set_size(abox, 460, 220);
         lv_obj_align(abox, LV_ALIGN_CENTER, 0, 0);
-        lv_obj_set_style_bg_color(abox, lv_color_hex(0x0c1828), 0);
-        lv_obj_set_style_border_color(abox, lv_color_hex(0x2a4080), 0);
+        lv_obj_set_style_bg_color(abox, tc(TH_SURFACE), 0);
+        lv_obj_set_style_border_color(abox, tc(TH_SURFACE_2), 0);
         lv_obj_set_style_border_width(abox, 2, 0);
         lv_obj_set_style_radius(abox, 12, 0);
         lv_obj_set_style_pad_all(abox, 0, 0);
@@ -409,8 +409,8 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_t *btn6 = lv_btn_create(box);
     lv_obj_set_size(btn6, BW2, H_ROW3);
     lv_obj_set_pos(btn6, XR, Y3);
-    lv_obj_set_style_bg_color(btn6, lv_color_hex(0x3a1a00), 0);
-    lv_obj_set_style_bg_color(btn6, lv_color_hex(0x6a3000), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn6, tc(TH_WARNING_BG), 0);
+    lv_obj_set_style_bg_color(btn6, tc(TH_WARNING_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn6, 8, 0);
     lv_obj_set_style_shadow_width(btn6, 0, 0);
     lv_obj_add_event_cb(btn6, [](lv_event_t *e) {
@@ -420,7 +420,7 @@ void showConfirmPopup(const char* msg, int action) {
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l6 = lv_label_create(btn6);
     lv_label_set_text(l6, T(STR_BTN_ARCHIVE_EMPTY));
-    lv_obj_set_style_text_color(l6, lv_color_hex(0xffb060), 0);
+    lv_obj_set_style_text_color(l6, tc(TH_WARNING), 0);
     lv_obj_set_style_text_font(l6, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(l6, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(l6);
@@ -453,8 +453,8 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_t *btn_ja = lv_btn_create(box);
     lv_obj_set_size(btn_ja, 170, 56);
     lv_obj_set_pos(btn_ja, 12, 122);
-    lv_obj_set_style_bg_color(btn_ja, lv_color_hex(0x1a4020), 0);
-    lv_obj_set_style_bg_color(btn_ja, lv_color_hex(0x2a7030), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_ja, tc(TH_OK_BG), 0);
+    lv_obj_set_style_bg_color(btn_ja, tc(TH_SUCCESS_BG), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_ja, 8, 0);
     lv_obj_set_style_shadow_width(btn_ja, 0, 0);
     lv_obj_add_event_cb(btn_ja, [](lv_event_t *e) {
@@ -466,7 +466,7 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_t *lbl_ja = lv_label_create(btn_ja);
     lv_label_set_text(lbl_ja, T(STR_BTN_CONFIRMED));
     lv_obj_set_style_text_font(lbl_ja, &lv_font_montserrat_ext_18, 0);
-    lv_obj_set_style_text_color(lbl_ja, lv_color_hex(0x80ffb0), 0);
+    lv_obj_set_style_text_color(lbl_ja, tc(TH_SUCCESS_TEXT), 0);
     lv_obj_center(lbl_ja);
 
     lv_obj_t *btn_nein = lv_btn_create(box);

@@ -34,12 +34,12 @@ void buildSystemScreen() {
   lv_obj_t *btn_lang = lv_btn_create(scr_system);
   lv_obj_set_size(btn_lang, BTN_W, BTN_H);
   lv_obj_set_pos(btn_lang, BTN_X, BTN_Y0);
-  lv_obj_set_style_bg_color(btn_lang, lv_color_hex(0x0a1a2a), 0);
-  lv_obj_set_style_bg_color(btn_lang, lv_color_hex(0x1a2a40), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_lang, tc(TH_TILE_BG), 0);
+  lv_obj_set_style_bg_color(btn_lang, tc(TH_SURFACE_3), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_lang, 10, 0);
   lv_obj_set_style_shadow_width(btn_lang, 0, 0);
   lv_obj_set_style_border_width(btn_lang, 1, 0);
-  lv_obj_set_style_border_color(btn_lang, lv_color_hex(0x1a2a40), 0);
+  lv_obj_set_style_border_color(btn_lang, tc(TH_SURFACE_3), 0);
   { lv_obj_t *ico = lv_label_create(btn_lang);
     lv_label_set_text(ico, LV_SYMBOL_LIST);
     lv_obj_set_style_text_color(ico, tc(TH_ACCENT), 0);
@@ -63,12 +63,12 @@ void buildSystemScreen() {
   lv_obj_t *btn_upd = lv_btn_create(scr_system);
   lv_obj_set_size(btn_upd, BTN_W, BTN_H);
   lv_obj_set_pos(btn_upd, BTN_X, BTN_Y0 + BTN_H + BTN_GAP);
-  lv_obj_set_style_bg_color(btn_upd, lv_color_hex(0x0a1a2a), 0);
-  lv_obj_set_style_bg_color(btn_upd, lv_color_hex(0x1a2a40), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_upd, tc(TH_TILE_BG), 0);
+  lv_obj_set_style_bg_color(btn_upd, tc(TH_SURFACE_3), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_upd, 10, 0);
   lv_obj_set_style_shadow_width(btn_upd, 0, 0);
   lv_obj_set_style_border_width(btn_upd, 1, 0);
-  lv_obj_set_style_border_color(btn_upd, lv_color_hex(0x1a2a40), 0);
+  lv_obj_set_style_border_color(btn_upd, tc(TH_SURFACE_3), 0);
   { lv_obj_t *ico = lv_label_create(btn_upd);
     lv_label_set_text(ico, LV_SYMBOL_DOWNLOAD);
     lv_obj_set_style_text_color(ico, tc(TH_ACCENT), 0);
@@ -126,8 +126,8 @@ void buildSystemScreen() {
   lv_obj_t *btn_reset = lv_btn_create(scr_system);
   lv_obj_set_size(btn_reset, HALF_W, RESET_H);
   lv_obj_set_pos(btn_reset, BTN_X, reset_y);
-  lv_obj_set_style_bg_color(btn_reset, lv_color_hex(0x0a1a2a), 0);
-  lv_obj_set_style_bg_color(btn_reset, lv_color_hex(0x1a2a40), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_reset, tc(TH_TILE_BG), 0);
+  lv_obj_set_style_bg_color(btn_reset, tc(TH_SURFACE_3), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_reset, 8, 0);
   lv_obj_set_style_shadow_width(btn_reset, 0, 0);
   lv_obj_set_style_border_width(btn_reset, 2, 0);
@@ -135,7 +135,7 @@ void buildSystemScreen() {
   { lv_obj_t *lbl = lv_label_create(btn_reset);
     char buf[32]; strncpy(buf, T(STR_BTN_FACTORY_RESET), sizeof(buf)-1);
     lv_label_set_text(lbl, buf);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xff6060), 0);
+    lv_obj_set_style_text_color(lbl, tc(TH_DANGER_TEXT), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl, LV_ALIGN_CENTER, 0, -7);
@@ -151,7 +151,7 @@ void buildSystemScreen() {
     lv_obj_t *pop = lv_obj_create(lv_scr_act());
     lv_obj_set_size(pop, 480, 320);
     lv_obj_set_pos(pop, 0, 0);
-    lv_obj_set_style_bg_color(pop, tc(TH_BLACK), 0);
+    lv_obj_set_style_bg_color(pop, tc(TH_POPUP_BG), 0);
     lv_obj_set_style_bg_opa(pop, LV_OPA_80, 0);
     lv_obj_set_style_border_width(pop, 0, 0);
     lv_obj_set_style_radius(pop, 0, 0);
@@ -161,7 +161,7 @@ void buildSystemScreen() {
     lv_obj_t *box = lv_obj_create(pop);
     lv_obj_set_size(box, 440, 240);
     lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(box, lv_color_hex(0x1a0808), 0);
+    lv_obj_set_style_bg_color(box, tc(TH_DANGER_BG), 0);
     lv_obj_set_style_border_color(box, tc(TH_DANGER_PRESSED), 0);
     lv_obj_set_style_border_width(box, 2, 0);
     lv_obj_set_style_radius(box, 12, 0);
@@ -171,7 +171,7 @@ void buildSystemScreen() {
     lv_obj_t *lbl_t = lv_label_create(box);
     char buf_t[48]; strncpy(buf_t, T(STR_FACTORY_RESET_TITLE), sizeof(buf_t)-1);
     lv_label_set_text(lbl_t, buf_t);
-    lv_obj_set_style_text_color(lbl_t, lv_color_hex(0xff6060), 0);
+    lv_obj_set_style_text_color(lbl_t, tc(TH_DANGER_TEXT), 0);
     lv_obj_set_style_text_font(lbl_t, &lv_font_montserrat_ext_18, 0);
     lv_obj_align(lbl_t, LV_ALIGN_TOP_MID, 0, 16);
 
@@ -239,12 +239,12 @@ void buildSystemScreen() {
   lv_obj_t *btn_reboot = lv_btn_create(scr_system);
   lv_obj_set_size(btn_reboot, HALF_W, RESET_H);
   lv_obj_set_pos(btn_reboot, BTN_X + HALF_W + 16, reset_y);
-  lv_obj_set_style_bg_color(btn_reboot, lv_color_hex(0x0a1a2a), 0);
-  lv_obj_set_style_bg_color(btn_reboot, lv_color_hex(0x1a2a40), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_reboot, tc(TH_TILE_BG), 0);
+  lv_obj_set_style_bg_color(btn_reboot, tc(TH_SURFACE_3), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_reboot, 8, 0);
   lv_obj_set_style_shadow_width(btn_reboot, 0, 0);
   lv_obj_set_style_border_width(btn_reboot, 1, 0);
-  lv_obj_set_style_border_color(btn_reboot, lv_color_hex(0x1a2a40), 0);
+  lv_obj_set_style_border_color(btn_reboot, tc(TH_SURFACE_3), 0);
   { lv_obj_t *lbl = lv_label_create(btn_reboot);
     char buf[32]; strncpy(buf, T(STR_BTN_REBOOT), sizeof(buf)-1);
     lv_label_set_text(lbl, buf);

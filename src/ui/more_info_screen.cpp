@@ -78,7 +78,7 @@ void showLocationPicker() {
   scr_location_picker = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_location_picker, 480, 320);
   lv_obj_set_pos(scr_location_picker, 0, 0);
-  lv_obj_set_style_bg_color(scr_location_picker, tc(TH_BLACK), 0);
+  lv_obj_set_style_bg_color(scr_location_picker, tc(TH_POPUP_BG), 0);
   lv_obj_set_style_bg_opa(scr_location_picker, LV_OPA_70, 0);
   lv_obj_set_style_border_width(scr_location_picker, 0, 0);
   lv_obj_set_style_radius(scr_location_picker, 0, 0);
@@ -89,7 +89,7 @@ void showLocationPicker() {
   lv_obj_t *box = lv_obj_create(scr_location_picker);
   lv_obj_set_size(box, 400, 280);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(0x0b1525), 0);
+  lv_obj_set_style_bg_color(box, tc(TH_SURFACE), 0);
   lv_obj_set_style_border_color(box, tc(TH_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, 10, 0);
@@ -120,7 +120,7 @@ void showLocationPicker() {
   lv_obj_set_style_bg_color(btn_x, tc(TH_DANGER_BG), 0);
   lv_obj_set_style_bg_color(btn_x, tc(TH_DANGER_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_x, 1, 0);
-  lv_obj_set_style_border_color(btn_x, lv_color_hex(0x601010), 0);
+  lv_obj_set_style_border_color(btn_x, tc(TH_DANGER_PRESSED), 0);
   lv_obj_set_style_radius(btn_x, 8, 0);
   lv_obj_set_style_shadow_width(btn_x, 0, 0);
   lv_obj_add_event_cb(btn_x, [](lv_event_t *e) {
@@ -147,7 +147,7 @@ void showLocationPicker() {
   lv_obj_t *list = lv_obj_create(box);
   lv_obj_set_size(list, 380, 220);
   lv_obj_set_pos(list, 10, 50);
-  lv_obj_set_style_bg_color(list, lv_color_hex(0x0b1525), 0);
+  lv_obj_set_style_bg_color(list, tc(TH_SURFACE), 0);
   lv_obj_set_style_border_width(list, 0, 0);
   lv_obj_set_style_radius(list, 0, 0);
   lv_obj_set_style_pad_all(list, 0, 0);
@@ -214,9 +214,9 @@ void fetchAndFillLocationList() {
   // "Kein Lagerort" Row
   lv_obj_t *btn_none = lv_btn_create(list);
   lv_obj_set_size(btn_none, 370, 44);
-  lv_obj_set_style_bg_color(btn_none, lv_color_hex(0x0d2040), 0);
+  lv_obj_set_style_bg_color(btn_none, tc(TH_TILE_BG), 0);
   lv_obj_set_style_bg_color(btn_none, tc(TH_SURFACE_2), LV_STATE_PRESSED);
-  lv_obj_set_style_border_color(btn_none, lv_color_hex(0x0f1e30), 0);
+  lv_obj_set_style_border_color(btn_none, tc(TH_TILE_BG), 0);
   lv_obj_set_style_border_width(btn_none, 1, 0);
   lv_obj_set_style_radius(btn_none, 6, 0);
   lv_obj_set_style_shadow_width(btn_none, 0, 0);
@@ -224,7 +224,7 @@ void fetchAndFillLocationList() {
   lv_obj_t *lbl_none = lv_label_create(btn_none);
   char none_buf[48]; strncpy(none_buf, T(STR_LOCATION_NONE), sizeof(none_buf)-1);
   lv_label_set_text(lbl_none, none_buf);
-  lv_obj_set_style_text_color(lbl_none, lv_color_hex(0x8ab0d8), 0);
+  lv_obj_set_style_text_color(lbl_none, tc(TH_TEXT), 0);
   lv_obj_set_style_text_font(lbl_none, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_none);
   lv_obj_add_event_cb(btn_none, [](lv_event_t *e) {
@@ -251,9 +251,9 @@ void fetchAndFillLocationList() {
     lv_obj_t *row = lv_btn_create(list);
     lv_obj_set_size(row, 370, 44);
     bool is_current = (strlen(sm_location_name) > 0 && strcmp(loc_name, sm_location_name) == 0);
-    lv_obj_set_style_bg_color(row, is_current ? lv_color_hex(0x0d3020) : lv_color_hex(0x0d2040), 0);
+    lv_obj_set_style_bg_color(row, is_current ? tc(TH_OK_BG) : tc(TH_TILE_BG), 0);
     lv_obj_set_style_bg_color(row, tc(TH_SURFACE_2), LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(row, is_current ? tc(TH_ACCENT) : lv_color_hex(0x0f1e30), 0);
+    lv_obj_set_style_border_color(row, is_current ? tc(TH_ACCENT) : tc(TH_TILE_BG), 0);
     lv_obj_set_style_border_width(row, 1, 0);
     lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_shadow_width(row, 0, 0);
@@ -288,7 +288,7 @@ void fetchAndFillLocationList() {
   if (loc_limit_hit) {
     lv_obj_t *limit_row = lv_obj_create(loc_list_obj);
     lv_obj_set_size(limit_row, 360, 40);
-    lv_obj_set_style_bg_color(limit_row, lv_color_hex(0x1a0808), 0);
+    lv_obj_set_style_bg_color(limit_row, tc(TH_DANGER_BG), 0);
     lv_obj_set_style_radius(limit_row, 6, 0);
     lv_obj_set_style_border_width(limit_row, 1, 0);
     lv_obj_set_style_border_color(limit_row, tc(TH_DANGER_BG), 0);
@@ -312,10 +312,10 @@ void fetchAndFillLocationList() {
 
   lv_obj_t *hint_row = lv_obj_create(loc_list_obj);
   lv_obj_set_size(hint_row, 360, 40);
-  lv_obj_set_style_bg_color(hint_row, lv_color_hex(0x1a1a08), 0);
+  lv_obj_set_style_bg_color(hint_row, tc(TH_SURFACE), 0);
   lv_obj_set_style_radius(hint_row, 6, 0);
   lv_obj_set_style_border_width(hint_row, 1, 0);
-  lv_obj_set_style_border_color(hint_row, lv_color_hex(0x3a3010), 0);
+  lv_obj_set_style_border_color(hint_row, tc(TH_WARNING_BG), 0);
   lv_obj_set_style_pad_all(hint_row, 0, 0);
   lv_obj_clear_flag(hint_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
   lv_obj_t *hint_lbl = lv_label_create(hint_row);
@@ -335,7 +335,7 @@ void buildMoreInfoScreen() {
   scr_more_info = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_more_info, 480, 320);
   lv_obj_set_pos(scr_more_info, 0, 0);
-  lv_obj_set_style_bg_color(scr_more_info, tc(TH_BLACK), 0);
+  lv_obj_set_style_bg_color(scr_more_info, tc(TH_POPUP_BG), 0);
   lv_obj_set_style_bg_opa(scr_more_info, LV_OPA_50, 0);
   lv_obj_set_style_border_width(scr_more_info, 0, 0);
   lv_obj_set_style_radius(scr_more_info, 0, 0);
@@ -346,7 +346,7 @@ void buildMoreInfoScreen() {
   lv_obj_t *box = lv_obj_create(scr_more_info);
   lv_obj_set_size(box, 464, 300);
   lv_obj_set_pos(box, 8, 10);
-  lv_obj_set_style_bg_color(box, lv_color_hex(0x0b1525), 0);
+  lv_obj_set_style_bg_color(box, tc(TH_SURFACE), 0);
   lv_obj_set_style_border_color(box, tc(TH_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, 10, 0);
@@ -377,7 +377,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_bg_color(btn_x, tc(TH_DANGER_BG), 0);
   lv_obj_set_style_bg_color(btn_x, tc(TH_DANGER_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_x, 1, 0);
-  lv_obj_set_style_border_color(btn_x, lv_color_hex(0x601010), 0);
+  lv_obj_set_style_border_color(btn_x, tc(TH_DANGER_PRESSED), 0);
   lv_obj_set_style_radius(btn_x, 8, 0);
   lv_obj_set_style_shadow_width(btn_x, 0, 0);
   lv_obj_add_event_cb(btn_x, [](lv_event_t *e) {
@@ -443,7 +443,7 @@ void buildMoreInfoScreen() {
   const char* mat_val = (strlen(sm_material_global) > 0) ? sm_material_global :
                         (strlen(g_tag.material) > 0 ? g_tag.material : "-");
   lv_label_set_text(lbl_mat, mat_val);
-  lv_obj_set_style_text_color(lbl_mat, lv_color_hex(0xf0f0f0), 0);
+  lv_obj_set_style_text_color(lbl_mat, tc(TH_TEXT_BRIGHT), 0);
   lv_obj_set_style_text_font(lbl_mat, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_pos(lbl_mat, 98, 68);
   lv_label_set_long_mode(lbl_mat, LV_LABEL_LONG_DOT);
@@ -459,7 +459,7 @@ void buildMoreInfoScreen() {
   // Filament name value
   lv_obj_t *lbl_fn = lv_label_create(box);
   lv_label_set_text(lbl_fn, strlen(sm_filament_name) > 0 ? sm_filament_name : "-");
-  lv_obj_set_style_text_color(lbl_fn, lv_color_hex(0x8ab0d8), 0);
+  lv_obj_set_style_text_color(lbl_fn, tc(TH_TEXT), 0);
   lv_obj_set_style_text_font(lbl_fn, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_pos(lbl_fn, 264, 70);
   lv_label_set_long_mode(lbl_fn, LV_LABEL_LONG_DOT);
@@ -469,7 +469,7 @@ void buildMoreInfoScreen() {
   lv_obj_t *div1 = lv_obj_create(box);
   lv_obj_set_size(div1, 444, 1);
   lv_obj_set_pos(div1, 10, 108);
-  lv_obj_set_style_bg_color(div1, lv_color_hex(0x0f1e30), 0);
+  lv_obj_set_style_bg_color(div1, tc(TH_TILE_BG), 0);
   lv_obj_set_style_border_width(div1, 0, 0);
   lv_obj_set_style_radius(div1, 0, 0);
   lv_obj_set_style_pad_all(div1, 0, 0);
@@ -496,7 +496,7 @@ void buildMoreInfoScreen() {
   const char* color_display = (strlen(g_tag.color_hex) > 1) ? g_tag.color_hex :
                               (strlen(sm_color_global) > 1 ? sm_color_global : "-");
   lv_label_set_text(v1, color_display);
-  lv_obj_set_style_text_color(v1, lv_color_hex(0x8ab0d8), 0);
+  lv_obj_set_style_text_color(v1, tc(TH_TEXT), 0);
   lv_obj_set_style_text_font(v1, &lv_font_montserrat_ext_18, 0);  // Fix 6: 16→18
   lv_obj_set_pos(v1, CA, 114 + VF);
 
@@ -510,7 +510,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_pos(c2, CB, 114);
   lv_obj_t *v2 = lv_label_create(box);
   lv_label_set_text(v2, strlen(g_tag.production_date) > 4 ? g_tag.production_date : "-");
-  lv_obj_set_style_text_color(v2, lv_color_hex(0x8ab0d8), 0);
+  lv_obj_set_style_text_color(v2, tc(TH_TEXT), 0);
   lv_obj_set_style_text_font(v2, &lv_font_montserrat_ext_18, 0);  // Fix 6
   lv_obj_set_pos(v2, CB, 114 + VF);
 
@@ -549,7 +549,7 @@ void buildMoreInfoScreen() {
   lv_obj_t *div2 = lv_obj_create(box);
   lv_obj_set_size(div2, 444, 1);
   lv_obj_set_pos(div2, 10, 200);
-  lv_obj_set_style_bg_color(div2, lv_color_hex(0x0f1e30), 0);
+  lv_obj_set_style_bg_color(div2, tc(TH_TILE_BG), 0);
   lv_obj_set_style_border_width(div2, 0, 0);
   lv_obj_set_style_radius(div2, 0, 0);
   lv_obj_set_style_pad_all(div2, 0, 0);
@@ -570,7 +570,7 @@ void buildMoreInfoScreen() {
   lv_obj_t *btn_loc = lv_btn_create(box);
   lv_obj_set_size(btn_loc, 220, 46);
   lv_obj_set_pos(btn_loc, CB - 10, 204);
-  lv_obj_set_style_bg_color(btn_loc, lv_color_hex(0x0d2040), 0);
+  lv_obj_set_style_bg_color(btn_loc, tc(TH_TILE_BG), 0);
   lv_obj_set_style_bg_color(btn_loc, tc(TH_SURFACE_2), LV_STATE_PRESSED);
   lv_obj_set_style_border_color(btn_loc, tc(TH_SURFACE_2), 0);
   lv_obj_set_style_border_width(btn_loc, 1, 0);
@@ -630,13 +630,13 @@ void buildMoreInfoScreen() {
     lv_obj_set_style_radius(btn_unlink, 8, 0);
     lv_obj_set_style_shadow_width(btn_unlink, 0, 0);
     lv_obj_set_style_border_width(btn_unlink, 1, 0);
-    lv_obj_set_style_border_color(btn_unlink, lv_color_hex(0x601010), 0);
+    lv_obj_set_style_border_color(btn_unlink, tc(TH_DANGER_PRESSED), 0);
     lv_obj_add_event_cb(btn_unlink, [](lv_event_t *e) {
       // Build confirmation popup on lv_scr_act() so it sits above more_info
       lv_obj_t *pop = lv_obj_create(lv_scr_act());
       lv_obj_set_size(pop, 480, 320);
       lv_obj_set_pos(pop, 0, 0);
-      lv_obj_set_style_bg_color(pop, tc(TH_BLACK), 0);
+      lv_obj_set_style_bg_color(pop, tc(TH_POPUP_BG), 0);
       lv_obj_set_style_bg_opa(pop, LV_OPA_80, 0);
       lv_obj_set_style_border_width(pop, 0, 0);
       lv_obj_set_style_radius(pop, 0, 0);
@@ -646,7 +646,7 @@ void buildMoreInfoScreen() {
       lv_obj_t *box2 = lv_obj_create(pop);
       lv_obj_set_size(box2, 420, 210);
       lv_obj_align(box2, LV_ALIGN_CENTER, 0, 0);
-      lv_obj_set_style_bg_color(box2, lv_color_hex(0x1a0808), 0);
+      lv_obj_set_style_bg_color(box2, tc(TH_DANGER_BG), 0);
       lv_obj_set_style_border_color(box2, tc(TH_DANGER_PRESSED), 0);
       lv_obj_set_style_border_width(box2, 2, 0);
       lv_obj_set_style_radius(box2, 12, 0);

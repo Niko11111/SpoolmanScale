@@ -41,7 +41,7 @@ void clearTagDisplay() {
   if (lbl_keys) lv_label_set_text(lbl_keys, "");
   if (lbl_raw_info) lv_label_set_text(lbl_raw_info, "");
   if (lbl_bag_sm_diff) lv_label_set_text(lbl_bag_sm_diff, "");
-  lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
+  lv_obj_set_style_bg_color(lbl_color_swatch, tc(TH_SURFACE_3), 0);
   // Also reset Spoolman data
   sm_found = false; sm_id = 0; sm_filament_id = 0; sm_vendor_id = 0; sm_spool_weight = 0;
   sm_last_dried[0] = '\0'; sm_article_nr[0] = '\0';

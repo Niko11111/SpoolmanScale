@@ -179,7 +179,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_t *box = lv_obj_create(pop);
     lv_obj_set_size(box, 420, 220);
     lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(box, lv_color_hex(0x0d1a2a), 0);
+    lv_obj_set_style_bg_color(box, tc(TH_SURFACE), 0);
     lv_obj_set_style_border_color(box, tc(TH_SURFACE_2), 0);
     lv_obj_set_style_border_width(box, 1, 0);
     lv_obj_set_style_radius(box, 10, 0);
@@ -229,7 +229,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_set_size(btn_can, 140, 44);
     lv_obj_align(btn_can, LV_ALIGN_BOTTOM_LEFT, 12, -12);
     lv_obj_set_style_bg_color(btn_can, tc(TH_SURFACE_DARK), 0);
-    lv_obj_set_style_bg_color(btn_can, lv_color_hex(0x2a3040), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_can, tc(TH_BORDER), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_can, 8, 0);
     lv_obj_set_style_shadow_width(btn_can, 0, 0);
     lv_obj_set_style_border_width(btn_can, 0, 0);
@@ -284,12 +284,12 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_t *btn_test = lv_btn_create(scr_extra_fields);
   lv_obj_set_size(btn_test, 210, 40);
   lv_obj_set_pos(btn_test, 18, 276);
-  lv_obj_set_style_bg_color(btn_test, lv_color_hex(0x1a1a0a), 0);
-  lv_obj_set_style_bg_color(btn_test, lv_color_hex(0x2a2a1a), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_test, tc(TH_SURFACE), 0);
+  lv_obj_set_style_bg_color(btn_test, tc(TH_OK_BG), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_test, 8, 0);
   lv_obj_set_style_shadow_width(btn_test, 0, 0);
   lv_obj_set_style_border_width(btn_test, 1, 0);
-  lv_obj_set_style_border_color(btn_test, lv_color_hex(0x2a2a1a), 0);
+  lv_obj_set_style_border_color(btn_test, tc(TH_OK_BG), 0);
   lv_obj_add_event_cb(btn_test, [](lv_event_t *e) {
     if (!wifi_ok || cfg_spoolman_base[0] == '\0') {
       if (lbl_extra_fields_status) {

@@ -114,7 +114,7 @@ void showQRPopup(int idx) {
   size_t url_len = strlen(QR_URLS[idx]);
   logSDf("QR: %s about to create url_len=%u heap=%d PSRAM=%d",
     names[idx], (unsigned)url_len, ESP.getFreeHeap(), ESP.getFreePsram());
-  lv_obj_t *qr = lv_qrcode_create(popup, 160, tc(TH_BLACK), lv_color_hex(0xffffff));
+  lv_obj_t *qr = lv_qrcode_create(popup, 160, lv_color_hex(0x000000), lv_color_hex(0xffffff));
   logSDf("QR: %s create OK heap=%d", names[idx], ESP.getFreeHeap());
   lv_res_t qr_res = lv_qrcode_update(qr, QR_URLS[idx], url_len);
   logSDf("QR: %s update done res=%d heap=%d", names[idx], (int)qr_res, ESP.getFreeHeap());

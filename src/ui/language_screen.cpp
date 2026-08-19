@@ -80,7 +80,7 @@ void showLanguageScreen() {
   lv_obj_set_size(btn_de, LB_W, LB_H);
   lv_obj_set_pos(btn_de, 8, LB_Y0);
   bool de_active = (g_lang == LANG_DE);
-  lv_obj_set_style_bg_color(btn_de, lv_color_hex(de_active ? 0x0a2a40 : g_theme[TH_SURFACE]), 0);
+  lv_obj_set_style_bg_color(btn_de, lv_color_hex(de_active ? g_theme[TH_SURFACE_3] : g_theme[TH_SURFACE]), 0);
   lv_obj_set_style_radius(btn_de, 10, 0);
   lv_obj_set_style_shadow_width(btn_de, 0, 0);
   lv_obj_set_style_border_width(btn_de, 2, 0);
@@ -101,7 +101,7 @@ void showLanguageScreen() {
   lv_obj_set_size(btn_en, LB_W, LB_H);
   lv_obj_set_pos(btn_en, 254, LB_Y0);
   bool en_active = (g_lang == LANG_EN);
-  lv_obj_set_style_bg_color(btn_en, lv_color_hex(en_active ? 0x0a2a40 : g_theme[TH_SURFACE]), 0);
+  lv_obj_set_style_bg_color(btn_en, lv_color_hex(en_active ? g_theme[TH_SURFACE_3] : g_theme[TH_SURFACE]), 0);
   lv_obj_set_style_radius(btn_en, 10, 0);
   lv_obj_set_style_shadow_width(btn_en, 0, 0);
   lv_obj_set_style_border_width(btn_en, 2, 0);
@@ -130,7 +130,7 @@ void showLanguageScreen() {
   lv_obj_set_size(btn_dmy, DB_W, DB_H);
   lv_obj_set_pos(btn_dmy, 8, DB_Y);
   bool dmy_active = (g_date_fmt == 0);
-  lv_obj_set_style_bg_color(btn_dmy, lv_color_hex(dmy_active ? 0x0a2a40 : g_theme[TH_SURFACE]), 0);
+  lv_obj_set_style_bg_color(btn_dmy, lv_color_hex(dmy_active ? g_theme[TH_SURFACE_3] : g_theme[TH_SURFACE]), 0);
   lv_obj_set_style_radius(btn_dmy, 10, 0);
   lv_obj_set_style_shadow_width(btn_dmy, 0, 0);
   lv_obj_set_style_border_width(btn_dmy, 2, 0);
@@ -150,7 +150,7 @@ void showLanguageScreen() {
   lv_obj_set_size(btn_iso, DB_W, DB_H);
   lv_obj_set_pos(btn_iso, 254, DB_Y);
   bool iso_active = (g_date_fmt == 1);
-  lv_obj_set_style_bg_color(btn_iso, lv_color_hex(iso_active ? 0x0a2a40 : g_theme[TH_SURFACE]), 0);
+  lv_obj_set_style_bg_color(btn_iso, lv_color_hex(iso_active ? g_theme[TH_SURFACE_3] : g_theme[TH_SURFACE]), 0);
   lv_obj_set_style_radius(btn_iso, 10, 0);
   lv_obj_set_style_shadow_width(btn_iso, 0, 0);
   lv_obj_set_style_border_width(btn_iso, 2, 0);

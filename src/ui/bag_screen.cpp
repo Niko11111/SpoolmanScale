@@ -117,7 +117,7 @@ void buildBagScreen() {
   lv_obj_set_size(btn_del_b, bw5_b, NP_H);
   lv_obj_set_pos(btn_del_b, NP_PAD_X, by5_b);
   lv_obj_set_style_bg_color(btn_del_b, tc(TH_SURFACE_DARK), 0);
-  lv_obj_set_style_bg_color(btn_del_b, lv_color_hex(0x2a3040), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_del_b, tc(TH_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_del_b, 6, 0);
   lv_obj_set_style_shadow_width(btn_del_b, 0, 0);
   lv_obj_set_style_border_width(btn_del_b, 1, 0);

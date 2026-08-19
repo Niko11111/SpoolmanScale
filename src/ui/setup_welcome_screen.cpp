@@ -81,8 +81,8 @@ void buildWelcomeScreen() {
   lv_obj_t *btn_en = lv_btn_create(scr_welcome);
   lv_obj_set_size(btn_en, LB_W, LB_H);
   lv_obj_set_pos(btn_en, 8, LB_Y);
-  lv_obj_set_style_bg_color(btn_en, lv_color_hex(0x0a2a40), 0);
-  lv_obj_set_style_bg_color(btn_en, lv_color_hex(0x1a4060), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_en, tc(TH_SURFACE_3), 0);
+  lv_obj_set_style_bg_color(btn_en, tc(TH_SURFACE_2), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_en, 10, 0);
   lv_obj_set_style_shadow_width(btn_en, 0, 0);
   lv_obj_set_style_border_width(btn_en, 2, 0);

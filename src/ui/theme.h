@@ -5,11 +5,6 @@
 
 // Runtime palette.
 //
-// Every entry is initialised to exactly the literal it replaced, so introducing
-// this table changes no pixel. It only moves the colours out of compile-time
-// constants and into something that can be changed at runtime, which is what
-// any kind of theme selection needs.
-//
 // Names describe the role a colour plays rather than the colour itself, so an
 // alternative palette can reuse them without the names becoming lies.
 enum ThemeColor : uint8_t {
@@ -25,14 +20,20 @@ enum ThemeColor : uint8_t {
   TH_TEXT_BRIGHT,     // emphasised text
   TH_TEXT_MUTED,      // subtitles
   TH_TEXT_DIM,        // hints, least emphasis
-  TH_WARNING,         // amber status line
+  TH_WARNING,         // amber status text
+  TH_WARNING_BG,      // amber panel fill
+  TH_WARNING_PRESSED, // amber panel, pressed
+  TH_ALERT,           // strong red badge
+  TH_LINK_ACCENT,     // Link button edge, olive by default
+  TH_COPY_ACCENT,     // Copy button edge, teal by default
   TH_SUCCESS_TEXT,
   TH_SUCCESS_BG,
   TH_OK_BG,
   TH_DANGER_TEXT,
   TH_DANGER_BG,
   TH_DANGER_PRESSED,
-  TH_BLACK,
+  TH_POPUP_BG,        // full-screen popup and modal backdrop
+  TH_ON_ACCENT,       // text drawn on top of the accent fill
   TH_COUNT
 };
 

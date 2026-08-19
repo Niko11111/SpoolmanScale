@@ -170,12 +170,12 @@ void buildFactorScreen() {
 
     if (i == 11) {
       // TARE button in the free slot (bottom right of numpad)
-      lv_obj_set_style_bg_color(btn, lv_color_hex(0x2a2010), 0);
-      lv_obj_set_style_bg_color(btn, lv_color_hex(0x4a4020), LV_STATE_PRESSED);
+      lv_obj_set_style_bg_color(btn, tc(TH_WARNING_BG), 0);
+      lv_obj_set_style_bg_color(btn, tc(TH_WARNING_PRESSED), LV_STATE_PRESSED);
       lv_obj_set_style_radius(btn, 6, 0);
       lv_obj_set_style_shadow_width(btn, 0, 0);
       lv_obj_set_style_border_width(btn, 1, 0);
-      lv_obj_set_style_border_color(btn, lv_color_hex(0x3a3010), 0);
+      lv_obj_set_style_border_color(btn, tc(TH_WARNING_BG), 0);
       lv_obj_add_event_cb(btn, [](lv_event_t *e) {
         if (!lbl_factor_result) return;
         if (scale_ready) {
@@ -225,7 +225,7 @@ void buildFactorScreen() {
   lv_obj_set_size(btn_del_f, bw5_f, NP_H);
   lv_obj_set_pos(btn_del_f, NP_PAD_X, by5_f);
   lv_obj_set_style_bg_color(btn_del_f, tc(TH_SURFACE_DARK), 0);
-  lv_obj_set_style_bg_color(btn_del_f, lv_color_hex(0x2a3040), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_del_f, tc(TH_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_del_f, 6, 0);
   lv_obj_set_style_shadow_width(btn_del_f, 0, 0);
   lv_obj_set_style_border_width(btn_del_f, 1, 0);

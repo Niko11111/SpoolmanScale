@@ -315,16 +315,16 @@ void buildWifiPassScreen() {
   lv_obj_set_size(ta_wifi_pass, 380, 44);
   lv_obj_align(ta_wifi_pass, LV_ALIGN_TOP_MID, 0, 74);
   lv_obj_set_style_text_font(ta_wifi_pass, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_color(ta_wifi_pass, lv_color_hex(0xffffff), 0);
-  lv_obj_set_style_bg_color(ta_wifi_pass, lv_color_hex(0x1e2e4a), 0);
-  lv_obj_set_style_border_color(ta_wifi_pass, lv_color_hex(0x2a4080), 0);
+  lv_obj_set_style_text_color(ta_wifi_pass, tc(TH_TEXT_BRIGHT), 0);
+  lv_obj_set_style_bg_color(ta_wifi_pass, tc(TH_BORDER), 0);
+  lv_obj_set_style_border_color(ta_wifi_pass, tc(TH_SURFACE_2), 0);
 
   // Keyboard
   kb_wifi_pass = lv_keyboard_create(scr_wifi_pass);
   lv_keyboard_set_textarea(kb_wifi_pass, ta_wifi_pass);
   lv_obj_set_size(kb_wifi_pass, 480, 160);
   lv_obj_align(kb_wifi_pass, LV_ALIGN_BOTTOM_MID, 0, 0);
-  lv_obj_set_style_bg_color(kb_wifi_pass, lv_color_hex(0x182238), 0);
+  lv_obj_set_style_bg_color(kb_wifi_pass, tc(TH_SURFACE_DARK), 0);
   lv_obj_set_style_border_width(kb_wifi_pass, 0, 0);
 
   // Enter on keyboard → connect

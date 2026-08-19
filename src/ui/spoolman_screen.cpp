@@ -154,7 +154,7 @@ void buildSpoolmanScreen() {
   lv_obj_set_size(btn_del, bw5, NP_H);
   lv_obj_set_pos(btn_del, NP_PAD_X, by5);
   lv_obj_set_style_bg_color(btn_del, tc(TH_SURFACE_DARK), 0);
-  lv_obj_set_style_bg_color(btn_del, lv_color_hex(0x2a3040), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_del, tc(TH_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_del, 6, 0);
   lv_obj_set_style_shadow_width(btn_del, 0, 0);
   lv_obj_set_style_border_width(btn_del, 1, 0);
@@ -390,7 +390,7 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
   lv_obj_set_size(btn_cont, 210, 50);
   lv_obj_set_pos(btn_cont, 254, 248);
   lv_obj_set_style_bg_color(btn_cont, tc(TH_SURFACE_DARK), 0);
-  lv_obj_set_style_bg_color(btn_cont, lv_color_hex(0x2a3040), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_cont, tc(TH_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_cont, 8, 0);
   lv_obj_set_style_shadow_width(btn_cont, 0, 0);
   lv_obj_set_style_border_width(btn_cont, 0, 0);

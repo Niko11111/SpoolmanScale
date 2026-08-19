@@ -13,7 +13,7 @@ void showRebootPopup() {
   lv_obj_t *pop = lv_obj_create(lv_scr_act());
   lv_obj_set_size(pop, 480, 320);
   lv_obj_set_pos(pop, 0, 0);
-  lv_obj_set_style_bg_color(pop, tc(TH_BLACK), 0);
+  lv_obj_set_style_bg_color(pop, tc(TH_POPUP_BG), 0);
   lv_obj_set_style_bg_opa(pop, LV_OPA_70, 0);
   lv_obj_set_style_border_width(pop, 0, 0);
   lv_obj_set_style_pad_all(pop, 0, 0);
@@ -22,7 +22,7 @@ void showRebootPopup() {
   lv_obj_t *box = lv_obj_create(pop);
   lv_obj_set_size(box, 400, 220);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
+  lv_obj_set_style_bg_color(box, tc(TH_SURFACE), 0);
   lv_obj_set_style_border_color(box, tc(TH_ACCENT), 0);
   lv_obj_set_style_border_width(box, 2, 0);
   lv_obj_set_style_radius(box, 12, 0);
