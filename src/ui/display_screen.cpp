@@ -14,11 +14,14 @@
 
 
 
+// Called from the click callback of a button that lives inside the screen it
+// replaces. buildDisplayScreen() opens with releaseScreen(), which frees the
+// old one through lv_obj_del_async() at the end of the current
+// lv_timer_handler() pass - so the object under the running callback stays
+// alive until the callback has returned. The synchronous lv_obj_del() that
+// used to stand here freed it mid-dispatch and only survived because nothing
+// touched the target afterwards.
 static void rebuildDisplayScreen() {
-  if (scr_display) {
-    lv_obj_del(scr_display);
-    scr_display = nullptr;
-  }
   buildDisplayScreen();
   lv_obj_clear_flag(scr_display, LV_OBJ_FLAG_HIDDEN);
 }
@@ -31,16 +34,40 @@ void buildDisplayScreen() {
   buildSubHeader(scr_display, T(STR_DISPLAY_TITLE),
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
 
-  lv_obj_t *lbl_bright = lv_label_create(scr_display);
+  // Everything below the header lives in a scrolling body. The screen itself
+  // is 320 px and buildOverlayScreen() clears SCROLLABLE on it, so content
+  // that outgrows the panel is clipped rather than reachable - and the idle
+  // stages alone want more rows than fit. Positions stay absolute inside the
+  // body; LVGL derives the scroll extent from the children.
+  lv_obj_t *body = lv_obj_create(scr_display);
+  lv_obj_set_size(body, 480, 270);
+  lv_obj_set_pos(body, 0, 50);
+  lv_obj_set_style_bg_opa(body, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_width(body, 0, 0);
+  lv_obj_set_style_radius(body, 0, 0);
+  lv_obj_set_style_pad_all(body, 0, 0);
+  lv_obj_set_scroll_dir(body, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_AUTO);
+  lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLL_ELASTIC);
+
+  // Row coordinates in one place: a stage is a label plus a button row 22 px
+  // under it. Collected here so adding a stage does not mean re-deriving every
+  // offset below it by hand.
+  const int Y_BRIGHT_LBL = 4,   Y_BRIGHT_SLIDER = 26;
+  const int Y_DIM_LBL    = 58,  Y_DIM_ROW       = 80;
+  const int Y_SLEEP_LBL  = 128, Y_SLEEP_ROW     = 150;
+  const int Y_HINT       = 198;
+
+  lv_obj_t *lbl_bright = lv_label_create(body);
   lv_label_set_text(lbl_bright, T(STR_BRIGHT_LABEL));
   lv_obj_set_style_text_color(lbl_bright, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(lbl_bright, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_bright, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_bright, LV_ALIGN_TOP_MID, 0, 54);
+  lv_obj_align(lbl_bright, LV_ALIGN_TOP_MID, 0, Y_BRIGHT_LBL);
 
-  lv_obj_t *slider = lv_slider_create(scr_display);
+  lv_obj_t *slider = lv_slider_create(body);
   lv_obj_set_size(slider, 456, 20);
-  lv_obj_set_pos(slider, 12, 76);
+  lv_obj_set_pos(slider, 12, Y_BRIGHT_SLIDER);
   lv_slider_set_range(slider, BRIGHT_MIN, BRIGHT_MAX);
   lv_slider_set_value(slider, bright_normal, LV_ANIM_OFF);
   lv_obj_set_style_bg_color(slider, lv_color_hex(0x1a3060), LV_PART_MAIN);
@@ -59,21 +86,21 @@ void buildDisplayScreen() {
     Serial.printf("Brightness saved: %d\n", val);
   }, LV_EVENT_RELEASED, NULL);
 
-  lv_obj_t *lbl_dim = lv_label_create(scr_display);
+  lv_obj_t *lbl_dim = lv_label_create(body);
   lv_label_set_text(lbl_dim, T(STR_DIM_LABEL));
   lv_obj_set_style_text_color(lbl_dim, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(lbl_dim, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_dim, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_dim, LV_ALIGN_TOP_MID, 0, 108);
+  lv_obj_align(lbl_dim, LV_ALIGN_TOP_MID, 0, Y_DIM_LBL);
 
   int dim_vals[] = {1, 2, 5, 10};
   int cur_dim = dim_timeout_ms / 60000;
   const int BTN_W = 88, BTN_H = 36, BTN_GAP = 8;
   const int BTN_START_X = (480 - 4*BTN_W - 3*BTN_GAP) / 2;
   for (int i = 0; i < 4; i++) {
-    lv_obj_t *b = lv_btn_create(scr_display);
+    lv_obj_t *b = lv_btn_create(body);
     lv_obj_set_size(b, BTN_W, BTN_H);
-    lv_obj_set_pos(b, BTN_START_X + i * (BTN_W + BTN_GAP), 130);
+    lv_obj_set_pos(b, BTN_START_X + i * (BTN_W + BTN_GAP), Y_DIM_ROW);
     bool active = (cur_dim == dim_vals[i]);
     lv_obj_set_style_bg_color(b, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
     lv_obj_set_style_radius(b, 8, 0);
@@ -94,12 +121,12 @@ void buildDisplayScreen() {
     }, LV_EVENT_CLICKED, (void*)(intptr_t)dim_vals[i]);
   }
 
-  lv_obj_t *lbl_sleep = lv_label_create(scr_display);
+  lv_obj_t *lbl_sleep = lv_label_create(body);
   lv_label_set_text(lbl_sleep, T(STR_SLEEP_LABEL));
   lv_obj_set_style_text_color(lbl_sleep, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(lbl_sleep, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_sleep, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_sleep, LV_ALIGN_TOP_MID, 0, 178);
+  lv_obj_align(lbl_sleep, LV_ALIGN_TOP_MID, 0, Y_SLEEP_LBL);
 
   // 0 means never sleep. Needed for the FilaMan remote link: in deep sleep
   // the ESP32 is off, so the scale drops out of FilaMan after 180 seconds and
@@ -109,9 +136,9 @@ void buildDisplayScreen() {
   const int SLEEP_START_X = (480 - 5*BTN_W - 4*SLEEP_BTN_GAP) / 2;
   int cur_sleep = sleep_timeout_ms / 60000;
   for (int i = 0; i < 5; i++) {
-    lv_obj_t *b = lv_btn_create(scr_display);
+    lv_obj_t *b = lv_btn_create(body);
     lv_obj_set_size(b, BTN_W, BTN_H);
-    lv_obj_set_pos(b, SLEEP_START_X + i * (BTN_W + SLEEP_BTN_GAP), 200);
+    lv_obj_set_pos(b, SLEEP_START_X + i * (BTN_W + SLEEP_BTN_GAP), Y_SLEEP_ROW);
     bool active = (cur_sleep == sleep_vals[i]);
     lv_obj_set_style_bg_color(b, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
     lv_obj_set_style_radius(b, 8, 0);
@@ -138,13 +165,13 @@ void buildDisplayScreen() {
     }, LV_EVENT_CLICKED, (void*)(intptr_t)sleep_vals[i]);
   }
 
-  lv_obj_t *hint = lv_label_create(scr_display);
+  lv_obj_t *hint = lv_label_create(body);
   lv_label_set_text(hint, T(STR_DISPLAY_HINT));
   lv_obj_set_style_text_color(hint, lv_color_hex(0x2a4060), 0);
   lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(hint, 440);
-  lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
+  lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, Y_HINT);
   if (sd_verbose) logSD("[verbose] buildDisplayScreen: done");
 }
