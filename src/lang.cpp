@@ -635,4 +635,7 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Weitere Optionen",              "More options"                       },  // STR_BTN_MORE_OPTIONS
   { "Ohne Nachfrage verknüpfen",     "Link without asking"                },  // STR_FLM_AUTOLINK
   { "wenn die Spule schon aufliegt", "when the spool is already on"       },  // STR_FLM_AUTOLINK_SUB
+  { LV_SYMBOL_EYE_CLOSE "  Bildschirm aus nach (Min.)",
+    LV_SYMBOL_EYE_CLOSE "  Screen off after (min.)"        },  // STR_SCREENOFF_LABEL
+  { "Nie",                           "Never"                              },  // STR_SCREENOFF_NEVER
 };

@@ -2,6 +2,7 @@
 
 int     bright_normal   = BRIGHT_NORMAL_DEFAULT;
 int     dim_timeout_ms  = DIM_TIMEOUT_DEFAULT;
+int     off_timeout_ms  = OFF_TIMEOUT_DEFAULT;
 int     sleep_timeout_ms = SLEEP_TIMEOUT_DEFAULT;
 
 TwoWire I2C_EXT   = TwoWire(1);

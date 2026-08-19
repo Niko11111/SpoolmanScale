@@ -39,8 +39,10 @@ void loadPrefs() {
 
   bright_normal = prefsGetUChar("bright", BRIGHT_NORMAL_DEFAULT);
   int dim_min = prefsGetUInt("dim_min", DIM_TIMEOUT_DEFAULT / 60000);
+  int off_min = prefsGetUInt("off_min", OFF_TIMEOUT_DEFAULT / 60000);
   int sleep_min = prefsGetUInt("sleep_min", SLEEP_TIMEOUT_DEFAULT / 60000);
   dim_timeout_ms = dim_min * 60000;
+  off_timeout_ms = off_min * 60000;
   sleep_timeout_ms = sleep_min * 60000;
 
   g_lang = (Lang)prefsGetUChar("lang", 1);
@@ -74,8 +76,8 @@ void loadPrefs() {
   Serial.printf("Prefs: SSID=%s Spoolman=%s\n", cfg_wifi_ssid, cfg_spoolman_base);
   Serial.printf("Scale: cal_factor=%.4f  zero_offset=%d  bag_weight=%.1fg\n",
     cal_factor, zero_offset, bag_weight_g);
-  Serial.printf("Display: bright=%d dim=%dmin sleep=%dmin\n",
-    bright_normal, dim_min, sleep_min);
+  Serial.printf("Display: bright=%d dim=%dmin off=%dmin sleep=%dmin\n",
+    bright_normal, dim_min, off_min, sleep_min);
 }
 
 void saveWifiCredentials(const char* ssid, const char* pass) {

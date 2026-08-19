@@ -9,6 +9,7 @@
 
 extern int bright_normal;
 extern int dim_timeout_ms;
+extern int off_timeout_ms;
 extern int sleep_timeout_ms;
 
 extern TwoWire I2C_EXT;

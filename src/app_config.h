@@ -15,6 +15,7 @@
 #define BRIGHT_NORMAL_DEFAULT    255
 #define DIM_TIMEOUT_DEFAULT   300000
 #define SLEEP_TIMEOUT_DEFAULT 1200000
+#define OFF_TIMEOUT_DEFAULT        0   // 0 = stage skipped
 
 #define CAL_FACTOR_DEFAULT  1.0f
 #define SCALE_FILTER_SIZE   8

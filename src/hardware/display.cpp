@@ -14,6 +14,8 @@
 // config below carries the port, both pins and the frequency, and bus_shared is
 // false. A second TwoWire(0) used to be created and begun here and then never
 // read or written, which initialised I2C port 0 twice over the same pins.
+static constexpr uint8_t BL_PWM_CHANNEL = 7;
+
 static void (*touch_activity_callback)() = nullptr;
 
 class LGFX : public lgfx::LGFX_Device {
@@ -42,7 +44,7 @@ public:
       // the backlight fully ON in deep sleep, where displayPrepareDeepSleep()
       // asks for brightness 0.
       cfg.pin_bl=hw_pins::LCD_BACKLIGHT; cfg.invert=false;
-      cfg.freq=44100; cfg.pwm_channel=7;
+      cfg.freq=44100; cfg.pwm_channel=BL_PWM_CHANNEL;
       _light.config(cfg); _panel.setLight(&_light); }
     { auto cfg = _touch.config();
       cfg.x_min=0; cfg.x_max=319; cfg.y_min=0; cfg.y_max=479;
@@ -121,6 +123,20 @@ bool displayHardwareBegin(void (*touch_activity_cb)()) {
 
 void displaySetBrightness(uint8_t brightness) {
   tft.setBrightness(brightness);
+}
+
+// Duty 0 still leaves LEDC driving the pin, and the backlight is an
+// unregulated low-side switch. Hold the pin low instead.
+void displayBacklightOff() {
+  displaySetBrightness(0);
+  ledcDetachPin(hw_pins::LCD_BACKLIGHT);
+  pinMode(hw_pins::LCD_BACKLIGHT, OUTPUT);
+  digitalWrite(hw_pins::LCD_BACKLIGHT, LOW);
+}
+
+void displayBacklightOn(uint8_t brightness) {
+  ledcAttachPin(hw_pins::LCD_BACKLIGHT, BL_PWM_CHANNEL);
+  displaySetBrightness(brightness);
 }
 
 void displayPrepareDeepSleep() {

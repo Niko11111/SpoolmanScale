@@ -360,6 +360,7 @@ void appLoop() {
     remoteLinkReportUnsupported("locations are not supported by this device");
   }
   if (remoteLinkPendingActive()) {
+    resetActivityTimer();   // a remote trigger counts as activity
     if (isRemoteLinkPopupOpen()) {
       // The user is looking at the question. No timeout while they decide,
       // the answer reports the outcome either way. FilaMan's own frontend
