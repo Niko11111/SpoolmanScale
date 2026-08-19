@@ -642,4 +642,5 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Ohne Tag wiegen",              "Weigh without a tag"                },  // STR_FLM_TAGLESS
   { "wenn kein Tag aufgelegt wird", "when no tag is presented"           },  // STR_FLM_TAGLESS_SUB
   { "Spule gewählt - jetzt wiegen", "Spool selected - weigh it now"      },  // STR_REMOTE_LINK_WEIGH
+  { "Wecken bei Auflage",           "Wake on load"                       },  // STR_WAKE_ON_LOAD
 };

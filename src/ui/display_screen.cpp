@@ -1,6 +1,7 @@
 #include "display_screen.h"
 #include "navigation.h"
 #include "app/app_state.h"
+#include "services/user_options.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -56,7 +57,8 @@ void buildDisplayScreen() {
   const int Y_BRIGHT_LBL = 4,   Y_BRIGHT_SLIDER = 26;
   const int Y_DIM_LBL    = 58,  Y_DIM_ROW       = 80;
   const int Y_SLEEP_LBL  = 128, Y_SLEEP_ROW     = 150;
-  const int Y_HINT       = 198;
+  const int Y_WAKE_ROW   = 198;
+  const int Y_HINT       = 244;
 
   lv_obj_t *lbl_bright = lv_label_create(body);
   lv_label_set_text(lbl_bright, T(STR_BRIGHT_LABEL));
@@ -163,6 +165,36 @@ void buildDisplayScreen() {
       rebuildDisplayScreen();
       Serial.printf("Sleep timeout: %d min\n", val);
     }, LV_EVENT_CLICKED, (void*)(intptr_t)sleep_vals[i]);
+  }
+
+  // Sits under the sleep row because it decides what may end the idle period,
+  // which is the same subject as the timers above it. Full width: the upstream
+  // PR made it half to pair with a theme button from another branch that is
+  // not in this tree, and a lone half-width button reads as a missing one.
+  {
+    lv_obj_t *b = lv_btn_create(body);
+    lv_obj_set_size(b, 456, 34);
+    lv_obj_set_pos(b, 12, Y_WAKE_ROW);
+    lv_obj_set_style_bg_color(b, g_wake_on_load ? lv_color_hex(0x28d49a)
+                                                : lv_color_hex(0x1a3060), 0);
+    lv_obj_set_style_radius(b, 8, 0);
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_set_style_border_width(b, 0, 0);
+    lv_obj_t *l = lv_label_create(b);
+    char wbuf[40];
+    snprintf(wbuf, sizeof(wbuf), "%s: %s", T(STR_WAKE_ON_LOAD),
+             T(g_wake_on_load ? STR_ON : STR_OFF));
+    lv_label_set_text(l, wbuf);
+    lv_obj_set_style_text_color(l, g_wake_on_load ? lv_color_hex(0x0a1020)
+                                                  : lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
+    lv_obj_center(l);
+    lv_obj_add_event_cb(b, [](lv_event_t *e) {
+      g_wake_on_load = !g_wake_on_load;
+      prefsPutBool("wake_load", g_wake_on_load);
+      rebuildDisplayScreen();
+      Serial.printf("Wake on load: %s\n", g_wake_on_load ? "on" : "off");
+    }, LV_EVENT_CLICKED, NULL);
   }
 
   lv_obj_t *hint = lv_label_create(body);

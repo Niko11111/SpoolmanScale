@@ -491,6 +491,10 @@ void appLoop() {
     for (int i = 0; i < count; i++) sum += scale_filter_buf[i];
     scale_weight_g = sum / count;
 
+    // A load appearing on the pad counts as activity, so the panel
+    // comes back without having to touch it first.
+    displayNoteWeight(scale_weight_g);
+
     // Keep the reference fresh only while the tag is genuinely being read.
     // nfc_absent_count > 0 means the reader has already missed it once, and
     // from that moment the weight may be on its way down.

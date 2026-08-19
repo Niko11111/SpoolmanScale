@@ -49,6 +49,7 @@ void loadPrefs() {
   cfg_first_boot = prefsGetBool("first_boot", true);
   last_used_mode = prefsGetUChar("lu_mode", 0);
   g_whole_gram = prefsGetBool("whole_gram", false);
+  g_wake_on_load = prefsGetBool("wake_load", true);
   g_ip_bar_mode = prefsGetUChar("ip_bar_mode", IP_BAR_OFF);
   g_flm_autolink = prefsGetBool("flm_autolink", false);
   g_flm_tagless  = prefsGetBool("flm_tagless", true);

@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 #include <esp_sleep.h>
+#include <math.h>
+#include "services/user_options.h"
 
 #include "app_config.h"
 #include "display.h"
@@ -27,6 +29,28 @@ void resetActivityTimer() {
     displaySetBrightness((uint8_t)bright_normal);
     is_dimmed = false;
   }
+}
+
+
+// Chosen well above the load cell's noise and the slow drift it shows as it
+// warms, and well below the lightest thing anyone puts on the pad: even a bare
+// spool is around 130 g. A gradual change never reaches it because the
+// reference moves with every sample; a spool being set down clears it in one.
+#define WEIGHT_WAKE_DELTA_G 15.0f
+
+static float weight_ref_g   = 0.0f;
+static bool  weight_ref_set = false;
+
+void displayNoteWeight(float grams) {
+  if (!g_wake_on_load) return;
+  if (!weight_ref_set) {          // first reading after boot is the baseline
+    weight_ref_g   = grams;
+    weight_ref_set = true;
+    return;
+  }
+  const float delta = fabsf(grams - weight_ref_g);
+  weight_ref_g = grams;
+  if (delta >= WEIGHT_WAKE_DELTA_G) resetActivityTimer();
 }
 
 void handlePowerManagement() {

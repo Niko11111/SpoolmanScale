@@ -27,3 +27,8 @@ extern bool g_flm_autolink;
 // to weigh it anyway rather than report a failure. Nothing is written to any
 // tag and no binding is stored; it lasts until the next scan.
 extern bool g_flm_tagless;
+// Wake the panel when the load on the scale changes. On by default: putting a
+// spool down is the action the device exists to answer, so having to touch the
+// screen first to read the result is the wrong way round. Switchable for a
+// scale that shares a bench with something that knocks it.
+extern bool g_wake_on_load;
