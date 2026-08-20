@@ -650,4 +650,14 @@ const char* const STRINGS[STR_COUNT][2] = {
     "When FilaMan triggers a link and the spool is already on the scale, it is linked without asking. If the material or colour do not match, the scale asks anyway." },  // STR_FLM_AUTOLINK_INFO
   { "Wird nach einer Verknüpfung aus FilaMan kein Tag aufgelegt, lädt die Waage nach 10 Sekunden trotzdem die gewählte Spule und lässt sie wiegen. Es wird nichts auf einen Tag geschrieben.",
     "If no tag is presented after a link from FilaMan, the scale loads the chosen spool anyway after 10 seconds and lets it be weighed. Nothing is written to any tag." },  // STR_FLM_TAGLESS_INFO
+  // FilaMan variants of the spool-weight scope buttons. The Spoolman ones
+  // carry the REST field name in brackets, which is a real reading aid there
+  // because the three scopes use three different names. In FilaMan two of
+  // the three are called the same thing, so the bracket helps nobody and is
+  // simply wrong on top. FilaMan also calls a vendor a manufacturer.
+  { "Diese Spule",                   "This spool"                         },  // STR_BTN_THIS_SPOOL_FM
+  { "Dieses Filament",               "This filament"                      },  // STR_BTN_THIS_FILAMENT_FM
+  { "Hersteller",                    "Manufacturer"                       },  // STR_BTN_THIS_VENDOR_FM
+  { LV_SYMBOL_CLOSE " leer / Archivieren\nRest wird 0",
+    LV_SYMBOL_CLOSE " empty / Archive\nremaining set to 0" },  // STR_BTN_ARCHIVE_EMPTY_FM
 };

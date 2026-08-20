@@ -1,6 +1,7 @@
 #include "confirm_popup.h"
 #include <math.h>
 #include "app/app_state.h"
+#include "services/backend.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -114,7 +115,8 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
       lv_obj_set_style_bg_color(b1, lv_color_hex(0x0a2040), 0);
       lv_obj_set_style_radius(b1, 8, 0); lv_obj_set_style_shadow_width(b1, 0, 0);
       { lv_obj_t *l = lv_label_create(b1);
-        lv_label_set_text(l, T(STR_BTN_THIS_SPOOL));
+        lv_label_set_text(l, T(backendIsFilaMan() ? STR_BTN_THIS_SPOOL_FM
+                                                  : STR_BTN_THIS_SPOOL));
         lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
         lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
         lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
@@ -130,7 +132,8 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
       lv_obj_set_style_bg_color(b2, lv_color_hex(0x0a2820), 0);
       lv_obj_set_style_radius(b2, 8, 0); lv_obj_set_style_shadow_width(b2, 0, 0);
       { lv_obj_t *l = lv_label_create(b2);
-        lv_label_set_text(l, T(STR_BTN_THIS_FILAMENT));
+        lv_label_set_text(l, T(backendIsFilaMan() ? STR_BTN_THIS_FILAMENT_FM
+                                                  : STR_BTN_THIS_FILAMENT));
         lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
         lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
         lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
@@ -146,7 +149,10 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
       lv_obj_set_style_bg_color(b3, lv_color_hex(0x281a00), 0);
       lv_obj_set_style_radius(b3, 8, 0); lv_obj_set_style_shadow_width(b3, 0, 0);
       { lv_obj_t *l = lv_label_create(b3);
-        lv_label_set_text(l, T(STR_BTN_THIS_VENDOR));
+        // Spoolman's vendor is FilaMan's manufacturer, and the bracketed field
+        // names below the title only hold for Spoolman - see the lang.cpp entries.
+        lv_label_set_text(l, T(backendIsFilaMan() ? STR_BTN_THIS_VENDOR_FM
+                                                  : STR_BTN_THIS_VENDOR));
         lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
         lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
         lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
@@ -516,7 +522,11 @@ void showConfirmPopup(const char* msg, int action) {
       showConfirmPopup(T(STR_ARCHIVE_CONFIRM), 3);
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l6 = lv_label_create(btn6);
-    lv_label_set_text(l6, T(STR_BTN_ARCHIVE_EMPTY));
+    // "remaining=0" is Spoolman's field name. FilaMan archives through a
+    // status endpoint and calls the field something else, so it says the same
+    // thing in words there.
+    lv_label_set_text(l6, T(backendIsFilaMan() ? STR_BTN_ARCHIVE_EMPTY_FM
+                                               : STR_BTN_ARCHIVE_EMPTY));
     lv_obj_set_style_text_color(l6, lv_color_hex(0xffb060), 0);
     lv_obj_set_style_text_font(l6, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(l6, LV_TEXT_ALIGN_CENTER, 0);
