@@ -657,7 +657,18 @@ int filamanSetStatus(const char* base_url, const char* api_key, int spool_id,
     logSDf("FilaMan: status change -> HTTP %d: %s", code, resp.substring(0, 120).c_str());
   }
   http.end();
-  return (code >= 200 && code < 300) ? 200 : code;
+  if (code < 200 || code >= 300) return code;
+
+  // The status endpoint only moves the spool to another status; it leaves the
+  // remaining weight alone. Spoolman zeroes it in the same PATCH that archives
+  // (see spoolmanPatchArchiveSpool), so an archived spool would otherwise still
+  // count its old contents as stock on this backend and not on the other one.
+  if (strcmp(status_key, "archived") == 0) {
+    int z = filamanPatchSpoolFloat(base_url, api_key, spool_id,
+                                   "remaining_weight_g", 0.0f, timeout_ms);
+    if (z != 200) logSDf("FilaMan: archived but remaining not cleared (HTTP %d)", z);
+  }
+  return 200;
 }
 
 int filamanPatchSpoolFloat(const char* base_url, const char* api_key, int spool_id,
@@ -665,6 +676,19 @@ int filamanPatchSpoolFloat(const char* base_url, const char* api_key, int spool_
   if (spool_id <= 0 || !field) return -1;
   JsonDocument body;
   body[field] = roundGrams(value);
+  String payload;
+  serializeJson(body, payload);
+  return patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
+                    payload, timeout_ms);
+}
+
+int filamanPatchSpoolFloat2(const char* base_url, const char* api_key, int spool_id,
+                            const char* field_a, float value_a,
+                            const char* field_b, float value_b, uint32_t timeout_ms) {
+  if (spool_id <= 0 || !field_a || !field_b) return -1;
+  JsonDocument body;
+  body[field_a] = roundGrams(value_a);
+  body[field_b] = roundGrams(value_b);
   String payload;
   serializeJson(body, payload);
   return patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),

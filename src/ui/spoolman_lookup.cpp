@@ -151,6 +151,23 @@ static float resolveTare(JsonVariantConst spool, uint8_t *source) {
   return 0.0f;
 }
 
+// How much filament this spool started with. The nominal weight of the
+// filament TYPE is a catalogue figure; what a manufacturer actually winds onto
+// an individual spool varies by a few percent, which is a few percentage
+// points on the display. Once that has been measured for a spool it is a
+// better number than the catalogue one, so it wins.
+//
+// Reading this back is what makes measuring it worth anything. Until now the
+// value was written and never read, so it survived exactly until the next scan
+// and then snapped back to the type nominal.
+static float resolveInitial(JsonVariantConst spool) {
+  float w = spool["initial_weight"] | 0.0f;
+  if (w > 0) return w;                                  // measured for this spool
+  w = spool["filament"]["weight"] | 0.0f;
+  if (w > 0) return w;                                  // nominal for the type
+  return 1000.0f;
+}
+
 static const char* tareSourceName(uint8_t s) {
   switch (s) {
     case TARE_SPOOL:    return "spool";
@@ -190,7 +207,7 @@ void querySpoolmanById(int spool_id) {
   sm_filament_id  = spool["filament"]["id"] | 0;
   sm_vendor_id    = spool["filament"]["vendor"]["id"] | 0;
   sm_remaining    = spool["remaining_weight"] | 0.0f;
-  sm_total        = spool["filament"]["weight"] | 1000.0f;
+  sm_total        = resolveInitial(spool);
   sm_spool_weight = resolveTare(spool, &sm_tare_source);
   logSDf("Spoolman: byID OK ID=%d remaining=%.1fg tare=%.0fg (%s)",
     sm_id, sm_remaining, sm_spool_weight, tareSourceName(sm_tare_source));
@@ -357,6 +374,9 @@ void querySpoolman(const char* tray_uuid) {
   filter_spool["id"] = true;
   filter_spool["archived"] = true;
   filter_spool["remaining_weight"] = true;
+  // Fetched so a spool that has had its real fill weight measured keeps it
+  // instead of falling back to the filament type's nominal on the next scan.
+  filter_spool["initial_weight"] = true;
   filter_spool["spool_weight"] = true;
   filter_spool["last_used"] = true;
   filter_spool["location"] = true;
@@ -498,7 +518,7 @@ void querySpoolman(const char* tray_uuid) {
     sm_filament_id = spool["filament"]["id"] | 0;
     sm_vendor_id   = spool["filament"]["vendor"]["id"] | 0;
     sm_remaining = spool["remaining_weight"] | 0.0f;
-    sm_total    = spool["filament"]["weight"] | 1000.0f;
+    sm_total    = resolveInitial(spool);
     sm_spool_weight = resolveTare(spool, &sm_tare_source);
     logSDf("Spoolman: found ID=%d remaining=%.1fg total=%.0fg",
       sm_id, sm_remaining, sm_total);

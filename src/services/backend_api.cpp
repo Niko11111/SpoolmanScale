@@ -187,8 +187,13 @@ int backendPatchSpoolRemaining(const char* base_url, int spool_id, float remaini
 int backendPatchInitialWeight(const char* base_url, int spool_id, float initial_weight,
                               uint32_t timeout_ms) {
   if (backendIsFilaMan()) {
-    return filamanPatchSpoolFloat(backendBaseUrl(), filamanApiKey(), spool_id,
-                                  "initial_total_weight_g", initial_weight, timeout_ms);
+    // Both fields, like the Spoolman side does. Writing only the initial weight
+    // leaves the old remaining in place, so the spool reads as full on the
+    // device - which updates its copy optimistically - and as half empty on the
+    // server until the next scan corrects the display back.
+    return filamanPatchSpoolFloat2(backendBaseUrl(), filamanApiKey(), spool_id,
+                                   "initial_total_weight_g", initial_weight,
+                                   "remaining_weight_g", initial_weight, timeout_ms);
   }
   return spoolmanPatchInitialWeight(base_url, spool_id, initial_weight, timeout_ms);
 }

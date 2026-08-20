@@ -132,6 +132,16 @@ int filamanSetStatus(const char* base_url, const char* api_key, int spool_id,
 int filamanPatchSpoolFloat(const char* base_url, const char* api_key, int spool_id,
                            const char* field, float value, uint32_t timeout_ms = 5000);
 
+// Two numeric fields in one PATCH. Needed wherever a value only makes sense
+// together with a second one - a fresh initial weight leaves a stale remaining
+// behind, an archived spool leaves a stale remaining behind. Spoolman writes
+// both in a single request and FilaMan has to as well, or the two disagree for
+// as long as it takes the next scan to overwrite the display.
+int filamanPatchSpoolFloat2(const char* base_url, const char* api_key, int spool_id,
+                            const char* field_a, float value_a,
+                            const char* field_b, float value_b,
+                            uint32_t timeout_ms = 5000);
+
 // Single numeric field on a filament, for the default empty spool weight.
 int filamanPatchFilamentFloat(const char* base_url, const char* api_key, int filament_id,
                               const char* field, float value, uint32_t timeout_ms = 5000);
