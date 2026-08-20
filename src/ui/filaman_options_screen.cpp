@@ -11,6 +11,7 @@
 #include "lang.h"
 #include "services/prefs_store.h"
 #include "services/user_options.h"
+#include "info_popup.h"
 #include "ui_common.h"
 
 
@@ -51,7 +52,10 @@ void buildFilaManOptionsScreen() {
     buf_t[sizeof(buf_t)-1] = '\0';
     char buf_s[40]; strncpy(buf_s, T(STR_FLM_AUTOLINK_SUB), sizeof(buf_s)-1);
     buf_s[sizeof(buf_s)-1] = '\0';
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_OK, buf_t, buf_s, g_flm_autolink);
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_OK, buf_t, buf_s, g_flm_autolink, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_FLM_AUTOLINK, STR_FLM_AUTOLINK_INFO));
 
     // Last child is the arrow, which a toggle turns into ON/OFF.
     lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
@@ -80,7 +84,10 @@ void buildFilaManOptionsScreen() {
     buf_t[sizeof(buf_t)-1] = '\0';
     char buf_s[40]; strncpy(buf_s, T(STR_FLM_TAGLESS_SUB), sizeof(buf_s)-1);
     buf_s[sizeof(buf_s)-1] = '\0';
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_OK, buf_t, buf_s, g_flm_tagless);
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_OK, buf_t, buf_s, g_flm_tagless, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_FLM_TAGLESS, STR_FLM_TAGLESS_INFO));
 
     lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
     if (arr_lbl) {

@@ -38,7 +38,12 @@ lv_obj_t* addInfoRow(lv_obj_t* parent, int y, const char* label,
 }
 
 lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
-                      const char* sub, bool toggle_active) {
+                      const char* sub, bool toggle_active,
+                      lv_obj_t** out_help) {
+  // The help button eats 30 px on the right, so the text has to give way.
+  // Only when there is one - a row without help keeps its old width and its
+  // old line breaks.
+  const int text_w = out_help ? 290 : 320;
   lv_obj_t *btn = lv_btn_create(list);
   lv_obj_set_size(btn, 456, 64);
   lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a1e30), 0);
@@ -59,7 +64,7 @@ lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
   lv_label_set_text(lbl, title);
   lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
   lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_width(lbl, 320);
+  lv_obj_set_width(lbl, text_w);
   lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 52, sub && strlen(sub) > 0 ? -10 : 0);
 
   if (sub && strlen(sub) > 0) {
@@ -67,8 +72,40 @@ lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
     lv_label_set_text(slbl, sub);
     lv_obj_set_style_text_color(slbl, toggle_active ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(slbl, &lv_font_montserrat_ext_12, 0);
-    lv_obj_set_width(slbl, 320);
+    lv_obj_set_width(slbl, text_w);
     lv_obj_align(slbl, LV_ALIGN_LEFT_MID, 52, 12);
+  }
+
+  // Built BEFORE the arrow on purpose. Three call sites reach for the arrow
+  // with lv_obj_get_child(btn, -1) to turn it into ON/OFF; appending here
+  // instead would hand them this button and the toggles would lose their
+  // state display.
+  //
+  // A circled ASCII "?" rather than an icon: FontAwesome's question-circle is
+  // in none of the 23 generated fonts and adding it would mean regenerating
+  // all of them, while 0x20-0x7F is in every one. The web UI already draws its
+  // help trigger exactly like this, so the two now match.
+  if (out_help) {
+    lv_obj_t *help = lv_btn_create(btn);
+    lv_obj_set_size(help, 34, 34);
+    lv_obj_align(help, LV_ALIGN_RIGHT_MID, -56, 0);
+    lv_obj_set_style_bg_opa(help, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_color(help, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(help, LV_OPA_COVER, LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(help, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_border_width(help, 1, 0);
+    lv_obj_set_style_radius(help, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_shadow_width(help, 0, 0);
+    lv_obj_set_style_pad_all(help, 0, 0);
+    // Below the 44 px touch minimum by design - a circle that big crowds the
+    // row. The hit area is widened instead, which costs nothing visually.
+    lv_obj_set_ext_click_area(help, 6);
+    lv_obj_t *q = lv_label_create(help);
+    lv_label_set_text(q, "?");
+    lv_obj_set_style_text_color(q, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_font(q, &lv_font_montserrat_ext_16, 0);
+    lv_obj_align(q, LV_ALIGN_CENTER, 0, 0);
+    *out_help = help;
   }
 
   lv_obj_t *arr = lv_label_create(btn);

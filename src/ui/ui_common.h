@@ -48,5 +48,10 @@ lv_obj_t* addInfoRow(lv_obj_t* parent, int y, const char* label,
 // right. Toggles replace that arrow with ON/OFF and pass toggle_active so the
 // border and subtitle turn green. Shared by the scale menu and the FilaMan
 // options, which is what moved it out of scale_menu.cpp.
+// Pass out_help to get a small circled "?" on the right of the row; the
+// button is handed back so the caller can attach showInfoPopup() to it. Left
+// null the row is built exactly as before, which is why the scale menu needs
+// no change.
 lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
-                      const char* sub, bool toggle_active = false);
+                      const char* sub, bool toggle_active = false,
+                      lv_obj_t** out_help = nullptr);

@@ -646,4 +646,8 @@ const char* const STRINGS[STR_COUNT][2] = {
   { LV_SYMBOL_EYE_CLOSE "  Bildschirm aus nach (Min.)",
     LV_SYMBOL_EYE_CLOSE "  Screen off after (min.)"        },  // STR_SCREENOFF_LABEL
   { "Nie",                           "Never"                              },  // STR_SCREENOFF_NEVER
+  { "Löst FilaMan eine Verknüpfung aus und die Spule liegt schon auf der Waage, wird ohne Rückfrage verknüpft. Passen Material oder Farbe nicht zusammen, fragt die Waage trotzdem nach.",
+    "When FilaMan triggers a link and the spool is already on the scale, it is linked without asking. If the material or colour do not match, the scale asks anyway." },  // STR_FLM_AUTOLINK_INFO
+  { "Wird nach einer Verknüpfung aus FilaMan kein Tag aufgelegt, lädt die Waage nach 10 Sekunden trotzdem die gewählte Spule und lässt sie wiegen. Es wird nichts auf einen Tag geschrieben.",
+    "If no tag is presented after a link from FilaMan, the scale loads the chosen spool anyway after 10 seconds and lets it be weighed. Nothing is written to any tag." },  // STR_FLM_TAGLESS_INFO
 };
