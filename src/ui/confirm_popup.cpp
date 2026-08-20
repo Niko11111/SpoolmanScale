@@ -50,20 +50,35 @@ static void tareFollowUp() {
   patchInitialWeight(sm_total);
 }
 
-// Whether New spool will derive the tare from this reading instead of
-// trusting the stored one, and what it would store. A full spool has a known
-// filament weight, which makes the tare the only unknown in the reading, and
-// this is the only moment it can be measured without emptying the spool first.
+// Whether New spool has to derive the tare from this reading because nothing
+// else is known, and what it would store.
+//
+// Only when no tare exists at any level. The two numbers in the reading are
+// the spool and the filament, and exactly one of them can be measured
+// independently: the spool. Its weight is a property of the spool MODEL and
+// barely varies between spools of the same kind, while what a manufacturer
+// actually winds onto an individual spool varies by a couple of percent. So a
+// tare that exists - measured here, or inherited from the filament or the
+// brand - is the more trustworthy of the two, and the filament weight is what
+// gets measured against it.
+//
+// Deriving on top of a known tare would do the opposite: it folds this one
+// spool's fill tolerance into a tare that other spools inherit, where a few
+// grams of error stop being local and start applying to every spool of that
+// filament or that brand.
+//
+// This is the only moment a tare can be had at all without emptying the spool
+// first, which is why it stays for the case where there is nothing.
+//
 // Asked in two places - the button label and its handler - so that the label
 // can never promise a different number than the press writes.
 static bool newSpoolDerivesTare(float* out_tare) {
+  if (sm_tare_source != TARE_NONE) return false;
   const float derived = scale_weight_g - sm_total;
   const bool plausible = (sm_total > 0.0f) &&
                          (derived >= NEW_SPOOL_TARE_MIN_G) &&
                          (derived <= NEW_SPOOL_TARE_MAX_G);
-  const bool disagrees = (sm_spool_weight <= 0.0f) ||
-                         (fabsf(derived - (float)sm_spool_weight) >= NEW_SPOOL_TARE_TOL_G);
-  if (!plausible || !disagrees) return false;
+  if (!plausible) return false;
   if (out_tare) *out_tare = derived;
   return true;
 }
@@ -306,9 +321,19 @@ void showConfirmPopup(const char* msg, int action) {
     // Name the weight the button will really write. Where the tare is derived
     // that is the nominal filament weight, not the reading minus a tare that
     // is about to be replaced - and those two differ by the whole spool.
-    float new_spool_shown = netto_plain;
-    if (newSpoolDerivesTare(nullptr)) new_spool_shown = sm_total;
+    const bool derives_tare = newSpoolDerivesTare(nullptr);
+    float new_spool_shown = derives_tare ? sm_total : netto_plain;
     snprintf(buf3, sizeof(buf3), T(STR_BTN_NEW_SPOOL_VAL), new_spool_shown);
+    // An inherited tare carries into the filament weight measured against it,
+    // so the button says where it came from - same wording as the spool
+    // details, so the two read as one statement rather than two.
+    const char *tare_note = "";
+    if (!derives_tare && sm_tare_source == TARE_FILAMENT) tare_note = T(STR_TARE_FROM_FILAMENT);
+    else if (!derives_tare && sm_tare_source == TARE_VENDOR) tare_note = T(STR_TARE_FROM_BRAND);
+    if (tare_note[0]) {
+      const size_t used = strlen(buf3);
+      snprintf(buf3 + used, sizeof(buf3) - used, "%s", tare_note);
+    }
     lv_label_set_text(l3, buf3);
     lv_obj_set_style_text_color(l3, lv_color_hex(0x80c8ff), 0);
     lv_obj_set_style_text_font(l3, &lv_font_montserrat_ext_14, 0);
