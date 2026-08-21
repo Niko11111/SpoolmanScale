@@ -94,18 +94,33 @@ jobs:
               sys.exit(1)
           print(f"{tag} ranks above {published}, ok")
           PY
-      - name: Prepare binaries
+      - name: Prepare release assets
+        run: |
+          # Always, for both kinds of tag. The device downloads
+          # releases/download/<tag>/SpoolmanScale.bin, so every release needs an
+          # asset under that exact name - and it has to be the binary just
+          # built, not whatever webflasher/ happens to hold from the last public
+          # release.
+          VERSION=${{ steps.version.outputs.version }}
+          cp .pio/build/${{ matrix.env }}/firmware.bin SpoolmanScale.bin
+          cp .pio/build/${{ matrix.env }}/firmware.bin SpoolmanScale_${VERSION}.bin
+      - name: Update the public web flasher
+        # Public tags only. An internal beta.N build would otherwise switch the
+        # flasher on the docs page to a test version that nobody outside the
+        # test should be offered.
+        if: "!contains(github.ref_name, '-beta.')"
         run: |
           VERSION=${{ steps.version.outputs.version }}
           cp .pio/build/${{ matrix.env }}/bootloader.bin webflasher/bootloader.bin
           cp .pio/build/${{ matrix.env }}/partitions.bin  webflasher/partitions.bin
           cp .pio/build/${{ matrix.env }}/firmware.bin    webflasher/SpoolmanScale.bin
-          cp .pio/build/${{ matrix.env }}/firmware.bin    SpoolmanScale_${VERSION}.bin
-      - name: Update manifest.json + index.html
-        run: |
-          VERSION=${{ steps.version.outputs.version }}
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" manifest.json
-          sed -i "s/Firmware v[0-9]*\.[0-9]*\.[0-9]*-beta/Firmware $VERSION/" index.html
+          # The whole suffix is optional, in both directions. Without the
+          # counter group a second beta.N in a row matched only the prefix and
+          # produced "v0.6.3-beta.14.13"; without making "-beta" itself optional
+          # the line would stop matching for good after the first suffix-free
+          # release and index.html would freeze at that version.
+          sed -i -E "s/Firmware v[0-9]+\.[0-9]+\.[0-9]+(-beta(\.[0-9]+)?)?/Firmware $VERSION/" index.html
       - name: Update version.json
         run: |
           # Read by the firmware's background update check. Deliberately a
@@ -138,14 +153,45 @@ jobs:
               f.write("\n")
           print("version.json:", data)
           PY
-      - name: Commit webflasher + manifest + index + version
+      - name: Publish the changed files to main
         run: |
+          # GitHub Pages serves version.json, index.html, manifest.json and
+          # webflasher/ from main, so the files have to land there - but only
+          # the files.
+          #
+          # This used to be "git pull origin main --rebase" followed by
+          # "git push origin HEAD:main". The checkout sits on the tagged commit,
+          # so tagging any branch other than main pushed that branch's entire
+          # history onto main as a fast-forward. Tagging dev would have merged
+          # dev into main as a side effect of cutting a release.
+          #
+          # Instead: carry the generated files aside, check out main, put them
+          # back, and commit there. One commit, only the intended files, no
+          # foreign history.
+          VERSION=${{ steps.version.outputs.version }}
+          mkdir -p /tmp/ci-out/webflasher
+          cp version.json /tmp/ci-out/
+          if [ -z "$(echo "$VERSION" | grep -E -- '-beta\.[0-9]+$')" ]; then
+            cp manifest.json index.html /tmp/ci-out/
+            cp webflasher/bootloader.bin webflasher/partitions.bin webflasher/SpoolmanScale.bin /tmp/ci-out/webflasher/
+          fi
+
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add webflasher/bootloader.bin webflasher/partitions.bin webflasher/SpoolmanScale.bin manifest.json index.html version.json
-          git diff --cached --quiet || git commit -m "CI: update webflasher + manifest + index + version for ${{ steps.version.outputs.version }}"
-          git pull origin main --rebase
-          git push origin HEAD:main
+          git fetch origin main
+          git checkout -B ci-main origin/main
+
+          cp /tmp/ci-out/version.json version.json
+          git add version.json
+          if [ -f /tmp/ci-out/manifest.json ]; then
+            cp /tmp/ci-out/manifest.json manifest.json
+            cp /tmp/ci-out/index.html index.html
+            cp /tmp/ci-out/webflasher/*.bin webflasher/
+            git add manifest.json index.html webflasher/bootloader.bin webflasher/partitions.bin webflasher/SpoolmanScale.bin
+          fi
+
+          git diff --cached --quiet || git commit -m "CI: publish $VERSION"
+          git push origin ci-main:main
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -158,7 +204,7 @@ jobs:
           # version and then install the previous binary.
           prerelease: ${{ contains(github.ref_name, '-beta.') }}
           files: |
-            webflasher/SpoolmanScale.bin
+            SpoolmanScale.bin
             SpoolmanScale_${{ steps.version.outputs.version }}.bin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

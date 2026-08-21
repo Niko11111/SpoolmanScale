@@ -150,8 +150,16 @@ void doGithubOtaCheck() {
 }
 
 void doGithubOtaFlash(const char* version) {
-  (void)version;
   if (!lbl_gh_status) return;
+
+  // The release to download, taken from the check that just ran rather than
+  // from GitHub's "latest" alias - see the URL below for why that matters.
+  const char* tag = (version && version[0]) ? version : gh_latest_version;
+  if (tag[0] == '\0') {
+    lv_label_set_text(lbl_gh_status, T(STR_GH_OTA_FLASH_FAIL));
+    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
+    return;
+  }
 
   lv_obj_t *overlay = lv_obj_create(lv_layer_top());
   lv_obj_set_size(overlay, 480, 320);
@@ -201,7 +209,15 @@ void doGithubOtaFlash(const char* version) {
   client.setInsecure();
   HTTPClient http;
 
-  String url = "https://github.com/Niko11111/SpoolmanScale/releases/latest/download/SpoolmanScale.bin";
+  // releases/latest skips pre-releases. Downloading from there while the check
+  // above found a pre-release handed the device the previous public build: it
+  // installed the downgrade, rebooted, found the same "update" again and
+  // offered it once more. Addressing the release by its tag is the only form
+  // that works for both kinds.
+  String url = "https://github.com/Niko11111/SpoolmanScale/releases/download/";
+  url += tag;
+  url += "/SpoolmanScale.bin";
+  Serial.printf("GitHub OTA URL: %s\n", url.c_str());
   http.begin(client, url);
   http.addHeader("User-Agent", "SpoolmanScale-ESP32");
   http.setTimeout(60000);
