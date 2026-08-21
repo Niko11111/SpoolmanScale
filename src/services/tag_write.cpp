@@ -168,6 +168,20 @@ static bool wrPage(uint8_t page, const uint8_t *d) {
   return nfcWriteNtagPage(page, buf);
 }
 
+// Capability container at page 3: byte 2 counts 8 byte blocks of user
+// memory. NTAG213 = 144, NTAG215 = 504, NTAG216 = 888.
+static uint16_t tagUserBytes() {
+  uint8_t cc[4] = {0};
+  if (!nfcReadNtagPage(3, cc) || cc[0] != 0xE1 || !cc[2]) return 0;
+  return (uint16_t)cc[2] * 8;
+}
+
+// Falls back to the smallest tag, so an unreadable CC never overruns.
+static uint8_t lastUserPage() {
+  const uint16_t b = tagUserBytes();
+  return b ? (uint8_t)(4 + b / 4 - 1) : 39;
+}
+
 static bool wrText(uint8_t first, const char *s) {
   uint8_t buf[16] = {0};
   size_t n = strlen(s);
@@ -187,11 +201,12 @@ static bool wrU16Pair(uint8_t page, uint16_t a, uint16_t b) {
   return wrPage(page, buf);
 }
 
-// Clears the user pages. Stops at 44, past anything either format writes,
-// and never touches 0-3.
+// Clears the user pages, whatever the tag has. A fixed upper page would
+// overrun an NTAG213 and report a failed erase after erasing everything.
 static bool eraseTag() {
   const uint8_t zero[4] = {0, 0, 0, 0};
-  for (uint8_t pg = 4; pg <= 44; pg++)
+  const uint8_t last = lastUserPage();
+  for (uint8_t pg = 4; pg <= last; pg++)
     if (!wrPage(pg, zero)) return false;
   return true;
 }
@@ -213,6 +228,8 @@ static bool writeAce(const AceFields *f) {
 
 // NDEF on an NTAG: TLV 0x03, length, one application/json record, 0xFE.
 // Record header D2 = MB|ME|SR, TNF 2 (media type).
+static char write_err[80] = "";
+
 static bool writeOpenSpool(const AceFields *f, int spool_id) {
   char json[224];
   int n = snprintf(json, sizeof(json),
@@ -237,6 +254,15 @@ static bool writeOpenSpool(const AceFields *f, int spool_id) {
   memcpy(buf + i, json, n);    i += n;
   buf[i++] = 0xFE;                       // terminator
   while (i % 4) buf[i++] = 0x00;
+
+  const uint8_t need_last = (uint8_t)(4 + (i + 3) / 4 - 1);
+  const uint8_t last = lastUserPage();
+  if (need_last > last) {
+    snprintf(write_err, sizeof(write_err),
+             "OpenSpool needs %d bytes, this tag holds %u", i,
+             (unsigned)((last - 3) * 4));
+    return false;
+  }
 
   for (int off = 0; off < i; off += 4)
     if (!wrPage((uint8_t)(4 + off / 4), buf + off)) return false;
@@ -404,16 +430,24 @@ static void refreshCache() {
 
   const bool is_ntag = strlen(g_tag.uid_str) > 14;   // 7 bytes reads as 20 chars
   snprintf(cached_uid, sizeof(cached_uid), "%s", g_tag.uid_str);
-  snprintf(cached_kind, sizeof(cached_kind), "%s",
-           is_ntag ? "NTAG, writable" : "MIFARE Classic, not writable");
 
-  if (!is_ntag) { cached_content[0] = 0; memset(&cached_info, 0, sizeof(cached_info)); return; }
+  if (!is_ntag) {
+    snprintf(cached_kind, sizeof(cached_kind), "MIFARE Classic, read-only");
+    cached_content[0] = 0;
+    memset(&cached_info, 0, sizeof(cached_info));
+    return;
+  }
 
   const bool changed = strcmp(last_uid, g_tag.uid_str) != 0 || cache_dirty;
   if (!changed && cached_content[0]) return;
   if (millis() - last_ms < 500) return;      // retry gap after a failed read
   last_ms = millis();
   if (changed) snprintf(last_uid, sizeof(last_uid), "%s", g_tag.uid_str);
+
+  const uint16_t bytes = tagUserBytes();
+  if (bytes) snprintf(cached_kind, sizeof(cached_kind), "NTAG, writable, %u bytes",
+                      (unsigned)bytes);
+  else       snprintf(cached_kind, sizeof(cached_kind), "NTAG, writable");
 
   // A page read that loses the reader returns a short or empty result, so keep
   // the last good description rather than blanking the page.
@@ -455,6 +489,7 @@ void tagWriteTick() {
   JsonObjectConst sp = doc.as<JsonObjectConst>();
 
   bool ok;
+  write_err[0] = 0;
   if (pending_fmt == TAG_FMT_ERASE) {
     ok = eraseTag();
   } else {
@@ -467,7 +502,8 @@ void tagWriteTick() {
   cache_dirty = true;   // the tag changed under a UID that did not
 
   if (!ok) {
-    finish("error", "Write failed - keep the tag still on the reader");
+    finish("error", write_err[0] ? write_err
+                                 : "Write failed - keep the tag still on the reader");
     return;
   }
   const char *name = sp["filament"]["name"] | "spool";
