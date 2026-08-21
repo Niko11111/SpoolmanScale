@@ -15,3 +15,11 @@ extern bool show_ota_pending;
 extern bool show_info_pending;
 extern bool show_drying_reminder_pending;
 extern bool lang_selected_no_reboot;
+
+// The OTA screen asked for a check while the background task held the TLS
+// connection. Retried from appLoop() once it is free, and given up on after
+// GH_CHECK_WAIT_MS so a task that never finishes cannot leave the screen
+// waiting forever.
+extern bool gh_check_pending;
+extern unsigned long gh_check_wait_since;
+#define GH_CHECK_WAIT_MS 10000

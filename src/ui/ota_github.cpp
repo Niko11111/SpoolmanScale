@@ -53,17 +53,29 @@ void doGithubOtaCheck() {
   lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0x4a6fa0), 0);
   lv_timer_handler();
 
+  // The background check holds its own TLS connection, and two handshakes want
+  // roughly 40 kB each. Rather than open a second one, hand this off to the
+  // loop and let it come back once the task is done - the screen already says
+  // "checking", so nothing looks stuck.
+  if (updateCheckBusy()) {
+    gh_check_pending = true;
+    gh_check_wait_since = millis();
+    logSD("OTA check: deferred, background check running");
+    return;
+  }
+
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
   // per_page caps the list. Unbounded it answers with every release ever cut -
   // 109 KB at the time of writing, against roughly 145 KB of free heap.
   String url = gh_prerelease
-    ? "https://api.github.com/repos/Niko11111/SpoolmanScale/releases?per_page=5"
+    ? "https://api.github.com/repos/Niko11111/SpoolmanScale/releases?per_page=3"
     : "https://api.github.com/repos/Niko11111/SpoolmanScale/releases/latest";
   http.begin(client, url);
   http.addHeader("User-Agent", "SpoolmanScale-ESP32");
   http.setTimeout(8000);
+  const uint32_t heap_before = ESP.getFreeHeap();
   int code = http.GET();
   Serial.printf("GitHub API: %d\n", code);
 
@@ -75,17 +87,20 @@ void doGithubOtaCheck() {
     return;
   }
 
-  // Parsed straight off the socket and through a filter. getString() used to
-  // pull the whole body onto the heap first, which on the pre-release path was
-  // 109 KB of a 145 KB heap before parsing had even started - hence the
-  // intermittent "JSON error", which came and went with heap fragmentation.
-  // The capacity argument DynamicJsonDocument used to carry was a fiction:
-  // ArduinoJson 7 ignores it and grows the document as needed.
-  //
-  // The filter keeps only the two keys this function looks at, so what is built
-  // in RAM is a handful of bytes rather than a mirror of GitHub's answer.
+  // Read as a String rather than straight off the socket. http.getStream()
+  // hands back the raw client, which skips HTTPClient's chunked decoding - and
+  // this endpoint answers chunked as soon as the list is not capped. The
+  // memory win never came from the stream anyway: it comes from per_page and
+  // from the filter, which is what keeps the parsed document small. With
+  // per_page=3 the body is around 27 kB and bounded.
+  String payload = http.getString();
+  const int    payload_len = payload.length();
+  const uint32_t heap_parse = ESP.getFreeHeap();
+  http.end();
+
   char tag[40] = "";
-  bool parse_ok = false;
+  DeserializationError err;
+  int entries = 0;
 
   if (gh_prerelease) {
     // add<JsonObject>() rather than the createNestedObject() the older filters
@@ -96,8 +111,10 @@ void doGithubOtaCheck() {
     f["draft"] = true;
 
     JsonDocument doc;
-    if (!deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter))) {
+    err = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
+    if (!err) {
       for (JsonVariant v : doc.as<JsonArray>()) {
+        entries++;
         JsonObject rel = v.as<JsonObject>();
         if (rel["draft"] | false) continue;
         const char* t = rel["tag_name"] | "";
@@ -108,29 +125,45 @@ void doGithubOtaCheck() {
           break;
         }
       }
-      parse_ok = true;
     }
   } else {
     JsonDocument filter;
     filter["tag_name"] = true;
 
     JsonDocument doc;
-    if (!deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter))) {
+    err = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
+    if (!err) {
+      entries = 1;
       const char* t = doc["tag_name"] | "";
       strncpy(tag, t, sizeof(tag) - 1);
-      parse_ok = true;
     }
   }
-  http.end();
 
-  if (!parse_ok) {
-    lv_label_set_text(lbl_gh_status, "JSON error");
+  // Enough to diagnose the next failure without guessing. "No release found"
+  // and "JSON error" looked identical from the outside before this, and both
+  // have several possible causes.
+  logSDf("OTA check: HTTP %d len=%d heap %u->%u pre=%d err=%s entries=%d tag='%s'",
+         code, payload_len, (unsigned)heap_before, (unsigned)heap_parse,
+         gh_prerelease ? 1 : 0, err.c_str(), entries, tag);
+  Serial.printf("OTA check: len=%d heap %u->%u err=%s entries=%d tag='%s'\n",
+                payload_len, (unsigned)heap_before, (unsigned)heap_parse,
+                err.c_str(), entries, tag);
+
+  if (err) {
+    // The first 60 characters say more than any error name: a chunk length, an
+    // HTML error page or a truncated body are all obvious at a glance.
+    logSDf("OTA check: body starts '%s'", payload.substring(0, 60).c_str());
+    snprintf(buf, sizeof(buf), "JSON: %s", err.c_str());
+    lv_label_set_text(lbl_gh_status, buf);
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
     return;
   }
 
   if (tag[0] == '\0') {
-    lv_label_set_text(lbl_gh_status, "No release found");
+    if (entries == 0) logSD("OTA check: list was empty");
+    else              logSD("OTA check: entries had no usable tag_name");
+    lv_label_set_text(lbl_gh_status, entries == 0 ? "Empty release list"
+                                                  : "No usable release");
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
     return;
   }

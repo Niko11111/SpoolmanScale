@@ -193,5 +193,9 @@ void appSetup() {
   // Arm the background update check. Scheduled for every boot path, including
   // the setup screens: the check itself waits for wifi_ok, so a device that
   // only gets on the network later still picks it up without a restart.
+  // Before the first check is even scheduled: the badge should be there
+  // immediately, not 90 seconds later, and not at all if the check skips
+  // itself because the last one was less than a day ago.
+  updateCheckRestoreBadge();
   updateCheckScheduleFirstRun();
 }

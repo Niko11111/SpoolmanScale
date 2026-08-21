@@ -23,6 +23,7 @@
 #include "services/ota_web_server.h"
 #include "services/remote_link.h"
 #include "services/user_options.h"
+#include "ui/ota_github.h"
 #include "services/update_check.h"
 #include "ui/ota_browser.h"
 #include "ui/remote_link_popup.h"
@@ -236,6 +237,19 @@ void appLoop() {
   // Background update check. Cheap: a few comparisons per pass, and the actual
   // request happens in its own task on the other core.
   updateCheckTick();
+
+  // A manual check that ran into the background task. Retried as soon as the
+  // TLS connection is free again, dropped after GH_CHECK_WAIT_MS so a task that
+  // never returns cannot leave the screen waiting on it.
+  if (gh_check_pending) {
+    if (!updateCheckBusy()) {
+      gh_check_pending = false;
+      doGithubOtaCheck();
+    } else if (millis() - gh_check_wait_since > GH_CHECK_WAIT_MS) {
+      gh_check_pending = false;
+      logSD("OTA check: gave up waiting for the background check");
+    }
+  }
 
   // Extra fields check/create — deferred from LVGL event callback to loop
   handleExtraFieldsDeferredActions();

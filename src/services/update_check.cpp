@@ -213,6 +213,24 @@ void maybeStartCheck() {
 
 }  // namespace
 
+bool updateCheckBusy() { return s_task_running; }
+
+// Restores the badge from what the last check found, without going near the
+// network. Comparing rather than trusting a stored flag means it corrects
+// itself: once FW_VERSION has caught up, the badge stays off on its own.
+void updateCheckRestoreBadge() {
+  String stored_s = prefsGetString("upd_ver", "");
+  const char* stored = stored_s.c_str();
+  if (stored[0] == '\0') return;
+  if (parseVersion(stored) <= parseVersion(FW_VERSION)) return;
+
+  strncpy(gh_latest_version, stored, sizeof(gh_latest_version) - 1);
+  gh_latest_version[sizeof(gh_latest_version) - 1] = '\0';
+  update_available = true;
+  showUpdateBadges(true);
+  logSDf("Update badge restored from NVS: %s > %s", stored, FW_VERSION);
+}
+
 void updateCheckScheduleFirstRun() {
   s_due_ms = millis() + FIRST_RUN_DELAY_MS + (esp_random() % FIRST_RUN_JITTER_MS);
   s_scheduled = true;
@@ -278,6 +296,10 @@ void updateCheckTick() {
     s_persist_epoch = 0;
     g_upd_last_epoch = epoch;
     prefsPutUInt("upd_last", epoch);
+    // The tag goes with it. Only the timestamp used to be kept, and since the
+    // check skips itself for a day, a reboot inside that window left the badge
+    // off while an update was in fact waiting.
+    prefsPutString("upd_ver", gh_latest_version);
   } else if (answered) {
     // The server answered but NTP has not, so the daily window cannot be
     // measured in wall clock time. Count uptime instead, otherwise the retry
