@@ -580,6 +580,11 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Adresse am Rechner im Browser öffnen und dort API-Key und Gerätecode eintragen. Der Status unten aktualisiert sich von selbst.",
     "Open this address in a browser on your computer and enter the API key and device code there. The status below updates on its own."
                                                                           },  // STR_WEB_SETUP_HINT
+  // BamBuddy has one credential where FilaMan has two, so the sentence that
+  // tells the user what to type differs.
+  { "Adresse am Rechner im Browser öffnen und dort den API-Key eintragen. Der Status unten aktualisiert sich von selbst.",
+    "Open this address in a browser on your computer and enter the API key there. The status below updates on its own."
+                                                                          },  // STR_WEB_SETUP_HINT_BB
   { "Im Browser einrichten",         "Set up in browser"                  },  // STR_BTN_WEB_SETUP
   { "Fertig",                        "Done"                               },  // STR_BTN_FINISH
   { "Weiter",                        "Next"                               },  // STR_BTN_NEXT
@@ -592,10 +597,10 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "AN",                            "ON"                                 },  // STR_ON
   { "AUS",                           "OFF"                                },  // STR_OFF
   { "Im Browser öffnen",             "Open in browser"                    },  // STR_BTN_OPEN_BROWSER
-  // Names both products in both languages and in every backend mode. Not
+  // Names every product in both languages and in every backend mode. Not
   // passed through backendText(), see the comment at the call site.
-  { "Nicht mit Spoolman oder FilaMan verbunden",
-    "Not affiliated with Spoolman or FilaMan"                             },  // STR_NOT_AFFILIATED
+  { "Nicht mit Spoolman, FilaMan oder BamBuddy verbunden",
+    "Not affiliated with Spoolman, FilaMan or BamBuddy"                   },  // STR_NOT_AFFILIATED
   { "Kein Tag erkannt, bitte neu auflegen",
     "No tag detected, place it again"                                    },  // STR_LINK_NO_TAG
 

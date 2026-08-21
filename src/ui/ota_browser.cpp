@@ -29,6 +29,9 @@ static lv_obj_t *s_lbl_token_val = nullptr;
 // thresholds are edited in the browser as well, but have nothing to do with
 // tokens, so that context just shows the address.
 static bool showsCredentials() {
+  // Spoolman has nothing to enter, so the rows are a FilaMan and BamBuddy
+  // affair even in the contexts that would otherwise show them.
+  if (backendMode() == BACKEND_SPOOLMAN) return false;
   return s_web_ctx == WEB_CTX_BACKEND || s_web_ctx == WEB_CTX_SETUP;
 }
 
@@ -113,15 +116,19 @@ void refreshWebCredentialRows() {
   }
   if (lv_obj_has_flag(scr_ota_browser, LV_OBJ_FLAG_HIDDEN)) return;
 
-  bool key_now   = (filamanApiKey()[0]      != '\0');
-  bool token_now = (filamanDeviceToken()[0] != '\0');
+  // BamBuddy has a single key and no second row at all, so the token half
+  // stays untouched there.
+  const bool bb = backendIsBamBuddy();
+  bool key_now   = bb ? (bambuddyApiKey()[0] != '\0')
+                      : (filamanApiKey()[0]  != '\0');
+  bool token_now = bb ? false : (filamanDeviceToken()[0] != '\0');
 
   if (key_now != s_key_shown) {
     s_key_shown = key_now;
     setCredentialRow(s_lbl_key_val, key_now);
     logSDf("Web: API key now %s", key_now ? "set" : "missing");
   }
-  if (token_now != s_token_shown) {
+  if (s_lbl_token_val && token_now != s_token_shown) {
     s_token_shown = token_now;
     setCredentialRow(s_lbl_token_val, token_now);
     logSDf("Web: device token now %s", token_now ? "set" : "missing");
@@ -191,8 +198,10 @@ void buildOtaBrowserScreen() {
   snprintf(ip_buf, sizeof(ip_buf), "http://%s/", ip.toString().c_str());
 
   char hint_buf[192];
-  strncpy(hint_buf, showsCredentials() ? T(STR_WEB_SETUP_HINT) : T(STR_OTA_OPEN_BROWSER),
-          sizeof(hint_buf) - 1);
+  const char* hint_src = !showsCredentials() ? T(STR_OTA_OPEN_BROWSER)
+                       : backendIsBamBuddy()  ? T(STR_WEB_SETUP_HINT_BB)
+                                              : T(STR_WEB_SETUP_HINT);
+  strncpy(hint_buf, hint_src, sizeof(hint_buf) - 1);
   hint_buf[sizeof(hint_buf) - 1] = '\0';
 
   lv_obj_t *lbl_hint = lv_label_create(scr_ota_browser);
@@ -211,12 +220,23 @@ void buildOtaBrowserScreen() {
   lv_obj_align(lbl_ip, LV_ALIGN_TOP_MID, 0, showsCredentials() ? 108 : 80);
 
   if (showsCredentials()) {
-    s_key_shown   = (filamanApiKey()[0]      != '\0');
-    s_token_shown = (filamanDeviceToken()[0] != '\0');
-    s_lbl_key_val   = addCredentialRow(scr_ota_browser, 158, T(STR_BACKEND_APIKEY),
-                                       s_key_shown);
-    s_lbl_token_val = addCredentialRow(scr_ota_browser, 192, T(STR_BACKEND_DEVICE_TOKEN),
-                                       s_token_shown);
+    if (backendIsBamBuddy()) {
+      // One credential, so one row - and it is left where the FilaMan pair
+      // starts rather than centred between them, which would make the screen
+      // jump when switching backends.
+      s_key_shown   = (bambuddyApiKey()[0] != '\0');
+      s_token_shown = false;
+      s_lbl_key_val   = addCredentialRow(scr_ota_browser, 158, T(STR_BACKEND_APIKEY),
+                                         s_key_shown);
+      s_lbl_token_val = nullptr;
+    } else {
+      s_key_shown   = (filamanApiKey()[0]      != '\0');
+      s_token_shown = (filamanDeviceToken()[0] != '\0');
+      s_lbl_key_val   = addCredentialRow(scr_ota_browser, 158, T(STR_BACKEND_APIKEY),
+                                         s_key_shown);
+      s_lbl_token_val = addCredentialRow(scr_ota_browser, 192, T(STR_BACKEND_DEVICE_TOKEN),
+                                         s_token_shown);
+    }
 
     if (s_web_ctx == WEB_CTX_SETUP) {
       lv_obj_t *btn_done = lv_btn_create(scr_ota_browser);

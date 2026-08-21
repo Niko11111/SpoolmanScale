@@ -14,6 +14,7 @@
 #include "services/app_settings.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/bambuddy_api.h"
 #include "header_status.h"
 #include "lang.h"
 #include "ui_common.h"
@@ -209,6 +210,11 @@ void buildSpoolmanScreen() {
       return;
     }
 
+    // BamBuddy needs to be asked where its inventory lives before anything
+    // else is read. Placed after the health check so a wrong address fails
+    // on the check rather than here.
+    backendAfterConnect();
+
     // Fetch version from /api/v1/info
     char sm_ver[32] = "?";
     backendGetVersion(cfg_spoolman_base, sm_ver, sizeof(sm_ver), 3000);
@@ -219,14 +225,25 @@ void buildSpoolmanScreen() {
     // there are no spools. In FilaMan that is the normal case during setup,
     // because counting needs the API key and it is entered a step later.
     // Printing "0 spools" there would look like an empty database.
-    char result_buf[64];
+    // Which database BamBuddy is on decides which half of the client runs,
+    // so it belongs on screen and not only in the log. The two names are the
+    // ones BamBuddy uses itself under Settings > Filament Tracking. Empty for
+    // the other backends, where there is nothing to choose between.
+    char inv_buf[16] = "";
+    if (backendIsBamBuddy()) {
+      snprintf(inv_buf, sizeof(inv_buf), "%s | ",
+               bbInventoryMode() == BB_INV_SPOOLMAN ? "Spoolman" : "built-in");
+    }
+
+    char result_buf[80];
     if (spool_count < 0) {
       char conn_buf[24];
       strncpy(conn_buf, T(STR_CONNECTED), sizeof(conn_buf) - 1);
       conn_buf[sizeof(conn_buf) - 1] = '\0';
-      snprintf(result_buf, sizeof(result_buf), "v%s | %s", sm_ver, conn_buf);
+      snprintf(result_buf, sizeof(result_buf), "v%s | %s%s", sm_ver, inv_buf, conn_buf);
     } else {
-      snprintf(result_buf, sizeof(result_buf), "v%s | %d spools", sm_ver, spool_count);
+      snprintf(result_buf, sizeof(result_buf), "v%s | %s%d spools",
+               sm_ver, inv_buf, spool_count);
     }
     if (lbl_sp_test_result) {
       lv_label_set_text(lbl_sp_test_result, result_buf);

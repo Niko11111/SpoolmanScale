@@ -28,6 +28,7 @@
 #include "ui/remote_link_popup.h"
 #include "services/spoolman_actions.h"
 #include "services/backend_api.h"
+#include "services/bambuddy_device.h"
 #include "services/wifi_manager.h"
 #include "services/filaman_api.h"
 #include "services/backend.h"
@@ -691,6 +692,11 @@ void appLoop() {
       }
     }
   }
+
+  // BamBuddy presence: registration, heartbeat, queued commands, live weight
+  // and tag removal. Paces itself, so it is called unconditionally and costs
+  // a mode check on the passes where it has nothing to do.
+  bambuddyDeviceTick();
 
   // The web server has to be up whenever FilaMan might trigger a link, and
   // has to stay down in Spoolman mode. Derived from the conditions once a

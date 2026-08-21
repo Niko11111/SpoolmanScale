@@ -1,8 +1,12 @@
 #include "backend_api.h"
 
+#include <ctype.h>
+
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
+#include "services/bambuddy_api.h"
+#include "services/bambuddy_device.h"
 #include "services/filaman_api.h"
 #include "services/list_limits.h"
 #include "services/spoolman_api.h"
@@ -26,6 +30,16 @@ static int notSupported(const char* fn) {
   return BACKEND_NOT_SUPPORTED;
 }
 
+void backendAfterConnect() {
+  if (backendMode() != BACKEND_BAMBUDDY) return;
+  // The server on the other end may be a different one than before, so the
+  // device presence starts over rather than heartbeating at a stale id.
+  bambuddyDeviceReset();
+  // Deliberately not cached behind a "done" flag: the address or the key can
+  // change between two calls, and the answer is one small request.
+  bbDetectInventoryMode(backendBaseUrl(), bambuddyApiKey());
+}
+
 // ============================================================
 //  READING
 // ============================================================
@@ -37,7 +51,8 @@ int backendGetSpoolJson(const char* base_url, int spool_id, JsonDocument& doc,
       return filamanGetSpoolJson(backendBaseUrl(), filamanApiKey(), spool_id,
                                  doc, timeout_ms, out_err);
     case BACKEND_BAMBUDDY:
-      return notSupported("GetSpoolJson");
+      return bbGetSpoolJson(backendBaseUrl(), bambuddyApiKey(), spool_id,
+                            doc, timeout_ms, out_err);
     default:
       return spoolmanGetSpoolJson(base_url, spool_id, doc, timeout_ms, out_err);
   }
@@ -55,7 +70,11 @@ int backendGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocum
                                      doc, nullptr, spool_list_limit > 100 ? spool_list_limit : 100,
                                      timeout_ms, out_err);
     case BACKEND_BAMBUDDY:
-      return notSupported("GetSpoolListJson");
+      // Same reason as FilaMan: the answer is rebuilt field by field, so a
+      // Spoolman field filter has nothing to act on.
+      (void)filter;
+      return bbGetSpoolListJson(backendBaseUrl(), bambuddyApiKey(), allow_archived,
+                                doc, timeout_ms, out_err);
     default:
       return spoolmanGetSpoolListJson(base_url, allow_archived, doc, timeout_ms, filter, out_err);
   }
@@ -79,7 +98,11 @@ int backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocume
       return filamanGetSpoolListJson(backendBaseUrl(), filamanApiKey(), false,
                                      doc, tag_uuid, 20, timeout_ms, out_err);
     case BACKEND_BAMBUDDY:
-      return notSupported("FindSpoolByTag");
+      // Answered through the device protocol, which is the only lookup that
+      // works in both of BamBuddy's inventory modes.
+      (void)filter;
+      return bbFindSpoolByTag(backendBaseUrl(), bambuddyApiKey(), tag_uuid,
+                              doc, timeout_ms, out_err);
     default:
       // Spoolman can do the same through an extra field filter. The field filter
       // is passed along because an older server ignores the query parameter and
@@ -96,7 +119,8 @@ int backendGetLocationsJson(const char* base_url, JsonDocument& doc,
       return filamanGetLocationsJson(backendBaseUrl(), filamanApiKey(), doc,
                                      timeout_ms, out_err);
     case BACKEND_BAMBUDDY:
-      return notSupported("GetLocationsJson");
+      return bbGetLocationsJson(backendBaseUrl(), bambuddyApiKey(), doc,
+                                timeout_ms, out_err);
     default:
       return spoolmanGetLocationsJson(base_url, doc, timeout_ms, out_err);
   }
@@ -117,7 +141,9 @@ int backendGetHealthCode(const char* base_url, uint32_t timeout_ms) {
     case BACKEND_FILAMAN:
       return filamanGetHealthCode(backendBaseUrl(), timeout_ms);
     case BACKEND_BAMBUDDY:
-      return notSupported("GetHealthCode");
+      // Two requests rather than one: BamBuddy has no /health, and the
+      // second one is what tells a rejected key from an absent server.
+      return bbGetHealthCode(backendBaseUrl(), bambuddyApiKey(), timeout_ms);
     default:
       return spoolmanGetHealthCode(base_url, timeout_ms);
   }
@@ -129,9 +155,8 @@ bool backendGetVersion(const char* base_url, char* out_version, size_t out_size,
     case BACKEND_FILAMAN:
       return filamanGetVersion(backendBaseUrl(), out_version, out_size, timeout_ms);
     case BACKEND_BAMBUDDY:
-      // bool return, so there is no BACKEND_NOT_SUPPORTED to hand back.
-      notSupported("GetVersion");
-      return false;
+      return bbGetVersion(backendBaseUrl(), bambuddyApiKey(), out_version,
+                          out_size, timeout_ms);
     default:
       return spoolmanGetVersion(base_url, out_version, out_size, timeout_ms);
   }
@@ -142,7 +167,7 @@ int backendCountActiveSpools(const char* base_url, uint32_t timeout_ms) {
     case BACKEND_FILAMAN:
       return filamanCountActiveSpools(backendBaseUrl(), filamanApiKey(), timeout_ms);
     case BACKEND_BAMBUDDY:
-      return notSupported("CountActiveSpools");
+      return bbCountActiveSpools(backendBaseUrl(), bambuddyApiKey(), timeout_ms);
     default:
       return spoolmanCountActiveSpools(base_url, timeout_ms);
   }
@@ -204,8 +229,20 @@ int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
     case BACKEND_FILAMAN:
       // Both tag types go into the native rfid_uid. An empty uuid unlinks.
       return filamanPatchRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, uuid, timeout_ms);
-    case BACKEND_BAMBUDDY:
-      return notSupported("PatchSpoolTag");
+    case BACKEND_BAMBUDDY: {
+      // A 32 character identifier is a Bambu tray uuid, anything shorter an
+      // NFC tag uid. Separators are stripped on the way: the Spoolman mode
+      // endpoint validates plain hex and answers 422 otherwise.
+      char hex[40];
+      size_t o = 0;
+      for (const char* p = uuid; p && *p && o + 1 < sizeof(hex); p++) {
+        if (isxdigit((unsigned char)*p)) hex[o++] = toupper((unsigned char)*p);
+      }
+      hex[o] = '\0';
+      const bool is_tray = (o == 32);
+      return bbLinkTag(backendBaseUrl(), bambuddyApiKey(), spool_id,
+                       is_tray ? nullptr : hex, is_tray ? hex : nullptr, timeout_ms);
+    }
     default:
       return spoolmanPatchSpoolTag(base_url, spool_id, uuid, timeout_ms);
   }
@@ -223,10 +260,16 @@ int backendPatchSpoolRemaining(const char* base_url, int spool_id, float remaini
       return filamanReportWeight(backendBaseUrl(), filamanDeviceToken(),
                                  spool_id, tag_uuid, gross, timeout_ms);
     }
-    case BACKEND_BAMBUDDY:
+    case BACKEND_BAMBUDDY: {
       // Wants the gross weight too, like FilaMan - it subtracts core_weight
-      // itself. Verified against BamBuddy 1.2.5.3 on 21.08.2026.
-      return notSupported("PatchSpoolRemaining");
+      // itself and derives weight_used. Verified against BamBuddy 1.2.5.3 on
+      // 21.08.2026: 700 g gross with a core of 251 became 551 g used.
+      float gross = (measured_g >= 0.0f) ? measured_g : (remaining + sm_spool_weight);
+      (void)last_used_iso;   // BamBuddy stamps last_weighed_at itself
+      (void)tag_uuid;        // identified by id
+      return bbUpdateSpoolWeight(backendBaseUrl(), bambuddyApiKey(), spool_id,
+                                 gross, timeout_ms);
+    }
     default:
       (void)tag_uuid;    // Spoolman identifies the spool by id only
       (void)measured_g;
@@ -245,8 +288,14 @@ int backendPatchInitialWeight(const char* base_url, int spool_id, float initial_
       return filamanPatchSpoolFloat2(backendBaseUrl(), filamanApiKey(), spool_id,
                                      "initial_total_weight_g", initial_weight,
                                      "remaining_weight_g", initial_weight, timeout_ms);
-    case BACKEND_BAMBUDDY:
-      return notSupported("PatchInitialWeight");
+    case BACKEND_BAMBUDDY: {
+      // Both numbers again, for the same reason as FilaMan. BamBuddy stores
+      // what was consumed, so a full spool is label_weight with nothing used.
+      const int   label = (int)initial_weight;
+      const float used  = 0.0f;
+      return bbPatchSpoolFields(backendBaseUrl(), bambuddyApiKey(), spool_id,
+                                &label, nullptr, &used, nullptr, nullptr, timeout_ms);
+    }
     default:
       return spoolmanPatchInitialWeight(base_url, spool_id, initial_weight, timeout_ms);
   }
@@ -258,7 +307,7 @@ int backendPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeou
       // Not a PATCH in FilaMan, archiving has its own endpoint.
       return filamanSetStatus(backendBaseUrl(), filamanApiKey(), spool_id, "archived", timeout_ms);
     case BACKEND_BAMBUDDY:
-      return notSupported("PatchArchiveSpool");
+      return bbArchiveSpool(backendBaseUrl(), bambuddyApiKey(), spool_id, timeout_ms);
     default:
       return spoolmanPatchArchiveSpool(base_url, spool_id, timeout_ms);
   }
@@ -270,11 +319,15 @@ int backendPatchSpoolWeight(const char* base_url, int spool_id, float spool_weig
     case BACKEND_FILAMAN:
       return filamanPatchSpoolFloat(backendBaseUrl(), filamanApiKey(), spool_id,
                                     "empty_spool_weight_g", spool_weight, timeout_ms);
-    case BACKEND_BAMBUDDY:
+    case BACKEND_BAMBUDDY: {
       // Only reaches the database in BamBuddy's own inventory. With Spoolman
-      // behind it the proxy accepts core_weight and drops it, so that mode has
-      // to keep answering "not supported" rather than reporting a false success.
-      return notSupported("PatchSpoolWeight");
+      // behind it the proxy accepts core_weight and drops it, so that mode
+      // answers "not supported" rather than reporting a false success.
+      if (bbInventoryMode() == BB_INV_SPOOLMAN) return notSupported("PatchSpoolWeight");
+      const int core = (int)spool_weight;
+      return bbPatchSpoolFields(backendBaseUrl(), bambuddyApiKey(), spool_id,
+                                nullptr, &core, nullptr, nullptr, nullptr, timeout_ms);
+    }
     default:
       return spoolmanPatchSpoolWeight(base_url, spool_id, spool_weight, timeout_ms);
   }
@@ -319,7 +372,11 @@ int backendPatchSpoolLocation(const char* base_url, int spool_id, const char* lo
       return filamanPatchSpoolLocation(backendBaseUrl(), filamanApiKey(), spool_id,
                                        location_name, timeout_ms);
     case BACKEND_BAMBUDDY:
-      return notSupported("PatchSpoolLocation");
+      // A plain string on the spool, no id to resolve. BamBuddy creates the
+      // location entry on the fly when the name is new.
+      return bbPatchSpoolFields(backendBaseUrl(), bambuddyApiKey(), spool_id,
+                                nullptr, nullptr, nullptr,
+                                location_name ? location_name : "", nullptr, timeout_ms);
     default:
       return spoolmanPatchSpoolLocation(base_url, spool_id, location_name, timeout_ms);
   }

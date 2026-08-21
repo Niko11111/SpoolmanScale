@@ -20,6 +20,12 @@
 //  nothing calls them: spoolmanGetJson and spoolmanIsReachable.
 // ============================================================
 
+// Runs once after the connection is up, before the first real call. Only
+// BamBuddy needs it: it asks the server whether the inventory is its own or
+// proxied to Spoolman, which decides the path prefix of everything that
+// follows. A no-op for the other two backends.
+void backendAfterConnect();
+
 // --- reading -------------------------------------------------
 int  backendGetSpoolJson(const char* base_url, int spool_id, JsonDocument& doc,
        uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr);
