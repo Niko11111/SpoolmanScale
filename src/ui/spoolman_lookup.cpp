@@ -343,6 +343,7 @@ void querySpoolmanById(int spool_id) {
   if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull()) {
     sm_vendor_name = spool["filament"]["vendor"]["name"] | String("");
     sm_vendor_name.trim();
+    snprintf(sm_vendor_g, sizeof(sm_vendor_g), "%s", sm_vendor_name.c_str());
   }
   String sm_color = spool["filament"]["color_hex"] | String("");
   sm_color.trim();
@@ -694,6 +695,7 @@ void querySpoolman(const char* tray_uuid) {
     if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull()) {
       sm_vendor_name = spool["filament"]["vendor"]["name"] | String("");
       sm_vendor_name.trim();
+    snprintf(sm_vendor_g, sizeof(sm_vendor_g), "%s", sm_vendor_name.c_str());
     }
     String sm_color = spool["filament"]["color_hex"] | String("");
     sm_color.trim();

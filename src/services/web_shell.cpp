@@ -120,8 +120,8 @@ String webShellFoot() {
 }
 
 String webShellNav(const char *active) {
-  static const char *PATHS[]  = { "/", "/ota", "/logs", "/drying", "/config", "/filaman" };
-  static const char *LABELS[] = { "Status", "Firmware", "Logs", "Drying", "Limits", "FilaMan" };
+  static const char *PATHS[]  = { "/", "/ota", "/logs", "/drying", "/config", "/filaman", "/tags" };
+  static const char *LABELS[] = { "Status", "Firmware", "Logs", "Drying", "Limits", "FilaMan", "Tags" };
 
   String n = "<style>.nav{display:flex;flex-wrap:wrap;gap:8px;width:100%;max-width:480px;"
              "margin-bottom:20px}.nav a{padding:8px 14px;background:#0a1828;border:1px solid "

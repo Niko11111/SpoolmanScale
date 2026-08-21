@@ -21,6 +21,9 @@
 #include "web_access.h"
 #include "web_shell.h"
 #include "hardware/display.h"
+#include "backend_api.h"
+#include "tag_write.h"
+#include "hardware/nfc.h"
 #include "web_home.h"
 #include "prefs_store.h"
 #include "wifi_manager.h"
@@ -68,13 +71,13 @@ static void serverEnsureStopped() {
   // credentials and the list limits all at once, while the clean URLs were
   // taken by its JSON backend. Each section now has its own address and only
   // that section is built and sent.
-  static const char *SEC_TITLE[] = { "Firmware", "Logs", "Drying", "FilaMan", "Limits" };
-  static const char *SEC_PATH[]  = { "/ota", "/logs", "/drying", "/filaman", "/config" };
+  static const char *SEC_TITLE[] = { "Firmware", "Logs", "Drying", "FilaMan", "Limits", "Tags" };
+  static const char *SEC_PATH[]  = { "/ota", "/logs", "/drying", "/filaman", "/config", "/tags" };
 
   static String maintNav(int sec) {
     String n = "<div class='nav'>";
     n += "<a href='/'>Status</a>";
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
       if (i == 3 && !backendIsFilaMan()) continue;   // not applicable on Spoolman
       n += String("<a class='") + (i == sec ? "on" : "") + "' href='" + SEC_PATH[i] + "'>"
            + SEC_TITLE[i] + "</a>";
@@ -234,9 +237,10 @@ static void serverEnsureStopped() {
       "<span id='dry-s' style='font-size:12px;color:#28d49a;line-height:36px;display:inline-block'></span>"
       "</div></div>"
       "<style>.dry-in{width:64px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
-      "border-radius:6px;padding:4px 8px;font-size:14px;text-align:center}</style>"
-      "<script>"
-      "function setLocL(){""var v=parseInt(document.getElementById('locl-in').value);""if(v<5)v=5;if(v>100)v=100;""fetch('/api/loclimit',{method:'POST',body:String(v)})"".then(r=>r.json()).then(d=>{""document.getElementById('locl-s').textContent='Saved: '+d.limit;""setTimeout(()=>{document.getElementById('locl-s').textContent='';},3000);""});}""function setGain(){"
+      "border-radius:6px;padding:4px 8px;font-size:14px;text-align:center}</style>";
+
+    html +=       "<script>"
+      "function setLocL(){""var v=parseInt(document.getElementById('locl-in').value);""if(v<5)v=5;if(v>100)v=100;""fetch('/api/loclimit',{method:'POST',body:String(v)})"".then(r=>r.json()).then(d=>{""document.getElementById('locl-s').textContent='Saved: '+d.limit;""setTimeout(()=>{document.getElementById('locl-s').textContent='';},3000);""});}""var tgCur='',tgNew='',tgLinked='',tgUid='';""function tgSync(){var b=document.getElementById('tg-btn');if(!b)return;""var n=document.getElementById('tg-new');""if(!tgNew){b.disabled=true;b.textContent='Pick a spool';if(n)n.textContent='';return;}""if(n){var w='Will write: '+tgNew;""if(tgLinked&&tgUid&&tgLinked!=tgUid)""w+=' | note: spool is linked to '+tgLinked+', linking replaces it';""n.textContent=w;}""if(tgCur===tgNew){b.disabled=true;b.textContent='Tag already matches';}""else{b.disabled=false;b.textContent=tgCur&&tgCur!='blank'?'Overwrite tag':'Write tag';}}""function loadPreview(){var v=parseInt(document.getElementById('tg-id').value);""var f=document.getElementById('tg-fmt').value;""if(!v){tgNew='';tgSync();return;}""fetch('/api/tag/preview?id='+v+'&fmt='+f).then(r=>r.json()).then(d=>{""tgNew=d.ok?d.preview:'';tgLinked=d.ok?(d.linked||''):'';""if(!d.ok){var n=document.getElementById('tg-new');""if(n)n.textContent='Spool '+v+' not found on the backend.';}""tgSync();});}""function setOpt(p,t){p.innerHTML='';var o=document.createElement('option');""o.value='';o.textContent=t;p.appendChild(o);}""function pickSpool(){var p=document.getElementById('tg-pick');""if(p.value)document.getElementById('tg-id').value=p.value;loadPreview();}""function loadSpools(){var p=document.getElementById('tg-pick');if(!p)return;""fetch('/api/spools').then(r=>r.json()).then(d=>{""if(d.error){setOpt(p,d.error);return;}""setOpt(p,'-- pick a spool --');""d.forEach(s=>{var o=document.createElement('option');o.value=s.id;""o.textContent='#'+s.id+'  '+s.label;p.appendChild(o);});""}).catch(e=>{setOpt(p,'spool list unavailable');});}""function tgPoll(){fetch('/api/tag').then(r=>r.json()).then(d=>{""document.getElementById('tg-uid').textContent=d.uid?('Tag on reader: '+d.uid+' ('+d.kind+')'):'No tag on the reader.';""var c=document.getElementById('tg-cur');""tgUid=d.uid||'';""if(c)c.textContent=d.content?('Currently on tag: '+d.content):'';""if(d.content!==tgCur){tgCur=d.content||'';tgSync();}""var s=document.getElementById('tg-s');""if(d.state!='idle'){s.textContent=d.message;""s.style.color=(d.state=='error')?'#ff8080':'#28d49a';}""});}""function writeTag(){""var v=parseInt(document.getElementById('tg-id').value);""if(!v){document.getElementById('tg-s').textContent='Enter a spool ID.';return;}""var f=document.getElementById('tg-fmt').value;""var l=document.getElementById('tg-link').checked?1:0;""fetch('/api/tag/write',{method:'POST',body:v+','+f+','+l})"".then(r=>r.json()).then(d=>{document.getElementById('tg-s').textContent=d.message||'Queued.';});""setTimeout(tgPoll,1500);setTimeout(tgPoll,4000);}""document.addEventListener('DOMContentLoaded',function(){""if(document.getElementById('tg-uid')){tgPoll();setInterval(tgPoll,3000);}""if(document.getElementById('tg-pick'))loadSpools();""});""function setGain(){"
       "var v=parseInt(document.getElementById('gain-in').value);"
       "fetch('/api/gain',{method:'POST',body:String(v)})"
       ".then(r=>r.json()).then(d=>{"
@@ -389,6 +393,31 @@ static void serverEnsureStopped() {
       "<button class='btn-toggle' onclick='setGain()'>Save</button>"
       "<span id='gain-s' style='font-size:12px;color:#28d49a;line-height:36px'></span>"
       "</div></div>";
+    if (sec == 5) html +=
+      "<div class='card'>"
+      "<h2>Write a tag</h2>"
+      "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>Place a writable NTAG on the reader, pick a spool, and write it. Whatever is already on the tag is replaced. Factory tags are usually MIFARE Classic or locked, and can only be read.</p>"
+      "<div id='tg-uid' style='font-size:13px;color:#c8d8f0;margin-bottom:12px'>Checking reader...</div>"
+      "<div id='tg-cur' style='font-size:12px;color:#4a6fa0;margin-bottom:12px'></div>"
+      "<div id='tg-new' style='font-size:12px;color:#4a6fa0;margin-bottom:12px'></div>"
+      "<div style='display:flex;gap:10px;align-items:center;flex-wrap:wrap'>"
+      "<label style='font-size:13px;color:#c8d8f0'>Spool ID</label>"
+      "<input id='tg-id' type='number' min='1' oninput='loadPreview()' style='width:88px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;border-radius:8px;padding:8px 10px;font-size:16px'>"
+      "<select id='tg-pick' onchange='pickSpool()' style='flex:1;min-width:200px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;border-radius:8px;padding:8px 10px;font-size:14px'><option value=''>Loading spools...</option></select>"
+      "<select id='tg-fmt' onchange='loadPreview()' style='background:#06080f;color:#e8f0ff;border:1px solid #1a3060;border-radius:8px;padding:8px 10px;font-size:14px'>"
+      "<option value='0'>Anycubic ACE</option>"
+      "<option value='1'>OpenSpool (FilaMan)</option>"
+      "<option value='2'>Erase the tag</option>"
+      "</select>"
+      "<button id='tg-btn' class='btn-toggle' onclick='writeTag()' disabled>Pick a spool</button>"
+      "</div>"
+      "<label style='display:flex;align-items:center;gap:8px;font-size:13px;color:#c8d8f0;margin-top:12px'>"
+      "<input id='tg-link' type='checkbox' checked style='width:16px;height:16px'>"
+      "Also link this tag to the spool, so presenting it selects that spool"
+      "</label>"
+      "<div id='tg-s' style='font-size:13px;color:#28d49a;margin-top:12px'></div>"
+      "</div>";
+
     html += webShellFoot();
     return html;
   }
@@ -481,6 +510,10 @@ static void registerRoutes() {
   ota_server.on("/config", HTTP_GET, []() {
     if (!webMaintenanceEnabled()) { webSendDisabled(ota_server, "List limits", "Settings > System > Web interface"); return; }
     ota_server.send(200, "text/html", maintPage(4));
+  });
+  ota_server.on("/tags", HTTP_GET, []() {
+    if (!webMaintenanceEnabled()) { webSendDisabled(ota_server, "Tag writing", "Settings > System > Web interface"); return; }
+    ota_server.send(200, "text/html", maintPage(5));
   });
 
 
@@ -727,6 +760,74 @@ static void registerRoutes() {
     }
     filamanSetDeviceToken(token);
     ota_server.send(200, "text/plain", "Device registered");
+  });
+
+  ota_server.on("/api/tag/preview", HTTP_GET, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    int id  = ota_server.arg("id").toInt();
+    int fmt = ota_server.arg("fmt").toInt();
+    char prev[128] = "", linked[40] = "";
+    bool ok = tagPreview(id, fmt == 2 ? TAG_FMT_ERASE : fmt == 1 ? TAG_FMT_OPENSPOOL : TAG_FMT_ACE,
+                         prev, sizeof(prev), linked, sizeof(linked));
+    ota_server.send(200, "application/json",
+      String("{\"ok\":") + (ok ? "true" : "false") + ",\"preview\":\"" + prev +
+      "\",\"linked\":\"" + linked + "\"}");
+  });
+
+  ota_server.on("/api/spools", HTTP_GET, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    JsonDocument doc;
+    int code = backendGetSpoolListJson(backendBaseUrl(), false, doc);
+    if (code != 200) {
+      ota_server.send(200, "application/json",
+                      String("{\"error\":\"backend HTTP ") + code + "\"}");
+      return;
+    }
+    String out = "[";
+    bool first = true;
+    for (JsonObjectConst sp : doc.as<JsonArrayConst>()) {
+      int id = sp["id"] | 0;
+      if (!id) continue;
+      String label = String(sp["filament"]["vendor"]["name"] | "");
+      String name  = String(sp["filament"]["name"] | "");
+      String mat   = String(sp["filament"]["material"] | "");
+      if (label.length() && name.length()) label += " ";
+      label += name;
+      if (mat.length()) label += " (" + mat + ")";
+      label.replace("\\", "");
+      label.replace("\"", "'");
+      if (!first) out += ",";
+      first = false;
+      out += "{\"id\":" + String(id) + ",\"label\":\"" + label + "\"}";
+    }
+    out += "]";
+    ota_server.send(200, "application/json", out);
+  });
+
+  ota_server.on("/api/tag", HTTP_GET, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    // Reader state comes from the loop task; touching the reader here would
+    // race the main NFC poll.
+    String j = String("{\"uid\":\"") + tagCachedUid() + "\",\"kind\":\"" + tagCachedKind() +
+               "\",\"state\":\"" + tagWriteState() +
+               "\",\"message\":\"" + tagWriteMessage() +
+               "\",\"content\":\"" + tagCachedContent() + "\"}";
+    ota_server.send(200, "application/json", j);
+  });
+
+  ota_server.on("/api/tag/write", HTTP_POST, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!ota_server.hasArg("plain")) { ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
+    String body = ota_server.arg("plain");
+    int c1 = body.indexOf(',');
+    int c2 = c1 < 0 ? -1 : body.indexOf(',', c1 + 1);
+    int id  = body.substring(0, c1 < 0 ? body.length() : c1).toInt();
+    int fmt = c1 < 0 ? 0 : body.substring(c1 + 1, c2 < 0 ? body.length() : c2).toInt();
+    bool link = c2 >= 0 && body.substring(c2 + 1).toInt() == 1;
+    bool ok = tagWriteRequest(id, fmt == 2 ? TAG_FMT_ERASE : fmt == 1 ? TAG_FMT_OPENSPOOL : TAG_FMT_ACE, link);
+    ota_server.send(200, "application/json",
+      ok ? "{\"message\":\"Queued, keep the tag on the reader.\"}"
+         : "{\"message\":\"Busy or invalid spool ID.\"}");
   });
 
   ota_server.on("/api/gain", HTTP_POST, []() {

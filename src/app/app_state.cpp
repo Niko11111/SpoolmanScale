@@ -87,6 +87,7 @@ char  sm_tag[48] = "";
 char  sm_article_nr[32] = "";
 char  sm_filament_name[32] = "";
 char  sm_material_global[32] = "";
+char  sm_vendor_g[32] = "";
 char  sm_color_global[16] = "";
 char  sm_location_name[48] = "";
 int   sm_location_id = 0;
