@@ -41,10 +41,13 @@ static char      message[96] = "";
 static char      cached_uid[26] = "";
 static char      cached_kind[34] = "";
 static char      cached_content[128] = "";
+static TagInfo   cached_info;
+static bool      cache_dirty = false;
 
 const char* tagCachedUid()     { return cached_uid; }
 const char* tagCachedKind()    { return cached_kind; }
 const char* tagCachedContent() { return cached_content; }
+const TagInfo* tagCachedInfo() { return &cached_info; }
 
 const char* tagWriteState()   { return state; }
 const char* tagWriteMessage() { return message; }
@@ -118,6 +121,38 @@ static void buildAce(JsonObjectConst sp, AceFields *f) {
     snprintf(f->sku, sizeof(f->sku), "%s", article);
   else
     snprintf(f->sku, sizeof(f->sku), "SM%d", (int)(sp["id"] | 0));
+}
+
+static void aceToInfo(const AceFields *f, TagInfo *ti) {
+  memset(ti, 0, sizeof(*ti));
+  snprintf(ti->fmt, sizeof(ti->fmt), "ACE");
+  snprintf(ti->sku, sizeof(ti->sku), "%s", f->sku);
+  snprintf(ti->brand, sizeof(ti->brand), "%s", f->brand);
+  snprintf(ti->material, sizeof(ti->material), "%s", f->material);
+  ti->has_color = true;
+  ti->r = f->r; ti->g = f->g; ti->b = f->b;
+  ti->et_lo = f->et_lo; ti->et_hi = f->et_hi;
+  ti->bed_lo = f->bed_lo; ti->bed_hi = f->bed_hi;
+  ti->dia_x100 = f->dia_x100; ti->length_m = f->length_m;
+  ti->weight_g = f->weight_g;
+}
+
+void tagInfoJson(const TagInfo *ti, char *out, size_t out_len) {
+  int n = snprintf(out, out_len, "{\"fmt\":\"%s\"", ti->fmt);
+  if (ti->brand[0])    n += snprintf(out + n, out_len - n, ",\"brand\":\"%s\"", ti->brand);
+  if (ti->material[0]) n += snprintf(out + n, out_len - n, ",\"material\":\"%s\"", ti->material);
+  if (ti->sku[0])      n += snprintf(out + n, out_len - n, ",\"sku\":\"%s\"", ti->sku);
+  if (ti->has_color)   n += snprintf(out + n, out_len - n, ",\"color\":\"#%02X%02X%02X\"",
+                                     ti->r, ti->g, ti->b);
+  if (ti->et_hi)       n += snprintf(out + n, out_len - n, ",\"nozzle\":\"%u-%u\"",
+                                     (unsigned)ti->et_lo, (unsigned)ti->et_hi);
+  if (ti->bed_hi)      n += snprintf(out + n, out_len - n, ",\"bed\":\"%u-%u\"",
+                                     (unsigned)ti->bed_lo, (unsigned)ti->bed_hi);
+  if (ti->weight_g)    n += snprintf(out + n, out_len - n, ",\"weight\":%u", (unsigned)ti->weight_g);
+  if (ti->dia_x100)    n += snprintf(out + n, out_len - n, ",\"dia\":\"%u.%02u\"",
+                                     (unsigned)(ti->dia_x100 / 100), (unsigned)(ti->dia_x100 % 100));
+  if (ti->length_m)    n += snprintf(out + n, out_len - n, ",\"len\":%u", (unsigned)ti->length_m);
+  snprintf(out + n, out_len - n, "}");
 }
 
 // One format for both sides, so the page can compare them as plain strings.
@@ -231,12 +266,25 @@ static bool readOpenSpool(char *out, size_t out_len) {
   return strstr(out, "openspool") != nullptr;
 }
 
-static void describeOpenSpool(const char *json, char *out, size_t out_len) {
+static void describeOpenSpool(const char *json, char *out, size_t out_len, TagInfo *ti) {
+  if (ti) { memset(ti, 0, sizeof(*ti)); snprintf(ti->fmt, sizeof(ti->fmt), "OpenSpool"); }
   JsonDocument d;
   if (deserializeJson(d, json)) { snprintf(out, out_len, "OpenSpool: unreadable"); return; }
   snprintf(out, out_len, "OpenSpool: %s %s, #%s, %s-%sC",
            d["brand"] | "?", d["type"] | "?", d["color_hex"] | "?",
            d["min_temp"] | "?", d["max_temp"] | "?");
+  if (!ti) return;
+  snprintf(ti->brand, sizeof(ti->brand), "%s", d["brand"] | "");
+  snprintf(ti->material, sizeof(ti->material), "%s", d["type"] | "");
+  const char *hex = d["color_hex"] | "";
+  if (*hex == '#') hex++;
+  unsigned r = 0, g = 0, b = 0;
+  if (strlen(hex) >= 6 && sscanf(hex, "%02x%02x%02x", &r, &g, &b) == 3) {
+    ti->has_color = true;
+    ti->r = (uint8_t)r; ti->g = (uint8_t)g; ti->b = (uint8_t)b;
+  }
+  ti->et_lo = (uint16_t)(d["min_temp"] | 0);
+  ti->et_hi = (uint16_t)(d["max_temp"] | 0);
 }
 
 static void readText(uint8_t first, char *out, size_t out_len) {
@@ -252,9 +300,12 @@ static void readText(uint8_t first, char *out, size_t out_len) {
   out[j] = 0;
 }
 
+static uint16_t rdU16(const uint8_t *d) { return (uint16_t)(d[0] | (d[1] << 8)); }
+
 // false when a page read came back short: the caller must not cache that.
-static bool tagDescribe(char *out, size_t out_len) {
+static bool tagDescribe(char *out, size_t out_len, TagInfo *ti) {
   out[0] = 0;
+  if (ti) memset(ti, 0, sizeof(*ti));
   uint8_t p4[4] = {0};
   if (!nfcReadNtagPage(4, p4)) return false;
 
@@ -264,18 +315,25 @@ static bool tagDescribe(char *out, size_t out_len) {
     readText(ACE_P_SKU, f.sku, sizeof(f.sku));
     readText(ACE_P_BRAND, f.brand, sizeof(f.brand));
     readText(ACE_P_MATERIAL, f.material, sizeof(f.material));
-    uint8_t col[4] = {0}, wt[4] = {0};
+    uint8_t col[4] = {0}, wt[4] = {0}, ext[4] = {0}, bed[4] = {0}, dl[4] = {0};
     nfcReadNtagPage(ACE_P_COLOR, col);
     nfcReadNtagPage(ACE_P_WEIGHT, wt);
+    nfcReadNtagPage(ACE_P_EXTRUDER, ext);
+    nfcReadNtagPage(ACE_P_BED, bed);
+    nfcReadNtagPage(ACE_P_DIALEN, dl);
     f.r = col[3]; f.g = col[2]; f.b = col[1];
-    f.weight_g = (uint16_t)(wt[0] | (wt[1] << 8));
+    f.weight_g = rdU16(wt);
+    f.et_lo = rdU16(ext);     f.et_hi = rdU16(ext + 2);
+    f.bed_lo = rdU16(bed);    f.bed_hi = rdU16(bed + 2);
+    f.dia_x100 = rdU16(dl);   f.length_m = rdU16(dl + 2);
     describeAce(&f, out, out_len);
+    if (ti) aceToInfo(&f, ti);
     return f.material[0] && f.brand[0];
   }
 
   char json[224];
   if (readOpenSpool(json, sizeof(json))) {
-    describeOpenSpool(json, out, out_len);
+    describeOpenSpool(json, out, out_len, ti);
     return true;
   }
 
@@ -286,13 +344,15 @@ static bool tagDescribe(char *out, size_t out_len) {
     for (int i = 0; i < 4; i++) if (d[i]) { blank = false; break; }
   }
   snprintf(out, out_len, "%s", blank ? "blank" : "unrecognised data");
+  if (ti) snprintf(ti->fmt, sizeof(ti->fmt), "%s", blank ? "blank" : "unknown");
   return true;
 }
 
 bool tagPreview(int spool_id, TagFormat fmt, char *out, size_t out_len,
-                char *linked, size_t linked_len) {
+                char *linked, size_t linked_len, TagInfo *info) {
   out[0] = 0;
   linked[0] = 0;
+  if (info) memset(info, 0, sizeof(*info));
   if (spool_id <= 0) return false;
 
   JsonDocument doc;
@@ -305,10 +365,21 @@ bool tagPreview(int spool_id, TagFormat fmt, char *out, size_t out_len,
 
   if (fmt == TAG_FMT_ERASE) {
     snprintf(out, out_len, "blank");
+    if (info) snprintf(info->fmt, sizeof(info->fmt), "blank");
     return true;
   }
   AceFields f;
   buildAce(sp, &f);
+  if (info) {
+    aceToInfo(&f, info);
+    if (fmt == TAG_FMT_OPENSPOOL) {
+      // OpenSpool carries neither the SKU nor the spool geometry.
+      snprintf(info->fmt, sizeof(info->fmt), "OpenSpool");
+      info->sku[0] = 0;
+      info->bed_lo = info->bed_hi = 0;
+      info->dia_x100 = info->length_m = info->weight_g = 0;
+    }
+  }
   if (fmt == TAG_FMT_OPENSPOOL) {
     snprintf(out, out_len, "OpenSpool: %s %s, #%02X%02X%02X, %u-%uC",
              f.brand, f.material, f.r, f.g, f.b,
@@ -327,6 +398,7 @@ static void refreshCache() {
 
   if (!tag_present) {
     cached_uid[0] = 0; cached_kind[0] = 0; cached_content[0] = 0;
+    memset(&cached_info, 0, sizeof(cached_info));
     last_uid[0] = 0;
     return;
   }
@@ -336,9 +408,9 @@ static void refreshCache() {
   snprintf(cached_kind, sizeof(cached_kind), "%s",
            is_ntag ? "NTAG, writable" : "MIFARE Classic, not writable");
 
-  if (!is_ntag) { cached_content[0] = 0; return; }
+  if (!is_ntag) { cached_content[0] = 0; memset(&cached_info, 0, sizeof(cached_info)); return; }
 
-  const bool changed = strcmp(last_uid, g_tag.uid_str) != 0;
+  const bool changed = strcmp(last_uid, g_tag.uid_str) != 0 || cache_dirty;
   if (!changed && cached_content[0]) return;
   if (millis() - last_ms < 500) return;      // retry gap after a failed read
   last_ms = millis();
@@ -347,8 +419,12 @@ static void refreshCache() {
   // A page read that loses the reader returns a short or empty result, so keep
   // the last good description rather than blanking the page.
   char tmp[128];
-  if (tagDescribe(tmp, sizeof(tmp)) && tmp[0])
+  TagInfo ti;
+  if (tagDescribe(tmp, sizeof(tmp), &ti) && tmp[0]) {
     snprintf(cached_content, sizeof(cached_content), "%s", tmp);
+    cached_info = ti;
+    cache_dirty = false;
+  }
 }
 
 void tagWriteTick() {
@@ -388,6 +464,8 @@ void tagWriteTick() {
     ok = (pending_fmt == TAG_FMT_ACE) ? writeAce(&f)
                                       : writeOpenSpool(&f, pending_id);
   }
+
+  cache_dirty = true;   // the tag changed under a UID that did not
 
   if (!ok) {
     finish("error", "Write failed - keep the tag still on the reader");
