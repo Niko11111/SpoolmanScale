@@ -116,11 +116,10 @@ static void buildAce(JsonObjectConst sp, AceFields *f) {
   f->length_m = (uint16_t)((f->weight_g / density) / area / 100.0f);
 
   snprintf(f->brand, sizeof(f->brand), "%s", sp["filament"]["vendor"]["name"] | "Generic");
-  const char *article = sp["filament"]["article_number"] | "";
-  if (article[0] && strlen(article) <= 16)
-    snprintf(f->sku, sizeof(f->sku), "%s", article);
-  else
-    snprintf(f->sku, sizeof(f->sku), "SM%d", (int)(sp["id"] | 0));
+  // Always the backend spool id. The ACE does not validate the SKU and hands
+  // the decoded contents to Klipper without a UID, so this is the only field
+  // that can point back at the spool record.
+  snprintf(f->sku, sizeof(f->sku), "SM%d", (int)(sp["id"] | 0));
 }
 
 static void aceToInfo(const AceFields *f, TagInfo *ti) {
