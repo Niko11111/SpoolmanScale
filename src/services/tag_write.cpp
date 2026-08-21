@@ -403,9 +403,13 @@ void tagWriteTick() {
     int u = 0;
     for (int i = 0; i < uid_len && u < (int)sizeof(uid_str) - 3; i++)
       u += snprintf(uid_str + u, sizeof(uid_str) - u, i ? ":%02X" : "%02X", uid[i]);
-    int code2 = backendPatchSpoolTag(backendBaseUrl(), pending_id, uid_str);
-    snprintf(m + n, sizeof(m) - n, code2 == 200 ? ", linked to the spool"
-                                                : ", but linking failed (HTTP %d)", code2);
+    char note[48];
+    int code2 = backendLinkSpoolTag(backendBaseUrl(), pending_id, uid_str,
+                                    note, sizeof(note));
+    if (code2 == 200)
+      snprintf(m + n, sizeof(m) - n, note[0] ? ", linked (%s)" : ", linked to the spool", note);
+    else
+      snprintf(m + n, sizeof(m) - n, ", but linking failed (HTTP %d)", code2);
   }
   finish("ok", m);
 }

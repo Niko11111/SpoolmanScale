@@ -550,6 +550,54 @@ int filamanPatchRfidUid(const char* base_url, const char* api_key, int spool_id,
   return code;
 }
 
+// Spool currently holding this UID, archived ones included, or 0.
+static int filamanSpoolHoldingTag(const char* base_url, const char* api_key,
+                                  const char* uuid, uint32_t timeout_ms) {
+  SpiRamAllocator alloc;
+  JsonDocument doc(&alloc);
+  if (filamanGetSpoolListJson(base_url, api_key, true, doc, uuid, 20, timeout_ms) != 200)
+    return 0;
+  for (JsonObjectConst sp : doc.as<JsonArrayConst>()) {
+    const char* t = sp["extra"]["tag"] | "";
+    if (t[0] && strcasecmp(t, uuid) == 0) return sp["id"] | 0;
+  }
+  return 0;
+}
+
+int filamanLinkRfidUid(const char* base_url, const char* api_key, int spool_id,
+                       const char* uuid, char* out_note, size_t note_size,
+                       uint32_t timeout_ms) {
+  if (out_note && note_size) out_note[0] = '\0';
+  if (spool_id <= 0 || !uuid || !uuid[0]) return -1;
+
+  char old_uid[40] = "";
+  {
+    SpiRamAllocator alloc;
+    JsonDocument doc(&alloc);
+    if (filamanGetSpoolJson(base_url, api_key, spool_id, doc, timeout_ms) == 200) {
+      const char* t = doc["extra"]["tag"] | "";
+      snprintf(old_uid, sizeof(old_uid), "%s", t);
+    }
+  }
+  if (strcasecmp(old_uid, uuid) == 0) return 200;   // already this tag
+
+  int holder = filamanSpoolHoldingTag(base_url, api_key, uuid, timeout_ms);
+  if (holder && holder != spool_id) {
+    int code = filamanPatchRfidUid(base_url, api_key, holder, nullptr, timeout_ms);
+    if (code != 200) {
+      logSDf("FilaMan: could not free tag from spool %d, HTTP %d", holder, code);
+      return code;
+    }
+    if (out_note && note_size)
+      snprintf(out_note, note_size, "took the tag off spool %d", holder);
+  }
+
+  if (old_uid[0]) {
+    filamanPatchCustomField(base_url, api_key, spool_id, "previous_tag", old_uid, timeout_ms);
+  }
+  return filamanPatchRfidUid(base_url, api_key, spool_id, uuid, timeout_ms);
+}
+
 int filamanPatchCustomField(const char* base_url, const char* api_key, int spool_id,
                             const char* key, const char* value, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || spool_id <= 0 || !key || !key[0]) return -1;

@@ -400,6 +400,18 @@ int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
   }
 }
 
+int backendLinkSpoolTag(const char* base_url, int spool_id, const char* uuid,
+                        char* out_note, size_t note_size, uint32_t timeout_ms) {
+  if (out_note && note_size) out_note[0] = '\0';
+  if (backendIsFilaMan()) {
+    return filamanLinkRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, uuid,
+                              out_note, note_size, timeout_ms);
+  }
+  // Only FilaMan's rfid_uid is unique. The rest take the ordinary write,
+  // which already knows how to reach each backend.
+  return backendPatchSpoolTag(base_url, spool_id, uuid, timeout_ms);
+}
+
 int backendPatchSpoolRemaining(const char* base_url, int spool_id, float remaining,
                                const char* last_used_iso, const char* tag_uuid,
                                float measured_g, uint32_t timeout_ms) {
