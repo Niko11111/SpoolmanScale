@@ -52,8 +52,7 @@ void buildSpoolmanScreen() {
   // Header. The product name is not translated, so it is composed here
   // instead of living in lang.cpp twice.
   char buf_title[32];
-  snprintf(buf_title, sizeof(buf_title), "%s Server",
-           backendIsFilaMan() ? "FilaMan" : "Spoolman");
+  snprintf(buf_title, sizeof(buf_title), "%s Server", backendName());
   buildSubHeader(scr_spoolman, buf_title,
     [](lv_event_t *e){
       logSD("BTN: Spoolman -> Back");
@@ -64,10 +63,13 @@ void buildSpoolmanScreen() {
       else             show_connection_from_spoolman_pending = true;
     });
 
-  // Hint: default port of the active backend, font14, y=52
+  // Hint: default port of the active backend, font14, y=52. Only a hint,
+  // nothing is appended - an address typed without a port goes to 80.
+  const char* def_port = (backendMode() == BACKEND_FILAMAN)  ? "8002"
+                       : (backendMode() == BACKEND_BAMBUDDY) ? "8000"
+                                                             : "7912";
   char buf_hint[32];
-  snprintf(buf_hint, sizeof(buf_hint), "192.168.x.x:%s",
-           backendIsFilaMan() ? "8002" : "7912");
+  snprintf(buf_hint, sizeof(buf_hint), "192.168.x.x:%s", def_port);
   lv_obj_t *lbl_hint = lv_label_create(scr_spoolman);
   lv_label_set_text(lbl_hint, buf_hint);
   lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
@@ -230,9 +232,9 @@ void buildSpoolmanScreen() {
       lv_label_set_text(lbl_sp_test_result, result_buf);
       lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x40c080), 0);
     }
-    // Reveal the button again. In FilaMan it only leads somewhere during the
-    // setup, where it is the step to the credentials.
-    if (btn_sp_extra_fields && (setup_active || !backendIsFilaMan())) {
+    // Reveal the button again. In FilaMan and BamBuddy it only leads
+    // somewhere during the setup, where it is the step to the credentials.
+    if (btn_sp_extra_fields && (setup_active || backendMode() == BACKEND_SPOOLMAN)) {
       lv_obj_clear_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
     }
 
@@ -273,12 +275,13 @@ void buildSpoolmanScreen() {
   // This button doubles as the step onward during setup, which is why it
   // starts hidden there and only appears once the connection test passed.
   // FilaMan needs no extra fields at all, it accepts custom_fields keys
-  // without a prior definition, so outside the setup it has nothing to do.
-  if (setup_active || backendIsFilaMan()) {
+  // without a prior definition, and BamBuddy has a fixed schema, so outside
+  // the setup neither has anything to do here.
+  if (setup_active || backendMode() != BACKEND_SPOOLMAN) {
     lv_obj_add_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
   }
   lv_obj_add_event_cb(btn_sp_extra_fields, [](lv_event_t *e) {
-    if (backendIsFilaMan()) {
+    if (backendMode() != BACKEND_SPOOLMAN) {
       // Next comes the credential step, and those are entered in a browser.
       showOtaBrowserScreen(WEB_CTX_SETUP);
     } else {
@@ -287,8 +290,8 @@ void buildSpoolmanScreen() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ef = lv_label_create(btn_sp_extra_fields);
   { char ef_buf[32];
-    if (backendIsFilaMan()) snprintf(ef_buf, sizeof(ef_buf), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_NEXT));
-    else                    snprintf(ef_buf, sizeof(ef_buf), "Extra Fields  " LV_SYMBOL_RIGHT);
+    if (backendMode() != BACKEND_SPOOLMAN) snprintf(ef_buf, sizeof(ef_buf), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_NEXT));
+    else                                   snprintf(ef_buf, sizeof(ef_buf), "Extra Fields  " LV_SYMBOL_RIGHT);
     lv_label_set_text(lbl_ef, ef_buf); }
   lv_obj_set_style_text_color(lbl_ef, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_ef, &lv_font_montserrat_ext_14, 0);

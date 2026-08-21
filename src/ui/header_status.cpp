@@ -38,13 +38,15 @@ void updateHeaderStatus() {
   // Both labels follow the active backend. Set here rather than only at build
   // time, because the backend can be switched while the main screen exists.
   if (lbl_hdr_sm) {
-    lv_label_set_text(lbl_hdr_sm, backendIsFilaMan() ? "FLM" : "SPM");
+    lv_label_set_text(lbl_hdr_sm, backendBadge());
     lv_obj_set_style_text_color(lbl_hdr_sm,
       sm_reachable ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
   }
 
   if (lbl_sm_cap) {
-    lv_label_set_text(lbl_sm_cap, backendIsFilaMan() ? "FilaMan:" : "Spoolman:");
+    char cap_buf[16];
+    backendCaption(cap_buf, sizeof(cap_buf));
+    lv_label_set_text(lbl_sm_cap, cap_buf);
   }
 
   if (lbl_hdr_scans) {

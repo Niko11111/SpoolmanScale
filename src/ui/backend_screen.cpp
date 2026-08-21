@@ -151,18 +151,20 @@ void buildBackendScreen() {
     });
   }
 
-  // --- mode selector: two segments side by side -----------------
-  const int SEG_W = 216, SEG_H = 54, SEG_Y = 54;
+  // --- mode selector: three segments side by side ---------------
+  // 480 px wide screen: 12 px margin, three 145 px segments, 10 px between.
+  const int SEG_W = 145, SEG_H = 54, SEG_Y = 54;
   const bool is_filaman = backendIsFilaMan();
 
-  struct Seg { const char *name; BackendMode mode; int x; };
-  const Seg segs[2] = {
-    { "Spoolman", BACKEND_SPOOLMAN, 16 },
-    { "FilaMan",  BACKEND_FILAMAN,  248 }
+  struct Seg { BackendMode mode; int x; };
+  const Seg segs[3] = {
+    { BACKEND_SPOOLMAN,  12 },
+    { BACKEND_FILAMAN,  167 },
+    { BACKEND_BAMBUDDY, 322 }
   };
 
-  for (int i = 0; i < 2; i++) {
-    const bool active = (segs[i].mode == BACKEND_FILAMAN) == is_filaman;
+  for (int i = 0; i < 3; i++) {
+    const bool active = (segs[i].mode == backendMode());
 
     lv_obj_t *b = lv_btn_create(scr_backend);
     lv_obj_set_size(b, SEG_W, SEG_H);
@@ -175,17 +177,17 @@ void buildBackendScreen() {
     lv_obj_set_style_border_color(b, lv_color_hex(active ? 0x28d49a : 0x1a2840), 0);
 
     lv_obj_t *l = lv_label_create(b);
-    lv_label_set_text(l, segs[i].name);
+    lv_label_set_text(l, backendModeName(segs[i].mode));
     lv_obj_set_style_text_color(l, lv_color_hex(active ? 0x28d49a : 0x8098b8), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_18, 0);
     lv_obj_center(l);
 
-    // The mode is stored in user_data so one callback serves both buttons.
+    // The mode is stored in user_data so one callback serves every button.
     lv_obj_set_user_data(b, (void *)(intptr_t)segs[i].mode);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
       BackendMode m = (BackendMode)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
       if (m == backendMode()) return;               // already active, nothing to do
-      logSDf("BTN: Backend -> %s", m == BACKEND_FILAMAN ? "FilaMan" : "Spoolman");  // m, not the active mode
+      logSDf("BTN: Backend -> %s", backendModeName(m));   // m, not the active mode
       s_pending_mode = m;
       s_mode_change_pending = true;
       show_backend_pending = true;                  // rebuild from appLoop()
@@ -242,7 +244,8 @@ void buildBackendScreen() {
     host_buf[sizeof(host_buf) - 1] = '\0';
 
     // An address without a port silently goes to port 80. FilaMan listens on
-    // 8002 by default, so flag a missing port in amber rather than green.
+    // 8002 and BamBuddy on 8000 by default, so flag a missing port in amber
+    // rather than green.
     const bool port_missing = h && h[0] && !strchr(h, ':');
 
     addNavRow(scr_backend, 122, buf_addr, host_buf,
@@ -258,8 +261,9 @@ void buildBackendScreen() {
   // filament manager, not of the network connection, and this screen has the
   // room in Spoolman mode because the two credential rows below are FilaMan
   // only. FilaMan calls them system extra fields, they sit behind a different
-  // endpoint and need admin rights, so they are not offered there.
-  if (!is_filaman) {
+  // endpoint and need admin rights, so they are not offered there. BamBuddy
+  // has a fixed schema and no extra fields at all.
+  if (backendMode() == BACKEND_SPOOLMAN) {
     char buf_ef[40];
     backendText(T(STR_EXTRA_FIELDS_TITLE), buf_ef, sizeof(buf_ef));
     addNavRow(scr_backend, 186, buf_ef, "tag, last_dried", 0x4a6fa0,
