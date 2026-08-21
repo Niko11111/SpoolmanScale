@@ -56,8 +56,10 @@ void doGithubOtaCheck() {
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
+  // per_page caps the list. Unbounded it answers with every release ever cut -
+  // 109 KB at the time of writing, against roughly 145 KB of free heap.
   String url = gh_prerelease
-    ? "https://api.github.com/repos/Niko11111/SpoolmanScale/releases"
+    ? "https://api.github.com/repos/Niko11111/SpoolmanScale/releases?per_page=5"
     : "https://api.github.com/repos/Niko11111/SpoolmanScale/releases/latest";
   http.begin(client, url);
   http.addHeader("User-Agent", "SpoolmanScale-ESP32");
@@ -73,33 +75,58 @@ void doGithubOtaCheck() {
     return;
   }
 
-  String payload = http.getString();
-  http.end();
+  // Parsed straight off the socket and through a filter. getString() used to
+  // pull the whole body onto the heap first, which on the pre-release path was
+  // 109 KB of a 145 KB heap before parsing had even started - hence the
+  // intermittent "JSON error", which came and went with heap fragmentation.
+  // The capacity argument DynamicJsonDocument used to carry was a fiction:
+  // ArduinoJson 7 ignores it and grows the document as needed.
+  //
+  // The filter keeps only the two keys this function looks at, so what is built
+  // in RAM is a handful of bytes rather than a mirror of GitHub's answer.
+  char tag[40] = "";
+  bool parse_ok = false;
 
-  const char* tag = "";
   if (gh_prerelease) {
-    DynamicJsonDocument doc(8192);
-    doc.clear();
-    if (deserializeJson(doc, payload)) {
-      lv_label_set_text(lbl_gh_status, "JSON error");
-      lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-      return;
-    }
-    JsonArray arr = doc.as<JsonArray>();
-    for (JsonObject rel : arr) {
-      if (rel["draft"] | false) continue;
-      tag = rel["tag_name"] | "";
-      if (tag[0] != '\0') break;
+    // add<JsonObject>() rather than the createNestedObject() the older filters
+    // in this repo use - same result, and it is the form ArduinoJson 7 keeps.
+    JsonDocument filter;
+    JsonObject f = filter.to<JsonArray>().add<JsonObject>();
+    f["tag_name"] = true;
+    f["draft"] = true;
+
+    JsonDocument doc;
+    if (!deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter))) {
+      for (JsonVariant v : doc.as<JsonArray>()) {
+        JsonObject rel = v.as<JsonObject>();
+        if (rel["draft"] | false) continue;
+        const char* t = rel["tag_name"] | "";
+        if (t[0] != '\0') {
+          // Copied while the document is still alive. The pointer dies with it,
+          // and it is read further down to build the download URL.
+          strncpy(tag, t, sizeof(tag) - 1);
+          break;
+        }
+      }
+      parse_ok = true;
     }
   } else {
-    DynamicJsonDocument doc(2048);
-    doc.clear();
-    if (deserializeJson(doc, payload)) {
-      lv_label_set_text(lbl_gh_status, "JSON error");
-      lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-      return;
+    JsonDocument filter;
+    filter["tag_name"] = true;
+
+    JsonDocument doc;
+    if (!deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter))) {
+      const char* t = doc["tag_name"] | "";
+      strncpy(tag, t, sizeof(tag) - 1);
+      parse_ok = true;
     }
-    tag = doc["tag_name"] | "";
+  }
+  http.end();
+
+  if (!parse_ok) {
+    lv_label_set_text(lbl_gh_status, "JSON error");
+    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
+    return;
   }
 
   if (tag[0] == '\0') {
