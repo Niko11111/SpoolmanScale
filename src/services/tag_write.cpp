@@ -114,8 +114,10 @@ static void buildAce(JsonObjectConst sp, AceFields *f) {
 
   snprintf(f->brand, sizeof(f->brand), "%s", sp["filament"]["vendor"]["name"] | "Generic");
   const char *article = sp["filament"]["article_number"] | "";
-  if (article[0]) snprintf(f->sku, sizeof(f->sku), "%s", article);
-  else            snprintf(f->sku, sizeof(f->sku), "SM%d", (int)(sp["id"] | 0));
+  if (article[0] && strlen(article) <= 16)
+    snprintf(f->sku, sizeof(f->sku), "%s", article);
+  else
+    snprintf(f->sku, sizeof(f->sku), "SM%d", (int)(sp["id"] | 0));
 }
 
 // One format for both sides, so the page can compare them as plain strings.
@@ -138,7 +140,11 @@ static bool wrText(uint8_t first, const char *s) {
   if (n > 16) n = 16;
   memcpy(buf, s, n);
   for (int i = 0; i < 4; i++) if (!wrPage(first + i, buf + i * 4)) return false;
-  return true;
+  // Fields are 16 bytes with a spare page after them. A full length value has
+  // no NUL of its own, so old data left in that page would run the two
+  // together on read.
+  const uint8_t zero[4] = {0, 0, 0, 0};
+  return wrPage(first + 4, zero);
 }
 
 static bool wrU16Pair(uint8_t page, uint16_t a, uint16_t b) {
