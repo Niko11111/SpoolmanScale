@@ -179,7 +179,13 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin main
-          git checkout -B ci-main origin/main
+          # -f discards the working tree, which by now holds a rewritten
+          # version.json. Without it the checkout refuses whenever that file
+          # differs between the tagged commit and main - which is exactly what
+          # happens as soon as a previous release has advanced main without the
+          # tagged branch following. Everything worth keeping is in /tmp/ci-out
+          # at this point.
+          git checkout -f -B ci-main origin/main
 
           cp /tmp/ci-out/version.json version.json
           git add version.json
