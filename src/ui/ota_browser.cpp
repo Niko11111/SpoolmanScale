@@ -195,7 +195,10 @@ void buildOtaBrowserScreen() {
     }
     ip = wifiManagerLocalIP();
   }
-  snprintf(ip_buf, sizeof(ip_buf), "http://%s/", ip.toString().c_str());
+  // "/" is the status page now, so send each flow to the page that carries
+  // its form: firmware upload lives at /ota, FilaMan credentials at /filaman.
+  snprintf(ip_buf, sizeof(ip_buf), "http://%s%s", ip.toString().c_str(),
+           showsCredentials() ? "/filaman" : "/ota");
 
   char hint_buf[192];
   const char* hint_src = !showsCredentials() ? T(STR_OTA_OPEN_BROWSER)

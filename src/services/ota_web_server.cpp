@@ -18,6 +18,10 @@
 #include "services/remote_link.h"
 #include "lang.h"
 #include "list_limits.h"
+#include "web_access.h"
+#include "web_shell.h"
+#include "hardware/display.h"
+#include "web_home.h"
 #include "prefs_store.h"
 #include "wifi_manager.h"
 
@@ -59,176 +63,53 @@ static void serverEnsureStopped() {
   Serial.println("Web server stopped");
 }
 
-void stopOtaServer() {
-  ota_routes_enabled = false;
-  // Keep the socket up when the remote link still needs it. The routes are
-  // closed either way, so nothing becomes reachable that was not before.
-  if (!remoteLinkNeedsServer()) serverEnsureStopped();
-}
+  // One shell, five pages. This used to be a single page at "/" carrying the
+  // firmware upload, the log browser, the drying thresholds, the FilaMan
+  // credentials and the list limits all at once, while the clean URLs were
+  // taken by its JSON backend. Each section now has its own address and only
+  // that section is built and sent.
+  static const char *SEC_TITLE[] = { "Firmware", "Logs", "Drying", "FilaMan", "Limits" };
+  static const char *SEC_PATH[]  = { "/ota", "/logs", "/drying", "/filaman", "/config" };
 
-void startOtaServer() {
-  if (!wifi_ok) return;
-  ota_routes_enabled = true;
-  serverEnsureRunning();
-}
-
-// Idempotent, called once a second from appLoop(). Picking the state up from
-// the conditions rather than from events means a backend switch, a freshly
-// entered device token and a returning WiFi connection all take effect
-// without anyone having to remember to call something.
-void webServerSyncState() {
-  if (remoteLinkNeedsServer())      serverEnsureRunning();
-  else if (!ota_routes_enabled)     serverEnsureStopped();
-}
-
-// Registered exactly once. This used to run on every visit to the web
-// screen, which appended another 15 handlers to WebServer's list each time
-// and never freed the previous ones.
-static void registerRoutes() {
-  if (routes_registered) return;
-  routes_registered = true;
-
-  // FilaMan remote link trigger. Deliberately not behind otaRoutesOpen():
-  // this one has to answer whenever the scale is awake, that is the whole
-  // point of keeping the socket up.
-  //
-  // FilaMan sends this fire and forget and waits five seconds, so nothing
-  // here may block. The request is only parked, appLoop() picks it up.
-  // Nothing is ever written to the tag, the trigger is read as "the spool on
-  // the scale belongs to this id".
-  ota_server.on("/api/v1/rfid/write", HTTP_POST, []() {
-    JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, ota_server.arg("plain"));
-    if (err) {
-      ota_server.send(400, "application/json", "{\"status\":\"error\"}");
-      return;
+  static String maintNav(int sec) {
+    String n = "<div class='nav'>";
+    n += "<a href='/'>Status</a>";
+    for (int i = 0; i < 5; i++) {
+      if (i == 3 && !backendIsFilaMan()) continue;   // not applicable on Spoolman
+      n += String("<a class='") + (i == sec ? "on" : "") + "' href='" + SEC_PATH[i] + "'>"
+           + SEC_TITLE[i] + "</a>";
     }
+    n += "</div>";
+    return n;
+  }
 
-    const int spool_id    = doc["spool_id"]    | 0;
-    const int location_id = doc["location_id"] | 0;
-
-    if (spool_id > 0) {
-      remoteLinkSetPending(spool_id);
-      ota_server.send(200, "application/json", "{\"status\":\"ok\"}");
-      return;
-    }
-    if (location_id > 0) {
-      // Locations are a FilaMan concept the scale does not handle yet.
-      // Turning the request down beats ignoring it: the web UI would
-      // otherwise poll for a full minute before its own timeout.
-      remote_link_reject_pending = true;
-      ota_server.send(200, "application/json", "{\"status\":\"ok\"}");
-      return;
-    }
-    ota_server.send(400, "application/json", "{\"status\":\"error\"}");
-  });
-
-  // Route: Startseite mit Upload-Formular
-  ota_server.on("/", HTTP_GET, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
-    char ver_buf[20];
-    strncpy(ver_buf, FW_VERSION, sizeof(ver_buf)-1);
-    ver_buf[sizeof(ver_buf)-1] = '\0';
-    String version = String(ver_buf);
-    String html =
-      "<!DOCTYPE html><html><head>"
-      "<meta charset='utf-8'>"
-      "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-      "<title>SpoolmanScale - Firmware Update</title>"
-      "<style>"
-      "*{box-sizing:border-box;margin:0;padding:0}"
-      "body{background:#06080f;color:#e8f0ff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
-      "min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:32px 16px}"
-      ".logo{font-size:32px;font-weight:700;color:#28d49a;letter-spacing:-0.5px;margin-bottom:4px}"
-      ".logo span{color:#e8f0ff}"
-      ".version{font-size:13px;color:#2a4060;margin-bottom:32px}"
-      ".card{background:#0c1828;border:1px solid #1a3060;border-radius:14px;padding:28px;"
-      "width:100%;max-width:480px;margin-bottom:20px}"
-      ".card h2{color:#28d49a;font-size:16px;font-weight:600;margin-bottom:16px;"
-      "display:flex;align-items:center;gap:8px}"
-      ".card h2::before{content:'';display:inline-block;width:3px;height:16px;"
-      "background:#28d49a;border-radius:2px}"
-      "input[type=file]{width:100%;padding:12px;background:#06080f;border:1px dashed #1a3060;"
-      "border-radius:8px;color:#4a6fa0;font-size:14px;margin-bottom:16px;cursor:pointer}"
-      "input[type=file]:hover{border-color:#28d49a}"
-      ".btn-flash{width:100%;padding:14px;background:#1a3020;color:#40c080;"
-      "border:1px solid #2a5030;border-radius:8px;font-size:16px;font-weight:600;"
-      "cursor:pointer;transition:background .2s}"
-      ".btn-flash:hover{background:#2a5030}"
-      ".hint{font-size:12px;color:#2a4060;margin-top:10px;text-align:center}"
-      ".log-row{display:flex;align-items:center;justify-content:space-between;"
-      "padding:10px 12px;background:#06080f;border:1px solid #1a3060;border-radius:8px;"
-      "margin-bottom:8px}"
-      ".log-name{color:#c8d8f0;font-size:14px;font-family:monospace}"
-      ".log-actions{display:flex;gap:6px}"
-      ".log-btn{padding:6px 14px;background:#0a1828;color:#28d49a;border:1px solid #1a3060;"
-      "border-radius:6px;font-size:13px;text-decoration:none;cursor:pointer}"
-      ".log-btn:hover{background:#1a3060}"
-      ".log-btn-del{color:#ff8080;border-color:#3a1010}"
-      ".log-btn-del:hover{background:#3a1010}"
-      ".sd-info-box{background:#090c0a;border-left:2px solid #1a3020;border-radius:0 4px 4px 0;"
-      "padding:5px 10px;margin-bottom:10px;font-size:11px;color:#2a5040;line-height:1.5}"
-      ".verbose-row{display:flex;align-items:center;justify-content:space-between;"
-      "padding:10px 12px;background:#06080f;border:1px solid #1a3060;border-radius:8px;"
-      "margin-bottom:12px}"
-      ".verbose-label{color:#c8d8f0;font-size:14px}"
-      ".verbose-state{display:inline-block;padding:3px 10px;border-radius:4px;"
-      "font-size:12px;font-weight:600;margin-left:8px}"
-      ".verbose-on{background:#1a3020;color:#40c080;border:1px solid #2a5030}"
-      ".verbose-off{background:#1a1828;color:#4a6fa0;border:1px solid #2a3050}"
-      ".btn-toggle{padding:6px 14px;background:#0a1828;color:#28d49a;border:1px solid #1a3060;"
-      "border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit}"
-      ".btn-toggle:hover{background:#1a3060}"
-      ".section-divider{height:1px;background:#1a3060;margin:12px 0}"
-      ".no-sd{text-align:center;padding:24px 16px}"
-      ".no-sd-title{color:#c8d8f0;font-size:15px;font-weight:600;margin-bottom:6px}"
-      ".no-sd-hint{color:#4a6fa0;font-size:13px;line-height:1.5}"
-      ".links{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:480px}"
-      ".link-btn{display:flex;align-items:center;justify-content:center;gap:8px;"
-      "padding:12px 16px;border-radius:10px;text-decoration:none;"
-      "font-size:14px;font-weight:500;transition:opacity .2s;border:1px solid}"
-      ".link-btn:hover{opacity:0.8}"
-      ".link-kofi{background:#1a2800;color:#a0d840;border-color:#2a4010}"
-      ".link-github{background:#0a1828;color:#28d49a;border-color:#1a3060}"
-      ".link-discord{background:#12103a;color:#8090ff;border-color:#2a2860}"
-      ".link-maker{background:#1a0a18;color:#c060e0;border-color:#2a1a38}"
-      ".footer{margin-top:24px;font-size:11px;color:#1a3060;text-align:center}"
-      "</style></head><body>"
-
-      // Logo
-      "<img src='data:image/jpeg;base64,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' style='width:120px;height:120px;border-radius:12px;margin-bottom:8px'>"
-      "<div class='version'>" + version + " &nbsp;|&nbsp; Firmware Update</div>"
-
-      "<div class='links' style='margin-bottom:20px'>"
-      "<a class='link-btn link-kofi' href='https://ko-fi.com/formfollowsfunction' target='_blank'>"
-      "&#9749; Ko-fi</a>"
-      "<a class='link-btn link-github' href='https://github.com/Niko11111/SpoolmanScale' target='_blank'>"
-      "&#9873; GitHub</a>"
-      "<a class='link-btn link-discord' href='https://discord.gg/GzQzGa5pBG' target='_blank'>"
-      "&#128172; Discord</a>"
-      "<a class='link-btn link-maker' href='https://makerworld.com/de/@FormFollowsF/upload' target='_blank'>"
-      "&#11088; MakerWorld</a>"
-      "</div>"
-
-      // Upload-Card
-      "<div class='card'>"
+  static String maintPage(int sec) {
+    String html;
+    html += webShellHead(SEC_TITLE[sec]);
+    html += webShellPageCss();
+    html += "<style>.nav{display:flex;flex-wrap:wrap;gap:8px;width:100%;max-width:480px;"
+            "margin-bottom:18px}.nav a{padding:8px 14px;background:#0a1828;border:1px solid "
+            "#1a3060;border-radius:8px;color:#4a6fa0;text-decoration:none;font-size:13px}"
+            ".nav a:hover{border-color:#28d49a;color:#e8f0ff}"
+            ".nav a.on{background:#1a3060;color:#e8f0ff;border-color:#28d49a}</style>";
+    html += maintNav(sec);
+    html += webShellLinks();
+    if (sec == 0) html +=       "<div class='card'>"
       "<h2>Upload Firmware</h2>"
       "<form method='POST' action='/update' enctype='multipart/form-data'>"
       "<input type='file' name='firmware' accept='.bin' required>"
       "<button class='btn-flash' type='submit'>&#x2191;&nbsp; Flash Firmware</button>"
       "</form>"
       "<p class='hint'>Select SpoolmanScale vX.Y.Z.bin - device restarts automatically</p>"
-      "</div>"
-
-      // SD-Logs Card
-      "<div class='card'>"
+      "</div>";
+    if (sec == 1) html +=       "<div class='card'>"
       "<h2>SD Card Logs</h2>"
       "<div id='log-list'><div class='no-sd'><div class='no-sd-hint'>Loading...</div></div></div>"
       "</div>"
       "<style>#log-entries{max-height:184px;overflow-y:auto}</style>"
       "<script>"
       "function loadLogs(){"
-      "fetch('/logs').then(r=>r.json()).then(d=>{"
+      "fetch('/api/logs').then(r=>r.json()).then(d=>{"
       "var c=document.getElementById('log-list');"
       "if(!d.sd){c.innerHTML="
       "\"<div class='no-sd'>\"+"
@@ -254,24 +135,21 @@ static void registerRoutes() {
       "d.files.forEach(f=>{"
       "h+=\"<div class='log-row'><span class='log-name'>\"+f.name+\"</span>\"+"
       "\"<div class='log-actions'>\"+"
-      "\"<a class='log-btn' href='/log?file=\"+encodeURIComponent(f.name)+\"' download='\"+f.name+\"'>Download</a>\"+"
+      "\"<a class='log-btn' href='/api/log?file=\"+encodeURIComponent(f.name)+\"' download='\"+f.name+\"'>Download</a>\"+"
       "\"<a class='log-btn log-btn-del' href='#' onclick=\\\"delLog('\"+f.name+\"');return false;\\\">Delete</a>\"+"
       "\"</div></div>\";});h+=\"</div>\";}"
       "c.innerHTML=h;});}"
       "function delLog(n){if(!confirm('Delete '+n+'?'))return;"
       "fetch('/deletelog?file='+encodeURIComponent(n),{method:'POST'}).then(()=>loadLogs());}"
       "function toggleVerbose(){"
-      "fetch('/verbose',{method:'POST'}).then(r=>r.json()).then(d=>{"
+      "fetch('/api/verbose',{method:'POST'}).then(r=>r.json()).then(d=>{"
       "loadLogs();"
       "if(d.verbose)alert('Verbose logging ENABLED. Reboot device for full effect.');"
       "else alert('Verbose logging DISABLED.');"
       "});}"
       "loadLogs();setInterval(loadLogs,30000);"
-      "</script>"
-
-      // List limits - combined, moved to end via JS or just keep at end
-      // Drying Reminder card
-      "<div class='card'>"
+      "</script>";
+    if (sec == 2) html +=       "<div class='card'>"
       "<h2>Drying Reminder - Material Thresholds</h2>"
       "<p style='font-size:12px;color:#4a6fa0;margin-bottom:6px'>Days until Yellow / Red warning per material. Sealed multiplier applies when storage is airtight.</p>"
       "<table id='dry-tbl' style='width:100%;border-collapse:collapse;font-size:14px;margin-bottom:14px'>"
@@ -358,10 +236,17 @@ static void registerRoutes() {
       "<style>.dry-in{width:64px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
       "border-radius:6px;padding:4px 8px;font-size:14px;text-align:center}</style>"
       "<script>"
-      "function setLocL(){""var v=parseInt(document.getElementById('locl-in').value);""if(v<5)v=5;if(v>100)v=100;""fetch('/loclimit',{method:'POST',body:String(v)})"".then(r=>r.json()).then(d=>{""document.getElementById('locl-s').textContent='Saved: '+d.limit;""setTimeout(()=>{document.getElementById('locl-s').textContent='';},3000);""});}""function setLL(){"
+      "function setLocL(){""var v=parseInt(document.getElementById('locl-in').value);""if(v<5)v=5;if(v>100)v=100;""fetch('/api/loclimit',{method:'POST',body:String(v)})"".then(r=>r.json()).then(d=>{""document.getElementById('locl-s').textContent='Saved: '+d.limit;""setTimeout(()=>{document.getElementById('locl-s').textContent='';},3000);""});}""function setGain(){"
+      "var v=parseInt(document.getElementById('gain-in').value);"
+      "fetch('/api/gain',{method:'POST',body:String(v)})"
+      ".then(r=>r.json()).then(d=>{"
+      "document.getElementById('gain-s').textContent='Saved: '+d.gain;"
+      "setTimeout(()=>{document.getElementById('gain-s').textContent='';},3000);"
+      "});}"
+      "function setLL(){"
       "var v=parseInt(document.getElementById('ll-in').value);"
       "if(v<5)v=5;if(v>100)v=100;"
-      "fetch('/listlimit',{method:'POST',body:String(v)})"
+      "fetch('/api/listlimit',{method:'POST',body:String(v)})"
       ".then(r=>r.json()).then(d=>{"
       "document.getElementById('ll-s').textContent='Saved: '+d.limit;"
       "setTimeout(()=>{document.getElementById('ll-s').textContent='';},3000);"
@@ -376,7 +261,7 @@ static void registerRoutes() {
       "sealed:sr?sr.checked:false};"
       "});"
       "var mult=parseFloat(document.getElementById('dry-mult').value)||1;"
-      "fetch('/drying',{method:'POST',"
+      "fetch('/api/drying',{method:'POST',"
       "headers:{'Content-Type':'application/json'},"
       "body:JSON.stringify({mult_sealed:mult,materials:arr})})"
       ".then(r=>r.json()).then(d=>{"
@@ -384,17 +269,13 @@ static void registerRoutes() {
       "setTimeout(()=>{document.getElementById('dry-s').textContent='';},3000);"
       "});}"
       "function resetDry(){"
-      "fetch('/drying/reset',{method:'POST'})"
+      "fetch('/api/drying/reset',{method:'POST'})"
       ".then(r=>r.json()).then(d=>{"
       "document.getElementById('dry-s').textContent='Reset!';"
       "setTimeout(()=>location.reload(),1500);"
       "});}"
-      "</script>"
-      // FilaMan credentials. Only emitted in FilaMan mode, so the block is
-      // not merely hidden but never built and never sent. Saves heap on the
-      // ESP32 and keeps the page free of options that do not apply.
-      + (backendIsFilaMan() ? String(
-      "<div class='card'>"
+      "</script>";
+    if (sec == 3 && backendIsFilaMan()) html +=       "<div class='card'>"
       "<h2>FilaMan</h2>"
       "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>"
       "The scale needs two credentials. The <b>device token</b> identifies it when "
@@ -467,54 +348,16 @@ static void registerRoutes() {
       "e.style.display=(e.style.display==='none'?'block':'none');}"
       "function setKey(){var v=document.getElementById('fm-key').value;"
       "if(v.indexOf('_')===0){return;}"
-      "fetch('/filaman/key',{method:'POST',body:v})"
+      "fetch('/api/filaman/key',{method:'POST',body:v})"
       ".then(r=>r.text()).then(t=>{document.getElementById('fm-key-s').textContent=t;});}"
       "function reg(){var c=document.getElementById('fm-code').value;"
       "document.getElementById('fm-reg-s').textContent='Registering...';"
-      "fetch('/filaman/register',{method:'POST',body:c})"
+      "fetch('/api/filaman/register',{method:'POST',body:c})"
       ".then(r=>r.text()).then(t=>{document.getElementById('fm-reg-s').textContent=t;});}"
-      "</script>") : String("")) +
-      // BamBuddy credentials. One key rather than two, and it may legitimately
-      // stay empty: an instance with authentication switched off answers
-      // without it. Same reasoning as above, the block is only built in
-      // BamBuddy mode.
-      (backendIsBamBuddy() ? String(
-      "<div class='card'>"
-      "<h2>BamBuddy</h2>"
-      "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>"
-      "The scale needs one API key. Leave it empty if your BamBuddy runs with "
-      "authentication switched off. "
-      "<span onclick=\"bh()\" style='cursor:pointer;color:#28d49a;border:1px solid #28d49a;"
-      "border-radius:50%;padding:0 6px;font-size:11px'>?</span></p>"
-      "<div id='h-bb' style='display:none;font-size:12px;color:#8ab0d8;background:#06080f;"
-      "border-left:2px solid #28d49a;border-radius:4px;padding:8px 10px;margin-bottom:12px'>"
-      "In BamBuddy open <b>Settings</b>, then <b>API Keys</b>, and create a key. "
-      "Tick <b>Read Status</b> and <b>Manage Inventory</b> - the first lets the scale "
-      "read spools and detect whether your inventory is local or on Spoolman, the second "
-      "lets it write weights back. The key is shown once, copy it right away.</div>"
-      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>"
-      "API key. Currently: "
-      + String(bambuddyApiKey()[0] ? "set" : "empty")
-      + "</label>"
-      "<div style='display:flex;gap:10px;align-items:center'>"
-      "<input id='bb-key' type='password' placeholder='bb_...' value='"
-      + String(bambuddyApiKey()[0] ? "________________" : "") + "'"
-      " style='flex:1;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
-      "border-radius:8px;padding:8px 10px;font-size:14px'>"
-      "<button class='btn-toggle' onclick='setBb()'>Save</button>"
-      "</div>"
-      "<span id='bb-key-s' style='font-size:12px;color:#28d49a'></span>"
-      "</div>"
-      "<script>"
-      "function bh(){var e=document.getElementById('h-bb');"
-      "e.style.display=(e.style.display==='none'?'block':'none');}"
-      "function setBb(){var v=document.getElementById('bb-key').value;"
-      "if(v.indexOf('_')===0){return;}"
-      "fetch('/bambuddy/key',{method:'POST',body:v})"
-      ".then(r=>r.text()).then(t=>{document.getElementById('bb-key-s').textContent=t;});}"
-      "</script>") : String("")) +
-      // List Limits combined card - at bottom
-      "<div class='card'>"
+      "</script>";
+    if (sec == 3 && backendIsBamBuddy()) html += 
+      "</script>";
+    if (sec == 4) html +=       "<div class='card'>"
       "<h2>List Limits</h2>"
       "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>Controls how many items are shown in picker lists. Increase carefully.</p>"
       "<div style='margin-bottom:12px'>"
@@ -534,16 +377,112 @@ static void registerRoutes() {
       "border-radius:8px;padding:8px 10px;font-size:16px'>"
       "<button class='btn-toggle' onclick='setLocL()'>Save</button>"
       "<span id='locl-s' style='font-size:12px;color:#28d49a;line-height:36px'></span>"
-      "</div></div></div>"
-      // All three are named regardless of the active mode. This device is
-      // called SpoolmanScale, so a disclaimer that mentions only the active
-      // backend would leave out the very name that could suggest an
-      // affiliation. Not a place to be clever with backendName().
-      "<div class='footer'>Not affiliated with Spoolman, FilaMan or BamBuddy"
-      " - Open Source Project</div>"
-      "</body></html>";
-    ota_server.send(200, "text/html", html);
+      "</div></div></div>";
+
+    if (sec == 4) html +=       "<div class='card'>"
+      "<h2>Display</h2>"
+      "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>Gamma lift applied to every pixel. 100 is off; higher raises shadows and midtones without touching white, which brightens the whole UI at once. Independent of the backlight.</p>"
+      "<div style='display:flex;gap:10px;align-items:center'>"
+      "<input id='gain-in' type='range' min='100' max='300' step='5' value='"+String(displayGetUiGain())+"'"
+      " oninput=\"document.getElementById('gain-v').textContent=this.value\" style='flex:1'>"
+      "<span id='gain-v' style='font-size:14px;color:#e8f0ff;width:38px;text-align:right'>"+String(displayGetUiGain())+"</span>"
+      "<button class='btn-toggle' onclick='setGain()'>Save</button>"
+      "<span id='gain-s' style='font-size:12px;color:#28d49a;line-height:36px'></span>"
+      "</div></div>";
+    html += webShellFoot();
+    return html;
+  }
+
+void stopOtaServer() {
+  ota_routes_enabled = false;
+  // Keep the socket up when the remote link still needs it. The routes are
+  // closed either way, so nothing becomes reachable that was not before.
+  if (!remoteLinkNeedsServer()) serverEnsureStopped();
+}
+
+void startOtaServer() {
+  if (!wifi_ok) return;
+  ota_routes_enabled = true;
+  serverEnsureRunning();
+}
+
+// Idempotent, called once a second from appLoop(). Picking the state up from
+// the conditions rather than from events means a backend switch, a freshly
+// entered device token and a returning WiFi connection all take effect
+// without anyone having to remember to call something.
+void webServerSyncState() {
+  if (remoteLinkNeedsServer())      serverEnsureRunning();
+  else if (!ota_routes_enabled)     serverEnsureStopped();
+}
+
+// Registered exactly once. This used to run on every visit to the web
+// screen, which appended another 15 handlers to WebServer's list each time
+// and never freed the previous ones.
+static void registerRoutes() {
+  if (routes_registered) return;
+  routes_registered = true;
+
+  // The status landing page owns its own routes. Registered here so
+  // everything lands in the one-shot registration.
+  registerHomeRoutes(ota_server);
+
+  // FilaMan remote link trigger. Deliberately not behind otaRoutesOpen():
+  // this one has to answer whenever the scale is awake, that is the whole
+  // point of keeping the socket up.
+  //
+  // FilaMan sends this fire and forget and waits five seconds, so nothing
+  // here may block. The request is only parked, appLoop() picks it up.
+  // Nothing is ever written to the tag, the trigger is read as "the spool on
+  // the scale belongs to this id".
+  ota_server.on("/api/v1/rfid/write", HTTP_POST, []() {
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, ota_server.arg("plain"));
+    if (err) {
+      ota_server.send(400, "application/json", "{\"status\":\"error\"}");
+      return;
+    }
+
+    const int spool_id    = doc["spool_id"]    | 0;
+    const int location_id = doc["location_id"] | 0;
+
+    if (spool_id > 0) {
+      remoteLinkSetPending(spool_id);
+      ota_server.send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+    if (location_id > 0) {
+      // Locations are a FilaMan concept the scale does not handle yet.
+      // Turning the request down beats ignoring it: the web UI would
+      // otherwise poll for a full minute before its own timeout.
+      remote_link_reject_pending = true;
+      ota_server.send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+    ota_server.send(400, "application/json", "{\"status\":\"error\"}");
   });
+
+  // Route: Startseite mit Upload-Formular
+  ota_server.on("/ota", HTTP_GET, []() {
+    if (!webMaintenanceEnabled()) { webSendDisabled(ota_server, "Setup and firmware", "Settings > System > Web interface"); return; }
+    ota_server.send(200, "text/html", maintPage(0));
+  });
+  ota_server.on("/logs", HTTP_GET, []() {
+    if (!webMaintenanceEnabled()) { webSendDisabled(ota_server, "Logs", "Settings > System > Web interface"); return; }
+    ota_server.send(200, "text/html", maintPage(1));
+  });
+  ota_server.on("/drying", HTTP_GET, []() {
+    if (!webMaintenanceEnabled()) { webSendDisabled(ota_server, "Drying thresholds", "Settings > System > Web interface"); return; }
+    ota_server.send(200, "text/html", maintPage(2));
+  });
+  ota_server.on("/filaman", HTTP_GET, []() {
+    if (!webMaintenanceEnabled()) { webSendDisabled(ota_server, "FilaMan setup", "Settings > System > Web interface"); return; }
+    ota_server.send(200, "text/html", maintPage(3));
+  });
+  ota_server.on("/config", HTTP_GET, []() {
+    if (!webMaintenanceEnabled()) { webSendDisabled(ota_server, "List limits", "Settings > System > Web interface"); return; }
+    ota_server.send(200, "text/html", maintPage(4));
+  });
+
 
   // Route: Upload verarbeiten
   ota_server.on("/update", HTTP_POST,
@@ -613,7 +552,7 @@ static void registerRoutes() {
 
   // ── SD-Card Log endpoints ─────────────────────────────────
   // GET /logs -> JSON list of available log files
-  ota_server.on("/logs", HTTP_GET, []() {
+  ota_server.on("/api/logs", HTTP_GET, []() {
     if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     if (!sd_available) {
       ota_server.send(200, "application/json", "{\"sd\":false,\"verbose\":false,\"files\":[]}");
@@ -649,7 +588,7 @@ static void registerRoutes() {
   });
 
   // GET /log?file=<filename> -> serve log file content
-  ota_server.on("/log", HTTP_GET, []() {
+  ota_server.on("/api/log", HTTP_GET, []() {
     if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     if (!sd_available) { ota_server.send(404, "text/plain", "No SD card"); return; }
     if (!ota_server.hasArg("file")) {
@@ -674,7 +613,7 @@ static void registerRoutes() {
   });
 
   // POST /deletelog?file=<name> -> delete a log file
-  ota_server.on("/deletelog", HTTP_POST, []() {
+  ota_server.on("/api/deletelog", HTTP_POST, []() {
     if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     if (!sd_available) { ota_server.send(404, "text/plain", "No SD card"); return; }
     if (!ota_server.hasArg("file")) {
@@ -696,7 +635,7 @@ static void registerRoutes() {
   });
 
   // POST /verbose -> toggle verbose.txt on SD root
-  ota_server.on("/verbose", HTTP_POST, []() {
+  ota_server.on("/api/verbose", HTTP_POST, []() {
     if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     if (!sd_available) {
       ota_server.send(404, "application/json", "{\"error\":\"No SD card\"}");
@@ -729,7 +668,7 @@ static void registerRoutes() {
   // List limit: GET returns current value, POST sets new value
   // FilaMan: store the API key. The value is never echoed back to the page,
   // the input shows a placeholder when one is already stored.
-  ota_server.on("/filaman/key", HTTP_POST, []() {
+  ota_server.on("/api/filaman/key", HTTP_POST, []() {
     if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     String key = ota_server.arg("plain");
     key.trim();
@@ -754,7 +693,7 @@ static void registerRoutes() {
   });
 
   // FilaMan: exchange the 6 character device code for a device token.
-  ota_server.on("/filaman/register", HTTP_POST, []() {
+  ota_server.on("/api/filaman/register", HTTP_POST, []() {
     if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     String code = ota_server.arg("plain");
     code.trim();
@@ -790,13 +729,26 @@ static void registerRoutes() {
     ota_server.send(200, "text/plain", "Device registered");
   });
 
-  ota_server.on("/listlimit", HTTP_GET, []() {
+  ota_server.on("/api/gain", HTTP_POST, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!ota_server.hasArg("plain")) { ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
+    int val = ota_server.arg("plain").toInt();
+    if (val < 100) val = 100;
+    if (val > 300) val = 300;
+    displaySetUiGain((uint16_t)val);
+    prefsPutUInt("ui_gain", (uint32_t)val);
+    char json[32]; snprintf(json, sizeof(json), "{\"gain\":%d}", val);
+    logSDf("Webserver: ui_gain set to %d", val);
+    ota_server.send(200, "application/json", json);
+  });
+
+  ota_server.on("/api/listlimit", HTTP_GET, []() {
     if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     char json[32];
     snprintf(json, sizeof(json), "{\"limit\":%d}", spool_list_limit);
     ota_server.send(200, "application/json", json);
   });
-  ota_server.on("/listlimit", HTTP_POST, []() {
+  ota_server.on("/api/listlimit", HTTP_POST, []() {
     if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     if (!ota_server.hasArg("plain")) { ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
     int val = ota_server.arg("plain").toInt();
@@ -809,13 +761,13 @@ static void registerRoutes() {
     ota_server.send(200, "application/json", json);
   });
 
-  ota_server.on("/loclimit", HTTP_GET, []() {
+  ota_server.on("/api/loclimit", HTTP_GET, []() {
     if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     char json[32];
     snprintf(json, sizeof(json), "{\"limit\":%d}", location_list_limit);
     ota_server.send(200, "application/json", json);
   });
-  ota_server.on("/loclimit", HTTP_POST, []() {
+  ota_server.on("/api/loclimit", HTTP_POST, []() {
     if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     if (!ota_server.hasArg("plain")) { ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
     int val = ota_server.arg("plain").toInt();
@@ -829,7 +781,7 @@ static void registerRoutes() {
   });
 
   // ── Drying Reminder: Material-Schwellwerte lesen ──────────
-  ota_server.on("/drying", HTTP_GET, []() {
+  ota_server.on("/api/drying", HTTP_GET, []() {
     if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     String json = "{";
     json += "\"mode\":" + String(g_dry_mode) + ",";
@@ -850,7 +802,7 @@ static void registerRoutes() {
 
   // ── Drying Reminder: Material-Schwellwerte speichern ──────
   // Body: JSON {"mult_sealed":3.0,"materials":[{"name":"PLA","yellow":180,"red":365},...]}
-  ota_server.on("/drying", HTTP_POST, []() {
+  ota_server.on("/api/drying", HTTP_POST, []() {
     if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     if (!ota_server.hasArg("plain")) {
       ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return;
@@ -898,7 +850,7 @@ static void registerRoutes() {
   });
 
   // ── Drying Reminder: Reset auf Defaults ───────────────────
-  ota_server.on("/drying/reset", HTTP_POST, []() {
+  ota_server.on("/api/drying/reset", HTTP_POST, []() {
     if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
     g_dry_mult_sealed = 2.0f;
     g_dry_man_yellow  = 30;
