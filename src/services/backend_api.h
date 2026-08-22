@@ -52,14 +52,32 @@ int  backendCountActiveSpools(const char* base_url, uint32_t timeout_ms = 6000);
 bool backendGetLastWeighedAt(const char* base_url, int spool_id,
        char* out_iso, size_t out_size, uint32_t timeout_ms = 6000);
 
-// Server side tag lookup. FilaMan can filter by tag, which turns a scan into
-// one small answer instead of the full inventory. Returns an array in the
-// Spoolman shape, usually with a single entry.
-// Spoolman has no equivalent and returns BACKEND_NOT_SUPPORTED, callers then
-// keep using the existing full list scan.
+// Server side tag lookup, which turns a scan into one small answer instead of
+// the full inventory. Returns an array in the Spoolman shape, usually with a
+// single entry. All three backends can do it, each by its own route, so there
+// is no BACKEND_NOT_SUPPORTED case here any more.
+// The match is not exact in any of them, so the caller must verify every hit.
 int  backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocument& doc,
        uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr,
        JsonDocument* filter = nullptr);
+
+// Second lookup for spools whose UIDs live in Spoolman's extra.card_uids, the
+// list SpoolLink keeps for the Snapmaker U1 so both tags of one spool find it.
+// Spoolman only; FilaMan and BamBuddy answer BACKEND_NOT_SUPPORTED because
+// nothing in their ecosystem fills that field.
+//
+// Only worth calling when backendHasCardUidsField() says yes: Spoolman skips a
+// filter on a field it does not know and answers with the entire inventory.
+int  backendFindSpoolByCardUid(const char* base_url, const char* uid, JsonDocument& doc,
+       uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr,
+       JsonDocument* filter = nullptr);
+
+// Whether the active backend has the card_uids extra field. Probed once per
+// backend and base URL and then cached, because the answer only changes when
+// the user points the scale somewhere else or edits the field list.
+// Always false outside Spoolman mode. Performs an HTTP request on the first
+// call, so never call it from an LVGL event callback.
+bool backendHasCardUidsField();
 
 // Which tare scopes the active backend can really store. Offering one it
 // cannot write gives a button that answers BACKEND_NOT_SUPPORTED, or worse

@@ -10,6 +10,7 @@ bool show_backend_pending = false;
 bool show_filaman_options_pending = false;
 bool show_bambuddy_options_pending = false;
 bool show_bambuddy_dried_pending = false;
+bool show_spoolman_options_pending = false;
 bool show_spoolman_pending = false;
 bool show_connection_from_spoolman_pending = false;
 bool show_system_pending = false;

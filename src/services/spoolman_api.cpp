@@ -1,4 +1,5 @@
 #include "spoolman_api.h"
+#include "tag_uid.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -114,6 +115,28 @@ int spoolmanFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocum
   //     with the full list and the caller's scan finds the spool anyway.
   //     That is the whole fallback: no version check, no second code path.
   String path = "/api/v1/spool?allow_archived=false&extra.tag=" + urlEncode(tag_uuid);
+  return spoolmanGetJson(base_url, path.c_str(), doc, timeout_ms, filter, out_err);
+}
+
+int spoolmanFindSpoolByCardUid(const char* base_url, const char* uid, JsonDocument& doc,
+                               uint32_t timeout_ms, JsonDocument* filter,
+                               DeserializationError* out_err) {
+  if (!uid || !uid[0]) return -1;
+
+  // Everything said about extra.tag above holds here too, with one addition:
+  // SpoolLink stores its UIDs as plain uppercase hex without separators, while
+  // the scale carries them around with colons. Sending the colon form would
+  // never match the ilike, so it is normalised first.
+  //
+  // An instance that has no card_uids field is the same case as an old server:
+  // Spoolman skips a filter whose field it does not know and answers with the
+  // full list. Callers guard against that with backendHasCardUidsField() and
+  // verify every hit anyway.
+  char plain[48];
+  tagUidNormalize(uid, plain, sizeof(plain));
+  if (!plain[0]) return -1;
+
+  String path = "/api/v1/spool?allow_archived=false&extra.card_uids=" + urlEncode(plain);
   return spoolmanGetJson(base_url, path.c_str(), doc, timeout_ms, filter, out_err);
 }
 

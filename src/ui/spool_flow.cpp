@@ -14,6 +14,7 @@
 #include "lang.h"
 #include "services/list_limits.h"
 #include "services/spoolman_actions.h"
+#include "services/tag_uid.h"
 #include "services/backend_api.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/spoolman_lookup.h"
@@ -179,6 +180,28 @@ unsigned long link_tag_first_seen_ms = 0;       // time of first detection
 //  SPOOLMAN: LOAD ALL SPOOLS (for new link flow)
 //  Loads all active spools including extra.tag status
 // ============================================================
+// Is this spool already bound to a tag?
+//
+// Two stores can hold one: extra.tag, which this firmware writes, and
+// card_uids, which SpoolLink writes for the Snapmaker U1. A spool managed by
+// SpoolLink has an empty tag field, so asking only about that one would offer
+// it in the link list as free and let it collect a third, redundant binding.
+static bool spoolHasAnyTag(JsonObjectConst spool) {
+  JsonObjectConst extra = spool["extra"];
+  if (extra.isNull()) return false;
+
+  for (const char* key : { "tag", CARD_UIDS_FIELD }) {
+    if (!extra.containsKey(key)) continue;
+    // Spoolman stores extra values JSON encoded, so an unset field arrives as
+    // a pair of literal quotes rather than as an empty string.
+    String v = extra[key].as<String>();
+    v.replace("\"", "");
+    v.trim();
+    if (v.length() > 0) return true;
+  }
+  return false;
+}
+
 void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool archived_only) {
   // Free any previous allocation
   linkSpoolsFree();
@@ -194,6 +217,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   fL["archived"] = true;
   fL["remaining_weight"] = true;
   fL["extra"]["tag"] = true;
+  fL["extra"][CARD_UIDS_FIELD] = true;
   fL["filament"]["id"] = true;
   fL["filament"]["name"] = true;
   fL["filament"]["material"] = true;
@@ -228,12 +252,8 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
 
     // Skip already-linked spools — only in normal link flow.
     // In copy-archived flow, archived spools are templates (typically still tagged) -> don't skip.
-    String existing_tag = "";
-    if (spool.containsKey("extra") && spool["extra"].containsKey("tag")) {
-      existing_tag = spool["extra"]["tag"].as<String>();
-      existing_tag.replace("\"",""); existing_tag.trim();
-    }
-    if (!archived_only && existing_tag.length() > 0) { skipped_tag++; count_linked++; continue; }
+    const bool linked = spoolHasAnyTag(spool);
+    if (!archived_only && linked) { skipped_tag++; count_linked++; continue; }
 
     String vname = "";
     if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
@@ -316,12 +336,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
       if (sp_archived) continue;
     }
 
-    String existing_tag = "";
-    if (spool.containsKey("extra") && spool["extra"].containsKey("tag")) {
-      existing_tag = spool["extra"]["tag"].as<String>();
-      existing_tag.replace("\"",""); existing_tag.trim();
-    }
-    if (!archived_only && existing_tag.length() > 0) continue;
+    if (!archived_only && spoolHasAnyTag(spool)) continue;
 
     String vname = "";
     if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
@@ -357,6 +372,15 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = spool["id"] | 0;
 
+    // Only ever set in the copy-archived flow: everywhere else a spool with a
+    // tag was skipped above. Deliberately the tag field alone, because this is
+    // what the overwrite warning offers to replace, and card_uids is not
+    // something this firmware writes.
+    String existing_tag = "";
+    if (spool.containsKey("extra") && spool["extra"].containsKey("tag")) {
+      existing_tag = spool["extra"]["tag"].as<String>();
+      existing_tag.replace("\"",""); existing_tag.trim();
+    }
     strncpy(s.existing_tag, existing_tag.c_str(), sizeof(s.existing_tag)-1);
     s.existing_tag[sizeof(s.existing_tag)-1] = '\0';
 
@@ -789,6 +813,14 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
   String existing = "";
   if (doc.containsKey("extra") && doc["extra"].containsKey("tag")) {
     existing = doc["extra"]["tag"].as<String>();
+    existing.replace("\"",""); existing.trim();
+  }
+  // A spool managed by SpoolLink has an empty tag field but is bound all the
+  // same. Without this the warning below would stay silent and the spool would
+  // quietly end up carrying two independent bindings.
+  if (existing.length() == 0 && doc.containsKey("extra") &&
+      doc["extra"].containsKey(CARD_UIDS_FIELD)) {
+    existing = doc["extra"][CARD_UIDS_FIELD].as<String>();
     existing.replace("\"",""); existing.trim();
   }
 

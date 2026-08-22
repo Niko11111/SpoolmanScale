@@ -1,6 +1,7 @@
 #include "backend_api.h"
 
 #include <ctype.h>
+#include <string.h>
 
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
@@ -10,6 +11,7 @@
 #include "services/filaman_api.h"
 #include "services/list_limits.h"
 #include "services/spoolman_api.h"
+#include "services/tag_uid.h"
 #include "services/user_options.h"
 
 // A missing backend path must show up in the log instead of looking like a
@@ -116,6 +118,56 @@ int backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocume
       // costing more memory than the normal full scan would.
       return spoolmanFindSpoolByTag(base_url, tag_uuid, doc, timeout_ms, filter, out_err);
   }
+}
+
+int backendFindSpoolByCardUid(const char* base_url, const char* uid, JsonDocument& doc,
+                              uint32_t timeout_ms, DeserializationError* out_err,
+                              JsonDocument* filter) {
+  if (!uid || !uid[0]) return BACKEND_NOT_SUPPORTED;
+  // card_uids is an agreement between SpoolLink, its companion apps and the
+  // U1 firmware, all of which write into Spoolman. Nothing fills the field in
+  // FilaMan or BamBuddy, so there is nothing to search there.
+  if (backendMode() != BACKEND_SPOOLMAN) return notSupported("FindSpoolByCardUid");
+  return spoolmanFindSpoolByCardUid(base_url, uid, doc, timeout_ms, filter, out_err);
+}
+
+bool backendHasCardUidsField() {
+  if (backendMode() != BACKEND_SPOOLMAN) return false;
+
+  const char* base = backendBaseUrl();
+  if (!base || !base[0]) return false;
+
+  // Cached against the URL it was probed for, so pointing the scale at another
+  // instance re-probes without anyone having to remember to invalidate. One
+  // small GET per boot is the entire cost of this feature for everyone who
+  // does not use SpoolLink.
+  static char s_probed_for[96] = {0};
+  static bool s_present = false;
+
+  if (strncmp(s_probed_for, base, sizeof(s_probed_for) - 1) == 0) return s_present;
+
+  // Plain document on purpose: the field list holds a handful of definitions,
+  // a few hundred bytes, and is nothing like the spool inventory that needs
+  // PSRAM. Not worth a local allocator in this file.
+  JsonDocument doc;
+  DeserializationError err = DeserializationError::Ok;
+  int code = spoolmanGetSpoolFieldsJson(base, doc, 5000, &err);
+  if (code != 200 || err) {
+    // Not cached: an unreachable server now says nothing about the field, and
+    // caching a "no" here would keep the feature off for the whole session.
+    logSDf("card_uids: field probe failed, code=%d err=%s", code, err.c_str());
+    return false;
+  }
+
+  s_present = false;
+  for (JsonObjectConst f : doc.as<JsonArrayConst>()) {
+    const char* key = f["key"] | "";
+    if (strcmp(key, CARD_UIDS_FIELD) == 0) { s_present = true; break; }
+  }
+  strncpy(s_probed_for, base, sizeof(s_probed_for) - 1);
+  s_probed_for[sizeof(s_probed_for) - 1] = '\0';
+  logSDf("card_uids: field %s on %s", s_present ? "present" : "absent", base);
+  return s_present;
 }
 
 int backendGetLocationsJson(const char* base_url, JsonDocument& doc,

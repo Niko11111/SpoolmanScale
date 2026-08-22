@@ -10,6 +10,7 @@ extern bool show_backend_pending;
 extern bool show_filaman_options_pending;
 extern bool show_bambuddy_options_pending;
 extern bool show_bambuddy_dried_pending;
+extern bool show_spoolman_options_pending;
 extern bool show_spoolman_pending;
 extern bool show_connection_from_spoolman_pending;
 extern bool show_system_pending;

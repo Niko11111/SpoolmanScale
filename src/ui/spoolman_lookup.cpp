@@ -13,6 +13,7 @@
 #include "services/location_state.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/tag_uid.h"
 #include "services/user_options.h"
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
@@ -34,6 +35,38 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
   }
 };
 
+}
+
+// Does this spool carry the scanned UID?
+//
+// extra.tag is asked first and its comparison is byte for byte the one this
+// firmware has always used. That order is deliberate: every existing
+// installation runs on that path, and nothing added below may be able to cost
+// it a match. card_uids is only consulted once the tag field has said no.
+//
+// Both server side searches are partial matches, so this runs on their results
+// too, not only on the full scan.
+static bool spoolMatchesTag(JsonObjectConst spool, const char* uid) {
+  if (!uid || !uid[0]) return false;
+
+  JsonObjectConst extra = spool["extra"];
+  if (extra.isNull()) return false;
+
+  if (extra.containsKey("tag")) {
+    String tag_val = extra["tag"].as<String>();
+    tag_val.replace("\"", "");
+    tag_val.trim();
+    if (tag_val.equalsIgnoreCase(uid)) return true;
+  }
+
+  // SpoolLink's list, written for the Snapmaker U1 so that both tags of one
+  // spool lead to it. Whole entry comparison, see cardUidsContain().
+  if (extra.containsKey(CARD_UIDS_FIELD)) {
+    const char* raw = extra[CARD_UIDS_FIELD] | (const char*)nullptr;
+    if (raw && cardUidsContain(raw, uid)) return true;
+  }
+
+  return false;
 }
 
 // Reduces an ISO timestamp to the day it falls on, in local time.
@@ -398,6 +431,7 @@ void querySpoolman(const char* tray_uuid) {
   filter_spool["last_used"] = true;
   filter_spool["location"] = true;
   filter_spool["extra"]["tag"] = true;
+  filter_spool["extra"][CARD_UIDS_FIELD] = true;
   filter_spool["extra"]["last_dried"] = true;
   filter_spool["filament"]["id"] = true;
   filter_spool["filament"]["name"] = true;
@@ -436,19 +470,48 @@ void querySpoolman(const char* tray_uuid) {
       // otherwise a spool whose UID still lives in custom_fields would be
       // reported as unknown. Only accept the short cut on a real match.
       for (JsonObjectConst s : doc.as<JsonArrayConst>()) {
-        String t = s["extra"]["tag"].as<String>();
-        t.replace("\"", "");
-        t.trim();
-        if (t.equalsIgnoreCase(tray_uuid)) { have_result = true; break; }
+        if (spoolMatchesTag(s, tray_uuid)) { have_result = true; break; }
       }
       if (have_result) {
         logSDf("Backend: tag search hit, %d spool(s) returned",
                (int)doc.as<JsonArrayConst>().size());
       }
     } else if (fcode != BACKEND_NOT_SUPPORTED) {
-      // Spoolman answers NOT_SUPPORTED by design, anything else is a real
-      // failure and should not disappear silently.
+      // Every backend has a route for this by now, so NOT_SUPPORTED is only a
+      // guard. Anything else is a real failure and should not disappear.
       logSDf("Backend: tag search failed, code=%d err=%s", fcode, err.c_str());
+    }
+    if (!have_result) {
+      doc.clear();
+      err = DeserializationError::Ok;
+    }
+  }
+
+  // Second server side search, for spools that keep their UIDs in card_uids
+  // instead of in the tag field. That is how SpoolLink stores them for the
+  // Snapmaker U1, where a spool carries one tag per flange so it can be loaded
+  // on either side of the printer.
+  //
+  // Only reached once the tag search has come up empty, so an installation
+  // without SpoolLink never pays for it. The field check is what keeps it that
+  // way: Spoolman skips a filter on a field it does not know and would answer
+  // with the whole inventory, which is the very cost this shortcut exists to
+  // avoid.
+  if (!have_result && backendHasCardUidsField()) {
+    int ccode = backendFindSpoolByCardUid(cfg_spoolman_base, tray_uuid, doc, 8000, &err, &filter);
+    if (ccode == 200 && !err) {
+      // Same reasoning as above, and one degree more necessary: the filter is
+      // an ilike, so a four byte UID matches inside a seven byte one belonging
+      // to a different spool. spoolMatchesTag() compares whole entries.
+      for (JsonObjectConst s : doc.as<JsonArrayConst>()) {
+        if (spoolMatchesTag(s, tray_uuid)) { have_result = true; break; }
+      }
+      if (have_result) {
+        logSDf("Backend: card_uids search hit, %d spool(s) returned",
+               (int)doc.as<JsonArrayConst>().size());
+      }
+    } else if (ccode != BACKEND_NOT_SUPPORTED) {
+      logSDf("Backend: card_uids search failed, code=%d err=%s", ccode, err.c_str());
     }
     if (!have_result) {
       doc.clear();
@@ -506,13 +569,19 @@ void querySpoolman(const char* tray_uuid) {
   for (JsonObject spool : spools) {
     if (!spool.containsKey("extra")) continue;
     JsonObject extra = spool["extra"];
-    if (!extra.containsKey("tag")) continue;
 
-    String tag_val = extra["tag"].as<String>();
-    tag_val.replace("\"", "");
-    tag_val.trim();
+    if (!spoolMatchesTag(spool, tray_uuid)) continue;
 
-    if (!tag_val.equalsIgnoreCase(tray_uuid)) continue;
+    // Read after the match, not as part of it: the FilaMan migration below
+    // writes this value back and wants the tag field's own notation. A spool
+    // matched through card_uids has no tag field, which leaves this empty -
+    // harmless, because that migration only runs in FilaMan mode.
+    String tag_val;
+    if (extra.containsKey("tag")) {
+      tag_val = extra["tag"].as<String>();
+      tag_val.replace("\"", "");
+      tag_val.trim();
+    }
 
     // FOUND
     sm_found    = true;
@@ -671,6 +740,7 @@ void querySpoolman(const char* tray_uuid) {
   f2["id"] = true;
   f2["archived"] = true;
   f2["extra"]["tag"] = true;
+  f2["extra"][CARD_UIDS_FIELD] = true;
   int code2 = backendGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
   if (code2 == 200) {
     if (!err2) {
@@ -679,12 +749,7 @@ void querySpoolman(const char* tray_uuid) {
         // Only check truly archived spools (explicit bool cast needed for JsonVariant)
         bool is_archived = spool["archived"].as<bool>();
         if (!is_archived) continue;
-        if (!spool.containsKey("extra")) continue;
-        JsonObject extra = spool["extra"];
-        if (!extra.containsKey("tag")) continue;
-        String tag_val = extra["tag"].as<String>();
-        tag_val.replace("\"", ""); tag_val.trim();
-        if (!tag_val.equalsIgnoreCase(tray_uuid)) continue;
+        if (!spoolMatchesTag(spool, tray_uuid)) continue;
         // Archived spool found
         Serial.printf("Spoolman: spool archived (ID=%d)\n", spool["id"] | 0);
         lv_label_set_text(lbl_spoolman_weight, T(STR_ARCHIVED));

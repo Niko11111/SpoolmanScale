@@ -37,6 +37,7 @@
 #include "ui/bag_screen.h"
 #include "ui/cal_reminder_screen.h"
 #include "ui/bambuddy_options_screen.h"
+#include "ui/spoolman_options_screen.h"
 #include "ui/confirm_popup.h"
 #include "ui/connection_screen.h"
 #include "ui/dried_action.h"
@@ -287,6 +288,12 @@ void appLoop() {
     buildFilaManOptionsScreen();   // releases the previous instance itself
     hideAllOverlays();
     lv_obj_clear_flag(scr_filaman_options, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_spoolman_options_pending) {
+    show_spoolman_options_pending = false;
+    buildSpoolmanOptionsScreen();  // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_spoolman_options, LV_OBJ_FLAG_HIDDEN);
   }
   if (show_bambuddy_options_pending) {
     show_bambuddy_options_pending = false;
@@ -845,7 +852,46 @@ void appLoop() {
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
           scanTag(uid, uidLen);
         } else {
-          if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES) {
+          if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES &&
+              bambu_blocks_read == 0) {
+            // Not a Bambu tag at all. Every sector failed authentication, so
+            // there is nothing here to decode and no amount of retrying will
+            // change that. It is a plain 4 byte card, the kind sold as an RFID
+            // button and stuck to spools by SpoolLink users.
+            //
+            // Those never reached the backend: the branch below insists on a
+            // 32 character tray uuid, so they sat in "waiting" forever. Looking
+            // them up by their UID is the whole point.
+            //
+            // Keyed off zero blocks rather than off the retry count alone. A
+            // real Bambu tag that only read partially still has dozens of
+            // blocks and belongs in the branch above, where "waiting" is the
+            // honest answer rather than "not in Spoolman".
+            if (wifi_ok && !isSpoolFlowIdInputOpen() &&
+                strcmp(uid_str, spoolman_queried_uid) != 0) {
+              querySpoolman(uid_str);
+              strncpy(spoolman_queried_uid, uid_str, sizeof(spoolman_queried_uid)-1);
+              spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';
+              if (!sm_found) {
+                strncpy(link_tag_uid, uid_str, sizeof(link_tag_uid)-1);
+                link_tag_uid[sizeof(link_tag_uid)-1] = '\0';
+                link_tag_first_seen_ms = millis();
+                link_popup_dismissed = false;
+              } else {
+                // Stays shorter than 32 characters, so everything that tells a
+                // Bambu tag apart by that length keeps saying no.
+                strncpy(g_tag.tray_uuid, uid_str, sizeof(g_tag.tray_uuid)-1);
+                g_tag.tray_uuid[sizeof(g_tag.tray_uuid)-1] = '\0';
+                updateLinkButton();
+              }
+            }
+            lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+            { char sb[48]; backendText(sm_found ? T(STR_TAG_FOUND) : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb));
+              lv_label_set_text(lbl_status, sb); }
+            lv_obj_set_style_text_color(lbl_status,
+              sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
+          } else if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES) {
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
             lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
             lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));

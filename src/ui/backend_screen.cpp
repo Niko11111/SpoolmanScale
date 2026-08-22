@@ -11,7 +11,6 @@
 #include "header_status.h"
 #include "lang.h"
 #include "navigation.h"
-#include "extra_fields_screen.h"
 #include "ota_browser.h"
 #include "ui_common.h"
 
@@ -287,21 +286,39 @@ void buildBackendScreen() {
               });
   }
 
-  // --- extra fields, Spoolman only -------------------------------
-  // Moved here from the connection screen: extra fields are a property of the
-  // filament manager, not of the network connection, and this screen has the
-  // room in Spoolman mode because the two credential rows below are FilaMan
-  // only. FilaMan calls them system extra fields, they sit behind a different
-  // endpoint and need admin rights, so they are not offered there. BamBuddy
-  // has a fixed schema and no extra fields at all.
+  // --- Spoolman only settings ------------------------------------
+  // The extra fields used to sit here as a row of their own. They moved into
+  // the options screen so all three backends now hang their own settings off
+  // the same "More options" button instead of one of them being special.
+  //
+  // Spoolman only by nature: FilaMan calls them system extra fields, which sit
+  // behind a different endpoint and need admin rights, and BamBuddy has a fixed
+  // schema with no extra fields at all.
+  //
+  // Centred rather than at x=16 like the other two: those sit beside a browser
+  // button, and Spoolman has no credentials to enter, so there is no pair here
+  // to line up with.
   if (backendMode() == BACKEND_SPOOLMAN) {
-    char buf_ef[40];
-    backendText(T(STR_EXTRA_FIELDS_TITLE), buf_ef, sizeof(buf_ef));
-    addNavRow(scr_backend, 186, buf_ef, "tag, last_dried", 0x4a6fa0,
-              [](lv_event_t *e) {
-                logSD("BTN: Backend -> Extra Fields");
-                showExtraFieldsScreen(false);
-              });
+    lv_obj_t *btn_opts = lv_btn_create(scr_backend);
+    lv_obj_set_size(btn_opts, 216, 44);
+    lv_obj_set_pos(btn_opts, 132, 244);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(0x0a1e30), 0);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btn_opts, 8, 0);
+    lv_obj_set_style_shadow_width(btn_opts, 0, 0);
+    lv_obj_set_style_border_width(btn_opts, 1, 0);
+    lv_obj_set_style_border_color(btn_opts, lv_color_hex(0x1a3060), 0);
+    lv_obj_add_event_cb(btn_opts, [](lv_event_t *e) {
+      logSD("BTN: Backend -> Spoolman options");
+      show_spoolman_options_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_opts = lv_label_create(btn_opts);
+    { char ob[40];
+      snprintf(ob, sizeof(ob), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_MORE_OPTIONS));
+      lv_label_set_text(lbl_opts, ob); }
+    lv_obj_set_style_text_color(lbl_opts, lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_font(lbl_opts, &lv_font_montserrat_ext_16, 0);
+    lv_obj_center(lbl_opts);
   }
 
   // --- FilaMan credentials, shown only in FilaMan mode -----------
@@ -345,8 +362,7 @@ void buildBackendScreen() {
   // One key instead of two, and an empty one is a valid state: an instance
   // with authentication switched off answers without it. Entered in the
   // browser for the same reason as FilaMan's, a 46 character key cannot be
-  // typed on a numpad. There is no options screen yet, so the browser button
-  // sits centred rather than beside one.
+  // typed on a numpad.
   if (backendIsBamBuddy()) {
     addCredentialsRow(scr_backend, 190,
                       T(STR_BACKEND_APIKEY), bambuddyApiKey()[0] != '\0',

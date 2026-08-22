@@ -30,6 +30,15 @@ int spoolmanFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocum
                            uint32_t timeout_ms = 8000, JsonDocument* filter = nullptr,
                            DeserializationError* out_err = nullptr);
 
+// Same search against extra.card_uids, the comma separated UID list SpoolLink
+// writes for the Snapmaker U1. Pass the UID in any notation, it is normalised
+// to plain hex here because the stored entries carry no separators. The same
+// two caveats apply: the match is partial, and a server without the field
+// silently ignores the filter and answers with everything.
+int spoolmanFindSpoolByCardUid(const char* base_url, const char* uid, JsonDocument& doc,
+                               uint32_t timeout_ms = 8000, JsonDocument* filter = nullptr,
+                               DeserializationError* out_err = nullptr);
+
 int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remaining, const char* last_used_iso = nullptr, uint32_t timeout_ms = 5000);
 int spoolmanPatchInitialWeight(const char* base_url, int spool_id, float initial_weight, uint32_t timeout_ms = 5000);
 int spoolmanPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeout_ms = 5000);
