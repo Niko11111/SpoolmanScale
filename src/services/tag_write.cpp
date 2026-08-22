@@ -59,13 +59,17 @@ static void finish(const char *st, const char *msg) {
 }
 
 bool tagWriteRequest(int spool_id, TagFormat fmt, bool link) {
-  if (pending || spool_id <= 0) return false;
+  if (pending) return false;
+  if (fmt != TAG_FMT_ERASE && spool_id <= 0) return false;
   pending_id   = spool_id;
   pending_fmt  = fmt;
   pending_link = link;
   pending     = true;
   snprintf(state, sizeof(state), "pending");
-  snprintf(message, sizeof(message), "Writing spool %d...", spool_id);
+  if (fmt == TAG_FMT_ERASE)
+    snprintf(message, sizeof(message), "Erasing the tag...");
+  else
+    snprintf(message, sizeof(message), "Writing spool %d...", spool_id);
   return true;
 }
 
@@ -475,6 +479,15 @@ void tagWriteTick() {
     return;
   }
 
+  write_err[0] = 0;
+  if (pending_fmt == TAG_FMT_ERASE) {
+    const bool erased = eraseTag();
+    cache_dirty = true;
+    finish(erased ? "ok" : "error",
+           erased ? "Tag erased" : "Erase failed - keep the tag still");
+    return;
+  }
+
   // Not querySpoolmanById(): that also repaints the main screen and would
   // change which spool the scale believes is loaded.
   JsonDocument doc;
@@ -489,10 +502,7 @@ void tagWriteTick() {
   JsonObjectConst sp = doc.as<JsonObjectConst>();
 
   bool ok;
-  write_err[0] = 0;
-  if (pending_fmt == TAG_FMT_ERASE) {
-    ok = eraseTag();
-  } else {
+  {
     AceFields f;
     buildAce(sp, &f);
     ok = (pending_fmt == TAG_FMT_ACE) ? writeAce(&f)
