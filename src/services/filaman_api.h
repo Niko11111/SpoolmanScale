@@ -130,6 +130,12 @@ int filamanRfidResult(const char* base_url, const char* device_token,
                       bool success, const char* tag_uuid, int spool_id,
                       const char* error_message, uint32_t timeout_ms = 6000);
 
+// Answers a scan trigger that arrived on /api/v1/rfid/scan-request with the
+// contents of the tag. Device token again, like the heartbeat. tag_json is
+// what the web UI then offers to import.
+int filamanSendTagData(const char* base_url, const char* device_token,
+                       const char* tag_json, uint32_t timeout_ms = 6000);
+
 // Status change, for example archiving. Uses its own endpoint rather than a
 // PATCH, see /api/v1/spools/{id}/status.
 int filamanSetStatus(const char* base_url, const char* api_key, int spool_id,

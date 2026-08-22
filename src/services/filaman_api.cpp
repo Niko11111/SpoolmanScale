@@ -320,6 +320,28 @@ int filamanRfidResult(const char* base_url, const char* device_token,
   return code;
 }
 
+int filamanSendTagData(const char* base_url, const char* device_token,
+                       const char* tag_json, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || !device_token || !device_token[0]) return -1;
+  if (!tag_json || !tag_json[0]) return -1;
+
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/devices/tag-data");
+  http.setTimeout(timeout_ms);
+  http.addHeader("Authorization", String("Device ") + device_token);
+  http.addHeader("Content-Type", "application/json");
+
+  JsonDocument body;
+  body["tag_json"] = tag_json;
+  String payload;
+  serializeJson(body, payload);
+
+  int code = http.POST(payload);
+  http.end();
+  logSDf("FilaMan: tag-data sent (HTTP %d)", code);
+  return code;
+}
+
 int filamanGetHealthCode(const char* base_url, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url)) return -1;
 

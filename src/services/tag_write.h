@@ -15,6 +15,10 @@ enum TagFormat : uint8_t {
 bool tagWriteRequest(int spool_id, TagFormat fmt, bool link);
 void tagWriteTick();
 
+// Parks a scan trigger from FilaMan. The tag on the reader is sent back on
+// the next tick, or the request expires.
+void tagScanRequest();
+
 const char* tagWriteState();     // idle | pending | ok | error
 const char* tagWriteMessage();
 

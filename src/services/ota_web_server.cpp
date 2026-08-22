@@ -466,6 +466,13 @@ static void registerRoutes() {
   // here may block. The request is only parked, appLoop() picks it up.
   // Nothing is ever written to the tag, the trigger is read as "the spool on
   // the scale belongs to this id".
+  // FilaMan's "import from tag". Parked like the write trigger, because the
+  // read cannot happen inside the handler.
+  ota_server.on("/api/v1/rfid/scan-request", HTTP_POST, []() {
+    tagScanRequest();
+    ota_server.send(200, "application/json", "{\"status\":\"ok\"}");
+  });
+
   ota_server.on("/api/v1/rfid/write", HTTP_POST, []() {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, ota_server.arg("plain"));

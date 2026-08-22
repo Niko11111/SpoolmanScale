@@ -8,8 +8,11 @@
 #include "hardware/nfc.h"
 #include "hardware/sd_logger.h"
 #include "app/app_state.h"
+#include "bambu/bambu_tag.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/filaman_api.h"
+#include "services/backend.h"
 
 // ACE page map (DnG-Crafts/ACE-RFID). Pages are 4 bytes.
 #define ACE_P_MAGIC     4
@@ -43,11 +46,15 @@ static char      cached_kind[34] = "";
 static char      cached_content[128] = "";
 static TagInfo   cached_info;
 static bool      cache_dirty = false;
+static bool      scan_pending = false;
+static unsigned long scan_since = 0;
+#define SCAN_WAIT_MS 30000
 
 const char* tagCachedUid()     { return cached_uid; }
 const char* tagCachedKind()    { return cached_kind; }
 const char* tagCachedContent() { return cached_content; }
 const TagInfo* tagCachedInfo() { return &cached_info; }
+void tagScanRequest() { scan_pending = true; scan_since = millis(); }
 
 const char* tagWriteState()   { return state; }
 const char* tagWriteMessage() { return message; }
@@ -466,8 +473,83 @@ static void refreshCache() {
   }
 }
 
+// Bambu puts the finish in the material, "PETG Basic", while FilaMan keeps it
+// in material_subgroup and matches on "PETG". Only a known finish word is
+// dropped: cutting at the first space would turn "Support For PLA" into
+// "Support", and would leave composites like PLA-CF alone only by luck.
+static void bareMaterial(char *m) {
+  static const char *FINISH[] = {
+    "Basic", "Matte", "Silk", "Silk+", "Tough", "Aero", "Galaxy", "Marble",
+    "Glow", "Sparkle", "Metal", "Wood", "Translucent", "Impact", "HF", "Plus"
+  };
+  for (int pass = 0; pass < 2; pass++) {
+    char *sp = strrchr(m, ' ');
+    if (!sp) return;
+    bool hit = false;
+    for (unsigned i = 0; i < sizeof(FINISH) / sizeof(FINISH[0]); i++)
+      if (!strcasecmp(sp + 1, FINISH[i])) { hit = true; break; }
+    if (!hit) return;
+    *sp = 0;
+  }
+}
+
+// FilaMan asks for a scan, the answer is whatever is on the reader. Nothing
+// is sent for a blank or unreadable tag: the request expires instead, which
+// the web UI reports as a timeout rather than as bad data.
+static void scanTick() {
+  if (!scan_pending) return;
+  if (millis() - scan_since > SCAN_WAIT_MS) {
+    scan_pending = false;
+    logSD("Tag scan: no readable tag, request expired");
+    return;
+  }
+
+  char material[17] = "", brand[33] = "", color[8] = "";
+  unsigned tlo = 0, thi = 0;
+  int sm = 0;
+
+  const TagInfo *ti = &cached_info;
+  const bool have_ntag = ti->fmt[0] && strcmp(ti->fmt, "blank") && strcmp(ti->fmt, "unknown");
+  if (have_ntag) {
+    snprintf(material, sizeof(material), "%s", ti->material);
+    snprintf(brand, sizeof(brand), "%s", ti->brand);
+    snprintf(color, sizeof(color), "%02X%02X%02X", ti->r, ti->g, ti->b);
+    tlo = ti->et_lo; thi = ti->et_hi;
+    if (ti->sku[0] == 'S' && ti->sku[1] == 'M') sm = atoi(ti->sku + 2);
+  } else if (tag_present && g_tag.material[0]) {
+    // A Bambu tag. The main flow has already decoded it, and it is the one
+    // kind of tag the page itself cannot read.
+    snprintf(material, sizeof(material), "%s", g_tag.material);
+    bareMaterial(material);
+    // Bambu stores no vendor string, but a tag that authenticates with the
+    // Bambu keys can only be theirs.
+    snprintf(brand, sizeof(brand), "%s",
+             g_tag.vendor[0] ? g_tag.vendor : "Bambu Lab");
+    const char *c = g_tag.color_hex;
+    if (*c == '#') c++;
+    snprintf(color, sizeof(color), "%s", c);
+    tlo = (unsigned)g_tag.temp_min; thi = (unsigned)g_tag.temp_max;
+    if (sm_found && sm_id > 0) sm = sm_id;
+  } else {
+    return;
+  }
+
+  char json[288];
+  int n = snprintf(json, sizeof(json),
+    "{\"protocol\":\"openspool\",\"version\":\"1.0\",\"type\":\"%s\","
+    "\"color_hex\":\"%s\",\"brand\":\"%s\","
+    "\"min_temp\":\"%u\",\"max_temp\":\"%u\"",
+    material, color, brand, tlo, thi);
+  if (sm > 0) n += snprintf(json + n, sizeof(json) - n, ",\"sm_id\":%d", sm);
+  snprintf(json + n, sizeof(json) - n, "}");
+
+  scan_pending = false;
+  filamanSendTagData(backendBaseUrl(), filamanDeviceToken(), json);
+}
+
 void tagWriteTick() {
   refreshCache();
+  scanTick();
   if (!pending) return;
   pending = false;
 
