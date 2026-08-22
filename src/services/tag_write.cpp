@@ -366,10 +366,12 @@ static bool tagDescribe(char *out, size_t out_len, TagInfo *ti) {
     return true;
   }
 
+  // A page that will not read is not an empty page. Reporting blank here let
+  // a badly seated tag look erased, and the result was cached as trusted.
   bool blank = true;
   for (int pg = 5; pg <= 8 && blank; pg++) {
     uint8_t d[4] = {0};
-    if (!nfcReadNtagPage(pg, d)) break;
+    if (!nfcReadNtagPage(pg, d)) return false;
     for (int i = 0; i < 4; i++) if (d[i]) { blank = false; break; }
   }
   snprintf(out, out_len, "%s", blank ? "blank" : "unrecognised data");
