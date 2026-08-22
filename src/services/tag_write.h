@@ -19,6 +19,13 @@ void tagWriteTick();
 // the next tick, or the request expires.
 void tagScanRequest();
 
+// FilaMan's write trigger carries the tag contents as an OpenSpool record.
+// They are parked until the user confirms on the device, then written as they
+// arrived: the server decided what goes on the tag, not the scale.
+void tagRemotePayloadSet(const char *json);
+bool tagRemotePayloadPending();
+bool tagWriteRemotePayload();
+
 const char* tagWriteState();     // idle | pending | ok | error
 const char* tagWriteMessage();
 

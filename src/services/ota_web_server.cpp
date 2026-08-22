@@ -484,6 +484,13 @@ static void registerRoutes() {
     const int spool_id    = doc["spool_id"]    | 0;
     const int location_id = doc["location_id"] | 0;
 
+    // FilaMan's backend expands the trigger into a full OpenSpool record
+    // before forwarding it. Keep it verbatim: the server decided what belongs
+    // on the tag. An older server sends only the id and nothing is written.
+    const char *proto = doc["protocol"] | "";
+    tagRemotePayloadSet(strcmp(proto, "openspool") == 0
+                        ? ota_server.arg("plain").c_str() : "");
+
     if (spool_id > 0) {
       remoteLinkSetPending(spool_id);
       ota_server.send(200, "application/json", "{\"status\":\"ok\"}");

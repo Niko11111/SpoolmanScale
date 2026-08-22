@@ -240,16 +240,12 @@ static bool writeAce(const AceFields *f) {
 // NDEF on an NTAG: TLV 0x03, length, one application/json record, 0xFE.
 // Record header D2 = MB|ME|SR, TNF 2 (media type).
 static char write_err[80] = "";
+static char remote_payload[320] = "";
 
-static bool writeOpenSpool(const AceFields *f, int spool_id) {
-  char json[224];
-  int n = snprintf(json, sizeof(json),
-    "{\"protocol\":\"openspool\",\"version\":\"1.0\",\"type\":\"%s\","
-    "\"color_hex\":\"%02X%02X%02X\",\"brand\":\"%s\","
-    "\"min_temp\":\"%u\",\"max_temp\":\"%u\",\"sm_id\":%d}",
-    f->material, f->r, f->g, f->b, f->brand,
-    (unsigned)f->et_lo, (unsigned)f->et_hi, spool_id);
-  if (n <= 0 || n >= (int)sizeof(json)) return false;
+// Wraps a JSON document in the NDEF TLV an OpenSpool reader expects.
+static bool writeNdefJson(const char *json) {
+  const int n = (int)strlen(json);
+  if (n <= 0 || n > 250) return false;
 
   static const char TYPE[] = "application/json";
   const uint8_t tlen = sizeof(TYPE) - 1;
@@ -278,6 +274,37 @@ static bool writeOpenSpool(const AceFields *f, int spool_id) {
   for (int off = 0; off < i; off += 4)
     if (!wrPage((uint8_t)(4 + off / 4), buf + off)) return false;
   return true;
+}
+
+static bool writeOpenSpool(const AceFields *f, int spool_id) {
+  char json[224];
+  int n = snprintf(json, sizeof(json),
+    "{\"protocol\":\"openspool\",\"version\":\"1.0\",\"type\":\"%s\","
+    "\"color_hex\":\"%02X%02X%02X\",\"brand\":\"%s\","
+    "\"min_temp\":\"%u\",\"max_temp\":\"%u\",\"sm_id\":%d}",
+    f->material, f->r, f->g, f->b, f->brand,
+    (unsigned)f->et_lo, (unsigned)f->et_hi, spool_id);
+  if (n <= 0 || n >= (int)sizeof(json)) return false;
+  return writeNdefJson(json);
+}
+
+void tagRemotePayloadSet(const char *json) {
+  snprintf(remote_payload, sizeof(remote_payload), "%s", json ? json : "");
+}
+
+bool tagRemotePayloadPending() { return remote_payload[0] != 0; }
+
+// Runs from the deferred handler, never from an LVGL callback: this talks to
+// the reader and takes as long as a write takes.
+bool tagWriteRemotePayload() {
+  if (!remote_payload[0]) return false;
+  uint8_t uid[8], uid_len = 0;
+  bool ok = nfcReadPassiveTarget(uid, &uid_len, 600) && uid_len == 7
+            && writeNdefJson(remote_payload);
+  remote_payload[0] = 0;
+  cache_dirty = true;
+  logSDf("RemoteLink: tag write %s", ok ? "ok" : "failed");
+  return ok;
 }
 
 // Reads the JSON payload back out of the NDEF wrapper.
