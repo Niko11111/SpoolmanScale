@@ -255,6 +255,14 @@ int spoolmanPatchSpoolTag(const char* base_url, int spool_id, const char* uuid, 
   return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, body, timeout_ms);
 }
 
+int spoolmanPatchCardUids(const char* base_url, int spool_id, const char* list, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || !list) return -1;
+  // Same JSON-inside-JSON encoding every text extra field uses, and the same
+  // per key merge that lets tag and last_dried survive each other.
+  String body = "{\"extra\": {\"" CARD_UIDS_FIELD "\": \"\\\"" + String(list) + "\\\"\"}}";
+  return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, body, timeout_ms);
+}
+
 int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remaining, const char* last_used_iso, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
   char body[128];

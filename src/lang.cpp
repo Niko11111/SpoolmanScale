@@ -516,6 +516,10 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Inventory: BamBuddy"                                                 },  // STR_BB_INV_OWN
   { "Inventar: Spoolman",
     "Inventory: Spoolman"                                                 },  // STR_BB_INV_SPOOLMAN
+  // Label above the database name on the backend screen. Same word as the
+  // short form above, so the two places do not invent two vocabularies.
+  { "Inventar",
+    "Inventory"                                                           },  // STR_BACKEND_INVENTORY
   { "Werkseinstellungen",       "Factory Reset"              },  // STR_BTN_FACTORY_RESET
   { "Alle Einstellungen löschen", "Erase all settings"      },  // STR_BTN_FACTORY_RESET_SUB
   { "Werkseinstellungen?",      "Factory Reset?"             },  // STR_FACTORY_RESET_TITLE
@@ -600,11 +604,11 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Gelb (Tage)",                   "Yellow (days)"                      },  // STR_DRY_MAT_HDR_YELLOW
   { "Rot (Tage)",                    "Red (days)"                         },  // STR_DRY_MAT_HDR_RED
   { "Vers.*",                        "Mult.*"                             },  // STR_DRY_MAT_HDR_MULT
-  { "* Multiplikator fuer luftdicht","* Multiplier for airtight storage"  },  // STR_DRY_MAT_FOOTNOTE
+  { "* Multiplikator für luftdicht","* Multiplier for airtight storage"  },  // STR_DRY_MAT_FOOTNOTE
   { "Gelb ab",                       "Yellow from"                        },  // STR_DRY_MAN_YELLOW_LBL
   { "Rot ab",                        "Red from"                           },  // STR_DRY_MAN_RED_LBL
   { "Tippen zum Bearbeiten",         "Tap to edit"                        },  // STR_DRY_MAN_EDIT_HINT
-  { "Grenzwerte gelten fuer alle Materialien.", "Limits apply to all materials." },  // STR_DRY_MAN_INFO
+  { "Grenzwerte gelten für alle Materialien.", "Limits apply to all materials." },  // STR_DRY_MAN_INFO
   { "Tage",                          "days"                               },  // STR_DRY_DAYS_UNIT
   { "Gelb-Schwellwert",              "Yellow threshold"                   },  // STR_DRY_NUMPAD_YELLOW_TITLE
   { "Rot-Schwellwert",               "Red threshold"                      },  // STR_DRY_NUMPAD_RED_TITLE
@@ -689,6 +693,40 @@ const char* const STRINGS[STR_COUNT][2] = {
 
   // FilaMan options sub screen
   { "Weitere Optionen",              "More options"                       },  // STR_BTN_MORE_OPTIONS
+  { "Mehrere Tags verknüpfen",      "Link multiple tags"                 },  // STR_CU_WRITE
+  { "Nutzt Spoolmans Feld card_uids",
+    "Uses Spoolman's card_uids field"                                     },  // STR_CU_WRITE_SUB
+  { "Spoolman hat kein Feld für NFC-Tags. Mehrere Projekte haben sich auf das "
+    "Extra-Feld card_uids geeinigt, das eine Liste von UIDs aufnimmt: SpoolLink "
+    "in der Snapmaker-Firmware, dessen Apps und Spool Studio. Ein Standard ist "
+    "es nicht - andere nutzen nfc_id, diese Waage sonst extra.tag.\n\n"
+    "Sinnvoll, wo eine Spule mehr als ein Tag trägt. Beim Snapmaker U1 ist das "
+    "die Regel, weil sie auf beide Seiten des Druckers passen muss.\n\n"
+    "An: gescannte UIDs kommen an die Liste, und Spulen mit UIDs erscheinen "
+    "wieder in der Verlinken-Liste. Aus: alles wie bisher. Gelesen wird das "
+    "Feld immer.",
+    "Spoolman has no field for NFC tags. Several projects settled on the extra "
+    "field card_uids, which holds a list of UIDs: SpoolLink in the Snapmaker "
+    "firmware, its companion apps and Spool Studio. It is not a standard - "
+    "others use nfc_id, and this scale otherwise uses extra.tag.\n\n"
+    "Useful wherever a spool carries more than one tag. On the Snapmaker U1 "
+    "that is the rule, because the spool has to fit either side of the "
+    "printer.\n\n"
+    "On: scanned UIDs are appended to the list, and spools with UIDs show up in "
+    "the link list again. Off: nothing changes. The field is read either way."   },  // STR_CU_WRITE_INFO
+  { "Liste voll, nichts geschrieben",
+    "List full, nothing written"                                          },  // STR_CU_FULL
+  { LV_SYMBOL_WARNING "  Spule hat schon UIDs",
+    LV_SYMBOL_WARNING "  Spool already has UIDs"                          },  // STR_WARN_A_ADD_TITLE
+  { "Spule #%d  |  %s %s\nHat bereits %d UID(s)",
+    "Spool #%d  |  %s %s\nAlready has %d UID(s)"                          },  // STR_WARN_A_ADD_INFO
+  { "Spule #%d\nHat bereits %d UID(s)",
+    "Spool #%d\nAlready has %d UID(s)"                                    },  // STR_WARN_A_ADD_SHORT
+  { "UID hinzufügen",               "Add UID"                            },  // STR_BTN_ADD_UID
+  { "Diese Spule hat %d UIDs.\nNur das aufliegende Tag entfernen\noder die ganze Verknüpfung lösen?",
+    "This spool has %d UIDs.\nRemove only the tag on the scale\nor the whole binding?" },  // STR_UNLINK_MULTI_MSG
+  { "Nur dieses Tag",                "Only this tag"                      },  // STR_BTN_UNLINK_ONE
+  { "Alle lösen",                   "Unlink all"                         },  // STR_BTN_UNLINK_ALL
   { "Ohne Nachfrage verknüpfen",     "Link without asking"                },  // STR_FLM_AUTOLINK
   { "wenn die Spule schon aufliegt", "when the spool is already on"       },  // STR_FLM_AUTOLINK_SUB
   { " (Filament)",                   " (filament)"                        },  // STR_TARE_FROM_FILAMENT

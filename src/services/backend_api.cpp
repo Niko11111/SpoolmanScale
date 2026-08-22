@@ -12,6 +12,7 @@
 #include "services/list_limits.h"
 #include "services/spoolman_api.h"
 #include "services/tag_uid.h"
+#include "services/tag_uid.h"
 #include "services/user_options.h"
 
 // A missing backend path must show up in the log instead of looking like a
@@ -170,6 +171,12 @@ bool backendHasCardUidsField() {
   return s_present;
 }
 
+int backendPatchCardUids(const char* base_url, int spool_id, const char* list,
+                         uint32_t timeout_ms) {
+  if (backendMode() != BACKEND_SPOOLMAN) return notSupported("PatchCardUids");
+  return spoolmanPatchCardUids(base_url, spool_id, list, timeout_ms);
+}
+
 int backendGetLocationsJson(const char* base_url, JsonDocument& doc,
                             uint32_t timeout_ms, DeserializationError* out_err) {
   switch (backendMode()) {
@@ -311,12 +318,8 @@ int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
       // NFC tag uid. Separators are stripped on the way: the Spoolman mode
       // endpoint validates plain hex and answers 422 otherwise.
       char hex[40];
-      size_t o = 0;
-      for (const char* p = uuid; p && *p && o + 1 < sizeof(hex); p++) {
-        if (isxdigit((unsigned char)*p)) hex[o++] = toupper((unsigned char)*p);
-      }
-      hex[o] = '\0';
-      const bool is_tray = (o == 32);
+      tagUidNormalize(uuid, hex, sizeof(hex));
+      const bool is_tray = (strlen(hex) == 32);
       return bbLinkTag(backendBaseUrl(), bambuddyApiKey(), spool_id,
                        is_tray ? nullptr : hex, is_tray ? hex : nullptr, timeout_ms);
     }

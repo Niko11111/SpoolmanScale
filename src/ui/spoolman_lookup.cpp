@@ -69,6 +69,45 @@ static bool spoolMatchesTag(JsonObjectConst spool, const char* uid) {
   return false;
 }
 
+// Copies one extra field into a buffer, quote stripped and trimmed. A value
+// that does not fit leaves the buffer empty rather than shortened: everything
+// downstream reads these as "what the spool is bound by", and a truncated list
+// would make an unlink drop whatever fell off the end.
+static void captureExtraField(JsonObjectConst extra, const char* key,
+                              char* out, size_t out_len, const char* what) {
+  out[0] = '\0';
+  if (extra.isNull() || !extra.containsKey(key)) return;
+
+  String v = extra[key].as<String>();
+  v.replace("\"", "");
+  v.trim();
+
+  if (v.length() >= out_len) {
+    logSDf("%s: value of spool %d too long (%d chars), ignored",
+           what, sm_id, (int)v.length());
+    return;
+  }
+
+  strncpy(out, v.c_str(), out_len - 1);
+  out[out_len - 1] = '\0';
+}
+
+// Keeps both stores that can bind a spool to a tag within reach of the unlink,
+// which runs from an LVGL callback where an HTTP request is out of the
+// question. The unlink popup needs the UID count before it opens, because that
+// decides whether it gets a third button, and the unlink itself needs to know
+// which of the two fields actually holds something so it can leave the other
+// one alone.
+//
+// Filled on every lookup rather than only with the write switch on, so that
+// flipping the switch while a spool sits on the scale does not land on an
+// empty buffer.
+static void captureBindings(JsonObjectConst spool) {
+  JsonObjectConst extra = spool["extra"];
+  captureExtraField(extra, CARD_UIDS_FIELD, sm_card_uids, sizeof(sm_card_uids), "card_uids");
+  captureExtraField(extra, "tag",           sm_tag,       sizeof(sm_tag),       "tag");
+}
+
 // Reduces an ISO timestamp to the day it falls on, in local time.
 //
 // FilaMan answers in UTC with a trailing Z. Simply cutting after ten
@@ -295,6 +334,8 @@ void querySpoolmanById(int spool_id) {
     strncpy(sm_last_dried, "-", sizeof(sm_last_dried)-1);
   }
 
+  captureBindings(spool);
+
   // Material, vendor, color — only for NTAG (Bambu has it from tag itself)
   String sm_material = spool["filament"]["material"] | String("");
   sm_material.trim();
@@ -407,6 +448,8 @@ void querySpoolman(const char* tray_uuid) {
   sm_location_name[0] = '\0'; sm_location_id = 0;
   sm_found = false;
   sm_id = 0;
+  sm_card_uids[0] = '\0';
+  sm_tag[0] = '\0';
   sm_spool_weight = 0;
   sm_remaining = 0;
   sm_total = 1000;
@@ -600,6 +643,8 @@ void querySpoolman(const char* tray_uuid) {
       int mc = backendPatchSpoolTag(cfg_spoolman_base, sm_id, tag_val.c_str(), 4000);
       logSDf("FilaMan: migrated tag of spool %d to rfid_uid, HTTP %d", sm_id, mc);
     }
+
+    captureBindings(spool);
 
     sm_filament_id = spool["filament"]["id"] | 0;
     sm_vendor_id   = spool["filament"]["vendor"]["id"] | 0;

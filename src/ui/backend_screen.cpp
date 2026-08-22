@@ -4,6 +4,10 @@
 #include <lvgl.h>
 #include <cstring>
 
+// Ahead of lang.h: bambuddy_api.h pulls in ArduinoJson, whose template
+// parameter T collides with the T() macro.
+#include "services/bambuddy_api.h"
+
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
 #include "hardware/sd_logger.h"
@@ -74,11 +78,14 @@ static lv_obj_t* addNavRow(lv_obj_t *parent, int y, const char *title,
 // first "set" ten pixels from the *other* label and read as belonging to it.
 // Stacking is the strongest grouping there is, and it matches the address row
 // right above - same label size and colour, same offset to the value.
-// label_b may be null, which BamBuddy uses - it has a single key where
-// FilaMan needs a pair.
+// label_b may be null, which BamBuddy used before it had something to put
+// there. value_b replaces the set/missing wording in the second column: not
+// every thing worth showing next to a credential is a credential, and the
+// active database is the example - it is not set or missing, it has a name.
 static void addCredentialsRow(lv_obj_t *parent, int y,
                               const char *label_a, bool present_a,
-                              const char *label_b, bool present_b) {
+                              const char *label_b, bool present_b,
+                              const char *value_b = nullptr) {
   const char *labels[2]  = { label_a, label_b };
   const bool  present[2] = { present_a, present_b };
   const int   columns    = label_b ? 2 : 1;
@@ -96,14 +103,19 @@ static void addCredentialsRow(lv_obj_t *parent, int y,
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
     lv_obj_set_pos(l, x, y);
 
-    char val_buf[24];
-    strncpy(val_buf, present[i] ? T(STR_BACKEND_SET) : T(STR_BACKEND_MISSING),
+    const bool free_value = (i == 1 && value_b);
+    char val_buf[28];
+    strncpy(val_buf, free_value ? value_b
+                                : (present[i] ? T(STR_BACKEND_SET) : T(STR_BACKEND_MISSING)),
             sizeof(val_buf) - 1);
     val_buf[sizeof(val_buf) - 1] = '\0';
 
     lv_obj_t *v = lv_label_create(parent);
     lv_label_set_text(v, val_buf);
-    lv_obj_set_style_text_color(v, lv_color_hex(present[i] ? 0x40c080 : 0xf0b838), 0);
+    // A free value is a statement of fact, not a warning - it gets the calm
+    // colour rather than the green/amber of a credential.
+    lv_obj_set_style_text_color(v, free_value ? lv_color_hex(0xc8d8f0)
+                                : lv_color_hex(present[i] ? 0x40c080 : 0xf0b838), 0);
     lv_obj_set_style_text_font(v, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_pos(v, x, y + 22);
   }
@@ -364,9 +376,17 @@ void buildBackendScreen() {
   // browser for the same reason as FilaMan's, a 46 character key cannot be
   // typed on a numpad.
   if (backendIsBamBuddy()) {
+    // Second column: which database the answers actually come from. It sits
+    // next to the key because both are "what this connection is", and it is
+    // the one thing about BamBuddy that can change without the scale being
+    // touched. Product names, so not translated.
+    char inv_buf[24];
+    strncpy(inv_buf, (bbInventoryMode() == BB_INV_SPOOLMAN) ? "Spoolman" : "BamBuddy",
+            sizeof(inv_buf) - 1);
+    inv_buf[sizeof(inv_buf) - 1] = '\0';
     addCredentialsRow(scr_backend, 190,
                       T(STR_BACKEND_APIKEY), bambuddyApiKey()[0] != '\0',
-                      nullptr, false);
+                      T(STR_BACKEND_INVENTORY), false, inv_buf);
 
     // Same pair as in FilaMan mode: the backend's own settings on the left,
     // the browser on the right.

@@ -7,3 +7,4 @@ bool g_flm_autolink = false;
 bool g_flm_tagless = true;
 bool g_wake_on_load = true;
 uint8_t g_bb_dried_target = BB_DRIED_NOTE;
+bool g_card_uids_write = false;

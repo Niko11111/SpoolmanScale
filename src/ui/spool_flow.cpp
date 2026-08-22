@@ -15,6 +15,7 @@
 #include "services/list_limits.h"
 #include "services/spoolman_actions.h"
 #include "services/tag_uid.h"
+#include "services/user_options.h"
 #include "services/backend_api.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/spoolman_lookup.h"
@@ -51,6 +52,11 @@ struct UnlinkedSpool {
   float remaining;     // remaining_weight
   float total;         // filament.weight
   char  existing_tag[48]; // extra.tag falls gesetzt (fuer Ueberschreib-Check)
+  // SpoolLink's UID list, quote stripped, empty when the spool has none.
+  // Only ever non-empty while g_card_uids_write is on, because that is the
+  // only case in which such a spool reaches the list at all. Overlong lists
+  // are stored as empty rather than shortened, see the fetch below.
+  char  card_uids[80];
   int   filament_id;   // filament.id (for copy flow)
   float spool_weight;  // spool_weight (for copy flow)
 };
@@ -202,6 +208,29 @@ static bool spoolHasAnyTag(JsonObjectConst spool) {
   return false;
 }
 
+// Does this spool keep its UIDs in card_uids? Narrower than spoolHasAnyTag()
+// on purpose: it is the one case in which an already bound spool may still be
+// offered, because appending a second UID is the whole point of the switch.
+static bool spoolHasCardUids(JsonObjectConst spool) {
+  JsonObjectConst extra = spool["extra"];
+  if (extra.isNull() || !extra.containsKey(CARD_UIDS_FIELD)) return false;
+  String v = extra[CARD_UIDS_FIELD].as<String>();
+  v.replace("\"", "");
+  v.trim();
+  return v.length() > 0;
+}
+
+// The target spool's UID list, or nullptr when it has none or is not in the
+// list at all. Both fetch paths fill the entry, so this is the single place
+// the write decision reads from.
+static const char* linkTargetCardUids(int spool_id) {
+  for (int i = 0; i < link_spool_count; i++) {
+    if (link_spools[i].id == spool_id)
+      return link_spools[i].card_uids[0] ? link_spools[i].card_uids : nullptr;
+  }
+  return nullptr;
+}
+
 void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool archived_only) {
   // Free any previous allocation
   linkSpoolsFree();
@@ -252,8 +281,13 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
 
     // Skip already-linked spools — only in normal link flow.
     // In copy-archived flow, archived spools are templates (typically still tagged) -> don't skip.
+    // With the write switch on, a spool whose UIDs live in card_uids stays in
+    // the list: it is the only way to add the second tag from the scale, and
+    // WarnPopupA catches the selection before anything is written. Switched
+    // off this is exactly the condition it has always been.
     const bool linked = spoolHasAnyTag(spool);
-    if (!archived_only && linked) { skipped_tag++; count_linked++; continue; }
+    const bool appendable = g_card_uids_write && spoolHasCardUids(spool);
+    if (!archived_only && linked && !appendable) { skipped_tag++; count_linked++; continue; }
 
     String vname = "";
     if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
@@ -336,7 +370,8 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
       if (sp_archived) continue;
     }
 
-    if (!archived_only && spoolHasAnyTag(spool)) continue;
+    if (!archived_only && spoolHasAnyTag(spool) &&
+        !(g_card_uids_write && spoolHasCardUids(spool))) continue;
 
     String vname = "";
     if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
@@ -383,6 +418,22 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     }
     strncpy(s.existing_tag, existing_tag.c_str(), sizeof(s.existing_tag)-1);
     s.existing_tag[sizeof(s.existing_tag)-1] = '\0';
+
+    // Never keep a shortened list: appending to a truncated one would drop
+    // the entries that fell off the end. Empty means "unknown", which sends
+    // the write back to extra.tag instead.
+    s.card_uids[0] = '\0';
+    if (spool.containsKey("extra") && spool["extra"].containsKey(CARD_UIDS_FIELD)) {
+      String cu = spool["extra"][CARD_UIDS_FIELD].as<String>();
+      cu.replace("\"",""); cu.trim();
+      if (cu.length() < sizeof(s.card_uids)) {
+        strncpy(s.card_uids, cu.c_str(), sizeof(s.card_uids)-1);
+        s.card_uids[sizeof(s.card_uids)-1] = '\0';
+      } else {
+        logSDf("link fetch: card_uids of spool %d too long (%d), ignored",
+               s.id, (int)cu.length());
+      }
+    }
 
     String fname = spool["filament"]["name"] | String("?");
     fname.trim();
@@ -481,7 +532,22 @@ void doLinkPatch(int spool_id, bool is_bambu) {
     return;
   }
 
-  patchSpoolTag(spool_id, link_uuid);
+  // The target's list decides the field. Null for every spool that has none,
+  // which is every spool reachable here while the switch is off.
+  if (!patchSpoolTag(spool_id, link_uuid, linkTargetCardUids(spool_id))) {
+    // Refused rather than truncated. Saying nothing here would look like a
+    // successful link right up to the next scan.
+    logSDf("LINK ABORT: card_uids of spool %d full", spool_id);
+    if (lbl_status) {
+      char buf[48];
+      strncpy(buf, T(STR_CU_FULL), sizeof(buf) - 1);
+      buf[sizeof(buf) - 1] = '\0';
+      lv_label_set_text(lbl_status, buf);
+      lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
+    }
+    closeLinkOverlays();
+    return;
+  }
 
   closeLinkOverlays();
 
@@ -520,7 +586,8 @@ static lv_obj_t* buildLinkOverlay() {
 // ============================================================
 //  LINK FLOW: WARNING POPUP A (spool already linked)
 // ============================================================
-void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu, const char* link_uuid) {
+void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
+                    const char* link_uuid, bool add_mode) {
   logSDf("SHOW: WarnPopupA spool=%d", spool_id);
   if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
 
@@ -546,7 +613,7 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu, const
 
   // Warning icon + title
   lv_obj_t *lbl_title = lv_label_create(box);
-  lv_label_set_text(lbl_title, T(STR_WARN_A_TITLE));
+  lv_label_set_text(lbl_title, T(add_mode ? STR_WARN_A_ADD_TITLE : STR_WARN_A_TITLE));
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0xf0b838), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_title, LV_TEXT_ALIGN_CENTER, 0);
@@ -576,7 +643,18 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu, const
     }
   }
   char info_buf[96];
-  if (sm_mat[0] || sm_name[0]) {
+  if (add_mode) {
+    // The UID list is too long to show and too dull to read. The count is what
+    // the user needs in order to recognise the spool as one that is already
+    // bound, and nothing is being replaced here anyway.
+    const int n = cardUidsCount(existing_tag);
+    if (sm_mat[0] || sm_name[0]) {
+      snprintf(info_buf, sizeof(info_buf), T(STR_WARN_A_ADD_INFO),
+        spool_id, sm_mat, sm_name, n);
+    } else {
+      snprintf(info_buf, sizeof(info_buf), T(STR_WARN_A_ADD_SHORT), spool_id, n);
+    }
+  } else if (sm_mat[0] || sm_name[0]) {
     snprintf(info_buf, sizeof(info_buf), T(STR_WARN_A_SPOOL_INFO),
       spool_id, sm_mat, sm_name, tag_short);
   } else {
@@ -602,8 +680,10 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu, const
   lv_obj_t *btn_force = lv_btn_create(box);
   lv_obj_set_size(btn_force, 420, 44);
   lv_obj_set_pos(btn_force, 10, 114);
-  lv_obj_set_style_bg_color(btn_force, lv_color_hex(0x3a2800), 0);
-  lv_obj_set_style_bg_color(btn_force, lv_color_hex(0x5a4000), LV_STATE_PRESSED);
+  // Adding is not the destructive act overwriting is, so it gets the calm
+  // green of a normal confirmation rather than the warning amber.
+  lv_obj_set_style_bg_color(btn_force, lv_color_hex(add_mode ? 0x1a3020 : 0x3a2800), 0);
+  lv_obj_set_style_bg_color(btn_force, lv_color_hex(add_mode ? 0x2a5030 : 0x5a4000), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_force, 8, 0);
   lv_obj_set_style_shadow_width(btn_force, 0, 0);
   lv_obj_set_style_border_width(btn_force, 0, 0);
@@ -613,8 +693,8 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu, const
     doLinkPatch(warn_a_spool_id, warn_a_is_bambu);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_force = lv_label_create(btn_force);
-  lv_label_set_text(lbl_force, T(STR_BTN_OVERWRITE));
-  lv_obj_set_style_text_color(lbl_force, lv_color_hex(0xf0b838), 0);
+  lv_label_set_text(lbl_force, T(add_mode ? STR_BTN_ADD_UID : STR_BTN_OVERWRITE));
+  lv_obj_set_style_text_color(lbl_force, lv_color_hex(add_mode ? 0x40c080 : 0xf0b838), 0);
   lv_obj_set_style_text_font(lbl_force, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_force);
 
@@ -816,12 +896,12 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     existing.replace("\"",""); existing.trim();
   }
   // A spool managed by SpoolLink has an empty tag field but is bound all the
-  // same. Without this the warning below would stay silent and the spool would
-  // quietly end up carrying two independent bindings.
-  if (existing.length() == 0 && doc.containsKey("extra") &&
-      doc["extra"].containsKey(CARD_UIDS_FIELD)) {
-    existing = doc["extra"][CARD_UIDS_FIELD].as<String>();
-    existing.replace("\"",""); existing.trim();
+  // same. Kept apart from the tag field, because which of the two is set
+  // decides whether the warning offers to overwrite or to add.
+  String existing_cu = "";
+  if (doc.containsKey("extra") && doc["extra"].containsKey(CARD_UIDS_FIELD)) {
+    existing_cu = doc["extra"][CARD_UIDS_FIELD].as<String>();
+    existing_cu.replace("\"",""); existing_cu.trim();
   }
 
   bool found_in_list = false;
@@ -838,6 +918,12 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     s.id = entered_id;
     strncpy(s.existing_tag, existing.c_str(), sizeof(s.existing_tag)-1);
     s.existing_tag[sizeof(s.existing_tag)-1] = '\0';
+    // Same rule as the list fetch: too long is stored as empty, never cut.
+    s.card_uids[0] = '\0';
+    if (existing_cu.length() > 0 && existing_cu.length() < sizeof(s.card_uids)) {
+      strncpy(s.card_uids, existing_cu.c_str(), sizeof(s.card_uids)-1);
+      s.card_uids[sizeof(s.card_uids)-1] = '\0';
+    }
     String mat = doc["filament"]["material"] | String("");
     mat.trim(); strncpy(s.material, mat.c_str(), sizeof(s.material)-1);
     s.material[sizeof(s.material)-1] = '\0';
@@ -855,8 +941,16 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     link_spool_count++;
   }
 
+  // The tag field wins the warning: overwriting it is the destructive case and
+  // has to be asked about first. Only a spool bound purely through card_uids
+  // gets the friendlier "add one" variant, and only with the switch on -
+  // switched off there is nothing to add to and the old warning is right.
   if (existing.length() > 0) {
     showWarnPopupA(entered_id, existing.c_str(), is_bambu, "");
+    return;
+  }
+  if (existing_cu.length() > 0) {
+    showWarnPopupA(entered_id, existing_cu.c_str(), is_bambu, "", g_card_uids_write);
     return;
   }
   if (is_bambu && g_tag.material[0]) {
@@ -1435,6 +1529,13 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
               snprintf(copy_confirm_name, sizeof(copy_confirm_name), "%s %s (%s)", cs.material, cs.name, cs.vendor);
           }
           copy_confirm_pending = true;
+        } else if (g_card_uids_write && link_spools[cidx].card_uids[0]) {
+          // Only these spools get a second dialog, and only because they are
+          // the ones the list would have hidden before the switch existed.
+          // The confirmation behind us says which spool, this one says that it
+          // is already bound and that nothing will be replaced.
+          showWarnPopupA(link_spools[cidx].id, link_spools[cidx].card_uids,
+                         link_flow_is_bambu, "", true);
         } else {
           doLinkPatch(link_spools[cidx].id, link_flow_is_bambu);
         }

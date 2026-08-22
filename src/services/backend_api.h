@@ -79,6 +79,11 @@ int  backendFindSpoolByCardUid(const char* base_url, const char* uid, JsonDocume
 // call, so never call it from an LVGL event callback.
 bool backendHasCardUidsField();
 
+// Writes a prepared card_uids list. Spoolman only, for the same reason as
+// backendFindSpoolByCardUid(): nothing else has the field.
+int  backendPatchCardUids(const char* base_url, int spool_id, const char* list,
+       uint32_t timeout_ms = 5000);
+
 // Which tare scopes the active backend can really store. Offering one it
 // cannot write gives a button that answers BACKEND_NOT_SUPPORTED, or worse
 // reports success and changes nothing - BamBuddy's Spoolman proxy accepts

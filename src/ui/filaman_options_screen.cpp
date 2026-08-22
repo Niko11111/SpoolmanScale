@@ -53,7 +53,7 @@ void buildFilaManOptionsScreen() {
     char buf_s[40]; strncpy(buf_s, T(STR_FLM_AUTOLINK_SUB), sizeof(buf_s)-1);
     buf_s[sizeof(buf_s)-1] = '\0';
     lv_obj_t *help = nullptr;
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_OK, buf_t, buf_s, g_flm_autolink, &help);
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_CHARGE, buf_t, buf_s, g_flm_autolink, &help);
     if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
                                   INFO_POPUP_ARG(STR_FLM_AUTOLINK, STR_FLM_AUTOLINK_INFO));
 
@@ -85,7 +85,7 @@ void buildFilaManOptionsScreen() {
     char buf_s[40]; strncpy(buf_s, T(STR_FLM_TAGLESS_SUB), sizeof(buf_s)-1);
     buf_s[sizeof(buf_s)-1] = '\0';
     lv_obj_t *help = nullptr;
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_OK, buf_t, buf_s, g_flm_tagless, &help);
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_DRIVE, buf_t, buf_s, g_flm_tagless, &help);
     if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
                                   INFO_POPUP_ARG(STR_FLM_TAGLESS, STR_FLM_TAGLESS_INFO));
 

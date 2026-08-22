@@ -11,7 +11,11 @@ void closeLinkEntryPopup();
 void showIdInputPopup(bool is_bambu, bool is_copy = false);
 void closeIdInputPopup();
 void linkIdLookupAndPatch(int entered_id, bool is_bambu);
-void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu, const char* link_uuid);
+// add_mode turns the popup from "already tagged, overwrite?" into "already has
+// UIDs, add one?". In that mode existing_tag carries the card_uids list, which
+// is shown as a count rather than verbatim.
+void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
+                    const char* link_uuid, bool add_mode = false);
 void showWarnPopupB(int spool_id, bool is_bambu);
 void doLinkPatch(int spool_id, bool is_bambu);
 void showVendorList();

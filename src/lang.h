@@ -376,6 +376,7 @@ enum StringID {
   STR_BB_DRIED_INFO,
   STR_BB_INV_OWN,
   STR_BB_INV_SPOOLMAN,
+  STR_BACKEND_INVENTORY,
 
   // Factory Reset
   STR_BTN_FACTORY_RESET,
@@ -533,6 +534,18 @@ enum StringID {
 
   // FilaMan options sub screen
   STR_BTN_MORE_OPTIONS,
+  // Snapmaker U1 / SpoolLink: writing to Spoolman's card_uids list
+  STR_CU_WRITE,
+  STR_CU_WRITE_SUB,
+  STR_CU_WRITE_INFO,
+  STR_CU_FULL,
+  STR_WARN_A_ADD_TITLE,
+  STR_WARN_A_ADD_INFO,
+  STR_WARN_A_ADD_SHORT,
+  STR_BTN_ADD_UID,
+  STR_UNLINK_MULTI_MSG,
+  STR_BTN_UNLINK_ONE,
+  STR_BTN_UNLINK_ALL,
   STR_FLM_AUTOLINK,
   STR_FLM_AUTOLINK_SUB,
 

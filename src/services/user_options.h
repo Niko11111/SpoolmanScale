@@ -50,3 +50,14 @@ enum BbDriedTarget : uint8_t {
   BB_DRIED_COUNT    = 3
 };
 extern uint8_t g_bb_dried_target;
+
+// Whether the scale may write to Spoolman's card_uids, the UID list SpoolLink
+// keeps for the Snapmaker U1. Off by default, and off it changes nothing at
+// all: linking, copying and unlinking behave exactly as they did before.
+//
+// Reading that field needs no switch and never had one - it cannot damage
+// anything, and the field's presence is signal enough. Writing changes the
+// user's database, so it stays their decision. It also opens the link list to
+// spools that already carry UIDs, which is the only way to add a second tag
+// from the scale.
+extern bool g_card_uids_write;

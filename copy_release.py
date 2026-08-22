@@ -72,7 +72,7 @@ def copy_release_files(source, target, env):
                 shutil.rmtree(path)
             else:
                 os.remove(path)
-        shutil.copytree(src_dir, source_dir, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(src_dir, source_dir, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"))
         print("copy_release: -> source/")
 
     # Build-Scripts + Config

@@ -82,7 +82,7 @@ void buildBamBuddyOptionsScreen() {
     buf_s[sizeof(buf_s) - 1] = '\0';
 
     lv_obj_t *help = nullptr;
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_WARNING, buf_t, buf_s, false, &help);
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_TINT, buf_t, buf_s, false, &help);
     if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
                                   INFO_POPUP_ARG(STR_BB_DRIED_TITLE, STR_BB_DRIED_INFO));
     lv_obj_add_event_cb(btn, [](lv_event_t *e){

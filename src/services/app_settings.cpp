@@ -54,6 +54,7 @@ void loadPrefs() {
   g_wake_on_load = prefsGetBool("wake_load", true);
   g_ip_bar_mode = prefsGetUChar("ip_bar_mode", IP_BAR_OFF);
   g_flm_autolink = prefsGetBool("flm_autolink", false);
+  g_card_uids_write = prefsGetBool("cu_write", false);
   g_flm_tagless  = prefsGetBool("flm_tagless", true);
   g_bb_dried_target = prefsGetUChar("bb_dried", BB_DRIED_NOTE);
   if (g_bb_dried_target >= BB_DRIED_COUNT) g_bb_dried_target = BB_DRIED_NOTE;

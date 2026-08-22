@@ -1,5 +1,7 @@
 #pragma once
 
+#include "services/tag_uid.h"   // CARD_UIDS_MAX
+
 #include <Arduino.h>
 #include <Wire.h>
 #include <lvgl.h>
@@ -99,6 +101,15 @@ enum TareSource : uint8_t {
 extern float sm_spool_weight;
 extern uint8_t sm_tare_source;
 extern char sm_last_dried[32];
+// The spool's card_uids list, quote stripped, empty when it has none. Kept so
+// the unlink popup can size itself without an HTTP request - see
+// captureCardUids() in spoolman_lookup.cpp. 192 characters hold twelve 7 byte
+// UIDs; anything longer is dropped rather than shortened.
+extern char sm_card_uids[CARD_UIDS_MAX];
+// The spool's extra.tag, quote stripped, empty when it has none. Counterpart
+// to sm_card_uids: together they say which of the two stores actually binds
+// this spool, so an unlink can leave the other one alone.
+extern char sm_tag[48];
 extern char sm_article_nr[32];
 extern char sm_filament_name[32];
 extern char sm_material_global[32];
