@@ -10,6 +10,7 @@
 #include "services/filaman_api.h"
 #include "services/list_limits.h"
 #include "services/spoolman_api.h"
+#include "services/user_options.h"
 
 // A missing backend path must show up in the log instead of looking like a
 // silent failure, but the periodic health check would repeat the same line
@@ -28,6 +29,11 @@ static int notSupported(const char* fn) {
   }
   logSDf("Backend: %s has no %s implementation yet", fn, backendName());
   return BACKEND_NOT_SUPPORTED;
+}
+
+void backendRefreshMode() {
+  if (backendMode() != BACKEND_BAMBUDDY) return;
+  bbDetectInventoryMode(backendBaseUrl(), bambuddyApiKey(), 4000);
 }
 
 void backendAfterConnect() {
@@ -188,6 +194,19 @@ bool backendGetLastWeighedAt(const char* base_url, int spool_id,
   return false;
 }
 
+bool backendCanTareSpool() {
+  if (backendMode() != BACKEND_BAMBUDDY) return true;
+  // Only BamBuddy's own database keeps core_weight on the spool. Behind the
+  // Spoolman proxy the field is accepted and discarded.
+  return bbInventoryMode() == BB_INV_LOCAL;
+}
+
+bool backendCanTareFilamentOrVendor() {
+  // BamBuddy has no filament type and no vendor as objects - brand and
+  // material are plain strings on the spool, so there is nothing to write to.
+  return backendMode() != BACKEND_BAMBUDDY;
+}
+
 // ============================================================
 //  CREATING
 // ============================================================
@@ -230,6 +249,12 @@ int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
       // Both tag types go into the native rfid_uid. An empty uuid unlinks.
       return filamanPatchRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, uuid, timeout_ms);
     case BACKEND_BAMBUDDY: {
+      // An empty uuid means unlink, and that is a different request: the
+      // link endpoint can only write. Without this the call fell through to
+      // bbLinkTag with nothing to link and failed with -1.
+      if (!uuid || !uuid[0]) {
+        return bbUnlinkTag(backendBaseUrl(), bambuddyApiKey(), spool_id, timeout_ms);
+      }
       // A 32 character identifier is a Bambu tray uuid, anything shorter an
       // NFC tag uid. Separators are stripped on the way: the Spoolman mode
       // endpoint validates plain hex and answers 422 otherwise.
@@ -391,9 +416,23 @@ int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* i
       return filamanPatchCustomField(backendBaseUrl(), filamanApiKey(), spool_id,
                                      "last_dried", iso_datetime, timeout_ms);
     case BACKEND_BAMBUDDY:
-      // BamBuddy has no field for this at all, upstream issues #2863 and #1754.
-      // Phase 1 picks one of three routes from a setting.
-      return notSupported("PatchSpoolLastDried");
+      // BamBuddy has no field for this at all - upstream issues #2863 and
+      // #1754 are open. The user picks where it goes instead.
+      switch (g_bb_dried_target) {
+        case BB_DRIED_SPOOLMAN:
+          // Past BamBuddy, straight into the Spoolman database behind it.
+          // Only possible in that mode, and only once the url is known.
+          if (bbInventoryMode() != BB_INV_SPOOLMAN || !bbSpoolmanUrl()[0]) {
+            return notSupported("PatchSpoolLastDried");
+          }
+          return spoolmanPatchSpoolLastDried(bbSpoolmanUrl(), spool_id,
+                                             iso_datetime, timeout_ms);
+        case BB_DRIED_NOTE:
+          return bbPatchDriedNote(backendBaseUrl(), bambuddyApiKey(), spool_id,
+                                  iso_datetime, timeout_ms);
+        default:
+          return notSupported("PatchSpoolLastDried");
+      }
     default:
       return spoolmanPatchSpoolLastDried(base_url, spool_id, iso_datetime, timeout_ms);
   }

@@ -6,7 +6,11 @@
 #include <string.h>
 #include <time.h>
 
+#include "app_config.h"
+#include "app/deferred_actions.h"
+#include "backend.h"
 #include "backend_api.h"
+#include "bambuddy_api.h"
 #include "hardware/sd_logger.h"
 #include "user_options.h"
 #include "ui/date_display.h"
@@ -17,9 +21,26 @@
 
 
 
-void patchSpoolmanWeight(float remaining) {
+void patchSpoolmanWeight(float remaining, bool skip_cap_check) {
   if (!wifi_ok) { Serial.println("patchSpoolmanWeight: no WiFi"); return; }
   if (!sm_found || sm_id == 0) { Serial.println("patchSpoolmanWeight: no spool"); return; }
+
+  // BamBuddy's own inventory stores what was consumed and derives the rest
+  // from the label weight, so it cannot represent a spool holding more than
+  // the label says - the value would read as full again on the next scan.
+  // Ask rather than let that happen silently. Behind Spoolman the remaining
+  // weight is stored directly and there is no ceiling.
+  // The tolerance keeps rounding noise on a genuinely full spool from asking.
+  if (!skip_cap_check && backendIsBamBuddy() && bbInventoryMode() == BB_INV_LOCAL &&
+      sm_total > 0.0f && remaining > sm_total + BB_CAP_TOLERANCE_G) {
+    bb_cap_measured_g = remaining;
+    bb_cap_label_g    = sm_total;
+    show_bb_cap_pending = true;      // the popup is built from appLoop()
+    logSDf("BamBuddy: %.0fg measured against a %.0fg label, asking first",
+           remaining, sm_total);
+    return;
+  }
+
   char today[12] = "";
   if (last_used_mode == 1) {
     time_t now = time(nullptr);

@@ -46,6 +46,8 @@ void hideAllOverlays() {
   if (scr_lastused)    lv_obj_add_flag(scr_lastused,    LV_OBJ_FLAG_HIDDEN);
   if (scr_backend)     lv_obj_add_flag(scr_backend,     LV_OBJ_FLAG_HIDDEN);
   if (scr_filaman_options) lv_obj_add_flag(scr_filaman_options, LV_OBJ_FLAG_HIDDEN);
+  if (scr_bambuddy_options) lv_obj_add_flag(scr_bambuddy_options, LV_OBJ_FLAG_HIDDEN);
+  if (scr_bambuddy_dried) lv_obj_add_flag(scr_bambuddy_dried, LV_OBJ_FLAG_HIDDEN);
   if (scr_spoolman_fail) lv_obj_add_flag(scr_spoolman_fail, LV_OBJ_FLAG_HIDDEN);
   if (scr_wifi)        lv_obj_add_flag(scr_wifi,        LV_OBJ_FLAG_HIDDEN);
   if (scr_spoolman)    lv_obj_add_flag(scr_spoolman,    LV_OBJ_FLAG_HIDDEN);

@@ -10,7 +10,10 @@
 // Longest German explanation is around 180 bytes, and an umlaut costs two of
 // them. 256 leaves room to grow a text without silently truncating it mid
 // character, which would render as a broken glyph.
-#define INFO_TEXT_BUF   256
+// Was 256 and silently truncated the first text that outgrew it. The box
+// holds about seven lines at font 14, which is roughly 340 characters - the
+// buffer is no longer the narrower of the two limits.
+#define INFO_TEXT_BUF   352
 #define INFO_TITLE_BUF   48
 
 void showInfoPopup(int title_id, int text_id) {

@@ -229,13 +229,17 @@ void buildSpoolmanScreen() {
     // so it belongs on screen and not only in the log. The two names are the
     // ones BamBuddy uses itself under Settings > Filament Tracking. Empty for
     // the other backends, where there is nothing to choose between.
-    char inv_buf[16] = "";
+    char inv_buf[32] = "";
     if (backendIsBamBuddy()) {
-      snprintf(inv_buf, sizeof(inv_buf), "%s | ",
-               bbInventoryMode() == BB_INV_SPOOLMAN ? "Spoolman" : "built-in");
+      char inv_name[24];
+      strncpy(inv_name, T(bbInventoryMode() == BB_INV_SPOOLMAN ? STR_BB_INV_SPOOLMAN
+                                                               : STR_BB_INV_OWN),
+              sizeof(inv_name) - 1);
+      inv_name[sizeof(inv_name) - 1] = '\0';
+      snprintf(inv_buf, sizeof(inv_buf), "%s | ", inv_name);
     }
 
-    char result_buf[80];
+    char result_buf[96];
     if (spool_count < 0) {
       char conn_buf[24];
       strncpy(conn_buf, T(STR_CONNECTED), sizeof(conn_buf) - 1);

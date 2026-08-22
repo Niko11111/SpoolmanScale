@@ -26,6 +26,12 @@
 // follows. A no-op for the other two backends.
 void backendAfterConnect();
 
+// Re-asks the server which inventory it is on. Cheap enough to run with the
+// periodic health check, and necessary: switching the filament manager in
+// BamBuddy does not fail loudly on our side, it silently points every read
+// and write at the other database, where the same id is a different spool.
+void backendRefreshMode();
+
 // --- reading -------------------------------------------------
 int  backendGetSpoolJson(const char* base_url, int spool_id, JsonDocument& doc,
        uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr);
@@ -54,6 +60,13 @@ bool backendGetLastWeighedAt(const char* base_url, int spool_id,
 int  backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocument& doc,
        uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr,
        JsonDocument* filter = nullptr);
+
+// Which tare scopes the active backend can really store. Offering one it
+// cannot write gives a button that answers BACKEND_NOT_SUPPORTED, or worse
+// reports success and changes nothing - BamBuddy's Spoolman proxy accepts
+// core_weight and drops it. Asked by the tare popup before it is built.
+bool backendCanTareSpool();
+bool backendCanTareFilamentOrVendor();
 
 // --- creating ------------------------------------------------
 int  backendCreateSpool(const char* base_url, int filament_id, float initial_weight,

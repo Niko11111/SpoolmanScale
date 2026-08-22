@@ -55,6 +55,8 @@ void loadPrefs() {
   g_ip_bar_mode = prefsGetUChar("ip_bar_mode", IP_BAR_OFF);
   g_flm_autolink = prefsGetBool("flm_autolink", false);
   g_flm_tagless  = prefsGetBool("flm_tagless", true);
+  g_bb_dried_target = prefsGetUChar("bb_dried", BB_DRIED_NOTE);
+  if (g_bb_dried_target >= BB_DRIED_COUNT) g_bb_dried_target = BB_DRIED_NOTE;
   g_auto_weight = prefsGetBool("auto_weight", false);
   g_auto_loc_popup = prefsGetBool("auto_loc_popup", false);
   gh_prerelease = prefsGetBool("gh_prerelease", false);

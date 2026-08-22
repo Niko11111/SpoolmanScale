@@ -36,6 +36,7 @@
 #include "ui/filaman_options_screen.h"
 #include "ui/bag_screen.h"
 #include "ui/cal_reminder_screen.h"
+#include "ui/bambuddy_options_screen.h"
 #include "ui/confirm_popup.h"
 #include "ui/connection_screen.h"
 #include "ui/dried_action.h"
@@ -256,6 +257,12 @@ void appLoop() {
     show_factor_pending = false;
     showFactorScreen();
   }
+  // Asked before a weight lands that BamBuddy would clamp. Built here because
+  // the write path that noticed it must not create a screen.
+  if (show_bb_cap_pending) {
+    show_bb_cap_pending = false;
+    showBamBuddyCapPopup(bb_cap_measured_g, bb_cap_label_g);
+  }
   if (show_drying_reminder_pending) {
     show_drying_reminder_pending = false;
     showDryingReminderScreen();
@@ -280,6 +287,18 @@ void appLoop() {
     buildFilaManOptionsScreen();   // releases the previous instance itself
     hideAllOverlays();
     lv_obj_clear_flag(scr_filaman_options, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_bambuddy_options_pending) {
+    show_bambuddy_options_pending = false;
+    buildBamBuddyOptionsScreen();  // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_bambuddy_options, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_bambuddy_dried_pending) {
+    show_bambuddy_dried_pending = false;
+    buildBamBuddyDriedScreen();    // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_bambuddy_dried, LV_OBJ_FLAG_HIDDEN);
   }
   if (show_spoolman_pending) {
     show_spoolman_pending = false;
@@ -671,6 +690,11 @@ void appLoop() {
       bool was_reachable = sm_reachable;
       sm_reachable = (code == 200);
       if (sm_reachable != was_reachable) updateHeaderStatus();
+      // Someone can switch BamBuddy's filament manager while the scale is
+      // running. That does not fail on our side, it just starts addressing
+      // the other database - so the mode is re-asked here rather than only
+      // at boot.
+      if (sm_reachable) backendRefreshMode();
     }
   }
 

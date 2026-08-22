@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "hardware/sd_logger.h"
+#include "services/user_options.h"
 
 namespace {
 
@@ -152,10 +153,20 @@ int bbDetectInventoryMode(const char* base_url, const char* api_key,
     while (n > 0 && s_spoolman_url[n - 1] == '/') s_spoolman_url[--n] = '\0';
   }
 
-  logSDf("BamBuddy: inventory mode %s%s%s",
-         s_mode == BB_INV_SPOOLMAN ? "Spoolman" : "local",
-         s_spoolman_url[0] ? " via " : "",
-         s_spoolman_url[0] ? s_spoolman_url : "");
+  // Logged on the first look and on every change, not on every check - this
+  // runs with the health check now and a line every 30 s would bury the log.
+  // A change is worth a line though: it means the scale is writing somewhere
+  // else from here on.
+  static bool  seen = false;
+  static BbInventoryMode last = BB_INV_LOCAL;
+  if (!seen || last != s_mode) {
+    logSDf("BamBuddy: inventory mode %s%s%s",
+           s_mode == BB_INV_SPOOLMAN ? "Spoolman" : "local",
+           s_spoolman_url[0] ? " via " : "",
+           s_spoolman_url[0] ? s_spoolman_url : "");
+    seen = true;
+    last = s_mode;
+  }
   return 200;
 }
 
@@ -190,15 +201,24 @@ const char* bbDeviceId() {
 //  names as the built in database, so one mapper serves both.
 // ============================================================
 
-// Pulls a "[dried:YYYY-MM-DD]" marker out of the note field. BamBuddy has no
-// column for a drying date, so the marker is where the scale keeps it. Read
-// unconditionally: a marker that is there is worth showing no matter which
-// write route the user picked.
+// Pulls a "[last_dried:YYYY-MM-DD]" marker out of the note field. BamBuddy
+// has no column for a drying date, so the marker is where the scale keeps it.
+// Read unconditionally: a marker that is there is worth showing no matter
+// which write route the user picked.
+//
+// "[dried:...]" is the spelling the first builds wrote and is still accepted.
+// Nothing migrates it on its own; the next drying entry rewrites it, which is
+// enough for a marker that only matters while it is current.
 static bool driedFromNote(const char* note, char* out, size_t out_size) {
   if (!note || !out || out_size < 11) return false;
-  const char* p = strstr(note, "[dried:");
-  if (!p) return false;
-  p += 7;
+  const char* p = strstr(note, "[last_dried:");
+  if (p) {
+    p += 12;
+  } else {
+    p = strstr(note, "[dried:");
+    if (!p) return false;
+    p += 7;
+  }
   const char* end = strchr(p, ']');
   if (!end || (size_t)(end - p) != 10) return false;   // YYYY-MM-DD
   memcpy(out, p, 10);
@@ -244,6 +264,12 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
 
   char dried[12];
   if (driedFromNote(note, dried, sizeof(dried))) extra["last_dried"] = dried;
+
+  // Only the built-in inventory keeps this; behind the Spoolman proxy it is
+  // always null. Carried along in the document so the display needs no second
+  // request - unlike FilaMan, where the date has to be dug out of an event log.
+  const char* weighed = src["last_weighed_at"] | (const char*)nullptr;
+  if (weighed) extra["last_weighed"] = weighed;
 
   // BamBuddy has no filament type as an object: brand, material and colour
   // sit on the spool itself. The shape is rebuilt here because the UI reads
@@ -347,7 +373,19 @@ int bbGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
   int code = getJson(url, api_key, raw, timeout_ms, out_err, nullptr);
   if (code != 200) return code;
 
-  mapSpool(raw.as<JsonObjectConst>(), doc.to<JsonObject>());
+  JsonObject out = doc.to<JsonObject>();
+  mapSpool(raw.as<JsonObjectConst>(), out);
+
+  // With the drying date kept on the Spoolman side, one small extra request
+  // fetches it - BamBuddy's proxy hides the extra dict it lives in. Only in
+  // that mode and only when the user picked it, so the normal scan stays at
+  // two requests.
+  if (g_bb_dried_target == BB_DRIED_SPOOLMAN && s_mode == BB_INV_SPOOLMAN) {
+    char dried[32];
+    if (bbGetDriedFromSpoolman(spool_id, dried, sizeof(dried), timeout_ms)) {
+      out["extra"]["last_dried"] = dried;
+    }
+  }
   return 200;
 }
 
@@ -529,6 +567,21 @@ int bbLinkTag(const char* base_url, const char* api_key, int spool_id,
   return sendJson("PATCH", url, api_key, out, timeout_ms, nullptr);
 }
 
+int bbUnlinkTag(const char* base_url, const char* api_key, int spool_id,
+                uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
+
+  char url[192];
+  snprintf(url, sizeof(url), "%s%s/spools/%d", base_url, bbInventoryBase(), spool_id);
+
+  // Written out rather than built, because what matters here is that both
+  // keys are present and null. In Spoolman mode the proxy checks exactly
+  // that - both named and both empty - before it clears extra.tag, and it
+  // refuses the request outright if a tag field carries a value.
+  return sendJson("PATCH", url, api_key,
+                  "{\"tag_uid\":null,\"tray_uuid\":null}", timeout_ms, nullptr);
+}
+
 int bbArchiveSpool(const char* base_url, const char* api_key, int spool_id,
                    uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
@@ -566,6 +619,91 @@ int bbPatchSpoolFields(const char* base_url, const char* api_key, int spool_id,
   String out;
   serializeJson(body, out);
   return sendJson("PATCH", url, api_key, out, timeout_ms, nullptr);
+}
+
+int bbPatchDriedNote(const char* base_url, const char* api_key, int spool_id,
+                     const char* iso, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || !iso || strlen(iso) < 10) return -1;
+
+  char day[11];
+  memcpy(day, iso, 10);
+  day[10] = '\0';
+
+  // Read first. The note belongs to the user and may hold anything; only the
+  // marker may change. A failed read is not a reason to overwrite it, so this
+  // gives up rather than guessing - the same rule filamanPatchCustomField
+  // follows for FilaMan's custom fields.
+  char url[192];
+  snprintf(url, sizeof(url), "%s%s/spools/%d", base_url, bbInventoryBase(), spool_id);
+
+  JsonDocument cur;
+  int code = getJson(url, api_key, cur, timeout_ms, nullptr, nullptr);
+  if (code != 200) {
+    logSDf("BamBuddy: note not read (HTTP %d), drying date not written", code);
+    return (code < 0) ? code : -2;
+  }
+
+  const char* old_note = cur["note"] | "";
+  String note(old_note);
+
+  char marker[28];
+  snprintf(marker, sizeof(marker), "[last_dried:%s]", day);
+
+  // Either spelling is replaced, so a note written by an older build is
+  // brought up to date the first time a drying entry is made.
+  int at = note.indexOf("[last_dried:");
+  if (at < 0) at = note.indexOf("[dried:");
+  if (at >= 0) {
+    int end = note.indexOf(']', at);
+    if (end < 0) end = note.length() - 1;      // truncated marker, replace to the end
+    note = note.substring(0, at) + marker + note.substring(end + 1);
+  } else {
+    if (note.length()) note += " ";
+    note += marker;
+  }
+  note.trim();
+
+  // BamBuddy caps the note at 500 characters and would answer 422. Dropping
+  // the write is better than losing the tail of someone's note.
+  if (note.length() > 500) {
+    logSD("BamBuddy: note would exceed 500 characters, drying date not written");
+    return -2;
+  }
+
+  JsonDocument body;
+  body["note"] = note;
+  String out;
+  serializeJson(body, out);
+  return sendJson("PATCH", url, api_key, out, timeout_ms, nullptr);
+}
+
+bool bbGetDriedFromSpoolman(int spool_id, char* out_iso, size_t out_size,
+                            uint32_t timeout_ms) {
+  if (out_iso && out_size) out_iso[0] = '\0';
+  if (!out_iso || out_size < 11 || spool_id <= 0) return false;
+  if (!s_spoolman_url[0]) return false;
+
+  // Straight to Spoolman, past BamBuddy: the proxy drops the extra dict, and
+  // the id is the same on both sides because it passes Spoolman's own through.
+  char url[192];
+  snprintf(url, sizeof(url), "%s/api/v1/spool/%d", s_spoolman_url, spool_id);
+
+  // Only the one field is wanted; the rest of a Spoolman spool is ballast.
+  JsonDocument filter;
+  filter["extra"]["last_dried"] = true;
+
+  JsonDocument doc;
+  if (getJson(url, nullptr, doc, timeout_ms, nullptr, &filter) != 200) return false;
+
+  // Spoolman stores extra values JSON encoded, so the value arrives quoted.
+  String v = doc["extra"]["last_dried"].as<String>();
+  v.replace("\"", "");
+  v.trim();
+  if (v.length() < 10) return false;
+
+  strncpy(out_iso, v.c_str(), out_size - 1);
+  out_iso[out_size - 1] = '\0';
+  return true;
 }
 
 int bbCreateSpool(const char* base_url, const char* api_key,

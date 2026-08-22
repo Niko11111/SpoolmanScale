@@ -133,8 +133,28 @@ int  bbUpdateSpoolWeight(const char* base_url, const char* api_key,
 int  bbLinkTag(const char* base_url, const char* api_key, int spool_id,
        const char* tag_uid, const char* tray_uuid, uint32_t timeout_ms = 8000);
 
+// Removes the tag from a spool. Not the link endpoint in reverse: that one
+// only ever writes. Both inventory modes take an explicit null on the plain
+// PATCH instead, and BamBuddy tells "sent as null" from "not sent" - an
+// omitted field means "leave alone", so the nulls have to be in the body.
+int  bbUnlinkTag(const char* base_url, const char* api_key, int spool_id,
+       uint32_t timeout_ms = 8000);
+
 int  bbArchiveSpool(const char* base_url, const char* api_key, int spool_id,
        uint32_t timeout_ms = 5000);
+
+// Writes a "[dried:YYYY-MM-DD]" marker into the note field, the only free
+// text BamBuddy offers. Read modify write: the rest of the note has to
+// survive, so a failed read means no write at all rather than an overwrite.
+// iso may be longer than the date, only the first ten characters are used.
+int  bbPatchDriedNote(const char* base_url, const char* api_key, int spool_id,
+       const char* iso, uint32_t timeout_ms = 8000);
+
+// Reads extra.last_dried straight from the Spoolman server behind BamBuddy.
+// Needed because the proxy does not pass extra through, and possible because
+// the spool id is the same on both sides. Empty when there is none.
+bool bbGetDriedFromSpoolman(int spool_id, char* out_iso, size_t out_size,
+       uint32_t timeout_ms = 6000);
 
 // Generic PATCH on the spool for the plain fields. Pass nullptr / a negative
 // number to leave a field untouched. Note that BamBuddy treats null as

@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.7.0-beta.4"
+#define FW_VERSION  "v0.7.0-beta.11"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -37,3 +37,7 @@
 // cut off, far short of the full timeout, which otherwise ends in a failure
 // for a spool that simply has no tag on it.
 #define REMOTE_LINK_TAGLESS_MS  10000
+
+// A spool that reads a few grams over its label weight is simply full, not
+// mislabelled. Only a real difference is worth interrupting the weighing for.
+#define BB_CAP_TOLERANCE_G   2.0f

@@ -46,6 +46,8 @@ extern lv_obj_t *scr_settings;
 extern lv_obj_t *scr_wifi;
 extern lv_obj_t *scr_backend;
 extern lv_obj_t *scr_filaman_options;
+extern lv_obj_t *scr_bambuddy_options;
+extern lv_obj_t *scr_bambuddy_dried;
 extern lv_obj_t *scr_spoolman;
 extern lv_obj_t *scr_spoolman_fail;
 extern lv_obj_t *scr_welcome;

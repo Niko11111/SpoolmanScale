@@ -82,11 +82,27 @@ static void isoDayLocal(const char* iso, char* out_day, size_t out_size) {
 // consumption and stays empty without a printer integration, while every
 // weighing lands in the spool event log, including the ones this scale
 // reports. native_iso is the value from the spool object, or null.
-static void applyLastUsed(const char* native_iso, int spool_id) {
+static void applyLastUsed(const char* native_iso, const char* weighed_iso, int spool_id) {
   char iso[40] = "";
   if (native_iso && native_iso[0]) {
     strncpy(iso, native_iso, sizeof(iso) - 1);
     iso[sizeof(iso) - 1] = '\0';
+  }
+
+  // BamBuddy's built-in inventory stamps the spool itself when a weight is
+  // written, so the date arrives with the spool and costs no extra request.
+  // The rule is the same as below: authoritative in weighed mode, a fallback
+  // otherwise. Behind the Spoolman proxy the field is empty and this does
+  // nothing, which is correct - there is no weighing date there.
+  if (weighed_iso && weighed_iso[0]) {
+    if (last_used_mode == 1 || !iso[0]) {
+      strncpy(iso, weighed_iso, sizeof(iso) - 1);
+      iso[sizeof(iso) - 1] = '\0';
+    }
+  } else if (backendIsBamBuddy() && last_used_mode == 1) {
+    // Weighed mode with nothing to show beats showing a consumption date
+    // under a "last weighed" label.
+    iso[0] = '\0';
   }
 
   // In weighed mode the event log is the only correct source. In last used
@@ -313,7 +329,8 @@ void querySpoolmanById(int spool_id) {
   lv_label_set_text(lbl_detail,        strlen(sm_article_nr)    > 0 ? sm_article_nr    : "-");
   lv_label_set_text(lbl_filament_name, strlen(sm_filament_name) > 0 ? sm_filament_name : "-");
 
-  applyLastUsed(spool["last_used"] | (const char*)nullptr, sm_id);
+  applyLastUsed(spool["last_used"] | (const char*)nullptr,
+                spool["extra"]["last_weighed"] | (const char*)nullptr, sm_id);
 
   Serial.printf("querySpoolmanById OK: ID=%d %.1fg dried=%s\n", sm_id, sm_remaining, sm_last_dried);
   updateLinkButton();
@@ -630,7 +647,8 @@ void querySpoolman(const char* tray_uuid) {
     lv_label_set_text(lbl_filament_name, strlen(sm_filament_name) > 0 ? sm_filament_name : "-");
 
     // last_used is directly in the spool object (not in extra!)
-    applyLastUsed(spool["last_used"] | (const char*)nullptr, sm_id);
+    applyLastUsed(spool["last_used"] | (const char*)nullptr,
+                spool["extra"]["last_weighed"] | (const char*)nullptr, sm_id);
 
     updateLinkButton();
     return;

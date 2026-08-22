@@ -32,3 +32,21 @@ extern bool g_flm_tagless;
 // screen first to read the result is the wrong way round. Switchable for a
 // scale that shares a bench with something that knocks it.
 extern bool g_wake_on_load;
+
+// Where the drying date goes in BamBuddy mode. BamBuddy has no field for it
+// at all - upstream issues #2863 and #1754 are open and waiting for votes -
+// so the scale needs somewhere to put it, and none of the choices is obvious
+// enough to make for the user.
+//   OFF      nothing is written, the reminder stays blank
+//   SPOOLMAN straight into Spoolman's extra.last_dried, past BamBuddy but
+//            into the same database. Only when BamBuddy proxies to Spoolman;
+//            the spool id is the same on both sides.
+//   NOTE     a "[dried:YYYY-MM-DD]" marker inside the note field, which is
+//            the only free text BamBuddy offers. Works in both modes.
+enum BbDriedTarget : uint8_t {
+  BB_DRIED_OFF      = 0,
+  BB_DRIED_SPOOLMAN = 1,
+  BB_DRIED_NOTE     = 2,
+  BB_DRIED_COUNT    = 3
+};
+extern uint8_t g_bb_dried_target;

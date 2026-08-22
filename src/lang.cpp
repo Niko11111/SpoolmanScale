@@ -465,6 +465,57 @@ const char* const STRINGS[STR_COUNT][2] = {
                                                                           },  // STR_LASTUSED_DESC_FILAMAN_WEIGHED
   { "Druckverbrauch oder Wägung",
     "Print usage or weighing"                                             },  // STR_BTN_LASTUSED_MODE_SUB_FM
+  // BamBuddy keeps both dates itself: last_used is stamped when a print
+  // consumes the spool, last_weighed_at when a weight is written. Neither is
+  // ours to fill, so unlike Spoolman nothing is repurposed here.
+  { "BamBuddy",
+    "BamBuddy"                                                            },  // STR_LASTUSED_OPT_BAMBUDDY
+  { "BamBuddy trägt 'Zuletzt benutzt' selbst ein, wenn ein Druck von dieser Spule verbraucht. Solange kein Druck erfasst wurde, zeigt der Hauptscreen ersatzweise die letzte Wägung an.",
+    "BamBuddy fills 'last used' itself when a print consumes this spool. Until a print has been recorded, the main screen falls back to the last weighing."
+                                                                          },  // STR_LASTUSED_DESC_BAMBUDDY_USED
+  { "BamBuddy stempelt jede Wägung mit Zeitstempel, auch die von dieser Waage. Der Hauptscreen zeigt dann 'Zuletzt gewogen'. Nur das BamBuddy-Inventar führt dieses Feld - mit einem Spoolman-Server dahinter bleibt es leer.",
+    "BamBuddy stamps every weighing, including the ones from this scale. The main screen then shows 'last weighed'. Only the BamBuddy inventory keeps this field - with a Spoolman server behind it, it stays empty."
+                                                                          },  // STR_LASTUSED_DESC_BAMBUDDY_WEIGHED
+  { "Druckverbrauch oder Wägung",
+    "Print usage or weighing"                                             },  // STR_BTN_LASTUSED_MODE_SUB_BB
+  // BamBuddy's own inventory stores consumption and derives the rest, so it
+  // cannot hold more filament than the label promises. Asked before writing
+  // rather than letting the value snap back on the next scan.
+  { "Mehr als das Etikett",
+    "More than the label"                                                 },  // STR_BB_CAP_TITLE
+  { "Gemessen: %.0f g. Das Etikett sagt %.0f g. BamBuddy kann nicht mehr speichern, als das Etikett hergibt - der Rest stuende danach wieder auf voll.",
+    "Measured: %.0f g. The label says %.0f g. BamBuddy cannot store more than the label allows, so the remainder would read as full again."
+                                                                          },  // STR_BB_CAP_BODY
+  { "Etikett auf %.0f g anheben",
+    "Raise label to %.0f g"                                               },  // STR_BB_CAP_RAISE
+  { "Etikett behalten",
+    "Keep the label"                                                      },  // STR_BB_CAP_KEEP
+  { "Trocknungsdatum",
+    "Drying date"                                                         },  // STR_BB_DRIED_TITLE
+  { "Nicht speichern",
+    "Do not store"                                                        },  // STR_BB_DRIED_OFF
+  { "Das Datum bleibt leer",
+    "The date stays empty"                                                },  // STR_BB_DRIED_OFF_SUB
+  { "Spoolman hinter BamBuddy",
+    "Spoolman behind BamBuddy"                                            },  // STR_BB_DRIED_SPOOLMAN
+  { "In extra.last_dried auf dem Spoolman-Server",
+    "Into extra.last_dried on the Spoolman server"                        },  // STR_BB_DRIED_SPOOLMAN_SUB
+  { "Nur wenn BamBuddy auf einen Spoolman-Server zeigt",
+    "Only when BamBuddy points at a Spoolman server"                      },  // STR_BB_DRIED_SPOOLMAN_NA
+  { "Ins Notizfeld",
+    "Into the note field"                                                 },  // STR_BB_DRIED_NOTE
+  { "Als [last_dried:JJJJ-MM-TT] in der Notiz",
+    "As [last_dried:YYYY-MM-DD] in the note"                              },  // STR_BB_DRIED_NOTE_SUB
+  { "BamBuddy hat kein Feld für ein Trocknungsdatum. Das Notizfeld geht immer und behält den übrigen Text. Der andere Weg schreibt in last_dried auf dem Spoolman-Server hinter BamBuddy.",
+    "BamBuddy has no field for a drying date. The note field always works and keeps the rest of the text. The other route writes into last_dried on the Spoolman server behind BamBuddy."
+                                                                          },  // STR_BB_DRIED_INFO
+  // Short forms for the connection test line, which has room for about 34
+  // characters. The "Inventar:" prefix is what says this names the data
+  // source and not the backend - bare "Spoolman" always means the native one.
+  { "Inventar: BamBuddy",
+    "Inventory: BamBuddy"                                                 },  // STR_BB_INV_OWN
+  { "Inventar: Spoolman",
+    "Inventory: Spoolman"                                                 },  // STR_BB_INV_SPOOLMAN
   { "Werkseinstellungen",       "Factory Reset"              },  // STR_BTN_FACTORY_RESET
   { "Alle Einstellungen löschen", "Erase all settings"      },  // STR_BTN_FACTORY_RESET_SUB
   { "Werkseinstellungen?",      "Factory Reset?"             },  // STR_FACTORY_RESET_TITLE

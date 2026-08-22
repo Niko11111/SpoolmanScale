@@ -351,6 +351,30 @@ void buildBackendScreen() {
     addCredentialsRow(scr_backend, 190,
                       T(STR_BACKEND_APIKEY), bambuddyApiKey()[0] != '\0',
                       nullptr, false);
-    addWebSetupButton(scr_backend, 132);
+
+    // Same pair as in FilaMan mode: the backend's own settings on the left,
+    // the browser on the right.
+    lv_obj_t *btn_opts = lv_btn_create(scr_backend);
+    lv_obj_set_size(btn_opts, 216, 44);
+    lv_obj_set_pos(btn_opts, 16, 244);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(0x0a1e30), 0);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btn_opts, 8, 0);
+    lv_obj_set_style_shadow_width(btn_opts, 0, 0);
+    lv_obj_set_style_border_width(btn_opts, 1, 0);
+    lv_obj_set_style_border_color(btn_opts, lv_color_hex(0x1a3060), 0);
+    lv_obj_add_event_cb(btn_opts, [](lv_event_t *e) {
+      logSD("BTN: Backend -> BamBuddy options");
+      show_bambuddy_options_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_opts = lv_label_create(btn_opts);
+    { char ob[40];
+      snprintf(ob, sizeof(ob), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_MORE_OPTIONS));
+      lv_label_set_text(lbl_opts, ob); }
+    lv_obj_set_style_text_color(lbl_opts, lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_font(lbl_opts, &lv_font_montserrat_ext_16, 0);
+    lv_obj_center(lbl_opts);
+
+    addWebSetupButton(scr_backend, 248);
   }
 }
