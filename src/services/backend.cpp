@@ -6,6 +6,7 @@
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
 #include "services/app_settings.h"
+#include "services/bambuddy_api.h"
 #include "services/prefs_store.h"
 
 // NVS keys. Kept short, NVS limits key length to 15 characters.
@@ -174,7 +175,9 @@ const char* backendName() { return backendModeName(s_mode); }
 const char* backendBadge() {
   switch (s_mode) {
     case BACKEND_FILAMAN:  return "FLM";
-    case BACKEND_BAMBUDDY: return "BBY";
+    // Which database is behind BamBuddy decides where every read and write
+    // lands, and it can change while the scale runs - worth the one letter.
+    case BACKEND_BAMBUDDY: return (bbInventoryMode() == BB_INV_SPOOLMAN) ? "BBS" : "BBY";
     default:               return "SPM";
   }
 }

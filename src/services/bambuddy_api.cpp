@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "hardware/sd_logger.h"
+#include "services/tag_uid.h"
 #include "services/user_options.h"
 
 namespace {
@@ -454,16 +455,6 @@ int bbCountActiveSpools(const char* base_url, const char* api_key,
   return (int)raw.as<JsonArrayConst>().size();
 }
 
-// Strips everything that is not a hex digit and upper cases the rest, which
-// is the form BamBuddy stores and the only one its link endpoint accepts.
-static void toPlainHex(const char* src, char* out, size_t out_size) {
-  size_t o = 0;
-  for (const char* p = src; p && *p && o + 1 < out_size; p++) {
-    if (isxdigit((unsigned char)*p)) out[o++] = toupper((unsigned char)*p);
-  }
-  out[o] = '\0';
-}
-
 int bbFindSpoolByTag(const char* base_url, const char* api_key, const char* tag,
                      JsonDocument& doc, uint32_t timeout_ms,
                      DeserializationError* out_err) {
@@ -471,7 +462,9 @@ int bbFindSpoolByTag(const char* base_url, const char* api_key, const char* tag,
   if (!hasBaseUrl(base_url) || !tag || !tag[0]) return -1;
 
   char hex[40];
-  toPlainHex(tag, hex, sizeof(hex));
+  // Plain uppercase hex is what BamBuddy stores and the only form its link
+  // endpoint accepts. tagUidNormalize() is the one place that knows this.
+  tagUidNormalize(tag, hex, sizeof(hex));
   if (!hex[0]) return -1;
 
   // A 32 character identifier is a Bambu tray uuid, anything shorter an NFC

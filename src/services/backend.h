@@ -82,8 +82,10 @@ const char* backendName();
 // to label and log a button before the switch has happened.
 const char* backendModeName(BackendMode mode);
 
-// Three letter code for the status bar: "SPM", "FLM", "BBY". The header has
-// room for exactly three characters at font 12.
+// Three letter code for the status bar: "SPM", "FLM", "BBY", and "BBS" for
+// BamBuddy with a Spoolman server behind it. Three characters exactly: the
+// header leaves 32 px before the scale reading, which is about four at font
+// 12, so a longer code would push into it.
 const char* backendBadge();
 
 // Product name followed by a colon, for the caption above the spool block.
