@@ -754,4 +754,41 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Hersteller",                    "Manufacturer"                       },  // STR_BTN_THIS_VENDOR_FM
   { LV_SYMBOL_CLOSE " leer / Archivieren\nRest wird 0",
     LV_SYMBOL_CLOSE " empty / Archive\nremaining set to 0" },  // STR_BTN_ARCHIVE_EMPTY_FM
+
+  // Auto AMS assignment. FilaMan marks a freshly weighed spool as pending on
+  // every printer driver for a few seconds, so the next tray to be loaded
+  // gets it. The wording avoids "auto assign" on its own because the whole
+  // point of the ask mode is that it is not automatic.
+  { "Auto AMS-Zuordnung",            "Auto AMS assign"                    },  // STR_AMS_TITLE
+  { "Spule beim Einlegen zuordnen",  "assign the spool as it goes in"     },  // STR_AMS_SUB
+  { "FilaMan merkt eine gewogene Spule einige Sekunden vor. Wer in dieser Zeit ein AMS-Fach belädt, bekommt sie zugeordnet. Geöffnet wird das Fenster nur von einem Gewicht, deshalb bucht die Waage beim Zuordnen ein zweites Mal: die Messung steht dann doppelt im Protokoll, der Wert bleibt gleich. Wandert die Spule ohnehin gleich in den Drucker, genügt kurz auflegen.",
+    "FilaMan reserves a weighed spool for a few seconds. Whoever loads an AMS tray in that time gets it assigned. Only a weight opens that window, so assigning books the value a second time: the measurement then shows twice in the log, the value stays the same. If the spool is going into the printer anyway, just resting it on the pad is enough." },  // STR_AMS_INFO
+  { "Aus",                           "Off"                                },  // STR_AMS_MODE_OFF
+  { "Nachfragen",                    "Ask"                                },  // STR_AMS_MODE_ASK
+  { "Immer an",                      "Always"                             },  // STR_AMS_MODE_ALWAYS
+  { "Es wird nichts vorgemerkt. Wiegen und Lagerort verhalten sich genau wie bisher.",
+    "Nothing is reserved. Weighing and location behave exactly as before." },  // STR_AMS_OFF_DESC
+  { "Beim Abnehmen wird gefragt, ob die Spule in den Drucker wandert. Ein Ja sendet das Gewicht und öffnet das Fenster.",
+    "When the spool is lifted you are asked whether it goes into the printer. A yes sends the weight and opens the window." },  // STR_AMS_ASK_DESC
+  { "Jede Wiegung merkt die Spule vor, ohne Nachfrage. Auch wenn du nur kurz nachwiegen wolltest.",
+    "Every weighing reserves the spool, without asking. Even when you only wanted to check a weight." },  // STR_AMS_ALWAYS_DESC
+  { "Fenster",                       "Window"                             },  // STR_AMS_WINDOW_LBL
+  { "wie lange die Spule vorgemerkt bleibt", "how long the spool stays reserved" },  // STR_AMS_WINDOW_HINT
+  { "s",                             "s"                                  },  // STR_AMS_SEC_UNIT
+  { "Bei Ablauf",                    "When it runs out"                   },  // STR_AMS_TIMER_LBL
+  { "wenn niemand antwortet",        "when nobody answers"                },  // STR_AMS_TIMER_HINT
+  { "Ja",                            "Yes"                                },  // STR_AMS_TIMER_YES
+  { "Nein",                          "No"                                 },  // STR_AMS_TIMER_NO
+  { "Spule jetzt ins AMS legen?",    "Putting the spool into the AMS?"    },  // STR_AMS_POPUP_Q
+  { "Zuordnung startet in %d s",     "Assignment starts in %d s"          },  // STR_AMS_POPUP_STARTS_IN
+  { "Ohne Zuordnung in %d s",        "Without assigning in %d s"          },  // STR_AMS_POPUP_CLOSES_IN
+  { "Ja, zuordnen",                  "Yes, assign"                        },  // STR_AMS_BTN_YES
+  { "Der ApiKey darf keine Geräte verwalten",
+    "This ApiKey may not manage devices" },  // STR_AMS_ERR_FORBIDDEN
+  { "Server antwortet nicht (HTTP %d)", "Server not answering (HTTP %d)"  },  // STR_AMS_ERR_HTTP
+  { "%.0f g sind gespeichert",       "%.0f g are saved"                   },  // STR_AMS_POPUP_SAVED
+  { "Zuordnung %d s",                "Assigning %d s"                     },  // STR_AMS_WINDOW_RUNNING
+  { "Server: Zuordnung aktiv",       "Server: assigning active"           },  // STR_AMS_SRV_ON
+  { "Server: aus",                   "Server: off"                        },  // STR_AMS_SRV_OFF
+  { "%.0f g werden dabei gespeichert", "%.0f g will be saved too"           },  // STR_AMS_POPUP_WILL_SAVE
 };

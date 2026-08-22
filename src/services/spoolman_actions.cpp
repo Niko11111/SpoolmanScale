@@ -23,9 +23,9 @@
 
 
 
-void patchSpoolmanWeight(float remaining, bool skip_cap_check) {
-  if (!wifi_ok) { Serial.println("patchSpoolmanWeight: no WiFi"); return; }
-  if (!sm_found || sm_id == 0) { Serial.println("patchSpoolmanWeight: no spool"); return; }
+int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
+  if (!wifi_ok) { Serial.println("patchSpoolmanWeight: no WiFi"); return PATCH_WEIGHT_NO_TARGET; }
+  if (!sm_found || sm_id == 0) { Serial.println("patchSpoolmanWeight: no spool"); return PATCH_WEIGHT_NO_TARGET; }
 
   // BamBuddy's own inventory stores what was consumed and derives the rest
   // from the label weight, so it cannot represent a spool holding more than
@@ -40,7 +40,7 @@ void patchSpoolmanWeight(float remaining, bool skip_cap_check) {
     show_bb_cap_pending = true;      // the popup is built from appLoop()
     logSDf("BamBuddy: %.0fg measured against a %.0fg label, asking first",
            remaining, sm_total);
-    return;
+    return PATCH_WEIGHT_ASKING;
   }
 
   char today[12] = "";
@@ -83,6 +83,7 @@ void patchSpoolmanWeight(float remaining, bool skip_cap_check) {
   } else {
     Serial.printf("PATCH error: %d\n", code);
   }
+  return code;
 }
 
 void patchArchiveSpool() {

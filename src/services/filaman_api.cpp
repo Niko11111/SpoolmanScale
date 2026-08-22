@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "hardware/sd_logger.h"
+#include "services/backend.h"
 
 namespace {
 
@@ -930,4 +931,96 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
 
   if (page > 1) logSDf("FilaMan: fetched %d spools over %d pages", fetched, page);
   return 200;
+}
+
+// ============================================================
+//  DEVICE AUTO-ASSIGN
+// ============================================================
+
+int filamanDeviceId() {
+  const char* tok = filamanDeviceToken();
+  if (!tok || strncmp(tok, "dev.", 4) != 0) return 0;
+  const int id = atoi(tok + 4);
+  return (id > 0) ? id : 0;
+}
+
+int filamanGetDeviceAutoAssign(const char* base_url, const char* api_key,
+                               int device_id, bool* out_enabled,
+                               int* out_timeout_s, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || device_id <= 0) return -1;
+
+  // There is no GET for a single device, only the list.
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/admin/devices?page_size=" + FILAMAN_PAGE_MAX);
+  http.setTimeout(timeout_ms);
+  addApiKey(http, api_key);
+  int code = http.GET();
+  if (code != 200) {
+    String resp = http.getString();
+    logSDf("FilaMan: GET admin/devices -> HTTP %d: %s", code, resp.substring(0, 120).c_str());
+    http.end();
+    return code;
+  }
+
+  // Three keys out of a record that also carries scopes, timestamps and the
+  // token hash. Filtering keeps a list of devices off the heap entirely.
+  JsonDocument filter;
+  JsonObject fi = filter["items"].to<JsonArray>().add<JsonObject>();
+  fi["id"] = true;
+  fi["auto_assign_enabled"] = true;
+  fi["auto_assign_timeout"] = true;
+
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, http.getStream(),
+                                             DeserializationOption::Filter(filter));
+  http.end();
+  if (err) {
+    logSDf("FilaMan: device list parse error: %s", err.c_str());
+    return -2;
+  }
+
+  for (JsonObjectConst d : doc["items"].as<JsonArrayConst>()) {
+    if ((d["id"] | 0) != device_id) continue;
+    if (out_enabled)   *out_enabled   = d["auto_assign_enabled"] | false;
+    if (out_timeout_s) *out_timeout_s = d["auto_assign_timeout"] | 60;
+    return 200;
+  }
+
+  // The token names a device the list does not contain, which happens after
+  // the device was deleted in FilaMan but the token still sits in NVS.
+  logSDf("FilaMan: device %d is not in the admin device list", device_id);
+  return 404;
+}
+
+int filamanSetDeviceAutoAssign(const char* base_url, const char* api_key,
+                               int device_id, const bool* enabled,
+                               const int* timeout_s, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || device_id <= 0) return -1;
+  if (!enabled && !timeout_s) return -1;
+
+  String body = "{";
+  if (enabled) {
+    body += "\"auto_assign_enabled\":";
+    body += (*enabled ? "true" : "false");
+  }
+  if (timeout_s) {
+    if (enabled) body += ",";
+    body += "\"auto_assign_timeout\":";
+    body += *timeout_s;
+  }
+  body += "}";
+
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/admin/devices/" + device_id);
+  http.setTimeout(timeout_ms);
+  addApiKey(http, api_key);
+  http.addHeader("Content-Type", "application/json");
+  int code = http.PUT(body);
+  if (code < 200 || code >= 300) {
+    String resp = http.getString();
+    logSDf("FilaMan: PUT admin/devices/%d %s -> HTTP %d: %s",
+           device_id, body.c_str(), code, resp.substring(0, 120).c_str());
+  }
+  http.end();
+  return (code >= 200 && code < 300) ? 200 : code;
 }

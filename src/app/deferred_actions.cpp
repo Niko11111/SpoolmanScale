@@ -8,6 +8,7 @@ bool show_factor_pending = false;
 bool show_lastused_pending = false;
 bool show_backend_pending = false;
 bool show_filaman_options_pending = false;
+bool show_ams_assign_pending = false;
 bool show_bambuddy_options_pending = false;
 bool show_bambuddy_dried_pending = false;
 bool show_spoolman_options_pending = false;

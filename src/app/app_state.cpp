@@ -33,6 +33,7 @@ lv_obj_t *scr_settings   = nullptr;
 lv_obj_t *scr_wifi       = nullptr;
 lv_obj_t *scr_backend    = nullptr;
 lv_obj_t *scr_filaman_options = nullptr;
+lv_obj_t *scr_ams_assign = nullptr;
 lv_obj_t *scr_bambuddy_options = nullptr;
 lv_obj_t *scr_bambuddy_dried = nullptr;
 lv_obj_t *scr_spoolman_options = nullptr;
@@ -145,6 +146,10 @@ int  s_dry_numpad_target = 0;
 int  s_dry_numpad_value  = 0;
 lv_obj_t* s_dry_numpad_scr = nullptr;
 lv_obj_t* s_dry_numpad_lbl = nullptr;
+
+int  s_ams_numpad_value = 0;
+lv_obj_t* s_ams_numpad_scr = nullptr;
+lv_obj_t* s_ams_numpad_lbl = nullptr;
 lv_obj_t *lbl_nfc_dot;
 lv_obj_t *lbl_hdr_wifi;
 lv_obj_t *lbl_hdr_nfc;

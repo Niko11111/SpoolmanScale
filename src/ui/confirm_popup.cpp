@@ -9,6 +9,7 @@
 #include <cstring>
 
 #include "hardware/sd_logger.h"
+#include "services/ams_assign.h"
 #include "services/auto_weight_state.h"
 #include "services/prefs_store.h"
 #include "services/spoolman_actions.h"
@@ -291,6 +292,11 @@ void showConfirmPopup(const char* msg, int action) {
       float r = scale_weight_g - (float)sm_spool_weight;
       if (r < 0) r = 0;
       patchSpoolmanWeight(r);
+      // Remembered so the question can come up on removal. A yes there
+      // reports the same weight once more, which is the only way to open the
+      // window. The cap check above cannot interfere: it is BamBuddy only and
+      // amsAskActive() requires FilaMan.
+      if (amsAskActive()) amsNoteMeasurement(sm_id, r, scale_weight_g, true);
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l1 = lv_label_create(btn1);
     char buf1[48];
@@ -314,6 +320,9 @@ void showConfirmPopup(const char* msg, int action) {
       float r = scale_weight_g - (float)sm_spool_weight - bag_weight_g;
       if (r < 0) r = 0;
       patchSpoolmanWeight(r);
+      // Gross without the bag: that is what the scale would have shown had
+      // the spool been weighed bare, and it is what FilaMan has to be told.
+      if (amsAskActive()) amsNoteMeasurement(sm_id, r, scale_weight_g - bag_weight_g, true);
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l2 = lv_label_create(btn2);
     char buf2[56];

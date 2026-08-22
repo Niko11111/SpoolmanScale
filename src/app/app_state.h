@@ -48,6 +48,7 @@ extern lv_obj_t *scr_settings;
 extern lv_obj_t *scr_wifi;
 extern lv_obj_t *scr_backend;
 extern lv_obj_t *scr_filaman_options;
+extern lv_obj_t *scr_ams_assign;
 extern lv_obj_t *scr_bambuddy_options;
 extern lv_obj_t *scr_bambuddy_dried;
 extern lv_obj_t *scr_spoolman_options;
@@ -172,6 +173,13 @@ extern int s_dry_numpad_target;
 extern int s_dry_numpad_value;
 extern lv_obj_t *s_dry_numpad_scr;
 extern lv_obj_t *s_dry_numpad_lbl;
+
+// Numpad for the AMS assignment window, in seconds. Held here for the
+// same reason as the drying one: showMainScreen() has to be able to tear
+// it down from outside the screen that built it.
+extern int s_ams_numpad_value;
+extern lv_obj_t *s_ams_numpad_scr;
+extern lv_obj_t *s_ams_numpad_lbl;
 extern lv_obj_t *lbl_nfc_dot;
 extern lv_obj_t *lbl_hdr_wifi;
 extern lv_obj_t *lbl_hdr_nfc;

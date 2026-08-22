@@ -9,8 +9,10 @@
 
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/ams_assign.h"
 #include "services/prefs_store.h"
 #include "services/user_options.h"
+#include "ams_assign_screen.h"
 #include "info_popup.h"
 #include "ui_common.h"
 
@@ -106,6 +108,30 @@ void buildFilaManOptionsScreen() {
       if (scr_filaman_options) { lv_obj_del(scr_filaman_options); scr_filaman_options = nullptr; }
       buildFilaManOptionsScreen();
       lv_obj_clear_flag(scr_filaman_options, LV_OBJ_FLAG_HIDDEN);
+    }, LV_EVENT_CLICKED, NULL); }
+
+
+  // Auto AMS assignment. Not a toggle but a mode, so the arrow carries the
+  // mode name and the row opens a screen of its own instead of flipping a
+  // bool. The window length and the timeout behaviour live in there too.
+  { char buf_t[40]; strncpy(buf_t, T(STR_AMS_TITLE), sizeof(buf_t)-1);
+    buf_t[sizeof(buf_t)-1] = '\0';
+    // The mode name goes in the subtitle, not in the arrow. A whole word
+    // there runs through the help circle - "Nachfragen" is 85 px and the gap
+    // is 42. Same solution the BamBuddy dried row uses for driedTargetName().
+    char buf_s[64];
+    snprintf(buf_s, sizeof(buf_s), "%s - %s", T(STR_AMS_SUB), amsModeName());
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_LOOP, buf_t, buf_s,
+                                g_ams_mode != AMS_OFF, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_AMS_TITLE, STR_AMS_INFO));
+
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      logSD("BTN: FilaMan Options -> Auto AMS assign");
+      // The screen reads the server when it opens, so it cannot be built
+      // from in here.
+      show_ams_assign_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
 }
