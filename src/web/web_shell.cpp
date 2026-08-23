@@ -1,10 +1,11 @@
-#include "web_shell.h"
+#include "web/web_shell.h"
 
 #include <string.h>
 
 #include "app_config.h"
-#include "backend.h"
-#include "web_access.h"
+#include "services/backend.h"
+#include "web/web_access.h"
+#include "web/web_pages.h"
 
 // Lifted verbatim from the original firmware-update page so nothing about the
 // look changes -- it is now just shared instead of duplicated.
@@ -50,7 +51,11 @@ String webShellHead(const char *subtitle) {
       ".link-maker{background:#1a0a18;color:#c060e0;border-color:#2a1a38}"
       ".footer{margin-top:24px;font-size:11px;color:#1a3060;text-align:center}"
       "</style></head><body>"
-      "<img src='data:image/jpeg;base64," + String(LOGO_B64) + "' style='width:120px;height:120px;border-radius:12px;margin-bottom:8px'>"
+      // Served from /logo.jpg rather than pasted in as a data URI. As a URI
+      // it was 7.1 kB of base64 rebuilt on the heap for every page and
+      // uncacheable, which grew worse with every page added.
+      "<img src='/logo.jpg' width='120' height='120' alt='SpoolmanScale'"
+      " style='width:120px;height:120px;border-radius:12px;margin-bottom:8px'>"
       "<div class='version'>" + String(ver_buf) + " &nbsp;|&nbsp; " + String(subtitle) + "</div>";
   return html;
 }
@@ -133,29 +138,20 @@ String webShellFoot() {
 }
 
 String webShellNav(const char *active) {
-  static const char *PATHS[]  = { "/", "/ota", "/logs", "/drying", "/config", "/filaman", "/tags" };
-  static const char *LABELS[] = { "Status", "Firmware", "Logs", "Drying", "Limits", "FilaMan", "Tags" };
-  static const WebGate GATES[] = { GATE_OPEN, GATE_MAINT, GATE_MAINT, GATE_CONFIG,
-                                   GATE_CONFIG, GATE_CONFIG, GATE_MAINT };
-
   String n = "<style>.nav{display:flex;flex-wrap:wrap;gap:8px;width:100%;max-width:480px;"
              "margin-bottom:20px}.nav a{padding:8px 14px;background:#0a1828;border:1px solid "
              "#1a3060;border-radius:8px;color:#4a6fa0;text-decoration:none;font-size:13px}"
              ".nav a:hover{border-color:#28d49a;color:#e8f0ff}"
              ".nav a.on{background:#1a3060;color:#e8f0ff;border-color:#28d49a}</style>"
              "<div class='nav'>";
-  for (size_t i = 0; i < sizeof(PATHS) / sizeof(PATHS[0]); i++) {
-    // Credentials only exist for the two backends that have them, and a tab
-    // that only ever says "switched off" is worse than no tab.
-    const bool creds = backendIsFilaMan() || backendIsBamBuddy();
-    if (!strcmp(PATHS[i], "/filaman") && !creds) continue;
-    // Same reasoning applied to the gates: a tab behind a shut one leads
-    // only to the "switched off" page.
-    if (!webGateOpen(GATES[i])) continue;
-    const char *label = (!strcmp(PATHS[i], "/filaman") && backendIsBamBuddy())
-                        ? "BamBuddy" : LABELS[i];
-    n += String("<a class='") + (strcmp(PATHS[i], active) == 0 ? "on" : "") +
-         "' href='" + PATHS[i] + "'>" + label + "</a>";
+  // One strip, built from the one table. There used to be two of these in two
+  // files with two hand-kept lists, and they disagreed: the status page showed
+  // the backend tab to a BamBuddy user and every other page hid it.
+  for (size_t i = 0; i < WEB_PAGE_COUNT; i++) {
+    const WebPage &p = *WEB_PAGES[i];
+    if (!webPageVisible(p)) continue;
+    n += String("<a class='") + (strcmp(p.path, active) == 0 ? "on" : "") +
+         "' href='" + p.path + "'>" + webPageLabel(p) + "</a>";
   }
   n += "</div>";
   return n;

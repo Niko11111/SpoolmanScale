@@ -1,15 +1,14 @@
-#include "web_home.h"
-#include <mbedtls/base64.h>
+#include "web/web_pages.h"
 
 #include <Arduino.h>
 
 #include "app/app_state.h"
 #include "app_config.h"
-#include "backend.h"
+#include "services/backend.h"
 #include "hardware/sd_logger.h"
-#include "web_access.h"
-#include "web_shell.h"
-#include "wifi_manager.h"
+#include "web/web_access.h"
+#include "web/web_shell.h"
+#include "services/wifi_manager.h"
 
 static String jsonEsc(const char *s) {
   String o;
@@ -72,10 +71,9 @@ static String statusJson() {
 
 // Uses the shared shell, so the logo, palette, community links and disclaimer
 // are the same ones the rest of the pages carry rather than a lookalike.
-static String homePage() {
+static String body() {
   String h;
-  h.reserve(6000);
-  h += webShellHead("Status");
+  h.reserve(4500);
   h += F("<style>"
          ".row{display:flex;justify-content:space-between;align-items:center;gap:12px;"
          "padding:7px 0;border-bottom:1px solid #0f1e30;font-size:14px}"
@@ -88,8 +86,6 @@ static String homePage() {
          "border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit}"
          ".tbtn:hover{background:#1a3060}"
          "</style>");
-  h += webShellNav("/");
-  h += webShellLinks();
 
   h += F("<div class='card'><h2>Status</h2><div id='st'></div></div>");
   // Not a second navigation -- the tabs above already do that. This says which
@@ -134,45 +130,12 @@ static String homePage() {
          "tick();setInterval(tick,5000);"
          "</script>");
   h += webShellRestartUi();
-  h += webShellFoot();
   return h;
 }
 
-void registerHomeRoutes(WebServer &srv) {
-  // Decoded on demand rather than kept in RAM: a browser asks for this once and
-  // then caches it, so holding 5 kB permanently to save a rare decode is a bad
-  // trade on a device with 320 kB.
-  // GATE_ALWAYS: a tab icon is not a read of device state, and the page that
-  // says "switched off" wants one too.
-  srv.on("/favicon.jpg", HTTP_GET, [&srv]() {
-    const char *b64 = webShellLogoBase64();
-    const size_t b64len = strlen(b64);
-    size_t need = 0;
-    mbedtls_base64_decode(nullptr, 0, &need, (const unsigned char *)b64, b64len);
-    uint8_t *buf = (uint8_t *)malloc(need);
-    if (!buf) { srv.send(500, "text/plain", "out of memory"); return; }
-    size_t out = 0;
-    if (mbedtls_base64_decode(buf, need, &out, (const unsigned char *)b64, b64len) != 0) {
-      free(buf);
-      srv.send(500, "text/plain", "logo decode failed");
-      return;
-    }
-    srv.sendHeader("Cache-Control", "public, max-age=604800");
-    srv.setContentLength(out);
-    srv.send(200, "image/jpeg", "");
-    srv.sendContent((const char *)buf, out);
-    free(buf);
-  });
-
-  srv.on("/", HTTP_GET, [&srv]() {
-    // Reachable whenever the socket is up - except when only the remote link
-    // is holding it up, in which case the master switch is off and the
-    // landing page has no business answering.
-    if (!webRequire(srv, GATE_OPEN, "The web interface")) return;
-    srv.send(200, "text/html", homePage());
-  });
-  // Restarting is not destructive -- settings live in NVS -- but it is still a
-  // remote action, so it needs one of the gates open rather than being exposed
+static void routes(WebServer &srv) {
+  // Restarting is not destructive - settings live in NVS - but it is still a
+  // remote action, so it sits behind a gate rather than being exposed
   // whenever the landing page is reachable.
   srv.on("/api/restart", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, "Restart")) return;
@@ -187,3 +150,9 @@ void registerHomeRoutes(WebServer &srv) {
     srv.send(200, "application/json", statusJson());
   });
 }
+
+extern const WebPage PAGE_STATUS;
+const WebPage PAGE_STATUS = {
+  "/", "Status", nullptr, GATE_OPEN, nullptr,
+  body, routes
+};

@@ -11,8 +11,8 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/backend.h"
-#include "services/ota_web_server.h"
-#include "services/web_access.h"
+#include "web/web_server.h"
+#include "web/web_access.h"
 #include "services/wifi_manager.h"
 #include "ui_common.h"
 
@@ -201,9 +201,11 @@ void buildOtaBrowserScreen() {
     ip = wifiManagerLocalIP();
   }
   // "/" is the status page now, so send each flow to the page that carries
-  // its form: firmware upload lives at /ota, FilaMan credentials at /filaman.
+  // its form: firmware upload lives at /ota, backend credentials at /backend.
+  // That path is deliberately not named after a backend - it used to be
+  // "/filaman", which sent BamBuddy users to a FilaMan URL.
   snprintf(ip_buf, sizeof(ip_buf), "http://%s%s", ip.toString().c_str(),
-           showsCredentials() ? "/filaman" : "/ota");
+           showsCredentials() ? "/backend" : "/ota");
 
   char hint_buf[192];
   const char* hint_src = !showsCredentials() ? T(STR_OTA_OPEN_BROWSER)

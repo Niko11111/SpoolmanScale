@@ -12,7 +12,7 @@
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
 #include "services/ota_state.h"
-#include "services/ota_web_server.h"
+#include "web/web_server.h"
 #include "services/prefs_store.h"
 #include "services/version_compare.h"
 #include "ui/ota_github.h"

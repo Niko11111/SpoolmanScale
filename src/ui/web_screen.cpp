@@ -9,8 +9,8 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "system_screen.h"
-#include "services/ota_web_server.h"
-#include "services/web_access.h"
+#include "web/web_server.h"
+#include "web/web_access.h"
 #include "services/wifi_manager.h"
 #include "ui_common.h"
 

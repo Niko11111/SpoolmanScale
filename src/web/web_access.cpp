@@ -1,8 +1,8 @@
-#include "web_access.h"
+#include "web/web_access.h"
 
 #include <Arduino.h>
 
-#include "prefs_store.h"
+#include "services/prefs_store.h"
 
 // Master defaults ON so browsing the device address gives you something
 // rather than a dead port. The two writing gates default OFF: everything
