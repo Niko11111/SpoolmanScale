@@ -20,6 +20,8 @@ static lv_obj_t *lbl_extra_fields_status = nullptr;
 static lv_obj_t *btn_extra_fields_create = nullptr;
 static lv_obj_t *btn_extra_fields_next   = nullptr;
 static bool extra_fields_setup_flow = false;
+// Which screen opened this one, so the back button can return there.
+static bool extra_fields_from_options = false;
 static bool extra_fields_check_pending = false;
 static bool extra_fields_create_pending = false;
 
@@ -52,7 +54,8 @@ void handleExtraFieldsDeferredActions() {
 static const char* REQUIRED_EXTRA_FIELDS_BASE[] = { "tag", "last_dried" };
 static const int   REQUIRED_EXTRA_FIELDS_BASE_COUNT = 2;
 
-void showExtraFieldsScreen(bool is_setup_flow) {
+void showExtraFieldsScreen(bool is_setup_flow, bool from_options) {
+  extra_fields_from_options = from_options;
   logSD("SHOW: ExtraFieldsScreen");
   logSDf("UI: Screen -> ExtraFields (setup=%d)", is_setup_flow ? 1 : 0);
   hideAllOverlays();
@@ -78,15 +81,16 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_clear_flag(scr_extra_fields, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_bg_color(scr_extra_fields, lv_color_hex(0x0a1020), 0);
 
-  // Header: back returns to the filament manager screen, which is where this
-  // screen is now reached from. Setup flow gets a title and an X instead.
+  // Header: back returns to whichever screen opened this one, the Spoolman
+  // options or the address screen. Setup flow gets a title and an X instead.
   if (!is_setup_flow) {
     char hdr_b[40]; backendText(T(STR_EXTRA_FIELDS_TITLE), hdr_b, sizeof(hdr_b));
     buildSubHeader(scr_extra_fields, hdr_b,
       [](lv_event_t *e) {
-        // Deferred: the backend screen is built from appLoop(), never from
-        // inside the callback of the screen it is about to replace.
-        show_backend_pending = true;
+        // Deferred either way: the target screen is built from appLoop(),
+        // never from inside the callback of the screen it is about to replace.
+        if (extra_fields_from_options) show_spoolman_options_pending = true;
+        else                           show_backend_pending = true;
       });
   } else {
     // Setup flow: title only + X (→ main screen), no back button

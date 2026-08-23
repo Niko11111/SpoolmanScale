@@ -1,4 +1,6 @@
 #include "spoolman_actions.h"
+#include "services/tag_uid.h"
+#include "services/user_options.h"
 #include "app/app_state.h"
 
 #include <Arduino.h>
@@ -6,7 +8,11 @@
 #include <string.h>
 #include <time.h>
 
+#include "app_config.h"
+#include "app/deferred_actions.h"
+#include "backend.h"
 #include "backend_api.h"
+#include "bambuddy_api.h"
 #include "hardware/sd_logger.h"
 #include "user_options.h"
 #include "ui/date_display.h"
@@ -17,9 +23,26 @@
 
 
 
-void patchSpoolmanWeight(float remaining) {
-  if (!wifi_ok) { Serial.println("patchSpoolmanWeight: no WiFi"); return; }
-  if (!sm_found || sm_id == 0) { Serial.println("patchSpoolmanWeight: no spool"); return; }
+int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
+  if (!wifi_ok) { Serial.println("patchSpoolmanWeight: no WiFi"); return PATCH_WEIGHT_NO_TARGET; }
+  if (!sm_found || sm_id == 0) { Serial.println("patchSpoolmanWeight: no spool"); return PATCH_WEIGHT_NO_TARGET; }
+
+  // BamBuddy's own inventory stores what was consumed and derives the rest
+  // from the label weight, so it cannot represent a spool holding more than
+  // the label says - the value would read as full again on the next scan.
+  // Ask rather than let that happen silently. Behind Spoolman the remaining
+  // weight is stored directly and there is no ceiling.
+  // The tolerance keeps rounding noise on a genuinely full spool from asking.
+  if (!skip_cap_check && backendIsBamBuddy() && bbInventoryMode() == BB_INV_LOCAL &&
+      sm_total > 0.0f && remaining > sm_total + BB_CAP_TOLERANCE_G) {
+    bb_cap_measured_g = remaining;
+    bb_cap_label_g    = sm_total;
+    show_bb_cap_pending = true;      // the popup is built from appLoop()
+    logSDf("BamBuddy: %.0fg measured against a %.0fg label, asking first",
+           remaining, sm_total);
+    return PATCH_WEIGHT_ASKING;
+  }
+
   char today[12] = "";
   if (last_used_mode == 1) {
     time_t now = time(nullptr);
@@ -60,6 +83,7 @@ void patchSpoolmanWeight(float remaining) {
   } else {
     Serial.printf("PATCH error: %d\n", code);
   }
+  return code;
 }
 
 void patchArchiveSpool() {
@@ -101,9 +125,41 @@ void patchArchiveSpool() {
   updateLinkButton();
 }
 
-void patchSpoolTag(int spool_id, const char* uuid) {
-  if (!wifi_ok) return;
+bool patchSpoolTag(int spool_id, const char* uuid, const char* current_card_uids) {
+  if (!wifi_ok) return false;
   const bool clearing = (!uuid || !uuid[0]);
+
+  // Write where the spool already is. A spool whose UIDs live in card_uids
+  // gets the new one appended there, everything else keeps going to extra.tag
+  // - which is every spool that has never met SpoolLink, and every spool at
+  // all while the switch is off.
+  if (!clearing && g_card_uids_write && current_card_uids && current_card_uids[0]) {
+    char merged[CARD_UIDS_MAX];
+    CardUidsResult r = cardUidsAppend(current_card_uids, uuid, merged, sizeof(merged));
+
+    if (r == CARD_UIDS_ALREADY_PRESENT) {
+      // Linking a tag that is already on the spool is not a failure, it just
+      // has nothing to write. Saying so beats a PATCH that changes nothing.
+      logSDf("PATCH card_uids ID=%d uuid='%s' already in list, no write",
+             spool_id, uuid);
+      return true;
+    }
+    if (r == CARD_UIDS_FULL) {
+      // Refusing is the whole point: a shortened list would drop a tag that
+      // belongs to the other flange, and nobody would notice until that tag
+      // stopped working.
+      logSDf("PATCH card_uids ID=%d uuid='%s' REFUSED, list full ('%s')",
+             spool_id, uuid, current_card_uids);
+      return false;
+    }
+
+    int code = backendPatchCardUids(cfg_spoolman_base, spool_id, merged);
+    Serial.printf("PATCH card_uids: '%s' HTTP %d\n", merged, code);
+    logSDf("PATCH card_uids ID=%d uuid='%s' -> '%s' HTTP %d",
+           spool_id, uuid, merged, code);
+    return true;
+  }
+
   Serial.printf("PATCH tag: '%s'%s\n", uuid ? uuid : "", clearing ? "  (UNLINK)" : "");
   int code = backendPatchSpoolTag(cfg_spoolman_base, spool_id, uuid);
   Serial.printf("patchSpoolTag: HTTP %d\n", code);
@@ -112,6 +168,54 @@ void patchSpoolTag(int spool_id, const char* uuid) {
   // the two apart afterwards.
   logSDf("PATCH tag ID=%d uuid='%s'%s HTTP %d",
          spool_id, uuid ? uuid : "", clearing ? " UNLINK" : "", code);
+  return true;
+}
+
+// Clears extra.tag, but only if the spool is actually bound through it.
+//
+// Writing a field that holds nothing is not harmless. Spoolman rejects an
+// extra field it does not know with HTTP 400, so a SpoolLink user who never ran
+// our extra fields assistant would collect an error for a field that was never
+// part of the binding. And touching data the scale did not put there is wrong
+// even when it happens to work.
+static bool clearTagIfSet(int spool_id) {
+  if (!sm_tag[0]) return false;
+  int code = backendPatchSpoolTag(cfg_spoolman_base, spool_id, "");
+  logSDf("UNLINK ID=%d cleared tag, HTTP %d", spool_id, code);
+  return true;
+}
+
+void unlinkCardUid(int spool_id, const char* uid, bool all) {
+  if (!wifi_ok) return;
+
+  if (all) {
+    // Both stores can hold a binding, and leaving one behind would keep the
+    // spool findable after the user was told it is gone. Each is only written
+    // if it holds something - see clearTagIfSet() for why that matters.
+    bool did = clearTagIfSet(spool_id);
+    if (sm_card_uids[0]) {
+      int c = backendPatchCardUids(cfg_spoolman_base, spool_id, "");
+      logSDf("UNLINK ID=%d cleared card_uids ('%s'), HTTP %d",
+             spool_id, sm_card_uids, c);
+      did = true;
+    }
+    if (!did) logSDf("UNLINK ID=%d nothing to clear, neither field set", spool_id);
+    return;
+  }
+
+  char rest[CARD_UIDS_MAX];
+  if (!cardUidsRemove(sm_card_uids, uid, rest, sizeof(rest))) {
+    // The UID was not in the list after all, so whatever brought the spool up
+    // was the tag field, if anything was.
+    logSDf("UNLINK ID=%d uuid='%s' not in card_uids", spool_id, uid ? uid : "");
+    if (!clearTagIfSet(spool_id))
+      logSDf("UNLINK ID=%d nothing to clear, neither field set", spool_id);
+    return;
+  }
+
+  int code = backendPatchCardUids(cfg_spoolman_base, spool_id, rest);
+  logSDf("UNLINK one ID=%d uuid='%s' left '%s' HTTP %d",
+         spool_id, uid ? uid : "", rest, code);
 }
 
 void patchInitialWeight(float initial_w) {

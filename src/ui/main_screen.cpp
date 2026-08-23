@@ -67,7 +67,7 @@ void updateDisplay() {
 
   // Vendor (Zone 3 Row B)
   lv_label_set_text(lbl_vendor,
-    strlen(g_tag.vendor) > 0 ? g_tag.vendor : "Bambu Lab");
+    strlen(g_tag.vendor) > 0 ? g_tag.vendor : BAMBU_VENDOR_NAME);
 
   // Hidden labels still written for More Info screen compatibility
   lv_label_set_text(lbl_uid, g_tag.uid_str);
@@ -134,7 +134,7 @@ void buildUI() {
 
   // Fix 10: Spoolman reachability indicator
   lbl_hdr_sm = lv_label_create(hdr);
-  lv_label_set_text(lbl_hdr_sm, backendIsFilaMan() ? "FLM" : "SPM");
+  lv_label_set_text(lbl_hdr_sm, backendBadge());
   lv_obj_set_style_text_color(lbl_hdr_sm, lv_color_hex(0x606060), 0);
   lv_obj_set_style_text_font(lbl_hdr_sm, &lv_font_montserrat_ext_12, 0);
   lv_obj_align(lbl_hdr_sm, LV_ALIGN_RIGHT_MID, -4, 0);
@@ -399,7 +399,8 @@ void buildUI() {
   // backend switch without rebuilding the main screen. The product names are
   // not translated, and STR_LBL_SPOOLMAN is identical in both languages.
   lbl_sm_cap = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_sm_cap, backendIsFilaMan() ? "FilaMan:" : "Spoolman:");
+  { char cap_buf[16]; backendCaption(cap_buf, sizeof(cap_buf));
+    lv_label_set_text(lbl_sm_cap, cap_buf); }
   lv_obj_set_style_text_color(lbl_sm_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_sm_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(lbl_sm_cap, 8, 188);

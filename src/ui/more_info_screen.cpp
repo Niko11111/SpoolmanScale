@@ -12,6 +12,8 @@
 #include "services/list_limits.h"
 #include "services/location_state.h"
 #include "services/spoolman_actions.h"
+#include "services/tag_uid.h"
+#include "services/user_options.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/wifi_manager.h"
@@ -28,6 +30,42 @@ static bool show_location_picker_pending = false;
 static bool show_more_info_pending = false;
 static bool fetch_locations_pending = false;
 static bool g_loc_picker_from_popup = false;
+
+// Shared by both confirm buttons of the unlink popup. user_data is 1 for
+// "release the whole binding" and 0 for "only the tag on the scale" - the
+// distinction two UIDs create and a single one does not have.
+static void unlinkConfirmCb(lv_event_t *e) {
+  lv_obj_t *btn = lv_event_get_target(e);
+  const bool all = (bool)(intptr_t)lv_obj_get_user_data(btn);
+  const int spool_id = sm_id;
+
+  // Read out of the button before the popup goes, then close it: the calls
+  // below reach the network and a dialog still on screen would look frozen.
+  lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(btn)));
+
+  if (g_card_uids_write && cardUidsCount(sm_card_uids) > 0) {
+    // The identifier the spool was found under. app_loop puts the plain UID
+    // there for NTAGs and for cards with no Bambu data, so this is the entry
+    // to take out of the list.
+    unlinkCardUid(spool_id, g_tag.tray_uuid, all);
+  } else if (sm_tag[0]) {
+    // Every other case, switched off included: clear the tag field and nothing
+    // else, exactly as this button has always done - only now it checks first
+    // whether that field holds anything. Writing an empty field empty changed
+    // nothing anyone could see, it just cost a request and, on a Spoolman that
+    // does not know the field, an HTTP 400.
+    patchSpoolTag(spool_id, "");
+    logSDf("Unlink spool ID=%d", spool_id);
+  } else {
+    logSDf("Unlink spool ID=%d: tag field empty, nothing written", spool_id);
+  }
+  Serial.printf("Unlink spool ID=%d all=%d\n", spool_id, all ? 1 : 0);
+
+  // Close More Info and reset display - NFC will re-scan and find no match
+  if (scr_more_info) { lv_obj_del(scr_more_info); scr_more_info = nullptr; }
+  clearTagDisplay();
+  showMainScreen();
+}
 static lv_obj_t *loc_list_obj = nullptr;
 static lv_obj_t *loc_status_obj = nullptr;
 
@@ -650,8 +688,15 @@ void buildMoreInfoScreen() {
       lv_obj_set_style_pad_all(pop, 0, 0);
       lv_obj_clear_flag(pop, LV_OBJ_FLAG_SCROLLABLE);
 
+      // Two UIDs make "unlink" ambiguous: the tag on the scale, or the whole
+      // binding including the one on the other flange, which the user cannot
+      // see. One UID or a plain tag field has no such question, and there the
+      // popup stays exactly what it always was.
+      const int cu_count = g_card_uids_write ? cardUidsCount(sm_card_uids) : 0;
+      const bool cu_multi = (cu_count >= 2);
+
       lv_obj_t *box2 = lv_obj_create(pop);
-      lv_obj_set_size(box2, 420, 210);
+      lv_obj_set_size(box2, 420, cu_multi ? 262 : 210);
       lv_obj_align(box2, LV_ALIGN_CENTER, 0, 0);
       lv_obj_set_style_bg_color(box2, lv_color_hex(0x1a0808), 0);
       lv_obj_set_style_border_color(box2, lv_color_hex(0x602020), 0);
@@ -668,7 +713,9 @@ void buildMoreInfoScreen() {
       lv_obj_align(lbl_t, LV_ALIGN_TOP_MID, 0, 16);
 
       lv_obj_t *lbl_m = lv_label_create(box2);
-      char buf_m[192]; backendText(T(STR_UNLINK_MSG), buf_m, sizeof(buf_m));
+      char buf_m[192];
+      if (cu_multi) snprintf(buf_m, sizeof(buf_m), T(STR_UNLINK_MULTI_MSG), cu_count);
+      else          backendText(T(STR_UNLINK_MSG), buf_m, sizeof(buf_m));
       lv_label_set_text(lbl_m, buf_m);
       lv_obj_set_style_text_color(lbl_m, lv_color_hex(0xc8d8f0), 0);
       lv_obj_set_style_text_font(lbl_m, &lv_font_montserrat_ext_14, 0);
@@ -679,8 +726,8 @@ void buildMoreInfoScreen() {
 
       // Cancel (links)
       lv_obj_t *btn_no = lv_btn_create(box2);
-      lv_obj_set_size(btn_no, 170, 44);
-      lv_obj_set_pos(btn_no, 12, 154);
+      lv_obj_set_size(btn_no, cu_multi ? 396 : 170, 44);
+      lv_obj_set_pos(btn_no, 12, cu_multi ? 204 : 154);
       lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x0a1828), 0);
       lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x1a2840), LV_STATE_PRESSED);
       lv_obj_set_style_radius(btn_no, 8, 0);
@@ -699,32 +746,48 @@ void buildMoreInfoScreen() {
 
       // Confirm unlink (rechts, rot)
       lv_obj_t *btn_yes = lv_btn_create(box2);
-      lv_obj_set_size(btn_yes, 220, 44);
-      lv_obj_set_pos(btn_yes, 190, 154);
+      lv_obj_set_size(btn_yes, cu_multi ? 196 : 220, 44);
+      lv_obj_set_pos(btn_yes, cu_multi ? 12 : 190, cu_multi ? 150 : 154);
       lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x3a1010), 0);
       lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x602020), LV_STATE_PRESSED);
       lv_obj_set_style_radius(btn_yes, 8, 0);
       lv_obj_set_style_shadow_width(btn_yes, 0, 0);
       lv_obj_set_style_border_width(btn_yes, 1, 0);
       lv_obj_set_style_border_color(btn_yes, lv_color_hex(0x602020), 0);
-      lv_obj_add_event_cb(btn_yes, [](lv_event_t *e) {
-        // Close popup
-        lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e))));
-        // Patch tag field to empty string
-        patchSpoolTag(sm_id, "");
-        logSDf("Unlink spool ID=%d", sm_id);
-        Serial.printf("Unlink spool ID=%d\n", sm_id);
-        // Close More Info and reset display — NFC will re-scan and find no match
-        if (scr_more_info) { lv_obj_del(scr_more_info); scr_more_info = nullptr; }
-        clearTagDisplay();
-        showMainScreen();
-      }, LV_EVENT_CLICKED, NULL);
+      // user_data carries whether this button means "all" or "only this one",
+      // so both share the handler below.
+      lv_obj_set_user_data(btn_yes, (void *)(intptr_t)(cu_multi ? 0 : 1));
+      lv_obj_add_event_cb(btn_yes, unlinkConfirmCb, LV_EVENT_CLICKED, NULL);
       lv_obj_t *lbl_yes = lv_label_create(btn_yes);
-      char buf_yes[48]; strncpy(buf_yes, T(STR_UNLINK_CONFIRM), sizeof(buf_yes)-1);
+      char buf_yes[48];
+      strncpy(buf_yes, T(cu_multi ? STR_BTN_UNLINK_ONE : STR_UNLINK_CONFIRM), sizeof(buf_yes)-1);
+      buf_yes[sizeof(buf_yes)-1] = '\0';
       lv_label_set_text(lbl_yes, buf_yes);
       lv_obj_set_style_text_color(lbl_yes, lv_color_hex(0xff8080), 0);
       lv_obj_set_style_text_font(lbl_yes, &lv_font_montserrat_ext_14, 0);
       lv_obj_align(lbl_yes, LV_ALIGN_CENTER, 0, 0);
+
+      if (cu_multi) {
+        lv_obj_t *btn_all = lv_btn_create(box2);
+        lv_obj_set_size(btn_all, 196, 44);
+        lv_obj_set_pos(btn_all, 212, 150);
+        lv_obj_set_style_bg_color(btn_all, lv_color_hex(0x3a1010), 0);
+        lv_obj_set_style_bg_color(btn_all, lv_color_hex(0x602020), LV_STATE_PRESSED);
+        lv_obj_set_style_radius(btn_all, 8, 0);
+        lv_obj_set_style_shadow_width(btn_all, 0, 0);
+        lv_obj_set_style_border_width(btn_all, 1, 0);
+        lv_obj_set_style_border_color(btn_all, lv_color_hex(0x602020), 0);
+        lv_obj_set_user_data(btn_all, (void *)(intptr_t)1);
+        lv_obj_add_event_cb(btn_all, unlinkConfirmCb, LV_EVENT_CLICKED, NULL);
+        lv_obj_t *lbl_all = lv_label_create(btn_all);
+        char buf_all[48];
+        strncpy(buf_all, T(STR_BTN_UNLINK_ALL), sizeof(buf_all)-1);
+        buf_all[sizeof(buf_all)-1] = '\0';
+        lv_label_set_text(lbl_all, buf_all);
+        lv_obj_set_style_text_color(lbl_all, lv_color_hex(0xff8080), 0);
+        lv_obj_set_style_text_font(lbl_all, &lv_font_montserrat_ext_14, 0);
+        lv_obj_align(lbl_all, LV_ALIGN_CENTER, 0, 0);
+      }
     }, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *lbl_unlink = lv_label_create(btn_unlink);

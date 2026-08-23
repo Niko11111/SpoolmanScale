@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <cstring>
 
+#include "ams_assign.h"
 #include "app_config.h"
 #include "auto_weight_state.h"
 #include "drying_config.h"
@@ -54,7 +55,14 @@ void loadPrefs() {
   g_wake_on_load = prefsGetBool("wake_load", true);
   g_ip_bar_mode = prefsGetUChar("ip_bar_mode", IP_BAR_OFF);
   g_flm_autolink = prefsGetBool("flm_autolink", false);
+  g_card_uids_write = prefsGetBool("cu_write", false);
   g_flm_tagless  = prefsGetBool("flm_tagless", true);
+  g_ams_mode      = prefsGetUChar("ams_mode", AMS_OFF);
+  if (g_ams_mode >= AMS_MODE_COUNT) g_ams_mode = AMS_OFF;
+  g_ams_timer_yes = prefsGetBool("ams_tmr_yes", true);
+  g_ams_window_s  = (int)prefsGetInt("ams_window", AMS_WINDOW_DEFAULT_S);
+  g_bb_dried_target = prefsGetUChar("bb_dried", BB_DRIED_NOTE);
+  if (g_bb_dried_target >= BB_DRIED_COUNT) g_bb_dried_target = BB_DRIED_NOTE;
   g_auto_weight = prefsGetBool("auto_weight", false);
   g_auto_loc_popup = prefsGetBool("auto_loc_popup", false);
   gh_prerelease = prefsGetBool("gh_prerelease", false);

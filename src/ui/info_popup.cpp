@@ -7,10 +7,15 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 
-// Longest German explanation is around 180 bytes, and an umlaut costs two of
-// them. 256 leaves room to grow a text without silently truncating it mid
-// character, which would render as a broken glyph.
-#define INFO_TEXT_BUF   256
+// Twice now a text has outgrown this buffer and been cut mid sentence, at 256
+// and again at 352. The reason it keeps happening is that nothing complains:
+// strncpy truncates silently, and a shortened explanation still looks like a
+// finished one. 768 is well past the longest text in lang.cpp, which is around
+// 470 bytes with its umlauts counted as the two bytes they are.
+//
+// The box no longer sets the narrower limit either - the text area scrolls
+// now, so length is a question of this buffer alone.
+#define INFO_TEXT_BUF   768
 #define INFO_TITLE_BUF   48
 
 void showInfoPopup(int title_id, int text_id) {
@@ -50,8 +55,24 @@ void showInfoPopup(int title_id, int text_id) {
   lv_obj_set_width(title, 424);
   lv_obj_set_pos(title, 8, 14);
 
-  lv_obj_t *info = lv_label_create(box);
-  char ibuf[INFO_TEXT_BUF];
+  // The text scrolls instead of being clipped. Some settings genuinely need a
+  // paragraph to explain, and a reader who can flick is better served than one
+  // who silently loses the last third.
+  lv_obj_t *scroll = lv_obj_create(box);
+  lv_obj_set_size(scroll, 424, 128);
+  lv_obj_set_pos(scroll, 8, 48);
+  lv_obj_set_style_bg_opa(scroll, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_width(scroll, 0, 0);
+  lv_obj_set_style_pad_all(scroll, 0, 0);
+  lv_obj_set_scroll_dir(scroll, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(scroll, LV_SCROLLBAR_MODE_AUTO);
+  lv_obj_clear_flag(scroll, LV_OBJ_FLAG_SCROLL_ELASTIC);
+
+  lv_obj_t *info = lv_label_create(scroll);
+  // Static, not on the stack: this runs from an LVGL event callback nested in
+  // lv_timer_handler(), and the buffer only has to survive until
+  // lv_label_set_text() has copied it into the label's own storage.
+  static char ibuf[INFO_TEXT_BUF];
   strncpy(ibuf, T(text_id), sizeof(ibuf) - 1);
   ibuf[sizeof(ibuf) - 1] = '\0';
   lv_label_set_text(info, ibuf);
@@ -59,8 +80,9 @@ void showInfoPopup(int title_id, int text_id) {
   lv_obj_set_style_text_font(info, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(info, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(info, 424);
-  lv_obj_set_pos(info, 8, 52);
+  // 14 px narrower than the container so the scrollbar has somewhere to sit.
+  lv_obj_set_width(info, 410);
+  lv_obj_set_pos(info, 0, 0);
 
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, 200, 48);

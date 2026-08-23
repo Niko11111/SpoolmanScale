@@ -18,11 +18,16 @@
 //      everything that writes
 //  FilaMan has no per device permissions, which is why both are
 //  needed. See SpoolmanScale_FilaMan_Integration_v2_0.md.
+//  BamBuddy uses a single API key sent as X-API-Key, created in
+//  Settings > API Keys with "Read Status" and "Manage Inventory".
+//  The key is optional: an instance with authentication disabled
+//  answers without it. See SpoolmanScale_BamBuddy_Integration.md.
 // ============================================================
 
 enum BackendMode : uint8_t {
   BACKEND_SPOOLMAN = 0,
-  BACKEND_FILAMAN  = 1
+  BACKEND_FILAMAN  = 1,
+  BACKEND_BAMBUDDY = 2
 };
 
 // Return value used by backend_api when a call has no equivalent in
@@ -37,6 +42,7 @@ void backendLoadSettings();
 BackendMode backendMode();
 void        backendSetMode(BackendMode mode);   // persists to NVS
 bool        backendIsFilaMan();
+bool        backendIsBamBuddy();
 
 // Base URL of the active backend, always without a trailing slash.
 // In Spoolman mode this is cfg_spoolman_base, so existing behaviour
@@ -60,19 +66,40 @@ const char* filamanDeviceToken();
 void        filamanSetApiKey(const char* key);          // persists
 void        filamanSetDeviceToken(const char* token);   // persists
 
+// BamBuddy credential. Empty string when unset, which is a valid state:
+// an instance with authentication disabled needs no key at all.
+const char* bambuddyApiKey();
+void        bambuddySetApiKey(const char* key);         // persists
+
 // True when the active backend has everything it needs to talk to
-// its server. Spoolman only needs a base URL.
+// its server. Spoolman and BamBuddy only need a base URL.
 bool backendIsConfigured();
 
-// Product name of the active backend, "Spoolman" or "FilaMan".
+// Product name of the active backend, "Spoolman", "FilaMan" or "BamBuddy".
 const char* backendName();
+
+// Same for a mode that is not the active one, which the mode selector needs
+// to label and log a button before the switch has happened.
+const char* backendModeName(BackendMode mode);
+
+// Three letter code for the status bar: "SPM", "FLM", "BBY", and "BBS" for
+// BamBuddy with a Spoolman server behind it. Three characters exactly: the
+// header leaves 32 px before the scale reading, which is about four at font
+// 12, so a longer code would push into it.
+const char* backendBadge();
+
+// Product name followed by a colon, for the caption above the spool block.
+// Written into a caller supplied buffer because LVGL cannot read Flash.
+void backendCaption(char* out, size_t out_size);
 
 // One line summary of the active backend for boot logs and diagnostics.
 //
 //   Spoolman | host=192.168.1.50 | configured=yes
 //   FilaMan | host=192.168.1.50 | key=set | device=set | configured=yes
+//   BamBuddy | host=192.168.1.50:8000 | key=set | configured=yes
 //
-// The credential fields only appear in FilaMan mode, Spoolman has none.
+// The credential fields only appear where a backend has them, Spoolman
+// has none.
 // The tokens themselves are never part of the output, only whether they
 // are present. 160 bytes are enough for the longest possible line.
 void backendStatusLine(char* out, size_t out_size);

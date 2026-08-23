@@ -14,6 +14,7 @@
 #include "services/app_settings.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/bambuddy_api.h"
 #include "header_status.h"
 #include "lang.h"
 #include "ui_common.h"
@@ -52,8 +53,7 @@ void buildSpoolmanScreen() {
   // Header. The product name is not translated, so it is composed here
   // instead of living in lang.cpp twice.
   char buf_title[32];
-  snprintf(buf_title, sizeof(buf_title), "%s Server",
-           backendIsFilaMan() ? "FilaMan" : "Spoolman");
+  snprintf(buf_title, sizeof(buf_title), "%s Server", backendName());
   buildSubHeader(scr_spoolman, buf_title,
     [](lv_event_t *e){
       logSD("BTN: Spoolman -> Back");
@@ -64,10 +64,13 @@ void buildSpoolmanScreen() {
       else             show_connection_from_spoolman_pending = true;
     });
 
-  // Hint: default port of the active backend, font14, y=52
+  // Hint: default port of the active backend, font14, y=52. Only a hint,
+  // nothing is appended - an address typed without a port goes to 80.
+  const char* def_port = (backendMode() == BACKEND_FILAMAN)  ? "8002"
+                       : (backendMode() == BACKEND_BAMBUDDY) ? "8000"
+                                                             : "7912";
   char buf_hint[32];
-  snprintf(buf_hint, sizeof(buf_hint), "192.168.x.x:%s",
-           backendIsFilaMan() ? "8002" : "7912");
+  snprintf(buf_hint, sizeof(buf_hint), "192.168.x.x:%s", def_port);
   lv_obj_t *lbl_hint = lv_label_create(scr_spoolman);
   lv_label_set_text(lbl_hint, buf_hint);
   lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
@@ -207,6 +210,11 @@ void buildSpoolmanScreen() {
       return;
     }
 
+    // BamBuddy needs to be asked where its inventory lives before anything
+    // else is read. Placed after the health check so a wrong address fails
+    // on the check rather than here.
+    backendAfterConnect();
+
     // Fetch version from /api/v1/info
     char sm_ver[32] = "?";
     backendGetVersion(cfg_spoolman_base, sm_ver, sizeof(sm_ver), 3000);
@@ -217,22 +225,37 @@ void buildSpoolmanScreen() {
     // there are no spools. In FilaMan that is the normal case during setup,
     // because counting needs the API key and it is entered a step later.
     // Printing "0 spools" there would look like an empty database.
-    char result_buf[64];
+    // Which database BamBuddy is on decides which half of the client runs,
+    // so it belongs on screen and not only in the log. The two names are the
+    // ones BamBuddy uses itself under Settings > Filament Tracking. Empty for
+    // the other backends, where there is nothing to choose between.
+    char inv_buf[32] = "";
+    if (backendIsBamBuddy()) {
+      char inv_name[24];
+      strncpy(inv_name, T(bbInventoryMode() == BB_INV_SPOOLMAN ? STR_BB_INV_SPOOLMAN
+                                                               : STR_BB_INV_OWN),
+              sizeof(inv_name) - 1);
+      inv_name[sizeof(inv_name) - 1] = '\0';
+      snprintf(inv_buf, sizeof(inv_buf), "%s | ", inv_name);
+    }
+
+    char result_buf[96];
     if (spool_count < 0) {
       char conn_buf[24];
       strncpy(conn_buf, T(STR_CONNECTED), sizeof(conn_buf) - 1);
       conn_buf[sizeof(conn_buf) - 1] = '\0';
-      snprintf(result_buf, sizeof(result_buf), "v%s | %s", sm_ver, conn_buf);
+      snprintf(result_buf, sizeof(result_buf), "v%s | %s%s", sm_ver, inv_buf, conn_buf);
     } else {
-      snprintf(result_buf, sizeof(result_buf), "v%s | %d spools", sm_ver, spool_count);
+      snprintf(result_buf, sizeof(result_buf), "v%s | %s%d spools",
+               sm_ver, inv_buf, spool_count);
     }
     if (lbl_sp_test_result) {
       lv_label_set_text(lbl_sp_test_result, result_buf);
       lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x40c080), 0);
     }
-    // Reveal the button again. In FilaMan it only leads somewhere during the
-    // setup, where it is the step to the credentials.
-    if (btn_sp_extra_fields && (setup_active || !backendIsFilaMan())) {
+    // Reveal the button again. In FilaMan and BamBuddy it only leads
+    // somewhere during the setup, where it is the step to the credentials.
+    if (btn_sp_extra_fields && (setup_active || backendMode() == BACKEND_SPOOLMAN)) {
       lv_obj_clear_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
     }
 
@@ -273,12 +296,13 @@ void buildSpoolmanScreen() {
   // This button doubles as the step onward during setup, which is why it
   // starts hidden there and only appears once the connection test passed.
   // FilaMan needs no extra fields at all, it accepts custom_fields keys
-  // without a prior definition, so outside the setup it has nothing to do.
-  if (setup_active || backendIsFilaMan()) {
+  // without a prior definition, and BamBuddy has a fixed schema, so outside
+  // the setup neither has anything to do here.
+  if (setup_active || backendMode() != BACKEND_SPOOLMAN) {
     lv_obj_add_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
   }
   lv_obj_add_event_cb(btn_sp_extra_fields, [](lv_event_t *e) {
-    if (backendIsFilaMan()) {
+    if (backendMode() != BACKEND_SPOOLMAN) {
       // Next comes the credential step, and those are entered in a browser.
       showOtaBrowserScreen(WEB_CTX_SETUP);
     } else {
@@ -287,8 +311,8 @@ void buildSpoolmanScreen() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ef = lv_label_create(btn_sp_extra_fields);
   { char ef_buf[32];
-    if (backendIsFilaMan()) snprintf(ef_buf, sizeof(ef_buf), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_NEXT));
-    else                    snprintf(ef_buf, sizeof(ef_buf), "Extra Fields  " LV_SYMBOL_RIGHT);
+    if (backendMode() != BACKEND_SPOOLMAN) snprintf(ef_buf, sizeof(ef_buf), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_NEXT));
+    else                                   snprintf(ef_buf, sizeof(ef_buf), "Extra Fields  " LV_SYMBOL_RIGHT);
     lv_label_set_text(lbl_ef, ef_buf); }
   lv_obj_set_style_text_color(lbl_ef, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_ef, &lv_font_montserrat_ext_14, 0);

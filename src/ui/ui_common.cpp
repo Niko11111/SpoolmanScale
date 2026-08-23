@@ -113,6 +113,14 @@ lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
   lv_obj_set_style_text_color(arr, lv_color_hex(0x2a4060), 0);
   lv_obj_set_style_text_font(arr, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(arr, LV_ALIGN_RIGHT_MID, -14, 0);
+  // Bounded, because callers overwrite this with words. Without a width the
+  // label is LV_SIZE_CONTENT pinned to the right edge, so it grows leftwards
+  // and walks straight through the help circle - which sits 42 px away. The
+  // text stays right aligned inside the box, so every existing row with its
+  // ON/OFF or symbol renders exactly as before.
+  lv_obj_set_width(arr, out_help ? 42 : 120);
+  lv_obj_set_style_text_align(arr, LV_TEXT_ALIGN_RIGHT, 0);
+  lv_label_set_long_mode(arr, LV_LABEL_LONG_DOT);
   return btn;
 }
 

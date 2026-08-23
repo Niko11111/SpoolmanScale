@@ -80,9 +80,11 @@ void buildScaleSubScreen() {
 
   { char buf_t[32]; strncpy(buf_t, T(STR_BTN_LASTUSED_MODE), sizeof(buf_t)-1);
     // The subtitle names the two sources, and they differ per backend.
-    char buf_s[48]; strncpy(buf_s, backendIsFilaMan() ? T(STR_BTN_LASTUSED_MODE_SUB_FM)
-                                                      : T(STR_BTN_LASTUSED_MODE_SUB),
-                            sizeof(buf_s)-1);
+    char buf_s[48];
+    strncpy(buf_s, backendIsFilaMan()  ? T(STR_BTN_LASTUSED_MODE_SUB_FM)
+                 : backendIsBamBuddy() ? T(STR_BTN_LASTUSED_MODE_SUB_BB)
+                                       : T(STR_BTN_LASTUSED_MODE_SUB),
+            sizeof(buf_s) - 1);
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_SAVE, buf_t, buf_s);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Scale-Sub -> Last Used Mode");

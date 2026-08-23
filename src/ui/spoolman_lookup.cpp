@@ -13,6 +13,7 @@
 #include "services/location_state.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/tag_uid.h"
 #include "services/user_options.h"
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
@@ -34,6 +35,77 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
   }
 };
 
+}
+
+// Does this spool carry the scanned UID?
+//
+// extra.tag is asked first and its comparison is byte for byte the one this
+// firmware has always used. That order is deliberate: every existing
+// installation runs on that path, and nothing added below may be able to cost
+// it a match. card_uids is only consulted once the tag field has said no.
+//
+// Both server side searches are partial matches, so this runs on their results
+// too, not only on the full scan.
+static bool spoolMatchesTag(JsonObjectConst spool, const char* uid) {
+  if (!uid || !uid[0]) return false;
+
+  JsonObjectConst extra = spool["extra"];
+  if (extra.isNull()) return false;
+
+  if (extra.containsKey("tag")) {
+    String tag_val = extra["tag"].as<String>();
+    tag_val.replace("\"", "");
+    tag_val.trim();
+    if (tag_val.equalsIgnoreCase(uid)) return true;
+  }
+
+  // SpoolLink's list, written for the Snapmaker U1 so that both tags of one
+  // spool lead to it. Whole entry comparison, see cardUidsContain().
+  if (extra.containsKey(CARD_UIDS_FIELD)) {
+    const char* raw = extra[CARD_UIDS_FIELD] | (const char*)nullptr;
+    if (raw && cardUidsContain(raw, uid)) return true;
+  }
+
+  return false;
+}
+
+// Copies one extra field into a buffer, quote stripped and trimmed. A value
+// that does not fit leaves the buffer empty rather than shortened: everything
+// downstream reads these as "what the spool is bound by", and a truncated list
+// would make an unlink drop whatever fell off the end.
+static void captureExtraField(JsonObjectConst extra, const char* key,
+                              char* out, size_t out_len, const char* what) {
+  out[0] = '\0';
+  if (extra.isNull() || !extra.containsKey(key)) return;
+
+  String v = extra[key].as<String>();
+  v.replace("\"", "");
+  v.trim();
+
+  if (v.length() >= out_len) {
+    logSDf("%s: value of spool %d too long (%d chars), ignored",
+           what, sm_id, (int)v.length());
+    return;
+  }
+
+  strncpy(out, v.c_str(), out_len - 1);
+  out[out_len - 1] = '\0';
+}
+
+// Keeps both stores that can bind a spool to a tag within reach of the unlink,
+// which runs from an LVGL callback where an HTTP request is out of the
+// question. The unlink popup needs the UID count before it opens, because that
+// decides whether it gets a third button, and the unlink itself needs to know
+// which of the two fields actually holds something so it can leave the other
+// one alone.
+//
+// Filled on every lookup rather than only with the write switch on, so that
+// flipping the switch while a spool sits on the scale does not land on an
+// empty buffer.
+static void captureBindings(JsonObjectConst spool) {
+  JsonObjectConst extra = spool["extra"];
+  captureExtraField(extra, CARD_UIDS_FIELD, sm_card_uids, sizeof(sm_card_uids), "card_uids");
+  captureExtraField(extra, "tag",           sm_tag,       sizeof(sm_tag),       "tag");
 }
 
 // Reduces an ISO timestamp to the day it falls on, in local time.
@@ -82,11 +154,27 @@ static void isoDayLocal(const char* iso, char* out_day, size_t out_size) {
 // consumption and stays empty without a printer integration, while every
 // weighing lands in the spool event log, including the ones this scale
 // reports. native_iso is the value from the spool object, or null.
-static void applyLastUsed(const char* native_iso, int spool_id) {
+static void applyLastUsed(const char* native_iso, const char* weighed_iso, int spool_id) {
   char iso[40] = "";
   if (native_iso && native_iso[0]) {
     strncpy(iso, native_iso, sizeof(iso) - 1);
     iso[sizeof(iso) - 1] = '\0';
+  }
+
+  // BamBuddy's built-in inventory stamps the spool itself when a weight is
+  // written, so the date arrives with the spool and costs no extra request.
+  // The rule is the same as below: authoritative in weighed mode, a fallback
+  // otherwise. Behind the Spoolman proxy the field is empty and this does
+  // nothing, which is correct - there is no weighing date there.
+  if (weighed_iso && weighed_iso[0]) {
+    if (last_used_mode == 1 || !iso[0]) {
+      strncpy(iso, weighed_iso, sizeof(iso) - 1);
+      iso[sizeof(iso) - 1] = '\0';
+    }
+  } else if (backendIsBamBuddy() && last_used_mode == 1) {
+    // Weighed mode with nothing to show beats showing a consumption date
+    // under a "last weighed" label.
+    iso[0] = '\0';
   }
 
   // In weighed mode the event log is the only correct source. In last used
@@ -246,6 +334,8 @@ void querySpoolmanById(int spool_id) {
     strncpy(sm_last_dried, "-", sizeof(sm_last_dried)-1);
   }
 
+  captureBindings(spool);
+
   // Material, vendor, color — only for NTAG (Bambu has it from tag itself)
   String sm_material = spool["filament"]["material"] | String("");
   sm_material.trim();
@@ -313,7 +403,8 @@ void querySpoolmanById(int spool_id) {
   lv_label_set_text(lbl_detail,        strlen(sm_article_nr)    > 0 ? sm_article_nr    : "-");
   lv_label_set_text(lbl_filament_name, strlen(sm_filament_name) > 0 ? sm_filament_name : "-");
 
-  applyLastUsed(spool["last_used"] | (const char*)nullptr, sm_id);
+  applyLastUsed(spool["last_used"] | (const char*)nullptr,
+                spool["extra"]["last_weighed"] | (const char*)nullptr, sm_id);
 
   Serial.printf("querySpoolmanById OK: ID=%d %.1fg dried=%s\n", sm_id, sm_remaining, sm_last_dried);
   updateLinkButton();
@@ -357,6 +448,8 @@ void querySpoolman(const char* tray_uuid) {
   sm_location_name[0] = '\0'; sm_location_id = 0;
   sm_found = false;
   sm_id = 0;
+  sm_card_uids[0] = '\0';
+  sm_tag[0] = '\0';
   sm_spool_weight = 0;
   sm_remaining = 0;
   sm_total = 1000;
@@ -381,6 +474,7 @@ void querySpoolman(const char* tray_uuid) {
   filter_spool["last_used"] = true;
   filter_spool["location"] = true;
   filter_spool["extra"]["tag"] = true;
+  filter_spool["extra"][CARD_UIDS_FIELD] = true;
   filter_spool["extra"]["last_dried"] = true;
   filter_spool["filament"]["id"] = true;
   filter_spool["filament"]["name"] = true;
@@ -419,19 +513,48 @@ void querySpoolman(const char* tray_uuid) {
       // otherwise a spool whose UID still lives in custom_fields would be
       // reported as unknown. Only accept the short cut on a real match.
       for (JsonObjectConst s : doc.as<JsonArrayConst>()) {
-        String t = s["extra"]["tag"].as<String>();
-        t.replace("\"", "");
-        t.trim();
-        if (t.equalsIgnoreCase(tray_uuid)) { have_result = true; break; }
+        if (spoolMatchesTag(s, tray_uuid)) { have_result = true; break; }
       }
       if (have_result) {
         logSDf("Backend: tag search hit, %d spool(s) returned",
                (int)doc.as<JsonArrayConst>().size());
       }
     } else if (fcode != BACKEND_NOT_SUPPORTED) {
-      // Spoolman answers NOT_SUPPORTED by design, anything else is a real
-      // failure and should not disappear silently.
+      // Every backend has a route for this by now, so NOT_SUPPORTED is only a
+      // guard. Anything else is a real failure and should not disappear.
       logSDf("Backend: tag search failed, code=%d err=%s", fcode, err.c_str());
+    }
+    if (!have_result) {
+      doc.clear();
+      err = DeserializationError::Ok;
+    }
+  }
+
+  // Second server side search, for spools that keep their UIDs in card_uids
+  // instead of in the tag field. That is how SpoolLink stores them for the
+  // Snapmaker U1, where a spool carries one tag per flange so it can be loaded
+  // on either side of the printer.
+  //
+  // Only reached once the tag search has come up empty, so an installation
+  // without SpoolLink never pays for it. The field check is what keeps it that
+  // way: Spoolman skips a filter on a field it does not know and would answer
+  // with the whole inventory, which is the very cost this shortcut exists to
+  // avoid.
+  if (!have_result && backendHasCardUidsField()) {
+    int ccode = backendFindSpoolByCardUid(cfg_spoolman_base, tray_uuid, doc, 8000, &err, &filter);
+    if (ccode == 200 && !err) {
+      // Same reasoning as above, and one degree more necessary: the filter is
+      // an ilike, so a four byte UID matches inside a seven byte one belonging
+      // to a different spool. spoolMatchesTag() compares whole entries.
+      for (JsonObjectConst s : doc.as<JsonArrayConst>()) {
+        if (spoolMatchesTag(s, tray_uuid)) { have_result = true; break; }
+      }
+      if (have_result) {
+        logSDf("Backend: card_uids search hit, %d spool(s) returned",
+               (int)doc.as<JsonArrayConst>().size());
+      }
+    } else if (ccode != BACKEND_NOT_SUPPORTED) {
+      logSDf("Backend: card_uids search failed, code=%d err=%s", ccode, err.c_str());
     }
     if (!have_result) {
       doc.clear();
@@ -489,13 +612,19 @@ void querySpoolman(const char* tray_uuid) {
   for (JsonObject spool : spools) {
     if (!spool.containsKey("extra")) continue;
     JsonObject extra = spool["extra"];
-    if (!extra.containsKey("tag")) continue;
 
-    String tag_val = extra["tag"].as<String>();
-    tag_val.replace("\"", "");
-    tag_val.trim();
+    if (!spoolMatchesTag(spool, tray_uuid)) continue;
 
-    if (!tag_val.equalsIgnoreCase(tray_uuid)) continue;
+    // Read after the match, not as part of it: the FilaMan migration below
+    // writes this value back and wants the tag field's own notation. A spool
+    // matched through card_uids has no tag field, which leaves this empty -
+    // harmless, because that migration only runs in FilaMan mode.
+    String tag_val;
+    if (extra.containsKey("tag")) {
+      tag_val = extra["tag"].as<String>();
+      tag_val.replace("\"", "");
+      tag_val.trim();
+    }
 
     // FOUND
     sm_found    = true;
@@ -514,6 +643,8 @@ void querySpoolman(const char* tray_uuid) {
       int mc = backendPatchSpoolTag(cfg_spoolman_base, sm_id, tag_val.c_str(), 4000);
       logSDf("FilaMan: migrated tag of spool %d to rfid_uid, HTTP %d", sm_id, mc);
     }
+
+    captureBindings(spool);
 
     sm_filament_id = spool["filament"]["id"] | 0;
     sm_vendor_id   = spool["filament"]["vendor"]["id"] | 0;
@@ -630,7 +761,8 @@ void querySpoolman(const char* tray_uuid) {
     lv_label_set_text(lbl_filament_name, strlen(sm_filament_name) > 0 ? sm_filament_name : "-");
 
     // last_used is directly in the spool object (not in extra!)
-    applyLastUsed(spool["last_used"] | (const char*)nullptr, sm_id);
+    applyLastUsed(spool["last_used"] | (const char*)nullptr,
+                spool["extra"]["last_weighed"] | (const char*)nullptr, sm_id);
 
     updateLinkButton();
     return;
@@ -653,6 +785,7 @@ void querySpoolman(const char* tray_uuid) {
   f2["id"] = true;
   f2["archived"] = true;
   f2["extra"]["tag"] = true;
+  f2["extra"][CARD_UIDS_FIELD] = true;
   int code2 = backendGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
   if (code2 == 200) {
     if (!err2) {
@@ -661,12 +794,7 @@ void querySpoolman(const char* tray_uuid) {
         // Only check truly archived spools (explicit bool cast needed for JsonVariant)
         bool is_archived = spool["archived"].as<bool>();
         if (!is_archived) continue;
-        if (!spool.containsKey("extra")) continue;
-        JsonObject extra = spool["extra"];
-        if (!extra.containsKey("tag")) continue;
-        String tag_val = extra["tag"].as<String>();
-        tag_val.replace("\"", ""); tag_val.trim();
-        if (!tag_val.equalsIgnoreCase(tray_uuid)) continue;
+        if (!spoolMatchesTag(spool, tray_uuid)) continue;
         // Archived spool found
         Serial.printf("Spoolman: spool archived (ID=%d)\n", spool["id"] | 0);
         lv_label_set_text(lbl_spoolman_weight, T(STR_ARCHIVED));

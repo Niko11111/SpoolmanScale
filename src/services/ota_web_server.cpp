@@ -474,6 +474,45 @@ static void registerRoutes() {
       "fetch('/filaman/register',{method:'POST',body:c})"
       ".then(r=>r.text()).then(t=>{document.getElementById('fm-reg-s').textContent=t;});}"
       "</script>") : String("")) +
+      // BamBuddy credentials. One key rather than two, and it may legitimately
+      // stay empty: an instance with authentication switched off answers
+      // without it. Same reasoning as above, the block is only built in
+      // BamBuddy mode.
+      (backendIsBamBuddy() ? String(
+      "<div class='card'>"
+      "<h2>BamBuddy</h2>"
+      "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>"
+      "The scale needs one API key. Leave it empty if your BamBuddy runs with "
+      "authentication switched off. "
+      "<span onclick=\"bh()\" style='cursor:pointer;color:#28d49a;border:1px solid #28d49a;"
+      "border-radius:50%;padding:0 6px;font-size:11px'>?</span></p>"
+      "<div id='h-bb' style='display:none;font-size:12px;color:#8ab0d8;background:#06080f;"
+      "border-left:2px solid #28d49a;border-radius:4px;padding:8px 10px;margin-bottom:12px'>"
+      "In BamBuddy open <b>Settings</b>, then <b>API Keys</b>, and create a key. "
+      "Tick <b>Read Status</b> and <b>Manage Inventory</b> - the first lets the scale "
+      "read spools and detect whether your inventory is local or on Spoolman, the second "
+      "lets it write weights back. The key is shown once, copy it right away.</div>"
+      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>"
+      "API key. Currently: "
+      + String(bambuddyApiKey()[0] ? "set" : "empty")
+      + "</label>"
+      "<div style='display:flex;gap:10px;align-items:center'>"
+      "<input id='bb-key' type='password' placeholder='bb_...' value='"
+      + String(bambuddyApiKey()[0] ? "________________" : "") + "'"
+      " style='flex:1;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
+      "border-radius:8px;padding:8px 10px;font-size:14px'>"
+      "<button class='btn-toggle' onclick='setBb()'>Save</button>"
+      "</div>"
+      "<span id='bb-key-s' style='font-size:12px;color:#28d49a'></span>"
+      "</div>"
+      "<script>"
+      "function bh(){var e=document.getElementById('h-bb');"
+      "e.style.display=(e.style.display==='none'?'block':'none');}"
+      "function setBb(){var v=document.getElementById('bb-key').value;"
+      "if(v.indexOf('_')===0){return;}"
+      "fetch('/bambuddy/key',{method:'POST',body:v})"
+      ".then(r=>r.text()).then(t=>{document.getElementById('bb-key-s').textContent=t;});}"
+      "</script>") : String("")) +
       // List Limits combined card - at bottom
       "<div class='card'>"
       "<h2>List Limits</h2>"
@@ -496,11 +535,12 @@ static void registerRoutes() {
       "<button class='btn-toggle' onclick='setLocL()'>Save</button>"
       "<span id='locl-s' style='font-size:12px;color:#28d49a;line-height:36px'></span>"
       "</div></div></div>"
-      // Both are named regardless of the active mode. This device is called
-      // SpoolmanScale, so in FilaMan mode a disclaimer that mentions only
-      // FilaMan would leave out the very name that could suggest an
+      // All three are named regardless of the active mode. This device is
+      // called SpoolmanScale, so a disclaimer that mentions only the active
+      // backend would leave out the very name that could suggest an
       // affiliation. Not a place to be clever with backendName().
-      "<div class='footer'>Not affiliated with Spoolman or FilaMan - Open Source Project</div>"
+      "<div class='footer'>Not affiliated with Spoolman, FilaMan or BamBuddy"
+      " - Open Source Project</div>"
       "</body></html>";
     ota_server.send(200, "text/html", html);
   });
@@ -696,6 +736,21 @@ static void registerRoutes() {
     if (key.length() < 8) { ota_server.send(400, "text/plain", "Key too short"); return; }
     filamanSetApiKey(key.c_str());
     ota_server.send(200, "text/plain", "Saved");
+  });
+
+  // BamBuddy: store the API key. An empty value is accepted and clears it,
+  // because an instance without authentication needs none - unlike FilaMan,
+  // where a missing credential is always a mistake.
+  ota_server.on("/bambuddy/key", HTTP_POST, []() {
+    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    String key = ota_server.arg("plain");
+    key.trim();
+    if (key.length() > 0 && key.length() < 8) {
+      ota_server.send(400, "text/plain", "Key too short");
+      return;
+    }
+    bambuddySetApiKey(key.c_str());
+    ota_server.send(200, "text/plain", key.length() ? "Saved" : "Cleared");
   });
 
   // FilaMan: exchange the 6 character device code for a device token.

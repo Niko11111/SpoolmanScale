@@ -14,6 +14,8 @@
 #include "lang.h"
 #include "services/list_limits.h"
 #include "services/spoolman_actions.h"
+#include "services/tag_uid.h"
+#include "services/user_options.h"
 #include "services/backend_api.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/spoolman_lookup.h"
@@ -50,6 +52,11 @@ struct UnlinkedSpool {
   float remaining;     // remaining_weight
   float total;         // filament.weight
   char  existing_tag[48]; // extra.tag falls gesetzt (fuer Ueberschreib-Check)
+  // SpoolLink's UID list, quote stripped, empty when the spool has none.
+  // Only ever non-empty while g_card_uids_write is on, because that is the
+  // only case in which such a spool reaches the list at all. Overlong lists
+  // are stored as empty rather than shortened, see the fetch below.
+  char  card_uids[80];
   int   filament_id;   // filament.id (for copy flow)
   float spool_weight;  // spool_weight (for copy flow)
 };
@@ -58,6 +65,15 @@ struct UnlinkedSpool {
 // web interface. Guarding those loops with spool_list_limit alone wrote past
 // the end as soon as a library had more than 20 vendors or materials.
 #define LINK_GROUP_MAX 20
+
+// True when the filament name already opens with the material. Spoolman's own
+// naming does this, and BamBuddy's mapping always does ("PETG HF Orange"), so
+// prefixing the material a second time would read "PETG PETG HF Orange".
+static bool nameStartsWithMaterial(const char* name, const char* material) {
+  if (!name || !name[0]) return false;
+  if (!material || !material[0]) return true;   // nothing left to prefix with
+  return strncasecmp(name, material, strlen(material)) == 0;
+}
 
 // Sort order of the link and copy lists: vendor, material, name, id, all
 // case insensitive except the id. Spools without a vendor go last rather
@@ -140,20 +156,45 @@ static bool link_flow_is_bambu = false;         // which flow is active
 
 // Copy spool flow state
 static lv_obj_t *scr_copy_entry   = nullptr;  // entry screen (ID / active / archived)
-static lv_obj_t *scr_copy_id      = nullptr;  // numeric ID input
 static lv_obj_t *scr_copy_list    = nullptr;  // spool list
 static lv_obj_t *scr_copy_confirm = nullptr;  // confirm popup
 static bool copy_flow_archived = false;        // true = showing archived spools
 static bool copy_flow_via_list = false;        // true = copy flow using vendor/material list path
 static bool copy_confirm_pending = false;      // deferred showCopyConfirmPopup from list row click
 static int  copy_confirm_fid = 0;
+// The template's own spool id. Carried alongside the filament id because the
+// two backends anchor a copy differently: Spoolman points the new spool at the
+// template's filament, BamBuddy has no filament as an object and reads the
+// template spool back instead. In BamBuddy the filament id is always 0.
+static int  copy_confirm_spool_id = 0;
 static float copy_confirm_remaining = 0, copy_confirm_initial = 0, copy_confirm_spool_w = 0;
 static char copy_confirm_name[80] = {};
-static char copy_id_input[8] = "";
-static lv_obj_t *lbl_copy_id_display = nullptr;
-static lv_obj_t *lbl_copy_id_status  = nullptr;
 // Template selected for copy
 static int   copy_template_filament_id = 0;
+static int   copy_template_spool_id    = 0;
+
+// Creating a spool from the tag itself. Kept separate from the copy state:
+// there is no template here, the tag is the only source.
+static lv_obj_t *scr_newtag        = nullptr;
+static lv_obj_t *lbl_newtag_info   = nullptr;
+static lv_obj_t *btn_newtag_w[NEWTAG_LABEL_COUNT] = { nullptr };
+static int  newtag_label_weight    = 0;
+static char newtag_material[16]    = "";   // base material, "PETG"
+static char newtag_subtype[24]     = "";   // what follows it, "HF"
+static char newtag_rgba[10]        = "";   // RRGGBBAA
+// Snapshot too, and for a sharper reason than the others: the no-tag timer in
+// app_loop.cpp wipes g_tag 60 s after the tag was last seen. Reading the brand
+// live at confirm time meant a slow decision produced a spool with no vendor
+// at all - and on a Spoolman server that is worse than it sounds, because
+// find_or_create_filament() then builds a filament with no vendor and a name
+// cut down to the bare material.
+static char newtag_brand[32]       = "";
+static char newtag_tray[36]        = "";   // same reason as newtag_brand
+static char newtag_color_name[32]  = "";   // resolved from the colour value
+// Opening the popup costs an HTTP round trip for the colour name, so the
+// button only raises a flag and loop() does the work - same reason as
+// copy_confirm_pending above.
+static bool newtag_open_pending    = false;
 static float copy_template_initial     = 0;
 static float copy_template_spool_w     = 0;
 static char  copy_template_name[64]    = "";
@@ -179,6 +220,51 @@ unsigned long link_tag_first_seen_ms = 0;       // time of first detection
 //  SPOOLMAN: LOAD ALL SPOOLS (for new link flow)
 //  Loads all active spools including extra.tag status
 // ============================================================
+// Is this spool already bound to a tag?
+//
+// Two stores can hold one: extra.tag, which this firmware writes, and
+// card_uids, which SpoolLink writes for the Snapmaker U1. A spool managed by
+// SpoolLink has an empty tag field, so asking only about that one would offer
+// it in the link list as free and let it collect a third, redundant binding.
+static bool spoolHasAnyTag(JsonObjectConst spool) {
+  JsonObjectConst extra = spool["extra"];
+  if (extra.isNull()) return false;
+
+  for (const char* key : { "tag", CARD_UIDS_FIELD }) {
+    if (!extra.containsKey(key)) continue;
+    // Spoolman stores extra values JSON encoded, so an unset field arrives as
+    // a pair of literal quotes rather than as an empty string.
+    String v = extra[key].as<String>();
+    v.replace("\"", "");
+    v.trim();
+    if (v.length() > 0) return true;
+  }
+  return false;
+}
+
+// Does this spool keep its UIDs in card_uids? Narrower than spoolHasAnyTag()
+// on purpose: it is the one case in which an already bound spool may still be
+// offered, because appending a second UID is the whole point of the switch.
+static bool spoolHasCardUids(JsonObjectConst spool) {
+  JsonObjectConst extra = spool["extra"];
+  if (extra.isNull() || !extra.containsKey(CARD_UIDS_FIELD)) return false;
+  String v = extra[CARD_UIDS_FIELD].as<String>();
+  v.replace("\"", "");
+  v.trim();
+  return v.length() > 0;
+}
+
+// The target spool's UID list, or nullptr when it has none or is not in the
+// list at all. Both fetch paths fill the entry, so this is the single place
+// the write decision reads from.
+static const char* linkTargetCardUids(int spool_id) {
+  for (int i = 0; i < link_spool_count; i++) {
+    if (link_spools[i].id == spool_id)
+      return link_spools[i].card_uids[0] ? link_spools[i].card_uids : nullptr;
+  }
+  return nullptr;
+}
+
 void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool archived_only) {
   // Free any previous allocation
   linkSpoolsFree();
@@ -194,6 +280,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   fL["archived"] = true;
   fL["remaining_weight"] = true;
   fL["extra"]["tag"] = true;
+  fL["extra"][CARD_UIDS_FIELD] = true;
   fL["filament"]["id"] = true;
   fL["filament"]["name"] = true;
   fL["filament"]["material"] = true;
@@ -228,12 +315,13 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
 
     // Skip already-linked spools — only in normal link flow.
     // In copy-archived flow, archived spools are templates (typically still tagged) -> don't skip.
-    String existing_tag = "";
-    if (spool.containsKey("extra") && spool["extra"].containsKey("tag")) {
-      existing_tag = spool["extra"]["tag"].as<String>();
-      existing_tag.replace("\"",""); existing_tag.trim();
-    }
-    if (!archived_only && existing_tag.length() > 0) { skipped_tag++; count_linked++; continue; }
+    // With the write switch on, a spool whose UIDs live in card_uids stays in
+    // the list: it is the only way to add the second tag from the scale, and
+    // WarnPopupA catches the selection before anything is written. Switched
+    // off this is exactly the condition it has always been.
+    const bool linked = spoolHasAnyTag(spool);
+    const bool appendable = g_card_uids_write && spoolHasCardUids(spool);
+    if (!archived_only && linked && !appendable) { skipped_tag++; count_linked++; continue; }
 
     String vname = "";
     if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
@@ -316,12 +404,8 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
       if (sp_archived) continue;
     }
 
-    String existing_tag = "";
-    if (spool.containsKey("extra") && spool["extra"].containsKey("tag")) {
-      existing_tag = spool["extra"]["tag"].as<String>();
-      existing_tag.replace("\"",""); existing_tag.trim();
-    }
-    if (!archived_only && existing_tag.length() > 0) continue;
+    if (!archived_only && spoolHasAnyTag(spool) &&
+        !(g_card_uids_write && spoolHasCardUids(spool))) continue;
 
     String vname = "";
     if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
@@ -357,8 +441,33 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = spool["id"] | 0;
 
+    // Only ever set in the copy-archived flow: everywhere else a spool with a
+    // tag was skipped above. Deliberately the tag field alone, because this is
+    // what the overwrite warning offers to replace, and card_uids is not
+    // something this firmware writes.
+    String existing_tag = "";
+    if (spool.containsKey("extra") && spool["extra"].containsKey("tag")) {
+      existing_tag = spool["extra"]["tag"].as<String>();
+      existing_tag.replace("\"",""); existing_tag.trim();
+    }
     strncpy(s.existing_tag, existing_tag.c_str(), sizeof(s.existing_tag)-1);
     s.existing_tag[sizeof(s.existing_tag)-1] = '\0';
+
+    // Never keep a shortened list: appending to a truncated one would drop
+    // the entries that fell off the end. Empty means "unknown", which sends
+    // the write back to extra.tag instead.
+    s.card_uids[0] = '\0';
+    if (spool.containsKey("extra") && spool["extra"].containsKey(CARD_UIDS_FIELD)) {
+      String cu = spool["extra"][CARD_UIDS_FIELD].as<String>();
+      cu.replace("\"",""); cu.trim();
+      if (cu.length() < sizeof(s.card_uids)) {
+        strncpy(s.card_uids, cu.c_str(), sizeof(s.card_uids)-1);
+        s.card_uids[sizeof(s.card_uids)-1] = '\0';
+      } else {
+        logSDf("link fetch: card_uids of spool %d too long (%d), ignored",
+               s.id, (int)cu.length());
+      }
+    }
 
     String fname = spool["filament"]["name"] | String("?");
     fname.trim();
@@ -457,7 +566,22 @@ void doLinkPatch(int spool_id, bool is_bambu) {
     return;
   }
 
-  patchSpoolTag(spool_id, link_uuid);
+  // The target's list decides the field. Null for every spool that has none,
+  // which is every spool reachable here while the switch is off.
+  if (!patchSpoolTag(spool_id, link_uuid, linkTargetCardUids(spool_id))) {
+    // Refused rather than truncated. Saying nothing here would look like a
+    // successful link right up to the next scan.
+    logSDf("LINK ABORT: card_uids of spool %d full", spool_id);
+    if (lbl_status) {
+      char buf[48];
+      strncpy(buf, T(STR_CU_FULL), sizeof(buf) - 1);
+      buf[sizeof(buf) - 1] = '\0';
+      lv_label_set_text(lbl_status, buf);
+      lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
+    }
+    closeLinkOverlays();
+    return;
+  }
 
   closeLinkOverlays();
 
@@ -496,7 +620,8 @@ static lv_obj_t* buildLinkOverlay() {
 // ============================================================
 //  LINK FLOW: WARNING POPUP A (spool already linked)
 // ============================================================
-void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu, const char* link_uuid) {
+void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
+                    const char* link_uuid, bool add_mode) {
   logSDf("SHOW: WarnPopupA spool=%d", spool_id);
   if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
 
@@ -522,7 +647,7 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu, const
 
   // Warning icon + title
   lv_obj_t *lbl_title = lv_label_create(box);
-  lv_label_set_text(lbl_title, T(STR_WARN_A_TITLE));
+  lv_label_set_text(lbl_title, T(add_mode ? STR_WARN_A_ADD_TITLE : STR_WARN_A_TITLE));
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0xf0b838), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_title, LV_TEXT_ALIGN_CENTER, 0);
@@ -552,7 +677,18 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu, const
     }
   }
   char info_buf[96];
-  if (sm_mat[0] || sm_name[0]) {
+  if (add_mode) {
+    // The UID list is too long to show and too dull to read. The count is what
+    // the user needs in order to recognise the spool as one that is already
+    // bound, and nothing is being replaced here anyway.
+    const int n = cardUidsCount(existing_tag);
+    if (sm_mat[0] || sm_name[0]) {
+      snprintf(info_buf, sizeof(info_buf), T(STR_WARN_A_ADD_INFO),
+        spool_id, sm_mat, sm_name, n);
+    } else {
+      snprintf(info_buf, sizeof(info_buf), T(STR_WARN_A_ADD_SHORT), spool_id, n);
+    }
+  } else if (sm_mat[0] || sm_name[0]) {
     snprintf(info_buf, sizeof(info_buf), T(STR_WARN_A_SPOOL_INFO),
       spool_id, sm_mat, sm_name, tag_short);
   } else {
@@ -578,8 +714,10 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu, const
   lv_obj_t *btn_force = lv_btn_create(box);
   lv_obj_set_size(btn_force, 420, 44);
   lv_obj_set_pos(btn_force, 10, 114);
-  lv_obj_set_style_bg_color(btn_force, lv_color_hex(0x3a2800), 0);
-  lv_obj_set_style_bg_color(btn_force, lv_color_hex(0x5a4000), LV_STATE_PRESSED);
+  // Adding is not the destructive act overwriting is, so it gets the calm
+  // green of a normal confirmation rather than the warning amber.
+  lv_obj_set_style_bg_color(btn_force, lv_color_hex(add_mode ? 0x1a3020 : 0x3a2800), 0);
+  lv_obj_set_style_bg_color(btn_force, lv_color_hex(add_mode ? 0x2a5030 : 0x5a4000), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_force, 8, 0);
   lv_obj_set_style_shadow_width(btn_force, 0, 0);
   lv_obj_set_style_border_width(btn_force, 0, 0);
@@ -589,8 +727,8 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu, const
     doLinkPatch(warn_a_spool_id, warn_a_is_bambu);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_force = lv_label_create(btn_force);
-  lv_label_set_text(lbl_force, T(STR_BTN_OVERWRITE));
-  lv_obj_set_style_text_color(lbl_force, lv_color_hex(0xf0b838), 0);
+  lv_label_set_text(lbl_force, T(add_mode ? STR_BTN_ADD_UID : STR_BTN_OVERWRITE));
+  lv_obj_set_style_text_color(lbl_force, lv_color_hex(add_mode ? 0x40c080 : 0xf0b838), 0);
   lv_obj_set_style_text_font(lbl_force, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_force);
 
@@ -791,6 +929,14 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     existing = doc["extra"]["tag"].as<String>();
     existing.replace("\"",""); existing.trim();
   }
+  // A spool managed by SpoolLink has an empty tag field but is bound all the
+  // same. Kept apart from the tag field, because which of the two is set
+  // decides whether the warning offers to overwrite or to add.
+  String existing_cu = "";
+  if (doc.containsKey("extra") && doc["extra"].containsKey(CARD_UIDS_FIELD)) {
+    existing_cu = doc["extra"][CARD_UIDS_FIELD].as<String>();
+    existing_cu.replace("\"",""); existing_cu.trim();
+  }
 
   bool found_in_list = false;
   for (int i = 0; i < link_spool_count; i++) {
@@ -806,6 +952,12 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     s.id = entered_id;
     strncpy(s.existing_tag, existing.c_str(), sizeof(s.existing_tag)-1);
     s.existing_tag[sizeof(s.existing_tag)-1] = '\0';
+    // Same rule as the list fetch: too long is stored as empty, never cut.
+    s.card_uids[0] = '\0';
+    if (existing_cu.length() > 0 && existing_cu.length() < sizeof(s.card_uids)) {
+      strncpy(s.card_uids, existing_cu.c_str(), sizeof(s.card_uids)-1);
+      s.card_uids[sizeof(s.card_uids)-1] = '\0';
+    }
     String mat = doc["filament"]["material"] | String("");
     mat.trim(); strncpy(s.material, mat.c_str(), sizeof(s.material)-1);
     s.material[sizeof(s.material)-1] = '\0';
@@ -823,8 +975,16 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     link_spool_count++;
   }
 
+  // The tag field wins the warning: overwriting it is the destructive case and
+  // has to be asked about first. Only a spool bound purely through card_uids
+  // gets the friendlier "add one" variant, and only with the switch on -
+  // switched off there is nothing to add to and the old warning is right.
   if (existing.length() > 0) {
     showWarnPopupA(entered_id, existing.c_str(), is_bambu, "");
+    return;
+  }
+  if (existing_cu.length() > 0) {
+    showWarnPopupA(entered_id, existing_cu.c_str(), is_bambu, "", g_card_uids_write);
     return;
   }
   if (is_bambu && g_tag.material[0]) {
@@ -1391,6 +1551,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
           UnlinkedSpool &cs = link_spools[cidx];
           logSDf("CopyConfirm via list: spool_id=%d fid=%d spw=%.0f", cs.id, cs.filament_id, cs.spool_weight);
           copy_confirm_fid = cs.filament_id;
+          copy_confirm_spool_id = cs.id;
           copy_confirm_remaining = cs.remaining;
           copy_confirm_initial = cs.total;
           copy_confirm_spool_w = cs.spool_weight;
@@ -1403,6 +1564,13 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
               snprintf(copy_confirm_name, sizeof(copy_confirm_name), "%s %s (%s)", cs.material, cs.name, cs.vendor);
           }
           copy_confirm_pending = true;
+        } else if (g_card_uids_write && link_spools[cidx].card_uids[0]) {
+          // Only these spools get a second dialog, and only because they are
+          // the ones the list would have hidden before the switch existed.
+          // The confirmation behind us says which spool, this one says that it
+          // is already bound and that nothing will be replaced.
+          showWarnPopupA(link_spools[cidx].id, link_spools[cidx].card_uids,
+                         link_flow_is_bambu, "", true);
         } else {
           doLinkPatch(link_spools[cidx].id, link_flow_is_bambu);
         }
@@ -2071,15 +2239,11 @@ void showLinkList() {
 //  COPY SPOOL FLOW
 //  Creates a new Spoolman spool based on an existing spool template
 //  (active or archived). Uses 3 API calls: fetch list, POST spool, PATCH tag.
-//  Limit: COPY_SPOOL_LIMIT spools shown (recommend <100 for stability).
+//  Limit: spool_list_limit rows shown, from NVS "list_limit".
 // ============================================================
 
 void closeCopyEntryPopup() {
   if (scr_copy_entry) { lv_obj_del(scr_copy_entry); scr_copy_entry = nullptr; }
-}
-
-void closeCopyIdInputPopup() {
-  if (scr_copy_id) { lv_obj_del(scr_copy_id); scr_copy_id = nullptr; }
 }
 
 void closeCopyListPopup() {
@@ -2091,18 +2255,25 @@ void closeCopyConfirmPopup() {
 }
 
 // Patch newly created spool with tag UID and query it on main screen
-void finishCopyFlow(int new_spool_id) {
-  // Bambu tags: use tray_uuid (long UUID from NFC block 9) — same logic as doLinkPatch
+void finishCopyFlow(int new_spool_id, const char* tray_uuid_override = nullptr) {
+  // Bambu tags: use tray_uuid (long UUID from NFC block 9) - same logic as doLinkPatch
   // NTAG: use link_tag_uid (short UID used as Spoolman key)
-  bool is_bambu_tag = (strlen(g_tag.tray_uuid) == 32);
-  const char* tag_to_write = is_bambu_tag ? g_tag.tray_uuid : link_tag_uid;
+  //
+  // The override exists because g_tag is not permanent: the no-tag timer in
+  // app_loop.cpp clears it 60 s after the tag was last seen. A caller that
+  // took its own copy earlier hands it in here rather than reading a field
+  // that may have been wiped while a popup was waiting for an answer.
+  const char* tray = (tray_uuid_override && strlen(tray_uuid_override) == 32)
+                     ? tray_uuid_override : g_tag.tray_uuid;
+  bool is_bambu_tag = (strlen(tray) == 32);
+  const char* tag_to_write = is_bambu_tag ? tray : link_tag_uid;
   logSDf("finishCopyFlow: spool=%d bambu=%d tag=%s", new_spool_id, (int)is_bambu_tag, tag_to_write);
   patchSpoolTag(new_spool_id, tag_to_write);
   sm_id = new_spool_id;
   sm_found = true;
   spoolman_queried_uid[0] = '\0';
   if (is_bambu_tag) {
-    querySpoolman(g_tag.tray_uuid);
+    querySpoolman(tray);
   } else {
     querySpoolmanById(new_spool_id);
   }
@@ -2110,18 +2281,20 @@ void finishCopyFlow(int new_spool_id) {
   showMainScreen();  // navigate to main after copy flow completes
 }
 
-// POST /api/v1/spool with template data, then PATCH tag
-void doCopySpoolCreate(int template_filament_id, float template_initial, float template_spool_w) {
+// Creates the new spool from the template, then attaches the tag.
+void doCopySpoolCreate(int template_spool_id, int template_filament_id,
+                       float template_initial, float template_spool_w) {
   if (!wifi_ok) return;
   float netto = scale_weight_g - template_spool_w;
   if (netto < 0) netto = 0;
 
   int new_id = 0;
-  int code = backendCreateSpool(cfg_spoolman_base, template_filament_id, template_initial,
-    template_spool_w, netto, &new_id, 8000);
+  int code = backendCreateSpool(cfg_spoolman_base, template_spool_id, template_filament_id,
+    template_initial, template_spool_w, netto, &new_id, 8000);
   if ((code == 200 || code == 201) && new_id > 0) {
     Serial.printf("Copy spool created: new ID=%d\n", new_id);
-    logSDf("Copy spool created: filament_id=%d new_spool_id=%d", template_filament_id, new_id);
+    logSDf("Copy spool created: tmpl_spool=%d fid=%d new_spool_id=%d",
+           template_spool_id, template_filament_id, new_id);
     finishCopyFlow(new_id);
     lv_label_set_text(lbl_status, T(STR_COPY_OK));
     lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
@@ -2133,9 +2306,11 @@ void doCopySpoolCreate(int template_filament_id, float template_initial, float t
 }
 
 // Confirm popup: shows template name + current scale weight, then creates
-void showCopyConfirmPopup(int template_filament_id, const char* template_name,
+void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
+                           const char* template_name,
                            float template_remaining, float template_initial, float template_spool_w) {
   closeCopyConfirmPopup();
+  copy_template_spool_id    = template_spool_id;
   copy_template_filament_id = template_filament_id;
   copy_template_initial      = template_initial;
   copy_template_spool_w      = template_spool_w;
@@ -2193,14 +2368,14 @@ void showCopyConfirmPopup(int template_filament_id, const char* template_name,
   lv_obj_set_style_radius(btn_ok, 8, 0);
   lv_obj_set_style_shadow_width(btn_ok, 0, 0);
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
+    int sid   = copy_template_spool_id;
     int fid   = copy_template_filament_id;
     float ini = copy_template_initial;
     float spw = copy_template_spool_w;
     closeCopyConfirmPopup();
     closeCopyListPopup();
-    closeCopyIdInputPopup();
     closeCopyEntryPopup();
-    doCopySpoolCreate(fid, ini, spw);
+    doCopySpoolCreate(sid, fid, ini, spw);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
   char ok_buf[32]; strncpy(ok_buf, T(STR_BTN_CONFIRMED), sizeof(ok_buf)-1);
@@ -2233,7 +2408,7 @@ void showCopyConfirmPopup(int template_filament_id, const char* template_name,
 }
 
 // Fetch spools for copy list (active or archived, material-filtered)
-// Uses PSRAM allocator. Max COPY_SPOOL_LIMIT entries shown.
+// Uses PSRAM allocator. Max spool_list_limit entries shown.
 void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bambu_tag) {
   // Free previous list
   linkSpoolsFree();
@@ -2323,8 +2498,10 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
     }
     UnlinkedSpool& s = link_spools[idx];
     s.id = spool["id"] | 0;
-    // Store filament_id in existing_tag field (reuse struct field)
-    snprintf(s.existing_tag, sizeof(s.existing_tag), "%d", (int)(spool["filament"]["id"] | 0));
+    // Not a tag here, and deliberately emptied rather than left alone:
+    // link_spools[] lives in PSRAM and is not zeroed, and the shared list
+    // builders skip every row whose existing_tag is non-empty.
+    s.existing_tag[0] = '\0';
     strncpy(s.name,     spool["filament"]["name"]           | "", sizeof(s.name)-1);
     s.name[sizeof(s.name)-1] = '\0';
     strncpy(s.vendor,   spool["filament"]["vendor"]["name"] | "", sizeof(s.vendor)-1);
@@ -2335,11 +2512,7 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
     snprintf(s.color_hex, sizeof(s.color_hex), "#%s", col);
     s.total     = spool["filament"]["weight"]  | 1000.0f;
     s.remaining = spool["remaining_weight"]    | 0.0f;
-    // Store spool_weight in remaining temporarily (we need it for the copy POST)
-    // Use a global for spool_weight — stored in existing_tag we repurpose below
-    // Actually store as: existing_tag = "filament_id:spool_weight_int"
     float spw = spool["spool_weight"] | 0.0f;
-    snprintf(s.existing_tag, sizeof(s.existing_tag), "%d:%.0f", (int)(spool["filament"]["id"] | 0), spw);
     s.filament_id  = spool["filament"]["id"] | 0;
     s.spool_weight = spw;
     idx++;
@@ -2527,11 +2700,15 @@ void showCopySpoolList() {
       int fid = sel.filament_id;
       float spw = sel.spool_weight;
       char tmpl_name[80];
-      snprintf(tmpl_name, sizeof(tmpl_name), "%s %s (%s)", sel.material, sel.name, sel.vendor);
+      if (nameStartsWithMaterial(sel.name, sel.material))
+        snprintf(tmpl_name, sizeof(tmpl_name), "%s (%s)", sel.name, sel.vendor);
+      else
+        snprintf(tmpl_name, sizeof(tmpl_name), "%s %s (%s)", sel.material, sel.name, sel.vendor);
       logSDf("BTN: CopyList row -> spool id=%d fid=%d", sel.id, fid);
       // Flag pattern: do not build new LVGL objects inside a list row callback
       copy_confirm_pending = true;
       copy_confirm_fid = fid;
+      copy_confirm_spool_id = sel.id;
       copy_confirm_remaining = sel.remaining;
       copy_confirm_initial = sel.total;
       copy_confirm_spool_w = spw;
@@ -2544,108 +2721,238 @@ void showCopySpoolList() {
   }
 }
 
-// ID input popup for copy flow — reuses same numpad style as link ID input
-void showCopyIdInputPopup() {
-  logSD("SHOW: CopyIdInputPopup");
-  closeCopyIdInputPopup();
-  copy_id_input[0] = '\0';
+// ============================================================
+//  CREATE A SPOOL FROM THE TAG
+//
+//  The way out when no template fits: a brand new Bambu spool whose type is
+//  not in the inventory yet. Everything the server needs is already on the
+//  tag except the weights - the tag carries no gram value at all - so the
+//  core is assumed to be a Bambu one and the nominal weight is picked from
+//  the scale and left editable.
+//
+//  BamBuddy only. Spoolman and FilaMan want a filament_id for a new spool,
+//  and a tag cannot supply one.
+// ============================================================
 
-  scr_copy_id = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(scr_copy_id, 480, 320);
-  lv_obj_set_pos(scr_copy_id, 0, 0);
-  lv_obj_set_style_bg_color(scr_copy_id, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_border_width(scr_copy_id, 0, 0);
-  lv_obj_set_style_pad_all(scr_copy_id, 0, 0);
-  lv_obj_set_style_radius(scr_copy_id, 0, 0);
-  lv_obj_clear_flag(scr_copy_id, LV_OBJ_FLAG_SCROLLABLE);
+void closeNewTagPopup() {
+  if (scr_newtag) { lv_obj_del(scr_newtag); scr_newtag = nullptr; }
+  lbl_newtag_info = nullptr;
+  for (int i = 0; i < NEWTAG_LABEL_COUNT; i++) btn_newtag_w[i] = nullptr;
+}
 
-  addBackButton(scr_copy_id, [](lv_event_t *e) { closeCopyIdInputPopup(); });
+// Net filament on the pad, measured against the assumed Bambu core.
+static float newTagNetto() {
+  float netto = scale_weight_g - (float)BAMBU_CORE_WEIGHT_G;
+  return netto < 0 ? 0 : netto;
+}
 
-  lv_obj_t *lbl_title = lv_label_create(scr_copy_id);
-  char title_buf[32]; backendText(T(STR_COPY_ID_BTN), title_buf, sizeof(title_buf));
+// Repaints the four choices so the active one is obvious, and refreshes the
+// text underneath it.
+static void newTagRefresh() {
+  static const int choices[NEWTAG_LABEL_COUNT] = NEWTAG_LABEL_CHOICES;
+  for (int i = 0; i < NEWTAG_LABEL_COUNT; i++) {
+    if (!btn_newtag_w[i]) continue;
+    bool on = (choices[i] == newtag_label_weight);
+    lv_obj_set_style_bg_color(btn_newtag_w[i], lv_color_hex(on ? 0x1a4020 : 0x0a1e30), 0);
+    lv_obj_set_style_border_width(btn_newtag_w[i], 1, 0);
+    lv_obj_set_style_border_color(btn_newtag_w[i], lv_color_hex(on ? 0x28d49a : 0x1a3060), 0);
+  }
+  if (lbl_newtag_info) {
+    char msg[192];
+    snprintf(msg, sizeof(msg), T(STR_NEWTAG_MSG),
+             newtag_brand, g_tag.material,
+             newtag_color_name[0] ? newtag_color_name : g_tag.color_hex,
+             newTagNetto());
+    lv_label_set_text(lbl_newtag_info, msg);
+  }
+}
+
+// Creates the spool and hands it to the main screen, exactly as a copy would.
+void doCreateSpoolFromTag() {
+  if (!wifi_ok) return;
+
+  int new_id = 0;
+  int code = backendCreateSpoolFromTag(newtag_material, newtag_subtype, newtag_brand,
+                                       newtag_rgba, newtag_color_name, newtag_label_weight,
+                                       BAMBU_CORE_WEIGHT_G, newTagNetto(),
+                                       g_tag.temp_min, g_tag.temp_max, &new_id, 8000);
+  if ((code == 200 || code == 201) && new_id > 0) {
+    Serial.printf("New spool from tag: new ID=%d\n", new_id);
+    logSDf("New spool from tag: mat=%s sub=%s brand=%s col=%s label=%d new_spool_id=%d",
+           newtag_material, newtag_subtype, newtag_brand, newtag_color_name,
+           newtag_label_weight, new_id);
+    finishCopyFlow(new_id, newtag_tray);
+    char ok_buf[40]; strncpy(ok_buf, T(STR_NEWTAG_OK), sizeof(ok_buf)-1);
+    ok_buf[sizeof(ok_buf)-1] = '\0';
+    lv_label_set_text(lbl_status, ok_buf);
+    lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+    return;
+  }
+  logSDf("New spool from tag failed: HTTP %d", code);
+  char fail_buf[40]; strncpy(fail_buf, T(STR_NEWTAG_FAIL), sizeof(fail_buf)-1);
+  fail_buf[sizeof(fail_buf)-1] = '\0';
+  lv_label_set_text(lbl_status, fail_buf);
+  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
+}
+
+void showNewFromTagPopup() {
+  logSD("SHOW: NewFromTagPopup");
+  closeNewTagPopup();
+
+  // Split "PETG HF" into the material BamBuddy stores and the subtype beside
+  // it. extractBambuSubtype() hands back the tail; its return value answers a
+  // different question (the PLA blacklist) and is not used here.
+  newtag_subtype[0] = '\0';
+  extractBambuSubtype(g_tag.material, newtag_subtype, sizeof(newtag_subtype));
+  size_t head = 0;
+  while (g_tag.material[head] && g_tag.material[head] != ' ' && g_tag.material[head] != '-') head++;
+  if (head >= sizeof(newtag_material)) head = sizeof(newtag_material) - 1;
+  memcpy(newtag_material, g_tag.material, head);
+  newtag_material[head] = '\0';
+
+  strncpy(newtag_brand, g_tag.vendor[0] ? g_tag.vendor : BAMBU_VENDOR_NAME,
+          sizeof(newtag_brand)-1);
+  newtag_brand[sizeof(newtag_brand)-1] = '\0';
+  strncpy(newtag_tray, g_tag.tray_uuid, sizeof(newtag_tray)-1);
+  newtag_tray[sizeof(newtag_tray)-1] = '\0';
+
+  // #RRGGBB on the tag, RRGGBBAA on the server. Fully opaque. Left empty when
+  // the colour block did not read - "FF" alone would be a malformed colour,
+  // and an absent field is the honest answer.
+  const char* hex = g_tag.color_hex[0] == '#' ? g_tag.color_hex + 1 : g_tag.color_hex;
+  if (strlen(hex) >= 6) snprintf(newtag_rgba, sizeof(newtag_rgba), "%.6sFF", hex);
+  else                  newtag_rgba[0] = '\0';
+
+  // The tag has the colour as a value only. Ask the backend for its name, so
+  // the new spool reads "PETG HF Orange" rather than a bare hex nobody can
+  // shop for. An unknown colour simply leaves the field empty.
+  newtag_color_name[0] = '\0';
+  if (newtag_rgba[0]) {
+    backendLookupColorName(newtag_rgba, g_tag.material,
+                           newtag_color_name, sizeof(newtag_color_name));
+  }
+
+  // Nearest nominal weight to what is actually on the pad.
+  static const int choices[NEWTAG_LABEL_COUNT] = NEWTAG_LABEL_CHOICES;
+  float netto = newTagNetto();
+  newtag_label_weight = choices[NEWTAG_LABEL_COUNT - 1];
+  int best = -1;
+  for (int i = 0; i < NEWTAG_LABEL_COUNT; i++) {
+    int diff = (int)(netto > choices[i] ? netto - choices[i] : choices[i] - netto);
+    if (best < 0 || diff < best) { best = diff; newtag_label_weight = choices[i]; }
+  }
+
+  scr_newtag = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(scr_newtag, 480, 320);
+  lv_obj_set_pos(scr_newtag, 0, 0);
+  lv_obj_set_style_bg_color(scr_newtag, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_opa(scr_newtag, LV_OPA_70, 0);
+  lv_obj_set_style_border_width(scr_newtag, 0, 0);
+  lv_obj_set_style_pad_all(scr_newtag, 0, 0);
+  lv_obj_clear_flag(scr_newtag, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t *box = lv_obj_create(scr_newtag);
+  lv_obj_set_size(box, 440, 284);
+  lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_border_width(box, 1, 0);
+  lv_obj_set_style_radius(box, 10, 0);
+  lv_obj_set_style_pad_all(box, 0, 0);
+  lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t *lbl_title = lv_label_create(box);
+  char title_buf[40]; strncpy(title_buf, T(STR_NEWTAG_TITLE), sizeof(title_buf)-1);
+  title_buf[sizeof(title_buf)-1] = '\0';
   lv_label_set_text(lbl_title, title_buf);
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
-  lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 8);
+  lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_16, 0);
+  lv_obj_set_style_text_align(lbl_title, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 10);
 
-  // Digit display
-  lbl_copy_id_display = lv_label_create(scr_copy_id);
-  lv_label_set_text(lbl_copy_id_display, "_");
-  lv_obj_set_style_text_color(lbl_copy_id_display, lv_color_hex(0xe8f0ff), 0);
-  lv_obj_set_style_text_font(lbl_copy_id_display, &lv_font_montserrat_ext_24, 0);
-  lv_obj_align(lbl_copy_id_display, LV_ALIGN_TOP_MID, 0, 36);
+  lbl_newtag_info = lv_label_create(box);
+  lv_obj_set_style_text_color(lbl_newtag_info, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_font(lbl_newtag_info, &lv_font_montserrat_ext_14, 0);
+  lv_obj_set_style_text_align(lbl_newtag_info, LV_TEXT_ALIGN_CENTER, 0);
+  lv_label_set_long_mode(lbl_newtag_info, LV_LABEL_LONG_WRAP);
+  lv_obj_set_width(lbl_newtag_info, 410);
+  lv_obj_align(lbl_newtag_info, LV_ALIGN_TOP_MID, 0, 38);
 
-  // Status label
-  lbl_copy_id_status = lv_label_create(scr_copy_id);
-  lv_label_set_text(lbl_copy_id_status, "");
-  lv_obj_set_style_text_color(lbl_copy_id_status, lv_color_hex(0xff8080), 0);
-  lv_obj_set_style_text_font(lbl_copy_id_status, &lv_font_montserrat_ext_12, 0);
-  lv_obj_align(lbl_copy_id_status, LV_ALIGN_TOP_MID, 0, 66);
+  lv_obj_t *lbl_lw = lv_label_create(box);
+  char lw_buf[24]; strncpy(lw_buf, T(STR_NEWTAG_LABEL_W), sizeof(lw_buf)-1);
+  lw_buf[sizeof(lw_buf)-1] = '\0';
+  lv_label_set_text(lbl_lw, lw_buf);
+  lv_obj_set_style_text_color(lbl_lw, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(lbl_lw, &lv_font_montserrat_ext_12, 0);
+  lv_obj_align(lbl_lw, LV_ALIGN_TOP_MID, 0, 108);
 
-  // Numpad: same style as link ID input (104x30, gap 4)
-  const int NP_W = 104, NP_H = 30, NP_GAP = 4;
-  const int NP_X0 = (480 - 3*(NP_W+NP_GAP)+NP_GAP) / 2;
-  const int NP_Y0 = 84;
-  const char* keys[] = {"1","2","3","4","5","6","7","8","9","<","0","OK"};
-  for (int k = 0; k < 12; k++) {
-    int row = k / 3, col = k % 3;
-    lv_obj_t *btn = lv_btn_create(scr_copy_id);
-    lv_obj_set_size(btn, NP_W, NP_H);
-    lv_obj_set_pos(btn, NP_X0 + col*(NP_W+NP_GAP), NP_Y0 + row*(NP_H+NP_GAP));
-    bool is_ok  = (k == 11);
-    bool is_del = (k == 9);
-    lv_obj_set_style_bg_color(btn, is_ok ? lv_color_hex(0x1a3020) : (is_del ? lv_color_hex(0x1a2030) : lv_color_hex(0x0a1828)), 0);
-    lv_obj_set_style_radius(btn, 6, 0);
-    lv_obj_set_style_shadow_width(btn, 0, 0);
-    lv_obj_set_style_border_width(btn, 0, 0);
-    lv_obj_t *lbl = lv_label_create(btn);
-    lv_label_set_text(lbl, keys[k]);
-    lv_obj_set_style_text_color(lbl, is_ok ? lv_color_hex(0x40c080) : lv_color_hex(0xc8d8f0), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_add_event_cb(btn, [](lv_event_t *e) {
-      lv_obj_t *b = lv_event_get_target(e);
-      lv_obj_t *l = lv_obj_get_child(b, 0);
-      const char *txt = lv_label_get_text(l);
-      if (strcmp(txt, "<") == 0) {
-        int len = strlen(copy_id_input);
-        if (len > 0) copy_id_input[len-1] = '\0';
-      } else if (strcmp(txt, "OK") == 0) {
-        if (strlen(copy_id_input) == 0) return;
-        int entered_id = atoi(copy_id_input);
-        if (entered_id <= 0) { lv_label_set_text(lbl_copy_id_status, "Invalid ID"); return; }
-        // Fetch spool data from Spoolman (allow archived)
-        if (!wifi_ok) { lv_label_set_text(lbl_copy_id_status, T(STR_LINK_NO_WIFI)); return; }
-        StaticJsonDocument<512> doc;
-        DeserializationError derr = DeserializationError::Ok;
-        int code = backendGetSpoolJson(cfg_spoolman_base, entered_id, doc, 8000, &derr);
-        if (code != 200) {
-          char err_buf[32]; snprintf(err_buf, sizeof(err_buf), T(STR_LINK_ID_NOT_FOUND), entered_id);
-          lv_label_set_text(lbl_copy_id_status, err_buf);
-          return;
-        }
-        int fid      = doc["filament"]["id"] | 0;
-        float ini    = doc["filament"]["weight"] | 1000.0f;
-        float spw    = doc["spool_weight"] | 0.0f;
-        const char *fname = doc["filament"]["name"] | "?";
-        const char *fmat  = doc["filament"]["material"] | "";
-        const char *fvnd  = doc["filament"]["vendor"]["name"] | "";
-        char tmpl[80];
-        float rem2 = doc["remaining_weight"] | 0.0f;
-        snprintf(tmpl, sizeof(tmpl), "%s %s (%s)", fmat, fname, fvnd);
-        showCopyConfirmPopup(fid, tmpl, rem2, ini, spw);
-      } else {
-        if (strlen(copy_id_input) < 6) {
-          strncat(copy_id_input, txt, 1);
-        }
-      }
-      // Update display
-      char disp[10];
-      snprintf(disp, sizeof(disp), "%s_", strlen(copy_id_input)?copy_id_input:"");
-      lv_label_set_text(lbl_copy_id_display, disp);
+  // Four nominal weights side by side. The index is stored on the button so
+  // one shared callback serves all of them.
+  const int W_BTN = 100, W_GAP = 6, W_Y = 128;
+  const int w_x0 = (440 - (NEWTAG_LABEL_COUNT * W_BTN + (NEWTAG_LABEL_COUNT - 1) * W_GAP)) / 2;
+  for (int i = 0; i < NEWTAG_LABEL_COUNT; i++) {
+    lv_obj_t *b = lv_btn_create(box);
+    lv_obj_set_size(b, W_BTN, 46);
+    lv_obj_set_pos(b, w_x0 + i * (W_BTN + W_GAP), W_Y);
+    lv_obj_set_style_radius(b, 8, 0);
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_set_user_data(b, (void*)(intptr_t)i);
+    lv_obj_add_event_cb(b, [](lv_event_t *e) {
+      static const int ch[NEWTAG_LABEL_COUNT] = NEWTAG_LABEL_CHOICES;
+      int idx = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
+      if (idx < 0 || idx >= NEWTAG_LABEL_COUNT) return;
+      newtag_label_weight = ch[idx];
+      newTagRefresh();
     }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *l = lv_label_create(b);
+    char wb[12]; snprintf(wb, sizeof(wb), "%d g", choices[i]);
+    lv_label_set_text(l, wb);
+    lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
+    lv_obj_align(l, LV_ALIGN_CENTER, 0, 0);
+    btn_newtag_w[i] = b;
   }
+
+  lv_obj_t *btn_ok = lv_btn_create(box);
+  lv_obj_set_size(btn_ok, 200, 52);
+  lv_obj_set_pos(btn_ok, 12, 194);
+  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x1a4020), 0);
+  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x2a7030), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_ok, 8, 0);
+  lv_obj_set_style_shadow_width(btn_ok, 0, 0);
+  lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
+    logSD("BTN: NewFromTag -> Confirm");
+    closeNewTagPopup();
+    closeCopyListPopup();
+    closeCopyEntryPopup();
+    doCreateSpoolFromTag();
+  }, LV_EVENT_CLICKED, NULL);
+  { lv_obj_t *l = lv_label_create(btn_ok);
+    char b[32]; strncpy(b, T(STR_BTN_CONFIRMED), sizeof(b)-1); b[sizeof(b)-1] = '\0';
+    lv_label_set_text(l, b);
+    lv_obj_set_style_text_color(l, lv_color_hex(0x80ffb0), 0);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+    lv_obj_align(l, LV_ALIGN_CENTER, 0, 0); }
+
+  lv_obj_t *btn_no = lv_btn_create(box);
+  lv_obj_set_size(btn_no, 200, 52);
+  lv_obj_set_pos(btn_no, 228, 194);
+  lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x3a1010), 0);
+  lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x602020), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_no, 8, 0);
+  lv_obj_set_style_shadow_width(btn_no, 0, 0);
+  lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
+    logSD("BTN: NewFromTag -> Cancel");
+    closeNewTagPopup();
+  }, LV_EVENT_CLICKED, NULL);
+  { lv_obj_t *l = lv_label_create(btn_no);
+    char b[32]; strncpy(b, T(STR_CANCEL), sizeof(b)-1); b[sizeof(b)-1] = '\0';
+    lv_label_set_text(l, b);
+    lv_obj_set_style_text_color(l, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+    lv_obj_align(l, LV_ALIGN_CENTER, 0, 0); }
+
+  newTagRefresh();
 }
 
 // Entry popup: choose ID / Active spools / Archived spools
@@ -2701,9 +3008,23 @@ void showCopyEntryPopup() {
   lv_obj_set_width(lbl_ctx, 450);
   lv_obj_align(lbl_ctx, LV_ALIGN_TOP_MID, 0, 60);
 
-  // Button layout: 3 buttons + cancel, ID= >100 recommended | List= <100 recommended
-  const int BTN_W = 380, BTN_H = 48, BTN_GAP = 8;
-  const int Y1 = 92, Y2 = Y1+BTN_H+BTN_GAP, Y3 = Y2+BTN_H+BTN_GAP, Y4 = Y3+BTN_H+BTN_GAP;
+  // Creating from the tag needs a backend that can do it and a Bambu tag to
+  // read it from - an NTAG carries no material, and material is the one field
+  // BamBuddy insists on.
+  const bool offer_from_tag = backendCanCreateFromTag() &&
+                              strlen(g_tag.tray_uuid) == 32 &&
+                              g_tag.material[0] != '\0';
+
+  // Button layout: 3 buttons + cancel, ID= >100 recommended | List= <100
+  // recommended. A fifth row only fits if every row gives up a few pixels, so
+  // the roomier spacing stays whenever the extra button is not offered.
+  const int BTN_W = 380;
+  const int BTN_H   = offer_from_tag ? 42 : 48;
+  const int BTN_GAP = offer_from_tag ?  5 :  8;
+  const int Y1 = offer_from_tag ? 84 : 92;
+  const int Y2 = Y1+BTN_H+BTN_GAP, Y3 = Y2+BTN_H+BTN_GAP, Y4 = Y3+BTN_H+BTN_GAP;
+  const int Y5 = Y4+BTN_H+BTN_GAP;
+  const int Y_CANCEL = offer_from_tag ? Y5 : Y4;
 
   // Button 1: Enter ID (works for active + archived, >100 spools recommended)
   lv_obj_t *btn1 = lv_btn_create(scr_copy_entry);
@@ -2797,10 +3118,34 @@ void showCopyEntryPopup() {
     lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(l, LV_ALIGN_CENTER, 0, 0); }
 
-  // Button 4: Cancel
+  // Button 4: create from the tag, only where that leads anywhere
+  if (offer_from_tag) {
+    lv_obj_t *btnt = lv_btn_create(scr_copy_entry);
+    lv_obj_set_size(btnt, BTN_W, BTN_H);
+    lv_obj_align(btnt, LV_ALIGN_TOP_MID, 0, Y4);
+    lv_obj_set_style_bg_color(btnt, lv_color_hex(0x0a2818), 0);
+    lv_obj_set_style_bg_color(btnt, lv_color_hex(0x1a4a30), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btnt, 10, 0);
+    lv_obj_set_style_shadow_width(btnt, 0, 0);
+    lv_obj_set_style_border_width(btnt, 1, 0);
+    lv_obj_set_style_border_color(btnt, lv_color_hex(0x28d49a), 0);
+    lv_obj_add_event_cb(btnt, [](lv_event_t *e) {
+      logSD("BTN: CopyEntry -> New from tag");
+      newtag_open_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *l = lv_label_create(btnt);
+    char b[40]; strncpy(b, T(STR_NEWTAG_BTN), sizeof(b)-1); b[sizeof(b)-1] = '\0';
+    lv_label_set_text(l, b);
+    lv_obj_set_style_text_color(l, lv_color_hex(0x80ffb0), 0);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+    lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(l, LV_ALIGN_CENTER, 0, 0);
+  }
+
+  // Cancel
   lv_obj_t *btn4 = lv_btn_create(scr_copy_entry);
   lv_obj_set_size(btn4, BTN_W, BTN_H);
-  lv_obj_align(btn4, LV_ALIGN_TOP_MID, 0, Y4);
+  lv_obj_align(btn4, LV_ALIGN_TOP_MID, 0, Y_CANCEL);
   lv_obj_set_style_bg_color(btn4, lv_color_hex(0x3a1010), 0);
   lv_obj_set_style_bg_color(btn4, lv_color_hex(0x602020), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn4, 10, 0);
@@ -2821,8 +3166,8 @@ void hideSpoolFlowOverlays() {
 }
 
 void deleteSpoolFlowOverlays() {
+  closeNewTagPopup();
   if (scr_copy_entry)   { lv_obj_del(scr_copy_entry);   scr_copy_entry   = nullptr; }
-  if (scr_copy_id)      { lv_obj_del(scr_copy_id);      scr_copy_id      = nullptr; }
   if (scr_copy_list)    { lv_obj_del(scr_copy_list);    scr_copy_list    = nullptr; }
   if (scr_copy_confirm) { lv_obj_del(scr_copy_confirm); scr_copy_confirm = nullptr; }
 }
@@ -2865,6 +3210,10 @@ void handleSpoolFlowDeferredActions() {
     copy_id_lookup_pending = 0;
     showIdInputPopup(link_flow_is_bambu);
   }
+  if (newtag_open_pending) {
+    newtag_open_pending = false;
+    showNewFromTagPopup();
+  }
   if (copy_confirm_pending) {
     copy_confirm_pending = false;
     // Hide copy list (keep it for cancel-back navigation), delete others.
@@ -2875,7 +3224,7 @@ void handleSpoolFlowDeferredActions() {
     if (scr_link_vendor) { lv_obj_del(scr_link_vendor); scr_link_vendor = nullptr; }
     if (scr_link_entry)  { lv_obj_del(scr_link_entry);  scr_link_entry  = nullptr; }
     if (scr_copy_entry)  { lv_obj_del(scr_copy_entry);  scr_copy_entry  = nullptr; }
-    showCopyConfirmPopup(copy_confirm_fid, copy_confirm_name,
+    showCopyConfirmPopup(copy_confirm_spool_id, copy_confirm_fid, copy_confirm_name,
                         copy_confirm_remaining, copy_confirm_initial, copy_confirm_spool_w);
   }
   // link_id_lookup_pending removed — direct call in callback (was causing PANIC)
@@ -2908,11 +3257,14 @@ void handleSpoolFlowDeferredActions() {
         const char *cfmat  = cdoc["filament"]["material"] | "";
         const char *cfvnd  = cdoc["filament"]["vendor"]["name"] | "";
         char ctmpl[80];
-        snprintf(ctmpl, sizeof(ctmpl), "%s %s (%s)", cfmat, cfname, cfvnd);
+        if (nameStartsWithMaterial(cfname, cfmat))
+          snprintf(ctmpl, sizeof(ctmpl), "%s (%s)", cfname, cfvnd);
+        else
+          snprintf(ctmpl, sizeof(ctmpl), "%s %s (%s)", cfmat, cfname, cfvnd);
         lbl_link_id_display = nullptr;
         lbl_link_id_status  = nullptr;
         if (scr_link_id) { lv_obj_del(scr_link_id); scr_link_id = nullptr; }
-        showCopyConfirmPopup(cfid, ctmpl, crem, cini, cspw);
+        showCopyConfirmPopup(cid, cfid, ctmpl, crem, cini, cspw);
       } else {
         if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_LINK_JSON_ERR));
       }

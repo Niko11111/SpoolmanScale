@@ -12,8 +12,10 @@
 !images/**
 # Re-excluded after the whitelist above: macOS drops .DS_Store into any folder
 # opened in Finder, and Affinity leaves a lock file next to an open document.
-# Without these two lines both would show up as commit candidates in images/.
-images/.DS_Store
+# Without these lines both would show up as commit candidates. The .DS_Store
+# rule is global rather than per folder, because the whitelist un-ignores the
+# file in every directory it covers - it turned up in src/ next.
+**/.DS_Store
 images/*~lock~
 !platformio.ini
 !partitions.csv

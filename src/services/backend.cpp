@@ -6,6 +6,7 @@
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
 #include "services/app_settings.h"
+#include "services/bambuddy_api.h"
 #include "services/prefs_store.h"
 
 // NVS keys. Kept short, NVS limits key length to 15 characters.
@@ -13,12 +14,18 @@
 #define NVS_FILAMAN_KEY     "filaman_key"
 #define NVS_FILAMAN_DEVICE  "filaman_dev"
 #define NVS_FILAMAN_HOST    "filaman_host"
+#define NVS_BAMBUDDY_KEY    "bb_key"
+#define NVS_BAMBUDDY_HOST   "bb_host"
 
 static BackendMode s_mode = BACKEND_SPOOLMAN;
 static char s_api_key[80]      = "";
 static char s_device_token[80] = "";
 static char s_filaman_host[64] = "";
 static char s_filaman_base[80] = "";
+// BamBuddy keys look like "bb_" plus 43 base64url characters, 46 in total.
+static char s_bambuddy_key[80]  = "";
+static char s_bambuddy_host[64] = "";
+static char s_bambuddy_base[80] = "";
 
 static void rebuildFilamanBase() {
   if (s_filaman_host[0]) {
@@ -28,9 +35,21 @@ static void rebuildFilamanBase() {
   }
 }
 
+static void rebuildBamBuddyBase() {
+  if (s_bambuddy_host[0]) {
+    snprintf(s_bambuddy_base, sizeof(s_bambuddy_base), "http://%s", s_bambuddy_host);
+  } else {
+    s_bambuddy_base[0] = '\0';
+  }
+}
+
 void backendLoadSettings() {
   uint8_t raw = prefsGetUChar(NVS_BACKEND_MODE, BACKEND_SPOOLMAN);
-  s_mode = (raw == BACKEND_FILAMAN) ? BACKEND_FILAMAN : BACKEND_SPOOLMAN;
+  // Anything unknown falls back to Spoolman, so a value written by a newer
+  // firmware cannot leave the device in a mode this build has no code for.
+  s_mode = (raw == BACKEND_FILAMAN)  ? BACKEND_FILAMAN
+         : (raw == BACKEND_BAMBUDDY) ? BACKEND_BAMBUDDY
+                                     : BACKEND_SPOOLMAN;
 
   String key = prefsGetString(NVS_FILAMAN_KEY, "");
   strncpy(s_api_key, key.c_str(), sizeof(s_api_key) - 1);
@@ -45,6 +64,15 @@ void backendLoadSettings() {
   s_filaman_host[sizeof(s_filaman_host) - 1] = '\0';
   rebuildFilamanBase();
 
+  String bb_key = prefsGetString(NVS_BAMBUDDY_KEY, "");
+  strncpy(s_bambuddy_key, bb_key.c_str(), sizeof(s_bambuddy_key) - 1);
+  s_bambuddy_key[sizeof(s_bambuddy_key) - 1] = '\0';
+
+  String bb_host = prefsGetString(NVS_BAMBUDDY_HOST, "");
+  strncpy(s_bambuddy_host, bb_host.c_str(), sizeof(s_bambuddy_host) - 1);
+  s_bambuddy_host[sizeof(s_bambuddy_host) - 1] = '\0';
+  rebuildBamBuddyBase();
+
   // Both channels, so the active backend is visible in a serial monitor as
   // well and not only on the card. writeBootBlock() repeats the same line
   // inside the daily log file, which is the one a user actually sends in.
@@ -56,32 +84,53 @@ void backendLoadSettings() {
 
 BackendMode backendMode() { return s_mode; }
 bool backendIsFilaMan()   { return s_mode == BACKEND_FILAMAN; }
+bool backendIsBamBuddy()  { return s_mode == BACKEND_BAMBUDDY; }
 
 void backendSetMode(BackendMode mode) {
-  s_mode = (mode == BACKEND_FILAMAN) ? BACKEND_FILAMAN : BACKEND_SPOOLMAN;
+  s_mode = (mode == BACKEND_FILAMAN)  ? BACKEND_FILAMAN
+         : (mode == BACKEND_BAMBUDDY) ? BACKEND_BAMBUDDY
+                                      : BACKEND_SPOOLMAN;
   prefsPutUChar(NVS_BACKEND_MODE, (uint8_t)s_mode);
-  logSDf("Backend: mode -> %s", backendIsFilaMan() ? "FilaMan" : "Spoolman");
+  logSDf("Backend: mode -> %s", backendName());
 }
 
 const char* backendBaseUrl() {
-  return backendIsFilaMan() ? s_filaman_base : cfg_spoolman_base;
+  switch (s_mode) {
+    case BACKEND_FILAMAN:  return s_filaman_base;
+    case BACKEND_BAMBUDDY: return s_bambuddy_base;
+    default:               return cfg_spoolman_base;
+  }
 }
 
 const char* backendHost() {
-  return backendIsFilaMan() ? s_filaman_host : cfg_spoolman_ip;
+  switch (s_mode) {
+    case BACKEND_FILAMAN:  return s_filaman_host;
+    case BACKEND_BAMBUDDY: return s_bambuddy_host;
+    default:               return cfg_spoolman_ip;
+  }
 }
 
 void backendSetHost(const char* host) {
   if (!host) return;
-  if (!backendIsFilaMan()) {
-    saveSpoolmanIP(host);   // unchanged path, same NVS key as before
-    return;
+  switch (s_mode) {
+    case BACKEND_FILAMAN:
+      strncpy(s_filaman_host, host, sizeof(s_filaman_host) - 1);
+      s_filaman_host[sizeof(s_filaman_host) - 1] = '\0';
+      rebuildFilamanBase();
+      prefsPutString(NVS_FILAMAN_HOST, s_filaman_host);
+      logSDf("Backend: FilaMan host -> %s", s_filaman_host);
+      return;
+    case BACKEND_BAMBUDDY:
+      strncpy(s_bambuddy_host, host, sizeof(s_bambuddy_host) - 1);
+      s_bambuddy_host[sizeof(s_bambuddy_host) - 1] = '\0';
+      rebuildBamBuddyBase();
+      prefsPutString(NVS_BAMBUDDY_HOST, s_bambuddy_host);
+      logSDf("Backend: BamBuddy host -> %s", s_bambuddy_host);
+      return;
+    default:
+      saveSpoolmanIP(host);   // unchanged path, same NVS key as before
+      return;
   }
-  strncpy(s_filaman_host, host, sizeof(s_filaman_host) - 1);
-  s_filaman_host[sizeof(s_filaman_host) - 1] = '\0';
-  rebuildFilamanBase();
-  prefsPutString(NVS_FILAMAN_HOST, s_filaman_host);
-  logSDf("Backend: FilaMan host -> %s", s_filaman_host);
 }
 
 const char* filamanApiKey()      { return s_api_key; }
@@ -103,8 +152,39 @@ void filamanSetDeviceToken(const char* token) {
   logSDf("Backend: FilaMan device token %s", s_device_token[0] ? "stored" : "cleared");
 }
 
-const char* backendName() {
-  return backendIsFilaMan() ? "FilaMan" : "Spoolman";
+const char* bambuddyApiKey() { return s_bambuddy_key; }
+
+void bambuddySetApiKey(const char* key) {
+  if (!key) return;
+  strncpy(s_bambuddy_key, key, sizeof(s_bambuddy_key) - 1);
+  s_bambuddy_key[sizeof(s_bambuddy_key) - 1] = '\0';
+  prefsPutString(NVS_BAMBUDDY_KEY, s_bambuddy_key);
+  logSDf("Backend: BamBuddy API key %s", s_bambuddy_key[0] ? "stored" : "cleared");
+}
+
+const char* backendModeName(BackendMode mode) {
+  switch (mode) {
+    case BACKEND_FILAMAN:  return "FilaMan";
+    case BACKEND_BAMBUDDY: return "BamBuddy";
+    default:               return "Spoolman";
+  }
+}
+
+const char* backendName() { return backendModeName(s_mode); }
+
+const char* backendBadge() {
+  switch (s_mode) {
+    case BACKEND_FILAMAN:  return "FLM";
+    // Which database is behind BamBuddy decides where every read and write
+    // lands, and it can change while the scale runs - worth the one letter.
+    case BACKEND_BAMBUDDY: return (bbInventoryMode() == BB_INV_SPOOLMAN) ? "BBS" : "BBY";
+    default:               return "SPM";
+  }
+}
+
+void backendCaption(char* out, size_t out_size) {
+  if (!out || out_size == 0) return;
+  snprintf(out, out_size, "%s:", backendName());
 }
 
 void backendStatusLine(char* out, size_t out_size) {
@@ -121,6 +201,14 @@ void backendStatusLine(char* out, size_t out_size) {
       s_api_key[0] ? "set" : "empty",
       s_device_token[0] ? "set" : "empty",
       backendIsConfigured() ? "yes" : "no");
+  } else if (backendIsBamBuddy()) {
+    // The key is reported but never gates "configured" - an instance with
+    // authentication disabled works without one.
+    snprintf(out, out_size, "%s | host=%s | key=%s | configured=%s",
+      backendName(),
+      host[0] ? host : "-",
+      s_bambuddy_key[0] ? "set" : "empty",
+      backendIsConfigured() ? "yes" : "no");
   } else {
     snprintf(out, out_size, "%s | host=%s | configured=%s",
       backendName(),
@@ -135,7 +223,7 @@ void backendText(const char* src, char* out, size_t out_size) {
   if (!src) return;
 
   // In Spoolman mode nothing changes, so take the cheap path.
-  if (!backendIsFilaMan()) {
+  if (s_mode == BACKEND_SPOOLMAN) {
     strncpy(out, src, out_size - 1);
     out[out_size - 1] = '\0';
     return;
@@ -164,6 +252,6 @@ void backendText(const char* src, char* out, size_t out_size) {
 
 bool backendIsConfigured() {
   if (strlen(backendBaseUrl()) <= 7) return false;   // longer than "http://"
-  if (!backendIsFilaMan()) return true;
+  if (!backendIsFilaMan()) return true;              // Spoolman and BamBuddy need no credentials
   return s_api_key[0] != '\0' && s_device_token[0] != '\0';
 }

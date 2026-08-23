@@ -465,6 +465,61 @@ const char* const STRINGS[STR_COUNT][2] = {
                                                                           },  // STR_LASTUSED_DESC_FILAMAN_WEIGHED
   { "Druckverbrauch oder Wägung",
     "Print usage or weighing"                                             },  // STR_BTN_LASTUSED_MODE_SUB_FM
+  // BamBuddy keeps both dates itself: last_used is stamped when a print
+  // consumes the spool, last_weighed_at when a weight is written. Neither is
+  // ours to fill, so unlike Spoolman nothing is repurposed here.
+  { "BamBuddy",
+    "BamBuddy"                                                            },  // STR_LASTUSED_OPT_BAMBUDDY
+  { "BamBuddy trägt 'Zuletzt benutzt' selbst ein, wenn ein Druck von dieser Spule verbraucht. Solange kein Druck erfasst wurde, zeigt der Hauptscreen ersatzweise die letzte Wägung an.",
+    "BamBuddy fills 'last used' itself when a print consumes this spool. Until a print has been recorded, the main screen falls back to the last weighing."
+                                                                          },  // STR_LASTUSED_DESC_BAMBUDDY_USED
+  { "BamBuddy stempelt jede Wägung mit Zeitstempel, auch die von dieser Waage. Der Hauptscreen zeigt dann 'Zuletzt gewogen'. Nur das BamBuddy-Inventar führt dieses Feld - mit einem Spoolman-Server dahinter bleibt es leer.",
+    "BamBuddy stamps every weighing, including the ones from this scale. The main screen then shows 'last weighed'. Only the BamBuddy inventory keeps this field - with a Spoolman server behind it, it stays empty."
+                                                                          },  // STR_LASTUSED_DESC_BAMBUDDY_WEIGHED
+  { "Druckverbrauch oder Wägung",
+    "Print usage or weighing"                                             },  // STR_BTN_LASTUSED_MODE_SUB_BB
+  // BamBuddy's own inventory stores consumption and derives the rest, so it
+  // cannot hold more filament than the label promises. Asked before writing
+  // rather than letting the value snap back on the next scan.
+  { "Mehr als das Etikett",
+    "More than the label"                                                 },  // STR_BB_CAP_TITLE
+  { "Gemessen: %.0f g. Das Etikett sagt %.0f g. BamBuddy kann nicht mehr speichern, als das Etikett hergibt - der Rest stuende danach wieder auf voll.",
+    "Measured: %.0f g. The label says %.0f g. BamBuddy cannot store more than the label allows, so the remainder would read as full again."
+                                                                          },  // STR_BB_CAP_BODY
+  { "Etikett auf %.0f g anheben",
+    "Raise label to %.0f g"                                               },  // STR_BB_CAP_RAISE
+  { "Etikett behalten",
+    "Keep the label"                                                      },  // STR_BB_CAP_KEEP
+  { "Trocknungsdatum",
+    "Drying date"                                                         },  // STR_BB_DRIED_TITLE
+  { "Nicht speichern",
+    "Do not store"                                                        },  // STR_BB_DRIED_OFF
+  { "Das Datum bleibt leer",
+    "The date stays empty"                                                },  // STR_BB_DRIED_OFF_SUB
+  { "Spoolman hinter BamBuddy",
+    "Spoolman behind BamBuddy"                                            },  // STR_BB_DRIED_SPOOLMAN
+  { "In extra.last_dried auf dem Spoolman-Server",
+    "Into extra.last_dried on the Spoolman server"                        },  // STR_BB_DRIED_SPOOLMAN_SUB
+  { "Nur wenn BamBuddy auf einen Spoolman-Server zeigt",
+    "Only when BamBuddy points at a Spoolman server"                      },  // STR_BB_DRIED_SPOOLMAN_NA
+  { "Ins Notizfeld",
+    "Into the note field"                                                 },  // STR_BB_DRIED_NOTE
+  { "Als [last_dried:JJJJ-MM-TT] in der Notiz",
+    "As [last_dried:YYYY-MM-DD] in the note"                              },  // STR_BB_DRIED_NOTE_SUB
+  { "BamBuddy hat kein Feld für ein Trocknungsdatum. Das Notizfeld geht immer und behält den übrigen Text. Der andere Weg schreibt in last_dried auf dem Spoolman-Server hinter BamBuddy.",
+    "BamBuddy has no field for a drying date. The note field always works and keeps the rest of the text. The other route writes into last_dried on the Spoolman server behind BamBuddy."
+                                                                          },  // STR_BB_DRIED_INFO
+  // Short forms for the connection test line, which has room for about 34
+  // characters. The "Inventar:" prefix is what says this names the data
+  // source and not the backend - bare "Spoolman" always means the native one.
+  { "Inventar: BamBuddy",
+    "Inventory: BamBuddy"                                                 },  // STR_BB_INV_OWN
+  { "Inventar: Spoolman",
+    "Inventory: Spoolman"                                                 },  // STR_BB_INV_SPOOLMAN
+  // Label above the database name on the backend screen. Same word as the
+  // short form above, so the two places do not invent two vocabularies.
+  { "Inventar",
+    "Inventory"                                                           },  // STR_BACKEND_INVENTORY
   { "Werkseinstellungen",       "Factory Reset"              },  // STR_BTN_FACTORY_RESET
   { "Alle Einstellungen löschen", "Erase all settings"      },  // STR_BTN_FACTORY_RESET_SUB
   { "Werkseinstellungen?",      "Factory Reset?"             },  // STR_FACTORY_RESET_TITLE
@@ -549,11 +604,11 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Gelb (Tage)",                   "Yellow (days)"                      },  // STR_DRY_MAT_HDR_YELLOW
   { "Rot (Tage)",                    "Red (days)"                         },  // STR_DRY_MAT_HDR_RED
   { "Vers.*",                        "Mult.*"                             },  // STR_DRY_MAT_HDR_MULT
-  { "* Multiplikator fuer luftdicht","* Multiplier for airtight storage"  },  // STR_DRY_MAT_FOOTNOTE
+  { "* Multiplikator für luftdicht","* Multiplier for airtight storage"  },  // STR_DRY_MAT_FOOTNOTE
   { "Gelb ab",                       "Yellow from"                        },  // STR_DRY_MAN_YELLOW_LBL
   { "Rot ab",                        "Red from"                           },  // STR_DRY_MAN_RED_LBL
   { "Tippen zum Bearbeiten",         "Tap to edit"                        },  // STR_DRY_MAN_EDIT_HINT
-  { "Grenzwerte gelten fuer alle Materialien.", "Limits apply to all materials." },  // STR_DRY_MAN_INFO
+  { "Grenzwerte gelten für alle Materialien.", "Limits apply to all materials." },  // STR_DRY_MAN_INFO
   { "Tage",                          "days"                               },  // STR_DRY_DAYS_UNIT
   { "Gelb-Schwellwert",              "Yellow threshold"                   },  // STR_DRY_NUMPAD_YELLOW_TITLE
   { "Rot-Schwellwert",               "Red threshold"                      },  // STR_DRY_NUMPAD_RED_TITLE
@@ -580,6 +635,11 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Adresse am Rechner im Browser öffnen und dort API-Key und Gerätecode eintragen. Der Status unten aktualisiert sich von selbst.",
     "Open this address in a browser on your computer and enter the API key and device code there. The status below updates on its own."
                                                                           },  // STR_WEB_SETUP_HINT
+  // BamBuddy has one credential where FilaMan has two, so the sentence that
+  // tells the user what to type differs.
+  { "Adresse am Rechner im Browser öffnen und dort den API-Key eintragen. Der Status unten aktualisiert sich von selbst.",
+    "Open this address in a browser on your computer and enter the API key there. The status below updates on its own."
+                                                                          },  // STR_WEB_SETUP_HINT_BB
   { "Im Browser einrichten",         "Set up in browser"                  },  // STR_BTN_WEB_SETUP
   { "Fertig",                        "Done"                               },  // STR_BTN_FINISH
   { "Weiter",                        "Next"                               },  // STR_BTN_NEXT
@@ -592,10 +652,10 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "AN",                            "ON"                                 },  // STR_ON
   { "AUS",                           "OFF"                                },  // STR_OFF
   { "Im Browser öffnen",             "Open in browser"                    },  // STR_BTN_OPEN_BROWSER
-  // Names both products in both languages and in every backend mode. Not
+  // Names every product in both languages and in every backend mode. Not
   // passed through backendText(), see the comment at the call site.
-  { "Nicht mit Spoolman oder FilaMan verbunden",
-    "Not affiliated with Spoolman or FilaMan"                             },  // STR_NOT_AFFILIATED
+  { "Nicht mit Spoolman, FilaMan oder BamBuddy verbunden",
+    "Not affiliated with Spoolman, FilaMan or BamBuddy"                   },  // STR_NOT_AFFILIATED
   { "Kein Tag erkannt, bitte neu auflegen",
     "No tag detected, place it again"                                    },  // STR_LINK_NO_TAG
 
@@ -633,6 +693,40 @@ const char* const STRINGS[STR_COUNT][2] = {
 
   // FilaMan options sub screen
   { "Weitere Optionen",              "More options"                       },  // STR_BTN_MORE_OPTIONS
+  { "Mehrere Tags verknüpfen",      "Link multiple tags"                 },  // STR_CU_WRITE
+  { "Nutzt Spoolmans Feld card_uids",
+    "Uses Spoolman's card_uids field"                                     },  // STR_CU_WRITE_SUB
+  { "Spoolman hat kein Feld für NFC-Tags. Mehrere Projekte haben sich auf das "
+    "Extra-Feld card_uids geeinigt, das eine Liste von UIDs aufnimmt: SpoolLink "
+    "in der Snapmaker-Firmware, dessen Apps und Spool Studio. Ein Standard ist "
+    "es nicht - andere nutzen nfc_id, diese Waage sonst extra.tag.\n\n"
+    "Sinnvoll, wo eine Spule mehr als ein Tag trägt. Beim Snapmaker U1 ist das "
+    "die Regel, weil sie auf beide Seiten des Druckers passen muss.\n\n"
+    "An: gescannte UIDs kommen an die Liste, und Spulen mit UIDs erscheinen "
+    "wieder in der Verlinken-Liste. Aus: alles wie bisher. Gelesen wird das "
+    "Feld immer.",
+    "Spoolman has no field for NFC tags. Several projects settled on the extra "
+    "field card_uids, which holds a list of UIDs: SpoolLink in the Snapmaker "
+    "firmware, its companion apps and Spool Studio. It is not a standard - "
+    "others use nfc_id, and this scale otherwise uses extra.tag.\n\n"
+    "Useful wherever a spool carries more than one tag. On the Snapmaker U1 "
+    "that is the rule, because the spool has to fit either side of the "
+    "printer.\n\n"
+    "On: scanned UIDs are appended to the list, and spools with UIDs show up in "
+    "the link list again. Off: nothing changes. The field is read either way."   },  // STR_CU_WRITE_INFO
+  { "Liste voll, nichts geschrieben",
+    "List full, nothing written"                                          },  // STR_CU_FULL
+  { LV_SYMBOL_WARNING "  Spule hat schon UIDs",
+    LV_SYMBOL_WARNING "  Spool already has UIDs"                          },  // STR_WARN_A_ADD_TITLE
+  { "Spule #%d  |  %s %s\nHat bereits %d UID(s)",
+    "Spool #%d  |  %s %s\nAlready has %d UID(s)"                          },  // STR_WARN_A_ADD_INFO
+  { "Spule #%d\nHat bereits %d UID(s)",
+    "Spool #%d\nAlready has %d UID(s)"                                    },  // STR_WARN_A_ADD_SHORT
+  { "UID hinzufügen",               "Add UID"                            },  // STR_BTN_ADD_UID
+  { "Diese Spule hat %d UIDs.\nNur das aufliegende Tag entfernen\noder die ganze Verknüpfung lösen?",
+    "This spool has %d UIDs.\nRemove only the tag on the scale\nor the whole binding?" },  // STR_UNLINK_MULTI_MSG
+  { "Nur dieses Tag",                "Only this tag"                      },  // STR_BTN_UNLINK_ONE
+  { "Alle lösen",                   "Unlink all"                         },  // STR_BTN_UNLINK_ALL
   { "Ohne Nachfrage verknüpfen",     "Link without asking"                },  // STR_FLM_AUTOLINK
   { "wenn die Spule schon aufliegt", "when the spool is already on"       },  // STR_FLM_AUTOLINK_SUB
   { " (Filament)",                   " (filament)"                        },  // STR_TARE_FROM_FILAMENT
@@ -660,4 +754,47 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Hersteller",                    "Manufacturer"                       },  // STR_BTN_THIS_VENDOR_FM
   { LV_SYMBOL_CLOSE " leer / Archivieren\nRest wird 0",
     LV_SYMBOL_CLOSE " empty / Archive\nremaining set to 0" },  // STR_BTN_ARCHIVE_EMPTY_FM
+
+  // Auto AMS assignment. FilaMan marks a freshly weighed spool as pending on
+  // every printer driver for a few seconds, so the next tray to be loaded
+  // gets it. The wording avoids "auto assign" on its own because the whole
+  // point of the ask mode is that it is not automatic.
+  { "Auto AMS-Zuordnung",            "Auto AMS assign"                    },  // STR_AMS_TITLE
+  { "Spule beim Einlegen zuordnen",  "assign the spool as it goes in"     },  // STR_AMS_SUB
+  { "FilaMan merkt eine gewogene Spule einige Sekunden vor. Wer in dieser Zeit ein AMS-Fach belädt, bekommt sie zugeordnet. Geöffnet wird das Fenster nur von einem Gewicht, deshalb bucht die Waage beim Zuordnen ein zweites Mal: die Messung steht dann doppelt im Protokoll, der Wert bleibt gleich. Wandert die Spule ohnehin gleich in den Drucker, genügt kurz auflegen.",
+    "FilaMan reserves a weighed spool for a few seconds. Whoever loads an AMS tray in that time gets it assigned. Only a weight opens that window, so assigning books the value a second time: the measurement then shows twice in the log, the value stays the same. If the spool is going into the printer anyway, just resting it on the pad is enough." },  // STR_AMS_INFO
+  { "Aus",                           "Off"                                },  // STR_AMS_MODE_OFF
+  { "Nachfragen",                    "Ask"                                },  // STR_AMS_MODE_ASK
+  { "Immer an",                      "Always"                             },  // STR_AMS_MODE_ALWAYS
+  { "Es wird nichts vorgemerkt. Wiegen und Lagerort verhalten sich genau wie bisher.",
+    "Nothing is reserved. Weighing and location behave exactly as before." },  // STR_AMS_OFF_DESC
+  { "Beim Abnehmen wird gefragt, ob die Spule in den Drucker wandert. Ein Ja sendet das Gewicht und öffnet das Fenster.",
+    "When the spool is lifted you are asked whether it goes into the printer. A yes sends the weight and opens the window." },  // STR_AMS_ASK_DESC
+  { "Jede Wiegung merkt die Spule vor, ohne Nachfrage. Auch wenn du nur kurz nachwiegen wolltest.",
+    "Every weighing reserves the spool, without asking. Even when you only wanted to check a weight." },  // STR_AMS_ALWAYS_DESC
+  { "Fenster",                       "Window"                             },  // STR_AMS_WINDOW_LBL
+  { "wie lange die Spule vorgemerkt bleibt", "how long the spool stays reserved" },  // STR_AMS_WINDOW_HINT
+  { "s",                             "s"                                  },  // STR_AMS_SEC_UNIT
+  { "Bei Ablauf",                    "When it runs out"                   },  // STR_AMS_TIMER_LBL
+  { "wenn niemand antwortet",        "when nobody answers"                },  // STR_AMS_TIMER_HINT
+  { "Ja",                            "Yes"                                },  // STR_AMS_TIMER_YES
+  { "Nein",                          "No"                                 },  // STR_AMS_TIMER_NO
+  { "Spule jetzt ins AMS legen?",    "Putting the spool into the AMS?"    },  // STR_AMS_POPUP_Q
+  { "Zuordnung startet in %d s",     "Assignment starts in %d s"          },  // STR_AMS_POPUP_STARTS_IN
+  { "Ohne Zuordnung in %d s",        "Without assigning in %d s"          },  // STR_AMS_POPUP_CLOSES_IN
+  { "Ja, zuordnen",                  "Yes, assign"                        },  // STR_AMS_BTN_YES
+  { "Der ApiKey darf keine Geräte verwalten",
+    "This ApiKey may not manage devices" },  // STR_AMS_ERR_FORBIDDEN
+  { "Server antwortet nicht (HTTP %d)", "Server not answering (HTTP %d)"  },  // STR_AMS_ERR_HTTP
+  { "%.0f g sind gespeichert",       "%.0f g are saved"                   },  // STR_AMS_POPUP_SAVED
+  { "Zuordnung %d s",                "Assigning %d s"                     },  // STR_AMS_WINDOW_RUNNING
+  { "Server: Zuordnung aktiv",       "Server: assigning active"           },  // STR_AMS_SRV_ON
+  { "Server: aus",                   "Server: off"                        },  // STR_AMS_SRV_OFF
+  { "%.0f g werden dabei gespeichert", "%.0f g will be saved too"           },  // STR_AMS_POPUP_WILL_SAVE
+  { "Neu aus Tag anlegen",           "Create from tag"                    },  // STR_NEWTAG_BTN
+  { "Spule aus Tag anlegen?",        "Create spool from tag?"             },  // STR_NEWTAG_TITLE
+  { "%s %s\nFarbe: %s\nWaagengewicht (netto): %.0f g", "%s %s\nColour: %s\nScale weight (net): %.0f g" },  // STR_NEWTAG_MSG
+  { "Nenngewicht",                   "Label weight"                       },  // STR_NEWTAG_LABEL_W
+  { "Spule angelegt!",               "Spool created!"                     },  // STR_NEWTAG_OK
+  { "Anlegen fehlgeschlagen",        "Could not create spool"             },  // STR_NEWTAG_FAIL
 };

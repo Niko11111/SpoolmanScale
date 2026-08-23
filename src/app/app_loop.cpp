@@ -27,15 +27,21 @@
 #include "services/update_check.h"
 #include "ui/ota_browser.h"
 #include "ui/remote_link_popup.h"
+#include "services/ams_assign.h"
 #include "services/spoolman_actions.h"
 #include "services/backend_api.h"
+#include "services/bambuddy_device.h"
 #include "services/wifi_manager.h"
 #include "services/filaman_api.h"
 #include "services/backend.h"
+#include "ui/ams_assign_popup.h"
+#include "ui/ams_assign_screen.h"
 #include "ui/backend_screen.h"
 #include "ui/filaman_options_screen.h"
 #include "ui/bag_screen.h"
 #include "ui/cal_reminder_screen.h"
+#include "ui/bambuddy_options_screen.h"
+#include "ui/spoolman_options_screen.h"
 #include "ui/confirm_popup.h"
 #include "ui/connection_screen.h"
 #include "ui/dried_action.h"
@@ -91,6 +97,20 @@ constexpr unsigned long LOC_DEBOUNCE_FAST_MS = 1200;
 // already be off the scale and the reference would have followed it down.
 static float loc_weight_ref   = 0.0f;
 static bool  loc_weight_valid = false;
+
+// Set on the first sample of a new tag presence, cleared when the tag is
+// gone. Only used to know when a fresh spool has arrived.
+static unsigned long loc_weight_since_ms = 0;
+
+// A gross weight that has demonstrably settled, tracked whether or not auto
+// weighing is switched on. The AMS question reports this when nothing was
+// weighed on purpose, and that value gets written to FilaMan - so it must not
+// be a number the average was still chasing. Same criterion the auto weight
+// path uses: within AUTO_WEIGHT_THRESH_G for AUTO_WEIGHT_STABLE_MS.
+static float         ams_settle_last  = -9999.0f;
+static unsigned long ams_settle_since = 0;
+static float         ams_settled_g    = 0.0f;
+static bool          ams_settled_ok   = false;
 constexpr int NFC_MAX_RETRIES = 5;
 constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
 
@@ -172,6 +192,7 @@ static unsigned long first_miss_ms = 0;       // start of the current detection 
 static unsigned long tag_absent_since_ms = 0; // when the last removal was declared
 static unsigned long last_scale_ms = 0;
 static int  loc_popup_pending_id = -1;              // debounced popup: sm_id scheduled, fires after 1500ms
+static int  ams_popup_pending_id = -1;              // same, for the AMS question; answered first when both are due
 
 void appLoop() {
   // No lv_tick_inc() here: the tick comes from millis() via LV_TICK_CUSTOM, so
@@ -269,6 +290,12 @@ void appLoop() {
     show_factor_pending = false;
     showFactorScreen();
   }
+  // Asked before a weight lands that BamBuddy would clamp. Built here because
+  // the write path that noticed it must not create a screen.
+  if (show_bb_cap_pending) {
+    show_bb_cap_pending = false;
+    showBamBuddyCapPopup(bb_cap_measured_g, bb_cap_label_g);
+  }
   if (show_drying_reminder_pending) {
     show_drying_reminder_pending = false;
     showDryingReminderScreen();
@@ -293,6 +320,30 @@ void appLoop() {
     buildFilaManOptionsScreen();   // releases the previous instance itself
     hideAllOverlays();
     lv_obj_clear_flag(scr_filaman_options, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_spoolman_options_pending) {
+    show_spoolman_options_pending = false;
+    buildSpoolmanOptionsScreen();  // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_spoolman_options, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_bambuddy_options_pending) {
+    show_bambuddy_options_pending = false;
+    buildBamBuddyOptionsScreen();  // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_bambuddy_options, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_bambuddy_dried_pending) {
+    show_bambuddy_dried_pending = false;
+    buildBamBuddyDriedScreen();    // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_bambuddy_dried, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_ams_assign_pending) {
+    show_ams_assign_pending = false;
+    buildAmsAssignScreen();        // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_ams_assign, LV_OBJ_FLAG_HIDDEN);
   }
   if (show_spoolman_pending) {
     show_spoolman_pending = false;
@@ -324,8 +375,13 @@ void appLoop() {
     showInfoScreen();  // builds + shows scr_info
   }
   handleMoreInfoDeferredActions();
-  // Debounced auto-location popup, cross-checked against the scale.
-  if (loc_popup_pending_id > 0 && !tag_present) {
+  handleAmsAssignDeferredActions();
+  // Debounced popups after a removal, cross-checked against the scale.
+  // The AMS question and the location question hang off the same event, so
+  // the verdict is worked out once and the AMS side gets it first: a spool
+  // on its way into a printer has no shelf worth asking about. The "no"
+  // branch of that popup raises the location question again.
+  if ((loc_popup_pending_id > 0 || ams_popup_pending_id > 0) && !tag_present) {
     const unsigned long since = millis() - last_tag_seen_ms;
     const float drop = loc_weight_ref - scale_weight_g;
     // Only meaningful when there was something on the scale to begin with.
@@ -340,14 +396,23 @@ void appLoop() {
 
     if (due) {
       int pending_id = loc_popup_pending_id;
+      int ams_id     = ams_popup_pending_id;
       loc_popup_pending_id = -1;
+      ams_popup_pending_id = -1;
 
       if (weight_says_stay) {
         // The reader lost the tag but the spool never moved. Typical for
         // NTAGs. Not a removal, so no popup and no note that it was already
-        // shown: the real removal later still deserves one.
+        // shown: the real removal later still deserves one. A parked
+        // measurement stays parked for exactly the same reason.
         logSDf("LOC: popup suppressed, weight unchanged (%.0fg vs %.0fg), spool still on the scale",
                scale_weight_g, loc_weight_ref);
+      } else if (ams_id > 0 && amsHasPending() && amsPendingSpoolId() == ams_id) {
+        logSDf("AMS: asking after %lums id=%d (weight %.0fg -> %.0fg%s)",
+               since, ams_id, loc_weight_ref, scale_weight_g,
+               weight_says_gone ? ", removal confirmed" : ", no weight signal");
+        showAmsAssignPopup(ams_id, amsPendingNetto(), sm_filament_name,
+                           amsPendingAlreadyReported());
       } else if (g_loc_popup_shown_for_id != pending_id && sm_id == pending_id) {
         logSDf("LOC: fired after %lums id=%d (weight %.0fg -> %.0fg%s)",
                since, pending_id, loc_weight_ref, scale_weight_g,
@@ -360,10 +425,16 @@ void appLoop() {
       }
     }
   }
-  // Cancel pending popup if tag came back
-  if (loc_popup_pending_id > 0 && tag_present) {
-    logSDf("[verbose] LOC: debounce cancelled — tag back id=%d", loc_popup_pending_id);
-    loc_popup_pending_id = -1;
+  // Cancel pending popups if tag came back
+  if (tag_present) {
+    if (loc_popup_pending_id > 0) {
+      logSDf("[verbose] LOC: debounce cancelled - tag back id=%d", loc_popup_pending_id);
+      loc_popup_pending_id = -1;
+    }
+    if (ams_popup_pending_id > 0) {
+      logSDf("[verbose] AMS: debounce cancelled - tag back id=%d", ams_popup_pending_id);
+      ams_popup_pending_id = -1;
+    }
   }
 
   // ── FilaMan remote link ──────────────────────────────────
@@ -457,6 +528,9 @@ void appLoop() {
   // last_tag_seen_ms to 0 below keeps this a one-shot until the next tag.
   if (!tag_present &&
       last_tag_seen_ms > 0 && millis() - last_tag_seen_ms > NO_TAG_CLEAR_MS) {
+    // clearTagDisplay() drops sm_id, so the note loses the spool it refers
+    // to. Nothing is lost by forgetting it, the weight was written already.
+    if (amsHasPending() && !isAmsAssignPopupOpen()) amsDropPending();
     clearTagDisplay();
     last_tag_seen_ms = 0;
     spoolman_queried_uid[0] = '\0';
@@ -511,11 +585,39 @@ void appLoop() {
     displayNoteWeight(scale_weight_g);
 
     // Keep the reference fresh only while the tag is genuinely being read.
-    // nfc_absent_count > 0 means the reader has already missed it once, and
-    // from that moment the weight may be on its way down.
-    if (tag_present && nfc_absent_count == 0) {
+    // The guard used to ask nfc_absent_count, which is written to 0 at every
+    // one of its sites and never incremented - so it was always true and the
+    // reference followed the spool all the way down as it was lifted, which
+    // also left the location cross-check below permanently mute.
+    // nfc_fast_polls is the counter that actually rises on a missed read.
+    if (tag_present && nfc_fast_polls == 0) {
+      if (loc_weight_since_ms == 0) {
+        // A fresh presence: start the stability window over, and do not carry
+        // the previous spool's settled value into it.
+        loc_weight_since_ms = millis();
+        ams_settle_last  = -9999.0f;
+        ams_settle_since = 0;
+        ams_settled_ok   = false;
+      }
       loc_weight_ref   = scale_weight_g;
       loc_weight_valid = scale_filter_full;   // only once the average is filled
+
+      // Kept up to date for as long as the pad stays still, so the stored
+      // value is always the most recent settled one. The moment the spool is
+      // lifted the reading moves and this stops updating, which is what makes
+      // the last value safe to report.
+      if (fabsf(scale_weight_g - ams_settle_last) > AMS_SETTLE_TOL_G) {
+        ams_settle_last  = scale_weight_g;
+        ams_settle_since = millis();
+      } else if (ams_settle_since > 0 &&
+                 millis() - ams_settle_since >= AMS_SETTLE_MS) {
+        ams_settled_g  = scale_weight_g;
+        ams_settled_ok = true;
+      }
+    } else if (!tag_present) {
+      // Only the presence marker is cleared. The settled value has to survive
+      // this pass: the removal is declared further down in the same one.
+      loc_weight_since_ms = 0;
     }
 
     char w_str[16];
@@ -636,6 +738,9 @@ void appLoop() {
           lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x40ff80), 0);
         }
         patchSpoolmanWeight(netto);
+        // Remembered, not held back: the value is in FilaMan now, this only
+        // lets a yes on removal report it once more to open the window.
+        if (amsAskActive()) amsNoteMeasurement(sm_id, netto, cur, true);
       } else if (auto_weight_stable_ms == 0) {
         auto_weight_last_val = cur;
         auto_weight_stable_ms = millis();
@@ -659,7 +764,9 @@ void appLoop() {
         auto_weight_last_val = -9999.0f;
         aw_last_shown_s = -1;
       }
-      if (aw_last_shown_s != 0 && lbl_weight_main_lbl) {
+      // While a window is running the button belongs to its countdown. A new
+      // spool takes it back, which is right: that one matters more.
+      if (aw_last_shown_s != 0 && lbl_weight_main_lbl && !amsWindowOpen()) {
         aw_last_shown_s = 0;
         char wmbuf[48];
         snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
@@ -675,6 +782,46 @@ void appLoop() {
     }
   }
 
+  // The offer goes stale when the spool is left sitting on the pad. Only the
+  // note is dropped, the weight went out when it was measured.
+  if (amsHasPending() && !isAmsAssignPopupOpen() &&
+      amsPendingAgeMs() > AMS_PENDING_MAX_MS) {
+    logSDf("AMS: offer expired after %lums, forgotten", amsPendingAgeMs());
+    amsDropPending();
+  }
+
+  // Assignment window countdown, in the status line. It belongs there and not
+  // on the weight button: that button is never disabled, its callback does not
+  // read its label, so anything written on it turns into a weight popup on the
+  // next tap. The status line is the place that says what is happening right
+  // now, and a tag arriving overwrites it on its own - which is correct, the
+  // new spool matters more than a window that keeps running anyway.
+  {
+    static int  ams_last_shown_s = -1;
+    static bool ams_owns_status = false;
+    const bool open = amsWindowOpen() && !tag_present;
+    if (open) {
+      const int rem = amsWindowRemainingS();
+      if (rem != ams_last_shown_s && lbl_status) {
+        ams_last_shown_s = rem;
+        ams_owns_status = true;
+        char wbuf[48];
+        snprintf(wbuf, sizeof(wbuf), T(STR_AMS_WINDOW_RUNNING), rem);
+        lv_label_set_text(lbl_status, wbuf);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+      }
+    } else if (ams_owns_status) {
+      // Hand the line back once, not on every pass. Only when the pad is still
+      // empty: with a tag on it the NFC branch owns the line already.
+      ams_owns_status = false;
+      ams_last_shown_s = -1;
+      if (lbl_status && !tag_present) {
+        lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+      }
+    }
+  }
+
   // Fix 10: Spoolman health check every 30s
   if (wifi_ok) {
     static unsigned long last_sm_check_ms = 0;
@@ -684,6 +831,11 @@ void appLoop() {
       bool was_reachable = sm_reachable;
       sm_reachable = (code == 200);
       if (sm_reachable != was_reachable) updateHeaderStatus();
+      // Someone can switch BamBuddy's filament manager while the scale is
+      // running. That does not fail on our side, it just starts addressing
+      // the other database - so the mode is re-asked here rather than only
+      // at boot.
+      if (sm_reachable) backendRefreshMode();
     }
   }
 
@@ -703,8 +855,21 @@ void appLoop() {
         logSDf("FilaMan: heartbeat %s (HTTP %d)", ok ? "OK" : "FAILED", code);
         last_hb_ok = ok;
       }
+      // One corrective write once the server is known to be reachable. A
+      // crash between the two PUTs of an AMS commit would otherwise leave
+      // auto_assign_enabled standing, and "ask" would behave like "always".
+      static bool ams_reconciled = false;
+      if (ok && !ams_reconciled) {
+        ams_reconciled = true;
+        amsBootReconcile();
+      }
     }
   }
+
+  // BamBuddy presence: registration, heartbeat, queued commands, live weight
+  // and tag removal. Paces itself, so it is called unconditionally and costs
+  // a mode check on the passes where it has nothing to do.
+  bambuddyDeviceTick();
 
   // The web server has to be up whenever FilaMan might trigger a link, and
   // has to stay down in Spoolman mode. Derived from the conditions once a
@@ -829,7 +994,46 @@ void appLoop() {
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
           scanTag(uid, uidLen);
         } else {
-          if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES) {
+          if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES &&
+              bambu_blocks_read == 0) {
+            // Not a Bambu tag at all. Every sector failed authentication, so
+            // there is nothing here to decode and no amount of retrying will
+            // change that. It is a plain 4 byte card, the kind sold as an RFID
+            // button and stuck to spools by SpoolLink users.
+            //
+            // Those never reached the backend: the branch below insists on a
+            // 32 character tray uuid, so they sat in "waiting" forever. Looking
+            // them up by their UID is the whole point.
+            //
+            // Keyed off zero blocks rather than off the retry count alone. A
+            // real Bambu tag that only read partially still has dozens of
+            // blocks and belongs in the branch above, where "waiting" is the
+            // honest answer rather than "not in Spoolman".
+            if (wifi_ok && !isSpoolFlowIdInputOpen() &&
+                strcmp(uid_str, spoolman_queried_uid) != 0) {
+              querySpoolman(uid_str);
+              strncpy(spoolman_queried_uid, uid_str, sizeof(spoolman_queried_uid)-1);
+              spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';
+              if (!sm_found) {
+                strncpy(link_tag_uid, uid_str, sizeof(link_tag_uid)-1);
+                link_tag_uid[sizeof(link_tag_uid)-1] = '\0';
+                link_tag_first_seen_ms = millis();
+                link_popup_dismissed = false;
+              } else {
+                // Stays shorter than 32 characters, so everything that tells a
+                // Bambu tag apart by that length keeps saying no.
+                strncpy(g_tag.tray_uuid, uid_str, sizeof(g_tag.tray_uuid)-1);
+                g_tag.tray_uuid[sizeof(g_tag.tray_uuid)-1] = '\0';
+                updateLinkButton();
+              }
+            }
+            lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+            { char sb[48]; backendText(sm_found ? T(STR_TAG_FOUND) : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb));
+              lv_label_set_text(lbl_status, sb); }
+            lv_obj_set_style_text_color(lbl_status,
+              sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
+          } else if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES) {
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
             lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
             lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
@@ -979,6 +1183,29 @@ void appLoop() {
           } else if (g_auto_loc_popup) {
             logSDf("[verbose] LOC: tag removed, popup suppressed id=%d shown_for=%d sm_found=%d wifi=%d", sm_id, g_loc_popup_shown_for_id, (int)sm_found, (int)wifi_ok);
           }
+          // The AMS question hangs off the same removal, on the same
+          // debounce and the same weight cross-check.
+          if (amsAskActive() && wifi_ok && sm_found && sm_id > 0) {
+            // On Serial, not through logSD(): that one returns early when no
+            // SD card is present, so on a card-less scale none of this exists.
+            Serial.printf("AMS: removal id=%d settled=%d %.0fg pending=%d\n",
+                          sm_id, (int)ams_settled_ok, ams_settled_g, (int)amsHasPending());
+            if (!amsHasPending() && ams_settled_ok && ams_settled_g >= LOC_WEIGHT_MIN_G) {
+              // Nothing was weighed on purpose this time, so the settled
+              // reading stands in for the report that never happened. That is
+              // what makes the question independent of auto weighing.
+              float ams_netto = ams_settled_g - (float)sm_spool_weight;
+              if (ams_netto < 0) ams_netto = 0;
+              amsNoteMeasurement(sm_id, ams_netto, ams_settled_g, false);
+            } else if (!amsHasPending()) {
+              Serial.printf("AMS: no usable weight, no question (needs >= %.0fg)\n",
+                            (double)LOC_WEIGHT_MIN_G);
+            }
+            if (amsHasPending() && amsPendingSpoolId() == sm_id) {
+              ams_popup_pending_id = sm_id;
+              Serial.printf("AMS: question scheduled for id=%d\n", sm_id);
+            }
+          }
           // Do NOT close list — user should be able to select spool
           // even if tag is temporarily removed
         }
@@ -1004,6 +1231,17 @@ void appLoop() {
         }
       }
     }
+  }
+
+  // The button bar is derived state (tag_present && !sm_found) but used to be
+  // recomputed only as a side effect of a backend lookup. A tag put back with
+  // an unchanged UID never re-queries, so after a cancelled link flow the pair
+  // stayed gone for good. Driven from the live state it cannot get stuck; the
+  // edge check keeps it from invalidating four LVGL objects every pass.
+  {
+    static int link_bar_state = -1;
+    const int s = (tag_present && !sm_found) ? 1 : 0;
+    if (s != link_bar_state) { link_bar_state = s; updateLinkButton(); }
   }
 
   delay(5);

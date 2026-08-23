@@ -182,3 +182,33 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
                             const char* search_term = nullptr,
                             int page_size = 100, uint32_t timeout_ms = 15000,
                             DeserializationError* out_err = nullptr);
+
+// ---------- the device's own auto-assign settings ----------
+//
+// FilaMan can mark a spool as "pending" on every running printer driver for
+// a number of seconds right after it was weighed, so that the next tray to
+// be loaded gets it. Whether that happens is a property of the device, not
+// of the request: the server reads auto_assign_enabled inside
+// POST /devices/scale/weight and hands the spool to the drivers there.
+//
+// Both fields live behind the admin API and need admin:devices_manage,
+// which the ApiKey carries only if the account behind it has the permission.
+// The device token can be used instead when the device was given that scope.
+
+// The device's own id, taken from the token: it is "dev.<id>.<secret>".
+// 0 when no token is registered.
+int filamanDeviceId();
+
+// Reads auto_assign_enabled and auto_assign_timeout for one device out of
+// the admin device list. Returns the HTTP status, 200 on success, 404 when
+// the id is not in the list, -2 on a parse error.
+int filamanGetDeviceAutoAssign(const char* base_url, const char* api_key,
+                               int device_id, bool* out_enabled,
+                               int* out_timeout_s, uint32_t timeout_ms = 8000);
+
+// Writes one or both fields. A null pointer means "leave alone": the server
+// parses DeviceUpdate with exclude_unset, so an omitted field keeps its
+// stored value. The device name is deliberately never sent.
+int filamanSetDeviceAutoAssign(const char* base_url, const char* api_key,
+                               int device_id, const bool* enabled,
+                               const int* timeout_s, uint32_t timeout_ms = 5000);

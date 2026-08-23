@@ -67,6 +67,7 @@ void wifiConnect() {
           backend_name, code, sm_reachable ? "OK" : "FAIL");
         // Server version, from /api/v1/info on Spoolman and /openapi.json on FilaMan
         if (sm_reachable) {
+          backendAfterConnect();
           char ver[32] = "?";
           if (backendGetVersion(backendBaseUrl(), ver, sizeof(ver), 3000)) {
             logSDf("%s version: %s", backend_name, ver);

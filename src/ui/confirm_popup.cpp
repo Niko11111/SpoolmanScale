@@ -2,12 +2,14 @@
 #include <math.h>
 #include "app/app_state.h"
 #include "services/backend.h"
+#include "services/backend_api.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
 #include <cstring>
 
 #include "hardware/sd_logger.h"
+#include "services/ams_assign.h"
 #include "services/auto_weight_state.h"
 #include "services/prefs_store.h"
 #include "services/spoolman_actions.h"
@@ -33,6 +35,7 @@ void closeConfirmPopup() {
 // The weight the scope buttons below will store. Normally whatever is on the
 // pad, but a brand new spool can derive it instead -- see the New spool button.
 static float s_tare_prompt_g = 0.0f;
+static float s_cap_measured  = 0.0f;
 static bool  s_tare_then_new = false;
 
 // After a tare is stored from the New spool flow the initial weight follows
@@ -90,6 +93,12 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
 
       // Sub-popup: where should the spool weight be written?
       const float w = s_tare_prompt_g;
+      // Not every backend has all three places to put it. BamBuddy has no
+      // filament and no vendor object at all, and behind its Spoolman proxy
+      // even the spool's own core weight is discarded on write. Buttons for
+      // those are not built rather than built and left to fail.
+      const bool scope_spool  = backendCanTareSpool();
+      const bool scope_shared = backendCanTareFilamentOrVendor();
 
       lv_obj_t *popup = lv_obj_create(lv_scr_act());
       lv_obj_set_size(popup, 480, 320);
@@ -109,9 +118,14 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
       lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_14, 0);
       lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
 
+      // Rows are placed one after another so a missing scope leaves no hole.
+      int row_y = 36;
+
       // Button 1: this spool
       lv_obj_t *b1 = lv_btn_create(popup);
-      lv_obj_set_size(b1, 460, 60); lv_obj_set_pos(b1, 10, 36);
+      lv_obj_set_size(b1, 460, 60); lv_obj_set_pos(b1, 10, row_y);
+      if (!scope_spool) lv_obj_add_flag(b1, LV_OBJ_FLAG_HIDDEN);
+      else row_y += 70;
       lv_obj_set_style_bg_color(b1, lv_color_hex(0x0a2040), 0);
       lv_obj_set_style_radius(b1, 8, 0); lv_obj_set_style_shadow_width(b1, 0, 0);
       { lv_obj_t *l = lv_label_create(b1);
@@ -128,7 +142,9 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
 
       // Button 2: this filament
       lv_obj_t *b2 = lv_btn_create(popup);
-      lv_obj_set_size(b2, 460, 60); lv_obj_set_pos(b2, 10, 106);
+      lv_obj_set_size(b2, 460, 60); lv_obj_set_pos(b2, 10, row_y);
+      if (!scope_shared) lv_obj_add_flag(b2, LV_OBJ_FLAG_HIDDEN);
+      else row_y += 70;
       lv_obj_set_style_bg_color(b2, lv_color_hex(0x0a2820), 0);
       lv_obj_set_style_radius(b2, 8, 0); lv_obj_set_style_shadow_width(b2, 0, 0);
       { lv_obj_t *l = lv_label_create(b2);
@@ -145,7 +161,9 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
 
       // Button 3: vendor
       lv_obj_t *b3 = lv_btn_create(popup);
-      lv_obj_set_size(b3, 460, 60); lv_obj_set_pos(b3, 10, 176);
+      lv_obj_set_size(b3, 460, 60); lv_obj_set_pos(b3, 10, row_y);
+      if (!scope_shared) lv_obj_add_flag(b3, LV_OBJ_FLAG_HIDDEN);
+      else row_y += 70;
       lv_obj_set_style_bg_color(b3, lv_color_hex(0x281a00), 0);
       lv_obj_set_style_radius(b3, 8, 0); lv_obj_set_style_shadow_width(b3, 0, 0);
       { lv_obj_t *l = lv_label_create(b3);
@@ -162,9 +180,9 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
         lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
       }, LV_EVENT_CLICKED, NULL);
 
-      // Button 4: cancel
+      // Button 4: cancel, right under whatever was built above
       lv_obj_t *b4 = lv_btn_create(popup);
-      lv_obj_set_size(b4, 460, 40); lv_obj_set_pos(b4, 10, 256);
+      lv_obj_set_size(b4, 460, 40); lv_obj_set_pos(b4, 10, row_y + 10);
       lv_obj_set_style_bg_color(b4, lv_color_hex(0x3a1010), 0);
       lv_obj_set_style_radius(b4, 8, 0); lv_obj_set_style_shadow_width(b4, 0, 0);
       { lv_obj_t *l = lv_label_create(b4);
@@ -248,6 +266,10 @@ void showConfirmPopup(const char* msg, int action) {
     const int Y3 = Y2 + H_ROW2 + PAD;
     const int Y4 = Y3 + H_ROW3 + PAD;
 
+    // True when at least one tare scope reaches the database. Decides both
+    // whether the button below exists and how wide its neighbour is.
+    const bool tare_writable = backendCanTareSpool() || backendCanTareFilamentOrVendor();
+
     const int BW2 = (BOX_W - 2*EDGE - PAD) / 2;
     const int XL  = EDGE;
     const int XR  = EDGE + BW2 + PAD;
@@ -270,6 +292,11 @@ void showConfirmPopup(const char* msg, int action) {
       float r = scale_weight_g - (float)sm_spool_weight;
       if (r < 0) r = 0;
       patchSpoolmanWeight(r);
+      // Remembered so the question can come up on removal. A yes there
+      // reports the same weight once more, which is the only way to open the
+      // window. The cap check above cannot interfere: it is BamBuddy only and
+      // amsAskActive() requires FilaMan.
+      if (amsAskActive()) amsNoteMeasurement(sm_id, r, scale_weight_g, true);
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l1 = lv_label_create(btn1);
     char buf1[48];
@@ -293,6 +320,9 @@ void showConfirmPopup(const char* msg, int action) {
       float r = scale_weight_g - (float)sm_spool_weight - bag_weight_g;
       if (r < 0) r = 0;
       patchSpoolmanWeight(r);
+      // Gross without the bag: that is what the scale would have shown had
+      // the spool been weighed bare, and it is what FilaMan has to be told.
+      if (amsAskActive()) amsNoteMeasurement(sm_id, r, scale_weight_g - bag_weight_g, true);
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l2 = lv_label_create(btn2);
     char buf2[56];
@@ -347,6 +377,11 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_center(l3);
 
     // ── Row 2 right: empty spool + core ──
+    // Dropped entirely where no tare scope can be written - which is the case
+    // for BamBuddy behind Spoolman. The place stays empty on purpose rather
+    // than letting the neighbour grow into it: a button that changes width
+    // depending on the backend reads as a different button.
+    if (tare_writable) {
     lv_obj_t *btn4 = lv_btn_create(box);
     lv_obj_set_size(btn4, BW2, H_ROW2);
     lv_obj_set_pos(btn4, XR, Y2);
@@ -366,6 +401,7 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_set_style_text_font(l4, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(l4, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(l4);
+    }
 
     // ── Row 3 links: Auto-Speichern Toggle ──
     // AN->AUS: sofort deaktivieren + Popup schliessen
@@ -590,4 +626,90 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_set_style_text_color(lbl_nein, lv_color_hex(0xff8080), 0);
     lv_obj_center(lbl_nein);
   }
+}
+
+// ============================================================
+//  BAMBUDDY: MEASUREMENT ABOVE THE LABEL WEIGHT
+//
+//  BamBuddy's built-in inventory keeps the consumed grams and derives the
+//  rest, so a spool holding more than its label says cannot be stored - the
+//  remainder clamps back to full. Raising the label is the only way to keep
+//  the number, and that changes a field the user owns, so it is asked.
+// ============================================================
+void showBamBuddyCapPopup(float measured_g, float label_g) {
+  lv_obj_t *popup = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(popup, 480, 320);
+  lv_obj_set_pos(popup, 0, 0);
+  lv_obj_set_style_bg_color(popup, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_border_width(popup, 0, 0);
+  lv_obj_set_style_radius(popup, 0, 0);
+  lv_obj_set_style_pad_all(popup, 0, 0);
+  lv_obj_clear_flag(popup, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t *title = lv_label_create(popup);
+  char title_buf[40];
+  strncpy(title_buf, T(STR_BB_CAP_TITLE), sizeof(title_buf) - 1);
+  title_buf[sizeof(title_buf) - 1] = '\0';
+  lv_label_set_text(title, title_buf);
+  lv_obj_set_style_text_color(title, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 14);
+
+  lv_obj_t *body = lv_label_create(popup);
+  char body_buf[240];
+  snprintf(body_buf, sizeof(body_buf), T(STR_BB_CAP_BODY), measured_g, label_g);
+  lv_label_set_text(body, body_buf);
+  lv_obj_set_style_text_color(body, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_font(body, &lv_font_montserrat_ext_14, 0);
+  lv_obj_set_style_text_align(body, LV_TEXT_ALIGN_CENTER, 0);
+  lv_label_set_long_mode(body, LV_LABEL_LONG_WRAP);
+  lv_obj_set_width(body, 440);
+  lv_obj_align(body, LV_ALIGN_TOP_MID, 0, 52);
+
+  // Remembered for the two handlers, which cannot capture anything.
+  s_cap_measured = measured_g;
+
+  lv_obj_t *b_raise = lv_btn_create(popup);
+  lv_obj_set_size(b_raise, 440, 56); lv_obj_set_pos(b_raise, 20, 150);
+  lv_obj_set_style_bg_color(b_raise, lv_color_hex(0x14402e), 0);
+  lv_obj_set_style_radius(b_raise, 8, 0);
+  lv_obj_set_style_shadow_width(b_raise, 0, 0);
+  { lv_obj_t *l = lv_label_create(b_raise);
+    char buf[48];
+    snprintf(buf, sizeof(buf), T(STR_BB_CAP_RAISE), measured_g);
+    lv_label_set_text(l, buf);
+    lv_obj_set_style_text_color(l, lv_color_hex(0x40c080), 0);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+    lv_obj_center(l); }
+  lv_obj_add_event_cb(b_raise, [](lv_event_t *e) {
+    const float g = s_cap_measured;
+    lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
+    // Order matters: the label first, so the weight that follows has room.
+    // patchInitialWeight writes label and consumption together, which already
+    // leaves the spool at full - the weight write after it is what stamps
+    // last_weighed_at and last_scale_weight.
+    patchInitialWeight(g);
+    patchSpoolmanWeight(g, true);
+  }, LV_EVENT_CLICKED, NULL);
+
+  lv_obj_t *b_keep = lv_btn_create(popup);
+  lv_obj_set_size(b_keep, 440, 48); lv_obj_set_pos(b_keep, 20, 216);
+  lv_obj_set_style_bg_color(b_keep, lv_color_hex(0x1a2a40), 0);
+  lv_obj_set_style_radius(b_keep, 8, 0);
+  lv_obj_set_style_shadow_width(b_keep, 0, 0);
+  { lv_obj_t *l = lv_label_create(b_keep);
+    char buf[40];
+    strncpy(buf, T(STR_BB_CAP_KEEP), sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    lv_label_set_text(l, buf);
+    lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+    lv_obj_center(l); }
+  lv_obj_add_event_cb(b_keep, [](lv_event_t *e) {
+    const float g = s_cap_measured;
+    lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
+    // Written anyway, so the scale and the server agree that a weighing
+    // happened. BamBuddy clamps it, which is what the user just accepted.
+    patchSpoolmanWeight(g, true);
+  }, LV_EVENT_CLICKED, NULL);
 }

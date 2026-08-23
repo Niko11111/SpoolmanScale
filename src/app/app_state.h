@@ -1,5 +1,7 @@
 #pragma once
 
+#include "services/tag_uid.h"   // CARD_UIDS_MAX
+
 #include <Arduino.h>
 #include <Wire.h>
 #include <lvgl.h>
@@ -46,6 +48,10 @@ extern lv_obj_t *scr_settings;
 extern lv_obj_t *scr_wifi;
 extern lv_obj_t *scr_backend;
 extern lv_obj_t *scr_filaman_options;
+extern lv_obj_t *scr_ams_assign;
+extern lv_obj_t *scr_bambuddy_options;
+extern lv_obj_t *scr_bambuddy_dried;
+extern lv_obj_t *scr_spoolman_options;
 extern lv_obj_t *scr_spoolman;
 extern lv_obj_t *scr_spoolman_fail;
 extern lv_obj_t *scr_welcome;
@@ -96,6 +102,15 @@ enum TareSource : uint8_t {
 extern float sm_spool_weight;
 extern uint8_t sm_tare_source;
 extern char sm_last_dried[32];
+// The spool's card_uids list, quote stripped, empty when it has none. Kept so
+// the unlink popup can size itself without an HTTP request - see
+// captureCardUids() in spoolman_lookup.cpp. 192 characters hold twelve 7 byte
+// UIDs; anything longer is dropped rather than shortened.
+extern char sm_card_uids[CARD_UIDS_MAX];
+// The spool's extra.tag, quote stripped, empty when it has none. Counterpart
+// to sm_card_uids: together they say which of the two stores actually binds
+// this spool, so an unlink can leave the other one alone.
+extern char sm_tag[48];
 extern char sm_article_nr[32];
 extern char sm_filament_name[32];
 extern char sm_material_global[32];
@@ -158,6 +173,13 @@ extern int s_dry_numpad_target;
 extern int s_dry_numpad_value;
 extern lv_obj_t *s_dry_numpad_scr;
 extern lv_obj_t *s_dry_numpad_lbl;
+
+// Numpad for the AMS assignment window, in seconds. Held here for the
+// same reason as the drying one: showMainScreen() has to be able to tear
+// it down from outside the screen that built it.
+extern int s_ams_numpad_value;
+extern lv_obj_t *s_ams_numpad_scr;
+extern lv_obj_t *s_ams_numpad_lbl;
 extern lv_obj_t *lbl_nfc_dot;
 extern lv_obj_t *lbl_hdr_wifi;
 extern lv_obj_t *lbl_hdr_nfc;

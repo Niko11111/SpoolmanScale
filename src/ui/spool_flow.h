@@ -11,7 +11,11 @@ void closeLinkEntryPopup();
 void showIdInputPopup(bool is_bambu, bool is_copy = false);
 void closeIdInputPopup();
 void linkIdLookupAndPatch(int entered_id, bool is_bambu);
-void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu, const char* link_uuid);
+// add_mode turns the popup from "already tagged, overwrite?" into "already has
+// UIDs, add one?". In that mode existing_tag carries the card_uids list, which
+// is shown as a count rather than verbatim.
+void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
+                    const char* link_uuid, bool add_mode = false);
 void showWarnPopupB(int spool_id, bool is_bambu);
 void doLinkPatch(int spool_id, bool is_bambu);
 void showVendorList();
@@ -21,11 +25,18 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
 
 void showCopyEntryPopup();
 void closeCopyEntryPopup();
-void showCopyIdInputPopup();
 void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bambu_tag = false);
 void showCopySpoolList();
-void showCopyConfirmPopup(int template_id, const char* template_name, float template_remaining, float template_initial, float template_spool_w);
-void doCopySpoolCreate(int template_filament_id, float template_initial, float template_spool_w);
+void showCopyConfirmPopup(int template_spool_id, int template_filament_id, const char* template_name,
+                          float template_remaining, float template_initial, float template_spool_w);
+void doCopySpoolCreate(int template_spool_id, int template_filament_id,
+                       float template_initial, float template_spool_w);
+
+// Creating a spool from the tag itself, for when no template fits. BamBuddy
+// only - see backendCanCreateFromTag().
+void showNewFromTagPopup();
+void closeNewTagPopup();
+void doCreateSpoolFromTag();
 
 void hideSpoolFlowOverlays();
 void deleteSpoolFlowOverlays();

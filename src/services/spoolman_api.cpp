@@ -1,4 +1,5 @@
 #include "spoolman_api.h"
+#include "tag_uid.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -117,6 +118,28 @@ int spoolmanFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocum
   return spoolmanGetJson(base_url, path.c_str(), doc, timeout_ms, filter, out_err);
 }
 
+int spoolmanFindSpoolByCardUid(const char* base_url, const char* uid, JsonDocument& doc,
+                               uint32_t timeout_ms, JsonDocument* filter,
+                               DeserializationError* out_err) {
+  if (!uid || !uid[0]) return -1;
+
+  // Everything said about extra.tag above holds here too, with one addition:
+  // SpoolLink stores its UIDs as plain uppercase hex without separators, while
+  // the scale carries them around with colons. Sending the colon form would
+  // never match the ilike, so it is normalised first.
+  //
+  // An instance that has no card_uids field is the same case as an old server:
+  // Spoolman skips a filter whose field it does not know and answers with the
+  // full list. Callers guard against that with backendHasCardUidsField() and
+  // verify every hit anyway.
+  char plain[48];
+  tagUidNormalize(uid, plain, sizeof(plain));
+  if (!plain[0]) return -1;
+
+  String path = "/api/v1/spool?allow_archived=false&extra.card_uids=" + urlEncode(plain);
+  return spoolmanGetJson(base_url, path.c_str(), doc, timeout_ms, filter, out_err);
+}
+
 int spoolmanGetLocationsJson(const char* base_url, JsonDocument& doc,
                              uint32_t timeout_ms, DeserializationError* out_err) {
   return spoolmanGetJson(base_url, "/api/v1/location", doc, timeout_ms, nullptr, out_err);
@@ -229,6 +252,14 @@ int spoolmanCreateSpoolField(const char* base_url, const char* field_name, uint3
 int spoolmanPatchSpoolTag(const char* base_url, int spool_id, const char* uuid, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || spool_id <= 0 || !uuid) return -1;
   String body = "{\"extra\": {\"tag\": \"\\\"" + String(uuid) + "\\\"\"}}";
+  return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, body, timeout_ms);
+}
+
+int spoolmanPatchCardUids(const char* base_url, int spool_id, const char* list, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || !list) return -1;
+  // Same JSON-inside-JSON encoding every text extra field uses, and the same
+  // per key merge that lets tag and last_dried survive each other.
+  String body = "{\"extra\": {\"" CARD_UIDS_FIELD "\": \"\\\"" + String(list) + "\\\"\"}}";
   return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, body, timeout_ms);
 }
 
