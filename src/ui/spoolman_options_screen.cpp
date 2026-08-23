@@ -14,6 +14,7 @@
 #include "services/user_options.h"
 #include "info_popup.h"
 #include "extra_fields_screen.h"
+#include "services/tag_field.h"
 #include "ui_common.h"
 
 // ============================================================
@@ -55,11 +56,14 @@ void buildSpoolmanOptionsScreen() {
 
   // Extra fields. The subtitle names the two the scale needs rather than
   // describing them, because the field names are what the user sees on the
-  // Spoolman side and are not translated.
+  // Spoolman side and are not translated. The tag field is whichever one is
+  // selected, so the row says which without having to be opened.
   { char buf_t[40];
     backendText(T(STR_EXTRA_FIELDS_TITLE), buf_t, sizeof(buf_t));
+    char buf_s[48];
+    snprintf(buf_s, sizeof(buf_s), "%s, " LAST_DRIED_FIELD, tagFieldKey());
 
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_LIST, buf_t, "tag, last_dried");
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_LIST, buf_t, buf_s);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Spoolman Options -> Extra Fields");
       // Called straight from the callback, the way the backend screen used to
@@ -69,8 +73,15 @@ void buildSpoolmanOptionsScreen() {
       showExtraFieldsScreen(false, /*from_options=*/true);
     }, LV_EVENT_CLICKED, NULL); }
 
-  // Writing card_uids. Below the extra fields because it depends on one of
-  // them existing, and because it is the rarer setting of the two.
+  // Linking more than one tag to a spool. Below the extra fields because it
+  // depends on one of them existing, and because it is the rarer setting.
+  //
+  // Only offered on a field with a list format, which is card_uids alone: tag
+  // and nfc_id are single valued in every project that reads them, so a comma
+  // separated value there would break the very compatibility the field choice
+  // exists to provide. Hidden rather than disabled, because with another field
+  // selected the setting has no meaning to explain.
+  if (tagFieldIsList())
   { char buf_t[40]; strncpy(buf_t, T(STR_CU_WRITE), sizeof(buf_t)-1);
     buf_t[sizeof(buf_t)-1] = '\0';
     char buf_s[48]; strncpy(buf_s, T(STR_CU_WRITE_SUB), sizeof(buf_s)-1);
@@ -96,6 +107,12 @@ void buildSpoolmanOptionsScreen() {
       prefsPutBool("cu_write", g_card_uids_write);
       logSDf("BTN: Spoolman Options -> write card_uids %s",
              g_card_uids_write ? "ON" : "OFF");
+      // Deliberately stays on this screen. Jumping into the extra fields
+      // assistant on every switch-on was right only when the field was
+      // missing, and wrong the rest of the time - which is most of the time.
+      // The row above names the field, and the tag field screen behind it
+      // shows whether the server has it.
+      //
       // Rebuild rather than patch the labels, same as the other option screens.
       if (scr_spoolman_options) { lv_obj_del(scr_spoolman_options); scr_spoolman_options = nullptr; }
       buildSpoolmanOptionsScreen();

@@ -12,15 +12,23 @@
 #define PATCH_WEIGHT_ASKING     (-2)
 int patchSpoolmanWeight(float remaining, bool skip_cap_check = false);
 void patchArchiveSpool();
-// current_card_uids is the target spool's list, or nullptr when the caller
-// does not know it. Only a non-empty list sends the write to card_uids;
-// everything else keeps going to extra.tag exactly as before.
-// Returns false only when the write was refused because the list is full.
+// Links `uuid` to a spool, or unlinks it when `uuid` is empty.
+//
+// field_values is what the spool currently holds in each tag field, indexed by
+// TagFieldId, or nullptr when the caller does not know. Entries may be null or
+// empty. It decides two things: a list field is appended to rather than
+// replaced, and a UID found in a field other than the selected one is written
+// into the selected one and then cleared where it came from - so the choice of
+// field actually takes effect instead of only applying to new spools.
+//
+// Returns false when nothing was written: the list was full, or the request
+// failed. An unlink always reports true.
 bool patchSpoolTag(int spool_id, const char* uuid,
-                   const char* current_card_uids = nullptr);
+                   const char* const* field_values = nullptr);
 
-// Unlink for a spool whose UIDs live in card_uids. `all` clears the whole
-// binding, otherwise only `uid` is taken out of the list.
+// Unlink. `all` clears every tag field the spool is bound through; otherwise
+// only `uid` is taken out of the list field that holds it, leaving the other
+// UIDs of that spool alone.
 void unlinkCardUid(int spool_id, const char* uid, bool all);
 void patchInitialWeight(float initial_w);
 void patchSpoolWeight(float spool_w);

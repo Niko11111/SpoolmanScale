@@ -12,6 +12,15 @@ extern bool show_ams_assign_pending;
 extern bool show_bambuddy_options_pending;
 extern bool show_bambuddy_dried_pending;
 extern bool show_spoolman_options_pending;
+// Turning the card_uids switch on needs the field to exist on the server, so
+// the assistant is opened right away rather than left for the user to find.
+extern bool show_extra_fields_pending;
+// The picker behind it, for which extra field holds the tag UID.
+extern bool show_tag_field_pending;
+// Create the selected tag field on the server. Its own flag rather than a
+// detour through the extra fields assistant, because the row that sets it says
+// "create the field" and has to do exactly that.
+extern bool create_tag_field_pending;
 extern bool show_spoolman_pending;
 extern bool show_connection_from_spoolman_pending;
 extern bool show_system_pending;

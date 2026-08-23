@@ -31,6 +31,48 @@ static int postJson(const String& url, const String& body, uint32_t timeout_ms) 
   return code;
 }
 
+static SpoolmanProgressFn s_progress = nullptr;
+
+void spoolmanSetProgressHook(SpoolmanProgressFn fn) { s_progress = fn; }
+
+// Passes the response through untouched and counts what went by, so the parse
+// of a large inventory stops being a silent gap.
+//
+// The hook is called every PROGRESS_STEP bytes rather than per byte: the count
+// itself is free, but a hook that redraws is not, and ArduinoJson pulls one
+// byte at a time often enough to matter. The hook throttles again by time -
+// this only keeps the call out of the innermost loop.
+#define PROGRESS_STEP  512
+
+class ProgressStream : public Stream {
+public:
+  explicit ProgressStream(Stream& inner) : in_(inner) {}
+  int    available() override { return in_.available(); }
+  int    peek() override      { return in_.peek(); }
+  void   flush() override     { in_.flush(); }
+  size_t write(uint8_t b) override { return in_.write(b); }
+  int    read() override {
+    int c = in_.read();
+    if (c >= 0) count(1);
+    return c;
+  }
+  size_t readBytes(char* buf, size_t len) override {
+    size_t r = in_.readBytes(buf, len);
+    count(r);
+    return r;
+  }
+private:
+  void count(size_t n) {
+    total_ += n;
+    if (total_ - last_ < PROGRESS_STEP) return;
+    last_ = total_;
+    if (s_progress) s_progress(total_);
+  }
+  Stream& in_;
+  size_t  total_ = 0;
+  size_t  last_  = 0;
+};
+
 static int getJson(const String& url, JsonDocument& doc, uint32_t timeout_ms,
                    JsonDocument* filter, DeserializationError* out_err) {
   if (out_err) *out_err = DeserializationError::Ok;
@@ -44,9 +86,18 @@ static int getJson(const String& url, JsonDocument& doc, uint32_t timeout_ms,
     return code;
   }
 
-  DeserializationError err = filter
-    ? deserializeJson(doc, *http.getStreamPtr(), DeserializationOption::Filter(*filter))
-    : deserializeJson(doc, *http.getStreamPtr());
+  // Wrapped only while somebody is listening, so every other request in the
+  // firmware reads exactly the stream it always did.
+  DeserializationError err = DeserializationError::Ok;
+  if (s_progress) {
+    ProgressStream ps(*http.getStreamPtr());
+    err = filter ? deserializeJson(doc, ps, DeserializationOption::Filter(*filter))
+                 : deserializeJson(doc, ps);
+  } else {
+    err = filter
+      ? deserializeJson(doc, *http.getStreamPtr(), DeserializationOption::Filter(*filter))
+      : deserializeJson(doc, *http.getStreamPtr());
+  }
   http.end();
   if (out_err) *out_err = err;
   return err ? -2 : 200;
@@ -95,10 +146,10 @@ static String urlEncode(const char* s) {
   return out;
 }
 
-int spoolmanFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocument& doc,
-                           uint32_t timeout_ms, JsonDocument* filter,
-                           DeserializationError* out_err) {
-  if (!tag_uuid || !tag_uuid[0]) return -1;
+int spoolmanFindSpoolByExtraField(const char* base_url, const char* key, const char* value,
+                                  JsonDocument& doc, uint32_t timeout_ms,
+                                  JsonDocument* filter, DeserializationError* out_err) {
+  if (!key || !key[0] || !value || !value[0]) return -1;
 
   // Spoolman filters on extra fields server side, in SQL. The parameter is
   // not listed in openapi.json because extra fields are user defined and
@@ -114,29 +165,18 @@ int spoolmanFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocum
   //   - an unknown parameter is ignored, so an older Spoolman simply answers
   //     with the full list and the caller's scan finds the spool anyway.
   //     That is the whole fallback: no version check, no second code path.
-  String path = "/api/v1/spool?allow_archived=false&extra.tag=" + urlEncode(tag_uuid);
-  return spoolmanGetJson(base_url, path.c_str(), doc, timeout_ms, filter, out_err);
-}
-
-int spoolmanFindSpoolByCardUid(const char* base_url, const char* uid, JsonDocument& doc,
-                               uint32_t timeout_ms, JsonDocument* filter,
-                               DeserializationError* out_err) {
-  if (!uid || !uid[0]) return -1;
-
-  // Everything said about extra.tag above holds here too, with one addition:
-  // SpoolLink stores its UIDs as plain uppercase hex without separators, while
-  // the scale carries them around with colons. Sending the colon form would
-  // never match the ilike, so it is normalised first.
+  //     The same happens for a field the server does not have, which is why
+  //     callers ask backendHasExtraField() before spending a request here -
+  //     otherwise the fast path silently becomes the slow one.
   //
-  // An instance that has no card_uids field is the same case as an old server:
-  // Spoolman skips a filter whose field it does not know and answers with the
-  // full list. Callers guard against that with backendHasCardUidsField() and
-  // verify every hit anyway.
-  char plain[48];
-  tagUidNormalize(uid, plain, sizeof(plain));
-  if (!plain[0]) return -1;
-
-  String path = "/api/v1/spool?allow_archived=false&extra.card_uids=" + urlEncode(plain);
+  // The key is a parameter because Spoolman parses extra.<name> generically
+  // (_parse_extra_field_filters), so every existing extra field is filterable
+  // the same way. `value` arrives already formatted for its field: plain hex
+  // where the field stores plain hex, verbatim where it does not. Formatting
+  // it here would need the spec, and this layer deliberately knows nothing
+  // about which field means what.
+  String path = String("/api/v1/spool?allow_archived=false&extra.") + key
+              + "=" + urlEncode(value);
   return spoolmanGetJson(base_url, path.c_str(), doc, timeout_ms, filter, out_err);
 }
 
@@ -249,17 +289,18 @@ int spoolmanCreateSpoolField(const char* base_url, const char* field_name, uint3
   return postJson(String(base_url) + "/api/v1/field/spool/" + field_name, body, timeout_ms);
 }
 
-int spoolmanPatchSpoolTag(const char* base_url, int spool_id, const char* uuid, uint32_t timeout_ms) {
-  if (!hasBaseUrl(base_url) || spool_id <= 0 || !uuid) return -1;
-  String body = "{\"extra\": {\"tag\": \"\\\"" + String(uuid) + "\\\"\"}}";
-  return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, body, timeout_ms);
-}
-
-int spoolmanPatchCardUids(const char* base_url, int spool_id, const char* list, uint32_t timeout_ms) {
-  if (!hasBaseUrl(base_url) || spool_id <= 0 || !list) return -1;
-  // Same JSON-inside-JSON encoding every text extra field uses, and the same
-  // per key merge that lets tag and last_dried survive each other.
-  String body = "{\"extra\": {\"" CARD_UIDS_FIELD "\": \"\\\"" + String(list) + "\\\"\"}}";
+int spoolmanPatchExtraField(const char* base_url, int spool_id, const char* key,
+                            const char* value, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || !key || !key[0] || !value) return -1;
+  // The JSON-inside-JSON encoding every text extra field uses: Spoolman stores
+  // them as JSON text, so the value carries its own pair of quotes inside the
+  // string. Spoolman merges per key, which is what lets the tag field and
+  // last_dried survive each other.
+  //
+  // Built with String concatenation rather than by pasting the key in at
+  // compile time. The old pair of functions did the latter, which only works
+  // while the key is a macro - and the whole point here is that it is not.
+  String body = String("{\"extra\": {\"") + key + "\": \"\\\"" + value + "\\\"\"}}";
   return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, body, timeout_ms);
 }
 

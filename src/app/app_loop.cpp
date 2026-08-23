@@ -30,6 +30,7 @@
 #include "services/ams_assign.h"
 #include "services/spoolman_actions.h"
 #include "services/backend_api.h"
+#include "services/tag_field.h"
 #include "services/bambuddy_device.h"
 #include "services/wifi_manager.h"
 #include "services/filaman_api.h"
@@ -47,6 +48,7 @@
 #include "ui/dried_action.h"
 #include "ui/drying_reminder_screen.h"
 #include "ui/extra_fields_screen.h"
+#include "ui/tag_field_screen.h"
 #include "ui/factor_screen.h"
 #include "ui/header_status.h"
 #include "ui/info_screen.h"
@@ -326,6 +328,26 @@ void appLoop() {
     buildSpoolmanOptionsScreen();  // releases the previous instance itself
     hideAllOverlays();
     lv_obj_clear_flag(scr_spoolman_options, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_extra_fields_pending) {
+    show_extra_fields_pending = false;
+    // from_options so the back button returns to the switch that sent us here.
+    showExtraFieldsScreen(false, /*from_options=*/true);
+  }
+  if (create_tag_field_pending) {
+    create_tag_field_pending = false;
+    // HTTP, so it happens here rather than in the button callback. The screen
+    // is rebuilt afterwards either way: the row has to stop offering an action
+    // that has already succeeded, and has to keep offering one that failed.
+    int c = backendCreateSpoolField(cfg_spoolman_base, tagFieldKey(), 5000);
+    logSDf("tag field: create '%s' HTTP %d", tagFieldKey(), c);
+    show_tag_field_pending = true;
+  }
+  if (show_tag_field_pending) {
+    show_tag_field_pending = false;
+    buildTagFieldScreen();         // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_tag_field, LV_OBJ_FLAG_HIDDEN);
   }
   if (show_bambuddy_options_pending) {
     show_bambuddy_options_pending = false;

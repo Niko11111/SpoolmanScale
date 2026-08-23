@@ -1,5 +1,9 @@
 #include "app_state.h"
 
+#include "services/tag_field.h"
+#include "services/tag_uid.h"
+#include "services/user_options.h"
+
 int     bright_normal   = BRIGHT_NORMAL_DEFAULT;
 int     dim_timeout_ms  = DIM_TIMEOUT_DEFAULT;
 int     off_timeout_ms  = OFF_TIMEOUT_DEFAULT;
@@ -42,6 +46,7 @@ lv_obj_t *scr_spoolman_fail = nullptr;
 lv_obj_t *scr_welcome    = nullptr;
 lv_obj_t *scr_first_boot = nullptr;
 lv_obj_t *scr_extra_fields = nullptr;
+lv_obj_t *scr_tag_field    = nullptr;
 lv_obj_t *scr_cal_reminder = nullptr;
 lv_obj_t *scr_wifi_setup = nullptr;
 lv_obj_t *scr_factor     = nullptr;
@@ -82,8 +87,20 @@ float sm_total = 1000;
 float sm_spool_weight = 0;
 uint8_t sm_tare_source = TARE_NONE;
 char  sm_last_dried[32] = "";
-char  sm_card_uids[CARD_UIDS_MAX] = "";
-char  sm_tag[48] = "";
+char  sm_tag_values[TAG_FIELD_COUNT][CARD_UIDS_MAX] = {};
+
+const char* smSelectedTagValue() {
+  return sm_tag_values[g_tag_field < TAG_FIELD_COUNT ? g_tag_field : TAG_FIELD_TAG];
+}
+
+int smBoundUidCount() {
+  int n = 0;
+  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) {
+    if (!sm_tag_values[i][0]) continue;
+    n += tagFieldSpec(i).is_list ? cardUidsCount(sm_tag_values[i]) : 1;
+  }
+  return n;
+}
 char  sm_article_nr[32] = "";
 char  sm_filament_name[32] = "";
 char  sm_material_global[32] = "";

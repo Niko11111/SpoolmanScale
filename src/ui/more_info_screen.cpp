@@ -43,21 +43,22 @@ static void unlinkConfirmCb(lv_event_t *e) {
   // below reach the network and a dialog still on screen would look frozen.
   lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(btn)));
 
-  if (g_card_uids_write && cardUidsCount(sm_card_uids) > 0) {
-    // The identifier the spool was found under. app_loop puts the plain UID
-    // there for NTAGs and for cards with no Bambu data, so this is the entry
-    // to take out of the list.
+  if (backendMode() == BACKEND_SPOOLMAN) {
+    // Only Spoolman has more than one place a binding can sit, so only there
+    // does the unlink have to look. unlinkCardUid() clears whichever fields
+    // hold something and leaves the rest alone - writing a field that is
+    // already empty costs a request and, on a server that does not know the
+    // field, an HTTP 400.
+    //
+    // g_tag.tray_uuid is the identifier the spool was found under: app_loop
+    // puts the plain UID there for NTAGs and for cards with no Bambu data, so
+    // it is the entry to take out of a list.
     unlinkCardUid(spool_id, g_tag.tray_uuid, all);
-  } else if (sm_tag[0]) {
-    // Every other case, switched off included: clear the tag field and nothing
-    // else, exactly as this button has always done - only now it checks first
-    // whether that field holds anything. Writing an empty field empty changed
-    // nothing anyone could see, it just cost a request and, on a Spoolman that
-    // does not know the field, an HTTP 400.
+  } else {
+    // FilaMan and BamBuddy keep one tag each in a place of their own, and
+    // patchSpoolTag() with an empty uuid is how both of them unlink.
     patchSpoolTag(spool_id, "");
     logSDf("Unlink spool ID=%d", spool_id);
-  } else {
-    logSDf("Unlink spool ID=%d: tag field empty, nothing written", spool_id);
   }
   Serial.printf("Unlink spool ID=%d all=%d\n", spool_id, all ? 1 : 0);
 
@@ -692,7 +693,7 @@ void buildMoreInfoScreen() {
       // binding including the one on the other flange, which the user cannot
       // see. One UID or a plain tag field has no such question, and there the
       // popup stays exactly what it always was.
-      const int cu_count = g_card_uids_write ? cardUidsCount(sm_card_uids) : 0;
+      const int cu_count = smBoundUidCount();
       const bool cu_multi = (cu_count >= 2);
 
       lv_obj_t *box2 = lv_obj_create(pop);

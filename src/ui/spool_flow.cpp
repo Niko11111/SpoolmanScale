@@ -14,9 +14,12 @@
 #include "lang.h"
 #include "services/list_limits.h"
 #include "services/spoolman_actions.h"
+#include "services/spoolman_api.h"
+#include "services/tag_field.h"
 #include "services/tag_uid.h"
 #include "services/user_options.h"
 #include "services/backend_api.h"
+#include "ui/loading_overlay.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/spoolman_lookup.h"
 #include "ui/ui_common.h"
@@ -51,12 +54,18 @@ struct UnlinkedSpool {
   char  color_hex[8];  // filament.color_hex (#RRGGBB)
   float remaining;     // remaining_weight
   float total;         // filament.weight
-  char  existing_tag[48]; // extra.tag falls gesetzt (fuer Ueberschreib-Check)
-  // SpoolLink's UID list, quote stripped, empty when the spool has none.
-  // Only ever non-empty while g_card_uids_write is on, because that is the
-  // only case in which such a spool reaches the list at all. Overlong lists
-  // are stored as empty rather than shortened, see the fetch below.
-  char  card_uids[80];
+  // What the spool holds in each tag field, indexed by TagFieldId, quote
+  // stripped, empty where the field holds nothing. Three jobs: it says whether
+  // the spool is bound at all, it is what the overwrite warning offers to
+  // replace, and patchSpoolTag() reads it to decide between appending to a
+  // list and migrating a UID out of the field it currently sits in.
+  //
+  // One size for all three rather than a tight fit per field: it keeps the row
+  // indexable by TagFieldId instead of needing a switch at every use site, and
+  // the list lives in PSRAM where the difference does not matter. Overlong
+  // values are stored as empty rather than shortened, see the fetch below -
+  // a truncated list would send the write somewhere it does not belong.
+  char  tag_values[TAG_FIELD_COUNT][CARD_UIDS_MAX];
   int   filament_id;   // filament.id (for copy flow)
   float spool_weight;  // spool_weight (for copy flow)
 };
@@ -95,6 +104,13 @@ static int compareLinkSpools(const void* a, const void* b) {
   if (c != 0) return c;
   return (x->id > y->id) - (x->id < y->id);
 }
+
+// Whether a second UID can be appended at all right now: the selected tag
+// field has a list format, the switch is on, and the server actually has that
+// field. Probed where the list is loaded,
+// never in a button callback - backendHasCardUidsField() can reach the network
+// on the first call, and it is the same answer patchSpoolTag() decides on.
+static bool link_cu_ok = false;
 
 static UnlinkedSpool* link_spools = nullptr;  // PSRAM-allocated at fetch time, freed after link flow
 static int            link_spool_count = 0;
@@ -222,15 +238,17 @@ unsigned long link_tag_first_seen_ms = 0;       // time of first detection
 // ============================================================
 // Is this spool already bound to a tag?
 //
-// Two stores can hold one: extra.tag, which this firmware writes, and
-// card_uids, which SpoolLink writes for the Snapmaker U1. A spool managed by
-// SpoolLink has an empty tag field, so asking only about that one would offer
-// it in the link list as free and let it collect a third, redundant binding.
+// Any of the tag fields can hold one, and which one depends on what wrote it:
+// this firmware writes the selected field, SpoolLink writes card_uids, FilaMan
+// and SpoolSense write nfc_id. Asking only about the selected one would offer
+// a spool bound elsewhere as free and let it collect a second, redundant
+// binding.
 static bool spoolHasAnyTag(JsonObjectConst spool) {
   JsonObjectConst extra = spool["extra"];
   if (extra.isNull()) return false;
 
-  for (const char* key : { "tag", CARD_UIDS_FIELD }) {
+  for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++) {
+    const char* key = tagFieldSpec(f).key;
     if (!extra.containsKey(key)) continue;
     // Spoolman stores extra values JSON encoded, so an unset field arrives as
     // a pair of literal quotes rather than as an empty string.
@@ -242,26 +260,61 @@ static bool spoolHasAnyTag(JsonObjectConst spool) {
   return false;
 }
 
-// Does this spool keep its UIDs in card_uids? Narrower than spoolHasAnyTag()
-// on purpose: it is the one case in which an already bound spool may still be
-// offered, because appending a second UID is the whole point of the switch.
-static bool spoolHasCardUids(JsonObjectConst spool) {
-  JsonObjectConst extra = spool["extra"];
-  if (extra.isNull() || !extra.containsKey(CARD_UIDS_FIELD)) return false;
-  String v = extra[CARD_UIDS_FIELD].as<String>();
-  v.replace("\"", "");
-  v.trim();
-  return v.length() > 0;
+// True when any tag field of this spool holds something, whichever one it is.
+static bool linkSpoolBound(const UnlinkedSpool& s) {
+  for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++)
+    if (s.tag_values[f][0]) return true;
+  return false;
 }
 
-// The target spool's UID list, or nullptr when it has none or is not in the
-// list at all. Both fetch paths fill the entry, so this is the single place
-// the write decision reads from.
-static const char* linkTargetCardUids(int spool_id) {
+// Whether a row should be left out of a rendered list.
+//
+// Has to agree with the fetch filter in fetchAllSpoolsForLink(): the fetch
+// keeps bound spools whenever a second UID can be appended, and a render pass
+// that dropped them anyway would put them in the array and then hide them -
+// which is exactly what happened when this was an open coded
+// "is extra.tag set" check in six places. Bound spools simply stopped
+// appearing, with nothing in the log to say why.
+//
+// The copy-from-archived flow is the exception it always was: there a tagged
+// spool is a template, not a conflict.
+static bool linkSpoolSkip(const UnlinkedSpool& s) {
+  if (copy_flow_via_list && copy_flow_archived) return false;
+  if (link_cu_ok) return false;
+  return linkSpoolBound(s);
+}
+
+// The target spool's fields as patchSpoolTag() wants them: one pointer per
+// TagFieldId, null where the field is empty. Both fetch paths fill the entry,
+// so this is the single place the write decision reads from.
+//
+// The pointer array is static because it has to outlive the call and there is
+// only ever one link in flight; the strings it points at live in the spool
+// list, which is not freed until the flow closes.
+static const char* s_target_values[TAG_FIELD_COUNT];
+
+static const char* const* linkTargetValues(int spool_id) {
   for (int i = 0; i < link_spool_count; i++) {
-    if (link_spools[i].id == spool_id)
-      return link_spools[i].card_uids[0] ? link_spools[i].card_uids : nullptr;
+    if (link_spools[i].id != spool_id) continue;
+    for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++)
+      s_target_values[f] = link_spools[i].tag_values[f][0]
+                         ? link_spools[i].tag_values[f] : nullptr;
+    return s_target_values;
   }
+  return nullptr;
+}
+
+// What the next UID would be added to, for the popup to describe: the selected
+// field if the spool is already bound there, otherwise whichever field does
+// bind it, because that UID becomes the first entry once it is migrated.
+// nullptr for an unbound spool. The popup counts what is in here and
+// patchSpoolTag() writes onto it, so the number shown and the value written
+// cannot drift apart.
+static const char* linkTargetBase(int spool_id) {
+  const char* const* v = linkTargetValues(spool_id);
+  if (!v) return nullptr;
+  if (v[g_tag_field]) return v[g_tag_field];
+  for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++) if (v[f]) return v[f];
   return nullptr;
 }
 
@@ -270,17 +323,37 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   linkSpoolsFree();
   if (!wifi_ok) return;
 
+  // Settled here, once, for every decision the flow makes afterwards. Offering
+  // an already bound spool the scale then could not append to would put the
+  // second UID straight on top of the first, which is what this guards.
+  //
+  // All three inputs go into the log: when a bound spool does not turn up in
+  // the list, this line is what says which of them said no.
+  { const bool is_list = tagFieldIsList();
+    const bool present = is_list && backendHasExtraField(tagFieldKey());
+    link_cu_ok = is_list && g_card_uids_write && present;
+    logSDf("link fetch: append=%d (field=%s list=%d write=%d present=%d)",
+           link_cu_ok ? 1 : 0, tagFieldKey(), is_list ? 1 : 0,
+           g_card_uids_write ? 1 : 0, present ? 1 : 0); }
+
+  // Up before the blocking work, and painted before this returns. The reader
+  // below moves it along, so the wait stops looking like a hang.
+  loadingOverlayShow(T(STR_LOADING_SPOOLS));
+  spoolmanSetProgressHook(loadingOverlayProgress);
+
   logSDf("link fetch: is_bambu=%d material_filter='%s' archived_only=%d",
     is_bambu, material_filter ? material_filter : "", (int)archived_only);
 
-  StaticJsonDocument<384> filterL;
+  StaticJsonDocument<512> filterL;
   JsonArray filterL_arr = filterL.to<JsonArray>();
   JsonObject fL = filterL_arr.createNestedObject();
   fL["id"] = true;
   fL["archived"] = true;
   fL["remaining_weight"] = true;
-  fL["extra"]["tag"] = true;
-  fL["extra"][CARD_UIDS_FIELD] = true;
+  // Every tag field: a spool can be bound through any of them, and the link
+  // flow has to see that whichever one the user has selected right now.
+  for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++)
+    fL["extra"][tagFieldSpec(f).key] = true;
   fL["filament"]["id"] = true;
   fL["filament"]["name"] = true;
   fL["filament"]["material"] = true;
@@ -288,11 +361,14 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   fL["filament"]["color_hex"] = true;
   fL["filament"]["vendor"]["name"] = true;
   fL["spool_weight"] = true;
+  if (filterL.overflowed())
+    logSD("link fetch: filter overflowed, fields will be missing");
   SpiRamAllocator psram_alloc;
   JsonDocument doc(&psram_alloc);
   DeserializationError err = DeserializationError::Ok;
   int code = backendGetSpoolListJson(cfg_spoolman_base, archived_only, doc, 8000, &filterL, &err);
-  if (code != 200 || err) return;
+  spoolmanSetProgressHook(nullptr);
+  if (code != 200 || err) { loadingOverlayHide(); return; }
 
   JsonArray spools = doc.as<JsonArray>();
   int total_in_api = 0;
@@ -313,15 +389,16 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
       if (sp_archived) { skipped_archived++; continue; }
     }
 
-    // Skip already-linked spools — only in normal link flow.
+    // Skip already-linked spools - only in normal link flow.
     // In copy-archived flow, archived spools are templates (typically still tagged) -> don't skip.
-    // With the write switch on, a spool whose UIDs live in card_uids stays in
-    // the list: it is the only way to add the second tag from the scale, and
-    // WarnPopupA catches the selection before anything is written. Switched
-    // off this is exactly the condition it has always been.
-    const bool linked = spoolHasAnyTag(spool);
-    const bool appendable = g_card_uids_write && spoolHasCardUids(spool);
-    if (!archived_only && linked && !appendable) { skipped_tag++; count_linked++; continue; }
+    // While a second UID can be appended, an already bound spool stays in the
+    // list whichever field binds it: that is the only way to add the tag on the
+    // other flange from the scale, and WarnPopupA catches the selection before
+    // anything is written. This used to ask for card_uids specifically, which
+    // left out every spool bound through any other field.
+    if (!archived_only && !link_cu_ok && spoolHasAnyTag(spool)) {
+      skipped_tag++; count_linked++; continue;
+    }
 
     String vname = "";
     if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
@@ -366,6 +443,10 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     matched++;
   }
 
+  { char buf[48];
+    snprintf(buf, sizeof(buf), T(STR_LOADING_FILTER), total_in_api);
+    loadingOverlaySetText(buf); }
+
   logSDf("Spoolman inventory: %d total | %d linked | %d unlinked | %d Bambu",
     total_in_api, count_linked, total_in_api - count_linked, count_bambu);
   Serial.printf("Spoolman inventory: %d total | %d linked | %d unlinked | %d Bambu\n",
@@ -375,7 +456,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   Serial.printf("link fetch: total=%d matched=%d (skip_tag=%d skip_vendor=%d skip_mat=%d)\n",
     total_in_api, matched, skipped_tag, skipped_vendor, skipped_material);
 
-  if (matched == 0) return;
+  if (matched == 0) { loadingOverlayHide(); return; }
 
   // Store ALL matched spools — the display limit is applied at render time (showFilteredSpoolList)
   // This allows Vendor and Material lists to see the full dataset
@@ -389,7 +470,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     link_spools = (UnlinkedSpool*)malloc(alloc_count * sizeof(UnlinkedSpool));
     logSD("link fetch: PSRAM alloc failed, using internal RAM");
   }
-  if (!link_spools) { logSD("link fetch: alloc failed completely"); return; }
+  if (!link_spools) { logSD("link fetch: alloc failed completely"); loadingOverlayHide(); return; }
   link_spools_capacity = alloc_count;
 
   // ── Pass 2: fill array (same filter) ────────────────────────
@@ -404,8 +485,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
       if (sp_archived) continue;
     }
 
-    if (!archived_only && spoolHasAnyTag(spool) &&
-        !(g_card_uids_write && spoolHasCardUids(spool))) continue;
+    if (!archived_only && !link_cu_ok && spoolHasAnyTag(spool)) continue;
 
     String vname = "";
     if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
@@ -441,31 +521,27 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = spool["id"] | 0;
 
-    // Only ever set in the copy-archived flow: everywhere else a spool with a
-    // tag was skipped above. Deliberately the tag field alone, because this is
-    // what the overwrite warning offers to replace, and card_uids is not
-    // something this firmware writes.
-    String existing_tag = "";
-    if (spool.containsKey("extra") && spool["extra"].containsKey("tag")) {
-      existing_tag = spool["extra"]["tag"].as<String>();
-      existing_tag.replace("\"",""); existing_tag.trim();
-    }
-    strncpy(s.existing_tag, existing_tag.c_str(), sizeof(s.existing_tag)-1);
-    s.existing_tag[sizeof(s.existing_tag)-1] = '\0';
-
-    // Never keep a shortened list: appending to a truncated one would drop
-    // the entries that fell off the end. Empty means "unknown", which sends
-    // the write back to extra.tag instead.
-    s.card_uids[0] = '\0';
-    if (spool.containsKey("extra") && spool["extra"].containsKey(CARD_UIDS_FIELD)) {
-      String cu = spool["extra"][CARD_UIDS_FIELD].as<String>();
-      cu.replace("\"",""); cu.trim();
-      if (cu.length() < sizeof(s.card_uids)) {
-        strncpy(s.card_uids, cu.c_str(), sizeof(s.card_uids)-1);
-        s.card_uids[sizeof(s.card_uids)-1] = '\0';
+    // Which field binds this spool decides everything the flow does next:
+    // whether it is offered at all, whether the warning says "overwrite" or
+    // "add", and whether the write appends to a list or migrates a UID out of
+    // one field into another.
+    //
+    // Never keep a shortened value: appending to a truncated list would drop
+    // the entries that fell off the end. Empty means "unknown", and the write
+    // then treats the spool as unbound rather than acting on half a list.
+    for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++) {
+      s.tag_values[f][0] = '\0';
+      const char* key = tagFieldSpec(f).key;
+      if (!spool.containsKey("extra") || !spool["extra"].containsKey(key)) continue;
+      String v = spool["extra"][key].as<String>();
+      v.replace("\"",""); v.trim();
+      if (v.length() == 0) continue;
+      if (v.length() < CARD_UIDS_MAX) {
+        strncpy(s.tag_values[f], v.c_str(), CARD_UIDS_MAX - 1);
+        s.tag_values[f][CARD_UIDS_MAX - 1] = '\0';
       } else {
-        logSDf("link fetch: card_uids of spool %d too long (%d), ignored",
-               s.id, (int)cu.length());
+        logSDf("link fetch: %s of spool %d too long (%d), ignored",
+               key, s.id, (int)v.length());
       }
     }
 
@@ -511,6 +587,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   // ids.
   qsort(link_spools, link_spool_count, sizeof(UnlinkedSpool), compareLinkSpools);
 
+  loadingOverlayHide();
   Serial.printf("fetchAllSpoolsForLink: %d spools loaded (PSRAM, sorted)\n", link_spool_count);
   logSDf("link fetch done: %d spools in list", link_spool_count);
 }
@@ -566,15 +643,16 @@ void doLinkPatch(int spool_id, bool is_bambu) {
     return;
   }
 
-  // The target's list decides the field. Null for every spool that has none,
-  // which is every spool reachable here while the switch is off.
-  if (!patchSpoolTag(spool_id, link_uuid, linkTargetCardUids(spool_id))) {
-    // Refused rather than truncated. Saying nothing here would look like a
-    // successful link right up to the next scan.
-    logSDf("LINK ABORT: card_uids of spool %d full", spool_id);
+  // Both stores go along: the list is appended to when there is one, and the
+  // tag field's UID becomes the list's first entry when there is not. Null for
+  // an unbound spool, and for every spool at all while the switch is off.
+  if (!patchSpoolTag(spool_id, link_uuid, linkTargetValues(spool_id))) {
+    // Nothing was written - the list was full, or the request failed. Saying
+    // nothing here would look like a successful link right up to the next scan.
+    logSDf("LINK ABORT: tag field of spool %d not written", spool_id);
     if (lbl_status) {
       char buf[48];
-      strncpy(buf, T(STR_CU_FULL), sizeof(buf) - 1);
+      strncpy(buf, T(STR_CU_NOT_WRITTEN), sizeof(buf) - 1);
       buf[sizeof(buf) - 1] = '\0';
       lv_label_set_text(lbl_status, buf);
       lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
@@ -907,6 +985,10 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
   lv_timer_handler();
   if (!wifi_ok) { if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_NO_WIFI)); return; }
 
+  // The ID path skips the list fetch, so it has to settle this for itself.
+  link_cu_ok = tagFieldIsList() && g_card_uids_write &&
+               backendHasExtraField(tagFieldKey());
+
   DynamicJsonDocument doc(8192);
   DeserializationError err = DeserializationError::Ok;
   int code = backendGetSpoolJson(cfg_spoolman_base, entered_id, doc, 5000, &err);
@@ -950,13 +1032,17 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
   if (!found_in_list && linkSpoolsEnsureCapacity(link_spool_count + 1)) {
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = entered_id;
-    strncpy(s.existing_tag, existing.c_str(), sizeof(s.existing_tag)-1);
-    s.existing_tag[sizeof(s.existing_tag)-1] = '\0';
     // Same rule as the list fetch: too long is stored as empty, never cut.
-    s.card_uids[0] = '\0';
-    if (existing_cu.length() > 0 && existing_cu.length() < sizeof(s.card_uids)) {
-      strncpy(s.card_uids, existing_cu.c_str(), sizeof(s.card_uids)-1);
-      s.card_uids[sizeof(s.card_uids)-1] = '\0';
+    for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++) {
+      s.tag_values[f][0] = '\0';
+      const char* key = tagFieldSpec(f).key;
+      if (!doc.containsKey("extra") || !doc["extra"].containsKey(key)) continue;
+      String v = doc["extra"][key].as<String>();
+      v.replace("\"",""); v.trim();
+      if (v.length() > 0 && v.length() < CARD_UIDS_MAX) {
+        strncpy(s.tag_values[f], v.c_str(), CARD_UIDS_MAX - 1);
+        s.tag_values[f][CARD_UIDS_MAX - 1] = '\0';
+      }
     }
     String mat = doc["filament"]["material"] | String("");
     mat.trim(); strncpy(s.material, mat.c_str(), sizeof(s.material)-1);
@@ -975,16 +1061,25 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     link_spool_count++;
   }
 
-  // The tag field wins the warning: overwriting it is the destructive case and
-  // has to be asked about first. Only a spool bound purely through card_uids
-  // gets the friendlier "add one" variant, and only with the switch on -
-  // switched off there is nothing to add to and the old warning is right.
+  // While appending is possible neither store is being replaced, so both get
+  // the friendlier "add one" variant - the tag field's UID moves into the list
+  // and the new one joins it there. The list wins when both are set, because
+  // that is the one being written.
+  //
+  // Without it the tag field wins instead: overwriting it is the destructive
+  // case and has to be asked about first.
+  if (link_cu_ok && (existing_cu.length() > 0 || existing.length() > 0)) {
+    showWarnPopupA(entered_id,
+                   existing_cu.length() > 0 ? existing_cu.c_str() : existing.c_str(),
+                   is_bambu, "", true);
+    return;
+  }
   if (existing.length() > 0) {
     showWarnPopupA(entered_id, existing.c_str(), is_bambu, "");
     return;
   }
   if (existing_cu.length() > 0) {
-    showWarnPopupA(entered_id, existing_cu.c_str(), is_bambu, "", g_card_uids_write);
+    showWarnPopupA(entered_id, existing_cu.c_str(), is_bambu, "", false);
     return;
   }
   if (is_bambu && g_tag.material[0]) {
@@ -1260,7 +1355,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   int display_count = 0;
   for (int i = 0; i < link_spool_count; i++) {
     UnlinkedSpool &sc = link_spools[i];
-    if (sc.existing_tag[0] != '\0' && !(copy_flow_via_list && copy_flow_archived)) continue;
+    if (linkSpoolSkip(sc)) continue;
     bool bv = (strncasecmp(sc.vendor, "Bambu", 5) == 0);
     if (link_flow_is_bambu) {
       if (!bv) continue;
@@ -1388,7 +1483,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     UnlinkedSpool &s = link_spools[i];
 
     // Filter: kein Tag, passender Vendor, passender Material-Prefix
-    if (s.existing_tag[0] != '\0' && !(copy_flow_via_list && copy_flow_archived)) continue;  // bereits verknuepft
+    if (linkSpoolSkip(s)) continue;  // bereits verknuepft
     bool bambu_vendor = (strncasecmp(s.vendor, "Bambu", 5) == 0);
     if (link_flow_is_bambu) {
       // Bambu-Flow: vendor muss Bambu enthalten, Material muss passen
@@ -1564,12 +1659,12 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
               snprintf(copy_confirm_name, sizeof(copy_confirm_name), "%s %s (%s)", cs.material, cs.name, cs.vendor);
           }
           copy_confirm_pending = true;
-        } else if (g_card_uids_write && link_spools[cidx].card_uids[0]) {
-          // Only these spools get a second dialog, and only because they are
+        } else if (link_cu_ok && linkTargetBase(link_spools[cidx].id)) {
+          // Only bound spools get a second dialog, and only because they are
           // the ones the list would have hidden before the switch existed.
           // The confirmation behind us says which spool, this one says that it
           // is already bound and that nothing will be replaced.
-          showWarnPopupA(link_spools[cidx].id, link_spools[cidx].card_uids,
+          showWarnPopupA(link_spools[cidx].id, linkTargetBase(link_spools[cidx].id),
                          link_flow_is_bambu, "", true);
         } else {
           doLinkPatch(link_spools[cidx].id, link_flow_is_bambu);
@@ -1706,7 +1801,7 @@ void showMaterialList(const char* vendor_name) {
   bool mat_limit_hit = false;
   for (int i = 0; i < link_spool_count; i++) {
     UnlinkedSpool &s = link_spools[i];
-    if (s.existing_tag[0] != '\0' && !(copy_flow_via_list && copy_flow_archived)) continue;
+    if (linkSpoolSkip(s)) continue;
     if (strncasecmp(s.vendor, vendor_name, strlen(vendor_name)) != 0) continue;
     if (!s.material[0]) continue;
     char prefix[4]; strncpy(prefix, s.material, 3); prefix[3] = '\0';
@@ -1788,7 +1883,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
   bool full_limit_hit = false;
   for (int i = 0; i < link_spool_count; i++) {
     UnlinkedSpool &s = link_spools[i];
-    if (s.existing_tag[0] != '\0' && !(copy_flow_via_list && copy_flow_archived)) continue;
+    if (linkSpoolSkip(s)) continue;
     if (strncasecmp(s.vendor, vendor_name, strlen(vendor_name)) != 0) continue;
     if (!s.material[0]) continue;
     if (strncasecmp(s.material, material_prefix, strlen(material_prefix)) != 0) continue;
@@ -1949,7 +2044,7 @@ void showVendorList() {
   // Zaehle Spulen gesamt (ohne bereits verknuepft)
   int total_unlinked = 0;
   for (int i = 0; i < link_spool_count; i++) {
-    if (link_spools[i].existing_tag[0] != '\0' && !(copy_flow_via_list && copy_flow_archived)) continue;
+    if (linkSpoolSkip(link_spools[i])) continue;
     total_unlinked++;
   }
 
@@ -2031,7 +2126,7 @@ void showVendorList() {
   bool vendor_limit_hit = false;
   for (int i = 0; i < link_spool_count; i++) {
     UnlinkedSpool &s = link_spools[i];
-    if (s.existing_tag[0] != '\0' && !(copy_flow_via_list && copy_flow_archived)) continue;
+    if (linkSpoolSkip(s)) continue;
     const char* vn = s.vendor[0] ? s.vendor : "Unbekannt";
     bool found = false;
     for (int j = 0; j < seen_v; j++) {
@@ -2415,11 +2510,19 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
 
   if (!wifi_ok) return;
 
+  loadingOverlayShow(T(STR_LOADING_SPOOLS));
+  spoolmanSetProgressHook(loadingOverlayProgress);
+
   SpiRamAllocator alloc;
   JsonDocument doc(&alloc);
   DeserializationError err = DeserializationError::Ok;
   int code = backendGetSpoolListJson(cfg_spoolman_base, true, doc, 10000, nullptr, &err);
-  if (code != 200 || err) { Serial.printf("fetchSpoolsForCopy JSON error: %s\n", err.c_str()); return; }
+  spoolmanSetProgressHook(nullptr);
+  if (code != 200 || err) {
+    loadingOverlayHide();
+    Serial.printf("fetchSpoolsForCopy JSON error: %s\n", err.c_str());
+    return;
+  }
 
   JsonArray arr = doc.as<JsonArray>();
   // Count matching entries first (for allocation)
@@ -2457,12 +2560,16 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
     if (count >= spool_list_limit + 1) break;
   }
 
+  { char buf[48];
+    snprintf(buf, sizeof(buf), T(STR_LOADING_FILTER), count);
+    loadingOverlaySetText(buf); }
+
   bool limit_hit = (count > spool_list_limit);
   int alloc_count = limit_hit ? spool_list_limit : count;
 
   link_spools = (UnlinkedSpool*)heap_caps_malloc(alloc_count * sizeof(UnlinkedSpool), MALLOC_CAP_SPIRAM);
   if (!link_spools) link_spools = (UnlinkedSpool*)malloc(alloc_count * sizeof(UnlinkedSpool));
-  if (!link_spools) { link_spool_count = 0; return; }
+  if (!link_spools) { link_spool_count = 0; loadingOverlayHide(); return; }
   link_spools_capacity = alloc_count;
 
   int idx = 0;
@@ -2500,8 +2607,8 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
     s.id = spool["id"] | 0;
     // Not a tag here, and deliberately emptied rather than left alone:
     // link_spools[] lives in PSRAM and is not zeroed, and the shared list
-    // builders skip every row whose existing_tag is non-empty.
-    s.existing_tag[0] = '\0';
+    // builders skip every row that is already bound, see linkSpoolBound().
+    for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++) s.tag_values[f][0] = '\0';
     strncpy(s.name,     spool["filament"]["name"]           | "", sizeof(s.name)-1);
     s.name[sizeof(s.name)-1] = '\0';
     strncpy(s.vendor,   spool["filament"]["vendor"]["name"] | "", sizeof(s.vendor)-1);
@@ -2518,6 +2625,7 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
     idx++;
   }
   link_spool_count = idx;
+  loadingOverlayHide();
 
   if (limit_hit) {
     Serial.printf("fetchSpoolsForCopy: limit hit (%d), showing %d\n", count, spool_list_limit);

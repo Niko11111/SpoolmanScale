@@ -51,8 +51,21 @@ enum BbDriedTarget : uint8_t {
 };
 extern uint8_t g_bb_dried_target;
 
+// Which Spoolman extra field the scale writes the tag UID into, as a
+// TagFieldId - see services/tag_field.h for the table behind it and for why
+// the choice covers the value format as well as the field name. Default is
+// extra.tag, what this firmware has always used, so an existing installation
+// notices nothing.
+//
+// Spoolman only. FilaMan has the native rfid_uid column and BamBuddy a fixed
+// schema, neither has extra fields to choose between.
+extern uint8_t g_tag_field;
+
 // Whether the scale may write to Spoolman's card_uids, the UID list SpoolLink
-// keeps for the Snapmaker U1. Off by default, and off it changes nothing at
+// keeps for the Snapmaker U1. Only ever offered while card_uids is the
+// selected tag field: it is the one convention with a list format, and a
+// comma separated value in tag or nfc_id would break the very tools the
+// choice exists to line up with. Off by default, and off it changes nothing at
 // all: linking, copying and unlinking behave exactly as they did before.
 //
 // Reading that field needs no switch and never had one - it cannot damage

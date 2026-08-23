@@ -4,6 +4,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Called while a large response is being read, with the number of bytes so
+// far. Set while something is on screen that wants to show progress, cleared
+// afterwards - nothing is wrapped and nothing costs anything while it is null.
+//
+// The parse of a full inventory is the long pole of a link flow, and it is one
+// blocking call: without a hook inside it there is no moment at which the UI
+// could say anything. The hook must be cheap and must not process input.
+typedef void (*SpoolmanProgressFn)(size_t bytes_read);
+void spoolmanSetProgressHook(SpoolmanProgressFn fn);
+
 int spoolmanGetJson(const char* base_url, const char* path, JsonDocument& doc,
   uint32_t timeout_ms = 8000, JsonDocument* filter = nullptr, DeserializationError* out_err = nullptr);
 int spoolmanGetSpoolJson(const char* base_url, int spool_id, JsonDocument& doc,
@@ -21,27 +31,28 @@ int spoolmanCountActiveSpools(const char* base_url, uint32_t timeout_ms = 6000);
 int spoolmanCreateSpool(const char* base_url, int filament_id, float initial_weight,
   float spool_weight, float remaining_weight, int* out_spool_id = nullptr, uint32_t timeout_ms = 8000);
 int spoolmanCreateSpoolField(const char* base_url, const char* field_name, uint32_t timeout_ms = 3000);
-int spoolmanPatchSpoolTag(const char* base_url, int spool_id, const char* uuid, uint32_t timeout_ms = 5000);
-// Writes the whole card_uids list. The merge happened before this call, in
-// cardUidsAppend() / cardUidsRemove(); this only ships the result. An empty
-// list writes "", which is the default SpoolLink gives the field.
-int spoolmanPatchCardUids(const char* base_url, int spool_id, const char* list, uint32_t timeout_ms = 5000);
-// Server side tag search. Result has the same shape as the spool list, but
-// usually holds a single entry. The match is partial and case insensitive,
-// so the caller must still verify the tag exactly. An older Spoolman ignores
-// the parameter and returns everything, which the caller's own scan handles.
-int spoolmanFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocument& doc,
-                           uint32_t timeout_ms = 8000, JsonDocument* filter = nullptr,
-                           DeserializationError* out_err = nullptr);
+// Writes one text extra field. `value` is the finished contents - for a list
+// field the merge already happened in cardUidsAppend() / cardUidsRemove(), and
+// for a single valued one it is the formatted UID. An empty value clears the
+// field, which is what an unlink writes.
+int spoolmanPatchExtraField(const char* base_url, int spool_id, const char* key,
+                            const char* value, uint32_t timeout_ms = 5000);
 
-// Same search against extra.card_uids, the comma separated UID list SpoolLink
-// writes for the Snapmaker U1. Pass the UID in any notation, it is normalised
-// to plain hex here because the stored entries carry no separators. The same
-// two caveats apply: the match is partial, and a server without the field
-// silently ignores the filter and answers with everything.
-int spoolmanFindSpoolByCardUid(const char* base_url, const char* uid, JsonDocument& doc,
-                               uint32_t timeout_ms = 8000, JsonDocument* filter = nullptr,
-                               DeserializationError* out_err = nullptr);
+// Server side search over one extra field. Result has the same shape as the
+// spool list but usually holds a single entry, which is the entire point: at
+// 268 spools this is under 1 kB instead of 176 kB.
+//
+// Two caveats the caller must handle, both unchanged from when this only did
+// extra.tag: the match is partial and case insensitive, so every hit has to be
+// verified exactly; and a server that does not know the field ignores the
+// filter and answers with the whole inventory, so ask backendHasExtraField()
+// first or the shortcut turns into the long way round without saying so.
+//
+// `value` must already be formatted for the field - see tagFieldFormat().
+int spoolmanFindSpoolByExtraField(const char* base_url, const char* key, const char* value,
+                                  JsonDocument& doc, uint32_t timeout_ms = 8000,
+                                  JsonDocument* filter = nullptr,
+                                  DeserializationError* out_err = nullptr);
 
 int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remaining, const char* last_used_iso = nullptr, uint32_t timeout_ms = 5000);
 int spoolmanPatchInitialWeight(const char* base_url, int spool_id, float initial_weight, uint32_t timeout_ms = 5000);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "services/tag_field.h"  // TagFieldId, TAG_FIELD_COUNT
 #include "services/tag_uid.h"   // CARD_UIDS_MAX
 
 #include <Arduino.h>
@@ -57,6 +58,7 @@ extern lv_obj_t *scr_spoolman_fail;
 extern lv_obj_t *scr_welcome;
 extern lv_obj_t *scr_first_boot;
 extern lv_obj_t *scr_extra_fields;
+extern lv_obj_t *scr_tag_field;
 extern lv_obj_t *scr_cal_reminder;
 extern lv_obj_t *scr_wifi_setup;
 extern lv_obj_t *scr_factor;
@@ -102,15 +104,25 @@ enum TareSource : uint8_t {
 extern float sm_spool_weight;
 extern uint8_t sm_tare_source;
 extern char sm_last_dried[32];
-// The spool's card_uids list, quote stripped, empty when it has none. Kept so
-// the unlink popup can size itself without an HTTP request - see
-// captureCardUids() in spoolman_lookup.cpp. 192 characters hold twelve 7 byte
+// What the matched spool holds in each tag field, indexed by TagFieldId, quote
+// stripped, empty where the field holds nothing. Filled by captureBindings()
+// in spoolman_lookup.cpp.
+//
+// All of them rather than just the selected one, because that is what says
+// which field actually binds this spool: an unlink has to empty the right one
+// and leave the others alone, and the unlink popup sizes itself from the UID
+// count without spending an HTTP request. 192 characters hold twelve 7 byte
 // UIDs; anything longer is dropped rather than shortened.
-extern char sm_card_uids[CARD_UIDS_MAX];
-// The spool's extra.tag, quote stripped, empty when it has none. Counterpart
-// to sm_card_uids: together they say which of the two stores actually binds
-// this spool, so an unlink can leave the other one alone.
-extern char sm_tag[48];
+extern char sm_tag_values[TAG_FIELD_COUNT][CARD_UIDS_MAX];
+
+// Shorthand for the field the user selected, which is the one most callers
+// mean. Never null.
+const char* smSelectedTagValue();
+
+// How many UIDs the matched spool is bound by, across every tag field. More
+// than one only ever comes from a list field, and that is what makes "unlink"
+// an ambiguous request that has to be asked about.
+int smBoundUidCount();
 extern char sm_article_nr[32];
 extern char sm_filament_name[32];
 extern char sm_material_global[32];

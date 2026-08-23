@@ -1,4 +1,5 @@
 #include "spoolman_actions.h"
+#include "services/tag_field.h"
 #include "services/tag_uid.h"
 #include "services/user_options.h"
 #include "app/app_state.h"
@@ -22,6 +23,11 @@
 
 
 
+
+// Holds one tag UID on its way from extra.tag into the card_uids list. The
+// longest the scale carries is a Bambu tray uuid at 32 characters, the colon
+// form of a 7 byte UID is 20. Same size as sm_tag, which is where it comes from.
+#define TAG_MIGRATE_MAX  48
 
 int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
   if (!wifi_ok) { Serial.println("patchSpoolmanWeight: no WiFi"); return PATCH_WEIGHT_NO_TARGET; }
@@ -125,63 +131,135 @@ void patchArchiveSpool() {
   updateLinkButton();
 }
 
-bool patchSpoolTag(int spool_id, const char* uuid, const char* current_card_uids) {
+// Empties the field a UID was migrated out of, once it is safely in the
+// selected one. Only ever in that order: the reverse can lose the binding
+// altogether if the second write fails.
+//
+// Refused when the source is a list holding more than one UID. Clearing it
+// would drop the tag on the other flange, and nobody would notice until that
+// tag stopped working. The spool then stays bound through both fields, which
+// the fallback search in querySpoolman() covers.
+static void clearMigrationSource(int spool_id, uint8_t src, const char* value) {
+  const TagFieldSpec& s = tagFieldSpec(src);
+  if (s.is_list) {
+    const int held = cardUidsCount(value);
+    if (held > 1) {
+      logSDf("MIGRATE ID=%d kept %s, it still holds %d UIDs", spool_id, s.key, held);
+      return;
+    }
+  }
+  int c = backendPatchExtraField(cfg_spoolman_base, spool_id, s.key, "");
+  logSDf("MIGRATE ID=%d moved '%s' from %s to %s, cleared %s HTTP %d",
+         spool_id, value ? value : "", s.key, tagFieldKey(), s.key, c);
+}
+
+bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_values) {
   if (!wifi_ok) return false;
   const bool clearing = (!uuid || !uuid[0]);
 
-  // Write where the spool already is. A spool whose UIDs live in card_uids
-  // gets the new one appended there, everything else keeps going to extra.tag
-  // - which is every spool that has never met SpoolLink, and every spool at
-  // all while the switch is off.
-  if (!clearing && g_card_uids_write && current_card_uids && current_card_uids[0]) {
+  const TagFieldSpec& spec = tagFieldSelected();
+  const char* selected = (!clearing && field_values) ? field_values[g_tag_field] : nullptr;
+  const bool  has_value = (selected && selected[0]);
+
+  // Where the binding sits now, if it is not already in the selected field.
+  // Moving it over is what keeps the choice meaningful: without it a spool
+  // linked before the switch would stay reachable only through the fallback
+  // search, and the field the user picked would never fill up.
+  //
+  // Spoolman only - the other backends have one place each for a tag and
+  // nothing to migrate between.
+  int src = -1;
+  if (!clearing && !has_value && field_values && backendMode() == BACKEND_SPOOLMAN) {
+    for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) {
+      if (i == g_tag_field) continue;
+      if (field_values[i] && field_values[i][0]) { src = (int)i; break; }
+    }
+  }
+
+  // The list path: append instead of replace. Only a field with a list format
+  // can do it, and only with the switch on - see g_card_uids_write.
+  const bool use_list = !clearing && spec.is_list && g_card_uids_write &&
+                        backendHasExtraField(spec.key);
+
+  if (use_list) {
+    // The base is the list the spool already has. A spool bound elsewhere
+    // brings that single UID along as the first entry, and a fresh one starts
+    // the list off - without that seed nothing would ever write entry one.
+    //
+    // Only ever seeded from a single valued source. Normalising a comma
+    // separated list would fuse its UIDs into one identifier that belongs to
+    // no tag at all. There is only one list field today, so src can never be
+    // one - but the spec table is meant to grow, and this is not a mistake
+    // anything downstream could catch.
+    char seeded[TAG_MIGRATE_MAX] = "";
+    if (!has_value && src >= 0 && !tagFieldSpec((uint8_t)src).is_list)
+      tagFieldFormat(spec, field_values[src], seeded, sizeof(seeded));
+    const char* base = has_value ? selected : seeded;
+
     char merged[CARD_UIDS_MAX];
-    CardUidsResult r = cardUidsAppend(current_card_uids, uuid, merged, sizeof(merged));
+    CardUidsResult r = cardUidsAppend(base, uuid, merged, sizeof(merged));
 
     if (r == CARD_UIDS_ALREADY_PRESENT) {
-      // Linking a tag that is already on the spool is not a failure, it just
-      // has nothing to write. Saying so beats a PATCH that changes nothing.
-      logSDf("PATCH card_uids ID=%d uuid='%s' already in list, no write",
-             spool_id, uuid);
+      // Linking a tag the spool already carries is not a failure, it just has
+      // nothing to write. Saying so beats a PATCH that changes nothing.
+      logSDf("PATCH %s ID=%d uuid='%s' already in list, no write",
+             spec.key, spool_id, uuid);
       return true;
     }
     if (r == CARD_UIDS_FULL) {
       // Refusing is the whole point: a shortened list would drop a tag that
-      // belongs to the other flange, and nobody would notice until that tag
-      // stopped working.
-      logSDf("PATCH card_uids ID=%d uuid='%s' REFUSED, list full ('%s')",
-             spool_id, uuid, current_card_uids);
+      // belongs to the other flange.
+      logSDf("PATCH %s ID=%d uuid='%s' REFUSED, list full ('%s')",
+             spec.key, spool_id, uuid, base);
       return false;
     }
 
-    int code = backendPatchCardUids(cfg_spoolman_base, spool_id, merged);
-    Serial.printf("PATCH card_uids: '%s' HTTP %d\n", merged, code);
-    logSDf("PATCH card_uids ID=%d uuid='%s' -> '%s' HTTP %d",
-           spool_id, uuid, merged, code);
+    int code = backendPatchExtraField(cfg_spoolman_base, spool_id, spec.key, merged);
+    Serial.printf("PATCH %s: '%s' HTTP %d\n", spec.key, merged, code);
+    logSDf("PATCH %s ID=%d uuid='%s' -> '%s' HTTP %d",
+           spec.key, spool_id, uuid, merged, code);
+    if (code != 200) return false;
+
+    if (!has_value && src >= 0) clearMigrationSource(spool_id, (uint8_t)src, field_values[src]);
     return true;
   }
 
+  // Single value. backendPatchSpoolTag() puts it where the active backend
+  // keeps its tags - the selected extra field on Spoolman, rfid_uid on
+  // FilaMan, the device protocol on BamBuddy - formatted for that field.
   Serial.printf("PATCH tag: '%s'%s\n", uuid ? uuid : "", clearing ? "  (UNLINK)" : "");
   int code = backendPatchSpoolTag(cfg_spoolman_base, spool_id, uuid);
   Serial.printf("patchSpoolTag: HTTP %d\n", code);
   // The uuid is part of the log line on purpose. An empty one is a valid
   // unlink and a silent disaster for a link, and the old line could not tell
   // the two apart afterwards.
-  logSDf("PATCH tag ID=%d uuid='%s'%s HTTP %d",
-         spool_id, uuid ? uuid : "", clearing ? " UNLINK" : "", code);
+  logSDf("PATCH tag ID=%d field=%s uuid='%s'%s HTTP %d",
+         spool_id, backendMode() == BACKEND_SPOOLMAN ? spec.key : "native",
+         uuid ? uuid : "", clearing ? " UNLINK" : "", code);
+
+  // An unlink reports success either way: the caller has already decided the
+  // binding is gone, and a failed clear is visible in the log.
+  if (clearing) return true;
+  if (code < 200 || code >= 300) return false;
+
+  if (src >= 0) clearMigrationSource(spool_id, (uint8_t)src, field_values[src]);
   return true;
 }
 
-// Clears extra.tag, but only if the spool is actually bound through it.
+// Clears the tag field a spool is bound through, but only if it holds
+// something.
 //
 // Writing a field that holds nothing is not harmless. Spoolman rejects an
-// extra field it does not know with HTTP 400, so a SpoolLink user who never ran
-// our extra fields assistant would collect an error for a field that was never
-// part of the binding. And touching data the scale did not put there is wrong
-// even when it happens to work.
-static bool clearTagIfSet(int spool_id) {
-  if (!sm_tag[0]) return false;
-  int code = backendPatchSpoolTag(cfg_spoolman_base, spool_id, "");
-  logSDf("UNLINK ID=%d cleared tag, HTTP %d", spool_id, code);
+// extra field it does not know with HTTP 400, so a user whose server never had
+// that field would collect an error for a field that was never part of the
+// binding. And touching data the scale did not put there is wrong even when it
+// happens to work.
+static bool clearBoundFieldIfSet(int spool_id, uint8_t field) {
+  const char* v = sm_tag_values[field];
+  if (!v[0]) return false;
+  const TagFieldSpec& s = tagFieldSpec(field);
+  int code = backendPatchExtraField(cfg_spoolman_base, spool_id, s.key, "");
+  logSDf("UNLINK ID=%d cleared %s ('%s'), HTTP %d", spool_id, s.key, v, code);
   return true;
 }
 
@@ -189,33 +267,38 @@ void unlinkCardUid(int spool_id, const char* uid, bool all) {
   if (!wifi_ok) return;
 
   if (all) {
-    // Both stores can hold a binding, and leaving one behind would keep the
-    // spool findable after the user was told it is gone. Each is only written
-    // if it holds something - see clearTagIfSet() for why that matters.
-    bool did = clearTagIfSet(spool_id);
-    if (sm_card_uids[0]) {
-      int c = backendPatchCardUids(cfg_spoolman_base, spool_id, "");
-      logSDf("UNLINK ID=%d cleared card_uids ('%s'), HTTP %d",
-             spool_id, sm_card_uids, c);
-      did = true;
-    }
-    if (!did) logSDf("UNLINK ID=%d nothing to clear, neither field set", spool_id);
+    // Every field that holds something has to go. Leaving one behind would
+    // keep the spool findable after the user was told it is gone, and the
+    // fallback search makes that more likely, not less.
+    bool did = false;
+    for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++)
+      if (clearBoundFieldIfSet(spool_id, i)) did = true;
+    if (!did) logSDf("UNLINK ID=%d nothing to clear, no field set", spool_id);
     return;
   }
 
-  char rest[CARD_UIDS_MAX];
-  if (!cardUidsRemove(sm_card_uids, uid, rest, sizeof(rest))) {
-    // The UID was not in the list after all, so whatever brought the spool up
-    // was the tag field, if anything was.
-    logSDf("UNLINK ID=%d uuid='%s' not in card_uids", spool_id, uid ? uid : "");
-    if (!clearTagIfSet(spool_id))
-      logSDf("UNLINK ID=%d nothing to clear, neither field set", spool_id);
+  // One UID out of a list, leaving the rest of the list alone. Only a list
+  // field can do that; everything else is an all-or-nothing binding.
+  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) {
+    const TagFieldSpec& s = tagFieldSpec(i);
+    if (!s.is_list || !sm_tag_values[i][0]) continue;
+
+    char rest[CARD_UIDS_MAX];
+    if (!cardUidsRemove(sm_tag_values[i], uid, rest, sizeof(rest))) continue;
+
+    int code = backendPatchExtraField(cfg_spoolman_base, spool_id, s.key, rest);
+    logSDf("UNLINK one ID=%d uuid='%s' left %s='%s' HTTP %d",
+           spool_id, uid ? uid : "", s.key, rest, code);
     return;
   }
 
-  int code = backendPatchCardUids(cfg_spoolman_base, spool_id, rest);
-  logSDf("UNLINK one ID=%d uuid='%s' left '%s' HTTP %d",
-         spool_id, uid ? uid : "", rest, code);
+  // The UID was in no list, so whatever brought the spool up was a single
+  // valued field, if anything was.
+  logSDf("UNLINK ID=%d uuid='%s' in no list", spool_id, uid ? uid : "");
+  bool did = false;
+  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++)
+    if (!tagFieldSpec(i).is_list && clearBoundFieldIfSet(spool_id, i)) { did = true; break; }
+  if (!did) logSDf("UNLINK ID=%d nothing to clear, no field set", spool_id);
 }
 
 void patchInitialWeight(float initial_w) {

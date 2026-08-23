@@ -289,7 +289,6 @@ enum StringID {
 
   // Extra fields screen
   STR_EXTRA_FIELDS_TITLE,
-  STR_EXTRA_FIELDS_CHECK_BTN,
   STR_EXTRA_FIELDS_CHECKING,
   STR_EXTRA_FIELDS_ALL_OK,
   STR_EXTRA_FIELDS_MISSING,
@@ -302,7 +301,6 @@ enum StringID {
   STR_EXTRA_FIELDS_NO_WIFI,
   STR_EXTRA_FIELDS_NO_SPOOLMAN,
   STR_EXTRA_FIELDS_SKIP,
-  STR_EXTRA_FIELDS_HINT,
 
   // Calibration reminder screen (end of first setup)
   STR_CAL_REMINDER_TITLE,
@@ -538,7 +536,7 @@ enum StringID {
   STR_CU_WRITE,
   STR_CU_WRITE_SUB,
   STR_CU_WRITE_INFO,
-  STR_CU_FULL,
+  STR_CU_NOT_WRITTEN,
   STR_WARN_A_ADD_TITLE,
   STR_WARN_A_ADD_INFO,
   STR_WARN_A_ADD_SHORT,
@@ -600,6 +598,31 @@ enum StringID {
   STR_NEWTAG_LABEL_W,
   STR_NEWTAG_OK,
   STR_NEWTAG_FAIL,
+
+  // Which Spoolman extra field holds the tag UID. Every project in the
+  // ecosystem picked a different one, so the scale lets the user say.
+  STR_TAG_FIELD,
+  STR_TAG_FIELD_INFO,
+  STR_TF_TAG,
+  STR_TF_TAG_SUB,
+  STR_TF_TAG_INFO,
+  STR_TF_NFCID,
+  STR_TF_NFCID_SUB,
+  STR_TF_NFCID_INFO,
+  STR_TF_CARDUIDS,
+  STR_TF_CARDUIDS_SUB,
+  STR_TF_CARDUIDS_INFO,
+  // The extra fields menu the choice lives in
+  STR_EF_LAST_DRIED,
+  STR_EF_LAST_DRIED_SUB,
+  STR_EF_LAST_DRIED_INFO,
+  STR_EF_PRESENT,
+  STR_EF_MISSING,
+  STR_EF_CREATE_ROW,
+  // Shown while a list flow is loading the inventory, which blocks for
+  // seconds on a large one.
+  STR_LOADING_SPOOLS,
+  STR_LOADING_FILTER,
 
   STR_COUNT
 };

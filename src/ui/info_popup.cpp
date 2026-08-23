@@ -15,7 +15,12 @@
 //
 // The box no longer sets the narrower limit either - the text area scrolls
 // now, so length is a question of this buffer alone.
-#define INFO_TEXT_BUF   768
+// Long enough for the longest text in the table with room to spare. It was
+// 768, which silently truncated the card_uids explanation mid sentence - the
+// scroll container below exists so a paragraph can be read, and a buffer that
+// quietly drops the end defeats it. Static storage, so the extra bytes cost
+// nothing that matters.
+#define INFO_TEXT_BUF   1024
 #define INFO_TITLE_BUF   48
 
 void showInfoPopup(int title_id, int text_id) {
@@ -73,6 +78,12 @@ void showInfoPopup(int title_id, int text_id) {
   // lv_timer_handler(), and the buffer only has to survive until
   // lv_label_set_text() has copied it into the label's own storage.
   static char ibuf[INFO_TEXT_BUF];
+  // Say so rather than drop the end in silence: a truncated explanation still
+  // looks like a finished one on screen, so nothing would ever point at it.
+  const size_t len = strlen(T(text_id));
+  if (len >= sizeof(ibuf))
+    logSDf("InfoPopup: text %d is %u bytes, buffer holds %u - truncated",
+           text_id, (unsigned)len, (unsigned)(sizeof(ibuf) - 1));
   strncpy(ibuf, T(text_id), sizeof(ibuf) - 1);
   ibuf[sizeof(ibuf) - 1] = '\0';
   lv_label_set_text(info, ibuf);

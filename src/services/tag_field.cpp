@@ -1,0 +1,43 @@
+#include "tag_field.h"
+
+#include <string.h>
+
+#include "lang.h"
+#include "services/tag_uid.h"
+#include "services/user_options.h"
+
+// The whole feature in one table. Adding a fourth convention is a row here
+// plus three strings; nothing else in the firmware asks for a field by name.
+//
+// card_uids reuses CARD_UIDS_FIELD rather than spelling the key a second time:
+// tag_uid.cpp compares against that macro, and two spellings that drift apart
+// would break the list handling in a way no compiler would catch.
+static const TagFieldSpec SPECS[TAG_FIELD_COUNT] = {
+  // key              is_list  plain_hex  name              sub                   info
+  { "tag",            false,   false,     STR_TF_TAG,       STR_TF_TAG_SUB,       STR_TF_TAG_INFO      },
+  { "nfc_id",         false,   true,      STR_TF_NFCID,     STR_TF_NFCID_SUB,     STR_TF_NFCID_INFO    },
+  { CARD_UIDS_FIELD,  true,    true,      STR_TF_CARDUIDS,  STR_TF_CARDUIDS_SUB,  STR_TF_CARDUIDS_INFO },
+};
+
+const TagFieldSpec& tagFieldSpec(uint8_t id) {
+  return SPECS[id < TAG_FIELD_COUNT ? id : TAG_FIELD_TAG];
+}
+
+const TagFieldSpec& tagFieldSelected() { return tagFieldSpec(g_tag_field); }
+const char*         tagFieldKey()      { return tagFieldSelected().key; }
+bool                tagFieldIsList()   { return tagFieldSelected().is_list; }
+
+void tagFieldFormat(const TagFieldSpec& spec, const char* uid,
+                    char* out, size_t out_len) {
+  if (!out || out_len == 0) return;
+  if (spec.plain_hex) {
+    tagUidNormalize(uid, out, out_len);
+    return;
+  }
+  // extra.tag keeps whatever the scale read: the colon form for an NTAG, the
+  // tray_uuid for a Bambu tag. That is what every spool already linked through
+  // this firmware holds, so normalising here would orphan the whole back
+  // catalogue on the next scan.
+  strncpy(out, uid ? uid : "", out_len - 1);
+  out[out_len - 1] = '\0';
+}

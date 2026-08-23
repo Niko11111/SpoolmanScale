@@ -11,7 +11,7 @@
 #include "services/filaman_api.h"
 #include "services/list_limits.h"
 #include "services/spoolman_api.h"
-#include "services/tag_uid.h"
+#include "services/tag_field.h"
 #include "services/tag_uid.h"
 #include "services/user_options.h"
 
@@ -113,68 +113,124 @@ int backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocume
       return bbFindSpoolByTag(backendBaseUrl(), bambuddyApiKey(), tag_uuid,
                               doc, timeout_ms, out_err);
     default:
-      // Spoolman can do the same through an extra field filter. The field filter
-      // is passed along because an older server ignores the query parameter and
-      // answers with everything: that case still works, and this keeps it from
-      // costing more memory than the normal full scan would.
-      return spoolmanFindSpoolByTag(base_url, tag_uuid, doc, timeout_ms, filter, out_err);
+      // Spoolman goes through whichever extra field the user selected. The
+      // field filter is passed along because a server that ignores the query
+      // parameter answers with everything: that case still works, and this
+      // keeps it from costing more memory than the normal full scan would.
+      return backendFindSpoolByTagField(g_tag_field, base_url, tag_uuid, doc,
+                                        timeout_ms, out_err, filter);
   }
 }
 
-int backendFindSpoolByCardUid(const char* base_url, const char* uid, JsonDocument& doc,
-                              uint32_t timeout_ms, DeserializationError* out_err,
-                              JsonDocument* filter) {
+int backendFindSpoolByTagField(uint8_t field_id, const char* base_url, const char* uid,
+                               JsonDocument& doc, uint32_t timeout_ms,
+                               DeserializationError* out_err, JsonDocument* filter) {
   if (!uid || !uid[0]) return BACKEND_NOT_SUPPORTED;
-  // card_uids is an agreement between SpoolLink, its companion apps and the
-  // U1 firmware, all of which write into Spoolman. Nothing fills the field in
-  // FilaMan or BamBuddy, so there is nothing to search there.
-  if (backendMode() != BACKEND_SPOOLMAN) return notSupported("FindSpoolByCardUid");
-  return spoolmanFindSpoolByCardUid(base_url, uid, doc, timeout_ms, filter, out_err);
+  // The tag field conventions are agreements between programs that write into
+  // Spoolman. FilaMan has its native rfid_uid column and BamBuddy a fixed
+  // schema, so there is no extra field to search there.
+  if (backendMode() != BACKEND_SPOOLMAN) return notSupported("FindSpoolByTagField");
+
+  const TagFieldSpec& spec = tagFieldSpec(field_id);
+
+  // The gate that keeps the fast path fast. Spoolman ignores a filter on a
+  // field it does not have and answers with the whole inventory - which looks
+  // like a hit, costs the full transfer, and would quietly undo the entire
+  // point of searching server side.
+  if (!backendHasExtraField(spec.key)) return BACKEND_NOT_SUPPORTED;
+
+  // Formatted for the field it is going to: plain hex where the field stores
+  // plain hex, verbatim where it does not. Sending the colon form at a field
+  // that holds none would never match the ilike.
+  char value[CARD_UIDS_MAX];
+  tagFieldFormat(spec, uid, value, sizeof(value));
+  if (!value[0]) return BACKEND_NOT_SUPPORTED;
+
+  return spoolmanFindSpoolByExtraField(base_url, spec.key, value, doc,
+                                       timeout_ms, filter, out_err);
 }
 
-bool backendHasCardUidsField() {
+// Which of the fields the scale knows a key is, or -1 for one it never asks
+// about. The probe below fills one bit per entry, so this ordering is the
+// only thing tying the mask to the keys.
+static int knownFieldIndex(const char* key) {
+  if (!key || !key[0]) return -1;
+  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++)
+    if (strcmp(key, tagFieldSpec(i).key) == 0) return (int)i;
+  if (strcmp(key, LAST_DRIED_FIELD) == 0) return TAG_FIELD_COUNT;
+  return -1;
+}
+
+// Cached against the URL it was probed for, so pointing the scale at another
+// instance re-probes without anyone having to remember to invalidate.
+static char    s_fields_probed_for[96] = {0};
+static uint8_t s_fields_mask = 0;
+
+void backendInvalidateExtraFieldCache() {
+  s_fields_probed_for[0] = '\0';
+  s_fields_mask = 0;
+}
+
+bool backendHasExtraField(const char* key) {
   if (backendMode() != BACKEND_SPOOLMAN) return false;
 
   const char* base = backendBaseUrl();
   if (!base || !base[0]) return false;
 
-  // Cached against the URL it was probed for, so pointing the scale at another
-  // instance re-probes without anyone having to remember to invalidate. One
-  // small GET per boot is the entire cost of this feature for everyone who
-  // does not use SpoolLink.
-  static char s_probed_for[96] = {0};
-  static bool s_present = false;
+  const int idx = knownFieldIndex(key);
+  if (idx < 0) return false;
 
-  if (strncmp(s_probed_for, base, sizeof(s_probed_for) - 1) == 0) return s_present;
+  if (strncmp(s_fields_probed_for, base, sizeof(s_fields_probed_for) - 1) != 0) {
+    // One GET returns every field definition, so all of them are settled at
+    // once. Probing per key would cost a request each and could answer
+    // inconsistently halfway through.
+    //
+    // Plain document on purpose: the field list holds a handful of
+    // definitions, a few hundred bytes, and is nothing like the spool
+    // inventory that needs PSRAM.
+    JsonDocument doc;
+    DeserializationError err = DeserializationError::Ok;
+    int code = spoolmanGetSpoolFieldsJson(base, doc, 5000, &err);
+    if (code != 200 || err) {
+      // Not cached: an unreachable server now says nothing about the fields,
+      // and caching a "no" here would keep them off for the whole session.
+      logSDf("extra fields: probe failed, code=%d err=%s", code, err.c_str());
+      return false;
+    }
 
-  // Plain document on purpose: the field list holds a handful of definitions,
-  // a few hundred bytes, and is nothing like the spool inventory that needs
-  // PSRAM. Not worth a local allocator in this file.
-  JsonDocument doc;
-  DeserializationError err = DeserializationError::Ok;
-  int code = spoolmanGetSpoolFieldsJson(base, doc, 5000, &err);
-  if (code != 200 || err) {
-    // Not cached: an unreachable server now says nothing about the field, and
-    // caching a "no" here would keep the feature off for the whole session.
-    logSDf("card_uids: field probe failed, code=%d err=%s", code, err.c_str());
-    return false;
+    uint8_t mask = 0;
+    for (JsonObjectConst f : doc.as<JsonArrayConst>()) {
+      const int i = knownFieldIndex(f["key"] | "");
+      if (i >= 0) mask |= (uint8_t)(1u << i);
+    }
+    s_fields_mask = mask;
+    strncpy(s_fields_probed_for, base, sizeof(s_fields_probed_for) - 1);
+    s_fields_probed_for[sizeof(s_fields_probed_for) - 1] = '\0';
+    logSDf("extra fields on %s: tag=%d nfc_id=%d card_uids=%d last_dried=%d",
+           base,
+           (mask >> TAG_FIELD_TAG)       & 1, (mask >> TAG_FIELD_NFC_ID)  & 1,
+           (mask >> TAG_FIELD_CARD_UIDS) & 1, (mask >> TAG_FIELD_COUNT)   & 1);
   }
 
-  s_present = false;
-  for (JsonObjectConst f : doc.as<JsonArrayConst>()) {
-    const char* key = f["key"] | "";
-    if (strcmp(key, CARD_UIDS_FIELD) == 0) { s_present = true; break; }
-  }
-  strncpy(s_probed_for, base, sizeof(s_probed_for) - 1);
-  s_probed_for[sizeof(s_probed_for) - 1] = '\0';
-  logSDf("card_uids: field %s on %s", s_present ? "present" : "absent", base);
-  return s_present;
+  return ((s_fields_mask >> idx) & 1u) != 0;
 }
 
-int backendPatchCardUids(const char* base_url, int spool_id, const char* list,
-                         uint32_t timeout_ms) {
-  if (backendMode() != BACKEND_SPOOLMAN) return notSupported("PatchCardUids");
-  return spoolmanPatchCardUids(base_url, spool_id, list, timeout_ms);
+int backendPatchExtraField(const char* base_url, int spool_id, const char* key,
+                           const char* value, uint32_t timeout_ms) {
+  if (backendMode() != BACKEND_SPOOLMAN) return notSupported("PatchExtraField");
+  int code = spoolmanPatchExtraField(base_url, spool_id, key, value, timeout_ms);
+
+  // A write that succeeds against a field the cache calls absent means the
+  // cache is wrong - the field came into existence somewhere other than our
+  // assistant. Left alone it would keep saying "absent" for the whole session,
+  // and everything gated on it stays off: the server side search for that
+  // field, and the append path. Both would fail quietly, which is the worst
+  // way for them to fail.
+  if (code >= 200 && code < 300 && !backendHasExtraField(key)) {
+    logSDf("extra fields: '%s' accepted a write but was cached as absent, re-probing", key);
+    backendInvalidateExtraFieldCache();
+  }
+  return code;
 }
 
 int backendGetLocationsJson(const char* base_url, JsonDocument& doc,
@@ -366,7 +422,11 @@ int backendCreateSpoolField(const char* base_url, const char* field_name,
   // so this may stay unsupported on purpose. See integration doc.
   // BamBuddy has no extra fields to create.
   if (backendIsFilaMan() || backendIsBamBuddy()) return notSupported("CreateSpoolField");
-  return spoolmanCreateSpoolField(base_url, field_name, timeout_ms);
+  int code = spoolmanCreateSpoolField(base_url, field_name, timeout_ms);
+  // The probe cache would otherwise keep answering "absent" for the rest of
+  // the session, and the field the user just created would stay unusable.
+  if (code == 200 || code == 201) backendInvalidateExtraFieldCache();
+  return code;
 }
 
 // ============================================================
@@ -395,8 +455,17 @@ int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
       return bbLinkTag(backendBaseUrl(), bambuddyApiKey(), spool_id,
                        is_tray ? nullptr : hex, is_tray ? hex : nullptr, timeout_ms);
     }
-    default:
-      return spoolmanPatchSpoolTag(base_url, spool_id, uuid, timeout_ms);
+    default: {
+      // Whichever extra field the user picked, in that field's own notation.
+      // A list field reached through here gets a one entry list, which is
+      // exactly what it should hold for a spool with a single tag; the merge
+      // for a second one happens in patchSpoolTag() before this is called.
+      const TagFieldSpec& spec = tagFieldSelected();
+      char value[CARD_UIDS_MAX];
+      if (uuid && uuid[0]) tagFieldFormat(spec, uuid, value, sizeof(value));
+      else                 value[0] = '\0';   // an empty value is the unlink
+      return backendPatchExtraField(base_url, spool_id, spec.key, value, timeout_ms);
+    }
   }
 }
 

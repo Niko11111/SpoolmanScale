@@ -28,6 +28,7 @@ void showCalReminderScreen() {
   if (scr_spoolman)      { lv_obj_del(scr_spoolman);      scr_spoolman      = nullptr; }
   if (scr_extra_fields)  { lv_obj_del(scr_extra_fields);  scr_extra_fields  = nullptr;
                            resetExtraFieldsScreenState(); }
+  if (scr_tag_field)     { lv_obj_del(scr_tag_field);     scr_tag_field     = nullptr; }
   hideAllOverlays();
   logSD("UI: Screen -> CalReminder: hideAllOverlays done");
   Serial.println("showCalReminderScreen: hideAllOverlays done");

@@ -13,6 +13,7 @@
 #include "services/location_state.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/tag_field.h"
 #include "services/tag_uid.h"
 #include "services/user_options.h"
 #include "ui/date_display.h"
@@ -46,24 +47,42 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 //
 // Both server side searches are partial matches, so this runs on their results
 // too, not only on the full scan.
+// Longest identifier the scale compares is a Bambu tray uuid at 32 characters.
+#define TAG_UID_CMP_MAX  48
+
 static bool spoolMatchesTag(JsonObjectConst spool, const char* uid) {
   if (!uid || !uid[0]) return false;
 
   JsonObjectConst extra = spool["extra"];
   if (extra.isNull()) return false;
 
-  if (extra.containsKey("tag")) {
-    String tag_val = extra["tag"].as<String>();
+  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) {
+    const TagFieldSpec& spec = tagFieldSpec(i);
+    if (!extra.containsKey(spec.key)) continue;
+
+    if (spec.is_list) {
+      // Whole entry comparison, see cardUidsContain(). The server side filter
+      // is an ilike, so a 4 byte UID would otherwise match inside a 7 byte one
+      // belonging to a different spool.
+      const char* raw = extra[spec.key] | (const char*)nullptr;
+      if (raw && cardUidsContain(raw, uid)) return true;
+      continue;
+    }
+
+    String tag_val = extra[spec.key].as<String>();
     tag_val.replace("\"", "");
     tag_val.trim();
+    // Byte for byte first: that is what extra.tag holds and what every spool
+    // linked by this firmware carries, so the common case costs one compare.
     if (tag_val.equalsIgnoreCase(uid)) return true;
-  }
 
-  // SpoolLink's list, written for the Snapmaker U1 so that both tags of one
-  // spool lead to it. Whole entry comparison, see cardUidsContain().
-  if (extra.containsKey(CARD_UIDS_FIELD)) {
-    const char* raw = extra[CARD_UIDS_FIELD] | (const char*)nullptr;
-    if (raw && cardUidsContain(raw, uid)) return true;
+    // Then normalised, which is what makes the other conventions match. A UID
+    // written into nfc_id by SpoolSense is plain hex while the scale carries
+    // it around with colons, and neither notation is wrong.
+    char have[TAG_UID_CMP_MAX], want[TAG_UID_CMP_MAX];
+    tagUidNormalize(tag_val.c_str(), have, sizeof(have));
+    tagUidNormalize(uid, want, sizeof(want));
+    if (have[0] && strcmp(have, want) == 0) return true;
   }
 
   return false;
@@ -104,8 +123,10 @@ static void captureExtraField(JsonObjectConst extra, const char* key,
 // empty buffer.
 static void captureBindings(JsonObjectConst spool) {
   JsonObjectConst extra = spool["extra"];
-  captureExtraField(extra, CARD_UIDS_FIELD, sm_card_uids, sizeof(sm_card_uids), "card_uids");
-  captureExtraField(extra, "tag",           sm_tag,       sizeof(sm_tag),       "tag");
+  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) {
+    const TagFieldSpec& spec = tagFieldSpec(i);
+    captureExtraField(extra, spec.key, sm_tag_values[i], CARD_UIDS_MAX, spec.key);
+  }
 }
 
 // Reduces an ISO timestamp to the day it falls on, in local time.
@@ -448,8 +469,7 @@ void querySpoolman(const char* tray_uuid) {
   sm_location_name[0] = '\0'; sm_location_id = 0;
   sm_found = false;
   sm_id = 0;
-  sm_card_uids[0] = '\0';
-  sm_tag[0] = '\0';
+  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) sm_tag_values[i][0] = '\0';
   sm_spool_weight = 0;
   sm_remaining = 0;
   sm_total = 1000;
@@ -461,7 +481,10 @@ void querySpoolman(const char* tray_uuid) {
 
   // Filter: only parse needed fields — reduces RAM, works with 100+ spools
   // Filter must be Array-wrapped to match the API array response structure
-  StaticJsonDocument<512> filter;
+  // Sized with room for every tag field. An overflowed filter silently drops
+  // keys, and a dropped tag key makes every spool come back looking unbound -
+  // hence the check after it is filled rather than trust in the number.
+  StaticJsonDocument<768> filter;
   JsonArray filter_arr = filter.to<JsonArray>();
   JsonObject filter_spool = filter_arr.createNestedObject();
   filter_spool["id"] = true;
@@ -473,9 +496,13 @@ void querySpoolman(const char* tray_uuid) {
   filter_spool["spool_weight"] = true;
   filter_spool["last_used"] = true;
   filter_spool["location"] = true;
-  filter_spool["extra"]["tag"] = true;
-  filter_spool["extra"][CARD_UIDS_FIELD] = true;
-  filter_spool["extra"]["last_dried"] = true;
+  // Every tag field, not just the selected one: the fallback pass above reads
+  // whichever one a spool is actually bound through. The keys come from the
+  // static spec table and outlive this document, which matters because
+  // ArduinoJson does not copy a const char* key.
+  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++)
+    filter_spool["extra"][tagFieldSpec(i).key] = true;
+  filter_spool["extra"][LAST_DRIED_FIELD] = true;
   filter_spool["filament"]["id"] = true;
   filter_spool["filament"]["name"] = true;
   filter_spool["filament"]["material"] = true;
@@ -488,6 +515,8 @@ void querySpoolman(const char* tray_uuid) {
   // Fetched so a spool with no tare of its own can fall back to the
   // filament or brand default instead of being weighed as if empty.
   filter_spool["filament"]["vendor"]["empty_spool_weight"] = true;
+  if (filter.overflowed())
+    logSD("Spoolman: scan filter overflowed, fields will be missing");
 
   // Use PSRAM for this document — frees internal RAM for LVGL
   SpiRamAllocator psram_alloc;
@@ -516,7 +545,11 @@ void querySpoolman(const char* tray_uuid) {
         if (spoolMatchesTag(s, tray_uuid)) { have_result = true; break; }
       }
       if (have_result) {
-        logSDf("Backend: tag search hit, %d spool(s) returned",
+        // The field is in the line on purpose: it is the only way to tell from
+        // a log whether the fast path ran on the selected field or whether the
+        // scan below did the work.
+        logSDf("Backend: %s search hit, %d spool(s) returned",
+               backendMode() == BACKEND_SPOOLMAN ? tagFieldKey() : "native",
                (int)doc.as<JsonArrayConst>().size());
       }
     } else if (fcode != BACKEND_NOT_SUPPORTED) {
@@ -530,31 +563,33 @@ void querySpoolman(const char* tray_uuid) {
     }
   }
 
-  // Second server side search, for spools that keep their UIDs in card_uids
-  // instead of in the tag field. That is how SpoolLink stores them for the
-  // Snapmaker U1, where a spool carries one tag per flange so it can be loaded
-  // on either side of the printer.
+  // The fallback pass: the tag fields the user did NOT select. A spool linked
+  // before the choice was changed still lives in its old field, and without
+  // this it would look unknown until somebody relinked it by hand.
   //
-  // Only reached once the tag search has come up empty, so an installation
-  // without SpoolLink never pays for it. The field check is what keeps it that
-  // way: Spoolman skips a filter on a field it does not know and would answer
-  // with the whole inventory, which is the very cost this shortcut exists to
-  // avoid.
-  if (!have_result && backendHasCardUidsField()) {
-    int ccode = backendFindSpoolByCardUid(cfg_spoolman_base, tray_uuid, doc, 8000, &err, &filter);
+  // Still server side, so it stays cheap - one small answer per field instead
+  // of the whole inventory. Each is skipped unless the server actually has
+  // that field, which is what keeps an installation that uses only one of them
+  // from paying for the other two: backendFindSpoolByTagField() answers
+  // BACKEND_NOT_SUPPORTED without spending a request.
+  for (uint8_t f = 0; !have_result && f < TAG_FIELD_COUNT; f++) {
+    if (f == g_tag_field) continue;   // already tried, it went first
+
+    int ccode = backendFindSpoolByTagField(f, cfg_spoolman_base, tray_uuid,
+                                           doc, 8000, &err, &filter);
     if (ccode == 200 && !err) {
-      // Same reasoning as above, and one degree more necessary: the filter is
-      // an ilike, so a four byte UID matches inside a seven byte one belonging
-      // to a different spool. spoolMatchesTag() compares whole entries.
+      // Every hit is verified: the filter is an ilike, so a four byte UID
+      // matches inside a seven byte one belonging to a different spool.
       for (JsonObjectConst s : doc.as<JsonArrayConst>()) {
         if (spoolMatchesTag(s, tray_uuid)) { have_result = true; break; }
       }
       if (have_result) {
-        logSDf("Backend: card_uids search hit, %d spool(s) returned",
-               (int)doc.as<JsonArrayConst>().size());
+        logSDf("Backend: %s search hit, %d spool(s) returned",
+               tagFieldSpec(f).key, (int)doc.as<JsonArrayConst>().size());
       }
     } else if (ccode != BACKEND_NOT_SUPPORTED) {
-      logSDf("Backend: card_uids search failed, code=%d err=%s", ccode, err.c_str());
+      logSDf("Backend: %s search failed, code=%d err=%s",
+             tagFieldSpec(f).key, ccode, err.c_str());
     }
     if (!have_result) {
       doc.clear();
@@ -779,13 +814,13 @@ void querySpoolman(const char* tray_uuid) {
   // internal RAM dry, so this one uses PSRAM like the active list above.
   JsonDocument doc2(&psram_alloc);
   DeserializationError err2 = DeserializationError::Ok;
-  StaticJsonDocument<256> filter2;
+  StaticJsonDocument<384> filter2;
   JsonArray filter2_arr = filter2.to<JsonArray>();
   JsonObject f2 = filter2_arr.createNestedObject();
   f2["id"] = true;
   f2["archived"] = true;
-  f2["extra"]["tag"] = true;
-  f2["extra"][CARD_UIDS_FIELD] = true;
+  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++)
+    f2["extra"][tagFieldSpec(i).key] = true;
   int code2 = backendGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
   if (code2 == 200) {
     if (!err2) {

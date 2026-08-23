@@ -1,5 +1,7 @@
 #include "user_options.h"
 
+#include "services/tag_field.h"
+
 uint8_t last_used_mode = 0;
 bool g_whole_gram = false;
 uint8_t g_ip_bar_mode = IP_BAR_OFF;
@@ -7,4 +9,5 @@ bool g_flm_autolink = false;
 bool g_flm_tagless = true;
 bool g_wake_on_load = true;
 uint8_t g_bb_dried_target = BB_DRIED_NOTE;
+uint8_t g_tag_field = TAG_FIELD_TAG;
 bool g_card_uids_write = false;

@@ -12,6 +12,7 @@
 #include "list_limits.h"
 #include "ota_state.h"
 #include "prefs_store.h"
+#include "tag_field.h"
 #include "user_options.h"
 
 
@@ -55,7 +56,14 @@ void loadPrefs() {
   g_wake_on_load = prefsGetBool("wake_load", true);
   g_ip_bar_mode = prefsGetUChar("ip_bar_mode", IP_BAR_OFF);
   g_flm_autolink = prefsGetBool("flm_autolink", false);
+  g_tag_field = prefsGetUChar("tag_field", TAG_FIELD_TAG);
+  if (g_tag_field >= TAG_FIELD_COUNT) g_tag_field = TAG_FIELD_TAG;
   g_card_uids_write = prefsGetBool("cu_write", false);
+  // The switch only means anything on a list field. Clamping it here rather
+  // than at every use site keeps the rest of the firmware from having to ask
+  // twice, and a stale "on" from before the field was switched cannot leak
+  // into a write.
+  if (!tagFieldIsList()) g_card_uids_write = false;
   g_flm_tagless  = prefsGetBool("flm_tagless", true);
   g_ams_mode      = prefsGetUChar("ams_mode", AMS_OFF);
   if (g_ams_mode >= AMS_MODE_COUNT) g_ams_mode = AMS_OFF;

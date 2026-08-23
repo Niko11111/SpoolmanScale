@@ -61,28 +61,41 @@ int  backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocum
        uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr,
        JsonDocument* filter = nullptr);
 
-// Second lookup for spools whose UIDs live in Spoolman's extra.card_uids, the
-// list SpoolLink keeps for the Snapmaker U1 so both tags of one spool find it.
-// Spoolman only; FilaMan and BamBuddy answer BACKEND_NOT_SUPPORTED because
-// nothing in their ecosystem fills that field.
+// The same search against one named tag field, by TagFieldId. Spoolman only;
+// FilaMan and BamBuddy answer BACKEND_NOT_SUPPORTED because neither keeps its
+// tags in a Spoolman extra field.
 //
-// Only worth calling when backendHasCardUidsField() says yes: Spoolman skips a
-// filter on a field it does not know and answers with the entire inventory.
-int  backendFindSpoolByCardUid(const char* base_url, const char* uid, JsonDocument& doc,
-       uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr,
-       JsonDocument* filter = nullptr);
+// backendFindSpoolByTag() above is this with the user's selected field. The
+// explicit form is for the fallback pass, which tries the fields the user did
+// not select so that switching never makes a linked spool disappear.
+//
+// The UID is formatted for the field before it is sent, and the field's
+// presence is checked first - a filter on a field the server does not have is
+// ignored, and Spoolman then answers with the whole inventory. BACKEND_NOT_
+// SUPPORTED comes back for a field that is not there, so the caller moves on
+// instead of paying for a full transfer that looks like a hit.
+int  backendFindSpoolByTagField(uint8_t field_id, const char* base_url, const char* uid,
+       JsonDocument& doc, uint32_t timeout_ms = 8000,
+       DeserializationError* out_err = nullptr, JsonDocument* filter = nullptr);
 
-// Whether the active backend has the card_uids extra field. Probed once per
-// backend and base URL and then cached, because the answer only changes when
-// the user points the scale somewhere else or edits the field list.
-// Always false outside Spoolman mode. Performs an HTTP request on the first
-// call, so never call it from an LVGL event callback.
-bool backendHasCardUidsField();
+// Whether the active Spoolman has a given extra field. Only answers for the
+// fields the scale knows - the three tag fields and last_dried - and false for
+// anything else, including every field outside Spoolman mode.
+//
+// One GET settles all of them and the result is cached against the base URL,
+// so pointing the scale elsewhere re-probes on its own. Performs an HTTP
+// request on the first call, so never call it from an LVGL event callback.
+bool backendHasExtraField(const char* key);
 
-// Writes a prepared card_uids list. Spoolman only, for the same reason as
-// backendFindSpoolByCardUid(): nothing else has the field.
-int  backendPatchCardUids(const char* base_url, int spool_id, const char* list,
-       uint32_t timeout_ms = 5000);
+// Drops that cache. Called after a field was created, which is the one moment
+// the answer changes without the base URL changing with it.
+void backendInvalidateExtraFieldCache();
+
+// Writes one text extra field. Spoolman only, for the same reason as
+// backendFindSpoolByTagField(): nothing else has extra fields. The value is
+// the finished contents - the list merge, if any, happened before this.
+int  backendPatchExtraField(const char* base_url, int spool_id, const char* key,
+       const char* value, uint32_t timeout_ms = 5000);
 
 // Which tare scopes the active backend can really store. Offering one it
 // cannot write gives a button that answers BACKEND_NOT_SUPPORTED, or worse
