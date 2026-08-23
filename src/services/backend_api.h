@@ -167,6 +167,12 @@ int  backendCreateSpoolField(const char* base_url, const char* field_name,
        uint32_t timeout_ms = 3000);
 
 // --- writing -------------------------------------------------
+// Link that survives the tag already being in use. On FilaMan the UID is
+// unique, so the old owner is unlinked first and the target's previous tag is
+// kept in custom_fields.previous_tag. out_note may get a short explanation.
+int  backendLinkSpoolTag(const char* base_url, int spool_id, const char* uuid,
+       char* out_note = nullptr, size_t note_size = 0, uint32_t timeout_ms = 8000);
+
 int  backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
        uint32_t timeout_ms = 5000);
 

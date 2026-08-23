@@ -4,6 +4,7 @@
 #include "pins.h"
 
 #include <LovyanGFX.hpp>
+#include <math.h>
 #include <esp_sleep.h>
 #include <lvgl.h>
 
@@ -60,9 +61,42 @@ static LGFX tft;
 static lv_disp_draw_buf_t draw_buf;
 static lv_color_t disp_buf[480 * 10];
 
+// RGB565 gamma lookup. Two small tables (5-bit R/B, 6-bit G) keep the
+// per-pixel cost to two array reads and some shifting.
+static uint8_t  ui_lut5[32];
+static uint8_t  ui_lut6[64];
+static uint16_t ui_gain = 100;      // 100 == identity, transform skipped
+
+uint16_t displayGetUiGain() { return ui_gain; }
+
+void displaySetUiGain(uint16_t gamma_x100) {
+  if (gamma_x100 < 100) gamma_x100 = 100;
+  if (gamma_x100 > 300) gamma_x100 = 300;
+  ui_gain = gamma_x100;
+  if (ui_gain > 100) {
+    const float inv = 100.0f / (float)ui_gain;   // exponent 1/gamma
+    for (int i = 0; i < 32; i++)
+      ui_lut5[i] = (uint8_t)lroundf(powf((float)i / 31.0f, inv) * 31.0f);
+    for (int i = 0; i < 64; i++)
+      ui_lut6[i] = (uint8_t)lroundf(powf((float)i / 63.0f, inv) * 63.0f);
+  }
+  // Only invalidated areas get re-flushed, so force a full repaint. Guarded
+  // because this is also called from loadPrefs(), before lv_init() has run.
+  if (lv_disp_get_default()) lv_obj_invalidate(lv_scr_act());
+}
+
 static void lvgl_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p) {
   uint32_t w = area->x2 - area->x1 + 1;
   uint32_t h = area->y2 - area->y1 + 1;
+  if (ui_gain > 100) {
+    const uint32_t n = w * h;
+    for (uint32_t i = 0; i < n; i++) {
+      uint16_t c = color_p[i].full;
+      color_p[i].full = (uint16_t)((ui_lut5[(c >> 11) & 0x1F] << 11) |
+                                   (ui_lut6[(c >>  5) & 0x3F] <<  5) |
+                                   (ui_lut5[ c        & 0x1F]));
+    }
+  }
   tft.startWrite();
   tft.setAddrWindow(area->x1, area->y1, w, h);
   tft.writePixels((lgfx::rgb565_t*)color_p, w * h);

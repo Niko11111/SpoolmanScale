@@ -15,6 +15,7 @@
 #include "services/user_options.h"
 #include "services/backend_api.h"
 #include "services/remote_link.h"
+#include "services/tag_write.h"
 #include "ui/spool_flow.h"
 #include "ui/spoolman_lookup.h"
 #include "bambu/material_match.h"
@@ -420,6 +421,7 @@ void handleRemoteLinkDeferredActions() {
 
   if (s_cancel_pending) {
     s_cancel_pending = false;
+    tagRemotePayloadSet("");
     logSDf("RemoteLink: cancelled on device, spool %d", s_spool_id);
     remoteLinkReport(false, s_link_uuid, "cancelled on device");
     return;
@@ -428,6 +430,15 @@ void handleRemoteLinkDeferredActions() {
   if (s_confirm_pending) {
     s_confirm_pending = false;
     const int spool_id = s_spool_id;
+
+    // Write before reporting, so a tag that could not be written is not
+    // reported as a success. Bambu tags are read-only and only ever linked.
+    if (s_is_bambu) {
+      tagRemotePayloadSet("");
+    } else if (tagRemotePayloadPending() && !tagWriteRemotePayload()) {
+      remoteLinkReport(false, s_link_uuid, "tag write failed");
+      return;
+    }
 
     // FilaMan sets rfid_uid itself when this succeeds, which also clears the
     // UID off any other spool that still carries it. That cleanup is why the

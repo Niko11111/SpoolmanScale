@@ -104,6 +104,13 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Nicht konfiguriert",     "Not configured"    },  // STR_BTN_WIFI_NONE
   { "WLAN Status",            "WiFi Status"       },  // STR_BTN_WIFI_STATUS
   { "Nicht verbunden",        "Not connected"     },  // STR_BTN_WIFI_STATUS_SUB
+  { "Server, OTA, Logs",      "Server, OTA, logs" },  // STR_BTN_WEB_SUB
+  { "Webserver",              "Web server"        },  // STR_WEB_SERVER
+  { "Setup, Firmware, Logs",  "Setup, firmware, logs" },  // STR_WEB_MAINT
+  { "Aus: Port 80 antwortet nicht.",
+    "Off: nothing answers on port 80." },  // STR_WEB_SERVER_HINT
+  { "Liefert /ota, /logs und die Konfiguration. Standardmäßig aus: schreibt Firmware und ändert Einstellungen, ohne Passwort.",
+    "Serves /ota, /logs, FilaMan pairing and the config endpoints. Off by default: these write firmware and change settings, with no password." },  // STR_WEB_MAINT_HINT
   { "Spoolman Server",        "Spoolman Server"   },  // STR_BTN_SPOOLMAN
 
   // Scale

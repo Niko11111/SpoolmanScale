@@ -23,6 +23,8 @@
 #include "services/ota_web_server.h"
 #include "services/remote_link.h"
 #include "services/user_options.h"
+#include "services/web_access.h"
+#include "services/tag_write.h"
 #include "ui/ota_github.h"
 #include "services/update_check.h"
 #include "ui/ota_browser.h"
@@ -253,6 +255,8 @@ void appLoop() {
 
   // OTA web server bedienen wenn aktiv
   handleOtaServerClient();
+  webServerTick();
+  tagWriteTick();
   // While the credential screen is open the user types into the browser, so
   // the two rows have to follow along without a keypress on the device.
   refreshWebCredentialRows();

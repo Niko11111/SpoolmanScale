@@ -93,6 +93,13 @@ int filamanGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
 int filamanPatchRfidUid(const char* base_url, const char* api_key, int spool_id,
                         const char* uuid, uint32_t timeout_ms = 5000);
 
+// Link that clears the way first. rfid_uid is UNIQUE, so claiming a UID that
+// another spool still holds fails with HTTP 500. Takes it off that spool,
+// keeps whatever the target had in custom_fields.previous_tag, then patches.
+int filamanLinkRfidUid(const char* base_url, const char* api_key, int spool_id,
+                       const char* uuid, char* out_note, size_t note_size,
+                       uint32_t timeout_ms = 8000);
+
 // Writes one key inside custom_fields while preserving the others.
 // Costs a GET before the PATCH, which is why nothing else uses this path.
 int filamanPatchCustomField(const char* base_url, const char* api_key, int spool_id,
@@ -122,6 +129,12 @@ int filamanReportWeight(const char* base_url, const char* device_token,
 int filamanRfidResult(const char* base_url, const char* device_token,
                       bool success, const char* tag_uuid, int spool_id,
                       const char* error_message, uint32_t timeout_ms = 6000);
+
+// Answers a scan trigger that arrived on /api/v1/rfid/scan-request with the
+// contents of the tag. Device token again, like the heartbeat. tag_json is
+// what the web UI then offers to import.
+int filamanSendTagData(const char* base_url, const char* device_token,
+                       const char* tag_json, uint32_t timeout_ms = 6000);
 
 // Status change, for example archiving. Uses its own endpoint rather than a
 // PATCH, see /api/v1/spools/{id}/status.

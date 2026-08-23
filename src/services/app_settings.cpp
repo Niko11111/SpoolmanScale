@@ -14,6 +14,8 @@
 #include "prefs_store.h"
 #include "tag_field.h"
 #include "user_options.h"
+#include "web_access.h"
+#include "hardware/display.h"
 
 
 void loadPrefs() {
@@ -40,6 +42,11 @@ void loadPrefs() {
   if (location_list_limit > 100) location_list_limit = 100;
 
   bright_normal = prefsGetUChar("bright", BRIGHT_NORMAL_DEFAULT);
+
+  webAccessLoad();
+  // Safe this early: displaySetUiGain() only builds its lookup tables and
+  // skips the LVGL repaint until a display exists.
+  displaySetUiGain((uint16_t)prefsGetUInt("ui_gain", 100));
   int dim_min = prefsGetUInt("dim_min", DIM_TIMEOUT_DEFAULT / 60000);
   int off_min = prefsGetUInt("off_min", OFF_TIMEOUT_DEFAULT / 60000);
   int sleep_min = prefsGetUInt("sleep_min", SLEEP_TIMEOUT_DEFAULT / 60000);
