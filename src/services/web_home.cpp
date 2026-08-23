@@ -61,6 +61,7 @@ static String statusJson() {
   j += ",\"nfc\":" + String(nfc_ok ? "true" : "false");
   j += ",\"sd\":" + String(sd_available ? "true" : "false");
   j += ",\"scans\":" + String(scan_count);
+  j += ",\"config\":" + String(webConfigEnabled() ? "true" : "false");
   j += ",\"maint\":" + String(webMaintenanceEnabled() ? "true" : "false");
   j += ",\"filaman\":" + String(backendIsFilaMan() ? "true" : "false");
   j += ",\"fmKey\":" + String(filamanApiKey()[0] ? "true" : "false");
@@ -123,12 +124,13 @@ static String homePage() {
          "s+=row('Uptime',d.uptime);"
          "document.getElementById('st').innerHTML=s;"
          "let a='';"
-         "a+=row('Setup, firmware and logs',onoff(d.maint));"
+         "a+=row('Settings',onoff(d.config));"
+         "a+=row('Firmware, logs and tags',onoff(d.maint));"
          "document.getElementById('acc').innerHTML=a;"
-         "document.getElementById('hint').textContent=d.maint?"
-         "'Firmware, logs and configuration are being served.':"
-         "'A section that is off is not served at all. Turn it on under "
-         "Settings > System > Web interface on the scale.';}"
+         "document.getElementById('hint').textContent="
+         "'A section that is off is not served at all, and neither are the "
+         "endpoints behind it. Turn one on under Settings > System > Web "
+         "interface on the scale.';}"
          "tick();setInterval(tick,5000);"
          "</script>");
   h += webShellRestartUi();
@@ -140,6 +142,8 @@ void registerHomeRoutes(WebServer &srv) {
   // Decoded on demand rather than kept in RAM: a browser asks for this once and
   // then caches it, so holding 5 kB permanently to save a rare decode is a bad
   // trade on a device with 320 kB.
+  // GATE_ALWAYS: a tab icon is not a read of device state, and the page that
+  // says "switched off" wants one too.
   srv.on("/favicon.jpg", HTTP_GET, [&srv]() {
     const char *b64 = webShellLogoBase64();
     const size_t b64len = strlen(b64);
@@ -161,16 +165,17 @@ void registerHomeRoutes(WebServer &srv) {
   });
 
   srv.on("/", HTTP_GET, [&srv]() {
+    // Reachable whenever the socket is up - except when only the remote link
+    // is holding it up, in which case the master switch is off and the
+    // landing page has no business answering.
+    if (!webRequire(srv, GATE_OPEN, "The web interface")) return;
     srv.send(200, "text/html", homePage());
   });
   // Restarting is not destructive -- settings live in NVS -- but it is still a
   // remote action, so it needs one of the gates open rather than being exposed
   // whenever the landing page is reachable.
   srv.on("/api/restart", HTTP_POST, [&srv]() {
-    if (!webMaintenanceEnabled()) {
-      webSendDisabled(srv, "Restart", "Settings > System > Web interface");
-      return;
-    }
+    if (!webRequire(srv, GATE_MAINT, "Restart")) return;
     logSD("Reboot: requested from web UI");
     srv.send(200, "application/json", "{\"ok\":true}");
     delay(400);            // let the response actually leave before the reset
@@ -178,6 +183,7 @@ void registerHomeRoutes(WebServer &srv) {
   });
 
   srv.on("/status.json", HTTP_GET, [&srv]() {
+    if (!webRequire(srv, GATE_OPEN, "The web interface")) return;
     srv.send(200, "application/json", statusJson());
   });
 }

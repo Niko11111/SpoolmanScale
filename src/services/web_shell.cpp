@@ -4,6 +4,7 @@
 
 #include "app_config.h"
 #include "backend.h"
+#include "web_access.h"
 
 // Lifted verbatim from the original firmware-update page so nothing about the
 // look changes -- it is now just shared instead of duplicated.
@@ -134,6 +135,8 @@ String webShellFoot() {
 String webShellNav(const char *active) {
   static const char *PATHS[]  = { "/", "/ota", "/logs", "/drying", "/config", "/filaman", "/tags" };
   static const char *LABELS[] = { "Status", "Firmware", "Logs", "Drying", "Limits", "FilaMan", "Tags" };
+  static const WebGate GATES[] = { GATE_OPEN, GATE_MAINT, GATE_MAINT, GATE_CONFIG,
+                                   GATE_CONFIG, GATE_CONFIG, GATE_MAINT };
 
   String n = "<style>.nav{display:flex;flex-wrap:wrap;gap:8px;width:100%;max-width:480px;"
              "margin-bottom:20px}.nav a{padding:8px 14px;background:#0a1828;border:1px solid "
@@ -146,6 +149,9 @@ String webShellNav(const char *active) {
     // that only ever says "switched off" is worse than no tab.
     const bool creds = backendIsFilaMan() || backendIsBamBuddy();
     if (!strcmp(PATHS[i], "/filaman") && !creds) continue;
+    // Same reasoning applied to the gates: a tab behind a shut one leads
+    // only to the "switched off" page.
+    if (!webGateOpen(GATES[i])) continue;
     const char *label = (!strcmp(PATHS[i], "/filaman") && backendIsBamBuddy())
                         ? "BamBuddy" : LABELS[i];
     n += String("<a class='") + (strcmp(PATHS[i], active) == 0 ? "on" : "") +

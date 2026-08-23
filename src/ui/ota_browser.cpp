@@ -12,6 +12,7 @@
 #include "lang.h"
 #include "services/backend.h"
 #include "services/ota_web_server.h"
+#include "services/web_access.h"
 #include "services/wifi_manager.h"
 #include "ui_common.h"
 
@@ -46,7 +47,6 @@ void showOtaBrowserScreen(WebScreenContext ctx) {
   logSDf("UI: Screen -> Web interface (ctx=%d)", (int)ctx);
   s_web_ctx = ctx;
   hideAllOverlays();
-  stopOtaServer();
   lbl_ota_status = nullptr;
   s_lbl_key_val = nullptr;
   s_lbl_token_val = nullptr;
@@ -56,7 +56,10 @@ void showOtaBrowserScreen(WebScreenContext ctx) {
   }
   buildOtaBrowserScreen();
   lv_obj_clear_flag(scr_ota_browser, LV_OBJ_FLAG_HIDDEN);
-  if (wifi_ok) startOtaServer();
+  // Not "start the server" any more - that belongs to webServerSyncState()
+  // alone. This only asks it to settle now rather than within the next
+  // second, so the address on screen is reachable the moment it appears.
+  webServerSyncState();
 }
 
 // One credential row: name on the left, state on the right. Returns the value
@@ -159,7 +162,9 @@ void buildOtaBrowserScreen() {
     buildSubHeader(scr_ota_browser, title_buf,
       [](lv_event_t *e){
         logSD("BTN: Web interface -> Back");
-        stopOtaServer();
+        // Back does not close the server. Whether it listens is the master
+        // switch's business, and closing it here behind that switch's back
+        // is exactly what used to leave port 80 dead until the next reboot.
         // Back goes where the user came from, not always to the update menu.
         switch (s_web_ctx) {
           case WEB_CTX_BACKEND: show_backend_pending         = true; break;
@@ -305,7 +310,12 @@ void buildOtaBrowserScreen() {
   lv_obj_set_style_border_width(btn_stop, 0, 0);
   lv_obj_add_event_cb(btn_stop, [](lv_event_t *e){
     logSD("BTN: OtaBrowser -> Stop server");
-    stopOtaServer();
+    // Turns the master switch off rather than the socket. A socket closed
+    // behind the switch's back came straight back up on the next sync, so
+    // the button used to promise something it could not deliver. This is
+    // persistent and shows as OFF on Settings > System > Web interface.
+    webSetMasterEnabled(false);
+    webServerSyncState();
     show_ota_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_stop = lv_label_create(btn_stop);

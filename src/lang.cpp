@@ -106,11 +106,14 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Nicht verbunden",        "Not connected"     },  // STR_BTN_WIFI_STATUS_SUB
   { "Server, OTA, Logs",      "Server, OTA, logs" },  // STR_BTN_WEB_SUB
   { "Webserver",              "Web server"        },  // STR_WEB_SERVER
-  { "Setup, Firmware, Logs",  "Setup, firmware, logs" },  // STR_WEB_MAINT
+  { "Firmware, Logs, Tags",   "Firmware, logs, tags" },  // STR_WEB_MAINT
+  { "Einstellungen",          "Settings"          },  // STR_WEB_CONFIG
   { "Aus: Port 80 antwortet nicht.",
     "Off: nothing answers on port 80." },  // STR_WEB_SERVER_HINT
-  { "Liefert /ota, /logs und die Konfiguration. Standardmäßig aus: schreibt Firmware und ändert Einstellungen, ohne Passwort.",
-    "Serves /ota, /logs, FilaMan pairing and the config endpoints. Off by default: these write firmware and change settings, with no password." },  // STR_WEB_MAINT_HINT
+  { "Liefert Firmware-Upload, Logs, Neustart und das Tag-Schreiben. Standardmäßig aus: schreibt Firmware und NFC-Tags, ohne Passwort.",
+    "Serves firmware upload, logs, restart and tag writing. Off by default: these write firmware and NFC tags, with no password." },  // STR_WEB_MAINT_HINT
+  { "Liefert Listenlimits, Trocknung, Anzeige und die Backend-Zugangsdaten. Standardmäßig aus: ändert Einstellungen ohne Passwort.",
+    "Serves list limits, drying, display and the backend credentials. Off by default: changes settings with no password." },  // STR_WEB_CONFIG_HINT
   { "Spoolman Server",        "Spoolman Server"   },  // STR_BTN_SPOOLMAN
 
   // Scale

@@ -32,20 +32,22 @@
 static WebServer ota_server(80);
 static bool ota_server_running  = false;
 static bool ota_upload_active   = false;
-static bool ota_routes_enabled  = false;
 static bool routes_registered   = false;
 
-// The OTA, log and settings routes answer only while the web screen is open.
-// The socket itself can outlive that screen, because FilaMan triggers the
-// remote link on port 80 and expects a listener at any time. So the routes
-// are gated rather than removed: WebServer has no way to unregister a
-// handler once it is added.
-static bool otaRoutesOpen() { return ota_routes_enabled; }
-
-// True while the scale has to stay reachable for FilaMan's write-tag
-// trigger. In Spoolman mode this is never true and nothing changes.
+// True while the scale has to stay reachable for FilaMan's device protocol.
+// In Spoolman and BamBuddy mode this is never true and nothing changes.
 static bool remoteLinkNeedsServer() {
   return wifi_ok && backendIsFilaMan() && filamanDeviceToken()[0];
+}
+
+// The one condition that decides whether port 80 is open. The master switch
+// owns it; the remote link can force it up on its own, because a user who
+// switches the web interface off did not ask for FilaMan to stop being able
+// to drive the scale. Everything except GATE_ALWAYS still answers 403 in
+// that state, so nothing becomes reachable that the switch was meant to
+// close.
+static bool serverShouldRun() {
+  return wifi_ok && (webMasterEnabled() || remoteLinkNeedsServer());
 }
 
 static void registerRoutes();
@@ -73,14 +75,35 @@ static void serverEnsureStopped() {
   // that section is built and sent.
   static const char *SEC_TITLE[] = { "Firmware", "Logs", "Drying", "FilaMan", "Limits", "Tags" };
   static const char *SEC_PATH[]  = { "/ota", "/logs", "/drying", "/filaman", "/config", "/tags" };
+  static const WebGate SEC_GATE[] = { GATE_MAINT, GATE_MAINT, GATE_CONFIG,
+                                      GATE_CONFIG, GATE_CONFIG, GATE_MAINT };
+
+  // Index 3 is the backend credentials page. It used to be skipped unless the
+  // backend was FilaMan, which hid it from BamBuddy users even though the
+  // page carries their key form and the device screen links straight to it.
+  static bool secApplies(int i) {
+    if (i == 3) return backendIsFilaMan() || backendIsBamBuddy();
+    return true;
+  }
+
+  // The tab says which backend it belongs to. A BamBuddy user following a
+  // tab labelled "FilaMan" has every reason to think they are in the wrong
+  // place.
+  static const char* secTitle(int i) {
+    if (i == 3 && backendIsBamBuddy()) return "BamBuddy";
+    return SEC_TITLE[i];
+  }
 
   static String maintNav(int sec) {
     String n = "<div class='nav'>";
     n += "<a href='/'>Status</a>";
     for (int i = 0; i < 6; i++) {
-      if (i == 3 && !backendIsFilaMan()) continue;   // not applicable on Spoolman
+      if (!secApplies(i)) continue;
+      // A tab behind a shut gate leads to nothing but the "switched off"
+      // page, so it is left out rather than offered and then refused.
+      if (!webGateOpen(SEC_GATE[i])) continue;
       n += String("<a class='") + (i == sec ? "on" : "") + "' href='" + SEC_PATH[i] + "'>"
-           + SEC_TITLE[i] + "</a>";
+           + secTitle(i) + "</a>";
     }
     n += "</div>";
     return n;
@@ -88,7 +111,7 @@ static void serverEnsureStopped() {
 
   static String maintPage(int sec) {
     String html;
-    html += webShellHead(SEC_TITLE[sec]);
+    html += webShellHead(secTitle(sec));
     html += webShellPageCss();
     html += "<style>.nav{display:flex;flex-wrap:wrap;gap:8px;width:100%;max-width:480px;"
             "margin-bottom:18px}.nav a{padding:8px 14px;background:#0a1828;border:1px solid "
@@ -359,7 +382,48 @@ static void serverEnsureStopped() {
       "fetch('/api/filaman/register',{method:'POST',body:c})"
       ".then(r=>r.text()).then(t=>{document.getElementById('fm-reg-s').textContent=t;});}"
       "</script>";
-    if (sec == 3 && backendIsBamBuddy()) html += 
+    // BamBuddy credentials. One key rather than two, and it may legitimately
+    // stay empty: an instance with authentication switched off answers
+    // without it.
+    //
+    // This card was lost when the single page was split into sections - the
+    // BamBuddy branch was left as a bare "</script>" with no form in it, so a
+    // BamBuddy user had nowhere to enter the key and the device screen sent
+    // them to exactly this page.
+    if (sec == 3 && backendIsBamBuddy()) html +=
+      "<div class='card'>"
+      "<h2>BamBuddy</h2>"
+      "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>"
+      "The scale needs one API key. Leave it empty if your BamBuddy runs with "
+      "authentication switched off. "
+      "<span onclick=\"bh()\" style='cursor:pointer;color:#28d49a;border:1px solid #28d49a;"
+      "border-radius:50%;padding:0 6px;font-size:11px'>?</span></p>"
+      "<div id='h-bb' style='display:none;font-size:12px;color:#8ab0d8;background:#06080f;"
+      "border-left:2px solid #28d49a;border-radius:4px;padding:8px 10px;margin-bottom:12px'>"
+      "In BamBuddy open <b>Settings</b>, then <b>API Keys</b>, and create a key. "
+      "Tick <b>Read Status</b> and <b>Manage Inventory</b> - the first lets the scale "
+      "read spools and detect whether your inventory is local or on Spoolman, the second "
+      "lets it write weights back. The key is shown once, copy it right away.</div>"
+      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>"
+      "API key. Currently: "
+      + String(bambuddyApiKey()[0] ? "set" : "empty")
+      + "</label>"
+      "<div style='display:flex;gap:10px;align-items:center'>"
+      "<input id='bb-key' type='password' placeholder='bb_...' value='"
+      + String(bambuddyApiKey()[0] ? "________________" : "") + "'"
+      " style='flex:1;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
+      "border-radius:8px;padding:8px 10px;font-size:14px'>"
+      "<button class='btn-toggle' onclick='setBb()'>Save</button>"
+      "</div>"
+      "<span id='bb-key-s' style='font-size:12px;color:#28d49a'></span>"
+      "</div>"
+      "<script>"
+      "function bh(){var e=document.getElementById('h-bb');"
+      "e.style.display=(e.style.display==='none'?'block':'none');}"
+      "function setBb(){var v=document.getElementById('bb-key').value;"
+      "if(v.indexOf('_')===0){return;}"
+      "fetch('/api/bambuddy/key',{method:'POST',body:v})"
+      ".then(r=>r.text()).then(t=>{document.getElementById('bb-key-s').textContent=t;});}"
       "</script>";
     if (sec == 4) html +=       "<div class='card'>"
       "<h2>List Limits</h2>"
@@ -425,27 +489,23 @@ static void serverEnsureStopped() {
     return html;
   }
 
-void stopOtaServer() {
-  ota_routes_enabled = false;
-  // Keep the socket up when the remote link still needs it. The routes are
-  // closed either way, so nothing becomes reachable that was not before.
-  if (!remoteLinkNeedsServer()) serverEnsureStopped();
-}
-
-void startOtaServer() {
-  if (!wifi_ok) return;
-  ota_routes_enabled = true;
-  serverEnsureRunning();
-}
-
-// Idempotent, called once a second from appLoop(). Picking the state up from
-// the conditions rather than from events means a backend switch, a freshly
-// entered device token and a returning WiFi connection all take effect
-// without anyone having to remember to call something.
+// Idempotent, called once a second from appLoop(). The only owner of the
+// socket. Picking the state up from the conditions rather than from events
+// means a backend switch, a freshly entered device token, a flipped master
+// switch and a returning WiFi connection all take effect without anyone
+// having to remember to call something.
+//
+// It used to share the job with a second automaton in web_access.cpp that
+// kept its own copy of "is the server started". The web screen closed the
+// server directly, that copy never heard about it, and port 80 stayed shut
+// until the next reboot. There is now exactly one caller of begin() and
+// stop() and no mirrored state to drift.
 void webServerSyncState() {
-  if (remoteLinkNeedsServer())      serverEnsureRunning();
-  else if (!ota_routes_enabled)     serverEnsureStopped();
+  if (serverShouldRun()) serverEnsureRunning();
+  else                   serverEnsureStopped();
 }
+
+bool webServerIsListening() { return ota_server_running; }
 
 // Registered exactly once. This used to run on every visit to the web
 // screen, which appended another 15 handlers to WebServer's list each time
@@ -458,9 +518,9 @@ static void registerRoutes() {
   // everything lands in the one-shot registration.
   registerHomeRoutes(ota_server);
 
-  // FilaMan remote link trigger. Deliberately not behind otaRoutesOpen():
-  // this one has to answer whenever the scale is awake, that is the whole
-  // point of keeping the socket up.
+  // FilaMan remote link trigger. GATE_ALWAYS, the only level that ignores
+  // the master switch: this one has to answer whenever the scale is awake,
+  // that is the whole point of keeping the socket up.
   //
   // FilaMan sends this fire and forget and waits five seconds, so nothing
   // here may block. The request is only parked, appLoop() picks it up.
@@ -509,27 +569,27 @@ static void registerRoutes() {
 
   // Route: Startseite mit Upload-Formular
   ota_server.on("/ota", HTTP_GET, []() {
-    if (!webMaintenanceEnabled()) { webSendDisabled(ota_server, "Setup and firmware", "Settings > System > Web interface"); return; }
+    if (!webRequire(ota_server, GATE_MAINT, "Firmware upload")) return;
     ota_server.send(200, "text/html", maintPage(0));
   });
   ota_server.on("/logs", HTTP_GET, []() {
-    if (!webMaintenanceEnabled()) { webSendDisabled(ota_server, "Logs", "Settings > System > Web interface"); return; }
+    if (!webRequire(ota_server, GATE_MAINT, "Logs")) return;
     ota_server.send(200, "text/html", maintPage(1));
   });
   ota_server.on("/drying", HTTP_GET, []() {
-    if (!webMaintenanceEnabled()) { webSendDisabled(ota_server, "Drying thresholds", "Settings > System > Web interface"); return; }
+    if (!webRequire(ota_server, GATE_CONFIG, "Drying thresholds")) return;
     ota_server.send(200, "text/html", maintPage(2));
   });
   ota_server.on("/filaman", HTTP_GET, []() {
-    if (!webMaintenanceEnabled()) { webSendDisabled(ota_server, "FilaMan setup", "Settings > System > Web interface"); return; }
+    if (!webRequire(ota_server, GATE_CONFIG, "Backend setup")) return;
     ota_server.send(200, "text/html", maintPage(3));
   });
   ota_server.on("/config", HTTP_GET, []() {
-    if (!webMaintenanceEnabled()) { webSendDisabled(ota_server, "List limits", "Settings > System > Web interface"); return; }
+    if (!webRequire(ota_server, GATE_CONFIG, "Configuration")) return;
     ota_server.send(200, "text/html", maintPage(4));
   });
   ota_server.on("/tags", HTTP_GET, []() {
-    if (!webMaintenanceEnabled()) { webSendDisabled(ota_server, "Tag writing", "Settings > System > Web interface"); return; }
+    if (!webRequire(ota_server, GATE_MAINT, "Tag writing")) return;
     ota_server.send(200, "text/html", maintPage(5));
   });
 
@@ -538,7 +598,7 @@ static void registerRoutes() {
   ota_server.on("/update", HTTP_POST,
     // Abschluss-Handler
     []() {
-      if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+      if (!webRequire(ota_server, GATE_MAINT, "Firmware upload")) return;
       bool ok = !Update.hasError();
       String msg = ok
         ? "<!DOCTYPE html><html><head><meta charset='utf-8'>"
@@ -572,7 +632,7 @@ static void registerRoutes() {
     },
     // Upload-Handler (chunk-weise)
     []() {
-      if (!otaRoutesOpen()) return;
+      if (!webGateOpen(GATE_MAINT)) return;
       HTTPUpload& upload = ota_server.upload();
       if (upload.status == UPLOAD_FILE_START) {
         Serial.printf("OTA start: %s\n", upload.filename.c_str());
@@ -603,7 +663,7 @@ static void registerRoutes() {
   // ── SD-Card Log endpoints ─────────────────────────────────
   // GET /logs -> JSON list of available log files
   ota_server.on("/api/logs", HTTP_GET, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_MAINT, "Logs")) return;
     if (!sd_available) {
       ota_server.send(200, "application/json", "{\"sd\":false,\"verbose\":false,\"files\":[]}");
       return;
@@ -639,7 +699,7 @@ static void registerRoutes() {
 
   // GET /log?file=<filename> -> serve log file content
   ota_server.on("/api/log", HTTP_GET, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_MAINT, "Logs")) return;
     if (!sd_available) { ota_server.send(404, "text/plain", "No SD card"); return; }
     if (!ota_server.hasArg("file")) {
       ota_server.send(400, "text/plain", "Missing file param");
@@ -664,7 +724,7 @@ static void registerRoutes() {
 
   // POST /deletelog?file=<name> -> delete a log file
   ota_server.on("/api/deletelog", HTTP_POST, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_MAINT, "Logs")) return;
     if (!sd_available) { ota_server.send(404, "text/plain", "No SD card"); return; }
     if (!ota_server.hasArg("file")) {
       ota_server.send(400, "text/plain", "Missing file param");
@@ -686,7 +746,7 @@ static void registerRoutes() {
 
   // POST /verbose -> toggle verbose.txt on SD root
   ota_server.on("/api/verbose", HTTP_POST, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_MAINT, "Logs")) return;
     if (!sd_available) {
       ota_server.send(404, "application/json", "{\"error\":\"No SD card\"}");
       return;
@@ -719,7 +779,7 @@ static void registerRoutes() {
   // FilaMan: store the API key. The value is never echoed back to the page,
   // the input shows a placeholder when one is already stored.
   ota_server.on("/api/filaman/key", HTTP_POST, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_CONFIG, "Backend setup")) return;
     String key = ota_server.arg("plain");
     key.trim();
     if (key.length() < 8) { ota_server.send(400, "text/plain", "Key too short"); return; }
@@ -730,8 +790,8 @@ static void registerRoutes() {
   // BamBuddy: store the API key. An empty value is accepted and clears it,
   // because an instance without authentication needs none - unlike FilaMan,
   // where a missing credential is always a mistake.
-  ota_server.on("/bambuddy/key", HTTP_POST, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+  ota_server.on("/api/bambuddy/key", HTTP_POST, []() {
+    if (!webRequire(ota_server, GATE_CONFIG, "Backend setup")) return;
     String key = ota_server.arg("plain");
     key.trim();
     if (key.length() > 0 && key.length() < 8) {
@@ -744,7 +804,7 @@ static void registerRoutes() {
 
   // FilaMan: exchange the 6 character device code for a device token.
   ota_server.on("/api/filaman/register", HTTP_POST, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_CONFIG, "Backend setup")) return;
     String code = ota_server.arg("plain");
     code.trim();
     code.toUpperCase();   // codes are shown uppercase in the FilaMan admin
@@ -780,7 +840,7 @@ static void registerRoutes() {
   });
 
   ota_server.on("/api/tag/preview", HTTP_GET, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_MAINT, "Tag writing")) return;
     int id  = ota_server.arg("id").toInt();
     int fmt = ota_server.arg("fmt").toInt();
     char prev[128] = "", linked[40] = "";
@@ -795,7 +855,7 @@ static void registerRoutes() {
   });
 
   ota_server.on("/api/spools", HTTP_GET, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_MAINT, "Tag writing")) return;
     JsonDocument doc;
     int code = backendGetSpoolListJson(backendBaseUrl(), false, doc);
     if (code != 200) {
@@ -825,7 +885,7 @@ static void registerRoutes() {
   });
 
   ota_server.on("/api/tag", HTTP_GET, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_MAINT, "Tag writing")) return;
     // Reader state comes from the loop task; touching the reader here would
     // race the main NFC poll.
     char info[320];
@@ -838,7 +898,7 @@ static void registerRoutes() {
   });
 
   ota_server.on("/api/tag/write", HTTP_POST, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_MAINT, "Tag writing")) return;
     if (!ota_server.hasArg("plain")) { ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
     String body = ota_server.arg("plain");
     int c1 = body.indexOf(',');
@@ -853,7 +913,7 @@ static void registerRoutes() {
   });
 
   ota_server.on("/api/gain", HTTP_POST, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_CONFIG, "Display")) return;
     if (!ota_server.hasArg("plain")) { ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
     int val = ota_server.arg("plain").toInt();
     if (val < 100) val = 100;
@@ -866,13 +926,13 @@ static void registerRoutes() {
   });
 
   ota_server.on("/api/listlimit", HTTP_GET, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_CONFIG, "Configuration")) return;
     char json[32];
     snprintf(json, sizeof(json), "{\"limit\":%d}", spool_list_limit);
     ota_server.send(200, "application/json", json);
   });
   ota_server.on("/api/listlimit", HTTP_POST, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_CONFIG, "Configuration")) return;
     if (!ota_server.hasArg("plain")) { ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
     int val = ota_server.arg("plain").toInt();
     if (val < 5) val = 5;
@@ -885,13 +945,13 @@ static void registerRoutes() {
   });
 
   ota_server.on("/api/loclimit", HTTP_GET, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_CONFIG, "Configuration")) return;
     char json[32];
     snprintf(json, sizeof(json), "{\"limit\":%d}", location_list_limit);
     ota_server.send(200, "application/json", json);
   });
   ota_server.on("/api/loclimit", HTTP_POST, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_CONFIG, "Configuration")) return;
     if (!ota_server.hasArg("plain")) { ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
     int val = ota_server.arg("plain").toInt();
     if (val < 5) val = 5;
@@ -905,7 +965,7 @@ static void registerRoutes() {
 
   // ── Drying Reminder: Material-Schwellwerte lesen ──────────
   ota_server.on("/api/drying", HTTP_GET, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_CONFIG, "Drying thresholds")) return;
     String json = "{";
     json += "\"mode\":" + String(g_dry_mode) + ",";
     json += "\"man_yellow\":" + String(g_dry_man_yellow) + ",";
@@ -926,7 +986,7 @@ static void registerRoutes() {
   // ── Drying Reminder: Material-Schwellwerte speichern ──────
   // Body: JSON {"mult_sealed":3.0,"materials":[{"name":"PLA","yellow":180,"red":365},...]}
   ota_server.on("/api/drying", HTTP_POST, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_CONFIG, "Drying thresholds")) return;
     if (!ota_server.hasArg("plain")) {
       ota_server.send(400, "application/json", "{\"error\":\"no body\"}"); return;
     }
@@ -974,7 +1034,7 @@ static void registerRoutes() {
 
   // ── Drying Reminder: Reset auf Defaults ───────────────────
   ota_server.on("/api/drying/reset", HTTP_POST, []() {
-    if (!otaRoutesOpen()) { ota_server.send(403, "text/plain", "Closed"); return; }
+    if (!webRequire(ota_server, GATE_CONFIG, "Drying thresholds")) return;
     g_dry_mult_sealed = 2.0f;
     g_dry_man_yellow  = 30;
     g_dry_man_red     = 90;

@@ -255,7 +255,6 @@ void appLoop() {
 
   // OTA web server bedienen wenn aktiv
   handleOtaServerClient();
-  webServerTick();
   tagWriteTick();
   // While the credential screen is open the user types into the browser, so
   // the two rows have to follow along without a keypress on the device.
@@ -532,7 +531,6 @@ void appLoop() {
   }
   if (finish_setup_pending) {
     finish_setup_pending = false;
-    stopOtaServer();
     showMainScreen();
   }
   if (lang_selected_no_reboot) {
@@ -897,9 +895,9 @@ void appLoop() {
   // a mode check on the passes where it has nothing to do.
   bambuddyDeviceTick();
 
-  // The web server has to be up whenever FilaMan might trigger a link, and
-  // has to stay down in Spoolman mode. Derived from the conditions once a
-  // second so a backend switch or a returning WiFi needs no extra wiring.
+  // The one owner of port 80. Derived from the conditions once a second, so
+  // a flipped master switch, a backend switch, a freshly entered device
+  // token and a returning WiFi all take effect without extra wiring.
   {
     static unsigned long last_web_sync_ms = 0;
     if (millis() - last_web_sync_ms >= 1000) {

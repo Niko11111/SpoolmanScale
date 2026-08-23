@@ -2,44 +2,67 @@
 
 #include <Arduino.h>
 
-#include "app/app_state.h"
-#include "ota_web_server.h"
 #include "prefs_store.h"
 
-// Master defaults ON so browsing the device address gives you something rather
-// than a dead port. The two gates default OFF: everything behind them either
-// changes device state or writes firmware.
+// Master defaults ON so browsing the device address gives you something
+// rather than a dead port. The two writing gates default OFF: everything
+// behind them either changes how the scale behaves or writes firmware, and
+// neither should become reachable just because the server is up.
 static bool master_on      = true;
+static bool config_on      = false;
 static bool maintenance_on = false;
 
 bool webMasterEnabled()      { return master_on; }
+bool webConfigEnabled()      { return config_on; }
 bool webMaintenanceEnabled() { return maintenance_on; }
 
 void webAccessLoad() {
   master_on      = prefsGetBool("web_master", true);
+  config_on      = prefsGetBool("web_config", false);
   maintenance_on = prefsGetBool("web_maint",  false);
 }
 
-static bool server_started = false;
-
+// Nothing here touches the socket. Whether the server listens is derived
+// once a second in webServerSyncState() from these switches plus the remote
+// link, so there is exactly one place that opens and closes port 80. The
+// previous version kept its own copy of that state here and went out of sync
+// the moment the web screen closed the server behind its back.
 void webSetMasterEnabled(bool on) {
   master_on = on;
   prefsPutBool("web_master", on);
-  if (!on) { stopOtaServer(); server_started = false; }
 }
 
-void webServerTick() {
-  if (master_on && wifi_ok) {
-    if (!server_started) { startOtaServer(); server_started = true; }
-  } else if (server_started) {
-    stopOtaServer();
-    server_started = false;
-  }
+void webSetConfigEnabled(bool on) {
+  config_on = on;
+  prefsPutBool("web_config", on);
 }
 
 void webSetMaintenanceEnabled(bool on) {
   maintenance_on = on;
   prefsPutBool("web_maint", on);
+}
+
+bool webGateOpen(WebGate g) {
+  switch (g) {
+    case GATE_ALWAYS: return true;
+    case GATE_OPEN:   return master_on;
+    case GATE_CONFIG: return master_on && config_on;
+    case GATE_MAINT:  return master_on && maintenance_on;
+  }
+  return false;
+}
+
+bool webRequire(WebServer &srv, WebGate g, const char *what) {
+  if (webGateOpen(g)) return true;
+  // An /api/* caller is a script, not a reader. Handing it a kilobyte of
+  // styled HTML it will never render only makes the failure harder to see in
+  // a console.
+  if (srv.uri().startsWith("/api/")) {
+    srv.send(403, "text/plain", "Switched off on the device");
+  } else {
+    webSendDisabled(srv, what, "Settings > System > Web interface");
+  }
+  return false;
 }
 
 void webSendDisabled(WebServer &srv, const char *what, const char *menu) {
