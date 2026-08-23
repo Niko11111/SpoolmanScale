@@ -9,6 +9,7 @@
 
 #include "hardware/sd_logger.h"
 #include "services/tag_uid.h"
+#include "services/wifi_manager.h"
 #include "services/user_options.h"
 
 namespace {
@@ -180,19 +181,10 @@ const char* bbInventoryBase() {
 
 const char* bbSpoolmanUrl() { return s_spoolman_url; }
 
-const char* bbDeviceId() {
-  static char id[20] = "";
-  if (!id[0]) {
-    // Mirrors the "sb-<mac>" of BamBuddy's own daemon so the two are
-    // recognisable side by side in the device list.
-    uint64_t mac = ESP.getEfuseMac();
-    uint8_t b[6];
-    for (int i = 0; i < 6; i++) b[i] = (uint8_t)(mac >> (8 * i));
-    snprintf(id, sizeof(id), "ssc-%02x%02x%02x%02x%02x%02x",
-             b[0], b[1], b[2], b[3], b[4], b[5]);
-  }
-  return id;
-}
+// Moved to wifi_manager so mDNS can advertise the same identity. Kept as a
+// pass-through rather than replaced at the call sites, because "device id"
+// means something specific to BamBuddy and the name carries that here.
+const char* bbDeviceId() { return wifiManagerDeviceId(); }
 
 // ============================================================
 //  TRANSLATION: BamBuddy spool  ->  Spoolman spool

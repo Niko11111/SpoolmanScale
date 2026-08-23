@@ -11,12 +11,14 @@ extern const WebPage PAGE_STATUS;
 extern const WebPage PAGE_FIRMWARE;
 extern const WebPage PAGE_LOGS;
 extern const WebPage PAGE_DRYING;
+extern const WebPage PAGE_NETWORK;
 extern const WebPage PAGE_BACKEND;
 extern const WebPage PAGE_CONFIG;
 extern const WebPage PAGE_TAGS;
 
 const WebPage* const WEB_PAGES[] = {
   &PAGE_STATUS,
+  &PAGE_NETWORK,
   &PAGE_BACKEND,
   &PAGE_CONFIG,
   &PAGE_DRYING,

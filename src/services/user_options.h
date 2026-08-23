@@ -6,14 +6,19 @@ extern uint8_t last_used_mode;
 extern bool g_whole_gram;
 
 // Which address the main screen status bar shows next to the scan counter.
-// 0 = nothing, 1 = this device's IP, 2 = the filament manager's address.
+// 0 = nothing, 1 = this device's IP, 2 = the filament manager's address,
+// 3 = this device's mDNS name.
 // Backend mode is useful when running more than one instance and you want to
 // see at a glance which one the scale is talking to.
+// Appended rather than inserted in a sensible order: the value is persisted,
+// so putting the new one in the middle would silently move every device that
+// was set to "backend" onto something else.
 enum IpBarMode : uint8_t {
   IP_BAR_OFF     = 0,
   IP_BAR_DEVICE  = 1,
   IP_BAR_BACKEND = 2,
-  IP_BAR_COUNT   = 3
+  IP_BAR_MDNS    = 3,
+  IP_BAR_COUNT   = 4
 };
 extern uint8_t g_ip_bar_mode;
 

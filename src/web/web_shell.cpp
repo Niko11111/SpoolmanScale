@@ -24,7 +24,8 @@ String webShellHead(const char *subtitle) {
   String html;
   html += "<!DOCTYPE html><html><head>"
       "<meta charset='utf-8'>"
-      "<link rel=\"icon\" type=\"image/jpeg\" href=\"/favicon.jpg\">"
+      "<link rel='icon' type='image/png' href='/favicon.png'>"
+      "<link rel='apple-touch-icon' href='/apple-touch-icon.png'>"
       "<meta name='viewport' content='width=device-width,initial-scale=1'>"
       "<title>SpoolmanScale - " + String(subtitle) + "</title>"
       "<style>"

@@ -8,10 +8,11 @@
 
 #include "hardware/sd_logger.h"
 #include "lang.h"
-#include "system_screen.h"
-#include "web/web_server.h"
-#include "web/web_access.h"
+#include "services/mdns_service.h"
 #include "services/wifi_manager.h"
+#include "system_screen.h"
+#include "web/web_access.h"
+#include "web/web_server.h"
 #include "ui_common.h"
 
 lv_obj_t *scr_web = nullptr;
@@ -80,6 +81,9 @@ void buildWebScreen() {
     url[sizeof(url) - 1] = '\0';
   } else if (!wifi_ok) {
     snprintf(url, sizeof(url), "Waiting for WiFi.");
+  } else if (mdnsRunning()) {
+    snprintf(url, sizeof(url), "http://%s.local  shows status and these switches.",
+             mdnsHostname());
   } else {
     snprintf(url, sizeof(url), "http://%s  shows status and these switches.",
              wifiManagerLocalIP().toString().c_str());

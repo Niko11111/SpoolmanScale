@@ -17,6 +17,7 @@
 #include "services/app_settings.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/mdns_service.h"
 #include "services/time_service.h"
 #include "services/update_check.h"
 #include "services/wifi_manager.h"
@@ -42,6 +43,9 @@ void wifiConnect() {
   if (wifiManagerConnect(cfg_wifi_ssid, cfg_wifi_password, 20, 500)) {
       wifi_ok = true;
       Serial.printf("WiFi OK! IP: %s\n", wifiManagerLocalIP().toString().c_str());
+      // Once here so the boot log names the address the user will type. The
+      // loop keeps it in step from then on.
+      mdnsSyncState();
       updateHeaderStatus();
       syncNTP();
       // SD logging: write boot block once time is available

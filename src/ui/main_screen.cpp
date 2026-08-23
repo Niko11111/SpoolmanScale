@@ -175,6 +175,16 @@ void buildUI() {
   lv_obj_set_style_text_color(lbl_hdr_ip, lv_color_hex(0x2a4060), 0);
   lv_obj_set_style_text_font(lbl_hdr_ip, &lv_font_montserrat_ext_12, 0);
   lv_obj_align(lbl_hdr_ip, LV_ALIGN_RIGHT_MID, -44, 0);
+  // Bounded like lbl_status above it. A device name is user supplied, so
+  // unlike an IP address its width is not something to leave to chance:
+  // there are 94 pixels between the end of the status text and this label.
+  lv_label_set_long_mode(lbl_hdr_ip, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(lbl_hdr_ip, 94);
+  // A fixed width makes the label a box, and text sits left in a box. Without
+  // this the address would drift away from the scan counter instead of
+  // staying flush against it, which is where it used to sit when the label
+  // still sized itself to its text.
+  lv_obj_set_style_text_align(lbl_hdr_ip, LV_TEXT_ALIGN_RIGHT, 0);
   lv_obj_add_flag(lbl_hdr_ip, LV_OBJ_FLAG_HIDDEN);
 
   // Scan counter: right side of status bar

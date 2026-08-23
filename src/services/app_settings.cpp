@@ -10,6 +10,7 @@
 #include "drying_config.h"
 #include "lang.h"
 #include "list_limits.h"
+#include "mdns_service.h"
 #include "ota_state.h"
 #include "prefs_store.h"
 #include "tag_field.h"
@@ -44,6 +45,7 @@ void loadPrefs() {
   bright_normal = prefsGetUChar("bright", BRIGHT_NORMAL_DEFAULT);
 
   webAccessLoad();
+  mdnsLoadHostname();
   // Safe this early: displaySetUiGain() only builds its lookup tables and
   // skips the LVGL repaint until a display exists.
   displaySetUiGain((uint16_t)prefsGetUInt("ui_gain", 100));

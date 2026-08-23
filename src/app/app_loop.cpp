@@ -36,6 +36,7 @@
 #include "services/bambuddy_device.h"
 #include "services/wifi_manager.h"
 #include "services/filaman_api.h"
+#include "services/mdns_service.h"
 #include "services/backend.h"
 #include "ui/ams_assign_popup.h"
 #include "ui/ams_assign_screen.h"
@@ -903,6 +904,9 @@ void appLoop() {
     if (millis() - last_web_sync_ms >= 1000) {
       last_web_sync_ms = millis();
       webServerSyncState();
+      // Right after, not before: the advertised _http._tcp service follows
+      // whether the socket is actually listening.
+      mdnsSyncState();
     }
   }
 

@@ -11,6 +11,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/backend.h"
+#include "services/mdns_service.h"
 #include "web/web_server.h"
 #include "web/web_access.h"
 #include "services/wifi_manager.h"
@@ -204,8 +205,19 @@ void buildOtaBrowserScreen() {
   // its form: firmware upload lives at /ota, backend credentials at /backend.
   // That path is deliberately not named after a backend - it used to be
   // "/filaman", which sent BamBuddy users to a FilaMan URL.
-  snprintf(ip_buf, sizeof(ip_buf), "http://%s%s", ip.toString().c_str(),
-           showsCredentials() ? "/backend" : "/ota");
+  const char *path = showsCredentials() ? "/backend" : "/ota";
+
+  // The name goes on the big line and the address stays underneath in small
+  // type. Not either-or: some Android versions still will not resolve a
+  // .local name, and the person standing at the scale has no way to know
+  // that before trying.
+  char addr_buf[64] = "";
+  if (mdnsRunning()) {
+    snprintf(ip_buf,   sizeof(ip_buf),   "http://%s.local%s", mdnsHostname(), path);
+    snprintf(addr_buf, sizeof(addr_buf), "%s", ip.toString().c_str());
+  } else {
+    snprintf(ip_buf, sizeof(ip_buf), "http://%s%s", ip.toString().c_str(), path);
+  }
 
   char hint_buf[192];
   const char* hint_src = !showsCredentials() ? T(STR_OTA_OPEN_BROWSER)
@@ -223,11 +235,21 @@ void buildOtaBrowserScreen() {
   lv_obj_set_width(lbl_hint, 440);
   lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, showsCredentials() ? 50 : 58);
 
+  const int addr_y = showsCredentials() ? 108 : 80;
+
   lv_obj_t *lbl_ip = lv_label_create(scr_ota_browser);
   lv_label_set_text(lbl_ip, ip_buf);
   lv_obj_set_style_text_color(lbl_ip, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_ip, &lv_font_montserrat_ext_20, 0);
-  lv_obj_align(lbl_ip, LV_ALIGN_TOP_MID, 0, showsCredentials() ? 108 : 80);
+  lv_obj_align(lbl_ip, LV_ALIGN_TOP_MID, 0, addr_y);
+
+  if (addr_buf[0]) {
+    lv_obj_t *lbl_fallback = lv_label_create(scr_ota_browser);
+    lv_label_set_text(lbl_fallback, addr_buf);
+    lv_obj_set_style_text_color(lbl_fallback, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(lbl_fallback, &lv_font_montserrat_ext_14, 0);
+    lv_obj_align(lbl_fallback, LV_ALIGN_TOP_MID, 0, addr_y + 26);
+  }
 
   if (showsCredentials()) {
     if (backendIsBamBuddy()) {
@@ -288,7 +310,7 @@ void buildOtaBrowserScreen() {
   lv_obj_set_style_text_color(lbl_hint2, lv_color_hex(0x2a4060), 0);
   lv_obj_set_style_text_font(lbl_hint2, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(lbl_hint2, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_hint2, LV_ALIGN_TOP_MID, 0, 112);
+  lv_obj_align(lbl_hint2, LV_ALIGN_TOP_MID, 0, addr_buf[0] ? 126 : 112);
   lv_label_set_long_mode(lbl_hint2, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(lbl_hint2, 440);
 

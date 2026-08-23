@@ -6,6 +6,7 @@
 #include <cstring>
 #include <lvgl.h>
 
+#include "services/mdns_service.h"
 #include "services/user_options.h"
 #include "services/wifi_manager.h"
 
@@ -65,6 +66,11 @@ void updateHeaderStatus() {
     if (g_ip_bar_mode == IP_BAR_DEVICE && wifi_ok) {
       ip = wifiManagerLocalIP().toString();
       text = ip.c_str();
+    } else if (g_ip_bar_mode == IP_BAR_MDNS && mdnsRunning()) {
+      // Bare name, no ".local". Same reasoning as the port below: there are
+      // about 94 pixels between the status text and the scan counter, and
+      // the suffix is the same on every device, so it only eats width.
+      text = mdnsHostname();
     } else if (g_ip_bar_mode == IP_BAR_BACKEND) {
       // Address only, no port. The point here is telling one server from
       // another when several are around - a test instance next to the live
