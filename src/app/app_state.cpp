@@ -88,6 +88,7 @@ float sm_spool_weight = 0;
 uint8_t sm_tare_source = TARE_NONE;
 char  sm_last_dried[32] = "";
 char  sm_tag_values[TAG_FIELD_COUNT][CARD_UIDS_MAX] = {};
+int   sm_tag_conflict_spool = 0;
 
 const char* smSelectedTagValue() {
   return sm_tag_values[g_tag_field < TAG_FIELD_COUNT ? g_tag_field : TAG_FIELD_TAG];
@@ -95,7 +96,7 @@ const char* smSelectedTagValue() {
 
 int smBoundUidCount() {
   int n = 0;
-  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) {
+  for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
     if (!sm_tag_values[i][0]) continue;
     n += tagFieldSpec(i).is_list ? cardUidsCount(sm_tag_values[i]) : 1;
   }

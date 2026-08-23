@@ -150,14 +150,62 @@ static void clearMigrationSource(int spool_id, uint8_t src, const char* value) {
   }
   int c = backendPatchExtraField(cfg_spoolman_base, spool_id, s.key, "");
   logSDf("MIGRATE ID=%d moved '%s' from %s to %s, cleared %s HTTP %d",
-         spool_id, value ? value : "", s.key, tagFieldKey(), s.key, c);
+         spool_id, value ? value : "", s.key, tagFieldKeyName(), s.key, c);
+}
+
+// What kind of tag the scale is holding, for Spoolman's informational format
+// field. A tray uuid is 32 characters and only a Bambu tag has one.
+static const char* tagFormatName(const char* uuid) {
+  char hex[40];
+  tagUidNormalize(uuid, hex, sizeof(hex));
+  return (strlen(hex) == 32) ? "bambu" : "ntag";
 }
 
 bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_values) {
   if (!wifi_ok) return false;
   const bool clearing = (!uuid || !uuid[0]);
+  sm_tag_conflict_spool = 0;   // stale from an earlier attempt would mislead
 
   const TagFieldSpec& spec = tagFieldSelected();
+
+  // Spoolman's own tag relation, where a spool holds several tags without any
+  // of the list handling below. Checked before anything reads field_values,
+  // because there is no field to read for this source.
+  if (spec.is_native) {
+    if (clearing) {
+      // Which UID to drop is the one the spool was found under.
+      int c = backendUnlinkTag(cfg_spoolman_base, spool_id, g_tag.tray_uuid);
+      logSDf("UNLINK native ID=%d uuid='%s' HTTP %d", spool_id, g_tag.tray_uuid, c);
+      return true;
+    }
+
+    int conflict = 0;
+    int code = backendLinkTag(cfg_spoolman_base, spool_id, uuid,
+                              tagFormatName(uuid), &conflict);
+    logSDf("LINK native ID=%d uuid='%s' format=%s HTTP %d%s",
+           spool_id, uuid, tagFormatName(uuid), code,
+           code == 409 ? " CONFLICT" : "");
+
+    if (code == 409) {
+      // A tag belongs to exactly one spool. Saying which one holds it beats a
+      // bare failure - it is the whole reason Spoolman puts the id in the body.
+      sm_tag_conflict_spool = conflict;
+      logSDf("LINK native: uuid='%s' already on spool %d", uuid, conflict);
+      return false;
+    }
+    if (code < 200 || code >= 300) return false;
+
+    // Bound natively now, so a UID left in an extra field would keep the spool
+    // findable through a store nobody writes any more. Same rule as the
+    // migration between fields, including the refusal to empty a list that
+    // still holds somebody else's tag.
+    if (field_values) {
+      for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
+        if (field_values[i] && field_values[i][0])
+          clearMigrationSource(spool_id, i, field_values[i]);
+    }
+    return true;
+  }
   const char* selected = (!clearing && field_values) ? field_values[g_tag_field] : nullptr;
   const bool  has_value = (selected && selected[0]);
 
@@ -170,7 +218,7 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
   // nothing to migrate between.
   int src = -1;
   if (!clearing && !has_value && field_values && backendMode() == BACKEND_SPOOLMAN) {
-    for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) {
+    for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
       if (i == g_tag_field) continue;
       if (field_values[i] && field_values[i][0]) { src = (int)i; break; }
     }
@@ -266,12 +314,20 @@ static bool clearBoundFieldIfSet(int spool_id, uint8_t field) {
 void unlinkCardUid(int spool_id, const char* uid, bool all) {
   if (!wifi_ok) return;
 
+  // A natively bound spool keeps its tags in the relation, not in a field.
+  // Everything below still runs afterwards, because a spool can carry both
+  // while it is being migrated.
+  if (backendHasNativeTags()) {
+    int c = backendUnlinkTag(cfg_spoolman_base, spool_id, uid);
+    logSDf("UNLINK native ID=%d uuid='%s' HTTP %d", spool_id, uid ? uid : "", c);
+  }
+
   if (all) {
     // Every field that holds something has to go. Leaving one behind would
     // keep the spool findable after the user was told it is gone, and the
     // fallback search makes that more likely, not less.
     bool did = false;
-    for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++)
+    for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
       if (clearBoundFieldIfSet(spool_id, i)) did = true;
     if (!did) logSDf("UNLINK ID=%d nothing to clear, no field set", spool_id);
     return;
@@ -279,7 +335,7 @@ void unlinkCardUid(int spool_id, const char* uid, bool all) {
 
   // One UID out of a list, leaving the rest of the list alone. Only a list
   // field can do that; everything else is an all-or-nothing binding.
-  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) {
+  for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
     const TagFieldSpec& s = tagFieldSpec(i);
     if (!s.is_list || !sm_tag_values[i][0]) continue;
 
@@ -296,7 +352,7 @@ void unlinkCardUid(int spool_id, const char* uid, bool all) {
   // valued field, if anything was.
   logSDf("UNLINK ID=%d uuid='%s' in no list", spool_id, uid ? uid : "");
   bool did = false;
-  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++)
+  for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
     if (!tagFieldSpec(i).is_list && clearBoundFieldIfSet(spool_id, i)) { did = true; break; }
   if (!did) logSDf("UNLINK ID=%d nothing to clear, no field set", spool_id);
 }

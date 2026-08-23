@@ -115,6 +115,11 @@ extern char sm_last_dried[32];
 // UIDs; anything longer is dropped rather than shortened.
 extern char sm_tag_values[TAG_FIELD_COUNT][CARD_UIDS_MAX];
 
+// The spool that already holds the tag a link was just refused for, or 0.
+// Written by patchSpoolTag() on Spoolman's 409, read by the link flow so it
+// can name that spool instead of reporting a bare failure.
+extern int sm_tag_conflict_spool;
+
 // Shorthand for the field the user selected, which is the one most callers
 // mean. Never null.
 const char* smSelectedTagValue();

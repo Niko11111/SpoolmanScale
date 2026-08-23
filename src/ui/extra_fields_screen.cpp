@@ -80,10 +80,14 @@ void handleExtraFieldsDeferredActions() {
 // Without its field the choice cannot do anything at all: Spoolman answers a
 // PATCH on an extra field it does not know with HTTP 400, and ignores a filter
 // on one, which turns the fast search into a full inventory download.
+// The native source has no field at all, so last_dried is then the only thing
+// the scale needs. tagFieldKey() is null in that case and would be a null
+// pointer in every strcmp below.
 static int requiredExtraFields(const char* out[], int max) {
   int n = 0;
   if (n < max) out[n++] = LAST_DRIED_FIELD;
-  if (n < max) out[n++] = tagFieldKey();
+  const char* key = tagFieldKey();
+  if (key && n < max) out[n++] = key;
   return n;
 }
 
@@ -186,7 +190,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   { char buf_t[40]; strncpy(buf_t, T(STR_TAG_FIELD), sizeof(buf_t)-1);
     buf_t[sizeof(buf_t)-1] = '\0';
     char buf_s[48];
-    snprintf(buf_s, sizeof(buf_s), "%s", tagFieldKey());
+    snprintf(buf_s, sizeof(buf_s), "%s", tagFieldKeyName());
     lv_obj_t *help = nullptr;
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_GPS, buf_t, buf_s, false, &help);
     if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,

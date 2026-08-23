@@ -10,4 +10,5 @@ bool g_flm_tagless = true;
 bool g_wake_on_load = true;
 uint8_t g_bb_dried_target = BB_DRIED_NOTE;
 uint8_t g_tag_field = TAG_FIELD_TAG;
+bool g_tag_field_chosen = false;
 bool g_card_uids_write = false;

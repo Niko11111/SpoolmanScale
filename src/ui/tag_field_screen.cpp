@@ -74,15 +74,24 @@ static void addFieldRow(lv_obj_t *list, uint8_t value) {
   // actually has it. A field that is missing is the one thing that stops the
   // choice from working, so it belongs where the choice is made rather than
   // one screen away.
+  //
+  // The native source is either supported or it is not, and there is nothing
+  // to create - so it says which, and nothing else.
+  const bool available = spec.is_native ? backendHasNativeTags()
+                                        : backendHasExtraField(spec.key);
   char buf_s[64];
-  char who[40];
-  strncpy(who, T((StringID)spec.str_sub), sizeof(who) - 1);
-  who[sizeof(who) - 1] = '\0';
-  char state[32];
-  strncpy(state, T(backendHasExtraField(spec.key) ? STR_EF_PRESENT : STR_EF_MISSING),
-          sizeof(state) - 1);
-  state[sizeof(state) - 1] = '\0';
-  snprintf(buf_s, sizeof(buf_s), "%s - %s", who, state);
+  if (spec.is_native) {
+    strncpy(buf_s, T(available ? STR_TF_NATIVE_SUB : STR_TF_NATIVE_NA), sizeof(buf_s) - 1);
+    buf_s[sizeof(buf_s) - 1] = '\0';
+  } else {
+    char who[40];
+    strncpy(who, T((StringID)spec.str_sub), sizeof(who) - 1);
+    who[sizeof(who) - 1] = '\0';
+    char state[32];
+    strncpy(state, T(available ? STR_EF_PRESENT : STR_EF_MISSING), sizeof(state) - 1);
+    state[sizeof(state) - 1] = '\0';
+    snprintf(buf_s, sizeof(buf_s), "%s - %s", who, state);
+  }
 
   lv_obj_t *help = nullptr;
   lv_obj_t *btn = makeListBtn(list, "", buf_t, buf_s, active, &help);
@@ -99,11 +108,21 @@ static void addFieldRow(lv_obj_t *list, uint8_t value) {
     lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_16, 0);
   }
 
+  // A source the server cannot serve stays visible but inert: the reason it
+  // cannot be picked is more use than an entry that simply is not there. An
+  // extra field is different - it can be created, so it stays selectable.
+  if (spec.is_native && !available) {
+    lv_obj_add_state(btn, LV_STATE_DISABLED);
+    lv_obj_set_style_opa(btn, LV_OPA_50, 0);
+    return;
+  }
+
   lv_obj_set_user_data(btn, (void *)(intptr_t)value);
   lv_obj_add_event_cb(btn, [](lv_event_t *e) {
     uint8_t v = (uint8_t)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
     if (v == g_tag_field) return;
     g_tag_field = v;
+    g_tag_field_chosen = true;
     prefsPutUChar("tag_field", v);
 
     // The multi tag switch only means anything on a list field. Clearing it
@@ -114,7 +133,7 @@ static void addFieldRow(lv_obj_t *list, uint8_t value) {
       prefsPutBool("cu_write", false);
       logSD("Tag field: not a list, multi tag switched off");
     }
-    logSDf("BTN: Tag field -> %s", tagFieldKey());
+    logSDf("BTN: Tag field -> %s", tagFieldKeyName());
 
     // Rebuild rather than patch the ticks, same as the other option screens -
     // but through the loop, not from here. The rebuild asks whether the newly
@@ -128,6 +147,8 @@ static void addFieldRow(lv_obj_t *list, uint8_t value) {
 // and the field's own row above already says "present".
 static void addCreateRow(lv_obj_t *list) {
   const TagFieldSpec& spec = tagFieldSelected();
+  // Nothing to create for the native source: it is a relation, not a field.
+  if (spec.is_native || !spec.key) return;
   if (backendHasExtraField(spec.key)) return;
 
   char buf_t[48];
@@ -140,7 +161,7 @@ static void addCreateRow(lv_obj_t *list) {
   if (arr_lbl) lv_label_set_text(arr_lbl, LV_SYMBOL_RIGHT);
 
   lv_obj_add_event_cb(btn, [](lv_event_t *e) {
-    logSDf("BTN: Tag field -> create '%s'", tagFieldKey());
+    logSDf("BTN: Tag field -> create '%s'", tagFieldKeyName());
     // Creates it, rather than sending the user to the assistant to tap
     // "create" a second time. The row says what it does. Deferred because it
     // reaches the network and this is a button callback.
@@ -174,6 +195,13 @@ void buildTagFieldScreen() {
 
   lv_obj_t *list = buildList(scr_tag_field);
 
-  for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++) addFieldRow(list, f);
+  // Native first: it is the one the scale picks by itself where it can, and
+  // the extra fields below it are the compatibility choices. The enum order is
+  // the other way round because those values live in NVS and could not be
+  // renumbered, so the order is spelled out here instead.
+  static const uint8_t ORDER[TAG_FIELD_COUNT] = {
+    TAG_FIELD_NATIVE, TAG_FIELD_TAG, TAG_FIELD_NFC_ID, TAG_FIELD_CARD_UIDS
+  };
+  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) addFieldRow(list, ORDER[i]);
   addCreateRow(list);
 }

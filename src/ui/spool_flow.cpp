@@ -247,7 +247,7 @@ static bool spoolHasAnyTag(JsonObjectConst spool) {
   JsonObjectConst extra = spool["extra"];
   if (extra.isNull()) return false;
 
-  for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++) {
+  for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++) {
     const char* key = tagFieldSpec(f).key;
     if (!extra.containsKey(key)) continue;
     // Spoolman stores extra values JSON encoded, so an unset field arrives as
@@ -262,7 +262,7 @@ static bool spoolHasAnyTag(JsonObjectConst spool) {
 
 // True when any tag field of this spool holds something, whichever one it is.
 static bool linkSpoolBound(const UnlinkedSpool& s) {
-  for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++)
+  for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++)
     if (s.tag_values[f][0]) return true;
   return false;
 }
@@ -296,7 +296,7 @@ static const char* s_target_values[TAG_FIELD_COUNT];
 static const char* const* linkTargetValues(int spool_id) {
   for (int i = 0; i < link_spool_count; i++) {
     if (link_spools[i].id != spool_id) continue;
-    for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++)
+    for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++)
       s_target_values[f] = link_spools[i].tag_values[f][0]
                          ? link_spools[i].tag_values[f] : nullptr;
     return s_target_values;
@@ -314,7 +314,7 @@ static const char* linkTargetBase(int spool_id) {
   const char* const* v = linkTargetValues(spool_id);
   if (!v) return nullptr;
   if (v[g_tag_field]) return v[g_tag_field];
-  for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++) if (v[f]) return v[f];
+  for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++) if (v[f]) return v[f];
   return nullptr;
 }
 
@@ -333,7 +333,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     const bool present = is_list && backendHasExtraField(tagFieldKey());
     link_cu_ok = is_list && g_card_uids_write && present;
     logSDf("link fetch: append=%d (field=%s list=%d write=%d present=%d)",
-           link_cu_ok ? 1 : 0, tagFieldKey(), is_list ? 1 : 0,
+           link_cu_ok ? 1 : 0, tagFieldKeyName(), is_list ? 1 : 0,
            g_card_uids_write ? 1 : 0, present ? 1 : 0); }
 
   // Up before the blocking work, and painted before this returns. The reader
@@ -352,7 +352,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   fL["remaining_weight"] = true;
   // Every tag field: a spool can be bound through any of them, and the link
   // flow has to see that whichever one the user has selected right now.
-  for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++)
+  for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++)
     fL["extra"][tagFieldSpec(f).key] = true;
   fL["filament"]["id"] = true;
   fL["filament"]["name"] = true;
@@ -529,7 +529,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     // Never keep a shortened value: appending to a truncated list would drop
     // the entries that fell off the end. Empty means "unknown", and the write
     // then treats the spool as unbound rather than acting on half a list.
-    for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++) {
+    for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++) {
       s.tag_values[f][0] = '\0';
       const char* key = tagFieldSpec(f).key;
       if (!spool.containsKey("extra") || !spool["extra"].containsKey(key)) continue;
@@ -652,7 +652,15 @@ void doLinkPatch(int spool_id, bool is_bambu) {
     logSDf("LINK ABORT: tag field of spool %d not written", spool_id);
     if (lbl_status) {
       char buf[48];
-      strncpy(buf, T(STR_CU_NOT_WRITTEN), sizeof(buf) - 1);
+      // Spoolman refuses a UID that another spool holds and says which one.
+      // Naming it is the difference between "that did not work" and something
+      // the user can act on.
+      if (sm_tag_conflict_spool > 0) {
+        snprintf(buf, sizeof(buf), T(STR_TAG_ON_OTHER_SPOOL), sm_tag_conflict_spool);
+        sm_tag_conflict_spool = 0;
+      } else {
+        strncpy(buf, T(STR_CU_NOT_WRITTEN), sizeof(buf) - 1);
+      }
       buf[sizeof(buf) - 1] = '\0';
       lv_label_set_text(lbl_status, buf);
       lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
@@ -1033,7 +1041,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = entered_id;
     // Same rule as the list fetch: too long is stored as empty, never cut.
-    for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++) {
+    for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++) {
       s.tag_values[f][0] = '\0';
       const char* key = tagFieldSpec(f).key;
       if (!doc.containsKey("extra") || !doc["extra"].containsKey(key)) continue;
@@ -2608,7 +2616,7 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
     // Not a tag here, and deliberately emptied rather than left alone:
     // link_spools[] lives in PSRAM and is not zeroed, and the shared list
     // builders skip every row that is already bound, see linkSpoolBound().
-    for (uint8_t f = 0; f < TAG_FIELD_COUNT; f++) s.tag_values[f][0] = '\0';
+    for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++) s.tag_values[f][0] = '\0';
     strncpy(s.name,     spool["filament"]["name"]           | "", sizeof(s.name)-1);
     s.name[sizeof(s.name)-1] = '\0';
     strncpy(s.vendor,   spool["filament"]["vendor"]["name"] | "", sizeof(s.vendor)-1);

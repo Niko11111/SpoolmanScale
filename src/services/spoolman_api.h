@@ -54,6 +54,41 @@ int spoolmanFindSpoolByExtraField(const char* base_url, const char* key, const c
                                   JsonDocument* filter = nullptr,
                                   DeserializationError* out_err = nullptr);
 
+// --- native tags, Spoolman master and later ------------------
+// Spoolman grew a tag relation of its own: spool.tags[], one UID per tag,
+// several tags per spool, normalised to plain uppercase hex server side. It
+// replaces the extra field conventions for anyone whose server has it, and
+// exists on none of the released versions, so every call here is reached only
+// after spoolmanHasTagApi() has answered 200.
+
+// Whether this server knows the tag API. Returns the HTTP status of a probe:
+// 200 yes, 404 no, anything else says nothing either way and must not be
+// cached as a no.
+int spoolmanHasTagApi(const char* base_url, uint32_t timeout_ms = 4000);
+
+// Reports a scan and resolves it in the same request. The response carries
+// matched_spool_id and, when it matched, the whole spool - so this one call
+// replaces the filter search, the verification pass and the follow-up GET.
+// A null match means "no native tag", not "unknown spool": one bound through
+// an extra field is invisible here and the caller must fall through.
+//
+// reader_id and reader_name are optional and put the scale in the server's
+// reader list, where a paired browser can react to what is on the pad.
+int spoolmanTagScan(const char* base_url, const char* uid, const char* reader_id,
+                    const char* reader_name, const char* format, JsonDocument& doc,
+                    uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr);
+
+// Links a tag. 201 on success, 404 for an unknown spool, and 409 when another
+// spool already holds the UID - in which case out_conflict_spool_id carries
+// that spool's id, because a tag belongs to exactly one spool and the useful
+// offer is to move it rather than to fail.
+int spoolmanLinkTag(const char* base_url, int spool_id, const char* uid,
+                    const char* format, int* out_conflict_spool_id = nullptr,
+                    uint32_t timeout_ms = 5000);
+
+int spoolmanUnlinkTag(const char* base_url, int spool_id, const char* uid,
+                      uint32_t timeout_ms = 5000);
+
 int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remaining, const char* last_used_iso = nullptr, uint32_t timeout_ms = 5000);
 int spoolmanPatchInitialWeight(const char* base_url, int spool_id, float initial_weight, uint32_t timeout_ms = 5000);
 int spoolmanPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeout_ms = 5000);

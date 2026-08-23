@@ -61,7 +61,7 @@ void buildSpoolmanOptionsScreen() {
   { char buf_t[40];
     backendText(T(STR_EXTRA_FIELDS_TITLE), buf_t, sizeof(buf_t));
     char buf_s[48];
-    snprintf(buf_s, sizeof(buf_s), "%s, " LAST_DRIED_FIELD, tagFieldKey());
+    snprintf(buf_s, sizeof(buf_s), "%s, " LAST_DRIED_FIELD, tagFieldKeyName());
 
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_LIST, buf_t, buf_s);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){

@@ -537,6 +537,7 @@ enum StringID {
   STR_CU_WRITE_SUB,
   STR_CU_WRITE_INFO,
   STR_CU_NOT_WRITTEN,
+  STR_TAG_ON_OTHER_SPOOL,
   STR_WARN_A_ADD_TITLE,
   STR_WARN_A_ADD_INFO,
   STR_WARN_A_ADD_SHORT,
@@ -603,6 +604,10 @@ enum StringID {
   // ecosystem picked a different one, so the scale lets the user say.
   STR_TAG_FIELD,
   STR_TAG_FIELD_INFO,
+  STR_TF_NATIVE,
+  STR_TF_NATIVE_SUB,
+  STR_TF_NATIVE_NA,
+  STR_TF_NATIVE_INFO,
   STR_TF_TAG,
   STR_TF_TAG_SUB,
   STR_TF_TAG_INFO,

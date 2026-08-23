@@ -87,9 +87,39 @@ int  backendFindSpoolByTagField(uint8_t field_id, const char* base_url, const ch
 // request on the first call, so never call it from an LVGL event callback.
 bool backendHasExtraField(const char* key);
 
-// Drops that cache. Called after a field was created, which is the one moment
-// the answer changes without the base URL changing with it.
+// Drops that cache, and the native tag probe with it. Called after a field was
+// created, which is the one moment the answer changes without the base URL
+// changing with it.
 void backendInvalidateExtraFieldCache();
+
+// --- native tags ---------------------------------------------
+// Whether this Spoolman has the tag relation of its own that master grew: one
+// UID per tag, several tags per spool, no extra field involved. False on every
+// released version, and on FilaMan and BamBuddy always. Probed once per base
+// URL and cached; an inconclusive answer is not cached and not a no.
+//
+// Everything below is reached only when this is true, and each call checks it
+// again rather than trusting the caller to have asked.
+bool backendHasNativeTags();
+
+// This scale's id in Spoolman's reader list, stable across reboots.
+const char* backendReaderId();
+
+// Reports a scan and resolves it in one request - see spoolmanTagScan(). A
+// null match means "no native tag", so the caller must still try the extra
+// field chain before calling a spool unknown.
+int  backendTagScan(const char* base_url, const char* uid, const char* format,
+       JsonDocument& doc, uint32_t timeout_ms = 8000,
+       DeserializationError* out_err = nullptr);
+
+// 201 links, 409 means another spool holds the UID and out_conflict_spool_id
+// names it, 404 is an unknown spool.
+int  backendLinkTag(const char* base_url, int spool_id, const char* uid,
+       const char* format, int* out_conflict_spool_id = nullptr,
+       uint32_t timeout_ms = 5000);
+
+int  backendUnlinkTag(const char* base_url, int spool_id, const char* uid,
+       uint32_t timeout_ms = 5000);
 
 // Writes one text extra field. Spoolman only, for the same reason as
 // backendFindSpoolByTagField(): nothing else has extra fields. The value is

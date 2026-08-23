@@ -56,8 +56,13 @@ void loadPrefs() {
   g_wake_on_load = prefsGetBool("wake_load", true);
   g_ip_bar_mode = prefsGetUChar("ip_bar_mode", IP_BAR_OFF);
   g_flm_autolink = prefsGetBool("flm_autolink", false);
-  g_tag_field = prefsGetUChar("tag_field", TAG_FIELD_TAG);
-  if (g_tag_field >= TAG_FIELD_COUNT) g_tag_field = TAG_FIELD_TAG;
+  // 0xFF as the default rather than TAG_FIELD_TAG, so "never chosen" can be
+  // told apart from "chose extra.tag". The two behave the same until a server
+  // with native tags turns up, and then only the first one is moved.
+  { uint8_t v = prefsGetUChar("tag_field", 0xFF);
+    g_tag_field_chosen = (v != 0xFF);
+    g_tag_field = g_tag_field_chosen ? v : TAG_FIELD_TAG;
+    if (g_tag_field >= TAG_FIELD_COUNT) { g_tag_field = TAG_FIELD_TAG; g_tag_field_chosen = false; } }
   g_card_uids_write = prefsGetBool("cu_write", false);
   // The switch only means anything on a list field. Clamping it here rather
   // than at every use site keeps the rest of the firmware from having to ask

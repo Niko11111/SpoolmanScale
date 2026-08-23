@@ -53,10 +53,26 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 static bool spoolMatchesTag(JsonObjectConst spool, const char* uid) {
   if (!uid || !uid[0]) return false;
 
+  // Spoolman's own tag relation, which a server on master fills. Asked first
+  // and separately from the extra fields, because a spool bound this way has
+  // none of them set - without this the scan below would find the spool and
+  // this check would then throw the match away again.
+  JsonArrayConst tags = spool["tags"];
+  if (!tags.isNull()) {
+    char want[TAG_UID_CMP_MAX];
+    tagUidNormalize(uid, want, sizeof(want));
+    for (JsonObjectConst t : tags) {
+      const char* have_raw = t["uid"] | "";
+      char have[TAG_UID_CMP_MAX];
+      tagUidNormalize(have_raw, have, sizeof(have));
+      if (want[0] && have[0] && strcmp(have, want) == 0) return true;
+    }
+  }
+
   JsonObjectConst extra = spool["extra"];
   if (extra.isNull()) return false;
 
-  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) {
+  for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
     const TagFieldSpec& spec = tagFieldSpec(i);
     if (!extra.containsKey(spec.key)) continue;
 
@@ -123,7 +139,7 @@ static void captureExtraField(JsonObjectConst extra, const char* key,
 // empty buffer.
 static void captureBindings(JsonObjectConst spool) {
   JsonObjectConst extra = spool["extra"];
-  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) {
+  for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
     const TagFieldSpec& spec = tagFieldSpec(i);
     captureExtraField(extra, spec.key, sm_tag_values[i], CARD_UIDS_MAX, spec.key);
   }
@@ -469,7 +485,7 @@ void querySpoolman(const char* tray_uuid) {
   sm_location_name[0] = '\0'; sm_location_id = 0;
   sm_found = false;
   sm_id = 0;
-  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) sm_tag_values[i][0] = '\0';
+  for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) sm_tag_values[i][0] = '\0';
   sm_spool_weight = 0;
   sm_remaining = 0;
   sm_total = 1000;
@@ -500,9 +516,12 @@ void querySpoolman(const char* tray_uuid) {
   // whichever one a spool is actually bound through. The keys come from the
   // static spec table and outlive this document, which matters because
   // ArduinoJson does not copy a const char* key.
-  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++)
+  for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
     filter_spool["extra"][tagFieldSpec(i).key] = true;
   filter_spool["extra"][LAST_DRIED_FIELD] = true;
+  // Spoolman's own tag relation, so the full scan can match a natively bound
+  // spool too. A filter on an array of objects describes one element.
+  filter_spool["tags"][0]["uid"] = true;
   filter_spool["filament"]["id"] = true;
   filter_spool["filament"]["name"] = true;
   filter_spool["filament"]["material"] = true;
@@ -534,7 +553,41 @@ void querySpoolman(const char* tray_uuid) {
   // caught by requiring an exact match below and otherwise falling through
   // to the full scan.
   bool have_result = false;
-  {
+
+  // Spoolman's native tag lookup, when the server has it. One request that
+  // resolves the tag and returns the spool with it, so it replaces the filter
+  // search, the verification pass and the follow-up GET in one go.
+  //
+  // A null match is not proof of absence: it means "no native tag", and a
+  // spool bound through an extra field is invisible here. That is why the
+  // chain below still runs, exactly as it does for a missed filter search.
+  // An installation that never chose is moved onto the native source the first
+  // time a server turns out to have it. Here rather than at boot, because the
+  // probe needs the network and boot does not have it yet.
+  tagFieldAutoSelect();
+
+  if (backendHasNativeTags()) {
+    JsonDocument scan(&psram_alloc);
+    DeserializationError serr = DeserializationError::Ok;
+    int scode = backendTagScan(cfg_spoolman_base, tray_uuid, nullptr, scan, 8000, &serr);
+    if (scode == 200 && !serr && !scan["spool"].isNull()) {
+      // Reshaped into the one element array the rest of this function reads,
+      // so nothing downstream has to know where the spool came from.
+      doc.clear();
+      JsonArray one = doc.to<JsonArray>();
+      one.add(scan["spool"]);
+      have_result = true;
+      logSDf("Backend: native tag scan hit, spool %d",
+             (int)(scan["matched_spool_id"] | 0));
+    } else if (scode == 200) {
+      logSD("Backend: native tag scan, no native tag for this uid");
+    } else if (scode != BACKEND_NOT_SUPPORTED) {
+      logSDf("Backend: native tag scan failed, code=%d err=%s", scode, serr.c_str());
+    }
+    if (!have_result) { doc.clear(); err = DeserializationError::Ok; }
+  }
+
+  if (!have_result) {
     int fcode = backendFindSpoolByTag(cfg_spoolman_base, tray_uuid, doc, 8000, &err, &filter);
     if (fcode == 200 && !err) {
       // The server side search is a text filter, not an exact tag match. A
@@ -549,7 +602,7 @@ void querySpoolman(const char* tray_uuid) {
         // a log whether the fast path ran on the selected field or whether the
         // scan below did the work.
         logSDf("Backend: %s search hit, %d spool(s) returned",
-               backendMode() == BACKEND_SPOOLMAN ? tagFieldKey() : "native",
+               backendMode() == BACKEND_SPOOLMAN ? tagFieldKeyName() : "backend",
                (int)doc.as<JsonArrayConst>().size());
       }
     } else if (fcode != BACKEND_NOT_SUPPORTED) {
@@ -572,7 +625,7 @@ void querySpoolman(const char* tray_uuid) {
   // that field, which is what keeps an installation that uses only one of them
   // from paying for the other two: backendFindSpoolByTagField() answers
   // BACKEND_NOT_SUPPORTED without spending a request.
-  for (uint8_t f = 0; !have_result && f < TAG_FIELD_COUNT; f++) {
+  for (uint8_t f = 0; !have_result && f < TAG_FIELD_EXTRA_COUNT; f++) {
     if (f == g_tag_field) continue;   // already tried, it went first
 
     int ccode = backendFindSpoolByTagField(f, cfg_spoolman_base, tray_uuid,
@@ -819,7 +872,7 @@ void querySpoolman(const char* tray_uuid) {
   JsonObject f2 = filter2_arr.createNestedObject();
   f2["id"] = true;
   f2["archived"] = true;
-  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++)
+  for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
     f2["extra"][tagFieldSpec(i).key] = true;
   int code2 = backendGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
   if (code2 == 200) {

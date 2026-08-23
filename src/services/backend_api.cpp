@@ -155,9 +155,9 @@ int backendFindSpoolByTagField(uint8_t field_id, const char* base_url, const cha
 // only thing tying the mask to the keys.
 static int knownFieldIndex(const char* key) {
   if (!key || !key[0]) return -1;
-  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++)
+  for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
     if (strcmp(key, tagFieldSpec(i).key) == 0) return (int)i;
-  if (strcmp(key, LAST_DRIED_FIELD) == 0) return TAG_FIELD_COUNT;
+  if (strcmp(key, LAST_DRIED_FIELD) == 0) return TAG_FIELD_EXTRA_COUNT;
   return -1;
 }
 
@@ -166,9 +166,75 @@ static int knownFieldIndex(const char* key) {
 static char    s_fields_probed_for[96] = {0};
 static uint8_t s_fields_mask = 0;
 
+// Same idea for the native tag API, kept beside the field cache because both
+// answer "what can this server do" and both go stale for the same reason.
+static char s_tagapi_probed_for[96] = {0};
+static bool s_tagapi_present = false;
+
 void backendInvalidateExtraFieldCache() {
   s_fields_probed_for[0] = '\0';
   s_fields_mask = 0;
+  s_tagapi_probed_for[0] = '\0';
+  s_tagapi_present = false;
+}
+
+bool backendHasNativeTags() {
+  if (backendMode() != BACKEND_SPOOLMAN) return false;
+
+  const char* base = backendBaseUrl();
+  if (!base || !base[0]) return false;
+
+  if (strncmp(s_tagapi_probed_for, base, sizeof(s_tagapi_probed_for) - 1) == 0)
+    return s_tagapi_present;
+
+  int code = spoolmanHasTagApi(base);
+  if (code == 200) {
+    s_tagapi_present = true;
+  } else if (code == 404) {
+    s_tagapi_present = false;
+  } else {
+    // Anything else says nothing about the feature - an unreachable server, a
+    // proxy in the way, a timeout. Caching that as a no would keep the native
+    // path off for the whole session over one bad moment.
+    logSDf("native tags: probe inconclusive, code=%d", code);
+    return false;
+  }
+
+  strncpy(s_tagapi_probed_for, base, sizeof(s_tagapi_probed_for) - 1);
+  s_tagapi_probed_for[sizeof(s_tagapi_probed_for) - 1] = '\0';
+  logSDf("native tags: %s on %s", s_tagapi_present ? "supported" : "absent", base);
+  return s_tagapi_present;
+}
+
+// A stable id for this scale in Spoolman's reader list, derived from the MAC
+// so it survives reboots and tells two scales apart.
+const char* backendReaderId() {
+  static char id[32] = {0};
+  if (!id[0]) {
+    uint8_t mac[6] = {0};
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(id, sizeof(id), "spoolmanscale-%02X%02X%02X", mac[3], mac[4], mac[5]);
+  }
+  return id;
+}
+
+int backendTagScan(const char* base_url, const char* uid, const char* format,
+                   JsonDocument& doc, uint32_t timeout_ms, DeserializationError* out_err) {
+  if (!backendHasNativeTags()) return notSupported("TagScan");
+  return spoolmanTagScan(base_url, uid, backendReaderId(), "SpoolmanScale",
+                         format, doc, timeout_ms, out_err);
+}
+
+int backendLinkTag(const char* base_url, int spool_id, const char* uid,
+                   const char* format, int* out_conflict_spool_id, uint32_t timeout_ms) {
+  if (!backendHasNativeTags()) return notSupported("LinkTag");
+  return spoolmanLinkTag(base_url, spool_id, uid, format, out_conflict_spool_id, timeout_ms);
+}
+
+int backendUnlinkTag(const char* base_url, int spool_id, const char* uid,
+                     uint32_t timeout_ms) {
+  if (!backendHasNativeTags()) return notSupported("UnlinkTag");
+  return spoolmanUnlinkTag(base_url, spool_id, uid, timeout_ms);
 }
 
 bool backendHasExtraField(const char* key) {
@@ -209,7 +275,7 @@ bool backendHasExtraField(const char* key) {
     logSDf("extra fields on %s: tag=%d nfc_id=%d card_uids=%d last_dried=%d",
            base,
            (mask >> TAG_FIELD_TAG)       & 1, (mask >> TAG_FIELD_NFC_ID)  & 1,
-           (mask >> TAG_FIELD_CARD_UIDS) & 1, (mask >> TAG_FIELD_COUNT)   & 1);
+           (mask >> TAG_FIELD_CARD_UIDS) & 1, (mask >> TAG_FIELD_EXTRA_COUNT) & 1);
   }
 
   return ((s_fields_mask >> idx) & 1u) != 0;

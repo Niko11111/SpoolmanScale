@@ -61,6 +61,11 @@ extern uint8_t g_bb_dried_target;
 // schema, neither has extra fields to choose between.
 extern uint8_t g_tag_field;
 
+// Whether the choice above was ever made, as opposed to being the default
+// nobody touched. Only an untouched installation is moved to Spoolman's native
+// tags when a server turns out to have them - see tagFieldAutoSelect().
+extern bool g_tag_field_chosen;
+
 // Whether the scale may write to Spoolman's card_uids, the UID list SpoolLink
 // keeps for the Snapmaker U1. Only ever offered while card_uids is the
 // selected tag field: it is the one convention with a list format, and a

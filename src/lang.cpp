@@ -721,6 +721,7 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Needs card_uids on the server - the extra fields assistant creates it "
     "while the switch is on."                                              },  // STR_CU_WRITE_INFO
   { "UID nicht hinzugefügt",        "UID not added"                      },  // STR_CU_NOT_WRITTEN
+  { "Tag hängt schon an Spule #%d", "Tag already on spool #%d"           },  // STR_TAG_ON_OTHER_SPOOL
   { LV_SYMBOL_WARNING "  Spule hat schon UIDs",
     LV_SYMBOL_WARNING "  Spool already has UIDs"                          },  // STR_WARN_A_ADD_TITLE
   { "Spule #%d  |  %s %s\nHat bereits %d UID(s)",
@@ -822,6 +823,31 @@ const char* const STRINGS[STR_COUNT][2] = {
     "write with HTTP 400 and the fast search falls back to loading the whole "
     "inventory."                                                          },  // STR_TAG_FIELD_INFO
 
+  { "Spoolman NFC (nativ)",          "Spoolman NFC (native)"              },  // STR_TF_NATIVE
+  { "Vom Server unterstützt",        "Supported by the server"            },  // STR_TF_NATIVE_SUB
+  { "Erst ab Spoolman v0.27",        "Spoolman v0.27 and later"           },  // STR_TF_NATIVE_NA
+  { "Spoolman hat inzwischen ein eigenes Tag-Modell, statt einer UID in einem "
+    "Extra-Feld. Es ist noch in keiner Version enthalten - diese Zeile wird "
+    "erst wählbar, wenn der Server es kann.\n\n"
+    "Was es besser macht: eine Spule kann mehrere Tags tragen, ohne Liste in "
+    "einem Textfeld. Ein Scan ist eine einzige Anfrage, die die Spule gleich "
+    "mitliefert, statt Suche plus Nachprüfung. Und ein Tag, der schon an einer "
+    "anderen Spule hängt, wird als solcher gemeldet statt still "
+    "überschrieben.\n\n"
+    "Die Extra-Felder bleiben trotzdem wählbar: SpoolLink, SpoolSense und "
+    "FilaMan schreiben weiter ihre eigenen, und wer eines davon parallel "
+    "betreibt, braucht es.",
+    "Spoolman has grown a tag model of its own, instead of a UID in an extra "
+    "field. No release carries it yet - this entry only becomes selectable "
+    "once the server has it.\n\n"
+    "What it does better: a spool can hold several tags with no list squeezed "
+    "into a text field. A scan is one request that returns the spool with it, "
+    "rather than a search plus a verification pass. And a tag that already "
+    "belongs to another spool is reported as such instead of being silently "
+    "overwritten.\n\n"
+    "The extra fields stay selectable regardless: SpoolLink, SpoolSense and "
+    "FilaMan keep writing their own, and anyone running one of them alongside "
+    "still needs it."                                                     },  // STR_TF_NATIVE_INFO
   { "extra.tag",                     "extra.tag"                          },  // STR_TF_TAG
   { "Diese Waage, OpenSpoolman",     "This scale, OpenSpoolman"           },  // STR_TF_TAG_SUB
   { "Das Feld, das diese Waage seit jeher benutzt, und das auch OpenSpoolman "

@@ -31,6 +31,39 @@ static int postJson(const String& url, const String& body, uint32_t timeout_ms) 
   return code;
 }
 
+// POST that keeps the answer. The tag endpoints reply with something worth
+// reading on both the success and the failure path - the scan carries the
+// whole matched spool, and a link conflict carries the id of the spool that
+// already holds the tag - so throwing the body away the way postJson() does
+// would mean a second request to learn what the first one already said.
+static int postJsonDoc(const String& url, const String& body, JsonDocument& doc,
+                       uint32_t timeout_ms, DeserializationError* out_err) {
+  if (out_err) *out_err = DeserializationError::Ok;
+
+  HTTPClient http;
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(timeout_ms);
+  int code = http.POST(body);
+  if (code <= 0) { http.end(); return code; }
+
+  DeserializationError err = deserializeJson(doc, *http.getStreamPtr());
+  http.end();
+  if (out_err) *out_err = err;
+  // The status is what the caller acts on. A body that will not parse is worth
+  // knowing about through out_err, but it does not turn a 201 into a failure.
+  return code;
+}
+
+static int deleteReq(const String& url, uint32_t timeout_ms) {
+  HTTPClient http;
+  http.begin(url);
+  http.setTimeout(timeout_ms);
+  int code = http.sendRequest("DELETE");
+  http.end();
+  return code;
+}
+
 static SpoolmanProgressFn s_progress = nullptr;
 
 void spoolmanSetProgressHook(SpoolmanProgressFn fn) { s_progress = fn; }
@@ -178,6 +211,76 @@ int spoolmanFindSpoolByExtraField(const char* base_url, const char* key, const c
   String path = String("/api/v1/spool?allow_archived=false&extra.") + key
               + "=" + urlEncode(value);
   return spoolmanGetJson(base_url, path.c_str(), doc, timeout_ms, filter, out_err);
+}
+
+// ============================================================
+//  NATIVE TAGS
+//
+//  Spoolman grew a tag relation of its own on master, after
+//  every project around it had already settled on a different
+//  extra field. Not in v0.26.1, so everything here is reached
+//  only once spoolmanHasTagApi() has said the server knows it.
+// ============================================================
+
+int spoolmanHasTagApi(const char* base_url, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url)) return -1;
+  // The reader registry is the cheapest thing to ask for: it takes no
+  // parameters, changes nothing, and answers an empty list on a server that
+  // has the feature and 404 on one that does not. Asking /api/v1/info instead
+  // would only give a version number, and comparing against a release that has
+  // not been cut yet is guesswork.
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/tag/reader");
+  http.setTimeout(timeout_ms);
+  int code = http.GET();
+  http.end();
+  return code;
+}
+
+int spoolmanTagScan(const char* base_url, const char* uid, const char* reader_id,
+                    const char* reader_name, const char* format, JsonDocument& doc,
+                    uint32_t timeout_ms, DeserializationError* out_err) {
+  if (!hasBaseUrl(base_url) || !uid || !uid[0]) return -1;
+
+  // The UID goes out as the scale holds it. Spoolman normalises it on the way
+  // in and echoes the canonical form back, and its own examples show both the
+  // colon form and plain hex, so there is nothing to convert here.
+  String body = String("{\"uid\":\"") + uid + "\"";
+  if (reader_id   && reader_id[0])   body += String(",\"reader_id\":\"")  + reader_id + "\"";
+  if (reader_name && reader_name[0]) body += String(",\"name\":\"")       + reader_name + "\"";
+  if (format      && format[0])      body += String(",\"format\":\"")     + format + "\"";
+  body += "}";
+
+  return postJsonDoc(String(base_url) + "/api/v1/tag/scan", body, doc, timeout_ms, out_err);
+}
+
+int spoolmanLinkTag(const char* base_url, int spool_id, const char* uid,
+                    const char* format, int* out_conflict_spool_id,
+                    uint32_t timeout_ms) {
+  if (out_conflict_spool_id) *out_conflict_spool_id = 0;
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || !uid || !uid[0]) return -1;
+
+  String body = String("{\"uid\":\"") + uid + "\"";
+  if (format && format[0]) body += String(",\"format\":\"") + format + "\"";
+  body += "}";
+
+  // 409 is not a failure to report as one: the body names the spool that holds
+  // the tag, which is the one thing a caller needs in order to offer moving it
+  // rather than sending the user off to find it.
+  JsonDocument doc;
+  int code = postJsonDoc(String(base_url) + "/api/v1/spool/" + spool_id + "/tag",
+                         body, doc, timeout_ms, nullptr);
+  if (code == 409 && out_conflict_spool_id)
+    *out_conflict_spool_id = doc["spool_id"] | 0;
+  return code;
+}
+
+int spoolmanUnlinkTag(const char* base_url, int spool_id, const char* uid,
+                      uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || !uid || !uid[0]) return -1;
+  // Matched the same way it is stored, so the colon form goes through as is.
+  return deleteReq(String(base_url) + "/api/v1/spool/" + spool_id + "/tag/" + urlEncode(uid),
+                   timeout_ms);
 }
 
 int spoolmanGetLocationsJson(const char* base_url, JsonDocument& doc,
