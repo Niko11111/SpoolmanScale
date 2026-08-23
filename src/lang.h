@@ -592,6 +592,15 @@ enum StringID {
   STR_AMS_SRV_ON,
   STR_AMS_SRV_OFF,
   STR_AMS_POPUP_WILL_SAVE,
+
+  // Creating a spool from the tag itself, when no template fits
+  STR_NEWTAG_BTN,
+  STR_NEWTAG_TITLE,
+  STR_NEWTAG_MSG,
+  STR_NEWTAG_LABEL_W,
+  STR_NEWTAG_OK,
+  STR_NEWTAG_FAIL,
+
   STR_COUNT
 };
 

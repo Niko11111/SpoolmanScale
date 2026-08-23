@@ -282,19 +282,32 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   f["weight"]       = (float)label;
   f["spool_weight"] = (float)core;
 
-  // Spoolman shows one name. Brand plus subtype is the most useful pairing,
-  // with the colour name filling in when there is no subtype.
+  // Spoolman shows one name. BamBuddy keeps the three parts apart, so they are
+  // joined in the order they are printed on the spool itself: "PETG HF
+  // Orange". The brand stays out of it - the display gives the vendor its own
+  // line, and an earlier version that led with the brand dropped the colour
+  // name entirely, because the subtype won and nothing else was appended.
   const char* brand   = src["brand"]      | "";
+  const char* mat_s   = src["material"]   | "";
   const char* subtype = src["subtype"]    | "";
   const char* colname = src["color_name"] | "";
-  char name[64];
-  if (subtype[0])      snprintf(name, sizeof(name), "%s %s", brand, subtype);
-  else if (colname[0]) snprintf(name, sizeof(name), "%s %s", brand, colname);
-  else                 snprintf(name, sizeof(name), "%s", brand);
-  // Trims the leading space a missing brand would leave behind.
-  const char* np = name;
-  while (*np == ' ') np++;
-  f["name"] = np;
+  const char* parts[3] = { mat_s, subtype, colname };
+  char name[64] = "";
+  size_t nl = 0;
+  for (int i = 0; i < 3; i++) {
+    if (!parts[i][0]) continue;
+    int w = snprintf(name + nl, sizeof(name) - nl, "%s%s", nl ? " " : "", parts[i]);
+    if (w < 0) break;
+    nl += (size_t)w;
+    if (nl >= sizeof(name) - 1) break;   // snprintf already truncated
+  }
+  // A spool with none of the three is unusual but not impossible; the brand
+  // keeps the row from rendering blank.
+  if (!name[0]) {
+    strncpy(name, brand, sizeof(name) - 1);
+    name[sizeof(name) - 1] = '\0';
+  }
+  f["name"] = name;
 
   // rgba is RRGGBBAA, Spoolman wants RRGGBB.
   const char* rgba = src["rgba"] | "";
@@ -359,6 +372,16 @@ bool bbGetVersion(const char* base_url, const char* api_key,
   strncpy(out_version, v, out_size - 1);
   out_version[out_size - 1] = '\0';
   return true;
+}
+
+int bbGetSpoolRawJson(const char* base_url, const char* api_key, int spool_id,
+                      JsonDocument& doc, uint32_t timeout_ms,
+                      DeserializationError* out_err) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
+
+  char url[192];
+  snprintf(url, sizeof(url), "%s%s/spools/%d", base_url, bbInventoryBase(), spool_id);
+  return getJson(url, api_key, doc, timeout_ms, out_err, nullptr);
 }
 
 int bbGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
@@ -699,31 +722,95 @@ bool bbGetDriedFromSpoolman(int spool_id, char* out_iso, size_t out_size,
   return true;
 }
 
+// A Bambu tag stores the colour as a value, never as a name. BamBuddy keeps a
+// catalogue that can turn one into the other, and does it better than a plain
+// hex table would: the material decides between entries that share a hex, so
+// "PLA Matte Charcoal" does not come back as "PLA Basic Black".
+//
+// Always the local path - the catalogue is BamBuddy's own, like locations, and
+// exists in both inventory modes. An unknown colour answers with null, which
+// is not an error: the spool is simply created without a colour name.
+int bbLookupColorName(const char* base_url, const char* api_key, const char* hex6,
+                      const char* material, char* out_name, size_t out_size,
+                      uint32_t timeout_ms) {
+  if (out_name && out_size) out_name[0] = '\0';
+  if (!hasBaseUrl(base_url) || !hex6 || strlen(hex6) < 6) return -1;
+
+  char esc[48] = "";
+  if (material && material[0]) {
+    // Only spaces need escaping here: material names are ASCII letters,
+    // digits, spaces and hyphens.
+    size_t o = 0;
+    for (size_t i = 0; material[i] && o + 4 < sizeof(esc); i++) {
+      if (material[i] == ' ') { memcpy(esc + o, "%20", 3); o += 3; }
+      else esc[o++] = material[i];
+    }
+    esc[o] = '\0';
+  }
+
+  char url[256];
+  snprintf(url, sizeof(url), "%s/api/v1/inventory/colors/by-material?hex=%.6s%s%s",
+           base_url, hex6, esc[0] ? "&material=" : "", esc);
+
+  JsonDocument doc;
+  int code = getJson(url, api_key, doc, timeout_ms, nullptr, nullptr);
+  if (code != 200) return code;
+
+  const char* name = doc["color_name"] | "";
+  if (name[0] && out_name && out_size) {
+    strncpy(out_name, name, out_size - 1);
+    out_name[out_size - 1] = '\0';
+  }
+  Serial.printf("BamBuddy colour: %.6s + '%s' -> '%s'\n",
+                hex6, material ? material : "", name);
+  return 200;
+}
+
 int bbCreateSpool(const char* base_url, const char* api_key,
-                  const char* material, const char* brand, const char* color_name,
-                  const char* rgba, int label_weight, int core_weight,
-                  const char* tag_uid, const char* tray_uuid,
-                  int* out_spool_id, uint32_t timeout_ms) {
+                  const BbNewSpool& spool, int* out_spool_id,
+                  uint32_t timeout_ms) {
   if (out_spool_id) *out_spool_id = 0;
-  if (!hasBaseUrl(base_url) || !material || !material[0]) return -1;
+  if (!hasBaseUrl(base_url) || !spool.material || !spool.material[0]) return -1;
 
   JsonDocument body;
-  body["material"] = material;
-  if (brand      && brand[0])      body["brand"]      = brand;
-  if (color_name && color_name[0]) body["color_name"] = color_name;
-  if (rgba       && rgba[0])       body["rgba"]       = rgba;
-  if (label_weight > 0) body["label_weight"] = label_weight;
-  if (core_weight  > 0) body["core_weight"]  = core_weight;
-  // Both are part of the create schema, so creating and linking is one
-  // request rather than two.
-  if (tag_uid   && tag_uid[0])   body["tag_uid"]   = tag_uid;
-  if (tray_uuid && tray_uuid[0]) body["tray_uuid"] = tray_uuid;
+  body["material"] = spool.material;
+  if (spool.subtype    && spool.subtype[0])    body["subtype"]    = spool.subtype;
+  if (spool.brand      && spool.brand[0])      body["brand"]      = spool.brand;
+  if (spool.color_name && spool.color_name[0]) body["color_name"] = spool.color_name;
+  if (spool.rgba       && spool.rgba[0])       body["rgba"]       = spool.rgba;
+  if (spool.label_weight > 0) body["label_weight"] = spool.label_weight;
+  if (spool.core_weight  > 0) body["core_weight"]  = spool.core_weight;
+  // Always written, zero included: BamBuddy stores what was consumed and
+  // derives the rest, so leaving it out would make every new spool full.
+  body["weight_used"] = roundGrams(spool.weight_used < 0.0f ? 0.0f : spool.weight_used);
+  // Only the built-in inventory has these. Behind the Spoolman proxy they are
+  // not part of the schema and are dropped server side without complaint.
+  if (spool.nozzle_temp_min > 0) body["nozzle_temp_min"] = spool.nozzle_temp_min;
+  if (spool.nozzle_temp_max > 0) body["nozzle_temp_max"] = spool.nozzle_temp_max;
 
   char url[192];
   snprintf(url, sizeof(url), "%s%s/spools", base_url, bbInventoryBase());
 
   String out, resp;
   serializeJson(body, out);
+  // Worth a line of its own: behind the Spoolman proxy an empty brand makes
+  // the server build a filament with no vendor and a name cut to the bare
+  // material, which looks like data loss on the display but starts here.
+  // Serial as well as SD: without a card logSDf() is a no-op, and this is the
+  // line that tells an empty vendor or colour apart from a server that
+  // dropped them.
+  Serial.printf("BamBuddy create: mat='%s' sub='%s' brand='%s' col='%s' label=%d core=%d used=%.0f\n",
+                spool.material,
+                spool.subtype    ? spool.subtype    : "",
+                spool.brand      ? spool.brand      : "",
+                spool.color_name ? spool.color_name : "",
+                spool.label_weight, spool.core_weight, spool.weight_used);
+  logSDf("BamBuddy create: mat=%s sub=%s brand=%s col=%s label=%d core=%d used=%.0f",
+         spool.material,
+         spool.subtype    ? spool.subtype    : "",
+         spool.brand      ? spool.brand      : "",
+         spool.color_name ? spool.color_name : "",
+         spool.label_weight, spool.core_weight, spool.weight_used);
   int code = sendJson("POST", url, api_key, out, timeout_ms, &resp);
   if (code != 200) return code;
 

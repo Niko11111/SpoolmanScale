@@ -270,9 +270,9 @@ bool backendCanTareFilamentOrVendor() {
 //  CREATING
 // ============================================================
 
-int backendCreateSpool(const char* base_url, int filament_id, float initial_weight,
-                       float spool_weight, float remaining_weight, int* out_spool_id,
-                       uint32_t timeout_ms) {
+int backendCreateSpool(const char* base_url, int template_spool_id, int filament_id,
+                       float initial_weight, float spool_weight, float remaining_weight,
+                       int* out_spool_id, uint32_t timeout_ms) {
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       // The tag is attached by the caller in a separate step, same as with
@@ -280,12 +280,84 @@ int backendCreateSpool(const char* base_url, int filament_id, float initial_weig
       return filamanCreateSpool(backendBaseUrl(), filamanApiKey(), filament_id,
                                 initial_weight, spool_weight, remaining_weight,
                                 nullptr, out_spool_id, timeout_ms);
-    case BACKEND_BAMBUDDY:
-      return notSupported("CreateSpool");
+    case BACKEND_BAMBUDDY: {
+      // No filament_id exists here, so the template is read back instead. Raw,
+      // because the mapped form folds subtype and color_name into one name and
+      // trims rgba down to six characters - a copy built from it would be
+      // poorer than the spool it was copied from.
+      if (template_spool_id <= 0) return notSupported("CreateSpool");
+
+      // Plain document: this is one spool, a couple of kilobytes, nothing like
+      // the inventory listing that needs PSRAM. Same reasoning as the field
+      // probe above.
+      JsonDocument tpl;
+      int code = bbGetSpoolRawJson(backendBaseUrl(), bambuddyApiKey(), template_spool_id,
+                                   tpl, timeout_ms);
+      if (code != 200) {
+        logSDf("BamBuddy: copy template %d unreadable (HTTP %d), nothing created",
+               template_spool_id, code);
+        return code;
+      }
+
+      BbNewSpool ns;
+      ns.material   = tpl["material"]   | "";
+      ns.subtype    = tpl["subtype"]    | "";
+      ns.brand      = tpl["brand"]      | "";
+      ns.color_name = tpl["color_name"] | "";
+      ns.rgba       = tpl["rgba"]       | "";
+      // The scale's reading wins over the template for how full the spool is,
+      // the template only says how big it is.
+      ns.label_weight = tpl["label_weight"] | (int)initial_weight;
+      ns.core_weight  = tpl["core_weight"]  | (int)spool_weight;
+      ns.weight_used  = (float)ns.label_weight - remaining_weight;
+      if (ns.weight_used < 0.0f) ns.weight_used = 0.0f;
+
+      return bbCreateSpool(backendBaseUrl(), bambuddyApiKey(), ns, out_spool_id,
+                           timeout_ms);
+    }
     default:
       return spoolmanCreateSpool(base_url, filament_id, initial_weight, spool_weight,
                                  remaining_weight, out_spool_id, timeout_ms);
   }
+}
+
+bool backendCanCreateFromTag() {
+  return backendMode() == BACKEND_BAMBUDDY;
+}
+
+void backendLookupColorName(const char* hex6, const char* material,
+                            char* out_name, size_t out_size) {
+  if (out_name && out_size) out_name[0] = '\0';
+  // Only BamBuddy keeps such a catalogue. The other two backends leave the
+  // name empty, which their create paths do not need anyway.
+  if (backendMode() != BACKEND_BAMBUDDY) return;
+  bbLookupColorName(backendBaseUrl(), bambuddyApiKey(), hex6, material,
+                    out_name, out_size);
+}
+
+int backendCreateSpoolFromTag(const char* material, const char* subtype,
+                              const char* brand, const char* rgba,
+                              const char* color_name,
+                              int label_weight, int core_weight, float remaining_weight,
+                              int nozzle_temp_min, int nozzle_temp_max,
+                              int* out_spool_id, uint32_t timeout_ms) {
+  if (out_spool_id) *out_spool_id = 0;
+  if (backendMode() != BACKEND_BAMBUDDY) return notSupported("CreateSpoolFromTag");
+
+  BbNewSpool ns;
+  ns.material        = material;
+  ns.subtype         = subtype;
+  ns.brand           = brand;
+  ns.rgba            = rgba;
+  ns.color_name      = color_name;
+  ns.label_weight    = label_weight;
+  ns.core_weight     = core_weight;
+  ns.nozzle_temp_min = nozzle_temp_min;
+  ns.nozzle_temp_max = nozzle_temp_max;
+  ns.weight_used = (float)label_weight - remaining_weight;
+  if (ns.weight_used < 0.0f) ns.weight_used = 0.0f;
+
+  return bbCreateSpool(backendBaseUrl(), bambuddyApiKey(), ns, out_spool_id, timeout_ms);
 }
 
 int backendCreateSpoolField(const char* base_url, const char* field_name,

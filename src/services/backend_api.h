@@ -92,9 +92,34 @@ bool backendCanTareSpool();
 bool backendCanTareFilamentOrVendor();
 
 // --- creating ------------------------------------------------
-int  backendCreateSpool(const char* base_url, int filament_id, float initial_weight,
-       float spool_weight, float remaining_weight, int* out_spool_id = nullptr,
-       uint32_t timeout_ms = 8000);
+// Copies a spool. Both anchors are passed because the backends disagree on
+// what a copy even is: Spoolman and FilaMan point the new spool at the
+// template's filament_id and never create a filament, while BamBuddy has no
+// filament as an object - material, brand and colour are strings on the spool,
+// so it reads template_spool_id back and replicates those. Each branch uses
+// the anchor it can, the other is ignored.
+int  backendCreateSpool(const char* base_url, int template_spool_id, int filament_id,
+       float initial_weight, float spool_weight, float remaining_weight,
+       int* out_spool_id = nullptr, uint32_t timeout_ms = 8000);
+
+// Creates a spool from what a Bambu tag carries, for the case where no
+// template fits. BamBuddy only - Spoolman and FilaMan want a filament_id, and
+// a tag cannot supply one. remaining_weight is the net reading of the scale.
+int  backendCreateSpoolFromTag(const char* material, const char* subtype,
+       const char* brand, const char* rgba, const char* color_name,
+       int label_weight, int core_weight,
+       float remaining_weight, int nozzle_temp_min, int nozzle_temp_max,
+       int* out_spool_id = nullptr, uint32_t timeout_ms = 8000);
+
+// Turns the colour value on a tag into a name the backend knows. Empty output
+// means "no name for this colour", which is not an error.
+void backendLookupColorName(const char* hex6, const char* material,
+       char* out_name, size_t out_size);
+
+// True when backendCreateSpoolFromTag() has a path on the active backend, so
+// the UI can leave the button out instead of offering a dead end.
+bool backendCanCreateFromTag();
+
 int  backendCreateSpoolField(const char* base_url, const char* field_name,
        uint32_t timeout_ms = 3000);
 

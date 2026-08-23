@@ -67,7 +67,7 @@ void updateDisplay() {
 
   // Vendor (Zone 3 Row B)
   lv_label_set_text(lbl_vendor,
-    strlen(g_tag.vendor) > 0 ? g_tag.vendor : "Bambu Lab");
+    strlen(g_tag.vendor) > 0 ? g_tag.vendor : BAMBU_VENDOR_NAME);
 
   // Hidden labels still written for More Info screen compatibility
   lv_label_set_text(lbl_uid, g_tag.uid_str);

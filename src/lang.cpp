@@ -791,4 +791,10 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Server: Zuordnung aktiv",       "Server: assigning active"           },  // STR_AMS_SRV_ON
   { "Server: aus",                   "Server: off"                        },  // STR_AMS_SRV_OFF
   { "%.0f g werden dabei gespeichert", "%.0f g will be saved too"           },  // STR_AMS_POPUP_WILL_SAVE
+  { "Neu aus Tag anlegen",           "Create from tag"                    },  // STR_NEWTAG_BTN
+  { "Spule aus Tag anlegen?",        "Create spool from tag?"             },  // STR_NEWTAG_TITLE
+  { "%s %s\nFarbe: %s\nWaagengewicht (netto): %.0f g", "%s %s\nColour: %s\nScale weight (net): %.0f g" },  // STR_NEWTAG_MSG
+  { "Nenngewicht",                   "Label weight"                       },  // STR_NEWTAG_LABEL_W
+  { "Spule angelegt!",               "Spool created!"                     },  // STR_NEWTAG_OK
+  { "Anlegen fehlgeschlagen",        "Could not create spool"             },  // STR_NEWTAG_FAIL
 };

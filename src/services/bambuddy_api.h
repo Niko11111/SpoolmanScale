@@ -78,6 +78,14 @@ int  bbGetHealthCode(const char* base_url, const char* api_key,
 bool bbGetVersion(const char* base_url, const char* api_key,
        char* out_version, size_t out_size, uint32_t timeout_ms = 4000);
 
+// Reads a spool exactly as BamBuddy stores it, skipping the Spoolman shaping
+// mapSpool() applies. Only spool creation needs this: subtype and color_name
+// are folded into filament.name by the mapping and rgba loses its alpha, so a
+// copy built from the mapped form would come out poorer than its template.
+int  bbGetSpoolRawJson(const char* base_url, const char* api_key, int spool_id,
+       JsonDocument& doc, uint32_t timeout_ms = 8000,
+       DeserializationError* out_err = nullptr);
+
 // Single spool, translated into the Spoolman shape.
 int  bbGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
        JsonDocument& doc, uint32_t timeout_ms = 8000,
@@ -163,14 +171,38 @@ int  bbPatchSpoolFields(const char* base_url, const char* api_key, int spool_id,
        const int* label_weight, const int* core_weight, const float* weight_used,
        const char* storage_location, const char* note, uint32_t timeout_ms = 8000);
 
-// Creates a spool. material is the only field BamBuddy insists on. tag_uid
-// and tray_uuid may be supplied right away, so creating and linking is one
-// request rather than two.
+// Resolves a colour value into BamBuddy's catalogue name, e.g. F75403 plus
+// "PETG HF" into "Orange". out_name is left empty when the colour is unknown,
+// which is a normal answer rather than a failure.
+int  bbLookupColorName(const char* base_url, const char* api_key, const char* hex6,
+       const char* material, char* out_name, size_t out_size,
+       uint32_t timeout_ms = 6000);
+
+// Fields for a new spool. material is the only one BamBuddy insists on;
+// everything else may stay empty or zero and is then left off the request.
+struct BbNewSpool {
+  const char* material        = nullptr;  // required
+  const char* subtype         = nullptr;
+  const char* brand           = nullptr;
+  const char* color_name      = nullptr;
+  const char* rgba            = nullptr;  // RRGGBBAA
+  int         label_weight    = 0;
+  int         core_weight     = 0;
+  float       weight_used     = 0.0f;     // consumption, not remaining
+  int         nozzle_temp_min = 0;
+  int         nozzle_temp_max = 0;
+};
+
+// Creates a spool in whichever inventory is active.
+//
+// Deliberately no tag: the built-in inventory would take tag_uid and
+// tray_uuid right here, but the Spoolman proxy has neither field in its
+// create schema and drops them without an error - the spool would come back
+// with HTTP 200 and no tag at all. Both modes therefore link afterwards
+// through bbLinkTag(), the one place that already tells them apart.
 int  bbCreateSpool(const char* base_url, const char* api_key,
-       const char* material, const char* brand, const char* color_name,
-       const char* rgba, int label_weight, int core_weight,
-       const char* tag_uid, const char* tray_uuid,
-       int* out_spool_id, uint32_t timeout_ms = 8000);
+       const BbNewSpool& spool, int* out_spool_id,
+       uint32_t timeout_ms = 8000);
 
 // --- device protocol -----------------------------------------
 

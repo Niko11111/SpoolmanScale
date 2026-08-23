@@ -25,11 +25,18 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
 
 void showCopyEntryPopup();
 void closeCopyEntryPopup();
-void showCopyIdInputPopup();
 void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bambu_tag = false);
 void showCopySpoolList();
-void showCopyConfirmPopup(int template_id, const char* template_name, float template_remaining, float template_initial, float template_spool_w);
-void doCopySpoolCreate(int template_filament_id, float template_initial, float template_spool_w);
+void showCopyConfirmPopup(int template_spool_id, int template_filament_id, const char* template_name,
+                          float template_remaining, float template_initial, float template_spool_w);
+void doCopySpoolCreate(int template_spool_id, int template_filament_id,
+                       float template_initial, float template_spool_w);
+
+// Creating a spool from the tag itself, for when no template fits. BamBuddy
+// only - see backendCanCreateFromTag().
+void showNewFromTagPopup();
+void closeNewTagPopup();
+void doCreateSpoolFromTag();
 
 void hideSpoolFlowOverlays();
 void deleteSpoolFlowOverlays();
