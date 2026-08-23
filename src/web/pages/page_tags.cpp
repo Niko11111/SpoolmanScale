@@ -14,6 +14,25 @@
 #include "services/tag_write.h"
 #include "web/web_access.h"
 
+// Defined locally in every .cpp that needs it, as everywhere else in this
+// project: ArduinoJson's allocator interface is a template detail and there
+// is no shared header for it.
+namespace {
+struct SpiRamAllocator : ArduinoJson::Allocator {
+  void* allocate(size_t size) override {
+    void* ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
+    if (!ptr) ptr = malloc(size);
+    return ptr;
+  }
+  void deallocate(void* pointer) override { heap_caps_free(pointer); }
+  void* reallocate(void* ptr, size_t new_size) override {
+    void* p = heap_caps_realloc(ptr, new_size, MALLOC_CAP_SPIRAM);
+    if (!p) p = realloc(ptr, new_size);
+    return p;
+  }
+};
+}
+
 static String body() {
   String html;
   html +=
@@ -64,14 +83,42 @@ static void routes(WebServer &srv) {
 
   srv.on("/api/spools", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, "Tag writing")) return;
-    JsonDocument doc;
-    int code = backendGetSpoolListJson(backendBaseUrl(), false, doc);
+
+    // Four fields per spool instead of the whole record. Without the filter a
+    // large inventory is parsed in full - 268 spools came to 176 kB in the
+    // lookup path this mirrors - and none of it is used here.
+    StaticJsonDocument<256> filter;
+    JsonObject f = filter.to<JsonArray>().createNestedObject();
+    f["id"] = true;
+    JsonObject ff = f.createNestedObject("filament");
+    ff["name"] = true;
+    ff["material"] = true;
+    ff.createNestedObject("vendor")["name"] = true;
+
+    // PSRAM, not the internal heap. This runs inside an HTTP handler, which is
+    // the worst moment to be holding the inventory in the 320 kB the rest of
+    // the firmware shares. Same reasoning as f2e61db for the GitHub release
+    // list.
+    SpiRamAllocator psram_alloc;
+    JsonDocument doc(&psram_alloc);
+    int code = backendGetSpoolListJson(backendBaseUrl(), false, doc, 8000, &filter);
     if (code != 200) {
       srv.send(200, "application/json",
                       String("{\"error\":\"backend HTTP ") + code + "\"}");
       return;
     }
-    String out = "[";
+
+    // Streamed rather than assembled. The old version built the entire reply
+    // as one String on top of the parsed document, so the inventory was on
+    // the heap twice at once.
+    //
+    // Deliberately not clipped to spool_list_limit: that limit exists because
+    // an LVGL picker with hundreds of rows runs the device out of memory, and
+    // a browser has no such problem. Clipping here would just hide spool 200
+    // from the one page whose job is picking any spool.
+    srv.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    srv.send(200, "application/json", "");
+    String chunk = "[";
     bool first = true;
     for (JsonObjectConst sp : doc.as<JsonArrayConst>()) {
       int id = sp["id"] | 0;
@@ -84,12 +131,14 @@ static void routes(WebServer &srv) {
       if (mat.length()) label += " (" + mat + ")";
       label.replace("\\", "");
       label.replace("\"", "'");
-      if (!first) out += ",";
+      if (!first) chunk += ",";
       first = false;
-      out += "{\"id\":" + String(id) + ",\"label\":\"" + label + "\"}";
+      chunk += "{\"id\":" + String(id) + ",\"label\":\"" + label + "\"}";
+      if (chunk.length() >= 1024) { srv.sendContent(chunk); chunk = ""; }
     }
-    out += "]";
-    srv.send(200, "application/json", out);
+    chunk += "]";
+    srv.sendContent(chunk);
+    srv.sendContent("");   // terminates the chunked response
   });
 
   srv.on("/api/tag", HTTP_GET, [&srv]() {

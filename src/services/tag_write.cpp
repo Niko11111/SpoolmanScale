@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <ctype.h>
 #include <math.h>
+#include <stdarg.h>
 #include <string.h>
 
 #include "hardware/nfc.h"
@@ -147,22 +148,44 @@ static void aceToInfo(const AceFields *f, TagInfo *ti) {
   ti->weight_g = f->weight_g;
 }
 
+// snprintf returns the length it *would* have written, so adding that up walks
+// the cursor past the end of the buffer the moment anything is truncated:
+// out + n then points outside it and out_len - n underflows to a huge size_t.
+// This returns what was actually written instead.
+//
+// The buffers callers pass are big enough for real field sizes, so this was
+// latent rather than live - but it is ten appends in a row in tagInfoJson()
+// and the same shape again in scanTick(), and the data comes off a tag.
+static size_t appendf(char *out, size_t out_len, size_t n, const char *fmt, ...)
+    __attribute__((format(printf, 4, 5)));
+
+static size_t appendf(char *out, size_t out_len, size_t n, const char *fmt, ...) {
+  if (out_len == 0) return 0;
+  if (n >= out_len - 1) return out_len - 1;   // already full, nothing more fits
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(out + n, out_len - n, fmt, ap);
+  va_end(ap);
+  return strnlen(out, out_len);
+}
+
 void tagInfoJson(const TagInfo *ti, char *out, size_t out_len) {
-  int n = snprintf(out, out_len, "{\"fmt\":\"%s\"", ti->fmt);
-  if (ti->brand[0])    n += snprintf(out + n, out_len - n, ",\"brand\":\"%s\"", ti->brand);
-  if (ti->material[0]) n += snprintf(out + n, out_len - n, ",\"material\":\"%s\"", ti->material);
-  if (ti->sku[0])      n += snprintf(out + n, out_len - n, ",\"sku\":\"%s\"", ti->sku);
-  if (ti->has_color)   n += snprintf(out + n, out_len - n, ",\"color\":\"#%02X%02X%02X\"",
-                                     ti->r, ti->g, ti->b);
-  if (ti->et_hi)       n += snprintf(out + n, out_len - n, ",\"nozzle\":\"%u-%u\"",
-                                     (unsigned)ti->et_lo, (unsigned)ti->et_hi);
-  if (ti->bed_hi)      n += snprintf(out + n, out_len - n, ",\"bed\":\"%u-%u\"",
-                                     (unsigned)ti->bed_lo, (unsigned)ti->bed_hi);
-  if (ti->weight_g)    n += snprintf(out + n, out_len - n, ",\"weight\":%u", (unsigned)ti->weight_g);
-  if (ti->dia_x100)    n += snprintf(out + n, out_len - n, ",\"dia\":\"%u.%02u\"",
-                                     (unsigned)(ti->dia_x100 / 100), (unsigned)(ti->dia_x100 % 100));
-  if (ti->length_m)    n += snprintf(out + n, out_len - n, ",\"len\":%u", (unsigned)ti->length_m);
-  snprintf(out + n, out_len - n, "}");
+  snprintf(out, out_len, "{\"fmt\":\"%s\"", ti->fmt);
+  size_t n = strnlen(out, out_len);
+  if (ti->brand[0])    n = appendf(out, out_len, n, ",\"brand\":\"%s\"", ti->brand);
+  if (ti->material[0]) n = appendf(out, out_len, n, ",\"material\":\"%s\"", ti->material);
+  if (ti->sku[0])      n = appendf(out, out_len, n, ",\"sku\":\"%s\"", ti->sku);
+  if (ti->has_color)   n = appendf(out, out_len, n, ",\"color\":\"#%02X%02X%02X\"",
+                                   ti->r, ti->g, ti->b);
+  if (ti->et_hi)       n = appendf(out, out_len, n, ",\"nozzle\":\"%u-%u\"",
+                                   (unsigned)ti->et_lo, (unsigned)ti->et_hi);
+  if (ti->bed_hi)      n = appendf(out, out_len, n, ",\"bed\":\"%u-%u\"",
+                                   (unsigned)ti->bed_lo, (unsigned)ti->bed_hi);
+  if (ti->weight_g)    n = appendf(out, out_len, n, ",\"weight\":%u", (unsigned)ti->weight_g);
+  if (ti->dia_x100)    n = appendf(out, out_len, n, ",\"dia\":\"%u.%02u\"",
+                                   (unsigned)(ti->dia_x100 / 100), (unsigned)(ti->dia_x100 % 100));
+  if (ti->length_m)    n = appendf(out, out_len, n, ",\"len\":%u", (unsigned)ti->length_m);
+  appendf(out, out_len, n, "}");
 }
 
 // One format for both sides, so the page can compare them as plain strings.
@@ -562,13 +585,14 @@ static void scanTick() {
   }
 
   char json[288];
-  int n = snprintf(json, sizeof(json),
+  snprintf(json, sizeof(json),
     "{\"protocol\":\"openspool\",\"version\":\"1.0\",\"type\":\"%s\","
     "\"color_hex\":\"%s\",\"brand\":\"%s\","
     "\"min_temp\":\"%u\",\"max_temp\":\"%u\"",
     material, color, brand, tlo, thi);
-  if (sm > 0) n += snprintf(json + n, sizeof(json) - n, ",\"sm_id\":%d", sm);
-  snprintf(json + n, sizeof(json) - n, "}");
+  size_t n = strnlen(json, sizeof(json));
+  if (sm > 0) n = appendf(json, sizeof(json), n, ",\"sm_id\":%d", sm);
+  appendf(json, sizeof(json), n, "}");
 
   scan_pending = false;
   filamanSendTagData(backendBaseUrl(), filamanDeviceToken(), json);

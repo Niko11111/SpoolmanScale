@@ -80,24 +80,28 @@ static void registerRoutes() {
   // page route itself is wrapped here so the gate check and the chrome happen
   // in one place and cannot be forgotten in a new page.
   for (size_t i = 0; i < WEB_PAGE_COUNT; i++) {
-    const WebPage &p = *WEB_PAGES[i];
-    ota_server.on(p.path, HTTP_GET, [&p]() {
+    // Captured as a pointer by value, not as a reference to the loop
+    // variable. The descriptor itself lives in ROM either way, but a
+    // by-value pointer says so at the capture and leaves nothing to reason
+    // about once the loop has ended.
+    const WebPage *pg = WEB_PAGES[i];
+    ota_server.on(pg->path, HTTP_GET, [pg]() {
       // A page that does not apply to this device is absent, not refused:
       // there is no backend page at all on Spoolman.
-      if (p.applies && !p.applies()) {
+      if (pg->applies && !pg->applies()) {
         ota_server.send(404, "text/plain", "Not found");
         return;
       }
-      if (!webRequire(ota_server, p.gate, webPageLabel(p))) return;
-      String html = webShellHead(webPageLabel(p));
+      if (!webRequire(ota_server, pg->gate, webPageLabel(*pg))) return;
+      String html = webShellHead(webPageLabel(*pg));
       html += webShellPageCss();
-      html += webShellNav(p.path);
+      html += webShellNav(pg->path);
       html += webShellLinks();
-      html += p.body();
+      html += pg->body();
       html += webShellFoot();
       ota_server.send(200, "text/html", html);
     });
-    if (p.routes) p.routes(ota_server);
+    if (pg->routes) pg->routes(ota_server);
   }
 
 
