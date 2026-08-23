@@ -13,6 +13,7 @@
 #include "services/location_state.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/spoolman_api.h"
 #include "services/tag_field.h"
 #include "services/tag_uid.h"
 #include "services/user_options.h"
@@ -49,6 +50,26 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 // too, not only on the full scan.
 // Longest identifier the scale compares is a Bambu tray uuid at 32 characters.
 #define TAG_UID_CMP_MAX  48
+
+// How often the inventory scan repaints its status line. Ten a second reads as
+// motion and each one costs a partial flush that the transfer is waiting on.
+#define SEARCH_TICK_MS  100
+
+// Writes the progress of the full inventory load into the main screen's status
+// line. Registered only for the duration of that load; the rest of the
+// firmware's requests never see it.
+static void searchProgress(size_t bytes_read) {
+  if (!lbl_status) return;
+  static unsigned long last = 0;
+  const unsigned long now = millis();
+  if (now - last < SEARCH_TICK_MS) return;
+  last = now;
+
+  char buf[48];
+  snprintf(buf, sizeof(buf), T(STR_SEARCHING_INVENTORY_KB), (unsigned)(bytes_read / 1024));
+  lv_label_set_text(lbl_status, buf);
+  lv_refr_now(NULL);
+}
 
 static bool spoolMatchesTag(JsonObjectConst spool, const char* uid) {
   if (!uid || !uid[0]) return false;
@@ -650,6 +671,25 @@ void querySpoolman(const char* tray_uuid) {
     }
   }
 
+  // The fast lookups have all missed, so the whole inventory is coming. That is
+  // seconds on a large library, and until now the display kept saying "reading
+  // tag" throughout - the read was long done, and a wait that says the wrong
+  // thing reads as a failure.
+  //
+  // Painted with lv_refr_now() rather than lv_timer_handler(): this runs from
+  // appLoop, and a redraw is all that is wanted here. No timers, no input.
+  if (lbl_status) {
+    char buf[40];
+    strncpy(buf, T(STR_SEARCHING_INVENTORY), sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    lv_label_set_text(lbl_status, buf);
+    lv_refr_now(NULL);
+  }
+  // The byte counter from the loading overlay, pointed at the status line
+  // instead. Whether it is still moving is the only question a wait like this
+  // raises, and the answer costs nothing here.
+  spoolmanSetProgressHook(searchProgress);
+
   // Up to 2 attempts: first try, then 1 retry on IncompleteInput / connection issues.
   // 20s timeout is generous for large Spoolman datasets (200+ spools over WiFi).
   for (int attempt = 1; !have_result && attempt <= 2; attempt++) {
@@ -685,6 +725,8 @@ void querySpoolman(const char* tray_uuid) {
       break;  // other errors are not transient -> don't retry
     }
   }
+
+  spoolmanSetProgressHook(nullptr);
 
   Serial.printf("DBG free heap after parse: %d bytes  free PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
   if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (after Spoolman parse)",

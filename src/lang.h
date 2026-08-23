@@ -53,6 +53,11 @@ enum StringID {
   STR_ARCHIVED,
   STR_READING_TAG,
   STR_READING_BAMBU_SECTOR,
+  // The long phase after the tag is read: the fast lookups missed and the
+  // whole inventory is being pulled. Without a line of its own the display
+  // sits on "reading tag" for seconds and looks like a failed read.
+  STR_SEARCHING_INVENTORY,
+  STR_SEARCHING_INVENTORY_KB,
 
   // Mainscreen Buttons
   STR_BTN_WEIGHT,

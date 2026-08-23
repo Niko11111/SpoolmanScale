@@ -52,6 +52,8 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Archiviert",             "Archived"                   },  // STR_ARCHIVED
   { "Lese Tag...",            "Reading tag..."             },  // STR_READING_TAG
   { "Lese Bambu Sektor %02d...", "Reading Bambu sector %02d..." },  // STR_READING_BAMBU_SECTOR
+  { "Durchsuche Inventar...", "Searching inventory..."        },  // STR_SEARCHING_INVENTORY
+  { "Durchsuche Inventar... %u KB", "Searching inventory... %u KB" },  // STR_SEARCHING_INVENTORY_KB
 
   // Mainscreen Buttons
   { "Gewicht updaten",        "Update Weight"     },  // STR_BTN_WEIGHT
@@ -692,34 +694,18 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Mehrere Tags verknüpfen",      "Link multiple tags"                 },  // STR_CU_WRITE
   { "Schreibt in Spoolmans Feld card_uids",
     "Writes to Spoolman's card_uids field"                                },  // STR_CU_WRITE_SUB
-  { "Spoolman hat kein Feld für NFC-Tags. Mehrere Projekte nutzen dafür das "
-    "Extra-Feld card_uids, das eine Liste von UIDs aufnimmt: SpoolLink in der "
-    "Snapmaker-Firmware, dessen Apps und Spool Studio. Ein Standard ist es "
-    "nicht - andere nutzen nfc_id, diese Waage sonst extra.tag.\n\n"
-    "Sinnvoll, wo eine Spule mehr als ein Tag trägt - beim Snapmaker U1 die "
-    "Regel, weil sie auf beide Seiten des Druckers passen muss.\n\n"
-    "An: card_uids ist das einzige Feld, in das noch geschrieben wird, auch "
-    "für die erste UID. Eine UID in extra.tag wandert beim nächsten "
-    "Verknüpfen in die Liste, extra.tag wird geleert und danach nicht mehr "
-    "angerührt. Verknüpfte Spulen erscheinen wieder in der Verlinken-Liste.\n\n"
-    "Aus: geschrieben wird nach extra.tag. Gelesen werden beide Felder "
-    "immer.\n\n"
-    "Braucht card_uids auf dem Server - der Extra-Felder-Assistent legt es an, "
-    "solange der Schalter an ist.",
-    "Spoolman has no field for NFC tags. Several projects use the extra field "
-    "card_uids for it, which holds a list of UIDs: SpoolLink in the Snapmaker "
-    "firmware, its companion apps and Spool Studio. It is not a standard - "
-    "others use nfc_id, and this scale otherwise uses extra.tag.\n\n"
-    "Useful wherever a spool carries more than one tag - on the Snapmaker U1 "
-    "that is the rule, because the spool has to fit either side of the "
-    "printer.\n\n"
-    "On: card_uids is the only field still written to, the first UID included. "
-    "A UID sitting in extra.tag moves into the list on the next link, "
-    "extra.tag is cleared and never touched again. Linked spools show up in "
-    "the link list again.\n\n"
-    "Off: writes go to extra.tag. Both fields are read either way.\n\n"
-    "Needs card_uids on the server - the extra fields assistant creates it "
-    "while the switch is on."                                              },  // STR_CU_WRITE_INFO
+  { "An: eine gescannte UID kommt an die Liste, statt sie zu ersetzen. "
+    "Verknüpfte Spulen erscheinen wieder in der Verlinken-Liste, damit ein "
+    "zweites Tag dazukommen kann.\n\n"
+    "Aus: in card_uids steht immer nur eine UID.\n\n"
+    "Nur für card_uids, weil es als einziges Extra-Feld eine Liste aufnimmt. "
+    "Spoolman NFC kann mehrere Tags von Haus aus und braucht den Schalter "
+    "nicht.",
+    "On: a scanned UID is appended to the list instead of replacing it. Linked "
+    "spools show up in the link list again so a second tag can join them.\n\n"
+    "Off: card_uids only ever holds one UID.\n\n"
+    "card_uids only, because it is the one extra field that holds a list. "
+    "Spoolman NFC does several tags natively and needs no switch."          },  // STR_CU_WRITE_INFO
   { "UID nicht hinzugefügt",        "UID not added"                      },  // STR_CU_NOT_WRITTEN
   { "Tag hängt schon an Spule #%d", "Tag already on spool #%d"           },  // STR_TAG_ON_OTHER_SPOOL
   { LV_SYMBOL_WARNING "  Spule hat schon UIDs",
@@ -805,23 +791,31 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Anlegen fehlgeschlagen",        "Could not create spool"             },  // STR_NEWTAG_FAIL
 
   { "Tag-Feld",                      "Tag field"                          },  // STR_TAG_FIELD
-  { "Spoolman hat kein eigenes Feld für NFC-Tags, deshalb legt jedes Projekt "
-    "die UID in ein anderes Extra-Feld. Hier wird bestimmt, in welches die "
-    "Waage schreibt.\n\n"
-    "Gelesen werden immer alle drei, damit beim Umstellen keine Spule "
-    "unsichtbar wird. Beim nächsten Verknüpfen wandert eine im alten Feld "
-    "gefundene UID ins gewählte.\n\n"
-    "Das Feld muss auf dem Server existieren - sonst lehnt Spoolman jedes "
-    "Schreiben mit HTTP 400 ab und die schnelle Suche fällt auf das Laden des "
-    "ganzen Inventars zurück.",
-    "Spoolman has no field of its own for NFC tags, so every project puts the "
-    "UID in a different extra field. This is where you say which one the scale "
-    "writes to.\n\n"
-    "All three are always read, so no spool goes missing when you switch. On "
-    "the next link a UID found in the old field moves into the chosen one.\n\n"
-    "The field has to exist on the server - otherwise Spoolman rejects every "
-    "write with HTTP 400 and the fast search falls back to loading the whole "
-    "inventory."                                                          },  // STR_TAG_FIELD_INFO
+  { "Jedes Projekt legt die Tag-UID in ein anderes Extra-Feld, weil Spoolman "
+    "lange keines dafür hatte. Das ändert sich gerade: Spoolman bekommt ein "
+    "eigenes Tag-Modell.\n\n"
+    "Hier wird bestimmt, wohin die Waage schreibt. Kann der Server das native "
+    "Modell, wählt sie es beim ersten Scan von selbst - eine Auswahl, die du "
+    "selbst getroffen hast, bleibt stehen.\n\n"
+    "Gelesen wird immer aus allen Quellen, damit beim Umstellen keine Spule "
+    "unsichtbar wird. Beim nächsten Verknüpfen wandert eine anderswo gefundene "
+    "UID in die gewählte Quelle.\n\n"
+    "Ein Extra-Feld muss dafür auf dem Server existieren - sonst lehnt Spoolman "
+    "jedes Schreiben mit HTTP 400 ab und die schnelle Suche fällt auf das Laden "
+    "des ganzen Inventars zurück. Für Spoolman NFC gilt das nicht, dort ist "
+    "kein Feld anzulegen.",
+    "Every project puts the tag UID in a different extra field, because "
+    "Spoolman had none for it for a long time. That is changing: Spoolman has "
+    "grown a tag model of its own.\n\n"
+    "This is where you say what the scale writes to. On a server that has the "
+    "native model it picks that by itself on the first scan; a choice you made "
+    "yourself is left alone.\n\n"
+    "Every source is always read, so nothing goes missing when you switch. On "
+    "the next link a UID found elsewhere moves into the selected source.\n\n"
+    "An extra field has to exist on the server for that - otherwise Spoolman "
+    "rejects every write with HTTP 400 and the fast search falls back to "
+    "loading the whole inventory. Spoolman NFC is exempt: there is no field to "
+    "create."                                                              },  // STR_TAG_FIELD_INFO
 
   { "Spoolman NFC (nativ)",          "Spoolman NFC (native)"              },  // STR_TF_NATIVE
   { "Vom Server unterstützt",        "Supported by the server"            },  // STR_TF_NATIVE_SUB
@@ -886,18 +880,25 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "SpoolLink, Snapmaker U1",       "SpoolLink, Snapmaker U1"            },  // STR_TF_CARDUIDS_SUB
   { "Das Feld, das SpoolLink in der Snapmaker-Firmware und Spool Studio "
     "benutzen.\n\n"
-    "Als einziges der drei nimmt es eine Liste auf: mehrere UIDs, "
+    "Das einzige Extra-Feld, das eine Liste aufnimmt: mehrere UIDs, "
     "kommagetrennt, reines Hex in Grossbuchstaben. Beim Snapmaker U1 ist das "
     "die Regel, weil eine Spule je ein Tag pro Flansch trägt und auf beide "
     "Seiten des Druckers passen muss.\n\n"
-    "Nur mit diesem Feld lässt sich die Option \"Mehrere Tags verknüpfen\" "
-    "einschalten.",
+    "Von den Extra-Feldern lässt nur dieses die Option \"Mehrere Tags "
+    "verknüpfen\" zu. Spoolman NFC kann das ebenfalls und braucht keinen "
+    "Schalter dafür, weil mehrere Tags dort der Normalfall sind statt eines "
+    "Formats in einem Textfeld. Wer die Wahl hat, nimmt Spoolman NFC - dieses "
+    "Feld ist die richtige Wahl, wenn SpoolLink daneben laufen soll.",
     "The field SpoolLink in the Snapmaker firmware and Spool Studio use.\n\n"
-    "The only one of the three that holds a list: several UIDs, comma "
-    "separated, plain uppercase hex. On the Snapmaker U1 that is the rule, "
-    "because a spool carries one tag per flange so it fits either side of the "
+    "The only extra field that holds a list: several UIDs, comma separated, "
+    "plain uppercase hex. On the Snapmaker U1 that is the rule, because a "
+    "spool carries one tag per flange so it fits either side of the "
     "printer.\n\n"
-    "Only this field lets you turn on \"Link multiple tags\"."             },  // STR_TF_CARDUIDS_INFO
+    "Of the extra fields only this one allows \"Link multiple tags\". Spoolman "
+    "NFC can do it too and needs no switch, because several tags are the "
+    "normal case there rather than a format squeezed into a text field. Given "
+    "the choice, take Spoolman NFC - this field is the right one when "
+    "SpoolLink is to run alongside."                                       },  // STR_TF_CARDUIDS_INFO
 
   { "Trocknungsdatum",               "Drying date"                        },  // STR_EF_LAST_DRIED
   { "extra.last_dried",              "extra.last_dried"                   },  // STR_EF_LAST_DRIED_SUB
