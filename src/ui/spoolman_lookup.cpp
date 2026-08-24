@@ -779,7 +779,11 @@ void querySpoolman(const char* tray_uuid) {
   // that field, which is what keeps an installation that uses only one of them
   // from paying for the other two: backendFindSpoolByTagField() answers
   // BACKEND_NOT_SUPPORTED without spending a request.
-  for (uint8_t f = 0; !have_result && f < TAG_FIELD_EXTRA_COUNT; f++) {
+  // Extra fields are a Spoolman convention. Running this on the others cost
+  // no request, but it logged "no implementation yet" once a boot, which
+  // reads like a missing feature rather than a loop that does not apply.
+  const bool extra_fields_apply = (backendMode() == BACKEND_SPOOLMAN);
+  for (uint8_t f = 0; extra_fields_apply && !have_result && f < TAG_FIELD_EXTRA_COUNT; f++) {
     if (f == g_tag_field) continue;   // already tried, it went first
 
     int ccode = backendFindSpoolByTagField(f, cfg_spoolman_base, tray_uuid,
@@ -1006,6 +1010,10 @@ void querySpoolman(const char* tray_uuid) {
 
     // Only fill fields from Spoolman if no Bambu tag present
     bool is_ntag = !is_bambu_tag;
+    logSDf("Spool %d identified: %s %s, %.0fg of %.0fg", sm_id,
+           sm_vendor_name.length() ? sm_vendor_name.c_str() : "?",
+           sm_material.length() ? sm_material.c_str() : "?",
+           sm_remaining, sm_total);
     Serial.printf("is_ntag=%d material='%s' vendor='%s' color='%s'\n",
       is_ntag, sm_material.c_str(), sm_vendor_name.c_str(), sm_color.c_str());
     if (is_ntag) {

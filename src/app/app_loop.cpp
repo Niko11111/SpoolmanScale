@@ -665,6 +665,16 @@ void appLoop() {
                  millis() - ams_settle_since >= AMS_SETTLE_MS) {
         ams_settled_g  = scale_weight_g;
         ams_settled_ok = true;
+        // Once per reading that actually changed. A pad standing still says
+        // nothing, which is the point: the log has to stay quiet when the
+        // scale is idle.
+        static float logged_settle = -9999.0f;
+        if (fabsf(ams_settled_g - logged_settle) > AMS_SETTLE_TOL_G) {
+          logged_settle = ams_settled_g;
+          // -0 g is what a bare pad reads as, and it looks like a fault.
+          const float shown = (fabsf(ams_settled_g) < 0.5f) ? 0.0f : ams_settled_g;
+          logSDf("Weight settled: %.0f g on the pad", shown);
+        }
       }
     } else if (!tag_present) {
       // Only the presence marker is cleared. The settled value has to survive
@@ -961,6 +971,18 @@ void appLoop() {
   //      Unknown      → ignore
   // ============================================================
   if (nfc_ok) {
+    // The poll finds the same tag several times a second. This says so once,
+    // so the log reads as "a tag was put on" rather than as a scan trace.
+    static char logged_uid[26] = "";
+    struct TagSeen {
+      static void note(const char *uid, const char *kind) {
+        if (!uid || !uid[0] || strcmp(logged_uid, uid) == 0) return;
+        snprintf(logged_uid, sizeof(logged_uid), "%s", uid);
+        logSDf("Tag placed: %s (%s)", uid, kind);
+      }
+      static void forget() { logged_uid[0] = '\0'; }
+    };
+
     static unsigned long last_nfc_check_ms = 0;
     static unsigned long last_nfc_stats_ms = 0;
     static uint8_t last_uid_len = 0;   // 4 = Bambu, 7 = NTAG, for the removal delay
@@ -1010,6 +1032,12 @@ void appLoop() {
         // ── MIFARE Classic (Bambu) ────────────────────────────
         last_tag_seen_ms = millis();
         tag_present = true;
+        {
+          char u[16];
+          snprintf(u, sizeof(u), "%02X:%02X:%02X:%02X",
+                   uid[0], uid[1], uid[2], uid[3]);
+          TagSeen::note(u, "Bambu");
+        }
         // A successful read means zero consecutive misses, by definition.
         // This used to be reset only when the UID changed, so after the very
         // first read of a spool the counter never went back to zero. The
@@ -1133,6 +1161,7 @@ void appLoop() {
           uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6]);
 
         Serial.printf("NFC: NTAG UID=%s\n", uid_str);
+        TagSeen::note(uid_str, "NTAG");
 
         // What the block below has already dealt with, which is a different
         // question from what is on screen.
@@ -1248,7 +1277,10 @@ void appLoop() {
           nfc_absent_count = 0;
           last_tag_seen_ms = millis();
           spoolman_queried_uid[0] = '\0';  // allow re-query when same tag is placed again
-          ntag_handled_uid[0] = '\0';      // the same tag returning is news again
+          // The same tag returning is news again: it has to be read anew, and
+          // it has to be said in the log anew.
+          ntag_handled_uid[0] = '\0';
+          TagSeen::forget();
           link_popup_dismissed = false;   // Reset flag → next spool can show popup
           link_tag_first_seen_ms = 0;
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
