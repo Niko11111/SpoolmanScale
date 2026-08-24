@@ -18,7 +18,16 @@
 static SPIClass spiSD(HSPI);
 bool sd_available = false;
 bool sd_verbose = false;
+// How many bytes the file named below already holds. A counter rather than a
+// question to the card on every line, because this check sits in front of
+// every single log call.
 static unsigned long sd_log_size = 0;
+// Which file that count belongs to. It used to belong to nothing in
+// particular: it started at zero on every boot, so the cap was a megabyte per
+// boot session rather than per day, which is what the plan asked for. Several
+// restarts in a day pushed the file well past the limit, and a long uptime
+// silenced the log while the file was still small.
+static char sd_log_file[24] = "";
 
 #define SD_LOG_MAX_SIZE  (1024UL * 1024UL)
 
@@ -34,11 +43,30 @@ String getCurrentLogFilename() {
 }
 
 void sdLogResetSize() {
+  // Forgetting which file the count belonged to is the part that matters: the
+  // next line then asks the card again. Deleting today's log on its own would
+  // otherwise leave the old count standing over a file that is empty.
   sd_log_size = 0;
+  sd_log_file[0] = '\0';
 }
 
 void logSD(const char* msg) {
   if (!sd_available) return;
+
+  String fname = getCurrentLogFilename();
+
+  // A file the count does not belong to - a new day, the first line after a
+  // restart, or the switch away from log_pre_ntp once the clock is set - means
+  // asking the card how big it already is. One extra open per boot and per day
+  // change; every line after that takes the cheap check below.
+  if (strcmp(sd_log_file, fname.c_str()) != 0) {
+    File probe = SD.open(fname.c_str(), FILE_READ);
+    sd_log_size = probe ? (unsigned long)probe.size() : 0;
+    if (probe) probe.close();
+    strncpy(sd_log_file, fname.c_str(), sizeof(sd_log_file) - 1);
+    sd_log_file[sizeof(sd_log_file) - 1] = '\0';
+  }
+
   if (sd_log_size > SD_LOG_MAX_SIZE) return;
 
   char timestamp[10];
@@ -50,7 +78,6 @@ void logSD(const char* msg) {
     strncpy(timestamp, "??:??:??", sizeof(timestamp)-1);
   }
 
-  String fname = getCurrentLogFilename();
   File f = SD.open(fname.c_str(), FILE_APPEND);
   if (!f) return;
   size_t written = f.printf("[%s] %s\n", timestamp, msg);
@@ -124,6 +151,11 @@ void writeBootBlock(const char* boot_or_reboot) {
   if (sd_verbose) f.println("Verbose logging: ON");
   f.println("=====================================");
   f.close();
+
+  // Written past the cap and never counted. Dropping the count here makes the
+  // next log line re-read the file, so the block's own bytes are included
+  // instead of quietly buying the session a few hundred bytes of headroom.
+  sdLogResetSize();
 }
 
 void cleanOldLogs() {

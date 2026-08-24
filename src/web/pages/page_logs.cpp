@@ -112,6 +112,12 @@ static String body() {
          "document.getElementById('vb').textContent=d.verbose?M.on:M.off;})"
          ".catch(()=>say(M.err));}"
          "loadLogs();"
+         // Was in the page until beta.33 and fell out of the 720px rebuild
+         // without anyone noticing. Back, but idle while the tab sits in the
+         // background - a forgotten tab should not poll the scale all day.
+         "setInterval(()=>{if(!document.hidden)loadLogs();},30000);"
+         "document.addEventListener('visibilitychange',()=>"
+         "{if(!document.hidden)loadLogs();});"
          "</script>");
   return h;
 }
@@ -194,6 +200,9 @@ static void routes(WebServer &srv) {
     }
     String path = "/" + fname;
     if (SD.remove(path.c_str())) {
+      // Deleting today's own log leaves the cap standing over a file that is
+      // gone, so the count is dropped here too and not only in the delete-all.
+      sdLogResetSize();
       logSDf("Log file deleted via web: %s", fname.c_str());
       srv.send(200, "text/plain", "OK");
     } else {
