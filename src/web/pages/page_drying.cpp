@@ -1,153 +1,133 @@
-// Drying thresholds and reminder settings.
+// Drying reminder. A spool that has been open for too long gets an amber or
+// a red marker on the main screen, and this is where the two thresholds are
+// set - per material, because PLA and PA do not age at the same rate.
+//
+// Sealed storage multiplies both thresholds. The radio pair says how this
+// material is stored here, not what the material is.
 #include "web/web_pages.h"
 
 #include <Arduino.h>
-#include <WebServer.h>
 #include <ArduinoJson.h>
+#include <WebServer.h>
 
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
 #include "services/drying_config.h"
 #include "services/prefs_store.h"
 #include "web/web_access.h"
+#include "web/web_shell.h"
+// Last on purpose: T() is a macro and ArduinoJson uses T as a template
+// parameter, so lang.h has to come after anything that pulls it in.
+#include "lang.h"
+
+static const char* label() { return T(STR_W_NAV_DRYING); }
 
 static String body() {
-  String html;
-  html +=
-      "<div class='card'>"
-      "<h2>Drying Reminder - Material Thresholds</h2>"
-      "<p style='font-size:12px;color:#4a6fa0;margin-bottom:6px'>Days until Yellow / Red warning per material. Sealed multiplier applies when storage is airtight.</p>"
-      "<table id='dry-tbl' style='width:100%;border-collapse:collapse;font-size:14px;margin-bottom:14px'>"
-      "<tr style='color:#4a6fa0;font-size:12px'><th style='text-align:left;padding:4px 6px'>Material</th>"
-      "<th style='text-align:center;padding:4px 6px'>Yellow</th><th style='text-align:center;padding:4px 6px'>Red</th>"
-      "<th style='text-align:center;padding:4px 6px'>Storage</th></tr>"
-      // PLA
-      "<tr><td style='padding:4px 6px;color:#e8f0ff'>PLA</td>"
-      "<td><input class='dry-in' name='y_PLA' type='number' min='1' value='"+String(g_dry_mat_yellow[0])+"'></td>"
-      "<td><input class='dry-in' name='r_PLA' type='number' min='1' value='"+String(g_dry_mat_red[0])+"'></td>"
-      "<td style='text-align:center;white-space:nowrap'>"
-      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
-      "<input type='radio' name='s_PLA' value='open' "+String(g_dry_mat_sealed[0]?"":"checked")+"> Open</label>"
-      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
-      "<input type='radio' name='s_PLA' value='sealed' "+String(g_dry_mat_sealed[0]?"checked":"")+"> Sealed</label>"
-      "</td></tr>"
-      "<tr><td style='padding:4px 6px;color:#e8f0ff'>PETG</td>"
-      "<td><input class='dry-in' name='y_PETG' type='number' min='1' value='"+String(g_dry_mat_yellow[1])+"'></td>"
-      "<td><input class='dry-in' name='r_PETG' type='number' min='1' value='"+String(g_dry_mat_red[1])+"'></td>"
-      "<td style='text-align:center;white-space:nowrap'>"
-      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
-      "<input type='radio' name='s_PETG' value='open' "+String(g_dry_mat_sealed[1]?"":"checked")+"> Open</label>"
-      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
-      "<input type='radio' name='s_PETG' value='sealed' "+String(g_dry_mat_sealed[1]?"checked":"")+"> Sealed</label>"
-      "</td></tr>"
-      "<tr><td style='padding:4px 6px;color:#e8f0ff'>ABS</td>"
-      "<td><input class='dry-in' name='y_ABS' type='number' min='1' value='"+String(g_dry_mat_yellow[2])+"'></td>"
-      "<td><input class='dry-in' name='r_ABS' type='number' min='1' value='"+String(g_dry_mat_red[2])+"'></td>"
-      "<td style='text-align:center;white-space:nowrap'>"
-      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
-      "<input type='radio' name='s_ABS' value='open' "+String(g_dry_mat_sealed[2]?"":"checked")+"> Open</label>"
-      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
-      "<input type='radio' name='s_ABS' value='sealed' "+String(g_dry_mat_sealed[2]?"checked":"")+"> Sealed</label>"
-      "</td></tr>"
-      "<tr><td style='padding:4px 6px;color:#e8f0ff'>ASA</td>"
-      "<td><input class='dry-in' name='y_ASA' type='number' min='1' value='"+String(g_dry_mat_yellow[3])+"'></td>"
-      "<td><input class='dry-in' name='r_ASA' type='number' min='1' value='"+String(g_dry_mat_red[3])+"'></td>"
-      "<td style='text-align:center;white-space:nowrap'>"
-      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
-      "<input type='radio' name='s_ASA' value='open' "+String(g_dry_mat_sealed[3]?"":"checked")+"> Open</label>"
-      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
-      "<input type='radio' name='s_ASA' value='sealed' "+String(g_dry_mat_sealed[3]?"checked":"")+"> Sealed</label>"
-      "</td></tr>"
-      "<tr><td style='padding:4px 6px;color:#e8f0ff'>TPU</td>"
-      "<td><input class='dry-in' name='y_TPU' type='number' min='1' value='"+String(g_dry_mat_yellow[4])+"'></td>"
-      "<td><input class='dry-in' name='r_TPU' type='number' min='1' value='"+String(g_dry_mat_red[4])+"'></td>"
-      "<td style='text-align:center;white-space:nowrap'>"
-      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
-      "<input type='radio' name='s_TPU' value='open' "+String(g_dry_mat_sealed[4]?"":"checked")+"> Open</label>"
-      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
-      "<input type='radio' name='s_TPU' value='sealed' "+String(g_dry_mat_sealed[4]?"checked":"")+"> Sealed</label>"
-      "</td></tr>"
-      "<tr><td style='padding:4px 6px;color:#e8f0ff'>PA</td>"
-      "<td><input class='dry-in' name='y_PA' type='number' min='1' value='"+String(g_dry_mat_yellow[5])+"'></td>"
-      "<td><input class='dry-in' name='r_PA' type='number' min='1' value='"+String(g_dry_mat_red[5])+"'></td>"
-      "<td style='text-align:center;white-space:nowrap'>"
-      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
-      "<input type='radio' name='s_PA' value='open' "+String(g_dry_mat_sealed[5]?"":"checked")+"> Open</label>"
-      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
-      "<input type='radio' name='s_PA' value='sealed' "+String(g_dry_mat_sealed[5]?"checked":"")+"> Sealed</label>"
-      "</td></tr>"
-      "<tr><td style='padding:4px 6px;color:#e8f0ff'>PC</td>"
-      "<td><input class='dry-in' name='y_PC' type='number' min='1' value='"+String(g_dry_mat_yellow[6])+"'></td>"
-      "<td><input class='dry-in' name='r_PC' type='number' min='1' value='"+String(g_dry_mat_red[6])+"'></td>"
-      "<td style='text-align:center;white-space:nowrap'>"
-      "<label style='font-size:11px;color:#4a6fa0;cursor:pointer;margin-right:8px'>"
-      "<input type='radio' name='s_PC' value='open' "+String(g_dry_mat_sealed[6]?"":"checked")+"> Open</label>"
-      "<label style='font-size:11px;color:#28d49a;cursor:pointer'>"
-      "<input type='radio' name='s_PC' value='sealed' "+String(g_dry_mat_sealed[6]?"checked":"")+"> Sealed</label>"
-      "</td></tr>"
-      "</table>"
-      "<div style='display:flex;gap:10px;align-items:center;margin-bottom:10px'>"
-      "<label style='font-size:13px;color:#c8d8f0'>Sealed multiplier:</label>"
-      "<input id='dry-mult' type='number' min='1' max='10' step='0.1' value='"+String(g_dry_mult_sealed,1)+"'"
-      " style='width:72px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
-      "border-radius:8px;padding:6px 10px;font-size:15px'>"
-      "<span style='font-size:12px;color:#4a6fa0'>x (airtight storage)</span>"
-      "</div>"
-      "<div style='display:flex;gap:10px'>"
-      "<button class='btn-toggle' onclick='saveDry()'>Save</button>"
-      "<button class='btn-toggle' style='background:#1a0a0a;border-color:#402020;color:#e04040' onclick='resetDry()'>Reset to Defaults</button>"
-      "<span id='dry-s' style='font-size:12px;color:#28d49a;line-height:36px;display:inline-block'></span>"
-      "</div></div>"
-      "<style>.dry-in{width:64px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
-      "border-radius:6px;padding:4px 8px;font-size:14px;text-align:center}</style>";
+  String h;
+  h.reserve(7000);
 
-    html +=       "<script>"
-      "function setLocL(){""var v=parseInt(document.getElementById('locl-in').value);""if(v<5)v=5;if(v>100)v=100;""fetch('/api/loclimit',{method:'POST',body:String(v)})"".then(r=>r.json()).then(d=>{""document.getElementById('locl-s').textContent='Saved: '+d.limit;""setTimeout(()=>{document.getElementById('locl-s').textContent='';},3000);""});}""var tgCur='',tgNew='',tgLinked='',tgUid='',tgCurI=null,tgNewI=null;""function esc(t){return String(t).replace(/[<>&]/g,function(c){""return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];});}""function row(k,a,b){if(a===undefined&&b===undefined)return '';""var d=(a!==undefined&&b!==undefined&&a!==b)?' class=\"diff\"':'';""return '<tr'+d+'><td>'+k+'</td><td>'+esc(a===undefined?'-':a)+'</td></tr>';}""function plain(el,t,x){el.innerHTML='<h3>'+t+'</h3>'""+'<div style=\"font-size:13px;color:#4a6fa0\">'+x+'</div>';}""function swatch(el,i,o,t,empty){if(!el)return;""if(!i||!i.fmt){plain(el,t,empty);return;}""if(i.fmt=='blank'){plain(el,t,'Blank tag');return;}""if(i.fmt=='unknown'){plain(el,t,'Data this firmware cannot read');return;}""o=o||{};""var h='<h3>'+t+'</h3>'""+'<div style=\"display:flex;gap:12px;align-items:center\">'""+'<div class=\"chip\" style=\"background:'+(i.color||'#101828')+'\"></div>'""+'<div><div class=\"name\">'+esc(i.brand||'')+' '+esc(i.material||'')+'</div>'""+'<div class=\"fmt\">'+esc(i.fmt)+(i.color?' - '+esc(i.color):'')+'</div></div></div>'""+'<table>'""+row('SKU',i.sku,o.sku)""+row('Nozzle',i.nozzle?i.nozzle+' C':undefined,o.nozzle?o.nozzle+' C':undefined)""+row('Bed',i.bed?i.bed+' C':undefined,o.bed?o.bed+' C':undefined)""+row('Weight',i.weight?i.weight+' g':undefined,o.weight?o.weight+' g':undefined)""+row('Diameter',i.dia?i.dia+' mm':undefined,o.dia?o.dia+' mm':undefined)""+row('Length',i.len?i.len+' m':undefined,o.len?o.len+' m':undefined)""+'</table>';el.innerHTML=h;}""function tgDraw(){""swatch(document.getElementById('tg-cur'),tgCurI,tgNewI,'On the tag','No tag on the reader.');""swatch(document.getElementById('tg-new'),tgNewI,tgCurI,'Will be written','Pick a spool.');}""function tgSync(){tgDraw();var b=document.getElementById('tg-btn');if(!b)return;""var n=document.getElementById('tg-note');""if(n)n.textContent=(tgLinked&&tgUid&&tgLinked!=tgUid)""?('This spool is linked to '+tgLinked+', which becomes its previous tag.'):'';""var er=document.getElementById('tg-erase');""if(er)er.disabled=!tgUid||tgCur=='blank';""if(!tgNew){b.disabled=true;b.textContent='Pick a spool';return;}""if(tgCur===tgNew){b.disabled=true;b.textContent='Tag already matches';}""else{b.disabled=false;b.textContent=tgCur&&tgCur!='blank'?'Overwrite tag':'Write tag';}}""function loadPreview(){var v=parseInt(document.getElementById('tg-id').value);""var f=document.getElementById('tg-fmt').value;""if(!v){tgNew='';tgNewI=null;tgSync();return;}""fetch('/api/tag/preview?id='+v+'&fmt='+f).then(r=>r.json()).then(d=>{""tgNew=d.ok?d.preview:'';tgLinked=d.ok?(d.linked||''):'';""tgNewI=d.ok?d.info:null;tgSync();});}""function setOpt(p,t){p.innerHTML='';var o=document.createElement('option');""o.value='';o.textContent=t;p.appendChild(o);}""function pickSpool(){var p=document.getElementById('tg-pick');""if(p.value)document.getElementById('tg-id').value=p.value;loadPreview();}""function loadSpools(){var p=document.getElementById('tg-pick');if(!p)return;""fetch('/api/spools').then(r=>r.json()).then(d=>{""if(d.error){setOpt(p,d.error);return;}""setOpt(p,'-- pick a spool --');""d.forEach(s=>{var o=document.createElement('option');o.value=s.id;""o.textContent='#'+s.id+'  '+s.label;p.appendChild(o);});""}).catch(e=>{setOpt(p,'spool list unavailable');});}""function tgPoll(){fetch('/api/tag').then(r=>r.json()).then(d=>{""document.getElementById('tg-uid').textContent=d.uid?('Tag on reader: '+d.uid+' ('+d.kind+')'):'No tag on the reader.';""tgUid=d.uid||'';tgCurI=d.uid?d.info:null;""tgCur=d.content||'';tgSync();""var s=document.getElementById('tg-s');""if(d.state!='idle'){s.textContent=d.message;""s.style.color=(d.state=='error')?'#ff8080':'#28d49a';}""});}""function eraseTag(){""if(!confirm('Erase everything on this tag?'))return;""fetch('/api/tag/write',{method:'POST',body:'0,2,0'})"".then(r=>r.json()).then(d=>{document.getElementById('tg-s').textContent=d.message||'Queued.';});""setTimeout(tgPoll,1500);setTimeout(tgPoll,4000);}""function writeTag(){""var v=parseInt(document.getElementById('tg-id').value);""if(!v){document.getElementById('tg-s').textContent='Enter a spool ID.';return;}""var f=document.getElementById('tg-fmt').value;""var l=document.getElementById('tg-link').checked?1:0;""fetch('/api/tag/write',{method:'POST',body:v+','+f+','+l})"".then(r=>r.json()).then(d=>{document.getElementById('tg-s').textContent=d.message||'Queued.';});""setTimeout(tgPoll,1500);setTimeout(tgPoll,4000);}""document.addEventListener('DOMContentLoaded',function(){""if(document.getElementById('tg-uid')){tgPoll();setInterval(tgPoll,3000);}""if(document.getElementById('tg-pick'))loadSpools();""});""function setGain(){"
-      "var v=parseInt(document.getElementById('gain-in').value);"
-      "fetch('/api/gain',{method:'POST',body:String(v)})"
-      ".then(r=>r.json()).then(d=>{"
-      "document.getElementById('gain-s').textContent='Saved: '+d.gain;"
-      "setTimeout(()=>{document.getElementById('gain-s').textContent='';},3000);"
-      "});}"
-      "function setLL(){"
-      "var v=parseInt(document.getElementById('ll-in').value);"
-      "if(v<5)v=5;if(v>100)v=100;"
-      "fetch('/api/listlimit',{method:'POST',body:String(v)})"
-      ".then(r=>r.json()).then(d=>{"
-      "document.getElementById('ll-s').textContent='Saved: '+d.limit;"
-      "setTimeout(()=>{document.getElementById('ll-s').textContent='';},3000);"
-      "});}"
-      "function saveDry(){"
-      "var mats=['PLA','PETG','ABS','ASA','TPU','PA','PC'];"
-      "var arr=mats.map(function(m){"
-      "var sr=document.querySelector('[name=s_'+m+'][value=sealed]');"
-      "return{name:m,"
-      "yellow:parseInt(document.querySelector('[name=y_'+m+']').value)||1,"
-      "red:parseInt(document.querySelector('[name=r_'+m+']').value)||1,"
-      "sealed:sr?sr.checked:false};"
-      "});"
-      "var mult=parseFloat(document.getElementById('dry-mult').value)||1;"
-      "fetch('/api/drying',{method:'POST',"
-      "headers:{'Content-Type':'application/json'},"
-      "body:JSON.stringify({mult_sealed:mult,materials:arr})})"
-      ".then(r=>r.json()).then(d=>{"
-      "document.getElementById('dry-s').textContent=d.ok?'Saved!':'Error';"
-      "setTimeout(()=>{document.getElementById('dry-s').textContent='';},3000);"
-      "});}"
-      "function resetDry(){"
-      "fetch('/api/drying/reset',{method:'POST'})"
-      ".then(r=>r.json()).then(d=>{"
-      "document.getElementById('dry-s').textContent='Reset!';"
-      "setTimeout(()=>location.reload(),1500);"
-      "});}"
-      "</script>";
-  return html;
+  h += F("<div class='grid'><div class='card wide'><h2>");
+  h += T(STR_W_C_DRYING);
+  h += F("</h2><div style='overflow-x:auto'><table><thead><tr><th>");
+  h += T(STR_W_DRY_MATERIAL);
+  h += F("</th><th>");
+  h += T(STR_W_DRY_YELLOW);
+  h += F("</th><th>");
+  h += T(STR_W_DRY_RED);
+  h += F("</th><th>");
+  h += T(STR_W_DRY_STORAGE);
+  h += F("</th></tr></thead><tbody>");
+
+  // Built from the table in drying_config rather than seven copies of the
+  // same row. The previous version spelled every material out by hand, so a
+  // new one meant editing the page as well as the config.
+  for (int i = 0; i < DRY_MAT_COUNT; i++) {
+    const String m = DRY_MAT_NAMES[i];
+    h += F("<tr><td style='color:var(--ink)'>");
+    h += m;
+    h += F("</td><td><input type='number' min='1' max='999' name='y_");
+    h += m;
+    h += F("' value='");
+    h += String(g_dry_mat_yellow[i]);
+    h += F("'></td><td><input type='number' min='1' max='999' name='r_");
+    h += m;
+    h += F("' value='");
+    h += String(g_dry_mat_red[i]);
+    h += F("'></td><td><label style='margin-right:14px;white-space:nowrap'>"
+           "<input type='radio' name='s_");
+    h += m;
+    h += F("' value='open'");
+    h += g_dry_mat_sealed[i] ? F("") : F(" checked");
+    h += F("> ");
+    h += T(STR_W_DRY_OPEN);
+    h += F("</label><label style='white-space:nowrap'><input type='radio' name='s_");
+    h += m;
+    h += F("' value='sealed'");
+    h += g_dry_mat_sealed[i] ? F(" checked") : F("");
+    h += F("> ");
+    h += T(STR_W_DRY_SEALED);
+    h += F("</label></td></tr>");
+  }
+
+  h += F("</tbody></table></div>"
+         "<div class='field' style='margin-top:18px'><label>");
+  h += T(STR_W_DRY_MULT);
+  h += F("</label><div class='inrow'>"
+         "<input id='dm' type='number' min='1' max='10' step='0.1' value='");
+  h += String(g_dry_mult_sealed, 1);
+  h += F("'><span class='suffix'>&times;</span>"
+         "<span class='hint' style='flex:1'>");
+  h += T(STR_W_DRY_MULT_HINT);
+  h += F("</span></div></div>"
+         "<div class='inrow' style='margin-top:18px'><button onclick='saveDry()'>");
+  h += T(STR_W_SAVE);
+  h += F("</button><button class='danger' onclick='resetDry()'>");
+  h += T(STR_W_DEFAULTS);
+  h += F("</button><span class='msg' id='dry-s'></span></div></div></div>");
+
+  // The unit is stated once, in the column heads, so it does not repeat
+  // fourteen times next to the inputs.
+  h += F("<p class='foot' style='text-align:left;margin-top:-6px'>");
+  h += T(STR_W_DRY_DAYS);
+  h += F("</p>");
+
+  h += F("<script>const M={ok:");
+  h += jsStr(T(STR_W_SAVED));
+  h += F(",err:");  h += jsStr(T(STR_W_ERROR));
+  h += F(",mats:[");
+  for (int i = 0; i < DRY_MAT_COUNT; i++) {
+    if (i) h += F(",");
+    h += jsStr(DRY_MAT_NAMES[i]);
+  }
+  h += F("]};"
+         "function flash(t,bad){const e=document.getElementById('dry-s');"
+         "e.textContent=t;e.className='msg'+(bad?' bad':'');"
+         "setTimeout(()=>{e.textContent='';},4000);}"
+         "function saveDry(){"
+         "const arr=M.mats.map(m=>{"
+         "const sr=document.querySelector('[name=s_'+m+'][value=sealed]');"
+         "return{name:m,"
+         "yellow:parseInt(document.querySelector('[name=y_'+m+']').value)||1,"
+         "red:parseInt(document.querySelector('[name=r_'+m+']').value)||1,"
+         "sealed:sr?sr.checked:false};});"
+         "const mult=parseFloat(document.getElementById('dm').value)||1;"
+         "fetch('/api/drying',{method:'POST',"
+         "headers:{'Content-Type':'application/json'},"
+         "body:JSON.stringify({mult_sealed:mult,materials:arr})})"
+         ".then(r=>r.json()).then(d=>flash(d.ok?M.ok:M.err,!d.ok))"
+         ".catch(()=>flash(M.err,true));}"
+         "function resetDry(){"
+         "fetch('/api/drying/reset',{method:'POST'})"
+         ".then(r=>r.json()).then(()=>{flash(M.ok,false);"
+         "setTimeout(()=>location.reload(),900);});}"
+         "</script>");
+  return h;
 }
 
 static void routes(WebServer &srv) {
   // ── Drying Reminder: Material-Schwellwerte lesen ──────────
   srv.on("/api/drying", HTTP_GET, [&srv]() {
-    if (!webRequire(srv, GATE_CONFIG, "Drying thresholds")) return;
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_DRYING))) return;
     String json = "{";
     json += "\"mode\":" + String(g_dry_mode) + ",";
     json += "\"man_yellow\":" + String(g_dry_man_yellow) + ",";
@@ -168,7 +148,7 @@ static void routes(WebServer &srv) {
   // ── Drying Reminder: Material-Schwellwerte speichern ──────
   // Body: JSON {"mult_sealed":3.0,"materials":[{"name":"PLA","yellow":180,"red":365},...]}
   srv.on("/api/drying", HTTP_POST, [&srv]() {
-    if (!webRequire(srv, GATE_CONFIG, "Drying thresholds")) return;
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_DRYING))) return;
     if (!srv.hasArg("plain")) {
       srv.send(400, "application/json", "{\"error\":\"no body\"}"); return;
     }
@@ -216,7 +196,7 @@ static void routes(WebServer &srv) {
 
   // ── Drying Reminder: Reset auf Defaults ───────────────────
   srv.on("/api/drying/reset", HTTP_POST, [&srv]() {
-    if (!webRequire(srv, GATE_CONFIG, "Drying thresholds")) return;
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_DRYING))) return;
     g_dry_mult_sealed = 2.0f;
     g_dry_man_yellow  = 30;
     g_dry_man_red     = 90;
@@ -242,6 +222,6 @@ static void routes(WebServer &srv) {
 
 extern const WebPage PAGE_DRYING;
 const WebPage PAGE_DRYING = {
-  "/drying", "Drying", nullptr, GATE_CONFIG, nullptr,
+  "/drying", label, GATE_CONFIG, nullptr,
   body, routes
 };

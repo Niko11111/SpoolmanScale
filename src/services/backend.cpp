@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <string.h>
+#include <strings.h>
 
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
@@ -110,8 +111,33 @@ const char* backendHost() {
   }
 }
 
+// Cleans an address before it is stored. Until now this took whatever it was
+// handed, which was harmless while the only way in was the device's twelve
+// key numeric pad - it cannot produce a slash or a space. The web interface
+// has a real keyboard, so "http://spoolman.local/" is now a thing a user can
+// type, and rebuildFilamanBase() would have turned it into
+// "http://http://spoolman.local/".
+//
+// https is not stripped here. Refusing it is the caller's job, because only
+// the caller can say so: the request would otherwise be sent as plain http to
+// port 80 and fail in a way that looks like the server is down.
+size_t backendCleanHost(const char* in, char* out, size_t out_size) {
+  if (!in || !out || out_size == 0) return 0;
+  while (*in == ' ' || *in == '\t') in++;
+  if (strncasecmp(in, "http://", 7) == 0) in += 7;
+
+  size_t n = 0;
+  while (*in && n + 1 < out_size) out[n++] = *in++;
+  while (n > 0 && (out[n-1] == ' ' || out[n-1] == '\t' || out[n-1] == '/')) n--;
+  out[n] = '\0';
+  return n;
+}
+
 void backendSetHost(const char* host) {
   if (!host) return;
+  char clean[64];
+  backendCleanHost(host, clean, sizeof(clean));
+  host = clean;
   switch (s_mode) {
     case BACKEND_FILAMAN:
       strncpy(s_filaman_host, host, sizeof(s_filaman_host) - 1);

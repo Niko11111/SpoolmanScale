@@ -11,27 +11,23 @@ extern const WebPage PAGE_STATUS;
 extern const WebPage PAGE_FIRMWARE;
 extern const WebPage PAGE_LOGS;
 extern const WebPage PAGE_DRYING;
-extern const WebPage PAGE_NETWORK;
 extern const WebPage PAGE_BACKEND;
 extern const WebPage PAGE_CONFIG;
 extern const WebPage PAGE_TAGS;
 
 const WebPage* const WEB_PAGES[] = {
   &PAGE_STATUS,
-  &PAGE_NETWORK,
   &PAGE_BACKEND,
-  &PAGE_CONFIG,
   &PAGE_DRYING,
   &PAGE_TAGS,
+  &PAGE_CONFIG,
   &PAGE_LOGS,
   &PAGE_FIRMWARE,
 };
 
 const size_t WEB_PAGE_COUNT = sizeof(WEB_PAGES) / sizeof(WEB_PAGES[0]);
 
-const char* webPageLabel(const WebPage &p) {
-  return p.label_fn ? p.label_fn() : p.label;
-}
+const char* webPageLabel(const WebPage &p) { return p.label(); }
 
 bool webPageVisible(const WebPage &p) {
   if (p.applies && !p.applies()) return false;

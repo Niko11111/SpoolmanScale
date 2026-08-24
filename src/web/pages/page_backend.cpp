@@ -1,190 +1,205 @@
-// Backend credentials. The path is deliberately neutral: it used to be
+// Backend: where the inventory lives and, where one is needed, how to get in.
+//
+// The path is deliberately neutral. It used to be "/backend" named
 // "/filaman", which was already wrong once BamBuddy arrived - the device
 // screen linked BamBuddy users to a FilaMan URL and the tab that would have
 // taken them there was hidden from them.
+//
+// The address field is the point of this page. On the device the address is
+// typed on a twelve key numeric pad, so a host name cannot be entered there
+// at all - which is exactly what someone running their services behind a
+// reverse proxy needs, because a proxy tells its backends apart by the Host
+// header and the proxy's own IP reaches none of them.
 #include "web/web_pages.h"
 
 #include <Arduino.h>
 #include <WebServer.h>
+
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
+#include "services/backend_api.h"
 #include "services/filaman_api.h"
 #include "web/web_access.h"
+#include "web/web_shell.h"
+// Last on purpose: T() is a macro and ArduinoJson uses T as a template
+// parameter, so lang.h has to come after anything that pulls it in.
+#include "lang.h"
 
-// Spoolman has nothing to enter, so the page does not exist there at all.
-static bool applies() { return backendIsFilaMan() || backendIsBamBuddy(); }
-
-// The tab says which backend it belongs to. A BamBuddy user following a tab
-// labelled "FilaMan" has every reason to think they are in the wrong place.
-static const char* label() { return backendIsBamBuddy() ? "BamBuddy" : "FilaMan"; }
+// Spoolman has no credentials, but it does have an address, so the page
+// exists in every mode now. It used to be skipped unless the backend was
+// FilaMan.
+static const char* label() { return T(STR_W_NAV_BACKEND); }
 
 static String body() {
-  String html;
-  if (backendIsFilaMan()) html +=
-      "<div class='card'>"
-      "<h2>FilaMan</h2>"
-      "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>"
-      "The scale needs two credentials. The <b>device token</b> identifies it when "
-      "reporting weights, the <b>API key</b> is used for everything else. "
-      "<span onclick=\"h('p')\" style='cursor:pointer;color:#28d49a;border:1px solid #28d49a;"
-      "border-radius:50%;padding:0 6px;font-size:11px'>?</span> "
-      "Tip for a tighter setup.</p>"
-      "<div id='h-p' style='display:none;font-size:12px;color:#8ab0d8;background:#06080f;"
-      "border-left:2px solid #28d49a;border-radius:4px;padding:10px 12px;margin-bottom:14px'>"
-      "An API key has no permissions of its own. It inherits them from the user who "
-      "created it, so a key made from an admin account can do everything that account "
-      "can. If you would rather keep that narrow:<br><br>"
-      "1. Create a new FilaMan user without admin rights.<br>"
-      "2. Create a role and give it at least these permissions:<br>"
-      "&nbsp;&nbsp;<b>Read</b> spools:read, spool_events:read, locations:read, "
-      "filaments:read, manufacturers:read<br>"
-      "&nbsp;&nbsp;<b>Write</b> spools:update, spools:create, spools:archive, "
-      "spools:move_location, filaments:update, manufacturers:update<br>"
-      "3. Assign the role to that user.<br>"
-      "4. Sign in <i>as that user</i> and create the API key there. A role has no "
-      "effect on a key created by somebody else.<br><br>"
-      "SpoolmanScale never deletes anything and never calls an admin endpoint. "
-      "Weight reports go through the device token, not the key.<br><br>"
-      "<i>The list is derived from the endpoints the firmware calls. It has not been "
-      "verified against a restricted account yet, so if something stops working, "
-      "widen the role and please report it.</i></div>"
-      "<div style='margin-bottom:12px'>"
-      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>"
-      "API key - create it in FilaMan under API keys "
-      "<span onclick=\"h('k')\" style='cursor:pointer;color:#28d49a;border:1px solid #28d49a;"
-      "border-radius:50%;padding:0 6px;font-size:11px;margin-left:4px'>?</span></label>"
-      "<div id='h-k' style='display:none;font-size:12px;color:#8ab0d8;background:#06080f;"
-      "border-left:2px solid #28d49a;border-radius:4px;padding:8px 10px;margin-bottom:8px'>"
-      "Open FilaMan in another tab. At the bottom of the left sidebar there is a gear icon. "
-      "Click it, choose <b>API keys</b>, and create a new key. Copy the value it shows you "
-      "right away, FilaMan will not display it a second time.</div>"
-      "<div style='display:flex;gap:10px;align-items:center'>"
-      "<input id='fm-key' type='password' placeholder='uak.1....' value='"
-      + String(filamanApiKey()[0] ? "________________" : "") + "'"
-      " style='flex:1;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
-      "border-radius:8px;padding:8px 10px;font-size:14px'>"
-      "<button class='btn-toggle' onclick='setKey()'>Save</button>"
-      "</div>"
-      "<span id='fm-key-s' style='font-size:12px;color:#28d49a'></span>"
-      "</div>"
-      "<div>"
-      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>"
-      "Device code - 6 characters from FilaMan admin. Current token: "
-      + String(filamanDeviceToken()[0] ? "set" : "missing")
-      + "<span onclick=\"h('d')\" style='cursor:pointer;color:#28d49a;border:1px solid #28d49a;"
-      "border-radius:50%;padding:0 6px;font-size:11px;margin-left:4px'>?</span></label>"
-      "<div id='h-d' style='display:none;font-size:12px;color:#8ab0d8;background:#06080f;"
-      "border-left:2px solid #28d49a;border-radius:4px;padding:8px 10px;margin-bottom:8px'>"
-      "In FilaMan go to the <b>Admin</b> area and open <b>Devices</b>. Add a new device there. "
-      "FilaMan then shows a 6 character code. Enter it below and press Register device. "
-      "Each code can only be used once, so if it is refused, have FilaMan issue a fresh one."
-      "</div>"
-      "<div style='display:flex;gap:10px;align-items:center'>"
-      "<input id='fm-code' type='text' maxlength='6' placeholder='AA5354'"
-      " style='width:110px;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
-      "border-radius:8px;padding:8px 10px;font-size:16px;letter-spacing:2px'>"
-      "<button class='btn-toggle' onclick='reg()'>Register device</button>"
-      "</div>"
-      "<span id='fm-reg-s' style='font-size:12px;color:#28d49a'></span>"
-      "</div></div>"
-      "<script>"
-      // Both credentials sit in places of FilaMan that are easy to miss, so
-      // each has a question mark that folds a short pointer open.
-      "function h(i){var e=document.getElementById('h-'+i);"
-      "e.style.display=(e.style.display==='none'?'block':'none');}"
-      "function setKey(){var v=document.getElementById('fm-key').value;"
-      "if(v.indexOf('_')===0){return;}"
-      "fetch('/api/filaman/key',{method:'POST',body:v})"
-      ".then(r=>r.text()).then(t=>{document.getElementById('fm-key-s').textContent=t;});}"
-      "function reg(){var c=document.getElementById('fm-code').value;"
-      "document.getElementById('fm-reg-s').textContent='Registering...';"
-      "fetch('/api/filaman/register',{method:'POST',body:c})"
-      ".then(r=>r.text()).then(t=>{document.getElementById('fm-reg-s').textContent=t;});}"
-      "</script>";
-    // BamBuddy credentials. One key rather than two, and it may legitimately
-    // stay empty: an instance with authentication switched off answers
-    // without it.
-    //
-    // This card was lost when the single page was split into sections - the
-    // BamBuddy branch was left as a bare "</script>" with no form in it, so a
-    // BamBuddy user had nowhere to enter the key and the device screen sent
-    // them to exactly this page.
-  if (backendIsBamBuddy()) html +=
-      "<div class='card'>"
-      "<h2>BamBuddy</h2>"
-      "<p style='font-size:12px;color:#4a6fa0;margin-bottom:14px'>"
-      "The scale needs one API key. Leave it empty if your BamBuddy runs with "
-      "authentication switched off. "
-      "<span onclick=\"bh()\" style='cursor:pointer;color:#28d49a;border:1px solid #28d49a;"
-      "border-radius:50%;padding:0 6px;font-size:11px'>?</span></p>"
-      "<div id='h-bb' style='display:none;font-size:12px;color:#8ab0d8;background:#06080f;"
-      "border-left:2px solid #28d49a;border-radius:4px;padding:8px 10px;margin-bottom:12px'>"
-      "In BamBuddy open <b>Settings</b>, then <b>API Keys</b>, and create a key. "
-      "Tick <b>Read Status</b> and <b>Manage Inventory</b> - the first lets the scale "
-      "read spools and detect whether your inventory is local or on Spoolman, the second "
-      "lets it write weights back. The key is shown once, copy it right away.</div>"
-      "<label style='font-size:13px;color:#c8d8f0;display:block;margin-bottom:6px'>"
-      "API key. Currently: "
-      + String(bambuddyApiKey()[0] ? "set" : "empty")
-      + "</label>"
-      "<div style='display:flex;gap:10px;align-items:center'>"
-      "<input id='bb-key' type='password' placeholder='bb_...' value='"
-      + String(bambuddyApiKey()[0] ? "________________" : "") + "'"
-      " style='flex:1;background:#06080f;color:#e8f0ff;border:1px solid #1a3060;"
-      "border-radius:8px;padding:8px 10px;font-size:14px'>"
-      "<button class='btn-toggle' onclick='setBb()'>Save</button>"
-      "</div>"
-      "<span id='bb-key-s' style='font-size:12px;color:#28d49a'></span>"
-      "</div>"
-      "<script>"
-      "function bh(){var e=document.getElementById('h-bb');"
-      "e.style.display=(e.style.display==='none'?'block':'none');}"
-      "function setBb(){var v=document.getElementById('bb-key').value;"
-      "if(v.indexOf('_')===0){return;}"
-      "fetch('/api/bambuddy/key',{method:'POST',body:v})"
-      ".then(r=>r.text()).then(t=>{document.getElementById('bb-key-s').textContent=t;});}"
-      "</script>";
-  return html;
+  const bool creds = backendIsFilaMan() || backendIsBamBuddy();
+
+  String h;
+  h.reserve(5200);
+  h += F("<div class='grid'>");
+
+  // ---- address ----------------------------------------------------------
+  h += F("<div class='card wide'><h2>");
+  h += T(STR_W_C_BACKEND_ADDR);
+  h += F("</h2><div class='field'><label>");
+  h += T(STR_W_HOST_LABEL);
+  h += F(" &middot; ");
+  h += backendName();
+  h += F("</label><div class='inrow'>"
+         "<input id='hs' type='text' maxlength='63' spellcheck='false' value='");
+  h += backendHost();
+  h += F("' placeholder='spoolman.local:7912'>"
+         "<button onclick='setHost()'>");
+  h += T(STR_W_SAVE);
+  h += F("</button></div><span class='msg' id='hs-s'></span>"
+         "<span class='hint'>");
+  h += T(STR_W_HOST_HINT);
+  h += F(" ");
+  h += T(STR_W_HOST_PORTHINT);
+  h += F("</span></div><div class='rows' style='margin-top:16px'><div class='row'>"
+         "<span class='k'>URL</span><span class='v mono'>");
+  h += backendBaseUrl();
+  h += F("</span></div><div class='row'><span class='k'>");
+  h += T(STR_W_R_REACHABLE);
+  h += F("</span><span class='v'><span class='pill ");
+  h += sm_reachable ? F("ok'>") : F("bd'>");
+  h += T(sm_reachable ? STR_W_S_YES : STR_W_S_NO);
+  h += F("</span></span></div></div></div>");
+
+  // ---- credentials, only where there are any ----------------------------
+  if (!creds) {
+    h += F("<div class='card wide'><h2>");
+    h += T(STR_W_C_CREDS);
+    h += F("</h2><p class='hint'>");
+    h += T(STR_W_NO_CREDS);
+    h += F("</p></div>");
+  } else if (backendIsBamBuddy()) {
+    // One key rather than two, and it may legitimately stay empty: an
+    // instance with authentication switched off answers without it.
+    h += F("<div class='card wide'><h2>");
+    h += T(STR_W_C_CREDS);
+    h += F("</h2><div class='field'><label>");
+    h += T(STR_W_APIKEY);
+    h += F(" &middot; ");
+    h += T(bambuddyApiKey()[0] ? STR_W_SET : STR_W_UNSET);
+    h += F("</label><div class='inrow'>"
+           "<input id='bk' type='password' placeholder='bb_...' value='");
+    h += bambuddyApiKey()[0] ? F("________________") : F("");
+    h += F("'><button onclick='setBb()'>");
+    h += T(STR_W_SAVE);
+    h += F("</button></div><span class='msg' id='bk-s'></span></div></div>");
+  } else {
+    h += F("<div class='card wide'><h2>");
+    h += T(STR_W_C_CREDS);
+    h += F("</h2><div class='field'><label>");
+    h += T(STR_W_APIKEY);
+    h += F(" &middot; ");
+    h += T(filamanApiKey()[0] ? STR_W_SET : STR_W_UNSET);
+    h += F("</label><div class='inrow'>"
+           "<input id='fk' type='password' placeholder='fm_...' value='");
+    h += filamanApiKey()[0] ? F("________________") : F("");
+    h += F("'><button onclick='setKey()'>");
+    h += T(STR_W_SAVE);
+    h += F("</button></div><span class='msg' id='fk-s'></span></div>"
+           "<div class='field'><label>");
+    h += T(STR_W_DEVICE_CODE);
+    h += F(" &middot; ");
+    h += T(filamanDeviceToken()[0] ? STR_W_SET : STR_W_UNSET);
+    h += F("</label><div class='inrow'>"
+           "<input id='fc' type='text' maxlength='12' spellcheck='false' placeholder='ABC123'>"
+           "<button onclick='reg()'>");
+    h += T(STR_W_REGISTER);
+    h += F("</button></div><span class='msg' id='fc-s'></span></div></div>");
+  }
+
+  h += F("</div><script>const M={ok:");
+  h += jsStr(T(STR_W_SAVED));
+  h += F(",err:");   h += jsStr(T(STR_W_ERROR));
+  h += F(",test:");  h += jsStr(T(STR_W_HOST_TESTING));
+  h += F("};"
+         "function flash(id,t,bad){const e=document.getElementById(id);"
+         "e.textContent=t;e.className='msg'+(bad?' bad':'');}"
+         "function post(u,v,id){"
+         "fetch(u,{method:'POST',headers:{'Content-Type':'text/plain'},body:v})"
+         ".then(r=>r.text().then(t=>({ok:r.ok,t}))).then(r=>flash(id,r.t||M.ok,!r.ok));}"
+         "function setHost(){const v=document.getElementById('hs').value;"
+         "flash('hs-s',M.test,false);post('/api/host',v,'hs-s');}"
+         // A stored key is shown as underscores so its length gives nothing
+         // away. Sending those back would overwrite the real one with them.
+         "function guard(v){return v.indexOf('_')!==0;}"
+         "function setBb(){const v=document.getElementById('bk').value;"
+         "if(!guard(v))return;post('/api/bambuddy/key',v,'bk-s');}"
+         "function setKey(){const v=document.getElementById('fk').value;"
+         "if(!guard(v))return;post('/api/filaman/key',v,'fk-s');}"
+         "function reg(){const v=document.getElementById('fc').value;"
+         "flash('fc-s',M.test,false);post('/api/filaman/register',v,'fc-s');}"
+         "</script>");
+  return h;
 }
 
 static void routes(WebServer &srv) {
-  // List limit: GET returns current value, POST sets new value
-  // FilaMan: store the API key. The value is never echoed back to the page,
-  // the input shows a placeholder when one is already stored.
-  srv.on("/api/filaman/key", HTTP_POST, [&srv]() {
-    if (!webRequire(srv, GATE_CONFIG, "Backend setup")) return;
-    String key = srv.arg("plain");
-    key.trim();
-    if (key.length() < 8) { srv.send(400, "text/plain", "Key too short"); return; }
-    filamanSetApiKey(key.c_str());
-    srv.send(200, "text/plain", "Saved");
+  // Address. Sanitised in backendSetHost(), but https has to be refused here:
+  // only the caller can say so, and letting it through would send the request
+  // as plain http to port 80 and fail in a way that looks like the server is
+  // down.
+  srv.on("/api/host", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
+    String host = srv.arg("plain");
+    host.trim();
+    if (host.startsWith("https://") || host.startsWith("HTTPS://")) {
+      srv.send(400, "text/plain", T(STR_W_HOST_HTTPS));
+      return;
+    }
+    char clean[64];
+    if (backendCleanHost(host.c_str(), clean, sizeof(clean)) == 0) {
+      srv.send(400, "text/plain", T(STR_W_HOST_EMPTY));
+      return;
+    }
+    backendSetHost(clean);
+    logSDf("Web: %s host -> %s", backendName(), clean);
+
+    // Answered with the result of an actual request rather than a bare
+    // "saved": a typo here is only visible when something tries to use it.
+    const int code = backendGetHealthCode(backendBaseUrl(), 4000);
+    sm_reachable = (code == 200);
+    String msg = String(sm_reachable ? T(STR_W_HOST_OK) : T(STR_W_HOST_FAIL))
+               + " - " + backendBaseUrl();
+    if (!sm_reachable) msg += " (HTTP " + String(code) + ")";
+    srv.send(200, "text/plain", msg);
   });
 
-  // BamBuddy: store the API key. An empty value is accepted and clears it,
-  // because an instance without authentication needs none - unlike FilaMan,
-  // where a missing credential is always a mistake.
+  srv.on("/api/filaman/key", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
+    String key = srv.arg("plain");
+    key.trim();
+    if (key.length() < 8) { srv.send(400, "text/plain", T(STR_W_ERROR)); return; }
+    filamanSetApiKey(key.c_str());
+    srv.send(200, "text/plain", T(STR_W_SAVED));
+  });
+
+  // An empty value is accepted and clears it, because an instance without
+  // authentication needs none - unlike FilaMan, where a missing credential
+  // is always a mistake.
   srv.on("/api/bambuddy/key", HTTP_POST, [&srv]() {
-    if (!webRequire(srv, GATE_CONFIG, "Backend setup")) return;
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
     String key = srv.arg("plain");
     key.trim();
     if (key.length() > 0 && key.length() < 8) {
-      srv.send(400, "text/plain", "Key too short");
+      srv.send(400, "text/plain", T(STR_W_ERROR));
       return;
     }
     bambuddySetApiKey(key.c_str());
-    srv.send(200, "text/plain", key.length() ? "Saved" : "Cleared");
+    srv.send(200, "text/plain", T(STR_W_SAVED));
   });
 
-  // FilaMan: exchange the 6 character device code for a device token.
   srv.on("/api/filaman/register", HTTP_POST, [&srv]() {
-    if (!webRequire(srv, GATE_CONFIG, "Backend setup")) return;
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
     String code = srv.arg("plain");
     code.trim();
     code.toUpperCase();   // codes are shown uppercase in the FilaMan admin
-    if (code.length() < 4) { srv.send(400, "text/plain", "Code too short"); return; }
+    if (code.length() < 4) { srv.send(400, "text/plain", T(STR_W_ERROR)); return; }
     if (strlen(backendBaseUrl()) <= 7) {
-      srv.send(200, "text/plain", "Set the FilaMan address on the device first");
+      srv.send(400, "text/plain", T(STR_W_HOST_EMPTY));
       return;
     }
 
@@ -196,26 +211,19 @@ static void routes(WebServer &srv) {
       // Always name the URL that was actually contacted. A missing port
       // silently sends the request to whatever runs on port 80, and the
       // answer then looks like a FilaMan problem when it is not.
-      String msg = String("Failed (HTTP ") + rc + ") calling "
-                 + backendBaseUrl() + "/api/v1/devices/register";
+      String msg = String("HTTP ") + rc + " - " + backendBaseUrl()
+                 + "/api/v1/devices/register";
       if (errmsg[0]) msg += String(" - ") + errmsg;
-      if (!strchr(backendHost(), ':')) {
-        msg += " - the address has no port, FilaMan usually runs on :8002";
-      } else if (rc == 404) {
-        msg += " - codes are single use, create a new device or rotate the token in FilaMan";
-      } else if (rc == 403) {
-        msg += " - this device already has a token, rotate it in FilaMan to get a fresh code";
-      }
       srv.send(200, "text/plain", msg);
       return;
     }
     filamanSetDeviceToken(token);
-    srv.send(200, "text/plain", "Device registered");
+    srv.send(200, "text/plain", T(STR_W_SAVED));
   });
 }
 
 extern const WebPage PAGE_BACKEND;
 const WebPage PAGE_BACKEND = {
-  "/backend", nullptr, label, GATE_CONFIG, applies,
+  "/backend", label, GATE_CONFIG, nullptr,
   body, routes
 };

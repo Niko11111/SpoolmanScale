@@ -17,6 +17,9 @@
 // ArduinoJson has to come after lang.h anywhere the T() macro is in scope.
 // Nothing here includes lang.h, so the plain include is safe.
 #include <ArduinoJson.h>
+// Last on purpose: T() is a macro and ArduinoJson uses T as a template
+// parameter, so lang.h has to come after anything that pulls it in.
+#include "lang.h"
 
 static WebServer ota_server(80);
 static bool ota_server_running  = false;
@@ -94,11 +97,10 @@ static void registerRoutes() {
       }
       if (!webRequire(ota_server, pg->gate, webPageLabel(*pg))) return;
       String html = webShellHead(webPageLabel(*pg));
-      html += webShellPageCss();
+      html += webShellHeader();
       html += webShellNav(pg->path);
-      html += webShellLinks();
       html += pg->body();
-      html += webShellFoot();
+      html += webShellFoot();   // links and disclaimer close the page
       ota_server.send(200, "text/html", html);
     });
     if (pg->routes) pg->routes(ota_server);

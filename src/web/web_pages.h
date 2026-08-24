@@ -18,12 +18,13 @@
 struct WebPage {
   // Both the URL and the identity used to mark the active tab.
   const char *path;
-  // Tab text. A page whose name depends on the device answers through
-  // label_fn instead and leaves this null.
-  const char *label;
-  // Null unless the label is not a constant - the backend page is called
-  // FilaMan or BamBuddy depending on what the scale is talking to.
-  const char *(*label_fn)();
+  // Tab text, resolved when the page is served rather than stored. Every
+  // label goes through the string table now, and the table is read against
+  // the language the device is currently set to - a fixed const char* here
+  // would have frozen the tab strip in whatever language was active when the
+  // firmware booted. The backend page uses the same hook to call itself
+  // FilaMan or BamBuddy.
+  const char *(*label)();
   WebGate gate;
   // Null means "always applicable". Otherwise the page is left out of the
   // navigation and answers 404 - the backend page does not exist at all on
@@ -44,7 +45,7 @@ struct WebPage {
 extern const WebPage* const WEB_PAGES[];
 extern const size_t  WEB_PAGE_COUNT;
 
-// The tab text for a page, resolving label_fn when there is one.
+// The tab text for a page.
 const char* webPageLabel(const WebPage &p);
 
 // Whether a page should appear in navigation: applicable to this device and

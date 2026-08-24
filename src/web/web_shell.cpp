@@ -2,200 +2,310 @@
 
 #include <string.h>
 
+#include <ArduinoJson.h>   // before lang.h: T() collides with its template parameter
+
 #include "app_config.h"
+#include "lang.h"
 #include "services/backend.h"
+#include "app/app_state.h"
+#include "services/mdns_service.h"
+#include "services/wifi_manager.h"
 #include "web/web_access.h"
 #include "web/web_pages.h"
 
-// Lifted verbatim from the original firmware-update page so nothing about the
-// look changes -- it is now just shared instead of duplicated.
-
-// The project logo, also served decoded from /favicon.jpg so the browser tab
-// carries the real mark instead of a generic globe.
+// The mark the pages show and the tab icon, served from /logo.jpg and
+// /favicon.jpg by web_assets.cpp rather than pasted into every page. As a
+// data URI it was 7.1 kB of base64 the browser could not cache, rebuilt on
+// the heap for every request.
 static const char LOGO_B64[] =
   "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";
 
+
 const char* webShellLogoBase64() { return LOGO_B64; }
 
+// Wraps a translated string as a JavaScript string literal, quotes included.
+// Every T() text that ends up inside a <script> block goes through this: the
+// German table carries apostrophes and quotation marks, and one unescaped
+// quote takes the whole page's script down without a word in the console.
+//
+// "<" is escaped as well. A literal "</script>" inside a JS string still ends
+// the script element as far as the HTML parser is concerned, so a translation
+// that ever contained one would break out of it.
+String jsStr(const char *in) {
+  String o = "\"";
+  for (const char *p = in ? in : ""; *p; p++) {
+    switch (*p) {
+      case '"':  o += "\\\""; break;
+      case '\\': o += "\\\\"; break;
+      case '\n': o += "\\n";  break;
+      case '\r': break;
+      case '<':  o += "\\x3C"; break;
+      default:   o += *p;
+    }
+  }
+  o += "\"";
+  return o;
+}
+
+// ---------------------------------------------------------------------------
+// The palette is the device's own, unchanged. What carries the look is the
+// type scale, the state pills and the space - a 720 px column instead of the
+// 480 px this was written at when the only viewer anyone pictured was a
+// phone.
+//
+// No web font on purpose. The scale sits on a LAN that may have no route to
+// the internet, so a font link would fail silently and drop to whatever the
+// browser picked.
+// ---------------------------------------------------------------------------
 String webShellHead(const char *subtitle) {
-  char ver_buf[20];
-  strncpy(ver_buf, FW_VERSION, sizeof(ver_buf)-1);
-  ver_buf[sizeof(ver_buf)-1] = '\0';
-  String html;
-  html += "<!DOCTYPE html><html><head>"
+  char ver[24];
+  strncpy(ver, FW_VERSION, sizeof(ver) - 1);
+  ver[sizeof(ver) - 1] = '\0';
+
+  String h;
+  h.reserve(4200);
+  h += F("<!DOCTYPE html><html><head>"
       "<meta charset='utf-8'>"
+      "<meta name='viewport' content='width=device-width,initial-scale=1'>"
       "<link rel='icon' type='image/png' href='/favicon.png'>"
       "<link rel='apple-touch-icon' href='/apple-touch-icon.png'>"
-      "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-      "<title>SpoolmanScale - " + String(subtitle) + "</title>"
-      "<style>"
+      "<title>SpoolmanScale - ");
+  h += subtitle;
+  h += F("</title><style>"
+      ":root{"
+      "--ground:#06080f;--surface:#0c1828;--surface-2:#0a1220;"
+      "--line:#1a3060;--line-soft:#14243c;"
+      "--ink:#e8f0ff;--ink-2:#c8d8f0;--ink-3:#4a6fa0;--ink-4:#2a4060;"
+      "--accent:#28d49a;--accent-dim:#123f34;--accent-line:#1d6b56;"
+      "--warn:#f0b838;--bad:#ff6b6b;--w:720px;"
+      "--sans:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
+      "--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}"
       "*{box-sizing:border-box;margin:0;padding:0}"
-      "body{background:#06080f;color:#e8f0ff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
-      "min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:32px 16px}"
-      ".logo{font-size:32px;font-weight:700;color:#28d49a;letter-spacing:-0.5px;margin-bottom:4px}"
-      ".logo span{color:#e8f0ff}"
-      ".version{font-size:13px;color:#2a4060;margin-bottom:32px}"
-      ".card{background:#0c1828;border:1px solid #1a3060;border-radius:14px;padding:28px;"
-      "width:100%;max-width:480px;margin-bottom:20px}"
-      ".card h2{color:#28d49a;font-size:16px;font-weight:600;margin-bottom:16px;"
-      "display:flex;align-items:center;gap:8px}"
-      ".card h2::before{content:'';display:inline-block;width:3px;height:16px;"
-      "background:#28d49a;border-radius:2px}"
-      ".links{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:480px}"
-      ".link-btn{display:flex;align-items:center;justify-content:center;gap:8px;"
-      "padding:12px 16px;border-radius:10px;text-decoration:none;"
-      "font-size:14px;font-weight:500;transition:opacity .2s;border:1px solid}"
-      ".link-btn:hover{opacity:0.8}"
-      ".link-kofi{background:#1a2800;color:#a0d840;border-color:#2a4010}"
-      ".link-github{background:#0a1828;color:#28d49a;border-color:#1a3060}"
-      ".link-discord{background:#12103a;color:#8090ff;border-color:#2a2860}"
-      ".link-maker{background:#1a0a18;color:#c060e0;border-color:#2a1a38}"
-      ".footer{margin-top:24px;font-size:11px;color:#1a3060;text-align:center}"
-      "</style></head><body>"
-      // Served from /logo.jpg rather than pasted in as a data URI. As a URI
-      // it was 7.1 kB of base64 rebuilt on the heap for every page and
-      // uncacheable, which grew worse with every page added.
-      "<img src='/logo.jpg' width='120' height='120' alt='SpoolmanScale'"
-      " style='width:120px;height:120px;border-radius:12px;margin-bottom:8px'>"
-      "<div class='version'>" + String(ver_buf) + " &nbsp;|&nbsp; " + String(subtitle) + "</div>";
-  return html;
+      "body{background:var(--ground);color:var(--ink);font-family:var(--sans);"
+      "font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;"
+      "padding:28px 20px 40px;display:flex;flex-direction:column;align-items:center;"
+      "gap:20px;min-height:100vh}"
+      ".wrap{width:100%;max-width:var(--w);display:flex;flex-direction:column;gap:18px}"
+      // header
+      ".head{display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:16px}"
+      ".mark{width:52px;height:52px;border-radius:13px;overflow:hidden;"
+      "border:1px solid var(--line)}"
+      ".mark img{width:100%;height:100%;display:block;object-fit:cover}"
+      ".wordmark{font-size:21px;font-weight:650;letter-spacing:-.02em;color:var(--accent)}"
+      ".wordmark span{color:var(--ink)}"
+      ".subline{font-size:12px;color:var(--ink-3);margin-top:2px;font-variant-numeric:tabular-nums}"
+      ".addr{display:flex;flex-direction:column;line-height:1.35;background:var(--surface-2);"
+      "border:1px solid var(--line-soft);border-radius:10px;padding:8px 12px}"
+      ".addr b{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--accent)}"
+      ".addr i{font-family:var(--mono);font-size:11px;font-style:normal;color:var(--ink-3)}"
+      // nav
+      ".nav{display:flex;flex-wrap:wrap;gap:4px;background:var(--surface-2);"
+      "border:1px solid var(--line-soft);border-radius:12px;padding:5px}"
+      ".nav a{color:var(--ink-3);text-decoration:none;font-size:13.5px;font-weight:500;"
+      "padding:8px 14px;border-radius:8px;transition:background .14s,color .14s}"
+      ".nav a:hover{color:var(--ink-2);background:#0f1e33}"
+      ".nav a.on{background:var(--accent-dim);color:var(--ink);"
+      "box-shadow:inset 0 0 0 1px var(--accent-line)}"
+      // cards
+      ".grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}"
+      ".card{background:var(--surface);border:1px solid var(--line-soft);"
+      "border-radius:14px;padding:18px 20px 20px}"
+      ".card.wide{grid-column:1/-1}"
+      ".card h2{font-size:11px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;"
+      "color:var(--ink-3);margin-bottom:14px}"
+      ".note{font-size:12.5px;color:var(--ink-3);line-height:1.55;margin-top:12px}"
+      ".note b{color:var(--ink-2);font-weight:500}"
+      // data rows: mono only for machine strings
+      ".rows{display:flex;flex-direction:column}"
+      ".row{display:flex;align-items:baseline;justify-content:space-between;gap:16px;"
+      "padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:14px}"
+      ".row:last-child{border-bottom:0;padding-bottom:0}.row:first-child{padding-top:0}"
+      ".k{color:var(--ink-3)}"
+      ".v{color:var(--ink-2);text-align:right;font-variant-numeric:tabular-nums}"
+      ".v.mono{font-family:var(--mono);font-size:13px}"
+      ".v em{font-style:normal;color:var(--ink-4);font-size:12.5px;margin-left:6px}"
+      // state as a shape, not only a word
+      ".pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;"
+      "letter-spacing:.04em;padding:3px 9px;border-radius:999px;border:1px solid}"
+      ".pill:before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}"
+      ".ok{color:var(--accent);border-color:var(--accent-line);background:#0b2b23}"
+      ".wr{color:var(--warn);border-color:#55420f;background:#221a06}"
+      ".bd{color:var(--bad);border-color:#6b2626;background:#2a0f0f}"
+      ".sig{display:inline-flex;gap:2px;align-items:flex-end;height:12px;margin-left:8px}"
+      ".sig i{width:3px;border-radius:1px;background:var(--ink-4)}"
+      ".sig i:nth-child(1){height:4px}.sig i:nth-child(2){height:7px}"
+      ".sig i:nth-child(3){height:10px}.sig i:nth-child(4){height:13px}"
+      // forms
+      ".field{display:flex;flex-direction:column;gap:7px}.field+.field{margin-top:16px}"
+      ".field label{font-size:13px;color:var(--ink-2)}"
+      ".hint{font-size:12px;color:var(--ink-4);line-height:1.55}"
+      ".inrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}"
+      "input[type=text],input[type=password],input[type=number],input[type=file],select{"
+      "flex:1;min-width:0;background:var(--ground);border:1px solid var(--line);"
+      "border-radius:9px;color:var(--ink);font:inherit;font-size:14px;padding:9px 12px}"
+      "input[type=number]{flex:0 0 86px;text-align:center}"
+      "input:focus,select:focus,button:focus-visible,a:focus-visible{"
+      "outline:2px solid var(--accent);outline-offset:1px}"
+      ".suffix{font-family:var(--mono);font-size:13px;color:var(--ink-3);white-space:nowrap}"
+      ".msg{font-size:12.5px;color:var(--accent);min-height:1.2em}"
+      ".msg.bad{color:var(--bad)}"
+      "button{appearance:none;cursor:pointer;font:inherit;font-size:13.5px;font-weight:550;"
+      "padding:9px 16px;border-radius:9px;background:#0f2a22;color:var(--accent);"
+      "border:1px solid var(--accent-line);transition:background .14s;white-space:nowrap}"
+      "button:hover{background:#164034}"
+      "button:disabled{opacity:.5;cursor:default}"
+      "button.quiet{background:#0f1b2c;color:var(--ink-2);border-color:var(--line)}"
+      "button.quiet:hover{background:#16273e}"
+      "button.danger{background:#2a0f0f;color:var(--bad);border-color:#6b2626}"
+      "button.danger:hover{background:#3a1616}"
+      "button.block{width:100%;margin-top:16px}"
+      ".range{display:flex;align-items:center;gap:12px}"
+      "input[type=range]{flex:1;accent-color:var(--accent)}"
+      ".range output{font-family:var(--mono);font-size:13px;color:var(--ink);width:34px;text-align:right}"
+      // tables and lists
+      "table{width:100%;border-collapse:collapse;font-size:13.5px}"
+      "th{font-size:10.5px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;"
+      "color:var(--ink-4);text-align:left;padding:0 8px 8px 0}"
+      "td{padding:5px 8px 5px 0;border-top:1px solid var(--line-soft);color:var(--ink-2)}"
+      ".listrow{display:flex;align-items:center;justify-content:space-between;gap:12px;"
+      "padding:10px 12px;border-radius:9px;background:var(--surface-2);"
+      "border:1px solid var(--line-soft)}"
+      ".listrow+.listrow{margin-top:7px}"
+      ".listrow .nm{font-family:var(--mono);font-size:13px;color:var(--ink-2)}"
+      ".listrow .sz{font-family:var(--mono);font-size:11.5px;color:var(--ink-4)}"
+      // links, one row at the bottom
+      ".links{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}"
+      ".links a{display:flex;align-items:center;justify-content:center;padding:11px 8px;"
+      "border-radius:10px;text-decoration:none;font-size:13px;font-weight:500;"
+      "background:var(--surface-2);color:var(--ink-3);border:1px solid var(--line-soft);"
+      "transition:color .14s,border-color .14s}"
+      ".links a:hover{color:var(--ink);border-color:var(--line)}"
+      ".foot{font-size:11.5px;color:var(--ink-4);text-align:center;line-height:1.6}"
+      "@media(max-width:700px){.grid{grid-template-columns:1fr}"
+      ".links{grid-template-columns:1fr 1fr}"
+      ".head{grid-template-columns:44px 1fr}.addr{grid-column:1/-1}}"
+      "@media(prefers-reduced-motion:reduce){*{transition:none!important}}"
+      "</style></head><body><div class='wrap'>");
+  return h;
 }
 
-String webShellPageCss() {
-  String html;
-  html += "<style>"
-      "input[type=file]{width:100%;padding:12px;background:#06080f;border:1px dashed #1a3060;"
-      "border-radius:8px;color:#4a6fa0;font-size:14px;margin-bottom:16px;cursor:pointer}"
-      "input[type=file]:hover{border-color:#28d49a}"
-      ".btn-flash{width:100%;padding:14px;background:#1a3020;color:#40c080;"
-      "border:1px solid #2a5030;border-radius:8px;font-size:16px;font-weight:600;"
-      "cursor:pointer;transition:background .2s}"
-      ".btn-flash:hover{background:#2a5030}"
-      ".hint{font-size:12px;color:#2a4060;margin-top:10px;text-align:center}"
-      ".log-row{display:flex;align-items:center;justify-content:space-between;"
-      "padding:10px 12px;background:#06080f;border:1px solid #1a3060;border-radius:8px;"
-      "margin-bottom:8px}"
-      ".log-name{color:#c8d8f0;font-size:14px;font-family:monospace}"
-      ".log-actions{display:flex;gap:6px}"
-      ".log-btn{padding:6px 14px;background:#0a1828;color:#28d49a;border:1px solid #1a3060;"
-      "border-radius:6px;font-size:13px;text-decoration:none;cursor:pointer}"
-      ".log-btn:hover{background:#1a3060}"
-      ".log-btn-del{color:#ff8080;border-color:#3a1010}"
-      ".log-btn-del:hover{background:#3a1010}"
-      ".sd-info-box{background:#090c0a;border-left:2px solid #1a3020;border-radius:0 4px 4px 0;"
-      "padding:5px 10px;margin-bottom:10px;font-size:11px;color:#2a5040;line-height:1.5}"
-      ".verbose-row{display:flex;align-items:center;justify-content:space-between;"
-      "padding:10px 12px;background:#06080f;border:1px solid #1a3060;border-radius:8px;"
-      "margin-bottom:12px}"
-      ".verbose-label{color:#c8d8f0;font-size:14px}"
-      ".verbose-state{display:inline-block;padding:3px 10px;border-radius:4px;"
-      "font-size:12px;font-weight:600;margin-left:8px}"
-      ".verbose-on{background:#1a3020;color:#40c080;border:1px solid #2a5030}"
-      ".verbose-off{background:#1a1828;color:#4a6fa0;border:1px solid #2a3050}"
-      ".swatch{flex:1;min-width:230px;background:#06080f;border:1px solid #1a3060;"
-      "border-radius:10px;padding:12px}"
-      ".swatch h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;"
-      "color:#4a6fa0;margin:0 0 10px}"
-      ".swatch .chip{width:52px;height:52px;border-radius:8px;"
-      "border:1px solid #2a4a80;flex:none}"
-      ".swatch .name{font-size:15px;color:#e8f0ff;font-weight:600}"
-      ".swatch .fmt{font-size:11px;color:#4a6fa0}"
-      ".swatch table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}"
-      ".swatch td{padding:3px 0;color:#c8d8f0}"
-      ".swatch td:first-child{color:#4a6fa0;width:42%}"
-      ".swatch tr.diff td{color:#e0a44a}"
-      ".btn-toggle{padding:6px 14px;background:#0a1828;color:#28d49a;border:1px solid #1a3060;"
-      "border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit}"
-      ".btn-toggle:hover{background:#1a3060}"
-      ".section-divider{height:1px;background:#1a3060;margin:12px 0}"
-      ".no-sd{text-align:center;padding:24px 16px}"
-      ".no-sd-title{color:#c8d8f0;font-size:15px;font-weight:600;margin-bottom:6px}"
-      ".no-sd-hint{color:#4a6fa0;font-size:13px;line-height:1.5}"
-      "</style>";
-  return html;
-}
+// The address block sits in the header because it is the one thing people
+// come to this page to read or to type, and it used to be a row halfway down
+// the status list. Name large, IP small underneath - not either or, because
+// some Android versions still will not resolve a .local name.
+String webShellHeader() {
+  String h;
+  h += F("<div class='head'><div class='mark'>"
+         "<img src='/logo.jpg' width='52' height='52' alt='SpoolmanScale'></div><div>"
+         "<div class='wordmark'>Spoolman<span>Scale</span></div>"
+         "<div class='subline'>");
+  h += FW_VERSION;
+  h += F(" &nbsp;&middot;&nbsp; ESP32-S3</div></div>");
 
-String webShellLinks() {
-  String html;
-  html += "<div class='links' style='margin-bottom:20px'>"
-      "<a class='link-btn link-kofi' href='https://ko-fi.com/formfollowsfunction' target='_blank'>"
-      "&#9749; Ko-fi</a>"
-      "<a class='link-btn link-github' href='https://github.com/Niko11111/SpoolmanScale' target='_blank'>"
-      "&#9873; GitHub</a>"
-      "<a class='link-btn link-discord' href='https://discord.gg/GzQzGa5pBG' target='_blank'>"
-      "&#128172; Discord</a>"
-      "<a class='link-btn link-maker' href='https://makerworld.com/de/@FormFollowsF/upload' target='_blank'>"
-      "&#11088; MakerWorld</a>"
-      "</div>";
-  return html;
-}
-
-String webShellFoot() {
-  // Both backends are named regardless of the active mode. This device is
-  // called SpoolmanScale, so in FilaMan mode a disclaimer mentioning only
-  // FilaMan would leave out the very name that could suggest an affiliation.
-  return String("<div class='footer'>Not affiliated with Spoolman, FilaMan or BamBuddy "
-                "- Open Source Project</div></body></html>");
+  if (wifi_ok) {
+    const String ip = wifiManagerLocalIP().toString();
+    h += F("<div class='addr'><b>");
+    if (mdnsRunning()) {
+      h += String(mdnsHostname()) + ".local";
+      h += F("</b><i>");
+      h += ip;
+    } else {
+      h += ip;
+      h += F("</b><i>");
+    }
+    h += F("</i></div>");
+  }
+  h += F("</div>");
+  return h;
 }
 
 String webShellNav(const char *active) {
-  String n = "<style>.nav{display:flex;flex-wrap:wrap;gap:8px;width:100%;max-width:480px;"
-             "margin-bottom:20px}.nav a{padding:8px 14px;background:#0a1828;border:1px solid "
-             "#1a3060;border-radius:8px;color:#4a6fa0;text-decoration:none;font-size:13px}"
-             ".nav a:hover{border-color:#28d49a;color:#e8f0ff}"
-             ".nav a.on{background:#1a3060;color:#e8f0ff;border-color:#28d49a}</style>"
-             "<div class='nav'>";
-  // One strip, built from the one table. There used to be two of these in two
-  // files with two hand-kept lists, and they disagreed: the status page showed
-  // the backend tab to a BamBuddy user and every other page hid it.
+  String n = F("<div class='nav'>");
+  // One strip built from the one table. There used to be two of these in two
+  // files with two hand kept lists, and they disagreed about BamBuddy.
   for (size_t i = 0; i < WEB_PAGE_COUNT; i++) {
     const WebPage &p = *WEB_PAGES[i];
     if (!webPageVisible(p)) continue;
-    n += String("<a class='") + (strcmp(p.path, active) == 0 ? "on" : "") +
+    n += String(F("<a class='")) + (strcmp(p.path, active) == 0 ? "on" : "") +
          "' href='" + p.path + "'>" + webPageLabel(p) + "</a>";
   }
-  n += "</div>";
+  n += F("</div>");
   return n;
 }
 
+String webShellLinks() {
+  return String(F(
+    "<div class='links'>"
+    "<a href='https://github.com/Niko11111/SpoolmanScale' target='_blank' rel='noopener'>GitHub</a>"
+    "<a href='https://ko-fi.com/formfollowsfunction' target='_blank' rel='noopener'>Ko-fi</a>"
+    "<a href='https://discord.gg/GzQzGa5pBG' target='_blank' rel='noopener'>Discord</a>"
+    "<a href='https://makerworld.com/de/@FormFollowsF/upload' target='_blank' rel='noopener'>MakerWorld</a>"
+    "</div>"));
+}
+
+// Links and disclaimer close every page. They used to be a 2x2 block of
+// saturated buttons directly under the logo, which put the loudest thing on
+// the page where the eye lands first and pushed the content below the fold.
+//
+// All three backends are named whatever the active one is. This device is
+// called SpoolmanScale, so naming only the active one would leave out the
+// very name that could suggest an affiliation.
+String webShellFoot() {
+  String f = webShellLinks();
+  f += F("<p class='foot'>");
+  f += T(STR_W_DISCLAIMER);
+  f += F("</p></div></body></html>");     // closes .wrap
+  return f;
+}
+
+// Restart overlay. The device is unreachable while it boots, so the page has
+// to say so and then find its own way back rather than leaving a dead tab.
+//
+// How long a boot takes is not a constant: an SD card adds roughly twenty
+// seconds, so the page asks the device what it has before deciding what
+// counts as too long. Guessing low would report a healthy boot as a failure.
 String webShellRestartUi() {
   String h;
+  h.reserve(2600);
   h += F("<style>"
          "#rbox{display:none;position:fixed;inset:0;background:rgba(6,8,15,.92);z-index:99;"
          "align-items:center;justify-content:center}"
-         "#rbox .rc{background:#0c1828;border:1px solid #1a3060;border-radius:14px;"
+         "#rbox .rc{background:var(--surface);border:1px solid var(--line);border-radius:14px;"
          "padding:32px 40px;text-align:center;max-width:360px}"
-         ".spin{width:44px;height:44px;margin:0 auto 18px;border:3px solid #1a3060;"
-         "border-top-color:#28d49a;border-radius:50%;animation:sp 1s linear infinite}"
+         ".spin{width:44px;height:44px;margin:0 auto 18px;border:3px solid var(--line);"
+         "border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite}"
          "@keyframes sp{to{transform:rotate(360deg)}}"
-         "#rtitle{color:#e8f0ff;font-size:16px;font-weight:600;margin-bottom:8px}"
-         "#rsec{color:#4a6fa0;font-size:13px;line-height:1.5}"
+         "#rtitle{color:var(--ink);font-size:16px;font-weight:600;margin-bottom:8px}"
+         "#rsec{color:var(--ink-3);font-size:13px;line-height:1.5}"
          "</style>"
          "<div id='rbox'><div class='rc'><div class='spin'></div>"
-         "<div id='rtitle'>Restarting</div>"
-         "<div id='rsec'>waiting for the device</div></div></div>"
-         "<script>"
+         "<div id='rtitle'>");
+  h += T(STR_W_RESTARTING);
+  h += F("</div><div id='rsec'>");
+  h += T(STR_W_RESTART_WAIT);
+  h += F("</div></div></div><script>"
+         "const RT={ask:");
+  h += jsStr(T(STR_W_RESTART_ASK));
+  h += F(",wait:");   h += jsStr(T(STR_W_RESTART_WAIT));
+  h += F(",sd:");     h += jsStr(T(STR_W_RESTART_SD));
+  h += F(",still:");  h += jsStr(T(STR_W_RESTART_LONG));
+  h += F(",gone:");   h += jsStr(T(STR_W_RESTART_GONE));
+  h += F(",reload:"); h += jsStr(T(STR_W_RELOAD));
+  h += F("};"
          "async function doRestart(){"
-         "if(!confirm('Restart the device now?'))return;"
-         // How long a boot takes is not a constant: an SD card adds roughly 20
-         // seconds, so ask the device what it has before deciding what counts
-         // as "too long". Guessing low would report a healthy boot as a failure.
+         "if(!confirm(RT.ask))return;"
          "let sd=false;"
          "try{sd=(await(await fetch('/status.json',{cache:'no-store'})).json()).sd}catch(e){}"
          "try{await fetch('/api/restart',{method:'POST'})}catch(e){}"
          "const box=document.getElementById('rbox'),m=document.getElementById('rsec');"
          "box.style.display='flex';"
-         "const expect=sd?35:10, limit=180;"
-         "let t=0;"
+         "const expect=sd?35:10,limit=180;let t=0;"
          "const iv=setInterval(async()=>{t++;"
-         "if(t<2){m.textContent='restarting'}"
-         "else if(t<expect){m.textContent='waiting for the device - '+t+'s'"
-         "+(sd?' (SD card fitted, boot takes about 20s longer)':'')}"
-         "else if(t<limit){m.textContent='still waiting - '+t+'s. It will reload as soon as "
-         "the device answers.'}"
+         "if(t<2){m.textContent=RT.wait}"
+         "else if(t<expect){m.textContent=RT.wait+' - '+t+'s'+(sd?RT.sd:'')}"
+         "else if(t<limit){m.textContent=RT.still+' - '+t+'s'}"
          "else{clearInterval(iv);"
-         "m.innerHTML=\"device has not answered in \"+limit+\"s.<br>It may be off the network - \"+"
-         "\"<a href='' style='color:#28d49a'>reload</a> to check.\";return}"
+         "m.innerHTML=RT.gone+\" <a href='' style='color:var(--accent)'>\"+RT.reload+'</a>';return}"
          // The old server answers for a moment after the request, so give it a
          // beat before the first poll or we reload against the dying instance.
          "if(t<2)return;"

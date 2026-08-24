@@ -932,4 +932,272 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Feld auf dem Server anlegen",   "Create the field on the server"     },  // STR_EF_CREATE_ROW
   { "Lade Spulen ...",               "Loading spools ..."                 },  // STR_LOADING_SPOOLS
   { "%d Spulen, sortiere ...",       "%d spools, sorting ..."             },  // STR_LOADING_FILTER
+
+  // ── Web interface ─────────────────────────────────────
+  { "Status",
+    "Status" },  // STR_W_NAV_STATUS
+  { "Backend",
+    "Backend" },  // STR_W_NAV_BACKEND
+  { "Trocknung",
+    "Drying" },  // STR_W_NAV_DRYING
+  { "Tags schreiben",
+    "Write tags" },  // STR_W_NAV_TAGS
+  { "Einstellungen",
+    "Settings" },  // STR_W_NAV_SETTINGS
+  { "Logs",
+    "Logs" },  // STR_W_NAV_LOGS
+  { "Firmware",
+    "Firmware" },  // STR_W_NAV_FIRMWARE
+  { "Keine Verbindung zu Spoolman, FilaMan oder BamBuddy - Open-Source-Projekt",
+    "Not affiliated with Spoolman, FilaMan or BamBuddy - Open Source Project" },  // STR_W_DISCLAIMER
+  { "Speichern",
+    "Save" },  // STR_W_SAVE
+  { "Gespeichert",
+    "Saved" },  // STR_W_SAVED
+  { "Fehler",
+    "Error" },  // STR_W_ERROR
+  { "Auf Standard zurück",
+    "Reset to defaults" },  // STR_W_DEFAULTS
+  { "%s ist ausgeschaltet",
+    "%s is switched off" },  // STR_W_OFF_TITLE
+  { "Dieser Bereich ist am Gerät abgeschaltet und wird deshalb nicht ausgeliefert.",
+    "This section is disabled on the device, so it is not being served." },  // STR_W_OFF_BODY
+  { "Hier einschalten:",
+    "Turn it on here:" },  // STR_W_OFF_WHERE
+  { "Einstellungen &rsaquo; System &rsaquo; Weboberfläche",
+    "Settings &rsaquo; System &rsaquo; Web interface" },  // STR_W_OFF_PATH
+  { "Danach diese Seite neu laden.",
+    "Then reload this page." },  // STR_W_OFF_RELOAD
+  { "Zurück zum Status",
+    "Back to status" },  // STR_W_BACK_STATUS
+  { "Netzwerk",
+    "Network" },  // STR_W_C_NETWORK
+  { "Hardware",
+    "Hardware" },  // STR_W_C_HARDWARE
+  { "Bestandsverwaltung",
+    "Inventory" },  // STR_W_C_INVENTORY
+  { "Zugriff",
+    "Access" },  // STR_W_C_ACCESS
+  { "Gerät",
+    "Device" },  // STR_W_C_DEVICE
+  { "WLAN",
+    "WiFi" },  // STR_W_R_WIFI
+  { "Adresse",
+    "Address" },  // STR_W_R_ADDRESS
+  { "Name",
+    "Name" },  // STR_W_R_NAME
+  { "Gateway",
+    "Gateway" },  // STR_W_R_GATEWAY
+  { "Waage",
+    "Scale" },  // STR_W_R_SCALE
+  { "NFC-Leser",
+    "NFC reader" },  // STR_W_R_NFC
+  { "SD-Karte",
+    "SD card" },  // STR_W_R_SD
+  { "Laufzeit",
+    "Uptime" },  // STR_W_R_UPTIME
+  { "Backend",
+    "Backend" },  // STR_W_R_BACKEND
+  { "Erreichbar",
+    "Reachable" },  // STR_W_R_REACHABLE
+  { "Tags gescannt",
+    "Tags scanned" },  // STR_W_R_SCANS
+  { "Ausführliches Protokoll",
+    "Verbose logging" },  // STR_W_R_VERBOSE
+  { "bereit",
+    "ready" },  // STR_W_S_READY
+  { "fehlt",
+    "missing" },  // STR_W_S_MISSING
+  { "an",
+    "on" },  // STR_W_S_ON
+  { "aus",
+    "off" },  // STR_W_S_OFF
+  { "ja",
+    "yes" },  // STR_W_S_YES
+  { "nein",
+    "no" },  // STR_W_S_NO
+  { "nicht verbunden",
+    "not connected" },  // STR_W_S_NOWIFI
+  { "Was ausgeschaltet ist, wird nicht ausgeliefert - auch die Endpunkte dahinter nicht. Umschalten am Gerät unter",
+    "A section that is off is not served at all, and neither are the endpoints behind it. Switch it on the device under" },  // STR_W_ACCESS_NOTE
+  { "Neu starten",
+    "Restart" },  // STR_W_RESTART
+  { "Alle Einstellungen liegen im NVS, ein Neustart verliert nichts.",
+    "Settings are kept in NVS, so a restart loses nothing." },  // STR_W_RESTART_NOTE
+  { "Gerät jetzt neu starten?",
+    "Restart the device now?" },  // STR_W_RESTART_ASK
+  { "Startet neu",
+    "Restarting" },  // STR_W_RESTARTING
+  { "warte auf das Gerät",
+    "waiting for the device" },  // STR_W_RESTART_WAIT
+  { " (SD-Karte steckt, der Start dauert rund 20 s länger)",
+    " (SD card fitted, boot takes about 20s longer)" },  // STR_W_RESTART_SD
+  { "immer noch am Warten",
+    "still waiting" },  // STR_W_RESTART_LONG
+  { "Das Gerät hat nicht geantwortet. Vielleicht ist es nicht mehr im Netz -",
+    "The device has not answered. It may be off the network -" },  // STR_W_RESTART_GONE
+  { "neu laden",
+    "reload" },  // STR_W_RELOAD
+  { "Adresse",
+    "Address" },  // STR_W_C_BACKEND_ADDR
+  { "Adresse des Backends",
+    "Backend address" },  // STR_W_HOST_LABEL
+  { "Hostname oder IP, bei Bedarf mit Port. Ein Name funktioniert auch hinter einem Reverse Proxy, wo die IP allein nicht ans Ziel führt.",
+    "Host name or IP, with a port when one is needed. A name also works behind a reverse proxy, where the IP alone does not reach the target." },  // STR_W_HOST_HINT
+  { "Ohne Port geht es auf 80. Üblich sind Spoolman 7912, FilaMan 8002, BamBuddy 8000.",
+    "Without a port this goes to 80. The usual ones are Spoolman 7912, FilaMan 8002, BamBuddy 8000." },  // STR_W_HOST_PORTHINT
+  { "Die Adresse darf nicht leer sein.",
+    "The address cannot be empty." },  // STR_W_HOST_EMPTY
+  { "https wird noch nicht unterstützt. Die Waage spricht nur http.",
+    "https is not supported yet. The scale speaks plain http only." },  // STR_W_HOST_HTTPS
+  { "Verbinde ...",
+    "Connecting ..." },  // STR_W_HOST_TESTING
+  { "Erreichbar",
+    "Reachable" },  // STR_W_HOST_OK
+  { "Nicht erreichbar",
+    "Not reachable" },  // STR_W_HOST_FAIL
+  { "Zugangsdaten",
+    "Credentials" },  // STR_W_C_CREDS
+  { "API-Key",
+    "API key" },  // STR_W_APIKEY
+  { "Gerätecode",
+    "Device code" },  // STR_W_DEVICE_CODE
+  { "Registrieren",
+    "Register" },  // STR_W_REGISTER
+  { "hinterlegt",
+    "set" },  // STR_W_SET
+  { "fehlt",
+    "missing" },  // STR_W_UNSET
+  { "Spoolman braucht keine Zugangsdaten.",
+    "Spoolman needs no credentials." },  // STR_W_NO_CREDS
+  { "Schwellwerte je Material",
+    "Thresholds per material" },  // STR_W_C_DRYING
+  { "Material",
+    "Material" },  // STR_W_DRY_MATERIAL
+  { "Gelb ab",
+    "Amber after" },  // STR_W_DRY_YELLOW
+  { "Rot ab",
+    "Red after" },  // STR_W_DRY_RED
+  { "Lagerung",
+    "Storage" },  // STR_W_DRY_STORAGE
+  { "offen",
+    "open" },  // STR_W_DRY_OPEN
+  { "trocken",
+    "sealed" },  // STR_W_DRY_SEALED
+  { "Tage",
+    "days" },  // STR_W_DRY_DAYS
+  { "Faktor für trockene Lagerung",
+    "Multiplier for sealed storage" },  // STR_W_DRY_MULT
+  { "Luftdicht gelagert hält Filament länger. Die Schwellwerte oben werden für diese Materialien mit dem Faktor multipliziert.",
+    "Filament stored airtight lasts longer. The thresholds above are multiplied by this factor for those materials." },  // STR_W_DRY_MULT_HINT
+  { "Gerätename",
+    "Device name" },  // STR_W_C_DEVNAME
+  { "Buchstaben, Ziffern und Bindestriche, bis %d Zeichen. Greift sofort, ohne Neustart. Der Name beim Router zieht beim nächsten Verbinden nach.",
+    "Letters, digits and hyphens, up to %d characters. Takes effect at once, without a restart. The name the router shows follows on the next connection." },  // STR_W_DEVNAME_HINT
+  { "Nur Buchstaben, Ziffern und Bindestriche, nicht am Anfang oder Ende.",
+    "Letters, digits and hyphens only, not at the start or end." },  // STR_W_DEVNAME_BAD
+  { "Jetzt erreichbar unter",
+    "Reachable now at" },  // STR_W_DEVNAME_NOW
+  { "Listenlimits",
+    "List limits" },  // STR_W_C_LIMITS
+  { "Spulenliste",
+    "Spool list" },  // STR_W_LIMIT_SPOOLS
+  { "Standortliste",
+    "Location list" },  // STR_W_LIMIT_LOCS
+  { "Wie viele Einträge die Auswahl am Gerät zeigt.",
+    "How many entries the picker on the device shows." },  // STR_W_LIMIT_HINT
+  { "Zu viele können einen Neustart auslösen.",
+    "Too many may cause a reboot." },  // STR_W_LIMIT_WARN
+  { "Anzeige",
+    "Display" },  // STR_W_C_DISPLAY
+  { "Helligkeitsanhebung",
+    "Brightness lift" },  // STR_W_GAIN
+  { "100 ist aus. Die Hintergrundbeleuchtung ist bei 255 schon am Anschlag, das hier ist der verbleibende Hebel auf ein dunkles Panel.",
+    "100 is off. The backlight is already at its ceiling at 255, so this is the only remaining lever on a dim panel." },  // STR_W_GAIN_HINT
+  { "Tag beschreiben",
+    "Write a tag" },  // STR_W_C_WRITETAG
+  { "Spule",
+    "Spool" },  // STR_W_TAG_SPOOL
+  { "-- Spule wählen --",
+    "-- pick a spool --" },  // STR_W_TAG_PICK
+  { "Format",
+    "Format" },  // STR_W_TAG_FORMAT
+  { "Auf dem Tag",
+    "On the tag" },  // STR_W_TAG_ONTAG
+  { "Würde geschrieben",
+    "Will be written" },  // STR_W_TAG_WILLBE
+  { "Kein Tag auf dem Leser.",
+    "No tag on the reader." },  // STR_W_TAG_NOTAG
+  { "Tag auf dem Leser:",
+    "Tag on the reader:" },  // STR_W_TAG_ONREADER
+  { "Erst eine Spule wählen.",
+    "Pick a spool first." },  // STR_W_TAG_PICKFIRST
+  { "Leerer Tag",
+    "Blank tag" },  // STR_W_TAG_BLANK
+  { "Daten, die diese Firmware nicht lesen kann",
+    "Data this firmware cannot read" },  // STR_W_TAG_UNKNOWN
+  { "Tag beschreiben",
+    "Write tag" },  // STR_W_TAG_WRITE
+  { "Tag überschreiben",
+    "Overwrite tag" },  // STR_W_TAG_OVERWRITE
+  { "Tag stimmt bereits überein",
+    "Tag already matches" },  // STR_W_TAG_MATCHES
+  { "Tag leeren",
+    "Erase tag" },  // STR_W_TAG_ERASE
+  { "Alles auf diesem Tag löschen?",
+    "Erase everything on this tag?" },  // STR_W_TAG_ERASE_ASK
+  { "Spule mit diesem Tag verknüpfen",
+    "Link the spool to this tag" },  // STR_W_TAG_LINK
+  { "Diese Spule hängt an %s, das damit zum vorherigen Tag wird.",
+    "This spool is linked to %s, which becomes its previous tag." },  // STR_W_TAG_RELINK
+  { "Eingereiht.",
+    "Queued." },  // STR_W_TAG_QUEUED
+  { "Spulenliste nicht verfügbar",
+    "Spool list unavailable" },  // STR_W_TAG_NOLIST
+  { "SKU",
+    "SKU" },  // STR_W_TAG_SKU
+  { "Düse",
+    "Nozzle" },  // STR_W_TAG_NOZZLE
+  { "Bett",
+    "Bed" },  // STR_W_TAG_BED
+  { "Gewicht",
+    "Weight" },  // STR_W_TAG_WEIGHT
+  { "Durchmesser",
+    "Diameter" },  // STR_W_TAG_DIA
+  { "Länge",
+    "Length" },  // STR_W_TAG_LENGTH
+  { "Beide Seiten kommen aus demselben Formatierer, deshalb sind sie Zeichen für Zeichen vergleichbar.",
+    "Both sides come from the same formatter, so they compare character for character." },  // STR_W_TAG_COMPARE
+  { "SD-Karte",
+    "SD card" },  // STR_W_C_LOGS
+  { "Ansehen",
+    "View" },  // STR_W_LOG_VIEW
+  { "Löschen",
+    "Delete" },  // STR_W_LOG_DELETE
+  { "Diese Datei löschen?",
+    "Delete this file?" },  // STR_W_LOG_DELETE_ASK
+  { "Keine SD-Karte erkannt",
+    "No SD card detected" },  // STR_W_LOG_NOSD
+  { "Eine FAT32-formatierte Karte einlegen, um die Diagnoseprotokolle zu aktivieren. Mit Karte dauert der Start rund 20 Sekunden länger.",
+    "Insert a FAT32 formatted card to enable diagnostic logging. Booting with a card takes about 20 seconds longer." },  // STR_W_LOG_NOSD_HINT
+  { "Noch keine Protokolle.",
+    "No logs yet." },  // STR_W_LOG_EMPTY
+  { "Firmware",
+    "Firmware" },  // STR_W_C_FIRMWARE
+  { "Installiert",
+    "Installed" },  // STR_W_FW_INSTALLED
+  { "Datei hochladen",
+    "Upload a file" },  // STR_W_FW_FILE
+  { "Flashen",
+    "Flash" },  // STR_W_FW_FLASH
+  { "Das Gerät startet nach dem Schreiben von selbst neu. Strom nicht trennen.",
+    "The device restarts by itself once written. Do not cut the power." },  // STR_W_FW_HINT
+  { "Update erfolgreich",
+    "Update successful" },  // STR_W_FW_OK
+  { "Das Gerät startet neu ...",
+    "Device is restarting ..." },  // STR_W_FW_RESTARTING
+  { "Update fehlgeschlagen",
+    "Update failed" },  // STR_W_FW_FAIL
+  { "Bitte erneut versuchen.",
+    "Please try again." },  // STR_W_FW_RETRY
 };

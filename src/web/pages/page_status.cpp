@@ -1,14 +1,23 @@
+// The landing page. It used to be the firmware upload, which meant browsing
+// the device address dropped the visitor straight into a file picker with no
+// way to reach anything else.
 #include "web/web_pages.h"
 
 #include <Arduino.h>
 
 #include "app/app_state.h"
 #include "app_config.h"
-#include "services/backend.h"
 #include "hardware/sd_logger.h"
+#include "services/backend.h"
+#include "services/mdns_service.h"
+#include "services/wifi_manager.h"
 #include "web/web_access.h"
 #include "web/web_shell.h"
-#include "services/wifi_manager.h"
+// Last on purpose: T() is a macro and ArduinoJson uses T as a template
+// parameter, so lang.h has to come after anything that pulls it in.
+#include "lang.h"
+
+static const char* label() { return T(STR_W_NAV_STATUS); }
 
 static String jsonEsc(const char *s) {
   String o;
@@ -62,6 +71,7 @@ static String statusJson() {
   j += ",\"scans\":" + String(scan_count);
   j += ",\"config\":" + String(webConfigEnabled() ? "true" : "false");
   j += ",\"maint\":" + String(webMaintenanceEnabled() ? "true" : "false");
+  j += ",\"creds\":" + String((backendIsFilaMan()||backendIsBamBuddy()) ? "true" : "false");
   j += ",\"filaman\":" + String(backendIsFilaMan() ? "true" : "false");
   j += ",\"fmKey\":" + String(filamanApiKey()[0] ? "true" : "false");
   j += ",\"fmToken\":" + String(filamanDeviceToken()[0] ? "true" : "false");
@@ -69,66 +79,116 @@ static String statusJson() {
   return j;
 }
 
-// Uses the shared shell, so the logo, palette, community links and disclaimer
-// are the same ones the rest of the pages carry rather than a lookalike.
+// A pill rather than the word on its own: state reads as a shape before it
+// reads as text, which is what a status page is for.
+static String pill(bool good, int good_id, int bad_id, bool warn_when_bad = false) {
+  String s = F("<span class='pill ");
+  s += good ? F("ok'>") : (warn_when_bad ? F("wr'>") : F("bd'>"));
+  s += T(good ? good_id : bad_id);
+  s += F("</span>");
+  return s;
+}
+
+static String row(const String &k, const String &v, bool mono = false) {
+  String s = F("<div class='row'><span class='k'>");
+  s += k;
+  s += mono ? F("</span><span class='v mono'>") : F("</span><span class='v'>");
+  s += v;
+  s += F("</span></div>");
+  return s;
+}
+
+static String uptimeText() {
+  uint32_t s = millis() / 1000UL;
+  uint32_t d = s / 86400UL; s %= 86400UL;
+  uint32_t h = s / 3600UL;  s %= 3600UL;
+  uint32_t m = s / 60UL;
+  char b[40];
+  if (d)      snprintf(b, sizeof(b), "%lu d %lu h", (unsigned long)d, (unsigned long)h);
+  else if (h) snprintf(b, sizeof(b), "%lu h %lu min", (unsigned long)h, (unsigned long)m);
+  else        snprintf(b, sizeof(b), "%lu min", (unsigned long)m);
+  return String(b);
+}
+
+// Four bars instead of a number nobody converts in their head. The number is
+// still there, quietly, for whoever wants it.
+static String signalBars() {
+  const int r = wifiManagerRSSI();
+  const int bars = (r >= -50) ? 4 : (r >= -65) ? 3 : (r >= -75) ? 2 : 1;
+  String s = F("<span class='sig'>");
+  for (int i = 1; i <= 4; i++) {
+    s += F("<i style='background:");
+    s += (i <= bars) ? (bars >= 3 ? F("var(--accent)") : F("var(--warn)")) : F("var(--ink-4)");
+    s += F("'></i>");
+  }
+  s += F("</span><em>");
+  s += String(r);
+  s += F(" dBm</em>");
+  return s;
+}
+
 static String body() {
   String h;
-  h.reserve(4500);
-  h += F("<style>"
-         ".row{display:flex;justify-content:space-between;align-items:center;gap:12px;"
-         "padding:7px 0;border-bottom:1px solid #0f1e30;font-size:14px}"
-         ".row:last-child{border-bottom:none}"
-         ".k{color:#4a6fa0}"
-         ".v{color:#c8d8f0;font-family:ui-monospace,Consolas,monospace;text-align:right;"
-         "word-break:break-all}"
-         ".ok{color:#40c080}.bad{color:#ff8080}.warn{color:#f0b838}"
-         ".tbtn{padding:8px 14px;background:#0a1828;color:#28d49a;border:1px solid #1a3060;"
-         "border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit}"
-         ".tbtn:hover{background:#1a3060}"
-         "</style>");
+  h.reserve(6000);
+  h += F("<div class='grid'>");
 
-  h += F("<div class='card'><h2>Status</h2><div id='st'></div></div>");
-  // Not a second navigation -- the tabs above already do that. This says which
+  // ---- network ----------------------------------------------------------
+  h += F("<div class='card'><h2>");
+  h += T(STR_W_C_NETWORK);
+  h += F("</h2><div class='rows'>");
+  if (wifi_ok) {
+    h += row(T(STR_W_R_WIFI), String(cfg_wifi_ssid) + signalBars());
+    h += row(T(STR_W_R_ADDRESS), wifiManagerLocalIP().toString(), true);
+    if (mdnsRunning()) h += row(T(STR_W_R_NAME), String(mdnsHostname()) + ".local", true);
+    h += row(T(STR_W_R_GATEWAY), wifiManagerGatewayIP().toString(), true);
+  } else {
+    h += row(T(STR_W_R_WIFI), String(F("<span class='pill bd'>")) + T(STR_W_S_NOWIFI) + "</span>");
+  }
+  h += F("</div></div>");
+
+  // ---- hardware ---------------------------------------------------------
+  h += F("<div class='card'><h2>");
+  h += T(STR_W_C_HARDWARE);
+  h += F("</h2><div class='rows'>");
+  h += row(T(STR_W_R_SCALE), pill(scl_ok, STR_W_S_READY, STR_W_S_MISSING));
+  h += row(T(STR_W_R_NFC),   pill(nfc_ok, STR_W_S_READY, STR_W_S_MISSING));
+  h += row(T(STR_W_R_SD),    pill(sd_available, STR_W_S_READY, STR_W_S_MISSING, true));
+  h += row(T(STR_W_R_UPTIME), uptimeText());
+  h += F("</div></div>");
+
+  // ---- inventory --------------------------------------------------------
+  h += F("<div class='card wide'><h2>");
+  h += T(STR_W_C_INVENTORY);
+  h += F("</h2><div class='rows'>");
+  h += row(T(STR_W_R_BACKEND), backendName());
+  h += row(T(STR_W_R_ADDRESS), backendBaseUrl(), true);
+  h += row(T(STR_W_R_REACHABLE), pill(sm_reachable, STR_W_S_YES, STR_W_S_NO));
+  h += row(T(STR_W_R_SCANS), String(scan_count));
+  h += F("</div></div>");
+
+  // ---- access -----------------------------------------------------------
+  // Not a second navigation - the tabs already do that. This says which
   // sections are actually being served, which the tabs cannot show.
-  h += F("<div class='card'><h2>Web access</h2><div id='acc'></div>"
-         "<p class='hint' id='hint' style='text-align:left;margin-top:12px'></p></div>");
+  h += F("<div class='card wide'><h2>");
+  h += T(STR_W_C_ACCESS);
+  h += F("</h2><div class='rows'>");
+  h += row(T(STR_W_NAV_SETTINGS), pill(webConfigEnabled(), STR_W_S_ON, STR_W_S_OFF, true));
+  h += row(T(STR_W_C_DEVICE),     pill(webMaintenanceEnabled(), STR_W_S_ON, STR_W_S_OFF, true));
+  h += F("</div><p class='note'>");
+  h += T(STR_W_ACCESS_NOTE);
+  h += F(" <b>");
+  h += T(STR_W_OFF_PATH);
+  h += F("</b>.</p></div>");
 
-  h += F("<div class='card'><h2>Device</h2>"
-         "<button class='tbtn' onclick='doRestart()'>Restart device</button>"
-         "<p class='hint' style='text-align:left'>Settings are kept in NVS, so a restart "
-         "loses nothing. The main screen adopts a new palette on the way back up.</p></div>");
+  // ---- device -----------------------------------------------------------
+  h += F("<div class='card wide'><h2>");
+  h += T(STR_W_C_DEVICE);
+  h += F("</h2><button class='quiet' onclick='doRestart()'>");
+  h += T(STR_W_RESTART);
+  h += F("</button><p class='note'>");
+  h += T(STR_W_RESTART_NOTE);
+  h += F("</p></div></div>");
 
-  h += F("<script>"
-         "function row(k,v){return \"<div class='row'><span class='k'>\"+k+"
-         "\"</span><span class='v'>\"+v+\"</span></div>\"}"
-         "function yn(b){return b?\"<span class='ok'>yes</span>\":\"<span class='bad'>no</span>\"}"
-         "function onoff(b){return b?\"<span class='ok'>on</span>\":\"<span class='warn'>off</span>\"}"
-         "async function tick(){"
-         "let d;try{d=await(await fetch('/status.json')).json()}catch(e){return}"
-         "let s='';"
-         "s+=row('WiFi',d.wifi?(d.ssid+\" <span class='k'>\"+d.rssi+\" dBm, \"+d.rssiWord+\"</span>\")"
-         ":\"<span class='bad'>not connected</span>\");"
-         "if(d.wifi){s+=row('IP',d.ip);s+=row('Gateway',d.gw);s+=row('DNS',d.dns)}"
-         "s+=row(d.backend,d.backendUrl);"
-         "s+=row(d.backend+' reachable',yn(d.backendOk));"
-         "if(d.filaman){s+=row('FilaMan API key',yn(d.fmKey));"
-         "s+=row('FilaMan device token',yn(d.fmToken))}"
-         "s+=row('Scale',yn(d.scale));"
-         "s+=row('NFC reader',yn(d.nfc));"
-         "s+=row('SD card',yn(d.sd));"
-         "s+=row('Tags scanned',d.scans);"
-         "s+=row('Uptime',d.uptime);"
-         "document.getElementById('st').innerHTML=s;"
-         "let a='';"
-         "a+=row('Settings',onoff(d.config));"
-         "a+=row('Firmware, logs and tags',onoff(d.maint));"
-         "document.getElementById('acc').innerHTML=a;"
-         "document.getElementById('hint').textContent="
-         "'A section that is off is not served at all, and neither are the "
-         "endpoints behind it. Turn one on under Settings > System > Web "
-         "interface on the scale.';}"
-         "tick();setInterval(tick,5000);"
-         "</script>");
   h += webShellRestartUi();
   return h;
 }
@@ -138,21 +198,23 @@ static void routes(WebServer &srv) {
   // remote action, so it sits behind a gate rather than being exposed
   // whenever the landing page is reachable.
   srv.on("/api/restart", HTTP_POST, [&srv]() {
-    if (!webRequire(srv, GATE_MAINT, "Restart")) return;
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_C_DEVICE))) return;
     logSD("Reboot: requested from web UI");
     srv.send(200, "application/json", "{\"ok\":true}");
     delay(400);            // let the response actually leave before the reset
     ESP.restart();
   });
 
+  // Polled by the restart overlay, which needs an answer the moment the
+  // device is back. Kept as JSON rather than folded into the page.
   srv.on("/status.json", HTTP_GET, [&srv]() {
-    if (!webRequire(srv, GATE_OPEN, "The web interface")) return;
+    if (!webRequire(srv, GATE_OPEN, T(STR_W_NAV_STATUS))) return;
     srv.send(200, "application/json", statusJson());
   });
 }
 
 extern const WebPage PAGE_STATUS;
 const WebPage PAGE_STATUS = {
-  "/", "Status", nullptr, GATE_OPEN, nullptr,
+  "/", label, GATE_OPEN, nullptr,
   body, routes
 };

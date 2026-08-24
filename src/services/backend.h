@@ -60,6 +60,11 @@ const char* backendHost();
 // existing behaviour and NVS key stay exactly as they were.
 void backendSetHost(const char* host);
 
+// Strips a leading "http://", surrounding whitespace and trailing slashes.
+// Applied by backendSetHost() itself; exposed so a caller can show the user
+// what will actually be stored before storing it. Returns the length written.
+size_t backendCleanHost(const char* in, char* out, size_t out_size);
+
 // FilaMan credentials. Empty strings when unset.
 const char* filamanApiKey();
 const char* filamanDeviceToken();

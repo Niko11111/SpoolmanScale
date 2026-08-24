@@ -1,72 +1,75 @@
-// SD card log browser, and the endpoints it polls.
+// The SD card log browser and the endpoints it polls.
 #include "web/web_pages.h"
 
 #include <Arduino.h>
-#include <WebServer.h>
 #include <SD.h>
+#include <WebServer.h>
 
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
 #include "web/web_access.h"
+#include "web/web_shell.h"
+// Last on purpose: T() is a macro and ArduinoJson uses T as a template
+// parameter, so lang.h has to come after anything that pulls it in.
+#include "lang.h"
+
+static const char* label() { return T(STR_W_NAV_LOGS); }
 
 static String body() {
-  String html;
-  html +=
-      "<div class='card'>"
-      "<h2>SD Card Logs</h2>"
-      "<div id='log-list'><div class='no-sd'><div class='no-sd-hint'>Loading...</div></div></div>"
-      "</div>"
-      "<style>#log-entries{max-height:184px;overflow-y:auto}</style>"
-      "<script>"
-      "function loadLogs(){"
-      "fetch('/api/logs').then(r=>r.json()).then(d=>{"
-      "var c=document.getElementById('log-list');"
-      "if(!d.sd){c.innerHTML="
-      "\"<div class='no-sd'>\"+"
-      "\"<div class='no-sd-title'>No SD card detected</div>\"+"
-      "\"<div class='no-sd-hint'>Insert a FAT32-formatted SD card<br>\"+"
-      "\"to enable diagnostic logging.<br>\"+"
-      "\"<span style='font-size:11px;color:#2a5a40'>* Booting with SD card increases startup time by ~20 seconds.</span></div>\"+"
-      "\"</div>\";return;}"
-      "var h=\"<div class='sd-info-box'>\"+"
-      "\"&#9432; SD card increases boot time by ~20 seconds. Use without SD for normal operation, insert only for debugging.</div>\"+"
-      "\"<div class='verbose-row'>\"+"
-      "\"<div><span class='verbose-label'>Verbose Logging</span>\"+"
-      "\"<span class='verbose-state \"+(d.verbose?'verbose-on':'verbose-off')+\"'>\"+"
-      "(d.verbose?'ON':'OFF')+\"</span></div>\"+"
-      "\"<button class='btn-toggle' onclick='toggleVerbose()'>Toggle</button>\"+"
-      "\"</div>\";"
-      "if(d.files.length===0){"
-      "h+=\"<div class='no-sd'>\"+"
-      "\"<div class='no-sd-title'>No log files yet</div>\"+"
-      "\"<div class='no-sd-hint'>Logs will appear here as you use the device.</div>\"+"
-      "\"</div>\";"
-      "}else{h+=\"<div class='section-divider'></div><div id='log-entries'>\";"
-      "d.files.forEach(f=>{"
-      "h+=\"<div class='log-row'><span class='log-name'>\"+f.name+\"</span>\"+"
-      "\"<div class='log-actions'>\"+"
-      "\"<a class='log-btn' href='/api/log?file=\"+encodeURIComponent(f.name)+\"' download='\"+f.name+\"'>Download</a>\"+"
-      "\"<a class='log-btn log-btn-del' href='#' onclick=\\\"delLog('\"+f.name+\"');return false;\\\">Delete</a>\"+"
-      "\"</div></div>\";});h+=\"</div>\";}"
-      "c.innerHTML=h;});}"
-      "function delLog(n){if(!confirm('Delete '+n+'?'))return;"
-      "fetch('/deletelog?file='+encodeURIComponent(n),{method:'POST'}).then(()=>loadLogs());}"
-      "function toggleVerbose(){"
-      "fetch('/api/verbose',{method:'POST'}).then(r=>r.json()).then(d=>{"
-      "loadLogs();"
-      "if(d.verbose)alert('Verbose logging ENABLED. Reboot device for full effect.');"
-      "else alert('Verbose logging DISABLED.');"
-      "});}"
-      "loadLogs();setInterval(loadLogs,30000);"
-      "</script>";
-  return html;
+  String h;
+  h.reserve(3200);
+  h += F("<div class='grid'><div class='card wide'><h2>");
+  h += T(STR_W_C_LOGS);
+  h += F("</h2><div id='lg'></div>"
+         "<div class='rows' style='margin-top:16px'><div class='row'>"
+         "<span class='k'>");
+  h += T(STR_W_R_VERBOSE);
+  h += F("</span><span class='v'>"
+         "<button id='vb' class='quiet' onclick='toggleVerbose()'></button>"
+         "</span></div></div></div></div>");
+
+  h += F("<script>const M={view:");
+  h += jsStr(T(STR_W_LOG_VIEW));
+  h += F(",del:");    h += jsStr(T(STR_W_LOG_DELETE));
+  h += F(",ask:");    h += jsStr(T(STR_W_LOG_DELETE_ASK));
+  h += F(",nosd:");   h += jsStr(T(STR_W_LOG_NOSD));
+  h += F(",nosdh:");  h += jsStr(T(STR_W_LOG_NOSD_HINT));
+  h += F(",empty:");  h += jsStr(T(STR_W_LOG_EMPTY));
+  h += F(",on:");     h += jsStr(T(STR_W_S_ON));
+  h += F(",off:");    h += jsStr(T(STR_W_S_OFF));
+  h += F("};"
+         "function kb(n){return n>=1048576?(n/1048576).toFixed(2)+' MB'"
+         ":(n/1024).toFixed(0)+' KB';}"
+         "function loadLogs(){fetch('/api/logs').then(r=>r.json()).then(d=>{"
+         "const c=document.getElementById('lg');"
+         "document.getElementById('vb').textContent=d.verbose?M.on:M.off;"
+         "if(!d.sd){c.innerHTML='<div class=\"hint\"><b style=\"color:var(--ink-2)\">'"
+         "+M.nosd+'</b><br>'+M.nosdh+'</div>';return;}"
+         "if(!d.files||!d.files.length){c.innerHTML='<div class=\"hint\">'+M.empty+'</div>';return;}"
+         "c.innerHTML=d.files.map(f=>"
+         "'<div class=\"listrow\"><span class=\"nm\">'+f.name+'</span>'"
+         "+'<span style=\"display:flex;align-items:center;gap:10px\">'"
+         "+'<span class=\"sz\">'+kb(f.size)+'</span>'"
+         "+'<a href=\"/api/log?file='+encodeURIComponent(f.name)+'\" target=\"_blank\">'"
+         "+'<button class=\"quiet\">'+M.view+'</button></a>'"
+         "+'<button class=\"danger\" onclick=\"delLog(\''+f.name+'\')\">'+M.del+'</button>'"
+         "+'</span></div>').join('');});}"
+         "function delLog(n){if(!confirm(M.ask))return;"
+         "fetch('/api/deletelog?file='+encodeURIComponent(n),{method:'POST'})"
+         ".then(()=>loadLogs());}"
+         "function toggleVerbose(){fetch('/api/verbose',{method:'POST'})"
+         ".then(r=>r.json()).then(d=>{"
+         "document.getElementById('vb').textContent=d.verbose?M.on:M.off;});}"
+         "document.addEventListener('DOMContentLoaded',loadLogs);"
+         "</script>");
+  return h;
 }
 
 static void routes(WebServer &srv) {
   // ── SD-Card Log endpoints ─────────────────────────────────
   // GET /logs -> JSON list of available log files
   srv.on("/api/logs", HTTP_GET, [&srv]() {
-    if (!webRequire(srv, GATE_MAINT, "Logs")) return;
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
     if (!sd_available) {
       srv.send(200, "application/json", "{\"sd\":false,\"verbose\":false,\"files\":[]}");
       return;
@@ -102,7 +105,7 @@ static void routes(WebServer &srv) {
 
   // GET /log?file=<filename> -> serve log file content
   srv.on("/api/log", HTTP_GET, [&srv]() {
-    if (!webRequire(srv, GATE_MAINT, "Logs")) return;
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
     if (!sd_available) { srv.send(404, "text/plain", "No SD card"); return; }
     if (!srv.hasArg("file")) {
       srv.send(400, "text/plain", "Missing file param");
@@ -127,7 +130,7 @@ static void routes(WebServer &srv) {
 
   // POST /deletelog?file=<name> -> delete a log file
   srv.on("/api/deletelog", HTTP_POST, [&srv]() {
-    if (!webRequire(srv, GATE_MAINT, "Logs")) return;
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
     if (!sd_available) { srv.send(404, "text/plain", "No SD card"); return; }
     if (!srv.hasArg("file")) {
       srv.send(400, "text/plain", "Missing file param");
@@ -149,7 +152,7 @@ static void routes(WebServer &srv) {
 
   // POST /verbose -> toggle verbose.txt on SD root
   srv.on("/api/verbose", HTTP_POST, [&srv]() {
-    if (!webRequire(srv, GATE_MAINT, "Logs")) return;
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
     if (!sd_available) {
       srv.send(404, "application/json", "{\"error\":\"No SD card\"}");
       return;
@@ -181,6 +184,6 @@ static void routes(WebServer &srv) {
 
 extern const WebPage PAGE_LOGS;
 const WebPage PAGE_LOGS = {
-  "/logs", "Logs", nullptr, GATE_MAINT, nullptr,
+  "/logs", label, GATE_MAINT, nullptr,
   body, routes
 };
