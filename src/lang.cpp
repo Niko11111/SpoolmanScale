@@ -1216,4 +1216,6 @@ const char* const STRINGS[STR_COUNT][2] = {
     "The key is in BamBuddy under settings. Leave the field empty if the instance runs without authentication." },  // STR_W_BB_SETUP
   { "Strom nicht trennen",
     "Do not cut the power" },  // STR_OTA_KEEP_POWER
+  { "Kaffee ausgeben",
+    "Buy me a coffee" },  // STR_W_KOFI
 };

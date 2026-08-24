@@ -195,12 +195,22 @@ String webShellHead(const char *subtitle) {
       // currentColor, so each mark takes the colour of the button it sits in:
       // green inside Ko-fi, grey in the other three.
       ".links svg{width:15px;height:15px;flex:none;fill:currentColor}"
+      // Ko-fi carries the long label and falls back to the bare name where it
+      // will not fit. display:none takes the hidden one out of the flex row
+      // and out of the accessibility tree, so there is neither a phantom gap
+      // nor a link that reads itself twice.
+      ".links .sm{display:none}"
       // Was --ink-4, which is 1.91:1 against the page - the last line still
       // carrying the fault the hints and notes were moved off in beta.38.
       ".foot{font-size:11.5px;color:var(--ink-soft);text-align:center;line-height:1.6}"
       "@media(max-width:700px){.grid{grid-template-columns:1fr}"
       ".links{grid-template-columns:1fr 1fr}"
       ".head{grid-template-columns:44px 1fr}.addr{grid-column:1/-1}}"
+      // Derived, not guessed: at two columns the cell is (V-50)/2 wide, and
+      // the German label needs 150px, which solves to V >= 350. German is the
+      // longer language here and sets the edge.
+      "@media(max-width:360px){.links .lg{display:none}"
+      ".links .sm{display:inline}}"
       "@media(prefers-reduced-motion:reduce){*{transition:none!important}}"
       "</style></head><body><div class='wrap'>");
   return h;
@@ -266,7 +276,9 @@ String webShellNav(const char *active) {
 #define SVG_END  "'/></svg>"
 
 String webShellLinks() {
-  return String(F(
+  String h;
+  h.reserve(2600);
+  h += F(
     "<div class='links'>"
     "<a href='https://github.com/Niko11111/SpoolmanScale' target='_blank' rel='noopener'>"
     SVG_OPEN
@@ -280,11 +292,14 @@ String webShellLinks() {
     " 0 0024 12.5C24 5.87 18.63.5 12 .5z"
     SVG_END "GitHub</a>"
 
-    "<a class='support' href='https://ko-fi.com/formfollowsfunction' target='_blank' rel='noopener'>"
+    "<a class='support' title='Ko-fi' href='https://ko-fi.com/formfollowsfunction' target='_blank' rel='noopener'>"
     SVG_OPEN
     "M12 21s-6.7-4.35-9.1-7.8C.6 10.1 2.1 6 5.8 6c2 0 3.4 1.1 4.2 2.2C10.8 7.1 "
     "12.2 6 14.2 6c3.7 0 5.2 4.1 2.9 7.2C18.7 16.65 12 21 12 21z"
-    SVG_END "Ko-fi</a>"
+    SVG_END "<span class='lg'>");
+  h += T(STR_W_KOFI);
+  // The name leaves the label on wide screens, so it stays reachable on hover.
+  h += F("</span><span class='sm'>Ko-fi</span></a>"
 
     "<a href='https://discord.gg/GzQzGa5pBG' target='_blank' rel='noopener'>"
     SVG_OPEN
@@ -302,7 +317,8 @@ String webShellLinks() {
     "l5.94-3.3L12 4.79zM5.5 9.79v5.79l5.5 3.07v-5.79L5.5 9.79zm13 0l-5.5 3.07v5."
     "79l5.5-3.07V9.79z"
     SVG_END "MakerWorld</a>"
-    "</div>"));
+    "</div>");
+  return h;
 }
 
 // Links and disclaimer close every page. They used to be a 2x2 block of
