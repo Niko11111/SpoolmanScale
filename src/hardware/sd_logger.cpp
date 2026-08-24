@@ -31,6 +31,56 @@ static char sd_log_file[24] = "";
 
 #define SD_LOG_MAX_SIZE  (1024UL * 1024UL)
 
+// 240 lines is a few minutes of ordinary running and the whole of a boot,
+// which is what this exists for. 38 kB, and it goes in PSRAM: the internal
+// heap is the one that runs out.
+#define LOG_RING_LINES 240
+#define LOG_RING_WIDTH 160
+
+static char             *ring      = nullptr;
+static uint16_t          ring_head = 0;   // next slot to write
+static uint16_t          ring_used = 0;
+static SemaphoreHandle_t ring_lock = nullptr;
+
+void logRingInit() {
+  if (ring) return;
+  ring_lock = xSemaphoreCreateMutex();
+  if (!ring_lock) return;
+  // No fallback to the internal heap on purpose. 38 kB there would cost more
+  // than the feature is worth, and a board without PSRAM simply logs to the
+  // card as it always did.
+  ring = (char *)heap_caps_malloc((size_t)LOG_RING_LINES * LOG_RING_WIDTH,
+                                  MALLOC_CAP_SPIRAM);
+  if (ring) memset(ring, 0, (size_t)LOG_RING_LINES * LOG_RING_WIDTH);
+}
+
+static void ringPut(const char *stamp, const char *msg) {
+  if (!ring || !ring_lock) return;
+  // A log line is never worth blocking the loop for. Dropping one beats
+  // holding up a weight reading.
+  if (xSemaphoreTake(ring_lock, pdMS_TO_TICKS(20)) != pdTRUE) return;
+  snprintf(ring + (size_t)ring_head * LOG_RING_WIDTH, LOG_RING_WIDTH,
+           "[%s] %s", stamp, msg);
+  ring_head = (uint16_t)((ring_head + 1) % LOG_RING_LINES);
+  if (ring_used < LOG_RING_LINES) ring_used++;
+  xSemaphoreGive(ring_lock);
+}
+
+size_t logRingCount() { return ring_used; }
+
+bool logRingGet(size_t idx, char *out, size_t out_len) {
+  if (!ring || !ring_lock || !out || out_len == 0) return false;
+  if (xSemaphoreTake(ring_lock, pdMS_TO_TICKS(20)) != pdTRUE) return false;
+  bool ok = idx < ring_used;
+  if (ok) {
+    const size_t oldest = (ring_head + LOG_RING_LINES - ring_used) % LOG_RING_LINES;
+    snprintf(out, out_len, "%s",
+             ring + ((oldest + idx) % LOG_RING_LINES) * LOG_RING_WIDTH);
+  }
+  xSemaphoreGive(ring_lock);
+  return ok;
+}
+
 String getCurrentLogFilename() {
   struct tm t;
   if (!getLocalTime(&t)) {
@@ -51,6 +101,26 @@ void sdLogResetSize() {
 }
 
 void logSD(const char* msg) {
+  // Before the card is considered: this is what a device without one keeps.
+  // With no clock yet, uptime says more than a row of question marks.
+  struct tm now;
+  const bool have_clock = getLocalTime(&now);
+  char stamp[10];
+  if (have_clock) {
+    snprintf(stamp, sizeof(stamp), "%02d:%02d:%02d",
+             now.tm_hour, now.tm_min, now.tm_sec);
+  } else {
+    strncpy(stamp, "??:??:??", sizeof(stamp) - 1);
+    stamp[sizeof(stamp) - 1] = '\0';
+  }
+  if (have_clock) {
+    ringPut(stamp, msg);
+  } else {
+    char up[12];
+    snprintf(up, sizeof(up), "+%lus", (unsigned long)(millis() / 1000));
+    ringPut(up, msg);
+  }
+
   if (!sd_available) return;
 
   String fname = getCurrentLogFilename();
@@ -69,24 +139,14 @@ void logSD(const char* msg) {
 
   if (sd_log_size > SD_LOG_MAX_SIZE) return;
 
-  char timestamp[10];
-  struct tm t;
-  if (getLocalTime(&t)) {
-    snprintf(timestamp, sizeof(timestamp), "%02d:%02d:%02d",
-      t.tm_hour, t.tm_min, t.tm_sec);
-  } else {
-    strncpy(timestamp, "??:??:??", sizeof(timestamp)-1);
-  }
-
   File f = SD.open(fname.c_str(), FILE_APPEND);
   if (!f) return;
-  size_t written = f.printf("[%s] %s\n", timestamp, msg);
+  size_t written = f.printf("[%s] %s\n", stamp, msg);
   f.close();
   sd_log_size += written;
 }
 
 void logSDf(const char* fmt, ...) {
-  if (!sd_available) return;
   char buf[256];
   va_list args;
   va_start(args, fmt);
@@ -114,6 +174,13 @@ const char* resetReasonStr() {
 }
 
 void writeBootBlock(const char* boot_or_reboot) {
+  // One line in the session log, so a ring without a card still says which
+  // firmware and which backend produced everything below it.
+  char backend_ring[160];
+  backendStatusLine(backend_ring, sizeof(backend_ring));
+  logSDf("%s: SpoolmanScale %s | %s | %s", boot_or_reboot, FW_VERSION,
+         resetReasonStr(), backend_ring);
+
   if (!sd_available) return;
 
   String fname = getCurrentLogFilename();

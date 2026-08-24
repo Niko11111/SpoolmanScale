@@ -1206,6 +1206,14 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Could not be loaded." },  // STR_W_LOAD_FAIL
   { "Eine eingelegte SD-Karte verlängert den Start um rund 20 Sekunden. Für den normalen Betrieb ohne Karte laufen lassen und sie nur zum Suchen eines Fehlers einlegen.",
     "A fitted SD card makes the device take about 20 seconds longer to start. Run it without a card normally and insert one only to chase a fault." },  // STR_W_LOG_NOTE
+  { "Sitzungsprotokoll",
+    "Session log" },  // STR_W_C_SESSION
+  { "Die letzten Zeilen seit dem Start, im Arbeitsspeicher gehalten und beim Neustart weg. Eine SD-Karte braucht es nur, um Protokolle zu behalten.",
+    "The last lines since start, held in memory and gone on restart. An SD card is only needed to keep logs, not to have them." },  // STR_W_SESSION_NOTE
+  { "Noch nichts protokolliert.",
+    "Nothing logged yet." },  // STR_W_SESSION_EMPTY
+  { "Aktualisieren",
+    "Refresh" },  // STR_W_SESSION_REFRESH
   { "Einen beschreibbaren NTAG auflegen, Spule wählen, schreiben. Was auf dem Tag steht, wird ersetzt. Werkstags sind meist MIFARE Classic oder gesperrt und lassen sich nur lesen.",
     "Place a writable NTAG on the reader, pick a spool, and write it. Whatever is already on the tag is replaced. Factory tags are usually MIFARE Classic or locked, and can only be read." },  // STR_W_TAG_NOTE
   { "<b>Welcher Tag für welches Format.</b> OpenSpool braucht rund 170 Byte und damit einen <b>NTAG215</b> (496 Byte) oder <b>NTAG216</b> (872 Byte). Auf einen NTAG213 (144 Byte) passt davon nichts, dort geht nur Anycubic ACE, das mit 112 Byte auskommt. Meldet ein Tag keine Größe, rechnet die Waage sicherheitshalber mit den 144 Byte eines NTAG213 - dann den Tag einmal mit einer NFC-App als NDEF formatieren, das trägt die Größe ein.",

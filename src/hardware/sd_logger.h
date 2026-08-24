@@ -9,6 +9,21 @@ String getCurrentLogFilename();
 void logSD(const char* msg);
 void logSDf(const char* fmt, ...);
 void initSD();
+
+// ---- session log --------------------------------------------------
+//
+// Every line also lands in a ring buffer in PSRAM, whether or not a card is
+// fitted. Without one that ring is the only log the device has, which is
+// exactly the case where somebody is trying to find out why something did
+// not work. The card is for keeping logs, not for having them.
+//
+// Allocated once at boot and lost on restart. Reads may come from the web
+// task while the loop writes, so both sides take a mutex.
+void   logRingInit();
+size_t logRingCount();
+// idx 0 is the oldest line still held. False when the ring is empty, the
+// index is past the end, or the buffer could not be allocated.
+bool   logRingGet(size_t idx, char *out, size_t out_len);
 void cleanOldLogs();
 
 // Makes the writer forget how big it believes today's log to be, so the next
