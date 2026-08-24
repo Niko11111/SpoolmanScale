@@ -54,6 +54,8 @@
 #include "ui/drying_reminder_screen.h"
 #include "ui/extra_fields_screen.h"
 #include "ui/tag_field_screen.h"
+#include "ui/timezone_screen.h"
+#include "ui/language_screen.h"
 #include "ui/factor_screen.h"
 #include "ui/header_status.h"
 #include "ui/info_screen.h"
@@ -366,6 +368,23 @@ void appLoop() {
     buildBamBuddyDriedScreen();    // releases the previous instance itself
     hideAllOverlays();
     lv_obj_clear_flag(scr_bambuddy_dried, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_timezone_pending) {
+    show_timezone_pending = false;
+    // The language screen is not part of the overlay set, so hiding the
+    // overlays does not touch it. It has to go explicitly or it stays alive
+    // underneath and comes back when this one is closed.
+    closeLanguageScreen();
+    buildTimeZoneScreen();         // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_timezone, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_language_pending) {
+    show_language_pending = false;
+    hideAllOverlays();
+    // Rebuilt rather than revealed: the zone button has to show what was just
+    // picked.
+    showLanguageScreen();
   }
   if (show_ams_assign_pending) {
     show_ams_assign_pending = false;

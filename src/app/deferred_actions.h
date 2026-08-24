@@ -12,6 +12,8 @@ extern bool show_ams_assign_pending;
 extern bool show_filaman_fields_pending;
 extern bool show_bambuddy_options_pending;
 extern bool show_bambuddy_dried_pending;
+extern bool show_timezone_pending;
+extern bool show_language_pending;
 extern bool show_spoolman_options_pending;
 // Turning the card_uids switch on needs the field to exist on the server, so
 // the assistant is opened right away rather than left for the user to find.

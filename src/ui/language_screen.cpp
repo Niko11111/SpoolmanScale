@@ -8,12 +8,38 @@
 #include "lang.h"
 #include "services/prefs_store.h"
 #include "reboot_popup.h"
+#include "app/deferred_actions.h"
+#include "services/time_service.h"
 
+
+// The screen manages itself rather than living in app_state: it is created
+// on demand and deleted by its own buttons. The pointer exists so the time
+// zone screen can take its place without leaving it alive underneath.
+static lv_obj_t *scr_language = nullptr;
+
+void closeLanguageScreen() {
+  if (!scr_language) return;
+  lv_obj_del_async(scr_language);
+  scr_language = nullptr;
+}
 
 void showLanguageScreen() {
   logSD("SHOW: LanguageScreen");
   logSD("UI: Screen -> Language");
+  closeLanguageScreen();
   lv_obj_t *scr = lv_obj_create(lv_scr_act());
+  scr_language = scr;
+  // Whoever deletes it, the pointer stops pointing at it. The back and close
+  // buttons below delete the screen directly, so clearing the pointer in one
+  // place beats remembering it in three.
+  //
+  // Only when it is still this object. closeLanguageScreen() deletes
+  // asynchronously, so opening the screen twice in quick succession builds the
+  // replacement before the old one is destroyed - and an unconditional clear
+  // would then null the pointer to the screen that is now up.
+  lv_obj_add_event_cb(scr, [](lv_event_t *e){
+    if (scr_language == lv_event_get_target(e)) scr_language = nullptr;
+  }, LV_EVENT_DELETE, NULL);
   lv_obj_set_size(scr, 480, 320);
   lv_obj_set_pos(scr, 0, 0);
   lv_obj_set_style_bg_color(scr, lv_color_hex(0x0a1020), 0);
@@ -165,10 +191,48 @@ void showLanguageScreen() {
     showRebootPopup();
   }, LV_EVENT_CLICKED, NULL);
 
-  lv_obj_t *hint2 = lv_label_create(scr);
-  lv_label_set_text(hint2, T(STR_LANG_HINT));
-  lv_obj_set_style_text_color(hint2, lv_color_hex(0x2a4060), 0);
-  lv_obj_set_style_text_font(hint2, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_style_text_align(hint2, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(hint2, LV_ALIGN_BOTTOM_MID, 0, -8);
+  // Time zone. A row rather than a pair of buttons, because there are twelve
+  // of them: the button carries the current zone so the setting can be read
+  // without opening the picker.
+  //
+  // The hint that used to sit here was a second copy of the one at the top of
+  // the screen, word for word.
+  lv_obj_t *lbl_tz = lv_label_create(scr);
+  { char buf[32]; strncpy(buf, T(STR_TZ_TITLE), sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    lv_label_set_text(lbl_tz, buf); }
+  lv_obj_set_style_text_color(lbl_tz, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_font(lbl_tz, &lv_font_montserrat_ext_14, 0);
+  lv_obj_set_pos(lbl_tz, 12, 238);
+
+  lv_obj_t *btn_tz = lv_btn_create(scr);
+  lv_obj_set_size(btn_tz, 464, 44);
+  lv_obj_set_pos(btn_tz, 8, 258);
+  lv_obj_set_style_bg_color(btn_tz, lv_color_hex(0x0a1e30), 0);
+  lv_obj_set_style_bg_color(btn_tz, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_tz, 10, 0);
+  lv_obj_set_style_shadow_width(btn_tz, 0, 0);
+  lv_obj_set_style_border_width(btn_tz, 1, 0);
+  lv_obj_set_style_border_color(btn_tz, lv_color_hex(0x1a3050), 0);
+
+  lv_obj_t *lbl_tz_val = lv_label_create(btn_tz);
+  { char buf[48]; strncpy(buf, timeZoneName(), sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    lv_label_set_text(lbl_tz_val, buf); }
+  lv_obj_set_style_text_color(lbl_tz_val, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_font(lbl_tz_val, &lv_font_montserrat_ext_16, 0);
+  lv_obj_align(lbl_tz_val, LV_ALIGN_LEFT_MID, 14, 0);
+
+  lv_obj_t *lbl_tz_arr = lv_label_create(btn_tz);
+  lv_label_set_text(lbl_tz_arr, LV_SYMBOL_RIGHT);
+  lv_obj_set_style_text_color(lbl_tz_arr, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_font(lbl_tz_arr, &lv_font_montserrat_ext_16, 0);
+  lv_obj_align(lbl_tz_arr, LV_ALIGN_RIGHT_MID, -14, 0);
+
+  // No reboot popup: unlike the language and the date format above, a zone
+  // takes effect on the next localtime_r().
+  lv_obj_add_event_cb(btn_tz, [](lv_event_t *e){
+    logSD("BTN: Language -> Time zone");
+    show_timezone_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
 }

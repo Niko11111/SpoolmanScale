@@ -19,6 +19,7 @@
 #include "services/list_limits.h"
 #include "services/mdns_service.h"
 #include "services/prefs_store.h"
+#include "services/time_service.h"
 #include "services/wifi_manager.h"
 #include "web/web_access.h"
 #include "web/web_shell.h"
@@ -105,7 +106,7 @@ static String nameStateJson() {
 
 static String body() {
   String h;
-  h.reserve(6000);
+  h.reserve(7400);
 
   h += F("<div class='grid'><div class='card wide'><h2>");
   h += T(STR_W_C_DEVNAME);
@@ -188,7 +189,43 @@ static String body() {
   h += F("</span></div>"
          "<button id='gn-b' class='quiet block'>");
   h += T(STR_W_SAVE);
-  h += F("</button><span class='msg' id='gn-s'></span></div></div>");
+  h += F("</button><span class='msg' id='gn-s'></span></div>");
+
+  // The zone the device writes every timestamp in, the SD log and the drying
+  // day count included. It belongs here rather than next to the log: it
+  // changes behaviour, it is not a property of one page.
+  h += F("<div class='card'><h2>");
+  h += T(STR_TZ_TITLE);
+  // The index, not the POSIX string. One of those is "<-03>3", and a value
+  // carrying angle brackets through an HTML attribute is a fight not worth
+  // having when the server has the table anyway.
+  h += F("</h2><div class='field'>"
+         "<select id='tz'>");
+  {
+    const int cur = timeZoneIndex();
+    if (cur < 0) {
+      // A zone that is not in the table can only come from a hand written
+      // preference. Shown so it is not silently replaced by the first entry,
+      // and inert so it cannot be picked again.
+      h += F("<option value='-1' selected disabled>");
+      h += timeZoneName();
+      h += F("</option>");
+    }
+    for (size_t i = 0; i < TZ_COUNT; i++) {
+      h += F("<option value='");
+      h += String((unsigned)i);
+      h += F("'");
+      if (cur == (int)i) h += F(" selected");
+      h += F(">");
+      h += TZ_LIST[i].name;
+      h += F(" (");
+      h += TZ_LIST[i].offset;
+      h += F(")</option>");
+    }
+  }
+  h += F("</select><span class='hint'>");
+  h += T(STR_W_TZ_NOTE);
+  h += F("</span></div><span class='msg' id='tz-s'></span></div></div>");
 
   // Its own script. When the pages were split the shared block stayed behind
   // on one of them and every Save button here called a function that was no
@@ -258,6 +295,13 @@ static String body() {
          "fetch('/api/gain',{method:'POST',headers:{'Content-Type':'text/plain'},body:String(v)})"
          ".then(r=>flash('gn-s',r.ok?M.ok:M.err,!r.ok,false))"
          ".catch(()=>flash('gn-s',M.err,true,false));}"
+         // The zone applies the moment it is picked, so there is no Save
+         // button to bind: the select is the control.
+         "$('tz').addEventListener('change',()=>{"
+         "fetch('/api/timezone',{method:'POST',headers:{'Content-Type':'text/plain'},"
+         "body:$('tz').value})"
+         ".then(r=>flash('tz-s',r.ok?M.ok:M.err,!r.ok,false))"
+         ".catch(()=>flash('tz-s',M.err,true,false));});"
          "$('ll-b').addEventListener('click',setLimits);"
          "$('gn-b').addEventListener('click',setGain);"
          "load();"
@@ -343,6 +387,24 @@ static void routes(WebServer &srv) {
     prefsPutUChar("loc_limit", (uint8_t)v);
     logSDf("Web: location list limit -> %d", v);
     srv.send(200, "application/json", String("{\"limit\":") + v + "}");
+  });
+
+  // Applied at once: timeZoneSet() hands the string to the C library, so the
+  // next line written to the log is already in the new zone. No restart.
+  srv.on("/api/timezone", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, "timezone")) return;
+    if (!srv.hasArg("plain")) { srv.send(400, "text/plain", "no body"); return; }
+    // An index into the table, so nothing that reaches setenv() comes from
+    // the request. A malformed TZ string would silently mean UTC, which reads
+    // as the setting having been lost.
+    const long idx = strtol(srv.arg("plain").c_str(), nullptr, 10);
+    if (idx < 0 || idx >= (long)TZ_COUNT) {
+      srv.send(400, "text/plain", "unknown zone");
+      return;
+    }
+    timeZoneSet(TZ_LIST[idx].tz);
+    logSDf("Time zone set to %s (%s)", TZ_LIST[idx].name, TZ_LIST[idx].tz);
+    srv.send(200, "text/plain", TZ_LIST[idx].name);
   });
 
   srv.on("/api/gain", HTTP_POST, [&srv]() {

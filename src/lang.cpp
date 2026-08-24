@@ -1240,6 +1240,12 @@ const char* const STRINGS[STR_COUNT][2] = {
     "1 file" },  // STR_W_LOG_COUNT_ONE
   { "Eine Datei löschen? Das Log von heute wird dabei neu begonnen.",
     "Delete one file? Today's log is started over." },  // STR_W_LOG_DELETE_ALL_ASK_ONE
+  { "Zeitzone",
+    "Time zone" },  // STR_TZ_TITLE
+  { "Gilt für jeden Zeitstempel des Geräts und für die Zählung der Trocknungstage. Kein Neustart nötig.",
+    "Applies to every timestamp the device writes and to the drying day count. No restart needed." },  // STR_TZ_HINT
+  { "Gilt für jeden Zeitstempel des Geräts und für die Zählung der Trocknungstage. Wirkt sofort, ohne Neustart.",
+    "Applies to every timestamp the device writes and to the drying day count. Takes effect at once, no restart." },  // STR_W_TZ_NOTE
 
   { "Felder",
     "Fields" },  // STR_FLM_FIELDS

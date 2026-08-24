@@ -54,6 +54,7 @@ void hideAllOverlays() {
   if (scr_filaman_fields)  lv_obj_add_flag(scr_filaman_fields, LV_OBJ_FLAG_HIDDEN);
   if (scr_bambuddy_options) lv_obj_add_flag(scr_bambuddy_options, LV_OBJ_FLAG_HIDDEN);
   if (scr_bambuddy_dried) lv_obj_add_flag(scr_bambuddy_dried, LV_OBJ_FLAG_HIDDEN);
+  if (scr_timezone)    lv_obj_add_flag(scr_timezone,    LV_OBJ_FLAG_HIDDEN);
   if (scr_spoolman_options) lv_obj_add_flag(scr_spoolman_options, LV_OBJ_FLAG_HIDDEN);
   if (scr_tag_field)     lv_obj_add_flag(scr_tag_field, LV_OBJ_FLAG_HIDDEN);
   if (scr_spoolman_fail) lv_obj_add_flag(scr_spoolman_fail, LV_OBJ_FLAG_HIDDEN);

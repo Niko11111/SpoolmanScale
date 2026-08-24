@@ -14,6 +14,7 @@
 #include "ota_state.h"
 #include "prefs_store.h"
 #include "tag_field.h"
+#include "time_service.h"
 #include "user_options.h"
 #include "web/web_access.h"
 #include "hardware/display.h"
@@ -58,6 +59,9 @@ void loadPrefs() {
 
   g_lang = (Lang)prefsGetUChar("lang", 1);
   g_date_fmt = prefsGetUChar("date_fmt", 0);
+  // Before anything formats a time. The zone falls back to the language read
+  // one line above, so this has to come after it.
+  timeZoneApply();
   cfg_lang_set = prefsGetBool("lang_set", false);
   cfg_first_boot = prefsGetBool("first_boot", true);
   last_used_mode = prefsGetUChar("lu_mode", 0);

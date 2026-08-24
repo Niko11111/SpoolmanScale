@@ -53,6 +53,7 @@ extern lv_obj_t *scr_ams_assign;
 extern lv_obj_t *scr_filaman_fields;
 extern lv_obj_t *scr_bambuddy_options;
 extern lv_obj_t *scr_bambuddy_dried;
+extern lv_obj_t *scr_timezone;
 extern lv_obj_t *scr_spoolman_options;
 extern lv_obj_t *scr_spoolman;
 extern lv_obj_t *scr_spoolman_fail;

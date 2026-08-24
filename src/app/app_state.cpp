@@ -41,6 +41,7 @@ lv_obj_t *scr_ams_assign = nullptr;
 lv_obj_t *scr_filaman_fields = nullptr;
 lv_obj_t *scr_bambuddy_options = nullptr;
 lv_obj_t *scr_bambuddy_dried = nullptr;
+lv_obj_t *scr_timezone = nullptr;
 lv_obj_t *scr_spoolman_options = nullptr;
 lv_obj_t *scr_spoolman   = nullptr;
 lv_obj_t *scr_spoolman_fail = nullptr;
