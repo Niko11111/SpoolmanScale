@@ -21,12 +21,13 @@ static String body() {
   h += F("<div class='grid'><div class='card wide'><h2>");
   h += T(STR_W_C_LOGS);
   h += F("</h2><div id='lg'></div>"
-         "<div class='rows' style='margin-top:16px'><div class='row'>"
+         "<div class='rows' style='margin-top:16px'><div class='row' id='vbrow'>"
          "<span class='k'>");
   h += T(STR_W_R_VERBOSE);
   h += F("</span><span class='v'>"
          "<button id='vb' class='quiet' onclick='toggleVerbose()'></button>"
-         "</span></div><div class='row'><span class='k' id='dsum'></span>"
+         "</span></div><div class='row' id='darow'>"
+         "<span class='k' id='dsum'></span>"
          "<span class='v'>"
          "<button id='da' class='danger' onclick='delAll()' disabled></button>"
          "</span></div></div><p class='note'>");
@@ -46,6 +47,8 @@ static String body() {
   h += F(",all:");    h += jsStr(T(STR_W_LOG_DELETE_ALL));
   h += F(",allask:"); h += jsStr(T(STR_W_LOG_DELETE_ALL_ASK));
   h += F(",count:");  h += jsStr(T(STR_W_LOG_COUNT));
+  h += F(",count1:"); h += jsStr(T(STR_W_LOG_COUNT_ONE));
+  h += F(",allask1:");h += jsStr(T(STR_W_LOG_DELETE_ALL_ASK_ONE));
   h += F("};"
          "function kb(n){return n>=1048576?(n/1048576).toFixed(2)+' MB'"
          ":(n/1024).toFixed(0)+' KB';}"
@@ -56,12 +59,20 @@ static String body() {
          "const c=document.getElementById('lg');"
          "document.getElementById('vb').textContent=d.verbose?M.on:M.off;"
          "const da=document.getElementById('da');"
-         "da.textContent=M.all;da.disabled=!d.files||!d.files.length;"
+         "da.textContent=M.all;"
+         // With nothing to delete the whole row goes, not just the button.
+         // The rule that strips the border from the last row still counts a
+         // display:none one, so hiding this one alone would leave the divider
+         // under Verbose hanging into empty space.
+         "const has=!!(d.files&&d.files.length);"
+         "document.getElementById('darow').style.display=has?'':'none';"
+         "document.getElementById('vbrow').style.borderBottom=has?'':'0';"
+         "da.disabled=!has;"
          // Says what pressing it would free, which is the number someone
          // wants before pressing it rather than after.
          "const n=d.files?d.files.length:0;"
          "document.getElementById('dsum').textContent=n"
-         "?M.count.replace('{n}',n)+' \u00b7 '"
+         "?(n===1?M.count1:M.count.replace('{n}',n))+' \u00b7 '"
          "+kb(d.files.reduce((s,f)=>s+f.size,0)):'';"
          // Sorted here rather than on the device: the browser already holds
          // the array. What arrives is FAT directory order, and the seven day
@@ -104,7 +115,7 @@ static String body() {
          ".then(()=>loadLogs()).catch(()=>say(M.err));}"
          "function delAll(){"
          "const n=document.querySelectorAll('.listrow').length;"
-         "if(!n||!confirm(M.allask.replace('{n}',n)))return;"
+         "if(!n||!confirm(n===1?M.allask1:M.allask.replace('{n}',n)))return;"
          "fetch('/api/deletelogs',{method:'POST'})"
          ".then(()=>loadLogs()).catch(()=>say(M.err));}"
          "function toggleVerbose(){fetch('/api/verbose',{method:'POST'})"

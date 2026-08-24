@@ -1234,4 +1234,10 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Delete {n} files? Today's log is started over." },  // STR_W_LOG_DELETE_ALL_ASK
   { "{n} Dateien",
     "{n} files" },  // STR_W_LOG_COUNT
+  // Its own entry rather than a rule in code: which counts need their own
+  // wording is a property of the language, not of the list.
+  { "1 Datei",
+    "1 file" },  // STR_W_LOG_COUNT_ONE
+  { "Eine Datei loeschen? Das Log von heute wird dabei neu begonnen.",
+    "Delete one file? Today's log is started over." },  // STR_W_LOG_DELETE_ALL_ASK_ONE
 };
