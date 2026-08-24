@@ -30,6 +30,16 @@ size_t logRingCount();
 // display zone out of this file.
 bool   logRingGet(size_t idx, char *out, size_t out_len,
                   time_t *when, uint32_t *up_s);
+
+// Lines written since boot, counting the ones already overwritten. A reader
+// that remembers this number can ask for what it has not seen instead of
+// fetching the whole ring, which is what makes following the log cheap.
+uint32_t logRingSeq();
+
+// One line by its absolute sequence number. False when that line has already
+// been overwritten, which tells a reader its cursor is stale.
+bool   logRingGetSeq(uint32_t seq, char *out, size_t out_len,
+                     time_t *when, uint32_t *up_s);
 void cleanOldLogs();
 
 // Makes the writer forget how big it believes today's log to be, so the next

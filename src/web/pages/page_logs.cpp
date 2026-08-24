@@ -84,7 +84,7 @@ static String body() {
          "padding:10px;font-size:12px;line-height:1.5;white-space:pre-wrap;"
          "word-break:break-word;margin:12px 0'></pre>"
          "<div style='display:flex;gap:12px;align-items:center'>"
-         "<button id='slb' class='quiet' onclick='loadSession()'>");
+         "<button id='slb' class='quiet' onclick='loadSession(true)'>");
   h += T(STR_W_SESSION_REFRESH);
   h += F("</button><span id='sls' class='note' style='margin:0'></span>"
          "</div></div></div>");
@@ -95,6 +95,8 @@ static String body() {
   h += F(",SESSION_REFRESH="); h += jsStr(T(STR_W_SESSION_REFRESH));
   h += F(",SESSION_AT=");      h += jsStr(T(STR_W_SESSION_UPDATED));
   h += F(",SESSION_LINES=");   h += jsStr(T(STR_W_SESSION_LINES));
+  h += F(",SESSION_PAUSED=");  h += jsStr(T(STR_W_SESSION_PAUSED));
+  h += F(",SESSION_NEW=");     h += jsStr(T(STR_W_SESSION_NEW));
   h += F(";</script>");
 
   h += F("<script>const M={view:");
@@ -118,19 +120,37 @@ static String body() {
          "function say(t){document.getElementById('lg').innerHTML="
          "'<div class=\"note\">'+t+'</div>';}"
          "function setTz(){var v=document.getElementById('tz').value;"
-         "fetch('/api/timezone',{method:'POST',body:v}).then(()=>loadSession());}"
-         "function loadSession(){"
-         "var b=document.getElementById('slb'),s=document.getElementById('sls');"
-         "if(b){b.disabled=true;b.textContent=SESSION_BUSY;}"
-         "fetch('/api/log/session').then(r=>r.text()).then(t=>{"
-         "var e=document.getElementById('sl');if(!e)return;"
-         "var v=t.trim();e.textContent=v?t:SESSION_EMPTY;"
-         "e.scrollTop=e.scrollHeight;"
-         "if(s){var n=v?v.split('\\n').length:0;"
-         "s.textContent=SESSION_AT+' '+new Date().toLocaleTimeString()"
-         "+' - '+n+' '+SESSION_LINES;}"
+         "fetch('/api/timezone',{method:'POST',body:v}).then(()=>loadSession(true));}"
+         "var slSeq=0,slFollow=true,slPend=0,slAuto=false;"
+         "function slAtEnd(e){return e.scrollHeight-e.scrollTop-e.clientHeight<12;}"
+         "function slNote(s,n){if(!s)return;"
+         "s.textContent=slFollow?(SESSION_AT+' '+new Date().toLocaleTimeString()"
+         "+' - '+n+' '+SESSION_LINES)"
+         ":(SESSION_PAUSED+(slPend?' - '+slPend+' '+SESSION_NEW:''));}"
+         "function loadSession(manual){"
+         "var b=document.getElementById('slb'),s=document.getElementById('sls'),"
+         "e=document.getElementById('sl');if(!e)return;"
+         "if(manual){slFollow=true;slPend=0;}"
+         "if(b&&manual){b.disabled=true;b.textContent=SESSION_BUSY;}"
+         "var u='/api/log/session?since='+(manual?0:slSeq);"
+         "fetch(u).then(r=>{slSeq=parseInt(r.headers.get('X-Log-Seq')||slSeq);"
+         "var rst=r.headers.get('X-Log-Reset')==='1';"
+         "return r.text().then(t=>({t:t,rst:rst}));}).then(d=>{"
+         "var stick=slFollow;"
+         "if(d.rst){e.textContent=d.t.trim()?d.t:SESSION_EMPTY;}"
+         "else if(d.t){if(e.textContent===SESSION_EMPTY)e.textContent='';"
+         "e.textContent+=d.t;if(!slFollow)slPend+=d.t.trim().split('\\n').length;}"
+         "if(stick){slAuto=true;e.scrollTop=e.scrollHeight;}"
+         "var all=e.textContent.trim();"
+         "slNote(s,all&&all!==SESSION_EMPTY?all.split('\\n').length:0);"
          "}).catch(()=>{if(s)s.textContent='-';})"
-         ".finally(()=>{if(b){b.disabled=false;b.textContent=SESSION_REFRESH;}});}"
+         ".finally(()=>{if(b&&manual){b.disabled=false;b.textContent=SESSION_REFRESH;}});}"
+         "function slWatch(){var e=document.getElementById('sl');if(!e)return;"
+         "e.addEventListener('scroll',function(){"
+         "if(slAuto){slAuto=false;return;}"
+         "if(slFollow){slFollow=false;"
+         "slNote(document.getElementById('sls'),0);}});"
+         "setInterval(function(){if(!document.hidden)loadSession(false);},3000);}"
          "function loadLogs(){fetch('/api/logs').then(r=>{"
          "if(!r.ok)throw 0;return r.json();}).then(d=>{"
          "const c=document.getElementById('lg');"
@@ -199,7 +219,7 @@ static String body() {
          ".then(r=>r.json()).then(d=>{"
          "document.getElementById('vb').textContent=d.verbose?M.on:M.off;})"
          ".catch(()=>say(M.err));}"
-"loadLogs();loadSession();"
+"loadLogs();loadSession(true);slWatch();"
          // Was in the page until beta.33 and fell out of the 720px rebuild
          // without anyone noticing. Back, but idle while the tab sits in the
          // background - a forgotten tab should not poll the scale all day.
@@ -342,14 +362,28 @@ static void routes(WebServer &srv) {
   // String: 240 lines is 38 kB, and this handler runs on the internal heap.
   srv.on("/api/log/session", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
-    const size_t n = logRingCount();
+    // A reader that says where it got to is sent only what came after, which
+    // is almost always nothing. Without that, following the log would push the
+    // whole ring through the loop every few seconds to say the same thing.
+    const uint32_t seq    = logRingSeq();
+    const uint32_t oldest = seq - (uint32_t)logRingCount();
+    uint32_t since = 0;
+    bool have_since = srv.hasArg("since");
+    if (have_since) since = (uint32_t)strtoul(srv.arg("since").c_str(), nullptr, 10);
+    // A cursor older than the ring means lines were missed. Say so, and send
+    // everything: the alternative is a gap the reader cannot see.
+    const bool stale = have_since && since < oldest;
+    if (!have_since || stale) since = oldest;
+
+    srv.sendHeader("X-Log-Seq", String(seq));
+    srv.sendHeader("X-Log-Reset", (!have_since || stale) ? "1" : "0");
     srv.setContentLength(CONTENT_LENGTH_UNKNOWN);
     srv.send(200, "text/plain", "");
     char line[176], out[200];
-    for (size_t i = 0; i < n; i++) {
+    for (uint32_t q = since; q < seq; q++) {
       time_t when = 0;
       uint32_t up = 0;
-      if (!logRingGet(i, line, sizeof(line), &when, &up)) continue;
+      if (!logRingGetSeq(q, line, sizeof(line), &when, &up)) continue;
       char stamp[16];
       if (when) {
         timeZoneFormat(when, stamp, sizeof(stamp));

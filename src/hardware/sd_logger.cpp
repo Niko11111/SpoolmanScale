@@ -42,6 +42,7 @@ static uint32_t         *ring_when = nullptr;   // UTC epoch, 0 before the clock
 static uint32_t         *ring_up   = nullptr;   // seconds since boot
 static uint16_t          ring_head = 0;   // next slot to write
 static uint16_t          ring_used = 0;
+static uint32_t          ring_seq  = 0;   // total ever written
 static SemaphoreHandle_t ring_lock = nullptr;
 
 void logRingInit() {
@@ -77,10 +78,29 @@ static void ringPut(time_t when, const char *msg) {
   ring_up[ring_head]   = (uint32_t)(millis() / 1000);
   ring_head = (uint16_t)((ring_head + 1) % LOG_RING_LINES);
   if (ring_used < LOG_RING_LINES) ring_used++;
+  ring_seq++;
   xSemaphoreGive(ring_lock);
 }
 
 size_t logRingCount() { return ring_used; }
+uint32_t logRingSeq()  { return ring_seq; }
+
+bool logRingGetSeq(uint32_t seq, char *out, size_t out_len,
+                   time_t *when, uint32_t *up_s) {
+  if (!ring || !ring_lock || !out || out_len == 0) return false;
+  if (xSemaphoreTake(ring_lock, pdMS_TO_TICKS(20)) != pdTRUE) return false;
+  // Everything before this has been overwritten by newer lines.
+  const uint32_t oldest = ring_seq - ring_used;
+  bool ok = (seq >= oldest && seq < ring_seq);
+  if (ok) {
+    const size_t slot = seq % LOG_RING_LINES;
+    snprintf(out, out_len, "%s", ring + slot * LOG_RING_WIDTH);
+    if (when) *when = (time_t)ring_when[slot];
+    if (up_s) *up_s = ring_up[slot];
+  }
+  xSemaphoreGive(ring_lock);
+  return ok;
+}
 
 bool logRingGet(size_t idx, char *out, size_t out_len,
                 time_t *when, uint32_t *up_s) {
