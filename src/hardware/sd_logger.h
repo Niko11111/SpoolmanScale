@@ -23,7 +23,13 @@ void   logRingInit();
 size_t logRingCount();
 // idx 0 is the oldest line still held. False when the ring is empty, the
 // index is past the end, or the buffer could not be allocated.
-bool   logRingGet(size_t idx, char *out, size_t out_len);
+//
+// The line comes back without a timestamp; when is the UTC moment it was
+// written, or 0 when the clock was not set yet and up_s holds seconds since
+// boot instead. Rendering is the caller's business, which is what keeps the
+// display zone out of this file.
+bool   logRingGet(size_t idx, char *out, size_t out_len,
+                  time_t *when, uint32_t *up_s);
 void cleanOldLogs();
 
 // Makes the writer forget how big it believes today's log to be, so the next

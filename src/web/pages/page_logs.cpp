@@ -8,12 +8,45 @@
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
 #include "web/web_access.h"
+#include "services/time_service.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
 // parameter, so lang.h has to come after anything that pulls it in.
 #include "lang.h"
 
 static const char* label() { return T(STR_W_NAV_LOGS); }
+
+// A short list rather than every zone there is: these cover where the device
+// actually gets used, and the value is the POSIX string the C library wants.
+static const struct { const char *name; const char *tz; } TZ_LIST[] = {
+  { "UTC",                      "UTC0" },
+  { "Europe (CET/CEST)",        "CET-1CEST,M3.5.0,M10.5.0/3" },
+  { "Europe (UK)",              "GMT0BST,M3.5.0/1,M10.5.0" },
+  { "Europe (EET/EEST)",        "EET-2EEST,M3.5.0/3,M10.5.0/4" },
+  { "US Eastern",               "EST5EDT,M3.2.0,M11.1.0" },
+  { "US Central",               "CST6CDT,M3.2.0,M11.1.0" },
+  { "US Mountain",              "MST7MDT,M3.2.0,M11.1.0" },
+  { "US Pacific",               "PST8PDT,M3.2.0,M11.1.0" },
+  { "Australia Eastern",        "AEST-10AEDT,M10.1.0,M4.1.0/3" },
+  { "Japan",                    "JST-9" },
+  { "India",                    "IST-5:30" },
+  { "Brazil (Sao Paulo)",       "<-03>3" },
+};
+
+static String tzOptions() {
+  const String cur = timeZoneGet();
+  String o;
+  for (size_t i = 0; i < sizeof(TZ_LIST) / sizeof(TZ_LIST[0]); i++) {
+    o += "<option value='";
+    o += TZ_LIST[i].tz;
+    o += "'";
+    if (cur == TZ_LIST[i].tz) o += " selected";
+    o += ">";
+    o += TZ_LIST[i].name;
+    o += "</option>";
+  }
+  return o;
+}
 
 static String body() {
   String h;
@@ -40,6 +73,12 @@ static String body() {
   h += T(STR_W_C_SESSION);
   h += F("</h2><p class='note'>");
   h += T(STR_W_SESSION_NOTE);
+  h += F("</p><div class='rows'><div class='row'><span class='k'>");
+  h += T(STR_W_R_TIMEZONE);
+  h += F("</span><span class='v'><select id='tz' onchange='setTz()' class='quiet'>");
+  h += tzOptions();
+  h += F("</select></span></div></div><p class='note'>");
+  h += T(STR_W_TZ_NOTE);
   h += F("</p><pre id='sl' style='max-height:340px;overflow:auto;"
          "background:#06080f;border:1px solid #1a3060;border-radius:8px;"
          "padding:10px;font-size:12px;line-height:1.5;white-space:pre-wrap;"
@@ -72,6 +111,8 @@ static String body() {
          ":(n/1024).toFixed(0)+' KB';}"
          "function say(t){document.getElementById('lg').innerHTML="
          "'<div class=\"note\">'+t+'</div>';}"
+         "function setTz(){var v=document.getElementById('tz').value;"
+         "fetch('/api/timezone',{method:'POST',body:v}).then(()=>loadSession());}"
          "function loadSession(){fetch('/api/log/session').then(r=>r.text()).then(t=>{"
          "var e=document.getElementById('sl');if(!e)return;"
          "e.textContent=t.trim()?t:SESSION_EMPTY;e.scrollTop=e.scrollHeight;"
@@ -290,13 +331,33 @@ static void routes(WebServer &srv) {
     const size_t n = logRingCount();
     srv.setContentLength(CONTENT_LENGTH_UNKNOWN);
     srv.send(200, "text/plain", "");
-    char line[176];
+    char line[176], out[200];
     for (size_t i = 0; i < n; i++) {
-      if (!logRingGet(i, line, sizeof(line) - 1)) continue;
-      strcat(line, "\n");
-      srv.sendContent(line);
+      time_t when = 0;
+      uint32_t up = 0;
+      if (!logRingGet(i, line, sizeof(line), &when, &up)) continue;
+      char stamp[16];
+      if (when) {
+        timeZoneFormat(when, stamp, sizeof(stamp));
+      } else {
+        // Written before the clock was set. Uptime beats a wrong wall time.
+        snprintf(stamp, sizeof(stamp), "+%lus", (unsigned long)up);
+      }
+      snprintf(out, sizeof(out), "[%s] %s\n", stamp, line);
+      srv.sendContent(out);
     }
     srv.sendContent("");
+  });
+
+  // The zone every timestamp is written in. Applied at once, so the next
+  // line in the session log is already in it.
+  srv.on("/api/timezone", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
+    if (!srv.hasArg("plain")) { srv.send(400, "text/plain", "no body"); return; }
+    const String tz = srv.arg("plain");
+    timeZoneSet(tz.c_str());
+    logSDf("Time zone set to %s", tz.c_str());
+    srv.send(200, "text/plain", tz);
   });
 
   // POST /verbose -> toggle verbose.txt on SD root

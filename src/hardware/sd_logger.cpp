@@ -38,6 +38,8 @@ static char sd_log_file[24] = "";
 #define LOG_RING_WIDTH 160
 
 static char             *ring      = nullptr;
+static uint32_t         *ring_when = nullptr;   // UTC epoch, 0 before the clock is set
+static uint32_t         *ring_up   = nullptr;   // seconds since boot
 static uint16_t          ring_head = 0;   // next slot to write
 static uint16_t          ring_used = 0;
 static SemaphoreHandle_t ring_lock = nullptr;
@@ -51,16 +53,28 @@ void logRingInit() {
   // card as it always did.
   ring = (char *)heap_caps_malloc((size_t)LOG_RING_LINES * LOG_RING_WIDTH,
                                   MALLOC_CAP_SPIRAM);
-  if (ring) memset(ring, 0, (size_t)LOG_RING_LINES * LOG_RING_WIDTH);
+  ring_when = (uint32_t *)heap_caps_malloc(LOG_RING_LINES * sizeof(uint32_t),
+                                           MALLOC_CAP_SPIRAM);
+  ring_up   = (uint32_t *)heap_caps_malloc(LOG_RING_LINES * sizeof(uint32_t),
+                                           MALLOC_CAP_SPIRAM);
+  if (!ring || !ring_when || !ring_up) {
+    free(ring); free(ring_when); free(ring_up);
+    ring = nullptr; ring_when = nullptr; ring_up = nullptr;
+    return;
+  }
+  memset(ring, 0, (size_t)LOG_RING_LINES * LOG_RING_WIDTH);
+  memset(ring_when, 0, LOG_RING_LINES * sizeof(uint32_t));
+  memset(ring_up, 0, LOG_RING_LINES * sizeof(uint32_t));
 }
 
-static void ringPut(const char *stamp, const char *msg) {
+static void ringPut(time_t when, const char *msg) {
   if (!ring || !ring_lock) return;
   // A log line is never worth blocking the loop for. Dropping one beats
   // holding up a weight reading.
   if (xSemaphoreTake(ring_lock, pdMS_TO_TICKS(20)) != pdTRUE) return;
-  snprintf(ring + (size_t)ring_head * LOG_RING_WIDTH, LOG_RING_WIDTH,
-           "[%s] %s", stamp, msg);
+  snprintf(ring + (size_t)ring_head * LOG_RING_WIDTH, LOG_RING_WIDTH, "%s", msg);
+  ring_when[ring_head] = (uint32_t)when;
+  ring_up[ring_head]   = (uint32_t)(millis() / 1000);
   ring_head = (uint16_t)((ring_head + 1) % LOG_RING_LINES);
   if (ring_used < LOG_RING_LINES) ring_used++;
   xSemaphoreGive(ring_lock);
@@ -68,14 +82,17 @@ static void ringPut(const char *stamp, const char *msg) {
 
 size_t logRingCount() { return ring_used; }
 
-bool logRingGet(size_t idx, char *out, size_t out_len) {
+bool logRingGet(size_t idx, char *out, size_t out_len,
+                time_t *when, uint32_t *up_s) {
   if (!ring || !ring_lock || !out || out_len == 0) return false;
   if (xSemaphoreTake(ring_lock, pdMS_TO_TICKS(20)) != pdTRUE) return false;
   bool ok = idx < ring_used;
   if (ok) {
     const size_t oldest = (ring_head + LOG_RING_LINES - ring_used) % LOG_RING_LINES;
-    snprintf(out, out_len, "%s",
-             ring + ((oldest + idx) % LOG_RING_LINES) * LOG_RING_WIDTH);
+    const size_t slot = (oldest + idx) % LOG_RING_LINES;
+    snprintf(out, out_len, "%s", ring + slot * LOG_RING_WIDTH);
+    if (when) *when = (time_t)ring_when[slot];
+    if (up_s) *up_s = ring_up[slot];
   }
   xSemaphoreGive(ring_lock);
   return ok;
@@ -113,13 +130,11 @@ void logSD(const char* msg) {
     strncpy(stamp, "??:??:??", sizeof(stamp) - 1);
     stamp[sizeof(stamp) - 1] = '\0';
   }
-  if (have_clock) {
-    ringPut(stamp, msg);
-  } else {
-    char up[12];
-    snprintf(up, sizeof(up), "+%lus", (unsigned long)(millis() / 1000));
-    ringPut(up, msg);
-  }
+  // getLocalTime() answers yes as soon as the clock is set at all, and before
+  // NTP that clock is wrong rather than absent. A year that cannot be right is
+  // the tell; those lines carry uptime instead.
+  const bool synced = have_clock && (now.tm_year + 1900) >= 2024;
+  ringPut(synced ? time(nullptr) : (time_t)0, msg);
 
   if (!sd_available) return;
 
