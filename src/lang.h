@@ -785,6 +785,7 @@ enum StringID {
   STR_W_TAG_NOTE,
   STR_W_FM_SETUP,
   STR_W_BB_SETUP,
+  STR_OTA_KEEP_POWER,
 
   STR_COUNT
 };

@@ -1212,4 +1212,6 @@ const char* const STRINGS[STR_COUNT][2] = {
     "In FilaMan, click your user name, choose <b>API keys</b> and create a key. It is shown once, so copy it right away. FilaMan then shows a six character device code - enter it below and register." },  // STR_W_FM_SETUP
   { "Der Schluessel steht in BamBuddy unter den Einstellungen. Laeuft die Instanz ohne Anmeldung, bleibt das Feld leer.",
     "The key is in BamBuddy under settings. Leave the field empty if the instance runs without authentication." },  // STR_W_BB_SETUP
+  { "Strom nicht trennen",
+    "Do not cut the power" },  // STR_OTA_KEEP_POWER
 };

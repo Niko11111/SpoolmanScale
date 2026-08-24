@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 extern bool update_available;
@@ -18,3 +19,16 @@ extern volatile bool gh_flash_active;
 extern bool g_upd_autocheck;
 // Unix time of the last successful check. NVS key "upd_last", 0 = never.
 extern uint32_t g_upd_last_epoch;
+
+// One progress line for both OTA paths - the GitHub download and the image
+// pushed from the browser. "1.42 / 1.87 MB - 76 %", or just the count when
+// total is 0, which is what a missing Content-Length looks like.
+//
+// Shared rather than written twice because the two screens sit next to each
+// other in the menu and a user comparing them should not be reading two
+// different shapes of the same number.
+void otaProgressLine(char* buf, size_t len, uint32_t done, uint32_t total);
+
+// How often either path may repaint. A 512 byte read loop that painted per
+// chunk would spend more time in the display than on the socket.
+#define OTA_PROGRESS_MS 200

@@ -235,7 +235,7 @@ void doGithubOtaFlash(const char* version) {
   lv_label_set_text(ico, LV_SYMBOL_DOWNLOAD);
   lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-  lv_obj_align(ico, LV_ALIGN_CENTER, 0, -40);
+  lv_obj_align(ico, LV_ALIGN_CENTER, 0, -52);
 
   lv_obj_t *lbl_ov = lv_label_create(overlay);
   char buf_ov[64]; strncpy(buf_ov, T(STR_GH_OTA_FLASHING), sizeof(buf_ov)-1); buf_ov[sizeof(buf_ov)-1]=0;
@@ -243,14 +243,38 @@ void doGithubOtaFlash(const char* version) {
   lv_obj_set_style_text_color(lbl_ov, lv_color_hex(0xf0b838), 0);
   lv_obj_set_style_text_font(lbl_ov, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_style_text_align(lbl_ov, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_ov, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_align(lbl_ov, LV_ALIGN_CENTER, 0, -14);
+
+  // The overlay used to say "~30-60 sec" and then nothing for a minute, which
+  // answers neither of the two questions a wait like this raises: how far along
+  // it is, and whether anything is still moving. The loop below already knew
+  // both - it counted the remaining bytes down and told nobody.
+  lv_obj_t *bar = lv_bar_create(overlay);
+  lv_obj_set_size(bar, 300, 8);
+  lv_obj_align(bar, LV_ALIGN_CENTER, 0, 18);
+  lv_obj_set_style_bg_color(bar, lv_color_hex(0x1a3060), 0);
+  lv_obj_set_style_bg_color(bar, lv_color_hex(0x28d49a), LV_PART_INDICATOR);
+  lv_obj_set_style_radius(bar, 4, 0);
+  lv_obj_set_style_radius(bar, 4, LV_PART_INDICATOR);
+  lv_bar_set_range(bar, 0, 100);
+  lv_bar_set_value(bar, 0, LV_ANIM_OFF);
 
   lv_obj_t *lbl_hint = lv_label_create(overlay);
-  lv_label_set_text(lbl_hint, "~30-60 sec");
+  lv_label_set_text(lbl_hint, "");
   lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_hint, LV_ALIGN_CENTER, 0, 30);
+  lv_obj_align(lbl_hint, LV_ALIGN_CENTER, 0, 42);
+
+  lv_obj_t *lbl_keep = lv_label_create(overlay);
+  char buf_keep[48];
+  strncpy(buf_keep, T(STR_OTA_KEEP_POWER), sizeof(buf_keep)-1);
+  buf_keep[sizeof(buf_keep)-1] = 0;
+  lv_label_set_text(lbl_keep, buf_keep);
+  lv_obj_set_style_text_color(lbl_keep, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(lbl_keep, &lv_font_montserrat_ext_14, 0);
+  lv_obj_set_style_text_align(lbl_keep, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(lbl_keep, LV_ALIGN_CENTER, 0, 70);
 
   lv_refr_now(NULL);
   lv_timer_handler();
@@ -306,6 +330,14 @@ void doGithubOtaFlash(const char* version) {
     return;
   }
 
+  // len is what is left to fetch; total is what there was. A server that sends
+  // no Content-Length leaves total at 0, and then the counter runs without a
+  // percentage and the bar stays hidden rather than lying about the end.
+  const uint32_t total = (len > 0) ? (uint32_t)len : 0;
+  if (!total) lv_obj_add_flag(bar, LV_OBJ_FLAG_HIDDEN);
+  uint32_t done = 0;
+  unsigned long last_paint = 0;
+
   uint8_t buf8[512];
   while (http.connected() && (len > 0 || len == -1)) {
     size_t available = stream->available();
@@ -313,7 +345,18 @@ void doGithubOtaFlash(const char* version) {
       size_t toRead = min(available, sizeof(buf8));
       size_t rd = stream->readBytes(buf8, toRead);
       if (Update.write(buf8, rd) != rd) break;
+      done += rd;
       if (len > 0) len -= rd;
+    }
+    if (millis() - last_paint >= OTA_PROGRESS_MS) {
+      last_paint = millis();
+      char line[48];
+      otaProgressLine(line, sizeof(line), done, total);
+      lv_label_set_text(lbl_hint, line);
+      if (total) lv_bar_set_value(bar, (int)((uint64_t)done * 100 / total), LV_ANIM_OFF);
+      // Redraws without running timers or handling input, which is what this
+      // overlay wants: nothing on it is interactive and the socket is waiting.
+      lv_refr_now(NULL);
     }
     lv_timer_handler();
     delay(1);

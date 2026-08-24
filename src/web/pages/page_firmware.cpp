@@ -10,6 +10,7 @@
 #include "app/app_state.h"
 #include "app_config.h"
 #include "hardware/sd_logger.h"
+#include "services/ota_state.h"
 #include "web/web_access.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
@@ -20,6 +21,14 @@
 // this to stay out of the way: a second TLS connection during a flash is
 // exactly the situation that must not happen.
 static bool ota_upload_active = false;
+
+// What the device screen needs to draw a bar while the browser pushes an
+// image. Until now it said "Uploading..." once and then nothing for two
+// minutes, so anyone standing at the scale could not tell a slow upload from
+// a dead one.
+static uint32_t ota_upload_total = 0;
+static uint32_t ota_upload_done  = 0;
+static unsigned long ota_last_paint = 0;
 
 bool otaWebUploadActive() { return ota_upload_active; }
 
@@ -99,12 +108,29 @@ static void routes(WebServer &srv) {
           Serial.println("OTA begin() error");
           ota_upload_active = false;
         }
+        // The multipart envelope adds a few hundred bytes on top of the
+        // image. On a 1.9 MB upload that is under 0.05 %, so it serves as the
+        // denominator; otaProgressLine() clamps the last stretch at 100.
+        ota_upload_total = (srv.clientContentLength() > 0)
+                           ? (uint32_t)srv.clientContentLength() : 0;
+        ota_upload_done  = 0;
+        ota_last_paint   = 0;
         if (lbl_ota_status) lv_label_set_text(lbl_ota_status,
           T(STR_OTA_UPLOADING));
         lv_timer_handler();
       } else if (upload.status == UPLOAD_FILE_WRITE) {
         if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
           Serial.println("OTA write() error");
+        }
+        ota_upload_done += upload.currentSize;
+        // Same cadence as the GitHub path. Painting per chunk would cost more
+        // than the write does.
+        if (lbl_ota_status && millis() - ota_last_paint >= OTA_PROGRESS_MS) {
+          ota_last_paint = millis();
+          char line[48];
+          otaProgressLine(line, sizeof(line), ota_upload_done, ota_upload_total);
+          lv_label_set_text(lbl_ota_status, line);
+          lv_refr_now(NULL);
         }
       } else if (upload.status == UPLOAD_FILE_END) {
         ota_upload_active = false;
