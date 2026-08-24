@@ -675,14 +675,14 @@ void doLinkPatch(int spool_id, bool is_bambu) {
   // Re-query Spoolman — use single-spool endpoint since we know the ID
   link_popup_dismissed = false;
   if (is_bambu) {
-    spoolman_queried_uid[0] = '\0';
+    tagLookupForget();
     querySpoolmanById(spool_id);
   } else {
     strncpy(g_tag.uid_str, link_tag_uid, sizeof(g_tag.uid_str)-1);
     g_tag.uid_str[sizeof(g_tag.uid_str)-1] = '\0';
     strncpy(g_tag.tray_uuid, link_tag_uid, sizeof(g_tag.tray_uuid)-1);
     g_tag.tray_uuid[sizeof(g_tag.tray_uuid)-1] = '\0';
-    spoolman_queried_uid[0] = '\0';
+    tagLookupForget();
     querySpoolmanById(spool_id);
   }
   Serial.printf("Linking complete! ID=%d\n", spool_id);
@@ -2375,7 +2375,7 @@ void finishCopyFlow(int new_spool_id, const char* tray_uuid_override = nullptr) 
   patchSpoolTag(new_spool_id, tag_to_write);
   sm_id = new_spool_id;
   sm_found = true;
-  spoolman_queried_uid[0] = '\0';
+  tagLookupForget();
   if (is_bambu_tag) {
     querySpoolman(tray);
   } else {

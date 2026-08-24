@@ -163,6 +163,15 @@ extern char spoolman_queried_uid[24];
 // which means "asked the backend about this one" and is written only when the
 // query actually runs, and from g_tag, which is what the display is showing.
 extern char ntag_handled_uid[24];
+
+// Clears both markers above. They answer the same question - "has the poll
+// already dealt with the tag lying on the pad" - for the two tag kinds, so
+// anything that changes what the backend knows about that tag has to clear
+// both or the poll keeps the stale answer. Linking, copying and creating all
+// do exactly that, and each one clearing whichever marker its author had in
+// mind is how a freshly linked spool ended up still reading as unlinked until
+// it was physically lifted off.
+void tagLookupForget();
 extern char sm_last_used[32];
 extern int nfc_retry_count;
 extern int nfc_absent_count;

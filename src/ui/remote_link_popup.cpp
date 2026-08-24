@@ -457,7 +457,7 @@ void handleRemoteLinkDeferredActions() {
       g_tag.tray_uuid[sizeof(g_tag.tray_uuid) - 1] = '\0';
     }
     link_popup_dismissed = false;
-    spoolman_queried_uid[0] = '\0';
+    tagLookupForget();
     querySpoolmanById(spool_id);
     logSDf("RemoteLink: linked spool %d", spool_id);
   }

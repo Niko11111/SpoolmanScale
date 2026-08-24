@@ -129,6 +129,11 @@ float bag_weight_g = 50.0f;
 
 char spoolman_queried_uid[24] = "";
 char ntag_handled_uid[24] = "";
+
+void tagLookupForget() {
+  spoolman_queried_uid[0] = '\0';
+  ntag_handled_uid[0]     = '\0';
+}
 char  sm_last_used[32] = "";
 
 int nfc_retry_count = 0;

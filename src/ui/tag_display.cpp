@@ -54,11 +54,10 @@ void clearTagDisplay() {
   g_tag.material[0] = '\0';   // CRITICAL: otherwise is_ntag=false remains after Bambu scan
   g_tag.color_hex[0] = '\0';
   g_tag.vendor[0] = '\0';
-  spoolman_queried_uid[0] = '\0';
   // Forgetting the tag means forgetting that it was handled. Unlinking a spool
   // clears the display and relies on the next poll reading the tag again,
-  // which only happens if this goes too.
-  ntag_handled_uid[0] = '\0';
+  // which only happens if both markers go.
+  tagLookupForget();
   link_tag_uid[0] = '\0';   // Also clear link UID
   link_popup_dismissed = false;
   link_tag_first_seen_ms = 0;

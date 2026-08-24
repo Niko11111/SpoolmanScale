@@ -603,7 +603,6 @@ void appLoop() {
     if (amsHasPending() && !isAmsAssignPopupOpen()) amsDropPending();
     clearTagDisplay();
     last_tag_seen_ms = 0;
-    spoolman_queried_uid[0] = '\0';
   }
 
   // Fill display with new tag data
