@@ -32,7 +32,25 @@ static String body() {
          "<button id='da' class='danger' onclick='delAll()' disabled></button>"
          "</span></div></div><p class='note'>");
   h += T(STR_W_LOG_NOTE);
-  h += F("</p></div></div>");
+  h += F("</p></div>");
+
+  // Kept separate from the card browser above: this one is always there,
+  // with or without a card, and it is the only log most devices have.
+  h += F("<div class='card wide'><h2>");
+  h += T(STR_W_C_SESSION);
+  h += F("</h2><p class='note'>");
+  h += T(STR_W_SESSION_NOTE);
+  h += F("</p><pre id='sl' style='max-height:340px;overflow:auto;"
+         "background:#06080f;border:1px solid #1a3060;border-radius:8px;"
+         "padding:10px;font-size:12px;line-height:1.5;white-space:pre-wrap;"
+         "word-break:break-word;margin:12px 0'></pre>"
+         "<button class='quiet' onclick='loadSession()'>");
+  h += T(STR_W_SESSION_REFRESH);
+  h += F("</button></div></div>");
+
+  h += F("<script>const SESSION_EMPTY=");
+  h += jsStr(T(STR_W_SESSION_EMPTY));
+  h += F(";</script>");
 
   h += F("<script>const M={view:");
   h += jsStr(T(STR_W_LOG_VIEW));
@@ -54,6 +72,10 @@ static String body() {
          ":(n/1024).toFixed(0)+' KB';}"
          "function say(t){document.getElementById('lg').innerHTML="
          "'<div class=\"note\">'+t+'</div>';}"
+         "function loadSession(){fetch('/api/log/session').then(r=>r.text()).then(t=>{"
+         "var e=document.getElementById('sl');if(!e)return;"
+         "e.textContent=t.trim()?t:SESSION_EMPTY;e.scrollTop=e.scrollHeight;"
+         "}).catch(()=>{});}"
          "function loadLogs(){fetch('/api/logs').then(r=>{"
          "if(!r.ok)throw 0;return r.json();}).then(d=>{"
          "const c=document.getElementById('lg');"
@@ -122,7 +144,7 @@ static String body() {
          ".then(r=>r.json()).then(d=>{"
          "document.getElementById('vb').textContent=d.verbose?M.on:M.off;})"
          ".catch(()=>say(M.err));}"
-         "loadLogs();"
+"loadLogs();loadSession();"
          // Was in the page until beta.33 and fell out of the 720px rebuild
          // without anyone noticing. Back, but idle while the tab sits in the
          // background - a forgotten tab should not poll the scale all day.
@@ -259,6 +281,22 @@ static void routes(WebServer &srv) {
     Serial.printf("All logs deleted via web: %d file(s)\n", deleted);
 
     srv.send(200, "application/json", String("{\"deleted\":") + deleted + "}");
+  });
+
+  // The ring buffer, oldest line first. Streamed rather than built into one
+  // String: 240 lines is 38 kB, and this handler runs on the internal heap.
+  srv.on("/api/log/session", HTTP_GET, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
+    const size_t n = logRingCount();
+    srv.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    srv.send(200, "text/plain", "");
+    char line[176];
+    for (size_t i = 0; i < n; i++) {
+      if (!logRingGet(i, line, sizeof(line) - 1)) continue;
+      strcat(line, "\n");
+      srv.sendContent(line);
+    }
+    srv.sendContent("");
   });
 
   // POST /verbose -> toggle verbose.txt on SD root

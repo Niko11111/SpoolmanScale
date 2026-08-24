@@ -50,13 +50,12 @@ void wifiConnect() {
       deviceNameTick();
       updateHeaderStatus();
       syncNTP();
-      // SD logging: write boot block once time is available
-      if (sd_available) {
-        cleanOldLogs();   // requires synced time
-        writeBootBlock("Boot");
-        logSDf("WiFi connected: %s | RSSI: %d dBm",
-          cfg_wifi_ssid, wifiManagerRSSI());
-      }
+      // The boot block and the connection line belong in the session log
+      // as well, so only the housekeeping stays behind the card check.
+      if (sd_available) cleanOldLogs();   // requires synced time
+      writeBootBlock("Boot");
+      logSDf("WiFi connected: %s | RSSI: %d dBm",
+        cfg_wifi_ssid, wifiManagerRSSI());
       // Fix 2: immediate health check after WiFi connect, against whichever
       // backend is active. The URL comes from backendBaseUrl() and the label
       // from backendName(), so a log never claims the wrong product. The gate

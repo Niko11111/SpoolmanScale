@@ -39,7 +39,11 @@
 // reboots. The heartbeat logs the watermark so the real usage stays visible.
 SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 
+#include "hardware/sd_logger.h"
+
 void setup() {
+  // Before anything that logs, so the ring holds the whole boot.
+  logRingInit();
   appSetup();
 }
 
