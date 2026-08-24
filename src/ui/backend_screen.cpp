@@ -16,6 +16,7 @@
 #include "lang.h"
 #include "navigation.h"
 #include "ota_browser.h"
+#include "tag_display.h"
 #include "ui_common.h"
 
 // Switching the mode has to happen outside this screen's own event callback,
@@ -34,6 +35,17 @@ static void applyPendingModeChange() {
   // reachability change, which can be half a minute away, or on reboot.
   sm_reachable = false;          // unknown until the new backend answers
   updateHeaderStatus();
+
+  // Everything on screen came from the backend that was just left: spool id,
+  // weights, drying date, and for an NTAG even the material and vendor, since
+  // those live on the server rather than on the tag. None of it is true for
+  // the new one, and the same spool may not exist there at all - so it is
+  // dropped rather than left standing until something happens to replace it.
+  //
+  // This also clears both lookup markers, which is what makes the poll treat
+  // the tag on the pad as new: it reads it again and asks the new backend
+  // about it, without anyone having to lift the spool off.
+  clearTagDisplay();
 }
 
 // Full width row that opens another screen: title on top, a value line under

@@ -207,7 +207,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   { char buf_t[40]; strncpy(buf_t, T(STR_EF_LAST_DRIED), sizeof(buf_t)-1);
     buf_t[sizeof(buf_t)-1] = '\0';
     lv_obj_t *help = nullptr;
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_CHARGE, buf_t, LAST_DRIED_FIELD,
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_TINT, buf_t, LAST_DRIED_FIELD,
                                 false, &help);
     if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
                                   INFO_POPUP_ARG(STR_EF_LAST_DRIED, STR_EF_LAST_DRIED_INFO));

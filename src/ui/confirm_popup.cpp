@@ -587,16 +587,53 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_center(l7);
 
   } else {
-    // Standard popup (dried): yes / no
-    lv_obj_set_size(box, 400, 200);
+    // Standard popup: an icon, the question, yes / no.
+    //
+    // The icon names the consequence before the sentence is read, and the
+    // three that land here are different enough to deserve their own: a drop
+    // for drying, a bin for archiving, a warning for throwing an address
+    // away. The drop is the same one the BamBuddy options screen already uses
+    // for the drying date.
+    //
+    // Height follows the text. Two short lines at 20 px need far less room
+    // than the address warning, which is a full paragraph and stays at 16 px
+    // so it does not run into the buttons.
+    const char*      icon     = LV_SYMBOL_WARNING;
+    uint32_t         icon_col = 0xf0b838;
+    const lv_font_t* q_font   = &lv_font_montserrat_ext_20;
+    int              box_h    = 210;
+    if (action == 1) {                       // dried today
+      icon = LV_SYMBOL_TINT;  icon_col = 0x5ad1ff;
+    } else if (action == 3) {                // archive spool
+      icon = LV_SYMBOL_TRASH; icon_col = 0xffb060;
+    } else {                                 // long text, e.g. discard address
+      q_font = &lv_font_montserrat_ext_16;
+      box_h  = 250;
+    }
+    const int BOX_W = 400;
+    const int BTN_H = 56;
+    const int BTN_Y = box_h - BTN_H - 18;
+
+    lv_obj_set_size(box, BOX_W, box_h);
     lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_pad_all(box, 0, 0);
-    lv_obj_set_width(lbl_q, 360);
-    lv_obj_align(lbl_q, LV_ALIGN_TOP_MID, 0, 20);
+
+    lv_obj_t *lbl_icon = lv_label_create(box);
+    lv_label_set_text(lbl_icon, icon);
+    lv_obj_set_style_text_color(lbl_icon, lv_color_hex(icon_col), 0);
+    // 24 rather than something larger on purpose: it is the biggest size the
+    // firmware already links. Pulling in a font for one glyph cost 74 kB of
+    // flash when this was first written at 32.
+    lv_obj_set_style_text_font(lbl_icon, &lv_font_montserrat_ext_24, 0);
+    lv_obj_align(lbl_icon, LV_ALIGN_TOP_MID, 0, 14);
+
+    lv_obj_set_style_text_font(lbl_q, q_font, 0);
+    lv_obj_set_width(lbl_q, BOX_W - 40);
+    lv_obj_align(lbl_q, LV_ALIGN_TOP_MID, 0, 62);
 
     lv_obj_t *btn_ja = lv_btn_create(box);
-    lv_obj_set_size(btn_ja, 170, 56);
-    lv_obj_set_pos(btn_ja, 12, 122);
+    lv_obj_set_size(btn_ja, 170, BTN_H);
+    lv_obj_set_pos(btn_ja, 12, BTN_Y);
     lv_obj_set_style_bg_color(btn_ja, lv_color_hex(0x1a4020), 0);
     lv_obj_set_style_bg_color(btn_ja, lv_color_hex(0x2a7030), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_ja, 8, 0);
@@ -615,8 +652,8 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_center(lbl_ja);
 
     lv_obj_t *btn_nein = lv_btn_create(box);
-    lv_obj_set_size(btn_nein, 170, 56);
-    lv_obj_set_pos(btn_nein, 218, 122);
+    lv_obj_set_size(btn_nein, 170, BTN_H);
+    lv_obj_set_pos(btn_nein, 218, BTN_Y);
     lv_obj_set_style_bg_color(btn_nein, lv_color_hex(0x3a1010), 0);
     lv_obj_set_style_bg_color(btn_nein, lv_color_hex(0x602020), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_nein, 8, 0);
