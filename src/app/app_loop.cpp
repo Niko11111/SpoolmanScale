@@ -253,10 +253,27 @@ void appLoop() {
     }
   }
 
-  // ── Loop heartbeat (every 5s, verbose only) ──────────────
-  // Helps diagnose freezes: last heartbeat timestamp = roughly when loop stopped
+  // ── Loop heartbeat (checked every 5s, verbose only) ──────
+  // Helps diagnose freezes: last heartbeat timestamp = roughly when loop
+  // stopped. Checked at the old rate, but written only when it has something
+  // to say. An idle scale repeats the same figures for hours, and a day of
+  // that was 978 kB of a 1 MB log - 90 % of the heartbeat lines byte
+  // identical to the one before, crowding out the 70 kB that showed what the
+  // device actually did.
+  //
+  // RSSI deliberately takes no part in the decision. It jitters by a dB or
+  // two continuously, so including it would mark every single line as
+  // changed and save nothing. It is still printed on the lines that do get
+  // written.
   static unsigned long last_heartbeat_ms = 0;
+  static unsigned long last_hb_logged_ms = 0;
   static uint32_t heartbeat_count = 0;
+  static bool     hb_have_prev    = false;
+  static uint32_t hb_prev_heap    = 0;
+  static uint32_t hb_prev_lv_free = 0;
+  static uint32_t hb_prev_stack   = 0;
+  static uint8_t  hb_prev_frag    = 0;
+  static bool     hb_prev_wifi    = false;
   if (sd_verbose && millis() - last_heartbeat_ms >= 5000) {
     last_heartbeat_ms = millis();
     heartbeat_count++;
@@ -266,14 +283,44 @@ void appLoop() {
     lv_mem_monitor_t lv_mem;
     lv_mem_monitor(&lv_mem);
     bool wifi_up = (WiFi.status() == WL_CONNECTED);
-    logSDf("[verbose] heartbeat #%u heap=%d PSRAM=%d uptime=%lus "
-           "lv_free=%u lv_biggest=%u lv_used=%u%% lv_frag=%u%% "
-           "stack_min=%u wifi=%s rssi=%d",
-      heartbeat_count, ESP.getFreeHeap(), ESP.getFreePsram(), millis() / 1000,
-      (unsigned)lv_mem.free_size, (unsigned)lv_mem.free_biggest_size,
-      (unsigned)lv_mem.used_pct, (unsigned)lv_mem.frag_pct,
-      (unsigned)stack_min_bytes,
-      wifi_up ? "up" : "DOWN", wifi_up ? WiFi.RSSI() : 0);
+
+    const uint32_t heap    = (uint32_t)ESP.getFreeHeap();
+    const uint32_t lv_free = (uint32_t)lv_mem.free_size;
+    const uint32_t stack   = (uint32_t)stack_min_bytes;
+
+    // Small drifts are normal and not worth a line. A kilobyte is well below
+    // anything that matters and well above the noise.
+    auto moved = [](uint32_t a, uint32_t b) {
+      return (a > b ? a - b : b - a) >= HEARTBEAT_QUIET_DELTA_B;
+    };
+    const bool changed = !hb_have_prev
+                      || moved(heap, hb_prev_heap)
+                      || moved(lv_free, hb_prev_lv_free)
+                      || stack < hb_prev_stack          // only ever falls
+                      || lv_mem.frag_pct != hb_prev_frag
+                      || wifi_up != hb_prev_wifi;
+    // A line every so often even when nothing moves, so that the last
+    // timestamp still says how far the loop got before it stopped - which is
+    // the whole point of a heartbeat.
+    const bool due = (millis() - last_hb_logged_ms) >= HEARTBEAT_KEEPALIVE_MS;
+
+    if (changed || due) {
+      last_hb_logged_ms = millis();
+      hb_have_prev    = true;
+      hb_prev_heap    = heap;
+      hb_prev_lv_free = lv_free;
+      hb_prev_stack   = stack;
+      hb_prev_frag    = lv_mem.frag_pct;
+      hb_prev_wifi    = wifi_up;
+      logSDf("[verbose] heartbeat #%u heap=%d PSRAM=%d uptime=%lus "
+             "lv_free=%u lv_biggest=%u lv_used=%u%% lv_frag=%u%% "
+             "stack_min=%u wifi=%s rssi=%d",
+        heartbeat_count, ESP.getFreeHeap(), ESP.getFreePsram(), millis() / 1000,
+        (unsigned)lv_mem.free_size, (unsigned)lv_mem.free_biggest_size,
+        (unsigned)lv_mem.used_pct, (unsigned)lv_mem.frag_pct,
+        (unsigned)stack_min_bytes,
+        wifi_up ? "up" : "DOWN", wifi_up ? WiFi.RSSI() : 0);
+    }
   }
 
   handleWifiReconnect();

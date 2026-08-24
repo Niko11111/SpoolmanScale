@@ -47,6 +47,8 @@ static String body() {
          "<div style='display:flex;gap:12px;align-items:center'>"
          "<button id='slb' class='quiet' onclick='loadSession(true)'>");
   h += T(STR_W_SESSION_REFRESH);
+  h += F("</button><button id='slc' class='quiet'>");
+  h += T(STR_W_SESSION_COPY);
   h += F("</button><span id='sls' class='note' style='margin:0'></span>"
          "</div></div></div>");
 
@@ -58,6 +60,9 @@ static String body() {
   h += F(",SESSION_LINES=");   h += jsStr(T(STR_W_SESSION_LINES));
   h += F(",SESSION_PAUSED=");  h += jsStr(T(STR_W_SESSION_PAUSED));
   h += F(",SESSION_NEW=");     h += jsStr(T(STR_W_SESSION_NEW));
+  h += F(",SESSION_COPY=");    h += jsStr(T(STR_W_SESSION_COPY));
+  h += F(",SESSION_COPIED=");  h += jsStr(T(STR_W_SESSION_COPIED));
+  h += F(",SESSION_COPYFAIL="); h += jsStr(T(STR_W_SESSION_COPYFAIL));
   h += F(";</script>");
 
   h += F("<script>const M={view:");
@@ -103,7 +108,29 @@ static String body() {
          "slNote(s,all&&all!==SESSION_EMPTY?all.split('\\n').length:0);"
          "}).catch(()=>{if(s)s.textContent='-';})"
          ".finally(()=>{if(b&&manual){b.disabled=false;b.textContent=SESSION_REFRESH;}});}"
+         "function slCopy(){"
+         "var e=document.getElementById('sl'),b=document.getElementById('slc');"
+         "if(!e||!b)return;"
+         "var txt=e.textContent||'';"
+         "var done=function(ok){b.textContent=ok?SESSION_COPIED:SESSION_COPYFAIL;"
+         "setTimeout(function(){b.textContent=SESSION_COPY;},1500);};"
+         // navigator.clipboard only exists in a secure context. This page is
+         // served over plain http on a LAN address, so it is undefined in
+         // every current browser and the older path below is the one that
+         // actually runs. The modern call stays first for the day the scale
+         // is reached over https or through localhost.
+         "if(navigator.clipboard&&window.isSecureContext){"
+         "navigator.clipboard.writeText(txt).then(function(){done(true);},"
+         "function(){done(false);});return;}"
+         "var t=document.createElement('textarea');t.value=txt;"
+         "t.setAttribute('readonly','');"
+         "t.style.position='fixed';t.style.top='-1000px';"
+         "document.body.appendChild(t);t.select();"
+         "var ok=false;try{ok=document.execCommand('copy');}catch(err){ok=false;}"
+         "document.body.removeChild(t);done(ok);}"
          "function slWatch(){var e=document.getElementById('sl');if(!e)return;"
+         "var c=document.getElementById('slc');"
+         "if(c)c.addEventListener('click',slCopy);"
          "e.addEventListener('scroll',function(){"
          "if(slAuto){slAuto=false;return;}"
          "if(slFollow){slFollow=false;"

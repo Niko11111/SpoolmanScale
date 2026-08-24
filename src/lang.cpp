@@ -1224,6 +1224,12 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Paused, press refresh to follow again" },  // STR_W_SESSION_PAUSED
   { "neu",
     "new" },  // STR_W_SESSION_NEW
+  { "Text kopieren",
+    "Copy text" },  // STR_W_SESSION_COPY
+  { "Kopiert",
+    "Copied" },  // STR_W_SESSION_COPIED
+  { "Kopieren nicht moeglich, bitte markieren",
+    "Cannot copy, please select the text" },  // STR_W_SESSION_COPYFAIL
   { "Einen beschreibbaren NTAG auflegen, Spule wählen, schreiben. Was auf dem Tag steht, wird ersetzt. Werkstags sind meist MIFARE Classic oder gesperrt und lassen sich nur lesen.",
     "Place a writable NTAG on the reader, pick a spool, and write it. Whatever is already on the tag is replaced. Factory tags are usually MIFARE Classic or locked, and can only be read." },  // STR_W_TAG_NOTE
   { "<b>Welcher Tag für welches Format.</b> OpenSpool braucht rund 170 Byte und damit einen <b>NTAG215</b> (496 Byte) oder <b>NTAG216</b> (872 Byte). Auf einen NTAG213 (144 Byte) passt davon nichts, dort geht nur Anycubic ACE, das mit 112 Byte auskommt. Meldet ein Tag keine Größe, rechnet die Waage sicherheitshalber mit den 144 Byte eines NTAG213 - dann den Tag einmal mit einer NFC-App als NDEF formatieren, das trägt die Größe ein.",

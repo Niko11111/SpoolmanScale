@@ -29,7 +29,13 @@ static unsigned long sd_log_size = 0;
 // silenced the log while the file was still small.
 static char sd_log_file[24] = "";
 
-#define SD_LOG_MAX_SIZE  (1024UL * 1024UL)
+// Per file, not per day: a full file is rotated to .1 and a fresh one starts,
+// so a busy day costs at most twice this. cleanOldLogs() drops everything
+// older than a week, which caps the whole store at 14 files - a rounding
+// error on any card this firmware will ever see. The old value was 1 MB and
+// came from v0.5.9-beta with no reason recorded; a single day of verbose
+// logging hit it and the log then went silent for the rest of the day.
+#define SD_LOG_MAX_SIZE  (8UL * 1024UL * 1024UL)
 
 // 240 lines is a few minutes of ordinary running and the whole of a boot,
 // which is what this exists for. 38 kB, and it goes in PSRAM: the internal
@@ -179,7 +185,31 @@ void logSD(const char* msg) {
     sd_log_file[sizeof(sd_log_file) - 1] = '\0';
   }
 
-  if (sd_log_size > SD_LOG_MAX_SIZE) return;
+  // Full means start a new one, never stop. Stopping is how a panic three
+  // hours after the cap was reached came to leave no trace at all, in a file
+  // that looked complete because the boot block after it is written past
+  // this check.
+  if (sd_log_size > SD_LOG_MAX_SIZE) {
+    String rotated = fname;
+    rotated.replace(".txt", ".1.txt");
+    SD.remove(rotated.c_str());            // only one generation is kept
+    if (SD.rename(fname.c_str(), rotated.c_str())) {
+      sd_log_size = 0;
+      File f = SD.open(fname.c_str(), FILE_APPEND);
+      if (f) {
+        size_t w = f.printf("[%s] --- continued, previous part is %s ---\n",
+                            stamp, rotated.c_str());
+        f.close();
+        sd_log_size += w;
+      }
+    } else {
+      // Rotation failed - carry on writing rather than going quiet. A file
+      // growing past the cap is a far smaller problem than a blind spot.
+      Serial.printf("logSD: rotate to %s failed, continuing in place\n",
+                    rotated.c_str());
+      sd_log_size = 0;
+    }
+  }
 
   File f = SD.open(fname.c_str(), FILE_APPEND);
   if (!f) return;
@@ -297,7 +327,10 @@ void cleanOldLogs() {
     String fname = name;
     if (!fname.startsWith("/")) fname = "/" + fname;
 
-    if (fname.startsWith("/log_") && fname.endsWith(".txt") && fname.length() == 19) {
+    // 19 is "/log_YYYY-MM-DD.txt"; a rotated part is longer ("...-24.1.txt")
+    // and must be matched too, or it would never be cleaned up and the week's
+    // worth of logs would grow without limit.
+    if (fname.startsWith("/log_") && fname.endsWith(".txt") && fname.length() >= 19) {
       int yyyy = fname.substring(5, 9).toInt();
       int mm   = fname.substring(10, 12).toInt();
       int dd   = fname.substring(13, 15).toInt();

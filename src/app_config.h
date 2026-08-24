@@ -58,3 +58,10 @@
 // beats guessing 1000 g for a 250 g refill.
 #define NEWTAG_LABEL_COUNT         4
 #define NEWTAG_LABEL_CHOICES  { 250, 500, 750, 1000 }
+
+// The verbose heartbeat is checked every 5 s but only written when something
+// moved by at least this much, plus one line per keepalive interval so the
+// last timestamp still marks how far the loop got. Measured on a real day:
+// 90 % of heartbeat lines repeated the previous one byte for byte.
+#define HEARTBEAT_QUIET_DELTA_B   1024
+#define HEARTBEAT_KEEPALIVE_MS   60000
