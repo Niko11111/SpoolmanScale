@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "hardware/sd_logger.h"
+#include "services/http_progress.h"
 #include "services/tag_uid.h"
 #include "services/wifi_manager.h"
 #include "services/user_options.h"
@@ -75,9 +76,19 @@ static int getJson(const char* url, const char* api_key, JsonDocument& doc,
     return code;
   }
 
-  DeserializationError err = filter
-    ? deserializeJson(doc, http.getStream(), DeserializationOption::Filter(*filter))
-    : deserializeJson(doc, http.getStream());
+  // Wrapped only while somebody is listening, so every other request in the
+  // firmware reads exactly the stream it always did. One request, no paging,
+  // so nothing has to be carried over.
+  DeserializationError err = DeserializationError::Ok;
+  if (httpProgressActive()) {
+    HttpProgressStream ps(http.getStream());
+    err = filter ? deserializeJson(doc, ps, DeserializationOption::Filter(*filter))
+                 : deserializeJson(doc, ps);
+  } else {
+    err = filter
+      ? deserializeJson(doc, http.getStream(), DeserializationOption::Filter(*filter))
+      : deserializeJson(doc, http.getStream());
+  }
   http.end();
 
   if (out_err) *out_err = err;

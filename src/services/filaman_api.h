@@ -106,6 +106,15 @@ int filamanPatchCustomField(const char* base_url, const char* api_key, int spool
                             const char* key, const char* value,
                             uint32_t timeout_ms = 8000);
 
+// Sets external_id. Used to write "bambulab:<tray uuid>" onto a spool this
+// scale linked, which is the only field the Bambu Lab plugin's duplicate
+// check consults - without it the plugin creates the spool a second time.
+//
+// Only ever called with the field empty. It is the plugin's namespace, and a
+// spoolman:<id> left by the importer says where the record came from.
+int filamanPatchExternalId(const char* base_url, const char* api_key, int spool_id,
+                           const char* external_id, uint32_t timeout_ms = 5000);
+
 // Reports a measured weight through the device API. FilaMan works out the
 // remaining filament itself, so the empty spool weight must NOT be
 // subtracted beforehand. Identifies the spool by id, or by tag when id is 0.

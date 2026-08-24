@@ -71,6 +71,28 @@ extern uint8_t g_tag_field;
 // tags when a server turns out to have them - see tagFieldAutoSelect().
 extern bool g_tag_field_chosen;
 
+// The two fields FilaMan's Bambu Lab plugin owns, and whether this scale
+// keeps them up to date. Reading them needs no switch and never had one: it
+// cannot damage anything, and a spool the printer already knows is a spool
+// this scale should recognise. Writing changes somebody else's field, so it
+// stays the user's decision.
+//
+// The chip uid goes into the first free of bambu_rfid_tag_1 and _2, and the
+// plugin only ever fills the first from what the AMS reported. Off by
+// default: it is metadata, and the one case where it earns its keep is a
+// Bambu tag that will not decrypt and has nothing but its chip uid to offer.
+extern bool g_flm_bambu_tags;
+
+// external_id is the only field the plugin's duplicate check looks at. A
+// spool this scale linked carries the tray uuid in rfid_uid instead, is
+// therefore invisible to that check, and gets created a second time - five of
+// seven on the instance this was measured on. Writing it as well ends that.
+//
+// On by default, and the price is in the info text: once the plugin owns the
+// record it also maintains remaining_weight_g from the AMS estimate, which
+// replaces a measured value until the next weighing.
+extern bool g_flm_ext_id;
+
 // Whether the scale may write to Spoolman's card_uids, the UID list SpoolLink
 // keeps for the Snapmaker U1. Only ever offered while card_uids is the
 // selected tag field: it is the one convention with a list format, and a

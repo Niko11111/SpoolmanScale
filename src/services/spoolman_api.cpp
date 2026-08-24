@@ -1,4 +1,5 @@
 #include "spoolman_api.h"
+#include "http_progress.h"
 #include "tag_uid.h"
 
 #include <Arduino.h>
@@ -64,48 +65,6 @@ static int deleteReq(const String& url, uint32_t timeout_ms) {
   return code;
 }
 
-static SpoolmanProgressFn s_progress = nullptr;
-
-void spoolmanSetProgressHook(SpoolmanProgressFn fn) { s_progress = fn; }
-
-// Passes the response through untouched and counts what went by, so the parse
-// of a large inventory stops being a silent gap.
-//
-// The hook is called every PROGRESS_STEP bytes rather than per byte: the count
-// itself is free, but a hook that redraws is not, and ArduinoJson pulls one
-// byte at a time often enough to matter. The hook throttles again by time -
-// this only keeps the call out of the innermost loop.
-#define PROGRESS_STEP  512
-
-class ProgressStream : public Stream {
-public:
-  explicit ProgressStream(Stream& inner) : in_(inner) {}
-  int    available() override { return in_.available(); }
-  int    peek() override      { return in_.peek(); }
-  void   flush() override     { in_.flush(); }
-  size_t write(uint8_t b) override { return in_.write(b); }
-  int    read() override {
-    int c = in_.read();
-    if (c >= 0) count(1);
-    return c;
-  }
-  size_t readBytes(char* buf, size_t len) override {
-    size_t r = in_.readBytes(buf, len);
-    count(r);
-    return r;
-  }
-private:
-  void count(size_t n) {
-    total_ += n;
-    if (total_ - last_ < PROGRESS_STEP) return;
-    last_ = total_;
-    if (s_progress) s_progress(total_);
-  }
-  Stream& in_;
-  size_t  total_ = 0;
-  size_t  last_  = 0;
-};
-
 static int getJson(const String& url, JsonDocument& doc, uint32_t timeout_ms,
                    JsonDocument* filter, DeserializationError* out_err) {
   if (out_err) *out_err = DeserializationError::Ok;
@@ -122,8 +81,8 @@ static int getJson(const String& url, JsonDocument& doc, uint32_t timeout_ms,
   // Wrapped only while somebody is listening, so every other request in the
   // firmware reads exactly the stream it always did.
   DeserializationError err = DeserializationError::Ok;
-  if (s_progress) {
-    ProgressStream ps(*http.getStreamPtr());
+  if (httpProgressActive()) {
+    HttpProgressStream ps(*http.getStreamPtr());
     err = filter ? deserializeJson(doc, ps, DeserializationOption::Filter(*filter))
                  : deserializeJson(doc, ps);
   } else {

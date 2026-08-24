@@ -40,6 +40,7 @@
 #include "services/backend.h"
 #include "ui/ams_assign_popup.h"
 #include "ui/ams_assign_screen.h"
+#include "ui/filaman_fields_screen.h"
 #include "ui/backend_screen.h"
 #include "ui/filaman_options_screen.h"
 #include "ui/bag_screen.h"
@@ -370,6 +371,12 @@ void appLoop() {
     buildAmsAssignScreen();        // releases the previous instance itself
     hideAllOverlays();
     lv_obj_clear_flag(scr_ams_assign, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_filaman_fields_pending) {
+    show_filaman_fields_pending = false;
+    buildFilaManFieldsScreen();    // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_filaman_fields, LV_OBJ_FLAG_HIDDEN);
   }
   if (show_spoolman_pending) {
     show_spoolman_pending = false;
@@ -1057,7 +1064,8 @@ void appLoop() {
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
             lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
-            { char sb[48]; backendText(sm_found ? T(STR_TAG_FOUND) : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb));
+            { char sb[48]; backendText(sm_found ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
+                                             : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb));
               lv_label_set_text(lbl_status, sb); }
             lv_obj_set_style_text_color(lbl_status,
               sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
@@ -1083,7 +1091,8 @@ void appLoop() {
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
             lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
-            { char sb[48]; backendText(sm_found ? T(STR_TAG_FOUND) : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb)); lv_label_set_text(lbl_status, sb); }
+            { char sb[48]; backendText(sm_found ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
+                                             : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb)); lv_label_set_text(lbl_status, sb); }
             lv_obj_set_style_text_color(lbl_status,
               sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
           }
@@ -1159,7 +1168,8 @@ void appLoop() {
           // Same UID — show popup after delay if not dismissed
           // Auto-popup disabled — user uses the Link/Copy buttons in Zone 5
           (void)link_tag_first_seen_ms;
-          { char sb[48]; backendText(sm_found ? T(STR_TAG_FOUND) : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb)); lv_label_set_text(lbl_status, sb); }
+          { char sb[48]; backendText(sm_found ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
+                                             : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb)); lv_label_set_text(lbl_status, sb); }
           lv_obj_set_style_text_color(lbl_status,
             sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
         }

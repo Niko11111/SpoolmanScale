@@ -8,6 +8,7 @@
 
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
+#include "services/http_progress.h"
 
 namespace {
 
@@ -129,6 +130,41 @@ static bool fetchLocations(const char* base_url, const char* api_key, bool force
   return true;
 }
 
+// Where FilaMan keeps the article number.
+//
+// It used to be shop_url alone, because the Spoolman importer wrote it there:
+// that column is the only free text on a filament and Spoolman has no URL
+// field of its own. Two things ended that. The importer leaves a value there
+// only when it parses as a link, and the Bambu Lab plugin fills shop_url with
+// the real store page. Measured against a live instance, all 348 of 672
+// filaments that carry a shop_url carry an https address, and not one carries
+// a bare number - so reading that field first put a truncated URL where the
+// article number belongs.
+//
+// shop_url is therefore asked last and only when it is not a link, which is
+// what keeps an older instance working: there the number is still the only
+// thing in that field.
+//
+// All three values are strings. bambu_product_code in particular is quoted in
+// the data, unlike the plugin's numeric bookkeeping fields next to it.
+static const char* articleNumber(JsonObjectConst fil) {
+  JsonVariantConst cf = fil["custom_fields"];
+
+  const char* v = cf["article_number"] | (const char*)nullptr;
+  if (v && v[0]) return v;
+
+  // Bambu's five digit product code, 11600 for Matte Marine Blue. The plugin
+  // keeps it under its own name, and for a Bambu filament it is the article
+  // number.
+  v = cf["bambu_product_code"] | (const char*)nullptr;
+  if (v && v[0]) return v;
+
+  v = fil["shop_url"] | (const char*)nullptr;
+  if (v && v[0] && strncasecmp(v, "http", 4) != 0) return v;
+
+  return "";
+}
+
 // ============================================================
 //  TRANSLATION: FilaMan spool  ->  Spoolman spool
 //
@@ -161,13 +197,13 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   // with replace("\"",""). Writing the bare value is therefore safe and
   // keeps the document smaller.
   JsonObject extra = dst["extra"].to<JsonObject>();
+  JsonVariantConst cf = src["custom_fields"];
   const char* uid = src["rfid_uid"] | "";
   if (uid[0]) {
     extra["tag"] = uid;
   } else {
     // Spools imported from Spoolman still carry the old value. Read it so
     // they are recognised before the migration writes rfid_uid.
-    JsonVariantConst cf = src["custom_fields"];
     const char* legacy = cf["spoolmanscale_tag"] | (const char*)nullptr;
     if (!legacy) legacy = cf["spoolman_extra"]["tag"] | (const char*)nullptr;
     if (legacy && legacy[0]) {
@@ -179,7 +215,33 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
     }
   }
 
-  const char* dried = src["custom_fields"]["last_dried"] | (const char*)nullptr;
+  // What the Bambu Lab plugin binds a spool by. It never touches rfid_uid -
+  // its README says so and leaves that field to external readers - so these
+  // are read in addition, never instead.
+  //
+  // external_id holds the tray uuid, the same 32 characters this firmware
+  // reads out of block 9 of the tag, behind a source prefix. The prefix stays
+  // out of the value: everything downstream compares tag notations, not
+  // provenance.
+  const char* ext = src["external_id"] | "";
+  if (strncmp(ext, "bambulab:", 9) == 0 && strlen(ext + 9) == 32) {
+    extra["bambu_ext"] = ext + 9;
+  }
+  // Whether the field holds anything at all, which is a different question:
+  // the importer leaves a spoolman:<id> there, and that says where the record
+  // came from. Nothing here may overwrite it.
+  if (ext[0]) extra["ext_set"] = true;
+
+  // One physical chip each. A Bambu spool carries two, one per flange, and
+  // the plugin only ever fills the first from what the AMS reported. The
+  // second is what its README keeps free "for another reader", which is this
+  // scale.
+  const char* b1 = cf["bambu_rfid_tag_1"] | (const char*)nullptr;
+  const char* b2 = cf["bambu_rfid_tag_2"] | (const char*)nullptr;
+  if (b1 && b1[0]) extra["bambu_tag1"] = b1;
+  if (b2 && b2[0]) extra["bambu_tag2"] = b2;
+
+  const char* dried = cf["last_dried"] | (const char*)nullptr;
   if (dried) extra["last_dried"] = dried;
 
   JsonObjectConst fil = src["filament"];
@@ -190,8 +252,7 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
     f["material"]     = fil["material_type"]            | "";
     f["weight"]       = fil["raw_material_weight_g"]    | 0.0f;
     f["spool_weight"] = fil["default_spool_weight_g"]   | 0.0f;
-    // shop_url carries the article number in FilaMan.
-    f["article_number"] = fil["shop_url"] | "";
+    f["article_number"] = articleNumber(fil);
 
     // FilaMan supports multi colour filaments, so colours are an array and
     // the hex code arrives with a leading '#'. Spoolman has neither.
@@ -572,6 +633,17 @@ int filamanPatchRfidUid(const char* base_url, const char* api_key, int spool_id,
   return code;
 }
 
+int filamanPatchExternalId(const char* base_url, const char* api_key, int spool_id,
+                           const char* external_id, uint32_t timeout_ms) {
+  if (spool_id <= 0 || !external_id || !external_id[0]) return -1;
+  JsonDocument body;
+  body["external_id"] = external_id;
+  String payload;
+  serializeJson(body, payload);
+  return patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
+                    payload, timeout_ms);
+}
+
 // Spool currently holding this UID, archived ones included, or 0.
 static int filamanSpoolHoldingTag(const char* base_url, const char* api_key,
                                   const char* uuid, uint32_t timeout_ms) {
@@ -937,6 +1009,7 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
   int page = 1;
   int fetched = 0;
   int total = -1;
+  size_t progress_bytes = 0;
 
   // timeout_ms applies to the whole call, not to each page. Without this a
   // 20 second timeout over 20 pages could block the loop for minutes with
@@ -967,7 +1040,17 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
 
     SpiRamAllocator alloc;
     JsonDocument raw(&alloc);
-    DeserializationError err = deserializeJson(raw, http.getStream());
+    // Wrapped only while somebody is listening. progress_bytes carries the
+    // count from one page into the next, so a paged inventory adds up instead
+    // of restarting the counter on every request.
+    DeserializationError err = DeserializationError::Ok;
+    if (httpProgressActive()) {
+      HttpProgressStream ps(http.getStream(), progress_bytes);
+      err = deserializeJson(raw, ps);
+      progress_bytes = ps.total();
+    } else {
+      err = deserializeJson(raw, http.getStream());
+    }
     http.end();
     if (err) {
       if (out_err) *out_err = err;

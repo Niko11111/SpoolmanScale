@@ -13,6 +13,8 @@
 #include "services/location_state.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/filaman_api.h"
+#include "services/http_progress.h"
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
 #include "services/tag_uid.h"
@@ -51,6 +53,22 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 // Longest identifier the scale compares is a Bambu tray uuid at 32 characters.
 #define TAG_UID_CMP_MAX  48
 
+// How a spool was recognised. Lower is better, and rank 1 has to keep
+// winning: every installation runs on it, and nothing added below may be able
+// to cost it a match. It also decides which of two spools wins when both
+// answer to the same tag, which is what the Bambu plugin's duplicates look
+// like from here.
+#define TAG_RANK_NONE        0
+#define TAG_RANK_FIELD       1   // a tag field, or Spoolman's tag relation
+#define TAG_RANK_BAMBU_EXT   2   // FilaMan external_id, bambulab:<tray uuid>
+#define TAG_RANK_BAMBU_CHIP  3   // chip uid in bambu_rfid_tag_1 / _2
+
+// A 4 byte chip uid is 8 characters, and the plugin pads it to 16 with a
+// fixed tail. Both lengths are checked rather than the tail itself: the tail
+// is what the AMS reported, not something this firmware gets to define.
+#define BAMBU_CHIP_UID_LEN    8
+#define BAMBU_TAG_FIELD_LEN  16
+
 // How often the inventory scan repaints its status line. Ten a second reads as
 // motion and each one costs a partial flush that the transfer is waiting on.
 #define SEARCH_TICK_MS  100
@@ -71,8 +89,8 @@ static void searchProgress(size_t bytes_read) {
   lv_refr_now(NULL);
 }
 
-static bool spoolMatchesTag(JsonObjectConst spool, const char* uid) {
-  if (!uid || !uid[0]) return false;
+static int spoolTagRank(JsonObjectConst spool, const char* uid) {
+  if (!uid || !uid[0]) return TAG_RANK_NONE;
 
   // Spoolman's own tag relation, which a server on master fills. Asked first
   // and separately from the extra fields, because a spool bound this way has
@@ -86,12 +104,12 @@ static bool spoolMatchesTag(JsonObjectConst spool, const char* uid) {
       const char* have_raw = t["uid"] | "";
       char have[TAG_UID_CMP_MAX];
       tagUidNormalize(have_raw, have, sizeof(have));
-      if (want[0] && have[0] && strcmp(have, want) == 0) return true;
+      if (want[0] && have[0] && strcmp(have, want) == 0) return TAG_RANK_FIELD;
     }
   }
 
   JsonObjectConst extra = spool["extra"];
-  if (extra.isNull()) return false;
+  if (extra.isNull()) return TAG_RANK_NONE;
 
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
     const TagFieldSpec& spec = tagFieldSpec(i);
@@ -102,7 +120,7 @@ static bool spoolMatchesTag(JsonObjectConst spool, const char* uid) {
       // is an ilike, so a 4 byte UID would otherwise match inside a 7 byte one
       // belonging to a different spool.
       const char* raw = extra[spec.key] | (const char*)nullptr;
-      if (raw && cardUidsContain(raw, uid)) return true;
+      if (raw && cardUidsContain(raw, uid)) return TAG_RANK_FIELD;
       continue;
     }
 
@@ -111,7 +129,7 @@ static bool spoolMatchesTag(JsonObjectConst spool, const char* uid) {
     tag_val.trim();
     // Byte for byte first: that is what extra.tag holds and what every spool
     // linked by this firmware carries, so the common case costs one compare.
-    if (tag_val.equalsIgnoreCase(uid)) return true;
+    if (tag_val.equalsIgnoreCase(uid)) return TAG_RANK_FIELD;
 
     // Then normalised, which is what makes the other conventions match. A UID
     // written into nfc_id by SpoolSense is plain hex while the scale carries
@@ -119,10 +137,51 @@ static bool spoolMatchesTag(JsonObjectConst spool, const char* uid) {
     char have[TAG_UID_CMP_MAX], want[TAG_UID_CMP_MAX];
     tagUidNormalize(tag_val.c_str(), have, sizeof(have));
     tagUidNormalize(uid, want, sizeof(want));
-    if (have[0] && strcmp(have, want) == 0) return true;
+    if (have[0] && strcmp(have, want) == 0) return TAG_RANK_FIELD;
   }
 
-  return false;
+  // ---- FilaMan's Bambu Lab plugin, below everything above ----
+  //
+  // Both of these can name a spool that the tag fields say nothing about, and
+  // both are read only: the plugin owns them, and what this scale writes back
+  // into them is decided in the options screen, not here.
+
+  // The tray uuid out of external_id. Exact, 32 characters, no notation to
+  // reconcile - it is the same value the scale read off the tag.
+  const char* ext = extra["bambu_ext"] | (const char*)nullptr;
+  if (ext && ext[0] && strlen(uid) == 32 && strcasecmp(ext, uid) == 0) {
+    return TAG_RANK_BAMBU_EXT;
+  }
+
+  // The uid of one physical chip. Only a 4 byte tag can be one, which is
+  // exactly 8 characters normalised - a 7 byte NTAG uid lives in the same
+  // variable and must not be tried against this field.
+  char want[TAG_UID_CMP_MAX];
+  tagUidNormalize(g_tag.uid_str, want, sizeof(want));
+  if (strlen(want) == BAMBU_CHIP_UID_LEN) {
+    for (uint8_t i = 0; i < 2; i++) {
+      const char* raw = extra[i == 0 ? "bambu_tag1" : "bambu_tag2"] | (const char*)nullptr;
+      if (!raw || !raw[0]) continue;
+      char have[TAG_UID_CMP_MAX];
+      tagUidNormalize(raw, have, sizeof(have));
+      // Anchored at the front and only against the full 16 character form the
+      // plugin writes. Not a substring search: a free comparison on 8
+      // characters would match inside anything else that field ever holds.
+      if (strlen(have) == BAMBU_TAG_FIELD_LEN &&
+          strncmp(have, want, BAMBU_CHIP_UID_LEN) == 0) {
+        return TAG_RANK_BAMBU_CHIP;
+      }
+    }
+  }
+
+  return TAG_RANK_NONE;
+}
+
+// The rank a spool has to reach for the server side searches to be believed.
+// They can only ever find what they filtered on, so anything below is a
+// substring hit on a different spool.
+static inline bool spoolMatchesTag(JsonObjectConst spool, const char* uid) {
+  return spoolTagRank(spool, uid) == TAG_RANK_FIELD;
 }
 
 // Copies one extra field into a buffer, quote stripped and trimmed. A value
@@ -163,6 +222,74 @@ static void captureBindings(JsonObjectConst spool) {
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
     const TagFieldSpec& spec = tagFieldSpec(i);
     captureExtraField(extra, spec.key, sm_tag_values[i], CARD_UIDS_MAX, spec.key);
+  }
+}
+
+// The tail FilaMan's Bambu Lab plugin appends to a chip uid. It is what the
+// AMS reported, identical on all seven spools this was read from, and this
+// firmware only reproduces it - it does not get to define it.
+#define BAMBU_TAG_PAD  "00000100"
+
+// Keeps the plugin's two fields in step with what is on the reader right now.
+//
+// Two writes, each behind its own switch, each only ever into an empty field.
+// The data itself is the guard: a value that is already there means nothing is
+// sent, so this costs a couple of comparisons per scan and a request once in
+// the life of a spool.
+//
+// Only for a genuine Bambu tag. A four byte card that happens to be linked to
+// a spool has no business in a field called "Bambu RFID Tag", and it has no
+// tray uuid to put in external_id either.
+static void filamanSyncBambuFields(int spool_id, JsonObjectConst extra,
+                                   const char* tray_uuid) {
+  if (spool_id <= 0 || !tray_uuid || strlen(tray_uuid) != 32) return;
+
+  const char* base = backendBaseUrl();
+  const char* key  = filamanApiKey();
+  if (!base || !base[0] || !key || !key[0]) return;
+
+  if (g_flm_bambu_tags) {
+    // The chip uid, not the tray uuid: these two fields name one physical
+    // chip each. Only a four byte tag has one, which is eight characters
+    // normalised - the seven byte uid of an NTAG lives in the same variable.
+    char want[TAG_UID_CMP_MAX];
+    tagUidNormalize(g_tag.uid_str, want, sizeof(want));
+    if (strlen(want) == BAMBU_CHIP_UID_LEN) {
+      bool    present   = false;
+      uint8_t free_slot = 0;
+      for (uint8_t i = 0; i < 2 && !present; i++) {
+        const char* raw = extra[i == 0 ? "bambu_tag1" : "bambu_tag2"] | (const char*)nullptr;
+        if (!raw || !raw[0]) {
+          if (!free_slot) free_slot = i + 1;
+          continue;
+        }
+        char have[TAG_UID_CMP_MAX];
+        tagUidNormalize(raw, have, sizeof(have));
+        if (strncmp(have, want, BAMBU_CHIP_UID_LEN) == 0) present = true;
+      }
+
+      if (!present && free_slot) {
+        char value[BAMBU_TAG_FIELD_LEN + 1];
+        snprintf(value, sizeof(value), "%s%s", want, BAMBU_TAG_PAD);
+        const char* field = (free_slot == 1) ? "bambu_rfid_tag_1" : "bambu_rfid_tag_2";
+        int c = filamanPatchCustomField(base, key, spool_id, field, value);
+        logSDf("FilaMan: spool %d %s = %s, HTTP %d", spool_id, field, value, c);
+      } else if (!present) {
+        // Both slots hold somebody else. Neither is touched: they say which
+        // chips are stuck to that spool, and this scan disagrees with both.
+        logSDf("FilaMan: spool %d has both Bambu tag slots taken, %s not written",
+               spool_id, want);
+      }
+    }
+  }
+
+  // The plugin's duplicate check reads external_id and nothing else. Only
+  // written while empty - a spoolman:<id> from the importer stays.
+  if (g_flm_ext_id && !(extra["ext_set"] | false)) {
+    char ext[48];
+    snprintf(ext, sizeof(ext), "bambulab:%s", tray_uuid);
+    int c = filamanPatchExternalId(base, key, spool_id, ext);
+    logSDf("FilaMan: spool %d external_id = %s, HTTP %d", spool_id, ext, c);
   }
 }
 
@@ -507,6 +634,7 @@ void querySpoolman(const char* tray_uuid) {
   sm_location_name[0] = '\0'; sm_location_id = 0;
   sm_found = false;
   sm_id = 0;
+  sm_dup_count = 0;
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) sm_tag_values[i][0] = '\0';
   sm_spool_weight = 0;
   sm_remaining = 0;
@@ -689,7 +817,7 @@ void querySpoolman(const char* tray_uuid) {
   // The byte counter from the loading overlay, pointed at the status line
   // instead. Whether it is still moving is the only question a wait like this
   // raises, and the answer costs nothing here.
-  spoolmanSetProgressHook(searchProgress);
+  httpSetProgressHook(searchProgress);
 
   // Up to 2 attempts: first try, then 1 retry on IncompleteInput / connection issues.
   // 20s timeout is generous for large Spoolman datasets (200+ spools over WiFi).
@@ -727,7 +855,7 @@ void querySpoolman(const char* tray_uuid) {
     }
   }
 
-  spoolmanSetProgressHook(nullptr);
+  httpSetProgressHook(nullptr);
 
   Serial.printf("DBG free heap after parse: %d bytes  free PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
   if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (after Spoolman parse)",
@@ -740,11 +868,32 @@ void querySpoolman(const char* tray_uuid) {
   }
 
   JsonArray spools = doc.as<JsonArray>();
+
+  // Which rank the best match reaches, and how many spools answer to this tag
+  // at all. Both need the whole list, so they are settled before anything is
+  // shown: the loop below returns on the first spool it accepts, and taking
+  // the first match in list order would hand a Bambu plugin duplicate the win
+  // over the record this scale linked itself. FilaMan answers id descending,
+  // so the duplicate comes first.
+  int best_rank = TAG_RANK_NONE;
+  sm_dup_count  = 0;
+  for (JsonObjectConst cand : spools) {
+    int rank = spoolTagRank(cand, tray_uuid);
+    if (rank == TAG_RANK_NONE) continue;
+    sm_dup_count++;
+    if (best_rank == TAG_RANK_NONE || rank < best_rank) best_rank = rank;
+  }
+  if (sm_dup_count > 1) {
+    logSDf("Backend: tag %s answers %d spools, taking rank %d",
+           tray_uuid, sm_dup_count, best_rank);
+  }
+
   for (JsonObject spool : spools) {
     if (!spool.containsKey("extra")) continue;
     JsonObject extra = spool["extra"];
 
-    if (!spoolMatchesTag(spool, tray_uuid)) continue;
+    int rank = spoolTagRank(spool, tray_uuid);
+    if (rank == TAG_RANK_NONE || rank != best_rank) continue;
 
     // Read after the match, not as part of it: the FilaMan migration below
     // writes this value back and wants the tag field's own notation. A spool
@@ -773,6 +922,24 @@ void querySpoolman(const char* tray_uuid) {
     if (backendIsFilaMan() && sm_id > 0 && (spool["extra"]["tag_legacy"] | false)) {
       int mc = backendPatchSpoolTag(cfg_spoolman_base, sm_id, tag_val.c_str(), 4000);
       logSDf("FilaMan: migrated tag of spool %d to rfid_uid, HTTP %d", sm_id, mc);
+    }
+
+    // The same idea, one field over: a spool found through the Bambu plugin's
+    // own bookkeeping has nothing in rfid_uid, so ?search= cannot see it and
+    // every scan would pull the whole inventory again. Writing the tray uuid
+    // there once puts it on the fast path for good.
+    //
+    // Only from rank 2 or 3, which is what "found through the plugin" means.
+    // A rank 1 match already has the field, and re-patching it on every scan
+    // would be a pointless write and a needless stall.
+    if (backendIsFilaMan() && sm_id > 0 && rank > TAG_RANK_FIELD && tag_val.length() == 0) {
+      int mc = backendPatchSpoolTag(cfg_spoolman_base, sm_id, tray_uuid, 4000);
+      logSDf("FilaMan: spool %d found at rank %d, wrote rfid_uid, HTTP %d",
+             sm_id, rank, mc);
+    }
+
+    if (backendIsFilaMan() && sm_id > 0) {
+      filamanSyncBambuFields(sm_id, extra, tray_uuid);
     }
 
     captureBindings(spool);
@@ -926,7 +1093,7 @@ void querySpoolman(const char* tray_uuid) {
         // Only check truly archived spools (explicit bool cast needed for JsonVariant)
         bool is_archived = spool["archived"].as<bool>();
         if (!is_archived) continue;
-        if (!spoolMatchesTag(spool, tray_uuid)) continue;
+        if (spoolTagRank(spool, tray_uuid) == TAG_RANK_NONE) continue;
         // Archived spool found
         Serial.printf("Spoolman: spool archived (ID=%d)\n", spool["id"] | 0);
         lv_label_set_text(lbl_spoolman_weight, T(STR_ARCHIVED));

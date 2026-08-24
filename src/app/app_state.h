@@ -50,6 +50,7 @@ extern lv_obj_t *scr_wifi;
 extern lv_obj_t *scr_backend;
 extern lv_obj_t *scr_filaman_options;
 extern lv_obj_t *scr_ams_assign;
+extern lv_obj_t *scr_filaman_fields;
 extern lv_obj_t *scr_bambuddy_options;
 extern lv_obj_t *scr_bambuddy_dried;
 extern lv_obj_t *scr_spoolman_options;
@@ -87,6 +88,13 @@ extern lv_obj_t *scr_wifi_pass;
 extern lv_obj_t *scr_wifi_connecting;
 
 extern int sm_id;
+
+// How many spools answered to the tag that was just looked up. Above one
+// means the backend holds more than one record for the same physical spool -
+// what FilaMan's Bambu Lab plugin produces when it creates a spool this scale
+// had already linked. The scan takes the best ranked one; this is what lets
+// the status line say that there was a choice to make.
+extern int sm_dup_count;
 extern int sm_filament_id;
 extern int sm_vendor_id;
 extern bool sm_found;

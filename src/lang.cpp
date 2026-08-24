@@ -1240,4 +1240,33 @@ const char* const STRINGS[STR_COUNT][2] = {
     "1 file" },  // STR_W_LOG_COUNT_ONE
   { "Eine Datei löschen? Das Log von heute wird dabei neu begonnen.",
     "Delete one file? Today's log is started over." },  // STR_W_LOG_DELETE_ALL_ASK_ONE
+
+  { "Felder",
+    "Fields" },  // STR_FLM_FIELDS
+  { "wohin der Tag geschrieben wird",
+    "where the tag is written" },  // STR_FLM_FIELDS_SUB
+  { "FilaMan hat ein eigenes Feld für NFC-Tags, und die Waage benutzt es. Daneben führt das Bambu-Lab-Plugin zwei Felder für die RFID-Chips einer Bambu-Spule und merkt sich die Tray-UUID in external_id.\n\nGelesen werden alle vier, immer und ohne Schalter: eine Spule, die der Drucker kennt, soll die Waage auch erkennen. Geschrieben wird nur, was hier eingeschaltet ist.",
+    "FilaMan has a field of its own for NFC tags and the scale uses it. Alongside it the Bambu Lab plugin keeps two fields for the RFID chips of a Bambu spool, and remembers the tray uuid in external_id.\n\nAll four are read, always and without a switch: a spool the printer knows is a spool this scale should recognise. Only what is switched on here is written." },  // STR_FLM_FIELDS_INFO
+
+  { "Tag-Feld",
+    "Tag field" },  // STR_FLM_TAGFIELD
+  { "Anders als bei Spoolman gibt es hier nichts zu wählen, und das ist gut so. rfid_uid ist FilaMans eigenes Feld für genau diesen Zweck, es ist das einzige, das die Server-Suche durchsucht, und das Bambu-Plugin fasst es laut eigener Zusage nie an.\n\nEin Ausweichfeld würde jeden Scan vom Schnellpfad auf den vollen Inventar-Scan werfen: unter 1 kB gegen 176 kB bei 280 Spulen.",
+    "Unlike Spoolman there is nothing to choose here, and that is a good thing. rfid_uid is FilaMan's own field for exactly this, it is the only one the server side search covers, and the Bambu plugin never touches it - its own documentation says so.\n\nWriting somewhere else would drop every scan from the fast path to a full inventory load: under 1 kB against 176 kB on a library of 280." },  // STR_FLM_TAGFIELD_INFO
+
+  { "Bambu-Tag-Felder pflegen",
+    "Maintain the Bambu tag fields" },  // STR_FLM_BTAGS
+  { "Chip-UID in den ersten freien Slot",
+    "chip uid into the first free slot" },  // STR_FLM_BTAGS_SUB
+  { "Eine Bambu-Spule trägt zwei RFID-Chips, einen je Seite. Das Plugin füllt nur den ersten der beiden Felder, mit dem, was der Drucker gemeldet hat; den zweiten hält es für einen weiteren Leser frei.\n\nAn: die Waage trägt die Chip-UID der aufliegenden Seite in den ersten freien der beiden Slots ein. Ein belegter Slot wird nie überschrieben. Legt man beide Seiten auf, sind danach beide gefüllt.\n\nNutzen: die Spule wird auch dann gefunden, wenn sich ihr Tag nicht entschlüsseln lässt und nur seine Chip-UID hergibt.",
+    "A Bambu spool carries two RFID chips, one per flange. The plugin fills only the first of the two fields, with what the printer reported, and keeps the second free for another reader.\n\nOn: the scale writes the chip uid of the side on the reader into the first free of the two slots. A slot that holds something is never overwritten. Present both sides and both end up filled.\n\nWhat it buys: the spool is still found when its tag will not decrypt and has nothing but its chip uid to offer." },  // STR_FLM_BTAGS_INFO
+
+  { "external_id mitschreiben",
+    "Write external_id too" },  // STR_FLM_EXTID
+  { "verhindert doppelte Spulen",
+    "stops duplicate spools" },  // STR_FLM_EXTID_SUB
+  { "Das Bambu-Plugin prüft vor dem Anlegen einer Spule nur external_id. Eine von der Waage verknüpfte Spule trägt die Tray-UUID aber in rfid_uid und ist für diese Prüfung unsichtbar - sie wird ein zweites Mal angelegt.\n\nAn: die Waage trägt bambulab:<Tray-UUID> nach, solange das Feld leer ist. Damit hören die Doppel auf.\n\nDer Preis: das Plugin behandelt die Spule danach als seine und schreibt das Restgewicht aus der AMS-Schätzung fort. Bis zur nächsten Wägung steht dann eine Schätzung dort, wo ein gemessener Wert stand.",
+    "Before creating a spool the Bambu plugin looks at external_id and nothing else. A spool linked by this scale carries the tray uuid in rfid_uid instead and is invisible to that check, so it gets created a second time.\n\nOn: the scale fills in bambulab:<tray uuid> while the field is empty. That ends the duplicates.\n\nThe price: the plugin then treats the spool as its own and maintains the remaining weight from the AMS estimate. Until the next weighing an estimate stands where a measured value stood." },  // STR_FLM_EXTID_INFO
+
+  { "Tag gefunden - mehrere Spulen",
+    "Tag found - several spools" },  // STR_TAG_FOUND_DUP
 };

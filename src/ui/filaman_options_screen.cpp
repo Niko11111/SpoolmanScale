@@ -111,6 +111,25 @@ void buildFilaManOptionsScreen() {
     }, LV_EVENT_CLICKED, NULL); }
 
 
+  // Which fields the scale writes, and what it leaves to the Bambu Lab
+  // plugin. Its own screen because three rows do not fit here, and because
+  // the two switches in it need room for what they cost.
+  { char buf_t[40]; strncpy(buf_t, T(STR_FLM_FIELDS), sizeof(buf_t)-1);
+    buf_t[sizeof(buf_t)-1] = '\0';
+    char buf_s[48]; strncpy(buf_s, T(STR_FLM_FIELDS_SUB), sizeof(buf_s)-1);
+    buf_s[sizeof(buf_s)-1] = '\0';
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_GPS, buf_t, buf_s, false, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_FLM_FIELDS, STR_FLM_FIELDS_INFO));
+
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      logSD("BTN: FilaMan Options -> Fields");
+      // Deferred like every other screen change: this callback belongs to the
+      // screen that is about to be replaced.
+      show_filaman_fields_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
   // Auto AMS assignment. Not a toggle but a mode, so the arrow carries the
   // mode name and the row opens a screen of its own instead of flipping a
   // bool. The window length and the timeout behaviour live in there too.

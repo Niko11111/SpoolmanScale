@@ -9,6 +9,7 @@ extern bool show_lastused_pending;
 extern bool show_backend_pending;
 extern bool show_filaman_options_pending;
 extern bool show_ams_assign_pending;
+extern bool show_filaman_fields_pending;
 extern bool show_bambuddy_options_pending;
 extern bool show_bambuddy_dried_pending;
 extern bool show_spoolman_options_pending;

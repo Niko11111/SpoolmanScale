@@ -799,6 +799,21 @@ enum StringID {
   STR_W_LOG_COUNT_ONE,
   STR_W_LOG_DELETE_ALL_ASK_ONE,
 
+  // FilaMan fields: what the scale writes, and what it leaves to the Bambu
+  // Lab plugin
+  STR_FLM_FIELDS,
+  STR_FLM_FIELDS_SUB,
+  STR_FLM_FIELDS_INFO,
+  STR_FLM_TAGFIELD,
+  STR_FLM_TAGFIELD_INFO,
+  STR_FLM_BTAGS,
+  STR_FLM_BTAGS_SUB,
+  STR_FLM_BTAGS_INFO,
+  STR_FLM_EXTID,
+  STR_FLM_EXTID_SUB,
+  STR_FLM_EXTID_INFO,
+  STR_TAG_FOUND_DUP,
+
   STR_COUNT
 };
 

@@ -38,6 +38,7 @@ lv_obj_t *scr_wifi       = nullptr;
 lv_obj_t *scr_backend    = nullptr;
 lv_obj_t *scr_filaman_options = nullptr;
 lv_obj_t *scr_ams_assign = nullptr;
+lv_obj_t *scr_filaman_fields = nullptr;
 lv_obj_t *scr_bambuddy_options = nullptr;
 lv_obj_t *scr_bambuddy_dried = nullptr;
 lv_obj_t *scr_spoolman_options = nullptr;
@@ -79,6 +80,7 @@ lv_obj_t *scr_wifi_pass         = nullptr;
 lv_obj_t *scr_wifi_connecting   = nullptr;
 
 int   sm_id = 0;
+int   sm_dup_count = 0;
 int   sm_filament_id = 0;
 int   sm_vendor_id = 0;
 bool  sm_found = false;

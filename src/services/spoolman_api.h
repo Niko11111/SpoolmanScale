@@ -4,15 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// Called while a large response is being read, with the number of bytes so
-// far. Set while something is on screen that wants to show progress, cleared
-// afterwards - nothing is wrapped and nothing costs anything while it is null.
-//
-// The parse of a full inventory is the long pole of a link flow, and it is one
-// blocking call: without a hook inside it there is no moment at which the UI
-// could say anything. The hook must be cheap and must not process input.
-typedef void (*SpoolmanProgressFn)(size_t bytes_read);
-void spoolmanSetProgressHook(SpoolmanProgressFn fn);
+// Progress during a large read lives in services/http_progress.h now: all
+// three backends answer the same request and all three take just as long, so
+// the hook cannot belong to one of them.
 
 int spoolmanGetJson(const char* base_url, const char* path, JsonDocument& doc,
   uint32_t timeout_ms = 8000, JsonDocument* filter = nullptr, DeserializationError* out_err = nullptr);

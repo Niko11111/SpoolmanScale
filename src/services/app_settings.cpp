@@ -79,6 +79,8 @@ void loadPrefs() {
   // into a write.
   if (!tagFieldIsList()) g_card_uids_write = false;
   g_flm_tagless  = prefsGetBool("flm_tagless", true);
+  g_flm_bambu_tags = prefsGetBool("flm_btags", false);
+  g_flm_ext_id     = prefsGetBool("flm_extid", true);
   g_ams_mode      = prefsGetUChar("ams_mode", AMS_OFF);
   if (g_ams_mode >= AMS_MODE_COUNT) g_ams_mode = AMS_OFF;
   g_ams_timer_yes = prefsGetBool("ams_tmr_yes", true);
