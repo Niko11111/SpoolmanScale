@@ -315,9 +315,18 @@ static bool writeNdefJson(const char *json) {
   const uint8_t need_last = (uint8_t)(4 + (i + 3) / 4 - 1);
   const uint8_t last = lastUserPage();
   if (need_last > last) {
-    snprintf(write_err, sizeof(write_err),
-             "OpenSpool needs %d bytes, this tag holds %u", i,
-             (unsigned)((last - 3) * 4));
+    // Two different faults used to read as one. A tag whose capability
+    // container is blank reports no size at all, and lastUserPage() then
+    // assumes the smallest NTAG - so an NTAG215 with 496 bytes free was
+    // turned away claiming it held 144, which sends the owner looking for a
+    // bigger tag instead of formatting the one in their hand.
+    if (!tagUserBytes())
+      snprintf(write_err, sizeof(write_err),
+               "Tag reports no size. Format it as NDEF once, then retry");
+    else
+      snprintf(write_err, sizeof(write_err),
+               "OpenSpool needs %d bytes, this tag holds %u", i,
+               (unsigned)((last - 3) * 4));
     return false;
   }
 
