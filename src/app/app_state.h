@@ -159,6 +159,10 @@ extern bool scale_filter_full;
 extern lv_obj_t *lbl_weight_main_lbl;
 extern float bag_weight_g;
 extern char spoolman_queried_uid[24];
+// Which NTAG the poll has already dealt with. Distinct from the one above,
+// which means "asked the backend about this one" and is written only when the
+// query actually runs, and from g_tag, which is what the display is showing.
+extern char ntag_handled_uid[24];
 extern char sm_last_used[32];
 extern int nfc_retry_count;
 extern int nfc_absent_count;

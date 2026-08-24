@@ -128,6 +128,7 @@ lv_obj_t *lbl_weight_main_lbl = nullptr;
 float bag_weight_g = 50.0f;
 
 char spoolman_queried_uid[24] = "";
+char ntag_handled_uid[24] = "";
 char  sm_last_used[32] = "";
 
 int nfc_retry_count = 0;

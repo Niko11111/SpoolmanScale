@@ -1134,16 +1134,34 @@ void appLoop() {
 
         Serial.printf("NFC: NTAG UID=%s\n", uid_str);
 
-        bool uid_changed_ntag_log = (strcmp(uid_str, g_tag.uid_str) != 0);
-        if (uid_changed_ntag_log) logSDf("NFC: NTAG UID=%s", uid_str);
+        // What the block below has already dealt with, which is a different
+        // question from what is on screen.
+        //
+        // g_tag holds the display, and the display deliberately keeps a spool
+        // after it is lifted: clearTagDisplay() runs from the block guarded by
+        // !tag_present and NO_TAG_CLEAR_MS. Put the same tag back before that
+        // and g_tag still names it, so asking g_tag whether the tag changed
+        // answers no and the read below is skipped. Worse, the tag being back
+        // keeps last_tag_seen_ms moving, so that block never runs at all and
+        // the stale figures stand until the spool is taken off for a full
+        // minute.
+        //
+        // spoolman_queried_uid is not the answer either: it means "asked the
+        // backend about this one", and it is only written when the query
+        // actually runs. With no WiFi, or with the manual id input open, it
+        // stays empty and every poll would look like a new tag.
+        bool uid_changed_ntag = (strcmp(uid_str, ntag_handled_uid) != 0);
+        if (uid_changed_ntag) logSDf("NFC: NTAG UID=%s", uid_str);
 
         lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
         lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
 
-        bool uid_changed_ntag = (strcmp(uid_str, g_tag.uid_str) != 0);
-
         if (uid_changed_ntag) {
-          // New UID — clear old tag data
+          // Marked handled straight away and unconditionally, whatever the
+          // query below decides to do.
+          strncpy(ntag_handled_uid, uid_str, sizeof(ntag_handled_uid)-1);
+          ntag_handled_uid[sizeof(ntag_handled_uid)-1] = '\0';
+          // New UID - clear old tag data
           strncpy(g_tag.uid_str, uid_str, sizeof(g_tag.uid_str)-1);
           g_tag.uid_str[sizeof(g_tag.uid_str)-1] = '\0';
           g_tag.tray_uuid[0] = '\0';
@@ -1230,6 +1248,7 @@ void appLoop() {
           nfc_absent_count = 0;
           last_tag_seen_ms = millis();
           spoolman_queried_uid[0] = '\0';  // allow re-query when same tag is placed again
+          ntag_handled_uid[0] = '\0';      // the same tag returning is news again
           link_popup_dismissed = false;   // Reset flag → next spool can show popup
           link_tag_first_seen_ms = 0;
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
