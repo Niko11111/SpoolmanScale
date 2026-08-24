@@ -169,12 +169,39 @@ static size_t appendf(char *out, size_t out_len, size_t n, const char *fmt, ...)
   return strnlen(out, out_len);
 }
 
+// Every text field here came off a tag or out of a tag's own JSON, so a
+// quotation mark in a brand name is a thing that can arrive. Unescaped it
+// made the reply malformed, and the tag page then stopped updating with no
+// message: r.json() throws and the poll dies.
+//
+// readText() already drops anything outside 0x20..0x7E, so a quote and a
+// backslash are the whole set.
+static void jesc(const char *in, char *out, size_t out_len) {
+  size_t j = 0;
+  for (const char *p = in ? in : ""; *p && j + 2 < out_len; p++) {
+    if (*p == '"' || *p == '\\') out[j++] = '\\';
+    out[j++] = *p;
+  }
+  out[j] = '\0';
+}
+
 void tagInfoJson(const TagInfo *ti, char *out, size_t out_len) {
-  snprintf(out, out_len, "{\"fmt\":\"%s\"", ti->fmt);
+  char e[40];
+  jesc(ti->fmt, e, sizeof(e));
+  snprintf(out, out_len, "{\"fmt\":\"%s\"", e);
   size_t n = strnlen(out, out_len);
-  if (ti->brand[0])    n = appendf(out, out_len, n, ",\"brand\":\"%s\"", ti->brand);
-  if (ti->material[0]) n = appendf(out, out_len, n, ",\"material\":\"%s\"", ti->material);
-  if (ti->sku[0])      n = appendf(out, out_len, n, ",\"sku\":\"%s\"", ti->sku);
+  if (ti->brand[0]) {
+    jesc(ti->brand, e, sizeof(e));
+    n = appendf(out, out_len, n, ",\"brand\":\"%s\"", e);
+  }
+  if (ti->material[0]) {
+    jesc(ti->material, e, sizeof(e));
+    n = appendf(out, out_len, n, ",\"material\":\"%s\"", e);
+  }
+  if (ti->sku[0]) {
+    jesc(ti->sku, e, sizeof(e));
+    n = appendf(out, out_len, n, ",\"sku\":\"%s\"", e);
+  }
   if (ti->has_color)   n = appendf(out, out_len, n, ",\"color\":\"#%02X%02X%02X\"",
                                    ti->r, ti->g, ti->b);
   if (ti->et_hi)       n = appendf(out, out_len, n, ",\"nozzle\":\"%u-%u\"",
@@ -651,16 +678,13 @@ void tagWriteTick() {
                                  : "Write failed - keep the tag still on the reader");
     return;
   }
+  // Erase returned above, so there is no format to branch on here any more.
   const char *name = sp["filament"]["name"] | "spool";
   char m[128];
-  int n;
-  if (pending_fmt == TAG_FMT_ERASE) {
-    n = snprintf(m, sizeof(m), "Tag erased");
-  } else {
-    n = snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", pending_id,
-                 name[0] ? name : "spool",
-                 pending_fmt == TAG_FMT_ACE ? "ACE" : "OpenSpool");
-  }
+  snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", pending_id,
+           name[0] ? name : "spool",
+           pending_fmt == TAG_FMT_ACE ? "ACE" : "OpenSpool");
+  size_t n = strnlen(m, sizeof(m));
 
   if (pending_link) {
     char uid_str[26];
@@ -670,10 +694,15 @@ void tagWriteTick() {
     char note[48];
     int code2 = backendLinkSpoolTag(backendBaseUrl(), pending_id, uid_str,
                                     note, sizeof(note));
-    if (code2 == 200)
-      snprintf(m + n, sizeof(m) - n, note[0] ? ", linked (%s)" : ", linked to the spool", note);
-    else
-      snprintf(m + n, sizeof(m) - n, ", but linking failed (HTTP %d)", code2);
+    // appendf, not m + n: a long filament name makes snprintf report a length
+    // it never wrote, and then m + n points past the buffer while
+    // sizeof(m) - n underflows. Same reason the rest of this file moved off it.
+    if (code2 == 200) {
+      if (note[0]) appendf(m, sizeof(m), n, ", linked (%s)", note);
+      else         appendf(m, sizeof(m), n, ", linked to the spool");
+    } else {
+      appendf(m, sizeof(m), n, ", but linking failed (HTTP %d)", code2);
+    }
   }
   finish("ok", m);
 }
