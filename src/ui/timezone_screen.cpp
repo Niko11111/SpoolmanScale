@@ -12,6 +12,10 @@
 #include "services/time_service.h"
 #include "ui_common.h"
 
+static bool tz_return_welcome = false;
+
+void setTimeZoneReturnToWelcome(bool to_welcome) { tz_return_welcome = to_welcome; }
+
 // The list body every screen of this kind uses. makeListBtn() never positions
 // its button and relies on the parent's flex flow.
 static lv_obj_t* buildList(lv_obj_t *parent) {
@@ -80,10 +84,25 @@ void buildTimeZoneScreen() {
   char title[32];
   strncpy(title, T(STR_TZ_TITLE), sizeof(title) - 1);
   title[sizeof(title) - 1] = '\0';
-  buildSubHeader(scr_timezone, title, [](lv_event_t *e){
-    logSD("BTN: Back -> Language");
-    show_language_pending = true;
-  });
+  if (tz_return_welcome) {
+    // Header built by hand rather than through buildSubHeader(): that one
+    // always adds a close button, and during first setup it would drop the
+    // owner on a main screen with no network configured.
+    addBackButton(scr_timezone, [](lv_event_t *e){
+      logSD("BTN: Back -> Welcome");
+      show_welcome_pending = true;
+    });
+    lv_obj_t *lbl_title = lv_label_create(scr_timezone);
+    lv_label_set_text(lbl_title, title);
+    lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
+    lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 12);
+  } else {
+    buildSubHeader(scr_timezone, title, [](lv_event_t *e){
+      logSD("BTN: Back -> Language");
+      show_language_pending = true;
+    });
+  }
 
   lv_obj_t *list = buildList(scr_timezone);
 

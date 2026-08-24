@@ -14,6 +14,7 @@ extern bool show_bambuddy_options_pending;
 extern bool show_bambuddy_dried_pending;
 extern bool show_timezone_pending;
 extern bool show_language_pending;
+extern bool show_welcome_pending;
 extern bool show_spoolman_options_pending;
 // Turning the card_uids switch on needs the field to exist on the server, so
 // the assistant is opened right away rather than left for the user to find.
@@ -30,7 +31,6 @@ extern bool show_system_pending;
 extern bool show_ota_pending;
 extern bool show_info_pending;
 extern bool show_drying_reminder_pending;
-extern bool lang_selected_no_reboot;
 
 // The OTA screen asked for a check while the background task held the TLS
 // connection. Retried from appLoop() once it is free, and given up on after

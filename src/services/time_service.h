@@ -40,3 +40,8 @@ const char* timeZoneName();
 
 // Index into TZ_LIST, or -1 when the stored zone is not one of them.
 int    timeZoneIndex();
+
+// The zone a language implies, as an index into TZ_LIST. German means central
+// Europe, everything else means UTC. Used for the fallback above and for the
+// pre-selection on the setup screen, so the two cannot drift apart.
+int    timeZoneDefaultIndexForLang(uint8_t lang);

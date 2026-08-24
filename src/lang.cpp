@@ -312,9 +312,9 @@ const char* const STRINGS[STR_COUNT][2] = {
     LV_SYMBOL_CLOSE " empty / Archive\nremaining=0" },  // STR_BTN_ARCHIVE_EMPTY
 
   // Welcome language select screen
-  { "Sprache wählen",          "Choose language"    },  // STR_WELCOME_LANG_TITLE
-  { "Sprache kann später\nim Settings geändert werden.",
-    "Language can be changed\nlater in Settings."   },  // STR_WELCOME_LANG_HINT
+  { "Sprache und Zeitzone",    "Language and time zone" },  // STR_WELCOME_LANG_TITLE
+  { "Beides lässt sich später in den Einstellungen ändern.\nWeiter startet das Gerät einmal neu.",
+    "Both can be changed later in Settings.\nNext restarts the device once."   },  // STR_WELCOME_LANG_HINT
 
   // WiFi scan count
   { "%d Netzwerke gefunden",    "%d networks found"  },  // STR_WIFI_NETWORKS_FOUND

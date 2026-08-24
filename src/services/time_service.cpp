@@ -36,11 +36,15 @@ const size_t TZ_COUNT = sizeof(TZ_LIST) / sizeof(TZ_LIST[0]);
 // on the same language here as it does everywhere else.
 #define LANG_DEFAULT   1
 
+int timeZoneDefaultIndexForLang(uint8_t lang) {
+  return (lang == LANG_VALUE_DE) ? TZ_INDEX_CET : TZ_INDEX_UTC;
+}
+
 String timeZoneGet() {
   const String stored = prefsGetString(PREF_KEY_TZ, "");
   if (stored.length()) return stored;
   const uint8_t lang = prefsGetUChar(PREF_KEY_LANG, LANG_DEFAULT);
-  return String(TZ_LIST[lang == LANG_VALUE_DE ? TZ_INDEX_CET : TZ_INDEX_UTC].tz);
+  return String(TZ_LIST[timeZoneDefaultIndexForLang(lang)].tz);
 }
 
 void timeZoneApply() {

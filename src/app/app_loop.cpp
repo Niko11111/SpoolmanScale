@@ -111,6 +111,26 @@ static bool  loc_weight_valid = false;
 // gone. Only used to know when a fresh spool has arrived.
 static unsigned long loc_weight_since_ms = 0;
 
+// Did the spool actually leave, or did the reader merely lose the tag?
+//
+// Two callers ask exactly this: the location and AMS popups below, and the
+// NTAG removal handler, which has to decide whether a returning tag is news.
+// Written once here so the two can never answer it differently.
+static bool weightSpeaks() {
+  return loc_weight_valid && (loc_weight_ref >= LOC_WEIGHT_MIN_G);
+}
+// Still carrying what it carried while the tag was last readable.
+static bool weightSaysSpoolStayed() {
+  if (!weightSpeaks()) return false;
+  const float drop = loc_weight_ref - scale_weight_g;
+  return (drop < LOC_WEIGHT_TOLERANCE_G) && (drop > -LOC_WEIGHT_TOLERANCE_G);
+}
+// Lost more than half the reference. Nothing but taking the spool off does that.
+static bool weightSaysSpoolGone() {
+  if (!weightSpeaks()) return false;
+  return (loc_weight_ref - scale_weight_g) > loc_weight_ref * LOC_WEIGHT_GONE_FRACTION;
+}
+
 // A gross weight that has demonstrably settled, tracked whether or not auto
 // weighing is switched on. The AMS question reports this when nothing was
 // weighed on purpose, and that value gets written to FilaMan - so it must not
@@ -386,6 +406,13 @@ void appLoop() {
     // picked.
     showLanguageScreen();
   }
+  if (show_welcome_pending) {
+    show_welcome_pending = false;
+    // Rebuilt for the same reason as the language screen above.
+    buildWelcomeScreen();
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_welcome, LV_OBJ_FLAG_HIDDEN);
+  }
   if (show_ams_assign_pending) {
     show_ams_assign_pending = false;
     buildAmsAssignScreen();        // releases the previous instance itself
@@ -436,12 +463,8 @@ void appLoop() {
   // branch of that popup raises the location question again.
   if ((loc_popup_pending_id > 0 || ams_popup_pending_id > 0) && !tag_present) {
     const unsigned long since = millis() - last_tag_seen_ms;
-    const float drop = loc_weight_ref - scale_weight_g;
-    // Only meaningful when there was something on the scale to begin with.
-    const bool weight_speaks = loc_weight_valid && (loc_weight_ref >= LOC_WEIGHT_MIN_G);
-    const bool weight_says_gone = weight_speaks && (drop > loc_weight_ref * LOC_WEIGHT_GONE_FRACTION);
-    const bool weight_says_stay = weight_speaks &&
-                                  (drop < LOC_WEIGHT_TOLERANCE_G) && (drop > -LOC_WEIGHT_TOLERANCE_G);
+    const bool weight_says_gone = weightSaysSpoolGone();
+    const bool weight_says_stay = weightSaysSpoolStayed();
 
     // A clear drop needs no further waiting, the spool is demonstrably off.
     const bool due = (since >= LOC_DEBOUNCE_MS) ||
@@ -560,11 +583,6 @@ void appLoop() {
   if (finish_setup_pending) {
     finish_setup_pending = false;
     showMainScreen();
-  }
-  if (lang_selected_no_reboot) {
-    lang_selected_no_reboot = false;
-    if (scr_welcome) { lv_obj_del(scr_welcome); scr_welcome = nullptr; }
-    showFirstBootScreen();
   }
   // Hide tare confirmation
   if (tare_msg_ms > 0 && millis() - tare_msg_ms > 800) {
@@ -1277,9 +1295,20 @@ void appLoop() {
           nfc_absent_count = 0;
           last_tag_seen_ms = millis();
           spoolman_queried_uid[0] = '\0';  // allow re-query when same tag is placed again
-          // The same tag returning is news again: it has to be read anew, and
-          // it has to be said in the log anew.
-          ntag_handled_uid[0] = '\0';
+          // Only a spool that demonstrably left counts as news when it comes
+          // back. An NTAG whose reception drops out for longer than the grace
+          // period, with the spool still sitting on the pad, would otherwise
+          // clear the display and fetch the whole spool again on every
+          // dropout - which is the loop the display gate was there to stop.
+          //
+          // A different tag is unaffected: its UID no longer matches the
+          // marker, so swapping spools still reads.
+          if (weightSaysSpoolStayed()) {
+            logSDf("NFC: tag lost, but the pad still carries %.0fg of %.0fg - kept",
+                   scale_weight_g, loc_weight_ref);
+          } else {
+            ntag_handled_uid[0] = '\0';
+          }
           TagSeen::forget();
           link_popup_dismissed = false;   // Reset flag → next spool can show popup
           link_tag_first_seen_ms = 0;
