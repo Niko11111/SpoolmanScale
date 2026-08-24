@@ -12,6 +12,7 @@
 #include "services/http_progress.h"
 #include "services/tag_uid.h"
 #include "services/wifi_manager.h"
+#include "services/time_service.h"
 #include "services/user_options.h"
 
 namespace {
@@ -645,9 +646,11 @@ int bbPatchDriedNote(const char* base_url, const char* api_key, int spool_id,
                      const char* iso, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || spool_id <= 0 || !iso || strlen(iso) < 10) return -1;
 
+  // The note holds a bare date with no zone, so it has to be the local day.
+  // Slicing the incoming UTC instant would put a drying just after midnight
+  // on the day before.
   char day[11];
-  memcpy(day, iso, 10);
-  day[10] = '\0';
+  isoDayLocal(iso, day, sizeof(day));
 
   // Read first. The note belongs to the user and may hold anything; only the
   // marker may change. A failed read is not a reason to overwrite it, so this

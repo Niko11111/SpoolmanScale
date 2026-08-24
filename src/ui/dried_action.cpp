@@ -9,6 +9,7 @@
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/time_service.h"
 #include "lang.h"
 
 // The write itself is deferred to appLoop(). In FilaMan mode it costs two
@@ -31,6 +32,14 @@ void btn_dried_cb(lv_event_t *e) {
     return;
   }
 
+  // A real UTC instant, because that is what the Z says and what Spoolman and
+  // FilaMan show after converting it back to the viewer's zone. Writing local
+  // time under a Z put their display two hours into the future.
+  //
+  // The other half of this lives on the reading side: the day such a stamp
+  // belongs to is the local one, so every reader goes through isoDayLocal()
+  // rather than slicing the first ten characters off. Doing only one of the
+  // two is what made the date read as yesterday just after midnight.
   struct tm ti;
   char iso_full_buf[32] = "2026-01-01T00:00:00.000Z";
   if (getLocalTime(&ti)) {
@@ -71,8 +80,7 @@ void handleDriedDeferredAction() {
 
   if (code == 200) {
     char today[11];
-    strncpy(today, iso, 10);
-    today[10] = '\0';
+    isoDayLocal(iso, today, sizeof(today));
     char de_date[12];
     isoToDe(today, de_date, sizeof(de_date));
     strncpy(sm_last_dried, de_date, sizeof(sm_last_dried)-1);

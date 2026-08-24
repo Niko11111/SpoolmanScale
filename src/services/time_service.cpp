@@ -1,6 +1,8 @@
 #include "time_service.h"
 
 #include <time.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "services/prefs_store.h"
 
@@ -98,4 +100,35 @@ void syncNTP() {
     Serial.print(".");
   }
   Serial.println("NTP ERROR");
+}
+
+// Days from the civil calendar to the epoch, without touching the C library's
+// timezone state - timegm() is not available here and mktime() would read the
+// string as local time, which is the very thing being converted from.
+static time_t utcToEpoch(int y, int mo, int d, int h, int mi, int s) {
+  y -= (mo <= 2);
+  int era = (y >= 0 ? y : y - 399) / 400;
+  unsigned yoe = (unsigned)(y - era * 400);
+  unsigned doy = (153u * (unsigned)(mo + (mo > 2 ? -3 : 9)) + 2u) / 5u + (unsigned)d - 1u;
+  unsigned doe = yoe * 365u + yoe / 4u - yoe / 100u + doy;
+  long long days = (long long)era * 146097LL + (long long)doe - 719468LL;
+  return (time_t)(days * 86400LL + h * 3600LL + mi * 60LL + s);
+}
+
+void isoDayLocal(const char* iso, char* out_day, size_t out_size) {
+  if (!iso || !out_day || out_size == 0) return;
+  int y, mo, d, h, mi, s;
+  if (strchr(iso, 'Z') &&
+      sscanf(iso, "%4d-%2d-%2dT%2d:%2d:%2d", &y, &mo, &d, &h, &mi, &s) == 6) {
+    time_t stamp = utcToEpoch(y, mo, d, h, mi, s);
+    struct tm* local = localtime(&stamp);
+    if (local) {
+      snprintf(out_day, out_size, "%04d-%02d-%02d",
+               local->tm_year + 1900, local->tm_mon + 1, local->tm_mday);
+      return;
+    }
+  }
+  strncpy(out_day, iso, out_size - 1);
+  out_day[out_size - 1] = '\0';
+  if (strlen(out_day) > 10) out_day[10] = '\0';
 }

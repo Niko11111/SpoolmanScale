@@ -45,3 +45,12 @@ int    timeZoneIndex();
 // Europe, everything else means UTC. Used for the fallback above and for the
 // pre-selection on the setup screen, so the two cannot drift apart.
 int    timeZoneDefaultIndexForLang(uint8_t lang);
+
+// Turns a stored timestamp into the calendar day it fell on locally.
+//
+// Spoolman and FilaMan keep instants in UTC, and near midnight the UTC date
+// is not the local one: a spool dried at 00:07 in summer carries a UTC stamp
+// from 22:07 the day before, and reading the first ten characters off it
+// reports yesterday. Anything without a Z - BamBuddy's date-only note marker,
+// for one - is already a local day and is passed through untouched.
+void isoDayLocal(const char* iso, char* out_day, size_t out_size);
