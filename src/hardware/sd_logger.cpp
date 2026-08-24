@@ -38,9 +38,29 @@ static char sd_log_file[24] = "";
 #define LOG_RING_WIDTH 160
 
 static char             *ring      = nullptr;
+static uint32_t         *ring_when = nullptr;   // UTC epoch, 0 before the clock is set
+static uint32_t         *ring_up   = nullptr;   // seconds since boot
 static uint16_t          ring_head = 0;   // next slot to write
 static uint16_t          ring_used = 0;
+static uint32_t          ring_seq  = 0;   // total ever written
 static SemaphoreHandle_t ring_lock = nullptr;
+
+// getLocalTime() waits up to five seconds for a clock that is not set, with a
+// delay(10) between attempts, and this is asked once per log line. Before NTP
+// that turns every line into a five second stall: twenty seconds of boot, and
+// in AP setup mode, where the clock is never set at all, it never stops.
+//
+// The question is only whether the year is plausible, and that needs no
+// waiting. A year before 2024 means the clock is running from the epoch
+// rather than from the network.
+static bool clockReady(struct tm *out) {
+  const time_t now = time(nullptr);
+  struct tm t;
+  localtime_r(&now, &t);
+  if (t.tm_year + 1900 < 2024) return false;
+  if (out) *out = t;
+  return true;
+}
 
 void logRingInit() {
   if (ring) return;
@@ -51,31 +71,56 @@ void logRingInit() {
   // card as it always did.
   ring = (char *)heap_caps_malloc((size_t)LOG_RING_LINES * LOG_RING_WIDTH,
                                   MALLOC_CAP_SPIRAM);
-  if (ring) memset(ring, 0, (size_t)LOG_RING_LINES * LOG_RING_WIDTH);
+  ring_when = (uint32_t *)heap_caps_malloc(LOG_RING_LINES * sizeof(uint32_t),
+                                           MALLOC_CAP_SPIRAM);
+  ring_up   = (uint32_t *)heap_caps_malloc(LOG_RING_LINES * sizeof(uint32_t),
+                                           MALLOC_CAP_SPIRAM);
+  if (!ring || !ring_when || !ring_up) {
+    free(ring); free(ring_when); free(ring_up);
+    ring = nullptr; ring_when = nullptr; ring_up = nullptr;
+    return;
+  }
+  memset(ring, 0, (size_t)LOG_RING_LINES * LOG_RING_WIDTH);
+  memset(ring_when, 0, LOG_RING_LINES * sizeof(uint32_t));
+  memset(ring_up, 0, LOG_RING_LINES * sizeof(uint32_t));
 }
 
-static void ringPut(const char *stamp, const char *msg) {
+// The moment, not a rendered stamp. The device runs in the owner's zone, so
+// formatting belongs where the line is read - and a stored string could not be
+// re-rendered after the zone changes.
+static void ringPut(time_t when, const char *msg) {
   if (!ring || !ring_lock) return;
+  // Verbose lines are two per screen visit and would evict everything worth
+  // keeping from 240 slots. They still go to the card, which is where anyone
+  // who switched them on is looking.
+  if (strncmp(msg, "[verbose]", 9) == 0) return;
   // A log line is never worth blocking the loop for. Dropping one beats
   // holding up a weight reading.
   if (xSemaphoreTake(ring_lock, pdMS_TO_TICKS(20)) != pdTRUE) return;
-  snprintf(ring + (size_t)ring_head * LOG_RING_WIDTH, LOG_RING_WIDTH,
-           "[%s] %s", stamp, msg);
+  snprintf(ring + (size_t)ring_head * LOG_RING_WIDTH, LOG_RING_WIDTH, "%s", msg);
+  ring_when[ring_head] = (uint32_t)when;
+  ring_up[ring_head]   = (uint32_t)(millis() / 1000);
   ring_head = (uint16_t)((ring_head + 1) % LOG_RING_LINES);
   if (ring_used < LOG_RING_LINES) ring_used++;
+  ring_seq++;
   xSemaphoreGive(ring_lock);
 }
 
 size_t logRingCount() { return ring_used; }
+uint32_t logRingSeq()  { return ring_seq; }
 
-bool logRingGet(size_t idx, char *out, size_t out_len) {
+bool logRingGetSeq(uint32_t seq, char *out, size_t out_len,
+                   time_t *when, uint32_t *up_s) {
   if (!ring || !ring_lock || !out || out_len == 0) return false;
   if (xSemaphoreTake(ring_lock, pdMS_TO_TICKS(20)) != pdTRUE) return false;
-  bool ok = idx < ring_used;
+  // Everything before this has been overwritten by newer lines.
+  const uint32_t oldest = ring_seq - ring_used;
+  bool ok = (seq >= oldest && seq < ring_seq);
   if (ok) {
-    const size_t oldest = (ring_head + LOG_RING_LINES - ring_used) % LOG_RING_LINES;
-    snprintf(out, out_len, "%s",
-             ring + ((oldest + idx) % LOG_RING_LINES) * LOG_RING_WIDTH);
+    const size_t slot = seq % LOG_RING_LINES;
+    snprintf(out, out_len, "%s", ring + slot * LOG_RING_WIDTH);
+    if (when) *when = (time_t)ring_when[slot];
+    if (up_s) *up_s = ring_up[slot];
   }
   xSemaphoreGive(ring_lock);
   return ok;
@@ -83,7 +128,10 @@ bool logRingGet(size_t idx, char *out, size_t out_len) {
 
 String getCurrentLogFilename() {
   struct tm t;
-  if (!getLocalTime(&t)) {
+  // clockReady() rather than getLocalTime(): the answer is the same and it
+  // does not stall five seconds per line while the clock is unset. This is
+  // most of what made a fitted card add twenty seconds to a boot.
+  if (!clockReady(&t)) {
     return String("/log_pre_ntp.txt");
   }
   char buf[32];
@@ -102,23 +150,17 @@ void sdLogResetSize() {
 
 void logSD(const char* msg) {
   // Before the card is considered: this is what a device without one keeps.
-  // With no clock yet, uptime says more than a row of question marks.
   struct tm now;
-  const bool have_clock = getLocalTime(&now);
+  const bool synced = clockReady(&now);
+  ringPut(synced ? time(nullptr) : (time_t)0, msg);
+
   char stamp[10];
-  if (have_clock) {
+  if (synced) {
     snprintf(stamp, sizeof(stamp), "%02d:%02d:%02d",
              now.tm_hour, now.tm_min, now.tm_sec);
   } else {
     strncpy(stamp, "??:??:??", sizeof(stamp) - 1);
     stamp[sizeof(stamp) - 1] = '\0';
-  }
-  if (have_clock) {
-    ringPut(stamp, msg);
-  } else {
-    char up[12];
-    snprintf(up, sizeof(up), "+%lus", (unsigned long)(millis() / 1000));
-    ringPut(up, msg);
   }
 
   if (!sd_available) return;
