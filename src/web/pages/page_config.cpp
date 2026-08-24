@@ -144,7 +144,10 @@ static void routes(WebServer &srv) {
     if (v < 5) v = 5;
     if (v > 100) v = 100;
     spool_list_limit = v;
-    prefsPutInt("spool_limit", v);
+    // loadPrefs() reads "list_limit" as a uchar. This wrote a different key
+    // as an int32, so the value looked saved and was gone after the next
+    // boot - and nothing else in the firmware writes these two.
+    prefsPutUChar("list_limit", (uint8_t)v);
     logSDf("Web: spool list limit -> %d", v);
     srv.send(200, "application/json", String("{\"limit\":") + v + "}");
   });
@@ -159,7 +162,7 @@ static void routes(WebServer &srv) {
     if (v < 5) v = 5;
     if (v > 100) v = 100;
     location_list_limit = v;
-    prefsPutInt("loc_limit", v);
+    prefsPutUChar("loc_limit", (uint8_t)v);
     logSDf("Web: location list limit -> %d", v);
     srv.send(200, "application/json", String("{\"limit\":") + v + "}");
   });

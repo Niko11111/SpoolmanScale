@@ -45,7 +45,7 @@ static const char* label() { return T(STR_W_NAV_TAGS); }
 
 static String body() {
   String h;
-  h.reserve(6500);
+  h.reserve(7000);
 
   h += F("<div class='grid'><div class='card wide'><h2>");
   h += T(STR_W_C_WRITETAG);
@@ -61,9 +61,11 @@ static String body() {
   h += F("</label><div class='inrow'>"
          "<input id='tg-id' type='number' min='1' oninput='loadPreview()'>"
          "<select id='tg-pick' onchange='pickSpool()' style='min-width:210px'></select>"
+         // OpenSpool first and preselected: it is the format the scale's own
+         // backends read back, where ACE only ever talks to the printer.
          "<select id='tg-fmt' onchange='loadPreview()' style='flex:0 0 auto'>"
+         "<option value='1' selected>OpenSpool (FilaMan)</option>"
          "<option value='0'>Anycubic ACE</option>"
-         "<option value='1'>OpenSpool (FilaMan)</option>"
          "</select></div></div>"
          "<label class='inrow' style='margin-top:14px;gap:8px;font-size:13px;color:var(--ink-2)'>"
          "<input id='tg-link' type='checkbox' checked style='flex:0 0 16px;width:16px;height:16px'> ");
@@ -74,7 +76,9 @@ static String body() {
          "<button id='tg-erase' class='danger' onclick='eraseTag()' disabled>");
   h += T(STR_W_TAG_ERASE);
   h += F("</button><span class='msg' id='tg-s'></span></div>"
-         "<p class='hint' style='margin-top:12px'>");
+         "<p class='note'>");
+  h += T(STR_W_TAG_NOTE);
+  h += F("</p><p class='hint' style='margin-top:8px'>");
   h += T(STR_W_TAG_COMPARE);
   h += F("</p></div></div>");
 
@@ -82,7 +86,7 @@ static String body() {
   // on the drying page, so every function this page calls was missing and the
   // whole page did nothing at all.
   h += F("<style>#tg-cur h3,#tg-new h3{font-size:10.5px;font-weight:650;letter-spacing:.1em;"
-         "text-transform:uppercase;color:var(--ink-4);margin-bottom:10px}"
+         "text-transform:uppercase;color:var(--ink-soft);margin-bottom:10px}"
          ".tgline{display:flex;align-items:center;gap:9px;margin-bottom:8px}"
          ".chip{width:26px;height:26px;border-radius:7px;border:1px solid #ffffff22;flex:none}"
          ".tgname{font-size:13.5px;color:var(--ink);line-height:1.3}"

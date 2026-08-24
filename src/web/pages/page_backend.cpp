@@ -35,7 +35,7 @@ static String body() {
   const bool creds = backendIsFilaMan() || backendIsBamBuddy();
 
   String h;
-  h.reserve(5200);
+  h.reserve(5900);
   h += F("<div class='grid'>");
 
   // ---- address ----------------------------------------------------------
@@ -87,7 +87,10 @@ static String body() {
     h += bambuddyApiKey()[0] ? F("________________") : F("");
     h += F("'><button onclick='setBb()'>");
     h += T(STR_W_SAVE);
-    h += F("</button></div><span class='msg' id='bk-s'></span></div></div>");
+    h += F("</button></div><span class='msg' id='bk-s'></span></div>"
+           "<p class='note'>");
+    h += T(STR_W_BB_SETUP);
+    h += F("</p></div>");
   } else {
     h += F("<div class='card wide'><h2>");
     h += T(STR_W_C_CREDS);
@@ -109,7 +112,10 @@ static String body() {
            "<input id='fc' type='text' maxlength='12' spellcheck='false' placeholder='ABC123'>"
            "<button onclick='reg()'>");
     h += T(STR_W_REGISTER);
-    h += F("</button></div><span class='msg' id='fc-s'></span></div></div>");
+    h += F("</button></div><span class='msg' id='fc-s'></span></div>"
+           "<p class='note'>");
+    h += T(STR_W_FM_SETUP);
+    h += F("</p></div>");
   }
 
   h += F("</div><script>const M={ok:");

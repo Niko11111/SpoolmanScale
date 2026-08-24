@@ -1200,4 +1200,16 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Update failed" },  // STR_W_FW_FAIL
   { "Bitte erneut versuchen.",
     "Please try again." },  // STR_W_FW_RETRY
+  { "Gewicht",
+    "Weight" },  // STR_W_R_WEIGHT
+  { "Konnte nicht geladen werden.",
+    "Could not be loaded." },  // STR_W_LOAD_FAIL
+  { "Eine eingelegte SD-Karte verlaengert den Start um rund 20 Sekunden. Fuer den normalen Betrieb ohne Karte laufen lassen und sie nur zum Suchen eines Fehlers einlegen.",
+    "A fitted SD card makes the device take about 20 seconds longer to start. Run it without a card normally and insert one only to chase a fault." },  // STR_W_LOG_NOTE
+  { "Einen beschreibbaren NTAG auflegen, Spule waehlen, schreiben. Was auf dem Tag steht, wird ersetzt. Werkstags sind meist MIFARE Classic oder gesperrt und lassen sich nur lesen.",
+    "Place a writable NTAG on the reader, pick a spool, and write it. Whatever is already on the tag is replaced. Factory tags are usually MIFARE Classic or locked, and can only be read." },  // STR_W_TAG_NOTE
+  { "In FilaMan auf den Benutzernamen klicken, dort <b>API keys</b> waehlen und einen Schluessel anlegen. Er wird nur einmal angezeigt, also gleich kopieren. Danach zeigt FilaMan einen sechsstelligen Geraetecode - den unten eintragen und registrieren.",
+    "In FilaMan, click your user name, choose <b>API keys</b> and create a key. It is shown once, so copy it right away. FilaMan then shows a six character device code - enter it below and register." },  // STR_W_FM_SETUP
+  { "Der Schluessel steht in BamBuddy unter den Einstellungen. Laeuft die Instanz ohne Anmeldung, bleibt das Feld leer.",
+    "The key is in BamBuddy under settings. Leave the field empty if the instance runs without authentication." },  // STR_W_BB_SETUP
 };

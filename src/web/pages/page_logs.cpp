@@ -17,7 +17,7 @@ static const char* label() { return T(STR_W_NAV_LOGS); }
 
 static String body() {
   String h;
-  h.reserve(3200);
+  h.reserve(3800);
   h += F("<div class='grid'><div class='card wide'><h2>");
   h += T(STR_W_C_LOGS);
   h += F("</h2><div id='lg'></div>"
@@ -26,7 +26,9 @@ static String body() {
   h += T(STR_W_R_VERBOSE);
   h += F("</span><span class='v'>"
          "<button id='vb' class='quiet' onclick='toggleVerbose()'></button>"
-         "</span></div></div></div></div>");
+         "</span></div></div><p class='note'>");
+  h += T(STR_W_LOG_NOTE);
+  h += F("</p></div></div>");
 
   h += F("<script>const M={view:");
   h += jsStr(T(STR_W_LOG_VIEW));
@@ -37,30 +39,46 @@ static String body() {
   h += F(",empty:");  h += jsStr(T(STR_W_LOG_EMPTY));
   h += F(",on:");     h += jsStr(T(STR_W_S_ON));
   h += F(",off:");    h += jsStr(T(STR_W_S_OFF));
+  h += F(",err:");    h += jsStr(T(STR_W_LOAD_FAIL));
   h += F("};"
          "function kb(n){return n>=1048576?(n/1048576).toFixed(2)+' MB'"
          ":(n/1024).toFixed(0)+' KB';}"
-         "function loadLogs(){fetch('/api/logs').then(r=>r.json()).then(d=>{"
+         "function say(t){document.getElementById('lg').innerHTML="
+         "'<div class=\"note\">'+t+'</div>';}"
+         "function loadLogs(){fetch('/api/logs').then(r=>{"
+         "if(!r.ok)throw 0;return r.json();}).then(d=>{"
          "const c=document.getElementById('lg');"
          "document.getElementById('vb').textContent=d.verbose?M.on:M.off;"
-         "if(!d.sd){c.innerHTML='<div class=\"hint\"><b style=\"color:var(--ink-2)\">'"
-         "+M.nosd+'</b><br>'+M.nosdh+'</div>';return;}"
-         "if(!d.files||!d.files.length){c.innerHTML='<div class=\"hint\">'+M.empty+'</div>';return;}"
+         "if(!d.sd){c.innerHTML='<div class=\"note\"><b>'+M.nosd+'</b><br>'"
+         "+M.nosdh+'</div>';return;}"
+         "if(!d.files||!d.files.length){say(M.empty);return;}"
          "c.innerHTML=d.files.map(f=>"
          "'<div class=\"listrow\"><span class=\"nm\">'+f.name+'</span>'"
          "+'<span style=\"display:flex;align-items:center;gap:10px\">'"
          "+'<span class=\"sz\">'+kb(f.size)+'</span>'"
          "+'<a href=\"/api/log?file='+encodeURIComponent(f.name)+'\" target=\"_blank\">'"
          "+'<button class=\"quiet\">'+M.view+'</button></a>'"
-         "+'<button class=\"danger\" onclick=\"delLog(\''+f.name+'\')\">'+M.del+'</button>'"
-         "+'</span></div>').join('');});}"
+         // The name rides in a data attribute and the handler is bound after
+         // the rows exist. Threading it through an inline onclick quotes it
+         // for C++, for a JS string, for an HTML attribute and for a JS call
+         // in that order, and one backslash lost on the way took the entire
+         // script block down without a word on the page.
+         "+'<button class=\"danger\" data-del=\"'+f.name+'\">'+M.del+'</button>'"
+         "+'</span></div>').join('');"
+         "c.querySelectorAll('[data-del]').forEach(b=>"
+         "b.onclick=()=>delLog(b.dataset.del));"
+         "}).catch(()=>say(M.err));}"
+         // Every fetch here ends in a catch. Without one a closed gate, a
+         // dropped connection or a 403 arriving as text/plain died as a silent
+         // rejection, and the card just stayed empty.
          "function delLog(n){if(!confirm(M.ask))return;"
          "fetch('/api/deletelog?file='+encodeURIComponent(n),{method:'POST'})"
-         ".then(()=>loadLogs());}"
+         ".then(()=>loadLogs()).catch(()=>say(M.err));}"
          "function toggleVerbose(){fetch('/api/verbose',{method:'POST'})"
          ".then(r=>r.json()).then(d=>{"
-         "document.getElementById('vb').textContent=d.verbose?M.on:M.off;});}"
-         "document.addEventListener('DOMContentLoaded',loadLogs);"
+         "document.getElementById('vb').textContent=d.verbose?M.on:M.off;})"
+         ".catch(()=>say(M.err));}"
+         "loadLogs();"
          "</script>");
   return h;
 }

@@ -76,6 +76,10 @@ String webShellHead(const char *subtitle) {
       "--ground:#06080f;--surface:#0c1828;--surface-2:#0a1220;"
       "--line:#1a3060;--line-soft:#14243c;"
       "--ink:#e8f0ff;--ink-2:#c8d8f0;--ink-3:#4a6fa0;--ink-4:#2a4060;"
+      // Quiet body copy had been sitting on --ink-4, which is 1.7:1 on the
+      // card - a hint nobody could read, and an empty state that looked
+      // like a page that had failed to load. 5.2:1, still clearly secondary.
+      "--ink-soft:#6d8cb8;"
       "--accent:#28d49a;--accent-dim:#123f34;--accent-line:#1d6b56;"
       "--warn:#f0b838;--bad:#ff6b6b;--w:720px;"
       "--sans:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
@@ -113,7 +117,7 @@ String webShellHead(const char *subtitle) {
       ".card.wide{grid-column:1/-1}"
       ".card h2{font-size:11px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;"
       "color:var(--ink-3);margin-bottom:14px}"
-      ".note{font-size:12.5px;color:var(--ink-3);line-height:1.55;margin-top:12px}"
+      ".note{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin-top:12px}"
       ".note b{color:var(--ink-2);font-weight:500}"
       // data rows: mono only for machine strings
       ".rows{display:flex;flex-direction:column}"
@@ -123,7 +127,7 @@ String webShellHead(const char *subtitle) {
       ".k{color:var(--ink-3)}"
       ".v{color:var(--ink-2);text-align:right;font-variant-numeric:tabular-nums}"
       ".v.mono{font-family:var(--mono);font-size:13px}"
-      ".v em{font-style:normal;color:var(--ink-4);font-size:12.5px;margin-left:6px}"
+      ".v em{font-style:normal;color:var(--ink-soft);font-size:12.5px;margin-left:6px}"
       // state as a shape, not only a word
       ".pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;"
       "letter-spacing:.04em;padding:3px 9px;border-radius:999px;border:1px solid}"
@@ -138,7 +142,7 @@ String webShellHead(const char *subtitle) {
       // forms
       ".field{display:flex;flex-direction:column;gap:7px}.field+.field{margin-top:16px}"
       ".field label{font-size:13px;color:var(--ink-2)}"
-      ".hint{font-size:12px;color:var(--ink-4);line-height:1.55}"
+      ".hint{font-size:12px;color:var(--ink-soft);line-height:1.55}"
       ".inrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}"
       "input[type=text],input[type=password],input[type=number],input[type=file],select{"
       "flex:1;min-width:0;background:var(--ground);border:1px solid var(--line);"
@@ -165,14 +169,14 @@ String webShellHead(const char *subtitle) {
       // tables and lists
       "table{width:100%;border-collapse:collapse;font-size:13.5px}"
       "th{font-size:10.5px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;"
-      "color:var(--ink-4);text-align:left;padding:0 8px 8px 0}"
+      "color:var(--ink-soft);text-align:left;padding:0 8px 8px 0}"
       "td{padding:5px 8px 5px 0;border-top:1px solid var(--line-soft);color:var(--ink-2)}"
       ".listrow{display:flex;align-items:center;justify-content:space-between;gap:12px;"
       "padding:10px 12px;border-radius:9px;background:var(--surface-2);"
       "border:1px solid var(--line-soft)}"
       ".listrow+.listrow{margin-top:7px}"
       ".listrow .nm{font-family:var(--mono);font-size:13px;color:var(--ink-2)}"
-      ".listrow .sz{font-family:var(--mono);font-size:11.5px;color:var(--ink-4)}"
+      ".listrow .sz{font-family:var(--mono);font-size:11.5px;color:var(--ink-soft)}"
       // links, one row at the bottom
       ".links{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}"
       ".links a{display:flex;align-items:center;justify-content:center;padding:11px 8px;"

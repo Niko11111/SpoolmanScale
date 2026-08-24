@@ -11,6 +11,7 @@
 #include "services/backend.h"
 #include "services/mdns_service.h"
 #include "services/wifi_manager.h"
+#include "ui/weight_format.h"
 #include "web/web_access.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
@@ -66,6 +67,15 @@ static String statusJson() {
   j += ",\"backendUrl\":\"" + jsonEsc(backendBaseUrl()) + "\"";
   j += ",\"backendOk\":" + String(sm_reachable ? "true" : "false");
   j += ",\"scale\":" + String(scl_ok ? "true" : "false");
+  j += ",\"scaleReady\":" + String(scale_ready ? "true" : "false");
+  {
+    // Read straight out of the loop task, which is also the task that
+    // serves this request - handleOtaServerClient() runs from appLoop(),
+    // so the value cannot be torn.
+    char w[24];
+    fmtG(w, sizeof(w), scale_weight_g);
+    j += ",\"weight\":\"" + jsonEsc(w) + "\"";
+  }
   j += ",\"nfc\":" + String(nfc_ok ? "true" : "false");
   j += ",\"sd\":" + String(sd_available ? "true" : "false");
   j += ",\"scans\":" + String(scan_count);
@@ -129,7 +139,7 @@ static String signalBars() {
 
 static String body() {
   String h;
-  h.reserve(6000);
+  h.reserve(6600);
   h += F("<div class='grid'>");
 
   // ---- network ----------------------------------------------------------
@@ -151,6 +161,18 @@ static String body() {
   h += T(STR_W_C_HARDWARE);
   h += F("</h2><div class='rows'>");
   h += row(T(STR_W_R_SCALE), pill(scl_ok, STR_W_S_READY, STR_W_S_MISSING));
+  {
+    // Server rendered once so the page is right before any script runs,
+    // then kept current by the poll below.
+    char w[24];
+    if (scale_ready) fmtG(w, sizeof(w), scale_weight_g);
+    else             strncpy(w, "---", sizeof(w));
+    h += F("<div class='row'><span class='k'>");
+    h += T(STR_W_R_WEIGHT);
+    h += F("</span><span class='v' id='wt'>");
+    h += w;
+    h += F("</span></div>");
+  }
   h += row(T(STR_W_R_NFC),   pill(nfc_ok, STR_W_S_READY, STR_W_S_MISSING));
   h += row(T(STR_W_R_SD),    pill(sd_available, STR_W_S_READY, STR_W_S_MISSING, true));
   h += row(T(STR_W_R_UPTIME), uptimeText());
@@ -190,6 +212,20 @@ static String body() {
   h += F("</p></div></div>");
 
   h += webShellRestartUi();
+
+  // Two seconds, and only while the tab is in front. A status page left
+  // open in a background tab would otherwise poll the scale all day for
+  // nobody. Names are prefixed so nothing collides with the restart
+  // overlay above - a duplicate const kills both blocks at parse time.
+  h += F("<script>"
+         "function wtTick(){if(document.hidden)return;"
+         "fetch('/status.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{"
+         "const e=document.getElementById('wt');"
+         "if(e)e.textContent=d.scaleReady?d.weight:'---';"
+         "}).catch(()=>{});}"
+         "setInterval(wtTick,2000);"
+         "document.addEventListener('visibilitychange',wtTick);"
+         "</script>");
   return h;
 }
 
