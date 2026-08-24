@@ -83,12 +83,18 @@ static String body() {
          "background:#06080f;border:1px solid #1a3060;border-radius:8px;"
          "padding:10px;font-size:12px;line-height:1.5;white-space:pre-wrap;"
          "word-break:break-word;margin:12px 0'></pre>"
-         "<button class='quiet' onclick='loadSession()'>");
+         "<div style='display:flex;gap:12px;align-items:center'>"
+         "<button id='slb' class='quiet' onclick='loadSession()'>");
   h += T(STR_W_SESSION_REFRESH);
-  h += F("</button></div></div>");
+  h += F("</button><span id='sls' class='note' style='margin:0'></span>"
+         "</div></div></div>");
 
   h += F("<script>const SESSION_EMPTY=");
   h += jsStr(T(STR_W_SESSION_EMPTY));
+  h += F(",SESSION_BUSY=");    h += jsStr(T(STR_W_SESSION_BUSY));
+  h += F(",SESSION_REFRESH="); h += jsStr(T(STR_W_SESSION_REFRESH));
+  h += F(",SESSION_AT=");      h += jsStr(T(STR_W_SESSION_UPDATED));
+  h += F(",SESSION_LINES=");   h += jsStr(T(STR_W_SESSION_LINES));
   h += F(";</script>");
 
   h += F("<script>const M={view:");
@@ -113,10 +119,18 @@ static String body() {
          "'<div class=\"note\">'+t+'</div>';}"
          "function setTz(){var v=document.getElementById('tz').value;"
          "fetch('/api/timezone',{method:'POST',body:v}).then(()=>loadSession());}"
-         "function loadSession(){fetch('/api/log/session').then(r=>r.text()).then(t=>{"
+         "function loadSession(){"
+         "var b=document.getElementById('slb'),s=document.getElementById('sls');"
+         "if(b){b.disabled=true;b.textContent=SESSION_BUSY;}"
+         "fetch('/api/log/session').then(r=>r.text()).then(t=>{"
          "var e=document.getElementById('sl');if(!e)return;"
-         "e.textContent=t.trim()?t:SESSION_EMPTY;e.scrollTop=e.scrollHeight;"
-         "}).catch(()=>{});}"
+         "var v=t.trim();e.textContent=v?t:SESSION_EMPTY;"
+         "e.scrollTop=e.scrollHeight;"
+         "if(s){var n=v?v.split('\\n').length:0;"
+         "s.textContent=SESSION_AT+' '+new Date().toLocaleTimeString()"
+         "+' - '+n+' '+SESSION_LINES;}"
+         "}).catch(()=>{if(s)s.textContent='-';})"
+         ".finally(()=>{if(b){b.disabled=false;b.textContent=SESSION_REFRESH;}});}"
          "function loadLogs(){fetch('/api/logs').then(r=>{"
          "if(!r.ok)throw 0;return r.json();}).then(d=>{"
          "const c=document.getElementById('lg');"
