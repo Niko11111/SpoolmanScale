@@ -7,49 +7,52 @@
 #include <cstring>
 
 #include "hardware/sd_logger.h"
+#include "info_popup.h"
 #include "lang.h"
 #include "services/mdns_service.h"
 #include "services/wifi_manager.h"
 #include "system_screen.h"
+#include "ui_common.h"
 #include "web/web_access.h"
 #include "web/web_server.h"
-#include "ui_common.h"
 
 lv_obj_t *scr_web = nullptr;
 
-static lv_obj_t* toggle(int x, int y, int w, const char *label, bool on,
-                        lv_event_cb_t cb) {
-  lv_obj_t *b = lv_btn_create(scr_web);
-  lv_obj_set_size(b, w, 44);
-  lv_obj_set_pos(b, x, y);
-  lv_obj_set_style_bg_color(b, on ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
-  lv_obj_set_style_radius(b, 8, 0);
-  lv_obj_set_style_shadow_width(b, 0, 0);
-  lv_obj_set_style_border_width(b, 0, 0);
-  lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, nullptr);
+// One helper for all three rows. They differ only in which switch they read
+// and write, so the row itself is built once - the hand rolled toggles this
+// replaces looked nothing like the rest of the device.
+static void addGateRow(lv_obj_t *list, const char *ico, int title_id,
+                       const char *sub, int info_id, bool on,
+                       lv_event_cb_t on_click) {
+  char buf_t[40];
+  strncpy(buf_t, T(title_id), sizeof(buf_t) - 1);
+  buf_t[sizeof(buf_t) - 1] = '\0';
 
-  lv_obj_t *l = lv_label_create(b);
-  lv_label_set_text(l, label);
-  lv_obj_set_style_text_color(l, on ? lv_color_hex(0x000000) : lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-  lv_obj_align(l, LV_ALIGN_LEFT_MID, 12, 0);
+  lv_obj_t *help = nullptr;
+  lv_obj_t *btn = makeListBtn(list, ico, buf_t, sub, on, &help);
+  if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                INFO_POPUP_ARG(title_id, info_id));
 
-  lv_obj_t *s = lv_label_create(b);
-  lv_label_set_text(s, on ? "ON" : "OFF");
-  lv_obj_set_style_text_color(s, on ? lv_color_hex(0x000000) : lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(s, &lv_font_montserrat_ext_16, 0);
-  lv_obj_align(s, LV_ALIGN_RIGHT_MID, -12, 0);
-  return b;
+  // Last child is the arrow, which a toggle turns into ON/OFF.
+  lv_obj_t *arr = lv_obj_get_child(btn, -1);
+  if (arr) {
+    char buf_v[8];
+    strncpy(buf_v, T(on ? STR_ON : STR_OFF), sizeof(buf_v) - 1);
+    buf_v[sizeof(buf_v) - 1] = '\0';
+    lv_label_set_text(arr, buf_v);
+    lv_obj_set_style_text_color(arr,
+      lv_color_hex(on ? 0x28d49a : 0x4a6fa0), 0);
+    lv_obj_set_style_text_font(arr, &lv_font_montserrat_ext_14, 0);
+  }
+  lv_obj_add_event_cb(btn, on_click, LV_EVENT_CLICKED, NULL);
 }
 
-static void note(int y, const char *txt) {
-  lv_obj_t *l = lv_label_create(scr_web);
-  lv_label_set_text(l, txt);
-  lv_obj_set_style_text_color(l, lv_color_hex(0x2a4060), 0);
-  lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_12, 0);
-  lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(l, 456);
-  lv_obj_set_pos(l, 12, y);
+// Rebuilt from the callback of a row it owns, so the deletion has to wait for
+// the next loop pass - releaseScreen() uses lv_obj_del_async() for exactly
+// this, which is why the rebuild is safe here.
+static void rebuild() {
+  buildWebScreen();
+  lv_obj_clear_flag(scr_web, LV_OBJ_FLAG_HIDDEN);
 }
 
 void buildWebScreen() {
@@ -62,53 +65,73 @@ void buildWebScreen() {
                        hideAllOverlays();
                        lv_obj_clear_flag(scr_system, LV_OBJ_FLAG_HIDDEN); });
 
-  toggle(12, 50, 456, T(STR_WEB_SERVER), webMasterEnabled(), [](lv_event_t *e) {
-    webSetMasterEnabled(!webMasterEnabled());
-    // The switch only records the wish. Ask the one owner of the socket to
-    // act on it now, so the line below already tells the truth about whether
-    // the address is reachable.
-    webServerSyncState();
-    buildWebScreen();
-    lv_obj_clear_flag(scr_web, LV_OBJ_FLAG_HIDDEN);
-  });
+  // The list body every settings screen uses. makeListBtn() never positions
+  // its button and relies on the parent's flex flow.
+  lv_obj_t *list = lv_obj_create(scr_web);
+  lv_obj_set_size(list, 480, 263);
+  lv_obj_set_pos(list, 0, 57);
+  lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_width(list, 0, 0);
+  lv_obj_set_style_pad_left(list, 12, 0);
+  lv_obj_set_style_pad_right(list, 12, 0);
+  lv_obj_set_style_pad_top(list, 6, 0);
+  lv_obj_set_style_pad_bottom(list, 6, 0);
+  lv_obj_set_style_pad_row(list, 6, 0);
+  lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_scroll_dir(list, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
+  lv_obj_clear_flag(list, LV_OBJ_FLAG_SCROLL_ELASTIC);
 
-  char url[72];
+  // The master switch carries the address as its subtitle rather than a
+  // separate note underneath: it is the one line on this screen a user is
+  // here to read, and makeListBtn() turns the subtitle green while the row
+  // is active, so it reads as "this is live" instead of as a caption.
+  char addr[56];
   if (!webMasterEnabled()) {
-    // STR_WEB_SERVER_HINT existed from the start and was never used - the
-    // line was built in English right here instead, so a German device said
-    // it in English.
-    strncpy(url, T(STR_WEB_SERVER_HINT), sizeof(url) - 1);
-    url[sizeof(url) - 1] = '\0';
+    strncpy(addr, T(STR_WEB_SERVER_HINT), sizeof(addr) - 1);
+    addr[sizeof(addr) - 1] = '\0';
   } else if (!wifi_ok) {
-    snprintf(url, sizeof(url), "Waiting for WiFi.");
+    strncpy(addr, T(STR_WIFI_STATUS_DISCONNECTED), sizeof(addr) - 1);
+    addr[sizeof(addr) - 1] = '\0';
   } else if (mdnsRunning()) {
-    snprintf(url, sizeof(url), "http://%s.local  shows status and these switches.",
-             mdnsHostname());
+    snprintf(addr, sizeof(addr), "http://%s.local", mdnsHostname());
   } else {
-    snprintf(url, sizeof(url), "http://%s  shows status and these switches.",
+    snprintf(addr, sizeof(addr), "http://%s",
              wifiManagerLocalIP().toString().c_str());
   }
-  note(98, url);
 
-  // Two switches rather than one. Changing a list limit and flashing firmware
-  // used to hang on the same bit, which meant anyone who wanted to edit the
-  // drying thresholds from the browser had to open the firmware upload to the
-  // network as well.
-  toggle(12, 124, 456, T(STR_WEB_CONFIG), webConfigEnabled(),
+  addGateRow(list, LV_SYMBOL_WIFI, STR_WEB_SERVER, addr, STR_WEB_SERVER_INFO,
+    webMasterEnabled(),
     [](lv_event_t *e) {
+      logSD("BTN: Web -> master toggle");
+      webSetMasterEnabled(!webMasterEnabled());
+      // The switch only records the wish. Ask the one owner of the socket to
+      // act on it now, so the address below already tells the truth.
+      webServerSyncState();
+      rebuild();
+    });
+
+  char sub_cfg[48];
+  strncpy(sub_cfg, T(STR_WEB_CONFIG_SUB), sizeof(sub_cfg) - 1);
+  sub_cfg[sizeof(sub_cfg) - 1] = '\0';
+  addGateRow(list, LV_SYMBOL_SETTINGS, STR_WEB_CONFIG, sub_cfg,
+    STR_WEB_CONFIG_HINT, webConfigEnabled(),
+    [](lv_event_t *e) {
+      logSD("BTN: Web -> config toggle");
       webSetConfigEnabled(!webConfigEnabled());
-      buildWebScreen();
-      lv_obj_clear_flag(scr_web, LV_OBJ_FLAG_HIDDEN);
+      rebuild();
     });
-  note(172, T(STR_WEB_CONFIG_HINT));
 
-  toggle(12, 210, 456, T(STR_WEB_MAINT), webMaintenanceEnabled(),
+  char sub_mnt[48];
+  strncpy(sub_mnt, T(STR_WEB_MAINT_SUB), sizeof(sub_mnt) - 1);
+  sub_mnt[sizeof(sub_mnt) - 1] = '\0';
+  addGateRow(list, LV_SYMBOL_DOWNLOAD, STR_WEB_MAINT, sub_mnt,
+    STR_WEB_MAINT_HINT, webMaintenanceEnabled(),
     [](lv_event_t *e) {
+      logSD("BTN: Web -> maintenance toggle");
       webSetMaintenanceEnabled(!webMaintenanceEnabled());
-      buildWebScreen();
-      lv_obj_clear_flag(scr_web, LV_OBJ_FLAG_HIDDEN);
+      rebuild();
     });
-  note(258, T(STR_WEB_MAINT_HINT));
 }
 
 void showWebScreen() {

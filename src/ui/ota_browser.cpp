@@ -17,6 +17,12 @@
 #include "services/wifi_manager.h"
 #include "ui_common.h"
 
+// The credential rows start below the address block. The address line grew
+// when the IP moved from font 14 to font 18, and at the old 158 the two
+// touched.
+#define CRED_ROW_Y0    168
+#define CRED_ROW_STEP   34
+
 // Which entry point brought the user here. Kept between show and build
 // because buildOtaBrowserScreen() is also reached through the generic
 // rebuild path and has no argument of its own.
@@ -244,11 +250,16 @@ void buildOtaBrowserScreen() {
   lv_obj_align(lbl_ip, LV_ALIGN_TOP_MID, 0, addr_y);
 
   if (addr_buf[0]) {
+    // Font 18 in the secondary text colour, not 14 in the hint colour. This
+    // is the address someone types when the .local name does not resolve -
+    // an Android phone, a router that filters multicast - so it has to be
+    // readable from arm's length, not decorative. It stays one step below
+    // the name above it and no further.
     lv_obj_t *lbl_fallback = lv_label_create(scr_ota_browser);
     lv_label_set_text(lbl_fallback, addr_buf);
-    lv_obj_set_style_text_color(lbl_fallback, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(lbl_fallback, &lv_font_montserrat_ext_14, 0);
-    lv_obj_align(lbl_fallback, LV_ALIGN_TOP_MID, 0, addr_y + 26);
+    lv_obj_set_style_text_color(lbl_fallback, lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_font(lbl_fallback, &lv_font_montserrat_ext_18, 0);
+    lv_obj_align(lbl_fallback, LV_ALIGN_TOP_MID, 0, addr_y + 28);
   }
 
   if (showsCredentials()) {
@@ -258,15 +269,15 @@ void buildOtaBrowserScreen() {
       // jump when switching backends.
       s_key_shown   = (bambuddyApiKey()[0] != '\0');
       s_token_shown = false;
-      s_lbl_key_val   = addCredentialRow(scr_ota_browser, 158, T(STR_BACKEND_APIKEY),
+      s_lbl_key_val   = addCredentialRow(scr_ota_browser, CRED_ROW_Y0, T(STR_BACKEND_APIKEY),
                                          s_key_shown);
       s_lbl_token_val = nullptr;
     } else {
       s_key_shown   = (filamanApiKey()[0]      != '\0');
       s_token_shown = (filamanDeviceToken()[0] != '\0');
-      s_lbl_key_val   = addCredentialRow(scr_ota_browser, 158, T(STR_BACKEND_APIKEY),
+      s_lbl_key_val   = addCredentialRow(scr_ota_browser, CRED_ROW_Y0, T(STR_BACKEND_APIKEY),
                                          s_key_shown);
-      s_lbl_token_val = addCredentialRow(scr_ota_browser, 192, T(STR_BACKEND_DEVICE_TOKEN),
+      s_lbl_token_val = addCredentialRow(scr_ota_browser, CRED_ROW_Y0 + CRED_ROW_STEP, T(STR_BACKEND_DEVICE_TOKEN),
                                          s_token_shown);
     }
 
@@ -310,7 +321,7 @@ void buildOtaBrowserScreen() {
   lv_obj_set_style_text_color(lbl_hint2, lv_color_hex(0x2a4060), 0);
   lv_obj_set_style_text_font(lbl_hint2, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(lbl_hint2, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_hint2, LV_ALIGN_TOP_MID, 0, addr_buf[0] ? 126 : 112);
+  lv_obj_align(lbl_hint2, LV_ALIGN_TOP_MID, 0, addr_buf[0] ? 134 : 112);
   lv_label_set_long_mode(lbl_hint2, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(lbl_hint2, 440);
 

@@ -106,14 +106,20 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Nicht verbunden",        "Not connected"     },  // STR_BTN_WIFI_STATUS_SUB
   { "Server, OTA, Logs",      "Server, OTA, logs" },  // STR_BTN_WEB_SUB
   { "Webserver",              "Web server"        },  // STR_WEB_SERVER
-  { "Firmware, Logs, Tags",   "Firmware, logs, tags" },  // STR_WEB_MAINT
+  { "Wartung",                "Maintenance"       },  // STR_WEB_MAINT
   { "Einstellungen",          "Settings"          },  // STR_WEB_CONFIG
   { "Aus: Port 80 antwortet nicht.",
     "Off: nothing answers on port 80." },  // STR_WEB_SERVER_HINT
+  { "Schaltet die Weboberfläche im Netz an und aus. Ausgeschaltet antwortet Port 80 nicht mehr - ausser FilaMan hat ein Geräte-Token hinterlegt, dann bleibt allein dessen Tag-Auslöser erreichbar.",
+    "Turns the web interface on and off across the network. Switched off, port 80 stops answering - unless FilaMan holds a device token, in which case only its tag trigger stays reachable." },  // STR_WEB_SERVER_INFO
   { "Liefert Firmware-Upload, Logs, Neustart und das Tag-Schreiben. Standardmäßig aus: schreibt Firmware und NFC-Tags, ohne Passwort.",
     "Serves firmware upload, logs, restart and tag writing. Off by default: these write firmware and NFC tags, with no password." },  // STR_WEB_MAINT_HINT
+  { "Firmware, Logs, Tags, Neustart",
+    "Firmware, logs, tags, restart" },  // STR_WEB_MAINT_SUB
   { "Liefert Listenlimits, Trocknung, Anzeige und die Backend-Zugangsdaten. Standardmäßig aus: ändert Einstellungen ohne Passwort.",
     "Serves list limits, drying, display and the backend credentials. Off by default: changes settings with no password." },  // STR_WEB_CONFIG_HINT
+  { "Listenlimits, Trocknung, Anzeige",
+    "List limits, drying, display" },  // STR_WEB_CONFIG_SUB
   { "Spoolman Server",        "Spoolman Server"   },  // STR_BTN_SPOOLMAN
 
   // Scale
