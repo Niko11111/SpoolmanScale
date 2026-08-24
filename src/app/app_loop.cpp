@@ -1102,13 +1102,22 @@ void appLoop() {
 
         Serial.printf("NFC: NTAG UID=%s\n", uid_str);
 
-        bool uid_changed_ntag_log = (strcmp(uid_str, g_tag.uid_str) != 0);
-        if (uid_changed_ntag_log) logSDf("NFC: NTAG UID=%s", uid_str);
+        // g_tag holds what is on screen, and the display deliberately keeps a
+        // spool for a minute after it is lifted. Asking it whether the tag
+        // changed therefore answers no for a tag that was taken off and put
+        // back inside that minute, and the whole read below is skipped.
+        //
+        // spoolman_queried_uid is the one that tracks the tag rather than the
+        // display: the removal handler clears it, with the comment "allow
+        // re-query when same tag is placed again". Until now nothing reached
+        // that check, because this one had already decided there was nothing
+        // to do.
+        bool uid_changed_ntag = (strcmp(uid_str, g_tag.uid_str) != 0) ||
+                                (strcmp(uid_str, spoolman_queried_uid) != 0);
+        if (uid_changed_ntag) logSDf("NFC: NTAG UID=%s", uid_str);
 
         lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
         lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
-
-        bool uid_changed_ntag = (strcmp(uid_str, g_tag.uid_str) != 0);
 
         if (uid_changed_ntag) {
           // New UID — clear old tag data
