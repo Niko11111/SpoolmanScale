@@ -14,6 +14,7 @@
 #include "services/prefs_store.h"
 #include "services/spoolman_actions.h"
 #include "dried_action.h"
+#include "spoolman_screen.h"
 #include "lang.h"
 
 
@@ -605,6 +606,7 @@ void showConfirmPopup(const char* msg, int action) {
       closeConfirmPopup();
       if (act == 1) btn_dried_cb(nullptr);
       if (act == 3) patchArchiveSpool();
+      if (act == 4) spoolmanClearHost();
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_ja = lv_label_create(btn_ja);
     lv_label_set_text(lbl_ja, T(STR_BTN_CONFIRMED));

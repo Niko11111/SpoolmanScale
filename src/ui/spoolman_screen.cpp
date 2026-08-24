@@ -16,6 +16,10 @@
 #include "services/backend_api.h"
 #include "services/bambuddy_api.h"
 #include "header_status.h"
+#include "services/mdns_service.h"
+#include "services/wifi_manager.h"
+#include "web/web_access.h"
+#include "confirm_popup.h"
 #include "lang.h"
 #include "ui_common.h"
 
@@ -23,6 +27,45 @@
 
 // Input buffer for Spoolman IP
 static char sp_ip_input[64] = "";
+// What the field held when the screen opened. The back button used to write
+// unconditionally, so merely opening the screen and leaving it rewrote NVS -
+// and on a host name a single stray tap appended a digit to it.
+static char sp_ip_original[64] = "";
+// True when the stored address cannot be typed on this screen.
+static bool sp_locked = false;
+
+// Every character the twelve key pad can produce. An empty host counts as
+// numeric: there is nothing to protect yet, and the pad is the right tool.
+//
+// The address field is a plain string shared with the browser, and the browser
+// has a real keyboard - it even advertises host names, because a reverse proxy
+// tells its backends apart by the Host header. A name that arrives that way
+// cannot be edited here, only damaged.
+static bool hostIsNumeric(const char* h) {
+  if (!h) return true;
+  for (; *h; h++)
+    if (!((*h >= '0' && *h <= '9') || *h == '.' || *h == ':')) return false;
+  return true;
+}
+
+// Where to go to change it. Same cascade as the web screen (web_screen.cpp),
+// because pointing at an address that does not answer is worse than saying
+// which switch is off.
+static void browserAddress(char* out, size_t len) {
+  if (!webMasterEnabled())  { strncpy(out, T(STR_SP_WEB_OFF), len - 1); }
+  else if (!wifi_ok)        { strncpy(out, T(STR_WIFI_STATUS_DISCONNECTED), len - 1); }
+  else if (mdnsRunning())   { snprintf(out, len, "http://%s.local", mdnsHostname()); return; }
+  else                      { snprintf(out, len, "http://%s",
+                                       wifiManagerLocalIP().toString().c_str()); return; }
+  out[len - 1] = '\0';
+}
+
+void spoolmanClearHost() {
+  logSDf("Backend: address cleared on the device (was %s)", backendHost());
+  backendSetHost("");
+  sp_ip_input[0] = '\0';
+  show_spoolman_pending = true;   // rebuilt one loop pass later, never here
+}
 static lv_obj_t *lbl_sp_ip_display = nullptr;
 static lv_obj_t *lbl_sp_test_result = nullptr;  // test result label on IP screen
 static lv_obj_t *btn_sp_extra_fields = nullptr;  // Extra Fields button on IP screen
@@ -50,6 +93,8 @@ void buildSpoolmanScreen() {
   lv_obj_clear_flag(scr_spoolman, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_bg_color(scr_spoolman, lv_color_hex(0x0a1020), 0);
 
+  sp_locked = !hostIsNumeric(backendHost());
+
   // Header. The product name is not translated, so it is composed here
   // instead of living in lang.cpp twice.
   char buf_title[32];
@@ -57,7 +102,11 @@ void buildSpoolmanScreen() {
   buildSubHeader(scr_spoolman, buf_title,
     [](lv_event_t *e){
       logSD("BTN: Spoolman -> Back");
-      if (sp_ip_input[0]) backendSetHost(sp_ip_input);
+      // Only on a real change. Writing whatever the field happens to hold
+      // turned a look into an edit, which is how one tap could append a
+      // digit to a host name and make it unresolvable.
+      if (sp_ip_input[0] && strcmp(sp_ip_input, sp_ip_original) != 0)
+        backendSetHost(sp_ip_input);
       // Return to wherever we came from. The Backend screen exists only
       // when the user navigated through it, the setup flow does not.
       if (scr_backend) show_backend_pending = true;
@@ -69,11 +118,16 @@ void buildSpoolmanScreen() {
   const char* def_port = (backendMode() == BACKEND_FILAMAN)  ? "8002"
                        : (backendMode() == BACKEND_BAMBUDDY) ? "8000"
                                                              : "7912";
-  char buf_hint[32];
-  snprintf(buf_hint, sizeof(buf_hint), "192.168.x.x:%s", def_port);
+  char buf_hint[48];
+  if (sp_locked) {
+    strncpy(buf_hint, T(STR_SP_LOCKED_TITLE), sizeof(buf_hint) - 1);
+    buf_hint[sizeof(buf_hint) - 1] = '\0';
+  } else {
+    snprintf(buf_hint, sizeof(buf_hint), "192.168.x.x:%s", def_port);
+  }
   lv_obj_t *lbl_hint = lv_label_create(scr_spoolman);
   lv_label_set_text(lbl_hint, buf_hint);
-  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(sp_locked ? 0xf0b838 : 0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 52);
@@ -86,11 +140,14 @@ void buildSpoolmanScreen() {
     strncpy(sp_ip_input, cur_host, sizeof(sp_ip_input)-1);
   }
   sp_ip_input[sizeof(sp_ip_input)-1] = '\0';
+  strncpy(sp_ip_original, sp_ip_input, sizeof(sp_ip_original) - 1);
+  sp_ip_original[sizeof(sp_ip_original)-1] = '\0';
+
   lv_obj_t *input_box = lv_obj_create(scr_spoolman);
   lv_obj_set_size(input_box, 420, 34);
   lv_obj_align(input_box, LV_ALIGN_TOP_MID, 0, 68);
   lv_obj_set_style_bg_color(input_box, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_border_color(input_box, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_border_color(input_box, lv_color_hex(sp_locked ? 0xf0b838 : 0x28d49a), 0);
   lv_obj_set_style_border_width(input_box, 1, 0);
   lv_obj_set_style_radius(input_box, 6, 0);
   lv_obj_set_style_pad_all(input_box, 0, 0);
@@ -107,6 +164,59 @@ void buildSpoolmanScreen() {
   const int NP_W = 130, NP_H = 32, NP_GAP = 3;
   const int NP_PAD_X = (480 - 3*NP_W - 2*NP_GAP) / 2;
   const int NP_START_Y = 104;
+
+  if (sp_locked) {
+    // No pad at all rather than a disabled one. A pad that is visible but does
+    // nothing reads as a broken screen; this says what the address is, why it
+    // cannot be edited here, and where it can be.
+    lv_obj_t *lbl_why = lv_label_create(scr_spoolman);
+    lv_obj_set_width(lbl_why, 440);
+    lv_label_set_long_mode(lbl_why, LV_LABEL_LONG_WRAP);
+    char buf_why[128];
+    strncpy(buf_why, T(STR_SP_LOCKED_INFO), sizeof(buf_why) - 1);
+    buf_why[sizeof(buf_why) - 1] = '\0';
+    lv_label_set_text(lbl_why, buf_why);
+    lv_obj_set_style_text_color(lbl_why, lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_font(lbl_why, &lv_font_montserrat_ext_14, 0);
+    lv_obj_set_style_text_align(lbl_why, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lbl_why, LV_ALIGN_TOP_MID, 0, 118);
+
+    char buf_addr[64];
+    browserAddress(buf_addr, sizeof(buf_addr));
+    lv_obj_t *lbl_addr = lv_label_create(scr_spoolman);
+    lv_obj_set_width(lbl_addr, 440);
+    lv_label_set_long_mode(lbl_addr, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(lbl_addr, buf_addr);
+    lv_obj_set_style_text_color(lbl_addr, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_font(lbl_addr, &lv_font_montserrat_ext_16, 0);
+    lv_obj_set_style_text_align(lbl_addr, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lbl_addr, LV_ALIGN_TOP_MID, 0, 172);
+
+    // The escape hatch. Without it a typo made in the browser cannot be
+    // undone from the device at all, because the pad has no letters.
+    lv_obj_t *btn_clear = lv_btn_create(scr_spoolman);
+    lv_obj_set_size(btn_clear, 200, 44);
+    lv_obj_align(btn_clear, LV_ALIGN_TOP_MID, 0, 222);
+    lv_obj_set_style_bg_color(btn_clear, lv_color_hex(0x3a1010), 0);
+    lv_obj_set_style_bg_color(btn_clear, lv_color_hex(0x602020), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btn_clear, 8, 0);
+    lv_obj_set_style_shadow_width(btn_clear, 0, 0);
+    lv_obj_set_style_border_width(btn_clear, 1, 0);
+    lv_obj_set_style_border_color(btn_clear, lv_color_hex(0x602020), 0);
+    lv_obj_add_event_cb(btn_clear, [](lv_event_t *e) {
+      // Asks, then acts one loop pass later. Nothing is deleted from inside
+      // this callback.
+      showConfirmPopup(T(STR_SP_CLEAR_ASK), 4);
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_clear = lv_label_create(btn_clear);
+    char buf_clear[32];
+    strncpy(buf_clear, T(STR_SP_CLEAR), sizeof(buf_clear) - 1);
+    buf_clear[sizeof(buf_clear) - 1] = '\0';
+    lv_label_set_text(lbl_clear, buf_clear);
+    lv_obj_set_style_text_color(lbl_clear, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_font(lbl_clear, &lv_font_montserrat_ext_16, 0);
+    lv_obj_center(lbl_clear);
+  } else {
 
   const char* np_labels[] = {
     "1","2","3",
@@ -268,6 +378,8 @@ void buildSpoolmanScreen() {
   lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0x40c080), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_ok);
+
+  }   // end of the numeric pad
 
   // Bottom area: test result info (left) + Extra Fields button (right)
   // numpad bottom = NP_START_Y + 4*(NP_H+NP_GAP) + NP_H = 104+4*35+32 = 276

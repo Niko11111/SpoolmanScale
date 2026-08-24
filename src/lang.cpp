@@ -1218,4 +1218,14 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Do not cut the power" },  // STR_OTA_KEEP_POWER
   { "Kaffee ausgeben",
     "Buy me a coffee" },  // STR_W_KOFI
+  { "Adresse ist ein Name",
+    "Address is a name" },  // STR_SP_LOCKED_TITLE
+  { "Dieser Ziffernblock kann nur Zahlen. Die Adresse im Browser aendern:",
+    "This keypad can only make numbers. Change the address in the browser:" },  // STR_SP_LOCKED_INFO
+  { "Weboberflaeche aus: Einstellungen > System > Weboberflaeche",
+    "Web interface off: Settings > System > Web interface" },  // STR_SP_WEB_OFF
+  { "Adresse leeren",
+    "Clear address" },  // STR_SP_CLEAR
+  { "Adresse verwerfen? Danach ist das Backend nicht mehr eingerichtet, und am Geraet laesst sich nur eine IP eingeben.",
+    "Discard the address? The backend is then no longer set up, and the device itself can only enter an IP." },  // STR_SP_CLEAR_ASK
 };
