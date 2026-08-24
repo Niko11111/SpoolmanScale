@@ -110,28 +110,38 @@ static void showFactoryResetPopup() {
   lv_obj_align(lbl_ok, LV_ALIGN_CENTER, 0, 0);
 }
 
-// One row of the list. All six entries differ only in icon, text and what they
-// do, so the row is built once instead of six times by hand.
-//
-// `danger` restyles the two destructive entries: a red border and red title
-// rather than a separate half width button pair at the bottom of the screen.
-// That pair is what used to make this screen end at y=313 of 320.
+// How loudly a row warns. A restart costs the user twenty seconds and takes
+// nothing away; a factory reset erases every setting on the device. Painting
+// both red would say they are the same kind of mistake to make.
+enum RowTone { TONE_PLAIN, TONE_WARN, TONE_DANGER };
+
+// One row of the list. All six entries differ only in icon, text and what
+// they do, so the row is built once instead of six times by hand. The toned
+// rows replace the separate pair of half width buttons that used to sit at
+// the bottom and made this screen end at y=313 of 320.
 static lv_obj_t* addRow(lv_obj_t *list, const char *ico, const char *title,
-                        const char *sub, lv_event_cb_t cb, bool danger = false) {
+                        const char *sub, lv_event_cb_t cb,
+                        RowTone tone = TONE_PLAIN) {
   char buf_t[40]; strncpy(buf_t, title, sizeof(buf_t) - 1); buf_t[sizeof(buf_t)-1] = '\0';
   char buf_s[48]; strncpy(buf_s, sub,   sizeof(buf_s) - 1); buf_s[sizeof(buf_s)-1] = '\0';
 
   lv_obj_t *btn = makeListBtn(list, ico, buf_t, buf_s);
-  if (danger) {
-    lv_obj_set_style_border_color(btn, lv_color_hex(0x602020), 0);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x180a0e), 0);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x3a1010), LV_STATE_PRESSED);
-    // Child 0 is the icon, child 1 the title. Both go red so the row reads as
-    // a warning before the text is read.
+  if (tone != TONE_PLAIN) {
+    // Amber is the same one the status bar and the web UI already warn in,
+    // red the same one the reset dialog uses, so neither introduces a colour.
+    const uint32_t border  = (tone == TONE_DANGER) ? 0x602020 : 0x3a2800;
+    const uint32_t bg      = (tone == TONE_DANGER) ? 0x180a0e : 0x161206;
+    const uint32_t pressed = (tone == TONE_DANGER) ? 0x3a1010 : 0x3a2c10;
+    const uint32_t text    = (tone == TONE_DANGER) ? 0xff6060 : 0xf0b838;
+    lv_obj_set_style_border_color(btn, lv_color_hex(border), 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(bg), 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(pressed), LV_STATE_PRESSED);
+    // Child 0 is the icon, child 1 the title. Both take the tone so the row
+    // reads as a warning before the text is read.
     lv_obj_t *ico_lbl = lv_obj_get_child(btn, 0);
     lv_obj_t *ttl_lbl = lv_obj_get_child(btn, 1);
-    if (ico_lbl) lv_obj_set_style_text_color(ico_lbl, lv_color_hex(0xff6060), 0);
-    if (ttl_lbl) lv_obj_set_style_text_color(ttl_lbl, lv_color_hex(0xff6060), 0);
+    if (ico_lbl) lv_obj_set_style_text_color(ico_lbl, lv_color_hex(text), 0);
+    if (ttl_lbl) lv_obj_set_style_text_color(ttl_lbl, lv_color_hex(text), 0);
   }
   lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
   return btn;
@@ -186,10 +196,10 @@ void buildSystemScreen() {
       if (sd_available) SD.end();
       delay(100);
       ESP.restart();
-    }, true);
+    }, TONE_WARN);
 
   addRow(list, LV_SYMBOL_TRASH, T(STR_BTN_FACTORY_RESET), T(STR_BTN_FACTORY_RESET_SUB),
-    [](lv_event_t *e){ showFactoryResetPopup(); }, true);
+    [](lv_event_t *e){ showFactoryResetPopup(); }, TONE_DANGER);
 
   // The badge is placed with lv_obj_align_to(), which reads the anchor's
   // coordinates as they are right now. Under a flex layout those are not
