@@ -505,6 +505,9 @@ void querySpoolmanById(int spool_id) {
     sm_location_name[sizeof(sm_location_name)-1] = '\0';
   }
 
+  // Spool status. Only FilaMan maps it, the others leave the key unset.
+  sm_status_id = spool["status_id"] | 0;
+
   // last_dried
   sm_last_dried[0] = '\0';
   if (spool.containsKey("extra") && spool["extra"].containsKey("last_dried")) {
@@ -632,6 +635,7 @@ void querySpoolman(const char* tray_uuid) {
   sm_color_global[0] = '\0';
   sm_last_used[0] = '\0';
   sm_location_name[0] = '\0'; sm_location_id = 0;
+  sm_status_id = 0;
   sm_found = false;
   sm_id = 0;
   sm_dup_count = 0;
@@ -969,6 +973,9 @@ void querySpoolman(const char* tray_uuid) {
       strncpy(sm_location_name, loc.c_str(), sizeof(sm_location_name)-1);
       sm_location_name[sizeof(sm_location_name)-1] = '\0';
     }
+
+    // Spool status. Only FilaMan maps it, the others leave the key unset.
+    sm_status_id = spool["status_id"] | 0;
     if (extra.containsKey("last_dried")) {
       String dried = extra["last_dried"].as<String>();
       dried.replace("\"", "");

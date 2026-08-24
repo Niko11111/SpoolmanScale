@@ -111,6 +111,7 @@ char  sm_vendor_g[32] = "";
 char  sm_color_global[16] = "";
 char  sm_location_name[48] = "";
 int   sm_location_id = 0;
+int   sm_status_id = 0;
 
 float scale_weight_g = 0.0f;
 bool scale_ready = false;

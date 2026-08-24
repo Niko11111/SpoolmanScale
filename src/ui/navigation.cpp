@@ -9,6 +9,7 @@
 #include "hardware/display_power.h"
 #include "hardware/sd_logger.h"
 #include "ui/extra_fields_screen.h"
+#include "ui/more_info_screen.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/settings_screen.h"
 #include "ui/spool_flow.h"
@@ -66,6 +67,7 @@ void hideAllOverlays() {
   if (scr_wifi_pass)   lv_obj_add_flag(scr_wifi_pass,   LV_OBJ_FLAG_HIDDEN);
   if (scr_wifi_connecting) lv_obj_add_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN);
   hideSpoolFlowOverlays();
+  hideMoreInfoOverlays();
 }
 
 void showMainScreen() {

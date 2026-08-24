@@ -143,6 +143,9 @@ extern char sm_vendor_g[32];
 extern char sm_color_global[16];
 extern char sm_location_name[48];
 extern int sm_location_id;
+// FilaMan spool status, 1..6 (see FILAMAN_STATUS_* in filaman_api.h).
+// 0 means unknown, which is also what Spoolman and BamBuddy always leave here.
+extern int sm_status_id;
 
 extern float scale_weight_g;
 extern bool scale_ready;

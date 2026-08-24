@@ -16,8 +16,10 @@
 #include "services/user_options.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/filaman_api.h"
 #include "services/wifi_manager.h"
 #include "lang.h"
+#include "confirm_popup.h"
 #include "tag_display.h"
 #include "ui_common.h"
 
@@ -25,11 +27,24 @@
 void showLocationPicker();
 void buildMoreInfoScreen();
 void fetchAndFillLocationList();
+static void showStatusPicker();
+static void applyPickedStatus(int status_id);
 
 static bool show_location_picker_pending = false;
 static bool show_more_info_pending = false;
 static bool fetch_locations_pending = false;
 static bool g_loc_picker_from_popup = false;
+
+static lv_obj_t *scr_location_picker = nullptr;
+
+// Status picker. The chosen id is parked here rather than acted on in the row
+// callback, so the overlay is gone before anything blocks on the network.
+static lv_obj_t *scr_status_picker = nullptr;
+static bool show_status_picker_pending = false;
+static bool status_close_pending      = false;
+static bool status_apply_pending      = false;
+static bool status_archive_pending    = false;
+static int  status_pick_id            = 0;   // 1..6, or 0 for "cancelled"
 
 // Shared by both confirm buttons of the unlink popup. user_data is 1 for
 // "release the whole binding" and 0 for "only the tag on the scale" - the
@@ -87,8 +102,49 @@ void handleMoreInfoDeferredActions() {
   }
   if (show_more_info_pending) {
     show_more_info_pending = false;
-    buildMoreInfoScreen();
+    // showMoreInfoScreen(), not buildMoreInfoScreen(): the latter overwrites
+    // scr_more_info with a fresh object and leaks the previous instance.
+    showMoreInfoScreen();
   }
+
+  if (show_status_picker_pending) {
+    show_status_picker_pending = false;
+    showStatusPicker();
+  }
+  if (status_apply_pending) {
+    status_apply_pending = false;
+    applyPickedStatus(status_pick_id);
+  }
+  if (status_archive_pending) {
+    status_archive_pending = false;
+    showConfirmPopup(T(STR_ARCHIVE_CONFIRM), 3);
+  }
+  // Deliberately last. releaseScreen() frees asynchronously, and appLoop()
+  // runs lv_timer_handler() before it gets here, so a flag set below is only
+  // read on the next pass - by which time the overlay is really gone and the
+  // blocking POST cannot freeze the screen with the picker still on it.
+  if (status_close_pending) {
+    status_close_pending = false;
+    releaseScreen(&scr_status_picker);
+    if (status_pick_id == FILAMAN_STATUS_ARCHIVED) {
+      // Archiving empties the spool and unlinks it, so the detail view behind
+      // the picker is about to be wrong either way. patchArchiveSpool() writes
+      // its result onto the main screen.
+      releaseScreen(&scr_more_info);
+      status_archive_pending = true;
+    } else if (status_pick_id > 0 && status_pick_id != sm_status_id) {
+      status_apply_pending = true;
+    }
+  }
+}
+
+// Both pickers, from the one list hideAllOverlays() already is. Neither used
+// to be in it, so navigating away from the location picker left it standing.
+void hideMoreInfoOverlays() {
+  releaseScreen(&scr_location_picker);
+  releaseScreen(&scr_status_picker);
+  loc_status_obj = nullptr;
+  loc_list_obj   = nullptr;
 }
 
 // ============================================================
@@ -106,8 +162,6 @@ void showMoreInfoScreen() {
 }
 
 // ── Location Picker ─────────────────────────────────────────
-static lv_obj_t *scr_location_picker = nullptr;
-
 void showLocationPicker() {
   if (scr_location_picker) { lv_obj_del(scr_location_picker); scr_location_picker = nullptr; }
   if (!sm_found || sm_id <= 0) return;
@@ -367,6 +421,174 @@ void fetchAndFillLocationList() {
   lv_obj_center(hint_lbl);
 }
 
+// ── Status Picker (FilaMan only) ────────────────────────────
+// FilaMan's six statuses. Fixed on the server, so the list needs no fetch
+// stage the way the location picker does.
+static StringID statusStrId(int status_id) {
+  switch (status_id) {
+    case FILAMAN_STATUS_NEW:      return STR_STATUS_NEW;
+    case FILAMAN_STATUS_OPENED:   return STR_STATUS_OPENED;
+    case FILAMAN_STATUS_DRYING:   return STR_STATUS_DRYING;
+    case FILAMAN_STATUS_ACTIVE:   return STR_STATUS_ACTIVE;
+    case FILAMAN_STATUS_EMPTY:    return STR_STATUS_EMPTY;
+    case FILAMAN_STATUS_ARCHIVED: return STR_ARCHIVED;
+    default:                      return STR_STATUS_UNKNOWN;
+  }
+}
+
+static uint32_t statusColor(int status_id) {
+  switch (status_id) {
+    case FILAMAN_STATUS_NEW:      return 0x8ab0d8;
+    case FILAMAN_STATUS_OPENED:   return 0x28d49a;
+    case FILAMAN_STATUS_DRYING:   return 0xf0b838;
+    case FILAMAN_STATUS_ACTIVE:   return 0x28d49a;
+    case FILAMAN_STATUS_EMPTY:    return 0xe04040;
+    case FILAMAN_STATUS_ARCHIVED: return 0x808080;
+    default:                      return 0x4a6fa0;
+  }
+}
+
+// Runs from handleMoreInfoDeferredActions(), never from a row callback: it
+// blocks for as long as the server takes.
+static void applyPickedStatus(int status_id) {
+  const char* key = filamanStatusKey(status_id);
+  if (!key || sm_id <= 0) return;
+  if (!wifiManagerIsConnected()) return;
+
+  int code = backendSetSpoolStatus(cfg_spoolman_base, sm_id, key, 5000);
+  logSDf("status: spool %d -> %s HTTP %d", sm_id, key, code);
+  if (code == 200) sm_status_id = status_id;
+  // Rebuilt either way. On failure the chip goes back to showing the truth.
+  show_more_info_pending = true;
+}
+
+static void statusRowCb(lv_event_t *e) {
+  status_pick_id = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
+  status_close_pending = true;
+}
+
+static void showStatusPicker() {
+  releaseScreen(&scr_status_picker);
+  if (!backendIsFilaMan() || !sm_found || sm_id <= 0) return;
+
+  // Backdrop
+  scr_status_picker = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(scr_status_picker, 480, 320);
+  lv_obj_set_pos(scr_status_picker, 0, 0);
+  lv_obj_set_style_bg_color(scr_status_picker, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_opa(scr_status_picker, LV_OPA_70, 0);
+  lv_obj_set_style_border_width(scr_status_picker, 0, 0);
+  lv_obj_set_style_radius(scr_status_picker, 0, 0);
+  lv_obj_set_style_pad_all(scr_status_picker, 0, 0);
+  lv_obj_clear_flag(scr_status_picker, LV_OBJ_FLAG_SCROLLABLE);
+
+  // Inner box - same dimensions as the location picker so both read alike
+  lv_obj_t *box = lv_obj_create(scr_status_picker);
+  lv_obj_set_size(box, 400, 280);
+  lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(0x0b1525), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_border_width(box, 1, 0);
+  lv_obj_set_style_radius(box, 10, 0);
+  lv_obj_set_style_pad_all(box, 0, 0);
+  lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+
+  // Header
+  lv_obj_t *hdr = lv_obj_create(box);
+  lv_obj_set_size(hdr, 400, 44);
+  lv_obj_set_pos(hdr, 0, 0);
+  lv_obj_set_style_bg_color(hdr, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_border_width(hdr, 0, 0);
+  lv_obj_set_style_radius(hdr, 0, 0);
+  lv_obj_set_style_pad_all(hdr, 0, 0);
+  lv_obj_clear_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t *lbl_title = lv_label_create(hdr);
+  char title_buf[48];
+  strncpy(title_buf, T(STR_STATUS_TITLE), sizeof(title_buf)-1);
+  title_buf[sizeof(title_buf)-1] = '\0';
+  lv_label_set_text(lbl_title, title_buf);
+  lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
+  lv_obj_align(lbl_title, LV_ALIGN_CENTER, 0, 0);
+
+  lv_obj_t *btn_x = lv_btn_create(hdr);
+  lv_obj_set_size(btn_x, 40, 40);
+  lv_obj_align(btn_x, LV_ALIGN_RIGHT_MID, -4, 0);
+  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
+  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
+  lv_obj_set_style_border_width(btn_x, 1, 0);
+  lv_obj_set_style_border_color(btn_x, lv_color_hex(0x601010), 0);
+  lv_obj_set_style_radius(btn_x, 8, 0);
+  lv_obj_set_style_shadow_width(btn_x, 0, 0);
+  lv_obj_add_event_cb(btn_x, [](lv_event_t *e) {
+    status_pick_id = 0;
+    status_close_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lbl_x = lv_label_create(btn_x);
+  lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
+  lv_obj_set_style_text_color(lbl_x, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
+  lv_obj_center(lbl_x);
+
+  // 2x3 grid. Six fixed values do not earn a scroll list, and a grid saves
+  // the mis-tap a narrow row invites on a touchscreen.
+  const int CELL_W = 186;
+  const int CELL_H = 66;
+  const int COL_X[2] = { 10, 204 };
+  const int ROW_Y[3] = { 54, 128, 202 };
+
+  for (int id = FILAMAN_STATUS_NEW; id <= FILAMAN_STATUS_COUNT; id++) {
+    const int idx = id - 1;
+    const bool is_current = (id == sm_status_id);
+    const bool is_archive = (id == FILAMAN_STATUS_ARCHIVED);
+
+    lv_obj_t *cell = lv_btn_create(box);
+    lv_obj_set_size(cell, CELL_W, CELL_H);
+    lv_obj_set_pos(cell, COL_X[idx % 2], ROW_Y[idx / 2]);
+    lv_obj_set_style_radius(cell, 8, 0);
+    lv_obj_set_style_shadow_width(cell, 0, 0);
+    lv_obj_set_style_border_width(cell, 1, 0);
+    lv_obj_set_style_pad_all(cell, 0, 0);
+
+    uint32_t txt_col;
+    if (is_current) {
+      // Same "this is the one you have" language as the location rows.
+      lv_obj_set_style_bg_color(cell, lv_color_hex(0x0d3020), 0);
+      lv_obj_set_style_bg_color(cell, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+      lv_obj_set_style_border_color(cell, lv_color_hex(0x28d49a), 0);
+      txt_col = 0x28d49a;
+    } else if (is_archive) {
+      // The archive vocabulary from the weight popup, so the one cell that
+      // asks a question before it acts announces itself.
+      lv_obj_set_style_bg_color(cell, lv_color_hex(0x3a1a00), 0);
+      lv_obj_set_style_bg_color(cell, lv_color_hex(0x6a3000), LV_STATE_PRESSED);
+      lv_obj_set_style_border_color(cell, lv_color_hex(0x6a3000), 0);
+      txt_col = 0xffb060;
+    } else {
+      lv_obj_set_style_bg_color(cell, lv_color_hex(0x0d2040), 0);
+      lv_obj_set_style_bg_color(cell, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+      lv_obj_set_style_border_color(cell, lv_color_hex(0x0f1e30), 0);
+      txt_col = 0xf0f0f0;
+    }
+
+    lv_obj_set_user_data(cell, (void*)(intptr_t)id);
+    lv_obj_add_event_cb(cell, statusRowCb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *lbl = lv_label_create(cell);
+    char cell_buf[32];
+    strncpy(cell_buf, T(statusStrId(id)), sizeof(cell_buf)-1);
+    cell_buf[sizeof(cell_buf)-1] = '\0';
+    lv_label_set_text(lbl, cell_buf);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(txt_col), 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
+    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(lbl, CELL_W - 12);
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_DOT);
+    lv_obj_center(lbl);
+  }
+}
+
 void buildMoreInfoScreen() {
   logSD("BUILD: MoreInfoScreen");
   // Full-screen dimmed backdrop
@@ -407,6 +629,48 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(lbl_title, LV_ALIGN_CENTER, 0, 0);
+
+  // Status chip — left half of the header, which holds nothing else. The box
+  // below is full to the pixel, this costs no vertical space at all.
+  // FilaMan only: Spoolman has just archived:bool and BamBuddy just an
+  // archive route, and an archived spool leaves sm_found false anyway, so the
+  // chip would never appear there.
+  if (backendIsFilaMan() && sm_found && sm_id > 0) {
+    const uint32_t st_col = statusColor(sm_status_id);
+    lv_obj_t *chip = lv_btn_create(hdr);
+    lv_obj_set_size(chip, 150, 44);
+    lv_obj_set_pos(chip, 8, 4);
+    lv_obj_set_style_bg_color(chip, lv_color_hex(0x0d2040), 0);
+    lv_obj_set_style_bg_color(chip, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(chip, lv_color_hex(st_col), 0);
+    lv_obj_set_style_border_width(chip, 1, 0);
+    lv_obj_set_style_radius(chip, 8, 0);
+    lv_obj_set_style_shadow_width(chip, 0, 0);
+    lv_obj_set_style_pad_all(chip, 0, 0);
+    lv_obj_add_event_cb(chip, [](lv_event_t *e) {
+      if (!wifiManagerIsConnected()) return;
+      show_status_picker_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+
+    // Cap is identical in both languages, like "Filament" and "Material".
+    lv_obj_t *chip_cap = lv_label_create(chip);
+    lv_label_set_text(chip_cap, "Status");
+    lv_obj_set_style_text_color(chip_cap, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(chip_cap, &lv_font_montserrat_ext_12, 0);
+    lv_obj_align(chip_cap, LV_ALIGN_CENTER, 0, -10);
+
+    lv_obj_t *chip_val = lv_label_create(chip);
+    char st_buf[24];
+    strncpy(st_buf, T(statusStrId(sm_status_id)), sizeof(st_buf)-1);
+    st_buf[sizeof(st_buf)-1] = '\0';
+    lv_label_set_text(chip_val, st_buf);
+    lv_obj_set_style_text_color(chip_val, lv_color_hex(st_col), 0);
+    lv_obj_set_style_text_font(chip_val, &lv_font_montserrat_ext_16, 0);
+    lv_obj_set_style_text_align(chip_val, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(chip_val, 134);
+    lv_label_set_long_mode(chip_val, LV_LABEL_LONG_DOT);
+    lv_obj_align(chip_val, LV_ALIGN_CENTER, 0, 8);
+  }
 
   // Close X button — Fix 10: 44x44px proper size
   lv_obj_t *btn_x = lv_btn_create(hdr);

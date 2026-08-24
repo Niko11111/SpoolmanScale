@@ -46,6 +46,7 @@ void clearTagDisplay() {
   sm_last_dried[0] = '\0'; sm_article_nr[0] = '\0';
   sm_filament_name[0] = '\0'; sm_material_global[0] = '\0'; sm_color_global[0] = '\0'; sm_last_used[0] = '\0';
   sm_location_name[0] = '\0';
+  sm_status_id = 0;
   tag_present = false;
   nfc_retry_count = 0; nfc_absent_count = 0; nfc_fast_polls = 0;
   g_tag.uid_str[0] = '\0';

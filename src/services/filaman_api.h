@@ -145,6 +145,22 @@ int filamanRfidResult(const char* base_url, const char* device_token,
 int filamanSendTagData(const char* base_url, const char* device_token,
                        const char* tag_json, uint32_t timeout_ms = 6000);
 
+// FilaMan's status table is part of the API contract: six rows with fixed ids
+// and no CRUD endpoint to change them. GET /api/v1/spools/statuses would cost
+// a round trip to learn something that cannot move, so the ids live here and
+// their labels live in lang.cpp.
+#define FILAMAN_STATUS_NEW       1
+#define FILAMAN_STATUS_OPENED    2
+#define FILAMAN_STATUS_DRYING    3
+#define FILAMAN_STATUS_ACTIVE    4
+#define FILAMAN_STATUS_EMPTY     5
+#define FILAMAN_STATUS_ARCHIVED  6
+#define FILAMAN_STATUS_COUNT     6
+
+// The key POST /api/v1/spools/{id}/status expects, or nullptr for an id the
+// server invented after this firmware was built.
+const char* filamanStatusKey(int status_id);
+
 // Status change, for example archiving. Uses its own endpoint rather than a
 // PATCH, see /api/v1/spools/{id}/status.
 int filamanSetStatus(const char* base_url, const char* api_key, int spool_id,

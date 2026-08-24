@@ -612,6 +612,13 @@ int backendPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeou
   }
 }
 
+int backendSetSpoolStatus(const char* base_url, int spool_id, const char* status_key,
+                          uint32_t timeout_ms) {
+  (void)base_url;
+  if (backendMode() != BACKEND_FILAMAN) return notSupported("SetSpoolStatus");
+  return filamanSetStatus(backendBaseUrl(), filamanApiKey(), spool_id, status_key, timeout_ms);
+}
+
 int backendPatchSpoolWeight(const char* base_url, int spool_id, float spool_weight,
                             uint32_t timeout_ms) {
   switch (backendMode()) {

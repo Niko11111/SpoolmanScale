@@ -192,6 +192,17 @@ int  backendPatchSpoolRemaining(const char* base_url, int spool_id, float remain
 int  backendPatchInitialWeight(const char* base_url, int spool_id, float initial_weight,
        uint32_t timeout_ms = 5000);
 int  backendPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeout_ms = 5000);
+
+// FilaMan's spool status. A change is an event in FilaMan's history rather
+// than a field, which is why this posts instead of patching. Spoolman knows
+// only archived:bool and BamBuddy only an archive route, so both answer
+// BACKEND_NOT_SUPPORTED.
+//
+// Archiving does not come through here. It has to zero the remaining weight
+// and take the spool out of the local state as well, which is what
+// backendPatchArchiveSpool() and patchArchiveSpool() do together.
+int  backendSetSpoolStatus(const char* base_url, int spool_id, const char* status_key,
+       uint32_t timeout_ms = 5000);
 int  backendPatchSpoolWeight(const char* base_url, int spool_id, float spool_weight,
        uint32_t timeout_ms = 5000);
 int  backendPatchFilamentSpoolWeight(const char* base_url, int filament_id, float spool_weight,

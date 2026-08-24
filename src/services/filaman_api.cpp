@@ -178,8 +178,12 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   dst["spool_weight"]     = src["empty_spool_weight_g"]    | 0.0f;
   dst["initial_weight"]   = src["initial_total_weight_g"]  | 0.0f;
 
-  // FilaMan has no boolean, archived is status id 6.
-  dst["archived"] = ((src["status_id"] | 0) == 6);
+  // FilaMan has no boolean, archived is status id 6. The id travels on as
+  // well: the UI shows and changes the full status, and the bool cannot tell
+  // "new" from "empty". Every existing filter keeps reading the bool.
+  const int status_id = src["status_id"] | 0;
+  dst["status_id"] = status_id;
+  dst["archived"]  = (status_id == FILAMAN_STATUS_ARCHIVED);
 
   // FilaMan maintains last_used_at itself and does not accept it in a PATCH.
   // It reflects real consumption, tracked through its printer integration.
@@ -780,6 +784,14 @@ int filamanReportWeight(const char* base_url, const char* device_token,
   return (code >= 200 && code < 300) ? 200 : code;
 }
 
+const char* filamanStatusKey(int status_id) {
+  static const char* const KEYS[FILAMAN_STATUS_COUNT] = {
+    "new", "opened", "drying", "active", "empty", "archived"
+  };
+  if (status_id < 1 || status_id > FILAMAN_STATUS_COUNT) return nullptr;
+  return KEYS[status_id - 1];
+}
+
 int filamanSetStatus(const char* base_url, const char* api_key, int spool_id,
                      const char* status_key, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || spool_id <= 0 || !status_key) return -1;
@@ -872,9 +884,9 @@ int filamanCreateSpool(const char* base_url, const char* api_key, int filament_i
   body["initial_total_weight_g"] = roundGrams(initial_weight);
   body["empty_spool_weight_g"]   = roundGrams(spool_weight);
   body["remaining_weight_g"]     = roundGrams(remaining_weight);
-  // 2 = opened. A spool that lands on the scale has been unwrapped, and
-  // FilaMan would otherwise leave it at its own default.
-  body["status_id"] = 2;
+  // A spool that lands on the scale has been unwrapped, and FilaMan would
+  // otherwise leave it at its own default.
+  body["status_id"] = FILAMAN_STATUS_OPENED;
   // Creating and linking in one request saves a round trip and avoids a spool
   // existing untagged if the follow-up PATCH were to fail.
   if (rfid_uid && rfid_uid[0]) body["rfid_uid"] = rfid_uid;

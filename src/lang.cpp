@@ -1287,4 +1287,13 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Answer to .local on the local network (mDNS)" },  // STR_W_MDNS
   { "Findet die Waage ohne DNS-Server. Aus, wenn in deinem Netz kein .local laufen soll.",
     "Finds the scale with no DNS server involved. Off if your network should carry no .local traffic." },  // STR_W_MDNS_HINT
+
+  // Spool status (FilaMan). Id 6 is covered by STR_ARCHIVED above.
+  { "Status wählen",         "Select status"              },  // STR_STATUS_TITLE
+  { "Neu",                    "New"                        },  // STR_STATUS_NEW
+  { "Geöffnet",              "Opened"                     },  // STR_STATUS_OPENED
+  { "Trocknet",               "Drying"                     },  // STR_STATUS_DRYING
+  { "Aktiv",                  "Active"                     },  // STR_STATUS_ACTIVE
+  { "Leer",                   "Empty"                      },  // STR_STATUS_EMPTY
+  { "Unbekannt",              "Unknown"                    },  // STR_STATUS_UNKNOWN
 };

@@ -825,6 +825,16 @@ enum StringID {
   STR_W_MDNS,
   STR_W_MDNS_HINT,
 
+  // Spool status (FilaMan). Six fixed ids on the server, no CRUD endpoint,
+  // so the labels are static here. Id 6 reuses STR_ARCHIVED.
+  STR_STATUS_TITLE,
+  STR_STATUS_NEW,
+  STR_STATUS_OPENED,
+  STR_STATUS_DRYING,
+  STR_STATUS_ACTIVE,
+  STR_STATUS_EMPTY,
+  STR_STATUS_UNKNOWN,
+
   STR_COUNT
 };
 
