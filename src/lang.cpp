@@ -17,7 +17,7 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Zurück",                "Back"             },  // STR_BACK
   { "Speichern",              "Save"             },  // STR_SAVE
   { "Bestätigen",            "Confirm"          },  // STR_CONFIRM
-  { "Schliessen",             "Close"            },  // STR_CLOSE
+  { "Schließen",             "Close"            },  // STR_CLOSE
   { "Erneut versuchen",       "Try again"        },  // STR_RETRY
   { "Trotzdem verknüpfen",   "Link anyway"      },  // STR_FORCE_LINK
   { "ID neu eingeben",        "Enter new ID"     },  // STR_ENTER_NEW_ID
@@ -110,7 +110,7 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Einstellungen",          "Settings"          },  // STR_WEB_CONFIG
   { "Aus: Port 80 antwortet nicht.",
     "Off: nothing answers on port 80." },  // STR_WEB_SERVER_HINT
-  { "Schaltet die Weboberfläche im Netz an und aus. Ausgeschaltet antwortet Port 80 nicht mehr - ausser FilaMan hat ein Geräte-Token hinterlegt, dann bleibt allein dessen Tag-Auslöser erreichbar.",
+  { "Schaltet die Weboberfläche im Netz an und aus. Ausgeschaltet antwortet Port 80 nicht mehr - außer FilaMan hat ein Geräte-Token hinterlegt, dann bleibt allein dessen Tag-Auslöser erreichbar.",
     "Turns the web interface on and off across the network. Switched off, port 80 stops answering - unless FilaMan holds a device token, in which case only its tag trigger stays reachable." },  // STR_WEB_SERVER_INFO
   { "Liefert Firmware-Upload, Logs, Neustart und das Tag-Schreiben. Standardmäßig aus: schreibt Firmware und NFC-Tags, ohne Passwort.",
     "Serves firmware upload, logs, restart and tag writing. Off by default: these write firmware and NFC tags, with no password." },  // STR_WEB_MAINT_HINT
