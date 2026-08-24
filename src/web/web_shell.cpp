@@ -301,7 +301,7 @@ String webShellLinks() {
   // The name leaves the label on wide screens, so it stays reachable on hover.
   h += F("</span><span class='sm'>Ko-fi</span></a>"
 
-    "<a href='https://discord.gg/GzQzGa5pBG' target='_blank' rel='noopener'>"
+    "<a href='https://discord.gg/TQvdxGuFcq' target='_blank' rel='noopener'>"
     SVG_OPEN
     "M20.3 4.4a19.8 19.8 0 00-4.9-1.5l-.6 1.2a18.3 18.3 0 00-5.5 0l-.6-1.2a19.7 "
     "19.7 0 00-4.9 1.5C.5 9 -.3 13.6.1 18a19.9 19.9 0 006 3l1.2-2a13.1 13.1 0 01"
