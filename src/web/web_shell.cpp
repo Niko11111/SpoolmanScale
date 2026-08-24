@@ -8,7 +8,7 @@
 #include "lang.h"
 #include "services/backend.h"
 #include "app/app_state.h"
-#include "services/mdns_service.h"
+#include "services/device_name.h"
 #include "services/wifi_manager.h"
 #include "web/web_access.h"
 #include "web/web_pages.h"
@@ -230,16 +230,15 @@ String webShellHeader() {
   h += F(" &nbsp;&middot;&nbsp; ESP32-S3</div></div>");
 
   if (wifi_ok) {
-    const String ip = wifiManagerLocalIP().toString();
+    char alt[48];
+    deviceAltAddress(alt, sizeof(alt));
     h += F("<div class='addr'><b>");
-    if (mdnsRunning()) {
-      h += String(mdnsHostname()) + ".local";
-      h += F("</b><i>");
-      h += ip;
-    } else {
-      h += ip;
-      h += F("</b><i>");
-    }
+    // deviceAltAddress() is empty exactly when the big line already carries
+    // the bare IP, so the two never say the same thing twice.
+    const String ip = wifiManagerLocalIP().toString();
+    h += alt[0] ? deviceFqdn() : ip.c_str();
+    h += F("</b><i>");
+    h += alt;
     h += F("</i></div>");
   }
   h += F("</div>");

@@ -11,7 +11,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/backend.h"
-#include "services/mdns_service.h"
+#include "services/device_name.h"
 #include "web/web_server.h"
 #include "web/web_access.h"
 #include "services/wifi_manager.h"
@@ -194,7 +194,7 @@ void buildOtaBrowserScreen() {
     return;
   }
 
-  char ip_buf[64];
+  char ip_buf[DEVICE_FQDN_MAX + 32];
   IPAddress ip = wifiManagerLocalIP();
   if (ip == IPAddress(0,0,0,0) && wifi_ok) {
     // Only happens right after connecting. No lv_timer_handler() in here:
@@ -215,15 +215,13 @@ void buildOtaBrowserScreen() {
 
   // The name goes on the big line and the address stays underneath in small
   // type. Not either-or: some Android versions still will not resolve a
-  // .local name, and the person standing at the scale has no way to know
-  // that before trying.
+  // .local name, a DNS name only works where the network serves it, and the
+  // person standing at the scale has no way to know that before trying.
   char addr_buf[64] = "";
-  if (mdnsRunning()) {
-    snprintf(ip_buf,   sizeof(ip_buf),   "http://%s.local%s", mdnsHostname(), path);
-    snprintf(addr_buf, sizeof(addr_buf), "%s", ip.toString().c_str());
-  } else {
-    snprintf(ip_buf, sizeof(ip_buf), "http://%s%s", ip.toString().c_str(), path);
-  }
+  char base[DEVICE_FQDN_MAX + 16];
+  deviceBrowserUrl(base, sizeof(base));
+  snprintf(ip_buf, sizeof(ip_buf), "%s%s", base, path);
+  deviceAltAddress(addr_buf, sizeof(addr_buf));
 
   char hint_buf[192];
   const char* hint_src = !showsCredentials() ? T(STR_OTA_OPEN_BROWSER)

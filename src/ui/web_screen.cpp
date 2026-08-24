@@ -9,7 +9,7 @@
 #include "hardware/sd_logger.h"
 #include "info_popup.h"
 #include "lang.h"
-#include "services/mdns_service.h"
+#include "services/device_name.h"
 #include "services/wifi_manager.h"
 #include "system_screen.h"
 #include "ui_common.h"
@@ -93,11 +93,8 @@ void buildWebScreen() {
   } else if (!wifi_ok) {
     strncpy(addr, T(STR_WIFI_STATUS_DISCONNECTED), sizeof(addr) - 1);
     addr[sizeof(addr) - 1] = '\0';
-  } else if (mdnsRunning()) {
-    snprintf(addr, sizeof(addr), "http://%s.local", mdnsHostname());
   } else {
-    snprintf(addr, sizeof(addr), "http://%s",
-             wifiManagerLocalIP().toString().c_str());
+    deviceBrowserUrl(addr, sizeof(addr));
   }
 
   addGateRow(list, LV_SYMBOL_WIFI, STR_WEB_SERVER, addr, STR_WEB_SERVER_INFO,

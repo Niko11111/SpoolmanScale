@@ -5,17 +5,21 @@
 // The device name came from a page of its own. It belongs here: it is a
 // setting like the others, and the device has no way to type it - the address
 // screen carries a twelve key numeric pad, so letters cannot be entered there
-// at all.
+// at all. It takes a whole name, "scale" or "scale.home.arpa": ".local" is
+// what mDNS answers to, not the only address a network can have.
 #include "web/web_pages.h"
 
 #include <Arduino.h>
 #include <WebServer.h>
 
+#include "app/app_state.h"
 #include "hardware/display.h"
 #include "hardware/sd_logger.h"
+#include "services/device_name.h"
 #include "services/list_limits.h"
 #include "services/mdns_service.h"
 #include "services/prefs_store.h"
+#include "services/wifi_manager.h"
 #include "web/web_access.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
@@ -24,26 +28,132 @@
 
 static const char* label() { return T(STR_W_NAV_SETTINGS); }
 
-static String body() {
-  char hint[220];
-  snprintf(hint, sizeof(hint), T(STR_W_DEVNAME_HINT), MDNS_HOSTNAME_MAX);
+static String jsonEsc(const char *s) {
+  String o;
+  for (const char *p = s ? s : ""; *p; p++) {
+    if (*p == '"' || *p == '\\') { o += '\\'; o += *p; }
+    else if ((uint8_t)*p < 0x20)  { o += ' '; }
+    else                          { o += *p; }
+  }
+  return o;
+}
 
+// The other addresses that reach the same scale, in the order someone would
+// try them. Both are listed because neither always works: a .local name is
+// lost on some Android builds, and a DNS name only exists where the network
+// serves it.
+static String altAddresses() {
+  String a;
+  if (deviceDomain()[0] && mdnsRunning()) {
+    char m[DEVICE_FQDN_MAX + 1];
+    deviceMdnsName(m, sizeof(m));
+    a = m;
+  }
+  if (wifi_ok) {
+    if (a.length()) a += " · ";
+    a += wifiManagerLocalIP().toString();
+  }
+  return a;
+}
+
+// The verdict under the field, already translated and already filled in.
+// Building it here rather than in the page keeps every user facing word on
+// the T() side, the way the rest of the firmware does it.
+static String dnsVerdict(bool &bad, bool &waiting) {
+  bad = waiting = false;
+  if (!deviceDomain()[0]) return String();
+  switch (deviceDnsState()) {
+    // UNKNOWN with a domain set means the verdict is still being worked out -
+    // either the tick has not started the lookup yet or the answer is on its
+    // way. Both read the same to someone waiting for it.
+    case DEV_DNS_UNKNOWN:
+    case DEV_DNS_CHECKING:
+      waiting = true;
+      return String(T(STR_W_DEVNAME_DNS_WAIT));
+    case DEV_DNS_MATCH:
+      return String(T(STR_W_DEVNAME_DNS_OK));
+    case DEV_DNS_OTHER: {
+      bad = true;
+      char b[160];
+      snprintf(b, sizeof(b), T(STR_W_DEVNAME_DNS_OTHER),
+               deviceDnsIP().toString().c_str());
+      return String(b);
+    }
+    case DEV_DNS_FAIL:
+      bad = true;
+      return String(T(STR_W_DEVNAME_DNS_NONE));
+    default:
+      return String();
+  }
+}
+
+// One shape for the card, whether it is rendered into the page or fetched
+// after a save. Two builders would drift.
+static String nameStateJson() {
+  bool bad = false, waiting = false;
+  const String verdict = dnsVerdict(bad, waiting);
+  String j = "{\"name\":\"" + jsonEsc(deviceFqdn()) + "\"";
+  j += ",\"mdns\":"    + String(deviceMdnsEnabled() ? "true" : "false");
+  j += ",\"mdnsRun\":" + String(mdnsRunning() ? "true" : "false");
+  j += ",\"also\":\""   + jsonEsc(altAddresses().c_str()) + "\"";
+  j += ",\"dnsMsg\":\"" + jsonEsc(verdict.c_str()) + "\"";
+  j += ",\"dnsBad\":"  + String(bad ? "true" : "false");
+  j += ",\"dnsWait\":" + String(waiting ? "true" : "false");
+  j += "}";
+  return j;
+}
+
+static String body() {
   String h;
-  h.reserve(4200);
+  h.reserve(6000);
 
   h += F("<div class='grid'><div class='card wide'><h2>");
   h += T(STR_W_C_DEVNAME);
   h += F("</h2><div class='field'><div class='inrow'>"
          "<input id='hn' type='text' maxlength='");
-  h += String(MDNS_HOSTNAME_MAX);
-  h += F("' spellcheck='false' value='");
-  h += mdnsHostname();
-  h += F("'><span class='suffix'>.local</span><button onclick='setHn()'>");
+  h += String(DEVICE_FQDN_MAX);
+  h += F("' spellcheck='false' placeholder='scale.home.arpa' value='");
+  h += deviceFqdn();
+  h += F("'><button id='hn-b'>");
   h += T(STR_W_SAVE);
-  h += F("</button></div><span class='msg' id='hn-s'></span>"
-         "<span class='hint'>");
-  h += hint;
-  h += F("</span></div></div>");
+  // One message line, not two. It carries the DNS verdict, and a save
+  // overwrites it for a moment before the verdict comes back - the two are
+  // never needed at the same time, and an empty .msg reserves a line whether
+  // it says anything or not.
+  //
+  // Both lines are filled in here as well as by paint(). Everything this card
+  // shows is known at render time, and a page that arrives blank and then
+  // fills itself in reads as a page that is broken for a moment.
+  bool bad = false, waiting = false;
+  const String verdict = dnsVerdict(bad, waiting);
+  const String also    = altAddresses();
+
+  h += F("</button></div><span class='msg");
+  if (bad) h += F(" bad");
+  h += F("' id='hn-s'>");
+  h += verdict;
+  h += F("</span><span class='hint' id='hn-a'>");
+  if (also.length()) { h += T(STR_W_DEVNAME_ALSO); h += ": "; h += also; }
+  h += F("</span><span class='hint'>");
+  h += T(STR_W_DEVNAME_HINT);
+  h += F("</span></div>");
+
+  // Second field rather than a second card: it is the same subject, and the
+  // switch only makes sense next to the name it applies to.
+  //
+  // Rendered with its state here rather than filled in by the script: a
+  // control that arrives blank and then jumps is worse than one that is a
+  // frame late. Shape taken from the one checkbox the interface already has,
+  // in page_tags.cpp - no new look for something this ordinary.
+  h += F("<div class='field'>"
+         "<label class='inrow' style='gap:8px;font-size:13px;color:var(--ink-2)'>"
+         "<input id='md' type='checkbox' style='flex:0 0 16px;width:16px;height:16px'");
+  if (deviceMdnsEnabled()) h += F(" checked");
+  h += F("> ");
+  h += T(STR_W_MDNS);
+  h += F("</label><span class='hint'>");
+  h += T(STR_W_MDNS_HINT);
+  h += F("</span><span class='msg' id='md-s'></span></div></div>");
 
   h += F("<div class='card'><h2>");
   h += T(STR_W_C_LIMITS);
@@ -60,7 +170,7 @@ static String body() {
   h += F("'><span class='hint' style='flex:1'>");
   h += T(STR_W_LIMIT_WARN);
   h += F("</span></div></div>"
-         "<button class='quiet block' onclick='setLimits()'>");
+         "<button id='ll-b' class='quiet block'>");
   h += T(STR_W_SAVE);
   h += F("</button><span class='msg' id='ll-s'></span></div>");
 
@@ -76,37 +186,81 @@ static String body() {
   h += F("</output></div><span class='hint'>");
   h += T(STR_W_GAIN_HINT);
   h += F("</span></div>"
-         "<button class='quiet block' onclick='setGain()'>");
+         "<button id='gn-b' class='quiet block'>");
   h += T(STR_W_SAVE);
   h += F("</button><span class='msg' id='gn-s'></span></div></div>");
 
   // Its own script. When the pages were split the shared block stayed behind
   // on one of them and every Save button here called a function that was no
   // longer on the page.
+  //
+  // Every handler is bound here rather than written into an onclick attribute:
+  // a page body is JavaScript inside a C++ string literal, and an attribute is
+  // the one place where the two levels of quoting collide.
   h += F("<script>const M={ok:");
   h += jsStr(T(STR_W_SAVED));
   h += F(",err:");
   h += jsStr(T(STR_W_ERROR));
-  h += F(",now:");
-  h += jsStr(T(STR_W_DEVNAME_NOW));
+  h += F(",also:");
+  h += jsStr(T(STR_W_DEVNAME_ALSO));
   h += F("};"
-         "function flash(id,t,bad){const e=document.getElementById(id);"
+         // A save answer stands for four seconds and then gives the line
+         // back to whatever belongs there. For the name field that is the DNS
+         // verdict, which load() repaints; clearing to empty would have lost
+         // it, and the two share one line now.
+         "function flash(id,t,bad,back){const e=document.getElementById(id);"
          "e.textContent=t;e.className='msg'+(bad?' bad':'');"
-         "setTimeout(()=>{e.textContent='';},4000);}"
-         "function setHn(){const v=document.getElementById('hn').value;"
-         "fetch('/api/hostname',{method:'POST',headers:{'Content-Type':'text/plain'},body:v})"
-         ".then(r=>r.text().then(t=>({ok:r.ok,t}))).then(r=>flash('hn-s',r.t,!r.ok));}"
+         "setTimeout(()=>{if(back){load();}else{e.textContent='';}},4000);}"
+         "function $(i){return document.getElementById(i);}"
+         // Repainting from one object keeps the verdict, the switch and the
+         // fallback addresses from ever disagreeing with each other.
+         "let poll=0;"
+         // Never while the field has focus. paint() runs from a poll every
+         // two seconds during a DNS check, and it would rewrite the name out
+         // from under someone in the middle of typing the next one.
+         "function paint(d){"
+         "if(document.activeElement!==$('hn'))$('hn').value=d.name;"
+         "$('hn-s').textContent=d.dnsMsg;"
+         "$('hn-s').className='msg'+(d.dnsBad?' bad':'');"
+         "$('hn-a').textContent=d.also?M.also+': '+d.also:'';"
+         "$('md').checked=d.mdns;"
+         "if(d.dnsWait&&poll<10){poll++;setTimeout(load,2000);}else if(!d.dnsWait){poll=0;}}"
+         "function load(){fetch('/api/hostname').then(r=>r.json()).then(paint)"
+         ".catch(()=>{});}"
+         // A rejected name keeps its message: handing the line back would
+         // paint the verdict of the name that is still stored, and that reads
+         // as if the bad one had been taken.
+         "$('hn-b').addEventListener('click',()=>{"
+         "fetch('/api/hostname',{method:'POST',headers:{'Content-Type':'text/plain'},"
+         "body:$('hn').value})"
+         ".then(r=>r.text().then(t=>({ok:r.ok,t})))"
+         ".then(r=>{poll=0;flash('hn-s',r.t,!r.ok,r.ok);})"
+         ".catch(()=>flash('hn-s',M.err,true,false));});"
+         // The box already shows what the user asked for, so a failure has to
+         // put it back. A checkbox claiming a state the scale is not in is
+         // worse than no answer at all.
+         "$('md').addEventListener('change',()=>{"
+         "const want=$('md').checked;"
+         "fetch('/api/mdns',{method:'POST',headers:{'Content-Type':'text/plain'},"
+         "body:want?'1':'0'}).then(r=>r.json()).then(d=>{"
+         "paint(d);flash('md-s',M.ok,false,false);})"
+         ".catch(()=>{$('md').checked=!want;flash('md-s',M.err,true,false);});});"
          "function clamp(el){let v=parseInt(el.value)||5;"
          "if(v<5)v=5;if(v>100)v=100;el.value=v;return v;}"
          "function setLimits(){"
-         "const a=clamp(document.getElementById('ll')),b=clamp(document.getElementById('lc'));"
+         "const a=clamp($('ll')),b=clamp($('lc'));"
          "Promise.all(["
          "fetch('/api/listlimit',{method:'POST',headers:{'Content-Type':'text/plain'},body:String(a)}),"
          "fetch('/api/loclimit',{method:'POST',headers:{'Content-Type':'text/plain'},body:String(b)})"
-         "]).then(rs=>flash('ll-s',rs.every(r=>r.ok)?M.ok:M.err,!rs.every(r=>r.ok)));}"
-         "function setGain(){const v=document.getElementById('gn').value;"
+         "]).then(rs=>flash('ll-s',rs.every(r=>r.ok)?M.ok:M.err,!rs.every(r=>r.ok),false))"
+         ".catch(()=>flash('ll-s',M.err,true,false));}"
+         "function setGain(){const v=$('gn').value;"
          "fetch('/api/gain',{method:'POST',headers:{'Content-Type':'text/plain'},body:String(v)})"
-         ".then(r=>flash('gn-s',r.ok?M.ok:M.err,!r.ok));}"
+         ".then(r=>flash('gn-s',r.ok?M.ok:M.err,!r.ok,false))"
+         ".catch(()=>flash('gn-s',M.err,true,false));}"
+         "$('ll-b').addEventListener('click',setLimits);"
+         "$('gn-b').addEventListener('click',setGain);"
+         "load();"
          "</script>");
   return h;
 }
@@ -114,24 +268,48 @@ static String body() {
 static void routes(WebServer &srv) {
   srv.on("/api/hostname", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
-    srv.send(200, "application/json",
-             String("{\"host\":\"") + mdnsHostname() + "\",\"mdns\":"
-             + (mdnsRunning() ? "true" : "false") + "}");
+    srv.send(200, "application/json", nameStateJson());
   });
 
   srv.on("/api/hostname", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
     String name = srv.arg("plain");
     name.trim();
-    if (!mdnsSetHostname(name.c_str())) {
+    if (!deviceSetName(name.c_str())) {
       // Named rather than a bare "invalid": the rule is not obvious and the
       // field has just been typed.
       srv.send(400, "text/plain", T(STR_W_DEVNAME_BAD));
       return;
     }
-    logSDf("Web: device name set to %s", mdnsHostname());
-    srv.send(200, "text/plain", String(T(STR_W_DEVNAME_NOW)) + " http://"
-                                + mdnsHostname() + ".local/");
+    logSDf("Web: device name set to %s", deviceFqdn());
+    // The responder restarts on the next sync pass, so the URL named here is
+    // the one that will answer a second from now rather than the one that
+    // does this instant. The message also carries the note about the router,
+    // which is the one moment it is worth reading - it used to sit under the
+    // field for good.
+    char url[DEVICE_FQDN_MAX + 16];
+    snprintf(url, sizeof(url), "http://%s/", deviceFqdn());
+    char msg[DEVICE_FQDN_MAX + 160];
+    snprintf(msg, sizeof(msg), T(STR_W_DEVNAME_NOW), url);
+    srv.send(200, "text/plain", msg);
+  });
+
+  // Takes the state it should be in, not a toggle. /api/verbose on the log
+  // page toggles because a button has no state of its own, but this is a
+  // checkbox: a request that arrives twice would flip twice and leave the box
+  // disagreeing with the scale. The answer carries the whole card back, so
+  // the page never has to work out what it now looks like.
+  srv.on("/api/mdns", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
+    String want = srv.arg("plain");
+    want.trim();
+    deviceSetMdnsEnabled(want == "1");
+    // Ask the one owner of the responder to act on it now, so the addresses
+    // in the reply already tell the truth.
+    mdnsSyncState();
+    deviceNameTick();
+    logSDf("Web: mDNS -> %s", deviceMdnsEnabled() ? "on" : "off");
+    srv.send(200, "application/json", nameStateJson());
   });
 
   srv.on("/api/listlimit", HTTP_GET, [&srv]() {

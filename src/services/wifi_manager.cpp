@@ -2,7 +2,7 @@
 
 #include <WiFi.h>
 
-#include "services/mdns_service.h"
+#include "services/device_name.h"
 
 void wifiManagerPrepareScan() {
   WiFi.disconnect(true);
@@ -33,7 +33,7 @@ bool wifiManagerConnect(const char* ssid, const char* password, int attempts, ui
   // so the router lists the scale by name instead of as "espressif". It
   // sticks to the netif, which is why the reconnect watchdog in appLoop()
   // does not need to repeat it.
-  WiFi.setHostname(mdnsHostname());
+  WiFi.setHostname(deviceLabel());
   WiFi.begin(ssid, password);
   for (int i = 0; i < attempts; i++) {
     delay(interval_ms);

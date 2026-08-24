@@ -814,6 +814,17 @@ enum StringID {
   STR_FLM_EXTID_INFO,
   STR_TAG_FOUND_DUP,
 
+  // Device name: the whole name rather than a label with ".local" nailed on,
+  // and what the network makes of it
+  STR_W_R_MDNS,
+  STR_W_DEVNAME_ALSO,
+  STR_W_DEVNAME_DNS_WAIT,
+  STR_W_DEVNAME_DNS_OK,
+  STR_W_DEVNAME_DNS_OTHER,
+  STR_W_DEVNAME_DNS_NONE,
+  STR_W_MDNS,
+  STR_W_MDNS_HINT,
+
   STR_COUNT
 };
 

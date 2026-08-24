@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "hardware/sd_logger.h"
+#include "services/device_name.h"
 #include "services/http_progress.h"
 #include "services/tag_uid.h"
 #include "services/wifi_manager.h"
@@ -834,7 +835,11 @@ int bbRegisterDevice(const char* base_url, const char* api_key, const char* ip,
 
   JsonDocument body;
   body["device_id"]          = bbDeviceId();
-  body["hostname"]           = "SpoolmanScale";
+  // The label the user chose, not the product name. The registration itself
+  // hangs on device_id (bbDeviceId()), so this is the display field and
+  // nothing keys off it - two scales on one BamBuddy can finally be told
+  // apart in its device list.
+  body["hostname"]           = deviceLabel();
   body["ip_address"]         = (ip && ip[0]) ? ip : "0.0.0.0";
   body["firmware_version"]   = firmware ? firmware : "";
   body["has_nfc"]            = true;

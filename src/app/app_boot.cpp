@@ -17,6 +17,7 @@
 #include "services/app_settings.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/device_name.h"
 #include "services/mdns_service.h"
 #include "services/time_service.h"
 #include "services/update_check.h"
@@ -46,6 +47,7 @@ void wifiConnect() {
       // Once here so the boot log names the address the user will type. The
       // loop keeps it in step from then on.
       mdnsSyncState();
+      deviceNameTick();
       updateHeaderStatus();
       syncNTP();
       // SD logging: write boot block once time is available

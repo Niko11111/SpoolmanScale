@@ -36,6 +36,7 @@
 #include "services/bambuddy_device.h"
 #include "services/wifi_manager.h"
 #include "services/filaman_api.h"
+#include "services/device_name.h"
 #include "services/mdns_service.h"
 #include "services/backend.h"
 #include "ui/ams_assign_popup.h"
@@ -914,6 +915,9 @@ void appLoop() {
       // Right after, not before: the advertised _http._tcp service follows
       // whether the socket is actually listening.
       mdnsSyncState();
+      // Last of the three: the address the interface prints depends on
+      // whether the responder came up, and the DNS check on the address.
+      deviceNameTick();
     }
   }
 

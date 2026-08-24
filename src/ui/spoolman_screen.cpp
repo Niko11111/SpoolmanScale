@@ -16,7 +16,7 @@
 #include "services/backend_api.h"
 #include "services/bambuddy_api.h"
 #include "header_status.h"
-#include "services/mdns_service.h"
+#include "services/device_name.h"
 #include "services/wifi_manager.h"
 #include "web/web_access.h"
 #include "confirm_popup.h"
@@ -54,9 +54,7 @@ static bool hostIsNumeric(const char* h) {
 static void browserAddress(char* out, size_t len) {
   if (!webMasterEnabled())  { strncpy(out, T(STR_SP_WEB_OFF), len - 1); }
   else if (!wifi_ok)        { strncpy(out, T(STR_WIFI_STATUS_DISCONNECTED), len - 1); }
-  else if (mdnsRunning())   { snprintf(out, len, "http://%s.local", mdnsHostname()); return; }
-  else                      { snprintf(out, len, "http://%s",
-                                       wifiManagerLocalIP().toString().c_str()); return; }
+  else                      { deviceBrowserUrl(out, len); return; }
   out[len - 1] = '\0';
 }
 

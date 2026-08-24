@@ -9,6 +9,7 @@
 #include "app_config.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
+#include "services/device_name.h"
 #include "services/mdns_service.h"
 #include "services/wifi_manager.h"
 #include "ui/weight_format.h"
@@ -60,6 +61,7 @@ static String statusJson() {
     j += ",\"rssi\":" + String(r);
     j += ",\"rssiWord\":\"" + String(rssiWord(r)) + "\"";
     j += ",\"ip\":\"" + wifiManagerLocalIP().toString() + "\"";
+    j += ",\"name\":\"" + jsonEsc(deviceFqdn()) + "\"";
     j += ",\"gw\":\"" + wifiManagerGatewayIP().toString() + "\"";
     j += ",\"dns\":\"" + wifiManagerDNSIP().toString() + "\"";
   }
@@ -149,7 +151,14 @@ static String body() {
   if (wifi_ok) {
     h += row(T(STR_W_R_WIFI), String(cfg_wifi_ssid) + signalBars());
     h += row(T(STR_W_R_ADDRESS), wifiManagerLocalIP().toString(), true);
-    if (mdnsRunning()) h += row(T(STR_W_R_NAME), String(mdnsHostname()) + ".local", true);
+    // Both names when both apply: the DNS name is the one the network
+    // serves, the mDNS name the one that works without it.
+    if (deviceDomain()[0] || mdnsRunning()) h += row(T(STR_W_R_NAME), deviceFqdn(), true);
+    if (deviceDomain()[0] && mdnsRunning()) {
+      char m[DEVICE_FQDN_MAX + 1];
+      deviceMdnsName(m, sizeof(m));
+      h += row(T(STR_W_R_MDNS), m, true);
+    }
     h += row(T(STR_W_R_GATEWAY), wifiManagerGatewayIP().toString(), true);
   } else {
     h += row(T(STR_W_R_WIFI), String(F("<span class='pill bd'>")) + T(STR_W_S_NOWIFI) + "</span>");

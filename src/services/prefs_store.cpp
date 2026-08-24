@@ -4,10 +4,15 @@
 
 static const char* PREFS_NAMESPACE = "spoolscale";
 
+// Guarded with isKey() the same way prefsGetFloat() is: getString() logs an
+// ESP_LOGE on a key that is not there yet, and a setting whose default is
+// "unset" would put a red NOT_FOUND line in every boot log for the life of
+// the device. The value returned is the same either way.
 String prefsGetString(const char* key, const char* default_value) {
   Preferences prefs;
   prefs.begin(PREFS_NAMESPACE, false);
-  String value = prefs.getString(key, default_value);
+  String value = prefs.isKey(key) ? prefs.getString(key, default_value)
+                                  : String(default_value);
   prefs.end();
   return value;
 }

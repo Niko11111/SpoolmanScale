@@ -60,7 +60,9 @@ static void ipBarModeText(char *buf, size_t len) {
   else if (g_ip_bar_mode == IP_BAR_BACKEND) strncpy(buf, backendName(), len - 1);
   // Reads the same in German and English, so it stays a literal - the same
   // reasoning the row labels at the top of this file are kept literal for.
-  else if (g_ip_bar_mode == IP_BAR_MDNS)    strncpy(buf, ".local", len - 1);
+  // No longer ".local": the bar shows the device label, and the suffix it
+  // carries is now the network's business rather than always mDNS.
+  else if (g_ip_bar_mode == IP_BAR_MDNS)    strncpy(buf, "Name", len - 1);
   else                                      strncpy(buf, T(STR_OFF), len - 1);
   buf[len - 1] = '\0';
 }

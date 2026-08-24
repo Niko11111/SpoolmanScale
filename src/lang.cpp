@@ -1092,12 +1092,12 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Filament stored airtight lasts longer. The thresholds above are multiplied by this factor for those materials." },  // STR_W_DRY_MULT_HINT
   { "Gerätename",
     "Device name" },  // STR_W_C_DEVNAME
-  { "Buchstaben, Ziffern und Bindestriche, bis %d Zeichen. Greift sofort, ohne Neustart. Der Name beim Router zieht beim nächsten Verbinden nach.",
-    "Letters, digits and hyphens, up to %d characters. Takes effect at once, without a restart. The name the router shows follows on the next connection." },  // STR_W_DEVNAME_HINT
-  { "Nur Buchstaben, Ziffern und Bindestriche, nicht am Anfang oder Ende.",
-    "Letters, digits and hyphens only, not at the start or end." },  // STR_W_DEVNAME_BAD
-  { "Jetzt erreichbar unter",
-    "Reachable now at" },  // STR_W_DEVNAME_NOW
+  { "Name oder ganze Adresse, zum Beispiel scale.home.arpa. Der Teil vor dem ersten Punkt ist auch der Name, den der Router zeigt.",
+    "A name, or a whole address such as scale.home.arpa. The part before the first dot is also the name your router shows." },  // STR_W_DEVNAME_HINT
+  { "Buchstaben, Ziffern und Bindestriche, durch Punkte getrennt. Kein Bindestrich am Anfang oder Ende, keine Leerzeichen, kein leerer Teil zwischen zwei Punkten.",
+    "Letters, digits and hyphens, separated by dots. No hyphen at the start or end, no spaces, no empty part between two dots." },  // STR_W_DEVNAME_BAD
+  { "Jetzt erreichbar unter %s - beim Router nach dem nächsten Verbinden.",
+    "Reachable now at %s - the router shows it after the next connection." },  // STR_W_DEVNAME_NOW
   { "Listenlimits",
     "List limits" },  // STR_W_C_LIMITS
   { "Spulenliste",
@@ -1269,4 +1269,22 @@ const char* const STRINGS[STR_COUNT][2] = {
 
   { "Tag gefunden - mehrere Spulen",
     "Tag found - several spools" },  // STR_TAG_FOUND_DUP
+
+  // ---- device name --------------------------------------------------
+  { "mDNS",
+    "mDNS" },  // STR_W_R_MDNS
+  { "Auch erreichbar über",
+    "Also reachable at" },  // STR_W_DEVNAME_ALSO
+  { "wird geprüft ...",
+    "checking ..." },  // STR_W_DEVNAME_DNS_WAIT
+  { "Der Name wird in deinem Netz aufgelöst und zeigt auf diese Waage.",
+    "This name resolves on your network and points at this scale." },  // STR_W_DEVNAME_DNS_OK
+  { "Der Name zeigt auf %s, nicht auf diese Waage.",
+    "This name points at %s, not at this scale." },  // STR_W_DEVNAME_DNS_OTHER
+  { "Dein DNS-Server kennt diesen Namen nicht.",
+    "Your DNS server does not know this name." },  // STR_W_DEVNAME_DNS_NONE
+  { "Im lokalen Netz auf .local antworten (mDNS)",
+    "Answer to .local on the local network (mDNS)" },  // STR_W_MDNS
+  { "Findet die Waage ohne DNS-Server. Aus, wenn in deinem Netz kein .local laufen soll.",
+    "Finds the scale with no DNS server involved. Off if your network should carry no .local traffic." },  // STR_W_MDNS_HINT
 };
