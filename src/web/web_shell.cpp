@@ -177,14 +177,27 @@ String webShellHead(const char *subtitle) {
       ".listrow+.listrow{margin-top:7px}"
       ".listrow .nm{font-family:var(--mono);font-size:13px;color:var(--ink-2)}"
       ".listrow .sz{font-family:var(--mono);font-size:11.5px;color:var(--ink-soft)}"
-      // links, one row at the bottom
+      // Links, one row at the bottom. They take the page's own button
+      // vocabulary rather than a look of their own: the quiet button for three
+      // of them, the primary one for Ko-fi. They used to sit at 3.64:1 text on
+      // a fill darker than any real button, with a 1.20:1 border - text on a
+      // hint of surface, not something that reads as pressable.
       ".links{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}"
-      ".links a{display:flex;align-items:center;justify-content:center;padding:11px 8px;"
-      "border-radius:10px;text-decoration:none;font-size:13px;font-weight:500;"
-      "background:var(--surface-2);color:var(--ink-3);border:1px solid var(--line-soft);"
-      "transition:color .14s,border-color .14s}"
-      ".links a:hover{color:var(--ink);border-color:var(--line)}"
-      ".foot{font-size:11.5px;color:var(--ink-4);text-align:center;line-height:1.6}"
+      ".links a{display:flex;align-items:center;justify-content:center;gap:8px;"
+      "padding:11px 8px;border-radius:9px;text-decoration:none;"
+      "font-size:13.5px;font-weight:550;"
+      "background:#0f1b2c;color:var(--ink-2);border:1px solid var(--line);"
+      "transition:background .14s}"
+      ".links a:hover{background:#16273e}"
+      ".links a.support{background:#0f2a22;color:var(--accent);"
+      "border-color:var(--accent-line)}"
+      ".links a.support:hover{background:#164034}"
+      // currentColor, so each mark takes the colour of the button it sits in:
+      // green inside Ko-fi, grey in the other three.
+      ".links svg{width:15px;height:15px;flex:none;fill:currentColor}"
+      // Was --ink-4, which is 1.91:1 against the page - the last line still
+      // carrying the fault the hints and notes were moved off in beta.38.
+      ".foot{font-size:11.5px;color:var(--ink-soft);text-align:center;line-height:1.6}"
       "@media(max-width:700px){.grid{grid-template-columns:1fr}"
       ".links{grid-template-columns:1fr 1fr}"
       ".head{grid-template-columns:44px 1fr}.addr{grid-column:1/-1}}"
@@ -237,13 +250,58 @@ String webShellNav(const char *active) {
   return n;
 }
 
+// Marks are inline rather than fetched. Ko-fi hands out a ready made button as
+// an image from their CDN, and the scale often sits on a LAN with no route out
+// - it would render as a broken image on exactly the button meant to collect
+// goodwill, for the same reason there is no web font here.
+//
+// An external sprite plus <use> would be cacheable and much smaller, but the
+// referenced document does not inherit the host page's currentColor in most
+// browsers, and colour per button is the point.
+//
+// GitHub and Discord publish monochrome marks for this. Ko-fi and MakerWorld
+// get a plain heart and a plain cube instead of a redrawn logo: it keeps the
+// row uniform and sidesteps the question of whether a traced mark is the mark.
+#define SVG_OPEN "<svg viewBox='0 0 24 24' aria-hidden='true' focusable='false'><path d='"
+#define SVG_END  "'/></svg>"
+
 String webShellLinks() {
   return String(F(
     "<div class='links'>"
-    "<a href='https://github.com/Niko11111/SpoolmanScale' target='_blank' rel='noopener'>GitHub</a>"
-    "<a href='https://ko-fi.com/formfollowsfunction' target='_blank' rel='noopener'>Ko-fi</a>"
-    "<a href='https://discord.gg/GzQzGa5pBG' target='_blank' rel='noopener'>Discord</a>"
-    "<a href='https://makerworld.com/de/@FormFollowsF/upload' target='_blank' rel='noopener'>MakerWorld</a>"
+    "<a href='https://github.com/Niko11111/SpoolmanScale' target='_blank' rel='noopener'>"
+    SVG_OPEN
+    "M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58"
+    "v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75."
+    "08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78."
+    "42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.96 0-1.32.47-2.39 1.24-3.23-.12-."
+    "31-.54-1.53.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 016.01 0c2.29-1.55 "
+    "3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.18.77.84 1.24 1.91 1.24 3.23 0 4.63"
+    "-2.81 5.65-5.49 5.95.43.37.82 1.1.82 2.22v3.29c0 .32.22.7.83.58A12.01 12.01"
+    " 0 0024 12.5C24 5.87 18.63.5 12 .5z"
+    SVG_END "GitHub</a>"
+
+    "<a class='support' href='https://ko-fi.com/formfollowsfunction' target='_blank' rel='noopener'>"
+    SVG_OPEN
+    "M12 21s-6.7-4.35-9.1-7.8C.6 10.1 2.1 6 5.8 6c2 0 3.4 1.1 4.2 2.2C10.8 7.1 "
+    "12.2 6 14.2 6c3.7 0 5.2 4.1 2.9 7.2C18.7 16.65 12 21 12 21z"
+    SVG_END "Ko-fi</a>"
+
+    "<a href='https://discord.gg/GzQzGa5pBG' target='_blank' rel='noopener'>"
+    SVG_OPEN
+    "M20.3 4.4a19.8 19.8 0 00-4.9-1.5l-.6 1.2a18.3 18.3 0 00-5.5 0l-.6-1.2a19.7 "
+    "19.7 0 00-4.9 1.5C.5 9 -.3 13.6.1 18a19.9 19.9 0 006 3l1.2-2a13.1 13.1 0 01"
+    "-1.9-.9l.4-.3a14 14 0 0012.1 0l.4.3a13 13 0 01-1.9.9l1.2 2a19.8 19.8 0 006"
+    "-3c.5-5.2-.8-9.7-3.5-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.5 8 10.5s2."
+    "2 1.1 2.2 2.4S9.2 15.3 8 15.3zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2"
+    " 1.1 2.2 2.4-1 2.4-2.2 2.4z"
+    SVG_END "Discord</a>"
+
+    "<a href='https://makerworld.com/de/@FormFollowsF/upload' target='_blank' rel='noopener'>"
+    SVG_OPEN
+    "M12 2.5l8.5 4.75v9.5L12 21.5l-8.5-4.75v-9.5L12 2.5zm0 2.29L6.06 8.1 12 11.4"
+    "l5.94-3.3L12 4.79zM5.5 9.79v5.79l5.5 3.07v-5.79L5.5 9.79zm13 0l-5.5 3.07v5."
+    "79l5.5-3.07V9.79z"
+    SVG_END "MakerWorld</a>"
     "</div>"));
 }
 
