@@ -497,7 +497,7 @@ const char* const STRINGS[STR_COUNT][2] = {
   // rather than letting the value snap back on the next scan.
   { "Mehr als das Etikett",
     "More than the label"                                                 },  // STR_BB_CAP_TITLE
-  { "Gemessen: %.0f g. Das Etikett sagt %.0f g. BamBuddy kann nicht mehr speichern, als das Etikett hergibt - der Rest stuende danach wieder auf voll.",
+  { "Gemessen: %.0f g. Das Etikett sagt %.0f g. BamBuddy kann nicht mehr speichern, als das Etikett hergibt - der Rest stünde danach wieder auf voll.",
     "Measured: %.0f g. The label says %.0f g. BamBuddy cannot store more than the label allows, so the remainder would read as full again."
                                                                           },  // STR_BB_CAP_BODY
   { "Etikett auf %.0f g anheben",
@@ -1204,15 +1204,15 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Weight" },  // STR_W_R_WEIGHT
   { "Konnte nicht geladen werden.",
     "Could not be loaded." },  // STR_W_LOAD_FAIL
-  { "Eine eingelegte SD-Karte verlaengert den Start um rund 20 Sekunden. Fuer den normalen Betrieb ohne Karte laufen lassen und sie nur zum Suchen eines Fehlers einlegen.",
+  { "Eine eingelegte SD-Karte verlängert den Start um rund 20 Sekunden. Für den normalen Betrieb ohne Karte laufen lassen und sie nur zum Suchen eines Fehlers einlegen.",
     "A fitted SD card makes the device take about 20 seconds longer to start. Run it without a card normally and insert one only to chase a fault." },  // STR_W_LOG_NOTE
-  { "Einen beschreibbaren NTAG auflegen, Spule waehlen, schreiben. Was auf dem Tag steht, wird ersetzt. Werkstags sind meist MIFARE Classic oder gesperrt und lassen sich nur lesen.",
+  { "Einen beschreibbaren NTAG auflegen, Spule wählen, schreiben. Was auf dem Tag steht, wird ersetzt. Werkstags sind meist MIFARE Classic oder gesperrt und lassen sich nur lesen.",
     "Place a writable NTAG on the reader, pick a spool, and write it. Whatever is already on the tag is replaced. Factory tags are usually MIFARE Classic or locked, and can only be read." },  // STR_W_TAG_NOTE
-  { "<b>Welcher Tag fuer welches Format.</b> OpenSpool braucht rund 170 Byte und damit einen <b>NTAG215</b> (496 Byte) oder <b>NTAG216</b> (872 Byte). Auf einen NTAG213 (144 Byte) passt davon nichts, dort geht nur Anycubic ACE, das mit 112 Byte auskommt. Meldet ein Tag keine Groesse, rechnet die Waage sicherheitshalber mit den 144 Byte eines NTAG213 - dann den Tag einmal mit einer NFC-App als NDEF formatieren, das traegt die Groesse ein.",
+  { "<b>Welcher Tag für welches Format.</b> OpenSpool braucht rund 170 Byte und damit einen <b>NTAG215</b> (496 Byte) oder <b>NTAG216</b> (872 Byte). Auf einen NTAG213 (144 Byte) passt davon nichts, dort geht nur Anycubic ACE, das mit 112 Byte auskommt. Meldet ein Tag keine Größe, rechnet die Waage sicherheitshalber mit den 144 Byte eines NTAG213 - dann den Tag einmal mit einer NFC-App als NDEF formatieren, das trägt die Größe ein.",
     "<b>Which tag for which format.</b> OpenSpool needs about 170 bytes, so it wants an <b>NTAG215</b> (496 bytes) or an <b>NTAG216</b> (872 bytes). None of it fits an NTAG213 (144 bytes), which leaves Anycubic ACE, and that needs only 112. A tag that reports no size at all is treated as the 144 bytes of an NTAG213 to stay safe - format such a tag as NDEF once with any NFC app and it will report its real size." },  // STR_W_TAG_SIZES
-  { "In FilaMan auf den Benutzernamen klicken, dort <b>API keys</b> waehlen und einen Schluessel anlegen. Er wird nur einmal angezeigt, also gleich kopieren. Danach zeigt FilaMan einen sechsstelligen Geraetecode - den unten eintragen und registrieren.",
+  { "In FilaMan auf den Benutzernamen klicken, dort <b>API keys</b> wählen und einen Schlüssel anlegen. Er wird nur einmal angezeigt, also gleich kopieren. Danach zeigt FilaMan einen sechsstelligen Gerätecode - den unten eintragen und registrieren.",
     "In FilaMan, click your user name, choose <b>API keys</b> and create a key. It is shown once, so copy it right away. FilaMan then shows a six character device code - enter it below and register." },  // STR_W_FM_SETUP
-  { "Der Schluessel steht in BamBuddy unter den Einstellungen. Laeuft die Instanz ohne Anmeldung, bleibt das Feld leer.",
+  { "Der Schlüssel steht in BamBuddy unter den Einstellungen. Läuft die Instanz ohne Anmeldung, bleibt das Feld leer.",
     "The key is in BamBuddy under settings. Leave the field empty if the instance runs without authentication." },  // STR_W_BB_SETUP
   { "Strom nicht trennen",
     "Do not cut the power" },  // STR_OTA_KEEP_POWER
@@ -1220,17 +1220,17 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Buy me a coffee" },  // STR_W_KOFI
   { "Adresse ist ein Name",
     "Address is a name" },  // STR_SP_LOCKED_TITLE
-  { "Dieser Ziffernblock kann nur Zahlen. Die Adresse im Browser aendern:",
+  { "Dieser Ziffernblock kann nur Zahlen. Die Adresse im Browser ändern:",
     "This keypad can only make numbers. Change the address in the browser:" },  // STR_SP_LOCKED_INFO
-  { "Weboberflaeche aus: Einstellungen > System > Weboberflaeche",
+  { "Weboberfläche aus: Einstellungen > System > Weboberfläche",
     "Web interface off: Settings > System > Web interface" },  // STR_SP_WEB_OFF
   { "Adresse leeren",
     "Clear address" },  // STR_SP_CLEAR
-  { "Adresse verwerfen? Danach ist das Backend nicht mehr eingerichtet, und am Geraet laesst sich nur eine IP eingeben.",
+  { "Adresse verwerfen? Danach ist das Backend nicht mehr eingerichtet, und am Gerät lässt sich nur eine IP eingeben.",
     "Discard the address? The backend is then no longer set up, and the device itself can only enter an IP." },  // STR_SP_CLEAR_ASK
-  { "Alle loeschen",
+  { "Alle löschen",
     "Delete all" },  // STR_W_LOG_DELETE_ALL
-  { "{n} Dateien loeschen? Das Log von heute wird dabei neu begonnen.",
+  { "{n} Dateien löschen? Das Log von heute wird dabei neu begonnen.",
     "Delete {n} files? Today's log is started over." },  // STR_W_LOG_DELETE_ALL_ASK
   { "{n} Dateien",
     "{n} files" },  // STR_W_LOG_COUNT
@@ -1238,6 +1238,6 @@ const char* const STRINGS[STR_COUNT][2] = {
   // wording is a property of the language, not of the list.
   { "1 Datei",
     "1 file" },  // STR_W_LOG_COUNT_ONE
-  { "Eine Datei loeschen? Das Log von heute wird dabei neu begonnen.",
+  { "Eine Datei löschen? Das Log von heute wird dabei neu begonnen.",
     "Delete one file? Today's log is started over." },  // STR_W_LOG_DELETE_ALL_ASK_ONE
 };
