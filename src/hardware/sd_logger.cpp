@@ -33,6 +33,10 @@ String getCurrentLogFilename() {
   return String(buf);
 }
 
+void sdLogResetSize() {
+  sd_log_size = 0;
+}
+
 void logSD(const char* msg) {
   if (!sd_available) return;
   if (sd_log_size > SD_LOG_MAX_SIZE) return;

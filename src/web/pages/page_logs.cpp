@@ -17,7 +17,7 @@ static const char* label() { return T(STR_W_NAV_LOGS); }
 
 static String body() {
   String h;
-  h.reserve(3800);
+  h.reserve(4200);
   h += F("<div class='grid'><div class='card wide'><h2>");
   h += T(STR_W_C_LOGS);
   h += F("</h2><div id='lg'></div>"
@@ -26,6 +26,9 @@ static String body() {
   h += T(STR_W_R_VERBOSE);
   h += F("</span><span class='v'>"
          "<button id='vb' class='quiet' onclick='toggleVerbose()'></button>"
+         "</span></div><div class='row'><span class='k' id='dsum'></span>"
+         "<span class='v'>"
+         "<button id='da' class='danger' onclick='delAll()' disabled></button>"
          "</span></div></div><p class='note'>");
   h += T(STR_W_LOG_NOTE);
   h += F("</p></div></div>");
@@ -40,6 +43,9 @@ static String body() {
   h += F(",on:");     h += jsStr(T(STR_W_S_ON));
   h += F(",off:");    h += jsStr(T(STR_W_S_OFF));
   h += F(",err:");    h += jsStr(T(STR_W_LOAD_FAIL));
+  h += F(",all:");    h += jsStr(T(STR_W_LOG_DELETE_ALL));
+  h += F(",allask:"); h += jsStr(T(STR_W_LOG_DELETE_ALL_ASK));
+  h += F(",count:");  h += jsStr(T(STR_W_LOG_COUNT));
   h += F("};"
          "function kb(n){return n>=1048576?(n/1048576).toFixed(2)+' MB'"
          ":(n/1024).toFixed(0)+' KB';}"
@@ -49,6 +55,28 @@ static String body() {
          "if(!r.ok)throw 0;return r.json();}).then(d=>{"
          "const c=document.getElementById('lg');"
          "document.getElementById('vb').textContent=d.verbose?M.on:M.off;"
+         "const da=document.getElementById('da');"
+         "da.textContent=M.all;da.disabled=!d.files||!d.files.length;"
+         // Says what pressing it would free, which is the number someone
+         // wants before pressing it rather than after.
+         "const n=d.files?d.files.length:0;"
+         "document.getElementById('dsum').textContent=n"
+         "?M.count.replace('{n}',n)+' \u00b7 '"
+         "+kb(d.files.reduce((s,f)=>s+f.size,0)):'';"
+         // Sorted here rather than on the device: the browser already holds
+         // the array. What arrives is FAT directory order, and the seven day
+         // rotation frees entries that later files drop into, so it reads as
+         // shuffled. Names are log_YYYY-MM-DD, which orders lexically the same
+         // as chronologically.
+         //
+         // log_pre_ntp carries no date and is checked separately so it lands
+         // at the bottom. The obvious shortcut - prefixing it with a low
+         // character and letting one comparison handle both - does not work:
+         // localeCompare ignores control characters and left it on top.
+         "if(d.files)d.files.sort((a,b)=>{"
+         "const A=a.name.startsWith('log_2'),B=b.name.startsWith('log_2');"
+         "if(A!==B)return A?-1:1;"
+         "return a.name<b.name?1:(a.name>b.name?-1:0);});"
          "if(!d.sd){c.innerHTML='<div class=\"note\"><b>'+M.nosd+'</b><br>'"
          "+M.nosdh+'</div>';return;}"
          "if(!d.files||!d.files.length){say(M.empty);return;}"
@@ -73,6 +101,11 @@ static String body() {
          // rejection, and the card just stayed empty.
          "function delLog(n){if(!confirm(M.ask))return;"
          "fetch('/api/deletelog?file='+encodeURIComponent(n),{method:'POST'})"
+         ".then(()=>loadLogs()).catch(()=>say(M.err));}"
+         "function delAll(){"
+         "const n=document.querySelectorAll('.listrow').length;"
+         "if(!n||!confirm(M.allask.replace('{n}',n)))return;"
+         "fetch('/api/deletelogs',{method:'POST'})"
          ".then(()=>loadLogs()).catch(()=>say(M.err));}"
          "function toggleVerbose(){fetch('/api/verbose',{method:'POST'})"
          ".then(r=>r.json()).then(d=>{"
@@ -166,6 +199,46 @@ static void routes(WebServer &srv) {
     } else {
       srv.send(500, "text/plain", "Delete failed");
     }
+  });
+
+  // POST /deletelogs -> remove every log file at once
+  srv.on("/api/deletelogs", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
+    if (!sd_available) { srv.send(404, "text/plain", "No SD card"); return; }
+
+    // Same walk-and-remove as cleanOldLogs(): close the entry, remove it, then
+    // ask for the next one. That pattern has been running in the rotation for
+    // a long time, so it is not reinvented here.
+    int deleted = 0;
+    File root = SD.open("/");
+    if (root && root.isDirectory()) {
+      File entry = root.openNextFile();
+      while (entry) {
+        if (!entry.isDirectory()) {
+          String name = entry.name();
+          if (name.startsWith("/")) name = name.substring(1);
+          if (name.startsWith("log_") && name.endsWith(".txt")) {
+            entry.close();
+            if (SD.remove(("/" + name).c_str())) deleted++;
+            entry = root.openNextFile();
+            continue;
+          }
+        }
+        entry = root.openNextFile();
+      }
+      root.close();
+    }
+
+    // The cap counts bytes since boot, so without this the card is empty and
+    // the writer stays mute until the next restart.
+    sdLogResetSize();
+
+    // Serial only, deliberately. logSDf() here would recreate today's file on
+    // the spot, and a list that is supposed to be empty would come back
+    // holding a fresh log with one line in it - which reads as a failure.
+    Serial.printf("All logs deleted via web: %d file(s)\n", deleted);
+
+    srv.send(200, "application/json", String("{\"deleted\":") + deleted + "}");
   });
 
   // POST /verbose -> toggle verbose.txt on SD root

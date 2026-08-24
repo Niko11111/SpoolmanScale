@@ -1228,4 +1228,10 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Clear address" },  // STR_SP_CLEAR
   { "Adresse verwerfen? Danach ist das Backend nicht mehr eingerichtet, und am Geraet laesst sich nur eine IP eingeben.",
     "Discard the address? The backend is then no longer set up, and the device itself can only enter an IP." },  // STR_SP_CLEAR_ASK
+  { "Alle loeschen",
+    "Delete all" },  // STR_W_LOG_DELETE_ALL
+  { "{n} Dateien loeschen? Das Log von heute wird dabei neu begonnen.",
+    "Delete {n} files? Today's log is started over." },  // STR_W_LOG_DELETE_ALL_ASK
+  { "{n} Dateien",
+    "{n} files" },  // STR_W_LOG_COUNT
 };
