@@ -125,6 +125,18 @@ static bool weightSaysSpoolStayed() {
   const float drop = loc_weight_ref - scale_weight_g;
   return (drop < LOC_WEIGHT_TOLERANCE_G) && (drop > -LOC_WEIGHT_TOLERANCE_G);
 }
+// A spool taken on for weighing through the FilaMan trigger when no tag ever
+// turned up. Automatic weighing keys on tag_present, which is precisely what
+// this case does not have, so the intent is carried here instead.
+//
+// It needs an end as much as a beginning. "No tag" is also the condition that
+// clears aw_done for the next spool, so marking the spool weighable without
+// also saying when that stops would save it again on every pass through the
+// loop, for as long as it sat there.
+static bool aw_adopted      = false;
+static bool aw_adopted_seen = false;   // a real load has been on the pad since
+static bool aw_done         = false;   // this spool already saved
+
 // Lost more than half the reference. Nothing but taking the spool off does that.
 static bool weightSaysSpoolGone() {
   if (!weightSpeaks()) return false;
@@ -599,6 +611,19 @@ void appLoop() {
       logSDf("RemoteLink: no tag, adopting spool %d for weighing", id);
       remoteLinkReport(true, nullptr, nullptr);
       querySpoolmanById(id);
+      // Weighable from here, by hand or on its own, until the pad is empty
+      // again. Starting a fresh cycle as well, so a spool weighed before this
+      // one does not leave its "already saved" behind.
+      aw_adopted      = true;
+      aw_adopted_seen = false;
+      aw_done         = false;
+      // Start the settling window here rather than inheriting one. A spool
+      // that had already been sitting still for three seconds when the
+      // trigger arrived would otherwise be written on the very first pass,
+      // with no countdown on the button and no moment to put a tag on after
+      // all. Now the same three seconds run visibly from the adoption.
+      auto_weight_stable_ms = millis();
+      auto_weight_last_val  = scale_weight_g;
       if (lbl_status) {
         char buf[48];
         strncpy(buf, T(STR_REMOTE_LINK_WEIGH), sizeof(buf) - 1);
@@ -823,12 +848,26 @@ void appLoop() {
   }
 
   // aw_done: einmal gespeichert -> kein weiterer Patch bis Spule abgenommen
+  // The adoption ends when the pad is empty again, or the moment a tag turns
+  // up and takes over. Kept outside the g_auto_weight block on purpose: it
+  // decides what the display is showing, and switching the automatic off must
+  // not leave a spool adopted forever.
+  if (aw_adopted) {
+    if (tag_present) {
+      aw_adopted = false;
+    } else if (scale_weight_g >= LOC_WEIGHT_MIN_G) {
+      aw_adopted_seen = true;          // something is really on there
+    } else if (aw_adopted_seen) {
+      logSD("RemoteLink: adopted spool taken off, weighing ends");
+      aw_adopted = false;
+    }
+  }
+
   if (g_auto_weight) {
     static int  aw_last_shown_s = -1;  // verhindert unnoetige Label-Updates
-    static bool aw_done = false;       // diese Spule bereits gespeichert?
 
     // Spule abgenommen -> Reset fuer naechste Spule
-    if (!tag_present && aw_done) {
+    if (!tag_present && !aw_adopted && aw_done) {
       aw_done = false;
       auto_weight_stable_ms = 0;
       auto_weight_last_val = -9999.0f;
@@ -841,7 +880,11 @@ void appLoop() {
       }
     }
 
-    if (!aw_done && !isConfirmPopupOpen() && sm_found && sm_id > 0 && scale_ready && tag_present) {
+    // A spool adopted without a tag counts as present: it was picked
+    // deliberately in the web UI, which says more about intent than a tag
+    // lying on the reader does.
+    if (!aw_done && !isConfirmPopupOpen() && sm_found && sm_id > 0 && scale_ready &&
+        (tag_present || aw_adopted)) {
       float cur = scale_weight_g;
       if (fabsf(cur - auto_weight_last_val) > AUTO_WEIGHT_THRESH_G) {
         // Gewicht bewegt sich -> Timer neu starten

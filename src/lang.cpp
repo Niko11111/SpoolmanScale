@@ -750,8 +750,8 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Nie",                           "Never"                              },  // STR_SCREENOFF_NEVER
   { "Löst FilaMan eine Verknüpfung aus und die Spule liegt schon auf der Waage, wird ohne Rückfrage verknüpft. Passen Material oder Farbe nicht zusammen, fragt die Waage trotzdem nach.",
     "When FilaMan triggers a link and the spool is already on the scale, it is linked without asking. If the material or colour do not match, the scale asks anyway." },  // STR_FLM_AUTOLINK_INFO
-  { "Wird nach einer Verknüpfung aus FilaMan kein Tag aufgelegt, lädt die Waage nach 10 Sekunden trotzdem die gewählte Spule und lässt sie wiegen. Es wird nichts auf einen Tag geschrieben.",
-    "If no tag is presented after a link from FilaMan, the scale loads the chosen spool anyway after 10 seconds and lets it be weighed. Nothing is written to any tag." },  // STR_FLM_TAGLESS_INFO
+  { "Wird nach einer Verknüpfung aus FilaMan innerhalb von 10 Sekunden kein Tag aufgelegt, lädt die Waage die dort gewählte Spule trotzdem und zeigt sie an. Gewogen wird sie danach wie jede andere: bei eingeschalteter Automatik von selbst, sonst über den Gewichtsknopf. FilaMans eigener Dialog meldet dabei einen Fehler, weil dort kein Tag geschrieben wurde - geladen ist die Spule trotzdem. Auf einen Tag wird nie etwas geschrieben, und die Zuordnung endet, sobald die Spule wieder heruntergenommen wird.",
+    "If no tag is presented within 10 seconds of a link from FilaMan, the scale loads the spool chosen there anyway and shows it. Weighing then works as for any other spool: on its own when automatic weighing is on, otherwise through the weight button. FilaMan's own dialog reports an error because no tag was written there - the spool is loaded regardless. Nothing is ever written to a tag, and the spool is released as soon as it is taken off the pad." },  // STR_FLM_TAGLESS_INFO
   // FilaMan variants of the spool-weight scope buttons. The Spoolman ones
   // carry the REST field name in brackets, which is a real reading aid there
   // because the three scopes use three different names. In FilaMan two of
