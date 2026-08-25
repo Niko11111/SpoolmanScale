@@ -23,6 +23,10 @@
 #define CRED_ROW_Y0    168
 #define CRED_ROW_STEP   34
 
+// One row of font 12. The notice is only ever one line, so everything below
+// it shifts by this fixed step rather than by a measured label height.
+#define GATE_NOTE_H     20
+
 // Which entry point brought the user here. Kept between show and build
 // because buildOtaBrowserScreen() is also reached through the generic
 // rebuild path and has no argument of its own.
@@ -32,6 +36,10 @@ static WebScreenContext s_web_ctx = WEB_CTX_FIRMWARE;
 // the other side. Null whenever the rows are not on screen.
 static lv_obj_t *s_lbl_key_val   = nullptr;
 static lv_obj_t *s_lbl_token_val = nullptr;
+
+// True when opening this screen had to switch something on. Only affects what
+// the screen says and how far the block below the address sits.
+static bool s_gate_opened = false;
 
 // Only the two FilaMan entry points need the credential rows. The drying
 // thresholds are edited in the browser as well, but have nothing to do with
@@ -49,10 +57,46 @@ static bool isFirmwareContext() {
   return s_web_ctx == WEB_CTX_FIRMWARE;
 }
 
+// What an entry point sends the user to, and which switch has to be on for
+// that page to answer at all.
+//
+// The path used to be a two way "credentials or /ota", which quietly sent the
+// drying context to the firmware page - it is neither of the two. Keeping the
+// gate next to the path is what lets the screen open the right one below.
+struct WebTarget { const char *path; WebGate gate; };
+
+static WebTarget webTargetFor(WebScreenContext ctx) {
+  switch (ctx) {
+    case WEB_CTX_BACKEND:
+    case WEB_CTX_SETUP:   return { "/backend", GATE_CONFIG };
+    case WEB_CTX_DRYING:  return { "/drying",  GATE_CONFIG };
+    default:              return { "/ota",     GATE_MAINT  };
+  }
+}
+
 void showOtaBrowserScreen(WebScreenContext ctx) {
   logSD("SHOW: OtaBrowserScreen");
   logSDf("UI: Screen -> Web interface (ctx=%d)", (int)ctx);
   s_web_ctx = ctx;
+
+  // Pressing the button is the request. Sending someone to an address that
+  // answers 403 because a switch they have never seen is off is not a
+  // safeguard, it is a dead end - and during the first time setup there is no
+  // menu to go and find that switch in. The master has to come with it:
+  // webGateOpen() is master_on && config_on, so the sub gate alone changes
+  // nothing, and "stop server" leaves the master off persistently.
+  const WebTarget t = webTargetFor(ctx);
+  s_gate_opened = false;
+  if (!webMasterEnabled()) { webSetMasterEnabled(true); s_gate_opened = true; }
+  if (t.gate == GATE_MAINT && !webMaintenanceEnabled()) {
+    webSetMaintenanceEnabled(true);
+    s_gate_opened = true;
+  } else if (t.gate == GATE_CONFIG && !webConfigEnabled()) {
+    webSetConfigEnabled(true);
+    s_gate_opened = true;
+  }
+  if (s_gate_opened) logSDf("Web: gate opened for %s (ctx=%d)", t.path, (int)ctx);
+
   hideAllOverlays();
   lbl_ota_status = nullptr;
   s_lbl_key_val = nullptr;
@@ -208,10 +252,10 @@ void buildOtaBrowserScreen() {
     ip = wifiManagerLocalIP();
   }
   // "/" is the status page now, so send each flow to the page that carries
-  // its form: firmware upload lives at /ota, backend credentials at /backend.
-  // That path is deliberately not named after a backend - it used to be
-  // "/filaman", which sent BamBuddy users to a FilaMan URL.
-  const char *path = showsCredentials() ? "/backend" : "/ota";
+  // its form. One table decides that, see webTargetFor() - the path is
+  // deliberately not named after a backend either, it used to be "/filaman",
+  // which sent BamBuddy users to a FilaMan URL.
+  const char *path = webTargetFor(s_web_ctx).path;
 
   // The name goes on the big line and the address stays underneath in small
   // type. Not either-or: some Android versions still will not resolve a
@@ -260,6 +304,27 @@ void buildOtaBrowserScreen() {
     lv_obj_align(lbl_fallback, LV_ALIGN_TOP_MID, 0, addr_y + 28);
   }
 
+  // Says what just happened, right under the address it made reachable. Amber
+  // is the colour this screen already uses for "not there yet", and font 12
+  // keeps it to one line in both languages at this width - which is what lets
+  // everything below shift by a constant.
+  const int note_h = s_gate_opened ? GATE_NOTE_H : 0;
+  if (s_gate_opened) {
+    char note_buf[64];
+    strncpy(note_buf, T(STR_WEB_GATE_OPENED), sizeof(note_buf) - 1);
+    note_buf[sizeof(note_buf) - 1] = '\0';
+
+    lv_obj_t *lbl_note = lv_label_create(scr_ota_browser);
+    lv_label_set_text(lbl_note, note_buf);
+    lv_obj_set_style_text_color(lbl_note, lv_color_hex(0xf0b838), 0);
+    lv_obj_set_style_text_font(lbl_note, &lv_font_montserrat_ext_12, 0);
+    lv_obj_set_style_text_align(lbl_note, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(lbl_note, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(lbl_note, 440);
+    // Clears the fallback address, which is font 18 and ends around +50.
+    lv_obj_align(lbl_note, LV_ALIGN_TOP_MID, 0, addr_y + (addr_buf[0] ? 52 : 30));
+  }
+
   if (showsCredentials()) {
     if (backendIsBamBuddy()) {
       // One credential, so one row - and it is left where the FilaMan pair
@@ -267,16 +332,17 @@ void buildOtaBrowserScreen() {
       // jump when switching backends.
       s_key_shown   = (bambuddyApiKey()[0] != '\0');
       s_token_shown = false;
-      s_lbl_key_val   = addCredentialRow(scr_ota_browser, CRED_ROW_Y0, T(STR_BACKEND_APIKEY),
-                                         s_key_shown);
+      s_lbl_key_val   = addCredentialRow(scr_ota_browser, CRED_ROW_Y0 + note_h,
+                                         T(STR_BACKEND_APIKEY), s_key_shown);
       s_lbl_token_val = nullptr;
     } else {
       s_key_shown   = (filamanApiKey()[0]      != '\0');
       s_token_shown = (filamanDeviceToken()[0] != '\0');
-      s_lbl_key_val   = addCredentialRow(scr_ota_browser, CRED_ROW_Y0, T(STR_BACKEND_APIKEY),
-                                         s_key_shown);
-      s_lbl_token_val = addCredentialRow(scr_ota_browser, CRED_ROW_Y0 + CRED_ROW_STEP, T(STR_BACKEND_DEVICE_TOKEN),
-                                         s_token_shown);
+      s_lbl_key_val   = addCredentialRow(scr_ota_browser, CRED_ROW_Y0 + note_h,
+                                         T(STR_BACKEND_APIKEY), s_key_shown);
+      s_lbl_token_val = addCredentialRow(scr_ota_browser,
+                                         CRED_ROW_Y0 + note_h + CRED_ROW_STEP,
+                                         T(STR_BACKEND_DEVICE_TOKEN), s_token_shown);
     }
 
     if (s_web_ctx == WEB_CTX_SETUP) {
@@ -319,7 +385,7 @@ void buildOtaBrowserScreen() {
   lv_obj_set_style_text_color(lbl_hint2, lv_color_hex(0x2a4060), 0);
   lv_obj_set_style_text_font(lbl_hint2, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(lbl_hint2, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_hint2, LV_ALIGN_TOP_MID, 0, addr_buf[0] ? 134 : 112);
+  lv_obj_align(lbl_hint2, LV_ALIGN_TOP_MID, 0, (addr_buf[0] ? 134 : 112) + note_h);
   lv_label_set_long_mode(lbl_hint2, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(lbl_hint2, 440);
 

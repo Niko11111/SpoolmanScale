@@ -327,8 +327,47 @@ String webShellLinks() {
 // All three backends are named whatever the active one is. This device is
 // called SpoolmanScale, so naming only the active one would leave out the
 // very name that could suggest an affiliation.
+// Which sections the device is not serving, named, plus where the switches
+// are. Read from the same table the tab strip reads, so it can never name a
+// page the navigation disagrees about.
+//
+// It says something in both states on purpose. A reader who finds no Backend
+// tab has no way to tell a missing feature from a shut switch, and the two
+// writing gates are off by default - which is exactly how people ended up
+// unable to enter their FilaMan credentials after flashing. A reader who
+// finds everything open should still know the device is what decides that.
+//
+// A page left out because it does not apply to this device is not listed: it
+// is absent, not switched off, and no switch would bring it back.
+static String webShellGateNote() {
+  String closed;
+  for (size_t i = 0; i < WEB_PAGE_COUNT; i++) {
+    const WebPage &p = *WEB_PAGES[i];
+    if (p.applies && !p.applies()) continue;
+    if (webGateOpen(p.gate)) continue;
+    if (closed.length()) closed += F(", ");
+    closed += webPageLabel(p);
+  }
+
+  String n;
+  n.reserve(320);
+  n += F("<p class='foot'>");
+  if (closed.length()) {
+    n += closed;
+    n += ' ';
+    n += T(STR_W_FOOT_GATE_OFF);
+  } else {
+    n += T(STR_W_FOOT_GATE_ALL);
+  }
+  n += F(" <b>");
+  n += T(STR_W_OFF_PATH);
+  n += F("</b>.</p>");
+  return n;
+}
+
 String webShellFoot() {
   String f = webShellLinks();
+  f += webShellGateNote();
   f += F("<p class='foot'>");
   f += T(STR_W_DISCLAIMER);
   f += F("</p></div></body></html>");     // closes .wrap
