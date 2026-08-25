@@ -639,6 +639,17 @@ void appLoop() {
   }
   handleRemoteLinkDeferredActions();
   handleTagWritePopupDeferredActions();
+  // A write from the web page just bound the tag on the reader to a spool.
+  // Showing it is the confirmation that matters - the browser reports the
+  // write, but the scale kept displaying whatever was there before.
+  if (const int linked_id = tagWriteTakeLinkedSpool()) {
+    if (!isSpoolFlowIdInputOpen() && !isSpoolFlowLinkEntryOpen() &&
+        !isConfirmPopupOpen()) {
+      logSDf("TagWrite: showing spool %d after the link", linked_id);
+      tagLookupForget();
+      querySpoolmanById(linked_id);
+    }
+  }
   if (show_system_pending) {
     show_system_pending = false;
     // Coming back from OTA / Info / Language to System screen

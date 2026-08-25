@@ -10,6 +10,7 @@
 #include "services/user_options.h"
 #include "services/backend.h"
 #include "services/http_progress.h"
+#include "services/tag_uid.h"
 
 namespace {
 
@@ -738,18 +739,31 @@ int filamanLinkRfidUid(const char* base_url, const char* api_key, int spool_id,
   if (out_note && note_size) out_note[0] = '\0';
   if (spool_id <= 0 || !uuid || !uuid[0]) return -1;
 
+  // Plain hex, the same way backendPatchSpoolTag() does it, and for the same
+  // reason: FilaMan's own reader writes rfid_uid without separators, and the
+  // server side ?search= is a substring match against that. The colon form the
+  // scale carries internally went in raw here and broke three things at once -
+  // the "already this tag" comparison below never matched, the holder search
+  // found nobody so a tag was never taken off its previous spool, and the
+  // stored value ended up the odd one out in FilaMan's own database.
+  char hex[40];
+  tagUidNormalize(uuid, hex, sizeof(hex));
+  if (!hex[0]) return -1;
+
   char old_uid[40] = "";
   {
     SpiRamAllocator alloc;
     JsonDocument doc(&alloc);
     if (filamanGetSpoolJson(base_url, api_key, spool_id, doc, timeout_ms) == 200) {
+      // Normalised too: a spool imported from Spoolman still carries the colon
+      // form in custom_fields until the migration rewrites it.
       const char* t = doc["extra"]["tag"] | "";
-      snprintf(old_uid, sizeof(old_uid), "%s", t);
+      tagUidNormalize(t, old_uid, sizeof(old_uid));
     }
   }
-  if (strcasecmp(old_uid, uuid) == 0) return 200;   // already this tag
+  if (strcasecmp(old_uid, hex) == 0) return 200;   // already this tag
 
-  int holder = filamanSpoolHoldingTag(base_url, api_key, uuid, timeout_ms);
+  int holder = filamanSpoolHoldingTag(base_url, api_key, hex, timeout_ms);
   if (holder && holder != spool_id) {
     int code = filamanPatchRfidUid(base_url, api_key, holder, nullptr, timeout_ms);
     if (code != 200) {
@@ -763,7 +777,7 @@ int filamanLinkRfidUid(const char* base_url, const char* api_key, int spool_id,
   if (old_uid[0]) {
     filamanPatchCustomField(base_url, api_key, spool_id, "previous_tag", old_uid, timeout_ms);
   }
-  return filamanPatchRfidUid(base_url, api_key, spool_id, uuid, timeout_ms);
+  return filamanPatchRfidUid(base_url, api_key, spool_id, hex, timeout_ms);
 }
 
 int filamanPatchCustomField(const char* base_url, const char* api_key, int spool_id,

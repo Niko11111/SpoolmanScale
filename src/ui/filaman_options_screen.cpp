@@ -111,8 +111,7 @@ void buildFilaManOptionsScreen() {
     }, LV_EVENT_CLICKED, NULL); }
 
   // Write the tag on a remote trigger. Third in the row because all three
-  // answer the same question - what happens when a link arrives from the web -
-  // and this one only ever acts where the first one skipped the question.
+  // answer the same question: what happens when a link arrives from the web.
   { char buf_t[40]; strncpy(buf_t, T(STR_FLM_REMOTE_WRITE), sizeof(buf_t)-1);
     buf_t[sizeof(buf_t)-1] = '\0';
     char buf_s[40]; strncpy(buf_s, T(STR_FLM_REMOTE_WRITE_SUB), sizeof(buf_s)-1);

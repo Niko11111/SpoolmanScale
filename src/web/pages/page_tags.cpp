@@ -68,7 +68,6 @@ static String body() {
          "<div class='card' style='background:var(--surface-2);padding:14px' id='tg-cur'></div>"
          "<div class='card' style='background:var(--surface-2);padding:14px' id='tg-new'></div>"
          "</div>"
-         "<div id='tg-note' class='msg' style='color:var(--warn);margin-top:12px'></div>"
          "<div class='field' style='margin-top:14px'><label>");
   h += T(STR_W_TAG_SPOOL);
   h += F("</label><div class='inrow'>"
@@ -77,7 +76,8 @@ static String body() {
          // OpenSpool first and preselected: it is the format the scale's own
          // backends read back, where ACE only ever talks to the printer.
          "<select id='tg-fmt' onchange='loadPreview()' style='flex:0 0 auto'>"
-         "<option value='1' selected>OpenSpool (FilaMan)</option>"
+         "<option value='1' selected>OpenSpool</option>"
+         "<option value='3'>FilaMan</option>"
          "<option value='0'>Anycubic ACE</option>"
          "</select></div></div>"
          "<label class='inrow' style='margin-top:14px;gap:8px;font-size:13px;color:var(--ink-2)'>"
@@ -89,6 +89,10 @@ static String body() {
          "<button id='tg-erase' class='danger' onclick='eraseTag()' disabled>");
   h += T(STR_W_TAG_ERASE);
   h += F("</button><span class='msg' id='tg-s'></span></div>"
+         // Right under the buttons rather than above the fields: it is about
+         // whether the write can happen at all, so it belongs where the write
+         // is started.
+         "<div id='tg-note' class='msg' style='color:var(--warn);margin-top:10px'></div>"
          "<p class='note'>");
   h += T(STR_W_TAG_NOTE);
   h += F("</p><p class='note' style='margin-top:8px'>");
@@ -131,8 +135,10 @@ static String body() {
   h += F(",weight:");  h += jsStr(T(STR_W_TAG_WEIGHT));
   h += F(",dia:");     h += jsStr(T(STR_W_TAG_DIA));
   h += F(",len:");     h += jsStr(T(STR_W_TAG_LENGTH));
+  h += F(",toosmall:"); h += jsStr(T(STR_W_TAG_TOOSMALL));
   h += F("};"
-         "let tgCur='',tgNew='',tgLinked='',tgUid='',tgCurI=null,tgNewI=null;"
+         "let tgCur='',tgNew='',tgLinked='',tgUid='',tgCurI=null,tgNewI=null,"
+         "tgBytes=0,tgNeed=0;"
          "function esc(t){return String(t).replace(/[<>&]/g,c=>"
          "({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}"
          // A row is only drawn when the side it belongs to has the field, and
@@ -165,12 +171,20 @@ static String body() {
          "swatch(document.getElementById('tg-cur'),tgCurI,tgNewI,M.cur,M.notag);"
          "swatch(document.getElementById('tg-new'),tgNewI,tgCurI,M.will,M.pickf);}"
          "function tgSync(){tgDraw();const b=document.getElementById('tg-btn');if(!b)return;"
+         // Said before the write, not after it. The capacity check inside the
+         // firmware refuses the same tag, but only once the user has already
+         // pressed the button and put the tag on the reader.
+         "const small=tgNeed&&tgBytes&&tgNeed>tgBytes;"
+         "const fs=document.getElementById('tg-fmt');"
+         "const fn=fs&&fs.selectedOptions[0]?fs.selectedOptions[0].textContent:'';"
          "const n=document.getElementById('tg-note');"
-         "if(n)n.textContent=(tgLinked&&tgUid&&tgLinked!=tgUid)"
-         "?M.relink.replace('%s',tgLinked):'';"
+         "if(n)n.textContent=small"
+         "?M.toosmall.replace('%s',fn).replace('%u',tgNeed).replace('%u',tgBytes)"
+         ":((tgLinked&&tgUid&&tgLinked!=tgUid)?M.relink.replace('%s',tgLinked):'');"
          "const er=document.getElementById('tg-erase');"
          "if(er)er.disabled=!tgUid||tgCur=='blank';"
          "if(!tgNew){b.disabled=true;b.textContent=M.pickf;return;}"
+         "if(small){b.disabled=true;b.textContent=M.write;return;}"
          "if(tgCur===tgNew){b.disabled=true;b.textContent=M.match;}"
          "else{b.disabled=false;b.textContent=tgCur&&tgCur!='blank'?M.over:M.write;}}"
          "function loadPreview(){const v=parseInt(document.getElementById('tg-id').value);"
@@ -178,7 +192,9 @@ static String body() {
          "if(!v){tgNew='';tgNewI=null;tgSync();return;}"
          "fetch('/api/tag/preview?id='+v+'&fmt='+f).then(r=>r.json()).then(d=>{"
          "tgNew=d.ok?d.preview:'';tgLinked=d.ok?(d.linked||''):'';"
-         "tgNewI=d.ok?d.info:null;tgSync();});}"
+         "tgNeed=d.ok?(d.need||0):0;"
+         "tgNewI=d.ok?d.info:null;tgSync();})"
+         ".catch(()=>{tgNew='';tgNewI=null;tgNeed=0;tgSync();});}"
          "function setOpt(p,t){p.innerHTML='';const o=document.createElement('option');"
          "o.value='';o.textContent=t;p.appendChild(o);}"
          "function pickSpool(){const p=document.getElementById('tg-pick');"
@@ -194,27 +210,38 @@ static String body() {
          "function tgPoll(){fetch('/api/tag').then(r=>r.json()).then(d=>{"
          "document.getElementById('tg-uid').textContent="
          "d.uid?(M.onread+' '+d.uid+' ('+d.kind+')'):M.notag;"
-         "tgUid=d.uid||'';tgCurI=d.uid?d.info:null;"
+         "tgUid=d.uid||'';tgCurI=d.uid?d.info:null;tgBytes=d.bytes||0;"
          "tgCur=d.content||'';tgSync();"
          "const s=document.getElementById('tg-s');"
          "if(d.state!='idle'){s.textContent=d.message;"
-         "s.className='msg'+(d.state=='error'?' bad':'');}});}"
+         "s.className='msg'+(d.state=='error'?' bad':'');}}).catch(()=>{});}"
          "function after(){setTimeout(tgPoll,1500);setTimeout(tgPoll,4000);}"
          "function eraseTag(){if(!confirm(M.eraseq))return;"
          "fetch('/api/tag/write',{method:'POST',body:'0,2,0'})"
          ".then(r=>r.json()).then(d=>{document.getElementById('tg-s').textContent="
-         "d.message||M.queued;});after();}"
+         "d.message||M.queued;}).catch(()=>{});after();}"
          "function writeTag(){const v=parseInt(document.getElementById('tg-id').value);"
          "if(!v){document.getElementById('tg-s').textContent=M.pickf;return;}"
          "const f=document.getElementById('tg-fmt').value;"
          "const l=document.getElementById('tg-link').checked?1:0;"
          "fetch('/api/tag/write',{method:'POST',body:v+','+f+','+l})"
          ".then(r=>r.json()).then(d=>{document.getElementById('tg-s').textContent="
-         "d.message||M.queued;});after();}"
+         "d.message||M.queued;}).catch(()=>{});after();}"
          "document.addEventListener('DOMContentLoaded',()=>{"
          "tgPoll();setInterval(tgPoll,3000);loadSpools();tgSync();});"
          "</script>");
   return h;
+}
+
+// The dropdown's values, in one place. Two call sites used to spell the same
+// ternary out by hand, and a third format would have had to be added to both.
+static TagFormat fmtFromInt(int f) {
+  switch (f) {
+    case 0:  return TAG_FMT_ACE;
+    case 2:  return TAG_FMT_ERASE;
+    case 3:  return TAG_FMT_FILAMAN;
+    default: return TAG_FMT_OPENSPOOL;
+  }
 }
 
 static void routes(WebServer &srv) {
@@ -224,13 +251,19 @@ static void routes(WebServer &srv) {
     int fmt = srv.arg("fmt").toInt();
     char prev[128] = "", linked[40] = "";
     TagInfo ti;
-    bool ok = tagPreview(id, fmt == 2 ? TAG_FMT_ERASE : fmt == 1 ? TAG_FMT_OPENSPOOL : TAG_FMT_ACE,
-                         prev, sizeof(prev), linked, sizeof(linked), &ti);
+    uint16_t need = 0;
+    bool ok = tagPreview(id, fmtFromInt(fmt),
+                         prev, sizeof(prev), linked, sizeof(linked), &ti, &need);
     char info[320];
     tagInfoJson(&ti, info, sizeof(info));
+    // jsonEsc on both: prev carries the backend's vendor and filament names,
+    // and a quotation mark in a brand made the reply malformed. r.json() then
+    // throws and the preview silently stops updating - the same fault the
+    // sibling route was fixed for.
     srv.send(200, "application/json",
       String("{\"ok\":") + (ok ? "true" : "false") + ",\"info\":" + info +
-      ",\"preview\":\"" + prev + "\",\"linked\":\"" + linked + "\"}");
+      ",\"need\":" + String((unsigned)need) +
+      ",\"preview\":\"" + jsonEsc(prev) + "\",\"linked\":\"" + jsonEsc(linked) + "\"}");
   });
 
   srv.on("/api/spools", HTTP_GET, [&srv]() {
@@ -300,6 +333,7 @@ static void routes(WebServer &srv) {
     char info[320];
     tagInfoJson(tagCachedInfo(), info, sizeof(info));
     String j = String("{\"info\":") + info +
+               ",\"bytes\":"    + String((unsigned)tagCachedBytes()) +
                ",\"uid\":\""     + jsonEsc(tagCachedUid()) +
                "\",\"kind\":\""    + jsonEsc(tagCachedKind()) +
                "\",\"state\":\""   + jsonEsc(tagWriteState()) +
@@ -317,7 +351,7 @@ static void routes(WebServer &srv) {
     int id  = body.substring(0, c1 < 0 ? body.length() : c1).toInt();
     int fmt = c1 < 0 ? 0 : body.substring(c1 + 1, c2 < 0 ? body.length() : c2).toInt();
     bool link = c2 >= 0 && body.substring(c2 + 1).toInt() == 1;
-    bool ok = tagWriteRequest(id, fmt == 2 ? TAG_FMT_ERASE : fmt == 1 ? TAG_FMT_OPENSPOOL : TAG_FMT_ACE, link);
+    bool ok = tagWriteRequest(id, fmtFromInt(fmt), link);
     srv.send(200, "application/json",
       ok ? "{\"message\":\"Queued, keep the tag on the reader.\"}"
          : "{\"message\":\"Busy or invalid spool ID.\"}");

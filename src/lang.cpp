@@ -1232,8 +1232,8 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Cannot copy, please select the text" },  // STR_W_SESSION_COPYFAIL
   { "Einen beschreibbaren NTAG auflegen, Spule wählen, schreiben. Was auf dem Tag steht, wird ersetzt. Werkstags sind meist MIFARE Classic oder gesperrt und lassen sich nur lesen.",
     "Place a writable NTAG on the reader, pick a spool, and write it. Whatever is already on the tag is replaced. Factory tags are usually MIFARE Classic or locked, and can only be read." },  // STR_W_TAG_NOTE
-  { "<b>Welcher Tag für welches Format.</b> OpenSpool braucht rund 170 Byte und damit einen <b>NTAG215</b> (496 Byte) oder <b>NTAG216</b> (872 Byte). Auf einen NTAG213 (144 Byte) passt davon nichts, dort geht nur Anycubic ACE, das mit 112 Byte auskommt. Meldet ein Tag keine Größe, rechnet die Waage sicherheitshalber mit den 144 Byte eines NTAG213 - dann den Tag einmal mit einer NFC-App als NDEF formatieren, das trägt die Größe ein.",
-    "<b>Which tag for which format.</b> OpenSpool needs about 170 bytes, so it wants an <b>NTAG215</b> (496 bytes) or an <b>NTAG216</b> (872 bytes). None of it fits an NTAG213 (144 bytes), which leaves Anycubic ACE, and that needs only 112. A tag that reports no size at all is treated as the 144 bytes of an NTAG213 to stay safe - format such a tag as NDEF once with any NFC app and it will report its real size." },  // STR_W_TAG_SIZES
+  { "<b>Welcher Tag für welches Format.</b> OpenSpool braucht rund 180 Byte und damit einen <b>NTAG215</b> (496 Byte) oder <b>NTAG216</b> (872 Byte). Auf einen NTAG213 (144 Byte) passt davon nichts, dort geht nur Anycubic ACE, das mit 112 Byte auskommt. Meldet ein Tag keine Größe, rechnet die Waage sicherheitshalber mit den 144 Byte eines NTAG213 - dann den Tag einmal mit einer NFC-App als NDEF formatieren, das trägt die Größe ein.",
+    "<b>Which tag for which format.</b> OpenSpool needs about 180 bytes, so it wants an <b>NTAG215</b> (496 bytes) or an <b>NTAG216</b> (872 bytes). None of it fits an NTAG213 (144 bytes), which leaves Anycubic ACE, and that needs only 112. A tag that reports no size at all is treated as the 144 bytes of an NTAG213 to stay safe - format such a tag as NDEF once with any NFC app and it will report its real size." },  // STR_W_TAG_SIZES
   { "In FilaMan auf den Benutzernamen klicken, dort <b>API keys</b> wählen und einen Schlüssel anlegen. Er wird nur einmal angezeigt, also gleich kopieren. Danach zeigt FilaMan einen sechsstelligen Gerätecode - den unten eintragen und registrieren.",
     "In FilaMan, click your user name, choose <b>API keys</b> and create a key. It is shown once, so copy it right away. FilaMan then shows a six character device code - enter it below and register." },  // STR_W_FM_SETUP
   { "Der Schlüssel steht in BamBuddy unter den Einstellungen. Läuft die Instanz ohne Anmeldung, bleibt das Feld leer.",
@@ -1329,20 +1329,48 @@ const char* const STRINGS[STR_COUNT][2] = {
 
   // Writing a tag
   { "Beschreiben + verknüpfen", "Write + link"             },  // STR_REMOTE_LINK_WRITE
-  { "Nur verknüpfen",         "Link only"                  },  // STR_REMOTE_LINK_ONLY
+  { "Tag im Format %s beschreiben und mit dieser Spule verknüpfen?",
+    "Write the tag as %s and link it to this spool?" },  // STR_REMOTE_LINK_Q_WRITE
   { "Tag beschreiben?",       "Write tag?"                 },  // STR_TW_ASK_TITLE
-  { "Die Spulendaten kommen auf den Tag. Was jetzt darauf steht, geht verloren.",
-    "The spool data goes onto the tag. Whatever is on it now is lost." },  // STR_TW_ASK_HINT
+  { "Der Tag wird im Format %s beschrieben. Was jetzt darauf steht, geht verloren.",
+    "The tag is written as %s. Whatever is on it now is lost." },  // STR_TW_ASK_HINT
   { "Beschreiben",            "Write"                      },  // STR_TW_BTN_WRITE
   { "Nicht jetzt",            "Not now"                    },  // STR_TW_BTN_SKIP
   { "Tag beschrieben",        "Tag written"                },  // STR_TW_OK
   { "Kein Tag auf dem Leser", "No tag on the reader"       },  // STR_TW_ERR_NO_TAG
   { "Dieser Tag ist nur lesbar", "This tag can only be read" },  // STR_TW_ERR_NOT_NTAG
   { "Spule nicht abrufbar",   "Spool could not be fetched" },  // STR_TW_ERR_BACKEND
-  { "Tag zu klein oder nicht formatiert", "Tag too small or not formatted" },  // STR_TW_ERR_SPACE
+  { "Der Tag ist zu klein für dieses Format. OpenSpool braucht einen NTAG215 mit 496 Byte, ein NTAG213 hat nur 144. Die Spule ist trotzdem mit dem Tag verknüpft - sie wird also erkannt, der Tag trägt nur keine Daten.",
+    "This tag is too small for the format. OpenSpool wants an NTAG215 with 496 bytes, an NTAG213 holds only 144. The spool is linked to the tag all the same, so it is still recognised - the tag just carries no data." },  // STR_TW_ERR_SPACE
   { "Fehlgeschlagen - Tag still halten", "Failed - keep the tag still" },  // STR_TW_ERR_WRITE
   { "Tag beim Trigger beschreiben", "Write tag on trigger" },  // STR_FLM_REMOTE_WRITE
   { "Nur wenn nicht gefragt wird", "Only when not asking"  },  // STR_FLM_REMOTE_WRITE_SUB
   { "Wenn der Filament-Manager einen Schreibvorgang auslöst, fragt die Waage nach - dort kannst du zwischen Beschreiben und nur Verknüpfen wählen. Ohne Nachfrage (Verknüpfen ohne Rückfrage) gibt es diese Wahl nicht. Dieser Schalter entscheidet dann, ob ein beschreibbarer NTAG die Spulendaten bekommt oder nur verknüpft wird. Bambu-Tags sind nur lesbar und werden immer nur verknüpft.",
-    "When the filament manager triggers a write, the scale asks, and you choose there between writing and linking only. With the prompt turned off (link without asking) there is no choice to make. This switch decides it instead: whether a writable NTAG gets the spool data, or is only linked. Bambu tags are read-only and are always only linked." },  // STR_FLM_REMOTE_WRITE_INFO
+    "When the filament manager triggers a write, the scale writes the tag and links it in one step. With the prompt turned off (link without asking) that happens without any question at all. Off, the trigger only links, exactly as it did before. Bambu tags are read-only and are always only linked." },  // STR_FLM_REMOTE_WRITE_INFO
+  { "%s passt nicht: %u Byte nötig, %u vorhanden. Dafür braucht es einen NTAG215.",
+    "%s does not fit: %u bytes needed, %u available. That wants an NTAG215." },  // STR_W_TAG_TOOSMALL
+
+  // Results of a write or an erase
+  { "Tag nicht beschrieben",  "Tag not written"            },  // STR_TW_FAILED
+  { "Die Spulendaten stehen jetzt im Format OpenSpool auf dem Tag.",
+    "The spool data is now on the tag, as OpenSpool." },  // STR_TW_OK_INFO
+  { "Tag auch löschen?",      "Erase the tag too?"         },  // STR_TW_ERASE_ASK_TITLE
+  { "Die Verknüpfung ist gelöst. Der Tag trägt die Spulendaten aber weiter.",
+    "The link is gone. The tag still carries the spool data though." },  // STR_TW_ERASE_ASK_HINT
+  { "Löschen",                "Erase"                      },  // STR_TW_BTN_ERASE
+  { "Behalten",               "Keep"                       },  // STR_TW_BTN_KEEP
+  { "Tag gelöscht",           "Tag erased"                 },  // STR_TW_ERASED
+  { "Der Tag ist leer und kann neu beschrieben werden.",
+    "The tag is empty and ready to be written again." },  // STR_TW_ERASED_INFO
+  { "Tag nicht gelöscht",     "Tag not erased"             },  // STR_TW_ERASE_FAILED
+  { "OK",                     "OK"                         },  // STR_BTN_OK
+
+  // Web access. The first line is an LVGL label and stays one row wide; the
+  // other two are the web footer and carry HTML.
+  { "Weboberfläche dafür freigeschaltet",
+    "Web interface switched on for this" },  // STR_WEB_GATE_OPENED
+  { "sind am Gerät ausgeschaltet und werden nicht ausgeliefert. Einschalten unter",
+    "are switched off on the device and are not being served. Switch them on under" },  // STR_W_FOOT_GATE_OFF
+  { "Welche Bereiche ausgeliefert werden, entscheidet das Gerät unter",
+    "Which sections are served is decided on the device under" },  // STR_W_FOOT_GATE_ALL
 };

@@ -27,11 +27,15 @@ extern uint8_t g_ip_bar_mode;
 // colour mismatch always asks regardless - see showRemoteLinkPopup().
 extern bool g_flm_autolink;
 
-// Whether a remote write trigger actually writes the tag, in the one case
-// where nobody can be asked: the confirmation popup is switched off and the
-// spool was already lying there. With the popup the user picks per request,
-// so this is never consulted. Off by default, because writing replaces
-// whatever the tag already carried and the trigger has always only linked.
+// Whether a remote write trigger actually writes the tag, or only links the
+// UID. On by default: the button that sends the trigger is labelled "write
+// RFID tag", so writing is the answer the user already gave by pressing it,
+// and asking a second time on the device is what testers complained about.
+// The confirmation still appears - it just confirms both steps at once, and
+// says which format it is about to put on the tag.
+//
+// Off turns the trigger back into the pure link it was before, for anyone who
+// uses it to bind tags that already carry something else.
 extern bool g_flm_remote_write;
 
 // Adopt a remotely linked spool for weighing when no tag turns up. The spool

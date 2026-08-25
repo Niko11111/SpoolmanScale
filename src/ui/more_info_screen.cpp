@@ -21,6 +21,7 @@
 #include "lang.h"
 #include "confirm_popup.h"
 #include "tag_display.h"
+#include "ui/tag_write_popup.h"
 #include "ui_common.h"
 
 
@@ -85,6 +86,13 @@ static void unlinkConfirmCb(lv_event_t *e) {
     logSDf("Unlink spool ID=%d", spool_id);
   }
   Serial.printf("Unlink spool ID=%d all=%d\n", spool_id, all ? 1 : 0);
+
+  // The binding is gone, but the tag on the reader still carries the spool
+  // data - the next reader to see it would still name a spool this one no
+  // longer knows. Asked rather than done: the tag may be somebody else's, and
+  // the question only appears when one is actually lying there with something
+  // on it.
+  requestTagEraseAsk();
 
   // Close More Info and reset display - NFC will re-scan and find no match
   if (scr_more_info) { lv_obj_del(scr_more_info); scr_more_info = nullptr; }

@@ -855,7 +855,7 @@ enum StringID {
   // because tag_write.cpp cannot include lang.h - T() collides with
   // ArduinoJson's template parameter.
   STR_REMOTE_LINK_WRITE,
-  STR_REMOTE_LINK_ONLY,
+  STR_REMOTE_LINK_Q_WRITE,
   STR_TW_ASK_TITLE,
   STR_TW_ASK_HINT,
   STR_TW_BTN_WRITE,
@@ -869,6 +869,28 @@ enum StringID {
   STR_FLM_REMOTE_WRITE,
   STR_FLM_REMOTE_WRITE_SUB,
   STR_FLM_REMOTE_WRITE_INFO,
+  STR_W_TAG_TOOSMALL,
+  // Results of a write or an erase, shown as their own modal: the status line
+  // is repainted by the NFC poll later in the same loop pass, so anything put
+  // there is gone before it can be read.
+  STR_TW_FAILED,
+  STR_TW_OK_INFO,
+  STR_TW_ERASE_ASK_TITLE,
+  STR_TW_ERASE_ASK_HINT,
+  STR_TW_BTN_ERASE,
+  STR_TW_BTN_KEEP,
+  STR_TW_ERASED,
+  STR_TW_ERASED_INFO,
+  STR_TW_ERASE_FAILED,
+  STR_BTN_OK,
+
+  // A device screen that points at a web page opens the switch that page
+  // needs and says so. The web footer names the same menu on every page, so
+  // the line on the device stays short enough for one row at font 12 - and
+  // it spells the path with ">" rather than the entity the web strings use.
+  STR_WEB_GATE_OPENED,
+  STR_W_FOOT_GATE_OFF,
+  STR_W_FOOT_GATE_ALL,
 
   STR_COUNT
 };

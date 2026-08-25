@@ -6,7 +6,15 @@ enum TagFormat : uint8_t {
   TAG_FMT_ACE = 0,        // Anycubic ACE: raw pages, read by the ACE itself
   TAG_FMT_OPENSPOOL = 1,  // OpenSpool: NDEF application/json, what FilaMan resolves
   TAG_FMT_ERASE = 2,      // zero the data pages
+  // The same record under FilaMan's own protocol name. Their server offers the
+  // choice between the two names and builds identical fields for both, so this
+  // differs from OpenSpool in one string and nothing else. It exists so a tag
+  // can be labelled the way a FilaMan installation expects to find it.
+  TAG_FMT_FILAMAN = 3,
 };
+
+// True for the formats that go on the tag as an NDEF JSON record.
+#define TAG_FMT_IS_NDEF(f)  ((f) == TAG_FMT_OPENSPOOL || (f) == TAG_FMT_FILAMAN)
 
 // What the last write ended in. The message next to it is English prose meant
 // for the web page; the device screen needs an id it can translate, and this
@@ -55,6 +63,17 @@ void tagRemotePayloadSet(const char *json, int spool_id);
 bool tagRemotePayloadPending();
 bool tagWriteRemotePayload();
 
+// The format the next write will produce, for the question on the screen:
+// whatever protocol name the parked record carries, "OpenSpool" when there is
+// none, because that is what the scale builds for itself.
+const char* tagRemotePayloadProtocol();
+
+// The spool a write just linked, handed over once and then forgotten. The
+// display should show what the tag on the reader now points at, but this file
+// runs on the service side and must not reach into the UI - appLoop() takes it
+// from here and does the lookup.
+int tagWriteTakeLinkedSpool();
+
 const char* tagWriteState();     // idle | pending | ok | error
 const char* tagWriteMessage();
 uint8_t     tagWriteResultCode();   // a TagWriteResult, for the device screen
@@ -65,6 +84,16 @@ uint8_t     tagWriteResultCode();   // a TagWriteResult, for the device screen
 const char* tagCachedUid();
 const char* tagCachedKind();
 const char* tagCachedContent();
+// User memory of the tag on the reader, 0 when there is none or it reports no
+// size. Read on the loop task with everything else, so a web handler can ask
+// without touching the reader.
+uint16_t    tagCachedBytes();
+
+// How much room a record of this length needs once it is wrapped in the NDEF
+// TLV and rounded up to whole pages. The write and the preview both go through
+// this, so the page can turn "it did not fit" into "it will not fit" before
+// anything is written.
+size_t      tagNdefSizeFor(size_t json_len);
 // linked receives the UID already on the spool record, "" if none. Both
 // backends hold a single tag, so linking a second one replaces the first.
 // Field by field view of a tag, so the page can show it as a swatch rather
@@ -87,5 +116,8 @@ void tagInfoJson(const TagInfo *ti, char *out, size_t out_len);
 // Last complete read of the tag on the reader. fmt is empty when there is none.
 const TagInfo* tagCachedInfo();
 
+// need receives the bytes the chosen format will occupy on the tag, so the
+// caller can compare it against tagCachedBytes() before offering the write.
 bool tagPreview(int spool_id, TagFormat fmt, char *out, size_t out_len,
-                char *linked, size_t linked_len, TagInfo *info = nullptr);
+                char *linked, size_t linked_len, TagInfo *info = nullptr,
+                uint16_t *need = nullptr);

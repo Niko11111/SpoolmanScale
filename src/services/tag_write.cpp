@@ -25,6 +25,8 @@
 #define ACE_P_BED      29
 #define ACE_P_DIALEN   30
 #define ACE_P_WEIGHT   31
+// Everything from the first user page through the last one ACE touches.
+#define ACE_BYTES      ((ACE_P_WEIGHT - 4 + 1) * 4)
 
 struct AceFields {
   char     sku[17];
@@ -42,11 +44,13 @@ static bool      pending_link = false;
 static char      state[12] = "idle";
 static char      message[96] = "";
 static uint8_t   result = TW_NONE;
+static int       linked_spool = 0;
 
 static char      cached_uid[26] = "";
 static char      cached_kind[34] = "";
 static char      cached_content[128] = "";
 static TagInfo   cached_info;
+static uint16_t  cached_bytes = 0;
 static bool      cache_dirty = false;
 static bool      scan_pending = false;
 static unsigned long scan_since = 0;
@@ -56,11 +60,18 @@ const char* tagCachedUid()     { return cached_uid; }
 const char* tagCachedKind()    { return cached_kind; }
 const char* tagCachedContent() { return cached_content; }
 const TagInfo* tagCachedInfo() { return &cached_info; }
+uint16_t tagCachedBytes()      { return cached_bytes; }
 void tagScanRequest() { scan_pending = true; scan_since = millis(); }
 
 const char* tagWriteState()   { return state; }
 const char* tagWriteMessage() { return message; }
 uint8_t     tagWriteResultCode() { return result; }
+
+int tagWriteTakeLinkedSpool() {
+  const int id = linked_spool;
+  linked_spool = 0;
+  return id;
+}
 
 // The tag the main poll is looking at, judged the same way refreshCache()
 // judges it: a 7 byte UID prints as 20 characters, a 4 byte one as 11. Reading
@@ -305,9 +316,19 @@ static bool writeAce(const AceFields *f) {
 // The single byte TLV length field is what caps the payload, not the tag: past
 // 255 total the TLV would need its three byte form, which nothing here writes.
 #define NDEF_JSON_MAX 250
+
+// TLV tag and length, record header with type and payload length, the media
+// type itself, the payload, the terminator - then rounded up to whole 4 byte
+// pages, because that is the unit a write goes in.
+size_t tagNdefSizeFor(size_t json_len) {
+  const size_t n = 2 + 3 + 16 + json_len + 1;
+  return n + ((4 - (n % 4)) % 4);
+}
+
 static char    write_err[80] = "";
 static uint8_t write_code = TW_ERR_WRITE;
 static char    remote_payload[320] = "";
+static char    remote_proto[12] = "";
 
 // Wraps a JSON document in the NDEF TLV an OpenSpool reader expects.
 static bool writeNdefJson(const char *json) {
@@ -316,6 +337,30 @@ static bool writeNdefJson(const char *json) {
 
   static const char TYPE[] = "application/json";
   const uint8_t tlen = sizeof(TYPE) - 1;
+
+  // Settled before a single byte is laid out: the same arithmetic the preview
+  // uses, so a tag the page called too small is exactly the one that fails here.
+  const int i_need = (int)tagNdefSizeFor((size_t)n);
+  {
+    const uint8_t need_last = (uint8_t)(4 + (i_need + 3) / 4 - 1);
+    const uint8_t last = lastUserPage();
+    if (need_last > last) {
+      // Two different faults used to read as one. A tag whose capability
+      // container is blank reports no size at all, and lastUserPage() then
+      // assumes the smallest NTAG - so an NTAG215 with 496 bytes free was
+      // turned away claiming it held 144, which sends the owner looking for a
+      // bigger tag instead of formatting the one in their hand.
+      if (!tagUserBytes())
+        snprintf(write_err, sizeof(write_err),
+                 "Tag reports no size. Format it as NDEF once, then retry");
+      else
+        snprintf(write_err, sizeof(write_err),
+                 "OpenSpool needs %d bytes, this tag holds %u", i_need,
+                 (unsigned)((last - 3) * 4));
+      write_code = TW_ERR_SPACE;
+      return false;
+    }
+  }
 
   uint8_t buf[288];
   int i = 0;
@@ -329,49 +374,56 @@ static bool writeNdefJson(const char *json) {
   buf[i++] = 0xFE;                       // terminator
   while (i % 4) buf[i++] = 0x00;
 
-  const uint8_t need_last = (uint8_t)(4 + (i + 3) / 4 - 1);
-  const uint8_t last = lastUserPage();
-  if (need_last > last) {
-    // Two different faults used to read as one. A tag whose capability
-    // container is blank reports no size at all, and lastUserPage() then
-    // assumes the smallest NTAG - so an NTAG215 with 496 bytes free was
-    // turned away claiming it held 144, which sends the owner looking for a
-    // bigger tag instead of formatting the one in their hand.
-    if (!tagUserBytes())
-      snprintf(write_err, sizeof(write_err),
-               "Tag reports no size. Format it as NDEF once, then retry");
-    else
-      snprintf(write_err, sizeof(write_err),
-               "OpenSpool needs %d bytes, this tag holds %u", i,
-               (unsigned)((last - 3) * 4));
-    write_code = TW_ERR_SPACE;
-    return false;
-  }
-
   for (int off = 0; off < i; off += 4)
     if (!wrPage((uint8_t)(4 + off / 4), buf + off)) return false;
   return true;
 }
 
-static bool writeOpenSpool(const AceFields *f, int spool_id) {
-  char json[224];
-  int n = snprintf(json, sizeof(json),
-    "{\"protocol\":\"openspool\",\"version\":\"1.0\",\"type\":\"%s\","
+// Two names for the same number, because two readers look for two different
+// keys. sm_id is the OpenSpool convention this firmware has always written and
+// what OpenSpoolman resolves. spool_id is what FilaMan's own reader looks for -
+// the word sm_id does not appear anywhere in FilaMan, and a record carrying
+// only that one arrives there as spool 0. Neither replaces the other.
+// What the format is called where a person reads it.
+static const char* fmtLabel(TagFormat fmt) {
+  switch (fmt) {
+    case TAG_FMT_ACE:     return "ACE";
+    case TAG_FMT_FILAMAN: return "FilaMan";
+    default:              return "OpenSpool";
+  }
+}
+
+static const char* protoName(TagFormat fmt) {
+  return fmt == TAG_FMT_FILAMAN ? "filaman" : "openspool";
+}
+
+static int buildOpenSpoolJson(const AceFields *f, int spool_id, TagFormat fmt,
+                              char *json, size_t json_len) {
+  int n = snprintf(json, json_len,
+    "{\"protocol\":\"%s\",\"version\":\"1.0\",\"type\":\"%s\","
     "\"color_hex\":\"%02X%02X%02X\",\"brand\":\"%s\","
-    "\"min_temp\":\"%u\",\"max_temp\":\"%u\",\"sm_id\":%d}",
-    f->material, f->r, f->g, f->b, f->brand,
-    (unsigned)f->et_lo, (unsigned)f->et_hi, spool_id);
-  if (n <= 0 || n >= (int)sizeof(json)) return false;
+    "\"min_temp\":\"%u\",\"max_temp\":\"%u\","
+    "\"spool_id\":%d,\"sm_id\":%d}",
+    protoName(fmt), f->material, f->r, f->g, f->b, f->brand,
+    (unsigned)f->et_lo, (unsigned)f->et_hi, spool_id, spool_id);
+  return (n > 0 && n < (int)json_len) ? n : 0;
+}
+
+static bool writeOpenSpool(const AceFields *f, int spool_id, TagFormat fmt) {
+  char json[224];
+  if (!buildOpenSpoolJson(f, spool_id, fmt, json, sizeof(json))) return false;
   return writeNdefJson(json);
 }
 
-// FilaMan describes the spool for its own protocol, not for the tag: the record
-// carries the request's own spool_id, and sm_id - the field that points a
-// written tag back at a spool, and the one this firmware writes itself - is not
-// in it. Written verbatim that produces a tag nothing can trace back. Both are
-// corrected here, once, and everything else the server chose is left alone.
+// What the server sent is kept exactly as it sent it - spool_id included. An
+// earlier version swapped that key for sm_id on the way through, on the theory
+// that sm_id was the one a reader needs. It is not: sm_id is this firmware's
+// own convention, FilaMan looks for spool_id, and a record with only sm_id
+// reaches FilaMan as spool 0. The one thing added here is sm_id when it is
+// missing, so the same tag also answers to an OpenSpool reader.
 void tagRemotePayloadSet(const char *json, int spool_id) {
   remote_payload[0] = 0;
+  remote_proto[0] = 0;
   if (!json || !json[0]) return;
 
   JsonDocument d;
@@ -379,8 +431,6 @@ void tagRemotePayloadSet(const char *json, int spool_id) {
     logSD("RemoteLink: tag payload is not JSON, ignoring it");
     return;
   }
-  d.remove("spool_id");
-  d.remove("location_id");
   if (d["sm_id"].isNull() && spool_id > 0) d["sm_id"] = spool_id;
 
   const size_t n = measureJson(d);
@@ -392,6 +442,16 @@ void tagRemotePayloadSet(const char *json, int spool_id) {
     return;
   }
   serializeJson(d, remote_payload, sizeof(remote_payload));
+
+  // Kept for the question on the screen. FilaMan writes the name lowercase;
+  // shown to a user it should read the way the two projects spell themselves.
+  const char *proto = d["protocol"] | "";
+  snprintf(remote_proto, sizeof(remote_proto), "%s",
+           strcmp(proto, "filaman") == 0 ? "FilaMan" : "OpenSpool");
+}
+
+const char* tagRemotePayloadProtocol() {
+  return remote_proto[0] ? remote_proto : "OpenSpool";
 }
 
 bool tagRemotePayloadPending() { return remote_payload[0] != 0; }
@@ -424,6 +484,7 @@ bool tagWriteRemotePayload() {
   }
 
   remote_payload[0] = 0;
+  remote_proto[0] = 0;
   cache_dirty = true;
   return ok;
 }
@@ -546,10 +607,11 @@ static bool tagDescribe(char *out, size_t out_len, TagInfo *ti) {
 }
 
 bool tagPreview(int spool_id, TagFormat fmt, char *out, size_t out_len,
-                char *linked, size_t linked_len, TagInfo *info) {
+                char *linked, size_t linked_len, TagInfo *info, uint16_t *need) {
   out[0] = 0;
   linked[0] = 0;
   if (info) memset(info, 0, sizeof(*info));
+  if (need) *need = 0;
   if (spool_id <= 0) return false;
 
   JsonDocument doc;
@@ -569,20 +631,31 @@ bool tagPreview(int spool_id, TagFormat fmt, char *out, size_t out_len,
   buildAce(sp, &f);
   if (info) {
     aceToInfo(&f, info);
-    if (fmt == TAG_FMT_OPENSPOOL) {
+    if (TAG_FMT_IS_NDEF(fmt)) {
       // OpenSpool carries neither the SKU nor the spool geometry.
-      snprintf(info->fmt, sizeof(info->fmt), "OpenSpool");
+      snprintf(info->fmt, sizeof(info->fmt), "%s",
+               fmt == TAG_FMT_FILAMAN ? "FilaMan" : "OpenSpool");
       info->sku[0] = 0;
       info->bed_lo = info->bed_hi = 0;
       info->dia_x100 = info->length_m = info->weight_g = 0;
     }
   }
-  if (fmt == TAG_FMT_OPENSPOOL) {
-    snprintf(out, out_len, "OpenSpool: %s %s, #%02X%02X%02X, %u-%uC",
+  if (TAG_FMT_IS_NDEF(fmt)) {
+    // Measured on the record that would really be written, not estimated. The
+    // brand name alone moves this by a dozen bytes, which is the difference
+    // between fitting an NTAG213 and not.
+    if (need) {
+      char json[224];
+      const int n = buildOpenSpoolJson(&f, spool_id, fmt, json, sizeof(json));
+      if (n > 0) *need = (uint16_t)tagNdefSizeFor((size_t)n);
+    }
+    snprintf(out, out_len, "%s: %s %s, #%02X%02X%02X, %u-%uC",
+             fmt == TAG_FMT_FILAMAN ? "FilaMan" : "OpenSpool",
              f.brand, f.material, f.r, f.g, f.b,
              (unsigned)f.et_lo, (unsigned)f.et_hi);
     return true;
   }
+  if (need) *need = ACE_BYTES;
   describeAce(&f, out, out_len);
   return true;
 }
@@ -595,6 +668,7 @@ static void refreshCache() {
 
   if (!tag_present) {
     cached_uid[0] = 0; cached_kind[0] = 0; cached_content[0] = 0;
+    cached_bytes = 0;
     memset(&cached_info, 0, sizeof(cached_info));
     last_uid[0] = 0;
     return;
@@ -606,6 +680,7 @@ static void refreshCache() {
   if (!is_ntag) {
     snprintf(cached_kind, sizeof(cached_kind), "MIFARE Classic, read-only");
     cached_content[0] = 0;
+    cached_bytes = 0;
     memset(&cached_info, 0, sizeof(cached_info));
     return;
   }
@@ -617,6 +692,7 @@ static void refreshCache() {
   if (changed) snprintf(last_uid, sizeof(last_uid), "%s", g_tag.uid_str);
 
   const uint16_t bytes = tagUserBytes();
+  cached_bytes = bytes;
   if (bytes) snprintf(cached_kind, sizeof(cached_kind), "NTAG, writable, %u bytes",
                       (unsigned)bytes);
   else       snprintf(cached_kind, sizeof(cached_kind), "NTAG, writable");
@@ -750,7 +826,7 @@ static bool writeSpoolRecord(int spool_id, TagFormat fmt,
   {
     AceFields f;
     buildAce(sp, &f);
-    ok = (fmt == TAG_FMT_ACE) ? writeAce(&f) : writeOpenSpool(&f, spool_id);
+    ok = TAG_FMT_IS_NDEF(fmt) ? writeOpenSpool(&f, spool_id, fmt) : writeAce(&f);
   }
 
   cache_dirty = true;   // the tag changed under a UID that did not
@@ -779,7 +855,7 @@ bool tagWriteSpoolNow(int spool_id, TagFormat fmt) {
 
   char m[128];
   snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", spool_id, name,
-           fmt == TAG_FMT_ACE ? "ACE" : "OpenSpool");
+           fmtLabel(fmt));
   finish("ok", m, TW_OK);
   return true;
 }
@@ -803,12 +879,24 @@ void tagWriteTick() {
   }
 
   char name[48];
-  if (!writeSpoolRecord(pending_id, pending_fmt, name, sizeof(name))) return;
+  const bool wrote = writeSpoolRecord(pending_id, pending_fmt, name, sizeof(name));
+  // writeSpoolRecord() has already reported why, and finish() below would
+  // overwrite the code, so keep it.
+  const uint8_t code = wrote ? TW_OK : result;
+
+  // A tag too small to write is no reason to leave the spool unbound. But a
+  // spool the backend could not hand over is not one to bind a tag to either,
+  // so that failure keeps the floor to itself.
+  if (!wrote && (!pending_link || code == TW_ERR_BACKEND)) return;
 
   // Erase returned above, so there is no format to branch on here any more.
-  char m[128];
-  snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", pending_id, name,
-           pending_fmt == TAG_FMT_ACE ? "ACE" : "OpenSpool");
+  char m[160];
+  if (wrote) {
+    snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", pending_id, name,
+             fmtLabel(pending_fmt));
+  } else {
+    snprintf(m, sizeof(m), "%s", message);
+  }
   size_t n = strnlen(m, sizeof(m));
 
   if (pending_link) {
@@ -823,11 +911,15 @@ void tagWriteTick() {
     // it never wrote, and then m + n points past the buffer while
     // sizeof(m) - n underflows. Same reason the rest of this file moved off it.
     if (code2 == 200) {
+      // The tag on the reader now points at this spool, so the screen should
+      // say so rather than keep whatever it showed before. Handed over as an
+      // id: the lookup repaints the main screen and belongs on the UI side.
+      linked_spool = pending_id;
       if (note[0]) appendf(m, sizeof(m), n, ", linked (%s)", note);
       else         appendf(m, sizeof(m), n, ", linked to the spool");
     } else {
       appendf(m, sizeof(m), n, ", but linking failed (HTTP %d)", code2);
     }
   }
-  finish("ok", m, TW_OK);
+  finish(wrote ? "ok" : "error", m, code);
 }

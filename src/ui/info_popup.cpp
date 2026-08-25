@@ -23,7 +23,7 @@
 #define INFO_TEXT_BUF   1024
 #define INFO_TITLE_BUF   48
 
-void showInfoPopup(int title_id, int text_id) {
+void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   if (title_id < 0 || title_id >= STR_COUNT) return;
   if (text_id  < 0 || text_id  >= STR_COUNT) return;
 
@@ -47,6 +47,22 @@ void showInfoPopup(int title_id, int text_id) {
   lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
+  // The glyph is what says which of the two happened before a word is read.
+  // Only for a result: a warning triangle over a settings explanation would be
+  // a lie, and a tick over one would be meaningless.
+  const bool is_result = (tone != INFO_PLAIN);
+  if (is_result) {
+    lv_obj_t *icon = lv_label_create(box);
+    lv_label_set_text(icon, tone == INFO_DONE ? LV_SYMBOL_OK : LV_SYMBOL_WARNING);
+    lv_obj_set_style_text_color(icon,
+      lv_color_hex(tone == INFO_DONE ? 0x80ffb0 : 0xf0b838), 0);
+    lv_obj_set_style_text_font(icon, &lv_font_montserrat_ext_24, 0);
+    lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, 12);
+  }
+  // Everything below the icon moves down by its height plus a little air, so
+  // one layout serves both shapes.
+  const int y_off = is_result ? 34 : 0;
+
   // Title: the name of the setting, so the popup is anchored to the row the
   // user tapped rather than being a floating paragraph.
   lv_obj_t *title = lv_label_create(box);
@@ -54,18 +70,19 @@ void showInfoPopup(int title_id, int text_id) {
   strncpy(tbuf, T(title_id), sizeof(tbuf) - 1);
   tbuf[sizeof(tbuf) - 1] = '\0';
   lv_label_set_text(title, tbuf);
-  lv_obj_set_style_text_color(title, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(title,
+    lv_color_hex(is_result ? 0xe8f0ff : 0x28d49a), 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_width(title, 424);
-  lv_obj_set_pos(title, 8, 14);
+  lv_obj_set_pos(title, 8, 14 + y_off);
 
   // The text scrolls instead of being clipped. Some settings genuinely need a
   // paragraph to explain, and a reader who can flick is better served than one
   // who silently loses the last third.
   lv_obj_t *scroll = lv_obj_create(box);
-  lv_obj_set_size(scroll, 424, 128);
-  lv_obj_set_pos(scroll, 8, 48);
+  lv_obj_set_size(scroll, 424, 128 - y_off);
+  lv_obj_set_pos(scroll, 8, 48 + y_off);
   lv_obj_set_style_bg_opa(scroll, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(scroll, 0, 0);
   lv_obj_set_style_pad_all(scroll, 0, 0);
@@ -87,7 +104,8 @@ void showInfoPopup(int title_id, int text_id) {
   strncpy(ibuf, T(text_id), sizeof(ibuf) - 1);
   ibuf[sizeof(ibuf) - 1] = '\0';
   lv_label_set_text(info, ibuf);
-  lv_obj_set_style_text_color(info, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(info,
+    lv_color_hex(is_result ? 0x4a6fa0 : 0xc8d8f0), 0);
   lv_obj_set_style_text_font(info, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(info, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
@@ -113,7 +131,7 @@ void showInfoPopup(int title_id, int text_id) {
 
   lv_obj_t *l = lv_label_create(btn);
   char bbuf[24];
-  strncpy(bbuf, T(STR_BACK), sizeof(bbuf) - 1);
+  strncpy(bbuf, T(is_result ? STR_BTN_OK : STR_BACK), sizeof(bbuf) - 1);
   bbuf[sizeof(bbuf) - 1] = '\0';
   lv_label_set_text(l, bbuf);
   lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);

@@ -112,10 +112,15 @@ void showRemoteLinkPopup(int spool_id) {
   strncpy(s_link_uuid, uuid, sizeof(s_link_uuid) - 1);
   s_link_uuid[sizeof(s_link_uuid) - 1] = '\0';
 
-  // Whether this tag can carry the spool data at all. A Bambu tag is read-only
-  // to us and a 4 byte UID is not an NTAG, so for both the only thing on offer
-  // is the link, exactly as before.
+  // Whether this tag can carry the spool data at all, and whether it should.
+  // A Bambu tag is read-only to us and a 4 byte UID is not an NTAG, so for both
+  // the only thing on offer is the link, exactly as before.
+  //
+  // The user already pressed "write tag" in the filament manager, so the
+  // question here is the one confirmation, not a second one: the setting says
+  // what confirming does, and the button says which of the two it is.
   const bool can_write = !s_is_bambu && tagIsWritableNtag();
+  s_write_pending = can_write && g_flm_remote_write;
 
   // Spool details are only decoration. The link works without them, so a
   // failed lookup downgrades the popup instead of cancelling it. That case is
@@ -188,9 +193,6 @@ void showRemoteLinkPopup(int spool_id) {
   if (g_flm_autolink && remoteLinkTagWasPresent() && !mismatch) {
     logSDf("RemoteLink: auto-linking spool %d, no prompt (tag was already on)",
            spool_id);
-    // Nobody is going to press a button here, so the setting stands in for the
-    // one they would have pressed.
-    s_write_pending = can_write && g_flm_remote_write;
     // The same two flags the Link button sets. handleRemoteLinkDeferredActions()
     // runs right after this in the same appLoop() pass and does the rest; it
     // null checks the overlay, so building none is fine.
@@ -215,11 +217,8 @@ void showRemoteLinkPopup(int spool_id) {
 
   // The comparison block adds two rows plus a header, so the box grows for it
   // rather than pushing the cancel button out through the bottom edge.
-  // A mismatch is only ever computed for a Bambu tag, and a Bambu tag is never
-  // writable, so the tall comparison box and the third button cannot both be
-  // needed at once - which is what keeps either of them on a 320 pixel screen.
   lv_obj_t *box = lv_obj_create(scr_remote_link);
-  lv_obj_set_size(box, 440, mismatch ? 300 : (can_write ? 280 : 260));
+  lv_obj_set_size(box, 440, mismatch ? 300 : 260);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
   lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
   lv_obj_set_style_border_color(box,
@@ -365,10 +364,17 @@ void showRemoteLinkPopup(int spool_id) {
         swatchColorFromHex(i == 0 ? g_tag.color_hex : color_hex), 0);
     }
     y_after_head += 70;
-  } else if (!can_write) {
+  } else {
     lv_obj_t *lbl_q = lv_label_create(box);
     { char qb[96];
-      strncpy(qb, T(STR_REMOTE_LINK_QUESTION), sizeof(qb) - 1);
+      // Naming the format is what separates "this tag gets overwritten" from
+      // "this tag gets remembered", and the two answers look identical without
+      // it.
+      if (s_write_pending)
+        snprintf(qb, sizeof(qb), T(STR_REMOTE_LINK_Q_WRITE),
+                 tagRemotePayloadProtocol());
+      else
+        strncpy(qb, T(STR_REMOTE_LINK_QUESTION), sizeof(qb) - 1);
       qb[sizeof(qb) - 1] = '\0';
       lv_label_set_text(lbl_q, qb); }
     lv_obj_set_style_text_color(lbl_q, lv_color_hex(0x4a6fa0), 0);
@@ -380,47 +386,16 @@ void showRemoteLinkPopup(int spool_id) {
     y_after_head += 34;
   }
 
-  // The write, when there is a tag that can take it. It sits on top and keeps
-  // the confirming look, because it is what FilaMan's button asked for - the
-  // link below it is the smaller of the two actions, not the safer default.
-  if (can_write) {
-    lv_obj_t *btn_wr = lv_btn_create(box);
-    lv_obj_set_size(btn_wr, 420, 48);
-    lv_obj_align(btn_wr, LV_ALIGN_TOP_MID, 0, y_after_head);
-    lv_obj_set_style_bg_color(btn_wr, lv_color_hex(0x0d3d2e), 0);
-    lv_obj_set_style_bg_color(btn_wr, lv_color_hex(0x18705a), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(btn_wr, 8, 0);
-    lv_obj_set_style_shadow_width(btn_wr, 0, 0);
-    lv_obj_set_style_border_width(btn_wr, 0, 0);
-    lv_obj_add_event_cb(btn_wr, [](lv_event_t *e) {
-      // Same rule as every other button here: flags only, the NFC write and
-      // the HTTP report happen one loop pass later.
-      s_write_pending   = true;
-      s_confirm_pending = true;
-      close_remote_link_pending = true;
-    }, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *lbl_wr = lv_label_create(btn_wr);
-    { char wb[40]; strncpy(wb, T(STR_REMOTE_LINK_WRITE), sizeof(wb) - 1);
-      wb[sizeof(wb) - 1] = '\0'; lv_label_set_text(lbl_wr, wb); }
-    lv_obj_set_style_text_color(lbl_wr, lv_color_hex(0x28d49a), 0);
-    lv_obj_set_style_text_font(lbl_wr, &lv_font_montserrat_ext_16, 0);
-    lv_obj_center(lbl_wr);
-    y_after_head += 56;
-  }
-
   lv_obj_t *btn_ok = lv_btn_create(box);
   lv_obj_set_size(btn_ok, 420, 48);
   lv_obj_align(btn_ok, LV_ALIGN_TOP_MID, 0, y_after_head);
   lv_obj_set_style_bg_color(btn_ok,
-    mismatch ? lv_color_hex(0x3a1010)
-             : lv_color_hex(can_write ? 0x0a1828 : 0x0d3d2e), 0);
+    mismatch ? lv_color_hex(0x3a1010) : lv_color_hex(0x0d3d2e), 0);
   lv_obj_set_style_bg_color(btn_ok,
-    mismatch ? lv_color_hex(0x602020)
-             : lv_color_hex(can_write ? 0x1a3060 : 0x18705a), LV_STATE_PRESSED);
+    mismatch ? lv_color_hex(0x602020) : lv_color_hex(0x18705a), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ok, 8, 0);
   lv_obj_set_style_shadow_width(btn_ok, 0, 0);
-  lv_obj_set_style_border_width(btn_ok, can_write ? 1 : 0, 0);
-  lv_obj_set_style_border_color(btn_ok, lv_color_hex(0x1a3060), 0);
+  lv_obj_set_style_border_width(btn_ok, 0, 0);
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
     // No HTTP and no delete in here, both happen one loop pass later.
     s_confirm_pending = true;
@@ -428,15 +403,13 @@ void showRemoteLinkPopup(int spool_id) {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
   { char bb[40];
-    strncpy(bb, mismatch    ? T(STR_BTN_OVERWRITE)
-                : can_write ? T(STR_REMOTE_LINK_ONLY)
-                            : T(STR_REMOTE_LINK_CONFIRM),
+    strncpy(bb, mismatch          ? T(STR_BTN_OVERWRITE)
+                : s_write_pending ? T(STR_REMOTE_LINK_WRITE)
+                                  : T(STR_REMOTE_LINK_CONFIRM),
             sizeof(bb) - 1);
     bb[sizeof(bb) - 1] = '\0'; lv_label_set_text(lbl_ok, bb); }
   lv_obj_set_style_text_color(lbl_ok,
-    mismatch    ? lv_color_hex(0xff8080)
-    : can_write ? lv_color_hex(0xc8d8f0)
-                : lv_color_hex(0x28d49a), 0);
+    mismatch ? lv_color_hex(0xff8080) : lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_ok);
 
@@ -459,6 +432,24 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_set_style_text_color(lbl_cancel, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(lbl_cancel, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_cancel);
+}
+
+// Puts the spool the tag now points at on the screen. Runs whether or not the
+// write succeeded: the link is what the display is about, and a tag that could
+// not be written is still bound to this spool.
+static void showLinkedSpool(int spool_id, bool is_bambu, const char *uuid) {
+  if (!is_bambu) {
+    // g_tag holds the previous scan until overwritten, and a 7 byte UID is
+    // exactly 23 characters into a 24 byte field, so the copy fills it to the
+    // brim and strncpy writes no terminator. Set it explicitly.
+    strncpy(g_tag.uid_str,   uuid, sizeof(g_tag.uid_str) - 1);
+    g_tag.uid_str[sizeof(g_tag.uid_str) - 1] = '\0';
+    strncpy(g_tag.tray_uuid, uuid, sizeof(g_tag.tray_uuid) - 1);
+    g_tag.tray_uuid[sizeof(g_tag.tray_uuid) - 1] = '\0';
+  }
+  link_popup_dismissed = false;
+  tagLookupForget();
+  querySpoolmanById(spool_id);
 }
 
 void handleRemoteLinkDeferredActions() {
@@ -501,10 +492,28 @@ void handleRemoteLinkDeferredActions() {
                         ? tagWriteRemotePayload()
                         : tagWriteSpoolNow(spool_id, TAG_FMT_OPENSPOOL);
       if (!ok) {
+        // The write failed, but the spool still belongs to this tag. FilaMan
+        // only sets rfid_uid when the result says success, so reporting the
+        // failure alone would leave the user with neither a written tag nor a
+        // link after asking for a write. The link is made here instead -
+        // backendLinkSpoolTag() is the same call the tag page uses, and it
+        // takes the tag off whatever spool was holding it.
+        char note[48];
+        const int lc = backendLinkSpoolTag(backendBaseUrl(), spool_id,
+                                           s_link_uuid, note, sizeof(note));
+        logSDf("RemoteLink: write failed for spool %d, link %s", spool_id,
+               lc == 200 ? "done anyway" : "failed too");
         // The reason, not just the fact. FilaMan shows this string to the user,
         // and "tag write failed" told nobody that the tag was too small.
         const char *why = tagWriteMessage();
-        remoteLinkReport(false, s_link_uuid, why[0] ? why : "tag write failed");
+        char msg[128];
+        snprintf(msg, sizeof(msg), "%s%s", why[0] ? why : "tag write failed",
+                 lc == 200 ? " - the spool was linked anyway" : "");
+        remoteLinkReport(false, s_link_uuid, msg);
+        // Not a silent exit any more. The spool is bound to this tag now, and
+        // leaving the previous one on the display was the reason a failed
+        // write looked like nothing had happened at all.
+        if (lc == 200) showLinkedSpool(spool_id, s_is_bambu, s_link_uuid);
         return;
       }
     }
@@ -516,18 +525,7 @@ void handleRemoteLinkDeferredActions() {
 
     // Pull the spool back in so the main screen shows the fresh link. The
     // same two steps the manual link does at the end of doLinkPatch().
-    if (!s_is_bambu) {
-      // g_tag holds the previous scan until overwritten, and a 7 byte UID is
-      // exactly 23 characters into a 24 byte field, so the copy fills it to the
-      // brim and strncpy writes no terminator. Set it explicitly.
-      strncpy(g_tag.uid_str,   s_link_uuid, sizeof(g_tag.uid_str) - 1);
-      g_tag.uid_str[sizeof(g_tag.uid_str) - 1] = '\0';
-      strncpy(g_tag.tray_uuid, s_link_uuid, sizeof(g_tag.tray_uuid) - 1);
-      g_tag.tray_uuid[sizeof(g_tag.tray_uuid) - 1] = '\0';
-    }
-    link_popup_dismissed = false;
-    tagLookupForget();
-    querySpoolmanById(spool_id);
+    showLinkedSpool(spool_id, s_is_bambu, s_link_uuid);
     logSDf("RemoteLink: linked spool %d%s", spool_id,
            want_write ? " and wrote the tag" : "");
   }
