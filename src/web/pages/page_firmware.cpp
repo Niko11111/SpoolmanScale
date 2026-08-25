@@ -43,6 +43,16 @@ static unsigned long ota_last_paint = 0;
 static bool gh_web_flash_pending = false;
 static char gh_web_flash_tag[40] = "";
 
+// The last answer the network gave, and what it was asked. Opening the page
+// checks by itself, so without this every visit - and every hop back to this
+// tab - would spend a TLS handshake and a GitHub request to be told the same
+// thing. Pressing the button always goes out; only the automatic check reuses
+// this.
+#define OTA_CHECK_CACHE_MS 600000UL
+static unsigned long s_check_ms  = 0;     // 0 = no check yet this boot
+static bool          s_check_pre = false; // the channel it was for
+static bool          s_check_new = false;
+
 bool otaWebUploadActive() { return ota_upload_active; }
 
 static const char* label() { return T(STR_W_NAV_FIRMWARE); }
@@ -149,7 +159,8 @@ static String body() {
   h += F("</h2><div class='rows' style='margin-bottom:16px'>"
          "<div class='row'><span class='k'>");
   h += T(STR_W_FW_CHANNEL);
-  h += F("</span><span class='v'><select id='ghch' style='flex:0 0 auto'>"
+  h += F("</span><span class='v'>"
+         "<select id='ghch' style='flex:0 0 auto' onchange='ghCheck(false)'>"
          "<option value='0'");
   if (!gh_prerelease) h += F(" selected");
   h += F(">");
@@ -231,19 +242,27 @@ static String body() {
          "INST=d;c.textContent=d.prerelease?G.chpre:G.chrel;"
          "r2.textContent=fmtDate(d.published);"
          "document.getElementById('fwnb').disabled=!d.notes;"
-         "}).catch(()=>{});}"
+         // Chained, not fired alongside: both calls are served from the same
+         // loop as everything else the scale does, so two at once only means
+         // the second one waits with a socket held open.
+         "}).catch(()=>{}).finally(()=>ghCheck(true));}"
          "function toggle(pre,btn,shown,hidden,text){"
          "var e=document.getElementById(pre),b=document.getElementById(btn);"
          "if(e.style.display==='block'){e.style.display='none';b.textContent=shown;return;}"
          "e.textContent=text;e.style.display='block';b.textContent=hidden;}"
          "function fwNotes(){if(!INST)return;"
          "toggle('fwn','fwnb',G.notes,G.hide,INST.notes);}"
-         "function ghCheck(){"
+         // auto is the check the page runs by itself, on load and when the
+         // channel changes. It may be answered from the device's last result,
+         // and it stays quiet when it fails: a scale with no route out should
+         // not greet every visitor with a red line.
+         "function ghCheck(auto){"
          "var b=document.getElementById('ghck');"
          "b.disabled=true;b.textContent=G.checking;ghSay('');"
-         "fetch('/api/ota/check?pre='+document.getElementById('ghch').value,"
+         "fetch('/api/ota/check?pre='+document.getElementById('ghch').value"
+         "+(auto?'&auto=1':''),"
          "{method:'POST'}).then(r=>r.json()).then(d=>{"
-         "if(!d.ok){ghSay(ghErr(d),true);return;}"
+         "if(!d.ok){if(!auto)ghSay(ghErr(d),true);return;}"
          "document.getElementById('ghlt').textContent=d.tag;"
          "document.getElementById('ghin').disabled=!d.update;"
          "var n=document.getElementById('ghnb');n.disabled=false;"
@@ -251,7 +270,7 @@ static String body() {
          "LATEST=null;document.getElementById('ghn').style.display='none';"
          "n.textContent=G.whatsnew;"
          "ghSay(d.update?G.avail:G.uptodate,false);"
-         "}).catch(()=>ghSay(G.fail,true))"
+         "}).catch(()=>{if(!auto)ghSay(G.fail,true);})"
          ".finally(()=>{b.disabled=false;b.textContent=G.check;});}"
          "var LATEST=null;"
          "function ghNotes(){"
@@ -328,8 +347,25 @@ static void routes(WebServer &srv) {
       return;
     }
     if (srv.hasArg("pre")) {
-      gh_prerelease = (srv.arg("pre") == "1");
-      prefsPutBool("gh_prerelease", gh_prerelease);
+      const bool want = (srv.arg("pre") == "1");
+      // Only on a real change. The page sends the channel with every check,
+      // including the one it runs by itself on load, and NVS is flash.
+      if (want != gh_prerelease) {
+        gh_prerelease = want;
+        prefsPutBool("gh_prerelease", gh_prerelease);
+      }
+    }
+
+    // The page checked itself rather than being asked to. An answer from the
+    // same channel, taken minutes ago, is the same answer.
+    if (srv.arg("auto") == "1" && s_check_ms != 0 &&
+        s_check_pre == gh_prerelease && gh_latest_version[0] &&
+        millis() - s_check_ms < OTA_CHECK_CACHE_MS) {
+      srv.send(200, "application/json",
+               "{\"ok\":true,\"cached\":true,\"tag\":\"" + jsonEsc(gh_latest_version) +
+               "\",\"installed\":\"" + jsonEsc(FW_VERSION) +
+               "\",\"update\":" + (s_check_new ? "true" : "false") + "}");
+      return;
     }
 
     char tag[40] = "", err[80] = "";
@@ -346,6 +382,9 @@ static void routes(WebServer &srv) {
       update_available = true;
       showUpdateBadges(true);
     }
+    s_check_ms  = millis() ? millis() : 1;   // 0 is reserved for "never"
+    s_check_pre = gh_prerelease;
+    s_check_new = newer;
     logSDf("OTA check: web asked, latest %s%s", tag, newer ? " (newer)" : "");
     srv.send(200, "application/json",
              "{\"ok\":true,\"tag\":\"" + jsonEsc(tag) +
