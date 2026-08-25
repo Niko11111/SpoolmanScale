@@ -106,6 +106,18 @@ int filamanPatchCustomField(const char* base_url, const char* api_key, int spool
                             const char* key, const char* value,
                             uint32_t timeout_ms = 8000);
 
+// A Bambu chip uid is four bytes, eight characters normalised. The plugin
+// pads the field to sixteen with what the AMS reported, so only the front is
+// ever compared.
+#define FILAMAN_BAMBU_CHIP_LEN  8
+
+// Undoes, on unlink, what this scale would have written into the Bambu
+// plugin's fields - external_id and a chip slot - and nothing else. Without
+// it the plugin's own entries keep naming the tag, the next scan finds the
+// spool through them, and rfid_uid is written straight back.
+int filamanUnlinkBambuFields(const char* base_url, const char* api_key, int spool_id,
+       const char* chip_uid_hex, uint32_t timeout_ms = 8000);
+
 // Sets external_id. Used to write "bambulab:<tray uuid>" onto a spool this
 // scale linked, which is the only field the Bambu Lab plugin's duplicate
 // check consults - without it the plugin creates the spool a second time.

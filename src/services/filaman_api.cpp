@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "hardware/sd_logger.h"
+#include "services/user_options.h"
 #include "services/backend.h"
 #include "services/http_progress.h"
 
@@ -554,6 +555,75 @@ static int patchSpool(const char* base_url, const char* api_key, const char* pat
   }
   http.end();
   return (code >= 200 && code < 300) ? 200 : code;
+}
+
+// Takes back, on unlink, exactly what this scale would have written into the
+// Bambu plugin's fields - and nothing else.
+//
+// Clearing rfid_uid alone does not free a spool: the plugin's own bookkeeping
+// still names the tag, the next scan finds the spool through it, and the
+// migration writes rfid_uid straight back. From the outside the unlink simply
+// did not stick.
+//
+// The rule is symmetry with the link, which is also what makes it safe to do
+// without asking. external_id goes only when it is a bambulab: binding and
+// only while the switch that writes it is on; an importer's spoolman:<id>
+// stays. A chip slot goes only when it holds this very chip and only while
+// that switch is on, so the plugin's own record of which chips sit on the
+// spool is never touched. With both switches off nothing here runs at all.
+int filamanUnlinkBambuFields(const char* base_url, const char* api_key, int spool_id,
+                             const char* chip_uid_hex, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
+  if (!g_flm_ext_id && !g_flm_bambu_tags) return 200;   // nothing we maintain
+
+  HTTPClient get;
+  get.begin(String(base_url) + "/api/v1/spools/" + spool_id);
+  get.setTimeout(timeout_ms);
+  addApiKey(get, api_key);
+  if (get.GET() != 200) { get.end(); return 200; }   // nothing readable, nothing to clear
+
+  SpiRamAllocator alloc;
+  JsonDocument raw(&alloc);
+  DeserializationError err = deserializeJson(raw, get.getStream());
+  get.end();
+  if (err) return 200;
+
+  JsonDocument body(&alloc);
+  bool touch = false;
+
+  const char* ext = raw["external_id"] | "";
+  if (g_flm_ext_id && strncmp(ext, "bambulab:", 9) == 0) {
+    body["external_id"] = nullptr;    // null clears, "" is rejected
+    touch = true;
+    logSDf("FilaMan: unlink clears external_id %s of spool %d", ext, spool_id);
+  }
+
+  JsonObjectConst existing = raw["custom_fields"];
+  if (g_flm_bambu_tags && chip_uid_hex && strlen(chip_uid_hex) == FILAMAN_BAMBU_CHIP_LEN &&
+      !existing.isNull()) {
+    // A PATCH replaces the whole object, so everything is copied and only a
+    // slot naming this chip is blanked.
+    JsonObject cf;
+    for (uint8_t i = 0; i < 2; i++) {
+      const char* field = (i == 0) ? "bambu_rfid_tag_1" : "bambu_rfid_tag_2";
+      const char* have  = existing[field] | (const char*)nullptr;
+      if (!have || !have[0]) continue;
+      if (strncasecmp(have, chip_uid_hex, FILAMAN_BAMBU_CHIP_LEN) != 0) continue;
+      if (cf.isNull()) {
+        cf = body["custom_fields"].to<JsonObject>();
+        for (JsonPairConst kv : existing) cf[kv.key()] = kv.value();
+      }
+      cf[field] = "";
+      touch = true;
+      logSDf("FilaMan: unlink clears %s of spool %d", field, spool_id);
+    }
+  }
+
+  if (!touch) return 200;
+  String payload;
+  serializeJson(body, payload);
+  return patchSpool(base_url, api_key,
+                    (String("/api/v1/spools/") + spool_id).c_str(), payload, timeout_ms);
 }
 
 // Removes the tag from the places an imported spool can still carry it.

@@ -73,6 +73,15 @@ static void unlinkConfirmCb(lv_event_t *e) {
     // FilaMan and BamBuddy keep one tag each in a place of their own, and
     // patchSpoolTag() with an empty uuid is how both of them unlink.
     patchSpoolTag(spool_id, "");
+    // FilaMan has more places a binding can hide. The Bambu plugin's fields
+    // would otherwise find the spool on the very next scan and the migration
+    // would write rfid_uid back, so an unlink that looked done did not hold.
+    // Only what this scale itself writes is taken back, see the function.
+    if (backendIsFilaMan()) {
+      char chip[24];
+      tagUidNormalize(g_tag.uid_str, chip, sizeof(chip));
+      filamanUnlinkBambuFields(backendBaseUrl(), filamanApiKey(), spool_id, chip);
+    }
     logSDf("Unlink spool ID=%d", spool_id);
   }
   Serial.printf("Unlink spool ID=%d all=%d\n", spool_id, all ? 1 : 0);
