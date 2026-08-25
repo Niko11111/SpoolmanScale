@@ -572,10 +572,10 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Auto weight update"                                                   },  // STR_AUTO_WEIGHT_TITLE
   { "Sobald eine Spule erkannt und das Gewicht\n3 Sekunden stabil ist, wird es automatisch\ngespeichert (ohne Beutel).",
     "Once a spool is detected and the weight\nis stable for 3 seconds, it will be saved\nautomatically (without bag)."  },  // STR_AUTO_WEIGHT_INFO
-  { LV_SYMBOL_PLAY " Auto aktivieren",
-    LV_SYMBOL_PLAY " Enable auto"                                          },  // STR_AUTO_WEIGHT_ENABLE
-  { LV_SYMBOL_STOP " Auto deaktivieren",
-    LV_SYMBOL_STOP " Disable auto"                                         },  // STR_AUTO_WEIGHT_DISABLE
+  { LV_SYMBOL_REFRESH " Auto aktivieren",
+    LV_SYMBOL_REFRESH " Enable auto"                                       },  // STR_AUTO_WEIGHT_ENABLE
+  { LV_SYMBOL_REFRESH " Auto deaktivieren",
+    LV_SYMBOL_REFRESH " Disable auto"                                      },  // STR_AUTO_WEIGHT_DISABLE
   { "Lagerort",
     "Location"                                                             },  // STR_BTN_LOCATION
   { "Lagerort wählen",

@@ -458,17 +458,28 @@ void showConfirmPopup(const char* msg, int action) {
         lv_obj_set_style_pad_all(abox, 0, 0);
         lv_obj_clear_flag(abox, LV_OBJ_FLAG_SCROLLABLE);
 
+        // The same circular arrow the button carries, on its own line so it
+        // reads as the mark of this setting rather than as part of the
+        // sentence. Both sizes below are already linked elsewhere, so the
+        // larger type costs no flash.
+        lv_obj_t *aicon = lv_label_create(abox);
+        lv_label_set_text(aicon, LV_SYMBOL_REFRESH);
+        lv_obj_set_style_text_color(aicon, lv_color_hex(0x28d49a), 0);
+        lv_obj_set_style_text_font(aicon, &lv_font_montserrat_ext_24, 0);
+        lv_obj_align(aicon, LV_ALIGN_TOP_MID, 0, 12);
+
         // Titel
         lv_obj_t *atitle = lv_label_create(abox);
         char atbuf[48]; strncpy(atbuf, T(STR_AUTO_WEIGHT_TITLE), sizeof(atbuf)-1); atbuf[sizeof(atbuf)-1] = '\0';
         lv_label_set_text(atitle, atbuf);
         lv_obj_set_style_text_color(atitle, lv_color_hex(0x28d49a), 0);
-        lv_obj_set_style_text_font(atitle, &lv_font_montserrat_ext_16, 0);
+        lv_obj_set_style_text_font(atitle, &lv_font_montserrat_ext_20, 0);
         lv_obj_set_style_text_align(atitle, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_width(atitle, 444);
-        lv_obj_set_pos(atitle, 8, 10);
+        lv_obj_set_pos(atitle, 8, 44);
 
-        // Info-Text
+        // Info-Text. Both languages carry three hard line breaks, so the block
+        // below is 3 lines at 14 px and ends well clear of the buttons at 156.
         lv_obj_t *ainfo = lv_label_create(abox);
         char aibuf[160]; strncpy(aibuf, T(STR_AUTO_WEIGHT_INFO), sizeof(aibuf)-1); aibuf[sizeof(aibuf)-1] = '\0';
         lv_label_set_text(ainfo, aibuf);
@@ -477,7 +488,7 @@ void showConfirmPopup(const char* msg, int action) {
         lv_obj_set_style_text_align(ainfo, LV_TEXT_ALIGN_CENTER, 0);
         lv_label_set_long_mode(ainfo, LV_LABEL_LONG_WRAP);
         lv_obj_set_width(ainfo, 444);
-        lv_obj_set_pos(ainfo, 8, 38);
+        lv_obj_set_pos(ainfo, 8, 78);
 
         // Bestaetigen-Button
         lv_obj_t *abtn_ok = lv_btn_create(abox);
@@ -541,7 +552,15 @@ void showConfirmPopup(const char* msg, int action) {
       lv_label_set_text(lbl_auto_weight_btn, abuf);
     }
     lv_obj_set_style_text_color(lbl_auto_weight_btn, g_auto_weight ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(lbl_auto_weight_btn, &lv_font_montserrat_ext_14, 0);
+    // 16 rather than 14: this row carries the one setting in the popup that is
+    // not about the spool in hand, and at 14 it read as a footnote. The row is
+    // 219 px wide, which the longer German wording still fits at this size.
+    //
+    // The circular arrow names the feature rather than the action, the way the
+    // drop names the drying date. Enabled or disabled is already said twice
+    // over, by the wording and by the colour, and a play/stop pair said it a
+    // third time while leaving nothing to recognise the row by.
+    lv_obj_set_style_text_font(lbl_auto_weight_btn, &lv_font_montserrat_ext_16, 0);
     lv_obj_set_style_text_align(lbl_auto_weight_btn, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(lbl_auto_weight_btn);
 
