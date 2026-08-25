@@ -53,6 +53,11 @@ static unsigned long s_check_ms  = 0;     // 0 = no check yet this boot
 static bool          s_check_pre = false; // the channel it was for
 static bool          s_check_new = false;
 
+// How far the GitHub download has got. Read by /api/ota/progress, which is the
+// only route answered while an image is being written.
+static uint32_t s_flash_done  = 0;
+static uint32_t s_flash_total = 0;
+
 bool otaWebUploadActive() { return ota_upload_active; }
 
 static const char* label() { return T(STR_W_NAV_FIRMWARE); }
@@ -80,6 +85,13 @@ static bool otaBusy() {
 }
 
 static void webFlashProgress(uint32_t done, uint32_t total) {
+  s_flash_done  = done;
+  s_flash_total = total;
+  // The browser that asked for this is watching a bar, and the loop that would
+  // normally answer it is here, inside the download. Pumping the server from
+  // the progress callback is what lets it answer at all - safely, because
+  // webRequire() turns every other route away while a flash is running.
+  handleOtaServerClient();
   if (!lbl_ota_status) return;
   char line[48];
   otaProgressLine(line, sizeof(line), done, total);
@@ -243,6 +255,7 @@ static String body() {
          "document.querySelector('#rbox .spin').style.display=ask?'none':'';"
          "document.getElementById('rtitle').textContent=title;"
          "document.getElementById('rsec').textContent=text;"
+         "document.getElementById('rbar').style.display='none';"
          "r.style.display=ask?'flex':'none';b.style.display='flex';}"
          "function rInit(){"
          "var rc=document.querySelector('#rbox .rc');if(!rc)return;"
@@ -253,7 +266,15 @@ static String body() {
          "no.onclick=function(){document.getElementById('rbox').style.display='none';};"
          "var yes=document.createElement('button');yes.textContent=G.install;"
          "yes.onclick=ghGo;"
-         "d.appendChild(no);d.appendChild(yes);rc.appendChild(d);}"
+         "d.appendChild(no);d.appendChild(yes);rc.appendChild(d);"
+         "var b=document.createElement('div');b.id='rbar';"
+         "b.style.cssText='display:none;height:8px;border-radius:4px;margin-top:18px;"
+         "background:var(--line);overflow:hidden';"
+         "b.innerHTML=\"<i id='rbari' style='display:block;height:100%;width:0;"
+         "background:var(--accent);transition:width .3s'></i>\";"
+         "rc.appendChild(b);}"
+         "function mb(n){return n>=1048576?(n/1048576).toFixed(2)+' MB'"
+         ":(n/1024).toFixed(0)+' KB';}"
          "function fwInit(){"
          "rInit();"
          "var e=document.getElementById('fwsince'),t=parseInt(e.dataset.t||'0');"
@@ -320,15 +341,33 @@ static String body() {
          // than leaving a spinner over a device that is not doing anything.
          "if(!d.ok){document.getElementById('rbox').style.display='none';"
          "ghSay(ghErr(d),true);return;}"
-         "var s=document.getElementById('rsec');"
-         "var t=0;var iv=setInterval(function(){t++;"
-         "s.textContent=G.keep+' - '+t+'s';"
-         "if(t<20)return;"
+         "var s=document.getElementById('rsec'),"
+         "bar=document.getElementById('rbar'),bi=document.getElementById('rbari');"
+         "var t=0,seen=false;"
+         // Two questions, in order: how far is the download, and is the device
+         // back. The first is answered until the write finishes, the second
+         // only once it has rebooted - /status.json is refused while an image
+         // is being written, so a reply from it means the new build is up.
+         "var iv=setInterval(function(){t++;"
          "if(t>300){clearInterval(iv);"
          "s.innerHTML=RT.gone+\" <a href='' style='color:var(--accent)'>\"+RT.reload+'</a>';"
          "return;}"
+         "fetch('/api/ota/progress',{cache:'no-store'}).then(r=>r.ok?r.json():null)"
+         ".then(function(d){"
+         "if(d&&d.active){seen=true;bar.style.display='block';"
+         "if(d.total){var p=Math.min(100,Math.round(d.done*100/d.total));"
+         "bi.style.width=p+'%';"
+         "s.textContent=mb(d.done)+' / '+mb(d.total)+' - '+p+' %';}"
+         "else{s.textContent=mb(d.done);}return;}"
+         // Not writing yet, or no longer writing. Before the download starts
+         // that is the queued request; after it, the device is rebooting.
+         "if(!seen){s.textContent=G.keep;return;}"
+         "s.textContent=G.keep+' - '+t+'s';bi.style.width='100%';"
          "fetch('/status.json',{cache:'no-store'}).then(function(r){"
          "if(r.ok){clearInterval(iv);location.reload();}}).catch(function(){});"
+         "}).catch(function(){"
+         "if(!seen){s.textContent=G.keep;return;}"
+         "s.textContent=G.keep+' - '+t+'s';});"
          "},1000);"
          "}).catch(()=>{document.getElementById('rbox').style.display='none';"
          "ghSay(G.fail,true);});}"
@@ -341,6 +380,17 @@ static void routes(WebServer &srv) {
   // What GitHub says about one tag: which channel it belongs to, when it was
   // published, and the release notes. The installed version and the one a
   // check found are both asked about through here.
+  // Answered from inside the download loop. Deliberately the smallest reply
+  // on the device: it is built while an image is being written.
+  srv.on("/api/ota/progress", HTTP_GET, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_FIRMWARE))) return;
+    char j[96];
+    snprintf(j, sizeof(j), "{\"active\":%s,\"done\":%lu,\"total\":%lu}",
+             gh_flash_active ? "true" : "false",
+             (unsigned long)s_flash_done, (unsigned long)s_flash_total);
+    srv.send(200, "application/json", j);
+  });
+
   srv.on("/api/ota/notes", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_FIRMWARE))) return;
     if (!wifi_ok) {
