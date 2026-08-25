@@ -85,6 +85,17 @@ void updateDisplay() {
 //  Zone 3: Spool Info  y=48..183 (136px) full width: swatch/id/mat/name | vendor/temp | dates/more
 //  Zone 4: Weights     y=184..263 (80px) Spoolman(+bar) | Scale(+diff) | TARE btn
 //  Zone 5: Buttons     y=264..319 (56px) [Update Weight] [Dried today] [Settings]
+//
+//  The grid every coordinate below answers to:
+//    - 8 px outer margin, left and right, in every zone
+//    - one baseline per row, whatever font size the values happen to be
+//    - 18 px from a caption's baseline to its value's baseline, everywhere
+//    - captions are font 12 in 0x4a6fa0; 0x2a4060 is 1.7:1 on this background
+//      and is a shape colour, not a text colour
+//    - zone 3 splits the width in half at 8 / 244; zones 4 and 5 have to keep
+//      a slot free on the right for TARE and the burger, so they sit on
+//      8 / 218 with the divider at 210. That is the one break in the grid.
+//    - reserved widths never overlap, even where today's text is short
 // ============================================================
 void buildUI() {
   lv_obj_set_style_bg_color(lv_scr_act(), lv_color_hex(0x0a1020), 0);
@@ -104,40 +115,37 @@ void buildUI() {
   lv_label_set_text(hdr_lbl, "SpoolmanScale " FW_VERSION);
   lv_obj_set_style_text_color(hdr_lbl, lv_color_hex(0x2a4060), 0);
   lv_obj_set_style_text_font(hdr_lbl, &lv_font_montserrat_ext_12, 0);
-  lv_obj_align(hdr_lbl, LV_ALIGN_LEFT_MID, 6, 0);
+  lv_obj_align(hdr_lbl, LV_ALIGN_LEFT_MID, 8, 0);
 
-  // SD card indicator in header — only visible when sd_available
-  lv_obj_t *lbl_sd_hdr = lv_label_create(hdr);
-  lv_label_set_text(lbl_sd_hdr, LV_SYMBOL_SD_CARD);
-  lv_obj_set_style_text_color(lbl_sd_hdr, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_sd_hdr, &lv_font_montserrat_ext_12, 0);
-  lv_obj_align(lbl_sd_hdr, LV_ALIGN_RIGHT_MID, -120, 0);
-  if (!sd_available) lv_obj_add_flag(lbl_sd_hdr, LV_OBJ_FLAG_HIDDEN);
+  // SD card indicator in header - only visible when sd_available.
+  // Positions of this and the four chips right of it come from
+  // layoutHeaderChips() at the end of this function, not from fixed offsets.
+  lbl_hdr_sd = lv_label_create(hdr);
+  lv_label_set_text(lbl_hdr_sd, LV_SYMBOL_SD_CARD);
+  lv_obj_set_style_text_color(lbl_hdr_sd, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(lbl_hdr_sd, &lv_font_montserrat_ext_12, 0);
+  if (!sd_available) lv_obj_add_flag(lbl_hdr_sd, LV_OBJ_FLAG_HIDDEN);
 
   lbl_hdr_wifi = lv_label_create(hdr);
   lv_label_set_text(lbl_hdr_wifi, LV_SYMBOL_WIFI);
   lv_obj_set_style_text_color(lbl_hdr_wifi, lv_color_hex(0x606060), 0);
   lv_obj_set_style_text_font(lbl_hdr_wifi, &lv_font_montserrat_ext_12, 0);
-  lv_obj_align(lbl_hdr_wifi, LV_ALIGN_RIGHT_MID, -100, 0);
 
   lbl_hdr_nfc = lv_label_create(hdr);
   lv_label_set_text(lbl_hdr_nfc, "NFC");
   lv_obj_set_style_text_color(lbl_hdr_nfc, lv_color_hex(0x606060), 0);
   lv_obj_set_style_text_font(lbl_hdr_nfc, &lv_font_montserrat_ext_12, 0);
-  lv_obj_align(lbl_hdr_nfc, LV_ALIGN_RIGHT_MID, -68, 0);
 
   lbl_hdr_scl = lv_label_create(hdr);
   lv_label_set_text(lbl_hdr_scl, "SCL");
   lv_obj_set_style_text_color(lbl_hdr_scl, lv_color_hex(0x606060), 0);
   lv_obj_set_style_text_font(lbl_hdr_scl, &lv_font_montserrat_ext_12, 0);
-  lv_obj_align(lbl_hdr_scl, LV_ALIGN_RIGHT_MID, -36, 0);
 
   // Fix 10: Spoolman reachability indicator
   lbl_hdr_sm = lv_label_create(hdr);
   lv_label_set_text(lbl_hdr_sm, backendBadge());
   lv_obj_set_style_text_color(lbl_hdr_sm, lv_color_hex(0x606060), 0);
   lv_obj_set_style_text_font(lbl_hdr_sm, &lv_font_montserrat_ext_12, 0);
-  lv_obj_align(lbl_hdr_sm, LV_ALIGN_RIGHT_MID, -4, 0);
 
   // ── ZONE 2: Status bar y=26..47 (22px) ──────────────────
   // dot + status text centered | #scan_count right
@@ -155,18 +163,18 @@ void buildUI() {
   lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
   lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
   lv_obj_set_style_text_font(lbl_nfc_dot, &lv_font_montserrat_ext_14, 0);
-  lv_obj_align(lbl_nfc_dot, LV_ALIGN_LEFT_MID, 6, 0);
+  lv_obj_align(lbl_nfc_dot, LV_ALIGN_LEFT_MID, 8, 0);
 
   lbl_status = lv_label_create(status_bar);
   lv_label_set_text(lbl_status, T(STR_BOOTING));
   lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x5090e0), 0);
   lv_obj_set_style_text_font(lbl_status, &lv_font_montserrat_ext_14, 0);
-  lv_obj_align(lbl_status, LV_ALIGN_LEFT_MID, 22, 0);
+  lv_obj_align(lbl_status, LV_ALIGN_LEFT_MID, 24, 0);
   // Bounded so a longer translation can never run into the address on the
-  // right. Today's longest status ends well clear of it, but that is not
-  // something to leave to chance.
+  // right. The longest string that lands here is STR_BOOTING at roughly
+  // 245 px, so 292 leaves room without reaching the address slot.
   lv_label_set_long_mode(lbl_status, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_status, 320);
+  lv_obj_set_width(lbl_status, 292);
 
   // Optional address, left of the scan counter. Filled by updateHeaderStatus()
   // according to g_ip_bar_mode, hidden while the mode is off.
@@ -174,10 +182,10 @@ void buildUI() {
   lv_label_set_text(lbl_hdr_ip, "");
   lv_obj_set_style_text_color(lbl_hdr_ip, lv_color_hex(0x2a4060), 0);
   lv_obj_set_style_text_font(lbl_hdr_ip, &lv_font_montserrat_ext_12, 0);
-  lv_obj_align(lbl_hdr_ip, LV_ALIGN_RIGHT_MID, -44, 0);
+  // Placed by layoutHeaderChips(), which hangs it off the scan counter so a
+  // growing count can never run into it.
   // Bounded like lbl_status above it. A device name is user supplied, so
-  // unlike an IP address its width is not something to leave to chance:
-  // there are 94 pixels between the end of the status text and this label.
+  // unlike an IP address its width is not something to leave to chance.
   lv_label_set_long_mode(lbl_hdr_ip, LV_LABEL_LONG_DOT);
   lv_obj_set_width(lbl_hdr_ip, 94);
   // A fixed width makes the label a box, and text sits left in a box. Without
@@ -192,7 +200,7 @@ void buildUI() {
   lv_label_set_text(lbl_hdr_scans, "#0");
   lv_obj_set_style_text_color(lbl_hdr_scans, lv_color_hex(0x2a4060), 0);
   lv_obj_set_style_text_font(lbl_hdr_scans, &lv_font_montserrat_ext_12, 0);
-  lv_obj_align(lbl_hdr_scans, LV_ALIGN_RIGHT_MID, -6, 0);
+  lv_obj_align(lbl_hdr_scans, LV_ALIGN_RIGHT_MID, -8, 0);
 
   lbl_scan_count = lbl_hdr_scans;
 
@@ -211,10 +219,12 @@ void buildUI() {
   // separator
   // Row C: Last used / Last dried
 
-  // Swatch (42x42, y=63)
+  // Swatch (42x42) - centred on the text line beside it, which runs 53..88.
+  // It used to sit at y=54 and hang 10 px below that line, leaving 2 px to
+  // the vendor caption underneath.
   lbl_color_swatch = lv_obj_create(lv_scr_act());
   lv_obj_set_size(lbl_color_swatch, 42, 42);
-  lv_obj_set_pos(lbl_color_swatch, 8, 54);
+  lv_obj_set_pos(lbl_color_swatch, 8, 50);
   lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
   lv_obj_set_style_radius(lbl_color_swatch, 6, 0);
   lv_obj_set_style_border_color(lbl_color_swatch, lv_color_hex(0x2a4060), 0);
@@ -222,83 +232,90 @@ void buildUI() {
   lv_obj_set_style_pad_all(lbl_color_swatch, 0, 0);
   lv_obj_clear_flag(lbl_color_swatch, LV_OBJ_FLAG_SCROLLABLE);
 
-  // Cap: ID (x=58, y=51)
+  // Cap: ID (x=58, y=53)
   lv_obj_t *lbl_id_cap = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_id_cap, "ID");
   lv_obj_set_style_text_color(lbl_id_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_id_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_id_cap, 58, 51);
+  lv_obj_set_pos(lbl_id_cap, 58, 53);
 
-  // SM-ID value (x=58, y=65)
+  // SM-ID value (x=58, y=69) - 46 px reserved, which holds five digits.
+  // The old 34 px ran into "Material" at four.
   lbl_spoolman_id = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_spoolman_id, "?");
   lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_spoolman_id, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(lbl_spoolman_id, 58, 65);
+  lv_obj_set_pos(lbl_spoolman_id, 58, 69);
+  lv_label_set_long_mode(lbl_spoolman_id, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(lbl_spoolman_id, 46);
 
-  // Cap: Material (x=92, y=51)
+  // Cap: Material (x=112, y=53)
   lv_obj_t *lbl_mat_cap = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_mat_cap, "Material");
   lv_obj_set_style_text_color(lbl_mat_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_mat_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_mat_cap, 92, 51);
+  lv_obj_set_pos(lbl_mat_cap, 112, 53);
 
-  // Material value (x=92, y=65)
+  // Material value (x=112, y=65) - 124 px, ending at 236 where column A ends.
+  // At width 160 it reached 252 and overlapped the filament column at 232.
   lbl_material = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_material, "-");
   lv_obj_set_style_text_color(lbl_material, lv_color_hex(0xf0f0f0), 0);
   lv_obj_set_style_text_font(lbl_material, &lv_font_montserrat_ext_20, 0);
-  lv_obj_set_pos(lbl_material, 92, 63);
+  lv_obj_set_pos(lbl_material, 112, 65);
   lv_label_set_long_mode(lbl_material, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_material, 160);
+  lv_obj_set_width(lbl_material, 124);
 
-  // Cap: Filament (x=260, y=51)
+  // Cap: Filament (x=244, y=53) - column B
   lv_obj_t *lbl_fil_cap = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_fil_cap, "Filament");
   lv_obj_set_style_text_color(lbl_fil_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_fil_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_fil_cap, 232, 51);  // Fix 5: slightly left
+  lv_obj_set_pos(lbl_fil_cap, 244, 53);
 
-  // Filament Name value (x=260, y=65)
+  // Filament Name value (x=244, y=69) - column B, full width to 472
   lbl_filament_name = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_filament_name, "-");
   lv_obj_set_style_text_color(lbl_filament_name, lv_color_hex(0xf0f0f0), 0);  // Fix 8: same as material
   lv_obj_set_style_text_font(lbl_filament_name, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(lbl_filament_name, 232, 66);  // Fix 5: slightly left
+  lv_obj_set_pos(lbl_filament_name, 244, 69);
   lv_label_set_long_mode(lbl_filament_name, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_filament_name, 212);
+  lv_obj_set_width(lbl_filament_name, 228);
 
   // Hex color: hidden dummy (only shown in More Info screen)
   lbl_color = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_color, "");
   lv_obj_add_flag(lbl_color, LV_OBJ_FLAG_HIDDEN);
 
-  // Row B: Vendor (x=8, y=98) | Temp (x=210, y=98) | More info btn TOP RIGHT bigger
+  // Row B: Vendor (x=8, y=100) | Temp (x=244, y=100) | More info btn top right
   lv_obj_t *lbl_vendor_cap = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_vendor_cap, T(STR_LBL_VENDOR));
   lv_obj_set_style_text_color(lbl_vendor_cap, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_vendor_cap, &lv_font_montserrat_ext_14, 0);  // Fix 5: +1 size
-  lv_obj_set_pos(lbl_vendor_cap, 8, 98);
+  lv_obj_set_style_text_font(lbl_vendor_cap, &lv_font_montserrat_ext_12, 0);
+  lv_obj_set_pos(lbl_vendor_cap, 8, 100);
 
   lbl_vendor = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_vendor, "-");
   lv_obj_set_style_text_color(lbl_vendor, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(lbl_vendor, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(lbl_vendor, 8, 115);  // Fix 5: +2px gap
+  lv_obj_set_pos(lbl_vendor, 8, 116);
   lv_label_set_long_mode(lbl_vendor, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_vendor, 190);
+  lv_obj_set_width(lbl_vendor, 228);
 
   lv_obj_t *lbl_temp_cap = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_temp_cap, T(STR_LBL_TEMP));
   lv_obj_set_style_text_color(lbl_temp_cap, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_temp_cap, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_pos(lbl_temp_cap, 248, 98);  // Fix 5: more right
+  lv_obj_set_style_text_font(lbl_temp_cap, &lv_font_montserrat_ext_12, 0);
+  lv_obj_set_pos(lbl_temp_cap, 244, 100);
 
   lbl_temp = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_temp, "-");
   lv_obj_set_style_text_color(lbl_temp, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(lbl_temp, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(lbl_temp, 248, 115);  // Fix 5: more right
+  lv_obj_set_pos(lbl_temp, 244, 116);
+  // Bounded so it stops before the More info button at x=388
+  lv_label_set_long_mode(lbl_temp, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(lbl_temp, 132);
 
   // "More info" button — Fix 4: more prominent, teal border
   lv_obj_t *btn_more = lv_btn_create(lv_scr_act());
@@ -319,16 +336,16 @@ void buildUI() {
   lv_obj_set_style_text_font(lbl_more, &lv_font_montserrat_ext_12, 0);
   lv_obj_center(lbl_more);
 
-  // Inner separator y=136 — Fix 2: slightly lower to give More info btn breathing room
+  // Inner separator - 6 px below Row B, 6 px above Row C
   lv_obj_t *sep_inner = lv_obj_create(lv_scr_act());
   lv_obj_set_size(sep_inner, 464, 1);
-  lv_obj_set_pos(sep_inner, 8, 138);
+  lv_obj_set_pos(sep_inner, 8, 140);
   lv_obj_set_style_bg_color(sep_inner, lv_color_hex(0x0f1e30), 0);
   lv_obj_set_style_border_width(sep_inner, 0, 0);
   lv_obj_set_style_radius(sep_inner, 0, 0);
   lv_obj_set_style_pad_all(sep_inner, 0, 0);
 
-  // Row C: Last used / Last dried — Fix 3: date values lower (y=158 instead of y=152)
+  // Row C: Last used / Last dried - caps y=146, values y=162
   lbl_lu_cap = lv_label_create(lv_scr_act());
   // Cap text depends on last_used_mode
   char lu_cap_buf[32];
@@ -340,37 +357,38 @@ void buildUI() {
   lu_cap_buf[sizeof(lu_cap_buf)-1] = '\0';
   lv_label_set_text(lbl_lu_cap, lu_cap_buf);
   lv_obj_set_style_text_color(lbl_lu_cap, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_lu_cap, &lv_font_montserrat_ext_14, 0);  // Fix 5
-  lv_obj_set_pos(lbl_lu_cap, 8, 142);
+  lv_obj_set_style_text_font(lbl_lu_cap, &lv_font_montserrat_ext_12, 0);
+  lv_obj_set_pos(lbl_lu_cap, 8, 146);
 
   lbl_last_used = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_last_used, "-");
   lv_obj_set_style_text_color(lbl_last_used, lv_color_hex(0x8ab0d8), 0);
   lv_obj_set_style_text_font(lbl_last_used, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(lbl_last_used, 8, 158);  // Fix 3: more gap
+  lv_obj_set_pos(lbl_last_used, 8, 162);
   lv_label_set_long_mode(lbl_last_used, LV_LABEL_LONG_DOT);
   lv_obj_set_width(lbl_last_used, 228);
 
   lv_obj_t *lbl_ld_cap = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_ld_cap, T(STR_LBL_LAST_DRIED));
   lv_obj_set_style_text_color(lbl_ld_cap, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_ld_cap, &lv_font_montserrat_ext_14, 0);  // Fix 5
-  lv_obj_set_pos(lbl_ld_cap, 244, 142);
+  lv_obj_set_style_text_font(lbl_ld_cap, &lv_font_montserrat_ext_12, 0);
+  lv_obj_set_pos(lbl_ld_cap, 244, 146);
 
   lbl_spoolman_dried_val = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_spoolman_dried_val, "-");
   lv_obj_set_style_text_color(lbl_spoolman_dried_val, lv_color_hex(0x5090e0), 0);
   lv_obj_set_style_text_font(lbl_spoolman_dried_val, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(lbl_spoolman_dried_val, 244, 158);  // Fix 3
+  lv_obj_set_pos(lbl_spoolman_dried_val, 244, 162);
+  // 204 px, so it stops before the warning symbol at x=456
   lv_label_set_long_mode(lbl_spoolman_dried_val, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_spoolman_dried_val, 210);
+  lv_obj_set_width(lbl_spoolman_dried_val, 204);
   lbl_spoolman_dried = lbl_spoolman_dried_val;
   // Ampel-Symbol (WARNING) rechts vom Datum, standardmaessig versteckt
   lbl_dried_sym = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_dried_sym, LV_SYMBOL_WARNING);
   lv_obj_set_style_text_color(lbl_dried_sym, lv_color_hex(0xf0b838), 0);
   lv_obj_set_style_text_font(lbl_dried_sym, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(lbl_dried_sym, 456, 158);
+  lv_obj_set_pos(lbl_dried_sym, 456, 162);
   lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
 
   // Unused labels still needed by updateDisplay / querySpoolman
@@ -401,9 +419,12 @@ void buildUI() {
   lv_obj_set_style_pad_all(sep2, 0, 0);
 
   // ── ZONE 4: Weights y=185..263 (79px) ───────────────────
-  // Left  (x=0..209):  Spoolman filament remaining (big) + % + bar
-  // Right (x=210..424): Scale filament netto (big) + SM diff | live total | live -bag
-  // Far right (x=425..479): TARE
+  // Column 1 (x=8..202):   backend remaining (big) + % + bar
+  // divider x=210
+  // Column 2 (x=218..400): scale netto (big) + diff | total | w/o bag
+  // divider x=408
+  // TARE     (x=416..472), vertically centred in the zone
+  // Caption baseline 202, big-value baseline 220, then 238 and 256.
 
   // Backend section — caption. Kept in a global so the text can follow a
   // backend switch without rebuilding the main screen. The product names are
@@ -413,26 +434,26 @@ void buildUI() {
     lv_label_set_text(lbl_sm_cap, cap_buf); }
   lv_obj_set_style_text_color(lbl_sm_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_sm_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_sm_cap, 8, 188);
+  lv_obj_set_pos(lbl_sm_cap, 8, 189);
 
   // Spoolman filament remaining — BIG
   lbl_spoolman_weight = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_spoolman_weight, wifi_ok ? "..." : T(STR_NO_WIFI));
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_spoolman_weight, &lv_font_montserrat_ext_20, 0);
-  lv_obj_set_pos(lbl_spoolman_weight, 8, 204);
+  lv_obj_set_pos(lbl_spoolman_weight, 8, 201);
 
   // Percent — Fix 3: right of weight, same row
   lbl_spoolman_pct = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_spoolman_pct, "");
   lv_obj_set_style_text_color(lbl_spoolman_pct, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_spoolman_pct, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_pos(lbl_spoolman_pct, 88, 208);  // right of weight, vertically centered
+  lv_obj_set_pos(lbl_spoolman_pct, 88, 207);  // shares baseline 220 with the weight
 
-  // Progress bar — Fix 3: higher (y=230) and thicker (6px)
+  // Progress bar - bottom edge on the last baseline of column 2
   lv_obj_t *bar_bg = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(bar_bg, 190, 8);
-  lv_obj_set_pos(bar_bg, 8, 244);
+  lv_obj_set_size(bar_bg, MAIN_BAR_W, 8);
+  lv_obj_set_pos(bar_bg, 8, 248);
   lv_obj_set_style_bg_color(bar_bg, lv_color_hex(0x0a1828), 0);
   lv_obj_set_style_border_width(bar_bg, 0, 0);
   lv_obj_set_style_radius(bar_bg, 4, 0);
@@ -449,95 +470,97 @@ void buildUI() {
   lv_obj_clear_flag(bar_fill, LV_OBJ_FLAG_SCROLLABLE);
   lbl_scale_diff = (lv_obj_t*)bar_fill;
 
-  // Vertical divider left/mid
+  // Vertical divider, column 1 / column 2
   lv_obj_t *vdiv1 = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(vdiv1, 1, 76);
-  lv_obj_set_pos(vdiv1, 210, 186);
+  lv_obj_set_size(vdiv1, 1, 70);
+  lv_obj_set_pos(vdiv1, 210, 189);
   lv_obj_set_style_bg_color(vdiv1, lv_color_hex(0x0f1e30), 0);
   lv_obj_set_style_border_width(vdiv1, 0, 0);
   lv_obj_set_style_radius(vdiv1, 0, 0);
   lv_obj_set_style_pad_all(vdiv1, 0, 0);
 
-  // Scale filament netto caption — Fix 3: "Waage - Spule" / "Scale - Spool"
+  // Scale filament netto caption - "Waage - Spule" / "Scale - Spool"
   lv_obj_t *lbl_sc_cap = lv_label_create(lv_scr_act());
   char sc_cap_buf[24]; strncpy(sc_cap_buf, T(STR_LBL_SCALE_SPOOL_CAP), sizeof(sc_cap_buf)-1);
   sc_cap_buf[sizeof(sc_cap_buf)-1] = '\0';
   lv_label_set_text(lbl_sc_cap, sc_cap_buf);
   lv_obj_set_style_text_color(lbl_sc_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_sc_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_sc_cap, 218, 188);
+  lv_obj_set_pos(lbl_sc_cap, 218, 189);
 
   // Scale filament netto — BIG
   lbl_scale_weight = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_scale_weight, scale_ready ? "0 g" : "---");
   lv_obj_set_style_text_color(lbl_scale_weight, lv_color_hex(0xf0b838), 0);
   lv_obj_set_style_text_font(lbl_scale_weight, &lv_font_montserrat_ext_20, 0);
-  lv_obj_set_pos(lbl_scale_weight, 218, 204);
+  lv_obj_set_pos(lbl_scale_weight, 218, 201);
 
   // SM diff caption + value — both diffs stacked on right side (Fix 3)
   lv_obj_t *lbl_diff_cap = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_diff_cap, "Diff:");
   lv_obj_set_style_text_color(lbl_diff_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_diff_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_diff_cap, 362, 188);
+  lv_obj_set_pos(lbl_diff_cap, 344, 189);
 
   lbl_raw_info = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_raw_info, "");
   lv_obj_set_style_text_color(lbl_raw_info, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_raw_info, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(lbl_raw_info, 362, 204);  // Fix 3: right column
+  lv_obj_set_pos(lbl_raw_info, 344, 205);  // shares baseline 220
 
-  // Fix 1: "Gesamt" / "Total" — Fix 4: value x same as o.Beutel value
+  // "Gesamt" / "Total" - caption and value share baseline 238
   lv_obj_t *lbl_live_cap = lv_label_create(lv_scr_act());
   char live_cap_buf[16]; strncpy(live_cap_buf, T(STR_LBL_TOTAL_CAP), sizeof(live_cap_buf)-1);
   live_cap_buf[sizeof(live_cap_buf)-1] = '\0';
   lv_label_set_text(lbl_live_cap, live_cap_buf);
   lv_obj_set_style_text_color(lbl_live_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_live_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_live_cap, 218, 228);
+  lv_obj_set_pos(lbl_live_cap, 218, 225);
 
   lbl_spoolman_dried = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_spoolman_dried, "");
   lv_obj_set_style_text_color(lbl_spoolman_dried, lv_color_hex(0x8ab0d8), 0);
   lv_obj_set_style_text_font(lbl_spoolman_dried, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_pos(lbl_spoolman_dried, 286, 226);  // Fix 4: same x as o.Beutel value
+  lv_obj_set_pos(lbl_spoolman_dried, 286, 225);
 
-  // Fix 2: "o. Beutel" / "w/o Bag"
+  // "o. Beutel" / "w/o Bag" - caption and value share baseline 256
   lv_obj_t *lbl_bag_cap = lv_label_create(lv_scr_act());
   char bag_cap_buf[16]; strncpy(bag_cap_buf, T(STR_LBL_WO_BAG_CAP), sizeof(bag_cap_buf)-1);
   bag_cap_buf[sizeof(bag_cap_buf)-1] = '\0';
   lv_label_set_text(lbl_bag_cap, bag_cap_buf);
   lv_obj_set_style_text_color(lbl_bag_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_bag_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_bag_cap, 218, 246);
+  lv_obj_set_pos(lbl_bag_cap, 218, 243);
 
   lv_obj_t *lbl_bag_diff = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_bag_diff, "");
   lv_obj_set_style_text_color(lbl_bag_diff, lv_color_hex(0xf0b838), 0);
   lv_obj_set_style_text_font(lbl_bag_diff, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_pos(lbl_bag_diff, 286, 244);
+  lv_obj_set_pos(lbl_bag_diff, 286, 243);
   lbl_keys = lbl_bag_diff;
 
-  // Fix 3+4: bag SM diff — stacked below Waage-Spule diff, with "g"
+  // bag diff - stacked below the netto diff, sharing baseline 256
   lbl_bag_sm_diff = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_bag_sm_diff, "");
   lv_obj_set_style_text_color(lbl_bag_sm_diff, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_bag_sm_diff, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(lbl_bag_sm_diff, 362, 244);  // same x as Waage-Spule diff, below
+  lv_obj_set_pos(lbl_bag_sm_diff, 344, 241);
 
-  // Vertical divider zone 4 mid/right — Fix 7: moved left for TARE breathing room
+  // Vertical divider, column 2 / TARE. This was a 0 x 0 object for a while,
+  // which drew nothing and left the zone looking open to the right.
   lv_obj_t *vdiv2 = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(vdiv2, 0, 0);
-  lv_obj_set_pos(vdiv2, 418, 186);
+  lv_obj_set_size(vdiv2, 1, 70);
+  lv_obj_set_pos(vdiv2, 408, 189);
   lv_obj_set_style_bg_color(vdiv2, lv_color_hex(0x0f1e30), 0);
   lv_obj_set_style_border_width(vdiv2, 0, 0);
   lv_obj_set_style_radius(vdiv2, 0, 0);
   lv_obj_set_style_pad_all(vdiv2, 0, 0);
 
-  // TARE button — Fix 1: 50px width (same as menu btn), divider gives left breathing room
+  // TARE button - right edge on the 8 px margin, centred in the zone (4 px
+  // above and below). 71 px, because the zone is 79 rows and 79 is odd.
   lv_obj_t *btn_tare = lv_btn_create(lv_scr_act());
-  lv_obj_set_size(btn_tare, 54, 70);
-  lv_obj_set_pos(btn_tare, 422, 188);
+  lv_obj_set_size(btn_tare, 56, 71);
+  lv_obj_set_pos(btn_tare, 416, 189);
   lv_obj_set_style_bg_color(btn_tare, lv_color_hex(0x2a2010), 0);
   lv_obj_set_style_bg_color(btn_tare, lv_color_hex(0x4a4020), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_tare, 1, 0);
@@ -580,8 +603,9 @@ void buildUI() {
   lv_obj_set_style_pad_all(sep3, 0, 0);
 
   // ── ZONE 5: Button bar y=265..319 (55px) ────────────────
-  // [Update Weight flex:1] [Dried today flex:1] [Settings 44px]
-  // When no link: both replaced by [Link spool flex:1] [Settings 44px]
+  // 8 | 202 | 8 | 202 | 8 | 44 | 8 across, 8 px above and below the buttons.
+  // The pair keeps equal widths, as the design guide requires.
+  // When no link: Update/Dried are replaced by Link/Copy in the same slots.
   lv_obj_t *btn_bar = lv_obj_create(lv_scr_act());
   lv_obj_set_size(btn_bar, 480, 55);
   lv_obj_set_pos(btn_bar, 0, 265);
@@ -593,8 +617,8 @@ void buildUI() {
 
   // "Update Weight" button (x=6, w=204)
   btn_weight_main = lv_btn_create(btn_bar);
-  lv_obj_set_size(btn_weight_main, 204, 40);
-  lv_obj_set_pos(btn_weight_main, 6, 8);
+  lv_obj_set_size(btn_weight_main, 202, 39);
+  lv_obj_set_pos(btn_weight_main, 8, 8);
   lv_obj_set_style_bg_color(btn_weight_main, lv_color_hex(0x1a3020), 0);
   lv_obj_set_style_bg_color(btn_weight_main, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_weight_main, 1, 0);
@@ -624,8 +648,8 @@ void buildUI() {
 
   // "Dried today" button (x=216, w=204)
   btn_dried = lv_btn_create(btn_bar);
-  lv_obj_set_size(btn_dried, 204, 40);
-  lv_obj_set_pos(btn_dried, 216, 8);
+  lv_obj_set_size(btn_dried, 202, 39);
+  lv_obj_set_pos(btn_dried, 218, 8);
   lv_obj_set_style_bg_color(btn_dried, lv_color_hex(0x0a2040), 0);
   lv_obj_set_style_bg_color(btn_dried, lv_color_hex(0x1a4080), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_dried, 1, 0);
@@ -648,8 +672,8 @@ void buildUI() {
   // Link button — 204px, olive-green, matches Update Weight style
   // ID= >100 spools recommended | List= <100 spools recommended
   btn_link = lv_btn_create(btn_bar);
-  lv_obj_set_size(btn_link, 204, 40);
-  lv_obj_set_pos(btn_link, 6, 8);
+  lv_obj_set_size(btn_link, 202, 39);
+  lv_obj_set_pos(btn_link, 8, 8);
   lv_obj_set_style_bg_color(btn_link, lv_color_hex(0x1e3000), 0);
   lv_obj_set_style_bg_color(btn_link, lv_color_hex(0x2e5000), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_link, 1, 0);
@@ -673,8 +697,8 @@ void buildUI() {
   // Copy spool button — 204px, teal, matches Dried Today style
   // ID= >100 spools recommended | List= <100 spools recommended
   btn_copy = lv_btn_create(btn_bar);
-  lv_obj_set_size(btn_copy, 204, 40);
-  lv_obj_set_pos(btn_copy, 216, 8);
+  lv_obj_set_size(btn_copy, 202, 39);
+  lv_obj_set_pos(btn_copy, 218, 8);
   lv_obj_set_style_bg_color(btn_copy, lv_color_hex(0x00222a), 0);
   lv_obj_set_style_bg_color(btn_copy, lv_color_hex(0x003a48), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_copy, 1, 0);
@@ -694,10 +718,10 @@ void buildUI() {
   lv_obj_set_style_text_align(lbl_cp, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_cp, LV_ALIGN_CENTER, 0, 0);
 
-  // Settings/Burger button (x=426, w=48)
+  // Settings/Burger button (x=428, w=44)
   lv_obj_t *btn_menu = lv_btn_create(btn_bar);
-  lv_obj_set_size(btn_menu, 44, 40);
-  lv_obj_set_pos(btn_menu, 429, 8);
+  lv_obj_set_size(btn_menu, 44, 39);
+  lv_obj_set_pos(btn_menu, 428, 8);
   lv_obj_set_style_bg_color(btn_menu, lv_color_hex(0x0a1828), 0);
   lv_obj_set_style_bg_color(btn_menu, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_menu, 1, 0);
@@ -715,6 +739,10 @@ void buildUI() {
   // on the button bar, because a child of the bar would be clipped at the bar's
   // edge and half of this dot sits outside it.
   lbl_burger_badge = createUpdateBadge(lv_scr_act(), btn_menu);
+
+  // Header chips and the status bar address are packed from their real
+  // widths, so this has to run after every label above exists.
+  layoutHeaderChips();
 
   page_main = lv_scr_act();
   // lbl_raw_info points to SM diff label on main screen (see above)

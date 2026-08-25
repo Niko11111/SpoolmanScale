@@ -7,6 +7,7 @@
 #include <cstring>
 #include <ctime>
 
+#include "app_config.h"
 #include "bambu/bambu_tag.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
@@ -551,9 +552,9 @@ void querySpoolmanById(int spool_id) {
   lv_obj_set_style_text_color(lbl_spoolman_pct, lv_color_hex(pct_color), 0);
 
   if (lbl_scale_diff) {
-    int bar_w = (int)((pct / 100.0f) * 190.0f);
+    int bar_w = (int)((pct / 100.0f) * (float)MAIN_BAR_W);
     if (bar_w < 0) bar_w = 0;
-    if (bar_w > 190) bar_w = 190;
+    if (bar_w > MAIN_BAR_W) bar_w = MAIN_BAR_W;
     lv_obj_set_width(lbl_scale_diff, bar_w);
     lv_obj_set_style_bg_color(lbl_scale_diff, lv_color_hex(pct_color), 0);
   }
@@ -1082,9 +1083,9 @@ void querySpoolman(const char* tray_uuid) {
 
     // Update progress bar fill width (max 190px) with same color
     if (lbl_scale_diff) {
-      int bar_w = (int)((pct / 100.0f) * 190.0f);
+      int bar_w = (int)((pct / 100.0f) * (float)MAIN_BAR_W);
       if (bar_w < 0) bar_w = 0;
-      if (bar_w > 190) bar_w = 190;
+      if (bar_w > MAIN_BAR_W) bar_w = MAIN_BAR_W;
       lv_obj_set_width(lbl_scale_diff, bar_w);
       lv_obj_set_style_bg_color(lbl_scale_diff, lv_color_hex(pct_color), 0);
     }

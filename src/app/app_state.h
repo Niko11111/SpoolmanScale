@@ -230,6 +230,7 @@ extern lv_obj_t *lbl_hdr_scl;
 extern lv_obj_t *lbl_hdr_scans;
 extern lv_obj_t *lbl_hdr_ip;    // status bar address, left of the scan counter
 extern lv_obj_t *lbl_hdr_sm;
+extern lv_obj_t *lbl_hdr_sd;   // header SD indicator, leftmost chip
 extern lv_obj_t *lbl_sm_cap;   // "Spoolman:" / "FilaMan:" above the database weight
 extern lv_obj_t *lbl_bag_sm_diff;
 

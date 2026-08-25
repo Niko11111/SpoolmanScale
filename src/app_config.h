@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.7.0-beta.75"
+#define FW_VERSION  "v0.7.0-beta.76"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -16,6 +16,12 @@
 #define DIM_TIMEOUT_DEFAULT   300000
 #define SLEEP_TIMEOUT_DEFAULT 1200000
 #define OFF_TIMEOUT_DEFAULT        0   // 0 = stage skipped
+
+// Main screen zone 4: the fill of the remaining-filament bar is written from
+// two places in spoolman_lookup.cpp and created in main_screen.cpp. It used to
+// be a bare 190 in all three, which is how the bar and its background came to
+// disagree the moment one of them was widened.
+#define MAIN_BAR_W  194
 
 #define CAL_FACTOR_DEFAULT  1.0f
 #define SCALE_FILTER_SIZE   8

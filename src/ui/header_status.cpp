@@ -20,6 +20,36 @@ static lv_color_t wifiColor() {
   return lv_color_hex(0xe06020);
 }
 
+// Right to left, one gap between neighbours. Fixed offsets were what made the
+// spacing uneven: they put the chips on a 32 px pitch while the labels differ
+// in width, so the gaps came out 5, 9 and 7 px. Widths also move at runtime -
+// "NFC" becomes "NFC!" on an error and the badge follows the backend - which
+// is why this runs after every text change rather than once at build time.
+#define HDR_CHIP_MARGIN  8
+#define HDR_CHIP_GAP    10
+
+void layoutHeaderChips() {
+  if (!lbl_hdr_sm) return;
+  // A label sized to its content only knows its new width after a layout pass,
+  // and lv_obj_align_to() reads that width. Without this the chips would be
+  // placed from the previous text.
+  lv_obj_update_layout(lv_obj_get_parent(lbl_hdr_sm));
+
+  lv_obj_align(lbl_hdr_sm, LV_ALIGN_RIGHT_MID, -HDR_CHIP_MARGIN, 0);
+  lv_obj_t *prev = lbl_hdr_sm;
+  lv_obj_t *chain[] = { lbl_hdr_scl, lbl_hdr_nfc, lbl_hdr_wifi, lbl_hdr_sd };
+  for (unsigned i = 0; i < sizeof(chain) / sizeof(chain[0]); i++) {
+    if (!chain[i]) continue;
+    lv_obj_align_to(chain[i], prev, LV_ALIGN_OUT_LEFT_MID, -HDR_CHIP_GAP, 0);
+    prev = chain[i];
+  }
+
+  // The address follows the scan counter for the same reason: that counter
+  // grows a digit at a time and a fixed offset would eventually collide.
+  if (lbl_hdr_ip && lbl_hdr_scans)
+    lv_obj_align_to(lbl_hdr_ip, lbl_hdr_scans, LV_ALIGN_OUT_LEFT_MID, -HDR_CHIP_GAP, 0);
+}
+
 void updateHeaderStatus() {
   if (!lbl_hdr_wifi) return;
 
@@ -97,4 +127,8 @@ void updateHeaderStatus() {
       lv_obj_add_flag(lbl_hdr_ip, LV_OBJ_FLAG_HIDDEN);
     }
   }
+
+  // Last: every text above is final by now, so the widths the packing reads
+  // are the ones that will actually be drawn.
+  layoutHeaderChips();
 }

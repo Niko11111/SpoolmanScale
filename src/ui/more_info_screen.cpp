@@ -161,6 +161,12 @@ void hideMoreInfoOverlays() {
 //  Overlay with teal border (8px margin), shows UID, UUID,
 //  article nr, production date, spool weight (empty), free slot.
 //  Always rebuilt on open. Only one close button (X).
+//
+//  Same grid as the main screen: 10 px inner margin inside the box,
+//  captions font 12 in 0x4a6fa0, 18 px from a caption's baseline to its
+//  value's baseline, two columns at 10 and 236. Values are font 18 in the
+//  grid and font 16 elsewhere, so the y offsets differ (14 and 16) to land
+//  on the same 18 px baseline distance.
 // ============================================================
 void showMoreInfoScreen() {
   logSD("SHOW: MoreInfoScreen");
@@ -648,7 +654,7 @@ void buildMoreInfoScreen() {
     const uint32_t st_col = statusColor(sm_status_id);
     lv_obj_t *chip = lv_btn_create(hdr);
     lv_obj_set_size(chip, 150, 44);
-    lv_obj_set_pos(chip, 8, 4);
+    lv_obj_set_pos(chip, 10, 4);
     lv_obj_set_style_bg_color(chip, lv_color_hex(0x0d2040), 0);
     lv_obj_set_style_bg_color(chip, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
     lv_obj_set_style_border_color(chip, lv_color_hex(st_col), 0);
@@ -684,7 +690,7 @@ void buildMoreInfoScreen() {
   // Close X button — Fix 10: 44x44px proper size
   lv_obj_t *btn_x = lv_btn_create(hdr);
   lv_obj_set_size(btn_x, 44, 44);
-  lv_obj_align(btn_x, LV_ALIGN_RIGHT_MID, -4, 0);
+  lv_obj_align(btn_x, LV_ALIGN_RIGHT_MID, -10, 0);
   lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
   lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_x, 1, 0);
@@ -709,17 +715,19 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_radius(hdiv, 0, 0);
   lv_obj_set_style_pad_all(hdiv, 0, 0);
 
-  // ── Swatch row: caps y=55, values y=70 ───────────────────
-  // Cap: ID
+  // ── Swatch row: caps y=60, values on baseline 91 ─────────
+  // Cap: ID. These three used to be 0x2a4060, which the design guide asks
+  // for and which is 1.7:1 on this background - a shape colour used as text.
   lv_obj_t *mi_id_cap = lv_label_create(box);
   lv_label_set_text(mi_id_cap, "ID");
-  lv_obj_set_style_text_color(mi_id_cap, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_color(mi_id_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(mi_id_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(mi_id_cap, 60, 55);
+  lv_obj_set_pos(mi_id_cap, 60, 60);
 
+  // Centred on the text line beside it (60..95), rather than hanging below it
   lv_obj_t *swatch = lv_obj_create(box);
   lv_obj_set_size(swatch, 42, 42);
-  lv_obj_set_pos(swatch, 10, 60);
+  lv_obj_set_pos(swatch, 10, 56);
   lv_obj_set_style_radius(swatch, 6, 0);
   lv_obj_set_style_border_color(swatch, lv_color_hex(0x2a4060), 0);
   lv_obj_set_style_border_width(swatch, 1, 0);
@@ -740,14 +748,16 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_color(lbl_id,
     (sm_found && sm_id > 0) ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
   lv_obj_set_style_text_font(lbl_id, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(lbl_id, 60, 70);
+  lv_obj_set_pos(lbl_id, 60, 76);
+  lv_label_set_long_mode(lbl_id, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(lbl_id, 46);
 
   // Cap: Material
   lv_obj_t *mi_mat_cap = lv_label_create(box);
   lv_label_set_text(mi_mat_cap, "Material");
-  lv_obj_set_style_text_color(mi_mat_cap, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_color(mi_mat_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(mi_mat_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(mi_mat_cap, 98, 55);
+  lv_obj_set_pos(mi_mat_cap, 114, 60);
 
   // Material value — for NTAG spools use sm_material (from Spoolman), for Bambu use g_tag.material
   lv_obj_t *lbl_mat = lv_label_create(box);
@@ -756,88 +766,97 @@ void buildMoreInfoScreen() {
   lv_label_set_text(lbl_mat, mat_val);
   lv_obj_set_style_text_color(lbl_mat, lv_color_hex(0xf0f0f0), 0);
   lv_obj_set_style_text_font(lbl_mat, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_pos(lbl_mat, 98, 68);
+  lv_obj_set_pos(lbl_mat, 114, 74);
   lv_label_set_long_mode(lbl_mat, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_mat, 160);
+  lv_obj_set_width(lbl_mat, 114);
 
   // Cap: Filament
   lv_obj_t *mi_fn_cap = lv_label_create(box);
   lv_label_set_text(mi_fn_cap, "Filament");
-  lv_obj_set_style_text_color(mi_fn_cap, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_color(mi_fn_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(mi_fn_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(mi_fn_cap, 264, 55);
+  lv_obj_set_pos(mi_fn_cap, 236, 60);
 
   // Filament name value
   lv_obj_t *lbl_fn = lv_label_create(box);
   lv_label_set_text(lbl_fn, strlen(sm_filament_name) > 0 ? sm_filament_name : "-");
   lv_obj_set_style_text_color(lbl_fn, lv_color_hex(0x8ab0d8), 0);
   lv_obj_set_style_text_font(lbl_fn, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(lbl_fn, 264, 70);
+  lv_obj_set_pos(lbl_fn, 236, 76);
   lv_label_set_long_mode(lbl_fn, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_fn, 188);
+  lv_obj_set_width(lbl_fn, 218);
 
   // Separator after swatch row
   lv_obj_t *div1 = lv_obj_create(box);
   lv_obj_set_size(div1, 444, 1);
-  lv_obj_set_pos(div1, 10, 108);
+  lv_obj_set_pos(div1, 10, 104);
   lv_obj_set_style_bg_color(div1, lv_color_hex(0x0f1e30), 0);
   lv_obj_set_style_border_width(div1, 0, 0);
   lv_obj_set_style_radius(div1, 0, 0);
   lv_obj_set_style_pad_all(div1, 0, 0);
 
-  // ── Fix 11: 2x3 grid — new order ────────────────────────
-  // Col A: x=10, Col B: x=242
-  // Row 1 y=114: Hex Color (A) | Production date (B)
-  // Row 2 y=150: Article no. (A) | Spool weight empty (B)
-  // separator y=186
-  // Row 3 y=192: UID (A, full width label)
-  // Row 4 y=228: Spoolman UUID (full width)
-  const int CA = 10, CB = 242;
-  const int VF = 18; // gap from cap to value
+  // ── 2x2 grid, then UID and UUID ─────────────────────────
+  // Col A: x=10, Col B: x=236, both 218 wide
+  // Row 1 caps y=110, values y=124   (baselines 123 / 141)
+  // Row 2 caps y=154, values y=168   (baselines 167 / 185)
+  // separator y=196
+  // Row 3 caps y=202: UID (A) | location button (B)
+  // Row 4 caps y=256: Spoolman UUID (A) | unlink button (B)
+  const int CA = 10, CB = 236;
+  const int CW = 218;  // reserved width of a column
+  const int VF = 14;   // cap y to value y, for a font 18 value on a font 12 cap
+  const int R1 = 110, R2 = 154, R3 = 202, R4 = 256;
+  const int VF16 = 16;  // same 18 px baseline distance, for a font 16 value
 
-  // Row 1 Left: Fix 11 — Hex Color / Color — Fix 6: larger
+  // Row 1 Left: hex colour
   char hex_cap[24]; strncpy(hex_cap, T(STR_LBL_HEX_COLOR), sizeof(hex_cap)-1);
   hex_cap[sizeof(hex_cap)-1] = '\0';
   lv_obj_t *c1 = lv_label_create(box);
   lv_label_set_text(c1, hex_cap);
   lv_obj_set_style_text_color(c1, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(c1, &lv_font_montserrat_ext_14, 0);  // Fix 6: 12→14
-  lv_obj_set_pos(c1, CA, 114);
+  lv_obj_set_style_text_font(c1, &lv_font_montserrat_ext_12, 0);
+  lv_obj_set_pos(c1, CA, R1);
   lv_obj_t *v1 = lv_label_create(box);
   const char* color_display = (strlen(g_tag.color_hex) > 1) ? g_tag.color_hex :
                               (strlen(sm_color_global) > 1 ? sm_color_global : "-");
   lv_label_set_text(v1, color_display);
   lv_obj_set_style_text_color(v1, lv_color_hex(0x8ab0d8), 0);
-  lv_obj_set_style_text_font(v1, &lv_font_montserrat_ext_18, 0);  // Fix 6: 16→18
-  lv_obj_set_pos(v1, CA, 114 + VF);
+  lv_obj_set_style_text_font(v1, &lv_font_montserrat_ext_18, 0);
+  lv_obj_set_pos(v1, CA, R1 + VF);
+  lv_label_set_long_mode(v1, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(v1, CW);
 
-  // Row 1 Right: Production date — Fix 6
+  // Row 1 Right: production date
   char prod_cap[24]; strncpy(prod_cap, T(STR_LBL_PRODUCTION_DATE), sizeof(prod_cap)-1);
   prod_cap[sizeof(prod_cap)-1] = '\0';
   lv_obj_t *c2 = lv_label_create(box);
   lv_label_set_text(c2, prod_cap);
   lv_obj_set_style_text_color(c2, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(c2, &lv_font_montserrat_ext_14, 0);  // Fix 6
-  lv_obj_set_pos(c2, CB, 114);
+  lv_obj_set_style_text_font(c2, &lv_font_montserrat_ext_12, 0);
+  lv_obj_set_pos(c2, CB, R1);
   lv_obj_t *v2 = lv_label_create(box);
   lv_label_set_text(v2, strlen(g_tag.production_date) > 4 ? g_tag.production_date : "-");
   lv_obj_set_style_text_color(v2, lv_color_hex(0x8ab0d8), 0);
-  lv_obj_set_style_text_font(v2, &lv_font_montserrat_ext_18, 0);  // Fix 6
-  lv_obj_set_pos(v2, CB, 114 + VF);
+  lv_obj_set_style_text_font(v2, &lv_font_montserrat_ext_18, 0);
+  lv_obj_set_pos(v2, CB, R1 + VF);
+  lv_label_set_long_mode(v2, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(v2, CW);
 
-  // Row 2 Left: Article no. — Fix 6: larger — Fix 2: more space (y=160)
+  // Row 2 Left: Article no.
   char art_cap[24]; strncpy(art_cap, T(STR_LBL_ARTICLE_NO_SHORT), sizeof(art_cap)-1);
   art_cap[sizeof(art_cap)-1] = '\0';
   lv_obj_t *c3 = lv_label_create(box);
   lv_label_set_text(c3, art_cap);
   lv_obj_set_style_text_color(c3, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(c3, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_pos(c3, CA, 158);
+  lv_obj_set_style_text_font(c3, &lv_font_montserrat_ext_12, 0);
+  lv_obj_set_pos(c3, CA, R2);
   lv_obj_t *v3 = lv_label_create(box);
   lv_label_set_text(v3, strlen(sm_article_nr) > 0 ? sm_article_nr : "-");
   lv_obj_set_style_text_color(v3, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(v3, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_pos(v3, CA, 158 + VF);
+  lv_obj_set_pos(v3, CA, R2 + VF);
+  lv_label_set_long_mode(v3, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(v3, CW);
 
   // Row 2 Right: Spool weight (empty)
   char sw_cap[24]; strncpy(sw_cap, T(STR_LBL_SPOOL_WEIGHT_EMPTY), sizeof(sw_cap)-1);
@@ -845,8 +864,8 @@ void buildMoreInfoScreen() {
   lv_obj_t *c4 = lv_label_create(box);
   lv_label_set_text(c4, sw_cap);
   lv_obj_set_style_text_color(c4, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(c4, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_pos(c4, CB, 158);
+  lv_obj_set_style_text_font(c4, &lv_font_montserrat_ext_12, 0);
+  lv_obj_set_pos(c4, CB, R2);
   lv_obj_t *v4 = lv_label_create(box);
   // An inherited tare is marked, so a number that came from the brand default
   // is not mistaken for one measured off this spool.
@@ -862,33 +881,37 @@ void buildMoreInfoScreen() {
   lv_label_set_text(v4, sw_buf);
   lv_obj_set_style_text_color(v4, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(v4, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_pos(v4, CB, 158 + VF);
+  lv_obj_set_pos(v4, CB, R2 + VF);
+  lv_label_set_long_mode(v4, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(v4, CW);
 
-  // Separator before UID+UUID — Fix 2: shifted down (y=200)
+  // Separator before UID+UUID
   lv_obj_t *div2 = lv_obj_create(box);
   lv_obj_set_size(div2, 444, 1);
-  lv_obj_set_pos(div2, 10, 200);
+  lv_obj_set_pos(div2, 10, 196);
   lv_obj_set_style_bg_color(div2, lv_color_hex(0x0f1e30), 0);
   lv_obj_set_style_border_width(div2, 0, 0);
   lv_obj_set_style_radius(div2, 0, 0);
   lv_obj_set_style_pad_all(div2, 0, 0);
 
-  // Fix 7: UID left + Spoolman ID right — shifted down (y=206)
+  // UID left, location button right - both starting on y=202
   lv_obj_t *c_uid = lv_label_create(box);
   lv_label_set_text(c_uid, "UID");
   lv_obj_set_style_text_color(c_uid, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(c_uid, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(c_uid, 10, 206);
+  lv_obj_set_pos(c_uid, CA, R3);
   lv_obj_t *v_uid = lv_label_create(box);
   lv_label_set_text(v_uid, strlen(g_tag.uid_str) > 0 ? g_tag.uid_str : "-");
   lv_obj_set_style_text_color(v_uid, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(v_uid, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(v_uid, 10, 206 + 13);
+  lv_obj_set_pos(v_uid, CA, R3 + VF16);
+  lv_label_set_long_mode(v_uid, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(v_uid, CW);
 
-  // Location button — bottom right of row 3 (replaces duplicate Spoolman ID)
+  // Location button - column B of row 3, top edge flush with the UID caption
   lv_obj_t *btn_loc = lv_btn_create(box);
-  lv_obj_set_size(btn_loc, 220, 46);
-  lv_obj_set_pos(btn_loc, CB - 10, 204);
+  lv_obj_set_size(btn_loc, CW, 46);
+  lv_obj_set_pos(btn_loc, CB, R3);
   lv_obj_set_style_bg_color(btn_loc, lv_color_hex(0x0d2040), 0);
   lv_obj_set_style_bg_color(btn_loc, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
   lv_obj_set_style_border_color(btn_loc, lv_color_hex(0x1a3060), 0);
@@ -914,7 +937,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_color(btn_loc_val, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(btn_loc_val, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(btn_loc_val, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_width(btn_loc_val, 204);
+  lv_obj_set_width(btn_loc_val, CW - 14);
   lv_label_set_long_mode(btn_loc_val, LV_LABEL_LONG_DOT);
   lv_obj_align(btn_loc_val, LV_ALIGN_CENTER, 0, 7);
   lv_obj_add_event_cb(btn_loc, [](lv_event_t *e) {
@@ -924,18 +947,18 @@ void buildMoreInfoScreen() {
     requestLocationPicker(false);
   }, LV_EVENT_CLICKED, NULL);
 
-  // Spoolman UUID — shifted down (y=246)
+  // Spoolman UUID left, unlink right - both ending on y=290
   lv_obj_t *c_uuid = lv_label_create(box);
   { char ub[32]; snprintf(ub, sizeof(ub), "%s UUID", backendName()); lv_label_set_text(c_uuid, ub); }
   lv_obj_set_style_text_color(c_uuid, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(c_uuid, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_pos(c_uuid, 10, 248);
+  lv_obj_set_style_text_font(c_uuid, &lv_font_montserrat_ext_12, 0);
+  lv_obj_set_pos(c_uuid, CA, R4);
   lv_obj_t *v_uuid = lv_label_create(box);
   lv_label_set_text(v_uuid,
     strlen(g_tag.tray_uuid) == 32 ? g_tag.tray_uuid : "-");
   lv_obj_set_style_text_color(v_uuid, lv_color_hex(0x4a7080), 0);
   lv_obj_set_style_text_font(v_uuid, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(v_uuid, 10, 264);
+  lv_obj_set_pos(v_uuid, CA, R4 + VF16);
   lv_label_set_long_mode(v_uuid, LV_LABEL_LONG_DOT);
   lv_obj_set_width(v_uuid, 330);  // shortened to make room for Unlink button
 
@@ -943,7 +966,7 @@ void buildMoreInfoScreen() {
   if (sm_found && sm_id > 0) {
     lv_obj_t *btn_unlink = lv_btn_create(box);
     lv_obj_set_size(btn_unlink, 104, 34);
-    lv_obj_set_pos(btn_unlink, 348, 258);
+    lv_obj_set_pos(btn_unlink, 350, R4);
     lv_obj_set_style_bg_color(btn_unlink, lv_color_hex(0x3a1010), 0);
     lv_obj_set_style_bg_color(btn_unlink, lv_color_hex(0x602020), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_unlink, 8, 0);
