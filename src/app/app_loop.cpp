@@ -340,6 +340,9 @@ void appLoop() {
   // OTA web server bedienen wenn aktiv
   handleOtaServerClient();
   tagWriteTick();
+  // Says a freshly linked tag once more, so a paired browser opens the spool
+  // instead of being left with the unknown-tag toast the first scan produced.
+  spoolmanRescanTick();
   // While the credential screen is open the user types into the browser, so
   // the two rows have to follow along without a keypress on the device.
   refreshWebCredentialRows();

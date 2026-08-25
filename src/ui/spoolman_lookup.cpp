@@ -64,6 +64,10 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 #define TAG_RANK_FIELD       1   // a tag field, or Spoolman's tag relation
 #define TAG_RANK_BAMBU_EXT   2   // FilaMan external_id, bambulab:<tray uuid>
 #define TAG_RANK_BAMBU_CHIP  3   // chip uid in bambu_rfid_tag_1 / _2
+// Any other text extra field the server happens to keep, compared without
+// knowing what it means. Last on purpose: a field this firmware writes must
+// always win over a value that merely looks the same somewhere else.
+#define TAG_RANK_EXTRA_OTHER 4
 
 // A 4 byte chip uid is 8 characters, and the plugin pads it to 16 with a
 // fixed tail. Both lengths are checked rather than the tail itself: the tail
@@ -91,6 +95,47 @@ static void searchProgress(size_t bytes_read) {
   lv_refr_now(NULL);
 }
 
+// Whether a stored value names this uid, comparing normalised so the colon
+// form and plain hex are the same thing. `is_list` picks whole entry
+// comparison, because a 4 byte uid would otherwise match inside a 7 byte one
+// belonging to a different spool.
+static bool valueNamesUid(const char* stored, bool is_list, const char* uid) {
+  if (!stored || !stored[0] || !uid || !uid[0]) return false;
+  if (is_list) return cardUidsContain(stored, uid);
+
+  String v(stored);
+  v.replace("\"", "");
+  v.trim();
+  if (v.length() == 0) return false;
+  if (v.equalsIgnoreCase(uid)) return true;
+
+  char have[TAG_UID_CMP_MAX], want[TAG_UID_CMP_MAX];
+  tagUidNormalize(v.c_str(), have, sizeof(have));
+  tagUidNormalize(uid, want, sizeof(want));
+  return have[0] && want[0] && strcmp(have, want) == 0;
+}
+
+// Both identities the tag on the reader can be stored under. For a Bambu tag
+// that is the tray uuid AND the chip uid: somebody may have put either one
+// into a field, and a spool bound by the chip must be found just as well as
+// one bound by the uuid. Everywhere else the two are the same value and the
+// second test costs nothing.
+static bool storedNamesTag(const char* stored, bool is_list, const char* uid) {
+  if (valueNamesUid(stored, is_list, uid)) return true;
+  const char* chip = tagNativeUid(uid);
+  return chip != uid && valueNamesUid(stored, is_list, chip);
+}
+
+// Whether a key is one of the tag conventions this firmware writes itself.
+// Those are compared above, with the list handling their format needs.
+static bool knownTagFieldKey(const char* key) {
+  for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
+    const char* k = tagFieldSpec(i).key;
+    if (k && strcmp(k, key) == 0) return true;
+  }
+  return false;
+}
+
 static int spoolTagRank(JsonObjectConst spool, const char* uid) {
   if (!uid || !uid[0]) return TAG_RANK_NONE;
 
@@ -102,11 +147,20 @@ static int spoolTagRank(JsonObjectConst spool, const char* uid) {
   if (!tags.isNull()) {
     char want[TAG_UID_CMP_MAX];
     tagUidNormalize(uid, want, sizeof(want));
+    // A Bambu tag is linked by its chip uid, while `uid` here is the tray
+    // uuid. Both are asked, so a spool linked by either is found: the chip is
+    // what this firmware writes now, the tray uuid is what it wrote before.
+    // For everything else tagNativeUid() answers with `uid` itself and the
+    // second compare costs nothing.
+    char want_chip[TAG_UID_CMP_MAX];
+    tagUidNormalize(tagNativeUid(uid), want_chip, sizeof(want_chip));
     for (JsonObjectConst t : tags) {
       const char* have_raw = t["uid"] | "";
       char have[TAG_UID_CMP_MAX];
       tagUidNormalize(have_raw, have, sizeof(have));
-      if (want[0] && have[0] && strcmp(have, want) == 0) return TAG_RANK_FIELD;
+      if (!have[0]) continue;
+      if (want[0]      && strcmp(have, want)      == 0) return TAG_RANK_FIELD;
+      if (want_chip[0] && strcmp(have, want_chip) == 0) return TAG_RANK_FIELD;
     }
   }
 
@@ -117,29 +171,12 @@ static int spoolTagRank(JsonObjectConst spool, const char* uid) {
     const TagFieldSpec& spec = tagFieldSpec(i);
     if (!extra.containsKey(spec.key)) continue;
 
-    if (spec.is_list) {
-      // Whole entry comparison, see cardUidsContain(). The server side filter
-      // is an ilike, so a 4 byte UID would otherwise match inside a 7 byte one
-      // belonging to a different spool.
-      const char* raw = extra[spec.key] | (const char*)nullptr;
-      if (raw && cardUidsContain(raw, uid)) return TAG_RANK_FIELD;
-      continue;
-    }
-
-    String tag_val = extra[spec.key].as<String>();
-    tag_val.replace("\"", "");
-    tag_val.trim();
-    // Byte for byte first: that is what extra.tag holds and what every spool
-    // linked by this firmware carries, so the common case costs one compare.
-    if (tag_val.equalsIgnoreCase(uid)) return TAG_RANK_FIELD;
-
-    // Then normalised, which is what makes the other conventions match. A UID
-    // written into nfc_id by SpoolSense is plain hex while the scale carries
-    // it around with colons, and neither notation is wrong.
-    char have[TAG_UID_CMP_MAX], want[TAG_UID_CMP_MAX];
-    tagUidNormalize(tag_val.c_str(), have, sizeof(have));
-    tagUidNormalize(uid, want, sizeof(want));
-    if (have[0] && strcmp(have, want) == 0) return TAG_RANK_FIELD;
+    // Both identities, and in both notations: a UID written into nfc_id by
+    // SpoolSense is plain hex while the scale carries it around with colons,
+    // and neither is wrong. For a Bambu tag the chip uid counts too, because
+    // somebody may have put that into the field rather than the tray uuid.
+    const char* raw = extra[spec.key] | (const char*)nullptr;
+    if (storedNamesTag(raw, spec.is_list, uid)) return TAG_RANK_FIELD;
   }
 
   // ---- FilaMan's Bambu Lab plugin, below everything above ----
@@ -173,6 +210,47 @@ static int spoolTagRank(JsonObjectConst spool, const char* uid) {
           strncmp(have, want, BAMBU_CHIP_UID_LEN) == 0) {
         return TAG_RANK_BAMBU_CHIP;
       }
+    }
+  }
+
+  // ---- any other text extra field, below everything this firmware writes ----
+  //
+  // A UID can sit in a field nobody agreed on: OpenSpoolman fills active_tray
+  // with the tray uuid of the spool in the AMS, and people invent their own.
+  // Comparing against all of them is what lets somebody adopt a whole library
+  // in one pass over the scale, whatever field they once used.
+  //
+  // Deliberately last, after the Bambu plugin's rules above: those name the
+  // very fields this loop would otherwise walk (bambu_ext, bambu_tag1/2) and
+  // give them their own, better ranks. Ranking them as "some other field"
+  // here would let a plugin duplicate win a comparison it should lose.
+  //
+  // Only reached when everything above said no, and ranked below it, so a
+  // coincidental match can never take a spool away from a real binding. The
+  // comparison is exact after normalising, so a colour name or a note cannot
+  // match; a field holding the very same hex still can, which is precisely
+  // why this rank exists.
+  for (JsonPairConst kv : extra) {
+    const char* key = kv.key().c_str();
+    if (!key || !key[0]) continue;
+    // The known ones were asked above, with their own list handling.
+    if (knownTagFieldKey(key)) continue;
+    // Not a tag store, and a timestamp that normalised to hex would be a
+    // match waiting to happen.
+    if (strcmp(key, LAST_DRIED_FIELD) == 0) continue;
+    if (!kv.value().is<const char*>()) continue;
+
+    String val = kv.value().as<String>();
+    val.replace("\"", "");
+    val.trim();
+    if (val.length() == 0) continue;
+
+    // Both shapes, because an unknown field may well hold a list, and both
+    // identities for the same reason as above.
+    if (storedNamesTag(val.c_str(), true,  uid) ||
+        storedNamesTag(val.c_str(), false, uid)) {
+      logSDf("tag found in extra.%s of spool %d", key, (int)(spool["id"] | 0));
+      return TAG_RANK_EXTRA_OTHER;
     }
   }
 
@@ -224,6 +302,34 @@ static void captureBindings(JsonObjectConst spool) {
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
     const TagFieldSpec& spec = tagFieldSpec(i);
     captureExtraField(extra, spec.key, sm_tag_values[i], CARD_UIDS_MAX, spec.key);
+  }
+
+  // The native relation goes into the slot next to them, as a comma separated
+  // list, which is the shape the card_uids helpers already read and write. A
+  // spool can hold several tags here - for a Bambu spool that is the normal
+  // case, one entry per chip plus the tray uuid - and an unlink has to take
+  // every one of them out. Without this list it could only ever drop the tag
+  // that happened to be on the reader, and the spool would keep being found
+  // by the others while the screen said it was unlinked.
+  char* out = sm_tag_values[TAG_FIELD_NATIVE];
+  out[0] = '\0';
+  JsonArrayConst tags = spool["tags"];
+  if (tags.isNull()) return;
+  size_t used = 0;
+  for (JsonObjectConst t : tags) {
+    const char* raw = t["uid"] | "";
+    if (!raw[0]) continue;
+    char norm[TAG_UID_CMP_MAX];
+    tagUidNormalize(raw, norm, sizeof(norm));
+    if (!norm[0]) continue;
+    const size_t need = strlen(norm) + (used ? 1 : 0);
+    if (used + need >= CARD_UIDS_MAX) {
+      logSDf("native tags: spool %d has more than fits, list truncated", sm_id);
+      break;
+    }
+    if (used) out[used++] = ',';
+    strcpy(out + used, norm);
+    used += strlen(norm);
   }
 }
 
@@ -582,6 +688,61 @@ void querySpoolmanById(int spool_id) {
 //  SPOOLMAN QUERY
 //  Finds spool by tray_uuid in extra.tag field
 // ============================================================
+// ============================================================
+//  RE-ANNOUNCING A TAG THE AUTO-LINK JUST LEARNED
+//
+//  The very first scan of a spool that Spoolman does not know yet can only
+//  answer "unknown tag": the link is made afterwards, out of the lookup that
+//  the same scan started. A paired browser therefore gets the unknown-tag
+//  toast and stays put, which reads as a failure even though everything
+//  worked.
+//
+//  One more scan fixes it, but not straight away: Spoolman broadcasts the same
+//  UID from the same reader only once per DEBOUNCE_WINDOW, three seconds, so
+//  an immediate repeat is swallowed. Hence the wait.
+// ============================================================
+
+static char     s_rescan_uid[40]    = {0};
+static char     s_rescan_format[16] = {0};
+static uint32_t s_rescan_due_ms     = 0;
+
+static void scheduleRescan(const char* uid, const char* format) {
+  if (!uid || !uid[0]) return;
+  strncpy(s_rescan_uid, uid, sizeof(s_rescan_uid) - 1);
+  s_rescan_uid[sizeof(s_rescan_uid) - 1] = '\0';
+  strncpy(s_rescan_format, format ? format : "", sizeof(s_rescan_format) - 1);
+  s_rescan_format[sizeof(s_rescan_format) - 1] = '\0';
+  s_rescan_due_ms = millis() + TAG_RESCAN_DELAY_MS;
+}
+
+void spoolmanRescanTick() {
+  if (!s_rescan_uid[0]) return;
+  // Signed difference, so the comparison survives the millis() rollover.
+  if ((int32_t)(millis() - s_rescan_due_ms) < 0) return;
+
+  char uid[sizeof(s_rescan_uid)];
+  char fmt[sizeof(s_rescan_format)];
+  strcpy(uid, s_rescan_uid);
+  strcpy(fmt, s_rescan_format);
+  // Cleared before the request, not after: this fires once either way, and a
+  // server that is down must not turn into a scan on every single loop pass.
+  s_rescan_uid[0] = '\0';
+
+  if (!wifi_ok) return;
+  if (!tag_present) {
+    // The spool is already off the pad. Opening it in somebody's browser now
+    // would be answering a question they stopped asking.
+    logSDf("Rescan: uid=%s dropped, tag no longer on the reader", uid);
+    return;
+  }
+
+  JsonDocument doc;
+  int code = backendTagScan(cfg_spoolman_base, uid, fmt[0] ? fmt : nullptr,
+                            doc, 5000, nullptr);
+  logSDf("Rescan: uid=%s re-announced, matched=%d HTTP %d",
+         uid, (int)(doc["matched_spool_id"] | 0), code);
+}
+
 void querySpoolman(const char* tray_uuid) {
   if (!wifi_ok) return;
   logSDf("Spoolman: query tray_uuid=%.16s...", tray_uuid ? tray_uuid : "");
@@ -630,10 +791,12 @@ void querySpoolman(const char* tray_uuid) {
 
   // Filter: only parse needed fields — reduces RAM, works with 100+ spools
   // Filter must be Array-wrapped to match the API array response structure
-  // Sized with room for every tag field. An overflowed filter silently drops
-  // keys, and a dropped tag key makes every spool come back looking unbound -
-  // hence the check after it is filled rather than trust in the number.
-  StaticJsonDocument<768> filter;
+  // Sized with room for every tag field AND for the server's own text fields,
+  // which are only known at runtime and can be a dozen. An overflowed filter
+  // silently drops keys, and a dropped tag key makes every spool come back
+  // looking unbound - hence the check after it is filled rather than trust in
+  // the number.
+  StaticJsonDocument<2048> filter;
   JsonArray filter_arr = filter.to<JsonArray>();
   JsonObject filter_spool = filter_arr.createNestedObject();
   filter_spool["id"] = true;
@@ -652,6 +815,12 @@ void querySpoolman(const char* tray_uuid) {
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
     filter_spool["extra"][tagFieldSpec(i).key] = true;
   filter_spool["extra"][LAST_DRIED_FIELD] = true;
+  // Plus every other text field the server keeps, so the scan below can find a
+  // UID that was put somewhere nobody agreed on. The keys are static storage
+  // in the capability cache, which they have to be: ArduinoJson does not copy
+  // a const char* key, and a document outliving its keys reads as garbage.
+  for (uint8_t i = 0; i < backendSpoolTextFieldCount(); i++)
+    filter_spool["extra"][backendSpoolTextFieldKey(i)] = true;
   // Spoolman's own tag relation, so the full scan can match a natively bound
   // spool too. A filter on an array of objects describes one element.
   filter_spool["tags"][0]["uid"] = true;
@@ -702,7 +871,12 @@ void querySpoolman(const char* tray_uuid) {
   if (backendHasNativeTags()) {
     JsonDocument scan(&psram_alloc);
     DeserializationError serr = DeserializationError::Ok;
-    int scode = backendTagScan(cfg_spoolman_base, tray_uuid, nullptr, scan, 8000, &serr);
+    // The chip uid, not the tray uuid: Spoolman's relation keys on hardware
+    // uids, and so do the phone, the ESPHome readers and Spoolman's own Add
+    // tag dialog. See the identity block in tag_field.h.
+    const char* scan_uid = tagNativeUid(tray_uuid);
+    int scode = backendTagScan(cfg_spoolman_base, scan_uid,
+                               tagFormatName(tray_uuid), scan, 8000, &serr);
     if (scode == 200 && !serr && !scan["spool"].isNull()) {
       // Reshaped into the one element array the rest of this function reads,
       // so nothing downstream has to know where the spool came from.
@@ -710,12 +884,34 @@ void querySpoolman(const char* tray_uuid) {
       JsonArray one = doc.to<JsonArray>();
       one.add(scan["spool"]);
       have_result = true;
-      logSDf("Backend: native tag scan hit, spool %d",
-             (int)(scan["matched_spool_id"] | 0));
+      logSDf("Backend: native tag scan hit, uid=%s spool %d",
+             scan_uid, (int)(scan["matched_spool_id"] | 0));
     } else if (scode == 200) {
-      logSD("Backend: native tag scan, no native tag for this uid");
+      logSDf("Backend: native tag scan, no native tag for uid=%s", scan_uid);
     } else if (scode != BACKEND_NOT_SUPPORTED) {
       logSDf("Backend: native tag scan failed, code=%d err=%s", scode, serr.c_str());
+    }
+    if (!have_result) { doc.clear(); err = DeserializationError::Ok; }
+  }
+
+  // A Bambu tag that an earlier firmware bound natively sits in the relation
+  // under its tray uuid, and the scan above no longer asks for that one. This
+  // catches those with a single exact lookup instead of the whole inventory,
+  // and the auto-link at the end then adds the chip uid, so a spool pays for
+  // this once. Only for Bambu: everywhere else the scan already asked this
+  // very uid and a second request would repeat it.
+  if (!have_result && tagIsBambu(tray_uuid)) {
+    int ncode = backendFindSpoolByNativeTag(cfg_spoolman_base, tray_uuid,
+                                            doc, 8000, &filter, &err);
+    if (ncode == 200 && !err) {
+      for (JsonObjectConst cand : doc.as<JsonArrayConst>()) {
+        if (spoolMatchesTag(cand, tray_uuid)) { have_result = true; break; }
+      }
+      if (have_result)
+        logSDf("Backend: native lookup hit on the tray uuid, %d spool(s) returned",
+               (int)doc.as<JsonArrayConst>().size());
+    } else if (ncode != BACKEND_NOT_SUPPORTED) {
+      logSDf("Backend: native tag lookup failed, code=%d err=%s", ncode, err.c_str());
     }
     if (!have_result) { doc.clear(); err = DeserializationError::Ok; }
   }
@@ -762,20 +958,36 @@ void querySpoolman(const char* tray_uuid) {
   // no request, but it logged "no implementation yet" once a boot, which
   // reads like a missing feature rather than a loop that does not apply.
   const bool extra_fields_apply = (backendMode() == BACKEND_SPOOLMAN);
-  for (uint8_t f = 0; extra_fields_apply && !have_result && f < TAG_FIELD_EXTRA_COUNT; f++) {
-    if (f == g_tag_field) continue;   // already tried, it went first
 
-    int ccode = backendFindSpoolByTagField(f, cfg_spoolman_base, tray_uuid,
+  // Both identities the tag can be stored under. A Bambu tag is carried around
+  // as its tray uuid, but somebody may well have written the chip uid into a
+  // field instead - that is what a reader without a Bambu decoder would have
+  // reported to them. The second pass only exists for Bambu, and only runs
+  // when the first found nothing, so the normal case still costs one request
+  // per field.
+  const char* candidates[2] = { tray_uuid, tagNativeUid(tray_uuid) };
+  const uint8_t candidate_count = (candidates[1] != candidates[0]) ? 2 : 1;
+
+  for (uint8_t c = 0; extra_fields_apply && !have_result && c < candidate_count; c++) {
+   for (uint8_t f = 0; !have_result && f < TAG_FIELD_EXTRA_COUNT; f++) {
+    // Only in the first pass: there the selected field already went ahead of
+    // this loop. In the second it has not been asked for this value yet.
+    if (c == 0 && f == tagFieldEffective()) continue;
+
+    int ccode = backendFindSpoolByTagField(f, cfg_spoolman_base, candidates[c],
                                            doc, 8000, &err, &filter);
     if (ccode == 200 && !err) {
       // Every hit is verified: the filter is an ilike, so a four byte UID
       // matches inside a seven byte one belonging to a different spool.
+      // spoolTagRank() checks both identities, so the tray uuid is the right
+      // thing to verify with whichever value found the spool.
       for (JsonObjectConst s : doc.as<JsonArrayConst>()) {
         if (spoolMatchesTag(s, tray_uuid)) { have_result = true; break; }
       }
       if (have_result) {
-        logSDf("Backend: %s search hit, %d spool(s) returned",
-               tagFieldSpec(f).key, (int)doc.as<JsonArrayConst>().size());
+        logSDf("Backend: %s search hit on %s, %d spool(s) returned",
+               tagFieldSpec(f).key, candidates[c],
+               (int)doc.as<JsonArrayConst>().size());
       }
     } else if (ccode != BACKEND_NOT_SUPPORTED) {
       logSDf("Backend: %s search failed, code=%d err=%s",
@@ -785,6 +997,7 @@ void querySpoolman(const char* tray_uuid) {
       doc.clear();
       err = DeserializationError::Ok;
     }
+   }
   }
 
   // The fast lookups have all missed, so the whole inventory is coming. That is
@@ -1107,6 +1320,124 @@ void querySpoolman(const char* tray_uuid) {
     // last_used is directly in the spool object (not in extra!)
     applyLastUsed(spool["last_used"] | (const char*)nullptr,
                 spool["extra"]["last_weighed"] | (const char*)nullptr, sm_id);
+
+    // Bring Spoolman's relation up to what is physically on the reader. Two
+    // groups of users end up here: somebody whose spools are bound through an
+    // extra field, whose bindings move over on the first placement, and
+    // somebody with Bambu spools, which collect one entry per side as each
+    // side gets read.
+    //
+    // A Bambu spool ends up with up to three entries, and each earns its place:
+    //   chip uid, one per side  every reader can report these, so they are
+    //                           what makes the spool findable by a phone, an
+    //                           ESPHome box, or Spoolman's Add tag dialog
+    //   tray uuid               only a Bambu-aware reader can produce it, but
+    //                           it identifies the spool from either side at
+    //                           once, without waiting for both chips
+    //
+    // What is already linked comes from captureBindings() above, so nothing is
+    // sent that Spoolman already holds and a settled spool costs no requests
+    // at all.
+    //
+    // Only while the native source is the selected one. Somebody who picked
+    // extra.nfc_id did so because another tool reads that field, and writing
+    // into a store they did not choose is not this scale's call.
+    //
+    // Nothing is cleared here, unlike the explicit link in patchSpoolTag().
+    // This runs on its own, without anybody asking for it, and a store that
+    // silently empties a field the user never touched is worse than one that
+    // leaves a duplicate behind.
+    if (tagFieldIsNative() && sm_id > 0 && backendHasNativeTags()) {
+      char* have = sm_tag_values[TAG_FIELD_NATIVE];
+
+      struct AutoLink {
+        // Whether anything was actually linked, which is what decides if the
+        // tag is worth announcing a second time.
+        static bool add(int spool_id, const char* uid, const char* format) {
+          int conflict = 0;
+          int code = backendLinkTag(cfg_spoolman_base, spool_id, uid,
+                                    format, &conflict);
+          if (code == 409) {
+            // Nobody asked for this link, so a tag that belongs to another
+            // spool is not an error to put on screen. It is worth a line in
+            // the log, because it means two spools claim one identity.
+            logSDf("Auto-link: uid=%s belongs to spool %d, left alone",
+                   uid, conflict);
+            return false;
+          } else if (code >= 200 && code < 300) {
+            logSDf("Auto-link: uid=%s added to spool %d", uid, spool_id);
+            return true;
+          }
+          logSDf("Auto-link: uid=%s to spool %d failed, HTTP %d",
+                 uid, spool_id, code);
+          return false;
+        }
+
+        // Keeps the captured list in step with what was just linked. It was
+        // read before these links existed, and an unlink straight afterwards
+        // reads that same list to decide what to drop. Without this it would
+        // leave the new entries behind, and a spool the user was told is
+        // unlinked would still be found by them.
+        static void remember(char* list, const char* uid) {
+          char merged[CARD_UIDS_MAX];
+          if (cardUidsAppend(list, uid, merged, sizeof(merged)) != CARD_UIDS_ADDED)
+            return;
+          strncpy(list, merged, CARD_UIDS_MAX - 1);
+          list[CARD_UIDS_MAX - 1] = '\0';
+        }
+      };
+
+      bool linked = false;
+      const char* chip = tagNativeUid(tray_uuid);
+      if (chip && chip[0] && !cardUidsContain(have, chip)) {
+        if (AutoLink::add(sm_id, chip, tagFormatName(tray_uuid))) {
+          AutoLink::remember(have, chip);
+          linked = true;
+        }
+      }
+
+      if (tagIsBambu(tray_uuid) && !cardUidsContain(have, tray_uuid)) {
+        if (AutoLink::add(sm_id, tray_uuid, "bambu")) {
+          AutoLink::remember(have, tray_uuid);
+          linked = true;
+        }
+      }
+
+      // OpenSpoolman reads a spool's tray uuid out of extra.tag and knows
+      // nothing about Spoolman's relation yet. A spool that migrates over
+       // through this path - found by a chip uid in card_uids, say - would
+      // otherwise drop out of its view, and this is the very path a whole
+      // library gets adopted through. The explicit link in patchSpoolTag()
+      // does the same thing for the same reason.
+      //
+      // Only into an empty field. Filling a blank is an addition; overwriting
+      // a value somebody put there would be an opinion, and this runs without
+      // anybody asking for it.
+      if (tagIsBambu(tray_uuid) && !sm_tag_values[TAG_FIELD_TAG][0]) {
+        const TagFieldSpec& companion = tagFieldSpec(TAG_FIELD_TAG);
+        if (backendHasExtraField(companion.key)) {
+          char val[40];
+          tagFieldFormat(companion, tray_uuid, val, sizeof(val));
+          int c = backendPatchExtraField(cfg_spoolman_base, sm_id,
+                                         companion.key, val);
+          logSDf("Auto-link: kept tray uuid in %s='%s' of spool %d HTTP %d",
+                 companion.key, val, sm_id, c);
+          if (c >= 200 && c < 300) {
+            strncpy(sm_tag_values[TAG_FIELD_TAG], val, CARD_UIDS_MAX - 1);
+            sm_tag_values[TAG_FIELD_TAG][CARD_UIDS_MAX - 1] = '\0';
+          }
+        } else {
+          logSDf("Auto-link: %s missing on the server, tray uuid not kept",
+                 companion.key);
+        }
+      }
+
+      // The scan that started this lookup went out before the link existed, so
+      // any browser paired with this scale was told the tag is unknown. Say it
+      // again, now that it resolves.
+      if (linked && chip && chip[0])
+        scheduleRescan(chip, tagFormatName(tray_uuid));
+    }
 
     updateLinkButton();
     return;

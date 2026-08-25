@@ -83,6 +83,19 @@ int spoolmanLinkTag(const char* base_url, int spool_id, const char* uid,
 int spoolmanUnlinkTag(const char* base_url, int spool_id, const char* uid,
                       uint32_t timeout_ms = 5000);
 
+// Looks a spool up by a linked tag. Exact and indexed, unlike the extra field
+// search: the server normalises both sides and a tag belongs to one spool, so
+// a hit needs no verification pass and an empty answer really means nobody
+// holds this UID.
+//
+// Deliberately not spoolmanTagScan(): that one broadcasts, and a lookup the
+// firmware makes on its own behalf must not move somebody's paired browser to
+// a spool they did not tap.
+int spoolmanFindSpoolByNativeTag(const char* base_url, const char* uid,
+                                 JsonDocument& doc, uint32_t timeout_ms = 8000,
+                                 JsonDocument* filter = nullptr,
+                                 DeserializationError* out_err = nullptr);
+
 int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remaining, const char* last_used_iso = nullptr, uint32_t timeout_ms = 5000);
 int spoolmanPatchInitialWeight(const char* base_url, int spool_id, float initial_weight, uint32_t timeout_ms = 5000);
 int spoolmanPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeout_ms = 5000);

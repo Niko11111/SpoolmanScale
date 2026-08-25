@@ -153,12 +153,36 @@ static void clearMigrationSource(int spool_id, uint8_t src, const char* value) {
          spool_id, value ? value : "", s.key, tagFieldKeyName(), s.key, c);
 }
 
-// What kind of tag the scale is holding, for Spoolman's informational format
-// field. A tray uuid is 32 characters and only a Bambu tag has one.
-static const char* tagFormatName(const char* uuid) {
-  char hex[40];
-  tagUidNormalize(uuid, hex, sizeof(hex));
-  return (strlen(hex) == 32) ? "bambu" : "ntag";
+
+// Drops every native tag the spool holds, taken from the list the lookup
+// captured, and falls back to the one identity in hand when nothing was.
+//
+// Shared on purpose: there are two ways into an unlink - patchSpoolTag() with
+// an empty uuid, and unlinkCardUid() - and they are reached from different
+// backends. Fixing this in one of them and not the other is exactly what left
+// a spool findable after the screen said it was unlinked.
+static void unlinkAllNativeTags(int spool_id, const char* fallback_uid) {
+  char list[CARD_UIDS_MAX];
+  strncpy(list, sm_tag_values[TAG_FIELD_NATIVE], sizeof(list) - 1);
+  list[sizeof(list) - 1] = '\0';
+
+  if (!list[0]) {
+    if (!fallback_uid || !fallback_uid[0]) {
+      logSDf("UNLINK native ID=%d: nothing captured and no uid in hand", spool_id);
+      return;
+    }
+    int c = backendUnlinkTag(cfg_spoolman_base, spool_id, fallback_uid);
+    logSDf("UNLINK native ID=%d uuid='%s' (no list captured) HTTP %d",
+           spool_id, fallback_uid, c);
+    return;
+  }
+
+  char* save = nullptr;
+  for (char* one = strtok_r(list, ",", &save); one;
+       one = strtok_r(nullptr, ",", &save)) {
+    int c = backendUnlinkTag(cfg_spoolman_base, spool_id, one);
+    logSDf("UNLINK native ID=%d uuid='%s' HTTP %d", spool_id, one, c);
+  }
 }
 
 bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_values) {
@@ -172,41 +196,90 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
   // of the list handling below. Checked before anything reads field_values,
   // because there is no field to read for this source.
   if (spec.is_native) {
+    // What this call is named by: the uid handed in, or the one the spool was
+    // found under when it is an unlink and carries none.
+    const char* scanned    = clearing ? g_tag.tray_uuid : uuid;
+    const char* native_uid = tagNativeUid(scanned);
+
     if (clearing) {
-      // Which UID to drop is the one the spool was found under.
-      int c = backendUnlinkTag(cfg_spoolman_base, spool_id, g_tag.tray_uuid);
-      logSDf("UNLINK native ID=%d uuid='%s' HTTP %d", spool_id, g_tag.tray_uuid, c);
+      unlinkAllNativeTags(spool_id, native_uid);
       return true;
     }
 
+    // The chip that is on the reader. Every reader can report this one, from a
+    // phone to an ESPHome box to Spoolman's own Add tag dialog, so it is the
+    // identity that makes the spool findable outside this firmware.
     int conflict = 0;
-    int code = backendLinkTag(cfg_spoolman_base, spool_id, uuid,
-                              tagFormatName(uuid), &conflict);
+    int code = backendLinkTag(cfg_spoolman_base, spool_id, native_uid,
+                              tagFormatName(scanned), &conflict);
     logSDf("LINK native ID=%d uuid='%s' format=%s HTTP %d%s",
-           spool_id, uuid, tagFormatName(uuid), code,
+           spool_id, native_uid, tagFormatName(scanned), code,
            code == 409 ? " CONFLICT" : "");
 
     if (code == 409) {
       // A tag belongs to exactly one spool. Saying which one holds it beats a
       // bare failure - it is the whole reason Spoolman puts the id in the body.
       sm_tag_conflict_spool = conflict;
-      logSDf("LINK native: uuid='%s' already on spool %d", uuid, conflict);
+      logSDf("LINK native: uuid='%s' already on spool %d", native_uid, conflict);
       return false;
     }
     if (code < 200 || code >= 300) return false;
+
+    // A Bambu tag carries a second identity: the tray uuid out of its
+    // contents, which both chips of the spool hold. Linked alongside, it finds
+    // the spool from either side straight away, instead of only once the other
+    // chip has been on the reader too. It is no substitute for the chip uid
+    // above - only a reader that can decrypt Bambu contents ever sees it.
+    if (tagIsBambu(scanned)) {
+      int c2 = backendLinkTag(cfg_spoolman_base, spool_id, scanned, "bambu", nullptr);
+      // A 409 here means another spool claims this tray uuid, which is a
+      // duplicate in the library rather than something this link did wrong.
+      // The chip is linked either way, so it stays a log line.
+      logSDf("LINK native ID=%d tray uuid='%s' HTTP %d%s",
+             spool_id, scanned, c2, c2 == 409 ? " CONFLICT" : "");
+    }
+
+    // OpenSpoolman reads a spool's tray uuid out of extra.tag, and that is how
+    // it knows which spool to subtract a print from. It does not know about
+    // Spoolman's tag relation yet, so a Bambu spool linked only natively would
+    // stop being recognised there and the user would have to relink it by hand
+    // in OpenSpoolman. Writing the value costs one PATCH on an action the user
+    // asked for, and it is dropped again the day OpenSpoolman reads the
+    // relation.
+    //
+    // This is also why the migration below skips extra.tag for a Bambu tag:
+    // clearing it is exactly what would break that setup.
+    const bool keep_tag_field = tagIsBambu(scanned);
+    if (keep_tag_field) {
+      const TagFieldSpec& companion = tagFieldSpec(TAG_FIELD_TAG);
+      if (!backendHasExtraField(companion.key)) {
+        logSDf("LINK native: %s missing on the server, tray uuid not kept",
+               companion.key);
+      } else {
+        char val[40];
+        tagFieldFormat(companion, scanned, val, sizeof(val));
+        int c = backendPatchExtraField(cfg_spoolman_base, spool_id,
+                                       companion.key, val);
+        logSDf("LINK native ID=%d kept tray uuid in %s='%s' HTTP %d",
+               spool_id, companion.key, val, c);
+      }
+    }
 
     // Bound natively now, so a UID left in an extra field would keep the spool
     // findable through a store nobody writes any more. Same rule as the
     // migration between fields, including the refusal to empty a list that
     // still holds somebody else's tag.
     if (field_values) {
-      for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
+      for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
+        if (keep_tag_field && i == TAG_FIELD_TAG) continue;
         if (field_values[i] && field_values[i][0])
           clearMigrationSource(spool_id, i, field_values[i]);
+      }
     }
     return true;
   }
-  const char* selected = (!clearing && field_values) ? field_values[g_tag_field] : nullptr;
+  const uint8_t eff = tagFieldEffective();
+  const char* selected = (!clearing && field_values) ? field_values[eff] : nullptr;
   const bool  has_value = (selected && selected[0]);
 
   // Where the binding sits now, if it is not already in the selected field.
@@ -219,7 +292,7 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
   int src = -1;
   if (!clearing && !has_value && field_values && backendMode() == BACKEND_SPOOLMAN) {
     for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
-      if (i == g_tag_field) continue;
+      if (i == eff) continue;
       if (field_values[i] && field_values[i][0]) { src = (int)i; break; }
     }
   }
@@ -318,8 +391,21 @@ void unlinkCardUid(int spool_id, const char* uid, bool all) {
   // Everything below still runs afterwards, because a spool can carry both
   // while it is being migrated.
   if (backendHasNativeTags()) {
-    int c = backendUnlinkTag(cfg_spoolman_base, spool_id, uid);
-    logSDf("UNLINK native ID=%d uuid='%s' HTTP %d", spool_id, uid ? uid : "", c);
+    // By the chip uid for a Bambu tag, because that is what the link was made
+    // with. The extra fields below still go by `uid`, the tray uuid, which is
+    // what they hold.
+    const char* native_uid = tagNativeUid(uid);
+    if (all) {
+      // A Bambu spool holds up to three entries, one per chip plus the tray
+      // uuid. "Unlink everything" has to mean all of them, or the spool comes
+      // straight back on the next placement.
+      unlinkAllNativeTags(spool_id, native_uid);
+    } else {
+      // Just the tag that is physically on the reader. The others stay, which
+      // is the whole point of the popup's second answer.
+      int c = backendUnlinkTag(cfg_spoolman_base, spool_id, native_uid);
+      logSDf("UNLINK native ID=%d uuid='%s' HTTP %d", spool_id, native_uid, c);
+    }
   }
 
   if (all) {

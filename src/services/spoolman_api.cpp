@@ -242,6 +242,15 @@ int spoolmanUnlinkTag(const char* base_url, int spool_id, const char* uid,
                    timeout_ms);
 }
 
+int spoolmanFindSpoolByNativeTag(const char* base_url, const char* uid,
+                                 JsonDocument& doc, uint32_t timeout_ms,
+                                 JsonDocument* filter, DeserializationError* out_err) {
+  if (!hasBaseUrl(base_url) || !uid || !uid[0]) return -1;
+  // Normalised server side, so the colon notation goes through unchanged.
+  String path = String("/api/v1/spool?allow_archived=false&tag=") + urlEncode(uid);
+  return spoolmanGetJson(base_url, path.c_str(), doc, timeout_ms, filter, out_err);
+}
+
 int spoolmanGetLocationsJson(const char* base_url, JsonDocument& doc,
                              uint32_t timeout_ms, DeserializationError* out_err) {
   return spoolmanGetJson(base_url, "/api/v1/location", doc, timeout_ms, nullptr, out_err);

@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.7.0-beta.76"
+#define FW_VERSION  "v0.7.0-beta.86"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -71,3 +71,9 @@
 // 90 % of heartbeat lines repeated the previous one byte for byte.
 #define HEARTBEAT_QUIET_DELTA_B   1024
 #define HEARTBEAT_KEEPALIVE_MS   60000
+
+// How long to wait before re-announcing a tag that the auto-link has just made
+// resolvable. Spoolman suppresses a repeat of the same UID from the same
+// reader within 3 seconds (DEBOUNCE_WINDOW in its scanrelay.py), so an
+// immediate second scan would be swallowed and never reach a paired browser.
+#define TAG_RESCAN_DELAY_MS  3500

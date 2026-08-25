@@ -59,6 +59,18 @@ struct TagFieldSpec {
 // reading past the table - a corrupted NVS value must not crash the scale.
 const TagFieldSpec& tagFieldSpec(uint8_t id);
 
+// The field that actually applies right now, as an index.
+//
+// Normally the user's choice. The native source is the exception: it needs a
+// server that has the tag relation, and the choice lives in NVS independently
+// of the backend. Pointing a scale that had chosen "native" at FilaMan or
+// BamBuddy would otherwise send every link into BACKEND_NOT_SUPPORTED - the
+// selection survives the switch, the endpoints do not.
+//
+// The stored choice is never touched. Switch back to Spoolman and it applies
+// again, which is why this exists instead of resetting the setting.
+uint8_t tagFieldEffective();
+
 // The field the user selected, and the two things most callers want from it.
 const TagFieldSpec& tagFieldSelected();
 // Null while the native source is selected, because there is no field then.
@@ -85,3 +97,44 @@ void tagFieldAutoSelect();
 // NUL terminates when out_len > 0.
 void tagFieldFormat(const TagFieldSpec& spec, const char* uid,
                     char* out, size_t out_len);
+
+// ============================================================
+//  WHICH UID IDENTIFIES THE TAG ON THE READER
+//
+//  A Bambu spool carries two chips, one on each side of the core. Both hold
+//  the same tray uuid in their contents, and each has its own hardware uid.
+//  So a Bambu tag has two identities, and they belong in different stores:
+//
+//    tray uuid   32 hex, seen from both sides   -> the extra field
+//    chip uid     8 hex, one side of the spool  -> Spoolman's tag relation
+//
+//  The tray uuid goes into the extra field because it keeps finding the spool
+//  no matter which side is on the reader. The chip uid goes into Spoolman's
+//  relation because that relation keys on hardware uids: it is what a phone,
+//  an ESPHome reader and Spoolman's own Add-tag dialog all report. Sending a
+//  tray uuid there would key the spool on a value no other reader ever sees,
+//  and Spoolman would take it, because a tray uuid is valid hex.
+//
+//  Everything else the scale reads has only one identity, and both functions
+//  answer with it.
+// ============================================================
+
+// All three answer about ONE lookup, named by the value that lookup was
+// started with, and never about whatever g_tag happens to hold. That matters:
+// the NTAG path calls querySpoolman() before it writes the new uid into
+// g_tag.tray_uuid, so reading the state there would still see the Bambu tag
+// that came before and hand back its chip uid. The argument cannot go stale.
+
+// True when `scanned` is a Bambu tray uuid, which is the only 32 character
+// identifier the scale ever looks a spool up by. An NTAG uid is 14 once
+// normalised, a card 8.
+bool tagIsBambu(const char* scanned);
+
+// The uid Spoolman's tag relation keys on: the hardware chip for a Bambu tag,
+// and `scanned` itself for everything else.
+const char* tagNativeUid(const char* scanned);
+
+// Spoolman's informational `format` vocabulary. Asked about `scanned` and not
+// about what goes on the wire: the native path sends an 8 character chip uid
+// for a Bambu tag, and a rule reading that length would call it an ntag.
+const char* tagFormatName(const char* scanned);

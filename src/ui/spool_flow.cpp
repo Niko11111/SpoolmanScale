@@ -314,7 +314,8 @@ static const char* const* linkTargetValues(int spool_id) {
 static const char* linkTargetBase(int spool_id) {
   const char* const* v = linkTargetValues(spool_id);
   if (!v) return nullptr;
-  if (v[g_tag_field]) return v[g_tag_field];
+  const uint8_t eff = tagFieldEffective();
+  if (v[eff]) return v[eff];
   for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++) if (v[f]) return v[f];
   return nullptr;
 }

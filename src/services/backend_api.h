@@ -121,6 +121,24 @@ int  backendLinkTag(const char* base_url, int spool_id, const char* uid,
 int  backendUnlinkTag(const char* base_url, int spool_id, const char* uid,
        uint32_t timeout_ms = 5000);
 
+// Exact lookup by a linked tag, without the broadcast /tag/scan carries.
+// BACKEND_NOT_SUPPORTED unless this is Spoolman and the server has the relation.
+int  backendFindSpoolByNativeTag(const char* base_url, const char* uid,
+       JsonDocument& doc, uint32_t timeout_ms = 8000,
+       JsonDocument* filter = nullptr, DeserializationError* out_err = nullptr);
+
+// Every text extra field this server keeps on a spool, whatever it is called.
+// Filled by the same probe that answers backendHasExtraField(), so asking
+// costs no request of its own, and empty on a backend that has no such list.
+//
+// Only text fields: a date or a number cannot hold a tag UID, and leaving them
+// out keeps both the read filter and the comparison smaller.
+//
+// The returned pointer is static storage and outlives any JsonDocument it is
+// put into, which matters because ArduinoJson does not copy a const char* key.
+uint8_t     backendSpoolTextFieldCount();
+const char* backendSpoolTextFieldKey(uint8_t index);
+
 // Writes one text extra field. Spoolman only, for the same reason as
 // backendFindSpoolByTagField(): nothing else has extra fields. The value is
 // the finished contents - the list merge, if any, happened before this.

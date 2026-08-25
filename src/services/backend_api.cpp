@@ -10,6 +10,7 @@
 #include "services/bambuddy_device.h"
 #include "services/filaman_api.h"
 #include "services/list_limits.h"
+#include "services/device_name.h"
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
 #include "services/tag_uid.h"
@@ -127,7 +128,7 @@ int backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocume
       // field filter is passed along because a server that ignores the query
       // parameter answers with everything: that case still works, and this
       // keeps it from costing more memory than the normal full scan would.
-      return backendFindSpoolByTagField(g_tag_field, base_url, tag_uuid, doc,
+      return backendFindSpoolByTagField(tagFieldEffective(), base_url, tag_uuid, doc,
                                         timeout_ms, out_err, filter);
   }
 }
@@ -176,6 +177,19 @@ static int knownFieldIndex(const char* key) {
 static char    s_fields_probed_for[96] = {0};
 static uint8_t s_fields_mask = 0;
 
+// Every text field the server has, not just the three this firmware writes.
+// A spool can carry a tag UID in any of them - active_tray gets one from
+// OpenSpoolman, and people invent their own - and the full inventory scan
+// compares against all of them so a spool is found whatever field it sits in.
+//
+// Capped rather than grown: this is read into a fixed filter and a fixed
+// comparison, and a server with a hundred custom fields must not be able to
+// turn one tag lookup into an unbounded one.
+#define BACKEND_TEXT_FIELDS_MAX  16
+#define BACKEND_FIELD_KEY_MAX    40
+static char    s_text_fields[BACKEND_TEXT_FIELDS_MAX][BACKEND_FIELD_KEY_MAX] = {};
+static uint8_t s_text_field_count = 0;
+
 // Same idea for the native tag API, kept beside the field cache because both
 // answer "what can this server do" and both go stale for the same reason.
 static char s_tagapi_probed_for[96] = {0};
@@ -184,6 +198,7 @@ static bool s_tagapi_present = false;
 void backendInvalidateExtraFieldCache() {
   s_fields_probed_for[0] = '\0';
   s_fields_mask = 0;
+  s_text_field_count = 0;
   s_tagapi_probed_for[0] = '\0';
   s_tagapi_present = false;
 }
@@ -231,7 +246,13 @@ const char* backendReaderId() {
 int backendTagScan(const char* base_url, const char* uid, const char* format,
                    JsonDocument& doc, uint32_t timeout_ms, DeserializationError* out_err) {
   if (!backendHasNativeTags()) return notSupported("TagScan");
-  return spoolmanTagScan(base_url, uid, backendReaderId(), "SpoolmanScale",
+  // The name is what Spoolman's reader picker shows. Two scales would
+  // otherwise sit there under one label, distinguishable only by the reader id
+  // nobody sees, so the name the user gave this device goes out instead.
+  // deviceLabel() is never empty and falls back to the product name itself.
+  const char* name = deviceLabel();
+  return spoolmanTagScan(base_url, uid, backendReaderId(),
+                         (name && name[0]) ? name : "SpoolmanScale",
                          format, doc, timeout_ms, out_err);
 }
 
@@ -245,6 +266,14 @@ int backendUnlinkTag(const char* base_url, int spool_id, const char* uid,
                      uint32_t timeout_ms) {
   if (!backendHasNativeTags()) return notSupported("UnlinkTag");
   return spoolmanUnlinkTag(base_url, spool_id, uid, timeout_ms);
+}
+
+int backendFindSpoolByNativeTag(const char* base_url, const char* uid,
+                                JsonDocument& doc, uint32_t timeout_ms,
+                                JsonDocument* filter, DeserializationError* out_err) {
+  if (!uid || !uid[0]) return BACKEND_NOT_SUPPORTED;
+  if (!backendHasNativeTags()) return notSupported("FindSpoolByNativeTag");
+  return spoolmanFindSpoolByNativeTag(base_url, uid, doc, timeout_ms, filter, out_err);
 }
 
 bool backendHasExtraField(const char* key) {
@@ -275,9 +304,21 @@ bool backendHasExtraField(const char* key) {
     }
 
     uint8_t mask = 0;
+    s_text_field_count = 0;
     for (JsonObjectConst f : doc.as<JsonArrayConst>()) {
-      const int i = knownFieldIndex(f["key"] | "");
+      const char* key = f["key"] | "";
+      const int i = knownFieldIndex(key);
       if (i >= 0) mask |= (uint8_t)(1u << i);
+
+      // Text only, and short enough to be a field key rather than a value that
+      // wandered into one. Anything longer is skipped rather than truncated:
+      // a shortened key would filter on a field that does not exist.
+      if (strcmp(f["field_type"] | "", "text") != 0) continue;
+      if (!key[0] || strlen(key) >= BACKEND_FIELD_KEY_MAX) continue;
+      if (s_text_field_count >= BACKEND_TEXT_FIELDS_MAX) continue;
+      strncpy(s_text_fields[s_text_field_count], key, BACKEND_FIELD_KEY_MAX - 1);
+      s_text_fields[s_text_field_count][BACKEND_FIELD_KEY_MAX - 1] = '\0';
+      s_text_field_count++;
     }
     s_fields_mask = mask;
     strncpy(s_fields_probed_for, base, sizeof(s_fields_probed_for) - 1);
@@ -286,9 +327,28 @@ bool backendHasExtraField(const char* key) {
            base,
            (mask >> TAG_FIELD_TAG)       & 1, (mask >> TAG_FIELD_NFC_ID)  & 1,
            (mask >> TAG_FIELD_CARD_UIDS) & 1, (mask >> TAG_FIELD_EXTRA_COUNT) & 1);
+    logSDf("extra fields on %s: %d text field(s) to compare against",
+           base, (int)s_text_field_count);
   }
 
   return ((s_fields_mask >> idx) & 1u) != 0;
+}
+
+uint8_t backendSpoolTextFieldCount() {
+  // Extra fields are a Spoolman convention. Guarded explicitly rather than
+  // left to the probe: backendHasExtraField() answers false for the other
+  // backends without touching the list, so a count filled while pointed at a
+  // Spoolman server would survive the switch and leak into their filters.
+  if (backendMode() != BACKEND_SPOOLMAN) return 0;
+  // The probe lives in backendHasExtraField(); asking it anything fills the
+  // list as a side effect, so one call settles both. The key is one this
+  // firmware knows, so the answer itself is not what matters here.
+  (void)backendHasExtraField(tagFieldSpec(TAG_FIELD_TAG).key);
+  return s_text_field_count;
+}
+
+const char* backendSpoolTextFieldKey(uint8_t index) {
+  return index < s_text_field_count ? s_text_fields[index] : "";
 }
 
 int backendPatchExtraField(const char* base_url, int spool_id, const char* key,

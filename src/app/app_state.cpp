@@ -94,7 +94,7 @@ char  sm_tag_values[TAG_FIELD_COUNT][CARD_UIDS_MAX] = {};
 int   sm_tag_conflict_spool = 0;
 
 const char* smSelectedTagValue() {
-  return sm_tag_values[g_tag_field < TAG_FIELD_COUNT ? g_tag_field : TAG_FIELD_TAG];
+  return sm_tag_values[tagFieldEffective()];
 }
 
 int smBoundUidCount() {
@@ -103,6 +103,13 @@ int smBoundUidCount() {
     if (!sm_tag_values[i][0]) continue;
     n += tagFieldSpec(i).is_list ? cardUidsCount(sm_tag_values[i]) : 1;
   }
+  // Spoolman's relation is held as a list in the slot beside them, whatever
+  // its spec says: is_list there drives the UI's multi tag switch, while
+  // several tags per spool are the normal case rather than a format. Counting
+  // them is what makes the unlink popup offer "all" at all - without this a
+  // Bambu spool with three entries looked like a single binding, and the only
+  // reachable answer dropped one of them.
+  n += cardUidsCount(sm_tag_values[TAG_FIELD_NATIVE]);
   return n;
 }
 char  sm_article_nr[32] = "";

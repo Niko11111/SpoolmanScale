@@ -6,6 +6,7 @@
 // defines the T() macro - ArduinoJson uses T as a template parameter.
 #include "services/backend_api.h"
 
+#include "app/app_state.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/prefs_store.h"
@@ -33,7 +34,17 @@ const TagFieldSpec& tagFieldSpec(uint8_t id) {
   return SPECS[id < TAG_FIELD_COUNT ? id : TAG_FIELD_TAG];
 }
 
-const TagFieldSpec& tagFieldSelected() { return tagFieldSpec(g_tag_field); }
+uint8_t tagFieldEffective() {
+  if (g_tag_field >= TAG_FIELD_COUNT) return TAG_FIELD_TAG;
+  if (!SPECS[g_tag_field].is_native) return g_tag_field;
+  // backendHasNativeTags() answers from the capability cache and returns false
+  // for the other backends before it can reach the network, so this stays
+  // cheap. It probes once per Spoolman URL, which by then has long happened in
+  // tagFieldAutoSelect() on the first lookup.
+  return backendHasNativeTags() ? TAG_FIELD_NATIVE : TAG_FIELD_TAG;
+}
+
+const TagFieldSpec& tagFieldSelected() { return tagFieldSpec(tagFieldEffective()); }
 const char*         tagFieldKey()      { return tagFieldSelected().key; }
 bool                tagFieldIsList()   { return tagFieldSelected().is_list; }
 bool                tagFieldIsNative() { return tagFieldSelected().is_native; }
@@ -71,4 +82,30 @@ void tagFieldFormat(const TagFieldSpec& spec, const char* uid,
   // until then, because the server side filter is an ilike on one notation.
   strncpy(out, uid ? uid : "", out_len - 1);
   out[out_len - 1] = '\0';
+}
+
+// ============================================================
+//  TAG IDENTITY
+//  See the block comment in tag_field.h for why a Bambu tag has two.
+// ============================================================
+
+bool tagIsBambu(const char* scanned) {
+  if (!scanned || !scanned[0]) return false;
+  // 32 characters is what a decoded tray uuid has, and nothing else the scale
+  // looks a spool up by produces one: a normalised NTAG uid is 14, a card 8.
+  char hex[40];
+  tagUidNormalize(scanned, hex, sizeof(hex));
+  return strlen(hex) == 32;
+}
+
+const char* tagNativeUid(const char* scanned) {
+  // g_tag.uid_str is only ever written by the Bambu scan path, which is also
+  // the only path that produces a 32 character value to be called with. Read
+  // under any weaker condition it would hand back whatever Bambu tag came
+  // before, and that is how a tag gets linked to the wrong spool.
+  return tagIsBambu(scanned) ? g_tag.uid_str : scanned;
+}
+
+const char* tagFormatName(const char* scanned) {
+  return tagIsBambu(scanned) ? "bambu" : "ntag";
 }
