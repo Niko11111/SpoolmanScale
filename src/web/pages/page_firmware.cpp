@@ -230,6 +230,7 @@ static String body() {
   h += F(",whatsnew:");   h += jsStr(T(STR_W_FW_WHATSNEW));
   h += F(",hide:");       h += jsStr(T(STR_W_FW_HIDE));
   h += F(",confirm:");    h += jsStr(T(STR_W_FW_CONFIRM));
+  h += F(",reboots:");    h += jsStr(T(STR_W_FW_REBOOTS));
   h += F(",cancel:");     h += jsStr(T(STR_CANCEL));
   h += F(",install:");    h += jsStr(T(STR_W_FW_INSTALL));
   h += F(",unpub:");      h += jsStr(T(STR_W_FW_UNPUBLISHED));
@@ -256,6 +257,9 @@ static String body() {
          "document.getElementById('rtitle').textContent=title;"
          "document.getElementById('rsec').textContent=text;"
          "document.getElementById('rbar').style.display='none';"
+         // The line under the bar outlives the counter above it, which is
+         // overwritten every second and cannot carry this.
+         "document.getElementById('rnote').style.display=ask?'none':'block';"
          "r.style.display=ask?'flex':'none';b.style.display='flex';}"
          "function rInit(){"
          "var rc=document.querySelector('#rbox .rc');if(!rc)return;"
@@ -272,7 +276,11 @@ static String body() {
          "background:var(--line);overflow:hidden';"
          "b.innerHTML=\"<i id='rbari' style='display:block;height:100%;width:0;"
          "background:var(--accent);transition:width .3s'></i>\";"
-         "rc.appendChild(b);}"
+         "rc.appendChild(b);"
+         "var n=document.createElement('div');n.id='rnote';"
+         "n.style.cssText='display:none;margin-top:16px;font-size:12px;"
+         "line-height:1.5;color:var(--ink-3)';"
+         "n.textContent=G.reboots;rc.appendChild(n);}"
          "function mb(n){return n>=1048576?(n/1048576).toFixed(2)+' MB'"
          ":(n/1024).toFixed(0)+' KB';}"
          "function fwInit(){"

@@ -1246,6 +1246,8 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Hide" },  // STR_W_FW_HIDE
   { "{v} installieren?",
     "Install {v}?" },  // STR_W_FW_CONFIRM
+  { "Das Gerät startet nach dem Download automatisch neu, die Seite lädt sich dann selbst. Strom nicht trennen.",
+    "The device restarts by itself when the download finishes, and this page reloads. Do not cut the power." },  // STR_W_FW_REBOOTS
   { "Gewicht",
     "Weight" },  // STR_W_R_WEIGHT
   { "Konnte nicht geladen werden.",
