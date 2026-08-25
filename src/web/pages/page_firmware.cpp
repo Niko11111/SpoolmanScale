@@ -217,6 +217,9 @@ static String body() {
   h += F(",notes:");      h += jsStr(T(STR_W_FW_NOTES));
   h += F(",whatsnew:");   h += jsStr(T(STR_W_FW_WHATSNEW));
   h += F(",hide:");       h += jsStr(T(STR_W_FW_HIDE));
+  h += F(",confirm:");    h += jsStr(T(STR_W_FW_CONFIRM));
+  h += F(",cancel:");     h += jsStr(T(STR_CANCEL));
+  h += F(",install:");    h += jsStr(T(STR_W_FW_INSTALL));
   h += F(",unpub:");      h += jsStr(T(STR_W_FW_UNPUBLISHED));
   h += F(",unknown:");    h += jsStr(T(STR_W_FW_UNKNOWN));
   h += F(",chrel:");      h += jsStr(T(STR_W_FW_CH_STABLE));
@@ -231,7 +234,28 @@ static String body() {
          // One request on load fills the three rows and keeps the body, so
          // opening the notes afterwards costs nothing.
          "var INST=null;"
+         // The overlay ships with a spinner and two lines of text. Installing
+         // asks a question first, so it grows a button row - added here rather
+         // than a second box, because the question and the wait that follows
+         // it are one conversation.
+         "function rModal(ask,title,text){"
+         "var b=document.getElementById('rbox'),r=document.getElementById('rbtn');"
+         "document.querySelector('#rbox .spin').style.display=ask?'none':'';"
+         "document.getElementById('rtitle').textContent=title;"
+         "document.getElementById('rsec').textContent=text;"
+         "r.style.display=ask?'flex':'none';b.style.display='flex';}"
+         "function rInit(){"
+         "var rc=document.querySelector('#rbox .rc');if(!rc)return;"
+         "var d=document.createElement('div');d.id='rbtn';"
+         "d.style.cssText='display:none;gap:10px;justify-content:center;margin-top:20px';"
+         "var no=document.createElement('button');no.className='quiet';"
+         "no.textContent=G.cancel;"
+         "no.onclick=function(){document.getElementById('rbox').style.display='none';};"
+         "var yes=document.createElement('button');yes.textContent=G.install;"
+         "yes.onclick=ghGo;"
+         "d.appendChild(no);d.appendChild(yes);rc.appendChild(d);}"
          "function fwInit(){"
+         "rInit();"
          "var e=document.getElementById('fwsince'),t=parseInt(e.dataset.t||'0');"
          "e.textContent=t?new Date(t*1000).toLocaleString():G.unknown;"
          "fetch('/api/ota/notes?tag='+encodeURIComponent(INSTALLED))"
@@ -287,11 +311,16 @@ static String body() {
          // until it has rebooted, so the first poll waits rather than
          // reporting a healthy install as a failure.
          "function ghInstall(){"
+         "var tag=document.getElementById('ghlt').textContent;"
+         "rModal(true,G.confirm.replace('{v}',tag),G.keep);}"
+         "function ghGo(){"
+         "rModal(false,G.installing,G.keep);"
          "fetch('/api/ota/install',{method:'POST'}).then(r=>r.json()).then(d=>{"
-         "if(!d.ok){ghSay(ghErr(d),true);return;}"
-         "document.getElementById('rtitle').textContent=G.installing;"
+         // A refusal closes the box again and says why on the card, rather
+         // than leaving a spinner over a device that is not doing anything.
+         "if(!d.ok){document.getElementById('rbox').style.display='none';"
+         "ghSay(ghErr(d),true);return;}"
          "var s=document.getElementById('rsec');"
-         "document.getElementById('rbox').style.display='flex';"
          "var t=0;var iv=setInterval(function(){t++;"
          "s.textContent=G.keep+' - '+t+'s';"
          "if(t<20)return;"
@@ -301,7 +330,8 @@ static String body() {
          "fetch('/status.json',{cache:'no-store'}).then(function(r){"
          "if(r.ok){clearInterval(iv);location.reload();}}).catch(function(){});"
          "},1000);"
-         "}).catch(()=>ghSay(G.fail,true));}"
+         "}).catch(()=>{document.getElementById('rbox').style.display='none';"
+         "ghSay(G.fail,true);});}"
          "fwInit();"
          "</script>");
   return h;

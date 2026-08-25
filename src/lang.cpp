@@ -1244,6 +1244,8 @@ const char* const STRINGS[STR_COUNT][2] = {
     "unknown" },  // STR_W_FW_UNKNOWN
   { "Ausblenden",
     "Hide" },  // STR_W_FW_HIDE
+  { "{v} installieren?",
+    "Install {v}?" },  // STR_W_FW_CONFIRM
   { "Gewicht",
     "Weight" },  // STR_W_R_WEIGHT
   { "Konnte nicht geladen werden.",
