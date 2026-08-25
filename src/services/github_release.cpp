@@ -121,6 +121,94 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
   return true;
 }
 
+// A tag goes straight into a URL, so nothing but the shape GitHub uses gets
+// that far.
+static bool tagLooksSafe(const char *tag) {
+  if (!tag || !tag[0]) return false;
+  size_t n = 0;
+  for (const char *p = tag; *p; p++, n++) {
+    const char c = *p;
+    const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                    (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_';
+    if (!ok) return false;
+  }
+  return n < 40;
+}
+
+// Long enough for the release notes this project writes - they run about 5 kB -
+// with room to spare, and short enough that a pasted build log cannot matter.
+#define GH_NOTES_MAX 8000
+
+bool githubReleaseByTag(const char *tag, GithubRelease &out,
+                        char *err, size_t err_len) {
+  out.tag[0] = out.name[0] = out.published[0] = '\0';
+  out.prerelease = false;
+  out.notes = "";
+  if (err && err_len) err[0] = '\0';
+
+  if (!tagLooksSafe(tag)) {
+    if (err && err_len) snprintf(err, err_len, "%s", "Bad tag");
+    return false;
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  String url = "https://api.github.com/repos/" GH_REPO "/releases/tags/";
+  url += tag;
+  http.begin(client, url);
+  http.addHeader("User-Agent", "SpoolmanScale-ESP32");
+  http.setTimeout(8000);
+  int code = http.GET();
+
+  // 404 is the ordinary answer for a build that was never published - a local
+  // one, or an image pushed through the browser. Told apart from a real
+  // failure so the page can say which it was.
+  if (code != 200) {
+    if (err && err_len) snprintf(err, err_len, code == 404 ? "notfound" : "HTTP %d", code);
+    http.end();
+    return false;
+  }
+
+  String payload = http.getString();
+  http.end();
+
+  JsonDocument filter;
+  filter["tag_name"]     = true;
+  filter["name"]         = true;
+  filter["prerelease"]   = true;
+  filter["published_at"] = true;
+  filter["body"]         = true;
+
+  JsonDocument doc;
+  DeserializationError jerr =
+    deserializeJson(doc, payload, DeserializationOption::Filter(filter));
+  if (jerr) {
+    if (err && err_len) snprintf(err, err_len, "JSON: %s", jerr.c_str());
+    return false;
+  }
+
+  strncpy(out.tag, doc["tag_name"] | tag, sizeof(out.tag) - 1);
+  out.tag[sizeof(out.tag) - 1] = '\0';
+  strncpy(out.name, doc["name"] | "", sizeof(out.name) - 1);
+  out.name[sizeof(out.name) - 1] = '\0';
+  strncpy(out.published, doc["published_at"] | "", sizeof(out.published) - 1);
+  out.published[sizeof(out.published) - 1] = '\0';
+  out.prerelease = doc["prerelease"] | false;
+
+  const char *b = doc["body"] | "";
+  if (strlen(b) > GH_NOTES_MAX) {
+    out.notes = String(b).substring(0, GH_NOTES_MAX);
+    out.notes += "\n...";
+  } else {
+    out.notes = b;
+  }
+
+  logSDf("OTA notes: %s pre=%d published=%s body=%u",
+         out.tag, out.prerelease ? 1 : 0, out.published, (unsigned)out.notes.length());
+  return true;
+}
+
 bool githubFlashTag(const char *tag, OtaProgressFn progress,
                     char *err, size_t err_len) {
   if (err && err_len) err[0] = '\0';

@@ -1230,6 +1230,20 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Check failed" },  // STR_W_FW_CHECK_FAIL
   { "Der Kanal ist derselbe wie am Gerät. Das Image wird vom Gerät geladen, nicht vom Browser.",
     "The channel is the same setting as on the device. The image is fetched by the device, not by this browser." },  // STR_W_FW_GH_HINT
+  { "Veröffentlicht",
+    "Released" },  // STR_W_FW_RELEASED
+  { "Installiert am",
+    "Installed on" },  // STR_W_FW_SINCE
+  { "Release Notes",
+    "Release notes" },  // STR_W_FW_NOTES
+  { "Was ist neu",
+    "What is new" },  // STR_W_FW_WHATSNEW
+  { "Nicht als Release veröffentlicht",
+    "Not a published release" },  // STR_W_FW_UNPUBLISHED
+  { "unbekannt",
+    "unknown" },  // STR_W_FW_UNKNOWN
+  { "Ausblenden",
+    "Hide" },  // STR_W_FW_HIDE
   { "Gewicht",
     "Weight" },  // STR_W_R_WEIGHT
   { "Konnte nicht geladen werden.",

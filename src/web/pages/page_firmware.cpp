@@ -51,6 +51,11 @@ static String jsonEsc(const char *s) {
   String o;
   for (const char *p = s ? s : ""; *p; p++) {
     if (*p == '"' || *p == '\\') { o += '\\'; o += *p; }
+    // Release notes are the only multi-line thing that comes through here,
+    // and they arrive with CRLF. The CR is dropped rather than turned into a
+    // space, which would end every line with one.
+    else if (*p == '\n')          { o += "\\n"; }
+    else if (*p == '\r')          { }
     else if ((uint8_t)*p < 0x20)  { o += ' '; }
     else                          { o += *p; }
   }
@@ -93,16 +98,39 @@ void otaWebGithubTick() {
 
 static String body() {
   String h;
-  h.reserve(5200);
+  h.reserve(7600);
+
+  // What is running, and where it came from. The version alone was already at
+  // the top of every page; which channel it belongs to and when it landed are
+  // the parts nothing could answer.
   h += F("<div class='grid'><div class='card wide'><h2>");
   h += T(STR_W_C_FIRMWARE);
-  h += F("</h2><div class='rows' style='margin-bottom:16px'>");
-  h += F("<div class='row'><span class='k'>");
+  h += F("</h2><div class='rows' style='margin-bottom:16px'>"
+         "<div class='row'><span class='k'>");
   h += T(STR_W_FW_INSTALLED);
   h += F("</span><span class='v mono'>");
   h += FW_VERSION;
-  h += F("</span></div></div>"
-         "<form method='POST' action='/update' enctype='multipart/form-data'>"
+  h += F("</span></div>"
+         "<div class='row'><span class='k'>");
+  h += T(STR_W_FW_CHANNEL);
+  h += F("</span><span class='v' id='fwch'>&hellip;</span></div>"
+         "<div class='row'><span class='k'>");
+  h += T(STR_W_FW_RELEASED);
+  h += F("</span><span class='v' id='fwrel'>&hellip;</span></div>"
+         "<div class='row'><span class='k'>");
+  h += T(STR_W_FW_SINCE);
+  // The epoch goes to the browser and is rendered there: the reader's own
+  // clock and zone are the right ones for a page, and the device's are a
+  // separate question.
+  h += F("</span><span class='v' id='fwsince' data-t='");
+  h += String((unsigned long)firmwareInstalledAt());
+  h += F("'></span></div></div>"
+         "<button class='quiet' id='fwnb' onclick='fwNotes()' disabled>");
+  h += T(STR_W_FW_NOTES);
+  h += F("</button>"
+         "<pre id='fwn' class='notes'></pre>"
+         "<form method='POST' action='/update' enctype='multipart/form-data'"
+         " style='margin-top:18px'>"
          "<div class='field'><label>");
   h += T(STR_W_FW_FILE);
   h += F("</label><div class='inrow'>"
@@ -139,20 +167,33 @@ static String body() {
          "<div class='inrow'><button class='quiet' id='ghck' onclick='ghCheck()'>");
   h += T(STR_W_FW_CHECK);
   // A check that already found something - the daily background one included
-  // - leaves the button ready, rather than making the visitor repeat it.
+  // - leaves the buttons ready, rather than making the visitor repeat it.
+  const bool have_latest = (gh_latest_version[0] != '\0');
   h += F("</button><button id='ghin' onclick='ghInstall()'");
-  if (!(update_available && gh_latest_version[0])) h += F(" disabled");
+  if (!(update_available && have_latest)) h += F(" disabled");
   h += F(">");
   h += T(STR_W_FW_INSTALL);
-  h += F("</button><span id='ghmsg' class='msg'></span></div><p class='note'>");
+  h += F("</button><button class='quiet' id='ghnb' onclick='ghNotes()'");
+  if (!have_latest) h += F(" disabled");
+  h += F(">");
+  h += T(STR_W_FW_WHATSNEW);
+  h += F("</button><span id='ghmsg' class='msg'></span></div>"
+         "<pre id='ghn' class='notes'></pre><p class='note'>");
   h += T(STR_W_FW_GH_HINT);
   h += F("</p></div></div>");
+
+  h += F("<style>.notes{display:none;max-height:340px;overflow:auto;"
+         "background:var(--ground);border:1px solid var(--line);border-radius:8px;"
+         "padding:12px 14px;margin-top:12px;font-size:12.5px;line-height:1.6;"
+         "white-space:pre-wrap;word-break:break-word;color:var(--ink-2)}</style>");
 
   // Brings in the waiting overlay and its strings; the install below drives
   // the same box rather than growing a second one.
   h += webShellRestartUi();
 
-  h += F("<script>const G={check:");
+  h += F("<script>const INSTALLED=");
+  h += jsStr(FW_VERSION);
+  h += F(",G={check:");
   h += jsStr(T(STR_W_FW_CHECK));
   h += F(",checking:");   h += jsStr(T(STR_W_FW_CHECKING));
   h += F(",uptodate:");   h += jsStr(T(STR_W_FW_UPTODATE));
@@ -162,11 +203,41 @@ static String body() {
   h += F(",busy:");       h += jsStr(T(STR_W_FW_BUSY));
   h += F(",installing:"); h += jsStr(T(STR_W_FW_INSTALLING));
   h += F(",keep:");       h += jsStr(T(STR_W_FW_HINT));
+  h += F(",notes:");      h += jsStr(T(STR_W_FW_NOTES));
+  h += F(",whatsnew:");   h += jsStr(T(STR_W_FW_WHATSNEW));
+  h += F(",hide:");       h += jsStr(T(STR_W_FW_HIDE));
+  h += F(",unpub:");      h += jsStr(T(STR_W_FW_UNPUBLISHED));
+  h += F(",unknown:");    h += jsStr(T(STR_W_FW_UNKNOWN));
+  h += F(",chrel:");      h += jsStr(T(STR_W_FW_CH_STABLE));
+  h += F(",chpre:");      h += jsStr(T(STR_W_FW_CH_PRE));
   h += F("};"
          "function ghSay(t,bad){var m=document.getElementById('ghmsg');"
          "m.className=bad?'msg bad':'msg';m.textContent=t;}"
          "function ghErr(d){return d.error==='nowifi'?G.nowifi:"
          "(d.error==='busy'?G.busy:G.fail+(d.error?': '+d.error:''));}"
+         "function fmtDate(s){if(!s)return G.unknown;"
+         "var d=new Date(s);return isNaN(d)?s:d.toLocaleDateString();}"
+         // One request on load fills the three rows and keeps the body, so
+         // opening the notes afterwards costs nothing.
+         "var INST=null;"
+         "function fwInit(){"
+         "var e=document.getElementById('fwsince'),t=parseInt(e.dataset.t||'0');"
+         "e.textContent=t?new Date(t*1000).toLocaleString():G.unknown;"
+         "fetch('/api/ota/notes?tag='+encodeURIComponent(INSTALLED))"
+         ".then(r=>r.json()).then(d=>{"
+         "var c=document.getElementById('fwch'),r2=document.getElementById('fwrel');"
+         "if(!d.ok){c.textContent=d.error==='notfound'?G.unpub:G.unknown;"
+         "r2.textContent=G.unknown;return;}"
+         "INST=d;c.textContent=d.prerelease?G.chpre:G.chrel;"
+         "r2.textContent=fmtDate(d.published);"
+         "document.getElementById('fwnb').disabled=!d.notes;"
+         "}).catch(()=>{});}"
+         "function toggle(pre,btn,shown,hidden,text){"
+         "var e=document.getElementById(pre),b=document.getElementById(btn);"
+         "if(e.style.display==='block'){e.style.display='none';b.textContent=shown;return;}"
+         "e.textContent=text;e.style.display='block';b.textContent=hidden;}"
+         "function fwNotes(){if(!INST)return;"
+         "toggle('fwn','fwnb',G.notes,G.hide,INST.notes);}"
          "function ghCheck(){"
          "var b=document.getElementById('ghck');"
          "b.disabled=true;b.textContent=G.checking;ghSay('');"
@@ -175,9 +246,24 @@ static String body() {
          "if(!d.ok){ghSay(ghErr(d),true);return;}"
          "document.getElementById('ghlt').textContent=d.tag;"
          "document.getElementById('ghin').disabled=!d.update;"
+         "var n=document.getElementById('ghnb');n.disabled=false;"
+         // A different tag than whatever the notes pane last showed.
+         "LATEST=null;document.getElementById('ghn').style.display='none';"
+         "n.textContent=G.whatsnew;"
          "ghSay(d.update?G.avail:G.uptodate,false);"
          "}).catch(()=>ghSay(G.fail,true))"
          ".finally(()=>{b.disabled=false;b.textContent=G.check;});}"
+         "var LATEST=null;"
+         "function ghNotes(){"
+         "var tag=document.getElementById('ghlt').textContent;"
+         "if(!tag||tag==='-')return;"
+         "if(LATEST){toggle('ghn','ghnb',G.whatsnew,G.hide,LATEST.notes);return;}"
+         "var b=document.getElementById('ghnb');b.disabled=true;"
+         "fetch('/api/ota/notes?tag='+encodeURIComponent(tag)).then(r=>r.json())"
+         ".then(d=>{if(!d.ok){ghSay(ghErr(d),true);return;}"
+         "LATEST=d;toggle('ghn','ghnb',G.whatsnew,G.hide,d.notes);})"
+         ".catch(()=>ghSay(G.fail,true))"
+         ".finally(()=>{b.disabled=false;});}"
          // The device is unreachable from the moment it starts downloading
          // until it has rebooted, so the first poll waits rather than
          // reporting a healthy install as a failure.
@@ -197,11 +283,40 @@ static String body() {
          "if(r.ok){clearInterval(iv);location.reload();}}).catch(function(){});"
          "},1000);"
          "}).catch(()=>ghSay(G.fail,true));}"
+         "fwInit();"
          "</script>");
   return h;
 }
 
 static void routes(WebServer &srv) {
+  // What GitHub says about one tag: which channel it belongs to, when it was
+  // published, and the release notes. The installed version and the one a
+  // check found are both asked about through here.
+  srv.on("/api/ota/notes", HTTP_GET, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_FIRMWARE))) return;
+    if (!wifi_ok) {
+      srv.send(200, "application/json", "{\"ok\":false,\"error\":\"nowifi\"}");
+      return;
+    }
+    if (otaBusy()) {
+      srv.send(200, "application/json", "{\"ok\":false,\"error\":\"busy\"}");
+      return;
+    }
+    GithubRelease rel;
+    char err[80] = "";
+    if (!githubReleaseByTag(srv.arg("tag").c_str(), rel, err, sizeof(err))) {
+      srv.send(200, "application/json",
+               "{\"ok\":false,\"error\":\"" + jsonEsc(err) + "\"}");
+      return;
+    }
+    srv.send(200, "application/json",
+             "{\"ok\":true,\"tag\":\"" + jsonEsc(rel.tag) +
+             "\",\"name\":\"" + jsonEsc(rel.name) +
+             "\",\"published\":\"" + jsonEsc(rel.published) +
+             "\",\"prerelease\":" + (rel.prerelease ? "true" : "false") +
+             ",\"notes\":\"" + jsonEsc(rel.notes.c_str()) + "\"}");
+  });
+
   srv.on("/api/ota/check", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_FIRMWARE))) return;
     if (!wifi_ok) {
