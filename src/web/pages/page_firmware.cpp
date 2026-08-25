@@ -52,6 +52,7 @@ static char gh_web_flash_tag[40] = "";
 static unsigned long s_check_ms  = 0;     // 0 = no check yet this boot
 static bool          s_check_pre = false; // the channel it was for
 static bool          s_check_new = false;
+static char          s_check_pub[24] = "";  // when that release was published
 
 // How far the GitHub download has got. Read by /api/ota/progress, which is the
 // only route answered while an image is being written.
@@ -186,7 +187,10 @@ static String body() {
   h += T(STR_W_FW_LATEST);
   h += F("</span><span class='v mono' id='ghlt'>");
   h += (gh_latest_version[0] ? gh_latest_version : "-");
-  h += F("</span></div></div>"
+  h += F("</span></div>"
+         "<div class='row'><span class='k'>");
+  h += T(STR_W_FW_RELEASED);
+  h += F("</span><span class='v' id='ghrel'>-</span></div></div>"
          "<div class='inrow'><button class='quiet' id='ghck' onclick='ghCheck()'>");
   h += T(STR_W_FW_CHECK);
   // A check that already found something - the daily background one included
@@ -244,6 +248,9 @@ static String body() {
          "(d.error==='busy'?G.busy:G.fail+(d.error?': '+d.error:''));}"
          "function fmtDate(s){if(!s)return G.unknown;"
          "var d=new Date(s);return isNaN(d)?s:d.toLocaleDateString();}"
+         "function setLatest(tag,pub){"
+         "document.getElementById('ghlt').textContent=tag;"
+         "document.getElementById('ghrel').textContent=pub?fmtDate(pub):'-';}"
          // One request on load fills the three rows and keeps the body, so
          // opening the notes afterwards costs nothing.
          "var INST=null;"
@@ -316,7 +323,7 @@ static String body() {
          "+(auto?'&auto=1':''),"
          "{method:'POST'}).then(r=>r.json()).then(d=>{"
          "if(!d.ok){if(!auto)ghSay(ghErr(d),true);return;}"
-         "document.getElementById('ghlt').textContent=d.tag;"
+         "setLatest(d.tag,d.published);"
          "document.getElementById('ghin').disabled=!d.update;"
          "var n=document.getElementById('ghnb');n.disabled=false;"
          // A different tag than whatever the notes pane last showed.
@@ -452,12 +459,14 @@ static void routes(WebServer &srv) {
       srv.send(200, "application/json",
                "{\"ok\":true,\"cached\":true,\"tag\":\"" + jsonEsc(gh_latest_version) +
                "\",\"installed\":\"" + jsonEsc(FW_VERSION) +
+               "\",\"published\":\"" + jsonEsc(s_check_pub) +
                "\",\"update\":" + (s_check_new ? "true" : "false") + "}");
       return;
     }
 
-    char tag[40] = "", err[80] = "";
-    if (!githubLatestTag(gh_prerelease, tag, sizeof(tag), err, sizeof(err))) {
+    char tag[40] = "", pub[24] = "", err[80] = "";
+    if (!githubLatestTag(gh_prerelease, tag, sizeof(tag), pub, sizeof(pub),
+                         err, sizeof(err))) {
       srv.send(200, "application/json",
                "{\"ok\":false,\"error\":\"" + jsonEsc(err) + "\"}");
       return;
@@ -473,10 +482,12 @@ static void routes(WebServer &srv) {
     s_check_ms  = millis() ? millis() : 1;   // 0 is reserved for "never"
     s_check_pre = gh_prerelease;
     s_check_new = newer;
+    snprintf(s_check_pub, sizeof(s_check_pub), "%s", pub);
     logSDf("OTA check: web asked, latest %s%s", tag, newer ? " (newer)" : "");
     srv.send(200, "application/json",
              "{\"ok\":true,\"tag\":\"" + jsonEsc(tag) +
              "\",\"installed\":\"" + jsonEsc(FW_VERSION) +
+             "\",\"published\":\"" + jsonEsc(pub) +
              "\",\"update\":" + (newer ? "true" : "false") + "}");
   });
 

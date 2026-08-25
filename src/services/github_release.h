@@ -11,9 +11,12 @@
 // LVGL screen, painting into its labels as they went, so nothing else could
 // reach them.
 
-// Newest release tag. prerelease also considers pre-releases. err carries a
-// short reason on failure, fit to be shown as it is.
+// Newest release tag, and when it was published - the list already carries
+// the date, so asking for it costs nothing over asking for the tag. published
+// may be null for a caller that only wants the tag. err carries a short reason
+// on failure, fit to be shown as it is.
 bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
+                     char *published, size_t pub_len,
                      char *err, size_t err_len);
 
 // One release as GitHub describes it. notes is the release body, markdown as

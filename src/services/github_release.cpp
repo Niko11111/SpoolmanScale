@@ -14,9 +14,11 @@
 #define GH_REPO "Niko11111/SpoolmanScale"
 
 bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
+                     char *published, size_t pub_len,
                      char *err, size_t err_len) {
   if (!tag || tag_len == 0) return false;
   tag[0] = '\0';
+  if (published && pub_len) published[0] = '\0';
   if (err && err_len) err[0] = '\0';
 
   WiFiClientSecure client;
@@ -60,6 +62,7 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
     JsonDocument filter;
     JsonObject f = filter.to<JsonArray>().add<JsonObject>();
     f["tag_name"] = true;
+    f["published_at"] = true;
     f["draft"] = true;
 
     JsonDocument doc;
@@ -74,6 +77,10 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
           // Copied while the document is still alive. The pointer dies with it.
           strncpy(tag, t, tag_len - 1);
           tag[tag_len - 1] = '\0';
+          if (published && pub_len) {
+            strncpy(published, rel["published_at"] | "", pub_len - 1);
+            published[pub_len - 1] = '\0';
+          }
           break;
         }
       }
@@ -81,6 +88,7 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
   } else {
     JsonDocument filter;
     filter["tag_name"] = true;
+    filter["published_at"] = true;
 
     JsonDocument doc;
     jerr = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
@@ -89,6 +97,10 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
       const char* t = doc["tag_name"] | "";
       strncpy(tag, t, tag_len - 1);
       tag[tag_len - 1] = '\0';
+      if (published && pub_len) {
+        strncpy(published, doc["published_at"] | "", pub_len - 1);
+        published[pub_len - 1] = '\0';
+      }
     }
   }
 

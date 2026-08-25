@@ -82,7 +82,8 @@ void doGithubOtaCheck() {
   }
 
   char tag[40] = "", cerr[80] = "";
-  if (!githubLatestTag(gh_prerelease, tag, sizeof(tag), cerr, sizeof(cerr))) {
+  if (!githubLatestTag(gh_prerelease, tag, sizeof(tag), nullptr, 0,
+                       cerr, sizeof(cerr))) {
     lv_label_set_text(lbl_gh_status, cerr[0] ? cerr : T(STR_GH_OTA_FLASH_FAIL));
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
     return;
