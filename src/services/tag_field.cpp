@@ -4,6 +4,7 @@
 
 // backend_api.h pulls in ArduinoJson, which must be parsed before lang.h
 // defines the T() macro - ArduinoJson uses T as a template parameter.
+#include "services/backend.h"
 #include "services/backend_api.h"
 
 #include "app/app_state.h"
@@ -37,11 +38,19 @@ const TagFieldSpec& tagFieldSpec(uint8_t id) {
 uint8_t tagFieldEffective() {
   if (g_tag_field >= TAG_FIELD_COUNT) return TAG_FIELD_TAG;
   if (!SPECS[g_tag_field].is_native) return g_tag_field;
-  // backendHasNativeTags() answers from the capability cache and returns false
-  // for the other backends before it can reach the network, so this stays
-  // cheap. It probes once per Spoolman URL, which by then has long happened in
-  // tagFieldAutoSelect() on the first lookup.
-  return backendHasNativeTags() ? TAG_FIELD_NATIVE : TAG_FIELD_TAG;
+  // The mode, and nothing else. This is read from LVGL callbacks and from
+  // early boot, long before the network exists, so it must not reach out:
+  // backendHasNativeTags() probes over HTTP the first time it is asked, and
+  // lwIP asserts hard on a request made before tcpip_init - "Invalid mbox",
+  // a boot loop, no way in but the cable.
+  //
+  // That makes this a narrower guard than it looks, and deliberately so. It
+  // answers "can this backend have a tag relation at all", which is what the
+  // NVS setting can get wrong when the backend is switched underneath it.
+  // Whether a given Spoolman server actually has one stays where it belongs:
+  // in the API wrappers, which run with a network and answer
+  // BACKEND_NOT_SUPPORTED when it is missing.
+  return (backendMode() == BACKEND_SPOOLMAN) ? TAG_FIELD_NATIVE : TAG_FIELD_TAG;
 }
 
 const TagFieldSpec& tagFieldSelected() { return tagFieldSpec(tagFieldEffective()); }
