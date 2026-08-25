@@ -354,6 +354,7 @@ void fetchAndFillLocationList() {
     else { showMoreInfoScreen(); }
   }, LV_EVENT_CLICKED, NULL);
 
+  logLvMem("loclist/pre", 0);
   // Location rows — API gibt Array von Strings zurück
   int loc_shown = 0;
   bool loc_limit_hit = false;
@@ -399,6 +400,7 @@ void fetchAndFillLocationList() {
     }, LV_EVENT_CLICKED, NULL);
     loc_shown++;
   }
+  logLvMem("loclist/post", loc_shown);
   // Hinweis: Limit erreicht
   if (loc_limit_hit) {
     lv_obj_t *limit_row = lv_obj_create(loc_list_obj);

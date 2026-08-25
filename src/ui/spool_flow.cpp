@@ -72,10 +72,16 @@ struct UnlinkedSpool {
   int   filament_id;   // filament.id (for copy flow)
   float spool_weight;  // spool_weight (for copy flow)
 };
-// Upper bound of the deduplicated group lists below. They are fixed size
-// arrays, while spool_list_limit is user configurable up to 100 through the
-// web interface. Guarding those loops with spool_list_limit alone wrote past
-// the end as soon as a library had more than 20 vendors or materials.
+// Upper bound of the deduplicated group lists below, and the only bound they
+// have. They are fixed size arrays, so a loop guarded by spool_list_limit
+// alone wrote past the end as soon as a library had more than 20 vendors or
+// materials - which is what this constant was introduced for.
+//
+// spool_list_limit is deliberately NOT checked here as well. It is the page
+// size of the spool list, and a vendor picker cut down to it made a library
+// with 13 vendors show 5 of them because someone had set the spool list to 5.
+// These rows are cheap anyway: 716 bytes each measured on hardware, so all 20
+// cost 14 kB against the 56 kB free when the picker opens.
 #define LINK_GROUP_MAX 20
 
 // True when the filament name already opens with the material. Spoolman's own
@@ -1501,6 +1507,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   lv_obj_set_style_radius(list, 0, 0);
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_scroll_dir(list, LV_DIR_VER);
+  logLvMem("spoollist/pre", 0);
 
   int count = 0;
   for (int i = 0; i < link_spool_count; i++) {
@@ -1722,6 +1729,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     }, LV_EVENT_CLICKED, (void*)(intptr_t)i);
   }
 
+  logLvMem("spoollist/post", count);
   if (count == 0) {
     lv_obj_t *lbl_empty = lv_label_create(scr_link_spools);
     lv_label_set_text(lbl_empty, T(STR_NO_SPOOLS));
@@ -1814,6 +1822,7 @@ void showMaterialList(const char* vendor_name) {
   lv_obj_set_style_radius(list, 0, 0);
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_scroll_dir(list, LV_DIR_VER);
+  logLvMem("matlist/pre", 0);
 
   // Deduplicate material prefixes (3 chars) for the selected vendor
   static char seen_mats[LINK_GROUP_MAX][4] = {};
@@ -1835,7 +1844,7 @@ void showMaterialList(const char* vendor_name) {
       if (strncasecmp(seen_mats[j], prefix, 3) == 0) { mat_counts[j]++; found = true; break; }
     }
     if (!found) {
-      if (seen_count >= LINK_GROUP_MAX || seen_count >= spool_list_limit) { mat_limit_hit = true; continue; }
+      if (seen_count >= LINK_GROUP_MAX) { mat_limit_hit = true; continue; }
       strncpy(seen_mats[seen_count], prefix, 3);
       mat_counts[seen_count] = 1;
       seen_count++;
@@ -1876,6 +1885,7 @@ void showMaterialList(const char* vendor_name) {
     }, LV_EVENT_CLICKED, (void*)(intptr_t)m);
   }
 
+  logLvMem("matlist/post", seen_count);
   if (seen_count == 0) {
     lv_obj_t *lbl_empty = lv_label_create(scr_link_mat);
     lv_label_set_text(lbl_empty, T(STR_NO_MATERIALS));
@@ -1918,7 +1928,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
       if (strcasecmp(seen_full[j], s.material) == 0) { full_counts[j]++; found = true; break; }
     }
     if (!found) {
-      if (full_seen_count >= LINK_GROUP_MAX || full_seen_count >= spool_list_limit) { full_limit_hit = true; continue; }
+      if (full_seen_count >= LINK_GROUP_MAX) { full_limit_hit = true; continue; }
       strncpy(seen_full[full_seen_count], s.material, sizeof(seen_full[0])-1);
       full_counts[full_seen_count] = 1;
       full_seen_count++;
@@ -2009,6 +2019,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
   lv_obj_set_style_radius(list, 0, 0);
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_scroll_dir(list, LV_DIR_VER);
+  logLvMem("matsublist/pre", 0);
 
   for (int m = 0; m < full_seen_count; m++) {
     lv_obj_t *row = lv_btn_create(list);
@@ -2045,6 +2056,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
     }, LV_EVENT_CLICKED, (void*)(intptr_t)m);
   }
 
+  logLvMem("matsublist/post", full_seen_count);
   if (full_seen_count == 0) {
     lv_obj_t *lbl_empty = lv_label_create(scr_link_mat_sub);
     lv_label_set_text(lbl_empty, T(STR_NO_MATERIALS));
@@ -2139,6 +2151,7 @@ void showVendorList() {
   lv_obj_set_style_radius(list, 0, 0);
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_scroll_dir(list, LV_DIR_VER);
+  logLvMem("vendorlist/pre", 0);
 
   // Dedupliziere Vendors
   static char seen_vendors[LINK_GROUP_MAX][32] = {};
@@ -2158,7 +2171,7 @@ void showVendorList() {
       if (strcasecmp(seen_vendors[j], vn) == 0) { vendor_counts[j]++; found = true; break; }
     }
     if (!found) {
-      if (seen_v >= LINK_GROUP_MAX || seen_v >= spool_list_limit) { vendor_limit_hit = true; continue; }
+      if (seen_v >= LINK_GROUP_MAX) { vendor_limit_hit = true; continue; }
       strncpy(seen_vendors[seen_v], vn, 31);
       vendor_counts[seen_v] = 1;
       seen_v++;
@@ -2198,6 +2211,7 @@ void showVendorList() {
     }, LV_EVENT_CLICKED, (void*)(intptr_t)v);
   }
 
+  logLvMem("vendorlist/post", seen_v);
   if (seen_v == 0) {
     lv_obj_t *lbl_empty = lv_label_create(scr_link_vendor);
     { char eb[80]; backendText(T(STR_NO_VENDORS), eb, sizeof(eb)); lv_label_set_text(lbl_empty, eb); }
@@ -2760,6 +2774,7 @@ void showCopySpoolList() {
   lv_obj_set_style_radius(list, 0, 0);
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_scroll_dir(list, LV_DIR_VER);
+  logLvMem("copylist/pre", 0);
 
   int copy_display_count = (link_spool_count > spool_list_limit) ? spool_list_limit : link_spool_count;
   if (link_spool_count > spool_list_limit) {
@@ -2849,6 +2864,7 @@ void showCopySpoolList() {
       copy_confirm_name[sizeof(copy_confirm_name)-1] = '\0';
     }, LV_EVENT_CLICKED, NULL);
   }
+  logLvMem("copylist/post", copy_display_count);
   if (link_spool_count > spool_list_limit) {
     addListMoreInfo(list, STR_LIST_MORE_SPOOLS);
   }

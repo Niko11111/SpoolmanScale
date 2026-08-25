@@ -36,7 +36,7 @@ void loadPrefs() {
   zero_offset = prefsGetInt("zero_offset", 0);
   bag_weight_g = prefsGetFloat("bag_weight", 50.0f);
 
-  spool_list_limit = (int)prefsGetUChar("list_limit", 16);
+  spool_list_limit = (int)prefsGetUChar("list_limit", 30);
   if (spool_list_limit < 5) spool_list_limit = 5;
   if (spool_list_limit > 100) spool_list_limit = 100;
   location_list_limit = (int)prefsGetUChar("loc_limit", 30);

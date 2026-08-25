@@ -172,6 +172,15 @@ void buildSubHeader(lv_obj_t *parent, const char *title,
   addCloseButton(parent);
 }
 
+void logLvMem(const char* tag, int rows) {
+  if (!sd_verbose) return;
+  lv_mem_monitor_t m;
+  lv_mem_monitor(&m);
+  logSDf("[verbose] lvmem %s rows=%d free=%u biggest=%u used=%u%% frag=%u%%",
+    tag, rows, (unsigned)m.free_size, (unsigned)m.free_biggest_size,
+    (unsigned)m.used_pct, (unsigned)m.frag_pct);
+}
+
 void releaseScreen(lv_obj_t **scr) {
   if (!scr || !*scr) return;
   lv_obj_del_async(*scr);

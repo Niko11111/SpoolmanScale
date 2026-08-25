@@ -1106,8 +1106,8 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Location list" },  // STR_W_LIMIT_LOCS
   { "Wie viele Einträge die Auswahl am Gerät zeigt.",
     "How many entries the picker on the device shows." },  // STR_W_LIMIT_HINT
-  { "Zu viele können einen Neustart auslösen.",
-    "Too many may cause a reboot." },  // STR_W_LIMIT_WARN
+  { "Zu viele Einträge lassen die Anzeige einfrieren - ein Neustart erfolgt nicht von selbst.",
+    "Too many entries freeze the display - it does not reboot by itself." },  // STR_W_LIMIT_WARN
   { "Anzeige",
     "Display" },  // STR_W_C_DISPLAY
   { "Helligkeitsanhebung",

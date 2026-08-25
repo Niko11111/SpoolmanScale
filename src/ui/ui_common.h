@@ -18,6 +18,18 @@ lv_obj_t* buildOverlayScreen();
 // own stay correct.
 void releaseScreen(lv_obj_t **scr);
 
+// One snapshot of the LVGL pool, tagged so a log can be read back per list.
+// LV_MEM_SIZE is a static pool in internal SRAM, PSRAM does not feed it, and
+// LV_USE_ASSERT_MALLOC turns an exhausted pool into while(1): no reboot, no
+// panic output, just a frozen screen and a warm board. The numbers that
+// matter are therefore the ones taken before the rows exist.
+//
+// Call it in pairs around a list build, "<name>/pre" and "<name>/post", with
+// rows = 0 on the pre call. The cost of one row is then
+//   (free of pre - free of post) / rows
+// Silent unless sd_verbose is on, so it costs nothing in normal operation.
+void logLvMem(const char* tag, int rows);
+
 // Neutral grey for a colour swatch with no usable colour behind it.
 #define SWATCH_FALLBACK_COLOR 0x333333
 
