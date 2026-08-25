@@ -97,6 +97,23 @@ int spoolmanFindSpoolByNativeTag(const char* base_url, const char* uid,
                                  DeserializationError* out_err = nullptr);
 
 int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remaining, const char* last_used_iso = nullptr, uint32_t timeout_ms = 5000);
+// Records a weighing from the GROSS weight and lets Spoolman do the rest: it
+// subtracts the tare, derives the used weight and stamps first_used/last_used.
+// This is the endpoint Spoolman intends for a scale, and it is the same shape
+// FilaMan and BamBuddy already get, so all three backends end up alike.
+//
+// Two things it does that the plain PATCH does not, both deliberate on the
+// server side: a reading above the initial gross weight raises the spool's
+// initial weight to match, and a reading below the empty weight is clamped to
+// empty rather than going negative.
+//
+// One case it cannot serve: a tare that is only known on the vendor. measure()
+// resolves spool then filament and then defaults to zero, so it would book the
+// core mass as filament. See Donkie/Spoolman#1117 - callers check
+// sm_tare_source before using this.
+int spoolmanMeasureSpool(const char* base_url, int spool_id, float gross_weight,
+                         uint32_t timeout_ms = 5000);
+
 int spoolmanPatchInitialWeight(const char* base_url, int spool_id, float initial_weight, uint32_t timeout_ms = 5000);
 int spoolmanPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeout_ms = 5000);
 int spoolmanPatchSpoolWeight(const char* base_url, int spool_id, float spool_weight, uint32_t timeout_ms = 5000);

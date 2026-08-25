@@ -22,6 +22,16 @@ static int patchJson(const String& url, const String& body, uint32_t timeout_ms)
   return code;
 }
 
+static int putJson(const String& url, const String& body, uint32_t timeout_ms) {
+  HTTPClient http;
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(timeout_ms);
+  int code = http.PUT(body);
+  http.end();
+  return code;
+}
+
 static int postJson(const String& url, const String& body, uint32_t timeout_ms) {
   HTTPClient http;
   http.begin(url);
@@ -384,6 +394,16 @@ int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remain
     snprintf(body, sizeof(body), "{\"remaining_weight\": %.1f}", remaining);
   }
   return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, String(body), timeout_ms);
+}
+
+int spoolmanMeasureSpool(const char* base_url, int spool_id, float gross_weight,
+                         uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
+  if (gross_weight < 0.0f) return -1;
+  char body[48];
+  snprintf(body, sizeof(body), "{\"weight\": %.1f}", gross_weight);
+  return putJson(String(base_url) + "/api/v1/spool/" + spool_id + "/measure",
+                 String(body), timeout_ms);
 }
 
 int spoolmanPatchInitialWeight(const char* base_url, int spool_id, float initial_weight, uint32_t timeout_ms) {

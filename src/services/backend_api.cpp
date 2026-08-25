@@ -650,10 +650,31 @@ int backendPatchSpoolRemaining(const char* base_url, int spool_id, float remaini
       return bbUpdateSpoolWeight(backendBaseUrl(), bambuddyApiKey(), spool_id,
                                  gross, timeout_ms);
     }
-    default:
+    default: {
       (void)tag_uuid;    // Spoolman identifies the spool by id only
-      (void)measured_g;
+
+      // Hand Spoolman the gross weight and let it do the arithmetic, the same
+      // way FilaMan and BamBuddy already get it. That is what /measure is for,
+      // it stamps first_used and last_used on its own, and it makes all three
+      // backends behave alike.
+      //
+      // The gross value is `remaining + sm_spool_weight`, so it is exactly what
+      // the pad showed. Handing it over is only safe while Spoolman resolves
+      // the same tare we did, and it does for the first two levels: spool, then
+      // filament. It does NOT walk up to the vendor - it falls back to zero
+      // there - so a vendor-only tare would come back with the core mass booked
+      // as filament. Donkie/Spoolman#1117. In that case the explicit PATCH
+      // stays, where this firmware has already subtracted the right number.
+      if (measured_g >= 0.0f && sm_tare_source != TARE_VENDOR) {
+        int code = spoolmanMeasureSpool(base_url, spool_id, measured_g, timeout_ms);
+        // 404 is the spool, 405 a server that predates the endpoint. Anything
+        // in that range means "not this way", and the spool still needs its
+        // weight, so fall through rather than report a failure.
+        if (code != 404 && code != 405) return code;
+        logSDf("measure not available (HTTP %d), falling back to PATCH", code);
+      }
       return spoolmanPatchSpoolRemaining(base_url, spool_id, remaining, last_used_iso, timeout_ms);
+    }
   }
 }
 
