@@ -99,13 +99,23 @@ int backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocume
   if (!tag_uuid || !tag_uuid[0]) return BACKEND_NOT_SUPPORTED;
 
   switch (backendMode()) {
-    case BACKEND_FILAMAN:
+    case BACKEND_FILAMAN: {
       // FilaMan filters server side, so a scan costs one small answer instead
       // of the whole inventory. The translation only produces the keys the UI
       // reads, so the caller's field filter does not apply.
       (void)filter;
+      // In the notation rfid_uid actually holds. ?search= is a substring
+      // match, so the colon form finds nothing in a field written as plain
+      // hex - which is what FilaMan's own reader writes, what this firmware
+      // writes since the notation was unified, and therefore very nearly
+      // everything. Sending the raw uid here left the fast path failing on
+      // every scan and the whole inventory being pulled instead.
+      char hex[40];
+      tagUidNormalize(tag_uuid, hex, sizeof(hex));
       return filamanGetSpoolListJson(backendBaseUrl(), filamanApiKey(), false,
-                                     doc, tag_uuid, 20, timeout_ms, out_err);
+                                     doc, hex[0] ? hex : tag_uuid, 20,
+                                     timeout_ms, out_err);
+    }
     case BACKEND_BAMBUDDY:
       // Answered through the device protocol, which is the only lookup that
       // works in both of BamBuddy's inventory modes.
@@ -502,9 +512,20 @@ int backendCreateSpoolField(const char* base_url, const char* field_name,
 int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
                          uint32_t timeout_ms) {
   switch (backendMode()) {
-    case BACKEND_FILAMAN:
+    case BACKEND_FILAMAN: {
       // Both tag types go into the native rfid_uid. An empty uuid unlinks.
-      return filamanPatchRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, uuid, timeout_ms);
+      //
+      // Plain hex like everywhere else. FilaMan's own reader writes it that
+      // way, so the colon form this used to send was the odd one out in its
+      // own database and missed the server side ?search= for anything not
+      // written by this scale.
+      if (!uuid || !uuid[0]) {
+        return filamanPatchRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, nullptr, timeout_ms);
+      }
+      char hex[40];
+      tagUidNormalize(uuid, hex, sizeof(hex));
+      return filamanPatchRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, hex, timeout_ms);
+    }
     case BACKEND_BAMBUDDY: {
       // An empty uuid means unlink, and that is a different request: the
       // link endpoint can only write. Without this the call fell through to

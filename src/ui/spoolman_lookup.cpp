@@ -896,6 +896,56 @@ void querySpoolman(const char* tray_uuid) {
     sm_found    = true;
     sm_id       = spool["id"] | 0;
 
+    // One-off migration to the plain hex notation. Older firmware wrote an
+    // NTAG uid into extra.tag with colons, which is the one notation the
+    // server side ilike cannot find once the scale asks in plain hex - the
+    // spool is still found, but only by pulling the whole inventory. Writing
+    // it back once puts it on the fast path for good.
+    //
+    // Deliberately narrow:
+    //  - only the native Spoolman backend. FilaMan has its own migration two
+    //    blocks down, and BamBuddy normalised from the start.
+    //  - only a match through the tag field itself. A spool found through the
+    //    Bambu plugin's bookkeeping has nothing to correct here.
+    //  - never a list field. card_uids holds several entries and writing one
+    //    value into it would drop the rest.
+    //  - only when the stored value really differs, so a correct entry is not
+    //    patched on every scan.
+    //
+    // A failed write is remembered rather than retried. A key without write
+    // permission would otherwise stall and log on every single placement, and
+    // the spool is found either way - the migration is a speed-up, not a
+    // requirement.
+    // Both backends that store a tag in a text field are covered. BamBuddy is
+    // not: it normalised from the start and its tag never reaches this loop.
+    //
+    // The value differs by backend but the question does not. Spoolman keeps
+    // it in whichever extra field the user picked, FilaMan in the native
+    // rfid_uid, which the mapping presents here as extra.tag.
+    const bool notation_backend =
+        (backendMode() == BACKEND_SPOOLMAN &&
+         !tagFieldIsNative() && !tagFieldIsList() && tagFieldKey()) ||
+        // tag_legacy has its own migration below and would double patch.
+        (backendIsFilaMan() && !(spool["extra"]["tag_legacy"] | false));
+    if (notation_backend && sm_id > 0 && rank == TAG_RANK_FIELD) {
+      static int s_migrate_failed_id = 0;    // do not hammer a read-only key
+      String stored;
+      const char* key = backendIsFilaMan() ? "tag" : tagFieldKey();
+      if (extra.containsKey(key)) {
+        stored = extra[key].as<String>();
+        stored.replace("\"", "");
+        stored.trim();
+      }
+      char want[TAG_UID_CMP_MAX];
+      tagUidNormalize(stored.c_str(), want, sizeof(want));
+      if (stored.length() && want[0] && stored != want && sm_id != s_migrate_failed_id) {
+        int mc = backendPatchSpoolTag(cfg_spoolman_base, sm_id, want, 4000);
+        logSDf("%s: rewrote tag of spool %d to plain hex, HTTP %d",
+               backendIsFilaMan() ? "FilaMan" : "Spoolman", sm_id, mc);
+        s_migrate_failed_id = (mc == 200) ? 0 : sm_id;
+      }
+    }
+
     // One-off migration for spools imported from Spoolman. Their UID lives in
     // custom_fields, where FilaMan's ?search= cannot see it, so every scan
     // would pull the whole inventory. Writing it to the native rfid_uid once

@@ -20,7 +20,7 @@
 // would break the list handling in a way no compiler would catch.
 static const TagFieldSpec SPECS[TAG_FIELD_COUNT] = {
   // key             native is_list plain_hex  name              sub                   info
-  { "tag",           false, false,  false,     STR_TF_TAG,       STR_TF_TAG_SUB,       STR_TF_TAG_INFO      },
+  { "tag",           false, false,  true,      STR_TF_TAG,       STR_TF_TAG_SUB,       STR_TF_TAG_INFO      },
   { "nfc_id",        false, false,  true,      STR_TF_NFCID,     STR_TF_NFCID_SUB,     STR_TF_NFCID_INFO    },
   { CARD_UIDS_FIELD, false, true,   true,      STR_TF_CARDUIDS,  STR_TF_CARDUIDS_SUB,  STR_TF_CARDUIDS_INFO },
   // No key and not a list: several tags per spool are the normal case here,
@@ -60,10 +60,15 @@ void tagFieldFormat(const TagFieldSpec& spec, const char* uid,
     tagUidNormalize(uid, out, out_len);
     return;
   }
-  // extra.tag keeps whatever the scale read: the colon form for an NTAG, the
-  // tray_uuid for a Bambu tag. That is what every spool already linked through
-  // this firmware holds, so normalising here would orphan the whole back
-  // catalogue on the next scan.
+  // Nothing left that wants the raw form. extra.tag used to keep the colon
+  // notation an NTAG is read in, which made it the only one of the four
+  // conventions not storing plain hex - and inconsistent with itself, since a
+  // Bambu tray uuid went into the same field as bare hex.
+  //
+  // Switching it does not orphan anything: spoolTagRank() compares normalised
+  // on both sides, so an entry still carrying colons is found, and the scan
+  // rewrites it once. What it does cost is the fast path for those entries
+  // until then, because the server side filter is an ilike on one notation.
   strncpy(out, uid ? uid : "", out_len - 1);
   out[out_len - 1] = '\0';
 }
