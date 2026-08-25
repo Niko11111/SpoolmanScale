@@ -110,6 +110,38 @@ void buildFilaManOptionsScreen() {
       lv_obj_clear_flag(scr_filaman_options, LV_OBJ_FLAG_HIDDEN);
     }, LV_EVENT_CLICKED, NULL); }
 
+  // Write the tag on a remote trigger. Third in the row because all three
+  // answer the same question - what happens when a link arrives from the web -
+  // and this one only ever acts where the first one skipped the question.
+  { char buf_t[40]; strncpy(buf_t, T(STR_FLM_REMOTE_WRITE), sizeof(buf_t)-1);
+    buf_t[sizeof(buf_t)-1] = '\0';
+    char buf_s[40]; strncpy(buf_s, T(STR_FLM_REMOTE_WRITE_SUB), sizeof(buf_s)-1);
+    buf_s[sizeof(buf_s)-1] = '\0';
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, buf_t, buf_s, g_flm_remote_write, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_FLM_REMOTE_WRITE, STR_FLM_REMOTE_WRITE_INFO));
+
+    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
+    if (arr_lbl) {
+      char buf_v[8]; strncpy(buf_v, T(g_flm_remote_write ? STR_ON : STR_OFF), sizeof(buf_v)-1);
+      buf_v[sizeof(buf_v)-1] = '\0';
+      lv_label_set_text(arr_lbl, buf_v);
+      lv_obj_set_style_text_color(arr_lbl,
+        g_flm_remote_write ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
+    }
+
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      g_flm_remote_write = !g_flm_remote_write;
+      prefsPutBool("flm_write", g_flm_remote_write);
+      logSDf("BTN: FilaMan Options -> write tag on trigger %s",
+             g_flm_remote_write ? "ON" : "OFF");
+      if (scr_filaman_options) { lv_obj_del(scr_filaman_options); scr_filaman_options = nullptr; }
+      buildFilaManOptionsScreen();
+      lv_obj_clear_flag(scr_filaman_options, LV_OBJ_FLAG_HIDDEN);
+    }, LV_EVENT_CLICKED, NULL); }
+
 
   // Which fields the scale writes, and what it leaves to the Bambu Lab
   // plugin. Its own screen because three rows do not fit here, and because

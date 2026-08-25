@@ -107,16 +107,15 @@ static void registerRoutes() {
   }
 
 
-  // FilaMan remote link trigger. GATE_ALWAYS, the only level that ignores
-  // the master switch: this one has to answer whenever the scale is awake,
-  // that is the whole point of keeping the socket up.
+  // The two FilaMan device endpoints. GATE_ALWAYS, the only level that ignores
+  // the master switch: these have to answer whenever the scale is awake, that
+  // is the whole point of keeping the socket up.
   //
-  // FilaMan sends this fire and forget and waits five seconds, so nothing
-  // here may block. The request is only parked, appLoop() picks it up.
-  // Nothing is ever written to the tag, the trigger is read as "the spool on
-  // the scale belongs to this id".
-  // FilaMan's "import from tag". Parked like the write trigger, because the
-  // read cannot happen inside the handler.
+  // FilaMan sends both fire and forget and waits five seconds, so nothing here
+  // may block. A request is only parked and appLoop() picks it up, because the
+  // NFC bus belongs to the loop task.
+
+  // "Import from tag": whatever is on the reader is sent back on the next tick.
   ota_server.on("/api/v1/rfid/scan-request", HTTP_POST, []() {
     tagScanRequest();
     ota_server.send(200, "application/json", "{\"status\":\"ok\"}");
@@ -134,12 +133,19 @@ static void registerRoutes() {
     const int spool_id    = doc["spool_id"]    | 0;
     const int location_id = doc["location_id"] | 0;
 
-    // FilaMan's backend expands the trigger into a full OpenSpool record
-    // before forwarding it. Keep it verbatim: the server decided what belongs
-    // on the tag. An older server sends only the id and nothing is written.
+    // FilaMan's backend can expand the trigger into a full record before
+    // forwarding it, under either of two protocol names. Keep what it sent:
+    // the server decided what belongs on the tag.
+    //
+    // It only does that with "write extended data" turned on in its admin
+    // settings, which is off by default - so a bare trigger carrying nothing
+    // but the id is the normal case, not an old server. The scale then builds
+    // the record itself from the spool record, the same one the tag page
+    // writes, and the setting stops mattering.
     const char *proto = doc["protocol"] | "";
-    tagRemotePayloadSet(strcmp(proto, "openspool") == 0
-                        ? ota_server.arg("plain").c_str() : "");
+    const bool has_record = !strcmp(proto, "openspool") || !strcmp(proto, "filaman");
+    tagRemotePayloadSet(has_record ? ota_server.arg("plain").c_str() : "",
+                        spool_id);
 
     if (spool_id > 0) {
       remoteLinkSetPending(spool_id);

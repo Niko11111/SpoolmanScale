@@ -27,6 +27,13 @@ extern uint8_t g_ip_bar_mode;
 // colour mismatch always asks regardless - see showRemoteLinkPopup().
 extern bool g_flm_autolink;
 
+// Whether a remote write trigger actually writes the tag, in the one case
+// where nobody can be asked: the confirmation popup is switched off and the
+// spool was already lying there. With the popup the user picks per request,
+// so this is never consulted. Off by default, because writing replaces
+// whatever the tag already carried and the trigger has always only linked.
+extern bool g_flm_remote_write;
+
 // Adopt a remotely linked spool for weighing when no tag turns up. The spool
 // was chosen deliberately in the web UI, so the useful answer to "no tag" is
 // to weigh it anyway rather than report a failure. Nothing is written to any

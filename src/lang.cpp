@@ -1326,4 +1326,23 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Aktiv",                  "Active"                     },  // STR_STATUS_ACTIVE
   { "Leer",                   "Empty"                      },  // STR_STATUS_EMPTY
   { "Unbekannt",              "Unknown"                    },  // STR_STATUS_UNKNOWN
+
+  // Writing a tag
+  { "Beschreiben + verknüpfen", "Write + link"             },  // STR_REMOTE_LINK_WRITE
+  { "Nur verknüpfen",         "Link only"                  },  // STR_REMOTE_LINK_ONLY
+  { "Tag beschreiben?",       "Write tag?"                 },  // STR_TW_ASK_TITLE
+  { "Die Spulendaten kommen auf den Tag. Was jetzt darauf steht, geht verloren.",
+    "The spool data goes onto the tag. Whatever is on it now is lost." },  // STR_TW_ASK_HINT
+  { "Beschreiben",            "Write"                      },  // STR_TW_BTN_WRITE
+  { "Nicht jetzt",            "Not now"                    },  // STR_TW_BTN_SKIP
+  { "Tag beschrieben",        "Tag written"                },  // STR_TW_OK
+  { "Kein Tag auf dem Leser", "No tag on the reader"       },  // STR_TW_ERR_NO_TAG
+  { "Dieser Tag ist nur lesbar", "This tag can only be read" },  // STR_TW_ERR_NOT_NTAG
+  { "Spule nicht abrufbar",   "Spool could not be fetched" },  // STR_TW_ERR_BACKEND
+  { "Tag zu klein oder nicht formatiert", "Tag too small or not formatted" },  // STR_TW_ERR_SPACE
+  { "Fehlgeschlagen - Tag still halten", "Failed - keep the tag still" },  // STR_TW_ERR_WRITE
+  { "Tag beim Trigger beschreiben", "Write tag on trigger" },  // STR_FLM_REMOTE_WRITE
+  { "Nur wenn nicht gefragt wird", "Only when not asking"  },  // STR_FLM_REMOTE_WRITE_SUB
+  { "Wenn der Filament-Manager einen Schreibvorgang auslöst, fragt die Waage nach - dort kannst du zwischen Beschreiben und nur Verknüpfen wählen. Ohne Nachfrage (Verknüpfen ohne Rückfrage) gibt es diese Wahl nicht. Dieser Schalter entscheidet dann, ob ein beschreibbarer NTAG die Spulendaten bekommt oder nur verknüpft wird. Bambu-Tags sind nur lesbar und werden immer nur verknüpft.",
+    "When the filament manager triggers a write, the scale asks, and you choose there between writing and linking only. With the prompt turned off (link without asking) there is no choice to make. This switch decides it instead: whether a writable NTAG gets the spool data, or is only linked. Bambu tags are read-only and are always only linked." },  // STR_FLM_REMOTE_WRITE_INFO
 };

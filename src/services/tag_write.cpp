@@ -41,6 +41,7 @@ static TagFormat pending_fmt = TAG_FMT_ACE;
 static bool      pending_link = false;
 static char      state[12] = "idle";
 static char      message[96] = "";
+static uint8_t   result = TW_NONE;
 
 static char      cached_uid[26] = "";
 static char      cached_kind[34] = "";
@@ -59,10 +60,20 @@ void tagScanRequest() { scan_pending = true; scan_since = millis(); }
 
 const char* tagWriteState()   { return state; }
 const char* tagWriteMessage() { return message; }
+uint8_t     tagWriteResultCode() { return result; }
 
-static void finish(const char *st, const char *msg) {
+// The tag the main poll is looking at, judged the same way refreshCache()
+// judges it: a 7 byte UID prints as 20 characters, a 4 byte one as 11. Reading
+// the cached scan rather than selecting the tag again is the point - a select
+// here would race the main poll, and the loser gets nothing back.
+bool tagIsWritableNtag() {
+  return tag_present && strlen(g_tag.uid_str) > 14;
+}
+
+static void finish(const char *st, const char *msg, uint8_t code) {
   snprintf(state, sizeof(state), "%s", st);
   snprintf(message, sizeof(message), "%s", msg);
+  result = code;
   logSDf("TagWrite: %s - %s", st, msg);
 }
 
@@ -73,6 +84,7 @@ bool tagWriteRequest(int spool_id, TagFormat fmt, bool link) {
   pending_fmt  = fmt;
   pending_link = link;
   pending     = true;
+  result      = TW_BUSY;
   snprintf(state, sizeof(state), "pending");
   if (fmt == TAG_FMT_ERASE)
     snprintf(message, sizeof(message), "Erasing the tag...");
@@ -289,13 +301,18 @@ static bool writeAce(const AceFields *f) {
 
 // NDEF on an NTAG: TLV 0x03, length, one application/json record, 0xFE.
 // Record header D2 = MB|ME|SR, TNF 2 (media type).
-static char write_err[80] = "";
-static char remote_payload[320] = "";
+//
+// The single byte TLV length field is what caps the payload, not the tag: past
+// 255 total the TLV would need its three byte form, which nothing here writes.
+#define NDEF_JSON_MAX 250
+static char    write_err[80] = "";
+static uint8_t write_code = TW_ERR_WRITE;
+static char    remote_payload[320] = "";
 
 // Wraps a JSON document in the NDEF TLV an OpenSpool reader expects.
 static bool writeNdefJson(const char *json) {
   const int n = (int)strlen(json);
-  if (n <= 0 || n > 250) return false;
+  if (n <= 0 || n > NDEF_JSON_MAX) return false;
 
   static const char TYPE[] = "application/json";
   const uint8_t tlen = sizeof(TYPE) - 1;
@@ -327,6 +344,7 @@ static bool writeNdefJson(const char *json) {
       snprintf(write_err, sizeof(write_err),
                "OpenSpool needs %d bytes, this tag holds %u", i,
                (unsigned)((last - 3) * 4));
+    write_code = TW_ERR_SPACE;
     return false;
   }
 
@@ -347,23 +365,78 @@ static bool writeOpenSpool(const AceFields *f, int spool_id) {
   return writeNdefJson(json);
 }
 
-void tagRemotePayloadSet(const char *json) {
-  snprintf(remote_payload, sizeof(remote_payload), "%s", json ? json : "");
+// FilaMan describes the spool for its own protocol, not for the tag: the record
+// carries the request's own spool_id, and sm_id - the field that points a
+// written tag back at a spool, and the one this firmware writes itself - is not
+// in it. Written verbatim that produces a tag nothing can trace back. Both are
+// corrected here, once, and everything else the server chose is left alone.
+void tagRemotePayloadSet(const char *json, int spool_id) {
+  remote_payload[0] = 0;
+  if (!json || !json[0]) return;
+
+  JsonDocument d;
+  if (deserializeJson(d, json)) {
+    logSD("RemoteLink: tag payload is not JSON, ignoring it");
+    return;
+  }
+  d.remove("spool_id");
+  d.remove("location_id");
+  if (d["sm_id"].isNull() && spool_id > 0) d["sm_id"] = spool_id;
+
+  const size_t n = measureJson(d);
+  // Turned away here rather than at write time, because that is what lets the
+  // caller fall back to the record the scale builds for itself.
+  if (n == 0 || n > NDEF_JSON_MAX || n >= sizeof(remote_payload)) {
+    logSDf("RemoteLink: tag payload is %u bytes, too long for a tag",
+           (unsigned)n);
+    return;
+  }
+  serializeJson(d, remote_payload, sizeof(remote_payload));
 }
 
 bool tagRemotePayloadPending() { return remote_payload[0] != 0; }
 
 // Runs from the deferred handler, never from an LVGL callback: this talks to
 // the reader and takes as long as a write takes.
+//
+// Reports through the same state the web page polls. A remote write used to
+// leave no trace there at all, so the tag page showed the result of whatever
+// had been written before it.
 bool tagWriteRemotePayload() {
   if (!remote_payload[0]) return false;
+  write_err[0] = 0;
+  write_code = TW_ERR_WRITE;
+
   uint8_t uid[8], uid_len = 0;
-  bool ok = nfcReadPassiveTarget(uid, &uid_len, 600) && uid_len == 7
-            && writeNdefJson(remote_payload);
+  bool ok = false;
+  if (!nfcReadPassiveTarget(uid, &uid_len, 600)) {
+    finish("error", "No tag on the reader", TW_ERR_NO_TAG);
+  } else if (uid_len != 7) {
+    finish("error", "Not a writable NTAG, this tag can only be read",
+           TW_ERR_NOT_NTAG);
+  } else if (!writeNdefJson(remote_payload)) {
+    finish("error", write_err[0] ? write_err
+                                 : "Write failed - keep the tag still on the reader",
+           write_code);
+  } else {
+    finish("ok", "Wrote the record the filament manager sent", TW_OK);
+    ok = true;
+  }
+
   remote_payload[0] = 0;
   cache_dirty = true;
-  logSDf("RemoteLink: tag write %s", ok ? "ok" : "failed");
   return ok;
+}
+
+// FilaMan can be set to write the record under either of two protocol names,
+// and both hold the same fields - the choice is a label. Reading the value out
+// rather than looking for the bare word anywhere in the record is what keeps a
+// filament brand called Filaman from being taken for a protocol.
+static bool isSupportedRecord(const char *json) {
+  JsonDocument d;
+  if (deserializeJson(d, json)) return false;
+  const char *proto = d["protocol"] | "";
+  return !strcmp(proto, "openspool") || !strcmp(proto, "filaman");
 }
 
 // Reads the JSON payload back out of the NDEF wrapper.
@@ -385,7 +458,7 @@ static bool readOpenSpool(char *out, size_t out_len) {
   size_t copy = (size_t)plen < out_len - 1 ? (size_t)plen : out_len - 1;
   memcpy(out, buf + start, copy);
   out[copy] = 0;
-  return strstr(out, "openspool") != nullptr;
+  return isSupportedRecord(out);
 }
 
 static void describeOpenSpool(const char *json, char *out, size_t out_len, TagInfo *ti) {
@@ -634,41 +707,42 @@ static void scanTick() {
   filamanSendTagData(backendBaseUrl(), filamanDeviceToken(), json);
 }
 
-void tagWriteTick() {
-  refreshCache();
-  scanTick();
-  if (!pending) return;
-  pending = false;
-
-  uint8_t uid[8], uid_len = 0;
-  if (!nfcReadPassiveTarget(uid, &uid_len, 600)) {
-    finish("error", "No tag on the reader");
-    return;
+// Selects the tag and says whether it can be written at all. Both write paths
+// start here, so the two refusals read the same wherever they came from.
+static bool selectWritableTag(uint8_t *uid, uint8_t *uid_len) {
+  *uid_len = 0;
+  if (!nfcReadPassiveTarget(uid, uid_len, 600)) {
+    finish("error", "No tag on the reader", TW_ERR_NO_TAG);
+    return false;
   }
-  if (uid_len != 7) {
-    finish("error", "Not a writable NTAG, this tag can only be read");
-    return;
+  if (*uid_len != 7) {
+    finish("error", "Not a writable NTAG, this tag can only be read",
+           TW_ERR_NOT_NTAG);
+    return false;
   }
+  return true;
+}
 
+// Builds the record from the spool and puts it on the already selected tag.
+// On failure it reports the reason itself and returns false; on success it
+// leaves the filament name in name[] and lets the caller word the message,
+// because only the caller knows whether a link is going to be appended to it.
+static bool writeSpoolRecord(int spool_id, TagFormat fmt,
+                             char *name, size_t name_len) {
+  name[0] = 0;
   write_err[0] = 0;
-  if (pending_fmt == TAG_FMT_ERASE) {
-    const bool erased = eraseTag();
-    cache_dirty = true;
-    finish(erased ? "ok" : "error",
-           erased ? "Tag erased" : "Erase failed - keep the tag still");
-    return;
-  }
+  write_code = TW_ERR_WRITE;
 
   // Not querySpoolmanById(): that also repaints the main screen and would
   // change which spool the scale believes is loaded.
   JsonDocument doc;
-  int code = backendGetSpoolJson(backendBaseUrl(), pending_id, doc);
+  int code = backendGetSpoolJson(backendBaseUrl(), spool_id, doc);
   if (code != 200 || doc.isNull()) {
     char m[96];
     snprintf(m, sizeof(m), "Spool %d not found on %s (HTTP %d)",
-             pending_id, backendName(), code);
-    finish("error", m);
-    return;
+             spool_id, backendName(), code);
+    finish("error", m, TW_ERR_BACKEND);
+    return false;
   }
   JsonObjectConst sp = doc.as<JsonObjectConst>();
 
@@ -676,22 +750,64 @@ void tagWriteTick() {
   {
     AceFields f;
     buildAce(sp, &f);
-    ok = (pending_fmt == TAG_FMT_ACE) ? writeAce(&f)
-                                      : writeOpenSpool(&f, pending_id);
+    ok = (fmt == TAG_FMT_ACE) ? writeAce(&f) : writeOpenSpool(&f, spool_id);
   }
 
   cache_dirty = true;   // the tag changed under a UID that did not
 
   if (!ok) {
     finish("error", write_err[0] ? write_err
-                                 : "Write failed - keep the tag still on the reader");
+                                 : "Write failed - keep the tag still on the reader",
+           write_code);
+    return false;
+  }
+  const char *n = sp["filament"]["name"] | "spool";
+  snprintf(name, name_len, "%s", n[0] ? n : "spool");
+  return true;
+}
+
+// The whole write for a caller that has no parking slot to go through - the
+// device screen and the FilaMan trigger both land here when no record came
+// with the request.
+bool tagWriteSpoolNow(int spool_id, TagFormat fmt) {
+  if (spool_id <= 0) return false;
+  uint8_t uid[8], uid_len = 0;
+  if (!selectWritableTag(uid, &uid_len)) return false;
+
+  char name[48];
+  if (!writeSpoolRecord(spool_id, fmt, name, sizeof(name))) return false;
+
+  char m[128];
+  snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", spool_id, name,
+           fmt == TAG_FMT_ACE ? "ACE" : "OpenSpool");
+  finish("ok", m, TW_OK);
+  return true;
+}
+
+void tagWriteTick() {
+  refreshCache();
+  scanTick();
+  if (!pending) return;
+  pending = false;
+
+  uint8_t uid[8], uid_len = 0;
+  if (!selectWritableTag(uid, &uid_len)) return;
+
+  if (pending_fmt == TAG_FMT_ERASE) {
+    const bool erased = eraseTag();
+    cache_dirty = true;
+    finish(erased ? "ok" : "error",
+           erased ? "Tag erased" : "Erase failed - keep the tag still",
+           erased ? TW_OK : TW_ERR_WRITE);
     return;
   }
+
+  char name[48];
+  if (!writeSpoolRecord(pending_id, pending_fmt, name, sizeof(name))) return;
+
   // Erase returned above, so there is no format to branch on here any more.
-  const char *name = sp["filament"]["name"] | "spool";
   char m[128];
-  snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", pending_id,
-           name[0] ? name : "spool",
+  snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", pending_id, name,
            pending_fmt == TAG_FMT_ACE ? "ACE" : "OpenSpool");
   size_t n = strnlen(m, sizeof(m));
 
@@ -713,5 +829,5 @@ void tagWriteTick() {
       appendf(m, sizeof(m), n, ", but linking failed (HTTP %d)", code2);
     }
   }
-  finish("ok", m);
+  finish("ok", m, TW_OK);
 }

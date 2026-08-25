@@ -29,6 +29,7 @@
 #include "services/update_check.h"
 #include "ui/ota_browser.h"
 #include "ui/remote_link_popup.h"
+#include "ui/tag_write_popup.h"
 #include "services/ams_assign.h"
 #include "services/spoolman_actions.h"
 #include "services/backend_api.h"
@@ -637,6 +638,7 @@ void appLoop() {
     }
   }
   handleRemoteLinkDeferredActions();
+  handleTagWritePopupDeferredActions();
   if (show_system_pending) {
     show_system_pending = false;
     // Coming back from OTA / Info / Language to System screen

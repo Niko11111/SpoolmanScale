@@ -20,9 +20,11 @@
 #include "services/tag_uid.h"
 #include "services/user_options.h"
 #include "services/backend_api.h"
+#include "services/tag_write.h"
 #include "ui/loading_overlay.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/spoolman_lookup.h"
+#include "ui/tag_write_popup.h"
 #include "ui/ui_common.h"
 #include "services/backend.h"
 
@@ -619,6 +621,12 @@ static void closeLinkOverlays() {
 //  LINK FLOW: COMPLETE LINKING
 //  PATCH + update main screen
 // ============================================================
+// Set at the end of a link, picked up on the next pass. Not built there and
+// then: doLinkPatch() is reached from LVGL callbacks as well as from this
+// handler, and an overlay must never be built out of the callback of the one
+// it covers.
+static int tagwrite_ask_spool_id = 0;
+
 void doLinkPatch(int spool_id, bool is_bambu) {
   const char* link_uuid = is_bambu ? g_tag.tray_uuid : link_tag_uid;
   Serial.printf("doLinkPatch: ID=%d uuid='%s'\n", spool_id, link_uuid ? link_uuid : "");
@@ -686,6 +694,13 @@ void doLinkPatch(int spool_id, bool is_bambu) {
     tagLookupForget();
     querySpoolmanById(spool_id);
   }
+
+  // The spool is known and an NTAG is lying on the reader, so its data can go
+  // onto the tag as well - the one moment where that costs the user nothing but
+  // one answer. Bambu tags are read-only and MIFARE is not ours to write, so
+  // both are left out by the same test the tag page uses.
+  if (!is_bambu && tagIsWritableNtag()) tagwrite_ask_spool_id = spool_id;
+
   Serial.printf("Linking complete! ID=%d\n", spool_id);
 }
 
@@ -3291,6 +3306,11 @@ void deleteSpoolFlowOverlays() {
 }
 
 void handleSpoolFlowDeferredActions() {
+  if (tagwrite_ask_spool_id > 0) {
+    const int id = tagwrite_ask_spool_id;
+    tagwrite_ask_spool_id = 0;
+    showTagWriteAskPopup(id);
+  }
   if (show_id_input_pending) {
     show_id_input_pending = false;
     id_input_open = false;

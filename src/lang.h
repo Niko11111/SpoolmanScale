@@ -850,6 +850,26 @@ enum StringID {
   STR_STATUS_EMPTY,
   STR_STATUS_UNKNOWN,
 
+  // Writing a tag. The remote trigger offers the write next to the link, the
+  // device asks after a link of its own, and the results come back as ids
+  // because tag_write.cpp cannot include lang.h - T() collides with
+  // ArduinoJson's template parameter.
+  STR_REMOTE_LINK_WRITE,
+  STR_REMOTE_LINK_ONLY,
+  STR_TW_ASK_TITLE,
+  STR_TW_ASK_HINT,
+  STR_TW_BTN_WRITE,
+  STR_TW_BTN_SKIP,
+  STR_TW_OK,
+  STR_TW_ERR_NO_TAG,
+  STR_TW_ERR_NOT_NTAG,
+  STR_TW_ERR_BACKEND,
+  STR_TW_ERR_SPACE,
+  STR_TW_ERR_WRITE,
+  STR_FLM_REMOTE_WRITE,
+  STR_FLM_REMOTE_WRITE_SUB,
+  STR_FLM_REMOTE_WRITE_INFO,
+
   STR_COUNT
 };
 
