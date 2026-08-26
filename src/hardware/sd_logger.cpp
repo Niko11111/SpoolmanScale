@@ -1,6 +1,7 @@
 #include "sd_logger.h"
 #include "app/app_state.h"
 #include "services/backend.h"
+#include "services/breadcrumb.h"
 
 #include "pins.h"
 
@@ -253,6 +254,18 @@ void writeBootBlock(const char* boot_or_reboot) {
   logSDf("%s: SpoolmanScale %s | %s | %s", boot_or_reboot, FW_VERSION,
          resetReasonStr(), backend_ring);
 
+  // What the previous boot was doing when it stopped. Only worth a line when
+  // it did not stop on purpose: after a clean restart the crumb names the
+  // restart, which says nothing anyone needs.
+  const esp_reset_reason_t rr = esp_reset_reason();
+  const bool crashed = (rr == ESP_RST_PANIC || rr == ESP_RST_INT_WDT ||
+                        rr == ESP_RST_TASK_WDT || rr == ESP_RST_WDT ||
+                        rr == ESP_RST_BROWNOUT);
+  if (crashed && crumbPrevious()[0]) {
+    logSDf("Last seen before the reset: %s (after %lus)",
+           crumbPrevious(), (unsigned long)(crumbPreviousUptimeMs() / 1000));
+  }
+
   if (!sd_available) return;
 
   String fname = getCurrentLogFilename();
@@ -273,6 +286,10 @@ void writeBootBlock(const char* boot_or_reboot) {
   f.printf("SpoolmanScale %s\n", FW_VERSION);
   f.printf("%s: %s\n", boot_or_reboot, dt_buf);
   f.printf("Reset reason: %s\n", resetReasonStr());
+  if (crashed && crumbPrevious()[0]) {
+    f.printf("Last seen before the reset: %s (after %lus)\n",
+             crumbPrevious(), (unsigned long)(crumbPreviousUptimeMs() / 1000));
+  }
   if (wifi_ok) {
     f.printf("WiFi: %s | IP: %s\n",
       cfg_wifi_ssid, WiFi.localIP().toString().c_str());

@@ -15,6 +15,7 @@
 #include "services/tag_uid.h"
 #include "services/user_options.h"
 #include "services/backend.h"
+#include "services/breadcrumb.h"
 #include "services/backend_api.h"
 #include "services/filaman_api.h"
 #include "services/wifi_manager.h"
@@ -164,6 +165,18 @@ void hideMoreInfoOverlays() {
   loc_list_obj   = nullptr;
 }
 
+// The picker and the two labels inside it, always together. The three buttons
+// that close it used to delete the screen and leave loc_status_obj and
+// loc_list_obj pointing into it - and fetchAndFillLocationList() pumps LVGL
+// for 100 ms before it writes to exactly those two, so a tap during the pump
+// left it writing to freed memory. LV_USE_ASSERT_OBJ is 0, so nothing catches
+// that on the way through.
+static void closeLocationPicker() {
+  if (scr_location_picker) { lv_obj_del(scr_location_picker); scr_location_picker = nullptr; }
+  loc_status_obj = nullptr;
+  loc_list_obj   = nullptr;
+}
+
 // ============================================================
 //  MORE INFO FILAMENT SCREEN
 //  Overlay with teal border (8px margin), shows UID, UUID,
@@ -186,7 +199,11 @@ void showMoreInfoScreen() {
 
 // ── Location Picker ─────────────────────────────────────────
 void showLocationPicker() {
-  if (scr_location_picker) { lv_obj_del(scr_location_picker); scr_location_picker = nullptr; }
+  // Through the same helper as the three close buttons, and for the same
+  // reason: the early return below leaves the function without building
+  // anything, and the two label pointers would otherwise still name the
+  // screen that was just deleted here.
+  closeLocationPicker();
   // A storage location on an archived spool describes a shelf nobody will look
   // on. Bringing it back first is the step that makes the question meaningful.
   if (!sm_found || sm_archived || sm_id <= 0) return;
@@ -241,7 +258,7 @@ void showLocationPicker() {
   lv_obj_set_style_radius(btn_x, 8, 0);
   lv_obj_set_style_shadow_width(btn_x, 0, 0);
   lv_obj_add_event_cb(btn_x, [](lv_event_t *e) {
-    if (scr_location_picker) { lv_obj_del(scr_location_picker); scr_location_picker = nullptr; }
+    closeLocationPicker();
     if (g_loc_picker_from_popup) { showMainScreen(); }
     else { showMoreInfoScreen(); }
   }, LV_EVENT_CLICKED, NULL);
@@ -286,6 +303,7 @@ void showLocationPicker() {
 }
 
 void fetchAndFillLocationList() {
+  crumbSet("loc fetch");
   logSD("LOC: fetchAndFillLocationList called");
   if (!loc_list_obj || !loc_status_obj) { logSD("LOC: null refs, abort"); return; }
   if (!scr_location_picker) { logSD("LOC: picker gone, abort"); return; }
@@ -294,6 +312,14 @@ void fetchAndFillLocationList() {
   for (int i = 0; i < 5; i++) {
     lv_task_handler();
     delay(20);
+  }
+  // lv_task_handler() dispatches touch, so those 100 ms are live: the X button
+  // and every row of the picker can close it from inside this loop. Asked
+  // again rather than trusting the check above - everything below writes into
+  // the two labels, and a closed picker has none.
+  if (!scr_location_picker || !loc_list_obj || !loc_status_obj) {
+    logSD("LOC: picker closed while it was being drawn, abort");
+    return;
   }
 
   logSDf("LOC: GET %s/api/v1/location", cfg_spoolman_base);
@@ -330,6 +356,10 @@ void fetchAndFillLocationList() {
 
   // "Kein Lagerort" Row
   lv_obj_t *btn_none = lv_btn_create(list);
+  // An exhausted LVGL pool comes back as NULL here, and LVGL 8.3 asserts
+  // nothing on the way - the next style call would write through it and take
+  // the device down with a panic. See the same guard in spool_flow.cpp.
+  if (!btn_none) { logSD("LOC: LVGL pool exhausted, no rows built"); return; }
   lv_obj_set_size(btn_none, 370, 44);
   lv_obj_set_style_bg_color(btn_none, lv_color_hex(0x0d2040), 0);
   lv_obj_set_style_bg_color(btn_none, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
@@ -351,7 +381,7 @@ void fetchAndFillLocationList() {
       sm_location_id = 0;
       sm_location_name[0] = '\0';
     }
-    if (scr_location_picker) { lv_obj_del(scr_location_picker); scr_location_picker = nullptr; }
+    closeLocationPicker();
     if (g_loc_picker_from_popup) { showMainScreen(); }
     else { showMoreInfoScreen(); }
   }, LV_EVENT_CLICKED, NULL);
@@ -366,7 +396,13 @@ void fetchAndFillLocationList() {
     strncpy(loc_name, v.as<const char*>() ? v.as<const char*>() : "-", sizeof(loc_name)-1);
     loc_name[sizeof(loc_name)-1] = '\0';
 
+    // Same reserve as the spool lists, same reason - see lvPoolHasRoomForRow().
+    if (!lvPoolHasRoomForRow()) {
+      logSDf("LOC: LVGL pool low, list cut at %d rows", loc_shown);
+      break;
+    }
     lv_obj_t *row = lv_btn_create(list);
+    if (!row) { logSDf("LOC: no room for a row, list cut at %d", loc_shown); break; }
     lv_obj_set_size(row, 370, 44);
     bool is_current = (strlen(sm_location_name) > 0 && strcmp(loc_name, sm_location_name) == 0);
     lv_obj_set_style_bg_color(row, is_current ? lv_color_hex(0x0d3020) : lv_color_hex(0x0d2040), 0);
@@ -396,7 +432,7 @@ void fetchAndFillLocationList() {
         g_loc_popup_shown_for_id = sm_id;
         logSDf("[verbose] LOC: location saved '%s' id=%d from_popup=%d", sel_name, sm_id, (int)g_loc_picker_from_popup);
       }
-      if (scr_location_picker) { lv_obj_del(scr_location_picker); scr_location_picker = nullptr; }
+      closeLocationPicker();
       if (g_loc_picker_from_popup) { showMainScreen(); }
       else { showMoreInfoScreen(); }
     }, LV_EVENT_CLICKED, NULL);

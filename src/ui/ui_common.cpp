@@ -186,6 +186,17 @@ void logLvMem(const char* tag, int rows) {
     (unsigned)m.used_pct, (unsigned)m.frag_pct);
 }
 
+bool lvPoolHasRoomForRow() {
+  lv_mem_monitor_t m;
+  lv_mem_monitor(&m);
+  // Both numbers, because they fail differently: free_size runs out when the
+  // list is simply too long, free_biggest_size when the pool is fragmented by
+  // the screens that were opened before it - which is the state the field logs
+  // show, sitting at 40 to 55 percent fragmentation after some navigating.
+  return m.free_size >= LV_ROW_RESERVE_BYTES &&
+         m.free_biggest_size >= LV_ROW_RESERVE_BYTES / 4u;
+}
+
 void releaseScreen(lv_obj_t **scr) {
   if (!scr || !*scr) return;
   lv_obj_del_async(*scr);

@@ -13,6 +13,7 @@
 #include "lang.h"
 #include "services/location_state.h"
 #include "services/backend.h"
+#include "services/breadcrumb.h"
 #include "services/backend_api.h"
 #include "services/filaman_api.h"
 #include "services/http_progress.h"
@@ -1086,6 +1087,7 @@ void querySpoolman(const char* tray_uuid) {
   // The byte counter from the loading overlay, pointed at the status line
   // instead. Whether it is still moving is the only question a wait like this
   // raises, and the answer costs nothing here.
+  crumbSet("inventory search");
   httpSetProgressHook(searchProgress);
 
   // Up to 2 attempts: first try, then 1 retry on IncompleteInput / connection issues.

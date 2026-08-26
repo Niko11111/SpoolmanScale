@@ -43,6 +43,7 @@
 #include "services/device_name.h"
 #include "services/mdns_service.h"
 #include "services/backend.h"
+#include "services/breadcrumb.h"
 #include "ui/ams_assign_popup.h"
 #include "ui/ams_assign_screen.h"
 #include "ui/filaman_fields_screen.h"
@@ -252,6 +253,9 @@ static int  loc_popup_pending_id = -1;              // debounced popup: sm_id sc
 static int  ams_popup_pending_id = -1;              // same, for the AMS question; answered first when both are due
 
 void appLoop() {
+  // Overwritten every pass, so a crumb from a marked section only stands while
+  // that section runs. Three stores and a short copy into RTC memory.
+  crumbSet("loop");
   // No lv_tick_inc() here: the tick comes from millis() via LV_TICK_CUSTOM, so
   // LVGL keeps correct time even while a blocking call holds up this loop.
   lv_timer_handler();
@@ -1232,6 +1236,7 @@ void appLoop() {
     if (millis() - last_nfc_check_ms >= poll_interval) {
       last_nfc_check_ms = millis();
       uint8_t uid[7], uidLen = 0;
+      crumbSet("nfc poll");
       bool found = nfcReadPassiveTarget(uid, &uidLen, poll_timeout);
 
       nfc_stat_scans++;
@@ -1368,6 +1373,7 @@ void appLoop() {
           } else {
             // tray_uuid present — query Spoolman if not done yet
             if (!isSpoolFlowIdInputOpen() && strcmp(g_tag.uid_str, spoolman_queried_uid) != 0 && strlen(g_tag.tray_uuid) == 32) {
+              crumbSet("backend lookup");
               querySpoolman(g_tag.tray_uuid);
               strncpy(spoolman_queried_uid, g_tag.uid_str, sizeof(spoolman_queried_uid)-1);
               spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';

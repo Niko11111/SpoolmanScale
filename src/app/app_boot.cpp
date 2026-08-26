@@ -18,6 +18,7 @@
 #include "services/app_settings.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/breadcrumb.h"
 #include "services/device_name.h"
 #include "services/mdns_service.h"
 #include "services/time_service.h"
@@ -109,6 +110,9 @@ void wifiConnect() {
 void appSetup() {
   Serial.begin(115200);
   delay(500);
+  // Before anything else can leave one of its own: this reads what the
+  // previous boot was doing when it stopped. writeBootBlock() prints it.
+  crumbBegin();
   Serial.println("=== SpoolmanScale " FW_VERSION " ===");
   Serial.println("KDF Master: 9a759cf2c4f7caff222cb9769b41bc96");
   Serial.println("Context:    RFID-B");

@@ -27,6 +27,7 @@
 #include "ui/tag_write_popup.h"
 #include "ui/ui_common.h"
 #include "services/backend.h"
+#include "services/breadcrumb.h"
 
 namespace {
 
@@ -233,6 +234,10 @@ static bool id_popup_is_copy   = false;  // true = copy flow, false = link flow
 static int  copy_id_lookup_pending = 0;  // >0 = deferred copy ID fetch (avoids stack overflow in lambda)
 static int  link_id_lookup_pending = 0;  // >0 = deferred linkIdLookupAndPatch (avoids stack overflow in lambda)
 static bool link_id_lookup_is_bambu = false;
+// Link overlays that hideSpoolFlowOverlays() has hidden and emptied, waiting to
+// be deleted on the loop task. They must not be deleted where they are hidden:
+// that call arrives from LVGL callbacks too.
+static bool link_overlays_close_pending = false;
 static bool show_id_input_pending = false;   // deferred re-open of IdInputPopup from Back button
 static bool show_id_input_rebuild = false;   // deferred re-open from WarnPopupA retry (rebuild after del)
 static bool id_input_open = false;           // true while IdInputPopup is visible — suppresses NFC Spoolman query
@@ -329,6 +334,7 @@ static const char* linkTargetBase(int spool_id) {
 }
 
 void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool archived_only) {
+  crumbSet("link fetch");
   // Free any previous allocation
   linkSpoolsFree();
   if (!wifi_ok) return;
@@ -634,6 +640,7 @@ static void closeLinkOverlays() {
 static int tagwrite_ask_spool_id = 0;
 
 void doLinkPatch(int spool_id, bool is_bambu) {
+  crumbSet("link patch");
   const char* link_uuid = is_bambu ? g_tag.tray_uuid : link_tag_uid;
   Serial.printf("doLinkPatch: ID=%d uuid='%s'\n", spool_id, link_uuid ? link_uuid : "");
 
@@ -1089,6 +1096,15 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     if (col.length() > 0 && col[0] != '#') col = "#" + col;
     strncpy(s.color_hex, col.c_str(), sizeof(s.color_hex)-1);
     s.color_hex[sizeof(s.color_hex)-1] = '\0';
+    // The four numbers the list fetch fills and this path used to leave alone.
+    // link_spools[] comes from heap_caps_malloc, which does not zero, so a row
+    // rendered afterwards showed whatever the block held before, and the copy
+    // flow would have carried that straight into a new spool as its filament
+    // id. Read from the same document as everything above.
+    s.remaining    = doc["remaining_weight"] | 0.0f;
+    s.total        = doc["filament"]["weight"] | 0.0f;
+    s.filament_id  = doc["filament"]["id"] | 0;
+    s.spool_weight = doc["spool_weight"] | 0.0f;
     link_spool_count++;
   }
 
@@ -1376,7 +1392,47 @@ static void addListMoreInfo(lv_obj_t* list, StringID str_id) {
   lv_obj_center(lbl);
 }
 
+// Whether a spool belongs in the filtered list. One function, because the
+// count above the list and the rows in it used to decide separately and did
+// not agree: the count skipped Bambu vendors in the non-Bambu flow while the
+// rows kept them, so picking "Bambu Lab" from the vendor list produced a
+// heading that said 0 over two rows. In the Bambu flow the count matched on
+// material_prefix and the rows on g_tag.material, which drifted the same way.
+static bool linkRowMatches(const UnlinkedSpool &s, const char* vendor_name,
+                           const char* material_prefix, const char* material_full) {
+  if (linkSpoolSkip(s)) return false;
+
+  if (link_flow_is_bambu) {
+    // The tag names its own vendor, so only Bambu spools can answer to it.
+    if (strncasecmp(s.vendor, "Bambu", 5) != 0) return false;
+    if (g_tag.material[0] && s.material[0]) {
+      if (isSupportMaterial(g_tag.material)) {
+        // Support tags: match Spoolman materials ending in "-S"
+        if (!isSupportSpoolmanMat(s.material)) return false;
+      } else {
+        if (strncasecmp(s.material, g_tag.material, 3) != 0) return false;
+        // Exclude support materials from non-support display
+        if (isSupportSpoolmanMat(s.material)) return false;
+      }
+    }
+    return true;
+  }
+
+  // Flow B: whatever the user picked in the vendor and material lists. Bambu
+  // is a vendor like any other here - the tag is an NTAG and says nothing
+  // about who made the filament.
+  if (vendor_name[0] &&
+      strncasecmp(s.vendor, vendor_name, strlen(vendor_name)) != 0) return false;
+  if (material_prefix[0] &&
+      strncasecmp(s.material, material_prefix, strlen(material_prefix)) != 0) return false;
+  // Stage 3: full material name match (exact, case-insensitive)
+  if (material_full && material_full[0] &&
+      strcasecmp(s.material, material_full) != 0) return false;
+  return true;
+}
+
 void showFilteredSpoolList(const char* vendor_name, const char* material_prefix, const char* material_full) {
+  crumbSet("spool list build");
   logSDf("SHOW: FilteredSpoolList vendor=%s mat=%s matf=%s", vendor_name, material_prefix, material_full ? material_full : "");
   if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
 
@@ -1385,26 +1441,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   // Count matching spools for title
   int display_count = 0;
   for (int i = 0; i < link_spool_count; i++) {
-    UnlinkedSpool &sc = link_spools[i];
-    if (linkSpoolSkip(sc)) continue;
-    bool bv = (strncasecmp(sc.vendor, "Bambu", 5) == 0);
-    if (link_flow_is_bambu) {
-      if (!bv) continue;
-      if (g_tag.material[0] && sc.material[0]) {
-        if (isSupportMaterial(g_tag.material)) {
-          if (!isSupportSpoolmanMat(sc.material)) continue;
-        } else {
-          if (material_prefix[0] && strncasecmp(sc.material, material_prefix, strlen(material_prefix)) != 0) continue;
-          if (isSupportSpoolmanMat(sc.material)) continue;
-        }
-      }
-    } else {
-      if (bv) continue;
-      if (vendor_name[0] && strncasecmp(sc.vendor, vendor_name, strlen(vendor_name)) != 0) continue;
-      if (material_prefix[0] && strncasecmp(sc.material, material_prefix, strlen(material_prefix)) != 0) continue;
-      // Stage 3: full material name match (exact, case-insensitive)
-      if (material_full && material_full[0] && strcasecmp(sc.material, material_full) != 0) continue;
-    }
+    if (!linkRowMatches(link_spools[i], vendor_name, material_prefix, material_full)) continue;
     display_count++;
   }
 
@@ -1514,32 +1551,21 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     if (count >= spool_list_limit) break;  // render limit — full data is still in link_spools[]
     UnlinkedSpool &s = link_spools[i];
 
-    // Filter: kein Tag, passender Vendor, passender Material-Prefix
-    if (linkSpoolSkip(s)) continue;  // bereits verknuepft
-    bool bambu_vendor = (strncasecmp(s.vendor, "Bambu", 5) == 0);
-    if (link_flow_is_bambu) {
-      // Bambu-Flow: vendor muss Bambu enthalten, Material muss passen
-      if (!bambu_vendor) continue;
-      if (g_tag.material[0] && s.material[0]) {
-        if (isSupportMaterial(g_tag.material)) {
-          // Support tags: match Spoolman materials ending in "-S"
-          if (!isSupportSpoolmanMat(s.material)) continue;
-        } else {
-          if (strncasecmp(s.material, g_tag.material, 3) != 0) continue;
-          // Exclude support materials from non-support display
-          if (isSupportSpoolmanMat(s.material)) continue;
-        }
-      }
-    } else {
-      // Flow B: vendor und material prefix filtern
-      if (vendor_name[0] && strncasecmp(s.vendor, vendor_name, strlen(vendor_name)) != 0) continue;
-      if (material_prefix[0] && strncasecmp(s.material, material_prefix, strlen(material_prefix)) != 0) continue;
-      // Stage 3: full material name match (exact, case-insensitive)
-      if (material_full && material_full[0] && strcasecmp(s.material, material_full) != 0) continue;
-    }
+    // The same question the count above asked, asked once.
+    if (!linkRowMatches(s, vendor_name, material_prefix, material_full)) continue;
 
     count++;
+    // A row is five objects. LVGL 8.3 answers an exhausted pool with NULL and
+    // asserts nothing, and every widget constructor writes through that pointer
+    // one line later - so running out here is a panic reboot, not the freeze the
+    // assert handler suggests. Asked before the row rather than after each of its
+    // objects, because the pool ran out between the second and the third.
+    if (!lvPoolHasRoomForRow()) {
+      logSDf("FilteredSpoolList: LVGL pool low, list cut at %d rows", count);
+      break;
+    }
     lv_obj_t *row = lv_btn_create(list);
+    if (!row) { logSDf("FilteredSpoolList: no room for a row, list cut at %d", count); break; }
     lv_obj_set_size(row, 452, 56);
     lv_obj_set_style_bg_color(row, lv_color_hex(0x0a1828), 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
@@ -1672,6 +1698,14 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
         int cidx = (intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
         lv_obj_t *pop = lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e)));
         lv_obj_del(pop);
+        // The same test the row callback does before it opens this popup. It is
+        // needed twice because the array can be freed between the two taps:
+        // anything that reaches hideAllOverlays() does that, a backend switch
+        // from the browser among them, and the popup outlives it.
+        if (!link_spools || cidx < 0 || cidx >= link_spool_count) {
+          logSDf("Link confirm: spool list gone, ignoring idx=%d", cidx);
+          return;
+        }
         if (copy_flow_via_list) {
           // Copy flow via vendor/material picker — flag pattern
           copy_flow_via_list = false;
@@ -1852,7 +1886,17 @@ void showMaterialList(const char* vendor_name) {
   }
 
   for (int m = 0; m < seen_count; m++) {
+    // A row is five objects. LVGL 8.3 answers an exhausted pool with NULL and
+    // asserts nothing, and every widget constructor writes through that pointer
+    // one line later - so running out here is a panic reboot, not the freeze the
+    // assert handler suggests. Asked before the row rather than after each of its
+    // objects, because the pool ran out between the second and the third.
+    if (!lvPoolHasRoomForRow()) {
+      logSDf("MaterialList: LVGL pool low, list cut at %d rows", m);
+      break;
+    }
     lv_obj_t *row = lv_btn_create(list);
+    if (!row) { logSDf("MaterialList: no room for a row, list cut at %d", m); break; }
     lv_obj_set_size(row, 452, 50);
     lv_obj_set_style_bg_color(row, lv_color_hex(0x0a1828), 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
@@ -2022,7 +2066,17 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
   logLvMem("matsublist/pre", 0);
 
   for (int m = 0; m < full_seen_count; m++) {
+    // A row is five objects. LVGL 8.3 answers an exhausted pool with NULL and
+    // asserts nothing, and every widget constructor writes through that pointer
+    // one line later - so running out here is a panic reboot, not the freeze the
+    // assert handler suggests. Asked before the row rather than after each of its
+    // objects, because the pool ran out between the second and the third.
+    if (!lvPoolHasRoomForRow()) {
+      logSDf("MaterialSubList: LVGL pool low, list cut at %d rows", m);
+      break;
+    }
     lv_obj_t *row = lv_btn_create(list);
+    if (!row) { logSDf("MaterialSubList: no room for a row, list cut at %d", m); break; }
     lv_obj_set_size(row, 452, 50);
     lv_obj_set_style_bg_color(row, lv_color_hex(0x0a1828), 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
@@ -2073,6 +2127,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
 //  LINK-FLOW: FLOW B PFAD 2 — HERSTELLER-AUSWAHL (Stufe 1)
 // ============================================================
 void showVendorList() {
+  crumbSet("vendor list build");
   logSD("SHOW: VendorList");
   if (scr_link_vendor) { lv_obj_del(scr_link_vendor); scr_link_vendor = nullptr; }
 
@@ -2179,7 +2234,17 @@ void showVendorList() {
   }
 
   for (int v = 0; v < seen_v; v++) {
+    // A row is five objects. LVGL 8.3 answers an exhausted pool with NULL and
+    // asserts nothing, and every widget constructor writes through that pointer
+    // one line later - so running out here is a panic reboot, not the freeze the
+    // assert handler suggests. Asked before the row rather than after each of its
+    // objects, because the pool ran out between the second and the third.
+    if (!lvPoolHasRoomForRow()) {
+      logSDf("VendorList: LVGL pool low, list cut at %d rows", v);
+      break;
+    }
     lv_obj_t *row = lv_btn_create(list);
+    if (!row) { logSDf("VendorList: no room for a row, list cut at %d", v); break; }
     lv_obj_set_size(row, 452, 50);
     lv_obj_set_style_bg_color(row, lv_color_hex(0x0a1828), 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
@@ -2677,6 +2742,7 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
 
 // Spool list for copy flow — identical layout to FilteredSpoolList
 void showCopySpoolList() {
+  crumbSet("copy list build");
   logSDf("SHOW: CopySpoolList archived=%d count=%d", (int)copy_flow_archived, link_spool_count);
   closeCopyListPopup();
 
@@ -2782,7 +2848,17 @@ void showCopySpoolList() {
   }
   for (int i = 0; i < copy_display_count; i++) {
     UnlinkedSpool &s = link_spools[i];
+    // A row is five objects. LVGL 8.3 answers an exhausted pool with NULL and
+    // asserts nothing, and every widget constructor writes through that pointer
+    // one line later - so running out here is a panic reboot, not the freeze the
+    // assert handler suggests. Asked before the row rather than after each of its
+    // objects, because the pool ran out between the second and the third.
+    if (!lvPoolHasRoomForRow()) {
+      logSDf("CopySpoolList: LVGL pool low, list cut at %d rows", i);
+      break;
+    }
     lv_obj_t *row = lv_btn_create(list);
+    if (!row) { logSDf("CopySpoolList: no room for a row, list cut at %d", i); break; }
     lv_obj_set_size(row, 452, 56);
     lv_obj_set_style_bg_color(row, lv_color_hex(0x0a1828), 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
@@ -3311,6 +3387,26 @@ void showCopyEntryPopup() {
 }
 
 void hideSpoolFlowOverlays() {
+  // The spool array is what every link overlay reads from, so freeing it while
+  // one of them is still on screen leaves a list that renders from nothing and
+  // a confirm button that dereferences a null pointer - a panic reboot, and
+  // for a while the only explanation for three of them in one test session.
+  //
+  // Hidden first, because a hidden object takes no input: from this line on
+  // the overlays cannot reach the freed array no matter what the user taps.
+  // Deleting them here is not allowed - hideAllOverlays() is reached from
+  // LVGL callbacks as well, so the delete is parked for the next loop pass.
+  lv_obj_t *const link_scr[] = {
+    scr_link_entry, scr_link_id, scr_link_warn_a, scr_link_warn_b,
+    scr_link_vendor, scr_link_mat, scr_link_mat_sub, scr_link_spools,
+    scr_link_list
+  };
+  for (unsigned i = 0; i < sizeof(link_scr) / sizeof(link_scr[0]); i++)
+    if (link_scr[i]) {
+      lv_obj_add_flag(link_scr[i], LV_OBJ_FLAG_HIDDEN);
+      link_overlays_close_pending = true;
+    }
+
   linkSpoolsFree();
 }
 
@@ -3322,6 +3418,14 @@ void deleteSpoolFlowOverlays() {
 }
 
 void handleSpoolFlowDeferredActions() {
+  // First, so nothing below builds on top of an overlay that is already dead.
+  // closeLinkOverlays() deletes exactly the nine screens hidden there and frees
+  // the array again, which is a no-op the second time around.
+  if (link_overlays_close_pending) {
+    link_overlays_close_pending = false;
+    logSD("Link flow: overlays closed after the spool list was freed");
+    closeLinkOverlays();
+  }
   if (tagwrite_ask_spool_id > 0) {
     const int id = tagwrite_ask_spool_id;
     tagwrite_ask_spool_id = 0;

@@ -19,16 +19,33 @@ lv_obj_t* buildOverlayScreen();
 void releaseScreen(lv_obj_t **scr);
 
 // One snapshot of the LVGL pool, tagged so a log can be read back per list.
-// LV_MEM_SIZE is a static pool in internal SRAM, PSRAM does not feed it, and
-// LV_USE_ASSERT_MALLOC turns an exhausted pool into while(1): no reboot, no
-// panic output, just a frozen screen and a warm board. The numbers that
-// matter are therefore the ones taken before the rows exist.
+// LV_MEM_SIZE is a static pool in internal SRAM and PSRAM does not feed it, so
+// the numbers that matter are the ones taken before the rows exist.
+//
+// What an exhausted pool does was long noted here as while(1) from
+// LV_USE_ASSERT_MALLOC - a freeze, no reboot. That is wrong for the case that
+// matters: lv_obj_class_create_obj() (lv_obj_class.c:47) returns NULL without
+// asserting anything, and lv_obj_create() / lv_label_create() hand that
+// straight to lv_obj_class_init_obj(), which writes to obj->layout_inv. So a
+// list that outgrows the pool is a null dereference, which on the ESP32 is
+// "PANIC (exception/abort)" and on the card is no explanation at all.
+// Reproduced in the simulator, see lvPoolHasRoomForRow() below.
 //
 // Call it in pairs around a list build, "<name>/pre" and "<name>/post", with
 // rows = 0 on the pre call. The cost of one row is then
 //   (free of pre - free of post) / rows
 // Silent unless sd_verbose is on, so it costs nothing in normal operation.
 void logLvMem(const char* tag, int rows);
+
+// Whether the pool can still take one more list row. Asked before a row is
+// built rather than after each object in it: a row is five objects, and
+// running out between the second and the third is the crash above.
+//
+// The reserve scales with the pointer width, so the same number covers the
+// device and the 64 bit host the simulator runs on, where every object is
+// about twice the size.
+#define LV_ROW_RESERVE_BYTES  (3072u * (sizeof(void*) / 4u))
+bool lvPoolHasRoomForRow();
 
 // Neutral grey for a colour swatch with no usable colour behind it.
 #define SWATCH_FALLBACK_COLOR 0x333333
