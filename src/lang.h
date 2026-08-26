@@ -974,6 +974,9 @@ enum StringID {
   // Same in both languages: it labels a 68px button and "Kalibrierung
   // zuruecksetzen" does not fit on one.
   STR_BTN_CAL_RESET_SHORT,
+  // Shown at the top of the link list when nothing matched the tag's material
+  // and the filter was dropped to keep the list from being empty.
+  STR_LIST_MAT_IGNORED,
 
   STR_COUNT
 };

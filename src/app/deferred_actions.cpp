@@ -18,6 +18,7 @@ bool show_ams_assign_pending = false;
 bool show_filaman_fields_pending = false;
 bool show_bambuddy_options_pending = false;
 bool show_bambuddy_dried_pending = false;
+bool show_tagwrite_pending = false;
 bool show_timezone_pending = false;
 bool show_language_pending = false;
 bool show_welcome_pending = false;

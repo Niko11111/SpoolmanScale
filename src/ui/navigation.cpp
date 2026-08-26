@@ -1,4 +1,5 @@
 #include "navigation.h"
+#include "scale_menu.h"
 #include "app/app_state.h"
 #include "ui_common.h"
 #include "web_screen.h"
@@ -54,6 +55,7 @@ void hideAllOverlays() {
   if (scr_filaman_fields)  lv_obj_add_flag(scr_filaman_fields, LV_OBJ_FLAG_HIDDEN);
   if (scr_bambuddy_options) lv_obj_add_flag(scr_bambuddy_options, LV_OBJ_FLAG_HIDDEN);
   if (scr_bambuddy_dried) lv_obj_add_flag(scr_bambuddy_dried, LV_OBJ_FLAG_HIDDEN);
+  if (scr_tagwrite)       lv_obj_add_flag(scr_tagwrite,       LV_OBJ_FLAG_HIDDEN);
   if (scr_timezone)    lv_obj_add_flag(scr_timezone,    LV_OBJ_FLAG_HIDDEN);
   if (scr_spoolman_options) lv_obj_add_flag(scr_spoolman_options, LV_OBJ_FLAG_HIDDEN);
   if (scr_tag_field)     lv_obj_add_flag(scr_tag_field, LV_OBJ_FLAG_HIDDEN);
@@ -84,7 +86,10 @@ void showMainScreen() {
 
   if (scr_settings)    { lv_obj_del(scr_settings);    scr_settings    = nullptr; }
   if (scr_connection)  { lv_obj_del(scr_connection);  scr_connection  = nullptr; }
-  if (scr_scale_sub)   { lv_obj_del(scr_scale_sub);   scr_scale_sub   = nullptr; }
+  // Through the helper, so the remembered list pointer goes with the screen
+  // rather than outliving it.
+  if (scr_scale_sub)   { scaleSubScrollForget();
+                         lv_obj_del(scr_scale_sub);   scr_scale_sub   = nullptr; }
   if (scr_drying_reminder) { lv_obj_del(scr_drying_reminder); scr_drying_reminder = nullptr; }
   if (s_dry_numpad_scr)    { lv_obj_del(s_dry_numpad_scr);    s_dry_numpad_scr    = nullptr; }
   s_dry_numpad_lbl = nullptr;
@@ -102,6 +107,7 @@ void showMainScreen() {
   if (scr_spoolman_options) { lv_obj_del(scr_spoolman_options); scr_spoolman_options = nullptr; }
   if (scr_bambuddy_options) { lv_obj_del(scr_bambuddy_options); scr_bambuddy_options = nullptr; }
   if (scr_bambuddy_dried)  { lv_obj_del(scr_bambuddy_dried);  scr_bambuddy_dried  = nullptr; }
+  if (scr_tagwrite)        { lv_obj_del(scr_tagwrite);        scr_tagwrite        = nullptr; }
   if (scr_lastused)    { lv_obj_del(scr_lastused);    scr_lastused    = nullptr; }
   if (scr_spoolman_fail){ lv_obj_del(scr_spoolman_fail); scr_spoolman_fail = nullptr; }
   if (scr_welcome)     { lv_obj_del(scr_welcome);     scr_welcome     = nullptr; }

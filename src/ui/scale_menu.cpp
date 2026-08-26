@@ -22,28 +22,47 @@
 
 
 
+// The list of this screen, kept so the scroll position can be put back after a
+// rebuild. A toggle row rebuilds the whole screen, and a freshly built flex
+// container starts at the top - which threw the user back to the first row
+// every time they changed something further down.
+static lv_obj_t *s_scale_list = nullptr;
+static lv_coord_t s_scale_scroll = 0;
+
+// Taken before the screen is deleted, put back after it is built. The layout
+// has to have run first, otherwise the content height is still zero and LVGL
+// clamps the offset away.
+void scaleSubScrollRemember() {
+  s_scale_scroll = (s_scale_list && scr_scale_sub) ? lv_obj_get_scroll_y(s_scale_list) : 0;
+  // Dropped straight away: the caller deletes the screen next, and a pointer
+  // to a freed list is worth nothing and dangerous to keep.
+  s_scale_list = nullptr;
+}
+
+void scaleSubScrollForget() {
+  s_scale_list   = nullptr;
+  s_scale_scroll = 0;
+}
+
+static void scaleSubScrollRestore() {
+  if (!s_scale_list || s_scale_scroll <= 0) return;
+  lv_obj_update_layout(s_scale_list);
+  lv_obj_scroll_to_y(s_scale_list, s_scale_scroll, LV_ANIM_OFF);
+}
+
 void buildScaleSubScreen() {
   logSD("BUILD: ScaleSubScreen");
   if (sd_verbose) logSD("[verbose] buildScaleSubScreen: start");
+  s_scale_list = nullptr;            // the old list goes with the old screen
   releaseScreen(&scr_scale_sub);
   scr_scale_sub = buildOverlayScreen();
   buildSubHeader(scr_scale_sub, T(STR_SCALE_TITLE),
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
 
-  lv_obj_t *list = lv_obj_create(scr_scale_sub);
-  lv_obj_set_size(list, 480, 263);
-  lv_obj_set_pos(list, 0, 57);
-  lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(list, 0, 0);
-  lv_obj_set_style_pad_left(list, 12, 0);
-  lv_obj_set_style_pad_right(list, 12, 0);
-  lv_obj_set_style_pad_top(list, 6, 0);
-  lv_obj_set_style_pad_bottom(list, 6, 0);
-  lv_obj_set_style_pad_row(list, 6, 0);
-  lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_scroll_dir(list, LV_DIR_VER);
-  lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
-  lv_obj_clear_flag(list, LV_OBJ_FLAG_SCROLL_ELASTIC);
+  // The shared list, not fourteen hand-copied lines of the same thing - this
+  // screen was the one the de-duplication in beta.106 missed.
+  lv_obj_t *list = buildOptionList(scr_scale_sub);
+  s_scale_list = list;
 
   { char bag_sub[32]; snprintf(bag_sub, sizeof(bag_sub), T(STR_BAG_CURRENT), bag_weight_g);
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_DRIVE, T(STR_BTN_BAGWEIGHT), bag_sub);
@@ -85,48 +104,20 @@ void buildScaleSubScreen() {
   // Writing the tag after a link, and in which format. Backend independent, so
   // it sits here rather than in one of the three backend option screens: what
   // goes on a tag is an agreement between the tag and whoever reads it, and
-  // none of the backends ever sees it.
+  // none of the backends ever sees it. One row, because two of them were two
+  // rebuilds of this list and it jumped back to the top on every tap.
   { char buf_t[40]; strncpy(buf_t, T(STR_TW_OPT_ASK), sizeof(buf_t)-1);
     buf_t[sizeof(buf_t)-1] = '\0';
-    char buf_s[8]; strncpy(buf_s, T(g_tagwrite_ask ? STR_ON : STR_OFF), sizeof(buf_s)-1);
+    // The subtitle carries the state, so the sub screen does not have to be
+    // opened to see it: off, or the format that would be written.
+    char buf_s[40];
+    if (g_tagwrite_ask) snprintf(buf_s, sizeof(buf_s), "%s", tagFormatLabel(g_tagwrite_fmt));
+    else                strncpy(buf_s, T(STR_OFF), sizeof(buf_s)-1);
     buf_s[sizeof(buf_s)-1] = '\0';
-    lv_obj_t *help = nullptr;
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, buf_t, buf_s, g_tagwrite_ask, &help);
-    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
-                                  INFO_POPUP_ARG(STR_TW_OPT_ASK, STR_TW_OPT_ASK_INFO));
-    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
-    if (arr_lbl) {
-      lv_label_set_text(arr_lbl, buf_s);
-      lv_obj_set_style_text_color(arr_lbl, g_tagwrite_ask ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
-      lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
-    }
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, buf_t, buf_s, g_tagwrite_ask);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
-      logSD("BTN: Scale-Sub -> Tag write ask toggle");
-      g_tagwrite_ask = !g_tagwrite_ask;
-      prefsPutBool("tagwrite_ask", g_tagwrite_ask);
-      scale_sub_rebuild_pending = true;
-    }, LV_EVENT_CLICKED, NULL); }
-
-  // Cycled rather than opened as a screen of its own, like the IP bar mode in
-  // wifi_info.cpp: three values, and the subtitle already says which one is
-  // set. The info button carries what each format means.
-  { char buf_t[32]; strncpy(buf_t, T(STR_TW_OPT_FMT), sizeof(buf_t)-1);
-    buf_t[sizeof(buf_t)-1] = '\0';
-    char buf_s[24]; strncpy(buf_s, tagFormatLabel(g_tagwrite_fmt), sizeof(buf_s)-1);
-    buf_s[sizeof(buf_s)-1] = '\0';
-    lv_obj_t *help = nullptr;
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_SD_CARD, buf_t, buf_s, false, &help);
-    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
-                                  INFO_POPUP_ARG(STR_TW_OPT_FMT, STR_TW_OPT_FMT_INFO));
-    lv_obj_add_event_cb(btn, [](lv_event_t *e){
-      // OpenSpool -> FilaMan -> ACE -> OpenSpool. TAG_FMT_ERASE is not in the
-      // ring: erasing answers an unlink, never a link.
-      g_tagwrite_fmt = (g_tagwrite_fmt == TAG_FMT_OPENSPOOL) ? TAG_FMT_FILAMAN
-                     : (g_tagwrite_fmt == TAG_FMT_FILAMAN)   ? TAG_FMT_ACE
-                                                             : TAG_FMT_OPENSPOOL;
-      prefsPutUChar("tagwrite_fmt", g_tagwrite_fmt);
-      logSDf("BTN: Scale-Sub -> Tag write format %s", tagFormatLabel(g_tagwrite_fmt));
-      scale_sub_rebuild_pending = true;
+      logSD("BTN: Scale-Sub -> Tag write");
+      show_tagwrite_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
   { char buf_t[32]; strncpy(buf_t, T(STR_BTN_LASTUSED_MODE), sizeof(buf_t)-1);
@@ -149,21 +140,121 @@ void buildScaleSubScreen() {
       show_factor_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
-  // The way back from a calibration that was taken while the ADC was not on
-  // the bus: every reading was -1 then, so the stored factor is arithmetic on
-  // nonsense and no amount of re-tareing fixes it. Until now the only cure was
-  // erasing NVS.
-  { char rst_t[40]; strncpy(rst_t, T(STR_BTN_CAL_RESET), sizeof(rst_t)-1);
-    rst_t[sizeof(rst_t)-1] = '\0';
-    char rst_s[40]; strncpy(rst_s, T(STR_BTN_CAL_RESET_SUB), sizeof(rst_s)-1);
-    rst_s[sizeof(rst_s)-1] = '\0';
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_REFRESH, rst_t, rst_s);
-    lv_obj_add_event_cb(btn, [](lv_event_t *e){
-      logSD("BTN: Scale-Sub -> Reset calibration");
-      char ask[64]; strncpy(ask, T(STR_CAL_RESET_CONFIRM), sizeof(ask)-1);
-      ask[sizeof(ask)-1] = '\0';
-      showConfirmPopup(ask, 6);
-    }, LV_EVENT_CLICKED, NULL); }
+  // No reset row here any more: the same action sits as a red button on the
+  // calibration screen itself, which is where somebody is standing when they
+  // find out they need it.
+
+  scaleSubScrollRestore();
 
   if (sd_verbose) logSD("[verbose] buildScaleSubScreen: done");
+}
+
+// ============================================================
+//  WRITING A TAG AFTER A LINK
+//
+//  One switch and a three way choice on one screen, because
+//  they only make sense together: the format answers a question
+//  that the switch has to have asked first.
+//
+//  Backend independent, unlike the option screens next door -
+//  what a tag holds is an agreement between the tag and
+//  whoever reads it later, and no backend ever sees it.
+// ============================================================
+
+// Indexed the way the rows are ordered, not by TagFormat value: OpenSpool
+// first because it is what the filament managers read, ACE last because it
+// only ever talks to the printer.
+static const uint8_t TW_FMT_ORDER[3] = {
+  TAG_FMT_OPENSPOOL, TAG_FMT_FILAMAN, TAG_FMT_ACE
+};
+static const StringID TW_FMT_NAME[3] = {
+  STR_TW_FMT_OPENSPOOL, STR_TW_FMT_FILAMAN, STR_TW_FMT_ACE
+};
+
+static void addTagFormatRow(lv_obj_t *list, uint8_t idx) {
+  const uint8_t value  = TW_FMT_ORDER[idx];
+  const bool    active = (g_tagwrite_fmt == value);
+
+  char buf_t[40];
+  strncpy(buf_t, T(TW_FMT_NAME[idx]), sizeof(buf_t) - 1);
+  buf_t[sizeof(buf_t) - 1] = '\0';
+
+  lv_obj_t *btn = makeListBtn(list, "", buf_t, "", active);
+
+  // Last child is the arrow, which here marks the chosen entry.
+  lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
+  if (arr_lbl) {
+    lv_label_set_text(arr_lbl, active ? LV_SYMBOL_OK : "");
+    lv_obj_set_style_text_color(arr_lbl, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_16, 0);
+  }
+
+  lv_obj_set_user_data(btn, (void *)(intptr_t)value);
+  lv_obj_add_event_cb(btn, [](lv_event_t *e) {
+    const uint8_t v = (uint8_t)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
+    if (v == g_tagwrite_fmt) return;
+    g_tagwrite_fmt = v;
+    prefsPutUChar("tagwrite_fmt", g_tagwrite_fmt);
+    logSDf("BTN: Tag write -> format %s", tagFormatLabel(g_tagwrite_fmt));
+    // Through the flag, never deleting the screen this button sits on.
+    show_tagwrite_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+}
+
+void buildTagWriteScreen() {
+  logSD("BUILD: TagWriteScreen");
+  releaseScreen(&scr_tagwrite);
+  scr_tagwrite = buildOverlayScreen();
+  buildSubHeader(scr_tagwrite, T(STR_TW_OPT_ASK),
+    [](lv_event_t *e){
+      logSD("BTN: Back -> Scale");
+      // Rebuilt rather than just unhidden: the row that leads here carries the
+      // format in its subtitle, and a kept screen would still show the old
+      // one. The scroll position is remembered across that rebuild, so the row
+      // stays where the finger left it.
+      hideAllOverlays();
+      scale_sub_rebuild_pending = true;
+    });
+
+  lv_obj_t *list = buildOptionList(scr_tagwrite);
+
+  // The switch first: without it the format below decides nothing.
+  { char buf_t[40]; strncpy(buf_t, T(STR_TW_OPT_ASK), sizeof(buf_t)-1);
+    buf_t[sizeof(buf_t)-1] = '\0';
+    char buf_s[48]; strncpy(buf_s, T(STR_TW_OPT_ASK_SUB), sizeof(buf_s)-1);
+    buf_s[sizeof(buf_s)-1] = '\0';
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, buf_t, buf_s, g_tagwrite_ask, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_TW_OPT_ASK, STR_TW_OPT_ASK_INFO));
+    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
+    if (arr_lbl) {
+      char on_off[8]; strncpy(on_off, T(g_tagwrite_ask ? STR_ON : STR_OFF), sizeof(on_off)-1);
+      on_off[sizeof(on_off)-1] = '\0';
+      lv_label_set_text(arr_lbl, on_off);
+      lv_obj_set_style_text_color(arr_lbl, g_tagwrite_ask ? lv_color_hex(0x28d49a)
+                                                          : lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
+    }
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      g_tagwrite_ask = !g_tagwrite_ask;
+      prefsPutBool("tagwrite_ask", g_tagwrite_ask);
+      logSDf("BTN: Tag write -> ask %s", g_tagwrite_ask ? "on" : "off");
+      show_tagwrite_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
+  // The format, with its own help. Shown even while the switch is off: it is
+  // also what the tag page in the browser writes when nothing else is chosen,
+  // and hiding it would make that setting unreachable from the device.
+  { char buf_t[32]; strncpy(buf_t, T(STR_TW_OPT_FMT), sizeof(buf_t)-1);
+    buf_t[sizeof(buf_t)-1] = '\0';
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_SD_CARD, buf_t, "", false, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_TW_OPT_FMT, STR_TW_OPT_FMT_INFO));
+    lv_obj_clear_flag(btn, LV_OBJ_FLAG_CLICKABLE);   // a heading, not a choice
+    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
+    if (arr_lbl) lv_label_set_text(arr_lbl, ""); }
+
+  for (uint8_t i = 0; i < 3; i++) addTagFormatRow(list, i);
 }

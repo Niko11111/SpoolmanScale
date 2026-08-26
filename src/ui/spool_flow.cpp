@@ -237,6 +237,11 @@ static bool link_id_lookup_is_bambu = false;
 // Link overlays that hideSpoolFlowOverlays() has hidden and emptied, waiting to
 // be deleted on the loop task. They must not be deleted where they are hidden:
 // that call arrives from LVGL callbacks too.
+// The last fetch found nothing for the tag's material and dropped that part of
+// the filter. The list says so at the top - a long list of the right vendor is
+// workable, a list of nothing is a dead end, but the user still has to know
+// which of the two they are looking at.
+bool link_material_ignored = false;
 static bool link_overlays_close_pending = false;
 static bool show_id_input_pending = false;   // deferred re-open of IdInputPopup from Back button
 static bool show_id_input_rebuild = false;   // deferred re-open from WarnPopupA retry (rebuild after del)
@@ -333,10 +338,95 @@ static const char* linkTargetBase(int spool_id) {
   return nullptr;
 }
 
+// Why a spool did not make it into the link list, or LINK_KEEP when it did.
+// The reasons are separate because the caller counts them and because the
+// fallback below re-runs the same test while ignoring exactly one of them.
+enum LinkFilterVerdict : uint8_t {
+  LINK_KEEP = 0,
+  LINK_SKIP_ARCHIVED,
+  LINK_SKIP_TAG,       // already bound and no second UID can be appended
+  LINK_SKIP_VENDOR,    // Bambu flow, and this is not a Bambu spool
+  LINK_SKIP_MATERIAL,  // material, subtype or colour did not match the tag
+};
+
+// The pre-filter, in one place. It used to live twice - once in the counting
+// pass and once in the filling pass, character for character - which is a
+// standing invitation for the two to drift apart.
+//
+// `ignore_material` drops the material, subtype and colour tests but keeps
+// everything else. That is the fallback for a library whose material names no
+// longer look like what the tag says: with FilamentDB imports renaming
+// "PLA Tough+" to "Tough Plus", the three-character test at the heart of this
+// rejects every spool, and an empty list is worse than a long one.
+static LinkFilterVerdict linkFilterVerdict(JsonObjectConst spool, bool is_bambu,
+                                           const char* material_filter,
+                                           bool archived_only, bool ignore_material) {
+  const bool sp_archived = spool["archived"] | false;
+  if (archived_only) { if (!sp_archived) return LINK_SKIP_ARCHIVED; }
+  else               { if (sp_archived)  return LINK_SKIP_ARCHIVED; }
+
+  // Skip already-linked spools - only in the normal link flow. In the
+  // copy-archived flow archived spools are templates and typically still
+  // tagged, so they must stay. While a second UID can be appended, an already
+  // bound spool stays in the list whichever field binds it: that is the only
+  // way to add the tag on the other flange from the scale, and WarnPopupA
+  // catches the selection before anything is written.
+  if (!archived_only && !link_cu_ok && spoolHasAnyTag(spool)) return LINK_SKIP_TAG;
+
+  if (!is_bambu) return LINK_KEEP;
+
+  String vname = "";
+  if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
+    vname = spool["filament"]["vendor"]["name"] | String("");
+  vname.trim();
+  if (strncasecmp(vname.c_str(), "Bambu", 5) != 0) return LINK_SKIP_VENDOR;
+
+  if (ignore_material || !material_filter || !material_filter[0]) return LINK_KEEP;
+
+  String mat = spool["filament"]["material"] | String("");
+  mat.trim();
+
+  // Support materials: match Spoolman materials ending in "-S" (PLA-S, ABS-S)
+  if (isSupportMaterial(material_filter)) {
+    if (!isSupportSpoolmanMat(mat.c_str())) return LINK_SKIP_MATERIAL;
+    return LINK_KEEP;   // no colour filter for support filaments
+  }
+
+  // Standard 3-char material prefix match ("PLA", "PET", "ABS")
+  if (strncasecmp(mat.c_str(), material_filter, 3) != 0) return LINK_SKIP_MATERIAL;
+  // Exclude support materials from a non-support filter (ABS-GF must not show ABS-S)
+  if (isSupportSpoolmanMat(mat.c_str())) return LINK_SKIP_MATERIAL;
+
+  // Subtype filter: only for known technical subtypes, see bambu_blacklist.h
+  char subkw[16];
+  if (extractBambuSubtype(material_filter, subkw, sizeof(subkw))) {
+    String fname = spool["filament"]["name"] | String("");
+    if (!containsIgnoreCase(mat.c_str(), subkw) && !containsIgnoreCase(fname.c_str(), subkw)) {
+      if (sd_verbose)
+        logSDf("[verbose] link fetch: subtype skip mat='%s' name='%.20s' kw='%s'",
+               mat.c_str(), fname.c_str(), subkw);
+      return LINK_SKIP_MATERIAL;
+    }
+  }
+
+  // Colour filter: a tag that names a colour skips spools far away from it
+  if (g_tag.color_hex[0] == '#') {
+    String col = spool["filament"]["color_hex"] | String("");
+    char col_buf[8]; snprintf(col_buf, sizeof(col_buf), "#%s", col.c_str());
+    if (colorDistance(g_tag.color_hex, col_buf) > 120) return LINK_SKIP_MATERIAL;
+  }
+  return LINK_KEEP;
+}
+
 void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool archived_only) {
   crumbSet("link fetch");
   // Free any previous allocation
   linkSpoolsFree();
+  // Cleared with the list, not further down where the fallback decides: every
+  // return between here and there would otherwise leave the last fetch's
+  // verdict standing, and the next list would drop its material filter for no
+  // reason and say so.
+  link_material_ignored = false;
   if (!wifi_ok) return;
 
   // Settled here, once, for every decision the flow makes afterwards. Offering
@@ -395,71 +485,46 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   int count_bambu = 0, count_linked = 0;
 
   // ── Pass 1: count matching spools (pre-filter) ──────────────
+  //
+  // Run twice when the first pass finds nothing: a library whose material
+  // names no longer resemble what the tag says would otherwise produce an
+  // empty list and a dead end. The second run keeps the vendor and the
+  // already-bound tests and drops only material, subtype and colour. It costs
+  // nothing - the same document, already parsed, walked once more.
   int matched = 0;
   int skipped_archived = 0;
-  for (JsonObject spool : spools) {
-    total_in_api++;
-
-    // Archived filter: copy-archived flow shows ONLY archived; otherwise skip them
-    bool sp_archived = spool["archived"] | false;
-    if (archived_only) {
-      if (!sp_archived) { skipped_archived++; continue; }
-    } else {
-      if (sp_archived) { skipped_archived++; continue; }
+  bool material_ignored = false;
+  for (int attempt = 0; attempt < 2; attempt++) {
+    if (attempt == 1) {
+      // Nothing matched, and the material test is the only thing that could
+      // have been too strict. Without a material filter there is nothing to
+      // relax, so there is no second attempt.
+      if (matched > 0 || !is_bambu || !material_filter || !material_filter[0]) break;
+      material_ignored = true;
+      link_material_ignored = true;
+      total_in_api = 0; skipped_archived = 0; skipped_tag = 0;
+      skipped_vendor = 0; skipped_material = 0; count_linked = 0; count_bambu = 0;
+      logSDf("link fetch: nothing matched '%s', retrying without the material filter",
+             material_filter);
     }
+    for (JsonObject spool : spools) {
+      total_in_api++;
+      String vname_c = "";
+      if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
+        vname_c = spool["filament"]["vendor"]["name"] | String("");
+      vname_c.trim();
+      if (strncasecmp(vname_c.c_str(), "Bambu", 5) == 0) count_bambu++;
 
-    // Skip already-linked spools - only in normal link flow.
-    // In copy-archived flow, archived spools are templates (typically still tagged) -> don't skip.
-    // While a second UID can be appended, an already bound spool stays in the
-    // list whichever field binds it: that is the only way to add the tag on the
-    // other flange from the scale, and WarnPopupA catches the selection before
-    // anything is written. This used to ask for card_uids specifically, which
-    // left out every spool bound through any other field.
-    if (!archived_only && !link_cu_ok && spoolHasAnyTag(spool)) {
-      skipped_tag++; count_linked++; continue;
-    }
-
-    String vname = "";
-    if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
-      vname = spool["filament"]["vendor"]["name"] | String("");
-    vname.trim();
-    bool bambu_vendor = (strncasecmp(vname.c_str(), "Bambu", 5) == 0);
-    if (bambu_vendor) count_bambu++;
-
-    if (is_bambu) {
-      if (!bambu_vendor) { skipped_vendor++; continue; }
-      if (material_filter && material_filter[0]) {
-        String mat = spool["filament"]["material"] | String("");
-        mat.trim();
-        // Support materials: match Spoolman materials ending in "-S" (e.g. PLA-S, ABS-S)
-        if (isSupportMaterial(material_filter)) {
-          if (!isSupportSpoolmanMat(mat.c_str())) { skipped_material++; continue; }
-          // No color filter for support filaments (always natural/white)
-        } else {
-          // Standard 3-char material prefix match (e.g. "PLA", "PET", "ABS")
-          if (strncasecmp(mat.c_str(), material_filter, 3) != 0) { skipped_material++; continue; }
-          // Exclude support materials from non-support filter (e.g. ABS-GF must not show ABS-S)
-          if (isSupportSpoolmanMat(mat.c_str())) { skipped_material++; continue; }
-          // Subtype filter: only for known technical subtypes (see bambu_blacklist.h)
-          char subkw[16];
-          if (extractBambuSubtype(material_filter, subkw, sizeof(subkw))) {
-            String fname = spool["filament"]["name"] | String("");
-            if (!containsIgnoreCase(mat.c_str(), subkw) && !containsIgnoreCase(fname.c_str(), subkw)) {
-              logSDf("link fetch: subtype skip mat='%s' name='%.20s' kw='%s'", mat.c_str(), fname.c_str(), subkw);
-              skipped_material++; continue;
-            }
-          }
-          // Color filter: if tag has a color, skip spools with very different color
-          if (g_tag.color_hex[0] == '#') {
-            String col = spool["filament"]["color_hex"] | String("");
-            char col_buf[8]; snprintf(col_buf, sizeof(col_buf), "#%s", col.c_str());
-            int dist = colorDistance(g_tag.color_hex, col_buf);
-            if (dist > 120) { skipped_material++; continue; }
-          }
-        }
+      switch (linkFilterVerdict(spool, is_bambu, material_filter, archived_only,
+                                material_ignored)) {
+        case LINK_SKIP_ARCHIVED: skipped_archived++; continue;
+        case LINK_SKIP_TAG:      skipped_tag++; count_linked++; continue;
+        case LINK_SKIP_VENDOR:   skipped_vendor++; continue;
+        case LINK_SKIP_MATERIAL: skipped_material++; continue;
+        default: break;
       }
+      matched++;
     }
-    matched++;
   }
 
   { char buf[48];
@@ -492,50 +557,13 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   if (!link_spools) { logSD("link fetch: alloc failed completely"); loadingOverlayHide(); return; }
   link_spools_capacity = alloc_count;
 
-  // ── Pass 2: fill array (same filter) ────────────────────────
+  // ── Pass 2: fill array (same filter, same verdict) ─────────
+  // material_ignored carries the first pass's decision, so the rows are
+  // exactly the spools that were counted.
   for (JsonObject spool : spools) {
     if (link_spool_count >= alloc_count) break;
-
-    // Archived filter: same logic as pass 1
-    bool sp_archived = spool["archived"] | false;
-    if (archived_only) {
-      if (!sp_archived) continue;
-    } else {
-      if (sp_archived) continue;
-    }
-
-    if (!archived_only && !link_cu_ok && spoolHasAnyTag(spool)) continue;
-
-    String vname = "";
-    if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
-      vname = spool["filament"]["vendor"]["name"] | String("");
-    vname.trim();
-    bool bambu_vendor = (strncasecmp(vname.c_str(), "Bambu", 5) == 0);
-
-    if (is_bambu) {
-      if (!bambu_vendor) continue;
-      if (material_filter && material_filter[0]) {
-        String mat = spool["filament"]["material"] | String("");
-        mat.trim();
-        if (isSupportMaterial(material_filter)) {
-          if (!isSupportSpoolmanMat(mat.c_str())) continue;
-          // No color filter for support filaments
-        } else {
-          if (strncasecmp(mat.c_str(), material_filter, 3) != 0) continue;
-          if (isSupportSpoolmanMat(mat.c_str())) continue;
-          char subkw[16];
-          if (extractBambuSubtype(material_filter, subkw, sizeof(subkw))) {
-            String fname2 = spool["filament"]["name"] | String("");
-            if (!containsIgnoreCase(mat.c_str(), subkw) && !containsIgnoreCase(fname2.c_str(), subkw)) continue;
-          }
-          if (g_tag.color_hex[0] == '#') {
-            String col = spool["filament"]["color_hex"] | String("");
-            char col_buf[8]; snprintf(col_buf, sizeof(col_buf), "#%s", col.c_str());
-            if (colorDistance(g_tag.color_hex, col_buf) > 120) continue;
-          }
-        }
-      }
-    }
+    if (linkFilterVerdict(spool, is_bambu, material_filter, archived_only,
+                          material_ignored) != LINK_KEEP) continue;
 
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = spool["id"] | 0;
@@ -569,6 +597,13 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     strncpy(s.name, fname.c_str(), sizeof(s.name)-1);
     s.name[sizeof(s.name)-1] = '\0';
 
+    // Read here rather than carried over from the filter: the vendor object is
+    // optional and a spool without one keeps an empty string, which the vendor
+    // list turns into its "unknown" row.
+    String vname = "";
+    if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
+      vname = spool["filament"]["vendor"]["name"] | String("");
+    vname.trim();
     strncpy(s.vendor, vname.c_str(), sizeof(s.vendor)-1);
     s.vendor[sizeof(s.vendor)-1] = '\0';
 
@@ -1425,6 +1460,10 @@ static bool linkRowMatches(const UnlinkedSpool &s, const char* vendor_name,
   if (link_flow_is_bambu) {
     // The tag names its own vendor, so only Bambu spools can answer to it.
     if (strncasecmp(s.vendor, "Bambu", 5) != 0) return false;
+    // The fetch already gave up on matching the material - applying the same
+    // test again here would hide every row it just let through, and the list
+    // would be empty despite the header counting them.
+    if (link_material_ignored) return true;
     if (g_tag.material[0] && s.material[0]) {
       if (isSupportMaterial(g_tag.material)) {
         // Support tags: match Spoolman materials ending in "-S"
@@ -1566,6 +1605,10 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   lv_obj_set_scroll_dir(list, LV_DIR_VER);
   logLvMem("spoollist/pre", 0);
 
+  // Before the rows, not after them: it explains what the whole list is, and
+  // at the bottom of a long list nobody would find it.
+  if (link_material_ignored) addListMoreInfo(list, STR_LIST_MAT_IGNORED);
+
   int count = 0;
   for (int i = 0; i < link_spool_count; i++) {
     if (count >= spool_list_limit) break;  // render limit — full data is still in link_spools[]
@@ -1574,7 +1617,6 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     // The same question the count above asked, asked once.
     if (!linkRowMatches(s, vendor_name, material_prefix, material_full)) continue;
 
-    count++;
     // A row is five objects. LVGL 8.3 answers an exhausted pool with NULL and
     // asserts nothing, and every widget constructor writes through that pointer
     // one line later - so running out here is a panic reboot, not the freeze the
@@ -1586,6 +1628,9 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     }
     lv_obj_t *row = lv_btn_create(list);
     if (!row) { logSDf("FilteredSpoolList: no room for a row, list cut at %d", count); break; }
+    // Counted once the row exists, so a cut at the very first candidate leaves
+    // count == 0 and the "no spools" message below still appears.
+    count++;
     lv_obj_set_size(row, 452, 56);
     lv_obj_set_style_bg_color(row, lv_color_hex(0x0a1828), 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(0x1a3060), LV_STATE_PRESSED);

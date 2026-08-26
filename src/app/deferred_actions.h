@@ -28,6 +28,9 @@ extern bool show_ams_assign_pending;
 extern bool show_filaman_fields_pending;
 extern bool show_bambuddy_options_pending;
 extern bool show_bambuddy_dried_pending;
+// The tag write screen: opened from the scale menu, and re-rendered by its own
+// rows after a pick - same shape as show_bambuddy_dried_pending above.
+extern bool show_tagwrite_pending;
 extern bool show_timezone_pending;
 extern bool show_language_pending;
 extern bool show_welcome_pending;

@@ -167,8 +167,8 @@ void buildFactorScreen() {
   // ── Reset calibration (right of numpad, mirror of the toggle) ──
   // The way back from a calibration taken while the ADC was off the bus: every
   // reading was -1 then, the stored factor is arithmetic on nonsense, and no
-  // amount of re-tareing fixes it. It exists in Settings > Scale, but this is
-  // the screen someone is on when they find out, so it is also here.
+  // amount of re-tareing fixes it. This is the only place it can be asked for,
+  // and the screen someone is on when they find out they need it.
   //
   // The column right of the numpad (x 400..480) is otherwise empty, so the
   // button sits where the whole-gram toggle sits on the other side.
@@ -197,8 +197,8 @@ void buildFactorScreen() {
     lv_obj_center(lbl_rst);
 
     lv_obj_add_event_cb(btn_rst, [](lv_event_t *e) {
-      // Through the same confirmation and the same deferred action as the row
-      // in Settings > Scale, so there is one place that performs the reset.
+      // The write itself is deferred like every other NVS write reached from a
+      // callback, and it rebuilds nothing - see cal_reset_pending in app_loop.
       logSD("BTN: Calibration -> Reset calibration");
       char ask[64]; strncpy(ask, T(STR_CAL_RESET_CONFIRM), sizeof(ask) - 1);
       ask[sizeof(ask) - 1] = '\0';

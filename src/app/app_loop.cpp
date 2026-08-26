@@ -443,17 +443,11 @@ void appLoop() {
     resetScaleFilter();
     scale_weight_g = 0.0f;
     logSD("Calibration reset to defaults");
-    // The reset can be asked for from two places now, and each stays where it
-    // is. Rebuilding the scale menu while the calibration screen is open would
-    // make that menu appear out of nowhere on top of it.
-    if (scr_factor && !lv_obj_has_flag(scr_factor, LV_OBJ_FLAG_HIDDEN)) {
-      if (lbl_factor_result) lv_label_set_text(lbl_factor_result, T(STR_CAL_RESET_DONE));
-      if (lbl_factor_cal_weight) lv_label_set_text(lbl_factor_cal_weight, "-- g");
-    } else if (scr_scale_sub) {
-      lv_obj_del(scr_scale_sub); scr_scale_sub = nullptr;
-      buildScaleSubScreen();
-      lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
-    }
+    // Asked for on the calibration screen and answered there: the factor line
+    // says so and the screen stays put. The scale menu picks the new factor up
+    // from its subtitle when the user goes back, which rebuilds it anyway.
+    if (lbl_factor_result) lv_label_set_text(lbl_factor_result, T(STR_CAL_RESET_DONE));
+    if (lbl_factor_cal_weight) lv_label_set_text(lbl_factor_cal_weight, "-- g");
   }
   // A scale menu row changed a setting and wants the screen to say so. The
   // rebuild deletes the row that asked for it, so it cannot happen in that
@@ -461,6 +455,8 @@ void appLoop() {
   if (scale_sub_rebuild_pending) {
     scale_sub_rebuild_pending = false;
     if (scr_scale_sub) {
+      // So the row that was just tapped is still under the finger afterwards.
+      scaleSubScrollRemember();
       lv_obj_del(scr_scale_sub); scr_scale_sub = nullptr;
       buildScaleSubScreen();
       lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
@@ -544,6 +540,12 @@ void appLoop() {
     buildBamBuddyDriedScreen();    // releases the previous instance itself
     hideAllOverlays();
     lv_obj_clear_flag(scr_bambuddy_dried, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_tagwrite_pending) {
+    show_tagwrite_pending = false;
+    buildTagWriteScreen();         // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_tagwrite, LV_OBJ_FLAG_HIDDEN);
   }
   if (show_timezone_pending) {
     show_timezone_pending = false;

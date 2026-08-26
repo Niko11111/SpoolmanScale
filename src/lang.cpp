@@ -1532,6 +1532,8 @@ const char* const STRINGS[][2] = {
     "page has its own format selector." },  // STR_W_TAGOPT_NOTE
   { "Speichern",                 "Download"           },  // STR_W_LOG_DOWNLOAD
   { "Reset Cal.",                "Reset Cal."         },  // STR_BTN_CAL_RESET_SHORT
+  { "Kein Material passte - Filter aufgehoben",
+    "No material matched - filter dropped" },  // STR_LIST_MAT_IGNORED
 };
 
 // Without this, a missing entry is not a compile error: every string from the
