@@ -9,7 +9,10 @@ extern bool gh_prerelease;
 // Newest tag seen by either the manual check on the GitHub OTA screen or the
 // background check. Lives here rather than inside ota_github.cpp because both
 // producers need to write it and the screen needs to read it.
-extern char gh_latest_version[32];
+// 40 to match the tag buffers in services/github_release.cpp and the
+// 39-character limit its tagLooksSafe() enforces. At 32 a longer tag was
+// truncated on the way in and the download URL built from it went to 404.
+extern char gh_latest_version[40];
 
 // True while doGithubOtaFlash() is writing the new image. The background check
 // must not open a second TLS connection while an image is being flashed.

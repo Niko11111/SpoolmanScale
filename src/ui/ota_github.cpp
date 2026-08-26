@@ -25,13 +25,81 @@ static lv_obj_t *lbl_gh_latest      = nullptr;
 static lv_obj_t *btn_gh_update      = nullptr;
 static lv_obj_t *lbl_gh_update_btn  = nullptr;
 
-// The download overlay's bar and byte counter. File scope so the progress
-// callback below can reach them: it is a plain function pointer, not a
-// closure.
-static lv_obj_t *gh_bar  = nullptr;
-static lv_obj_t *gh_hint = nullptr;
+// The download overlay. File scope so the progress callback can reach it - it
+// is a plain function pointer, not a closure - and so both callers raise the
+// same one instead of growing a second.
+static lv_obj_t *gh_overlay = nullptr;
+static lv_obj_t *gh_bar     = nullptr;
+static lv_obj_t *gh_hint    = nullptr;
 
-static void ghScreenProgress(uint32_t done, uint32_t total) {
+void otaGithubOverlayShow() {
+  if (gh_overlay) return;
+
+  gh_overlay = lv_obj_create(lv_layer_top());
+  lv_obj_set_size(gh_overlay, 480, 320);
+  lv_obj_set_pos(gh_overlay, 0, 0);
+  lv_obj_set_style_bg_color(gh_overlay, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_opa(gh_overlay, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(gh_overlay, 0, 0);
+  lv_obj_set_style_pad_all(gh_overlay, 0, 0);
+  lv_obj_clear_flag(gh_overlay, LV_OBJ_FLAG_SCROLLABLE);
+  // Clickable on purpose, though nothing on it reacts. A non-clickable object
+  // drops out of LVGL's hit test and the touch lands on the screen underneath,
+  // which is still live and still running its callbacks. The back button of
+  // the OTA screen would delete that screen mid-download, and lbl_gh_status is
+  // written again once the download returns.
+  lv_obj_add_flag(gh_overlay, LV_OBJ_FLAG_CLICKABLE);
+
+  lv_obj_t *ico = lv_label_create(gh_overlay);
+  lv_label_set_text(ico, LV_SYMBOL_DOWNLOAD);
+  lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
+  lv_obj_align(ico, LV_ALIGN_CENTER, 0, -52);
+
+  lv_obj_t *lbl_ov = lv_label_create(gh_overlay);
+  char buf_ov[64]; strncpy(buf_ov, T(STR_GH_OTA_FLASHING), sizeof(buf_ov)-1); buf_ov[sizeof(buf_ov)-1]=0;
+  lv_label_set_text(lbl_ov, buf_ov);
+  lv_obj_set_style_text_color(lbl_ov, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_font(lbl_ov, &lv_font_montserrat_ext_18, 0);
+  lv_obj_set_style_text_align(lbl_ov, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(lbl_ov, LV_ALIGN_CENTER, 0, -14);
+
+  // The overlay used to say "~30-60 sec" and then nothing for a minute, which
+  // answers neither of the two questions a wait like this raises: how far along
+  // it is, and whether anything is still moving. The loop below already knew
+  // both - it counted the remaining bytes down and told nobody.
+  gh_bar = lv_bar_create(gh_overlay);
+  lv_obj_set_size(gh_bar, 300, 8);
+  lv_obj_align(gh_bar, LV_ALIGN_CENTER, 0, 18);
+  lv_obj_set_style_bg_color(gh_bar, lv_color_hex(0x1a3060), 0);
+  lv_obj_set_style_bg_color(gh_bar, lv_color_hex(0x28d49a), LV_PART_INDICATOR);
+  lv_obj_set_style_radius(gh_bar, 4, 0);
+  lv_obj_set_style_radius(gh_bar, 4, LV_PART_INDICATOR);
+  lv_bar_set_range(gh_bar, 0, 100);
+  lv_bar_set_value(gh_bar, 0, LV_ANIM_OFF);
+
+  gh_hint = lv_label_create(gh_overlay);
+  lv_label_set_text(gh_hint, "");
+  lv_obj_set_style_text_color(gh_hint, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(gh_hint, &lv_font_montserrat_ext_14, 0);
+  lv_obj_set_style_text_align(gh_hint, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(gh_hint, LV_ALIGN_CENTER, 0, 42);
+
+  lv_obj_t *lbl_keep = lv_label_create(gh_overlay);
+  char buf_keep[48];
+  strncpy(buf_keep, T(STR_OTA_KEEP_POWER), sizeof(buf_keep)-1);
+  buf_keep[sizeof(buf_keep)-1] = 0;
+  lv_label_set_text(lbl_keep, buf_keep);
+  lv_obj_set_style_text_color(lbl_keep, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(lbl_keep, &lv_font_montserrat_ext_14, 0);
+  lv_obj_set_style_text_align(lbl_keep, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(lbl_keep, LV_ALIGN_CENTER, 0, 70);
+
+  lv_refr_now(NULL);
+  lv_timer_handler();
+}
+
+void otaGithubOverlayProgress(uint32_t done, uint32_t total) {
   char line[48];
   otaProgressLine(line, sizeof(line), done, total);
   if (gh_hint) lv_label_set_text(gh_hint, line);
@@ -44,6 +112,17 @@ static void ghScreenProgress(uint32_t done, uint32_t total) {
   // Redraws without running timers or handling input, which is what this
   // overlay wants: nothing on it is interactive and the socket is waiting.
   lv_refr_now(NULL);
+}
+
+void otaGithubOverlayHide() {
+  if (!gh_overlay) return;
+  // Not from a callback of its own - this runs in the loop, after the download
+  // returned. Leaving it up was what made a failed download look like a frozen
+  // device.
+  lv_obj_del(gh_overlay);
+  gh_overlay = nullptr;
+  gh_bar     = nullptr;
+  gh_hint    = nullptr;
 }
 
 // The silent variant that used to live here is gone. It ran blocking in the
@@ -142,63 +221,7 @@ void doGithubOtaFlash(const char* version) {
     return;
   }
 
-  lv_obj_t *overlay = lv_obj_create(lv_layer_top());
-  lv_obj_set_size(overlay, 480, 320);
-  lv_obj_set_pos(overlay, 0, 0);
-  lv_obj_set_style_bg_color(overlay, lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_bg_opa(overlay, LV_OPA_COVER, 0);
-  lv_obj_set_style_border_width(overlay, 0, 0);
-  lv_obj_set_style_pad_all(overlay, 0, 0);
-  lv_obj_clear_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_clear_flag(overlay, LV_OBJ_FLAG_CLICKABLE);
-
-  lv_obj_t *ico = lv_label_create(overlay);
-  lv_label_set_text(ico, LV_SYMBOL_DOWNLOAD);
-  lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
-  lv_obj_align(ico, LV_ALIGN_CENTER, 0, -52);
-
-  lv_obj_t *lbl_ov = lv_label_create(overlay);
-  char buf_ov[64]; strncpy(buf_ov, T(STR_GH_OTA_FLASHING), sizeof(buf_ov)-1); buf_ov[sizeof(buf_ov)-1]=0;
-  lv_label_set_text(lbl_ov, buf_ov);
-  lv_obj_set_style_text_color(lbl_ov, lv_color_hex(0xf0b838), 0);
-  lv_obj_set_style_text_font(lbl_ov, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_style_text_align(lbl_ov, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_ov, LV_ALIGN_CENTER, 0, -14);
-
-  // The overlay used to say "~30-60 sec" and then nothing for a minute, which
-  // answers neither of the two questions a wait like this raises: how far along
-  // it is, and whether anything is still moving. The loop below already knew
-  // both - it counted the remaining bytes down and told nobody.
-  gh_bar = lv_bar_create(overlay);
-  lv_obj_set_size(gh_bar, 300, 8);
-  lv_obj_align(gh_bar, LV_ALIGN_CENTER, 0, 18);
-  lv_obj_set_style_bg_color(gh_bar, lv_color_hex(0x1a3060), 0);
-  lv_obj_set_style_bg_color(gh_bar, lv_color_hex(0x28d49a), LV_PART_INDICATOR);
-  lv_obj_set_style_radius(gh_bar, 4, 0);
-  lv_obj_set_style_radius(gh_bar, 4, LV_PART_INDICATOR);
-  lv_bar_set_range(gh_bar, 0, 100);
-  lv_bar_set_value(gh_bar, 0, LV_ANIM_OFF);
-
-  gh_hint = lv_label_create(overlay);
-  lv_label_set_text(gh_hint, "");
-  lv_obj_set_style_text_color(gh_hint, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(gh_hint, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_style_text_align(gh_hint, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(gh_hint, LV_ALIGN_CENTER, 0, 42);
-
-  lv_obj_t *lbl_keep = lv_label_create(overlay);
-  char buf_keep[48];
-  strncpy(buf_keep, T(STR_OTA_KEEP_POWER), sizeof(buf_keep)-1);
-  buf_keep[sizeof(buf_keep)-1] = 0;
-  lv_label_set_text(lbl_keep, buf_keep);
-  lv_obj_set_style_text_color(lbl_keep, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_keep, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_style_text_align(lbl_keep, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_keep, LV_ALIGN_CENTER, 0, 70);
-
-  lv_refr_now(NULL);
-  lv_timer_handler();
+  otaGithubOverlayShow();
 
   char buf[64]; strncpy(buf, T(STR_GH_OTA_FLASHING), sizeof(buf)-1); buf[sizeof(buf)-1]=0;
   lv_label_set_text(lbl_gh_status, buf);
@@ -207,9 +230,8 @@ void doGithubOtaFlash(const char* version) {
   lv_timer_handler();
 
   char ferr[80] = "";
-  const bool flashed = githubFlashTag(tag, ghScreenProgress, ferr, sizeof(ferr));
-  gh_bar  = nullptr;
-  gh_hint = nullptr;
+  const bool flashed = githubFlashTag(tag, otaGithubOverlayProgress, ferr, sizeof(ferr));
+  if (!flashed) otaGithubOverlayHide();
 
   if (flashed) {
     char okmsg[64]; strncpy(okmsg, T(STR_GH_OTA_FLASH_OK), sizeof(okmsg)-1); okmsg[sizeof(okmsg)-1]=0;

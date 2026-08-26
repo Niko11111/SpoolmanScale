@@ -15,6 +15,7 @@
 #include "services/prefs_store.h"
 #include "services/update_check.h"
 #include "services/version_compare.h"
+#include "ui/ota_github.h"
 #include "ui/update_badges.h"
 #include "web/web_access.h"
 #include "web/web_server.h"
@@ -93,11 +94,13 @@ static void webFlashProgress(uint32_t done, uint32_t total) {
   // the progress callback is what lets it answer at all - safely, because
   // webRequire() turns every other route away while a flash is running.
   handleOtaServerClient();
+  // And the scale itself, which is writing the flash and about to restart.
+  // Its own screen is the only thing a person standing in front of it can see.
+  otaGithubOverlayProgress(done, total);
   if (!lbl_ota_status) return;
   char line[48];
   otaProgressLine(line, sizeof(line), done, total);
   lv_label_set_text(lbl_ota_status, line);
-  lv_refr_now(NULL);
 }
 
 void otaWebGithubTick() {
@@ -106,6 +109,15 @@ void otaWebGithubTick() {
 
   logSDf("OTA: installing %s from GitHub, asked from the web UI", gh_web_flash_tag);
   if (lbl_ota_status) lv_label_set_text(lbl_ota_status, T(STR_GH_OTA_FLASHING));
+  // Stale from whatever ran before. The browser only reads these while the
+  // flash is active, but starting a second one from the first one's byte count
+  // would make the bar jump.
+  s_flash_done  = 0;
+  s_flash_total = 0;
+  // The same cover the device screen raises. Someone standing at the scale
+  // gets told an image is being written, and the touch below it stops
+  // reaching a screen that is about to be replaced.
+  otaGithubOverlayShow();
 
   char err[80] = "";
   if (githubFlashTag(gh_web_flash_tag, webFlashProgress, err, sizeof(err))) {
@@ -115,13 +127,14 @@ void otaWebGithubTick() {
     delay(1500);
     ESP.restart();
   }
+  otaGithubOverlayHide();
   logSDf("OTA: install failed - %s", err);
   if (lbl_ota_status) lv_label_set_text(lbl_ota_status, T(STR_OTA_FAIL));
 }
 
 static String body() {
   String h;
-  h.reserve(7600);
+  h.reserve(10500);
 
   // What is running, and where it came from. The version alone was already at
   // the top of every page; which channel it belongs to and when it landed are
@@ -475,9 +488,16 @@ static void routes(WebServer &srv) {
     strncpy(gh_latest_version, tag, sizeof(gh_latest_version) - 1);
     gh_latest_version[sizeof(gh_latest_version) - 1] = '\0';
     const bool newer = parseVersion(tag) > parseVersion(FW_VERSION);
-    if (newer) {
-      update_available = true;
-      showUpdateBadges(true);
+    // A check answers in both directions. Setting the badge but never clearing
+    // it left it lit after a channel change that found something older, and
+    // body() builds the Install button out of update_available - so the button
+    // came back armed on a release below the running one.
+    //
+    // Not while the OTA screen is showing a result the user asked for, which
+    // is the rule services/update_check.cpp states for the background check.
+    if (newer || !otaGithubScreenVisible()) {
+      update_available = newer;
+      showUpdateBadges(newer);
     }
     s_check_ms  = millis() ? millis() : 1;   // 0 is reserved for "never"
     s_check_pre = gh_prerelease;

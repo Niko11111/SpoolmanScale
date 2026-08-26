@@ -12,7 +12,7 @@
 bool update_available = false;
 bool gh_prerelease = false;
 
-char gh_latest_version[32] = "";
+char gh_latest_version[40] = "";
 
 volatile bool gh_flash_active = false;
 
