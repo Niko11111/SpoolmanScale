@@ -19,6 +19,7 @@
 #include "services/list_limits.h"
 #include "services/mdns_service.h"
 #include "services/prefs_store.h"
+#include "services/user_options.h"
 #include "services/time_service.h"
 #include "services/wifi_manager.h"
 #include "web/web_access.h"
@@ -216,7 +217,23 @@ static String body() {
   }
   h += F("</select><span class='hint'>");
   h += T(STR_W_TZ_NOTE);
-  h += F("</span></div><span class='msg' id='tz-s'></span></div></div>");
+  h += F("</span></div><span class='msg' id='tz-s'></span></div>");
+
+  // ---- how the panel behaves --------------------------------------------
+  // Waking on load had been documented in user_options.h since it was written
+  // and was never switchable: loadPrefs() read it, display_power.cpp acted on
+  // it, and no line in the firmware ever wrote it. This is that missing half.
+  h += F("<div class='card wide'><h2>");
+  h += T(STR_W_C_PANEL);
+  h += F("</h2><div class='field'>"
+         "<label class='check'><span class='switch'>"
+         "<input id='wk' type='checkbox'");
+  if (g_wake_on_load) h += F(" checked");
+  h += F("><i></i></span>");
+  h += T(STR_W_WAKE);
+  h += F("</label><span class='hint'>");
+  h += T(STR_W_WAKE_HINT);
+  h += F("</span><span class='msg' id='wk-s'></span></div></div></div>");
 
   // Its own script. When the pages were split the shared block stayed behind
   // on one of them and every Save button here called a function that was no
@@ -277,6 +294,13 @@ static String body() {
          // button to bind: the select is the control.
          "$('tz').addEventListener('change',()=>{"
          "postFlash('/api/timezone',$('tz').value,'tz-s',4000);});"
+         // Same shape as the mDNS switch: the box already shows what was
+         // asked for, so a failure has to put it back.
+         "$('wk').addEventListener('change',()=>{"
+         "const want=$('wk').checked;"
+         "post('/api/wakeload',want?'1':'0').then(r=>{"
+         "if(!r.ok)$('wk').checked=!want;"
+         "flash('wk-s',r.ok?WS.ok:WS.err,!r.ok,4000);});});"
          "$('ll-b').addEventListener('click',setLimits);"
          "$('gn-b').addEventListener('click',setGain);"
          "load();"
@@ -380,6 +404,19 @@ static void routes(WebServer &srv) {
     timeZoneSet(TZ_LIST[idx].tz);
     logSDf("Time zone set to %s (%s)", TZ_LIST[idx].name, TZ_LIST[idx].tz);
     srv.send(200, "text/plain", TZ_LIST[idx].name);
+  });
+
+  // State, not a toggle: the browser sends what it wants to be, so two tabs
+  // open on the same page cannot talk past each other. Same choice /api/mdns
+  // made for the same reason.
+  srv.on("/api/wakeload", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
+    const bool on = (srv.arg("plain").toInt() != 0);
+    g_wake_on_load = on;
+    prefsPutBool("wake_load", on);
+    logSDf("Web: wake on load -> %s", on ? "ON" : "OFF");
+    srv.send(200, "application/json", on ? "{\"ok\":true,\"v\":1}"
+                                         : "{\"ok\":true,\"v\":0}");
   });
 
   srv.on("/api/gain", HTTP_POST, [&srv]() {

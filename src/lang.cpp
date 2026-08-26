@@ -1454,6 +1454,12 @@ const char* const STRINGS[][2] = {
   // %s is the name of the backend being switched to.
   { "Auf %s umschalten? Die Waage spricht danach mit einem anderen Bestand.",
     "Switch to %s? The scale will talk to a different inventory afterwards." },  // STR_W_BACKEND_ASK
+  { "Panel",
+    "Panel" },  // STR_W_C_PANEL
+  { "Beim Auflegen aufwachen",
+    "Wake when a spool is put down" },  // STR_W_WAKE
+  { "Eine Spule aufzulegen ist die Frage, die das Gerät beantworten soll - erst den Bildschirm antippen zu müssen, um das Ergebnis zu lesen, wäre verkehrt herum. Ausschalten, wenn die Waage neben etwas steht, das sie anstößt.",
+    "Putting a spool down is the question the device exists to answer, so having to touch the screen first to read the result is the wrong way round. Turn it off for a scale that shares a bench with something that knocks it." },  // STR_W_WAKE_HINT
 };
 
 // Without this, a missing entry is not a compile error: every string from the

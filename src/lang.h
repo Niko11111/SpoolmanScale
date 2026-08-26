@@ -937,6 +937,13 @@ enum StringID {
   STR_W_BACKEND_NOTE,
   STR_W_BACKEND_ASK,
 
+  // Waking on load. Documented in user_options.h from the day it was written
+  // and never switchable - loadPrefs() read it, display_power.cpp acted on it,
+  // and nothing ever wrote it.
+  STR_W_C_PANEL,
+  STR_W_WAKE,
+  STR_W_WAKE_HINT,
+
   STR_COUNT
 };
 
