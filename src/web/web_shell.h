@@ -20,6 +20,10 @@ String webShellFoot();
 // the request, and an immediate poll would reload too early.
 String webShellRestartUi();
 
+// Opens a page's <script> block: assigns the two strings /app.js needs into
+// its holder. Emit it first, then whatever the page needs of its own.
+String webShellJsStrings();
+
 // Wraps a translated string as a JavaScript string literal, quotes included.
 // Use it for every T() text that lands inside a <script> block.
 String jsStr(const char *in);

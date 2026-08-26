@@ -118,27 +118,27 @@ static String body() {
     h += F("</p></div>");
   }
 
-  h += F("</div><script>const M={ok:");
-  h += jsStr(T(STR_W_SAVED));
-  h += F(",err:");   h += jsStr(T(STR_W_ERROR));
-  h += F(",test:");  h += jsStr(T(STR_W_HOST_TESTING));
+  // $, flash and post come from /app.js. Only the one string this page has
+  // beyond the shared pair stays here.
+  h += F("</div><script>");
+  h += webShellJsStrings();
+  h += F("const M={test:");
+  h += jsStr(T(STR_W_HOST_TESTING));
   h += F("};"
-         "function flash(id,t,bad){const e=document.getElementById(id);"
-         "e.textContent=t;e.className='msg'+(bad?' bad':'');}"
-         "function post(u,v,id){"
-         "fetch(u,{method:'POST',headers:{'Content-Type':'text/plain'},body:v})"
-         ".then(r=>r.text().then(t=>({ok:r.ok,t}))).then(r=>flash(id,r.t||M.ok,!r.ok));}"
-         "function setHost(){const v=document.getElementById('hs').value;"
-         "flash('hs-s',M.test,false);post('/api/host',v,'hs-s');}"
+         // No ms: these answers stand. /api/host replies with the result of a
+         // real health check and /api/filaman/register with the HTTP status of
+         // the registration - neither is worth clearing after four seconds.
+         "function setHost(){flash('hs-s',M.test,false);"
+         "postFlash('/api/host',$('hs').value,'hs-s');}"
          // A stored key is shown as underscores so its length gives nothing
          // away. Sending those back would overwrite the real one with them.
          "function guard(v){return v.indexOf('_')!==0;}"
-         "function setBb(){const v=document.getElementById('bk').value;"
-         "if(!guard(v))return;post('/api/bambuddy/key',v,'bk-s');}"
-         "function setKey(){const v=document.getElementById('fk').value;"
-         "if(!guard(v))return;post('/api/filaman/key',v,'fk-s');}"
-         "function reg(){const v=document.getElementById('fc').value;"
-         "flash('fc-s',M.test,false);post('/api/filaman/register',v,'fc-s');}"
+         "function setBb(){const v=$('bk').value;"
+         "if(!guard(v))return;postFlash('/api/bambuddy/key',v,'bk-s');}"
+         "function setKey(){const v=$('fk').value;"
+         "if(!guard(v))return;postFlash('/api/filaman/key',v,'fk-s');}"
+         "function reg(){flash('fc-s',M.test,false);"
+         "postFlash('/api/filaman/register',$('fc').value,'fc-s');}"
          "</script>");
   return h;
 }

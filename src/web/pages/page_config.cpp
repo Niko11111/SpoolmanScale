@@ -225,21 +225,15 @@ static String body() {
   // Every handler is bound here rather than written into an onclick attribute:
   // a page body is JavaScript inside a C++ string literal, and an attribute is
   // the one place where the two levels of quoting collide.
-  h += F("<script>const M={ok:");
-  h += jsStr(T(STR_W_SAVED));
-  h += F(",err:");
-  h += jsStr(T(STR_W_ERROR));
-  h += F(",also:");
+  // $, flash, post and postFlash come from /app.js. A save answer stands for
+  // four seconds and then gives the line back to whatever belongs there - for
+  // the name field that is the DNS verdict, which load() repaints, and the
+  // two share one line. That is what flash()'s after() argument is for.
+  h += F("<script>");
+  h += webShellJsStrings();
+  h += F("const M={also:");
   h += jsStr(T(STR_W_DEVNAME_ALSO));
   h += F("};"
-         // A save answer stands for four seconds and then gives the line
-         // back to whatever belongs there. For the name field that is the DNS
-         // verdict, which load() repaints; clearing to empty would have lost
-         // it, and the two share one line now.
-         "function flash(id,t,bad,back){const e=document.getElementById(id);"
-         "e.textContent=t;e.className='msg'+(bad?' bad':'');"
-         "setTimeout(()=>{if(back){load();}else{e.textContent='';}},4000);}"
-         "function $(i){return document.getElementById(i);}"
          // Repainting from one object keeps the verdict, the switch and the
          // fallback addresses from ever disagreeing with each other.
          "let poll=0;"
@@ -253,46 +247,36 @@ static String body() {
          "$('hn-a').textContent=d.also?M.also+': '+d.also:'';"
          "$('md').checked=d.mdns;"
          "if(d.dnsWait&&poll<10){poll++;setTimeout(load,2000);}else if(!d.dnsWait){poll=0;}}"
-         "function load(){fetch('/api/hostname').then(r=>r.json()).then(paint)"
-         ".catch(()=>{});}"
+         "function load(){getJson('/api/hostname').then(d=>{if(d)paint(d);});}"
          // A rejected name keeps its message: handing the line back would
          // paint the verdict of the name that is still stored, and that reads
          // as if the bad one had been taken.
          "$('hn-b').addEventListener('click',()=>{"
-         "fetch('/api/hostname',{method:'POST',headers:{'Content-Type':'text/plain'},"
-         "body:$('hn').value})"
-         ".then(r=>r.text().then(t=>({ok:r.ok,t})))"
-         ".then(r=>{poll=0;flash('hn-s',r.t,!r.ok,r.ok);})"
-         ".catch(()=>flash('hn-s',M.err,true,false));});"
+         "post('/api/hostname',$('hn').value).then(r=>{poll=0;"
+         "flash('hn-s',r.text||WS.err,!r.ok,4000,r.ok?load:null);});});"
          // The box already shows what the user asked for, so a failure has to
          // put it back. A checkbox claiming a state the scale is not in is
          // worse than no answer at all.
          "$('md').addEventListener('change',()=>{"
          "const want=$('md').checked;"
-         "fetch('/api/mdns',{method:'POST',headers:{'Content-Type':'text/plain'},"
-         "body:want?'1':'0'}).then(r=>r.json()).then(d=>{"
-         "paint(d);flash('md-s',M.ok,false,false);})"
-         ".catch(()=>{$('md').checked=!want;flash('md-s',M.err,true,false);});});"
+         "post('/api/mdns',want?'1':'0').then(r=>{"
+         "if(!r.ok||!r.json){$('md').checked=!want;"
+         "flash('md-s',WS.err,true,4000);return;}"
+         "paint(r.json);flash('md-s',WS.ok,false,4000);});});"
          "function clamp(el){let v=parseInt(el.value)||5;"
          "if(v<5)v=5;if(v>100)v=100;el.value=v;return v;}"
+         // Two values, one button: both go out together and the line reports
+         // the pair, so a half success cannot read as a whole one.
          "function setLimits(){"
-         "const a=clamp($('ll')),b=clamp($('lc'));"
-         "Promise.all(["
-         "fetch('/api/listlimit',{method:'POST',headers:{'Content-Type':'text/plain'},body:String(a)}),"
-         "fetch('/api/loclimit',{method:'POST',headers:{'Content-Type':'text/plain'},body:String(b)})"
-         "]).then(rs=>flash('ll-s',rs.every(r=>r.ok)?M.ok:M.err,!rs.every(r=>r.ok),false))"
-         ".catch(()=>flash('ll-s',M.err,true,false));}"
-         "function setGain(){const v=$('gn').value;"
-         "fetch('/api/gain',{method:'POST',headers:{'Content-Type':'text/plain'},body:String(v)})"
-         ".then(r=>flash('gn-s',r.ok?M.ok:M.err,!r.ok,false))"
-         ".catch(()=>flash('gn-s',M.err,true,false));}"
+         "Promise.all([post('/api/listlimit',clamp($('ll'))),"
+         "post('/api/loclimit',clamp($('lc')))])"
+         ".then(rs=>{const ok=rs.every(r=>r.ok);"
+         "flash('ll-s',ok?WS.ok:WS.err,!ok,4000);});}"
+         "function setGain(){postFlash('/api/gain',$('gn').value,'gn-s',4000);}"
          // The zone applies the moment it is picked, so there is no Save
          // button to bind: the select is the control.
          "$('tz').addEventListener('change',()=>{"
-         "fetch('/api/timezone',{method:'POST',headers:{'Content-Type':'text/plain'},"
-         "body:$('tz').value})"
-         ".then(r=>flash('tz-s',r.ok?M.ok:M.err,!r.ok,false))"
-         ".catch(()=>flash('tz-s',M.err,true,false));});"
+         "postFlash('/api/timezone',$('tz').value,'tz-s',4000);});"
          "$('ll-b').addEventListener('click',setLimits);"
          "$('gn-b').addEventListener('click',setGain);"
          "load();"

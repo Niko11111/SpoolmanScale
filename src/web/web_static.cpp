@@ -183,6 +183,66 @@ static const char APP_CSS[] PROGMEM =
 
 const char* webStaticVersion() { return FW_VERSION; }
 
+// The block every page's script used to carry its own copy of. There were
+// three flash() implementations with three different signatures, and the POST
+// boilerplate stood nine times in page_config.cpp alone.
+//
+// It is a route rather than something the shell pastes into each page,
+// because the last attempt at sharing it was a copy: page_config.cpp still
+// carries the scar in a comment - "when the pages were split the shared block
+// stayed behind on one of them and every Save button here called a function
+// that was no longer on the page".
+//
+// No translated string lives in here. The device serves pages in whichever
+// language it is set to, and this file is cached across both - so the strings
+// stay in the page and are assigned into WS.
+static const char APP_JS[] PROGMEM =
+  "var WS={ok:'OK',err:'Error'};\n"
+
+  "function $(i){return document.getElementById(i);}\n"
+
+  // One message line, for every page. ms omitted leaves the text standing,
+  // which is what a host test result or a rejected name wants; after() lets a
+  // caller hand the line back to whatever else writes there instead of
+  // clearing it.
+  "function flash(id,t,bad,ms,after){"
+  "var e=$(id);if(!e)return;"
+  "e.textContent=t;e.className='msg'+(bad?' bad':'');"
+  "if(e._ft){clearTimeout(e._ft);e._ft=0;}"
+  "if(ms)e._ft=setTimeout(function(){e._ft=0;"
+  "if(after)after();else e.textContent='';},ms);}\n"
+
+  // Never rejects. A closed gate answers /api/* with 403 as text/plain,
+  // r.json() throws on that, and an uncaught rejection leaves an empty card
+  // that looks like a fault in the firmware rather than a shut switch.
+  //
+  // Hands back both readings of the body so a caller can take whichever its
+  // route speaks: .text for the plain replies, .json for the ones that answer
+  // with an object. That is what lets the two formats coexist while they do.
+  "function post(u,body){"
+  "return fetch(u,{method:'POST',headers:{'Content-Type':'text/plain'},"
+  "body:String(body)})"
+  ".then(function(r){return r.text().then(function(t){"
+  "var j=null;try{j=JSON.parse(t);}catch(e){}"
+  "return{ok:r.ok,text:t,json:j};});})"
+  ".catch(function(){return{ok:false,text:'',json:null};});}\n"
+
+  // POST and report in one call. A route that answers with prose says it
+  // itself - /api/host replies with the result of a real health check, and
+  // overwriting that with \"saved\" would throw away the only useful part.
+  "function postFlash(u,body,id,ms,after){"
+  "return post(u,body).then(function(r){"
+  "var okv=r.json?(r.json.ok!==false):r.ok;"
+  "var msg=(r.json===null&&r.text)?r.text:(okv?WS.ok:WS.err);"
+  "flash(id,msg,!okv,ms,okv?after:null);"
+  "return r;});}\n"
+
+  // Resolves with null instead of rejecting, same reason as post().
+  "function getJson(u){"
+  "return fetch(u,{cache:'no-store'}).then(function(r){"
+  "if(!r.ok)throw 0;return r.json();}).catch(function(){return null;});}\n"
+;
+
 void registerStaticRoutes(WebServer &srv) {
   srv.on("/app.css", HTTP_GET, [&srv]() {
     // Immutable for a year: the URL carries the firmware version, so the
@@ -190,5 +250,10 @@ void registerStaticRoutes(WebServer &srv) {
     // links a new URL rather than waiting for a cache to expire.
     srv.sendHeader("Cache-Control", "public, max-age=31536000, immutable");
     srv.send_P(200, "text/css", APP_CSS);
+  });
+
+  srv.on("/app.js", HTTP_GET, [&srv]() {
+    srv.sendHeader("Cache-Control", "public, max-age=31536000, immutable");
+    srv.send_P(200, "application/javascript", APP_JS);
   });
 }

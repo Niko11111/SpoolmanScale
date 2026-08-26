@@ -97,7 +97,11 @@ String webShellHead(const char *subtitle) {
       // never outlive the page it styles - see web_static.cpp.
       "<link rel='stylesheet' href='/app.css?v=");
   h += webStaticVersion();
-  h += F("'></head><body><div class='wrap'>");
+  // In the head and without defer, so $, flash and post exist by the time a
+  // page's own script runs at the end of the body.
+  h += F("'><script src='/app.js?v=");
+  h += webStaticVersion();
+  h += F("'></script></head><body><div class='wrap'>");
   return h;
 }
 
@@ -248,6 +252,22 @@ static String webShellGateNote() {
   n += T(STR_W_OFF_PATH);
   n += F("</b>.</p>");
   return n;
+}
+
+// The two strings every page's script needs, assigned into the holder that
+// /app.js declares. Five pages used to open their script with the same
+// `const M={ok:...,err:...}`; a page that needs strings of its own still
+// declares them, it just no longer repeats these two.
+//
+// They cannot live in /app.js: that file is cached across languages, and the
+// device serves its pages in whichever one it is set to.
+String webShellJsStrings() {
+  String s = F("WS.ok=");
+  s += jsStr(T(STR_W_SAVED));
+  s += F(";WS.err=");
+  s += jsStr(T(STR_W_ERROR));
+  s += F(";");
+  return s;
 }
 
 String webShellFoot() {

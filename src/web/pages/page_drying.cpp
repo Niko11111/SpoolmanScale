@@ -91,18 +91,17 @@ static String body() {
   h += T(STR_W_DRY_DAYS);
   h += F("</p>");
 
-  h += F("<script>const M={ok:");
-  h += jsStr(T(STR_W_SAVED));
-  h += F(",err:");  h += jsStr(T(STR_W_ERROR));
-  h += F(",mats:[");
+  h += F("<script>");
+  h += webShellJsStrings();
+  h += F("const M={mats:[");
   for (int i = 0; i < DRY_MAT_COUNT; i++) {
     if (i) h += F(",");
     h += jsStr(DRY_MAT_NAMES[i]);
   }
   h += F("]};"
-         "function flash(t,bad){const e=document.getElementById('dry-s');"
-         "e.textContent=t;e.className='msg'+(bad?' bad':'');"
-         "setTimeout(()=>{e.textContent='';},4000);}"
+         // The one route that takes a JSON body, so it builds its own fetch
+         // rather than going through post() - the shared helper sends plain
+         // text, which is what every other setting route speaks.
          "function saveDry(){"
          "const arr=M.mats.map(m=>{"
          "const sr=document.querySelector('[name=s_'+m+'][value=sealed]');"
@@ -110,16 +109,15 @@ static String body() {
          "yellow:parseInt(document.querySelector('[name=y_'+m+']').value)||1,"
          "red:parseInt(document.querySelector('[name=r_'+m+']').value)||1,"
          "sealed:sr?sr.checked:false};});"
-         "const mult=parseFloat(document.getElementById('dm').value)||1;"
+         "const mult=parseFloat($('dm').value)||1;"
          "fetch('/api/drying',{method:'POST',"
          "headers:{'Content-Type':'application/json'},"
          "body:JSON.stringify({mult_sealed:mult,materials:arr})})"
-         ".then(r=>r.json()).then(d=>flash(d.ok?M.ok:M.err,!d.ok))"
-         ".catch(()=>flash(M.err,true));}"
+         ".then(r=>r.json()).then(d=>flash('dry-s',d.ok?WS.ok:WS.err,!d.ok,4000))"
+         ".catch(()=>flash('dry-s',WS.err,true,4000));}"
          "function resetDry(){"
-         "fetch('/api/drying/reset',{method:'POST'})"
-         ".then(r=>r.json()).then(()=>{flash(M.ok,false);"
-         "setTimeout(()=>location.reload(),900);});}"
+         "postFlash('/api/drying/reset','','dry-s',4000)"
+         ".then(r=>{if(r.ok)setTimeout(()=>location.reload(),900);});}"
          "</script>");
   return h;
 }
