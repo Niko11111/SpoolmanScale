@@ -7,6 +7,7 @@
 #include <lvgl.h>
 #include <cstring>
 
+#include "confirm_popup.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/auto_weight_state.h"
@@ -96,6 +97,22 @@ void buildScaleSubScreen() {
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Scale-Sub -> Calibration");
       show_factor_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
+  // The way back from a calibration that was taken while the ADC was not on
+  // the bus: every reading was -1 then, so the stored factor is arithmetic on
+  // nonsense and no amount of re-tareing fixes it. Until now the only cure was
+  // erasing NVS.
+  { char rst_t[40]; strncpy(rst_t, T(STR_BTN_CAL_RESET), sizeof(rst_t)-1);
+    rst_t[sizeof(rst_t)-1] = '\0';
+    char rst_s[40]; strncpy(rst_s, T(STR_BTN_CAL_RESET_SUB), sizeof(rst_s)-1);
+    rst_s[sizeof(rst_s)-1] = '\0';
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_REFRESH, rst_t, rst_s);
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      logSD("BTN: Scale-Sub -> Reset calibration");
+      char ask[64]; strncpy(ask, T(STR_CAL_RESET_CONFIRM), sizeof(ask)-1);
+      ask[sizeof(ask)-1] = '\0';
+      showConfirmPopup(ask, 6);
     }, LV_EVENT_CLICKED, NULL); }
 
   if (sd_verbose) logSD("[verbose] buildScaleSubScreen: done");

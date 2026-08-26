@@ -4,9 +4,11 @@
 
 #include <Arduino.h>
 #include <lvgl.h>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 
+#include "app_config.h"
 #include "hardware/scale.h"
 #include "hardware/scale_state.h"
 #include "hardware/sd_logger.h"
@@ -177,7 +179,9 @@ void buildFactorScreen() {
       lv_obj_set_style_border_color(btn, lv_color_hex(0x3a3010), 0);
       lv_obj_add_event_cb(btn, [](lv_event_t *e) {
         if (!lbl_factor_result) return;
-        if (scale_ready) {
+        // Presence asked as well as scale_ready: an ADC that left the bus
+        // reads back as all ones, and tare would store -1 as the zero point.
+        if (scale_ready && scaleHardwarePresent()) {
           int32_t raw = scaleHardwareReadRaw();
           saveTareOffset(raw);
           scale_weight_g = 0.0f;
@@ -253,17 +257,30 @@ void buildFactorScreen() {
   lv_obj_add_event_cb(btn_ok_f, [](lv_event_t *e) {
     if (!lbl_factor_result) return;
     float known_g = atof(factor_input);
-    if (known_g > 0 && scale_ready) {
+    if (!scale_ready || !scaleHardwarePresent()) {
+      lv_label_set_text(lbl_factor_result, T(STR_TARE_NOT_READY));
+    } else if (known_g <= 0) {
+      lv_label_set_text(lbl_factor_result, T(STR_CAL_ZERO_ERR));
+    } else if (known_g < CAL_KNOWN_MIN_G || known_g > CAL_KNOWN_MAX_G) {
+      lv_label_set_text(lbl_factor_result, T(STR_CAL_RANGE_ERR));
+    } else {
       int32_t raw = scaleHardwareReadRaw();
       float factor = (float)(raw - zero_offset) / known_g;
-      saveCalFactor(factor);
-      char buf[64];
-      snprintf(buf, sizeof(buf), T(STR_CAL_OK), factor);
-      lv_label_set_text(lbl_factor_result, buf);
-    } else if (!scale_ready) {
-      lv_label_set_text(lbl_factor_result, T(STR_TARE_NOT_READY));
-    } else {
-      lv_label_set_text(lbl_factor_result, T(STR_CAL_ZERO_ERR));
+      // The last line of defence. A reading the bus never delivered is -1, and
+      // if tare stored -1 too the difference is zero: the factor collapses and
+      // every later weight explodes. Refusing here costs a retry; storing it
+      // costs a device that has to be re-flashed to be usable again.
+      if (!isfinite(factor) ||
+          fabsf(factor) < CAL_FACTOR_MIN || fabsf(factor) > CAL_FACTOR_MAX) {
+        Serial.printf("Calibration refused: raw=%d zero=%d known=%.1f factor=%.6f\n",
+                      raw, zero_offset, known_g, factor);
+        lv_label_set_text(lbl_factor_result, T(STR_CAL_IMPLAUSIBLE));
+      } else {
+        saveCalFactor(factor);
+        char buf[64];
+        snprintf(buf, sizeof(buf), T(STR_CAL_OK), factor);
+        lv_label_set_text(lbl_factor_result, buf);
+      }
     }
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok2_f = lv_label_create(btn_ok_f);

@@ -569,7 +569,9 @@ void buildUI() {
   lv_obj_set_style_shadow_width(btn_tare, 0, 0);
   lv_obj_add_event_cb(btn_tare, [](lv_event_t *e) {
     logSD("UI: Button -> TARE (main)");
-    if (scale_ready) {
+    // Presence as well as scale_ready: an ADC that left the bus reads back as
+    // all ones, and tare would store -1 as the zero point.
+    if (scale_ready && scaleHardwarePresent()) {
       int32_t raw = scaleHardwareReadRaw();
       saveTareOffset(raw);
       scale_weight_g = 0.0f;

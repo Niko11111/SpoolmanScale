@@ -7,6 +7,9 @@ extern bool finish_setup_pending;
 extern bool cal_reminder_pending;
 extern bool show_bag_pending;
 extern bool show_factor_pending;
+// The calibration reset was confirmed. Deferred like every other write reached
+// from an LVGL callback, and because it rebuilds the screen the button sits on.
+extern bool cal_reset_pending;
 extern bool show_lastused_pending;
 extern bool show_backend_pending;
 

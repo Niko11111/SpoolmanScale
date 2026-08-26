@@ -7,6 +7,7 @@
 
 #include "app/app_state.h"
 #include "app_config.h"
+#include "hardware/i2c_scan.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/device_name.h"
@@ -70,6 +71,7 @@ static String statusJson() {
     j += ",\"weight\":\"" + jsonEsc(w) + "\"";
   }
   j += ",\"nfc\":" + String(nfc_ok ? "true" : "false");
+  j += ",\"i2c\":\"" + jsonEsc(i2cScanLast()) + "\"";
   j += ",\"sd\":" + String(sd_available ? "true" : "false");
   j += ",\"scans\":" + String(scan_count);
   j += ",\"config\":" + String(webConfigEnabled() ? "true" : "false");
@@ -174,8 +176,21 @@ static String body() {
     h += F("</span></div>");
   }
   h += row(T(STR_W_R_NFC),   pill(nfc_ok, STR_W_S_READY, STR_W_S_MISSING));
+  // What answers on the external bus, in the words the boot log uses. Both
+  // rows above say "missing" for a chip that is broken, unpowered or wired to
+  // the wrong pin; this one says whether anything is there at all.
+  {
+    h += F("<div class='row'><span class='k'>");
+    h += T(STR_W_R_I2C);
+    h += F("</span><span class='v mono' id='i2c'>");
+    h += i2cScanLast();
+    h += F("</span></div>");
+  }
   h += row(T(STR_W_R_SD),    pill(sd_available, STR_W_S_READY, STR_W_S_MISSING, true));
   h += row(T(STR_W_R_UPTIME), uptimeText());
+  h += F("<button class='quiet' id='i2cbtn'>");
+  h += T(STR_W_RESCAN);
+  h += F("</button>");
   h += F("</div></div>");
 
   // ---- inventory --------------------------------------------------------
@@ -222,9 +237,20 @@ static String body() {
          "fetch('/status.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{"
          "const e=document.getElementById('wt');"
          "if(e)e.textContent=d.scaleReady?d.weight:'---';"
+         "const q=document.getElementById('i2c');"
+         "if(q&&d.i2c)q.textContent=d.i2c;"
          "}).catch(()=>{});}"
          "setInterval(wtTick,2000);"
          "document.addEventListener('visibilitychange',wtTick);"
+         "const i2cB=document.getElementById('i2cbtn');"
+         "if(i2cB)i2cB.addEventListener('click',()=>{"
+         "i2cB.disabled=true;"
+         "fetch('/api/i2cscan',{method:'POST',cache:'no-store'})"
+         ".then(r=>r.json()).then(d=>{"
+         "const e=document.getElementById('i2c');"
+         "if(e)e.textContent=d.i2c;"
+         "}).catch(()=>{}).then(()=>{i2cB.disabled=false;});"
+         "});"
          "</script>");
   return h;
 }
@@ -239,6 +265,18 @@ static void routes(WebServer &srv) {
     srv.send(200, "application/json", "{\"ok\":true}");
     delay(400);            // let the response actually leave before the reset
     ESP.restart();
+  });
+
+  // Probing 112 addresses costs about 10 ms of bus time that the reader and
+  // the ADC have to wait through, so it happens when someone asks rather than
+  // on every poll of the page. It runs in the loop task - the same task that
+  // owns I2C_EXT - because handleOtaServerClient() is called from appLoop().
+  srv.on("/api/i2cscan", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_OPEN, T(STR_W_NAV_STATUS))) return;
+    i2cScanRefresh(I2C_EXT);
+    logSDf("I2C_EXT rescan: %s", i2cScanLast());
+    srv.send(200, "application/json",
+             String("{\"i2c\":\"") + jsonEsc(i2cScanLast()) + "\"}");
   });
 
   // Polled by the restart overlay, which needs an answer the moment the

@@ -10,6 +10,7 @@
 #include "app/setup_flow.h"
 #include "hardware/display.h"
 #include "hardware/display_power.h"
+#include "hardware/i2c_scan.h"
 #include "hardware/nfc.h"
 #include "hardware/pins.h"
 #include "hardware/scale.h"
@@ -130,6 +131,16 @@ void appSetup() {
 
   I2C_EXT.begin(hw_pins::I2C_EXT_SDA, hw_pins::I2C_EXT_SCL, 100000);
 
+  // Who is actually out there, before anything tries to talk to a chip. Both
+  // drivers report "not found" the same way whether the module is broken,
+  // unpowered or wired to the wrong pin, and a failed register read comes back
+  // as all ones - so a chip that is not there can look like one that is. An
+  // address probe cannot be fooled, and this one line has settled more than
+  // one support case that started as "the ESP is defective".
+  i2cScanRefresh(I2C_EXT);
+  Serial.printf("I2C_EXT scan: %s\n", i2cScanLast());
+  logSDf("I2C_EXT scan: %s", i2cScanLast());
+
   // Build UI immediately after display init so the user sees a screen right away.
   // lbl_status shows STR_BOOTING until wifiConnect() completes
   buildUI();
@@ -140,13 +151,13 @@ void appSetup() {
 
   Serial.print("Looking for PN532... ");
   uint32_t ver = 0;
-  if (nfcHardwareBegin(&I2C_EXT, hw_pins::PN532_RESET, &ver)) {
+  if (nfcHardwareBegin(&I2C_EXT, hw_pins::PN532_RESET, hw_pins::PN532_IRQ_UNUSED, &ver)) {
     nfc_ok = true;
     Serial.printf("OK (FW %d.%d)\n", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
     logSDf("NFC ready (PN532 FW %d.%d)", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
   } else {
-    Serial.println("ERROR!");
-    logSD("NFC init FAILED");
+    Serial.printf("ERROR! (bus: %s)\n", i2cScanLast());
+    logSDf("NFC init FAILED (bus: %s)", i2cScanLast());
   }
 
   Serial.print("Looking for NAU7802... ");
@@ -163,8 +174,9 @@ void appSetup() {
     // Two ways to land here: the chip did not answer on 0x2A at all, or it
     // answered but never finished calibrating. scaleHardwareBegin() prints
     // which one, so this must not claim a cause of its own.
-    Serial.println("ERROR! Scale unavailable (NAU7802 on 0x2A)");
-    logSD("Scale init FAILED");
+    Serial.printf("ERROR! Scale unavailable (NAU7802 on 0x%02X, bus: %s)\n",
+                  I2C_ADDR_NAU7802, i2cScanLast());
+    logSDf("Scale init FAILED (bus: %s)", i2cScanLast());
   }
 
   updateHeaderStatus();

@@ -17,6 +17,7 @@
 #include "hardware/display_power.h"
 #include "hardware/nfc.h"
 #include "hardware/scale.h"
+#include "hardware/scale_state.h"
 #include "hardware/sd_logger.h"
 #include "hardware/spoolscale_tag.h"
 #include "services/auto_weight_state.h"
@@ -157,6 +158,18 @@ static float         ams_settled_g    = 0.0f;
 static bool          ams_settled_ok   = false;
 constexpr int NFC_MAX_RETRIES = 5;
 constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
+
+// ── Scale on the bus ───────────────────────────────────────────────────────
+// Bringing the ADC back is only attempted for one that was working and then
+// dropped off, and only a few times. A chip that answers on its address but
+// never finishes its internal calibration - a dead load cell does that - would
+// otherwise stall the loop for the three seconds scaleHardwareBegin() spends
+// retrying, every five seconds, for as long as the device is switched on. A
+// scale that stays down is bad; a device that hitches every five seconds and
+// still has no scale is worse.
+constexpr uint8_t SCALE_RECOVER_ATTEMPTS = 3;
+static bool    scale_lost = false;
+static uint8_t scale_recover_tries = 0;
 
 // ── NFC polling (v0.6.1-beta) ──────────────────────────────────────────────
 // A single missed read used to count as a miss straight away. NTAG couples
@@ -414,6 +427,21 @@ void appLoop() {
   if (show_factor_pending) {
     show_factor_pending = false;
     showFactorScreen();
+  }
+  // Confirmed on the scale menu. Rebuilt rather than patched: the calibration
+  // row carries the factor in its subtitle, so the screen has to say the new
+  // one - and that means deleting the screen the button lives on, which is
+  // exactly what must not happen inside its own callback.
+  if (cal_reset_pending) {
+    cal_reset_pending = false;
+    saveCalFactor(CAL_FACTOR_DEFAULT);
+    saveTareOffset(0);
+    resetScaleFilter();
+    scale_weight_g = 0.0f;
+    logSD("Calibration reset to defaults");
+    if (scr_scale_sub) { lv_obj_del(scr_scale_sub); scr_scale_sub = nullptr; }
+    buildScaleSubScreen();
+    lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
   }
   // Asked before a weight lands that BamBuddy would clamp. Built here because
   // the write path that noticed it must not create a screen.
@@ -759,6 +787,26 @@ void appLoop() {
     lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);  // yellow
     lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
     lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+  }
+
+  // The ADC can leave the bus while the device is running - a plug working
+  // loose is the usual way. Caught here rather than left to the 5 s probe
+  // below, because until it is noticed the firmware invents weights: a failed
+  // register read is all ones through Adafruit_BusIO, which available() reads
+  // as "conversion ready" and read() as a sample of -1. Tare or calibrate on
+  // that and the nonsense is stored for good.
+  if (scale_ready && millis() - last_scale_ms >= 200 && !scaleHardwarePresent()) {
+    last_scale_ms = millis();
+    scale_ready = false;
+    scl_ok = false;
+    scale_lost = true;
+    scale_recover_tries = 0;
+    resetScaleFilter();
+    scale_weight_g = 0.0f;
+    if (lbl_scale_weight) lv_label_set_text(lbl_scale_weight, "---");
+    updateHeaderStatus();
+    Serial.println("Scale: NAU7802 stopped answering, readings suspended");
+    logSD("Scale: NAU7802 stopped answering");
   }
 
   // NAU7802: read weight every 200ms and update labels.
@@ -1118,14 +1166,34 @@ void appLoop() {
     }
   }
 
-  // Periodic NAU7802 I2C ping every 5s (independent of WiFi)
+  // Periodic NAU7802 I2C ping every 5s (independent of WiFi), and the way
+  // back: a chip that returns has been through a power cycle, so it lost its
+  // LDO, gain and rate settings and has to be set up again. Same shape as the
+  // NFC reader watchdog further down - the alternative is a device that stays
+  // dead until someone restarts it, over a plug that is already seated again.
   {
     static unsigned long last_scl_check_ms = 0;
     if (millis() - last_scl_check_ms >= 5000) {
       last_scl_check_ms = millis();
-      I2C_EXT.beginTransmission(0x2A);
       bool prev = scl_ok;
-      scl_ok = (I2C_EXT.endTransmission() == 0);
+      scl_ok = scaleHardwarePresent();
+      if (scl_ok && !scale_ready && scale_lost &&
+          scale_recover_tries < SCALE_RECOVER_ATTEMPTS) {
+        scale_recover_tries++;
+        // The callback keeps the UI alive: the internal calibration can take
+        // up to three seconds, and this runs in the loop task.
+        if (scaleHardwareBegin(&I2C_EXT, [](){ delay(100); lv_timer_handler(); })) {
+          scale_ready = true;
+          scale_lost = false;
+          resetScaleFilter();
+          Serial.println("Scale: NAU7802 back on the bus");
+          logSD("Scale: NAU7802 recovered");
+        } else {
+          scl_ok = false;
+          Serial.printf("Scale: re-init failed (%u/%u)\n",
+                        scale_recover_tries, SCALE_RECOVER_ATTEMPTS);
+        }
+      }
       if (scl_ok != prev) updateHeaderStatus();
     }
   }

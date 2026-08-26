@@ -7,6 +7,7 @@ bool finish_setup_pending = false;
 bool cal_reminder_pending = false;
 bool show_bag_pending = false;
 bool show_factor_pending = false;
+bool cal_reset_pending = false;
 bool show_lastused_pending = false;
 bool show_backend_pending = false;
 bool backend_mode_change_pending = false;

@@ -11,8 +11,9 @@ static constexpr uint8_t MIFARE_SECTOR_READ_ATTEMPTS = 3;
 static TwoWire* nfc_wire = nullptr;
 static int8_t   nfc_reset_pin = -1;
 
-bool nfcHardwareBegin(TwoWire* wire, int8_t reset_pin, uint32_t* firmware_version) {
-  if (!nfc) nfc = new Adafruit_PN532(-1, reset_pin, wire);
+bool nfcHardwareBegin(TwoWire* wire, int8_t reset_pin, int8_t irq_pin,
+                      uint32_t* firmware_version) {
+  if (!nfc) nfc = new Adafruit_PN532(irq_pin, reset_pin, wire);
   if (!nfc) return false;
   nfc_wire = wire;
   nfc_reset_pin = reset_pin;

@@ -2,6 +2,7 @@
 #include "app/app_state.h"
 
 #include <Arduino.h>
+#include <cmath>
 #include <cstring>
 
 #include "ams_assign.h"
@@ -34,6 +35,17 @@ void loadPrefs() {
   snprintf(cfg_spoolman_base, sizeof(cfg_spoolman_base), "http://%s", cfg_spoolman_ip);
 
   cal_factor = prefsGetFloat("cal_factor", CAL_FACTOR_DEFAULT);
+  // Only the impossible is repaired, not the merely unusual. A factor of zero
+  // divides every weight into infinity and a device carrying one cannot be
+  // used at all - it is what a calibration on an absent ADC leaves behind,
+  // where tare and reading are both -1. Anything above that band is the user's
+  // and stays untouched; Settings > Scale can reset it deliberately.
+  if (!isfinite(cal_factor) || fabsf(cal_factor) < CAL_FACTOR_BROKEN) {
+    Serial.printf("cal_factor %.6f is unusable, back to %.4f\n",
+                  cal_factor, CAL_FACTOR_DEFAULT);
+    cal_factor = CAL_FACTOR_DEFAULT;
+    prefsPutFloat("cal_factor", cal_factor);
+  }
   zero_offset = prefsGetInt("zero_offset", 0);
   bag_weight_g = prefsGetFloat("bag_weight", 50.0f);
 

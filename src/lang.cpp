@@ -1462,6 +1462,20 @@ const char* const STRINGS[][2] = {
   // the label; what belongs here is when to turn it off.
   { "Ausschalten, wenn die Waage neben etwas steht, das sie anstößt.",
     "Turn it off for a scale that shares a bench with something that knocks it." },  // STR_W_WAKE_HINT
+
+  // Resetting the calibration, and the two refusals that keep a bad one from
+  // being stored in the first place.
+  { "Kalibrierung zurücksetzen", "Reset calibration"  },  // STR_BTN_CAL_RESET
+  { "Faktor und Tara auf Werk",  "Factor and tare to default" },  // STR_BTN_CAL_RESET_SUB
+  { "Kalibrierung und Tara zurücksetzen?",
+    "Reset calibration and tare?" },  // STR_CAL_RESET_CONFIRM
+  { LV_SYMBOL_OK "  Kalibrierung zurückgesetzt",
+    LV_SYMBOL_OK "  Calibration reset" },  // STR_CAL_RESET_DONE
+  { "Referenz: 10 - 20000 g",    "Reference: 10 - 20000 g" },  // STR_CAL_RANGE_ERR
+  { LV_SYMBOL_WARNING "  Messwert unplausibel, nicht gespeichert",
+    LV_SYMBOL_WARNING "  Reading implausible, not saved" },  // STR_CAL_IMPLAUSIBLE
+  { "I2C-Bus",                   "I2C bus"            },  // STR_W_R_I2C
+  { "Bus neu abfragen",          "Rescan bus"         },  // STR_W_RESCAN
 };
 
 // Without this, a missing entry is not a compile error: every string from the

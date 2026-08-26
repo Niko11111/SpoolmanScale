@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.7.0-beta.110"
+#define FW_VERSION  "v0.7.0-beta.111"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -25,6 +25,28 @@
 
 #define CAL_FACTOR_DEFAULT  1.0f
 #define SCALE_FILTER_SIZE   8
+
+// The two chips on I2C_EXT. Named because a bare 0x2A stood in three files and
+// meant nothing to anyone reading a bus scan.
+#define I2C_ADDR_PN532      0x24
+#define I2C_ADDR_NAU7802    0x2A
+
+// What a calibration is allowed to produce. A failed I2C read comes back as
+// all ones through Adafruit_BusIO, so an absent ADC delivers a sample of -1
+// for every reading: tare and calibration then agree perfectly and the factor
+// collapses towards zero, which turns every later weight into a number like
+// -3487423847234 g. A real cell at gain 128 lands somewhere around 100 to 2000
+// counts per gram, so this band rejects the nonsense without arguing with
+// anyone's hardware.
+#define CAL_FACTOR_MIN        1.0f
+#define CAL_FACTOR_MAX   100000.0f
+// Below this the factor is not unusual, it is broken - it makes the device
+// unusable, so loadPrefs() repairs it instead of honouring it.
+#define CAL_FACTOR_BROKEN     0.001f
+// The reference weight someone types in. A gram or two cannot calibrate
+// anything, and nobody puts 50 kg on a filament scale.
+#define CAL_KNOWN_MIN_G      10.0f
+#define CAL_KNOWN_MAX_G   20000.0f
 
 // Remote link, triggered from the FilaMan web UI. The window matches the 60
 // seconds the FilaMan frontend polls for a result, so both sides give up at

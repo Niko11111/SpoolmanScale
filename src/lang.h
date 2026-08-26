@@ -944,6 +944,18 @@ enum StringID {
   STR_W_WAKE,
   STR_W_WAKE_HINT,
 
+  // The scale saying what it actually knows. A calibration taken while the ADC
+  // was off the bus stores a factor built from -1 samples, and until now the
+  // only way back was erasing NVS.
+  STR_BTN_CAL_RESET,
+  STR_BTN_CAL_RESET_SUB,
+  STR_CAL_RESET_CONFIRM,
+  STR_CAL_RESET_DONE,
+  STR_CAL_RANGE_ERR,
+  STR_CAL_IMPLAUSIBLE,
+  STR_W_R_I2C,
+  STR_W_RESCAN,
+
   STR_COUNT
 };
 

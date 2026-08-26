@@ -697,6 +697,9 @@ void showConfirmPopup(const char* msg, int action) {
       // 5 = downgrade confirmed on the OTA screen. Only the flag here; the
       // download runs from appLoop().
       if (act == 5) gh_downgrade_pending = true;
+      // 6 = reset the calibration. The flag again: it writes NVS and rebuilds
+      // the screen this button was opened from.
+      if (act == 6) cal_reset_pending = true;
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_ja = lv_label_create(btn_ja);
     lv_label_set_text(lbl_ja, T(STR_BTN_CONFIRMED));
