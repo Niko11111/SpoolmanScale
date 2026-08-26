@@ -187,7 +187,9 @@ void showMoreInfoScreen() {
 // ── Location Picker ─────────────────────────────────────────
 void showLocationPicker() {
   if (scr_location_picker) { lv_obj_del(scr_location_picker); scr_location_picker = nullptr; }
-  if (!sm_found || sm_id <= 0) return;
+  // A storage location on an archived spool describes a shelf nobody will look
+  // on. Bringing it back first is the step that makes the question meaningful.
+  if (!sm_found || sm_archived || sm_id <= 0) return;
 
   // Backdrop
   scr_location_picker = lv_obj_create(lv_scr_act());
@@ -657,9 +659,10 @@ void buildMoreInfoScreen() {
 
   // Status chip — left half of the header, which holds nothing else. The box
   // below is full to the pixel, this costs no vertical space at all.
-  // FilaMan only: Spoolman has just archived:bool and BamBuddy just an
-  // archive route, and an archived spool leaves sm_found false anyway, so the
-  // chip would never appear there.
+  // FilaMan only: it is the one backend with a status worth showing and worth
+  // changing. Spoolman has just archived:bool and BamBuddy just an archive
+  // route, and for those the weight popup's reactivate button is the way back,
+  // so a chip here would be a second control for a single boolean.
   if (backendIsFilaMan() && sm_found && sm_id > 0) {
     const uint32_t st_col = statusColor(sm_status_id);
     lv_obj_t *chip = lv_btn_create(hdr);

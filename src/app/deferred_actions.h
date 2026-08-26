@@ -36,6 +36,12 @@ extern bool show_drying_reminder_pending;
 // connection. Retried from appLoop() once it is free, and given up on after
 // GH_CHECK_WAIT_MS so a task that never finishes cannot leave the screen
 // waiting forever.
+// The reactivate button was pressed on an archived spool. Deferred like every
+// other network call reached from an LVGL callback, and it carries the weight
+// the button named rather than re-measuring in the loop.
+extern bool  reactivate_pending;
+extern float reactivate_weight_g;
+
 extern bool gh_check_pending;
 // The user confirmed a downgrade on the OTA screen. The download blocks for
 // about a minute and ends in a restart, so it does not run from the popup's

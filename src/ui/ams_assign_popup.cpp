@@ -185,7 +185,7 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
 // Offers the location question the AMS answer did not already settle.
 static void offerLocationPicker(int spool_id) {
   if (!g_auto_loc_popup || !wifi_ok) return;
-  if (!sm_found || sm_id != spool_id) return;
+  if (!sm_found || sm_archived || sm_id != spool_id) return;
   if (g_loc_popup_shown_for_id == spool_id) return;
   g_loc_popup_shown_for_id = spool_id;
   requestLocationPicker(true);

@@ -38,6 +38,10 @@ void closeConfirmPopup() {
 // pad, but a brand new spool can derive it instead -- see the New spool button.
 static float s_tare_prompt_g = 0.0f;
 static float s_cap_measured  = 0.0f;
+// What the reactivate button says it will write. Settled while the popup is
+// built and reused in the callback, so the number the user read is the number
+// that lands - re-measuring on the click would quietly write something else.
+static float s_reactivate_g   = 0.0f;
 static bool  s_tare_then_new = false;
 
 // After a tare is stored from the New spool flow the initial weight follows
@@ -277,6 +281,9 @@ void showConfirmPopup(const char* msg, int action) {
     const int XR  = EDGE + BW2 + PAD;
 
     float netto_plain = scale_weight_g - (float)sm_spool_weight;
+    // Settled here, with the same arithmetic the weight buttons use, so the
+    // reactivate button below can name the number it will write.
+    s_reactivate_g = (netto_plain < 0) ? 0.0f : netto_plain;
     float netto_bag   = netto_plain - bag_weight_g;
     if (netto_plain < 0) netto_plain = 0;
     if (netto_bag   < 0) netto_bag   = 0;
@@ -565,26 +572,49 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_set_style_text_align(lbl_auto_weight_btn, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(lbl_auto_weight_btn);
 
-    // ── Row 3 right: empty / archive ──
+    // ── Row 3 right: empty / archive, or its opposite ──
+    //
+    // On an archived spool this is the way back. Same place, because it is the
+    // same decision seen from the other side, and there is no room for a fifth
+    // button anyway. Green rather than orange: archiving takes a spool out of
+    // circulation, this puts it back.
     lv_obj_t *btn6 = lv_btn_create(box);
     lv_obj_set_size(btn6, BW2, H_ROW3);
     lv_obj_set_pos(btn6, XR, Y3);
-    lv_obj_set_style_bg_color(btn6, lv_color_hex(0x3a1a00), 0);
-    lv_obj_set_style_bg_color(btn6, lv_color_hex(0x6a3000), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn6, lv_color_hex(sm_archived ? 0x0a3020 : 0x3a1a00), 0);
+    lv_obj_set_style_bg_color(btn6, lv_color_hex(sm_archived ? 0x156040 : 0x6a3000),
+                              LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn6, 8, 0);
     lv_obj_set_style_shadow_width(btn6, 0, 0);
     lv_obj_add_event_cb(btn6, [](lv_event_t *e) {
       closeConfirmPopup();
+      if (sm_archived) {
+        // No confirmation step: the button already named the number it writes,
+        // and the action is undoable by archiving again. Deferred like every
+        // other network call reached from a callback.
+        reactivate_weight_g = s_reactivate_g;
+        reactivate_pending  = true;
+        return;
+      }
       // Separate confirmation popup for archiving
       showConfirmPopup(T(STR_ARCHIVE_CONFIRM), 3);
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l6 = lv_label_create(btn6);
-    // "remaining=0" is Spoolman's field name. FilaMan archives through a
-    // status endpoint and calls the field something else, so it says the same
-    // thing in words there.
-    lv_label_set_text(l6, T(backendIsFilaMan() ? STR_BTN_ARCHIVE_EMPTY_FM
-                                               : STR_BTN_ARCHIVE_EMPTY));
-    lv_obj_set_style_text_color(l6, lv_color_hex(0xffb060), 0);
+    if (sm_archived) {
+      // The subtitle carries the weight this will write, so the button says
+      // what it does. Formatted here rather than in the table because the
+      // number only exists once the spool is on the pad.
+      char rb[64];
+      snprintf(rb, sizeof(rb), T(STR_BTN_REACTIVATE), s_reactivate_g);
+      lv_label_set_text(l6, rb);
+    } else {
+      // "remaining=0" is Spoolman's field name. FilaMan archives through a
+      // status endpoint and calls the field something else, so it says the same
+      // thing in words there.
+      lv_label_set_text(l6, T(backendIsFilaMan() ? STR_BTN_ARCHIVE_EMPTY_FM
+                                                 : STR_BTN_ARCHIVE_EMPTY));
+    }
+    lv_obj_set_style_text_color(l6, lv_color_hex(sm_archived ? 0x28d49a : 0xffb060), 0);
     lv_obj_set_style_text_font(l6, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(l6, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(l6);

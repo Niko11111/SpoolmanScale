@@ -345,6 +345,9 @@ void appLoop() {
   // Says a freshly linked tag once more, so a paired browser opens the spool
   // instead of being left with the unknown-tag toast the first scan produced.
   spoolmanRescanTick();
+  // Asks again while an unknown tag sits on the pad, so linking it in a
+  // browser shows up here without lifting the spool off and back on.
+  spoolmanRecheckTick();
   // While the credential screen is open the user types into the browser, so
   // the two rows have to follow along without a keypress on the device.
   refreshWebCredentialRows();
@@ -379,6 +382,23 @@ void appLoop() {
   // Extra fields check/create — deferred from LVGL event callback to loop
   handleExtraFieldsDeferredActions();
   handleDriedDeferredAction();
+  // Bringing an archived spool back. Out here rather than in the button's
+  // callback because it reaches the network, and it carries the weight the
+  // button named so the screen and the database agree on one number.
+  if (reactivate_pending) {
+    reactivate_pending = false;
+    if (!reactivateSpool(reactivate_weight_g)) {
+      logSDf("Reactivate failed for spool %d", sm_id);
+      if (lbl_status) {
+        char buf[48];
+        strncpy(buf, T(STR_CU_NOT_WRITTEN), sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+        lv_label_set_text(lbl_status, buf);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
+      }
+    }
+  }
+
   if (cal_reminder_pending) {
     cal_reminder_pending = false;
     showCalReminderScreen();
@@ -910,7 +930,10 @@ void appLoop() {
     // A spool adopted without a tag counts as present: it was picked
     // deliberately in the web UI, which says more about intent than a tag
     // lying on the reader does.
-    if (!aw_done && !isConfirmPopupOpen() && sm_found && sm_id > 0 && scale_ready &&
+    // sm_archived is excluded on purpose: an archived spool reads 0 g by
+    // definition, so weighing it silently would file a full spool as empty
+    // stock. Bringing it back is a decision, and it has its own button.
+    if (!aw_done && !isConfirmPopupOpen() && sm_found && !sm_archived && sm_id > 0 && scale_ready &&
         (tag_present || aw_adopted)) {
       float cur = scale_weight_g;
       if (fabsf(cur - auto_weight_last_val) > AUTO_WEIGHT_THRESH_G) {
@@ -1249,11 +1272,15 @@ void appLoop() {
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
             lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
-            { char sb[48]; backendText(sm_found ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
-                                             : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb));
+            // Archived is its own answer: saying "tag detected" in green while the
+            // line below reads "Archived" tells the user two different things.
+            { char sb[48]; backendText(sm_archived ? T(STR_ARCHIVED)
+                                       : sm_found ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
+                                                  : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb));
               lv_label_set_text(lbl_status, sb); }
             lv_obj_set_style_text_color(lbl_status,
-              sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
+              sm_archived ? lv_color_hex(0x808080)
+                          : sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
           } else if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES) {
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
             lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
@@ -1276,10 +1303,13 @@ void appLoop() {
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
             lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
-            { char sb[48]; backendText(sm_found ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
-                                             : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb)); lv_label_set_text(lbl_status, sb); }
+            { char sb[48]; backendText(sm_archived ? T(STR_ARCHIVED)
+                                       : sm_found ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
+                                                  : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb));
+              lv_label_set_text(lbl_status, sb); }
             lv_obj_set_style_text_color(lbl_status,
-              sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
+              sm_archived ? lv_color_hex(0x808080)
+                          : sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
           }
         }
 
@@ -1372,10 +1402,13 @@ void appLoop() {
           // Same UID — show popup after delay if not dismissed
           // Auto-popup disabled — user uses the Link/Copy buttons in Zone 5
           (void)link_tag_first_seen_ms;
-          { char sb[48]; backendText(sm_found ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
-                                             : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb)); lv_label_set_text(lbl_status, sb); }
+          { char sb[48]; backendText(sm_archived ? T(STR_ARCHIVED)
+                                     : sm_found ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
+                                                : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb));
+            lv_label_set_text(lbl_status, sb); }
           lv_obj_set_style_text_color(lbl_status,
-            sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
+            sm_archived ? lv_color_hex(0x808080)
+                        : sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
         }
 
       } else {
@@ -1434,7 +1467,11 @@ void appLoop() {
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
           // Auto location popup: if enabled, spool is linked, and not shown for this spool yet
           // Debounce: only trigger after 1500ms — avoids spurious remove during NTAG read
-          if (g_auto_loc_popup && sm_found && sm_id > 0 && wifi_ok && g_loc_popup_shown_for_id != sm_id) {
+          // Not for an archived spool: asking where to store something that
+          // was just taken out of the inventory is a question about a spool
+          // nobody is looking for.
+          if (g_auto_loc_popup && sm_found && !sm_archived && sm_id > 0 && wifi_ok &&
+              g_loc_popup_shown_for_id != sm_id) {
             loc_popup_pending_id = sm_id;  // schedule — will fire after debounce in loop
             logSDf("[verbose] LOC: tag removed, popup scheduled id=%d (debounce 2500ms)", sm_id);
           } else if (g_auto_loc_popup) {
@@ -1442,7 +1479,10 @@ void appLoop() {
           }
           // The AMS question hangs off the same removal, on the same
           // debounce and the same weight cross-check.
-          if (amsAskActive() && wifi_ok && sm_found && sm_id > 0) {
+          // Same for the AMS question, and here it matters more than tidiness:
+          // it notes a measurement against the spool id, which turns into a
+          // weight write later on.
+          if (amsAskActive() && wifi_ok && sm_found && !sm_archived && sm_id > 0) {
             // On Serial, not through logSD(): that one returns early when no
             // SD card is present, so on a card-less scale none of this exists.
             Serial.printf("AMS: removal id=%d settled=%d %.0fg pending=%d\n",

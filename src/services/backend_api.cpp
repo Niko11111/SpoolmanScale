@@ -714,6 +714,34 @@ int backendPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeou
   }
 }
 
+int backendReactivateSpool(const char* base_url, int spool_id, float remaining,
+                           float gross, uint32_t timeout_ms) {
+  switch (backendMode()) {
+    case BACKEND_FILAMAN: {
+      // Archived is status 6 there, so coming back is a status change. "active"
+      // rather than "new": the spool has been used, and saying otherwise would
+      // undo what the user knows about it.
+      int code = filamanSetStatus(backendBaseUrl(), filamanApiKey(), spool_id,
+                                  "active", timeout_ms);
+      if (code < 200 || code >= 300) return code;
+      // FilaMan cleared the remaining weight when it archived (see
+      // filaman_api.cpp), so the weight has to follow, and it wants gross.
+      return filamanReportWeight(backendBaseUrl(), filamanDeviceToken(),
+                                 spool_id, nullptr, gross, timeout_ms);
+    }
+    case BACKEND_BAMBUDDY: {
+      int code = bbRestoreSpool(backendBaseUrl(), bambuddyApiKey(), spool_id, timeout_ms);
+      if (code < 200 || code >= 300) return code;
+      return bbUpdateSpoolWeight(backendBaseUrl(), bambuddyApiKey(), spool_id,
+                                 gross, timeout_ms);
+    }
+    default:
+      // One request: unarchiving and the weight belong together, and a second
+      // call that fails would leave the spool back but reading as empty.
+      return spoolmanReactivateSpool(base_url, spool_id, remaining, timeout_ms);
+  }
+}
+
 int backendSetSpoolStatus(const char* base_url, int spool_id, const char* status_key,
                           uint32_t timeout_ms) {
   (void)base_url;

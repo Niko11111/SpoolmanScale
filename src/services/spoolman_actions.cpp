@@ -14,6 +14,7 @@
 #include "backend.h"
 #include "backend_api.h"
 #include "bambuddy_api.h"
+#include "ui/spoolman_lookup.h"
 #include "hardware/sd_logger.h"
 #include "user_options.h"
 #include "ui/date_display.h"
@@ -29,9 +30,41 @@
 // form of a 7 byte UID is 20. Same size as sm_tag, which is where it comes from.
 #define TAG_MIGRATE_MAX  48
 
+bool reactivateSpool(float remaining) {
+  if (!wifi_ok) { Serial.println("reactivateSpool: no WiFi"); return false; }
+  if (!sm_found || sm_id == 0) { Serial.println("reactivateSpool: no spool"); return false; }
+  if (remaining < 0) remaining = 0;
+
+  // Gross for the backends that subtract the tare themselves, exactly the way
+  // the weight path does it: the callers computed remaining as pad minus
+  // sm_spool_weight, so adding it back is what the pad showed.
+  const float gross = remaining + sm_spool_weight;
+  int code = backendReactivateSpool(cfg_spoolman_base, sm_id, remaining, gross);
+  logSDf("REACTIVATE ID=%d remaining=%.1fg gross=%.1fg HTTP %d",
+         sm_id, remaining, gross, code);
+  if (code < 200 || code >= 300) return false;
+
+  // Reloading rather than patching the globals by hand: the spool comes back
+  // with a used_weight the server recalculated, and guessing it here is how
+  // the display and the database drift apart.
+  sm_archived = false;
+  querySpoolmanById(sm_id);
+  return true;
+}
+
 int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
   if (!wifi_ok) { Serial.println("patchSpoolmanWeight: no WiFi"); return PATCH_WEIGHT_NO_TARGET; }
   if (!sm_found || sm_id == 0) { Serial.println("patchSpoolmanWeight: no spool"); return PATCH_WEIGHT_NO_TARGET; }
+
+  // Giving an archived spool a weight is asking for it back. Writing the weight
+  // alone would leave it archived AND full, a state no backend has a name for
+  // and nothing else in the firmware expects. Reactivating is the honest
+  // reading of the gesture, and the green button in the popup is the way that
+  // announces it beforehand.
+  if (sm_archived) {
+    logSDf("Weight on archived spool %d, reactivating instead", sm_id);
+    return reactivateSpool(remaining) ? 200 : PATCH_WEIGHT_NO_TARGET;
+  }
 
   // BamBuddy's own inventory stores what was consumed and derives the rest
   // from the label weight, so it cannot represent a spool holding more than
@@ -125,9 +158,12 @@ void patchArchiveSpool() {
   if (lbl_spoolman_dried)  lv_label_set_text(lbl_spoolman_dried, "");
   if (lbl_keys)            lv_label_set_text(lbl_keys, "");
 
-  // The spool is out of the active inventory, so a further weight update or
-  // dried action would target something that is no longer there.
-  sm_found = false;
+  // Out of the active inventory, but still the spool in hand: it stays on the
+  // screen so the user can see what happened and undo it. sm_archived is what
+  // holds off everything that writes - see app_state.h - and it makes this
+  // route end up looking exactly like scanning an archived spool, which is
+  // what the block above was already trying to do.
+  sm_archived = true;
   updateLinkButton();
 }
 

@@ -111,6 +111,12 @@ int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remain
 // resolves spool then filament and then defaults to zero, so it would book the
 // core mass as filament. See Donkie/Spoolman#1117 - callers check
 // sm_tare_source before using this.
+// Brings an archived spool back and records the weight in the same request.
+// Archiving zeroes remaining_weight, so the two belong together: unarchiving
+// alone would leave a full spool on the shelf reading as empty.
+int spoolmanReactivateSpool(const char* base_url, int spool_id, float remaining,
+                            uint32_t timeout_ms = 5000);
+
 int spoolmanMeasureSpool(const char* base_url, int spool_id, float gross_weight,
                          uint32_t timeout_ms = 5000);
 

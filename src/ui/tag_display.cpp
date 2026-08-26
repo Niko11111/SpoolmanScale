@@ -42,7 +42,10 @@ void clearTagDisplay() {
   if (lbl_bag_sm_diff) lv_label_set_text(lbl_bag_sm_diff, "");
   lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
   // Also reset Spoolman data
-  sm_found = false; sm_id = 0; sm_filament_id = 0; sm_vendor_id = 0; sm_spool_weight = 0;
+  // sm_archived belongs with sm_found: left standing it would make the next
+  // spool look archived until a lookup corrected it, and everything that holds
+  // off on an archived spool would hold off on that one.
+  sm_found = false; sm_archived = false; sm_id = 0; sm_filament_id = 0; sm_vendor_id = 0; sm_spool_weight = 0;
   sm_last_dried[0] = '\0'; sm_article_nr[0] = '\0';
   sm_filament_name[0] = '\0'; sm_material_global[0] = '\0'; sm_color_global[0] = '\0'; sm_last_used[0] = '\0';
   sm_location_name[0] = '\0';

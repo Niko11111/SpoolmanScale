@@ -151,6 +151,11 @@ int  bbUnlinkTag(const char* base_url, const char* api_key, int spool_id,
 int  bbArchiveSpool(const char* base_url, const char* api_key, int spool_id,
        uint32_t timeout_ms = 5000);
 
+// Brings an archived spool back. The counterpart to bbArchiveSpool(); BamBuddy
+// keeps both under the same inventory base.
+int  bbRestoreSpool(const char* base_url, const char* api_key, int spool_id,
+       uint32_t timeout_ms = 8000);
+
 // Writes a "[dried:YYYY-MM-DD]" marker into the note field, the only free
 // text BamBuddy offers. Read modify write: the rest of the note has to
 // survive, so a failed read means no write at all rather than an overwrite.

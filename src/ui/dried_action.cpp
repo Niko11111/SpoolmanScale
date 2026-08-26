@@ -31,6 +31,13 @@ void btn_dried_cb(lv_event_t *e) {
     lv_label_set_text(lbl_spoolman_dried_val, T(STR_WAIT_SCAN));
     return;
   }
+  // A drying date on a spool that is out of the inventory records care for
+  // something nobody is going to print with. The button is hidden for an
+  // archived spool, so this only catches the paths that call in directly.
+  if (sm_archived) {
+    lv_label_set_text(lbl_spoolman_dried_val, T(STR_ARCHIVED));
+    return;
+  }
 
   // A real UTC instant, because that is what the Z says and what Spoolman and
   // FilaMan show after converting it back to the viewer's zone. Writing local

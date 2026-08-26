@@ -396,6 +396,17 @@ int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remain
   return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, String(body), timeout_ms);
 }
 
+int spoolmanReactivateSpool(const char* base_url, int spool_id, float remaining,
+                            uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
+  // Both fields in one PATCH. Archiving set remaining_weight to 0, so bringing
+  // the spool back without a weight would leave it looking empty, and a second
+  // request could fail on its own and leave exactly that state behind.
+  char body[80];
+  snprintf(body, sizeof(body), "{\"archived\": false, \"remaining_weight\": %.1f}", remaining);
+  return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, String(body), timeout_ms);
+}
+
 int spoolmanMeasureSpool(const char* base_url, int spool_id, float gross_weight,
                          uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;

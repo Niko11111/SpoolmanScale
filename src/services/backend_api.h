@@ -219,6 +219,15 @@ int  backendPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeo
 // Archiving does not come through here. It has to zero the remaining weight
 // and take the spool out of the local state as well, which is what
 // backendPatchArchiveSpool() and patchArchiveSpool() do together.
+// Brings an archived spool back and records what is on the pad, in that order.
+// Every backend zeroes the remaining weight when archiving, so the two are one
+// action: bringing a spool back without its weight files a full spool as empty.
+//
+// `remaining` is the net weight, `gross` what the pad showed - FilaMan and
+// BamBuddy subtract the tare themselves, Spoolman takes the net value here.
+int  backendReactivateSpool(const char* base_url, int spool_id, float remaining,
+       float gross, uint32_t timeout_ms = 8000);
+
 int  backendSetSpoolStatus(const char* base_url, int spool_id, const char* status_key,
        uint32_t timeout_ms = 5000);
 int  backendPatchSpoolWeight(const char* base_url, int spool_id, float spool_weight,

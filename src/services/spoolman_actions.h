@@ -23,6 +23,11 @@ void patchArchiveSpool();
 //
 // Returns false when nothing was written: the list was full, or the request
 // failed. An unlink always reports true.
+// Brings the archived spool on the pad back and records `remaining` in the
+// same go. Reloads the spool afterwards, so the screen shows what the server
+// actually stored rather than what was hoped for.
+bool reactivateSpool(float remaining);
+
 bool patchSpoolTag(int spool_id, const char* uuid,
                    const char* const* field_values = nullptr);
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.7.0-beta.98"
+#define FW_VERSION  "v0.7.0-beta.101"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -77,3 +77,9 @@
 // reader within 3 seconds (DEBOUNCE_WINDOW in its scanrelay.py), so an
 // immediate second scan would be swallowed and never reach a paired browser.
 #define TAG_RESCAN_DELAY_MS  3500
+
+// How often to ask again whether a tag that came up unknown has been linked in
+// the meantime. Only ever while such a tag is on the pad, and only over the
+// cheap server side lookup - never the full inventory scan, and never
+// /tag/scan, which would broadcast an unknown tag on every attempt.
+#define TAG_RECHECK_MS  4000

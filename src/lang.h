@@ -922,6 +922,10 @@ enum StringID {
   STR_W_FOOT_GATE_OFF,
   STR_W_FOOT_GATE_ALL,
 
+  // Replaces the archive button on a spool that is already archived. Carries
+  // the weight in its subtitle, so the button says what it will write.
+  STR_BTN_REACTIVATE,
+
   STR_COUNT
 };
 

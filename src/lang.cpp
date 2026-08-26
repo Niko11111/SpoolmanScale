@@ -1433,6 +1433,12 @@ const char* const STRINGS[][2] = {
     "are switched off on the device and are not being served. Switch them on under" },  // STR_W_FOOT_GATE_OFF
   { "Welche Bereiche ausgeliefert werden, entscheidet das Gerät unter",
     "Which sections are served is decided on the device under" },  // STR_W_FOOT_GATE_ALL
+
+  // Weight popup, in place of the archive button when the spool is archived.
+  // The %.0f is the net weight on the pad: the button names the number it is
+  // about to write, so nothing is decided out of sight.
+  { LV_SYMBOL_REFRESH " Reaktivieren\nRest wird %.0f g",
+    LV_SYMBOL_REFRESH " Reactivate\nremaining set to %.0f g" },  // STR_BTN_REACTIVATE
 };
 
 // Without this, a missing entry is not a compile error: every string from the

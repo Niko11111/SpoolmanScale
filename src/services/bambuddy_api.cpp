@@ -613,6 +613,18 @@ int bbArchiveSpool(const char* base_url, const char* api_key, int spool_id,
   return sendJson("POST", url, api_key, "{}", timeout_ms, nullptr);
 }
 
+int bbRestoreSpool(const char* base_url, const char* api_key, int spool_id,
+                   uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
+
+  // The counterpart to /archive, and it sits right next to it in both
+  // inventory modes, so bbInventoryBase() picks the right one.
+  char url[192];
+  snprintf(url, sizeof(url), "%s%s/spools/%d/restore", base_url,
+           bbInventoryBase(), spool_id);
+  return sendJson("POST", url, api_key, "{}", timeout_ms, nullptr);
+}
+
 int bbPatchSpoolFields(const char* base_url, const char* api_key, int spool_id,
                        const int* label_weight, const int* core_weight,
                        const float* weight_used, const char* storage_location,

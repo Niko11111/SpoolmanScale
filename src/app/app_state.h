@@ -124,6 +124,13 @@ extern char sm_last_dried[32];
 // UIDs; anything longer is dropped rather than shortened.
 extern char sm_tag_values[TAG_FIELD_COUNT][CARD_UIDS_MAX];
 
+// A spool that was found, but is archived. Its own state rather than a flavour
+// of sm_found: the screen has to show the spool - name, filament, tare - so the
+// user can bring it back, while everything that writes has to hold off until
+// they do. Archiving in Spoolman sets remaining_weight to 0, so a silent
+// weighing here would record a full spool as empty stock.
+extern bool sm_archived;
+
 // The spool that already holds the tag a link was just refused for, or 0.
 // Written by patchSpoolTag() on Spoolman's 409, read by the link flow so it
 // can name that spool instead of reporting a bare failure.

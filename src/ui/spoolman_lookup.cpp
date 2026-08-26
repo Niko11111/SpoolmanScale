@@ -20,6 +20,7 @@
 #include "services/tag_field.h"
 #include "services/tag_uid.h"
 #include "services/time_service.h"
+#include "ui/spool_flow.h"
 #include "services/user_options.h"
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
@@ -559,6 +560,9 @@ void querySpoolmanById(int spool_id) {
 
   sm_found        = true;
   sm_id           = spool["id"] | 0;
+  // Found and archived is a state of its own, see app_state.h. Read here
+  // because this is the one path that fetches a spool whole.
+  sm_archived     = spool["archived"] | false;
   sm_filament_id  = spool["filament"]["id"] | 0;
   sm_vendor_id    = spool["filament"]["vendor"]["id"] | 0;
   sm_remaining    = spool["remaining_weight"] | 0.0f;
@@ -715,6 +719,68 @@ static void scheduleRescan(const char* uid, const char* format) {
   s_rescan_due_ms = millis() + TAG_RESCAN_DELAY_MS;
 }
 
+// What the last lookup was named by. The recheck needs exactly this value and
+// cannot reconstruct it: for a Bambu tag it is the tray uuid, for an NTAG the
+// plain uid, and g_tag only carries the former reliably.
+static char s_last_query[48] = {0};
+
+void spoolmanRecheckTick() {
+  if (!wifi_ok || !tag_present || sm_found) return;
+  if (!s_last_query[0]) return;
+  if (isSpoolFlowIdInputOpen()) return;   // the user is busy picking a spool
+
+  static uint32_t last_ms = 0;
+  // Signed difference, so this survives the millis() rollover.
+  if (last_ms && (int32_t)(millis() - last_ms) < (int32_t)TAG_RECHECK_MS) return;
+  last_ms = millis();
+
+  // Only the fields the verification reads. The point of this pass is that it
+  // stays small: a real miss still falls through to the inventory scan in
+  // querySpoolman(), and doing that every few seconds is exactly what must not
+  // happen here.
+  StaticJsonDocument<512> filter;
+  JsonArray filter_arr = filter.to<JsonArray>();
+  JsonObject f = filter_arr.createNestedObject();
+  f["id"] = true;
+  for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
+    f["extra"][tagFieldSpec(i).key] = true;
+  f["tags"][0]["uid"] = true;
+
+  SpiRamAllocator psram_alloc;
+  JsonDocument doc(&psram_alloc);
+  DeserializationError err = DeserializationError::Ok;
+  bool hit = false;
+
+  // Every backend has a cheap lookup by tag, so this works for all three. The
+  // one split: with Spoolman's own relation selected there is no extra field
+  // to filter on, and backendFindSpoolByTag() would answer NOT_SUPPORTED.
+  if (backendHasNativeTags()) {
+    const char* nu = tagNativeUid(s_last_query);
+    if (backendFindSpoolByNativeTag(cfg_spoolman_base, nu, doc, 5000, &filter, &err) == 200 && !err) {
+      for (JsonObjectConst cand : doc.as<JsonArrayConst>())
+        if (spoolMatchesTag(cand, s_last_query)) { hit = true; break; }
+    }
+    if (!hit) { doc.clear(); err = DeserializationError::Ok; }
+  }
+
+  if (!hit) {
+    if (backendFindSpoolByTag(cfg_spoolman_base, s_last_query, doc, 5000, &err, &filter) == 200 && !err) {
+      // Verified exactly: FilaMan's search is a substring match, so an
+      // unverified hit would announce somebody else's spool.
+      for (JsonObjectConst cand : doc.as<JsonArrayConst>())
+        if (spoolMatchesTag(cand, s_last_query)) { hit = true; break; }
+    }
+  }
+
+  if (!hit) return;
+
+  // Known now. Clearing this is what the loop reads as "ask again", the same
+  // thing lifting the spool off the pad does, so the normal path fetches the
+  // spool and paints the screen. Nothing is duplicated here.
+  logSDf("Recheck: %s resolves now, re-reading", s_last_query);
+  spoolman_queried_uid[0] = '\0';
+}
+
 void spoolmanRescanTick() {
   if (!s_rescan_uid[0]) return;
   // Signed difference, so the comparison survives the millis() rollover.
@@ -745,6 +811,8 @@ void spoolmanRescanTick() {
 
 void querySpoolman(const char* tray_uuid) {
   if (!wifi_ok) return;
+  strncpy(s_last_query, tray_uuid ? tray_uuid : "", sizeof(s_last_query) - 1);
+  s_last_query[sizeof(s_last_query) - 1] = '\0';
   logSDf("Spoolman: query tray_uuid=%.16s...", tray_uuid ? tray_uuid : "");
 
   // Reset all Spoolman labels before new query
@@ -777,6 +845,7 @@ void querySpoolman(const char* tray_uuid) {
   sm_location_name[0] = '\0'; sm_location_id = 0;
   sm_status_id = 0;
   sm_found = false;
+  sm_archived = false;
   sm_id = 0;
   sm_dup_count = 0;
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) sm_tag_values[i][0] = '\0';
@@ -1470,21 +1539,26 @@ void querySpoolman(const char* tray_uuid) {
         bool is_archived = spool["archived"].as<bool>();
         if (!is_archived) continue;
         if (spoolTagRank(spool, tray_uuid) == TAG_RANK_NONE) continue;
-        // Archived spool found
-        Serial.printf("Spoolman: spool archived (ID=%d)\n", spool["id"] | 0);
-        lv_label_set_text(lbl_spoolman_weight, T(STR_ARCHIVED));
-        lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x808080), 0);
-        lv_label_set_text(lbl_spoolman_pct, "");
-        lv_label_set_text(lbl_spoolman_dried_val, "-");
-        if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
-        lv_label_set_text(lbl_last_used, "-");
-        lv_label_set_text(lbl_detail, "-");
-        lv_label_set_text(lbl_filament_name, "-");
-        // Reset progress bar and diff labels
-        if (lbl_scale_diff) lv_obj_set_width(lbl_scale_diff, 0);
-        if (lbl_spoolman_dried) lv_label_set_text(lbl_spoolman_dried, "");
-        if (lbl_keys) lv_label_set_text(lbl_keys, "");
-        sm_found = false;
+        // Archived, but found. Fetching it whole rather than painting a dead
+        // end here: the user has to see which spool this is before deciding to
+        // bring it back, and that means name, filament and tare, none of which
+        // the lean archive filter carries. querySpoolmanById() reads `archived`
+        // and sets sm_archived, so everything that writes holds off.
+        const int archived_id = spool["id"] | 0;
+        Serial.printf("Spoolman: spool archived (ID=%d)\n", archived_id);
+        logSDf("Spoolman: found ID=%d, archived", archived_id);
+        doc2.clear();          // the byId fetch wants the PSRAM back
+        querySpoolmanById(archived_id);
+
+        // Said after the fetch, which has just painted the ordinary weight.
+        // Zero grams is what archiving leaves behind, and showing that number
+        // would read as a measurement rather than as a state.
+        if (sm_archived) {
+          lv_label_set_text(lbl_spoolman_weight, T(STR_ARCHIVED));
+          lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x808080), 0);
+          lv_label_set_text(lbl_spoolman_pct, "");
+          if (lbl_scale_diff) lv_obj_set_width(lbl_scale_diff, 0);
+        }
         updateLinkButton();
         return;
       }
