@@ -47,6 +47,25 @@ String jsStr(const char *in) {
   return o;
 }
 
+String jsonEsc(const char *s) {
+  String o;
+  // The char-at-a-time append below reallocates in steps, and release notes
+  // run to several kilobytes. One guess up front costs nothing and saves the
+  // chain of copies.
+  const size_t n = s ? strlen(s) : 0;
+  o.reserve(n + n / 8 + 8);
+  for (const char *p = s ? s : ""; *p; p++) {
+    if (*p == '"' || *p == '\\') { o += '\\'; o += *p; }
+    // Multi-line values arrive with CRLF. The CR is dropped rather than turned
+    // into a space, which would leave one at the end of every line.
+    else if (*p == '\n')          { o += "\\n"; }
+    else if (*p == '\r')          { }
+    else if ((uint8_t)*p < 0x20)  { o += ' '; }
+    else                          { o += *p; }
+  }
+  return o;
+}
+
 // ---------------------------------------------------------------------------
 // The palette is the device's own, unchanged. What carries the look is the
 // type scale, the state pills and the space - a 720 px column instead of the

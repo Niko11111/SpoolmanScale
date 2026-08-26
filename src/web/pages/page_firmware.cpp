@@ -65,20 +65,6 @@ bool otaWebUploadActive() { return ota_upload_active; }
 
 static const char* label() { return T(STR_W_NAV_FIRMWARE); }
 
-static String jsonEsc(const char *s) {
-  String o;
-  for (const char *p = s ? s : ""; *p; p++) {
-    if (*p == '"' || *p == '\\') { o += '\\'; o += *p; }
-    // Release notes are the only multi-line thing that comes through here,
-    // and they arrive with CRLF. The CR is dropped rather than turned into a
-    // space, which would end every line with one.
-    else if (*p == '\n')          { o += "\\n"; }
-    else if (*p == '\r')          { }
-    else if ((uint8_t)*p < 0x20)  { o += ' '; }
-    else                          { o += *p; }
-  }
-  return o;
-}
 
 // Whatever else is holding a TLS connection or writing flash. Two handshakes
 // want roughly 40 kB each and the device does not have that twice over.

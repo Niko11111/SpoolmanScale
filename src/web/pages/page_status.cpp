@@ -21,15 +21,6 @@
 
 static const char* label() { return T(STR_W_NAV_STATUS); }
 
-static String jsonEsc(const char *s) {
-  String o;
-  for (const char *p = s ? s : ""; *p; p++) {
-    if (*p == '"' || *p == '\\') { o += '\\'; o += *p; }
-    else if ((uint8_t)*p < 0x20)  { o += ' '; }
-    else                          { o += *p; }
-  }
-  return o;
-}
 
 static String uptimeStr() {
   uint32_t s = millis() / 1000UL;

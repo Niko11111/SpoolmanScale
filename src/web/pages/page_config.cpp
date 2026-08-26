@@ -29,15 +29,6 @@
 
 static const char* label() { return T(STR_W_NAV_SETTINGS); }
 
-static String jsonEsc(const char *s) {
-  String o;
-  for (const char *p = s ? s : ""; *p; p++) {
-    if (*p == '"' || *p == '\\') { o += '\\'; o += *p; }
-    else if ((uint8_t)*p < 0x20)  { o += ' '; }
-    else                          { o += *p; }
-  }
-  return o;
-}
 
 // The other addresses that reach the same scale, in the order someone would
 // try them. Both are listed because neither always works: a .local name is

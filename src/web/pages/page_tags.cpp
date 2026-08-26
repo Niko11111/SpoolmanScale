@@ -43,18 +43,6 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 
 static const char* label() { return T(STR_W_NAV_TAGS); }
 
-// The reply below is built by concatenation, and two of its fields carry text
-// this firmware did not choose: the message names the filament as the backend
-// spells it, and the content is read off the tag.
-static String jsonEsc(const char *s) {
-  String o;
-  for (const char *p = s ? s : ""; *p; p++) {
-    if (*p == '"' || *p == '\\') { o += '\\'; o += *p; }
-    else if ((uint8_t)*p < 0x20)   { o += ' '; }
-    else                           { o += *p; }
-  }
-  return o;
-}
 
 static String body() {
   String h;

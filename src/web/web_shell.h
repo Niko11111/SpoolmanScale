@@ -24,4 +24,10 @@ String webShellRestartUi();
 // Use it for every T() text that lands inside a <script> block.
 String jsStr(const char *in);
 
+// Escapes a string for the inside of a JSON string literal, quotes not
+// included. Newlines survive as \n rather than collapsing to spaces, which
+// matters for anything multi-line: release notes and NDEF text records both
+// come through here.
+String jsonEsc(const char *s);
+
 const char* webShellLogoBase64();
