@@ -10,7 +10,7 @@ uint8_t g_date_fmt = 0;  // 0=DD.MM.YYYY  1=YYYY-MM-DD
 
 // Order MUST exactly match the StringID enum in lang.h!
 // Format: { "Deutsch", "English" }
-const char* const STRINGS[STR_COUNT][2] = {
+const char* const STRINGS[][2] = {
 
   // Navigation
   { "Abbrechen",              "Cancel"           },  // STR_CANCEL
@@ -1434,3 +1434,10 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Welche Bereiche ausgeliefert werden, entscheidet das Gerät unter",
     "Which sections are served is decided on the device under" },  // STR_W_FOOT_GATE_ALL
 };
+
+// Without this, a missing entry is not a compile error: every string from the
+// gap onwards reads as the wrong one, in both languages, and the only symptom
+// is a UI that looks scrambled. That is what a merge produces when two
+// branches both append here, and nothing else would catch it.
+static_assert(sizeof(STRINGS) / sizeof(STRINGS[0]) == STR_COUNT,
+              "STRINGS and the StringID enum are out of step");

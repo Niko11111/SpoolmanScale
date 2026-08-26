@@ -925,7 +925,11 @@ enum StringID {
   STR_COUNT
 };
 
-extern const char* const STRINGS[STR_COUNT][2];
+// Deliberately without a bound: it comes from the initializer in lang.cpp, so
+// the static_assert there can compare the two. Spelled [STR_COUNT][2] here,
+// the definition inherits that bound, a short initializer is padded with
+// nullptr, and nothing complains.
+extern const char* const STRINGS[][2];
 
 // Macro: T(STR_XXX) -> returns the string in the current language
 #define T(id) STRINGS[id][g_lang]
