@@ -11,6 +11,7 @@
 #include "services/wifi_manager.h"
 #include "web/web_access.h"
 #include "web/web_assets.h"
+#include "web/web_static.h"
 #include "web/web_pages.h"
 #include "web/web_shell.h"
 
@@ -78,6 +79,7 @@ static void registerRoutes() {
   routes_registered = true;
 
   registerAssetRoutes(ota_server);
+  registerStaticRoutes(ota_server);
 
   // Every page and every endpoint it owns, straight from the one table. The
   // page route itself is wrapped here so the gate check and the chrome happen

@@ -68,8 +68,8 @@ static String body() {
          "<option value='3'>FilaMan</option>"
          "<option value='0'>Anycubic ACE</option>"
          "</select></div></div>"
-         "<label class='inrow' style='margin-top:14px;gap:8px;font-size:13px;color:var(--ink-2)'>"
-         "<input id='tg-link' type='checkbox' checked style='flex:0 0 16px;width:16px;height:16px'> ");
+         "<label class='check' style='margin-top:14px'><span class='switch'>"
+         "<input id='tg-link' type='checkbox' checked><i></i></span>");
   h += T(STR_W_TAG_LINK);
   h += F("</label>"
          "<div class='inrow' style='margin-top:16px'>"

@@ -135,13 +135,13 @@ static String body() {
   //
   // Rendered with its state here rather than filled in by the script: a
   // control that arrives blank and then jumps is worse than one that is a
-  // frame late. Shape taken from the one checkbox the interface already has,
-  // in page_tags.cpp - no new look for something this ordinary.
+  // frame late. The shape is .switch/.check from the stylesheet now - it used
+  // to be an inline style copied between this page and page_tags.cpp.
   h += F("<div class='field'>"
-         "<label class='inrow' style='gap:8px;font-size:13px;color:var(--ink-2)'>"
-         "<input id='md' type='checkbox' style='flex:0 0 16px;width:16px;height:16px'");
+         "<label class='check'><span class='switch'>"
+         "<input id='md' type='checkbox'");
   if (deviceMdnsEnabled()) h += F(" checked");
-  h += F("> ");
+  h += F("><i></i></span>");
   h += T(STR_W_MDNS);
   h += F("</label><span class='hint'>");
   h += T(STR_W_MDNS_HINT);
