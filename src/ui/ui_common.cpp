@@ -193,6 +193,14 @@ void releaseScreen(lv_obj_t **scr) {
 }
 
 lv_obj_t* buildOverlayScreen() {
+  // One reading per screen built, taken before anything is allocated for it.
+  // Every overlay screen in the firmware comes through here, so the sequence
+  // of these lines is the pool's trend across a navigation session - which is
+  // the shape the problem has: not one screen that is too expensive, but free
+  // memory that does not come back. Read it next to the "BUILD: xScreen" line
+  // the caller logs immediately before.
+  logLvMem("screen", 0);
+
   lv_obj_t *scr = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr, 480, 320);
   lv_obj_set_pos(scr, 0, 0);
@@ -317,8 +325,13 @@ lv_obj_t* addSettingRow(lv_obj_t *list, const SettingDesc &s) {
 // One screen's worth of rows: everything in the table that belongs to this
 // backend and applies right now, in table order.
 void addSettingRows(lv_obj_t *list) {
+  int rows = 0;
   for (size_t i = 0; i < SETTINGS_COUNT; i++) {
     if (!settingVisible(SETTINGS[i])) continue;
     addSettingRow(list, SETTINGS[i]);
+    rows++;
   }
+  // What the rows themselves cost, against the reading buildOverlayScreen()
+  // took a moment earlier. The difference is one screen's worth of rows.
+  logLvMem("options", rows);
 }
