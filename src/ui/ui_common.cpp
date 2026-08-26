@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "hardware/sd_logger.h"
+#include "theme.h"
 
 
 lv_color_t swatchColorFromHex(const char* hex) {
@@ -22,14 +23,14 @@ lv_obj_t* addInfoRow(lv_obj_t* parent, int y, const char* label,
                      lv_obj_t** out_label) {
   lv_obj_t *l = lv_label_create(parent);
   lv_label_set_text(l, label);
-  lv_obj_set_style_text_color(l, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(l, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_pos(l, INFO_ROW_LABEL_X, y + 3);
   if (out_label) *out_label = l;
 
   lv_obj_t *v = lv_label_create(parent);
   lv_label_set_text(v, "-");
-  lv_obj_set_style_text_color(v, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_color(v, tc(TH_TEXT_BRIGHT), 0);
   lv_obj_set_style_text_font(v, &lv_font_montserrat_ext_16, 0);
   lv_label_set_long_mode(v, LV_LABEL_LONG_DOT);
   lv_obj_set_width(v, INFO_ROW_VALUE_W);
@@ -41,23 +42,23 @@ lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
                       const char* sub, bool toggle_active) {
   lv_obj_t *btn = lv_btn_create(list);
   lv_obj_set_size(btn, 456, 64);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn, tc(TH_TILE_BG), 0);
+  lv_obj_set_style_bg_color(btn, tc(TH_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, 10, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 1, 0);
-  lv_obj_set_style_border_color(btn, toggle_active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3050), 0);
+  lv_obj_set_style_border_color(btn, toggle_active ? tc(TH_ACCENT) : tc(TH_BORDER), 0);
   lv_obj_set_style_pad_all(btn, 0, 0);
 
   lv_obj_t *ico = lv_label_create(btn);
   lv_label_set_text(ico, ico_sym);
-  lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(ico, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
   lv_obj_align(ico, LV_ALIGN_LEFT_MID, 14, 0);
 
   lv_obj_t *lbl = lv_label_create(btn);
   lv_label_set_text(lbl, title);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_color(lbl, tc(TH_TEXT_BRIGHT), 0);
   lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_width(lbl, 320);
   lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 52, sub && strlen(sub) > 0 ? -10 : 0);
@@ -65,7 +66,7 @@ lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
   if (sub && strlen(sub) > 0) {
     lv_obj_t *slbl = lv_label_create(btn);
     lv_label_set_text(slbl, sub);
-    lv_obj_set_style_text_color(slbl, toggle_active ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(slbl, toggle_active ? tc(TH_ACCENT) : tc(TH_TEXT_MUTED), 0);
     lv_obj_set_style_text_font(slbl, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_width(slbl, 320);
     lv_obj_align(slbl, LV_ALIGN_LEFT_MID, 52, 12);
@@ -73,7 +74,7 @@ lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
 
   lv_obj_t *arr = lv_label_create(btn);
   lv_label_set_text(arr, LV_SYMBOL_RIGHT);
-  lv_obj_set_style_text_color(arr, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_color(arr, tc(TH_TEXT_DIM), 0);
   lv_obj_set_style_text_font(arr, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(arr, LV_ALIGN_RIGHT_MID, -14, 0);
   return btn;
@@ -83,8 +84,8 @@ void addBackButton(lv_obj_t *parent, lv_event_cb_t cb) {
   lv_obj_t *btn = lv_btn_create(parent);
   lv_obj_set_size(btn, 44, 44);
   lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 4, 2);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn, tc(TH_SURFACE), 0);
+  lv_obj_set_style_bg_color(btn, tc(TH_SURFACE_2), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, 8, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
@@ -92,7 +93,7 @@ void addBackButton(lv_obj_t *parent, lv_event_cb_t cb) {
   lv_obj_t *lbl = lv_label_create(btn);
   lv_label_set_text(lbl, LV_SYMBOL_LEFT);
   lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl, tc(TH_ACCENT), 0);
   lv_obj_center(lbl);
 }
 
@@ -100,8 +101,8 @@ void addCloseButton(lv_obj_t *parent) {
   lv_obj_t *btn = lv_btn_create(parent);
   lv_obj_set_size(btn, 44, 44);
   lv_obj_align(btn, LV_ALIGN_TOP_RIGHT, -4, 2);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(0x602020), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn, tc(TH_DANGER_BG), 0);
+  lv_obj_set_style_bg_color(btn, tc(TH_DANGER_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, 8, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
@@ -109,7 +110,7 @@ void addCloseButton(lv_obj_t *parent) {
   lv_obj_t *lbl = lv_label_create(btn);
   lv_label_set_text(lbl, LV_SYMBOL_CLOSE);
   lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_color(lbl, tc(TH_DANGER_TEXT), 0);
   lv_obj_center(lbl);
 }
 
@@ -120,7 +121,7 @@ void buildSubHeader(lv_obj_t *parent, const char *title,
 
   lv_obj_t *lbl_title = lv_label_create(parent);
   lv_label_set_text(lbl_title, title);
-  lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_title, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 12);
 
@@ -142,6 +143,6 @@ lv_obj_t* buildOverlayScreen() {
   lv_obj_set_style_border_width(scr, 0, 0);
   lv_obj_set_style_pad_all(scr, 0, 0);
   lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(scr, tc(TH_BG), 0);
   return scr;
 }
