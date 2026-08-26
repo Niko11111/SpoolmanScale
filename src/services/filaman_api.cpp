@@ -72,6 +72,11 @@ static char          s_loc_name[FILAMAN_LOC_MAX][FILAMAN_LOC_NAME_LEN];
 static int           s_loc_count = 0;
 static unsigned long s_loc_fetched_ms = 0;
 
+void filamanForgetLocations() {
+  s_loc_count = 0;
+  s_loc_fetched_ms = 0;
+}
+
 static const char* locationNameById(int id) {
   if (id <= 0) return nullptr;
   for (int i = 0; i < s_loc_count; i++) {

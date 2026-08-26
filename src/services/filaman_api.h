@@ -262,3 +262,9 @@ int filamanGetDeviceAutoAssign(const char* base_url, const char* api_key,
 int filamanSetDeviceAutoAssign(const char* base_url, const char* api_key,
                                int device_id, const bool* enabled,
                                const int* timeout_s, uint32_t timeout_ms = 5000);
+
+// Throws the cached location table away. It is keyed by nothing but time - a
+// five minute TTL - so after a switch to a different FilaMan instance it would
+// keep resolving ids that belong to the server just left, and writing them.
+// There was no way to reach it from outside at all.
+void filamanForgetLocations();

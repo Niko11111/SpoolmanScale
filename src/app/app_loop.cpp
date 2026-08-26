@@ -10,6 +10,7 @@
 #include "app_config.h"
 #include "app/app_boot.h"
 #include "app/app_state.h"
+#include "app/backend_switch.h"
 #include "app/deferred_actions.h"
 #include "bambu/bambu_scan.h"
 #include "bambu/bambu_tag.h"
@@ -432,6 +433,16 @@ void appLoop() {
     buildLastUsedScreen();
     hideAllOverlays();
     lv_obj_clear_flag(scr_lastused, LV_OBJ_FLAG_HIDDEN);
+  }
+  // The web asked for a different backend. Applied here rather than in the
+  // handler, and before the screen rebuild below, so an open backend screen
+  // redraws with the new mode instead of standing there stale.
+  if (backend_mode_change_pending) {
+    backend_mode_change_pending = false;
+    backendApplyMode((BackendMode)pending_backend_mode);
+    if (scr_backend && !lv_obj_has_flag(scr_backend, LV_OBJ_FLAG_HIDDEN)) {
+      show_backend_pending = true;
+    }
   }
   if (show_backend_pending) {
     show_backend_pending = false;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 extern bool skip_setup_pending;
 extern bool finish_setup_pending;
 extern bool cal_reminder_pending;
@@ -7,6 +9,13 @@ extern bool show_bag_pending;
 extern bool show_factor_pending;
 extern bool show_lastused_pending;
 extern bool show_backend_pending;
+
+// Set by the web route, consumed in appLoop(). Not applied in the handler
+// itself: that runs in the loop task, already deep in the WebServer stack, and
+// backendApplyMode() rebuilds screens and makes requests of its own. The loop
+// task has 16 kB, and that nesting is what overflowed it before.
+extern bool backend_mode_change_pending;
+extern uint8_t pending_backend_mode;
 extern bool show_filaman_options_pending;
 extern bool show_ams_assign_pending;
 extern bool show_filaman_fields_pending;

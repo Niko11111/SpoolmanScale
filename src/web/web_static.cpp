@@ -206,6 +206,15 @@ static const char APP_CSS[] PROGMEM =
       // A row the device owns. Says so instead of showing a control that
       // cannot work here.
       ".od{font-size:12px;color:var(--ink-3);white-space:nowrap}"
+      // Which backend. Three segments side by side, the same shape the device
+      // shows them in - and the active one is disabled rather than merely
+      // highlighted, because there is nothing to switch to there.
+      ".btabs{display:flex;gap:8px;flex-wrap:wrap}"
+      ".btab{flex:1 1 0;min-width:104px;justify-content:center;"
+      "background:#0f1b2c;color:var(--ink-2);border-color:var(--line)}"
+      ".btab:hover{background:#16273e}"
+      ".btab.on{background:#0f2a22;color:var(--accent);"
+      "border-color:var(--accent-line);opacity:1;cursor:default}"
 ;
 
 const char* webStaticVersion() { return FW_VERSION; }

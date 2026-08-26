@@ -1447,6 +1447,13 @@ const char* const STRINGS[][2] = {
     "on the device" },  // STR_W_ON_DEVICE
   { "Dieses Backend hat keine weiteren Optionen.",
     "This backend has no further options." },  // STR_W_NO_OPTIONS
+  { "Filamentverwaltung",
+    "Filament manager" },  // STR_W_C_BACKEND
+  { "Adresse, Zugangsdaten und Optionen gehören jeweils zu einer Verwaltung und bleiben beim Wechsel erhalten.",
+    "Address, credentials and options belong to one manager each and survive a switch." },  // STR_W_BACKEND_NOTE
+  // %s is the name of the backend being switched to.
+  { "Auf %s umschalten? Die Waage spricht danach mit einem anderen Bestand.",
+    "Switch to %s? The scale will talk to a different inventory afterwards." },  // STR_W_BACKEND_ASK
 };
 
 // Without this, a missing entry is not a compile error: every string from the

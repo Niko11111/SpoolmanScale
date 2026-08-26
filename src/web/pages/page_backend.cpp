@@ -16,6 +16,7 @@
 #include <WebServer.h>
 
 #include "app/app_state.h"
+#include "app/deferred_actions.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
@@ -38,6 +39,32 @@ static String body() {
   String h;
   h.reserve(5900);
   h += F("<div class='grid'>");
+
+  // ---- which backend ----------------------------------------------------
+  // Above the address, because the address only means something once it is
+  // known which server it points at - the same order the device setup asks in.
+  //
+  // Each backend keeps its own address and its own credentials, so switching
+  // loses nothing and switching back finds everything where it was.
+  h += F("<div class='card wide'><h2>");
+  h += T(STR_W_C_BACKEND);
+  h += F("</h2><div class='btabs'>");
+  for (uint8_t m = 0; m < 3; m++) {
+    const bool on = (backendMode() == (BackendMode)m);
+    h += F("<button class='btab");
+    if (on) h += F(" on");
+    h += F("' data-m='");
+    h += String((int)m);
+    h += F("'");
+    if (on) h += F(" disabled");
+    h += F(">");
+    h += backendModeName((BackendMode)m);
+    h += F("</button>");
+  }
+  h += F("</div><span class='msg' id='bm-s'></span>"
+         "<p class='note'>");
+  h += T(STR_W_BACKEND_NOTE);
+  h += F("</p></div>");
 
   // ---- address ----------------------------------------------------------
   h += F("<div class='card wide'><h2>");
@@ -138,6 +165,7 @@ static String body() {
   h += jsStr(T(STR_W_HOST_TESTING));
   h += F(",dev:");  h += jsStr(T(STR_W_ON_DEVICE));
   h += F(",none:"); h += jsStr(T(STR_W_NO_OPTIONS));
+  h += F(",swap:"); h += jsStr(T(STR_W_BACKEND_ASK));
   h += F("};"
          // No ms: these answers stand. /api/host replies with the result of a
          // real health check and /api/filaman/register with the HTTP status of
@@ -218,6 +246,19 @@ static String body() {
          "v.insertBefore(q,v.firstChild);wrap.appendChild(p);}"
          "return wrap;}"
 
+         // Switching moves the scale to a different inventory, so it asks
+         // first - the action stays possible, the intent has to be deliberate.
+         // The reload is what redraws address, credentials and options for the
+         // backend now active; the device needs a moment to settle first.
+         "document.querySelectorAll('.btab').forEach(b=>{"
+         "b.addEventListener('click',()=>{"
+         "const n=b.textContent;"
+         "if(!confirm(M.swap.replace('%s',n)))return;"
+         "flash('bm-s',M.test,false);"
+         "post('/api/backend/mode',b.dataset.m).then(r=>{"
+         "if(!r.ok){flash('bm-s',WS.err,true,4000);return;}"
+         "setTimeout(()=>location.reload(),1200);});});});"
+
          "function load(){getJson('/api/settings').then(d=>{"
          "const c=$('os');if(!c)return;c.textContent='';"
          "if(!d){const e=document.createElement('p');e.className='hint';"
@@ -293,6 +334,23 @@ static String settingsJson() {
 }
 
 static void routes(WebServer &srv) {
+  // Switching the backend. Only the intent is recorded: this runs in the loop
+  // task, already deep in the WebServer stack, and backendApplyMode() rebuilds
+  // screens and makes requests of its own. appLoop() carries it out.
+  srv.on("/api/backend/mode", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
+    const long m = srv.arg("plain").toInt();
+    if (m < 0 || m > 2) { srv.send(400, "text/plain", T(STR_W_ERROR)); return; }
+    if ((BackendMode)m == backendMode()) {
+      srv.send(200, "text/plain", backendName());
+      return;
+    }
+    pending_backend_mode = (uint8_t)m;
+    backend_mode_change_pending = true;
+    logSDf("Web: backend -> %s", backendModeName((BackendMode)m));
+    srv.send(200, "text/plain", backendModeName((BackendMode)m));
+  });
+
   srv.on("/api/settings", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
     srv.send(200, "application/json", settingsJson());

@@ -17,6 +17,7 @@
 #include "navigation.h"
 #include "ota_browser.h"
 #include "tag_display.h"
+#include "app/backend_switch.h"
 #include "ui_common.h"
 
 // Switching the mode has to happen outside this screen's own event callback,
@@ -28,24 +29,9 @@ static bool s_mode_change_pending = false;
 static void applyPendingModeChange() {
   if (!s_mode_change_pending) return;
   s_mode_change_pending = false;
-  backendSetMode(s_pending_mode);
-
-  // The header abbreviation and the caption above the database weight name
-  // the backend. Without this they would only catch up on the next
-  // reachability change, which can be half a minute away, or on reboot.
-  sm_reachable = false;          // unknown until the new backend answers
-  updateHeaderStatus();
-
-  // Everything on screen came from the backend that was just left: spool id,
-  // weights, drying date, and for an NTAG even the material and vendor, since
-  // those live on the server rather than on the tag. None of it is true for
-  // the new one, and the same spool may not exist there at all - so it is
-  // dropped rather than left standing until something happens to replace it.
-  //
-  // This also clears both lookup markers, which is what makes the poll treat
-  // the tag on the pad as new: it reads it again and asks the new backend
-  // about it, without anyone having to lift the spool off.
-  clearTagDisplay();
+  // One switch for both entry points. What it lets go of used to be spelled
+  // out here and stopped after three steps - see app/backend_switch.cpp.
+  backendApplyMode(s_pending_mode);
 }
 
 // Full width row that opens another screen: title on top, a value line under
