@@ -1088,11 +1088,19 @@ void querySpoolman(const char* tray_uuid) {
   // instead. Whether it is still moving is the only question a wait like this
   // raises, and the answer costs nothing here.
   crumbSet("inventory search");
+
   // The loop stops here until the whole inventory is in. Bracketed so the
   // clocks that are running - the AMS question, the location prompt - do not
   // count the wait against the user, who cannot reach a button during it.
-  httpStallBegin();
-  httpSetProgressHook(searchProgress);
+  //
+  // A scope, not two calls: the retry below returns from the middle of this
+  // function, and a hand-written httpStallEnd() after the loop never ran on
+  // that path. The bracket stayed open, the depth stuck at 1, and every clock
+  // in the firmware then subtracted its whole elapsed time - the AMS question
+  // stood at ten seconds for the rest of the boot and the location prompt
+  // behind it was never asked again.
+  {
+  HttpStall stall(searchProgress);
 
   // Up to 2 attempts: first try, then 1 retry on IncompleteInput / connection issues.
   // 20s timeout is generous for large Spoolman datasets (200+ spools over WiFi).
@@ -1129,9 +1137,7 @@ void querySpoolman(const char* tray_uuid) {
       break;  // other errors are not transient -> don't retry
     }
   }
-
-  httpSetProgressHook(nullptr);
-  httpStallEnd();
+  }   // HttpStall: hook cleared and the bracket closed, whichever way we left
 
   Serial.printf("DBG free heap after parse: %d bytes  free PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
   if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (after Spoolman parse)",

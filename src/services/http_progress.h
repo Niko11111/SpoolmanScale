@@ -39,6 +39,14 @@ typedef void (*HttpProgressFn)(size_t bytes_read);
 
 // Brackets a call that will hold up the loop. Nesting is counted, so an inner
 // bracket cannot end the outer one's measurement early.
+//
+// Do not call these by hand - use HttpStall below. The first version of this
+// did call them by hand, and the retry loop in querySpoolman() has a `return`
+// in the middle: one trip through it left the bracket open, the depth stuck
+// at 1, and httpStallTotalMs() growing at wall-clock rate for the rest of the
+// boot. That made the AMS countdown subtract exactly as much as had elapsed,
+// so it stood at ten seconds forever, and the location prompt that hangs off
+// its timeout was never asked again.
 void httpStallBegin();
 void httpStallEnd();
 
@@ -48,6 +56,30 @@ void httpStallEnd();
 uint32_t httpStallTotalMs();
 
 void           httpSetProgressHook(HttpProgressFn fn);
+
+// The bracket as a scope, so no return path can leave it open. It also clears
+// the progress hook on the way out: the two are set together at every call
+// site and forgetting the hook leaves it painting into a label that the next
+// request knows nothing about.
+//
+//     { HttpStall stall(searchProgress);
+//       ... blocking fetch, returns allowed ... }
+//
+// Passing no hook brackets the time only.
+class HttpStall {
+public:
+  explicit HttpStall(HttpProgressFn hook = nullptr) {
+    httpStallBegin();
+    if (hook) httpSetProgressHook(hook);
+  }
+  ~HttpStall() {
+    httpSetProgressHook(nullptr);
+    httpStallEnd();
+  }
+  HttpStall(const HttpStall&) = delete;
+  HttpStall& operator=(const HttpStall&) = delete;
+};
+
 HttpProgressFn httpProgressHook();
 
 // True while a hook is registered. Call sites use it to skip the wrapper

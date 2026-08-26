@@ -198,8 +198,20 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
 // Offers the location question the AMS answer did not already settle.
 static void offerLocationPicker(int spool_id) {
   if (!g_auto_loc_popup || !wifi_ok) return;
-  if (!sm_found || sm_archived || sm_id != spool_id) return;
-  if (g_loc_popup_shown_for_id == spool_id) return;
+  // The AMS branch in appLoop() takes the removal event for itself and drops
+  // the location prompt, so this is the only place it can still be asked. Both
+  // ways out are logged: while the question stood, the NFC poll kept running
+  // underneath it, and a spool that landed on the pad in the meantime moved
+  // sm_id - which voids the promise silently.
+  if (!sm_found || sm_archived || sm_id != spool_id) {
+    logSDf("LOC: not offered after AMS, id=%d sm_id=%d found=%d archived=%d",
+           spool_id, sm_id, (int)sm_found, (int)sm_archived);
+    return;
+  }
+  if (g_loc_popup_shown_for_id == spool_id) {
+    logSDf("LOC: not offered after AMS, already answered for id=%d", spool_id);
+    return;
+  }
   g_loc_popup_shown_for_id = spool_id;
   requestLocationPicker(true);
 }

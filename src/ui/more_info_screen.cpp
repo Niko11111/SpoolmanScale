@@ -206,7 +206,17 @@ void showLocationPicker() {
   closeLocationPicker();
   // A storage location on an archived spool describes a shelf nobody will look
   // on. Bringing it back first is the step that makes the question meaningful.
-  if (!sm_found || sm_archived || sm_id <= 0) return;
+  //
+  // Logged, because this used to be the one path in the whole chain that
+  // produced no trace at all: by the time this runs, one loop pass after the
+  // prompt was scheduled, the next spool's lookup may already have moved
+  // sm_id - and then the question simply never appeared, with nothing on the
+  // card to say why.
+  if (!sm_found || sm_archived || sm_id <= 0) {
+    logSDf("LOC: picker not shown, sm_found=%d archived=%d sm_id=%d",
+           (int)sm_found, (int)sm_archived, sm_id);
+    return;
+  }
 
   // Backdrop
   scr_location_picker = lv_obj_create(lv_scr_act());
