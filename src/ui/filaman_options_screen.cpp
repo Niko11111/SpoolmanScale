@@ -12,6 +12,7 @@
 #include "services/prefs_store.h"
 #include "services/user_options.h"
 #include "ui_common.h"
+#include "theme.h"
 
 
 void buildFilaManOptionsScreen() {
@@ -52,7 +53,7 @@ void buildFilaManOptionsScreen() {
       buf_v[sizeof(buf_v)-1] = '\0';
       lv_label_set_text(arr_lbl, buf_v);
       lv_obj_set_style_text_color(arr_lbl,
-        g_flm_autolink ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+        g_flm_autolink ? tc(TH_ACCENT) : tc(TH_TEXT_MUTED), 0);
       lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
     }
 

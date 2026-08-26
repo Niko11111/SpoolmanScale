@@ -14,6 +14,7 @@
 #include "services/drying_config.h"
 #include "services/prefs_store.h"
 #include "ui_common.h"
+#include "theme.h"
 
 
 
@@ -66,7 +67,7 @@ void buildScaleSubScreen() {
     lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
     if (arr_lbl) {
       lv_label_set_text(arr_lbl, buf_s);
-      lv_obj_set_style_text_color(arr_lbl, g_auto_loc_popup ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_color(arr_lbl, g_auto_loc_popup ? tc(TH_ACCENT) : tc(TH_TEXT_MUTED), 0);
       lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
     }
     lv_obj_add_event_cb(btn, [](lv_event_t *e){

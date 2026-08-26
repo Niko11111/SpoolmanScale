@@ -14,6 +14,7 @@
 #include "services/ota_web_server.h"
 #include "services/wifi_manager.h"
 #include "ui_common.h"
+#include "theme.h"
 
 // Which entry point brought the user here. Kept between show and build
 // because buildOtaBrowserScreen() is also reached through the generic
@@ -66,7 +67,7 @@ static lv_obj_t* addCredentialRow(lv_obj_t *parent, int y, const char *name,
 
   lv_obj_t *l = lv_label_create(parent);
   lv_label_set_text(l, name_buf);
-  lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(l, tc(TH_TEXT), 0);
   lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_pos(l, 40, y);
 
@@ -77,7 +78,7 @@ static lv_obj_t* addCredentialRow(lv_obj_t *parent, int y, const char *name,
 
   lv_obj_t *v = lv_label_create(parent);
   lv_label_set_text(v, val_buf);
-  lv_obj_set_style_text_color(v, lv_color_hex(present ? 0x40c080 : 0xf0b838), 0);
+  lv_obj_set_style_text_color(v, lv_color_hex(present ? g_theme[TH_SUCCESS_TEXT] : g_theme[TH_WARNING]), 0);
   lv_obj_set_style_text_font(v, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(v, LV_ALIGN_TOP_RIGHT, -40, y);
   return v;
@@ -90,7 +91,7 @@ static void setCredentialRow(lv_obj_t *label, bool present) {
           sizeof(val_buf) - 1);
   val_buf[sizeof(val_buf) - 1] = '\0';
   lv_label_set_text(label, val_buf);
-  lv_obj_set_style_text_color(label, lv_color_hex(present ? 0x40c080 : 0xf0b838), 0);
+  lv_obj_set_style_text_color(label, lv_color_hex(present ? g_theme[TH_SUCCESS_TEXT] : g_theme[TH_WARNING]), 0);
 }
 
 // Remembers what the rows currently say. Rewriting a label invalidates it and
@@ -145,7 +146,7 @@ void buildOtaBrowserScreen() {
     // A plain title keeps the screen consistent with the other setup steps.
     lv_obj_t *lbl_title = lv_label_create(scr_ota_browser);
     lv_label_set_text(lbl_title, title_buf);
-    lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(lbl_title, tc(TH_ACCENT), 0);
     lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
     lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 12);
   } else {
@@ -168,7 +169,7 @@ void buildOtaBrowserScreen() {
     strncpy(err_buf, T(STR_OTA_NO_WIFI), sizeof(err_buf) - 1);
     err_buf[sizeof(err_buf) - 1] = '\0';
     lv_label_set_text(lbl_err, err_buf);
-    lv_obj_set_style_text_color(lbl_err, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_color(lbl_err, tc(TH_DANGER_TEXT), 0);
     lv_obj_set_style_text_font(lbl_err, &lv_font_montserrat_ext_16, 0);
     lv_obj_set_style_text_align(lbl_err, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl_err, LV_ALIGN_CENTER, 0, 0);
@@ -197,7 +198,7 @@ void buildOtaBrowserScreen() {
 
   lv_obj_t *lbl_hint = lv_label_create(scr_ota_browser);
   lv_label_set_text(lbl_hint, hint_buf);
-  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_hint, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_hint, LV_LABEL_LONG_WRAP);
@@ -206,7 +207,7 @@ void buildOtaBrowserScreen() {
 
   lv_obj_t *lbl_ip = lv_label_create(scr_ota_browser);
   lv_label_set_text(lbl_ip, ip_buf);
-  lv_obj_set_style_text_color(lbl_ip, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_ip, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_ip, &lv_font_montserrat_ext_20, 0);
   lv_obj_align(lbl_ip, LV_ALIGN_TOP_MID, 0, showsCredentials() ? 108 : 80);
 
@@ -222,8 +223,8 @@ void buildOtaBrowserScreen() {
       lv_obj_t *btn_done = lv_btn_create(scr_ota_browser);
       lv_obj_set_size(btn_done, 200, 48);
       lv_obj_align(btn_done, LV_ALIGN_BOTTOM_MID, 0, -20);
-      lv_obj_set_style_bg_color(btn_done, lv_color_hex(0x1a3020), 0);
-      lv_obj_set_style_bg_color(btn_done, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+      lv_obj_set_style_bg_color(btn_done, tc(TH_OK_BG), 0);
+      lv_obj_set_style_bg_color(btn_done, tc(TH_SUCCESS_BG), LV_STATE_PRESSED);
       lv_obj_set_style_radius(btn_done, 8, 0);
       lv_obj_set_style_shadow_width(btn_done, 0, 0);
       lv_obj_set_style_border_width(btn_done, 0, 0);
@@ -238,7 +239,7 @@ void buildOtaBrowserScreen() {
       strncpy(done_buf, T(STR_BTN_FINISH), sizeof(done_buf) - 1);
       done_buf[sizeof(done_buf) - 1] = '\0';
       lv_label_set_text(lbl_done, done_buf);
-      lv_obj_set_style_text_color(lbl_done, lv_color_hex(0x40c080), 0);
+      lv_obj_set_style_text_color(lbl_done, tc(TH_SUCCESS_TEXT), 0);
       lv_obj_set_style_text_font(lbl_done, &lv_font_montserrat_ext_16, 0);
       lv_obj_center(lbl_done);
     }
@@ -255,7 +256,7 @@ void buildOtaBrowserScreen() {
   strncpy(file_buf, T(STR_OTA_FILE_HINT), sizeof(file_buf) - 1);
   file_buf[sizeof(file_buf) - 1] = '\0';
   lv_label_set_text(lbl_hint2, file_buf);
-  lv_obj_set_style_text_color(lbl_hint2, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_color(lbl_hint2, tc(TH_TEXT_DIM), 0);
   lv_obj_set_style_text_font(lbl_hint2, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(lbl_hint2, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_hint2, LV_ALIGN_TOP_MID, 0, 112);
@@ -267,7 +268,7 @@ void buildOtaBrowserScreen() {
   strncpy(wait_buf, T(STR_OTA_WAITING), sizeof(wait_buf) - 1);
   wait_buf[sizeof(wait_buf) - 1] = '\0';
   lv_label_set_text(lbl_ota_status, wait_buf);
-  lv_obj_set_style_text_color(lbl_ota_status, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_ota_status, tc(TH_WARNING), 0);
   lv_obj_set_style_text_font(lbl_ota_status, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_ota_status, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_ota_status, LV_ALIGN_CENTER, 0, 40);
@@ -275,8 +276,8 @@ void buildOtaBrowserScreen() {
   lv_obj_t *btn_stop = lv_btn_create(scr_ota_browser);
   lv_obj_set_size(btn_stop, 200, 48);
   lv_obj_align(btn_stop, LV_ALIGN_BOTTOM_MID, 0, -20);
-  lv_obj_set_style_bg_color(btn_stop, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_stop, lv_color_hex(0x602020), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_stop, tc(TH_DANGER_BG), 0);
+  lv_obj_set_style_bg_color(btn_stop, tc(TH_DANGER_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_stop, 8, 0);
   lv_obj_set_style_shadow_width(btn_stop, 0, 0);
   lv_obj_set_style_border_width(btn_stop, 0, 0);
@@ -290,7 +291,7 @@ void buildOtaBrowserScreen() {
   strncpy(stop_buf, T(STR_BTN_STOP_SERVER), sizeof(stop_buf) - 1);
   stop_buf[sizeof(stop_buf) - 1] = '\0';
   lv_label_set_text(lbl_stop, stop_buf);
-  lv_obj_set_style_text_color(lbl_stop, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_color(lbl_stop, tc(TH_DANGER_TEXT), 0);
   lv_obj_set_style_text_font(lbl_stop, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_stop);
 }

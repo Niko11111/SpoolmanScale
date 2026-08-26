@@ -10,6 +10,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "extra/libs/qrcode/lv_qrcode.h"
+#include "theme.h"
 
 
 
@@ -46,7 +47,7 @@ void showQRPopup(int idx) {
   lv_obj_t *popup = lv_obj_create(lv_scr_act());
   lv_obj_set_size(popup, 480, 320);
   lv_obj_set_pos(popup, 0, 0);
-  lv_obj_set_style_bg_color(popup, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(popup, tc(TH_BG), 0);
   lv_obj_set_style_border_width(popup, 0, 0);
   lv_obj_set_style_radius(popup, 0, 0);
   lv_obj_set_style_pad_all(popup, 0, 0);
@@ -55,14 +56,14 @@ void showQRPopup(int idx) {
   lv_obj_t *btn_back = lv_btn_create(popup);
   lv_obj_set_size(btn_back, 44, 44);
   lv_obj_set_pos(btn_back, 4, 2);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_back, tc(TH_SURFACE), 0);
+  lv_obj_set_style_bg_color(btn_back, tc(TH_SURFACE_2), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_back, 8, 0);
   lv_obj_set_style_shadow_width(btn_back, 0, 0);
   lv_obj_set_style_border_width(btn_back, 0, 0);
   lv_obj_t *lbl_bk = lv_label_create(btn_back);
   lv_label_set_text(lbl_bk, LV_SYMBOL_LEFT);
-  lv_obj_set_style_text_color(lbl_bk, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_bk, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_bk, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_bk);
   lv_obj_add_event_cb(btn_back, [](lv_event_t *e){
@@ -71,21 +72,21 @@ void showQRPopup(int idx) {
 
   lv_obj_t *lbl_title = lv_label_create(popup);
   lv_label_set_text(lbl_title, QR_TITLES[idx]);
-  lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_title, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 12);
 
   lv_obj_t *btn_x = lv_btn_create(popup);
   lv_obj_set_size(btn_x, 44, 44);
   lv_obj_align(btn_x, LV_ALIGN_TOP_RIGHT, -4, 2);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_x, tc(TH_DANGER_BG), 0);
+  lv_obj_set_style_bg_color(btn_x, tc(TH_DANGER_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_x, 8, 0);
   lv_obj_set_style_shadow_width(btn_x, 0, 0);
   lv_obj_set_style_border_width(btn_x, 0, 0);
   lv_obj_t *lbl_x = lv_label_create(btn_x);
   lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_color(lbl_x, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_color(lbl_x, tc(TH_DANGER_TEXT), 0);
   lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_x);
   lv_obj_add_event_cb(btn_x, [](lv_event_t *e){
@@ -96,7 +97,7 @@ void showQRPopup(int idx) {
 
   lv_obj_t *lbl_desc = lv_label_create(popup);
   lv_label_set_text(lbl_desc, getQRDesc(idx));
-  lv_obj_set_style_text_color(lbl_desc, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_desc, tc(TH_TEXT), 0);
   lv_obj_set_style_text_font(lbl_desc, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_desc, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_desc, LV_LABEL_LONG_WRAP);
@@ -105,7 +106,7 @@ void showQRPopup(int idx) {
 
   lv_obj_t *lbl_url = lv_label_create(popup);
   lv_label_set_text(lbl_url, QR_URLS_DISPLAY[idx]);
-  lv_obj_set_style_text_color(lbl_url, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_url, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_url, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_url, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_url, LV_ALIGN_TOP_MID, 0, 84);
@@ -128,7 +129,7 @@ void showInfoScreen() {
   scr_info = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_info, 480, 320);
   lv_obj_set_pos(scr_info, 0, 0);
-  lv_obj_set_style_bg_color(scr_info, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(scr_info, tc(TH_BG), 0);
   lv_obj_set_style_border_width(scr_info, 0, 0);
   lv_obj_set_style_radius(scr_info, 0, 0);
   lv_obj_set_style_pad_all(scr_info, 0, 0);
@@ -137,14 +138,14 @@ void showInfoScreen() {
   lv_obj_t *btn_back = lv_btn_create(scr_info);
   lv_obj_set_size(btn_back, 44, 44);
   lv_obj_set_pos(btn_back, 4, 2);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_back, tc(TH_SURFACE), 0);
+  lv_obj_set_style_bg_color(btn_back, tc(TH_SURFACE_2), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_back, 8, 0);
   lv_obj_set_style_shadow_width(btn_back, 0, 0);
   lv_obj_set_style_border_width(btn_back, 0, 0);
   lv_obj_t *lbl_bk = lv_label_create(btn_back);
   lv_label_set_text(lbl_bk, LV_SYMBOL_LEFT);
-  lv_obj_set_style_text_color(lbl_bk, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_bk, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_bk, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_bk);
   lv_obj_add_event_cb(btn_back, [](lv_event_t *e){
@@ -154,21 +155,21 @@ void showInfoScreen() {
 
   lv_obj_t *hdr = lv_label_create(scr_info);
   lv_label_set_text(hdr, T(STR_BTN_INFO));
-  lv_obj_set_style_text_color(hdr, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(hdr, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(hdr, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(hdr, LV_ALIGN_TOP_MID, 0, 12);
 
   lv_obj_t *btn_x = lv_btn_create(scr_info);
   lv_obj_set_size(btn_x, 44, 44);
   lv_obj_align(btn_x, LV_ALIGN_TOP_RIGHT, -4, 2);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_x, tc(TH_DANGER_BG), 0);
+  lv_obj_set_style_bg_color(btn_x, tc(TH_DANGER_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_x, 8, 0);
   lv_obj_set_style_shadow_width(btn_x, 0, 0);
   lv_obj_set_style_border_width(btn_x, 0, 0);
   lv_obj_t *lbl_x = lv_label_create(btn_x);
   lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_color(lbl_x, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_color(lbl_x, tc(TH_DANGER_TEXT), 0);
   lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_x);
   lv_obj_add_event_cb(btn_x, [](lv_event_t *e){
@@ -180,7 +181,7 @@ void showInfoScreen() {
   char ver_buf[40];
   snprintf(ver_buf, sizeof(ver_buf), T(STR_INFO_VERSION), FW_VERSION);
   lv_label_set_text(ver_lbl, ver_buf);
-  lv_obj_set_style_text_color(ver_lbl, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(ver_lbl, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(ver_lbl, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(ver_lbl, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(ver_lbl, LV_ALIGN_TOP_MID, 0, 54);
@@ -188,8 +189,8 @@ void showInfoScreen() {
   const int QB_W = 228, QB_H = 90, QB_GAP = 8;
   const int QB_X0 = (480 - 2*QB_W - QB_GAP) / 2;
   const int QB_Y0 = 82;
-  static const uint32_t QB_COLS[] = { 0x1a2800, 0x0a1828, 0x12103a, 0x1a0a18 };
-  static const uint32_t QB_TEXT[] = { 0xa0d840, 0x28d49a, 0x8090ff, 0xc060e0 };
+  const uint32_t QB_COLS[] = { 0x1a2800, g_theme[TH_SURFACE], 0x12103a, 0x1a0a18 };
+  const uint32_t QB_TEXT[] = { 0xa0d840, g_theme[TH_ACCENT], 0x8090ff, 0xc060e0 };
 
   lv_obj_t *btn_kofi = lv_btn_create(scr_info);
   lv_obj_set_size(btn_kofi, QB_W, QB_H);
@@ -266,14 +267,14 @@ void showInfoScreen() {
   lv_obj_t *disc = lv_label_create(scr_info);
   { char db[64]; strncpy(db, T(STR_NOT_AFFILIATED), sizeof(db) - 1); db[sizeof(db) - 1] = '\0';
     lv_label_set_text(disc, db); }
-  lv_obj_set_style_text_color(disc, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_color(disc, tc(TH_TEXT_DIM), 0);
   lv_obj_set_style_text_font(disc, &lv_font_montserrat_ext_10, 0);
   lv_obj_set_style_text_align(disc, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(disc, LV_ALIGN_BOTTOM_MID, 0, -6);
 
   lv_obj_t *hint = lv_label_create(scr_info);
   lv_label_set_text(hint, T(STR_INFO_HINT));
-  lv_obj_set_style_text_color(hint, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_color(hint, tc(TH_TEXT_DIM), 0);
   lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -22);

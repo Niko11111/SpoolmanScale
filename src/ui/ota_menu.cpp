@@ -13,6 +13,7 @@
 #include "services/ota_state.h"
 #include "ui_common.h"
 #include "update_badges.h"
+#include "theme.h"
 
 
 void showOtaGithubScreen();
@@ -38,26 +39,26 @@ void buildOtaScreen() {
   lv_obj_t *btn_browser = lv_btn_create(scr_ota);
   lv_obj_set_size(btn_browser, 456, 80);
   lv_obj_set_pos(btn_browser, 12, 58);
-  lv_obj_set_style_bg_color(btn_browser, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_browser, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_browser, tc(TH_TILE_BG), 0);
+  lv_obj_set_style_bg_color(btn_browser, tc(TH_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_browser, 10, 0);
   lv_obj_set_style_shadow_width(btn_browser, 0, 0);
   lv_obj_set_style_border_width(btn_browser, 1, 0);
-  lv_obj_set_style_border_color(btn_browser, lv_color_hex(0x1a3050), 0);
+  lv_obj_set_style_border_color(btn_browser, tc(TH_BORDER), 0);
   { lv_obj_t *ico = lv_label_create(btn_browser);
     lv_label_set_text(ico, LV_SYMBOL_UPLOAD);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(ico, tc(TH_ACCENT), 0);
     lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
     lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
     lv_obj_t *lbl = lv_label_create(btn_browser);
     lv_label_set_text(lbl, T(STR_OTA_BROWSER));
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
+    lv_obj_set_style_text_color(lbl, tc(TH_TEXT_BRIGHT), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
     lv_obj_t *sub = lv_label_create(btn_browser);
     lv_label_set_text(sub, T(STR_OTA_BROWSER_SUB));
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(sub, tc(TH_TEXT_MUTED), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
@@ -68,26 +69,26 @@ void buildOtaScreen() {
   lv_obj_t *btn_gh = lv_btn_create(scr_ota);
   lv_obj_set_size(btn_gh, 456, 80);
   lv_obj_set_pos(btn_gh, 12, 150);
-  lv_obj_set_style_bg_color(btn_gh, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_gh, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_gh, tc(TH_TILE_BG), 0);
+  lv_obj_set_style_bg_color(btn_gh, tc(TH_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_gh, 10, 0);
   lv_obj_set_style_shadow_width(btn_gh, 0, 0);
   lv_obj_set_style_border_width(btn_gh, 1, 0);
-  lv_obj_set_style_border_color(btn_gh, lv_color_hex(0x1a3050), 0);
+  lv_obj_set_style_border_color(btn_gh, tc(TH_BORDER), 0);
   { lv_obj_t *ico = lv_label_create(btn_gh);
     lv_label_set_text(ico, LV_SYMBOL_DOWNLOAD);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(ico, tc(TH_ACCENT), 0);
     lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
     lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
     lv_obj_t *lbl = lv_label_create(btn_gh);
     lv_label_set_text(lbl, T(STR_OTA_GITHUB));
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
+    lv_obj_set_style_text_color(lbl, tc(TH_TEXT_BRIGHT), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
     lv_obj_t *sub = lv_label_create(btn_gh);
     lv_label_set_text(sub, T(STR_OTA_GITHUB_SUB));
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(sub, tc(TH_TEXT_MUTED), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
@@ -100,7 +101,7 @@ void buildOtaScreen() {
   lv_obj_t *ver_ota = lv_label_create(scr_ota);
   char ver_buf[32]; snprintf(ver_buf, sizeof(ver_buf), T(STR_OTA_CURRENT), FW_VERSION);
   lv_label_set_text(ver_ota, ver_buf);
-  lv_obj_set_style_text_color(ver_ota, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_color(ver_ota, tc(TH_TEXT_DIM), 0);
   lv_obj_set_style_text_font(ver_ota, &lv_font_montserrat_ext_12, 0);
   lv_obj_align(ver_ota, LV_ALIGN_BOTTOM_MID, 0, -8);
 }

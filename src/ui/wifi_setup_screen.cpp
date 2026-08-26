@@ -17,6 +17,7 @@
 #include "setup_welcome_screen.h"
 #include "ui_common.h"
 #include "services/backend.h"
+#include "theme.h"
 
 
 
@@ -79,12 +80,12 @@ void buildWifiSetupScreen() {
   lv_obj_set_style_border_width(scr_wifi_setup, 0, 0);
   lv_obj_set_style_pad_all(scr_wifi_setup, 0, 0);
   lv_obj_clear_flag(scr_wifi_setup, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_wifi_setup, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(scr_wifi_setup, tc(TH_BG), 0);
 
   // Header
   lv_obj_t *title = lv_label_create(scr_wifi_setup);
   lv_label_set_text(title, T(STR_WIFI_TITLE));
-  lv_obj_set_style_text_color(title, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(title, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 14);
 
@@ -106,14 +107,14 @@ void buildWifiSetupScreen() {
   lv_obj_t *btn_scan = lv_btn_create(scr_wifi_setup);
   lv_obj_set_size(btn_scan, 44, 36);
   lv_obj_align(btn_scan, LV_ALIGN_TOP_MID, 100, 4);
-  lv_obj_set_style_bg_color(btn_scan, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_scan, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_scan, tc(TH_SURFACE), 0);
+  lv_obj_set_style_bg_color(btn_scan, tc(TH_SURFACE_2), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_scan, 6, 0);
   lv_obj_set_style_shadow_width(btn_scan, 0, 0);
   lv_obj_set_style_border_width(btn_scan, 0, 0);
   lv_obj_t *lbl_scan_btn = lv_label_create(btn_scan);
   lv_label_set_text(lbl_scan_btn, LV_SYMBOL_REFRESH);
-  lv_obj_set_style_text_color(lbl_scan_btn, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_scan_btn, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_scan_btn, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_scan_btn);
 
@@ -121,7 +122,7 @@ void buildWifiSetupScreen() {
   lv_obj_t *list = lv_obj_create(scr_wifi_setup);
   lv_obj_set_size(list, 460, 218);
   lv_obj_set_pos(list, 10, 56);
-  lv_obj_set_style_bg_color(list, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(list, tc(TH_BG), 0);
   lv_obj_set_style_border_width(list, 0, 0);
   lv_obj_set_style_pad_all(list, 2, 0);
   lv_obj_set_style_radius(list, 0, 0);
@@ -134,7 +135,7 @@ void buildWifiSetupScreen() {
   // Status label (initially "scanning...")
   lbl_wifi_setup_status = lv_label_create(scr_wifi_setup);
   lv_label_set_text(lbl_wifi_setup_status, T(STR_WIFI_SCAN));
-  lv_obj_set_style_text_color(lbl_wifi_setup_status, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_wifi_setup_status, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(lbl_wifi_setup_status, &lv_font_montserrat_ext_14, 0);
   lv_obj_align(lbl_wifi_setup_status, LV_ALIGN_BOTTOM_MID, 0, -8);
 
@@ -211,18 +212,18 @@ void doWifiScan() {
 
     // Signal color
     uint32_t sig_color;
-    if      (rssi >= -65) sig_color = 0x28d49a;  // green
-    else if (rssi >= -80) sig_color = 0xf0b838;  // yellow
+    if      (rssi >= -65) sig_color = g_theme[TH_ACCENT];  // green
+    else if (rssi >= -80) sig_color = g_theme[TH_WARNING];  // yellow
     else                  sig_color = 0xff8000;   // orange
 
     // Row button
     lv_obj_t *row = lv_btn_create(lbl_wifi_scan_list);
     lv_obj_set_size(row, 452, 46);
-    lv_obj_set_style_bg_color(row, lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_bg_color(row, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(row, tc(TH_SURFACE), 0);
+    lv_obj_set_style_bg_color(row, tc(TH_SURFACE_2), LV_STATE_PRESSED);
     lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_shadow_width(row, 0, 0);
-    lv_obj_set_style_border_color(row, lv_color_hex(0x1a2840), 0);
+    lv_obj_set_style_border_color(row, tc(TH_SURFACE_3), 0);
     lv_obj_set_style_border_width(row, 1, 0);
     lv_obj_set_style_pad_all(row, 0, 0);
     lv_obj_set_user_data(row, row_ssid[slot]);
@@ -230,7 +231,7 @@ void doWifiScan() {
     // SSID Label
     lv_obj_t *lbl_ssid = lv_label_create(row);
     lv_label_set_text(lbl_ssid, ssid.c_str());
-    lv_obj_set_style_text_color(lbl_ssid, lv_color_hex(0xe8f0ff), 0);
+    lv_obj_set_style_text_color(lbl_ssid, tc(TH_TEXT_BRIGHT), 0);
     lv_obj_set_style_text_font(lbl_ssid, &lv_font_montserrat_ext_16, 0);
     lv_obj_align(lbl_ssid, LV_ALIGN_LEFT_MID, 12, 0);
     lv_label_set_long_mode(lbl_ssid, LV_LABEL_LONG_DOT);
@@ -284,7 +285,7 @@ void buildWifiPassScreen() {
   lv_obj_set_style_border_width(scr_wifi_pass, 0, 0);
   lv_obj_set_style_pad_all(scr_wifi_pass, 0, 0);
   lv_obj_clear_flag(scr_wifi_pass, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_wifi_pass, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(scr_wifi_pass, tc(TH_BG), 0);
 
   // Back button
   addBackButton(scr_wifi_pass, [](lv_event_t *e) { showWifiSetupScreen(); });
@@ -293,7 +294,7 @@ void buildWifiPassScreen() {
   // Title
   lv_obj_t *title = lv_label_create(scr_wifi_pass);
   lv_label_set_text(title, T(STR_WIFI_PASS_TITLE));
-  lv_obj_set_style_text_color(title, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(title, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 14);
 
@@ -302,7 +303,7 @@ void buildWifiPassScreen() {
   snprintf(ssid_hint, sizeof(ssid_hint), T(STR_WIFI_PASS_HINT), wifi_setup_ssid);
   lv_obj_t *lbl_ssid_show = lv_label_create(scr_wifi_pass);
   lv_label_set_text(lbl_ssid_show, ssid_hint);
-  lv_obj_set_style_text_color(lbl_ssid_show, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_ssid_show, tc(TH_TEXT), 0);
   lv_obj_set_style_text_font(lbl_ssid_show, &lv_font_montserrat_ext_14, 0);
   lv_obj_align(lbl_ssid_show, LV_ALIGN_TOP_MID, 0, 52);
 
@@ -314,16 +315,16 @@ void buildWifiPassScreen() {
   lv_obj_set_size(ta_wifi_pass, 380, 44);
   lv_obj_align(ta_wifi_pass, LV_ALIGN_TOP_MID, 0, 74);
   lv_obj_set_style_text_font(ta_wifi_pass, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_color(ta_wifi_pass, lv_color_hex(0xffffff), 0);
-  lv_obj_set_style_bg_color(ta_wifi_pass, lv_color_hex(0x1e2e4a), 0);
-  lv_obj_set_style_border_color(ta_wifi_pass, lv_color_hex(0x2a4080), 0);
+  lv_obj_set_style_text_color(ta_wifi_pass, tc(TH_TEXT_BRIGHT), 0);
+  lv_obj_set_style_bg_color(ta_wifi_pass, tc(TH_BORDER), 0);
+  lv_obj_set_style_border_color(ta_wifi_pass, tc(TH_SURFACE_2), 0);
 
   // Keyboard
   kb_wifi_pass = lv_keyboard_create(scr_wifi_pass);
   lv_keyboard_set_textarea(kb_wifi_pass, ta_wifi_pass);
   lv_obj_set_size(kb_wifi_pass, 480, 160);
   lv_obj_align(kb_wifi_pass, LV_ALIGN_BOTTOM_MID, 0, 0);
-  lv_obj_set_style_bg_color(kb_wifi_pass, lv_color_hex(0x182238), 0);
+  lv_obj_set_style_bg_color(kb_wifi_pass, tc(TH_SURFACE_DARK), 0);
   lv_obj_set_style_border_width(kb_wifi_pass, 0, 0);
 
   // Enter on keyboard → connect
@@ -379,7 +380,7 @@ void showWifiConnectingScreen() {
     char ok_buf[48];
     snprintf(ok_buf, sizeof(ok_buf), LV_SYMBOL_OK "  %s", T(STR_WIFI_SUCCESS));
     if (status_lbl) lv_label_set_text(status_lbl, ok_buf);
-    lv_obj_set_style_text_color(status_lbl, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(status_lbl, tc(TH_ACCENT), 0);
 
     if (conn_val_ssid) {
       lv_label_set_text(conn_val_ssid, cfg_wifi_ssid[0] ? cfg_wifi_ssid : "-");
@@ -404,7 +405,7 @@ void showWifiConnectingScreen() {
     char fail_buf[80];
     snprintf(fail_buf, sizeof(fail_buf), T(STR_WIFI_CONN_FAILED), cfg_wifi_ssid);
     if (status_lbl) lv_label_set_text(status_lbl, fail_buf);
-    lv_obj_set_style_text_color(status_lbl, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_color(status_lbl, tc(TH_DANGER_TEXT), 0);
 
     // Show retry button
     if (btn_conn_retry) lv_obj_clear_flag(btn_conn_retry, LV_OBJ_FLAG_HIDDEN);
@@ -429,11 +430,11 @@ void buildWifiConnectingScreen() {
   lv_obj_set_style_border_width(scr_wifi_connecting, 0, 0);
   lv_obj_set_style_pad_all(scr_wifi_connecting, 0, 0);
   lv_obj_clear_flag(scr_wifi_connecting, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_wifi_connecting, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(scr_wifi_connecting, tc(TH_BG), 0);
 
   lv_obj_t *title = lv_label_create(scr_wifi_connecting);
   lv_label_set_text(title, T(STR_WIFI_TITLE));
-  lv_obj_set_style_text_color(title, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(title, tc(TH_ACCENT), 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 24);
 
@@ -444,7 +445,7 @@ void buildWifiConnectingScreen() {
   snprintf(conn_buf, sizeof(conn_buf), T(STR_WIFI_CONNECTING), wifi_setup_ssid);
   lv_obj_t *lbl_connecting = lv_label_create(scr_wifi_connecting);
   lv_label_set_text(lbl_connecting, conn_buf);
-  lv_obj_set_style_text_color(lbl_connecting, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_connecting, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(lbl_connecting, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(lbl_connecting, LV_ALIGN_TOP_MID, 0, 68);
 
@@ -452,7 +453,7 @@ void buildWifiConnectingScreen() {
   lbl_conn_status = lv_label_create(scr_wifi_connecting);
   lv_obj_t *lbl_status_conn = lbl_conn_status;
   lv_label_set_text(lbl_status_conn, "");
-  lv_obj_set_style_text_color(lbl_status_conn, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_status_conn, tc(TH_TEXT), 0);
   lv_obj_set_style_text_font(lbl_status_conn, &lv_font_montserrat_ext_20, 0);
   lv_obj_set_style_text_align(lbl_status_conn, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_status_conn, LV_ALIGN_TOP_MID, 0, 100);
@@ -477,15 +478,15 @@ void buildWifiConnectingScreen() {
   lv_obj_set_size(btn_retry, 200, 48);
   lv_obj_align(btn_retry, LV_ALIGN_BOTTOM_MID, -110, -20);
   lv_obj_add_flag(btn_retry, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_style_bg_color(btn_retry, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_retry, lv_color_hex(0x602020), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_retry, tc(TH_DANGER_BG), 0);
+  lv_obj_set_style_bg_color(btn_retry, tc(TH_DANGER_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_retry, 8, 0);
   lv_obj_set_style_shadow_width(btn_retry, 0, 0);
   lv_obj_set_style_border_width(btn_retry, 0, 0);
   lv_obj_add_event_cb(btn_retry, [](lv_event_t *e) { logSD("BTN: Retry -> WifiSetup"); showWifiSetupScreen(); }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_retry = lv_label_create(btn_retry);
   lv_label_set_text(lbl_retry, LV_SYMBOL_LEFT "  "); { char rb[32]; snprintf(rb,sizeof(rb),"%s",T(STR_RETRY)); lv_label_set_text(lbl_retry,rb); }
-  lv_obj_set_style_text_color(lbl_retry, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_color(lbl_retry, tc(TH_DANGER_TEXT), 0);
   lv_obj_set_style_text_font(lbl_retry, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_retry);
 
@@ -495,8 +496,8 @@ void buildWifiConnectingScreen() {
   lv_obj_set_size(btn_next, 200, 48);
   lv_obj_align(btn_next, LV_ALIGN_BOTTOM_MID, 110, -20);
   lv_obj_add_flag(btn_next, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_style_bg_color(btn_next, lv_color_hex(0x1a3020), 0);
-  lv_obj_set_style_bg_color(btn_next, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_next, tc(TH_OK_BG), 0);
+  lv_obj_set_style_bg_color(btn_next, tc(TH_SUCCESS_BG), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_next, 8, 0);
   lv_obj_set_style_shadow_width(btn_next, 0, 0);
   lv_obj_set_style_border_width(btn_next, 0, 0);
@@ -520,7 +521,7 @@ void buildWifiConnectingScreen() {
     size_t n = strlen(nb);
     snprintf(nb + n, sizeof(nb) - n, "  " LV_SYMBOL_RIGHT);
     lv_label_set_text(lbl_next, nb); }
-  lv_obj_set_style_text_color(lbl_next, lv_color_hex(0x40c080), 0);
+  lv_obj_set_style_text_color(lbl_next, tc(TH_SUCCESS_TEXT), 0);
   lv_obj_set_style_text_font(lbl_next, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_next);
 }

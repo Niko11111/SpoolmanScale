@@ -12,6 +12,7 @@
 #include "ui_common.h"
 #include "wifi_info.h"
 #include "services/wifi_manager.h"
+#include "theme.h"
 
 
 void showWifiSetupScreen();
@@ -67,26 +68,26 @@ void buildConnectionScreen() {
   lv_obj_t *btn_wifi = lv_btn_create(scr_connection);
   lv_obj_set_size(btn_wifi, BTN_W, BTN_H);
   lv_obj_set_pos(btn_wifi, BTN_X, BTN_Y[0]);
-  lv_obj_set_style_bg_color(btn_wifi, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_wifi, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_wifi, tc(TH_TILE_BG), 0);
+  lv_obj_set_style_bg_color(btn_wifi, tc(TH_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_wifi, 10, 0);
   lv_obj_set_style_shadow_width(btn_wifi, 0, 0);
   lv_obj_set_style_border_width(btn_wifi, 1, 0);
-  lv_obj_set_style_border_color(btn_wifi, lv_color_hex(0x1a3050), 0);
+  lv_obj_set_style_border_color(btn_wifi, tc(TH_BORDER), 0);
   { lv_obj_t *ico = lv_label_create(btn_wifi);
     lv_label_set_text(ico, LV_SYMBOL_WIFI);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(ico, tc(TH_ACCENT), 0);
     lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
     lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
     lv_obj_t *lbl = lv_label_create(btn_wifi);
     lv_label_set_text(lbl, T(STR_BTN_WIFI_SETTINGS));
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
+    lv_obj_set_style_text_color(lbl, tc(TH_TEXT_BRIGHT), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
     lv_obj_t *sub = lv_label_create(btn_wifi);
     lv_label_set_text(sub, cfg_wifi_ssid[0] ? cfg_wifi_ssid : T(STR_BTN_WIFI_NONE));
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(sub, tc(TH_TEXT_MUTED), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
@@ -95,27 +96,27 @@ void buildConnectionScreen() {
   lv_obj_t *btn_ws = lv_btn_create(scr_connection);
   lv_obj_set_size(btn_ws, BTN_W, BTN_H);
   lv_obj_set_pos(btn_ws, BTN_X, BTN_Y[1]);
-  lv_obj_set_style_bg_color(btn_ws, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_ws, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_ws, tc(TH_TILE_BG), 0);
+  lv_obj_set_style_bg_color(btn_ws, tc(TH_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ws, 10, 0);
   lv_obj_set_style_shadow_width(btn_ws, 0, 0);
   lv_obj_set_style_border_width(btn_ws, 1, 0);
-  lv_obj_set_style_border_color(btn_ws, lv_color_hex(0x1a3050), 0);
+  lv_obj_set_style_border_color(btn_ws, tc(TH_BORDER), 0);
   { lv_obj_t *ico = lv_label_create(btn_ws);
     lv_label_set_text(ico, LV_SYMBOL_GPS);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(ico, tc(TH_ACCENT), 0);
     lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
     lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
     lv_obj_t *lbl = lv_label_create(btn_ws);
     lv_label_set_text(lbl, T(STR_BTN_WIFI_STATUS));
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
+    lv_obj_set_style_text_color(lbl, tc(TH_TEXT_BRIGHT), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
     lv_obj_t *sub = lv_label_create(btn_ws);
     lbl_wifi_ip = sub;
     { char ipbuf[24]; wifiIpText(ipbuf, sizeof(ipbuf)); lv_label_set_text(sub, ipbuf); }
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(sub, tc(TH_TEXT_MUTED), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
@@ -131,15 +132,15 @@ void buildConnectionScreen() {
   lv_obj_t *btn_sp = lv_btn_create(scr_connection);
   lv_obj_set_size(btn_sp, BTN_W, BTN_H);
   lv_obj_set_pos(btn_sp, BTN_X, BTN_Y[2]);
-  lv_obj_set_style_bg_color(btn_sp, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_sp, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_sp, tc(TH_TILE_BG), 0);
+  lv_obj_set_style_bg_color(btn_sp, tc(TH_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_sp, 10, 0);
   lv_obj_set_style_shadow_width(btn_sp, 0, 0);
   lv_obj_set_style_border_width(btn_sp, 1, 0);
-  lv_obj_set_style_border_color(btn_sp, lv_color_hex(0x1a3050), 0);
+  lv_obj_set_style_border_color(btn_sp, tc(TH_BORDER), 0);
   { lv_obj_t *ico = lv_label_create(btn_sp);
     lv_label_set_text(ico, LV_SYMBOL_SETTINGS);
-    lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(ico, tc(TH_ACCENT), 0);
     lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
     lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
     char buf_backend[32];
@@ -147,7 +148,7 @@ void buildConnectionScreen() {
     buf_backend[sizeof(buf_backend)-1] = '\0';
     lv_obj_t *lbl = lv_label_create(btn_sp);
     lv_label_set_text(lbl, buf_backend);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
+    lv_obj_set_style_text_color(lbl, tc(TH_TEXT_BRIGHT), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
@@ -160,7 +161,7 @@ void buildConnectionScreen() {
       (host && host[0]) ? host : T(STR_BTN_WIFI_NONE));
     lv_obj_t *sub = lv_label_create(btn_sp);
     lv_label_set_text(sub, buf_sub);
-    lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(sub, tc(TH_TEXT_MUTED), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }

@@ -58,6 +58,7 @@
 #include "ui/tag_display.h"
 #include "ui/weight_format.h"
 #include "lang.h"
+#include "ui/theme.h"
 
 namespace {
 constexpr unsigned long NO_TAG_CLEAR_MS = 60000;
@@ -372,7 +373,7 @@ void appLoop() {
         strncpy(buf, T(STR_REMOTE_LINK_TIMEOUT), sizeof(buf) - 1);
         buf[sizeof(buf) - 1] = '\0';
         lv_label_set_text(lbl_status, buf);
-        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+        lv_obj_set_style_text_color(lbl_status, tc(TH_WARNING), 0);
       }
     } else if (tag_present && !isConfirmPopupOpen() &&
                !isSpoolFlowIdInputOpen() && !isSpoolFlowLinkEntryOpen()) {
@@ -448,9 +449,9 @@ void appLoop() {
   if (g_tag_displayed && millis() - g_tag_shown_ms > 10000) {
     g_tag_displayed = false;
     lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-    lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);  // yellow
+    lv_obj_set_style_text_color(lbl_nfc_dot, tc(TH_WARNING), 0);  // yellow
     lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-    lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+    lv_obj_set_style_text_color(lbl_status, tc(TH_WARNING), 0);
   }
 
   // NAU7802: read weight every 200ms and update labels.
@@ -508,7 +509,7 @@ void appLoop() {
         snprintf(sd_str, sizeof(sd_str), sm_diff >= 0 ? "+%.0f g" : "%.0f g", sm_diff);
         lv_label_set_text(lbl_raw_info, sd_str);
         lv_obj_set_style_text_color(lbl_raw_info,
-          sm_diff >= 0 ? lv_color_hex(0x40c080) : lv_color_hex(0xe04040), 0);
+          sm_diff >= 0 ? tc(TH_SUCCESS_TEXT) : lv_color_hex(0xe04040), 0);
       }
 
       // Live total (with spool)
@@ -526,7 +527,7 @@ void appLoop() {
         char b_str[16];
         fmtG(b_str, sizeof(b_str), ohne_beutel);
         lv_label_set_text(lbl_keys, b_str);
-        lv_obj_set_style_text_color(lbl_keys, lv_color_hex(0xf0b838), 0);  // same as scale netto
+        lv_obj_set_style_text_color(lbl_keys, tc(TH_WARNING), 0);  // same as scale netto
 
         // bag SM diff
         if (lbl_bag_sm_diff && sm_remaining > 0) {
@@ -535,7 +536,7 @@ void appLoop() {
           snprintf(bd_str, sizeof(bd_str), bag_diff >= 0 ? "+%.0f g" : "%.0f g", bag_diff);
           lv_label_set_text(lbl_bag_sm_diff, bd_str);
           lv_obj_set_style_text_color(lbl_bag_sm_diff,
-            bag_diff >= 0 ? lv_color_hex(0x40c080) : lv_color_hex(0xe04040), 0);
+            bag_diff >= 0 ? tc(TH_SUCCESS_TEXT) : lv_color_hex(0xe04040), 0);
         }
       }
     } else if (sm_found) {
@@ -570,7 +571,7 @@ void appLoop() {
         char wmbuf[48];
         snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
         lv_label_set_text(lbl_weight_main_lbl, wmbuf);
-        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x28d49a), 0);
+        lv_obj_set_style_text_color(lbl_weight_main_lbl, tc(TH_ACCENT), 0);
       }
     }
 
@@ -625,7 +626,7 @@ void appLoop() {
         char wmbuf[48];
         snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
         lv_label_set_text(lbl_weight_main_lbl, wmbuf);
-        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x28d49a), 0);
+        lv_obj_set_style_text_color(lbl_weight_main_lbl, tc(TH_ACCENT), 0);
       }
     }
   } else {
@@ -771,9 +772,9 @@ void appLoop() {
           nfc_retry_count = 0; nfc_absent_count = 0;
           last_bambu_retry_ms = 0;
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_nfc_dot, tc(TH_ACCENT), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_status, tc(TH_ACCENT), 0);
           scanTag(uid, uidLen);
         } else if ((uuid_missing || contents_incomplete) && nfc_retry_count < NFC_MAX_RETRIES &&
                    millis() - last_bambu_retry_ms >= NFC_BAMBU_RETRY_BACKOFF_MS) {
@@ -785,16 +786,16 @@ void appLoop() {
             nfc_retry_count,
             NFC_MAX_RETRIES);
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_nfc_dot, tc(TH_ACCENT), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_status, tc(TH_ACCENT), 0);
           scanTag(uid, uidLen);
         } else {
           if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES) {
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
+            lv_obj_set_style_text_color(lbl_nfc_dot, tc(TH_WARNING), 0);
             lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-            lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+            lv_obj_set_style_text_color(lbl_status, tc(TH_WARNING), 0);
           } else {
             // tray_uuid present — query Spoolman if not done yet
             if (!isSpoolFlowIdInputOpen() && strcmp(g_tag.uid_str, spoolman_queried_uid) != 0 && strlen(g_tag.tray_uuid) == 32) {
@@ -811,10 +812,10 @@ void appLoop() {
               (void)link_tag_first_seen_ms;
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+            lv_obj_set_style_text_color(lbl_nfc_dot, tc(TH_ACCENT), 0);
             { char sb[48]; backendText(sm_found ? T(STR_TAG_FOUND) : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb)); lv_label_set_text(lbl_status, sb); }
             lv_obj_set_style_text_color(lbl_status,
-              sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
+              sm_found ? tc(TH_ACCENT) : tc(TH_WARNING), 0);
           }
         }
 
@@ -835,7 +836,7 @@ void appLoop() {
         if (uid_changed_ntag_log) logSDf("NFC: NTAG UID=%s", uid_str);
 
         lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-        lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+        lv_obj_set_style_text_color(lbl_nfc_dot, tc(TH_ACCENT), 0);
 
         bool uid_changed_ntag = (strcmp(uid_str, g_tag.uid_str) != 0);
 
@@ -857,9 +858,9 @@ void appLoop() {
           lv_label_set_text(lbl_last_used, "-");
           lv_label_set_text(lbl_spoolman_dried_val, "-");
         if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
-          lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
+          lv_obj_set_style_bg_color(lbl_color_swatch, tc(TH_SURFACE_3), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_status, tc(TH_ACCENT), 0);
           lv_timer_handler();
 
           if (wifi_ok && !isSpoolFlowIdInputOpen()) {
@@ -875,14 +876,14 @@ void appLoop() {
               link_popup_dismissed = false;
             } else {
               lv_label_set_text(lbl_status, T(STR_TAG_FOUND));
-              lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+              lv_obj_set_style_text_color(lbl_status, tc(TH_ACCENT), 0);
               strncpy(g_tag.tray_uuid, uid_str, sizeof(g_tag.tray_uuid)-1);
               g_tag.tray_uuid[sizeof(g_tag.tray_uuid)-1] = '\0';
               updateLinkButton();
             }
           } else {
             lv_label_set_text(lbl_status, T(STR_TAG_FOUND));
-            lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+            lv_obj_set_style_text_color(lbl_status, tc(TH_ACCENT), 0);
           }
         } else {
           // Same UID — show popup after delay if not dismissed
@@ -890,7 +891,7 @@ void appLoop() {
           (void)link_tag_first_seen_ms;
           { char sb[48]; backendText(sm_found ? T(STR_TAG_FOUND) : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb)); lv_label_set_text(lbl_status, sb); }
           lv_obj_set_style_text_color(lbl_status,
-            sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
+            sm_found ? tc(TH_ACCENT) : tc(TH_WARNING), 0);
         }
 
       } else {
@@ -929,9 +930,9 @@ void appLoop() {
           link_popup_dismissed = false;   // Reset flag → next spool can show popup
           link_tag_first_seen_ms = 0;
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
+          lv_obj_set_style_text_color(lbl_nfc_dot, tc(TH_WARNING), 0);
           lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+          lv_obj_set_style_text_color(lbl_status, tc(TH_WARNING), 0);
           // Auto location popup: if enabled, spool is linked, and not shown for this spool yet
           // Debounce: only trigger after 1500ms — avoids spurious remove during NTAG read
           if (g_auto_loc_popup && sm_found && sm_id > 0 && wifi_ok && g_loc_popup_shown_for_id != sm_id) {

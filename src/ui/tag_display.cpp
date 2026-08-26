@@ -8,6 +8,7 @@
 #include "lang.h"
 #include "main_screen_helpers.h"
 #include "spool_flow.h"
+#include "theme.h"
 
 
 // ============================================================
@@ -15,15 +16,15 @@
 // ============================================================
 void clearTagDisplay() {
   lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-  lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);  // yellow = kein Tag
+  lv_obj_set_style_text_color(lbl_nfc_dot, tc(TH_WARNING), 0);  // yellow = kein Tag
   lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_status, tc(TH_WARNING), 0);
   lv_label_set_text(lbl_uid, "-");
   lv_label_set_text(lbl_tray_uuid, "-");
   lv_label_set_text(lbl_material, "-");
   lv_label_set_text(lbl_date, "-");
   lv_label_set_text(lbl_spoolman_id, "?");
-  lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_id, tc(TH_WARNING), 0);
   lv_label_set_text(lbl_color, "-");
   lv_label_set_text(lbl_temp, "-");
   lv_label_set_text(lbl_vendor, "-");
@@ -40,7 +41,7 @@ void clearTagDisplay() {
   if (lbl_keys) lv_label_set_text(lbl_keys, "");
   if (lbl_raw_info) lv_label_set_text(lbl_raw_info, "");
   if (lbl_bag_sm_diff) lv_label_set_text(lbl_bag_sm_diff, "");
-  lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
+  lv_obj_set_style_bg_color(lbl_color_swatch, tc(TH_SURFACE_3), 0);
   // Also reset Spoolman data
   sm_found = false; sm_id = 0; sm_filament_id = 0; sm_vendor_id = 0; sm_spool_weight = 0;
   sm_last_dried[0] = '\0'; sm_article_nr[0] = '\0';
