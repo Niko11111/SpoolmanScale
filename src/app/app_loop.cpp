@@ -353,12 +353,19 @@ void appLoop() {
   // request happens in its own task on the other core.
   updateCheckTick();
 
-  // A manual check that ran into the background task. Retried as soon as the
-  // TLS connection is free again, dropped after GH_CHECK_WAIT_MS so a task that
-  // never returns cannot leave the screen waiting on it.
   firmwareStampTick();
   otaWebGithubTick();
 
+  // A confirmed downgrade. Same download and same restart as an update, only
+  // it was asked about first.
+  if (gh_downgrade_pending) {
+    gh_downgrade_pending = false;
+    doGithubOtaFlash(gh_latest_version);
+  }
+
+  // A manual check that ran into the background task. Retried as soon as the
+  // TLS connection is free again, dropped after GH_CHECK_WAIT_MS so a task that
+  // never returns cannot leave the screen waiting on it.
   if (gh_check_pending) {
     if (!updateCheckBusy()) {
       gh_check_pending = false;

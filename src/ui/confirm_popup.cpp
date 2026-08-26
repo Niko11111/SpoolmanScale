@@ -14,6 +14,7 @@
 #include "services/prefs_store.h"
 #include "services/spoolman_actions.h"
 #include "dried_action.h"
+#include "app/deferred_actions.h"
 #include "spoolman_screen.h"
 #include "lang.h"
 
@@ -663,6 +664,9 @@ void showConfirmPopup(const char* msg, int action) {
       if (act == 1) btn_dried_cb(nullptr);
       if (act == 3) patchArchiveSpool();
       if (act == 4) spoolmanClearHost();
+      // 5 = downgrade confirmed on the OTA screen. Only the flag here; the
+      // download runs from appLoop().
+      if (act == 5) gh_downgrade_pending = true;
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_ja = lv_label_create(btn_ja);
     lv_label_set_text(lbl_ja, T(STR_BTN_CONFIRMED));

@@ -37,6 +37,10 @@ extern bool show_drying_reminder_pending;
 // GH_CHECK_WAIT_MS so a task that never finishes cannot leave the screen
 // waiting forever.
 extern bool gh_check_pending;
+// The user confirmed a downgrade on the OTA screen. The download blocks for
+// about a minute and ends in a restart, so it does not run from the popup's
+// own callback.
+extern bool gh_downgrade_pending;
 extern unsigned long gh_check_wait_since;
 #define GH_CHECK_WAIT_MS 10000
 

@@ -14,6 +14,7 @@
 #include "services/prefs_store.h"
 #include "services/update_check.h"
 #include "services/version_compare.h"
+#include "confirm_popup.h"
 #include "update_badges.h"
 #include "ui_common.h"
 
@@ -28,6 +29,10 @@ static lv_obj_t *lbl_gh_update_btn  = nullptr;
 // The download overlay. File scope so the progress callback can reach it - it
 // is a plain function pointer, not a closure - and so both callers raise the
 // same one instead of growing a second.
+// What the last check found, for the button that acts on it. The label alone
+// cannot be read back, and the direction decides whether it asks first.
+static bool gh_found_older = false;
+
 static lv_obj_t *gh_overlay = nullptr;
 static lv_obj_t *gh_bar     = nullptr;
 static lv_obj_t *gh_hint    = nullptr;
@@ -185,12 +190,22 @@ void doGithubOtaCheck() {
   uint64_t cur = parseVersion(FW_VERSION);
   uint64_t remote = parseVersion(gh_latest_version);
 
-  if (remote <= cur) {
+  gh_found_older = (remote < cur);
+
+  if (remote == cur) {
     char upd[48]; strncpy(upd, T(STR_GH_OTA_UP_TO_DATE), sizeof(upd)-1); upd[sizeof(upd)-1]=0;
     lv_label_set_text(lbl_gh_status, upd);
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0x40c080), 0);
+    update_available = false;
+    showUpdateBadges(false);
   } else {
-    char avail[64]; snprintf(avail, sizeof(avail), T(STR_GH_OTA_UPDATE_AVAIL), gh_latest_version);
+    // Older is also an answer worth acting on: someone testing a pre-release
+    // and moving the channel back wants the release below, and it is the same
+    // download either way. What differs is that going back gets asked about.
+    char avail[80];
+    snprintf(avail, sizeof(avail),
+             T(gh_found_older ? STR_GH_OTA_OLDER : STR_GH_OTA_UPDATE_AVAIL),
+             gh_latest_version);
     lv_label_set_text(lbl_gh_status, avail);
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xf0b838), 0);
     if (btn_gh_update) {
@@ -199,13 +214,18 @@ void doGithubOtaCheck() {
       lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
       lv_obj_set_style_border_color(btn_gh_update, lv_color_hex(0x28d49a), 0);
       if (lbl_gh_update_btn) {
-        char ubtn[48]; strncpy(ubtn, T(STR_GH_OTA_UPDATE_BTN), sizeof(ubtn)-1); ubtn[sizeof(ubtn)-1]=0;
+        char ubtn[48];
+        strncpy(ubtn, T(gh_found_older ? STR_GH_OTA_DOWNGRADE_BTN
+                                       : STR_GH_OTA_UPDATE_BTN), sizeof(ubtn)-1);
+        ubtn[sizeof(ubtn)-1]=0;
         lv_label_set_text(lbl_gh_update_btn, ubtn);
         lv_obj_set_style_text_color(lbl_gh_update_btn, lv_color_hex(0x40c080), 0);
       }
     }
-    update_available = true;
-    showUpdateBadges(true);
+    // The badge means an update is waiting, so an older release must not light
+    // it - and a check that found nothing newer has to take it down again.
+    update_available = !gh_found_older;
+    showUpdateBadges(!gh_found_older);
   }
 }
 
@@ -397,6 +417,15 @@ void buildOtaGithubScreen() {
   lv_obj_set_style_border_color(btn_gh_update, lv_color_hex(0x1a2030), 0);
   lv_obj_add_state(btn_gh_update, LV_STATE_DISABLED);
   lv_obj_add_event_cb(btn_gh_update, [](lv_event_t *e){
+    // Going back costs the same minute and the same restart as going forward,
+    // and nothing about the screen says which direction the button points, so
+    // the one that loses features asks first.
+    if (gh_found_older) {
+      char ask[160];
+      snprintf(ask, sizeof(ask), T(STR_GH_OTA_DOWNGRADE_ASK), gh_latest_version);
+      showConfirmPopup(ask, 5);
+      return;
+    }
     doGithubOtaFlash(gh_latest_version);
   }, LV_EVENT_CLICKED, NULL);
 

@@ -450,6 +450,12 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Pre-release"                                                         },  // STR_GH_OTA_PRERELEASE
   { "Autom. Suche",
     "Auto check"                                                          },  // STR_GH_OTA_AUTOCHECK
+  { "Ältere Version verfügbar: %s",
+    "Older release available: %s"                                         },  // STR_GH_OTA_OLDER
+  { "Zurückstufen",
+    "Downgrade"                                                           },  // STR_GH_OTA_DOWNGRADE_BTN
+  { "Auf %s zurückstufen?\nDiese Version ist älter als die installierte.",
+    "Downgrade to %s?\nThis release is older than the installed one."      },  // STR_GH_OTA_DOWNGRADE_ASK
 
   { "Last Used Modus",
     "Last Used Mode"                                                      },  // STR_BTN_LASTUSED_MODE
@@ -1248,6 +1254,12 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Install {v}?" },  // STR_W_FW_CONFIRM
   { "Das Gerät startet nach dem Download automatisch neu, die Seite lädt sich dann selbst. Strom nicht trennen.",
     "The device restarts by itself when the download finishes, and this page reloads. Do not cut the power." },  // STR_W_FW_REBOOTS
+  { "Ältere Version",
+    "Older release" },  // STR_W_FW_OLDER
+  { "Auf {v} zurückstufen?",
+    "Downgrade to {v}?" },  // STR_W_FW_DOWNGRADE
+  { "{v} ist älter als die installierte {i}.",
+    "{v} is older than the installed {i}." },  // STR_W_FW_DOWNWARN
   { "Gewicht",
     "Weight" },  // STR_W_R_WEIGHT
   { "Konnte nicht geladen werden.",

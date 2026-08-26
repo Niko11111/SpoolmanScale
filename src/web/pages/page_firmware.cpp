@@ -53,6 +53,7 @@ static char gh_web_flash_tag[40] = "";
 static unsigned long s_check_ms  = 0;     // 0 = no check yet this boot
 static bool          s_check_pre = false; // the channel it was for
 static bool          s_check_new = false;
+static bool          s_check_old = false;  // found something below the running build
 static char          s_check_pub[24] = "";  // when that release was published
 
 // How far the GitHub download has got. Read by /api/ota/progress, which is the
@@ -254,6 +255,9 @@ static String body() {
   h += F(",unknown:");    h += jsStr(T(STR_W_FW_UNKNOWN));
   h += F(",chrel:");      h += jsStr(T(STR_W_FW_CH_STABLE));
   h += F(",chpre:");      h += jsStr(T(STR_W_FW_CH_PRE));
+  h += F(",older:");      h += jsStr(T(STR_W_FW_OLDER));
+  h += F(",downgrade:");  h += jsStr(T(STR_W_FW_DOWNGRADE));
+  h += F(",downwarn:");   h += jsStr(T(STR_W_FW_DOWNWARN));
   h += F("};"
          "function ghSay(t,bad){var m=document.getElementById('ghmsg');"
          "m.className=bad?'msg bad':'msg';m.textContent=t;}"
@@ -337,15 +341,19 @@ static String body() {
          "{method:'POST'}).then(r=>r.json()).then(d=>{"
          "if(!d.ok){if(!auto)ghSay(ghErr(d),true);return;}"
          "setLatest(d.tag,d.published);"
-         "document.getElementById('ghin').disabled=!d.update;"
+         // Either direction is something to act on. Older only ever gets
+         // here through a check that answered, so a silent automatic failure
+         // leaves the button as the server rendered it: off.
+         "OLDER=!!d.older;"
+         "document.getElementById('ghin').disabled=!(d.update||d.older);"
          "var n=document.getElementById('ghnb');n.disabled=false;"
          // A different tag than whatever the notes pane last showed.
          "LATEST=null;document.getElementById('ghn').style.display='none';"
          "n.textContent=G.whatsnew;"
-         "ghSay(d.update?G.avail:G.uptodate,false);"
+         "ghSay(d.update?G.avail:(d.older?G.older:G.uptodate),false);"
          "}).catch(()=>{if(!auto)ghSay(G.fail,true);})"
          ".finally(()=>{b.disabled=false;b.textContent=G.check;});}"
-         "var LATEST=null;"
+         "var LATEST=null,OLDER=false;"
          "function ghNotes(){"
          "var tag=document.getElementById('ghlt').textContent;"
          "if(!tag||tag==='-')return;"
@@ -361,6 +369,8 @@ static String body() {
          // reporting a healthy install as a failure.
          "function ghInstall(){"
          "var tag=document.getElementById('ghlt').textContent;"
+         "if(OLDER){rModal(true,G.downgrade.replace('{v}',tag),"
+         "G.downwarn.replace('{v}',tag).replace('{i}',INSTALLED)+' '+G.keep);return;}"
          "rModal(true,G.confirm.replace('{v}',tag),G.keep);}"
          "function ghGo(){"
          "rModal(false,G.installing,G.keep);"
@@ -473,7 +483,8 @@ static void routes(WebServer &srv) {
                "{\"ok\":true,\"cached\":true,\"tag\":\"" + jsonEsc(gh_latest_version) +
                "\",\"installed\":\"" + jsonEsc(FW_VERSION) +
                "\",\"published\":\"" + jsonEsc(s_check_pub) +
-               "\",\"update\":" + (s_check_new ? "true" : "false") + "}");
+               "\",\"update\":" + (s_check_new ? "true" : "false") +
+               ",\"older\":" + (s_check_old ? "true" : "false") + "}");
       return;
     }
 
@@ -487,7 +498,12 @@ static void routes(WebServer &srv) {
 
     strncpy(gh_latest_version, tag, sizeof(gh_latest_version) - 1);
     gh_latest_version[sizeof(gh_latest_version) - 1] = '\0';
-    const bool newer = parseVersion(tag) > parseVersion(FW_VERSION);
+    const uint64_t remote = parseVersion(tag), running = parseVersion(FW_VERSION);
+    const bool newer = remote > running;
+    // Offered, not pushed. Someone who tested a pre-release and moved the
+    // channel back is asking for the release below the running build, and the
+    // page has to be able to say so rather than only "already up to date".
+    const bool older = remote < running;
     // A check answers in both directions. Setting the badge but never clearing
     // it left it lit after a channel change that found something older, and
     // body() builds the Install button out of update_available - so the button
@@ -502,13 +518,16 @@ static void routes(WebServer &srv) {
     s_check_ms  = millis() ? millis() : 1;   // 0 is reserved for "never"
     s_check_pre = gh_prerelease;
     s_check_new = newer;
+    s_check_old = older;
     snprintf(s_check_pub, sizeof(s_check_pub), "%s", pub);
-    logSDf("OTA check: web asked, latest %s%s", tag, newer ? " (newer)" : "");
+    logSDf("OTA check: web asked, latest %s%s", tag,
+           newer ? " (newer)" : (older ? " (older)" : ""));
     srv.send(200, "application/json",
              "{\"ok\":true,\"tag\":\"" + jsonEsc(tag) +
              "\",\"installed\":\"" + jsonEsc(FW_VERSION) +
              "\",\"published\":\"" + jsonEsc(pub) +
-             "\",\"update\":" + (newer ? "true" : "false") + "}");
+             "\",\"update\":" + (newer ? "true" : "false") +
+             ",\"older\":" + (older ? "true" : "false") + "}");
   });
 
   // Installs what the last check found. The tag is never taken from the
