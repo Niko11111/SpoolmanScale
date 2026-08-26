@@ -970,6 +970,10 @@ enum StringID {
   STR_W_TAGOPT_ASK,
   STR_W_TAGOPT_FMT,
   STR_W_TAGOPT_NOTE,
+  STR_W_LOG_DOWNLOAD,
+  // Same in both languages: it labels a 68px button and "Kalibrierung
+  // zuruecksetzen" does not fit on one.
+  STR_BTN_CAL_RESET_SHORT,
 
   STR_COUNT
 };

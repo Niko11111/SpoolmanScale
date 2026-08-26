@@ -67,6 +67,7 @@ static String body() {
 
   h += F("<script>const M={view:");
   h += jsStr(T(STR_W_LOG_VIEW));
+  h += F(",dl:");     h += jsStr(T(STR_W_LOG_DOWNLOAD));
   h += F(",del:");    h += jsStr(T(STR_W_LOG_DELETE));
   h += F(",ask:");    h += jsStr(T(STR_W_LOG_DELETE_ASK));
   h += F(",nosd:");   h += jsStr(T(STR_W_LOG_NOSD));
@@ -179,6 +180,12 @@ static String body() {
          "+'<span class=\"sz\">'+kb(f.size)+'</span>'"
          "+'<a href=\"/api/log?file='+encodeURIComponent(f.name)+'\" target=\"_blank\">'"
          "+'<button class=\"quiet\">'+M.view+'</button></a>'"
+         // No target=_blank on this one: a new tab suppresses the download
+         // hint in some browsers. The download attribute and the header the
+         // route sends say the same thing twice, on purpose.
+         "+'<a href=\"/api/log?dl=1&file='+encodeURIComponent(f.name)"
+         "+'\" download=\"'+f.name+'\">'"
+         "+'<button class=\"quiet\">'+M.dl+'</button></a>'"
          // The name rides in a data attribute and the handler is bound after
          // the rows exist. Threading it through an inline onclick quotes it
          // for C++, for a JS string, for an HTML attribute and for a JS call
@@ -274,6 +281,16 @@ static void routes(WebServer &srv) {
     }
     File f = SD.open(path.c_str(), FILE_READ);
     if (!f) { srv.send(500, "text/plain", "Open failed"); return; }
+    // Same file either way; the header is the whole difference between reading
+    // it in the browser and saving it. text/plain renders inline everywhere,
+    // so without this there is no way to get the file out of the device - the
+    // download used to be a `download` attribute on the link and fell out with
+    // the 720px rebuild. sendHeader() before streamFile() is honoured, the
+    // same order the session route uses for X-Log-Seq below.
+    if (srv.hasArg("dl")) {
+      srv.sendHeader("Content-Disposition",
+                     "attachment; filename=\"" + fname + "\"");
+    }
     srv.streamFile(f, "text/plain");
     f.close();
   });

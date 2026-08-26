@@ -2,6 +2,7 @@
 
 #include <Stream.h>
 #include <stddef.h>
+#include <stdint.h>
 
 // ============================================================
 //  PROGRESS FOR A LONG RESPONSE
@@ -20,6 +21,31 @@
 // ============================================================
 
 typedef void (*HttpProgressFn)(size_t bytes_read);
+
+// ============================================================
+//  TIME THE LOOP SPENT NOT LOOPING
+//
+//  A whole inventory is one blocking call: appLoop() does not come round
+//  again until it returns, which on a large FilaMan library is eight seconds
+//  and more. Anything counting down in the meantime counts down unattended -
+//  the AMS question opened with ten seconds on the clock, the fetch ate all
+//  ten, and the log records the answer as "counted down to no" without the
+//  user ever having been offered a button.
+//
+//  So the blocking time is measured and anything with a clock subtracts it.
+//  Measured here because this file already sees every long transfer, and one
+//  counter serves every caller.
+// ============================================================
+
+// Brackets a call that will hold up the loop. Nesting is counted, so an inner
+// bracket cannot end the outer one's measurement early.
+void httpStallBegin();
+void httpStallEnd();
+
+// Total milliseconds spent inside those brackets since boot. A clock takes it
+// when it opens and subtracts the difference from its elapsed time; while a
+// fetch runs the clock therefore stands still instead of running out.
+uint32_t httpStallTotalMs();
 
 void           httpSetProgressHook(HttpProgressFn fn);
 HttpProgressFn httpProgressHook();

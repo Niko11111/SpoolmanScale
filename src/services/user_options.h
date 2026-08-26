@@ -14,11 +14,17 @@ extern bool g_whole_gram;
 // so putting the new one in the middle would silently move every device that
 // was set to "backend" onto something else.
 enum IpBarMode : uint8_t {
-  IP_BAR_OFF     = 0,
-  IP_BAR_DEVICE  = 1,
-  IP_BAR_BACKEND = 2,
-  IP_BAR_MDNS    = 3,
-  IP_BAR_COUNT   = 4
+  IP_BAR_OFF          = 0,
+  IP_BAR_DEVICE       = 1,
+  IP_BAR_BACKEND      = 2,
+  IP_BAR_MDNS         = 3,
+  // Address and port. Its own mode rather than a port added to the one above:
+  // that one exists to tell two servers apart at a glance and drops the port
+  // because it is the same on all of them, and the bar is only 94 px wide.
+  // With two instances of the same manager on one host the port is the only
+  // thing that differs, and then it is the only thing worth showing.
+  IP_BAR_BACKEND_PORT = 4,
+  IP_BAR_COUNT        = 5
 };
 extern uint8_t g_ip_bar_mode;
 

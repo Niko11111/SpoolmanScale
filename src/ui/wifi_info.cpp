@@ -63,6 +63,10 @@ static void ipBarModeText(char *buf, size_t len) {
   // No longer ".local": the bar shows the device label, and the suffix it
   // carries is now the network's business rather than always mDNS.
   else if (g_ip_bar_mode == IP_BAR_MDNS)    strncpy(buf, "Name", len - 1);
+  // The backend's name with the port marker after it, so the two backend modes
+  // are told apart by what they add rather than by their position in the ring.
+  else if (g_ip_bar_mode == IP_BAR_BACKEND_PORT)
+    snprintf(buf, len, "%s :Port", backendName());
   else                                      strncpy(buf, T(STR_OFF), len - 1);
   buf[len - 1] = '\0';
 }

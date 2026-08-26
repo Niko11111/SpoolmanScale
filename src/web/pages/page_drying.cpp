@@ -32,9 +32,13 @@ static String body() {
   h += T(STR_W_DRY_MATERIAL);
   h += F("</th><th>");
   h += T(STR_W_DRY_YELLOW);
-  h += F("</th><th>");
+  h += F(" (");
+  h += T(STR_W_DRY_DAYS);
+  h += F(")</th><th>");
   h += T(STR_W_DRY_RED);
-  h += F("</th><th>");
+  h += F(" (");
+  h += T(STR_W_DRY_DAYS);
+  h += F(")</th><th>");
   h += T(STR_W_DRY_STORAGE);
   h += F("</th></tr></thead><tbody>");
 
@@ -84,12 +88,6 @@ static String body() {
   h += F("</button><button class='danger' onclick='resetDry()'>");
   h += T(STR_W_DEFAULTS);
   h += F("</button><span class='msg' id='dry-s'></span></div></div></div>");
-
-  // The unit is stated once, in the column heads, so it does not repeat
-  // fourteen times next to the inputs.
-  h += F("<p class='foot' style='text-align:left;margin-top:-6px'>");
-  h += T(STR_W_DRY_DAYS);
-  h += F("</p>");
 
   h += F("<script>");
   h += webShellJsStrings();

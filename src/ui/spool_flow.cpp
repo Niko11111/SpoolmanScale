@@ -355,6 +355,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   // Up before the blocking work, and painted before this returns. The reader
   // below moves it along, so the wait stops looking like a hang.
   loadingOverlayShow(T(STR_LOADING_SPOOLS));
+  httpStallBegin();     // see httpStallTotalMs(): the clocks stop with the loop
   httpSetProgressHook(loadingOverlayProgress);
 
   logSDf("link fetch: is_bambu=%d material_filter='%s' archived_only=%d",
@@ -384,6 +385,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   DeserializationError err = DeserializationError::Ok;
   int code = backendGetSpoolListJson(cfg_spoolman_base, archived_only, doc, 8000, &filterL, &err);
   httpSetProgressHook(nullptr);
+  httpStallEnd();
   if (code != 200 || err) { loadingOverlayHide(); return; }
 
   JsonArray spools = doc.as<JsonArray>();
@@ -2632,6 +2634,7 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
   if (!wifi_ok) return;
 
   loadingOverlayShow(T(STR_LOADING_SPOOLS));
+  httpStallBegin();     // same bracket as the link fetch above
   httpSetProgressHook(loadingOverlayProgress);
 
   SpiRamAllocator alloc;
@@ -2639,6 +2642,7 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
   DeserializationError err = DeserializationError::Ok;
   int code = backendGetSpoolListJson(cfg_spoolman_base, true, doc, 10000, nullptr, &err);
   httpSetProgressHook(nullptr);
+  httpStallEnd();
   if (code != 200 || err) {
     loadingOverlayHide();
     Serial.printf("fetchSpoolsForCopy JSON error: %s\n", err.c_str());

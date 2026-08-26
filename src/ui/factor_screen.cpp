@@ -11,6 +11,7 @@
 #include "app_config.h"
 #include "hardware/scale.h"
 #include "hardware/scale_state.h"
+#include "confirm_popup.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "scale_menu.h"
@@ -160,6 +161,48 @@ void buildFactorScreen() {
       lv_obj_set_style_bg_color(b, g_whole_gram ? lv_color_hex(0x1a3020) : lv_color_hex(0x0a1828), 0);
       lv_obj_set_style_border_color(b, g_whole_gram ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a2840), 0);
       lv_obj_set_style_text_color(l, g_whole_gram ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+    }, LV_EVENT_CLICKED, NULL);
+  }
+
+  // ── Reset calibration (right of numpad, mirror of the toggle) ──
+  // The way back from a calibration taken while the ADC was off the bus: every
+  // reading was -1 then, the stored factor is arithmetic on nonsense, and no
+  // amount of re-tareing fixes it. It exists in Settings > Scale, but this is
+  // the screen someone is on when they find out, so it is also here.
+  //
+  // The column right of the numpad (x 400..480) is otherwise empty, so the
+  // button sits where the whole-gram toggle sits on the other side.
+  {
+    lv_obj_t *btn_rst = lv_btn_create(scr_factor);
+    lv_obj_set_size(btn_rst, 68, 68);
+    int rst_y = NP_START_Y + (4*(NP_H+NP_GAP) - 68) / 2;
+    lv_obj_set_pos(btn_rst, 480 - 68 - 6, rst_y);
+    lv_obj_set_style_radius(btn_rst, 8, 0);
+    lv_obj_set_style_shadow_width(btn_rst, 0, 0);
+    lv_obj_set_style_border_width(btn_rst, 1, 0);
+    // The house red for something that cannot be taken back, as in
+    // ui_common.cpp addCloseButton() and the No button of every confirmation.
+    lv_obj_set_style_bg_color(btn_rst, lv_color_hex(0x3a1010), 0);
+    lv_obj_set_style_bg_color(btn_rst, lv_color_hex(0x602020), LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(btn_rst, lv_color_hex(0x601010), 0);
+
+    lv_obj_t *lbl_rst = lv_label_create(btn_rst);
+    { char rb[24]; strncpy(rb, T(STR_BTN_CAL_RESET_SHORT), sizeof(rb) - 1);
+      rb[sizeof(rb) - 1] = '\0'; lv_label_set_text(lbl_rst, rb); }
+    lv_obj_set_style_text_color(lbl_rst, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_font(lbl_rst, &lv_font_montserrat_ext_12, 0);
+    lv_obj_set_style_text_align(lbl_rst, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(lbl_rst, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(lbl_rst, 60);
+    lv_obj_center(lbl_rst);
+
+    lv_obj_add_event_cb(btn_rst, [](lv_event_t *e) {
+      // Through the same confirmation and the same deferred action as the row
+      // in Settings > Scale, so there is one place that performs the reset.
+      logSD("BTN: Calibration -> Reset calibration");
+      char ask[64]; strncpy(ask, T(STR_CAL_RESET_CONFIRM), sizeof(ask) - 1);
+      ask[sizeof(ask) - 1] = '\0';
+      showConfirmPopup(ask, 6);
     }, LV_EVENT_CLICKED, NULL);
   }
 

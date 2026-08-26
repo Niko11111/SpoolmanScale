@@ -119,12 +119,26 @@ void updateHeaderStatus() {
           text = h;
         }
       }
+    } else if (g_ip_bar_mode == IP_BAR_BACKEND_PORT) {
+      // As the user typed it, port included. backendHost() already holds
+      // "ip:port" when one was given - the mode above is the one that takes
+      // it apart, this one does not.
+      const char *h = backendHost();
+      if (h && h[0]) text = h;
     }
     if (text) {
+      // 192.168.4.100:7913 needs about 113 px in this font and the label is
+      // 94 wide, so the port mode gets the room it needs and the status line
+      // to its left gives it up. Every other mode leaves both as they were.
+      const bool wide = (g_ip_bar_mode == IP_BAR_BACKEND_PORT);
+      lv_obj_set_width(lbl_hdr_ip, wide ? HDR_IP_W_PORT : HDR_IP_W);
+      if (lbl_status)
+        lv_obj_set_width(lbl_status, wide ? HDR_STATUS_W_NARROW : HDR_STATUS_W);
       lv_label_set_text(lbl_hdr_ip, text);
       lv_obj_clear_flag(lbl_hdr_ip, LV_OBJ_FLAG_HIDDEN);
     } else {
       lv_obj_add_flag(lbl_hdr_ip, LV_OBJ_FLAG_HIDDEN);
+      if (lbl_status) lv_obj_set_width(lbl_status, HDR_STATUS_W);
     }
   }
 

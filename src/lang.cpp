@@ -1530,6 +1530,8 @@ const char* const STRINGS[][2] = {
     "Das Schreiben auf dieser Seite hat seine eigene Formatauswahl.",
     "Applies to the question the scale asks after a link. Writing from this "
     "page has its own format selector." },  // STR_W_TAGOPT_NOTE
+  { "Speichern",                 "Download"           },  // STR_W_LOG_DOWNLOAD
+  { "Reset Cal.",                "Reset Cal."         },  // STR_BTN_CAL_RESET_SHORT
 };
 
 // Without this, a missing entry is not a compile error: every string from the

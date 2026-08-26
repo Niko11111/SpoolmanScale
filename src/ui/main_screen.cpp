@@ -174,7 +174,7 @@ void buildUI() {
   // right. The longest string that lands here is STR_BOOTING at roughly
   // 245 px, so 292 leaves room without reaching the address slot.
   lv_label_set_long_mode(lbl_status, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_status, 292);
+  lv_obj_set_width(lbl_status, HDR_STATUS_W);
 
   // Optional address, left of the scan counter. Filled by updateHeaderStatus()
   // according to g_ip_bar_mode, hidden while the mode is off.
@@ -187,7 +187,7 @@ void buildUI() {
   // Bounded like lbl_status above it. A device name is user supplied, so
   // unlike an IP address its width is not something to leave to chance.
   lv_label_set_long_mode(lbl_hdr_ip, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_hdr_ip, 94);
+  lv_obj_set_width(lbl_hdr_ip, HDR_IP_W);
   // A fixed width makes the label a box, and text sits left in a box. Without
   // this the address would drift away from the scan counter instead of
   // staying flush against it, which is where it used to sit when the label

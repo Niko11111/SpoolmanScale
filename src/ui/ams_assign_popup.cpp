@@ -8,6 +8,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/ams_assign.h"
+#include "services/http_progress.h"
 #include "services/auto_weight_state.h"
 #include "services/location_state.h"
 #include "ui/more_info_screen.h"
@@ -24,6 +25,12 @@ static bool s_cancel_pending  = false;
 static bool s_close_pending   = false;
 
 static unsigned long s_opened_ms   = 0;
+// What the blocking-time counter stood at when the popup opened. The wait for
+// a whole inventory does not count against the ten seconds: the loop is not
+// running then, so no button on this popup can be pressed. Without this the
+// question regularly expired unanswered while a fetch was in flight, and the
+// log recorded it as the user saying no.
+static uint32_t      s_opened_stall = 0;
 static int           s_last_shown_s = -1;
 
 bool isAmsAssignPopupOpen() { return scr_ams_popup != nullptr; }
@@ -38,7 +45,12 @@ static void closeAmsAssignPopup() {
 // difference rather than against an absolute deadline, so the millis()
 // rollover after 49 days cannot make it expire on the spot.
 static int remainingSeconds() {
-  const unsigned long elapsed = millis() - s_opened_ms;
+  unsigned long elapsed = millis() - s_opened_ms;
+  // Minus whatever of that time the loop spent inside a blocking backend call.
+  // Guarded rather than trusted: the two are measured independently, and a
+  // stall longer than the elapsed time would wrap the subtraction.
+  const uint32_t stalled = httpStallTotalMs() - s_opened_stall;
+  elapsed = (stalled >= elapsed) ? 0 : (elapsed - stalled);
   if (elapsed >= AMS_ASK_COUNTDOWN_MS) return 0;
   return (int)((AMS_ASK_COUNTDOWN_MS - elapsed + 999) / 1000);
 }
@@ -63,6 +75,7 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   s_cancel_pending  = false;
   s_close_pending   = false;
   s_opened_ms       = millis();
+  s_opened_stall    = httpStallTotalMs();
 
   scr_ams_popup = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_ams_popup, 480, 320);
