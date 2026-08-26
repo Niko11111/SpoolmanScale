@@ -13,6 +13,7 @@
 #include "lang.h"
 #include "ui_common.h"
 #include "services/backend.h"
+#include "theme.h"
 
 
 
@@ -76,7 +77,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_set_style_border_width(scr_extra_fields, 0, 0);
   lv_obj_set_style_pad_all(scr_extra_fields, 0, 0);
   lv_obj_clear_flag(scr_extra_fields, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_extra_fields, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(scr_extra_fields, tc(TH_BG), 0);
 
   // Header: back returns to the filament manager screen, which is where this
   // screen is now reached from. Setup flow gets a title and an X instead.
@@ -92,7 +93,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     // Setup flow: title only + X (→ main screen), no back button
     lv_obj_t *lbl_title = lv_label_create(scr_extra_fields);
     { char tb[40]; backendText(T(STR_EXTRA_FIELDS_TITLE), tb, sizeof(tb)); lv_label_set_text(lbl_title, tb); }
-    lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(lbl_title, tc(TH_ACCENT), 0);
     lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
     lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 12);
 
@@ -100,15 +101,15 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_t *btn_x = lv_btn_create(scr_extra_fields);
     lv_obj_set_size(btn_x, 44, 44);
     lv_obj_align(btn_x, LV_ALIGN_TOP_RIGHT, -4, 2);
-    lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
-    lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_x, tc(TH_DANGER_BG), 0);
+    lv_obj_set_style_bg_color(btn_x, tc(TH_DANGER_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_x, 8, 0);
     lv_obj_set_style_shadow_width(btn_x, 0, 0);
     lv_obj_set_style_border_width(btn_x, 0, 0);
     lv_obj_add_event_cb(btn_x, [](lv_event_t *e){ logSD("BTN: Close -> Main"); showMainScreen(); }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_x = lv_label_create(btn_x);
     lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-    lv_obj_set_style_text_color(lbl_x, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_color(lbl_x, tc(TH_DANGER_TEXT), 0);
     lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
     lv_obj_center(lbl_x);
   }
@@ -116,7 +117,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   // Hint text
   lv_obj_t *lbl_hint = lv_label_create(scr_extra_fields);
   lv_label_set_text(lbl_hint, T(STR_EXTRA_FIELDS_HINT));
-  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_hint, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_hint, LV_LABEL_LONG_WRAP);
@@ -127,25 +128,25 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_t *btn_check = lv_btn_create(scr_extra_fields);
   lv_obj_set_size(btn_check, 280, 44);
   lv_obj_align(btn_check, LV_ALIGN_TOP_MID, 0, 138);
-  lv_obj_set_style_bg_color(btn_check, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_check, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_check, tc(TH_TILE_BG), 0);
+  lv_obj_set_style_bg_color(btn_check, tc(TH_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_check, 8, 0);
   lv_obj_set_style_shadow_width(btn_check, 0, 0);
   lv_obj_set_style_border_width(btn_check, 1, 0);
-  lv_obj_set_style_border_color(btn_check, lv_color_hex(0x1a3060), 0);
+  lv_obj_set_style_border_color(btn_check, tc(TH_SURFACE_2), 0);
   lv_obj_add_event_cb(btn_check, [](lv_event_t *e) {
     extra_fields_check_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_check = lv_label_create(btn_check);
   lv_label_set_text(lbl_check, T(STR_EXTRA_FIELDS_CHECK_BTN));
-  lv_obj_set_style_text_color(lbl_check, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_check, tc(TH_TEXT), 0);
   lv_obj_set_style_text_font(lbl_check, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_check);
 
   // Status label — below check button
   lbl_extra_fields_status = lv_label_create(scr_extra_fields);
   lv_label_set_text(lbl_extra_fields_status, "");
-  lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_extra_fields_status, tc(TH_TEXT), 0);
   lv_obj_set_style_text_font(lbl_extra_fields_status, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_extra_fields_status, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_extra_fields_status, LV_LABEL_LONG_WRAP);
@@ -156,12 +157,12 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   btn_extra_fields_create = lv_btn_create(scr_extra_fields);
   lv_obj_set_size(btn_extra_fields_create, 440, 42);
   lv_obj_align(btn_extra_fields_create, LV_ALIGN_TOP_MID, 0, 228);
-  lv_obj_set_style_bg_color(btn_extra_fields_create, lv_color_hex(0x1a3020), 0);
-  lv_obj_set_style_bg_color(btn_extra_fields_create, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_extra_fields_create, tc(TH_OK_BG), 0);
+  lv_obj_set_style_bg_color(btn_extra_fields_create, tc(TH_SUCCESS_BG), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_extra_fields_create, 8, 0);
   lv_obj_set_style_shadow_width(btn_extra_fields_create, 0, 0);
   lv_obj_set_style_border_width(btn_extra_fields_create, 1, 0);
-  lv_obj_set_style_border_color(btn_extra_fields_create, lv_color_hex(0x2a5030), 0);
+  lv_obj_set_style_border_color(btn_extra_fields_create, tc(TH_SUCCESS_BG), 0);
   lv_obj_add_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_event_cb(btn_extra_fields_create, [](lv_event_t *e) {
     // Confirmation popup
@@ -178,8 +179,8 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_t *box = lv_obj_create(pop);
     lv_obj_set_size(box, 420, 220);
     lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(box, lv_color_hex(0x0d1a2a), 0);
-    lv_obj_set_style_border_color(box, lv_color_hex(0x1a3060), 0);
+    lv_obj_set_style_bg_color(box, tc(TH_SURFACE), 0);
+    lv_obj_set_style_border_color(box, tc(TH_SURFACE_2), 0);
     lv_obj_set_style_border_width(box, 1, 0);
     lv_obj_set_style_radius(box, 10, 0);
     lv_obj_set_style_pad_all(box, 0, 0);
@@ -187,13 +188,13 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
 
     lv_obj_t *lbl_ct = lv_label_create(box);
     lv_label_set_text(lbl_ct, T(STR_EXTRA_FIELDS_CONFIRM_TITLE));
-    lv_obj_set_style_text_color(lbl_ct, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(lbl_ct, tc(TH_ACCENT), 0);
     lv_obj_set_style_text_font(lbl_ct, &lv_font_montserrat_ext_18, 0);
     lv_obj_align(lbl_ct, LV_ALIGN_TOP_MID, 0, 18);
 
     lv_obj_t *lbl_cm = lv_label_create(box);
     lv_label_set_text(lbl_cm, T(STR_EXTRA_FIELDS_CONFIRM_MSG));
-    lv_obj_set_style_text_color(lbl_cm, lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_color(lbl_cm, tc(TH_TEXT), 0);
     lv_obj_set_style_text_font(lbl_cm, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(lbl_cm, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(lbl_cm, LV_LABEL_LONG_WRAP);
@@ -204,8 +205,8 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_t *btn_conf = lv_btn_create(box);
     lv_obj_set_size(btn_conf, 180, 44);
     lv_obj_align(btn_conf, LV_ALIGN_BOTTOM_RIGHT, -12, -12);
-    lv_obj_set_style_bg_color(btn_conf, lv_color_hex(0x1a3020), 0);
-    lv_obj_set_style_bg_color(btn_conf, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_conf, tc(TH_OK_BG), 0);
+    lv_obj_set_style_bg_color(btn_conf, tc(TH_SUCCESS_BG), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_conf, 8, 0);
     lv_obj_set_style_shadow_width(btn_conf, 0, 0);
     lv_obj_set_style_border_width(btn_conf, 0, 0);
@@ -219,7 +220,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_conf = lv_label_create(btn_conf);
     lv_label_set_text(lbl_conf, T(STR_CONFIRM));
-    lv_obj_set_style_text_color(lbl_conf, lv_color_hex(0x40c080), 0);
+    lv_obj_set_style_text_color(lbl_conf, tc(TH_SUCCESS_TEXT), 0);
     lv_obj_set_style_text_font(lbl_conf, &lv_font_montserrat_ext_16, 0);
     lv_obj_center(lbl_conf);
 
@@ -227,8 +228,8 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_t *btn_can = lv_btn_create(box);
     lv_obj_set_size(btn_can, 140, 44);
     lv_obj_align(btn_can, LV_ALIGN_BOTTOM_LEFT, 12, -12);
-    lv_obj_set_style_bg_color(btn_can, lv_color_hex(0x1a2030), 0);
-    lv_obj_set_style_bg_color(btn_can, lv_color_hex(0x2a3040), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_can, tc(TH_SURFACE_DARK), 0);
+    lv_obj_set_style_bg_color(btn_can, tc(TH_BORDER), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_can, 8, 0);
     lv_obj_set_style_shadow_width(btn_can, 0, 0);
     lv_obj_set_style_border_width(btn_can, 0, 0);
@@ -239,14 +240,14 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_can = lv_label_create(btn_can);
     lv_label_set_text(lbl_can, T(STR_CANCEL));
-    lv_obj_set_style_text_color(lbl_can, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(lbl_can, tc(TH_TEXT_MUTED), 0);
     lv_obj_set_style_text_font(lbl_can, &lv_font_montserrat_ext_16, 0);
     lv_obj_center(lbl_can);
   }, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *lbl_create = lv_label_create(btn_extra_fields_create);
   lv_label_set_text(lbl_create, T(STR_EXTRA_FIELDS_CREATE_BTN));
-  lv_obj_set_style_text_color(lbl_create, lv_color_hex(0x40c080), 0);
+  lv_obj_set_style_text_color(lbl_create, tc(TH_SUCCESS_TEXT), 0);
   lv_obj_set_style_text_font(lbl_create, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_create);
 
@@ -259,12 +260,12 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_t *btn_skip_bottom = btn_extra_fields_next;
   lv_obj_set_size(btn_skip_bottom, 210, 40);
   lv_obj_set_pos(btn_skip_bottom, 246, 276);
-  lv_obj_set_style_bg_color(btn_skip_bottom, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_skip_bottom, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_skip_bottom, tc(TH_SURFACE), 0);
+  lv_obj_set_style_bg_color(btn_skip_bottom, tc(TH_SURFACE_2), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_skip_bottom, 8, 0);
   lv_obj_set_style_shadow_width(btn_skip_bottom, 0, 0);
   lv_obj_set_style_border_width(btn_skip_bottom, 1, 0);
-  lv_obj_set_style_border_color(btn_skip_bottom, lv_color_hex(0x1a2840), 0);
+  lv_obj_set_style_border_color(btn_skip_bottom, tc(TH_SURFACE_3), 0);
   lv_obj_add_event_cb(btn_skip_bottom, [](lv_event_t *e) {
     // Only reachable in the setup chain now, so there is one way onwards.
     // Deferred: never call showCalReminderScreen from an LVGL callback.
@@ -274,7 +275,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   char skip_buf[32];
   snprintf(skip_buf, sizeof(skip_buf), "%s  " LV_SYMBOL_RIGHT, T(STR_EXTRA_FIELDS_SKIP));
   lv_label_set_text(lbl_skip_b, skip_buf);
-  lv_obj_set_style_text_color(lbl_skip_b, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_skip_b, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(lbl_skip_b, &lv_font_montserrat_ext_14, 0);
   lv_obj_center(lbl_skip_b);
   }
@@ -283,17 +284,17 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_t *btn_test = lv_btn_create(scr_extra_fields);
   lv_obj_set_size(btn_test, 210, 40);
   lv_obj_set_pos(btn_test, 18, 276);
-  lv_obj_set_style_bg_color(btn_test, lv_color_hex(0x1a1a0a), 0);
-  lv_obj_set_style_bg_color(btn_test, lv_color_hex(0x2a2a1a), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_test, tc(TH_SURFACE), 0);
+  lv_obj_set_style_bg_color(btn_test, tc(TH_OK_BG), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_test, 8, 0);
   lv_obj_set_style_shadow_width(btn_test, 0, 0);
   lv_obj_set_style_border_width(btn_test, 1, 0);
-  lv_obj_set_style_border_color(btn_test, lv_color_hex(0x2a2a1a), 0);
+  lv_obj_set_style_border_color(btn_test, tc(TH_OK_BG), 0);
   lv_obj_add_event_cb(btn_test, [](lv_event_t *e) {
     if (!wifi_ok || cfg_spoolman_base[0] == '\0') {
       if (lbl_extra_fields_status) {
         lv_label_set_text(lbl_extra_fields_status, T(STR_EXTRA_FIELDS_NO_WIFI));
-        lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
+        lv_obj_set_style_text_color(lbl_extra_fields_status, tc(TH_DANGER_TEXT), 0);
       }
       return;
     }
@@ -302,19 +303,19 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     if (lbl_extra_fields_status) {
       if (code == 200 || code == 201) {
         { char sb[96]; backendText(T(STR_EF_TEST_CREATED), sb, sizeof(sb)); lv_label_set_text(lbl_extra_fields_status, sb); }
-        lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
+        lv_obj_set_style_text_color(lbl_extra_fields_status, tc(TH_WARNING), 0);
       } else if (code == 409) {
         { char sb[96]; backendText(T(STR_EF_TEST_EXISTS), sb, sizeof(sb)); lv_label_set_text(lbl_extra_fields_status, sb); }
-        lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
+        lv_obj_set_style_text_color(lbl_extra_fields_status, tc(TH_WARNING), 0);
       } else {
         lv_label_set_text(lbl_extra_fields_status, T(STR_EF_TEST_FAIL));
-        lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
+        lv_obj_set_style_text_color(lbl_extra_fields_status, tc(TH_DANGER_TEXT), 0);
       }
     }
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_test = lv_label_create(btn_test);
   lv_label_set_text(lbl_test, T(STR_EF_TEST_BTN));
-  lv_obj_set_style_text_color(lbl_test, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_test, tc(TH_WARNING), 0);
   lv_obj_set_style_text_font(lbl_test, &lv_font_montserrat_ext_14, 0);
   lv_obj_center(lbl_test);
 }
@@ -325,17 +326,17 @@ void checkAndCreateExtraFields(bool create_missing) {
 
   if (!wifi_ok) {
     lv_label_set_text(lbl_extra_fields_status, T(STR_EXTRA_FIELDS_NO_WIFI));
-    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_color(lbl_extra_fields_status, tc(TH_DANGER_TEXT), 0);
     return;
   }
   if (cfg_spoolman_base[0] == '\0' || strcmp(cfg_spoolman_base, "http://") == 0) {
     { char sb[64]; backendText(T(STR_EXTRA_FIELDS_NO_SPOOLMAN), sb, sizeof(sb)); lv_label_set_text(lbl_extra_fields_status, sb); }
-    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_color(lbl_extra_fields_status, tc(TH_DANGER_TEXT), 0);
     return;
   }
 
   lv_label_set_text(lbl_extra_fields_status, T(STR_EXTRA_FIELDS_CHECKING));
-  lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_extra_fields_status, tc(TH_TEXT_MUTED), 0);
   if (btn_extra_fields_create) lv_obj_add_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
   lv_timer_handler();
   yield();
@@ -356,7 +357,7 @@ void checkAndCreateExtraFields(bool create_missing) {
     char buf[96];
     backendText(T(STR_SPOOLMAN_FAIL), buf, sizeof(buf));
     lv_label_set_text(lbl_extra_fields_status, buf);
-    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_color(lbl_extra_fields_status, tc(TH_DANGER_TEXT), 0);
     return;
   }
 
@@ -389,19 +390,19 @@ void checkAndCreateExtraFields(bool create_missing) {
   if (missing_count == 0) {
     // All OK
     lv_label_set_text(lbl_extra_fields_status, T(STR_EXTRA_FIELDS_ALL_OK));
-    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0x40c080), 0);
+    lv_obj_set_style_text_color(lbl_extra_fields_status, tc(TH_SUCCESS_TEXT), 0);
     if (btn_extra_fields_create) lv_obj_add_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
     // Turn skip/next button green with "Next →" label
     if (btn_extra_fields_next) {
-      lv_obj_set_style_bg_color(btn_extra_fields_next, lv_color_hex(0x1a3020), 0);
-      lv_obj_set_style_bg_color(btn_extra_fields_next, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-      lv_obj_set_style_border_color(btn_extra_fields_next, lv_color_hex(0x2a5030), 0);
+      lv_obj_set_style_bg_color(btn_extra_fields_next, tc(TH_OK_BG), 0);
+      lv_obj_set_style_bg_color(btn_extra_fields_next, tc(TH_SUCCESS_BG), LV_STATE_PRESSED);
+      lv_obj_set_style_border_color(btn_extra_fields_next, tc(TH_SUCCESS_BG), 0);
       lv_obj_t *lbl = lv_obj_get_child(btn_extra_fields_next, 0);
       if (lbl) {
         char next_lbl[32];
         snprintf(next_lbl, sizeof(next_lbl), "%s  " LV_SYMBOL_RIGHT, T(STR_CONFIRM));
         lv_label_set_text(lbl, next_lbl);
-        lv_obj_set_style_text_color(lbl, lv_color_hex(0x40c080), 0);
+        lv_obj_set_style_text_color(lbl, tc(TH_SUCCESS_TEXT), 0);
       }
     }
     Serial.println("Extra fields: all present");
@@ -412,14 +413,14 @@ void checkAndCreateExtraFields(bool create_missing) {
     char status_buf[128];
     snprintf(status_buf, sizeof(status_buf), T(STR_EXTRA_FIELDS_MISSING), missing_buf);
     lv_label_set_text(lbl_extra_fields_status, status_buf);
-    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
+    lv_obj_set_style_text_color(lbl_extra_fields_status, tc(TH_WARNING), 0);
     if (btn_extra_fields_create) lv_obj_clear_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
     return;
   }
 
   // Create missing fields
   lv_label_set_text(lbl_extra_fields_status, T(STR_EXTRA_FIELDS_CREATING));
-  lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_extra_fields_status, tc(TH_TEXT_MUTED), 0);
   lv_timer_handler();
   yield();
 
@@ -444,7 +445,7 @@ void checkAndCreateExtraFields(bool create_missing) {
     char fail_buf[128];
     snprintf(fail_buf, sizeof(fail_buf), T(STR_EXTRA_FIELDS_CREATE_FAIL), fail_fields);
     lv_label_set_text(lbl_extra_fields_status, fail_buf);
-    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_color(lbl_extra_fields_status, tc(TH_DANGER_TEXT), 0);
   } else {
     if (btn_extra_fields_create) lv_obj_add_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
     yield();

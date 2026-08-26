@@ -17,6 +17,7 @@
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
 #include "ui_common.h"
+#include "theme.h"
 
 namespace {
 
@@ -231,8 +232,8 @@ void querySpoolmanById(int spool_id) {
   float pct = (sm_total > 0) ? (sm_remaining / sm_total) * 100.0f : 0;
   uint32_t pct_color;
   if (pct <= 10.0f)      pct_color = 0xe04040;
-  else if (pct <= 30.0f) pct_color = 0xf0b838;
-  else                   pct_color = 0x28d49a;
+  else if (pct <= 30.0f) pct_color = g_theme[TH_WARNING];
+  else                   pct_color = g_theme[TH_ACCENT];
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(pct_color), 0);
 
   char pct_str[16];
@@ -251,7 +252,7 @@ void querySpoolmanById(int spool_id) {
   char sm_id_str[16];
   snprintf(sm_id_str, sizeof(sm_id_str), "%d", sm_id);
   lv_label_set_text(lbl_spoolman_id, sm_id_str);
-  lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_id, tc(TH_ACCENT), 0);
 
   char dried_display[48];
   driedDisplayStr(sm_last_dried, dried_display, sizeof(dried_display));
@@ -276,7 +277,7 @@ void querySpoolman(const char* tray_uuid) {
 
   // Reset all Spoolman labels before new query
   lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT));
-  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_weight, tc(TH_ACCENT), 0);
   lv_label_set_text(lbl_spoolman_pct, "");
   lv_label_set_text(lbl_spoolman_dried_val, "");
   if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
@@ -293,7 +294,7 @@ void querySpoolman(const char* tray_uuid) {
   if (!is_bambu_tag) {
     lv_label_set_text(lbl_material, "-");
     lv_label_set_text(lbl_vendor, "-");
-    lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
+    lv_obj_set_style_bg_color(lbl_color_swatch, tc(TH_SURFACE_3), 0);
   }
   sm_last_dried[0] = '\0';
   sm_article_nr[0] = '\0';
@@ -536,8 +537,8 @@ void querySpoolman(const char* tray_uuid) {
     // Choose color: 0-10% red, 11-30% orange, 31-100% green
     uint32_t pct_color;
     if (pct <= 10.0f)       pct_color = 0xe04040;
-    else if (pct <= 30.0f)  pct_color = 0xf0b838;
-    else                    pct_color = 0x28d49a;
+    else if (pct <= 30.0f)  pct_color = g_theme[TH_WARNING];
+    else                    pct_color = g_theme[TH_ACCENT];
 
     lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(pct_color), 0);
 
@@ -559,7 +560,7 @@ void querySpoolman(const char* tray_uuid) {
     char sm_id_str[16];
     snprintf(sm_id_str, sizeof(sm_id_str), "%d", sm_id);
     lv_label_set_text(lbl_spoolman_id, sm_id_str);
-    lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(lbl_spoolman_id, tc(TH_ACCENT), 0);
 
     // Last drying: set value with "N days ago"
     char dried_display[48];
@@ -632,7 +633,7 @@ void querySpoolman(const char* tray_uuid) {
   Serial.println("Spoolman: spool not found");
   logSD("Spoolman: spool not found");
   { char nb[40]; backendText(T(STR_NOT_IN_SPOOLMAN), nb, sizeof(nb)); lv_label_set_text(lbl_spoolman_weight, nb); }
-  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_weight, tc(TH_ACCENT), 0);
   sm_found = false;
   updateLinkButton();
 }

@@ -8,6 +8,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/drying_config.h"
+#include "theme.h"
 
 static int dryingAlertLevel(const char* last_dried_local);
 
@@ -107,8 +108,8 @@ void applyDriedLabel(lv_obj_t* lbl_val, lv_obj_t* lbl_sym, const char* de_date) 
   if (sd_verbose) logSDf("[verbose] applyDriedLabel: date=%s level=%d mode=%d", de_date, level, g_dry_mode);
   uint32_t col;
   if      (level == 2) col = 0xe04040;  // rot
-  else if (level == 1) col = 0xf0b838;  // gelb
-  else if (level == 0) col = 0x28d49a;  // gruen
+  else if (level == 1) col = g_theme[TH_WARNING];  // gelb
+  else if (level == 0) col = g_theme[TH_ACCENT];  // gruen
   else                 col = 0x5090e0;  // kein Modus / kein Datum -> neutral blau
   lv_obj_set_style_text_color(lbl_val, lv_color_hex(col), 0);
   // Symbol (nur bei Warnung/Alarm)

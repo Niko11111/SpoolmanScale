@@ -10,7 +10,7 @@ uint8_t g_date_fmt = 0;  // 0=DD.MM.YYYY  1=YYYY-MM-DD
 
 // Order MUST exactly match the StringID enum in lang.h!
 // Format: { "Deutsch", "English" }
-const char* const STRINGS[STR_COUNT][2] = {
+const char* const STRINGS[][2] = {
 
   // Navigation
   { "Abbrechen",              "Cancel"           },  // STR_CANCEL
@@ -102,6 +102,12 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Nicht konfiguriert",     "Not configured"    },  // STR_BTN_WIFI_NONE
   { "WLAN Status",            "WiFi Status"       },  // STR_BTN_WIFI_STATUS
   { "Nicht verbunden",        "Not connected"     },  // STR_BTN_WIFI_STATUS_SUB
+  { "Design",                 "Theme"             },  // STR_THEME_TITLE
+  { "Voreinstellung",         "Preset"            },  // STR_THEME_PRESET
+  { "Eigenes",                "Custom"            },  // STR_THEME_CUSTOM
+  { "UI-Helligkeit",          "UI brightness"     },  // STR_THEME_GAIN
+  { "Einzelne Farben werden im Browser bearbeitet. Theme-Editor unter System > Weboberfläche aktivieren.",
+    "Individual colours are edited from a browser. Enable the theme editor under System > Web interface." },  // STR_THEME_HINT
   { "Spoolman Server",        "Spoolman Server"   },  // STR_BTN_SPOOLMAN
 
   // Scale
@@ -635,4 +641,12 @@ const char* const STRINGS[STR_COUNT][2] = {
   { "Weitere Optionen",              "More options"                       },  // STR_BTN_MORE_OPTIONS
   { "Ohne Nachfrage verknüpfen",     "Link without asking"                },  // STR_FLM_AUTOLINK
   { "wenn die Spule schon aufliegt", "when the spool is already on"       },  // STR_FLM_AUTOLINK_SUB
+  { "Neu starten - Hauptbildschirm uebernimmt die Farben",
+    "Restart to apply the palette to the main screen"    },  // STR_THEME_RESTART
 };
+
+// One row per enum entry. Declared [STR_COUNT][2] a short table silently
+// zero-filled and every string past the gap rendered as the wrong text or as
+// a null pointer. Now it is a build error.
+static_assert(sizeof(STRINGS) / sizeof(STRINGS[0]) == STR_COUNT,
+              "STRINGS needs exactly one row per Str enum entry");

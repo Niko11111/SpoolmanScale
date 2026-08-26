@@ -14,6 +14,7 @@
 #include "services/user_options.h"
 #include "services/wifi_manager.h"
 #include "ui_common.h"
+#include "theme.h"
 
 // One fact per row, label and value in two columns across the full width, so
 // nothing has to wrap and every row stays on its own baseline.
@@ -66,13 +67,13 @@ static void refreshIpBarButton() {
   if (!btn_ipbar || !lv_obj_is_valid(btn_ipbar)) return;
   const bool on = (g_ip_bar_mode != IP_BAR_OFF);
   lv_obj_set_style_border_color(btn_ipbar,
-    lv_color_hex(on ? 0x28d49a : 0x1a3050), 0);
+    lv_color_hex(on ? g_theme[TH_ACCENT] : g_theme[TH_BORDER]), 0);
   if (lbl_ipbar_mode) {
     char buf[24];
     ipBarModeText(buf, sizeof(buf));
     lv_label_set_text(lbl_ipbar_mode, buf);
     lv_obj_set_style_text_color(lbl_ipbar_mode,
-      lv_color_hex(on ? 0x28d49a : 0x4a6fa0), 0);
+      lv_color_hex(on ? g_theme[TH_ACCENT] : g_theme[TH_TEXT_MUTED]), 0);
   }
 }
 
@@ -88,8 +89,8 @@ static void buildIpBarSelector() {
   btn_ipbar = lv_btn_create(scr_wifi);
   lv_obj_set_size(btn_ipbar, 456, 44);
   lv_obj_set_pos(btn_ipbar, 12, SELECTOR_Y);
-  lv_obj_set_style_bg_color(btn_ipbar, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_ipbar, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_ipbar, tc(TH_TILE_BG), 0);
+  lv_obj_set_style_bg_color(btn_ipbar, tc(TH_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ipbar, 10, 0);
   lv_obj_set_style_shadow_width(btn_ipbar, 0, 0);
   lv_obj_set_style_border_width(btn_ipbar, 1, 0);
@@ -100,7 +101,7 @@ static void buildIpBarSelector() {
     strncpy(buf, T(STR_BTN_IP_STATUSBAR), sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
     lv_label_set_text(title, buf); }
-  lv_obj_set_style_text_color(title, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_color(title, tc(TH_TEXT_BRIGHT), 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(title, LV_ALIGN_LEFT_MID, 12, 0);
 
@@ -127,7 +128,7 @@ void buildWifiScreen() {
   btn_ipbar = nullptr;
   lbl_ipbar_mode = nullptr;
   releaseScreen(&scr_wifi);
-  scr_wifi = buildOverlayScreen();
+  scr_wifi = buildOverlayScreen(&scr_wifi);
   buildSubHeader(scr_wifi, T(STR_BTN_WIFI_STATUS), [](lv_event_t *e) {
     if (!scr_connection) buildConnectionScreen();
     hideAllOverlays();
@@ -166,12 +167,12 @@ void updateWifiInfo() {
   // this" - the value still matters, it says which network is set up.
   lv_label_set_text(val_ssid, cfg_wifi_ssid[0] ? cfg_wifi_ssid : "-");
   lv_obj_set_style_text_color(val_ssid,
-    lv_color_hex(wifi_ok ? 0xe8f0ff : 0x4a6fa0), 0);
+    lv_color_hex(wifi_ok ? g_theme[TH_TEXT_BRIGHT] : g_theme[TH_TEXT_MUTED]), 0);
 
   lv_label_set_text(val_state, wifi_ok ? T(STR_WIFI_STATUS_CONNECTED)
                                        : T(STR_WIFI_STATUS_DISCONNECTED));
   lv_obj_set_style_text_color(val_state,
-    lv_color_hex(wifi_ok ? 0x40c080 : 0xff8080), 0);
+    lv_color_hex(wifi_ok ? g_theme[TH_SUCCESS_TEXT] : g_theme[TH_DANGER_TEXT]), 0);
 
   // The MAC belongs to the radio, not to the link, so it stays readable while
   // disconnected - that is exactly when someone is setting up a reservation.

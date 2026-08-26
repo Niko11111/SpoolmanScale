@@ -14,6 +14,7 @@
 #include "services/user_options.h"
 #include "ui_common.h"
 #include "services/backend.h"
+#include "theme.h"
 
 
 
@@ -32,7 +33,7 @@ void updateLastUsedCapLabel() {
 void buildLastUsedScreen() {
   logSD("BUILD: LastUsedScreen");
   releaseScreen(&scr_lastused);
-  scr_lastused = buildOverlayScreen();
+  scr_lastused = buildOverlayScreen(&scr_lastused);
   buildSubHeader(scr_lastused, T(STR_LASTUSED_TITLE),
     [](lv_event_t *e){
       hideAllOverlays();
@@ -45,10 +46,10 @@ void buildLastUsedScreen() {
   lv_obj_set_size(btn_osm, 210, 50);
   lv_obj_set_pos(btn_osm, 12, 58);
   bool osm_active = (last_used_mode == 0);
-  lv_obj_set_style_bg_color(btn_osm, lv_color_hex(osm_active ? 0x1a3020 : 0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_osm, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_osm, lv_color_hex(osm_active ? g_theme[TH_OK_BG] : g_theme[TH_SURFACE]), 0);
+  lv_obj_set_style_bg_color(btn_osm, tc(TH_SUCCESS_BG), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_osm, 1, 0);
-  lv_obj_set_style_border_color(btn_osm, lv_color_hex(osm_active ? 0x28d49a : 0x1a3060), 0);
+  lv_obj_set_style_border_color(btn_osm, lv_color_hex(osm_active ? g_theme[TH_ACCENT] : g_theme[TH_SURFACE_2]), 0);
   lv_obj_set_style_radius(btn_osm, 8, 0);
   lv_obj_set_style_shadow_width(btn_osm, 0, 0);
   lv_obj_add_event_cb(btn_osm, [](lv_event_t *e) {
@@ -63,7 +64,7 @@ void buildLastUsedScreen() {
   // where the same option reads FilaMan's own consumption field.
   lv_label_set_text(lbl_osm, backendIsFilaMan() ? T(STR_LASTUSED_OPT_FILAMAN)
                                                 : T(STR_LASTUSED_OPT_OSM));
-  lv_obj_set_style_text_color(lbl_osm, lv_color_hex(osm_active ? 0x40c080 : 0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_osm, lv_color_hex(osm_active ? g_theme[TH_SUCCESS_TEXT] : g_theme[TH_TEXT]), 0);
   lv_obj_set_style_text_font(lbl_osm, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_osm, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_osm, LV_ALIGN_CENTER, 0, 0);
@@ -72,10 +73,10 @@ void buildLastUsedScreen() {
   lv_obj_set_size(btn_lw, 210, 50);
   lv_obj_set_pos(btn_lw, 238, 58);
   bool lw_active = (last_used_mode == 1);
-  lv_obj_set_style_bg_color(btn_lw, lv_color_hex(lw_active ? 0x1a3020 : 0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_lw, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_lw, lv_color_hex(lw_active ? g_theme[TH_OK_BG] : g_theme[TH_SURFACE]), 0);
+  lv_obj_set_style_bg_color(btn_lw, tc(TH_SUCCESS_BG), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_lw, 1, 0);
-  lv_obj_set_style_border_color(btn_lw, lv_color_hex(lw_active ? 0x28d49a : 0x1a3060), 0);
+  lv_obj_set_style_border_color(btn_lw, lv_color_hex(lw_active ? g_theme[TH_ACCENT] : g_theme[TH_SURFACE_2]), 0);
   lv_obj_set_style_radius(btn_lw, 8, 0);
   lv_obj_set_style_shadow_width(btn_lw, 0, 0);
   lv_obj_add_event_cb(btn_lw, [](lv_event_t *e) {
@@ -87,7 +88,7 @@ void buildLastUsedScreen() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_lw = lv_label_create(btn_lw);
   lv_label_set_text(lbl_lw, T(STR_LASTUSED_OPT_WEIGHED));
-  lv_obj_set_style_text_color(lbl_lw, lv_color_hex(lw_active ? 0x40c080 : 0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_lw, lv_color_hex(lw_active ? g_theme[TH_SUCCESS_TEXT] : g_theme[TH_TEXT]), 0);
   lv_obj_set_style_text_font(lbl_lw, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_lw, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_lw, LV_ALIGN_CENTER, 0, 0);
@@ -101,7 +102,7 @@ void buildLastUsedScreen() {
   char desc_buf[280];
   strncpy(desc_buf, desc, sizeof(desc_buf)-1); desc_buf[sizeof(desc_buf)-1] = 0;
   lv_label_set_text(lbl_desc, desc_buf);
-  lv_obj_set_style_text_color(lbl_desc, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_desc, tc(TH_TEXT_MUTED), 0);
   lv_obj_set_style_text_font(lbl_desc, &lv_font_montserrat_ext_14, 0);
   lv_label_set_long_mode(lbl_desc, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(lbl_desc, 448);
