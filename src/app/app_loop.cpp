@@ -447,6 +447,17 @@ void appLoop() {
     buildScaleSubScreen();
     lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
   }
+  // A scale menu row changed a setting and wants the screen to say so. The
+  // rebuild deletes the row that asked for it, so it cannot happen in that
+  // row's own callback.
+  if (scale_sub_rebuild_pending) {
+    scale_sub_rebuild_pending = false;
+    if (scr_scale_sub) {
+      lv_obj_del(scr_scale_sub); scr_scale_sub = nullptr;
+      buildScaleSubScreen();
+      lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
   // Asked before a weight lands that BamBuddy would clamp. Built here because
   // the write path that noticed it must not create a screen.
   if (show_bb_cap_pending) {

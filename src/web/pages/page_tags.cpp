@@ -15,7 +15,9 @@
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/prefs_store.h"
 #include "services/tag_write.h"
+#include "services/user_options.h"
 #include "web/web_access.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
@@ -87,6 +89,33 @@ static String body() {
   h += T(STR_W_TAG_SIZES);
   h += F("</p><p class='hint' style='margin-top:8px'>");
   h += T(STR_W_TAG_COMPARE);
+  h += F("</p></div>");
+
+  // What the scale does on its own after a link, as opposed to what this page
+  // does when the button above is pressed. Same two settings as Settings >
+  // Scale on the device, and the note says which of the two is which - the
+  // format selector above belongs to the write on this page and nothing else.
+  h += F("<div class='card wide'><h2>");
+  h += T(STR_W_C_TAGOPTS);
+  h += F("</h2>"
+         "<label class='check'><span class='switch'>"
+         "<input id='to-ask' type='checkbox'><i></i></span>");
+  h += T(STR_W_TAGOPT_ASK);
+  h += F("</label>"
+         "<div class='field' style='margin-top:14px'><label>");
+  h += T(STR_W_TAGOPT_FMT);
+  h += F("</label><div class='inrow'>"
+         "<select id='to-fmt' style='min-width:210px'>"
+         "<option value='1'>OpenSpool</option>"
+         "<option value='3'>FilaMan</option>"
+         "<option value='0'>Anycubic ACE</option>"
+         "</select></div></div>"
+         "<div class='inrow' style='margin-top:16px'>"
+         "<button onclick='saveTagOpts()'>");
+  h += T(STR_W_SAVE);
+  h += F("</button><span class='msg' id='to-s'></span></div>"
+         "<p class='note' style='margin-top:10px'>");
+  h += T(STR_W_TAGOPT_NOTE);
   h += F("</p></div></div>");
 
   // Its own script. When the pages were split the shared block stayed behind
@@ -100,6 +129,26 @@ static String body() {
          "#tg-cur table td,#tg-new table td{font-size:11.5px;font-family:var(--mono);"
          "color:var(--ink-3);padding:3px 8px 3px 0;border:0}"
          "tr.diff td{color:var(--warn)}</style>");
+
+  h += F("<script>const TO={saved:");
+  h += jsStr(T(STR_W_SAVED));
+  h += F(",err:");  h += jsStr(T(STR_W_LOAD_FAIL));
+  h += F("};"
+         // Both values in one line, same shape as /api/tag/write above, so the
+         // route stays a two-liner and needs no JSON parser.
+         "function loadTagOpts(){fetch('/api/tagopts').then(r=>r.json()).then(d=>{"
+         "document.getElementById('to-ask').checked=!!d.ask;"
+         "document.getElementById('to-fmt').value=String(d.fmt);"
+         "}).catch(()=>{});}"
+         "function saveTagOpts(){"
+         "const a=document.getElementById('to-ask').checked?1:0;"
+         "const f=document.getElementById('to-fmt').value;"
+         "const s=document.getElementById('to-s');"
+         "fetch('/api/tagopts',{method:'POST',body:a+','+f})"
+         ".then(r=>r.json()).then(()=>{s.textContent=TO.saved;})"
+         ".catch(()=>{s.textContent=TO.err;});}"
+         "loadTagOpts();"
+         "</script>");
 
   h += F("<script>const M={cur:");
   h += jsStr(T(STR_W_TAG_ONTAG));
@@ -328,6 +377,36 @@ static void routes(WebServer &srv) {
                "\",\"message\":\"" + jsonEsc(tagWriteMessage()) +
                "\",\"content\":\"" + jsonEsc(tagCachedContent()) + "\"}";
     srv.send(200, "application/json", j);
+  });
+
+  // GATE_CONFIG rather than GATE_MAINT: this changes what the device does
+  // later, it does not write a tag now. The gate is a property of the route,
+  // not of the page it happens to sit on.
+  srv.on("/api/tagopts", HTTP_GET, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_C_TAGOPTS))) return;
+    srv.send(200, "application/json",
+             String("{\"ask\":") + (g_tagwrite_ask ? "true" : "false") +
+             ",\"fmt\":" + String((int)g_tagwrite_fmt) + "}");
+  });
+
+  srv.on("/api/tagopts", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_C_TAGOPTS))) return;
+    if (!srv.hasArg("plain")) { srv.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
+    String body = srv.arg("plain");
+    const int comma = body.indexOf(',');
+    g_tagwrite_ask = body.substring(0, comma < 0 ? body.length() : comma).toInt() == 1;
+    if (comma >= 0) {
+      const int f = body.substring(comma + 1).toInt();
+      // Only the three the device can write. Erase answers an unlink and is
+      // not offered here, and an unknown number must not reach NVS.
+      if (f == TAG_FMT_ACE || f == TAG_FMT_OPENSPOOL || f == TAG_FMT_FILAMAN)
+        g_tagwrite_fmt = (uint8_t)f;
+    }
+    prefsPutBool("tagwrite_ask", g_tagwrite_ask);
+    prefsPutUChar("tagwrite_fmt", g_tagwrite_fmt);
+    logSDf("Web: tag write ask=%d format=%s",
+           (int)g_tagwrite_ask, tagFormatLabel(g_tagwrite_fmt));
+    srv.send(200, "application/json", "{\"ok\":true}");
   });
 
   srv.on("/api/tag/write", HTTP_POST, [&srv]() {

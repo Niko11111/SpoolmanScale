@@ -8,6 +8,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/tag_write.h"
+#include "services/user_options.h"
 #include "info_popup.h"
 #include "ui_common.h"
 
@@ -126,7 +127,10 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
   // thing that says what is about to be lost.
   lv_obj_t *lbl_hint = lv_label_create(box);
   { char hb[192];
-    const char *fmt = (s_mode == ASK_ERASE) ? s_erase_fmt : "OpenSpool";
+    // The erase says what is about to be lost, the write says what is about
+    // to be put there - and that is now a setting, not a constant.
+    const char *fmt = (s_mode == ASK_ERASE) ? s_erase_fmt
+                                            : tagFormatLabel(g_tagwrite_fmt);
     snprintf(hb, sizeof(hb), T(hint), fmt[0] ? fmt : "OpenSpool");
     lv_label_set_text(lbl_hint, hb); }
   lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
@@ -219,12 +223,12 @@ void handleTagWritePopupDeferredActions() {
   confirm_pending = false;
 
   // No link flag either way: the write follows a link that already happened,
-  // and the erase follows an unlink. OpenSpool rather than ACE, because it is
-  // the format the filament managers read - ACE stays a choice the tag page
-  // offers.
+  // and the erase follows an unlink. The format is the one set in Settings >
+  // Scale; it used to be OpenSpool with no way to say otherwise, which left
+  // an ACE user no path at all from the device.
   const bool queued = (s_mode == ASK_ERASE)
                         ? tagWriteRequest(0, TAG_FMT_ERASE, false)
-                        : tagWriteRequest(s_spool_id, TAG_FMT_OPENSPOOL, false);
+                        : tagWriteRequest(s_spool_id, (TagFormat)g_tagwrite_fmt, false);
   if (queued) {
     s_watching = true;
   } else {

@@ -16,6 +16,22 @@ enum TagFormat : uint8_t {
 // True for the formats that go on the tag as an NDEF JSON record.
 #define TAG_FMT_IS_NDEF(f)  ((f) == TAG_FMT_OPENSPOOL || (f) == TAG_FMT_FILAMAN)
 
+// What a tag has to hold before an NDEF record is worth attempting. The record
+// is around 150 to 190 bytes depending on how long the brand and material
+// names are, plus the TLV wrapper - so an NTAG213 with 144 bytes of user
+// memory can never take one, and the only thing offering it there produces is
+// "OpenSpool needs 176 bytes, this tag holds 144".
+//
+// A floor, not a promise: a tag above it can still be too small for a
+// particularly long record, and that write reports what happened as before.
+// NTAG215 (504) and NTAG216 (888) clear it with room to spare.
+#define TAGWRITE_NDEF_MIN_BYTES  176
+
+// The format's name for a log line or a status text. Plain ASCII and not
+// translated - these are protocol names, and this file cannot include lang.h
+// because T() collides with ArduinoJson's template parameter.
+const char* tagFormatLabel(uint8_t fmt);
+
 // What the last write ended in. The message next to it is English prose meant
 // for the web page; the device screen needs an id it can translate, and this
 // file cannot include lang.h because T() collides with ArduinoJson.

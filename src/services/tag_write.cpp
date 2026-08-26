@@ -397,6 +397,15 @@ static const char* protoName(TagFormat fmt) {
   return fmt == TAG_FMT_FILAMAN ? "filaman" : "openspool";
 }
 
+const char* tagFormatLabel(uint8_t fmt) {
+  switch (fmt) {
+    case TAG_FMT_ACE:       return "Anycubic ACE";
+    case TAG_FMT_FILAMAN:   return "FilaMan";
+    case TAG_FMT_ERASE:     return "erase";
+    default:                return "OpenSpool";
+  }
+}
+
 static int buildOpenSpoolJson(const AceFields *f, int spool_id, TagFormat fmt,
                               char *json, size_t json_len) {
   int n = snprintf(json, json_len,

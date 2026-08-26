@@ -10,6 +10,10 @@ extern bool show_factor_pending;
 // The calibration reset was confirmed. Deferred like every other write reached
 // from an LVGL callback, and because it rebuilds the screen the button sits on.
 extern bool cal_reset_pending;
+// A row of the scale menu changed a setting and the screen has to show it.
+// Deferred rather than rebuilt on the spot: the rebuild deletes the screen the
+// button that set it sits on, which is what CLAUDE.md rules out.
+extern bool scale_sub_rebuild_pending;
 extern bool show_lastused_pending;
 extern bool show_backend_pending;
 

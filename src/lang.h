@@ -956,6 +956,21 @@ enum StringID {
   STR_W_R_I2C,
   STR_W_RESCAN,
 
+  // Writing a tag after a link. Backend independent: what goes on a tag is an
+  // agreement between the tag and whoever reads it, and no backend sees it.
+  STR_TW_OPT_ASK,
+  STR_TW_OPT_ASK_SUB,
+  STR_TW_OPT_ASK_INFO,
+  STR_TW_OPT_FMT,
+  STR_TW_OPT_FMT_INFO,
+  STR_TW_FMT_OPENSPOOL,
+  STR_TW_FMT_FILAMAN,
+  STR_TW_FMT_ACE,
+  STR_W_C_TAGOPTS,
+  STR_W_TAGOPT_ASK,
+  STR_W_TAGOPT_FMT,
+  STR_W_TAGOPT_NOTE,
+
   STR_COUNT
 };
 

@@ -16,6 +16,7 @@
 #include "prefs_store.h"
 #include "settings_registry.h"
 #include "tag_field.h"
+#include "tag_write.h"
 #include "time_service.h"
 #include "user_options.h"
 #include "web/web_access.h"
@@ -111,6 +112,14 @@ void loadPrefs() {
   g_ams_window_s  = (int)prefsGetInt("ams_window", AMS_WINDOW_DEFAULT_S);
   g_auto_weight = prefsGetBool("auto_weight", false);
   g_auto_loc_popup = prefsGetBool("auto_loc_popup", false);
+  g_tagwrite_ask   = prefsGetBool("tagwrite_ask", false);
+  // Clamped rather than trusted: the value is persisted, and a firmware that
+  // once knew a fourth format would otherwise leave one behind that this build
+  // cannot write. TAG_FMT_ERASE is deliberately not offered here - erasing is
+  // an answer to an unlink, not to a link.
+  g_tagwrite_fmt   = prefsGetUChar("tagwrite_fmt", TAG_FMT_OPENSPOOL);
+  if (g_tagwrite_fmt != TAG_FMT_ACE && !TAG_FMT_IS_NDEF(g_tagwrite_fmt))
+    g_tagwrite_fmt = TAG_FMT_OPENSPOOL;
   gh_prerelease = prefsGetBool("gh_prerelease", false);
   g_upd_autocheck = prefsGetBool("upd_check", true);
   g_upd_last_epoch = prefsGetUInt("upd_last", 0);

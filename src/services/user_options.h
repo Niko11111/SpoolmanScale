@@ -104,6 +104,24 @@ extern bool g_flm_bambu_tags;
 // replaces a measured value until the next weighing.
 extern bool g_flm_ext_id;
 
+// Whether the scale offers to put the spool data on the tag once a link has
+// been made on the device, and in which format.
+//
+// Backend independent, unlike everything else in this file: what a tag holds
+// is an agreement between the tag and whoever reads it later, and no backend
+// ever sees it. The question used to appear after every single link of a
+// writable NTAG, in every mode, with the format hard coded - which is what
+// testers reported as the thing that annoyed them most.
+//
+// Off by default. A link binds the UID; putting a record on the tag as well
+// is a separate intention, and the tag page in the browser is the place that
+// shows what would go on there before it does.
+extern bool g_tagwrite_ask;
+
+// A TagFormat - see services/tag_write.h. OpenSpool by default: it is the
+// record the filament managers read, where ACE only ever talks to the printer.
+extern uint8_t g_tagwrite_fmt;
+
 // Whether the scale may write to Spoolman's card_uids, the UID list SpoolLink
 // keeps for the Snapmaker U1. Only ever offered while card_uids is the
 // selected tag field: it is the one convention with a list format, and a

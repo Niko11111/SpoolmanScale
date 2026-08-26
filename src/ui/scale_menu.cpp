@@ -14,6 +14,9 @@
 #include "services/backend.h"
 #include "services/drying_config.h"
 #include "services/prefs_store.h"
+#include "services/tag_write.h"
+#include "services/user_options.h"
+#include "info_popup.h"
 #include "ui_common.h"
 
 
@@ -74,9 +77,56 @@ void buildScaleSubScreen() {
       logSD("BTN: Scale-Sub -> Auto Location Popup Toggle");
       g_auto_loc_popup = !g_auto_loc_popup;
       prefsPutBool("auto_loc_popup", g_auto_loc_popup);
-      if (scr_scale_sub) { lv_obj_del(scr_scale_sub); scr_scale_sub = nullptr; }
-      buildScaleSubScreen();
-      lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
+      // Through the flag like the two rows below, not deleting the screen this
+      // button sits on from inside its own callback.
+      scale_sub_rebuild_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
+  // Writing the tag after a link, and in which format. Backend independent, so
+  // it sits here rather than in one of the three backend option screens: what
+  // goes on a tag is an agreement between the tag and whoever reads it, and
+  // none of the backends ever sees it.
+  { char buf_t[40]; strncpy(buf_t, T(STR_TW_OPT_ASK), sizeof(buf_t)-1);
+    buf_t[sizeof(buf_t)-1] = '\0';
+    char buf_s[8]; strncpy(buf_s, T(g_tagwrite_ask ? STR_ON : STR_OFF), sizeof(buf_s)-1);
+    buf_s[sizeof(buf_s)-1] = '\0';
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, buf_t, buf_s, g_tagwrite_ask, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_TW_OPT_ASK, STR_TW_OPT_ASK_INFO));
+    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
+    if (arr_lbl) {
+      lv_label_set_text(arr_lbl, buf_s);
+      lv_obj_set_style_text_color(arr_lbl, g_tagwrite_ask ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
+    }
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      logSD("BTN: Scale-Sub -> Tag write ask toggle");
+      g_tagwrite_ask = !g_tagwrite_ask;
+      prefsPutBool("tagwrite_ask", g_tagwrite_ask);
+      scale_sub_rebuild_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
+  // Cycled rather than opened as a screen of its own, like the IP bar mode in
+  // wifi_info.cpp: three values, and the subtitle already says which one is
+  // set. The info button carries what each format means.
+  { char buf_t[32]; strncpy(buf_t, T(STR_TW_OPT_FMT), sizeof(buf_t)-1);
+    buf_t[sizeof(buf_t)-1] = '\0';
+    char buf_s[24]; strncpy(buf_s, tagFormatLabel(g_tagwrite_fmt), sizeof(buf_s)-1);
+    buf_s[sizeof(buf_s)-1] = '\0';
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_SD_CARD, buf_t, buf_s, false, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_TW_OPT_FMT, STR_TW_OPT_FMT_INFO));
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      // OpenSpool -> FilaMan -> ACE -> OpenSpool. TAG_FMT_ERASE is not in the
+      // ring: erasing answers an unlink, never a link.
+      g_tagwrite_fmt = (g_tagwrite_fmt == TAG_FMT_OPENSPOOL) ? TAG_FMT_FILAMAN
+                     : (g_tagwrite_fmt == TAG_FMT_FILAMAN)   ? TAG_FMT_ACE
+                                                             : TAG_FMT_OPENSPOOL;
+      prefsPutUChar("tagwrite_fmt", g_tagwrite_fmt);
+      logSDf("BTN: Scale-Sub -> Tag write format %s", tagFormatLabel(g_tagwrite_fmt));
+      scale_sub_rebuild_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
   { char buf_t[32]; strncpy(buf_t, T(STR_BTN_LASTUSED_MODE), sizeof(buf_t)-1);

@@ -1476,6 +1476,60 @@ const char* const STRINGS[][2] = {
     LV_SYMBOL_WARNING "  Reading implausible, not saved" },  // STR_CAL_IMPLAUSIBLE
   { "I2C-Bus",                   "I2C bus"            },  // STR_W_R_I2C
   { "Bus neu abfragen",          "Rescan bus"         },  // STR_W_RESCAN
+
+  // ---- Writing a tag after a link ----
+  { "Tag nach Verlinken beschreiben",
+    "Write tag after linking"    },  // STR_TW_OPT_ASK
+  { "Fragt nach dem Verlinken",  "Asks once a spool is linked" },  // STR_TW_OPT_ASK_SUB
+  { "Nach dem Verlinken einer Spule fragt die Waage, ob die Spulendaten "
+    "zusätzlich auf den Tag geschrieben werden sollen. Der Tag wird dabei "
+    "vollständig überschrieben, sein bisheriger Inhalt ist verloren.\n\n"
+    "Aus bedeutet: es wird nur die UID mit der Spule verknüpft, der Tag "
+    "selbst bleibt unberührt. Beschreiben geht dann weiterhin über die "
+    "Tag-Seite der Weboberfläche, wo vorher sichtbar ist, was auf den Tag "
+    "geht.\n\n"
+    "Gefragt wird nur bei einem NTAG, der gross genug ist. Ein NTAG213 mit "
+    "144 Byte ist für OpenSpool und FilaMan zu klein, NTAG215 und NTAG216 "
+    "reichen. Bambu-Tags lassen sich nicht beschreiben.",
+    "After a spool is linked the scale asks whether the spool data should go "
+    "onto the tag as well. The tag is overwritten completely; whatever is on "
+    "it now is lost.\n\n"
+    "Off means only the UID is bound to the spool and the tag itself is left "
+    "alone. Writing is then still available on the tag page of the web "
+    "interface, where what goes on the tag is visible beforehand.\n\n"
+    "The question only appears for an NTAG with room for the record. An "
+    "NTAG213 with 144 bytes is too small for OpenSpool and FilaMan, NTAG215 "
+    "and NTAG216 are not. Bambu tags cannot be written at all." },  // STR_TW_OPT_ASK_INFO
+  { "Format",                    "Format"             },  // STR_TW_OPT_FMT
+  { "Das Format entscheidet, wer den Tag lesen kann.\n\n"
+    "OpenSpool ist ein NDEF-Datensatz mit Material, Farbe, Marke, "
+    "Temperaturen und der Spulen-ID, den FilaMan und OpenSpool-Leser "
+    "verstehen.\n\n"
+    "FilaMan ist derselbe Datensatz unter dem Protokollnamen, den eine "
+    "FilaMan-Installation erwartet.\n\n"
+    "Anycubic ACE schreibt keinen Datensatz, sondern rohe Seiten mit "
+    "Artikelnummer, Marke, Material, Farbe, Düsen- und Betttemperatur, "
+    "Durchmesser, Länge und Gewicht. Das liest die ACE selbst.",
+    "The format decides who can read the tag.\n\n"
+    "OpenSpool is an NDEF record carrying material, colour, brand, "
+    "temperatures and the spool id, which FilaMan and OpenSpool readers "
+    "understand.\n\n"
+    "FilaMan is the same record under the protocol name a FilaMan "
+    "installation expects.\n\n"
+    "Anycubic ACE writes no record at all but raw pages holding SKU, brand, "
+    "material, colour, nozzle and bed temperature, diameter, length and "
+    "weight. The ACE reads those itself." },  // STR_TW_OPT_FMT_INFO
+  { "OpenSpool",                 "OpenSpool"          },  // STR_TW_FMT_OPENSPOOL
+  { "FilaMan",                   "FilaMan"            },  // STR_TW_FMT_FILAMAN
+  { "Anycubic ACE",              "Anycubic ACE"       },  // STR_TW_FMT_ACE
+  { "Tag beschreiben",           "Writing tags"       },  // STR_W_C_TAGOPTS
+  { "Nach dem Verlinken an der Waage fragen",
+    "Ask at the scale after linking" },  // STR_W_TAGOPT_ASK
+  { "Format",                    "Format"             },  // STR_W_TAGOPT_FMT
+  { "Gilt für die Frage, die nach dem Verlinken an der Waage erscheint. "
+    "Das Schreiben auf dieser Seite hat seine eigene Formatauswahl.",
+    "Applies to the question the scale asks after a link. Writing from this "
+    "page has its own format selector." },  // STR_W_TAGOPT_NOTE
 };
 
 // Without this, a missing entry is not a compile error: every string from the

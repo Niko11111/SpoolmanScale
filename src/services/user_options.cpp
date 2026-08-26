@@ -1,6 +1,7 @@
 #include "user_options.h"
 
 #include "services/tag_field.h"
+#include "services/tag_write.h"
 
 uint8_t last_used_mode = 0;
 bool g_whole_gram = false;
@@ -15,3 +16,5 @@ bool g_tag_field_chosen = false;
 bool g_card_uids_write = false;
 bool g_flm_bambu_tags = false;
 bool g_flm_ext_id = true;
+bool g_tagwrite_ask = false;
+uint8_t g_tagwrite_fmt = TAG_FMT_OPENSPOOL;

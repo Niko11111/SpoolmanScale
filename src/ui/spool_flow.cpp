@@ -708,11 +708,28 @@ void doLinkPatch(int spool_id, bool is_bambu) {
     querySpoolmanById(spool_id);
   }
 
-  // The spool is known and an NTAG is lying on the reader, so its data can go
-  // onto the tag as well - the one moment where that costs the user nothing but
-  // one answer. Bambu tags are read-only and MIFARE is not ours to write, so
-  // both are left out by the same test the tag page uses.
-  if (!is_bambu && tagIsWritableNtag()) tagwrite_ask_spool_id = spool_id;
+  // The spool is known and an NTAG is lying on the reader, so its data could go
+  // onto the tag as well. Three things have to hold before that is worth
+  // asking about:
+  //
+  //  - the user asked for the question at all. It used to appear after every
+  //    link in every backend mode, which is the complaint this switch answers.
+  //  - the tag can be written. Bambu tags are read only and MIFARE is not ours
+  //    to write, both ruled out by the same test the tag page uses.
+  //  - the record fits. An NTAG213 holds 144 bytes and an OpenSpool record
+  //    needs around 190, so on those tags the question could only ever end in
+  //    "OpenSpool needs 176 bytes, this tag holds 144". Asked in bytes rather
+  //    than by tag type, so a tag reporting its size honestly decides for
+  //    itself. A tag that reports nothing at all (0) is not ruled out - the
+  //    write says what happened either way.
+  if (g_tagwrite_ask && !is_bambu && tagIsWritableNtag()) {
+    const uint16_t have = tagCachedBytes();
+    const bool fits = !TAG_FMT_IS_NDEF(g_tagwrite_fmt) ||
+                      have == 0 || have >= TAGWRITE_NDEF_MIN_BYTES;
+    if (fits) tagwrite_ask_spool_id = spool_id;
+    else logSDf("Tag write: not asking, %u bytes on the tag is too small for %s",
+                (unsigned)have, tagFormatLabel(g_tagwrite_fmt));
+  }
 
   Serial.printf("Linking complete! ID=%d\n", spool_id);
 }
