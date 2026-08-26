@@ -4,16 +4,12 @@
 #include "app/deferred_actions.h"
 
 #include <Arduino.h>
-#include <ArduinoJson.h>
-#include <HTTPClient.h>
-#include <Update.h>
-#include <WiFiClient.h>
-#include <WiFiClientSecure.h>
 #include <lvgl.h>
 
 #include "app_config.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/github_release.h"
 #include "services/ota_state.h"
 #include "services/prefs_store.h"
 #include "services/update_check.h"
@@ -28,6 +24,27 @@ static lv_obj_t *lbl_gh_installed   = nullptr;
 static lv_obj_t *lbl_gh_latest      = nullptr;
 static lv_obj_t *btn_gh_update      = nullptr;
 static lv_obj_t *lbl_gh_update_btn  = nullptr;
+
+// The download overlay's bar and byte counter. File scope so the progress
+// callback below can reach them: it is a plain function pointer, not a
+// closure.
+static lv_obj_t *gh_bar  = nullptr;
+static lv_obj_t *gh_hint = nullptr;
+
+static void ghScreenProgress(uint32_t done, uint32_t total) {
+  char line[48];
+  otaProgressLine(line, sizeof(line), done, total);
+  if (gh_hint) lv_label_set_text(gh_hint, line);
+  // No total means no Content-Length, and a bar without an end lies about
+  // where it is. The counter alone is honest.
+  if (gh_bar) {
+    if (total) lv_bar_set_value(gh_bar, (int)((uint64_t)done * 100 / total), LV_ANIM_OFF);
+    else       lv_obj_add_flag(gh_bar, LV_OBJ_FLAG_HIDDEN);
+  }
+  // Redraws without running timers or handling input, which is what this
+  // overlay wants: nothing on it is interactive and the socket is waiting.
+  lv_refr_now(NULL);
+}
 
 // The silent variant that used to live here is gone. It ran blocking in the
 // boot path and now lives in services/update_check.cpp, in its own task.
@@ -64,106 +81,10 @@ void doGithubOtaCheck() {
     return;
   }
 
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-  // per_page caps the list. Unbounded it answers with every release ever cut -
-  // 109 KB at the time of writing, against roughly 145 KB of free heap.
-  String url = gh_prerelease
-    ? "https://api.github.com/repos/Niko11111/SpoolmanScale/releases?per_page=3"
-    : "https://api.github.com/repos/Niko11111/SpoolmanScale/releases/latest";
-  http.begin(client, url);
-  http.addHeader("User-Agent", "SpoolmanScale-ESP32");
-  http.setTimeout(8000);
-  const uint32_t heap_before = ESP.getFreeHeap();
-  int code = http.GET();
-  Serial.printf("GitHub API: %d\n", code);
-
-  if (code != 200) {
-    snprintf(buf, sizeof(buf), "HTTP %d", code);
-    lv_label_set_text(lbl_gh_status, buf);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-    http.end();
-    return;
-  }
-
-  // Read as a String rather than straight off the socket. http.getStream()
-  // hands back the raw client, which skips HTTPClient's chunked decoding - and
-  // this endpoint answers chunked as soon as the list is not capped. The
-  // memory win never came from the stream anyway: it comes from per_page and
-  // from the filter, which is what keeps the parsed document small. With
-  // per_page=3 the body is around 27 kB and bounded.
-  String payload = http.getString();
-  const int    payload_len = payload.length();
-  const uint32_t heap_parse = ESP.getFreeHeap();
-  http.end();
-
-  char tag[40] = "";
-  DeserializationError err;
-  int entries = 0;
-
-  if (gh_prerelease) {
-    // add<JsonObject>() rather than the createNestedObject() the older filters
-    // in this repo use - same result, and it is the form ArduinoJson 7 keeps.
-    JsonDocument filter;
-    JsonObject f = filter.to<JsonArray>().add<JsonObject>();
-    f["tag_name"] = true;
-    f["draft"] = true;
-
-    JsonDocument doc;
-    err = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
-    if (!err) {
-      for (JsonVariant v : doc.as<JsonArray>()) {
-        entries++;
-        JsonObject rel = v.as<JsonObject>();
-        if (rel["draft"] | false) continue;
-        const char* t = rel["tag_name"] | "";
-        if (t[0] != '\0') {
-          // Copied while the document is still alive. The pointer dies with it,
-          // and it is read further down to build the download URL.
-          strncpy(tag, t, sizeof(tag) - 1);
-          break;
-        }
-      }
-    }
-  } else {
-    JsonDocument filter;
-    filter["tag_name"] = true;
-
-    JsonDocument doc;
-    err = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
-    if (!err) {
-      entries = 1;
-      const char* t = doc["tag_name"] | "";
-      strncpy(tag, t, sizeof(tag) - 1);
-    }
-  }
-
-  // Enough to diagnose the next failure without guessing. "No release found"
-  // and "JSON error" looked identical from the outside before this, and both
-  // have several possible causes.
-  logSDf("OTA check: HTTP %d len=%d heap %u->%u pre=%d err=%s entries=%d tag='%s'",
-         code, payload_len, (unsigned)heap_before, (unsigned)heap_parse,
-         gh_prerelease ? 1 : 0, err.c_str(), entries, tag);
-  Serial.printf("OTA check: len=%d heap %u->%u err=%s entries=%d tag='%s'\n",
-                payload_len, (unsigned)heap_before, (unsigned)heap_parse,
-                err.c_str(), entries, tag);
-
-  if (err) {
-    // The first 60 characters say more than any error name: a chunk length, an
-    // HTML error page or a truncated body are all obvious at a glance.
-    logSDf("OTA check: body starts '%s'", payload.substring(0, 60).c_str());
-    snprintf(buf, sizeof(buf), "JSON: %s", err.c_str());
-    lv_label_set_text(lbl_gh_status, buf);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-    return;
-  }
-
-  if (tag[0] == '\0') {
-    if (entries == 0) logSD("OTA check: list was empty");
-    else              logSD("OTA check: entries had no usable tag_name");
-    lv_label_set_text(lbl_gh_status, entries == 0 ? "Empty release list"
-                                                  : "No usable release");
+  char tag[40] = "", cerr[80] = "";
+  if (!githubLatestTag(gh_prerelease, tag, sizeof(tag), nullptr, 0,
+                       cerr, sizeof(cerr))) {
+    lv_label_set_text(lbl_gh_status, cerr[0] ? cerr : T(STR_GH_OTA_FLASH_FAIL));
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
     return;
   }
@@ -249,22 +170,22 @@ void doGithubOtaFlash(const char* version) {
   // answers neither of the two questions a wait like this raises: how far along
   // it is, and whether anything is still moving. The loop below already knew
   // both - it counted the remaining bytes down and told nobody.
-  lv_obj_t *bar = lv_bar_create(overlay);
-  lv_obj_set_size(bar, 300, 8);
-  lv_obj_align(bar, LV_ALIGN_CENTER, 0, 18);
-  lv_obj_set_style_bg_color(bar, lv_color_hex(0x1a3060), 0);
-  lv_obj_set_style_bg_color(bar, lv_color_hex(0x28d49a), LV_PART_INDICATOR);
-  lv_obj_set_style_radius(bar, 4, 0);
-  lv_obj_set_style_radius(bar, 4, LV_PART_INDICATOR);
-  lv_bar_set_range(bar, 0, 100);
-  lv_bar_set_value(bar, 0, LV_ANIM_OFF);
+  gh_bar = lv_bar_create(overlay);
+  lv_obj_set_size(gh_bar, 300, 8);
+  lv_obj_align(gh_bar, LV_ALIGN_CENTER, 0, 18);
+  lv_obj_set_style_bg_color(gh_bar, lv_color_hex(0x1a3060), 0);
+  lv_obj_set_style_bg_color(gh_bar, lv_color_hex(0x28d49a), LV_PART_INDICATOR);
+  lv_obj_set_style_radius(gh_bar, 4, 0);
+  lv_obj_set_style_radius(gh_bar, 4, LV_PART_INDICATOR);
+  lv_bar_set_range(gh_bar, 0, 100);
+  lv_bar_set_value(gh_bar, 0, LV_ANIM_OFF);
 
-  lv_obj_t *lbl_hint = lv_label_create(overlay);
-  lv_label_set_text(lbl_hint, "");
-  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_hint, LV_ALIGN_CENTER, 0, 42);
+  gh_hint = lv_label_create(overlay);
+  lv_label_set_text(gh_hint, "");
+  lv_obj_set_style_text_color(gh_hint, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(gh_hint, &lv_font_montserrat_ext_14, 0);
+  lv_obj_set_style_text_align(gh_hint, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(gh_hint, LV_ALIGN_CENTER, 0, 42);
 
   lv_obj_t *lbl_keep = lv_label_create(overlay);
   char buf_keep[48];
@@ -285,95 +206,23 @@ void doGithubOtaFlash(const char* version) {
   if (btn_gh_update) lv_obj_add_flag(btn_gh_update, LV_OBJ_FLAG_HIDDEN);
   lv_timer_handler();
 
-  // Keeps the background check from opening a second TLS connection while the
-  // image is being written. Cleared on every exit path below.
-  gh_flash_active = true;
+  char ferr[80] = "";
+  const bool flashed = githubFlashTag(tag, ghScreenProgress, ferr, sizeof(ferr));
+  gh_bar  = nullptr;
+  gh_hint = nullptr;
 
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-
-  // releases/latest skips pre-releases. Downloading from there while the check
-  // above found a pre-release handed the device the previous public build: it
-  // installed the downgrade, rebooted, found the same "update" again and
-  // offered it once more. Addressing the release by its tag is the only form
-  // that works for both kinds.
-  String url = "https://github.com/Niko11111/SpoolmanScale/releases/download/";
-  url += tag;
-  url += "/SpoolmanScale.bin";
-  Serial.printf("GitHub OTA URL: %s\n", url.c_str());
-  http.begin(client, url);
-  http.addHeader("User-Agent", "SpoolmanScale-ESP32");
-  http.setTimeout(60000);
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-
-  int code = http.GET();
-  Serial.printf("GitHub OTA download: %d\n", code);
-
-  if (code != 200) {
-    snprintf(buf, sizeof(buf), "%s (HTTP %d)", T(STR_GH_OTA_FLASH_FAIL), code);
-    lv_label_set_text(lbl_gh_status, buf);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-    http.end();
-    gh_flash_active = false;
-    return;
-  }
-
-  int len = http.getSize();
-  WiFiClient* stream = http.getStreamPtr();
-
-  if (!Update.begin(len > 0 ? len : UPDATE_SIZE_UNKNOWN)) {
-    lv_label_set_text(lbl_gh_status, T(STR_GH_OTA_FLASH_FAIL));
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
-    http.end();
-    gh_flash_active = false;
-    return;
-  }
-
-  // len is what is left to fetch; total is what there was. A server that sends
-  // no Content-Length leaves total at 0, and then the counter runs without a
-  // percentage and the bar stays hidden rather than lying about the end.
-  const uint32_t total = (len > 0) ? (uint32_t)len : 0;
-  if (!total) lv_obj_add_flag(bar, LV_OBJ_FLAG_HIDDEN);
-  uint32_t done = 0;
-  unsigned long last_paint = 0;
-
-  uint8_t buf8[512];
-  while (http.connected() && (len > 0 || len == -1)) {
-    size_t available = stream->available();
-    if (available) {
-      size_t toRead = min(available, sizeof(buf8));
-      size_t rd = stream->readBytes(buf8, toRead);
-      if (Update.write(buf8, rd) != rd) break;
-      done += rd;
-      if (len > 0) len -= rd;
-    }
-    if (millis() - last_paint >= OTA_PROGRESS_MS) {
-      last_paint = millis();
-      char line[48];
-      otaProgressLine(line, sizeof(line), done, total);
-      lv_label_set_text(lbl_hint, line);
-      if (total) lv_bar_set_value(bar, (int)((uint64_t)done * 100 / total), LV_ANIM_OFF);
-      // Redraws without running timers or handling input, which is what this
-      // overlay wants: nothing on it is interactive and the socket is waiting.
-      lv_refr_now(NULL);
-    }
-    lv_timer_handler();
-    delay(1);
-  }
-  http.end();
-
-  if (Update.end(true) && !Update.hasError()) {
-    char ok[64]; strncpy(ok, T(STR_GH_OTA_FLASH_OK), sizeof(ok)-1); ok[sizeof(ok)-1]=0;
-    lv_label_set_text(lbl_gh_status, ok);
+  if (flashed) {
+    char okmsg[64]; strncpy(okmsg, T(STR_GH_OTA_FLASH_OK), sizeof(okmsg)-1); okmsg[sizeof(okmsg)-1]=0;
+    lv_label_set_text(lbl_gh_status, okmsg);
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0x40c080), 0);
     lv_timer_handler();
     delay(2000);
+    logSD("Reboot: GitHub update written");
     ESP.restart();
   } else {
-    gh_flash_active = false;
-    char fail[64]; strncpy(fail, T(STR_GH_OTA_FLASH_FAIL), sizeof(fail)-1); fail[sizeof(fail)-1]=0;
-    lv_label_set_text(lbl_gh_status, fail);
+    snprintf(buf, sizeof(buf), "%s%s%s", T(STR_GH_OTA_FLASH_FAIL),
+             ferr[0] ? " - " : "", ferr);
+    lv_label_set_text(lbl_gh_status, buf);
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
   }
 }

@@ -23,3 +23,8 @@ bool webServerIsListening();
 // background update check uses this to stay out of the way; a second TLS
 // connection during a flash is exactly the situation that must not happen.
 bool otaWebUploadActive();
+
+// Runs a GitHub install asked for from the firmware page. Deferred to the loop
+// so the request that started it has already been answered and closed: the
+// download blocks for around a minute and ends in a restart.
+void otaWebGithubTick();

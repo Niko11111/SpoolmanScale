@@ -1,5 +1,7 @@
 #include "web/web_access.h"
 
+#include "services/ota_state.h"
+
 #include <Arduino.h>
 
 #include "services/prefs_store.h"
@@ -56,6 +58,15 @@ bool webGateOpen(WebGate g) {
 }
 
 bool webRequire(WebServer &srv, WebGate g, const char *what) {
+  // Writing firmware holds the loop, and the progress view is served from
+  // inside that loop so the bar can move. Nothing else is: a page built while
+  // an image is being written would come out of the same heap, and a
+  // /status.json answered mid-flash would tell the waiting browser the device
+  // is back when it has not even rebooted yet.
+  if (gh_flash_active && srv.uri() != "/api/ota/progress") {
+    srv.send(503, "text/plain", "flashing");
+    return false;
+  }
   if (webGateOpen(g)) return true;
   // An /api/* caller is a script, not a reader. Handing it a kilobyte of
   // styled HTML it will never render only makes the failure harder to see in

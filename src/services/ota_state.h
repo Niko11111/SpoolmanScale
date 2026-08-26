@@ -20,6 +20,16 @@ extern bool g_upd_autocheck;
 // Unix time of the last successful check. NVS key "upd_last", 0 = never.
 extern uint32_t g_upd_last_epoch;
 
+// When the running build first ran, as a UTC epoch. 0 means not known: the
+// stamp is only written once the clock is set, and a build installed before
+// this existed never wrote one.
+uint32_t firmwareInstalledAt();
+
+// Records the moment, once, on the first loop pass with a usable clock. A
+// version that differs from what NVS holds is a fresh install; the same one is
+// the build that was already there and keeps its original date.
+void firmwareStampTick();
+
 // One progress line for both OTA paths - the GitHub download and the image
 // pushed from the browser. "1.42 / 1.87 MB - 76 %", or just the count when
 // total is 0, which is what a missing Content-Length looks like.

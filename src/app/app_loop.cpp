@@ -26,6 +26,7 @@
 #include "web/web_access.h"
 #include "services/tag_write.h"
 #include "ui/ota_github.h"
+#include "services/ota_state.h"
 #include "services/update_check.h"
 #include "ui/ota_browser.h"
 #include "ui/remote_link_popup.h"
@@ -355,6 +356,9 @@ void appLoop() {
   // A manual check that ran into the background task. Retried as soon as the
   // TLS connection is free again, dropped after GH_CHECK_WAIT_MS so a task that
   // never returns cannot leave the screen waiting on it.
+  firmwareStampTick();
+  otaWebGithubTick();
+
   if (gh_check_pending) {
     if (!updateCheckBusy()) {
       gh_check_pending = false;

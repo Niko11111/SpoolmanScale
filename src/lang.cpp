@@ -1200,6 +1200,54 @@ const char* const STRINGS[STR_COUNT][2] = {
     "Update failed" },  // STR_W_FW_FAIL
   { "Bitte erneut versuchen.",
     "Please try again." },  // STR_W_FW_RETRY
+  { "Update über GitHub",
+    "Update from GitHub" },  // STR_W_C_FW_GITHUB
+  { "Kanal",
+    "Channel" },  // STR_W_FW_CHANNEL
+  { "Release",
+    "Release" },  // STR_W_FW_CH_STABLE
+  { "Vorabversion",
+    "Pre-release" },  // STR_W_FW_CH_PRE
+  { "Neueste",
+    "Latest" },  // STR_W_FW_LATEST
+  { "Nach Updates suchen",
+    "Check for updates" },  // STR_W_FW_CHECK
+  { "Suche ...",
+    "Checking ..." },  // STR_W_FW_CHECKING
+  { "Bereits aktuell",
+    "Already up to date" },  // STR_W_FW_UPTODATE
+  { "Update verfügbar",
+    "Update available" },  // STR_W_FW_AVAIL
+  { "Installieren",
+    "Install" },  // STR_W_FW_INSTALL
+  { "Wird installiert ...",
+    "Installing ..." },  // STR_W_FW_INSTALLING
+  { "Kein WLAN",
+    "No WiFi connection" },  // STR_W_FW_NOWIFI
+  { "Das Gerät prüft oder schreibt gerade",
+    "The device is already checking or writing" },  // STR_W_FW_BUSY
+  { "Suche fehlgeschlagen",
+    "Check failed" },  // STR_W_FW_CHECK_FAIL
+  { "Der Kanal ist derselbe wie am Gerät. Das Image wird vom Gerät geladen, nicht vom Browser.",
+    "The channel is the same setting as on the device. The image is fetched by the device, not by this browser." },  // STR_W_FW_GH_HINT
+  { "Veröffentlicht",
+    "Released" },  // STR_W_FW_RELEASED
+  { "Installiert am",
+    "Installed on" },  // STR_W_FW_SINCE
+  { "Release Notes",
+    "Release notes" },  // STR_W_FW_NOTES
+  { "Was ist neu",
+    "What is new" },  // STR_W_FW_WHATSNEW
+  { "Nicht als Release veröffentlicht",
+    "Not a published release" },  // STR_W_FW_UNPUBLISHED
+  { "unbekannt",
+    "unknown" },  // STR_W_FW_UNKNOWN
+  { "Ausblenden",
+    "Hide" },  // STR_W_FW_HIDE
+  { "{v} installieren?",
+    "Install {v}?" },  // STR_W_FW_CONFIRM
+  { "Das Gerät startet nach dem Download automatisch neu, die Seite lädt sich dann selbst. Strom nicht trennen.",
+    "The device restarts by itself when the download finishes, and this page reloads. Do not cut the power." },  // STR_W_FW_REBOOTS
   { "Gewicht",
     "Weight" },  // STR_W_R_WEIGHT
   { "Konnte nicht geladen werden.",
