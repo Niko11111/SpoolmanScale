@@ -223,7 +223,9 @@ static String body() {
   // Waking on load had been documented in user_options.h since it was written
   // and was never switchable: loadPrefs() read it, display_power.cpp acted on
   // it, and no line in the firmware ever wrote it. This is that missing half.
-  h += F("<div class='card wide'><h2>");
+  // Half width, next to the time zone: one switch and a line does not need a
+  // row of its own.
+  h += F("<div class='card'><h2>");
   h += T(STR_W_C_PANEL);
   h += F("</h2><div class='field'>"
          "<label class='check'><span class='switch'>"
