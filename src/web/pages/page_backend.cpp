@@ -20,6 +20,7 @@
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/filaman_api.h"
+#include "services/settings_registry.h"
 #include "web/web_access.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
@@ -118,12 +119,25 @@ static String body() {
     h += F("</p></div>");
   }
 
+  // ---- more options, filled from /api/settings --------------------------
+  // Server rendered as an empty card with one line of prose, then filled by
+  // the script. The rows themselves are not built here on purpose: there is
+  // one renderer for every kind of option, so an option added to the registry
+  // shows up in the browser without a line being written here.
+  h += F("<div class='card wide'><h2>");
+  h += T(STR_BTN_MORE_OPTIONS);
+  h += F("</h2><div id='os'><p class='hint'>");
+  h += T(STR_W_LOADING);
+  h += F("</p></div></div>");
+
   // $, flash and post come from /app.js. Only the one string this page has
   // beyond the shared pair stays here.
   h += F("</div><script>");
   h += webShellJsStrings();
   h += F("const M={test:");
   h += jsStr(T(STR_W_HOST_TESTING));
+  h += F(",dev:");  h += jsStr(T(STR_W_ON_DEVICE));
+  h += F(",none:"); h += jsStr(T(STR_W_NO_OPTIONS));
   h += F("};"
          // No ms: these answers stand. /api/host replies with the result of a
          // real health check and /api/filaman/register with the HTTP status of
@@ -139,11 +153,181 @@ static String body() {
          "if(!guard(v))return;postFlash('/api/filaman/key',v,'fk-s');}"
          "function reg(){flash('fc-s',M.test,false);"
          "postFlash('/api/filaman/register',$('fc').value,'fc-s');}"
+
+         // ---- the options, one renderer for every kind --------------------
+         // Nothing here knows any individual setting. Adding one to the
+         // registry puts it on this page with no change to this file, which is
+         // the whole reason the table exists.
+         //
+         // Built with createElement rather than innerHTML: the names and the
+         // help texts are translated prose that goes through no escaping on
+         // the way here, and a quotation mark in one of them would end the
+         // attribute it landed in.
+         "function orow(d){"
+         "const r=document.createElement('div');r.className='orow';"
+         "const l=document.createElement('div');l.className='ol';"
+         "const n=document.createElement('span');n.className='on';"
+         "n.textContent=d.name;l.appendChild(n);"
+         "if(d.sub){const sb=document.createElement('span');sb.className='os';"
+         "sb.textContent=d.sub;l.appendChild(sb);}"
+         "r.appendChild(l);"
+         "const v=document.createElement('div');v.className='ov';"
+
+         // A switch, the same shape the rest of the interface uses.
+         "if(d.kind==='bool'){"
+         "const w=document.createElement('label');w.className='switch';"
+         "const c=document.createElement('input');c.type='checkbox';c.checked=!!d.v;"
+         "c.addEventListener('change',()=>{"
+         "const want=c.checked;"
+         "post('/api/settings',d.id+'='+(want?1:0)).then(r2=>{"
+         // The box already shows what the user asked for, so a failure has to
+         // put it back. A switch claiming a state the scale is not in is worse
+         // than no answer at all.
+         "if(!r2.ok){c.checked=!want;flash('os-s',WS.err,true,4000);return;}"
+         "flash('os-s',WS.ok,false,4000);load();});});"
+         "w.appendChild(c);w.appendChild(document.createElement('i'));"
+         "v.appendChild(w);}"
+
+         // A choice. An option the scale cannot reach right now is offered but
+         // inert, the way the device screen leaves it visible and explains why.
+         "else if(d.kind==='enum'){"
+         "const sel=document.createElement('select');"
+         "(d.opts||[]).forEach((o,i)=>{"
+         "const op=document.createElement('option');"
+         "op.value=i;op.textContent=o;"
+         "if(d.na&&d.na.indexOf(i)>=0)op.disabled=true;"
+         "if(i===d.v)op.selected=true;sel.appendChild(op);});"
+         "sel.addEventListener('change',()=>{"
+         "post('/api/settings',d.id+'='+sel.value).then(r2=>{"
+         "flash('os-s',r2.ok?WS.ok:WS.err,!r2.ok,4000);load();});});"
+         "v.appendChild(sel);}"
+
+         // Everything else lives on the device: a create assistant, a numeric
+         // window, a screen that reads the server as it opens. Saying so beats
+         // showing a control that cannot work here.
+         "else{const t=document.createElement('span');t.className='od';"
+         "t.textContent=M.dev;v.appendChild(t);}"
+
+         "r.appendChild(v);"
+         "const wrap=document.createElement('div');wrap.appendChild(r);"
+         "if(d.info){"
+         "const q=document.createElement('button');"
+         "q.className='quiet oq';q.textContent='?';q.title=M.dev;"
+         "const p=document.createElement('p');p.className='oi';p.textContent=d.info;"
+         "q.addEventListener('click',()=>p.classList.toggle('open'));"
+         "v.insertBefore(q,v.firstChild);wrap.appendChild(p);}"
+         "return wrap;}"
+
+         "function load(){getJson('/api/settings').then(d=>{"
+         "const c=$('os');if(!c)return;c.textContent='';"
+         "if(!d){const e=document.createElement('p');e.className='hint';"
+         "e.textContent=WS.err;c.appendChild(e);return;}"
+         "if(!d.length){const e=document.createElement('p');e.className='hint';"
+         "e.textContent=M.none;c.appendChild(e);return;}"
+         "d.forEach(x=>c.appendChild(orow(x)));"
+         "const m=document.createElement('span');m.className='msg';m.id='os-s';"
+         "c.appendChild(m);});}"
+         "load();"
          "</script>");
   return h;
 }
 
+// The registry as JSON, filtered to what belongs on screen right now: this
+// backend, and applies(). Built by hand rather than with ArduinoJson - it is a
+// flat list of short fields, and a document big enough to hold every info text
+// would come off the same internal heap the rest of the firmware needs.
+static String settingsJson() {
+  String j;
+  j.reserve(2400);
+  j += '[';
+  bool first = true;
+  for (size_t i = 0; i < SETTINGS_COUNT; i++) {
+    const SettingDesc &s = SETTINGS[i];
+    if (!settingVisible(s)) continue;
+    if (!first) j += ',';
+    first = false;
+
+    // A row with a screen behind it that is not a plain choice is the device's
+    // business: the screens carry create assistants and numeric pads.
+    const bool device_only = (s.kind == SET_SUBMENU);
+
+    char sub[64];
+    settingSubtitle(s, sub, sizeof(sub));
+
+    j += F("{\"id\":\"");   j += s.id;
+    j += F("\",\"kind\":\"");
+    j += device_only ? F("submenu") : (s.kind == SET_BOOL ? F("bool") : F("enum"));
+    j += F("\",\"v\":");    j += String(settingGet(s));
+    j += F(",\"name\":\"");  j += jsonEsc(T((StringID)s.str_name));
+    j += F("\",\"sub\":\"");  j += jsonEsc(sub);
+    j += F("\"");
+    if (s.str_info) {
+      j += F(",\"info\":\""); j += jsonEsc(T((StringID)s.str_info)); j += F("\"");
+    }
+    if (!device_only && s.opt_str && s.opt_count) {
+      j += F(",\"opts\":[");
+      for (uint8_t v = 0; v < s.opt_count; v++) {
+        if (v) j += ',';
+        j += F("\""); j += jsonEsc(T((StringID)s.opt_str[v])); j += F("\"");
+      }
+      j += ']';
+      // Which of them cannot be picked right now, so the browser can offer the
+      // choice and still refuse it - the same thing the device screen does by
+      // leaving the row visible and inert.
+      if (s.opt_ok) {
+        j += F(",\"na\":[");
+        bool f2 = true;
+        for (uint8_t v = 0; v < s.opt_count; v++) {
+          if (s.opt_ok(v)) continue;
+          if (!f2) j += ',';
+          f2 = false;
+          j += String(v);
+        }
+        j += ']';
+      }
+    }
+    j += '}';
+  }
+  j += ']';
+  return j;
+}
+
 static void routes(WebServer &srv) {
+  srv.on("/api/settings", HTTP_GET, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
+    srv.send(200, "application/json", settingsJson());
+  });
+
+  // "<id>=<value>", the same plain text body every other setting route on this
+  // page takes. settingSet() is the only thing that writes an option, so this
+  // cannot forget what a device callback does - it runs the same code.
+  srv.on("/api/settings", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
+    String body = srv.arg("plain");
+    const int eq = body.indexOf('=');
+    if (eq <= 0) { srv.send(400, "text/plain", T(STR_W_ERROR)); return; }
+
+    String id = body.substring(0, eq);
+    id.trim();
+    const SettingDesc *s = settingById(id.c_str());
+    // Not visible means not settable: a value the scale is not offering right
+    // now must not be reachable by guessing its id.
+    if (!s || !settingVisible(*s) || s->kind == SET_SUBMENU) {
+      srv.send(404, "text/plain", T(STR_W_ERROR));
+      return;
+    }
+    const long v = body.substring(eq + 1).toInt();
+    if (v < 0 || v > 255) { srv.send(400, "text/plain", T(STR_W_ERROR)); return; }
+    if (s->opt_ok && !s->opt_ok((uint8_t)v)) {
+      srv.send(400, "text/plain", T(STR_W_ERROR));
+      return;
+    }
+
+    settingSet(*s, (uint8_t)v);
+    logSDf("Web: %s -> %ld", s->id, v);
+    srv.send(200, "text/plain", T(STR_W_SAVED));
+  });
+
   // Address. Sanitised in backendSetHost(), but https has to be refused here:
   // only the caller can say so, and letting it through would send the request
   // as plain http to port 80 and fail in a way that looks like the server is

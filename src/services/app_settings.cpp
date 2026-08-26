@@ -13,6 +13,7 @@
 #include "device_name.h"
 #include "ota_state.h"
 #include "prefs_store.h"
+#include "settings_registry.h"
 #include "tag_field.h"
 #include "time_service.h"
 #include "user_options.h"
@@ -68,7 +69,6 @@ void loadPrefs() {
   g_whole_gram = prefsGetBool("whole_gram", false);
   g_wake_on_load = prefsGetBool("wake_load", true);
   g_ip_bar_mode = prefsGetUChar("ip_bar_mode", IP_BAR_OFF);
-  g_flm_autolink = prefsGetBool("flm_autolink", false);
   // 0xFF as the default rather than TAG_FIELD_TAG, so "never chosen" can be
   // told apart from "chose extra.tag". The two behave the same until a server
   // with native tags turns up, and then only the first one is moved.
@@ -76,22 +76,27 @@ void loadPrefs() {
     g_tag_field_chosen = (v != 0xFF);
     g_tag_field = g_tag_field_chosen ? v : TAG_FIELD_TAG;
     if (g_tag_field >= TAG_FIELD_COUNT) { g_tag_field = TAG_FIELD_TAG; g_tag_field_chosen = false; } }
-  g_card_uids_write = prefsGetBool("cu_write", false);
-  // The switch only means anything on a list field. Clamping it here rather
-  // than at every use site keeps the rest of the firmware from having to ask
-  // twice, and a stale "on" from before the field was switched cannot leak
-  // into a write.
+  // Every backend option at once, key, type and default read off the one
+  // table. This used to be a run of prefsGetX(key, default) lines where those
+  // three had to agree by hand - and once did not: page_config.cpp:360 still
+  // describes a limit that was written under a different key with a different
+  // type and was gone after the next boot.
+  //
+  // The four below stay written out: they belong to the sub screens, which
+  // carry logic no table holds - a create assistant, a numeric window - and
+  // are not in the registry yet.
+  settingsLoadAll();
+
+  // The card_uids switch only means anything on a list field. Clamping here
+  // rather than at every use site keeps the rest of the firmware from having
+  // to ask twice, and a stale "on" from before the field was switched cannot
+  // leak into a write. After settingsLoadAll(), which is what loads it.
   if (!tagFieldIsList()) g_card_uids_write = false;
-  g_flm_tagless  = prefsGetBool("flm_tagless", true);
-  g_flm_remote_write = prefsGetBool("flm_write", true);
+
   g_flm_bambu_tags = prefsGetBool("flm_btags", false);
   g_flm_ext_id     = prefsGetBool("flm_extid", true);
-  g_ams_mode      = prefsGetUChar("ams_mode", AMS_OFF);
-  if (g_ams_mode >= AMS_MODE_COUNT) g_ams_mode = AMS_OFF;
   g_ams_timer_yes = prefsGetBool("ams_tmr_yes", true);
   g_ams_window_s  = (int)prefsGetInt("ams_window", AMS_WINDOW_DEFAULT_S);
-  g_bb_dried_target = prefsGetUChar("bb_dried", BB_DRIED_NOTE);
-  if (g_bb_dried_target >= BB_DRIED_COUNT) g_bb_dried_target = BB_DRIED_NOTE;
   g_auto_weight = prefsGetBool("auto_weight", false);
   g_auto_loc_popup = prefsGetBool("auto_loc_popup", false);
   gh_prerelease = prefsGetBool("gh_prerelease", false);

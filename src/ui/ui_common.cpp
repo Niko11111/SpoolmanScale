@@ -5,6 +5,11 @@
 #include <cstring>
 
 #include "hardware/sd_logger.h"
+#include "app/deferred_actions.h"
+#include "info_popup.h"
+#include "services/backend.h"
+#include "services/settings_registry.h"
+#include "lang.h"
 
 
 lv_color_t swatchColorFromHex(const char* hex) {
@@ -198,4 +203,122 @@ lv_obj_t* buildOverlayScreen() {
   lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_bg_color(scr, lv_color_hex(0x0a1020), 0);
   return scr;
+}
+
+
+// ---------------------------------------------------------------------------
+//  Settings rows, built from the registry
+// ---------------------------------------------------------------------------
+
+// The list body every settings screen uses. These fourteen lines stood word
+// for word in seven files, each with the same warning comment attached.
+lv_obj_t* buildOptionList(lv_obj_t *parent) {
+  lv_obj_t *list = lv_obj_create(parent);
+  lv_obj_set_size(list, 480, 263);
+  lv_obj_set_pos(list, 0, 57);
+  lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_width(list, 0, 0);
+  lv_obj_set_style_pad_left(list, 12, 0);
+  lv_obj_set_style_pad_right(list, 12, 0);
+  lv_obj_set_style_pad_top(list, 6, 0);
+  lv_obj_set_style_pad_bottom(list, 6, 0);
+  lv_obj_set_style_pad_row(list, 6, 0);
+  // makeListBtn() never positions its button, it relies on the parent's
+  // layout. Without a flex flow every entry lands on the content origin and
+  // only the last one added is visible.
+  lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_scroll_dir(list, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
+  lv_obj_clear_flag(list, LV_OBJ_FLAG_SCROLL_ELASTIC);
+  return list;
+}
+
+// Asks for the options screen of whichever backend is active to be rebuilt.
+// Through the pending flag rather than by deleting here: this runs inside the
+// callback of a button on the very screen that would be deleted, and the flag
+// path goes through releaseScreen(), which uses lv_obj_del_async(). The hand
+// written toggles this replaces called lv_obj_del() straight from the callback
+// - the one thing the project's own rules say never to do.
+static void requestOptionsRebuild() {
+  if (backendIsFilaMan())       show_filaman_options_pending  = true;
+  else if (backendIsBamBuddy()) show_bambuddy_options_pending = true;
+  else                          show_spoolman_options_pending = true;
+}
+
+static void settingRowClicked(lv_event_t *e) {
+  const SettingDesc *s =
+    (const SettingDesc *)lv_obj_get_user_data(lv_event_get_target(e));
+  if (!s) return;
+
+  // A row that leads somewhere hands over instead of changing anything. The
+  // screens behind these carry logic a table cannot hold - a create assistant,
+  // a numeric window, a reason why one choice is unavailable.
+  if (s->opens != OPEN_NONE) {
+    switch (s->opens) {
+      case OPEN_SP_EXTRA_FIELDS: show_extra_fields_pending    = true; break;
+      case OPEN_FLM_FIELDS:      show_filaman_fields_pending  = true; break;
+      case OPEN_AMS_ASSIGN:      show_ams_assign_pending      = true; break;
+      case OPEN_BB_DRIED:        show_bambuddy_dried_pending  = true; break;
+      default: break;
+    }
+    logSDf("BTN: Options -> %s", s->id);
+    return;
+  }
+
+  if (s->kind != SET_BOOL) return;
+  const uint8_t now = settingGet(*s);
+  settingSet(*s, now ? 0 : 1);
+  logSDf("BTN: Options -> %s %s", s->id, now ? "OFF" : "ON");
+  requestOptionsRebuild();
+}
+
+lv_obj_t* addSettingRow(lv_obj_t *list, const SettingDesc &s) {
+  char buf_t[40];
+  strncpy(buf_t, T((StringID)s.str_name), sizeof(buf_t) - 1);
+  buf_t[sizeof(buf_t) - 1] = '\0';
+
+  char buf_s[64];
+  settingSubtitle(s, buf_s, sizeof(buf_s));
+
+  // A switch shows its own state. Anything else is plain, except the AMS row,
+  // which is not a switch but should still read as active while a mode is set.
+  const bool active = (s.kind == SET_BOOL) ? (settingGet(s) != 0)
+                                           : (s.active_if_set && settingGet(s) != 0);
+
+  lv_obj_t *help = nullptr;
+  lv_obj_t *btn = makeListBtn(list, s.icon, buf_t, buf_s, active,
+                              s.str_info ? &help : nullptr);
+  if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                INFO_POPUP_ARG(s.str_name, s.str_info));
+
+  // Last child is the arrow, which a switch turns into ON/OFF. makeListBtn()
+  // builds the help button before the arrow on purpose, so this still finds
+  // the arrow on a row that has both.
+  if (s.kind == SET_BOOL) {
+    lv_obj_t *arr = lv_obj_get_child(btn, -1);
+    if (arr) {
+      char buf_v[8];
+      strncpy(buf_v, T(active ? STR_ON : STR_OFF), sizeof(buf_v) - 1);
+      buf_v[sizeof(buf_v) - 1] = '\0';
+      lv_label_set_text(arr, buf_v);
+      lv_obj_set_style_text_color(arr,
+        lv_color_hex(active ? 0x28d49a : 0x4a6fa0), 0);
+      lv_obj_set_style_text_font(arr, &lv_font_montserrat_ext_14, 0);
+    }
+  }
+
+  // The descriptor lives in ROM, so the pointer stays valid for as long as the
+  // row does and nothing has to be freed with it.
+  lv_obj_set_user_data(btn, (void *)&s);
+  lv_obj_add_event_cb(btn, settingRowClicked, LV_EVENT_CLICKED, NULL);
+  return btn;
+}
+
+// One screen's worth of rows: everything in the table that belongs to this
+// backend and applies right now, in table order.
+void addSettingRows(lv_obj_t *list) {
+  for (size_t i = 0; i < SETTINGS_COUNT; i++) {
+    if (!settingVisible(SETTINGS[i])) continue;
+    addSettingRow(list, SETTINGS[i]);
+  }
 }

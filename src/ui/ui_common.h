@@ -67,3 +67,19 @@ lv_obj_t* addInfoRow(lv_obj_t* parent, int y, const char* label,
 lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
                       const char* sub, bool toggle_active = false,
                       lv_obj_t** out_help = nullptr);
+
+// ---------------------------------------------------------------------------
+//  Settings rows, built from services/settings_registry.h
+// ---------------------------------------------------------------------------
+struct SettingDesc;
+
+// The list body every settings screen uses, once instead of seven times.
+lv_obj_t* buildOptionList(lv_obj_t* parent);
+
+// One row from its description: title, subtitle, help circle, ON/OFF and the
+// click, all decided by the descriptor. Replaces ~27 lines of hand written
+// LVGL per option, of which nine were the same arrow patch six files carried.
+lv_obj_t* addSettingRow(lv_obj_t* list, const SettingDesc& s);
+
+// Every row that belongs to the active backend and applies right now.
+void addSettingRows(lv_obj_t* list);

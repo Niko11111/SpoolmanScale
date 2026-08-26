@@ -926,6 +926,14 @@ enum StringID {
   // the weight in its subtitle, so the button says what it will write.
   STR_BTN_REACTIVATE,
 
+  // The backend options, mirrored in the browser from the one registry.
+  // Appended rather than grouped with the other web strings: the array in
+  // lang.cpp is positional, so inserting in the middle moves every entry
+  // after it - and this table gets appended to from two branches at once.
+  STR_W_LOADING,
+  STR_W_ON_DEVICE,
+  STR_W_NO_OPTIONS,
+
   STR_COUNT
 };
 

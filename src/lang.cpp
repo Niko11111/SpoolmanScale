@@ -1439,6 +1439,14 @@ const char* const STRINGS[][2] = {
   // about to write, so nothing is decided out of sight.
   { LV_SYMBOL_REFRESH " Reaktivieren\nRest wird %.0f g",
     LV_SYMBOL_REFRESH " Reactivate\nremaining set to %.0f g" },  // STR_BTN_REACTIVATE
+
+  // Backend options, mirrored in the browser
+  { "Wird geladen ...",
+    "Loading ..." },  // STR_W_LOADING
+  { "am Gerät",
+    "on the device" },  // STR_W_ON_DEVICE
+  { "Dieses Backend hat keine weiteren Optionen.",
+    "This backend has no further options." },  // STR_W_NO_OPTIONS
 };
 
 // Without this, a missing entry is not a compile error: every string from the

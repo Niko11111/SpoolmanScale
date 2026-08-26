@@ -179,6 +179,33 @@ static const char APP_CSS[] PROGMEM =
       ".check{display:flex;align-items:center;gap:10px;font-size:13px;"
       "color:var(--ink-2);cursor:pointer}"
       ".check+.check{margin-top:10px}"
+
+      // A settings row: name and its one line of explanation on the left, the
+      // control on the right. Close to .row/.k/.v, which carries a label and a
+      // value - but a setting needs a second line under the name, and .row has
+      // nowhere to put one.
+      ".orow{display:flex;justify-content:space-between;align-items:flex-start;"
+      "gap:16px;padding:12px 0;border-bottom:1px solid var(--line-soft)}"
+      ".orow:last-child{border-bottom:0;padding-bottom:0}"
+      ".orow:first-child{padding-top:0}"
+      ".ol{display:flex;flex-direction:column;gap:3px;min-width:0}"
+      ".on{font-size:14px;color:var(--ink-2)}"
+      // Quiet text goes on --ink-soft. --ink-4 is a shape colour for rules and
+      // inactive bars; as text on a card it is 1.7:1 and invisible.
+      ".os{font-size:12px;color:var(--ink-soft);line-height:1.45}"
+      ".ov{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding-top:2px}"
+      // The help circle the device shows as a "?" next to the row. Same idea
+      // here, and it opens the same text - as a line under the row rather than
+      // a modal, because a page has room and a 480px panel does not.
+      ".oq{flex:0 0 22px;width:22px;height:22px;padding:0;border-radius:50%;"
+      "font-size:12px;line-height:1;display:flex;align-items:center;"
+      "justify-content:center}"
+      ".oi{font-size:12.5px;color:var(--ink-soft);line-height:1.55;"
+      "padding:0 0 12px;display:none}"
+      ".oi.open{display:block}"
+      // A row the device owns. Says so instead of showing a control that
+      // cannot work here.
+      ".od{font-size:12px;color:var(--ink-3);white-space:nowrap}"
 ;
 
 const char* webStaticVersion() { return FW_VERSION; }
