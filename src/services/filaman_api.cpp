@@ -261,6 +261,12 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
     f["id"]           = fil["id"] | 0;
     f["name"]         = fil["designation"]              | "";
     f["material"]     = fil["material_type"]            | "";
+    // FilaMan's own subdivision of a material - "tough-plus", "silk", "hf".
+    // Spoolman has no counterpart, so nothing else reads it; the Bambu subtype
+    // filter does, because it is the one field that names the product line
+    // when the designation does not. A spool whose designation is just
+    // "Cyan (12601)" is only recognisable as Tough+ through this.
+    f["material_subgroup"] = fil["material_subgroup"]   | "";
     f["weight"]       = fil["raw_material_weight_g"]    | 0.0f;
     f["spool_weight"] = fil["default_spool_weight_g"]   | 0.0f;
     f["article_number"] = articleNumber(fil);

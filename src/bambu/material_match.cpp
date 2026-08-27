@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <string.h>
 #include <strings.h>
 
@@ -28,6 +29,32 @@ bool extractBambuSubtype(const char* material, char* out_kw, size_t out_size) {
     if (strcasecmp(out_kw, BAMBU_PLA_SUBTYPE_BLACKLIST[i]) == 0) return true;
   }
   return false;
+}
+
+// Lower case, "+" spelled out, separators dropped: "Tough+" and "Tough Plus"
+// both become "toughplus", while plain "Tough" stays "tough" and therefore
+// keeps matching only itself - Bambu sells both lines and they must not be
+// confused.
+//
+// A text longer than the buffer is truncated, which can only lose a match, and
+// the name fields this is given are far shorter.
+static void normalizeSubtype(const char* in, char* out, size_t out_size) {
+  size_t o = 0;
+  for (const char* p = in; p && *p && out_size > 5 && o < out_size - 5; p++) {
+    if (*p == '+') { memcpy(out + o, "plus", 4); o += 4; continue; }
+    if (*p == ' ' || *p == '-' || *p == '_') continue;
+    out[o++] = (char)tolower((unsigned char)*p);
+  }
+  out[o] = '\0';
+}
+
+bool bambuSubtypeMatches(const char* haystack, const char* subtype) {
+  if (!haystack || !haystack[0] || !subtype || !subtype[0]) return false;
+  char hay[96], need[32];
+  normalizeSubtype(haystack, hay, sizeof(hay));
+  normalizeSubtype(subtype, need, sizeof(need));
+  if (!hay[0] || !need[0]) return false;
+  return strstr(hay, need) != nullptr;
 }
 
 bool isSupportMaterial(const char* material_filter) {

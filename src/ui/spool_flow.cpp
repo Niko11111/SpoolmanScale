@@ -398,13 +398,22 @@ static LinkFilterVerdict linkFilterVerdict(JsonObjectConst spool, bool is_bambu,
   if (isSupportSpoolmanMat(mat.c_str())) return LINK_SKIP_MATERIAL;
 
   // Subtype filter: only for known technical subtypes, see bambu_blacklist.h
+  //
+  // Three places are asked, because three spellings are in circulation for the
+  // same thing: the material, the designation, and FilaMan's material_subgroup
+  // - the last one is what identifies a spool whose designation is only a
+  // colour. bambuSubtypeMatches() reads "Tough+", "Tough Plus" and "tough-plus"
+  // as one, which is what the tag and the FilamentDB actually spell.
   char subkw[16];
   if (extractBambuSubtype(material_filter, subkw, sizeof(subkw))) {
     String fname = spool["filament"]["name"] | String("");
-    if (!containsIgnoreCase(mat.c_str(), subkw) && !containsIgnoreCase(fname.c_str(), subkw)) {
+    String fsub  = spool["filament"]["material_subgroup"] | String("");
+    if (!bambuSubtypeMatches(mat.c_str(), subkw) &&
+        !bambuSubtypeMatches(fname.c_str(), subkw) &&
+        !bambuSubtypeMatches(fsub.c_str(), subkw)) {
       if (sd_verbose)
-        logSDf("[verbose] link fetch: subtype skip mat='%s' name='%.20s' kw='%s'",
-               mat.c_str(), fname.c_str(), subkw);
+        logSDf("[verbose] link fetch: subtype skip mat='%s' name='%.20s' sub='%.16s' kw='%s'",
+               mat.c_str(), fname.c_str(), fsub.c_str(), subkw);
       return LINK_SKIP_MATERIAL;
     }
   }
@@ -2718,7 +2727,9 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
         char subkw[16];
         if (extractBambuSubtype(material_filter, subkw, sizeof(subkw))) {
           const char* fname = spool["filament"]["name"] | "";
-          if (!containsIgnoreCase(mat, subkw) && !containsIgnoreCase(fname, subkw)) continue;
+          const char* fname_sub = spool["filament"]["material_subgroup"] | "";
+          if (!bambuSubtypeMatches(mat, subkw) && !bambuSubtypeMatches(fname, subkw) &&
+              !bambuSubtypeMatches(fname_sub, subkw)) continue;
         }
         if (g_tag.color_hex[0] == '#') {
           const char* col = spool["filament"]["color_hex"] | "";
@@ -2765,7 +2776,9 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
         char subkw[16];
         if (extractBambuSubtype(material_filter, subkw, sizeof(subkw))) {
           const char* fname2 = spool["filament"]["name"] | "";
-          if (!containsIgnoreCase(mat, subkw) && !containsIgnoreCase(fname2, subkw)) continue;
+          const char* fname2_sub = spool["filament"]["material_subgroup"] | "";
+          if (!bambuSubtypeMatches(mat, subkw) && !bambuSubtypeMatches(fname2, subkw) &&
+              !bambuSubtypeMatches(fname2_sub, subkw)) continue;
         }
         if (g_tag.color_hex[0] == '#') {
           const char* col2 = spool["filament"]["color_hex"] | "";

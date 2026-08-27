@@ -175,8 +175,11 @@ void showRemoteLinkPopup(int spool_id) {
       // filter in fetchAllSpoolsForLink().
       char subkw[16];
       if (!mismatch_material && extractBambuSubtype(g_tag.material, subkw, sizeof(subkw))) {
-        mismatch_material = !containsIgnoreCase(material, subkw) &&
-                            !containsIgnoreCase(name, subkw);
+        // Same tolerant compare as the link flow: the tag writes "Tough+",
+        // the library writes "Tough Plus", and a literal search made every
+        // one of them look like a material mismatch.
+        mismatch_material = !bambuSubtypeMatches(material, subkw) &&
+                            !bambuSubtypeMatches(name, subkw);
       }
     }
     // Same threshold the manual flow uses to drop far off colours from the list.
