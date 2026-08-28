@@ -150,6 +150,11 @@ FilaMan needs an **API key** and a **device token**. Both are entered through th
 
 FilaMan reaches furthest into the tag features. It can send the scale a write job together with the tag contents, which you confirm on the device, and it can ask the scale to read a tag and take the data into its inventory. Lift a freshly weighed spool off the pad and the scale offers to hand it to FilaMan for the next printer that loads a tray, so you do not have to assign it by hand.
 
+Because both write to the same field, a spool you link to an NTAG here is recognised by **FilaMan's own smartphone app** as well - scan the sticker with your phone and the spool comes up.
+
+**Recommended add-on: [Bambu Usage Tracker](https://github.com/Niko11111/FilaManBambuUsage)**
+For anyone running Bambu spools: it counts filament as it is printed and books it against the right spool, so your inventory stays right without weighing after every job.
+
 ### <img src="https://raw.githubusercontent.com/Niko11111/SpoolmanScale/main/images/BamBuddy_logo.png" height="20" align="top"> BamBuddy
 
 BamBuddy needs an **API key**, entered on the same page as the FilaMan credentials.
@@ -198,7 +203,9 @@ Have a feature request? Post it in the [Discord](https://discord.gg/xadskCrPFu) 
 
 ## Credits
 
-The codebase was refactored with major help from **[@DanielNagy](https://github.com/DanielNagy)**, which made the two-backend architecture possible in the first place.
+**[@Simon-CR](https://github.com/Simon-CR)** contributed large parts of this release: the web interface rebuilt as separate pages with access gates, writing NFC tags from the browser, both halves of FilaMan's device tag protocol, and the firmware page that checks GitHub for updates and says what is running. Plenty of ideas for what comes next, too - thank you.
+
+The codebase was refactored with major help from **[@DanielNagy](https://github.com/DanielNagy)**, which made the multi-backend architecture possible in the first place.
 
 ## Inspiration
 
