@@ -17,13 +17,13 @@ static const char* QR_TITLES[] = { "Ko-fi", "GitHub", "Discord", "MakerWorld" };
 static const char* QR_URLS[]   = {
   "https://ko-fi.com/formfollowsfunction",
   "https://github.com/Niko11111/SpoolmanScale",
-  "https://discord.gg/TQvdxGuFcq",
+  "https://discord.gg/xadskCrPFu",
   "https://makerworld.com/de/@FormFollowsF/upload"
 };
 static const char* QR_URLS_DISPLAY[] = {
   "ko-fi.com/formfollowsfunction",
   "github.com/Niko11111/SpoolmanScale",
-  "discord.gg/TQvdxGuFcq",
+  "discord.gg/xadskCrPFu",
   "makerworld.com/de/@FormFollowsF/upload"
 };
 

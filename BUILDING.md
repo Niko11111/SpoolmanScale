@@ -4,7 +4,7 @@ This guide covers everything you need to physically build a SpoolmanScale: parts
 
 For the project overview, features, and flashing instructions, see the [README](README.md).
 
-> ⚠️ This is a beta build guide. If something is unclear or doesn't fit your hardware batch, please report it on [MakerWorld](https://makerworld.com/@FormFollowsF) or in the [Discord](https://discord.gg/TQvdxGuFcq).
+> ⚠️ This is a beta build guide. If something is unclear or doesn't fit your hardware batch, please report it on [MakerWorld](https://makerworld.com/@FormFollowsF) or in the [Discord](https://discord.gg/xadskCrPFu).
 
 ---
 
