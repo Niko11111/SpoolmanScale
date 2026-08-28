@@ -1626,14 +1626,14 @@ const char* const STRINGS[][2] = {
   { "Der PN532 bestätigt 0x24, beantwortet aber keinen Befehl. Er steht damit "
     "auf I2C - sonst würde er sich gar nicht melden - und SDA und SCL "
     "stimmen ebenfalls.\n\n"
-    "Prüfe die RST-Leitung an Pin 7 (braun, GPIO12). Ohne sie bleibt der Chip "
+    "Prüfe die RST-Leitung an Pin 5 (blau, GPIO12). Ohne sie bleibt der Chip "
     "im Reset und schweigt.\n\n"
     "Kontrolliere außerdem, ob die beiden DIP-Schalter sauber einrasten: "
     "SW1 = ON, SW2 = OFF.",
     "The PN532 acknowledges 0x24 but answers no command. That means it is set "
     "to I2C - it would not answer at all otherwise - and SDA and SCL are "
     "right too.\n\n"
-    "Check the RST wire on pin 7 (brown, GPIO12). Without it the chip stays "
+    "Check the RST wire on pin 5 (blue, GPIO12). Without it the chip stays "
     "in reset and says nothing.\n\n"
     "Also make sure both DIP switches sit firmly: SW1 = ON, SW2 = OFF." },  // STR_DIAG_PN532_MUTE_TEXT
 
