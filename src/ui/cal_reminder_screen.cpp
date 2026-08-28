@@ -6,6 +6,7 @@
 #include <lvgl.h>
 #include <cstring>
 
+#include "app/deferred_actions.h"
 #include "extra_fields_screen.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
@@ -93,22 +94,46 @@ void buildCalReminderScreen() {
   lv_obj_set_width(lbl_msg, 440);
   lv_obj_align(lbl_msg, LV_ALIGN_TOP_MID, 0, 88);
 
-  // Single "Got it" button — centers, leads to main screen
+  // Two buttons, side by side. There used to be one: buf_now was filled from
+  // STR_CAL_REMINDER_NOW and then never used, so the screen told people to go
+  // to Settings > Scale > Calibration and made them find it themselves. The
+  // string was already translated, only the button was missing.
   lv_obj_t *btn_got = lv_btn_create(scr_cal_reminder);
-  lv_obj_set_size(btn_got, 280, 48);
-  lv_obj_align(btn_got, LV_ALIGN_BOTTOM_MID, 0, -20);
-  lv_obj_set_style_bg_color(btn_got, lv_color_hex(0x1a3020), 0);
-  lv_obj_set_style_bg_color(btn_got, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+  lv_obj_set_size(btn_got, 210, 48);
+  lv_obj_align(btn_got, LV_ALIGN_BOTTOM_LEFT, 20, -20);
+  lv_obj_set_style_bg_color(btn_got, lv_color_hex(0x141c30), 0);
+  lv_obj_set_style_bg_color(btn_got, lv_color_hex(0x1e2a44), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_got, 8, 0);
   lv_obj_set_style_shadow_width(btn_got, 0, 0);
   lv_obj_set_style_border_width(btn_got, 1, 0);
-  lv_obj_set_style_border_color(btn_got, lv_color_hex(0x2a5030), 0);
+  lv_obj_set_style_border_color(btn_got, lv_color_hex(0x2a4060), 0);
   lv_obj_add_event_cb(btn_got, [](lv_event_t *e) {
     showMainScreen();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_got = lv_label_create(btn_got);
   lv_label_set_text(lbl_got, buf_later);
-  lv_obj_set_style_text_color(lbl_got, lv_color_hex(0x40c080), 0);
+  lv_obj_set_style_text_color(lbl_got, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(lbl_got, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_got);
+
+  lv_obj_t *btn_now = lv_btn_create(scr_cal_reminder);
+  lv_obj_set_size(btn_now, 210, 48);
+  lv_obj_align(btn_now, LV_ALIGN_BOTTOM_RIGHT, -20, -20);
+  lv_obj_set_style_bg_color(btn_now, lv_color_hex(0x1a3020), 0);
+  lv_obj_set_style_bg_color(btn_now, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_now, 8, 0);
+  lv_obj_set_style_shadow_width(btn_now, 0, 0);
+  lv_obj_set_style_border_width(btn_now, 1, 0);
+  lv_obj_set_style_border_color(btn_now, lv_color_hex(0x2a5030), 0);
+  lv_obj_add_event_cb(btn_now, [](lv_event_t *e) {
+    // Deferred, and not only out of habit: this has to leave the setup before
+    // it opens the calibration, which means tearing down the screen this
+    // button lives on. The loop does both, in that order.
+    cal_now_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lbl_now = lv_label_create(btn_now);
+  lv_label_set_text(lbl_now, buf_now);
+  lv_obj_set_style_text_color(lbl_now, lv_color_hex(0x40c080), 0);
+  lv_obj_set_style_text_font(lbl_now, &lv_font_montserrat_ext_16, 0);
+  lv_obj_center(lbl_now);
 }

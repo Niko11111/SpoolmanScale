@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.7.0-beta.122"
+#define FW_VERSION  "v0.7.0-beta.124"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -105,3 +105,36 @@
 // cheap server side lookup - never the full inventory scan, and never
 // /tag/scan, which would broadcast an unknown tag on every attempt.
 #define TAG_RECHECK_MS  4000
+
+// ============================================================
+//  Hardware self diagnosis
+// ============================================================
+// How often the diagnosis re-evaluates. It probes one I2C address per pass,
+// so this is the extra bus traffic it costs; everything else it reads is
+// state the loop already keeps.
+#define DIAG_TICK_MS  2000
+
+// Peak to peak spread of the moving average window that stops being noise and
+// starts being a wiring fault. A settled pad sits inside a gram or two; a
+// signal wire that is only half seated swings by hundreds.
+#define DIAG_NOISE_G  20.0f
+// How long that spread has to hold before it is reported. A hand on the pad or
+// a spool being placed produces one to two seconds of it, and neither is a
+// fault worth interrupting anyone for.
+#define DIAG_NOISE_SUSTAIN_MS  10000
+
+// A+ and A- swapped: the cell reads the load with the wrong sign, so an empty
+// pad sits far below zero and putting something on it drives the number down
+// rather than up.
+#define DIAG_INVERTED_G  -200.0f
+#define DIAG_INVERTED_SUSTAIN_MS  5000
+// What rules the inversion out for the rest of the session. Someone who tared
+// with a spool on the pad and then lifted it sits at a large negative number
+// too, and that is not a fault - but their cell has read a real positive load
+// at some point, and a swapped one never does.
+#define DIAG_POSITIVE_SEEN_G  50.0f
+
+// How many times the loop re-initialises a reader that is on the bus but not
+// answering, before it stops trying. Mirrors SCALE_RECOVER_ATTEMPTS, which is
+// declared next to the scale watchdog in app_loop.cpp.
+#define NFC_RECOVER_ATTEMPTS  3

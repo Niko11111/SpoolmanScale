@@ -11,6 +11,7 @@
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/device_name.h"
+#include "services/diagnostics.h"
 #include "services/mdns_service.h"
 #include "services/wifi_manager.h"
 #include "ui/weight_format.h"
@@ -72,6 +73,15 @@ static String statusJson() {
   }
   j += ",\"nfc\":" + String(nfc_ok ? "true" : "false");
   j += ",\"i2c\":\"" + jsonEsc(i2cScanLast()) + "\"";
+  {
+    // Two forms on purpose. "diag" is the code, always English, for whoever is
+    // reading a paste of this JSON in a support thread; "diagText" is what the
+    // row on the page says, in the language the device is set to.
+    const DiagCode dc = diagnosticsCurrent();
+    j += ",\"diag\":\"" + jsonEsc(diagName(dc)) + "\"";
+    j += ",\"diagText\":\"" +
+         jsonEsc(dc == DIAG_NONE ? T(STR_W_S_DIAG_OK) : T(diagTitleString(dc))) + "\"";
+  }
   j += ",\"sd\":" + String(sd_available ? "true" : "false");
   j += ",\"scans\":" + String(scan_count);
   j += ",\"config\":" + String(webConfigEnabled() ? "true" : "false");
@@ -186,6 +196,18 @@ static String body() {
     h += i2cScanLast();
     h += F("</span></div>");
   }
+  // What the device would say to its owner if they were standing in front of
+  // it. Support runs through this page as often as through the panel, and a
+  // screenshot of it should carry the finding rather than only the symptoms
+  // that led to it.
+  {
+    const DiagCode dc = diagnosticsCurrent();
+    h += F("<div class='row'><span class='k'>");
+    h += T(STR_W_R_DIAG);
+    h += F("</span><span class='v' id='diag'>");
+    h += (dc == DIAG_NONE) ? String(T(STR_W_S_DIAG_OK)) : String(T(diagTitleString(dc)));
+    h += F("</span></div>");
+  }
   h += row(T(STR_W_R_SD),    pill(sd_available, STR_W_S_READY, STR_W_S_MISSING, true));
   h += row(T(STR_W_R_UPTIME), uptimeText());
   h += F("<button class='quiet' id='i2cbtn'>");
@@ -239,6 +261,8 @@ static String body() {
          "if(e)e.textContent=d.scaleReady?d.weight:'---';"
          "const q=document.getElementById('i2c');"
          "if(q&&d.i2c)q.textContent=d.i2c;"
+         "const g=document.getElementById('diag');"
+         "if(g&&d.diagText)g.textContent=d.diagText;"
          "}).catch(()=>{});}"
          "setInterval(wtTick,2000);"
          "document.addEventListener('visibilitychange',wtTick);"

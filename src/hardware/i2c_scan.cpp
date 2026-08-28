@@ -22,6 +22,11 @@ uint8_t i2cScan(TwoWire &wire, uint8_t *found, uint8_t max_found) {
   return n;
 }
 
+bool i2cPresent(TwoWire &wire, uint8_t addr) {
+  wire.beginTransmission(addr);
+  return wire.endTransmission() == 0;
+}
+
 const char *i2cKnownName(uint8_t addr) {
   if (addr == I2C_ADDR_PN532)   return "PN532";
   if (addr == I2C_ADDR_NAU7802) return "NAU7802";

@@ -12,6 +12,7 @@
 #include "hardware/scale.h"
 #include "hardware/scale_state.h"
 #include "confirm_popup.h"
+#include "info_popup.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "scale_menu.h"
@@ -83,6 +84,35 @@ void buildFactorScreen() {
   lv_label_set_long_mode(lbl_desc, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(lbl_desc, 440);
   lv_obj_align(lbl_desc, LV_ALIGN_TOP_MID, 0, 54);
+
+  // The whole instruction, one tap away. This screen has room for the one line
+  // above and a numpad, not for the four steps someone needs the first time -
+  // and the first time is exactly when they are here. Styled like the help
+  // circles on the settings rows so it reads as the same affordance.
+  //
+  // In the header row rather than beside the hint: everything from y=50 down
+  // is spoken for - the factor readout sits at the right edge at y=78 - and
+  // the 16 px between the centred title and the close button is the one gap on
+  // this screen that nothing else wants.
+  lv_obj_t *help = lv_btn_create(scr_factor);
+  lv_obj_set_size(help, 34, 34);
+  lv_obj_set_pos(help, 386, 5);
+  lv_obj_set_style_bg_opa(help, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_bg_color(help, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(help, LV_OPA_COVER, LV_STATE_PRESSED);
+  lv_obj_set_style_border_color(help, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_border_width(help, 1, 0);
+  lv_obj_set_style_radius(help, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_shadow_width(help, 0, 0);
+  lv_obj_set_style_pad_all(help, 0, 0);
+  lv_obj_set_ext_click_area(help, 6);
+  lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                      INFO_POPUP_ARG(STR_CAL_HELP_TITLE, STR_CAL_HELP_TEXT));
+  lv_obj_t *help_q = lv_label_create(help);
+  lv_label_set_text(help_q, "?");
+  lv_obj_set_style_text_color(help_q, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_font(help_q, &lv_font_montserrat_ext_16, 0);
+  lv_obj_align(help_q, LV_ALIGN_CENTER, 0, 0);
 
   // Single status row: "Scale: <value>" left | "Factor: --" right
   lv_obj_t *lbl_cal_w_title = lv_label_create(scr_factor);

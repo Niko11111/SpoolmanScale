@@ -75,3 +75,16 @@ extern unsigned long gh_check_wait_since;
 extern bool  show_bb_cap_pending;
 extern float bb_cap_measured_g;
 extern float bb_cap_label_g;
+
+// The diagnosis banner offered a way out and the user took it. Both run from
+// the loop rather than the popup's own callback: one opens a screen, the other
+// touches the I2C bus, and neither is safe from inside an LVGL event.
+//
+// A re-probe after the user has been told to check a plug. Without it the only
+// way to confirm a repair is a restart, which is a poor answer to "I just
+// pushed the connector back in".
+extern bool i2c_rescan_pending;
+// "Calibrate now" on the reminder at the end of the setup. It has two steps in
+// a fixed order - leave the setup, then open the calibration - so it cannot be
+// expressed with show_factor_pending alone.
+extern bool cal_now_pending;

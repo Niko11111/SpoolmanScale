@@ -44,6 +44,9 @@
 #include "services/mdns_service.h"
 #include "services/backend.h"
 #include "services/breadcrumb.h"
+#include "services/diagnostics.h"
+#include "hardware/i2c_scan.h"
+#include "ui/diag_banner.h"
 #include "ui/ams_assign_popup.h"
 #include "ui/ams_assign_screen.h"
 #include "ui/filaman_fields_screen.h"
@@ -434,6 +437,30 @@ void appLoop() {
   if (show_factor_pending) {
     show_factor_pending = false;
     showFactorScreen();
+  }
+  // "Calibrate now" on the reminder at the end of the setup. Two steps in a
+  // fixed order: showMainScreen() first, because it is what tears down the
+  // setup overlays and clears setup_active, and only then the calibration on
+  // top of a main screen that is actually there.
+  if (cal_now_pending) {
+    cal_now_pending = false;
+    showMainScreen();
+    showFactorScreen();
+  }
+  // "Check again" in the diagnosis popup. The bus probe belongs to the loop
+  // task, so the popup only asked - this is where it happens. The full sweep
+  // refreshes the line the status page and the boot log share; the diagnosis
+  // re-evaluates on the same pass so the answer is on screen before the user
+  // has let go of the button.
+  if (i2c_rescan_pending) {
+    i2c_rescan_pending = false;
+    i2cScanRefresh(I2C_EXT);
+    logSDf("I2C_EXT rescan (diagnosis): %s", i2cScanLast());
+    scl_ok = scaleHardwarePresent();
+    diagnosticsRecheckNow();
+    diagnosticsTick();
+    updateDiagBanner();
+    updateHeaderStatus();
   }
   // Confirmed on the scale menu. Rebuilt rather than patched: the calibration
   // row carries the factor in its subtitle, so the screen has to say the new
@@ -852,8 +879,22 @@ void appLoop() {
     if (scale_filter_idx == 0) scale_filter_full = true;
     int count = scale_filter_full ? SCALE_FILTER_SIZE : scale_filter_idx;
     float sum = 0;
-    for (int i = 0; i < count; i++) sum += scale_filter_buf[i];
+    // Peak to peak of the same window, for free: the diagnosis needs to know
+    // how far the readings scatter, and this loop already walks every one of
+    // them to build the average.
+    float lo = scale_filter_buf[0], hi = scale_filter_buf[0];
+    for (int i = 0; i < count; i++) {
+      const float v = scale_filter_buf[i];
+      sum += v;
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
     scale_weight_g = sum / count;
+
+    // A window that is not full yet spans a tare or a fresh start, so its
+    // spread says nothing about the wiring. Reported as zero until it fills,
+    // which keeps the sustain timer from arming on the way up.
+    diagnosticsNoteSample(scale_weight_g, scale_filter_full ? (hi - lo) : 0.0f);
 
     // A load appearing on the pad counts as activity, so the panel
     // comes back without having to touch it first.
@@ -1225,6 +1266,53 @@ void appLoop() {
       if (scl_ok != prev) updateHeaderStatus();
     }
   }
+
+  // The same way back for the reader, and the reason it did not exist before:
+  // the reader watchdog further down sits inside `if (nfc_ok)`, so it only ever
+  // ran for a reader that had already worked once. A PN532 that failed at boot
+  // left nfc_ok false, skipped the whole scan block including its own
+  // watchdog, and stayed dead until someone power cycled the device - over a
+  // connector that may well have been pushed back in minutes earlier.
+  //
+  // That matters more now than it did: the diagnosis tells people to check a
+  // plug, and a suggestion whose result only shows after a restart is not much
+  // of a suggestion. Only attempted while the chip actually acknowledges its
+  // address, so a device built without a reader does not retry forever.
+  {
+    static unsigned long last_nfc_recover_ms = 0;
+    static uint8_t nfc_recover_tries = 0;
+    if (!nfc_ok && millis() - last_nfc_recover_ms >= 5000) {
+      last_nfc_recover_ms = millis();
+      if (!i2cPresent(I2C_EXT, I2C_ADDR_PN532)) {
+        // Off the bus entirely. Nothing to re-initialise, and the counter is
+        // cleared so a reader that is plugged back in gets a full set of
+        // attempts rather than the remainder of an old one.
+        nfc_recover_tries = 0;
+      } else if (nfc_recover_tries < NFC_RECOVER_ATTEMPTS) {
+        nfc_recover_tries++;
+        uint32_t ver = 0;
+        if (nfcHardwareReinit(&ver)) {
+          nfc_ok = true;
+          nfc_recover_tries = 0;
+          nfc_stat_reinits++;
+          Serial.printf("NFC: reader came back (fw 0x%08lX)\n", (unsigned long)ver);
+          logSDf("NFC: reader recovered (fw 0x%08lX)", (unsigned long)ver);
+          updateHeaderStatus();
+        } else {
+          Serial.printf("NFC: re-init failed (%u/%u)\n",
+                        nfc_recover_tries, NFC_RECOVER_ATTEMPTS);
+        }
+      }
+    } else if (nfc_ok) {
+      nfc_recover_tries = 0;
+    }
+  }
+
+  // What the device would tell its owner if it could talk. Paces itself, so it
+  // is called unconditionally; the banner call below is a compare on every
+  // pass where the finding has not changed.
+  diagnosticsTick();
+  updateDiagBanner();
 
   // ============================================================
   //  NFC SCAN LOGIC (0.4.21)

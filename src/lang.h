@@ -1009,6 +1009,40 @@ enum StringID {
   STR_TW_MODE_ASK,
   STR_TW_MODE_ALWAYS,
 
+  // Hardware self diagnosis. One banner string, one title and one body per
+  // finding - the banner has to fit a 480 px strip, the body explains the
+  // cause and names the wire to look at.
+  STR_DIAG_TAP,
+  STR_DIAG_BTN_LATER,
+  STR_DIAG_BTN_RECHECK,
+  STR_DIAG_BUS_EMPTY_BANNER,
+  STR_DIAG_BUS_EMPTY_TITLE,
+  STR_DIAG_BUS_EMPTY_TEXT,
+  STR_DIAG_NAU_MISSING_BANNER,
+  STR_DIAG_NAU_MISSING_TITLE,
+  STR_DIAG_NAU_MISSING_TEXT,
+  STR_DIAG_PN532_MISSING_BANNER,
+  STR_DIAG_PN532_MISSING_TITLE,
+  STR_DIAG_PN532_MISSING_TEXT,
+  STR_DIAG_PN532_MUTE_BANNER,
+  STR_DIAG_PN532_MUTE_TITLE,
+  STR_DIAG_PN532_MUTE_TEXT,
+  STR_DIAG_UNCAL_BANNER,
+  STR_DIAG_UNCAL_TITLE,
+  STR_DIAG_UNCAL_TEXT,
+  STR_DIAG_INVERTED_BANNER,
+  STR_DIAG_INVERTED_TITLE,
+  STR_DIAG_INVERTED_TEXT,
+  STR_DIAG_NOISY_BANNER,
+  STR_DIAG_NOISY_TITLE,
+  STR_DIAG_NOISY_TEXT,
+  // The full instruction behind the "?" on the calibration screen. The screen
+  // itself has room for one line and a numpad, not for four steps.
+  STR_CAL_HELP_TITLE,
+  STR_CAL_HELP_TEXT,
+  // The same finding on the status page in the browser.
+  STR_W_R_DIAG,
+  STR_W_S_DIAG_OK,
 
   STR_COUNT
 };

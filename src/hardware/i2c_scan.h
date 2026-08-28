@@ -22,6 +22,12 @@
 // found[]. Returns how many were written, never more than max_found.
 uint8_t i2cScan(TwoWire &wire, uint8_t *found, uint8_t max_found);
 
+// Does one specific address acknowledge? The single-address form of the scan
+// above, for the times a caller already knows who it is looking for and only
+// wants to know whether that chip is on the bus right now. Cheap enough to ask
+// every couple of seconds, which a full sweep is not.
+bool i2cPresent(TwoWire &wire, uint8_t addr);
+
 // The chip this project expects at an address, or nullptr for anything else.
 const char *i2cKnownName(uint8_t addr);
 

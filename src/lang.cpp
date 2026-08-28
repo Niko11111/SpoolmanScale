@@ -1571,6 +1571,126 @@ const char* const STRINGS[][2] = {
   { "Aus",                       "Off"                      },  // STR_TW_MODE_OFF
   { "Fragen",                    "Ask"                      },  // STR_TW_MODE_ASK
   { "Immer schreiben",           "Write every time"         },  // STR_TW_MODE_ALWAYS
+
+  // ---- Hardware self diagnosis -----------------------------------------
+  { "  -  antippen",             "  -  tap for help"        },  // STR_DIAG_TAP
+  { "Später",                    "Later"                    },  // STR_DIAG_BTN_LATER
+  { "Erneut prüfen",             "Check again"              },  // STR_DIAG_BTN_RECHECK
+
+  { "Kein Modul am I2C-Bus",     "Nothing on the I2C bus"   },  // STR_DIAG_BUS_EMPTY_BANNER
+  { "Kein Modul am I2C-Bus",     "Nothing on the I2C bus"   },  // STR_DIAG_BUS_EMPTY_TITLE
+  { "Weder der NFC-Reader noch der Waagen-ADC antworten.\n\n"
+    "Das 7-polige Kabel muss bündig links in der 8-poligen I/O-Buchse sitzen. "
+    "Ein Pin daneben und beide Module sind stromlos.\n\n"
+    "Prüfe Pin 1 (5V, rot), Pin 2 (GND, schwarz), Pin 3 (SDA, gelb) und "
+    "Pin 4 (SCL, grün).",
+    "Neither the NFC reader nor the scale ADC answers.\n\n"
+    "The 7 pin cable has to sit flush to the left in the 8 pin I/O socket. "
+    "One pin off and both modules are unpowered.\n\n"
+    "Check pin 1 (5V, red), pin 2 (GND, black), pin 3 (SDA, yellow) and "
+    "pin 4 (SCL, green)." },  // STR_DIAG_BUS_EMPTY_TEXT
+
+  { "Waagen-ADC fehlt (NAU7802)", "Scale ADC missing (NAU7802)" },  // STR_DIAG_NAU_MISSING_BANNER
+  { "Waagen-ADC fehlt",          "Scale ADC missing"        },  // STR_DIAG_NAU_MISSING_TITLE
+  { "Die NAU7802 antwortet nicht auf 0x2A. Der NFC-Reader schon, SDA und SCL "
+    "sind also grundsätzlich in Ordnung.\n\n"
+    "Prüfe VIN, GND, SDA und SCL an der NAU7802.\n\n"
+    "Bei fertigen STEMMA-QT-Kabeln von Drittanbietern stimmt die "
+    "Pinreihenfolge oft nicht mit der des WT32-Kabels überein.",
+    "The NAU7802 does not answer on 0x2A. The NFC reader does, so SDA and SCL "
+    "are basically fine.\n\n"
+    "Check VIN, GND, SDA and SCL on the NAU7802.\n\n"
+    "On third party STEMMA QT cables the pin order often does not match the "
+    "WT32 cable." },  // STR_DIAG_NAU_MISSING_TEXT
+
+  { "NFC-Reader fehlt (PN532)",  "NFC reader missing (PN532)" },  // STR_DIAG_PN532_MISSING_BANNER
+  { "NFC-Reader fehlt",          "NFC reader missing"       },  // STR_DIAG_PN532_MISSING_TITLE
+  { "Der PN532 antwortet nicht auf 0x24. Der Waagen-ADC schon, SDA und SCL "
+    "sind also grundsätzlich in Ordnung.\n\n"
+    "Prüfe zuerst die beiden DIP-Schalter auf dem Modul: für I2C muss "
+    "SW1 = ON und SW2 = OFF stehen. In der HSU- oder SPI-Stellung meldet sich "
+    "der Chip auf dem I2C-Bus überhaupt nicht - genau dieses Bild.\n\n"
+    "Sonst braucht der PN532 5V von Pin 1 des I/O-Kabels. Schließe ihn nicht "
+    "über den STEMMA-QT-Durchgang der NAU7802 an - der führt nur 3,3V.",
+    "The PN532 does not answer on 0x24. The scale ADC does, so SDA and SCL "
+    "are basically fine.\n\n"
+    "Check the two DIP switches on the module first: I2C needs SW1 = ON and "
+    "SW2 = OFF. Set to HSU or SPI the chip does not answer on the I2C bus at "
+    "all - which is exactly what is happening here.\n\n"
+    "Otherwise the PN532 needs 5V from pin 1 of the I/O cable. Do not daisy "
+    "chain it through the NAU7802 STEMMA QT passthrough - that one only "
+    "carries 3.3V." },  // STR_DIAG_PN532_MISSING_TEXT
+
+  { "NFC-Reader antwortet nicht", "NFC reader does not answer" },  // STR_DIAG_PN532_MUTE_BANNER
+  { "NFC-Reader meldet sich nicht", "NFC reader stays silent" },  // STR_DIAG_PN532_MUTE_TITLE
+  { "Der PN532 bestätigt 0x24, beantwortet aber keinen Befehl. Er steht damit "
+    "auf I2C - sonst würde er sich gar nicht melden - und SDA und SCL "
+    "stimmen ebenfalls.\n\n"
+    "Prüfe die RST-Leitung an Pin 7 (braun, GPIO12). Ohne sie bleibt der Chip "
+    "im Reset und schweigt.\n\n"
+    "Kontrolliere außerdem, ob die beiden DIP-Schalter sauber einrasten: "
+    "SW1 = ON, SW2 = OFF.",
+    "The PN532 acknowledges 0x24 but answers no command. That means it is set "
+    "to I2C - it would not answer at all otherwise - and SDA and SCL are "
+    "right too.\n\n"
+    "Check the RST wire on pin 7 (brown, GPIO12). Without it the chip stays "
+    "in reset and says nothing.\n\n"
+    "Also make sure both DIP switches sit firmly: SW1 = ON, SW2 = OFF." },  // STR_DIAG_PN532_MUTE_TEXT
+
+  { "Waage nicht kalibriert",    "Scale not calibrated"     },  // STR_DIAG_UNCAL_BANNER
+  { "Waage nicht kalibriert",    "Scale not calibrated"     },  // STR_DIAG_UNCAL_TITLE
+  { "Der angezeigte Wert ist der Rohwert des ADC, nicht Gramm. Deshalb steht "
+    "dort eine sechsstellige Zahl, die von selbst um Hunderte springt.\n\n"
+    "Das ist kein Defekt und kein Verkabelungsfehler. Die Waage weiß nur noch "
+    "nicht, wie viele Messschritte ein Gramm sind.\n\n"
+    "Lege ein bekanntes Gewicht auf und kalibriere sie.",
+    "The value on screen is the raw ADC reading, not grams. That is why it is "
+    "a six digit number that jumps by hundreds on its own.\n\n"
+    "This is neither a defect nor a wiring mistake. The scale simply does not "
+    "know yet how many counts make a gram.\n\n"
+    "Place a known weight on it and calibrate." },  // STR_DIAG_UNCAL_TEXT
+
+  { "Wägezelle verpolt (A+/A-)", "Load cell reversed (A+/A-)" },  // STR_DIAG_INVERTED_BANNER
+  { "Wägezelle verpolt",         "Load cell reversed"       },  // STR_DIAG_INVERTED_TITLE
+  { "Die Waage liest bei leerer Plattform stark negativ und hat seit dem Start "
+    "nie ein positives Gewicht gesehen. Auflegen macht die Zahl kleiner statt "
+    "größer.\n\n"
+    "Tausche an der NAU7802 die beiden Signaladern: A+ (weiß) und A- (grün).\n\n"
+    "Danach neu tarieren und kalibrieren.",
+    "The scale reads far below zero with an empty platform and has never seen "
+    "a positive weight since it started. Loading it makes the number go down "
+    "instead of up.\n\n"
+    "Swap the two signal wires on the NAU7802: A+ (white) and A- (green).\n\n"
+    "Then tare and calibrate again." },  // STR_DIAG_INVERTED_TEXT
+
+  { "Wägezelle unruhig",         "Load cell unstable"       },  // STR_DIAG_NOISY_BANNER
+  { "Wägezelle unruhig",         "Load cell unstable"       },  // STR_DIAG_NOISY_TITLE
+  { "Der Messwert schwankt dauerhaft um mehr als %d g, obwohl auf der "
+    "Plattform nichts bewegt wird.\n\n"
+    "Das ist typisch für eine lose Ader an der NAU7802. Prüfe E+ (rot), "
+    "E- (schwarz), A+ (weiß) und A- (grün) auf kalte Lötstellen.\n\n"
+    "Prüfe außerdem, ob ein Kabel gegen die Wiegeplattform drückt.",
+    "The reading keeps swinging by more than %d g although nothing on the "
+    "platform is moving.\n\n"
+    "That is typical for a loose wire on the NAU7802. Check E+ (red), "
+    "E- (black), A+ (white) and A- (green) for cold solder joints.\n\n"
+    "Also check whether a cable is pressing against the weighing platform." },  // STR_DIAG_NOISY_TEXT
+
+  { "So kalibrierst du",         "How to calibrate"         },  // STR_CAL_HELP_TITLE
+  { "1. Plattform leer räumen und TARE drücken. Die Anzeige muss auf 0 gehen.\n\n"
+    "2. Ein Gewicht auflegen, das du genau kennst. Ideal sind etwa 1000 g - "
+    "eine volle Spule, auf einer Küchenwaage nachgewogen, reicht völlig.\n\n"
+    "3. Dieses Gewicht in Gramm eintippen und auf Berechnen drücken.\n\n"
+    "Je genauer das Referenzgewicht, desto genauer misst die Waage danach.",
+    "1. Clear the platform and press TARE. The reading has to go to 0.\n\n"
+    "2. Place a weight you know exactly. Around 1000 g is ideal - a full spool "
+    "checked on a kitchen scale is plenty.\n\n"
+    "3. Type that weight in grams and press Calculate.\n\n"
+    "The more precise the reference weight, the more accurate the scale is "
+    "afterwards." },  // STR_CAL_HELP_TEXT
+
+  { "Diagnose",                  "Diagnosis"                },  // STR_W_R_DIAG
+  { "ohne Befund",               "nothing found"            },  // STR_W_S_DIAG_OK
 };
 
 StringID tagWriteResultString(uint8_t code) {

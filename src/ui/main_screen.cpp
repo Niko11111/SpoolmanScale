@@ -18,6 +18,7 @@
 #include "services/tag_write.h"
 #include "services/user_options.h"
 #include "ui/confirm_popup.h"
+#include "ui/diag_banner.h"
 #include "ui/dried_action.h"
 #include "ui/update_badges.h"
 #include "ui/header_status.h"
@@ -189,6 +190,11 @@ void buildUI() {
   lv_obj_set_style_radius(status_bar, 0, 0);
   lv_obj_set_style_pad_all(status_bar, 0, 0);
   lv_obj_clear_flag(status_bar, LV_OBJ_FLAG_SCROLLABLE);
+
+  // The diagnosis strip lives inside this bar and is built only when there is
+  // something to report. Registering the parent costs nothing and keeps the
+  // strip below every overlay screen for free.
+  diagBannerInit(status_bar);
 
   lbl_nfc_dot = lv_label_create(status_bar);
   lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
