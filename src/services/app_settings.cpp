@@ -112,7 +112,17 @@ void loadPrefs() {
   g_ams_window_s  = (int)prefsGetInt("ams_window", AMS_WINDOW_DEFAULT_S);
   g_auto_weight = prefsGetBool("auto_weight", false);
   g_auto_loc_popup = prefsGetBool("auto_loc_popup", false);
-  g_tagwrite_ask   = prefsGetBool("tagwrite_ask", false);
+  // Three states now, where this used to be a yes/no switch. Nobody loses their
+  // setting: an installation that had the question turned on comes back as
+  // "ask", one that had it off as "off", and the old key is left in NVS rather
+  // than deleted - a downgrade should still find it.
+  g_tagwrite_mode  = prefsGetUChar("tagwr_mode",
+                       prefsGetBool("tagwrite_ask", false) ? TAGWRITE_ASK
+                                                           : TAGWRITE_OFF);
+  if (g_tagwrite_mode > TAGWRITE_ALWAYS) g_tagwrite_mode = TAGWRITE_ASK;
+  // Short key: NVS takes 15 characters and "tagmismatch_ask" is exactly at the
+  // limit, which is no place to be.
+  g_tagmismatch_ask = prefsGetBool("tagmism_ask", false);
   // Clamped rather than trusted: the value is persisted, and a firmware that
   // once knew a fourth format would otherwise leave one behind that this build
   // cannot write. TAG_FMT_ERASE is deliberately not offered here - erasing is

@@ -98,9 +98,20 @@ static String body() {
   h += F("<div class='card wide'><h2>");
   h += T(STR_W_C_TAGOPTS);
   h += F("</h2>"
-         "<label class='check'><span class='switch'>"
-         "<input id='to-ask' type='checkbox'><i></i></span>");
+         "<div class='field'><label>");
   h += T(STR_W_TAGOPT_ASK);
+  h += F("</label><div class='inrow'>"
+         "<select id='to-ask' style='min-width:210px'>"
+         "<option value='0'>");
+  h += T(STR_TW_MODE_OFF);
+  h += F("</option><option value='1'>");
+  h += T(STR_TW_MODE_ASK);
+  h += F("</option><option value='2'>");
+  h += T(STR_TW_MODE_ALWAYS);
+  h += F("</option></select></div></div>"
+         "<label class='check' style='margin-top:14px'><span class='switch'>"
+         "<input id='to-mism' type='checkbox'><i></i></span>");
+  h += T(STR_W_TAGOPT_MISM);
   h += F("</label>"
          "<div class='field' style='margin-top:14px'><label>");
   h += T(STR_W_TAGOPT_FMT);
@@ -110,10 +121,11 @@ static String body() {
          "<option value='3'>FilaMan</option>"
          "<option value='0'>Anycubic ACE</option>"
          "</select></div></div>"
+         // No save button: each control writes when it is changed, the way the
+         // switches on the config page do. A settings card that looks saved
+         // but is not is the failure this avoids.
          "<div class='inrow' style='margin-top:16px'>"
-         "<button onclick='saveTagOpts()'>");
-  h += T(STR_W_SAVE);
-  h += F("</button><span class='msg' id='to-s'></span></div>"
+         "<span class='msg' id='to-s'></span></div>"
          "<p class='note' style='margin-top:10px'>");
   h += T(STR_W_TAGOPT_NOTE);
   h += F("</p></div></div>");
@@ -134,19 +146,27 @@ static String body() {
   h += jsStr(T(STR_W_SAVED));
   h += F(",err:");  h += jsStr(T(STR_W_LOAD_FAIL));
   h += F("};"
-         // Both values in one line, same shape as /api/tag/write above, so the
-         // route stays a two-liner and needs no JSON parser.
+         // All three values in one line, same shape as /api/tag/write above, so
+         // the route stays a handful of lines and needs no JSON parser.
          "function loadTagOpts(){fetch('/api/tagopts').then(r=>r.json()).then(d=>{"
-         "document.getElementById('to-ask').checked=!!d.ask;"
+         "document.getElementById('to-ask').value=String(d.ask);"
+         "document.getElementById('to-mism').checked=!!d.mism;"
          "document.getElementById('to-fmt').value=String(d.fmt);"
          "}).catch(()=>{});}"
          "function saveTagOpts(){"
-         "const a=document.getElementById('to-ask').checked?1:0;"
+         "const a=document.getElementById('to-ask').value;"
+         "const m=document.getElementById('to-mism').checked?1:0;"
          "const f=document.getElementById('to-fmt').value;"
          "const s=document.getElementById('to-s');"
-         "fetch('/api/tagopts',{method:'POST',body:a+','+f})"
-         ".then(r=>r.json()).then(()=>{s.textContent=TO.saved;})"
-         ".catch(()=>{s.textContent=TO.err;});}"
+         "fetch('/api/tagopts',{method:'POST',body:a+','+f+','+m})"
+         ".then(r=>r.json()).then(()=>{s.textContent=TO.saved;"
+         "setTimeout(()=>{s.textContent='';},4000);})"
+         // The controls already show what was asked for, so a failed write has
+         // to put them back rather than leave a switch claiming a state the
+         // scale is not in. Re-reading is the shortest way to the truth.
+         ".catch(()=>{s.textContent=TO.err;loadTagOpts();});}"
+         "['to-ask','to-mism','to-fmt'].forEach(function(id){"
+         "document.getElementById(id).addEventListener('change',saveTagOpts);});"
          "loadTagOpts();"
          "</script>");
 
@@ -217,7 +237,11 @@ static String body() {
          "const n=document.getElementById('tg-note');"
          "if(n)n.textContent=small"
          "?M.toosmall.replace('%s',fn).replace('%u',tgNeed).replace('%u',tgBytes)"
-         ":((tgLinked&&tgUid&&tgLinked!=tgUid)?M.relink.replace('%s',tgLinked):'');"
+         // tgLinked is already "a different tag than the one on the reader" - the
+         // comparison used to happen here and compared "047F3ABBD12A81" against
+         // "04:7F:3A:BB:D1:2A:81", so the warning appeared for the very tag the
+         // user was holding.
+         ":(tgLinked?M.relink.replace('%s',tgLinked):'');"
          "const er=document.getElementById('tg-erase');"
          "if(er)er.disabled=!tgUid||tgCur=='blank';"
          "if(!tgNew){b.disabled=true;b.textContent=M.pickf;return;}"
@@ -279,6 +303,68 @@ static TagFormat fmtFromInt(int f) {
     case 3:  return TAG_FMT_FILAMAN;
     default: return TAG_FMT_OPENSPOOL;
   }
+}
+
+// What tag_write.cpp reports, said in the user's language. That file builds
+// English prose because it cannot reach lang.h (T() collides with ArduinoJson's
+// template parameter), so it hands out the parts - see TagWriteReport - and the
+// sentence is put together here, where T() is available.
+static String tagWriteMessageLocal() {
+  const char *st = tagWriteState();
+  if (!strcmp(st, "idle")) return String("");
+
+  const TagWriteReport *r = tagWriteReportData();
+  char buf[256];
+
+  if (!strcmp(st, "pending")) {
+    if (r->erase) return String(T(STR_W_TW_ERASING));
+    snprintf(buf, sizeof(buf), T(STR_W_TW_WRITING), r->spool_id);
+    return String(buf);
+  }
+
+  if (r->erase)
+    return String(r->code == TW_OK ? T(STR_W_TW_ERASED) : T(STR_W_TW_ERASE_FAIL));
+
+  String out;
+  if (r->code == TW_OK) {
+    snprintf(buf, sizeof(buf), T(STR_W_TW_WROTE), r->spool_id, r->name,
+             tagFormatLabel(r->fmt));
+    out = buf;
+  } else {
+    out = T(tagWriteResultString(r->code));
+  }
+
+  // The link is its own sentence half: a tag can be written and still not be
+  // bound, which is exactly the case that has to be readable.
+  if (r->link == TAG_LINK_OK) {
+    if (r->link_note[0]) {
+      snprintf(buf, sizeof(buf), T(STR_W_TW_LINKED_NOTE), r->link_note);
+      out += buf;
+    } else {
+      out += T(STR_W_TW_LINKED);
+    }
+  } else if (r->link == TAG_LINK_FAIL) {
+    snprintf(buf, sizeof(buf), T(STR_W_TW_LINK_FAIL), r->link_http);
+    out += buf;
+  }
+  return out;
+}
+
+// "NTAG, beschreibbar, 496 Byte". Same reason as above: tagCachedKind() is
+// English, tagCachedKindCode() is the part that translates.
+static String tagKindLocal() {
+  const uint8_t k = tagCachedKindCode();
+  if (k == TAG_KIND_NONE) return String("");
+  if (k == TAG_KIND_MIFARE) return String(T(STR_W_TAG_KIND_MIFARE));
+
+  String out = T(STR_W_TAG_KIND_NTAG);
+  const uint16_t b = tagCachedBytes();
+  if (b) {
+    char buf[24];
+    snprintf(buf, sizeof(buf), T(STR_W_TAG_KIND_BYTES), (unsigned)b);
+    out += buf;
+  }
+  return out;
 }
 
 static void routes(WebServer &srv) {
@@ -372,9 +458,9 @@ static void routes(WebServer &srv) {
     String j = String("{\"info\":") + info +
                ",\"bytes\":"    + String((unsigned)tagCachedBytes()) +
                ",\"uid\":\""     + jsonEsc(tagCachedUid()) +
-               "\",\"kind\":\""    + jsonEsc(tagCachedKind()) +
+               "\",\"kind\":\""    + jsonEsc(tagKindLocal().c_str()) +
                "\",\"state\":\""   + jsonEsc(tagWriteState()) +
-               "\",\"message\":\"" + jsonEsc(tagWriteMessage()) +
+               "\",\"message\":\"" + jsonEsc(tagWriteMessageLocal().c_str()) +
                "\",\"content\":\"" + jsonEsc(tagCachedContent()) + "\"}";
     srv.send(200, "application/json", j);
   });
@@ -385,7 +471,8 @@ static void routes(WebServer &srv) {
   srv.on("/api/tagopts", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_C_TAGOPTS))) return;
     srv.send(200, "application/json",
-             String("{\"ask\":") + (g_tagwrite_ask ? "true" : "false") +
+             String("{\"ask\":") + String((int)g_tagwrite_mode) +
+             ",\"mism\":" + (g_tagmismatch_ask ? "true" : "false") +
              ",\"fmt\":" + String((int)g_tagwrite_fmt) + "}");
   });
 
@@ -393,19 +480,31 @@ static void routes(WebServer &srv) {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_C_TAGOPTS))) return;
     if (!srv.hasArg("plain")) { srv.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
     String body = srv.arg("plain");
-    const int comma = body.indexOf(',');
-    g_tagwrite_ask = body.substring(0, comma < 0 ? body.length() : comma).toInt() == 1;
-    if (comma >= 0) {
-      const int f = body.substring(comma + 1).toInt();
+    const int c1 = body.indexOf(',');
+    const int c2 = c1 < 0 ? -1 : body.indexOf(',', c1 + 1);
+    // 0 off, 1 ask, 2 write every time. A page from before this was a choice
+    // sends 0 or 1, which lands on the same two states it always meant.
+    const int mode = body.substring(0, c1 < 0 ? body.length() : c1).toInt();
+    if (mode >= TAGWRITE_OFF && mode <= TAGWRITE_ALWAYS)
+      g_tagwrite_mode = (uint8_t)mode;
+    if (c1 >= 0) {
+      const int f = body.substring(c1 + 1, c2 < 0 ? body.length() : c2).toInt();
       // Only the three the device can write. Erase answers an unlink and is
       // not offered here, and an unknown number must not reach NVS.
       if (f == TAG_FMT_ACE || f == TAG_FMT_OPENSPOOL || f == TAG_FMT_FILAMAN)
         g_tagwrite_fmt = (uint8_t)f;
     }
-    prefsPutBool("tagwrite_ask", g_tagwrite_ask);
+    // Absent from a page still sitting in a browser from before this switch
+    // existed. Leaving the setting alone is the honest reading of a body that
+    // does not mention it - turning it off would be a decision nobody made.
+    if (c2 >= 0) {
+      g_tagmismatch_ask = body.substring(c2 + 1).toInt() == 1;
+      prefsPutBool("tagmism_ask", g_tagmismatch_ask);
+    }
+    prefsPutUChar("tagwr_mode", g_tagwrite_mode);
     prefsPutUChar("tagwrite_fmt", g_tagwrite_fmt);
-    logSDf("Web: tag write ask=%d format=%s",
-           (int)g_tagwrite_ask, tagFormatLabel(g_tagwrite_fmt));
+    logSDf("Web: tag write mode=%d mismatch ask=%d format=%s",
+           (int)g_tagwrite_mode, (int)g_tagmismatch_ask, tagFormatLabel(g_tagwrite_fmt));
     srv.send(200, "application/json", "{\"ok\":true}");
   });
 

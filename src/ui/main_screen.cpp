@@ -15,6 +15,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/auto_weight_state.h"
+#include "services/tag_write.h"
 #include "services/user_options.h"
 #include "ui/confirm_popup.h"
 #include "ui/dried_action.h"
@@ -78,6 +79,36 @@ void updateDisplay() {
   lv_label_set_text(lbl_detail, sm_article_nr[0] ? sm_article_nr : "-");
 
   // (lbl_raw_info is now used for SM diff display, updated in loop)
+}
+
+// ============================================================
+//  FILL DISPLAY FROM THE TAG ITSELF (NTAG, before the backend answers)
+// ============================================================
+void showTagInfoOnDisplay(const TagInfo *ti) {
+  if (!ti) return;
+
+  if (ti->material[0]) lv_label_set_text(lbl_material, ti->material);
+  if (ti->brand[0])    lv_label_set_text(lbl_vendor, ti->brand);
+
+  if (ti->has_color) {
+    char hex[8];
+    snprintf(hex, sizeof(hex), "#%02X%02X%02X", ti->r, ti->g, ti->b);
+    lv_label_set_text(lbl_color, hex);
+    lv_obj_set_style_bg_color(lbl_color_swatch, swatchColorFromHex(hex), 0);
+  }
+
+  // Both ends or neither: a range printed from a single value would read as a
+  // temperature the tag never carried.
+  if (ti->et_lo > 0 && ti->et_hi > 0) {
+    char temp_str[24];
+    snprintf(temp_str, sizeof(temp_str), "%u - %u C",
+             (unsigned)ti->et_lo, (unsigned)ti->et_hi);
+    lv_label_set_text(lbl_temp, temp_str);
+  }
+
+  logSDf("Tag: showing %s record from the tag, %s %s",
+         ti->fmt, ti->brand[0] ? ti->brand : "?",
+         ti->material[0] ? ti->material : "?");
 }
 
 //  Zone 1: Header      y=0..25   (26px)  Name/Version | WiFi NFC

@@ -684,7 +684,7 @@ static void closeLinkOverlays() {
 // then: doLinkPatch() is reached from LVGL callbacks as well as from this
 // handler, and an overlay must never be built out of the callback of the one
 // it covers.
-static int tagwrite_ask_spool_id = 0;
+static int tagwrite_after_link_id = 0;
 
 void doLinkPatch(int spool_id, bool is_bambu) {
   crumbSet("link patch");
@@ -769,11 +769,11 @@ void doLinkPatch(int spool_id, bool is_bambu) {
   //    than by tag type, so a tag reporting its size honestly decides for
   //    itself. A tag that reports nothing at all (0) is not ruled out - the
   //    write says what happened either way.
-  if (g_tagwrite_ask && !is_bambu && tagIsWritableNtag()) {
+  if (g_tagwrite_mode != TAGWRITE_OFF && !is_bambu && tagIsWritableNtag()) {
     const uint16_t have = tagCachedBytes();
     const bool fits = !TAG_FMT_IS_NDEF(g_tagwrite_fmt) ||
                       have == 0 || have >= TAGWRITE_NDEF_MIN_BYTES;
-    if (fits) tagwrite_ask_spool_id = spool_id;
+    if (fits) tagwrite_after_link_id = spool_id;
     else logSDf("Tag write: not asking, %u bytes on the tag is too small for %s",
                 (unsigned)have, tagFormatLabel(g_tagwrite_fmt));
   }
@@ -3506,10 +3506,14 @@ void handleSpoolFlowDeferredActions() {
     logSD("Link flow: overlays closed after the spool list was freed");
     closeLinkOverlays();
   }
-  if (tagwrite_ask_spool_id > 0) {
-    const int id = tagwrite_ask_spool_id;
-    tagwrite_ask_spool_id = 0;
-    showTagWriteAskPopup(id);
+  if (tagwrite_after_link_id > 0) {
+    const int id = tagwrite_after_link_id;
+    tagwrite_after_link_id = 0;
+    // "Always" skips the question, not the answer: the write is parked the same
+    // way and its result still appears, because a tag that silently failed to
+    // take the record would be the worst of both.
+    if (g_tagwrite_mode == TAGWRITE_ALWAYS) startTagWriteNoAsk(id);
+    else                                    showTagWriteAskPopup(id);
   }
   if (show_id_input_pending) {
     show_id_input_pending = false;

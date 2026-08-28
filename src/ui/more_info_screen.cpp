@@ -1,6 +1,7 @@
 #include "more_info_screen.h"
 #include "navigation.h"
 #include "app/app_state.h"
+#include "services/tag_field.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -332,7 +333,10 @@ void fetchAndFillLocationList() {
     return;
   }
 
-  logSDf("LOC: GET %s/api/v1/location", cfg_spoolman_base);
+  // The address the request actually goes to, not the Spoolman one: with
+  // FilaMan or BamBuddy selected this line named a host that was never asked,
+  // and the path differs between the backends as well.
+  logSDf("LOC: GET locations from %s", backendBaseUrl());
   JsonDocument doc;
   DeserializationError err = DeserializationError::Ok;
   int code = backendGetLocationsJson(cfg_spoolman_base, doc, 8000, &err);
@@ -1050,6 +1054,24 @@ void buildMoreInfoScreen() {
       // popup stays exactly what it always was.
       const int cu_count = smBoundUidCount();
       const bool cu_multi = (cu_count >= 2);
+      // What is about to be cleared, by name. The old message said "clears the
+      // tag field entry" and named neither which field nor that Spoolman's own
+      // relation goes too - so an unlink that touched two places looked like it
+      // touched one.
+      char cu_src[96] = "";
+      { size_t used = 0;
+        for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) {
+          if (!sm_tag_values[i][0]) continue;
+          char nm[32];
+          strncpy(nm, T(tagFieldSpec(i).str_name), sizeof(nm) - 1);
+          nm[sizeof(nm) - 1] = '\0';
+          const size_t need = strlen(nm) + (used ? 2 : 0);
+          if (used + need >= sizeof(cu_src)) break;
+          if (used) { cu_src[used++] = ','; cu_src[used++] = ' '; }
+          strcpy(cu_src + used, nm);
+          used += strlen(nm);
+        }
+      }
 
       lv_obj_t *box2 = lv_obj_create(pop);
       lv_obj_set_size(box2, 420, cu_multi ? 262 : 210);
@@ -1069,9 +1091,16 @@ void buildMoreInfoScreen() {
       lv_obj_align(lbl_t, LV_ALIGN_TOP_MID, 0, 16);
 
       lv_obj_t *lbl_m = lv_label_create(box2);
-      char buf_m[192];
-      if (cu_multi) snprintf(buf_m, sizeof(buf_m), T(STR_UNLINK_MULTI_MSG), cu_count);
+      char buf_m[288];
+      if (cu_multi) strncpy(buf_m, T(STR_UNLINK_MULTI_MSG), sizeof(buf_m) - 1);
       else          backendText(T(STR_UNLINK_MSG), buf_m, sizeof(buf_m));
+      buf_m[sizeof(buf_m) - 1] = '\0';
+      if (cu_src[0]) {
+        const size_t used = strlen(buf_m);
+        char line[128];
+        snprintf(line, sizeof(line), T(STR_UNLINK_SOURCES), cu_src);
+        snprintf(buf_m + used, sizeof(buf_m) - used, "\n%s", line);
+      }
       lv_label_set_text(lbl_m, buf_m);
       lv_obj_set_style_text_color(lbl_m, lv_color_hex(0xc8d8f0), 0);
       lv_obj_set_style_text_font(lbl_m, &lv_font_montserrat_ext_14, 0);

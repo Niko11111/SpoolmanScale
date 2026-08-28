@@ -24,7 +24,8 @@ enum TagFormat : uint8_t {
 //
 // A floor, not a promise: a tag above it can still be too small for a
 // particularly long record, and that write reports what happened as before.
-// NTAG215 (504) and NTAG216 (888) clear it with room to spare.
+// NTAG215 (496) and NTAG216 (872) clear it with room to spare. Those are the
+// sizes the capability container reports, the NDEF area rather than the chip.
 #define TAGWRITE_NDEF_MIN_BYTES  176
 
 // The format's name for a log line or a status text. Plain ASCII and not
@@ -94,11 +95,43 @@ const char* tagWriteState();     // idle | pending | ok | error
 const char* tagWriteMessage();
 uint8_t     tagWriteResultCode();   // a TagWriteResult, for the device screen
 
+// The same answer taken apart, for callers that have to say it in the user's
+// language. tagWriteMessage() is English prose and stays that way - it goes
+// into the log and back to FilaMan - but the web page is translated, and a
+// German page reading "Wrote spool 272 (PLA Army Green) as OpenSpool" is the
+// one place that showed. This file cannot reach lang.h (T() collides with
+// ArduinoJson's template parameter), so it hands out the parts and the page
+// puts the sentence together, the same way the device screen already does with
+// tagWriteResultCode().
+enum TagLinkState : int8_t {
+  TAG_LINK_NONE = 0,   // no link was asked for
+  TAG_LINK_OK   = 1,
+  TAG_LINK_FAIL = -1,
+};
+struct TagWriteReport {
+  uint8_t  code;        // a TagWriteResult
+  bool     erase;       // the job was an erase, not a write
+  int      spool_id;
+  char     name[48];    // the filament name, empty until the spool was fetched
+  uint8_t  fmt;         // a TagFormat
+  int8_t   link;        // a TagLinkState
+  int      link_http;   // the code the link attempt came back with
+  char     link_note[48];  // what the backend said about the link, may be empty
+};
+const TagWriteReport* tagWriteReportData();
+
 // Last reader state, refreshed on the loop task. The HTTP handler must use
 // these rather than touching the reader itself: its page reads would race the
 // main NFC poll and come back with fields missing.
 const char* tagCachedUid();
 const char* tagCachedKind();
+// What tagCachedKind() says, as a number, for the translated web page.
+enum TagKind : uint8_t {
+  TAG_KIND_NONE   = 0,
+  TAG_KIND_MIFARE = 1,   // 4 byte UID, this firmware only reads those
+  TAG_KIND_NTAG   = 2,   // 7 byte UID, writable; tagCachedBytes() has the size
+};
+uint8_t     tagCachedKindCode();
 const char* tagCachedContent();
 // User memory of the tag on the reader, 0 when there is none or it reports no
 // size. Read on the loop task with everything else, so a web handler can ask
@@ -110,8 +143,11 @@ uint16_t    tagCachedBytes();
 // this, so the page can turn "it did not fit" into "it will not fit" before
 // anything is written.
 size_t      tagNdefSizeFor(size_t json_len);
-// linked receives the UID already on the spool record, "" if none. Both
-// backends hold a single tag, so linking a second one replaces the first.
+// linked receives the UID the spool is already bound to, from any of the tag
+// fields or from Spoolman's relation, normalised to plain hex - and only when
+// that is a different tag than the one on the reader. Empty means "nothing to
+// warn about": either the spool is unbound, or it is bound to exactly the tag
+// the user is holding.
 // Field by field view of a tag, so the page can show it as a swatch rather
 // than one line of text. Empty strings and zeros mean the format does not
 // carry that field.
@@ -131,6 +167,32 @@ void tagInfoJson(const TagInfo *ti, char *out, size_t out_len);
 
 // Last complete read of the tag on the reader. fmt is empty when there is none.
 const TagInfo* tagCachedInfo();
+
+// Reads the tag on the reader right now instead of waiting for the next tick,
+// so tagCachedInfo() answers within the same loop pass. Only for callers on the
+// loop task that have just polled and still hold the tag selected - the main
+// NFC poll is the one that does, and it is what the cache reads from anyway.
+void tagReadInfoNow();
+
+// True when the cached read holds a record worth showing: a format that was
+// recognised, rather than an empty tag or bytes nothing could make sense of.
+bool tagCachedHasRecord();
+
+// Whether the record on the tag disagrees with the spool it is bound to.
+// want receives what that spool would put on a tag right now, so the caller can
+// show both sides. Fetches the spool, so loop task only, never a callback.
+//
+// Compared are material, brand and colour, and each of the three is skipped
+// where one side says nothing:
+//  - material by family, PLA against PLA - the scale writes the family and
+//    other writers put "PLA Basic" there, which is the same filament
+//  - brand only when the spool names a vendor; buildAce() falls back to
+//    "Generic", which is an absent vendor rather than a different one
+//  - colour only when the spool carries one, over the same distance threshold
+//    the link flow uses. A spool with no colour reads as black here and is
+//    left alone, so a real black-against-red difference goes unreported - the
+//    quiet way round of the two.
+bool tagDiffersFromSpool(int spool_id, TagFormat fmt, TagInfo *want);
 
 // need receives the bytes the chosen format will occupy on the tag, so the
 // caller can compare it against tagCachedBytes() before offering the write.

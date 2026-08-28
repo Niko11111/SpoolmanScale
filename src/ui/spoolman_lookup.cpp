@@ -19,6 +19,7 @@
 #include "services/http_progress.h"
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
+#include "services/tag_write.h"
 #include "services/tag_uid.h"
 #include "services/time_service.h"
 #include "ui/spool_flow.h"
@@ -534,6 +535,16 @@ static const char* tareSourceName(uint8_t s) {
   }
 }
 
+// The server wins wherever it says anything. Where it says nothing, whatever
+// the tag carried stays on screen, and only when both are empty does the field
+// fall back to a dash. Before this, a spool whose filament had no material
+// wiped the value the tag had just shown.
+static void setFromServerOrTag(lv_obj_t *lbl, const char *server, const char *from_tag) {
+  if (server && server[0])      lv_label_set_text(lbl, server);
+  else if (from_tag && from_tag[0]) lv_label_set_text(lbl, from_tag);
+  else                          lv_label_set_text(lbl, "-");
+}
+
 void querySpoolmanById(int spool_id) {
   if (!wifi_ok) return;
   Serial.printf("querySpoolmanById: ID=%d\n", spool_id);
@@ -628,8 +639,10 @@ void querySpoolmanById(int spool_id) {
 
   bool is_ntag = !is_bambu_tag;
   if (is_ntag) {
-    lv_label_set_text(lbl_material, sm_material.length() > 0 ? sm_material.c_str() : "-");
-    lv_label_set_text(lbl_vendor,   sm_vendor_name.length() > 0 ? sm_vendor_name.c_str() : "-");
+    const TagInfo *ti = tagCachedInfo();
+    const bool from_tag = tagCachedHasRecord();
+    setFromServerOrTag(lbl_material, sm_material.c_str(), from_tag ? ti->material : "");
+    setFromServerOrTag(lbl_vendor, sm_vendor_name.c_str(), from_tag ? ti->brand : "");
     strncpy(sm_material_global, sm_material.c_str(), sizeof(sm_material_global)-1);
     sm_material_global[sizeof(sm_material_global)-1] = '\0';
     strncpy(sm_color_global, sm_color.c_str(), sizeof(sm_color_global)-1);
@@ -775,11 +788,16 @@ void spoolmanRecheckTick() {
 
   if (!hit) return;
 
-  // Known now. Clearing this is what the loop reads as "ask again", the same
-  // thing lifting the spool off the pad does, so the normal path fetches the
-  // spool and paints the screen. Nothing is duplicated here.
+  // Known now. Forgetting the lookup is what the loop reads as "ask again",
+  // the same thing lifting the spool off the pad does, so the normal path
+  // fetches the spool and paints the screen. Nothing is duplicated here.
+  //
+  // Both markers, not just spoolman_queried_uid: that one is only ever read
+  // in the Bambu branch, while an NTAG is judged by ntag_handled_uid. Clearing
+  // half of it made this whole recheck a no-op for NTAGs - the tag resolved,
+  // the log said so, and the screen kept saying "not in Spoolman".
   logSDf("Recheck: %s resolves now, re-reading", s_last_query);
-  spoolman_queried_uid[0] = '\0';
+  tagLookupForget();
 }
 
 void spoolmanRescanTick() {
@@ -832,7 +850,11 @@ void querySpoolman(const char* tray_uuid) {
   if (lbl_bag_sm_diff) lv_label_set_text(lbl_bag_sm_diff, "");
   // bei Bambu kommen diese Felder aus dem Tag selbst (updateDisplay) nicht aus Spoolman
   bool is_bambu_tag = (strlen(g_tag.material) > 0);
-  if (!is_bambu_tag) {
+  // An NTAG carrying a record has just put the same three fields on screen, so
+  // this reset would blank them for the length of the request and, for a spool
+  // the server does not know, leave them blank. is_bambu_tag itself stays what
+  // it was: it decides who fills the fields further down, not who clears them.
+  if (!is_bambu_tag && !tagCachedHasRecord()) {
     lv_label_set_text(lbl_material, "-");
     lv_label_set_text(lbl_vendor, "-");
     lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
@@ -970,7 +992,12 @@ void querySpoolman(const char* tray_uuid) {
   // and the auto-link at the end then adds the chip uid, so a spool pays for
   // this once. Only for Bambu: everywhere else the scan already asked this
   // very uid and a second request would repeat it.
-  if (!have_result && tagIsBambu(tray_uuid)) {
+  // Spoolman only: the tag relation this asks for is its own. The others
+  // answer BACKEND_NOT_SUPPORTED without spending a request, so the cost was
+  // never the point - but they logged "has no implementation yet" once a boot,
+  // which reads like a missing feature instead of a step that does not apply.
+  // The search below covers the same ground for them.
+  if (!have_result && tagIsBambu(tray_uuid) && backendMode() == BACKEND_SPOOLMAN) {
     int ncode = backendFindSpoolByNativeTag(cfg_spoolman_base, tray_uuid,
                                             doc, 8000, &filter, &err);
     if (ncode == 200 && !err) {
@@ -1342,8 +1369,10 @@ void querySpoolman(const char* tray_uuid) {
     Serial.printf("is_ntag=%d material='%s' vendor='%s' color='%s'\n",
       is_ntag, sm_material.c_str(), sm_vendor_name.c_str(), sm_color.c_str());
     if (is_ntag) {
-      lv_label_set_text(lbl_material, sm_material.length() > 0 ? sm_material.c_str() : "-");
-      lv_label_set_text(lbl_vendor, sm_vendor_name.length() > 0 ? sm_vendor_name.c_str() : "-");
+      const TagInfo *ti = tagCachedInfo();
+      const bool from_tag = tagCachedHasRecord();
+      setFromServerOrTag(lbl_material, sm_material.c_str(), from_tag ? ti->material : "");
+      setFromServerOrTag(lbl_vendor, sm_vendor_name.c_str(), from_tag ? ti->brand : "");
       strncpy(sm_material_global, sm_material.c_str(), sizeof(sm_material_global)-1);
       sm_material_global[sizeof(sm_material_global)-1] = '\0';
       strncpy(sm_color_global, sm_color.c_str(), sizeof(sm_color_global)-1);

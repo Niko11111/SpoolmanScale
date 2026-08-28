@@ -122,7 +122,31 @@ extern bool g_flm_ext_id;
 // Off by default. A link binds the UID; putting a record on the tag as well
 // is a separate intention, and the tag page in the browser is the place that
 // shows what would go on there before it does.
-extern bool g_tagwrite_ask;
+// What happens to a writable NTAG right after it was linked. Three states, one
+// value: two switches would have a fourth ("off, but without asking") that
+// means nothing.
+//
+// Off by default. A link binds the UID; putting a record on the tag as well is
+// a separate intention, and the tag page in the browser is the place that shows
+// what would go on there before it does.
+enum TagWriteMode : uint8_t {
+  TAGWRITE_OFF    = 0,
+  TAGWRITE_ASK    = 1,   // the question that used to be the "on" of a switch
+  TAGWRITE_ALWAYS = 2,   // write straight away, only the result is reported
+};
+extern uint8_t g_tagwrite_mode;
+
+// Whether a tag whose record disagrees with the spool it is bound to leads to
+// an offer to write it again. Off by default and a switch of its own: the one
+// above answers "a link just happened", this one answers "this tag has been
+// lying around since something changed", and a scale that writes tags is not
+// automatically a scale that wants to be asked about every old one.
+//
+// Compared are material, brand and colour. Temperatures are left out - Spoolman
+// often carries none, and 0 against 220 is a difference that means nothing -
+// and so is the format: an ACE tag read while OpenSpool is selected says
+// nothing about the spool being wrong.
+extern bool g_tagmismatch_ask;
 
 // A TagFormat - see services/tag_write.h. OpenSpool by default: it is the
 // record the filament managers read, where ACE only ever talks to the printer.

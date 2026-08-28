@@ -977,6 +977,38 @@ enum StringID {
   // Shown at the top of the link list when nothing matched the tag's material
   // and the filter was dropped to keep the list from being empty.
   STR_LIST_MAT_IGNORED,
+  // The tag disagrees with the spool it is bound to. The hint carries one %s,
+  // which is both sides of the comparison already laid out over two lines.
+  STR_TW_OPT_MISM,
+  STR_TW_OPT_MISM_SUB,
+  STR_TW_OPT_MISM_INFO,
+  STR_TW_MISM_TITLE,
+  STR_TW_MISM_HINT,
+  STR_TW_BTN_REWRITE,
+  STR_TW_MISM_TAG,
+  STR_TW_MISM_SERVER,
+  STR_W_TAGOPT_MISM,
+  // The tag page says in German what tag_write.cpp reports in English. That
+  // file cannot reach lang.h - T() collides with ArduinoJson's template
+  // parameter - so it hands out the parts and page_tags.cpp assembles them.
+  STR_W_TW_WRITING,
+  STR_W_TW_ERASING,
+  STR_W_TW_WROTE,
+  STR_W_TW_LINKED,
+  STR_W_TW_LINKED_NOTE,
+  STR_W_TW_LINK_FAIL,
+  STR_W_TW_ERASED,
+  STR_W_TW_ERASE_FAIL,
+  STR_W_TAG_KIND_MIFARE,
+  STR_W_TAG_KIND_NTAG,
+  STR_W_TAG_KIND_BYTES,
+  // What the unlink is about to clear, listed by name.
+  STR_UNLINK_SOURCES,
+  // Writing after a link: off, ask, or straight away.
+  STR_TW_MODE_OFF,
+  STR_TW_MODE_ASK,
+  STR_TW_MODE_ALWAYS,
+
 
   STR_COUNT
 };
@@ -986,6 +1018,11 @@ enum StringID {
 // the definition inherits that bound, a short initializer is padded with
 // nullptr, and nothing complains.
 extern const char* const STRINGS[][2];
+
+// Which string explains a TagWriteResult. Lives here rather than in either
+// caller: the device popup and the tag page in the browser say the same thing
+// about the same code, and two tables would have drifted apart.
+StringID tagWriteResultString(uint8_t code);
 
 // Macro: T(STR_XXX) -> returns the string in the current language
 #define T(id) STRINGS[id][g_lang]

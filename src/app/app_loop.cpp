@@ -366,6 +366,9 @@ void appLoop() {
   // Asks again while an unknown tag sits on the pad, so linking it in a
   // browser shows up here without lifting the spool off and back on.
   spoolmanRecheckTick();
+  // And once the spool is known, whether the tag still says the same thing it
+  // does. Costs a request only while the switch for it is on.
+  tagMismatchTick();
   // While the credential screen is open the user types into the browser, so
   // the two rows have to follow along without a keypress on the device.
   refreshWebCredentialRows();
@@ -1480,6 +1483,18 @@ void appLoop() {
           lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+
+          // What the tag itself says, before anyone is asked about it. The poll
+          // has the tag selected right now, so this is the one moment the pages
+          // can be read without competing with it, and the lookup below blocks
+          // for as long as the network takes.
+          //
+          // Only the display: the record is a copy from whenever it was
+          // written, and the backend answer below replaces every field it
+          // fills. A tag no backend knows keeps these values instead of
+          // showing four dashes.
+          tagReadInfoNow();
+          if (tagCachedHasRecord()) showTagInfoOnDisplay(tagCachedInfo());
           lv_timer_handler();
 
           if (wifi_ok && !isSpoolFlowIdInputOpen()) {

@@ -25,7 +25,17 @@ void showTagWriteAskPopup(int spool_id);
 // Asks whether to erase the tag as well. Parked rather than built, because the
 // unlink that leads here runs inside an LVGL callback and tears down its own
 // screen on the way out.
+// Writes the tag for a spool that was just linked, with no question in front
+// of it - what g_tagwrite_mode == TAGWRITE_ALWAYS asks for. The result is
+// reported exactly as it is after a confirmed question.
+void startTagWriteNoAsk(int spool_id);
+
 void requestTagEraseAsk();
+
+// Checks the tag on the reader against the spool it is bound to and offers to
+// write it again when the two disagree. Loop task only - it fetches the spool.
+// Does nothing unless g_tagmismatch_ask is on.
+void tagMismatchTick();
 
 bool isTagWritePopupOpen();
 

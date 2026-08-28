@@ -114,6 +114,14 @@ int smBoundUidCount() {
   n += cardUidsCount(sm_tag_values[TAG_FIELD_NATIVE]);
   return n;
 }
+
+int smBoundSourceCount() {
+  int n = 0;
+  for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
+    if (sm_tag_values[i][0]) n++;
+  if (sm_tag_values[TAG_FIELD_NATIVE][0]) n++;
+  return n;
+}
 char  sm_article_nr[32] = "";
 char  sm_filament_name[32] = "";
 char  sm_material_global[32] = "";

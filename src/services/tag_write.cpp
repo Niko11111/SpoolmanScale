@@ -10,9 +10,12 @@
 #include "hardware/sd_logger.h"
 #include "app/app_state.h"
 #include "bambu/bambu_tag.h"
+#include "bambu/material_match.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/filaman_api.h"
+#include "services/tag_field.h"
+#include "services/tag_uid.h"
 #include "services/backend.h"
 
 // ACE page map (DnG-Crafts/ACE-RFID). Pages are 4 bytes.
@@ -45,9 +48,15 @@ static char      state[12] = "idle";
 static char      message[96] = "";
 static uint8_t   result = TW_NONE;
 static int       linked_spool = 0;
+// The same answer as `message`, in parts, so a translated caller can build its
+// own sentence - see TagWriteReport in the header.
+static TagWriteReport report;
 
 static char      cached_uid[26] = "";
 static char      cached_kind[34] = "";
+// The same statement as a number, because cached_kind is English prose and the
+// web page is translated. 0 nothing, 1 MIFARE Classic read-only, 2 NTAG.
+static uint8_t   cached_kindcode = TAG_KIND_NONE;
 static char      cached_content[128] = "";
 static TagInfo   cached_info;
 static uint16_t  cached_bytes = 0;
@@ -61,7 +70,18 @@ const char* tagCachedKind()    { return cached_kind; }
 const char* tagCachedContent() { return cached_content; }
 const TagInfo* tagCachedInfo() { return &cached_info; }
 uint16_t tagCachedBytes()      { return cached_bytes; }
+uint8_t  tagCachedKindCode()   { return cached_kindcode; }
+
+// "blank" and "unknown" are answers, not records: one says the pages are
+// empty, the other that they hold something no format claims. Neither has a
+// brand or a material to show, and both are asked about in three places.
+bool tagCachedHasRecord() {
+  return cached_info.fmt[0] && strcmp(cached_info.fmt, "blank") != 0 &&
+         strcmp(cached_info.fmt, "unknown") != 0;
+}
 void tagScanRequest() { scan_pending = true; scan_since = millis(); }
+
+const TagWriteReport* tagWriteReportData() { return &report; }
 
 const char* tagWriteState()   { return state; }
 const char* tagWriteMessage() { return message; }
@@ -85,6 +105,7 @@ static void finish(const char *st, const char *msg, uint8_t code) {
   snprintf(state, sizeof(state), "%s", st);
   snprintf(message, sizeof(message), "%s", msg);
   result = code;
+  report.code = code;
   logSDf("TagWrite: %s - %s", st, msg);
 }
 
@@ -96,6 +117,11 @@ bool tagWriteRequest(int spool_id, TagFormat fmt, bool link) {
   pending_link = link;
   pending     = true;
   result      = TW_BUSY;
+  memset(&report, 0, sizeof(report));
+  report.code     = TW_BUSY;
+  report.erase    = (fmt == TAG_FMT_ERASE);
+  report.spool_id = spool_id;
+  report.fmt      = (uint8_t)fmt;
   snprintf(state, sizeof(state), "pending");
   if (fmt == TAG_FMT_ERASE)
     snprintf(message, sizeof(message), "Erasing the tag...");
@@ -104,37 +130,80 @@ bool tagWriteRequest(int spool_id, TagFormat fmt, bool link) {
   return true;
 }
 
-static void materialFamily(const char *in, char *out, size_t out_len) {
+// Neither backend stores print temperatures, so they come from the family the
+// material name starts with. Density is only used to estimate the length.
+//
+// Longer names first where one is a prefix of another: PLA+ before PLA, PETG
+// before nothing else that starts with PET.
+struct MatFamily {
+  const char* name;
+  uint16_t    et_lo, et_hi, bed_lo, bed_hi;
+  float       density;
+};
+static const MatFamily MAT_FAMILIES[] = {
+  { "PETG", 230, 250, 70,  80,  1.27f },
+  { "PLA+", 200, 220, 50,  60,  1.24f },
+  { "PLA",  200, 220, 50,  60,  1.24f },
+  { "ABS",  240, 260, 90, 100,  1.04f },
+  { "ASA",  240, 260, 90, 100,  1.07f },
+  { "TPU",  210, 230, 40,  50,  1.21f },
+  { "TPE",  210, 230, 40,  50,  1.21f },
+  { "HIPS", 230, 245, 90, 110,  1.04f },
+  { "PVA",  190, 210, 50,  60,  1.23f },
+  { "PC",   260, 280, 90, 110,  1.20f },
+  { "PA",   250, 270, 60,  80,  1.14f },
+  { "PP",   220, 240, 60,  80,  0.90f },
+};
+#define MAT_DENSITY_FALLBACK  1.24f
+
+// The family a material name begins with, or null when none of them fits.
+//
+// A prefix, and it has to end at a boundary: "PC-CF" is PC, "PCTG" is not - it
+// is a copolyester that would print 60 degrees too hot on PC settings. This is
+// also why an unmatched name gets no temperatures at all rather than PLA's:
+// before this, every material outside the list was written to the tag as "PLA"
+// at 200-220 C, which is what a TPE spool on this scale did.
+static const MatFamily* matchFamily(const char *in) {
+  if (!in || !in[0]) return nullptr;
   char up[40] = {0};
-  for (size_t i = 0; i < sizeof(up) - 1 && in[i]; i++) up[i] = toupper((unsigned char)in[i]);
-  const char *fam = "PLA";
-  if      (strstr(up, "PETG")) fam = "PETG";
-  else if (strstr(up, "ABS"))  fam = "ABS";
-  else if (strstr(up, "ASA"))  fam = "ASA";
-  else if (strstr(up, "TPU"))  fam = "TPU";
-  else if (strstr(up, "PLA+")) fam = "PLA+";
-  else if (strstr(up, "PC"))   fam = "PC";
-  else if (strstr(up, "PLA"))  fam = "PLA";
-  snprintf(out, out_len, "%s", fam);
+  for (size_t i = 0; i < sizeof(up) - 1 && in[i]; i++)
+    up[i] = toupper((unsigned char)in[i]);
+
+  for (unsigned i = 0; i < sizeof(MAT_FAMILIES) / sizeof(MAT_FAMILIES[0]); i++) {
+    const char* fam = MAT_FAMILIES[i].name;
+    const size_t n = strlen(fam);
+    if (strncmp(up, fam, n) != 0) continue;
+    const char c = up[n];
+    // End of the name, or a separator - never another letter.
+    if (c == '\0' || c == '-' || c == '+' || c == ' ' || c == '_' ||
+        (c >= '0' && c <= '9'))
+      return &MAT_FAMILIES[i];
+  }
+  return nullptr;
 }
 
-// Neither backend stores print temperatures, so they come from the family.
-static void defaultsFor(const char *fam, AceFields *f, float *density) {
-  if      (!strcmp(fam, "PETG")) { f->et_lo=230; f->et_hi=250; f->bed_lo=70; f->bed_hi=80;  *density=1.27f; }
-  else if (!strcmp(fam, "ABS"))  { f->et_lo=240; f->et_hi=260; f->bed_lo=90; f->bed_hi=100; *density=1.04f; }
-  else if (!strcmp(fam, "ASA"))  { f->et_lo=240; f->et_hi=260; f->bed_lo=90; f->bed_hi=100; *density=1.07f; }
-  else if (!strcmp(fam, "TPU"))  { f->et_lo=210; f->et_hi=230; f->bed_lo=40; f->bed_hi=50;  *density=1.21f; }
-  else if (!strcmp(fam, "PC"))   { f->et_lo=260; f->et_hi=280; f->bed_lo=90; f->bed_hi=110; *density=1.20f; }
-  else                           { f->et_lo=200; f->et_hi=220; f->bed_lo=50; f->bed_hi=60;  *density=1.24f; }
-}
 
 static void buildAce(JsonObjectConst sp, AceFields *f) {
   memset(f, 0, sizeof(*f));
+  // The spool's own material name goes on the tag, not the family it belongs
+  // to. Writing the family made a TPE-83A spool arrive as "PLA", and a reader
+  // has no way of telling that apart from a spool that really is PLA.
   const char *material = sp["filament"]["material"] | "PLA";
-  materialFamily(material[0] ? material : "PLA", f->material, sizeof(f->material));
+  if (!material[0]) material = "PLA";
+  snprintf(f->material, sizeof(f->material), "%s", material);
 
-  float density = 1.24f;
-  defaultsFor(f->material, f, &density);
+  float density = MAT_DENSITY_FALLBACK;
+  const MatFamily* fam = matchFamily(material);
+  if (fam) {
+    f->et_lo = fam->et_lo; f->et_hi = fam->et_hi;
+    f->bed_lo = fam->bed_lo; f->bed_hi = fam->bed_hi;
+    density = fam->density;
+  } else {
+    // Zero, and the preview shows a dash. A reader can ignore a missing
+    // temperature; a wrong one it cannot.
+    logSDf("tag: material '%s' is in no known family, no temperatures written",
+           material);
+  }
 
   unsigned r = 0, g = 0, b = 0;
   const char *c = sp["filament"]["color_hex"] | "";
@@ -252,8 +321,10 @@ static bool wrPage(uint8_t page, const uint8_t *d) {
   return nfcWriteNtagPage(page, buf);
 }
 
-// Capability container at page 3: byte 2 counts 8 byte blocks of user
-// memory. NTAG213 = 144, NTAG215 = 504, NTAG216 = 888.
+// Capability container at page 3: byte 2 counts 8 byte blocks. What it reports
+// is the NDEF area, which is a little smaller than the chip: NTAG213 144 of
+// 144, NTAG215 496 of 504, NTAG216 872 of 888. Those are the numbers the UI
+// shows, because they are what a record actually has to fit into.
 static uint16_t tagUserBytes() {
   uint8_t cc[4] = {0};
   if (!nfcReadNtagPage(3, cc) || cc[0] != 0xE1 || !cc[2]) return 0;
@@ -531,6 +602,16 @@ static bool readOpenSpool(char *out, size_t out_len) {
   return isSupportedRecord(out);
 }
 
+// OpenSpool carries the temperatures as JSON strings - "min_temp":"200" - and
+// that is what this firmware, FilaMan and the OpenSpool tools all write. Read
+// with `| 0` ArduinoJson answers 0 for a string, which is why the preview said
+// "Duese -" next to a tag that plainly carried 200-220 C. Takes either shape.
+static uint16_t jsonTemp(JsonVariantConst v) {
+  if (v.is<unsigned>() || v.is<int>() || v.is<float>()) return (uint16_t)(v | 0);
+  const char* s = v | "";
+  return s[0] ? (uint16_t)atoi(s) : 0;
+}
+
 static void describeOpenSpool(const char *json, char *out, size_t out_len, TagInfo *ti) {
   if (ti) { memset(ti, 0, sizeof(*ti)); snprintf(ti->fmt, sizeof(ti->fmt), "OpenSpool"); }
   JsonDocument d;
@@ -548,8 +629,8 @@ static void describeOpenSpool(const char *json, char *out, size_t out_len, TagIn
     ti->has_color = true;
     ti->r = (uint8_t)r; ti->g = (uint8_t)g; ti->b = (uint8_t)b;
   }
-  ti->et_lo = (uint16_t)(d["min_temp"] | 0);
-  ti->et_hi = (uint16_t)(d["max_temp"] | 0);
+  ti->et_lo = jsonTemp(d["min_temp"]);
+  ti->et_hi = jsonTemp(d["max_temp"]);
 }
 
 static void readText(uint8_t first, char *out, size_t out_len) {
@@ -628,8 +709,48 @@ bool tagPreview(int spool_id, TagFormat fmt, char *out, size_t out_len,
     return false;
   JsonObjectConst sp = doc.as<JsonObjectConst>();
 
-  const char *tag = sp["extra"]["tag"] | "";
-  snprintf(linked, linked_len, "%s", tag);
+  // Which tag the spool already carries, and only when that is a *different*
+  // tag than the one on the reader. The caller warns that writing here makes
+  // the old binding stale, and a warning about the tag lying in front of the
+  // user is how that warning stopped meaning anything.
+  //
+  // Every source, not just extra.tag: nfc_id, card_uids and Spoolman's own
+  // relation bind a spool just as well. Normalised on the way out, because
+  // extra fields arrive JSON encoded and still carry their quotes, and because
+  // a UID is written with or without colons depending on who wrote it.
+  linked[0] = 0;
+  {
+    #define TAG_UID_NORM_MAX 48
+    JsonObjectConst extra = sp["extra"];
+    JsonArrayConst  tags  = sp["tags"];
+    const char* here = cached_uid;
+    bool bound_here = false;
+
+    for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT && !bound_here; i++) {
+      const char* raw = extra[tagFieldSpec(i).key] | "";
+      if (raw[0] && here[0] && cardUidsContain(raw, here)) bound_here = true;
+    }
+    if (!bound_here && !tags.isNull()) {
+      for (JsonObjectConst t : tags) {
+        const char* raw = t["uid"] | "";
+        if (raw[0] && here[0] && cardUidsContain(raw, here)) { bound_here = true; break; }
+      }
+    }
+
+    if (!bound_here) {
+      char norm[TAG_UID_NORM_MAX];
+      for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT && !linked[0]; i++) {
+        tagUidNormalize(extra[tagFieldSpec(i).key] | "", norm, sizeof(norm));
+        if (norm[0]) snprintf(linked, linked_len, "%s", norm);
+      }
+      if (!linked[0] && !tags.isNull()) {
+        for (JsonObjectConst t : tags) {
+          tagUidNormalize(t["uid"] | "", norm, sizeof(norm));
+          if (norm[0]) { snprintf(linked, linked_len, "%s", norm); break; }
+        }
+      }
+    }
+  }
 
   if (fmt == TAG_FMT_ERASE) {
     snprintf(out, out_len, "blank");
@@ -669,15 +790,61 @@ bool tagPreview(int spool_id, TagFormat fmt, char *out, size_t out_len,
   return true;
 }
 
+// The threshold the link flow and the remote link popup already judge a colour
+// pair by, so the same two spools are called a mismatch everywhere.
+#define TAG_MISMATCH_COLOR_DIST  120
+
+bool tagDiffersFromSpool(int spool_id, TagFormat fmt, TagInfo *want) {
+  if (!want || spool_id <= 0) return false;
+  if (!tagCachedHasRecord()) return false;
+
+  char out[128], linked[26];
+  if (!tagPreview(spool_id, fmt, out, sizeof(out), linked, sizeof(linked), want))
+    return false;
+
+  const TagInfo *have = &cached_info;
+
+  // Family against family where both are known, so "PLA" and "PLA Basic" agree
+  // and asking about that would be asking about nothing. Where either side is
+  // outside the family list, the names themselves decide - two unknowns are
+  // only the same filament if they are spelled the same.
+  if (have->material[0] && want->material[0]) {
+    const MatFamily* fh = matchFamily(have->material);
+    const MatFamily* fw = matchFamily(want->material);
+    const bool differs = (fh && fw)
+                       ? (fh != fw)
+                       : (strcasecmp(have->material, want->material) != 0);
+    if (differs) return true;
+  }
+
+  // "Generic" is buildAce()'s stand-in for a spool with no vendor. Treating it
+  // as a brand would report every tag that names one as a mismatch.
+  if (have->brand[0] && want->brand[0] && strcasecmp(want->brand, "Generic") != 0 &&
+      strcasecmp(have->brand, want->brand) != 0) return true;
+
+  if (have->has_color && want->has_color && (want->r || want->g || want->b)) {
+    char a[8], b[8];
+    snprintf(a, sizeof(a), "#%02X%02X%02X", have->r, have->g, have->b);
+    snprintf(b, sizeof(b), "#%02X%02X%02X", want->r, want->g, want->b);
+    if (colorDistance(a, b) > TAG_MISMATCH_COLOR_DIST) return true;
+  }
+
+  return false;
+}
+
 // Uses what the main NFC poll already found. Selecting the tag again here
 // would compete with that poll, and the loser gets nothing back.
-static void refreshCache() {
+//
+// force skips the retry gap, for the one caller that runs immediately after a
+// poll and needs the answer in the same pass rather than half a second later.
+static void refreshCache(bool force = false) {
   static unsigned long last_ms = 0;
   static char last_uid[26] = "";
 
   if (!tag_present) {
     cached_uid[0] = 0; cached_kind[0] = 0; cached_content[0] = 0;
     cached_bytes = 0;
+    cached_kindcode = TAG_KIND_NONE;
     memset(&cached_info, 0, sizeof(cached_info));
     last_uid[0] = 0;
     return;
@@ -688,6 +855,7 @@ static void refreshCache() {
 
   if (!is_ntag) {
     snprintf(cached_kind, sizeof(cached_kind), "MIFARE Classic, read-only");
+    cached_kindcode = TAG_KIND_MIFARE;
     cached_content[0] = 0;
     cached_bytes = 0;
     memset(&cached_info, 0, sizeof(cached_info));
@@ -696,12 +864,15 @@ static void refreshCache() {
 
   const bool changed = strcmp(last_uid, g_tag.uid_str) != 0 || cache_dirty;
   if (!changed && cached_content[0]) return;
-  if (millis() - last_ms < 500) return;      // retry gap after a failed read
+  // Retry gap after a failed read. A forced read has just been handed a freshly
+  // selected tag, so there is nothing to back off from.
+  if (!force && millis() - last_ms < 500) return;
   last_ms = millis();
   if (changed) snprintf(last_uid, sizeof(last_uid), "%s", g_tag.uid_str);
 
   const uint16_t bytes = tagUserBytes();
   cached_bytes = bytes;
+  cached_kindcode = TAG_KIND_NTAG;
   if (bytes) snprintf(cached_kind, sizeof(cached_kind), "NTAG, writable, %u bytes",
                       (unsigned)bytes);
   else       snprintf(cached_kind, sizeof(cached_kind), "NTAG, writable");
@@ -716,6 +887,8 @@ static void refreshCache() {
     cache_dirty = false;
   }
 }
+
+void tagReadInfoNow() { refreshCache(true); }
 
 // Bambu puts the finish in the material, "PETG Basic", while FilaMan keeps it
 // in material_subgroup and matches on "PETG". Only a known finish word is
@@ -753,8 +926,7 @@ static void scanTick() {
   int sm = 0;
 
   const TagInfo *ti = &cached_info;
-  const bool have_ntag = ti->fmt[0] && strcmp(ti->fmt, "blank") && strcmp(ti->fmt, "unknown");
-  if (have_ntag) {
+  if (tagCachedHasRecord()) {
     snprintf(material, sizeof(material), "%s", ti->material);
     snprintf(brand, sizeof(brand), "%s", ti->brand);
     snprintf(color, sizeof(color), "%02X%02X%02X", ti->r, ti->g, ti->b);
@@ -865,6 +1037,10 @@ bool tagWriteSpoolNow(int spool_id, TagFormat fmt) {
   char m[128];
   snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", spool_id, name,
            fmtLabel(fmt));
+  memset(&report, 0, sizeof(report));
+  report.spool_id = spool_id;
+  report.fmt      = (uint8_t)fmt;
+  snprintf(report.name, sizeof(report.name), "%s", name);
   finish("ok", m, TW_OK);
   return true;
 }
@@ -881,6 +1057,7 @@ void tagWriteTick() {
   if (pending_fmt == TAG_FMT_ERASE) {
     const bool erased = eraseTag();
     cache_dirty = true;
+    report.erase = true;
     finish(erased ? "ok" : "error",
            erased ? "Tag erased" : "Erase failed - keep the tag still",
            erased ? TW_OK : TW_ERR_WRITE);
@@ -889,6 +1066,7 @@ void tagWriteTick() {
 
   char name[48];
   const bool wrote = writeSpoolRecord(pending_id, pending_fmt, name, sizeof(name));
+  snprintf(report.name, sizeof(report.name), "%s", name);
   // writeSpoolRecord() has already reported why, and finish() below would
   // overwrite the code, so keep it.
   const uint8_t code = wrote ? TW_OK : result;
@@ -916,17 +1094,31 @@ void tagWriteTick() {
     char note[48];
     int code2 = backendLinkSpoolTag(backendBaseUrl(), pending_id, uid_str,
                                     note, sizeof(note));
+    // One retry. The failure seen in the field was HTTP -1, a connection error,
+    // and it left a written tag on a spool that names no tag - the exact state
+    // this step exists to prevent. A second attempt costs 300 ms and only ever
+    // runs after something already went wrong.
+    if (code2 != 200) {
+      logSDf("TagWrite: link failed (HTTP %d), retrying once", code2);
+      delay(300);
+      code2 = backendLinkSpoolTag(backendBaseUrl(), pending_id, uid_str,
+                                  note, sizeof(note));
+    }
     // appendf, not m + n: a long filament name makes snprintf report a length
     // it never wrote, and then m + n points past the buffer while
     // sizeof(m) - n underflows. Same reason the rest of this file moved off it.
+    report.link_http = code2;
+    snprintf(report.link_note, sizeof(report.link_note), "%s", note);
     if (code2 == 200) {
       // The tag on the reader now points at this spool, so the screen should
       // say so rather than keep whatever it showed before. Handed over as an
       // id: the lookup repaints the main screen and belongs on the UI side.
       linked_spool = pending_id;
+      report.link = TAG_LINK_OK;
       if (note[0]) appendf(m, sizeof(m), n, ", linked (%s)", note);
       else         appendf(m, sizeof(m), n, ", linked to the spool");
     } else {
+      report.link = TAG_LINK_FAIL;
       appendf(m, sizeof(m), n, ", but linking failed (HTTP %d)", code2);
     }
   }

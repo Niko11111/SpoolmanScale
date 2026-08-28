@@ -145,6 +145,13 @@ const char* smSelectedTagValue();
 // than one only ever comes from a list field, and that is what makes "unlink"
 // an ambiguous request that has to be asked about.
 int smBoundUidCount();
+
+// How many places hold a binding at all, which is a different question from how
+// many UIDs there are: the same UID in extra.tag and in Spoolman's relation is
+// two sources and one tag. The unlink asks when either count is above one - two
+// UIDs make "only this one or all of them" a real question, two sources make
+// "you are about to clear both" worth saying out loud.
+int smBoundSourceCount();
 extern char sm_article_nr[32];
 extern char sm_filament_name[32];
 extern char sm_material_global[32];

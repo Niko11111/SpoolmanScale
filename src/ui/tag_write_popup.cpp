@@ -9,7 +9,9 @@
 #include "lang.h"
 #include "services/tag_write.h"
 #include "services/user_options.h"
+#include "confirm_popup.h"
 #include "info_popup.h"
+#include "spool_flow.h"
 #include "ui_common.h"
 
 // The house measurements for a two button question, same as confirm_popup.cpp:
@@ -23,12 +25,13 @@
 
 // Which of the two questions is on screen. They differ in their words and in
 // what confirming does, in nothing else - one builder serves both.
-enum AskMode : uint8_t { ASK_WRITE, ASK_ERASE };
+enum AskMode : uint8_t { ASK_WRITE, ASK_ERASE, ASK_REWRITE };
 
 static lv_obj_t *scr_tag_write = nullptr;
 static bool     close_pending   = false;
 static bool     confirm_pending = false;
 static bool     erase_ask_pending = false;
+static bool     mismatch_ask_pending = false;
 static int      s_spool_id      = 0;
 static AskMode  s_mode          = ASK_WRITE;
 // What the tag held when the unlink asked. Taken then and not later, because
@@ -37,6 +40,10 @@ static AskMode  s_mode          = ASK_WRITE;
 // cache, and the question about a tag that is still lying there would never be
 // asked at all.
 static char     s_erase_fmt[12] = "";
+
+// Both sides of a mismatch, laid out over two lines. Built while the spool is
+// still in hand, because the question is shown a pass later.
+static char     s_mismatch_detail[96] = "";
 
 // Set while a write is on its way, so the result is picked up once.
 static bool s_watching = false;
@@ -48,25 +55,9 @@ void requestTagEraseAsk() {
   // Only worth asking when there is something to erase. An unlink from the
   // more info screen usually happens with no tag anywhere near the reader, and
   // a tag that carries nothing has nothing to lose.
-  if (!tagIsWritableNtag()) return;
-  const char *fmt = tagCachedInfo()->fmt;
-  if (!fmt[0] || !strcmp(fmt, "blank") || !strcmp(fmt, "unknown")) return;
-  snprintf(s_erase_fmt, sizeof(s_erase_fmt), "%s", fmt);
+  if (!tagIsWritableNtag() || !tagCachedHasRecord()) return;
+  snprintf(s_erase_fmt, sizeof(s_erase_fmt), "%s", tagCachedInfo()->fmt);
   erase_ask_pending = true;
-}
-
-// The result codes tag_write.cpp reports, as something the screen can say. Its
-// own messages are English prose for the web page; this file is where they
-// turn into a translated line.
-static StringID resultString(uint8_t code) {
-  switch (code) {
-    case TW_OK:            return STR_TW_OK;
-    case TW_ERR_NO_TAG:    return STR_TW_ERR_NO_TAG;
-    case TW_ERR_NOT_NTAG:  return STR_TW_ERR_NOT_NTAG;
-    case TW_ERR_BACKEND:   return STR_TW_ERR_BACKEND;
-    case TW_ERR_SPACE:     return STR_TW_ERR_SPACE;
-    default:               return STR_TW_ERR_WRITE;
-  }
 }
 
 // A modal, not the status line. lbl_status is repainted by the NFC poll from
@@ -78,10 +69,10 @@ static void showResult(uint8_t code) {
   const uint8_t tone = ok ? INFO_DONE : INFO_WARN;
   if (s_mode == ASK_ERASE)
     showInfoPopup(ok ? STR_TW_ERASED : STR_TW_ERASE_FAILED,
-                  ok ? STR_TW_ERASED_INFO : resultString(code), tone);
+                  ok ? STR_TW_ERASED_INFO : tagWriteResultString(code), tone);
   else
     showInfoPopup(ok ? STR_TW_OK : STR_TW_FAILED,
-                  ok ? STR_TW_OK_INFO : resultString(code), tone);
+                  ok ? STR_TW_OK_INFO : tagWriteResultString(code), tone);
 }
 
 // Title, consequence, and the two answers. Everything else is fixed.
@@ -129,9 +120,11 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
   { char hb[192];
     // The erase says what is about to be lost, the write says what is about
     // to be put there - and that is now a setting, not a constant.
-    const char *fmt = (s_mode == ASK_ERASE) ? s_erase_fmt
-                                            : tagFormatLabel(g_tagwrite_fmt);
-    snprintf(hb, sizeof(hb), T(hint), fmt[0] ? fmt : "OpenSpool");
+    // The rewrite has neither to say: its hint is the comparison itself.
+    const char *arg = (s_mode == ASK_ERASE)   ? s_erase_fmt
+                    : (s_mode == ASK_REWRITE) ? s_mismatch_detail
+                                              : tagFormatLabel(g_tagwrite_fmt);
+    snprintf(hb, sizeof(hb), T(hint), arg[0] ? arg : "OpenSpool");
     lv_label_set_text(lbl_hint, hb); }
   lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
@@ -178,6 +171,21 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
   lv_obj_center(lbl_no);
 }
 
+void startTagWriteNoAsk(int spool_id) {
+  if (spool_id <= 0 || scr_tag_write) return;
+  s_spool_id = spool_id;
+  s_mode     = ASK_WRITE;
+  logSDf("TagWrite: writing spool %d without asking", spool_id);
+  if (tagWriteRequest(spool_id, (TagFormat)g_tagwrite_fmt, false)) {
+    // The same watch a confirmed question sets, so the result popup appears
+    // through the one path that already knows how to show it.
+    s_watching = true;
+  } else {
+    showResult(TW_ERR_WRITE);
+    logSD("TagWrite: writer busy, nothing queued");
+  }
+}
+
 void showTagWriteAskPopup(int spool_id) {
   if (scr_tag_write || spool_id <= 0) return;
   s_spool_id = spool_id;
@@ -193,6 +201,58 @@ static void showTagEraseAskPopup() {
   logSDf("SHOW: TagEraseAskPopup, tag holds %s", s_erase_fmt);
   buildAsk(STR_TW_ERASE_ASK_TITLE, STR_TW_ERASE_ASK_HINT,
            STR_TW_BTN_ERASE, STR_TW_BTN_KEEP);
+}
+
+// The decision was taken in tagMismatchTick(), which also built the two lines.
+static void showTagMismatchPopup() {
+  if (scr_tag_write || !s_mismatch_detail[0]) return;
+  s_mode = ASK_REWRITE;
+  logSDf("SHOW: TagMismatchPopup spool=%d", s_spool_id);
+  buildAsk(STR_TW_MISM_TITLE, STR_TW_MISM_HINT, STR_TW_BTN_REWRITE, STR_TW_BTN_KEEP);
+}
+
+// Asks once per tag and spool whether a record that disagrees with the spool
+// should be written again. Off by default - see g_tagmismatch_ask.
+//
+// On the loop task and nowhere else: it fetches the spool to compare against.
+// The marker survives lifting the spool off the pad on purpose: answering
+// "keep" and being asked again the next time the same spool is weighed is the
+// behaviour testers reported as the most annoying thing the scale did.
+void tagMismatchTick() {
+  static char asked_uid[26] = "";
+  static int  asked_id = 0;
+
+  if (!g_tagmismatch_ask) return;
+  if (!wifi_ok || !tag_present || !sm_found || sm_id <= 0) return;
+  if (!tagIsWritableNtag() || !tagCachedHasRecord()) return;
+  if (scr_tag_write || erase_ask_pending || mismatch_ask_pending) return;
+  // Not over somebody else's question, and not while a list is being worked
+  // through: this one can wait, all of those were asked for.
+  if (isConfirmPopupOpen() || isSpoolFlowIdInputOpen() || isSpoolFlowLinkEntryOpen())
+    return;
+
+  if (asked_id == sm_id && strcmp(asked_uid, g_tag.uid_str) == 0) return;
+  // Before the request, not after: the comparison costs a GET, and a pair that
+  // turns out to agree must not pay for it again on the very next pass.
+  snprintf(asked_uid, sizeof(asked_uid), "%s", g_tag.uid_str);
+  asked_id = sm_id;
+
+  TagInfo want;
+  if (!tagDiffersFromSpool(sm_id, (TagFormat)g_tagwrite_fmt, &want)) return;
+
+  const TagInfo *have = tagCachedInfo();
+  char have_col[10] = "", want_col[10] = "";
+  if (have->has_color) snprintf(have_col, sizeof(have_col), " #%02X%02X%02X",
+                                have->r, have->g, have->b);
+  if (want.has_color)  snprintf(want_col, sizeof(want_col), " #%02X%02X%02X",
+                                want.r, want.g, want.b);
+  snprintf(s_mismatch_detail, sizeof(s_mismatch_detail), "%s: %s %s%s\n%s: %s %s%s",
+           T(STR_TW_MISM_TAG), have->brand, have->material, have_col,
+           T(STR_TW_MISM_SERVER), want.brand, want.material, want_col);
+
+  s_spool_id = sm_id;
+  mismatch_ask_pending = true;
+  logSDf("Tag: spool %d disagrees with the tag, asking", sm_id);
 }
 
 void handleTagWritePopupDeferredActions() {
@@ -211,6 +271,11 @@ void handleTagWritePopupDeferredActions() {
     showTagEraseAskPopup();
   }
 
+  if (mismatch_ask_pending) {
+    mismatch_ask_pending = false;
+    showTagMismatchPopup();
+  }
+
   if (!close_pending) return;
   close_pending = false;
 
@@ -222,10 +287,11 @@ void handleTagWritePopupDeferredActions() {
   }
   confirm_pending = false;
 
-  // No link flag either way: the write follows a link that already happened,
-  // and the erase follows an unlink. The format is the one set in Settings >
-  // Scale; it used to be OpenSpool with no way to say otherwise, which left
-  // an ACE user no path at all from the device.
+  // No link flag any of the three ways: the write follows a link that already
+  // happened, the rewrite a spool that is already bound, and the erase an
+  // unlink. The format is the one set in Settings > Scale; it used to be
+  // OpenSpool with no way to say otherwise, which left an ACE user no path at
+  // all from the device.
   const bool queued = (s_mode == ASK_ERASE)
                         ? tagWriteRequest(0, TAG_FMT_ERASE, false)
                         : tagWriteRequest(s_spool_id, (TagFormat)g_tagwrite_fmt, false);

@@ -3,6 +3,7 @@
 //  lang.cpp — String table DE / EN
 // ============================================================
 #include <lvgl.h>
+#include "services/tag_write.h"   // the TagWriteResult codes
 #include "lang.h"
 
 Lang   g_lang     = LANG_EN;
@@ -737,8 +738,8 @@ const char* const STRINGS[][2] = {
   { "Spule #%d\nHat bereits %d UID(s)",
     "Spool #%d\nAlready has %d UID(s)"                                    },  // STR_WARN_A_ADD_SHORT
   { "UID hinzufügen",               "Add UID"                            },  // STR_BTN_ADD_UID
-  { "Diese Spule hat %d UIDs.\nNur das aufliegende Tag entfernen\noder die ganze Verknüpfung lösen?",
-    "This spool has %d UIDs.\nRemove only the tag on the scale\nor the whole binding?" },  // STR_UNLINK_MULTI_MSG
+  { "Diese Spule ist mehrfach gebunden.\nNur das Tag auf der Waage lösen\noder die ganze Bindung?",
+    "This spool is bound more than once.\nRemove only the tag on the scale\nor the whole binding?" },  // STR_UNLINK_MULTI_MSG
   { "Nur dieses Tag",                "Only this tag"                      },  // STR_BTN_UNLINK_ONE
   { "Alle lösen",                   "Unlink all"                         },  // STR_BTN_UNLINK_ALL
   { "Ohne Nachfrage verknüpfen",     "Link without asking"                },  // STR_FLM_AUTOLINK
@@ -1172,8 +1173,8 @@ const char* const STRINGS[][2] = {
     "Diameter" },  // STR_W_TAG_DIA
   { "Länge",
     "Length" },  // STR_W_TAG_LENGTH
-  { "Beide Seiten kommen aus demselben Formatierer, deshalb sind sie Zeichen für Zeichen vergleichbar.",
-    "Both sides come from the same formatter, so they compare character for character." },  // STR_W_TAG_COMPARE
+  { "Links steht, was gerade auf dem Tag liegt, rechts, was die gewählte Spule ergäbe. Abweichende Zeilen sind farbig.",
+    "On the left what the tag holds right now, on the right what the selected spool would put there. Lines that differ are coloured." },  // STR_W_TAG_COMPARE
   { "SD-Karte",
     "SD card" },  // STR_W_C_LOGS
   { "Ansehen",
@@ -1290,7 +1291,7 @@ const char* const STRINGS[][2] = {
     "Copied" },  // STR_W_SESSION_COPIED
   { "Kopieren nicht moeglich, bitte markieren",
     "Cannot copy, please select the text" },  // STR_W_SESSION_COPYFAIL
-  { "Einen beschreibbaren NTAG auflegen, Spule wählen, schreiben. Was auf dem Tag steht, wird ersetzt. Werkstags sind meist MIFARE Classic oder gesperrt und lassen sich nur lesen.",
+  { "Einen beschreibbaren NTAG auflegen, Spule wählen, schreiben. Was auf dem Tag steht, wird ersetzt. Tags ab Werk sind meist MIFARE Classic oder gesperrt und lassen sich nur lesen.",
     "Place a writable NTAG on the reader, pick a spool, and write it. Whatever is already on the tag is replaced. Factory tags are usually MIFARE Classic or locked, and can only be read." },  // STR_W_TAG_NOTE
   { "<b>Welcher Tag für welches Format.</b> OpenSpool braucht rund 180 Byte und damit einen <b>NTAG215</b> (496 Byte) oder <b>NTAG216</b> (872 Byte). Auf einen NTAG213 (144 Byte) passt davon nichts, dort geht nur Anycubic ACE, das mit 112 Byte auskommt. Meldet ein Tag keine Größe, rechnet die Waage sicherheitshalber mit den 144 Byte eines NTAG213 - dann den Tag einmal mit einer NFC-App als NDEF formatieren, das trägt die Größe ein.",
     "<b>Which tag for which format.</b> OpenSpool needs about 180 bytes, so it wants an <b>NTAG215</b> (496 bytes) or an <b>NTAG216</b> (872 bytes). None of it fits an NTAG213 (144 bytes), which leaves Anycubic ACE, and that needs only 112. A tag that reports no size at all is treated as the 144 bytes of an NTAG213 to stay safe - format such a tag as NDEF once with any NFC app and it will report its real size." },  // STR_W_TAG_SIZES
@@ -1480,26 +1481,27 @@ const char* const STRINGS[][2] = {
   // ---- Writing a tag after a link ----
   { "Tag nach Verlinken beschreiben",
     "Write tag after linking"    },  // STR_TW_OPT_ASK
-  { "Fragt nach dem Verlinken",  "Asks once a spool is linked" },  // STR_TW_OPT_ASK_SUB
-  { "Nach dem Verlinken einer Spule fragt die Waage, ob die Spulendaten "
-    "zusätzlich auf den Tag geschrieben werden sollen. Der Tag wird dabei "
-    "vollständig überschrieben, sein bisheriger Inhalt ist verloren.\n\n"
-    "Aus bedeutet: es wird nur die UID mit der Spule verknüpft, der Tag "
-    "selbst bleibt unberührt. Beschreiben geht dann weiterhin über die "
-    "Tag-Seite der Weboberfläche, wo vorher sichtbar ist, was auf den Tag "
-    "geht.\n\n"
-    "Gefragt wird nur bei einem NTAG, der gross genug ist. Ein NTAG213 mit "
+  { "Aus, fragen oder immer",    "Off, ask or every time" },  // STR_TW_OPT_ASK_SUB
+  { "Was nach dem Verlinken einer Spule mit dem Tag geschieht. Beschrieben "
+    "wird er vollständig, sein bisheriger Inhalt ist verloren.\n\n"
+    "Aus: nur die UID wird mit der Spule verknüpft, der Tag bleibt unberührt. "
+    "Beschreiben geht weiterhin über die Tag-Seite der Weboberfläche, wo "
+    "vorher sichtbar ist, was auf den Tag geht.\n\n"
+    "Fragen: die Waage fragt jedes Mal nach.\n\n"
+    "Immer schreiben: ohne Rückfrage, nur das Ergebnis wird gemeldet.\n\n"
+    "Geschrieben wird nur ein NTAG, der gross genug ist. Ein NTAG213 mit "
     "144 Byte ist für OpenSpool und FilaMan zu klein, NTAG215 und NTAG216 "
     "reichen. Bambu-Tags lassen sich nicht beschreiben.",
-    "After a spool is linked the scale asks whether the spool data should go "
-    "onto the tag as well. The tag is overwritten completely; whatever is on "
-    "it now is lost.\n\n"
-    "Off means only the UID is bound to the spool and the tag itself is left "
-    "alone. Writing is then still available on the tag page of the web "
-    "interface, where what goes on the tag is visible beforehand.\n\n"
-    "The question only appears for an NTAG with room for the record. An "
-    "NTAG213 with 144 bytes is too small for OpenSpool and FilaMan, NTAG215 "
-    "and NTAG216 are not. Bambu tags cannot be written at all." },  // STR_TW_OPT_ASK_INFO
+    "What happens to the tag once a spool is linked. Writing replaces its "
+    "contents completely; whatever is on it now is lost.\n\n"
+    "Off: only the UID is bound to the spool, the tag itself is left alone. "
+    "Writing is still available on the tag page of the web interface, where "
+    "what goes on the tag is visible beforehand.\n\n"
+    "Ask: the scale asks every time.\n\n"
+    "Write every time: no question, only the result is reported.\n\n"
+    "Only an NTAG with room for the record is written. An NTAG213 with 144 "
+    "bytes is too small for OpenSpool and FilaMan, NTAG215 and NTAG216 are "
+    "not. Bambu tags cannot be written at all." },  // STR_TW_OPT_ASK_INFO
   { "Format",                    "Format"             },  // STR_TW_OPT_FMT
   { "Das Format entscheidet, wer den Tag lesen kann.\n\n"
     "OpenSpool ist ein NDEF-Datensatz mit Material, Farbe, Marke, "
@@ -1523,18 +1525,64 @@ const char* const STRINGS[][2] = {
   { "FilaMan",                   "FilaMan"            },  // STR_TW_FMT_FILAMAN
   { "Anycubic ACE",              "Anycubic ACE"       },  // STR_TW_FMT_ACE
   { "Tag beschreiben",           "Writing tags"       },  // STR_W_C_TAGOPTS
-  { "Nach dem Verlinken an der Waage fragen",
-    "Ask at the scale after linking" },  // STR_W_TAGOPT_ASK
+  { "Nach dem Verlinken",        "After linking"      },  // STR_W_TAGOPT_ASK
   { "Format",                    "Format"             },  // STR_W_TAGOPT_FMT
-  { "Gilt für die Frage, die nach dem Verlinken an der Waage erscheint. "
+  { "Gilt für das, was die Waage nach einem Verlinken selbst tut. "
     "Das Schreiben auf dieser Seite hat seine eigene Formatauswahl.",
-    "Applies to the question the scale asks after a link. Writing from this "
+    "Applies to what the scale does on its own after a link. Writing from this "
     "page has its own format selector." },  // STR_W_TAGOPT_NOTE
   { "Speichern",                 "Download"           },  // STR_W_LOG_DOWNLOAD
   { "Reset Cal.",                "Reset Cal."         },  // STR_BTN_CAL_RESET_SHORT
   { "Kein Material passte - Filter aufgehoben",
     "No material matched - filter dropped" },  // STR_LIST_MAT_IGNORED
+  { "Bei Abweichung fragen",     "Ask on a mismatch"  },  // STR_TW_OPT_MISM
+  { "Wenn der Tag nicht zur Spule passt",
+    "When the tag disagrees with the spool" },  // STR_TW_OPT_MISM_SUB
+  { "Traegt der Tag ein anderes Material, eine andere Marke oder eine deutlich "
+    "andere Farbe als die verknuepfte Spule, bietet die Waage an, ihn neu zu "
+    "beschreiben. Verglichen wird nur der Inhalt, nicht das Format. Aus "
+    "bleibt der Tag unangetastet.",
+    "If the tag carries a different material, brand or a clearly different "
+    "colour than the spool it is bound to, the scale offers to write it again. "
+    "Only the contents are compared, not the format. Off leaves the tag "
+    "untouched." },  // STR_TW_OPT_MISM_INFO
+  { "Tag weicht ab",             "Tag disagrees"      },  // STR_TW_MISM_TITLE
+  { "%s",                        "%s"                 },  // STR_TW_MISM_HINT
+  { "Neu beschreiben",           "Write again"        },  // STR_TW_BTN_REWRITE
+  { "Tag",                       "Tag"                },  // STR_TW_MISM_TAG
+  { "Server",                    "Server"             },  // STR_TW_MISM_SERVER
+  { "An der Waage fragen, wenn der Tag nicht zur Spule passt",
+    "Ask at the scale when the tag disagrees with the spool" },  // STR_W_TAGOPT_MISM
+  { "Spule %d wird geschrieben...", "Writing spool %d..."   },  // STR_W_TW_WRITING
+  { "Tag wird geleert...",       "Erasing the tag..."       },  // STR_W_TW_ERASING
+  { "Spule %d (%s) als %s geschrieben",
+    "Wrote spool %d (%s) as %s" },  // STR_W_TW_WROTE
+  { ", verknüpft",               ", linked to the spool"    },  // STR_W_TW_LINKED
+  { ", verknüpft (%s)",          ", linked (%s)"            },  // STR_W_TW_LINKED_NOTE
+  { ", aber das Verknüpfen schlug fehl (HTTP %d)",
+    ", but linking failed (HTTP %d)" },  // STR_W_TW_LINK_FAIL
+  { "Tag geleert",               "Tag erased"               },  // STR_W_TW_ERASED
+  { "Löschen fehlgeschlagen - Tag ruhig halten",
+    "Erase failed - keep the tag still" },  // STR_W_TW_ERASE_FAIL
+  { "MIFARE Classic, nur lesbar", "MIFARE Classic, read-only" },  // STR_W_TAG_KIND_MIFARE
+  { "NTAG, beschreibbar",        "NTAG, writable"           },  // STR_W_TAG_KIND_NTAG
+  { ", %u Byte",                 ", %u bytes"               },  // STR_W_TAG_KIND_BYTES
+  { "Gebunden über: %s",         "Bound through: %s"        },  // STR_UNLINK_SOURCES
+  { "Aus",                       "Off"                      },  // STR_TW_MODE_OFF
+  { "Fragen",                    "Ask"                      },  // STR_TW_MODE_ASK
+  { "Immer schreiben",           "Write every time"         },  // STR_TW_MODE_ALWAYS
 };
+
+StringID tagWriteResultString(uint8_t code) {
+  switch (code) {
+    case TW_OK:            return STR_TW_OK;
+    case TW_ERR_NO_TAG:    return STR_TW_ERR_NO_TAG;
+    case TW_ERR_NOT_NTAG:  return STR_TW_ERR_NOT_NTAG;
+    case TW_ERR_BACKEND:   return STR_TW_ERR_BACKEND;
+    case TW_ERR_SPACE:     return STR_TW_ERR_SPACE;
+    default:               return STR_TW_ERR_WRITE;
+  }
+}
 
 // Without this, a missing entry is not a compile error: every string from the
 // gap onwards reads as the wrong one, in both languages, and the only symptom

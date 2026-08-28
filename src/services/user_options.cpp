@@ -16,5 +16,6 @@ bool g_tag_field_chosen = false;
 bool g_card_uids_write = false;
 bool g_flm_bambu_tags = false;
 bool g_flm_ext_id = true;
-bool g_tagwrite_ask = false;
+uint8_t g_tagwrite_mode = TAGWRITE_OFF;
+bool g_tagmismatch_ask = false;
 uint8_t g_tagwrite_fmt = TAG_FMT_OPENSPOOL;

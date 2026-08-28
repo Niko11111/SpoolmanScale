@@ -109,12 +109,21 @@ void buildScaleSubScreen() {
   { char buf_t[40]; strncpy(buf_t, T(STR_TW_OPT_ASK), sizeof(buf_t)-1);
     buf_t[sizeof(buf_t)-1] = '\0';
     // The subtitle carries the state, so the sub screen does not have to be
-    // opened to see it: off, or the format that would be written.
-    char buf_s[40];
-    if (g_tagwrite_ask) snprintf(buf_s, sizeof(buf_s), "%s", tagFormatLabel(g_tagwrite_fmt));
-    else                strncpy(buf_s, T(STR_OFF), sizeof(buf_s)-1);
+    // opened to see it: off, or what happens and in which format.
+    char buf_s[48];
+    if (g_tagwrite_mode == TAGWRITE_OFF) {
+      strncpy(buf_s, T(STR_OFF), sizeof(buf_s)-1);
+    } else {
+      char mode[24];
+      strncpy(mode, T(g_tagwrite_mode == TAGWRITE_ALWAYS ? STR_TW_MODE_ALWAYS
+                                                         : STR_TW_MODE_ASK),
+              sizeof(mode)-1);
+      mode[sizeof(mode)-1] = '\0';
+      snprintf(buf_s, sizeof(buf_s), "%s - %s", mode, tagFormatLabel(g_tagwrite_fmt));
+    }
     buf_s[sizeof(buf_s)-1] = '\0';
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, buf_t, buf_s, g_tagwrite_ask);
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, buf_t, buf_s,
+                                g_tagwrite_mode != TAGWRITE_OFF);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Scale-Sub -> Tag write");
       show_tagwrite_pending = true;
@@ -201,6 +210,39 @@ static void addTagFormatRow(lv_obj_t *list, uint8_t idx) {
   }, LV_EVENT_CLICKED, NULL);
 }
 
+// The three states of "write after linking", one row each - the same shape as
+// the format rows below them, because it is the same kind of choice.
+static const StringID TW_MODE_NAME[3] = {
+  STR_TW_MODE_OFF, STR_TW_MODE_ASK, STR_TW_MODE_ALWAYS
+};
+
+static void addTagModeRow(lv_obj_t *list, uint8_t value) {
+  const bool active = (g_tagwrite_mode == value);
+
+  char buf_t[40];
+  strncpy(buf_t, T(TW_MODE_NAME[value]), sizeof(buf_t) - 1);
+  buf_t[sizeof(buf_t) - 1] = '\0';
+
+  lv_obj_t *btn = makeListBtn(list, "", buf_t, "", active);
+
+  lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
+  if (arr_lbl) {
+    lv_label_set_text(arr_lbl, active ? LV_SYMBOL_OK : "");
+    lv_obj_set_style_text_color(arr_lbl, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_16, 0);
+  }
+
+  lv_obj_set_user_data(btn, (void *)(intptr_t)value);
+  lv_obj_add_event_cb(btn, [](lv_event_t *e) {
+    const uint8_t v = (uint8_t)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
+    if (v == g_tagwrite_mode) return;
+    g_tagwrite_mode = v;
+    prefsPutUChar("tagwr_mode", g_tagwrite_mode);
+    logSDf("BTN: Tag write -> mode %u", (unsigned)g_tagwrite_mode);
+    show_tagwrite_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+}
+
 void buildTagWriteScreen() {
   logSD("BUILD: TagWriteScreen");
   releaseScreen(&scr_tagwrite);
@@ -218,28 +260,43 @@ void buildTagWriteScreen() {
 
   lv_obj_t *list = buildOptionList(scr_tagwrite);
 
-  // The switch first: without it the format below decides nothing.
+  // The choice first: without it the format below decides nothing.
   { char buf_t[40]; strncpy(buf_t, T(STR_TW_OPT_ASK), sizeof(buf_t)-1);
     buf_t[sizeof(buf_t)-1] = '\0';
-    char buf_s[48]; strncpy(buf_s, T(STR_TW_OPT_ASK_SUB), sizeof(buf_s)-1);
-    buf_s[sizeof(buf_s)-1] = '\0';
     lv_obj_t *help = nullptr;
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, buf_t, buf_s, g_tagwrite_ask, &help);
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, buf_t, "", false, &help);
     if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
                                   INFO_POPUP_ARG(STR_TW_OPT_ASK, STR_TW_OPT_ASK_INFO));
+    lv_obj_clear_flag(btn, LV_OBJ_FLAG_CLICKABLE);   // a heading, not a choice
+    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
+    if (arr_lbl) lv_label_set_text(arr_lbl, ""); }
+
+  for (uint8_t i = 0; i <= TAGWRITE_ALWAYS; i++) addTagModeRow(list, i);
+
+  // The second question the scale can ask about a tag, and its own switch: this
+  // one is not about a link that just happened but about a tag that has been
+  // lying around since something changed, and wanting one is not wanting both.
+  { char buf_t[40]; strncpy(buf_t, T(STR_TW_OPT_MISM), sizeof(buf_t)-1);
+    buf_t[sizeof(buf_t)-1] = '\0';
+    char buf_s[48]; strncpy(buf_s, T(STR_TW_OPT_MISM_SUB), sizeof(buf_s)-1);
+    buf_s[sizeof(buf_s)-1] = '\0';
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_REFRESH, buf_t, buf_s, g_tagmismatch_ask, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_TW_OPT_MISM, STR_TW_OPT_MISM_INFO));
     lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
     if (arr_lbl) {
-      char on_off[8]; strncpy(on_off, T(g_tagwrite_ask ? STR_ON : STR_OFF), sizeof(on_off)-1);
+      char on_off[8]; strncpy(on_off, T(g_tagmismatch_ask ? STR_ON : STR_OFF), sizeof(on_off)-1);
       on_off[sizeof(on_off)-1] = '\0';
       lv_label_set_text(arr_lbl, on_off);
-      lv_obj_set_style_text_color(arr_lbl, g_tagwrite_ask ? lv_color_hex(0x28d49a)
-                                                          : lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_color(arr_lbl, g_tagmismatch_ask ? lv_color_hex(0x28d49a)
+                                                             : lv_color_hex(0x4a6fa0), 0);
       lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
     }
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
-      g_tagwrite_ask = !g_tagwrite_ask;
-      prefsPutBool("tagwrite_ask", g_tagwrite_ask);
-      logSDf("BTN: Tag write -> ask %s", g_tagwrite_ask ? "on" : "off");
+      g_tagmismatch_ask = !g_tagmismatch_ask;
+      prefsPutBool("tagmism_ask", g_tagmismatch_ask);
+      logSDf("BTN: Tag mismatch -> ask %s", g_tagmismatch_ask ? "on" : "off");
       show_tagwrite_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
