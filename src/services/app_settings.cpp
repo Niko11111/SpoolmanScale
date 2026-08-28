@@ -79,7 +79,10 @@ void loadPrefs() {
   cfg_lang_set = prefsGetBool("lang_set", false);
   cfg_first_boot = prefsGetBool("first_boot", true);
   last_used_mode = prefsGetUChar("lu_mode", 0);
-  g_whole_gram = prefsGetBool("whole_gram", false);
+  // On unless someone deliberately turned it off. The toggle writes the key on
+  // every press, so a device that has one stored keeps its own answer - only a
+  // device that never touched it follows this default.
+  g_whole_gram = prefsGetBool("whole_gram", true);
   g_wake_on_load = prefsGetBool("wake_load", true);
   g_ip_bar_mode = prefsGetUChar("ip_bar_mode", IP_BAR_OFF);
   // 0xFF as the default rather than TAG_FIELD_TAG, so "never chosen" can be

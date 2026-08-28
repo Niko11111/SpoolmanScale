@@ -8,6 +8,18 @@
 #include <WiFiClient.h>
 #include <string.h>
 
+// Every weight leaves this file as a whole gram.
+//
+// A load cell on a filament spool has no meaningful accuracy below a gram, and
+// the decimal did more harm than the precision was worth: Spoolman derives
+// used_weight as initial minus remaining, and 1000.0 - 748.3 comes back out of
+// a float as 251.70000000000005. That number then stands in the web UI, which
+// is what "the weights are suddenly enormously long" meant. Whole grams cannot
+// produce it - the subtraction stays exact.
+//
+// FilaMan and BamBuddy already rounded on the way out, each with its own
+// roundGrams(); this file was the one backend still sending decimals.
+
 static bool hasBaseUrl(const char* base_url) {
   return base_url && strlen(base_url) > 4;
 }
@@ -349,7 +361,7 @@ int spoolmanCreateSpool(const char* base_url, int filament_id, float initial_wei
 
   char body[256];
   snprintf(body, sizeof(body),
-    "{\"filament_id\":%d,\"initial_weight\":%.1f,\"spool_weight\":%.1f,\"remaining_weight\":%.1f}",
+    "{\"filament_id\":%d,\"initial_weight\":%.0f,\"spool_weight\":%.0f,\"remaining_weight\":%.0f}",
     filament_id, initial_weight, spool_weight, remaining_weight);
   int code = http.POST(body);
   if ((code == 200 || code == 201) && out_spool_id) {
@@ -389,9 +401,9 @@ int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remain
   if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
   char body[128];
   if (last_used_iso && last_used_iso[0]) {
-    snprintf(body, sizeof(body), "{\"remaining_weight\": %.1f, \"last_used\": \"%s\"}", remaining, last_used_iso);
+    snprintf(body, sizeof(body), "{\"remaining_weight\": %.0f, \"last_used\": \"%s\"}", remaining, last_used_iso);
   } else {
-    snprintf(body, sizeof(body), "{\"remaining_weight\": %.1f}", remaining);
+    snprintf(body, sizeof(body), "{\"remaining_weight\": %.0f}", remaining);
   }
   return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, String(body), timeout_ms);
 }
@@ -403,7 +415,7 @@ int spoolmanReactivateSpool(const char* base_url, int spool_id, float remaining,
   // the spool back without a weight would leave it looking empty, and a second
   // request could fail on its own and leave exactly that state behind.
   char body[80];
-  snprintf(body, sizeof(body), "{\"archived\": false, \"remaining_weight\": %.1f}", remaining);
+  snprintf(body, sizeof(body), "{\"archived\": false, \"remaining_weight\": %.0f}", remaining);
   return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, String(body), timeout_ms);
 }
 
@@ -412,7 +424,7 @@ int spoolmanMeasureSpool(const char* base_url, int spool_id, float gross_weight,
   if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
   if (gross_weight < 0.0f) return -1;
   char body[48];
-  snprintf(body, sizeof(body), "{\"weight\": %.1f}", gross_weight);
+  snprintf(body, sizeof(body), "{\"weight\": %.0f}", gross_weight);
   return putJson(String(base_url) + "/api/v1/spool/" + spool_id + "/measure",
                  String(body), timeout_ms);
 }
@@ -420,7 +432,7 @@ int spoolmanMeasureSpool(const char* base_url, int spool_id, float gross_weight,
 int spoolmanPatchInitialWeight(const char* base_url, int spool_id, float initial_weight, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
   char body[80];
-  snprintf(body, sizeof(body), "{\"initial_weight\": %.1f, \"remaining_weight\": %.1f}",
+  snprintf(body, sizeof(body), "{\"initial_weight\": %.0f, \"remaining_weight\": %.0f}",
     initial_weight, initial_weight);
   return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, String(body), timeout_ms);
 }
@@ -434,21 +446,21 @@ int spoolmanPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeo
 int spoolmanPatchSpoolWeight(const char* base_url, int spool_id, float spool_weight, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
   char body[64];
-  snprintf(body, sizeof(body), "{\"spool_weight\": %.1f}", spool_weight);
+  snprintf(body, sizeof(body), "{\"spool_weight\": %.0f}", spool_weight);
   return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, String(body), timeout_ms);
 }
 
 int spoolmanPatchFilamentSpoolWeight(const char* base_url, int filament_id, float spool_weight, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || filament_id <= 0) return -1;
   char body[64];
-  snprintf(body, sizeof(body), "{\"spool_weight\": %.1f}", spool_weight);
+  snprintf(body, sizeof(body), "{\"spool_weight\": %.0f}", spool_weight);
   return patchJson(String(base_url) + "/api/v1/filament/" + filament_id, String(body), timeout_ms);
 }
 
 int spoolmanPatchVendorEmptySpoolWeight(const char* base_url, int vendor_id, float spool_weight, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || vendor_id <= 0) return -1;
   char body[64];
-  snprintf(body, sizeof(body), "{\"empty_spool_weight\": %.1f}", spool_weight);
+  snprintf(body, sizeof(body), "{\"empty_spool_weight\": %.0f}", spool_weight);
   return patchJson(String(base_url) + "/api/v1/vendor/" + vendor_id, String(body), timeout_ms);
 }
 

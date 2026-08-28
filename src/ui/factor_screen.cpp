@@ -125,7 +125,14 @@ void buildFactorScreen() {
   lv_label_set_text(lbl_factor_cal_weight, "-- g");
   lv_obj_set_style_text_color(lbl_factor_cal_weight, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_factor_cal_weight, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_factor_cal_weight, 56, 78);
+  // Hung off the caption instead of a fixed 56. The caption is a translated
+  // string and its width follows the language: "Scale:" is 38 px and left a
+  // gap, "Waage:" is 45 and ended one pixel into the value, so the German
+  // screen read "Waage:0 g". Aligning to the real width fixes both and any
+  // translation after them.
+  lv_obj_update_layout(scr_factor);
+  lv_obj_align_to(lbl_factor_cal_weight, lbl_cal_w_title,
+                  LV_ALIGN_OUT_RIGHT_MID, 6, 0);
 
   lbl_factor_result = lv_label_create(scr_factor);
   lv_label_set_text(lbl_factor_result, T(STR_CAL_FACTOR));
