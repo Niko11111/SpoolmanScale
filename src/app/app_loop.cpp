@@ -20,6 +20,9 @@
 #include "hardware/scale_state.h"
 #include "hardware/sd_logger.h"
 #include "hardware/spoolscale_tag.h"
+#include "services/nfc_reset.h"
+#include "ui/info_popup.h"
+#include "ui/nfc_reset_popup.h"
 #include "services/auto_weight_state.h"
 #include "services/location_state.h"
 #include "web/web_server.h"
@@ -630,6 +633,25 @@ void appLoop() {
     hideAllOverlays();
     lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
   }
+  // Shown once the device has settled, not during boot: a modal that appears
+  // while the first screen is still assembling reads as a fault.
+  static bool hint_checked = false;
+  if (!hint_checked && millis() > 12000) {
+    hint_checked = true;
+    if (nfcResetHintDue()) showNfcResetHint();
+  }
+
+  if (nfc_reset_probe_pending) {
+    nfc_reset_probe_pending = false;
+    // Runs here rather than in the button's own callback: the probe holds a
+    // line low and talks to the reader over I2C, and that bus belongs to this
+    // task.
+    const bool works = nfcResetSelfTest();
+    showInfoPopup(works ? STR_NFCRST_OK_TITLE  : STR_NFCRST_FAIL_TITLE,
+                  works ? STR_NFCRST_OK_TEXT   : STR_NFCRST_FAIL_TEXT,
+                  works ? INFO_DONE : INFO_WARN);
+  }
+
   if (show_ota_pending) {
     show_ota_pending = false;
     if (scr_ota) { lv_obj_del(scr_ota); scr_ota = nullptr; }
@@ -1295,6 +1317,7 @@ void appLoop() {
           nfc_ok = true;
           nfc_recover_tries = 0;
           nfc_stat_reinits++;
+          nfcReaderNoteRecovery();
           Serial.printf("NFC: reader came back (fw 0x%08lX)\n", (unsigned long)ver);
           logSDf("NFC: reader recovered (fw 0x%08lX)", (unsigned long)ver);
           updateHeaderStatus();
@@ -1727,6 +1750,7 @@ void appLoop() {
             uint32_t ver = 0;
             bool recovered = nfcHardwareReinit(&ver);
             nfc_stat_reinits++;
+            nfcReaderNoteRecovery();
             Serial.printf("NFC: reader not responding, re-init %s (fw 0x%08lX)\n",
               recovered ? "ok" : "FAILED", (unsigned long)ver);
             logSDf("NFC: reader re-init %s (fw 0x%08lX)",

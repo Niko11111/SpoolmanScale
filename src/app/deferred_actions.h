@@ -33,6 +33,10 @@ extern bool show_bambuddy_dried_pending;
 extern bool show_tagwrite_pending;
 extern bool show_timezone_pending;
 extern bool show_language_pending;
+
+// The NFC reset probe touches the I2C bus, so it cannot run from the LVGL
+// callback that asks for it - the bus belongs to the loop task.
+extern bool nfc_reset_probe_pending;
 extern bool show_welcome_pending;
 extern bool show_spoolman_options_pending;
 // Turning the card_uids switch on needs the field to exist on the server, so

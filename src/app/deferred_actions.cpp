@@ -21,6 +21,7 @@ bool show_bambuddy_dried_pending = false;
 bool show_tagwrite_pending = false;
 bool show_timezone_pending = false;
 bool show_language_pending = false;
+bool nfc_reset_probe_pending = false;
 bool show_welcome_pending = false;
 bool show_spoolman_options_pending = false;
 bool show_extra_fields_pending = false;

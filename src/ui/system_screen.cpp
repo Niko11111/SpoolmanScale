@@ -10,6 +10,7 @@
 
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/nfc_reset.h"
 #include "services/backend.h"
 #include "services/ota_state.h"
 #include "ui_common.h"
@@ -189,6 +190,21 @@ void buildSystemScreen() {
 
   addRow(list, LV_SYMBOL_BELL, T(STR_BTN_INFO), T(STR_BTN_INFO_SUB),
     [](lv_event_t *e){ logSD("BTN: System -> Info"); show_info_pending = true; });
+
+  // Always present, unlike the popup that points at it. A row is pulled, not
+  // pushed: whoever has just moved the wire comes here to confirm it, and
+  // hiding the confirmation from the person who did the work would be exactly
+  // backwards.
+  { char rst_sub[40];
+    strncpy(rst_sub, T(nfcResetVerified() ? STR_NFCRST_ROW_DONE : STR_NFCRST_ROW_SUB),
+            sizeof(rst_sub) - 1);
+    rst_sub[sizeof(rst_sub) - 1] = '\0';
+    addRow(list, LV_SYMBOL_CHARGE, T(STR_NFCRST_ROW), rst_sub,
+      [](lv_event_t *e){
+        logSD("BTN: System -> NFC reset probe");
+        nfc_reset_probe_pending = true;
+      });
+  }
 
   addRow(list, LV_SYMBOL_REFRESH, T(STR_BTN_REBOOT), T(STR_BTN_REBOOT_SUB),
     [](lv_event_t *e){

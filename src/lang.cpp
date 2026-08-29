@@ -1626,16 +1626,23 @@ const char* const STRINGS[][2] = {
   { "Der PN532 bestätigt 0x24, beantwortet aber keinen Befehl. Er steht damit "
     "auf I2C - sonst würde er sich gar nicht melden - und SDA und SCL "
     "stimmen ebenfalls.\n\n"
-    "Prüfe die RST-Leitung an Pin 5 (blau, GPIO12). Ohne sie bleibt der Chip "
-    "im Reset und schweigt.\n\n"
-    "Kontrolliere außerdem, ob die beiden DIP-Schalter sauber einrasten: "
-    "SW1 = ON, SW2 = OFF.",
+    "Prüfe zuerst die beiden DIP-Schalter: für I2C muss SW1 = ON und SW2 = OFF "
+    "stehen. Ein Schalter zwischen zwei Stellungen ist die häufigste Ursache.\n\n"
+    "Prüfe dann die 5V an Pin 1. Zu wenig Spannung lässt den Chip sich am Bus "
+    "melden, ohne dass er arbeiten kann.\n\n"
+    "Einen Reset zum Ziehen gibt es hier nicht: der orange RST-Draht liegt auf "
+    "einem Ausgang des Moduls statt auf dessen Reset-Eingang. Aus- und wieder "
+    "einstecken ist der einzige harte Reset.",
     "The PN532 acknowledges 0x24 but answers no command. That means it is set "
     "to I2C - it would not answer at all otherwise - and SDA and SCL are "
     "right too.\n\n"
-    "Check the RST wire on pin 5 (blue, GPIO12). Without it the chip stays "
-    "in reset and says nothing.\n\n"
-    "Also make sure both DIP switches sit firmly: SW1 = ON, SW2 = OFF." },  // STR_DIAG_PN532_MUTE_TEXT
+    "Check the two DIP switches first: I2C needs SW1 = ON and SW2 = OFF. A "
+    "switch resting between positions is the most common cause.\n\n"
+    "Then check the 5V on pin 1. Too little supply lets the chip announce "
+    "itself on the bus without being able to work.\n\n"
+    "There is no reset to pull here: the orange RST wire sits on an output of "
+    "the module rather than its reset input. Unplugging and replugging is the "
+    "only hard reset there is." },  // STR_DIAG_PN532_MUTE_TEXT
 
   { "Waage nicht kalibriert",    "Scale not calibrated"     },  // STR_DIAG_UNCAL_BANNER
   { "Waage nicht kalibriert",    "Scale not calibrated"     },  // STR_DIAG_UNCAL_TITLE
@@ -1691,6 +1698,49 @@ const char* const STRINGS[][2] = {
 
   { "Diagnose",                  "Diagnosis"                },  // STR_W_R_DIAG
   { "ohne Befund",               "nothing found"            },  // STR_W_S_DIAG_OK
+
+  // ---- PN532 reset line, the optional hardware modification ----
+  { "Hardware-Umbau möglich",    "A hardware change is available" },  // STR_NFCRST_HINT_TITLE
+  { "Der NFC-Leser dieser Waage musste schon einmal neu gestartet werden.\n\n"
+    "Dagegen gibt es einen optionalen Umbau: der orange RST-Draht gehört auf "
+    "RSTPDN. Dann kann die Waage den Leser wirklich zurücksetzen.\n\n"
+    "Anleitung in der Doku unter Verkabelung. Prüfen danach unter "
+    "System > NFC-Reset prüfen. Es geht nichts kaputt, wenn du es lässt.",
+    "The NFC reader on this scale has had to be restarted at least once.\n\n"
+    "There is an optional change against it: the orange RST wire belongs on "
+    "RSTPDN. The scale can then genuinely reset the reader.\n\n"
+    "Guide in the docs under Wiring. Check afterwards under System > Check NFC "
+    "reset. Nothing breaks if you leave it." },  // STR_NFCRST_HINT_TEXT
+  { "Später",                    "Later"                    },  // STR_NFCRST_LATER
+  { "Nicht mehr anzeigen",       "Do not show again"        },  // STR_NFCRST_NEVER
+
+  { "NFC-Reset prüfen",          "Check NFC reset"          },  // STR_NFCRST_ROW
+  { "Nach dem Umlöten",          "After the rewiring"       },  // STR_NFCRST_ROW_SUB
+  { "Leitung geprüft, aktiv",    "Line verified, in use"    },  // STR_NFCRST_ROW_DONE
+  { "Prüft, ob der orange RST-Draht auf RSTPDN sitzt. Der Test zieht die "
+    "Leitung kurz auf Masse und schaut, ob der Leser das merkt - offener "
+    "Kollektor, er kann also nichts beschädigen, wenn der Draht noch auf dem "
+    "alten Pad liegt.\n\n"
+    "Besteht der Test, benutzt die Waage ab dem nächsten Start den echten "
+    "Reset.",
+    "Checks whether the orange RST wire sits on RSTPDN. The test pulls the "
+    "line to ground for a moment and watches whether the reader notices - open "
+    "drain, so it cannot damage anything if the wire is still on the old "
+    "pad.\n\n"
+    "If the test passes, the scale uses the real reset from the next start "
+    "on." },  // STR_NFCRST_INFO
+  { "Reset-Leitung sitzt",       "Reset line is there"      },  // STR_NFCRST_OK_TITLE
+  { "Der Leser hat auf die Leitung reagiert. Ab dem nächsten Start benutzt "
+    "die Waage den Hardware-Reset.",
+    "The reader responded to the line. From the next start the scale uses the "
+    "hardware reset." },  // STR_NFCRST_OK_TEXT
+  { "Keine Wirkung",             "No effect"                },  // STR_NFCRST_FAIL_TITLE
+  { "Der Leser hat nichts gemerkt. Der orange Draht liegt noch auf dem alten "
+    "Pad, oder die Lötstelle hat keinen Kontakt.\n\n"
+    "Es ändert sich nichts, die Waage arbeitet weiter wie bisher.",
+    "The reader did not notice. The orange wire is still on the old pad, or "
+    "the joint is not making contact.\n\n"
+    "Nothing changes, the scale carries on as before." },  // STR_NFCRST_FAIL_TEXT
 };
 
 StringID tagWriteResultString(uint8_t code) {

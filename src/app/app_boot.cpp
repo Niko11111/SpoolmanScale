@@ -13,6 +13,7 @@
 #include "hardware/i2c_scan.h"
 #include "hardware/nfc.h"
 #include "hardware/pins.h"
+#include "services/nfc_reset.h"
 #include "hardware/scale.h"
 #include "hardware/sd_logger.h"
 #include "services/app_settings.h"
@@ -155,7 +156,8 @@ void appSetup() {
 
   Serial.print("Looking for PN532... ");
   uint32_t ver = 0;
-  if (nfcHardwareBegin(&I2C_EXT, hw_pins::PN532_RESET, hw_pins::PN532_IRQ_UNUSED, &ver)) {
+  nfcResetLoad();
+  if (nfcHardwareBegin(&I2C_EXT, nfcResetPinForBoot(), hw_pins::PN532_IRQ_UNUSED, &ver)) {
     nfc_ok = true;
     Serial.printf("OK (FW %d.%d)\n", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
     logSDf("NFC ready (PN532 FW %d.%d)", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
