@@ -14,6 +14,12 @@ extern bool cal_reset_pending;
 // Deferred rather than rebuilt on the spot: the rebuild deletes the screen the
 // button that set it sits on, which is what CLAUDE.md rules out.
 extern bool scale_sub_rebuild_pending;
+// A setting changed that is only read while the interface is built, so it
+// takes a restart to show. Its own flag rather than a call from the callback:
+// the same tap also schedules a screen rebuild, and that one runs
+// hideAllOverlays() - a popup opened first would be taken down by it. Drained
+// after the rebuild, so the order is fixed rather than hoped for.
+extern bool show_reboot_pending;
 extern bool show_lastused_pending;
 extern bool show_backend_pending;
 

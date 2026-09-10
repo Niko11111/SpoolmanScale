@@ -13,6 +13,7 @@
 #include "hardware/i2c_scan.h"
 #include "hardware/nfc.h"
 #include "hardware/pins.h"
+#include "services/user_options.h"
 #include "services/nfc_reset.h"
 #include "hardware/scale.h"
 #include "hardware/sd_logger.h"
@@ -166,23 +167,33 @@ void appSetup() {
     logSDf("NFC init FAILED (bus: %s)", i2cScanLast());
   }
 
-  Serial.print("Looking for NAU7802... ");
-  if (scaleHardwareBegin(&I2C_EXT, [](){
-    Serial.print(".");
-    delay(100);
-    lv_timer_handler();  // tick runs off millis(), see LV_TICK_CUSTOM in lv_conf.h
-  })) {
-    scl_ok = true;
-    scale_ready = true;
-    Serial.printf("OK! cal_factor=%.4f  zero_offset=%d\n", cal_factor, zero_offset);
-    logSDf("Scale ready (cal=%.4f zero=%d)", cal_factor, zero_offset);
+  // A device built without a load cell is not a device with a broken one. The
+  // probe is skipped entirely rather than allowed to fail: scaleHardwareBegin()
+  // spends up to three seconds on a chip that answers and will not calibrate,
+  // and there is nothing here to wait for. scl_ok and scale_ready stay false,
+  // which is what every consumer already asks.
+  if (!g_scale_fitted) {
+    Serial.println("Scale switched off in the settings, NAU7802 not probed");
+    logSD("Scale switched off in the settings, NAU7802 not probed");
   } else {
-    // Two ways to land here: the chip did not answer on 0x2A at all, or it
-    // answered but never finished calibrating. scaleHardwareBegin() prints
-    // which one, so this must not claim a cause of its own.
-    Serial.printf("ERROR! Scale unavailable (NAU7802 on 0x%02X, bus: %s)\n",
-                  I2C_ADDR_NAU7802, i2cScanLast());
-    logSDf("Scale init FAILED (bus: %s)", i2cScanLast());
+    Serial.print("Looking for NAU7802... ");
+    if (scaleHardwareBegin(&I2C_EXT, [](){
+      Serial.print(".");
+      delay(100);
+      lv_timer_handler();  // tick runs off millis(), see LV_TICK_CUSTOM in lv_conf.h
+    })) {
+      scl_ok = true;
+      scale_ready = true;
+      Serial.printf("OK! cal_factor=%.4f  zero_offset=%d\n", cal_factor, zero_offset);
+      logSDf("Scale ready (cal=%.4f zero=%d)", cal_factor, zero_offset);
+    } else {
+      // Two ways to land here: the chip did not answer on 0x2A at all, or it
+      // answered but never finished calibrating. scaleHardwareBegin() prints
+      // which one, so this must not claim a cause of its own.
+      Serial.printf("ERROR! Scale unavailable (NAU7802 on 0x%02X, bus: %s)\n",
+                    I2C_ADDR_NAU7802, i2cScanLast());
+      logSDf("Scale init FAILED (bus: %s)", i2cScanLast());
+    }
   }
 
   updateHeaderStatus();

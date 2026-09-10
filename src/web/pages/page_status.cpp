@@ -14,6 +14,7 @@
 #include "services/diagnostics.h"
 #include "services/mdns_service.h"
 #include "services/wifi_manager.h"
+#include "services/user_options.h"
 #include "ui/weight_format.h"
 #include "web/web_access.h"
 #include "web/web_shell.h"
@@ -61,6 +62,9 @@ static String statusJson() {
   j += ",\"backend\":\"" + jsonEsc(backendName()) + "\"";
   j += ",\"backendUrl\":\"" + jsonEsc(backendBaseUrl()) + "\"";
   j += ",\"backendOk\":" + String(sm_reachable ? "true" : "false");
+  // Whether one is fitted at all comes first: without it a false "scale"
+  // reads as a fault on a device that was built without one on purpose.
+  j += ",\"scaleFitted\":" + String(g_scale_fitted ? "true" : "false");
   j += ",\"scale\":" + String(scl_ok ? "true" : "false");
   j += ",\"scaleReady\":" + String(scale_ready ? "true" : "false");
   {
@@ -172,8 +176,17 @@ static String body() {
   h += F("<div class='card'><h2>");
   h += T(STR_W_C_HARDWARE);
   h += F("</h2><div class='rows'>");
-  h += row(T(STR_W_R_SCALE), pill(scl_ok, STR_W_S_READY, STR_W_S_MISSING));
-  {
+  if (!g_scale_fitted) {
+    // No pill. A pill is a verdict on something that should be working, and
+    // there is nothing here to work - so this is quiet text on --ink-soft,
+    // the same voice the page uses elsewhere for an aside. The weight row
+    // goes with it: there is no number to keep current.
+    String v = F("<em>");
+    v += T(STR_W_S_SCALE_OFF);
+    v += F("</em>");
+    h += row(T(STR_W_R_SCALE), v);
+  } else {
+    h += row(T(STR_W_R_SCALE), pill(scl_ok, STR_W_S_READY, STR_W_S_MISSING));
     // Server rendered once so the page is right before any script runs,
     // then kept current by the poll below.
     char w[24];

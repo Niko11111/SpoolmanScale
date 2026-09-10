@@ -2,6 +2,21 @@
 
 #include <stdint.h>
 
+// Whether this device has a load cell at all. A SpoolmanScale can be built
+// with display and reader only - there is a printable mount for exactly that -
+// and it is then a spool terminal: hold a tag against it, see the spool, put
+// it away on a shelf or hand it to a printer.
+//
+// Off takes the whole weighing side out of the way rather than leaving it
+// broken on screen: the ADC is never probed, the home screen loses its scale
+// column and the TARE key, the menu loses calibration and bag weight, and the
+// diagnosis stops reporting a chip nobody fitted as a fault.
+//
+// On by default, so a device that has a scale notices nothing at all. It is
+// read once while the interface is built, which is why changing it asks for a
+// restart instead of rearranging the home screen under the user's hands.
+extern bool g_scale_fitted;
+
 extern uint8_t last_used_mode;
 extern bool g_whole_gram;
 

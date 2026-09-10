@@ -266,6 +266,11 @@ extern lv_obj_t *lbl_bag_sm_diff;
 extern lv_obj_t *btn_dried;
 extern lv_obj_t *btn_link;
 extern lv_obj_t *btn_weight_main;
+// Slot 1 of the button bar on a device with no load cell, where the weight
+// button would otherwise sit. Only one of the two ever exists - buildUI()
+// builds whichever the scale switch calls for - so updateLinkButton() picks
+// the one it was given rather than assuming either.
+extern lv_obj_t *btn_location;
 extern lv_obj_t *scr_more_info;
 extern int scan_count;
 extern lv_obj_t *page_main;

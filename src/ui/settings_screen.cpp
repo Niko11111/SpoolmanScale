@@ -15,6 +15,7 @@
 #include "ui_common.h"
 #include "update_badges.h"
 #include "services/backend.h"
+#include "services/user_options.h"
 
 
 void resetActivityTimer();
@@ -51,7 +52,11 @@ void buildSettingsScreen() {
   backendText(T(STR_TILE_CONN_SUB), conn_sub, sizeof(conn_sub));
   struct { const char *icon; const char *label; const char *sub; uint32_t col; } tiles[] = {
     { LV_SYMBOL_WIFI,     T(STR_TILE_CONNECTION), conn_sub,                0x0a1e30 },
-    { LV_SYMBOL_DRIVE,    T(STR_TILE_SCALE),      T(STR_TILE_SCALE_SUB),   0x0a1e30 },
+    // The label stays "Scale" even with none fitted: this tile is where the
+    // switch that turns it back on lives. Only the subtitle stops naming the
+    // two rows that are no longer in there.
+    { LV_SYMBOL_DRIVE,    T(STR_TILE_SCALE),
+      T(g_scale_fitted ? STR_TILE_SCALE_SUB : STR_TILE_SCALE_SUB_OFF),         0x0a1e30 },
     { LV_SYMBOL_IMAGE,    T(STR_TILE_DISPLAY),    T(STR_TILE_DISPLAY_SUB), 0x0a1e30 },
     { LV_SYMBOL_SETTINGS, T(STR_TILE_SYSTEM),     T(STR_TILE_SYSTEM_SUB),  0x0a1e30 },
   };

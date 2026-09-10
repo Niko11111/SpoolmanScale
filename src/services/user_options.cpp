@@ -3,6 +3,7 @@
 #include "services/tag_field.h"
 #include "services/tag_write.h"
 
+bool g_scale_fitted = true;
 uint8_t last_used_mode = 0;
 bool g_whole_gram = true;
 uint8_t g_ip_bar_mode = IP_BAR_OFF;

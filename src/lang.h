@@ -1073,6 +1073,16 @@ enum StringID {
   STR_TAG2_BTN_DONE,
   STR_TAG2_LINKED,
 
+  // A device built without a load cell: the switch, what the home screen says
+  // in its place, and how the other two interfaces name the state.
+  STR_NO_SCALE,
+  STR_SCALE_FITTED,
+  STR_SCALE_FITTED_INFO,
+  STR_TILE_SCALE_SUB_OFF,
+  STR_W_SCALE_FITTED,
+  STR_W_SCALE_FITTED_HINT,
+  STR_W_S_SCALE_OFF,
+
   STR_COUNT
 };
 

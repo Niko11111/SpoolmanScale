@@ -21,6 +21,7 @@
 #include "hardware/sd_logger.h"
 #include "hardware/spoolscale_tag.h"
 #include "services/nfc_reset.h"
+#include "ui/reboot_popup.h"
 #include "ui/info_popup.h"
 #include "ui/nfc_reset_popup.h"
 #include "services/auto_weight_state.h"
@@ -429,7 +430,12 @@ void appLoop() {
 
   if (cal_reminder_pending) {
     cal_reminder_pending = false;
-    showCalReminderScreen();
+    // The last step of the setup asks whether to calibrate now. With no load
+    // cell there is nothing to calibrate, so the chain ends one screen early.
+    // showMainScreen() frees every setup screen itself - the same ones
+    // showCalReminderScreen() would have freed - so nothing is left standing.
+    if (g_scale_fitted) showCalReminderScreen();
+    else                showMainScreen();
   }
   handleSpoolFlowDeferredActions();
   if (show_bag_pending) {
@@ -495,6 +501,11 @@ void appLoop() {
       buildScaleSubScreen();
       lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
     }
+  }
+  // After the rebuild above, never before it: that one hides every overlay.
+  if (show_reboot_pending) {
+    show_reboot_pending = false;
+    showRebootPopup();
   }
   // Asked before a weight lands that BamBuddy would clamp. Built here because
   // the write path that noticed it must not create a screen.
@@ -1277,7 +1288,9 @@ void appLoop() {
   // dead until someone restarts it, over a plug that is already seated again.
   {
     static unsigned long last_scl_check_ms = 0;
-    if (millis() - last_scl_check_ms >= 5000) {
+    // Nothing to find and nothing to bring back on a device that was built
+    // without the load cell, so the bus is left alone entirely.
+    if (g_scale_fitted && millis() - last_scl_check_ms >= 5000) {
       last_scl_check_ms = millis();
       bool prev = scl_ok;
       scl_ok = scaleHardwarePresent();

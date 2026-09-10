@@ -9,6 +9,7 @@
 #include "hardware/nfc.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/user_options.h"
 
 // ---- observed state ---------------------------------------------------
 // Written by diagnosticsNoteSample() every 200 ms, read by the tick.
@@ -72,13 +73,17 @@ void diagnosticsTick() {
   // pushed back in takes effect without a restart. 0x2A is already answered by
   // the scale watchdog every 5 s, so only the reader costs a transaction here.
   pn532_on_bus = i2cPresent(I2C_EXT, I2C_ADDR_PN532);
-  const bool nau_on_bus = scl_ok;
+  // A device built without a load cell has no NAU7802 to miss, so its silence
+  // is the configuration rather than a finding. Asked as "is one missing" and
+  // not as "is one there": the reader's own verdicts below have to go on
+  // working, and pretending the chip answers would break the first branch.
+  const bool nau_missing = g_scale_fitted && !scl_ok;
 
   DiagCode next = DIAG_NONE;
 
-  if (!pn532_on_bus && !nau_on_bus) {
+  if (!pn532_on_bus && nau_missing) {
     next = DIAG_BUS_EMPTY;
-  } else if (!nau_on_bus) {
+  } else if (nau_missing) {
     next = DIAG_NAU_MISSING;
   } else if (!pn532_on_bus) {
     next = DIAG_PN532_MISSING;

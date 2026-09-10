@@ -84,6 +84,9 @@ void loadPrefs() {
   // device that never touched it follows this default.
   g_whole_gram = prefsGetBool("whole_gram", true);
   g_wake_on_load = prefsGetBool("wake_load", true);
+  // Same default and the same reason: a device that was never told otherwise
+  // has a scale. Only one built without a load cell says so once.
+  g_scale_fitted = prefsGetBool("scale_fitted", true);
   g_ip_bar_mode = prefsGetUChar("ip_bar_mode", IP_BAR_OFF);
   // 0xFF as the default rather than TAG_FIELD_TAG, so "never chosen" can be
   // told apart from "chose extra.tag". The two behave the same until a server

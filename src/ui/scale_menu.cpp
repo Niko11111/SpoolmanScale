@@ -64,6 +64,11 @@ void buildScaleSubScreen() {
   lv_obj_t *list = buildOptionList(scr_scale_sub);
   s_scale_list = list;
 
+  // The bag weight is subtracted from a reading, so it only means something
+  // while there are readings. Same for the calibration further down; the four
+  // rows between them are about tags and drying and survive a device with no
+  // load cell untouched.
+  if (g_scale_fitted)
   { char bag_sub[32]; snprintf(bag_sub, sizeof(bag_sub), T(STR_BAG_CURRENT), bag_weight_g);
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_DRIVE, T(STR_BTN_BAGWEIGHT), bag_sub);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
@@ -142,11 +147,41 @@ void buildScaleSubScreen() {
       show_lastused_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
+  if (g_scale_fitted)
   { char cal_sub[32]; snprintf(cal_sub, sizeof(cal_sub), T(STR_CAL_FACTOR_SHORT), cal_factor);
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, T(STR_BTN_CALIBRATE), cal_sub);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Scale-Sub -> Calibration");
       show_factor_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
+  // Last, because it is the row that decides what the rest of this screen even
+  // shows - and because on a device that has a scale nobody ever needs it.
+  // It stays visible with the scale off: this is where it gets turned back on.
+  { char buf_t[40]; strncpy(buf_t, T(STR_SCALE_FITTED), sizeof(buf_t)-1);
+    buf_t[sizeof(buf_t)-1] = '\0';
+    char buf_s[8]; strncpy(buf_s, T(g_scale_fitted ? STR_ON : STR_OFF), sizeof(buf_s)-1);
+    buf_s[sizeof(buf_s)-1] = '\0';
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_SETTINGS, buf_t, "", g_scale_fitted, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_SCALE_FITTED, STR_SCALE_FITTED_INFO));
+    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
+    if (arr_lbl) {
+      lv_label_set_text(arr_lbl, buf_s);
+      lv_obj_set_style_text_color(arr_lbl, g_scale_fitted ? lv_color_hex(0x28d49a)
+                                                          : lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
+    }
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      g_scale_fitted = !g_scale_fitted;
+      prefsPutBool("scale_fitted", g_scale_fitted);
+      logSDf("BTN: Scale-Sub -> scale fitted %s", g_scale_fitted ? "on" : "off");
+      // The row first, so it shows the new state, then the popup. Both through
+      // flags: the rebuild deletes the screen this button sits on, and it runs
+      // hideAllOverlays() - a popup opened here would go down with it.
+      scale_sub_rebuild_pending = true;
+      show_reboot_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
   // No reset row here any more: the same action sits as a red button on the

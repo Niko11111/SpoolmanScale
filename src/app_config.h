@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.7.1-beta.9"
+#define FW_VERSION  "v0.7.1-beta.10"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -22,6 +22,15 @@
 // be a bare 190 in all three, which is how the bar and its background came to
 // disagree the moment one of them was widened.
 #define MAIN_BAR_W  194
+
+// The right half of zone 4, which without a load cell carries a note instead
+// of the live weights. x=218 is the column 2 axis the design guide fixes,
+// 254 runs it out to the 8 px right margin, and y=189 with h=70 is the zone
+// the two vertical dividers already span.
+#define MAIN_NOSCALE_X  218
+#define MAIN_NOSCALE_W  254
+#define MAIN_ZONE4_Y    189
+#define MAIN_ZONE4_H     70
 
 #define CAL_FACTOR_DEFAULT  1.0f
 #define SCALE_FILTER_SIZE   8

@@ -1596,12 +1596,16 @@ const char* const STRINGS[][2] = {
     "sind also grundsätzlich in Ordnung.\n\n"
     "Prüfe VIN, GND, SDA und SCL an der NAU7802.\n\n"
     "Bei fertigen STEMMA-QT-Kabeln von Drittanbietern stimmt die "
-    "Pinreihenfolge oft nicht mit der des WT32-Kabels überein.",
+    "Pinreihenfolge oft nicht mit der des WT32-Kabels überein.\n\n"
+    "Ist dieses Gerät bewusst ohne Waage gebaut, schalte sie unter "
+    "Einstellungen > Waage ab - dann verschwindet diese Meldung.",
     "The NAU7802 does not answer on 0x2A. The NFC reader does, so SDA and SCL "
     "are basically fine.\n\n"
     "Check VIN, GND, SDA and SCL on the NAU7802.\n\n"
     "On third party STEMMA QT cables the pin order often does not match the "
-    "WT32 cable." },  // STR_DIAG_NAU_MISSING_TEXT
+    "WT32 cable.\n\n"
+    "If this device was deliberately built without a scale, switch it off "
+    "under Settings > Scale and this finding goes away." },  // STR_DIAG_NAU_MISSING_TEXT
 
   { "NFC-Reader fehlt (PN532)",  "NFC reader missing (PN532)" },  // STR_DIAG_PN532_MISSING_BANNER
   { "NFC-Reader fehlt",          "NFC reader missing"       },  // STR_DIAG_PN532_MISSING_TITLE
@@ -1807,6 +1811,35 @@ const char* const STRINGS[][2] = {
   { "Fertig",                    "Done"                     },  // STR_TAG2_BTN_DONE
   { "Zweites Tag verknüpft",     "Second tag linked"        },  // STR_TAG2_LINKED
 
+  // ── A device built without a load cell ──
+  { "Keine Waage angeschlossen", "No scale connected"       },  // STR_NO_SCALE
+  { "Waage vorhanden",           "Scale fitted"             },  // STR_SCALE_FITTED
+  { "An: das Gerät hat eine Wiegezelle und verhält sich wie bisher.\n\n"
+    "Aus: der ganze Waagenteil verschwindet. Der NAU7802 wird beim Start gar "
+    "nicht erst gesucht, der Hauptbildschirm zeigt statt der Gewichte einen "
+    "Hinweis und trägt an der Stelle von TARE nichts mehr, der Knopf "
+    "\"Gewicht updaten\" wird zum Lagerort-Knopf, und Kalibrierung und "
+    "Beutelgewicht verschwinden aus diesem Menü.\n\n"
+    "Gedacht für ein Gerät, das nur aus Display und Leser gebaut ist: Tag "
+    "auflegen, Spule sehen, Lagerort und Drucker zuordnen. Ohne diesen "
+    "Schalter meldet so ein Gerät dauerhaft einen Defekt, den es nicht hat."
+    "\n\n"
+    "Die Umstellung braucht einen Neustart.",
+    "On: the device has a load cell and behaves exactly as before.\n\n"
+    "Off: the whole weighing side disappears. The NAU7802 is not even looked "
+    "for at startup, the main screen carries a note instead of the weights and "
+    "nothing where TARE used to be, the \"Update weight\" button becomes the "
+    "location button, and calibration and bag weight leave this menu.\n\n"
+    "Meant for a device built from display and reader alone: hold a tag "
+    "against it, see the spool, give it a location and a printer. Without this "
+    "switch such a device reports a fault it does not have, for good.\n\n"
+    "Changing it needs a restart."                                        },  // STR_SCALE_FITTED_INFO
+  { "Ohne Waage | Mehr",         "No scale | More"          },  // STR_TILE_SCALE_SUB_OFF
+  { "Waage vorhanden",           "Scale fitted"             },  // STR_W_SCALE_FITTED
+  { "Aus, wenn das Gerät nur aus Display und Leser besteht. Braucht einen "
+    "Neustart.",
+    "Off if the device is display and reader only. Needs a restart."      },  // STR_W_SCALE_FITTED_HINT
+  { "abgeschaltet",              "switched off"             },  // STR_W_S_SCALE_OFF
 };
 
 StringID tagWriteResultString(uint8_t code) {

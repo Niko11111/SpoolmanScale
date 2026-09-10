@@ -33,7 +33,9 @@ void clearTagDisplay() {
   lv_label_set_text(lbl_spoolman_weight, "---");
   lv_label_set_text(lbl_spoolman_pct, "");
   lv_label_set_text(lbl_spoolman_dried_val, "-");
-  lv_label_set_text(lbl_scale_weight, "---");
+  // Guarded like the four below it: on a device without a load cell zone 4
+  // has no scale column, and this runs on every clear.
+  if (lbl_scale_weight) lv_label_set_text(lbl_scale_weight, "---");
   // Reset progress bar fill width to 0
   if (lbl_scale_diff) lv_obj_set_width(lbl_scale_diff, 0);
   if (lbl_spoolman_dried) lv_label_set_text(lbl_spoolman_dried, "");

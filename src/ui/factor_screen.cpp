@@ -267,7 +267,7 @@ void buildFactorScreen() {
           scale_weight_g = 0.0f;
           resetScaleFilter();
           lv_label_set_text(lbl_factor_result, T(STR_TARE_OK));
-          lv_label_set_text(lbl_scale_weight, "0 g");
+          if (lbl_scale_weight) lv_label_set_text(lbl_scale_weight, "0 g");
           Serial.println("Tare (calibration screen) executed");
         } else {
           lv_label_set_text(lbl_factor_result, T(STR_TARE_NOT_READY));

@@ -17,6 +17,7 @@
 #include "services/auto_weight_state.h"
 #include "services/tag_write.h"
 #include "services/user_options.h"
+#include "services/wifi_manager.h"
 #include "ui/confirm_popup.h"
 #include "ui/diag_banner.h"
 #include "ui/dried_action.h"
@@ -168,10 +169,15 @@ void buildUI() {
   lv_obj_set_style_text_color(lbl_hdr_nfc, lv_color_hex(0x606060), 0);
   lv_obj_set_style_text_font(lbl_hdr_nfc, &lv_font_montserrat_ext_12, 0);
 
-  lbl_hdr_scl = lv_label_create(hdr);
-  lv_label_set_text(lbl_hdr_scl, "SCL");
-  lv_obj_set_style_text_color(lbl_hdr_scl, lv_color_hex(0x606060), 0);
-  lv_obj_set_style_text_font(lbl_hdr_scl, &lv_font_montserrat_ext_12, 0);
+  // Not built at all without a load cell, rather than built and hidden.
+  // layoutHeaderChips() packs the row with lv_obj_align_to() and skips only
+  // nullptr - a hidden label still gets a place and would leave a gap.
+  if (g_scale_fitted) {
+    lbl_hdr_scl = lv_label_create(hdr);
+    lv_label_set_text(lbl_hdr_scl, "SCL");
+    lv_obj_set_style_text_color(lbl_hdr_scl, lv_color_hex(0x606060), 0);
+    lv_obj_set_style_text_font(lbl_hdr_scl, &lv_font_montserrat_ext_12, 0);
+  }
 
   // Fix 10: Spoolman reachability indicator
   lbl_hdr_sm = lv_label_create(hdr);
@@ -419,7 +425,11 @@ void buildUI() {
   // 204 px, so it stops before the warning symbol at x=456
   lv_label_set_long_mode(lbl_spoolman_dried_val, LV_LABEL_LONG_DOT);
   lv_obj_set_width(lbl_spoolman_dried_val, 204);
-  lbl_spoolman_dried = lbl_spoolman_dried_val;
+  // lbl_spoolman_dried is NOT aimed here. It belongs to the live total in
+  // zone 4 and was overwritten there a hundred lines further down, so the
+  // assignment that used to stand here never survived anyway. Without a scale
+  // zone 4 is not built, and it would have survived - pointing four callers
+  // that mean "clear the total" at the last-dried value instead.
   // Ampel-Symbol (WARNING) rechts vom Datum, standardmaessig versteckt
   lbl_dried_sym = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_dried_sym, LV_SYMBOL_WARNING);
@@ -516,121 +526,156 @@ void buildUI() {
   lv_obj_set_style_radius(vdiv1, 0, 0);
   lv_obj_set_style_pad_all(vdiv1, 0, 0);
 
-  // Scale filament netto caption - "Waage - Spule" / "Scale - Spool"
-  lv_obj_t *lbl_sc_cap = lv_label_create(lv_scr_act());
-  char sc_cap_buf[24]; strncpy(sc_cap_buf, T(STR_LBL_SCALE_SPOOL_CAP), sizeof(sc_cap_buf)-1);
-  sc_cap_buf[sizeof(sc_cap_buf)-1] = '\0';
-  lv_label_set_text(lbl_sc_cap, sc_cap_buf);
-  lv_obj_set_style_text_color(lbl_sc_cap, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_sc_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_sc_cap, 218, 189);
+  // Everything from here to the button bar belongs to the load cell: the live
+  // netto, the two diffs, the total, the bag line, the second divider and the
+  // TARE key. Built only when there is a scale to feed them.
+  //
+  // Built, not hidden. buildUI() runs once, so a device with a scale carries
+  // no extra objects for this and a device without one carries a dozen fewer -
+  // which is the whole reason the switch asks for a restart instead of
+  // rearranging this zone while the user is looking at it.
+  if (g_scale_fitted) {
+    // Scale filament netto caption - "Waage - Spule" / "Scale - Spool"
+    lv_obj_t *lbl_sc_cap = lv_label_create(lv_scr_act());
+    char sc_cap_buf[24]; strncpy(sc_cap_buf, T(STR_LBL_SCALE_SPOOL_CAP), sizeof(sc_cap_buf)-1);
+    sc_cap_buf[sizeof(sc_cap_buf)-1] = '\0';
+    lv_label_set_text(lbl_sc_cap, sc_cap_buf);
+    lv_obj_set_style_text_color(lbl_sc_cap, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(lbl_sc_cap, &lv_font_montserrat_ext_12, 0);
+    lv_obj_set_pos(lbl_sc_cap, 218, 189);
 
-  // Scale filament netto — BIG
-  lbl_scale_weight = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_scale_weight, scale_ready ? "0 g" : "---");
-  lv_obj_set_style_text_color(lbl_scale_weight, lv_color_hex(0xf0b838), 0);
-  lv_obj_set_style_text_font(lbl_scale_weight, &lv_font_montserrat_ext_20, 0);
-  lv_obj_set_pos(lbl_scale_weight, 218, 201);
+    // Scale filament netto — BIG
+    lbl_scale_weight = lv_label_create(lv_scr_act());
+    lv_label_set_text(lbl_scale_weight, scale_ready ? "0 g" : "---");
+    lv_obj_set_style_text_color(lbl_scale_weight, lv_color_hex(0xf0b838), 0);
+    lv_obj_set_style_text_font(lbl_scale_weight, &lv_font_montserrat_ext_20, 0);
+    lv_obj_set_pos(lbl_scale_weight, 218, 201);
 
-  // SM diff caption + value — both diffs stacked on right side (Fix 3)
-  lv_obj_t *lbl_diff_cap = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_diff_cap, "Diff:");
-  lv_obj_set_style_text_color(lbl_diff_cap, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_diff_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_diff_cap, 344, 189);
+    // SM diff caption + value — both diffs stacked on right side (Fix 3)
+    lv_obj_t *lbl_diff_cap = lv_label_create(lv_scr_act());
+    lv_label_set_text(lbl_diff_cap, "Diff:");
+    lv_obj_set_style_text_color(lbl_diff_cap, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(lbl_diff_cap, &lv_font_montserrat_ext_12, 0);
+    lv_obj_set_pos(lbl_diff_cap, 344, 189);
 
-  lbl_raw_info = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_raw_info, "");
-  lv_obj_set_style_text_color(lbl_raw_info, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_raw_info, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(lbl_raw_info, 344, 205);  // shares baseline 220
+    lbl_raw_info = lv_label_create(lv_scr_act());
+    lv_label_set_text(lbl_raw_info, "");
+    lv_obj_set_style_text_color(lbl_raw_info, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(lbl_raw_info, &lv_font_montserrat_ext_16, 0);
+    lv_obj_set_pos(lbl_raw_info, 344, 205);  // shares baseline 220
 
-  // "Gesamt" / "Total" - caption and value share baseline 238
-  lv_obj_t *lbl_live_cap = lv_label_create(lv_scr_act());
-  char live_cap_buf[16]; strncpy(live_cap_buf, T(STR_LBL_TOTAL_CAP), sizeof(live_cap_buf)-1);
-  live_cap_buf[sizeof(live_cap_buf)-1] = '\0';
-  lv_label_set_text(lbl_live_cap, live_cap_buf);
-  lv_obj_set_style_text_color(lbl_live_cap, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_live_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_live_cap, 218, 225);
+    // "Gesamt" / "Total" - caption and value share baseline 238
+    lv_obj_t *lbl_live_cap = lv_label_create(lv_scr_act());
+    char live_cap_buf[16]; strncpy(live_cap_buf, T(STR_LBL_TOTAL_CAP), sizeof(live_cap_buf)-1);
+    live_cap_buf[sizeof(live_cap_buf)-1] = '\0';
+    lv_label_set_text(lbl_live_cap, live_cap_buf);
+    lv_obj_set_style_text_color(lbl_live_cap, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(lbl_live_cap, &lv_font_montserrat_ext_12, 0);
+    lv_obj_set_pos(lbl_live_cap, 218, 225);
 
-  lbl_spoolman_dried = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_spoolman_dried, "");
-  lv_obj_set_style_text_color(lbl_spoolman_dried, lv_color_hex(0x8ab0d8), 0);
-  lv_obj_set_style_text_font(lbl_spoolman_dried, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_pos(lbl_spoolman_dried, 286, 225);
+    lbl_spoolman_dried = lv_label_create(lv_scr_act());
+    lv_label_set_text(lbl_spoolman_dried, "");
+    lv_obj_set_style_text_color(lbl_spoolman_dried, lv_color_hex(0x8ab0d8), 0);
+    lv_obj_set_style_text_font(lbl_spoolman_dried, &lv_font_montserrat_ext_14, 0);
+    lv_obj_set_pos(lbl_spoolman_dried, 286, 225);
 
-  // "o. Beutel" / "w/o Bag" - caption and value share baseline 256
-  lv_obj_t *lbl_bag_cap = lv_label_create(lv_scr_act());
-  char bag_cap_buf[16]; strncpy(bag_cap_buf, T(STR_LBL_WO_BAG_CAP), sizeof(bag_cap_buf)-1);
-  bag_cap_buf[sizeof(bag_cap_buf)-1] = '\0';
-  lv_label_set_text(lbl_bag_cap, bag_cap_buf);
-  lv_obj_set_style_text_color(lbl_bag_cap, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_bag_cap, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_pos(lbl_bag_cap, 218, 243);
+    // "o. Beutel" / "w/o Bag" - caption and value share baseline 256
+    lv_obj_t *lbl_bag_cap = lv_label_create(lv_scr_act());
+    char bag_cap_buf[16]; strncpy(bag_cap_buf, T(STR_LBL_WO_BAG_CAP), sizeof(bag_cap_buf)-1);
+    bag_cap_buf[sizeof(bag_cap_buf)-1] = '\0';
+    lv_label_set_text(lbl_bag_cap, bag_cap_buf);
+    lv_obj_set_style_text_color(lbl_bag_cap, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(lbl_bag_cap, &lv_font_montserrat_ext_12, 0);
+    lv_obj_set_pos(lbl_bag_cap, 218, 243);
 
-  lv_obj_t *lbl_bag_diff = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_bag_diff, "");
-  lv_obj_set_style_text_color(lbl_bag_diff, lv_color_hex(0xf0b838), 0);
-  lv_obj_set_style_text_font(lbl_bag_diff, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_pos(lbl_bag_diff, 286, 243);
-  lbl_keys = lbl_bag_diff;
+    lv_obj_t *lbl_bag_diff = lv_label_create(lv_scr_act());
+    lv_label_set_text(lbl_bag_diff, "");
+    lv_obj_set_style_text_color(lbl_bag_diff, lv_color_hex(0xf0b838), 0);
+    lv_obj_set_style_text_font(lbl_bag_diff, &lv_font_montserrat_ext_14, 0);
+    lv_obj_set_pos(lbl_bag_diff, 286, 243);
+    lbl_keys = lbl_bag_diff;
 
-  // bag diff - stacked below the netto diff, sharing baseline 256
-  lbl_bag_sm_diff = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_bag_sm_diff, "");
-  lv_obj_set_style_text_color(lbl_bag_sm_diff, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_bag_sm_diff, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_pos(lbl_bag_sm_diff, 344, 241);
+    // bag diff - stacked below the netto diff, sharing baseline 256
+    lbl_bag_sm_diff = lv_label_create(lv_scr_act());
+    lv_label_set_text(lbl_bag_sm_diff, "");
+    lv_obj_set_style_text_color(lbl_bag_sm_diff, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(lbl_bag_sm_diff, &lv_font_montserrat_ext_16, 0);
+    lv_obj_set_pos(lbl_bag_sm_diff, 344, 241);
 
-  // Vertical divider, column 2 / TARE. This was a 0 x 0 object for a while,
-  // which drew nothing and left the zone looking open to the right.
-  lv_obj_t *vdiv2 = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(vdiv2, 1, 70);
-  lv_obj_set_pos(vdiv2, 408, 189);
-  lv_obj_set_style_bg_color(vdiv2, lv_color_hex(0x0f1e30), 0);
-  lv_obj_set_style_border_width(vdiv2, 0, 0);
-  lv_obj_set_style_radius(vdiv2, 0, 0);
-  lv_obj_set_style_pad_all(vdiv2, 0, 0);
+    // Vertical divider, column 2 / TARE. This was a 0 x 0 object for a while,
+    // which drew nothing and left the zone looking open to the right.
+    lv_obj_t *vdiv2 = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(vdiv2, 1, 70);
+    lv_obj_set_pos(vdiv2, 408, 189);
+    lv_obj_set_style_bg_color(vdiv2, lv_color_hex(0x0f1e30), 0);
+    lv_obj_set_style_border_width(vdiv2, 0, 0);
+    lv_obj_set_style_radius(vdiv2, 0, 0);
+    lv_obj_set_style_pad_all(vdiv2, 0, 0);
 
-  // TARE button - right edge on the 8 px margin, centred in the zone (4 px
-  // above and below). 71 px, because the zone is 79 rows and 79 is odd.
-  lv_obj_t *btn_tare = lv_btn_create(lv_scr_act());
-  lv_obj_set_size(btn_tare, 56, 71);
-  lv_obj_set_pos(btn_tare, 416, 189);
-  lv_obj_set_style_bg_color(btn_tare, lv_color_hex(0x2a2010), 0);
-  lv_obj_set_style_bg_color(btn_tare, lv_color_hex(0x4a4020), LV_STATE_PRESSED);
-  lv_obj_set_style_border_width(btn_tare, 1, 0);
-  lv_obj_set_style_border_color(btn_tare, lv_color_hex(0x3a3010), 0);
-  lv_obj_set_style_radius(btn_tare, 8, 0);
-  lv_obj_set_style_shadow_width(btn_tare, 0, 0);
-  lv_obj_add_event_cb(btn_tare, [](lv_event_t *e) {
-    logSD("UI: Button -> TARE (main)");
-    // Presence as well as scale_ready: an ADC that left the bus reads back as
-    // all ones, and tare would store -1 as the zero point.
-    if (scale_ready && scaleHardwarePresent()) {
-      int32_t raw = scaleHardwareReadRaw();
-      saveTareOffset(raw);
-      scale_weight_g = 0.0f;
-      resetScaleFilter();
-      lv_label_set_text(lbl_scale_weight, "0 g");
-      Serial.println("TARE (main)");
-      logSDf("TARE applied (raw=%d)", raw);
-    } else {
-      logSD("TARE: scale not ready");
-    }
-  }, LV_EVENT_CLICKED, NULL);
-  // Icon top, text bottom — both centered
-  lv_obj_t *lbl_tare_icon = lv_label_create(btn_tare);
-  lv_label_set_text(lbl_tare_icon, LV_SYMBOL_REFRESH);
-  lv_obj_set_style_text_color(lbl_tare_icon, lv_color_hex(0xf0b838), 0);
-  lv_obj_set_style_text_font(lbl_tare_icon, &lv_font_montserrat_ext_18, 0);
-  lv_obj_align(lbl_tare_icon, LV_ALIGN_CENTER, 0, -10);
-  lv_obj_t *lbl_tare_txt = lv_label_create(btn_tare);
-  lv_label_set_text(lbl_tare_txt, "TARE");
-  lv_obj_set_style_text_color(lbl_tare_txt, lv_color_hex(0xf0b838), 0);
-  lv_obj_set_style_text_font(lbl_tare_txt, &lv_font_montserrat_ext_10, 0);
-  lv_obj_align(lbl_tare_txt, LV_ALIGN_CENTER, 0, 12);
+    // TARE button - right edge on the 8 px margin, centred in the zone (4 px
+    // above and below). 71 px, because the zone is 79 rows and 79 is odd.
+    lv_obj_t *btn_tare = lv_btn_create(lv_scr_act());
+    lv_obj_set_size(btn_tare, 56, 71);
+    lv_obj_set_pos(btn_tare, 416, 189);
+    lv_obj_set_style_bg_color(btn_tare, lv_color_hex(0x2a2010), 0);
+    lv_obj_set_style_bg_color(btn_tare, lv_color_hex(0x4a4020), LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(btn_tare, 1, 0);
+    lv_obj_set_style_border_color(btn_tare, lv_color_hex(0x3a3010), 0);
+    lv_obj_set_style_radius(btn_tare, 8, 0);
+    lv_obj_set_style_shadow_width(btn_tare, 0, 0);
+    lv_obj_add_event_cb(btn_tare, [](lv_event_t *e) {
+      logSD("UI: Button -> TARE (main)");
+      // Presence as well as scale_ready: an ADC that left the bus reads back as
+      // all ones, and tare would store -1 as the zero point.
+      if (scale_ready && scaleHardwarePresent()) {
+        int32_t raw = scaleHardwareReadRaw();
+        saveTareOffset(raw);
+        scale_weight_g = 0.0f;
+        resetScaleFilter();
+        lv_label_set_text(lbl_scale_weight, "0 g");
+        Serial.println("TARE (main)");
+        logSDf("TARE applied (raw=%d)", raw);
+      } else {
+        logSD("TARE: scale not ready");
+      }
+    }, LV_EVENT_CLICKED, NULL);
+    // Icon top, text bottom — both centered
+    lv_obj_t *lbl_tare_icon = lv_label_create(btn_tare);
+    lv_label_set_text(lbl_tare_icon, LV_SYMBOL_REFRESH);
+    lv_obj_set_style_text_color(lbl_tare_icon, lv_color_hex(0xf0b838), 0);
+    lv_obj_set_style_text_font(lbl_tare_icon, &lv_font_montserrat_ext_18, 0);
+    lv_obj_align(lbl_tare_icon, LV_ALIGN_CENTER, 0, -10);
+    lv_obj_t *lbl_tare_txt = lv_label_create(btn_tare);
+    lv_label_set_text(lbl_tare_txt, "TARE");
+    lv_obj_set_style_text_color(lbl_tare_txt, lv_color_hex(0xf0b838), 0);
+    lv_obj_set_style_text_font(lbl_tare_txt, &lv_font_montserrat_ext_10, 0);
+    lv_obj_align(lbl_tare_txt, LV_ALIGN_CENTER, 0, 12);
+  } else {
+    // The right half of the zone, saying why it is empty. Left half untouched:
+    // remaining, percent and the bar come out of the database and are just as
+    // true without a load cell.
+    //
+    // On #4a6fa0, the caption colour. Not #2a4060 - that is a shape colour for
+    // rules and inactive bars, and at 1.7:1 on this background it is not text.
+    lv_obj_t *lbl_no_scale = lv_label_create(lv_scr_act());
+    char ns_buf[48];
+    strncpy(ns_buf, T(STR_NO_SCALE), sizeof(ns_buf) - 1);
+    ns_buf[sizeof(ns_buf) - 1] = '\0';
+    lv_label_set_text(lbl_no_scale, ns_buf);
+    lv_obj_set_style_text_color(lbl_no_scale, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_font(lbl_no_scale, &lv_font_montserrat_ext_14, 0);
+    lv_obj_set_style_text_align(lbl_no_scale, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(lbl_no_scale, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(lbl_no_scale, MAIN_NOSCALE_W);
+    // Centred from the height it really has, not from a number worked out for
+    // German. A longer translation wraps to two lines and a fixed y would hang
+    // it out of the zone; the label only knows its height after a layout pass.
+    lv_obj_set_pos(lbl_no_scale, MAIN_NOSCALE_X, MAIN_ZONE4_Y);
+    lv_obj_update_layout(lbl_no_scale);
+    const lv_coord_t ns_h = lv_obj_get_height(lbl_no_scale);
+    lv_obj_set_pos(lbl_no_scale, MAIN_NOSCALE_X,
+                   MAIN_ZONE4_Y + (MAIN_ZONE4_H - ns_h) / 2);
+  }
 
   // Separator zone 4/5
   lv_obj_t *sep3 = lv_obj_create(lv_scr_act());
@@ -654,36 +699,71 @@ void buildUI() {
   lv_obj_set_style_pad_all(btn_bar, 0, 0);
   lv_obj_clear_flag(btn_bar, LV_OBJ_FLAG_SCROLLABLE);
 
-  // "Update Weight" button (x=6, w=204)
-  btn_weight_main = lv_btn_create(btn_bar);
-  lv_obj_set_size(btn_weight_main, 202, 39);
-  lv_obj_set_pos(btn_weight_main, 8, 8);
-  lv_obj_set_style_bg_color(btn_weight_main, lv_color_hex(0x1a3020), 0);
-  lv_obj_set_style_bg_color(btn_weight_main, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-  lv_obj_set_style_border_width(btn_weight_main, 1, 0);
-  lv_obj_set_style_border_color(btn_weight_main, lv_color_hex(0x2a5030), 0);
-  lv_obj_set_style_radius(btn_weight_main, 8, 0);
-  lv_obj_set_style_shadow_width(btn_weight_main, 0, 0);
-  lv_obj_add_event_cb(btn_weight_main, [](lv_event_t *e) {
-    logSD("UI: Button -> Update Weight");
-    { char qb[64]; backendText(T(STR_POPUP_WEIGHT_Q), qb, sizeof(qb)); showConfirmPopup(qb, 2); }
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *lbl_wm = lv_label_create(btn_weight_main);
-  lbl_weight_main_lbl = lbl_wm;
-  {
-    char wmbuf[48];
-    if (g_auto_weight)
-      snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
-    else {
-      strncpy(wmbuf, T(STR_BTN_WEIGHT), sizeof(wmbuf)-1);
-      wmbuf[sizeof(wmbuf)-1] = '\0';
+  // Slot 1 of the pair. With a scale it updates the weight; without one there
+  // is no weight to send, and the slot goes to the location instead - which is
+  // what a display-and-reader device is for: see the spool, put it on a shelf.
+  if (g_scale_fitted) {
+    // "Update Weight" button (x=6, w=204)
+    btn_weight_main = lv_btn_create(btn_bar);
+    lv_obj_set_size(btn_weight_main, 202, 39);
+    lv_obj_set_pos(btn_weight_main, 8, 8);
+    lv_obj_set_style_bg_color(btn_weight_main, lv_color_hex(0x1a3020), 0);
+    lv_obj_set_style_bg_color(btn_weight_main, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(btn_weight_main, 1, 0);
+    lv_obj_set_style_border_color(btn_weight_main, lv_color_hex(0x2a5030), 0);
+    lv_obj_set_style_radius(btn_weight_main, 8, 0);
+    lv_obj_set_style_shadow_width(btn_weight_main, 0, 0);
+    lv_obj_add_event_cb(btn_weight_main, [](lv_event_t *e) {
+      logSD("UI: Button -> Update Weight");
+      { char qb[64]; backendText(T(STR_POPUP_WEIGHT_Q), qb, sizeof(qb)); showConfirmPopup(qb, 2); }
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_wm = lv_label_create(btn_weight_main);
+    lbl_weight_main_lbl = lbl_wm;
+    {
+      char wmbuf[48];
+      if (g_auto_weight)
+        snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
+      else {
+        strncpy(wmbuf, T(STR_BTN_WEIGHT), sizeof(wmbuf)-1);
+        wmbuf[sizeof(wmbuf)-1] = '\0';
+      }
+      lv_label_set_text(lbl_wm, wmbuf);
     }
-    lv_label_set_text(lbl_wm, wmbuf);
+    lv_obj_set_style_text_color(lbl_wm, g_auto_weight ? lv_color_hex(0x28d49a) : lv_color_hex(0x40c080), 0);
+    lv_obj_set_style_text_font(lbl_wm, &lv_font_montserrat_ext_16, 0);
+    lv_obj_set_style_text_align(lbl_wm, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lbl_wm, LV_ALIGN_CENTER, 0, 0);
+  } else {
+    // Same geometry as the button it stands in for. The colours are the ones
+    // the location button in More Info already wears, so the two read as one
+    // function rather than as two things that happen to open the same list.
+    btn_location = lv_btn_create(btn_bar);
+    lv_obj_set_size(btn_location, 202, 39);
+    lv_obj_set_pos(btn_location, 8, 8);
+    lv_obj_set_style_bg_color(btn_location, lv_color_hex(0x0d2040), 0);
+    lv_obj_set_style_bg_color(btn_location, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(btn_location, 1, 0);
+    lv_obj_set_style_border_color(btn_location, lv_color_hex(0x1a3060), 0);
+    lv_obj_set_style_radius(btn_location, 8, 0);
+    lv_obj_set_style_shadow_width(btn_location, 0, 0);
+    lv_obj_add_event_cb(btn_location, [](lv_event_t *e) {
+      logSD("UI: Button -> Location (main)");
+      // The list is fetched over HTTP, so this only ever asks. true says the
+      // picker was opened from here, which is what sends its exits back to the
+      // main screen instead of to More Info.
+      if (!wifiManagerIsConnected()) return;
+      requestLocationPicker(true);
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_loc = lv_label_create(btn_location);
+    char locbuf[32];
+    strncpy(locbuf, T(STR_BTN_LOCATION), sizeof(locbuf) - 1);
+    locbuf[sizeof(locbuf) - 1] = '\0';
+    lv_label_set_text(lbl_loc, locbuf);
+    lv_obj_set_style_text_color(lbl_loc, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_font(lbl_loc, &lv_font_montserrat_ext_16, 0);
+    lv_obj_set_style_text_align(lbl_loc, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lbl_loc, LV_ALIGN_CENTER, 0, 0);
   }
-  lv_obj_set_style_text_color(lbl_wm, g_auto_weight ? lv_color_hex(0x28d49a) : lv_color_hex(0x40c080), 0);
-  lv_obj_set_style_text_font(lbl_wm, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_align(lbl_wm, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_wm, LV_ALIGN_CENTER, 0, 0);
 
   // "Dried today" button (x=216, w=204)
   btn_dried = lv_btn_create(btn_bar);
