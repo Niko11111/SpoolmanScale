@@ -221,6 +221,121 @@ static void unlinkAllNativeTags(int spool_id, const char* fallback_uid) {
   }
 }
 
+// ============================================================
+//  THE HARDWARE UID, FOR READERS THAT SEE NOTHING ELSE
+// ============================================================
+// The two lengths a reader ever reports, normalised: a 4 byte uid and a 7 byte
+// one. Everything the scale scans is one of them.
+#define HW_UID_LEN_4B   8
+#define HW_UID_LEN_7B  14
+
+// Only a hardware uid belongs in the Happy Hare field, and this is what keeps
+// a tray uuid out of it.
+//
+// Happy Hare builds a reverse map of uid to spool, and a uid it finds on a
+// second spool it MOVES, stripping it from the first. A tray uuid is not a
+// tag: both chips of a spool carry it, and every duplicate a Bambu import left
+// behind carries it too. Two such spools would take it off each other for as
+// long as both are scanned. It is 32 characters and refused here.
+static bool hwUidIsHardware(const char* norm) {
+  const size_t n = strlen(norm);
+  return n == HW_UID_LEN_4B || n == HW_UID_LEN_7B;
+}
+
+bool syncHwUidField(int spool_id, const char* scanned) {
+  // Everything that can say no without touching the network, before anything
+  // that cannot. This runs on every lookup that found a spool, so a spool
+  // whose uids are already on file has to cost nothing at all.
+  if (!g_hw_uid_write || spool_id <= 0)  return false;
+  if (backendMode() != BACKEND_SPOOLMAN) return false;
+  if (!wifi_ok)                          return false;
+  // Nothing on the reader. There is no uid to report and no spool this could
+  // be about.
+  if (!scanned || !scanned[0])           return false;
+
+  // The chip, never the tray uuid: tagNativeUid() answers with g_tag.uid_str
+  // for a Bambu tag and with `scanned` itself for everything else, so an NTAG
+  // and a plain card need no special case here.
+  char uid[CARD_UIDS_MAX];
+  tagUidNormalize(tagNativeUid(scanned), uid, sizeof(uid));
+  if (!hwUidIsHardware(uid)) {
+    logSDf("HW uid: '%s' is not a hardware uid, %s not written", uid, RFID_TAG_FIELD);
+    return false;
+  }
+
+  // The gate that keeps a settled spool free, and it sits ahead of the field
+  // probe on purpose - that one reaches the network on its first call for a
+  // server. sm_hw_uid_value was filled by captureBindings() out of the very
+  // document this lookup parsed, so it cannot be stale.
+  if (cardUidsContain(sm_hw_uid_value, uid)) return false;
+
+  if (!backendHasExtraField(RFID_TAG_FIELD)) {
+    logSDf("HW uid: %s missing on the server, '%s' not written", RFID_TAG_FIELD, uid);
+    return false;
+  }
+
+  char merged[CARD_UIDS_MAX];
+  CardUidsResult r = cardUidsAppend(sm_hw_uid_value, uid, merged, sizeof(merged));
+  if (r == CARD_UIDS_FULL) {
+    // Refused rather than shortened. The list may hold a uid Happy Hare put
+    // there itself, and dropping one takes a spool off a printer.
+    logSDf("HW uid ID=%d '%s' REFUSED, %s full ('%s')",
+           spool_id, uid, RFID_TAG_FIELD, sm_hw_uid_value);
+    return false;
+  }
+  if (r == CARD_UIDS_ALREADY_PRESENT) return false;
+
+  int c = backendPatchExtraField(cfg_spoolman_base, spool_id, RFID_TAG_FIELD, merged);
+  logSDf("HW uid ID=%d %s='%s' (%d) HTTP %d",
+         spool_id, RFID_TAG_FIELD, merged, cardUidsCount(merged), c);
+  if (c < 200 || c >= 300) return false;
+
+  // Keeps the captured value in step with what was just written, the same way
+  // AutoLink::remember() does for the native list and for the same reason: the
+  // unlink reads this buffer, and it was read before this entry existed. A
+  // spool the user was told is unlinked would otherwise still answer at a gate.
+  strncpy(sm_hw_uid_value, merged, CARD_UIDS_MAX - 1);
+  sm_hw_uid_value[CARD_UIDS_MAX - 1] = '\0';
+  return true;
+}
+
+// Takes the tag on the reader back out of the Happy Hare field, or empties it.
+//
+// Not gated on the switch. It may have been turned off after values were
+// written, and an unlink that leaves them behind keeps the spool answering at
+// the gate after the screen said it is gone. The captured value is the guard
+// instead: a field holding nothing costs no request, which is also what keeps
+// an HTTP 400 off a server that never had the field.
+static void unlinkHwUidField(int spool_id, const char* scanned, bool all) {
+  if (!sm_hw_uid_value[0]) return;
+
+  if (all) {
+    // The whole binding means all of it, including the chip on the other
+    // flange - which this scale can name only because captureBindings() read
+    // the list. Leaving that one behind is exactly the half-unlink the tag
+    // fields go out of their way to avoid.
+    int c = backendPatchExtraField(cfg_spoolman_base, spool_id, RFID_TAG_FIELD, "");
+    logSDf("UNLINK ID=%d cleared %s ('%s'), HTTP %d",
+           spool_id, RFID_TAG_FIELD, sm_hw_uid_value, c);
+    if (c >= 200 && c < 300) sm_hw_uid_value[0] = '\0';
+    return;
+  }
+
+  char uid[CARD_UIDS_MAX];
+  tagUidNormalize(tagNativeUid(scanned), uid, sizeof(uid));
+
+  char rest[CARD_UIDS_MAX];
+  if (!cardUidsRemove(sm_hw_uid_value, uid, rest, sizeof(rest))) return;
+
+  int c = backendPatchExtraField(cfg_spoolman_base, spool_id, RFID_TAG_FIELD, rest);
+  logSDf("UNLINK one ID=%d uid='%s' left %s='%s' HTTP %d",
+         spool_id, uid, RFID_TAG_FIELD, rest, c);
+  if (c >= 200 && c < 300) {
+    strncpy(sm_hw_uid_value, rest, CARD_UIDS_MAX - 1);
+    sm_hw_uid_value[CARD_UIDS_MAX - 1] = '\0';
+  }
+}
+
 bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_values) {
   if (!wifi_ok) return false;
   const bool clearing = (!uuid || !uuid[0]);
@@ -443,6 +558,10 @@ void unlinkCardUid(int spool_id, const char* uid, bool all) {
       logSDf("UNLINK native ID=%d uuid='%s' HTTP %d", spool_id, native_uid, c);
     }
   }
+
+  // The companion field, whichever way the popup was answered. It is not one
+  // of the tag fields below, so the loop over them would never reach it.
+  unlinkHwUidField(spool_id, uid, all);
 
   if (all) {
     // Every field that holds something has to go. Leaving one behind would

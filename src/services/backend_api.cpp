@@ -169,6 +169,12 @@ static int knownFieldIndex(const char* key) {
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
     if (strcmp(key, tagFieldSpec(i).key) == 0) return (int)i;
   if (strcmp(key, LAST_DRIED_FIELD) == 0) return TAG_FIELD_EXTRA_COUNT;
+  // Probed like a tag field without being one: the companion write is gated on
+  // it, and a key the probe does not know reads as absent for the whole
+  // session, so the write would never happen and never say why. It would also
+  // make every successful write throw the field cache away, see
+  // backendPatchExtraField() below.
+  if (strcmp(key, RFID_TAG_FIELD)   == 0) return TAG_FIELD_EXTRA_COUNT + 1;
   return -1;
 }
 
@@ -323,10 +329,11 @@ bool backendHasExtraField(const char* key) {
     s_fields_mask = mask;
     strncpy(s_fields_probed_for, base, sizeof(s_fields_probed_for) - 1);
     s_fields_probed_for[sizeof(s_fields_probed_for) - 1] = '\0';
-    logSDf("extra fields on %s: tag=%d nfc_id=%d card_uids=%d last_dried=%d",
+    logSDf("extra fields on %s: tag=%d nfc_id=%d card_uids=%d last_dried=%d rfid_tag=%d",
            base,
            (mask >> TAG_FIELD_TAG)       & 1, (mask >> TAG_FIELD_NFC_ID)  & 1,
-           (mask >> TAG_FIELD_CARD_UIDS) & 1, (mask >> TAG_FIELD_EXTRA_COUNT) & 1);
+           (mask >> TAG_FIELD_CARD_UIDS) & 1, (mask >> TAG_FIELD_EXTRA_COUNT) & 1,
+           (mask >> (TAG_FIELD_EXTRA_COUNT + 1)) & 1);
     logSDf("extra fields on %s: %d text field(s) to compare against",
            base, (int)s_text_field_count);
   }

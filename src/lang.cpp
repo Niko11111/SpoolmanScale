@@ -1741,6 +1741,36 @@ const char* const STRINGS[][2] = {
     "The reader did not notice. The orange wire is still on the old pad, or "
     "the joint is not making contact.\n\n"
     "Nothing changes, the scale carries on as before." },  // STR_NFCRST_FAIL_TEXT
+
+  // ── Hardware UID into extra.rfid_tag ──
+  { "Chip-UID mitschreiben",     "Also write the chip UID"  },  // STR_HW_UID_WRITE
+  { "Zusätzlich in rfid_tag",    "Into rfid_tag as well"    },  // STR_HW_UID_WRITE_SUB
+  { "An: die Hardware-UID des Chips, der gerade auf dem Leser liegt, kommt "
+    "zusätzlich in das Extra-Feld rfid_tag, als kommagetrennte Liste. Die "
+    "Bindung selbst bleibt unverändert in dem Feld, das oben gewählt ist.\n\n"
+    "Happy Hare an einem Voron liest ausschliesslich rfid_tag, und die Leser "
+    "an den Gates sehen nur die Hardware-UID des Chips, nie die tray_uuid "
+    "einer Bambu-Spule. Ohne dieses Feld findet der Drucker die Spule nicht, "
+    "die auf der Waage längst erkannt wird.\n\n"
+    "Eine Bambu-Spule trägt zwei Chips, also zwei UIDs. Die Liste wächst von "
+    "selbst: einmal jede Seite auflegen, danach antwortet die Spule an beiden "
+    "Gates.\n\n"
+    "Die Waage schreibt dabei in jede Spule, die sie erkennt, nicht erst beim "
+    "Verknüpfen. Steht die UID schon drin, geht keine Anfrage mehr raus. Das "
+    "Feld legt Happy Hare selbst an.",
+    "On: the hardware UID of the chip currently on the reader goes into the "
+    "rfid_tag extra field as well, as a comma separated list. The binding "
+    "itself stays untouched in the field selected above.\n\n"
+    "Happy Hare on a Voron reads rfid_tag and nothing else, and the readers at "
+    "its gates only ever see the chip's hardware UID, never the tray_uuid of a "
+    "Bambu spool. Without this field the printer cannot find the spool the "
+    "scale recognises perfectly well.\n\n"
+    "A Bambu spool carries two chips and therefore two UIDs. The list grows on "
+    "its own: put each side on the reader once and the spool answers at both "
+    "gates.\n\n"
+    "The scale writes this into every spool it recognises, not only when a "
+    "link is made. Once the UID is in there, no request goes out again. Happy "
+    "Hare creates the field itself."                                      },  // STR_HW_UID_WRITE_INFO
 };
 
 StringID tagWriteResultString(uint8_t code) {

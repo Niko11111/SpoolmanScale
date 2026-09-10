@@ -94,6 +94,7 @@ void backendApplyMode(BackendMode mode) {
   sm_archived = false;
   sm_location_id = 0;            // its name is cleared, the id was not
   sm_tag_conflict_spool = 0;
+  sm_hw_uid_value[0] = '\0';     // belongs to a spool on the old server
   sm_vendor_g[0] = '\0';
   sm_tare_source = 0;
 

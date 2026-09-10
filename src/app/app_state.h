@@ -125,6 +125,20 @@ extern char sm_last_dried[32];
 // UIDs; anything longer is dropped rather than shortened.
 extern char sm_tag_values[TAG_FIELD_COUNT][CARD_UIDS_MAX];
 
+// What the matched spool holds in extra.rfid_tag, filled by the same pass.
+//
+// Its own buffer rather than a slot in the array above: that one is indexed by
+// TagFieldId and is walked whole in places that read every filled slot as a
+// binding - the unlink popup names them all - and this field binds nothing. It
+// carries a copy of the hardware uid for a reader that cannot see anything
+// else. Widening the array would also mean touching an enum whose order is
+// persisted in NVS.
+//
+// Needed in RAM for the same reason as the array: the unlink runs from an LVGL
+// callback and cannot go and fetch it, and appending has to know what is
+// already there or it would replace the tag on the other flange.
+extern char sm_hw_uid_value[CARD_UIDS_MAX];
+
 // A spool that was found, but is archived. Its own state rather than a flavour
 // of sm_found: the screen has to show the spool - name, filament, tare - so the
 // user can bring it back, while everything that writes has to hold off until

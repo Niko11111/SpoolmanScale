@@ -92,6 +92,7 @@ float sm_spool_weight = 0;
 uint8_t sm_tare_source = TARE_NONE;
 char  sm_last_dried[32] = "";
 char  sm_tag_values[TAG_FIELD_COUNT][CARD_UIDS_MAX] = {};
+char  sm_hw_uid_value[CARD_UIDS_MAX] = "";
 bool  sm_archived = false;
 int   sm_tag_conflict_spool = 0;
 

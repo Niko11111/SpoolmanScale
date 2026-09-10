@@ -17,6 +17,7 @@
 #include "services/backend_api.h"
 #include "services/filaman_api.h"
 #include "services/http_progress.h"
+#include "services/spoolman_actions.h"
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
 #include "services/tag_write.h"
@@ -306,6 +307,12 @@ static void captureBindings(JsonObjectConst spool) {
     const TagFieldSpec& spec = tagFieldSpec(i);
     captureExtraField(extra, spec.key, sm_tag_values[i], CARD_UIDS_MAX, spec.key);
   }
+
+  // Read here rather than in its own pass, and before the early return below:
+  // a spool with no native tags leaves this function at that return, and the
+  // companion field has nothing to do with the relation.
+  captureExtraField(extra, RFID_TAG_FIELD, sm_hw_uid_value,
+                    CARD_UIDS_MAX, RFID_TAG_FIELD);
 
   // The native relation goes into the slot next to them, as a comma separated
   // list, which is the shape the card_uids helpers already read and write. A
@@ -872,6 +879,7 @@ void querySpoolman(const char* tray_uuid) {
   sm_id = 0;
   sm_dup_count = 0;
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) sm_tag_values[i][0] = '\0';
+  sm_hw_uid_value[0] = '\0';
   sm_spool_weight = 0;
   sm_remaining = 0;
   sm_total = 1000;
@@ -907,6 +915,11 @@ void querySpoolman(const char* tray_uuid) {
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
     filter_spool["extra"][tagFieldSpec(i).key] = true;
   filter_spool["extra"][LAST_DRIED_FIELD] = true;
+  // Named rather than left to the sweep below. That one stops at
+  // BACKEND_TEXT_FIELDS_MAX, and this field decides whether a uid is appended
+  // or written over: arriving empty would make every placement look like the
+  // first one and replace the chip on the other flange.
+  filter_spool["extra"][RFID_TAG_FIELD] = true;
   // Plus every other text field the server keeps, so the scan below can find a
   // UID that was put somewhere nobody agreed on. The keys are static storage
   // in the capability cache, which they have to be: ArduinoJson does not copy
@@ -1302,6 +1315,21 @@ void querySpoolman(const char* tray_uuid) {
     }
 
     captureBindings(spool);
+
+    // In step with the tag on the reader rather than with the binding. A Bambu
+    // spool carries a chip per side and only the one lying on the pad can be
+    // reported, so the field would stay half filled if this waited for an
+    // explicit link - and a library that is already bound would never reach
+    // one at all.
+    //
+    // What makes it fill itself is a detail of the scan loop: the marker that
+    // stops a tag from being looked up twice is keyed on g_tag.uid_str, the
+    // chip, while the lookup goes out with the tray uuid (app_loop.cpp:849 and
+    // :1510). Turning the spool over is therefore a new tag to that marker and
+    // a fresh lookup lands here, where the second chip is appended beside the
+    // first. Anything that starts deduplicating on the tray uuid takes that
+    // away without touching a line of this.
+    syncHwUidField(sm_id, tray_uuid);
 
     sm_filament_id = spool["filament"]["id"] | 0;
     sm_vendor_id   = spool["filament"]["vendor"]["id"] | 0;

@@ -35,6 +35,21 @@ bool patchSpoolTag(int spool_id, const char* uuid,
 // only `uid` is taken out of the list field that holds it, leaving the other
 // UIDs of that spool alone.
 void unlinkCardUid(int spool_id, const char* uid, bool all);
+
+// Appends the hardware uid of the tag on the reader to extra.rfid_tag, beside
+// whatever binds the spool. `scanned` is the value this lookup was started
+// with - the tray uuid for a Bambu tag - never the uid itself: which of the
+// two identities goes on the wire is this function's business.
+//
+// Runs on every lookup that found a spool rather than on an explicit link. A
+// Bambu spool is found by its tray uuid from either side, and each side has to
+// contribute its own chip uid before a gate reader can resolve both, so the
+// field fills itself over two placements instead of asking for anything.
+//
+// Reads and updates sm_hw_uid_value, which captureBindings() has just filled.
+// Silent and free on a spool that already carries the uid, which is the normal
+// case. Returns true only when something was written.
+bool syncHwUidField(int spool_id, const char* scanned);
 void patchInitialWeight(float initial_w);
 void patchSpoolWeight(float spool_w);
 void patchFilamentSpoolWeight(float spool_w);

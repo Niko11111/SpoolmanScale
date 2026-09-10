@@ -23,6 +23,15 @@
 // but it is probed and created alongside them, so it belongs in the same list.
 #define LAST_DRIED_FIELD  "last_dried"
 
+// The extra field Happy Hare v4 reads its gate uids out of. Not a tag field
+// either, and never selectable - the binding stays wherever the choice below
+// puts it, and this only ever carries a copy of the hardware uid next to it.
+//
+// The name is fixed in Happy Hare as MMU_RFID_FIELD and cannot be configured
+// there, so there is nothing here to choose. It holds a comma separated list,
+// because a spool can carry a tag per side and both have to resolve to it.
+#define RFID_TAG_FIELD  "rfid_tag"
+
 // These values are persisted in NVS, so entries are appended and never
 // inserted - putting the native source first would have turned every stored
 // "0", meaning extra.tag, into something else on the next boot.

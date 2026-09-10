@@ -84,6 +84,19 @@ const SettingDesc SETTINGS[] = {
     0, 0, nullptr,
     appliesCardUids, nullptr, nullptr, OPEN_NONE, nullptr, false },
 
+  // Copying the hardware uid into the field Happy Hare reads. Always offered
+  // on Spoolman, unlike the row above: it hangs on no tag field, because it
+  // writes beside the binding rather than into it.
+  //
+  // Deliberately not hidden when the server has no rfid_tag field. That would
+  // need a probe from inside a screen build, and it would be a dead end - the
+  // row is how the field gets created in the first place. The write checks
+  // instead, and says so in the log.
+  { "hw_uid_write", SET_BOOL, SC_SPOOLMAN, &g_hw_uid_write,
+    STR_HW_UID_WRITE, STR_HW_UID_WRITE_SUB, STR_HW_UID_WRITE_INFO, LV_SYMBOL_UPLOAD,
+    0, 0, nullptr,
+    nullptr, nullptr, nullptr, OPEN_NONE, nullptr, false },
+
   // ---- FilaMan -----------------------------------------------------------
 
   // Link without asking. The subtitle carries the condition, because the

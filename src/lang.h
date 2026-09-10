@@ -1058,6 +1058,11 @@ enum StringID {
   STR_NFCRST_FAIL_TITLE,
   STR_NFCRST_FAIL_TEXT,
 
+  // Copying the chip's hardware uid into extra.rfid_tag, for Happy Hare
+  STR_HW_UID_WRITE,
+  STR_HW_UID_WRITE_SUB,
+  STR_HW_UID_WRITE_INFO,
+
   STR_COUNT
 };
 

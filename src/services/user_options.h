@@ -165,3 +165,22 @@ extern uint8_t g_tagwrite_fmt;
 // spools that already carry UIDs, which is the only way to add a second tag
 // from the scale.
 extern bool g_card_uids_write;
+
+// Whether the scale copies the hardware uid of the tag on the reader into
+// extra.rfid_tag, the field Happy Hare v4 resolves its gate readers against.
+// Off by default.
+//
+// It exists because a Bambu tag has two identities and only one of them ever
+// leaves the scale: the tray uuid out of the encrypted contents binds the
+// spool, while an MMU's gate reader sees nothing but the chip's hardware uid.
+// The same spool is then found here and unknown at the printer.
+//
+// Not a second binding and not a tag field: whatever the tag field choice
+// says stays exactly where it is, and this only ever adds. It grows on its
+// own, because a spool is found by its tray uuid from either side while each
+// side contributes its own chip uid the first time it faces the reader.
+//
+// Unlike the tag fields this is written on every lookup rather than on an
+// explicit link - a library that is already bound would otherwise have to be
+// relinked spool by spool to get anything out of it.
+extern bool g_hw_uid_write;
