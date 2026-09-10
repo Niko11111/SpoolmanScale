@@ -1771,6 +1771,42 @@ const char* const STRINGS[][2] = {
     "The scale writes this into every spool it recognises, not only when a "
     "link is made. Once the UID is in there, no request goes out again. Happy "
     "Hare creates the field itself."                                      },  // STR_HW_UID_WRITE_INFO
+
+  // ── The tag on the other flange ──
+  { "Zweites Tag abfragen",      "Ask for a second tag"     },  // STR_TAG2_ASK
+  { "Nach dem Verknüpfen",       "Right after a link"       },  // STR_TAG2_ASK_SUB
+  { "An: nach jedem erfolgreichen Verknüpfen fragt die Waage nach einem "
+    "zweiten Tag. Spule umdrehen, Tag auflegen, fertig - es geht an dieselbe "
+    "Spule wie das erste.\n\n"
+    "Der Wunsch dahinter war ein zweiter Leser, einer je Gehäuseseite. Das "
+    "gibt die Hardware nicht her, also macht hier ein Ablauf, was sonst ein "
+    "Bauteil täte.\n\n"
+    "Bei einer Bambu-Spule tragen beide Chips dieselbe tray_uuid, die zweite "
+    "Chip-UID käme also ohnehin irgendwann dazu. Die Frage sagt nur, wann der "
+    "Moment dafür ist. Zwei NTAGs teilen dagegen gar nichts, und ohne die "
+    "Frage müsste die Spule ein zweites Mal von Hand gesucht werden.\n\n"
+    "Die Zeile erscheint nur, wo die gewählte Quelle mehr als ein Tag halten "
+    "kann. Ob das zweite Tag auch beschrieben wird, entscheidet weiterhin die "
+    "Einstellung zum Tag-Schreiben.",
+    "On: after every successful link the scale asks for a second tag. Turn the "
+    "spool over, put the tag on the reader, done - it goes to the same spool "
+    "as the first one.\n\n"
+    "What was asked for was a second reader, one per side of the case. The "
+    "hardware has one, so here a flow does what a part would have done.\n\n"
+    "On a Bambu spool both chips carry the same tray uuid, so the second chip "
+    "uid would turn up eventually anyway. The question only says when that "
+    "moment is. Two NTAGs share nothing at all, and without it the spool has "
+    "to be looked up by hand a second time.\n\n"
+    "The row only appears where the selected source can hold more than one "
+    "tag. Whether the second tag is written as well is still decided by the "
+    "tag writing setting."                                                },  // STR_TAG2_ASK_INFO
+  { "Zweites Tag",               "Second tag"               },  // STR_TAG2_TITLE
+  { "Spule umdrehen und das zweite Tag auflegen",
+    "Turn the spool over and place the second tag"           },  // STR_TAG2_PROMPT
+  { "Schließt in %d s",          "Closes in %d s"           },  // STR_TAG2_CLOSES_IN
+  { "Fertig",                    "Done"                     },  // STR_TAG2_BTN_DONE
+  { "Zweites Tag verknüpft",     "Second tag linked"        },  // STR_TAG2_LINKED
+
 };
 
 StringID tagWriteResultString(uint8_t code) {

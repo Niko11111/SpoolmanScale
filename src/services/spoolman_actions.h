@@ -28,8 +28,16 @@ void patchArchiveSpool();
 // actually stored rather than what was hoped for.
 bool reactivateSpool(float remaining);
 
+//
+// `additional` marks a further tag for a spool that is already bound, which is
+// the second chip on the other flange. It changes nothing on the sources that
+// hold several by nature - the relation takes another row, the list field gets
+// another entry - and it is what keeps FilaMan off slot one, where a plain
+// write would replace the tag instead of adding to it. A source that can only
+// hold one refuses instead of overwriting, and says so in the log.
 bool patchSpoolTag(int spool_id, const char* uuid,
-                   const char* const* field_values = nullptr);
+                   const char* const* field_values = nullptr,
+                   bool additional = false);
 
 // Unlink. `all` clears every tag field the spool is bound through; otherwise
 // only `uid` is taken out of the list field that holds it, leaving the other

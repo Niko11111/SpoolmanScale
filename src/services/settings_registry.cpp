@@ -31,6 +31,13 @@
 // explain, so the row is absent rather than disabled.
 static bool appliesCardUids() { return tagFieldIsList(); }
 
+// The second tag question only where a second tag has somewhere to go. Asked
+// of the source rather than of the server, because this runs from the screen
+// build and from the web page and must not reach the network - see the comment
+// on tagFieldHoldsSeveral(). The server half is settled later, by
+// backendCanHoldSecondTag(), at the moment the question would be asked.
+static bool appliesSecondTag() { return tagFieldHoldsSeveral(); }
+
 // The two fields the scale needs, named rather than described: the field names
 // are what the user sees on the Spoolman side and are not translated. The tag
 // field is whichever one is selected, so the row says which without being
@@ -83,6 +90,16 @@ const SettingDesc SETTINGS[] = {
     STR_CU_WRITE, STR_CU_WRITE_SUB, STR_CU_WRITE_INFO, LV_SYMBOL_PLUS,
     0, 0, nullptr,
     appliesCardUids, nullptr, nullptr, OPEN_NONE, nullptr, false },
+
+  // The tag on the other flange. Beside the row above because both answer the
+  // same question - more than one tag per spool - and SC_ALL because FilaMan
+  // has a second slot of its own since 1.3.1. It therefore heads the list in
+  // FilaMan mode too, which is where it belongs: it is about linking, and
+  // everything below it is about weighing.
+  { "tag2_ask", SET_BOOL, SC_ALL, &g_tag2_ask,
+    STR_TAG2_ASK, STR_TAG2_ASK_SUB, STR_TAG2_ASK_INFO, LV_SYMBOL_COPY,
+    0, 0, nullptr,
+    appliesSecondTag, nullptr, nullptr, OPEN_NONE, nullptr, false },
 
   // Copying the hardware uid into the field Happy Hare reads. Always offered
   // on Spoolman, unlike the row above: it hangs on no tag field, because it

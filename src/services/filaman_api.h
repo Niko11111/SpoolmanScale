@@ -93,6 +93,35 @@ int filamanGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
 int filamanPatchRfidUid(const char* base_url, const char* api_key, int spool_id,
                         const char* uuid, uint32_t timeout_ms = 5000);
 
+// Sets rfid_uid_2, the second slot FilaMan grew in 1.3.1. Same shape as the
+// call above, and deliberately not a copy of filamanLinkRfidUid() below: the
+// dance that one does - find the holder, take the tag off it, keep the old
+// value - exists only because a PATCH used to fail at the unique index.
+// set_rfid_uids() does all of it server side now, and having the same rule in
+// two places is how the two start to disagree.
+//
+// Fails with a validation error on a server that has no such column, which is
+// why callers ask filamanHasRfidSlot2() first.
+int filamanPatchRfidUid2(const char* base_url, const char* api_key, int spool_id,
+                         const char* uuid, uint32_t timeout_ms = 5000);
+
+// Whether this server has the second slot at all.
+//
+// The test is the presence of the key rfid_uid_2 in a spool response, not a
+// version number. FastAPI serialises the field even when it is null, so its
+// mere presence separates 1.3.1 from everything before it - while a version
+// number is a wager the moment somebody builds their own image, which is
+// exactly what the instance on the homeserver does.
+//
+// Cached per base URL. An inconclusive answer is not cached, so one bad
+// moment cannot switch the feature off for the whole session.
+bool filamanHasRfidSlot2(const char* base_url, const char* api_key,
+                         uint32_t timeout_ms = 5000);
+
+// Forgets the cached answer above. Called when the backend or its address
+// changes, because the capability belongs to the server, not to the scale.
+void filamanForgetRfidSlot2();
+
 // Link that clears the way first. rfid_uid is UNIQUE, so claiming a UID that
 // another spool still holds fails with HTTP 500. Takes it off that spool,
 // keeps whatever the target had in custom_fields.previous_tag, then patches.

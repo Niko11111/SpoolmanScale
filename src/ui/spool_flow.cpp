@@ -21,8 +21,10 @@
 #include "services/user_options.h"
 #include "services/backend_api.h"
 #include "services/tag_write.h"
+#include "ui/confirm_popup.h"
 #include "ui/loading_overlay.h"
 #include "ui/main_screen_helpers.h"
+#include "ui/second_tag_popup.h"
 #include "ui/spoolman_lookup.h"
 #include "ui/tag_write_popup.h"
 #include "ui/ui_common.h"
@@ -318,6 +320,19 @@ static const char* const* linkTargetValues(int spool_id) {
     for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++)
       s_target_values[f] = link_spools[i].tag_values[f][0]
                          ? link_spools[i].tag_values[f] : nullptr;
+    return s_target_values;
+  }
+
+  // The list is gone by the time a second tag is linked: closeLinkOverlays()
+  // frees it, and that has already run. What is left is what the reload after
+  // the first link captured, and for the spool on the pad that is the same
+  // document read one request ago.
+  //
+  // It matters for the list field. Without a base to append to, the write
+  // would start a fresh list and drop the tag it was supposed to join.
+  if (sm_found && sm_id == spool_id) {
+    for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++)
+      s_target_values[f] = sm_tag_values[f][0] ? sm_tag_values[f] : nullptr;
     return s_target_values;
   }
   return nullptr;
@@ -686,6 +701,21 @@ static void closeLinkOverlays() {
 // it covers.
 static int tagwrite_after_link_id = 0;
 
+// Same idea for the second tag question, and picked up in the same handler -
+// but only once the tag write above is out of the way, or the two would fight
+// over the screen and over the tag on the reader.
+static int secondtag_after_link_id = 0;
+
+// Set while linkAdditionalTag() is running. It marks the write as an addition
+// rather than a binding, and it keeps doLinkPatch() from arming the question
+// that led here - a link made in answer to the question must not ask it again.
+static bool s_additional_link = false;
+
+// Whether the last doLinkPatch() actually wrote. It has no return value and
+// three ways out, and linkAdditionalTag() must not report success over an
+// error message doLinkPatch() has just put on the screen.
+static bool s_last_link_ok = false;
+
 void doLinkPatch(int spool_id, bool is_bambu) {
   crumbSet("link patch");
   const char* link_uuid = is_bambu ? g_tag.tray_uuid : link_tag_uid;
@@ -699,6 +729,7 @@ void doLinkPatch(int spool_id, bool is_bambu) {
   // The UID comes from a buffer that is cleared whenever the tag display is
   // reset, so it can legitimately be gone by the time the user finishes
   // picking a spool. That is a failed link, not an unlink.
+  s_last_link_ok = false;
   if (!link_uuid || !link_uuid[0]) {
     logSDf("LINK ABORT: no tag UID for spool %d (bambu=%d)", spool_id, is_bambu ? 1 : 0);
     Serial.println("doLinkPatch: aborted, no tag UID");
@@ -716,7 +747,8 @@ void doLinkPatch(int spool_id, bool is_bambu) {
   // Both stores go along: the list is appended to when there is one, and the
   // tag field's UID becomes the list's first entry when there is not. Null for
   // an unbound spool, and for every spool at all while the switch is off.
-  if (!patchSpoolTag(spool_id, link_uuid, linkTargetValues(spool_id))) {
+  if (!patchSpoolTag(spool_id, link_uuid, linkTargetValues(spool_id),
+                     s_additional_link)) {
     // Nothing was written - the list was full, or the request failed. Saying
     // nothing here would look like a successful link right up to the next scan.
     logSDf("LINK ABORT: tag field of spool %d not written", spool_id);
@@ -778,7 +810,50 @@ void doLinkPatch(int spool_id, bool is_bambu) {
                 (unsigned)have, tagFormatLabel(g_tagwrite_fmt));
   }
 
+  // The tag on the other flange, once the write above has settled. Three
+  // conditions, and the order is the cheap ones first: the user asked for the
+  // question, this is not itself the answer to one, and the server can hold a
+  // further tag at all - that last one may probe, which is why it runs here in
+  // the loop rather than where the settings row is drawn.
+  if (g_tag2_ask && !s_additional_link && backendCanHoldSecondTag())
+    secondtag_after_link_id = spool_id;
+
+  s_last_link_ok = true;
   Serial.printf("Linking complete! ID=%d\n", spool_id);
+}
+
+void linkAdditionalTag(int spool_id, const char* uid) {
+  if (spool_id <= 0 || !uid || !uid[0]) return;
+
+  // One source for the tag type, the same one doLinkPatch() reads. A Bambu
+  // spool keeps its 32 character tray uuid across both chips, while a second
+  // NTAG cleared the field when it was seen - so the length answers this
+  // without anybody having to carry a flag along.
+  const bool is_bambu = tagIsBambu(g_tag.tray_uuid);
+
+  strncpy(link_tag_uid, uid, sizeof(link_tag_uid) - 1);
+  link_tag_uid[sizeof(link_tag_uid) - 1] = '\0';
+  logSDf("TAG2: linking '%s' to spool %d (bambu=%d)", uid, spool_id, is_bambu ? 1 : 0);
+
+  s_additional_link = true;
+  doLinkPatch(spool_id, is_bambu);
+  s_additional_link = false;
+
+  if (!s_last_link_ok) return;   // doLinkPatch already said why, on the screen
+
+  // The chip that is now on the reader belongs in the field an MMU gate reads
+  // as well. querySpoolmanById() above refreshed sm_hw_uid_value but does not
+  // write, and waiting for the next placement would leave the spool answering
+  // at one gate only. Free while the switch is off, which it checks first.
+  syncHwUidField(spool_id, g_tag.tray_uuid);
+
+  if (lbl_status) {
+    char buf[48];
+    strncpy(buf, T(STR_TAG2_LINKED), sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    lv_label_set_text(lbl_status, buf);
+    lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+  }
 }
 
 // ============================================================
@@ -3514,6 +3589,24 @@ void handleSpoolFlowDeferredActions() {
     // take the record would be the worst of both.
     if (g_tagwrite_mode == TAGWRITE_ALWAYS) startTagWriteNoAsk(id);
     else                                    showTagWriteAskPopup(id);
+  }
+  // Behind the tag write on purpose, and behind whatever it started. The
+  // record goes onto the tag that is still lying on the reader, so asking for
+  // the next one first would be asking the user to take it away mid write.
+  //
+  // "pending" is the state tagWriteTick() reports while a write is in flight;
+  // the popup covers the question in front of it.
+  if (secondtag_after_link_id > 0 &&
+      !isTagWritePopupOpen() && strcmp(tagWriteState(), "pending") != 0) {
+    const int id = secondtag_after_link_id;
+    secondtag_after_link_id = 0;
+    // Not on top of the numpad or the link entry. Both own the reader for
+    // their own purpose, and the popup would take the next tag away from them.
+    if (isConfirmPopupOpen() || isSpoolFlowIdInputOpen() || isSpoolFlowLinkEntryOpen()) {
+      logSDf("TAG2: not asking for spool %d, another popup has the screen", id);
+    } else {
+      showSecondTagPopup(id, g_tag.uid_str);
+    }
   }
   if (show_id_input_pending) {
     show_id_input_pending = false;

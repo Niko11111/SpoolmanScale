@@ -63,6 +63,21 @@ const char* tagFieldKeyName() {
   return k ? k : "native";
 }
 
+bool tagFieldHoldsSeveral() {
+  // FilaMan carries two native columns since 1.3.1 and has no field to choose,
+  // so the source below says nothing about it. Whether this particular server
+  // is new enough is not decided here - see the comment in the header.
+  if (backendIsFilaMan()) return true;
+  // BamBuddy holds tag_uid and tray_uuid, which is two identities of one chip
+  // rather than two chips. A second flange has nowhere to go.
+  if (backendIsBamBuddy()) return false;
+
+  // Spoolman. The relation is built for several tags per spool; the list field
+  // holds them only while the switch that appends rather than replaces is on.
+  if (tagFieldIsNative()) return true;
+  return tagFieldIsList() && g_card_uids_write;
+}
+
 void tagFieldAutoSelect() {
   if (g_tag_field_chosen) return;          // a decision, even an implicit one
   if (!backendHasNativeTags()) return;

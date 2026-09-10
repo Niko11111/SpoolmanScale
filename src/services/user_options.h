@@ -184,3 +184,22 @@ extern bool g_card_uids_write;
 // explicit link - a library that is already bound would otherwise have to be
 // relinked spool by spool to get anything out of it.
 extern bool g_hw_uid_write;
+
+// Whether the scale asks for a second tag right after a link succeeded.
+// Off by default.
+//
+// The community asked for a second reader, one per side of the case, so a
+// spool with a chip on each flange is recognised whichever way round it lies.
+// The hardware has one reader, so this is the flow that replaces the part:
+// link, turn the spool over, done.
+//
+// A Bambu spool half solves this on its own today - both chips carry the same
+// tray uuid, so the second one is found and appended the next time that side
+// happens to face the reader. Two NTAGs share nothing, and without this the
+// user has to look the spool up in the link list a second time.
+//
+// Only offered where the source in force can hold more than one tag; see
+// tagFieldHoldsSeveral() and backendCanHoldSecondTag(). Writing the second tag
+// is not a separate setting - it runs through the same link as the first one,
+// so g_tagwrite_mode asks for it the same way.
+extern bool g_tag2_ask;

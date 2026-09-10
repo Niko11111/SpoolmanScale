@@ -92,6 +92,21 @@ bool                tagFieldIsNative();
 // tagFieldKey() and handle the null.
 const char*         tagFieldKeyName();
 
+// Whether the source in force can hold more than one tag per spool, answered
+// from memory alone.
+//
+// Memory alone is the whole point: this is what the settings row for the
+// second tag question hangs on, and a row is rendered from the screen build
+// and from the web page. A probe there would repeat the fault that
+// tagFieldEffective() below carries a comment about - HTTP before lwIP is up
+// is a boot loop with no way in but the cable.
+//
+// It therefore answers the structural question ("can this source hold a
+// second tag at all"), never the server one. Whether a given FilaMan really
+// has the second slot is decided by backendCanHoldSecondTag(), which runs
+// with a network under it.
+bool tagFieldHoldsSeveral();
+
 // Picks the native source once, on a server that has it, for an installation
 // that has never chosen. An explicit choice is never overridden: somebody on
 // card_uids is running SpoolLink beside Spoolman and still needs that list

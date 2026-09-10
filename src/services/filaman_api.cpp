@@ -719,6 +719,82 @@ int filamanPatchRfidUid(const char* base_url, const char* api_key, int spool_id,
   return code;
 }
 
+int filamanPatchRfidUid2(const char* base_url, const char* api_key, int spool_id,
+                         const char* uuid, uint32_t timeout_ms) {
+  if (spool_id <= 0) return -1;
+  JsonDocument body;
+  // null rather than an empty string, the same trap as in the call above.
+  if (uuid && uuid[0]) body["rfid_uid_2"] = uuid;
+  else                 body["rfid_uid_2"] = nullptr;
+
+  String payload;
+  serializeJson(body, payload);
+  // No legacy cleanup on unlink, unlike slot one. custom_fields only ever held
+  // a single tag, and that one belongs to rfid_uid.
+  return patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
+                    payload, timeout_ms);
+}
+
+// Cache for the probe below. Same form as the native tag probe in
+// backend_api.cpp: keyed on the base URL, and an unclear answer is not stored.
+static char s_slot2_probed_for[96] = {0};
+static bool s_slot2_present = false;
+
+void filamanForgetRfidSlot2() {
+  s_slot2_probed_for[0] = '\0';
+  s_slot2_present = false;
+}
+
+bool filamanHasRfidSlot2(const char* base_url, const char* api_key,
+                         uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url)) return false;
+  if (strncmp(s_slot2_probed_for, base_url, sizeof(s_slot2_probed_for) - 1) == 0)
+    return s_slot2_present;
+
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/spools?page_size=1");
+  http.setTimeout(timeout_ms);
+  addApiKey(http, api_key);
+  const int code = http.GET();
+  if (code != 200) {
+    http.end();
+    // Says nothing about the feature - an unreachable server, a proxy, a
+    // timeout. Not cached, so the next link tries again.
+    logSDf("FilaMan: rfid_uid_2 probe inconclusive, HTTP %d", code);
+    return false;
+  }
+
+  // Only the one key, so the document stays tiny whatever the spool carries.
+  // A filter keeps a member it names even when the value is null, and drops
+  // everything else - which is exactly the difference this has to measure.
+  JsonDocument filter;
+  filter["items"][0]["rfid_uid_2"] = true;
+  JsonDocument doc;
+  DeserializationError err =
+    deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
+  http.end();
+  if (err) {
+    logSDf("FilaMan: rfid_uid_2 probe parse error: %s", err.c_str());
+    return false;
+  }
+
+  JsonArrayConst items = doc["items"].as<JsonArrayConst>();
+  if (items.isNull() || items.size() == 0) {
+    // An empty library answers nothing about the schema. Left uncached so the
+    // first spool the user creates settles it.
+    logSD("FilaMan: rfid_uid_2 probe found no spool to look at");
+    return false;
+  }
+
+  // Present, not filled: on 1.3.1 the key is there and usually null.
+  s_slot2_present = items[0].as<JsonObjectConst>().containsKey("rfid_uid_2");
+  strncpy(s_slot2_probed_for, base_url, sizeof(s_slot2_probed_for) - 1);
+  s_slot2_probed_for[sizeof(s_slot2_probed_for) - 1] = '\0';
+  logSDf("FilaMan: second rfid slot %s on %s",
+         s_slot2_present ? "supported" : "absent", base_url);
+  return s_slot2_present;
+}
+
 int filamanPatchExternalId(const char* base_url, const char* api_key, int spool_id,
                            const char* external_id, uint32_t timeout_ms) {
   if (spool_id <= 0 || !external_id || !external_id[0]) return -1;

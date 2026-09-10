@@ -51,6 +51,7 @@
 #include "hardware/i2c_scan.h"
 #include "ui/diag_banner.h"
 #include "ui/ams_assign_popup.h"
+#include "ui/second_tag_popup.h"
 #include "ui/ams_assign_screen.h"
 #include "ui/filaman_fields_screen.h"
 #include "ui/backend_screen.h"
@@ -666,6 +667,10 @@ void appLoop() {
   }
   handleMoreInfoDeferredActions();
   handleAmsAssignDeferredActions();
+  // Watches the reader for the tag on the other flange while its question
+  // stands. It has to run every pass, not only when something happened: the
+  // countdown is what it is mostly doing.
+  handleSecondTagDeferredActions();
   // Debounced popups after a removal, cross-checked against the scale.
   // The AMS question and the location question hang off the same event, so
   // the verdict is worked out once and the AMS side gets it first: a spool
@@ -846,7 +851,15 @@ void appLoop() {
     g_tag_displayed = true;
     g_tag_shown_ms = millis();
     updateDisplay();
-    if (!isSpoolFlowIdInputOpen() && strlen(g_tag.tray_uuid) == 32 && strcmp(g_tag.uid_str, spoolman_queried_uid) != 0) {
+    // While the second tag question stands the tag belongs to it, in all four
+    // places this test appears. The chip on the other flange is not a new
+    // spool to look up - on a Bambu spool the lookup would merely repeat
+    // itself, and a second NTAG would come back "not in Spoolman" and clear
+    // sm_id, taking the target of the question away with it. Only the lookup
+    // is held off; scanTag() still runs, because the popup needs the decoded
+    // chip uid.
+    if (!isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen() &&
+        strlen(g_tag.tray_uuid) == 32 && strcmp(g_tag.uid_str, spoolman_queried_uid) != 0) {
       querySpoolman(g_tag.tray_uuid);
       strncpy(spoolman_queried_uid, g_tag.uid_str, sizeof(spoolman_queried_uid)-1);
       spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';
@@ -1471,7 +1484,7 @@ void appLoop() {
             // real Bambu tag that only read partially still has dozens of
             // blocks and belongs in the branch above, where "waiting" is the
             // honest answer rather than "not in Spoolman".
-            if (wifi_ok && !isSpoolFlowIdInputOpen() &&
+            if (wifi_ok && !isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen() &&
                 strcmp(uid_str, spoolman_queried_uid) != 0) {
               querySpoolman(uid_str);
               strncpy(spoolman_queried_uid, uid_str, sizeof(spoolman_queried_uid)-1);
@@ -1507,7 +1520,8 @@ void appLoop() {
             lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
           } else {
             // tray_uuid present — query Spoolman if not done yet
-            if (!isSpoolFlowIdInputOpen() && strcmp(g_tag.uid_str, spoolman_queried_uid) != 0 && strlen(g_tag.tray_uuid) == 32) {
+            if (!isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen() &&
+                strcmp(g_tag.uid_str, spoolman_queried_uid) != 0 && strlen(g_tag.tray_uuid) == 32) {
               crumbSet("backend lookup");
               querySpoolman(g_tag.tray_uuid);
               strncpy(spoolman_queried_uid, g_tag.uid_str, sizeof(spoolman_queried_uid)-1);
@@ -1608,7 +1622,7 @@ void appLoop() {
           if (tagCachedHasRecord()) showTagInfoOnDisplay(tagCachedInfo());
           lv_timer_handler();
 
-          if (wifi_ok && !isSpoolFlowIdInputOpen()) {
+          if (wifi_ok && !isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen()) {
             querySpoolman(uid_str);
             strncpy(spoolman_queried_uid, uid_str, sizeof(spoolman_queried_uid)-1);
             spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';

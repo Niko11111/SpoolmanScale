@@ -207,6 +207,10 @@ void backendInvalidateExtraFieldCache() {
   s_text_field_count = 0;
   s_tagapi_probed_for[0] = '\0';
   s_tagapi_present = false;
+  // FilaMan's second slot is the same kind of answer about the same server,
+  // and it goes stale for the same reason. Its cache lives in filaman_api.cpp
+  // because that is where the probe is, not because it is a different thing.
+  filamanForgetRfidSlot2();
 }
 
 bool backendHasNativeTags() {
@@ -235,6 +239,21 @@ bool backendHasNativeTags() {
   s_tagapi_probed_for[sizeof(s_tagapi_probed_for) - 1] = '\0';
   logSDf("native tags: %s on %s", s_tagapi_present ? "supported" : "absent", base);
   return s_tagapi_present;
+}
+
+bool backendCanHoldSecondTag() {
+  // The structural half first, because it needs no network and rules out the
+  // two cases that no server version will ever change.
+  if (!tagFieldHoldsSeveral()) return false;
+
+  // Spoolman is settled by the field alone: the relation takes as many tags as
+  // a spool has, and the list field is a text field the scale writes itself.
+  // Neither needs asking.
+  if (!backendIsFilaMan()) return true;
+
+  // FilaMan does need asking. The column arrived in 1.3.1, and a scale pointed
+  // at an older instance must not offer a question the server refuses.
+  return filamanHasRfidSlot2(backendBaseUrl(), filamanApiKey());
 }
 
 // A stable id for this scale in Spoolman's reader list, derived from the MAC
@@ -620,6 +639,31 @@ int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
       else                 value[0] = '\0';   // an empty value is the unlink
       return backendPatchExtraField(base_url, spool_id, spec.key, value, timeout_ms);
     }
+  }
+}
+
+int backendPatchSpoolTagSlot2(const char* base_url, int spool_id, const char* uuid,
+                              uint32_t timeout_ms) {
+  (void)base_url;   // FilaMan reads its address and key from its own module
+  switch (backendMode()) {
+    case BACKEND_FILAMAN: {
+      if (!uuid || !uuid[0]) {
+        return filamanPatchRfidUid2(backendBaseUrl(), filamanApiKey(), spool_id,
+                                    nullptr, timeout_ms);
+      }
+      // Plain hex, same as slot one. FilaMan canonicalises to its own notation
+      // on the way in since 1.3.1, but sending the colon form would still make
+      // this the odd one out of everything else the scale writes.
+      char hex[40];
+      tagUidNormalize(uuid, hex, sizeof(hex));
+      return filamanPatchRfidUid2(backendBaseUrl(), filamanApiKey(), spool_id,
+                                  hex, timeout_ms);
+    }
+    default:
+      // Spoolman appends inside patchSpoolTag() - the relation and the list
+      // field both take a further tag through the ordinary write - and
+      // BamBuddy has nowhere to put one. Neither should ever get here.
+      return notSupported("backendPatchSpoolTagSlot2");
   }
 }
 

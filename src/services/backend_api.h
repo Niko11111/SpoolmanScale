@@ -102,6 +102,15 @@ void backendInvalidateExtraFieldCache();
 // again rather than trusting the caller to have asked.
 bool backendHasNativeTags();
 
+// Whether a second tag can be bound to a spool on this server right now.
+//
+// The honest half of the question, as opposed to tagFieldHoldsSeveral(), which
+// answers the structural half from memory so a settings row can be rendered
+// without touching the network. This one may probe - on FilaMan it asks
+// whether the server has the second column at all - so it belongs in the loop,
+// never in a screen build and never in an LVGL callback.
+bool backendCanHoldSecondTag();
+
 // This scale's id in Spoolman's reader list, stable across reboots.
 const char* backendReaderId();
 
@@ -192,6 +201,14 @@ int  backendLinkSpoolTag(const char* base_url, int spool_id, const char* uuid,
        char* out_note = nullptr, size_t note_size = 0, uint32_t timeout_ms = 8000);
 
 int  backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
+       uint32_t timeout_ms = 5000);
+
+// The second tag of a spool, where the backend keeps one in a place of its
+// own. FilaMan only: Spoolman appends through the ordinary write, because the
+// relation and the list field both take a further tag without a second
+// endpoint, and BamBuddy has no room for one. Both answer
+// BACKEND_NOT_SUPPORTED here rather than quietly overwriting the first tag.
+int  backendPatchSpoolTagSlot2(const char* base_url, int spool_id, const char* uuid,
        uint32_t timeout_ms = 5000);
 
 // Weight update. The two backends want different numbers:

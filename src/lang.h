@@ -1063,6 +1063,16 @@ enum StringID {
   STR_HW_UID_WRITE_SUB,
   STR_HW_UID_WRITE_INFO,
 
+  // Asking for the tag on the other flange right after a link
+  STR_TAG2_ASK,
+  STR_TAG2_ASK_SUB,
+  STR_TAG2_ASK_INFO,
+  STR_TAG2_TITLE,
+  STR_TAG2_PROMPT,
+  STR_TAG2_CLOSES_IN,
+  STR_TAG2_BTN_DONE,
+  STR_TAG2_LINKED,
+
   STR_COUNT
 };
 

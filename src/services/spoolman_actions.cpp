@@ -336,12 +336,35 @@ static void unlinkHwUidField(int spool_id, const char* scanned, bool all) {
   }
 }
 
-bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_values) {
+bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_values,
+                   bool additional) {
   if (!wifi_ok) return false;
   const bool clearing = (!uuid || !uuid[0]);
   sm_tag_conflict_spool = 0;   // stale from an earlier attempt would mislead
 
   const TagFieldSpec& spec = tagFieldSelected();
+
+  // A further tag beside the binding, before any of the paths below get to
+  // decide anything. An unlink is never "additional" - clearing goes through
+  // unlinkCardUid(), which knows about every field at once.
+  if (additional && !clearing) {
+    if (backendIsFilaMan()) {
+      // Its own column, not the one the first tag sits in. Everything below
+      // would aim at rfid_uid and take the first chip off the spool.
+      const int code = backendPatchSpoolTagSlot2(cfg_spoolman_base, spool_id, uuid);
+      logSDf("LINK slot2 ID=%d uuid='%s' HTTP %d", spool_id, uuid, code);
+      return code >= 200 && code < 300;
+    }
+    // Everything else has to be a source that holds several by itself. The
+    // settings row is hidden where that is not true, so this is a guard
+    // against a code path, not against a user - but a silent overwrite of the
+    // first tag is exactly the damage worth a line of code.
+    if (!spec.is_native && !(spec.is_list && g_card_uids_write)) {
+      logSDf("LINK second: %s holds one tag, '%s' not written",
+             tagFieldKeyName(), uuid);
+      return false;
+    }
+  }
 
   // Spoolman's own tag relation, where a spool holds several tags without any
   // of the list handling below. Checked before anything reads field_values,
@@ -381,7 +404,10 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     // the spool from either side straight away, instead of only once the other
     // chip has been on the reader too. It is no substitute for the chip uid
     // above - only a reader that can decrypt Bambu contents ever sees it.
-    if (tagIsBambu(scanned)) {
+    // Skipped for a further tag: the first link already put the tray uuid in,
+    // and both chips of the spool carry the same one. Asking again would be a
+    // request whose only possible answers are "already yours" and 409.
+    if (tagIsBambu(scanned) && !additional) {
       int c2 = backendLinkTag(cfg_spoolman_base, spool_id, scanned, "bambu", nullptr);
       // A 409 here means another spool claims this tray uuid, which is a
       // duplicate in the library rather than something this link did wrong.
@@ -401,7 +427,7 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     // This is also why the migration below skips extra.tag for a Bambu tag:
     // clearing it is exactly what would break that setup.
     const bool keep_tag_field = tagIsBambu(scanned);
-    if (keep_tag_field) {
+    if (keep_tag_field && !additional) {
       const TagFieldSpec& companion = tagFieldSpec(TAG_FIELD_TAG);
       if (!backendHasExtraField(companion.key)) {
         logSDf("LINK native: %s missing on the server, tray uuid not kept",
@@ -420,7 +446,12 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     // findable through a store nobody writes any more. Same rule as the
     // migration between fields, including the refusal to empty a list that
     // still holds somebody else's tag.
-    if (field_values) {
+    //
+    // Not for a further tag. The first link cleared what had to go, and
+    // running it again would meet an extra.tag this very function refused to
+    // rewrite two blocks up - so it would delete the tray uuid OpenSpoolman
+    // reads instead of leaving it where the first link deliberately put it.
+    if (field_values && !additional) {
       for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
         if (keep_tag_field && i == TAG_FIELD_TAG) continue;
         if (field_values[i] && field_values[i][0])
