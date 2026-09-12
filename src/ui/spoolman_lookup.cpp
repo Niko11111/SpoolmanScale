@@ -11,6 +11,9 @@
 #include "bambu/bambu_tag.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+
+// How long the inventory scan waits before its one retry, panel kept alive.
+#define SPOOLMAN_RETRY_PAUSE_MS  300
 #include "services/location_state.h"
 #include "services/backend.h"
 #include "services/breadcrumb.h"
@@ -1201,7 +1204,14 @@ void querySpoolman(const char* tray_uuid) {
     if (attempt > 1) {
       Serial.printf("Spoolman: retry attempt %d after %s\n", attempt, err.c_str());
       logSDf("Spoolman: retry attempt %d (prev err=%s)", attempt, err.c_str());
-      delay(300);  // brief pause before retry
+      // A pause that keeps the panel alive. This runs from appLoop(); a plain
+      // delay() froze the touch for its length, on top of a request that
+      // had just spent its timeout.
+      const unsigned long t0 = millis();
+      while (millis() - t0 < SPOOLMAN_RETRY_PAUSE_MS) {
+        lv_timer_handler();
+        delay(10);
+      }
       doc.clear();
     }
 

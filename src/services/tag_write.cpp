@@ -1,6 +1,7 @@
 #include "tag_write.h"
 
 #include <ArduinoJson.h>
+#include <lvgl.h>
 #include <ctype.h>
 #include <math.h>
 #include <stdarg.h>
@@ -28,6 +29,9 @@
 #define ACE_P_BED      29
 #define ACE_P_DIALEN   30
 #define ACE_P_WEIGHT   31
+
+// How long the link is given to settle before its one retry.
+#define TAGWRITE_LINK_RETRY_MS  300
 // Everything from the first user page through the last one ACE touches.
 #define ACE_BYTES      ((ACE_P_WEIGHT - 4 + 1) * 4)
 
@@ -334,6 +338,22 @@ static bool wrPage(uint8_t page, const uint8_t *d) {
   return nfcWriteNtagPage(page, buf);
 }
 
+// Reads a page back and compares. A write the chip acknowledged is not yet a
+// write that took: a tag drifting off the antenna acks and stores nothing.
+static bool rdPageIs(uint8_t page, const uint8_t *expect) {
+  uint8_t got[4] = {0};
+  return nfcReadNtagPage(page, got) && memcmp(got, expect, 4) == 0;
+}
+
+// The last user page an NTAG2xx can have: the library refuses pages from 231
+// on, and the largest tag this firmware writes, an NTAG216, ends at 225.
+#define NTAG_PAGE_MAX         230
+// Without a readable capability container the smallest tag is assumed.
+#define NTAG_FALLBACK_LAST_PG  39
+// The page every record starts on, once the four the chip keeps for itself
+// are past.
+#define NTAG_FIRST_USER_PAGE    4
+
 // Capability container at page 3: byte 2 counts 8 byte blocks. What it reports
 // is the NDEF area, which is a little smaller than the chip: NTAG213 144 of
 // 144, NTAG215 496 of 504, NTAG216 872 of 888. Those are the numbers the UI
@@ -347,7 +367,13 @@ static uint16_t tagUserBytes() {
 // Falls back to the smallest tag, so an unreadable CC never overruns.
 static uint8_t lastUserPage() {
   const uint16_t b = tagUserBytes();
-  return b ? (uint8_t)(4 + b / 4 - 1) : 39;
+  if (!b) return NTAG_FALLBACK_LAST_PG;
+  // In 16 bits. Byte 2 of the CC is whatever the tag says, and from 0x7F up -
+  // an NTAG I2C plus 2k reports 0xEA - the old 8 bit sum wrapped to page 1,
+  // after which eraseTag() ran no pass at all and reported success.
+  uint16_t last = NTAG_FIRST_USER_PAGE + b / 4 - 1;
+  if (last > NTAG_PAGE_MAX) last = NTAG_PAGE_MAX;
+  return (uint8_t)last;
 }
 
 static bool wrText(uint8_t first, const char *s) {
@@ -382,7 +408,13 @@ static bool eraseTag() {
 static bool writeAce(const AceFields *f) {
   const uint8_t magic[4] = { 0x7B, 0x00, 0x65, 0x00 };
   const uint8_t color[4] = { 0xFF, f->b, f->g, f->r };
-  return wrPage(ACE_P_MAGIC, magic)
+  const uint8_t zero[4]  = { 0, 0, 0, 0 };
+  // The magic page goes last, and is blanked first. The magic used to be
+  // written before the fields, so a spool lifted mid-write left a tag that
+  // announced an ACE record over whatever the pages held before - and the
+  // next scan showed that as a plausible spool. Blank until the last page,
+  // it reads as empty instead.
+  return wrPage(ACE_P_MAGIC, zero)
       && wrText(ACE_P_SKU, f->sku)
       && wrText(ACE_P_BRAND, f->brand)
       && wrText(ACE_P_MATERIAL, f->material)
@@ -390,7 +422,10 @@ static bool writeAce(const AceFields *f) {
       && wrU16Pair(ACE_P_EXTRUDER, f->et_lo, f->et_hi)
       && wrU16Pair(ACE_P_BED, f->bed_lo, f->bed_hi)
       && wrU16Pair(ACE_P_DIALEN, f->dia_x100, f->length_m)
-      && wrU16Pair(ACE_P_WEIGHT, f->weight_g, 0);
+      && wrU16Pair(ACE_P_WEIGHT, f->weight_g, 0)
+      && wrPage(ACE_P_MAGIC, magic)
+      && rdPageIs(ACE_P_MAGIC, magic)
+      && rdPageIs(ACE_P_COLOR, color);
 }
 
 
@@ -458,8 +493,25 @@ static bool writeNdefJson(const char *json) {
   buf[i++] = 0xFE;                       // terminator
   while (i % 4) buf[i++] = 0x00;
 
-  for (int off = 0; off < i; off += 4)
-    if (!wrPage((uint8_t)(4 + off / 4), buf + off)) return false;
+  // The TLV header sits in the first page and is written last, after that
+  // page has been blanked: a tag lifted mid-write then reads as empty, not
+  // as a record whose length byte points into whatever the pages held
+  // before. The header and the last page are read back - the two that
+  // decide whether a reader sees a whole record.
+  const uint8_t zero[4] = { 0, 0, 0, 0 };
+  if (!wrPage(NTAG_FIRST_USER_PAGE, zero)) return false;
+  for (int off = 4; off < i; off += 4)
+    if (!wrPage((uint8_t)(NTAG_FIRST_USER_PAGE + off / 4), buf + off)) return false;
+  if (!wrPage(NTAG_FIRST_USER_PAGE, buf)) return false;
+
+  const int last_off = i - 4;
+  if (!rdPageIs(NTAG_FIRST_USER_PAGE, buf) ||
+      (last_off > 0 && !rdPageIs((uint8_t)(NTAG_FIRST_USER_PAGE + last_off / 4), buf + last_off))) {
+    snprintf(write_err, sizeof(write_err),
+             "Tag did not keep the record - hold it still and retry");
+    write_code = TW_ERR_WRITE;
+    return false;
+  }
   return true;
 }
 
@@ -560,7 +612,7 @@ bool tagWriteRemotePayload() {
   write_err[0] = 0;
   write_code = TW_ERR_WRITE;
 
-  uint8_t uid[8], uid_len = 0;
+  uint8_t uid[NFC_UID_MAX], uid_len = 0;
   bool ok = false;
   if (!nfcReadPassiveTarget(uid, &uid_len, 600)) {
     finish("error", "No tag on the reader", TW_ERR_NO_TAG);
@@ -1041,7 +1093,7 @@ static bool writeSpoolRecord(int spool_id, TagFormat fmt,
 // with the request.
 bool tagWriteSpoolNow(int spool_id, TagFormat fmt) {
   if (spool_id <= 0) return false;
-  uint8_t uid[8], uid_len = 0;
+  uint8_t uid[NFC_UID_MAX], uid_len = 0;
   if (!selectWritableTag(uid, &uid_len)) return false;
 
   char name[48];
@@ -1064,7 +1116,7 @@ void tagWriteTick() {
   if (!pending) return;
   pending = false;
 
-  uint8_t uid[8], uid_len = 0;
+  uint8_t uid[NFC_UID_MAX], uid_len = 0;
   if (!selectWritableTag(uid, &uid_len)) return;
 
   if (pending_fmt == TAG_FMT_ERASE) {
@@ -1117,7 +1169,14 @@ void tagWriteTick() {
     // runs after something already went wrong.
     if (code2 != 200) {
       logSDf("TagWrite: link failed (HTTP %d), retrying once", code2);
-      delay(300);
+      // Paused with the panel kept alive: this runs from appLoop(), and a
+      // plain delay() here froze the touch for its length on top of the
+      // request that had just failed.
+      const unsigned long t0 = millis();
+      while (millis() - t0 < TAGWRITE_LINK_RETRY_MS) {
+        lv_timer_handler();
+        delay(10);
+      }
       code2 = backendLinkSpoolTag(backendBaseUrl(), pending_id, uid_str,
                                   note, sizeof(note));
     }

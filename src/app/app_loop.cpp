@@ -19,7 +19,6 @@
 #include "hardware/scale.h"
 #include "hardware/scale_state.h"
 #include "hardware/sd_logger.h"
-#include "hardware/spoolscale_tag.h"
 #include "services/nfc_reset.h"
 #include "ui/reboot_popup.h"
 #include "ui/info_popup.h"
@@ -1420,7 +1419,7 @@ void appLoop() {
 
     if (millis() - last_nfc_check_ms >= poll_interval) {
       last_nfc_check_ms = millis();
-      uint8_t uid[7], uidLen = 0;
+      uint8_t uid[NFC_UID_MAX], uidLen = 0;
       crumbSet("nfc poll");
       bool found = nfcReadPassiveTarget(uid, &uidLen, poll_timeout);
 

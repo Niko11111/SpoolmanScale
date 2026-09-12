@@ -51,7 +51,7 @@ bool nfcReadPassiveTarget(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms) {
 }
 
 static bool reselectMifareUid(const uint8_t expected_uid[4], uint16_t timeout_ms) {
-  uint8_t uid[7] = {0};
+  uint8_t uid[NFC_UID_MAX] = {0};
   uint8_t uid_len = 0;
   return nfcReadPassiveTarget(uid, &uid_len, timeout_ms) &&
          uid_len == 4 &&
