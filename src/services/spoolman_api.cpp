@@ -376,10 +376,27 @@ int spoolmanCreateSpool(const char* base_url, int filament_id, float initial_wei
 
 int spoolmanCreateSpoolField(const char* base_url, const char* field_name, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || !field_name || !field_name[0]) return -1;
-  String body = "{\"name\":\"";
-  body += field_name;
-  body += "\",\"field_type\":\"text\",\"default_value\":\"\\\"\\\"\"}";
-  return postJson(String(base_url) + "/api/v1/field/spool/" + field_name, body, timeout_ms);
+  // Through the serializer, and the name encoded in the path: a quote or a
+  // space in a field name used to produce a body Spoolman answered with 422.
+  JsonDocument body;
+  body["name"]          = field_name;
+  body["field_type"]    = "text";
+  body["default_value"] = "\"\"";
+  String payload;
+  serializeJson(body, payload);
+  return postJson(String(base_url) + "/api/v1/field/spool/" + urlEncode(field_name), payload, timeout_ms);
+}
+
+// A text extra field holds JSON text: the value travels as a JSON string
+// inside the JSON string, so it is serialised twice - once to become the
+// inner "\"value\"", once as the outer field. Doing the inner step by hand
+// left quotes and backslashes in the value unescaped.
+static String jsonQuoted(const char* value) {
+  JsonDocument inner;
+  inner.set(value ? value : "");
+  String out;
+  serializeJson(inner, out);
+  return out;
 }
 
 int spoolmanPatchExtraField(const char* base_url, int spool_id, const char* key,
@@ -390,11 +407,11 @@ int spoolmanPatchExtraField(const char* base_url, int spool_id, const char* key,
   // string. Spoolman merges per key, which is what lets the tag field and
   // last_dried survive each other.
   //
-  // Built with String concatenation rather than by pasting the key in at
-  // compile time. The old pair of functions did the latter, which only works
-  // while the key is a macro - and the whole point here is that it is not.
-  String body = String("{\"extra\": {\"") + key + "\": \"\\\"" + value + "\\\"\"}}";
-  return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, body, timeout_ms);
+  JsonDocument body;
+  body["extra"][key] = jsonQuoted(value);
+  String payload;
+  serializeJson(body, payload);
+  return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, payload, timeout_ms);
 }
 
 int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remaining, const char* last_used_iso, uint32_t timeout_ms) {
@@ -469,16 +486,20 @@ int spoolmanPatchSpoolLocation(const char* base_url, int spool_id, const char* l
   if (!location_name || !location_name[0]) {
     return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, "{\"location\":null}", timeout_ms);
   }
-  String body = "{\"location\":\"";
-  body += location_name;
-  body += "\"}";
-  return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, body, timeout_ms);
+  // The name is the server's own, from its location list - and a location
+  // called Shelf "A" used to come back as a 422 nobody could explain.
+  JsonDocument body;
+  body["location"] = location_name;
+  String payload;
+  serializeJson(body, payload);
+  return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, payload, timeout_ms);
 }
 
 int spoolmanPatchSpoolLastDried(const char* base_url, int spool_id, const char* iso_datetime, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || spool_id <= 0 || !iso_datetime || !iso_datetime[0]) return -1;
-  String body = "{\"extra\": {\"last_dried\": \"\\\"";
-  body += iso_datetime;
-  body += "\\\"\"}}";
-  return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, body, timeout_ms);
+  JsonDocument body;
+  body["extra"]["last_dried"] = jsonQuoted(iso_datetime);
+  String payload;
+  serializeJson(body, payload);
+  return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, payload, timeout_ms);
 }

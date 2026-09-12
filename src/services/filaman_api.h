@@ -122,6 +122,11 @@ int filamanPatchRfidUid2(const char* base_url, const char* api_key, int spool_id
 // unlink has to treat those two differently.
 bool filamanRfidSlot2Known(const char* base_url);
 
+// True when the last spool list stopped short of the whole inventory (the
+// timeout, or the page cap). A tag not found in such a list is unknown, not
+// absent - the difference between "link it" and "create a duplicate".
+bool filamanLastListPartial();
+
 bool filamanHasRfidSlot2(const char* base_url, const char* api_key,
                          uint32_t timeout_ms = 5000);
 

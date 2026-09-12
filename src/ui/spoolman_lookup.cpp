@@ -1273,6 +1273,16 @@ void querySpoolman(const char* tray_uuid) {
            tray_uuid, sm_dup_count, best_rank);
   }
 
+  // A list that stopped short - FilaMan's timeout or page cap - proves
+  // nothing about a tag it does not contain. Read as "not there", the scale
+  // offered to link or create the spool, and a library over the cap grew a
+  // duplicate per scan. A match in the part that did arrive still counts.
+  if (best_rank == TAG_RANK_NONE && backendLastListPartial()) {
+    logSDf("Backend: tag %s not in a partial inventory, verdict withheld", tray_uuid);
+    lv_label_set_text(lbl_spoolman_weight, T(STR_API_ERROR));
+    return;
+  }
+
   for (JsonObject spool : spools) {
     if (!spool.containsKey("extra")) continue;
     JsonObject extra = spool["extra"];

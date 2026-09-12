@@ -1,4 +1,5 @@
 #include "spoolman_screen.h"
+#include "app/backend_switch.h"
 #include "navigation.h"
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
@@ -60,7 +61,7 @@ static void browserAddress(char* out, size_t len) {
 
 void spoolmanClearHost() {
   logSDf("Backend: address cleared on the device (was %s)", backendHost());
-  backendSetHost("");
+  backendApplyHost("");
   sp_ip_input[0] = '\0';
   show_spoolman_pending = true;   // rebuilt one loop pass later, never here
 }
@@ -111,7 +112,7 @@ void buildSpoolmanScreen() {
       // turned a look into an edit, which is how one tap could append a
       // digit to a host name and make it unresolvable.
       if (sp_ip_input[0] && strcmp(sp_ip_input, sp_ip_original) != 0)
-        backendSetHost(sp_ip_input);
+        backendApplyHost(sp_ip_input);
       // Return to wherever we came from. The Backend screen exists only
       // when the user navigated through it, the setup flow does not.
       if (scr_backend) show_backend_pending = true;
@@ -299,7 +300,7 @@ void buildSpoolmanScreen() {
   lv_obj_set_style_border_color(btn_ok, lv_color_hex(0x2a5030), 0);
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
     if (!sp_ip_input[0]) return;
-    backendSetHost(sp_ip_input);
+    backendApplyHost(sp_ip_input);
 
     // Show testing status
     if (lbl_sp_test_result) {

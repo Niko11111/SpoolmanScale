@@ -22,17 +22,30 @@
 // logged only once per boot. The names are string literals, so comparing
 // pointers is enough to tell them apart.
 static int notSupported(const char* fn) {
-  static const char* logged[24] = { nullptr };
+  static const char* logged[32] = { nullptr };
   static uint8_t logged_count = 0;
+  static uint8_t logged_mode  = 0xFF;
 
+  // Once per call site and per backend: a switch starts the table over, so a
+  // support log from a user who changed backends still names the gaps of the
+  // one they are on.
+  if (logged_mode != (uint8_t)backendMode()) {
+    logged_mode  = (uint8_t)backendMode();
+    logged_count = 0;
+  }
   for (uint8_t i = 0; i < logged_count; i++) {
     if (logged[i] == fn) return BACKEND_NOT_SUPPORTED;
   }
-  if (logged_count < (sizeof(logged) / sizeof(logged[0]))) {
-    logged[logged_count++] = fn;
-  }
+  // A full table stays quiet rather than logging every call: the health
+  // check would otherwise write the same line every 30 seconds.
+  if (logged_count >= (sizeof(logged) / sizeof(logged[0]))) return BACKEND_NOT_SUPPORTED;
+  logged[logged_count++] = fn;
   logSDf("Backend: %s has no %s implementation yet", fn, backendName());
   return BACKEND_NOT_SUPPORTED;
+}
+
+bool backendLastListPartial() {
+  return backendMode() == BACKEND_FILAMAN && filamanLastListPartial();
 }
 
 void backendRefreshMode() {

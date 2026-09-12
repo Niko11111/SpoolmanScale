@@ -478,7 +478,9 @@ int bbCountActiveSpools(const char* base_url, const char* api_key,
   SpiRamAllocator alloc;
   JsonDocument raw(&alloc);
   int code = getJson(url, api_key, raw, timeout_ms, nullptr, &filter);
-  if (code != 200) return code;
+  // -1 like the other two backends: the caller shows a count, and a 403 from
+  // a key without the inventory scope used to read as "403 spools".
+  if (code != 200) return -1;
 
   return (int)raw.as<JsonArrayConst>().size();
 }

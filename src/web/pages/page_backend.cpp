@@ -12,6 +12,8 @@
 // header and the proxy's own IP reaches none of them.
 #include "web/web_pages.h"
 
+#include "app/backend_switch.h"
+
 #include <Arduino.h>
 #include <WebServer.h>
 
@@ -403,7 +405,7 @@ static void routes(WebServer &srv) {
       srv.send(400, "text/plain", T(STR_W_HOST_EMPTY));
       return;
     }
-    backendSetHost(clean);
+    backendApplyHost(clean);
     logSDf("Web: %s host -> %s", backendName(), clean);
 
     // Answered with the result of an actual request rather than a bare

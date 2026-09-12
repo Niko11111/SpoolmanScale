@@ -319,7 +319,11 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_align(lbl_ct, LV_ALIGN_TOP_MID, 0, 18);
 
     lv_obj_t *lbl_cm = lv_label_create(box);
-    lv_label_set_text(lbl_cm, T(STR_EXTRA_FIELDS_CONFIRM_MSG));
+    // Through backendText() like the title above it: the string names
+    // Spoolman, and on the other two backends that was the wrong name.
+    { char cm[160];
+      backendText(T(STR_EXTRA_FIELDS_CONFIRM_MSG), cm, sizeof(cm));
+      lv_label_set_text(lbl_cm, cm); }
     lv_obj_set_style_text_color(lbl_cm, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(lbl_cm, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(lbl_cm, LV_TEXT_ALIGN_CENTER, 0);

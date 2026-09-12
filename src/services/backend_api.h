@@ -1,5 +1,10 @@
 #pragma once
 
+// True when the last inventory fetch stopped short of the whole list. Only
+// FilaMan pages and can run out of time or pages; the other two answer whole.
+// A tag not found in a short list is unknown, not absent.
+bool backendLastListPartial();
+
 #include <ArduinoJson.h>
 #include <stddef.h>
 #include <stdint.h>

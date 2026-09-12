@@ -38,6 +38,31 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 #define FILAMAN_PAGE_MAX    200
 #define FILAMAN_MAX_PAGES    20
 
+// Whether the last inventory fetch stopped short - the timeout or the page
+// cap - so a caller that did not find a tag in it can say "unknown" rather
+// than "not there". Read through filamanLastListPartial().
+static bool s_last_list_partial = false;
+bool filamanLastListPartial() { return s_last_list_partial; }
+
+// What goes into a query string. The Spoolman client has the same helper;
+// the search term here is whatever a tag carried, and a '&' or a '#' in it
+// used to end the query early.
+static String urlEncodeQuery(const char* s) {
+  String out;
+  for (const char* p = s ? s : ""; *p; p++) {
+    const unsigned char c = (unsigned char)*p;
+    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+        c == '-' || c == '_' || c == '.') {
+      out += (char)c;
+    } else {
+      char buf[4];
+      snprintf(buf, sizeof(buf), "%%%02X", c);
+      out += buf;
+    }
+  }
+  return out;
+}
+
 static bool hasBaseUrl(const char* base_url) {
   return base_url && strlen(base_url) > 7;   // longer than "http://"
 }
@@ -644,6 +669,13 @@ int filamanUnlinkBambuFields(const char* base_url, const char* api_key, int spoo
   }
 
   if (!touch) return 200;
+  // The same guard the two sibling custom_fields writes have: a PATCH
+  // replaces the whole object, and a copy that ran out of memory would send
+  // a truncated one - the user's other fields gone with HTTP 200.
+  if (body.overflowed()) {
+    logSD("FilaMan: custom_fields copy overflowed, PATCH aborted to avoid data loss");
+    return -2;
+  }
   String payload;
   serializeJson(body, payload);
   return patchSpool(base_url, api_key,
@@ -870,8 +902,13 @@ static int filamanSpoolHoldingTag(const char* base_url, const char* api_key,
   if (filamanGetSpoolListJson(base_url, api_key, true, doc, uuid, 20, timeout_ms) != 200)
     return 0;
   for (JsonObjectConst sp : doc.as<JsonArrayConst>()) {
-    const char* t = sp["extra"]["tag"] | "";
-    if (t[0] && strcasecmp(t, uuid) == 0) return sp["id"] | 0;
+    // Either slot: the search matched on both, and a chip moved from a
+    // second flange has to be freed from there too, or the link fails on
+    // FilaMan's unique index.
+    const char* t  = sp["extra"]["tag"]  | "";
+    const char* t2 = sp["extra"]["tag2"] | "";
+    if ((t[0]  && strcasecmp(t,  uuid) == 0) ||
+        (t2[0] && strcasecmp(t2, uuid) == 0)) return sp["id"] | 0;
   }
   return 0;
 }
@@ -1231,6 +1268,7 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
                             const char* search_term, int page_size,
                             uint32_t timeout_ms, DeserializationError* out_err) {
   if (out_err) *out_err = DeserializationError::Ok;
+  s_last_list_partial = false;
   if (!hasBaseUrl(base_url)) return -1;
 
   // FilaMan rejects page_size above 200 with a validation error, so an
@@ -1261,12 +1299,13 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
     if (include_archived) url += "&include_archived=true";
     if (search_term && search_term[0]) {
       url += "&search=";
-      url += search_term;
+      url += urlEncodeQuery(search_term);
     }
 
     uint32_t elapsed = millis() - started_ms;
     if (elapsed >= timeout_ms) {
       logSDf("FilaMan: spool list timed out after %d of %d spools", fetched, total);
+      s_last_list_partial = true;
       break;   // keep what was fetched, the caller sees a shorter list
     }
 
@@ -1316,6 +1355,7 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
     if (page >= FILAMAN_MAX_PAGES) {
       logSDf("FilaMan: stopped after %d pages, %d of %d spools fetched",
              page, fetched, total);
+      s_last_list_partial = true;
       break;
     }
     page++;

@@ -18,3 +18,10 @@
 // calling into the screens would turn the layering upside down, and the device
 // path and the web path both have to take exactly the same steps.
 void backendApplyMode(BackendMode mode);
+
+// Changing the address of the current backend. The mode stays, but every
+// cache that holds the old server's answers has to go: the FilaMan location
+// list is keyed on nothing but a five minute TTL, and a spool given a
+// location within that window was PATCHed with an id that belonged to the
+// instance just left - HTTP 200, wrong shelf.
+void backendApplyHost(const char *host);

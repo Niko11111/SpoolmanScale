@@ -24,6 +24,14 @@
 #include "ui/tag_display.h"
 #include "web/web_server.h"
 
+void backendApplyHost(const char *host) {
+  backendSetHost(host);
+  filamanForgetLocations();
+  backendInvalidateExtraFieldCache();
+  amsPresenceForget();
+  sm_reachable = false;          // unknown until the new address answers
+}
+
 void backendApplyMode(BackendMode mode) {
   if (mode == backendMode()) return;
 
