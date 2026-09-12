@@ -61,6 +61,18 @@ static char          s_check_pub[24] = "";  // when that release was published
 static uint32_t s_flash_done  = 0;
 static uint32_t s_flash_total = 0;
 
+// What the chunk handler found out, for the completion handler: whether the
+// image went into flash whole. The completion handler used to ask
+// Update.hasError(), which is also false when Update was never started - a
+// refused or failed begin() ended in a "success" page and a restart into
+// whatever was there before.
+static bool s_upload_ok = false;
+
+// What the multipart envelope adds on top of the image: boundary lines and
+// the part header. A few hundred bytes; this is the slack the size check
+// allows before an upload is called too big for the partition.
+#define OTA_MULTIPART_SLACK  2048
+
 bool otaWebUploadActive() { return ota_upload_active; }
 
 static const char* label() { return T(STR_W_NAV_FIRMWARE); }
@@ -107,7 +119,8 @@ void otaWebGithubTick() {
   otaGithubOverlayShow();
 
   char err[80] = "";
-  if (githubFlashTag(gh_web_flash_tag, webFlashProgress, err, sizeof(err))) {
+  if (githubFlashTag(gh_web_flash_tag, otaExpectedSha(gh_web_flash_tag),
+                     webFlashProgress, err, sizeof(err))) {
     logSD("Reboot: GitHub update written");
     if (lbl_ota_status) lv_label_set_text(lbl_ota_status, T(STR_OTA_SUCCESS));
     lv_timer_handler();
@@ -545,7 +558,8 @@ static void routes(WebServer &srv) {
     // refuses the reply and flashes the device anyway.
     [&srv]() {
       if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_FIRMWARE))) return;
-      bool ok = !Update.hasError();
+      const bool ok = s_upload_ok;
+      s_upload_ok = false;
       String msg = ok
         ? "<!DOCTYPE html><html><head><meta charset='utf-8'>"
           "<meta http-equiv='refresh' content='5;url=/'>"
@@ -583,20 +597,37 @@ static void routes(WebServer &srv) {
       // - the gate, the host, the origin, the password, and no other flash in
       // progress - is asked here, and a refused upload is read and dropped so
       // the browser gets the proper answer from the completion handler.
+      // refused: never started, the bytes are read and dropped. failed:
+      // started and broken off - the same, but Update has been aborted.
       static bool refused = false;
+      static bool failed  = false;
       HTTPUpload& upload = srv.upload();
       if (upload.status == UPLOAD_FILE_START) {
+        s_upload_ok = false;
+        failed  = false;
         refused = !webAllowed(srv, GATE_MAINT);
         if (refused) {
           logSD("OTA: upload refused before the first byte");
+          return;
+        }
+        // Against the partition, before a byte is written. Update would find
+        // out by itself, two megabytes later, with a write error.
+        const size_t announced = srv.clientContentLength();
+        const size_t room      = ESP.getFreeSketchSpace();
+        if (announced > room + OTA_MULTIPART_SLACK) {
+          refused = true;
+          logSDf("OTA: upload of %u bytes refused, partition holds %u",
+                 (unsigned)announced, (unsigned)room);
           return;
         }
         Serial.printf("OTA start: %s\n", upload.filename.c_str());
         ota_upload_active = true;
         if (Update.isRunning()) Update.abort();  // clean up any previous failed upload
         if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
-          Serial.println("OTA begin() error");
+          logSDf("OTA: begin() failed, error %u", (unsigned)Update.getError());
           ota_upload_active = false;
+          failed = true;
+          return;
         }
         // The multipart envelope adds a few hundred bytes on top of the
         // image. On a 1.9 MB upload that is under 0.05 %, so it serves as the
@@ -608,13 +639,31 @@ static void routes(WebServer &srv) {
         if (lbl_ota_status) lv_label_set_text(lbl_ota_status,
           T(STR_OTA_UPLOADING));
         lv_timer_handler();
-      } else if (refused) {
+      } else if (refused || failed) {
         if (upload.status == UPLOAD_FILE_END || upload.status == UPLOAD_FILE_ABORTED) {
           refused = false;
+          failed  = false;
         }
+      } else if (upload.status == UPLOAD_FILE_ABORTED) {
+        // The browser tab closed, or the link dropped. The library reports
+        // this and nothing here used to listen: ota_upload_active stayed set
+        // for good, every OTA route answered "busy" and the daily check never
+        // ran again until a reboot.
+        Update.abort();
+        ota_upload_active = false;
+        ota_upload_done   = 0;
+        ota_upload_total  = 0;
+        logSD("OTA: upload aborted by the client");
+        if (lbl_ota_status) lv_label_set_text(lbl_ota_status, T(STR_OTA_FAIL));
       } else if (upload.status == UPLOAD_FILE_WRITE) {
         if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-          Serial.println("OTA write() error");
+          logSDf("OTA: write failed after %u bytes, error %u",
+                 (unsigned)ota_upload_done, (unsigned)Update.getError());
+          Update.abort();
+          ota_upload_active = false;
+          failed = true;
+          if (lbl_ota_status) lv_label_set_text(lbl_ota_status, T(STR_OTA_FAIL));
+          return;
         }
         ota_upload_done += upload.currentSize;
         // Same cadence as the GitHub path. Painting per chunk would cost more
@@ -628,10 +677,15 @@ static void routes(WebServer &srv) {
         }
       } else if (upload.status == UPLOAD_FILE_END) {
         ota_upload_active = false;
-        if (Update.end(true)) {
-          Serial.printf("OTA end: %u bytes\n", upload.totalSize);
+        // end(true), because the image size is only known now: the multipart
+        // envelope hid it from begin(). The library still checks the image
+        // header before it commits.
+        s_upload_ok = Update.end(true) && !Update.hasError();
+        if (s_upload_ok) {
+          logSDf("OTA: browser upload complete, %u bytes", (unsigned)upload.totalSize);
         } else {
-          Serial.println("OTA end() error");
+          logSDf("OTA: end() failed after %u bytes, error %u",
+                 (unsigned)upload.totalSize, (unsigned)Update.getError());
         }
       }
     }

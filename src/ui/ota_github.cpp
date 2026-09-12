@@ -258,7 +258,8 @@ void doGithubOtaFlash(const char* version) {
   lv_timer_handler();
 
   char ferr[80] = "";
-  const bool flashed = githubFlashTag(tag, otaGithubOverlayProgress, ferr, sizeof(ferr));
+  const bool flashed = githubFlashTag(tag, otaExpectedSha(tag), otaGithubOverlayProgress,
+                                      ferr, sizeof(ferr));
   if (!flashed) otaGithubOverlayHide();
 
   if (flashed) {

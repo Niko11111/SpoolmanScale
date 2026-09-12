@@ -7,11 +7,27 @@
 #include <WiFiClient.h>
 #include <WiFiClientSecure.h>
 #include <lvgl.h>
+#include <string.h>
+#include "mbedtls/sha256.h"
 
 #include "hardware/sd_logger.h"
 #include "services/ota_state.h"
 
 #define GH_REPO "Niko11111/SpoolmanScale"
+
+// No bytes for this long while the socket is still open: the download is
+// stuck, not slow. GitHub's CDN streams a 2 MB image in a few seconds.
+#define GH_DOWNLOAD_STALL_MS  20000
+
+// The root store built into the SDK (CONFIG_MBEDTLS_CERTIFICATE_BUNDLE), as
+// the linker names it. github.com and api.github.com chain to Sectigo today,
+// the release assets and GitHub Pages to Let's Encrypt; the bundle carries
+// both and whatever they move to next.
+extern const uint8_t x509_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
+
+void githubTrust(WiFiClientSecure &client) {
+  client.setCACertBundle(x509_crt_bundle_start);
+}
 
 bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
                      char *published, size_t pub_len,
@@ -22,7 +38,7 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
   if (err && err_len) err[0] = '\0';
 
   WiFiClientSecure client;
-  client.setInsecure();
+  githubTrust(client);
   HTTPClient http;
   // per_page caps the list. Unbounded it answers with every release ever cut -
   // 109 KB at the time of writing, against roughly 145 KB of free heap.
@@ -164,7 +180,7 @@ bool githubReleaseByTag(const char *tag, GithubRelease &out,
   }
 
   WiFiClientSecure client;
-  client.setInsecure();
+  githubTrust(client);
   HTTPClient http;
   String url = "https://api.github.com/repos/" GH_REPO "/releases/tags/";
   url += tag;
@@ -221,13 +237,25 @@ bool githubReleaseByTag(const char *tag, GithubRelease &out,
   return true;
 }
 
-bool githubFlashTag(const char *tag, OtaProgressFn progress,
-                    char *err, size_t err_len) {
+// Lower-case hex of a digest, for the log line and the comparison.
+static void hexDigest(const unsigned char *d, size_t n, char *out, size_t out_len) {
+  static const char hexd[] = "0123456789abcdef";
+  size_t o = 0;
+  for (size_t i = 0; i < n && o + 2 < out_len; i++) {
+    out[o++] = hexd[d[i] >> 4];
+    out[o++] = hexd[d[i] & 0x0F];
+  }
+  out[o] = '\0';
+}
+
+bool githubFlashTag(const char *tag, const char *sha256_hex,
+                    OtaProgressFn progress, char *err, size_t err_len) {
   if (err && err_len) err[0] = '\0';
   if (!tag || tag[0] == '\0') {
     if (err && err_len) snprintf(err, err_len, "%s", "No release selected");
     return false;
   }
+  const bool check_sha = (sha256_hex && strlen(sha256_hex) == 64);
 
   // Keeps the background check from opening a second TLS connection while the
   // image is being written. Cleared on every failing path below; a success
@@ -235,7 +263,7 @@ bool githubFlashTag(const char *tag, OtaProgressFn progress,
   gh_flash_active = true;
 
   WiFiClientSecure client;
-  client.setInsecure();
+  githubTrust(client);
   HTTPClient http;
 
   // releases/latest skips pre-releases. Downloading from there while the check
@@ -278,6 +306,15 @@ bool githubFlashTag(const char *tag, OtaProgressFn progress,
   const uint32_t total = (len > 0) ? (uint32_t)len : 0;
   uint32_t done = 0;
   unsigned long last_paint = 0;
+  unsigned long last_data  = millis();
+  bool write_failed = false;
+  bool stalled      = false;
+
+  // Summed as the bytes go into flash, so the check at the end is over what
+  // was written rather than over what was received.
+  mbedtls_sha256_context sha;
+  mbedtls_sha256_init(&sha);
+  mbedtls_sha256_starts_ret(&sha, 0);
 
   uint8_t buf8[512];
   while (http.connected() && (len > 0 || len == -1)) {
@@ -285,9 +322,14 @@ bool githubFlashTag(const char *tag, OtaProgressFn progress,
     if (available) {
       size_t toRead = min(available, sizeof(buf8));
       size_t rd = stream->readBytes(buf8, toRead);
-      if (Update.write(buf8, rd) != rd) break;
+      if (Update.write(buf8, rd) != rd) { write_failed = true; break; }
+      mbedtls_sha256_update_ret(&sha, buf8, rd);
       done += rd;
+      last_data = millis();
       if (len > 0) len -= rd;
+    } else if (millis() - last_data >= GH_DOWNLOAD_STALL_MS) {
+      stalled = true;
+      break;
     }
     if (progress && millis() - last_paint >= OTA_PROGRESS_MS) {
       last_paint = millis();
@@ -298,7 +340,51 @@ bool githubFlashTag(const char *tag, OtaProgressFn progress,
   }
   http.end();
 
-  if (Update.end(true) && !Update.hasError()) return true;
+  unsigned char digest[32];
+  mbedtls_sha256_finish_ret(&sha, digest);
+  mbedtls_sha256_free(&sha);
+  char got[65];
+  hexDigest(digest, sizeof(digest), got, sizeof(got));
+
+  // Every way the bytes can be wrong is refused before the image is
+  // committed. Update.end(true) used to run here whatever had happened, and
+  // it means "finalise even if bytes are missing": a WiFi drop mid-download
+  // produced a success message, a reboot, and the bootloader quietly falling
+  // back to the old image.
+  const char *fail = nullptr;
+  char detail[80] = "";
+  if (write_failed) {
+    snprintf(detail, sizeof(detail), "Update error %u", (unsigned)Update.getError());
+    fail = detail;
+  } else if (stalled) {
+    snprintf(detail, sizeof(detail), "Stalled after %u bytes", (unsigned)done);
+    fail = detail;
+  } else if (total > 0 && done != total) {
+    snprintf(detail, sizeof(detail), "Incomplete: %u of %u bytes", (unsigned)done, (unsigned)total);
+    fail = detail;
+  } else if (done == 0) {
+    fail = "Empty download";
+  } else if (check_sha && strcasecmp(got, sha256_hex) != 0) {
+    fail = "Checksum mismatch";
+    logSDf("OTA: sha256 expected %s, got %s", sha256_hex, got);
+  }
+
+  if (fail) {
+    Update.abort();
+    logSDf("OTA: %s refused - %s", tag, fail);
+    if (err && err_len) snprintf(err, err_len, "%s", fail);
+    gh_flash_active = false;
+    return false;
+  }
+
+  logSDf("OTA: %s complete, %u bytes, sha256 %s%s", tag, (unsigned)done, got,
+         check_sha ? " (verified)" : " (no checksum published)");
+
+  // With a known size the strict form: the library checks that every byte
+  // it was promised has arrived. Only a server that sent no Content-Length
+  // leaves it no way to know, and that case was already bounded above.
+  const bool ended = (total > 0) ? Update.end(false) : Update.end(true);
+  if (ended && !Update.hasError()) return true;
 
   if (err && err_len) snprintf(err, err_len, "Update error %u",
                                (unsigned)Update.getError());
