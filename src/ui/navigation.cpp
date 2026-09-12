@@ -10,7 +10,12 @@
 #include "hardware/display_power.h"
 #include "hardware/sd_logger.h"
 #include "ui/ams_view.h"
+#include "ui/connection_screen.h"
 #include "ui/extra_fields_screen.h"
+#include "ui/ota_github.h"
+#include "ui/spoolman_screen.h"
+#include "ui/wifi_info.h"
+#include "ui/wifi_setup_screen.h"
 #include "ui/more_info_screen.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/header_status.h"
@@ -76,6 +81,30 @@ void hideAllOverlays() {
   hideAmsViewOverlays();
 }
 
+void deleteOtaScreens() {
+  if (scr_ota)         { lv_obj_del(scr_ota);         scr_ota         = nullptr; }
+  lbl_gh_btn_badge = nullptr;
+  if (scr_ota_browser) { lv_obj_del(scr_ota_browser); scr_ota_browser = nullptr; }
+  lbl_ota_status = nullptr;      // written by the web upload from the loop
+  if (scr_ota_github)  { lv_obj_del(scr_ota_github);  scr_ota_github  = nullptr; }
+  otaGithubForgetLabels();       // written by the parked check from the loop
+}
+
+// Screens that used to be hidden here and never deleted: they stayed in the
+// 96 kB pool for the rest of the session, and the two WiFi screens kept their
+// refresh timers firing at objects nobody was looking at. Everything that
+// carries a pointer the loop can still write goes through a close helper that
+// drops the pointer with the screen.
+static void deleteSecondaryScreens() {
+  closeWifiInfoScreen();
+  closeConnectionScreen();
+  closeSpoolmanScreen();
+  closeWifiConnectingScreen();
+  if (scr_backend)  { lv_obj_del(scr_backend);  scr_backend  = nullptr; }
+  if (scr_web)      { lv_obj_del(scr_web);      scr_web      = nullptr; }
+  if (scr_timezone) { lv_obj_del(scr_timezone); scr_timezone = nullptr; }
+}
+
 void showMainScreen() {
   logSD("SHOW: MainScreen");
   logSD("UI: Screen -> Main");
@@ -88,7 +117,8 @@ void showMainScreen() {
   hideAllOverlays();
 
   if (scr_settings)    { lv_obj_del(scr_settings);    scr_settings    = nullptr; }
-  if (scr_connection)  { lv_obj_del(scr_connection);  scr_connection  = nullptr; }
+  lbl_system_badge = nullptr;    // sat on the System tile, written from the loop
+  deleteSecondaryScreens();
   // Through the helper, so the remembered list pointer goes with the screen
   // rather than outliving it.
   if (scr_scale_sub)   { scaleSubScrollForget();
@@ -98,16 +128,18 @@ void showMainScreen() {
   s_dry_numpad_lbl = nullptr;
   if (scr_display)     { lv_obj_del(scr_display);     scr_display     = nullptr; }
   if (scr_system)      { lv_obj_del(scr_system);      scr_system      = nullptr; }
-  if (scr_ota)         { lv_obj_del(scr_ota);         scr_ota         = nullptr; }
-  if (scr_ota_browser) { lv_obj_del(scr_ota_browser); scr_ota_browser = nullptr; }
-  if (scr_ota_github)  { lv_obj_del(scr_ota_github);  scr_ota_github  = nullptr; }
+  lbl_fw_badge = nullptr;        // sat on the Firmware row, same
+  deleteOtaScreens();
   if (scr_factor)      { lv_obj_del(scr_factor);      scr_factor      = nullptr; }
+  lbl_factor_result     = nullptr;   // written by cal_reset_pending from the loop
+  lbl_factor_cal_weight = nullptr;
   if (scr_bag)         { lv_obj_del(scr_bag);         scr_bag         = nullptr; }
   if (scr_filaman_options) { lv_obj_del(scr_filaman_options); scr_filaman_options = nullptr; }
   if (scr_ams_assign)      { lv_obj_del(scr_ams_assign);      scr_ams_assign      = nullptr; }
   destroyAmsView();
   if (scr_filaman_fields)  { lv_obj_del(scr_filaman_fields);  scr_filaman_fields  = nullptr; }
   if (s_ams_numpad_scr)    { lv_obj_del(s_ams_numpad_scr);    s_ams_numpad_scr    = nullptr; }
+  s_ams_numpad_lbl = nullptr;
   if (scr_spoolman_options) { lv_obj_del(scr_spoolman_options); scr_spoolman_options = nullptr; }
   if (scr_bambuddy_options) { lv_obj_del(scr_bambuddy_options); scr_bambuddy_options = nullptr; }
   if (scr_bambuddy_dried)  { lv_obj_del(scr_bambuddy_dried);  scr_bambuddy_dried  = nullptr; }
@@ -141,14 +173,17 @@ void showSettingsScreen() {
   hideAllOverlays();
 
   if (scr_settings)    { lv_obj_del(scr_settings);    scr_settings    = nullptr; }
-  if (scr_connection)  { lv_obj_del(scr_connection);  scr_connection  = nullptr; }
-  if (scr_scale_sub)   { lv_obj_del(scr_scale_sub);   scr_scale_sub   = nullptr; }
+  lbl_system_badge = nullptr;
+  deleteSecondaryScreens();
+  if (scr_scale_sub)   { scaleSubScrollForget();
+                         lv_obj_del(scr_scale_sub);   scr_scale_sub   = nullptr; }
   if (scr_display)     { lv_obj_del(scr_display);     scr_display     = nullptr; }
   if (scr_system)      { lv_obj_del(scr_system);      scr_system      = nullptr; }
-  if (scr_ota)         { lv_obj_del(scr_ota);         scr_ota         = nullptr; }
-  if (scr_ota_browser) { lv_obj_del(scr_ota_browser); scr_ota_browser = nullptr; }
-  if (scr_ota_github)  { lv_obj_del(scr_ota_github);  scr_ota_github  = nullptr; }
+  lbl_fw_badge = nullptr;
+  deleteOtaScreens();
   if (scr_factor)      { lv_obj_del(scr_factor);      scr_factor      = nullptr; }
+  lbl_factor_result     = nullptr;
+  lbl_factor_cal_weight = nullptr;
   if (scr_bag)         { lv_obj_del(scr_bag);         scr_bag         = nullptr; }
   if (scr_lastused)    { lv_obj_del(scr_lastused);    scr_lastused    = nullptr; }
   if (scr_spoolman_fail){ lv_obj_del(scr_spoolman_fail); scr_spoolman_fail = nullptr; }

@@ -637,8 +637,8 @@ void appLoop() {
   }
   if (show_spoolman_pending) {
     show_spoolman_pending = false;
-    // Always rebuild — sp_ip_input is reset on entry
-    if (scr_spoolman) { lv_obj_del(scr_spoolman); scr_spoolman = nullptr; }
+    // Always rebuild - sp_ip_input is reset on entry
+    closeSpoolmanScreen();
     if (scr_spoolman_fail) { lv_obj_del(scr_spoolman_fail); scr_spoolman_fail = nullptr; }
     buildSpoolmanScreen();
     hideAllOverlays();
@@ -646,8 +646,8 @@ void appLoop() {
   }
   if (show_connection_from_spoolman_pending) {
     show_connection_from_spoolman_pending = false;
-    if (scr_spoolman)   { lv_obj_del(scr_spoolman);   scr_spoolman   = nullptr; }
-    if (scr_connection) { lv_obj_del(scr_connection); scr_connection = nullptr; }
+    closeSpoolmanScreen();
+    closeConnectionScreen();
     buildConnectionScreen();
     hideAllOverlays();
     lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
@@ -840,11 +840,10 @@ void appLoop() {
   if (show_system_pending) {
     show_system_pending = false;
     // Coming back from OTA / Info / Language to System screen
-    if (scr_ota)         { lv_obj_del(scr_ota);         scr_ota         = nullptr; }
-    if (scr_ota_browser) { lv_obj_del(scr_ota_browser); scr_ota_browser = nullptr; }
-    if (scr_ota_github)  { lv_obj_del(scr_ota_github);  scr_ota_github  = nullptr; }
+    deleteOtaScreens();
     if (scr_info)        { lv_obj_del(scr_info);        scr_info        = nullptr; }
     if (scr_system)      { lv_obj_del(scr_system);      scr_system      = nullptr; }
+    lbl_fw_badge = nullptr;
     buildSystemScreen();
     hideAllOverlays();
     lv_obj_clear_flag(scr_system, LV_OBJ_FLAG_HIDDEN);

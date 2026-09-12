@@ -45,6 +45,12 @@ static void refreshWifiIp(lv_timer_t *t) {
   }
 }
 
+void closeConnectionScreen() {
+  if (wifi_ip_timer) { lv_timer_del(wifi_ip_timer); wifi_ip_timer = nullptr; }
+  lbl_wifi_ip = nullptr;
+  if (scr_connection) { lv_obj_del(scr_connection); scr_connection = nullptr; }
+}
+
 void buildConnectionScreen() {
   logSD("BUILD: ConnectionScreen");
   // Drop the previous screen's timer before the new one is built, so the two

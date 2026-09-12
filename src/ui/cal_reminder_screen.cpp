@@ -8,6 +8,7 @@
 
 #include "app/deferred_actions.h"
 #include "extra_fields_screen.h"
+#include "spoolman_screen.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "ui_common.h"
@@ -26,7 +27,7 @@ void showCalReminderScreen() {
   if (scr_first_boot)    { lv_obj_del(scr_first_boot);    scr_first_boot    = nullptr; }
   if (scr_wifi_setup)    { lv_obj_del(scr_wifi_setup);    scr_wifi_setup    = nullptr; }
   if (scr_wifi_pass)     { lv_obj_del(scr_wifi_pass);     scr_wifi_pass     = nullptr; }
-  if (scr_spoolman)      { lv_obj_del(scr_spoolman);      scr_spoolman      = nullptr; }
+  closeSpoolmanScreen();
   if (scr_extra_fields)  { lv_obj_del(scr_extra_fields);  scr_extra_fields  = nullptr;
                            resetExtraFieldsScreenState(); }
   if (scr_tag_field)     { lv_obj_del(scr_tag_field);     scr_tag_field     = nullptr; }

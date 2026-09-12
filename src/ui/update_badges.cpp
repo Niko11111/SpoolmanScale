@@ -19,7 +19,12 @@ constexpr uint32_t BADGE_BORDER_COLOR = 0x0a1020;
 
 
 static void setBadgeVisible(lv_obj_t *badge, bool show) {
-  if (!badge) return;
+  // Three of the four badges live on screens that showMainScreen() deletes,
+  // and this runs from the loop whenever the update check answers - long
+  // after the user has been through Settings and back. The pointers are
+  // nulled where the screens go, and this is the second lock on the door:
+  // lv_obj_is_valid() walks the tree and never dereferences the candidate.
+  if (!badge || !lv_obj_is_valid(badge)) return;
   if (show) lv_obj_clear_flag(badge, LV_OBJ_FLAG_HIDDEN);
   else      lv_obj_add_flag(badge, LV_OBJ_FLAG_HIDDEN);
 }

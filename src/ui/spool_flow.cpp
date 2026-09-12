@@ -681,7 +681,12 @@ void fetchUnlinkedSpools() { fetchAllSpoolsForLink(false, ""); }
 // Both the successful and the aborted path need exactly this.
 static void closeLinkOverlays() {
   if (scr_link_entry)  { lv_obj_del(scr_link_entry);  scr_link_entry  = nullptr; }
-  if (scr_link_id)     { lv_obj_del(scr_link_id);     scr_link_id     = nullptr; }
+  // Through its own close: that one also clears id_input_open and the two
+  // labels. Deleting the numpad by hand left the flag standing, and every
+  // tag lookup in appLoop() stands aside while it is set - a backend switch
+  // from the web page with the numpad open meant no tag was looked up again
+  // until somebody happened to reach the main screen.
+  closeIdInputPopup();
   if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
   if (scr_link_warn_b) { lv_obj_del(scr_link_warn_b); scr_link_warn_b = nullptr; }
   if (scr_link_vendor) { lv_obj_del(scr_link_vendor); scr_link_vendor = nullptr; }
@@ -3560,10 +3565,16 @@ void hideSpoolFlowOverlays() {
   // the overlays cannot reach the freed array no matter what the user taps.
   // Deleting them here is not allowed - hideAllOverlays() is reached from
   // LVGL callbacks as well, so the delete is parked for the next loop pass.
+  //
+  // The copy flow reads the same array and lives on the same rules, so its
+  // three screens and the new-tag popup are in the list: left out, they
+  // stayed drawn on top of whatever was built next, with rows pointing into
+  // the freed list.
   lv_obj_t *const link_scr[] = {
     scr_link_entry, scr_link_id, scr_link_warn_a, scr_link_warn_b,
     scr_link_vendor, scr_link_mat, scr_link_mat_sub, scr_link_spools,
-    scr_link_list
+    scr_link_list,
+    scr_copy_entry, scr_copy_list, scr_copy_confirm, scr_newtag
   };
   for (unsigned i = 0; i < sizeof(link_scr) / sizeof(link_scr[0]); i++)
     if (link_scr[i]) {
@@ -3589,6 +3600,7 @@ void handleSpoolFlowDeferredActions() {
     link_overlays_close_pending = false;
     logSD("Link flow: overlays closed after the spool list was freed");
     closeLinkOverlays();
+    deleteSpoolFlowOverlays();
   }
   if (tagwrite_after_link_id > 0) {
     const int id = tagwrite_after_link_id;

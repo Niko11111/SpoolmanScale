@@ -130,6 +130,14 @@ static void buildIpBarSelector() {
   refreshIpBarButton();
 }
 
+void closeWifiInfoScreen() {
+  if (wifi_info_timer) { lv_timer_del(wifi_info_timer); wifi_info_timer = nullptr; }
+  val_ssid = val_state = val_ip = val_gw = val_dns = val_mac = val_rssi = nullptr;
+  lbl_ipbar_mode = nullptr;
+  btn_ipbar      = nullptr;
+  if (scr_wifi) { lv_obj_del(scr_wifi); scr_wifi = nullptr; }
+}
+
 void buildWifiScreen() {
   if (wifi_info_timer) { lv_timer_del(wifi_info_timer); wifi_info_timer = nullptr; }
   val_ssid = nullptr;

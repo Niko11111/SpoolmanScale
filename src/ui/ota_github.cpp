@@ -26,6 +26,14 @@ static lv_obj_t *lbl_gh_latest      = nullptr;
 static lv_obj_t *btn_gh_update      = nullptr;
 static lv_obj_t *lbl_gh_update_btn  = nullptr;
 
+void otaGithubForgetLabels() {
+  lbl_gh_status     = nullptr;
+  lbl_gh_installed  = nullptr;
+  lbl_gh_latest     = nullptr;
+  btn_gh_update     = nullptr;
+  lbl_gh_update_btn = nullptr;
+}
+
 // The download overlay. File scope so the progress callback can reach it - it
 // is a plain function pointer, not a closure - and so both callers raise the
 // same one instead of growing a second.
@@ -272,11 +280,7 @@ void doGithubOtaFlash(const char* version) {
 void showOtaGithubScreen() {
   logSD("SHOW: OtaGithubScreen");
   logSD("UI: Screen -> OTA GitHub");
-  lbl_gh_status     = nullptr;
-  lbl_gh_installed  = nullptr;
-  lbl_gh_latest     = nullptr;
-  btn_gh_update     = nullptr;
-  lbl_gh_update_btn = nullptr;
+  otaGithubForgetLabels();
   if (!update_available) gh_latest_version[0] = '\0';
 
   if (scr_ota_github) { lv_obj_del(scr_ota_github); scr_ota_github = nullptr; }

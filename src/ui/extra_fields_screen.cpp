@@ -536,8 +536,8 @@ void checkAndCreateExtraFields(bool create_missing) {
   int missing_count = 0;
   for (int i = 0; i < ef_count; i++) {
     if (!field_exists[i]) {
-      if (missing_count > 0) strncat(missing_buf, ", ", sizeof(missing_buf)-1);
-      strncat(missing_buf, required[i], sizeof(missing_buf)-1);
+      if (missing_count > 0) strncat(missing_buf, ", ", sizeof(missing_buf) - strlen(missing_buf) - 1);
+      strncat(missing_buf, required[i], sizeof(missing_buf) - strlen(missing_buf) - 1);
       missing_count++;
     }
   }
@@ -553,8 +553,10 @@ void checkAndCreateExtraFields(bool create_missing) {
     }
     char ok_buf[128];
     snprintf(ok_buf, sizeof(ok_buf), T(STR_EXTRA_FIELDS_ALL_OK), have_buf);
-    lv_label_set_text(lbl_extra_fields_status, ok_buf);
-    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0x40c080), 0);
+    if (lbl_extra_fields_status) {
+      lv_label_set_text(lbl_extra_fields_status, ok_buf);
+      lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0x40c080), 0);
+    }
     if (btn_extra_fields_create) lv_obj_add_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
     // Turn skip/next button green with "Next →" label
     if (btn_extra_fields_next) {
@@ -576,14 +578,16 @@ void checkAndCreateExtraFields(bool create_missing) {
   if (!create_missing) {
     char status_buf[128];
     snprintf(status_buf, sizeof(status_buf), T(STR_EXTRA_FIELDS_MISSING), missing_buf);
-    lv_label_set_text(lbl_extra_fields_status, status_buf);
-    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
+    if (lbl_extra_fields_status) {
+      lv_label_set_text(lbl_extra_fields_status, status_buf);
+      lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
+    }
     if (btn_extra_fields_create) lv_obj_clear_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
     return;
   }
 
   // Create missing fields
-  lv_label_set_text(lbl_extra_fields_status, T(STR_EXTRA_FIELDS_CREATING));
+  if (lbl_extra_fields_status) lv_label_set_text(lbl_extra_fields_status, T(STR_EXTRA_FIELDS_CREATING));
   lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0x4a6fa0), 0);
   lv_timer_handler();
   yield();
@@ -600,8 +604,8 @@ void checkAndCreateExtraFields(bool create_missing) {
     Serial.printf("Create field '%s': %d\n", required[i], c2);
     logSDf("extra fields: create '%s' HTTP %d", required[i], c2);
     if (c2 != 200 && c2 != 201) {
-      if (fail_count > 0) strncat(fail_fields, ", ", sizeof(fail_fields)-1);
-      strncat(fail_fields, required[i], sizeof(fail_fields)-1);
+      if (fail_count > 0) strncat(fail_fields, ", ", sizeof(fail_fields) - strlen(fail_fields) - 1);
+      strncat(fail_fields, required[i], sizeof(fail_fields) - strlen(fail_fields) - 1);
       fail_count++;
     }
   }
@@ -609,8 +613,13 @@ void checkAndCreateExtraFields(bool create_missing) {
   if (fail_count > 0) {
     char fail_buf[128];
     snprintf(fail_buf, sizeof(fail_buf), T(STR_EXTRA_FIELDS_CREATE_FAIL), fail_fields);
-    lv_label_set_text(lbl_extra_fields_status, fail_buf);
-    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
+    // The loop above pumps LVGL between the requests, and the X on the setup
+    // variant of this screen goes through showMainScreen(), which nulls this
+    // label. Unguarded, that was LV_ASSERT_NULL and a frozen device.
+    if (lbl_extra_fields_status) {
+      lv_label_set_text(lbl_extra_fields_status, fail_buf);
+      lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
+    }
   } else {
     if (btn_extra_fields_create) lv_obj_add_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
     yield();

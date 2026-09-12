@@ -592,6 +592,9 @@ void querySpoolmanById(int spool_id) {
 
   sm_found        = true;
   sm_id           = spool["id"] | 0;
+  // One spool, asked for by id: a duplicate count left over from the last
+  // scan would keep the status line saying "more than one answered".
+  sm_dup_count    = 0;
   // Found and archived is a state of its own, see app_state.h. Read here
   // because this is the one path that fetches a spool whole.
   sm_archived     = spool["archived"] | false;

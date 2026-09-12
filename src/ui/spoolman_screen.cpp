@@ -68,6 +68,13 @@ static lv_obj_t *lbl_sp_ip_display = nullptr;
 static lv_obj_t *lbl_sp_test_result = nullptr;  // test result label on IP screen
 static lv_obj_t *btn_sp_extra_fields = nullptr;  // Extra Fields button on IP screen
 
+void closeSpoolmanScreen() {
+  lbl_sp_ip_display   = nullptr;
+  lbl_sp_test_result  = nullptr;
+  btn_sp_extra_fields = nullptr;
+  if (scr_spoolman) { lv_obj_del(scr_spoolman); scr_spoolman = nullptr; }
+}
+
 void buildSpoolmanScreen() {
   logSD("BUILD: SpoolmanScreen");
   // This is the most object-heavy screen in the project (numpad + header,
@@ -533,7 +540,7 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
     if (spoolman_fail_is_setup) {
       showExtraFieldsScreen(true);
     } else {
-      if (scr_connection) { lv_obj_del(scr_connection); scr_connection = nullptr; }
+      closeConnectionScreen();
       buildConnectionScreen();
       if (!scr_connection) buildConnectionScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
     }

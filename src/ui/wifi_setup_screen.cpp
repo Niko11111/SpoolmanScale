@@ -352,11 +352,18 @@ static void setConnSummaryHidden(bool hidden) {
   }
 }
 
+void closeWifiConnectingScreen() {
+  btn_conn_retry = btn_conn_next = lbl_conn_status = nullptr;
+  conn_val_ssid = conn_val_ip = conn_val_gw = conn_val_rssi = nullptr;
+  conn_lbl_ssid = conn_lbl_ip = conn_lbl_gw = conn_lbl_rssi = nullptr;
+  if (scr_wifi_connecting) { lv_obj_del(scr_wifi_connecting); scr_wifi_connecting = nullptr; }
+}
+
 void showWifiConnectingScreen() {
   logSD("SHOW: WifiConnectingScreen");
   logSD("UI: Screen -> WifiConnecting");
   hideAllOverlays();
-  if (scr_wifi_connecting) { lv_obj_del(scr_wifi_connecting); scr_wifi_connecting = nullptr; }
+  closeWifiConnectingScreen();
   buildWifiConnectingScreen();
   lv_obj_clear_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN);
   lv_timer_handler();

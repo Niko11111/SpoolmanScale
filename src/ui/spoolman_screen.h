@@ -1,6 +1,8 @@
 #pragma once
 
 void buildSpoolmanScreen();
+// Deletes the address screen and drops the three labels that hang off it.
+void closeSpoolmanScreen();
 void showSpoolmanFailScreen(bool is_setup_flow);
 
 // Throws the stored backend address away and rebuilds the address screen, so

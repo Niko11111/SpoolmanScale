@@ -101,7 +101,7 @@ void buildSettingsScreen() {
       switch (idx) {
         case 0:
           logSD("UI: Tile -> Connection");
-          if (scr_connection) { lv_obj_del(scr_connection); scr_connection = nullptr; }
+          closeConnectionScreen();
           buildConnectionScreen();
           if (!scr_connection) buildConnectionScreen();
           hideAllOverlays();

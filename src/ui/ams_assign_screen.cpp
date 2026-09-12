@@ -85,6 +85,7 @@ static void buildAmsWindowNumpad() {
   title_buf[sizeof(title_buf)-1] = '\0';
   buildSubHeader(s_ams_numpad_scr, title_buf, [](lv_event_t *e){
     if (s_ams_numpad_scr) { lv_obj_del(s_ams_numpad_scr); s_ams_numpad_scr = nullptr; }
+    s_ams_numpad_lbl = nullptr;
     show_ams_assign_pending = true;
   });
 
