@@ -2,7 +2,29 @@
 
 #include <Preferences.h>
 
+#include "hardware/sd_logger.h"
+
 static const char* PREFS_NAMESPACE = "spoolscale";
+
+// How long the same failure stays quiet after it was logged once.
+#define PREFS_FAIL_LOG_MS  60000UL
+
+// A write or an open that did not take. Logged, not thrown: the caller has
+// nothing better to do than carry on, but the log has to say why a setting
+// came back on the next boot.
+static void prefsReportFail(const char* what, const char* key) {
+  static unsigned long last_ms = 0;
+  if (last_ms && millis() - last_ms < PREFS_FAIL_LOG_MS) return;
+  last_ms = millis();
+  Serial.printf("NVS: %s of '%s' failed\n", what, key);
+  logSDf("NVS: %s of '%s' failed - the setting will not survive a restart", what, key);
+}
+
+static bool prefsOpen(Preferences& prefs, const char* key) {
+  if (prefs.begin(PREFS_NAMESPACE, false)) return true;
+  prefsReportFail("open", key);
+  return false;
+}
 
 // Guarded with isKey() the same way prefsGetFloat() is: getString() logs an
 // ESP_LOGE on a key that is not there yet, and a setting whose default is
@@ -10,7 +32,7 @@ static const char* PREFS_NAMESPACE = "spoolscale";
 // the device. The value returned is the same either way.
 String prefsGetString(const char* key, const char* default_value) {
   Preferences prefs;
-  prefs.begin(PREFS_NAMESPACE, false);
+  if (!prefsOpen(prefs, key)) return String(default_value);
   String value = prefs.isKey(key) ? prefs.getString(key, default_value)
                                   : String(default_value);
   prefs.end();
@@ -19,7 +41,7 @@ String prefsGetString(const char* key, const char* default_value) {
 
 float prefsGetFloat(const char* key, float default_value) {
   Preferences prefs;
-  prefs.begin(PREFS_NAMESPACE, false);
+  if (!prefsOpen(prefs, key)) return default_value;
   float value = prefs.isKey(key) ? prefs.getFloat(key, default_value) : default_value;
   prefs.end();
   return value;
@@ -27,7 +49,7 @@ float prefsGetFloat(const char* key, float default_value) {
 
 int prefsGetInt(const char* key, int default_value) {
   Preferences prefs;
-  prefs.begin(PREFS_NAMESPACE, false);
+  if (!prefsOpen(prefs, key)) return default_value;
   int value = prefs.getInt(key, default_value);
   prefs.end();
   return value;
@@ -35,7 +57,7 @@ int prefsGetInt(const char* key, int default_value) {
 
 uint32_t prefsGetUInt(const char* key, uint32_t default_value) {
   Preferences prefs;
-  prefs.begin(PREFS_NAMESPACE, false);
+  if (!prefsOpen(prefs, key)) return default_value;
   uint32_t value = prefs.getUInt(key, default_value);
   prefs.end();
   return value;
@@ -43,7 +65,7 @@ uint32_t prefsGetUInt(const char* key, uint32_t default_value) {
 
 uint8_t prefsGetUChar(const char* key, uint8_t default_value) {
   Preferences prefs;
-  prefs.begin(PREFS_NAMESPACE, false);
+  if (!prefsOpen(prefs, key)) return default_value;
   uint8_t value = prefs.getUChar(key, default_value);
   prefs.end();
   return value;
@@ -51,50 +73,63 @@ uint8_t prefsGetUChar(const char* key, uint8_t default_value) {
 
 bool prefsGetBool(const char* key, bool default_value) {
   Preferences prefs;
-  prefs.begin(PREFS_NAMESPACE, false);
+  if (!prefsOpen(prefs, key)) return default_value;
   bool value = prefs.getBool(key, default_value);
   prefs.end();
   return value;
 }
 
-void prefsPutString(const char* key, const char* value) {
+// put*() returns the number of bytes written, 0 on failure.
+bool prefsPutString(const char* key, const char* value) {
   Preferences prefs;
-  prefs.begin(PREFS_NAMESPACE, false);
-  prefs.putString(key, value);
+  if (!prefsOpen(prefs, key)) return false;
+  const bool ok = prefs.putString(key, value) > 0 || (value && !value[0]);
   prefs.end();
+  if (!ok) prefsReportFail("write", key);
+  return ok;
 }
 
-void prefsPutFloat(const char* key, float value) {
+bool prefsPutFloat(const char* key, float value) {
   Preferences prefs;
-  prefs.begin(PREFS_NAMESPACE, false);
-  prefs.putFloat(key, value);
+  if (!prefsOpen(prefs, key)) return false;
+  const bool ok = prefs.putFloat(key, value) > 0;
   prefs.end();
+  if (!ok) prefsReportFail("write", key);
+  return ok;
 }
 
-void prefsPutInt(const char* key, int value) {
+bool prefsPutInt(const char* key, int value) {
   Preferences prefs;
-  prefs.begin(PREFS_NAMESPACE, false);
-  prefs.putInt(key, value);
+  if (!prefsOpen(prefs, key)) return false;
+  const bool ok = prefs.putInt(key, value) > 0;
   prefs.end();
+  if (!ok) prefsReportFail("write", key);
+  return ok;
 }
 
-void prefsPutUInt(const char* key, uint32_t value) {
+bool prefsPutUInt(const char* key, uint32_t value) {
   Preferences prefs;
-  prefs.begin(PREFS_NAMESPACE, false);
-  prefs.putUInt(key, value);
+  if (!prefsOpen(prefs, key)) return false;
+  const bool ok = prefs.putUInt(key, value) > 0;
   prefs.end();
+  if (!ok) prefsReportFail("write", key);
+  return ok;
 }
 
-void prefsPutUChar(const char* key, uint8_t value) {
+bool prefsPutUChar(const char* key, uint8_t value) {
   Preferences prefs;
-  prefs.begin(PREFS_NAMESPACE, false);
-  prefs.putUChar(key, value);
+  if (!prefsOpen(prefs, key)) return false;
+  const bool ok = prefs.putUChar(key, value) > 0;
   prefs.end();
+  if (!ok) prefsReportFail("write", key);
+  return ok;
 }
 
-void prefsPutBool(const char* key, bool value) {
+bool prefsPutBool(const char* key, bool value) {
   Preferences prefs;
-  prefs.begin(PREFS_NAMESPACE, false);
-  prefs.putBool(key, value);
+  if (!prefsOpen(prefs, key)) return false;
+  const bool ok = prefs.putBool(key, value) > 0;
   prefs.end();
+  if (!ok) prefsReportFail("write", key);
+  return ok;
 }
