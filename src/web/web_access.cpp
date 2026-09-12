@@ -20,6 +20,8 @@
 // rather than a dead port. The two writing gates default OFF: everything
 // behind them either changes how the scale behaves or writes firmware, and
 // neither should become reachable just because the server is up.
+static void sendTinyPage(WebServer &srv, int code, const char *title, const String &body);
+
 static bool master_on      = true;
 static bool config_on      = false;
 static bool maintenance_on = false;
@@ -289,17 +291,28 @@ bool webRequire(WebServer &srv, WebGate g, const char *what) {
       return false;
     case WEB_NEED_AUTH:
       // The browser turns this into its own password prompt on a page, and
-      // sends the answer along with everything it asks for afterwards.
-      srv.requestAuthentication(BASIC_AUTH, "SpoolmanScale", T(STR_W_AUTH_NEEDED));
+      // sends the answer along with everything it asks for afterwards. The
+      // body is what shows behind that prompt, and for a moment after a
+      // cancelled one - a page in the device's own style rather than a bare
+      // sentence on white.
+      srv.sendHeader("WWW-Authenticate", "Basic realm=\"SpoolmanScale\"");
+      if (api) {
+        srv.send(401, "text/plain; charset=utf-8", T(STR_W_AUTH_NEEDED));
+      } else {
+        String b = F("<p>");
+        b += T(STR_W_AUTH_NEEDED);
+        b += F("</p>");
+        sendTinyPage(srv, 401, T(STR_W_R_PASSWORD), b);
+      }
       return false;
   }
   return false;
 }
 
-void webSendDisabled(WebServer &srv, const char *what, const char *menu) {
-  char title[80];
-  snprintf(title, sizeof(title), T(STR_W_OFF_TITLE), what ? what : "");
-
+// The one small page this file serves by itself, for the gate that is shut
+// and for the password prompt. Self-contained on purpose: it is served when
+// the rest of the interface is not, so it links no stylesheet.
+static void sendTinyPage(WebServer &srv, int code, const char *title, const String &body) {
   String h;
   h.reserve(2000);
   h += F("<!DOCTYPE html><html><head><meta charset='utf-8'>"
@@ -322,16 +335,26 @@ void webSendDisabled(WebServer &srv, const char *what, const char *menu) {
          "a:hover{text-decoration:underline}"
          "</style></head><body><div class='card'><h1>");
   h += title;
-  h += F("</h1><p>");
-  h += T(STR_W_OFF_BODY);
-  h += F("</p><p>");
-  h += T(STR_W_OFF_WHERE);
-  h += F("</p><div class='path'>");
-  h += (menu && menu[0]) ? menu : T(STR_W_OFF_PATH);
-  h += F("</div><p>");
-  h += T(STR_W_OFF_RELOAD);
-  h += F("</p><p><a href='/'>&#8592; ");
+  h += F("</h1>");
+  h += body;
+  h += F("<p><a href='/'>&#8592; ");
   h += T(STR_W_BACK_STATUS);
   h += F("</a></p></div></body></html>");
-  srv.send(403, "text/html", h);
+  srv.send(code, "text/html", h);
+}
+
+void webSendDisabled(WebServer &srv, const char *what, const char *menu) {
+  char title[80];
+  snprintf(title, sizeof(title), T(STR_W_OFF_TITLE), what ? what : "");
+  String b;
+  b += F("<p>");
+  b += T(STR_W_OFF_BODY);
+  b += F("</p><p>");
+  b += T(STR_W_OFF_WHERE);
+  b += F("</p><div class='path'>");
+  b += (menu && menu[0]) ? menu : T(STR_W_OFF_PATH);
+  b += F("</div><p>");
+  b += T(STR_W_OFF_RELOAD);
+  b += F("</p>");
+  sendTinyPage(srv, 403, title, b);
 }

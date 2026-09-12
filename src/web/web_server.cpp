@@ -22,7 +22,64 @@
 // parameter, so lang.h has to come after anything that pulls it in.
 #include "lang.h"
 
-static WebServer ota_server(80);
+// How long an accepted socket may stay silent before it is dropped. The
+// library waits HTTP_MAX_DATA_WAIT, five seconds, and serves one connection
+// at a time - so a socket a browser opened and never used (Chrome opens
+// spares on hover and on navigation) parked every other request for those
+// five seconds, and with the accept backlog at four the browser saw
+// "site not reachable" in between. A real request follows the handshake
+// within milliseconds on a LAN; a second is patience enough.
+#define WEB_IDLE_CLIENT_MS 1000
+
+// The library's handleClient() with that one number changed. Everything it
+// touches is protected and the method is virtual, so this is an override
+// rather than a patched copy of the library.
+class ScaleWebServer : public WebServer {
+ public:
+  using WebServer::WebServer;
+
+  // Nagle off for the accepted sockets: every reply here is small and the
+  // browser waits for the last packet of it.
+  void tune() { _server.setNoDelay(true); }
+
+  void handleClient() override {
+    if (_currentStatus == HC_NONE) {
+      _currentClient = _server.available();
+      if (!_currentClient) {
+        if (_nullDelay) delay(1);
+        return;
+      }
+      _currentStatus = HC_WAIT_READ;
+      _statusChange  = millis();
+    }
+
+    bool keepCurrentClient = false;
+    bool callYield = false;
+
+    if (_currentClient.connected() && _currentStatus == HC_WAIT_READ) {
+      if (_currentClient.available()) {
+        if (_parseRequest(_currentClient)) {
+          _currentClient.setTimeout(HTTP_MAX_SEND_WAIT / 1000);
+          _contentLength = CONTENT_LENGTH_NOT_SET;
+          _handleRequest();
+        }
+      } else {
+        if (millis() - _statusChange <= WEB_IDLE_CLIENT_MS) keepCurrentClient = true;
+        callYield = true;
+      }
+    }
+
+    if (!keepCurrentClient) {
+      _currentClient = WiFiClient();
+      _currentStatus = HC_NONE;
+      _currentUpload.reset();
+      _currentRaw.reset();
+    }
+    if (callYield) yield();
+  }
+};
+
+static ScaleWebServer ota_server(80);
 static bool ota_server_running  = false;
 static bool routes_registered   = false;
 
@@ -52,6 +109,7 @@ static void serverEnsureRunning() {
   static const char *HDR_KEYS[] = { "Origin" };
   ota_server.collectHeaders(HDR_KEYS, 1);
   ota_server.begin();
+  ota_server.tune();
   ota_server_running = true;
   Serial.printf("Web server listening: http://%s/\n",
                 wifiManagerLocalIP().toString().c_str());
