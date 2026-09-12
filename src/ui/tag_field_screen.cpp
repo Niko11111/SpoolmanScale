@@ -64,7 +64,11 @@ static lv_obj_t* buildList(lv_obj_t *parent) {
 // ============================================================
 static void addFieldRow(lv_obj_t *list, uint8_t value) {
   const TagFieldSpec& spec = tagFieldSpec(value);
-  const bool active = (g_tag_field == value);
+  // What is in force, not what is stored. The two part when the native source
+  // is selected on a server that turned out not to have it: the tick has to
+  // sit on the field that is actually being written, or the screen says the
+  // binding goes somewhere it does not.
+  const bool active = (tagFieldEffective() == value);
 
   char buf_t[40];
   strncpy(buf_t, T((StringID)spec.str_name), sizeof(buf_t) - 1);

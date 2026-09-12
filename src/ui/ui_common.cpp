@@ -6,11 +6,33 @@
 
 #include "hardware/sd_logger.h"
 #include "app/deferred_actions.h"
+#include "ams_assign_popup.h"
+#include "confirm_popup.h"
 #include "info_popup.h"
+#include "second_tag_popup.h"
+#include "spool_flow.h"
+#include "tag_write_popup.h"
 #include "services/backend.h"
 #include "services/settings_registry.h"
 #include "lang.h"
 
+
+bool uiModalWaiting() {
+  // Every popup that asks something and has no countdown of its own to fall
+  // back on, plus the AMS question, which does have one but whose buttons are
+  // just as dead while the loop is busy.
+  //
+  // info_popup belongs in here too. It closes itself, but only when the button
+  // is pressed - so it waits exactly like the rest, and the result of an erase
+  // was the one nobody could dismiss.
+  return isInfoPopupOpen()
+      || isTagWritePopupOpen()
+      || isConfirmPopupOpen()
+      || isSpoolFlowIdInputOpen()
+      || isSpoolFlowLinkEntryOpen()
+      || isSecondTagPopupOpen()
+      || isAmsAssignPopupOpen();
+}
 
 lv_color_t swatchColorFromHex(const char* hex) {
   if (!hex) return lv_color_hex(SWATCH_FALLBACK_COLOR);

@@ -213,6 +213,15 @@ void backendInvalidateExtraFieldCache() {
   filamanForgetRfidSlot2();
 }
 
+int backendNativeTagsCached() {
+  if (backendMode() != BACKEND_SPOOLMAN) return 0;
+  const char* base = backendBaseUrl();
+  if (!base || !base[0]) return -1;
+  if (strncmp(s_tagapi_probed_for, base, sizeof(s_tagapi_probed_for) - 1) != 0)
+    return -1;                       // nobody has asked this server yet
+  return s_tagapi_present ? 1 : 0;
+}
+
 bool backendHasNativeTags() {
   if (backendMode() != BACKEND_SPOOLMAN) return false;
 
@@ -241,15 +250,39 @@ bool backendHasNativeTags() {
   return s_tagapi_present;
 }
 
+bool backendNativeTagsAbsent() {
+  if (backendMode() != BACKEND_SPOOLMAN) return false;
+
+  const char* base = backendBaseUrl();
+  if (!base || !base[0]) return false;
+
+  // Never asked, or asked about a different server. Both mean "no answer", and
+  // an answer is what this is for.
+  if (strncmp(s_tagapi_probed_for, base, sizeof(s_tagapi_probed_for) - 1) != 0)
+    return false;
+
+  return !s_tagapi_present;
+}
+
 bool backendCanHoldSecondTag() {
   // The structural half first, because it needs no network and rules out the
   // two cases that no server version will ever change.
   if (!tagFieldHoldsSeveral()) return false;
 
-  // Spoolman is settled by the field alone: the relation takes as many tags as
-  // a spool has, and the list field is a text field the scale writes itself.
-  // Neither needs asking.
-  if (!backendIsFilaMan()) return true;
+  // Spoolman, and the list field really is settled by the field alone: it is a
+  // text field this scale writes itself, so no server version can refuse it.
+  //
+  // The relation is not. It arrived in v0.27, and tagFieldEffective() answers
+  // "native" on every Spoolman because it is not allowed to reach the network
+  // - so on an older server the source reads as selected while the endpoints
+  // do not exist. Asking here is what keeps the question off a scale that
+  // could not act on the answer; it was the missing half of this check.
+  if (!backendIsFilaMan()) {
+    if (!tagFieldIsNative()) return true;
+    if (backendHasNativeTags()) return true;
+    logSD("Second tag: this Spoolman has no tag relation, not asking");
+    return false;
+  }
 
   // FilaMan does need asking. The column arrived in 1.3.1, and a scale pointed
   // at an older instance must not offer a question the server refuses.
@@ -606,7 +639,11 @@ int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
       // own database and missed the server side ?search= for anything not
       // written by this scale.
       if (!uuid || !uuid[0]) {
-        return filamanPatchRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, nullptr, timeout_ms);
+        // Both slots, not just the first. An unlink that leaves the chip on
+        // the other flange behind keeps the spool answering at a printer after
+        // the screen said it is gone - the half unlink the tag fields go out
+        // of their way to avoid.
+        return filamanClearRfidUids(backendBaseUrl(), filamanApiKey(), spool_id, timeout_ms);
       }
       char hex[40];
       tagUidNormalize(uuid, hex, sizeof(hex));
@@ -898,4 +935,78 @@ int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* i
     default:
       return spoolmanPatchSpoolLastDried(base_url, spool_id, iso_datetime, timeout_ms);
   }
+}
+
+// ------------------------------------------------------------
+//  AMS SLOTS
+// ------------------------------------------------------------
+
+bool backendHasAmsView() {
+  switch (backendMode()) {
+    case BACKEND_FILAMAN:
+    case BACKEND_BAMBUDDY: return backendIsConfigured();
+    default:               return false;
+  }
+}
+
+bool backendCanAssignAmsSlot() {
+  return backendMode() == BACKEND_BAMBUDDY && backendIsConfigured();
+}
+
+int backendListPrinters(AmsPrinterList& out, uint32_t timeout_ms) {
+  switch (backendMode()) {
+    case BACKEND_FILAMAN:
+      return filamanListPrinters(backendBaseUrl(), filamanApiKey(), out, timeout_ms);
+    case BACKEND_BAMBUDDY:
+      return bbListPrinters(backendBaseUrl(), bambuddyApiKey(), out, timeout_ms);
+    default:
+      // Spoolman keeps filament, not printers. location is free text about
+      // shelves and nothing an AMS bay may be mapped onto.
+      out = AmsPrinterList{};
+      return notSupported("ListPrinters");
+  }
+}
+
+int backendGetAmsState(int printer_id, AmsSlotState& out, uint32_t timeout_ms) {
+  switch (backendMode()) {
+    case BACKEND_FILAMAN:
+      return filamanGetAmsState(backendBaseUrl(), filamanApiKey(), printer_id,
+                                out, timeout_ms);
+    case BACKEND_BAMBUDDY:
+      return bbGetAmsState(backendBaseUrl(), bambuddyApiKey(), printer_id,
+                           out, timeout_ms);
+    default:
+      out = AmsSlotState{};
+      return notSupported("GetAmsState");
+  }
+}
+
+int backendAssignAmsSlot(int spool_id, int printer_id, int ams_id, int tray_id,
+                         uint32_t timeout_ms) {
+  if (backendMode() != BACKEND_BAMBUDDY) {
+    // FilaMan is the interesting no here. It does have an AMS assignment,
+    // but no model in which the scale names a bay and the database takes it:
+    // there the scale opens a time window and the next tray to be loaded
+    // wins, which is amsCommitWithWindow(). Sending anything to FilaMan from
+    // this function would equate two different mechanisms.
+    return notSupported("AssignAmsSlot");
+  }
+  return bbAssignSlot(backendBaseUrl(), bambuddyApiKey(), spool_id, printer_id,
+                      ams_id, tray_id, timeout_ms);
+}
+
+int backendUnassignAmsSlot(int spool_id, int printer_id, int ams_id, int tray_id,
+                           uint32_t timeout_ms) {
+  if (backendMode() != BACKEND_BAMBUDDY) return notSupported("UnassignAmsSlot");
+  return bbUnassignSlot(backendBaseUrl(), bambuddyApiKey(), spool_id, printer_id,
+                        ams_id, tray_id, timeout_ms);
+}
+
+int backendFindSpoolSlot(int spool_id, int printer_id, int* out_ams,
+                         int* out_tray, uint32_t timeout_ms) {
+  if (out_ams)  *out_ams  = -1;
+  if (out_tray) *out_tray = -1;
+  if (backendMode() != BACKEND_BAMBUDDY) return notSupported("FindSpoolSlot");
+  return bbFindSpoolSlot(backendBaseUrl(), bambuddyApiKey(), spool_id, printer_id,
+                         out_ams, out_tray, timeout_ms);
 }

@@ -44,7 +44,11 @@ static bool appliesSecondTag() { return tagFieldHoldsSeveral(); }
 // opened.
 static const char* subExtraFields() {
   static char buf[48];
-  snprintf(buf, sizeof(buf), "%s, " LAST_DRIED_FIELD, tagFieldKeyName());
+  // The Happy Hare field joins the list only while the switch that writes it
+  // is on, which is the same rule the screen behind this row applies. Naming a
+  // field the scale does not need would send the user creating columns.
+  snprintf(buf, sizeof(buf), "%s, " LAST_DRIED_FIELD "%s", tagFieldKeyName(),
+           g_hw_uid_write ? ", " RFID_TAG_FIELD : "");
   return buf;
 }
 
@@ -168,6 +172,14 @@ const SettingDesc SETTINGS[] = {
     STR_BB_DRIED_TITLE, 0, STR_BB_DRIED_INFO, LV_SYMBOL_TINT,
     BB_DRIED_NOTE, BB_DRIED_COUNT, OPT_BB_DRIED,
     nullptr, nullptr, nullptr, OPEN_BB_DRIED, bbDriedOptOk, false },
+
+  // The bay picker after weighing. A plain switch: BamBuddy knows only "ask"
+  // and "off" here, because without a time window there is no third thing an
+  // "always" could mean.
+  { "bb_ams_ask", SET_BOOL, SC_BAMBUDDY, &g_ams_pick_ask,
+    STR_BBAMS_ASK, STR_BBAMS_ASK_SUB, STR_BBAMS_ASK_INFO, LV_SYMBOL_SHUFFLE,
+    0, 0, nullptr,
+    nullptr, nullptr, nullptr, OPEN_NONE, nullptr, false },
 };
 
 const size_t SETTINGS_COUNT = sizeof(SETTINGS) / sizeof(SETTINGS[0]);

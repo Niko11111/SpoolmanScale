@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "services/ams_slots.h"
+
 // ============================================================
 //  FILAMAN HTTP LAYER
 //
@@ -117,6 +119,16 @@ int filamanPatchRfidUid2(const char* base_url, const char* api_key, int spool_id
 // moment cannot switch the feature off for the whole session.
 bool filamanHasRfidSlot2(const char* base_url, const char* api_key,
                          uint32_t timeout_ms = 5000);
+
+// Frees a spool of every chip it holds, both slots in one request, and drops
+// the legacy value in custom_fields with it.
+//
+// One request on purpose: set_rfid_uids() back-fills the primary slot from the
+// secondary, so clearing them one after the other would move the second chip
+// into the first slot in between and the first PATCH would look like a no-op.
+// rfid_uid_2 is only named when the server has it.
+int filamanClearRfidUids(const char* base_url, const char* api_key, int spool_id,
+                         uint32_t timeout_ms = 8000);
 
 // Forgets the cached answer above. Called when the backend or its address
 // changes, because the capability belongs to the server, not to the scale.
@@ -297,3 +309,36 @@ int filamanSetDeviceAutoAssign(const char* base_url, const char* api_key,
 // keep resolving ids that belong to the server just left, and writing them.
 // There was no way to reach it from outside at all.
 void filamanForgetLocations();
+
+// --- ams slots -----------------------------------------------
+
+// FilaMan has an endpoint built for exactly this job: /api/v1/display, "all
+// active printers with their AMS slots". It arrives already grouped by unit,
+// with kind telling an AMS, an AMS HT and the external holder apart, so no
+// regrouping is needed on this side.
+//
+// Verified against FilaMan 1.3.1 on 11.09.2026, schema_version 3:
+//   {"schema_version":3,"printers":[{"id":1,"name":"X1C","connected":null,
+//     "ams":[{"ams_id":0,"kind":"ams","label":"AMS A","temperature":null,
+//       "humidity":null,"slots":[{"slot":0,"label":"A1","empty":true,
+//         "active":false,"color":"#202020","material":"","spool_id":null,
+//         "remaining_percent":null,"remaining_grams":null}]}]}]}
+// The external holder comes as one entry of kind "external" with ams_id 255
+// and bays 254 and 255, an AMS HT as kind "ams_ht" with ams_id 128 and one
+// bay. An empty bay carries a placeholder grey, so empty is the only thing
+// that says a bay is free - never the colour.
+//
+// fields=full is asked for rather than fields=slots: the short form leaves
+// out temperature, humidity and the gram figure, which is most of what the
+// unit row shows.
+//
+// Needs a user API key. The route carries no permission check of its own,
+// any valid principal is enough.
+int  filamanGetAmsState(const char* base_url, const char* api_key,
+       int printer_id, AmsSlotState& out, uint32_t timeout_ms = 8000);
+
+// The printers, from the same endpoint in its short form. No second route
+// and no pagination to walk: /api/v1/display already answers for every
+// active printer, which is exactly the set worth offering.
+int  filamanListPrinters(const char* base_url, const char* api_key,
+       AmsPrinterList& out, uint32_t timeout_ms = 8000);

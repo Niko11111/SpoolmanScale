@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "services/ams_slots.h"
+
 // ============================================================
 //  BAMBUDDY REST CLIENT
 //
@@ -208,6 +210,54 @@ struct BbNewSpool {
 int  bbCreateSpool(const char* base_url, const char* api_key,
        const BbNewSpool& spool, int* out_spool_id,
        uint32_t timeout_ms = 8000);
+
+// --- ams slots -----------------------------------------------
+
+// Live AMS state of one printer, filtered down to the twelve fields the view
+// shows. PrinterStatus carries 66 of them, including camera paths, HMS
+// errors and every temperature, so the filter here is not an optimisation
+// but the difference between a small document and the free heap.
+//
+// Clears out before the request. Answers 200 for a printer without an AMS as
+// well: ams_exists is then false and only the external holder is filled.
+// A printer id of 0 or less never leaves the device, it returns -1.
+int  bbGetAmsState(const char* base_url, const char* api_key, int printer_id,
+       AmsSlotState& out, uint32_t timeout_ms = 8000);
+
+// Every configured printer. The response schema of this endpoint is empty in
+// BamBuddy's own OpenAPI, so the shape is not guessed: a bare array, and an
+// object carrying "printers" or "items", are all accepted and the form that
+// arrived is logged once.
+int  bbListPrinters(const char* base_url, const char* api_key,
+       AmsPrinterList& out, uint32_t timeout_ms = 8000);
+
+// Pins a spool to a bay. The two inventory modes take different routes and
+// different key names for the same thing, and they are not a prefix apart:
+// local is /inventory/assignments with spool_id, behind Spoolman it is
+// /spoolman/inventory/slot-assignments with spoolman_spool_id.
+//
+// All four values are mandatory on both. BamBuddy validates tray_id to 0..3
+// and ams_id to 0..255, so the external holder is checked before the request
+// rather than after, to keep a 422 from reading like a broken server.
+//
+// The POST also configures the bay on the printer over MQTT, which is a side
+// effect on hardware that weighing never had before. A disconnected printer
+// is worth telling the user about first.
+int  bbAssignSlot(const char* base_url, const char* api_key, int spool_id,
+       int printer_id, int ams_id, int tray_id, uint32_t timeout_ms = 8000);
+
+// Releases a bay. The asymmetry is BamBuddy's: locally an assignment is
+// addressed by the bay it sits in, behind Spoolman by the spool that holds
+// it. A caller that knows only the spool therefore needs the bay as well for
+// the local mode, and passes what it has.
+int  bbUnassignSlot(const char* base_url, const char* api_key, int spool_id,
+       int printer_id, int ams_id, int tray_id, uint32_t timeout_ms = 6000);
+
+// Where this spool currently sits, or ams -1 when nowhere. Reads the whole
+// assignment list of the printer: neither mode has a by-spool lookup, and
+// the enriched list behind Spoolman is the narrower of the two answers.
+int  bbFindSpoolSlot(const char* base_url, const char* api_key, int spool_id,
+       int printer_id, int* out_ams, int* out_tray, uint32_t timeout_ms = 8000);
 
 // --- device protocol -----------------------------------------
 

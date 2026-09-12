@@ -212,6 +212,9 @@ lv_obj_t *btn_dried  = nullptr;
 lv_obj_t *btn_link   = nullptr;
 lv_obj_t *btn_weight_main = nullptr;
 lv_obj_t *btn_location = nullptr;
+lv_obj_t *lbl_no_scale = nullptr;
+lv_obj_t *btn_ams_main = nullptr;
+lv_obj_t *btn_hdr_ams = nullptr;
 
 lv_obj_t *scr_more_info = nullptr;
 

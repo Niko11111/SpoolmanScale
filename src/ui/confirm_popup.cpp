@@ -10,6 +10,7 @@
 
 #include "hardware/sd_logger.h"
 #include "services/ams_assign.h"
+#include "services/ams_pick.h"
 #include "services/auto_weight_state.h"
 #include "services/prefs_store.h"
 #include "services/spoolman_actions.h"
@@ -306,6 +307,7 @@ void showConfirmPopup(const char* msg, int action) {
       // window. The cap check above cannot interfere: it is BamBuddy only and
       // amsAskActive() requires FilaMan.
       if (amsAskActive()) amsNoteMeasurement(sm_id, r, scale_weight_g, true);
+      if (amsPickActive()) amsPickNote(sm_id, sm_filament_name);
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l1 = lv_label_create(btn1);
     char buf1[48];
@@ -332,6 +334,7 @@ void showConfirmPopup(const char* msg, int action) {
       // Gross without the bag: that is what the scale would have shown had
       // the spool been weighed bare, and it is what FilaMan has to be told.
       if (amsAskActive()) amsNoteMeasurement(sm_id, r, scale_weight_g - bag_weight_g, true);
+      if (amsPickActive()) amsPickNote(sm_id, sm_filament_name);
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l2 = lv_label_create(btn2);
     char buf2[56];

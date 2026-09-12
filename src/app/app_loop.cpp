@@ -42,6 +42,9 @@
 #include "services/backend_api.h"
 #include "services/tag_field.h"
 #include "services/bambuddy_device.h"
+#include "services/ams_presence.h"
+#include "services/ams_pick.h"
+#include "ui/ams_view.h"
 #include "services/wifi_manager.h"
 #include "services/filaman_api.h"
 #include "services/device_name.h"
@@ -259,6 +262,7 @@ static unsigned long tag_absent_since_ms = 0; // when the last removal was decla
 static unsigned long last_scale_ms = 0;
 static int  loc_popup_pending_id = -1;              // debounced popup: sm_id scheduled, fires after 1500ms
 static int  ams_popup_pending_id = -1;              // same, for the AMS question; answered first when both are due
+static int  pick_popup_pending_id = -1;             // same, for the AMS bay picker; only one of the three is ever set per backend
 
 void appLoop() {
   // Overwritten every pass, so a crumb from a marked section only stands while
@@ -466,7 +470,10 @@ void appLoop() {
     i2c_rescan_pending = false;
     i2cScanRefresh(I2C_EXT);
     logSDf("I2C_EXT rescan (diagnosis): %s", i2cScanLast());
-    scl_ok = scaleHardwarePresent();
+    // The second writer of scl_ok, and it has to ask the same question as the
+    // 5 s probe: a chip that is wired but switched off in the settings must
+    // not come back as present, or the header lights up again.
+    if (g_scale_fitted) scl_ok = scaleHardwarePresent();
     diagnosticsRecheckNow();
     diagnosticsTick();
     updateDiagBanner();
@@ -678,6 +685,9 @@ void appLoop() {
   }
   handleMoreInfoDeferredActions();
   handleAmsAssignDeferredActions();
+  handleAmsViewDeferredActions();
+  amsPickTick();
+  amsPresenceTick();
   // Watches the reader for the tag on the other flange while its question
   // stands. It has to run every pass, not only when something happened: the
   // countdown is what it is mostly doing.
@@ -687,7 +697,8 @@ void appLoop() {
   // the verdict is worked out once and the AMS side gets it first: a spool
   // on its way into a printer has no shelf worth asking about. The "no"
   // branch of that popup raises the location question again.
-  if ((loc_popup_pending_id > 0 || ams_popup_pending_id > 0) && !tag_present) {
+  if ((loc_popup_pending_id > 0 || ams_popup_pending_id > 0 ||
+       pick_popup_pending_id > 0) && !tag_present) {
     const unsigned long since = millis() - last_tag_seen_ms;
     const bool weight_says_gone = weightSaysSpoolGone();
     const bool weight_says_stay = weightSaysSpoolStayed();
@@ -699,8 +710,10 @@ void appLoop() {
     if (due) {
       int pending_id = loc_popup_pending_id;
       int ams_id     = ams_popup_pending_id;
-      loc_popup_pending_id = -1;
-      ams_popup_pending_id = -1;
+      int pick_id    = pick_popup_pending_id;
+      loc_popup_pending_id  = -1;
+      ams_popup_pending_id  = -1;
+      pick_popup_pending_id = -1;
 
       if (weight_says_stay) {
         // The reader lost the tag but the spool never moved. Typical for
@@ -709,6 +722,12 @@ void appLoop() {
         // measurement stays parked for exactly the same reason.
         logSDf("LOC: popup suppressed, weight unchanged (%.0fg vs %.0fg), spool still on the scale",
                scale_weight_g, loc_weight_ref);
+      } else if (pick_id > 0 && amsPickHasPending() &&
+                 amsPickPendingSpoolId() == pick_id) {
+        logSDf("AMSPICK: asking after %lums id=%d (weight %.0fg -> %.0fg%s)",
+               since, pick_id, loc_weight_ref, scale_weight_g,
+               weight_says_gone ? ", removal confirmed" : ", no weight signal");
+        amsPickShow();
       } else if (ams_id > 0 && amsHasPending() && amsPendingSpoolId() == ams_id) {
         logSDf("AMS: asking after %lums id=%d (weight %.0fg -> %.0fg%s)",
                since, ams_id, loc_weight_ref, scale_weight_g,
@@ -736,6 +755,11 @@ void appLoop() {
     if (ams_popup_pending_id > 0) {
       logSDf("[verbose] AMS: debounce cancelled - tag back id=%d", ams_popup_pending_id);
       ams_popup_pending_id = -1;
+    }
+    if (pick_popup_pending_id > 0) {
+      logSDf("[verbose] AMSPICK: debounce cancelled - tag back id=%d",
+             pick_popup_pending_id);
+      pick_popup_pending_id = -1;
     }
   }
 
@@ -1134,6 +1158,7 @@ void appLoop() {
         // Remembered, not held back: the value is in FilaMan now, this only
         // lets a yes on removal report it once more to open the window.
         if (amsAskActive()) amsNoteMeasurement(sm_id, netto, cur, true);
+        if (amsPickActive()) amsPickNote(sm_id, sm_filament_name);
       } else if (auto_weight_stable_ms == 0) {
         auto_weight_last_val = cur;
         auto_weight_stable_ms = millis();
@@ -1760,6 +1785,16 @@ void appLoop() {
             if (amsHasPending() && amsPendingSpoolId() == sm_id) {
               ams_popup_pending_id = sm_id;
               Serial.printf("AMS: question scheduled for id=%d\n", sm_id);
+            }
+          }
+          // The bay picker hangs off the same removal. Its own branch rather
+          // than a shared one: this flow has no measurement to stand in for
+          // anything, it only needs to know which spool was just taken off.
+          if (amsPickActive() && wifi_ok && sm_found && !sm_archived && sm_id > 0) {
+            if (!amsPickHasPending()) amsPickNote(sm_id, sm_filament_name);
+            if (amsPickPendingSpoolId() == sm_id) {
+              pick_popup_pending_id = sm_id;
+              Serial.printf("AMSPICK: picker scheduled for id=%d\n", sm_id);
             }
           }
           // Do NOT close list — user should be able to select spool

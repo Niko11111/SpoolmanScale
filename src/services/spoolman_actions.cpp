@@ -242,6 +242,18 @@ static bool hwUidIsHardware(const char* norm) {
   return n == HW_UID_LEN_4B || n == HW_UID_LEN_7B;
 }
 
+// Raised when a link had to go into the default field because the selected
+// source does not exist on this server, taken once by the screen. A flag
+// rather than a popup from here: this module is the service layer, and an
+// overlay must never be built out of the callback a link was started from.
+static bool s_native_missing = false;
+
+bool patchSpoolTagTakeNativeMissing() {
+  const bool was = s_native_missing;
+  s_native_missing = false;
+  return was;
+}
+
 bool syncHwUidField(int spool_id, const char* scanned) {
   // Everything that can say no without touching the network, before anything
   // that cannot. This runs on every lookup that found a spool, so a spool
@@ -397,6 +409,35 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
       logSDf("LINK native: uuid='%s' already on spool %d", native_uid, conflict);
       return false;
     }
+
+    // Warn, do not block. What is wrong here is the stored source, not the
+    // link. tagFieldEffective() answers "native" on every Spoolman because it
+    // is not allowed to reach the network, so a scale that once talked to a
+    // v0.27 server keeps that choice when it is pointed back at an older one -
+    // and the user cannot see the setting failing. Refusing the link would
+    // punish them for that.
+    //
+    // The binding goes into the default field instead, the one place every
+    // Spoolman has. It heals itself: the fallback pass in querySpoolman()
+    // finds a spool bound this way, and the migration further down this
+    // function moves it into the relation the first time a link runs against a
+    // server that has one.
+    if (code == BACKEND_NOT_SUPPORTED) {
+      const TagFieldSpec& fb = tagFieldSpec(TAG_FIELD_TAG);
+      if (!backendHasExtraField(fb.key)) {
+        logSDf("LINK native: no relation on this server and no %s either, "
+               "nothing written", fb.key);
+        return false;
+      }
+      char val[CARD_UIDS_MAX];
+      tagFieldFormat(fb, scanned, val, sizeof(val));
+      const int c = backendPatchExtraField(cfg_spoolman_base, spool_id, fb.key, val);
+      logSDf("LINK native: this server has no tag relation, wrote %s='%s' "
+             "instead, HTTP %d", fb.key, val, c);
+      if (c < 200 || c >= 300) return false;
+      s_native_missing = true;   // said once, by the screen
+      return true;
+    }
     if (code < 200 || code >= 300) return false;
 
     // A Bambu tag carries a second identity: the tray uuid out of its
@@ -537,7 +578,8 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
   // unlink and a silent disaster for a link, and the old line could not tell
   // the two apart afterwards.
   logSDf("PATCH tag ID=%d field=%s uuid='%s'%s HTTP %d",
-         spool_id, backendMode() == BACKEND_SPOOLMAN ? spec.key : "native",
+         spool_id, backendMode() == BACKEND_SPOOLMAN ? spec.key
+                 : backendIsFilaMan() ? "rfid_uid" : "device protocol",
          uuid ? uuid : "", clearing ? " UNLINK" : "", code);
 
   // An unlink reports success either way: the caller has already decided the

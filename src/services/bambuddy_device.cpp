@@ -12,6 +12,7 @@
 #include "services/auto_weight_state.h"
 #include "services/bambuddy_api.h"
 #include "services/backend.h"
+#include "services/user_options.h"
 #include "services/wifi_manager.h"
 
 // BamBuddy marks a device offline after 30 seconds without a heartbeat
@@ -147,7 +148,12 @@ void bambuddyDeviceTick() {
 
     char cmd[40] = "";
     int  write_spool_id = 0;
-    int  code = bbHeartbeat(base, key, /*nfc_ok=*/true, scale_ready,
+    // scale_ok, not scale_ready: with no load cell fitted there is no fault to
+    // report, and sending false made BamBuddy render the device as a scale
+    // that is broken rather than a device that has none. has_scale in the
+    // registration is what distinguishes the two.
+    int  code = bbHeartbeat(base, key, /*nfc_ok=*/true,
+                            /*scale_ok=*/(!g_scale_fitted || scale_ready),
                             millis() / 1000,
                             wifiManagerLocalIP().toString().c_str(), FW_VERSION,
                             cmd, sizeof(cmd), &write_spool_id);

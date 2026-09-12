@@ -23,11 +23,23 @@
 #define INFO_TEXT_BUF   1024
 #define INFO_TITLE_BUF   48
 
+// Whether one of these is up. It has a button and no timer, so it waits for an
+// answer like every other modal - and a blocking lookup underneath it takes
+// the touch panel away for as long as it runs. Tracked here rather than
+// guessed from the screen tree, which is what uiModalWaiting() needs.
+static lv_obj_t *s_info_pop = nullptr;
+
+bool isInfoPopupOpen() { return s_info_pop != nullptr; }
+
 void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   if (title_id < 0 || title_id >= STR_COUNT) return;
   if (text_id  < 0 || text_id  >= STR_COUNT) return;
 
   lv_obj_t *pop = lv_obj_create(lv_scr_act());
+  // One at a time. A second one over the first would leave the pointer below
+  // naming the newer and the older standing there forever.
+  if (s_info_pop) lv_obj_del_async(s_info_pop);
+  s_info_pop = pop;
   lv_obj_set_size(pop, 480, 320);
   lv_obj_set_pos(pop, 0, 0);
   lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
@@ -126,7 +138,12 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
     // Deleted asynchronously because this runs inside the dispatch of an event
     // belonging to a child of what is being freed.
     lv_obj_t *box = lv_obj_get_parent(lv_event_get_target(e));
-    lv_obj_del_async(lv_obj_get_parent(box));
+    lv_obj_t *scrim = lv_obj_get_parent(box);
+    // Cleared here, not in a delete callback: the async free happens a pass
+    // later, and anything asking in between has to be told the question is
+    // already answered.
+    if (scrim == s_info_pop) s_info_pop = nullptr;
+    lv_obj_del_async(scrim);
   }, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *l = lv_label_create(btn);

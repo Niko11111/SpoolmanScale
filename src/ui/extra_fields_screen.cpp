@@ -31,8 +31,13 @@ static bool extra_fields_check_pending = false;
 // The arrow label of each menu row, which carries whether the server has that
 // field. Filled in by checkAndCreateExtraFields(), which already has the
 // answer and does not need a second request for it.
-enum FieldRow { FIELD_ROW_DRIED = 0, FIELD_ROW_TAG = 1, FIELD_ROW_COUNT = 2 };
-static lv_obj_t *lbl_field_state[FIELD_ROW_COUNT] = { nullptr, nullptr };
+enum FieldRow {
+  FIELD_ROW_DRIED  = 0,
+  FIELD_ROW_TAG    = 1,
+  FIELD_ROW_HW_UID = 2,   // only built while the switch for it is on
+  FIELD_ROW_COUNT  = 3
+};
+static lv_obj_t *lbl_field_state[FIELD_ROW_COUNT] = { nullptr, nullptr, nullptr };
 
 // Whether this screen is part of first setup, so the tag field screen behind
 // it can build the matching header.
@@ -88,7 +93,30 @@ static int requiredExtraFields(const char* out[], int max) {
   if (n < max) out[n++] = LAST_DRIED_FIELD;
   const char* key = tagFieldKey();
   if (key && n < max) out[n++] = key;
+  // Only with the switch on, for the same reason the unselected tag fields are
+  // left out: creating a column nobody asked for is worse than not having it.
+  // With the switch on it is not optional at all - Spoolman answers a PATCH on
+  // a field it does not know with HTTP 400, so without it the setting is on
+  // and silently does nothing.
+  //
+  // Happy Hare creates the field itself on any server it runs against, so this
+  // is for the case where the scale is set up first.
+  if (g_hw_uid_write && n < max) out[n++] = RFID_TAG_FIELD;
   return n;
+}
+
+// Which menu row shows the state of a required field, or -1 for one that has
+// no row of its own.
+//
+// By name rather than by position. The list is built from what is needed right
+// now - last_dried always, the selected tag field only when it has a key, the
+// Happy Hare field only behind its switch - so an index into it means a
+// different field on different days, and the native source already shifts
+// everything after it by one.
+static int fieldRowFor(const char* key) {
+  if (strcmp(key, LAST_DRIED_FIELD) == 0) return FIELD_ROW_DRIED;
+  if (strcmp(key, RFID_TAG_FIELD)   == 0) return FIELD_ROW_HW_UID;
+  return FIELD_ROW_TAG;   // whichever one is selected
 }
 
 void showExtraFieldsScreen(bool is_setup_flow, bool from_options) {
@@ -215,6 +243,23 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_add_event_cb(btn, [](lv_event_t *e) {
       extra_fields_check_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
+
+  // Row 3: the field an MMU's gate readers resolve against, and only while the
+  // switch that writes it is on - with it off there is no field to have. Like
+  // the row above it has nothing to choose, so tapping it re-runs the check.
+  if (g_hw_uid_write) {
+    char buf_t[40]; strncpy(buf_t, T(STR_HW_UID_WRITE), sizeof(buf_t)-1);
+    buf_t[sizeof(buf_t)-1] = '\0';
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_UPLOAD, buf_t, RFID_TAG_FIELD,
+                                false, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_HW_UID_WRITE, STR_HW_UID_WRITE_INFO));
+    lbl_field_state[FIELD_ROW_HW_UID] = lv_obj_get_child(btn, -1);
+    lv_obj_add_event_cb(btn, [](lv_event_t *e) {
+      extra_fields_check_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+  }
 
   // Both rows start out saying nothing is known yet, which is the truth until
   // the check below has run.
@@ -442,6 +487,16 @@ void checkAndCreateExtraFields(bool create_missing) {
     return;
   }
 
+  // Settles which source is in force before asking what it needs. Without it
+  // this screen can be the first thing that runs on a given server - during
+  // setup there has been no scan yet - and the native source would still look
+  // selected on a server that does not have it, so the tag field would be
+  // left out of the list entirely and nothing would offer to create it.
+  //
+  // Reaches the network, which is allowed here: this function is deferred out
+  // of the pending flag and runs from appLoop(), never from the callback.
+  tagFieldAutoSelect();
+
   // Parse existing field names
   const char* required[REQUIRED_EXTRA_FIELDS_MAX];
   int ef_count = requiredExtraFields(required, REQUIRED_EXTRA_FIELDS_MAX);
@@ -468,10 +523,11 @@ void checkAndCreateExtraFields(bool create_missing) {
 
   // The menu rows above say per field what the server has. Same data as the
   // list below, shown where the user is looking rather than only as a summary.
-  for (int i = 0; i < ef_count && i < FIELD_ROW_COUNT; i++) {
-    if (!lbl_field_state[i]) continue;
-    lv_label_set_text(lbl_field_state[i], field_exists[i] ? LV_SYMBOL_OK : LV_SYMBOL_WARNING);
-    lv_obj_set_style_text_color(lbl_field_state[i],
+  for (int i = 0; i < ef_count; i++) {
+    const int row = fieldRowFor(required[i]);
+    if (row < 0 || !lbl_field_state[row]) continue;
+    lv_label_set_text(lbl_field_state[row], field_exists[i] ? LV_SYMBOL_OK : LV_SYMBOL_WARNING);
+    lv_obj_set_style_text_color(lbl_field_state[row],
       lv_color_hex(field_exists[i] ? 0x28d49a : 0xf0b838), 0);
   }
 

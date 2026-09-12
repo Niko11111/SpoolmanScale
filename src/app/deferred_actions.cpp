@@ -16,6 +16,7 @@ bool backend_mode_change_pending = false;
 uint8_t pending_backend_mode = 0;
 bool show_filaman_options_pending = false;
 bool show_ams_assign_pending = false;
+bool show_ams_view_pending = false;
 bool show_filaman_fields_pending = false;
 bool show_bambuddy_options_pending = false;
 bool show_bambuddy_dried_pending = false;

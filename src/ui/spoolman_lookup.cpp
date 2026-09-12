@@ -183,6 +183,19 @@ static int spoolTagRank(JsonObjectConst spool, const char* uid) {
     if (storedNamesTag(raw, spec.is_list, uid)) return TAG_RANK_FIELD;
   }
 
+  // FilaMan's second slot, which mapSpool() puts here because extra.tag holds
+  // one value. Rank 1 like the first one, and not a tag field: it binds the
+  // spool just as hard, the chip is simply on the other flange. Anything
+  // lower would let a spool that merely mentions the same value somewhere
+  // else win against a real binding.
+  //
+  // No spec and no list. FilaMan keeps two columns, not a list, and the key
+  // exists only on a server that has the second one.
+  {
+    const char* raw2 = extra["tag2"] | (const char*)nullptr;
+    if (storedNamesTag(raw2, false, uid)) return TAG_RANK_FIELD;
+  }
+
   // ---- FilaMan's Bambu Lab plugin, below everything above ----
   //
   // Both of these can name a spool that the tag fields say nothing about, and
@@ -745,10 +758,27 @@ static void scheduleRescan(const char* uid, const char* format) {
 // plain uid, and g_tag only carries the former reliably.
 static char s_last_query[48] = {0};
 
+// Set when a lookup skipped its inventory scan because a question was waiting
+// to be answered. Declared here so the tick below and querySpoolman() share
+// one flag rather than each keeping half the story.
+static bool s_scan_deferred = false;
+
 void spoolmanRecheckTick() {
   if (!wifi_ok || !tag_present || sm_found) return;
   if (!s_last_query[0]) return;
   if (isSpoolFlowIdInputOpen()) return;   // the user is busy picking a spool
+
+  // A lookup that stood aside for a question owes one full pass. Forgetting
+  // the markers is how that is asked for: the scan loop then treats the tag on
+  // the pad as new and runs the whole lookup, scan included. Done before the
+  // cheap probe below rather than instead of it, because this costs nothing
+  // and the probe costs a request.
+  if (s_scan_deferred && !uiModalWaiting()) {
+    s_scan_deferred = false;
+    logSD("Spoolman: the question is gone, asking for the full lookup again");
+    tagLookupForget();
+    return;
+  }
 
   static uint32_t last_ms = 0;
   // Signed difference, so this survives the millis() rollover.
@@ -1144,7 +1174,27 @@ void querySpoolman(const char* tray_uuid) {
 
   // Up to 2 attempts: first try, then 1 retry on IncompleteInput / connection issues.
   // 20s timeout is generous for large Spoolman datasets (200+ spools over WiFi).
-  for (int attempt = 1; !have_result && attempt <= 2; attempt++) {
+  // Not while a question is waiting to be answered. This is the only part of a
+  // lookup long enough to matter: 249 active spools plus 254 including the
+  // archive, three pages each, six seconds in which the touch panel is not
+  // read at all - which is what made the erase question impossible to answer.
+  // See uiModalWaiting() for why pumping LVGL instead is not an option.
+  //
+  // Standing aside costs nothing that is not recovered: spoolmanRecheckTick()
+  // keeps asking the cheap server side lookup every few seconds while an
+  // unknown tag lies on the pad, and clears the marker on a hit.
+  const bool defer_scan = uiModalWaiting();
+  if (defer_scan) {
+    // Remembered, not just skipped. The cheap lookup has already missed, so a
+    // spool findable only by the scan - a uid in FilaMan's custom_fields, or
+    // in an extra field nobody agreed on - would otherwise read as unknown
+    // until the tag is lifted and put back. spoolmanRecheckTick() makes it
+    // good as soon as the screen is free again.
+    s_scan_deferred = true;
+    logSD("Spoolman: full scan stood aside, a question is waiting on screen");
+  }
+
+  for (int attempt = 1; !have_result && !defer_scan && attempt <= 2; attempt++) {
     if (attempt > 1) {
       Serial.printf("Spoolman: retry attempt %d after %s\n", attempt, err.c_str());
       logSDf("Spoolman: retry attempt %d (prev err=%s)", attempt, err.c_str());
@@ -1600,7 +1650,21 @@ void querySpoolman(const char* tray_uuid) {
   f2["archived"] = true;
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
     f2["extra"][tagFieldSpec(i).key] = true;
-  int code2 = backendGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
+  // The other half of the six seconds, and stood aside for the same reason.
+  // An archived spool is a rare answer to begin with; a question nobody can
+  // answer is worse than finding it one placement later.
+  //
+  // Not a return: the tail below is what sets sm_found and paints "not in
+  // Spoolman", and skipping it would leave the screen showing the spool
+  // before. A code of 0 falls through to exactly that, which is also the
+  // honest answer - the cheap lookup has already missed, and
+  // spoolmanRecheckTick() corrects it within seconds if it was wrong.
+  const bool skip_archived = uiModalWaiting();
+  if (skip_archived)
+    logSD("Spoolman: archived pass stood aside, a question is waiting on screen");
+  int code2 = skip_archived
+                ? 0
+                : backendGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
   if (code2 == 200) {
     if (!err2) {
       JsonArray spools2 = doc2.as<JsonArray>();

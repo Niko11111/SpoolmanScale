@@ -22,6 +22,7 @@
 #include "services/backend_api.h"
 #include "services/tag_write.h"
 #include "ui/confirm_popup.h"
+#include "ui/info_popup.h"
 #include "ui/loading_overlay.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/second_tag_popup.h"
@@ -711,6 +712,11 @@ static int secondtag_after_link_id = 0;
 // that led here - a link made in answer to the question must not ask it again.
 static bool s_additional_link = false;
 
+// Raised when the link went into the default field because the selected source
+// is not on this server. Shown once, and only when the screen is free - an
+// overlay must not be built out of the callback the link came from.
+static bool nativemissing_pending = false;
+
 // Whether the last doLinkPatch() actually wrote. It has no return value and
 // three ways out, and linkAdditionalTag() must not report success over an
 // error message doLinkPatch() has just put on the screen.
@@ -770,6 +776,9 @@ void doLinkPatch(int spool_id, bool is_bambu) {
     closeLinkOverlays();
     return;
   }
+
+  // Asked before the reload below, because the answer to it is already in.
+  if (patchSpoolTagTakeNativeMissing()) nativemissing_pending = true;
 
   closeLinkOverlays();
 
@@ -3607,6 +3616,14 @@ void handleSpoolFlowDeferredActions() {
     } else {
       showSecondTagPopup(id, g_tag.uid_str);
     }
+  }
+  // Behind every other modal, and only when none is up: this explains a link
+  // that already succeeded, so it can wait for the screen to be free rather
+  // than stack on top of the tag write question.
+  if (nativemissing_pending && !uiModalWaiting()) {
+    nativemissing_pending = false;
+    logSD("Link: selected tag source missing on this server, said so");
+    showInfoPopup(STR_TF_NOREL_TITLE, STR_TF_NOREL_TEXT, INFO_WARN);
   }
   if (show_id_input_pending) {
     show_id_input_pending = false;

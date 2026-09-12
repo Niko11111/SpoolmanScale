@@ -226,6 +226,18 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
     }
   }
 
+  // The second slot, FilaMan's own since 1.3.1. Its own key rather than a
+  // second value in extra.tag, because that field holds exactly one and
+  // everything which writes it means slot one by that name - the notation
+  // rewrite, the holder search, the unlink.
+  //
+  // Without this the chip on the other flange is invisible to the scale even
+  // though the server finds it: ?search= covers both slots, but the hit is
+  // then verified against extra.tag, fails, and is thrown away. The spool
+  // reads as unknown while the server has it on file.
+  const char* uid2 = src["rfid_uid_2"] | "";
+  if (uid2[0]) extra["tag2"] = uid2;
+
   // What the Bambu Lab plugin binds a spool by. It never touches rfid_uid -
   // its README says so and leaves that field to external readers - so these
   // are read in addition, never instead.
@@ -795,6 +807,35 @@ bool filamanHasRfidSlot2(const char* base_url, const char* api_key,
   return s_slot2_present;
 }
 
+int filamanClearRfidUids(const char* base_url, const char* api_key, int spool_id,
+                         uint32_t timeout_ms) {
+  if (spool_id <= 0) return -1;
+
+  JsonDocument body;
+  body["rfid_uid"] = nullptr;
+  // Only named on a server that has the column: a key FilaMan does not know
+  // comes back as a validation error and would take the first slot down with
+  // it. The probe is cached, so this costs nothing after the first call.
+  const bool slot2 = filamanHasRfidSlot2(base_url, api_key, timeout_ms);
+  if (slot2) body["rfid_uid_2"] = nullptr;
+
+  String payload;
+  serializeJson(body, payload);
+  int code = patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
+                        payload, timeout_ms);
+  logSDf("FilaMan: cleared rfid_uid%s of spool %d, HTTP %d",
+         slot2 ? " and rfid_uid_2" : "", spool_id, code);
+
+  // Both slots in one request rather than two, because set_rfid_uids() would
+  // otherwise back-fill the primary from the secondary in between and the
+  // first PATCH would look as if it had done nothing.
+  //
+  // The legacy value has to go as well, or the next scan finds the spool
+  // through custom_fields and the migration links it straight back.
+  if (code == 200) filamanClearLegacyTag(base_url, api_key, spool_id, timeout_ms);
+  return code;
+}
+
 int filamanPatchExternalId(const char* base_url, const char* api_key, int spool_id,
                            const char* external_id, uint32_t timeout_ms) {
   if (spool_id <= 0 || !external_id || !external_id[0]) return -1;
@@ -1359,4 +1400,269 @@ int filamanSetDeviceAutoAssign(const char* base_url, const char* api_key,
   }
   http.end();
   return (code >= 200 && code < 300) ? 200 : code;
+}
+
+// ------------------------------------------------------------
+//  AMS SLOTS
+// ------------------------------------------------------------
+
+// FilaMan sends "#RRGGBB". An empty bay carries the placeholder #202020,
+// which is a real colour in the JSON and not a real colour on the spool, so
+// the caller decides by empty and only then asks for this.
+static bool parseDisplayColor(const char* hex, uint32_t* out) {
+  if (!hex || !out) return false;
+  const char* h = (hex[0] == '#') ? hex + 1 : hex;
+  if (strlen(h) < 6) return false;
+  unsigned int r, g, b;
+  if (sscanf(h, "%02X%02X%02X", &r, &g, &b) != 3) return false;
+  *out = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+  return true;
+}
+
+// The filter both calls share. Written once because the two only differ in
+// how much of it they use, and a second copy would drift.
+static void buildDisplayFilter(JsonDocument& filter, bool with_slots) {
+  JsonObject p = filter["printers"].to<JsonArray>().add<JsonObject>();
+  p["id"]        = true;
+  p["name"]      = true;
+  p["connected"] = true;
+  if (!with_slots) return;
+
+  // What the printer is doing. state is a bare word, job is null unless
+  // something is running.
+  p["state"] = true;
+  JsonObject j = p["job"].to<JsonObject>();
+  j["progress"] = true;
+
+  JsonObject u = p["ams"].to<JsonArray>().add<JsonObject>();
+  u["ams_id"]      = true;
+  u["kind"]        = true;
+  u["label"]       = true;
+  u["temperature"] = true;
+  u["humidity"]    = true;
+  // null unless a cycle is really running, since 1.3.3.
+  JsonObject dr = u["drying"].to<JsonObject>();
+  dr["status"]      = true;
+  dr["target_temp"] = true;
+  dr["time"]        = true;
+
+  JsonObject sl = u["slots"].to<JsonArray>().add<JsonObject>();
+  sl["slot"]              = true;
+  sl["empty"]             = true;
+  sl["active"]            = true;
+  sl["color"]             = true;
+  sl["color_name"]        = true;
+  sl["material"]          = true;
+  sl["spool_id"]          = true;
+  sl["remaining_percent"] = true;
+  sl["remaining_grams"]   = true;
+  sl["backup_of"]         = true;
+}
+
+// GET on the display endpoint, filtered. Kept local: the answer is a few
+// kilobytes and every caller here wants the same handling.
+static int getDisplay(const char* base_url, const char* api_key, const char* path,
+                      JsonDocument& doc, JsonDocument& filter, uint32_t timeout_ms) {
+  HTTPClient http;
+  if (!http.begin(String(base_url) + path)) return -1;
+  http.setTimeout(timeout_ms);
+  addApiKey(http, api_key);
+
+  int code = http.GET();
+  if (code != 200) {
+    http.end();
+    return code;
+  }
+  DeserializationError err =
+    deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
+  http.end();
+  if (err) {
+    logSDf("FilaMan: display JSON parse failed (%s)", err.c_str());
+    return -2;
+  }
+  return 200;
+}
+
+int filamanGetAmsState(const char* base_url, const char* api_key, int printer_id,
+                       AmsSlotState& out, uint32_t timeout_ms) {
+  out = AmsSlotState{};
+  if (!hasBaseUrl(base_url) || printer_id <= 0) return -1;
+
+  char path[96];
+  snprintf(path, sizeof(path), "/api/v1/display/printers/%d?fields=full", printer_id);
+
+  JsonDocument filter;
+  buildDisplayFilter(filter, true);
+
+  JsonDocument doc;
+  int code = getDisplay(base_url, api_key, path, doc, filter, timeout_ms);
+  if (code != 200) return code;
+
+  // The single printer route answers in the same envelope as the list, so
+  // the first entry is the printer asked for.
+  JsonObjectConst pr = doc["printers"][0].as<JsonObjectConst>();
+  if (pr.isNull()) {
+    logSDf("FilaMan: display has no printer %d", printer_id);
+    return -2;
+  }
+
+  out.printer_id = pr["id"] | printer_id;
+  strncpy(out.printer, pr["name"] | "", sizeof(out.printer) - 1);
+  strncpy(out.state, pr["state"] | "", sizeof(out.state) - 1);
+
+  // job is null whenever nothing runs, so the percentage is the one field
+  // worth carrying: it is what makes "RUNNING" mean something on a screen
+  // this small.
+  JsonVariantConst job = pr["job"];
+  out.job_percent = AMS_JOB_NA;
+  if (!job.isNull()) {
+    int pct = job["progress"] | AMS_JOB_NA;
+    if (pct < 0 || pct > 100) pct = AMS_JOB_NA;
+    out.job_percent = (int8_t)pct;
+  }
+  // connected is null while the driver has never reported, which is not the
+  // same as false, but for the screen both mean "do not trust this as live".
+  out.connected = pr["connected"] | false;
+
+  for (JsonVariantConst uv : pr["ams"].as<JsonArrayConst>()) {
+    JsonObjectConst u = uv.as<JsonObjectConst>();
+    if (out.unit_count >= AMS_UNITS_TOTAL) {
+      logSDf("FilaMan: printer %d has more units than %d, rest ignored",
+             printer_id, AMS_UNITS_TOTAL);
+      break;
+    }
+    AmsSlotUnit& dst = out.unit[out.unit_count];
+    dst = AmsSlotUnit{};
+
+    const char* kind = u["kind"] | "ams";
+    dst.ams_id = (uint8_t)(u["ams_id"] | 0);
+    dst.is_ext = (strcmp(kind, "external") == 0);
+    dst.is_ht  = (strcmp(kind, "ams_ht") == 0);
+
+    // A name the user gave the unit. "AMS A" and "External" are FilaMan's
+    // own generated labels, and repeating those would put an untranslated
+    // string on the screen where the view has a translated one.
+    const char* label = u["label"] | "";
+    if (label[0] && strncmp(label, "AMS ", 4) != 0 &&
+        strcmp(label, "External") != 0 && strncmp(label, "HT", 2) != 0) {
+      strncpy(dst.label, label, sizeof(dst.label) - 1);
+    }
+
+    JsonVariantConst hum = u["humidity"];
+    if (hum.isNull()) {
+      dst.humidity = AMS_HUMIDITY_NA;
+    } else {
+      int h = hum.as<int>();
+      // The driver prefers the raw percentage and falls back to Bambu's 1 to
+      // 5 step depending on the printer, without ever saying which it sent.
+      dst.humidity_is_level = (h > 0 && h <= 5);
+      if (h < 0 || h > 100) h = AMS_HUMIDITY_NA;
+      dst.humidity = (int8_t)h;
+    }
+
+    JsonVariantConst tmp = u["temperature"];
+    dst.temp_c10 = tmp.isNull() ? AMS_TEMP_NA
+                                : (int16_t)lroundf(tmp.as<float>() * 10.0f);
+
+    // Present only while a cycle runs. The units of "time" are not written
+    // down anywhere; minutes is what the figure looks like next to a Bambu
+    // drying cycle, and it is labelled as such on screen so a wrong guess
+    // shows itself rather than misleading quietly.
+    JsonVariantConst dry = u["drying"];
+    dst.drying       = !dry.isNull();
+    dst.dry_target_c = AMS_REMAIN_NA;
+    dst.dry_minutes  = AMS_REMAIN_NA;
+    if (dst.drying) {
+      int t = dry["target_temp"] | AMS_REMAIN_NA;
+      if (t < 0 || t > 127) t = AMS_REMAIN_NA;
+      dst.dry_target_c = (int8_t)t;
+      int m = dry["time"] | AMS_REMAIN_NA;
+      if (m < 0 || m > INT16_MAX) m = AMS_REMAIN_NA;
+      dst.dry_minutes = (int16_t)m;
+    }
+
+    // Both values are live MQTT readings that FilaMan does not persist, so a
+    // printer it cannot currently reach reports them as null while the bays
+    // still come back from the database. That asymmetry looks like a bug in
+    // the scale, so the raw pair is logged next to the connected flag: it is
+    // the difference between "the printer is not talking" and "this AMS does
+    // not measure humidity".
+    logSDf("[verbose] FilaMan: unit %d kind=%s hum=%s temp=%s (printer connected=%d)",
+           (int)dst.ams_id, kind,
+           hum.isNull() ? "null" : String(hum.as<int>()).c_str(),
+           tmp.isNull() ? "null" : String(tmp.as<float>(), 1).c_str(),
+           (int)out.connected);
+
+    for (JsonVariantConst sv : u["slots"].as<JsonArrayConst>()) {
+      if (dst.tray_count >= AMS_MAX_TRAYS) break;
+      JsonObjectConst sl = sv.as<JsonObjectConst>();
+      AmsSlotTray& t = dst.tray[dst.tray_count];
+      t = AmsSlotTray{};
+
+      t.tray_id = (uint8_t)(sl["slot"] | dst.tray_count);
+      t.exists  = !(sl["empty"] | true);
+      t.active  = sl["active"] | false;
+      t.spool_id = sl["spool_id"] | 0;
+      strncpy(t.name, sl["material"] | "", sizeof(t.name) - 1);
+      strncpy(t.color_name, sl["color_name"] | "", sizeof(t.color_name) - 1);
+      // A label like "B2", and null when this bay has no partner.
+      strncpy(t.backup_of, sl["backup_of"] | "", sizeof(t.backup_of) - 1);
+
+      // Only an occupied bay has a colour worth drawing; an empty one
+      // carries the placeholder grey.
+      t.has_color = t.exists && parseDisplayColor(sl["color"] | "", &t.color);
+
+      int pct = sl["remaining_percent"] | AMS_REMAIN_NA;
+      if (pct < 0 || pct > 100) pct = AMS_REMAIN_NA;
+      t.remain = (int8_t)pct;
+
+      int grams = sl["remaining_grams"] | AMS_REMAIN_NA;
+      if (grams < 0 || grams > INT16_MAX) grams = AMS_REMAIN_NA;
+      t.remain_g = (int16_t)grams;
+
+      dst.tray_count++;
+    }
+    out.unit_count++;
+  }
+
+  out.ams_exists = (out.unit_count > 0);
+  out.valid = true;
+  logSDf("FilaMan: AMS of printer %d, %d unit(s), connected=%d",
+         printer_id, (int)out.unit_count, (int)out.connected);
+  return 200;
+}
+
+int filamanListPrinters(const char* base_url, const char* api_key,
+                        AmsPrinterList& out, uint32_t timeout_ms) {
+  out = AmsPrinterList{};
+  if (!hasBaseUrl(base_url)) return -1;
+
+  JsonDocument filter;
+  buildDisplayFilter(filter, false);
+
+  JsonDocument doc;
+  int code = getDisplay(base_url, api_key, "/api/v1/display?fields=slots",
+                        doc, filter, timeout_ms);
+  if (code != 200) return code;
+
+  for (JsonVariantConst pv : doc["printers"].as<JsonArrayConst>()) {
+    if (out.count >= AMS_MAX_PRINTERS) {
+      logSDf("FilaMan: more than %d printers, rest ignored", AMS_MAX_PRINTERS);
+      break;
+    }
+    JsonObjectConst po = pv.as<JsonObjectConst>();
+    int id = po["id"] | 0;
+    if (id <= 0) continue;
+    AmsPrinter& dst = out.p[out.count];
+    dst = AmsPrinter{};
+    dst.id = id;
+    strncpy(dst.name, po["name"] | "", sizeof(dst.name) - 1);
+    // The endpoint only reports active printers, so anything listed counts.
+    dst.active = true;
+    dst.online = po["connected"] | false;
+    out.count++;
+  }
+
+  logSDf("FilaMan: %d printer(s) from the display endpoint", (int)out.count);
+  return 200;
 }

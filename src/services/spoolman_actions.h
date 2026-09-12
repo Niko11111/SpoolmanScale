@@ -35,6 +35,16 @@ bool reactivateSpool(float remaining);
 // another entry - and it is what keeps FilaMan off slot one, where a plain
 // write would replace the tag instead of adding to it. A source that can only
 // hold one refuses instead of overwriting, and says so in the log.
+// Whether the last link had to fall back to the default extra field because
+// the selected source does not exist on this server, cleared by the asking.
+//
+// The scale keeps its tag source in NVS and tagFieldEffective() cannot check
+// it against the server without reaching the network, so pointing a scale from
+// a v0.27 Spoolman back at an older one leaves "native" selected with no
+// endpoints behind it. The link still happens; this is how the screen gets to
+// say why it went somewhere else.
+bool patchSpoolTagTakeNativeMissing();
+
 bool patchSpoolTag(int spool_id, const char* uuid,
                    const char* const* field_values = nullptr,
                    bool additional = false);

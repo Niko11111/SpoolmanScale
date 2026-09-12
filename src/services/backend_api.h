@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "services/ams_slots.h"
 
 // ============================================================
 //  BACKEND API DISPATCH
@@ -101,6 +102,26 @@ void backendInvalidateExtraFieldCache();
 // Everything below is reached only when this is true, and each call checks it
 // again rather than trusting the caller to have asked.
 bool backendHasNativeTags();
+
+// The same answer out of the cache, and never over the network: 1 supported,
+// 0 absent, -1 nobody has asked this server yet.
+//
+// For the places that must not probe - a settings row is rendered from the
+// screen build and from the web page, and HTTP before lwIP is up is a boot
+// loop. Once any lookup has run this session the answer is known, so a row can
+// stop offering something the server cannot do without ever risking a request.
+int  backendNativeTagsCached();
+
+// Whether this server has been asked and said no. Not the negation of the
+// call above: that one also answers false when the question could not be put -
+// no network, a proxy in the way, a timeout - and those must not be acted on.
+//
+// Reads the cache and never probes, so it is safe from an LVGL callback and
+// from early boot, which is the whole reason it exists: the effective tag
+// field has to fall off a relation the server does not have, and it is asked
+// for that from both places. False until something has probed; the lookup does
+// that at the top of every scan.
+bool backendNativeTagsAbsent();
 
 // Whether a second tag can be bound to a spool on this server right now.
 //
@@ -257,3 +278,40 @@ int  backendPatchSpoolLocation(const char* base_url, int spool_id,
        const char* location_name = nullptr, uint32_t timeout_ms = 8000);
 int  backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* iso_datetime,
        uint32_t timeout_ms = 5000);
+
+// --- ams slots -----------------------------------------------
+
+// Whether the active backend can show the AMS at all. BamBuddy reads it from
+// the printer status, FilaMan from its display endpoint, Spoolman knows
+// nothing about printers. Asked before a button is drawn, so the way in is
+// simply absent rather than present and answering with an error.
+bool backendHasAmsView();
+
+// Whether a spool can be pinned to a bay from here. Only BamBuddy: FilaMan
+// does have an AMS assignment, but no model in which the scale names the bay
+// and the database takes it - there the scale opens a time window and the
+// server decides, which is what amsCommitWithWindow() does.
+bool backendCanAssignAmsSlot();
+
+// The printers worth offering. Both backends answer with the active ones.
+int  backendListPrinters(AmsPrinterList& out, uint32_t timeout_ms = 8000);
+
+// The live AMS of one printer, in the shared shape. Clears out first, and
+// leaves valid false on every path that did not fill it.
+int  backendGetAmsState(int printer_id, AmsSlotState& out,
+       uint32_t timeout_ms = 8000);
+
+// Pins a spool to a bay. BamBuddy only - see backendCanAssignAmsSlot() for
+// why FilaMan says no despite having an AMS assignment of its own.
+int  backendAssignAmsSlot(int spool_id, int printer_id, int ams_id, int tray_id,
+       uint32_t timeout_ms = 8000);
+
+// Releases a bay. Both identifiers are passed because the two BamBuddy
+// inventory modes address an assignment differently, by bay or by spool.
+int  backendUnassignAmsSlot(int spool_id, int printer_id, int ams_id, int tray_id,
+       uint32_t timeout_ms = 6000);
+
+// Where this spool sits right now, or ams -1 when nowhere. Used to tell a
+// fresh assignment from a move, so the user can be told which it is.
+int  backendFindSpoolSlot(int spool_id, int printer_id, int* out_ams,
+       int* out_tray, uint32_t timeout_ms = 8000);

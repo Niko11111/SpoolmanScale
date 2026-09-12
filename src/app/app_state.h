@@ -271,6 +271,25 @@ extern lv_obj_t *btn_weight_main;
 // builds whichever the scale switch calls for - so updateLinkButton() picks
 // the one it was given rather than assuming either.
 extern lv_obj_t *btn_location;
+
+// Zone 4's right half on a device with no load cell: the note saying why the
+// weights are absent, and the way into the AMS view when the backend has one.
+// Both exist only in that mode, so everything that touches them checks first -
+// updateAmsAffordance() in main_screen_helpers.cpp is the one place that does.
+//
+// The note moves: it sits at the top of the zone when the button is below it
+// and in the middle when it is alone, which is why it needs a pointer at all.
+extern lv_obj_t *lbl_no_scale;
+extern lv_obj_t *btn_ams_main;
+
+// The AMS chip in the header, and the only one of the chips that is a button
+// rather than a state. It exists in both modes: a device with a load cell has
+// no room for the zone 4 button and reaches the view from here.
+//
+// It says "there is an AMS view on this backend", not "an AMS is connected" -
+// that answer costs a blocking round trip and lives nowhere a chip could read
+// it. Colour is therefore an affordance here, not a verdict.
+extern lv_obj_t *btn_hdr_ams;
 extern lv_obj_t *scr_more_info;
 extern int scan_count;
 extern lv_obj_t *page_main;

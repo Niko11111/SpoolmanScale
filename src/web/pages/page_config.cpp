@@ -19,6 +19,7 @@
 #include "services/list_limits.h"
 #include "services/mdns_service.h"
 #include "services/prefs_store.h"
+#include "hardware/scale_state.h"
 #include "services/user_options.h"
 #include "services/time_service.h"
 #include "services/wifi_manager.h"
@@ -446,8 +447,9 @@ static void routes(WebServer &srv) {
   srv.on("/api/scalefitted", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
     const bool on = (srv.arg("plain").toInt() != 0);
-    g_scale_fitted = on;
-    prefsPutBool("scale_fitted", on);
+    // Same one writer as the row on the device, so the clean-up that drops the
+    // readings happens whichever switch was used.
+    setScaleFitted(on);
     logSDf("Web: scale fitted -> %s", on ? "ON" : "OFF");
     srv.send(200, "application/json", on ? "{\"ok\":true,\"v\":1}"
                                          : "{\"ok\":true,\"v\":0}");

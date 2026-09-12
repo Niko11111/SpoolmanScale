@@ -100,3 +100,23 @@ lv_obj_t* addSettingRow(lv_obj_t* list, const SettingDesc& s);
 
 // Every row that belongs to the active backend and applies right now.
 void addSettingRows(lv_obj_t* list);
+
+// ---------------------------------------------------------------------------
+//  Modal questions
+// ---------------------------------------------------------------------------
+
+// True while a popup is on screen waiting for the user to answer it.
+//
+// It exists because a blocking backend call and a question on screen cannot
+// share the loop. lv_timer_handler() is what reads the touch panel, and it
+// does not run while an HTTP request is in flight - a full inventory is six
+// seconds on a library of 250 - so the question sits there taking no input
+// and looks broken. Pumping LVGL from inside the request is not the way out:
+// loading_overlay.cpp repaints with lv_refr_now() for exactly this reason and
+// says why, dispatching events from there would re-enter the callback the
+// request was started from.
+//
+// So the expensive lookup stands aside instead. The cheap server side tag
+// search still runs, and spoolmanRecheckTick() keeps retrying it while an
+// unknown tag lies on the pad, which is what makes standing aside free.
+bool uiModalWaiting();

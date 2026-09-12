@@ -9,6 +9,7 @@
 #include "services/device_name.h"
 #include "services/mdns_service.h"
 #include "services/user_options.h"
+#include "ui/main_screen_helpers.h"
 #include "services/wifi_manager.h"
 
 
@@ -37,9 +38,16 @@ void layoutHeaderChips() {
 
   lv_obj_align(lbl_hdr_sm, LV_ALIGN_RIGHT_MID, -HDR_CHIP_MARGIN, 0);
   lv_obj_t *prev = lbl_hdr_sm;
-  lv_obj_t *chain[] = { lbl_hdr_scl, lbl_hdr_nfc, lbl_hdr_wifi, lbl_hdr_sd };
+  // AMS first, so it lands directly left of the backend badge: it belongs to
+  // the backend, and the two read as a pair.
+  lv_obj_t *chain[] = { btn_hdr_ams, lbl_hdr_scl, lbl_hdr_nfc, lbl_hdr_wifi, lbl_hdr_sd };
   for (unsigned i = 0; i < sizeof(chain) / sizeof(chain[0]); i++) {
-    if (!chain[i]) continue;
+    // Hidden counts as absent. lv_obj_align_to() reads nothing but the
+    // reference object's geometry - the hidden flag never reaches it - so a
+    // hidden label keeps its slot and leaves a hole in the row. That is what
+    // the SD icon has been doing on a card-less device, and it is what a chip
+    // that comes and goes at runtime would do on every appearance.
+    if (!chain[i] || lv_obj_has_flag(chain[i], LV_OBJ_FLAG_HIDDEN)) continue;
     lv_obj_align_to(chain[i], prev, LV_ALIGN_OUT_LEFT_MID, -HDR_CHIP_GAP, 0);
     prev = chain[i];
   }
@@ -61,10 +69,19 @@ void updateHeaderStatus() {
       nfc_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
   }
 
+  // The chip is not built at all when the device starts without a load cell.
+  // It still exists when the switch is thrown while the device is running, and
+  // then it has to go: the readings stop, so whatever it last said is frozen.
+  // The restart the switch asks for rebuilds the header without it.
   if (lbl_hdr_scl) {
-    lv_label_set_text(lbl_hdr_scl, scl_ok ? "SCL" : "SCL!");
-    lv_obj_set_style_text_color(lbl_hdr_scl,
-      scl_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
+    if (!g_scale_fitted) {
+      lv_obj_add_flag(lbl_hdr_scl, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_clear_flag(lbl_hdr_scl, LV_OBJ_FLAG_HIDDEN);
+      lv_label_set_text(lbl_hdr_scl, scl_ok ? "SCL" : "SCL!");
+      lv_obj_set_style_text_color(lbl_hdr_scl,
+        scl_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
+    }
   }
 
   // Both labels follow the active backend. Set here rather than only at build
@@ -141,6 +158,11 @@ void updateHeaderStatus() {
       if (lbl_status) lv_obj_set_width(lbl_status, HDR_STATUS_W);
     }
   }
+
+  // Zone 4's AMS button hangs on the backend, and this function already runs
+  // on every backend switch - backendApplyMode() calls it. Costs two pointer
+  // checks on a device that has a scale, where neither object exists.
+  updateAmsAffordance();
 
   // Last: every text above is final by now, so the widths the packing reads
   // are the ones that will actually be drawn.

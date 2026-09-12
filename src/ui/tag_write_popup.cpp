@@ -12,6 +12,7 @@
 #include "confirm_popup.h"
 #include "info_popup.h"
 #include "second_tag_popup.h"
+#include "tag_display.h"
 #include "spool_flow.h"
 #include "ui_common.h"
 
@@ -270,6 +271,23 @@ void handleTagWritePopupDeferredActions() {
     showResult(code);
     logSDf("TagWritePopup: finished, mode=%d code=%u", (int)s_mode,
            (unsigned)code);
+
+  }
+
+  // An erased tag keeps its record on screen: the display was painted from the
+  // cache when the tag was read, and nothing reads it again by itself.
+  //
+  // Outside the block above on purpose. That one only fires for a write this
+  // popup started, while the web interface erases through the same tick and
+  // never touches this popup at all - so asking the writer covers both ways
+  // out with one mechanism.
+  //
+  // clearTagDisplay() is the same handle the unlink uses: labels, tag state
+  // and both lookup markers go, so the next poll treats the tag on the pad as
+  // new, reads it again and paints what is actually on it now - nothing.
+  if (tagWriteTakeErased()) {
+    logSD("Tag: erased, clearing it off the screen so the next poll re-reads");
+    clearTagDisplay();
   }
 
   if (erase_ask_pending) {

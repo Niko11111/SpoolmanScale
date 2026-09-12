@@ -218,3 +218,14 @@ extern bool g_hw_uid_write;
 // is not a separate setting - it runs through the same link as the first one,
 // so g_tagwrite_mode asks for it the same way.
 extern bool g_tag2_ask;
+
+// Whether the scale offers the AMS bay picker after weighing a spool, for the
+// backends that can pin a spool to a bay. Off by default: the assignment also
+// configures the bay on the printer over MQTT, and that is a side effect
+// nobody should get without having asked for it.
+//
+// Only two states, so a switch rather than the three way mode FilaMan's own
+// AMS assignment carries. There "always" means the server flag stays raised
+// and every weighing opens a window; here there is no window and no implicit
+// bay, so an "always" would have nothing to do.
+extern bool g_ams_pick_ask;

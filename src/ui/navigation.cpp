@@ -9,9 +9,11 @@
 
 #include "hardware/display_power.h"
 #include "hardware/sd_logger.h"
+#include "ui/ams_view.h"
 #include "ui/extra_fields_screen.h"
 #include "ui/more_info_screen.h"
 #include "ui/main_screen_helpers.h"
+#include "ui/header_status.h"
 #include "ui/settings_screen.h"
 #include "ui/spool_flow.h"
 
@@ -71,6 +73,7 @@ void hideAllOverlays() {
   if (scr_wifi_connecting) lv_obj_add_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN);
   hideSpoolFlowOverlays();
   hideMoreInfoOverlays();
+  hideAmsViewOverlays();
 }
 
 void showMainScreen() {
@@ -102,6 +105,7 @@ void showMainScreen() {
   if (scr_bag)         { lv_obj_del(scr_bag);         scr_bag         = nullptr; }
   if (scr_filaman_options) { lv_obj_del(scr_filaman_options); scr_filaman_options = nullptr; }
   if (scr_ams_assign)      { lv_obj_del(scr_ams_assign);      scr_ams_assign      = nullptr; }
+  destroyAmsView();
   if (scr_filaman_fields)  { lv_obj_del(scr_filaman_fields);  scr_filaman_fields  = nullptr; }
   if (s_ams_numpad_scr)    { lv_obj_del(s_ams_numpad_scr);    s_ams_numpad_scr    = nullptr; }
   if (scr_spoolman_options) { lv_obj_del(scr_spoolman_options); scr_spoolman_options = nullptr; }
@@ -119,6 +123,11 @@ void showMainScreen() {
   deleteSpoolFlowOverlays();
   resetActivityTimer();
   updateLinkButton();
+  // The chrome as well as the button bar. Settings reached from here can change
+  // what the header is allowed to show - throwing the scale switch leaves an
+  // SCL chip standing that nothing else would take down until the next scan -
+  // and this is the one gate every way back to the main screen passes through.
+  updateHeaderStatus();
 }
 
 void showSettingsScreen() {

@@ -9,6 +9,7 @@
 #include <cstring>
 
 #include "app_config.h"
+#include "app/deferred_actions.h"
 #include "bambu/bambu_tag.h"
 #include "hardware/scale.h"
 #include "hardware/scale_state.h"
@@ -23,6 +24,7 @@
 #include "ui/dried_action.h"
 #include "ui/update_badges.h"
 #include "ui/header_status.h"
+#include "ui/main_screen_helpers.h"
 #include "ui/more_info_screen.h"
 #include "ui/settings_screen.h"
 #include "ui/spool_flow.h"
@@ -169,15 +171,48 @@ void buildUI() {
   lv_obj_set_style_text_color(lbl_hdr_nfc, lv_color_hex(0x606060), 0);
   lv_obj_set_style_text_font(lbl_hdr_nfc, &lv_font_montserrat_ext_12, 0);
 
-  // Not built at all without a load cell, rather than built and hidden.
-  // layoutHeaderChips() packs the row with lv_obj_align_to() and skips only
-  // nullptr - a hidden label still gets a place and would leave a gap.
+  // Not built at all without a load cell, rather than built and hidden. The
+  // packing does skip hidden objects now, so this is no longer load bearing -
+  // it simply saves an object that could never say anything.
   if (g_scale_fitted) {
     lbl_hdr_scl = lv_label_create(hdr);
     lv_label_set_text(lbl_hdr_scl, "SCL");
     lv_obj_set_style_text_color(lbl_hdr_scl, lv_color_hex(0x606060), 0);
     lv_obj_set_style_text_font(lbl_hdr_scl, &lv_font_montserrat_ext_12, 0);
   }
+
+  // The one chip that is a button. Bordered and filled where its neighbours
+  // are bare text, because it does something when pressed and they do not -
+  // among five status labels that difference has to be visible.
+  //
+  // Sized to its content so the packing can measure it, 18 px tall so it sits
+  // inside the 26 px header with room above and below. Built in both modes and
+  // shown by updateAmsAffordance() when the backend has a view to open.
+  btn_hdr_ams = lv_btn_create(hdr);
+  lv_obj_set_width(btn_hdr_ams, LV_SIZE_CONTENT);
+  lv_obj_set_height(btn_hdr_ams, HDR_AMS_H);
+  lv_obj_set_style_pad_hor(btn_hdr_ams, HDR_AMS_PAD_X, 0);
+  lv_obj_set_style_pad_ver(btn_hdr_ams, 0, 0);
+  lv_obj_set_style_bg_color(btn_hdr_ams, lv_color_hex(0x0d2040), 0);
+  lv_obj_set_style_bg_color(btn_hdr_ams, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_border_width(btn_hdr_ams, 1, 0);
+  lv_obj_set_style_border_color(btn_hdr_ams, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_radius(btn_hdr_ams, 4, 0);
+  lv_obj_set_style_shadow_width(btn_hdr_ams, 0, 0);
+  lv_obj_add_flag(btn_hdr_ams, LV_OBJ_FLAG_HIDDEN);
+  // A chip cannot reach 44x44 inside a 26 px header, so the touch area is
+  // grown instead of the chip. 8 px is the ceiling: the diagnosis banner is a
+  // clickable strip across y=26..47 and anything more starts competing with it.
+  lv_obj_set_ext_click_area(btn_hdr_ams, HDR_AMS_TOUCH_PAD);
+  lv_obj_add_event_cb(btn_hdr_ams, [](lv_event_t *e) {
+    logSD("UI: Header chip -> AMS view");
+    show_ams_view_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lbl_hdr_ams = lv_label_create(btn_hdr_ams);
+  lv_label_set_text(lbl_hdr_ams, "AMS");
+  lv_obj_set_style_text_color(lbl_hdr_ams, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_font(lbl_hdr_ams, &lv_font_montserrat_ext_12, 0);
+  lv_obj_center(lbl_hdr_ams);
 
   // Fix 10: Spoolman reachability indicator
   lbl_hdr_sm = lv_label_create(hdr);
@@ -651,30 +686,60 @@ void buildUI() {
     lv_obj_set_style_text_font(lbl_tare_txt, &lv_font_montserrat_ext_10, 0);
     lv_obj_align(lbl_tare_txt, LV_ALIGN_CENTER, 0, 12);
   } else {
-    // The right half of the zone, saying why it is empty. Left half untouched:
-    // remaining, percent and the bar come out of the database and are just as
-    // true without a load cell.
+    // The right half of the zone. Left half untouched: remaining, percent and
+    // the bar come out of the database and are just as true without a load
+    // cell.
     //
-    // On #4a6fa0, the caption colour. Not #2a4060 - that is a shape colour for
-    // rules and inactive bars, and at 1.7:1 on this background it is not text.
-    lv_obj_t *lbl_no_scale = lv_label_create(lv_scr_act());
+    // The note is an aside now, not the message - font 12 on #4a6fa0, the
+    // caption scale of the grid. Not #2a4060: that is a shape colour for rules
+    // and inactive bars, and at 1.7:1 on this background it is not text.
+    lbl_no_scale = lv_label_create(lv_scr_act());
     char ns_buf[48];
     strncpy(ns_buf, T(STR_NO_SCALE), sizeof(ns_buf) - 1);
     ns_buf[sizeof(ns_buf) - 1] = '\0';
     lv_label_set_text(lbl_no_scale, ns_buf);
     lv_obj_set_style_text_color(lbl_no_scale, lv_color_hex(0x4a6fa0), 0);
-    lv_obj_set_style_text_font(lbl_no_scale, &lv_font_montserrat_ext_14, 0);
+    lv_obj_set_style_text_font(lbl_no_scale, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(lbl_no_scale, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(lbl_no_scale, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(lbl_no_scale, MAIN_NOSCALE_W);
-    // Centred from the height it really has, not from a number worked out for
-    // German. A longer translation wraps to two lines and a fixed y would hang
-    // it out of the zone; the label only knows its height after a layout pass.
-    lv_obj_set_pos(lbl_no_scale, MAIN_NOSCALE_X, MAIN_ZONE4_Y);
-    lv_obj_update_layout(lbl_no_scale);
-    const lv_coord_t ns_h = lv_obj_get_height(lbl_no_scale);
-    lv_obj_set_pos(lbl_no_scale, MAIN_NOSCALE_X,
-                   MAIN_ZONE4_Y + (MAIN_ZONE4_H - ns_h) / 2);
+
+    // The way into the AMS view, in the space the live weights used to have.
+    // Built here and shown or hidden by updateAmsAffordance(): it belongs to
+    // FilaMan and BamBuddy only, and the backend can be switched while this
+    // screen exists. Same colours as the location button in zone 5, so a
+    // display-only device speaks one language.
+    //
+    // Only offered where there is room for it. A device with a load cell
+    // reaches the same view through Settings > Scale.
+    btn_ams_main = lv_btn_create(lv_scr_act());
+    lv_obj_set_size(btn_ams_main, MAIN_NOSCALE_W, MAIN_AMS_BTN_H);
+    lv_obj_set_pos(btn_ams_main, MAIN_NOSCALE_X, MAIN_AMS_BTN_Y);
+    lv_obj_set_style_bg_color(btn_ams_main, lv_color_hex(0x0d2040), 0);
+    lv_obj_set_style_bg_color(btn_ams_main, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(btn_ams_main, 1, 0);
+    lv_obj_set_style_border_color(btn_ams_main, lv_color_hex(0x1a3060), 0);
+    lv_obj_set_style_radius(btn_ams_main, 8, 0);
+    lv_obj_set_style_shadow_width(btn_ams_main, 0, 0);
+    lv_obj_add_flag(btn_ams_main, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_event_cb(btn_ams_main, [](lv_event_t *e) {
+      logSD("UI: Button -> AMS view (main)");
+      // No WiFi check here on purpose: the view reports a missing connection
+      // itself, which is better than a button that does nothing.
+      show_ams_view_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_ams = lv_label_create(btn_ams_main);
+    char ams_buf[32];
+    strncpy(ams_buf, T(STR_AMSV_BTN), sizeof(ams_buf) - 1);
+    ams_buf[sizeof(ams_buf) - 1] = '\0';
+    lv_label_set_text(lbl_ams, ams_buf);
+    lv_obj_set_style_text_color(lbl_ams, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_font(lbl_ams, &lv_font_montserrat_ext_16, 0);
+    lv_obj_set_style_text_align(lbl_ams, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lbl_ams, LV_ALIGN_CENTER, 0, 0);
+
+    // Places the note, and decides whether the button is there at all.
+    updateAmsAffordance();
   }
 
   // Separator zone 4/5

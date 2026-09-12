@@ -48,6 +48,13 @@ static char      state[12] = "idle";
 static char      message[96] = "";
 static uint8_t   result = TW_NONE;
 static int       linked_spool = 0;
+
+// Raised by a successful erase, taken once by the UI. A flag rather than a
+// call into the screens, because this module belongs to the service layer and
+// runs from the loop task - and because the web interface erases through the
+// very same tick, so both ways out are covered by one signal instead of the
+// popup carrying half of it.
+static bool      erased_flag = false;
 // The same answer as `message`, in parts, so a translated caller can build its
 // own sentence - see TagWriteReport in the header.
 static TagWriteReport report;
@@ -91,6 +98,12 @@ int tagWriteTakeLinkedSpool() {
   const int id = linked_spool;
   linked_spool = 0;
   return id;
+}
+
+bool tagWriteTakeErased() {
+  const bool was = erased_flag;
+  erased_flag = false;
+  return was;
 }
 
 // The tag the main poll is looking at, judged the same way refreshCache()
@@ -1058,6 +1071,10 @@ void tagWriteTick() {
     const bool erased = eraseTag();
     cache_dirty = true;
     report.erase = true;
+    // The screen is still showing the record that was just wiped, whoever
+    // asked for the erase. Only on success: a failed erase left the tag as it
+    // was, and what is on screen is then still the truth.
+    if (erased) erased_flag = true;
     finish(erased ? "ok" : "error",
            erased ? "Tag erased" : "Erase failed - keep the tag still",
            erased ? TW_OK : TW_ERR_WRITE);

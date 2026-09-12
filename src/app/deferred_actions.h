@@ -31,6 +31,11 @@ extern bool backend_mode_change_pending;
 extern uint8_t pending_backend_mode;
 extern bool show_filaman_options_pending;
 extern bool show_ams_assign_pending;
+// The AMS view. A flag rather than a direct call because building it ends in
+// an HTTP request, and that must not run inside the LVGL callback that asked
+// for it. Set from wherever a way into the view is offered - the row is two
+// lines, so the place it sits can move without touching anything else.
+extern bool show_ams_view_pending;
 extern bool show_filaman_fields_pending;
 extern bool show_bambuddy_options_pending;
 extern bool show_bambuddy_dried_pending;

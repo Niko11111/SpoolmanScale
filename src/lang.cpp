@@ -541,6 +541,72 @@ const char* const STRINGS[][2] = {
   // short form above, so the two places do not invent two vocabularies.
   { "Inventar",
     "Inventory"                                                           },  // STR_BACKEND_INVENTORY
+
+  // AMS view. The unit names are built here rather than taken from the
+  // server: both backends generate their own "AMS A" style labels, and a
+  // generated English label would land on the screen untranslated.
+  { "AMS-Status",
+    "AMS status"                                                      },  // STR_AMSV_TITLE
+  { "AMS ansehen",
+    "Show the AMS"                                                    },  // STR_AMSV_BTN
+  { "Fächer des Druckers",
+    "The printer's bays"                                              },  // STR_AMSV_BTN_SUB
+  { "Neu laden",
+    "Reload"                                                          },  // STR_AMSV_RELOAD
+  { "AMS wird gelesen...",
+    "Reading the AMS..."                                              },  // STR_AMSV_LOADING
+  { "AMS %d",
+    "AMS %d"                                                          },  // STR_AMSV_UNIT
+  { "AMS HT %d",
+    "AMS HT %d"                                                       },  // STR_AMSV_UNIT_HT
+  { "Extern",
+    "External"                                                        },  // STR_AMSV_UNIT_EXT
+  { "Leer",
+    "Empty"                                                           },  // STR_AMSV_EMPTY
+  { "%d%%",
+    "%d%%"                                                            },  // STR_AMSV_HUM_PCT
+  { "Stufe %d",
+    "Step %d"                                                         },  // STR_AMSV_HUM_LEVEL
+  // Says why the bays are still there. FilaMan keeps the assignment in its
+  // database but temperature and humidity are live MQTT readings, so an
+  // unreachable printer shows full bays with no climate - which looks like a
+  // fault in the scale unless the line explains it.
+  { "offline, letzter Stand",
+    "offline, last known state"                                           },  // STR_AMSV_OFFLINE
+  { "Kein AMS gemeldet",
+    "No AMS reported"                                                 },  // STR_AMSV_NO_AMS
+  { "Kein Drucker gefunden",
+    "No printer found"                                                },  // STR_AMSV_NO_PRINTER
+  { "Server antwortet %d",
+    "The server answers %d"                                           },  // STR_AMSV_ERR_HTTP
+  { "Kein Netz",
+    "No network"                                                      },  // STR_AMSV_ERR_NET
+  { "Zu wenig Speicher für alle Fächer",
+    "Not enough memory for every bay"                                 },  // STR_AMSV_ERR_FULL
+  { "Trocknet %d C, %d min",
+    "Drying %d C, %d min"                                             },  // STR_AMSV_DRYING
+  { "Trocknet %d C",
+    "Drying %d C"                                                     },  // STR_AMSV_DRYING_T
+  { "druckt %d%%",
+    "printing %d%%"                                                   },  // STR_AMSV_JOB
+  // Which of several printers is on screen. Same in both languages, but
+  // it goes through T() so a language that numbers differently can change it.
+  { "%d/%d",
+    "%d/%d"                                                           },  // STR_AMSV_PRN_OF
+  { "%s -> in welches Fach?",
+    "%s -> into which bay?"                                           },  // STR_AMSV_PICK_HEAD
+  { "Spule ist zugeordnet",
+    "The spool is assigned"                                           },  // STR_AMSV_ASSIGNED
+  { "Spule umgezogen",
+    "The spool moved"                                                 },  // STR_AMSV_MOVED
+  { "Zuordnung fehlgeschlagen",
+    "Assignment failed"                                          },  // STR_AMSV_ASSIGN_FAIL
+  { "Nach dem Wiegen ins AMS",
+    "Into the AMS after weighing"                                     },  // STR_BBAMS_ASK
+  { "Beim Abheben nach dem Fach fragen",
+    "Ask for the bay on removal"                                      },  // STR_BBAMS_ASK_SUB
+  { "An: nach dem Wiegen einer bekannten Spule fragt die Waage beim Abheben, in welches AMS-Fach sie geht, und trägt das in BamBuddy ein.\n\nBamBuddy konfiguriert das Fach dabei über MQTT am Drucker mit - Material, Farbe und Temperaturen. Das ist gewollt, aber es wirkt auf den Drucker, nicht nur auf die Datenbank.",
+    "On: after a known spool has been weighed, the scale asks on removal which AMS bay it goes into and records that in BamBuddy.\n\nBamBuddy also configures the bay on the printer over MQTT while doing so - material, colour and temperatures. That is intended, but it acts on the printer, not only on the database." },  // STR_BBAMS_ASK_INFO
   { "Werkseinstellungen",       "Factory Reset"              },  // STR_BTN_FACTORY_RESET
   { "Alle Einstellungen löschen", "Erase all settings"      },  // STR_BTN_FACTORY_RESET_SUB
   { "Werkseinstellungen?",      "Factory Reset?"             },  // STR_FACTORY_RESET_TITLE
@@ -566,7 +632,7 @@ const char* const STRINGS[][2] = {
   { "Ja, unlinken",             "Yes, unlink"                },  // STR_UNLINK_CONFIRM
   { "Waage initialisiert...",   "Scale calibrating..."       },  // STR_SCALE_CALIBRATING
   { "Verbinde mit WiFi...",     "Connecting to WiFi..."      },  // STR_WIFI_CONNECTING_BOOT
-  { "Waage und WiFi werden gestartet...", "Starting up, please wait..." },  // STR_BOOTING
+  { "Gerät wird gestartet...", "Starting up, please wait..." },  // STR_BOOTING
   { "Neustart",                 "Reboot"                     },  // STR_BTN_REBOOT
   { "Gerät neu starten",       "Restart device"             },  // STR_BTN_REBOOT_SUB
   { "Ganze g",                  "Whole g"                    },  // STR_WHOLE_GRAM
@@ -780,13 +846,18 @@ const char* const STRINGS[][2] = {
     "FilaMan reserves a weighed spool for a few seconds. Whoever loads an AMS tray in that time gets it assigned. Only a weight opens that window, so assigning books the value a second time: the measurement then shows twice in the log, the value stays the same. If the spool is going into the printer anyway, just resting it on the pad is enough." },  // STR_AMS_INFO
   { "Aus",                           "Off"                                },  // STR_AMS_MODE_OFF
   { "Nachfragen",                    "Ask"                                },  // STR_AMS_MODE_ASK
-  { "Immer an",                      "Always"                             },  // STR_AMS_MODE_ALWAYS
+  // Not "Immer an": next to "Nachfragen" that reads as "the question is
+  // always on", which is the opposite of what it does. Users asking for a way
+  // out of the popup had the mode in front of them and did not recognise it.
+  { "Automatisch",                   "Automatic"                          },  // STR_AMS_MODE_ALWAYS
   { "Es wird nichts vorgemerkt. Wiegen und Lagerort verhalten sich genau wie bisher.",
     "Nothing is reserved. Weighing and location behave exactly as before." },  // STR_AMS_OFF_DESC
   { "Beim Abnehmen wird gefragt, ob die Spule in den Drucker wandert. Ein Ja sendet das Gewicht und öffnet das Fenster.",
     "When the spool is lifted you are asked whether it goes into the printer. A yes sends the weight and opens the window." },  // STR_AMS_ASK_DESC
-  { "Jede Wiegung merkt die Spule vor, ohne Nachfrage. Auch wenn du nur kurz nachwiegen wolltest.",
-    "Every weighing reserves the spool, without asking. Even when you only wanted to check a weight." },  // STR_AMS_ALWAYS_DESC
+  // The gain first, the price second: this is the mode people come looking
+  // for when the popup is in their way, so it has to say so before it warns.
+  { "Kein Popup, kein Countdown: jede Wiegung merkt die Spule vor. Der Preis ist, dass auch kurzes Nachwiegen sie vormerkt.",
+    "No popup, no countdown: every weighing reserves the spool. The price is that checking a weight reserves it too." },  // STR_AMS_ALWAYS_DESC
   { "Fenster",                       "Window"                             },  // STR_AMS_WINDOW_LBL
   { "wie lange die Spule vorgemerkt bleibt", "how long the spool stays reserved" },  // STR_AMS_WINDOW_HINT
   { "s",                             "s"                                  },  // STR_AMS_SEC_UNIT
@@ -1775,6 +1846,26 @@ const char* const STRINGS[][2] = {
     "The scale writes this into every spool it recognises, not only when a "
     "link is made. Once the UID is in there, no request goes out again. Happy "
     "Hare creates the field itself."                                      },  // STR_HW_UID_WRITE_INFO
+
+  // ── A link that could not use the selected source ──
+  { "Tag-Quelle nicht verfügbar", "Tag source unavailable" },  // STR_TF_NOREL_TITLE
+  { "Dieser Spoolman hat noch keine eigene Tag-Relation - die gibt es erst ab "
+    "v0.27. Als Quelle sind aber die nativen Tags gewählt.\n\n"
+    "Der Tag wurde deshalb in das Extra-Feld tag geschrieben, das jeder "
+    "Spoolman hat. Die Spule wird damit gefunden, nur nicht auf dem "
+    "schnellsten Weg.\n\n"
+    "Dauerhaft besser: unter Einstellungen die Tag-Quelle auf card_uids "
+    "stellen. Das Feld hält auch mehrere UIDs je Spule, also auch einen "
+    "zweiten Tag. Sobald der Server auf v0.27 steht, zieht die Waage die "
+    "Bindung beim nächsten Verknüpfen von selbst in die Relation um.",
+    "This Spoolman has no tag relation of its own yet - that arrives in v0.27. "
+    "The selected source is native tags all the same.\n\n"
+    "The tag went into the extra field tag instead, which every Spoolman has. "
+    "The spool is found by it, just not by the fastest route.\n\n"
+    "Better for good: set the tag source to card_uids under Settings. That "
+    "field also holds several UIDs per spool, so a second tag fits too. Once "
+    "the server is on v0.27 the scale moves the binding into the relation by "
+    "itself, on the next link."                                            },  // STR_TF_NOREL_TEXT
 
   // ── The tag on the other flange ──
   { "Zweites Tag abfragen",      "Ask for a second tag"     },  // STR_TAG2_ASK

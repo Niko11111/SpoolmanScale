@@ -840,6 +840,343 @@ int bbCreateSpool(const char* base_url, const char* api_key,
 }
 
 // ------------------------------------------------------------
+//  AMS SLOTS
+// ------------------------------------------------------------
+
+// Bambu sends a tray colour as six hex digits, or eight with an alpha byte
+// on the end. An alpha of 00 is what an empty bay reports, and painting that
+// as black would claim a colour the bay does not have - so it is rejected
+// rather than truncated. Kept local instead of reaching for the UI helper:
+// a service that included ui_common would drag LVGL into the HTTP layer.
+static bool parseTrayColor(const char* hex, uint32_t* out) {
+  if (!hex || !out) return false;
+  const char* h = (hex[0] == '#') ? hex + 1 : hex;
+  const size_t len = strlen(h);
+  if (len != 6 && len != 8) return false;
+  if (len == 8 && h[6] == '0' && h[7] == '0') return false;
+
+  unsigned int r, g, b;
+  if (sscanf(h, "%02X%02X%02X", &r, &g, &b) != 3) return false;
+  *out = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+  return true;
+}
+
+// One AMSTray object into one bay. Shared by the AMS units and the external
+// holder, because BamBuddy describes both with the same schema.
+static void fillTray(JsonObjectConst t, AmsSlotTray& out, uint8_t tray_id) {
+  out = AmsSlotTray{};
+  out.tray_id  = tray_id;
+  // BamBuddy reports no gram figure per bay, only the percentage Bambu sends.
+  out.remain_g = AMS_REMAIN_NA;
+
+  // The sub brand is the name a user recognises ("PLA Matte"); the bare
+  // material is the fallback when the spool carries no brand information.
+  const char* sub  = t["tray_sub_brands"] | "";
+  const char* type = t["tray_type"] | "";
+  const char* name = (sub && sub[0]) ? sub : type;
+  strncpy(out.name, name ? name : "", sizeof(out.name) - 1);
+
+  out.has_color = parseTrayColor(t["tray_color"] | "", &out.color);
+
+  // Bambu itself sends -1 for "no idea", and anything outside 0..100 is a
+  // value we would only misdraw.
+  int remain = t["remain"] | AMS_REMAIN_NA;
+  if (remain < 0 || remain > 100) remain = AMS_REMAIN_NA;
+  out.remain = (int8_t)remain;
+
+  // exists is the authority when the field is there. When it is missing,
+  // a bay that names a material is holding one - that is how BamBuddy's own
+  // interface reads it too.
+  JsonVariantConst ex = t["exists"];
+  out.exists = ex.isNull() ? (out.name[0] != '\0') : (ex.as<bool>());
+}
+
+int bbGetAmsState(const char* base_url, const char* api_key, int printer_id,
+                  AmsSlotState& out, uint32_t timeout_ms) {
+  out = AmsSlotState{};
+  if (!hasBaseUrl(base_url) || printer_id <= 0) return -1;
+
+  char url[192];
+  snprintf(url, sizeof(url), "%s/api/v1/printers/%d/status", base_url, printer_id);
+
+  JsonDocument filter;
+  filter["name"]       = true;
+  filter["connected"]  = true;
+  filter["ams_exists"] = true;
+
+  JsonObject fu = filter["ams"].to<JsonArray>().add<JsonObject>();
+  fu["id"]        = true;
+  fu["humidity"]  = true;
+  fu["temp"]      = true;
+  fu["is_ams_ht"] = true;
+  JsonObject ft = fu["tray"].to<JsonArray>().add<JsonObject>();
+  ft["id"]              = true;
+  ft["tray_color"]      = true;
+  ft["tray_type"]       = true;
+  ft["tray_sub_brands"] = true;
+  ft["remain"]          = true;
+  ft["exists"]          = true;
+
+  // Which bay the printer feeds from. Bambu numbers it globally as
+  // ams_id * 4 + slot, so it is resolved back to a pair below.
+  filter["tray_now"] = true;
+
+  // vt_tray is an AMSTray array of its own at the top level, not a child of
+  // ams, so the same field set has to be named a second time.
+  JsonObject fv = filter["vt_tray"].to<JsonArray>().add<JsonObject>();
+  fv["id"]              = true;
+  fv["tray_color"]      = true;
+  fv["tray_type"]       = true;
+  fv["tray_sub_brands"] = true;
+  fv["remain"]          = true;
+  fv["exists"]          = true;
+
+  // No PSRAM allocator: what survives the filter is a couple of kilobytes
+  // and is copied into the fixed struct right away.
+  JsonDocument doc;
+  int code = getJson(url, api_key, doc, timeout_ms, nullptr, &filter);
+  if (code != 200) return code;
+
+  out.printer_id = printer_id;
+  strncpy(out.printer, doc["name"] | "", sizeof(out.printer) - 1);
+  out.connected  = doc["connected"] | false;
+  out.ams_exists = doc["ams_exists"] | false;
+
+  // 255 is Bambu's "nothing loaded", and so is a missing field.
+  const int tray_now = doc["tray_now"] | 255;
+
+  for (JsonVariantConst uv : doc["ams"].as<JsonArrayConst>()) {
+    JsonObjectConst u = uv.as<JsonObjectConst>();
+    if (out.unit_count >= AMS_MAX_UNITS) {
+      logSDf("BamBuddy: printer %d reports more than %d AMS units, rest ignored",
+             printer_id, AMS_MAX_UNITS);
+      break;
+    }
+    AmsSlotUnit& dst = out.unit[out.unit_count];
+    dst = AmsSlotUnit{};
+    dst.ams_id = (uint8_t)(u["id"] | 0);
+    dst.is_ht  = (u["is_ams_ht"] | false) || dst.ams_id >= 128;
+
+    JsonVariantConst hum = u["humidity"];
+    if (hum.isNull()) {
+      dst.humidity = AMS_HUMIDITY_NA;
+    } else {
+      int h = hum.as<int>();
+      // Bambu reports either a raw percentage or its own 1 to 5 step, and
+      // never says which. Anything at or below the top step is read as a
+      // step: an AMS at 5 percent humidity does not occur, a step 5 does.
+      dst.humidity_is_level = (h > 0 && h <= 5);
+      if (h < 0 || h > 100) h = AMS_HUMIDITY_NA;
+      dst.humidity = (int8_t)h;
+    }
+
+    JsonVariantConst tmp = u["temp"];
+    dst.temp_c10 = tmp.isNull() ? AMS_TEMP_NA : (int16_t)lroundf(tmp.as<float>() * 10.0f);
+
+    for (JsonVariantConst tv : u["tray"].as<JsonArrayConst>()) {
+      if (dst.tray_count >= AMS_MAX_TRAYS) break;
+      JsonObjectConst t = tv.as<JsonObjectConst>();
+      const uint8_t tid = (uint8_t)(t["id"] | dst.tray_count);
+      fillTray(t, dst.tray[dst.tray_count], tid);
+      dst.tray[dst.tray_count].active = (tray_now == dst.ams_id * 4 + tid);
+      dst.tray_count++;
+    }
+    out.unit_count++;
+  }
+
+  // The external holder is one unit carrying its bays, not one unit per bay:
+  // a dual nozzle H2D has two of them side by side, and they belong together
+  // on the screen the way the bays of an AMS do.
+  JsonArrayConst vt = doc["vt_tray"].as<JsonArrayConst>();
+  if (!vt.isNull() && vt.size() > 0 && out.unit_count < AMS_UNITS_TOTAL) {
+    AmsSlotUnit& dst = out.unit[out.unit_count];
+    dst = AmsSlotUnit{};
+    dst.ams_id   = AMS_EXT_AMS_ID;
+    dst.is_ext   = true;
+    dst.humidity = AMS_HUMIDITY_NA;
+    dst.temp_c10 = AMS_TEMP_NA;
+
+    for (JsonVariantConst tv : vt) {
+      if (dst.tray_count >= AMS_MAX_EXT) break;
+      JsonObjectConst t = tv.as<JsonObjectConst>();
+      const uint8_t tid = (uint8_t)(t["id"] | (AMS_EXT_TRAY_ID + dst.tray_count));
+      fillTray(t, dst.tray[dst.tray_count], tid);
+      dst.tray[dst.tray_count].active = (tray_now == tid);
+      dst.tray_count++;
+    }
+    out.unit_count++;
+  }
+
+  out.valid = true;
+  logSDf("BamBuddy: AMS of printer %d, %d unit(s), connected=%d ams_exists=%d",
+         printer_id, (int)out.unit_count, (int)out.connected, (int)out.ams_exists);
+  return 200;
+}
+
+int bbListPrinters(const char* base_url, const char* api_key,
+                   AmsPrinterList& out, uint32_t timeout_ms) {
+  out = AmsPrinterList{};
+  if (!hasBaseUrl(base_url)) return -1;
+
+  char url[160];
+  snprintf(url, sizeof(url), "%s/api/v1/printers/", base_url);
+
+  JsonDocument filter;
+  filter.to<JsonArray>();   // accepts the bare array form
+
+  SpiRamAllocator alloc;
+  JsonDocument doc(&alloc);
+  // Unfiltered: the endpoint declares no response schema at all, so a filter
+  // written for a guessed shape would quietly empty the list instead of
+  // failing. The answer is a handful of printers.
+  int code = getJson(url, api_key, doc, timeout_ms, nullptr, nullptr);
+  if (code != 200) return code;
+
+  // Three shapes are accepted because the contract does not say which one
+  // this is, and the one that arrived is logged so the guess never has to be
+  // made twice.
+  JsonArrayConst arr;
+  const char* shape = "array";
+  if (doc.is<JsonArrayConst>()) {
+    arr = doc.as<JsonArrayConst>();
+  } else if (doc["printers"].is<JsonArrayConst>()) {
+    arr = doc["printers"].as<JsonArrayConst>();
+    shape = "printers";
+  } else if (doc["items"].is<JsonArrayConst>()) {
+    arr = doc["items"].as<JsonArrayConst>();
+    shape = "items";
+  } else {
+    logSD("BamBuddy: printer list has none of the three known shapes");
+    return -2;
+  }
+
+  for (JsonVariantConst pv : arr) {
+    if (out.count >= AMS_MAX_PRINTERS) {
+      logSDf("BamBuddy: more than %d printers, rest ignored", AMS_MAX_PRINTERS);
+      break;
+    }
+    JsonObjectConst po = pv.as<JsonObjectConst>();
+    int id = po["id"] | 0;
+    if (id <= 0) continue;
+    AmsPrinter& dst = out.p[out.count];
+    dst = AmsPrinter{};
+    dst.id = id;
+    strncpy(dst.name, po["name"] | "", sizeof(dst.name) - 1);
+    // Neither key is guaranteed; absent means "do not grey it out".
+    dst.active = po["is_active"] | true;
+    dst.online = po["connected"] | po["online"] | false;
+    out.count++;
+  }
+
+  logSDf("BamBuddy: %d printer(s) from a \"%s\" response", (int)out.count, shape);
+  return 200;
+}
+
+// Both assignment routes, told apart in one place. They differ in more than
+// the prefix bbInventoryBase() hands out, so that helper is deliberately not
+// used here.
+static const char* assignPath() {
+  return (bbInventoryMode() == BB_INV_SPOOLMAN)
+           ? "/api/v1/spoolman/inventory/slot-assignments"
+           : "/api/v1/inventory/assignments";
+}
+
+int bbAssignSlot(const char* base_url, const char* api_key, int spool_id,
+                 int printer_id, int ams_id, int tray_id, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || printer_id <= 0) return -1;
+
+  // Checked here rather than left to the server: a 422 arrives as a wall of
+  // validation JSON, and the one thing worth knowing is that this bay cannot
+  // be addressed at all.
+  if (ams_id < 0 || ams_id > 255 || tray_id < 0 || tray_id > 3) {
+    logSDf("BamBuddy: bay %d/%d is outside what an assignment accepts",
+           ams_id, tray_id);
+    return -1;
+  }
+
+  const bool proxy = (bbInventoryMode() == BB_INV_SPOOLMAN);
+  JsonDocument body;
+  body[proxy ? "spoolman_spool_id" : "spool_id"] = spool_id;
+  body["printer_id"] = printer_id;
+  body["ams_id"]     = ams_id;
+  body["tray_id"]    = tray_id;
+
+  String payload;
+  serializeJson(body, payload);
+
+  char url[192];
+  snprintf(url, sizeof(url), "%s%s", base_url, assignPath());
+
+  int code = sendJson("POST", url, api_key, payload, timeout_ms, nullptr);
+  logSDf("BamBuddy: spool %d -> printer %d bay %d/%d, HTTP %d",
+         spool_id, printer_id, ams_id, tray_id, code);
+  return code;
+}
+
+int bbUnassignSlot(const char* base_url, const char* api_key, int spool_id,
+                   int printer_id, int ams_id, int tray_id, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url)) return -1;
+
+  char url[208];
+  if (bbInventoryMode() == BB_INV_SPOOLMAN) {
+    if (spool_id <= 0) return -1;
+    snprintf(url, sizeof(url), "%s%s/%d", base_url, assignPath(), spool_id);
+  } else {
+    if (printer_id <= 0 || ams_id < 0 || tray_id < 0) return -1;
+    snprintf(url, sizeof(url), "%s%s/%d/%d/%d", base_url, assignPath(),
+             printer_id, ams_id, tray_id);
+  }
+
+  int code = sendJson("DELETE", url, api_key, String("{}"), timeout_ms, nullptr);
+  // 404 means it was not assigned, which is the state the caller wanted.
+  if (code == 404) code = 200;
+  logSDf("BamBuddy: release spool %d / bay %d/%d, HTTP %d",
+         spool_id, ams_id, tray_id, code);
+  return code;
+}
+
+int bbFindSpoolSlot(const char* base_url, const char* api_key, int spool_id,
+                    int printer_id, int* out_ams, int* out_tray,
+                    uint32_t timeout_ms) {
+  if (out_ams)  *out_ams  = -1;
+  if (out_tray) *out_tray = -1;
+  if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
+
+  const bool proxy = (bbInventoryMode() == BB_INV_SPOOLMAN);
+  char url[224];
+  if (proxy) {
+    snprintf(url, sizeof(url),
+             "%s/api/v1/spoolman/inventory/slot-assignments/all?printer_id=%d",
+             base_url, printer_id);
+  } else {
+    snprintf(url, sizeof(url), "%s/api/v1/inventory/assignments?printer_id=%d",
+             base_url, printer_id);
+  }
+
+  // The local answer embeds the whole spool in every entry, so the filter is
+  // what keeps this from pulling the inventory across for one number.
+  JsonDocument filter;
+  JsonObject f = filter.to<JsonArray>().add<JsonObject>();
+  f["ams_id"]  = true;
+  f["tray_id"] = true;
+  f[proxy ? "spoolman_spool_id" : "spool_id"] = true;
+
+  JsonDocument doc;
+  int code = getJson(url, api_key, doc, timeout_ms, nullptr, &filter);
+  if (code != 200) return code;
+
+  const char* id_key = proxy ? "spoolman_spool_id" : "spool_id";
+  for (JsonVariantConst av : doc.as<JsonArrayConst>()) {
+    JsonObjectConst a = av.as<JsonObjectConst>();
+    if ((a[id_key] | 0) != spool_id) continue;
+    if (out_ams)  *out_ams  = a["ams_id"]  | -1;
+    if (out_tray) *out_tray = a["tray_id"] | -1;
+    break;
+  }
+  return 200;
+}
+
+// ------------------------------------------------------------
 //  DEVICE PROTOCOL
 // ------------------------------------------------------------
 
@@ -858,7 +1195,12 @@ int bbRegisterDevice(const char* base_url, const char* api_key, const char* ip,
   body["ip_address"]         = (ip && ip[0]) ? ip : "0.0.0.0";
   body["firmware_version"]   = firmware ? firmware : "";
   body["has_nfc"]            = true;
-  body["has_scale"]          = true;
+  // A device built from display and reader alone has no load cell, and saying
+  // otherwise puts it in BamBuddy's device list as a scale. tare_offset and
+  // calibration_factor stay in the body regardless: leaving fields out could
+  // upset the parser on the other side, and has_scale is the field it is
+  // meant to tell them apart by.
+  body["has_scale"]          = g_scale_fitted;
   body["tare_offset"]        = tare_offset;
   body["calibration_factor"] = calibration_factor;
   body["nfc_reader_type"]    = "PN532";

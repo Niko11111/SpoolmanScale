@@ -6,6 +6,7 @@
 // bambuddy_api.h and backend_api.h pull in ArduinoJson, which has to be parsed
 // before lang.h defines T() - ArduinoJson uses T as a template parameter.
 // Nothing here needs lang.h, so the plain includes are safe.
+#include "services/ams_presence.h"
 #include "services/backend_api.h"
 #include "services/bambuddy_device.h"
 #include "services/filaman_api.h"
@@ -37,6 +38,8 @@ void backendApplyMode(BackendMode mode) {
     amsWriteEnabled(false);
   }
   amsDropPending();
+  // The cached answer belongs to the server being left behind.
+  amsPresenceForget();
 
   // An open FilaMan link is a question the scale can no longer answer:
   // remoteLinkReport() bails out on the mode check and only writes a log

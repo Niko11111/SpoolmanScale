@@ -8,10 +8,14 @@
 #include <cstring>
 
 #include "confirm_popup.h"
+#include "hardware/scale_state.h"
 #include "hardware/sd_logger.h"
-#include "lang.h"
 #include "services/auto_weight_state.h"
 #include "services/backend.h"
+// Before lang.h: it pulls in ArduinoJson, whose template parameter T
+// collides with the T() macro.
+#include "services/backend_api.h"
+#include "lang.h"
 #include "services/drying_config.h"
 #include "services/prefs_store.h"
 #include "services/tag_write.h"
@@ -69,6 +73,20 @@ void buildScaleSubScreen() {
   // rows between them are about tags and drying and survive a device with no
   // load cell untouched.
   if (g_scale_fitted)
+  // First in the list. It is the row that gets used most on a device wired to
+  // a printer, and the only one here that is not a setting but a look at
+  // something live.
+  if (backendHasAmsView())
+  { char buf_t[32]; strncpy(buf_t, T(STR_AMSV_BTN), sizeof(buf_t)-1);
+    buf_t[sizeof(buf_t)-1] = '\0';
+    char buf_s[40]; strncpy(buf_s, T(STR_AMSV_BTN_SUB), sizeof(buf_s)-1);
+    buf_s[sizeof(buf_s)-1] = '\0';
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_LIST, buf_t, buf_s);
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      logSD("BTN: Scale-Sub -> AMS view");
+      show_ams_view_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
   { char bag_sub[32]; snprintf(bag_sub, sizeof(bag_sub), T(STR_BAG_CURRENT), bag_weight_g);
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_DRIVE, T(STR_BTN_BAGWEIGHT), bag_sub);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
@@ -174,8 +192,10 @@ void buildScaleSubScreen() {
       lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
     }
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
-      g_scale_fitted = !g_scale_fitted;
-      prefsPutBool("scale_fitted", g_scale_fitted);
+      // Through setScaleFitted(), not by hand: it also drops the readings and
+      // the frozen scl_ok, which is what left a green SCL in the header when
+      // the restart below was dismissed.
+      setScaleFitted(!g_scale_fitted);
       logSDf("BTN: Scale-Sub -> scale fitted %s", g_scale_fitted ? "on" : "off");
       // The row first, so it shows the new state, then the popup. Both through
       // flags: the rebuild deletes the screen this button sits on, and it runs
