@@ -15,6 +15,7 @@
 #include "app/deferred_actions.h"
 #include "hardware/sd_logger.h"
 #include "services/ams_assign.h"
+#include "services/ams_pick.h"
 #include "services/location_state.h"
 #include "services/remote_link.h"
 #include "services/tag_field.h"
@@ -38,6 +39,9 @@ void backendApplyMode(BackendMode mode) {
     amsWriteEnabled(false);
   }
   amsDropPending();
+  // Same for the bay picker's note: the spool id in it belongs to the old
+  // server, and the picker would otherwise open for it on the next removal.
+  amsPickDropPending();
   // The cached answer belongs to the server being left behind.
   amsPresenceForget();
 

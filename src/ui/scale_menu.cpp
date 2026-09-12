@@ -14,6 +14,7 @@
 #include "services/backend.h"
 // Before lang.h: it pulls in ArduinoJson, whose template parameter T
 // collides with the T() macro.
+#include "services/ams_presence.h"
 #include "services/backend_api.h"
 #include "lang.h"
 #include "services/drying_config.h"
@@ -68,31 +69,35 @@ void buildScaleSubScreen() {
   lv_obj_t *list = buildOptionList(scr_scale_sub);
   s_scale_list = list;
 
-  // The bag weight is subtracted from a reading, so it only means something
-  // while there are readings. Same for the calibration further down; the four
-  // rows between them are about tags and drying and survive a device with no
-  // load cell untouched.
-  if (g_scale_fitted)
   // First in the list. It is the row that gets used most on a device wired to
   // a printer, and the only one here that is not a setting but a look at
-  // something live.
-  if (backendHasAmsView())
-  { char buf_t[32]; strncpy(buf_t, T(STR_AMSV_BTN), sizeof(buf_t)-1);
+  // something live. The same two conditions as the header chip and the zone-4
+  // button: a backend that can show an AMS, and a printer known to have one -
+  // without the second the row leads to an empty page.
+  if (backendHasAmsView() && amsPresenceHasAms()) {
+    char buf_t[32]; strncpy(buf_t, T(STR_AMSV_BTN), sizeof(buf_t)-1);
     buf_t[sizeof(buf_t)-1] = '\0';
     char buf_s[40]; strncpy(buf_s, T(STR_AMSV_BTN_SUB), sizeof(buf_s)-1);
     buf_s[sizeof(buf_s)-1] = '\0';
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_LIST, buf_t, buf_s);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Scale-Sub -> AMS view");
-      show_ams_view_pending = true;
-    }, LV_EVENT_CLICKED, NULL); }
+      show_ams_view_scale_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+  }
 
-  { char bag_sub[32]; snprintf(bag_sub, sizeof(bag_sub), T(STR_BAG_CURRENT), bag_weight_g);
+  // The bag weight is subtracted from a reading, so it only means something
+  // while there are readings. Same for the calibration further down; the four
+  // rows between them are about tags and drying and survive a device with no
+  // load cell untouched.
+  if (g_scale_fitted) {
+    char bag_sub[32]; snprintf(bag_sub, sizeof(bag_sub), T(STR_BAG_CURRENT), bag_weight_g);
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_DRIVE, T(STR_BTN_BAGWEIGHT), bag_sub);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Scale-Sub -> Bag Weight");
       show_bag_pending = true;
-    }, LV_EVENT_CLICKED, NULL); }
+    }, LV_EVENT_CLICKED, NULL);
+  }
 
   { char buf_t[40]; strncpy(buf_t, T(STR_BTN_DRYING_REMINDER), sizeof(buf_t)-1);
     char buf_s[24];

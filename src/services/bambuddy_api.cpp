@@ -941,6 +941,9 @@ int bbGetAmsState(const char* base_url, const char* api_key, int printer_id,
   strncpy(out.printer, doc["name"] | "", sizeof(out.printer) - 1);
   out.connected  = doc["connected"] | false;
   out.ams_exists = doc["ams_exists"] | false;
+  // The status payload carries no job progress. Left at the zero the struct
+  // starts with, the view reads it as "printing 0 %" on every idle printer.
+  out.job_percent = AMS_JOB_NA;
 
   // 255 is Bambu's "nothing loaded", and so is a missing field.
   const int tray_now = doc["tray_now"] | 255;
@@ -978,7 +981,12 @@ int bbGetAmsState(const char* base_url, const char* api_key, int printer_id,
       JsonObjectConst t = tv.as<JsonObjectConst>();
       const uint8_t tid = (uint8_t)(t["id"] | dst.tray_count);
       fillTray(t, dst.tray[dst.tray_count], tid);
-      dst.tray[dst.tray_count].active = (tray_now == dst.ams_id * 4 + tid);
+      // A regular AMS is addressed as ams_id * 4 + slot. An AMS HT numbers
+      // itself from 128 and has one bay, so that product cannot fit the
+      // field; the id itself is what the printer reports for it.
+      const int global = dst.ams_id * 4 + tid;
+      dst.tray[dst.tray_count].active =
+        (tray_now == global) || (dst.is_ht && tray_now == dst.ams_id);
       dst.tray_count++;
     }
     out.unit_count++;
@@ -1140,7 +1148,7 @@ int bbFindSpoolSlot(const char* base_url, const char* api_key, int spool_id,
                     uint32_t timeout_ms) {
   if (out_ams)  *out_ams  = -1;
   if (out_tray) *out_tray = -1;
-  if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || printer_id <= 0) return -1;
 
   const bool proxy = (bbInventoryMode() == BB_INV_SPOOLMAN);
   char url[224];

@@ -53,6 +53,15 @@ void amsPickDropPending() { s_pending.active = false; }
 
 // Runs one pass after the picker closed, never from the tap itself.
 static void onPicked(int ams_id, int tray_id) {
+  // The page went away without a tap: back, a backend switch, a navigation
+  // that tore it down. The question was seen and not answered, so it is not
+  // asked again the next time the same spool comes off the pad.
+  if (ams_id < 0 || tray_id < 0) {
+    logSD("AMSPICK: picker closed without an answer, note dropped");
+    amsPickDropPending();
+    return;
+  }
+
   const int spool_id = amsPickPendingSpoolId();
   if (spool_id <= 0) {
     logSD("AMSPICK: answer arrived with no spool remembered");
@@ -103,6 +112,12 @@ static void onPicked(int ams_id, int tray_id) {
 
 void amsPickShow() {
   if (!s_pending.active) return;
+  // A note taken under one backend can be asked about under another only if
+  // that one can assign bays too, and the option is still on.
+  if (!amsPickActive()) {
+    amsPickDropPending();
+    return;
+  }
 
   char fmt[48], head[80];
   strncpy(fmt, T(STR_AMSV_PICK_HEAD), sizeof(fmt) - 1);

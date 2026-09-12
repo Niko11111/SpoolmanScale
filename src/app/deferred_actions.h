@@ -36,6 +36,8 @@ extern bool show_ams_assign_pending;
 // for it. Set from wherever a way into the view is offered - the row is two
 // lines, so the place it sits can move without touching anything else.
 extern bool show_ams_view_pending;
+// The same page opened from Settings > Scale, which is where it goes back to.
+extern bool show_ams_view_scale_pending;
 extern bool show_filaman_fields_pending;
 extern bool show_bambuddy_options_pending;
 extern bool show_bambuddy_dried_pending;

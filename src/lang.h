@@ -412,8 +412,8 @@ enum StringID {
   STR_AMSV_ERR_HTTP,
   STR_AMSV_ERR_NET,
   STR_AMSV_ERR_FULL,
-  STR_AMSV_DRYING,
-  STR_AMSV_DRYING_T,
+  STR_AMSV_DRYING_TIME,   // "%d C, %d min" - two arguments
+  STR_AMSV_DRYING_TEMP,   // "%d C" - one argument
   STR_AMSV_JOB,
   STR_AMSV_PRN_OF,
   STR_AMSV_PICK_HEAD,

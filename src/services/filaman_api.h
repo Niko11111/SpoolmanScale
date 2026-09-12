@@ -117,6 +117,11 @@ int filamanPatchRfidUid2(const char* base_url, const char* api_key, int spool_id
 //
 // Cached per base URL. An inconclusive answer is not cached, so one bad
 // moment cannot switch the feature off for the whole session.
+// Whether the probe above has a cached answer for this server at all. Its
+// "false" covers both "the column is not there" and "could not tell", and an
+// unlink has to treat those two differently.
+bool filamanRfidSlot2Known(const char* base_url);
+
 bool filamanHasRfidSlot2(const char* base_url, const char* api_key,
                          uint32_t timeout_ms = 5000);
 

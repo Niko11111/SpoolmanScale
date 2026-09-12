@@ -30,8 +30,25 @@
 #define AMSV_UNIT_H       (AMSV_UNIT_HDR_H + AMSV_TILE_H + 9)
 #define AMSV_BODY_TOP     40
 #define AMSV_HEADLINE_H   24
+// The status line and the reload chip share one row.
+#define AMSV_STATUS_ROW_H 28
+#define AMSV_RELOAD_W     88
+#define AMSV_RELOAD_H     24
+// How far the chip stays clear of the header's close button: the X reaches
+// down to 40 and is 48 wide, and a chip tucked under its corner reads as
+// belonging to it.
+#define AMSV_CLOSE_CLEAR  56
+// The status line is 12 px of text; this makes it a finger sized target.
+#define AMSV_STATUS_EXT_CLICK 12
 // What is left of the row once the reload chip and its margins are taken off.
-#define AMSV_STATUS_W     (480 - AMSV_MARGIN - (AMSV_MARGIN + 56) - 88 - 8)
+#define AMSV_STATUS_W     (480 - AMSV_MARGIN - (AMSV_MARGIN + AMSV_CLOSE_CLEAR) - AMSV_RELOAD_W - 8)
+// How the page is pumped before a blocking fetch, so the loading line is
+// drawn and a tap on back is seen: passes and the pause between them.
+#define AMSV_PUMP_PASSES  5
+#define AMSV_PUMP_MS      5
+// The PICK headline: the spool name and the question around it. Sized to
+// what amsPickShow() builds, so nothing is cut on the way in.
+#define AMSV_HEADLINE_MAX 80
 
 // Palette, the same one the rest of the interface uses.
 #define AMSV_COL_BG       0x0a1828
@@ -50,7 +67,7 @@ static lv_obj_t*    s_body      = nullptr;   // scrolling container
 static lv_obj_t*    s_status    = nullptr;   // the line shown while loading
 static AmsViewMode  s_mode      = AMS_VIEW_BROWSE;
 static AmsPickCb    s_cb        = nullptr;
-static char         s_headline[48] = "";
+static char         s_headline[AMSV_HEADLINE_MAX] = "";
 static AmsSlotState s_state;
 
 static bool s_build_pending = false;
@@ -64,6 +81,10 @@ static bool s_pick_pending  = false;
 static int  s_pick_ams      = -1;
 static int  s_pick_tray     = -1;
 static int  s_printer_id    = 0;
+// Where the page goes back to. Opened from the scale menu it returns there;
+// from the header chip, the zone-4 button or the picker it lands on the main
+// screen, which is where those were pressed.
+static bool s_return_to_scale_menu = false;
 
 // Packs a bay into user_data. A pointer sized integer holds both, and the
 // pair is what the callback needs - an index into the grid would be wrong
@@ -86,7 +107,18 @@ void requestAmsView(AmsViewMode mode, AmsPickCb cb, const char* headline) {
   // stale name on the line - this screen is opened rarely enough that the
   // trade is not close.
   s_printers.count = 0;
+  // A fresh question. An answer parked by an earlier page must not be handed
+  // to this one's callback.
+  s_pick_pending = false;
+  s_pick_ams     = -1;
+  s_pick_tray    = -1;
+  s_return_to_scale_menu = false;
   s_build_pending = true;
+}
+
+void requestAmsViewFromScaleMenu() {
+  requestAmsView(AMS_VIEW_BROWSE);
+  s_return_to_scale_menu = true;
 }
 
 bool isAmsViewOpen() { return s_scr != nullptr; }
@@ -106,12 +138,28 @@ void hideAmsViewOverlays() {
   if (s_scr) lv_obj_add_flag(s_scr, LV_OBJ_FLAG_HIDDEN);
 }
 
+// Hands the callback "no answer" when a PICK page goes away without a tap,
+// so the note behind the question is dropped rather than asked again on the
+// next removal. Not while an answer is already parked: that one is the
+// answer, and it runs one pass later.
+static void signalDismissIfUnanswered() {
+  if (s_mode != AMS_VIEW_PICK || !s_cb || s_pick_pending) return;
+  s_pick_ams     = -1;
+  s_pick_tray    = -1;
+  s_pick_pending = true;
+}
+
 void destroyAmsView() {
+  if (s_scr) signalDismissIfUnanswered();
   closeAmsView();
   s_build_pending = false;
   s_fetch_pending = false;
   s_close_pending = false;
-  s_pick_pending  = false;
+  s_return_to_scale_menu = false;
+  // s_pick_pending stays. Every pick closes the page first, and that close
+  // goes through showMainScreen() and lands here - clearing the flag would
+  // swallow the user's answer one pass before it runs, which is exactly what
+  // beta.28 did: no bay was ever assigned.
 }
 
 static void setStatus(const char* text) {
@@ -231,7 +279,10 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
   lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 0);
 
   lv_obj_set_user_data(tile, AMSV_KEY(unit.ams_id, tray.tray_id));
-  if (s_mode == AMS_VIEW_PICK) {
+  // The external holder is not a bay a spool can be pinned to: the server
+  // refuses it, so offering it would only ever answer "assignment failed".
+  const bool pickable = (s_mode == AMS_VIEW_PICK) && !unit.is_ext;
+  if (pickable) {
     lv_obj_add_flag(tile, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(tile, tileClicked, LV_EVENT_CLICKED, nullptr);
   } else {
@@ -273,7 +324,7 @@ static void buildUnitHeader(lv_obj_t* parent, const AmsSlotUnit& unit,
   if (unit.drying) {
     char dfmt[40], dbuf[48];
     const bool with_time = (unit.dry_minutes > 0);
-    strncpy(dfmt, T(with_time ? STR_AMSV_DRYING : STR_AMSV_DRYING_T),
+    strncpy(dfmt, T(with_time ? STR_AMSV_DRYING_TIME : STR_AMSV_DRYING_TEMP),
             sizeof(dfmt) - 1);
     dfmt[sizeof(dfmt) - 1] = '\0';
     if (with_time) {
@@ -402,11 +453,8 @@ static void buildScreen() {
     char rlab[20];
     strncpy(rlab, T(STR_AMSV_RELOAD), sizeof(rlab) - 1);
     rlab[sizeof(rlab) - 1] = '\0';
-    lv_obj_set_size(rl, 88, 24);
-    // Clear of the close button above it: the header's X reaches down to 40
-    // and is 48 wide, and a chip tucked under its corner reads as belonging
-    // to it.
-    lv_obj_align(rl, LV_ALIGN_TOP_RIGHT, -(AMSV_MARGIN + 56), top);
+    lv_obj_set_size(rl, AMSV_RELOAD_W, AMSV_RELOAD_H);
+    lv_obj_align(rl, LV_ALIGN_TOP_RIGHT, -(AMSV_MARGIN + AMSV_CLOSE_CLEAR), top);
     lv_obj_set_style_bg_color(rl, lv_color_hex(AMSV_COL_LINE), 0);
     lv_obj_set_style_radius(rl, 6, 0);
     lv_obj_set_style_shadow_width(rl, 0, 0);
@@ -434,10 +482,10 @@ static void buildScreen() {
     // Attached once, here, and not where the text is written: a redraw runs
     // that path again, and a second callback on the same object would step
     // two printers per tap.
-    lv_obj_set_ext_click_area(s_status, 12);
+    lv_obj_set_ext_click_area(s_status, AMSV_STATUS_EXT_CLICK);
     lv_obj_add_event_cb(s_status, nextPrinterCb, LV_EVENT_CLICKED, nullptr);
   }
-  top += 28;
+  top += AMSV_STATUS_ROW_H;
 
   s_body = lv_obj_create(s_scr);
   if (s_body) {
@@ -459,9 +507,9 @@ static void fetchAndDraw() {
   if (!s_scr) return;
   setStatus(T(STR_AMSV_LOADING));
 
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < AMSV_PUMP_PASSES; i++) {
     lv_timer_handler();
-    delay(5);
+    delay(AMSV_PUMP_MS);
   }
   if (!s_scr) return;
 
@@ -568,6 +616,10 @@ void handleAmsViewDeferredActions() {
     show_ams_view_pending = false;
     requestAmsView(AMS_VIEW_BROWSE);
   }
+  if (show_ams_view_scale_pending) {
+    show_ams_view_scale_pending = false;
+    requestAmsViewFromScaleMenu();
+  }
 
   // Closing comes first, so a pick that asked to close does not run its
   // request with the page still up. releaseScreen() frees asynchronously and
@@ -576,20 +628,29 @@ void handleAmsViewDeferredActions() {
   if (s_close_pending) {
     s_close_pending = false;
     s_fetch_pending = false;
+    // Back without a tap on a PICK page is an answer too: "not now".
+    signalDismissIfUnanswered();
     closeAmsView();
-    showMainScreen();
+    if (s_return_to_scale_menu && scr_scale_sub) {
+      // The menu is still there, hidden by the build: showing it again puts
+      // the user back on the row they came from, scroll position included.
+      s_return_to_scale_menu = false;
+      lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      showMainScreen();   // calls destroyAmsView(), which leaves the pick alone
+    }
     return;
   }
 
   // Last, and a pass after the close: this is the one that talks to the
-  // server.
+  // server. The callback sees (-1, -1) when the page was closed without an
+  // answer, and it is the callback that knows what that means for its note.
   if (s_pick_pending) {
     s_pick_pending = false;
-    if (s_cb && s_pick_ams >= 0 && s_pick_tray >= 0) {
-      s_cb(s_pick_ams, s_pick_tray);
-    }
+    const int ams = s_pick_ams, tray = s_pick_tray;
     s_pick_ams  = -1;
     s_pick_tray = -1;
+    if (s_cb) s_cb(ams, tray);
     return;
   }
 

@@ -7,6 +7,7 @@
 #include "services/ams_slots.h"
 #include "services/backend_api.h"
 #include "ui/ams_view.h"
+#include "ui/ui_common.h"
 
 namespace {
 
@@ -14,6 +15,11 @@ bool          s_known      = false;
 bool          s_has_ams    = false;
 int           s_printer_id = 0;
 unsigned long s_last_ms    = 0;
+
+// In BSS, not on the loop task's stack: together they are close to two
+// kilobytes, and ams_slots.h asks for exactly this.
+AmsPrinterList s_printers;
+AmsSlotState   s_state;
 
 }  // namespace
 
@@ -33,29 +39,34 @@ void amsPresenceTick() {
   // The view makes the same calls while it is open, and two of them at once
   // would only fight over the socket.
   if (isAmsViewOpen()) return;
+  // Two blocking requests under a question the user is looking at would hold
+  // the touch panel for their whole timeout. The question comes first.
+  if (uiModalWaiting()) return;
 
   const unsigned long now = millis();
   if (s_last_ms == 0) {
-    if (now < AMS_PRESENCE_FIRST_MS) return;
-  } else if (now - s_last_ms < AMS_PRESENCE_INTERVAL_MS) {
+    // First pass after boot or after a forget: ask AMS_PRESENCE_FIRST_MS from
+    // now, expressed as an interval that is already mostly elapsed so the
+    // check below stays a plain subtraction and survives the millis() wrap.
+    s_last_ms = now - (AMS_PRESENCE_INTERVAL_MS - AMS_PRESENCE_FIRST_MS);
     return;
   }
+  if (now - s_last_ms < AMS_PRESENCE_INTERVAL_MS) return;
   s_last_ms = now;
 
   // The printer id survives between passes: it changes when somebody adds or
   // removes a printer, not on a timer, and looking it up again every time
   // would double the cost of this check.
   if (s_printer_id <= 0) {
-    AmsPrinterList printers;
-    const int code = backendListPrinters(printers, 5000);
-    if (code != 200 || printers.count == 0) {
+    const int code = backendListPrinters(s_printers, 5000);
+    if (code != 200 || s_printers.count == 0) {
       logSDf("[verbose] AMS: no printer to ask about (HTTP %d)", code);
       return;
     }
-    s_printer_id = printers.p[0].id;
+    s_printer_id = s_printers.p[0].id;
   }
 
-  AmsSlotState st;
+  AmsSlotState& st = s_state;
   const int code = backendGetAmsState(s_printer_id, st, 5000);
   if (code != 200) {
     logSDf("[verbose] AMS: presence check failed, HTTP %d", code);

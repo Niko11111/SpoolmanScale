@@ -23,7 +23,10 @@ enum AmsViewMode : uint8_t {
 };
 
 // Called with the pair the user tapped, never an index into a list: the list
-// can have been rebuilt between the drawing and the answer.
+// can have been rebuilt between the drawing and the answer. Called with
+// (-1, -1) when the page went away without a tap - back, a backend switch,
+// anything that tears the page down - so the caller can drop what it was
+// asking about instead of asking again on the next removal.
 typedef void (*AmsPickCb)(int ams_id, int tray_id);
 
 // Opens the page. Does no work itself beyond raising a flag - the fetch that
@@ -31,6 +34,10 @@ typedef void (*AmsPickCb)(int ams_id, int tray_id);
 // inside an LVGL callback.
 void requestAmsView(AmsViewMode mode, AmsPickCb cb = nullptr,
                     const char* headline = nullptr);
+
+// The same page in BROWSE mode, but closing it returns to Settings > Scale
+// rather than to the main screen, because that is where it was opened.
+void requestAmsViewFromScaleMenu();
 
 // Runs the parked work: build, fetch, redraw, close. Called from appLoop().
 void handleAmsViewDeferredActions();

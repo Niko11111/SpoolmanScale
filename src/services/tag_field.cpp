@@ -106,13 +106,19 @@ bool tagFieldHoldsSeveral() {
 }
 
 void tagFieldAutoSelect() {
-  // Asked first and unconditionally, because this is the call that fills the
-  // cache tagFieldEffective() reads to fall back off a relation the server
-  // does not have. Returning early on a settled choice - which is every
-  // installation that ever picked one - would leave that cache empty, and the
-  // fallback would never arm for the one case it exists for: somebody on the
-  // native source whose server was downgraded.
-  const bool has_native = backendHasNativeTags();
+  // Asked before the settled-choice return below, because this is the call
+  // that fills the cache tagFieldEffective() reads to fall back off a relation
+  // the server does not have. Returning early on a settled choice - which is
+  // every installation that ever picked one - would leave that cache empty,
+  // and the fallback would never arm for the one case it exists for: somebody
+  // on the native source whose server was downgraded.
+  //
+  // But only where the answer is used: while no choice is made yet, or while
+  // the native source is the choice. On extra.tag or card_uids the probe
+  // decides nothing, and an inconclusive one (a proxy, a timeout) is not
+  // cached - so there it would be one blocking request per scan, forever.
+  const bool need_probe = !g_tag_field_chosen || g_tag_field == TAG_FIELD_NATIVE;
+  const bool has_native = need_probe && backendHasNativeTags();
 
   // A server that answered no while the native source is selected. Said once
   // per probe rather than per scan: tagFieldEffective() is asked constantly

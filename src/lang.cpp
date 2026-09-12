@@ -584,9 +584,9 @@ const char* const STRINGS[][2] = {
   { "Zu wenig Speicher für alle Fächer",
     "Not enough memory for every bay"                                 },  // STR_AMSV_ERR_FULL
   { "Trocknet %d C, %d min",
-    "Drying %d C, %d min"                                             },  // STR_AMSV_DRYING
+    "Drying %d C, %d min"                                             },  // STR_AMSV_DRYING_TIME
   { "Trocknet %d C",
-    "Drying %d C"                                                     },  // STR_AMSV_DRYING_T
+    "Drying %d C"                                                     },  // STR_AMSV_DRYING_TEMP
   { "druckt %d%%",
     "printing %d%%"                                                   },  // STR_AMSV_JOB
   // Which of several printers is on screen. Same in both languages, but

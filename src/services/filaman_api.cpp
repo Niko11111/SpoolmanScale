@@ -757,6 +757,11 @@ void filamanForgetRfidSlot2() {
   s_slot2_present = false;
 }
 
+bool filamanRfidSlot2Known(const char* base_url) {
+  if (!hasBaseUrl(base_url)) return false;
+  return strncmp(s_slot2_probed_for, base_url, sizeof(s_slot2_probed_for) - 1) == 0;
+}
+
 bool filamanHasRfidSlot2(const char* base_url, const char* api_key,
                          uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url)) return false;
@@ -817,6 +822,16 @@ int filamanClearRfidUids(const char* base_url, const char* api_key, int spool_id
   // comes back as a validation error and would take the first slot down with
   // it. The probe is cached, so this costs nothing after the first call.
   const bool slot2 = filamanHasRfidSlot2(base_url, api_key, timeout_ms);
+  if (!slot2 && !filamanRfidSlot2Known(base_url)) {
+    // "No" and "could not tell" come back the same way, and only the first
+    // may clear one slot alone. Clearing on an unanswered probe would report
+    // an unlink that left the second chip bound - the half unlink this
+    // function exists to prevent. Refused instead, and the next attempt
+    // probes again.
+    logSDf("FilaMan: cannot tell whether spool %d has a second rfid slot, unlink refused",
+           spool_id);
+    return -2;
+  }
   if (slot2) body["rfid_uid_2"] = nullptr;
 
   String payload;
