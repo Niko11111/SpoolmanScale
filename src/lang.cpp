@@ -1931,6 +1931,41 @@ const char* const STRINGS[][2] = {
     "Neustart.",
     "Off if the device is display and reader only. Needs a restart."      },  // STR_W_SCALE_FITTED_HINT
   { "abgeschaltet",              "switched off"             },  // STR_W_S_SCALE_OFF
+
+  { "Passwort",                  "Password"                 },  // STR_WEB_PASS
+  { "Gesetzt - der Browser fragt danach",
+    "Set - the browser asks for it"                         },  // STR_WEB_PASS_SET
+  { "Nicht gesetzt",             "Not set"                  },  // STR_WEB_PASS_UNSET
+  { "Schützt die Bereiche Einstellungen und Gerät im Browser: Backend, "
+    "Einstellungen, Tags, Logs und Firmware. Ohne Passwort darf jedes Gerät "
+    "im Netz diese Bereiche nutzen, sobald sie eingeschaltet sind - auch "
+    "Firmware flashen.\n\n"
+    "4 bis 8 Ziffern. Der Browser fragt danach, der Benutzername ist egal. "
+    "Leer speichern entfernt das Passwort.",
+    "Protects the Settings and Device sections in the browser: backend, "
+    "settings, tags, logs and firmware. Without a password any device on the "
+    "network can use those sections once they are switched on - firmware "
+    "upload included.\n\n"
+    "4 to 8 digits. The browser asks for it, the user name does not matter. "
+    "Save empty to remove the password."                     },  // STR_WEB_PASS_INFO
+  { "Web-Passwort",              "Web password"             },  // STR_WEB_PASS_TITLE
+  { "4 bis 8 Ziffern. Leer speichern entfernt das Passwort.",
+    "4 to 8 digits. Save empty to remove the password."      },  // STR_WEB_PASS_HINT
+  { "Passwort",                  "Password"                 },  // STR_W_R_PASSWORD
+  { "gesetzt",                   "set"                      },  // STR_W_S_SET
+  { "nicht gesetzt",             "not set"                  },  // STR_W_S_NOTSET
+  { "Ohne Passwort kann jedes Gerät im Netz die eingeschalteten Bereiche nutzen, "
+    "Firmware flashen eingeschlossen. Setzen am Gerät unter",
+    "Without a password any device on the network can use the sections that "
+    "are on, firmware upload included. Set one on the device under" },  // STR_W_PASS_NOTE
+  { "Passwort nötig: beliebiger Benutzername, das Web-Passwort der Waage.",
+    "Password required: any user name, the scale's web password." },  // STR_W_AUTH_NEEDED
+  { "Diese Adresse gehört nicht zur Waage. Bitte über die IP-Adresse oder den "
+    "Gerätenamen aufrufen.",
+    "This address does not belong to the scale. Open it by IP address or by "
+    "its device name."                                       },  // STR_W_BAD_HOST
+  { "Anfrage von einer fremden Seite abgelehnt.",
+    "Request from a foreign page refused."                   },  // STR_W_BAD_ORIGIN
 };
 
 StringID tagWriteResultString(uint8_t code) {

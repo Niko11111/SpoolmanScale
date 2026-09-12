@@ -1117,6 +1117,23 @@ enum StringID {
   STR_W_SCALE_FITTED_HINT,
   STR_W_S_SCALE_OFF,
 
+  // The web interface's lock: a numeric password for the two writing gates,
+  // typed on the device, asked for by the browser. And the two refusals a
+  // browser can run into on the way in.
+  STR_WEB_PASS,
+  STR_WEB_PASS_SET,
+  STR_WEB_PASS_UNSET,
+  STR_WEB_PASS_INFO,
+  STR_WEB_PASS_TITLE,
+  STR_WEB_PASS_HINT,
+  STR_W_R_PASSWORD,
+  STR_W_S_SET,
+  STR_W_S_NOTSET,
+  STR_W_PASS_NOTE,
+  STR_W_AUTH_NEEDED,
+  STR_W_BAD_HOST,
+  STR_W_BAD_ORIGIN,
+
   STR_COUNT
 };
 

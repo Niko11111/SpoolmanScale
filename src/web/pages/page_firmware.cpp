@@ -578,9 +578,19 @@ static void routes(WebServer &srv) {
     },
     // Chunk handler.
     [&srv]() {
-      if (!webGateOpen(GATE_MAINT)) return;
+      // Decided at the first byte, not in the completion handler: by the time
+      // that runs the image is already in flash. Everything webRequire() asks
+      // - the gate, the host, the origin, the password, and no other flash in
+      // progress - is asked here, and a refused upload is read and dropped so
+      // the browser gets the proper answer from the completion handler.
+      static bool refused = false;
       HTTPUpload& upload = srv.upload();
       if (upload.status == UPLOAD_FILE_START) {
+        refused = !webAllowed(srv, GATE_MAINT);
+        if (refused) {
+          logSD("OTA: upload refused before the first byte");
+          return;
+        }
         Serial.printf("OTA start: %s\n", upload.filename.c_str());
         ota_upload_active = true;
         if (Update.isRunning()) Update.abort();  // clean up any previous failed upload
@@ -598,6 +608,10 @@ static void routes(WebServer &srv) {
         if (lbl_ota_status) lv_label_set_text(lbl_ota_status,
           T(STR_OTA_UPLOADING));
         lv_timer_handler();
+      } else if (refused) {
+        if (upload.status == UPLOAD_FILE_END || upload.status == UPLOAD_FILE_ABORTED) {
+          refused = false;
+        }
       } else if (upload.status == UPLOAD_FILE_WRITE) {
         if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
           Serial.println("OTA write() error");

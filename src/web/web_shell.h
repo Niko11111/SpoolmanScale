@@ -34,4 +34,10 @@ String jsStr(const char *in);
 // come through here.
 String jsonEsc(const char *s);
 
+// For a runtime value that lands in HTML - between tags or inside a quoted
+// attribute. The backend host, the SSID and the backend URL all come from a
+// keyboard, and one apostrophe in a value='...' attribute was enough to run a
+// script on every page load.
+String htmlEsc(const char *s);
+
 const char* webShellLogoBase64();

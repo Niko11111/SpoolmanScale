@@ -47,6 +47,10 @@ static void registerRoutes();
 static void serverEnsureRunning() {
   if (ota_server_running) return;
   registerRoutes();
+  // The headers webRequire() reads. Authorization is collected by the library
+  // on its own; Origin has to be asked for, and asked for before begin().
+  static const char *HDR_KEYS[] = { "Origin" };
+  ota_server.collectHeaders(HDR_KEYS, 1);
   ota_server.begin();
   ota_server_running = true;
   Serial.printf("Web server listening: http://%s/\n",
@@ -111,7 +115,8 @@ static void registerRoutes() {
 
   // The two FilaMan device endpoints. GATE_ALWAYS, the only level that ignores
   // the master switch: these have to answer whenever the scale is awake, that
-  // is the whole point of keeping the socket up.
+  // is the whole point of keeping the socket up. What the gate does ask is
+  // that the caller is the configured FilaMan server - see webRequire().
   //
   // FilaMan sends both fire and forget and waits five seconds, so nothing here
   // may block. A request is only parked and appLoop() picks it up, because the
@@ -119,12 +124,14 @@ static void registerRoutes() {
 
   // "Import from tag": whatever is on the reader is sent back on the next tick.
   ota_server.on("/api/v1/rfid/scan-request", HTTP_POST, []() {
+    if (!webRequire(ota_server, GATE_ALWAYS, "FilaMan")) return;
     tagScanRequest();
     ota_server.send(200, "application/json", "{\"status\":\"ok\"}");
   });
 
 
   ota_server.on("/api/v1/rfid/write", HTTP_POST, []() {
+    if (!webRequire(ota_server, GATE_ALWAYS, "FilaMan")) return;
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, ota_server.arg("plain"));
     if (err) {

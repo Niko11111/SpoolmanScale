@@ -126,8 +126,18 @@ size_t backendCleanHost(const char* in, char* out, size_t out_size) {
   while (*in == ' ' || *in == '\t') in++;
   if (strncasecmp(in, "http://", 7) == 0) in += 7;
 
+  // Only what an address is made of: letters, digits, dot, colon, hyphen,
+  // underscore, slash. A quote or a bracket has no place in one, and the
+  // value goes into a page attribute later - escaped there as well, but a
+  // host that cannot carry one is the cheaper of the two locks.
   size_t n = 0;
-  while (*in && n + 1 < out_size) out[n++] = *in++;
+  for (; *in && n + 1 < out_size; in++) {
+    const char c = *in;
+    const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                    (c >= '0' && c <= '9') || c == '.' || c == ':' ||
+                    c == '-' || c == '_' || c == '/';
+    if (ok) out[n++] = c;
+  }
   while (n > 0 && (out[n-1] == ' ' || out[n-1] == '\t' || out[n-1] == '/')) n--;
   out[n] = '\0';
   return n;

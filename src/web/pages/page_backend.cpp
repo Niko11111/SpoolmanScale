@@ -75,7 +75,7 @@ static String body() {
   h += backendName();
   h += F("</label><div class='inrow'>"
          "<input id='hs' type='text' maxlength='63' spellcheck='false' value='");
-  h += backendHost();
+  h += htmlEsc(backendHost());
   h += F("' placeholder='spoolman.local:7912'>"
          "<button onclick='setHost()'>");
   h += T(STR_W_SAVE);
@@ -86,7 +86,7 @@ static String body() {
   h += T(STR_W_HOST_PORTHINT);
   h += F("</span></div><div class='rows' style='margin-top:16px'><div class='row'>"
          "<span class='k'>URL</span><span class='v mono'>");
-  h += backendBaseUrl();
+  h += htmlEsc(backendBaseUrl());
   h += F("</span></div><div class='row'><span class='k'>");
   h += T(STR_W_R_REACHABLE);
   h += F("</span><span class='v'><span class='pill ");

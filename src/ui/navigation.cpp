@@ -79,6 +79,7 @@ void hideAllOverlays() {
   hideSpoolFlowOverlays();
   hideMoreInfoOverlays();
   hideAmsViewOverlays();
+  webPinScreenHide();
 }
 
 void deleteOtaScreens() {
@@ -102,6 +103,7 @@ static void deleteSecondaryScreens() {
   closeWifiConnectingScreen();
   if (scr_backend)  { lv_obj_del(scr_backend);  scr_backend  = nullptr; }
   if (scr_web)      { lv_obj_del(scr_web);      scr_web      = nullptr; }
+  webPinScreenClose();
   if (scr_timezone) { lv_obj_del(scr_timezone); scr_timezone = nullptr; }
 }
 

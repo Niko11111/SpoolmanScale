@@ -67,6 +67,23 @@ String jsonEsc(const char *s) {
   return o;
 }
 
+String htmlEsc(const char *s) {
+  String o;
+  const size_t n = s ? strlen(s) : 0;
+  o.reserve(n + 16);
+  for (const char *p = s ? s : ""; *p; p++) {
+    switch (*p) {
+      case '&':  o += "&amp;";  break;
+      case '<':  o += "&lt;";   break;
+      case '>':  o += "&gt;";   break;
+      case '"':  o += "&quot;"; break;
+      case '\'': o += "&#39;";  break;
+      default:   o += *p;
+    }
+  }
+  return o;
+}
+
 // ---------------------------------------------------------------------------
 // The palette is the device's own, unchanged. What carries the look is the
 // type scale, the state pills and the space - a 720 px column instead of the

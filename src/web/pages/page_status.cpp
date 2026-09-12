@@ -156,7 +156,7 @@ static String body() {
   h += T(STR_W_C_NETWORK);
   h += F("</h2><div class='rows'>");
   if (wifi_ok) {
-    h += row(T(STR_W_R_WIFI), String(cfg_wifi_ssid) + signalBars());
+    h += row(T(STR_W_R_WIFI), htmlEsc(cfg_wifi_ssid) + signalBars());
     h += row(T(STR_W_R_ADDRESS), wifiManagerLocalIP().toString(), true);
     // Both names when both apply: the DNS name is the one the network
     // serves, the mDNS name the one that works without it.
@@ -223,9 +223,13 @@ static String body() {
   }
   h += row(T(STR_W_R_SD),    pill(sd_available, STR_W_S_READY, STR_W_S_MISSING, true));
   h += row(T(STR_W_R_UPTIME), uptimeText());
-  h += F("<button class='quiet' id='i2cbtn'>");
-  h += T(STR_W_RESCAN);
-  h += F("</button>");
+  // The rescan holds the I2C bus for a moment, so it sits behind the config
+  // gate now; the button is only offered where the request would get through.
+  if (webGateOpen(GATE_CONFIG)) {
+    h += F("<button class='quiet' id='i2cbtn'>");
+    h += T(STR_W_RESCAN);
+    h += F("</button>");
+  }
   h += F("</div></div>");
 
   // ---- inventory --------------------------------------------------------
@@ -233,7 +237,7 @@ static String body() {
   h += T(STR_W_C_INVENTORY);
   h += F("</h2><div class='rows'>");
   h += row(T(STR_W_R_BACKEND), backendName());
-  h += row(T(STR_W_R_ADDRESS), backendBaseUrl(), true);
+  h += row(T(STR_W_R_ADDRESS), htmlEsc(backendBaseUrl()), true);
   h += row(T(STR_W_R_REACHABLE), pill(sm_reachable, STR_W_S_YES, STR_W_S_NO));
   h += row(T(STR_W_R_SCANS), String(scan_count));
   h += F("</div></div>");
@@ -246,11 +250,22 @@ static String body() {
   h += F("</h2><div class='rows'>");
   h += row(T(STR_W_NAV_SETTINGS), pill(webConfigEnabled(), STR_W_S_ON, STR_W_S_OFF, true));
   h += row(T(STR_W_C_DEVICE),     pill(webMaintenanceEnabled(), STR_W_S_ON, STR_W_S_OFF, true));
+  h += row(T(STR_W_R_PASSWORD),   pill(webHasPassword(), STR_W_S_SET, STR_W_S_NOTSET, true));
   h += F("</div><p class='note'>");
   h += T(STR_W_ACCESS_NOTE);
   h += F(" <b>");
   h += T(STR_W_OFF_PATH);
-  h += F("</b>.</p></div>");
+  h += F("</b>.</p>");
+  if (!webHasPassword()) {
+    // Said where the switches are shown, because that is the moment someone
+    // turns a writing gate on and should know what it opens.
+    h += F("<p class='note'>");
+    h += T(STR_W_PASS_NOTE);
+    h += F(" <b>");
+    h += T(STR_W_OFF_PATH);
+    h += F("</b>.</p>");
+  }
+  h += F("</div>");
 
   // ---- device -----------------------------------------------------------
   h += F("<div class='card wide'><h2>");
@@ -309,7 +324,7 @@ static void routes(WebServer &srv) {
   // on every poll of the page. It runs in the loop task - the same task that
   // owns I2C_EXT - because handleOtaServerClient() is called from appLoop().
   srv.on("/api/i2cscan", HTTP_POST, [&srv]() {
-    if (!webRequire(srv, GATE_OPEN, T(STR_W_NAV_STATUS))) return;
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_STATUS))) return;
     i2cScanRefresh(I2C_EXT);
     logSDf("I2C_EXT rescan: %s", i2cScanLast());
     srv.send(200, "application/json",

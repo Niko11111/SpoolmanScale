@@ -37,6 +37,20 @@ void webAccessLoad();
 
 bool webGateOpen(WebGate g);
 
+// The lock on the two writing gates: a numeric password, typed on the device,
+// asked for by the browser as HTTP Basic auth (any user name). Empty means no
+// password, and the status page says so. Digits only, because the device has
+// a numpad and nothing else to type it with.
+#define WEB_PASS_MIN  4
+#define WEB_PASS_MAX  8
+bool webHasPassword();
+void webSetPassword(const char *digits);
+
+// The same verdict webRequire() reaches, without answering. For the one
+// handler that runs before there is a reply to give: the upload chunk
+// callback, which sees the bytes before the completion handler sees anything.
+bool webAllowed(WebServer &srv, WebGate g);
+
 // The one line every handler starts with. Answers by itself and returns
 // false when the gate is shut, so a caller that forgets to return has still
 // not leaked anything - the reply is already sent.
