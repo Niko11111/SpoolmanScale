@@ -18,7 +18,7 @@ static const char APP_CSS[] PROGMEM =
       // like a page that had failed to load. 5.2:1, still clearly secondary.
       "--ink-soft:#6d8cb8;"
       "--accent:#28d49a;--accent-dim:#123f34;--accent-line:#1d6b56;"
-      "--warn:#f0b838;--bad:#ff6b6b;--w:720px;"
+      "--warn:#f0b838;--bad:#ff6b6b;--w:860px;"
       "--sans:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
       "--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}"
       "*{box-sizing:border-box;margin:0;padding:0}"
@@ -52,6 +52,9 @@ static const char APP_CSS[] PROGMEM =
       ".card{background:var(--surface);border:1px solid var(--line-soft);"
       "border-radius:14px;padding:18px 20px 20px}"
       ".card.wide{grid-column:1/-1}"
+      // Spans both columns like .wide, but takes a column of its own once the
+      // grid has three - the status page's inventory card.
+      ".card.w2{grid-column:1/-1}"
       ".card h2{font-size:11px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;"
       "color:var(--ink-3);margin-bottom:14px}"
       ".note{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin-top:12px}"
@@ -100,6 +103,16 @@ static const char APP_CSS[] PROGMEM =
       "button.danger{background:#2a0f0f;color:var(--bad);border-color:#6b2626}"
       "button.danger:hover{background:#3a1616}"
       "button.block{width:100%;margin-top:16px}"
+      // A file input in the page's own button vocabulary. The native control
+      // stays in the label, hidden, so the label click opens the picker and
+      // the form still posts the file; the chosen name shows beside it.
+      ".filebtn{display:inline-flex;align-items:center;cursor:pointer;font:inherit;"
+      "font-size:13.5px;font-weight:550;padding:9px 16px;border-radius:9px;"
+      "background:#0f1b2c;color:var(--ink-2);border:1px solid var(--line);white-space:nowrap}"
+      ".filebtn:hover{background:#16273e}"
+      ".filebtn input{display:none}"
+      ".fname{flex:1;min-width:0;font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);"
+      "overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
       ".range{display:flex;align-items:center;gap:12px}"
       "input[type=range]{flex:1;accent-color:var(--accent)}"
       ".range output{font-family:var(--mono);font-size:13px;color:var(--ink);width:34px;text-align:right}"
@@ -140,9 +153,20 @@ static const char APP_CSS[] PROGMEM =
       // Was --ink-4, which is 1.91:1 against the page - the last line still
       // carrying the fault the hints and notes were moved off in beta.38.
       ".foot{font-size:11.5px;color:var(--ink-soft);text-align:center;line-height:1.6}"
+      // Three columns for the status page on a wide screen: two cards in a
+      // 860 px column left two thirds of a 1440 px window empty.
+      "@media(min-width:1100px){.g3{grid-template-columns:repeat(3,1fr)}"
+      ".g3 .card.w2{grid-column:auto}}"
       "@media(max-width:700px){.grid{grid-template-columns:1fr}"
       ".links{grid-template-columns:1fr 1fr}"
-      ".head{grid-template-columns:44px 1fr}.addr{grid-column:1/-1}}"
+      // The mark follows its column: a 52 px image in a 44 px cell pushed the
+      // wordmark over by 8 px.
+      ".head{grid-template-columns:44px 1fr}.mark{width:44px;height:44px}"
+      ".addr{grid-column:1/-1}}"
+      // A log row carries three buttons. Below 500 px they take a line of their
+      // own under the name rather than squeezing it out.
+      "@media(max-width:500px){.listrow{flex-wrap:wrap}"
+      ".listrow>span:last-child{width:100%;justify-content:flex-end}}"
       // Derived, not guessed: at two columns the cell is (V-50)/2 wide, and
       // the German label needs 150px, which solves to V >= 350. German is the
       // longer language here and sets the edge.

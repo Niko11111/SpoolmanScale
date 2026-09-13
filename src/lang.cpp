@@ -941,8 +941,8 @@ const char* const STRINGS[][2] = {
     "Backend" },  // STR_W_NAV_BACKEND
   { "Trocknung",
     "Drying" },  // STR_W_NAV_DRYING
-  { "Tags schreiben",
-    "Write tags" },  // STR_W_NAV_TAGS
+  { "Tags",
+    "Tags" },  // STR_W_NAV_TAGS
   { "Einstellungen",
     "Settings" },  // STR_W_NAV_SETTINGS
   { "Logs",
@@ -1081,8 +1081,6 @@ const char* const STRINGS[][2] = {
     "Red after" },  // STR_W_DRY_RED
   { "Lagerung",
     "Storage" },  // STR_W_DRY_STORAGE
-  { "offen",
-    "open" },  // STR_W_DRY_OPEN
   { "trocken",
     "sealed" },  // STR_W_DRY_SEALED
   { "Tage",
@@ -1886,6 +1884,10 @@ const char* const STRINGS[][2] = {
   { "%d T.",                     "%d d"                       },  // STR_DAYS_ABBR_FMT
   { "%.0f g neu",                "%.0f g new"                 },  // STR_NEW_SPOOL_WEIGHT_FMT
   { "Diff",                      "Diff"                       },  // STR_LBL_DIFF_CAP
+  { "Datei wählen",              "Choose file"                },  // STR_W_FW_CHOOSE
+  { "Keine Datei gewählt",       "No file chosen"             },  // STR_W_FW_NOFILE
+  { "Wartung (Firmware, Logs, Tags)",
+    "Maintenance (firmware, logs, tags)"                      },  // STR_W_R_MAINT_GATE
 };
 
 StringID tagWriteResultString(uint8_t code) {

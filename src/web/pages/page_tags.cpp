@@ -235,7 +235,7 @@ static String body() {
          "const fs=document.getElementById('tg-fmt');"
          "const fn=fs&&fs.selectedOptions[0]?fs.selectedOptions[0].textContent:'';"
          "const n=document.getElementById('tg-note');"
-         "if(n)n.textContent=small"
+         "if(n)n.textContent=!tgNew?M.pickf:small"
          "?M.toosmall.replace('%s',fn).replace('%u',tgNeed).replace('%u',tgBytes)"
          // tgLinked is already "a different tag than the one on the reader" - the
          // comparison used to happen here and compared "047F3ABBD12A81" against
@@ -244,7 +244,7 @@ static String body() {
          ":(tgLinked?M.relink.replace('%s',tgLinked):'');"
          "const er=document.getElementById('tg-erase');"
          "if(er)er.disabled=!tgUid||tgCur=='blank';"
-         "if(!tgNew){b.disabled=true;b.textContent=M.pickf;return;}"
+         "if(!tgNew){b.disabled=true;b.textContent=M.write;return;}"
          "if(small){b.disabled=true;b.textContent=M.write;return;}"
          "if(tgCur===tgNew){b.disabled=true;b.textContent=M.match;}"
          "else{b.disabled=false;b.textContent=tgCur&&tgCur!='blank'?M.over:M.write;}}"

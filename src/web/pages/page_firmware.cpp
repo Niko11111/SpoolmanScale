@@ -170,8 +170,17 @@ static String body() {
          "<div class='field'><label>");
   h += T(STR_W_FW_FILE);
   h += F("</label><div class='inrow'>"
-         "<input type='file' name='firmware' accept='.bin' required>"
-         "<button type='submit'>");
+         "<label class='filebtn'>");
+  h += T(STR_W_FW_CHOOSE);
+  // No `required` on the hidden input: the browser cannot point at a hidden
+  // control to complain, so the form would just do nothing. The submit button
+  // stays disabled until a file is picked instead.
+  h += F("<input type='file' name='firmware' accept='.bin' onchange='fwPick(this)'></label>"
+         "<span class='fname' id='fwname' data-none='");
+  h += htmlEsc(T(STR_W_FW_NOFILE));
+  h += F("'>");
+  h += T(STR_W_FW_NOFILE);
+  h += F("</span><button type='submit' id='fwgo' disabled>");
   h += T(STR_W_FW_FLASH);
   h += F("</button></div><span class='hint'>");
   h += T(STR_W_FW_HINT);
@@ -326,6 +335,10 @@ static String body() {
          "var e=document.getElementById(pre),b=document.getElementById(btn);"
          "if(e.style.display==='block'){e.style.display='none';b.textContent=shown;return;}"
          "e.textContent=text;e.style.display='block';b.textContent=hidden;}"
+         "function fwPick(i){const f=i.files&&i.files[0];"
+         "const s=document.getElementById('fwname');"
+         "s.textContent=f?f.name:s.dataset.none;"
+         "document.getElementById('fwgo').disabled=!f;}"
          "function fwNotes(){if(!INST)return;"
          "toggle('fwn','fwnb',G.notes,G.hide,INST.notes);}"
          // auto is the check the page runs by itself, on load and when the

@@ -57,18 +57,15 @@ static String body() {
     h += m;
     h += F("' value='");
     h += String(g_dry_mat_red[i]);
-    h += F("'></td><td><label style='margin-right:14px;white-space:nowrap'>"
-           "<input type='radio' name='s_");
+    // One switch, the same control the settings pages use, instead of a pair
+    // of browser default radio buttons - the only unstyled element the
+    // interface had left.
+    h += F("'></td><td><label class='check' style='white-space:nowrap'>"
+           "<span class='switch'><input type='checkbox' name='s_");
     h += m;
-    h += F("' value='open'");
-    h += g_dry_mat_sealed[i] ? F("") : F(" checked");
-    h += F("> ");
-    h += T(STR_W_DRY_OPEN);
-    h += F("</label><label style='white-space:nowrap'><input type='radio' name='s_");
-    h += m;
-    h += F("' value='sealed'");
+    h += F("'");
     h += g_dry_mat_sealed[i] ? F(" checked") : F("");
-    h += F("> ");
+    h += F("><i></i></span>");
     h += T(STR_W_DRY_SEALED);
     h += F("</label></td></tr>");
   }
@@ -102,10 +99,11 @@ static String body() {
          // text, which is what every other setting route speaks.
          "function saveDry(){"
          "const arr=M.mats.map(m=>{"
-         "const sr=document.querySelector('[name=s_'+m+'][value=sealed]');"
+         // Quoted: a material name like PLA+ is not a valid unquoted selector.
+         "const sr=document.querySelector('[name=\"s_'+m+'\"]');"
          "return{name:m,"
-         "yellow:parseInt(document.querySelector('[name=y_'+m+']').value)||1,"
-         "red:parseInt(document.querySelector('[name=r_'+m+']').value)||1,"
+         "yellow:parseInt(document.querySelector('[name=\"y_'+m+'\"]').value)||1,"
+         "red:parseInt(document.querySelector('[name=\"r_'+m+'\"]').value)||1,"
          "sealed:sr?sr.checked:false};});"
          "const mult=parseFloat($('dm').value)||1;"
          "fetch('/api/drying',{method:'POST',"

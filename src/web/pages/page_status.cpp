@@ -149,7 +149,7 @@ static String signalBars() {
 static String body() {
   String h;
   h.reserve(6600);
-  h += F("<div class='grid'>");
+  h += F("<div class='grid g3'>");
 
   // ---- network ----------------------------------------------------------
   h += F("<div class='card'><h2>");
@@ -170,6 +170,9 @@ static String body() {
   } else {
     h += row(T(STR_W_R_WIFI), String(F("<span class='pill bd'>")) + T(STR_W_S_NOWIFI) + "</span>");
   }
+  // With the network, not the hardware: it is how long this connection has
+  // been standing, and it fills a card that had four rows beside eight.
+  h += row(T(STR_W_R_UPTIME), uptimeText());
   h += F("</div></div>");
 
   // ---- hardware ---------------------------------------------------------
@@ -222,7 +225,6 @@ static String body() {
     h += F("</span></div>");
   }
   h += row(T(STR_W_R_SD),    pill(sd_available, STR_W_S_READY, STR_W_S_MISSING, true));
-  h += row(T(STR_W_R_UPTIME), uptimeText());
   // The rescan holds the I2C bus for a moment, so it sits behind the config
   // gate now; the button is only offered where the request would get through.
   if (webGateOpen(GATE_CONFIG)) {
@@ -233,7 +235,7 @@ static String body() {
   h += F("</div></div>");
 
   // ---- inventory --------------------------------------------------------
-  h += F("<div class='card wide'><h2>");
+  h += F("<div class='card w2'><h2>");
   h += T(STR_W_C_INVENTORY);
   h += F("</h2><div class='rows'>");
   h += row(T(STR_W_R_BACKEND), backendName());
@@ -249,7 +251,9 @@ static String body() {
   h += T(STR_W_C_ACCESS);
   h += F("</h2><div class='rows'>");
   h += row(T(STR_W_NAV_SETTINGS), pill(webConfigEnabled(), STR_W_S_ON, STR_W_S_OFF, true));
-  h += row(T(STR_W_C_DEVICE),     pill(webMaintenanceEnabled(), STR_W_S_ON, STR_W_S_OFF, true));
+  // Named for what it opens. "Device" said nothing about firmware, logs and
+  // tags being behind this one switch.
+  h += row(T(STR_W_R_MAINT_GATE), pill(webMaintenanceEnabled(), STR_W_S_ON, STR_W_S_OFF, true));
   h += row(T(STR_W_R_PASSWORD),   pill(webHasPassword(), STR_W_S_SET, STR_W_S_NOTSET, true));
   h += F("</div><p class='note'>");
   h += T(STR_W_ACCESS_NOTE);

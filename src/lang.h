@@ -692,7 +692,6 @@ enum StringID {
   STR_W_DRY_YELLOW,
   STR_W_DRY_RED,
   STR_W_DRY_STORAGE,
-  STR_W_DRY_OPEN,
   STR_W_DRY_SEALED,
   STR_W_DRY_DAYS,
   STR_W_DRY_MULT,
@@ -1090,6 +1089,12 @@ enum StringID {
   STR_DAYS_ABBR_FMT,
   STR_NEW_SPOOL_WEIGHT_FMT,
   STR_LBL_DIFF_CAP,           // zone 4, the scale-minus-backend difference
+
+  // Web: the styled file input on the firmware page, and the access card's
+  // name for the maintenance gate.
+  STR_W_FW_CHOOSE,
+  STR_W_FW_NOFILE,
+  STR_W_R_MAINT_GATE,
 
   STR_COUNT
 };
