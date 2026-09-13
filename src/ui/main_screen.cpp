@@ -64,7 +64,7 @@ void updateDisplay() {
   // Temp (Zone 3 Row B)
   char temp_str[24];
   if (g_tag.temp_min > 0 && g_tag.temp_max > 0) {
-    snprintf(temp_str, sizeof(temp_str), "%d - %d C", g_tag.temp_min, g_tag.temp_max);
+    snprintf(temp_str, sizeof(temp_str), "%d - %d °C", g_tag.temp_min, g_tag.temp_max);
   } else {
     copyT(temp_str, sizeof(temp_str), STR_UNKNOWN);
   }
@@ -428,7 +428,7 @@ void buildUI() {
   char lu_cap_buf[32];
   // The weighed variant reuses the option label, which carries no colon
   if (last_used_mode == 1)
-    snprintf(lu_cap_buf, sizeof(lu_cap_buf), "%s:", T(STR_LASTUSED_OPT_WEIGHED));
+    copyT(lu_cap_buf, sizeof(lu_cap_buf), STR_LASTUSED_OPT_WEIGHED);
   else
     copyT(lu_cap_buf, sizeof(lu_cap_buf), STR_LBL_LAST_USED);
   lv_label_set_text(lbl_lu_cap, lu_cap_buf);
@@ -585,7 +585,7 @@ void buildUI() {
 
     // SM diff caption + value - both diffs stacked on right side (Fix 3)
     lv_obj_t *lbl_diff_cap = lv_label_create(lv_scr_act());
-    lv_label_set_text(lbl_diff_cap, "Diff:");
+    lv_label_set_text(lbl_diff_cap, T(STR_LBL_DIFF_CAP));
     lv_obj_set_style_text_color(lbl_diff_cap, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(lbl_diff_cap, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_pos(lbl_diff_cap, 344, 189);

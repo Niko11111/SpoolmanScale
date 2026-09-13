@@ -1089,6 +1089,7 @@ enum StringID {
   STR_MINUTES_FMT,
   STR_DAYS_ABBR_FMT,
   STR_NEW_SPOOL_WEIGHT_FMT,
+  STR_LBL_DIFF_CAP,           // zone 4, the scale-minus-backend difference
 
   STR_COUNT
 };

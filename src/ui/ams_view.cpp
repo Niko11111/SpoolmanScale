@@ -346,7 +346,7 @@ static void buildUnitHeader(lv_obj_t* parent, const AmsSlotUnit& unit,
   }
   if (unit.temp_c10 != AMS_TEMP_NA) {
     char tmp[16];
-    snprintf(tmp, sizeof(tmp), "%s%d.%d C", right[0] ? "   " : "",
+    snprintf(tmp, sizeof(tmp), "%s%d.%d °C", right[0] ? "   " : "",
              unit.temp_c10 / 10, abs(unit.temp_c10 % 10));
     strncat(right, tmp, sizeof(right) - strlen(right) - 1);
   }

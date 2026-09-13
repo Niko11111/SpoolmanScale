@@ -220,7 +220,7 @@ const char* backendBadge() {
 
 void backendCaption(char* out, size_t out_size) {
   if (!out || out_size == 0) return;
-  snprintf(out, out_size, "%s:", backendName());
+  snprintf(out, out_size, "%s", backendName());
 }
 
 void backendStatusLine(char* out, size_t out_size) {

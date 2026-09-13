@@ -21,17 +21,17 @@ const char* const STRINGS[][2] = {
   { "ID neu eingeben",        "Enter new ID"     },  // STR_ENTER_NEW_ID
 
   // Mainscreen Labels
-  { "Spoolman:",              "Spoolman:"        },  // STR_LBL_SPOOLMAN
-  { "Waage:",                 "Scale:"           },  // STR_LBL_SCALE
-  { "Letzte Benutzung:",      "Last used:"       },  // STR_LBL_LAST_USED
-  { "Letzte Trocknung:",      "Last dried:"      },  // STR_LBL_LAST_DRIED
-  { "Temperatur:",            "Temperature:"     },  // STR_LBL_TEMP
-  { "Hersteller:",            "Vendor:"          },  // STR_LBL_VENDOR
+  { "Spoolman",               "Spoolman"         },  // STR_LBL_SPOOLMAN
+  { "Waage",                  "Scale"            },  // STR_LBL_SCALE
+  { "Letzte Benutzung",       "Last used"        },  // STR_LBL_LAST_USED
+  { "Letzte Trocknung",       "Last dried"       },  // STR_LBL_LAST_DRIED
+  { "Temperatur",             "Temperature"      },  // STR_LBL_TEMP
+  { "Hersteller",             "Vendor"           },  // STR_LBL_VENDOR
 
   // Mainscreen Status
   { "Spule an Reader halten...", "Hold spool near reader..." },  // STR_WAIT_SCAN
   { "NFC Tag erkannt",        "NFC tag detected"           },  // STR_TAG_FOUND
-  { "Kein WiFi",              "No WiFi"                    },  // STR_NO_WIFI
+  { "Kein WLAN",              "No WiFi"                    },  // STR_NO_WIFI
   { "Warte...",               "Please wait..."             },  // STR_WAIT
   { "Warte auf Scan...",      "Waiting for scan..."        },  // STR_WAIT_SCAN_SM
   { "unbekannt",              "unknown"                    },  // STR_UNKNOWN
@@ -54,10 +54,10 @@ const char* const STRINGS[][2] = {
   // Welcome Screen
 
   // WiFi Setup
-  { "WiFi einrichten",        "WiFi Setup"        },  // STR_WIFI_TITLE
+  { "WLAN einrichten",        "WiFi setup"        },  // STR_WIFI_TITLE
   { "Netzwerke suchen...",    "Scanning networks..." },  // STR_WIFI_SCAN
   { "Keine Netzwerke gefunden", "No networks found" },  // STR_WIFI_NO_NET
-  { "WiFi Passwort",          "WiFi Password"     },  // STR_WIFI_PASS_TITLE
+  { "WLAN-Passwort",          "WiFi password"     },  // STR_WIFI_PASS_TITLE
   { "Passwort für: %s",      "Password for: %s"  },  // STR_WIFI_PASS_HINT
   { "Passwort...",             "Password..."       },  // STR_WIFI_PASS_PLACEHOLDER
   { "Verbinde mit %s...",     "Connecting to %s..." },  // STR_WIFI_CONNECTING
@@ -69,18 +69,18 @@ const char* const STRINGS[][2] = {
   // Settings
   { "Einstellungen",          "Settings"          },  // STR_SETTINGS_TITLE
   { "Verbindung",             "Connection"        },  // STR_TILE_CONNECTION
-  { "WiFi & Spoolman",        "WiFi & Spoolman"   },  // STR_TILE_CONN_SUB
+  { "WLAN & Server",          "WiFi & server"     },  // STR_TILE_CONN_SUB
   { "Waage",                  "Scale"             },  // STR_TILE_SCALE
-  { "Cal. | Bag | Mehr",     "Cal. | Bag | More"  },  // STR_TILE_SCALE_SUB
+  { "Kalibrieren | Beutel | Mehr", "Calibrate | Bag | More" },  // STR_TILE_SCALE_SUB
   { "Display",                "Display"           },  // STR_TILE_DISPLAY
   { "Helligkeit & Timeout",   "Brightness & Timeout" },  // STR_TILE_DISPLAY_SUB
   { "System",                 "System"            },  // STR_TILE_SYSTEM
   { "Sprache | Update | Info","Language | Update | Info" },  // STR_TILE_SYSTEM_SUB
 
   // Connection
-  { "WiFi Einstellungen",     "WiFi Settings"     },  // STR_BTN_WIFI_SETTINGS
+  { "WLAN-Einstellungen",     "WiFi settings"     },  // STR_BTN_WIFI_SETTINGS
   { "Nicht konfiguriert",     "Not configured"    },  // STR_BTN_WIFI_NONE
-  { "WLAN Status",            "WiFi Status"       },  // STR_BTN_WIFI_STATUS
+  { "WLAN-Status",            "WiFi status"       },  // STR_BTN_WIFI_STATUS
   { "Nicht verbunden",        "Not connected"     },  // STR_BTN_WIFI_STATUS_SUB
   { "Server, OTA, Logs",      "Server, OTA, logs" },  // STR_BTN_WEB_SUB
   { "Webserver",              "Web server"        },  // STR_WEB_SERVER
@@ -123,8 +123,8 @@ const char* const STRINGS[][2] = {
     LV_SYMBOL_IMAGE "  Brightness"               },  // STR_BRIGHT_LABEL
   { LV_SYMBOL_MINUS "  Dimmen nach (Min.)",
     LV_SYMBOL_MINUS "  Dim after (min.)"         },  // STR_DIM_LABEL
-  { LV_SYMBOL_POWER "  Sleep nach (Min.)",
-    LV_SYMBOL_POWER "  Sleep after (min.)"       },  // STR_SLEEP_LABEL
+  { LV_SYMBOL_POWER "  Tiefschlaf nach (Min.)",
+    LV_SYMBOL_POWER "  Deep sleep after (min.)"       },  // STR_SLEEP_LABEL
 
   // System
   { "System",                 "System"            },  // STR_SYSTEM_TITLE
@@ -203,7 +203,7 @@ const char* const STRINGS[][2] = {
   { "ID nicht gefunden",        "ID not found"        },  // STR_LINK_ID_NOT_FOUND
   { "HTTP Fehler %d",           "HTTP Error %d"       },  // STR_LINK_HTTP_ERR
   { "JSON Fehler",              "JSON error"          },  // STR_LINK_JSON_ERR
-  { "Kein WiFi",                "No WiFi"             },  // STR_LINK_NO_WIFI
+  { "Kein WLAN",                "No WiFi"             },  // STR_LINK_NO_WIFI
   { LV_SYMBOL_WARNING "  Spule bereits verknüpft",
     LV_SYMBOL_WARNING "  Tag already assigned!"  },  // STR_WARN_A_TITLE
   { LV_SYMBOL_WARNING "  Trotzdem verknüpfen",
@@ -296,8 +296,8 @@ const char* const STRINGS[][2] = {
     "Your SpoolmanScale is almost ready."         },  // STR_FIRSTBOOT_SUB
   // Both backends are named here because this screen appears before the user
   // has chosen one. It must therefore not go through backendText().
-  { "In wenigen Schritten richten wir\nWiFi, Spoolman/FilaMan und die Waage ein.",
-    "In a few steps we will set up\nWiFi, Spoolman/FilaMan and the scale."  },  // STR_FIRSTBOOT_HINT
+  { "In wenigen Schritten richten wir\nWLAN, Server und die Waage ein.",
+    "In a few steps we will set up\nWiFi, the server and the scale."  },  // STR_FIRSTBOOT_HINT
   { LV_SYMBOL_RIGHT "  Los geht's",
     LV_SYMBOL_RIGHT "  Get started"               },  // STR_FIRSTBOOT_BTN
 
@@ -372,7 +372,7 @@ const char* const STRINGS[][2] = {
     "Check for Updates"                                                   },  // STR_GH_OTA_CHECK_BTN
   { "Prüfen...",
     "Checking..."                                                         },  // STR_GH_OTA_CHECKING
-  { "Kein WiFi - bitte zuerst verbinden",
+  { "Kein WLAN - bitte zuerst verbinden",
     "No WiFi - please connect first"                                      },  // STR_GH_OTA_NO_WIFI
   { "Bereits aktuell",
     "Already up to date"                                                  },  // STR_GH_OTA_UP_TO_DATE
@@ -526,10 +526,10 @@ const char* const STRINGS[][2] = {
     "No network"                                                      },  // STR_AMSV_ERR_NET
   { "Zu wenig Speicher für alle Fächer",
     "Not enough memory for every bay"                                 },  // STR_AMSV_ERR_FULL
-  { "Trocknet %d C, %d min",
-    "Drying %d C, %d min"                                             },  // STR_AMSV_DRYING_TIME
-  { "Trocknet %d C",
-    "Drying %d C"                                                     },  // STR_AMSV_DRYING_TEMP
+  { "Trocknet %d °C, %d min",
+    "Drying %d °C, %d min"                                             },  // STR_AMSV_DRYING_TIME
+  { "Trocknet %d °C",
+    "Drying %d °C"                                                     },  // STR_AMSV_DRYING_TEMP
   { "druckt %d%%",
     "printing %d%%"                                                   },  // STR_AMSV_JOB
   // Which of several printers is on screen. Same in both languages, but
@@ -553,8 +553,8 @@ const char* const STRINGS[][2] = {
   { "Werkseinstellungen",       "Factory Reset"              },  // STR_BTN_FACTORY_RESET
   { "Alle Einstellungen löschen", "Erase all settings"      },  // STR_BTN_FACTORY_RESET_SUB
   { "Werkseinstellungen?",      "Factory Reset?"             },  // STR_FACTORY_RESET_TITLE
-  { "Alle Einstellungen werden gelöscht:\nWiFi, Spoolman IP, Kalibrierung,\nSprache und alle anderen Daten.\nDanach startet das Gerät neu.",
-    "All settings will be erased:\nWiFi, Spoolman IP, calibration,\nlanguage and all other data.\nThe device will restart afterwards." },  // STR_FACTORY_RESET_MSG
+  { "Alle Einstellungen werden gelöscht:\nWLAN, Server-Adresse, Kalibrierung,\nSprache und alle anderen Daten.\nDanach startet das Gerät neu.",
+    "All settings will be erased:\nWiFi, server address, calibration,\nlanguage and all other data.\nThe device will restart afterwards." },  // STR_FACTORY_RESET_MSG
   { "Ja, alles löschen",       "Yes, erase everything"      },  // STR_FACTORY_RESET_CONFIRM
   { "Spule kopieren",            "Copy spool"                 },  // STR_BTN_COPY_SPOOL
   { "Spule kopieren",            "Copy spool"                 },  // STR_COPY_TITLE
@@ -572,7 +572,7 @@ const char* const STRINGS[][2] = {
   { "Löscht den Eintrag im Tag-Feld in Spoolman.\nDie Spule bleibt erhalten.",
     "Clears the tag field entry in Spoolman.\nThe spool itself is kept." },  // STR_UNLINK_MSG
   { "Ja, unlinken",             "Yes, unlink"                },  // STR_UNLINK_CONFIRM
-  { "Verbinde mit WiFi...",     "Connecting to WiFi..."      },  // STR_WIFI_CONNECTING_BOOT
+  { "Verbinde mit WLAN...",     "Connecting to WiFi..."      },  // STR_WIFI_CONNECTING_BOOT
   { "Gerät wird gestartet...", "Starting up, please wait..." },  // STR_BOOTING
   { "Neustart",                 "Reboot"                     },  // STR_BTN_REBOOT
   { "Gerät neu starten",       "Restart device"             },  // STR_BTN_REBOOT_SUB
@@ -676,8 +676,8 @@ const char* const STRINGS[][2] = {
 
   // Main screen weight box and More-info detail grid
   { "Waage - Spule",                 "Scale - Spool"                      },  // STR_LBL_SCALE_SPOOL_CAP
-  { "Gesamt:",                       "Total:"                             },  // STR_LBL_TOTAL_CAP
-  { "o. Beutel:",                    "w/o Bag:"                           },  // STR_LBL_WO_BAG_CAP
+  { "Gesamt",                        "Total"                              },  // STR_LBL_TOTAL_CAP
+  { "o. Beutel",                     "w/o bag"                            },  // STR_LBL_WO_BAG_CAP
   { "Farbe",                         "Hex Color"                          },  // STR_LBL_HEX_COLOR
   { "Produktionsdatum",              "Production date"                    },  // STR_LBL_PRODUCTION_DATE
   { "Artikelnr.",                    "Article no."                        },  // STR_LBL_ARTICLE_NO_SHORT
@@ -1521,7 +1521,7 @@ const char* const STRINGS[][2] = {
     "Applies to what the scale does on its own after a link. Writing from this "
     "page has its own format selector." },  // STR_W_TAGOPT_NOTE
   { "Speichern",                 "Download"           },  // STR_W_LOG_DOWNLOAD
-  { "Reset Cal.",                "Reset Cal."         },  // STR_BTN_CAL_RESET_SHORT
+  { "Kalibrierung zurücksetzen", "Reset calibration"  },  // STR_BTN_CAL_RESET_SHORT
   { "Kein Material passte - Filter aufgehoben",
     "No material matched - filter dropped" },  // STR_LIST_MAT_IGNORED
   { "Bei Abweichung fragen",     "Ask on a mismatch"  },  // STR_TW_OPT_MISM
@@ -1885,6 +1885,7 @@ const char* const STRINGS[][2] = {
   { "%d Min",                    "%d min"                     },  // STR_MINUTES_FMT
   { "%d T.",                     "%d d"                       },  // STR_DAYS_ABBR_FMT
   { "%.0f g neu",                "%.0f g new"                 },  // STR_NEW_SPOOL_WEIGHT_FMT
+  { "Diff",                      "Diff"                       },  // STR_LBL_DIFF_CAP
 };
 
 StringID tagWriteResultString(uint8_t code) {

@@ -2055,7 +2055,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     if (s.remaining <= 0 && s.total > 0)
       snprintf(rest_buf, sizeof(rest_buf), T(STR_NEW_SPOOL_WEIGHT_FMT), s.total);
     else
-      snprintf(rest_buf, sizeof(rest_buf), "%.0fg", s.remaining);
+      snprintf(rest_buf, sizeof(rest_buf), "%.0f g", s.remaining);
     lv_label_set_text(lbl_rest, rest_buf);
     lv_obj_set_style_text_color(lbl_rest, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(lbl_rest, &lv_font_montserrat_ext_14, 0);
@@ -2102,10 +2102,10 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
       bool name_has_mat = (s.material[0] && s.name[0] &&
                            strncasecmp(s.name, s.material, strlen(s.material)) == 0);
       if (name_has_mat) {
-        snprintf(info, sizeof(info), "#%d  %s\n%.0fg / %.0fg",
+        snprintf(info, sizeof(info), "#%d  %s\n%.0f g / %.0f g",
           s.id, s.name, s.remaining, s.total);
       } else {
-        snprintf(info, sizeof(info), "#%d  %s %s\n%.0fg / %.0fg",
+        snprintf(info, sizeof(info), "#%d  %s %s\n%.0f g / %.0f g",
           s.id, s.material, s.name, s.remaining, s.total);
       }
       lv_obj_t *lbl_info = lv_label_create(box);
@@ -3344,7 +3344,7 @@ void showCopySpoolList() {
     lv_obj_t *lbl_rest = lv_label_create(row);
     char rest_buf[24];
     if (s.remaining <= 0 && s.total > 0) snprintf(rest_buf, sizeof(rest_buf), T(STR_NEW_SPOOL_WEIGHT_FMT), s.total);
-    else snprintf(rest_buf, sizeof(rest_buf), "%.0fg", s.remaining);
+    else snprintf(rest_buf, sizeof(rest_buf), "%.0f g", s.remaining);
     lv_label_set_text(lbl_rest, rest_buf);
     lv_obj_set_style_text_color(lbl_rest, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(lbl_rest, &lv_font_montserrat_ext_14, 0);

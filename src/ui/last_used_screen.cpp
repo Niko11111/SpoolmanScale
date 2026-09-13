@@ -22,7 +22,7 @@ void updateLastUsedCapLabel() {
   char buf[32];
   // Same two captions as the main screen, kept in step with it
   if (last_used_mode == 1)
-    snprintf(buf, sizeof(buf), "%s:", T(STR_LASTUSED_OPT_WEIGHED));
+    copyT(buf, sizeof(buf), STR_LASTUSED_OPT_WEIGHED);
   else
     copyT(buf, sizeof(buf), STR_LBL_LAST_USED);
   lv_label_set_text(lbl_lu_cap, buf);
