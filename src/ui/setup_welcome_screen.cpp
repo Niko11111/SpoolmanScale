@@ -233,6 +233,7 @@ void buildWelcomeScreen() {
     prefsPutUChar("lang", de ? 0 : 1);
     prefsPutBool("lang_set", true);
     prefsPutBool("first_boot", true);
+    prefsFlush();      // parked while LVGL dispatches; the restart comes next
     logSDf("Setup: language=%s zone=%s -> restart",
            de ? "DE" : "EN",
            (wel_tz_sel >= 0 && (size_t)wel_tz_sel < TZ_COUNT) ? TZ_LIST[wel_tz_sel].name : "?");

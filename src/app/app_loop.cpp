@@ -63,6 +63,7 @@
 #include "ui/cal_reminder_screen.h"
 #include "ui/bambuddy_options_screen.h"
 #include "ui/spoolman_options_screen.h"
+#include "services/prefs_store.h"
 #include "ui/confirm_popup.h"
 #include "ui/connection_screen.h"
 #include "ui/dried_action.h"
@@ -270,7 +271,13 @@ void appLoop() {
   crumbSet("loop");
   // No lv_tick_inc() here: the tick comes from millis() via LV_TICK_CUSTOM, so
   // LVGL keeps correct time even while a blocking call holds up this loop.
+  //
+  // Settings changed by a button are parked while LVGL dispatches and written
+  // the moment it is done, so no flash write runs inside an event callback.
+  prefsDeferWrites(true);
   lv_timer_handler();
+  prefsDeferWrites(false);
+  prefsFlush();
   handlePowerManagement();
 
   // ── Stack watermark of the loop task ─────────────────────

@@ -80,6 +80,18 @@ public:
   HttpStall& operator=(const HttpStall&) = delete;
 };
 
+// The time bracket alone, for the backend dispatcher: every function there
+// that takes a timeout holds the loop for up to that long, so each opens one
+// of these on its first line. It leaves the progress hook alone - the caller
+// that set one, the spool list say, is still using it when this scope ends.
+class HttpStallTime {
+public:
+  HttpStallTime()  { httpStallBegin(); }
+  ~HttpStallTime() { httpStallEnd(); }
+  HttpStallTime(const HttpStallTime&) = delete;
+  HttpStallTime& operator=(const HttpStallTime&) = delete;
+};
+
 HttpProgressFn httpProgressHook();
 
 // True while a hook is registered. Call sites use it to skip the wrapper

@@ -4,6 +4,7 @@
 #include <lvgl.h>
 
 #include "hardware/sd_logger.h"
+#include "services/prefs_store.h"
 #include "ui_common.h"
 #include "lang.h"
 
@@ -58,6 +59,7 @@ void showRebootPopup() {
   lv_obj_set_style_border_width(btn_rb, 0, 0);
   lv_obj_add_event_cb(btn_rb, [](lv_event_t *e){
     logSD("Reboot: user (language/date change)");
+    prefsFlush();      // the setting parked by the button that opened this popup
     ESP.restart();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *rb_lbl = lv_label_create(btn_rb);

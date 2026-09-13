@@ -1,4 +1,5 @@
 #include "system_screen.h"
+#include "services/prefs_store.h"
 #include "navigation.h"
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
@@ -99,6 +100,8 @@ static void showFactoryResetPopup() {
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e){
     logSD("Factory Reset: erasing NVS flash partition");
     Serial.println("Factory Reset: erasing NVS flash partition");
+    // Nothing parked in this pass may be written back after the erase.
+    prefsDiscardWrites();
     // Close SD logging before erase to avoid corruption
     if (sd_available) SD.end();
     delay(100);
@@ -214,6 +217,7 @@ void buildSystemScreen() {
   addRow(list, LV_SYMBOL_REFRESH, T(STR_BTN_REBOOT), T(STR_BTN_REBOOT_SUB),
     [](lv_event_t *e){
       logSD("BTN: System -> Reboot");
+      prefsFlush();
       if (sd_available) SD.end();
       delay(100);
       ESP.restart();
