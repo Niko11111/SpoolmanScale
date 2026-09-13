@@ -341,13 +341,13 @@ void showLocationPicker() {
   lv_obj_center(lbl_x);
 
   // Status label (loading / error)
-  lv_obj_t *lbl_status = lv_label_create(box);
+  lv_obj_t *lbl_loc_status = lv_label_create(box);
   char status_buf[48];
   strncpy(status_buf, T(STR_LOCATION_LOADING), sizeof(status_buf)-1);
-  lv_label_set_text(lbl_status, status_buf);
-  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_status, &lv_font_montserrat_ext_16, 0);
-  lv_obj_align(lbl_status, LV_ALIGN_CENTER, 0, 10);
+  lv_label_set_text(lbl_loc_status, status_buf);
+  lv_obj_set_style_text_color(lbl_loc_status, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(lbl_loc_status, &lv_font_montserrat_ext_16, 0);
+  lv_obj_align(lbl_loc_status, LV_ALIGN_CENTER, 0, 10);
 
   // Scrollable list container
   lv_obj_t *list = lv_obj_create(box);
@@ -362,7 +362,7 @@ void showLocationPicker() {
   lv_obj_add_flag(list, LV_OBJ_FLAG_HIDDEN);
 
   // Store refs for async fetch
-  loc_status_obj = lbl_status;
+  loc_status_obj = lbl_loc_status;
   loc_list_obj   = list;
 
   // Trigger async HTTP fetch via loop()
@@ -456,7 +456,7 @@ void fetchAndFillLocationList() {
   }, LV_EVENT_CLICKED, NULL);
 
   logLvMem("loclist/pre", 0);
-  // Location rows — API gibt Array von Strings zurück
+  // Location rows - API gibt Array von Strings zurück
   int loc_shown = 0;
   bool loc_limit_hit = false;
   for (JsonVariant v : locs) {
@@ -748,14 +748,14 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_pad_all(hdr, 0, 0);
   lv_obj_clear_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
 
-  // Title — Fix 12: always "More info filament" in both languages
+  // Title - Fix 12: always "More info filament" in both languages
   lv_obj_t *lbl_title = lv_label_create(hdr);
   lv_label_set_text(lbl_title, "Filament");
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(lbl_title, LV_ALIGN_CENTER, 0, 0);
 
-  // Status chip — left half of the header, which holds nothing else. The box
+  // Status chip - left half of the header, which holds nothing else. The box
   // below is full to the pixel, this costs no vertical space at all.
   // FilaMan only: it is the one backend with a status worth showing and worth
   // changing. Spoolman has just archived:bool and BamBuddy just an archive
@@ -798,7 +798,7 @@ void buildMoreInfoScreen() {
     lv_obj_align(chip_val, LV_ALIGN_CENTER, 0, 8);
   }
 
-  // Close X button — Fix 10: 44x44px proper size
+  // Close X button - Fix 10: 44x44px proper size
   lv_obj_t *btn_x = lv_btn_create(hdr);
   lv_obj_set_size(btn_x, 44, 44);
   lv_obj_align(btn_x, LV_ALIGN_RIGHT_MID, -10, 0);
@@ -870,7 +870,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_font(mi_mat_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(mi_mat_cap, 114, 60);
 
-  // Material value — for NTAG spools use sm_material (from Spoolman), for Bambu use g_tag.material
+  // Material value - for NTAG spools use sm_material (from Spoolman), for Bambu use g_tag.material
   lv_obj_t *lbl_mat = lv_label_create(box);
   const char* mat_val = (strlen(sm_material_global) > 0) ? sm_material_global :
                         (strlen(g_tag.material) > 0 ? g_tag.material : "-");
@@ -1030,7 +1030,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_radius(btn_loc, 8, 0);
   lv_obj_set_style_shadow_width(btn_loc, 0, 0);
   lv_obj_set_style_pad_all(btn_loc, 0, 0);
-  // Cap label — centered, shifted 2px up from center
+  // Cap label - centered, shifted 2px up from center
   lv_obj_t *btn_loc_cap = lv_label_create(btn_loc);
   char loc_cap_buf[32];
   strncpy(loc_cap_buf, T(STR_BTN_LOCATION), sizeof(loc_cap_buf)-1);
@@ -1039,7 +1039,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_font(btn_loc_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(btn_loc_cap, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(btn_loc_cap, LV_ALIGN_CENTER, 0, -11);
-  // Value label — centered
+  // Value label - centered
   lv_obj_t *btn_loc_val = lv_label_create(btn_loc);
   char loc_val_buf[48];
   strncpy(loc_val_buf, sm_location_name[0] ? sm_location_name : "-", sizeof(loc_val_buf)-1);
@@ -1073,7 +1073,7 @@ void buildMoreInfoScreen() {
   lv_label_set_long_mode(v_uuid, LV_LABEL_LONG_DOT);
   lv_obj_set_width(v_uuid, 330);  // shortened to make room for Unlink button
 
-  // Unlink button — bottom right, only visible when spool is linked (sm_found && sm_id > 0)
+  // Unlink button - bottom right, only visible when spool is linked (sm_found && sm_id > 0)
   if (sm_found && sm_id > 0) {
     lv_obj_t *btn_unlink = lv_btn_create(box);
     lv_obj_set_size(btn_unlink, 104, 34);

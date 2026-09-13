@@ -17,6 +17,11 @@
 #include "services/tag_uid.h"
 #include "services/user_options.h"
 
+// Rows per request when FilaMan lists spools. The render limit is applied by
+// the caller; this used to be "spool_list_limit if above 100, else 100", and
+// the limit is clamped to 100, so it was always 100.
+#define FILAMAN_LIST_PAGE_ROWS  100
+
 // A missing backend path must show up in the log instead of looking like a
 // silent failure, but the periodic health check would repeat the same line
 // every 30 seconds and bury everything else. Each call site is therefore
@@ -93,7 +98,7 @@ int backendGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocum
       // field and only the keys the UI reads are produced anyway.
       (void)filter;
       return filamanGetSpoolListJson(backendBaseUrl(), filamanApiKey(), allow_archived,
-                                     doc, nullptr, spool_list_limit > 100 ? spool_list_limit : 100,
+                                     doc, nullptr, FILAMAN_LIST_PAGE_ROWS,
                                      timeout_ms, out_err);
     case BACKEND_BAMBUDDY:
       // Same reason as FilaMan: the answer is rebuilt field by field, so a

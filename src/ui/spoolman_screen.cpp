@@ -225,7 +225,7 @@ void buildSpoolmanScreen() {
   lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 52);
 
-  // Pre-fill with "192.168." if empty — user only needs to add last two octets + port
+  // Pre-fill with "192.168." if empty - user only needs to add last two octets + port
   const char* cur_host = backendHost();
   if (!cur_host || cur_host[0] == '\0') {
     strncpy(sp_ip_input, "192.168.", sizeof(sp_ip_input)-1);
@@ -253,7 +253,7 @@ void buildSpoolmanScreen() {
   lv_obj_set_style_text_align(lbl_sp_ip_display, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_center(lbl_sp_ip_display);
 
-  // Numpad: NP_H=32, NP_GAP=3, start y=104 — larger than before
+  // Numpad: NP_H=32, NP_GAP=3, start y=104 - larger than before
   const int NP_W = 130, NP_H = 32, NP_GAP = 3;
   const int NP_PAD_X = (480 - 3*NP_W - 2*NP_GAP) / 2;
   const int NP_START_Y = 104;
@@ -414,7 +414,7 @@ void buildSpoolmanScreen() {
   // bottom row y=281, h=32, bottom=313 (7px margin)
   const int BOT_Y = 281, BOT_H = 32;
 
-  // Test result label — left side, y=281
+  // Test result label - left side, y=281
   lbl_sp_test_result = lv_label_create(scr_spoolman);
   lv_label_set_text(lbl_sp_test_result, "");
   lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x4a6fa0), 0);
@@ -423,7 +423,7 @@ void buildSpoolmanScreen() {
   lv_obj_set_size(lbl_sp_test_result, 260, BOT_H);
   lv_obj_set_pos(lbl_sp_test_result, NP_PAD_X, BOT_Y);
 
-  // Extra Fields button — right side, 170px wide
+  // Extra Fields button - right side, 170px wide
   btn_sp_extra_fields = lv_btn_create(scr_spoolman);
   lv_obj_set_size(btn_sp_extra_fields, 170, BOT_H);
   lv_obj_set_pos(btn_sp_extra_fields, 480 - NP_PAD_X - 170, BOT_Y);
@@ -469,7 +469,7 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
   hideAllOverlays();
   if (scr_spoolman_fail) { lv_obj_del(scr_spoolman_fail); scr_spoolman_fail = nullptr; }
 
-  // Copy all strings to RAM buffers — T() returns Flash pointers which LVGL can't read directly
+  // Copy all strings to RAM buffers - T() returns Flash pointers which LVGL can't read directly
   char buf_title[32], buf_msg[96], buf_retry[48], buf_skip[48];
   backendText(T(STR_SPOOLMAN_TITLE), buf_title, sizeof(buf_title));
   backendText(T(STR_SPOOLMAN_FAIL), buf_msg, sizeof(buf_msg));

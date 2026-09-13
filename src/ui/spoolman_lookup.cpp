@@ -503,7 +503,7 @@ static void applyLastUsed(const char* native_iso, const char* weighed_iso, int s
 
 // ============================================================
 //  SPOOLMAN QUERY BY ID
-//  Used after link-flow — fetches only one spool by ID.
+//  Used after link-flow - fetches only one spool by ID.
 //  Fills same globals and labels as querySpoolman().
 // ============================================================
 
@@ -619,7 +619,7 @@ void querySpoolmanById(int spool_id) {
   strncpy(sm_filament_name, fil_name.c_str(), sizeof(sm_filament_name)-1);
   sm_filament_name[sizeof(sm_filament_name)-1] = '\0';
 
-  // Location — Spoolman gibt location als einfachen String zurück
+  // Location - Spoolman gibt location als einfachen String zurück
   sm_location_id = 0;
   sm_location_name[0] = '\0';
   if (!spool["location"].isNull() && spool["location"].is<const char*>()) {
@@ -651,7 +651,7 @@ void querySpoolmanById(int spool_id) {
 
   captureBindings(spool);
 
-  // Material, vendor, color — only for NTAG (Bambu has it from tag itself)
+  // Material, vendor, color - only for NTAG (Bambu has it from tag itself)
   String sm_material = spool["filament"]["material"] | String("");
   sm_material.trim();
   String sm_vendor_name = "";
@@ -714,8 +714,6 @@ void querySpoolmanById(int spool_id) {
   lv_label_set_text(lbl_spoolman_id, sm_id_str);
   lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0x28d49a), 0);
 
-  char dried_display[48];
-  driedDisplayStr(sm_last_dried, dried_display, sizeof(dried_display));
   applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, sm_last_dried);
 
   lv_label_set_text(lbl_detail,        strlen(sm_article_nr)    > 0 ? sm_article_nr    : "-");
@@ -928,7 +926,7 @@ void querySpoolman(const char* tray_uuid) {
   if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (before Spoolman GET)",
     ESP.getFreeHeap(), ESP.getFreePsram());
 
-  // Filter: only parse needed fields — reduces RAM, works with 100+ spools
+  // Filter: only parse needed fields - reduces RAM, works with 100+ spools
   // Filter must be Array-wrapped to match the API array response structure
   // Sized with room for every tag field AND for the server's own text fields,
   // which are only known at runtime and can be a dozen. An overflowed filter
@@ -983,7 +981,7 @@ void querySpoolman(const char* tray_uuid) {
   if (filter.overflowed())
     logSD("Spoolman: scan filter overflowed, fields will be missing");
 
-  // Use PSRAM for this document — frees internal RAM for LVGL
+  // Use PSRAM for this document - frees internal RAM for LVGL
   SpiRamAllocator psram_alloc;
   JsonDocument doc(&psram_alloc);
   DeserializationError err = DeserializationError::Ok;
@@ -1234,7 +1232,7 @@ void querySpoolman(const char* tray_uuid) {
       continue;  // retry on HTTP or transient parse error too
     }
 
-    // Stream directly from HTTP — avoids allocating a 40KB+ String in RAM
+    // Stream directly from HTTP - avoids allocating a 40KB+ String in RAM
 
     if (!err) break;  // success
     // Parse failed -> retry only on transient stream issues
@@ -1424,7 +1422,7 @@ void querySpoolman(const char* tray_uuid) {
     strncpy(sm_filament_name, fil_name.c_str(), sizeof(sm_filament_name)-1);
     sm_filament_name[sizeof(sm_filament_name)-1] = '\0';
 
-    // Location — einfacher String in Spoolman
+    // Location - einfacher String in Spoolman
     sm_location_name[0] = '\0';
     if (!spool["location"].isNull() && spool["location"].is<const char*>()) {
       String loc = spool["location"] | String("");
@@ -1490,7 +1488,7 @@ void querySpoolman(const char* tray_uuid) {
       }
     }
 
-    // Update display — Fix 5: color based on remaining %
+    // Update display - Fix 5: color based on remaining %
     char weight_str[32];
     snprintf(weight_str, sizeof(weight_str), "%.0f g", sm_remaining);
     lv_label_set_text(lbl_spoolman_weight, weight_str);
@@ -1524,9 +1522,6 @@ void querySpoolman(const char* tray_uuid) {
     lv_label_set_text(lbl_spoolman_id, sm_id_str);
     lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0x28d49a), 0);
 
-    // Last drying: set value with "N days ago"
-    char dried_display[48];
-    driedDisplayStr(sm_last_dried, dried_display, sizeof(dried_display));
     applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, sm_last_dried);
 
     lv_label_set_text(lbl_detail, strlen(sm_article_nr) > 0 ? sm_article_nr : "-");
@@ -1658,7 +1653,7 @@ void querySpoolman(const char* tray_uuid) {
     return;
   }
 
-  // Not found in active spools — check if archived
+  // Not found in active spools - check if archived
   Serial.println("Spoolman: not in active spools, checking archive...");
   doc.clear();  // RAM freigeben vor zweitem Call
 

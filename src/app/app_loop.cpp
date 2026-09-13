@@ -1161,7 +1161,7 @@ void appLoop() {
         aw_last_shown_s = -1;
         float netto = cur - (float)sm_spool_weight;
         if (netto < 0) netto = 0;
-        // Haekchen im Button — bleibt bis Spule abgenommen wird
+        // Haekchen im Button - bleibt bis Spule abgenommen wird
         if (lbl_weight_main_lbl) {
           char wmbuf[48];
           snprintf(wmbuf, sizeof(wmbuf), "%s " LV_SYMBOL_OK, T(STR_BTN_WEIGHT));
@@ -1571,7 +1571,7 @@ void appLoop() {
             lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
             lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
           } else {
-            // tray_uuid present — query Spoolman if not done yet
+            // tray_uuid present - query Spoolman if not done yet
             if (!isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen() &&
                 strcmp(g_tag.uid_str, spoolman_queried_uid) != 0 && strlen(g_tag.tray_uuid) == 32) {
               crumbSet("backend lookup");
@@ -1584,7 +1584,7 @@ void appLoop() {
               }
             } else if (!sm_found && !link_popup_dismissed && !isSpoolFlowLinkEntryOpen() &&
                        wifi_ok && strlen(g_tag.tray_uuid) == 32) {
-              // Auto-popup disabled — user uses the Link/Copy buttons in Zone 5
+              // Auto-popup disabled - user uses the Link/Copy buttons in Zone 5
               (void)link_tag_first_seen_ms;
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
@@ -1697,8 +1697,8 @@ void appLoop() {
             lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
           }
         } else {
-          // Same UID — show popup after delay if not dismissed
-          // Auto-popup disabled — user uses the Link/Copy buttons in Zone 5
+          // Same UID - show popup after delay if not dismissed
+          // Auto-popup disabled - user uses the Link/Copy buttons in Zone 5
           (void)link_tag_first_seen_ms;
           { char sb[48]; backendText(sm_archived ? T(STR_ARCHIVED)
                                      : sm_found ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
@@ -1764,13 +1764,13 @@ void appLoop() {
           lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
           // Auto location popup: if enabled, spool is linked, and not shown for this spool yet
-          // Debounce: only trigger after 1500ms — avoids spurious remove during NTAG read
+          // Debounce: only trigger after 1500ms - avoids spurious remove during NTAG read
           // Not for an archived spool: asking where to store something that
           // was just taken out of the inventory is a question about a spool
           // nobody is looking for.
           if (g_auto_loc_popup && sm_found && !sm_archived && sm_id > 0 && wifi_ok &&
               g_loc_popup_shown_for_id != sm_id) {
-            loc_popup_pending_id = sm_id;  // schedule — will fire after debounce in loop
+            loc_popup_pending_id = sm_id;  // schedule - will fire after debounce in loop
             logSDf("[verbose] LOC: tag removed, popup scheduled id=%d (debounce 2500ms)", sm_id);
           } else if (g_auto_loc_popup) {
             logSDf("[verbose] LOC: tag removed, popup suppressed id=%d shown_for=%d sm_found=%d wifi=%d", sm_id, g_loc_popup_shown_for_id, (int)sm_found, (int)wifi_ok);
@@ -1811,7 +1811,7 @@ void appLoop() {
               Serial.printf("AMSPICK: picker scheduled for id=%d\n", sm_id);
             }
           }
-          // Do NOT close list — user should be able to select spool
+          // Do NOT close list - user should be able to select spool
           // even if tag is temporarily removed
         }
 

@@ -84,14 +84,15 @@ static void handleCommand(const char* base, const char* key, const char* cmd,
   }
 
   if (strcmp(cmd, "write_tag") == 0) {
-    // Writing to tags is out of scope for this project by design: the scale
-    // only ever reads them. Declined by id so BamBuddy can close the dialog
-    // it opened rather than sit on "waiting for SpoolBuddy".
+    // The scale writes tags only from its own screens, where the user confirms
+    // at the device with the tag in view - not on a request from elsewhere.
+    // Declined by id so BamBuddy can close the dialog it opened rather than
+    // sit on "waiting for SpoolBuddy".
     if (write_spool_id > 0) {
       bbWriteTagResult(base, key, write_spool_id, nullptr, false,
-                       "SpoolmanScale never writes to tags, it only reads them");
+                       "SpoolmanScale writes tags from its own screens only");
     } else {
-      bbCommandResult(base, key, cmd, false, "SpoolmanScale does not write tags");
+      bbCommandResult(base, key, cmd, false, "SpoolmanScale does not write tags on request");
     }
     logSD("BamBuddy: declined a tag write");
     return;

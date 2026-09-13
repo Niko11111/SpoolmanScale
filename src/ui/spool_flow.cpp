@@ -53,7 +53,7 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 
 
 
-// Tag type enum — declared globally so all functions can use it
+// Tag type enum - declared globally so all functions can use it
 struct UnlinkedSpool {
   int   id;
   char  name[48];      // filament.name
@@ -230,7 +230,7 @@ static float copy_template_spool_w     = 0;
 static char  copy_template_name[64]    = "";
 // btn_copy: global for show/hide alongside btn_link
 lv_obj_t *btn_copy = nullptr;
-// Configurable list limit — loaded from NVS, adjustable via webserver /listlimit
+// Configurable list limit - loaded from NVS, adjustable via webserver /listlimit
 
 // Popup control: prevents immediate re-display after cancel
 static bool id_popup_is_bambu = false;  // shared between numpad lambdas
@@ -289,7 +289,7 @@ enum LinkNav {
 static LinkNav link_nav_pending = LNAV_NONE;
 static char    link_nav_vendor[32] = "";   // the vendor a row picked
 static bool show_id_input_rebuild = false;   // deferred re-open from WarnPopupA retry (rebuild after del)
-static bool id_input_open = false;           // true while IdInputPopup is visible — suppresses NFC Spoolman query
+static bool id_input_open = false;           // true while IdInputPopup is visible - suppresses NFC Spoolman query
 
 bool link_popup_dismissed = false;              // user dismissed the popup
 unsigned long link_tag_first_seen_ms = 0;       // time of first detection
@@ -608,7 +608,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
 
   if (matched == 0) { loadingOverlayHide(); return; }
 
-  // Store ALL matched spools — the display limit is applied at render time (showFilteredSpoolList)
+  // Store ALL matched spools - the display limit is applied at render time (showFilteredSpoolList)
   // This allows Vendor and Material lists to see the full dataset
   int alloc_count = matched;
   logSDf("link fetch: matched=%d, allocating all for vendor/material dedupe", matched);
@@ -960,7 +960,7 @@ void doLinkPatch(int spool_id, bool is_bambu) {
 
   closeLinkOverlays();
 
-  // Re-query Spoolman — use single-spool endpoint since we know the ID
+  // Re-query Spoolman - use single-spool endpoint since we know the ID
   link_popup_dismissed = false;
   if (is_bambu) {
     tagLookupForget();
@@ -1144,7 +1144,7 @@ static void runTagMove() {
 }
 
 // ============================================================
-//  LINK FLOW: HELPER — create overlay base
+//  LINK FLOW: HELPER - create overlay base
 // ============================================================
 static lv_obj_t* buildLinkOverlay() {
   lv_obj_t *scr = lv_obj_create(lv_scr_act());
@@ -1575,7 +1575,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
 }
 
 // ============================================================
-//  LINK-FLOW: ZIFFERNBLOCK (Pfad 1 — ID eingeben)
+//  LINK-FLOW: ZIFFERNBLOCK (Pfad 1 - ID eingeben)
 // ============================================================
 void showIdInputPopup(bool is_bambu, bool is_copy) {
   logSDf("SHOW: IdInputPopup bambu=%d copy=%d", (int)is_bambu, (int)is_copy);
@@ -1606,9 +1606,9 @@ void showIdInputPopup(bool is_bambu, bool is_copy) {
   lv_obj_add_event_cb(btn_back, [](lv_event_t *e) {
     logSD("BTN: IdInput -> Back (flag)");
     show_id_input_pending = false;  // cancel any pending re-open
-    // Use flag pattern — cannot delete own parent screen in callback
+    // Use flag pattern - cannot delete own parent screen in callback
     if (id_popup_is_copy) {
-      // Close and show copy entry — deferred via loop
+      // Close and show copy entry - deferred via loop
       if (scr_link_id) { lv_obj_add_flag(scr_link_id, LV_OBJ_FLAG_HIDDEN); }
       if (scr_copy_entry) lv_obj_clear_flag(scr_copy_entry, LV_OBJ_FLAG_HIDDEN);
       // Delete scr_link_id safely after callback via pending flag
@@ -1676,7 +1676,7 @@ void showIdInputPopup(bool is_bambu, bool is_copy) {
   lv_obj_set_style_text_align(lbl_ctx, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_ctx, LV_ALIGN_TOP_MID, 0, 56);
 
-  // Input field — kompakter, y=76
+  // Input field - kompakter, y=76
   lv_obj_t *input_box = lv_obj_create(scr_link_id);
   lv_obj_set_size(input_box, 260, 44);
   lv_obj_align(input_box, LV_ALIGN_TOP_MID, 0, 76);
@@ -1760,12 +1760,12 @@ void showIdInputPopup(bool is_bambu, bool is_copy) {
           return;
         }
         if (id_popup_is_copy) {
-          // Defer to loop — HTTP + JSON in lambda causes stack overflow
+          // Defer to loop - HTTP + JSON in lambda causes stack overflow
           if (!wifi_ok) { if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_LINK_NO_WIFI)); return; }
           copy_id_lookup_pending = entered_id;
           if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_LINK_CHECKING));
         } else {
-          // Defer to loop — direct call causes stack overflow in LVGL lambda
+          // Defer to loop - direct call causes stack overflow in LVGL lambda
           link_id_lookup_pending = entered_id;
           link_id_lookup_is_bambu = id_popup_is_bambu;
           if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_LINK_CHECKING));
@@ -1797,7 +1797,7 @@ void closeIdInputPopup() {
 }
 
 // ============================================================
-//  LINK-FLOW: FLOW B PFAD 2 — SPULEN-LISTE (Stufe 3)
+//  LINK-FLOW: FLOW B PFAD 2 - SPULEN-LISTE (Stufe 3)
 // ============================================================
 // Helper: adds a non-clickable info row at the bottom of a list when limit was hit
 static void addListMoreInfo(lv_obj_t* list, StringID str_id) {
@@ -1959,7 +1959,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   lv_obj_set_style_radius(div, 0, 0);
   lv_obj_set_style_pad_all(div, 0, 0);
 
-  // Scrollable list — full height below header
+  // Scrollable list - full height below header
   lv_obj_t *list = lv_obj_create(scr_link_spools);
   lv_obj_set_size(list, 460, 264);
   lv_obj_set_pos(list, 10, 56);
@@ -1977,7 +1977,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
 
   int count = 0;
   for (int i = 0; i < link_spool_count; i++) {
-    if (count >= spool_list_limit) break;  // render limit — full data is still in link_spools[]
+    if (count >= spool_list_limit) break;  // render limit - full data is still in link_spools[]
     UnlinkedSpool &s = link_spools[i];
 
     // The same question the count above asked, asked once.
@@ -2034,7 +2034,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     lv_obj_set_style_text_font(lbl_name, &lv_font_montserrat_ext_16, 0);
     lv_obj_align(lbl_name, LV_ALIGN_TOP_LEFT, 50, 5);
     lv_label_set_long_mode(lbl_name, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(lbl_name, 396);  // volle Breite — kein Hersteller in Zeile 1
+    lv_obj_set_width(lbl_name, 396);  // volle Breite - kein Hersteller in Zeile 1
 
     // ── Zeile 2: Farbkachel + Gewicht + Hersteller rechts ─
     // Color tile (14x14px)
@@ -2053,7 +2053,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     lv_obj_t *lbl_rest = lv_label_create(row);
     char rest_buf[24];
     if (s.remaining <= 0 && s.total > 0)
-      snprintf(rest_buf, sizeof(rest_buf), "%.0fg neu", s.total);
+      snprintf(rest_buf, sizeof(rest_buf), T(STR_NEW_SPOOL_WEIGHT_FMT), s.total);
     else
       snprintf(rest_buf, sizeof(rest_buf), "%.0fg", s.remaining);
     lv_label_set_text(lbl_rest, rest_buf);
@@ -2117,7 +2117,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
       lv_obj_set_width(lbl_info, 400);
       lv_obj_align(lbl_info, LV_ALIGN_TOP_MID, 0, 48);
 
-      // Link button — y=110, h=46
+      // Link button - y=110, h=46
       lv_obj_t *btn_yes = lv_btn_create(box);
       lv_obj_set_size(btn_yes, 420, 46);
       lv_obj_set_pos(btn_yes, 10, 110);
@@ -2141,7 +2141,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
           return;
         }
         if (copy_flow_via_list) {
-          // Copy flow via vendor/material picker — flag pattern
+          // Copy flow via vendor/material picker - flag pattern
           copy_flow_via_list = false;
           UnlinkedSpool &cs = link_spools[cidx];
           logSDf("CopyConfirm via list: spool_id=%d fid=%d spw=%.0f", cs.id, cs.filament_id, cs.spool_weight);
@@ -2180,7 +2180,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
       lv_obj_set_style_text_font(lbl_yes, &lv_font_montserrat_ext_18, 0);
       lv_obj_center(lbl_yes);
 
-      // Cancel button — y=164 (gap=8 after btn_yes ends at 156)
+      // Cancel button - y=164 (gap=8 after btn_yes ends at 156)
       lv_obj_t *btn_no = lv_btn_create(box);
       lv_obj_set_size(btn_no, 420, 40);
       lv_obj_set_pos(btn_no, 10, 164);
@@ -2215,14 +2215,14 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
 }
 
 // ============================================================
-//  LINK-FLOW: FLOW B PFAD 2 — MATERIAL-AUSWAHL (Stufe 2)
+//  LINK-FLOW: FLOW B PFAD 2 - MATERIAL-AUSWAHL (Stufe 2)
 // ============================================================
 void showMaterialList(const char* vendor_name) {
   logSDf("SHOW: MaterialList vendor=%s", vendor_name);
   releaseScreen(&scr_link_mat);
   strncpy(link_selected_vendor, vendor_name, sizeof(link_selected_vendor)-1);
   link_selected_vendor[sizeof(link_selected_vendor)-1] = '\0';
-  link_selected_material_full[0] = 0;  // reset on entry — set fresh in stage 3
+  link_selected_material_full[0] = 0;  // reset on entry - set fresh in stage 3
   link_stage3_shown = false;
 
   scr_link_mat = buildLinkOverlay();
@@ -2380,7 +2380,7 @@ void showMaterialList(const char* vendor_name) {
 }
 
 // ============================================================
-//  LINK-FLOW: FLOW B PFAD 2 — MATERIAL-VOLLNAME-AUSWAHL (Stufe 3)
+//  LINK-FLOW: FLOW B PFAD 2 - MATERIAL-VOLLNAME-AUSWAHL (Stufe 3)
 //  Dedupliziert s.material exakt fuer Vendor + Material-Prefix.
 //  Bei nur einem Eintrag: direkt zu Stufe 4 (auto-skip).
 // ============================================================
@@ -2415,12 +2415,12 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
     }
   }
 
-  // Auto-skip stage 3 when only one full name found — go directly to stage 4
+  // Auto-skip stage 3 when only one full name found - go directly to stage 4
   if (full_seen_count == 1 && !full_limit_hit) {
     logSDf("MaterialSubList auto-skip: only %s", seen_full[0]);
     strncpy(link_selected_material_full, seen_full[0], sizeof(link_selected_material_full)-1);
     link_selected_material_full[sizeof(link_selected_material_full)-1] = '\0';
-    link_stage3_shown = false;  // not actually rendered — back from stage 4 must skip stage 3
+    link_stage3_shown = false;  // not actually rendered - back from stage 4 must skip stage 3
     showFilteredSpoolList(vendor_name, material_prefix, link_selected_material_full);
     return;
   }
@@ -2558,7 +2558,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
 }
 
 // ============================================================
-//  LINK-FLOW: FLOW B PFAD 2 — HERSTELLER-AUSWAHL (Stufe 1)
+//  LINK-FLOW: FLOW B PFAD 2 - HERSTELLER-AUSWAHL (Stufe 1)
 // ============================================================
 void showVendorList() {
   crumbSet("vendor list build");
@@ -2654,7 +2654,7 @@ void showVendorList() {
   for (int i = 0; i < link_spool_count; i++) {
     UnlinkedSpool &s = link_spools[i];
     if (linkSpoolSkip(s)) continue;
-    const char* vn = s.vendor[0] ? s.vendor : "Unbekannt";
+    const char* vn = s.vendor[0] ? s.vendor : T(STR_STATUS_UNKNOWN);
     bool found = false;
     for (int j = 0; j < seen_v; j++) {
       if (strcasecmp(seen_vendors[j], vn) == 0) { vendor_counts[j]++; found = true; break; }
@@ -2858,12 +2858,12 @@ void closeLinkList() {
 
 void showLinkList() {
   logSD("SHOW: LinkList (legacy)");
-  // Wird nicht mehr direkt aufgerufen — Entry-Popup uebernimmt
+  // Wird nicht mehr direkt aufgerufen - Entry-Popup uebernimmt
   showLinkEntryPopup(false);
 }
 
 // ============================================================
-//  UI BAUEN  — Redesign Beta_0.4.100
+//  UI BAUEN - Redesign Beta_0.4.100
 // Main screen construction lives in ui/main_screen.cpp.
 
 // ============================================================
@@ -3177,7 +3177,7 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
     link_spool_count, (int)archived, material_filter ? material_filter : "");
 }
 
-// Spool list for copy flow — identical layout to FilteredSpoolList
+// Spool list for copy flow - identical layout to FilteredSpoolList
 void showCopySpoolList() {
   crumbSet("copy list build");
   logSDf("SHOW: CopySpoolList archived=%d count=%d", (int)copy_flow_archived, link_spool_count);
@@ -3341,7 +3341,7 @@ void showCopySpoolList() {
 
     lv_obj_t *lbl_rest = lv_label_create(row);
     char rest_buf[24];
-    if (s.remaining <= 0 && s.total > 0) snprintf(rest_buf, sizeof(rest_buf), "%.0fg neu", s.total);
+    if (s.remaining <= 0 && s.total > 0) snprintf(rest_buf, sizeof(rest_buf), T(STR_NEW_SPOOL_WEIGHT_FMT), s.total);
     else snprintf(rest_buf, sizeof(rest_buf), "%.0fg", s.remaining);
     lv_label_set_text(lbl_rest, rest_buf);
     lv_obj_set_style_text_color(lbl_rest, lv_color_hex(0x4a6fa0), 0);
@@ -4063,7 +4063,7 @@ void handleSpoolFlowDeferredActions() {
     showCopyConfirmPopup(copy_confirm_spool_id, copy_confirm_fid, copy_confirm_name,
                         copy_confirm_remaining, copy_confirm_initial, copy_confirm_spool_w);
   }
-  // link_id_lookup_pending removed — direct call in callback (was causing PANIC)
+  // link_id_lookup_pending removed - direct call in callback (was causing PANIC)
   if (link_id_lookup_pending > 0 && scr_link_warn_a == nullptr && scr_link_warn_b == nullptr) {
     int pid = link_id_lookup_pending;
     bool pbambu = link_id_lookup_is_bambu;
@@ -4077,7 +4077,7 @@ void handleSpoolFlowDeferredActions() {
   if (copy_id_lookup_pending > 0) {
     int cid = copy_id_lookup_pending;
     copy_id_lookup_pending = 0;
-    // Fetch spool data for copy confirm — done in loop to avoid stack overflow in lambda.
+    // Fetch spool data for copy confirm - done in loop to avoid stack overflow in lambda.
     DynamicJsonDocument cdoc(1024);
     DeserializationError derr2 = DeserializationError::Ok;
     int hcode = backendGetSpoolJson(cfg_spoolman_base, cid, cdoc, 5000, &derr2);

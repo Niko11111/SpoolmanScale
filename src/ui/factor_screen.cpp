@@ -31,7 +31,7 @@ void showFactorScreen() {
   logSD("SHOW: FactorScreen");
   logSD("UI: Screen -> Calibration");
   // Null all loop-update pointers BEFORE deleting scr_factor
-  // Loop checks these pointers — must be null before del to avoid dangling access
+  // Loop checks these pointers - must be null before del to avoid dangling access
   lbl_factor_display    = nullptr;
   lbl_factor_result     = nullptr;
   lbl_factor_cal_weight = nullptr;
@@ -75,7 +75,7 @@ void buildFactorScreen() {
       lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
     });
 
-  // Description / hint — single line, compact
+  // Description / hint - single line, compact
   lv_obj_t *lbl_desc = lv_label_create(scr_factor);
   lv_label_set_text(lbl_desc, T(STR_CAL_TARE_HINT));
   lv_obj_set_style_text_color(lbl_desc, lv_color_hex(0x4a6fa0), 0);
@@ -142,7 +142,7 @@ void buildFactorScreen() {
   lv_obj_set_width(lbl_factor_result, 220);
   lv_obj_set_pos(lbl_factor_result, 248, 78);
 
-  // Input field — y=94 (below status row)
+  // Input field - y=94 (below status row)
   lv_obj_t *input_box_f = lv_obj_create(scr_factor);
   lv_obj_set_size(input_box_f, 260, 34);
   lv_obj_align(input_box_f, LV_ALIGN_TOP_MID, 0, 94);
@@ -168,7 +168,7 @@ void buildFactorScreen() {
   const char* np_labels_f[] = { "1","2","3","4","5","6","7","8","9",".","0","T" };
 
   // ── Whole-gram toggle (left of numpad, 68x68px) ──
-  // NP_PAD_X = 80px — 68px toggle fits with 6px margin
+  // NP_PAD_X = 80px - 68px toggle fits with 6px margin
   {
     lv_obj_t *btn_wg = lv_btn_create(scr_factor);
     lv_obj_set_size(btn_wg, 68, 68);

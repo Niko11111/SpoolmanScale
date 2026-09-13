@@ -24,7 +24,7 @@ static char  s_dried_iso[32]  = "";
 void btn_dried_cb(lv_event_t *e) {
   logSD("UI: Button -> Dried Today");
   if (!wifi_ok) {
-    lv_label_set_text(lbl_spoolman_dried_val, "No WiFi!");
+    lv_label_set_text(lbl_spoolman_dried_val, T(STR_NO_WIFI));
     return;
   }
   if (!sm_found || sm_id == 0) {

@@ -61,14 +61,14 @@ static lv_obj_t *ta_wifi_pass = nullptr;
 static lv_obj_t *kb_wifi_pass = nullptr;
 
 // ============================================================
-//  WIFI SETUP: STEP 1 — Network scan + selection
+//  WIFI SETUP: STEP 1 - Network scan + selection
 // ============================================================
 void showWifiSetupScreen() {
   logSD("SHOW: WifiSetupScreen");
   logSD("UI: Screen -> WifiSetup");
   hideAllOverlays();
   if (scr_wifi_setup) { lv_obj_del(scr_wifi_setup); scr_wifi_setup = nullptr; }
-  // Null global pointers — otherwise they point to deleted objects
+  // Null global pointers - otherwise they point to deleted objects
   lbl_wifi_scan_list    = nullptr;
   lbl_wifi_setup_status = nullptr;
   buildWifiSetupScreen();
@@ -175,7 +175,7 @@ void doWifiScan() {
   lv_obj_clean(lbl_wifi_scan_list);
   lv_timer_handler();
 
-  // Disconnect required after failed WiFi.begin() —
+  // Disconnect required after failed WiFi.begin() - 
   // otherwise scanNetworks() returns 0
   wifiManagerPrepareScan();
   int n = wifiManagerScanNetworks();
@@ -223,12 +223,6 @@ void doWifiScan() {
     int slot = row_count++;
     strncpy(row_ssid[slot], ssid.c_str(), sizeof(row_ssid[slot])-1);
     row_ssid[slot][sizeof(row_ssid[slot])-1] = '\0';
-
-    // Signal bar (3 levels)
-    const char* signal_icon;
-    if      (rssi >= -65) signal_icon = LV_SYMBOL_WIFI "   ";
-    else if (rssi >= -80) signal_icon = LV_SYMBOL_WIFI "   ";
-    else                  signal_icon = LV_SYMBOL_WIFI "   ";
 
     // Signal color
     uint32_t sig_color;
@@ -281,7 +275,7 @@ void doWifiScan() {
 }
 
 // ============================================================
-//  WIFI SETUP: STEP 2 — Password entry
+//  WIFI SETUP: STEP 2 - Password entry
 // ============================================================
 void showWifiPassScreen() {
   logSD("SHOW: WifiPassScreen");
@@ -362,7 +356,7 @@ void buildWifiPassScreen() {
 }
 
 // ============================================================
-//  WIFI SETUP: STEP 3 — Connect + result
+//  WIFI SETUP: STEP 3 - Connect + result
 // ============================================================
 // The rows are four label pairs rather than one container, so visibility is
 // toggled over the value labels and their siblings. Built hidden and only
@@ -480,7 +474,7 @@ void buildWifiConnectingScreen() {
   lv_obj_set_style_text_font(lbl_connecting, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(lbl_connecting, LV_ALIGN_TOP_MID, 0, 68);
 
-  // Status label — larger font, filled after connection
+  // Status label - larger font, filled after connection
   lbl_conn_status = lv_label_create(scr_wifi_connecting);
   lv_obj_t *lbl_status_conn = lbl_conn_status;
   lv_label_set_text(lbl_status_conn, "");

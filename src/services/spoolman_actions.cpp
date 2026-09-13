@@ -86,7 +86,7 @@ int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
   if (last_used_mode == 1) {
     time_t now = time(nullptr);
     struct tm* t = localtime(&now);
-    snprintf(today, sizeof(today), "%04d-%02d-%02d", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday);
+    if (t) snprintf(today, sizeof(today), "%04d-%02d-%02d", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday);
   }
   Serial.printf("PATCH weight: %.1fg\n", remaining);
   // FilaMan wants the gross weight and subtracts the empty spool weight
@@ -105,10 +105,13 @@ int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
     char p_str[16];
     snprintf(p_str, sizeof(p_str), "%.1f %%", pct);
     lv_label_set_text(lbl_spoolman_pct, p_str);
+    struct tm* t = nullptr;
     if (last_used_mode == 1 && lbl_last_used) {
-      char today_iso[12];
       time_t now = time(nullptr);
-      struct tm* t = localtime(&now);
+      t = localtime(&now);
+    }
+    if (t) {
+      char today_iso[12];
       snprintf(today_iso, sizeof(today_iso), "%04d-%02d-%02d", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday);
       char today_local[12];
       isoToDe(today_iso, today_local, sizeof(today_local));

@@ -123,7 +123,7 @@ void buildDisplayScreen() {
       strncpy(buf, T(STR_SCREENOFF_NEVER), sizeof(buf) - 1);
       buf[sizeof(buf) - 1] = '\0';
     } else {
-      snprintf(buf, sizeof(buf), "%d Min", dim_vals[i]);
+      snprintf(buf, sizeof(buf), T(STR_MINUTES_FMT), dim_vals[i]);
     }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);
@@ -172,7 +172,7 @@ void buildDisplayScreen() {
       strncpy(buf, T(STR_SCREENOFF_NEVER), sizeof(buf) - 1);
       buf[sizeof(buf) - 1] = '\0';
     } else {
-      snprintf(buf, sizeof(buf), "%d Min", off_vals[i]);
+      snprintf(buf, sizeof(buf), T(STR_MINUTES_FMT), off_vals[i]);
     }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);
@@ -224,7 +224,7 @@ void buildDisplayScreen() {
       strncpy(buf, T(STR_SCREENOFF_NEVER), sizeof(buf) - 1);
       buf[sizeof(buf) - 1] = '\0';
     } else {
-      snprintf(buf, sizeof(buf), "%d Min", sleep_vals[i]);
+      snprintf(buf, sizeof(buf), T(STR_MINUTES_FMT), sleep_vals[i]);
     }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);

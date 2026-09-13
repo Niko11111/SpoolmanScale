@@ -136,7 +136,7 @@ void buildUI() {
   lv_obj_set_style_bg_color(lv_scr_act(), lv_color_hex(0x0a1020), 0);
 
   // ── ZONE 1: Header y=0..25 (26px) ───────────────────────
-  // Name+Version left | WiFi NFC right — scan counter moved to status bar
+  // Name+Version left | WiFi NFC right - scan counter moved to status bar
   lv_obj_t *hdr = lv_obj_create(lv_scr_act());
   lv_obj_set_size(hdr, 480, 26);
   lv_obj_set_pos(hdr, 0, 0);
@@ -222,7 +222,7 @@ void buildUI() {
 
   // ── ZONE 2: Status bar y=26..47 (22px) ──────────────────
   // dot + status text centered | #scan_count right
-  // Fix 9: status bar same color as background — no odd contrast stripe
+  // Fix 9: status bar same color as background - no odd contrast stripe
   lv_obj_t *status_bar = lv_obj_create(lv_scr_act());
   lv_obj_set_size(status_bar, 480, 22);
   lv_obj_set_pos(status_bar, 0, 26);
@@ -395,7 +395,7 @@ void buildUI() {
   lv_label_set_long_mode(lbl_temp, LV_LABEL_LONG_DOT);
   lv_obj_set_width(lbl_temp, 132);
 
-  // "More info" button — Fix 4: more prominent, teal border
+  // "More info" button - Fix 4: more prominent, teal border
   lv_obj_t *btn_more = lv_btn_create(lv_scr_act());
   lv_obj_set_size(btn_more, 84, 34);
   lv_obj_set_pos(btn_more, 388, 100);
@@ -474,7 +474,7 @@ void buildUI() {
   lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
 
   // Unused labels still needed by updateDisplay / querySpoolman
-  // lbl_uid, lbl_tray_uuid, lbl_detail, lbl_date — hidden dummy labels
+  // lbl_uid, lbl_tray_uuid, lbl_detail, lbl_date - hidden dummy labels
   lbl_uid = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_uid, "");
   lv_obj_add_flag(lbl_uid, LV_OBJ_FLAG_HIDDEN);
@@ -508,7 +508,7 @@ void buildUI() {
   // TARE     (x=416..472), vertically centred in the zone
   // Caption baseline 202, big-value baseline 220, then 238 and 256.
 
-  // Backend section — caption. Kept in a global so the text can follow a
+  // Backend section - caption. Kept in a global so the text can follow a
   // backend switch without rebuilding the main screen. The product names are
   // not translated, and STR_LBL_SPOOLMAN is identical in both languages.
   lbl_sm_cap = lv_label_create(lv_scr_act());
@@ -518,14 +518,14 @@ void buildUI() {
   lv_obj_set_style_text_font(lbl_sm_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(lbl_sm_cap, 8, 189);
 
-  // Spoolman filament remaining — BIG
+  // Spoolman filament remaining - BIG
   lbl_spoolman_weight = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_spoolman_weight, wifi_ok ? "..." : T(STR_NO_WIFI));
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_spoolman_weight, &lv_font_montserrat_ext_20, 0);
   lv_obj_set_pos(lbl_spoolman_weight, 8, 201);
 
-  // Percent — Fix 3: right of weight, same row
+  // Percent - Fix 3: right of weight, same row
   lbl_spoolman_pct = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_spoolman_pct, "");
   lv_obj_set_style_text_color(lbl_spoolman_pct, lv_color_hex(0x28d49a), 0);
@@ -579,14 +579,14 @@ void buildUI() {
     lv_obj_set_style_text_font(lbl_sc_cap, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_pos(lbl_sc_cap, 218, 189);
 
-    // Scale filament netto — BIG
+    // Scale filament netto - BIG
     lbl_scale_weight = lv_label_create(lv_scr_act());
     lv_label_set_text(lbl_scale_weight, scale_ready ? "0 g" : "---");
     lv_obj_set_style_text_color(lbl_scale_weight, lv_color_hex(0xf0b838), 0);
     lv_obj_set_style_text_font(lbl_scale_weight, &lv_font_montserrat_ext_20, 0);
     lv_obj_set_pos(lbl_scale_weight, 218, 201);
 
-    // SM diff caption + value — both diffs stacked on right side (Fix 3)
+    // SM diff caption + value - both diffs stacked on right side (Fix 3)
     lv_obj_t *lbl_diff_cap = lv_label_create(lv_scr_act());
     lv_label_set_text(lbl_diff_cap, "Diff:");
     lv_obj_set_style_text_color(lbl_diff_cap, lv_color_hex(0x4a6fa0), 0);
@@ -674,7 +674,7 @@ void buildUI() {
         logSD("TARE: scale not ready");
       }
     }, LV_EVENT_CLICKED, NULL);
-    // Icon top, text bottom — both centered
+    // Icon top, text bottom - both centered
     lv_obj_t *lbl_tare_icon = lv_label_create(btn_tare);
     lv_label_set_text(lbl_tare_icon, LV_SYMBOL_REFRESH);
     lv_obj_set_style_text_color(lbl_tare_icon, lv_color_hex(0xf0b838), 0);
@@ -852,8 +852,8 @@ void buildUI() {
   lv_obj_set_style_text_align(lbl_dr, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_dr, LV_ALIGN_CENTER, 0, 0);
 
-  // "Link spool" button — same slot, initially hidden
-  // Link button — 204px, olive-green, matches Update Weight style
+  // "Link spool" button - same slot, initially hidden
+  // Link button - 204px, olive-green, matches Update Weight style
   // ID= >100 spools recommended | List= <100 spools recommended
   btn_link = lv_btn_create(btn_bar);
   lv_obj_set_size(btn_link, 202, 39);
@@ -878,7 +878,7 @@ void buildUI() {
   lv_obj_set_style_text_align(lbl_lk, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_lk, LV_ALIGN_CENTER, 0, 0);
 
-  // Copy spool button — 204px, teal, matches Dried Today style
+  // Copy spool button - 204px, teal, matches Dried Today style
   // ID= >100 spools recommended | List= <100 spools recommended
   btn_copy = lv_btn_create(btn_bar);
   lv_obj_set_size(btn_copy, 202, 39);

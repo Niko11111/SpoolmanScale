@@ -297,7 +297,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_set_style_text_font(lbl_field_state[i], &lv_font_montserrat_ext_16, 0);
   }
 
-  // Status label — below check button
+  // Status label - below check button
   lbl_extra_fields_status = lv_label_create(scr_extra_fields);
   lv_label_set_text(lbl_extra_fields_status, "");
   lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xc8d8f0), 0);
@@ -307,7 +307,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_set_width(lbl_extra_fields_status, 440);
   lv_obj_align(lbl_extra_fields_status, LV_ALIGN_TOP_MID, 0, 192);
 
-  // Create missing fields button — full width, above bottom row, initially hidden
+  // Create missing fields button - full width, above bottom row, initially hidden
   btn_extra_fields_create = lv_btn_create(scr_extra_fields);
   lv_obj_set_size(btn_extra_fields_create, 440, 42);
   lv_obj_align(btn_extra_fields_create, LV_ALIGN_TOP_MID, 0, 228);
@@ -491,7 +491,7 @@ void checkAndCreateExtraFields(bool create_missing) {
   lv_timer_handler();
   yield();
 
-  // GET /api/v1/field/spool — list all existing extra fields
+  // GET /api/v1/field/spool - list all existing extra fields
   DynamicJsonDocument doc(8192);
   DeserializationError err = DeserializationError::Ok;
   int code = backendGetSpoolFieldsJson(cfg_spoolman_base, doc, 4000, &err);
@@ -654,6 +654,6 @@ void checkAndCreateExtraFields(bool create_missing) {
 
 
 // ============================================================
-//  OTA — BROWSER UPLOAD
+//  OTA - BROWSER UPLOAD
 // ============================================================
 

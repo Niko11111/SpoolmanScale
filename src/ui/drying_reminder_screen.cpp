@@ -54,7 +54,7 @@ static void buildDryNumpadScreen(int target) {
   lv_obj_align(s_dry_numpad_lbl, LV_ALIGN_CENTER, 0, 0);
 
   // Numpad 3x4 Grid: 1-9, DEL, 0, SAVE (standard pattern)
-  // Row4: [DEL][0][SAVE] — SAVE replaces separate button below
+  // Row4: [DEL][0][SAVE] - SAVE replaces separate button below
   const int NP_W = 136, NP_H = 36, NP_GAP = 4;
   const int NP_X0 = (480 - 3*NP_W - 2*NP_GAP) / 2;
   const int NP_Y0 = 122;
@@ -272,8 +272,8 @@ void showDryingReminderScreen() {
       int eff_y = (int)(g_dry_mat_yellow[i] * eff_mult);
       int eff_r = (int)(g_dry_mat_red[i]    * eff_mult);
       char y_buf[10], r_buf[10];
-      snprintf(y_buf, sizeof(y_buf), "%d T.", eff_y);
-      snprintf(r_buf, sizeof(r_buf), "%d T.", eff_r);
+      snprintf(y_buf, sizeof(y_buf), T(STR_DAYS_ABBR_FMT), eff_y);
+      snprintf(r_buf, sizeof(r_buf), T(STR_DAYS_ABBR_FMT), eff_r);
       cell(DRY_MAT_NAMES[i], 0,  72, 0xe8f0ff);
       cell(y_buf,            80, 120, 0xf0b838);
       cell(r_buf,           210, 120, 0xe04040);

@@ -1,6 +1,6 @@
 // ============================================================
 //  SpoolmanScale – Localization (i18n)
-//  lang.h — String IDs, enum, T() macro
+//  lang.h - String IDs, enum, T() macro
 //  Languages: DE (0) | EN (1)
 // ============================================================
 #pragma once
@@ -16,26 +16,17 @@ enum StringID {
   // Navigation
   STR_CANCEL,
   STR_BACK,
-  STR_SAVE,
   STR_CONFIRM,
-  STR_CLOSE,
   STR_RETRY,
-  STR_FORCE_LINK,
   STR_ENTER_NEW_ID,
 
   // Mainscreen Labels
-  STR_LBL_UID,
-  STR_LBL_UUID,
-  STR_LBL_MATERIAL,
   STR_LBL_SPOOLMAN,
   STR_LBL_SCALE,
   STR_LBL_LAST_USED,
   STR_LBL_LAST_DRIED,
   STR_LBL_TEMP,
   STR_LBL_VENDOR,
-  STR_LBL_ARTICLE,
-  STR_LBL_PRODUCTION,
-  STR_LBL_SPOOLMAN_ID,
 
   // Mainscreen Status
   STR_WAIT_SCAN,
@@ -52,7 +43,6 @@ enum StringID {
   STR_NOT_IN_SPOOLMAN,
   STR_ARCHIVED,
   STR_READING_TAG,
-  STR_READING_BAMBU_SECTOR,
   // The long phase after the tag is read: the fast lookups missed and the
   // whole inventory is being pulled. Without a line of its own the display
   // sits on "reading tag" for seconds and looks like a failed read.
@@ -65,27 +55,19 @@ enum StringID {
   STR_BTN_LINK,
 
   // Welcome Screen
-  STR_WELCOME_SUB,
-  STR_WELCOME_HINT,
-  STR_BTN_SETUP_NOW,
 
   // WiFi Setup
   STR_WIFI_TITLE,
   STR_WIFI_SCAN,
-  STR_WIFI_SELECT,
-  STR_WIFI_RESCAN,
   STR_WIFI_NO_NET,
   STR_WIFI_PASS_TITLE,
   STR_WIFI_PASS_HINT,
   STR_WIFI_PASS_PLACEHOLDER,
   STR_WIFI_CONNECTING,
   STR_WIFI_SUCCESS,
-  STR_WIFI_FAIL,
-  STR_BTN_CONNECT,
 
   // Spoolman IP
   STR_SPOOLMAN_TITLE,
-  STR_SPOOLMAN_HINT,
 
   // Settings
   STR_SETTINGS_TITLE,
@@ -97,10 +79,8 @@ enum StringID {
   STR_TILE_DISPLAY_SUB,
   STR_TILE_SYSTEM,
   STR_TILE_SYSTEM_SUB,
-  STR_BTN_TARE,
 
   // Connection
-  STR_CONN_TITLE,
   STR_BTN_WIFI_SETTINGS,
   STR_BTN_WIFI_NONE,
   STR_BTN_WIFI_STATUS,
@@ -115,26 +95,20 @@ enum StringID {
   STR_WEB_MAINT_SUB,
   STR_WEB_CONFIG_HINT,
   STR_WEB_CONFIG_SUB,
-  STR_BTN_SPOOLMAN,
 
   // Scale
   STR_SCALE_TITLE,
   STR_BTN_CALIBRATE,
-  STR_BTN_CAL_SUB,
   STR_BTN_BAGWEIGHT,
-  STR_BTN_BAG_SUB,
 
   // Calibration
   STR_CAL_TITLE,
-  STR_CAL_DESC,
   STR_CAL_FACTOR,
   STR_CAL_OK,
-  STR_CAL_SCALE_NOT_READY,
   STR_CAL_ZERO_ERR,
   STR_BTN_CALCULATE,
 
   // Bag weight
-  STR_BAG_TITLE,
   STR_BAG_DESC,
   STR_BAG_SAVED,
   STR_BAG_INVALID,
@@ -144,11 +118,9 @@ enum StringID {
   STR_BRIGHT_LABEL,
   STR_DIM_LABEL,
   STR_SLEEP_LABEL,
-  STR_DISPLAY_HINT,
 
   // System
   STR_SYSTEM_TITLE,
-  STR_BTN_LANGUAGE,
   STR_BTN_LANG_SUB,
   STR_BTN_FW_UPDATE,
   STR_BTN_FW_SUB,
@@ -158,7 +130,6 @@ enum StringID {
   // Language screen
   STR_LANG_TITLE,
   STR_LANG_HINT,
-  STR_LANG_EN_SUB,
   STR_DATE_FMT_LABEL,
 
   // OTA
@@ -179,7 +150,6 @@ enum StringID {
   STR_OTA_CURRENT,
 
   // Info Screen
-  STR_INFO_TITLE,
   STR_INFO_VERSION,
   STR_INFO_HINT,
 
@@ -192,11 +162,7 @@ enum StringID {
   // Weight popup
   STR_POPUP_DRIED_Q,
   STR_POPUP_WEIGHT_Q,
-  STR_BTN_NO_BAG,
-  STR_BTN_WITH_BAG,
-  STR_BTN_NEW_SPOOL,
   STR_BTN_EMPTY_SPOOL,
-  STR_BTN_ARCHIVE,
   STR_BTN_CONFIRMED,
 
   // Spool weight sub-popup
@@ -208,7 +174,6 @@ enum StringID {
   // Link Flow
   STR_LINK_BAMBU_TITLE,
   STR_LINK_NTAG_TITLE,
-  STR_LINK_NOT_IN_SM,
   STR_BTN_ENTER_ID,
   STR_BTN_FROM_LIST,
   STR_LINK_ID_TITLE,
@@ -218,23 +183,18 @@ enum StringID {
   STR_LINK_JSON_ERR,
   STR_LINK_NO_WIFI,
   STR_WARN_A_TITLE,
-  STR_WARN_A_INFO,
   STR_BTN_OVERWRITE,
   STR_WARN_B_TITLE,
   STR_WARN_B_DETAILS,
   STR_VENDOR_TITLE,
   STR_MAT_TITLE,
-  STR_SPOOLS_TITLE,
   STR_NO_VENDORS,
   STR_NO_MATERIALS,
   STR_NO_SPOOLS,
   STR_CONFIRM_LINK,
   STR_LINK_OK,
-  STR_LINK_FAIL,
 
   // Tare
-  STR_TARE_TITLE,
-  STR_TARE_DESC,
   STR_TARE_OK,
   STR_TARE_NOT_READY,
 
@@ -246,7 +206,6 @@ enum StringID {
   STR_REBOOT_BTN,
 
   // WiFi connecting result
-  STR_WIFI_CONNECTED_IP,
   STR_WIFI_CONN_FAILED,
 
   // WiFi quality
@@ -261,7 +220,6 @@ enum StringID {
   STR_BTN_SAVE,
 
   // Spool list title
-  STR_SPOOLS_BAMBU,
   STR_SPOOLS_ALL,
 
   // Settings calibration sub
@@ -294,7 +252,6 @@ enum StringID {
   STR_BTN_NO_BAG_VAL,
   STR_BTN_WITH_BAG_VAL,
   STR_BTN_NEW_SPOOL_VAL,
-  STR_BTN_TARE_ZERO,
 
   // First boot welcome screen
   STR_FIRSTBOOT_TITLE,
@@ -311,7 +268,6 @@ enum StringID {
   STR_EXTRA_FIELDS_CONFIRM_TITLE,
   STR_EXTRA_FIELDS_CONFIRM_MSG,
   STR_EXTRA_FIELDS_CREATING,
-  STR_EXTRA_FIELDS_CREATED_OK,
   STR_EXTRA_FIELDS_CREATE_FAIL,
   STR_EXTRA_FIELDS_NO_WIFI,
   STR_EXTRA_FIELDS_NO_SPOOLMAN,
@@ -334,7 +290,6 @@ enum StringID {
 
   // Spoolman IP validation
   STR_SPOOLMAN_TESTING,
-  STR_SPOOLMAN_OK,
   STR_SPOOLMAN_FAIL,
   STR_SPOOLMAN_RETRY,
   STR_SPOOLMAN_SKIP,
@@ -442,7 +397,6 @@ enum StringID {
   STR_COPY_OK,
   STR_COPY_FAIL,
   STR_COPY_NO_SPOOLS,
-  STR_COPY_LIMIT_HIT,
 
   // First boot skip button
   STR_BTN_SKIP_SETUP,
@@ -454,7 +408,6 @@ enum StringID {
   STR_UNLINK_CONFIRM,
 
   // Scale boot status
-  STR_SCALE_CALIBRATING,
   STR_WIFI_CONNECTING_BOOT,
   STR_BOOTING,
 
@@ -482,26 +435,18 @@ enum StringID {
   STR_LOCATION_NONE,
   STR_LOCATION_LOADING,
   STR_LOCATION_NO_WIFI,
-  STR_LOCATION_SAVED,
-  STR_LOCATION_FAIL,
   STR_LOCATION_NO_LOCATIONS,
   STR_LOCATION_HINT_EMPTY,
   STR_LOCATION_LIMIT_HIT,
 
   // No spools hint (link flow)
-  STR_NO_SPOOLS_HINT,
 
   // Auto location popup toggle
   STR_BTN_AUTO_LOC_POPUP,
-  STR_BTN_AUTO_LOC_POPUP_SUB,
-  STR_AUTO_LOC_POPUP_TITLE,
-  STR_AUTO_LOC_POPUP_MSG,
 
   // Drying reminder
   STR_BTN_DRYING_REMINDER,
-  STR_BTN_DRYING_REMINDER_SUB,
   STR_DRYING_REMINDER_TITLE,
-  STR_DRYING_REMINDER_COMING_SOON,
 
   // Drying Reminder Screen
   STR_DRY_MODE_OFF,
@@ -512,8 +457,6 @@ enum StringID {
   STR_DRY_MAT_HDR_MAT,
   STR_DRY_MAT_HDR_YELLOW,
   STR_DRY_MAT_HDR_RED,
-  STR_DRY_MAT_HDR_MULT,
-  STR_DRY_MAT_FOOTNOTE,
   STR_DRY_MAN_YELLOW_LBL,
   STR_DRY_MAN_RED_LBL,
   STR_DRY_MAN_EDIT_HINT,
@@ -526,7 +469,6 @@ enum StringID {
 
   // Backend selection (Spoolman / FilaMan)
   STR_BACKEND_TITLE,
-  STR_BACKEND_TILE_SUB,
   STR_BACKEND_ADDRESS,
   STR_BACKEND_APIKEY,
   STR_BACKEND_DEVICE_TOKEN,
@@ -567,10 +509,8 @@ enum StringID {
   STR_REMOTE_LINK_TITLE,
   STR_REMOTE_LINK_QUESTION,
   STR_REMOTE_LINK_CONFIRM,
-  STR_REMOTE_LINK_MISMATCH,
   STR_REMOTE_LINK_NO_DETAILS,
   STR_REMOTE_LINK_TIMEOUT,
-  STR_SLEEP_OFF,
 
   // Tag versus spool comparison, shown in the remote link popup on a mismatch
   STR_REMOTE_LINK_COL_TAG,
@@ -602,7 +542,6 @@ enum StringID {
   STR_FLM_TAGLESS,
   STR_FLM_TAGLESS_SUB,
   STR_REMOTE_LINK_WEIGH,
-  STR_WAKE_ON_LOAD,
   STR_SCREENOFF_LABEL,
   STR_SCREENOFF_NEVER,
   STR_FLM_AUTOLINK_INFO,
@@ -667,7 +606,6 @@ enum StringID {
   STR_TF_CARDUIDS_INFO,
   // The extra fields menu the choice lives in
   STR_EF_LAST_DRIED,
-  STR_EF_LAST_DRIED_SUB,
   STR_EF_LAST_DRIED_INFO,
   STR_EF_PRESENT,
   STR_EF_MISSING,
@@ -772,7 +710,6 @@ enum StringID {
   STR_W_C_WRITETAG,
   STR_W_TAG_SPOOL,
   STR_W_TAG_PICK,
-  STR_W_TAG_FORMAT,
   STR_W_TAG_ONTAG,
   STR_W_TAG_WILLBE,
   STR_W_TAG_NOTAG,
@@ -977,8 +914,6 @@ enum StringID {
   // The scale saying what it actually knows. A calibration taken while the ADC
   // was off the bus stores a factor built from -1 samples, and until now the
   // only way back was erasing NVS.
-  STR_BTN_CAL_RESET,
-  STR_BTN_CAL_RESET_SUB,
   STR_CAL_RESET_CONFIRM,
   STR_CAL_RESET_DONE,
   STR_CAL_RANGE_ERR,
@@ -989,7 +924,6 @@ enum StringID {
   // Writing a tag after a link. Backend independent: what goes on a tag is an
   // agreement between the tag and whoever reads it, and no backend sees it.
   STR_TW_OPT_ASK,
-  STR_TW_OPT_ASK_SUB,
   STR_TW_OPT_ASK_INFO,
   STR_TW_OPT_FMT,
   STR_TW_OPT_FMT_INFO,
@@ -1082,7 +1016,6 @@ enum StringID {
   STR_NFCRST_ROW,
   STR_NFCRST_ROW_SUB,
   STR_NFCRST_ROW_DONE,
-  STR_NFCRST_INFO,
   STR_NFCRST_OK_TITLE,
   STR_NFCRST_OK_TEXT,
   STR_NFCRST_FAIL_TITLE,
@@ -1148,6 +1081,12 @@ enum StringID {
   STR_TAGMOVE_FAILED,
   STR_TAGMOVE_FROM,
   STR_TAGMOVE_TO,
+
+  // Format strings that were literals in the screens: minutes on the display
+  // screen, days in the drying table, the fresh weight in the spool lists.
+  STR_MINUTES_FMT,
+  STR_DAYS_ABBR_FMT,
+  STR_NEW_SPOOL_WEIGHT_FMT,
 
   STR_COUNT
 };

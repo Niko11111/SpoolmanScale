@@ -60,7 +60,7 @@ void buildCalReminderScreen() {
   lv_obj_clear_flag(scr_cal_reminder, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_bg_color(scr_cal_reminder, lv_color_hex(0x0a1020), 0);
 
-  // Static buffers — must outlive the function since LVGL holds pointers to them
+  // Static buffers - must outlive the function since LVGL holds pointers to them
   static char buf_title[48], buf_msg[256], buf_later[32], buf_now[48];
   strncpy(buf_title, T(STR_CAL_REMINDER_TITLE), sizeof(buf_title)-1); buf_title[sizeof(buf_title)-1]=0;
   strncpy(buf_msg,   T(STR_CAL_REMINDER_MSG),   sizeof(buf_msg)-1);   buf_msg[sizeof(buf_msg)-1]=0;
@@ -75,7 +75,7 @@ void buildCalReminderScreen() {
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 20);
 
-  // No back button in setup flow — CalReminder is the last setup step
+  // No back button in setup flow - CalReminder is the last setup step
   addCloseButton(scr_cal_reminder);
 
   // Icon

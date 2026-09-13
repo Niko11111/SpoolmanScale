@@ -328,7 +328,7 @@ void showConfirmPopup(const char* msg, int action) {
   lv_label_set_long_mode(lbl_q, LV_LABEL_LONG_WRAP);
 
   if (action == 2) {
-    // Layout: 4 Zeilen — Row1=66, Row2=52, Row3=52, Row4=42
+    // Layout: 4 Zeilen - Row1=66, Row2=52, Row3=52, Row4=42
     // BOX_H = 8+28+6+66+6+52+6+52+6+42+8 = 280px (original)
     const int BOX_W  = 460;
     const int H_ROW1 = 66;
@@ -520,7 +520,7 @@ void showConfirmPopup(const char* msg, int action) {
         closeConfirmPopup();
       } else {
         // Aktivieren: zweites Bestaetigungs-Popup zeigen
-        // Gewichts-Popup verstecken (nicht loeschen — cancel bringt es zurueck)
+        // Gewichts-Popup verstecken (nicht loeschen - cancel bringt es zurueck)
         if (confirm_popup) lv_obj_add_flag(confirm_popup, LV_OBJ_FLAG_HIDDEN);
 
         releaseScreen(&s_auto_popup);
