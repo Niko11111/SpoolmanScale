@@ -492,7 +492,7 @@ void checkAndCreateExtraFields(bool create_missing) {
   yield();
 
   // GET /api/v1/field/spool - list all existing extra fields
-  DynamicJsonDocument doc(8192);
+  JsonDocument doc;
   DeserializationError err = DeserializationError::Ok;
   int code = backendGetSpoolFieldsJson(cfg_spoolman_base, doc, 4000, &err);
   yield();

@@ -395,13 +395,13 @@ static void routes(WebServer &srv) {
     // Four fields per spool instead of the whole record. Without the filter a
     // large inventory is parsed in full - 268 spools came to 176 kB in the
     // lookup path this mirrors - and none of it is used here.
-    StaticJsonDocument<256> filter;
-    JsonObject f = filter.to<JsonArray>().createNestedObject();
+    JsonDocument filter;
+    JsonObject f = filter.to<JsonArray>().add<JsonObject>();
     f["id"] = true;
-    JsonObject ff = f.createNestedObject("filament");
+    JsonObject ff = f["filament"].to<JsonObject>();
     ff["name"] = true;
     ff["material"] = true;
-    ff.createNestedObject("vendor")["name"] = true;
+    ff["vendor"]["name"] = true;
 
     // PSRAM, not the internal heap. This runs inside an HTTP handler, which is
     // the worst moment to be holding the inventory in the 320 kB the rest of

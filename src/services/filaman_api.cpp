@@ -12,6 +12,17 @@
 #include "services/http_progress.h"
 #include "services/tag_uid.h"
 
+// Whether an object carries the key at all, a null value included. This is
+// what containsKey() answered; obj[key].isNull() also says "absent" for a key
+// that is present and null, and here the key's presence is the whole question:
+// a FilaMan that has the second rfid column answers null for a spool without
+// a second chip.
+static bool jsonHasKey(JsonObjectConst obj, const char* key) {
+  for (JsonPairConst kv : obj)
+    if (strcmp(kv.key().c_str(), key) == 0) return true;
+  return false;
+}
+
 namespace {
 
 // ArduinoJson has to be told to use PSRAM, and the allocator must be defined
@@ -836,7 +847,7 @@ bool filamanHasRfidSlot2(const char* base_url, const char* api_key,
   }
 
   // Present, not filled: on 1.3.1 the key is there and usually null.
-  s_slot2_present = items[0].as<JsonObjectConst>().containsKey("rfid_uid_2");
+  s_slot2_present = jsonHasKey(items[0].as<JsonObjectConst>(), "rfid_uid_2");
   strncpy(s_slot2_probed_for, base_url, sizeof(s_slot2_probed_for) - 1);
   s_slot2_probed_for[sizeof(s_slot2_probed_for) - 1] = '\0';
   logSDf("FilaMan: second rfid slot %s on %s",

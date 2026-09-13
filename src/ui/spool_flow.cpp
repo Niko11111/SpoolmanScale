@@ -312,7 +312,7 @@ static bool spoolHasAnyTag(JsonObjectConst spool) {
 
   for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++) {
     const char* key = tagFieldSpec(f).key;
-    if (!extra.containsKey(key)) continue;
+    if (extra[key].isNull()) continue;
     // Spoolman stores extra values JSON encoded, so an unset field arrives as
     // a pair of literal quotes rather than as an empty string.
     String v = extra[key].as<String>();
@@ -433,7 +433,7 @@ static LinkFilterVerdict linkFilterVerdict(JsonObjectConst spool, bool is_bambu,
   if (!is_bambu) return LINK_KEEP;
 
   String vname = "";
-  if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
+  if (!spool["filament"]["vendor"].isNull())
     vname = spool["filament"]["vendor"]["name"] | String("");
   vname.trim();
   if (strncasecmp(vname.c_str(), "Bambu", 5) != 0) return LINK_SKIP_VENDOR;
@@ -515,9 +515,9 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   logSDf("link fetch: is_bambu=%d material_filter='%s' archived_only=%d",
     is_bambu, material_filter ? material_filter : "", (int)archived_only);
 
-  StaticJsonDocument<512> filterL;
+  JsonDocument filterL;
   JsonArray filterL_arr = filterL.to<JsonArray>();
-  JsonObject fL = filterL_arr.createNestedObject();
+  JsonObject fL = filterL_arr.add<JsonObject>();
   fL["id"] = true;
   fL["archived"] = true;
   fL["remaining_weight"] = true;
@@ -576,7 +576,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     for (JsonObject spool : spools) {
       total_in_api++;
       String vname_c = "";
-      if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
+      if (!spool["filament"]["vendor"].isNull())
         vname_c = spool["filament"]["vendor"]["name"] | String("");
       vname_c.trim();
       if (strncasecmp(vname_c.c_str(), "Bambu", 5) == 0) count_bambu++;
@@ -645,7 +645,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++) {
       s.tag_values[f][0] = '\0';
       const char* key = tagFieldSpec(f).key;
-      if (!spool.containsKey("extra") || !spool["extra"].containsKey(key)) continue;
+      if (spool["extra"][key].isNull()) continue;
       String v = spool["extra"][key].as<String>();
       v.replace("\"",""); v.trim();
       if (v.length() == 0) continue;
@@ -667,7 +667,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     // optional and a spool without one keeps an empty string, which the vendor
     // list turns into its "unknown" row.
     String vname = "";
-    if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
+    if (!spool["filament"]["vendor"].isNull())
       vname = spool["filament"]["vendor"]["name"] | String("");
     vname.trim();
     strncpy(s.vendor, vname.c_str(), sizeof(s.vendor)-1);
@@ -1459,7 +1459,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
   link_cu_ok = tagFieldIsList() && g_card_uids_write &&
                backendHasExtraField(tagFieldKey());
 
-  DynamicJsonDocument doc(8192);
+  JsonDocument doc;
   DeserializationError err = DeserializationError::Ok;
   int code = backendGetSpoolJson(cfg_spoolman_base, entered_id, doc, 5000, &err);
   if (code == 404 || code < 0) {
@@ -1477,7 +1477,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
   }
 
   String existing = "";
-  if (doc.containsKey("extra") && doc["extra"].containsKey("tag")) {
+  if (!doc["extra"]["tag"].isNull()) {
     existing = doc["extra"]["tag"].as<String>();
     existing.replace("\"",""); existing.trim();
   }
@@ -1485,7 +1485,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
   // same. Kept apart from the tag field, because which of the two is set
   // decides whether the warning offers to overwrite or to add.
   String existing_cu = "";
-  if (doc.containsKey("extra") && doc["extra"].containsKey(CARD_UIDS_FIELD)) {
+  if (!doc["extra"][CARD_UIDS_FIELD].isNull()) {
     existing_cu = doc["extra"][CARD_UIDS_FIELD].as<String>();
     existing_cu.replace("\"",""); existing_cu.trim();
   }
@@ -1506,7 +1506,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++) {
       s.tag_values[f][0] = '\0';
       const char* key = tagFieldSpec(f).key;
-      if (!doc.containsKey("extra") || !doc["extra"].containsKey(key)) continue;
+      if (doc["extra"][key].isNull()) continue;
       String v = doc["extra"][key].as<String>();
       v.replace("\"",""); v.trim();
       if (v.length() > 0 && v.length() < CARD_UIDS_MAX) {
@@ -4078,7 +4078,7 @@ void handleSpoolFlowDeferredActions() {
     int cid = copy_id_lookup_pending;
     copy_id_lookup_pending = 0;
     // Fetch spool data for copy confirm - done in loop to avoid stack overflow in lambda.
-    DynamicJsonDocument cdoc(1024);
+    JsonDocument cdoc;
     DeserializationError derr2 = DeserializationError::Ok;
     int hcode = backendGetSpoolJson(cfg_spoolman_base, cid, cdoc, 5000, &derr2);
     if (hcode != 200) {

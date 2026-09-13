@@ -311,7 +311,7 @@ bool spoolmanGetVersion(const char* base_url, char* out_version, size_t out_size
     return false;
   }
 
-  StaticJsonDocument<256> doc;
+  JsonDocument doc;
   DeserializationError err = deserializeJson(doc, http.getString());
   http.end();
   if (err) return false;
@@ -365,7 +365,7 @@ int spoolmanCreateSpool(const char* base_url, int filament_id, float initial_wei
     filament_id, initial_weight, spool_weight, remaining_weight);
   int code = http.POST(body);
   if ((code == 200 || code == 201) && out_spool_id) {
-    StaticJsonDocument<256> doc;
+    JsonDocument doc;
     if (!deserializeJson(doc, http.getString())) {
       *out_spool_id = doc["id"] | 0;
     }

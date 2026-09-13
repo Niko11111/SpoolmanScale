@@ -148,30 +148,30 @@ static void routes(WebServer &srv) {
     if (!srv.hasArg("plain")) {
       srv.send(400, "application/json", "{\"error\":\"no body\"}"); return;
     }
-    StaticJsonDocument<1024> doc;
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, srv.arg("plain"));
     if (err) {
       srv.send(400, "application/json", "{\"error\":\"json parse\"}"); return;
     }
-    if (doc.containsKey("mult_sealed")) {
+    if (!doc["mult_sealed"].isNull()) {
       g_dry_mult_sealed = doc["mult_sealed"].as<float>();
       if (g_dry_mult_sealed < 1.0f) g_dry_mult_sealed = 1.0f;
       if (g_dry_mult_sealed > 10.0f) g_dry_mult_sealed = 10.0f;
       prefsPutFloat("dry_mult_s", g_dry_mult_sealed);
     }
-    if (doc.containsKey("materials")) {
+    if (!doc["materials"].isNull()) {
       JsonArray arr = doc["materials"].as<JsonArray>();
       for (JsonObject obj : arr) {
         const char* nm = obj["name"] | "";
         for (int i = 0; i < DRY_MAT_COUNT; i++) {
           if (strcasecmp(nm, DRY_MAT_NAMES[i]) == 0) {
             char key[16];
-            if (obj.containsKey("yellow")) {
+            if (!obj["yellow"].isNull()) {
               g_dry_mat_yellow[i] = max(1, (int)obj["yellow"]);
               snprintf(key, sizeof(key), "dry_y_%s", DRY_MAT_NAMES[i]);
               prefsPutInt(key, g_dry_mat_yellow[i]);
             }
-            if (obj.containsKey("red")) {
+            if (!obj["red"].isNull()) {
               g_dry_mat_red[i] = max(1, (int)obj["red"]);
               snprintf(key, sizeof(key), "dry_r_%s", DRY_MAT_NAMES[i]);
               prefsPutInt(key, g_dry_mat_red[i]);

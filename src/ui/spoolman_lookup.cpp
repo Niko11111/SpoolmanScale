@@ -176,7 +176,7 @@ static int spoolTagRank(JsonObjectConst spool, const char* uid) {
 
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
     const TagFieldSpec& spec = tagFieldSpec(i);
-    if (!extra.containsKey(spec.key)) continue;
+    if (extra[spec.key].isNull()) continue;
 
     // Both identities, and in both notations: a UID written into nfc_id by
     // SpoolSense is plain hex while the scale carries it around with colons,
@@ -291,7 +291,7 @@ static inline bool spoolMatchesTag(JsonObjectConst spool, const char* uid) {
 static void captureExtraField(JsonObjectConst extra, const char* key,
                               char* out, size_t out_len, const char* what) {
   out[0] = '\0';
-  if (extra.isNull() || !extra.containsKey(key)) return;
+  if (extra[key].isNull()) return;
 
   String v = extra[key].as<String>();
   v.replace("\"", "");
@@ -575,7 +575,7 @@ void querySpoolmanById(int spool_id) {
   if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (before byID GET)",
     ESP.getFreeHeap(), ESP.getFreePsram());
 
-  DynamicJsonDocument doc(8192);
+  JsonDocument doc;
   DeserializationError err = DeserializationError::Ok;
   int code = backendGetSpoolJson(cfg_spoolman_base, spool_id, doc, 8000, &err);
   if (code != 200) {
@@ -634,7 +634,7 @@ void querySpoolmanById(int spool_id) {
 
   // last_dried
   sm_last_dried[0] = '\0';
-  if (spool.containsKey("extra") && spool["extra"].containsKey("last_dried")) {
+  if (!spool["extra"]["last_dried"].isNull()) {
     String dried = spool["extra"]["last_dried"].as<String>();
     dried.replace("\"", "");
     // The stored value is a UTC instant; the day it belongs to is the local
@@ -655,7 +655,7 @@ void querySpoolmanById(int spool_id) {
   String sm_material = spool["filament"]["material"] | String("");
   sm_material.trim();
   String sm_vendor_name = "";
-  if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull()) {
+  if (!spool["filament"]["vendor"].isNull()) {
     sm_vendor_name = spool["filament"]["vendor"]["name"] | String("");
     sm_vendor_name.trim();
     snprintf(sm_vendor_g, sizeof(sm_vendor_g), "%s", sm_vendor_name.c_str());
@@ -793,9 +793,9 @@ void spoolmanRecheckTick() {
   // stays small: a real miss still falls through to the inventory scan in
   // querySpoolman(), and doing that every few seconds is exactly what must not
   // happen here.
-  StaticJsonDocument<512> filter;
+  JsonDocument filter;
   JsonArray filter_arr = filter.to<JsonArray>();
-  JsonObject f = filter_arr.createNestedObject();
+  JsonObject f = filter_arr.add<JsonObject>();
   f["id"] = true;
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
     f["extra"][tagFieldSpec(i).key] = true;
@@ -933,9 +933,9 @@ void querySpoolman(const char* tray_uuid) {
   // silently drops keys, and a dropped tag key makes every spool come back
   // looking unbound - hence the check after it is filled rather than trust in
   // the number.
-  StaticJsonDocument<2048> filter;
+  JsonDocument filter;
   JsonArray filter_arr = filter.to<JsonArray>();
-  JsonObject filter_spool = filter_arr.createNestedObject();
+  JsonObject filter_spool = filter_arr.add<JsonObject>();
   filter_spool["id"] = true;
   filter_spool["archived"] = true;
   filter_spool["remaining_weight"] = true;
@@ -1285,7 +1285,7 @@ void querySpoolman(const char* tray_uuid) {
   }
 
   for (JsonObject spool : spools) {
-    if (!spool.containsKey("extra")) continue;
+    if (spool["extra"].isNull()) continue;
     JsonObject extra = spool["extra"];
 
     int rank = spoolTagRank(spool, tray_uuid);
@@ -1296,7 +1296,7 @@ void querySpoolman(const char* tray_uuid) {
     // matched through card_uids has no tag field, which leaves this empty -
     // harmless, because that migration only runs in FilaMan mode.
     String tag_val;
-    if (extra.containsKey("tag")) {
+    if (!extra["tag"].isNull()) {
       tag_val = extra["tag"].as<String>();
       tag_val.replace("\"", "");
       tag_val.trim();
@@ -1341,7 +1341,7 @@ void querySpoolman(const char* tray_uuid) {
       static int s_migrate_failed_id = 0;    // do not hammer a read-only key
       String stored;
       const char* key = backendIsFilaMan() ? "tag" : tagFieldKey();
-      if (extra.containsKey(key)) {
+      if (!extra[key].isNull()) {
         stored = extra[key].as<String>();
         stored.replace("\"", "");
         stored.trim();
@@ -1433,7 +1433,7 @@ void querySpoolman(const char* tray_uuid) {
 
     // Spool status. Only FilaMan maps it, the others leave the key unset.
     sm_status_id = spool["status_id"] | 0;
-    if (extra.containsKey("last_dried")) {
+    if (!extra["last_dried"].isNull()) {
       String dried = extra["last_dried"].as<String>();
       dried.replace("\"", "");
       char day[11];
@@ -1454,7 +1454,7 @@ void querySpoolman(const char* tray_uuid) {
     String sm_material = spool["filament"]["material"] | String("");
     sm_material.trim();
     String sm_vendor_name = "";
-    if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull()) {
+    if (!spool["filament"]["vendor"].isNull()) {
       sm_vendor_name = spool["filament"]["vendor"]["name"] | String("");
       sm_vendor_name.trim();
     snprintf(sm_vendor_g, sizeof(sm_vendor_g), "%s", sm_vendor_name.c_str());
@@ -1664,9 +1664,9 @@ void querySpoolman(const char* tray_uuid) {
   // internal RAM dry, so this one uses PSRAM like the active list above.
   JsonDocument doc2(&psram_alloc);
   DeserializationError err2 = DeserializationError::Ok;
-  StaticJsonDocument<384> filter2;
+  JsonDocument filter2;
   JsonArray filter2_arr = filter2.to<JsonArray>();
-  JsonObject f2 = filter2_arr.createNestedObject();
+  JsonObject f2 = filter2_arr.add<JsonObject>();
   f2["id"] = true;
   f2["archived"] = true;
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
