@@ -57,6 +57,11 @@ bool lvPoolHasRoomForRow();
 // uninitialised and gave the swatch a random colour off the stack.
 lv_color_t swatchColorFromHex(const char* hex);
 
+// At most max_bytes of s into out, never cutting through a multi-byte UTF-8
+// sequence. "%.8s" cut "Köln" between the two bytes of the ö and a box stood
+// where the letter was.
+void utf8Cut(const char* s, size_t max_bytes, char* out, size_t out_size);
+
 // Two column info row: a muted label on the left, the value on the right.
 // Used by the WiFi status screen and by the summary on the WiFi connecting
 // screen, so both stay in step. Returns the value label so the caller can

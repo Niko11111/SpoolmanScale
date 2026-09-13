@@ -540,7 +540,7 @@ void buildWifiConnectingScreen() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_next = lv_label_create(btn_next);
   { char nb[32];
-    if (setup_active) strncpy(nb, T(STR_BTN_NEXT), sizeof(nb) - 1);
+    if (setup_active) copyT(nb, sizeof(nb), STR_BTN_NEXT);
     else              strncpy(nb, backendName(), sizeof(nb) - 1);
     nb[sizeof(nb) - 1] = '\0';
     size_t n = strlen(nb);

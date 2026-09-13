@@ -120,8 +120,7 @@ void buildDisplayScreen() {
     lv_obj_set_style_border_width(b, 0, 0);
     char buf[16];
     if (dim_vals[i] == 0) {
-      strncpy(buf, T(STR_SCREENOFF_NEVER), sizeof(buf) - 1);
-      buf[sizeof(buf) - 1] = '\0';
+      copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
     } else {
       snprintf(buf, sizeof(buf), T(STR_MINUTES_FMT), dim_vals[i]);
     }
@@ -169,8 +168,7 @@ void buildDisplayScreen() {
     lv_obj_set_style_border_width(b, 0, 0);
     char buf[16];
     if (off_vals[i] == 0) {
-      strncpy(buf, T(STR_SCREENOFF_NEVER), sizeof(buf) - 1);
-      buf[sizeof(buf) - 1] = '\0';
+      copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
     } else {
       snprintf(buf, sizeof(buf), T(STR_MINUTES_FMT), off_vals[i]);
     }
@@ -221,8 +219,7 @@ void buildDisplayScreen() {
     lv_obj_set_style_border_width(b, 0, 0);
     char buf[16];
     if (sleep_vals[i] == 0) {
-      strncpy(buf, T(STR_SCREENOFF_NEVER), sizeof(buf) - 1);
-      buf[sizeof(buf) - 1] = '\0';
+      copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
     } else {
       snprintf(buf, sizeof(buf), T(STR_MINUTES_FMT), sleep_vals[i]);
     }

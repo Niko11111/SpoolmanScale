@@ -438,8 +438,7 @@ void appLoop() {
       logSDf("Reactivate failed for spool %d", sm_id);
       if (lbl_status) {
         char buf[48];
-        strncpy(buf, T(STR_CU_NOT_WRITTEN), sizeof(buf) - 1);
-        buf[sizeof(buf) - 1] = '\0';
+        copyT(buf, sizeof(buf), STR_CU_NOT_WRITTEN);
         lv_label_set_text(lbl_status, buf);
         lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
       }
@@ -796,8 +795,7 @@ void appLoop() {
       remoteLinkReport(false, nullptr, "timed out waiting for a tag");
       if (lbl_status) {
         char buf[48];
-        strncpy(buf, T(STR_REMOTE_LINK_TIMEOUT), sizeof(buf) - 1);
-        buf[sizeof(buf) - 1] = '\0';
+        copyT(buf, sizeof(buf), STR_REMOTE_LINK_TIMEOUT);
         lv_label_set_text(lbl_status, buf);
         lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
       }
@@ -831,8 +829,7 @@ void appLoop() {
       auto_weight_last_val  = scale_weight_g;
       if (lbl_status) {
         char buf[48];
-        strncpy(buf, T(STR_REMOTE_LINK_WEIGH), sizeof(buf) - 1);
-        buf[sizeof(buf) - 1] = '\0';
+        copyT(buf, sizeof(buf), STR_REMOTE_LINK_WEIGH);
         lv_label_set_text(lbl_status, buf);
         lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
       }

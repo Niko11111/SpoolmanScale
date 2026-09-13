@@ -224,8 +224,7 @@ void buildFactorScreen() {
     lv_obj_set_style_border_color(btn_rst, lv_color_hex(0x601010), 0);
 
     lv_obj_t *lbl_rst = lv_label_create(btn_rst);
-    { char rb[24]; strncpy(rb, T(STR_BTN_CAL_RESET_SHORT), sizeof(rb) - 1);
-      rb[sizeof(rb) - 1] = '\0'; lv_label_set_text(lbl_rst, rb); }
+    { char rb[24]; copyT(rb, sizeof(rb), STR_BTN_CAL_RESET_SHORT); lv_label_set_text(lbl_rst, rb); }
     lv_obj_set_style_text_color(lbl_rst, lv_color_hex(0xff8080), 0);
     lv_obj_set_style_text_font(lbl_rst, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(lbl_rst, LV_TEXT_ALIGN_CENTER, 0);
@@ -237,8 +236,7 @@ void buildFactorScreen() {
       // The write itself is deferred like every other NVS write reached from a
       // callback, and it rebuilds nothing - see cal_reset_pending in app_loop.
       logSD("BTN: Calibration -> Reset calibration");
-      char ask[64]; strncpy(ask, T(STR_CAL_RESET_CONFIRM), sizeof(ask) - 1);
-      ask[sizeof(ask) - 1] = '\0';
+      char ask[64]; copyT(ask, sizeof(ask), STR_CAL_RESET_CONFIRM);
       showConfirmPopup(ask, 6);
     }, LV_EVENT_CLICKED, NULL);
   }

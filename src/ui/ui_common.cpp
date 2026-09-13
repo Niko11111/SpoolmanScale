@@ -220,6 +220,20 @@ bool lvPoolHasRoomForRow() {
          m.free_biggest_size >= LV_ROW_RESERVE_BYTES / 4u;
 }
 
+void utf8Cut(const char* s, size_t max_bytes, char* out, size_t out_size) {
+  if (!out || !out_size) return;
+  out[0] = '\0';
+  if (!s) return;
+  size_t n = strlen(s);
+  if (n > max_bytes) n = max_bytes;
+  if (n >= out_size) n = out_size - 1;
+  // Back off to the start of the sequence the cut landed in: a continuation
+  // byte is 10xxxxxx.
+  while (n > 0 && ((unsigned char)s[n] & 0xC0) == 0x80) n--;
+  memcpy(out, s, n);
+  out[n] = '\0';
+}
+
 void releaseScreen(lv_obj_t **scr) {
   if (!scr || !*scr) return;
   // Hidden first: the object lives until the next timer pass, and a released
@@ -320,8 +334,7 @@ static void settingRowClicked(lv_event_t *e) {
 
 lv_obj_t* addSettingRow(lv_obj_t *list, const SettingDesc &s) {
   char buf_t[40];
-  strncpy(buf_t, T((StringID)s.str_name), sizeof(buf_t) - 1);
-  buf_t[sizeof(buf_t) - 1] = '\0';
+  copyT(buf_t, sizeof(buf_t), (StringID)s.str_name);
 
   char buf_s[64];
   settingSubtitle(s, buf_s, sizeof(buf_s));
@@ -344,8 +357,7 @@ lv_obj_t* addSettingRow(lv_obj_t *list, const SettingDesc &s) {
     lv_obj_t *arr = lv_obj_get_child(btn, -1);
     if (arr) {
       char buf_v[8];
-      strncpy(buf_v, T(active ? STR_ON : STR_OFF), sizeof(buf_v) - 1);
-      buf_v[sizeof(buf_v) - 1] = '\0';
+      copyT(buf_v, sizeof(buf_v), active ? STR_ON : STR_OFF);
       lv_label_set_text(arr, buf_v);
       lv_obj_set_style_text_color(arr,
         lv_color_hex(active ? 0x28d49a : 0x4a6fa0), 0);

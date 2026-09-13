@@ -62,10 +62,10 @@ void buildCalReminderScreen() {
 
   // Static buffers - must outlive the function since LVGL holds pointers to them
   static char buf_title[48], buf_msg[256], buf_later[32], buf_now[48];
-  strncpy(buf_title, T(STR_CAL_REMINDER_TITLE), sizeof(buf_title)-1); buf_title[sizeof(buf_title)-1]=0;
-  strncpy(buf_msg,   T(STR_CAL_REMINDER_MSG),   sizeof(buf_msg)-1);   buf_msg[sizeof(buf_msg)-1]=0;
-  strncpy(buf_later, T(STR_CAL_REMINDER_LATER), sizeof(buf_later)-1); buf_later[sizeof(buf_later)-1]=0;
-  strncpy(buf_now,   T(STR_CAL_REMINDER_NOW),   sizeof(buf_now)-1);   buf_now[sizeof(buf_now)-1]=0;
+  copyT(buf_title, sizeof(buf_title), STR_CAL_REMINDER_TITLE); buf_title[sizeof(buf_title)-1]=0;
+  copyT(buf_msg, sizeof(buf_msg), STR_CAL_REMINDER_MSG);   buf_msg[sizeof(buf_msg)-1]=0;
+  copyT(buf_later, sizeof(buf_later), STR_CAL_REMINDER_LATER); buf_later[sizeof(buf_later)-1]=0;
+  copyT(buf_now, sizeof(buf_now), STR_CAL_REMINDER_NOW);   buf_now[sizeof(buf_now)-1]=0;
   Serial.println("buildCalReminderScreen: strings copied");
 
   // Title

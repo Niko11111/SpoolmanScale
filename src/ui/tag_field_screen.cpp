@@ -71,8 +71,7 @@ static void addFieldRow(lv_obj_t *list, uint8_t value) {
   const bool active = (tagFieldEffective() == value);
 
   char buf_t[40];
-  strncpy(buf_t, T((StringID)spec.str_name), sizeof(buf_t) - 1);
-  buf_t[sizeof(buf_t) - 1] = '\0';
+  copyT(buf_t, sizeof(buf_t), (StringID)spec.str_name);
 
   // The subtitle names who else writes the field, and adds whether the server
   // actually has it. A field that is missing is the one thing that stops the
@@ -85,15 +84,12 @@ static void addFieldRow(lv_obj_t *list, uint8_t value) {
                                         : backendHasExtraField(spec.key);
   char buf_s[64];
   if (spec.is_native) {
-    strncpy(buf_s, T(available ? STR_TF_NATIVE_SUB : STR_TF_NATIVE_NA), sizeof(buf_s) - 1);
-    buf_s[sizeof(buf_s) - 1] = '\0';
+    copyT(buf_s, sizeof(buf_s), available ? STR_TF_NATIVE_SUB : STR_TF_NATIVE_NA);
   } else {
     char who[40];
-    strncpy(who, T((StringID)spec.str_sub), sizeof(who) - 1);
-    who[sizeof(who) - 1] = '\0';
+    copyT(who, sizeof(who), (StringID)spec.str_sub);
     char state[32];
-    strncpy(state, T(available ? STR_EF_PRESENT : STR_EF_MISSING), sizeof(state) - 1);
-    state[sizeof(state) - 1] = '\0';
+    copyT(state, sizeof(state), available ? STR_EF_PRESENT : STR_EF_MISSING);
     snprintf(buf_s, sizeof(buf_s), "%s - %s", who, state);
   }
 
@@ -156,8 +152,7 @@ static void addCreateRow(lv_obj_t *list) {
   if (backendHasExtraField(spec.key)) return;
 
   char buf_t[48];
-  strncpy(buf_t, T(STR_EF_CREATE_ROW), sizeof(buf_t) - 1);
-  buf_t[sizeof(buf_t) - 1] = '\0';
+  copyT(buf_t, sizeof(buf_t), STR_EF_CREATE_ROW);
 
   lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_WARNING, buf_t, spec.key);
 
@@ -183,8 +178,7 @@ void buildTagFieldScreen() {
     // that chain: title plus the red close button, no back arrow.
     lv_obj_t *title = lv_label_create(scr_tag_field);
     char buf[40];
-    strncpy(buf, T(STR_TAG_FIELD), sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
+    copyT(buf, sizeof(buf), STR_TAG_FIELD);
     lv_label_set_text(title, buf);
     lv_obj_set_style_text_color(title, lv_color_hex(0x28d49a), 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);

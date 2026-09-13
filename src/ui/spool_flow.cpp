@@ -798,7 +798,7 @@ static void fetchSpoolSummary(int spool_id, SpoolSummary &out) {
 // One spool of the move question: caption column, swatch, words.
 static void moveRow(lv_obj_t *box, int y, StringID caption_id, const SpoolSummary &sum) {
   lv_obj_t *cap = lv_label_create(box);
-  { char cb[24]; strncpy(cb, T(caption_id), sizeof(cb) - 1); cb[sizeof(cb) - 1] = '\0';
+  { char cb[24]; copyT(cb, sizeof(cb), caption_id);
     lv_label_set_text(cap, cb); }
   lv_obj_set_style_text_color(cap, lv_color_hex(0x8fa8c8), 0);
   lv_obj_set_style_text_font(cap, &lv_font_montserrat_ext_14, 0);
@@ -911,8 +911,7 @@ void doLinkPatch(int spool_id, bool is_bambu) {
     Serial.println("doLinkPatch: aborted, no tag UID");
     if (lbl_status) {
       char buf[48];
-      strncpy(buf, T(STR_LINK_NO_TAG), sizeof(buf) - 1);
-      buf[sizeof(buf) - 1] = '\0';
+      copyT(buf, sizeof(buf), STR_LINK_NO_TAG);
       lv_label_set_text(lbl_status, buf);
       lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
     }
@@ -944,7 +943,7 @@ void doLinkPatch(int spool_id, bool is_bambu) {
       }
       sm_tag_conflict_spool = 0;
     } else {
-      strncpy(buf, T(STR_CU_NOT_WRITTEN), sizeof(buf) - 1);
+      copyT(buf, sizeof(buf), STR_CU_NOT_WRITTEN);
     }
     buf[sizeof(buf) - 1] = '\0';
     if (lbl_status) {
@@ -1013,8 +1012,7 @@ void linkAdditionalTag(int spool_id, const char* uid) {
 
   if (lbl_status) {
     char buf[48];
-    strncpy(buf, T(STR_TAG2_LINKED), sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
+    copyT(buf, sizeof(buf), STR_TAG2_LINKED);
     lv_label_set_text(lbl_status, buf);
     lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
   }
@@ -1097,8 +1095,7 @@ static void showTagMovePopup() {
     tagmove_close_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
-  { char bb[32]; strncpy(bb, T(STR_TAGMOVE_BTN), sizeof(bb) - 1);
-    bb[sizeof(bb) - 1] = '\0'; lv_label_set_text(lbl_ok, bb); }
+  { char bb[32]; copyT(bb, sizeof(bb), STR_TAGMOVE_BTN); lv_label_set_text(lbl_ok, bb); }
   lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0x80ffb0), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_ok);
@@ -1114,8 +1111,7 @@ static void showTagMovePopup() {
     tagmove_close_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_no = lv_label_create(btn_no);
-  { char cb[32]; strncpy(cb, T(STR_CANCEL), sizeof(cb) - 1);
-    cb[sizeof(cb) - 1] = '\0'; lv_label_set_text(lbl_no, cb); }
+  { char cb[32]; copyT(cb, sizeof(cb), STR_CANCEL); lv_label_set_text(lbl_no, cb); }
   lv_obj_set_style_text_color(lbl_no, lv_color_hex(0xff8080), 0);
   lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_no);
@@ -1802,8 +1798,7 @@ void closeIdInputPopup() {
 // Helper: adds a non-clickable info row at the bottom of a list when limit was hit
 static void addListMoreInfo(lv_obj_t* list, StringID str_id) {
   char buf[96];
-  strncpy(buf, T(str_id), sizeof(buf)-1);
-  buf[sizeof(buf)-1] = '\0';
+  copyT(buf, sizeof(buf), str_id);
 
   lv_obj_t *row = lv_obj_create(list);
   lv_obj_set_size(row, 452, 48);
@@ -1886,9 +1881,14 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     snprintf(title_buf, sizeof(title_buf), "Bambu %s - %d",
       g_tag.material[0] ? g_tag.material : "", display_count);
   } else if (material_full && material_full[0]) {
-    snprintf(title_buf, sizeof(title_buf), "%.8s %.10s - %d", vendor_name, material_full, display_count);
+    char v8[9], m10[11];
+    utf8Cut(vendor_name, 8, v8, sizeof(v8));
+    utf8Cut(material_full, 10, m10, sizeof(m10));
+    snprintf(title_buf, sizeof(title_buf), "%s %s - %d", v8, m10, display_count);
   } else if (material_prefix[0]) {
-    snprintf(title_buf, sizeof(title_buf), "%.8s %.4s - %d", vendor_name, material_prefix, display_count);
+    char v8[9];
+    utf8Cut(vendor_name, 8, v8, sizeof(v8));
+    snprintf(title_buf, sizeof(title_buf), "%s %.4s - %d", v8, material_prefix, display_count);
   } else {
     snprintf(title_buf, sizeof(title_buf), "%s - %d", T(STR_SPOOLS_ALL), display_count);
   }
@@ -2227,8 +2227,9 @@ void showMaterialList(const char* vendor_name) {
 
   scr_link_mat = buildLinkOverlay();
 
-  char title_buf[48];
-  snprintf(title_buf, sizeof(title_buf), "%s | %.16s", T(STR_MAT_TITLE), vendor_name);
+  char title_buf[48], v16[17];
+  utf8Cut(vendor_name, 16, v16, sizeof(v16));
+  snprintf(title_buf, sizeof(title_buf), "%s | %s", T(STR_MAT_TITLE), v16);
 
   // Header with Back + Cancel
   lv_obj_t *hdr_mat = lv_obj_create(scr_link_mat);
@@ -2429,8 +2430,9 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
   releaseScreen(&scr_link_mat_sub);
   scr_link_mat_sub = buildLinkOverlay();
 
-  char title_buf[48];
-  snprintf(title_buf, sizeof(title_buf), "%.16s | %.4s", vendor_name, material_prefix);
+  char title_buf[48], v16[17];
+  utf8Cut(vendor_name, 16, v16, sizeof(v16));
+  snprintf(title_buf, sizeof(title_buf), "%s | %.4s", v16, material_prefix);
 
   // Header with Back + Cancel
   lv_obj_t *hdr_ms = lv_obj_create(scr_link_mat_sub);
@@ -2661,7 +2663,7 @@ void showVendorList() {
     }
     if (!found) {
       if (seen_v >= LINK_GROUP_MAX) { vendor_limit_hit = true; continue; }
-      strncpy(seen_vendors[seen_v], vn, 31);
+      utf8Cut(vn, 31, seen_vendors[seen_v], sizeof(seen_vendors[seen_v]));
       vendor_counts[seen_v] = 1;
       seen_v++;
     }
@@ -2969,7 +2971,7 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
 
   // Title
   lv_obj_t *lbl_title = lv_label_create(box);
-  char title_buf[32]; strncpy(title_buf, T(STR_COPY_CONFIRM_TITLE), sizeof(title_buf)-1);
+  char title_buf[32]; copyT(title_buf, sizeof(title_buf), STR_COPY_CONFIRM_TITLE);
   lv_label_set_text(lbl_title, title_buf);
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_16, 0);
@@ -3008,7 +3010,7 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
     copy_create_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
-  char ok_buf[32]; strncpy(ok_buf, T(STR_BTN_CONFIRMED), sizeof(ok_buf)-1);
+  char ok_buf[32]; copyT(ok_buf, sizeof(ok_buf), STR_BTN_CONFIRMED);
   lv_label_set_text(lbl_ok, ok_buf);
   lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0x80ffb0), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_16, 0);
@@ -3029,7 +3031,7 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
     if (scr_copy_list) lv_obj_clear_flag(scr_copy_list, LV_OBJ_FLAG_HIDDEN);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_no = lv_label_create(btn_no);
-  char no_buf[32]; strncpy(no_buf, T(STR_CANCEL), sizeof(no_buf)-1);
+  char no_buf[32]; copyT(no_buf, sizeof(no_buf), STR_CANCEL);
   lv_label_set_text(lbl_no, no_buf);
   lv_obj_set_style_text_color(lbl_no, lv_color_hex(0xff8080), 0);
   lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_16, 0);
@@ -3194,7 +3196,7 @@ void showCopySpoolList() {
 
   // Header: 52px, Back left, Cancel/X right, title center
   char title_buf[48];
-  char title_str[32]; strncpy(title_str, T(STR_COPY_TITLE), sizeof(title_str)-1);
+  char title_str[32]; copyT(title_str, sizeof(title_str), STR_COPY_TITLE);
   snprintf(title_buf, sizeof(title_buf), "%s - %d", title_str, link_spool_count);
 
   lv_obj_t *hdr = lv_obj_create(scr_copy_list);
@@ -3260,7 +3262,7 @@ void showCopySpoolList() {
 
   if (link_spool_count == 0) {
     lv_obj_t *lbl_empty = lv_label_create(scr_copy_list);
-    char empty_buf[48]; strncpy(empty_buf, T(STR_COPY_NO_SPOOLS), sizeof(empty_buf)-1);
+    char empty_buf[48]; copyT(empty_buf, sizeof(empty_buf), STR_COPY_NO_SPOOLS);
     lv_label_set_text(lbl_empty, empty_buf);
     lv_obj_set_style_text_color(lbl_empty, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(lbl_empty, &lv_font_montserrat_ext_16, 0);
@@ -3444,15 +3446,13 @@ void doCreateSpoolFromTag() {
            newtag_material, newtag_subtype, newtag_brand, newtag_color_name,
            newtag_label_weight, new_id);
     finishCopyFlow(new_id, newtag_tray);
-    char ok_buf[40]; strncpy(ok_buf, T(STR_NEWTAG_OK), sizeof(ok_buf)-1);
-    ok_buf[sizeof(ok_buf)-1] = '\0';
+    char ok_buf[40]; copyT(ok_buf, sizeof(ok_buf), STR_NEWTAG_OK);
     lv_label_set_text(lbl_status, ok_buf);
     lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
     return;
   }
   logSDf("New spool from tag failed: HTTP %d", code);
-  char fail_buf[40]; strncpy(fail_buf, T(STR_NEWTAG_FAIL), sizeof(fail_buf)-1);
-  fail_buf[sizeof(fail_buf)-1] = '\0';
+  char fail_buf[40]; copyT(fail_buf, sizeof(fail_buf), STR_NEWTAG_FAIL);
   lv_label_set_text(lbl_status, fail_buf);
   lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
 }
@@ -3524,8 +3524,7 @@ void showNewFromTagPopup() {
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *lbl_title = lv_label_create(box);
-  char title_buf[40]; strncpy(title_buf, T(STR_NEWTAG_TITLE), sizeof(title_buf)-1);
-  title_buf[sizeof(title_buf)-1] = '\0';
+  char title_buf[40]; copyT(title_buf, sizeof(title_buf), STR_NEWTAG_TITLE);
   lv_label_set_text(lbl_title, title_buf);
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_16, 0);
@@ -3541,8 +3540,7 @@ void showNewFromTagPopup() {
   lv_obj_align(lbl_newtag_info, LV_ALIGN_TOP_MID, 0, 38);
 
   lv_obj_t *lbl_lw = lv_label_create(box);
-  char lw_buf[24]; strncpy(lw_buf, T(STR_NEWTAG_LABEL_W), sizeof(lw_buf)-1);
-  lw_buf[sizeof(lw_buf)-1] = '\0';
+  char lw_buf[24]; copyT(lw_buf, sizeof(lw_buf), STR_NEWTAG_LABEL_W);
   lv_label_set_text(lbl_lw, lw_buf);
   lv_obj_set_style_text_color(lbl_lw, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_lw, &lv_font_montserrat_ext_12, 0);
@@ -3587,7 +3585,7 @@ void showNewFromTagPopup() {
     newtag_create_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_ok);
-    char b[32]; strncpy(b, T(STR_BTN_CONFIRMED), sizeof(b)-1); b[sizeof(b)-1] = '\0';
+    char b[32]; copyT(b, sizeof(b), STR_BTN_CONFIRMED);
     lv_label_set_text(l, b);
     lv_obj_set_style_text_color(l, lv_color_hex(0x80ffb0), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
@@ -3605,7 +3603,7 @@ void showNewFromTagPopup() {
     closeNewTagPopup();
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_no);
-    char b[32]; strncpy(b, T(STR_CANCEL), sizeof(b)-1); b[sizeof(b)-1] = '\0';
+    char b[32]; copyT(b, sizeof(b), STR_CANCEL);
     lv_label_set_text(l, b);
     lv_obj_set_style_text_color(l, lv_color_hex(0xff8080), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
@@ -3633,7 +3631,7 @@ void showCopyEntryPopup() {
 
   // Title
   lv_obj_t *lbl_title = lv_label_create(scr_copy_entry);
-  char title_buf[32]; strncpy(title_buf, T(STR_COPY_TITLE), sizeof(title_buf)-1);
+  char title_buf[32]; copyT(title_buf, sizeof(title_buf), STR_COPY_TITLE);
   lv_label_set_text(lbl_title, title_buf);
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
@@ -3720,7 +3718,7 @@ void showCopyEntryPopup() {
     copy_fetch_pending  = true;
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn2);
-    char b[40]; strncpy(b, T(STR_COPY_ACTIVE_BTN), sizeof(b)-1);
+    char b[40]; copyT(b, sizeof(b), STR_COPY_ACTIVE_BTN);
     lv_label_set_text(l, b);
     lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
@@ -3743,7 +3741,7 @@ void showCopyEntryPopup() {
     copy_fetch_pending  = true;
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn3);
-    char b[40]; strncpy(b, T(STR_COPY_ARCHIVED_BTN), sizeof(b)-1);
+    char b[40]; copyT(b, sizeof(b), STR_COPY_ARCHIVED_BTN);
     lv_label_set_text(l, b);
     lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
@@ -3766,7 +3764,7 @@ void showCopyEntryPopup() {
       newtag_open_pending = true;
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l = lv_label_create(btnt);
-    char b[40]; strncpy(b, T(STR_NEWTAG_BTN), sizeof(b)-1); b[sizeof(b)-1] = '\0';
+    char b[40]; copyT(b, sizeof(b), STR_NEWTAG_BTN);
     lv_label_set_text(l, b);
     lv_obj_set_style_text_color(l, lv_color_hex(0x80ffb0), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
@@ -3785,7 +3783,7 @@ void showCopyEntryPopup() {
   lv_obj_set_style_border_width(btn4, 0, 0);
   lv_obj_add_event_cb(btn4, [](lv_event_t *e) { closeCopyEntryPopup(); }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn4);
-    char b[16]; strncpy(b, T(STR_CANCEL), sizeof(b)-1);
+    char b[16]; copyT(b, sizeof(b), STR_CANCEL);
     lv_label_set_text(l, b);
     lv_obj_set_style_text_color(l, lv_color_hex(0xff8080), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);

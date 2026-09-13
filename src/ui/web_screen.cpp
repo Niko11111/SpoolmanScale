@@ -42,8 +42,7 @@ static void buildWebPinScreen() {
   s_pin_scr = buildOverlayScreen();
 
   char title[40];
-  strncpy(title, T(STR_WEB_PASS_TITLE), sizeof(title) - 1);
-  title[sizeof(title) - 1] = '\0';
+  copyT(title, sizeof(title), STR_WEB_PASS_TITLE);
   buildSubHeader(s_pin_scr, title, [](lv_event_t *e){
     logSD("BTN: Back -> Web (password untouched)");
     webPinScreenClose();
@@ -52,8 +51,7 @@ static void buildWebPinScreen() {
 
   lv_obj_t *hint = lv_label_create(s_pin_scr);
   { char hb[96];
-    strncpy(hb, T(STR_WEB_PASS_HINT), sizeof(hb) - 1);
-    hb[sizeof(hb) - 1] = '\0';
+    copyT(hb, sizeof(hb), STR_WEB_PASS_HINT);
     lv_label_set_text(hint, hb); }
   lv_obj_set_style_text_color(hint, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
@@ -132,8 +130,7 @@ static void addGateRow(lv_obj_t *list, const char *ico, int title_id,
                        const char *sub, int info_id, bool on,
                        lv_event_cb_t on_click) {
   char buf_t[40];
-  strncpy(buf_t, T(title_id), sizeof(buf_t) - 1);
-  buf_t[sizeof(buf_t) - 1] = '\0';
+  copyT(buf_t, sizeof(buf_t), title_id);
 
   lv_obj_t *help = nullptr;
   lv_obj_t *btn = makeListBtn(list, ico, buf_t, sub, on, &help);
@@ -144,8 +141,7 @@ static void addGateRow(lv_obj_t *list, const char *ico, int title_id,
   lv_obj_t *arr = lv_obj_get_child(btn, -1);
   if (arr) {
     char buf_v[8];
-    strncpy(buf_v, T(on ? STR_ON : STR_OFF), sizeof(buf_v) - 1);
-    buf_v[sizeof(buf_v) - 1] = '\0';
+    copyT(buf_v, sizeof(buf_v), on ? STR_ON : STR_OFF);
     lv_label_set_text(arr, buf_v);
     lv_obj_set_style_text_color(arr,
       lv_color_hex(on ? 0x28d49a : 0x4a6fa0), 0);
@@ -195,11 +191,9 @@ void buildWebScreen() {
   // is active, so it reads as "this is live" instead of as a caption.
   char addr[56];
   if (!webMasterEnabled()) {
-    strncpy(addr, T(STR_WEB_SERVER_HINT), sizeof(addr) - 1);
-    addr[sizeof(addr) - 1] = '\0';
+    copyT(addr, sizeof(addr), STR_WEB_SERVER_HINT);
   } else if (!wifi_ok) {
-    strncpy(addr, T(STR_WIFI_STATUS_DISCONNECTED), sizeof(addr) - 1);
-    addr[sizeof(addr) - 1] = '\0';
+    copyT(addr, sizeof(addr), STR_WIFI_STATUS_DISCONNECTED);
   } else {
     deviceBrowserUrl(addr, sizeof(addr));
   }
@@ -216,8 +210,7 @@ void buildWebScreen() {
     });
 
   char sub_cfg[48];
-  strncpy(sub_cfg, T(STR_WEB_CONFIG_SUB), sizeof(sub_cfg) - 1);
-  sub_cfg[sizeof(sub_cfg) - 1] = '\0';
+  copyT(sub_cfg, sizeof(sub_cfg), STR_WEB_CONFIG_SUB);
   addGateRow(list, LV_SYMBOL_SETTINGS, STR_WEB_CONFIG, sub_cfg,
     STR_WEB_CONFIG_HINT, webConfigEnabled(),
     [](lv_event_t *e) {
@@ -227,8 +220,7 @@ void buildWebScreen() {
     });
 
   char sub_mnt[48];
-  strncpy(sub_mnt, T(STR_WEB_MAINT_SUB), sizeof(sub_mnt) - 1);
-  sub_mnt[sizeof(sub_mnt) - 1] = '\0';
+  copyT(sub_mnt, sizeof(sub_mnt), STR_WEB_MAINT_SUB);
   addGateRow(list, LV_SYMBOL_DOWNLOAD, STR_WEB_MAINT, sub_mnt,
     STR_WEB_MAINT_HINT, webMaintenanceEnabled(),
     [](lv_event_t *e) {
@@ -242,12 +234,9 @@ void buildWebScreen() {
   // the state reads the same way the switches do.
   {
     char buf_t[40];
-    strncpy(buf_t, T(STR_WEB_PASS), sizeof(buf_t) - 1);
-    buf_t[sizeof(buf_t) - 1] = '\0';
+    copyT(buf_t, sizeof(buf_t), STR_WEB_PASS);
     char buf_s[56];
-    strncpy(buf_s, T(webHasPassword() ? STR_WEB_PASS_SET : STR_WEB_PASS_UNSET),
-            sizeof(buf_s) - 1);
-    buf_s[sizeof(buf_s) - 1] = '\0';
+    copyT(buf_s, sizeof(buf_s), webHasPassword() ? STR_WEB_PASS_SET : STR_WEB_PASS_UNSET);
     lv_obj_t *help = nullptr;
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_KEYBOARD, buf_t, buf_s,
                                 webHasPassword(), &help);

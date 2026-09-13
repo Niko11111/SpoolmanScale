@@ -115,8 +115,7 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   lv_obj_align(lbl_spool, LV_ALIGN_TOP_MID, 0, 16);
 
   lv_obj_t *lbl_q = lv_label_create(box);
-  { char qbuf[64]; strncpy(qbuf, T(STR_AMS_POPUP_Q), sizeof(qbuf)-1);
-    qbuf[sizeof(qbuf)-1] = '\0';
+  { char qbuf[64]; copyT(qbuf, sizeof(qbuf), STR_AMS_POPUP_Q);
     lv_label_set_text(lbl_q, qbuf); }
   lv_obj_set_style_text_color(lbl_q, lv_color_hex(0xe8f0ff), 0);
   lv_obj_set_style_text_font(lbl_q, &lv_font_montserrat_ext_18, 0);
@@ -165,8 +164,7 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
     s_close_pending   = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_yes = lv_label_create(btn_yes);
-  { char ybuf[24]; strncpy(ybuf, T(STR_AMS_BTN_YES), sizeof(ybuf)-1);
-    ybuf[sizeof(ybuf)-1] = '\0'; lv_label_set_text(lbl_yes, ybuf); }
+  { char ybuf[24]; copyT(ybuf, sizeof(ybuf), STR_AMS_BTN_YES); lv_label_set_text(lbl_yes, ybuf); }
   lv_obj_set_style_text_color(lbl_yes, lv_color_hex(0x80ffa0), 0);
   lv_obj_set_style_text_font(lbl_yes, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_yes);
@@ -183,8 +181,7 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
     s_close_pending  = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_no = lv_label_create(btn_no);
-  { char nbuf[24]; strncpy(nbuf, T(STR_AMS_TIMER_NO), sizeof(nbuf)-1);
-    nbuf[sizeof(nbuf)-1] = '\0'; lv_label_set_text(lbl_no, nbuf); }
+  { char nbuf[24]; copyT(nbuf, sizeof(nbuf), STR_AMS_TIMER_NO); lv_label_set_text(lbl_no, nbuf); }
   lv_obj_set_style_text_color(lbl_no, lv_color_hex(0xffa0a0), 0);
   lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_no);

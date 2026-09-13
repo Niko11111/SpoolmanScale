@@ -53,8 +53,8 @@ static bool hostIsNumeric(const char* h) {
 // because pointing at an address that does not answer is worse than saying
 // which switch is off.
 static void browserAddress(char* out, size_t len) {
-  if (!webMasterEnabled())  { strncpy(out, T(STR_SP_WEB_OFF), len - 1); }
-  else if (!wifi_ok)        { strncpy(out, T(STR_WIFI_STATUS_DISCONNECTED), len - 1); }
+  if (!webMasterEnabled())  { copyT(out, len, STR_SP_WEB_OFF); }
+  else if (!wifi_ok)        { copyT(out, len, STR_WIFI_STATUS_DISCONNECTED); }
   else                      { deviceBrowserUrl(out, len); return; }
   out[len - 1] = '\0';
 }
@@ -130,18 +130,14 @@ static void runAddressTest() {
   char inv_buf[32] = "";
   if (backendIsBamBuddy()) {
     char inv_name[24];
-    strncpy(inv_name, T(bbInventoryMode() == BB_INV_SPOOLMAN ? STR_BB_INV_SPOOLMAN
-                                                             : STR_BB_INV_OWN),
-            sizeof(inv_name) - 1);
-    inv_name[sizeof(inv_name) - 1] = '\0';
+    copyT(inv_name, sizeof(inv_name), bbInventoryMode() == BB_INV_SPOOLMAN ? STR_BB_INV_SPOOLMAN : STR_BB_INV_OWN);
     snprintf(inv_buf, sizeof(inv_buf), "%s | ", inv_name);
   }
 
   char result_buf[96];
   if (spool_count < 0) {
     char conn_buf[24];
-    strncpy(conn_buf, T(STR_CONNECTED), sizeof(conn_buf) - 1);
-    conn_buf[sizeof(conn_buf) - 1] = '\0';
+    copyT(conn_buf, sizeof(conn_buf), STR_CONNECTED);
     snprintf(result_buf, sizeof(result_buf), "v%s | %s%s", sm_ver, inv_buf, conn_buf);
   } else {
     char cnt[32];
@@ -213,8 +209,7 @@ void buildSpoolmanScreen() {
                                                              : "7912";
   char buf_hint[48];
   if (sp_locked) {
-    strncpy(buf_hint, T(STR_SP_LOCKED_TITLE), sizeof(buf_hint) - 1);
-    buf_hint[sizeof(buf_hint) - 1] = '\0';
+    copyT(buf_hint, sizeof(buf_hint), STR_SP_LOCKED_TITLE);
   } else {
     snprintf(buf_hint, sizeof(buf_hint), "192.168.x.x:%s", def_port);
   }
@@ -266,8 +261,7 @@ void buildSpoolmanScreen() {
     lv_obj_set_width(lbl_why, 440);
     lv_label_set_long_mode(lbl_why, LV_LABEL_LONG_WRAP);
     char buf_why[128];
-    strncpy(buf_why, T(STR_SP_LOCKED_INFO), sizeof(buf_why) - 1);
-    buf_why[sizeof(buf_why) - 1] = '\0';
+    copyT(buf_why, sizeof(buf_why), STR_SP_LOCKED_INFO);
     lv_label_set_text(lbl_why, buf_why);
     lv_obj_set_style_text_color(lbl_why, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(lbl_why, &lv_font_montserrat_ext_14, 0);
@@ -303,8 +297,7 @@ void buildSpoolmanScreen() {
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_clear = lv_label_create(btn_clear);
     char buf_clear[32];
-    strncpy(buf_clear, T(STR_SP_CLEAR), sizeof(buf_clear) - 1);
-    buf_clear[sizeof(buf_clear) - 1] = '\0';
+    copyT(buf_clear, sizeof(buf_clear), STR_SP_CLEAR);
     lv_label_set_text(lbl_clear, buf_clear);
     lv_obj_set_style_text_color(lbl_clear, lv_color_hex(0xff8080), 0);
     lv_obj_set_style_text_font(lbl_clear, &lv_font_montserrat_ext_16, 0);
@@ -392,8 +385,7 @@ void buildSpoolmanScreen() {
     // Says "testing" now, tests on the next loop pass.
     if (lbl_sp_test_result) {
       char tb[48];
-      strncpy(tb, T(STR_SPOOLMAN_TESTING), sizeof(tb) - 1);
-      tb[sizeof(tb) - 1] = '\0';
+      copyT(tb, sizeof(tb), STR_SPOOLMAN_TESTING);
       lv_label_set_text(lbl_sp_test_result, tb);
       lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x4a6fa0), 0);
     }
@@ -473,8 +465,8 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
   char buf_title[32], buf_msg[96], buf_retry[48], buf_skip[48];
   backendText(T(STR_SPOOLMAN_TITLE), buf_title, sizeof(buf_title));
   backendText(T(STR_SPOOLMAN_FAIL), buf_msg, sizeof(buf_msg));
-  strncpy(buf_retry, T(STR_SPOOLMAN_RETRY), sizeof(buf_retry)-1); buf_retry[sizeof(buf_retry)-1]=0;
-  strncpy(buf_skip,  T(STR_SPOOLMAN_SKIP),  sizeof(buf_skip)-1);  buf_skip[sizeof(buf_skip)-1]=0;
+  copyT(buf_retry, sizeof(buf_retry), STR_SPOOLMAN_RETRY); buf_retry[sizeof(buf_retry)-1]=0;
+  copyT(buf_skip, sizeof(buf_skip), STR_SPOOLMAN_SKIP);  buf_skip[sizeof(buf_skip)-1]=0;
 
   scr_spoolman_fail = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_spoolman_fail, 480, 320);

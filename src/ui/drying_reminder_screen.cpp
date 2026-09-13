@@ -129,9 +129,9 @@ void showDryingReminderScreen() {
   // ── Modi-Toggle-Buttons ──────────────────────────────────
   // Drei Buttons nebeneinander: Aus / Material / Manuell
   char ml0[16],ml1[16],ml2[16];
-  strncpy(ml0,T(STR_DRY_MODE_OFF),sizeof(ml0)-1);
-  strncpy(ml1,T(STR_DRY_MODE_MATERIAL),sizeof(ml1)-1);
-  strncpy(ml2,T(STR_DRY_MODE_MANUAL),sizeof(ml2)-1);
+  copyT(ml0, sizeof(ml0), STR_DRY_MODE_OFF);
+  copyT(ml1, sizeof(ml1), STR_DRY_MODE_MATERIAL);
+  copyT(ml2, sizeof(ml2), STR_DRY_MODE_MANUAL);
   const char* mode_labels[] = { ml0, ml1, ml2 };
   int btn_w = 144, btn_h = 36, btn_y = 64, btn_gap = 6;
   int total_w = 3*btn_w + 2*btn_gap;
@@ -169,7 +169,7 @@ void showDryingReminderScreen() {
   if (g_dry_mode == 0) {
     // Aus: Erklaerungstext
     lv_obj_t *lbl = lv_label_create(scr_drying_reminder);
-    { char dbuf[200]; strncpy(dbuf, T(STR_DRY_OFF_DESC), sizeof(dbuf)-1);
+    { char dbuf[200]; copyT(dbuf, sizeof(dbuf), STR_DRY_OFF_DESC);
       lv_label_set_text(lbl, dbuf); }
     lv_obj_set_style_text_color(lbl, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
@@ -181,7 +181,7 @@ void showDryingReminderScreen() {
   } else if (g_dry_mode == 1) {
     // Material: Tabelle der Schwellwerte (read-only)
     lv_obj_t *hint = lv_label_create(scr_drying_reminder);
-    { char hbuf[64]; strncpy(hbuf, T(STR_DRY_MAT_HINT), sizeof(hbuf)-1); hbuf[sizeof(hbuf)-1]=0;
+    { char hbuf[64]; copyT(hbuf, sizeof(hbuf), STR_DRY_MAT_HINT); hbuf[sizeof(hbuf)-1]=0;
       lv_label_set_text(hint, hbuf); }
     lv_obj_set_style_text_color(hint, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
@@ -242,9 +242,9 @@ void showDryingReminderScreen() {
         lv_obj_set_pos(l, x, 4);
       };
       { char h0[24],h1[24],h2[24];
-      strncpy(h0,T(STR_DRY_MAT_HDR_MAT),sizeof(h0)-1);
-      strncpy(h1,T(STR_DRY_MAT_HDR_YELLOW),sizeof(h1)-1);
-      strncpy(h2,T(STR_DRY_MAT_HDR_RED),sizeof(h2)-1);
+      copyT(h0, sizeof(h0), STR_DRY_MAT_HDR_MAT);
+      copyT(h1, sizeof(h1), STR_DRY_MAT_HDR_YELLOW);
+      copyT(h2, sizeof(h2), STR_DRY_MAT_HDR_RED);
       hdr(h0,0,72); hdr(h1,80,120); hdr(h2,210,120);
       lv_obj_t *h4l = lv_label_create(row);
       lv_label_set_text(h4l, T(STR_DRY_SEALED_HDR));
@@ -319,7 +319,7 @@ void showDryingReminderScreen() {
       lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 24, -8);
       // Untertitel
       lv_obj_t *slbl = lv_label_create(row_btn);
-      { char ehbuf[32]; strncpy(ehbuf, T(STR_DRY_MAN_EDIT_HINT), sizeof(ehbuf)-1); lv_label_set_text(slbl, ehbuf); }
+      { char ehbuf[32]; copyT(ehbuf, sizeof(ehbuf), STR_DRY_MAN_EDIT_HINT); lv_label_set_text(slbl, ehbuf); }
       lv_obj_set_style_text_color(slbl, lv_color_hex(0x2a4060), 0);
       lv_obj_set_style_text_font(slbl, &lv_font_montserrat_ext_12, 0);
       lv_obj_align(slbl, LV_ALIGN_LEFT_MID, 24, 10);
@@ -338,12 +338,12 @@ void showDryingReminderScreen() {
         lv_obj_clear_flag(s_dry_numpad_scr, LV_OBJ_FLAG_HIDDEN);
       }, LV_EVENT_CLICKED, NULL);
     };
-    { char ybuf[16]; strncpy(ybuf, T(STR_DRY_MAN_YELLOW_LBL), sizeof(ybuf)-1); makeThreshRow(ybuf, g_dry_man_yellow, 0xf0b838, content_y,      0); }
-    { char rbuf[16]; strncpy(rbuf, T(STR_DRY_MAN_RED_LBL),    sizeof(rbuf)-1); makeThreshRow(rbuf, g_dry_man_red,    0xe04040, content_y + 68, 1); }
+    { char ybuf[16]; copyT(ybuf, sizeof(ybuf), STR_DRY_MAN_YELLOW_LBL); makeThreshRow(ybuf, g_dry_man_yellow, 0xf0b838, content_y,      0); }
+    { char rbuf[16]; copyT(rbuf, sizeof(rbuf), STR_DRY_MAN_RED_LBL); makeThreshRow(rbuf, g_dry_man_red,    0xe04040, content_y + 68, 1); }
 
     // Info-Text
     lv_obj_t *info = lv_label_create(scr_drying_reminder);
-    { char ibuf[64]; strncpy(ibuf, T(STR_DRY_MAN_INFO), sizeof(ibuf)-1); lv_label_set_text(info, ibuf); }
+    { char ibuf[64]; copyT(ibuf, sizeof(ibuf), STR_DRY_MAN_INFO); lv_label_set_text(info, ibuf); }
     lv_obj_set_style_text_color(info, lv_color_hex(0x2a4060), 0);
     lv_obj_set_style_text_font(info, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(info, LV_TEXT_ALIGN_CENTER, 0);

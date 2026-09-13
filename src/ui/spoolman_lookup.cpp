@@ -1156,8 +1156,7 @@ void querySpoolman(const char* tray_uuid) {
   // appLoop, and a redraw is all that is wanted here. No timers, no input.
   if (lbl_status) {
     char buf[40];
-    strncpy(buf, T(STR_SEARCHING_INVENTORY), sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
+    copyT(buf, sizeof(buf), STR_SEARCHING_INVENTORY);
     lv_label_set_text(lbl_status, buf);
     lv_refr_now(NULL);
   }

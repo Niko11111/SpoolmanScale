@@ -513,7 +513,7 @@ void showConfirmPopup(const char* msg, int action) {
         logSD("Auto-Weight: deaktiviert");
         if (lbl_weight_main_lbl) {
           char wmbuf[40];
-          strncpy(wmbuf, T(STR_BTN_WEIGHT), sizeof(wmbuf)-1); wmbuf[sizeof(wmbuf)-1] = '\0';
+          copyT(wmbuf, sizeof(wmbuf), STR_BTN_WEIGHT);
           lv_label_set_text(lbl_weight_main_lbl, wmbuf);
           lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x40c080), 0);
         }
@@ -557,7 +557,7 @@ void showConfirmPopup(const char* msg, int action) {
 
         // Titel
         lv_obj_t *atitle = lv_label_create(abox);
-        char atbuf[48]; strncpy(atbuf, T(STR_AUTO_WEIGHT_TITLE), sizeof(atbuf)-1); atbuf[sizeof(atbuf)-1] = '\0';
+        char atbuf[48]; copyT(atbuf, sizeof(atbuf), STR_AUTO_WEIGHT_TITLE);
         lv_label_set_text(atitle, atbuf);
         lv_obj_set_style_text_color(atitle, lv_color_hex(0x28d49a), 0);
         lv_obj_set_style_text_font(atitle, &lv_font_montserrat_ext_20, 0);
@@ -568,7 +568,7 @@ void showConfirmPopup(const char* msg, int action) {
         // Info-Text. Both languages carry three hard line breaks, so the block
         // below is 3 lines at 14 px and ends well clear of the buttons at 156.
         lv_obj_t *ainfo = lv_label_create(abox);
-        char aibuf[160]; strncpy(aibuf, T(STR_AUTO_WEIGHT_INFO), sizeof(aibuf)-1); aibuf[sizeof(aibuf)-1] = '\0';
+        char aibuf[160]; copyT(aibuf, sizeof(aibuf), STR_AUTO_WEIGHT_INFO);
         lv_label_set_text(ainfo, aibuf);
         lv_obj_set_style_text_color(ainfo, lv_color_hex(0xc8d8f0), 0);
         lv_obj_set_style_text_font(ainfo, &lv_font_montserrat_ext_14, 0);
@@ -602,7 +602,7 @@ void showConfirmPopup(const char* msg, int action) {
           closeConfirmPopup();            // erstes Popup weg
         }, LV_EVENT_CLICKED, NULL);
         lv_obj_t *abtn_ok_lbl = lv_label_create(abtn_ok);
-        char acbuf[32]; strncpy(acbuf, T(STR_CONFIRM), sizeof(acbuf)-1); acbuf[sizeof(acbuf)-1] = '\0';
+        char acbuf[32]; copyT(acbuf, sizeof(acbuf), STR_CONFIRM);
         lv_label_set_text(abtn_ok_lbl, acbuf);
         lv_obj_set_style_text_color(abtn_ok_lbl, lv_color_hex(0x40c080), 0);
         lv_obj_set_style_text_font(abtn_ok_lbl, &lv_font_montserrat_ext_14, 0);
@@ -622,7 +622,7 @@ void showConfirmPopup(const char* msg, int action) {
           if (confirm_popup) lv_obj_clear_flag(confirm_popup, LV_OBJ_FLAG_HIDDEN);
         }, LV_EVENT_CLICKED, NULL);
         lv_obj_t *abtn_cancel_lbl = lv_label_create(abtn_cancel);
-        char acancelbuf[32]; strncpy(acancelbuf, T(STR_CANCEL), sizeof(acancelbuf)-1); acancelbuf[sizeof(acancelbuf)-1] = '\0';
+        char acancelbuf[32]; copyT(acancelbuf, sizeof(acancelbuf), STR_CANCEL);
         lv_label_set_text(abtn_cancel_lbl, acancelbuf);
         lv_obj_set_style_text_color(abtn_cancel_lbl, lv_color_hex(0xff8080), 0);
         lv_obj_set_style_text_font(abtn_cancel_lbl, &lv_font_montserrat_ext_14, 0);
@@ -822,8 +822,7 @@ void showBamBuddyCapPopup(float measured_g, float label_g) {
 
   lv_obj_t *title = lv_label_create(popup);
   char title_buf[40];
-  strncpy(title_buf, T(STR_BB_CAP_TITLE), sizeof(title_buf) - 1);
-  title_buf[sizeof(title_buf) - 1] = '\0';
+  copyT(title_buf, sizeof(title_buf), STR_BB_CAP_TITLE);
   lv_label_set_text(title, title_buf);
   lv_obj_set_style_text_color(title, lv_color_hex(0xf0b838), 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);
@@ -867,8 +866,7 @@ void showBamBuddyCapPopup(float measured_g, float label_g) {
   lv_obj_set_style_shadow_width(b_keep, 0, 0);
   { lv_obj_t *l = lv_label_create(b_keep);
     char buf[40];
-    strncpy(buf, T(STR_BB_CAP_KEEP), sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
+    copyT(buf, sizeof(buf), STR_BB_CAP_KEEP);
     lv_label_set_text(l, buf);
     lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);

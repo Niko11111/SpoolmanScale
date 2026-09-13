@@ -153,8 +153,7 @@ void buildBackendScreen() {
   releaseScreen(&scr_backend);
 
   char buf_title[32];
-  strncpy(buf_title, T(STR_BACKEND_TITLE), sizeof(buf_title) - 1);
-  buf_title[sizeof(buf_title) - 1] = '\0';
+  copyT(buf_title, sizeof(buf_title), STR_BACKEND_TITLE);
 
   scr_backend = buildOverlayScreen();
 
@@ -238,8 +237,7 @@ void buildBackendScreen() {
   // one question it is here for and gets out of the way.
   if (setup_active) {
     char buf_hint[160];
-    strncpy(buf_hint, T(STR_SETUP_BACKEND_HINT), sizeof(buf_hint) - 1);
-    buf_hint[sizeof(buf_hint) - 1] = '\0';
+    copyT(buf_hint, sizeof(buf_hint), STR_SETUP_BACKEND_HINT);
 
     lv_obj_t *hint = lv_label_create(scr_backend);
     lv_label_set_text(hint, buf_hint);
@@ -275,8 +273,7 @@ void buildBackendScreen() {
   // --- address row, opens the existing numpad screen -------------
   {
     char buf_addr[24];
-    strncpy(buf_addr, T(STR_BACKEND_ADDRESS), sizeof(buf_addr) - 1);
-    buf_addr[sizeof(buf_addr) - 1] = '\0';
+    copyT(buf_addr, sizeof(buf_addr), STR_BACKEND_ADDRESS);
 
     char host_buf[64];
     const char *h = backendHost();

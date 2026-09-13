@@ -81,8 +81,7 @@ static void buildAmsWindowNumpad() {
   s_ams_numpad_scr = buildOverlayScreen();
 
   char title_buf[32];
-  strncpy(title_buf, T(STR_AMS_WINDOW_LBL), sizeof(title_buf)-1);
-  title_buf[sizeof(title_buf)-1] = '\0';
+  copyT(title_buf, sizeof(title_buf), STR_AMS_WINDOW_LBL);
   buildSubHeader(s_ams_numpad_scr, title_buf, [](lv_event_t *e){
     if (s_ams_numpad_scr) { lv_obj_del(s_ams_numpad_scr); s_ams_numpad_scr = nullptr; }
     s_ams_numpad_lbl = nullptr;
@@ -205,8 +204,7 @@ void buildAmsAssignScreen() {
 
   releaseScreen(&scr_ams_assign);
   scr_ams_assign = buildOverlayScreen();
-  { char tbuf[32]; strncpy(tbuf, T(STR_AMS_TITLE), sizeof(tbuf)-1);
-    tbuf[sizeof(tbuf)-1] = '\0';
+  { char tbuf[32]; copyT(tbuf, sizeof(tbuf), STR_AMS_TITLE);
     buildSubHeader(scr_ams_assign, tbuf, [](lv_event_t *e){
       logSD("BTN: Back -> FilaMan options");
       show_filaman_options_pending = true;
@@ -214,9 +212,9 @@ void buildAmsAssignScreen() {
 
   // ---- mode buttons ------------------------------------------------
   char ml0[16], ml1[16], ml2[16];
-  strncpy(ml0, T(STR_AMS_MODE_OFF),    sizeof(ml0)-1); ml0[sizeof(ml0)-1] = '\0';
-  strncpy(ml1, T(STR_AMS_MODE_ASK),    sizeof(ml1)-1); ml1[sizeof(ml1)-1] = '\0';
-  strncpy(ml2, T(STR_AMS_MODE_ALWAYS), sizeof(ml2)-1); ml2[sizeof(ml2)-1] = '\0';
+  copyT(ml0, sizeof(ml0), STR_AMS_MODE_OFF);
+  copyT(ml1, sizeof(ml1), STR_AMS_MODE_ASK);
+  copyT(ml2, sizeof(ml2), STR_AMS_MODE_ALWAYS);
   const char* mode_labels[] = { ml0, ml1, ml2 };
   const int btn_w = 144, btn_h = 36, btn_y = 64, btn_gap = 6;
   const int btn_x0 = (480 - (3*btn_w + 2*btn_gap)) / 2;
@@ -262,8 +260,8 @@ void buildAmsAssignScreen() {
   // ---- content per mode --------------------------------------------
   char win_val[16];
   snprintf(win_val, sizeof(win_val), "%d %s", g_ams_window_s, T(STR_AMS_SEC_UNIT));
-  char win_lbl[24];  strncpy(win_lbl,  T(STR_AMS_WINDOW_LBL),  sizeof(win_lbl)-1);  win_lbl[sizeof(win_lbl)-1]  = '\0';
-  char win_hint[48]; strncpy(win_hint, T(STR_AMS_WINDOW_HINT), sizeof(win_hint)-1); win_hint[sizeof(win_hint)-1] = '\0';
+  char win_lbl[24];  copyT(win_lbl, sizeof(win_lbl), STR_AMS_WINDOW_LBL);
+  char win_hint[48]; copyT(win_hint, sizeof(win_hint), STR_AMS_WINDOW_HINT);
 
   auto windowRowCb = [](lv_event_t *e){
     if (scr_ams_assign) { lv_obj_del(scr_ams_assign); scr_ams_assign = nullptr; }
@@ -274,10 +272,9 @@ void buildAmsAssignScreen() {
   int desc_y = 132;
 
   if (g_ams_mode == AMS_ASK) {
-    char tl[24];  strncpy(tl,  T(STR_AMS_TIMER_LBL),  sizeof(tl)-1);  tl[sizeof(tl)-1]  = '\0';
-    char th[40];  strncpy(th,  T(STR_AMS_TIMER_HINT), sizeof(th)-1);  th[sizeof(th)-1]  = '\0';
-    char tv[16];  strncpy(tv,  T(g_ams_timer_yes ? STR_AMS_TIMER_YES : STR_AMS_TIMER_NO),
-                          sizeof(tv)-1); tv[sizeof(tv)-1] = '\0';
+    char tl[24];  copyT(tl, sizeof(tl), STR_AMS_TIMER_LBL);
+    char th[40];  copyT(th, sizeof(th), STR_AMS_TIMER_HINT);
+    char tv[16];  copyT(tv, sizeof(tv), g_ams_timer_yes ? STR_AMS_TIMER_YES : STR_AMS_TIMER_NO);
     makeValueRow(scr_ams_assign, tl, th, tv,
                  g_ams_timer_yes ? 0x28d49a : 0xf0b838, 124,
                  [](lv_event_t *e){
@@ -300,8 +297,7 @@ void buildAmsAssignScreen() {
     const int desc_id = (g_ams_mode == AMS_ASK)    ? STR_AMS_ASK_DESC
                       : (g_ams_mode == AMS_ALWAYS) ? STR_AMS_ALWAYS_DESC
                                                    : STR_AMS_OFF_DESC;
-    strncpy(dbuf, T(desc_id), sizeof(dbuf)-1);
-    dbuf[sizeof(dbuf)-1] = '\0';
+    copyT(dbuf, sizeof(dbuf), desc_id);
     lv_obj_t *lbl = lv_label_create(scr_ams_assign);
     lv_label_set_text(lbl, dbuf);
     lv_obj_set_style_text_color(lbl, lv_color_hex(0x4a6fa0), 0);
@@ -317,8 +313,7 @@ void buildAmsAssignScreen() {
   if (s_server_code != 200 && s_server_code != 0) {
     char ebuf[80];
     if (s_server_code == 403) {
-      strncpy(ebuf, T(STR_AMS_ERR_FORBIDDEN), sizeof(ebuf)-1);
-      ebuf[sizeof(ebuf)-1] = '\0';
+      copyT(ebuf, sizeof(ebuf), STR_AMS_ERR_FORBIDDEN);
     } else {
       snprintf(ebuf, sizeof(ebuf), T(STR_AMS_ERR_HTTP), s_server_code);
     }

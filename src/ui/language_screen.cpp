@@ -213,8 +213,7 @@ void showLanguageScreen() {
   // The hint that used to sit here was a second copy of the one at the top of
   // the screen, word for word.
   lv_obj_t *lbl_tz = lv_label_create(scr);
-  { char buf[32]; strncpy(buf, T(STR_TZ_TITLE), sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
+  { char buf[32]; copyT(buf, sizeof(buf), STR_TZ_TITLE);
     lv_label_set_text(lbl_tz, buf); }
   lv_obj_set_style_text_color(lbl_tz, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(lbl_tz, &lv_font_montserrat_ext_14, 0);

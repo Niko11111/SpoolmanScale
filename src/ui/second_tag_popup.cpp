@@ -99,8 +99,7 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *lbl_title = lv_label_create(box);
-  { char tbuf[32]; strncpy(tbuf, T(STR_TAG2_TITLE), sizeof(tbuf)-1);
-    tbuf[sizeof(tbuf)-1] = '\0'; lv_label_set_text(lbl_title, tbuf); }
+  { char tbuf[32]; copyT(tbuf, sizeof(tbuf), STR_TAG2_TITLE); lv_label_set_text(lbl_title, tbuf); }
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0xe8f0ff), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 14);
@@ -121,8 +120,7 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   lv_obj_align(lbl_spool, LV_ALIGN_TOP_MID, 0, 46);
 
   lv_obj_t *lbl_prompt = lv_label_create(box);
-  { char pbuf[96]; strncpy(pbuf, T(STR_TAG2_PROMPT), sizeof(pbuf)-1);
-    pbuf[sizeof(pbuf)-1] = '\0'; lv_label_set_text(lbl_prompt, pbuf); }
+  { char pbuf[96]; copyT(pbuf, sizeof(pbuf), STR_TAG2_PROMPT); lv_label_set_text(lbl_prompt, pbuf); }
   lv_obj_set_style_text_color(lbl_prompt, lv_color_hex(0xe8f0ff), 0);
   lv_obj_set_style_text_font(lbl_prompt, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_width(lbl_prompt, 360);
@@ -154,8 +152,7 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
     s_close_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_done = lv_label_create(btn_done);
-  { char dbuf[24]; strncpy(dbuf, T(STR_TAG2_BTN_DONE), sizeof(dbuf)-1);
-    dbuf[sizeof(dbuf)-1] = '\0'; lv_label_set_text(lbl_done, dbuf); }
+  { char dbuf[24]; copyT(dbuf, sizeof(dbuf), STR_TAG2_BTN_DONE); lv_label_set_text(lbl_done, dbuf); }
   lv_obj_set_style_text_color(lbl_done, lv_color_hex(0xe8f0ff), 0);
   lv_obj_set_style_text_font(lbl_done, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_done);

@@ -66,7 +66,7 @@ void updateDisplay() {
   if (g_tag.temp_min > 0 && g_tag.temp_max > 0) {
     snprintf(temp_str, sizeof(temp_str), "%d - %d C", g_tag.temp_min, g_tag.temp_max);
   } else {
-    strncpy(temp_str, T(STR_UNKNOWN), sizeof(temp_str)-1);
+    copyT(temp_str, sizeof(temp_str), STR_UNKNOWN);
   }
   lv_label_set_text(lbl_temp, temp_str);
 
@@ -407,8 +407,7 @@ void buildUI() {
   lv_obj_set_style_shadow_width(btn_more, 0, 0);
   lv_obj_add_event_cb(btn_more, [](lv_event_t *e){ logSD("BTN: Main -> MoreInfo"); showMoreInfoScreen(); }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_more = lv_label_create(btn_more);
-  char more_buf[24]; strncpy(more_buf, T(STR_BTN_MORE_INFO), sizeof(more_buf)-1);
-  more_buf[sizeof(more_buf)-1] = '\0';
+  char more_buf[24]; copyT(more_buf, sizeof(more_buf), STR_BTN_MORE_INFO);
   lv_label_set_text(lbl_more, more_buf);
   lv_obj_set_style_text_color(lbl_more, lv_color_hex(0x28d49a), 0);  // teal text
   lv_obj_set_style_text_font(lbl_more, &lv_font_montserrat_ext_12, 0);
@@ -431,8 +430,7 @@ void buildUI() {
   if (last_used_mode == 1)
     snprintf(lu_cap_buf, sizeof(lu_cap_buf), "%s:", T(STR_LASTUSED_OPT_WEIGHED));
   else
-    strncpy(lu_cap_buf, T(STR_LBL_LAST_USED), sizeof(lu_cap_buf)-1);
-  lu_cap_buf[sizeof(lu_cap_buf)-1] = '\0';
+    copyT(lu_cap_buf, sizeof(lu_cap_buf), STR_LBL_LAST_USED);
   lv_label_set_text(lbl_lu_cap, lu_cap_buf);
   lv_obj_set_style_text_color(lbl_lu_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_lu_cap, &lv_font_montserrat_ext_12, 0);
@@ -572,8 +570,7 @@ void buildUI() {
   if (g_scale_fitted) {
     // Scale filament netto caption - "Waage - Spule" / "Scale - Spool"
     lv_obj_t *lbl_sc_cap = lv_label_create(lv_scr_act());
-    char sc_cap_buf[24]; strncpy(sc_cap_buf, T(STR_LBL_SCALE_SPOOL_CAP), sizeof(sc_cap_buf)-1);
-    sc_cap_buf[sizeof(sc_cap_buf)-1] = '\0';
+    char sc_cap_buf[24]; copyT(sc_cap_buf, sizeof(sc_cap_buf), STR_LBL_SCALE_SPOOL_CAP);
     lv_label_set_text(lbl_sc_cap, sc_cap_buf);
     lv_obj_set_style_text_color(lbl_sc_cap, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(lbl_sc_cap, &lv_font_montserrat_ext_12, 0);
@@ -601,8 +598,7 @@ void buildUI() {
 
     // "Gesamt" / "Total" - caption and value share baseline 238
     lv_obj_t *lbl_live_cap = lv_label_create(lv_scr_act());
-    char live_cap_buf[16]; strncpy(live_cap_buf, T(STR_LBL_TOTAL_CAP), sizeof(live_cap_buf)-1);
-    live_cap_buf[sizeof(live_cap_buf)-1] = '\0';
+    char live_cap_buf[16]; copyT(live_cap_buf, sizeof(live_cap_buf), STR_LBL_TOTAL_CAP);
     lv_label_set_text(lbl_live_cap, live_cap_buf);
     lv_obj_set_style_text_color(lbl_live_cap, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(lbl_live_cap, &lv_font_montserrat_ext_12, 0);
@@ -616,8 +612,7 @@ void buildUI() {
 
     // "o. Beutel" / "w/o Bag" - caption and value share baseline 256
     lv_obj_t *lbl_bag_cap = lv_label_create(lv_scr_act());
-    char bag_cap_buf[16]; strncpy(bag_cap_buf, T(STR_LBL_WO_BAG_CAP), sizeof(bag_cap_buf)-1);
-    bag_cap_buf[sizeof(bag_cap_buf)-1] = '\0';
+    char bag_cap_buf[16]; copyT(bag_cap_buf, sizeof(bag_cap_buf), STR_LBL_WO_BAG_CAP);
     lv_label_set_text(lbl_bag_cap, bag_cap_buf);
     lv_obj_set_style_text_color(lbl_bag_cap, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(lbl_bag_cap, &lv_font_montserrat_ext_12, 0);
@@ -695,8 +690,7 @@ void buildUI() {
     // and inactive bars, and at 1.7:1 on this background it is not text.
     lbl_no_scale = lv_label_create(lv_scr_act());
     char ns_buf[48];
-    strncpy(ns_buf, T(STR_NO_SCALE), sizeof(ns_buf) - 1);
-    ns_buf[sizeof(ns_buf) - 1] = '\0';
+    copyT(ns_buf, sizeof(ns_buf), STR_NO_SCALE);
     lv_label_set_text(lbl_no_scale, ns_buf);
     lv_obj_set_style_text_color(lbl_no_scale, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(lbl_no_scale, &lv_font_montserrat_ext_12, 0);
@@ -730,8 +724,7 @@ void buildUI() {
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_ams = lv_label_create(btn_ams_main);
     char ams_buf[32];
-    strncpy(ams_buf, T(STR_AMSV_BTN), sizeof(ams_buf) - 1);
-    ams_buf[sizeof(ams_buf) - 1] = '\0';
+    copyT(ams_buf, sizeof(ams_buf), STR_AMSV_BTN);
     lv_label_set_text(lbl_ams, ams_buf);
     lv_obj_set_style_text_color(lbl_ams, lv_color_hex(0x28d49a), 0);
     lv_obj_set_style_text_font(lbl_ams, &lv_font_montserrat_ext_16, 0);
@@ -789,8 +782,7 @@ void buildUI() {
       if (g_auto_weight)
         snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
       else {
-        strncpy(wmbuf, T(STR_BTN_WEIGHT), sizeof(wmbuf)-1);
-        wmbuf[sizeof(wmbuf)-1] = '\0';
+        copyT(wmbuf, sizeof(wmbuf), STR_BTN_WEIGHT);
       }
       lv_label_set_text(lbl_wm, wmbuf);
     }
@@ -821,8 +813,7 @@ void buildUI() {
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_loc = lv_label_create(btn_location);
     char locbuf[32];
-    strncpy(locbuf, T(STR_BTN_LOCATION), sizeof(locbuf) - 1);
-    locbuf[sizeof(locbuf) - 1] = '\0';
+    copyT(locbuf, sizeof(locbuf), STR_BTN_LOCATION);
     lv_label_set_text(lbl_loc, locbuf);
     lv_obj_set_style_text_color(lbl_loc, lv_color_hex(0x28d49a), 0);
     lv_obj_set_style_text_font(lbl_loc, &lv_font_montserrat_ext_16, 0);
@@ -871,7 +862,7 @@ void buildUI() {
     showLinkEntryPopup(strlen(g_tag.tray_uuid) == 32);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_lk = lv_label_create(btn_link);
-  char lbl_lk_buf[32]; strncpy(lbl_lk_buf, T(STR_BTN_LINK), sizeof(lbl_lk_buf)-1);
+  char lbl_lk_buf[32]; copyT(lbl_lk_buf, sizeof(lbl_lk_buf), STR_BTN_LINK);
   lv_label_set_text(lbl_lk, lbl_lk_buf);
   lv_obj_set_style_text_color(lbl_lk, lv_color_hex(0xb8e030), 0);
   lv_obj_set_style_text_font(lbl_lk, &lv_font_montserrat_ext_16, 0);
@@ -895,7 +886,7 @@ void buildUI() {
     showCopyEntryPopup();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_cp = lv_label_create(btn_copy);
-  char lbl_cp_buf[32]; strncpy(lbl_cp_buf, T(STR_BTN_COPY_SPOOL), sizeof(lbl_cp_buf)-1);
+  char lbl_cp_buf[32]; copyT(lbl_cp_buf, sizeof(lbl_cp_buf), STR_BTN_COPY_SPOOL);
   lv_label_set_text(lbl_cp, lbl_cp_buf);
   lv_obj_set_style_text_color(lbl_cp, lv_color_hex(0x20d8f8), 0);
   lv_obj_set_style_text_font(lbl_cp, &lv_font_montserrat_ext_16, 0);

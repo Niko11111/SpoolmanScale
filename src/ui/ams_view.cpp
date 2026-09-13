@@ -174,8 +174,7 @@ static void setStatus(const char* text) {
 static void setStatusFmt(int str_id, int value) {
   if (!s_status) return;
   char fmt[48], buf[64];
-  strncpy(fmt, T(str_id), sizeof(fmt) - 1);
-  fmt[sizeof(fmt) - 1] = '\0';
+  copyT(fmt, sizeof(fmt), str_id);
   snprintf(buf, sizeof(buf), fmt, value);
   lv_label_set_text(s_status, buf);
   lv_obj_clear_flag(s_status, LV_OBJ_FLAG_HIDDEN);
@@ -234,8 +233,7 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
 
   char line[72];
   if (!tray.exists) {
-    strncpy(line, T(STR_AMSV_EMPTY), sizeof(line) - 1);
-    line[sizeof(line) - 1] = '\0';
+    copyT(line, sizeof(line), STR_AMSV_EMPTY);
   } else {
     char name[AMS_NAME_MAX];
     strncpy(name, tray.name[0] ? tray.name : T(STR_AMSV_EMPTY), sizeof(name) - 1);
@@ -300,12 +298,10 @@ static void buildUnitHeader(lv_obj_t* parent, const AmsSlotUnit& unit,
     strncpy(title, unit.label, sizeof(title) - 1);
     title[sizeof(title) - 1] = '\0';
   } else if (unit.is_ext) {
-    strncpy(title, T(STR_AMSV_UNIT_EXT), sizeof(title) - 1);
-    title[sizeof(title) - 1] = '\0';
+    copyT(title, sizeof(title), STR_AMSV_UNIT_EXT);
   } else {
     char fmt[24];
-    strncpy(fmt, T(unit.is_ht ? STR_AMSV_UNIT_HT : STR_AMSV_UNIT), sizeof(fmt) - 1);
-    fmt[sizeof(fmt) - 1] = '\0';
+    copyT(fmt, sizeof(fmt), unit.is_ht ? STR_AMSV_UNIT_HT : STR_AMSV_UNIT);
     // An AMS HT numbers itself from 128 up, a regular AMS from 0.
     const int shown = unit.is_ht ? (unit.ams_id - 127) : (unit.ams_id + 1);
     snprintf(title, sizeof(title), fmt, shown > 0 ? shown : index + 1);
@@ -324,9 +320,7 @@ static void buildUnitHeader(lv_obj_t* parent, const AmsSlotUnit& unit,
   if (unit.drying) {
     char dfmt[40], dbuf[48];
     const bool with_time = (unit.dry_minutes > 0);
-    strncpy(dfmt, T(with_time ? STR_AMSV_DRYING_TIME : STR_AMSV_DRYING_TEMP),
-            sizeof(dfmt) - 1);
-    dfmt[sizeof(dfmt) - 1] = '\0';
+    copyT(dfmt, sizeof(dfmt), with_time ? STR_AMSV_DRYING_TIME : STR_AMSV_DRYING_TEMP);
     if (with_time) {
       snprintf(dbuf, sizeof(dbuf), dfmt, (int)unit.dry_target_c,
                (int)unit.dry_minutes);
@@ -347,9 +341,7 @@ static void buildUnitHeader(lv_obj_t* parent, const AmsSlotUnit& unit,
   char right[32] = "";
   if (unit.humidity != AMS_HUMIDITY_NA) {
     char fmt[16];
-    strncpy(fmt, T(unit.humidity_is_level ? STR_AMSV_HUM_LEVEL : STR_AMSV_HUM_PCT),
-            sizeof(fmt) - 1);
-    fmt[sizeof(fmt) - 1] = '\0';
+    copyT(fmt, sizeof(fmt), unit.humidity_is_level ? STR_AMSV_HUM_LEVEL : STR_AMSV_HUM_PCT);
     snprintf(right, sizeof(right), fmt, (int)unit.humidity);
   }
   if (unit.temp_c10 != AMS_TEMP_NA) {
@@ -426,8 +418,7 @@ static void buildScreen() {
   if (!s_scr) return;
 
   char title[32];
-  strncpy(title, T(STR_AMSV_TITLE), sizeof(title) - 1);
-  title[sizeof(title) - 1] = '\0';
+  copyT(title, sizeof(title), STR_AMSV_TITLE);
   buildSubHeader(s_scr, title, backCb);
 
   int top = AMSV_BODY_TOP;
@@ -451,8 +442,7 @@ static void buildScreen() {
   lv_obj_t* rl = lv_btn_create(s_scr);
   if (rl) {
     char rlab[20];
-    strncpy(rlab, T(STR_AMSV_RELOAD), sizeof(rlab) - 1);
-    rlab[sizeof(rlab) - 1] = '\0';
+    copyT(rlab, sizeof(rlab), STR_AMSV_RELOAD);
     lv_obj_set_size(rl, AMSV_RELOAD_W, AMSV_RELOAD_H);
     lv_obj_align(rl, LV_ALIGN_TOP_RIGHT, -(AMSV_MARGIN + AMSV_CLOSE_CLEAR), top);
     lv_obj_set_style_bg_color(rl, lv_color_hex(AMSV_COL_LINE), 0);
@@ -568,8 +558,7 @@ static void fetchAndDraw() {
     // nothing.
     if (s_printers.count > 1) {
       char fmt[12];
-      strncpy(fmt, T(STR_AMSV_PRN_OF), sizeof(fmt) - 1);
-      fmt[sizeof(fmt) - 1] = '\0';
+      copyT(fmt, sizeof(fmt), STR_AMSV_PRN_OF);
       char n[12];
       snprintf(n, sizeof(n), fmt, (int)s_printer_idx + 1, (int)s_printers.count);
       snprintf(pos, sizeof(pos), "%s  ", n);
@@ -582,8 +571,7 @@ static void fetchAndDraw() {
                T(STR_AMSV_OFFLINE));
     } else if (s_state.job_percent >= 0) {
       char fmt[24];
-      strncpy(fmt, T(STR_AMSV_JOB), sizeof(fmt) - 1);
-      fmt[sizeof(fmt) - 1] = '\0';
+      copyT(fmt, sizeof(fmt), STR_AMSV_JOB);
       char job[24];
       snprintf(job, sizeof(job), fmt, (int)s_state.job_percent);
       snprintf(body, sizeof(body), "%s - %s", s_state.printer, job);

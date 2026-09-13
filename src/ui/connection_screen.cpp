@@ -149,8 +149,7 @@ void buildConnectionScreen() {
     lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
     lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
     char buf_backend[32];
-    strncpy(buf_backend, T(STR_BACKEND_TITLE), sizeof(buf_backend)-1);
-    buf_backend[sizeof(buf_backend)-1] = '\0';
+    copyT(buf_backend, sizeof(buf_backend), STR_BACKEND_TITLE);
     lv_obj_t *lbl = lv_label_create(btn_sp);
     lv_label_set_text(lbl, buf_backend);
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);

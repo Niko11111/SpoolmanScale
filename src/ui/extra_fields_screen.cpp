@@ -243,8 +243,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
 
   // Row 1: which field holds the tag UID. The subtitle names the current
   // choice, so the setting can be read without opening it.
-  { char buf_t[40]; strncpy(buf_t, T(STR_TAG_FIELD), sizeof(buf_t)-1);
-    buf_t[sizeof(buf_t)-1] = '\0';
+  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_TAG_FIELD);
     char buf_s[48];
     snprintf(buf_s, sizeof(buf_s), "%s", tagFieldKeyName());
     lv_obj_t *help = nullptr;
@@ -260,8 +259,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
 
   // Row 2: the drying date field. Nothing to choose, so tapping it re-runs
   // the check that offers to create whatever is missing.
-  { char buf_t[40]; strncpy(buf_t, T(STR_EF_LAST_DRIED), sizeof(buf_t)-1);
-    buf_t[sizeof(buf_t)-1] = '\0';
+  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_EF_LAST_DRIED);
     lv_obj_t *help = nullptr;
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_TINT, buf_t, LAST_DRIED_FIELD,
                                 false, &help);
@@ -276,8 +274,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   // switch that writes it is on - with it off there is no field to have. Like
   // the row above it has nothing to choose, so tapping it re-runs the check.
   if (g_hw_uid_write) {
-    char buf_t[40]; strncpy(buf_t, T(STR_HW_UID_WRITE), sizeof(buf_t)-1);
-    buf_t[sizeof(buf_t)-1] = '\0';
+    char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_HW_UID_WRITE);
     lv_obj_t *help = nullptr;
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_UPLOAD, buf_t, RFID_TAG_FIELD,
                                 false, &help);
@@ -456,8 +453,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     // Says "testing" now, asks the server on the next loop pass.
     if (lbl_extra_fields_status) {
       char tb[48];
-      strncpy(tb, T(STR_SPOOLMAN_TESTING), sizeof(tb) - 1);
-      tb[sizeof(tb) - 1] = '\0';
+      copyT(tb, sizeof(tb), STR_SPOOLMAN_TESTING);
       lv_label_set_text(lbl_extra_fields_status, tb);
       lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0x4a6fa0), 0);
     }

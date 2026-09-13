@@ -228,8 +228,7 @@ void buildOtaBrowserScreen() {
   if (!wifi_ok) {
     lv_obj_t *lbl_err = lv_label_create(scr_ota_browser);
     char err_buf[64];
-    strncpy(err_buf, T(STR_OTA_NO_WIFI), sizeof(err_buf) - 1);
-    err_buf[sizeof(err_buf) - 1] = '\0';
+    copyT(err_buf, sizeof(err_buf), STR_OTA_NO_WIFI);
     lv_label_set_text(lbl_err, err_buf);
     lv_obj_set_style_text_color(lbl_err, lv_color_hex(0xff8080), 0);
     lv_obj_set_style_text_font(lbl_err, &lv_font_montserrat_ext_16, 0);
@@ -311,8 +310,7 @@ void buildOtaBrowserScreen() {
   const int note_h = s_gate_opened ? GATE_NOTE_H : 0;
   if (s_gate_opened) {
     char note_buf[64];
-    strncpy(note_buf, T(STR_WEB_GATE_OPENED), sizeof(note_buf) - 1);
-    note_buf[sizeof(note_buf) - 1] = '\0';
+    copyT(note_buf, sizeof(note_buf), STR_WEB_GATE_OPENED);
 
     lv_obj_t *lbl_note = lv_label_create(scr_ota_browser);
     lv_label_set_text(lbl_note, note_buf);
@@ -362,8 +360,7 @@ void buildOtaBrowserScreen() {
       }, LV_EVENT_CLICKED, NULL);
       lv_obj_t *lbl_done = lv_label_create(btn_done);
       char done_buf[24];
-      strncpy(done_buf, T(STR_BTN_FINISH), sizeof(done_buf) - 1);
-      done_buf[sizeof(done_buf) - 1] = '\0';
+      copyT(done_buf, sizeof(done_buf), STR_BTN_FINISH);
       lv_label_set_text(lbl_done, done_buf);
       lv_obj_set_style_text_color(lbl_done, lv_color_hex(0x40c080), 0);
       lv_obj_set_style_text_font(lbl_done, &lv_font_montserrat_ext_16, 0);
@@ -379,8 +376,7 @@ void buildOtaBrowserScreen() {
 
   lv_obj_t *lbl_hint2 = lv_label_create(scr_ota_browser);
   char file_buf[160];
-  strncpy(file_buf, T(STR_OTA_FILE_HINT), sizeof(file_buf) - 1);
-  file_buf[sizeof(file_buf) - 1] = '\0';
+  copyT(file_buf, sizeof(file_buf), STR_OTA_FILE_HINT);
   lv_label_set_text(lbl_hint2, file_buf);
   lv_obj_set_style_text_color(lbl_hint2, lv_color_hex(0x2a4060), 0);
   lv_obj_set_style_text_font(lbl_hint2, &lv_font_montserrat_ext_12, 0);
@@ -391,8 +387,7 @@ void buildOtaBrowserScreen() {
 
   lbl_ota_status = lv_label_create(scr_ota_browser);
   char wait_buf[64];
-  strncpy(wait_buf, T(STR_OTA_WAITING), sizeof(wait_buf) - 1);
-  wait_buf[sizeof(wait_buf) - 1] = '\0';
+  copyT(wait_buf, sizeof(wait_buf), STR_OTA_WAITING);
   lv_label_set_text(lbl_ota_status, wait_buf);
   lv_obj_set_style_text_color(lbl_ota_status, lv_color_hex(0xf0b838), 0);
   lv_obj_set_style_text_font(lbl_ota_status, &lv_font_montserrat_ext_16, 0);
@@ -419,8 +414,7 @@ void buildOtaBrowserScreen() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_stop = lv_label_create(btn_stop);
   char stop_buf[32];
-  strncpy(stop_buf, T(STR_BTN_STOP_SERVER), sizeof(stop_buf) - 1);
-  stop_buf[sizeof(stop_buf) - 1] = '\0';
+  copyT(stop_buf, sizeof(stop_buf), STR_BTN_STOP_SERVER);
   lv_label_set_text(lbl_stop, stop_buf);
   lv_obj_set_style_text_color(lbl_stop, lv_color_hex(0xff8080), 0);
   lv_obj_set_style_text_font(lbl_stop, &lv_font_montserrat_ext_16, 0);

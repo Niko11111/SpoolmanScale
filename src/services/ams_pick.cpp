@@ -120,8 +120,7 @@ void amsPickShow() {
   }
 
   char fmt[48], head[80];
-  strncpy(fmt, T(STR_AMSV_PICK_HEAD), sizeof(fmt) - 1);
-  fmt[sizeof(fmt) - 1] = '\0';
+  copyT(fmt, sizeof(fmt), STR_AMSV_PICK_HEAD);
   snprintf(head, sizeof(head), fmt,
            s_pending.name[0] ? s_pending.name : "");
   requestAmsView(AMS_VIEW_PICK, onPicked, head);

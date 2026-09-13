@@ -82,8 +82,7 @@ void buildTimeZoneScreen() {
   scr_timezone = buildOverlayScreen();
 
   char title[32];
-  strncpy(title, T(STR_TZ_TITLE), sizeof(title) - 1);
-  title[sizeof(title) - 1] = '\0';
+  copyT(title, sizeof(title), STR_TZ_TITLE);
   if (tz_return_welcome) {
     // Header built by hand rather than through buildSubHeader(): that one
     // always adds a close button, and during first setup it would drop the
@@ -110,8 +109,7 @@ void buildTimeZoneScreen() {
   for (size_t i = 0; i < TZ_COUNT; i++) addZoneRow(list, i, active_idx);
 
   char hint_buf[160];
-  strncpy(hint_buf, T(STR_TZ_HINT), sizeof(hint_buf) - 1);
-  hint_buf[sizeof(hint_buf) - 1] = '\0';
+  copyT(hint_buf, sizeof(hint_buf), STR_TZ_HINT);
   lv_obj_t *hint = lv_label_create(scr_timezone);
   lv_label_set_text(hint, hint_buf);
   lv_obj_set_style_text_color(hint, lv_color_hex(0x4a6fa0), 0);

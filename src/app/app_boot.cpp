@@ -40,7 +40,7 @@ void wifiConnect() {
   // Update status bar; may already be set from setup(), but ensure it's shown.
   if (lbl_status) {
     char wifi_buf[32];
-    strncpy(wifi_buf, T(STR_WIFI_CONNECTING_BOOT), sizeof(wifi_buf)-1);
+    copyT(wifi_buf, sizeof(wifi_buf), STR_WIFI_CONNECTING_BOOT);
     lv_label_set_text(lbl_status, wifi_buf);
     lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x5090e0), 0);
     lv_timer_handler();

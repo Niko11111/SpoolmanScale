@@ -51,7 +51,7 @@ static void showFactoryResetPopup() {
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *lbl_t = lv_label_create(box);
-  char buf_t[48]; strncpy(buf_t, T(STR_FACTORY_RESET_TITLE), sizeof(buf_t)-1);
+  char buf_t[48]; copyT(buf_t, sizeof(buf_t), STR_FACTORY_RESET_TITLE);
   lv_label_set_text(lbl_t, buf_t);
   lv_obj_set_style_text_color(lbl_t, lv_color_hex(0xff6060), 0);
   lv_obj_set_style_text_font(lbl_t, &lv_font_montserrat_ext_18, 0);
@@ -81,7 +81,7 @@ static void showFactoryResetPopup() {
     releaseScreen(&s_reset_pop);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_c = lv_label_create(btn_c);
-  char buf_c[32]; strncpy(buf_c, T(STR_CANCEL), sizeof(buf_c)-1);
+  char buf_c[32]; copyT(buf_c, sizeof(buf_c), STR_CANCEL);
   lv_label_set_text(lbl_c, buf_c);
   lv_obj_set_style_text_color(lbl_c, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_c, &lv_font_montserrat_ext_14, 0);
@@ -112,7 +112,7 @@ static void showFactoryResetPopup() {
     ESP.restart();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
-  char buf_ok[48]; strncpy(buf_ok, T(STR_FACTORY_RESET_CONFIRM), sizeof(buf_ok)-1);
+  char buf_ok[48]; copyT(buf_ok, sizeof(buf_ok), STR_FACTORY_RESET_CONFIRM);
   lv_label_set_text(lbl_ok, buf_ok);
   lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0xff8080), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_14, 0);
@@ -204,9 +204,7 @@ void buildSystemScreen() {
   // hiding the confirmation from the person who did the work would be exactly
   // backwards.
   { char rst_sub[40];
-    strncpy(rst_sub, T(nfcResetVerified() ? STR_NFCRST_ROW_DONE : STR_NFCRST_ROW_SUB),
-            sizeof(rst_sub) - 1);
-    rst_sub[sizeof(rst_sub) - 1] = '\0';
+    copyT(rst_sub, sizeof(rst_sub), nfcResetVerified() ? STR_NFCRST_ROW_DONE : STR_NFCRST_ROW_SUB);
     addRow(list, LV_SYMBOL_CHARGE, T(STR_NFCRST_ROW), rst_sub,
       [](lv_event_t *e){
         logSD("BTN: System -> NFC reset probe");

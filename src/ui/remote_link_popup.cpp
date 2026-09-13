@@ -232,8 +232,7 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *lbl_title = lv_label_create(box);
-  { char tb[48]; strncpy(tb, T(STR_REMOTE_LINK_TITLE), sizeof(tb) - 1);
-    tb[sizeof(tb) - 1] = '\0'; lv_label_set_text(lbl_title, tb); }
+  { char tb[48]; copyT(tb, sizeof(tb), STR_REMOTE_LINK_TITLE); lv_label_set_text(lbl_title, tb); }
   lv_obj_set_style_text_color(lbl_title,
     mismatch ? lv_color_hex(0xff8080) : lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
@@ -274,8 +273,7 @@ void showRemoteLinkPopup(int spool_id) {
       snprintf(head, sizeof(head), "#%d  %s", spool_id, name[0] ? name : "-");
     }
   } else {
-    char fmt[64]; strncpy(fmt, T(STR_REMOTE_LINK_NO_DETAILS), sizeof(fmt) - 1);
-    fmt[sizeof(fmt) - 1] = '\0';
+    char fmt[64]; copyT(fmt, sizeof(fmt), STR_REMOTE_LINK_NO_DETAILS);
     snprintf(head, sizeof(head), "#%d  %s", spool_id, fmt);
   }
   lv_obj_t *lbl_head = lv_label_create(box);
@@ -377,8 +375,7 @@ void showRemoteLinkPopup(int spool_id) {
         snprintf(qb, sizeof(qb), T(STR_REMOTE_LINK_Q_WRITE),
                  tagRemotePayloadProtocol());
       else
-        strncpy(qb, T(STR_REMOTE_LINK_QUESTION), sizeof(qb) - 1);
-      qb[sizeof(qb) - 1] = '\0';
+        copyT(qb, sizeof(qb), STR_REMOTE_LINK_QUESTION);
       lv_label_set_text(lbl_q, qb); }
     lv_obj_set_style_text_color(lbl_q, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(lbl_q, &lv_font_montserrat_ext_14, 0);
@@ -430,8 +427,7 @@ void showRemoteLinkPopup(int spool_id) {
     close_remote_link_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_cancel = lv_label_create(btn_cancel);
-  { char cb[32]; strncpy(cb, T(STR_CANCEL), sizeof(cb) - 1);
-    cb[sizeof(cb) - 1] = '\0'; lv_label_set_text(lbl_cancel, cb); }
+  { char cb[32]; copyT(cb, sizeof(cb), STR_CANCEL); lv_label_set_text(lbl_cancel, cb); }
   lv_obj_set_style_text_color(lbl_cancel, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(lbl_cancel, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_cancel);

@@ -79,8 +79,7 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   // user tapped rather than being a floating paragraph.
   lv_obj_t *title = lv_label_create(box);
   char tbuf[INFO_TITLE_BUF];
-  strncpy(tbuf, T(title_id), sizeof(tbuf) - 1);
-  tbuf[sizeof(tbuf) - 1] = '\0';
+  copyT(tbuf, sizeof(tbuf), title_id);
   lv_label_set_text(title, tbuf);
   lv_obj_set_style_text_color(title,
     lv_color_hex(is_result ? 0xe8f0ff : 0x28d49a), 0);
@@ -113,8 +112,7 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   if (len >= sizeof(ibuf))
     logSDf("InfoPopup: text %d is %u bytes, buffer holds %u - truncated",
            text_id, (unsigned)len, (unsigned)(sizeof(ibuf) - 1));
-  strncpy(ibuf, T(text_id), sizeof(ibuf) - 1);
-  ibuf[sizeof(ibuf) - 1] = '\0';
+  copyT(ibuf, sizeof(ibuf), text_id);
   lv_label_set_text(info, ibuf);
   lv_obj_set_style_text_color(info,
     lv_color_hex(is_result ? 0x4a6fa0 : 0xc8d8f0), 0);
@@ -154,8 +152,7 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
 
   lv_obj_t *l = lv_label_create(btn);
   char bbuf[24];
-  strncpy(bbuf, T(is_result ? STR_BTN_OK : STR_BACK), sizeof(bbuf) - 1);
-  bbuf[sizeof(bbuf) - 1] = '\0';
+  copyT(bbuf, sizeof(bbuf), is_result ? STR_BTN_OK : STR_BACK);
   lv_label_set_text(l, bbuf);
   lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);

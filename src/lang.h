@@ -5,6 +5,8 @@
 // ============================================================
 #pragma once
 #include <stdint.h>
+#include <stdio.h>
+#include <stddef.h>
 
 enum Lang { LANG_DE = 0, LANG_EN = 1 };
 extern Lang g_lang;
@@ -1102,5 +1104,13 @@ extern const char* const STRINGS[][2];
 // about the same code, and two tables would have drifted apart.
 StringID tagWriteResultString(uint8_t code);
 
-// Macro: T(STR_XXX) -> returns the string in the current language
+// Macro: T(STR_XXX) -> returns the string in the current language. LVGL can
+// take it directly; lv_label_set_text() copies.
 #define T(id) STRINGS[id][g_lang]
+
+// A table string into a buffer, terminated - for the places that go on to
+// format or append. It replaces strncpy(buf, T(id), sizeof(buf) - 1), which
+// left the last byte to chance whenever a translation filled the buffer.
+static inline void copyT(char* dst, size_t n, int id) {
+  snprintf(dst, n, "%s", STRINGS[id][g_lang]);
+}
