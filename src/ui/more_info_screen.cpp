@@ -52,14 +52,32 @@ static int  status_pick_id            = 0;   // 1..6, or 0 for "cancelled"
 // Shared by both confirm buttons of the unlink popup. user_data is 1 for
 // "release the whole binding" and 0 for "only the tag on the scale" - the
 // distinction two UIDs create and a single one does not have.
+// Parked by the unlink confirmation and the location picker for
+// handleMoreInfoDeferredActions(). Both reach the backend, and both used to
+// run inside the callback of the button that asked - with the popup gone and
+// the touch panel dead for the length of the request.
+static bool unlink_pending  = false;
+static bool unlink_all      = false;
+static int  unlink_spool_id = 0;
+static bool loc_patch_pending  = false;
+static char loc_patch_name[48] = "";      // empty: clear the location
+static void closeLocationPicker();
+
 static void unlinkConfirmCb(lv_event_t *e) {
   lv_obj_t *btn = lv_event_get_target(e);
-  const bool all = (bool)(intptr_t)lv_obj_get_user_data(btn);
-  const int spool_id = sm_id;
+  unlink_all      = (bool)(intptr_t)lv_obj_get_user_data(btn);
+  unlink_spool_id = sm_id;
+  // Read out of the button before the popup goes. The popup is this button's
+  // grandparent, so it is released asynchronously; the unlink itself runs from
+  // the loop a pass later.
+  lv_obj_del_async(lv_obj_get_parent(lv_obj_get_parent(btn)));
+  unlink_pending = true;
+}
 
-  // Read out of the button before the popup goes, then close it: the calls
-  // below reach the network and a dialog still on screen would look frozen.
-  lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(btn)));
+static void runUnlink() {
+  const bool all      = unlink_all;
+  const int  spool_id = unlink_spool_id;
+  if (spool_id <= 0) return;
 
   if (backendMode() == BACKEND_SPOOLMAN) {
     // Only Spoolman has more than one place a binding can sit, so only there
@@ -110,6 +128,36 @@ void requestLocationPicker(bool from_popup) {
 }
 
 void handleMoreInfoDeferredActions() {
+  if (unlink_pending) {
+    unlink_pending = false;
+    runUnlink();
+  }
+  if (loc_patch_pending) {
+    loc_patch_pending = false;
+    closeLocationPicker();
+    if (sm_id > 0) {
+      const bool clear = (loc_patch_name[0] == '\0');
+      const int code = backendPatchSpoolLocation(cfg_spoolman_base, sm_id,
+                                                 clear ? nullptr : loc_patch_name, 8000);
+      if (code == 200) {
+        if (clear) {
+          sm_location_id = 0;
+          sm_location_name[0] = '\0';
+        } else {
+          strncpy(sm_location_name, loc_patch_name, sizeof(sm_location_name) - 1);
+          sm_location_name[sizeof(sm_location_name) - 1] = '\0';
+          sm_location_id = 0;
+          // Mark the popup as shown so it does not re-trigger on the next
+          // removal.
+          g_loc_popup_shown_for_id = sm_id;
+          logSDf("[verbose] LOC: location saved '%s' id=%d from_popup=%d",
+                 loc_patch_name, sm_id, (int)g_loc_picker_from_popup);
+        }
+      }
+    }
+    if (g_loc_picker_from_popup) showMainScreen();
+    else                         showMoreInfoScreen();
+  }
   if (show_location_picker_pending) {
     show_location_picker_pending = false;
     logSDf("[verbose] LOC: show_location_picker_pending fired from_popup=%d id=%d", (int)g_loc_picker_from_popup, sm_id);
@@ -390,14 +438,8 @@ void fetchAndFillLocationList() {
   lv_obj_center(lbl_none);
   lv_obj_add_event_cb(btn_none, [](lv_event_t *e) {
     if (!wifiManagerIsConnected() || sm_id <= 0) return;
-    int code = backendPatchSpoolLocation(cfg_spoolman_base, sm_id, nullptr, 8000);
-    if (code == 200) {
-      sm_location_id = 0;
-      sm_location_name[0] = '\0';
-    }
-    closeLocationPicker();
-    if (g_loc_picker_from_popup) { showMainScreen(); }
-    else { showMoreInfoScreen(); }
+    loc_patch_name[0] = '\0';      // clear
+    loc_patch_pending = true;
   }, LV_EVENT_CLICKED, NULL);
 
   logLvMem("loclist/pre", 0);
@@ -436,19 +478,12 @@ void fetchAndFillLocationList() {
     lv_obj_add_event_cb(row, [](lv_event_t *e) {
       lv_obj_t *lbl = lv_obj_get_child(lv_event_get_target(e), 0);
       if (!lbl || !wifiManagerIsConnected() || sm_id <= 0) return;
+      // Copied out of the label now: the picker is gone by the time the
+      // PATCH runs from the loop.
       const char* sel_name = lv_label_get_text(lbl);
-      int code = backendPatchSpoolLocation(cfg_spoolman_base, sm_id, sel_name, 8000);
-      if (code == 200) {
-        strncpy(sm_location_name, sel_name, sizeof(sm_location_name)-1);
-        sm_location_name[sizeof(sm_location_name)-1] = '\0';
-        sm_location_id = 0;
-        // Mark popup as shown so it doesn't re-trigger on next tag-remove
-        g_loc_popup_shown_for_id = sm_id;
-        logSDf("[verbose] LOC: location saved '%s' id=%d from_popup=%d", sel_name, sm_id, (int)g_loc_picker_from_popup);
-      }
-      closeLocationPicker();
-      if (g_loc_picker_from_popup) { showMainScreen(); }
-      else { showMoreInfoScreen(); }
+      strncpy(loc_patch_name, sel_name ? sel_name : "", sizeof(loc_patch_name) - 1);
+      loc_patch_name[sizeof(loc_patch_name) - 1] = '\0';
+      loc_patch_pending = true;
     }, LV_EVENT_CLICKED, NULL);
     loc_shown++;
   }

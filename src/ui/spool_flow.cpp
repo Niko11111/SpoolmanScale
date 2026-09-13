@@ -247,6 +247,21 @@ static bool link_id_lookup_is_bambu = false;
 bool link_material_ignored = false;
 static bool link_overlays_close_pending = false;
 static bool show_id_input_pending = false;   // deferred re-open of IdInputPopup from Back button
+
+// Parked by the flow's buttons for handleSpoolFlowDeferredActions(). Every
+// one of these reaches the backend - a link PATCH, an inventory fetch, a
+// spool create - and used to run inside the callback of the button that
+// asked for it, with the touch panel dead for the length of the request.
+static bool  link_patch_pending      = false;   // doLinkPatch(id, bambu)
+static int   link_patch_id           = 0;
+static bool  link_patch_bambu        = false;
+static bool  link_list_fetch_pending = false;   // "from the list" on the link entry
+static bool  copy_fetch_pending      = false;   // copy entry: active or archived spools
+static bool  copy_fetch_archived     = false;
+static bool  copy_create_pending     = false;   // copy confirm OK
+static int   copy_create_sid = 0, copy_create_fid = 0;
+static float copy_create_ini = 0.0f, copy_create_spw = 0.0f;
+static bool  newtag_create_pending   = false;   // new-from-tag OK
 static bool show_id_input_rebuild = false;   // deferred re-open from WarnPopupA retry (rebuild after del)
 static bool id_input_open = false;           // true while IdInputPopup is visible — suppresses NFC Spoolman query
 
@@ -991,9 +1006,11 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
   lv_obj_set_style_shadow_width(btn_force, 0, 0);
   lv_obj_set_style_border_width(btn_force, 0, 0);
   lv_obj_add_event_cb(btn_force, [](lv_event_t *e) {
-    if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
-    if (scr_link_id)     { lv_obj_del(scr_link_id);     scr_link_id = nullptr; }
-    doLinkPatch(warn_a_spool_id, warn_a_is_bambu);
+    // Parked: the popup this button sits on and the numpad behind it are
+    // taken down by the handler, then the PATCH runs from the loop.
+    link_patch_id    = warn_a_spool_id;
+    link_patch_bambu = warn_a_is_bambu;
+    link_patch_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_force = lv_label_create(btn_force);
   lv_label_set_text(lbl_force, T(add_mode ? STR_BTN_ADD_UID : STR_BTN_OVERWRITE));
@@ -1119,9 +1136,9 @@ void showWarnPopupB(int spool_id, bool is_bambu) {
   lv_obj_set_style_shadow_width(btn_force, 0, 0);
   lv_obj_set_style_border_width(btn_force, 0, 0);
   lv_obj_add_event_cb(btn_force, [](lv_event_t *e) {
-    if (scr_link_warn_b) { lv_obj_del(scr_link_warn_b); scr_link_warn_b = nullptr; }
-    if (scr_link_id)     { lv_obj_del(scr_link_id);     scr_link_id = nullptr; }
-    doLinkPatch(warn_b_spool_id, warn_b_is_bambu);
+    link_patch_id    = warn_b_spool_id;
+    link_patch_bambu = warn_b_is_bambu;
+    link_patch_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_force = lv_label_create(btn_force);
   lv_label_set_text(lbl_force, T(STR_BTN_OVERWRITE));
@@ -1860,7 +1877,9 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
       lv_obj_add_event_cb(btn_yes, [](lv_event_t *e) {
         int cidx = (intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
         lv_obj_t *pop = lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e)));
-        lv_obj_del(pop);
+        // Asynchronously: pop is this button's grandparent, and the rest of
+        // this callback still runs inside its event dispatch.
+        lv_obj_del_async(pop);
         // The same test the row callback does before it opens this popup. It is
         // needed twice because the array can be freed between the two taps:
         // anything that reaches hideAllOverlays() does that, a backend switch
@@ -1896,7 +1915,11 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
           showWarnPopupA(link_spools[cidx].id, linkTargetBase(link_spools[cidx].id),
                          link_flow_is_bambu, "", true);
         } else {
-          doLinkPatch(link_spools[cidx].id, link_flow_is_bambu);
+          // The id is copied now; the list it came from may be freed before
+          // the handler runs.
+          link_patch_id    = link_spools[cidx].id;
+          link_patch_bambu = link_flow_is_bambu;
+          link_patch_pending = true;
         }
       }, LV_EVENT_CLICKED, NULL);
       lv_obj_t *lbl_yes = lv_label_create(btn_yes);
@@ -2540,13 +2563,9 @@ void showLinkEntryPopup(bool is_bambu) {
   lv_obj_set_style_border_width(btn2, 1, 0);
   lv_obj_set_style_border_color(btn2, lv_color_hex(0x1a3060), 0);
   lv_obj_add_event_cb(btn2, [](lv_event_t *e) {
-    // Load and pre-filter spools, then start appropriate flow
-    fetchAllSpoolsForLink(link_flow_is_bambu, link_flow_is_bambu ? g_tag.material : "");
-    if (link_flow_is_bambu) {
-      showFilteredSpoolList("", "", "");  // Flow A: direct list (already material-filtered)
-    } else {
-      showVendorList();               // Flow B: 3-step
-    }
+    // The inventory fetch takes seconds; it runs from the loop, then the
+    // list or the vendor picker opens.
+    link_list_fetch_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *l2 = lv_label_create(btn2);
   lv_label_set_text(l2, T(STR_BTN_FROM_LIST));
@@ -2730,14 +2749,13 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
   lv_obj_set_style_radius(btn_ok, 8, 0);
   lv_obj_set_style_shadow_width(btn_ok, 0, 0);
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
-    int sid   = copy_template_spool_id;
-    int fid   = copy_template_filament_id;
-    float ini = copy_template_initial;
-    float spw = copy_template_spool_w;
-    closeCopyConfirmPopup();
-    closeCopyListPopup();
-    closeCopyEntryPopup();
-    doCopySpoolCreate(sid, fid, ini, spw);
+    copy_create_sid = copy_template_spool_id;
+    copy_create_fid = copy_template_filament_id;
+    copy_create_ini = copy_template_initial;
+    copy_create_spw = copy_template_spool_w;
+    // The handler closes the three popups - this button's own among them -
+    // and then creates the spool from the loop.
+    copy_create_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
   char ok_buf[32]; strncpy(ok_buf, T(STR_BTN_CONFIRMED), sizeof(ok_buf)-1);
@@ -3316,10 +3334,7 @@ void showNewFromTagPopup() {
   lv_obj_set_style_shadow_width(btn_ok, 0, 0);
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
     logSD("BTN: NewFromTag -> Confirm");
-    closeNewTagPopup();
-    closeCopyListPopup();
-    closeCopyEntryPopup();
-    doCreateSpoolFromTag();
+    newtag_create_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_ok);
     char b[32]; strncpy(b, T(STR_BTN_CONFIRMED), sizeof(b)-1); b[sizeof(b)-1] = '\0';
@@ -3451,22 +3466,8 @@ void showCopyEntryPopup() {
   lv_obj_set_style_border_color(btn2, lv_color_hex(0x1a3060), 0);
   lv_obj_add_event_cb(btn2, [](lv_event_t *e) {
     logSD("BTN: CopyEntry -> Active spools");
-    copy_flow_archived = false;
-    bool is_bambu_tag = (strlen(g_tag.tray_uuid) == 32);
-    if (is_bambu_tag) {
-      // Bambu: use material filter if available, else show all
-      fetchSpoolsForCopy(false, strlen(g_tag.material) > 0 ? g_tag.material : "", true);
-      showCopySpoolList();
-    } else {
-      // NTAG: always go via 4-stage vendor/material picker
-      copy_flow_via_list = true;
-      link_flow_is_bambu = false;
-      link_selected_material[0] = 0;
-      link_selected_material_full[0] = 0;
-      link_stage3_shown = false;
-      fetchAllSpoolsForLink(false, "", false);  // active spools only
-      showVendorList();
-    }
+    copy_fetch_archived = false;
+    copy_fetch_pending  = true;
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn2);
     char b[40]; strncpy(b, T(STR_COPY_ACTIVE_BTN), sizeof(b)-1);
@@ -3488,21 +3489,8 @@ void showCopyEntryPopup() {
   lv_obj_set_style_border_color(btn3, lv_color_hex(0x1a3060), 0);
   lv_obj_add_event_cb(btn3, [](lv_event_t *e) {
     logSD("BTN: CopyEntry -> Archived spools");
-    copy_flow_archived = true;
-    bool is_bambu_tag = (strlen(g_tag.tray_uuid) == 32);
-    if (is_bambu_tag) {
-      fetchSpoolsForCopy(true, strlen(g_tag.material) > 0 ? g_tag.material : "", true);
-      showCopySpoolList();
-    } else {
-      // NTAG: always go via 4-stage vendor/material picker (archived only)
-      copy_flow_via_list = true;
-      link_flow_is_bambu = false;
-      link_selected_material[0] = 0;
-      link_selected_material_full[0] = 0;
-      link_stage3_shown = false;
-      fetchAllSpoolsForLink(false, "", true);  // archived only
-      showVendorList();
-    }
+    copy_fetch_archived = true;
+    copy_fetch_pending  = true;
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn3);
     char b[40]; strncpy(b, T(STR_COPY_ARCHIVED_BTN), sizeof(b)-1);
@@ -3601,6 +3589,58 @@ void handleSpoolFlowDeferredActions() {
     logSD("Link flow: overlays closed after the spool list was freed");
     closeLinkOverlays();
     deleteSpoolFlowOverlays();
+  }
+
+  // ---- what the flow's buttons parked ----------------------------------
+  if (link_patch_pending) {
+    link_patch_pending = false;
+    // The warning popups and the numpad go first; doLinkPatch() then reaches
+    // the backend and repaints the main screen.
+    if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
+    if (scr_link_warn_b) { lv_obj_del(scr_link_warn_b); scr_link_warn_b = nullptr; }
+    closeIdInputPopup();
+    doLinkPatch(link_patch_id, link_patch_bambu);
+  }
+  if (link_list_fetch_pending) {
+    link_list_fetch_pending = false;
+    // Load and pre-filter spools, then start the appropriate flow.
+    fetchAllSpoolsForLink(link_flow_is_bambu, link_flow_is_bambu ? g_tag.material : "");
+    if (link_flow_is_bambu) showFilteredSpoolList("", "", "");   // Flow A: direct list
+    else                    showVendorList();                    // Flow B: 3-step
+  }
+  if (copy_fetch_pending) {
+    copy_fetch_pending = false;
+    copy_flow_archived = copy_fetch_archived;
+    const bool is_bambu_tag = (strlen(g_tag.tray_uuid) == 32);
+    if (is_bambu_tag) {
+      // Bambu: use the material filter if available, else show all.
+      fetchSpoolsForCopy(copy_fetch_archived,
+                         strlen(g_tag.material) > 0 ? g_tag.material : "", true);
+      showCopySpoolList();
+    } else {
+      // NTAG: always through the vendor/material picker.
+      copy_flow_via_list = true;
+      link_flow_is_bambu = false;
+      link_selected_material[0] = 0;
+      link_selected_material_full[0] = 0;
+      link_stage3_shown = false;
+      fetchAllSpoolsForLink(false, "", copy_fetch_archived);
+      showVendorList();
+    }
+  }
+  if (copy_create_pending) {
+    copy_create_pending = false;
+    closeCopyConfirmPopup();
+    closeCopyListPopup();
+    closeCopyEntryPopup();
+    doCopySpoolCreate(copy_create_sid, copy_create_fid, copy_create_ini, copy_create_spw);
+  }
+  if (newtag_create_pending) {
+    newtag_create_pending = false;
+    closeNewTagPopup();
+    closeCopyListPopup();
+    closeCopyEntryPopup();
+    doCreateSpoolFromTag();
   }
   if (tagwrite_after_link_id > 0) {
     const int id = tagwrite_after_link_id;
