@@ -1888,6 +1888,10 @@ const char* const STRINGS[][2] = {
   { "Keine Datei gewählt",       "No file chosen"             },  // STR_W_FW_NOFILE
   { "Wartung (Firmware, Logs, Tags)",
     "Maintenance (firmware, logs, tags)"                      },  // STR_W_R_MAINT_GATE
+  { "AMS-Ansicht",               "AMS view"                   },  // STR_AMS_BTN_VIEW
+  { "%s -> Fenster für die Zuordnung öffnen?",
+    "%s -> open the assignment window?"                       },  // STR_AMSV_WINDOW_HEAD
+  { "Fenster öffnen",            "Open window"                },  // STR_AMSV_BTN_WINDOW
 };
 
 StringID tagWriteResultString(uint8_t code) {

@@ -50,6 +50,13 @@
 // The PICK headline: the spool name and the question around it. Sized to
 // what amsPickShow() builds, so nothing is cut on the way in.
 #define AMSV_HEADLINE_MAX 80
+// The footer of a PICK or WINDOW page: one strip for the buttons, kept low
+// so it costs less than a row of bays, with the hit area widened instead.
+#define AMSV_FOOT_H       40
+#define AMSV_FOOT_BTN_W   150
+#define AMSV_FOOT_BTN_H   30
+#define AMSV_FOOT_BTN_EXT 6
+#define AMSV_FOOT_GAP     12
 
 // Palette, from the one table in theme.h. The local names stay so the
 // drawing code below reads as before; what they mean is decided there.
@@ -144,8 +151,12 @@ void hideAmsViewOverlays() {
 // so the note behind the question is dropped rather than asked again on the
 // next removal. Not while an answer is already parked: that one is the
 // answer, and it runs one pass later.
+static bool modeAsks() {
+  return s_mode == AMS_VIEW_PICK || s_mode == AMS_VIEW_WINDOW;
+}
+
 static void signalDismissIfUnanswered() {
-  if (s_mode != AMS_VIEW_PICK || !s_cb || s_pick_pending) return;
+  if (!modeAsks() || !s_cb || s_pick_pending) return;
   s_pick_ams     = -1;
   s_pick_tray    = -1;
   s_pick_pending = true;
@@ -398,6 +409,49 @@ static void backCb(lv_event_t* e) {
   s_close_pending = true;
 }
 
+// The footer's Cancel: the same "not now" the X in the header gives, as a
+// word at the bottom where the finger already is.
+static void footCancelCb(lv_event_t* e) {
+  s_close_pending = true;
+}
+
+// WINDOW: open FilaMan's assignment window. (0, 0) is the answer the
+// callback reads as "open"; the request itself runs one pass later, with
+// the page gone.
+static void footOpenCb(lv_event_t* e) {
+  s_pick_ams      = 0;
+  s_pick_tray     = 0;
+  s_pick_pending  = true;
+  s_close_pending = true;
+}
+
+static lv_obj_t* footButton(int x, int str_id, bool primary, lv_event_cb_t cb) {
+  lv_obj_t* b = lv_btn_create(s_scr);
+  if (!b) return nullptr;
+  lv_obj_set_size(b, AMSV_FOOT_BTN_W, AMSV_FOOT_BTN_H);
+  lv_obj_set_pos(b, x, 320 - AMSV_FOOT_H + (AMSV_FOOT_H - AMSV_FOOT_BTN_H) / 2);
+  lv_obj_set_style_bg_color(b, lv_color_hex(primary ? UI_COL_OK_BG : UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(b, lv_color_hex(primary ? UI_COL_OK_BG_PRESSED : UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_border_width(b, 1, 0);
+  lv_obj_set_style_border_color(b, lv_color_hex(primary ? UI_COL_OK_BG_PRESSED : UI_COL_LINE), 0);
+  lv_obj_set_style_radius(b, UI_RADIUS_BTN, 0);
+  lv_obj_set_style_shadow_width(b, 0, 0);
+  // Under the 44 px touch minimum by design, so the strip stays small; the
+  // hit area is widened instead.
+  lv_obj_set_ext_click_area(b, AMSV_FOOT_BTN_EXT);
+  lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, nullptr);
+  lv_obj_t* l = lv_label_create(b);
+  if (l) {
+    char t[24];
+    copyT(t, sizeof(t), str_id);
+    lv_label_set_text(l, t);
+    lv_obj_set_style_text_color(l, lv_color_hex(primary ? UI_COL_OK_TEXT : UI_COL_INK_2), 0);
+    lv_obj_set_style_text_font(l, UI_FONT_SMALL, 0);
+    lv_obj_align(l, LV_ALIGN_CENTER, 0, 0);
+  }
+  return b;
+}
+
 static void reloadCb(lv_event_t* e) {
   s_fetch_pending = true;
 }
@@ -428,7 +482,7 @@ static void buildScreen() {
   // The spool being placed, so the comparison with a bay is on one screen.
   // Only in PICK: in BROWSE there is no spool in hand and the line would
   // take a row of tiles worth of space to say nothing.
-  if (s_mode == AMS_VIEW_PICK && s_headline[0]) {
+  if (modeAsks() && s_headline[0]) {
     lv_obj_t* h = lv_label_create(s_scr);
     if (h) {
       lv_label_set_text(h, s_headline);
@@ -479,16 +533,28 @@ static void buildScreen() {
   }
   top += AMSV_STATUS_ROW_H;
 
+  // A question leaves room for its footer; a look at the bays does not.
+  const int foot = modeAsks() ? AMSV_FOOT_H : 0;
+
   s_body = lv_obj_create(s_scr);
   if (s_body) {
     lv_obj_set_pos(s_body, 0, top);
-    lv_obj_set_size(s_body, 480, 320 - top);
+    lv_obj_set_size(s_body, 480, 320 - top - foot);
     lv_obj_set_style_bg_color(s_body, lv_color_hex(AMSV_COL_BG), 0);
     lv_obj_set_style_bg_opa(s_body, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_body, 0, 0);
     lv_obj_set_style_pad_all(s_body, 0, 0);
     lv_obj_set_style_radius(s_body, 0, 0);
     lv_obj_set_scroll_dir(s_body, LV_DIR_VER);
+  }
+
+  // The footer. PICK: a way out in words, the X alone was easy to miss.
+  // WINDOW: the one action this mode exists for, and the way out beside it.
+  if (s_mode == AMS_VIEW_PICK) {
+    footButton((480 - AMSV_FOOT_BTN_W) / 2, STR_CANCEL, false, footCancelCb);
+  } else if (s_mode == AMS_VIEW_WINDOW) {
+    footButton(240 - AMSV_FOOT_GAP / 2 - AMSV_FOOT_BTN_W, STR_AMSV_BTN_WINDOW, true, footOpenCb);
+    footButton(240 + AMSV_FOOT_GAP / 2, STR_CANCEL, false, footCancelCb);
   }
 }
 

@@ -1096,6 +1096,11 @@ enum StringID {
   STR_W_FW_NOFILE,
   STR_W_R_MAINT_GATE,
 
+  // The AMS question's third answer, and the AMS view in window mode.
+  STR_AMS_BTN_VIEW,
+  STR_AMSV_WINDOW_HEAD,
+  STR_AMSV_BTN_WINDOW,
+
   STR_COUNT
 };
 

@@ -12,21 +12,29 @@
 //  a filled AmsSlotState and draws it. That is what lets the same
 //  page serve BamBuddy and FilaMan, and a third backend later.
 //
-//  Two modes. BROWSE just shows the AMS. PICK adds the weighed
+//  Three modes. BROWSE just shows the AMS. PICK adds the weighed
 //  spool to the header and turns every bay into a button, for the
-//  backends that can pin a spool to a bay.
+//  backends that can pin a spool to a bay. WINDOW shows the bays
+//  for orientation only and offers FilaMan's assignment window in
+//  the footer: there the next tray to be loaded takes the spool,
+//  so no bay is tapped.
+//
+//  PICK and WINDOW carry a footer with a Cancel button, so the way
+//  out is a word and not only the X in the header.
 // ============================================================
 
 enum AmsViewMode : uint8_t {
   AMS_VIEW_BROWSE = 0,
-  AMS_VIEW_PICK   = 1
+  AMS_VIEW_PICK   = 1,
+  AMS_VIEW_WINDOW = 2
 };
 
 // Called with the pair the user tapped, never an index into a list: the list
 // can have been rebuilt between the drawing and the answer. Called with
-// (-1, -1) when the page went away without a tap - back, a backend switch,
-// anything that tears the page down - so the caller can drop what it was
-// asking about instead of asking again on the next removal.
+// (-1, -1) when the page went away without a tap - back, Cancel, a backend
+// switch, anything that tears the page down - so the caller can drop what it
+// was asking about instead of asking again on the next removal. In WINDOW
+// mode the open button answers (0, 0).
 typedef void (*AmsPickCb)(int ams_id, int tray_id);
 
 // Opens the page. Does no work itself beyond raising a flag - the fetch that
