@@ -23,9 +23,9 @@ void zone4WaitingStyle(bool waiting) {
 
 void clearTagDisplay() {
   lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-  lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x4a6fa0), 0);  // yellow = kein Tag
+  lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);  // yellow = kein Tag
   lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x8fa8c8), 0);
+  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
   lv_label_set_text(lbl_uid, "-");
   lv_label_set_text(lbl_tray_uuid, "-");
   lv_label_set_text(lbl_material, "-");

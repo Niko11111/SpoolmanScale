@@ -5,11 +5,13 @@
 
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
+#include "services/auto_weight_state.h"
 #include "services/backend_api.h"
 #include "services/location_state.h"
 #include "services/user_options.h"
 #include "ui/ams_view.h"
 #include "ui/info_popup.h"
+#include "ui/more_info_screen.h"
 
 #include "lang.h"
 
@@ -51,14 +53,36 @@ unsigned long amsPickPendingAgeMs() {
 
 void amsPickDropPending() { s_pending.active = false; }
 
+// The location question the picker took the removal event away from. A
+// spool that went into a bay needs no shelf; one whose picker was closed
+// without a tap is going somewhere else, and that is what the location
+// prompt is for. Same conditions and same guard as the AMS question's "no"
+// branch in ams_assign_popup.cpp: the NFC poll kept running under the page,
+// and a spool that landed meanwhile moved sm_id.
+static void offerLocationAfterPick(int spool_id) {
+  if (!g_auto_loc_popup || !wifi_ok) return;
+  if (!sm_found || sm_archived || sm_id != spool_id) {
+    logSDf("LOC: not offered after the picker, id=%d sm_id=%d found=%d archived=%d",
+           spool_id, sm_id, (int)sm_found, (int)sm_archived);
+    return;
+  }
+  if (g_loc_popup_shown_for_id == spool_id) return;
+  g_loc_popup_shown_for_id = spool_id;
+  logSDf("LOC: offered after the picker was closed, id=%d", spool_id);
+  requestLocationPicker(true);
+}
+
 // Runs one pass after the picker closed, never from the tap itself.
 static void onPicked(int ams_id, int tray_id) {
   // The page went away without a tap: back, a backend switch, a navigation
-  // that tore it down. The question was seen and not answered, so it is not
-  // asked again the next time the same spool comes off the pad.
+  // that tore it down. The bay question was seen and not answered, so it is
+  // not asked again for this spool - the location question still is, because
+  // a spool that is not going into the printer is going onto a shelf.
   if (ams_id < 0 || tray_id < 0) {
+    const int spool_id = amsPickPendingSpoolId();
     logSD("AMSPICK: picker closed without an answer, note dropped");
     amsPickDropPending();
+    offerLocationAfterPick(spool_id);
     return;
   }
 
