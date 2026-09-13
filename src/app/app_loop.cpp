@@ -1711,10 +1711,13 @@ void appLoop() {
         if (tag_present) {
           // First close the gap with a few short-interval retries. Most NTAG
           // dropouts are a single missed read and come back on the next one.
-          if (nfc_fast_polls < NFC_FAST_POLL_MAX) {
+          // Neither branch leaves appLoop() early any more: the two returns
+          // that stood here skipped the link bar check and the 5 ms pause at
+          // the end of the loop on every fast re-poll.
+          const bool retrying = (nfc_fast_polls < NFC_FAST_POLL_MAX);
+          if (retrying) {
             if (nfc_fast_polls == 0) first_miss_ms = millis();
-            nfc_fast_polls++;
-            return;   // next poll follows in NFC_POLL_FAST_MS
+            nfc_fast_polls++;   // next poll follows in NFC_POLL_FAST_MS
           }
           // Retries exhausted. NTAG gets the longer grace period because it is
           // the flakier of the two protocols.
@@ -1727,85 +1730,85 @@ void appLoop() {
           // forever on a tag that would not authenticate.
           const unsigned long absent_limit =
             (last_uid_len == 7) ? NFC_ABSENT_NTAG_MS : NFC_ABSENT_BAMBU_MS;
-          if (millis() - first_miss_ms < absent_limit) return;
-
-          nfc_stat_removals++;
-          nfc_fast_polls = 0;
-          Serial.printf("NFC: tag removed (gap %u ms, %d fast re-polls exhausted)\n",
-            (unsigned)(millis() - first_miss_ms), NFC_FAST_POLL_MAX);
-          logSD("NFC: tag removed");
-          tag_present = false;
-          tag_absent_since_ms = millis();
-          nfc_absent_count = 0;
-          last_tag_seen_ms = millis();
-          spoolman_queried_uid[0] = '\0';  // allow re-query when same tag is placed again
-          // Only a spool that demonstrably left counts as news when it comes
-          // back. An NTAG whose reception drops out for longer than the grace
-          // period, with the spool still sitting on the pad, would otherwise
-          // clear the display and fetch the whole spool again on every
-          // dropout - which is the loop the display gate was there to stop.
-          //
-          // A different tag is unaffected: its UID no longer matches the
-          // marker, so swapping spools still reads.
-          if (weightSaysSpoolStayed()) {
-            logSDf("NFC: tag lost, but the pad still carries %.0fg of %.0fg - kept",
-                   scale_weight_g, loc_weight_ref);
-          } else {
-            ntag_handled_uid[0] = '\0';
-          }
-          TagSeen::forget();
-          link_popup_dismissed = false;   // Reset flag → next spool can show popup
-          link_tag_first_seen_ms = 0;
-          lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
-          lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
-          // Auto location popup: if enabled, spool is linked, and not shown for this spool yet
-          // Debounce: only trigger after 1500ms - avoids spurious remove during NTAG read
-          // Not for an archived spool: asking where to store something that
-          // was just taken out of the inventory is a question about a spool
-          // nobody is looking for.
-          if (g_auto_loc_popup && sm_found && !sm_archived && sm_id > 0 && wifi_ok &&
-              g_loc_popup_shown_for_id != sm_id) {
-            loc_popup_pending_id = sm_id;  // schedule - will fire after debounce in loop
-            logSDf("[verbose] LOC: tag removed, popup scheduled id=%d (debounce 2500ms)", sm_id);
-          } else if (g_auto_loc_popup) {
-            logSDf("[verbose] LOC: tag removed, popup suppressed id=%d shown_for=%d sm_found=%d wifi=%d", sm_id, g_loc_popup_shown_for_id, (int)sm_found, (int)wifi_ok);
-          }
-          // The AMS question hangs off the same removal, on the same
-          // debounce and the same weight cross-check.
-          // Same for the AMS question, and here it matters more than tidiness:
-          // it notes a measurement against the spool id, which turns into a
-          // weight write later on.
-          if (amsAskActive() && wifi_ok && sm_found && !sm_archived && sm_id > 0) {
-            // On Serial, not through logSD(): that one returns early when no
-            // SD card is present, so on a card-less scale none of this exists.
-            Serial.printf("AMS: removal id=%d settled=%d %.0fg pending=%d\n",
-                          sm_id, (int)ams_settled_ok, ams_settled_g, (int)amsHasPending());
-            if (!amsHasPending() && ams_settled_ok && ams_settled_g >= LOC_WEIGHT_MIN_G) {
-              // Nothing was weighed on purpose this time, so the settled
-              // reading stands in for the report that never happened. That is
-              // what makes the question independent of auto weighing.
-              float ams_netto = ams_settled_g - (float)sm_spool_weight;
-              if (ams_netto < 0) ams_netto = 0;
-              amsNoteMeasurement(sm_id, ams_netto, ams_settled_g, false);
-            } else if (!amsHasPending()) {
-              Serial.printf("AMS: no usable weight, no question (needs >= %.0fg)\n",
-                            (double)LOC_WEIGHT_MIN_G);
+          if (!retrying && millis() - first_miss_ms >= absent_limit) {
+            nfc_stat_removals++;
+            nfc_fast_polls = 0;
+            Serial.printf("NFC: tag removed (gap %u ms, %d fast re-polls exhausted)\n",
+              (unsigned)(millis() - first_miss_ms), NFC_FAST_POLL_MAX);
+            logSD("NFC: tag removed");
+            tag_present = false;
+            tag_absent_since_ms = millis();
+            nfc_absent_count = 0;
+            last_tag_seen_ms = millis();
+            spoolman_queried_uid[0] = '\0';  // allow re-query when same tag is placed again
+            // Only a spool that demonstrably left counts as news when it comes
+            // back. An NTAG whose reception drops out for longer than the grace
+            // period, with the spool still sitting on the pad, would otherwise
+            // clear the display and fetch the whole spool again on every
+            // dropout - which is the loop the display gate was there to stop.
+            //
+            // A different tag is unaffected: its UID no longer matches the
+            // marker, so swapping spools still reads.
+            if (weightSaysSpoolStayed()) {
+              logSDf("NFC: tag lost, but the pad still carries %.0fg of %.0fg - kept",
+                     scale_weight_g, loc_weight_ref);
+            } else {
+              ntag_handled_uid[0] = '\0';
             }
-            if (amsHasPending() && amsPendingSpoolId() == sm_id) {
-              ams_popup_pending_id = sm_id;
-              Serial.printf("AMS: question scheduled for id=%d\n", sm_id);
+            TagSeen::forget();
+            link_popup_dismissed = false;   // Reset flag → next spool can show popup
+            link_tag_first_seen_ms = 0;
+            lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
+            lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
+            lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+            // Auto location popup: if enabled, spool is linked, and not shown for this spool yet
+            // Debounce: only trigger after 1500ms - avoids spurious remove during NTAG read
+            // Not for an archived spool: asking where to store something that
+            // was just taken out of the inventory is a question about a spool
+            // nobody is looking for.
+            if (g_auto_loc_popup && sm_found && !sm_archived && sm_id > 0 && wifi_ok &&
+                g_loc_popup_shown_for_id != sm_id) {
+              loc_popup_pending_id = sm_id;  // schedule - will fire after debounce in loop
+              logSDf("[verbose] LOC: tag removed, popup scheduled id=%d (debounce 2500ms)", sm_id);
+            } else if (g_auto_loc_popup) {
+              logSDf("[verbose] LOC: tag removed, popup suppressed id=%d shown_for=%d sm_found=%d wifi=%d", sm_id, g_loc_popup_shown_for_id, (int)sm_found, (int)wifi_ok);
             }
-          }
-          // The bay picker hangs off the same removal. Its own branch rather
-          // than a shared one: this flow has no measurement to stand in for
-          // anything, it only needs to know which spool was just taken off.
-          if (amsPickActive() && wifi_ok && sm_found && !sm_archived && sm_id > 0) {
-            if (!amsPickHasPending()) amsPickNote(sm_id, sm_filament_name);
-            if (amsPickPendingSpoolId() == sm_id) {
-              pick_popup_pending_id = sm_id;
-              Serial.printf("AMSPICK: picker scheduled for id=%d\n", sm_id);
+            // The AMS question hangs off the same removal, on the same
+            // debounce and the same weight cross-check.
+            // Same for the AMS question, and here it matters more than tidiness:
+            // it notes a measurement against the spool id, which turns into a
+            // weight write later on.
+            if (amsAskActive() && wifi_ok && sm_found && !sm_archived && sm_id > 0) {
+              // On Serial, not through logSD(): that one returns early when no
+              // SD card is present, so on a card-less scale none of this exists.
+              Serial.printf("AMS: removal id=%d settled=%d %.0fg pending=%d\n",
+                            sm_id, (int)ams_settled_ok, ams_settled_g, (int)amsHasPending());
+              if (!amsHasPending() && ams_settled_ok && ams_settled_g >= LOC_WEIGHT_MIN_G) {
+                // Nothing was weighed on purpose this time, so the settled
+                // reading stands in for the report that never happened. That is
+                // what makes the question independent of auto weighing.
+                float ams_netto = ams_settled_g - (float)sm_spool_weight;
+                if (ams_netto < 0) ams_netto = 0;
+                amsNoteMeasurement(sm_id, ams_netto, ams_settled_g, false);
+              } else if (!amsHasPending()) {
+                Serial.printf("AMS: no usable weight, no question (needs >= %.0fg)\n",
+                              (double)LOC_WEIGHT_MIN_G);
+              }
+              if (amsHasPending() && amsPendingSpoolId() == sm_id) {
+                ams_popup_pending_id = sm_id;
+                Serial.printf("AMS: question scheduled for id=%d\n", sm_id);
+              }
+            }
+            // The bay picker hangs off the same removal. Its own branch rather
+            // than a shared one: this flow has no measurement to stand in for
+            // anything, it only needs to know which spool was just taken off.
+            if (amsPickActive() && wifi_ok && sm_found && !sm_archived && sm_id > 0) {
+              if (!amsPickHasPending()) amsPickNote(sm_id, sm_filament_name);
+              if (amsPickPendingSpoolId() == sm_id) {
+                pick_popup_pending_id = sm_id;
+                Serial.printf("AMSPICK: picker scheduled for id=%d\n", sm_id);
+              }
             }
           }
           // Do NOT close list - user should be able to select spool

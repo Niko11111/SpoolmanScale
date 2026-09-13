@@ -10,6 +10,7 @@
 #include "services/backend_api.h"
 #include "services/prefs_store.h"
 #include "ui/navigation.h"
+#include "ui/theme.h"
 #include "ui/ui_common.h"
 
 // Last, and after everything that pulls in ArduinoJson: its template
@@ -50,12 +51,13 @@
 // what amsPickShow() builds, so nothing is cut on the way in.
 #define AMSV_HEADLINE_MAX 80
 
-// Palette, the same one the rest of the interface uses.
-#define AMSV_COL_BG       0x0a1828
-#define AMSV_COL_LINE     0x1a3050
-#define AMSV_COL_ACCENT   0x28d49a
-#define AMSV_COL_MUTED    0x4a6fa0
-#define AMSV_COL_EMPTY    0x101f33
+// Palette, from the one table in theme.h. The local names stay so the
+// drawing code below reads as before; what they mean is decided there.
+#define AMSV_COL_BG       UI_COL_SURFACE_2
+#define AMSV_COL_LINE     UI_COL_ROW_PRESSED
+#define AMSV_COL_ACCENT   UI_COL_ACCENT
+#define AMSV_COL_MUTED    UI_COL_CAPTION
+#define AMSV_COL_EMPTY    UI_COL_EMPTY
 
 // Above this a filament colour is bright enough to need dark text on it.
 // Weighted the way the eye sees the channels, not a plain average: pure

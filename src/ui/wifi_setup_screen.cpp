@@ -68,7 +68,7 @@ void showWifiSetupScreen() {
   logSD("SHOW: WifiSetupScreen");
   logSD("UI: Screen -> WifiSetup");
   hideAllOverlays();
-  if (scr_wifi_setup) { lv_obj_del(scr_wifi_setup); scr_wifi_setup = nullptr; }
+  releaseScreen(&scr_wifi_setup);   // the rescan button sits on it
   // Null global pointers - otherwise they point to deleted objects
   lbl_wifi_scan_list    = nullptr;
   lbl_wifi_setup_status = nullptr;
@@ -282,7 +282,7 @@ void showWifiPassScreen() {
   logSD("SHOW: WifiPassScreen");
   logSD("UI: Screen -> WifiPass");
   hideAllOverlays();
-  if (scr_wifi_pass) { lv_obj_del(scr_wifi_pass); scr_wifi_pass = nullptr; }
+  releaseScreen(&scr_wifi_pass);
   ta_wifi_pass = nullptr;
   kb_wifi_pass = nullptr;
   buildWifiPassScreen();
@@ -376,7 +376,7 @@ void closeWifiConnectingScreen() {
   btn_conn_retry = btn_conn_next = lbl_conn_status = nullptr;
   conn_val_ssid = conn_val_ip = conn_val_gw = conn_val_rssi = nullptr;
   conn_lbl_ssid = conn_lbl_ip = conn_lbl_gw = conn_lbl_rssi = nullptr;
-  if (scr_wifi_connecting) { lv_obj_del(scr_wifi_connecting); scr_wifi_connecting = nullptr; }
+  releaseScreen(&scr_wifi_connecting);   // retry and next sit on it
 }
 
 void showWifiConnectingScreen() {
