@@ -424,6 +424,7 @@ static void routes(WebServer &srv) {
     // The request runs on the web worker; the page asks GET /api/host for
     // the answer. Held in this handler it stood the loop still for four
     // seconds.
+    if (webJobState() == WJS_DONE) webJobTake();   // somebody else's leftover
     if (webJobStart(WJ_HOST_TEST, nullptr, false)) {
       srv.send(202, "application/json", "{\"queued\":true}");
     } else {

@@ -320,18 +320,23 @@ static String body() {
          "rInit();"
          "var e=document.getElementById('fwsince'),t=parseInt(e.dataset.t||'0');"
          "e.textContent=t?new Date(t*1000).toLocaleString():G.unknown;"
-         "fetch('/api/ota/notes?tag='+encodeURIComponent(INSTALLED))"
-         ".then(r=>r.json()).then(d=>{"
+         "fwInst(0);}"
+         // The installed release's notes come from the worker like every
+         // other GitHub answer: 202 means "asked, not answered", so this asks
+         // again a second later. The check is chained behind the final answer,
+         // because the worker takes one job at a time.
+         "function fwInst(n){"
+         "fetch('/api/ota/notes?tag='+encodeURIComponent(INSTALLED),{cache:'no-store'})"
+         ".then(r=>{if(r.status===202){if(n<60)setTimeout(()=>fwInst(n+1),1000);"
+         "else ghCheck(true);return null;}return r.json();}).then(d=>{"
+         "if(!d)return;"
          "var c=document.getElementById('fwch'),r2=document.getElementById('fwrel');"
          "if(!d.ok){c.textContent=d.error==='notfound'?G.unpub:G.unknown;"
-         "r2.textContent=G.unknown;return;}"
+         "r2.textContent=G.unknown;}else{"
          "INST=d;c.textContent=d.prerelease?G.chpre:G.chrel;"
          "r2.textContent=fmtDate(d.published);"
-         "document.getElementById('fwnb').disabled=!d.notes;"
-         // Chained, not fired alongside: both calls are served from the same
-         // loop as everything else the scale does, so two at once only means
-         // the second one waits with a socket held open.
-         "}).catch(()=>{}).finally(()=>ghCheck(true));}"
+         "document.getElementById('fwnb').disabled=!d.notes;}"
+         "ghCheck(true);}).catch(()=>ghCheck(true));}"
          "function toggle(pre,btn,shown,hidden,text){"
          "var e=document.getElementById(pre),b=document.getElementById(btn);"
          "if(e.style.display==='block'){e.style.display='none';b.textContent=shown;return;}"
@@ -346,16 +351,16 @@ static String body() {
          // channel changes. It may be answered from the device's last result,
          // and it stays quiet when it fails: a scale with no route out should
          // not greet every visitor with a red line.
-         "function ghCheck(auto){"
+         "function ghCheck(auto,n){"
          "var b=document.getElementById('ghck');"
          "b.disabled=true;b.textContent=G.checking;ghSay('');"
-         "var again=false;"
+         "var again=false;n=n||0;"
          "fetch('/api/ota/check?pre='+document.getElementById('ghch').value"
          "+(auto?'&auto=1':''),"
          // 202: the device has asked GitHub and is not back yet. Asked again
          // in a second; the button stays "checking" meanwhile.
-         "{method:'POST'}).then(r=>{if(r.status===202){again=true;"
-         "setTimeout(()=>ghCheck(auto),1000);return null;}return r.json();}).then(d=>{"
+         "{method:'POST'}).then(r=>{if(r.status===202&&n<60){again=true;"
+         "setTimeout(()=>ghCheck(auto,n+1),1000);return null;}return r.json();}).then(d=>{"
          "if(!d)return;"
          "if(!d.ok){if(!auto)ghSay(ghErr(d),true);return;}"
          "setLatest(d.tag,d.published);"
@@ -457,10 +462,16 @@ static void routes(WebServer &srv) {
     // A check that is in, or on its way, comes before every other answer:
     // the page is asking again for the one it started.
     if (webJobState() == WJS_DONE && webJobKind() == WJ_GH_CHECK) { ghCheckFinish(srv); return; }
-    if (webJobState() == WJS_RUNNING && webJobKind() == WJ_GH_CHECK) {
+    if (webJobState() == WJS_RUNNING) {
+      // Ours, or somebody else's: either way the answer is "ask again". A
+      // "busy" here is what the page showed for a whole minute whenever the
+      // notes of the installed release were still on their way.
       srv.send(202, "application/json", "{\"ok\":true,\"pending\":true}");
       return;
     }
+    // A finished job nobody collected - the page moved on - must not block
+    // this one: the slot is taken back and used.
+    if (webJobState() == WJS_DONE) webJobTake();
     if (!wifi_ok) {
       srv.send(200, "application/json", "{\"ok\":false,\"error\":\"nowifi\"}");
       return;
@@ -516,11 +527,11 @@ static void routes(WebServer &srv) {
       // Notes for another tag were waiting; asked for this one, start over.
     }
     if (webJobState() == WJS_RUNNING) {
-      srv.send(webJobKind() == WJ_GH_NOTES ? 202 : 200, "application/json",
-               webJobKind() == WJ_GH_NOTES ? "{\"ok\":true,\"pending\":true}"
-                                           : "{\"ok\":false,\"error\":\"busy\"}");
+      // Ours or another job's: the page asks again either way.
+      srv.send(202, "application/json", "{\"ok\":true,\"pending\":true}");
       return;
     }
+    if (webJobState() == WJS_DONE) webJobTake();   // somebody else's leftover
     if (!wifi_ok) {
       srv.send(200, "application/json", "{\"ok\":false,\"error\":\"nowifi\"}");
       return;
