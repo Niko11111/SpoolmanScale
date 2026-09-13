@@ -9,6 +9,7 @@
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "lang.h"
+#include "theme.h"
 #include "ui_common.h"
 #include "wifi_info.h"
 #include "services/wifi_manager.h"
@@ -63,15 +64,16 @@ void buildConnectionScreen() {
   buildSubHeader(scr_connection, T(STR_TILE_CONNECTION),
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
 
-  // Back to the 80px tiles this screen always had. They only ever got squeezed
-  // to make room for a fourth tile; with extra fields moved to the filament
-  // manager screen there are three again in both backend modes, and three at
-  // 80px end at 310 of 320.
+  // Three rows of 80 px tiles. The two WiFi tiles share the first row, which
+  // is what makes room for the fourth: the way straight into the current
+  // filament manager's options, one tap shorter than through its screen.
   const int BTN_W = 456, BTN_H = 80, BTN_X = 12;
+  const int HALF_W = 222, HALF_X2 = BTN_X + HALF_W + 12;   // 222 + 12 + 222 = 456
+  const int HALF_SUB_W = HALF_W - 16;                       // the subtitle's room on a half tile
   const int BTN_Y[] = { 54, 142, 230 };
 
   lv_obj_t *btn_wifi = lv_btn_create(scr_connection);
-  lv_obj_set_size(btn_wifi, BTN_W, BTN_H);
+  lv_obj_set_size(btn_wifi, HALF_W, BTN_H);
   lv_obj_set_pos(btn_wifi, BTN_X, BTN_Y[0]);
   lv_obj_set_style_bg_color(btn_wifi, lv_color_hex(0x0a1e30), 0);
   lv_obj_set_style_bg_color(btn_wifi, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
@@ -95,12 +97,15 @@ void buildConnectionScreen() {
     lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
+    // An SSID can be 32 characters; on a half tile it is cut with dots.
+    lv_obj_set_width(sub, HALF_SUB_W);
+    lv_label_set_long_mode(sub, LV_LABEL_LONG_DOT);
     lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
   lv_obj_add_event_cb(btn_wifi, [](lv_event_t *e){ logSD("BTN: Conn -> WifiSetup"); showWifiSetupScreen(); }, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *btn_ws = lv_btn_create(scr_connection);
-  lv_obj_set_size(btn_ws, BTN_W, BTN_H);
-  lv_obj_set_pos(btn_ws, BTN_X, BTN_Y[1]);
+  lv_obj_set_size(btn_ws, HALF_W, BTN_H);
+  lv_obj_set_pos(btn_ws, HALF_X2, BTN_Y[0]);
   lv_obj_set_style_bg_color(btn_ws, lv_color_hex(0x0a1e30), 0);
   lv_obj_set_style_bg_color(btn_ws, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ws, 10, 0);
@@ -124,6 +129,8 @@ void buildConnectionScreen() {
     lv_obj_set_style_text_color(sub, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(sub, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(sub, HALF_SUB_W);
+    lv_label_set_long_mode(sub, LV_LABEL_LONG_DOT);
     lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
   lv_obj_add_event_cb(btn_ws, [](lv_event_t *e){
     logSD("BTN: Conn -> WiFi Status");
@@ -136,7 +143,7 @@ void buildConnectionScreen() {
 
   lv_obj_t *btn_sp = lv_btn_create(scr_connection);
   lv_obj_set_size(btn_sp, BTN_W, BTN_H);
-  lv_obj_set_pos(btn_sp, BTN_X, BTN_Y[2]);
+  lv_obj_set_pos(btn_sp, BTN_X, BTN_Y[1]);
   lv_obj_set_style_bg_color(btn_sp, lv_color_hex(0x0a1e30), 0);
   lv_obj_set_style_bg_color(btn_sp, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_sp, 10, 0);
@@ -172,6 +179,44 @@ void buildConnectionScreen() {
   lv_obj_add_event_cb(btn_sp, [](lv_event_t *e){
     logSD("BTN: Conn -> Backend");
     show_backend_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+
+  // Straight into the active filament manager's options. The same screen the
+  // "More options" button on the backend screen opens, one tap earlier; the
+  // tile says which backend's options those are.
+  lv_obj_t *btn_opts = lv_btn_create(scr_connection);
+  lv_obj_set_size(btn_opts, BTN_W, BTN_H);
+  lv_obj_set_pos(btn_opts, BTN_X, BTN_Y[2]);
+  lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_opts, UI_RADIUS_ROW, 0);
+  lv_obj_set_style_shadow_width(btn_opts, 0, 0);
+  lv_obj_set_style_border_width(btn_opts, 1, 0);
+  lv_obj_set_style_border_color(btn_opts, lv_color_hex(UI_COL_ROW_PRESSED), 0);
+  { lv_obj_t *ico = lv_label_create(btn_opts);
+    lv_label_set_text(ico, LV_SYMBOL_LIST);
+    lv_obj_set_style_text_color(ico, lv_color_hex(UI_COL_ACCENT), 0);
+    lv_obj_set_style_text_font(ico, UI_FONT_ICON, 0);
+    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -24);
+    char buf_opts[40];
+    copyT(buf_opts, sizeof(buf_opts), STR_BTN_MORE_OPTIONS);
+    lv_obj_t *lbl = lv_label_create(btn_opts);
+    lv_label_set_text(lbl, buf_opts);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_INK), 0);
+    lv_obj_set_style_text_font(lbl, UI_FONT_TITLE, 0);
+    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 4);
+    lv_obj_t *sub = lv_label_create(btn_opts);
+    lv_label_set_text(sub, backendName());
+    lv_obj_set_style_text_color(sub, lv_color_hex(UI_COL_CAPTION), 0);
+    lv_obj_set_style_text_font(sub, UI_FONT_SMALL, 0);
+    lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(sub, LV_ALIGN_CENTER, 0, 26); }
+  lv_obj_add_event_cb(btn_opts, [](lv_event_t *e){
+    logSD("BTN: Conn -> Backend options");
+    if (backendIsFilaMan())       show_filaman_options_pending  = true;
+    else if (backendIsBamBuddy()) show_bambuddy_options_pending = true;
+    else                          show_spoolman_options_pending = true;
   }, LV_EVENT_CLICKED, NULL);
 
   if (sd_verbose) logSD("[verbose] buildConnectionScreen: done");
