@@ -8,6 +8,8 @@ extern bool sd_verbose;
 String getCurrentLogFilename();
 void logSD(const char* msg);
 void logSDf(const char* fmt, ...);
+// Writes the lines other tasks queued. From appLoop().
+void sdLoggerTick();
 void initSD();
 
 // ---- session log --------------------------------------------------

@@ -18,6 +18,7 @@
 #include "ui/ota_github.h"
 #include "ui/update_badges.h"
 #include "web/web_access.h"
+#include "web/web_jobs.h"
 #include "web/web_server.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
@@ -348,9 +349,14 @@ static String body() {
          "function ghCheck(auto){"
          "var b=document.getElementById('ghck');"
          "b.disabled=true;b.textContent=G.checking;ghSay('');"
+         "var again=false;"
          "fetch('/api/ota/check?pre='+document.getElementById('ghch').value"
          "+(auto?'&auto=1':''),"
-         "{method:'POST'}).then(r=>r.json()).then(d=>{"
+         // 202: the device has asked GitHub and is not back yet. Asked again
+         // in a second; the button stays "checking" meanwhile.
+         "{method:'POST'}).then(r=>{if(r.status===202){again=true;"
+         "setTimeout(()=>ghCheck(auto),1000);return null;}return r.json();}).then(d=>{"
+         "if(!d)return;"
          "if(!d.ok){if(!auto)ghSay(ghErr(d),true);return;}"
          "setLatest(d.tag,d.published);"
          // Either direction is something to act on. Older only ever gets
@@ -364,18 +370,19 @@ static String body() {
          "n.textContent=G.whatsnew;"
          "ghSay(d.update?G.avail:(d.older?G.older:G.uptodate),false);"
          "}).catch(()=>{if(!auto)ghSay(G.fail,true);})"
-         ".finally(()=>{b.disabled=false;b.textContent=G.check;});}"
+         ".finally(()=>{if(!again){b.disabled=false;b.textContent=G.check;}});}"
          "var LATEST=null,OLDER=false;"
          "function ghNotes(){"
          "var tag=document.getElementById('ghlt').textContent;"
          "if(!tag||tag==='-')return;"
          "if(LATEST){toggle('ghn','ghnb',G.whatsnew,G.hide,LATEST.notes);return;}"
-         "var b=document.getElementById('ghnb');b.disabled=true;"
-         "fetch('/api/ota/notes?tag='+encodeURIComponent(tag)).then(r=>r.json())"
-         ".then(d=>{if(!d.ok){ghSay(ghErr(d),true);return;}"
+         "var b=document.getElementById('ghnb');b.disabled=true;var again=false;"
+         "fetch('/api/ota/notes?tag='+encodeURIComponent(tag)).then(r=>{"
+         "if(r.status===202){again=true;setTimeout(ghNotes,1000);return null;}return r.json();})"
+         ".then(d=>{if(!d)return;if(!d.ok){ghSay(ghErr(d),true);return;}"
          "LATEST=d;toggle('ghn','ghnb',G.whatsnew,G.hide,d.notes);})"
          ".catch(()=>ghSay(G.fail,true))"
-         ".finally(()=>{b.disabled=false;});}"
+         ".finally(()=>{if(!again)b.disabled=false;});}"
          // The device is unreachable from the moment it starts downloading
          // until it has rebooted, so the first poll waits rather than
          // reporting a healthy install as a failure.
@@ -426,6 +433,9 @@ static String body() {
   return h;
 }
 
+static void ghCheckFinish(WebServer &srv);
+static void routesTail(WebServer &srv);
+
 static void routes(WebServer &srv) {
   // What GitHub says about one tag: which channel it belongs to, when it was
   // published, and the release notes. The installed version and the one a
@@ -441,33 +451,16 @@ static void routes(WebServer &srv) {
     srv.send(200, "application/json", j);
   });
 
-  srv.on("/api/ota/notes", HTTP_GET, [&srv]() {
-    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_FIRMWARE))) return;
-    if (!wifi_ok) {
-      srv.send(200, "application/json", "{\"ok\":false,\"error\":\"nowifi\"}");
-      return;
-    }
-    if (otaBusy()) {
-      srv.send(200, "application/json", "{\"ok\":false,\"error\":\"busy\"}");
-      return;
-    }
-    GithubRelease rel;
-    char err[80] = "";
-    if (!githubReleaseByTag(srv.arg("tag").c_str(), rel, err, sizeof(err))) {
-      srv.send(200, "application/json",
-               "{\"ok\":false,\"error\":\"" + jsonEsc(err) + "\"}");
-      return;
-    }
-    srv.send(200, "application/json",
-             "{\"ok\":true,\"tag\":\"" + jsonEsc(rel.tag) +
-             "\",\"name\":\"" + jsonEsc(rel.name) +
-             "\",\"published\":\"" + jsonEsc(rel.published) +
-             "\",\"prerelease\":" + (rel.prerelease ? "true" : "false") +
-             ",\"notes\":\"" + jsonEsc(rel.notes.c_str()) + "\"}");
-  });
 
   srv.on("/api/ota/check", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_FIRMWARE))) return;
+    // A check that is in, or on its way, comes before every other answer:
+    // the page is asking again for the one it started.
+    if (webJobState() == WJS_DONE && webJobKind() == WJ_GH_CHECK) { ghCheckFinish(srv); return; }
+    if (webJobState() == WJS_RUNNING && webJobKind() == WJ_GH_CHECK) {
+      srv.send(202, "application/json", "{\"ok\":true,\"pending\":true}");
+      return;
+    }
     if (!wifi_ok) {
       srv.send(200, "application/json", "{\"ok\":false,\"error\":\"nowifi\"}");
       return;
@@ -500,14 +493,64 @@ static void routes(WebServer &srv) {
       return;
     }
 
-    char tag[40] = "", pub[24] = "", err[80] = "";
-    if (!githubLatestTag(gh_prerelease, tag, sizeof(tag), pub, sizeof(pub),
-                         err, sizeof(err))) {
-      srv.send(200, "application/json",
-               "{\"ok\":false,\"error\":\"" + jsonEsc(err) + "\"}");
+    // The request itself runs on the web worker: a TLS handshake held the
+    // loop task, and with it the display, for up to eight seconds when it was
+    // made here. 202 says "asked, not answered"; the page asks again.
+    if (!webJobStart(WJ_GH_CHECK, nullptr, gh_prerelease)) {
+      srv.send(200, "application/json", "{\"ok\":false,\"error\":\"busy\"}");
       return;
     }
+    srv.send(202, "application/json", "{\"ok\":true,\"pending\":true}");
+  });
+  srv.on("/api/ota/notes", HTTP_GET, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_FIRMWARE))) return;
+    const String tag = srv.arg("tag");
+    // Collect, if the notes for this tag are in.
+    if (webJobState() == WJS_DONE && webJobKind() == WJ_GH_NOTES) {
+      const WebJobResult& r = webJobResult();
+      String reply = r.ok ? r.body
+                          : "{\"ok\":false,\"error\":\"" + jsonEsc(r.err) + "\"}";
+      const bool same = (tag == r.tag) || !r.ok;
+      webJobTake();
+      if (same) { srv.send(200, "application/json", reply); return; }
+      // Notes for another tag were waiting; asked for this one, start over.
+    }
+    if (webJobState() == WJS_RUNNING) {
+      srv.send(webJobKind() == WJ_GH_NOTES ? 202 : 200, "application/json",
+               webJobKind() == WJ_GH_NOTES ? "{\"ok\":true,\"pending\":true}"
+                                           : "{\"ok\":false,\"error\":\"busy\"}");
+      return;
+    }
+    if (!wifi_ok) {
+      srv.send(200, "application/json", "{\"ok\":false,\"error\":\"nowifi\"}");
+      return;
+    }
+    if (otaBusy() || !webJobStart(WJ_GH_NOTES, tag.c_str(), false)) {
+      srv.send(200, "application/json", "{\"ok\":false,\"error\":\"busy\"}");
+      return;
+    }
+    srv.send(202, "application/json", "{\"ok\":true,\"pending\":true}");
+  });
+  routesTail(srv);
+}
 
+// The second half of /api/ota/check, once the worker has the tag: everything
+// here touches the loop task's own things - the badge, NVS, the cached
+// answer - and so it runs in the handler that collects, not in the worker.
+static void ghCheckFinish(WebServer &srv) {
+  const WebJobResult& r = webJobResult();
+  if (!r.ok) {
+    String reply = "{\"ok\":false,\"error\":\"" + jsonEsc(r.err) + "\"}";
+    webJobTake();
+    srv.send(200, "application/json", reply);
+    return;
+  }
+  char tag[40], pub[24];
+  strncpy(tag, r.tag, sizeof(tag) - 1); tag[sizeof(tag) - 1] = '\0';
+  strncpy(pub, r.pub, sizeof(pub) - 1); pub[sizeof(pub) - 1] = '\0';
+  webJobTake();
+
+  {
     strncpy(gh_latest_version, tag, sizeof(gh_latest_version) - 1);
     gh_latest_version[sizeof(gh_latest_version) - 1] = '\0';
     const uint64_t remote = parseVersion(tag), running = parseVersion(FW_VERSION);
@@ -540,8 +583,10 @@ static void routes(WebServer &srv) {
              "\",\"published\":\"" + jsonEsc(pub) +
              "\",\"update\":" + (newer ? "true" : "false") +
              ",\"older\":" + (older ? "true" : "false") + "}");
-  });
+  }
+}
 
+static void routesTail(WebServer &srv) {
   // Installs what the last check found. The tag is never taken from the
   // request: it goes straight into a download URL, and the only version this
   // page ever offers is the one it just showed.

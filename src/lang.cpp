@@ -1892,6 +1892,8 @@ const char* const STRINGS[][2] = {
   { "%s -> Fenster für die Zuordnung öffnen?",
     "%s -> open the assignment window?"                       },  // STR_AMSV_WINDOW_HEAD
   { "Fenster öffnen",            "Open window"                },  // STR_AMSV_BTN_WINDOW
+  { "Gespeichert - Test übersprungen, das Gerät ist beschäftigt",
+    "Saved - test skipped, the device is busy"                },  // STR_W_HOST_SAVED_ONLY
 };
 
 StringID tagWriteResultString(uint8_t code) {

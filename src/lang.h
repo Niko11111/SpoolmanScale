@@ -1100,6 +1100,7 @@ enum StringID {
   STR_AMS_BTN_VIEW,
   STR_AMSV_WINDOW_HEAD,
   STR_AMSV_BTN_WINDOW,
+  STR_W_HOST_SAVED_ONLY,      // the address took, the test could not run
 
   STR_COUNT
 };

@@ -19,6 +19,7 @@
 #include "services/tag_write.h"
 #include "services/user_options.h"
 #include "web/web_access.h"
+#include "web/web_jobs.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
 // parameter, so lang.h has to come after anything that pulls it in.
@@ -260,9 +261,13 @@ static String body() {
          "o.value='';o.textContent=t;p.appendChild(o);}"
          "function pickSpool(){const p=document.getElementById('tg-pick');"
          "if(p.value)document.getElementById('tg-id').value=p.value;loadPreview();}"
-         "function loadSpools(){const p=document.getElementById('tg-pick');if(!p)return;"
-         "setOpt(p,M.pick);"
-         "fetch('/api/spools').then(r=>r.json()).then(d=>{"
+         // 202 means the device is still fetching; asked again until it is not.
+         "function loadSpools(n){const p=document.getElementById('tg-pick');if(!p)return;"
+         "if(!n)setOpt(p,M.pick);"
+         "fetch('/api/spools',{cache:'no-store'}).then(r=>{"
+         "if(r.status===202){if((n||0)<40)setTimeout(()=>loadSpools((n||0)+1),700);"
+         "else setOpt(p,M.nolist);return null;}return r.json();}).then(d=>{"
+         "if(!d)return;"
          "if(d.error){setOpt(p,d.error);return;}"
          "setOpt(p,M.pick);"
          "d.forEach(s=>{const o=document.createElement('option');o.value=s.id;"
@@ -391,62 +396,32 @@ static void routes(WebServer &srv) {
 
   srv.on("/api/spools", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
-
-    // Four fields per spool instead of the whole record. Without the filter a
-    // large inventory is parsed in full - 268 spools came to 176 kB in the
-    // lookup path this mirrors - and none of it is used here.
-    JsonDocument filter;
-    JsonObject f = filter.to<JsonArray>().add<JsonObject>();
-    f["id"] = true;
-    JsonObject ff = f["filament"].to<JsonObject>();
-    ff["name"] = true;
-    ff["material"] = true;
-    ff["vendor"]["name"] = true;
-
-    // PSRAM, not the internal heap. This runs inside an HTTP handler, which is
-    // the worst moment to be holding the inventory in the 320 kB the rest of
-    // the firmware shares. Same reasoning as f2e61db for the GitHub release
-    // list.
-    SpiRamAllocator psram_alloc;
-    JsonDocument doc(&psram_alloc);
-    int code = backendGetSpoolListJson(backendBaseUrl(), false, doc, 8000, &filter);
-    if (code != 200) {
-      srv.send(200, "application/json",
-                      String("{\"error\":\"backend HTTP ") + code + "\"}");
+    // Start or collect. The list takes up to eight seconds to come in and
+    // used to be fetched inside this handler, holding the loop task for
+    // that long; it runs on the web worker now and the page asks again
+    // until the answer is ready - 202 says "not yet".
+    if (webJobState() == WJS_DONE && webJobKind() == WJ_SPOOLS) {
+      const WebJobResult& r = webJobResult();
+      if (!r.ok) {
+        srv.send(200, "application/json",
+                 String("{\"error\":\"backend HTTP ") + r.code + "\"}");
+      } else {
+        srv.send(200, "application/json", r.body);
+      }
+      webJobTake();
       return;
     }
-
-    // Streamed rather than assembled. The old version built the entire reply
-    // as one String on top of the parsed document, so the inventory was on
-    // the heap twice at once.
-    //
-    // Deliberately not clipped to spool_list_limit: that limit exists because
-    // an LVGL picker with hundreds of rows runs the device out of memory, and
-    // a browser has no such problem. Clipping here would just hide spool 200
-    // from the one page whose job is picking any spool.
-    srv.setContentLength(CONTENT_LENGTH_UNKNOWN);
-    srv.send(200, "application/json", "");
-    String chunk = "[";
-    bool first = true;
-    for (JsonObjectConst sp : doc.as<JsonArrayConst>()) {
-      int id = sp["id"] | 0;
-      if (!id) continue;
-      String label = String(sp["filament"]["vendor"]["name"] | "");
-      String name  = String(sp["filament"]["name"] | "");
-      String mat   = String(sp["filament"]["material"] | "");
-      if (label.length() && name.length()) label += " ";
-      label += name;
-      if (mat.length()) label += " (" + mat + ")";
-      label.replace("\\", "");
-      label.replace("\"", "'");
-      if (!first) chunk += ",";
-      first = false;
-      chunk += "{\"id\":" + String(id) + ",\"label\":\"" + label + "\"}";
-      if (chunk.length() >= 1024) { srv.sendContent(chunk); chunk = ""; }
+    if (webJobState() == WJS_RUNNING) {
+      srv.send(webJobKind() == WJ_SPOOLS ? 202 : 409, "application/json",
+               webJobKind() == WJ_SPOOLS ? "{\"pending\":true}" : "{\"error\":\"busy\"}");
+      return;
     }
-    chunk += "]";
-    srv.sendContent(chunk);
-    srv.sendContent("");   // terminates the chunked response
+    if (webJobState() == WJS_DONE) webJobTake();   // somebody else's leftover
+    if (!webJobStart(WJ_SPOOLS, nullptr, false)) {
+      srv.send(200, "application/json", "{\"error\":\"busy\"}");
+      return;
+    }
+    srv.send(202, "application/json", "{\"pending\":true}");
   });
 
   srv.on("/api/tag", HTTP_GET, [&srv]() {

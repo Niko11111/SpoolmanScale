@@ -25,6 +25,7 @@
 #include "services/filaman_api.h"
 #include "services/settings_registry.h"
 #include "web/web_access.h"
+#include "web/web_jobs.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
 // parameter, so lang.h has to come after anything that pulls it in.
@@ -173,7 +174,17 @@ static String body() {
          // real health check and /api/filaman/register with the HTTP status of
          // the registration - neither is worth clearing after four seconds.
          "function setHost(){flash('hs-s',M.test,false);"
-         "postFlash('/api/host',$('hs').value,'hs-s');}"
+         "post('/api/host',$('hs').value).then(function(r){"
+         "if(!r.ok){flash('hs-s',r.text||WS.err,true);return;}"
+         "if(r.json&&r.json.queued===false){flash('hs-s',r.json.msg,false);return;}"
+         "hostPoll(0);});}"
+         // The test runs on the device's worker; this asks for its answer
+         // twice a second for up to twenty seconds.
+         "function hostPoll(n){getJson('/api/host').then(function(d){"
+         "if(!d){flash('hs-s',WS.err,true);return;}"
+         "if(d.state==='running'){if(n<40)setTimeout(function(){hostPoll(n+1);},500);"
+         "else flash('hs-s',WS.err,true);return;}"
+         "if(d.state==='done')flash('hs-s',d.msg,!d.ok);});}"
          // A stored key is shown as underscores so its length gives nothing
          // away. Sending those back would overwrite the real one with them.
          "function guard(v){return v.indexOf('_')!==0;}"
@@ -410,12 +421,37 @@ static void routes(WebServer &srv) {
 
     // Answered with the result of an actual request rather than a bare
     // "saved": a typo here is only visible when something tries to use it.
-    const int code = backendGetHealthCode(backendBaseUrl(), 4000);
-    sm_reachable = (code == 200);
-    String msg = String(sm_reachable ? T(STR_W_HOST_OK) : T(STR_W_HOST_FAIL))
-               + " - " + backendBaseUrl();
-    if (!sm_reachable) msg += " (HTTP " + String(code) + ")";
-    srv.send(200, "text/plain", msg);
+    // The request runs on the web worker; the page asks GET /api/host for
+    // the answer. Held in this handler it stood the loop still for four
+    // seconds.
+    if (webJobStart(WJ_HOST_TEST, nullptr, false)) {
+      srv.send(202, "application/json", "{\"queued\":true}");
+    } else {
+      srv.send(200, "application/json",
+               String("{\"queued\":false,\"msg\":\"") + jsonEsc(T(STR_W_HOST_SAVED_ONLY)) + "\"}");
+    }
+  });
+  srv.on("/api/host", HTTP_GET, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
+    if (webJobState() == WJS_RUNNING && webJobKind() == WJ_HOST_TEST) {
+      srv.send(202, "application/json", "{\"state\":\"running\"}");
+      return;
+    }
+    if (webJobState() == WJS_DONE && webJobKind() == WJ_HOST_TEST) {
+      const WebJobResult& r = webJobResult();
+      // The reachability flag belongs to the loop task; the worker left it
+      // alone and only brought the code.
+      sm_reachable = r.ok;
+      String msg = String(r.ok ? T(STR_W_HOST_OK) : T(STR_W_HOST_FAIL))
+                 + " - " + backendBaseUrl();
+      if (!r.ok) msg += " (HTTP " + String(r.code) + ")";
+      String j = String("{\"state\":\"done\",\"ok\":") + (r.ok ? "true" : "false") +
+                 ",\"msg\":\"" + jsonEsc(msg.c_str()) + "\"}";
+      webJobTake();
+      srv.send(200, "application/json", j);
+      return;
+    }
+    srv.send(200, "application/json", "{\"state\":\"idle\"}");
   });
 
   srv.on("/api/filaman/key", HTTP_POST, [&srv]() {

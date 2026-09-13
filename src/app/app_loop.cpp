@@ -64,6 +64,7 @@
 #include "ui/bambuddy_options_screen.h"
 #include "ui/spoolman_options_screen.h"
 #include "services/prefs_store.h"
+#include "web/web_jobs.h"
 #include "ui/confirm_popup.h"
 #include "ui/connection_screen.h"
 #include "ui/dried_action.h"
@@ -385,6 +386,8 @@ void appLoop() {
   // Asks again while an unknown tag sits on the pad, so linking it in a
   // browser shows up here without lifting the spool off and back on.
   spoolmanRecheckTick();
+  sdLoggerTick();
+  webJobsTick();
   // And once the spool is known, whether the tag still says the same thing it
   // does. Costs a request only while the switch for it is on.
   tagMismatchTick();
