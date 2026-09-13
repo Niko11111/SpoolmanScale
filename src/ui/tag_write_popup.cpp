@@ -54,9 +54,10 @@ static uint32_t s_mism_tag_rgb = 0,           s_mism_srv_rgb = 0;
 
 #define MISM_SWATCH_PX  18
 
-// One line of the comparison: the swatch, when the side has a colour, and the
-// words. A flex row, so the pair stays centred whatever the text's width.
-static void mismatchRow(lv_obj_t *box, int y, const char *text,
+// One line of the comparison: who says it, the swatch when that side has a
+// colour, and the words. A flex row, so the three stay centred as a group
+// whatever the text's width.
+static void mismatchRow(lv_obj_t *box, int y, StringID caption, const char *text,
                         bool has_color, uint32_t rgb) {
   lv_obj_t *row = lv_obj_create(box);
   lv_obj_remove_style_all(row);
@@ -67,6 +68,10 @@ static void mismatchRow(lv_obj_t *box, int y, const char *text,
   lv_obj_set_style_pad_column(row, 8, 0);
   lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_clear_flag(row, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_t *cap = lv_label_create(row);
+  { char cb[24]; snprintf(cb, sizeof(cb), "%s:", T(caption)); lv_label_set_text(cap, cb); }
+  lv_obj_set_style_text_color(cap, lv_color_hex(0x8fa8c8), 0);
+  lv_obj_set_style_text_font(cap, &lv_font_montserrat_ext_16, 0);
   if (has_color) {
     lv_obj_t *sw = lv_obj_create(row);
     lv_obj_remove_style_all(sw);
@@ -158,8 +163,8 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
   if (s_mode == ASK_REWRITE) {
     // The rewrite's hint is the comparison itself: the tag's side and the
     // server's, each with its colour where it has one.
-    mismatchRow(box, 98,  s_mism_tag_line, s_mism_tag_has_color, s_mism_tag_rgb);
-    mismatchRow(box, 126, s_mism_srv_line, s_mism_srv_has_color, s_mism_srv_rgb);
+    mismatchRow(box, 98,  STR_TW_MISM_TAG,    s_mism_tag_line, s_mism_tag_has_color, s_mism_tag_rgb);
+    mismatchRow(box, 126, STR_TW_MISM_SERVER, s_mism_srv_line, s_mism_srv_has_color, s_mism_srv_rgb);
   } else {
     lv_obj_t *lbl_hint = lv_label_create(box);
     { char hb[192];
@@ -298,12 +303,13 @@ void tagMismatchTick() {
                                 have->r, have->g, have->b);
   if (want.has_color)  snprintf(want_col, sizeof(want_col), " #%02X%02X%02X",
                                 want.r, want.g, want.b);
-  snprintf(s_mism_tag_line, sizeof(s_mism_tag_line), "%s: %s %s%s",
-           T(STR_TW_MISM_TAG), have->brand, have->material, have_col);
-  snprintf(s_mism_srv_line, sizeof(s_mism_srv_line), "%s: %s %s%s",
-           T(STR_TW_MISM_SERVER), want.brand, want.material, want_col);
-  snprintf(s_mismatch_detail, sizeof(s_mismatch_detail), "%s\n%s",
-           s_mism_tag_line, s_mism_srv_line);
+  // The words alone; the popup puts the caption and the swatch in front.
+  snprintf(s_mism_tag_line, sizeof(s_mism_tag_line), "%s %s%s",
+           have->brand, have->material, have_col);
+  snprintf(s_mism_srv_line, sizeof(s_mism_srv_line), "%s %s%s",
+           want.brand, want.material, want_col);
+  snprintf(s_mismatch_detail, sizeof(s_mismatch_detail), "%s: %s\n%s: %s",
+           T(STR_TW_MISM_TAG), s_mism_tag_line, T(STR_TW_MISM_SERVER), s_mism_srv_line);
   s_mism_tag_has_color = have->has_color;
   s_mism_srv_has_color = want.has_color;
   s_mism_tag_rgb = ((uint32_t)have->r << 16) | ((uint32_t)have->g << 8) | have->b;

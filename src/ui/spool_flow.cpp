@@ -772,6 +772,60 @@ static bool      s_move_is_bambu   = false;
 static bool      s_move_additional = false;  // it was the second tag
 static char      s_move_uid[40]    = "";
 
+// What the popup shows of each spool: id, vendor, material, name, and the
+// colour as a swatch. Fetched when the question is about to be asked, so the
+// user decides between two spools they can recognise, not between two ids.
+struct SpoolSummary { char text[72]; char color[8]; };
+static SpoolSummary s_move_from_sum, s_move_to_sum;
+
+static void fetchSpoolSummary(int spool_id, SpoolSummary &out) {
+  snprintf(out.text, sizeof(out.text), "#%d", spool_id);
+  out.color[0] = '\0';
+  if (!wifi_ok || spool_id <= 0) return;
+  SpiRamAllocator psram_alloc;
+  JsonDocument doc(&psram_alloc);
+  DeserializationError err = DeserializationError::Ok;
+  if (backendGetSpoolJson(cfg_spoolman_base, spool_id, doc, 5000, &err) != 200 || err) return;
+  JsonVariant f = doc["filament"];
+  const char* vendor   = f["vendor"]["name"] | "";
+  const char* material = f["material"]       | "";
+  const char* name     = f["name"]           | "";
+  const char* color    = f["color_hex"]      | "";
+  snprintf(out.text, sizeof(out.text), "#%d  %s %s  %s", spool_id, vendor, material, name);
+  if (strlen(color) >= 6) snprintf(out.color, sizeof(out.color), "%.6s", color);
+}
+
+// One spool of the move question: caption column, swatch, words.
+static void moveRow(lv_obj_t *box, int y, StringID caption_id, const SpoolSummary &sum) {
+  lv_obj_t *cap = lv_label_create(box);
+  { char cb[24]; strncpy(cb, T(caption_id), sizeof(cb) - 1); cb[sizeof(cb) - 1] = '\0';
+    lv_label_set_text(cap, cb); }
+  lv_obj_set_style_text_color(cap, lv_color_hex(0x8fa8c8), 0);
+  lv_obj_set_style_text_font(cap, &lv_font_montserrat_ext_14, 0);
+  lv_obj_set_pos(cap, 20, y + 2);
+  int x = 20 + 104;
+  if (sum.color[0]) {
+    lv_obj_t *sw = lv_obj_create(box);
+    lv_obj_remove_style_all(sw);
+    lv_obj_set_size(sw, 18, 18);
+    lv_obj_set_pos(sw, x, y + 1);
+    lv_obj_set_style_radius(sw, 4, 0);
+    lv_obj_set_style_bg_color(sw, swatchColorFromHex(sum.color), 0);
+    lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(sw, 1, 0);
+    lv_obj_set_style_border_color(sw, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_clear_flag(sw, LV_OBJ_FLAG_CLICKABLE);
+    x += 26;
+  }
+  lv_obj_t *l = lv_label_create(box);
+  lv_label_set_text(l, sum.text);
+  lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(l, 400 - 20 - x);
+  lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+  lv_obj_set_pos(l, x, y);
+}
+
 // Set when a lookup that stood at "not in Spoolman" resolves without the
 // scale having linked anything: somebody bound the tag from outside. The loop
 // re-reads the tag; once that has found the spool, the follow-ups a link from
@@ -1016,15 +1070,18 @@ static void showTagMovePopup() {
   lv_obj_set_width(lbl_q, box_w - 40);
   lv_obj_align(lbl_q, LV_ALIGN_TOP_MID, 0, 52);
 
+  // The two spools, so the decision is between things the user recognises.
+  moveRow(box, 96,  STR_TAGMOVE_FROM, s_move_from_sum);
+  moveRow(box, 124, STR_TAGMOVE_TO,   s_move_to_sum);
+
   lv_obj_t *lbl_hint = lv_label_create(box);
-  { char hb[128]; snprintf(hb, sizeof(hb), T(STR_TAGMOVE_HINT), s_move_spool_id, s_move_from_id);
+  { char hb[64]; snprintf(hb, sizeof(hb), T(STR_TAGMOVE_HINT), s_move_from_id);
     lv_label_set_text(lbl_hint, hb); }
-  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_16, 0);
+  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x8fa8c8), 0);
+  lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
-  lv_label_set_long_mode(lbl_hint, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(lbl_hint, box_w - 40);
-  lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 98);
+  lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 158);
 
   lv_obj_t *btn_ok = lv_btn_create(box);
   lv_obj_set_size(btn_ok, btn_w, btn_h);
@@ -3891,6 +3948,9 @@ void handleSpoolFlowDeferredActions() {
   // ---- a tag another spool holds ------------------------------------------
   if (tagmove_ask_pending) {
     tagmove_ask_pending = false;
+    // Two small requests, on the loop, before the question goes up.
+    fetchSpoolSummary(s_move_from_id,  s_move_from_sum);
+    fetchSpoolSummary(s_move_spool_id, s_move_to_sum);
     showTagMovePopup();
   }
   if (tagmove_close_pending) {
