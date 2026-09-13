@@ -121,8 +121,8 @@ const char* const STRINGS[][2] = {
   { "Display",                "Display"           },  // STR_DISPLAY_TITLE
   { LV_SYMBOL_IMAGE "  Helligkeit",
     LV_SYMBOL_IMAGE "  Brightness"               },  // STR_BRIGHT_LABEL
-  { LV_SYMBOL_MINUS "  Dimmen nach (Min.)",
-    LV_SYMBOL_MINUS "  Dim after (min.)"         },  // STR_DIM_LABEL
+  { LV_SYMBOL_EYE_OPEN "  Dimmen nach (Min.)",
+    LV_SYMBOL_EYE_OPEN "  Dim after (min.)"         },  // STR_DIM_LABEL
   { LV_SYMBOL_POWER "  Tiefschlaf nach (Min.)",
     LV_SYMBOL_POWER "  Deep sleep after (min.)"       },  // STR_SLEEP_LABEL
 
@@ -338,8 +338,8 @@ const char* const STRINGS[][2] = {
     LV_SYMBOL_EDIT "  Calibrate now"              },  // STR_CAL_REMINDER_NOW
 
   // Calibration TARE hint
-  { "Zuerst ohne Gewicht TARE drücken!\nDann Gewicht auflegen und berechnen.",
-    "First press TARE without weight!\nThen place weight and calculate."  },  // STR_CAL_TARE_HINT
+  { "Erst TARE ohne Gewicht, dann Gewicht auflegen und berechnen.",
+    "First TARE with nothing on the pad, then place the weight and calculate."  },  // STR_CAL_TARE_HINT
 
   // Extra fields test button
   { LV_SYMBOL_EDIT "  Testfeld erstellen",
@@ -576,7 +576,7 @@ const char* const STRINGS[][2] = {
   { "Gerät wird gestartet...", "Starting up, please wait..." },  // STR_BOOTING
   { "Neustart",                 "Reboot"                     },  // STR_BTN_REBOOT
   { "Gerät neu starten",       "Restart device"             },  // STR_BTN_REBOOT_SUB
-  { "Ganze g",                  "Whole g"                    },  // STR_WHOLE_GRAM
+  { "Ganze Gramm",              "Whole grams"                },  // STR_WHOLE_GRAM
   { "Mehr Spulen gefunden - nicht gelistet? Per Spool-ID verknüpfen",   "More spools found - not listed? Use Spool-ID"   },  // STR_LIST_MORE_SPOOLS
   { "Mehr Hersteller gefunden - nicht gelistet? Per Spool-ID verknüpfen", "More vendors found - not listed? Use Spool-ID" },  // STR_LIST_MORE_VENDORS
   { "Mehr Materialien gefunden - nicht gelistet? Per Spool-ID verknüpfen", "More materials found - not listed? Use Spool-ID" },  // STR_LIST_MORE_MATS
@@ -1521,7 +1521,7 @@ const char* const STRINGS[][2] = {
     "Applies to what the scale does on its own after a link. Writing from this "
     "page has its own format selector." },  // STR_W_TAGOPT_NOTE
   { "Speichern",                 "Download"           },  // STR_W_LOG_DOWNLOAD
-  { "Kalibrierung zurücksetzen", "Reset calibration"  },  // STR_BTN_CAL_RESET_SHORT
+  { "Kal. löschen",              "Reset cal."         },  // STR_BTN_CAL_RESET_SHORT
   { "Kein Material passte - Filter aufgehoben",
     "No material matched - filter dropped" },  // STR_LIST_MAT_IGNORED
   { "Bei Abweichung fragen",     "Ask on a mismatch"  },  // STR_TW_OPT_MISM

@@ -110,7 +110,9 @@ void buildScaleSubScreen() {
 
   { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_BTN_AUTO_LOC_POPUP);
     char buf_s[8]; copyT(buf_s, sizeof(buf_s), g_auto_loc_popup ? STR_ON : STR_OFF);
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_GPS, buf_t, buf_s, g_auto_loc_popup);
+    // No subtitle: the state stands on the right like on every other switch,
+    // and it used to stand twice.
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_GPS, buf_t, "", g_auto_loc_popup);
     lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
     if (arr_lbl) {
       lv_label_set_text(arr_lbl, buf_s);
@@ -308,18 +310,13 @@ void buildTagWriteScreen() {
       scale_sub_rebuild_pending = true;
     });
 
+  // The explanation sits in the header. It used to be a heading row that
+  // repeated the title word for word and carried nothing but the "?".
+  addHeaderHelp(scr_tagwrite, STR_TW_OPT_ASK, STR_TW_OPT_ASK_INFO);
+
   lv_obj_t *list = buildOptionList(scr_tagwrite);
 
   // The choice first: without it the format below decides nothing.
-  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_TW_OPT_ASK);
-    lv_obj_t *help = nullptr;
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, buf_t, "", false, &help);
-    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
-                                  INFO_POPUP_ARG(STR_TW_OPT_ASK, STR_TW_OPT_ASK_INFO));
-    lv_obj_clear_flag(btn, LV_OBJ_FLAG_CLICKABLE);   // a heading, not a choice
-    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
-    if (arr_lbl) lv_label_set_text(arr_lbl, ""); }
-
   for (uint8_t i = 0; i <= TAGWRITE_ALWAYS; i++) addTagModeRow(list, i);
 
   // The second question the scale can ask about a tag, and its own switch: this

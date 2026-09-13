@@ -234,6 +234,31 @@ void utf8Cut(const char* s, size_t max_bytes, char* out, size_t out_size) {
   out[n] = '\0';
 }
 
+lv_obj_t* addHeaderHelp(lv_obj_t *scr, int title_id, int text_id) {
+  lv_obj_t *help = lv_btn_create(scr);
+  lv_obj_set_size(help, 34, 34);
+  lv_obj_set_pos(help, 386, 5);
+  lv_obj_set_style_bg_opa(help, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_bg_color(help, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(help, LV_OPA_COVER, LV_STATE_PRESSED);
+  lv_obj_set_style_border_color(help, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_border_width(help, 1, 0);
+  lv_obj_set_style_radius(help, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_shadow_width(help, 0, 0);
+  lv_obj_set_style_pad_all(help, 0, 0);
+  // Below the 44 px touch minimum by design, like the row help: the hit area
+  // is widened instead.
+  lv_obj_set_ext_click_area(help, 6);
+  lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                      INFO_POPUP_ARG(title_id, text_id));
+  lv_obj_t *q = lv_label_create(help);
+  lv_label_set_text(q, "?");
+  lv_obj_set_style_text_color(q, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_font(q, &lv_font_montserrat_ext_16, 0);
+  lv_obj_align(q, LV_ALIGN_CENTER, 0, 0);
+  return help;
+}
+
 void releaseScreen(lv_obj_t **scr) {
   if (!scr || !*scr) return;
   // Hidden first: the object lives until the next timer pass, and a released

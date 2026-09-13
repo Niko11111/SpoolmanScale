@@ -31,6 +31,7 @@
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
 #include "ui_common.h"
+#include "ui/tag_display.h"
 
 namespace {
 
@@ -688,6 +689,7 @@ void querySpoolmanById(int spool_id) {
   // Update display labels
   char weight_str[32];
   snprintf(weight_str, sizeof(weight_str), "%.0f g", sm_remaining);
+  zone4WaitingStyle(false);
   lv_label_set_text(lbl_spoolman_weight, weight_str);
   float pct = (sm_total > 0) ? (sm_remaining / sm_total) * 100.0f : 0;
   uint32_t pct_color;
@@ -879,6 +881,7 @@ void querySpoolman(const char* tray_uuid) {
   logSDf("Spoolman: query tray_uuid=%.16s...", tray_uuid ? tray_uuid : "");
 
   // Reset all Spoolman labels before new query
+  zone4WaitingStyle(false);
   lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT));
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
   lv_label_set_text(lbl_spoolman_pct, "");

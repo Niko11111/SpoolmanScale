@@ -216,7 +216,7 @@ void showDryingReminderScreen() {
 
     // Scrollbare Tabelle
     lv_obj_t *tbl_cont = lv_obj_create(scr_drying_reminder);
-    lv_obj_set_size(tbl_cont, 456, 162);
+    lv_obj_set_size(tbl_cont, 456, 150);
     lv_obj_set_pos(tbl_cont, 12, content_y + 4);
     lv_obj_set_style_bg_color(tbl_cont, lv_color_hex(0x050f1e), 0);
     lv_obj_set_style_border_color(tbl_cont, lv_color_hex(0x1a3050), 0);
@@ -250,7 +250,7 @@ void showDryingReminderScreen() {
       lv_label_set_text(h4l, T(STR_DRY_SEALED_HDR));
       lv_obj_set_style_text_color(h4l, lv_color_hex(0x4a6fa0), 0);
       lv_obj_set_style_text_font(h4l, &lv_font_montserrat_ext_12, 0);
-      lv_obj_set_width(h4l, 50); lv_obj_set_pos(h4l, 366, 4); }
+      lv_obj_set_width(h4l, 90); lv_obj_set_pos(h4l, 340, 4); }
     }
     // Daten-Zeilen
     for (int i = 0; i < DRY_MAT_COUNT; i++) {
@@ -282,14 +282,14 @@ void showDryingReminderScreen() {
       lv_label_set_text(seal_lbl, g_dry_mat_sealed[i] ? LV_SYMBOL_OK : "-");
       lv_obj_set_style_text_color(seal_lbl, g_dry_mat_sealed[i] ? lv_color_hex(0x28d49a) : lv_color_hex(0x2a4060), 0);
       lv_obj_set_style_text_font(seal_lbl, &lv_font_montserrat_ext_14, 0);
-      lv_obj_set_pos(seal_lbl, 370, 2);
+      lv_obj_set_pos(seal_lbl, 350, 2);
     }
     // Fussnote
     lv_obj_t *fn = lv_label_create(scr_drying_reminder);
     { char fnbuf[80]; snprintf(fnbuf, sizeof(fnbuf), T(STR_DRY_MAT_EFF_NOTE), g_dry_mult_sealed); lv_label_set_text(fn, fnbuf); }
-    lv_obj_set_style_text_color(fn, lv_color_hex(0x2a4060), 0);
+    lv_obj_set_style_text_color(fn, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(fn, &lv_font_montserrat_ext_12, 0);
-    lv_obj_align(fn, LV_ALIGN_BOTTOM_MID, 0, -4);
+    lv_obj_align(fn, LV_ALIGN_BOTTOM_MID, 0, -6);
 
   } else {
     // Manuell: zwei Zeilen, Gelb + Rot, per Numpad editierbar

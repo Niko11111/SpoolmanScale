@@ -308,7 +308,9 @@ void buildBackendScreen() {
   if (backendMode() == BACKEND_SPOOLMAN) {
     lv_obj_t *btn_opts = lv_btn_create(scr_backend);
     lv_obj_set_size(btn_opts, 216, 44);
-    lv_obj_set_pos(btn_opts, 132, 244);
+    // Right under the address row. It sat at 244 like the two backends that
+    // have credential rows in between, and here nothing is in between.
+    lv_obj_set_pos(btn_opts, 132, 194);
     lv_obj_set_style_bg_color(btn_opts, lv_color_hex(0x0a1e30), 0);
     lv_obj_set_style_bg_color(btn_opts, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_opts, 8, 0);

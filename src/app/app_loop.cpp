@@ -920,9 +920,9 @@ void appLoop() {
   if (g_tag_displayed && millis() - g_tag_shown_ms > 10000) {
     g_tag_displayed = false;
     lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-    lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);  // yellow
+    lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x4a6fa0), 0);  // yellow
     lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-    lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+    lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x8fa8c8), 0);
   }
 
   // The ADC can leave the bus while the device is running - a plug working
@@ -1246,7 +1246,7 @@ void appLoop() {
       ams_last_shown_s = -1;
       if (lbl_status && !tag_present) {
         lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x8fa8c8), 0);
       }
     }
   }
@@ -1564,9 +1564,9 @@ void appLoop() {
                           : sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
           } else if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES) {
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x4a6fa0), 0);
             lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-            lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+            lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x8fa8c8), 0);
           } else {
             // tray_uuid present - query Spoolman if not done yet
             if (!isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen() &&
@@ -1757,9 +1757,9 @@ void appLoop() {
           link_popup_dismissed = false;   // Reset flag → next spool can show popup
           link_tag_first_seen_ms = 0;
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
+          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x4a6fa0), 0);
           lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x8fa8c8), 0);
           // Auto location popup: if enabled, spool is linked, and not shown for this spool yet
           // Debounce: only trigger after 1500ms - avoids spurious remove during NTAG read
           // Not for an archived spool: asking where to store something that

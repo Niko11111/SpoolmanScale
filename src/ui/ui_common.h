@@ -3,6 +3,10 @@
 #include <lvgl.h>
 
 void addBackButton(lv_obj_t *parent, lv_event_cb_t cb);
+// The "?" circle in the header row, between the centred title and the close
+// button - the one gap on a sub screen nothing else wants. Opens the info
+// popup with the two strings.
+lv_obj_t* addHeaderHelp(lv_obj_t *scr, int title_id, int text_id);
 void addCloseButton(lv_obj_t *parent);
 void buildSubHeader(lv_obj_t *parent, const char *title,
                     lv_event_cb_t back_cb, const char *back_hint = nullptr);
