@@ -20,7 +20,7 @@
 // buttons 170 wide with 12 px gutters on a 400 px box, and 18 px of air below
 // them.
 #define BOX_W  400
-#define BOX_H  236
+#define BOX_H  260   // room for the hint at 16 px
 #define BTN_W  170
 #define BTN_H  56
 #define BTN_Y  (BOX_H - BTN_H - 18)
@@ -109,7 +109,7 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
   { char qb[48]; strncpy(qb, T(title), sizeof(qb) - 1);
     qb[sizeof(qb) - 1] = '\0'; lv_label_set_text(lbl_q, qb); }
   lv_obj_set_style_text_color(lbl_q, lv_color_hex(0xe8f0ff), 0);
-  lv_obj_set_style_text_font(lbl_q, &lv_font_montserrat_ext_18, 0);
+  lv_obj_set_style_text_font(lbl_q, &lv_font_montserrat_ext_20, 0);
   lv_obj_set_style_text_align(lbl_q, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_q, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(lbl_q, BOX_W - 40);
@@ -128,12 +128,15 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
                                               : tagFormatLabel(g_tagwrite_fmt);
     snprintf(hb, sizeof(hb), T(hint), arg[0] ? arg : "OpenSpool");
     lv_label_set_text(lbl_hint, hb); }
-  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
+  // Body text, not a caption: this line carries what is about to be written
+  // or lost, and at 14 px in the caption colour it was the one thing on the
+  // popup people could not read from where they stand.
+  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_hint, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(lbl_hint, BOX_W - 40);
-  lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 96);
+  lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 98);
 
   lv_obj_t *btn_ok = lv_btn_create(box);
   lv_obj_set_size(btn_ok, BTN_W, BTN_H);

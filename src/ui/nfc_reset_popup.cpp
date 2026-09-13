@@ -7,13 +7,18 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/nfc_reset.h"
+#include "ui_common.h"
 
 #define HINT_TEXT_BUF  768
 #define HINT_TITLE_BUF  64
 
+static lv_obj_t *s_hint_pop = nullptr;
+
+void closeNfcResetHint() { releaseScreen(&s_hint_pop); }
+
 static void closeFromButton(lv_event_t *e) {
-  lv_obj_t *box = lv_obj_get_parent(lv_event_get_target(e));
-  lv_obj_del_async(lv_obj_get_parent(box));
+  (void)e;
+  releaseScreen(&s_hint_pop);
 }
 
 static void laterCb(lv_event_t *e) {
@@ -57,7 +62,9 @@ static void mkButton(lv_obj_t *box, int x, int w, int str_id, bool primary,
 void showNfcResetHint() {
   logSD("SHOW: NfcResetHint");
 
+  releaseScreen(&s_hint_pop);
   lv_obj_t *pop = lv_obj_create(lv_scr_act());
+  s_hint_pop = pop;
   lv_obj_set_size(pop, 480, 320);
   lv_obj_set_pos(pop, 0, 0);
   lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);

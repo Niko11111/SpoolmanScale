@@ -7,3 +7,4 @@
 // after "never", because a dismissal that does not hold teaches people that
 // the button is broken.
 void showNfcResetHint();
+void closeNfcResetHint();

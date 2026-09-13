@@ -221,6 +221,10 @@ bool lvPoolHasRoomForRow() {
 
 void releaseScreen(lv_obj_t **scr) {
   if (!scr || !*scr) return;
+  // Hidden first: the object lives until the next timer pass, and a released
+  // screen must take no tap and paint nothing in the meantime - the list it
+  // rendered from may be freed by the line after this call.
+  lv_obj_add_flag(*scr, LV_OBJ_FLAG_HIDDEN);
   lv_obj_del_async(*scr);
   *scr = nullptr;
 }

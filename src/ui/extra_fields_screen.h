@@ -8,3 +8,5 @@ void buildExtraFieldsScreen(bool is_setup_flow);
 void checkAndCreateExtraFields(bool create_missing);
 void resetExtraFieldsScreenState();
 void handleExtraFieldsDeferredActions();
+// The confirmation popup, for the navigation.
+void closeExtraFieldsPopup();

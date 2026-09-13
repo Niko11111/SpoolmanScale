@@ -17,6 +17,10 @@
 // zone screen can take its place without leaving it alive underneath.
 static lv_obj_t *scr_language = nullptr;
 
+void hideLanguageScreen() {
+  if (scr_language) lv_obj_add_flag(scr_language, LV_OBJ_FLAG_HIDDEN);
+}
+
 void closeLanguageScreen() {
   if (!scr_language) return;
   lv_obj_del_async(scr_language);
@@ -62,7 +66,7 @@ void showLanguageScreen() {
   lv_obj_set_style_text_font(lbl_bk, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_bk);
   lv_obj_add_event_cb(btn_back, [](lv_event_t *e){
-    lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
+    closeLanguageScreen();      // asynchronous: this button sits on it
   }, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *hdr = lv_label_create(scr);
@@ -85,8 +89,7 @@ void showLanguageScreen() {
   lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_x);
   lv_obj_add_event_cb(btn_x, [](lv_event_t *e){
-    lv_obj_t *scr_lang = lv_obj_get_parent(lv_event_get_target(e));
-    lv_obj_del(scr_lang);
+    closeLanguageScreen();
     showMainScreen();
   }, LV_EVENT_CLICKED, NULL);
 

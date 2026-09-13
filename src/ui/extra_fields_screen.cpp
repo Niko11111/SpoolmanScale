@@ -45,6 +45,10 @@ static bool extra_fields_in_setup = false;
 static bool extra_fields_create_pending = false;
 // The "create a test field" button. One request, parked like the other two.
 static bool extra_fields_test_pending = false;
+// The "create the missing fields?" confirmation, held so navigation can
+// take it down.
+static lv_obj_t *s_ef_confirm_pop = nullptr;
+void closeExtraFieldsPopup() { releaseScreen(&s_ef_confirm_pop); }
 
 void resetExtraFieldsScreenState() {
   for (int i = 0; i < FIELD_ROW_COUNT; i++) lbl_field_state[i] = nullptr;
@@ -55,6 +59,7 @@ void resetExtraFieldsScreenState() {
   extra_fields_check_pending = false;
   extra_fields_create_pending = false;
   extra_fields_test_pending = false;
+  releaseScreen(&s_ef_confirm_pop);
 }
 
 static void runTestFieldCreate() {
@@ -315,10 +320,12 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_add_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_event_cb(btn_extra_fields_create, [](lv_event_t *e) {
     // Confirmation popup
+    releaseScreen(&s_ef_confirm_pop);
     lv_obj_t *pop = lv_obj_create(lv_scr_act());
+    s_ef_confirm_pop = pop;
     lv_obj_set_size(pop, 480, 320);
     lv_obj_set_pos(pop, 0, 0);
-    lv_obj_set_style_bg_color(pop, lv_color_hex(0x00000080), 0);  // semi-transparent
+    lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);   // scrim, opacity below
     lv_obj_set_style_bg_opa(pop, LV_OPA_70, 0);
     lv_obj_set_style_border_width(pop, 0, 0);
     lv_obj_set_style_radius(pop, 0, 0);
@@ -364,11 +371,8 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_set_style_shadow_width(btn_conf, 0, 0);
     lv_obj_set_style_border_width(btn_conf, 0, 0);
     lv_obj_add_event_cb(btn_conf, [](lv_event_t *e) {
-      // Close popup (2 levels up: btn -> box -> pop)
-      lv_obj_t *box_obj = lv_obj_get_parent(lv_event_get_target(e));
-      lv_obj_t *pop_obj = lv_obj_get_parent(box_obj);
-      lv_obj_del(pop_obj);
-      // Defer HTTP call to loop — never call HTTP directly from LVGL event callback
+      releaseScreen(&s_ef_confirm_pop);
+      // Defer HTTP call to loop - never call HTTP directly from LVGL event callback
       extra_fields_create_pending = true;
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_conf = lv_label_create(btn_conf);
@@ -387,9 +391,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_set_style_shadow_width(btn_can, 0, 0);
     lv_obj_set_style_border_width(btn_can, 0, 0);
     lv_obj_add_event_cb(btn_can, [](lv_event_t *e) {
-      lv_obj_t *box_obj = lv_obj_get_parent(lv_event_get_target(e));
-      lv_obj_t *pop_obj = lv_obj_get_parent(box_obj);
-      lv_obj_del(pop_obj);
+      releaseScreen(&s_ef_confirm_pop);
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_can = lv_label_create(btn_can);
     lv_label_set_text(lbl_can, T(STR_CANCEL));

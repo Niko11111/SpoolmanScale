@@ -10,9 +10,14 @@
 #include "hardware/display_power.h"
 #include "hardware/sd_logger.h"
 #include "ui/ams_view.h"
+#include "ui/confirm_popup.h"
 #include "ui/connection_screen.h"
 #include "ui/extra_fields_screen.h"
+#include "ui/language_screen.h"
+#include "ui/nfc_reset_popup.h"
 #include "ui/ota_github.h"
+#include "ui/reboot_popup.h"
+#include "ui/system_screen.h"
 #include "ui/spoolman_screen.h"
 #include "ui/wifi_info.h"
 #include "ui/wifi_setup_screen.h"
@@ -80,6 +85,19 @@ void hideAllOverlays() {
   hideMoreInfoOverlays();
   hideAmsViewOverlays();
   webPinScreenHide();
+  hideLanguageScreen();
+  // The dialogs that used to be locals of whichever callback built them, so
+  // nothing outside could reach them and a navigation left them standing over
+  // the next screen. Closed rather than hidden: nothing ever shows a dialog
+  // again, and a hidden confirm popup would keep uiModalWaiting() true from
+  // under the new screen. The deletes are asynchronous, so this is safe from
+  // the callbacks hideAllOverlays() is reached from.
+  closeConfirmPopups();
+  closeRebootPopup();
+  closeNfcResetHint();
+  closeFactoryResetPopup();
+  closeExtraFieldsPopup();
+  closeMoreInfoPopups();
 }
 
 void deleteOtaScreens() {
@@ -105,6 +123,7 @@ static void deleteSecondaryScreens() {
   if (scr_web)      { lv_obj_del(scr_web);      scr_web      = nullptr; }
   webPinScreenClose();
   if (scr_timezone) { lv_obj_del(scr_timezone); scr_timezone = nullptr; }
+  closeLanguageScreen();
 }
 
 void showMainScreen() {

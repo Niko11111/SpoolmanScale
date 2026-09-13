@@ -61,7 +61,13 @@ static bool unlink_all      = false;
 static int  unlink_spool_id = 0;
 static bool loc_patch_pending  = false;
 static char loc_patch_name[48] = "";      // empty: clear the location
+static bool loc_cancel_pending = false;   // the picker's X
 static void closeLocationPicker();
+// The unlink confirmation. A local of the button's callback until now, so no
+// navigation could take it down.
+static lv_obj_t *s_unlink_popup = nullptr;
+
+void closeMoreInfoPopups() { releaseScreen(&s_unlink_popup); }
 
 static void unlinkConfirmCb(lv_event_t *e) {
   lv_obj_t *btn = lv_event_get_target(e);
@@ -70,7 +76,7 @@ static void unlinkConfirmCb(lv_event_t *e) {
   // Read out of the button before the popup goes. The popup is this button's
   // grandparent, so it is released asynchronously; the unlink itself runs from
   // the loop a pass later.
-  lv_obj_del_async(lv_obj_get_parent(lv_obj_get_parent(btn)));
+  releaseScreen(&s_unlink_popup);
   unlink_pending = true;
 }
 
@@ -131,6 +137,12 @@ void handleMoreInfoDeferredActions() {
   if (unlink_pending) {
     unlink_pending = false;
     runUnlink();
+  }
+  if (loc_cancel_pending) {
+    loc_cancel_pending = false;
+    closeLocationPicker();
+    if (g_loc_picker_from_popup) showMainScreen();
+    else                         showMoreInfoScreen();
   }
   if (loc_patch_pending) {
     loc_patch_pending = false;
@@ -317,9 +329,10 @@ void showLocationPicker() {
   lv_obj_set_style_radius(btn_x, 8, 0);
   lv_obj_set_style_shadow_width(btn_x, 0, 0);
   lv_obj_add_event_cb(btn_x, [](lv_event_t *e) {
-    closeLocationPicker();
-    if (g_loc_picker_from_popup) { showMainScreen(); }
-    else { showMoreInfoScreen(); }
+    // Parked: this button sits on the picker it would delete, and the fetch
+    // that fills the list pumps LVGL - a tap here used to rebuild More Info
+    // from inside that fetch.
+    loc_cancel_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_x = lv_label_create(btn_x);
   lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
@@ -1073,7 +1086,9 @@ void buildMoreInfoScreen() {
     lv_obj_set_style_border_color(btn_unlink, lv_color_hex(0x601010), 0);
     lv_obj_add_event_cb(btn_unlink, [](lv_event_t *e) {
       // Build confirmation popup on lv_scr_act() so it sits above more_info
+      releaseScreen(&s_unlink_popup);
       lv_obj_t *pop = lv_obj_create(lv_scr_act());
+      s_unlink_popup = pop;
       lv_obj_set_size(pop, 480, 320);
       lv_obj_set_pos(pop, 0, 0);
       lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
@@ -1155,7 +1170,7 @@ void buildMoreInfoScreen() {
       lv_obj_set_style_border_width(btn_no, 1, 0);
       lv_obj_set_style_border_color(btn_no, lv_color_hex(0x1a2840), 0);
       lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
-        lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e))));
+        releaseScreen(&s_unlink_popup);
       }, LV_EVENT_CLICKED, NULL);
       lv_obj_t *lbl_no = lv_label_create(btn_no);
       char buf_no[32]; strncpy(buf_no, T(STR_CANCEL), sizeof(buf_no)-1);

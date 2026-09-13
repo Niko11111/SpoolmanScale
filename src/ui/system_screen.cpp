@@ -23,8 +23,13 @@ void showLanguageScreen();
 // Wipes every setting, so it asks first. Lifted out of the button callback
 // unchanged when the screen became a list - the dialog itself is the same one
 // that has always been there.
+static lv_obj_t *s_reset_pop = nullptr;
+void closeFactoryResetPopup() { releaseScreen(&s_reset_pop); }
+
 static void showFactoryResetPopup() {
+  releaseScreen(&s_reset_pop);
   lv_obj_t *pop = lv_obj_create(lv_scr_act());
+  s_reset_pop = pop;
   lv_obj_set_size(pop, 480, 320);
   lv_obj_set_pos(pop, 0, 0);
   lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
@@ -72,7 +77,7 @@ static void showFactoryResetPopup() {
   lv_obj_set_style_border_width(btn_c, 1, 0);
   lv_obj_set_style_border_color(btn_c, lv_color_hex(0x1a2840), 0);
   lv_obj_add_event_cb(btn_c, [](lv_event_t *e){
-    lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e))));
+    releaseScreen(&s_reset_pop);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_c = lv_label_create(btn_c);
   char buf_c[32]; strncpy(buf_c, T(STR_CANCEL), sizeof(buf_c)-1);

@@ -1,4 +1,5 @@
 #include "confirm_popup.h"
+#include "ui_common.h"
 #include <math.h>
 #include "app/app_state.h"
 #include "services/backend.h"
@@ -23,6 +24,19 @@
 static lv_obj_t *confirm_popup = nullptr;
 static int confirm_action = 0;
 static lv_obj_t *lbl_auto_weight_btn = nullptr;
+// The three dialogs this file opens on top of the main popup. They used to
+// be locals of the callback that built them, so nothing could close them
+// from outside and a navigation left them standing over the next screen.
+static lv_obj_t *s_scope_popup = nullptr;   // where the empty spool weight goes
+static lv_obj_t *s_auto_popup  = nullptr;   // the auto-weight question
+static lv_obj_t *s_cap_popup   = nullptr;   // BamBuddy's label weight question
+
+void closeConfirmPopups() {
+  closeConfirmPopup();
+  releaseScreen(&s_scope_popup);
+  releaseScreen(&s_auto_popup);
+  releaseScreen(&s_cap_popup);
+}
 
 bool isConfirmPopupOpen() {
   return confirm_popup != nullptr;
@@ -172,7 +186,9 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
       const bool scope_spool  = backendCanTareSpool();
       const bool scope_shared = backendCanTareFilamentOrVendor();
 
+      releaseScreen(&s_scope_popup);
       lv_obj_t *popup = lv_obj_create(lv_scr_act());
+      s_scope_popup = popup;
       lv_obj_set_size(popup, 480, 320);
       lv_obj_set_pos(popup, 0, 0);
       lv_obj_set_style_bg_color(popup, lv_color_hex(0x0a1020), 0);
@@ -209,7 +225,7 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
         lv_obj_center(l); }
       lv_obj_add_event_cb(b1, [](lv_event_t *e) {
         s_job = CJ_TARE_SPOOL; s_job_value = s_tare_prompt_g;
-        lv_obj_del_async(lv_obj_get_parent(lv_event_get_target(e)));
+        releaseScreen(&s_scope_popup);
       }, LV_EVENT_CLICKED, NULL);
 
       // Button 2: this filament
@@ -228,7 +244,7 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
         lv_obj_center(l); }
       lv_obj_add_event_cb(b2, [](lv_event_t *e) {
         s_job = CJ_TARE_FILAMENT; s_job_value = s_tare_prompt_g;
-        lv_obj_del_async(lv_obj_get_parent(lv_event_get_target(e)));
+        releaseScreen(&s_scope_popup);
       }, LV_EVENT_CLICKED, NULL);
 
       // Button 3: vendor
@@ -249,7 +265,7 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
         lv_obj_center(l); }
       lv_obj_add_event_cb(b3, [](lv_event_t *e) {
         s_job = CJ_TARE_VENDOR; s_job_value = s_tare_prompt_g;
-        lv_obj_del_async(lv_obj_get_parent(lv_event_get_target(e)));
+        releaseScreen(&s_scope_popup);
       }, LV_EVENT_CLICKED, NULL);
 
       // Button 4: cancel, right under whatever was built above
@@ -264,7 +280,7 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
         lv_obj_center(l); }
       lv_obj_add_event_cb(b4, [](lv_event_t *e) {
         s_tare_then_new = false;
-        lv_obj_del_async(lv_obj_get_parent(lv_event_get_target(e)));
+        releaseScreen(&s_scope_popup);
       }, LV_EVENT_CLICKED, NULL);
 
       // A bag on the pad is counted into the reading, and this number may be
@@ -507,7 +523,9 @@ void showConfirmPopup(const char* msg, int action) {
         // Gewichts-Popup verstecken (nicht loeschen — cancel bringt es zurueck)
         if (confirm_popup) lv_obj_add_flag(confirm_popup, LV_OBJ_FLAG_HIDDEN);
 
+        releaseScreen(&s_auto_popup);
         lv_obj_t *apop = lv_obj_create(lv_scr_act());
+        s_auto_popup = apop;
         lv_obj_set_size(apop, 480, 320);
         lv_obj_set_pos(apop, 0, 0);
         lv_obj_set_style_bg_color(apop, lv_color_hex(0x000000), 0);
@@ -568,7 +586,6 @@ void showConfirmPopup(const char* msg, int action) {
         lv_obj_set_style_radius(abtn_ok, 8, 0);
         lv_obj_set_style_shadow_width(abtn_ok, 0, 0);
         lv_obj_add_event_cb(abtn_ok, [](lv_event_t *e) {
-          lv_obj_t *apop = lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e)));
           // Aktivieren
           g_auto_weight = true;
           auto_weight_stable_ms = 0;
@@ -581,8 +598,8 @@ void showConfirmPopup(const char* msg, int action) {
             lv_label_set_text(lbl_weight_main_lbl, wmbuf);
             lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x28d49a), 0);
           }
-          lv_obj_del(apop);         // zweites Popup weg
-          closeConfirmPopup();      // erstes Popup weg
+          releaseScreen(&s_auto_popup);   // zweites Popup weg
+          closeConfirmPopup();            // erstes Popup weg
         }, LV_EVENT_CLICKED, NULL);
         lv_obj_t *abtn_ok_lbl = lv_label_create(abtn_ok);
         char acbuf[32]; strncpy(acbuf, T(STR_CONFIRM), sizeof(acbuf)-1); acbuf[sizeof(acbuf)-1] = '\0';
@@ -600,8 +617,7 @@ void showConfirmPopup(const char* msg, int action) {
         lv_obj_set_style_radius(abtn_cancel, 8, 0);
         lv_obj_set_style_shadow_width(abtn_cancel, 0, 0);
         lv_obj_add_event_cb(abtn_cancel, [](lv_event_t *e) {
-          lv_obj_t *apop = lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e)));
-          lv_obj_del(apop);
+          releaseScreen(&s_auto_popup);
           // Erstes Popup wieder einblenden
           if (confirm_popup) lv_obj_clear_flag(confirm_popup, LV_OBJ_FLAG_HIDDEN);
         }, LV_EVENT_CLICKED, NULL);
@@ -793,7 +809,9 @@ void showConfirmPopup(const char* msg, int action) {
 //  the number, and that changes a field the user owns, so it is asked.
 // ============================================================
 void showBamBuddyCapPopup(float measured_g, float label_g) {
+  releaseScreen(&s_cap_popup);
   lv_obj_t *popup = lv_obj_create(lv_scr_act());
+  s_cap_popup = popup;
   lv_obj_set_size(popup, 480, 320);
   lv_obj_set_pos(popup, 0, 0);
   lv_obj_set_style_bg_color(popup, lv_color_hex(0x0a1020), 0);
@@ -839,7 +857,7 @@ void showBamBuddyCapPopup(float measured_g, float label_g) {
     lv_obj_center(l); }
   lv_obj_add_event_cb(b_raise, [](lv_event_t *e) {
     s_job = CJ_CAP_RAISE; s_job_value = s_cap_measured;
-    lv_obj_del_async(lv_obj_get_parent(lv_event_get_target(e)));
+    releaseScreen(&s_cap_popup);
   }, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *b_keep = lv_btn_create(popup);
@@ -857,6 +875,6 @@ void showBamBuddyCapPopup(float measured_g, float label_g) {
     lv_obj_center(l); }
   lv_obj_add_event_cb(b_keep, [](lv_event_t *e) {
     s_job = CJ_CAP_KEEP; s_job_value = s_cap_measured;
-    lv_obj_del_async(lv_obj_get_parent(lv_event_get_target(e)));
+    releaseScreen(&s_cap_popup);
   }, LV_EVENT_CLICKED, NULL);
 }

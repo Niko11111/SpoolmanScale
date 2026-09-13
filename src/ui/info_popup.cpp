@@ -118,7 +118,7 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   lv_label_set_text(info, ibuf);
   lv_obj_set_style_text_color(info,
     lv_color_hex(is_result ? 0x4a6fa0 : 0xc8d8f0), 0);
-  lv_obj_set_style_text_font(info, &lv_font_montserrat_ext_14, 0);
+  lv_obj_set_style_text_font(info, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(info, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
   // 14 px narrower than the container so the scrollbar has somewhere to sit.

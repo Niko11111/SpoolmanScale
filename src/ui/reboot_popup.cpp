@@ -4,12 +4,19 @@
 #include <lvgl.h>
 
 #include "hardware/sd_logger.h"
+#include "ui_common.h"
 #include "lang.h"
+
+static lv_obj_t *s_reboot_pop = nullptr;
+
+void closeRebootPopup() { releaseScreen(&s_reboot_pop); }
 
 void showRebootPopup() {
   logSD("SHOW: RebootPopup");
   logSD("UI: Screen -> RebootPopup");
+  releaseScreen(&s_reboot_pop);
   lv_obj_t *pop = lv_obj_create(lv_scr_act());
+  s_reboot_pop = pop;
   lv_obj_set_size(pop, 480, 320);
   lv_obj_set_pos(pop, 0, 0);
   lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
@@ -49,7 +56,10 @@ void showRebootPopup() {
   lv_obj_set_style_radius(btn_rb, 8, 0);
   lv_obj_set_style_shadow_width(btn_rb, 0, 0);
   lv_obj_set_style_border_width(btn_rb, 0, 0);
-  lv_obj_add_event_cb(btn_rb, [](lv_event_t *e){ logSD("Reboot: user (language/date change)"); ESP.restart(); }, LV_EVENT_CLICKED, NULL);
+  lv_obj_add_event_cb(btn_rb, [](lv_event_t *e){
+    logSD("Reboot: user (language/date change)");
+    ESP.restart();
+  }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *rb_lbl = lv_label_create(btn_rb);
   lv_label_set_text(rb_lbl, T(STR_REBOOT_BTN));
   lv_obj_set_style_text_color(rb_lbl, lv_color_hex(0x40c080), 0);
@@ -65,9 +75,7 @@ void showRebootPopup() {
   lv_obj_set_style_shadow_width(btn_cancel, 0, 0);
   lv_obj_set_style_border_width(btn_cancel, 0, 0);
   lv_obj_add_event_cb(btn_cancel, [](lv_event_t *e){
-    lv_obj_t *box_obj = lv_obj_get_parent(lv_event_get_target(e));
-    lv_obj_t *pop_obj = lv_obj_get_parent(box_obj);
-    lv_obj_del(pop_obj);
+    releaseScreen(&s_reboot_pop);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *c_lbl = lv_label_create(btn_cancel);
   lv_label_set_text(c_lbl, T(STR_CANCEL));

@@ -1,4 +1,5 @@
 #include "spool_flow.h"
+#include "ui_common.h"
 #include "navigation.h"
 #include "app/app_state.h"
 
@@ -262,6 +263,31 @@ static bool  copy_create_pending     = false;   // copy confirm OK
 static int   copy_create_sid = 0, copy_create_fid = 0;
 static float copy_create_ini = 0.0f, copy_create_spw = 0.0f;
 static bool  newtag_create_pending   = false;   // new-from-tag OK
+
+// The confirmation that sits on top of the spool list ("link this one?").
+// Built inside the row's callback and, until now, held by nothing: a
+// navigation away - a backend switch from the browser, say - left it drawn
+// over whatever came next. Hidden and freed with the other link overlays.
+static lv_obj_t *scr_link_confirm = nullptr;
+
+// Stepping between the link lists (vendor, material, sub-material, spools) is
+// parked and carried out by the loop. A row or back button used to delete the
+// list it sat on and build the next one in the same callback; done
+// asynchronously instead, the old list would still be in the 96 kB pool while
+// the new one is built, and the spool list is cut to leave 3 kB free - not
+// enough for a material list on top. So the loop deletes the old list first,
+// synchronously, and builds the next one into the room that frees.
+enum LinkNav {
+  LNAV_NONE = 0,
+  LNAV_SPOOLS_BACK,    // spool list -> material (sub) list or entry popup
+  LNAV_MAT_BACK,       // material list -> vendor list
+  LNAV_MAT_ROW,        // material list -> sub-material list
+  LNAV_MATSUB_BACK,    // sub-material list -> material list
+  LNAV_MATSUB_ROW,     // sub-material list -> spool list
+  LNAV_VENDOR_ROW      // vendor list -> material list
+};
+static LinkNav link_nav_pending = LNAV_NONE;
+static char    link_nav_vendor[32] = "";   // the vendor a row picked
 static bool show_id_input_rebuild = false;   // deferred re-open from WarnPopupA retry (rebuild after del)
 static bool id_input_open = false;           // true while IdInputPopup is visible — suppresses NFC Spoolman query
 
@@ -695,20 +721,20 @@ void fetchUnlinkedSpools() { fetchAllSpoolsForLink(false, ""); }
 // Tears down every screen of the link flow and frees the PSRAM spool list.
 // Both the successful and the aborted path need exactly this.
 static void closeLinkOverlays() {
-  if (scr_link_entry)  { lv_obj_del(scr_link_entry);  scr_link_entry  = nullptr; }
+  releaseScreen(&scr_link_entry);
   // Through its own close: that one also clears id_input_open and the two
   // labels. Deleting the numpad by hand left the flag standing, and every
   // tag lookup in appLoop() stands aside while it is set - a backend switch
   // from the web page with the numpad open meant no tag was looked up again
   // until somebody happened to reach the main screen.
   closeIdInputPopup();
-  if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
-  if (scr_link_warn_b) { lv_obj_del(scr_link_warn_b); scr_link_warn_b = nullptr; }
-  if (scr_link_vendor) { lv_obj_del(scr_link_vendor); scr_link_vendor = nullptr; }
-  if (scr_link_mat)    { lv_obj_del(scr_link_mat);    scr_link_mat    = nullptr; }
-  if (scr_link_mat_sub){ lv_obj_del(scr_link_mat_sub);scr_link_mat_sub= nullptr; }
-  if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
-  if (scr_link_list)   { lv_obj_del(scr_link_list);   scr_link_list   = nullptr; }
+  releaseScreen(&scr_link_warn_a);
+  releaseScreen(&scr_link_warn_b);
+  releaseScreen(&scr_link_vendor);
+  releaseScreen(&scr_link_mat);
+  releaseScreen(&scr_link_mat_sub);
+  releaseScreen(&scr_link_spools);
+  releaseScreen(&scr_link_list);
   linkSpoolsFree();
 }
 
@@ -907,7 +933,7 @@ static lv_obj_t* buildLinkOverlay() {
 void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
                     const char* link_uuid, bool add_mode) {
   logSDf("SHOW: WarnPopupA spool=%d", spool_id);
-  if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
+  releaseScreen(&scr_link_warn_a);
 
   scr_link_warn_a = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_link_warn_a, 480, 320);
@@ -1029,8 +1055,8 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
   lv_obj_set_style_border_color(btn_retry, lv_color_hex(0x1a3060), 0);
   lv_obj_add_event_cb(btn_retry, [](lv_event_t *e) {
     logSD("BTN: WarnA -> retry IdInput (flag)");
-    if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
-    if (scr_link_id)     { lv_obj_del(scr_link_id);     scr_link_id     = nullptr; }
+    releaseScreen(&scr_link_warn_a);
+    releaseScreen(&scr_link_id);
     link_id_input[0] = '\0';
     link_id_lookup_pending = 0;
     show_id_input_rebuild = true;  // loop rebuilds IdInputPopup safely
@@ -1050,8 +1076,8 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
   lv_obj_set_style_shadow_width(btn_cancel, 0, 0);
   lv_obj_set_style_border_width(btn_cancel, 0, 0);
   lv_obj_add_event_cb(btn_cancel, [](lv_event_t *e) {
-    if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
-    if (scr_link_id)     { lv_obj_del(scr_link_id);     scr_link_id = nullptr; }
+    releaseScreen(&scr_link_warn_a);
+    releaseScreen(&scr_link_id);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_cancel = lv_label_create(btn_cancel);
   lv_label_set_text(lbl_cancel, T(STR_CANCEL));
@@ -1066,7 +1092,7 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
 // ============================================================
 void showWarnPopupB(int spool_id, bool is_bambu) {
   logSDf("SHOW: WarnPopupB spool=%d", spool_id);
-  if (scr_link_warn_b) { lv_obj_del(scr_link_warn_b); scr_link_warn_b = nullptr; }
+  releaseScreen(&scr_link_warn_b);
 
   static int  warn_b_spool_id = 0;
   static bool warn_b_is_bambu = false;
@@ -1156,9 +1182,13 @@ void showWarnPopupB(int spool_id, bool is_bambu) {
   lv_obj_set_style_border_width(btn_retry, 1, 0);
   lv_obj_set_style_border_color(btn_retry, lv_color_hex(0x1a3060), 0);
   lv_obj_add_event_cb(btn_retry, [](lv_event_t *e) {
-    if (scr_link_warn_b) { lv_obj_del(scr_link_warn_b); scr_link_warn_b = nullptr; }
+    // Same route as the retry on popup A: the loop rebuilds the numpad once
+    // this popup is gone.
+    releaseScreen(&scr_link_warn_b);
+    releaseScreen(&scr_link_id);
     link_id_input[0] = '\0';
-    showIdInputPopup(warn_b_is_bambu);
+    link_id_lookup_pending = 0;
+    show_id_input_rebuild = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_retry = lv_label_create(btn_retry);
   lv_label_set_text(lbl_retry, T(STR_ENTER_NEW_ID));
@@ -1175,8 +1205,8 @@ void showWarnPopupB(int spool_id, bool is_bambu) {
   lv_obj_set_style_shadow_width(btn_cancel, 0, 0);
   lv_obj_set_style_border_width(btn_cancel, 0, 0);
   lv_obj_add_event_cb(btn_cancel, [](lv_event_t *e) {
-    if (scr_link_warn_b) { lv_obj_del(scr_link_warn_b); scr_link_warn_b = nullptr; }
-    if (scr_link_id)     { lv_obj_del(scr_link_id);     scr_link_id = nullptr; }
+    releaseScreen(&scr_link_warn_b);
+    releaseScreen(&scr_link_id);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_cancel = lv_label_create(btn_cancel);
   lv_label_set_text(lbl_cancel, T(STR_CANCEL));
@@ -1318,7 +1348,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
 void showIdInputPopup(bool is_bambu, bool is_copy) {
   logSDf("SHOW: IdInputPopup bambu=%d copy=%d", (int)is_bambu, (int)is_copy);
   id_input_open = true;  // suppress NFC Spoolman query while numpad open
-  if (scr_link_id) { lv_obj_del(scr_link_id); scr_link_id = nullptr; }
+  releaseScreen(&scr_link_id);
   lbl_link_id_display = nullptr;
   lbl_link_id_status  = nullptr;
 
@@ -1529,7 +1559,7 @@ void closeIdInputPopup() {
   id_input_open = false;
   link_id_lookup_pending = 0;  // cancel any pending lookup when popup closes
   copy_id_lookup_pending = 0;
-  if (scr_link_id) { lv_obj_del(scr_link_id); scr_link_id = nullptr; }
+  releaseScreen(&scr_link_id);
   lbl_link_id_display = nullptr;
   lbl_link_id_status  = nullptr;
 }
@@ -1608,7 +1638,7 @@ static bool linkRowMatches(const UnlinkedSpool &s, const char* vendor_name,
 void showFilteredSpoolList(const char* vendor_name, const char* material_prefix, const char* material_full) {
   crumbSet("spool list build");
   logSDf("SHOW: FilteredSpoolList vendor=%s mat=%s matf=%s", vendor_name, material_prefix, material_full ? material_full : "");
-  if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
+  releaseScreen(&scr_link_spools);
 
   scr_link_spools = buildLinkOverlay();
 
@@ -1658,18 +1688,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   lv_obj_set_style_border_width(btn_hdr_back, 0, 0);
   lv_obj_add_event_cb(btn_hdr_back, [](lv_event_t *e) {
     logSD("BTN: SpoolList -> Back");
-    if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
-    if (link_flow_is_bambu) {
-      if (scr_link_entry) lv_obj_clear_flag(scr_link_entry, LV_OBJ_FLAG_HIDDEN);
-    } else {
-      // NTAG: if stage 3 was actually shown (not auto-skipped), back goes there
-      // otherwise back goes to stage 2 (material prefix list)
-      if (link_stage3_shown) {
-        showMaterialSubList(link_selected_vendor, link_selected_material);
-      } else {
-        showMaterialList(link_selected_vendor);
-      }
-    }
+    link_nav_pending = LNAV_SPOOLS_BACK;
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_hdr_back);
     lv_label_set_text(l, LV_SYMBOL_LEFT);
@@ -1688,11 +1707,11 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   lv_obj_set_style_border_width(btn_hdr_cancel, 0, 0);
   lv_obj_add_event_cb(btn_hdr_cancel, [](lv_event_t *e) {
     logSD("BTN: SpoolList -> Cancel");
-    if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
-    if (scr_link_entry)  { lv_obj_del(scr_link_entry);  scr_link_entry  = nullptr; }
-    if (scr_link_vendor) { lv_obj_del(scr_link_vendor); scr_link_vendor = nullptr; }
-    if (scr_link_mat)    { lv_obj_del(scr_link_mat);    scr_link_mat    = nullptr; }
-    if (scr_link_mat_sub){ lv_obj_del(scr_link_mat_sub);scr_link_mat_sub= nullptr; }
+    releaseScreen(&scr_link_spools);
+    releaseScreen(&scr_link_entry);
+    releaseScreen(&scr_link_vendor);
+    releaseScreen(&scr_link_mat);
+    releaseScreen(&scr_link_mat_sub);
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_hdr_cancel);
     lv_label_set_text(l, LV_SYMBOL_CLOSE);
@@ -1817,7 +1836,9 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
       UnlinkedSpool &s = link_spools[idx];
 
       // Sicherheits-Popup (halbtransparentes Overlay)
+      releaseScreen(&scr_link_confirm);
       lv_obj_t *popup = lv_obj_create(lv_scr_act());
+      scr_link_confirm = popup;
       lv_obj_set_size(popup, 480, 320);
       lv_obj_set_pos(popup, 0, 0);
       lv_obj_set_style_bg_color(popup, lv_color_hex(0x000000), 0);
@@ -1876,10 +1897,9 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
       lv_obj_set_user_data(btn_yes, (void*)(intptr_t)idx);
       lv_obj_add_event_cb(btn_yes, [](lv_event_t *e) {
         int cidx = (intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
-        lv_obj_t *pop = lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e)));
-        // Asynchronously: pop is this button's grandparent, and the rest of
-        // this callback still runs inside its event dispatch.
-        lv_obj_del_async(pop);
+        // Asynchronously: the popup is this button's grandparent, and the rest
+        // of this callback still runs inside its event dispatch.
+        releaseScreen(&scr_link_confirm);
         // The same test the row callback does before it opens this popup. It is
         // needed twice because the array can be freed between the two taps:
         // anything that reaches hideAllOverlays() does that, a backend switch
@@ -1938,7 +1958,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
       lv_obj_set_style_shadow_width(btn_no, 0, 0);
       lv_obj_set_style_border_width(btn_no, 0, 0);
       lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
-        lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e))));
+        releaseScreen(&scr_link_confirm);
       }, LV_EVENT_CLICKED, NULL);
       lv_obj_t *lbl_no = lv_label_create(btn_no);
       lv_label_set_text(lbl_no, T(STR_CANCEL));
@@ -1967,7 +1987,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
 // ============================================================
 void showMaterialList(const char* vendor_name) {
   logSDf("SHOW: MaterialList vendor=%s", vendor_name);
-  if (scr_link_mat) { lv_obj_del(scr_link_mat); scr_link_mat = nullptr; }
+  releaseScreen(&scr_link_mat);
   strncpy(link_selected_vendor, vendor_name, sizeof(link_selected_vendor)-1);
   link_selected_vendor[sizeof(link_selected_vendor)-1] = '\0';
   link_selected_material_full[0] = 0;  // reset on entry — set fresh in stage 3
@@ -2000,8 +2020,7 @@ void showMaterialList(const char* vendor_name) {
   lv_obj_set_style_border_width(btn_mat_back, 0, 0);
   lv_obj_add_event_cb(btn_mat_back, [](lv_event_t *e) {
     logSD("BTN: MatList -> Back");
-    if (scr_link_mat) { lv_obj_del(scr_link_mat); scr_link_mat = nullptr; }
-    showVendorList();
+    link_nav_pending = LNAV_MAT_BACK;
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_mat_back); lv_label_set_text(l, LV_SYMBOL_LEFT);
     lv_obj_set_style_text_color(l, lv_color_hex(0x28d49a), 0);
@@ -2017,11 +2036,11 @@ void showMaterialList(const char* vendor_name) {
   lv_obj_add_event_cb(btn_mat_cancel, [](lv_event_t *e) {
     logSD("BTN: MatList -> Cancel");
     copy_flow_via_list = false;
-    if (scr_link_mat)    { lv_obj_del(scr_link_mat);    scr_link_mat    = nullptr; }
-    if (scr_link_mat_sub){ lv_obj_del(scr_link_mat_sub);scr_link_mat_sub= nullptr; }
-    if (scr_link_vendor) { lv_obj_del(scr_link_vendor); scr_link_vendor = nullptr; }
-    if (scr_link_entry)  { lv_obj_del(scr_link_entry);  scr_link_entry  = nullptr; }
-    if (scr_copy_entry)  { lv_obj_del(scr_copy_entry);  scr_copy_entry  = nullptr; }
+    releaseScreen(&scr_link_mat);
+    releaseScreen(&scr_link_mat_sub);
+    releaseScreen(&scr_link_vendor);
+    releaseScreen(&scr_link_entry);
+    releaseScreen(&scr_copy_entry);
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_mat_cancel); lv_label_set_text(l, LV_SYMBOL_CLOSE);
     lv_obj_set_style_text_color(l, lv_color_hex(0xff8080), 0);
@@ -2110,8 +2129,7 @@ void showMaterialList(const char* vendor_name) {
       strncpy(link_selected_material, seen_mats[idx], sizeof(link_selected_material)-1);
       link_selected_material[sizeof(link_selected_material)-1] = '\0';
       link_selected_material_full[0] = 0;  // reset for new branch
-      if (scr_link_mat) { lv_obj_del(scr_link_mat); scr_link_mat = nullptr; }
-      showMaterialSubList(link_selected_vendor, link_selected_material);
+      link_nav_pending = LNAV_MAT_ROW;
     }, LV_EVENT_CLICKED, (void*)(intptr_t)m);
   }
 
@@ -2176,7 +2194,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
   }
 
   link_stage3_shown = true;  // actually rendered
-  if (scr_link_mat_sub) { lv_obj_del(scr_link_mat_sub); scr_link_mat_sub = nullptr; }
+  releaseScreen(&scr_link_mat_sub);
   scr_link_mat_sub = buildLinkOverlay();
 
   char title_buf[48];
@@ -2205,8 +2223,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
   lv_obj_set_style_border_width(btn_ms_back, 0, 0);
   lv_obj_add_event_cb(btn_ms_back, [](lv_event_t *e) {
     logSD("BTN: MatSubList -> Back");
-    if (scr_link_mat_sub) { lv_obj_del(scr_link_mat_sub); scr_link_mat_sub = nullptr; }
-    showMaterialList(link_selected_vendor);
+    link_nav_pending = LNAV_MATSUB_BACK;
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_ms_back); lv_label_set_text(l, LV_SYMBOL_LEFT);
     lv_obj_set_style_text_color(l, lv_color_hex(0x28d49a), 0);
@@ -2223,11 +2240,11 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
   lv_obj_add_event_cb(btn_ms_cancel, [](lv_event_t *e) {
     logSD("BTN: MatSubList -> Cancel");
     copy_flow_via_list = false;
-    if (scr_link_mat_sub){ lv_obj_del(scr_link_mat_sub);scr_link_mat_sub= nullptr; }
-    if (scr_link_mat)    { lv_obj_del(scr_link_mat);    scr_link_mat    = nullptr; }
-    if (scr_link_vendor) { lv_obj_del(scr_link_vendor); scr_link_vendor = nullptr; }
-    if (scr_link_entry)  { lv_obj_del(scr_link_entry);  scr_link_entry  = nullptr; }
-    if (scr_copy_entry)  { lv_obj_del(scr_copy_entry);  scr_copy_entry  = nullptr; }
+    releaseScreen(&scr_link_mat_sub);
+    releaseScreen(&scr_link_mat);
+    releaseScreen(&scr_link_vendor);
+    releaseScreen(&scr_link_entry);
+    releaseScreen(&scr_copy_entry);
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_ms_cancel); lv_label_set_text(l, LV_SYMBOL_CLOSE);
     lv_obj_set_style_text_color(l, lv_color_hex(0xff8080), 0);
@@ -2291,8 +2308,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
       int idx = (intptr_t)lv_event_get_user_data(e);
       strncpy(link_selected_material_full, seen_full[idx], sizeof(link_selected_material_full)-1);
       link_selected_material_full[sizeof(link_selected_material_full)-1] = '\0';
-      if (scr_link_mat_sub) { lv_obj_del(scr_link_mat_sub); scr_link_mat_sub = nullptr; }
-      showFilteredSpoolList(link_selected_vendor, link_selected_material, link_selected_material_full);
+      link_nav_pending = LNAV_MATSUB_ROW;
     }, LV_EVENT_CLICKED, (void*)(intptr_t)m);
   }
 
@@ -2315,7 +2331,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
 void showVendorList() {
   crumbSet("vendor list build");
   logSD("SHOW: VendorList");
-  if (scr_link_vendor) { lv_obj_del(scr_link_vendor); scr_link_vendor = nullptr; }
+  releaseScreen(&scr_link_vendor);
 
   scr_link_vendor = buildLinkOverlay();
 
@@ -2351,7 +2367,7 @@ void showVendorList() {
   lv_obj_set_style_border_width(btn_vnd_back, 0, 0);
   lv_obj_add_event_cb(btn_vnd_back, [](lv_event_t *e) {
     logSD("BTN: VendorList -> Back");
-    if (scr_link_vendor) { lv_obj_del(scr_link_vendor); scr_link_vendor = nullptr; }
+    releaseScreen(&scr_link_vendor);
     if (scr_link_entry)  lv_obj_clear_flag(scr_link_entry, LV_OBJ_FLAG_HIDDEN);
     if (scr_copy_entry)  lv_obj_clear_flag(scr_copy_entry, LV_OBJ_FLAG_HIDDEN);
   }, LV_EVENT_CLICKED, NULL);
@@ -2369,9 +2385,9 @@ void showVendorList() {
   lv_obj_add_event_cb(btn_vnd_x, [](lv_event_t *e) {
     logSD("BTN: VendorList -> Cancel");
     copy_flow_via_list = false;
-    if (scr_link_vendor) { lv_obj_del(scr_link_vendor); scr_link_vendor = nullptr; }
-    if (scr_link_entry)  { lv_obj_del(scr_link_entry);  scr_link_entry  = nullptr; }
-    if (scr_copy_entry)  { lv_obj_del(scr_copy_entry);  scr_copy_entry  = nullptr; }
+    releaseScreen(&scr_link_vendor);
+    releaseScreen(&scr_link_entry);
+    releaseScreen(&scr_copy_entry);
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_vnd_x); lv_label_set_text(l, LV_SYMBOL_CLOSE);
     lv_obj_set_style_text_color(l, lv_color_hex(0xff8080), 0);
@@ -2457,8 +2473,10 @@ void showVendorList() {
 
     lv_obj_add_event_cb(row, [](lv_event_t *e) {
       int idx = (intptr_t)lv_event_get_user_data(e);
-      if (scr_link_vendor) { lv_obj_del(scr_link_vendor); scr_link_vendor = nullptr; }
-      showMaterialList(seen_vendors[idx]);
+      if (idx < 0 || idx >= LINK_GROUP_MAX) return;
+      strncpy(link_nav_vendor, seen_vendors[idx], sizeof(link_nav_vendor) - 1);
+      link_nav_vendor[sizeof(link_nav_vendor) - 1] = '\0';
+      link_nav_pending = LNAV_VENDOR_ROW;
     }, LV_EVENT_CLICKED, (void*)(intptr_t)v);
   }
 
@@ -2480,7 +2498,7 @@ void showVendorList() {
 //  LINK-FLOW: EINSTIEGS-POPUP (Flow A + B)
 // ============================================================
 void closeLinkEntryPopup() {
-  if (scr_link_entry) { lv_obj_del(scr_link_entry); scr_link_entry = nullptr; }
+  releaseScreen(&scr_link_entry);
 }
 
 void showLinkEntryPopup(bool is_bambu) {
@@ -2597,13 +2615,13 @@ void showLinkEntryPopup(bool is_bambu) {
 //  LEGACY: closeLinkList / showLinkList (nicht mehr aktiv genutzt)
 // ============================================================
 void closeLinkList() {
-  if (scr_link_list)   { lv_obj_del(scr_link_list);   scr_link_list   = nullptr; }
-  if (scr_link_entry)  { lv_obj_del(scr_link_entry);  scr_link_entry  = nullptr; }
-  if (scr_link_id)     { lv_obj_del(scr_link_id);     scr_link_id     = nullptr; }
-  if (scr_link_vendor) { lv_obj_del(scr_link_vendor); scr_link_vendor = nullptr; }
-  if (scr_link_mat)    { lv_obj_del(scr_link_mat);    scr_link_mat    = nullptr; }
-  if (scr_link_mat_sub){ lv_obj_del(scr_link_mat_sub);scr_link_mat_sub= nullptr; }
-  if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
+  releaseScreen(&scr_link_list);
+  releaseScreen(&scr_link_entry);
+  releaseScreen(&scr_link_id);
+  releaseScreen(&scr_link_vendor);
+  releaseScreen(&scr_link_mat);
+  releaseScreen(&scr_link_mat_sub);
+  releaseScreen(&scr_link_spools);
 }
 
 void showLinkList() {
@@ -2624,15 +2642,15 @@ void showLinkList() {
 // ============================================================
 
 void closeCopyEntryPopup() {
-  if (scr_copy_entry) { lv_obj_del(scr_copy_entry); scr_copy_entry = nullptr; }
+  releaseScreen(&scr_copy_entry);
 }
 
 void closeCopyListPopup() {
-  if (scr_copy_list) { lv_obj_del(scr_copy_list); scr_copy_list = nullptr; }
+  releaseScreen(&scr_copy_list);
 }
 
 void closeCopyConfirmPopup() {
-  if (scr_copy_confirm) { lv_obj_del(scr_copy_confirm); scr_copy_confirm = nullptr; }
+  releaseScreen(&scr_copy_confirm);
 }
 
 // Patch newly created spool with tag UID and query it on main screen
@@ -3147,7 +3165,7 @@ void showCopySpoolList() {
 // ============================================================
 
 void closeNewTagPopup() {
-  if (scr_newtag) { lv_obj_del(scr_newtag); scr_newtag = nullptr; }
+  releaseScreen(&scr_newtag);
   lbl_newtag_info = nullptr;
   for (int i = 0; i < NEWTAG_LABEL_COUNT; i++) btn_newtag_w[i] = nullptr;
 }
@@ -3561,7 +3579,7 @@ void hideSpoolFlowOverlays() {
   lv_obj_t *const link_scr[] = {
     scr_link_entry, scr_link_id, scr_link_warn_a, scr_link_warn_b,
     scr_link_vendor, scr_link_mat, scr_link_mat_sub, scr_link_spools,
-    scr_link_list,
+    scr_link_list, scr_link_confirm,
     scr_copy_entry, scr_copy_list, scr_copy_confirm, scr_newtag
   };
   for (unsigned i = 0; i < sizeof(link_scr) / sizeof(link_scr[0]); i++)
@@ -3575,9 +3593,10 @@ void hideSpoolFlowOverlays() {
 
 void deleteSpoolFlowOverlays() {
   closeNewTagPopup();
-  if (scr_copy_entry)   { lv_obj_del(scr_copy_entry);   scr_copy_entry   = nullptr; }
-  if (scr_copy_list)    { lv_obj_del(scr_copy_list);    scr_copy_list    = nullptr; }
-  if (scr_copy_confirm) { lv_obj_del(scr_copy_confirm); scr_copy_confirm = nullptr; }
+  releaseScreen(&scr_link_confirm);
+  releaseScreen(&scr_copy_entry);
+  releaseScreen(&scr_copy_list);
+  releaseScreen(&scr_copy_confirm);
 }
 
 void handleSpoolFlowDeferredActions() {
@@ -3591,13 +3610,64 @@ void handleSpoolFlowDeferredActions() {
     deleteSpoolFlowOverlays();
   }
 
+  // ---- stepping between the link lists -----------------------------------
+  if (link_nav_pending != LNAV_NONE) {
+    const LinkNav nav = link_nav_pending;
+    link_nav_pending = LNAV_NONE;
+    // Every list below is built from this array. Gone between the tap and
+    // this pass - a backend switch from the browser does that - there is
+    // nothing left to step through, and the overlays went with it.
+    if (link_spools) {
+      // A copy, because showMaterialList() writes the name it is given into
+      // link_selected_vendor - the buffer some of these would hand it.
+      char vendor[sizeof(link_selected_vendor)];
+      strncpy(vendor, link_selected_vendor, sizeof(vendor) - 1);
+      vendor[sizeof(vendor) - 1] = '\0';
+      switch (nav) {
+        case LNAV_SPOOLS_BACK:
+          if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
+          if (link_flow_is_bambu) {
+            if (scr_link_entry) lv_obj_clear_flag(scr_link_entry, LV_OBJ_FLAG_HIDDEN);
+          } else if (link_stage3_shown) {
+            // NTAG: back to stage 3 if it was really shown, else to stage 2
+            showMaterialSubList(vendor, link_selected_material);
+          } else {
+            showMaterialList(vendor);
+          }
+          break;
+        case LNAV_MAT_BACK:
+          if (scr_link_mat) { lv_obj_del(scr_link_mat); scr_link_mat = nullptr; }
+          showVendorList();
+          break;
+        case LNAV_MAT_ROW:
+          if (scr_link_mat) { lv_obj_del(scr_link_mat); scr_link_mat = nullptr; }
+          showMaterialSubList(vendor, link_selected_material);
+          break;
+        case LNAV_MATSUB_BACK:
+          if (scr_link_mat_sub) { lv_obj_del(scr_link_mat_sub); scr_link_mat_sub = nullptr; }
+          showMaterialList(vendor);
+          break;
+        case LNAV_MATSUB_ROW:
+          if (scr_link_mat_sub) { lv_obj_del(scr_link_mat_sub); scr_link_mat_sub = nullptr; }
+          showFilteredSpoolList(vendor, link_selected_material, link_selected_material_full);
+          break;
+        case LNAV_VENDOR_ROW:
+          if (scr_link_vendor) { lv_obj_del(scr_link_vendor); scr_link_vendor = nullptr; }
+          showMaterialList(link_nav_vendor);
+          break;
+        case LNAV_NONE:
+          break;
+      }
+    }
+  }
+
   // ---- what the flow's buttons parked ----------------------------------
   if (link_patch_pending) {
     link_patch_pending = false;
     // The warning popups and the numpad go first; doLinkPatch() then reaches
     // the backend and repaints the main screen.
-    if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
-    if (scr_link_warn_b) { lv_obj_del(scr_link_warn_b); scr_link_warn_b = nullptr; }
+    releaseScreen(&scr_link_warn_a);
+    releaseScreen(&scr_link_warn_b);
     closeIdInputPopup();
     doLinkPatch(link_patch_id, link_patch_bambu);
   }
@@ -3682,7 +3752,7 @@ void handleSpoolFlowDeferredActions() {
     id_input_open = false;
     link_id_lookup_pending = 0;
     copy_id_lookup_pending = 0;
-    if (scr_link_id) { lv_obj_del(scr_link_id); scr_link_id = nullptr; }
+    releaseScreen(&scr_link_id);
     lbl_link_id_display = nullptr;
     lbl_link_id_status  = nullptr;
     // Clean up entry popups if they were hidden by X button
@@ -3700,8 +3770,9 @@ void handleSpoolFlowDeferredActions() {
     link_id_input[0] = '\0';
     lbl_link_id_display = nullptr;
     lbl_link_id_status  = nullptr;
-    // Delete old numpad BEFORE showIdInputPopup; prevents residual touch events
-    // from firing the confirm callback during lv_obj_del inside showIdInputPopup.
+    // The old numpad goes first. From the loop this may be synchronous, and
+    // it should be: the new one is built a few lines down, and two numpads
+    // in the pool at once is room the spool list would have used.
     if (scr_link_id) { lv_obj_del(scr_link_id); scr_link_id = nullptr; }
     // Free the link_spools buffer grown during the failed lookup so the next
     // lookup starts with a clean slate and no out-of-bounds risk.
@@ -3722,12 +3793,12 @@ void handleSpoolFlowDeferredActions() {
     copy_confirm_pending = false;
     // Hide copy list (keep it for cancel-back navigation), delete others.
     if (scr_copy_list) lv_obj_add_flag(scr_copy_list, LV_OBJ_FLAG_HIDDEN);
-    if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
-    if (scr_link_mat)    { lv_obj_del(scr_link_mat);    scr_link_mat    = nullptr; }
-    if (scr_link_mat_sub){ lv_obj_del(scr_link_mat_sub);scr_link_mat_sub= nullptr; }
-    if (scr_link_vendor) { lv_obj_del(scr_link_vendor); scr_link_vendor = nullptr; }
-    if (scr_link_entry)  { lv_obj_del(scr_link_entry);  scr_link_entry  = nullptr; }
-    if (scr_copy_entry)  { lv_obj_del(scr_copy_entry);  scr_copy_entry  = nullptr; }
+    releaseScreen(&scr_link_spools);
+    releaseScreen(&scr_link_mat);
+    releaseScreen(&scr_link_mat_sub);
+    releaseScreen(&scr_link_vendor);
+    releaseScreen(&scr_link_entry);
+    releaseScreen(&scr_copy_entry);
     showCopyConfirmPopup(copy_confirm_spool_id, copy_confirm_fid, copy_confirm_name,
                         copy_confirm_remaining, copy_confirm_initial, copy_confirm_spool_w);
   }
@@ -3737,7 +3808,7 @@ void handleSpoolFlowDeferredActions() {
     bool pbambu = link_id_lookup_is_bambu;
     link_id_lookup_pending = 0;
     // Close numpad before HTTP call
-    if (scr_link_id) { lv_obj_del(scr_link_id); scr_link_id = nullptr; }
+    releaseScreen(&scr_link_id);
     lbl_link_id_display = nullptr; lbl_link_id_status = nullptr;
     id_input_open = false;
     linkIdLookupAndPatch(pid, pbambu);
@@ -3767,7 +3838,7 @@ void handleSpoolFlowDeferredActions() {
           snprintf(ctmpl, sizeof(ctmpl), "%s %s (%s)", cfmat, cfname, cfvnd);
         lbl_link_id_display = nullptr;
         lbl_link_id_status  = nullptr;
-        if (scr_link_id) { lv_obj_del(scr_link_id); scr_link_id = nullptr; }
+        releaseScreen(&scr_link_id);
         showCopyConfirmPopup(cid, cfid, ctmpl, crem, cini, cspw);
       } else {
         if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_LINK_JSON_ERR));
