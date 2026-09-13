@@ -23,6 +23,15 @@
 // but it is probed and created alongside them, so it belongs in the same list.
 #define LAST_DRIED_FIELD  "last_dried"
 
+// The extra field Happy Hare v4 reads its gate uids out of. Not a tag field
+// either, and never selectable - the binding stays wherever the choice below
+// puts it, and this only ever carries a copy of the hardware uid next to it.
+//
+// The name is fixed in Happy Hare as MMU_RFID_FIELD and cannot be configured
+// there, so there is nothing here to choose. It holds a comma separated list,
+// because a spool can carry a tag per side and both have to resolve to it.
+#define RFID_TAG_FIELD  "rfid_tag"
+
 // These values are persisted in NVS, so entries are appended and never
 // inserted - putting the native source first would have turned every stored
 // "0", meaning extra.tag, into something else on the next boot.
@@ -82,6 +91,21 @@ bool                tagFieldIsNative();
 // lines and labels only - anything that builds a request must use
 // tagFieldKey() and handle the null.
 const char*         tagFieldKeyName();
+
+// Whether the source in force can hold more than one tag per spool, answered
+// from memory alone.
+//
+// Memory alone is the whole point: this is what the settings row for the
+// second tag question hangs on, and a row is rendered from the screen build
+// and from the web page. A probe there would repeat the fault that
+// tagFieldEffective() below carries a comment about - HTTP before lwIP is up
+// is a boot loop with no way in but the cable.
+//
+// It therefore answers the structural question ("can this source hold a
+// second tag at all"), never the server one. Whether a given FilaMan really
+// has the second slot is decided by backendCanHoldSecondTag(), which runs
+// with a network under it.
+bool tagFieldHoldsSeveral();
 
 // Picks the native source once, on a server that has it, for an installation
 // that has never chosen. An explicit choice is never overridden: somebody on

@@ -1,6 +1,7 @@
 #include "ota_state.h"
 
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
 #include <Arduino.h>
@@ -13,6 +14,13 @@ bool update_available = false;
 bool gh_prerelease = false;
 
 char gh_latest_version[40] = "";
+char gh_latest_sha[65]     = "";
+char gh_latest_sha_tag[40] = "";
+
+const char* otaExpectedSha(const char *tag) {
+  if (!tag || !tag[0] || !gh_latest_sha[0]) return "";
+  return (strcmp(tag, gh_latest_sha_tag) == 0) ? gh_latest_sha : "";
+}
 
 volatile bool gh_flash_active = false;
 

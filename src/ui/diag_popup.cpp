@@ -55,8 +55,7 @@ static lv_obj_t *mkButton(lv_obj_t *box, int x, int w, int str_id, bool primary,
 
   lv_obj_t *l = lv_label_create(btn);
   char bbuf[32];
-  strncpy(bbuf, T(str_id), sizeof(bbuf) - 1);
-  bbuf[sizeof(bbuf) - 1] = '\0';
+  copyT(bbuf, sizeof(bbuf), str_id);
   lv_label_set_text(l, bbuf);
   lv_obj_set_style_text_color(l,
     lv_color_hex(primary ? 0x40c080 : 0xc8d8f0), 0);
@@ -101,8 +100,7 @@ void showDiagPopup(DiagCode c) {
 
   lv_obj_t *title = lv_label_create(box);
   char tbuf[DIAG_TITLE_BUF];
-  strncpy(tbuf, T(diagTitleString(c)), sizeof(tbuf) - 1);
-  tbuf[sizeof(tbuf) - 1] = '\0';
+  copyT(tbuf, sizeof(tbuf), diagTitleString(c));
   lv_label_set_text(title, tbuf);
   lv_obj_set_style_text_color(title, lv_color_hex(0xe8f0ff), 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);

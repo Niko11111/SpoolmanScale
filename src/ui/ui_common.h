@@ -3,6 +3,10 @@
 #include <lvgl.h>
 
 void addBackButton(lv_obj_t *parent, lv_event_cb_t cb);
+// The "?" circle in the header row, between the centred title and the close
+// button - the one gap on a sub screen nothing else wants. Opens the info
+// popup with the two strings.
+lv_obj_t* addHeaderHelp(lv_obj_t *scr, int title_id, int text_id);
 void addCloseButton(lv_obj_t *parent);
 void buildSubHeader(lv_obj_t *parent, const char *title,
                     lv_event_cb_t back_cb, const char *back_hint = nullptr);
@@ -57,6 +61,11 @@ bool lvPoolHasRoomForRow();
 // uninitialised and gave the swatch a random colour off the stack.
 lv_color_t swatchColorFromHex(const char* hex);
 
+// At most max_bytes of s into out, never cutting through a multi-byte UTF-8
+// sequence. "%.8s" cut "Köln" between the two bytes of the ö and a box stood
+// where the letter was.
+void utf8Cut(const char* s, size_t max_bytes, char* out, size_t out_size);
+
 // Two column info row: a muted label on the left, the value on the right.
 // Used by the WiFi status screen and by the summary on the WiFi connecting
 // screen, so both stay in step. Returns the value label so the caller can
@@ -100,3 +109,23 @@ lv_obj_t* addSettingRow(lv_obj_t* list, const SettingDesc& s);
 
 // Every row that belongs to the active backend and applies right now.
 void addSettingRows(lv_obj_t* list);
+
+// ---------------------------------------------------------------------------
+//  Modal questions
+// ---------------------------------------------------------------------------
+
+// True while a popup is on screen waiting for the user to answer it.
+//
+// It exists because a blocking backend call and a question on screen cannot
+// share the loop. lv_timer_handler() is what reads the touch panel, and it
+// does not run while an HTTP request is in flight - a full inventory is six
+// seconds on a library of 250 - so the question sits there taking no input
+// and looks broken. Pumping LVGL from inside the request is not the way out:
+// loading_overlay.cpp repaints with lv_refr_now() for exactly this reason and
+// says why, dispatching events from there would re-enter the callback the
+// request was started from.
+//
+// So the expensive lookup stands aside instead. The cheap server side tag
+// search still runs, and spoolmanRecheckTick() keeps retrying it while an
+// unknown tag lies on the pad, which is what makes standing aside free.
+bool uiModalWaiting();

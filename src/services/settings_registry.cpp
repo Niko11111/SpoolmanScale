@@ -31,13 +31,24 @@
 // explain, so the row is absent rather than disabled.
 static bool appliesCardUids() { return tagFieldIsList(); }
 
+// The second tag question only where a second tag has somewhere to go. Asked
+// of the source rather than of the server, because this runs from the screen
+// build and from the web page and must not reach the network - see the comment
+// on tagFieldHoldsSeveral(). The server half is settled later, by
+// backendCanHoldSecondTag(), at the moment the question would be asked.
+static bool appliesSecondTag() { return tagFieldHoldsSeveral(); }
+
 // The two fields the scale needs, named rather than described: the field names
 // are what the user sees on the Spoolman side and are not translated. The tag
 // field is whichever one is selected, so the row says which without being
 // opened.
 static const char* subExtraFields() {
   static char buf[48];
-  snprintf(buf, sizeof(buf), "%s, " LAST_DRIED_FIELD, tagFieldKeyName());
+  // The Happy Hare field joins the list only while the switch that writes it
+  // is on, which is the same rule the screen behind this row applies. Naming a
+  // field the scale does not need would send the user creating columns.
+  snprintf(buf, sizeof(buf), "%s, " LAST_DRIED_FIELD "%s", tagFieldKeyName(),
+           g_hw_uid_write ? ", " RFID_TAG_FIELD : "");
   return buf;
 }
 
@@ -83,6 +94,29 @@ const SettingDesc SETTINGS[] = {
     STR_CU_WRITE, STR_CU_WRITE_SUB, STR_CU_WRITE_INFO, LV_SYMBOL_PLUS,
     0, 0, nullptr,
     appliesCardUids, nullptr, nullptr, OPEN_NONE, nullptr, false },
+
+  // The tag on the other flange. Beside the row above because both answer the
+  // same question - more than one tag per spool - and SC_ALL because FilaMan
+  // has a second slot of its own since 1.3.1. It therefore heads the list in
+  // FilaMan mode too, which is where it belongs: it is about linking, and
+  // everything below it is about weighing.
+  { "tag2_ask", SET_BOOL, SC_ALL, &g_tag2_ask,
+    STR_TAG2_ASK, STR_TAG2_ASK_SUB, STR_TAG2_ASK_INFO, LV_SYMBOL_COPY,
+    0, 0, nullptr,
+    appliesSecondTag, nullptr, nullptr, OPEN_NONE, nullptr, false },
+
+  // Copying the hardware uid into the field Happy Hare reads. Always offered
+  // on Spoolman, unlike the row above: it hangs on no tag field, because it
+  // writes beside the binding rather than into it.
+  //
+  // Deliberately not hidden when the server has no rfid_tag field. That would
+  // need a probe from inside a screen build, and it would be a dead end - the
+  // row is how the field gets created in the first place. The write checks
+  // instead, and says so in the log.
+  { "hw_uid_write", SET_BOOL, SC_SPOOLMAN, &g_hw_uid_write,
+    STR_HW_UID_WRITE, STR_HW_UID_WRITE_SUB, STR_HW_UID_WRITE_INFO, LV_SYMBOL_UPLOAD,
+    0, 0, nullptr,
+    nullptr, nullptr, nullptr, OPEN_NONE, nullptr, false },
 
   // ---- FilaMan -----------------------------------------------------------
 
@@ -138,6 +172,14 @@ const SettingDesc SETTINGS[] = {
     STR_BB_DRIED_TITLE, 0, STR_BB_DRIED_INFO, LV_SYMBOL_TINT,
     BB_DRIED_NOTE, BB_DRIED_COUNT, OPT_BB_DRIED,
     nullptr, nullptr, nullptr, OPEN_BB_DRIED, bbDriedOptOk, false },
+
+  // The bay picker after weighing. A plain switch: BamBuddy knows only "ask"
+  // and "off" here, because without a time window there is no third thing an
+  // "always" could mean.
+  { "bb_ams_ask", SET_BOOL, SC_BAMBUDDY, &g_ams_pick_ask,
+    STR_BBAMS_ASK, STR_BBAMS_ASK_SUB, STR_BBAMS_ASK_INFO, LV_SYMBOL_SHUFFLE,
+    0, 0, nullptr,
+    nullptr, nullptr, nullptr, OPEN_NONE, nullptr, false },
 };
 
 const size_t SETTINGS_COUNT = sizeof(SETTINGS) / sizeof(SETTINGS[0]);

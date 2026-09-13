@@ -8,3 +8,5 @@ void handleMoreInfoDeferredActions();
 // picker left open survives a navigation change and sits on top of whatever
 // comes next.
 void hideMoreInfoOverlays();
+// Frees the unlink confirmation, for the navigation.
+void closeMoreInfoPopups();

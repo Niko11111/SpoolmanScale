@@ -86,7 +86,7 @@ int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
   if (last_used_mode == 1) {
     time_t now = time(nullptr);
     struct tm* t = localtime(&now);
-    snprintf(today, sizeof(today), "%04d-%02d-%02d", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday);
+    if (t) snprintf(today, sizeof(today), "%04d-%02d-%02d", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday);
   }
   Serial.printf("PATCH weight: %.1fg\n", remaining);
   // FilaMan wants the gross weight and subtracts the empty spool weight
@@ -105,10 +105,13 @@ int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
     char p_str[16];
     snprintf(p_str, sizeof(p_str), "%.1f %%", pct);
     lv_label_set_text(lbl_spoolman_pct, p_str);
+    struct tm* t = nullptr;
     if (last_used_mode == 1 && lbl_last_used) {
-      char today_iso[12];
       time_t now = time(nullptr);
-      struct tm* t = localtime(&now);
+      t = localtime(&now);
+    }
+    if (t) {
+      char today_iso[12];
       snprintf(today_iso, sizeof(today_iso), "%04d-%02d-%02d", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday);
       char today_local[12];
       isoToDe(today_iso, today_local, sizeof(today_local));
@@ -221,12 +224,162 @@ static void unlinkAllNativeTags(int spool_id, const char* fallback_uid) {
   }
 }
 
-bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_values) {
+// ============================================================
+//  THE HARDWARE UID, FOR READERS THAT SEE NOTHING ELSE
+// ============================================================
+// The two lengths a reader ever reports, normalised: a 4 byte uid and a 7 byte
+// one. Everything the scale scans is one of them.
+#define HW_UID_LEN_4B   8
+#define HW_UID_LEN_7B  14
+
+// Only a hardware uid belongs in the Happy Hare field, and this is what keeps
+// a tray uuid out of it.
+//
+// Happy Hare builds a reverse map of uid to spool, and a uid it finds on a
+// second spool it MOVES, stripping it from the first. A tray uuid is not a
+// tag: both chips of a spool carry it, and every duplicate a Bambu import left
+// behind carries it too. Two such spools would take it off each other for as
+// long as both are scanned. It is 32 characters and refused here.
+static bool hwUidIsHardware(const char* norm) {
+  const size_t n = strlen(norm);
+  return n == HW_UID_LEN_4B || n == HW_UID_LEN_7B;
+}
+
+// Raised when a link had to go into the default field because the selected
+// source does not exist on this server, taken once by the screen. A flag
+// rather than a popup from here: this module is the service layer, and an
+// overlay must never be built out of the callback a link was started from.
+static bool s_native_missing = false;
+
+bool patchSpoolTagTakeNativeMissing() {
+  const bool was = s_native_missing;
+  s_native_missing = false;
+  return was;
+}
+
+bool syncHwUidField(int spool_id, const char* scanned) {
+  // Everything that can say no without touching the network, before anything
+  // that cannot. This runs on every lookup that found a spool, so a spool
+  // whose uids are already on file has to cost nothing at all.
+  if (!g_hw_uid_write || spool_id <= 0)  return false;
+  if (backendMode() != BACKEND_SPOOLMAN) return false;
+  if (!wifi_ok)                          return false;
+  // Nothing on the reader. There is no uid to report and no spool this could
+  // be about.
+  if (!scanned || !scanned[0])           return false;
+
+  // The chip, never the tray uuid: tagNativeUid() answers with g_tag.uid_str
+  // for a Bambu tag and with `scanned` itself for everything else, so an NTAG
+  // and a plain card need no special case here.
+  char uid[CARD_UIDS_MAX];
+  tagUidNormalize(tagNativeUid(scanned), uid, sizeof(uid));
+  if (!hwUidIsHardware(uid)) {
+    logSDf("HW uid: '%s' is not a hardware uid, %s not written", uid, RFID_TAG_FIELD);
+    return false;
+  }
+
+  // The gate that keeps a settled spool free, and it sits ahead of the field
+  // probe on purpose - that one reaches the network on its first call for a
+  // server. sm_hw_uid_value was filled by captureBindings() out of the very
+  // document this lookup parsed, so it cannot be stale.
+  if (cardUidsContain(sm_hw_uid_value, uid)) return false;
+
+  if (!backendHasExtraField(RFID_TAG_FIELD)) {
+    logSDf("HW uid: %s missing on the server, '%s' not written", RFID_TAG_FIELD, uid);
+    return false;
+  }
+
+  char merged[CARD_UIDS_MAX];
+  CardUidsResult r = cardUidsAppend(sm_hw_uid_value, uid, merged, sizeof(merged));
+  if (r == CARD_UIDS_FULL) {
+    // Refused rather than shortened. The list may hold a uid Happy Hare put
+    // there itself, and dropping one takes a spool off a printer.
+    logSDf("HW uid ID=%d '%s' REFUSED, %s full ('%s')",
+           spool_id, uid, RFID_TAG_FIELD, sm_hw_uid_value);
+    return false;
+  }
+  if (r == CARD_UIDS_ALREADY_PRESENT) return false;
+
+  int c = backendPatchExtraField(cfg_spoolman_base, spool_id, RFID_TAG_FIELD, merged);
+  logSDf("HW uid ID=%d %s='%s' (%d) HTTP %d",
+         spool_id, RFID_TAG_FIELD, merged, cardUidsCount(merged), c);
+  if (c < 200 || c >= 300) return false;
+
+  // Keeps the captured value in step with what was just written, the same way
+  // AutoLink::remember() does for the native list and for the same reason: the
+  // unlink reads this buffer, and it was read before this entry existed. A
+  // spool the user was told is unlinked would otherwise still answer at a gate.
+  strncpy(sm_hw_uid_value, merged, CARD_UIDS_MAX - 1);
+  sm_hw_uid_value[CARD_UIDS_MAX - 1] = '\0';
+  return true;
+}
+
+// Takes the tag on the reader back out of the Happy Hare field, or empties it.
+//
+// Not gated on the switch. It may have been turned off after values were
+// written, and an unlink that leaves them behind keeps the spool answering at
+// the gate after the screen said it is gone. The captured value is the guard
+// instead: a field holding nothing costs no request, which is also what keeps
+// an HTTP 400 off a server that never had the field.
+static void unlinkHwUidField(int spool_id, const char* scanned, bool all) {
+  if (!sm_hw_uid_value[0]) return;
+
+  if (all) {
+    // The whole binding means all of it, including the chip on the other
+    // flange - which this scale can name only because captureBindings() read
+    // the list. Leaving that one behind is exactly the half-unlink the tag
+    // fields go out of their way to avoid.
+    int c = backendPatchExtraField(cfg_spoolman_base, spool_id, RFID_TAG_FIELD, "");
+    logSDf("UNLINK ID=%d cleared %s ('%s'), HTTP %d",
+           spool_id, RFID_TAG_FIELD, sm_hw_uid_value, c);
+    if (c >= 200 && c < 300) sm_hw_uid_value[0] = '\0';
+    return;
+  }
+
+  char uid[CARD_UIDS_MAX];
+  tagUidNormalize(tagNativeUid(scanned), uid, sizeof(uid));
+
+  char rest[CARD_UIDS_MAX];
+  if (!cardUidsRemove(sm_hw_uid_value, uid, rest, sizeof(rest))) return;
+
+  int c = backendPatchExtraField(cfg_spoolman_base, spool_id, RFID_TAG_FIELD, rest);
+  logSDf("UNLINK one ID=%d uid='%s' left %s='%s' HTTP %d",
+         spool_id, uid, RFID_TAG_FIELD, rest, c);
+  if (c >= 200 && c < 300) {
+    strncpy(sm_hw_uid_value, rest, CARD_UIDS_MAX - 1);
+    sm_hw_uid_value[CARD_UIDS_MAX - 1] = '\0';
+  }
+}
+
+bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_values,
+                   bool additional) {
   if (!wifi_ok) return false;
   const bool clearing = (!uuid || !uuid[0]);
   sm_tag_conflict_spool = 0;   // stale from an earlier attempt would mislead
 
   const TagFieldSpec& spec = tagFieldSelected();
+
+  // A further tag beside the binding, before any of the paths below get to
+  // decide anything. An unlink is never "additional" - clearing goes through
+  // unlinkCardUid(), which knows about every field at once.
+  if (additional && !clearing) {
+    if (backendIsFilaMan()) {
+      // Its own column, not the one the first tag sits in. Everything below
+      // would aim at rfid_uid and take the first chip off the spool.
+      const int code = backendPatchSpoolTagSlot2(cfg_spoolman_base, spool_id, uuid);
+      logSDf("LINK slot2 ID=%d uuid='%s' HTTP %d", spool_id, uuid, code);
+      return code >= 200 && code < 300;
+    }
+    // Everything else has to be a source that holds several by itself. The
+    // settings row is hidden where that is not true, so this is a guard
+    // against a code path, not against a user - but a silent overwrite of the
+    // first tag is exactly the damage worth a line of code.
+    if (!spec.is_native && !(spec.is_list && g_card_uids_write)) {
+      logSDf("LINK second: %s holds one tag, '%s' not written",
+             tagFieldKeyName(), uuid);
+      return false;
+    }
+  }
 
   // Spoolman's own tag relation, where a spool holds several tags without any
   // of the list handling below. Checked before anything reads field_values,
@@ -259,6 +412,35 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
       logSDf("LINK native: uuid='%s' already on spool %d", native_uid, conflict);
       return false;
     }
+
+    // Warn, do not block. What is wrong here is the stored source, not the
+    // link. tagFieldEffective() answers "native" on every Spoolman because it
+    // is not allowed to reach the network, so a scale that once talked to a
+    // v0.27 server keeps that choice when it is pointed back at an older one -
+    // and the user cannot see the setting failing. Refusing the link would
+    // punish them for that.
+    //
+    // The binding goes into the default field instead, the one place every
+    // Spoolman has. It heals itself: the fallback pass in querySpoolman()
+    // finds a spool bound this way, and the migration further down this
+    // function moves it into the relation the first time a link runs against a
+    // server that has one.
+    if (code == BACKEND_NOT_SUPPORTED) {
+      const TagFieldSpec& fb = tagFieldSpec(TAG_FIELD_TAG);
+      if (!backendHasExtraField(fb.key)) {
+        logSDf("LINK native: no relation on this server and no %s either, "
+               "nothing written", fb.key);
+        return false;
+      }
+      char val[CARD_UIDS_MAX];
+      tagFieldFormat(fb, scanned, val, sizeof(val));
+      const int c = backendPatchExtraField(cfg_spoolman_base, spool_id, fb.key, val);
+      logSDf("LINK native: this server has no tag relation, wrote %s='%s' "
+             "instead, HTTP %d", fb.key, val, c);
+      if (c < 200 || c >= 300) return false;
+      s_native_missing = true;   // said once, by the screen
+      return true;
+    }
     if (code < 200 || code >= 300) return false;
 
     // A Bambu tag carries a second identity: the tray uuid out of its
@@ -266,7 +448,10 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     // the spool from either side straight away, instead of only once the other
     // chip has been on the reader too. It is no substitute for the chip uid
     // above - only a reader that can decrypt Bambu contents ever sees it.
-    if (tagIsBambu(scanned)) {
+    // Skipped for a further tag: the first link already put the tray uuid in,
+    // and both chips of the spool carry the same one. Asking again would be a
+    // request whose only possible answers are "already yours" and 409.
+    if (tagIsBambu(scanned) && !additional) {
       int c2 = backendLinkTag(cfg_spoolman_base, spool_id, scanned, "bambu", nullptr);
       // A 409 here means another spool claims this tray uuid, which is a
       // duplicate in the library rather than something this link did wrong.
@@ -286,7 +471,7 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     // This is also why the migration below skips extra.tag for a Bambu tag:
     // clearing it is exactly what would break that setup.
     const bool keep_tag_field = tagIsBambu(scanned);
-    if (keep_tag_field) {
+    if (keep_tag_field && !additional) {
       const TagFieldSpec& companion = tagFieldSpec(TAG_FIELD_TAG);
       if (!backendHasExtraField(companion.key)) {
         logSDf("LINK native: %s missing on the server, tray uuid not kept",
@@ -305,7 +490,12 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     // findable through a store nobody writes any more. Same rule as the
     // migration between fields, including the refusal to empty a list that
     // still holds somebody else's tag.
-    if (field_values) {
+    //
+    // Not for a further tag. The first link cleared what had to go, and
+    // running it again would meet an extra.tag this very function refused to
+    // rewrite two blocks up - so it would delete the tray uuid OpenSpoolman
+    // reads instead of leaving it where the first link deliberately put it.
+    if (field_values && !additional) {
       for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
         if (keep_tag_field && i == TAG_FIELD_TAG) continue;
         if (field_values[i] && field_values[i][0])
@@ -391,7 +581,8 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
   // unlink and a silent disaster for a link, and the old line could not tell
   // the two apart afterwards.
   logSDf("PATCH tag ID=%d field=%s uuid='%s'%s HTTP %d",
-         spool_id, backendMode() == BACKEND_SPOOLMAN ? spec.key : "native",
+         spool_id, backendMode() == BACKEND_SPOOLMAN ? spec.key
+                 : backendIsFilaMan() ? "rfid_uid" : "device protocol",
          uuid ? uuid : "", clearing ? " UNLINK" : "", code);
 
   // An unlink reports success either way: the caller has already decided the
@@ -443,6 +634,10 @@ void unlinkCardUid(int spool_id, const char* uid, bool all) {
       logSDf("UNLINK native ID=%d uuid='%s' HTTP %d", spool_id, native_uid, c);
     }
   }
+
+  // The companion field, whichever way the popup was answered. It is not one
+  // of the tag fields below, so the loop over them would never reach it.
+  unlinkHwUidField(spool_id, uid, all);
 
   if (all) {
     // Every field that holds something has to go. Leaving one behind would

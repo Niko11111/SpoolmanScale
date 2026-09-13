@@ -66,8 +66,10 @@ void buildDisplayScreen() {
   lv_obj_align(lbl_bright, LV_ALIGN_TOP_MID, 0, Y_BRIGHT_LBL);
 
   lv_obj_t *slider = lv_slider_create(body);
-  lv_obj_set_size(slider, 456, 20);
-  lv_obj_set_pos(slider, 12, Y_BRIGHT_SLIDER);
+  // 20 px in from either edge: the knob is drawn centred on the track's end
+  // and overhung the screen at 255.
+  lv_obj_set_size(slider, 440, 20);
+  lv_obj_set_pos(slider, 20, Y_BRIGHT_SLIDER);
   lv_slider_set_range(slider, BRIGHT_MIN, BRIGHT_MAX);
   lv_slider_set_value(slider, bright_normal, LV_ANIM_OFF);
   lv_obj_set_style_bg_color(slider, lv_color_hex(0x1a3060), LV_PART_MAIN);
@@ -112,7 +114,7 @@ void buildDisplayScreen() {
                           (cur_sleep == 0 || dim_vals[i] < cur_sleep));
     lv_obj_set_style_bg_color(b, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
     if (!allowed) {
-      lv_obj_set_style_bg_opa(b, LV_OPA_40, 0);
+      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
       lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
     }
     lv_obj_set_style_radius(b, 8, 0);
@@ -120,16 +122,15 @@ void buildDisplayScreen() {
     lv_obj_set_style_border_width(b, 0, 0);
     char buf[16];
     if (dim_vals[i] == 0) {
-      strncpy(buf, T(STR_SCREENOFF_NEVER), sizeof(buf) - 1);
-      buf[sizeof(buf) - 1] = '\0';
+      copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
     } else {
-      snprintf(buf, sizeof(buf), "%d Min", dim_vals[i]);
+      snprintf(buf, sizeof(buf), T(STR_MINUTES_FMT), dim_vals[i]);
     }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);
     lv_obj_set_style_text_color(l, active ? lv_color_hex(0x0a1020)
                                  : (allowed ? lv_color_hex(0xc8d8f0)
-                                            : lv_color_hex(0x2a4060)), 0);
+                                            : lv_color_hex(0x4a6fa0)), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
@@ -161,7 +162,7 @@ void buildDisplayScreen() {
                           (cur_sleep == 0 || off_vals[i] < cur_sleep));
     lv_obj_set_style_bg_color(b, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
     if (!allowed) {
-      lv_obj_set_style_bg_opa(b, LV_OPA_40, 0);
+      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
       lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
     }
     lv_obj_set_style_radius(b, 8, 0);
@@ -169,16 +170,15 @@ void buildDisplayScreen() {
     lv_obj_set_style_border_width(b, 0, 0);
     char buf[16];
     if (off_vals[i] == 0) {
-      strncpy(buf, T(STR_SCREENOFF_NEVER), sizeof(buf) - 1);
-      buf[sizeof(buf) - 1] = '\0';
+      copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
     } else {
-      snprintf(buf, sizeof(buf), "%d Min", off_vals[i]);
+      snprintf(buf, sizeof(buf), T(STR_MINUTES_FMT), off_vals[i]);
     }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);
     lv_obj_set_style_text_color(l, active ? lv_color_hex(0x0a1020)
                                  : (allowed ? lv_color_hex(0xc8d8f0)
-                                            : lv_color_hex(0x2a4060)), 0);
+                                            : lv_color_hex(0x4a6fa0)), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
@@ -213,7 +213,7 @@ void buildDisplayScreen() {
                           (cur_off == 0 || sleep_vals[i] > cur_off));
     lv_obj_set_style_bg_color(b, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
     if (!allowed) {
-      lv_obj_set_style_bg_opa(b, LV_OPA_40, 0);
+      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
       lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
     }
     lv_obj_set_style_radius(b, 8, 0);
@@ -221,16 +221,15 @@ void buildDisplayScreen() {
     lv_obj_set_style_border_width(b, 0, 0);
     char buf[16];
     if (sleep_vals[i] == 0) {
-      strncpy(buf, T(STR_SCREENOFF_NEVER), sizeof(buf) - 1);
-      buf[sizeof(buf) - 1] = '\0';
+      copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
     } else {
-      snprintf(buf, sizeof(buf), "%d Min", sleep_vals[i]);
+      snprintf(buf, sizeof(buf), T(STR_MINUTES_FMT), sleep_vals[i]);
     }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);
     lv_obj_set_style_text_color(l, active ? lv_color_hex(0x0a1020)
                                  : (allowed ? lv_color_hex(0xc8d8f0)
-                                            : lv_color_hex(0x2a4060)), 0);
+                                            : lv_color_hex(0x4a6fa0)), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {

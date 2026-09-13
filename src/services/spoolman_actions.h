@@ -28,13 +28,46 @@ void patchArchiveSpool();
 // actually stored rather than what was hoped for.
 bool reactivateSpool(float remaining);
 
+//
+// `additional` marks a further tag for a spool that is already bound, which is
+// the second chip on the other flange. It changes nothing on the sources that
+// hold several by nature - the relation takes another row, the list field gets
+// another entry - and it is what keeps FilaMan off slot one, where a plain
+// write would replace the tag instead of adding to it. A source that can only
+// hold one refuses instead of overwriting, and says so in the log.
+// Whether the last link had to fall back to the default extra field because
+// the selected source does not exist on this server, cleared by the asking.
+//
+// The scale keeps its tag source in NVS and tagFieldEffective() cannot check
+// it against the server without reaching the network, so pointing a scale from
+// a v0.27 Spoolman back at an older one leaves "native" selected with no
+// endpoints behind it. The link still happens; this is how the screen gets to
+// say why it went somewhere else.
+bool patchSpoolTagTakeNativeMissing();
+
 bool patchSpoolTag(int spool_id, const char* uuid,
-                   const char* const* field_values = nullptr);
+                   const char* const* field_values = nullptr,
+                   bool additional = false);
 
 // Unlink. `all` clears every tag field the spool is bound through; otherwise
 // only `uid` is taken out of the list field that holds it, leaving the other
 // UIDs of that spool alone.
 void unlinkCardUid(int spool_id, const char* uid, bool all);
+
+// Appends the hardware uid of the tag on the reader to extra.rfid_tag, beside
+// whatever binds the spool. `scanned` is the value this lookup was started
+// with - the tray uuid for a Bambu tag - never the uid itself: which of the
+// two identities goes on the wire is this function's business.
+//
+// Runs on every lookup that found a spool rather than on an explicit link. A
+// Bambu spool is found by its tray uuid from either side, and each side has to
+// contribute its own chip uid before a gate reader can resolve both, so the
+// field fills itself over two placements instead of asking for anything.
+//
+// Reads and updates sm_hw_uid_value, which captureBindings() has just filled.
+// Silent and free on a spool that already carries the uid, which is the normal
+// case. Returns true only when something was written.
+bool syncHwUidField(int spool_id, const char* scanned);
 void patchInitialWeight(float initial_w);
 void patchSpoolWeight(float spool_w);
 void patchFilamentSpoolWeight(float spool_w);

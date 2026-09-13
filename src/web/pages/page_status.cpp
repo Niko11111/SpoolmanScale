@@ -14,6 +14,7 @@
 #include "services/diagnostics.h"
 #include "services/mdns_service.h"
 #include "services/wifi_manager.h"
+#include "services/user_options.h"
 #include "ui/weight_format.h"
 #include "web/web_access.h"
 #include "web/web_shell.h"
@@ -61,6 +62,9 @@ static String statusJson() {
   j += ",\"backend\":\"" + jsonEsc(backendName()) + "\"";
   j += ",\"backendUrl\":\"" + jsonEsc(backendBaseUrl()) + "\"";
   j += ",\"backendOk\":" + String(sm_reachable ? "true" : "false");
+  // Whether one is fitted at all comes first: without it a false "scale"
+  // reads as a fault on a device that was built without one on purpose.
+  j += ",\"scaleFitted\":" + String(g_scale_fitted ? "true" : "false");
   j += ",\"scale\":" + String(scl_ok ? "true" : "false");
   j += ",\"scaleReady\":" + String(scale_ready ? "true" : "false");
   {
@@ -145,14 +149,14 @@ static String signalBars() {
 static String body() {
   String h;
   h.reserve(6600);
-  h += F("<div class='grid'>");
+  h += F("<div class='grid g3'>");
 
   // ---- network ----------------------------------------------------------
   h += F("<div class='card'><h2>");
   h += T(STR_W_C_NETWORK);
   h += F("</h2><div class='rows'>");
   if (wifi_ok) {
-    h += row(T(STR_W_R_WIFI), String(cfg_wifi_ssid) + signalBars());
+    h += row(T(STR_W_R_WIFI), htmlEsc(cfg_wifi_ssid) + signalBars());
     h += row(T(STR_W_R_ADDRESS), wifiManagerLocalIP().toString(), true);
     // Both names when both apply: the DNS name is the one the network
     // serves, the mDNS name the one that works without it.
@@ -166,14 +170,26 @@ static String body() {
   } else {
     h += row(T(STR_W_R_WIFI), String(F("<span class='pill bd'>")) + T(STR_W_S_NOWIFI) + "</span>");
   }
+  // With the network, not the hardware: it is how long this connection has
+  // been standing, and it fills a card that had four rows beside eight.
+  h += row(T(STR_W_R_UPTIME), uptimeText());
   h += F("</div></div>");
 
   // ---- hardware ---------------------------------------------------------
   h += F("<div class='card'><h2>");
   h += T(STR_W_C_HARDWARE);
   h += F("</h2><div class='rows'>");
-  h += row(T(STR_W_R_SCALE), pill(scl_ok, STR_W_S_READY, STR_W_S_MISSING));
-  {
+  if (!g_scale_fitted) {
+    // No pill. A pill is a verdict on something that should be working, and
+    // there is nothing here to work - so this is quiet text on --ink-soft,
+    // the same voice the page uses elsewhere for an aside. The weight row
+    // goes with it: there is no number to keep current.
+    String v = F("<em>");
+    v += T(STR_W_S_SCALE_OFF);
+    v += F("</em>");
+    h += row(T(STR_W_R_SCALE), v);
+  } else {
+    h += row(T(STR_W_R_SCALE), pill(scl_ok, STR_W_S_READY, STR_W_S_MISSING));
     // Server rendered once so the page is right before any script runs,
     // then kept current by the poll below.
     char w[24];
@@ -209,18 +225,21 @@ static String body() {
     h += F("</span></div>");
   }
   h += row(T(STR_W_R_SD),    pill(sd_available, STR_W_S_READY, STR_W_S_MISSING, true));
-  h += row(T(STR_W_R_UPTIME), uptimeText());
-  h += F("<button class='quiet' id='i2cbtn'>");
-  h += T(STR_W_RESCAN);
-  h += F("</button>");
+  // The rescan holds the I2C bus for a moment, so it sits behind the config
+  // gate now; the button is only offered where the request would get through.
+  if (webGateOpen(GATE_CONFIG)) {
+    h += F("<button class='quiet' id='i2cbtn'>");
+    h += T(STR_W_RESCAN);
+    h += F("</button>");
+  }
   h += F("</div></div>");
 
   // ---- inventory --------------------------------------------------------
-  h += F("<div class='card wide'><h2>");
+  h += F("<div class='card w2'><h2>");
   h += T(STR_W_C_INVENTORY);
   h += F("</h2><div class='rows'>");
   h += row(T(STR_W_R_BACKEND), backendName());
-  h += row(T(STR_W_R_ADDRESS), backendBaseUrl(), true);
+  h += row(T(STR_W_R_ADDRESS), htmlEsc(backendBaseUrl()), true);
   h += row(T(STR_W_R_REACHABLE), pill(sm_reachable, STR_W_S_YES, STR_W_S_NO));
   h += row(T(STR_W_R_SCANS), String(scan_count));
   h += F("</div></div>");
@@ -232,12 +251,25 @@ static String body() {
   h += T(STR_W_C_ACCESS);
   h += F("</h2><div class='rows'>");
   h += row(T(STR_W_NAV_SETTINGS), pill(webConfigEnabled(), STR_W_S_ON, STR_W_S_OFF, true));
-  h += row(T(STR_W_C_DEVICE),     pill(webMaintenanceEnabled(), STR_W_S_ON, STR_W_S_OFF, true));
+  // Named for what it opens. "Device" said nothing about firmware, logs and
+  // tags being behind this one switch.
+  h += row(T(STR_W_R_MAINT_GATE), pill(webMaintenanceEnabled(), STR_W_S_ON, STR_W_S_OFF, true));
+  h += row(T(STR_W_R_PASSWORD),   pill(webHasPassword(), STR_W_S_SET, STR_W_S_NOTSET, true));
   h += F("</div><p class='note'>");
   h += T(STR_W_ACCESS_NOTE);
   h += F(" <b>");
   h += T(STR_W_OFF_PATH);
-  h += F("</b>.</p></div>");
+  h += F("</b>.</p>");
+  if (!webHasPassword()) {
+    // Said where the switches are shown, because that is the moment someone
+    // turns a writing gate on and should know what it opens.
+    h += F("<p class='note'>");
+    h += T(STR_W_PASS_NOTE);
+    h += F(" <b>");
+    h += T(STR_W_OFF_PATH);
+    h += F("</b>.</p>");
+  }
+  h += F("</div>");
 
   // ---- device -----------------------------------------------------------
   h += F("<div class='card wide'><h2>");
@@ -296,7 +328,7 @@ static void routes(WebServer &srv) {
   // on every poll of the page. It runs in the loop task - the same task that
   // owns I2C_EXT - because handleOtaServerClient() is called from appLoop().
   srv.on("/api/i2cscan", HTTP_POST, [&srv]() {
-    if (!webRequire(srv, GATE_OPEN, T(STR_W_NAV_STATUS))) return;
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_STATUS))) return;
     i2cScanRefresh(I2C_EXT);
     logSDf("I2C_EXT rescan: %s", i2cScanLast());
     srv.send(200, "application/json",

@@ -17,6 +17,7 @@
 #include "setup_welcome_screen.h"
 #include "ui_common.h"
 #include "services/backend.h"
+#include "ui/tag_display.h"
 
 
 
@@ -48,20 +49,27 @@ static lv_obj_t *conn_lbl_gw   = nullptr;
 static lv_obj_t *conn_lbl_rssi = nullptr;
 
 static char  wifi_setup_ssid[33]  = "";
+// What the callbacks park for appLoop(): a scan takes seconds and the connect
+// attempt ten, and both used to run inside the button that asked for them.
+// The password is copied out of the textarea here, because that textarea is
+// gone by the time the connect runs.
+static bool  wifi_scan_pending    = false;
+static bool  wifi_connect_pending = false;
+static char  wifi_setup_pass[65]  = "";
 static lv_obj_t *lbl_wifi_setup_status = nullptr;
 static lv_obj_t *lbl_wifi_scan_list = nullptr;
 static lv_obj_t *ta_wifi_pass = nullptr;
 static lv_obj_t *kb_wifi_pass = nullptr;
 
 // ============================================================
-//  WIFI SETUP: STEP 1 — Network scan + selection
+//  WIFI SETUP: STEP 1 - Network scan + selection
 // ============================================================
 void showWifiSetupScreen() {
   logSD("SHOW: WifiSetupScreen");
   logSD("UI: Screen -> WifiSetup");
   hideAllOverlays();
-  if (scr_wifi_setup) { lv_obj_del(scr_wifi_setup); scr_wifi_setup = nullptr; }
-  // Null global pointers — otherwise they point to deleted objects
+  releaseScreen(&scr_wifi_setup);   // the rescan button sits on it
+  // Null global pointers - otherwise they point to deleted objects
   lbl_wifi_scan_list    = nullptr;
   lbl_wifi_setup_status = nullptr;
   buildWifiSetupScreen();
@@ -141,11 +149,25 @@ void buildWifiSetupScreen() {
   // Scan button callback (after building list)
   lv_obj_add_event_cb(btn_scan, [](lv_event_t *e) {
     lv_label_set_text(lbl_wifi_setup_status, T(STR_WIFI_SCAN));
-    doWifiScan();
+    wifi_scan_pending = true;
   }, LV_EVENT_CLICKED, NULL);
 
-  // Immediate scan on open
-  doWifiScan();
+  // Scan on the next loop pass. The status line already says so; a scan
+  // from here would run inside whichever callback opened this screen.
+  wifi_scan_pending = true;
+}
+
+void handleWifiSetupDeferredActions() {
+  if (wifi_scan_pending) {
+    wifi_scan_pending = false;
+    if (scr_wifi_setup && lbl_wifi_scan_list && lbl_wifi_setup_status) doWifiScan();
+  }
+  if (wifi_connect_pending) {
+    wifi_connect_pending = false;
+    saveWifiCredentials(wifi_setup_ssid, wifi_setup_pass);
+    memset(wifi_setup_pass, 0, sizeof(wifi_setup_pass));
+    showWifiConnectingScreen();
+  }
 }
 
 // Perform scan and populate list
@@ -154,7 +176,7 @@ void doWifiScan() {
   lv_obj_clean(lbl_wifi_scan_list);
   lv_timer_handler();
 
-  // Disconnect required after failed WiFi.begin() —
+  // Disconnect required after failed WiFi.begin() - 
   // otherwise scanNetworks() returns 0
   wifiManagerPrepareScan();
   int n = wifiManagerScanNetworks();
@@ -202,12 +224,6 @@ void doWifiScan() {
     int slot = row_count++;
     strncpy(row_ssid[slot], ssid.c_str(), sizeof(row_ssid[slot])-1);
     row_ssid[slot][sizeof(row_ssid[slot])-1] = '\0';
-
-    // Signal bar (3 levels)
-    const char* signal_icon;
-    if      (rssi >= -65) signal_icon = LV_SYMBOL_WIFI "   ";
-    else if (rssi >= -80) signal_icon = LV_SYMBOL_WIFI "   ";
-    else                  signal_icon = LV_SYMBOL_WIFI "   ";
 
     // Signal color
     uint32_t sig_color;
@@ -260,13 +276,13 @@ void doWifiScan() {
 }
 
 // ============================================================
-//  WIFI SETUP: STEP 2 — Password entry
+//  WIFI SETUP: STEP 2 - Password entry
 // ============================================================
 void showWifiPassScreen() {
   logSD("SHOW: WifiPassScreen");
   logSD("UI: Screen -> WifiPass");
   hideAllOverlays();
-  if (scr_wifi_pass) { lv_obj_del(scr_wifi_pass); scr_wifi_pass = nullptr; }
+  releaseScreen(&scr_wifi_pass);
   ta_wifi_pass = nullptr;
   kb_wifi_pass = nullptr;
   buildWifiPassScreen();
@@ -329,15 +345,19 @@ void buildWifiPassScreen() {
   // Enter on keyboard → connect
   lv_obj_add_event_cb(kb_wifi_pass, [](lv_event_t *e) {
     if (lv_event_get_code(e) == LV_EVENT_READY) {
+      // Copied now, connected on the next loop pass: the NVS write and the
+      // ten second connect attempt do not belong in the keyboard's callback,
+      // and the textarea is deleted with this screen before they run.
       const char* pass = lv_textarea_get_text(ta_wifi_pass);
-      saveWifiCredentials(wifi_setup_ssid, pass);
-      showWifiConnectingScreen();
+      strncpy(wifi_setup_pass, pass ? pass : "", sizeof(wifi_setup_pass) - 1);
+      wifi_setup_pass[sizeof(wifi_setup_pass) - 1] = '\0';
+      wifi_connect_pending = true;
     }
   }, LV_EVENT_ALL, NULL);
 }
 
 // ============================================================
-//  WIFI SETUP: STEP 3 — Connect + result
+//  WIFI SETUP: STEP 3 - Connect + result
 // ============================================================
 // The rows are four label pairs rather than one container, so visibility is
 // toggled over the value labels and their siblings. Built hidden and only
@@ -352,11 +372,18 @@ static void setConnSummaryHidden(bool hidden) {
   }
 }
 
+void closeWifiConnectingScreen() {
+  btn_conn_retry = btn_conn_next = lbl_conn_status = nullptr;
+  conn_val_ssid = conn_val_ip = conn_val_gw = conn_val_rssi = nullptr;
+  conn_lbl_ssid = conn_lbl_ip = conn_lbl_gw = conn_lbl_rssi = nullptr;
+  releaseScreen(&scr_wifi_connecting);   // retry and next sit on it
+}
+
 void showWifiConnectingScreen() {
   logSD("SHOW: WifiConnectingScreen");
   logSD("UI: Screen -> WifiConnecting");
   hideAllOverlays();
-  if (scr_wifi_connecting) { lv_obj_del(scr_wifi_connecting); scr_wifi_connecting = nullptr; }
+  closeWifiConnectingScreen();
   buildWifiConnectingScreen();
   lv_obj_clear_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN);
   lv_timer_handler();
@@ -373,6 +400,7 @@ void showWifiConnectingScreen() {
   if (wifi_ok) {
     syncNTP();
     updateHeaderStatus();
+    zone4WaitingStyle(true);
     lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));
     // The IP used to be crammed into this line; it now has a row of its own
     // below, so the headline is just the result.
@@ -448,7 +476,7 @@ void buildWifiConnectingScreen() {
   lv_obj_set_style_text_font(lbl_connecting, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(lbl_connecting, LV_ALIGN_TOP_MID, 0, 68);
 
-  // Status label — larger font, filled after connection
+  // Status label - larger font, filled after connection
   lbl_conn_status = lv_label_create(scr_wifi_connecting);
   lv_obj_t *lbl_status_conn = lbl_conn_status;
   lv_label_set_text(lbl_status_conn, "");
@@ -514,7 +542,7 @@ void buildWifiConnectingScreen() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_next = lv_label_create(btn_next);
   { char nb[32];
-    if (setup_active) strncpy(nb, T(STR_BTN_NEXT), sizeof(nb) - 1);
+    if (setup_active) copyT(nb, sizeof(nb), STR_BTN_NEXT);
     else              strncpy(nb, backendName(), sizeof(nb) - 1);
     nb[sizeof(nb) - 1] = '\0';
     size_t n = strlen(nb);

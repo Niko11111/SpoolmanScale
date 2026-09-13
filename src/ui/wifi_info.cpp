@@ -56,7 +56,7 @@ static lv_obj_t* addRow(int index, const char *label) {
 // "Spoolman" or "FilaMan" rather than a vague "Backend" and the user can see
 // what they are about to get.
 static void ipBarModeText(char *buf, size_t len) {
-  if (g_ip_bar_mode == IP_BAR_DEVICE)       strncpy(buf, T(STR_IP_BAR_DEVICE), len - 1);
+  if (g_ip_bar_mode == IP_BAR_DEVICE)       copyT(buf, len, STR_IP_BAR_DEVICE);
   else if (g_ip_bar_mode == IP_BAR_BACKEND) strncpy(buf, backendName(), len - 1);
   // Reads the same in German and English, so it stays a literal - the same
   // reasoning the row labels at the top of this file are kept literal for.
@@ -67,7 +67,7 @@ static void ipBarModeText(char *buf, size_t len) {
   // are told apart by what they add rather than by their position in the ring.
   else if (g_ip_bar_mode == IP_BAR_BACKEND_PORT)
     snprintf(buf, len, "%s :Port", backendName());
-  else                                      strncpy(buf, T(STR_OFF), len - 1);
+  else                                      copyT(buf, len, STR_OFF);
   buf[len - 1] = '\0';
 }
 
@@ -106,8 +106,7 @@ static void buildIpBarSelector() {
 
   lv_obj_t *title = lv_label_create(btn_ipbar);
   { char buf[40];
-    strncpy(buf, T(STR_BTN_IP_STATUSBAR), sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
+    copyT(buf, sizeof(buf), STR_BTN_IP_STATUSBAR);
     lv_label_set_text(title, buf); }
   lv_obj_set_style_text_color(title, lv_color_hex(0xe8f0ff), 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_16, 0);
@@ -128,6 +127,14 @@ static void buildIpBarSelector() {
   }, LV_EVENT_CLICKED, NULL);
 
   refreshIpBarButton();
+}
+
+void closeWifiInfoScreen() {
+  if (wifi_info_timer) { lv_timer_del(wifi_info_timer); wifi_info_timer = nullptr; }
+  val_ssid = val_state = val_ip = val_gw = val_dns = val_mac = val_rssi = nullptr;
+  lbl_ipbar_mode = nullptr;
+  btn_ipbar      = nullptr;
+  if (scr_wifi) { lv_obj_del(scr_wifi); scr_wifi = nullptr; }
 }
 
 void buildWifiScreen() {

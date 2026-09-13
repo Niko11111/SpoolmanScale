@@ -31,7 +31,7 @@ void showFactorScreen() {
   logSD("SHOW: FactorScreen");
   logSD("UI: Screen -> Calibration");
   // Null all loop-update pointers BEFORE deleting scr_factor
-  // Loop checks these pointers — must be null before del to avoid dangling access
+  // Loop checks these pointers - must be null before del to avoid dangling access
   lbl_factor_display    = nullptr;
   lbl_factor_result     = nullptr;
   lbl_factor_cal_weight = nullptr;
@@ -75,7 +75,7 @@ void buildFactorScreen() {
       lv_obj_clear_flag(scr_scale_sub, LV_OBJ_FLAG_HIDDEN);
     });
 
-  // Description / hint — single line, compact
+  // Description / hint - single line, compact
   lv_obj_t *lbl_desc = lv_label_create(scr_factor);
   lv_label_set_text(lbl_desc, T(STR_CAL_TARE_HINT));
   lv_obj_set_style_text_color(lbl_desc, lv_color_hex(0x4a6fa0), 0);
@@ -94,25 +94,7 @@ void buildFactorScreen() {
   // is spoken for - the factor readout sits at the right edge at y=78 - and
   // the 16 px between the centred title and the close button is the one gap on
   // this screen that nothing else wants.
-  lv_obj_t *help = lv_btn_create(scr_factor);
-  lv_obj_set_size(help, 34, 34);
-  lv_obj_set_pos(help, 386, 5);
-  lv_obj_set_style_bg_opa(help, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_bg_color(help, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-  lv_obj_set_style_bg_opa(help, LV_OPA_COVER, LV_STATE_PRESSED);
-  lv_obj_set_style_border_color(help, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_border_width(help, 1, 0);
-  lv_obj_set_style_radius(help, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_shadow_width(help, 0, 0);
-  lv_obj_set_style_pad_all(help, 0, 0);
-  lv_obj_set_ext_click_area(help, 6);
-  lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
-                      INFO_POPUP_ARG(STR_CAL_HELP_TITLE, STR_CAL_HELP_TEXT));
-  lv_obj_t *help_q = lv_label_create(help);
-  lv_label_set_text(help_q, "?");
-  lv_obj_set_style_text_color(help_q, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(help_q, &lv_font_montserrat_ext_16, 0);
-  lv_obj_align(help_q, LV_ALIGN_CENTER, 0, 0);
+  addHeaderHelp(scr_factor, STR_CAL_HELP_TITLE, STR_CAL_HELP_TEXT);
 
   // Single status row: "Scale: <value>" left | "Factor: --" right
   lv_obj_t *lbl_cal_w_title = lv_label_create(scr_factor);
@@ -142,7 +124,7 @@ void buildFactorScreen() {
   lv_obj_set_width(lbl_factor_result, 220);
   lv_obj_set_pos(lbl_factor_result, 248, 78);
 
-  // Input field — y=94 (below status row)
+  // Input field - y=94 (below status row)
   lv_obj_t *input_box_f = lv_obj_create(scr_factor);
   lv_obj_set_size(input_box_f, 260, 34);
   lv_obj_align(input_box_f, LV_ALIGN_TOP_MID, 0, 94);
@@ -168,7 +150,7 @@ void buildFactorScreen() {
   const char* np_labels_f[] = { "1","2","3","4","5","6","7","8","9",".","0","T" };
 
   // ── Whole-gram toggle (left of numpad, 68x68px) ──
-  // NP_PAD_X = 80px — 68px toggle fits with 6px margin
+  // NP_PAD_X = 80px - 68px toggle fits with 6px margin
   {
     lv_obj_t *btn_wg = lv_btn_create(scr_factor);
     lv_obj_set_size(btn_wg, 68, 68);
@@ -217,16 +199,16 @@ void buildFactorScreen() {
     lv_obj_set_style_radius(btn_rst, 8, 0);
     lv_obj_set_style_shadow_width(btn_rst, 0, 0);
     lv_obj_set_style_border_width(btn_rst, 1, 0);
-    // The house red for something that cannot be taken back, as in
-    // ui_common.cpp addCloseButton() and the No button of every confirmation.
-    lv_obj_set_style_bg_color(btn_rst, lv_color_hex(0x3a1010), 0);
-    lv_obj_set_style_bg_color(btn_rst, lv_color_hex(0x602020), LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(btn_rst, lv_color_hex(0x601010), 0);
+    // Quiet surface, amber words: a red block at the screen's edge read as
+    // Cancel, and this is not a way out of the screen but a setting to undo.
+    // The confirmation it opens carries the red.
+    lv_obj_set_style_bg_color(btn_rst, lv_color_hex(0x0a1828), 0);
+    lv_obj_set_style_bg_color(btn_rst, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(btn_rst, lv_color_hex(0x1a2840), 0);
 
     lv_obj_t *lbl_rst = lv_label_create(btn_rst);
-    { char rb[24]; strncpy(rb, T(STR_BTN_CAL_RESET_SHORT), sizeof(rb) - 1);
-      rb[sizeof(rb) - 1] = '\0'; lv_label_set_text(lbl_rst, rb); }
-    lv_obj_set_style_text_color(lbl_rst, lv_color_hex(0xff8080), 0);
+    { char rb[24]; copyT(rb, sizeof(rb), STR_BTN_CAL_RESET_SHORT); lv_label_set_text(lbl_rst, rb); }
+    lv_obj_set_style_text_color(lbl_rst, lv_color_hex(0xf0b838), 0);
     lv_obj_set_style_text_font(lbl_rst, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(lbl_rst, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(lbl_rst, LV_LABEL_LONG_WRAP);
@@ -237,8 +219,7 @@ void buildFactorScreen() {
       // The write itself is deferred like every other NVS write reached from a
       // callback, and it rebuilds nothing - see cal_reset_pending in app_loop.
       logSD("BTN: Calibration -> Reset calibration");
-      char ask[64]; strncpy(ask, T(STR_CAL_RESET_CONFIRM), sizeof(ask) - 1);
-      ask[sizeof(ask) - 1] = '\0';
+      char ask[64]; copyT(ask, sizeof(ask), STR_CAL_RESET_CONFIRM);
       showConfirmPopup(ask, 6);
     }, LV_EVENT_CLICKED, NULL);
   }
@@ -267,14 +248,14 @@ void buildFactorScreen() {
           scale_weight_g = 0.0f;
           resetScaleFilter();
           lv_label_set_text(lbl_factor_result, T(STR_TARE_OK));
-          lv_label_set_text(lbl_scale_weight, "0 g");
+          if (lbl_scale_weight) lv_label_set_text(lbl_scale_weight, "0 g");
           Serial.println("Tare (calibration screen) executed");
         } else {
           lv_label_set_text(lbl_factor_result, T(STR_TARE_NOT_READY));
         }
       }, LV_EVENT_CLICKED, NULL);
       lv_obj_t *lbl = lv_label_create(btn);
-      lv_label_set_text(lbl, LV_SYMBOL_REFRESH "TARE");
+      lv_label_set_text(lbl, LV_SYMBOL_REFRESH " TARE");
       lv_obj_set_style_text_color(lbl, lv_color_hex(0xf0b838), 0);
       lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
       lv_obj_center(lbl);

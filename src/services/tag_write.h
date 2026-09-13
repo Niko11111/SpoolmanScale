@@ -91,6 +91,15 @@ const char* tagRemotePayloadProtocol();
 // from here and does the lookup.
 int tagWriteTakeLinkedSpool();
 
+// Whether a tag was erased since this was last asked, cleared by the asking.
+//
+// Every erase passes through tagWriteTick(), including the one the web
+// interface triggers, so this is the one place that knows. The display is
+// painted from the tag cache and nothing reads the tag again by itself, so
+// without this the brand and material of what was just wiped stay on screen
+// and the erase reads as if it had not worked.
+bool tagWriteTakeErased();
+
 const char* tagWriteState();     // idle | pending | ok | error
 const char* tagWriteMessage();
 uint8_t     tagWriteResultCode();   // a TagWriteResult, for the device screen

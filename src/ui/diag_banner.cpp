@@ -82,10 +82,8 @@ void updateDiagBanner() {
   // has to hold the longest banner string plus the tap hint.
   char buf[96];
   char tail[32];
-  strncpy(buf, T(diagBannerString(c)), sizeof(buf) - 1);
-  buf[sizeof(buf) - 1] = '\0';
-  strncpy(tail, T(STR_DIAG_TAP), sizeof(tail) - 1);
-  tail[sizeof(tail) - 1] = '\0';
+  copyT(buf, sizeof(buf), diagBannerString(c));
+  copyT(tail, sizeof(tail), STR_DIAG_TAP);
 
   char line[128];
   snprintf(line, sizeof(line), LV_SYMBOL_WARNING "  %s%s", buf, tail);

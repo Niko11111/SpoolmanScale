@@ -25,7 +25,8 @@ static String body() {
          "<span class='k'>");
   h += T(STR_W_R_VERBOSE);
   h += F("</span><span class='v'>"
-         "<button id='vb' class='quiet' onclick='toggleVerbose()'></button>"
+         "<label class='check' style='justify-content:flex-end'><span class='switch'>"
+         "<input id='vb' type='checkbox' onchange='toggleVerbose()'><i></i></span></label>"
          "</span></div><div class='row' id='darow'>"
          "<span class='k' id='dsum'></span>"
          "<span class='v'>"
@@ -140,7 +141,7 @@ static String body() {
          "function loadLogs(){fetch('/api/logs').then(r=>{"
          "if(!r.ok)throw 0;return r.json();}).then(d=>{"
          "const c=document.getElementById('lg');"
-         "document.getElementById('vb').textContent=d.verbose?M.on:M.off;"
+         "document.getElementById('vb').checked=!!d.verbose;"
          "const da=document.getElementById('da');"
          "da.textContent=M.all;"
          // With nothing to delete the whole row goes, not just the button.
@@ -209,8 +210,10 @@ static String body() {
          ".then(()=>loadLogs()).catch(()=>say(M.err));}"
          "function toggleVerbose(){fetch('/api/verbose',{method:'POST'})"
          ".then(r=>r.json()).then(d=>{"
-         "document.getElementById('vb').textContent=d.verbose?M.on:M.off;})"
-         ".catch(()=>say(M.err));}"
+         "document.getElementById('vb').checked=!!d.verbose;})"
+         // The switch already moved under the finger; a failed request puts
+         // it back where the device says it is.
+         ".catch(()=>{say(M.err);loadLogs();});}"
 "loadLogs();loadSession(true);slWatch();"
          // Was in the page until beta.33 and fell out of the 720px rebuild
          // without anyone noticing. Back, but idle while the tab sits in the

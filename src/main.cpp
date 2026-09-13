@@ -1,7 +1,7 @@
 // ============================================================
 //  SpoolmanScale – Bambu NFC Tag Reader & Decoder
 //  Board:   WT32-SC01 Plus (ESP32-S3)
-//  Version: v0.7.0
+//  Version: v0.7.1
 //
 //  Reads Bambu Lab MIFARE Classic tags, derives keys via KDF
 //  (HKDF/SHA256, master key from Bambu-Research-Group/RFID-Tag-Guide),
@@ -13,7 +13,7 @@
 //    Pin 2 (GND)  -> PN532 GND
 //    Pin 3 (IO1)  -> PN532 SDA (GPIO 10)
 //    Pin 4 (IO2)  -> PN532 SCL (GPIO 11)
-//    Pin 5 (IO3)  -> PN532 RST (GPIO 12)
+//    Pin 7 (IO5)  -> PN532 RSTO (brown) - module OUTPUT, not driven
 //
 //  PN532 DIP-Switches: SW1=ON, SW2=OFF -> I2C mode
 //

@@ -131,13 +131,21 @@ jobs:
           # A tag carrying a beta counter (v0.6.0-beta.3) is an internal build
           # and only ever lands in "prerelease". A public tag (v0.6.0-beta)
           # updates both, so devices with pre-releases switched off see it too.
+          #
+          # The checksum of the image goes next to the tag. The device sums
+          # the download as it writes it and refuses to commit on a mismatch,
+          # so a corrupt or foreign image cannot be booted - TLS covers the
+          # path, this covers the bytes.
           VERSION=${{ steps.version.outputs.version }}
-          python3 - "$VERSION" <<'PY'
+          SHA=$(sha256sum SpoolmanScale.bin | cut -d' ' -f1)
+          python3 - "$VERSION" "$SHA" <<'PY'
           import json, re, sys
-          version = sys.argv[1]
+          version, sha = sys.argv[1], sys.argv[2]
           data = {
               "stable": "",
+              "stable_sha256": "",
               "prerelease": "",
+              "prerelease_sha256": "",
               "url": "https://github.com/Niko11111/SpoolmanScale/releases/latest",
           }
           try:
@@ -146,8 +154,10 @@ jobs:
           except FileNotFoundError:
               pass
           data["prerelease"] = version
+          data["prerelease_sha256"] = sha
           if not re.search(r"-beta\.\d+$", version):
               data["stable"] = version
+              data["stable_sha256"] = sha
           with open("version.json", "w") as f:
               json.dump(data, f, indent=2)
               f.write("\n")

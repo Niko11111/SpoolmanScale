@@ -2,6 +2,21 @@
 
 #include <stdint.h>
 
+// Whether this device has a load cell at all. A SpoolmanScale can be built
+// with display and reader only - there is a printable mount for exactly that -
+// and it is then a spool terminal: hold a tag against it, see the spool, put
+// it away on a shelf or hand it to a printer.
+//
+// Off takes the whole weighing side out of the way rather than leaving it
+// broken on screen: the ADC is never probed, the home screen loses its scale
+// column and the TARE key, the menu loses calibration and bag weight, and the
+// diagnosis stops reporting a chip nobody fitted as a fault.
+//
+// On by default, so a device that has a scale notices nothing at all. It is
+// read once while the interface is built, which is why changing it asks for a
+// restart instead of rearranging the home screen under the user's hands.
+extern bool g_scale_fitted;
+
 extern uint8_t last_used_mode;
 extern bool g_whole_gram;
 
@@ -165,3 +180,52 @@ extern uint8_t g_tagwrite_fmt;
 // spools that already carry UIDs, which is the only way to add a second tag
 // from the scale.
 extern bool g_card_uids_write;
+
+// Whether the scale copies the hardware uid of the tag on the reader into
+// extra.rfid_tag, the field Happy Hare v4 resolves its gate readers against.
+// Off by default.
+//
+// It exists because a Bambu tag has two identities and only one of them ever
+// leaves the scale: the tray uuid out of the encrypted contents binds the
+// spool, while an MMU's gate reader sees nothing but the chip's hardware uid.
+// The same spool is then found here and unknown at the printer.
+//
+// Not a second binding and not a tag field: whatever the tag field choice
+// says stays exactly where it is, and this only ever adds. It grows on its
+// own, because a spool is found by its tray uuid from either side while each
+// side contributes its own chip uid the first time it faces the reader.
+//
+// Unlike the tag fields this is written on every lookup rather than on an
+// explicit link - a library that is already bound would otherwise have to be
+// relinked spool by spool to get anything out of it.
+extern bool g_hw_uid_write;
+
+// Whether the scale asks for a second tag right after a link succeeded.
+// Off by default.
+//
+// The community asked for a second reader, one per side of the case, so a
+// spool with a chip on each flange is recognised whichever way round it lies.
+// The hardware has one reader, so this is the flow that replaces the part:
+// link, turn the spool over, done.
+//
+// A Bambu spool half solves this on its own today - both chips carry the same
+// tray uuid, so the second one is found and appended the next time that side
+// happens to face the reader. Two NTAGs share nothing, and without this the
+// user has to look the spool up in the link list a second time.
+//
+// Only offered where the source in force can hold more than one tag; see
+// tagFieldHoldsSeveral() and backendCanHoldSecondTag(). Writing the second tag
+// is not a separate setting - it runs through the same link as the first one,
+// so g_tagwrite_mode asks for it the same way.
+extern bool g_tag2_ask;
+
+// Whether the scale offers the AMS bay picker after weighing a spool, for the
+// backends that can pin a spool to a bay. Off by default: the assignment also
+// configures the bay on the printer over MQTT, and that is a side effect
+// nobody should get without having asked for it.
+//
+// Only two states, so a switch rather than the three way mode FilaMan's own
+// AMS assignment carries. There "always" means the server flag stays raised
+// and every weighing opens a window; here there is no window and no implicit
+// bay, so an "always" would have nothing to do.
+extern bool g_ams_pick_ask;

@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "services/ams_slots.h"
+
 // ============================================================
 //  FILAMAN HTTP LAYER
 //
@@ -92,6 +94,55 @@ int filamanGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
 // Sets rfid_uid. Used for link, and with an empty uuid for unlink.
 int filamanPatchRfidUid(const char* base_url, const char* api_key, int spool_id,
                         const char* uuid, uint32_t timeout_ms = 5000);
+
+// Sets rfid_uid_2, the second slot FilaMan grew in 1.3.1. Same shape as the
+// call above, and deliberately not a copy of filamanLinkRfidUid() below: the
+// dance that one does - find the holder, take the tag off it, keep the old
+// value - exists only because a PATCH used to fail at the unique index.
+// set_rfid_uids() does all of it server side now, and having the same rule in
+// two places is how the two start to disagree.
+//
+// Fails with a validation error on a server that has no such column, which is
+// why callers ask filamanHasRfidSlot2() first.
+int filamanPatchRfidUid2(const char* base_url, const char* api_key, int spool_id,
+                         const char* uuid, uint32_t timeout_ms = 5000);
+
+// Whether this server has the second slot at all.
+//
+// The test is the presence of the key rfid_uid_2 in a spool response, not a
+// version number. FastAPI serialises the field even when it is null, so its
+// mere presence separates 1.3.1 from everything before it - while a version
+// number is a wager the moment somebody builds their own image, which is
+// exactly what the instance on the homeserver does.
+//
+// Cached per base URL. An inconclusive answer is not cached, so one bad
+// moment cannot switch the feature off for the whole session.
+// Whether the probe above has a cached answer for this server at all. Its
+// "false" covers both "the column is not there" and "could not tell", and an
+// unlink has to treat those two differently.
+bool filamanRfidSlot2Known(const char* base_url);
+
+// True when the last spool list stopped short of the whole inventory (the
+// timeout, or the page cap). A tag not found in such a list is unknown, not
+// absent - the difference between "link it" and "create a duplicate".
+bool filamanLastListPartial();
+
+bool filamanHasRfidSlot2(const char* base_url, const char* api_key,
+                         uint32_t timeout_ms = 5000);
+
+// Frees a spool of every chip it holds, both slots in one request, and drops
+// the legacy value in custom_fields with it.
+//
+// One request on purpose: set_rfid_uids() back-fills the primary slot from the
+// secondary, so clearing them one after the other would move the second chip
+// into the first slot in between and the first PATCH would look like a no-op.
+// rfid_uid_2 is only named when the server has it.
+int filamanClearRfidUids(const char* base_url, const char* api_key, int spool_id,
+                         uint32_t timeout_ms = 8000);
+
+// Forgets the cached answer above. Called when the backend or its address
+// changes, because the capability belongs to the server, not to the scale.
+void filamanForgetRfidSlot2();
 
 // Link that clears the way first. rfid_uid is UNIQUE, so claiming a UID that
 // another spool still holds fails with HTTP 500. Takes it off that spool,
@@ -268,3 +319,36 @@ int filamanSetDeviceAutoAssign(const char* base_url, const char* api_key,
 // keep resolving ids that belong to the server just left, and writing them.
 // There was no way to reach it from outside at all.
 void filamanForgetLocations();
+
+// --- ams slots -----------------------------------------------
+
+// FilaMan has an endpoint built for exactly this job: /api/v1/display, "all
+// active printers with their AMS slots". It arrives already grouped by unit,
+// with kind telling an AMS, an AMS HT and the external holder apart, so no
+// regrouping is needed on this side.
+//
+// Verified against FilaMan 1.3.1 on 11.09.2026, schema_version 3:
+//   {"schema_version":3,"printers":[{"id":1,"name":"X1C","connected":null,
+//     "ams":[{"ams_id":0,"kind":"ams","label":"AMS A","temperature":null,
+//       "humidity":null,"slots":[{"slot":0,"label":"A1","empty":true,
+//         "active":false,"color":"#202020","material":"","spool_id":null,
+//         "remaining_percent":null,"remaining_grams":null}]}]}]}
+// The external holder comes as one entry of kind "external" with ams_id 255
+// and bays 254 and 255, an AMS HT as kind "ams_ht" with ams_id 128 and one
+// bay. An empty bay carries a placeholder grey, so empty is the only thing
+// that says a bay is free - never the colour.
+//
+// fields=full is asked for rather than fields=slots: the short form leaves
+// out temperature, humidity and the gram figure, which is most of what the
+// unit row shows.
+//
+// Needs a user API key. The route carries no permission check of its own,
+// any valid principal is enough.
+int  filamanGetAmsState(const char* base_url, const char* api_key,
+       int printer_id, AmsSlotState& out, uint32_t timeout_ms = 8000);
+
+// The printers, from the same endpoint in its short form. No second route
+// and no pagination to walk: /api/v1/display already answers for every
+// active printer, which is exactly the set worth offering.
+int  filamanListPrinters(const char* base_url, const char* api_key,
+       AmsPrinterList& out, uint32_t timeout_ms = 8000);

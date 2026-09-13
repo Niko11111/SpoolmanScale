@@ -6,6 +6,7 @@
 // bambuddy_api.h and backend_api.h pull in ArduinoJson, which has to be parsed
 // before lang.h defines T() - ArduinoJson uses T as a template parameter.
 // Nothing here needs lang.h, so the plain includes are safe.
+#include "services/ams_presence.h"
 #include "services/backend_api.h"
 #include "services/bambuddy_device.h"
 #include "services/filaman_api.h"
@@ -14,6 +15,7 @@
 #include "app/deferred_actions.h"
 #include "hardware/sd_logger.h"
 #include "services/ams_assign.h"
+#include "services/ams_pick.h"
 #include "services/location_state.h"
 #include "services/remote_link.h"
 #include "services/tag_field.h"
@@ -21,6 +23,14 @@
 #include "ui/header_status.h"
 #include "ui/tag_display.h"
 #include "web/web_server.h"
+
+void backendApplyHost(const char *host) {
+  backendSetHost(host);
+  filamanForgetLocations();
+  backendInvalidateExtraFieldCache();
+  amsPresenceForget();
+  sm_reachable = false;          // unknown until the new address answers
+}
 
 void backendApplyMode(BackendMode mode) {
   if (mode == backendMode()) return;
@@ -37,6 +47,11 @@ void backendApplyMode(BackendMode mode) {
     amsWriteEnabled(false);
   }
   amsDropPending();
+  // Same for the bay picker's note: the spool id in it belongs to the old
+  // server, and the picker would otherwise open for it on the next removal.
+  amsPickDropPending();
+  // The cached answer belongs to the server being left behind.
+  amsPresenceForget();
 
   // An open FilaMan link is a question the scale can no longer answer:
   // remoteLinkReport() bails out on the mode check and only writes a log
@@ -94,6 +109,7 @@ void backendApplyMode(BackendMode mode) {
   sm_archived = false;
   sm_location_id = 0;            // its name is cleared, the id was not
   sm_tag_conflict_spool = 0;
+  sm_hw_uid_value[0] = '\0';     // belongs to a spool on the old server
   sm_vendor_g[0] = '\0';
   sm_tare_source = 0;
 

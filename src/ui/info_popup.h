@@ -23,6 +23,10 @@ enum InfoPopupTone : uint8_t {
 
 void showInfoPopup(int title_id, int text_id, uint8_t tone = INFO_PLAIN);
 
+// True while one is on screen. It carries a button and no countdown, so it is
+// waiting for the user exactly like the questions are - see uiModalWaiting().
+bool isInfoPopupOpen();
+
 // Ready-made LV_EVENT_CLICKED handler. Attach it to the help button that
 // makeListBtn() hands back and pass INFO_POPUP_ARG(...) as user_data; no
 // per-call-site lambda needed.

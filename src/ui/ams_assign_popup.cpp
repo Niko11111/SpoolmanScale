@@ -11,7 +11,9 @@
 #include "services/http_progress.h"
 #include "services/auto_weight_state.h"
 #include "services/location_state.h"
+#include "ui/ams_view.h"
 #include "ui/more_info_screen.h"
+#include "ui/theme.h"
 #include "ui_common.h"
 
 static lv_obj_t *scr_ams_popup = nullptr;
@@ -23,6 +25,10 @@ static int  s_spool_id        = 0;
 static bool s_confirm_pending = false;
 static bool s_cancel_pending  = false;
 static bool s_close_pending   = false;
+// The third answer: look at the bays first. The popup closes and the AMS
+// view opens in WINDOW mode; its footer gives the same yes and no.
+static bool s_view_pending    = false;
+static char s_spool_name[32]  = "";
 
 static unsigned long s_opened_ms   = 0;
 // What the blocking-time counter stood at when the popup opened. The wait for
@@ -74,6 +80,12 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   s_confirm_pending = false;
   s_cancel_pending  = false;
   s_close_pending   = false;
+  s_view_pending    = false;
+  s_spool_name[0]   = '\0';
+  if (spool_name) {
+    strncpy(s_spool_name, spool_name, sizeof(s_spool_name) - 1);
+    s_spool_name[sizeof(s_spool_name) - 1] = '\0';
+  }
   s_opened_ms       = millis();
   s_opened_stall    = httpStallTotalMs();
 
@@ -115,8 +127,7 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   lv_obj_align(lbl_spool, LV_ALIGN_TOP_MID, 0, 16);
 
   lv_obj_t *lbl_q = lv_label_create(box);
-  { char qbuf[64]; strncpy(qbuf, T(STR_AMS_POPUP_Q), sizeof(qbuf)-1);
-    qbuf[sizeof(qbuf)-1] = '\0';
+  { char qbuf[64]; copyT(qbuf, sizeof(qbuf), STR_AMS_POPUP_Q);
     lv_label_set_text(lbl_q, qbuf); }
   lv_obj_set_style_text_color(lbl_q, lv_color_hex(0xe8f0ff), 0);
   lv_obj_set_style_text_font(lbl_q, &lv_font_montserrat_ext_18, 0);
@@ -152,8 +163,10 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   lv_obj_align(lbl_ams_count, LV_ALIGN_TOP_MID, 0, 106);
   updateCountdownLabel();
 
+  // Three answers in the row that held two: yes, a look at the bays first,
+  // no. 118 + 124 + 118 with the 8 px gutters the pair had.
   lv_obj_t *btn_yes = lv_btn_create(box);
-  lv_obj_set_size(btn_yes, 170, 56);
+  lv_obj_set_size(btn_yes, 118, 56);
   lv_obj_set_pos(btn_yes, 12, 156);
   lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x1a4020), 0);
   lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x2a7030), LV_STATE_PRESSED);
@@ -165,15 +178,33 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
     s_close_pending   = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_yes = lv_label_create(btn_yes);
-  { char ybuf[24]; strncpy(ybuf, T(STR_AMS_BTN_YES), sizeof(ybuf)-1);
-    ybuf[sizeof(ybuf)-1] = '\0'; lv_label_set_text(lbl_yes, ybuf); }
+  { char ybuf[24]; copyT(ybuf, sizeof(ybuf), STR_AMS_BTN_YES); lv_label_set_text(lbl_yes, ybuf); }
   lv_obj_set_style_text_color(lbl_yes, lv_color_hex(0x80ffa0), 0);
-  lv_obj_set_style_text_font(lbl_yes, &lv_font_montserrat_ext_16, 0);
+  lv_obj_set_style_text_font(lbl_yes, UI_FONT_SMALL, 0);
   lv_obj_center(lbl_yes);
 
+  lv_obj_t *btn_view = lv_btn_create(box);
+  lv_obj_set_size(btn_view, 124, 56);
+  lv_obj_set_pos(btn_view, 138, 156);
+  lv_obj_set_style_bg_color(btn_view, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_view, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_border_width(btn_view, 1, 0);
+  lv_obj_set_style_border_color(btn_view, lv_color_hex(UI_COL_LINE), 0);
+  lv_obj_set_style_radius(btn_view, UI_RADIUS_BTN, 0);
+  lv_obj_set_style_shadow_width(btn_view, 0, 0);
+  lv_obj_add_event_cb(btn_view, [](lv_event_t *e) {
+    s_view_pending  = true;
+    s_close_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lbl_view = lv_label_create(btn_view);
+  { char vb[24]; copyT(vb, sizeof(vb), STR_AMS_BTN_VIEW); lv_label_set_text(lbl_view, vb); }
+  lv_obj_set_style_text_color(lbl_view, lv_color_hex(UI_COL_ACCENT), 0);
+  lv_obj_set_style_text_font(lbl_view, UI_FONT_SMALL, 0);
+  lv_obj_center(lbl_view);
+
   lv_obj_t *btn_no = lv_btn_create(box);
-  lv_obj_set_size(btn_no, 170, 56);
-  lv_obj_set_pos(btn_no, 218, 156);
+  lv_obj_set_size(btn_no, 118, 56);
+  lv_obj_set_pos(btn_no, 270, 156);
   lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x3a1010), 0);
   lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x702020), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_no, 8, 0);
@@ -183,16 +214,44 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
     s_close_pending  = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_no = lv_label_create(btn_no);
-  { char nbuf[24]; strncpy(nbuf, T(STR_AMS_TIMER_NO), sizeof(nbuf)-1);
-    nbuf[sizeof(nbuf)-1] = '\0'; lv_label_set_text(lbl_no, nbuf); }
+  { char nbuf[24]; copyT(nbuf, sizeof(nbuf), STR_AMS_TIMER_NO); lv_label_set_text(lbl_no, nbuf); }
   lv_obj_set_style_text_color(lbl_no, lv_color_hex(0xffa0a0), 0);
-  lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_16, 0);
+  lv_obj_set_style_text_font(lbl_no, UI_FONT_SMALL, 0);
   lv_obj_center(lbl_no);
 
   logSDf("AMS: asking for id=%d (%.0fg, %s), %lus, timeout means %s",
          spool_id, netto_g, already_saved ? "saved" : "not written yet",
          (unsigned long)(AMS_ASK_COUNTDOWN_MS / 1000),
          g_ams_timer_yes ? "yes" : "no");
+}
+
+static void offerLocationPicker(int spool_id);
+
+// What the AMS view answers in WINDOW mode, one pass after it closed: (0, 0)
+// from its open button, (-1, -1) from Cancel, the X or a navigation. The
+// same two outcomes the popup's own buttons have, with the same guards.
+static void onWindowDecision(int ams_id, int tray_id) {
+  const int spool_id = s_spool_id;
+  if (amsHasPending() && amsPendingSpoolId() != spool_id) {
+    logSDf("AMS: view answer discarded, parked spool changed from %d to %d",
+           spool_id, amsPendingSpoolId());
+    return;
+  }
+  if (ams_id < 0 || tray_id < 0) {
+    logSDf("AMS: view closed without opening the window, id=%d", spool_id);
+    amsDropPending();
+    offerLocationPicker(spool_id);
+    return;
+  }
+  if (!amsHasPending()) {
+    // The note expired while the bays were being looked at. Said in the
+    // log; the weight was written when it was measured.
+    logSDf("AMS: nothing parked any more for id=%d, window not opened", spool_id);
+    return;
+  }
+  logSDf("AMS: window opened from the view for id=%d", spool_id);
+  amsCommitWithWindow();
+  g_loc_popup_shown_for_id = spool_id;
 }
 
 // Offers the location question the AMS answer did not already settle.
@@ -243,6 +302,19 @@ void handleAmsAssignDeferredActions() {
            spool_id, amsPendingSpoolId());
     s_confirm_pending = false;
     s_cancel_pending  = false;
+    return;
+  }
+
+  if (s_view_pending) {
+    s_view_pending    = false;
+    s_confirm_pending = false;
+    s_cancel_pending  = false;
+    // The bays for orientation, the window button in the footer. The note
+    // stays parked; the view's answer comes back through onWindowDecision.
+    char fmt[48], head[80];
+    copyT(fmt, sizeof(fmt), STR_AMSV_WINDOW_HEAD);
+    snprintf(head, sizeof(head), fmt, s_spool_name);
+    requestAmsView(AMS_VIEW_WINDOW, onWindowDecision, head);
     return;
   }
 

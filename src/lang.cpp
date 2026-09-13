@@ -1,6 +1,6 @@
 // ============================================================
 //  SpoolmanScale – Localization (i18n)
-//  lang.cpp — String table DE / EN
+//  lang.cpp - String table DE / EN
 // ============================================================
 #include <lvgl.h>
 #include "services/tag_write.h"   // the TagWriteResult codes
@@ -16,31 +16,22 @@ const char* const STRINGS[][2] = {
   // Navigation
   { "Abbrechen",              "Cancel"           },  // STR_CANCEL
   { "Zurück",                "Back"             },  // STR_BACK
-  { "Speichern",              "Save"             },  // STR_SAVE
   { "Bestätigen",            "Confirm"          },  // STR_CONFIRM
-  { "Schließen",             "Close"            },  // STR_CLOSE
   { "Erneut versuchen",       "Try again"        },  // STR_RETRY
-  { "Trotzdem verknüpfen",   "Link anyway"      },  // STR_FORCE_LINK
   { "ID neu eingeben",        "Enter new ID"     },  // STR_ENTER_NEW_ID
 
   // Mainscreen Labels
-  { "UID:",                   "UID:"             },  // STR_LBL_UID
-  { "Spoolman UUID:",         "Spoolman UUID:"   },  // STR_LBL_UUID
-  { "Material:",              "Material:"        },  // STR_LBL_MATERIAL
-  { "Spoolman:",              "Spoolman:"        },  // STR_LBL_SPOOLMAN
-  { "Waage:",                 "Scale:"           },  // STR_LBL_SCALE
-  { "Letzte Benutzung:",      "Last used:"       },  // STR_LBL_LAST_USED
-  { "Letzte Trocknung:",      "Last dried:"      },  // STR_LBL_LAST_DRIED
-  { "Temperatur:",            "Temperature:"     },  // STR_LBL_TEMP
-  { "Hersteller:",            "Vendor:"          },  // STR_LBL_VENDOR
-  { "Artikelnummer:",         "Article no.:"     },  // STR_LBL_ARTICLE
-  { "Produktion:",            "Production:"      },  // STR_LBL_PRODUCTION
-  { "Spoolman ID:",           "Spoolman ID:"     },  // STR_LBL_SPOOLMAN_ID
+  { "Spoolman",               "Spoolman"         },  // STR_LBL_SPOOLMAN
+  { "Waage",                  "Scale"            },  // STR_LBL_SCALE
+  { "Letzte Benutzung",       "Last used"        },  // STR_LBL_LAST_USED
+  { "Letzte Trocknung",       "Last dried"       },  // STR_LBL_LAST_DRIED
+  { "Temperatur",             "Temperature"      },  // STR_LBL_TEMP
+  { "Hersteller",             "Vendor"           },  // STR_LBL_VENDOR
 
   // Mainscreen Status
   { "Spule an Reader halten...", "Hold spool near reader..." },  // STR_WAIT_SCAN
   { "NFC Tag erkannt",        "NFC tag detected"           },  // STR_TAG_FOUND
-  { "Kein WiFi",              "No WiFi"                    },  // STR_NO_WIFI
+  { "Kein WLAN",              "No WiFi"                    },  // STR_NO_WIFI
   { "Warte...",               "Please wait..."             },  // STR_WAIT
   { "Warte auf Scan...",      "Waiting for scan..."        },  // STR_WAIT_SCAN_SM
   { "unbekannt",              "unknown"                    },  // STR_UNKNOWN
@@ -52,7 +43,6 @@ const char* const STRINGS[][2] = {
   { "Nicht in Spoolman",      "Not in Spoolman"            },  // STR_NOT_IN_SPOOLMAN
   { "Archiviert",             "Archived"                   },  // STR_ARCHIVED
   { "Lese Tag...",            "Reading tag..."             },  // STR_READING_TAG
-  { "Lese Bambu Sektor %02d...", "Reading Bambu sector %02d..." },  // STR_READING_BAMBU_SECTOR
   { "Durchsuche Inventar...", "Searching inventory..."        },  // STR_SEARCHING_INVENTORY
   { "Durchsuche Inventar... %u KB", "Searching inventory... %u KB" },  // STR_SEARCHING_INVENTORY_KB
 
@@ -62,48 +52,35 @@ const char* const STRINGS[][2] = {
   { "Spule verknüpfen",      "Link Spool"        },  // STR_BTN_LINK
 
   // Welcome Screen
-  { "Willkommen! Bitte WiFi einrichten.",
-    "Welcome! Please set up WiFi."              },  // STR_WELCOME_SUB
-  { "Verbinde mit WiFi und gib die\nSpoolman-Server-IP ein.",
-    "Connect to WiFi and enter\nyour Spoolman server IP." },  // STR_WELCOME_HINT
-  { "Jetzt einrichten",       "Set up now"        },  // STR_BTN_SETUP_NOW
 
   // WiFi Setup
-  { "WiFi einrichten",        "WiFi Setup"        },  // STR_WIFI_TITLE
+  { "WLAN einrichten",        "WiFi setup"        },  // STR_WIFI_TITLE
   { "Netzwerke suchen...",    "Scanning networks..." },  // STR_WIFI_SCAN
-  { "Netzwerk auswählen:",   "Select network:"   },  // STR_WIFI_SELECT
-  { "Erneut suchen",          "Scan again"        },  // STR_WIFI_RESCAN
   { "Keine Netzwerke gefunden", "No networks found" },  // STR_WIFI_NO_NET
-  { "WiFi Passwort",          "WiFi Password"     },  // STR_WIFI_PASS_TITLE
+  { "WLAN-Passwort",          "WiFi password"     },  // STR_WIFI_PASS_TITLE
   { "Passwort für: %s",      "Password for: %s"  },  // STR_WIFI_PASS_HINT
   { "Passwort...",             "Password..."       },  // STR_WIFI_PASS_PLACEHOLDER
   { "Verbinde mit %s...",     "Connecting to %s..." },  // STR_WIFI_CONNECTING
   { "Verbunden!",             "Connected!"        },  // STR_WIFI_SUCCESS
-  { "Verbindung fehlgeschlagen", "Connection failed" },  // STR_WIFI_FAIL
-  { "Verbinden",              "Connect"           },  // STR_BTN_CONNECT
 
   // Spoolman IP
   { "Spoolman Server",        "Spoolman Server"   },  // STR_SPOOLMAN_TITLE
-  { "IP:Port  (z.B. 192.168.x.x:7912)",
-    "IP:Port  (e.g. 192.168.x.x:7912)"          },  // STR_SPOOLMAN_HINT
 
   // Settings
   { "Einstellungen",          "Settings"          },  // STR_SETTINGS_TITLE
   { "Verbindung",             "Connection"        },  // STR_TILE_CONNECTION
-  { "WiFi & Spoolman",        "WiFi & Spoolman"   },  // STR_TILE_CONN_SUB
+  { "WLAN & Server",          "WiFi & server"     },  // STR_TILE_CONN_SUB
   { "Waage",                  "Scale"             },  // STR_TILE_SCALE
-  { "Cal. | Bag | Mehr",     "Cal. | Bag | More"  },  // STR_TILE_SCALE_SUB
+  { "Kalibrieren | Beutel | Mehr", "Calibrate | Bag | More" },  // STR_TILE_SCALE_SUB
   { "Display",                "Display"           },  // STR_TILE_DISPLAY
   { "Helligkeit & Timeout",   "Brightness & Timeout" },  // STR_TILE_DISPLAY_SUB
   { "System",                 "System"            },  // STR_TILE_SYSTEM
   { "Sprache | Update | Info","Language | Update | Info" },  // STR_TILE_SYSTEM_SUB
-  { "TARE  -  Waage auf Null setzen", "TARE  -  Zero the scale" },  // STR_BTN_TARE
 
   // Connection
-  { "Verbindung",             "Connection"        },  // STR_CONN_TITLE
-  { "WiFi Einstellungen",     "WiFi Settings"     },  // STR_BTN_WIFI_SETTINGS
+  { "WLAN-Einstellungen",     "WiFi settings"     },  // STR_BTN_WIFI_SETTINGS
   { "Nicht konfiguriert",     "Not configured"    },  // STR_BTN_WIFI_NONE
-  { "WLAN Status",            "WiFi Status"       },  // STR_BTN_WIFI_STATUS
+  { "WLAN-Status",            "WiFi status"       },  // STR_BTN_WIFI_STATUS
   { "Nicht verbunden",        "Not connected"     },  // STR_BTN_WIFI_STATUS_SUB
   { "Server, OTA, Logs",      "Server, OTA, logs" },  // STR_BTN_WEB_SUB
   { "Webserver",              "Web server"        },  // STR_WEB_SERVER
@@ -121,28 +98,20 @@ const char* const STRINGS[][2] = {
     "Serves list limits, drying, display and the backend credentials. Off by default: changes settings with no password." },  // STR_WEB_CONFIG_HINT
   { "Listenlimits, Trocknung, Anzeige",
     "List limits, drying, display" },  // STR_WEB_CONFIG_SUB
-  { "Spoolman Server",        "Spoolman Server"   },  // STR_BTN_SPOOLMAN
 
   // Scale
   { "Waage",                  "Scale"             },  // STR_SCALE_TITLE
   { "Kalibrierung",           "Calibration"       },  // STR_BTN_CALIBRATE
-  { "Faktor: %.4f",           "Factor: %.4f"      },  // STR_BTN_CAL_SUB
   { "Beutelgewicht",          "Bag weight"        },  // STR_BTN_BAGWEIGHT
-  { "Aktuell: %.1fg",         "Current: %.1fg"    },  // STR_BTN_BAG_SUB
 
   // Calibration
   { "Kalibrierung",           "Calibration"       },  // STR_CAL_TITLE
-  { "Bekanntes Gewicht auflegen, Gramm eingeben, berechnen.",
-    "Place known weight, enter grams, calculate." },  // STR_CAL_DESC
   { "Faktor: --",             "Factor: --"        },  // STR_CAL_FACTOR
   { "Faktor: %.4f",           "Factor: %.4f"      },  // STR_CAL_OK
-  { LV_SYMBOL_WARNING "  Waage nicht bereit",
-    LV_SYMBOL_WARNING "  Scale not ready"         },  // STR_CAL_SCALE_NOT_READY
   { "Fehler: Gewicht = 0",    "Error: weight = 0" },  // STR_CAL_ZERO_ERR
   { LV_SYMBOL_OK "  Berechnen", LV_SYMBOL_OK "  Calculate" },  // STR_BTN_CALCULATE
 
   // Bag weight
-  { "Beutelgewicht",          "Bag weight"        },  // STR_BAG_TITLE
   { "Vakuumbeutel inkl. Silikagelpack (in Gramm)",
     "Vacuum bag incl. silica gel pack (in grams)" },  // STR_BAG_DESC
   { "%.1fg gespeichert",      "%.1fg saved"       },  // STR_BAG_SAVED
@@ -152,16 +121,13 @@ const char* const STRINGS[][2] = {
   { "Display",                "Display"           },  // STR_DISPLAY_TITLE
   { LV_SYMBOL_IMAGE "  Helligkeit",
     LV_SYMBOL_IMAGE "  Brightness"               },  // STR_BRIGHT_LABEL
-  { LV_SYMBOL_MINUS "  Dimmen nach (Min.)",
-    LV_SYMBOL_MINUS "  Dim after (min.)"         },  // STR_DIM_LABEL
-  { LV_SYMBOL_POWER "  Sleep nach (Min.)",
-    LV_SYMBOL_POWER "  Sleep after (min.)"       },  // STR_SLEEP_LABEL
-  { "Werte werden sofort gespeichert.",
-    "Values are saved immediately."              },  // STR_DISPLAY_HINT
+  { LV_SYMBOL_EYE_OPEN "  Dimmen nach (Min.)",
+    LV_SYMBOL_EYE_OPEN "  Dim after (min.)"         },  // STR_DIM_LABEL
+  { LV_SYMBOL_POWER "  Tiefschlaf nach (Min.)",
+    LV_SYMBOL_POWER "  Deep sleep after (min.)"       },  // STR_SLEEP_LABEL
 
   // System
   { "System",                 "System"            },  // STR_SYSTEM_TITLE
-  { "Sprache / Language",     "Sprache / Language" },  // STR_BTN_LANGUAGE
   { "Deutsch / English",      "Deutsch / English"  },  // STR_BTN_LANG_SUB
   { "Firmware Update",        "Firmware Update"    },  // STR_BTN_FW_UPDATE
   { "Browser oder GitHub",    "Browser or GitHub"  },  // STR_BTN_FW_SUB
@@ -172,7 +138,6 @@ const char* const STRINGS[][2] = {
   { "Sprache / Language",     "Sprache / Language" },  // STR_LANG_TITLE
   { "Gerät startet nach Auswahl neu.",
     "Device will reboot after selection." },  // STR_LANG_HINT
-  { "coming soon",            "coming soon"        },  // STR_LANG_EN_SUB
   { "Datum / Date format:",   "Datum / Date format:" },  // STR_DATE_FMT_LABEL
 
   // OTA
@@ -201,7 +166,6 @@ const char* const STRINGS[][2] = {
   { "Aktuell: %s",            "Current: %s"        },  // STR_OTA_CURRENT
 
   // Info Screen
-  { "Info & Unterstützung",   "Info & Support"     },  // STR_INFO_TITLE
   { "SpoolmanScale  %s",      "SpoolmanScale  %s"  },  // STR_INFO_VERSION
   { "Tippe einen Button um den QR-Code anzuzeigen.",
     "Tap a button to show the QR code."         },  // STR_INFO_HINT
@@ -219,11 +183,7 @@ const char* const STRINGS[][2] = {
   // Weight popup
   { "Heute getrocknet\nspeichern?",  "Save dried\ntoday?"    },  // STR_POPUP_DRIED_Q
   { "Gewicht in\nSpoolman updaten?", "Update weight\nin Spoolman?" },  // STR_POPUP_WEIGHT_Q
-  { "Ohne Beutel\n%.0fg",            "No bag\n%.0fg"          },  // STR_BTN_NO_BAG
-  { "Mit Beutel\n%.0fg - %.0fg",     "With bag\n%.0fg - %.0fg" },  // STR_BTN_WITH_BAG
-  { "Neue Spule\n%.0fg netto",        "New spool\n%.0fg net"   },  // STR_BTN_NEW_SPOOL
   { "Leere Spule\n(Spule + Kern messen)",     "Empty spool\n(measure spool + core)" },  // STR_BTN_EMPTY_SPOOL
-  { "Spule archivieren\n(leer, 0g)", "Archive spool\n(empty, 0g)" },  // STR_BTN_ARCHIVE
   { "Ja, bestätigen",               "Yes, confirm"           },  // STR_BTN_CONFIRMED
 
   // Spool weight sub-popup
@@ -236,7 +196,6 @@ const char* const STRINGS[][2] = {
   // Link Flow
   { "Bambu-Spule verknüpfen",  "Link Bambu spool"   },  // STR_LINK_BAMBU_TITLE
   { "Unbekannte Spule",         "Unknown spool"       },  // STR_LINK_NTAG_TITLE
-  { "%s | nicht in Spoolman",   "%s | not in Spoolman" },  // STR_LINK_NOT_IN_SM
   { "Spool-ID eingeben",        "Enter Spool-ID"      },  // STR_BTN_ENTER_ID
   { "Aus Liste wählen",        "Choose from list"    },  // STR_BTN_FROM_LIST
   { "Spoolman Spool-ID",        "Spoolman Spool-ID"   },  // STR_LINK_ID_TITLE
@@ -244,11 +203,9 @@ const char* const STRINGS[][2] = {
   { "ID nicht gefunden",        "ID not found"        },  // STR_LINK_ID_NOT_FOUND
   { "HTTP Fehler %d",           "HTTP Error %d"       },  // STR_LINK_HTTP_ERR
   { "JSON Fehler",              "JSON error"          },  // STR_LINK_JSON_ERR
-  { "Kein WiFi",                "No WiFi"             },  // STR_LINK_NO_WIFI
+  { "Kein WLAN",                "No WiFi"             },  // STR_LINK_NO_WIFI
   { LV_SYMBOL_WARNING "  Spule bereits verknüpft",
     LV_SYMBOL_WARNING "  Tag already assigned!"  },  // STR_WARN_A_TITLE
-  { "Spule #%d hat bereits\nein Tag: %s",
-    "Spool #%d already has\na tag: %s"          },  // STR_WARN_A_INFO
   { LV_SYMBOL_WARNING "  Trotzdem verknüpfen",
     LV_SYMBOL_WARNING "  Link anyway"           },  // STR_BTN_OVERWRITE
   { "Material stimmt nicht überein", "Material mismatch" },  // STR_WARN_B_TITLE
@@ -256,19 +213,14 @@ const char* const STRINGS[][2] = {
     "Tag:      %s\nSpoolman: %s  (#%d)\n\nWrong ID? Please double-check." },  // STR_WARN_B_DETAILS
   { "Hersteller wählen  (%d Spulen)", "Choose vendor  (%d spools)" },  // STR_VENDOR_TITLE
   { "Material wählen",         "Choose material"     },  // STR_MAT_TITLE
-  { "Spule auswählen  (%d)",   "Select spool  (%d)"  },  // STR_SPOOLS_TITLE
   { "Keine Spulen ohne Tag\nin Spoolman gefunden.",
     "No unlinked spools\nfound in Spoolman."    },  // STR_NO_VENDORS
   { "Keine Materialien gefunden.", "No materials found." },  // STR_NO_MATERIALS
   { "Keine passenden Spulen.\nBitte per ID verlinken.",  "No matching spools.\nPlease link via ID." },  // STR_NO_SPOOLS
   { "Verknüpfen?",             "Link this spool?"    },  // STR_CONFIRM_LINK
   { LV_SYMBOL_OK "  Verknüpfen", LV_SYMBOL_OK "  Link"      },  // STR_LINK_OK
-  { "Fehler beim Verknüpfen",  "Error linking"       },  // STR_LINK_FAIL
 
   // Tare
-  { "Tare / Nullpunkt",        "Tare / Zero point"   },  // STR_TARE_TITLE
-  { "Waage leeren und\nTare-Button drücken.",
-    "Empty the scale and\npress the TARE button." },  // STR_TARE_DESC
   { LV_SYMBOL_OK "  Tare gesetzt!", LV_SYMBOL_OK "  Tare set!" },  // STR_TARE_OK
   { LV_SYMBOL_WARNING "  Waage nicht bereit",
     LV_SYMBOL_WARNING "  Scale not ready"       },  // STR_TARE_NOT_READY
@@ -282,8 +234,6 @@ const char* const STRINGS[][2] = {
     LV_SYMBOL_REFRESH "  Restart now"               },  // STR_REBOOT_BTN
 
   // WiFi connecting result
-  { LV_SYMBOL_OK "  Verbunden!\nIP: %s",
-    LV_SYMBOL_OK "  Connected!\nIP: %s"             },  // STR_WIFI_CONNECTED_IP
   { LV_SYMBOL_WARNING "  Verbindung fehlgeschlagen.\nSSID: %s",
     LV_SYMBOL_WARNING "  Connection failed.\nSSID: %s" },  // STR_WIFI_CONN_FAILED
 
@@ -299,7 +249,6 @@ const char* const STRINGS[][2] = {
   { LV_SYMBOL_OK "  Speichern", LV_SYMBOL_OK "  Save"       },  // STR_BTN_SAVE
 
   // Spool list title
-  { "Bambu",                    "Bambu"              },  // STR_SPOOLS_BAMBU
   { "Alle",                     "All"                },  // STR_SPOOLS_ALL
 
   // Settings calibration sub
@@ -339,8 +288,6 @@ const char* const STRINGS[][2] = {
     LV_SYMBOL_OK " With bag\n%.0fg - %.0fg"         },  // STR_BTN_WITH_BAG_VAL
   { LV_SYMBOL_PLUS " Neue Spule\n%.0fg netto",
     LV_SYMBOL_PLUS " New spool\n%.0fg net"          },  // STR_BTN_NEW_SPOOL_VAL
-  { LV_SYMBOL_REFRESH " TARE\nZero scale",
-    LV_SYMBOL_REFRESH " TARE\nZero scale"           },  // STR_BTN_TARE_ZERO
 
   // First boot welcome screen
   { "Willkommen!",
@@ -349,8 +296,8 @@ const char* const STRINGS[][2] = {
     "Your SpoolmanScale is almost ready."         },  // STR_FIRSTBOOT_SUB
   // Both backends are named here because this screen appears before the user
   // has chosen one. It must therefore not go through backendText().
-  { "In wenigen Schritten richten wir\nWiFi, Spoolman/FilaMan und die Waage ein.",
-    "In a few steps we will set up\nWiFi, Spoolman/FilaMan and the scale."  },  // STR_FIRSTBOOT_HINT
+  { "In wenigen Schritten richten wir\nWLAN, Server und die Waage ein.",
+    "In a few steps we will set up\nWiFi, the server and the scale."  },  // STR_FIRSTBOOT_HINT
   { LV_SYMBOL_RIGHT "  Los geht's",
     LV_SYMBOL_RIGHT "  Get started"               },  // STR_FIRSTBOOT_BTN
 
@@ -371,8 +318,6 @@ const char* const STRINGS[][2] = {
     "SpoolmanScale will create the\nmissing extra fields in Spoolman.\n\nProceed?" },  // STR_EXTRA_FIELDS_CONFIRM_MSG
   { "Lege Felder an...",
     "Creating fields..."                          },  // STR_EXTRA_FIELDS_CREATING
-  { LV_SYMBOL_OK "  Felder erfolgreich angelegt!",
-    LV_SYMBOL_OK "  Fields created successfully!" },  // STR_EXTRA_FIELDS_CREATED_OK
   { LV_SYMBOL_WARNING "  Fehler beim Anlegen: %s",
     LV_SYMBOL_WARNING "  Error creating: %s"      },  // STR_EXTRA_FIELDS_CREATE_FAIL
   { LV_SYMBOL_WARNING "  Kein WiFi",
@@ -393,8 +338,8 @@ const char* const STRINGS[][2] = {
     LV_SYMBOL_EDIT "  Calibrate now"              },  // STR_CAL_REMINDER_NOW
 
   // Calibration TARE hint
-  { "Zuerst ohne Gewicht TARE drücken!\nDann Gewicht auflegen und berechnen.",
-    "First press TARE without weight!\nThen place weight and calculate."  },  // STR_CAL_TARE_HINT
+  { "Erst TARE ohne Gewicht, dann Gewicht auflegen und berechnen.",
+    "First TARE with nothing on the pad, then place the weight and calculate."  },  // STR_CAL_TARE_HINT
 
   // Extra fields test button
   { LV_SYMBOL_EDIT "  Testfeld erstellen",
@@ -409,8 +354,6 @@ const char* const STRINGS[][2] = {
   // Spoolman IP validation
   { "Verbindung wird geprüft...",
     "Testing connection..."                                               },  // STR_SPOOLMAN_TESTING
-  { LV_SYMBOL_OK "  Spoolman erreichbar",
-    LV_SYMBOL_OK "  Spoolman reachable"                                  },  // STR_SPOOLMAN_OK
   { LV_SYMBOL_WARNING "  Spoolman nicht erreichbar",
     LV_SYMBOL_WARNING "  Spoolman not reachable"                         },  // STR_SPOOLMAN_FAIL
   { "Erneut versuchen",
@@ -429,7 +372,7 @@ const char* const STRINGS[][2] = {
     "Check for Updates"                                                   },  // STR_GH_OTA_CHECK_BTN
   { "Prüfen...",
     "Checking..."                                                         },  // STR_GH_OTA_CHECKING
-  { "Kein WiFi - bitte zuerst verbinden",
+  { "Kein WLAN - bitte zuerst verbinden",
     "No WiFi - please connect first"                                      },  // STR_GH_OTA_NO_WIFI
   { "Bereits aktuell",
     "Already up to date"                                                  },  // STR_GH_OTA_UP_TO_DATE
@@ -541,11 +484,77 @@ const char* const STRINGS[][2] = {
   // short form above, so the two places do not invent two vocabularies.
   { "Inventar",
     "Inventory"                                                           },  // STR_BACKEND_INVENTORY
+
+  // AMS view. The unit names are built here rather than taken from the
+  // server: both backends generate their own "AMS A" style labels, and a
+  // generated English label would land on the screen untranslated.
+  { "AMS-Status",
+    "AMS status"                                                      },  // STR_AMSV_TITLE
+  { "AMS ansehen",
+    "Show the AMS"                                                    },  // STR_AMSV_BTN
+  { "Fächer des Druckers",
+    "The printer's bays"                                              },  // STR_AMSV_BTN_SUB
+  { "Neu laden",
+    "Reload"                                                          },  // STR_AMSV_RELOAD
+  { "AMS wird gelesen...",
+    "Reading the AMS..."                                              },  // STR_AMSV_LOADING
+  { "AMS %d",
+    "AMS %d"                                                          },  // STR_AMSV_UNIT
+  { "AMS HT %d",
+    "AMS HT %d"                                                       },  // STR_AMSV_UNIT_HT
+  { "Extern",
+    "External"                                                        },  // STR_AMSV_UNIT_EXT
+  { "Leer",
+    "Empty"                                                           },  // STR_AMSV_EMPTY
+  { "%d%%",
+    "%d%%"                                                            },  // STR_AMSV_HUM_PCT
+  { "Stufe %d",
+    "Step %d"                                                         },  // STR_AMSV_HUM_LEVEL
+  // Says why the bays are still there. FilaMan keeps the assignment in its
+  // database but temperature and humidity are live MQTT readings, so an
+  // unreachable printer shows full bays with no climate - which looks like a
+  // fault in the scale unless the line explains it.
+  { "offline, letzter Stand",
+    "offline, last known state"                                           },  // STR_AMSV_OFFLINE
+  { "Kein AMS gemeldet",
+    "No AMS reported"                                                 },  // STR_AMSV_NO_AMS
+  { "Kein Drucker gefunden",
+    "No printer found"                                                },  // STR_AMSV_NO_PRINTER
+  { "Server antwortet %d",
+    "The server answers %d"                                           },  // STR_AMSV_ERR_HTTP
+  { "Kein Netz",
+    "No network"                                                      },  // STR_AMSV_ERR_NET
+  { "Zu wenig Speicher für alle Fächer",
+    "Not enough memory for every bay"                                 },  // STR_AMSV_ERR_FULL
+  { "Trocknet %d °C, %d min",
+    "Drying %d °C, %d min"                                             },  // STR_AMSV_DRYING_TIME
+  { "Trocknet %d °C",
+    "Drying %d °C"                                                     },  // STR_AMSV_DRYING_TEMP
+  { "druckt %d%%",
+    "printing %d%%"                                                   },  // STR_AMSV_JOB
+  // Which of several printers is on screen. Same in both languages, but
+  // it goes through T() so a language that numbers differently can change it.
+  { "%d/%d",
+    "%d/%d"                                                           },  // STR_AMSV_PRN_OF
+  { "%s -> in welches Fach?",
+    "%s -> into which bay?"                                           },  // STR_AMSV_PICK_HEAD
+  { "Spule ist zugeordnet",
+    "The spool is assigned"                                           },  // STR_AMSV_ASSIGNED
+  { "Spule umgezogen",
+    "The spool moved"                                                 },  // STR_AMSV_MOVED
+  { "Zuordnung fehlgeschlagen",
+    "Assignment failed"                                          },  // STR_AMSV_ASSIGN_FAIL
+  { "Nach dem Wiegen ins AMS",
+    "Into the AMS after weighing"                                     },  // STR_BBAMS_ASK
+  { "Beim Abheben nach dem Fach fragen",
+    "Ask for the bay on removal"                                      },  // STR_BBAMS_ASK_SUB
+  { "An: nach dem Wiegen einer bekannten Spule fragt die Waage beim Abheben, in welches AMS-Fach sie geht, und trägt das in BamBuddy ein.\n\nBamBuddy konfiguriert das Fach dabei über MQTT am Drucker mit - Material, Farbe und Temperaturen. Das ist gewollt, aber es wirkt auf den Drucker, nicht nur auf die Datenbank.",
+    "On: after a known spool has been weighed, the scale asks on removal which AMS bay it goes into and records that in BamBuddy.\n\nBamBuddy also configures the bay on the printer over MQTT while doing so - material, colour and temperatures. That is intended, but it acts on the printer, not only on the database." },  // STR_BBAMS_ASK_INFO
   { "Werkseinstellungen",       "Factory Reset"              },  // STR_BTN_FACTORY_RESET
   { "Alle Einstellungen löschen", "Erase all settings"      },  // STR_BTN_FACTORY_RESET_SUB
   { "Werkseinstellungen?",      "Factory Reset?"             },  // STR_FACTORY_RESET_TITLE
-  { "Alle Einstellungen werden gelöscht:\nWiFi, Spoolman IP, Kalibrierung,\nSprache und alle anderen Daten.\nDanach startet das Gerät neu.",
-    "All settings will be erased:\nWiFi, Spoolman IP, calibration,\nlanguage and all other data.\nThe device will restart afterwards." },  // STR_FACTORY_RESET_MSG
+  { "Alle Einstellungen werden gelöscht:\nWLAN, Server-Adresse, Kalibrierung,\nSprache und alle anderen Daten.\nDanach startet das Gerät neu.",
+    "All settings will be erased:\nWiFi, server address, calibration,\nlanguage and all other data.\nThe device will restart afterwards." },  // STR_FACTORY_RESET_MSG
   { "Ja, alles löschen",       "Yes, erase everything"      },  // STR_FACTORY_RESET_CONFIRM
   { "Spule kopieren",            "Copy spool"                 },  // STR_BTN_COPY_SPOOL
   { "Spule kopieren",            "Copy spool"                 },  // STR_COPY_TITLE
@@ -557,19 +566,17 @@ const char* const STRINGS[][2] = {
   { "Spule erstellt!",           "Spool created!"             },  // STR_COPY_OK
   { "Fehler beim Erstellen",     "Error creating spool"       },  // STR_COPY_FAIL
   { "Keine Spulen gefunden",     "No spools found"            },  // STR_COPY_NO_SPOOLS
-  { "Zu viele Ergebnisse.\nBitte ID verwenden.", "Too many results.\nPlease use ID instead." },  // STR_COPY_LIMIT_HIT
   { "Setup überspringen",      "Skip setup"                 },  // STR_BTN_SKIP_SETUP
   { "Unlink",                   "Unlink"                     },  // STR_UNLINK_BTN
   { "Spule unlinken?",          "Unlink spool?"              },  // STR_UNLINK_TITLE
   { "Löscht den Eintrag im Tag-Feld in Spoolman.\nDie Spule bleibt erhalten.",
     "Clears the tag field entry in Spoolman.\nThe spool itself is kept." },  // STR_UNLINK_MSG
   { "Ja, unlinken",             "Yes, unlink"                },  // STR_UNLINK_CONFIRM
-  { "Waage initialisiert...",   "Scale calibrating..."       },  // STR_SCALE_CALIBRATING
-  { "Verbinde mit WiFi...",     "Connecting to WiFi..."      },  // STR_WIFI_CONNECTING_BOOT
-  { "Waage und WiFi werden gestartet...", "Starting up, please wait..." },  // STR_BOOTING
+  { "Verbinde mit WLAN...",     "Connecting to WiFi..."      },  // STR_WIFI_CONNECTING_BOOT
+  { "Gerät wird gestartet...", "Starting up, please wait..." },  // STR_BOOTING
   { "Neustart",                 "Reboot"                     },  // STR_BTN_REBOOT
   { "Gerät neu starten",       "Restart device"             },  // STR_BTN_REBOOT_SUB
-  { "Ganze g",                  "Whole g"                    },  // STR_WHOLE_GRAM
+  { "Ganze Gramm",              "Whole grams"                },  // STR_WHOLE_GRAM
   { "Mehr Spulen gefunden - nicht gelistet? Per Spool-ID verknüpfen",   "More spools found - not listed? Use Spool-ID"   },  // STR_LIST_MORE_SPOOLS
   { "Mehr Hersteller gefunden - nicht gelistet? Per Spool-ID verknüpfen", "More vendors found - not listed? Use Spool-ID" },  // STR_LIST_MORE_VENDORS
   { "Mehr Materialien gefunden - nicht gelistet? Per Spool-ID verknüpfen", "More materials found - not listed? Use Spool-ID" },  // STR_LIST_MORE_MATS
@@ -593,25 +600,15 @@ const char* const STRINGS[][2] = {
     "Loading..."                                                           },  // STR_LOCATION_LOADING
   { "Kein WLAN",
     "No WiFi"                                                              },  // STR_LOCATION_NO_WIFI
-  { LV_SYMBOL_OK " Gespeichert",
-    LV_SYMBOL_OK " Saved"                                                  },  // STR_LOCATION_SAVED
-  { LV_SYMBOL_WARNING " Fehler",
-    LV_SYMBOL_WARNING " Error"                                             },  // STR_LOCATION_FAIL
   { "Keine Spoolman-Lagerorte gefunden",
     "No Spoolman locations found"                                          },  // STR_LOCATION_NO_LOCATIONS
   { "Leere Lagerorte werden nicht angezeigt",
     "Empty locations are not shown"                                        },  // STR_LOCATION_HINT_EMPTY
   { "Zu viele Lagerorte - nicht alle angezeigt",
     "Too many locations - not all shown"                                   },  // STR_LOCATION_LIMIT_HIT
-  { "Bitte per ID verlinken",        "Please link via ID"                 },  // STR_NO_SPOOLS_HINT
   { "Ortsabfrage bei Entnahme",      "Location on removal"                },  // STR_BTN_AUTO_LOC_POPUP
-  { "Lagerort-Auswahl automatisch",  "Auto location picker"               },  // STR_BTN_AUTO_LOC_POPUP_SUB
-  { "Lagerort speichern?",           "Save location?"                     },  // STR_AUTO_LOC_POPUP_TITLE
-  { "Wo wird die Spule gelagert?",   "Where is the spool stored?"         },  // STR_AUTO_LOC_POPUP_MSG
   { "Trocknungserinnerung",          "Drying Reminder"                    },  // STR_BTN_DRYING_REMINDER
-  { "Ampelsystem",                   "Alert system"                       },  // STR_BTN_DRYING_REMINDER_SUB
   { "Trocknungserinnerung",          "Drying Reminder"                    },  // STR_DRYING_REMINDER_TITLE
-  { "Kommt bald",                    "Coming soon"                        },  // STR_DRYING_REMINDER_COMING_SOON
 
   // Drying Reminder Screen
   { "Aus",                           "Off"                                },  // STR_DRY_MODE_OFF
@@ -624,8 +621,6 @@ const char* const STRINGS[][2] = {
   { "Material",                      "Material"                           },  // STR_DRY_MAT_HDR_MAT
   { "Gelb (Tage)",                   "Yellow (days)"                      },  // STR_DRY_MAT_HDR_YELLOW
   { "Rot (Tage)",                    "Red (days)"                         },  // STR_DRY_MAT_HDR_RED
-  { "Vers.*",                        "Mult.*"                             },  // STR_DRY_MAT_HDR_MULT
-  { "* Multiplikator für luftdicht","* Multiplier for airtight storage"  },  // STR_DRY_MAT_FOOTNOTE
   { "Gelb ab",                       "Yellow from"                        },  // STR_DRY_MAN_YELLOW_LBL
   { "Rot ab",                        "Red from"                           },  // STR_DRY_MAN_RED_LBL
   { "Tippen zum Bearbeiten",         "Tap to edit"                        },  // STR_DRY_MAN_EDIT_HINT
@@ -643,7 +638,6 @@ const char* const STRINGS[][2] = {
   // here. The address screen keeps "Server", because a server address is
   // literally what gets typed in there.
   { "Filamentverwaltung",            "Filament manager"                   },  // STR_BACKEND_TITLE
-  { "Programm und Zugangsdaten",     "Application and credentials"        },  // STR_BACKEND_TILE_SUB
   { "Adresse",                       "Address"                            },  // STR_BACKEND_ADDRESS
   { "API-Key",                       "API key"                            },  // STR_BACKEND_APIKEY
   { "Device-Token",                  "Device token"                       },  // STR_BACKEND_DEVICE_TOKEN
@@ -682,8 +676,8 @@ const char* const STRINGS[][2] = {
 
   // Main screen weight box and More-info detail grid
   { "Waage - Spule",                 "Scale - Spool"                      },  // STR_LBL_SCALE_SPOOL_CAP
-  { "Gesamt:",                       "Total:"                             },  // STR_LBL_TOTAL_CAP
-  { "o. Beutel:",                    "w/o Bag:"                           },  // STR_LBL_WO_BAG_CAP
+  { "Gesamt",                        "Total"                              },  // STR_LBL_TOTAL_CAP
+  { "o. Beutel",                     "w/o bag"                            },  // STR_LBL_WO_BAG_CAP
   { "Farbe",                         "Hex Color"                          },  // STR_LBL_HEX_COLOR
   { "Produktionsdatum",              "Production date"                    },  // STR_LBL_PRODUCTION_DATE
   { "Artikelnr.",                    "Article no."                        },  // STR_LBL_ARTICLE_NO_SHORT
@@ -700,11 +694,8 @@ const char* const STRINGS[][2] = {
   { "Aufliegenden Tag mit dieser Spule verknüpfen?",
     "Link the tag on the scale to this spool?"                            },  // STR_REMOTE_LINK_QUESTION
   { "Verknüpfen",                   "Link"                                },  // STR_REMOTE_LINK_CONFIRM
-  { "Material weicht ab: Tag %s, Spule %s",
-    "Material mismatch: tag %s, spool %s"                                 },  // STR_REMOTE_LINK_MISMATCH
   { "Details nicht abrufbar",        "Details unavailable"                },  // STR_REMOTE_LINK_NO_DETAILS
   { "Verknüpfung abgelaufen",       "Link request timed out"              },  // STR_REMOTE_LINK_TIMEOUT
-  { "Aus",                           "Off"                                },  // STR_SLEEP_OFF
 
   // Tag versus spool comparison
   { "Tag",                           "Tag"                                },  // STR_REMOTE_LINK_COL_TAG
@@ -751,7 +742,6 @@ const char* const STRINGS[][2] = {
   { "Ohne Tag wiegen",              "Weigh without a tag"                },  // STR_FLM_TAGLESS
   { "wenn kein Tag aufgelegt wird", "when no tag is presented"           },  // STR_FLM_TAGLESS_SUB
   { "Spule gewählt - jetzt wiegen", "Spool selected - weigh it now"      },  // STR_REMOTE_LINK_WEIGH
-  { "Wecken bei Auflage",           "Wake on load"                       },  // STR_WAKE_ON_LOAD
   { LV_SYMBOL_EYE_CLOSE "  Bildschirm aus nach (Min.)",
     LV_SYMBOL_EYE_CLOSE "  Screen off after (min.)"        },  // STR_SCREENOFF_LABEL
   { "Nie",                           "Never"                              },  // STR_SCREENOFF_NEVER
@@ -780,13 +770,18 @@ const char* const STRINGS[][2] = {
     "FilaMan reserves a weighed spool for a few seconds. Whoever loads an AMS tray in that time gets it assigned. Only a weight opens that window, so assigning books the value a second time: the measurement then shows twice in the log, the value stays the same. If the spool is going into the printer anyway, just resting it on the pad is enough." },  // STR_AMS_INFO
   { "Aus",                           "Off"                                },  // STR_AMS_MODE_OFF
   { "Nachfragen",                    "Ask"                                },  // STR_AMS_MODE_ASK
-  { "Immer an",                      "Always"                             },  // STR_AMS_MODE_ALWAYS
+  // Not "Immer an": next to "Nachfragen" that reads as "the question is
+  // always on", which is the opposite of what it does. Users asking for a way
+  // out of the popup had the mode in front of them and did not recognise it.
+  { "Automatisch",                   "Automatic"                          },  // STR_AMS_MODE_ALWAYS
   { "Es wird nichts vorgemerkt. Wiegen und Lagerort verhalten sich genau wie bisher.",
     "Nothing is reserved. Weighing and location behave exactly as before." },  // STR_AMS_OFF_DESC
   { "Beim Abnehmen wird gefragt, ob die Spule in den Drucker wandert. Ein Ja sendet das Gewicht und öffnet das Fenster.",
     "When the spool is lifted you are asked whether it goes into the printer. A yes sends the weight and opens the window." },  // STR_AMS_ASK_DESC
-  { "Jede Wiegung merkt die Spule vor, ohne Nachfrage. Auch wenn du nur kurz nachwiegen wolltest.",
-    "Every weighing reserves the spool, without asking. Even when you only wanted to check a weight." },  // STR_AMS_ALWAYS_DESC
+  // The gain first, the price second: this is the mode people come looking
+  // for when the popup is in their way, so it has to say so before it warns.
+  { "Kein Popup, kein Countdown: jede Wiegung merkt die Spule vor. Der Preis ist, dass auch kurzes Nachwiegen sie vormerkt.",
+    "No popup, no countdown: every weighing reserves the spool. The price is that checking a weight reserves it too." },  // STR_AMS_ALWAYS_DESC
   { "Fenster",                       "Window"                             },  // STR_AMS_WINDOW_LBL
   { "wie lange die Spule vorgemerkt bleibt", "how long the spool stays reserved" },  // STR_AMS_WINDOW_HINT
   { "s",                             "s"                                  },  // STR_AMS_SEC_UNIT
@@ -924,7 +919,6 @@ const char* const STRINGS[][2] = {
     "SpoolLink is to run alongside."                                       },  // STR_TF_CARDUIDS_INFO
 
   { "Trocknungsdatum",               "Drying date"                        },  // STR_EF_LAST_DRIED
-  { "extra.last_dried",              "extra.last_dried"                   },  // STR_EF_LAST_DRIED_SUB
   { "Wann die Spule zuletzt getrocknet wurde. Spoolman hat dafür kein eigenes "
     "Feld, deshalb schreibt die Waage es nach extra.last_dried.\n\n"
     "Fehlt das Feld, bleibt die Trocknungsanzeige leer und der Knopf "
@@ -947,8 +941,8 @@ const char* const STRINGS[][2] = {
     "Backend" },  // STR_W_NAV_BACKEND
   { "Trocknung",
     "Drying" },  // STR_W_NAV_DRYING
-  { "Tags schreiben",
-    "Write tags" },  // STR_W_NAV_TAGS
+  { "Tags",
+    "Tags" },  // STR_W_NAV_TAGS
   { "Einstellungen",
     "Settings" },  // STR_W_NAV_SETTINGS
   { "Logs",
@@ -1087,8 +1081,6 @@ const char* const STRINGS[][2] = {
     "Red after" },  // STR_W_DRY_RED
   { "Lagerung",
     "Storage" },  // STR_W_DRY_STORAGE
-  { "offen",
-    "open" },  // STR_W_DRY_OPEN
   { "trocken",
     "sealed" },  // STR_W_DRY_SEALED
   { "Tage",
@@ -1127,8 +1119,6 @@ const char* const STRINGS[][2] = {
     "Spool" },  // STR_W_TAG_SPOOL
   { "-- Spule wählen --",
     "-- pick a spool --" },  // STR_W_TAG_PICK
-  { "Format",
-    "Format" },  // STR_W_TAG_FORMAT
   { "Auf dem Tag",
     "On the tag" },  // STR_W_TAG_ONTAG
   { "Würde geschrieben",
@@ -1466,8 +1456,6 @@ const char* const STRINGS[][2] = {
 
   // Resetting the calibration, and the two refusals that keep a bad one from
   // being stored in the first place.
-  { "Kalibrierung zurücksetzen", "Reset calibration"  },  // STR_BTN_CAL_RESET
-  { "Faktor und Tara auf Werk",  "Factor and tare to default" },  // STR_BTN_CAL_RESET_SUB
   { "Kalibrierung und Tara zurücksetzen?",
     "Reset calibration and tare?" },  // STR_CAL_RESET_CONFIRM
   { LV_SYMBOL_OK "  Kalibrierung zurückgesetzt",
@@ -1481,7 +1469,6 @@ const char* const STRINGS[][2] = {
   // ---- Writing a tag after a link ----
   { "Tag nach Verlinken beschreiben",
     "Write tag after linking"    },  // STR_TW_OPT_ASK
-  { "Aus, fragen oder immer",    "Off, ask or every time" },  // STR_TW_OPT_ASK_SUB
   { "Was nach dem Verlinken einer Spule mit dem Tag geschieht. Beschrieben "
     "wird er vollständig, sein bisheriger Inhalt ist verloren.\n\n"
     "Aus: nur die UID wird mit der Spule verknüpft, der Tag bleibt unberührt. "
@@ -1532,7 +1519,7 @@ const char* const STRINGS[][2] = {
     "Applies to what the scale does on its own after a link. Writing from this "
     "page has its own format selector." },  // STR_W_TAGOPT_NOTE
   { "Speichern",                 "Download"           },  // STR_W_LOG_DOWNLOAD
-  { "Reset Cal.",                "Reset Cal."         },  // STR_BTN_CAL_RESET_SHORT
+  { "Kal. löschen",              "Reset cal."         },  // STR_BTN_CAL_RESET_SHORT
   { "Kein Material passte - Filter aufgehoben",
     "No material matched - filter dropped" },  // STR_LIST_MAT_IGNORED
   { "Bei Abweichung fragen",     "Ask on a mismatch"  },  // STR_TW_OPT_MISM
@@ -1596,12 +1583,16 @@ const char* const STRINGS[][2] = {
     "sind also grundsätzlich in Ordnung.\n\n"
     "Prüfe VIN, GND, SDA und SCL an der NAU7802.\n\n"
     "Bei fertigen STEMMA-QT-Kabeln von Drittanbietern stimmt die "
-    "Pinreihenfolge oft nicht mit der des WT32-Kabels überein.",
+    "Pinreihenfolge oft nicht mit der des WT32-Kabels überein.\n\n"
+    "Ist dieses Gerät bewusst ohne Waage gebaut, schalte sie unter "
+    "Einstellungen > Waage ab - dann verschwindet diese Meldung.",
     "The NAU7802 does not answer on 0x2A. The NFC reader does, so SDA and SCL "
     "are basically fine.\n\n"
     "Check VIN, GND, SDA and SCL on the NAU7802.\n\n"
     "On third party STEMMA QT cables the pin order often does not match the "
-    "WT32 cable." },  // STR_DIAG_NAU_MISSING_TEXT
+    "WT32 cable.\n\n"
+    "If this device was deliberately built without a scale, switch it off "
+    "under Settings > Scale and this finding goes away." },  // STR_DIAG_NAU_MISSING_TEXT
 
   { "NFC-Reader fehlt (PN532)",  "NFC reader missing (PN532)" },  // STR_DIAG_PN532_MISSING_BANNER
   { "NFC-Reader fehlt",          "NFC reader missing"       },  // STR_DIAG_PN532_MISSING_TITLE
@@ -1626,16 +1617,23 @@ const char* const STRINGS[][2] = {
   { "Der PN532 bestätigt 0x24, beantwortet aber keinen Befehl. Er steht damit "
     "auf I2C - sonst würde er sich gar nicht melden - und SDA und SCL "
     "stimmen ebenfalls.\n\n"
-    "Prüfe die RST-Leitung an Pin 7 (braun, GPIO12). Ohne sie bleibt der Chip "
-    "im Reset und schweigt.\n\n"
-    "Kontrolliere außerdem, ob die beiden DIP-Schalter sauber einrasten: "
-    "SW1 = ON, SW2 = OFF.",
+    "Prüfe zuerst die beiden DIP-Schalter: für I2C muss SW1 = ON und SW2 = OFF "
+    "stehen. Ein Schalter zwischen zwei Stellungen ist die häufigste Ursache.\n\n"
+    "Prüfe dann die 5V an Pin 1. Zu wenig Spannung lässt den Chip sich am Bus "
+    "melden, ohne dass er arbeiten kann.\n\n"
+    "Einen Reset zum Ziehen gibt es hier nicht: der orange RST-Draht liegt auf "
+    "einem Ausgang des Moduls statt auf dessen Reset-Eingang. Aus- und wieder "
+    "einstecken ist der einzige harte Reset.",
     "The PN532 acknowledges 0x24 but answers no command. That means it is set "
     "to I2C - it would not answer at all otherwise - and SDA and SCL are "
     "right too.\n\n"
-    "Check the RST wire on pin 7 (brown, GPIO12). Without it the chip stays "
-    "in reset and says nothing.\n\n"
-    "Also make sure both DIP switches sit firmly: SW1 = ON, SW2 = OFF." },  // STR_DIAG_PN532_MUTE_TEXT
+    "Check the two DIP switches first: I2C needs SW1 = ON and SW2 = OFF. A "
+    "switch resting between positions is the most common cause.\n\n"
+    "Then check the 5V on pin 1. Too little supply lets the chip announce "
+    "itself on the bus without being able to work.\n\n"
+    "There is no reset to pull here: the orange RST wire sits on an output of "
+    "the module rather than its reset input. Unplugging and replugging is the "
+    "only hard reset there is." },  // STR_DIAG_PN532_MUTE_TEXT
 
   { "Waage nicht kalibriert",    "Scale not calibrated"     },  // STR_DIAG_UNCAL_BANNER
   { "Waage nicht kalibriert",    "Scale not calibrated"     },  // STR_DIAG_UNCAL_TITLE
@@ -1691,6 +1689,211 @@ const char* const STRINGS[][2] = {
 
   { "Diagnose",                  "Diagnosis"                },  // STR_W_R_DIAG
   { "ohne Befund",               "nothing found"            },  // STR_W_S_DIAG_OK
+
+  // ---- PN532 reset line, the optional hardware modification ----
+  { "Hardware-Umbau möglich",    "A hardware change is available" },  // STR_NFCRST_HINT_TITLE
+  { "Der NFC-Leser dieser Waage musste schon einmal neu gestartet werden.\n\n"
+    "Dagegen gibt es einen optionalen Umbau: der orange RST-Draht gehört auf "
+    "RSTPDN. Dann kann die Waage den Leser wirklich zurücksetzen.\n\n"
+    "Anleitung in der Doku unter Verkabelung. Prüfen danach unter "
+    "System > NFC-Reset prüfen. Es geht nichts kaputt, wenn du es lässt.",
+    "The NFC reader on this scale has had to be restarted at least once.\n\n"
+    "There is an optional change against it: the orange RST wire belongs on "
+    "RSTPDN. The scale can then genuinely reset the reader.\n\n"
+    "Guide in the docs under Wiring. Check afterwards under System > Check NFC "
+    "reset. Nothing breaks if you leave it." },  // STR_NFCRST_HINT_TEXT
+  { "Später",                    "Later"                    },  // STR_NFCRST_LATER
+  { "Nicht mehr anzeigen",       "Do not show again"        },  // STR_NFCRST_NEVER
+
+  { "NFC-Reset prüfen",          "Check NFC reset"          },  // STR_NFCRST_ROW
+  { "Nach dem Umlöten",          "After the rewiring"       },  // STR_NFCRST_ROW_SUB
+  { "Leitung geprüft, aktiv",    "Line verified, in use"    },  // STR_NFCRST_ROW_DONE
+  { "Reset-Leitung sitzt",       "Reset line is there"      },  // STR_NFCRST_OK_TITLE
+  { "Der Leser hat auf die Leitung reagiert. Ab dem nächsten Start benutzt "
+    "die Waage den Hardware-Reset.",
+    "The reader responded to the line. From the next start the scale uses the "
+    "hardware reset." },  // STR_NFCRST_OK_TEXT
+  { "Keine Wirkung",             "No effect"                },  // STR_NFCRST_FAIL_TITLE
+  { "Der Leser hat nichts gemerkt. Der orange Draht liegt noch auf dem alten "
+    "Pad, oder die Lötstelle hat keinen Kontakt.\n\n"
+    "Es ändert sich nichts, die Waage arbeitet weiter wie bisher.",
+    "The reader did not notice. The orange wire is still on the old pad, or "
+    "the joint is not making contact.\n\n"
+    "Nothing changes, the scale carries on as before." },  // STR_NFCRST_FAIL_TEXT
+
+  // ── Hardware UID into extra.rfid_tag ──
+  { "Chip-UID mitschreiben",     "Also write the chip UID"  },  // STR_HW_UID_WRITE
+  { "Zusätzlich in rfid_tag",    "Into rfid_tag as well"    },  // STR_HW_UID_WRITE_SUB
+  { "An: die Hardware-UID des Chips, der gerade auf dem Leser liegt, kommt "
+    "zusätzlich in das Extra-Feld rfid_tag, als kommagetrennte Liste. Die "
+    "Bindung selbst bleibt unverändert in dem Feld, das oben gewählt ist.\n\n"
+    "Happy Hare an einem Voron liest ausschliesslich rfid_tag, und die Leser "
+    "an den Gates sehen nur die Hardware-UID des Chips, nie die tray_uuid "
+    "einer Bambu-Spule. Ohne dieses Feld findet der Drucker die Spule nicht, "
+    "die auf der Waage längst erkannt wird.\n\n"
+    "Eine Bambu-Spule trägt zwei Chips, also zwei UIDs. Die Liste wächst von "
+    "selbst: einmal jede Seite auflegen, danach antwortet die Spule an beiden "
+    "Gates.\n\n"
+    "Die Waage schreibt dabei in jede Spule, die sie erkennt, nicht erst beim "
+    "Verknüpfen. Steht die UID schon drin, geht keine Anfrage mehr raus. Das "
+    "Feld legt Happy Hare selbst an.",
+    "On: the hardware UID of the chip currently on the reader goes into the "
+    "rfid_tag extra field as well, as a comma separated list. The binding "
+    "itself stays untouched in the field selected above.\n\n"
+    "Happy Hare on a Voron reads rfid_tag and nothing else, and the readers at "
+    "its gates only ever see the chip's hardware UID, never the tray_uuid of a "
+    "Bambu spool. Without this field the printer cannot find the spool the "
+    "scale recognises perfectly well.\n\n"
+    "A Bambu spool carries two chips and therefore two UIDs. The list grows on "
+    "its own: put each side on the reader once and the spool answers at both "
+    "gates.\n\n"
+    "The scale writes this into every spool it recognises, not only when a "
+    "link is made. Once the UID is in there, no request goes out again. Happy "
+    "Hare creates the field itself."                                      },  // STR_HW_UID_WRITE_INFO
+
+  // ── A link that could not use the selected source ──
+  { "Tag-Quelle nicht verfügbar", "Tag source unavailable" },  // STR_TF_NOREL_TITLE
+  { "Dieser Spoolman hat noch keine eigene Tag-Relation - die gibt es erst ab "
+    "v0.27. Als Quelle sind aber die nativen Tags gewählt.\n\n"
+    "Der Tag wurde deshalb in das Extra-Feld tag geschrieben, das jeder "
+    "Spoolman hat. Die Spule wird damit gefunden, nur nicht auf dem "
+    "schnellsten Weg.\n\n"
+    "Dauerhaft besser: unter Einstellungen die Tag-Quelle auf card_uids "
+    "stellen. Das Feld hält auch mehrere UIDs je Spule, also auch einen "
+    "zweiten Tag. Sobald der Server auf v0.27 steht, zieht die Waage die "
+    "Bindung beim nächsten Verknüpfen von selbst in die Relation um.",
+    "This Spoolman has no tag relation of its own yet - that arrives in v0.27. "
+    "The selected source is native tags all the same.\n\n"
+    "The tag went into the extra field tag instead, which every Spoolman has. "
+    "The spool is found by it, just not by the fastest route.\n\n"
+    "Better for good: set the tag source to card_uids under Settings. That "
+    "field also holds several UIDs per spool, so a second tag fits too. Once "
+    "the server is on v0.27 the scale moves the binding into the relation by "
+    "itself, on the next link."                                            },  // STR_TF_NOREL_TEXT
+
+  // ── The tag on the other flange ──
+  { "Zweites Tag abfragen",      "Ask for a second tag"     },  // STR_TAG2_ASK
+  { "Nach dem Verknüpfen",       "Right after a link"       },  // STR_TAG2_ASK_SUB
+  { "An: nach jedem erfolgreichen Verknüpfen fragt die Waage nach einem "
+    "zweiten Tag. Spule umdrehen, Tag auflegen, fertig - es geht an dieselbe "
+    "Spule wie das erste.\n\n"
+    "Der Wunsch dahinter war ein zweiter Leser, einer je Gehäuseseite. Das "
+    "gibt die Hardware nicht her, also macht hier ein Ablauf, was sonst ein "
+    "Bauteil täte.\n\n"
+    "Bei einer Bambu-Spule tragen beide Chips dieselbe tray_uuid, die zweite "
+    "Chip-UID käme also ohnehin irgendwann dazu. Die Frage sagt nur, wann der "
+    "Moment dafür ist. Zwei NTAGs teilen dagegen gar nichts, und ohne die "
+    "Frage müsste die Spule ein zweites Mal von Hand gesucht werden.\n\n"
+    "Die Zeile erscheint nur, wo die gewählte Quelle mehr als ein Tag halten "
+    "kann. Ob das zweite Tag auch beschrieben wird, entscheidet weiterhin die "
+    "Einstellung zum Tag-Schreiben.",
+    "On: after every successful link the scale asks for a second tag. Turn the "
+    "spool over, put the tag on the reader, done - it goes to the same spool "
+    "as the first one.\n\n"
+    "What was asked for was a second reader, one per side of the case. The "
+    "hardware has one, so here a flow does what a part would have done.\n\n"
+    "On a Bambu spool both chips carry the same tray uuid, so the second chip "
+    "uid would turn up eventually anyway. The question only says when that "
+    "moment is. Two NTAGs share nothing at all, and without it the spool has "
+    "to be looked up by hand a second time.\n\n"
+    "The row only appears where the selected source can hold more than one "
+    "tag. Whether the second tag is written as well is still decided by the "
+    "tag writing setting."                                                },  // STR_TAG2_ASK_INFO
+  { "Zweites Tag",               "Second tag"               },  // STR_TAG2_TITLE
+  { "Spule umdrehen und das zweite Tag auflegen",
+    "Turn the spool over and place the second tag"           },  // STR_TAG2_PROMPT
+  { "Schließt in %d s",          "Closes in %d s"           },  // STR_TAG2_CLOSES_IN
+  { "Fertig",                    "Done"                     },  // STR_TAG2_BTN_DONE
+  { "Zweites Tag verknüpft",     "Second tag linked"        },  // STR_TAG2_LINKED
+
+  // ── A device built without a load cell ──
+  { "Keine Waage angeschlossen", "No scale connected"       },  // STR_NO_SCALE
+  { "Waage vorhanden",           "Scale fitted"             },  // STR_SCALE_FITTED
+  { "An: das Gerät hat eine Wiegezelle und verhält sich wie bisher.\n\n"
+    "Aus: der ganze Waagenteil verschwindet. Der NAU7802 wird beim Start gar "
+    "nicht erst gesucht, der Hauptbildschirm zeigt statt der Gewichte einen "
+    "Hinweis und trägt an der Stelle von TARE nichts mehr, der Knopf "
+    "\"Gewicht updaten\" wird zum Lagerort-Knopf, und Kalibrierung und "
+    "Beutelgewicht verschwinden aus diesem Menü.\n\n"
+    "Gedacht für ein Gerät, das nur aus Display und Leser gebaut ist: Tag "
+    "auflegen, Spule sehen, Lagerort und Drucker zuordnen. Ohne diesen "
+    "Schalter meldet so ein Gerät dauerhaft einen Defekt, den es nicht hat."
+    "\n\n"
+    "Die Umstellung braucht einen Neustart.",
+    "On: the device has a load cell and behaves exactly as before.\n\n"
+    "Off: the whole weighing side disappears. The NAU7802 is not even looked "
+    "for at startup, the main screen carries a note instead of the weights and "
+    "nothing where TARE used to be, the \"Update weight\" button becomes the "
+    "location button, and calibration and bag weight leave this menu.\n\n"
+    "Meant for a device built from display and reader alone: hold a tag "
+    "against it, see the spool, give it a location and a printer. Without this "
+    "switch such a device reports a fault it does not have, for good.\n\n"
+    "Changing it needs a restart."                                        },  // STR_SCALE_FITTED_INFO
+  { "Ohne Waage | Mehr",         "No scale | More"          },  // STR_TILE_SCALE_SUB_OFF
+  { "Waage vorhanden",           "Scale fitted"             },  // STR_W_SCALE_FITTED
+  { "Aus, wenn das Gerät nur aus Display und Leser besteht. Braucht einen "
+    "Neustart.",
+    "Off if the device is display and reader only. Needs a restart."      },  // STR_W_SCALE_FITTED_HINT
+  { "abgeschaltet",              "switched off"             },  // STR_W_S_SCALE_OFF
+
+  { "Passwort",                  "Password"                 },  // STR_WEB_PASS
+  { "Gesetzt - der Browser fragt danach",
+    "Set - the browser asks for it"                         },  // STR_WEB_PASS_SET
+  { "Nicht gesetzt",             "Not set"                  },  // STR_WEB_PASS_UNSET
+  { "Schützt die Bereiche Einstellungen und Gerät im Browser: Backend, "
+    "Einstellungen, Tags, Logs und Firmware. Ohne Passwort darf jedes Gerät "
+    "im Netz diese Bereiche nutzen, sobald sie eingeschaltet sind - auch "
+    "Firmware flashen.\n\n"
+    "4 bis 8 Ziffern. Der Browser fragt danach, der Benutzername ist egal. "
+    "Leer speichern entfernt das Passwort.",
+    "Protects the Settings and Device sections in the browser: backend, "
+    "settings, tags, logs and firmware. Without a password any device on the "
+    "network can use those sections once they are switched on - firmware "
+    "upload included.\n\n"
+    "4 to 8 digits. The browser asks for it, the user name does not matter. "
+    "Save empty to remove the password."                     },  // STR_WEB_PASS_INFO
+  { "Web-Passwort",              "Web password"             },  // STR_WEB_PASS_TITLE
+  { "4 bis 8 Ziffern. Leer speichern entfernt das Passwort.",
+    "4 to 8 digits. Save empty to remove the password."      },  // STR_WEB_PASS_HINT
+  { "Passwort",                  "Password"                 },  // STR_W_R_PASSWORD
+  { "gesetzt",                   "set"                      },  // STR_W_S_SET
+  { "nicht gesetzt",             "not set"                  },  // STR_W_S_NOTSET
+  { "Ohne Passwort kann jedes Gerät im Netz die eingeschalteten Bereiche nutzen, "
+    "Firmware flashen eingeschlossen. Setzen am Gerät unter",
+    "Without a password any device on the network can use the sections that "
+    "are on, firmware upload included. Set one on the device under" },  // STR_W_PASS_NOTE
+  { "Passwort nötig: beliebiger Benutzername, das Web-Passwort der Waage.",
+    "Password required: any user name, the scale's web password." },  // STR_W_AUTH_NEEDED
+  { "Diese Adresse gehört nicht zur Waage. Bitte über die IP-Adresse oder den "
+    "Gerätenamen aufrufen.",
+    "This address does not belong to the scale. Open it by IP address or by "
+    "its device name."                                       },  // STR_W_BAD_HOST
+  { "Anfrage von einer fremden Seite abgelehnt.",
+    "Request from a foreign page refused."                   },  // STR_W_BAD_ORIGIN
+  { "%d Spulen",                 "%d spools"                },  // STR_SPOOLS_COUNT
+  { "Beide Tags gehören jetzt zu dieser Spule.",
+    "Both tags now belong to this spool."                     },  // STR_TAG2_LINKED_INFO
+  { "Zweites Tag nicht verknüpft", "Second tag not linked"    },  // STR_TAG2_FAILED
+  { "Spule #%d verliert das Tag.",
+    "Spool #%d loses the tag."                                },  // STR_TAGMOVE_HINT
+  { "Umhängen",                  "Move"                       },  // STR_TAGMOVE_BTN
+  { "Umhängen fehlgeschlagen",   "Move failed"                },  // STR_TAGMOVE_FAILED
+  { "Hängt an:",                 "On spool:"                  },  // STR_TAGMOVE_FROM
+  { "Umhängen zu:",              "Move to:"                   },  // STR_TAGMOVE_TO
+  { "%d Min",                    "%d min"                     },  // STR_MINUTES_FMT
+  { "%d T.",                     "%d d"                       },  // STR_DAYS_ABBR_FMT
+  { "%.0f g neu",                "%.0f g new"                 },  // STR_NEW_SPOOL_WEIGHT_FMT
+  { "Diff",                      "Diff"                       },  // STR_LBL_DIFF_CAP
+  { "Datei wählen",              "Choose file"                },  // STR_W_FW_CHOOSE
+  { "Keine Datei gewählt",       "No file chosen"             },  // STR_W_FW_NOFILE
+  { "Wartung (Firmware, Logs, Tags)",
+    "Maintenance (firmware, logs, tags)"                      },  // STR_W_R_MAINT_GATE
+  { "AMS-Ansicht",               "AMS view"                   },  // STR_AMS_BTN_VIEW
+  { "%s -> Fenster für die Zuordnung öffnen?",
+    "%s -> open the assignment window?"                       },  // STR_AMSV_WINDOW_HEAD
+  { "Fenster öffnen",            "Open window"                },  // STR_AMSV_BTN_WINDOW
+  { "Gespeichert - Test übersprungen, das Gerät ist beschäftigt",
+    "Saved - test skipped, the device is busy"                },  // STR_W_HOST_SAVED_ONLY
 };
 
 StringID tagWriteResultString(uint8_t code) {

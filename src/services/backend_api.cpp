@@ -9,6 +9,7 @@
 #include "services/bambuddy_api.h"
 #include "services/bambuddy_device.h"
 #include "services/filaman_api.h"
+#include "services/http_progress.h"
 #include "services/list_limits.h"
 #include "services/device_name.h"
 #include "services/spoolman_api.h"
@@ -16,23 +17,41 @@
 #include "services/tag_uid.h"
 #include "services/user_options.h"
 
+// Rows per request when FilaMan lists spools. The render limit is applied by
+// the caller; this used to be "spool_list_limit if above 100, else 100", and
+// the limit is clamped to 100, so it was always 100.
+#define FILAMAN_LIST_PAGE_ROWS  100
+
 // A missing backend path must show up in the log instead of looking like a
 // silent failure, but the periodic health check would repeat the same line
 // every 30 seconds and bury everything else. Each call site is therefore
 // logged only once per boot. The names are string literals, so comparing
 // pointers is enough to tell them apart.
 static int notSupported(const char* fn) {
-  static const char* logged[24] = { nullptr };
+  static const char* logged[32] = { nullptr };
   static uint8_t logged_count = 0;
+  static uint8_t logged_mode  = 0xFF;
 
+  // Once per call site and per backend: a switch starts the table over, so a
+  // support log from a user who changed backends still names the gaps of the
+  // one they are on.
+  if (logged_mode != (uint8_t)backendMode()) {
+    logged_mode  = (uint8_t)backendMode();
+    logged_count = 0;
+  }
   for (uint8_t i = 0; i < logged_count; i++) {
     if (logged[i] == fn) return BACKEND_NOT_SUPPORTED;
   }
-  if (logged_count < (sizeof(logged) / sizeof(logged[0]))) {
-    logged[logged_count++] = fn;
-  }
+  // A full table stays quiet rather than logging every call: the health
+  // check would otherwise write the same line every 30 seconds.
+  if (logged_count >= (sizeof(logged) / sizeof(logged[0]))) return BACKEND_NOT_SUPPORTED;
+  logged[logged_count++] = fn;
   logSDf("Backend: %s has no %s implementation yet", fn, backendName());
   return BACKEND_NOT_SUPPORTED;
+}
+
+bool backendLastListPartial() {
+  return backendMode() == BACKEND_FILAMAN && filamanLastListPartial();
 }
 
 void backendRefreshMode() {
@@ -56,6 +75,7 @@ void backendAfterConnect() {
 
 int backendGetSpoolJson(const char* base_url, int spool_id, JsonDocument& doc,
                         uint32_t timeout_ms, DeserializationError* out_err) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       return filamanGetSpoolJson(backendBaseUrl(), filamanApiKey(), spool_id,
@@ -71,13 +91,14 @@ int backendGetSpoolJson(const char* base_url, int spool_id, JsonDocument& doc,
 int backendGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocument& doc,
                             uint32_t timeout_ms, JsonDocument* filter,
                             DeserializationError* out_err) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       // The Spoolman JSON filter does not apply, FilaMan is translated field by
       // field and only the keys the UI reads are produced anyway.
       (void)filter;
       return filamanGetSpoolListJson(backendBaseUrl(), filamanApiKey(), allow_archived,
-                                     doc, nullptr, spool_list_limit > 100 ? spool_list_limit : 100,
+                                     doc, nullptr, FILAMAN_LIST_PAGE_ROWS,
                                      timeout_ms, out_err);
     case BACKEND_BAMBUDDY:
       // Same reason as FilaMan: the answer is rebuilt field by field, so a
@@ -93,6 +114,7 @@ int backendGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocum
 int backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocument& doc,
                           uint32_t timeout_ms, DeserializationError* out_err,
                           JsonDocument* filter) {
+  HttpStallTime stall;   // the loop stands still for this call
   // Without a tag both backends would drop the search term and answer with
   // the whole inventory, which callers would then treat as a successful
   // lookup. Spoolman is worse still: an empty value there means "spools with
@@ -136,6 +158,7 @@ int backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocume
 int backendFindSpoolByTagField(uint8_t field_id, const char* base_url, const char* uid,
                                JsonDocument& doc, uint32_t timeout_ms,
                                DeserializationError* out_err, JsonDocument* filter) {
+  HttpStallTime stall;   // the loop stands still for this call
   if (!uid || !uid[0]) return BACKEND_NOT_SUPPORTED;
   // The tag field conventions are agreements between programs that write into
   // Spoolman. FilaMan has its native rfid_uid column and BamBuddy a fixed
@@ -169,6 +192,12 @@ static int knownFieldIndex(const char* key) {
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
     if (strcmp(key, tagFieldSpec(i).key) == 0) return (int)i;
   if (strcmp(key, LAST_DRIED_FIELD) == 0) return TAG_FIELD_EXTRA_COUNT;
+  // Probed like a tag field without being one: the companion write is gated on
+  // it, and a key the probe does not know reads as absent for the whole
+  // session, so the write would never happen and never say why. It would also
+  // make every successful write throw the field cache away, see
+  // backendPatchExtraField() below.
+  if (strcmp(key, RFID_TAG_FIELD)   == 0) return TAG_FIELD_EXTRA_COUNT + 1;
   return -1;
 }
 
@@ -201,6 +230,19 @@ void backendInvalidateExtraFieldCache() {
   s_text_field_count = 0;
   s_tagapi_probed_for[0] = '\0';
   s_tagapi_present = false;
+  // FilaMan's second slot is the same kind of answer about the same server,
+  // and it goes stale for the same reason. Its cache lives in filaman_api.cpp
+  // because that is where the probe is, not because it is a different thing.
+  filamanForgetRfidSlot2();
+}
+
+int backendNativeTagsCached() {
+  if (backendMode() != BACKEND_SPOOLMAN) return 0;
+  const char* base = backendBaseUrl();
+  if (!base || !base[0]) return -1;
+  if (strncmp(s_tagapi_probed_for, base, sizeof(s_tagapi_probed_for) - 1) != 0)
+    return -1;                       // nobody has asked this server yet
+  return s_tagapi_present ? 1 : 0;
 }
 
 bool backendHasNativeTags() {
@@ -231,6 +273,45 @@ bool backendHasNativeTags() {
   return s_tagapi_present;
 }
 
+bool backendNativeTagsAbsent() {
+  if (backendMode() != BACKEND_SPOOLMAN) return false;
+
+  const char* base = backendBaseUrl();
+  if (!base || !base[0]) return false;
+
+  // Never asked, or asked about a different server. Both mean "no answer", and
+  // an answer is what this is for.
+  if (strncmp(s_tagapi_probed_for, base, sizeof(s_tagapi_probed_for) - 1) != 0)
+    return false;
+
+  return !s_tagapi_present;
+}
+
+bool backendCanHoldSecondTag() {
+  // The structural half first, because it needs no network and rules out the
+  // two cases that no server version will ever change.
+  if (!tagFieldHoldsSeveral()) return false;
+
+  // Spoolman, and the list field really is settled by the field alone: it is a
+  // text field this scale writes itself, so no server version can refuse it.
+  //
+  // The relation is not. It arrived in v0.27, and tagFieldEffective() answers
+  // "native" on every Spoolman because it is not allowed to reach the network
+  // - so on an older server the source reads as selected while the endpoints
+  // do not exist. Asking here is what keeps the question off a scale that
+  // could not act on the answer; it was the missing half of this check.
+  if (!backendIsFilaMan()) {
+    if (!tagFieldIsNative()) return true;
+    if (backendHasNativeTags()) return true;
+    logSD("Second tag: this Spoolman has no tag relation, not asking");
+    return false;
+  }
+
+  // FilaMan does need asking. The column arrived in 1.3.1, and a scale pointed
+  // at an older instance must not offer a question the server refuses.
+  return filamanHasRfidSlot2(backendBaseUrl(), filamanApiKey());
+}
+
 // A stable id for this scale in Spoolman's reader list, derived from the MAC
 // so it survives reboots and tells two scales apart.
 const char* backendReaderId() {
@@ -245,6 +326,7 @@ const char* backendReaderId() {
 
 int backendTagScan(const char* base_url, const char* uid, const char* format,
                    JsonDocument& doc, uint32_t timeout_ms, DeserializationError* out_err) {
+  HttpStallTime stall;   // the loop stands still for this call
   if (!backendHasNativeTags()) return notSupported("TagScan");
   // The name is what Spoolman's reader picker shows. Two scales would
   // otherwise sit there under one label, distinguishable only by the reader id
@@ -258,12 +340,14 @@ int backendTagScan(const char* base_url, const char* uid, const char* format,
 
 int backendLinkTag(const char* base_url, int spool_id, const char* uid,
                    const char* format, int* out_conflict_spool_id, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   if (!backendHasNativeTags()) return notSupported("LinkTag");
   return spoolmanLinkTag(base_url, spool_id, uid, format, out_conflict_spool_id, timeout_ms);
 }
 
 int backendUnlinkTag(const char* base_url, int spool_id, const char* uid,
                      uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   if (!backendHasNativeTags()) return notSupported("UnlinkTag");
   return spoolmanUnlinkTag(base_url, spool_id, uid, timeout_ms);
 }
@@ -271,6 +355,7 @@ int backendUnlinkTag(const char* base_url, int spool_id, const char* uid,
 int backendFindSpoolByNativeTag(const char* base_url, const char* uid,
                                 JsonDocument& doc, uint32_t timeout_ms,
                                 JsonDocument* filter, DeserializationError* out_err) {
+  HttpStallTime stall;   // the loop stands still for this call
   if (!uid || !uid[0]) return BACKEND_NOT_SUPPORTED;
   if (!backendHasNativeTags()) return notSupported("FindSpoolByNativeTag");
   return spoolmanFindSpoolByNativeTag(base_url, uid, doc, timeout_ms, filter, out_err);
@@ -323,10 +408,11 @@ bool backendHasExtraField(const char* key) {
     s_fields_mask = mask;
     strncpy(s_fields_probed_for, base, sizeof(s_fields_probed_for) - 1);
     s_fields_probed_for[sizeof(s_fields_probed_for) - 1] = '\0';
-    logSDf("extra fields on %s: tag=%d nfc_id=%d card_uids=%d last_dried=%d",
+    logSDf("extra fields on %s: tag=%d nfc_id=%d card_uids=%d last_dried=%d rfid_tag=%d",
            base,
            (mask >> TAG_FIELD_TAG)       & 1, (mask >> TAG_FIELD_NFC_ID)  & 1,
-           (mask >> TAG_FIELD_CARD_UIDS) & 1, (mask >> TAG_FIELD_EXTRA_COUNT) & 1);
+           (mask >> TAG_FIELD_CARD_UIDS) & 1, (mask >> TAG_FIELD_EXTRA_COUNT) & 1,
+           (mask >> (TAG_FIELD_EXTRA_COUNT + 1)) & 1);
     logSDf("extra fields on %s: %d text field(s) to compare against",
            base, (int)s_text_field_count);
   }
@@ -353,6 +439,7 @@ const char* backendSpoolTextFieldKey(uint8_t index) {
 
 int backendPatchExtraField(const char* base_url, int spool_id, const char* key,
                            const char* value, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   if (backendMode() != BACKEND_SPOOLMAN) return notSupported("PatchExtraField");
   int code = spoolmanPatchExtraField(base_url, spool_id, key, value, timeout_ms);
 
@@ -371,6 +458,7 @@ int backendPatchExtraField(const char* base_url, int spool_id, const char* key,
 
 int backendGetLocationsJson(const char* base_url, JsonDocument& doc,
                             uint32_t timeout_ms, DeserializationError* out_err) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       return filamanGetLocationsJson(backendBaseUrl(), filamanApiKey(), doc,
@@ -385,6 +473,7 @@ int backendGetLocationsJson(const char* base_url, JsonDocument& doc,
 
 int backendGetSpoolFieldsJson(const char* base_url, JsonDocument& doc,
                               uint32_t timeout_ms, DeserializationError* out_err) {
+  HttpStallTime stall;   // the loop stands still for this call
   // FilaMan equivalent is /api/v1/system-extra-fields, different shape.
   // BamBuddy has a fixed schema and no extra fields at all.
   if (backendIsFilaMan() || backendIsBamBuddy()) return notSupported("GetSpoolFieldsJson");
@@ -392,6 +481,7 @@ int backendGetSpoolFieldsJson(const char* base_url, JsonDocument& doc,
 }
 
 int backendGetHealthCode(const char* base_url, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   // FilaMan serves /health outside the /api/v1 prefix and needs no
   // credentials for it, so this works before any token is stored.
   switch (backendMode()) {
@@ -408,6 +498,7 @@ int backendGetHealthCode(const char* base_url, uint32_t timeout_ms) {
 
 bool backendGetVersion(const char* base_url, char* out_version, size_t out_size,
                        uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       return filamanGetVersion(backendBaseUrl(), out_version, out_size, timeout_ms);
@@ -420,6 +511,7 @@ bool backendGetVersion(const char* base_url, char* out_version, size_t out_size,
 }
 
 int backendCountActiveSpools(const char* base_url, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       return filamanCountActiveSpools(backendBaseUrl(), filamanApiKey(), timeout_ms);
@@ -432,6 +524,7 @@ int backendCountActiveSpools(const char* base_url, uint32_t timeout_ms) {
 
 bool backendGetLastWeighedAt(const char* base_url, int spool_id,
                              char* out_iso, size_t out_size, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   if (out_iso && out_size > 0) out_iso[0] = '\0';
   if (backendIsFilaMan()) {
     return filamanGetLastMeasuredAt(backendBaseUrl(), filamanApiKey(), spool_id,
@@ -465,6 +558,7 @@ bool backendCanTareFilamentOrVendor() {
 int backendCreateSpool(const char* base_url, int template_spool_id, int filament_id,
                        float initial_weight, float spool_weight, float remaining_weight,
                        int* out_spool_id, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       // The tag is attached by the caller in a separate step, same as with
@@ -533,6 +627,7 @@ int backendCreateSpoolFromTag(const char* material, const char* subtype,
                               int label_weight, int core_weight, float remaining_weight,
                               int nozzle_temp_min, int nozzle_temp_max,
                               int* out_spool_id, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   if (out_spool_id) *out_spool_id = 0;
   if (backendMode() != BACKEND_BAMBUDDY) return notSupported("CreateSpoolFromTag");
 
@@ -554,6 +649,7 @@ int backendCreateSpoolFromTag(const char* material, const char* subtype,
 
 int backendCreateSpoolField(const char* base_url, const char* field_name,
                             uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   // Creating system extra fields in FilaMan appears to need admin rights,
   // so this may stay unsupported on purpose. See integration doc.
   // BamBuddy has no extra fields to create.
@@ -571,6 +667,7 @@ int backendCreateSpoolField(const char* base_url, const char* field_name,
 
 int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
                          uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN: {
       // Both tag types go into the native rfid_uid. An empty uuid unlinks.
@@ -580,7 +677,11 @@ int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
       // own database and missed the server side ?search= for anything not
       // written by this scale.
       if (!uuid || !uuid[0]) {
-        return filamanPatchRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, nullptr, timeout_ms);
+        // Both slots, not just the first. An unlink that leaves the chip on
+        // the other flange behind keeps the spool answering at a printer after
+        // the screen said it is gone - the half unlink the tag fields go out
+        // of their way to avoid.
+        return filamanClearRfidUids(backendBaseUrl(), filamanApiKey(), spool_id, timeout_ms);
       }
       char hex[40];
       tagUidNormalize(uuid, hex, sizeof(hex));
@@ -616,8 +717,35 @@ int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
   }
 }
 
+int backendPatchSpoolTagSlot2(const char* base_url, int spool_id, const char* uuid,
+                              uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
+  (void)base_url;   // FilaMan reads its address and key from its own module
+  switch (backendMode()) {
+    case BACKEND_FILAMAN: {
+      if (!uuid || !uuid[0]) {
+        return filamanPatchRfidUid2(backendBaseUrl(), filamanApiKey(), spool_id,
+                                    nullptr, timeout_ms);
+      }
+      // Plain hex, same as slot one. FilaMan canonicalises to its own notation
+      // on the way in since 1.3.1, but sending the colon form would still make
+      // this the odd one out of everything else the scale writes.
+      char hex[40];
+      tagUidNormalize(uuid, hex, sizeof(hex));
+      return filamanPatchRfidUid2(backendBaseUrl(), filamanApiKey(), spool_id,
+                                  hex, timeout_ms);
+    }
+    default:
+      // Spoolman appends inside patchSpoolTag() - the relation and the list
+      // field both take a further tag through the ordinary write - and
+      // BamBuddy has nowhere to put one. Neither should ever get here.
+      return notSupported("backendPatchSpoolTagSlot2");
+  }
+}
+
 int backendLinkSpoolTag(const char* base_url, int spool_id, const char* uuid,
                         char* out_note, size_t note_size, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   if (out_note && note_size) out_note[0] = '\0';
   if (backendIsFilaMan()) {
     return filamanLinkRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, uuid,
@@ -631,6 +759,7 @@ int backendLinkSpoolTag(const char* base_url, int spool_id, const char* uuid,
 int backendPatchSpoolRemaining(const char* base_url, int spool_id, float remaining,
                                const char* last_used_iso, const char* tag_uuid,
                                float measured_g, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN: {
       // FilaMan does the arithmetic on its side. Handing it the remaining
@@ -680,6 +809,7 @@ int backendPatchSpoolRemaining(const char* base_url, int spool_id, float remaini
 
 int backendPatchInitialWeight(const char* base_url, int spool_id, float initial_weight,
                               uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       // Both fields, like the Spoolman side does. Writing only the initial weight
@@ -703,6 +833,7 @@ int backendPatchInitialWeight(const char* base_url, int spool_id, float initial_
 }
 
 int backendPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       // Not a PATCH in FilaMan, archiving has its own endpoint.
@@ -716,6 +847,7 @@ int backendPatchArchiveSpool(const char* base_url, int spool_id, uint32_t timeou
 
 int backendReactivateSpool(const char* base_url, int spool_id, float remaining,
                            float gross, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN: {
       // Archived is status 6 there, so coming back is a status change. "active"
@@ -744,6 +876,7 @@ int backendReactivateSpool(const char* base_url, int spool_id, float remaining,
 
 int backendSetSpoolStatus(const char* base_url, int spool_id, const char* status_key,
                           uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   (void)base_url;
   if (backendMode() != BACKEND_FILAMAN) return notSupported("SetSpoolStatus");
   return filamanSetStatus(backendBaseUrl(), filamanApiKey(), spool_id, status_key, timeout_ms);
@@ -751,6 +884,7 @@ int backendSetSpoolStatus(const char* base_url, int spool_id, const char* status
 
 int backendPatchSpoolWeight(const char* base_url, int spool_id, float spool_weight,
                             uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       return filamanPatchSpoolFloat(backendBaseUrl(), filamanApiKey(), spool_id,
@@ -771,6 +905,7 @@ int backendPatchSpoolWeight(const char* base_url, int spool_id, float spool_weig
 
 int backendPatchFilamentSpoolWeight(const char* base_url, int filament_id, float spool_weight,
                                     uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       return filamanPatchFilamentFloat(backendBaseUrl(), filamanApiKey(), filament_id,
@@ -786,6 +921,7 @@ int backendPatchFilamentSpoolWeight(const char* base_url, int filament_id, float
 
 int backendPatchVendorEmptySpoolWeight(const char* base_url, int vendor_id, float spool_weight,
                                        uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       // Spoolman's vendor is FilaMan's manufacturer, the field name is the same
@@ -802,6 +938,7 @@ int backendPatchVendorEmptySpoolWeight(const char* base_url, int vendor_id, floa
 
 int backendPatchSpoolLocation(const char* base_url, int spool_id, const char* location_name,
                               uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       // FilaMan stores a location_id, so the name is resolved on the way out.
@@ -820,6 +957,7 @@ int backendPatchSpoolLocation(const char* base_url, int spool_id, const char* lo
 
 int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* iso_datetime,
                                uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       // The only write that needs a read first: a PATCH on custom_fields
@@ -847,4 +985,83 @@ int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* i
     default:
       return spoolmanPatchSpoolLastDried(base_url, spool_id, iso_datetime, timeout_ms);
   }
+}
+
+// ------------------------------------------------------------
+//  AMS SLOTS
+// ------------------------------------------------------------
+
+bool backendHasAmsView() {
+  switch (backendMode()) {
+    case BACKEND_FILAMAN:
+    case BACKEND_BAMBUDDY: return backendIsConfigured();
+    default:               return false;
+  }
+}
+
+bool backendCanAssignAmsSlot() {
+  return backendMode() == BACKEND_BAMBUDDY && backendIsConfigured();
+}
+
+int backendListPrinters(AmsPrinterList& out, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
+  switch (backendMode()) {
+    case BACKEND_FILAMAN:
+      return filamanListPrinters(backendBaseUrl(), filamanApiKey(), out, timeout_ms);
+    case BACKEND_BAMBUDDY:
+      return bbListPrinters(backendBaseUrl(), bambuddyApiKey(), out, timeout_ms);
+    default:
+      // Spoolman keeps filament, not printers. location is free text about
+      // shelves and nothing an AMS bay may be mapped onto.
+      out = AmsPrinterList{};
+      return notSupported("ListPrinters");
+  }
+}
+
+int backendGetAmsState(int printer_id, AmsSlotState& out, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
+  switch (backendMode()) {
+    case BACKEND_FILAMAN:
+      return filamanGetAmsState(backendBaseUrl(), filamanApiKey(), printer_id,
+                                out, timeout_ms);
+    case BACKEND_BAMBUDDY:
+      return bbGetAmsState(backendBaseUrl(), bambuddyApiKey(), printer_id,
+                           out, timeout_ms);
+    default:
+      out = AmsSlotState{};
+      return notSupported("GetAmsState");
+  }
+}
+
+int backendAssignAmsSlot(int spool_id, int printer_id, int ams_id, int tray_id,
+                         uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
+  if (backendMode() != BACKEND_BAMBUDDY) {
+    // FilaMan is the interesting no here. It does have an AMS assignment,
+    // but no model in which the scale names a bay and the database takes it:
+    // there the scale opens a time window and the next tray to be loaded
+    // wins, which is amsCommitWithWindow(). Sending anything to FilaMan from
+    // this function would equate two different mechanisms.
+    return notSupported("AssignAmsSlot");
+  }
+  return bbAssignSlot(backendBaseUrl(), bambuddyApiKey(), spool_id, printer_id,
+                      ams_id, tray_id, timeout_ms);
+}
+
+int backendUnassignAmsSlot(int spool_id, int printer_id, int ams_id, int tray_id,
+                           uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
+  if (backendMode() != BACKEND_BAMBUDDY) return notSupported("UnassignAmsSlot");
+  return bbUnassignSlot(backendBaseUrl(), bambuddyApiKey(), spool_id, printer_id,
+                        ams_id, tray_id, timeout_ms);
+}
+
+int backendFindSpoolSlot(int spool_id, int printer_id, int* out_ams,
+                         int* out_tray, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
+  if (out_ams)  *out_ams  = -1;
+  if (out_tray) *out_tray = -1;
+  if (backendMode() != BACKEND_BAMBUDDY) return notSupported("FindSpoolSlot");
+  return bbFindSpoolSlot(backendBaseUrl(), bambuddyApiKey(), spool_id, printer_id,
+                         out_ams, out_tray, timeout_ms);
 }

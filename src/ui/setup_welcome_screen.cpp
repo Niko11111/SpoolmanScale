@@ -154,8 +154,7 @@ void buildWelcomeScreen() {
 
   // ---- time zone, asked here so the clock is right from the first boot ----
   lv_obj_t *lbl_tzc = lv_label_create(scr_welcome);
-  { char buf[32]; strncpy(buf, T(STR_TZ_TITLE), sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
+  { char buf[32]; copyT(buf, sizeof(buf), STR_TZ_TITLE);
     lv_label_set_text(lbl_tzc, buf); }
   lv_obj_set_style_text_color(lbl_tzc, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(lbl_tzc, &lv_font_montserrat_ext_14, 0);
@@ -216,8 +215,7 @@ void buildWelcomeScreen() {
   lv_obj_set_style_border_width(btn_next, 2, 0);
   lv_obj_set_style_border_color(btn_next, lv_color_hex(0x28d49a), 0);
   lv_obj_t *lbl_next = lv_label_create(btn_next);
-  { char buf[24]; strncpy(buf, T(STR_BTN_NEXT), sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
+  { char buf[24]; copyT(buf, sizeof(buf), STR_BTN_NEXT);
     lv_label_set_text(lbl_next, buf); }
   lv_obj_set_style_text_color(lbl_next, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_next, &lv_font_montserrat_ext_18, 0);
@@ -233,6 +231,7 @@ void buildWelcomeScreen() {
     prefsPutUChar("lang", de ? 0 : 1);
     prefsPutBool("lang_set", true);
     prefsPutBool("first_boot", true);
+    prefsFlush();      // parked while LVGL dispatches; the restart comes next
     logSDf("Setup: language=%s zone=%s -> restart",
            de ? "DE" : "EN",
            (wel_tz_sel >= 0 && (size_t)wel_tz_sel < TZ_COUNT) ? TZ_LIST[wel_tz_sel].name : "?");
@@ -286,7 +285,7 @@ void buildFirstBootScreen() {
   // No backendText() here: at this point no backend has been chosen, and the
   // text deliberately names both. Substituting would turn it into
   // "FilaMan/FilaMan" once a mode is stored.
-  { char hb[128]; strncpy(hb, T(STR_FIRSTBOOT_HINT), sizeof(hb) - 1); hb[sizeof(hb) - 1] = '\0';
+  { char hb[128]; copyT(hb, sizeof(hb), STR_FIRSTBOOT_HINT);
     lv_label_set_text(lbl_hint, hb); }
   lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_14, 0);
@@ -347,7 +346,7 @@ void buildFirstBootScreen() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_skip = lv_label_create(btn_skip);
   char skip_buf[32];
-  strncpy(skip_buf, T(STR_BTN_SKIP_SETUP), sizeof(skip_buf)-1);
+  copyT(skip_buf, sizeof(skip_buf), STR_BTN_SKIP_SETUP);
   lv_label_set_text(lbl_skip, skip_buf);
   lv_obj_set_style_text_color(lbl_skip, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_skip, &lv_font_montserrat_ext_14, 0);

@@ -18,6 +18,7 @@
 #include "ui/ota_github.h"
 #include "ui/update_badges.h"
 #include "web/web_access.h"
+#include "web/web_jobs.h"
 #include "web/web_server.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
@@ -60,6 +61,18 @@ static char          s_check_pub[24] = "";  // when that release was published
 // only route answered while an image is being written.
 static uint32_t s_flash_done  = 0;
 static uint32_t s_flash_total = 0;
+
+// What the chunk handler found out, for the completion handler: whether the
+// image went into flash whole. The completion handler used to ask
+// Update.hasError(), which is also false when Update was never started - a
+// refused or failed begin() ended in a "success" page and a restart into
+// whatever was there before.
+static bool s_upload_ok = false;
+
+// What the multipart envelope adds on top of the image: boundary lines and
+// the part header. A few hundred bytes; this is the slack the size check
+// allows before an upload is called too big for the partition.
+#define OTA_MULTIPART_SLACK  2048
 
 bool otaWebUploadActive() { return ota_upload_active; }
 
@@ -107,7 +120,8 @@ void otaWebGithubTick() {
   otaGithubOverlayShow();
 
   char err[80] = "";
-  if (githubFlashTag(gh_web_flash_tag, webFlashProgress, err, sizeof(err))) {
+  if (githubFlashTag(gh_web_flash_tag, otaExpectedSha(gh_web_flash_tag),
+                     webFlashProgress, err, sizeof(err))) {
     logSD("Reboot: GitHub update written");
     if (lbl_ota_status) lv_label_set_text(lbl_ota_status, T(STR_OTA_SUCCESS));
     lv_timer_handler();
@@ -157,8 +171,17 @@ static String body() {
          "<div class='field'><label>");
   h += T(STR_W_FW_FILE);
   h += F("</label><div class='inrow'>"
-         "<input type='file' name='firmware' accept='.bin' required>"
-         "<button type='submit'>");
+         "<label class='filebtn'>");
+  h += T(STR_W_FW_CHOOSE);
+  // No `required` on the hidden input: the browser cannot point at a hidden
+  // control to complain, so the form would just do nothing. The submit button
+  // stays disabled until a file is picked instead.
+  h += F("<input type='file' name='firmware' accept='.bin' onchange='fwPick(this)'></label>"
+         "<span class='fname' id='fwname' data-none='");
+  h += htmlEsc(T(STR_W_FW_NOFILE));
+  h += F("'>");
+  h += T(STR_W_FW_NOFILE);
+  h += F("</span><button type='submit' id='fwgo' disabled>");
   h += T(STR_W_FW_FLASH);
   h += F("</button></div><span class='hint'>");
   h += T(STR_W_FW_HINT);
@@ -313,6 +336,10 @@ static String body() {
          "var e=document.getElementById(pre),b=document.getElementById(btn);"
          "if(e.style.display==='block'){e.style.display='none';b.textContent=shown;return;}"
          "e.textContent=text;e.style.display='block';b.textContent=hidden;}"
+         "function fwPick(i){const f=i.files&&i.files[0];"
+         "const s=document.getElementById('fwname');"
+         "s.textContent=f?f.name:s.dataset.none;"
+         "document.getElementById('fwgo').disabled=!f;}"
          "function fwNotes(){if(!INST)return;"
          "toggle('fwn','fwnb',G.notes,G.hide,INST.notes);}"
          // auto is the check the page runs by itself, on load and when the
@@ -322,9 +349,14 @@ static String body() {
          "function ghCheck(auto){"
          "var b=document.getElementById('ghck');"
          "b.disabled=true;b.textContent=G.checking;ghSay('');"
+         "var again=false;"
          "fetch('/api/ota/check?pre='+document.getElementById('ghch').value"
          "+(auto?'&auto=1':''),"
-         "{method:'POST'}).then(r=>r.json()).then(d=>{"
+         // 202: the device has asked GitHub and is not back yet. Asked again
+         // in a second; the button stays "checking" meanwhile.
+         "{method:'POST'}).then(r=>{if(r.status===202){again=true;"
+         "setTimeout(()=>ghCheck(auto),1000);return null;}return r.json();}).then(d=>{"
+         "if(!d)return;"
          "if(!d.ok){if(!auto)ghSay(ghErr(d),true);return;}"
          "setLatest(d.tag,d.published);"
          // Either direction is something to act on. Older only ever gets
@@ -338,18 +370,19 @@ static String body() {
          "n.textContent=G.whatsnew;"
          "ghSay(d.update?G.avail:(d.older?G.older:G.uptodate),false);"
          "}).catch(()=>{if(!auto)ghSay(G.fail,true);})"
-         ".finally(()=>{b.disabled=false;b.textContent=G.check;});}"
+         ".finally(()=>{if(!again){b.disabled=false;b.textContent=G.check;}});}"
          "var LATEST=null,OLDER=false;"
          "function ghNotes(){"
          "var tag=document.getElementById('ghlt').textContent;"
          "if(!tag||tag==='-')return;"
          "if(LATEST){toggle('ghn','ghnb',G.whatsnew,G.hide,LATEST.notes);return;}"
-         "var b=document.getElementById('ghnb');b.disabled=true;"
-         "fetch('/api/ota/notes?tag='+encodeURIComponent(tag)).then(r=>r.json())"
-         ".then(d=>{if(!d.ok){ghSay(ghErr(d),true);return;}"
+         "var b=document.getElementById('ghnb');b.disabled=true;var again=false;"
+         "fetch('/api/ota/notes?tag='+encodeURIComponent(tag)).then(r=>{"
+         "if(r.status===202){again=true;setTimeout(ghNotes,1000);return null;}return r.json();})"
+         ".then(d=>{if(!d)return;if(!d.ok){ghSay(ghErr(d),true);return;}"
          "LATEST=d;toggle('ghn','ghnb',G.whatsnew,G.hide,d.notes);})"
          ".catch(()=>ghSay(G.fail,true))"
-         ".finally(()=>{b.disabled=false;});}"
+         ".finally(()=>{if(!again)b.disabled=false;});}"
          // The device is unreachable from the moment it starts downloading
          // until it has rebooted, so the first poll waits rather than
          // reporting a healthy install as a failure.
@@ -400,6 +433,9 @@ static String body() {
   return h;
 }
 
+static void ghCheckFinish(WebServer &srv);
+static void routesTail(WebServer &srv);
+
 static void routes(WebServer &srv) {
   // What GitHub says about one tag: which channel it belongs to, when it was
   // published, and the release notes. The installed version and the one a
@@ -415,33 +451,16 @@ static void routes(WebServer &srv) {
     srv.send(200, "application/json", j);
   });
 
-  srv.on("/api/ota/notes", HTTP_GET, [&srv]() {
-    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_FIRMWARE))) return;
-    if (!wifi_ok) {
-      srv.send(200, "application/json", "{\"ok\":false,\"error\":\"nowifi\"}");
-      return;
-    }
-    if (otaBusy()) {
-      srv.send(200, "application/json", "{\"ok\":false,\"error\":\"busy\"}");
-      return;
-    }
-    GithubRelease rel;
-    char err[80] = "";
-    if (!githubReleaseByTag(srv.arg("tag").c_str(), rel, err, sizeof(err))) {
-      srv.send(200, "application/json",
-               "{\"ok\":false,\"error\":\"" + jsonEsc(err) + "\"}");
-      return;
-    }
-    srv.send(200, "application/json",
-             "{\"ok\":true,\"tag\":\"" + jsonEsc(rel.tag) +
-             "\",\"name\":\"" + jsonEsc(rel.name) +
-             "\",\"published\":\"" + jsonEsc(rel.published) +
-             "\",\"prerelease\":" + (rel.prerelease ? "true" : "false") +
-             ",\"notes\":\"" + jsonEsc(rel.notes.c_str()) + "\"}");
-  });
 
   srv.on("/api/ota/check", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_FIRMWARE))) return;
+    // A check that is in, or on its way, comes before every other answer:
+    // the page is asking again for the one it started.
+    if (webJobState() == WJS_DONE && webJobKind() == WJ_GH_CHECK) { ghCheckFinish(srv); return; }
+    if (webJobState() == WJS_RUNNING && webJobKind() == WJ_GH_CHECK) {
+      srv.send(202, "application/json", "{\"ok\":true,\"pending\":true}");
+      return;
+    }
     if (!wifi_ok) {
       srv.send(200, "application/json", "{\"ok\":false,\"error\":\"nowifi\"}");
       return;
@@ -474,14 +493,64 @@ static void routes(WebServer &srv) {
       return;
     }
 
-    char tag[40] = "", pub[24] = "", err[80] = "";
-    if (!githubLatestTag(gh_prerelease, tag, sizeof(tag), pub, sizeof(pub),
-                         err, sizeof(err))) {
-      srv.send(200, "application/json",
-               "{\"ok\":false,\"error\":\"" + jsonEsc(err) + "\"}");
+    // The request itself runs on the web worker: a TLS handshake held the
+    // loop task, and with it the display, for up to eight seconds when it was
+    // made here. 202 says "asked, not answered"; the page asks again.
+    if (!webJobStart(WJ_GH_CHECK, nullptr, gh_prerelease)) {
+      srv.send(200, "application/json", "{\"ok\":false,\"error\":\"busy\"}");
       return;
     }
+    srv.send(202, "application/json", "{\"ok\":true,\"pending\":true}");
+  });
+  srv.on("/api/ota/notes", HTTP_GET, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_FIRMWARE))) return;
+    const String tag = srv.arg("tag");
+    // Collect, if the notes for this tag are in.
+    if (webJobState() == WJS_DONE && webJobKind() == WJ_GH_NOTES) {
+      const WebJobResult& r = webJobResult();
+      String reply = r.ok ? r.body
+                          : "{\"ok\":false,\"error\":\"" + jsonEsc(r.err) + "\"}";
+      const bool same = (tag == r.tag) || !r.ok;
+      webJobTake();
+      if (same) { srv.send(200, "application/json", reply); return; }
+      // Notes for another tag were waiting; asked for this one, start over.
+    }
+    if (webJobState() == WJS_RUNNING) {
+      srv.send(webJobKind() == WJ_GH_NOTES ? 202 : 200, "application/json",
+               webJobKind() == WJ_GH_NOTES ? "{\"ok\":true,\"pending\":true}"
+                                           : "{\"ok\":false,\"error\":\"busy\"}");
+      return;
+    }
+    if (!wifi_ok) {
+      srv.send(200, "application/json", "{\"ok\":false,\"error\":\"nowifi\"}");
+      return;
+    }
+    if (otaBusy() || !webJobStart(WJ_GH_NOTES, tag.c_str(), false)) {
+      srv.send(200, "application/json", "{\"ok\":false,\"error\":\"busy\"}");
+      return;
+    }
+    srv.send(202, "application/json", "{\"ok\":true,\"pending\":true}");
+  });
+  routesTail(srv);
+}
 
+// The second half of /api/ota/check, once the worker has the tag: everything
+// here touches the loop task's own things - the badge, NVS, the cached
+// answer - and so it runs in the handler that collects, not in the worker.
+static void ghCheckFinish(WebServer &srv) {
+  const WebJobResult& r = webJobResult();
+  if (!r.ok) {
+    String reply = "{\"ok\":false,\"error\":\"" + jsonEsc(r.err) + "\"}";
+    webJobTake();
+    srv.send(200, "application/json", reply);
+    return;
+  }
+  char tag[40], pub[24];
+  strncpy(tag, r.tag, sizeof(tag) - 1); tag[sizeof(tag) - 1] = '\0';
+  strncpy(pub, r.pub, sizeof(pub) - 1); pub[sizeof(pub) - 1] = '\0';
+  webJobTake();
+
+  {
     strncpy(gh_latest_version, tag, sizeof(gh_latest_version) - 1);
     gh_latest_version[sizeof(gh_latest_version) - 1] = '\0';
     const uint64_t remote = parseVersion(tag), running = parseVersion(FW_VERSION);
@@ -514,8 +583,10 @@ static void routes(WebServer &srv) {
              "\",\"published\":\"" + jsonEsc(pub) +
              "\",\"update\":" + (newer ? "true" : "false") +
              ",\"older\":" + (older ? "true" : "false") + "}");
-  });
+  }
+}
 
+static void routesTail(WebServer &srv) {
   // Installs what the last check found. The tag is never taken from the
   // request: it goes straight into a download URL, and the only version this
   // page ever offers is the one it just showed.
@@ -545,7 +616,8 @@ static void routes(WebServer &srv) {
     // refuses the reply and flashes the device anyway.
     [&srv]() {
       if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_FIRMWARE))) return;
-      bool ok = !Update.hasError();
+      const bool ok = s_upload_ok;
+      s_upload_ok = false;
       String msg = ok
         ? "<!DOCTYPE html><html><head><meta charset='utf-8'>"
           "<meta http-equiv='refresh' content='5;url=/'>"
@@ -578,15 +650,42 @@ static void routes(WebServer &srv) {
     },
     // Chunk handler.
     [&srv]() {
-      if (!webGateOpen(GATE_MAINT)) return;
+      // Decided at the first byte, not in the completion handler: by the time
+      // that runs the image is already in flash. Everything webRequire() asks
+      // - the gate, the host, the origin, the password, and no other flash in
+      // progress - is asked here, and a refused upload is read and dropped so
+      // the browser gets the proper answer from the completion handler.
+      // refused: never started, the bytes are read and dropped. failed:
+      // started and broken off - the same, but Update has been aborted.
+      static bool refused = false;
+      static bool failed  = false;
       HTTPUpload& upload = srv.upload();
       if (upload.status == UPLOAD_FILE_START) {
+        s_upload_ok = false;
+        failed  = false;
+        refused = !webAllowed(srv, GATE_MAINT);
+        if (refused) {
+          logSD("OTA: upload refused before the first byte");
+          return;
+        }
+        // Against the partition, before a byte is written. Update would find
+        // out by itself, two megabytes later, with a write error.
+        const size_t announced = srv.clientContentLength();
+        const size_t room      = ESP.getFreeSketchSpace();
+        if (announced > room + OTA_MULTIPART_SLACK) {
+          refused = true;
+          logSDf("OTA: upload of %u bytes refused, partition holds %u",
+                 (unsigned)announced, (unsigned)room);
+          return;
+        }
         Serial.printf("OTA start: %s\n", upload.filename.c_str());
         ota_upload_active = true;
         if (Update.isRunning()) Update.abort();  // clean up any previous failed upload
         if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
-          Serial.println("OTA begin() error");
+          logSDf("OTA: begin() failed, error %u", (unsigned)Update.getError());
           ota_upload_active = false;
+          failed = true;
+          return;
         }
         // The multipart envelope adds a few hundred bytes on top of the
         // image. On a 1.9 MB upload that is under 0.05 %, so it serves as the
@@ -598,9 +697,31 @@ static void routes(WebServer &srv) {
         if (lbl_ota_status) lv_label_set_text(lbl_ota_status,
           T(STR_OTA_UPLOADING));
         lv_timer_handler();
+      } else if (refused || failed) {
+        if (upload.status == UPLOAD_FILE_END || upload.status == UPLOAD_FILE_ABORTED) {
+          refused = false;
+          failed  = false;
+        }
+      } else if (upload.status == UPLOAD_FILE_ABORTED) {
+        // The browser tab closed, or the link dropped. The library reports
+        // this and nothing here used to listen: ota_upload_active stayed set
+        // for good, every OTA route answered "busy" and the daily check never
+        // ran again until a reboot.
+        Update.abort();
+        ota_upload_active = false;
+        ota_upload_done   = 0;
+        ota_upload_total  = 0;
+        logSD("OTA: upload aborted by the client");
+        if (lbl_ota_status) lv_label_set_text(lbl_ota_status, T(STR_OTA_FAIL));
       } else if (upload.status == UPLOAD_FILE_WRITE) {
         if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-          Serial.println("OTA write() error");
+          logSDf("OTA: write failed after %u bytes, error %u",
+                 (unsigned)ota_upload_done, (unsigned)Update.getError());
+          Update.abort();
+          ota_upload_active = false;
+          failed = true;
+          if (lbl_ota_status) lv_label_set_text(lbl_ota_status, T(STR_OTA_FAIL));
+          return;
         }
         ota_upload_done += upload.currentSize;
         // Same cadence as the GitHub path. Painting per chunk would cost more
@@ -614,10 +735,15 @@ static void routes(WebServer &srv) {
         }
       } else if (upload.status == UPLOAD_FILE_END) {
         ota_upload_active = false;
-        if (Update.end(true)) {
-          Serial.printf("OTA end: %u bytes\n", upload.totalSize);
+        // end(true), because the image size is only known now: the multipart
+        // envelope hid it from begin(). The library still checks the image
+        // header before it commits.
+        s_upload_ok = Update.end(true) && !Update.hasError();
+        if (s_upload_ok) {
+          logSDf("OTA: browser upload complete, %u bytes", (unsigned)upload.totalSize);
         } else {
-          Serial.println("OTA end() error");
+          logSDf("OTA: end() failed after %u bytes, error %u",
+                 (unsigned)upload.totalSize, (unsigned)Update.getError());
         }
       }
     }

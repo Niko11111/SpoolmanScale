@@ -12,6 +12,7 @@
 #include "services/auto_weight_state.h"
 #include "services/bambuddy_api.h"
 #include "services/backend.h"
+#include "services/user_options.h"
 #include "services/wifi_manager.h"
 
 // BamBuddy marks a device offline after 30 seconds without a heartbeat
@@ -83,14 +84,15 @@ static void handleCommand(const char* base, const char* key, const char* cmd,
   }
 
   if (strcmp(cmd, "write_tag") == 0) {
-    // Writing to tags is out of scope for this project by design: the scale
-    // only ever reads them. Declined by id so BamBuddy can close the dialog
-    // it opened rather than sit on "waiting for SpoolBuddy".
+    // The scale writes tags only from its own screens, where the user confirms
+    // at the device with the tag in view - not on a request from elsewhere.
+    // Declined by id so BamBuddy can close the dialog it opened rather than
+    // sit on "waiting for SpoolBuddy".
     if (write_spool_id > 0) {
       bbWriteTagResult(base, key, write_spool_id, nullptr, false,
-                       "SpoolmanScale never writes to tags, it only reads them");
+                       "SpoolmanScale writes tags from its own screens only");
     } else {
-      bbCommandResult(base, key, cmd, false, "SpoolmanScale does not write tags");
+      bbCommandResult(base, key, cmd, false, "SpoolmanScale does not write tags on request");
     }
     logSD("BamBuddy: declined a tag write");
     return;
@@ -147,7 +149,12 @@ void bambuddyDeviceTick() {
 
     char cmd[40] = "";
     int  write_spool_id = 0;
-    int  code = bbHeartbeat(base, key, /*nfc_ok=*/true, scale_ready,
+    // scale_ok, not scale_ready: with no load cell fitted there is no fault to
+    // report, and sending false made BamBuddy render the device as a scale
+    // that is broken rather than a device that has none. has_scale in the
+    // registration is what distinguishes the two.
+    int  code = bbHeartbeat(base, key, /*nfc_ok=*/true,
+                            /*scale_ok=*/(!g_scale_fitted || scale_ready),
                             millis() / 1000,
                             wifiManagerLocalIP().toString().c_str(), FW_VERSION,
                             cmd, sizeof(cmd), &write_spool_id);

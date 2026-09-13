@@ -61,16 +61,14 @@ static void addDriedRow(lv_obj_t *list, const SettingDesc &s, uint8_t value) {
   const bool enabled = !s.opt_ok || s.opt_ok(value);
 
   char buf_t[40];
-  strncpy(buf_t, T((StringID)s.opt_str[value]), sizeof(buf_t) - 1);
-  buf_t[sizeof(buf_t) - 1] = '\0';
+  copyT(buf_t, sizeof(buf_t), (StringID)s.opt_str[value]);
 
   // An unavailable choice says why in place of what it does - that is the more
   // useful line, and it is the only one the user can act on.
   char buf_s[48];
   const StringID sub = (!enabled && value == BB_DRIED_SPOOLMAN)
                      ? STR_BB_DRIED_SPOOLMAN_NA : DRIED_SUB[value];
-  strncpy(buf_s, T(sub), sizeof(buf_s) - 1);
-  buf_s[sizeof(buf_s) - 1] = '\0';
+  copyT(buf_s, sizeof(buf_s), sub);
 
   lv_obj_t *btn = makeListBtn(list, "", buf_t, buf_s, active);
 

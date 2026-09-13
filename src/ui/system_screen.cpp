@@ -1,4 +1,5 @@
 #include "system_screen.h"
+#include "services/prefs_store.h"
 #include "navigation.h"
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
@@ -10,6 +11,7 @@
 
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/nfc_reset.h"
 #include "services/backend.h"
 #include "services/ota_state.h"
 #include "ui_common.h"
@@ -22,8 +24,13 @@ void showLanguageScreen();
 // Wipes every setting, so it asks first. Lifted out of the button callback
 // unchanged when the screen became a list - the dialog itself is the same one
 // that has always been there.
+static lv_obj_t *s_reset_pop = nullptr;
+void closeFactoryResetPopup() { releaseScreen(&s_reset_pop); }
+
 static void showFactoryResetPopup() {
+  releaseScreen(&s_reset_pop);
   lv_obj_t *pop = lv_obj_create(lv_scr_act());
+  s_reset_pop = pop;
   lv_obj_set_size(pop, 480, 320);
   lv_obj_set_pos(pop, 0, 0);
   lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
@@ -44,7 +51,7 @@ static void showFactoryResetPopup() {
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *lbl_t = lv_label_create(box);
-  char buf_t[48]; strncpy(buf_t, T(STR_FACTORY_RESET_TITLE), sizeof(buf_t)-1);
+  char buf_t[48]; copyT(buf_t, sizeof(buf_t), STR_FACTORY_RESET_TITLE);
   lv_label_set_text(lbl_t, buf_t);
   lv_obj_set_style_text_color(lbl_t, lv_color_hex(0xff6060), 0);
   lv_obj_set_style_text_font(lbl_t, &lv_font_montserrat_ext_18, 0);
@@ -71,10 +78,10 @@ static void showFactoryResetPopup() {
   lv_obj_set_style_border_width(btn_c, 1, 0);
   lv_obj_set_style_border_color(btn_c, lv_color_hex(0x1a2840), 0);
   lv_obj_add_event_cb(btn_c, [](lv_event_t *e){
-    lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e))));
+    releaseScreen(&s_reset_pop);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_c = lv_label_create(btn_c);
-  char buf_c[32]; strncpy(buf_c, T(STR_CANCEL), sizeof(buf_c)-1);
+  char buf_c[32]; copyT(buf_c, sizeof(buf_c), STR_CANCEL);
   lv_label_set_text(lbl_c, buf_c);
   lv_obj_set_style_text_color(lbl_c, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_c, &lv_font_montserrat_ext_14, 0);
@@ -93,6 +100,8 @@ static void showFactoryResetPopup() {
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e){
     logSD("Factory Reset: erasing NVS flash partition");
     Serial.println("Factory Reset: erasing NVS flash partition");
+    // Nothing parked in this pass may be written back after the erase.
+    prefsDiscardWrites();
     // Close SD logging before erase to avoid corruption
     if (sd_available) SD.end();
     delay(100);
@@ -103,7 +112,7 @@ static void showFactoryResetPopup() {
     ESP.restart();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
-  char buf_ok[48]; strncpy(buf_ok, T(STR_FACTORY_RESET_CONFIRM), sizeof(buf_ok)-1);
+  char buf_ok[48]; copyT(buf_ok, sizeof(buf_ok), STR_FACTORY_RESET_CONFIRM);
   lv_label_set_text(lbl_ok, buf_ok);
   lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0xff8080), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_14, 0);
@@ -190,9 +199,23 @@ void buildSystemScreen() {
   addRow(list, LV_SYMBOL_BELL, T(STR_BTN_INFO), T(STR_BTN_INFO_SUB),
     [](lv_event_t *e){ logSD("BTN: System -> Info"); show_info_pending = true; });
 
+  // Always present, unlike the popup that points at it. A row is pulled, not
+  // pushed: whoever has just moved the wire comes here to confirm it, and
+  // hiding the confirmation from the person who did the work would be exactly
+  // backwards.
+  { char rst_sub[40];
+    copyT(rst_sub, sizeof(rst_sub), nfcResetVerified() ? STR_NFCRST_ROW_DONE : STR_NFCRST_ROW_SUB);
+    addRow(list, LV_SYMBOL_CHARGE, T(STR_NFCRST_ROW), rst_sub,
+      [](lv_event_t *e){
+        logSD("BTN: System -> NFC reset probe");
+        nfc_reset_probe_pending = true;
+      });
+  }
+
   addRow(list, LV_SYMBOL_REFRESH, T(STR_BTN_REBOOT), T(STR_BTN_REBOOT_SUB),
     [](lv_event_t *e){
       logSD("BTN: System -> Reboot");
+      prefsFlush();
       if (sd_available) SD.end();
       delay(100);
       ESP.restart();

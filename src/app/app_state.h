@@ -125,6 +125,20 @@ extern char sm_last_dried[32];
 // UIDs; anything longer is dropped rather than shortened.
 extern char sm_tag_values[TAG_FIELD_COUNT][CARD_UIDS_MAX];
 
+// What the matched spool holds in extra.rfid_tag, filled by the same pass.
+//
+// Its own buffer rather than a slot in the array above: that one is indexed by
+// TagFieldId and is walked whole in places that read every filled slot as a
+// binding - the unlink popup names them all - and this field binds nothing. It
+// carries a copy of the hardware uid for a reader that cannot see anything
+// else. Widening the array would also mean touching an enum whose order is
+// persisted in NVS.
+//
+// Needed in RAM for the same reason as the array: the unlink runs from an LVGL
+// callback and cannot go and fetch it, and appending has to know what is
+// already there or it would replace the tag on the other flange.
+extern char sm_hw_uid_value[CARD_UIDS_MAX];
+
 // A spool that was found, but is archived. Its own state rather than a flavour
 // of sm_found: the screen has to show the spool - name, filament, tare - so the
 // user can bring it back, while everything that writes has to hold off until
@@ -252,6 +266,30 @@ extern lv_obj_t *lbl_bag_sm_diff;
 extern lv_obj_t *btn_dried;
 extern lv_obj_t *btn_link;
 extern lv_obj_t *btn_weight_main;
+// Slot 1 of the button bar on a device with no load cell, where the weight
+// button would otherwise sit. Only one of the two ever exists - buildUI()
+// builds whichever the scale switch calls for - so updateLinkButton() picks
+// the one it was given rather than assuming either.
+extern lv_obj_t *btn_location;
+
+// Zone 4's right half on a device with no load cell: the note saying why the
+// weights are absent, and the way into the AMS view when the backend has one.
+// Both exist only in that mode, so everything that touches them checks first -
+// updateAmsAffordance() in main_screen_helpers.cpp is the one place that does.
+//
+// The note moves: it sits at the top of the zone when the button is below it
+// and in the middle when it is alone, which is why it needs a pointer at all.
+extern lv_obj_t *lbl_no_scale;
+extern lv_obj_t *btn_ams_main;
+
+// The AMS chip in the header, and the only one of the chips that is a button
+// rather than a state. It exists in both modes: a device with a load cell has
+// no room for the zone 4 button and reaches the view from here.
+//
+// It says "there is an AMS view on this backend", not "an AMS is connected" -
+// that answer costs a blocking round trip and lives nowhere a chip could read
+// it. Colour is therefore an affordance here, not a verdict.
+extern lv_obj_t *btn_hdr_ams;
 extern lv_obj_t *scr_more_info;
 extern int scan_count;
 extern lv_obj_t *page_main;

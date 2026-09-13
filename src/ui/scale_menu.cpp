@@ -8,10 +8,15 @@
 #include <cstring>
 
 #include "confirm_popup.h"
+#include "hardware/scale_state.h"
 #include "hardware/sd_logger.h"
-#include "lang.h"
 #include "services/auto_weight_state.h"
 #include "services/backend.h"
+// Before lang.h: it pulls in ArduinoJson, whose template parameter T
+// collides with the T() macro.
+#include "services/ams_presence.h"
+#include "services/backend_api.h"
+#include "lang.h"
 #include "services/drying_config.h"
 #include "services/prefs_store.h"
 #include "services/tag_write.h"
@@ -64,14 +69,35 @@ void buildScaleSubScreen() {
   lv_obj_t *list = buildOptionList(scr_scale_sub);
   s_scale_list = list;
 
-  { char bag_sub[32]; snprintf(bag_sub, sizeof(bag_sub), T(STR_BAG_CURRENT), bag_weight_g);
+  // First in the list. It is the row that gets used most on a device wired to
+  // a printer, and the only one here that is not a setting but a look at
+  // something live. The same two conditions as the header chip and the zone-4
+  // button: a backend that can show an AMS, and a printer known to have one -
+  // without the second the row leads to an empty page.
+  if (backendHasAmsView() && amsPresenceHasAms()) {
+    char buf_t[32]; copyT(buf_t, sizeof(buf_t), STR_AMSV_BTN);
+    char buf_s[40]; copyT(buf_s, sizeof(buf_s), STR_AMSV_BTN_SUB);
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_LIST, buf_t, buf_s);
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      logSD("BTN: Scale-Sub -> AMS view");
+      show_ams_view_scale_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+  }
+
+  // The bag weight is subtracted from a reading, so it only means something
+  // while there are readings. Same for the calibration further down; the four
+  // rows between them are about tags and drying and survive a device with no
+  // load cell untouched.
+  if (g_scale_fitted) {
+    char bag_sub[32]; snprintf(bag_sub, sizeof(bag_sub), T(STR_BAG_CURRENT), bag_weight_g);
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_DRIVE, T(STR_BTN_BAGWEIGHT), bag_sub);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Scale-Sub -> Bag Weight");
       show_bag_pending = true;
-    }, LV_EVENT_CLICKED, NULL); }
+    }, LV_EVENT_CLICKED, NULL);
+  }
 
-  { char buf_t[40]; strncpy(buf_t, T(STR_BTN_DRYING_REMINDER), sizeof(buf_t)-1);
+  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_BTN_DRYING_REMINDER);
     char buf_s[24];
     const char* mode_lbl[] = { T(STR_DRY_MODE_OFF), T(STR_DRY_MODE_MATERIAL), T(STR_DRY_MODE_MANUAL) };
     strncpy(buf_s, mode_lbl[g_dry_mode < 3 ? g_dry_mode : 0], sizeof(buf_s)-1);
@@ -82,10 +108,11 @@ void buildScaleSubScreen() {
       show_drying_reminder_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
-  { char buf_t[40]; strncpy(buf_t, T(STR_BTN_AUTO_LOC_POPUP), sizeof(buf_t)-1);
-    char buf_s[8]; strncpy(buf_s, T(g_auto_loc_popup ? STR_ON : STR_OFF), sizeof(buf_s)-1);
-    buf_s[sizeof(buf_s)-1] = '\0';
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_GPS, buf_t, buf_s, g_auto_loc_popup);
+  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_BTN_AUTO_LOC_POPUP);
+    char buf_s[8]; copyT(buf_s, sizeof(buf_s), g_auto_loc_popup ? STR_ON : STR_OFF);
+    // No subtitle: the state stands on the right like on every other switch,
+    // and it used to stand twice.
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_GPS, buf_t, "", g_auto_loc_popup);
     lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
     if (arr_lbl) {
       lv_label_set_text(arr_lbl, buf_s);
@@ -106,19 +133,16 @@ void buildScaleSubScreen() {
   // goes on a tag is an agreement between the tag and whoever reads it, and
   // none of the backends ever sees it. One row, because two of them were two
   // rebuilds of this list and it jumped back to the top on every tap.
-  { char buf_t[40]; strncpy(buf_t, T(STR_TW_OPT_ASK), sizeof(buf_t)-1);
-    buf_t[sizeof(buf_t)-1] = '\0';
+  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_TW_OPT_ASK);
     // The subtitle carries the state, so the sub screen does not have to be
     // opened to see it: off, or what happens and in which format.
     char buf_s[48];
     if (g_tagwrite_mode == TAGWRITE_OFF) {
-      strncpy(buf_s, T(STR_OFF), sizeof(buf_s)-1);
+      copyT(buf_s, sizeof(buf_s), STR_OFF);
     } else {
       char mode[24];
-      strncpy(mode, T(g_tagwrite_mode == TAGWRITE_ALWAYS ? STR_TW_MODE_ALWAYS
-                                                         : STR_TW_MODE_ASK),
-              sizeof(mode)-1);
-      mode[sizeof(mode)-1] = '\0';
+      copyT(mode, sizeof(mode), g_tagwrite_mode == TAGWRITE_ALWAYS ? STR_TW_MODE_ALWAYS
+                                                         : STR_TW_MODE_ASK);
       snprintf(buf_s, sizeof(buf_s), "%s - %s", mode, tagFormatLabel(g_tagwrite_fmt));
     }
     buf_s[sizeof(buf_s)-1] = '\0';
@@ -129,7 +153,7 @@ void buildScaleSubScreen() {
       show_tagwrite_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
-  { char buf_t[32]; strncpy(buf_t, T(STR_BTN_LASTUSED_MODE), sizeof(buf_t)-1);
+  { char buf_t[32]; copyT(buf_t, sizeof(buf_t), STR_BTN_LASTUSED_MODE);
     // The subtitle names the two sources, and they differ per backend.
     char buf_s[48];
     strncpy(buf_s, backendIsFilaMan()  ? T(STR_BTN_LASTUSED_MODE_SUB_FM)
@@ -142,11 +166,41 @@ void buildScaleSubScreen() {
       show_lastused_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
+  if (g_scale_fitted)
   { char cal_sub[32]; snprintf(cal_sub, sizeof(cal_sub), T(STR_CAL_FACTOR_SHORT), cal_factor);
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, T(STR_BTN_CALIBRATE), cal_sub);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Scale-Sub -> Calibration");
       show_factor_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
+  // Last, because it is the row that decides what the rest of this screen even
+  // shows - and because on a device that has a scale nobody ever needs it.
+  // It stays visible with the scale off: this is where it gets turned back on.
+  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_SCALE_FITTED);
+    char buf_s[8]; copyT(buf_s, sizeof(buf_s), g_scale_fitted ? STR_ON : STR_OFF);
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_SETTINGS, buf_t, "", g_scale_fitted, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_SCALE_FITTED, STR_SCALE_FITTED_INFO));
+    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
+    if (arr_lbl) {
+      lv_label_set_text(arr_lbl, buf_s);
+      lv_obj_set_style_text_color(arr_lbl, g_scale_fitted ? lv_color_hex(0x28d49a)
+                                                          : lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
+    }
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      // Through setScaleFitted(), not by hand: it also drops the readings and
+      // the frozen scl_ok, which is what left a green SCL in the header when
+      // the restart below was dismissed.
+      setScaleFitted(!g_scale_fitted);
+      logSDf("BTN: Scale-Sub -> scale fitted %s", g_scale_fitted ? "on" : "off");
+      // The row first, so it shows the new state, then the popup. Both through
+      // flags: the rebuild deletes the screen this button sits on, and it runs
+      // hideAllOverlays() - a popup opened here would go down with it.
+      scale_sub_rebuild_pending = true;
+      show_reboot_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
   // No reset row here any more: the same action sits as a red button on the
@@ -185,8 +239,7 @@ static void addTagFormatRow(lv_obj_t *list, uint8_t idx) {
   const bool    active = (g_tagwrite_fmt == value);
 
   char buf_t[40];
-  strncpy(buf_t, T(TW_FMT_NAME[idx]), sizeof(buf_t) - 1);
-  buf_t[sizeof(buf_t) - 1] = '\0';
+  copyT(buf_t, sizeof(buf_t), TW_FMT_NAME[idx]);
 
   lv_obj_t *btn = makeListBtn(list, "", buf_t, "", active);
 
@@ -220,8 +273,7 @@ static void addTagModeRow(lv_obj_t *list, uint8_t value) {
   const bool active = (g_tagwrite_mode == value);
 
   char buf_t[40];
-  strncpy(buf_t, T(TW_MODE_NAME[value]), sizeof(buf_t) - 1);
-  buf_t[sizeof(buf_t) - 1] = '\0';
+  copyT(buf_t, sizeof(buf_t), TW_MODE_NAME[value]);
 
   lv_obj_t *btn = makeListBtn(list, "", buf_t, "", active);
 
@@ -258,36 +310,27 @@ void buildTagWriteScreen() {
       scale_sub_rebuild_pending = true;
     });
 
+  // The explanation sits in the header. It used to be a heading row that
+  // repeated the title word for word and carried nothing but the "?".
+  addHeaderHelp(scr_tagwrite, STR_TW_OPT_ASK, STR_TW_OPT_ASK_INFO);
+
   lv_obj_t *list = buildOptionList(scr_tagwrite);
 
   // The choice first: without it the format below decides nothing.
-  { char buf_t[40]; strncpy(buf_t, T(STR_TW_OPT_ASK), sizeof(buf_t)-1);
-    buf_t[sizeof(buf_t)-1] = '\0';
-    lv_obj_t *help = nullptr;
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, buf_t, "", false, &help);
-    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
-                                  INFO_POPUP_ARG(STR_TW_OPT_ASK, STR_TW_OPT_ASK_INFO));
-    lv_obj_clear_flag(btn, LV_OBJ_FLAG_CLICKABLE);   // a heading, not a choice
-    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
-    if (arr_lbl) lv_label_set_text(arr_lbl, ""); }
-
   for (uint8_t i = 0; i <= TAGWRITE_ALWAYS; i++) addTagModeRow(list, i);
 
   // The second question the scale can ask about a tag, and its own switch: this
   // one is not about a link that just happened but about a tag that has been
   // lying around since something changed, and wanting one is not wanting both.
-  { char buf_t[40]; strncpy(buf_t, T(STR_TW_OPT_MISM), sizeof(buf_t)-1);
-    buf_t[sizeof(buf_t)-1] = '\0';
-    char buf_s[48]; strncpy(buf_s, T(STR_TW_OPT_MISM_SUB), sizeof(buf_s)-1);
-    buf_s[sizeof(buf_s)-1] = '\0';
+  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_TW_OPT_MISM);
+    char buf_s[48]; copyT(buf_s, sizeof(buf_s), STR_TW_OPT_MISM_SUB);
     lv_obj_t *help = nullptr;
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_REFRESH, buf_t, buf_s, g_tagmismatch_ask, &help);
     if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
                                   INFO_POPUP_ARG(STR_TW_OPT_MISM, STR_TW_OPT_MISM_INFO));
     lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
     if (arr_lbl) {
-      char on_off[8]; strncpy(on_off, T(g_tagmismatch_ask ? STR_ON : STR_OFF), sizeof(on_off)-1);
-      on_off[sizeof(on_off)-1] = '\0';
+      char on_off[8]; copyT(on_off, sizeof(on_off), g_tagmismatch_ask ? STR_ON : STR_OFF);
       lv_label_set_text(arr_lbl, on_off);
       lv_obj_set_style_text_color(arr_lbl, g_tagmismatch_ask ? lv_color_hex(0x28d49a)
                                                              : lv_color_hex(0x4a6fa0), 0);
@@ -303,8 +346,7 @@ void buildTagWriteScreen() {
   // The format, with its own help. Shown even while the switch is off: it is
   // also what the tag page in the browser writes when nothing else is chosen,
   // and hiding it would make that setting unreachable from the device.
-  { char buf_t[32]; strncpy(buf_t, T(STR_TW_OPT_FMT), sizeof(buf_t)-1);
-    buf_t[sizeof(buf_t)-1] = '\0';
+  { char buf_t[32]; copyT(buf_t, sizeof(buf_t), STR_TW_OPT_FMT);
     lv_obj_t *help = nullptr;
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_SD_CARD, buf_t, "", false, &help);
     if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,

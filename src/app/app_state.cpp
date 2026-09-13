@@ -92,6 +92,7 @@ float sm_spool_weight = 0;
 uint8_t sm_tare_source = TARE_NONE;
 char  sm_last_dried[32] = "";
 char  sm_tag_values[TAG_FIELD_COUNT][CARD_UIDS_MAX] = {};
+char  sm_hw_uid_value[CARD_UIDS_MAX] = "";
 bool  sm_archived = false;
 int   sm_tag_conflict_spool = 0;
 
@@ -210,6 +211,10 @@ lv_obj_t *lbl_bag_sm_diff = nullptr;
 lv_obj_t *btn_dried  = nullptr;
 lv_obj_t *btn_link   = nullptr;
 lv_obj_t *btn_weight_main = nullptr;
+lv_obj_t *btn_location = nullptr;
+lv_obj_t *lbl_no_scale = nullptr;
+lv_obj_t *btn_ams_main = nullptr;
+lv_obj_t *btn_hdr_ams = nullptr;
 
 lv_obj_t *scr_more_info = nullptr;
 

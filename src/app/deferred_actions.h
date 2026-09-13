@@ -14,6 +14,12 @@ extern bool cal_reset_pending;
 // Deferred rather than rebuilt on the spot: the rebuild deletes the screen the
 // button that set it sits on, which is what CLAUDE.md rules out.
 extern bool scale_sub_rebuild_pending;
+// A setting changed that is only read while the interface is built, so it
+// takes a restart to show. Its own flag rather than a call from the callback:
+// the same tap also schedules a screen rebuild, and that one runs
+// hideAllOverlays() - a popup opened first would be taken down by it. Drained
+// after the rebuild, so the order is fixed rather than hoped for.
+extern bool show_reboot_pending;
 extern bool show_lastused_pending;
 extern bool show_backend_pending;
 
@@ -25,6 +31,13 @@ extern bool backend_mode_change_pending;
 extern uint8_t pending_backend_mode;
 extern bool show_filaman_options_pending;
 extern bool show_ams_assign_pending;
+// The AMS view. A flag rather than a direct call because building it ends in
+// an HTTP request, and that must not run inside the LVGL callback that asked
+// for it. Set from wherever a way into the view is offered - the row is two
+// lines, so the place it sits can move without touching anything else.
+extern bool show_ams_view_pending;
+// The same page opened from Settings > Scale, which is where it goes back to.
+extern bool show_ams_view_scale_pending;
 extern bool show_filaman_fields_pending;
 extern bool show_bambuddy_options_pending;
 extern bool show_bambuddy_dried_pending;
@@ -33,6 +46,10 @@ extern bool show_bambuddy_dried_pending;
 extern bool show_tagwrite_pending;
 extern bool show_timezone_pending;
 extern bool show_language_pending;
+
+// The NFC reset probe touches the I2C bus, so it cannot run from the LVGL
+// callback that asks for it - the bus belongs to the loop task.
+extern bool nfc_reset_probe_pending;
 extern bool show_welcome_pending;
 extern bool show_spoolman_options_pending;
 // Turning the card_uids switch on needs the field to exist on the server, so
@@ -66,6 +83,9 @@ extern bool gh_check_pending;
 // about a minute and ends in a restart, so it does not run from the popup's
 // own callback.
 extern bool gh_downgrade_pending;
+// The update button on the OTA screen. Same minute, same restart as the
+// downgrade above, and it used to run inline in the button's callback.
+extern bool gh_flash_pending;
 extern unsigned long gh_check_wait_since;
 #define GH_CHECK_WAIT_MS 10000
 

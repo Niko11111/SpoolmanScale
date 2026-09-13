@@ -52,14 +52,38 @@ static int  status_pick_id            = 0;   // 1..6, or 0 for "cancelled"
 // Shared by both confirm buttons of the unlink popup. user_data is 1 for
 // "release the whole binding" and 0 for "only the tag on the scale" - the
 // distinction two UIDs create and a single one does not have.
+// Parked by the unlink confirmation and the location picker for
+// handleMoreInfoDeferredActions(). Both reach the backend, and both used to
+// run inside the callback of the button that asked - with the popup gone and
+// the touch panel dead for the length of the request.
+static bool unlink_pending  = false;
+static bool unlink_all      = false;
+static int  unlink_spool_id = 0;
+static bool loc_patch_pending  = false;
+static char loc_patch_name[48] = "";      // empty: clear the location
+static bool loc_cancel_pending = false;   // the picker's X
+static void closeLocationPicker();
+// The unlink confirmation. A local of the button's callback until now, so no
+// navigation could take it down.
+static lv_obj_t *s_unlink_popup = nullptr;
+
+void closeMoreInfoPopups() { releaseScreen(&s_unlink_popup); }
+
 static void unlinkConfirmCb(lv_event_t *e) {
   lv_obj_t *btn = lv_event_get_target(e);
-  const bool all = (bool)(intptr_t)lv_obj_get_user_data(btn);
-  const int spool_id = sm_id;
+  unlink_all      = (bool)(intptr_t)lv_obj_get_user_data(btn);
+  unlink_spool_id = sm_id;
+  // Read out of the button before the popup goes. The popup is this button's
+  // grandparent, so it is released asynchronously; the unlink itself runs from
+  // the loop a pass later.
+  releaseScreen(&s_unlink_popup);
+  unlink_pending = true;
+}
 
-  // Read out of the button before the popup goes, then close it: the calls
-  // below reach the network and a dialog still on screen would look frozen.
-  lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(btn)));
+static void runUnlink() {
+  const bool all      = unlink_all;
+  const int  spool_id = unlink_spool_id;
+  if (spool_id <= 0) return;
 
   if (backendMode() == BACKEND_SPOOLMAN) {
     // Only Spoolman has more than one place a binding can sit, so only there
@@ -110,6 +134,42 @@ void requestLocationPicker(bool from_popup) {
 }
 
 void handleMoreInfoDeferredActions() {
+  if (unlink_pending) {
+    unlink_pending = false;
+    runUnlink();
+  }
+  if (loc_cancel_pending) {
+    loc_cancel_pending = false;
+    closeLocationPicker();
+    if (g_loc_picker_from_popup) showMainScreen();
+    else                         showMoreInfoScreen();
+  }
+  if (loc_patch_pending) {
+    loc_patch_pending = false;
+    closeLocationPicker();
+    if (sm_id > 0) {
+      const bool clear = (loc_patch_name[0] == '\0');
+      const int code = backendPatchSpoolLocation(cfg_spoolman_base, sm_id,
+                                                 clear ? nullptr : loc_patch_name, 8000);
+      if (code == 200) {
+        if (clear) {
+          sm_location_id = 0;
+          sm_location_name[0] = '\0';
+        } else {
+          strncpy(sm_location_name, loc_patch_name, sizeof(sm_location_name) - 1);
+          sm_location_name[sizeof(sm_location_name) - 1] = '\0';
+          sm_location_id = 0;
+          // Mark the popup as shown so it does not re-trigger on the next
+          // removal.
+          g_loc_popup_shown_for_id = sm_id;
+          logSDf("[verbose] LOC: location saved '%s' id=%d from_popup=%d",
+                 loc_patch_name, sm_id, (int)g_loc_picker_from_popup);
+        }
+      }
+    }
+    if (g_loc_picker_from_popup) showMainScreen();
+    else                         showMoreInfoScreen();
+  }
   if (show_location_picker_pending) {
     show_location_picker_pending = false;
     logSDf("[verbose] LOC: show_location_picker_pending fired from_popup=%d id=%d", (int)g_loc_picker_from_popup, sm_id);
@@ -253,7 +313,7 @@ void showLocationPicker() {
 
   lv_obj_t *lbl_title = lv_label_create(hdr);
   char title_buf[48];
-  strncpy(title_buf, T(STR_LOCATION_TITLE), sizeof(title_buf)-1);
+  copyT(title_buf, sizeof(title_buf), STR_LOCATION_TITLE);
   lv_label_set_text(lbl_title, title_buf);
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
@@ -269,9 +329,10 @@ void showLocationPicker() {
   lv_obj_set_style_radius(btn_x, 8, 0);
   lv_obj_set_style_shadow_width(btn_x, 0, 0);
   lv_obj_add_event_cb(btn_x, [](lv_event_t *e) {
-    closeLocationPicker();
-    if (g_loc_picker_from_popup) { showMainScreen(); }
-    else { showMoreInfoScreen(); }
+    // Parked: this button sits on the picker it would delete, and the fetch
+    // that fills the list pumps LVGL - a tap here used to rebuild More Info
+    // from inside that fetch.
+    loc_cancel_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_x = lv_label_create(btn_x);
   lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
@@ -280,13 +341,13 @@ void showLocationPicker() {
   lv_obj_center(lbl_x);
 
   // Status label (loading / error)
-  lv_obj_t *lbl_status = lv_label_create(box);
+  lv_obj_t *lbl_loc_status = lv_label_create(box);
   char status_buf[48];
-  strncpy(status_buf, T(STR_LOCATION_LOADING), sizeof(status_buf)-1);
-  lv_label_set_text(lbl_status, status_buf);
-  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x4a6fa0), 0);
-  lv_obj_set_style_text_font(lbl_status, &lv_font_montserrat_ext_16, 0);
-  lv_obj_align(lbl_status, LV_ALIGN_CENTER, 0, 10);
+  copyT(status_buf, sizeof(status_buf), STR_LOCATION_LOADING);
+  lv_label_set_text(lbl_loc_status, status_buf);
+  lv_obj_set_style_text_color(lbl_loc_status, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(lbl_loc_status, &lv_font_montserrat_ext_16, 0);
+  lv_obj_align(lbl_loc_status, LV_ALIGN_CENTER, 0, 10);
 
   // Scrollable list container
   lv_obj_t *list = lv_obj_create(box);
@@ -301,12 +362,12 @@ void showLocationPicker() {
   lv_obj_add_flag(list, LV_OBJ_FLAG_HIDDEN);
 
   // Store refs for async fetch
-  loc_status_obj = lbl_status;
+  loc_status_obj = lbl_loc_status;
   loc_list_obj   = list;
 
   // Trigger async HTTP fetch via loop()
   if (!wifiManagerIsConnected()) {
-    char buf[32]; strncpy(buf, T(STR_LOCATION_NO_WIFI), sizeof(buf)-1);
+    char buf[32]; copyT(buf, sizeof(buf), STR_LOCATION_NO_WIFI);
     lv_label_set_text(lbl_status, buf);
     return;
   }
@@ -383,25 +444,19 @@ void fetchAndFillLocationList() {
   lv_obj_set_style_shadow_width(btn_none, 0, 0);
   lv_obj_set_style_pad_bottom(btn_none, 4, 0);
   lv_obj_t *lbl_none = lv_label_create(btn_none);
-  char none_buf[48]; strncpy(none_buf, T(STR_LOCATION_NONE), sizeof(none_buf)-1);
+  char none_buf[48]; copyT(none_buf, sizeof(none_buf), STR_LOCATION_NONE);
   lv_label_set_text(lbl_none, none_buf);
   lv_obj_set_style_text_color(lbl_none, lv_color_hex(0x8ab0d8), 0);
   lv_obj_set_style_text_font(lbl_none, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_none);
   lv_obj_add_event_cb(btn_none, [](lv_event_t *e) {
     if (!wifiManagerIsConnected() || sm_id <= 0) return;
-    int code = backendPatchSpoolLocation(cfg_spoolman_base, sm_id, nullptr, 8000);
-    if (code == 200) {
-      sm_location_id = 0;
-      sm_location_name[0] = '\0';
-    }
-    closeLocationPicker();
-    if (g_loc_picker_from_popup) { showMainScreen(); }
-    else { showMoreInfoScreen(); }
+    loc_patch_name[0] = '\0';      // clear
+    loc_patch_pending = true;
   }, LV_EVENT_CLICKED, NULL);
 
   logLvMem("loclist/pre", 0);
-  // Location rows — API gibt Array von Strings zurück
+  // Location rows - API gibt Array von Strings zurück
   int loc_shown = 0;
   bool loc_limit_hit = false;
   for (JsonVariant v : locs) {
@@ -436,19 +491,12 @@ void fetchAndFillLocationList() {
     lv_obj_add_event_cb(row, [](lv_event_t *e) {
       lv_obj_t *lbl = lv_obj_get_child(lv_event_get_target(e), 0);
       if (!lbl || !wifiManagerIsConnected() || sm_id <= 0) return;
+      // Copied out of the label now: the picker is gone by the time the
+      // PATCH runs from the loop.
       const char* sel_name = lv_label_get_text(lbl);
-      int code = backendPatchSpoolLocation(cfg_spoolman_base, sm_id, sel_name, 8000);
-      if (code == 200) {
-        strncpy(sm_location_name, sel_name, sizeof(sm_location_name)-1);
-        sm_location_name[sizeof(sm_location_name)-1] = '\0';
-        sm_location_id = 0;
-        // Mark popup as shown so it doesn't re-trigger on next tag-remove
-        g_loc_popup_shown_for_id = sm_id;
-        logSDf("[verbose] LOC: location saved '%s' id=%d from_popup=%d", sel_name, sm_id, (int)g_loc_picker_from_popup);
-      }
-      closeLocationPicker();
-      if (g_loc_picker_from_popup) { showMainScreen(); }
-      else { showMoreInfoScreen(); }
+      strncpy(loc_patch_name, sel_name ? sel_name : "", sizeof(loc_patch_name) - 1);
+      loc_patch_name[sizeof(loc_patch_name) - 1] = '\0';
+      loc_patch_pending = true;
     }, LV_EVENT_CLICKED, NULL);
     loc_shown++;
   }
@@ -464,7 +512,7 @@ void fetchAndFillLocationList() {
     lv_obj_set_style_pad_all(limit_row, 0, 0);
     lv_obj_clear_flag(limit_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     lv_obj_t *limit_lbl = lv_label_create(limit_row);
-    char limit_buf[64]; strncpy(limit_buf, T(STR_LOCATION_LIMIT_HIT), sizeof(limit_buf)-1);
+    char limit_buf[64]; copyT(limit_buf, sizeof(limit_buf), STR_LOCATION_LIMIT_HIT);
     lv_label_set_text(limit_lbl, limit_buf);
     lv_obj_set_style_text_color(limit_lbl, lv_color_hex(0xff8080), 0);
     lv_obj_set_style_text_font(limit_lbl, &lv_font_montserrat_ext_12, 0);
@@ -488,7 +536,7 @@ void fetchAndFillLocationList() {
   lv_obj_set_style_pad_all(hint_row, 0, 0);
   lv_obj_clear_flag(hint_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
   lv_obj_t *hint_lbl = lv_label_create(hint_row);
-  char hint_buf[64]; strncpy(hint_buf, T(STR_LOCATION_HINT_EMPTY), sizeof(hint_buf)-1);
+  char hint_buf[64]; copyT(hint_buf, sizeof(hint_buf), STR_LOCATION_HINT_EMPTY);
   lv_label_set_text(hint_lbl, hint_buf);
   lv_obj_set_style_text_color(hint_lbl, lv_color_hex(0xf0b838), 0);
   lv_obj_set_style_text_font(hint_lbl, &lv_font_montserrat_ext_14, 0);
@@ -582,8 +630,7 @@ static void showStatusPicker() {
 
   lv_obj_t *lbl_title = lv_label_create(hdr);
   char title_buf[48];
-  strncpy(title_buf, T(STR_STATUS_TITLE), sizeof(title_buf)-1);
-  title_buf[sizeof(title_buf)-1] = '\0';
+  copyT(title_buf, sizeof(title_buf), STR_STATUS_TITLE);
   lv_label_set_text(lbl_title, title_buf);
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
@@ -654,8 +701,7 @@ static void showStatusPicker() {
 
     lv_obj_t *lbl = lv_label_create(cell);
     char cell_buf[32];
-    strncpy(cell_buf, T(statusStrId(id)), sizeof(cell_buf)-1);
-    cell_buf[sizeof(cell_buf)-1] = '\0';
+    copyT(cell_buf, sizeof(cell_buf), statusStrId(id));
     lv_label_set_text(lbl, cell_buf);
     lv_obj_set_style_text_color(lbl, lv_color_hex(txt_col), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
@@ -700,14 +746,14 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_pad_all(hdr, 0, 0);
   lv_obj_clear_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
 
-  // Title — Fix 12: always "More info filament" in both languages
+  // Title - Fix 12: always "More info filament" in both languages
   lv_obj_t *lbl_title = lv_label_create(hdr);
   lv_label_set_text(lbl_title, "Filament");
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(lbl_title, LV_ALIGN_CENTER, 0, 0);
 
-  // Status chip — left half of the header, which holds nothing else. The box
+  // Status chip - left half of the header, which holds nothing else. The box
   // below is full to the pixel, this costs no vertical space at all.
   // FilaMan only: it is the one backend with a status worth showing and worth
   // changing. Spoolman has just archived:bool and BamBuddy just an archive
@@ -739,8 +785,7 @@ void buildMoreInfoScreen() {
 
     lv_obj_t *chip_val = lv_label_create(chip);
     char st_buf[24];
-    strncpy(st_buf, T(statusStrId(sm_status_id)), sizeof(st_buf)-1);
-    st_buf[sizeof(st_buf)-1] = '\0';
+    copyT(st_buf, sizeof(st_buf), statusStrId(sm_status_id));
     lv_label_set_text(chip_val, st_buf);
     lv_obj_set_style_text_color(chip_val, lv_color_hex(st_col), 0);
     lv_obj_set_style_text_font(chip_val, &lv_font_montserrat_ext_16, 0);
@@ -750,7 +795,7 @@ void buildMoreInfoScreen() {
     lv_obj_align(chip_val, LV_ALIGN_CENTER, 0, 8);
   }
 
-  // Close X button — Fix 10: 44x44px proper size
+  // Close X button - Fix 10: 44x44px proper size
   lv_obj_t *btn_x = lv_btn_create(hdr);
   lv_obj_set_size(btn_x, 44, 44);
   lv_obj_align(btn_x, LV_ALIGN_RIGHT_MID, -10, 0);
@@ -822,7 +867,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_font(mi_mat_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(mi_mat_cap, 114, 60);
 
-  // Material value — for NTAG spools use sm_material (from Spoolman), for Bambu use g_tag.material
+  // Material value - for NTAG spools use sm_material (from Spoolman), for Bambu use g_tag.material
   lv_obj_t *lbl_mat = lv_label_create(box);
   const char* mat_val = (strlen(sm_material_global) > 0) ? sm_material_global :
                         (strlen(g_tag.material) > 0 ? g_tag.material : "-");
@@ -872,8 +917,7 @@ void buildMoreInfoScreen() {
   const int VF16 = 16;  // same 18 px baseline distance, for a font 16 value
 
   // Row 1 Left: hex colour
-  char hex_cap[24]; strncpy(hex_cap, T(STR_LBL_HEX_COLOR), sizeof(hex_cap)-1);
-  hex_cap[sizeof(hex_cap)-1] = '\0';
+  char hex_cap[24]; copyT(hex_cap, sizeof(hex_cap), STR_LBL_HEX_COLOR);
   lv_obj_t *c1 = lv_label_create(box);
   lv_label_set_text(c1, hex_cap);
   lv_obj_set_style_text_color(c1, lv_color_hex(0x4a6fa0), 0);
@@ -890,8 +934,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_width(v1, CW);
 
   // Row 1 Right: production date
-  char prod_cap[24]; strncpy(prod_cap, T(STR_LBL_PRODUCTION_DATE), sizeof(prod_cap)-1);
-  prod_cap[sizeof(prod_cap)-1] = '\0';
+  char prod_cap[24]; copyT(prod_cap, sizeof(prod_cap), STR_LBL_PRODUCTION_DATE);
   lv_obj_t *c2 = lv_label_create(box);
   lv_label_set_text(c2, prod_cap);
   lv_obj_set_style_text_color(c2, lv_color_hex(0x4a6fa0), 0);
@@ -906,8 +949,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_width(v2, CW);
 
   // Row 2 Left: Article no.
-  char art_cap[24]; strncpy(art_cap, T(STR_LBL_ARTICLE_NO_SHORT), sizeof(art_cap)-1);
-  art_cap[sizeof(art_cap)-1] = '\0';
+  char art_cap[24]; copyT(art_cap, sizeof(art_cap), STR_LBL_ARTICLE_NO_SHORT);
   lv_obj_t *c3 = lv_label_create(box);
   lv_label_set_text(c3, art_cap);
   lv_obj_set_style_text_color(c3, lv_color_hex(0x4a6fa0), 0);
@@ -922,8 +964,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_width(v3, CW);
 
   // Row 2 Right: Spool weight (empty)
-  char sw_cap[24]; strncpy(sw_cap, T(STR_LBL_SPOOL_WEIGHT_EMPTY), sizeof(sw_cap)-1);
-  sw_cap[sizeof(sw_cap)-1] = '\0';
+  char sw_cap[24]; copyT(sw_cap, sizeof(sw_cap), STR_LBL_SPOOL_WEIGHT_EMPTY);
   lv_obj_t *c4 = lv_label_create(box);
   lv_label_set_text(c4, sw_cap);
   lv_obj_set_style_text_color(c4, lv_color_hex(0x4a6fa0), 0);
@@ -982,16 +1023,16 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_radius(btn_loc, 8, 0);
   lv_obj_set_style_shadow_width(btn_loc, 0, 0);
   lv_obj_set_style_pad_all(btn_loc, 0, 0);
-  // Cap label — centered, shifted 2px up from center
+  // Cap label - centered, shifted 2px up from center
   lv_obj_t *btn_loc_cap = lv_label_create(btn_loc);
   char loc_cap_buf[32];
-  strncpy(loc_cap_buf, T(STR_BTN_LOCATION), sizeof(loc_cap_buf)-1);
+  copyT(loc_cap_buf, sizeof(loc_cap_buf), STR_BTN_LOCATION);
   lv_label_set_text(btn_loc_cap, loc_cap_buf);
   lv_obj_set_style_text_color(btn_loc_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(btn_loc_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(btn_loc_cap, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(btn_loc_cap, LV_ALIGN_CENTER, 0, -11);
-  // Value label — centered
+  // Value label - centered
   lv_obj_t *btn_loc_val = lv_label_create(btn_loc);
   char loc_val_buf[48];
   strncpy(loc_val_buf, sm_location_name[0] ? sm_location_name : "-", sizeof(loc_val_buf)-1);
@@ -1025,7 +1066,7 @@ void buildMoreInfoScreen() {
   lv_label_set_long_mode(v_uuid, LV_LABEL_LONG_DOT);
   lv_obj_set_width(v_uuid, 330);  // shortened to make room for Unlink button
 
-  // Unlink button — bottom right, only visible when spool is linked (sm_found && sm_id > 0)
+  // Unlink button - bottom right, only visible when spool is linked (sm_found && sm_id > 0)
   if (sm_found && sm_id > 0) {
     lv_obj_t *btn_unlink = lv_btn_create(box);
     lv_obj_set_size(btn_unlink, 104, 34);
@@ -1038,7 +1079,9 @@ void buildMoreInfoScreen() {
     lv_obj_set_style_border_color(btn_unlink, lv_color_hex(0x601010), 0);
     lv_obj_add_event_cb(btn_unlink, [](lv_event_t *e) {
       // Build confirmation popup on lv_scr_act() so it sits above more_info
+      releaseScreen(&s_unlink_popup);
       lv_obj_t *pop = lv_obj_create(lv_scr_act());
+      s_unlink_popup = pop;
       lv_obj_set_size(pop, 480, 320);
       lv_obj_set_pos(pop, 0, 0);
       lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
@@ -1063,8 +1106,7 @@ void buildMoreInfoScreen() {
         for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++) {
           if (!sm_tag_values[i][0]) continue;
           char nm[32];
-          strncpy(nm, T(tagFieldSpec(i).str_name), sizeof(nm) - 1);
-          nm[sizeof(nm) - 1] = '\0';
+          copyT(nm, sizeof(nm), tagFieldSpec(i).str_name);
           const size_t need = strlen(nm) + (used ? 2 : 0);
           if (used + need >= sizeof(cu_src)) break;
           if (used) { cu_src[used++] = ','; cu_src[used++] = ' '; }
@@ -1084,7 +1126,7 @@ void buildMoreInfoScreen() {
       lv_obj_clear_flag(box2, LV_OBJ_FLAG_SCROLLABLE);
 
       lv_obj_t *lbl_t = lv_label_create(box2);
-      char buf_t[48]; strncpy(buf_t, T(STR_UNLINK_TITLE), sizeof(buf_t)-1);
+      char buf_t[48]; copyT(buf_t, sizeof(buf_t), STR_UNLINK_TITLE);
       lv_label_set_text(lbl_t, buf_t);
       lv_obj_set_style_text_color(lbl_t, lv_color_hex(0xff8080), 0);
       lv_obj_set_style_text_font(lbl_t, &lv_font_montserrat_ext_18, 0);
@@ -1092,7 +1134,7 @@ void buildMoreInfoScreen() {
 
       lv_obj_t *lbl_m = lv_label_create(box2);
       char buf_m[288];
-      if (cu_multi) strncpy(buf_m, T(STR_UNLINK_MULTI_MSG), sizeof(buf_m) - 1);
+      if (cu_multi) copyT(buf_m, sizeof(buf_m), STR_UNLINK_MULTI_MSG);
       else          backendText(T(STR_UNLINK_MSG), buf_m, sizeof(buf_m));
       buf_m[sizeof(buf_m) - 1] = '\0';
       if (cu_src[0]) {
@@ -1120,10 +1162,10 @@ void buildMoreInfoScreen() {
       lv_obj_set_style_border_width(btn_no, 1, 0);
       lv_obj_set_style_border_color(btn_no, lv_color_hex(0x1a2840), 0);
       lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
-        lv_obj_del(lv_obj_get_parent(lv_obj_get_parent(lv_event_get_target(e))));
+        releaseScreen(&s_unlink_popup);
       }, LV_EVENT_CLICKED, NULL);
       lv_obj_t *lbl_no = lv_label_create(btn_no);
-      char buf_no[32]; strncpy(buf_no, T(STR_CANCEL), sizeof(buf_no)-1);
+      char buf_no[32]; copyT(buf_no, sizeof(buf_no), STR_CANCEL);
       lv_label_set_text(lbl_no, buf_no);
       lv_obj_set_style_text_color(lbl_no, lv_color_hex(0x4a6fa0), 0);
       lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_14, 0);
@@ -1145,8 +1187,7 @@ void buildMoreInfoScreen() {
       lv_obj_add_event_cb(btn_yes, unlinkConfirmCb, LV_EVENT_CLICKED, NULL);
       lv_obj_t *lbl_yes = lv_label_create(btn_yes);
       char buf_yes[48];
-      strncpy(buf_yes, T(cu_multi ? STR_BTN_UNLINK_ONE : STR_UNLINK_CONFIRM), sizeof(buf_yes)-1);
-      buf_yes[sizeof(buf_yes)-1] = '\0';
+      copyT(buf_yes, sizeof(buf_yes), cu_multi ? STR_BTN_UNLINK_ONE : STR_UNLINK_CONFIRM);
       lv_label_set_text(lbl_yes, buf_yes);
       lv_obj_set_style_text_color(lbl_yes, lv_color_hex(0xff8080), 0);
       lv_obj_set_style_text_font(lbl_yes, &lv_font_montserrat_ext_14, 0);
@@ -1166,8 +1207,7 @@ void buildMoreInfoScreen() {
         lv_obj_add_event_cb(btn_all, unlinkConfirmCb, LV_EVENT_CLICKED, NULL);
         lv_obj_t *lbl_all = lv_label_create(btn_all);
         char buf_all[48];
-        strncpy(buf_all, T(STR_BTN_UNLINK_ALL), sizeof(buf_all)-1);
-        buf_all[sizeof(buf_all)-1] = '\0';
+        copyT(buf_all, sizeof(buf_all), STR_BTN_UNLINK_ALL);
         lv_label_set_text(lbl_all, buf_all);
         lv_obj_set_style_text_color(lbl_all, lv_color_hex(0xff8080), 0);
         lv_obj_set_style_text_font(lbl_all, &lv_font_montserrat_ext_14, 0);
@@ -1176,7 +1216,7 @@ void buildMoreInfoScreen() {
     }, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *lbl_unlink = lv_label_create(btn_unlink);
-    char buf_ul[16]; strncpy(buf_ul, T(STR_UNLINK_BTN), sizeof(buf_ul)-1);
+    char buf_ul[16]; copyT(buf_ul, sizeof(buf_ul), STR_UNLINK_BTN);
     lv_label_set_text(lbl_unlink, buf_ul);
     lv_obj_set_style_text_color(lbl_unlink, lv_color_hex(0xff8080), 0);
     lv_obj_set_style_text_font(lbl_unlink, &lv_font_montserrat_ext_14, 0);

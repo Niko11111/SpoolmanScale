@@ -31,13 +31,24 @@ static bool extra_fields_check_pending = false;
 // The arrow label of each menu row, which carries whether the server has that
 // field. Filled in by checkAndCreateExtraFields(), which already has the
 // answer and does not need a second request for it.
-enum FieldRow { FIELD_ROW_DRIED = 0, FIELD_ROW_TAG = 1, FIELD_ROW_COUNT = 2 };
-static lv_obj_t *lbl_field_state[FIELD_ROW_COUNT] = { nullptr, nullptr };
+enum FieldRow {
+  FIELD_ROW_DRIED  = 0,
+  FIELD_ROW_TAG    = 1,
+  FIELD_ROW_HW_UID = 2,   // only built while the switch for it is on
+  FIELD_ROW_COUNT  = 3
+};
+static lv_obj_t *lbl_field_state[FIELD_ROW_COUNT] = { nullptr, nullptr, nullptr };
 
 // Whether this screen is part of first setup, so the tag field screen behind
 // it can build the matching header.
 static bool extra_fields_in_setup = false;
 static bool extra_fields_create_pending = false;
+// The "create a test field" button. One request, parked like the other two.
+static bool extra_fields_test_pending = false;
+// The "create the missing fields?" confirmation, held so navigation can
+// take it down.
+static lv_obj_t *s_ef_confirm_pop = nullptr;
+void closeExtraFieldsPopup() { releaseScreen(&s_ef_confirm_pop); }
 
 void resetExtraFieldsScreenState() {
   for (int i = 0; i < FIELD_ROW_COUNT; i++) lbl_field_state[i] = nullptr;
@@ -47,6 +58,24 @@ void resetExtraFieldsScreenState() {
   extra_fields_setup_flow = false;
   extra_fields_check_pending = false;
   extra_fields_create_pending = false;
+  extra_fields_test_pending = false;
+  releaseScreen(&s_ef_confirm_pop);
+}
+
+static void runTestFieldCreate() {
+  int code = backendCreateSpoolField(cfg_spoolman_base, "spoolscale_test", 1500);
+  Serial.printf("Test field create: %d\n", code);
+  if (!lbl_extra_fields_status) return;      // the screen went away meanwhile
+  if (code == 200 || code == 201) {
+    { char sb[96]; backendText(T(STR_EF_TEST_CREATED), sb, sizeof(sb)); lv_label_set_text(lbl_extra_fields_status, sb); }
+    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
+  } else if (code == 409) {
+    { char sb[96]; backendText(T(STR_EF_TEST_EXISTS), sb, sizeof(sb)); lv_label_set_text(lbl_extra_fields_status, sb); }
+    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
+  } else {
+    lv_label_set_text(lbl_extra_fields_status, T(STR_EF_TEST_FAIL));
+    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
+  }
 }
 
 void handleExtraFieldsDeferredActions() {
@@ -57,6 +86,10 @@ void handleExtraFieldsDeferredActions() {
   if (extra_fields_create_pending) {
     extra_fields_create_pending = false;
     checkAndCreateExtraFields(true);
+  }
+  if (extra_fields_test_pending) {
+    extra_fields_test_pending = false;
+    runTestFieldCreate();
   }
 }
 
@@ -88,7 +121,30 @@ static int requiredExtraFields(const char* out[], int max) {
   if (n < max) out[n++] = LAST_DRIED_FIELD;
   const char* key = tagFieldKey();
   if (key && n < max) out[n++] = key;
+  // Only with the switch on, for the same reason the unselected tag fields are
+  // left out: creating a column nobody asked for is worse than not having it.
+  // With the switch on it is not optional at all - Spoolman answers a PATCH on
+  // a field it does not know with HTTP 400, so without it the setting is on
+  // and silently does nothing.
+  //
+  // Happy Hare creates the field itself on any server it runs against, so this
+  // is for the case where the scale is set up first.
+  if (g_hw_uid_write && n < max) out[n++] = RFID_TAG_FIELD;
   return n;
+}
+
+// Which menu row shows the state of a required field, or -1 for one that has
+// no row of its own.
+//
+// By name rather than by position. The list is built from what is needed right
+// now - last_dried always, the selected tag field only when it has a key, the
+// Happy Hare field only behind its switch - so an index into it means a
+// different field on different days, and the native source already shifts
+// everything after it by one.
+static int fieldRowFor(const char* key) {
+  if (strcmp(key, LAST_DRIED_FIELD) == 0) return FIELD_ROW_DRIED;
+  if (strcmp(key, RFID_TAG_FIELD)   == 0) return FIELD_ROW_HW_UID;
+  return FIELD_ROW_TAG;   // whichever one is selected
 }
 
 void showExtraFieldsScreen(bool is_setup_flow, bool from_options) {
@@ -187,8 +243,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
 
   // Row 1: which field holds the tag UID. The subtitle names the current
   // choice, so the setting can be read without opening it.
-  { char buf_t[40]; strncpy(buf_t, T(STR_TAG_FIELD), sizeof(buf_t)-1);
-    buf_t[sizeof(buf_t)-1] = '\0';
+  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_TAG_FIELD);
     char buf_s[48];
     snprintf(buf_s, sizeof(buf_s), "%s", tagFieldKeyName());
     lv_obj_t *help = nullptr;
@@ -204,8 +259,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
 
   // Row 2: the drying date field. Nothing to choose, so tapping it re-runs
   // the check that offers to create whatever is missing.
-  { char buf_t[40]; strncpy(buf_t, T(STR_EF_LAST_DRIED), sizeof(buf_t)-1);
-    buf_t[sizeof(buf_t)-1] = '\0';
+  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_EF_LAST_DRIED);
     lv_obj_t *help = nullptr;
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_TINT, buf_t, LAST_DRIED_FIELD,
                                 false, &help);
@@ -216,6 +270,22 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
       extra_fields_check_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
+  // Row 3: the field an MMU's gate readers resolve against, and only while the
+  // switch that writes it is on - with it off there is no field to have. Like
+  // the row above it has nothing to choose, so tapping it re-runs the check.
+  if (g_hw_uid_write) {
+    char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_HW_UID_WRITE);
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_UPLOAD, buf_t, RFID_TAG_FIELD,
+                                false, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_HW_UID_WRITE, STR_HW_UID_WRITE_INFO));
+    lbl_field_state[FIELD_ROW_HW_UID] = lv_obj_get_child(btn, -1);
+    lv_obj_add_event_cb(btn, [](lv_event_t *e) {
+      extra_fields_check_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+  }
+
   // Both rows start out saying nothing is known yet, which is the truth until
   // the check below has run.
   for (int i = 0; i < FIELD_ROW_COUNT; i++) {
@@ -224,7 +294,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_set_style_text_font(lbl_field_state[i], &lv_font_montserrat_ext_16, 0);
   }
 
-  // Status label — below check button
+  // Status label - below check button
   lbl_extra_fields_status = lv_label_create(scr_extra_fields);
   lv_label_set_text(lbl_extra_fields_status, "");
   lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xc8d8f0), 0);
@@ -234,7 +304,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_set_width(lbl_extra_fields_status, 440);
   lv_obj_align(lbl_extra_fields_status, LV_ALIGN_TOP_MID, 0, 192);
 
-  // Create missing fields button — full width, above bottom row, initially hidden
+  // Create missing fields button - full width, above bottom row, initially hidden
   btn_extra_fields_create = lv_btn_create(scr_extra_fields);
   lv_obj_set_size(btn_extra_fields_create, 440, 42);
   lv_obj_align(btn_extra_fields_create, LV_ALIGN_TOP_MID, 0, 228);
@@ -247,10 +317,12 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_add_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_event_cb(btn_extra_fields_create, [](lv_event_t *e) {
     // Confirmation popup
+    releaseScreen(&s_ef_confirm_pop);
     lv_obj_t *pop = lv_obj_create(lv_scr_act());
+    s_ef_confirm_pop = pop;
     lv_obj_set_size(pop, 480, 320);
     lv_obj_set_pos(pop, 0, 0);
-    lv_obj_set_style_bg_color(pop, lv_color_hex(0x00000080), 0);  // semi-transparent
+    lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);   // scrim, opacity below
     lv_obj_set_style_bg_opa(pop, LV_OPA_70, 0);
     lv_obj_set_style_border_width(pop, 0, 0);
     lv_obj_set_style_radius(pop, 0, 0);
@@ -274,7 +346,11 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_align(lbl_ct, LV_ALIGN_TOP_MID, 0, 18);
 
     lv_obj_t *lbl_cm = lv_label_create(box);
-    lv_label_set_text(lbl_cm, T(STR_EXTRA_FIELDS_CONFIRM_MSG));
+    // Through backendText() like the title above it: the string names
+    // Spoolman, and on the other two backends that was the wrong name.
+    { char cm[160];
+      backendText(T(STR_EXTRA_FIELDS_CONFIRM_MSG), cm, sizeof(cm));
+      lv_label_set_text(lbl_cm, cm); }
     lv_obj_set_style_text_color(lbl_cm, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(lbl_cm, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(lbl_cm, LV_TEXT_ALIGN_CENTER, 0);
@@ -292,11 +368,8 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_set_style_shadow_width(btn_conf, 0, 0);
     lv_obj_set_style_border_width(btn_conf, 0, 0);
     lv_obj_add_event_cb(btn_conf, [](lv_event_t *e) {
-      // Close popup (2 levels up: btn -> box -> pop)
-      lv_obj_t *box_obj = lv_obj_get_parent(lv_event_get_target(e));
-      lv_obj_t *pop_obj = lv_obj_get_parent(box_obj);
-      lv_obj_del(pop_obj);
-      // Defer HTTP call to loop — never call HTTP directly from LVGL event callback
+      releaseScreen(&s_ef_confirm_pop);
+      // Defer HTTP call to loop - never call HTTP directly from LVGL event callback
       extra_fields_create_pending = true;
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_conf = lv_label_create(btn_conf);
@@ -315,9 +388,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
     lv_obj_set_style_shadow_width(btn_can, 0, 0);
     lv_obj_set_style_border_width(btn_can, 0, 0);
     lv_obj_add_event_cb(btn_can, [](lv_event_t *e) {
-      lv_obj_t *box_obj = lv_obj_get_parent(lv_event_get_target(e));
-      lv_obj_t *pop_obj = lv_obj_get_parent(box_obj);
-      lv_obj_del(pop_obj);
+      releaseScreen(&s_ef_confirm_pop);
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_can = lv_label_create(btn_can);
     lv_label_set_text(lbl_can, T(STR_CANCEL));
@@ -379,20 +450,14 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
       }
       return;
     }
-    int code = backendCreateSpoolField(cfg_spoolman_base, "spoolscale_test", 1500);
-    Serial.printf("Test field create: %d\n", code);
+    // Says "testing" now, asks the server on the next loop pass.
     if (lbl_extra_fields_status) {
-      if (code == 200 || code == 201) {
-        { char sb[96]; backendText(T(STR_EF_TEST_CREATED), sb, sizeof(sb)); lv_label_set_text(lbl_extra_fields_status, sb); }
-        lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
-      } else if (code == 409) {
-        { char sb[96]; backendText(T(STR_EF_TEST_EXISTS), sb, sizeof(sb)); lv_label_set_text(lbl_extra_fields_status, sb); }
-        lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
-      } else {
-        lv_label_set_text(lbl_extra_fields_status, T(STR_EF_TEST_FAIL));
-        lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
-      }
+      char tb[48];
+      copyT(tb, sizeof(tb), STR_SPOOLMAN_TESTING);
+      lv_label_set_text(lbl_extra_fields_status, tb);
+      lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0x4a6fa0), 0);
     }
+    extra_fields_test_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_test = lv_label_create(btn_test);
   lv_label_set_text(lbl_test, T(STR_EF_TEST_BTN));
@@ -422,8 +487,8 @@ void checkAndCreateExtraFields(bool create_missing) {
   lv_timer_handler();
   yield();
 
-  // GET /api/v1/field/spool — list all existing extra fields
-  DynamicJsonDocument doc(8192);
+  // GET /api/v1/field/spool - list all existing extra fields
+  JsonDocument doc;
   DeserializationError err = DeserializationError::Ok;
   int code = backendGetSpoolFieldsJson(cfg_spoolman_base, doc, 4000, &err);
   yield();
@@ -441,6 +506,16 @@ void checkAndCreateExtraFields(bool create_missing) {
     lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
     return;
   }
+
+  // Settles which source is in force before asking what it needs. Without it
+  // this screen can be the first thing that runs on a given server - during
+  // setup there has been no scan yet - and the native source would still look
+  // selected on a server that does not have it, so the tag field would be
+  // left out of the list entirely and nothing would offer to create it.
+  //
+  // Reaches the network, which is allowed here: this function is deferred out
+  // of the pending flag and runs from appLoop(), never from the callback.
+  tagFieldAutoSelect();
 
   // Parse existing field names
   const char* required[REQUIRED_EXTRA_FIELDS_MAX];
@@ -468,10 +543,11 @@ void checkAndCreateExtraFields(bool create_missing) {
 
   // The menu rows above say per field what the server has. Same data as the
   // list below, shown where the user is looking rather than only as a summary.
-  for (int i = 0; i < ef_count && i < FIELD_ROW_COUNT; i++) {
-    if (!lbl_field_state[i]) continue;
-    lv_label_set_text(lbl_field_state[i], field_exists[i] ? LV_SYMBOL_OK : LV_SYMBOL_WARNING);
-    lv_obj_set_style_text_color(lbl_field_state[i],
+  for (int i = 0; i < ef_count; i++) {
+    const int row = fieldRowFor(required[i]);
+    if (row < 0 || !lbl_field_state[row]) continue;
+    lv_label_set_text(lbl_field_state[row], field_exists[i] ? LV_SYMBOL_OK : LV_SYMBOL_WARNING);
+    lv_obj_set_style_text_color(lbl_field_state[row],
       lv_color_hex(field_exists[i] ? 0x28d49a : 0xf0b838), 0);
   }
 
@@ -480,8 +556,8 @@ void checkAndCreateExtraFields(bool create_missing) {
   int missing_count = 0;
   for (int i = 0; i < ef_count; i++) {
     if (!field_exists[i]) {
-      if (missing_count > 0) strncat(missing_buf, ", ", sizeof(missing_buf)-1);
-      strncat(missing_buf, required[i], sizeof(missing_buf)-1);
+      if (missing_count > 0) strncat(missing_buf, ", ", sizeof(missing_buf) - strlen(missing_buf) - 1);
+      strncat(missing_buf, required[i], sizeof(missing_buf) - strlen(missing_buf) - 1);
       missing_count++;
     }
   }
@@ -497,8 +573,10 @@ void checkAndCreateExtraFields(bool create_missing) {
     }
     char ok_buf[128];
     snprintf(ok_buf, sizeof(ok_buf), T(STR_EXTRA_FIELDS_ALL_OK), have_buf);
-    lv_label_set_text(lbl_extra_fields_status, ok_buf);
-    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0x40c080), 0);
+    if (lbl_extra_fields_status) {
+      lv_label_set_text(lbl_extra_fields_status, ok_buf);
+      lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0x40c080), 0);
+    }
     if (btn_extra_fields_create) lv_obj_add_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
     // Turn skip/next button green with "Next →" label
     if (btn_extra_fields_next) {
@@ -520,14 +598,16 @@ void checkAndCreateExtraFields(bool create_missing) {
   if (!create_missing) {
     char status_buf[128];
     snprintf(status_buf, sizeof(status_buf), T(STR_EXTRA_FIELDS_MISSING), missing_buf);
-    lv_label_set_text(lbl_extra_fields_status, status_buf);
-    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
+    if (lbl_extra_fields_status) {
+      lv_label_set_text(lbl_extra_fields_status, status_buf);
+      lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
+    }
     if (btn_extra_fields_create) lv_obj_clear_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
     return;
   }
 
   // Create missing fields
-  lv_label_set_text(lbl_extra_fields_status, T(STR_EXTRA_FIELDS_CREATING));
+  if (lbl_extra_fields_status) lv_label_set_text(lbl_extra_fields_status, T(STR_EXTRA_FIELDS_CREATING));
   lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0x4a6fa0), 0);
   lv_timer_handler();
   yield();
@@ -544,8 +624,8 @@ void checkAndCreateExtraFields(bool create_missing) {
     Serial.printf("Create field '%s': %d\n", required[i], c2);
     logSDf("extra fields: create '%s' HTTP %d", required[i], c2);
     if (c2 != 200 && c2 != 201) {
-      if (fail_count > 0) strncat(fail_fields, ", ", sizeof(fail_fields)-1);
-      strncat(fail_fields, required[i], sizeof(fail_fields)-1);
+      if (fail_count > 0) strncat(fail_fields, ", ", sizeof(fail_fields) - strlen(fail_fields) - 1);
+      strncat(fail_fields, required[i], sizeof(fail_fields) - strlen(fail_fields) - 1);
       fail_count++;
     }
   }
@@ -553,8 +633,13 @@ void checkAndCreateExtraFields(bool create_missing) {
   if (fail_count > 0) {
     char fail_buf[128];
     snprintf(fail_buf, sizeof(fail_buf), T(STR_EXTRA_FIELDS_CREATE_FAIL), fail_fields);
-    lv_label_set_text(lbl_extra_fields_status, fail_buf);
-    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
+    // The loop above pumps LVGL between the requests, and the X on the setup
+    // variant of this screen goes through showMainScreen(), which nulls this
+    // label. Unguarded, that was LV_ASSERT_NULL and a frozen device.
+    if (lbl_extra_fields_status) {
+      lv_label_set_text(lbl_extra_fields_status, fail_buf);
+      lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
+    }
   } else {
     if (btn_extra_fields_create) lv_obj_add_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
     yield();
@@ -565,6 +650,6 @@ void checkAndCreateExtraFields(bool create_missing) {
 
 
 // ============================================================
-//  OTA — BROWSER UPLOAD
+//  OTA - BROWSER UPLOAD
 // ============================================================
 

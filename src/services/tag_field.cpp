@@ -47,10 +47,26 @@ uint8_t tagFieldEffective() {
   // That makes this a narrower guard than it looks, and deliberately so. It
   // answers "can this backend have a tag relation at all", which is what the
   // NVS setting can get wrong when the backend is switched underneath it.
-  // Whether a given Spoolman server actually has one stays where it belongs:
-  // in the API wrappers, which run with a network and answer
-  // BACKEND_NOT_SUPPORTED when it is missing.
-  return (backendMode() == BACKEND_SPOOLMAN) ? TAG_FIELD_NATIVE : TAG_FIELD_TAG;
+  if (backendMode() != BACKEND_SPOOLMAN) return TAG_FIELD_TAG;
+
+  // And the second way the setting goes stale: the server was downgraded off
+  // the version that has the relation. Nothing about the choice changed, so
+  // nothing used to notice - but the selected source has no key, every extra
+  // field path skips it, and the native endpoints answer
+  // BACKEND_NOT_SUPPORTED. Linking stopped working with no setting looking
+  // wrong anywhere.
+  //
+  // Reading a cache, never probing: an answer that had to be fetched cannot be
+  // had from here, see above. Only a server that actually said no counts, so a
+  // bad moment on the network does not swing the field back and forth.
+  //
+  // The stored choice is deliberately left alone. It is still what the user
+  // asked for, and putting the server back on a version that has the relation
+  // brings it into effect again without anybody having to pick it a second
+  // time.
+  if (backendNativeTagsAbsent()) return TAG_FIELD_TAG;
+
+  return TAG_FIELD_NATIVE;
 }
 
 const TagFieldSpec& tagFieldSelected() { return tagFieldSpec(tagFieldEffective()); }
@@ -63,9 +79,63 @@ const char* tagFieldKeyName() {
   return k ? k : "native";
 }
 
+bool tagFieldHoldsSeveral() {
+  // FilaMan carries two native columns since 1.3.1 and has no field to choose,
+  // so the source below says nothing about it. Whether this particular server
+  // is new enough is not decided here - see the comment in the header.
+  if (backendIsFilaMan()) return true;
+  // BamBuddy holds tag_uid and tray_uuid, which is two identities of one chip
+  // rather than two chips. A second flange has nowhere to go.
+  if (backendIsBamBuddy()) return false;
+
+  // Spoolman. The list field holds several while the switch that appends
+  // rather than replaces is on, and that needs nothing from the server.
+  if (!tagFieldIsNative()) return tagFieldIsList() && g_card_uids_write;
+
+  // The relation does need something from the server: it arrived in v0.27, and
+  // tagFieldEffective() above answers "native" on every Spoolman because it
+  // must not reach the network. On an older server the source therefore reads
+  // as selected while the endpoints are not there, and a row offering a second
+  // tag would promise something no link can deliver.
+  //
+  // Read out of the cache, never probed - this runs from the screen build. An
+  // unanswered cache (-1) leaves the row visible: before the first lookup
+  // nothing is known, and hiding a row that belongs there is the worse guess
+  // of the two. A definite "absent" takes it away.
+  return backendNativeTagsCached() != 0;
+}
+
 void tagFieldAutoSelect() {
+  // Asked before the settled-choice return below, because this is the call
+  // that fills the cache tagFieldEffective() reads to fall back off a relation
+  // the server does not have. Returning early on a settled choice - which is
+  // every installation that ever picked one - would leave that cache empty,
+  // and the fallback would never arm for the one case it exists for: somebody
+  // on the native source whose server was downgraded.
+  //
+  // But only where the answer is used: while no choice is made yet, or while
+  // the native source is the choice. On extra.tag or card_uids the probe
+  // decides nothing, and an inconclusive one (a proxy, a timeout) is not
+  // cached - so there it would be one blocking request per scan, forever.
+  const bool need_probe = !g_tag_field_chosen || g_tag_field == TAG_FIELD_NATIVE;
+  const bool has_native = need_probe && backendHasNativeTags();
+
+  // A server that answered no while the native source is selected. Said once
+  // per probe rather than per scan: tagFieldEffective() is asked constantly
+  // and cannot log.
+  static bool s_absence_logged = false;
+  if (backendNativeTagsAbsent() && g_tag_field == TAG_FIELD_NATIVE) {
+    if (!s_absence_logged) {
+      logSDf("Tag field: server has no tag relation, falling back to extra.%s",
+             tagFieldSpec(TAG_FIELD_TAG).key);
+      s_absence_logged = true;
+    }
+  } else {
+    s_absence_logged = false;
+  }
+
   if (g_tag_field_chosen) return;          // a decision, even an implicit one
-  if (!backendHasNativeTags()) return;
+  if (!has_native) return;
 
   g_tag_field = TAG_FIELD_NATIVE;
   g_tag_field_chosen = true;

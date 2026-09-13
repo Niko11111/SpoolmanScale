@@ -24,8 +24,7 @@ static void rowAsToggle(lv_obj_t *btn, bool on) {
   lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
   if (!arr_lbl) return;
   char buf_v[8];
-  strncpy(buf_v, T(on ? STR_ON : STR_OFF), sizeof(buf_v) - 1);
-  buf_v[sizeof(buf_v) - 1] = '\0';
+  copyT(buf_v, sizeof(buf_v), on ? STR_ON : STR_OFF);
   lv_label_set_text(arr_lbl, buf_v);
   lv_obj_set_style_text_color(arr_lbl,
     on ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
@@ -71,8 +70,7 @@ void buildFilaManFieldsScreen() {
   // Where the tag goes. A row without a switch, because the answer is fixed
   // and the question is a fair one to ask on the device - Spoolman has the
   // same row and there it opens a choice.
-  { char buf_t[40]; strncpy(buf_t, T(STR_FLM_TAGFIELD), sizeof(buf_t)-1);
-    buf_t[sizeof(buf_t)-1] = '\0';
+  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_FLM_TAGFIELD);
     lv_obj_t *help = nullptr;
     // Not a toggle, so it gets the neutral border: green here would read as
     // "switched on" next to the two rows below that really do switch.
@@ -85,10 +83,8 @@ void buildFilaManFieldsScreen() {
     lv_obj_clear_flag(btn, LV_OBJ_FLAG_CLICKABLE); }
 
   // The two chip fields the plugin keeps.
-  { char buf_t[40]; strncpy(buf_t, T(STR_FLM_BTAGS), sizeof(buf_t)-1);
-    buf_t[sizeof(buf_t)-1] = '\0';
-    char buf_s[48]; strncpy(buf_s, T(STR_FLM_BTAGS_SUB), sizeof(buf_s)-1);
-    buf_s[sizeof(buf_s)-1] = '\0';
+  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_FLM_BTAGS);
+    char buf_s[48]; copyT(buf_s, sizeof(buf_s), STR_FLM_BTAGS_SUB);
     lv_obj_t *help = nullptr;
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_SD_CARD, buf_t, buf_s, g_flm_bambu_tags, &help);
     if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
@@ -103,10 +99,8 @@ void buildFilaManFieldsScreen() {
     }, LV_EVENT_CLICKED, NULL); }
 
   // external_id, which is what stops the plugin creating the spool twice.
-  { char buf_t[40]; strncpy(buf_t, T(STR_FLM_EXTID), sizeof(buf_t)-1);
-    buf_t[sizeof(buf_t)-1] = '\0';
-    char buf_s[48]; strncpy(buf_s, T(STR_FLM_EXTID_SUB), sizeof(buf_s)-1);
-    buf_s[sizeof(buf_s)-1] = '\0';
+  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_FLM_EXTID);
+    char buf_s[48]; copyT(buf_s, sizeof(buf_s), STR_FLM_EXTID_SUB);
     lv_obj_t *help = nullptr;
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_COPY, buf_t, buf_s, g_flm_ext_id, &help);
     if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,

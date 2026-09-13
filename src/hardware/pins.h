@@ -7,7 +7,25 @@ namespace hw_pins {
 constexpr int8_t I2C_EXT_SDA = 10;   // PN532 + NAU7802 bus
 constexpr int8_t I2C_EXT_SCL = 11;   // PN532 + NAU7802 bus
 
-constexpr int8_t PN532_RESET = 12;
+// The PN532's reset line exists in two places, and which one is used is a
+// property of the device rather than of the firmware.
+//
+// Every SpoolmanScale built before September 2026 has the orange RST wire on
+// the header opposite the labelled one, where the module brings out an output
+// rather than its RSTPD_N input. Measured on the bench: with the wire there,
+// holding any connector GPIO low leaves the reader answering
+// GetFirmwareVersion with a healthy 0x32010607 - the reset simply never
+// reached the chip, on any unit, since May 2026.
+//
+// Moving the wire to RSTPDN makes it work; verified on 2026-08-29, where the
+// same probe returned SILENT while held and the reader came back after. But
+// that is a soldering job, most of the fleet will never do it, and driving
+// PN532_RESET_WIRE on a device that still has the old wiring puts the ESP32's
+// output against the module's. So the pin is only handed to the library after
+// a measurement on this very device says the wire was moved - see
+// services/nfc_reset.h.
+constexpr int8_t PN532_RESET_WIRE = 14;   // EXT_IO5, connector pin 7, brown
+constexpr int8_t PN532_RESET_SAFE = 12;   // EXT_IO3, pin 5, no build ever wired it
 
 // The PN532's IRQ line is not wired, and in I2C mode the library never reads
 // it: isready() answers from the bus, and the branch that would call

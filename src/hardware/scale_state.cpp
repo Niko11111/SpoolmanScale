@@ -6,6 +6,7 @@
 
 #include "app_config.h"
 #include "services/prefs_store.h"
+#include "services/user_options.h"
 
 
 void saveCalFactor(float factor) {
@@ -30,4 +31,20 @@ void resetScaleFilter() {
   memset(scale_filter_buf, 0, sizeof(scale_filter_buf));
   scale_filter_idx = 0;
   scale_filter_full = false;
+}
+
+
+void setScaleFitted(bool fitted) {
+  g_scale_fitted = fitted;
+  prefsPutBool("scale_fitted", fitted);
+  Serial.printf("scale_fitted saved: %s\n", fitted ? "yes" : "no");
+
+  // Only the way down needs doing. Coming back up is the restart's job: the
+  // ADC has to be probed and calibrated, and that belongs in app_boot.cpp.
+  if (!fitted) {
+    scale_ready    = false;
+    scl_ok         = false;
+    scale_weight_g = 0.0f;
+    resetScaleFilter();
+  }
 }

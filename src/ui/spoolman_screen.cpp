@@ -1,4 +1,5 @@
 #include "spoolman_screen.h"
+#include "app/backend_switch.h"
 #include "navigation.h"
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
@@ -52,21 +53,111 @@ static bool hostIsNumeric(const char* h) {
 // because pointing at an address that does not answer is worse than saying
 // which switch is off.
 static void browserAddress(char* out, size_t len) {
-  if (!webMasterEnabled())  { strncpy(out, T(STR_SP_WEB_OFF), len - 1); }
-  else if (!wifi_ok)        { strncpy(out, T(STR_WIFI_STATUS_DISCONNECTED), len - 1); }
+  if (!webMasterEnabled())  { copyT(out, len, STR_SP_WEB_OFF); }
+  else if (!wifi_ok)        { copyT(out, len, STR_WIFI_STATUS_DISCONNECTED); }
   else                      { deviceBrowserUrl(out, len); return; }
   out[len - 1] = '\0';
 }
 
 void spoolmanClearHost() {
   logSDf("Backend: address cleared on the device (was %s)", backendHost());
-  backendSetHost("");
+  backendApplyHost("");
   sp_ip_input[0] = '\0';
   show_spoolman_pending = true;   // rebuilt one loop pass later, never here
 }
 static lv_obj_t *lbl_sp_ip_display = nullptr;
 static lv_obj_t *lbl_sp_test_result = nullptr;  // test result label on IP screen
 static lv_obj_t *btn_sp_extra_fields = nullptr;  // Extra Fields button on IP screen
+// The save button parks the address test here; appLoop() runs it.
+static bool sp_test_pending = false;
+static void runAddressTest();
+
+void handleSpoolmanScreenDeferredActions() {
+  if (!sp_test_pending) return;
+  sp_test_pending = false;
+  if (!scr_spoolman) return;      // the screen went away before its pass
+  runAddressTest();
+}
+
+void closeSpoolmanScreen() {
+  sp_test_pending     = false;
+  lbl_sp_ip_display   = nullptr;
+  lbl_sp_test_result  = nullptr;
+  btn_sp_extra_fields = nullptr;
+  if (scr_spoolman) { lv_obj_del(scr_spoolman); scr_spoolman = nullptr; }
+}
+
+// The address test the save button asks for: health, version, spool count -
+// up to thirteen seconds of requests. Run from appLoop() one pass after the
+// button, never from the button itself, which held the touch panel for the
+// whole of it.
+static void runAddressTest() {
+  // Health check
+  int hcode = backendGetHealthCode(cfg_spoolman_base, 4000);
+  sm_reachable = (hcode == 200);
+
+  if (!sm_reachable) {
+    if (lbl_sp_test_result) {
+      char buf[64];
+      snprintf(buf, sizeof(buf), "%s (HTTP %d)", T(STR_API_ERROR), hcode);
+      lv_label_set_text(lbl_sp_test_result, buf);
+      lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0xff8080), 0);
+    }
+    logSDf("Spoolman IP test FAIL: HTTP %d ip=%s", hcode, sp_ip_input);
+    Serial.printf("Spoolman IP test FAIL: HTTP %d ip=%s\n", hcode, sp_ip_input);
+    return;
+  }
+
+  // BamBuddy needs to be asked where its inventory lives before anything
+  // else is read. Placed after the health check so a wrong address fails
+  // on the check rather than here.
+  backendAfterConnect();
+
+  // Fetch version from /api/v1/info
+  char sm_ver[32] = "?";
+  backendGetVersion(cfg_spoolman_base, sm_ver, sizeof(sm_ver), 3000);
+
+  int spool_count = backendCountActiveSpools(cfg_spoolman_base, 6000);
+
+  // A negative count means the question could not be answered, not that
+  // there are no spools. In FilaMan that is the normal case during setup,
+  // because counting needs the API key and it is entered a step later.
+  // Printing "0 spools" there would look like an empty database.
+  // Which database BamBuddy is on decides which half of the client runs,
+  // so it belongs on screen and not only in the log. The two names are the
+  // ones BamBuddy uses itself under Settings > Filament Tracking. Empty for
+  // the other backends, where there is nothing to choose between.
+  char inv_buf[32] = "";
+  if (backendIsBamBuddy()) {
+    char inv_name[24];
+    copyT(inv_name, sizeof(inv_name), bbInventoryMode() == BB_INV_SPOOLMAN ? STR_BB_INV_SPOOLMAN : STR_BB_INV_OWN);
+    snprintf(inv_buf, sizeof(inv_buf), "%s | ", inv_name);
+  }
+
+  char result_buf[96];
+  if (spool_count < 0) {
+    char conn_buf[24];
+    copyT(conn_buf, sizeof(conn_buf), STR_CONNECTED);
+    snprintf(result_buf, sizeof(result_buf), "v%s | %s%s", sm_ver, inv_buf, conn_buf);
+  } else {
+    char cnt[32];
+    snprintf(cnt, sizeof(cnt), T(STR_SPOOLS_COUNT), spool_count);
+    snprintf(result_buf, sizeof(result_buf), "v%s | %s%s", sm_ver, inv_buf, cnt);
+  }
+  if (lbl_sp_test_result) {
+    lv_label_set_text(lbl_sp_test_result, result_buf);
+    lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x40c080), 0);
+  }
+  // Reveal the button again. In FilaMan and BamBuddy it only leads
+  // somewhere during the setup, where it is the step to the credentials.
+  if (btn_sp_extra_fields && (setup_active || backendMode() == BACKEND_SPOOLMAN)) {
+    lv_obj_clear_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
+  }
+
+  logSDf("Spoolman IP test OK: %s | %d spools", sm_ver, spool_count);
+  Serial.printf("Spoolman IP test OK: %s | %d spools\n", sm_ver, spool_count);
+  updateHeaderStatus();
+}
 
 void buildSpoolmanScreen() {
   logSD("BUILD: SpoolmanScreen");
@@ -104,7 +195,7 @@ void buildSpoolmanScreen() {
       // turned a look into an edit, which is how one tap could append a
       // digit to a host name and make it unresolvable.
       if (sp_ip_input[0] && strcmp(sp_ip_input, sp_ip_original) != 0)
-        backendSetHost(sp_ip_input);
+        backendApplyHost(sp_ip_input);
       // Return to wherever we came from. The Backend screen exists only
       // when the user navigated through it, the setup flow does not.
       if (scr_backend) show_backend_pending = true;
@@ -118,8 +209,7 @@ void buildSpoolmanScreen() {
                                                              : "7912";
   char buf_hint[48];
   if (sp_locked) {
-    strncpy(buf_hint, T(STR_SP_LOCKED_TITLE), sizeof(buf_hint) - 1);
-    buf_hint[sizeof(buf_hint) - 1] = '\0';
+    copyT(buf_hint, sizeof(buf_hint), STR_SP_LOCKED_TITLE);
   } else {
     snprintf(buf_hint, sizeof(buf_hint), "192.168.x.x:%s", def_port);
   }
@@ -130,7 +220,7 @@ void buildSpoolmanScreen() {
   lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 52);
 
-  // Pre-fill with "192.168." if empty — user only needs to add last two octets + port
+  // Pre-fill with "192.168." if empty - user only needs to add last two octets + port
   const char* cur_host = backendHost();
   if (!cur_host || cur_host[0] == '\0') {
     strncpy(sp_ip_input, "192.168.", sizeof(sp_ip_input)-1);
@@ -158,7 +248,7 @@ void buildSpoolmanScreen() {
   lv_obj_set_style_text_align(lbl_sp_ip_display, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_center(lbl_sp_ip_display);
 
-  // Numpad: NP_H=32, NP_GAP=3, start y=104 — larger than before
+  // Numpad: NP_H=32, NP_GAP=3, start y=104 - larger than before
   const int NP_W = 130, NP_H = 32, NP_GAP = 3;
   const int NP_PAD_X = (480 - 3*NP_W - 2*NP_GAP) / 2;
   const int NP_START_Y = 104;
@@ -171,8 +261,7 @@ void buildSpoolmanScreen() {
     lv_obj_set_width(lbl_why, 440);
     lv_label_set_long_mode(lbl_why, LV_LABEL_LONG_WRAP);
     char buf_why[128];
-    strncpy(buf_why, T(STR_SP_LOCKED_INFO), sizeof(buf_why) - 1);
-    buf_why[sizeof(buf_why) - 1] = '\0';
+    copyT(buf_why, sizeof(buf_why), STR_SP_LOCKED_INFO);
     lv_label_set_text(lbl_why, buf_why);
     lv_obj_set_style_text_color(lbl_why, lv_color_hex(0xc8d8f0), 0);
     lv_obj_set_style_text_font(lbl_why, &lv_font_montserrat_ext_14, 0);
@@ -208,8 +297,7 @@ void buildSpoolmanScreen() {
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_clear = lv_label_create(btn_clear);
     char buf_clear[32];
-    strncpy(buf_clear, T(STR_SP_CLEAR), sizeof(buf_clear) - 1);
-    buf_clear[sizeof(buf_clear) - 1] = '\0';
+    copyT(buf_clear, sizeof(buf_clear), STR_SP_CLEAR);
     lv_label_set_text(lbl_clear, buf_clear);
     lv_obj_set_style_text_color(lbl_clear, lv_color_hex(0xff8080), 0);
     lv_obj_set_style_text_font(lbl_clear, &lv_font_montserrat_ext_16, 0);
@@ -292,83 +380,17 @@ void buildSpoolmanScreen() {
   lv_obj_set_style_border_color(btn_ok, lv_color_hex(0x2a5030), 0);
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
     if (!sp_ip_input[0]) return;
-    backendSetHost(sp_ip_input);
+    backendApplyHost(sp_ip_input);
 
-    // Show testing status
+    // Says "testing" now, tests on the next loop pass.
     if (lbl_sp_test_result) {
-      lv_label_set_text(lbl_sp_test_result, "Connecting...");
+      char tb[48];
+      copyT(tb, sizeof(tb), STR_SPOOLMAN_TESTING);
+      lv_label_set_text(lbl_sp_test_result, tb);
       lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x4a6fa0), 0);
     }
     if (btn_sp_extra_fields) lv_obj_add_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
-    lv_timer_handler();
-
-    // Health check
-    int hcode = backendGetHealthCode(cfg_spoolman_base, 4000);
-    sm_reachable = (hcode == 200);
-
-    if (!sm_reachable) {
-      if (lbl_sp_test_result) {
-        char buf[48];
-        snprintf(buf, sizeof(buf), "Error: HTTP %d", hcode);
-        lv_label_set_text(lbl_sp_test_result, buf);
-        lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0xff8080), 0);
-      }
-      logSDf("Spoolman IP test FAIL: HTTP %d ip=%s", hcode, sp_ip_input);
-      Serial.printf("Spoolman IP test FAIL: HTTP %d ip=%s\n", hcode, sp_ip_input);
-      return;
-    }
-
-    // BamBuddy needs to be asked where its inventory lives before anything
-    // else is read. Placed after the health check so a wrong address fails
-    // on the check rather than here.
-    backendAfterConnect();
-
-    // Fetch version from /api/v1/info
-    char sm_ver[32] = "?";
-    backendGetVersion(cfg_spoolman_base, sm_ver, sizeof(sm_ver), 3000);
-
-    int spool_count = backendCountActiveSpools(cfg_spoolman_base, 6000);
-
-    // A negative count means the question could not be answered, not that
-    // there are no spools. In FilaMan that is the normal case during setup,
-    // because counting needs the API key and it is entered a step later.
-    // Printing "0 spools" there would look like an empty database.
-    // Which database BamBuddy is on decides which half of the client runs,
-    // so it belongs on screen and not only in the log. The two names are the
-    // ones BamBuddy uses itself under Settings > Filament Tracking. Empty for
-    // the other backends, where there is nothing to choose between.
-    char inv_buf[32] = "";
-    if (backendIsBamBuddy()) {
-      char inv_name[24];
-      strncpy(inv_name, T(bbInventoryMode() == BB_INV_SPOOLMAN ? STR_BB_INV_SPOOLMAN
-                                                               : STR_BB_INV_OWN),
-              sizeof(inv_name) - 1);
-      inv_name[sizeof(inv_name) - 1] = '\0';
-      snprintf(inv_buf, sizeof(inv_buf), "%s | ", inv_name);
-    }
-
-    char result_buf[96];
-    if (spool_count < 0) {
-      char conn_buf[24];
-      strncpy(conn_buf, T(STR_CONNECTED), sizeof(conn_buf) - 1);
-      conn_buf[sizeof(conn_buf) - 1] = '\0';
-      snprintf(result_buf, sizeof(result_buf), "v%s | %s%s", sm_ver, inv_buf, conn_buf);
-    } else {
-      snprintf(result_buf, sizeof(result_buf), "v%s | %s%d spools",
-               sm_ver, inv_buf, spool_count);
-    }
-    if (lbl_sp_test_result) {
-      lv_label_set_text(lbl_sp_test_result, result_buf);
-      lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x40c080), 0);
-    }
-    // Reveal the button again. In FilaMan and BamBuddy it only leads
-    // somewhere during the setup, where it is the step to the credentials.
-    if (btn_sp_extra_fields && (setup_active || backendMode() == BACKEND_SPOOLMAN)) {
-      lv_obj_clear_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
-    }
-
-    logSDf("Spoolman IP test OK: %s | %d spools", sm_ver, spool_count);
-    Serial.printf("Spoolman IP test OK: %s | %d spools\n", sm_ver, spool_count);
+    sp_test_pending = true;
     updateHeaderStatus();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
@@ -384,7 +406,7 @@ void buildSpoolmanScreen() {
   // bottom row y=281, h=32, bottom=313 (7px margin)
   const int BOT_Y = 281, BOT_H = 32;
 
-  // Test result label — left side, y=281
+  // Test result label - left side, y=281
   lbl_sp_test_result = lv_label_create(scr_spoolman);
   lv_label_set_text(lbl_sp_test_result, "");
   lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(0x4a6fa0), 0);
@@ -393,7 +415,7 @@ void buildSpoolmanScreen() {
   lv_obj_set_size(lbl_sp_test_result, 260, BOT_H);
   lv_obj_set_pos(lbl_sp_test_result, NP_PAD_X, BOT_Y);
 
-  // Extra Fields button — right side, 170px wide
+  // Extra Fields button - right side, 170px wide
   btn_sp_extra_fields = lv_btn_create(scr_spoolman);
   lv_obj_set_size(btn_sp_extra_fields, 170, BOT_H);
   lv_obj_set_pos(btn_sp_extra_fields, 480 - NP_PAD_X - 170, BOT_Y);
@@ -439,12 +461,12 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
   hideAllOverlays();
   if (scr_spoolman_fail) { lv_obj_del(scr_spoolman_fail); scr_spoolman_fail = nullptr; }
 
-  // Copy all strings to RAM buffers — T() returns Flash pointers which LVGL can't read directly
+  // Copy all strings to RAM buffers - T() returns Flash pointers which LVGL can't read directly
   char buf_title[32], buf_msg[96], buf_retry[48], buf_skip[48];
   backendText(T(STR_SPOOLMAN_TITLE), buf_title, sizeof(buf_title));
   backendText(T(STR_SPOOLMAN_FAIL), buf_msg, sizeof(buf_msg));
-  strncpy(buf_retry, T(STR_SPOOLMAN_RETRY), sizeof(buf_retry)-1); buf_retry[sizeof(buf_retry)-1]=0;
-  strncpy(buf_skip,  T(STR_SPOOLMAN_SKIP),  sizeof(buf_skip)-1);  buf_skip[sizeof(buf_skip)-1]=0;
+  copyT(buf_retry, sizeof(buf_retry), STR_SPOOLMAN_RETRY); buf_retry[sizeof(buf_retry)-1]=0;
+  copyT(buf_skip, sizeof(buf_skip), STR_SPOOLMAN_SKIP);  buf_skip[sizeof(buf_skip)-1]=0;
 
   scr_spoolman_fail = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_spoolman_fail, 480, 320);
@@ -533,7 +555,7 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
     if (spoolman_fail_is_setup) {
       showExtraFieldsScreen(true);
     } else {
-      if (scr_connection) { lv_obj_del(scr_connection); scr_connection = nullptr; }
+      closeConnectionScreen();
       buildConnectionScreen();
       if (!scr_connection) buildConnectionScreen(); hideAllOverlays(); lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
     }

@@ -11,6 +11,7 @@
 #include "app_config.h"
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
+#include "services/github_release.h"
 #include "services/ota_state.h"
 #include "web/web_server.h"
 #include "services/prefs_store.h"
@@ -55,7 +56,10 @@ constexpr uint32_t TIME_IS_SYNCED = 1700000000;
 // stack is taken from the heap when the task starts and given back when it
 // deletes itself, so this costs nothing for the other 86399 seconds of the day.
 // The watermark is logged below; if it stays comfortable this can come down.
-constexpr uint32_t TASK_STACK_BYTES = 12288;
+// Raised from 12 kB when the connection stopped being setInsecure(): the
+// certificate bundle parses the matching root inside the handshake, on this
+// stack.
+constexpr uint32_t TASK_STACK_BYTES = 14336;
 constexpr int      TASK_PRIORITY    = 1;   // below the Arduino loop task
 constexpr int      TASK_CORE        = 0;   // the loop runs on core 1
 
@@ -82,6 +86,7 @@ volatile uint32_t s_persist_epoch = 0;   // non-zero: tick writes it to NVS
 // background result landing mid-draw would otherwise show a half-written
 // string. Only updateCheckTick() copies it across.
 char s_found_version[32] = "";
+char s_found_sha[65]     = "";
 
 unsigned long s_due_ms = 0;
 bool s_scheduled = false;
@@ -90,7 +95,7 @@ void updateCheckTask(void* arg) {
   (void)arg;
 
   WiFiClientSecure client;
-  client.setInsecure();
+  githubTrust(client);
   HTTPClient http;
 
   if (!http.begin(client, VERSION_URL)) {
@@ -134,8 +139,15 @@ void updateCheckTask(void* arg) {
   // With pre-releases on, fall back to the stable tag when the file carries no
   // separate pre-release, which is the case right after a public release.
   const char* tag = nullptr;
-  if (gh_prerelease) tag = doc["prerelease"].as<const char*>();
-  if (!tag || tag[0] == '\0') tag = doc["stable"].as<const char*>();
+  const char* sha = nullptr;
+  if (gh_prerelease) {
+    tag = doc["prerelease"].as<const char*>();
+    sha = doc["prerelease_sha256"].as<const char*>();
+  }
+  if (!tag || tag[0] == '\0') {
+    tag = doc["stable"].as<const char*>();
+    sha = doc["stable_sha256"].as<const char*>();
+  }
 
   if (!tag || tag[0] == '\0') {
     s_result = RES_FAIL_JSON;
@@ -146,6 +158,13 @@ void updateCheckTask(void* arg) {
 
   strncpy(s_found_version, tag, sizeof(s_found_version) - 1);
   s_found_version[sizeof(s_found_version) - 1] = '\0';
+  // Published next to the tag by the release workflow. A version.json from
+  // before that carries none, and the flash then runs on TLS alone.
+  s_found_sha[0] = '\0';
+  if (sha && strlen(sha) == 64) {
+    strncpy(s_found_sha, sha, sizeof(s_found_sha) - 1);
+    s_found_sha[sizeof(s_found_sha) - 1] = '\0';
+  }
 
   uint64_t installed = parseVersion(FW_VERSION);
   uint64_t remote    = parseVersion(s_found_version);
@@ -226,6 +245,14 @@ void updateCheckRestoreBadge() {
 
   strncpy(gh_latest_version, stored, sizeof(gh_latest_version) - 1);
   gh_latest_version[sizeof(gh_latest_version) - 1] = '\0';
+  // The checksum that came with it, if the workflow published one.
+  String sha_s = prefsGetString("upd_sha", "");
+  if (sha_s.length() == 64) {
+    strncpy(gh_latest_sha, sha_s.c_str(), sizeof(gh_latest_sha) - 1);
+    gh_latest_sha[sizeof(gh_latest_sha) - 1] = '\0';
+    strncpy(gh_latest_sha_tag, gh_latest_version, sizeof(gh_latest_sha_tag) - 1);
+    gh_latest_sha_tag[sizeof(gh_latest_sha_tag) - 1] = '\0';
+  }
   update_available = true;
   showUpdateBadges(true);
   logSDf("Update badge restored from NVS: %s > %s", stored, FW_VERSION);
@@ -253,6 +280,10 @@ void updateCheckTick() {
       case RES_AVAILABLE:
         strncpy(gh_latest_version, s_found_version, sizeof(gh_latest_version) - 1);
         gh_latest_version[sizeof(gh_latest_version) - 1] = '\0';
+        strncpy(gh_latest_sha, s_found_sha, sizeof(gh_latest_sha) - 1);
+        gh_latest_sha[sizeof(gh_latest_sha) - 1] = '\0';
+        strncpy(gh_latest_sha_tag, s_found_version, sizeof(gh_latest_sha_tag) - 1);
+        gh_latest_sha_tag[sizeof(gh_latest_sha_tag) - 1] = '\0';
         update_available = true;
         showUpdateBadges(true);
         logSDf("Update check: %s available (installed %s)",
@@ -269,6 +300,8 @@ void updateCheckTick() {
         // it would be the device arguing with itself. The next check settles it.
         if (!otaGithubScreenVisible()) {
           gh_latest_version[0] = '\0';
+          gh_latest_sha[0] = '\0';
+          gh_latest_sha_tag[0] = '\0';
           update_available = false;
           showUpdateBadges(false);
         }
@@ -300,6 +333,7 @@ void updateCheckTick() {
     // check skips itself for a day, a reboot inside that window left the badge
     // off while an update was in fact waiting.
     prefsPutString("upd_ver", gh_latest_version);
+    prefsPutString("upd_sha", gh_latest_sha);
   } else if (answered) {
     // The server answered but NTP has not, so the daily window cannot be
     // measured in wall clock time. Count uptime instead, otherwise the retry

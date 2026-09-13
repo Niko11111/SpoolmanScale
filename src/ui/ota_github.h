@@ -4,6 +4,10 @@
 
 void showOtaGithubScreen();
 void buildOtaGithubScreen();
+// The screen is deleted from several navigation paths that know nothing of
+// the labels on it, while the parked check and the downgrade path write them
+// from the loop up to ten seconds later. Called wherever the screen goes.
+void otaGithubForgetLabels();
 void doGithubOtaCheck();
 void doGithubOtaFlash(const char* version);
 

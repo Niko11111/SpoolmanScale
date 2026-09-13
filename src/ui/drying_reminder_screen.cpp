@@ -54,7 +54,7 @@ static void buildDryNumpadScreen(int target) {
   lv_obj_align(s_dry_numpad_lbl, LV_ALIGN_CENTER, 0, 0);
 
   // Numpad 3x4 Grid: 1-9, DEL, 0, SAVE (standard pattern)
-  // Row4: [DEL][0][SAVE] — SAVE replaces separate button below
+  // Row4: [DEL][0][SAVE] - SAVE replaces separate button below
   const int NP_W = 136, NP_H = 36, NP_GAP = 4;
   const int NP_X0 = (480 - 3*NP_W - 2*NP_GAP) / 2;
   const int NP_Y0 = 122;
@@ -129,9 +129,9 @@ void showDryingReminderScreen() {
   // ── Modi-Toggle-Buttons ──────────────────────────────────
   // Drei Buttons nebeneinander: Aus / Material / Manuell
   char ml0[16],ml1[16],ml2[16];
-  strncpy(ml0,T(STR_DRY_MODE_OFF),sizeof(ml0)-1);
-  strncpy(ml1,T(STR_DRY_MODE_MATERIAL),sizeof(ml1)-1);
-  strncpy(ml2,T(STR_DRY_MODE_MANUAL),sizeof(ml2)-1);
+  copyT(ml0, sizeof(ml0), STR_DRY_MODE_OFF);
+  copyT(ml1, sizeof(ml1), STR_DRY_MODE_MATERIAL);
+  copyT(ml2, sizeof(ml2), STR_DRY_MODE_MANUAL);
   const char* mode_labels[] = { ml0, ml1, ml2 };
   int btn_w = 144, btn_h = 36, btn_y = 64, btn_gap = 6;
   int total_w = 3*btn_w + 2*btn_gap;
@@ -169,7 +169,7 @@ void showDryingReminderScreen() {
   if (g_dry_mode == 0) {
     // Aus: Erklaerungstext
     lv_obj_t *lbl = lv_label_create(scr_drying_reminder);
-    { char dbuf[200]; strncpy(dbuf, T(STR_DRY_OFF_DESC), sizeof(dbuf)-1);
+    { char dbuf[200]; copyT(dbuf, sizeof(dbuf), STR_DRY_OFF_DESC);
       lv_label_set_text(lbl, dbuf); }
     lv_obj_set_style_text_color(lbl, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
@@ -181,7 +181,7 @@ void showDryingReminderScreen() {
   } else if (g_dry_mode == 1) {
     // Material: Tabelle der Schwellwerte (read-only)
     lv_obj_t *hint = lv_label_create(scr_drying_reminder);
-    { char hbuf[64]; strncpy(hbuf, T(STR_DRY_MAT_HINT), sizeof(hbuf)-1); hbuf[sizeof(hbuf)-1]=0;
+    { char hbuf[64]; copyT(hbuf, sizeof(hbuf), STR_DRY_MAT_HINT); hbuf[sizeof(hbuf)-1]=0;
       lv_label_set_text(hint, hbuf); }
     lv_obj_set_style_text_color(hint, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
@@ -216,7 +216,7 @@ void showDryingReminderScreen() {
 
     // Scrollbare Tabelle
     lv_obj_t *tbl_cont = lv_obj_create(scr_drying_reminder);
-    lv_obj_set_size(tbl_cont, 456, 162);
+    lv_obj_set_size(tbl_cont, 456, 150);
     lv_obj_set_pos(tbl_cont, 12, content_y + 4);
     lv_obj_set_style_bg_color(tbl_cont, lv_color_hex(0x050f1e), 0);
     lv_obj_set_style_border_color(tbl_cont, lv_color_hex(0x1a3050), 0);
@@ -242,15 +242,15 @@ void showDryingReminderScreen() {
         lv_obj_set_pos(l, x, 4);
       };
       { char h0[24],h1[24],h2[24];
-      strncpy(h0,T(STR_DRY_MAT_HDR_MAT),sizeof(h0)-1);
-      strncpy(h1,T(STR_DRY_MAT_HDR_YELLOW),sizeof(h1)-1);
-      strncpy(h2,T(STR_DRY_MAT_HDR_RED),sizeof(h2)-1);
+      copyT(h0, sizeof(h0), STR_DRY_MAT_HDR_MAT);
+      copyT(h1, sizeof(h1), STR_DRY_MAT_HDR_YELLOW);
+      copyT(h2, sizeof(h2), STR_DRY_MAT_HDR_RED);
       hdr(h0,0,72); hdr(h1,80,120); hdr(h2,210,120);
       lv_obj_t *h4l = lv_label_create(row);
       lv_label_set_text(h4l, T(STR_DRY_SEALED_HDR));
       lv_obj_set_style_text_color(h4l, lv_color_hex(0x4a6fa0), 0);
       lv_obj_set_style_text_font(h4l, &lv_font_montserrat_ext_12, 0);
-      lv_obj_set_width(h4l, 50); lv_obj_set_pos(h4l, 366, 4); }
+      lv_obj_set_width(h4l, 90); lv_obj_set_pos(h4l, 340, 4); }
     }
     // Daten-Zeilen
     for (int i = 0; i < DRY_MAT_COUNT; i++) {
@@ -272,8 +272,8 @@ void showDryingReminderScreen() {
       int eff_y = (int)(g_dry_mat_yellow[i] * eff_mult);
       int eff_r = (int)(g_dry_mat_red[i]    * eff_mult);
       char y_buf[10], r_buf[10];
-      snprintf(y_buf, sizeof(y_buf), "%d T.", eff_y);
-      snprintf(r_buf, sizeof(r_buf), "%d T.", eff_r);
+      snprintf(y_buf, sizeof(y_buf), T(STR_DAYS_ABBR_FMT), eff_y);
+      snprintf(r_buf, sizeof(r_buf), T(STR_DAYS_ABBR_FMT), eff_r);
       cell(DRY_MAT_NAMES[i], 0,  72, 0xe8f0ff);
       cell(y_buf,            80, 120, 0xf0b838);
       cell(r_buf,           210, 120, 0xe04040);
@@ -282,14 +282,14 @@ void showDryingReminderScreen() {
       lv_label_set_text(seal_lbl, g_dry_mat_sealed[i] ? LV_SYMBOL_OK : "-");
       lv_obj_set_style_text_color(seal_lbl, g_dry_mat_sealed[i] ? lv_color_hex(0x28d49a) : lv_color_hex(0x2a4060), 0);
       lv_obj_set_style_text_font(seal_lbl, &lv_font_montserrat_ext_14, 0);
-      lv_obj_set_pos(seal_lbl, 370, 2);
+      lv_obj_set_pos(seal_lbl, 350, 2);
     }
     // Fussnote
     lv_obj_t *fn = lv_label_create(scr_drying_reminder);
     { char fnbuf[80]; snprintf(fnbuf, sizeof(fnbuf), T(STR_DRY_MAT_EFF_NOTE), g_dry_mult_sealed); lv_label_set_text(fn, fnbuf); }
-    lv_obj_set_style_text_color(fn, lv_color_hex(0x2a4060), 0);
+    lv_obj_set_style_text_color(fn, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(fn, &lv_font_montserrat_ext_12, 0);
-    lv_obj_align(fn, LV_ALIGN_BOTTOM_MID, 0, -4);
+    lv_obj_align(fn, LV_ALIGN_BOTTOM_MID, 0, -6);
 
   } else {
     // Manuell: zwei Zeilen, Gelb + Rot, per Numpad editierbar
@@ -319,7 +319,7 @@ void showDryingReminderScreen() {
       lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 24, -8);
       // Untertitel
       lv_obj_t *slbl = lv_label_create(row_btn);
-      { char ehbuf[32]; strncpy(ehbuf, T(STR_DRY_MAN_EDIT_HINT), sizeof(ehbuf)-1); lv_label_set_text(slbl, ehbuf); }
+      { char ehbuf[32]; copyT(ehbuf, sizeof(ehbuf), STR_DRY_MAN_EDIT_HINT); lv_label_set_text(slbl, ehbuf); }
       lv_obj_set_style_text_color(slbl, lv_color_hex(0x2a4060), 0);
       lv_obj_set_style_text_font(slbl, &lv_font_montserrat_ext_12, 0);
       lv_obj_align(slbl, LV_ALIGN_LEFT_MID, 24, 10);
@@ -338,12 +338,12 @@ void showDryingReminderScreen() {
         lv_obj_clear_flag(s_dry_numpad_scr, LV_OBJ_FLAG_HIDDEN);
       }, LV_EVENT_CLICKED, NULL);
     };
-    { char ybuf[16]; strncpy(ybuf, T(STR_DRY_MAN_YELLOW_LBL), sizeof(ybuf)-1); makeThreshRow(ybuf, g_dry_man_yellow, 0xf0b838, content_y,      0); }
-    { char rbuf[16]; strncpy(rbuf, T(STR_DRY_MAN_RED_LBL),    sizeof(rbuf)-1); makeThreshRow(rbuf, g_dry_man_red,    0xe04040, content_y + 68, 1); }
+    { char ybuf[16]; copyT(ybuf, sizeof(ybuf), STR_DRY_MAN_YELLOW_LBL); makeThreshRow(ybuf, g_dry_man_yellow, 0xf0b838, content_y,      0); }
+    { char rbuf[16]; copyT(rbuf, sizeof(rbuf), STR_DRY_MAN_RED_LBL); makeThreshRow(rbuf, g_dry_man_red,    0xe04040, content_y + 68, 1); }
 
     // Info-Text
     lv_obj_t *info = lv_label_create(scr_drying_reminder);
-    { char ibuf[64]; strncpy(ibuf, T(STR_DRY_MAN_INFO), sizeof(ibuf)-1); lv_label_set_text(info, ibuf); }
+    { char ibuf[64]; copyT(ibuf, sizeof(ibuf), STR_DRY_MAN_INFO); lv_label_set_text(info, ibuf); }
     lv_obj_set_style_text_color(info, lv_color_hex(0x2a4060), 0);
     lv_obj_set_style_text_font(info, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(info, LV_TEXT_ALIGN_CENTER, 0);

@@ -23,11 +23,23 @@
 #define INFO_TEXT_BUF   1024
 #define INFO_TITLE_BUF   48
 
+// Whether one of these is up. It has a button and no timer, so it waits for an
+// answer like every other modal - and a blocking lookup underneath it takes
+// the touch panel away for as long as it runs. Tracked here rather than
+// guessed from the screen tree, which is what uiModalWaiting() needs.
+static lv_obj_t *s_info_pop = nullptr;
+
+bool isInfoPopupOpen() { return s_info_pop != nullptr; }
+
 void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   if (title_id < 0 || title_id >= STR_COUNT) return;
   if (text_id  < 0 || text_id  >= STR_COUNT) return;
 
   lv_obj_t *pop = lv_obj_create(lv_scr_act());
+  // One at a time. A second one over the first would leave the pointer below
+  // naming the newer and the older standing there forever.
+  if (s_info_pop) lv_obj_del_async(s_info_pop);
+  s_info_pop = pop;
   lv_obj_set_size(pop, 480, 320);
   lv_obj_set_pos(pop, 0, 0);
   lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
@@ -67,8 +79,7 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   // user tapped rather than being a floating paragraph.
   lv_obj_t *title = lv_label_create(box);
   char tbuf[INFO_TITLE_BUF];
-  strncpy(tbuf, T(title_id), sizeof(tbuf) - 1);
-  tbuf[sizeof(tbuf) - 1] = '\0';
+  copyT(tbuf, sizeof(tbuf), title_id);
   lv_label_set_text(title, tbuf);
   lv_obj_set_style_text_color(title,
     lv_color_hex(is_result ? 0xe8f0ff : 0x28d49a), 0);
@@ -101,17 +112,22 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   if (len >= sizeof(ibuf))
     logSDf("InfoPopup: text %d is %u bytes, buffer holds %u - truncated",
            text_id, (unsigned)len, (unsigned)(sizeof(ibuf) - 1));
-  strncpy(ibuf, T(text_id), sizeof(ibuf) - 1);
-  ibuf[sizeof(ibuf) - 1] = '\0';
+  copyT(ibuf, sizeof(ibuf), text_id);
   lv_label_set_text(info, ibuf);
   lv_obj_set_style_text_color(info,
     lv_color_hex(is_result ? 0x4a6fa0 : 0xc8d8f0), 0);
-  lv_obj_set_style_text_font(info, &lv_font_montserrat_ext_14, 0);
+  lv_obj_set_style_text_font(info, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(info, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
   // 14 px narrower than the container so the scrollbar has somewhere to sit.
   lv_obj_set_width(info, 410);
   lv_obj_set_pos(info, 0, 0);
+  // A short text sits in the middle of the area, not against its top edge: a
+  // one line result over half a box of nothing read as unfinished. A long one
+  // keeps the top, so the scroll starts at its first word.
+  lv_obj_update_layout(info);
+  if (lv_obj_get_height(info) <= lv_obj_get_height(scroll))
+    lv_obj_align(info, LV_ALIGN_CENTER, 0, 0);
 
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, 200, 48);
@@ -126,13 +142,17 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
     // Deleted asynchronously because this runs inside the dispatch of an event
     // belonging to a child of what is being freed.
     lv_obj_t *box = lv_obj_get_parent(lv_event_get_target(e));
-    lv_obj_del_async(lv_obj_get_parent(box));
+    lv_obj_t *scrim = lv_obj_get_parent(box);
+    // Cleared here, not in a delete callback: the async free happens a pass
+    // later, and anything asking in between has to be told the question is
+    // already answered.
+    if (scrim == s_info_pop) s_info_pop = nullptr;
+    lv_obj_del_async(scrim);
   }, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *l = lv_label_create(btn);
   char bbuf[24];
-  strncpy(bbuf, T(is_result ? STR_BTN_OK : STR_BACK), sizeof(bbuf) - 1);
-  bbuf[sizeof(bbuf) - 1] = '\0';
+  copyT(bbuf, sizeof(bbuf), is_result ? STR_BTN_OK : STR_BACK);
   lv_label_set_text(l, bbuf);
   lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);

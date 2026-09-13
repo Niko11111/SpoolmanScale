@@ -100,7 +100,8 @@ void buildOtaScreen() {
   lv_obj_t *ver_ota = lv_label_create(scr_ota);
   char ver_buf[32]; snprintf(ver_buf, sizeof(ver_buf), T(STR_OTA_CURRENT), FW_VERSION);
   lv_label_set_text(ver_ota, ver_buf);
-  lv_obj_set_style_text_color(ver_ota, lv_color_hex(0x2a4060), 0);
-  lv_obj_set_style_text_font(ver_ota, &lv_font_montserrat_ext_12, 0);
+  // Was --ink-4, a rule colour; as text it is unreadable on this ground.
+  lv_obj_set_style_text_color(ver_ota, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(ver_ota, &lv_font_montserrat_ext_14, 0);
   lv_obj_align(ver_ota, LV_ALIGN_BOTTOM_MID, 0, -8);
 }

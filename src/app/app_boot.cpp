@@ -13,6 +13,8 @@
 #include "hardware/i2c_scan.h"
 #include "hardware/nfc.h"
 #include "hardware/pins.h"
+#include "services/user_options.h"
+#include "services/nfc_reset.h"
 #include "hardware/scale.h"
 #include "hardware/sd_logger.h"
 #include "services/app_settings.h"
@@ -29,6 +31,7 @@
 #include "ui/setup_welcome_screen.h"
 #include "ui/wifi_setup_screen.h"
 #include "lang.h"
+#include "ui/tag_display.h"
 
 // ============================================================
 //  CONNECT WIFI
@@ -38,7 +41,7 @@ void wifiConnect() {
   // Update status bar; may already be set from setup(), but ensure it's shown.
   if (lbl_status) {
     char wifi_buf[32];
-    strncpy(wifi_buf, T(STR_WIFI_CONNECTING_BOOT), sizeof(wifi_buf)-1);
+    copyT(wifi_buf, sizeof(wifi_buf), STR_WIFI_CONNECTING_BOOT);
     lv_label_set_text(lbl_status, wifi_buf);
     lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x5090e0), 0);
     lv_timer_handler();
@@ -87,6 +90,7 @@ void wifiConnect() {
         Serial.printf("%s health check skipped: no host configured\n", backend_name);
       }
       updateHeaderStatus();
+      zone4WaitingStyle(true);
       lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));
       lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
       lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
@@ -155,7 +159,8 @@ void appSetup() {
 
   Serial.print("Looking for PN532... ");
   uint32_t ver = 0;
-  if (nfcHardwareBegin(&I2C_EXT, hw_pins::PN532_RESET, hw_pins::PN532_IRQ_UNUSED, &ver)) {
+  nfcResetLoad();
+  if (nfcHardwareBegin(&I2C_EXT, nfcResetPinForBoot(), hw_pins::PN532_IRQ_UNUSED, &ver)) {
     nfc_ok = true;
     Serial.printf("OK (FW %d.%d)\n", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
     logSDf("NFC ready (PN532 FW %d.%d)", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
@@ -164,23 +169,33 @@ void appSetup() {
     logSDf("NFC init FAILED (bus: %s)", i2cScanLast());
   }
 
-  Serial.print("Looking for NAU7802... ");
-  if (scaleHardwareBegin(&I2C_EXT, [](){
-    Serial.print(".");
-    delay(100);
-    lv_timer_handler();  // tick runs off millis(), see LV_TICK_CUSTOM in lv_conf.h
-  })) {
-    scl_ok = true;
-    scale_ready = true;
-    Serial.printf("OK! cal_factor=%.4f  zero_offset=%d\n", cal_factor, zero_offset);
-    logSDf("Scale ready (cal=%.4f zero=%d)", cal_factor, zero_offset);
+  // A device built without a load cell is not a device with a broken one. The
+  // probe is skipped entirely rather than allowed to fail: scaleHardwareBegin()
+  // spends up to three seconds on a chip that answers and will not calibrate,
+  // and there is nothing here to wait for. scl_ok and scale_ready stay false,
+  // which is what every consumer already asks.
+  if (!g_scale_fitted) {
+    Serial.println("Scale switched off in the settings, NAU7802 not probed");
+    logSD("Scale switched off in the settings, NAU7802 not probed");
   } else {
-    // Two ways to land here: the chip did not answer on 0x2A at all, or it
-    // answered but never finished calibrating. scaleHardwareBegin() prints
-    // which one, so this must not claim a cause of its own.
-    Serial.printf("ERROR! Scale unavailable (NAU7802 on 0x%02X, bus: %s)\n",
-                  I2C_ADDR_NAU7802, i2cScanLast());
-    logSDf("Scale init FAILED (bus: %s)", i2cScanLast());
+    Serial.print("Looking for NAU7802... ");
+    if (scaleHardwareBegin(&I2C_EXT, [](){
+      Serial.print(".");
+      delay(100);
+      lv_timer_handler();  // tick runs off millis(), see LV_TICK_CUSTOM in lv_conf.h
+    })) {
+      scl_ok = true;
+      scale_ready = true;
+      Serial.printf("OK! cal_factor=%.4f  zero_offset=%d\n", cal_factor, zero_offset);
+      logSDf("Scale ready (cal=%.4f zero=%d)", cal_factor, zero_offset);
+    } else {
+      // Two ways to land here: the chip did not answer on 0x2A at all, or it
+      // answered but never finished calibrating. scaleHardwareBegin() prints
+      // which one, so this must not claim a cause of its own.
+      Serial.printf("ERROR! Scale unavailable (NAU7802 on 0x%02X, bus: %s)\n",
+                    I2C_ADDR_NAU7802, i2cScanLast());
+      logSDf("Scale init FAILED (bus: %s)", i2cScanLast());
+    }
   }
 
   updateHeaderStatus();

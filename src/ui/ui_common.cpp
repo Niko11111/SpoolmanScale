@@ -6,11 +6,34 @@
 
 #include "hardware/sd_logger.h"
 #include "app/deferred_actions.h"
+#include "ams_assign_popup.h"
+#include "confirm_popup.h"
 #include "info_popup.h"
+#include "second_tag_popup.h"
+#include "spool_flow.h"
+#include "tag_write_popup.h"
 #include "services/backend.h"
 #include "services/settings_registry.h"
 #include "lang.h"
 
+
+bool uiModalWaiting() {
+  // Every popup that asks something and has no countdown of its own to fall
+  // back on, plus the AMS question, which does have one but whose buttons are
+  // just as dead while the loop is busy.
+  //
+  // info_popup belongs in here too. It closes itself, but only when the button
+  // is pressed - so it waits exactly like the rest, and the result of an erase
+  // was the one nobody could dismiss.
+  return isInfoPopupOpen()
+      || isTagWritePopupOpen()
+      || isConfirmPopupOpen()
+      || isSpoolFlowIdInputOpen()
+      || isSpoolFlowLinkEntryOpen()
+      || isSecondTagPopupOpen()
+      || isSpoolFlowTagMoveOpen()
+      || isAmsAssignPopupOpen();
+}
 
 lv_color_t swatchColorFromHex(const char* hex) {
   if (!hex) return lv_color_hex(SWATCH_FALLBACK_COLOR);
@@ -197,8 +220,51 @@ bool lvPoolHasRoomForRow() {
          m.free_biggest_size >= LV_ROW_RESERVE_BYTES / 4u;
 }
 
+void utf8Cut(const char* s, size_t max_bytes, char* out, size_t out_size) {
+  if (!out || !out_size) return;
+  out[0] = '\0';
+  if (!s) return;
+  size_t n = strlen(s);
+  if (n > max_bytes) n = max_bytes;
+  if (n >= out_size) n = out_size - 1;
+  // Back off to the start of the sequence the cut landed in: a continuation
+  // byte is 10xxxxxx.
+  while (n > 0 && ((unsigned char)s[n] & 0xC0) == 0x80) n--;
+  memcpy(out, s, n);
+  out[n] = '\0';
+}
+
+lv_obj_t* addHeaderHelp(lv_obj_t *scr, int title_id, int text_id) {
+  lv_obj_t *help = lv_btn_create(scr);
+  lv_obj_set_size(help, 34, 34);
+  lv_obj_set_pos(help, 386, 5);
+  lv_obj_set_style_bg_opa(help, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_bg_color(help, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(help, LV_OPA_COVER, LV_STATE_PRESSED);
+  lv_obj_set_style_border_color(help, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_border_width(help, 1, 0);
+  lv_obj_set_style_radius(help, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_shadow_width(help, 0, 0);
+  lv_obj_set_style_pad_all(help, 0, 0);
+  // Below the 44 px touch minimum by design, like the row help: the hit area
+  // is widened instead.
+  lv_obj_set_ext_click_area(help, 6);
+  lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                      INFO_POPUP_ARG(title_id, text_id));
+  lv_obj_t *q = lv_label_create(help);
+  lv_label_set_text(q, "?");
+  lv_obj_set_style_text_color(q, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_font(q, &lv_font_montserrat_ext_16, 0);
+  lv_obj_align(q, LV_ALIGN_CENTER, 0, 0);
+  return help;
+}
+
 void releaseScreen(lv_obj_t **scr) {
   if (!scr || !*scr) return;
+  // Hidden first: the object lives until the next timer pass, and a released
+  // screen must take no tap and paint nothing in the meantime - the list it
+  // rendered from may be freed by the line after this call.
+  lv_obj_add_flag(*scr, LV_OBJ_FLAG_HIDDEN);
   lv_obj_del_async(*scr);
   *scr = nullptr;
 }
@@ -293,8 +359,7 @@ static void settingRowClicked(lv_event_t *e) {
 
 lv_obj_t* addSettingRow(lv_obj_t *list, const SettingDesc &s) {
   char buf_t[40];
-  strncpy(buf_t, T((StringID)s.str_name), sizeof(buf_t) - 1);
-  buf_t[sizeof(buf_t) - 1] = '\0';
+  copyT(buf_t, sizeof(buf_t), (StringID)s.str_name);
 
   char buf_s[64];
   settingSubtitle(s, buf_s, sizeof(buf_s));
@@ -317,8 +382,7 @@ lv_obj_t* addSettingRow(lv_obj_t *list, const SettingDesc &s) {
     lv_obj_t *arr = lv_obj_get_child(btn, -1);
     if (arr) {
       char buf_v[8];
-      strncpy(buf_v, T(active ? STR_ON : STR_OFF), sizeof(buf_v) - 1);
-      buf_v[sizeof(buf_v) - 1] = '\0';
+      copyT(buf_v, sizeof(buf_v), active ? STR_ON : STR_OFF);
       lv_label_set_text(arr, buf_v);
       lv_obj_set_style_text_color(arr,
         lv_color_hex(active ? 0x28d49a : 0x4a6fa0), 0);

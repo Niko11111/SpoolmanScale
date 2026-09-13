@@ -19,6 +19,7 @@
 #include "services/list_limits.h"
 #include "services/mdns_service.h"
 #include "services/prefs_store.h"
+#include "hardware/scale_state.h"
 #include "services/user_options.h"
 #include "services/time_service.h"
 #include "services/wifi_manager.h"
@@ -235,7 +236,27 @@ static String body() {
   h += T(STR_W_WAKE);
   h += F("</label><span class='hint'>");
   h += T(STR_W_WAKE_HINT);
-  h += F("</span><span class='msg' id='wk-s'></span></div></div></div>");
+  h += F("</span><span class='msg' id='wk-s'></span></div>");
+
+  // Second switch in the same card, because both answer "what kind of device
+  // is this". Unlike every other switch on this page it needs a restart: the
+  // home screen reads it once while it is built, so the restart button that
+  // the status page already offers is repeated here rather than sending the
+  // user off to find it.
+  h += F("<div class='field'>"
+         "<label class='check'><span class='switch'>"
+         "<input id='sf' type='checkbox'");
+  if (g_scale_fitted) h += F(" checked");
+  h += F("><i></i></span>");
+  h += T(STR_W_SCALE_FITTED);
+  h += F("</label><span class='hint'>");
+  h += T(STR_W_SCALE_FITTED_HINT);
+  h += F("</span><span class='msg' id='sf-s'></span>"
+         "<div><button class='quiet' id='sf-rb'>");
+  h += T(STR_W_RESTART);
+  h += F("</button></div></div></div></div>");
+
+  h += webShellRestartUi();
 
   // Its own script. When the pages were split the shared block stayed behind
   // on one of them and every Save button here called a function that was no
@@ -303,6 +324,15 @@ static String body() {
          "post('/api/wakeload',want?'1':'0').then(r=>{"
          "if(!r.ok)$('wk').checked=!want;"
          "flash('wk-s',r.ok?WS.ok:WS.err,!r.ok,4000);});});"
+         // Same again for the scale switch. doRestart() comes from
+         // webShellRestartUi() above and is bound rather than written into an
+         // onclick attribute.
+         "$('sf').addEventListener('change',()=>{"
+         "const want=$('sf').checked;"
+         "post('/api/scalefitted',want?'1':'0').then(r=>{"
+         "if(!r.ok)$('sf').checked=!want;"
+         "flash('sf-s',r.ok?WS.ok:WS.err,!r.ok,4000);});});"
+         "$('sf-rb').addEventListener('click',doRestart);"
          "$('ll-b').addEventListener('click',setLimits);"
          "$('gn-b').addEventListener('click',setGain);"
          "load();"
@@ -411,6 +441,20 @@ static void routes(WebServer &srv) {
   // State, not a toggle: the browser sends what it wants to be, so two tabs
   // open on the same page cannot talk past each other. Same choice /api/mdns
   // made for the same reason.
+  // State, not a toggle, for the same reason as the two below. Takes effect on
+  // the next start: the home screen and the menus read it while they are
+  // built, so writing it here and rearranging nothing is the honest answer.
+  srv.on("/api/scalefitted", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
+    const bool on = (srv.arg("plain").toInt() != 0);
+    // Same one writer as the row on the device, so the clean-up that drops the
+    // readings happens whichever switch was used.
+    setScaleFitted(on);
+    logSDf("Web: scale fitted -> %s", on ? "ON" : "OFF");
+    srv.send(200, "application/json", on ? "{\"ok\":true,\"v\":1}"
+                                         : "{\"ok\":true,\"v\":0}");
+  });
+
   srv.on("/api/wakeload", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
     const bool on = (srv.arg("plain").toInt() != 0);

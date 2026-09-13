@@ -1,4 +1,6 @@
 #include "sd_logger.h"
+
+#include "services/loop_task.h"
 #include "app/app_state.h"
 #include "services/backend.h"
 #include "services/breadcrumb.h"
@@ -155,8 +157,44 @@ void sdLogResetSize() {
   sd_log_file[0] = '\0';
 }
 
+// Lines written from a task other than the loop's. The card is the loop's:
+// two tasks appending to the same file through the SD library corrupt the
+// file and sometimes the driver. So a line from the web worker is parked here
+// with its stamp and written by sdLoggerTick() on the next loop pass.
+#define SD_QUEUE_LEN      8
+#define SD_QUEUE_LINE_MAX 160
+struct QueuedLine { char stamp[10]; char msg[SD_QUEUE_LINE_MAX]; };
+static QueuedLine     s_queue[SD_QUEUE_LEN];
+static uint8_t        s_queue_len = 0;
+static portMUX_TYPE   s_queue_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static void sdWriteLine(const char* stamp, const char* msg);
+
+static void queueLine(const char* stamp, const char* msg) {
+  portENTER_CRITICAL(&s_queue_mux);
+  if (s_queue_len < SD_QUEUE_LEN) {
+    QueuedLine& q = s_queue[s_queue_len++];
+    strncpy(q.stamp, stamp, sizeof(q.stamp) - 1); q.stamp[sizeof(q.stamp) - 1] = '\0';
+    strncpy(q.msg, msg, sizeof(q.msg) - 1);       q.msg[sizeof(q.msg) - 1] = '\0';
+  }
+  portEXIT_CRITICAL(&s_queue_mux);
+}
+
+void sdLoggerTick() {
+  if (!s_queue_len) return;
+  QueuedLine batch[SD_QUEUE_LEN];
+  uint8_t n;
+  portENTER_CRITICAL(&s_queue_mux);
+  n = s_queue_len;
+  memcpy(batch, s_queue, sizeof(QueuedLine) * n);
+  s_queue_len = 0;
+  portEXIT_CRITICAL(&s_queue_mux);
+  for (uint8_t i = 0; i < n; i++) sdWriteLine(batch[i].stamp, batch[i].msg);
+}
+
 void logSD(const char* msg) {
   // Before the card is considered: this is what a device without one keeps.
+  // The ring has its own lock, so this part is safe from any task.
   struct tm now;
   const bool synced = clockReady(&now);
   ringPut(synced ? time(nullptr) : (time_t)0, msg);
@@ -171,6 +209,11 @@ void logSD(const char* msg) {
   }
 
   if (!sd_available) return;
+  if (!onLoopTask()) { queueLine(stamp, msg); return; }
+  sdWriteLine(stamp, msg);
+}
+
+static void sdWriteLine(const char* stamp, const char* msg) {
 
   String fname = getCurrentLogFilename();
 
@@ -376,6 +419,8 @@ void cleanOldLogs() {
 }
 
 void initSD() {
+  // setup() runs on the same task loop() does, so this is the loop task.
+  loopTaskRemember();
   spiSD.begin(hw_pins::SD_SCK, hw_pins::SD_MISO, hw_pins::SD_MOSI, hw_pins::SD_CS);
   if (SD.begin(hw_pins::SD_CS, spiSD)) {
     sd_available = true;

@@ -11,12 +11,16 @@
 #include "bambu/bambu_tag.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+
+// How long the inventory scan waits before its one retry, panel kept alive.
+#define SPOOLMAN_RETRY_PAUSE_MS  300
 #include "services/location_state.h"
 #include "services/backend.h"
 #include "services/breadcrumb.h"
 #include "services/backend_api.h"
 #include "services/filaman_api.h"
 #include "services/http_progress.h"
+#include "services/spoolman_actions.h"
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
 #include "services/tag_write.h"
@@ -27,6 +31,7 @@
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
 #include "ui_common.h"
+#include "ui/tag_display.h"
 
 namespace {
 
@@ -172,7 +177,7 @@ static int spoolTagRank(JsonObjectConst spool, const char* uid) {
 
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
     const TagFieldSpec& spec = tagFieldSpec(i);
-    if (!extra.containsKey(spec.key)) continue;
+    if (extra[spec.key].isNull()) continue;
 
     // Both identities, and in both notations: a UID written into nfc_id by
     // SpoolSense is plain hex while the scale carries it around with colons,
@@ -180,6 +185,19 @@ static int spoolTagRank(JsonObjectConst spool, const char* uid) {
     // somebody may have put that into the field rather than the tray uuid.
     const char* raw = extra[spec.key] | (const char*)nullptr;
     if (storedNamesTag(raw, spec.is_list, uid)) return TAG_RANK_FIELD;
+  }
+
+  // FilaMan's second slot, which mapSpool() puts here because extra.tag holds
+  // one value. Rank 1 like the first one, and not a tag field: it binds the
+  // spool just as hard, the chip is simply on the other flange. Anything
+  // lower would let a spool that merely mentions the same value somewhere
+  // else win against a real binding.
+  //
+  // No spec and no list. FilaMan keeps two columns, not a list, and the key
+  // exists only on a server that has the second one.
+  {
+    const char* raw2 = extra["tag2"] | (const char*)nullptr;
+    if (storedNamesTag(raw2, false, uid)) return TAG_RANK_FIELD;
   }
 
   // ---- FilaMan's Bambu Lab plugin, below everything above ----
@@ -274,7 +292,7 @@ static inline bool spoolMatchesTag(JsonObjectConst spool, const char* uid) {
 static void captureExtraField(JsonObjectConst extra, const char* key,
                               char* out, size_t out_len, const char* what) {
   out[0] = '\0';
-  if (extra.isNull() || !extra.containsKey(key)) return;
+  if (extra[key].isNull()) return;
 
   String v = extra[key].as<String>();
   v.replace("\"", "");
@@ -306,6 +324,12 @@ static void captureBindings(JsonObjectConst spool) {
     const TagFieldSpec& spec = tagFieldSpec(i);
     captureExtraField(extra, spec.key, sm_tag_values[i], CARD_UIDS_MAX, spec.key);
   }
+
+  // Read here rather than in its own pass, and before the early return below:
+  // a spool with no native tags leaves this function at that return, and the
+  // companion field has nothing to do with the relation.
+  captureExtraField(extra, RFID_TAG_FIELD, sm_hw_uid_value,
+                    CARD_UIDS_MAX, RFID_TAG_FIELD);
 
   // The native relation goes into the slot next to them, as a comma separated
   // list, which is the shape the card_uids helpers already read and write. A
@@ -480,7 +504,7 @@ static void applyLastUsed(const char* native_iso, const char* weighed_iso, int s
 
 // ============================================================
 //  SPOOLMAN QUERY BY ID
-//  Used after link-flow — fetches only one spool by ID.
+//  Used after link-flow - fetches only one spool by ID.
 //  Fills same globals and labels as querySpoolman().
 // ============================================================
 
@@ -552,7 +576,7 @@ void querySpoolmanById(int spool_id) {
   if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (before byID GET)",
     ESP.getFreeHeap(), ESP.getFreePsram());
 
-  DynamicJsonDocument doc(8192);
+  JsonDocument doc;
   DeserializationError err = DeserializationError::Ok;
   int code = backendGetSpoolJson(cfg_spoolman_base, spool_id, doc, 8000, &err);
   if (code != 200) {
@@ -572,6 +596,9 @@ void querySpoolmanById(int spool_id) {
 
   sm_found        = true;
   sm_id           = spool["id"] | 0;
+  // One spool, asked for by id: a duplicate count left over from the last
+  // scan would keep the status line saying "more than one answered".
+  sm_dup_count    = 0;
   // Found and archived is a state of its own, see app_state.h. Read here
   // because this is the one path that fetches a spool whole.
   sm_archived     = spool["archived"] | false;
@@ -593,7 +620,7 @@ void querySpoolmanById(int spool_id) {
   strncpy(sm_filament_name, fil_name.c_str(), sizeof(sm_filament_name)-1);
   sm_filament_name[sizeof(sm_filament_name)-1] = '\0';
 
-  // Location — Spoolman gibt location als einfachen String zurück
+  // Location - Spoolman gibt location als einfachen String zurück
   sm_location_id = 0;
   sm_location_name[0] = '\0';
   if (!spool["location"].isNull() && spool["location"].is<const char*>()) {
@@ -608,7 +635,7 @@ void querySpoolmanById(int spool_id) {
 
   // last_dried
   sm_last_dried[0] = '\0';
-  if (spool.containsKey("extra") && spool["extra"].containsKey("last_dried")) {
+  if (!spool["extra"]["last_dried"].isNull()) {
     String dried = spool["extra"]["last_dried"].as<String>();
     dried.replace("\"", "");
     // The stored value is a UTC instant; the day it belongs to is the local
@@ -625,11 +652,11 @@ void querySpoolmanById(int spool_id) {
 
   captureBindings(spool);
 
-  // Material, vendor, color — only for NTAG (Bambu has it from tag itself)
+  // Material, vendor, color - only for NTAG (Bambu has it from tag itself)
   String sm_material = spool["filament"]["material"] | String("");
   sm_material.trim();
   String sm_vendor_name = "";
-  if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull()) {
+  if (!spool["filament"]["vendor"].isNull()) {
     sm_vendor_name = spool["filament"]["vendor"]["name"] | String("");
     sm_vendor_name.trim();
     snprintf(sm_vendor_g, sizeof(sm_vendor_g), "%s", sm_vendor_name.c_str());
@@ -662,6 +689,7 @@ void querySpoolmanById(int spool_id) {
   // Update display labels
   char weight_str[32];
   snprintf(weight_str, sizeof(weight_str), "%.0f g", sm_remaining);
+  zone4WaitingStyle(false);
   lv_label_set_text(lbl_spoolman_weight, weight_str);
   float pct = (sm_total > 0) ? (sm_remaining / sm_total) * 100.0f : 0;
   uint32_t pct_color;
@@ -688,8 +716,6 @@ void querySpoolmanById(int spool_id) {
   lv_label_set_text(lbl_spoolman_id, sm_id_str);
   lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0x28d49a), 0);
 
-  char dried_display[48];
-  driedDisplayStr(sm_last_dried, dried_display, sizeof(dried_display));
   applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, sm_last_dried);
 
   lv_label_set_text(lbl_detail,        strlen(sm_article_nr)    > 0 ? sm_article_nr    : "-");
@@ -738,10 +764,27 @@ static void scheduleRescan(const char* uid, const char* format) {
 // plain uid, and g_tag only carries the former reliably.
 static char s_last_query[48] = {0};
 
+// Set when a lookup skipped its inventory scan because a question was waiting
+// to be answered. Declared here so the tick below and querySpoolman() share
+// one flag rather than each keeping half the story.
+static bool s_scan_deferred = false;
+
 void spoolmanRecheckTick() {
   if (!wifi_ok || !tag_present || sm_found) return;
   if (!s_last_query[0]) return;
   if (isSpoolFlowIdInputOpen()) return;   // the user is busy picking a spool
+
+  // A lookup that stood aside for a question owes one full pass. Forgetting
+  // the markers is how that is asked for: the scan loop then treats the tag on
+  // the pad as new and runs the whole lookup, scan included. Done before the
+  // cheap probe below rather than instead of it, because this costs nothing
+  // and the probe costs a request.
+  if (s_scan_deferred && !uiModalWaiting()) {
+    s_scan_deferred = false;
+    logSD("Spoolman: the question is gone, asking for the full lookup again");
+    tagLookupForget();
+    return;
+  }
 
   static uint32_t last_ms = 0;
   // Signed difference, so this survives the millis() rollover.
@@ -752,9 +795,9 @@ void spoolmanRecheckTick() {
   // stays small: a real miss still falls through to the inventory scan in
   // querySpoolman(), and doing that every few seconds is exactly what must not
   // happen here.
-  StaticJsonDocument<512> filter;
+  JsonDocument filter;
   JsonArray filter_arr = filter.to<JsonArray>();
-  JsonObject f = filter_arr.createNestedObject();
+  JsonObject f = filter_arr.add<JsonObject>();
   f["id"] = true;
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
     f["extra"][tagFieldSpec(i).key] = true;
@@ -798,6 +841,9 @@ void spoolmanRecheckTick() {
   // the log said so, and the screen kept saying "not in Spoolman".
   logSDf("Recheck: %s resolves now, re-reading", s_last_query);
   tagLookupForget();
+  // Bound from outside. What a link from the scale would do next is armed
+  // once the re-read has the spool.
+  spoolFlowExpectRemoteLink();
 }
 
 void spoolmanRescanTick() {
@@ -835,6 +881,7 @@ void querySpoolman(const char* tray_uuid) {
   logSDf("Spoolman: query tray_uuid=%.16s...", tray_uuid ? tray_uuid : "");
 
   // Reset all Spoolman labels before new query
+  zone4WaitingStyle(false);
   lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT));
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
   lv_label_set_text(lbl_spoolman_pct, "");
@@ -872,6 +919,7 @@ void querySpoolman(const char* tray_uuid) {
   sm_id = 0;
   sm_dup_count = 0;
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) sm_tag_values[i][0] = '\0';
+  sm_hw_uid_value[0] = '\0';
   sm_spool_weight = 0;
   sm_remaining = 0;
   sm_total = 1000;
@@ -881,16 +929,16 @@ void querySpoolman(const char* tray_uuid) {
   if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (before Spoolman GET)",
     ESP.getFreeHeap(), ESP.getFreePsram());
 
-  // Filter: only parse needed fields — reduces RAM, works with 100+ spools
+  // Filter: only parse needed fields - reduces RAM, works with 100+ spools
   // Filter must be Array-wrapped to match the API array response structure
   // Sized with room for every tag field AND for the server's own text fields,
   // which are only known at runtime and can be a dozen. An overflowed filter
   // silently drops keys, and a dropped tag key makes every spool come back
   // looking unbound - hence the check after it is filled rather than trust in
   // the number.
-  StaticJsonDocument<2048> filter;
+  JsonDocument filter;
   JsonArray filter_arr = filter.to<JsonArray>();
-  JsonObject filter_spool = filter_arr.createNestedObject();
+  JsonObject filter_spool = filter_arr.add<JsonObject>();
   filter_spool["id"] = true;
   filter_spool["archived"] = true;
   filter_spool["remaining_weight"] = true;
@@ -907,6 +955,11 @@ void querySpoolman(const char* tray_uuid) {
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
     filter_spool["extra"][tagFieldSpec(i).key] = true;
   filter_spool["extra"][LAST_DRIED_FIELD] = true;
+  // Named rather than left to the sweep below. That one stops at
+  // BACKEND_TEXT_FIELDS_MAX, and this field decides whether a uid is appended
+  // or written over: arriving empty would make every placement look like the
+  // first one and replace the chip on the other flange.
+  filter_spool["extra"][RFID_TAG_FIELD] = true;
   // Plus every other text field the server keeps, so the scan below can find a
   // UID that was put somewhere nobody agreed on. The keys are static storage
   // in the capability cache, which they have to be: ArduinoJson does not copy
@@ -931,7 +984,7 @@ void querySpoolman(const char* tray_uuid) {
   if (filter.overflowed())
     logSD("Spoolman: scan filter overflowed, fields will be missing");
 
-  // Use PSRAM for this document — frees internal RAM for LVGL
+  // Use PSRAM for this document - frees internal RAM for LVGL
   SpiRamAllocator psram_alloc;
   JsonDocument doc(&psram_alloc);
   DeserializationError err = DeserializationError::Ok;
@@ -1106,8 +1159,7 @@ void querySpoolman(const char* tray_uuid) {
   // appLoop, and a redraw is all that is wanted here. No timers, no input.
   if (lbl_status) {
     char buf[40];
-    strncpy(buf, T(STR_SEARCHING_INVENTORY), sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
+    copyT(buf, sizeof(buf), STR_SEARCHING_INVENTORY);
     lv_label_set_text(lbl_status, buf);
     lv_refr_now(NULL);
   }
@@ -1131,11 +1183,38 @@ void querySpoolman(const char* tray_uuid) {
 
   // Up to 2 attempts: first try, then 1 retry on IncompleteInput / connection issues.
   // 20s timeout is generous for large Spoolman datasets (200+ spools over WiFi).
-  for (int attempt = 1; !have_result && attempt <= 2; attempt++) {
+  // Not while a question is waiting to be answered. This is the only part of a
+  // lookup long enough to matter: 249 active spools plus 254 including the
+  // archive, three pages each, six seconds in which the touch panel is not
+  // read at all - which is what made the erase question impossible to answer.
+  // See uiModalWaiting() for why pumping LVGL instead is not an option.
+  //
+  // Standing aside costs nothing that is not recovered: spoolmanRecheckTick()
+  // keeps asking the cheap server side lookup every few seconds while an
+  // unknown tag lies on the pad, and clears the marker on a hit.
+  const bool defer_scan = uiModalWaiting();
+  if (defer_scan) {
+    // Remembered, not just skipped. The cheap lookup has already missed, so a
+    // spool findable only by the scan - a uid in FilaMan's custom_fields, or
+    // in an extra field nobody agreed on - would otherwise read as unknown
+    // until the tag is lifted and put back. spoolmanRecheckTick() makes it
+    // good as soon as the screen is free again.
+    s_scan_deferred = true;
+    logSD("Spoolman: full scan stood aside, a question is waiting on screen");
+  }
+
+  for (int attempt = 1; !have_result && !defer_scan && attempt <= 2; attempt++) {
     if (attempt > 1) {
       Serial.printf("Spoolman: retry attempt %d after %s\n", attempt, err.c_str());
       logSDf("Spoolman: retry attempt %d (prev err=%s)", attempt, err.c_str());
-      delay(300);  // brief pause before retry
+      // A pause that keeps the panel alive. This runs from appLoop(); a plain
+      // delay() froze the touch for its length, on top of a request that
+      // had just spent its timeout.
+      const unsigned long t0 = millis();
+      while (millis() - t0 < SPOOLMAN_RETRY_PAUSE_MS) {
+        lv_timer_handler();
+        delay(10);
+      }
       doc.clear();
     }
 
@@ -1155,7 +1234,7 @@ void querySpoolman(const char* tray_uuid) {
       continue;  // retry on HTTP or transient parse error too
     }
 
-    // Stream directly from HTTP — avoids allocating a 40KB+ String in RAM
+    // Stream directly from HTTP - avoids allocating a 40KB+ String in RAM
 
     if (!err) break;  // success
     // Parse failed -> retry only on transient stream issues
@@ -1197,8 +1276,18 @@ void querySpoolman(const char* tray_uuid) {
            tray_uuid, sm_dup_count, best_rank);
   }
 
+  // A list that stopped short - FilaMan's timeout or page cap - proves
+  // nothing about a tag it does not contain. Read as "not there", the scale
+  // offered to link or create the spool, and a library over the cap grew a
+  // duplicate per scan. A match in the part that did arrive still counts.
+  if (best_rank == TAG_RANK_NONE && backendLastListPartial()) {
+    logSDf("Backend: tag %s not in a partial inventory, verdict withheld", tray_uuid);
+    lv_label_set_text(lbl_spoolman_weight, T(STR_API_ERROR));
+    return;
+  }
+
   for (JsonObject spool : spools) {
-    if (!spool.containsKey("extra")) continue;
+    if (spool["extra"].isNull()) continue;
     JsonObject extra = spool["extra"];
 
     int rank = spoolTagRank(spool, tray_uuid);
@@ -1209,7 +1298,7 @@ void querySpoolman(const char* tray_uuid) {
     // matched through card_uids has no tag field, which leaves this empty -
     // harmless, because that migration only runs in FilaMan mode.
     String tag_val;
-    if (extra.containsKey("tag")) {
+    if (!extra["tag"].isNull()) {
       tag_val = extra["tag"].as<String>();
       tag_val.replace("\"", "");
       tag_val.trim();
@@ -1254,7 +1343,7 @@ void querySpoolman(const char* tray_uuid) {
       static int s_migrate_failed_id = 0;    // do not hammer a read-only key
       String stored;
       const char* key = backendIsFilaMan() ? "tag" : tagFieldKey();
-      if (extra.containsKey(key)) {
+      if (!extra[key].isNull()) {
         stored = extra[key].as<String>();
         stored.replace("\"", "");
         stored.trim();
@@ -1303,6 +1392,21 @@ void querySpoolman(const char* tray_uuid) {
 
     captureBindings(spool);
 
+    // In step with the tag on the reader rather than with the binding. A Bambu
+    // spool carries a chip per side and only the one lying on the pad can be
+    // reported, so the field would stay half filled if this waited for an
+    // explicit link - and a library that is already bound would never reach
+    // one at all.
+    //
+    // What makes it fill itself is a detail of the scan loop: the marker that
+    // stops a tag from being looked up twice is keyed on g_tag.uid_str, the
+    // chip, while the lookup goes out with the tray uuid (app_loop.cpp:849 and
+    // :1510). Turning the spool over is therefore a new tag to that marker and
+    // a fresh lookup lands here, where the second chip is appended beside the
+    // first. Anything that starts deduplicating on the tray uuid takes that
+    // away without touching a line of this.
+    syncHwUidField(sm_id, tray_uuid);
+
     sm_filament_id = spool["filament"]["id"] | 0;
     sm_vendor_id   = spool["filament"]["vendor"]["id"] | 0;
     sm_remaining = spool["remaining_weight"] | 0.0f;
@@ -1320,7 +1424,7 @@ void querySpoolman(const char* tray_uuid) {
     strncpy(sm_filament_name, fil_name.c_str(), sizeof(sm_filament_name)-1);
     sm_filament_name[sizeof(sm_filament_name)-1] = '\0';
 
-    // Location — einfacher String in Spoolman
+    // Location - einfacher String in Spoolman
     sm_location_name[0] = '\0';
     if (!spool["location"].isNull() && spool["location"].is<const char*>()) {
       String loc = spool["location"] | String("");
@@ -1331,7 +1435,7 @@ void querySpoolman(const char* tray_uuid) {
 
     // Spool status. Only FilaMan maps it, the others leave the key unset.
     sm_status_id = spool["status_id"] | 0;
-    if (extra.containsKey("last_dried")) {
+    if (!extra["last_dried"].isNull()) {
       String dried = extra["last_dried"].as<String>();
       dried.replace("\"", "");
       char day[11];
@@ -1352,7 +1456,7 @@ void querySpoolman(const char* tray_uuid) {
     String sm_material = spool["filament"]["material"] | String("");
     sm_material.trim();
     String sm_vendor_name = "";
-    if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull()) {
+    if (!spool["filament"]["vendor"].isNull()) {
       sm_vendor_name = spool["filament"]["vendor"]["name"] | String("");
       sm_vendor_name.trim();
     snprintf(sm_vendor_g, sizeof(sm_vendor_g), "%s", sm_vendor_name.c_str());
@@ -1386,7 +1490,7 @@ void querySpoolman(const char* tray_uuid) {
       }
     }
 
-    // Update display — Fix 5: color based on remaining %
+    // Update display - Fix 5: color based on remaining %
     char weight_str[32];
     snprintf(weight_str, sizeof(weight_str), "%.0f g", sm_remaining);
     lv_label_set_text(lbl_spoolman_weight, weight_str);
@@ -1420,9 +1524,6 @@ void querySpoolman(const char* tray_uuid) {
     lv_label_set_text(lbl_spoolman_id, sm_id_str);
     lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0x28d49a), 0);
 
-    // Last drying: set value with "N days ago"
-    char dried_display[48];
-    driedDisplayStr(sm_last_dried, dried_display, sizeof(dried_display));
     applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, sm_last_dried);
 
     lv_label_set_text(lbl_detail, strlen(sm_article_nr) > 0 ? sm_article_nr : "-");
@@ -1554,7 +1655,7 @@ void querySpoolman(const char* tray_uuid) {
     return;
   }
 
-  // Not found in active spools — check if archived
+  // Not found in active spools - check if archived
   Serial.println("Spoolman: not in active spools, checking archive...");
   doc.clear();  // RAM freigeben vor zweitem Call
 
@@ -1565,14 +1666,28 @@ void querySpoolman(const char* tray_uuid) {
   // internal RAM dry, so this one uses PSRAM like the active list above.
   JsonDocument doc2(&psram_alloc);
   DeserializationError err2 = DeserializationError::Ok;
-  StaticJsonDocument<384> filter2;
+  JsonDocument filter2;
   JsonArray filter2_arr = filter2.to<JsonArray>();
-  JsonObject f2 = filter2_arr.createNestedObject();
+  JsonObject f2 = filter2_arr.add<JsonObject>();
   f2["id"] = true;
   f2["archived"] = true;
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
     f2["extra"][tagFieldSpec(i).key] = true;
-  int code2 = backendGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
+  // The other half of the six seconds, and stood aside for the same reason.
+  // An archived spool is a rare answer to begin with; a question nobody can
+  // answer is worse than finding it one placement later.
+  //
+  // Not a return: the tail below is what sets sm_found and paints "not in
+  // Spoolman", and skipping it would leave the screen showing the spool
+  // before. A code of 0 falls through to exactly that, which is also the
+  // honest answer - the cheap lookup has already missed, and
+  // spoolmanRecheckTick() corrects it within seconds if it was wrong.
+  const bool skip_archived = uiModalWaiting();
+  if (skip_archived)
+    logSD("Spoolman: archived pass stood aside, a question is waiting on screen");
+  int code2 = skip_archived
+                ? 0
+                : backendGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
   if (code2 == 200) {
     if (!err2) {
       JsonArray spools2 = doc2.as<JsonArray>();

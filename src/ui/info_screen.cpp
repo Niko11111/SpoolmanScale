@@ -264,7 +264,7 @@ void showInfoScreen() {
   // SpoolmanScale, which is exactly why it needs to say this somewhere the
   // user actually looks. Both names appear regardless of the active backend.
   lv_obj_t *disc = lv_label_create(scr_info);
-  { char db[64]; strncpy(db, T(STR_NOT_AFFILIATED), sizeof(db) - 1); db[sizeof(db) - 1] = '\0';
+  { char db[64]; copyT(db, sizeof(db), STR_NOT_AFFILIATED);
     lv_label_set_text(disc, db); }
   lv_obj_set_style_text_color(disc, lv_color_hex(0x2a4060), 0);
   lv_obj_set_style_text_font(disc, &lv_font_montserrat_ext_10, 0);

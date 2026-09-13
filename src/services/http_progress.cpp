@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+#include "services/loop_task.h"
+
 static HttpProgressFn s_progress = nullptr;
 
 static uint32_t s_stall_total_ms = 0;
@@ -9,11 +11,15 @@ static uint32_t s_stall_started   = 0;
 static uint8_t  s_stall_depth     = 0;
 
 void httpStallBegin() {
+  // The web worker's requests hold nothing on screen up; only the loop's own
+  // waits are time a countdown must give back.
+  if (!onLoopTask()) return;
   if (s_stall_depth == 0) s_stall_started = millis();
   if (s_stall_depth < 255) s_stall_depth++;
 }
 
 void httpStallEnd() {
+  if (!onLoopTask()) return;
   if (s_stall_depth == 0) return;
   s_stall_depth--;
   // Only the outermost bracket adds anything: the inner ones are already

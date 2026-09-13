@@ -8,6 +8,7 @@
 
 #include "app/deferred_actions.h"
 #include "extra_fields_screen.h"
+#include "spoolman_screen.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "ui_common.h"
@@ -26,7 +27,7 @@ void showCalReminderScreen() {
   if (scr_first_boot)    { lv_obj_del(scr_first_boot);    scr_first_boot    = nullptr; }
   if (scr_wifi_setup)    { lv_obj_del(scr_wifi_setup);    scr_wifi_setup    = nullptr; }
   if (scr_wifi_pass)     { lv_obj_del(scr_wifi_pass);     scr_wifi_pass     = nullptr; }
-  if (scr_spoolman)      { lv_obj_del(scr_spoolman);      scr_spoolman      = nullptr; }
+  closeSpoolmanScreen();
   if (scr_extra_fields)  { lv_obj_del(scr_extra_fields);  scr_extra_fields  = nullptr;
                            resetExtraFieldsScreenState(); }
   if (scr_tag_field)     { lv_obj_del(scr_tag_field);     scr_tag_field     = nullptr; }
@@ -59,12 +60,12 @@ void buildCalReminderScreen() {
   lv_obj_clear_flag(scr_cal_reminder, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_bg_color(scr_cal_reminder, lv_color_hex(0x0a1020), 0);
 
-  // Static buffers — must outlive the function since LVGL holds pointers to them
+  // Static buffers - must outlive the function since LVGL holds pointers to them
   static char buf_title[48], buf_msg[256], buf_later[32], buf_now[48];
-  strncpy(buf_title, T(STR_CAL_REMINDER_TITLE), sizeof(buf_title)-1); buf_title[sizeof(buf_title)-1]=0;
-  strncpy(buf_msg,   T(STR_CAL_REMINDER_MSG),   sizeof(buf_msg)-1);   buf_msg[sizeof(buf_msg)-1]=0;
-  strncpy(buf_later, T(STR_CAL_REMINDER_LATER), sizeof(buf_later)-1); buf_later[sizeof(buf_later)-1]=0;
-  strncpy(buf_now,   T(STR_CAL_REMINDER_NOW),   sizeof(buf_now)-1);   buf_now[sizeof(buf_now)-1]=0;
+  copyT(buf_title, sizeof(buf_title), STR_CAL_REMINDER_TITLE); buf_title[sizeof(buf_title)-1]=0;
+  copyT(buf_msg, sizeof(buf_msg), STR_CAL_REMINDER_MSG);   buf_msg[sizeof(buf_msg)-1]=0;
+  copyT(buf_later, sizeof(buf_later), STR_CAL_REMINDER_LATER); buf_later[sizeof(buf_later)-1]=0;
+  copyT(buf_now, sizeof(buf_now), STR_CAL_REMINDER_NOW);   buf_now[sizeof(buf_now)-1]=0;
   Serial.println("buildCalReminderScreen: strings copied");
 
   // Title
@@ -74,7 +75,7 @@ void buildCalReminderScreen() {
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 20);
 
-  // No back button in setup flow — CalReminder is the last setup step
+  // No back button in setup flow - CalReminder is the last setup step
   addCloseButton(scr_cal_reminder);
 
   // Icon
