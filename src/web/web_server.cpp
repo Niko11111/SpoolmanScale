@@ -64,7 +64,14 @@ class ScaleWebServer : public WebServer {
           _handleRequest();
         }
       } else {
-        if (millis() - _statusChange <= WEB_IDLE_CLIENT_MS) keepCurrentClient = true;
+        // An idle socket keeps its second only while nobody is waiting behind
+        // it. Browsers open connections on speculation and leave them empty;
+        // one of those at the front of a one-client server held the tab the
+        // user actually clicked for up to a second. hasClient() accepts the
+        // next connection into the server's own slot, so nothing is lost by
+        // asking.
+        if (millis() - _statusChange <= WEB_IDLE_CLIENT_MS && !_server.hasClient())
+          keepCurrentClient = true;
         callYield = true;
       }
     }
