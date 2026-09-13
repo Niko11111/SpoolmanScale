@@ -420,6 +420,7 @@ void appLoop() {
   handleExtraFieldsDeferredActions();
   handleSpoolmanScreenDeferredActions();
   handleWifiSetupDeferredActions();
+  handleConfirmPopupDeferredActions();
   handleDriedDeferredAction();
   // Bringing an archived spool back. Out here rather than in the button's
   // callback because it reaches the network, and it carries the weight the

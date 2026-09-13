@@ -29,9 +29,74 @@ bool isConfirmPopupOpen() {
 }
 
 void closeConfirmPopup() {
-  if (confirm_popup) { lv_obj_del(confirm_popup); confirm_popup = nullptr; }
+  // Deleted on the next timer pass, not here: every caller of this is one of
+  // the popup's own buttons, and deleting a button's ancestor from inside its
+  // callback is the one thing LVGL's event dispatch cannot be trusted with.
+  // The pointer is dropped now, so the popup counts as closed from this line.
+  if (confirm_popup) { lv_obj_del_async(confirm_popup); confirm_popup = nullptr; }
   confirm_action = 0;
-  lbl_auto_weight_btn = nullptr;  // Pointer ungültig nach lv_obj_del
+  lbl_auto_weight_btn = nullptr;  // gone with the popup
+}
+
+// What a button asked for, carried to appLoop(). Every one of these reaches
+// the backend, and they used to run inside the button's own callback with
+// the touch panel dead for the length of the request. One slot is enough:
+// the popups are modal, a second press cannot land before the first has run.
+enum ConfirmJob : uint8_t {
+  CJ_NONE = 0,
+  CJ_WEIGHT,          // the remaining weight, plus the AMS notes
+  CJ_INITIAL,         // a new spool's initial weight
+  CJ_TARE_SPOOL,      // the empty spool weight, on this spool
+  CJ_TARE_FILAMENT,   // ... on the filament
+  CJ_TARE_VENDOR,     // ... on the brand
+  CJ_ARCHIVE,
+  CJ_CAP_RAISE,       // BamBuddy: raise the label weight, then write
+  CJ_CAP_KEEP         // BamBuddy: keep the label, write anyway
+};
+static ConfirmJob s_job       = CJ_NONE;
+static float      s_job_value = 0.0f;
+static float      s_job_gross = 0.0f;   // the pad reading the AMS note wants
+
+static void tareFollowUp();
+
+void handleConfirmPopupDeferredActions() {
+  if (s_job == CJ_NONE) return;
+  const ConfirmJob job = s_job;
+  s_job = CJ_NONE;
+  switch (job) {
+    case CJ_WEIGHT:
+      patchSpoolmanWeight(s_job_value);
+      // Remembered so the question can come up on removal. A yes there
+      // reports the same weight once more, which is the only way to open the
+      // window. The cap check cannot interfere: it is BamBuddy only and
+      // amsAskActive() requires FilaMan.
+      if (amsAskActive()) amsNoteMeasurement(sm_id, s_job_value, s_job_gross, true);
+      if (amsPickActive()) amsPickNote(sm_id, sm_filament_name);
+      break;
+    case CJ_INITIAL:
+      patchInitialWeight(s_job_value);
+      break;
+    case CJ_TARE_SPOOL:    patchSpoolWeight(s_job_value);         tareFollowUp(); break;
+    case CJ_TARE_FILAMENT: patchFilamentSpoolWeight(s_job_value); tareFollowUp(); break;
+    case CJ_TARE_VENDOR:   patchVendorSpoolWeight(s_job_value);   tareFollowUp(); break;
+    case CJ_ARCHIVE:
+      patchArchiveSpool();
+      break;
+    case CJ_CAP_RAISE:
+      // Order matters: the label first, so the weight that follows has room.
+      // patchInitialWeight writes label and consumption together, which
+      // already leaves the spool at full - the weight write after it is what
+      // stamps last_weighed_at and last_scale_weight.
+      patchInitialWeight(s_job_value);
+      patchSpoolmanWeight(s_job_value, true);
+      break;
+    case CJ_CAP_KEEP:
+      // Written anyway, so the scale and the server agree that a weighing
+      // happened. BamBuddy clamps it, which is what the user just accepted.
+      patchSpoolmanWeight(s_job_value, true);
+      break;
+    default: break;
+  }
 }
 
 
@@ -143,8 +208,8 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
         lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_center(l); }
       lv_obj_add_event_cb(b1, [](lv_event_t *e) {
-        patchSpoolWeight(s_tare_prompt_g); tareFollowUp();
-        lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
+        s_job = CJ_TARE_SPOOL; s_job_value = s_tare_prompt_g;
+        lv_obj_del_async(lv_obj_get_parent(lv_event_get_target(e)));
       }, LV_EVENT_CLICKED, NULL);
 
       // Button 2: this filament
@@ -162,8 +227,8 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
         lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_center(l); }
       lv_obj_add_event_cb(b2, [](lv_event_t *e) {
-        patchFilamentSpoolWeight(s_tare_prompt_g); tareFollowUp();
-        lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
+        s_job = CJ_TARE_FILAMENT; s_job_value = s_tare_prompt_g;
+        lv_obj_del_async(lv_obj_get_parent(lv_event_get_target(e)));
       }, LV_EVENT_CLICKED, NULL);
 
       // Button 3: vendor
@@ -183,8 +248,8 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
         lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_center(l); }
       lv_obj_add_event_cb(b3, [](lv_event_t *e) {
-        patchVendorSpoolWeight(s_tare_prompt_g); tareFollowUp();
-        lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
+        s_job = CJ_TARE_VENDOR; s_job_value = s_tare_prompt_g;
+        lv_obj_del_async(lv_obj_get_parent(lv_event_get_target(e)));
       }, LV_EVENT_CLICKED, NULL);
 
       // Button 4: cancel, right under whatever was built above
@@ -199,7 +264,7 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
         lv_obj_center(l); }
       lv_obj_add_event_cb(b4, [](lv_event_t *e) {
         s_tare_then_new = false;
-        lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
+        lv_obj_del_async(lv_obj_get_parent(lv_event_get_target(e)));
       }, LV_EVENT_CLICKED, NULL);
 
       // A bag on the pad is counted into the reading, and this number may be
@@ -301,13 +366,8 @@ void showConfirmPopup(const char* msg, int action) {
       closeConfirmPopup();
       float r = scale_weight_g - (float)sm_spool_weight;
       if (r < 0) r = 0;
-      patchSpoolmanWeight(r);
-      // Remembered so the question can come up on removal. A yes there
-      // reports the same weight once more, which is the only way to open the
-      // window. The cap check above cannot interfere: it is BamBuddy only and
-      // amsAskActive() requires FilaMan.
-      if (amsAskActive()) amsNoteMeasurement(sm_id, r, scale_weight_g, true);
-      if (amsPickActive()) amsPickNote(sm_id, sm_filament_name);
+      // The numbers are taken now, the request runs on the next loop pass.
+      s_job = CJ_WEIGHT; s_job_value = r; s_job_gross = scale_weight_g;
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l1 = lv_label_create(btn1);
     char buf1[48];
@@ -330,11 +390,9 @@ void showConfirmPopup(const char* msg, int action) {
       closeConfirmPopup();
       float r = scale_weight_g - (float)sm_spool_weight - bag_weight_g;
       if (r < 0) r = 0;
-      patchSpoolmanWeight(r);
       // Gross without the bag: that is what the scale would have shown had
       // the spool been weighed bare, and it is what FilaMan has to be told.
-      if (amsAskActive()) amsNoteMeasurement(sm_id, r, scale_weight_g - bag_weight_g, true);
-      if (amsPickActive()) amsPickNote(sm_id, sm_filament_name);
+      s_job = CJ_WEIGHT; s_job_value = r; s_job_gross = scale_weight_g - bag_weight_g;
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l2 = lv_label_create(btn2);
     char buf2[56];
@@ -362,7 +420,7 @@ void showConfirmPopup(const char* msg, int action) {
       }
       float initial = scale_weight_g - (float)sm_spool_weight;
       if (initial < 0) initial = 0;
-      patchInitialWeight(initial);
+      s_job = CJ_INITIAL; s_job_value = initial;
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l3 = lv_label_create(btn3);
     char buf3[56];
@@ -695,7 +753,7 @@ void showConfirmPopup(const char* msg, int action) {
       int act = confirm_action;
       closeConfirmPopup();
       if (act == 1) btn_dried_cb(nullptr);
-      if (act == 3) patchArchiveSpool();
+      if (act == 3) s_job = CJ_ARCHIVE;
       if (act == 4) spoolmanClearHost();
       // 5 = downgrade confirmed on the OTA screen. Only the flag here; the
       // download runs from appLoop().
@@ -780,14 +838,8 @@ void showBamBuddyCapPopup(float measured_g, float label_g) {
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
     lv_obj_center(l); }
   lv_obj_add_event_cb(b_raise, [](lv_event_t *e) {
-    const float g = s_cap_measured;
-    lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
-    // Order matters: the label first, so the weight that follows has room.
-    // patchInitialWeight writes label and consumption together, which already
-    // leaves the spool at full - the weight write after it is what stamps
-    // last_weighed_at and last_scale_weight.
-    patchInitialWeight(g);
-    patchSpoolmanWeight(g, true);
+    s_job = CJ_CAP_RAISE; s_job_value = s_cap_measured;
+    lv_obj_del_async(lv_obj_get_parent(lv_event_get_target(e)));
   }, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *b_keep = lv_btn_create(popup);
@@ -804,10 +856,7 @@ void showBamBuddyCapPopup(float measured_g, float label_g) {
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
     lv_obj_center(l); }
   lv_obj_add_event_cb(b_keep, [](lv_event_t *e) {
-    const float g = s_cap_measured;
-    lv_obj_del(lv_obj_get_parent(lv_event_get_target(e)));
-    // Written anyway, so the scale and the server agree that a weighing
-    // happened. BamBuddy clamps it, which is what the user just accepted.
-    patchSpoolmanWeight(g, true);
+    s_job = CJ_CAP_KEEP; s_job_value = s_cap_measured;
+    lv_obj_del_async(lv_obj_get_parent(lv_event_get_target(e)));
   }, LV_EVENT_CLICKED, NULL);
 }
