@@ -849,6 +849,7 @@ void appLoop() {
       logSDf("TagWrite: showing spool %d after the link", linked_id);
       tagLookupForget();
       querySpoolmanById(linked_id);
+      spoolFlowAskSecondTag(linked_id);
     }
   }
   if (show_system_pending) {

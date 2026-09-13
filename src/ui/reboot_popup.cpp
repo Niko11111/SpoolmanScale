@@ -8,14 +8,16 @@
 #include "ui_common.h"
 #include "lang.h"
 
-static lv_obj_t *s_reboot_pop = nullptr;
+static lv_obj_t      *s_reboot_pop = nullptr;
+static RebootCommitFn s_commit     = nullptr;
 
-void closeRebootPopup() { releaseScreen(&s_reboot_pop); }
+void closeRebootPopup() { releaseScreen(&s_reboot_pop); s_commit = nullptr; }
 
-void showRebootPopup() {
+void showRebootPopup(RebootCommitFn commit) {
   logSD("SHOW: RebootPopup");
   logSD("UI: Screen -> RebootPopup");
   releaseScreen(&s_reboot_pop);
+  s_commit = commit;
   lv_obj_t *pop = lv_obj_create(lv_scr_act());
   s_reboot_pop = pop;
   lv_obj_set_size(pop, 480, 320);
@@ -59,7 +61,8 @@ void showRebootPopup() {
   lv_obj_set_style_border_width(btn_rb, 0, 0);
   lv_obj_add_event_cb(btn_rb, [](lv_event_t *e){
     logSD("Reboot: user (language/date change)");
-    prefsFlush();      // the setting parked by the button that opened this popup
+    if (s_commit) s_commit();   // the choice this popup was opened for
+    prefsFlush();               // parked while LVGL dispatches; the restart is next
     ESP.restart();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *rb_lbl = lv_label_create(btn_rb);
@@ -77,6 +80,7 @@ void showRebootPopup() {
   lv_obj_set_style_shadow_width(btn_cancel, 0, 0);
   lv_obj_set_style_border_width(btn_cancel, 0, 0);
   lv_obj_add_event_cb(btn_cancel, [](lv_event_t *e){
+    s_commit = nullptr;         // nothing is written
     releaseScreen(&s_reboot_pop);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *c_lbl = lv_label_create(btn_cancel);

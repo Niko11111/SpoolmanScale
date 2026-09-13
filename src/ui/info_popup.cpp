@@ -124,6 +124,12 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   // 14 px narrower than the container so the scrollbar has somewhere to sit.
   lv_obj_set_width(info, 410);
   lv_obj_set_pos(info, 0, 0);
+  // A short text sits in the middle of the area, not against its top edge: a
+  // one line result over half a box of nothing read as unfinished. A long one
+  // keeps the top, so the scroll starts at its first word.
+  lv_obj_update_layout(info);
+  if (lv_obj_get_height(info) <= lv_obj_get_height(scroll))
+    lv_obj_align(info, LV_ALIGN_CENTER, 0, 0);
 
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, 200, 48);

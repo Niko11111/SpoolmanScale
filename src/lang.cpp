@@ -1967,6 +1967,13 @@ const char* const STRINGS[][2] = {
   { "Anfrage von einer fremden Seite abgelehnt.",
     "Request from a foreign page refused."                   },  // STR_W_BAD_ORIGIN
   { "%d Spulen",                 "%d spools"                },  // STR_SPOOLS_COUNT
+  { "Beide Tags gehören jetzt zu dieser Spule.",
+    "Both tags now belong to this spool."                     },  // STR_TAG2_LINKED_INFO
+  { "Zweites Tag nicht verknüpft", "Second tag not linked"    },  // STR_TAG2_FAILED
+  { "Zu Spule #%d umhängen? Spule #%d verliert das Tag.",
+    "Move it to spool #%d? Spool #%d loses the tag."          },  // STR_TAGMOVE_HINT
+  { "Umhängen",                  "Move"                       },  // STR_TAGMOVE_BTN
+  { "Umhängen fehlgeschlagen",   "Move failed"                },  // STR_TAGMOVE_FAILED
 };
 
 StringID tagWriteResultString(uint8_t code) {

@@ -33,6 +33,17 @@ void doLinkPatch(int spool_id, bool is_bambu);
 // `uid` is what the reader reported. Whether the spool is a Bambu one is read
 // off g_tag, not passed in, so there is one source for it rather than two.
 void linkAdditionalTag(int spool_id, const char* uid);
+
+// A link made somewhere else resolved the tag on the reader - Spoolman's own
+// web page, say. spoolmanRecheckTick() calls this on the hit; once the loop's
+// re-read has found the spool, the follow-ups a link from the scale gets (the
+// tag write, the second tag) are armed.
+void spoolFlowExpectRemoteLink();
+// The second tag question alone, for a link the scale's own web page made
+// together with a write - the tag is already written, so only that follows.
+void spoolFlowAskSecondTag(int spool_id);
+// The "move the tag off spool N?" question, for uiModalWaiting().
+bool isSpoolFlowTagMoveOpen();
 void showVendorList();
 void showMaterialList(const char* vendor_name);
 void showMaterialSubList(const char* vendor_name, const char* material_prefix);

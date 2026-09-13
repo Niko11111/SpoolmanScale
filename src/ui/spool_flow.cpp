@@ -758,6 +758,38 @@ static int secondtag_after_link_id = 0;
 // that led here - a link made in answer to the question must not ask it again.
 static bool s_additional_link = false;
 
+// A link that Spoolman refused because the tag is on another spool. Offered
+// as a move rather than left at a red line in the status bar: the line is
+// repainted by the NFC poll a moment later, and a tag on the wrong spool is
+// something the user can decide about.
+static lv_obj_t *scr_tag_move        = nullptr;
+static bool      tagmove_ask_pending   = false;
+static bool      tagmove_close_pending = false;
+static bool      tagmove_yes_pending   = false;
+static int       s_move_spool_id   = 0;      // where the tag should go
+static int       s_move_from_id    = 0;      // where Spoolman says it is
+static bool      s_move_is_bambu   = false;
+static bool      s_move_additional = false;  // it was the second tag
+static char      s_move_uid[40]    = "";
+
+// Set when a lookup that stood at "not in Spoolman" resolves without the
+// scale having linked anything: somebody bound the tag from outside. The loop
+// re-reads the tag; once that has found the spool, the follow-ups a link from
+// the scale gets are armed. Expires when the tag leaves or nothing comes.
+static unsigned long s_remote_link_ms = 0;
+#define REMOTE_LINK_EXPECT_MS  20000UL
+
+bool isSpoolFlowTagMoveOpen() { return scr_tag_move != nullptr; }
+
+void spoolFlowExpectRemoteLink() {
+  s_remote_link_ms = millis() ? millis() : 1;
+}
+
+void spoolFlowAskSecondTag(int spool_id) {
+  if (spool_id > 0 && g_tag2_ask && backendCanHoldSecondTag())
+    secondtag_after_link_id = spool_id;
+}
+
 // Raised when the link went into the default field because the selected source
 // is not on this server. Shown once, and only when the screen is free - an
 // overlay must not be built out of the callback the link came from.
@@ -767,6 +799,44 @@ static bool nativemissing_pending = false;
 // three ways out, and linkAdditionalTag() must not report success over an
 // error message doLinkPatch() has just put on the screen.
 static bool s_last_link_ok = false;
+
+// What comes after a link, whichever way it was made: the tag write question
+// and the second tag question. Called by doLinkPatch() for a link from the
+// scale, and from the loop for one that arrived from outside - Spoolman's own
+// web page binding the tag that lies on the reader.
+static void armLinkFollowUps(int spool_id, bool is_bambu) {
+  // The spool is known and an NTAG is lying on the reader, so its data could go
+  // onto the tag as well. Three things have to hold before that is worth
+  // asking about:
+  //
+  //  - the user asked for the question at all. It used to appear after every
+  //    link in every backend mode, which is the complaint this switch answers.
+  //  - the tag can be written. Bambu tags are read only and MIFARE is not ours
+  //    to write, both ruled out by the same test the tag page uses.
+  //  - the record fits. An NTAG213 holds 144 bytes and an OpenSpool record
+  //    needs around 190, so on those tags the question could only ever end in
+  //    "OpenSpool needs 176 bytes, this tag holds 144". Asked in bytes rather
+  //    than by tag type, so a tag reporting its size honestly decides for
+  //    itself. A tag that reports nothing at all (0) is not ruled out - the
+  //    write says what happened either way.
+  if (g_tagwrite_mode != TAGWRITE_OFF && !is_bambu && tagIsWritableNtag()) {
+    const uint16_t have = tagCachedBytes();
+    const bool fits = !TAG_FMT_IS_NDEF(g_tagwrite_fmt) ||
+                      have == 0 || have >= TAGWRITE_NDEF_MIN_BYTES;
+    if (fits) tagwrite_after_link_id = spool_id;
+    else logSDf("Tag write: not asking, %u bytes on the tag is too small for %s",
+                (unsigned)have, tagFormatLabel(g_tagwrite_fmt));
+  }
+
+  // The tag on the other flange, once the write above has settled. Three
+  // conditions, and the order is the cheap ones first: the user asked for the
+  // question, this is not itself the answer to one, and the server can hold a
+  // further tag at all - that last one may probe, which is why it runs here in
+  // the loop rather than where the settings row is drawn.
+  if (g_tag2_ask && !s_additional_link && backendCanHoldSecondTag())
+    secondtag_after_link_id = spool_id;
+
+}
 
 void doLinkPatch(int spool_id, bool is_bambu) {
   crumbSet("link patch");
@@ -804,18 +874,26 @@ void doLinkPatch(int spool_id, bool is_bambu) {
     // Nothing was written - the list was full, or the request failed. Saying
     // nothing here would look like a successful link right up to the next scan.
     logSDf("LINK ABORT: tag field of spool %d not written", spool_id);
-    if (lbl_status) {
-      char buf[48];
-      // Spoolman refuses a UID that another spool holds and says which one.
-      // Naming it is the difference between "that did not work" and something
-      // the user can act on.
-      if (sm_tag_conflict_spool > 0) {
-        snprintf(buf, sizeof(buf), T(STR_TAG_ON_OTHER_SPOOL), sm_tag_conflict_spool);
-        sm_tag_conflict_spool = 0;
-      } else {
-        strncpy(buf, T(STR_CU_NOT_WRITTEN), sizeof(buf) - 1);
+    char buf[48];
+    // Spoolman refuses a UID that another spool holds and says which one.
+    // Naming it is the difference between "that did not work" and something
+    // the user can act on - and the move question below is the acting.
+    if (sm_tag_conflict_spool > 0) {
+      snprintf(buf, sizeof(buf), T(STR_TAG_ON_OTHER_SPOOL), sm_tag_conflict_spool);
+      if (sm_tag_conflict_spool != spool_id) {
+        s_move_spool_id   = spool_id;
+        s_move_from_id    = sm_tag_conflict_spool;
+        s_move_is_bambu   = is_bambu;
+        s_move_additional = s_additional_link;
+        snprintf(s_move_uid, sizeof(s_move_uid), "%s", link_uuid);
+        tagmove_ask_pending = true;
       }
-      buf[sizeof(buf) - 1] = '\0';
+      sm_tag_conflict_spool = 0;
+    } else {
+      strncpy(buf, T(STR_CU_NOT_WRITTEN), sizeof(buf) - 1);
+    }
+    buf[sizeof(buf) - 1] = '\0';
+    if (lbl_status) {
       lv_label_set_text(lbl_status, buf);
       lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
     }
@@ -842,36 +920,7 @@ void doLinkPatch(int spool_id, bool is_bambu) {
     querySpoolmanById(spool_id);
   }
 
-  // The spool is known and an NTAG is lying on the reader, so its data could go
-  // onto the tag as well. Three things have to hold before that is worth
-  // asking about:
-  //
-  //  - the user asked for the question at all. It used to appear after every
-  //    link in every backend mode, which is the complaint this switch answers.
-  //  - the tag can be written. Bambu tags are read only and MIFARE is not ours
-  //    to write, both ruled out by the same test the tag page uses.
-  //  - the record fits. An NTAG213 holds 144 bytes and an OpenSpool record
-  //    needs around 190, so on those tags the question could only ever end in
-  //    "OpenSpool needs 176 bytes, this tag holds 144". Asked in bytes rather
-  //    than by tag type, so a tag reporting its size honestly decides for
-  //    itself. A tag that reports nothing at all (0) is not ruled out - the
-  //    write says what happened either way.
-  if (g_tagwrite_mode != TAGWRITE_OFF && !is_bambu && tagIsWritableNtag()) {
-    const uint16_t have = tagCachedBytes();
-    const bool fits = !TAG_FMT_IS_NDEF(g_tagwrite_fmt) ||
-                      have == 0 || have >= TAGWRITE_NDEF_MIN_BYTES;
-    if (fits) tagwrite_after_link_id = spool_id;
-    else logSDf("Tag write: not asking, %u bytes on the tag is too small for %s",
-                (unsigned)have, tagFormatLabel(g_tagwrite_fmt));
-  }
-
-  // The tag on the other flange, once the write above has settled. Three
-  // conditions, and the order is the cheap ones first: the user asked for the
-  // question, this is not itself the answer to one, and the server can hold a
-  // further tag at all - that last one may probe, which is why it runs here in
-  // the loop rather than where the settings row is drawn.
-  if (g_tag2_ask && !s_additional_link && backendCanHoldSecondTag())
-    secondtag_after_link_id = spool_id;
+  armLinkFollowUps(spool_id, is_bambu);
 
   s_last_link_ok = true;
   Serial.printf("Linking complete! ID=%d\n", spool_id);
@@ -894,7 +943,13 @@ void linkAdditionalTag(int spool_id, const char* uid) {
   doLinkPatch(spool_id, is_bambu);
   s_additional_link = false;
 
-  if (!s_last_link_ok) return;   // doLinkPatch already said why, on the screen
+  if (!s_last_link_ok) {
+    // doLinkPatch put the reason on the status line, which the NFC poll
+    // repaints a moment later. A conflict opens the move question instead;
+    // everything else is said in a modal, or it was never seen.
+    if (!tagmove_ask_pending) showInfoPopup(STR_TAG2_FAILED, STR_CU_NOT_WRITTEN, INFO_WARN);
+    return;
+  }
 
   // The chip that is now on the reader belongs in the field an MMU gate reads
   // as well. querySpoolmanById() above refreshed sm_hw_uid_value but does not
@@ -908,6 +963,126 @@ void linkAdditionalTag(int spool_id, const char* uid) {
     buf[sizeof(buf) - 1] = '\0';
     lv_label_set_text(lbl_status, buf);
     lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+  }
+  // Said in a modal as well, because that status line is repainted by the
+  // NFC poll on the next pass and the link had no visible outcome. Not when a
+  // tag write follows: that ends in a result popup of its own, and two in a
+  // row would be one too many.
+  if (tagwrite_after_link_id == 0)
+    showInfoPopup(STR_TAG2_LINKED, STR_TAG2_LINKED_INFO, INFO_DONE);
+}
+
+// ------------------------------------------------------------------
+//  Moving a tag another spool holds
+// ------------------------------------------------------------------
+static void showTagMovePopup() {
+  releaseScreen(&scr_tag_move);
+  scr_tag_move = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(scr_tag_move, 480, 320);
+  lv_obj_set_pos(scr_tag_move, 0, 0);
+  lv_obj_set_style_bg_color(scr_tag_move, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_opa(scr_tag_move, LV_OPA_70, 0);
+  lv_obj_set_style_border_width(scr_tag_move, 0, 0);
+  lv_obj_set_style_radius(scr_tag_move, 0, 0);
+  lv_obj_set_style_pad_all(scr_tag_move, 0, 0);
+  lv_obj_clear_flag(scr_tag_move, LV_OBJ_FLAG_SCROLLABLE);
+
+  // The house measurements of the tag write question, so the two read as
+  // the same kind of thing.
+  const int box_w = 400, box_h = 260, btn_w = 170, btn_h = 56;
+  lv_obj_t *box = lv_obj_create(scr_tag_move);
+  lv_obj_set_size(box, box_w, box_h);
+  lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(0x2a4080), 0);
+  lv_obj_set_style_border_width(box, 2, 0);
+  lv_obj_set_style_radius(box, 12, 0);
+  lv_obj_set_style_pad_all(box, 0, 0);
+  lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t *icon = lv_label_create(box);
+  lv_label_set_text(icon, LV_SYMBOL_WARNING);
+  lv_obj_set_style_text_color(icon, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_font(icon, &lv_font_montserrat_ext_24, 0);
+  lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, 14);
+
+  lv_obj_t *lbl_q = lv_label_create(box);
+  { char qb[64]; snprintf(qb, sizeof(qb), T(STR_TAG_ON_OTHER_SPOOL), s_move_from_id);
+    lv_label_set_text(lbl_q, qb); }
+  lv_obj_set_style_text_color(lbl_q, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_font(lbl_q, &lv_font_montserrat_ext_20, 0);
+  lv_obj_set_style_text_align(lbl_q, LV_TEXT_ALIGN_CENTER, 0);
+  lv_label_set_long_mode(lbl_q, LV_LABEL_LONG_WRAP);
+  lv_obj_set_width(lbl_q, box_w - 40);
+  lv_obj_align(lbl_q, LV_ALIGN_TOP_MID, 0, 52);
+
+  lv_obj_t *lbl_hint = lv_label_create(box);
+  { char hb[128]; snprintf(hb, sizeof(hb), T(STR_TAGMOVE_HINT), s_move_spool_id, s_move_from_id);
+    lv_label_set_text(lbl_hint, hb); }
+  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_16, 0);
+  lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
+  lv_label_set_long_mode(lbl_hint, LV_LABEL_LONG_WRAP);
+  lv_obj_set_width(lbl_hint, box_w - 40);
+  lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 98);
+
+  lv_obj_t *btn_ok = lv_btn_create(box);
+  lv_obj_set_size(btn_ok, btn_w, btn_h);
+  lv_obj_set_pos(btn_ok, 12, box_h - btn_h - 18);
+  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x1a4020), 0);
+  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x2a7030), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_ok, 8, 0);
+  lv_obj_set_style_shadow_width(btn_ok, 0, 0);
+  lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
+    // Flags only: the move costs two requests, and this button sits on the
+    // popup that has to go first.
+    tagmove_yes_pending   = true;
+    tagmove_close_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lbl_ok = lv_label_create(btn_ok);
+  { char bb[32]; strncpy(bb, T(STR_TAGMOVE_BTN), sizeof(bb) - 1);
+    bb[sizeof(bb) - 1] = '\0'; lv_label_set_text(lbl_ok, bb); }
+  lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0x80ffb0), 0);
+  lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_18, 0);
+  lv_obj_center(lbl_ok);
+
+  lv_obj_t *btn_no = lv_btn_create(box);
+  lv_obj_set_size(btn_no, btn_w, btn_h);
+  lv_obj_set_pos(btn_no, box_w - btn_w - 12, box_h - btn_h - 18);
+  lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x3a1010), 0);
+  lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x602020), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_no, 8, 0);
+  lv_obj_set_style_shadow_width(btn_no, 0, 0);
+  lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
+    tagmove_close_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lbl_no = lv_label_create(btn_no);
+  { char cb[32]; strncpy(cb, T(STR_CANCEL), sizeof(cb) - 1);
+    cb[sizeof(cb) - 1] = '\0'; lv_label_set_text(lbl_no, cb); }
+  lv_obj_set_style_text_color(lbl_no, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_18, 0);
+  lv_obj_center(lbl_no);
+
+  logSDf("SHOW: TagMovePopup tag '%s' from spool %d to %d", s_move_uid,
+         s_move_from_id, s_move_spool_id);
+}
+
+// Takes the tag off the spool that holds it and runs the link again. On the
+// loop task: two requests.
+static void runTagMove() {
+  const char* native_uid = tagNativeUid(s_move_uid);
+  const int code = backendUnlinkTag(cfg_spoolman_base, s_move_from_id, native_uid, 8000);
+  logSDf("TAG MOVE: '%s' off spool %d HTTP %d", native_uid, s_move_from_id, code);
+  if (code < 200 || code >= 300) {
+    showInfoPopup(STR_TAGMOVE_FAILED, STR_CU_NOT_WRITTEN, INFO_WARN);
+    return;
+  }
+  if (s_move_additional) {
+    linkAdditionalTag(s_move_spool_id, s_move_uid);
+  } else {
+    strncpy(link_tag_uid, s_move_uid, sizeof(link_tag_uid) - 1);
+    link_tag_uid[sizeof(link_tag_uid) - 1] = '\0';
+    doLinkPatch(s_move_spool_id, s_move_is_bambu);
   }
 }
 
@@ -3579,7 +3754,7 @@ void hideSpoolFlowOverlays() {
   lv_obj_t *const link_scr[] = {
     scr_link_entry, scr_link_id, scr_link_warn_a, scr_link_warn_b,
     scr_link_vendor, scr_link_mat, scr_link_mat_sub, scr_link_spools,
-    scr_link_list, scr_link_confirm,
+    scr_link_list, scr_link_confirm, scr_tag_move,
     scr_copy_entry, scr_copy_list, scr_copy_confirm, scr_newtag
   };
   for (unsigned i = 0; i < sizeof(link_scr) / sizeof(link_scr[0]); i++)
@@ -3594,6 +3769,7 @@ void hideSpoolFlowOverlays() {
 void deleteSpoolFlowOverlays() {
   closeNewTagPopup();
   releaseScreen(&scr_link_confirm);
+  releaseScreen(&scr_tag_move);
   releaseScreen(&scr_copy_entry);
   releaseScreen(&scr_copy_list);
   releaseScreen(&scr_copy_confirm);
@@ -3712,6 +3888,31 @@ void handleSpoolFlowDeferredActions() {
     closeCopyEntryPopup();
     doCreateSpoolFromTag();
   }
+  // ---- a tag another spool holds ------------------------------------------
+  if (tagmove_ask_pending) {
+    tagmove_ask_pending = false;
+    showTagMovePopup();
+  }
+  if (tagmove_close_pending) {
+    tagmove_close_pending = false;
+    releaseScreen(&scr_tag_move);
+    if (tagmove_yes_pending) {
+      tagmove_yes_pending = false;
+      runTagMove();
+    }
+  }
+
+  // ---- a link that arrived from outside ---------------------------------
+  if (s_remote_link_ms) {
+    if (!tag_present || millis() - s_remote_link_ms > REMOTE_LINK_EXPECT_MS) {
+      s_remote_link_ms = 0;
+    } else if (sm_found && sm_id > 0) {
+      s_remote_link_ms = 0;
+      logSDf("Link: spool %d was bound from outside, arming the follow-ups", sm_id);
+      armLinkFollowUps(sm_id, tagIsBambu(g_tag.tray_uuid));
+    }
+  }
+
   if (tagwrite_after_link_id > 0) {
     const int id = tagwrite_after_link_id;
     tagwrite_after_link_id = 0;

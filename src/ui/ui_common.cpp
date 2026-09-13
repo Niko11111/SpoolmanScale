@@ -31,6 +31,7 @@ bool uiModalWaiting() {
       || isSpoolFlowIdInputOpen()
       || isSpoolFlowLinkEntryOpen()
       || isSecondTagPopupOpen()
+      || isSpoolFlowTagMoveOpen()
       || isAmsAssignPopupOpen();
 }
 

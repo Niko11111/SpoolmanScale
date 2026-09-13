@@ -841,6 +841,9 @@ void spoolmanRecheckTick() {
   // the log said so, and the screen kept saying "not in Spoolman".
   logSDf("Recheck: %s resolves now, re-reading", s_last_query);
   tagLookupForget();
+  // Bound from outside. What a link from the scale would do next is armed
+  // once the re-read has the spool.
+  spoolFlowExpectRemoteLink();
 }
 
 void spoolmanRescanTick() {

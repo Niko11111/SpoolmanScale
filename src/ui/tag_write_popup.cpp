@@ -43,9 +43,46 @@ static AskMode  s_mode          = ASK_WRITE;
 // asked at all.
 static char     s_erase_fmt[12] = "";
 
-// Both sides of a mismatch, laid out over two lines. Built while the spool is
-// still in hand, because the question is shown a pass later.
-static char     s_mismatch_detail[96] = "";
+// Both sides of a mismatch, one line each, plus the colour of each side as a
+// swatch: a hex code says two colours differ, a swatch says how. Built while
+// the spool is still in hand, because the question is shown a pass later.
+static char     s_mismatch_detail[96] = "";    // both lines, for the log and the gate
+static char     s_mism_tag_line[56] = "";
+static char     s_mism_srv_line[56] = "";
+static bool     s_mism_tag_has_color = false, s_mism_srv_has_color = false;
+static uint32_t s_mism_tag_rgb = 0,           s_mism_srv_rgb = 0;
+
+#define MISM_SWATCH_PX  18
+
+// One line of the comparison: the swatch, when the side has a colour, and the
+// words. A flex row, so the pair stays centred whatever the text's width.
+static void mismatchRow(lv_obj_t *box, int y, const char *text,
+                        bool has_color, uint32_t rgb) {
+  lv_obj_t *row = lv_obj_create(box);
+  lv_obj_remove_style_all(row);
+  lv_obj_set_size(row, BOX_W - 40, MISM_SWATCH_PX + 6);
+  lv_obj_align(row, LV_ALIGN_TOP_MID, 0, y);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(row, 8, 0);
+  lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_clear_flag(row, LV_OBJ_FLAG_CLICKABLE);
+  if (has_color) {
+    lv_obj_t *sw = lv_obj_create(row);
+    lv_obj_remove_style_all(sw);
+    lv_obj_set_size(sw, MISM_SWATCH_PX, MISM_SWATCH_PX);
+    lv_obj_set_style_radius(sw, 4, 0);
+    lv_obj_set_style_bg_color(sw, lv_color_hex(rgb), 0);
+    lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(sw, 1, 0);
+    lv_obj_set_style_border_color(sw, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_clear_flag(sw, LV_OBJ_FLAG_CLICKABLE);
+  }
+  lv_obj_t *l = lv_label_create(row);
+  lv_label_set_text(l, text);
+  lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+}
 
 // Set while a write is on its way, so the result is picked up once.
 static bool s_watching = false;
@@ -118,25 +155,30 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
   // The format belongs in the sentence. "The tag is written" says nothing about
   // what a reader will make of it afterwards, and for the erase it is the only
   // thing that says what is about to be lost.
-  lv_obj_t *lbl_hint = lv_label_create(box);
-  { char hb[192];
-    // The erase says what is about to be lost, the write says what is about
-    // to be put there - and that is now a setting, not a constant.
-    // The rewrite has neither to say: its hint is the comparison itself.
-    const char *arg = (s_mode == ASK_ERASE)   ? s_erase_fmt
-                    : (s_mode == ASK_REWRITE) ? s_mismatch_detail
+  if (s_mode == ASK_REWRITE) {
+    // The rewrite's hint is the comparison itself: the tag's side and the
+    // server's, each with its colour where it has one.
+    mismatchRow(box, 98,  s_mism_tag_line, s_mism_tag_has_color, s_mism_tag_rgb);
+    mismatchRow(box, 126, s_mism_srv_line, s_mism_srv_has_color, s_mism_srv_rgb);
+  } else {
+    lv_obj_t *lbl_hint = lv_label_create(box);
+    { char hb[192];
+      // The erase says what is about to be lost, the write says what is about
+      // to be put there - and that is now a setting, not a constant.
+      const char *arg = (s_mode == ASK_ERASE) ? s_erase_fmt
                                               : tagFormatLabel(g_tagwrite_fmt);
-    snprintf(hb, sizeof(hb), T(hint), arg[0] ? arg : "OpenSpool");
-    lv_label_set_text(lbl_hint, hb); }
-  // Body text, not a caption: this line carries what is about to be written
-  // or lost, and at 14 px in the caption colour it was the one thing on the
-  // popup people could not read from where they stand.
-  lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
-  lv_label_set_long_mode(lbl_hint, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(lbl_hint, BOX_W - 40);
-  lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 98);
+      snprintf(hb, sizeof(hb), T(hint), arg[0] ? arg : "OpenSpool");
+      lv_label_set_text(lbl_hint, hb); }
+    // Body text, not a caption: this line carries what is about to be written
+    // or lost, and at 14 px in the caption colour it was the one thing on the
+    // popup people could not read from where they stand.
+    lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_16, 0);
+    lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(lbl_hint, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(lbl_hint, BOX_W - 40);
+    lv_obj_align(lbl_hint, LV_ALIGN_TOP_MID, 0, 98);
+  }
 
   lv_obj_t *btn_ok = lv_btn_create(box);
   lv_obj_set_size(btn_ok, BTN_W, BTN_H);
@@ -256,9 +298,16 @@ void tagMismatchTick() {
                                 have->r, have->g, have->b);
   if (want.has_color)  snprintf(want_col, sizeof(want_col), " #%02X%02X%02X",
                                 want.r, want.g, want.b);
-  snprintf(s_mismatch_detail, sizeof(s_mismatch_detail), "%s: %s %s%s\n%s: %s %s%s",
-           T(STR_TW_MISM_TAG), have->brand, have->material, have_col,
+  snprintf(s_mism_tag_line, sizeof(s_mism_tag_line), "%s: %s %s%s",
+           T(STR_TW_MISM_TAG), have->brand, have->material, have_col);
+  snprintf(s_mism_srv_line, sizeof(s_mism_srv_line), "%s: %s %s%s",
            T(STR_TW_MISM_SERVER), want.brand, want.material, want_col);
+  snprintf(s_mismatch_detail, sizeof(s_mismatch_detail), "%s\n%s",
+           s_mism_tag_line, s_mism_srv_line);
+  s_mism_tag_has_color = have->has_color;
+  s_mism_srv_has_color = want.has_color;
+  s_mism_tag_rgb = ((uint32_t)have->r << 16) | ((uint32_t)have->g << 8) | have->b;
+  s_mism_srv_rgb = ((uint32_t)want.r  << 16) | ((uint32_t)want.g  << 8) | want.b;
 
   s_spool_id = sm_id;
   mismatch_ask_pending = true;

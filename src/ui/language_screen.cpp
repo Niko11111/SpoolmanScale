@@ -17,6 +17,21 @@
 // zone screen can take its place without leaving it alive underneath.
 static lv_obj_t *scr_language = nullptr;
 
+// What a button picked, held until the restart is confirmed and written to
+// NVS only then. The buttons used to save and set g_lang on the spot, so
+// cancelling the restart left a half translated screen and the new language
+// on the next boot anyway. Each button clears the other's pick: a cancelled
+// choice must not ride along with the next one.
+static int s_pick_lang = -1;   // 0 DE, 1 EN, -1 untouched
+static int s_pick_date = -1;   // 0 DD.MM.YYYY, 1 YYYY-MM-DD, -1 untouched
+
+static void commitLanguageChoice() {
+  if (s_pick_lang >= 0) prefsPutUChar("lang", (uint8_t)s_pick_lang);
+  if (s_pick_date >= 0) prefsPutUChar("date_fmt", (uint8_t)s_pick_date);
+  logSDf("Language: committed lang=%d date_fmt=%d", s_pick_lang, s_pick_date);
+  s_pick_lang = s_pick_date = -1;
+}
+
 void hideLanguageScreen() {
   if (scr_language) lv_obj_add_flag(scr_language, LV_OBJ_FLAG_HIDDEN);
 }
@@ -31,6 +46,7 @@ void showLanguageScreen() {
   logSD("SHOW: LanguageScreen");
   logSD("UI: Screen -> Language");
   closeLanguageScreen();
+  s_pick_lang = s_pick_date = -1;
   lv_obj_t *scr = lv_obj_create(lv_scr_act());
   scr_language = scr;
   // Whoever deletes it, the pointer stops pointing at it. The back and close
@@ -119,10 +135,9 @@ void showLanguageScreen() {
   lv_obj_set_style_text_font(lbl_de, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_de);
   lv_obj_add_event_cb(btn_de, [](lv_event_t *e){
-    g_lang = LANG_DE;
-    prefsPutUChar("lang", 0);
+    s_pick_lang = 0; s_pick_date = -1;
     Serial.println("Language: German -> Reboot");
-    showRebootPopup();
+    showRebootPopup(commitLanguageChoice);
   }, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *btn_en = lv_btn_create(scr);
@@ -140,10 +155,9 @@ void showLanguageScreen() {
   lv_obj_set_style_text_font(lbl_en, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_en);
   lv_obj_add_event_cb(btn_en, [](lv_event_t *e){
-    g_lang = LANG_EN;
-    prefsPutUChar("lang", 1);
+    s_pick_lang = 1; s_pick_date = -1;
     Serial.println("Language: English -> Reboot");
-    showRebootPopup();
+    showRebootPopup(commitLanguageChoice);
   }, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *lbl_date = lv_label_create(scr);
@@ -169,9 +183,8 @@ void showLanguageScreen() {
   lv_obj_set_style_text_font(lbl_dmy, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_dmy);
   lv_obj_add_event_cb(btn_dmy, [](lv_event_t *e){
-    g_date_fmt = 0;
-    prefsPutUChar("date_fmt", 0);
-    showRebootPopup();
+    s_pick_date = 0; s_pick_lang = -1;
+    showRebootPopup(commitLanguageChoice);
   }, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *btn_iso = lv_btn_create(scr);
@@ -189,9 +202,8 @@ void showLanguageScreen() {
   lv_obj_set_style_text_font(lbl_iso, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_iso);
   lv_obj_add_event_cb(btn_iso, [](lv_event_t *e){
-    g_date_fmt = 1;
-    prefsPutUChar("date_fmt", 1);
-    showRebootPopup();
+    s_pick_date = 1; s_pick_lang = -1;
+    showRebootPopup(commitLanguageChoice);
   }, LV_EVENT_CLICKED, NULL);
 
   // Time zone. A row rather than a pair of buttons, because there are twelve

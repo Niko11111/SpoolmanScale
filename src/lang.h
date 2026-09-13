@@ -1138,6 +1138,15 @@ enum StringID {
   // sides.
   STR_SPOOLS_COUNT,
 
+  // The second tag's outcome, said in a modal because the status line is
+  // repainted by the NFC poll a moment later - and the offer to move a tag
+  // that another spool holds.
+  STR_TAG2_LINKED_INFO,
+  STR_TAG2_FAILED,
+  STR_TAGMOVE_HINT,
+  STR_TAGMOVE_BTN,
+  STR_TAGMOVE_FAILED,
+
   STR_COUNT
 };
 
