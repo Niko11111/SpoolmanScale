@@ -1,6 +1,8 @@
 #pragma once
 
 void showWifiSetupScreen();
+// Runs the scan and the connect attempt the setup screens parked. From appLoop().
+void handleWifiSetupDeferredActions();
 void buildWifiSetupScreen();
 void doWifiScan();
 void showWifiPassScreen();

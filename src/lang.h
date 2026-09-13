@@ -1134,6 +1134,10 @@ enum StringID {
   STR_W_BAD_HOST,
   STR_W_BAD_ORIGIN,
 
+  // The address test's result line. "%d spools" used to be English on both
+  // sides.
+  STR_SPOOLS_COUNT,
+
   STR_COUNT
 };
 

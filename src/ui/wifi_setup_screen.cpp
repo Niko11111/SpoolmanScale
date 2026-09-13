@@ -48,6 +48,13 @@ static lv_obj_t *conn_lbl_gw   = nullptr;
 static lv_obj_t *conn_lbl_rssi = nullptr;
 
 static char  wifi_setup_ssid[33]  = "";
+// What the callbacks park for appLoop(): a scan takes seconds and the connect
+// attempt ten, and both used to run inside the button that asked for them.
+// The password is copied out of the textarea here, because that textarea is
+// gone by the time the connect runs.
+static bool  wifi_scan_pending    = false;
+static bool  wifi_connect_pending = false;
+static char  wifi_setup_pass[65]  = "";
 static lv_obj_t *lbl_wifi_setup_status = nullptr;
 static lv_obj_t *lbl_wifi_scan_list = nullptr;
 static lv_obj_t *ta_wifi_pass = nullptr;
@@ -141,11 +148,25 @@ void buildWifiSetupScreen() {
   // Scan button callback (after building list)
   lv_obj_add_event_cb(btn_scan, [](lv_event_t *e) {
     lv_label_set_text(lbl_wifi_setup_status, T(STR_WIFI_SCAN));
-    doWifiScan();
+    wifi_scan_pending = true;
   }, LV_EVENT_CLICKED, NULL);
 
-  // Immediate scan on open
-  doWifiScan();
+  // Scan on the next loop pass. The status line already says so; a scan
+  // from here would run inside whichever callback opened this screen.
+  wifi_scan_pending = true;
+}
+
+void handleWifiSetupDeferredActions() {
+  if (wifi_scan_pending) {
+    wifi_scan_pending = false;
+    if (scr_wifi_setup && lbl_wifi_scan_list && lbl_wifi_setup_status) doWifiScan();
+  }
+  if (wifi_connect_pending) {
+    wifi_connect_pending = false;
+    saveWifiCredentials(wifi_setup_ssid, wifi_setup_pass);
+    memset(wifi_setup_pass, 0, sizeof(wifi_setup_pass));
+    showWifiConnectingScreen();
+  }
 }
 
 // Perform scan and populate list
@@ -329,9 +350,13 @@ void buildWifiPassScreen() {
   // Enter on keyboard → connect
   lv_obj_add_event_cb(kb_wifi_pass, [](lv_event_t *e) {
     if (lv_event_get_code(e) == LV_EVENT_READY) {
+      // Copied now, connected on the next loop pass: the NVS write and the
+      // ten second connect attempt do not belong in the keyboard's callback,
+      // and the textarea is deleted with this screen before they run.
       const char* pass = lv_textarea_get_text(ta_wifi_pass);
-      saveWifiCredentials(wifi_setup_ssid, pass);
-      showWifiConnectingScreen();
+      strncpy(wifi_setup_pass, pass ? pass : "", sizeof(wifi_setup_pass) - 1);
+      wifi_setup_pass[sizeof(wifi_setup_pass) - 1] = '\0';
+      wifi_connect_pending = true;
     }
   }, LV_EVENT_ALL, NULL);
 }

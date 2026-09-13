@@ -83,6 +83,9 @@ extern bool gh_check_pending;
 // about a minute and ends in a restart, so it does not run from the popup's
 // own callback.
 extern bool gh_downgrade_pending;
+// The update button on the OTA screen. Same minute, same restart as the
+// downgrade above, and it used to run inline in the button's callback.
+extern bool gh_flash_pending;
 extern unsigned long gh_check_wait_since;
 #define GH_CHECK_WAIT_MS 10000
 

@@ -86,6 +86,7 @@
 #include "ui/spool_flow.h"
 #include "ui/spoolman_lookup.h"
 #include "ui/spoolman_screen.h"
+#include "ui/wifi_setup_screen.h"
 #include "ui/system_screen.h"
 #include "ui/tag_display.h"
 #include "ui/weight_format.h"
@@ -397,6 +398,10 @@ void appLoop() {
     gh_downgrade_pending = false;
     doGithubOtaFlash(gh_latest_version);
   }
+  if (gh_flash_pending) {
+    gh_flash_pending = false;
+    doGithubOtaFlash(gh_latest_version);
+  }
 
   // A manual check that ran into the background task. Retried as soon as the
   // TLS connection is free again, dropped after GH_CHECK_WAIT_MS so a task that
@@ -411,8 +416,10 @@ void appLoop() {
     }
   }
 
-  // Extra fields check/create — deferred from LVGL event callback to loop
+  // Extra fields check/create - deferred from LVGL event callback to loop
   handleExtraFieldsDeferredActions();
+  handleSpoolmanScreenDeferredActions();
+  handleWifiSetupDeferredActions();
   handleDriedDeferredAction();
   // Bringing an archived spool back. Out here rather than in the button's
   // callback because it reaches the network, and it carries the weight the

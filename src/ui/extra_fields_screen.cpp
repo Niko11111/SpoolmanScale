@@ -43,6 +43,8 @@ static lv_obj_t *lbl_field_state[FIELD_ROW_COUNT] = { nullptr, nullptr, nullptr 
 // it can build the matching header.
 static bool extra_fields_in_setup = false;
 static bool extra_fields_create_pending = false;
+// The "create a test field" button. One request, parked like the other two.
+static bool extra_fields_test_pending = false;
 
 void resetExtraFieldsScreenState() {
   for (int i = 0; i < FIELD_ROW_COUNT; i++) lbl_field_state[i] = nullptr;
@@ -52,6 +54,23 @@ void resetExtraFieldsScreenState() {
   extra_fields_setup_flow = false;
   extra_fields_check_pending = false;
   extra_fields_create_pending = false;
+  extra_fields_test_pending = false;
+}
+
+static void runTestFieldCreate() {
+  int code = backendCreateSpoolField(cfg_spoolman_base, "spoolscale_test", 1500);
+  Serial.printf("Test field create: %d\n", code);
+  if (!lbl_extra_fields_status) return;      // the screen went away meanwhile
+  if (code == 200 || code == 201) {
+    { char sb[96]; backendText(T(STR_EF_TEST_CREATED), sb, sizeof(sb)); lv_label_set_text(lbl_extra_fields_status, sb); }
+    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
+  } else if (code == 409) {
+    { char sb[96]; backendText(T(STR_EF_TEST_EXISTS), sb, sizeof(sb)); lv_label_set_text(lbl_extra_fields_status, sb); }
+    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
+  } else {
+    lv_label_set_text(lbl_extra_fields_status, T(STR_EF_TEST_FAIL));
+    lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
+  }
 }
 
 void handleExtraFieldsDeferredActions() {
@@ -62,6 +81,10 @@ void handleExtraFieldsDeferredActions() {
   if (extra_fields_create_pending) {
     extra_fields_create_pending = false;
     checkAndCreateExtraFields(true);
+  }
+  if (extra_fields_test_pending) {
+    extra_fields_test_pending = false;
+    runTestFieldCreate();
   }
 }
 
@@ -428,20 +451,15 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
       }
       return;
     }
-    int code = backendCreateSpoolField(cfg_spoolman_base, "spoolscale_test", 1500);
-    Serial.printf("Test field create: %d\n", code);
+    // Says "testing" now, asks the server on the next loop pass.
     if (lbl_extra_fields_status) {
-      if (code == 200 || code == 201) {
-        { char sb[96]; backendText(T(STR_EF_TEST_CREATED), sb, sizeof(sb)); lv_label_set_text(lbl_extra_fields_status, sb); }
-        lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
-      } else if (code == 409) {
-        { char sb[96]; backendText(T(STR_EF_TEST_EXISTS), sb, sizeof(sb)); lv_label_set_text(lbl_extra_fields_status, sb); }
-        lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xf0b838), 0);
-      } else {
-        lv_label_set_text(lbl_extra_fields_status, T(STR_EF_TEST_FAIL));
-        lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0xff8080), 0);
-      }
+      char tb[48];
+      strncpy(tb, T(STR_SPOOLMAN_TESTING), sizeof(tb) - 1);
+      tb[sizeof(tb) - 1] = '\0';
+      lv_label_set_text(lbl_extra_fields_status, tb);
+      lv_obj_set_style_text_color(lbl_extra_fields_status, lv_color_hex(0x4a6fa0), 0);
     }
+    extra_fields_test_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_test = lv_label_create(btn_test);
   lv_label_set_text(lbl_test, T(STR_EF_TEST_BTN));

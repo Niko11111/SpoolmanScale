@@ -431,7 +431,9 @@ void buildOtaGithubScreen() {
       showConfirmPopup(ask, 5);
       return;
     }
-    doGithubOtaFlash(gh_latest_version);
+    // Parked, like the downgrade: a minute of TLS download and a flash write
+    // do not run from the button that asked for them.
+    gh_flash_pending = true;
   }, LV_EVENT_CLICKED, NULL);
 
   lbl_gh_update_btn = lv_label_create(btn_gh_update);

@@ -3,6 +3,8 @@
 void buildSpoolmanScreen();
 // Deletes the address screen and drops the three labels that hang off it.
 void closeSpoolmanScreen();
+// Runs the address test the save button parked. Called from appLoop().
+void handleSpoolmanScreenDeferredActions();
 void showSpoolmanFailScreen(bool is_setup_flow);
 
 // Throws the stored backend address away and rebuilds the address screen, so

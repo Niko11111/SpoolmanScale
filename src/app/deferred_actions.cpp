@@ -40,6 +40,7 @@ bool  reactivate_pending   = false;
 float reactivate_weight_g  = 0.0f;
 bool gh_check_pending = false;
 bool gh_downgrade_pending = false;
+bool gh_flash_pending = false;
 unsigned long gh_check_wait_since = 0;
 
 bool  show_bb_cap_pending = false;

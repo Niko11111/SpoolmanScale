@@ -1966,6 +1966,7 @@ const char* const STRINGS[][2] = {
     "its device name."                                       },  // STR_W_BAD_HOST
   { "Anfrage von einer fremden Seite abgelehnt.",
     "Request from a foreign page refused."                   },  // STR_W_BAD_ORIGIN
+  { "%d Spulen",                 "%d spools"                },  // STR_SPOOLS_COUNT
 };
 
 StringID tagWriteResultString(uint8_t code) {
