@@ -31,7 +31,6 @@
 #include "ui/setup_welcome_screen.h"
 #include "ui/wifi_setup_screen.h"
 #include "lang.h"
-#include "ui/tag_display.h"
 
 // ============================================================
 //  CONNECT WIFI
@@ -90,7 +89,6 @@ void wifiConnect() {
         Serial.printf("%s health check skipped: no host configured\n", backend_name);
       }
       updateHeaderStatus();
-      zone4WaitingStyle(true);
       lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));
       lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
       lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);

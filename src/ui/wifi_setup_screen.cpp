@@ -17,7 +17,6 @@
 #include "setup_welcome_screen.h"
 #include "ui_common.h"
 #include "services/backend.h"
-#include "ui/tag_display.h"
 
 
 
@@ -400,7 +399,6 @@ void showWifiConnectingScreen() {
   if (wifi_ok) {
     syncNTP();
     updateHeaderStatus();
-    zone4WaitingStyle(true);
     lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));
     // The IP used to be crammed into this line; it now has a row of its own
     // below, so the headline is just the result.
