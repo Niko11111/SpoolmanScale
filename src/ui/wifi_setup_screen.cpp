@@ -14,10 +14,12 @@
 #include "services/app_settings.h"
 #include "services/time_service.h"
 #include "services/wifi_manager.h"
+#include "services/improv_serial.h"
+#include "services/setup_portal.h"
 #include "setup_welcome_screen.h"
+#include "wifi_portal_screen.h"
 #include "ui_common.h"
 #include "services/backend.h"
-#include "ui/tag_display.h"
 
 
 
@@ -28,6 +30,69 @@
 // Entries the RSSI sort covers. Networks beyond this stay in scan order, which
 // only matters in places dense enough to see more than this many APs at once.
 #define WIFI_SCAN_SORT_MAX  64
+// WPA2 allows 63 characters, or 64 as hex. The textarea stops there, so a
+// longer entry is visibly refused instead of silently cut on the copy.
+#define WIFI_PASS_MAX_LEN   64
+
+// LVGL's default keyboard, adjusted in two places. The special page had no
+// ^ ~ | or `, so a WiFi password containing one could not be typed at all.
+// And the keyboard key at the bottom left only sends CANCEL, which nothing on
+// this screen answers, so it is gone on all three pages and the space bar has
+// its width. Otherwise the same keys, and the control keys carry LVGL's own
+// labels, so lv_keyboard_def_event_cb() still switches pages, deletes and
+// confirms. LVGL keeps the arrays by pointer, which is why they live here and
+// not on the stack.
+#define WIFI_KB_BTN(w)  (LV_BTNMATRIX_CTRL_POPOVER | (w))
+#define WIFI_KB_KEY     WIFI_KB_BTN(1)
+// One bottom row for all three pages, so nothing shifts on a page switch.
+#define WIFI_KB_MAP_BOTTOM   LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, LV_SYMBOL_OK, ""
+#define WIFI_KB_CTRL_BOTTOM  LV_BTNMATRIX_CTRL_CHECKED | 2, 8, \
+                             LV_BTNMATRIX_CTRL_CHECKED | 2, LV_KEYBOARD_CTRL_BTN_FLAGS | 2
+static const char * const wifi_kb_map_lc[] = {
+  "1#", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", LV_SYMBOL_BACKSPACE, "\n",
+  "ABC", "a", "s", "d", "f", "g", "h", "j", "k", "l", LV_SYMBOL_NEW_LINE, "\n",
+  "_", "-", "z", "x", "c", "v", "b", "n", "m", ".", ",", ":", "\n",
+  WIFI_KB_MAP_BOTTOM
+};
+static const char * const wifi_kb_map_uc[] = {
+  "1#", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", LV_SYMBOL_BACKSPACE, "\n",
+  "abc", "A", "S", "D", "F", "G", "H", "J", "K", "L", LV_SYMBOL_NEW_LINE, "\n",
+  "_", "-", "Z", "X", "C", "V", "B", "N", "M", ".", ",", ":", "\n",
+  WIFI_KB_MAP_BOTTOM
+};
+// Lower and upper case share their widths.
+static const lv_btnmatrix_ctrl_t wifi_kb_ctrl_text[] = {
+  LV_KEYBOARD_CTRL_BTN_FLAGS | 5,
+  WIFI_KB_BTN(4), WIFI_KB_BTN(4), WIFI_KB_BTN(4), WIFI_KB_BTN(4), WIFI_KB_BTN(4),
+  WIFI_KB_BTN(4), WIFI_KB_BTN(4), WIFI_KB_BTN(4), WIFI_KB_BTN(4), WIFI_KB_BTN(4),
+  LV_BTNMATRIX_CTRL_CHECKED | 7,
+  LV_KEYBOARD_CTRL_BTN_FLAGS | 6,
+  WIFI_KB_BTN(3), WIFI_KB_BTN(3), WIFI_KB_BTN(3), WIFI_KB_BTN(3), WIFI_KB_BTN(3),
+  WIFI_KB_BTN(3), WIFI_KB_BTN(3), WIFI_KB_BTN(3), WIFI_KB_BTN(3),
+  LV_BTNMATRIX_CTRL_CHECKED | 7,
+  LV_BTNMATRIX_CTRL_CHECKED | WIFI_KB_KEY, LV_BTNMATRIX_CTRL_CHECKED | WIFI_KB_KEY,
+  WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY,
+  LV_BTNMATRIX_CTRL_CHECKED | WIFI_KB_KEY, LV_BTNMATRIX_CTRL_CHECKED | WIFI_KB_KEY,
+  LV_BTNMATRIX_CTRL_CHECKED | WIFI_KB_KEY,
+  WIFI_KB_CTRL_BOTTOM
+};
+static const char * const wifi_kb_map_spec[] = {
+  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "^", "~", LV_SYMBOL_BACKSPACE, "\n",
+  "abc", "+", "&", "/", "*", "=", "%", "!", "?", "#", "<", ">", "\n",
+  "\\", "@", "$", "(", ")", "{", "}", "[", "]", ";", "\"", "'", "|", "`", "\n",
+  WIFI_KB_MAP_BOTTOM
+};
+static const lv_btnmatrix_ctrl_t wifi_kb_ctrl_spec[] = {
+  WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY,
+  WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY,
+  LV_BTNMATRIX_CTRL_CHECKED | 2,
+  LV_KEYBOARD_CTRL_BTN_FLAGS | 2,
+  WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY,
+  WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY,
+  WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY,
+  WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY, WIFI_KB_KEY,
+  WIFI_KB_CTRL_BOTTOM
+};
 
 // Held by name rather than looked up with lv_obj_get_child(screen, -1/-2).
 // The index form silently pointed at the wrong widget as soon as anything new
@@ -36,6 +101,10 @@
 static lv_obj_t *btn_conn_retry = nullptr;
 static lv_obj_t *btn_conn_next  = nullptr;
 static lv_obj_t *lbl_conn_status = nullptr;
+// Only for a link that was already up: the line under the title and the
+// button that takes Retry's place.
+static lv_obj_t *lbl_conn_intro  = nullptr;
+static lv_obj_t *btn_conn_change = nullptr;
 
 // Summary rows, filled once the link is up. Built hidden so the failure path
 // looks exactly as it did before.
@@ -55,7 +124,8 @@ static char  wifi_setup_ssid[33]  = "";
 // gone by the time the connect runs.
 static bool  wifi_scan_pending    = false;
 static bool  wifi_connect_pending = false;
-static char  wifi_setup_pass[65]  = "";
+static bool  wifi_reconnect_pending = false;
+static char  wifi_setup_pass[WIFI_PASS_MAX_LEN + 1] = "";
 static lv_obj_t *lbl_wifi_setup_status = nullptr;
 static lv_obj_t *lbl_wifi_scan_list = nullptr;
 static lv_obj_t *ta_wifi_pass = nullptr;
@@ -100,6 +170,11 @@ void buildWifiSetupScreen() {
   addBackButton(scr_wifi_setup, [](lv_event_t *e) {
     if (strlen(cfg_wifi_ssid) == 0) {
       showWelcomeScreen();
+    } else if (setup_active) {
+      // In the setup with a network already stored. The scan has dropped that
+      // link, so back means connecting to it again, not a trip into the
+      // settings menu in the middle of the setup.
+      wifi_reconnect_pending = true;
     } else {
       hideAllOverlays();
       buildConnectionScreen();
@@ -125,9 +200,10 @@ void buildWifiSetupScreen() {
   lv_obj_set_style_text_font(lbl_scan_btn, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_scan_btn);
 
-  // Scrollable network list (y=50 → y=56 due to header)
+  // Scrollable network list (y=50 → y=56 due to header). Ends above the row
+  // with the status and the phone button.
   lv_obj_t *list = lv_obj_create(scr_wifi_setup);
-  lv_obj_set_size(list, 460, 218);
+  lv_obj_set_size(list, 460, 208);
   lv_obj_set_pos(list, 10, 56);
   lv_obj_set_style_bg_color(list, lv_color_hex(0x0a1020), 0);
   lv_obj_set_style_border_width(list, 0, 0);
@@ -144,7 +220,30 @@ void buildWifiSetupScreen() {
   lv_label_set_text(lbl_wifi_setup_status, T(STR_WIFI_SCAN));
   lv_obj_set_style_text_color(lbl_wifi_setup_status, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_wifi_setup_status, &lv_font_montserrat_ext_14, 0);
-  lv_obj_align(lbl_wifi_setup_status, LV_ALIGN_BOTTOM_MID, 0, -8);
+  lv_label_set_long_mode(lbl_wifi_setup_status, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(lbl_wifi_setup_status, 250);
+  lv_obj_align(lbl_wifi_setup_status, LV_ALIGN_BOTTOM_LEFT, 16, -18);
+
+  // The other way in: the scale opens a network of its own and the phone does
+  // the typing.
+  lv_obj_t *btn_portal = lv_btn_create(scr_wifi_setup);
+  lv_obj_set_size(btn_portal, 190, 40);
+  lv_obj_align(btn_portal, LV_ALIGN_BOTTOM_RIGHT, -10, -8);
+  lv_obj_set_style_bg_color(btn_portal, lv_color_hex(0x0a1828), 0);
+  lv_obj_set_style_bg_color(btn_portal, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_portal, 8, 0);
+  lv_obj_set_style_shadow_width(btn_portal, 0, 0);
+  lv_obj_set_style_border_width(btn_portal, 1, 0);
+  lv_obj_set_style_border_color(btn_portal, lv_color_hex(0x1a2840), 0);
+  lv_obj_add_event_cb(btn_portal, [](lv_event_t *e) {
+    logSD("BTN: WifiSetup -> Portal");
+    showWifiPortalScreen();
+  }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lbl_portal = lv_label_create(btn_portal);
+  lv_label_set_text(lbl_portal, T(STR_BTN_WIFI_PORTAL));
+  lv_obj_set_style_text_color(lbl_portal, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_font(lbl_portal, &lv_font_montserrat_ext_14, 0);
+  lv_obj_center(lbl_portal);
 
   // Scan button callback (after building list)
   lv_obj_add_event_cb(btn_scan, [](lv_event_t *e) {
@@ -157,16 +256,57 @@ void buildWifiSetupScreen() {
   wifi_scan_pending = true;
 }
 
+static bool wifiSetupScreenVisible() {
+  return (scr_wifi_setup      && !lv_obj_has_flag(scr_wifi_setup,      LV_OBJ_FLAG_HIDDEN)) ||
+         (scr_wifi_pass       && !lv_obj_has_flag(scr_wifi_pass,       LV_OBJ_FLAG_HIDDEN)) ||
+         (scr_wifi_connecting && !lv_obj_has_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN)) ||
+         (scr_wifi_portal     && !lv_obj_has_flag(scr_wifi_portal,     LV_OBJ_FLAG_HIDDEN));
+}
+
+void wifiSetupConnectWith(const char *ssid, const char *pass) {
+  strncpy(wifi_setup_ssid, ssid, sizeof(wifi_setup_ssid) - 1);
+  wifi_setup_ssid[sizeof(wifi_setup_ssid) - 1] = '\0';
+  strncpy(wifi_setup_pass, pass, sizeof(wifi_setup_pass) - 1);
+  wifi_setup_pass[sizeof(wifi_setup_pass) - 1] = '\0';
+  wifi_connect_pending = true;
+}
+
 void handleWifiSetupDeferredActions() {
-  if (wifi_scan_pending) {
+  // Held while the browser connects: the scan's radio reset would cut that
+  // attempt off. Either it succeeds and the screen moves on, or the scan runs
+  // right after.
+  if (wifi_scan_pending && !improvSerialBusy()) {
     wifi_scan_pending = false;
-    if (scr_wifi_setup && lbl_wifi_scan_list && lbl_wifi_setup_status) doWifiScan();
+    // Not once the list is behind another screen, and never while the setup
+    // portal runs: a scan switches to station mode and ends its access point.
+    if (scr_wifi_setup && lbl_wifi_scan_list && lbl_wifi_setup_status &&
+        !lv_obj_has_flag(scr_wifi_setup, LV_OBJ_FLAG_HIDDEN) && !setupPortalActive()) {
+      doWifiScan();
+    }
   }
   if (wifi_connect_pending) {
     wifi_connect_pending = false;
     saveWifiCredentials(wifi_setup_ssid, wifi_setup_pass);
     memset(wifi_setup_pass, 0, sizeof(wifi_setup_pass));
     showWifiConnectingScreen();
+  }
+  if (wifi_reconnect_pending) {
+    wifi_reconnect_pending = false;
+    // showWifiConnectingScreen() connects with the stored credentials. This
+    // only names the network in its "Connecting to" line.
+    strncpy(wifi_setup_ssid, cfg_wifi_ssid, sizeof(wifi_setup_ssid) - 1);
+    wifi_setup_ssid[sizeof(wifi_setup_ssid) - 1] = '\0';
+    showWifiConnectingScreen();
+  }
+  if (improvSerialTakeProvisioned()) {
+    updateHeaderStatus();
+    // What a boot without a network left on the home screen.
+    if (lbl_spoolman_weight &&
+        strcmp(lv_label_get_text(lbl_spoolman_weight), T(STR_NO_WIFI)) == 0) {
+      lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));
+    }
+    // A scan or a password the browser has just made moot.
+    if (wifiSetupScreenVisible()) showWifiConnectedScreen();
   }
 }
 
@@ -278,6 +418,19 @@ void doWifiScan() {
 // ============================================================
 //  WIFI SETUP: STEP 2 - Password entry
 // ============================================================
+// ✓ reports READY on the keyboard and then on the textarea as well, so this
+// can run twice for one press; the second run only repeats the first.
+static void wifiPassReadyCb(lv_event_t *e) {
+  if (!ta_wifi_pass) return;
+  // Copied now, connected on the next loop pass: the NVS write and the
+  // ten second connect attempt do not belong in the keyboard's callback,
+  // and the textarea is deleted with this screen before they run.
+  const char* pass = lv_textarea_get_text(ta_wifi_pass);
+  strncpy(wifi_setup_pass, pass ? pass : "", sizeof(wifi_setup_pass) - 1);
+  wifi_setup_pass[sizeof(wifi_setup_pass) - 1] = '\0';
+  wifi_connect_pending = true;
+}
+
 void showWifiPassScreen() {
   logSD("SHOW: WifiPassScreen");
   logSD("UI: Screen -> WifiPass");
@@ -327,6 +480,7 @@ void buildWifiPassScreen() {
   lv_textarea_set_one_line(ta_wifi_pass, true);
   lv_textarea_set_password_mode(ta_wifi_pass, false);
   lv_textarea_set_placeholder_text(ta_wifi_pass, T(STR_WIFI_PASS_PLACEHOLDER));
+  lv_textarea_set_max_length(ta_wifi_pass, WIFI_PASS_MAX_LEN);
   lv_obj_set_size(ta_wifi_pass, 380, 44);
   lv_obj_align(ta_wifi_pass, LV_ALIGN_TOP_MID, 0, 74);
   lv_obj_set_style_text_font(ta_wifi_pass, &lv_font_montserrat_ext_16, 0);
@@ -336,24 +490,22 @@ void buildWifiPassScreen() {
 
   // Keyboard
   kb_wifi_pass = lv_keyboard_create(scr_wifi_pass);
+  lv_keyboard_set_map(kb_wifi_pass, LV_KEYBOARD_MODE_TEXT_LOWER,
+                      (const char **)wifi_kb_map_lc, wifi_kb_ctrl_text);
+  lv_keyboard_set_map(kb_wifi_pass, LV_KEYBOARD_MODE_TEXT_UPPER,
+                      (const char **)wifi_kb_map_uc, wifi_kb_ctrl_text);
+  lv_keyboard_set_map(kb_wifi_pass, LV_KEYBOARD_MODE_SPECIAL,
+                      (const char **)wifi_kb_map_spec, wifi_kb_ctrl_spec);
   lv_keyboard_set_textarea(kb_wifi_pass, ta_wifi_pass);
   lv_obj_set_size(kb_wifi_pass, 480, 160);
   lv_obj_align(kb_wifi_pass, LV_ALIGN_BOTTOM_MID, 0, 0);
   lv_obj_set_style_bg_color(kb_wifi_pass, lv_color_hex(0x182238), 0);
   lv_obj_set_style_border_width(kb_wifi_pass, 0, 0);
 
-  // Enter on keyboard → connect
-  lv_obj_add_event_cb(kb_wifi_pass, [](lv_event_t *e) {
-    if (lv_event_get_code(e) == LV_EVENT_READY) {
-      // Copied now, connected on the next loop pass: the NVS write and the
-      // ten second connect attempt do not belong in the keyboard's callback,
-      // and the textarea is deleted with this screen before they run.
-      const char* pass = lv_textarea_get_text(ta_wifi_pass);
-      strncpy(wifi_setup_pass, pass ? pass : "", sizeof(wifi_setup_pass) - 1);
-      wifi_setup_pass[sizeof(wifi_setup_pass) - 1] = '\0';
-      wifi_connect_pending = true;
-    }
-  }, LV_EVENT_ALL, NULL);
+  // Both confirm keys connect. ✓ reports READY on the keyboard, ↵ only on the
+  // textarea, so the handler sits on both.
+  lv_obj_add_event_cb(kb_wifi_pass, wifiPassReadyCb, LV_EVENT_READY, NULL);
+  lv_obj_add_event_cb(ta_wifi_pass, wifiPassReadyCb, LV_EVENT_READY, NULL);
 }
 
 // ============================================================
@@ -374,9 +526,55 @@ static void setConnSummaryHidden(bool hidden) {
 
 void closeWifiConnectingScreen() {
   btn_conn_retry = btn_conn_next = lbl_conn_status = nullptr;
+  lbl_conn_intro = btn_conn_change = nullptr;
   conn_val_ssid = conn_val_ip = conn_val_gw = conn_val_rssi = nullptr;
   conn_lbl_ssid = conn_lbl_ip = conn_lbl_gw = conn_lbl_rssi = nullptr;
   releaseScreen(&scr_wifi_connecting);   // retry and next sit on it
+}
+
+// The result block of a working link: headline, the four rows, and Next.
+static void fillConnSuccess() {
+  // The IP used to be crammed into this line; it now has a row of its own
+  // below, so the headline is just the result.
+  char ok_buf[48];
+  snprintf(ok_buf, sizeof(ok_buf), LV_SYMBOL_OK "  %s", T(STR_WIFI_SUCCESS));
+  if (lbl_conn_status) {
+    lv_label_set_text(lbl_conn_status, ok_buf);
+    lv_obj_set_style_text_color(lbl_conn_status, lv_color_hex(0x28d49a), 0);
+  }
+
+  if (conn_val_ssid) {
+    lv_label_set_text(conn_val_ssid, cfg_wifi_ssid[0] ? cfg_wifi_ssid : "-");
+    lv_label_set_text(conn_val_ip,   wifiManagerLocalIP().toString().c_str());
+    lv_label_set_text(conn_val_gw,   wifiManagerGatewayIP().toString().c_str());
+    const int rssi = wifiManagerRSSI();
+    const char *qual;
+    if      (rssi >= -50) qual = T(STR_WIFI_QUAL_EXCELLENT);
+    else if (rssi >= -65) qual = T(STR_WIFI_QUAL_GOOD);
+    else if (rssi >= -75) qual = T(STR_WIFI_QUAL_MEDIUM);
+    else                  qual = T(STR_WIFI_QUAL_WEAK);
+    char rssi_buf[48];
+    snprintf(rssi_buf, sizeof(rssi_buf), "%d dBm  (%s)", rssi, qual);
+    lv_label_set_text(conn_val_rssi, rssi_buf);
+    setConnSummaryHidden(false);
+  }
+
+  if (btn_conn_next) lv_obj_clear_flag(btn_conn_next, LV_OBJ_FLAG_HIDDEN);
+}
+
+// The same screen for a link that is already up, typically one the web
+// flasher set: no connect attempt, the result straight away, and a way to a
+// different network where Retry would be.
+void showWifiConnectedScreen() {
+  logSD("SHOW: WifiConnectedScreen");
+  logSD("UI: Screen -> WifiConnected");
+  hideAllOverlays();
+  closeWifiConnectingScreen();
+  buildWifiConnectingScreen();
+  if (lbl_conn_intro) lv_label_set_text(lbl_conn_intro, T(STR_WIFI_ALREADY_CONNECTED));
+  fillConnSuccess();
+  if (btn_conn_change) lv_obj_clear_flag(btn_conn_change, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_clear_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN);
 }
 
 void showWifiConnectingScreen() {
@@ -400,33 +598,8 @@ void showWifiConnectingScreen() {
   if (wifi_ok) {
     syncNTP();
     updateHeaderStatus();
-    zone4WaitingStyle(true);
     lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));
-    // The IP used to be crammed into this line; it now has a row of its own
-    // below, so the headline is just the result.
-    char ok_buf[48];
-    snprintf(ok_buf, sizeof(ok_buf), LV_SYMBOL_OK "  %s", T(STR_WIFI_SUCCESS));
-    if (status_lbl) lv_label_set_text(status_lbl, ok_buf);
-    lv_obj_set_style_text_color(status_lbl, lv_color_hex(0x28d49a), 0);
-
-    if (conn_val_ssid) {
-      lv_label_set_text(conn_val_ssid, cfg_wifi_ssid[0] ? cfg_wifi_ssid : "-");
-      lv_label_set_text(conn_val_ip,   wifiManagerLocalIP().toString().c_str());
-      lv_label_set_text(conn_val_gw,   wifiManagerGatewayIP().toString().c_str());
-      const int rssi = wifiManagerRSSI();
-      const char *qual;
-      if      (rssi >= -50) qual = T(STR_WIFI_QUAL_EXCELLENT);
-      else if (rssi >= -65) qual = T(STR_WIFI_QUAL_GOOD);
-      else if (rssi >= -75) qual = T(STR_WIFI_QUAL_MEDIUM);
-      else                  qual = T(STR_WIFI_QUAL_WEAK);
-      char rssi_buf[48];
-      snprintf(rssi_buf, sizeof(rssi_buf), "%d dBm  (%s)", rssi, qual);
-      lv_label_set_text(conn_val_rssi, rssi_buf);
-      setConnSummaryHidden(false);
-    }
-
-    // Show next button
-    if (btn_conn_next) lv_obj_clear_flag(btn_conn_next, LV_OBJ_FLAG_HIDDEN);
+    fillConnSuccess();
   } else {
     updateHeaderStatus();
     char fail_buf[80];
@@ -446,6 +619,7 @@ void buildWifiConnectingScreen() {
   // Cleared before the old screen goes away, so nothing can be touched between
   // the delete and the rebuild below.
   btn_conn_retry = btn_conn_next = lbl_conn_status = nullptr;
+  lbl_conn_intro = btn_conn_change = nullptr;
   conn_val_ssid = conn_val_ip = conn_val_gw = conn_val_rssi = nullptr;
   conn_lbl_ssid = conn_lbl_ip = conn_lbl_gw = conn_lbl_rssi = nullptr;
   releaseScreen(&scr_wifi_connecting);
@@ -475,6 +649,7 @@ void buildWifiConnectingScreen() {
   lv_obj_set_style_text_color(lbl_connecting, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_connecting, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(lbl_connecting, LV_ALIGN_TOP_MID, 0, 68);
+  lbl_conn_intro = lbl_connecting;
 
   // Status label - larger font, filled after connection
   lbl_conn_status = lv_label_create(scr_wifi_connecting);
@@ -516,6 +691,25 @@ void buildWifiConnectingScreen() {
   lv_obj_set_style_text_color(lbl_retry, lv_color_hex(0xff8080), 0);
   lv_obj_set_style_text_font(lbl_retry, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_retry);
+
+  // Change network (initially hidden). In Retry's place, and quiet: keeping
+  // the network is the normal answer.
+  btn_conn_change = lv_btn_create(scr_wifi_connecting);
+  lv_obj_set_size(btn_conn_change, 200, 48);
+  lv_obj_align(btn_conn_change, LV_ALIGN_BOTTOM_MID, -110, -20);
+  lv_obj_add_flag(btn_conn_change, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_style_bg_color(btn_conn_change, lv_color_hex(0x0a1828), 0);
+  lv_obj_set_style_bg_color(btn_conn_change, lv_color_hex(0x1a2840), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_conn_change, 8, 0);
+  lv_obj_set_style_shadow_width(btn_conn_change, 0, 0);
+  lv_obj_set_style_border_width(btn_conn_change, 1, 0);
+  lv_obj_set_style_border_color(btn_conn_change, lv_color_hex(0x1a2840), 0);
+  lv_obj_add_event_cb(btn_conn_change, [](lv_event_t *e) { logSD("BTN: Change WiFi -> WifiSetup"); showWifiSetupScreen(); }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lbl_change = lv_label_create(btn_conn_change);
+  lv_label_set_text(lbl_change, T(STR_BTN_WIFI_CHANGE));
+  lv_obj_set_style_text_color(lbl_change, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_font(lbl_change, &lv_font_montserrat_ext_16, 0);
+  lv_obj_center(lbl_change);
 
   // Next button → Spoolman IP (initially hidden)
   btn_conn_next = lv_btn_create(scr_wifi_connecting);

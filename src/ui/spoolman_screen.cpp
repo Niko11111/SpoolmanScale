@@ -96,6 +96,36 @@ static void runAddressTest() {
   int hcode = backendGetHealthCode(cfg_spoolman_base, 4000);
   sm_reachable = (hcode == 200);
 
+  // BamBuddy with authentication answers the credential half of the check
+  // with 401 or 403 while the key is missing or wrong. The server is there,
+  // and during the setup the key is only entered in the next step, so this
+  // leads on to that step instead of ending here.
+  if (!sm_reachable && backendIsBamBuddy() && (hcode == 401 || hcode == 403)) {
+    const bool has_key = bambuddyApiKey()[0] != '\0';
+    if (lbl_sp_test_result) {
+      char buf[64];
+      if (has_key) {
+        snprintf(buf, sizeof(buf), "%s (HTTP %d)", T(STR_BB_KEY_REJECTED), hcode);
+      } else {
+        // The version endpoint is public, so it still names the server.
+        char ver[32] = "?";
+        backendGetVersion(cfg_spoolman_base, ver, sizeof(ver), 3000);
+        snprintf(buf, sizeof(buf), "v%s | %s", ver, T(STR_BB_KEY_MISSING));
+      }
+      lv_label_set_text(lbl_sp_test_result, buf);
+      lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(has_key ? 0xff8080 : 0xf0b838), 0);
+    }
+    if (btn_sp_extra_fields && setup_active) {
+      lv_obj_clear_flag(btn_sp_extra_fields, LV_OBJ_FLAG_HIDDEN);
+    }
+    logSDf("Spoolman IP test: BamBuddy reachable, API key %s (HTTP %d)",
+           has_key ? "rejected" : "missing", hcode);
+    Serial.printf("Spoolman IP test: BamBuddy reachable, API key %s (HTTP %d)\n",
+                  has_key ? "rejected" : "missing", hcode);
+    updateHeaderStatus();
+    return;
+  }
+
   if (!sm_reachable) {
     if (lbl_sp_test_result) {
       char buf[64];

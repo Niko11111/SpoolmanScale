@@ -13,14 +13,6 @@
 // ============================================================
 //  CLEAR DISPLAY (no tag detected)
 // ============================================================
-void zone4WaitingStyle(bool waiting) {
-  if (!lbl_spoolman_weight) return;
-  lv_obj_set_style_text_font(lbl_spoolman_weight,
-    waiting ? &lv_font_montserrat_ext_14 : &lv_font_montserrat_ext_20, 0);
-  lv_obj_set_style_text_color(lbl_spoolman_weight,
-    lv_color_hex(waiting ? 0x4a6fa0 : 0x28d49a), 0);
-}
-
 void clearTagDisplay() {
   lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
   lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);  // yellow = kein Tag
@@ -38,7 +30,6 @@ void clearTagDisplay() {
   lv_label_set_text(lbl_detail, "-");
   lv_label_set_text(lbl_filament_name, "");
   lv_label_set_text(lbl_last_used, "-");
-  zone4WaitingStyle(false);
   lv_label_set_text(lbl_spoolman_weight, "---");
   lv_label_set_text(lbl_spoolman_pct, "");
   lv_label_set_text(lbl_spoolman_dried_val, "-");

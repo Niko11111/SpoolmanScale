@@ -13,6 +13,9 @@ void handleOtaServerClient();
 // There used to be a second automaton in web_access.cpp with its own copy of
 // this state, plus direct calls from the web screen. The copies drifted and
 // port 80 stayed shut until the next reboot.
+//
+// While the WiFi setup portal runs (services/setup_portal.h), the port serves
+// the portal's form and the main interface is down.
 void webServerSyncState();
 
 // Whether the socket is currently accepting connections. Used by the mDNS

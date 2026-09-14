@@ -412,8 +412,8 @@ static void routes(WebServer &srv) {
       return;
     }
     if (webJobState() == WJS_RUNNING) {
-      srv.send(webJobKind() == WJ_SPOOLS ? 202 : 409, "application/json",
-               webJobKind() == WJ_SPOOLS ? "{\"pending\":true}" : "{\"error\":\"busy\"}");
+      // Ours or another job's: the page asks again either way.
+      srv.send(202, "application/json", "{\"pending\":true}");
       return;
     }
     if (webJobState() == WJS_DONE) webJobTake();   // somebody else's leftover
