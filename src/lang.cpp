@@ -1925,6 +1925,8 @@ const char* const STRINGS[][2] = {
     "Please choose a network or type its name (32 characters at most)." },  // STR_PORTAL_PAGE_ERR_SSID
   { "Das Passwort hat 8 bis 64 Zeichen, bei einem offenen Netz bleibt es leer.",
     "The password has 8 to 64 characters, or stays empty for an open network." },  // STR_PORTAL_PAGE_ERR_PASS
+  { "API-Key fehlt noch",        "API key still missing"      },  // STR_BB_KEY_MISSING
+  { "API-Key abgelehnt",         "API key rejected"           },  // STR_BB_KEY_REJECTED
 };
 
 StringID tagWriteResultString(uint8_t code) {

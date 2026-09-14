@@ -184,12 +184,17 @@ static String body() {
          "if(!d){flash('hs-s',WS.err,true);return;}"
          "if(d.state==='running'){if(n<40)setTimeout(function(){hostPoll(n+1);},500);"
          "else flash('hs-s',WS.err,true);return;}"
-         "if(d.state==='done')flash('hs-s',d.msg,!d.ok);});}"
+         // bad rather than !ok: a BamBuddy key that is not entered yet leaves
+         // the test unfinished without being a fault.
+         "if(d.state==='done')flash('hs-s',d.msg,d.bad);});}"
          // A stored key is shown as underscores so its length gives nothing
          // away. Sending those back would overwrite the real one with them.
          "function guard(v){return v.indexOf('_')!==0;}"
+         // A new key changes what the address test can say. The device runs it
+         // again on saving, and this picks up the answer for the line above.
          "function setBb(){const v=$('bk').value;"
-         "if(!guard(v))return;postFlash('/api/bambuddy/key',v,'bk-s');}"
+         "if(!guard(v))return;postFlash('/api/bambuddy/key',v,'bk-s')"
+         ".then(function(r){if(r.ok)hostPoll(0);});}"
          "function setKey(){const v=$('fk').value;"
          "if(!guard(v))return;postFlash('/api/filaman/key',v,'fk-s');}"
          "function reg(){flash('fc-s',M.test,false);"
@@ -443,10 +448,21 @@ static void routes(WebServer &srv) {
       // The reachability flag belongs to the loop task; the worker left it
       // alone and only brought the code.
       sm_reachable = r.ok;
-      String msg = String(r.ok ? T(STR_W_HOST_OK) : T(STR_W_HOST_FAIL))
+      // BamBuddy with authentication answers the credential half of the test
+      // with 401 or 403 while the key is missing or wrong. The server is there
+      // then, and "not reachable" sent people looking for a network fault.
+      const bool bb_auth = !r.ok && backendIsBamBuddy() && (r.code == 401 || r.code == 403);
+      const bool no_key  = bb_auth && !bambuddyApiKey()[0];
+      String msg = String((r.ok || bb_auth) ? T(STR_W_HOST_OK) : T(STR_W_HOST_FAIL))
                  + " - " + backendBaseUrl();
-      if (!r.ok) msg += " (HTTP " + String(r.code) + ")";
+      if (no_key)       msg += String(" (") + T(STR_BB_KEY_MISSING) + ")";
+      else if (bb_auth) msg += String(" (") + T(STR_BB_KEY_REJECTED) + ", HTTP " + String(r.code) + ")";
+      else if (!r.ok)   msg += " (HTTP " + String(r.code) + ")";
+      // A key that is simply not entered yet is the normal state halfway
+      // through the setup, not a fault, so it is not shown in red.
+      const bool bad = !r.ok && !no_key;
       String j = String("{\"state\":\"done\",\"ok\":") + (r.ok ? "true" : "false") +
+                 ",\"bad\":" + (bad ? "true" : "false") +
                  ",\"msg\":\"" + jsonEsc(msg.c_str()) + "\"}";
       webJobTake();
       srv.send(200, "application/json", j);
@@ -476,6 +492,13 @@ static void routes(WebServer &srv) {
       return;
     }
     bambuddySetApiKey(key.c_str());
+    // Tested again right away, so the address line can stop saying the key is
+    // missing. The page asks GET /api/host for the answer; if the worker is
+    // busy there is simply no new one, and nothing to test without an address.
+    if (strlen(backendBaseUrl()) > 7) {   // longer than "http://"
+      if (webJobState() == WJS_DONE) webJobTake();
+      webJobStart(WJ_HOST_TEST, nullptr, false);
+    }
     srv.send(200, "text/plain", T(STR_W_SAVED));
   });
 

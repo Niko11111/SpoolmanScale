@@ -1123,6 +1123,8 @@ enum StringID {
   STR_PORTAL_PAGE_DONE,
   STR_PORTAL_PAGE_ERR_SSID,
   STR_PORTAL_PAGE_ERR_PASS,
+  STR_BB_KEY_MISSING,         // address test: BamBuddy answers, no key yet
+  STR_BB_KEY_REJECTED,
 
   STR_COUNT
 };
