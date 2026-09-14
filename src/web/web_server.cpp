@@ -7,12 +7,14 @@
 #include "services/backend.h"
 #include "services/filaman_api.h"
 #include "services/remote_link.h"
+#include "services/setup_portal.h"
 #include "services/tag_write.h"
 #include "services/wifi_manager.h"
 #include "web/web_access.h"
 #include "web/web_assets.h"
 #include "web/web_static.h"
 #include "web/web_pages.h"
+#include "web/web_portal.h"
 #include "web/web_shell.h"
 
 // ArduinoJson has to come after lang.h anywhere the T() macro is in scope.
@@ -90,6 +92,14 @@ static ScaleWebServer ota_server(80);
 static bool ota_server_running  = false;
 static bool routes_registered   = false;
 
+// While the WiFi setup portal runs, port 80 serves its form instead. The
+// access point is the only network then, the main interface has nothing to
+// offer on it, and its host check would refuse every request a phone sends.
+// A server object of its own, because routes cannot be taken off one.
+static ScaleWebServer portal_server(80);
+static bool portal_server_running    = false;
+static bool portal_routes_registered = false;
+
 // True while the scale has to stay reachable for FilaMan's device protocol.
 // In Spoolman and BamBuddy mode this is never true and nothing changes.
 static bool remoteLinkNeedsServer() {
@@ -129,11 +139,38 @@ static void serverEnsureStopped() {
   Serial.println("Web server stopped");
 }
 
+static void portalEnsureRunning() {
+  if (portal_server_running) return;
+  if (!portal_routes_registered) {
+    portal_routes_registered = true;
+    registerPortalRoutes(portal_server);
+  }
+  portal_server.begin();
+  portal_server.tune();
+  portal_server_running = true;
+  Serial.printf("Setup portal listening: http://%s/\n", setupPortalIP().toString().c_str());
+}
+
+static void portalEnsureStopped() {
+  if (!portal_server_running) return;
+  portal_server.stop();
+  portal_server_running = false;
+  Serial.println("Setup portal stopped");
+}
+
 // Idempotent, called once a second from appLoop() and once more whenever a
 // screen wants the state to settle now. The only owner of the socket: there
 // used to be a second automaton in web_access.cpp with its own copy of this
-// state, and the copies drifted until port 80 stayed shut until reboot.
+// state, and the copies drifted until port 80 stayed shut until reboot. The
+// setup portal is one more state of the same socket, not a second owner:
+// each server is stopped before the other one binds the port.
 void webServerSyncState() {
+  if (setupPortalActive()) {
+    serverEnsureStopped();
+    portalEnsureRunning();
+    return;
+  }
+  portalEnsureStopped();
   if (serverShouldRun()) serverEnsureRunning();
   else                   serverEnsureStopped();
 }
@@ -239,5 +276,6 @@ static void registerRoutes() {
 }
 
 void handleOtaServerClient() {
-  if (ota_server_running) ota_server.handleClient();
+  if (ota_server_running)    ota_server.handleClient();
+  if (portal_server_running) portal_server.handleClient();
 }

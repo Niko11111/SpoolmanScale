@@ -21,6 +21,7 @@
 #include "ui/spoolman_screen.h"
 #include "ui/wifi_info.h"
 #include "ui/wifi_setup_screen.h"
+#include "ui/wifi_portal_screen.h"
 #include "ui/more_info_screen.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/header_status.h"
@@ -81,6 +82,8 @@ void hideAllOverlays() {
   if (scr_wifi_setup)  lv_obj_add_flag(scr_wifi_setup,  LV_OBJ_FLAG_HIDDEN);
   if (scr_wifi_pass)   lv_obj_add_flag(scr_wifi_pass,   LV_OBJ_FLAG_HIDDEN);
   if (scr_wifi_connecting) lv_obj_add_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN);
+  // Hidden means over: the loop sees it and takes the access point down.
+  if (scr_wifi_portal) lv_obj_add_flag(scr_wifi_portal, LV_OBJ_FLAG_HIDDEN);
   hideSpoolFlowOverlays();
   hideMoreInfoOverlays();
   hideAmsViewOverlays();
@@ -119,6 +122,7 @@ static void deleteSecondaryScreens() {
   closeConnectionScreen();
   closeSpoolmanScreen();
   closeWifiConnectingScreen();
+  closeWifiPortalScreen();
   if (scr_backend)  { lv_obj_del(scr_backend);  scr_backend  = nullptr; }
   if (scr_web)      { lv_obj_del(scr_web);      scr_web      = nullptr; }
   webPinScreenClose();

@@ -1894,6 +1894,37 @@ const char* const STRINGS[][2] = {
   { "Fenster öffnen",            "Open window"                },  // STR_AMSV_BTN_WINDOW
   { "Gespeichert - Test übersprungen, das Gerät ist beschäftigt",
     "Saved - test skipped, the device is busy"                },  // STR_W_HOST_SAVED_ONLY
+  { "Bereits mit einem WLAN verbunden.",
+    "Already connected to WiFi."                              },  // STR_WIFI_ALREADY_CONNECTED
+  { "WLAN ändern",               "Change WiFi"                },  // STR_BTN_WIFI_CHANGE
+  { "Per Handy einrichten",      "Set up by phone"            },  // STR_BTN_WIFI_PORTAL
+  { "WLAN per Handy einrichten", "Set up WiFi by phone"       },  // STR_PORTAL_TITLE
+  { "1. WLAN der Waage beitreten", "1. Join the scale's WiFi" },  // STR_PORTAL_STEP_JOIN
+  { "2. Seite öffnen",           "2. Open the page"           },  // STR_PORTAL_STEP_OPEN
+  { "WLAN: %s",                  "WiFi: %s"                   },  // STR_PORTAL_NET_FMT
+  { "Passwort: %s",              "Password: %s"               },  // STR_PORTAL_PASS_FMT
+  { "Öffnet sich meist von selbst", "Usually opens by itself" },  // STR_PORTAL_OPENS_ITSELF
+  { "Meldet das Handy \"kein Internet\", verbunden bleiben.",
+    "If the phone reports \"no internet\", stay connected."  },  // STR_PORTAL_ANDROID_HINT
+  { "Warte auf Eingabe am Handy...", "Waiting for the phone..." },  // STR_PORTAL_WAITING
+  { "Daten empfangen, verbinde gleich...",
+    "Received, connecting in a moment..."                     },  // STR_PORTAL_RECEIVED
+  { LV_SYMBOL_WARNING "  Das WLAN der Waage konnte nicht starten.",
+    LV_SYMBOL_WARNING "  The scale's WiFi could not start."   },  // STR_PORTAL_START_FAILED
+  { "Wähle das WLAN, mit dem sich die Waage verbinden soll.",
+    "Choose the WiFi network the scale should join."          },  // STR_PORTAL_PAGE_INTRO
+  { "Netzwerk",                  "Network"                    },  // STR_PORTAL_PAGE_NETWORK
+  { "Bitte wählen",              "Please choose"              },  // STR_PORTAL_PAGE_CHOOSE
+  { "Oder Namen eingeben (verstecktes Netz)",
+    "Or type its name (hidden network)"                       },  // STR_PORTAL_PAGE_OTHER
+  { "Passwort",                  "Password"                   },  // STR_PORTAL_PAGE_PASS
+  { "Verbinden",                 "Connect"                    },  // STR_PORTAL_PAGE_SUBMIT
+  { "Die Waage verbindet sich jetzt mit %s. Das Ergebnis erscheint auf ihrem Display, dieses WLAN schaltet sich dabei ab.",
+    "The scale is now connecting to %s. The result appears on its display, and this WiFi network switches off." },  // STR_PORTAL_PAGE_DONE
+  { "Bitte ein Netzwerk wählen oder seinen Namen eingeben (höchstens 32 Zeichen).",
+    "Please choose a network or type its name (32 characters at most)." },  // STR_PORTAL_PAGE_ERR_SSID
+  { "Das Passwort hat 8 bis 64 Zeichen, bei einem offenen Netz bleibt es leer.",
+    "The password has 8 to 64 characters, or stays empty for an open network." },  // STR_PORTAL_PAGE_ERR_PASS
 };
 
 StringID tagWriteResultString(uint8_t code) {

@@ -17,6 +17,7 @@ char cfg_spoolman_ip[64]   = "";
 char cfg_spoolman_base[80] = "";
 bool cfg_lang_set          = false;
 bool cfg_first_boot        = true;
+bool cfg_setup_resume      = false;
 bool spoolman_fail_is_setup  = false;
 bool setup_active            = false;
 
@@ -80,6 +81,7 @@ lv_obj_t *lbl_factor_cal_weight = nullptr;
 
 lv_obj_t *scr_wifi_pass         = nullptr;
 lv_obj_t *scr_wifi_connecting   = nullptr;
+lv_obj_t *scr_wifi_portal       = nullptr;
 
 int   sm_id = 0;
 int   sm_dup_count = 0;

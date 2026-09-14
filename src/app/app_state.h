@@ -23,6 +23,10 @@ extern char cfg_spoolman_ip[64];
 extern char cfg_spoolman_base[80];
 extern bool cfg_lang_set;
 extern bool cfg_first_boot;
+// Set when the browser supplied WiFi while the setup was running. The language
+// step restarts the device, and without this the restart would find an SSID
+// and boot past the rest of the setup. Cleared when the setup ends.
+extern bool cfg_setup_resume;
 extern bool spoolman_fail_is_setup;
 
 // True while the user is walking through the first time setup chain
@@ -88,6 +92,7 @@ extern lv_obj_t *lbl_factor_result;
 extern lv_obj_t *lbl_factor_cal_weight;
 extern lv_obj_t *scr_wifi_pass;
 extern lv_obj_t *scr_wifi_connecting;
+extern lv_obj_t *scr_wifi_portal;
 
 extern int sm_id;
 

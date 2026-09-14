@@ -202,6 +202,8 @@ void appSetup() {
   // Boot logic:
   // 1. lang_set=false: language selection (always first)
   // 2. lang_set=true, first_boot=true, SSID empty: first boot welcome screen
+  //    Same with an SSID the web flasher supplied during the setup
+  //    (setup_resume), connecting behind the screen.
   // 3. lang_set=true, first_boot=false, SSID empty: WiFi setup
   // 4. lang_set=true, SSID set: normal start
   if (!cfg_lang_set) {
@@ -216,6 +218,15 @@ void appSetup() {
     setSetupActive(true, "boot: first boot, no SSID");
     logSetupBootState("firstboot");
     showFirstBootScreen();
+  } else if (cfg_first_boot && cfg_setup_resume) {
+    // The browser set the WiFi while the language screen was up, and choosing
+    // the language restarted the device. The rest of the setup still has to
+    // run, so the SSID alone must not count as "set up".
+    setSetupActive(true, "boot: first boot, WiFi from the web flasher");
+    logSetupBootState("firstboot-resume");
+    showFirstBootScreen();
+    lv_timer_handler();
+    wifiConnect();
   } else if (strlen(cfg_wifi_ssid) == 0) {
     setSetupActive(true, "boot: no SSID");
     logSetupBootState("wifisetup");

@@ -14,6 +14,7 @@
 #include "wifi_setup_screen.h"
 #include "services/backend.h"
 #include "services/time_service.h"
+#include "services/wifi_manager.h"
 #include "timezone_screen.h"
 
 
@@ -323,7 +324,10 @@ void buildFirstBootScreen() {
   lv_obj_add_event_cb(btn_start, [](lv_event_t *e) {
     prefsPutBool("first_boot", false);
     cfg_first_boot = false;
-    showWifiSetupScreen();
+    // A link the web flasher already brought up is shown with the choice to
+    // keep or change it. A scan would drop it before the user decided.
+    if (wifiManagerIsConnected()) showWifiConnectedScreen();
+    else                          showWifiSetupScreen();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_start = lv_label_create(btn_start);
   lv_label_set_text(lbl_start, T(STR_FIRSTBOOT_BTN));

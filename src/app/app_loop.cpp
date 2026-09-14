@@ -45,6 +45,9 @@
 #include "services/ams_pick.h"
 #include "ui/ams_view.h"
 #include "services/wifi_manager.h"
+#include "services/improv_serial.h"
+#include "services/setup_portal.h"
+#include "ui/wifi_portal_screen.h"
 #include "services/filaman_api.h"
 #include "services/device_name.h"
 #include "services/mdns_service.h"
@@ -239,6 +242,11 @@ constexpr unsigned long NFC_RETRY_RESET_ABSENT_MS = 10000;
 static void handleWifiReconnect() {
   if (cfg_wifi_ssid[0] == '\0') return;
   if (WiFi.status() == WL_CONNECTED) return;
+  // The browser is trying a network of its own; a begin() with the stored
+  // one would cancel that attempt.
+  if (improvSerialBusy()) return;
+  // The setup portal's access point is the network while it runs.
+  if (setupPortalActive()) return;
 
   bool wifi_ui_visible =
     (scr_wifi_setup     && !lv_obj_has_flag(scr_wifi_setup,     LV_OBJ_FLAG_HIDDEN)) ||
@@ -375,6 +383,11 @@ void appLoop() {
     }
   }
 
+  // Before the watchdog, so a connect attempt from the browser is already
+  // known to be running when the watchdog asks.
+  improvSerialTick();
+  // DNS answers for the setup portal, and the hand-off of what its form sent.
+  setupPortalTick();
   handleWifiReconnect();
 
   // OTA web server bedienen wenn aktiv
@@ -429,6 +442,9 @@ void appLoop() {
   // Extra fields check/create - deferred from LVGL event callback to loop
   handleExtraFieldsDeferredActions();
   handleSpoolmanScreenDeferredActions();
+  // Before the WiFi setup actions: a form the portal handed over becomes their
+  // connect in the same pass.
+  handleWifiPortalDeferredActions();
   handleWifiSetupDeferredActions();
   handleConfirmPopupDeferredActions();
   handleDriedDeferredAction();

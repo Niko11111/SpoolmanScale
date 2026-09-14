@@ -23,11 +23,64 @@ int wifiManagerScannedRSSI(int index) {
   return WiFi.RSSI(index);
 }
 
+// Entries the RSSI sort covers. Networks beyond this stay in scan order, which
+// only matters in places dense enough to see more than this many at once.
+#define WIFI_MANAGER_SORT_MAX 64
+
+int wifiManagerScanSorted(WifiScanEntry *out, int max) {
+  const int n = WiFi.scanNetworks();
+  if (n <= 0) {
+    WiFi.scanDelete();
+    return n;
+  }
+
+  // Sorting an index array leaves the scan results where the accessors
+  // expect them.
+  const int sort_n = n < WIFI_MANAGER_SORT_MAX ? n : WIFI_MANAGER_SORT_MAX;
+  int idx[WIFI_MANAGER_SORT_MAX];
+  for (int i = 0; i < sort_n; i++) idx[i] = i;
+  for (int i = 0; i < sort_n - 1; i++) {
+    for (int j = 0; j < sort_n - i - 1; j++) {
+      if (WiFi.RSSI(idx[j]) < WiFi.RSSI(idx[j + 1])) {
+        const int tmp = idx[j]; idx[j] = idx[j + 1]; idx[j + 1] = tmp;
+      }
+    }
+  }
+
+  int count = 0;
+  for (int k = 0; k < sort_n && count < max; k++) {
+    const String ssid = WiFi.SSID(idx[k]);
+    if (ssid.length() == 0 || ssid.length() >= sizeof(out[0].ssid)) continue;
+    bool seen = false;
+    for (int s = 0; s < count && !seen; s++) seen = (strcmp(out[s].ssid, ssid.c_str()) == 0);
+    if (seen) continue;
+    strcpy(out[count].ssid, ssid.c_str());
+    out[count].rssi = WiFi.RSSI(idx[k]);
+    out[count].open = (WiFi.encryptionType(idx[k]) == WIFI_AUTH_OPEN);
+    count++;
+  }
+  WiFi.scanDelete();
+  return count;
+}
+
 void wifiManagerClearScan() {
   WiFi.scanDelete();
 }
 
-bool wifiManagerConnect(const char* ssid, const char* password, int attempts, uint32_t interval_ms) {
+bool wifiManagerStartAp(const char* ssid, const char* password, IPAddress ip, IPAddress netmask) {
+  if (!WiFi.mode(WIFI_AP)) return false;
+  if (!WiFi.softAP(ssid, password)) return false;
+  // The scale is its own gateway: a phone only looks for a captive portal on
+  // a network that claims a route out.
+  return WiFi.softAPConfig(ip, ip, netmask);
+}
+
+void wifiManagerStopAp() {
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_STA);
+}
+
+void wifiManagerBegin(const char* ssid, const char* password) {
   WiFi.mode(WIFI_STA);
   // Has to happen before begin(): the DHCP client sends it with the request,
   // so the router lists the scale by name instead of as "espressif". It
@@ -35,6 +88,10 @@ bool wifiManagerConnect(const char* ssid, const char* password, int attempts, ui
   // does not need to repeat it.
   WiFi.setHostname(deviceLabel());
   WiFi.begin(ssid, password);
+}
+
+bool wifiManagerConnect(const char* ssid, const char* password, int attempts, uint32_t interval_ms) {
+  wifiManagerBegin(ssid, password);
   for (int i = 0; i < attempts; i++) {
     delay(interval_ms);
     if (WiFi.status() == WL_CONNECTED) return true;
