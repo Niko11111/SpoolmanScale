@@ -17,11 +17,17 @@ static const char* label() { return T(STR_W_NAV_LOGS); }
 
 static String body() {
   String h;
-  h.reserve(6500);
+  h.reserve(7000);
   h += F("<div class='grid'><div class='card wide'><h2>");
   h += T(STR_W_C_LOGS);
   h += F("</h2><div id='lg'></div>"
-         "<div class='rows' style='margin-top:16px'><div class='row' id='vbrow'>"
+         "<div class='rows' style='margin-top:16px'><div class='row'>"
+         "<span class='k'>");
+  h += T(STR_W_R_SDLOG);
+  h += F("</span><span class='v'>"
+         "<label class='check' style='justify-content:flex-end'><span class='switch'>"
+         "<input id='sdl' type='checkbox' onchange='toggleSdLog()'><i></i></span></label>"
+         "</span></div><div class='row' id='vbrow'>"
          "<span class='k'>");
   h += T(STR_W_R_VERBOSE);
   h += F("</span><span class='v'>"
@@ -141,7 +147,11 @@ static String body() {
          "function loadLogs(){fetch('/api/logs').then(r=>{"
          "if(!r.ok)throw 0;return r.json();}).then(d=>{"
          "const c=document.getElementById('lg');"
-         "document.getElementById('vb').checked=!!d.verbose;"
+         // Verbose lines only ever go to the card, so with the card log off,
+         // or no card at all, that switch would change nothing anyone sees.
+         "const sdl=document.getElementById('sdl'),vb=document.getElementById('vb');"
+         "sdl.checked=!!d.log;sdl.disabled=!d.sd;"
+         "vb.checked=!!d.verbose;vb.disabled=!d.sd||!d.log;"
          "const da=document.getElementById('da');"
          "da.textContent=M.all;"
          // With nothing to delete the whole row goes, not just the button.
@@ -208,6 +218,12 @@ static String body() {
          "if(!n||!confirm(n===1?M.allask1:M.allask.replace('{n}',n)))return;"
          "fetch('/api/deletelogs',{method:'POST'})"
          ".then(()=>loadLogs()).catch(()=>say(M.err));}"
+         // Reloads rather than trusting its own answer: the verbose switch
+         // greys out with this one, and a failure puts both back where the
+         // device says they are.
+         "function toggleSdLog(){fetch('/api/sdlog',{method:'POST'})"
+         ".then(r=>{if(!r.ok)throw 0;return r.json();}).then(()=>loadLogs())"
+         ".catch(()=>{say(M.err);loadLogs();});}"
          "function toggleVerbose(){fetch('/api/verbose',{method:'POST'})"
          ".then(r=>r.json()).then(d=>{"
          "document.getElementById('vb').checked=!!d.verbose;})"
@@ -234,7 +250,9 @@ static void routes(WebServer &srv) {
       srv.send(200, "application/json", "{\"sd\":false,\"verbose\":false,\"files\":[]}");
       return;
     }
-    String json = "{\"sd\":true,\"verbose\":";
+    String json = "{\"sd\":true,\"log\":";
+    json += sd_logging ? "true" : "false";
+    json += ",\"verbose\":";
     json += sd_verbose ? "true" : "false";
     json += ",\"files\":[";
     File root = SD.open("/");
@@ -406,6 +424,21 @@ static void routes(WebServer &srv) {
       srv.sendContent(out);
     }
     srv.sendContent("");
+  });
+
+  // POST /api/sdlog -> switch writing to the card on or off. Only the writing:
+  // the files already there stay listed, readable and deletable either way.
+  srv.on("/api/sdlog", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
+    if (!sd_available) {
+      srv.send(404, "application/json", "{\"error\":\"No SD card\"}");
+      return;
+    }
+    if (!sdLoggingSet(!sd_logging)) {
+      srv.send(500, "application/json", "{\"error\":\"Failed to store the setting\"}");
+      return;
+    }
+    srv.send(200, "application/json", sd_logging ? "{\"log\":true}" : "{\"log\":false}");
   });
 
   // POST /verbose -> toggle verbose.txt on SD root

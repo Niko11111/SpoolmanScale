@@ -4,6 +4,11 @@
 
 extern bool sd_available;
 extern bool sd_verbose;
+// Whether lines go to the card at all. On unless switched off in the browser,
+// and kept in NVS rather than on the card: it is a setting of the device, so
+// a swapped card does not quietly turn it back on. The session ring below
+// fills either way.
+extern bool sd_logging;
 
 String getCurrentLogFilename();
 void logSD(const char* msg);
@@ -11,6 +16,11 @@ void logSDf(const char* fmt, ...);
 // Writes the lines other tasks queued. From appLoop().
 void sdLoggerTick();
 void initSD();
+
+// Stores the switch and applies it. False when NVS refused the write, and then
+// nothing changed: a switch that flips for this boot only would come back on
+// after the next restart without a word.
+bool sdLoggingSet(bool on);
 
 // ---- session log --------------------------------------------------
 //

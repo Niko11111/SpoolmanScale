@@ -1003,6 +1003,8 @@ const char* const STRINGS[][2] = {
     "Reachable" },  // STR_W_R_REACHABLE
   { "Tags gescannt",
     "Tags scanned" },  // STR_W_R_SCANS
+  { "Protokoll auf SD-Karte",
+    "Log to SD card" },  // STR_W_R_SDLOG
   { "Ausführliches Protokoll",
     "Verbose logging" },  // STR_W_R_VERBOSE
   { "bereit",
@@ -1175,8 +1177,8 @@ const char* const STRINGS[][2] = {
     "Delete this file?" },  // STR_W_LOG_DELETE_ASK
   { "Keine SD-Karte erkannt",
     "No SD card detected" },  // STR_W_LOG_NOSD
-  { "Eine FAT32-formatierte Karte einlegen, um die Diagnoseprotokolle zu aktivieren. Mit Karte dauert der Start rund 20 Sekunden länger.",
-    "Insert a FAT32 formatted card to enable diagnostic logging. Booting with a card takes about 20 seconds longer." },  // STR_W_LOG_NOSD_HINT
+  { "Eine FAT32-formatierte Karte einlegen, um die Diagnoseprotokolle zu aktivieren.",
+    "Insert a FAT32 formatted card to enable diagnostic logging." },  // STR_W_LOG_NOSD_HINT
   { "Noch keine Protokolle.",
     "No logs yet." },  // STR_W_LOG_EMPTY
   { "Firmware",
@@ -1255,8 +1257,8 @@ const char* const STRINGS[][2] = {
     "Weight" },  // STR_W_R_WEIGHT
   { "Konnte nicht geladen werden.",
     "Could not be loaded." },  // STR_W_LOAD_FAIL
-  { "Eine eingelegte SD-Karte verlängert den Start um rund 20 Sekunden. Für den normalen Betrieb ohne Karte laufen lassen und sie nur zum Suchen eines Fehlers einlegen.",
-    "A fitted SD card makes the device take about 20 seconds longer to start. Run it without a card normally and insert one only to chase a fault." },  // STR_W_LOG_NOTE
+  { "Jede Zeile auf der Karte ist ein eigener Schreibzugriff. Läuft alles rund, lässt sich das Protokoll oben abschalten, ohne die Karte zu ziehen. Das Sitzungsprotokoll weiter unten läuft immer weiter.",
+    "Every line on the card is a write of its own. When everything runs fine, switch the log off above instead of pulling the card. The session log further down keeps running either way." },  // STR_W_LOG_NOTE
   { "Sitzungsprotokoll",
     "Session log" },  // STR_W_C_SESSION
   { "Die letzten Zeilen seit dem Start, im Arbeitsspeicher gehalten und beim Neustart weg. Eine SD-Karte braucht es nur, um Protokolle zu behalten.",
