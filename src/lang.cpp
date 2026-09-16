@@ -1045,8 +1045,8 @@ const char* const STRINGS[][2] = {
     "Backend address" },  // STR_W_HOST_LABEL
   { "Hostname oder IP, bei Bedarf mit Port. Ein Name funktioniert auch hinter einem Reverse Proxy, wo die IP allein nicht ans Ziel führt.",
     "Host name or IP, with a port when one is needed. A name also works behind a reverse proxy, where the IP alone does not reach the target." },  // STR_W_HOST_HINT
-  { "Ohne Port geht es auf 80. Üblich sind Spoolman 7912, FilaMan 8002, BamBuddy 8000.",
-    "Without a port this goes to 80. The usual ones are Spoolman 7912, FilaMan 8002, BamBuddy 8000." },  // STR_W_HOST_PORTHINT
+  { "Ohne Port geht es auf 80. Üblich sind Spoolman 7912, FilaMan 8083, BamBuddy 8000.",
+    "Without a port this goes to 80. The usual ones are Spoolman 7912, FilaMan 8083, BamBuddy 8000." },  // STR_W_HOST_PORTHINT
   { "Die Adresse darf nicht leer sein.",
     "The address cannot be empty." },  // STR_W_HOST_EMPTY
   { "https wird noch nicht unterstützt. Die Waage spricht nur http.",
