@@ -2,3 +2,4 @@
 
 void appSetup();
 void wifiConnect();
+void wifiOnConnected();
