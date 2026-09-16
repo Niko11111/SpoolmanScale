@@ -43,8 +43,11 @@
 // business knowing how the screen writes a date, and date_display.h turns
 // one into the other at the point of drawing.
 #define SD_DATE_MAX      12
-// "AMS B - Fach 2" and "Externer Halter 1" both fit.
-#define SD_BAY_MAX       24
+// The composed title, "<unit> - Fach N": a unit name of the user's choosing
+// (AMS_NAME_MAX) plus the bay, with room to spare. 24 held "AMS 1 - Fach 2"
+// and cut "Werkstatt AMS oben - Fach 3" to "Werkstatt AMS oben - F", without
+// a word, because snprintf truncates in silence.
+#define SD_BAY_MAX       40
 
 // Weight that was never recorded. Distinct from 0 g, which is a spool that
 // has been used up - the difference the whole detail card exists to show.

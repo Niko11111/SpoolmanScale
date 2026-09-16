@@ -18,6 +18,10 @@
 //  own detail view down before it runs.
 // ============================================================
 
+// The chip's footprint, shared with the headers that lay out around it.
+#define STATUS_CHIP_W 150
+#define STATUS_CHIP_H 44
+
 // The answer, delivered from the loop. 0 means the picker was dismissed
 // without a choice.
 typedef void (*StatusPickCb)(int status_id);

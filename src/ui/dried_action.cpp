@@ -52,7 +52,13 @@ void btn_dried_cb(lv_event_t *e) {
   // two places building the same stamp is two places for that pair to come
   // apart again.
   char iso_full_buf[32];
-  nowIsoUtc(iso_full_buf, sizeof(iso_full_buf));
+  if (!nowIsoUtc(iso_full_buf, sizeof(iso_full_buf))) {
+    // No clock, no date. The fallback stamp would be booked as the day this
+    // spool was dried, and the first of January reads as months overdue.
+    logSD("Dried: clock not set, nothing written");
+    lv_label_set_text(lbl_spoolman_dried_val, T(STR_ERR_SAVE));
+    return;
+  }
 
   strncpy(s_dried_iso, iso_full_buf, sizeof(s_dried_iso)-1);
   s_dried_iso[sizeof(s_dried_iso)-1] = '\0';

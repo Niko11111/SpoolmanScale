@@ -15,6 +15,7 @@
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
 #include "services/tag_uid.h"
+#include "services/text_util.h"
 #include "services/time_service.h"
 #include "services/user_options.h"
 
@@ -1110,11 +1111,30 @@ int backendFindBaySpool(int printer_id, int ams_id, int tray_id,
 
 // Copies a string out of the answer, and leaves the destination alone when
 // the key is absent or empty. That is what lets the AMS state pre-fill a
-// field the database has nothing for.
+// field the database has nothing for. Cut at a UTF-8 boundary: a location
+// with an umlaut past the field's end used to leave half a glyph, which the
+// panel draws as a box.
 static void keepStr(JsonVariantConst v, char* dst, size_t n) {
   const char* s = v | (const char*)nullptr;
   if (!s || !s[0]) return;
-  snprintf(dst, n, "%s", s);
+  utf8Cut(s, n - 1, dst, n);
+}
+
+// An extra field's text, with the quoting Spoolman stores it under removed.
+// Spoolman keeps extra values JSON encoded, so a text arrives as "\"...\"" and
+// an empty one as "\"\""; FilaMan's and BamBuddy's mappings hand the bare
+// text over. One reader for both shapes, stripping the way every other reader
+// of these fields in the tree does. Empty when the key is absent.
+static void extraText(JsonVariantConst v, char* out, size_t n) {
+  if (!out || n == 0) return;
+  out[0] = '\0';
+  const char* s = v | (const char*)nullptr;
+  if (!s) return;
+  size_t len = strlen(s);
+  if (len >= 2 && s[0] == '"' && s[len - 1] == '"') { s++; len -= 2; }
+  if (len >= n) len = n - 1;
+  memcpy(out, s, len);
+  out[len] = '\0';
 }
 
 int backendGetSpoolDetail(int spool_id, AmsSpoolDetail& out, uint32_t timeout_ms) {
@@ -1174,16 +1194,29 @@ int backendGetSpoolDetail(int spool_id, AmsSpoolDetail& out, uint32_t timeout_ms
   keepStr(fil["material"], out.material, sizeof(out.material));
 
   // A tag of any kind counts: the card says whether this spool can be found
-  // by holding it against the scale, not which field holds the binding.
-  const char* tag = sp["extra"]["tag"] | "";
-  out.tag_linked = (tag[0] != '\0');
+  // by holding it against the scale, not which field holds the binding. So
+  // every extra field the scale can read a tag from is asked, plus FilaMan's
+  // second slot - reading extra.tag alone missed a spool bound through nfc_id
+  // or card_uids, which is what the field setting exists for.
+  out.tag_linked = false;
+  JsonObjectConst extra = sp["extra"].as<JsonObjectConst>();
+  if (!extra.isNull()) {
+    char v[48];
+    for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT && !out.tag_linked; i++) {
+      const TagFieldSpec& spec = tagFieldSpec(i);
+      if (!spec.key) continue;
+      extraText(extra[spec.key], v, sizeof(v));
+      out.tag_linked = (v[0] != '\0');
+    }
+    if (!out.tag_linked) {
+      extraText(extra["tag2"], v, sizeof(v));
+      out.tag_linked = (v[0] != '\0');
+    }
+  }
 
   char iso[32];
-  const char* dried = sp["extra"]["last_dried"] | "";
-  if (dried[0]) {
-    snprintf(iso, sizeof(iso), "%s", dried);
-    isoDayLocal(iso, out.last_dried, sizeof(out.last_dried));
-  }
+  extraText(sp["extra"]["last_dried"], iso, sizeof(iso));
+  if (iso[0]) isoDayLocal(iso, out.last_dried, sizeof(out.last_dried));
   // The same three step rule applyLastUsed() follows on the main screen, and
   // it has to be the same: a card that showed a dash where the screen behind
   // it shows a date would read as the card being broken.
@@ -1197,7 +1230,8 @@ int backendGetSpoolDetail(int spool_id, AmsSpoolDetail& out, uint32_t timeout_ms
 
   // BamBuddy stamps the spool itself when a weight is written, so this one
   // arrives with the answer and costs nothing.
-  const char* weighed = sp["extra"]["last_weighed"] | "";
+  char weighed[40];
+  extraText(sp["extra"]["last_weighed"], weighed, sizeof(weighed));
   if (weighed[0]) {
     if (last_used_mode == 1 || !used_iso[0]) {
       snprintf(used_iso, sizeof(used_iso), "%s", weighed);

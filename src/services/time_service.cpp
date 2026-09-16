@@ -137,8 +137,12 @@ bool nowIsoUtc(char* out, size_t out_size) {
   if (!out || out_size == 0) return false;
   snprintf(out, out_size, "2026-01-01T00:00:00.000Z");
 
+  // Timeout 0: the default is five seconds of polling when the year still
+  // reads 1970, and this is called from the pad's drying button, which is an
+  // LVGL callback. A clock that is not set now is not going to be set in five
+  // seconds either.
   struct tm ti;
-  if (!getLocalTime(&ti)) return false;
+  if (!getLocalTime(&ti, 0)) return false;
   time_t now = mktime(&ti);
   struct tm* utc = gmtime(&now);
   if (!utc) return false;

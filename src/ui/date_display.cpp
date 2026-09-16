@@ -47,8 +47,10 @@ int daysSince(const char* local_date) {
     // DD.MM.YYYY
     if (sscanf(local_date, "%d.%d.%d", &day, &month, &year) != 3) return -1;
   }
+  // Timeout 0, see nowIsoUtc(): the default polls five seconds while the
+  // clock is unset, and a detail card with two dates asks four times.
   struct tm ti;
-  if (!getLocalTime(&ti)) return -1;
+  if (!getLocalTime(&ti, 0)) return -1;
   // Datum als Unix-Timestamp
   struct tm then = {};
   then.tm_mday = day;

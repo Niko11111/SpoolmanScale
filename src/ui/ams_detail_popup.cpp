@@ -329,6 +329,17 @@ static void closeCb(lv_event_t* e) {
 #define AMSD_FIELD_PAD_Y  6
 #define AMSD_FIELD_H      44
 
+// One line, no more. A label with a width but no height grows downwards when
+// the text does not fit, and LV_LABEL_LONG_DOT never engages because there is
+// no height to be too tall for - the second line was then drawn through the
+// divider, or over the caption of the row below. A real height, one line of
+// the font in use, is what turns the overflow into dots. Same fault, same fix
+// as the note under the bar (AMSD_NOTE_H).
+static void oneLine(lv_obj_t* l, int w, const lv_font_t* font) {
+  lv_obj_set_size(l, w, lv_font_get_line_height(font));
+  lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+}
+
 static lv_obj_t* cell(lv_obj_t* box, int x, int y, int cap_id,
                       const char* value, uint32_t value_col,
                       const lv_font_t* font = UI_FONT_BODY,
@@ -369,9 +380,8 @@ static lv_obj_t* cell(lv_obj_t* box, int x, int y, int cap_id,
   // like nothing being there.
   lv_obj_set_style_text_color(v, lv_color_hex(has ? value_col : UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(v, font, 0);
+  oneLine(v, AMSD_CW, font);
   lv_obj_set_pos(v, x, y + AMSD_VF);
-  lv_obj_set_width(v, AMSD_CW);
-  lv_label_set_long_mode(v, LV_LABEL_LONG_DOT);
   return v;
 }
 
@@ -408,7 +418,17 @@ static void buildHeader(lv_obj_t* box, const AmsSpoolDetail& d) {
     lv_label_set_text(title, d.bay);
     lv_obj_set_style_text_color(title, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_text_font(title, UI_FONT_BODY, 0);
-    lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
+    // Centred in the room the header actually has: between the chip and the
+    // close button when there is a chip, and mirrored around the close button
+    // when there is not. With a width and one line, because a unit name of
+    // the user's choosing can be longer than that room, and a label with
+    // neither ran under the chip.
+    const int left  = (d.status_id > 0) ? AMSD_PAD + STATUS_CHIP_W + AMSD_PAD
+                                        : AMSD_PAD + AMSD_CLOSE + AMSD_PAD;
+    const int right = AMSD_BOX_W - AMSD_PAD - AMSD_CLOSE - AMSD_PAD;
+    oneLine(title, right - left, UI_FONT_BODY);
+    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(title, LV_ALIGN_LEFT_MID, left, 0);
   }
 
   // The status is FilaMan's alone. Spoolman has archived:bool and BamBuddy an
@@ -501,9 +521,8 @@ static void buildIdentity(lv_obj_t* box, const AmsSpoolDetail& d) {
     lv_obj_set_style_text_color(id,
       lv_color_hex(d.spool_id > 0 ? UI_COL_ACCENT : UI_COL_WARN), 0);
     lv_obj_set_style_text_font(id, UI_FONT_BODY, 0);
+    oneLine(id, AMSD_ID_W, UI_FONT_BODY);
     lv_obj_set_pos(id, AMSD_ID_X, AMSD_IDENT_VAL_Y);
-    lv_obj_set_width(id, AMSD_ID_W);
-    lv_label_set_long_mode(id, LV_LABEL_LONG_DOT);
   }
 
   lv_obj_t* mc = lv_label_create(box);
@@ -520,9 +539,8 @@ static void buildIdentity(lv_obj_t* box, const AmsSpoolDetail& d) {
     lv_label_set_text(mv, d.material[0] ? d.material : "-");
     lv_obj_set_style_text_color(mv, lv_color_hex(UI_COL_INK), 0);
     lv_obj_set_style_text_font(mv, UI_FONT_BODY, 0);
+    oneLine(mv, AMSD_MAT_W, UI_FONT_BODY);
     lv_obj_set_pos(mv, AMSD_MAT_X, AMSD_IDENT_VAL_Y);
-    lv_obj_set_width(mv, AMSD_MAT_W);
-    lv_label_set_long_mode(mv, LV_LABEL_LONG_DOT);
   }
 
   // The trade name, and where there is none, whatever the printer called the
@@ -540,9 +558,8 @@ static void buildIdentity(lv_obj_t* box, const AmsSpoolDetail& d) {
     lv_label_set_text(fv, d.name[0] ? d.name : "-");
     lv_obj_set_style_text_color(fv, lv_color_hex(UI_COL_VALUE_BLUE), 0);
     lv_obj_set_style_text_font(fv, UI_FONT_BODY, 0);
+    oneLine(fv, AMSD_CW, UI_FONT_BODY);
     lv_obj_set_pos(fv, AMSD_CB, AMSD_IDENT_VAL_Y);
-    lv_obj_set_width(fv, AMSD_CW);
-    lv_label_set_long_mode(fv, LV_LABEL_LONG_DOT);
   }
 }
 
@@ -583,24 +600,10 @@ static void buildWeight(lv_obj_t* box, const AmsSpoolDetail& d) {
     lv_obj_set_pos(val, AMSD_CA, AMSD_WEIGHT_VAL_Y);
   }
 
-  // The percentage the printer reports, which exists on bays the database has
-  // no gram figure for - a Bambu spool says how full it is without anyone
-  // having weighed it.
-  if (d.remain_pct >= 0) {
-    lv_obj_t* pct = lv_label_create(box);
-    if (pct) {
-      char buf[12];
-      snprintf(buf, sizeof(buf), "%d %%", (int)d.remain_pct);
-      lv_label_set_text(pct, buf);
-      lv_obj_set_style_text_color(pct,
-        lv_color_hex(d.remain_pct < AMSD_LOW_PCT ? UI_COL_WARN : UI_COL_ACCENT), 0);
-      lv_obj_set_style_text_font(pct, UI_FONT_TITLE, 0);
-      lv_obj_align(pct, LV_ALIGN_TOP_RIGHT, -AMSD_PAD, AMSD_WEIGHT_VAL_Y);
-    }
-  }
-
   // Share of a full spool: from the two weights when both are there, else the
-  // printer's own percentage.
+  // percentage the printer reports - which exists on bays the database has no
+  // gram figure for, because a Bambu spool says how full it is without anyone
+  // having weighed it.
   int share = -1;
   if (known && d.total_g > 0.0f) {
     share = (int)((d.remaining_g / d.total_g) * 100.0f + 0.5f);
@@ -610,7 +613,22 @@ static void buildWeight(lv_obj_t* box, const AmsSpoolDetail& d) {
     share = d.remain_pct;
   }
 
+  // The figure on the right is the share the bar draws, from the same source.
+  // It used to be the printer's percentage whenever there was one, next to a
+  // bar drawn from the database's grams: two sources, two numbers, and
+  // nothing on the card to say which was which.
   if (share >= 0) {
+    lv_obj_t* pct = lv_label_create(box);
+    if (pct) {
+      char buf[12];
+      snprintf(buf, sizeof(buf), "%d %%", share);
+      lv_label_set_text(pct, buf);
+      lv_obj_set_style_text_color(pct,
+        lv_color_hex(share < AMSD_LOW_PCT ? UI_COL_WARN : UI_COL_ACCENT), 0);
+      lv_obj_set_style_text_font(pct, UI_FONT_TITLE, 0);
+      lv_obj_align(pct, LV_ALIGN_TOP_RIGHT, -AMSD_PAD, AMSD_WEIGHT_VAL_Y);
+    }
+
     lv_obj_t* bar = lv_bar_create(box);
     if (bar) {
       lv_obj_set_size(bar, AMSD_BAR_W, AMSD_BAR_H);
@@ -734,7 +752,13 @@ static void buildGrid(lv_obj_t* box, const AmsSpoolDetail& d) {
 void showAmsDetailPopup(const AmsSpoolDetail& d) {
   // Kept so a write can update one field and redraw from it. Guarded against
   // self-assignment, because the redraw after a write passes s_det back in.
-  if (&d != &s_det) s_det = d;
+  if (&d != &s_det) {
+    s_det = d;
+    // A fresh card starts clean. Only the redraw after a write passes s_det
+    // back in, and only that one may carry the flag a failed write set - left
+    // standing, it reappeared on every bay opened afterwards.
+    s_write_failed = false;
+  }
 
   // Open-replace rather than stack: a second tap on a bay while the card
   // stands should show that bay, not two cards.
@@ -809,15 +833,21 @@ void handleAmsDetailDeferredActions() {
   if (s_dried_pending) {
     s_dried_pending = false;
     char iso[32];
-    nowIsoUtc(iso, sizeof(iso));
-    loadingOverlayShow(T(STR_AMSD_SAVING));
-    const int code = backendPatchSpoolLastDried(cfg_spoolman_base, spool_id, iso);
-    loadingOverlayHide();
-    logSDf("AMSDETAIL: dried %s for spool %d, HTTP %d", iso, spool_id, code);
-    if (code == 200) {
-      isoDayLocal(iso, s_det.last_dried, sizeof(s_det.last_dried));
-    } else {
+    if (!nowIsoUtc(iso, sizeof(iso))) {
+      // No clock, no date: the fallback stamp would be booked as the day the
+      // spool was dried. Shown as a failed save, which is what it is.
+      logSDf("AMSDETAIL: clock not set, dried date for spool %d not written", spool_id);
       s_write_failed = true;
+    } else {
+      loadingOverlayShow(T(STR_AMSD_SAVING));
+      const int code = backendPatchSpoolLastDried(cfg_spoolman_base, spool_id, iso);
+      loadingOverlayHide();
+      logSDf("AMSDETAIL: dried %s for spool %d, HTTP %d", iso, spool_id, code);
+      if (code == 200) {
+        isoDayLocal(iso, s_det.last_dried, sizeof(s_det.last_dried));
+      } else {
+        s_write_failed = true;
+      }
     }
   }
 
@@ -841,5 +871,15 @@ void handleAmsDetailDeferredActions() {
 
   // Redrawn either way: on success it shows the new value, on failure it goes
   // back to showing the truth with a line saying the write did not take.
-  if (s_pop) showAmsDetailPopup(s_det);
+  //
+  // The old card goes synchronously first. This runs on the loop task, not
+  // inside a callback, so a plain delete is allowed here - and the deferred
+  // delete releaseScreen() does would have left both cards in the pool for a
+  // pass: the simulator measured the redraw at 64 to 78 percent used, and
+  // 39 percent fragmentation once the first was finally freed.
+  if (s_pop) {
+    lv_obj_del(s_pop);
+    s_pop = nullptr;
+    showAmsDetailPopup(s_det);
+  }
 }

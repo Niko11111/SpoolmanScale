@@ -57,7 +57,7 @@ lv_obj_t* buildStatusChip(lv_obj_t* parent, int x, int y, int status_id,
 
   lv_obj_t* chip = cb ? lv_btn_create(parent) : lv_obj_create(parent);
   if (!chip) return nullptr;
-  lv_obj_set_size(chip, 150, 44);
+  lv_obj_set_size(chip, STATUS_CHIP_W, STATUS_CHIP_H);
   lv_obj_set_pos(chip, x, y);
   lv_obj_set_style_bg_color(chip, lv_color_hex(0x0d2040), 0);
   lv_obj_set_style_bg_color(chip, lv_color_hex(0x1a3060), LV_STATE_PRESSED);

@@ -122,7 +122,7 @@ void requestAmsView(AmsViewMode mode, AmsPickCb cb, const char* headline) {
   s_mode = mode;
   s_cb   = cb;
   s_headline[0] = '\0';
-  if (headline) strncpy(s_headline, headline, sizeof(s_headline) - 1);
+  if (headline) snprintf(s_headline, sizeof(s_headline), "%s", headline);
   // Re-read on every opening. One request more per visit, and in exchange a
   // backend switch, a renamed printer or a removed one can never leave a
   // stale name on the line - this screen is opened rarely enough that the
@@ -949,9 +949,13 @@ void handleAmsViewDeferredActions() {
   // the taps that would otherwise queue up behind it.
   if (s_detail_pending) {
     s_detail_pending = false;
-    openDetail(s_detail_ams, s_detail_tray);
+    // Latched before the blocking call, like the pick above: a tap that lands
+    // while the fetch runs must not find the pair already cleared.
+    const int ams  = s_detail_ams;
+    const int tray = s_detail_tray;
     s_detail_ams  = -1;
     s_detail_tray = -1;
+    openDetail(ams, tray);
     return;
   }
 

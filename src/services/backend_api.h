@@ -351,11 +351,16 @@ int  backendFindBaySpool(int printer_id, int ams_id, int tray_id,
 
 // Everything the database holds about one spool, for the detail card behind
 // an AMS bay. Reads through backendGetSpoolJson(), so it needs no backend
-// branch of its own - all three answer in the same shape.
+// branch of its own - all three answer in the Spoolman shape. Not quite the
+// same shape, though: Spoolman's extra values arrive JSON quoted, the other
+// two mappings hand bare text over, and the reader here strips either.
 //
-// Fills only the fields it finds and leaves the rest of out untouched, so a
-// caller can pre-fill from the AMS state and keep whatever the printer knows
-// where the database knows nothing. Sets out.found on success.
+// Fills only the text fields it finds and leaves the rest of out untouched,
+// so a caller can pre-fill from the AMS state and keep whatever the printer
+// knows where the database knows nothing. The weights are the database's
+// word: null there means never weighed, and the card says so rather than
+// passing the printer's fill level off as a weighing. Sets out.found on
+// success.
 //
 // Deliberately not querySpoolmanById(): that one writes the sm_* globals,
 // which hold the spool on the pad. Performs an HTTP request, so never call it

@@ -218,7 +218,14 @@ static const char* articleNumber(JsonObjectConst fil) {
 // ============================================================
 static void mapSpool(JsonObjectConst src, JsonObject dst) {
   dst["id"]             = src["id"] | 0;
-  dst["remaining_weight"] = src["remaining_weight_g"]      | 0.0f;
+  // Left out when the server has null, rather than written as 0 g. Every
+  // reader defaults a missing key to the zero it used to get, so nothing
+  // changes for them - but the detail card behind an AMS bay has to tell
+  // "never weighed" from "empty", and reads null as the former and 0 as the
+  // latter. Spool 295 on the test instance is the case: remaining null,
+  // and the card showed "0 g" where it exists to say "no weight stored".
+  JsonVariantConst rem = src["remaining_weight_g"];
+  if (!rem.isNull()) dst["remaining_weight"] = rem.as<float>();
   dst["spool_weight"]     = src["empty_spool_weight_g"]    | 0.0f;
 
   // Spoolman's initial_weight is the filament alone - its own schema says

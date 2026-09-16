@@ -688,8 +688,13 @@ void buildMoreInfoScreen() {
     (sm_found && sm_id > 0) ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
   lv_obj_set_style_text_font(lbl_id, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_pos(lbl_id, 60, 76);
+  // Every value label on this card gets a real height, one line of its font:
+  // with LV_SIZE_CONTENT a text wider than the label wraps to a second line
+  // and LV_LABEL_LONG_DOT never engages, because there is no height to be
+  // too tall for. The second line then ran through the divider below, or
+  // over the caption of the next row. Same fix as on the AMS detail card.
+  lv_obj_set_size(lbl_id, 46, lv_font_get_line_height(&lv_font_montserrat_ext_16));
   lv_label_set_long_mode(lbl_id, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_id, 46);
 
   // Cap: Material
   lv_obj_t *mi_mat_cap = lv_label_create(box);
@@ -706,8 +711,8 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_color(lbl_mat, lv_color_hex(0xf0f0f0), 0);
   lv_obj_set_style_text_font(lbl_mat, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_pos(lbl_mat, 114, 74);
+  lv_obj_set_size(lbl_mat, 114, lv_font_get_line_height(&lv_font_montserrat_ext_18));
   lv_label_set_long_mode(lbl_mat, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_mat, 114);
 
   // Cap: Filament
   lv_obj_t *mi_fn_cap = lv_label_create(box);
@@ -722,8 +727,8 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_color(lbl_fn, lv_color_hex(0x8ab0d8), 0);
   lv_obj_set_style_text_font(lbl_fn, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_pos(lbl_fn, 236, 76);
+  lv_obj_set_size(lbl_fn, 218, lv_font_get_line_height(&lv_font_montserrat_ext_16));
   lv_label_set_long_mode(lbl_fn, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_fn, 218);
 
   // Separator after swatch row
   lv_obj_t *div1 = lv_obj_create(box);
@@ -761,8 +766,8 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_color(v1, lv_color_hex(0x8ab0d8), 0);
   lv_obj_set_style_text_font(v1, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_pos(v1, CA, R1 + VF);
+  lv_obj_set_size(v1, CW, lv_font_get_line_height(&lv_font_montserrat_ext_18));
   lv_label_set_long_mode(v1, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(v1, CW);
 
   // Row 1 Right: production date
   char prod_cap[24]; copyT(prod_cap, sizeof(prod_cap), STR_LBL_PRODUCTION_DATE);
@@ -776,8 +781,8 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_color(v2, lv_color_hex(0x8ab0d8), 0);
   lv_obj_set_style_text_font(v2, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_pos(v2, CB, R1 + VF);
+  lv_obj_set_size(v2, CW, lv_font_get_line_height(&lv_font_montserrat_ext_18));
   lv_label_set_long_mode(v2, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(v2, CW);
 
   // Row 2 Left: Article no.
   char art_cap[24]; copyT(art_cap, sizeof(art_cap), STR_LBL_ARTICLE_NO_SHORT);
@@ -791,8 +796,8 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_color(v3, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(v3, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_pos(v3, CA, R2 + VF);
+  lv_obj_set_size(v3, CW, lv_font_get_line_height(&lv_font_montserrat_ext_18));
   lv_label_set_long_mode(v3, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(v3, CW);
 
   // Row 2 Right: Spool weight (empty)
   char sw_cap[24]; copyT(sw_cap, sizeof(sw_cap), STR_LBL_SPOOL_WEIGHT_EMPTY);
@@ -817,8 +822,8 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_color(v4, lv_color_hex(0xc8d8f0), 0);
   lv_obj_set_style_text_font(v4, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_pos(v4, CB, R2 + VF);
+  lv_obj_set_size(v4, CW, lv_font_get_line_height(&lv_font_montserrat_ext_18));
   lv_label_set_long_mode(v4, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(v4, CW);
 
   // Separator before UID+UUID
   lv_obj_t *div2 = lv_obj_create(box);
@@ -840,8 +845,8 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_color(v_uid, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(v_uid, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_pos(v_uid, CA, R3 + VF16);
+  lv_obj_set_size(v_uid, CW, lv_font_get_line_height(&lv_font_montserrat_ext_16));
   lv_label_set_long_mode(v_uid, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(v_uid, CW);
 
   // Location button - column B of row 3, top edge flush with the UID caption
   lv_obj_t *btn_loc = lv_btn_create(box);
@@ -872,7 +877,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_color(btn_loc_val, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(btn_loc_val, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(btn_loc_val, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_width(btn_loc_val, CW - 14);
+  lv_obj_set_size(btn_loc_val, CW - 14, lv_font_get_line_height(&lv_font_montserrat_ext_16));
   lv_label_set_long_mode(btn_loc_val, LV_LABEL_LONG_DOT);
   lv_obj_align(btn_loc_val, LV_ALIGN_CENTER, 0, 7);
   lv_obj_add_event_cb(btn_loc, [](lv_event_t *e) {
@@ -894,8 +899,8 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_color(v_uuid, lv_color_hex(0x4a7080), 0);
   lv_obj_set_style_text_font(v_uuid, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_pos(v_uuid, CA, R4 + VF16);
+  lv_obj_set_size(v_uuid, 330, lv_font_get_line_height(&lv_font_montserrat_ext_16));  // shortened to make room for Unlink button
   lv_label_set_long_mode(v_uuid, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(v_uuid, 330);  // shortened to make room for Unlink button
 
   // Unlink button - bottom right, only visible when spool is linked (sm_found && sm_id > 0)
   if (sm_found && sm_id > 0) {

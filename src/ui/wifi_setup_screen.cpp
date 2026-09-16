@@ -272,6 +272,22 @@ void wifiSetupConnectWith(const char *ssid, const char *pass) {
 }
 
 void handleWifiSetupDeferredActions() {
+  // First, because it decides what the rest of this pass may do. A scan that
+  // was parked while the browser connected - the button, or a screen opened
+  // meanwhile - would otherwise run now, and its radio reset
+  // (wifiManagerPrepareScan() disconnects) took the link the browser had just
+  // made straight down again: a green "connected" screen with no address.
+  if (improvSerialTakeProvisioned()) {
+    wifi_scan_pending = false;
+    updateHeaderStatus();
+    // What a boot without a network left on the home screen.
+    if (lbl_spoolman_weight &&
+        strcmp(lv_label_get_text(lbl_spoolman_weight), T(STR_NO_WIFI)) == 0) {
+      lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));
+    }
+    // A scan or a password the browser has just made moot.
+    if (wifiSetupScreenVisible()) showWifiConnectedScreen();
+  }
   // Held while the browser connects: the scan's radio reset would cut that
   // attempt off. Either it succeeds and the screen moves on, or the scan runs
   // right after.
@@ -297,16 +313,6 @@ void handleWifiSetupDeferredActions() {
     strncpy(wifi_setup_ssid, cfg_wifi_ssid, sizeof(wifi_setup_ssid) - 1);
     wifi_setup_ssid[sizeof(wifi_setup_ssid) - 1] = '\0';
     showWifiConnectingScreen();
-  }
-  if (improvSerialTakeProvisioned()) {
-    updateHeaderStatus();
-    // What a boot without a network left on the home screen.
-    if (lbl_spoolman_weight &&
-        strcmp(lv_label_get_text(lbl_spoolman_weight), T(STR_NO_WIFI)) == 0) {
-      lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));
-    }
-    // A scan or a password the browser has just made moot.
-    if (wifiSetupScreenVisible()) showWifiConnectedScreen();
   }
 }
 
