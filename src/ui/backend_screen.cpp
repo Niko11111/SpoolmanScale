@@ -281,7 +281,7 @@ void buildBackendScreen() {
     host_buf[sizeof(host_buf) - 1] = '\0';
 
     // An address without a port silently goes to port 80. FilaMan listens on
-    // 8002 and BamBuddy on 8000 by default, so flag a missing port in amber
+    // 8083 and BamBuddy on 8000 by default, so flag a missing port in amber
     // rather than green.
     const bool port_missing = h && h[0] && !strchr(h, ':');
 
