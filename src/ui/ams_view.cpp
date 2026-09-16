@@ -805,6 +805,35 @@ static void buildScreen() {
   }
 }
 
+// What the printer's state word means, across the spellings the drivers
+// use. Bambu's gcode_state is RUNNING, PAUSE, FINISH, FAILED, IDLE, PREPARE
+// and SLICING; a driver that normalises writes the participle instead.
+// Matched without case, and anything else is PRINTER_OTHER, which the
+// status line prints as it came.
+enum PrinterActivity {
+  PRINTER_OTHER, PRINTER_PRINTING, PRINTER_PAUSED, PRINTER_FINISHED,
+  PRINTER_FAILED, PRINTER_IDLE, PRINTER_PREPARING
+};
+
+static PrinterActivity printerActivity(const char* st) {
+  if (!st || !st[0]) return PRINTER_OTHER;
+  static const struct { const char* word; PrinterActivity act; } WORDS[] = {
+    { "RUNNING",   PRINTER_PRINTING  }, { "PRINTING",  PRINTER_PRINTING  },
+    { "PAUSE",     PRINTER_PAUSED    }, { "PAUSED",    PRINTER_PAUSED    },
+    { "FINISH",    PRINTER_FINISHED  }, { "FINISHED",  PRINTER_FINISHED  },
+    { "COMPLETED", PRINTER_FINISHED  },
+    { "FAILED",    PRINTER_FAILED    }, { "FAILURE",   PRINTER_FAILED    },
+    { "ERROR",     PRINTER_FAILED    },
+    { "IDLE",      PRINTER_IDLE      }, { "READY",     PRINTER_IDLE      },
+    { "PREPARE",   PRINTER_PREPARING }, { "PREPARING", PRINTER_PREPARING },
+    { "SLICING",   PRINTER_PREPARING },
+  };
+  for (const auto& w : WORDS) {
+    if (strcasecmp(st, w.word) == 0) return w.act;
+  }
+  return PRINTER_OTHER;
+}
+
 // Fills the page. Blocks for the length of the request, so the screen is
 // drawn first and pumped, and the screen is checked again afterwards: the
 // user can have tapped back during those milliseconds.
@@ -869,6 +898,7 @@ static void fetchAndDraw() {
     // What the printer is doing, without its name: offline, a job, a state,
     // or nothing at all.
     char what[48] = "";
+    const PrinterActivity act = printerActivity(s_state.state);
     if (!s_state.connected) {
       // An offline printer still has a last known state worth showing, so
       // this is a note next to the grid rather than a refusal to draw it.
@@ -876,11 +906,26 @@ static void fetchAndDraw() {
       // the printer for a driver that has not reported sends the user to
       // the wrong machine.
       copyT(what, sizeof(what), s_state.conn_known ? STR_AMSV_OFFLINE : STR_AMSV_UNKNOWN);
-    } else if (s_state.job_percent >= 0) {
+    } else if (s_state.job_percent >= 0 &&
+               (act == PRINTER_PRINTING || act == PRINTER_PAUSED)) {
+      // The percentage only while it means something. Bambu reports the
+      // finished job and its 100 % until the next print starts, and FilaMan
+      // passes that through, so a printer that finished two days ago read
+      // "printing 100%" the whole time.
       char fmt[24];
-      copyT(fmt, sizeof(fmt), STR_AMSV_JOB);
+      copyT(fmt, sizeof(fmt), act == PRINTER_PAUSED ? STR_AMSV_JOB_PAUSED : STR_AMSV_JOB);
       snprintf(what, sizeof(what), fmt, (int)s_state.job_percent);
+    } else if (act == PRINTER_FINISHED) {
+      copyT(what, sizeof(what), STR_AMSV_STATE_FINISH);
+    } else if (act == PRINTER_FAILED) {
+      copyT(what, sizeof(what), STR_AMSV_STATE_FAILED);
+    } else if (act == PRINTER_IDLE) {
+      copyT(what, sizeof(what), STR_AMSV_STATE_IDLE);
+    } else if (act == PRINTER_PREPARING) {
+      copyT(what, sizeof(what), STR_AMSV_STATE_PREPARE);
     } else if (s_state.state[0]) {
+      // A state this list does not know is shown as the server wrote it,
+      // rather than hidden.
       snprintf(what, sizeof(what), "%s", s_state.state);
     }
 

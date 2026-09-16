@@ -536,6 +536,19 @@ const char* const STRINGS[][2] = {
     "Drying %d °C"                                                     },  // STR_AMSV_DRYING_TEMP
   { "druckt %d%%",
     "printing %d%%"                                                   },  // STR_AMSV_JOB
+  // The printer's own states, in words. Bambu keeps the last job and its
+  // 100 % on the wire after a print until the next one starts, so the
+  // percentage alone would read "printing 100%" for days.
+  { "pausiert bei %d%%",
+    "paused at %d%%"                                                  },  // STR_AMSV_JOB_PAUSED
+  { "Druck fertig",
+    "print finished"                                                  },  // STR_AMSV_STATE_FINISH
+  { "Druck abgebrochen",
+    "print failed"                                                    },  // STR_AMSV_STATE_FAILED
+  { "bereit",
+    "idle"                                                            },  // STR_AMSV_STATE_IDLE
+  { "bereitet vor",
+    "preparing"                                                       },  // STR_AMSV_STATE_PREPARE
   // Which of several printers is on screen. Same in both languages, but
   // it goes through T() so a language that numbers differently can change it.
   { "%d/%d",
