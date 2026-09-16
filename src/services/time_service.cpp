@@ -132,3 +132,18 @@ void isoDayLocal(const char* iso, char* out_day, size_t out_size) {
   out_day[out_size - 1] = '\0';
   if (strlen(out_day) > 10) out_day[10] = '\0';
 }
+
+bool nowIsoUtc(char* out, size_t out_size) {
+  if (!out || out_size == 0) return false;
+  snprintf(out, out_size, "2026-01-01T00:00:00.000Z");
+
+  struct tm ti;
+  if (!getLocalTime(&ti)) return false;
+  time_t now = mktime(&ti);
+  struct tm* utc = gmtime(&now);
+  if (!utc) return false;
+  snprintf(out, out_size, "%04d-%02d-%02dT%02d:%02d:%02d.000Z",
+           utc->tm_year + 1900, utc->tm_mon + 1, utc->tm_mday,
+           utc->tm_hour, utc->tm_min, utc->tm_sec);
+  return true;
+}

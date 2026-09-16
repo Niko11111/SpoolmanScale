@@ -9,6 +9,8 @@
 #include "hardware/sd_logger.h"
 #include "services/backend_api.h"
 #include "services/prefs_store.h"
+#include "ui/ams_detail_popup.h"
+#include "ui/loading_overlay.h"
 #include "ui/navigation.h"
 #include "ui/theme.h"
 #include "ui/ui_common.h"
@@ -90,6 +92,16 @@ static bool s_pick_pending  = false;
 static int  s_pick_ams      = -1;
 static int  s_pick_tray     = -1;
 static int  s_printer_id    = 0;
+// A bay was tapped for its detail card. Carried like every other answer:
+// parked here, acted on from the loop, because the fetch behind it blocks.
+static bool s_detail_pending = false;
+static int  s_detail_ams     = -1;
+static int  s_detail_tray    = -1;
+// PICK only. While it is on, a tap opens the card instead of answering the
+// question, so the bays can be read before one of them is chosen.
+static bool s_info_mode      = false;
+static lv_obj_t* s_info_btn  = nullptr;
+static lv_obj_t* s_headline_lbl = nullptr;
 // Where the page goes back to. Opened from the scale menu it returns there;
 // from the header chip, the zone-4 button or the picker it lands on the main
 // screen, which is where those were pressed.
@@ -121,6 +133,15 @@ void requestAmsView(AmsViewMode mode, AmsPickCb cb, const char* headline) {
   s_pick_pending = false;
   s_pick_ams     = -1;
   s_pick_tray    = -1;
+  // And a fresh switch. Only the close through showMainScreen() reaches
+  // destroyAmsView(); coming back from the scale menu does not, so without
+  // this an info mode left on once would still be on the next time a
+  // question was asked - and the tap that was meant to choose a bay would
+  // open a card instead.
+  s_info_mode      = false;
+  s_detail_pending = false;
+  s_detail_ams     = -1;
+  s_detail_tray    = -1;
   s_return_to_scale_menu = false;
   s_build_pending = true;
 }
@@ -138,12 +159,18 @@ int  amsViewPrinterId() { return s_printer_id; }
 // have to be cleared together with the screen: a stale s_body outliving its
 // parent is the kind of leftover that writes into freed memory later.
 static void closeAmsView() {
+  // The card sits on lv_scr_act(), not inside the page, so freeing the page
+  // would leave it standing over whatever comes next.
+  closeAmsDetailPopup();
   releaseScreen(&s_scr);
-  s_body   = nullptr;
-  s_status = nullptr;
+  s_body     = nullptr;
+  s_status   = nullptr;
+  s_info_btn = nullptr;
+  s_headline_lbl = nullptr;
 }
 
 void hideAmsViewOverlays() {
+  closeAmsDetailPopup();
   if (s_scr) lv_obj_add_flag(s_scr, LV_OBJ_FLAG_HIDDEN);
 }
 
@@ -169,6 +196,10 @@ void destroyAmsView() {
   s_fetch_pending = false;
   s_close_pending = false;
   s_return_to_scale_menu = false;
+  // Unlike s_pick_pending below, this one goes: it opens a card over a page
+  // that is being torn down, and there is nothing left to open it against.
+  s_detail_pending = false;
+  s_info_mode = false;
   // s_pick_pending stays. Every pick closes the page first, and that close
   // goes through showMainScreen() and lands here - clearing the flag would
   // swallow the user's answer one pass before it runs, which is exactly what
@@ -193,14 +224,75 @@ static void setStatusFmt(int str_id, int value) {
   lv_obj_clear_flag(s_status, LV_OBJ_FLAG_HIDDEN);
 }
 
+// The bay behind a packed key, or nullptr. Looked up by the pair rather than
+// by a grid index for the same reason the callback carries the pair: a
+// refresh can reorder the grid between the tap and the answer.
+static const AmsSlotTray* findTray(int ams_id, int tray_id,
+                                   const AmsSlotUnit** out_unit) {
+  for (uint8_t u = 0; u < s_state.unit_count; u++) {
+    const AmsSlotUnit& unit = s_state.unit[u];
+    if (unit.ams_id != (uint8_t)ams_id) continue;
+    for (uint8_t t = 0; t < unit.tray_count; t++) {
+      if (unit.tray[t].tray_id != (uint8_t)tray_id) continue;
+      if (out_unit) *out_unit = &unit;
+      return &unit.tray[t];
+    }
+  }
+  return nullptr;
+}
+
+static bool trayExists(int ams_id, int tray_id) {
+  const AmsSlotTray* t = findTray(ams_id, tray_id, nullptr);
+  return t && t->exists;
+}
+
+static bool unitIsExt(int ams_id) {
+  for (uint8_t u = 0; u < s_state.unit_count; u++) {
+    if (s_state.unit[u].ams_id == (uint8_t)ams_id) return s_state.unit[u].is_ext;
+  }
+  return false;
+}
+
+// Whether a tap means "show me this spool" rather than "put it here".
+// Everywhere except a question, and inside a question while the info switch
+// is on. The future FilaMan picker will be AMS_VIEW_PICK as well, so it
+// inherits this without a line of its own.
+static bool modeShowsDetail() {
+  return s_mode != AMS_VIEW_PICK || s_info_mode;
+}
+
 static void tileClicked(lv_event_t* e) {
-  if (s_mode != AMS_VIEW_PICK || !s_cb) return;
-  void* key = lv_obj_get_user_data(lv_event_get_target(e));
+  lv_obj_t* tile = lv_event_get_target(e);
+  void* key = lv_obj_get_user_data(tile);
+  const int ams  = AMSV_KEY_AMS(key);
+  const int tray = AMSV_KEY_TRAY(key);
+
+  if (modeShowsDetail()) {
+    // Only a bay with something in it has anything to tell. An empty one is
+    // not clickable outside PICK at all, and inside PICK the info switch
+    // makes it inert rather than answering the question by accident.
+    if (!trayExists(ams, tray)) return;
+    s_detail_ams     = ams;
+    s_detail_tray    = tray;
+    s_detail_pending = true;
+    // No close: the card lies over the page, and there is nothing to come
+    // back to because it answers nothing.
+    return;
+  }
+
+  if (!s_cb) return;
+  // The external holder is not a bay a spool can be pinned to - the server
+  // refuses it. It used to be built unclickable, which left a tap on it
+  // silent; now it says why.
+  if (unitIsExt(ams)) {
+    setStatus(T(STR_AMSV_EXT_NO_PICK));
+    return;
+  }
   // Nothing but remembering. The callback sends the assignment, and an HTTP
   // request out of an LVGL callback is what this firmware never does: the
   // page it would run from is still on screen and would freeze mid tap.
-  s_pick_ams   = AMSV_KEY_AMS(key);
-  s_pick_tray  = AMSV_KEY_TRAY(key);
+  s_pick_ams   = ams;
+  s_pick_tray  = tray;
   s_pick_pending  = true;
   s_close_pending = true;
 }
@@ -244,13 +336,26 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
     text_col = (luma > AMSV_LUMA_SWITCH) ? 0x000000 : 0xFFFFFF;
   }
 
+  // A filled bay is always three lines, in the same order, with a dash where
+  // a value is missing. Built the other way round - a line only when there is
+  // something to put on it - the same bay read as two lines on one tile and
+  // three on the next, and because the label is centred the text sat at a
+  // different height in each. Nothing was wrong with any single tile; the row
+  // of them looked broken.
   char line[72];
   if (!tray.exists) {
+    // An empty bay stays one line. There is nothing to line up with, and the
+    // difference between "nothing in here" and "something with no data"
+    // should stay visible at a glance.
     copyT(line, sizeof(line), STR_AMSV_EMPTY);
   } else {
     char name[AMS_NAME_MAX];
     strncpy(name, tray.name[0] ? tray.name : T(STR_AMSV_EMPTY), sizeof(name) - 1);
     name[sizeof(name) - 1] = '\0';
+
+    // color_name arrives cleaned - the parser drops a hex code and strips an
+    // article number before it stores anything, because the field is too
+    // short to hold "Charcoal (11101)" and clean it afterwards.
 
     // Grams say more than a percentage when both are known, and the
     // percentage is all there is on a spool the server never weighed.
@@ -262,7 +367,7 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
     }
 
     // The bay that stands in for this one, appended to the amount rather than
-    // given a line of its own: it is a footnote, and a third row of text on a
+    // given a line of its own: it is a footnote, and a fourth row of text on a
     // tile this size costs more than it tells.
     if (tray.backup_of[0]) {
       char b[16];
@@ -270,15 +375,10 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
       strncat(amount, b, sizeof(amount) - strlen(amount) - 1);
     }
 
-    // The colour name only when the server knows one. The tile already
-    // carries the colour itself, so this is the name for it, not a repeat.
-    if (tray.color_name[0]) {
-      snprintf(line, sizeof(line), "%s\n%s\n%s", name, tray.color_name, amount);
-    } else if (amount[0]) {
-      snprintf(line, sizeof(line), "%s\n%s", name, amount);
-    } else {
-      snprintf(line, sizeof(line), "%s", name);
-    }
+    snprintf(line, sizeof(line), "%s\n%s\n%s",
+             name,
+             tray.color_name[0] ? tray.color_name : "-",
+             amount[0]          ? amount          : "-");
   }
 
   lv_obj_t* lbl = lv_label_create(tile);
@@ -290,9 +390,11 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
   lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 0);
 
   lv_obj_set_user_data(tile, AMSV_KEY(unit.ams_id, tray.tray_id));
-  // The external holder is not a bay a spool can be pinned to: the server
-  // refuses it, so offering it would only ever answer "assignment failed".
-  const bool pickable = (s_mode == AMS_VIEW_PICK) && !unit.is_ext;
+  // In a question every bay answers, including the external holder, which
+  // tileClicked() then turns down with a reason - the tap used to land in
+  // silence. Elsewhere only a filled bay is worth a tap, because all it can
+  // do is show what is in it.
+  const bool pickable = (s_mode == AMS_VIEW_PICK) || tray.exists;
   if (pickable) {
     lv_obj_add_flag(tile, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(tile, tileClicked, LV_EVENT_CLICKED, nullptr);
@@ -452,6 +554,42 @@ static lv_obj_t* footButton(int x, int str_id, bool primary, lv_event_cb_t cb) {
   return b;
 }
 
+// Puts the info switch and the headline into whichever state s_info_mode is
+// in. Both change together and neither needs a redraw of the grid: the tiles
+// stay clickable either way, only what a tap means changes.
+static void applyInfoMode() {
+  if (s_info_btn) {
+    const bool on = s_info_mode;
+    lv_obj_set_style_border_width(s_info_btn, on ? 2 : 1, 0);
+    lv_obj_set_style_border_color(s_info_btn,
+      lv_color_hex(on ? UI_COL_ACCENT : UI_COL_LINE), 0);
+    lv_obj_set_style_bg_color(s_info_btn,
+      lv_color_hex(on ? UI_COL_ACCENT_DIM : UI_COL_SURFACE_2), 0);
+    lv_obj_t* l = lv_obj_get_child(s_info_btn, 0);
+    if (l) {
+      lv_obj_set_style_text_color(l,
+        lv_color_hex(on ? UI_COL_ACCENT : UI_COL_INK_2), 0);
+    }
+  }
+  if (s_headline_lbl) {
+    // The headline is the one line that says what a tap will do, so it is the
+    // line that has to change when that changes.
+    char buf[AMSV_HEADLINE_MAX];
+    if (s_info_mode) copyT(buf, sizeof(buf), STR_AMSV_INFO_HINT);
+    else             snprintf(buf, sizeof(buf), "%s", s_headline);
+    lv_label_set_text(s_headline_lbl, buf);
+    lv_obj_set_style_text_color(s_headline_lbl,
+      lv_color_hex(s_info_mode ? UI_COL_INK_SOFT : AMSV_COL_ACCENT), 0);
+  }
+}
+
+static void footInfoCb(lv_event_t* e) {
+  s_info_mode = !s_info_mode;
+  // Safe inside the callback: nothing is created or freed here, only styles
+  // and one label's text.
+  applyInfoMode();
+}
+
 static void reloadCb(lv_event_t* e) {
   s_fetch_pending = true;
 }
@@ -489,6 +627,9 @@ static void buildScreen() {
       lv_obj_set_style_text_color(h, lv_color_hex(AMSV_COL_ACCENT), 0);
       lv_obj_set_style_text_font(h, &lv_font_montserrat_ext_12, 0);
       lv_obj_set_pos(h, AMSV_MARGIN, top + 4);
+      // Kept so the info switch can rewrite it. Cleared in closeAmsView()
+      // along with the rest, because the page is rebuilt on every opening.
+      s_headline_lbl = h;
     }
     top += AMSV_HEADLINE_H;
   }
@@ -548,10 +689,15 @@ static void buildScreen() {
     lv_obj_set_scroll_dir(s_body, LV_DIR_VER);
   }
 
-  // The footer. PICK: a way out in words, the X alone was easy to miss.
+  // The footer. PICK: a way out in words, the X alone was easy to miss, and
+  // the info switch beside it - the one place a tap already means something,
+  // so the only place the two have to be told apart.
   // WINDOW: the one action this mode exists for, and the way out beside it.
   if (s_mode == AMS_VIEW_PICK) {
-    footButton((480 - AMSV_FOOT_BTN_W) / 2, STR_CANCEL, false, footCancelCb);
+    s_info_btn = footButton(240 - AMSV_FOOT_GAP / 2 - AMSV_FOOT_BTN_W,
+                            STR_AMSV_INFO, false, footInfoCb);
+    footButton(240 + AMSV_FOOT_GAP / 2, STR_CANCEL, false, footCancelCb);
+    applyInfoMode();
   } else if (s_mode == AMS_VIEW_WINDOW) {
     footButton(240 - AMSV_FOOT_GAP / 2 - AMSV_FOOT_BTN_W, STR_AMSV_BTN_WINDOW, true, footOpenCb);
     footButton(240 + AMSV_FOOT_GAP / 2, STR_CANCEL, false, footCancelCb);
@@ -670,6 +816,90 @@ static void fetchAndDraw() {
   layoutGrid(s_state);
 }
 
+// The bay's own name, the way the unit header writes it: a name the user gave
+// the unit where there is one, otherwise "AMS 2" or "AMS HT 1" built from the
+// number, and the bay counted from one.
+static void bayName(const AmsSlotUnit& unit, const AmsSlotTray& tray,
+                    char* out, size_t n) {
+  char unit_name[AMS_NAME_MAX + 8];
+  if (unit.label[0]) {
+    snprintf(unit_name, sizeof(unit_name), "%s", unit.label);
+  } else if (unit.is_ext) {
+    copyT(unit_name, sizeof(unit_name), STR_AMSV_UNIT_EXT);
+  } else {
+    char fmt[24];
+    copyT(fmt, sizeof(fmt), unit.is_ht ? STR_AMSV_UNIT_HT : STR_AMSV_UNIT);
+    const int shown = unit.is_ht ? (unit.ams_id - 127) : (unit.ams_id + 1);
+    snprintf(unit_name, sizeof(unit_name), fmt, shown > 0 ? shown : 1);
+  }
+
+  char fmt[24];
+  copyT(fmt, sizeof(fmt), STR_AMSD_BAY);
+  snprintf(out, n, fmt, unit_name, (int)tray.tray_id + 1);
+}
+
+// Everything the AMS answer already knows about a bay, before anything is
+// asked of the database. What the database then has lays over this; what it
+// has not stays as the printer reported it.
+static void detailFromTray(const AmsSlotUnit& unit, const AmsSlotTray& tray,
+                           AmsSpoolDetail& out) {
+  out = AmsSpoolDetail{};
+  out.remaining_g = SD_WEIGHT_NA;
+  out.total_g     = SD_WEIGHT_NA;
+
+  bayName(unit, tray, out.bay, sizeof(out.bay));
+  out.color      = tray.color;
+  out.has_color  = tray.has_color;
+  out.spool_id   = tray.spool_id;
+  out.remain_pct = tray.remain;
+  out.nozzle_min = tray.nozzle_min;
+  out.nozzle_max = tray.nozzle_max;
+  snprintf(out.material, sizeof(out.material), "%s", tray.name);
+  snprintf(out.backup_of, sizeof(out.backup_of), "%s", tray.backup_of);
+  snprintf(out.color_name, sizeof(out.color_name), "%s", tray.color_name);
+
+  // The grams the printer reports are a fill level, not a weighing, so they
+  // stand in only until the database says otherwise.
+  if (tray.remain_g > 0) out.remaining_g = (float)tray.remain_g;
+}
+
+// Reads one bay and shows it. Blocking, so it runs from the loop and never
+// from the tap that asked for it.
+static void openDetail(int ams_id, int tray_id) {
+  const AmsSlotUnit* unit = nullptr;
+  const AmsSlotTray* tray = findTray(ams_id, tray_id, &unit);
+  if (!tray || !unit) {
+    logSDf("AMSVIEW: detail for bay %d/%d, no such bay", ams_id, tray_id);
+    return;
+  }
+
+  static AmsSpoolDetail det;   // BSS: 200 bytes the loop task's stack is spared
+  detailFromTray(*unit, *tray, det);
+
+  loadingOverlayShow(T(STR_AMSD_LOADING));
+
+  // FilaMan names the spool per bay in the same answer the grid was drawn
+  // from, so there is nothing to look up. BamBuddy does not, and its
+  // assignment list is the only place the pair is resolved.
+  int spool_id = det.spool_id;
+  if (spool_id <= 0 && s_printer_id > 0) {
+    int found = backendFindBaySpool(s_printer_id, ams_id, tray_id);
+    if (found > 0) {
+      spool_id = found;
+      det.spool_id = found;
+    }
+  }
+
+  if (spool_id > 0) backendGetSpoolDetail(spool_id, det);
+
+  loadingOverlayHide();
+
+  // The page can have gone while the request ran - a tap on back is seen by
+  // the loading overlay's own refresh.
+  if (!s_scr) return;
+  showAmsDetailPopup(det);
+}
+
 void handleAmsViewDeferredActions() {
   if (show_ams_view_pending) {
     show_ams_view_pending = false;
@@ -710,6 +940,18 @@ void handleAmsViewDeferredActions() {
     s_pick_ams  = -1;
     s_pick_tray = -1;
     if (s_cb) s_cb(ams, tray);
+    return;
+  }
+
+  // The detail card. Also a request, and also run with the page standing -
+  // unlike a pick, because the card lies over that page and goes away again
+  // on its own. The loading overlay covers the seconds in between and eats
+  // the taps that would otherwise queue up behind it.
+  if (s_detail_pending) {
+    s_detail_pending = false;
+    openDetail(s_detail_ams, s_detail_tray);
+    s_detail_ams  = -1;
+    s_detail_tray = -1;
     return;
   }
 

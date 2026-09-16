@@ -1933,6 +1933,27 @@ const char* const STRINGS[][2] = {
     "The password has 8 to 64 characters, or stays empty for an open network." },  // STR_PORTAL_PAGE_ERR_PASS
   { "API-Key fehlt noch",        "API key still missing"      },  // STR_BB_KEY_MISSING
   { "API-Key abgelehnt",         "API key rejected"           },  // STR_BB_KEY_REJECTED
+
+  // AMS view: info mode and the detail card
+  { "Info",                      "Info"                       },  // STR_AMSV_INFO
+  { "Fach antippen zeigt die Spule",
+    "Tap a bay to see its spool"                              },  // STR_AMSV_INFO_HINT
+  { "Der externe Halter kann nicht zugewiesen werden",
+    "The external holder cannot be assigned"                   },  // STR_AMSV_EXT_NO_PICK
+  { "%s - Fach %d",              "%s - bay %d"                },  // STR_AMSD_BAY
+  { "Restmenge",                 "Remaining"                  },  // STR_AMSD_REMAINING
+  { "%s von %s",                 "%s of %s"                   },  // STR_AMSD_OF
+  { "Kein Gewicht im Backend hinterlegt",
+    "No weight stored in the backend"                          },  // STR_AMSD_NO_WEIGHT
+  { "Keine Spule im Backend verknüpft",
+    "No spool linked in the backend"                           },  // STR_AMSD_NO_SPOOL
+  { "Details werden geladen ...", "Loading details ..."        },  // STR_AMSD_LOADING
+  { "Details nicht abrufbar",    "Details unavailable"        },  // STR_AMSD_FAIL
+  { "Ersatz %s",                 "Backup %s"                  },  // STR_AMSD_BACKUP
+  { "Trocknung von heute für\ndiese Spule speichern?",
+    "Record today's drying for\nthis spool?"                    },  // STR_AMSD_DRIED_Q
+  { "Wird gespeichert ...",      "Saving ..."                 },  // STR_AMSD_SAVING
+  { "Speichern fehlgeschlagen",  "Saving failed"              },  // STR_AMSD_WRITE_FAIL
 };
 
 StringID tagWriteResultString(uint8_t code) {

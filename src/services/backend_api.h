@@ -9,6 +9,7 @@ bool backendLastListPartial();
 #include <stddef.h>
 #include <stdint.h>
 #include "services/ams_slots.h"
+#include "services/spool_detail.h"
 
 // ============================================================
 //  BACKEND API DISPATCH
@@ -56,6 +57,16 @@ int  backendCountActiveSpools(const char* base_url, uint32_t timeout_ms = 6000);
 // keeps no such history and answers false, there the scale writes the date
 // into last_used itself.
 bool backendGetLastWeighedAt(const char* base_url, int spool_id,
+       char* out_iso, size_t out_size, uint32_t timeout_ms = 6000);
+
+// Date the spool was last used, for the backends whose spool object does not
+// carry one. Only FilaMan: it books print consumption into the event log and
+// leaves last_used_at null, so a spool that has been printed from for weeks
+// reads as never used everywhere the field is trusted. Any log entry that
+// moved the weight counts - a booked print or a weighing - and a move between
+// bays does not. The other two answer false; their spool object already has
+// the date.
+bool backendGetLastUsedAt(const char* base_url, int spool_id,
        char* out_iso, size_t out_size, uint32_t timeout_ms = 6000);
 
 // Server side tag lookup, which turns a scan into one small answer instead of
@@ -331,3 +342,23 @@ int  backendUnassignAmsSlot(int spool_id, int printer_id, int ams_id, int tray_i
 // fresh assignment from a move, so the user can be told which it is.
 int  backendFindSpoolSlot(int spool_id, int printer_id, int* out_ams,
        int* out_tray, uint32_t timeout_ms = 8000);
+
+// Which spool sits in this bay, 0 when none is on file. Only BamBuddy needs
+// it: FilaMan's display answer already names the spool per bay, so the AMS
+// state carries the id and no request is due at all.
+int  backendFindBaySpool(int printer_id, int ams_id, int tray_id,
+       uint32_t timeout_ms = 8000);
+
+// Everything the database holds about one spool, for the detail card behind
+// an AMS bay. Reads through backendGetSpoolJson(), so it needs no backend
+// branch of its own - all three answer in the same shape.
+//
+// Fills only the fields it finds and leaves the rest of out untouched, so a
+// caller can pre-fill from the AMS state and keep whatever the printer knows
+// where the database knows nothing. Sets out.found on success.
+//
+// Deliberately not querySpoolmanById(): that one writes the sm_* globals,
+// which hold the spool on the pad. Performs an HTTP request, so never call it
+// from an LVGL event callback.
+int  backendGetSpoolDetail(int spool_id, AmsSpoolDetail& out,
+       uint32_t timeout_ms = 8000);

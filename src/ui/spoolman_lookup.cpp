@@ -470,13 +470,19 @@ static void applyLastUsed(const char* native_iso, const char* weighed_iso, int s
     iso[0] = '\0';
   }
 
-  // In weighed mode the event log is the only correct source. In last used
-  // mode it serves as a fallback, so the line is not simply empty until a
-  // printer reports consumption for the first time.
+  // In weighed mode the event log is the only correct source, and only a
+  // weighing counts. In last used mode it serves as a fallback and any entry
+  // that moved the weight counts, because that is what "used" means: FilaMan
+  // books a print into the log and leaves last_used_at null, so asking only
+  // for weighings left the line empty on a spool that had been printed from
+  // all month.
   if (backendIsFilaMan() && (last_used_mode == 1 || !iso[0])) {
-    char measured[40];
-    if (backendGetLastWeighedAt(cfg_spoolman_base, spool_id, measured, sizeof(measured))) {
-      strncpy(iso, measured, sizeof(iso) - 1);
+    char found[40];
+    const bool ok = (last_used_mode == 1)
+      ? backendGetLastWeighedAt(cfg_spoolman_base, spool_id, found, sizeof(found))
+      : backendGetLastUsedAt(cfg_spoolman_base, spool_id, found, sizeof(found));
+    if (ok) {
+      strncpy(iso, found, sizeof(iso) - 1);
       iso[sizeof(iso) - 1] = '\0';
     } else if (last_used_mode == 1) {
       // Showing a consumption date under a "last weighed" label would be

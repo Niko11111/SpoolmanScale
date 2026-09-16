@@ -15,6 +15,7 @@
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
 #include "services/tag_uid.h"
+#include "services/time_service.h"
 #include "services/user_options.h"
 
 // Rows per request when FilaMan lists spools. The render limit is applied by
@@ -555,6 +556,22 @@ bool backendGetLastWeighedAt(const char* base_url, int spool_id,
   return false;
 }
 
+bool backendGetLastUsedAt(const char* base_url, int spool_id,
+                          char* out_iso, size_t out_size, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
+  if (out_iso && out_size > 0) out_iso[0] = '\0';
+  if (backendIsFilaMan()) {
+    return filamanGetLastUsedAt(backendBaseUrl(), filamanApiKey(), spool_id,
+                                out_iso, out_size, timeout_ms);
+  }
+  // The other two keep a usable date on the spool itself, so there is nothing
+  // to look up: Spoolman has last_used, BamBuddy stamps it when a print
+  // consumes. Only FilaMan books the consumption into a log and leaves the
+  // field null.
+  (void)base_url; (void)spool_id; (void)timeout_ms;
+  return false;
+}
+
 bool backendCanTareSpool() {
   if (backendMode() != BACKEND_BAMBUDDY) return true;
   // Only BamBuddy's own database keeps core_weight on the spool. Behind the
@@ -1081,4 +1098,134 @@ int backendFindSpoolSlot(int spool_id, int printer_id, int* out_ams,
   if (backendMode() != BACKEND_BAMBUDDY) return notSupported("FindSpoolSlot");
   return bbFindSpoolSlot(backendBaseUrl(), bambuddyApiKey(), spool_id, printer_id,
                          out_ams, out_tray, timeout_ms);
+}
+
+int backendFindBaySpool(int printer_id, int ams_id, int tray_id,
+                        uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
+  if (backendMode() != BACKEND_BAMBUDDY) return notSupported("FindBaySpool");
+  return bbFindBaySpool(backendBaseUrl(), bambuddyApiKey(), printer_id,
+                        ams_id, tray_id, timeout_ms);
+}
+
+// Copies a string out of the answer, and leaves the destination alone when
+// the key is absent or empty. That is what lets the AMS state pre-fill a
+// field the database has nothing for.
+static void keepStr(JsonVariantConst v, char* dst, size_t n) {
+  const char* s = v | (const char*)nullptr;
+  if (!s || !s[0]) return;
+  snprintf(dst, n, "%s", s);
+}
+
+int backendGetSpoolDetail(int spool_id, AmsSpoolDetail& out, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
+  if (spool_id <= 0) return -1;
+
+  JsonDocument doc;
+  int code = backendGetSpoolJson(backendBaseUrl(), spool_id, doc, timeout_ms);
+  if (code != 200) {
+    logSDf("detail: spool %d not readable, code %d", spool_id, code);
+    return code;
+  }
+
+  JsonObjectConst sp = doc.as<JsonObjectConst>();
+  if (sp.isNull()) return -2;
+  JsonObjectConst fil = sp["filament"].as<JsonObjectConst>();
+
+  out.spool_id  = sp["id"] | spool_id;
+  out.archived  = sp["archived"] | false;
+  out.status_id = sp["status_id"] | 0;
+
+  // A missing weight is not a zero weight. Spoolman sends null for a spool
+  // that was never weighed, and drawing that as "0 g" would say the spool is
+  // empty when the truth is that nobody knows.
+  JsonVariantConst rem = sp["remaining_weight"];
+  out.remaining_g = rem.isNull() ? SD_WEIGHT_NA : rem.as<float>();
+
+  // What a full spool holds: the figure recorded on this spool, else the
+  // filament's net weight. Same fallback the weighing path uses.
+  JsonVariantConst init = sp["initial_weight"];
+  if (!init.isNull() && init.as<float>() > 0.0f) {
+    out.total_g = init.as<float>();
+  } else {
+    float fw = fil["weight"] | 0.0f;
+    out.total_g = (fw > 0.0f) ? fw : SD_WEIGHT_NA;
+  }
+
+  keepStr(sp["location"], out.location, sizeof(out.location));
+  keepStr(fil["name"], out.name, sizeof(out.name));
+  keepStr(fil["vendor"]["name"], out.vendor, sizeof(out.vendor));
+
+  // The material type alone, exactly as the server stores it.
+  //
+  // It used to have material_subgroup glued on, on the theory that "PETG" and
+  // "hf" name one product between them. They do not: the subgroup is a slug
+  // whose casing is whatever the import left behind - the test instance holds
+  // "hf", "matte" and "Tough Plus" side by side - so the compound came out as
+  // "PETG hf", a string that exists on no spool and in no shop. FilaMan never
+  // builds it either; its own pages print the subgroup verbatim in a column of
+  // its own and never next to the type.
+  //
+  // What the compound was there for is carried by the designation beside it:
+  // "Hf - White", "Matte - Charcoal". Where a designation does not name the
+  // product line - "Cyan (12601)" is a Tough+ and does not say so - the card
+  // no longer shows it. That is a real loss, and the place to put it back is
+  // a caption of its own, not a word stuck onto another field.
+  keepStr(fil["material"], out.material, sizeof(out.material));
+
+  // A tag of any kind counts: the card says whether this spool can be found
+  // by holding it against the scale, not which field holds the binding.
+  const char* tag = sp["extra"]["tag"] | "";
+  out.tag_linked = (tag[0] != '\0');
+
+  char iso[32];
+  const char* dried = sp["extra"]["last_dried"] | "";
+  if (dried[0]) {
+    snprintf(iso, sizeof(iso), "%s", dried);
+    isoDayLocal(iso, out.last_dried, sizeof(out.last_dried));
+  }
+  // The same three step rule applyLastUsed() follows on the main screen, and
+  // it has to be the same: a card that showed a dash where the screen behind
+  // it shows a date would read as the card being broken.
+  //
+  // FilaMan writes last_used only when a printer reports consumption, so a
+  // spool that has only ever been weighed has nothing in it - which is the
+  // case for every spool on the test instance.
+  char used_iso[40] = "";
+  const char* used = sp["last_used"] | "";
+  if (used[0]) snprintf(used_iso, sizeof(used_iso), "%s", used);
+
+  // BamBuddy stamps the spool itself when a weight is written, so this one
+  // arrives with the answer and costs nothing.
+  const char* weighed = sp["extra"]["last_weighed"] | "";
+  if (weighed[0]) {
+    if (last_used_mode == 1 || !used_iso[0]) {
+      snprintf(used_iso, sizeof(used_iso), "%s", weighed);
+    }
+  } else if (backendMode() == BACKEND_BAMBUDDY && last_used_mode == 1) {
+    // A consumption date under a "last weighed" caption would be wrong.
+    used_iso[0] = '\0';
+  }
+
+  // FilaMan keeps the history in an event log, which is a second request.
+  // Paid only when there is nothing to show without it, or when the user asked
+  // for the weighing date specifically. In weighed mode only a weighing will
+  // do; otherwise anything that moved the weight counts, which is what makes
+  // a spool printed from for weeks stop reading as never used.
+  if (backendMode() == BACKEND_FILAMAN && (last_used_mode == 1 || !used_iso[0])) {
+    char found[40];
+    const bool ok = (last_used_mode == 1)
+      ? backendGetLastWeighedAt(backendBaseUrl(), spool_id, found, sizeof(found))
+      : backendGetLastUsedAt(backendBaseUrl(), spool_id, found, sizeof(found));
+    if (ok) {
+      snprintf(used_iso, sizeof(used_iso), "%s", found);
+    } else if (last_used_mode == 1) {
+      used_iso[0] = '\0';
+    }
+  }
+
+  if (used_iso[0]) isoDayLocal(used_iso, out.last_used, sizeof(out.last_used));
+
+  out.found = true;
+  return 200;
 }

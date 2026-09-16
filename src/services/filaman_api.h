@@ -65,6 +65,21 @@ int filamanCountActiveSpools(const char* base_url, const char* api_key,
 bool filamanGetLastMeasuredAt(const char* base_url, const char* api_key, int spool_id,
                               char* out_iso, size_t out_size, uint32_t timeout_ms = 6000);
 
+// When the spool was last used, from the same log. "Used" is any entry that
+// moved the weight: a print the consumption tracking booked off, or a
+// weighing. A move_location is not one - being reassigned to a bay is not
+// using the filament, and the driver writes those often enough to bury
+// everything else.
+//
+// Asked by the weight fields rather than by event_type, so a type FilaMan
+// adds later counts the moment it carries a delta.
+//
+// This is what last_used_at should hold and does not: FilaMan books the
+// consumption into the event log and leaves the spool field null, so a spool
+// that has been printed from for weeks still reads as never used.
+bool filamanGetLastUsedAt(const char* base_url, const char* api_key, int spool_id,
+                          char* out_iso, size_t out_size, uint32_t timeout_ms = 6000);
+
 // ---------- reading, translated to the Spoolman shape ----------
 //
 // FilaMan uses different field names than Spoolman. Rather than teach the

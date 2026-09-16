@@ -83,6 +83,12 @@ struct AmsSlotTray {
   char     name[AMS_NAME_MAX];     // sub brand or trade name, else material
   char     color_name[AMS_COLOR_NAME_MAX];  // manufacturer's name, may be empty
   int16_t  remain_g;               // grams left, or AMS_REMAIN_NA
+  // The nozzle range the server keeps for this bay's filament, or
+  // AMS_REMAIN_NA. Carried per bay rather than fetched with the spool
+  // because the display answer already has it and a second request would
+  // buy nothing. Only FilaMan reports it; BamBuddy never reads it back.
+  int16_t  nozzle_min;
+  int16_t  nozzle_max;
   uint8_t  tray_id;                // bay id as the server numbered it
   int8_t   remain;                 // percent, or AMS_REMAIN_NA
   // The bay that stands in for this one when it runs out, empty when none.

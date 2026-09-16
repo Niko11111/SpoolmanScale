@@ -870,6 +870,11 @@ static void fillTray(JsonObjectConst t, AmsSlotTray& out, uint8_t tray_id) {
   out.tray_id  = tray_id;
   // BamBuddy reports no gram figure per bay, only the percentage Bambu sends.
   out.remain_g = AMS_REMAIN_NA;
+  // Nor a nozzle range: it takes one when a spool is created and never hands
+  // it back. Said here rather than left at the zero of the initializer, which
+  // a reader would take for a real 0 °C.
+  out.nozzle_min = AMS_REMAIN_NA;
+  out.nozzle_max = AMS_REMAIN_NA;
 
   // The sub brand is the name a user recognises ("PLA Matte"); the bare
   // material is the fallback when the spool carries no brand information.
@@ -1149,14 +1154,19 @@ int bbUnassignSlot(const char* base_url, const char* api_key, int spool_id,
   return code;
 }
 
-int bbFindSpoolSlot(const char* base_url, const char* api_key, int spool_id,
-                    int printer_id, int* out_ams, int* out_tray,
-                    uint32_t timeout_ms) {
-  if (out_ams)  *out_ams  = -1;
-  if (out_tray) *out_tray = -1;
-  if (!hasBaseUrl(base_url) || spool_id <= 0 || printer_id <= 0) return -1;
-
+// The slot assignments of one printer, cut down to the three numbers that
+// make up an assignment. Both directions of the lookup - spool to bay and bay
+// to spool - read the same list, so the route and the filter are built once:
+// two copies would be two places for the proxy mode to be got wrong.
+//
+// Returns 200 and fills doc, or the transport's code. id_key is set to
+// whichever key this inventory mode names the spool with.
+static int bbGetAssignments(const char* base_url, const char* api_key,
+                            int printer_id, JsonDocument& doc,
+                            const char** id_key, uint32_t timeout_ms) {
   const bool proxy = (bbInventoryMode() == BB_INV_SPOOLMAN);
+  *id_key = proxy ? "spoolman_spool_id" : "spool_id";
+
   char url[224];
   if (proxy) {
     snprintf(url, sizeof(url),
@@ -1173,13 +1183,23 @@ int bbFindSpoolSlot(const char* base_url, const char* api_key, int spool_id,
   JsonObject f = filter.to<JsonArray>().add<JsonObject>();
   f["ams_id"]  = true;
   f["tray_id"] = true;
-  f[proxy ? "spoolman_spool_id" : "spool_id"] = true;
+  f[*id_key]   = true;
+
+  return getJson(url, api_key, doc, timeout_ms, nullptr, &filter);
+}
+
+int bbFindSpoolSlot(const char* base_url, const char* api_key, int spool_id,
+                    int printer_id, int* out_ams, int* out_tray,
+                    uint32_t timeout_ms) {
+  if (out_ams)  *out_ams  = -1;
+  if (out_tray) *out_tray = -1;
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || printer_id <= 0) return -1;
 
   JsonDocument doc;
-  int code = getJson(url, api_key, doc, timeout_ms, nullptr, &filter);
+  const char* id_key = nullptr;
+  int code = bbGetAssignments(base_url, api_key, printer_id, doc, &id_key, timeout_ms);
   if (code != 200) return code;
 
-  const char* id_key = proxy ? "spoolman_spool_id" : "spool_id";
   for (JsonVariantConst av : doc.as<JsonArrayConst>()) {
     JsonObjectConst a = av.as<JsonObjectConst>();
     if ((a[id_key] | 0) != spool_id) continue;
@@ -1188,6 +1208,28 @@ int bbFindSpoolSlot(const char* base_url, const char* api_key, int spool_id,
     break;
   }
   return 200;
+}
+
+int bbFindBaySpool(const char* base_url, const char* api_key, int printer_id,
+                   int ams_id, int tray_id, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || printer_id <= 0 || ams_id < 0 || tray_id < 0) return -1;
+
+  JsonDocument doc;
+  const char* id_key = nullptr;
+  int code = bbGetAssignments(base_url, api_key, printer_id, doc, &id_key, timeout_ms);
+  if (code != 200) return code;
+
+  for (JsonVariantConst av : doc.as<JsonArrayConst>()) {
+    JsonObjectConst a = av.as<JsonObjectConst>();
+    if ((a["ams_id"] | -1) != ams_id || (a["tray_id"] | -1) != tray_id) continue;
+    int id = a[id_key] | 0;
+    logSDf("BamBuddy: bay %d/%d of printer %d holds spool %d",
+           ams_id, tray_id, printer_id, id);
+    return id > 0 ? id : 0;
+  }
+  // The printer has no assignment for this bay. Not an error: a bay can hold
+  // filament the inventory never heard of.
+  return 0;
 }
 
 // ------------------------------------------------------------

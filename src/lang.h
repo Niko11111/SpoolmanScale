@@ -1128,6 +1128,22 @@ enum StringID {
   STR_BB_KEY_MISSING,         // address test: BamBuddy answers, no key yet
   STR_BB_KEY_REJECTED,
 
+  // The AMS view's info mode, and the detail card behind a bay.
+  STR_AMSV_INFO,
+  STR_AMSV_INFO_HINT,
+  STR_AMSV_EXT_NO_PICK,
+  STR_AMSD_BAY,               // "%s - bay %d", the unit name and the tray
+  STR_AMSD_REMAINING,
+  STR_AMSD_OF,                // "%s of %s", two weights already formatted
+  STR_AMSD_NO_WEIGHT,
+  STR_AMSD_NO_SPOOL,
+  STR_AMSD_LOADING,
+  STR_AMSD_FAIL,
+  STR_AMSD_BACKUP,            // "Backup %s", a bay label
+  STR_AMSD_DRIED_Q,           // confirm: record today's drying for this bay
+  STR_AMSD_SAVING,
+  STR_AMSD_WRITE_FAIL,
+
   STR_COUNT
 };
 

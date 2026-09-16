@@ -259,6 +259,13 @@ int  bbUnassignSlot(const char* base_url, const char* api_key, int spool_id,
 int  bbFindSpoolSlot(const char* base_url, const char* api_key, int spool_id,
        int printer_id, int* out_ams, int* out_tray, uint32_t timeout_ms = 8000);
 
+// The other direction: which spool sits in this bay. Returns the id, 0 when
+// the bay carries no assignment, or a negative code. FilaMan needs no
+// counterpart - its display answer names the spool per bay, BamBuddy's does
+// not, and this is the only route that closes that gap.
+int  bbFindBaySpool(const char* base_url, const char* api_key, int printer_id,
+       int ams_id, int tray_id, uint32_t timeout_ms = 8000);
+
 // --- device protocol -----------------------------------------
 
 // Registers the scale so it shows up under Settings > SpoolBuddy. The

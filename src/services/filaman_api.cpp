@@ -11,6 +11,7 @@
 #include "services/backend.h"
 #include "services/http_progress.h"
 #include "services/tag_uid.h"
+#include "services/text_util.h"
 
 // Whether an object carries the key at all, a null value included. This is
 // what containsKey() answered; obj[key].isNull() also says "absent" for a key
@@ -219,7 +220,25 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   dst["id"]             = src["id"] | 0;
   dst["remaining_weight"] = src["remaining_weight_g"]      | 0.0f;
   dst["spool_weight"]     = src["empty_spool_weight_g"]    | 0.0f;
-  dst["initial_weight"]   = src["initial_total_weight_g"]  | 0.0f;
+
+  // Spoolman's initial_weight is the filament alone - its own schema says
+  // "(net weight)" - while FilaMan's initial_total_weight_g includes the empty
+  // spool, as the name says. Mapping one onto the other unchanged put a gross
+  // weight into a net field, and everything downstream reads it as net: the
+  // percentage on the main screen (187 of 1250 instead of 187 of 1000), the
+  // tare the weight popup derives as "on the scale minus this", and BamBuddy's
+  // over-capacity check.
+  //
+  // The subtraction is FilaMan's own: display_service.py does
+  // max(initial - empty, 0) and falls back to the filament's nominal weight,
+  // so this reads the pair exactly as the server reads it. Guarded, because a
+  // spool with no empty weight recorded must keep the only number it has
+  // rather than turn into zero.
+  float init  = src["initial_total_weight_g"] | 0.0f;
+  float empty = src["empty_spool_weight_g"]   | 0.0f;
+  if (init > 0.0f && empty > 0.0f && init > empty) init -= empty;
+  if (init <= 0.0f) init = src["filament"]["raw_material_weight_g"] | 0.0f;
+  dst["initial_weight"] = init;
 
   // FilaMan has no boolean, archived is status id 6. The id travels on as
   // well: the UI shows and changes the full status, and the bool cannot tell
@@ -300,8 +319,16 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   if (b1 && b1[0]) extra["bambu_tag1"] = b1;
   if (b2 && b2[0]) extra["bambu_tag2"] = b2;
 
+  // Same two places as the tag above, and for the same reason: a spool the
+  // importer brought over from Spoolman keeps its whole extra block nested
+  // under spoolman_extra, so the date sits one level deeper than the one this
+  // scale writes. Reading only the top level meant every imported spool
+  // looked as if it had never been dried - on this card and on the main
+  // screen alike. Top level first, because that is where a drying recorded
+  // here lands and it is then the newer of the two.
   const char* dried = cf["last_dried"] | (const char*)nullptr;
-  if (dried) extra["last_dried"] = dried;
+  if (!dried) dried = cf["spoolman_extra"]["last_dried"] | (const char*)nullptr;
+  if (dried && dried[0]) extra["last_dried"] = dried;
 
   JsonObjectConst fil = src["filament"];
   if (!fil.isNull()) {
@@ -546,13 +573,19 @@ int filamanCountActiveSpools(const char* base_url, const char* api_key,
   return doc["total"] | -1;
 }
 
-// How many events to look at when searching for the last measurement. The log
-// is newest first, and status changes, drying and manual corrections sit
-// between measurements, so a single entry is not enough.
-#define FILAMAN_EVENT_SCAN  5
+// How many events to look at. The log is newest first, and moves, status
+// changes and drying sit between the entries that matter, so a single entry is
+// not enough. Twenty rather than five because the driver writes a
+// move_location every time a bay is assigned or freed: spool 15 on the test
+// instance collected five of them in three weeks and nothing else, which a
+// five entry window would have read as "no history at all". The answer is
+// filtered down to four keys, so twenty events are still under two kilobytes.
+#define FILAMAN_EVENT_SCAN  20
 
-bool filamanGetLastMeasuredAt(const char* base_url, const char* api_key, int spool_id,
-                              char* out_iso, size_t out_size, uint32_t timeout_ms) {
+// One pass over the log for whichever of the two questions the caller has.
+static bool filamanFindEvent(const char* base_url, const char* api_key, int spool_id,
+                             bool weighed_only, char* out_iso, size_t out_size,
+                             uint32_t timeout_ms) {
   if (out_iso && out_size > 0) out_iso[0] = '\0';
   if (!hasBaseUrl(base_url) || spool_id <= 0 || !out_iso || out_size == 0) return false;
 
@@ -563,12 +596,14 @@ bool filamanGetLastMeasuredAt(const char* base_url, const char* api_key, int spo
   addApiKey(http, api_key);
   if (http.GET() != 200) { http.end(); return false; }
 
-  // Only the two keys that matter are parsed. Each event otherwise carries
-  // colours, manufacturer and material, none of which are needed here.
+  // Only the keys that matter are parsed. Each event otherwise carries
+  // colours, manufacturer, material and both location ids.
   JsonDocument filter;
   JsonObject fi = filter["items"].to<JsonArray>().add<JsonObject>();
-  fi["event_type"] = true;
-  fi["event_at"]   = true;
+  fi["event_type"]       = true;
+  fi["event_at"]         = true;
+  fi["delta_weight_g"]   = true;
+  fi["measured_weight_g"] = true;
 
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, http.getStream(),
@@ -580,8 +615,13 @@ bool filamanGetLastMeasuredAt(const char* base_url, const char* api_key, int spo
   }
 
   for (JsonObjectConst e : doc["items"].as<JsonArrayConst>()) {
-    const char* type = e["event_type"] | "";
-    if (strcmp(type, "measurement") != 0) continue;
+    const bool measured = !e["measured_weight_g"].isNull();
+    const bool moved    = measured || !e["delta_weight_g"].isNull();
+    // Asked by what the entry did to the weight, not by what it is called. A
+    // move_location leaves both null, a print_consumption carries a delta, a
+    // weighing carries the measured value - and an event type FilaMan adds
+    // later is judged by the same rule without this having to hear about it.
+    if (!(weighed_only ? measured : moved)) continue;
     const char* at = e["event_at"] | (const char*)nullptr;
     if (!at || !at[0]) continue;
     strncpy(out_iso, at, out_size - 1);
@@ -589,6 +629,16 @@ bool filamanGetLastMeasuredAt(const char* base_url, const char* api_key, int spo
     return true;
   }
   return false;
+}
+
+bool filamanGetLastMeasuredAt(const char* base_url, const char* api_key, int spool_id,
+                              char* out_iso, size_t out_size, uint32_t timeout_ms) {
+  return filamanFindEvent(base_url, api_key, spool_id, true, out_iso, out_size, timeout_ms);
+}
+
+bool filamanGetLastUsedAt(const char* base_url, const char* api_key, int spool_id,
+                          char* out_iso, size_t out_size, uint32_t timeout_ms) {
+  return filamanFindEvent(base_url, api_key, spool_id, false, out_iso, out_size, timeout_ms);
 }
 
 // ============================================================
@@ -1566,6 +1616,12 @@ static void buildDisplayFilter(JsonDocument& filter, bool with_slots) {
   sl["remaining_percent"] = true;
   sl["remaining_grams"]   = true;
   sl["backup_of"]         = true;
+  // The nozzle range of whatever sits in the bay. Two more numbers in an
+  // answer that is already 4 kB, and they save the detail card a second
+  // request - the spool route does not carry them at all, they come from the
+  // printer profile.
+  sl["nozzle_min"]        = true;
+  sl["nozzle_max"]        = true;
 }
 
 // GET on the display endpoint, filtered. Kept local: the answer is a few
@@ -1723,7 +1779,11 @@ int filamanGetAmsState(const char* base_url, const char* api_key, int printer_id
       t.active  = sl["active"] | false;
       t.spool_id = sl["spool_id"] | 0;
       strncpy(t.name, sl["material"] | "", sizeof(t.name) - 1);
-      strncpy(t.color_name, sl["color_name"] | "", sizeof(t.color_name) - 1);
+      // Cleaned here rather than where it is drawn. "Charcoal (11101)" is
+      // exactly AMS_COLOR_NAME_MAX characters, so a plain copy stored
+      // "Charcoal (11101" and the closing bracket the stripper looks for
+      // was already gone by the time anyone looked.
+      colorNameClean(sl["color_name"] | "", t.color_name, sizeof(t.color_name));
       // A label like "B2", and null when this bay has no partner.
       strncpy(t.backup_of, sl["backup_of"] | "", sizeof(t.backup_of) - 1);
 
@@ -1738,6 +1798,15 @@ int filamanGetAmsState(const char* base_url, const char* api_key, int printer_id
       int grams = sl["remaining_grams"] | AMS_REMAIN_NA;
       if (grams < 0 || grams > INT16_MAX) grams = AMS_REMAIN_NA;
       t.remain_g = (int16_t)grams;
+
+      // A profile with a single setpoint reports the same number twice; the
+      // view shows one figure then rather than a range of nothing.
+      int nmin = sl["nozzle_min"] | AMS_REMAIN_NA;
+      int nmax = sl["nozzle_max"] | AMS_REMAIN_NA;
+      if (nmin <= 0 || nmin > 600) nmin = AMS_REMAIN_NA;
+      if (nmax <= 0 || nmax > 600) nmax = AMS_REMAIN_NA;
+      t.nozzle_min = (int16_t)nmin;
+      t.nozzle_max = (int16_t)nmax;
 
       dst.tray_count++;
     }

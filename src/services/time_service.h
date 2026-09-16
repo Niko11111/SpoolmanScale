@@ -54,3 +54,13 @@ int    timeZoneDefaultIndexForLang(uint8_t lang);
 // reports yesterday. Anything without a Z - BamBuddy's date-only note marker,
 // for one - is already a local day and is passed through untouched.
 void isoDayLocal(const char* iso, char* out_day, size_t out_size);
+
+// Now, as a UTC instant in the form both servers store: "2026-09-16T08:31:00
+// .000Z". The other half of isoDayLocal() - writing local time under a Z put
+// their display two hours into the future, which is the bug that made the
+// pair necessary in the first place.
+//
+// Falls back to a fixed stamp when the clock has never been set, so a write
+// carries something parseable rather than 1970. Returns false in that case, so
+// a caller that would rather not write at all can decide for itself.
+bool nowIsoUtc(char* out, size_t out_size);
