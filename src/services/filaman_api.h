@@ -342,8 +342,9 @@ void filamanForgetLocations();
 // out temperature, humidity and the gram figure, which is most of what the
 // unit row shows.
 //
-// Needs a user API key. The route carries no permission check of its own,
-// any valid principal is enough.
+// Needs a user API key whose principal has the display:read permission. A
+// device token carrying that scope would do as well: the route is meant for
+// panels and says so.
 int  filamanGetAmsState(const char* base_url, const char* api_key,
        int printer_id, AmsSlotState& out, uint32_t timeout_ms = 8000);
 

@@ -136,6 +136,10 @@ struct AmsSlotState {
   uint8_t     unit_count;           // units plus external holders
   bool        valid;                // a fetch filled this, do not draw before
   bool        connected;            // the backend can currently reach the printer
+  // FilaMan answers null while no driver has ever reported, which is not the
+  // same as "the printer is off". Without this the screen would call a
+  // backend that simply does not know yet an offline printer.
+  bool        conn_known;           // the backend actually stated the above
   bool        ams_exists;           // the printer reports an AMS at all
 };
 

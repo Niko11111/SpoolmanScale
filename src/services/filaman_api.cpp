@@ -1504,8 +1504,11 @@ static void buildDisplayFilter(JsonDocument& filter, bool with_slots) {
   u["ams_id"]      = true;
   u["kind"]        = true;
   u["label"]       = true;
-  u["temperature"] = true;
-  u["humidity"]    = true;
+  u["temperature"]    = true;
+  u["humidity"]       = true;
+  // Since the driver reports both, humidity carries the percentage and this
+  // carries Bambu's 1 to 5 step. Reading it beats guessing from the number.
+  u["humidity_level"] = true;
   // null unless a cycle is really running, since 1.3.3.
   JsonObject dr = u["drying"].to<JsonObject>();
   dr["status"]      = true;
@@ -1586,9 +1589,12 @@ int filamanGetAmsState(const char* base_url, const char* api_key, int printer_id
     if (pct < 0 || pct > 100) pct = AMS_JOB_NA;
     out.job_percent = (int8_t)pct;
   }
-  // connected is null while the driver has never reported, which is not the
-  // same as false, but for the screen both mean "do not trust this as live".
-  out.connected = pr["connected"] | false;
+  // connected is null while no driver has ever reported, which is not the
+  // same as false: the first says the backend does not know, the second says
+  // the printer is not answering. The screen says which.
+  JsonVariantConst conn = pr["connected"];
+  out.conn_known = !conn.isNull();
+  out.connected  = conn | false;
 
   for (JsonVariantConst uv : pr["ams"].as<JsonArrayConst>()) {
     JsonObjectConst u = uv.as<JsonObjectConst>();
@@ -1615,13 +1621,20 @@ int filamanGetAmsState(const char* base_url, const char* api_key, int printer_id
     }
 
     JsonVariantConst hum = u["humidity"];
-    if (hum.isNull()) {
+    JsonVariantConst lvl = u["humidity_level"];
+    if (hum.isNull() && lvl.isNull()) {
       dst.humidity = AMS_HUMIDITY_NA;
+    } else if (hum.isNull()) {
+      // Only the step arrived, so there is nothing to guess about.
+      int l = lvl.as<int>();
+      dst.humidity_is_level = (l > 0 && l <= 5);
+      dst.humidity = dst.humidity_is_level ? (int8_t)l : AMS_HUMIDITY_NA;
     } else {
       int h = hum.as<int>();
-      // The driver prefers the raw percentage and falls back to Bambu's 1 to
-      // 5 step depending on the printer, without ever saying which it sent.
-      dst.humidity_is_level = (h > 0 && h <= 5);
+      // A percentage below six once read as a step, which turned a very dry
+      // AMS into "step 5". When the server states the step separately, the
+      // number here is the percentage and needs no interpretation.
+      dst.humidity_is_level = lvl.isNull() && (h > 0 && h <= 5);
       if (h < 0 || h > 100) h = AMS_HUMIDITY_NA;
       dst.humidity = (int8_t)h;
     }

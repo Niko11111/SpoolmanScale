@@ -635,8 +635,11 @@ static void fetchAndDraw() {
     if (!s_state.connected) {
       // An offline printer still has a last known state worth showing, so
       // this is a note next to the grid rather than a refusal to draw it.
+      // A backend that never said either way gets its own wording: blaming
+      // the printer for a driver that has not reported sends the user to
+      // the wrong machine.
       snprintf(body, sizeof(body), "%s - %s", s_state.printer,
-               T(STR_AMSV_OFFLINE));
+               T(s_state.conn_known ? STR_AMSV_OFFLINE : STR_AMSV_UNKNOWN));
     } else if (s_state.job_percent >= 0) {
       char fmt[24];
       copyT(fmt, sizeof(fmt), STR_AMSV_JOB);

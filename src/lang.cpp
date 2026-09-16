@@ -516,6 +516,10 @@ const char* const STRINGS[][2] = {
   // fault in the scale unless the line explains it.
   { "offline, letzter Stand",
     "offline, last known state"                                           },  // STR_AMSV_OFFLINE
+  // Not the same as offline: the server has simply never heard from its
+  // driver. Saying "offline" there blames the printer for the server.
+  { "Status unbekannt",
+    "state unknown"                                                       },  // STR_AMSV_UNKNOWN
   { "Kein AMS gemeldet",
     "No AMS reported"                                                 },  // STR_AMSV_NO_AMS
   { "Kein Drucker gefunden",

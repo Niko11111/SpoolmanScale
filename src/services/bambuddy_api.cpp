@@ -941,7 +941,11 @@ int bbGetAmsState(const char* base_url, const char* api_key, int printer_id,
 
   out.printer_id = printer_id;
   strncpy(out.printer, doc["name"] | "", sizeof(out.printer) - 1);
-  out.connected  = doc["connected"] | false;
+  // Same distinction as on the FilaMan side, so both branches mean the same
+  // thing by an absent flag.
+  JsonVariantConst conn = doc["connected"];
+  out.conn_known = !conn.isNull();
+  out.connected  = conn | false;
   out.ams_exists = doc["ams_exists"] | false;
   // The status payload carries no job progress. Left at the zero the struct
   // starts with, the view reads it as "printing 0 %" on every idle printer.
