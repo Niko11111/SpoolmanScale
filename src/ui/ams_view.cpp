@@ -33,18 +33,40 @@
 #define AMSV_UNIT_H       (AMSV_UNIT_HDR_H + AMSV_TILE_H + 9)
 #define AMSV_BODY_TOP     40
 #define AMSV_HEADLINE_H   24
-// The status line and the reload chip share one row.
-#define AMSV_STATUS_ROW_H 28
+// The status row: the printer's name, as a chip when there is more than one
+// printer to step through, and what the printer is doing beside it. The row
+// has the whole width since the reload chip moved up into the header - it
+// used to share this row, which squeezed the printer into 12 px of text that
+// was hard to read and, with two printers, did not look like the switch it is.
+#define AMSV_STATUS_ROW_H 36
+#define AMSV_CHIP_H       28
+#define AMSV_CHIP_PAD_X   12
+// The label inside the chip gets this much more than its text, so the
+// simulator's check does not count a chip sized to its text as tight.
+#define AMSV_CHIP_TXT_SLACK 10
+#define AMSV_CHIP_GAP     10
+// Room the status keeps beside the widest printer chip, so a long name cuts
+// with dots inside the chip rather than pushing the status off the row.
+#define AMSV_STATUS_MIN_W 120
 #define AMSV_RELOAD_W     88
-#define AMSV_RELOAD_H     24
-// How far the chip stays clear of the header's close button: the X reaches
-// down to 40 and is 48 wide, and a chip tucked under its corner reads as
-// belonging to it.
-#define AMSV_CLOSE_CLEAR  56
-// The status line is 12 px of text; this makes it a finger sized target.
-#define AMSV_STATUS_EXT_CLICK 12
-// What is left of the row once the reload chip and its margins are taken off.
-#define AMSV_STATUS_W     (480 - AMSV_MARGIN - (AMSV_MARGIN + AMSV_CLOSE_CLEAR) - AMSV_RELOAD_W - 8)
+// The header's buttons are 44 px tall and 2 px down (addBackButton and
+// addCloseButton in ui_common.cpp), so their middle is at 24; the reload chip
+// sits on that line, centred between the title and the close button.
+#define AMSV_HDR_MID      24
+#define AMSV_HDR_BTN_W    44
+#define AMSV_HDR_BTN_IN   4
+// Finger room around the printer chip beyond its 28 px. Four, not more:
+// the chip sits under the back button's corner, and a wider halo would take
+// that button's lowest taps.
+#define AMSV_STATUS_EXT_CLICK 4
+// Air between the printer chip and the back button above it. The row and
+// the grid move down by this much, but only with two or more printers -
+// only then is there a chip, and a single printer page should not lose
+// height to a control it does not have.
+#define AMSV_CHIP_AIR     8
+// What the row offers a line of text: from the left margin to the scrollbar's
+// margin on the right.
+#define AMSV_STATUS_W     (480 - AMSV_MARGIN - AMSV_MARGIN_R)
 // How the page is pumped before a blocking fetch, so the loading line is
 // drawn and a tap on back is seen: passes and the pause between them.
 #define AMSV_PUMP_PASSES  5
@@ -76,6 +98,15 @@
 static lv_obj_t*    s_scr       = nullptr;
 static lv_obj_t*    s_body      = nullptr;   // scrolling container
 static lv_obj_t*    s_status    = nullptr;   // the line shown while loading
+// The printer's name as a chip, built once and shown only with two or more
+// printers; the status label moves right to make room for it.
+static lv_obj_t*    s_printer_btn = nullptr;
+static lv_obj_t*    s_printer_lbl = nullptr;
+// Where the status row and the body were built, so applyRowDrop() can move
+// them by AMSV_CHIP_AIR once the printers are known and there are two.
+static int          s_row_top  = 0;
+static int          s_body_top = 0;
+static int          s_body_h   = 0;
 static AmsViewMode  s_mode      = AMS_VIEW_BROWSE;
 static AmsPickCb    s_cb        = nullptr;
 static char         s_headline[AMSV_HEADLINE_MAX] = "";
@@ -167,6 +198,8 @@ static void closeAmsView() {
   s_status   = nullptr;
   s_info_btn = nullptr;
   s_headline_lbl = nullptr;
+  s_printer_btn  = nullptr;
+  s_printer_lbl  = nullptr;
 }
 
 void hideAmsViewOverlays() {
@@ -206,8 +239,39 @@ void destroyAmsView() {
   // beta.28 did: no bay was ever assigned.
 }
 
+// The row as one line of text: the printer chip hidden, the label from the
+// margin across the width. What every message wants - loading, an error, a
+// note - and what a single printer setup shows all the time. The chip comes
+// back with the next drawn state.
+// Keyed on the printer count rather than on the chip's visibility, so a
+// reload - which lays the row plain while it loads - does not bounce the
+// grid up and down by eight pixels every time.
+static int rowDrop() { return (s_printers.count > 1) ? AMSV_CHIP_AIR : 0; }
+
+static void applyRowDrop() {
+  const int drop   = rowDrop();
+  const int chip_y = s_row_top + (AMSV_STATUS_ROW_H - AMSV_CHIP_H) / 2 + drop;
+  const lv_coord_t lh = lv_font_get_line_height(UI_FONT_BODY);
+  if (s_printer_btn) lv_obj_set_y(s_printer_btn, chip_y);
+  if (s_status)      lv_obj_set_y(s_status, chip_y + (AMSV_CHIP_H - lh) / 2);
+  if (s_body) {
+    lv_obj_set_y(s_body, s_body_top + drop);
+    lv_obj_set_height(s_body, s_body_h - drop);
+  }
+}
+
+static void statusRowPlain() {
+  applyRowDrop();
+  if (s_printer_btn) lv_obj_add_flag(s_printer_btn, LV_OBJ_FLAG_HIDDEN);
+  if (s_status) {
+    lv_obj_set_x(s_status, AMSV_MARGIN);
+    lv_obj_set_width(s_status, AMSV_STATUS_W);
+  }
+}
+
 static void setStatus(const char* text) {
   if (!s_status) return;
+  statusRowPlain();
   char buf[64];
   strncpy(buf, text ? text : "", sizeof(buf) - 1);
   buf[sizeof(buf) - 1] = '\0';
@@ -217,6 +281,7 @@ static void setStatus(const char* text) {
 
 static void setStatusFmt(int str_id, int value) {
   if (!s_status) return;
+  statusRowPlain();
   char fmt[48], buf[64];
   copyT(fmt, sizeof(fmt), str_id);
   snprintf(buf, sizeof(buf), fmt, value);
@@ -615,6 +680,36 @@ static void buildScreen() {
   copyT(title, sizeof(title), STR_AMSV_TITLE);
   buildSubHeader(s_scr, title, backCb);
 
+  // The reload chip, in the header between the title and the close button,
+  // centred in the gap. The title's width is measured rather than assumed: it
+  // differs per language, and a chip that is symmetric in one and off by
+  // twenty pixels in the other would read as a mistake in the second.
+  {
+    lv_obj_t* rl = lv_btn_create(s_scr);
+    if (rl) {
+      char rlab[20];
+      copyT(rlab, sizeof(rlab), STR_AMSV_RELOAD);
+      const lv_coord_t tw = lv_txt_get_width(title, (uint32_t)strlen(title),
+                                             UI_FONT_TITLE, 0, LV_TEXT_FLAG_NONE);
+      const int title_right = 240 + tw / 2;
+      const int close_left  = 480 - AMSV_HDR_BTN_IN - AMSV_HDR_BTN_W;
+      const int x = (title_right + close_left) / 2 - AMSV_RELOAD_W / 2;
+      lv_obj_set_size(rl, AMSV_RELOAD_W, AMSV_CHIP_H);
+      lv_obj_set_pos(rl, x, AMSV_HDR_MID - AMSV_CHIP_H / 2);
+      lv_obj_set_style_bg_color(rl, lv_color_hex(AMSV_COL_LINE), 0);
+      lv_obj_set_style_radius(rl, 6, 0);
+      lv_obj_set_style_shadow_width(rl, 0, 0);
+      lv_obj_add_event_cb(rl, reloadCb, LV_EVENT_CLICKED, nullptr);
+      lv_obj_t* rt = lv_label_create(rl);
+      if (rt) {
+        lv_label_set_text(rt, rlab);
+        lv_obj_set_style_text_color(rt, lv_color_hex(AMSV_COL_ACCENT), 0);
+        lv_obj_set_style_text_font(rt, UI_FONT_SMALL, 0);
+        lv_obj_align(rt, LV_ALIGN_CENTER, 0, 0);
+      }
+    }
+  }
+
   int top = AMSV_BODY_TOP;
 
   // The spool being placed, so the comparison with a bay is on one screen.
@@ -634,49 +729,55 @@ static void buildScreen() {
     top += AMSV_HEADLINE_H;
   }
 
-  // Status and reload share one row. Stacked they cost 48 of the 280 pixels
-  // below the header, which is most of a row of bays.
-  lv_obj_t* rl = lv_btn_create(s_scr);
-  if (rl) {
-    char rlab[20];
-    copyT(rlab, sizeof(rlab), STR_AMSV_RELOAD);
-    lv_obj_set_size(rl, AMSV_RELOAD_W, AMSV_RELOAD_H);
-    lv_obj_align(rl, LV_ALIGN_TOP_RIGHT, -(AMSV_MARGIN + AMSV_CLOSE_CLEAR), top);
-    lv_obj_set_style_bg_color(rl, lv_color_hex(AMSV_COL_LINE), 0);
-    lv_obj_set_style_radius(rl, 6, 0);
-    lv_obj_set_style_shadow_width(rl, 0, 0);
-    lv_obj_add_event_cb(rl, reloadCb, LV_EVENT_CLICKED, nullptr);
-    lv_obj_t* rt = lv_label_create(rl);
-    if (rt) {
-      lv_label_set_text(rt, rlab);
-      lv_obj_set_style_text_color(rt, lv_color_hex(AMSV_COL_ACCENT), 0);
-      lv_obj_set_style_text_font(rt, &lv_font_montserrat_ext_12, 0);
-      lv_obj_align(rt, LV_ALIGN_CENTER, 0, 0);
+  // The status row: the printer chip first, hidden until the printers are
+  // known and there are two of them, and the status label after it - or from
+  // the margin, when the chip is away. Sized to its text when it is shown.
+  s_row_top = top;
+  const int chip_y = top + (AMSV_STATUS_ROW_H - AMSV_CHIP_H) / 2;
+  const lv_coord_t lh = lv_font_get_line_height(UI_FONT_BODY);
+  s_printer_btn = lv_btn_create(s_scr);
+  if (s_printer_btn) {
+    lv_obj_set_size(s_printer_btn, AMSV_RELOAD_W, AMSV_CHIP_H);
+    lv_obj_set_pos(s_printer_btn, AMSV_MARGIN, chip_y);
+    lv_obj_set_style_bg_color(s_printer_btn, lv_color_hex(AMSV_COL_LINE), 0);
+    lv_obj_set_style_radius(s_printer_btn, 6, 0);
+    lv_obj_set_style_shadow_width(s_printer_btn, 0, 0);
+    lv_obj_set_style_pad_all(s_printer_btn, 0, 0);
+    lv_obj_set_ext_click_area(s_printer_btn, AMSV_STATUS_EXT_CLICK);
+    lv_obj_add_flag(s_printer_btn, LV_OBJ_FLAG_HIDDEN);
+    // Attached once, here, and not where the text is written: a redraw runs
+    // that path again, and a second callback on the same object would step
+    // two printers per tap.
+    lv_obj_add_event_cb(s_printer_btn, nextPrinterCb, LV_EVENT_CLICKED, nullptr);
+    s_printer_lbl = lv_label_create(s_printer_btn);
+    if (s_printer_lbl) {
+      lv_label_set_text(s_printer_lbl, "");
+      lv_obj_set_style_text_color(s_printer_lbl, lv_color_hex(AMSV_COL_ACCENT), 0);
+      lv_obj_set_style_text_font(s_printer_lbl, UI_FONT_BODY, 0);
+      lv_obj_set_style_text_align(s_printer_lbl, LV_TEXT_ALIGN_CENTER, 0);
+      lv_label_set_long_mode(s_printer_lbl, LV_LABEL_LONG_DOT);
+      lv_obj_align(s_printer_lbl, LV_ALIGN_CENTER, 0, 0);
     }
   }
 
   s_status = lv_label_create(s_scr);
   if (s_status) {
     lv_label_set_text(s_status, "");
-    lv_obj_set_style_text_color(s_status, lv_color_hex(AMSV_COL_MUTED), 0);
-    lv_obj_set_style_text_font(s_status, &lv_font_montserrat_ext_12, 0);
-    lv_obj_set_pos(s_status, AMSV_MARGIN, top + 6);
-    // Bounded and clipped with an ellipsis: the line carries a printer name
-    // the user chose, and a long one would otherwise run straight under the
-    // reload chip.
-    lv_obj_set_width(s_status, AMSV_STATUS_W);
+    lv_obj_set_style_text_color(s_status, lv_color_hex(UI_COL_INK_2), 0);
+    lv_obj_set_style_text_font(s_status, UI_FONT_BODY, 0);
+    // One line with a real height, so a long printer name is cut with dots
+    // rather than wrapped into the grid below.
+    lv_obj_set_size(s_status, AMSV_STATUS_W, lh);
     lv_label_set_long_mode(s_status, LV_LABEL_LONG_DOT);
-    // Attached once, here, and not where the text is written: a redraw runs
-    // that path again, and a second callback on the same object would step
-    // two printers per tap.
-    lv_obj_set_ext_click_area(s_status, AMSV_STATUS_EXT_CLICK);
-    lv_obj_add_event_cb(s_status, nextPrinterCb, LV_EVENT_CLICKED, nullptr);
+    lv_obj_set_pos(s_status, AMSV_MARGIN, chip_y + (AMSV_CHIP_H - lh) / 2);
   }
   top += AMSV_STATUS_ROW_H;
 
   // A question leaves room for its footer; a look at the bays does not.
   const int foot = modeAsks() ? AMSV_FOOT_H : 0;
 
+  s_body_top = top;
+  s_body_h   = 320 - top - foot;
   s_body = lv_obj_create(s_scr);
   if (s_body) {
     lv_obj_set_pos(s_body, 0, top);
@@ -765,51 +866,59 @@ static void fetchAndDraw() {
   // place the printer is named, and with several of them configured that is
   // the difference between a board and somebody else's board.
   {
-    char line[64];
-    char pos[16] = "";
-    // Only when there is something to step through. On one printer the
-    // "1/1" would be noise and the line would look like a control that does
-    // nothing.
-    if (s_printers.count > 1) {
-      char fmt[12];
-      copyT(fmt, sizeof(fmt), STR_AMSV_PRN_OF);
-      char n[12];
-      snprintf(n, sizeof(n), fmt, (int)s_printer_idx + 1, (int)s_printers.count);
-      snprintf(pos, sizeof(pos), "%s  ", n);
-    }
-    char body[64];
+    // What the printer is doing, without its name: offline, a job, a state,
+    // or nothing at all.
+    char what[48] = "";
     if (!s_state.connected) {
       // An offline printer still has a last known state worth showing, so
       // this is a note next to the grid rather than a refusal to draw it.
       // A backend that never said either way gets its own wording: blaming
       // the printer for a driver that has not reported sends the user to
       // the wrong machine.
-      snprintf(body, sizeof(body), "%s - %s", s_state.printer,
-               T(s_state.conn_known ? STR_AMSV_OFFLINE : STR_AMSV_UNKNOWN));
+      copyT(what, sizeof(what), s_state.conn_known ? STR_AMSV_OFFLINE : STR_AMSV_UNKNOWN);
     } else if (s_state.job_percent >= 0) {
       char fmt[24];
       copyT(fmt, sizeof(fmt), STR_AMSV_JOB);
-      char job[24];
-      snprintf(job, sizeof(job), fmt, (int)s_state.job_percent);
-      snprintf(body, sizeof(body), "%s - %s", s_state.printer, job);
+      snprintf(what, sizeof(what), fmt, (int)s_state.job_percent);
     } else if (s_state.state[0]) {
-      snprintf(body, sizeof(body), "%s - %s", s_state.printer, s_state.state);
-    } else {
-      snprintf(body, sizeof(body), "%s", s_state.printer);
+      snprintf(what, sizeof(what), "%s", s_state.state);
     }
-    snprintf(line, sizeof(line), "%s%s", pos, body);
-    setStatus(line);
 
-    // Tapping the line steps to the next printer. The line names the printer
-    // anyway, so it is where a user looks for one - cheaper than a page of
-    // its own and it costs no room on a screen that has none. The accent
-    // colour is what says it can be tapped at all.
-    if (s_status) {
-      const bool switchable = (s_printers.count > 1);
-      if (switchable) lv_obj_add_flag(s_status, LV_OBJ_FLAG_CLICKABLE);
-      else            lv_obj_clear_flag(s_status, LV_OBJ_FLAG_CLICKABLE);
-      lv_obj_set_style_text_color(
-        s_status, lv_color_hex(switchable ? AMSV_COL_ACCENT : AMSV_COL_MUTED), 0);
+    // With two or more printers the name is the switch, and looks like one:
+    // the same chip as "reload", holding "2/3  P1S" so it also says where in
+    // the list the next tap goes. The status stands beside it in plain text.
+    // On one printer there is nothing to step through, so the line is text
+    // only - a chip that does nothing would be a promise the page cannot keep.
+    const bool switchable = (s_printers.count > 1);
+    if (switchable && s_printer_btn && s_printer_lbl && s_status) {
+      applyRowDrop();
+      char fmt[12], n[12], name[48];
+      copyT(fmt, sizeof(fmt), STR_AMSV_PRN_OF);
+      snprintf(n, sizeof(n), fmt, (int)s_printer_idx + 1, (int)s_printers.count);
+      snprintf(name, sizeof(name), "%s  %s", n, s_state.printer);
+      lv_label_set_text(s_printer_lbl, name);
+      // Sized to the name. A name of the user's choosing can be long; the chip
+      // stops where the status would have no room left, and the label inside
+      // cuts with dots.
+      lv_coord_t w = lv_txt_get_width(name, (uint32_t)strlen(name), UI_FONT_BODY,
+                                      0, LV_TEXT_FLAG_NONE) + 2 * AMSV_CHIP_PAD_X;
+      const lv_coord_t w_max = AMSV_STATUS_W - AMSV_CHIP_GAP - AMSV_STATUS_MIN_W;
+      if (w > w_max) w = w_max;
+      lv_obj_set_width(s_printer_btn, w);
+      lv_obj_set_size(s_printer_lbl, w - 2 * AMSV_CHIP_PAD_X + AMSV_CHIP_TXT_SLACK,
+                      lv_font_get_line_height(UI_FONT_BODY));
+      lv_obj_clear_flag(s_printer_btn, LV_OBJ_FLAG_HIDDEN);
+
+      const int x = AMSV_MARGIN + w + AMSV_CHIP_GAP;
+      lv_obj_set_x(s_status, x);
+      lv_obj_set_width(s_status, 480 - AMSV_MARGIN_R - x);
+      lv_label_set_text(s_status, what);
+      lv_obj_clear_flag(s_status, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      char line[80];
+      if (what[0]) snprintf(line, sizeof(line), "%s - %s", s_state.printer, what);
+      else         snprintf(line, sizeof(line), "%s", s_state.printer);
+      setStatus(line);
     }
   }
 
