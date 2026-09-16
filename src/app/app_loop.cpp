@@ -241,7 +241,6 @@ constexpr unsigned long NFC_RETRY_RESET_ABSENT_MS = 10000;
 // It stays out of the way while any WiFi setup screen is on display.
 static void handleWifiReconnect() {
   if (cfg_wifi_ssid[0] == '\0') return;
-  if (WiFi.status() == WL_CONNECTED) return;
   // The browser is trying a network of its own; a begin() with the stored
   // one would cancel that attempt.
   if (improvSerialBusy()) return;
@@ -253,6 +252,17 @@ static void handleWifiReconnect() {
     (scr_wifi_pass      && !lv_obj_has_flag(scr_wifi_pass,      LV_OBJ_FLAG_HIDDEN)) ||
     (scr_wifi_connecting && !lv_obj_has_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN));
   if (wifi_ui_visible) return;
+
+  if (WiFi.status() == WL_CONNECTED) {
+    // Connected, but boot gave up before the network answered, so nothing that
+    // a connection starts has run yet. The guards above apply here as well:
+    // each of those flows sets wifi_ok on its own once it succeeds.
+    if (!wifi_ok) {
+      logSD("WiFi: connected after boot, starting network services");
+      wifiOnConnected();
+    }
+    return;
+  }
 
   static unsigned long last_retry_ms = 0;
   if (last_retry_ms != 0 && millis() - last_retry_ms < WIFI_RETRY_INTERVAL_MS) return;
