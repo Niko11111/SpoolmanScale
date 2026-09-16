@@ -1506,12 +1506,7 @@ void appLoop() {
         // ── MIFARE Classic (Bambu) ────────────────────────────
         last_tag_seen_ms = millis();
         tag_present = true;
-        {
-          char u[16];
-          snprintf(u, sizeof(u), "%02X:%02X:%02X:%02X",
-                   uid[0], uid[1], uid[2], uid[3]);
-          TagSeen::note(u, "Bambu");
-        }
+
         // A successful read means zero consecutive misses, by definition.
         // This used to be reset only when the UID changed, so after the very
         // first read of a spool the counter never went back to zero. The
@@ -1531,14 +1526,22 @@ void appLoop() {
         bool contents_incomplete = (bambu_blocks_read < 48);
 
         if (uid_changed) {
-          Serial.printf("NFC: New Bambu UID %s\n", uid_str);
+          Serial.printf("NFC: New 4-byte UID %s\n", uid_str);
           nfc_retry_count = 0; nfc_absent_count = 0;
           last_bambu_retry_ms = 0;
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
           lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
-          scanTag(uid, uidLen);
+
+          BambuScanResult res = scanTag(uid, uidLen);
+          if (res == BAMBU_SCAN_FAIL_SECTOR_0) {
+            nfc_retry_count = NFC_MAX_RETRIES; // Fast fail: bypass all retries
+            bambu_blocks_read = 0;             // Ensure it's treated as non-Bambu
+          }
+          if (res == BAMBU_SCAN_OK) {
+             TagSeen::note(uid_str, "Bambu");
+          }
         } else if ((uuid_missing || contents_incomplete) && nfc_retry_count < NFC_MAX_RETRIES &&
                    millis() - last_bambu_retry_ms >= NFC_BAMBU_RETRY_BACKOFF_MS) {
           last_bambu_retry_ms = millis();
@@ -1552,8 +1555,25 @@ void appLoop() {
           lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
-          scanTag(uid, uidLen);
-        } else {
+
+          BambuScanResult res = scanTag(uid, uidLen);
+          if (res == BAMBU_SCAN_FAIL_SECTOR_0) {
+            nfc_retry_count = NFC_MAX_RETRIES; // Fast fail on retry
+            bambu_blocks_read = 0;
+          }
+          if (res == BAMBU_SCAN_OK) {
+             TagSeen::note(uid_str, "Bambu");
+          }
+        }
+
+        // Update flags after scanTag may have changed them for the same loop pass
+        bambu_blocks_read = countBambuDataBlocksRead(g_tag);
+        uuid_missing = (strlen(g_tag.tray_uuid) < 32);
+        contents_incomplete = (bambu_blocks_read < 48);
+
+        // Fallthrough check to handle fast-fail immediately in the same pass
+        if (!uid_changed && !((uuid_missing || contents_incomplete) && nfc_retry_count < NFC_MAX_RETRIES && millis() - last_bambu_retry_ms >= NFC_BAMBU_RETRY_BACKOFF_MS)) {
+
           if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES &&
               bambu_blocks_read == 0) {
             // Not a Bambu tag at all. Every sector failed authentication, so

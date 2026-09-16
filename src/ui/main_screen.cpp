@@ -10,6 +10,7 @@
 
 #include "app_config.h"
 #include "app/deferred_actions.h"
+#include "bambu/bambu_scan.h"
 #include "bambu/bambu_tag.h"
 #include "hardware/scale.h"
 #include "hardware/scale_state.h"
@@ -70,14 +71,16 @@ void updateDisplay() {
   }
   lv_label_set_text(lbl_temp, temp_str);
 
+  bool is_bambu = (strlen(g_tag.tray_uuid) == 32) || (countBambuDataBlocksRead(g_tag) > 0);
+
   // Vendor (Zone 3 Row B)
   lv_label_set_text(lbl_vendor,
-    strlen(g_tag.vendor) > 0 ? g_tag.vendor : BAMBU_VENDOR_NAME);
+    strlen(g_tag.vendor) > 0 ? g_tag.vendor : (is_bambu ? BAMBU_VENDOR_NAME : "-"));
 
   // Hidden labels still written for More Info screen compatibility
   lv_label_set_text(lbl_uid, g_tag.uid_str);
   lv_label_set_text(lbl_tray_uuid,
-    strlen(g_tag.tray_uuid) == 32 ? g_tag.tray_uuid : T(STR_NOT_READABLE));
+    strlen(g_tag.tray_uuid) == 32 ? g_tag.tray_uuid : (is_bambu ? T(STR_NOT_READABLE) : "-"));
   lv_label_set_text(lbl_date,
     strlen(g_tag.production_date) > 4 ? g_tag.production_date : T(STR_UNKNOWN));
   lv_label_set_text(lbl_detail, sm_article_nr[0] ? sm_article_nr : "-");

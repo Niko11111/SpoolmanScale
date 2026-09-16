@@ -39,7 +39,7 @@ int countBambuDataBlocksRead(const BambuTagData& tag) {
 // off the loop task stack.
 static BambuTagData scan_buf;
 
-void scanTag(uint8_t *uid, uint8_t uid_len) {
+BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
   char uid_str[24];
   sprintf(uid_str, "%02X:%02X:%02X:%02X", uid[0], uid[1], uid[2], uid[3]);
 
@@ -59,7 +59,7 @@ void scanTag(uint8_t *uid, uint8_t uid_len) {
   Serial.println("Deriving keys...");
   if (!deriveKeys(uid, uid_len, scan_buf.keys)) {
     Serial.println("Key derivation failed!");
-    return;   // g_tag is left untouched
+    return BAMBU_SCAN_FAIL_SECTOR_0;   // KDF fail prevents sector 0 read
   }
 
   for (int i = 0; i < 16; i++) {
@@ -78,9 +78,21 @@ void scanTag(uint8_t *uid, uint8_t uid_len) {
   Serial.println("Reading sectors...");
   int success_count = 0;
   char sector_summary[160] = "";
+  BambuScanResult result = BAMBU_SCAN_OK;
+
   for (int sector = 0; sector < 16; sector++) {
     uint8_t sec_blocks[4][16];
     bool ok = readSector(sector, scan_buf.keys[sector], uid, sec_blocks);
+
+    if (!ok && sector == 0) {
+      Serial.println("Sector 0 read failed! Fast-failing Bambu scan.");
+      result = BAMBU_SCAN_FAIL_SECTOR_0;
+      break;
+    }
+    if (!ok) {
+      result = BAMBU_SCAN_FAIL_OTHER;
+    }
+
     for (int b = 0; b < 3; b++) {
       int block_num = sector * 4 + b;
       if (ok) {
@@ -131,4 +143,6 @@ void scanTag(uint8_t *uid, uint8_t uid_len) {
     logSDf("NFC: retry read worse (%d < %d blocks), previous data kept",
       new_blocks, prev_blocks);
   }
+
+  return result;
 }
