@@ -140,11 +140,22 @@ bool backendCanHoldSecondTag();
 // This scale's id in Spoolman's reader list, stable across reboots.
 const char* backendReaderId();
 
-// Reports a scan and resolves it in one request - see spoolmanTagScan(). A
-// null match means "no native tag", so the caller must still try the extra
-// field chain before calling a spool unknown.
-int  backendTagScan(const char* base_url, const char* uid, const char* format,
-       JsonDocument& doc, uint32_t timeout_ms = 8000,
+// Whether this backend wants to hear about a scan at all. True for Spoolman
+// and FilaMan, which both let a browser follow this reader to the spool it just
+// read; false for BamBuddy, which has no such route.
+bool backendReportsScans();
+
+// Reports a scan and resolves it in one request - see spoolmanTagScan() and
+// filamanTagScan(). A null match means "no native tag", so the caller must
+// still try the extra field chain before calling a spool unknown.
+//
+// Only Spoolman embeds the spool in its answer, which is why it can replace the
+// whole lookup. FilaMan answers with the match alone and the caller looks the
+// spool up as it always did; announcing the scan is the point there.
+// alt_uid is the same tag written the other way, or null. Only FilaMan uses it;
+// Spoolman keys on the hardware uid alone.
+int  backendTagScan(const char* base_url, const char* uid, const char* alt_uid,
+       const char* format, JsonDocument& doc, uint32_t timeout_ms = 8000,
        DeserializationError* out_err = nullptr);
 
 // 201 links, 409 means another spool holds the UID and out_conflict_spool_id

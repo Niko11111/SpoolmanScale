@@ -324,9 +324,26 @@ const char* backendReaderId() {
   return id;
 }
 
-int backendTagScan(const char* base_url, const char* uid, const char* format,
-                   JsonDocument& doc, uint32_t timeout_ms, DeserializationError* out_err) {
+bool backendReportsScans() {
+  return backendHasNativeTags() || backendMode() == BACKEND_FILAMAN;
+}
+
+int backendTagScan(const char* base_url, const char* uid, const char* alt_uid,
+                   const char* format, JsonDocument& doc, uint32_t timeout_ms,
+                   DeserializationError* out_err) {
   HttpStallTime stall;   // the loop stands still for this call
+  if (backendMode() == BACKEND_FILAMAN) {
+    // Not base_url: every caller here passes cfg_spoolman_base, which is the
+    // Spoolman address and is empty on a FilaMan setup. Passing it on made the
+    // call return -1 before it ever reached the network.
+    // Same reader identity Spoolman gets, so a browser binds to this scale by
+    // one name whichever backend it is talking to.
+    const char* fm_name = deviceLabel();
+    return filamanTagScan(backendBaseUrl(), filamanDeviceToken(), uid, alt_uid,
+                          backendReaderId(),
+                          (fm_name && fm_name[0]) ? fm_name : "SpoolmanScale",
+                          format, doc, timeout_ms, out_err);
+  }
   if (!backendHasNativeTags()) return notSupported("TagScan");
   // The name is what Spoolman's reader picker shows. Two scales would
   // otherwise sit there under one label, distinguishable only by the reader id

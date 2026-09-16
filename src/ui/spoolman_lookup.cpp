@@ -866,7 +866,9 @@ void spoolmanRescanTick() {
   }
 
   JsonDocument doc;
-  int code = backendTagScan(cfg_spoolman_base, uid, fmt[0] ? fmt : nullptr,
+  // No second spelling here: the rescan only ever holds the uid it is named
+  // after, and the tray notation it came from is long out of scope.
+  int code = backendTagScan(cfg_spoolman_base, uid, nullptr, fmt[0] ? fmt : nullptr,
                             doc, 5000, nullptr);
   logSDf("Rescan: uid=%s re-announced, matched=%d HTTP %d",
          uid, (int)(doc["matched_spool_id"] | 0), code);
@@ -998,9 +1000,12 @@ void querySpoolman(const char* tray_uuid) {
   // to the full scan.
   bool have_result = false;
 
-  // Spoolman's native tag lookup, when the server has it. One request that
-  // resolves the tag and returns the spool with it, so it replaces the filter
-  // search, the verification pass and the follow-up GET in one go.
+  // Telling the server which tag was just read. On Spoolman this is also the
+  // lookup: one request resolves the tag and returns the spool with it, so it
+  // replaces the filter search, the verification pass and the follow-up GET in
+  // one go. On FilaMan only the announcement lands - it answers with the match
+  // but not the spool, so the chain below still runs. Either way a browser
+  // watching this reader can now follow it to the spool.
   //
   // A null match is not proof of absence: it means "no native tag", and a
   // spool bound through an extra field is invisible here. That is why the
@@ -1010,14 +1015,18 @@ void querySpoolman(const char* tray_uuid) {
   // probe needs the network and boot does not have it yet.
   tagFieldAutoSelect();
 
-  if (backendHasNativeTags()) {
+  if (backendReportsScans()) {
     JsonDocument scan(&psram_alloc);
     DeserializationError serr = DeserializationError::Ok;
     // The chip uid, not the tray uuid: Spoolman's relation keys on hardware
     // uids, and so do the phone, the ESPHome readers and Spoolman's own Add
     // tag dialog. See the identity block in tag_field.h.
     const char* scan_uid = tagNativeUid(tray_uuid);
-    int scode = backendTagScan(cfg_spoolman_base, scan_uid,
+    // The tray notation goes along as the second spelling. A Bambu spool the
+    // driver imported is on file under it, while one this scale linked is on
+    // file under the chip uid, and the scale cannot know which - so it offers
+    // both. Ignored by Spoolman, which keys on the hardware uid alone.
+    int scode = backendTagScan(cfg_spoolman_base, scan_uid, tray_uuid,
                                tagFormatName(tray_uuid), scan, 8000, &serr);
     if (scode == 200 && !serr && !scan["spool"].isNull()) {
       // Reshaped into the one element array the rest of this function reads,
@@ -1029,7 +1038,11 @@ void querySpoolman(const char* tray_uuid) {
       logSDf("Backend: native tag scan hit, uid=%s spool %d",
              scan_uid, (int)(scan["matched_spool_id"] | 0));
     } else if (scode == 200) {
-      logSDf("Backend: native tag scan, no native tag for uid=%s", scan_uid);
+      // FilaMan always lands here: it reports the match but never embeds the
+      // spool, so the chain below does the looking up and this call was the
+      // announcement. On Spoolman it means the uid has no native tag.
+      logSDf("Backend: tag scan announced, uid=%s matched=%d, no spool embedded",
+             scan_uid, (int)(scan["matched_spool_id"] | 0));
     } else if (scode != BACKEND_NOT_SUPPORTED) {
       logSDf("Backend: native tag scan failed, code=%d err=%s", scode, serr.c_str());
     }

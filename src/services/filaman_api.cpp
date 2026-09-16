@@ -1059,6 +1059,46 @@ int filamanReportWeight(const char* base_url, const char* device_token,
   return (code >= 200 && code < 300) ? 200 : code;
 }
 
+int filamanTagScan(const char* base_url, const char* device_token, const char* uid,
+                   const char* alt_uid, const char* reader_id, const char* reader_name,
+                   const char* format, JsonDocument& doc, uint32_t timeout_ms,
+                   DeserializationError* out_err) {
+  if (out_err) *out_err = DeserializationError::Ok;
+  if (!hasBaseUrl(base_url) || !uid || !uid[0]) return -1;
+  if (!device_token || !device_token[0]) {
+    // Distinct from -1 so the caller can tell "not set up" from "call failed".
+    logSD("FilaMan: no device token, scan not announced");
+    return FILAMAN_NO_DEVICE_TOKEN;
+  }
+
+  JsonDocument body;
+  body["uid"] = uid;
+  if (alt_uid && alt_uid[0] && strcmp(alt_uid, uid) != 0) body["alt_uid"] = alt_uid;
+  if (reader_id   && reader_id[0])   body["reader_id"] = reader_id;
+  if (reader_name && reader_name[0]) body["name"]      = reader_name;
+  if (format && format[0]) body["format"] = format;
+  String payload;
+  serializeJson(body, payload);
+
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/tag/scan");
+  http.setTimeout(timeout_ms);
+  http.addHeader("Authorization", String("Device ") + device_token);
+  http.addHeader("Content-Type", "application/json");
+  int code = http.POST(payload);
+  if (code <= 0) { http.end(); return code; }
+
+  DeserializationError err = deserializeJson(doc, *http.getStreamPtr());
+  http.end();
+  if (out_err) *out_err = err;
+  if (code < 200 || code >= 300) {
+    logSDf("FilaMan: tag scan -> HTTP %d", code);
+  }
+  // The status is what the caller acts on; an unparseable body is reported
+  // through out_err rather than turned into a failure.
+  return code;
+}
+
 const char* filamanStatusKey(int status_id) {
   static const char* const KEYS[FILAMAN_STATUS_COUNT] = {
     "new", "opened", "drying", "active", "empty", "archived"

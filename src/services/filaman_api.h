@@ -185,6 +185,26 @@ int filamanReportWeight(const char* base_url, const char* device_token,
                         int spool_id, const char* tag_uuid, float measured_g,
                         uint32_t timeout_ms = 8000);
 
+// Announces a tag the scale has just read, so a browser watching this reader
+// can follow it to the spool. FilaMan records the scan in its reader table -
+// the database is the hand-off, because its event bus is per Gunicorn worker
+// and an event would reach only the browsers on one of them.
+//
+// The answer carries matched_spool_id, so this doubles as a lookup, but unlike
+// Spoolman's /tag/scan it does not embed the spool: the caller still runs its
+// normal lookup. Device token, like the weight report.
+//
+// alt_uid is the other spelling of the same tag, when there is one. A Bambu
+// spool is on file under its tray uuid when the driver imported it and under
+// the chip uid when this scale linked it, and which one a server keeps is not
+// something the scale can know - so it offers both and lets the server match.
+// reader_id and reader_name are the same pair Spoolman's /tag/scan takes: a
+// stable id a browser can bind to, and the name its picker shows.
+int filamanTagScan(const char* base_url, const char* device_token, const char* uid,
+                   const char* alt_uid, const char* reader_id, const char* reader_name,
+                   const char* format, JsonDocument& doc, uint32_t timeout_ms = 5000,
+                   DeserializationError* out_err = nullptr);
+
 // Result of a remotely triggered tag operation, answering a trigger that
 // arrived on /api/v1/rfid/write. Authenticated with the device token, not the
 // API key, exactly like the heartbeat.
