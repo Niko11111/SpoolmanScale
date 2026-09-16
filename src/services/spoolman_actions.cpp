@@ -185,7 +185,7 @@ static void unlinkAllNativeTags(int spool_id, const char* fallback_uid) {
   }
 }
 
-bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_values) {
+bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_values, int slot) {
   if (!wifi_ok) return false;
   const bool clearing = (!uuid || !uuid[0]);
   sm_tag_conflict_spool = 0;   // stale from an earlier attempt would mislead
@@ -349,7 +349,7 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
   // keeps its tags - the selected extra field on Spoolman, rfid_uid on
   // FilaMan, the device protocol on BamBuddy - formatted for that field.
   Serial.printf("PATCH tag: '%s'%s\n", uuid ? uuid : "", clearing ? "  (UNLINK)" : "");
-  int code = backendPatchSpoolTag(cfg_spoolman_base, spool_id, uuid);
+  int code = backendPatchSpoolTag(cfg_spoolman_base, spool_id, uuid, slot);
   Serial.printf("patchSpoolTag: HTTP %d\n", code);
   // The uuid is part of the log line on purpose. An empty one is a valid
   // unlink and a silent disaster for a link, and the old line could not tell

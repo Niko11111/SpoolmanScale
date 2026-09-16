@@ -54,7 +54,7 @@ BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
   scan_buf.uid_str[sizeof(scan_buf.uid_str)-1] = '\0';
 
   Serial.printf("\n=== Tag gefunden: %s ===\n", scan_buf.uid_str);
-  logSDf("NFC: Bambu tag found UID=%s", scan_buf.uid_str);
+  logSDf("NFC: 4-byte MIFARE tag found UID=%s", scan_buf.uid_str);
 
   Serial.println("Deriving keys...");
   if (!deriveKeys(uid, uid_len, scan_buf.keys)) {

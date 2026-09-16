@@ -205,6 +205,7 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   JsonObject extra = dst["extra"].to<JsonObject>();
   JsonVariantConst cf = src["custom_fields"];
   const char* uid = src["rfid_uid"] | "";
+  const char* uid2 = src["rfid_uid_2"] | "";
   if (uid[0]) {
     extra["tag"] = uid;
   } else {
@@ -220,6 +221,7 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
       extra["tag_legacy"] = true;
     }
   }
+  if (uid2[0]) extra["tag2"] = uid2;
 
   // What the Bambu Lab plugin binds a spool by. It never touches rfid_uid -
   // its README says so and leaves that field to external readers - so these
@@ -684,16 +686,17 @@ static int filamanClearLegacyTag(const char* base_url, const char* api_key, int 
 }
 
 int filamanPatchRfidUid(const char* base_url, const char* api_key, int spool_id,
-                        const char* uuid, uint32_t timeout_ms) {
+                        const char* uuid, int slot, uint32_t timeout_ms) {
   if (spool_id <= 0) return -1;
   JsonDocument body;
+  const char* key = (slot == 2) ? "rfid_uid_2" : "rfid_uid";
   if (uuid && uuid[0]) {
-    body["rfid_uid"] = uuid;
+    body[key] = uuid;
   } else {
     // Unlink. An empty string is not the same as no value here: FilaMan
     // answers {"rfid_uid": ""} with HTTP 500 and keeps the old tag, while
     // null clears it. Verified against a live 1.2.36 instance.
-    body["rfid_uid"] = nullptr;
+    body[key] = nullptr;
   }
   String payload;
   serializeJson(body, payload);
@@ -735,7 +738,7 @@ static int filamanSpoolHoldingTag(const char* base_url, const char* api_key,
 
 int filamanLinkRfidUid(const char* base_url, const char* api_key, int spool_id,
                        const char* uuid, char* out_note, size_t note_size,
-                       uint32_t timeout_ms) {
+                       int slot, uint32_t timeout_ms) {
   if (out_note && note_size) out_note[0] = '\0';
   if (spool_id <= 0 || !uuid || !uuid[0]) return -1;
 
@@ -774,10 +777,10 @@ int filamanLinkRfidUid(const char* base_url, const char* api_key, int spool_id,
       snprintf(out_note, note_size, "took the tag off spool %d", holder);
   }
 
-  if (old_uid[0]) {
+  if (old_uid[0] && slot == 1) {
     filamanPatchCustomField(base_url, api_key, spool_id, "previous_tag", old_uid, timeout_ms);
   }
-  return filamanPatchRfidUid(base_url, api_key, spool_id, hex, timeout_ms);
+  return filamanPatchRfidUid(base_url, api_key, spool_id, hex, slot, timeout_ms);
 }
 
 int filamanPatchCustomField(const char* base_url, const char* api_key, int spool_id,

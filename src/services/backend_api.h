@@ -189,10 +189,10 @@ int  backendCreateSpoolField(const char* base_url, const char* field_name,
 // unique, so the old owner is unlinked first and the target's previous tag is
 // kept in custom_fields.previous_tag. out_note may get a short explanation.
 int  backendLinkSpoolTag(const char* base_url, int spool_id, const char* uuid,
-       char* out_note = nullptr, size_t note_size = 0, uint32_t timeout_ms = 8000);
+       char* out_note = nullptr, size_t note_size = 0, int slot = 1, uint32_t timeout_ms = 8000);
 
 int  backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
-       uint32_t timeout_ms = 5000);
+       int slot = 1, uint32_t timeout_ms = 5000);
 
 // Weight update. The two backends want different numbers:
 //   Spoolman takes the finished remaining weight

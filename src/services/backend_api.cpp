@@ -570,7 +570,7 @@ int backendCreateSpoolField(const char* base_url, const char* field_name,
 // ============================================================
 
 int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
-                         uint32_t timeout_ms) {
+                         int slot, uint32_t timeout_ms) {
   switch (backendMode()) {
     case BACKEND_FILAMAN: {
       // Both tag types go into the native rfid_uid. An empty uuid unlinks.
@@ -580,11 +580,11 @@ int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
       // own database and missed the server side ?search= for anything not
       // written by this scale.
       if (!uuid || !uuid[0]) {
-        return filamanPatchRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, nullptr, timeout_ms);
+        return filamanPatchRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, nullptr, slot, timeout_ms);
       }
       char hex[40];
       tagUidNormalize(uuid, hex, sizeof(hex));
-      return filamanPatchRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, hex, timeout_ms);
+      return filamanPatchRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, hex, slot, timeout_ms);
     }
     case BACKEND_BAMBUDDY: {
       // An empty uuid means unlink, and that is a different request: the
@@ -617,15 +617,15 @@ int backendPatchSpoolTag(const char* base_url, int spool_id, const char* uuid,
 }
 
 int backendLinkSpoolTag(const char* base_url, int spool_id, const char* uuid,
-                        char* out_note, size_t note_size, uint32_t timeout_ms) {
+                        char* out_note, size_t note_size, int slot, uint32_t timeout_ms) {
   if (out_note && note_size) out_note[0] = '\0';
   if (backendIsFilaMan()) {
     return filamanLinkRfidUid(backendBaseUrl(), filamanApiKey(), spool_id, uuid,
-                              out_note, note_size, timeout_ms);
+                              out_note, note_size, slot, timeout_ms);
   }
   // Only FilaMan's rfid_uid is unique. The rest take the ordinary write,
   // which already knows how to reach each backend.
-  return backendPatchSpoolTag(base_url, spool_id, uuid, timeout_ms);
+  return backendPatchSpoolTag(base_url, spool_id, uuid, slot, timeout_ms);
 }
 
 int backendPatchSpoolRemaining(const char* base_url, int spool_id, float remaining,

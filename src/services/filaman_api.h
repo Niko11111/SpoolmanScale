@@ -91,14 +91,14 @@ int filamanGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
 
 // Sets rfid_uid. Used for link, and with an empty uuid for unlink.
 int filamanPatchRfidUid(const char* base_url, const char* api_key, int spool_id,
-                        const char* uuid, uint32_t timeout_ms = 5000);
+                        const char* uuid, int slot = 1, uint32_t timeout_ms = 5000);
 
 // Link that clears the way first. rfid_uid is UNIQUE, so claiming a UID that
 // another spool still holds fails with HTTP 500. Takes it off that spool,
 // keeps whatever the target had in custom_fields.previous_tag, then patches.
 int filamanLinkRfidUid(const char* base_url, const char* api_key, int spool_id,
                        const char* uuid, char* out_note, size_t note_size,
-                       uint32_t timeout_ms = 8000);
+                       int slot = 1, uint32_t timeout_ms = 8000);
 
 // Writes one key inside custom_fields while preserving the others.
 // Costs a GET before the PATCH, which is why nothing else uses this path.

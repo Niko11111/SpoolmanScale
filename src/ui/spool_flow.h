@@ -17,7 +17,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu);
 void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
                     const char* link_uuid, bool add_mode = false);
 void showWarnPopupB(int spool_id, bool is_bambu);
-void doLinkPatch(int spool_id, bool is_bambu);
+void doLinkPatch(int spool_id, bool is_bambu, int slot = 1);
 void showVendorList();
 void showMaterialList(const char* vendor_name);
 void showMaterialSubList(const char* vendor_name, const char* material_prefix);

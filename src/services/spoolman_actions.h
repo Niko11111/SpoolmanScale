@@ -24,7 +24,7 @@ void patchArchiveSpool();
 // Returns false when nothing was written: the list was full, or the request
 // failed. An unlink always reports true.
 bool patchSpoolTag(int spool_id, const char* uuid,
-                   const char* const* field_values = nullptr);
+                   const char* const* field_values = nullptr, int slot = 1);
 
 // Unlink. `all` clears every tag field the spool is bound through; otherwise
 // only `uid` is taken out of the list field that holds it, leaving the other

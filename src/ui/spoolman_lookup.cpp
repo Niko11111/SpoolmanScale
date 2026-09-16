@@ -179,6 +179,9 @@ static int spoolTagRank(JsonObjectConst spool, const char* uid) {
     if (storedNamesTag(raw, spec.is_list, uid)) return TAG_RANK_FIELD;
   }
 
+  const char* tag2 = extra["tag2"] | (const char*)nullptr;
+  if (tag2 && storedNamesTag(tag2, false, uid)) return TAG_RANK_FIELD;
+
   // ---- FilaMan's Bambu Lab plugin, below everything above ----
   //
   // Both of these can name a spool that the tag fields say nothing about, and
@@ -745,7 +748,11 @@ void spoolmanRescanTick() {
 
 void querySpoolman(const char* tray_uuid) {
   if (!wifi_ok) return;
-  logSDf("Spoolman: query tray_uuid=%.16s...", tray_uuid ? tray_uuid : "");
+  if (tray_uuid && strlen(tray_uuid) == 32) {
+    logSDf("Spoolman: query tray_uuid=%.16s...", tray_uuid);
+  } else {
+    logSDf("Spoolman: query tag=%s...", tray_uuid ? tray_uuid : "");
+  }
 
   // Reset all Spoolman labels before new query
   lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT));

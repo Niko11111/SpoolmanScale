@@ -69,6 +69,7 @@ struct UnlinkedSpool {
   // values are stored as empty rather than shortened, see the fetch below -
   // a truncated list would send the write somewhere it does not belong.
   char  tag_values[TAG_FIELD_COUNT][CARD_UIDS_MAX];
+  char  tag2[40];      // extra.tag2 (FilaMan's rfid_uid_2)
   int   filament_id;   // filament.id (for copy flow)
   float spool_weight;  // spool_weight (for copy flow)
 };
@@ -290,6 +291,15 @@ static bool linkSpoolBound(const UnlinkedSpool& s) {
 static bool linkSpoolSkip(const UnlinkedSpool& s) {
   if (copy_flow_via_list && copy_flow_archived) return false;
   if (link_cu_ok) return false;
+
+  if (backendMode() == BACKEND_FILAMAN) {
+    // If FilaMan, only skip if BOTH slots are occupied. If one is free, we can still link.
+    bool slot1_full = (s.tag_values[TAG_FIELD_TAG][0] != '\0');
+    bool slot2_full = (s.tag2[0] != '\0');
+    if (slot1_full && slot2_full) return true;
+    return false;
+  }
+
   return linkSpoolBound(s);
 }
 
@@ -406,8 +416,14 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     // other flange from the scale, and WarnPopupA catches the selection before
     // anything is written. This used to ask for card_uids specifically, which
     // left out every spool bound through any other field.
-    if (!archived_only && !link_cu_ok && spoolHasAnyTag(spool)) {
-      skipped_tag++; count_linked++; continue;
+    if (!archived_only && !link_cu_ok) {
+      if (backendMode() == BACKEND_FILAMAN) {
+        const char* u1 = spool.containsKey("extra") ? (spool["extra"]["tag"] | "") : "";
+        const char* u2 = spool.containsKey("extra") ? (spool["extra"]["tag2"] | "") : "";
+        if (u1[0] && u2[0]) { skipped_tag++; count_linked++; continue; }
+      } else if (spoolHasAnyTag(spool)) {
+        skipped_tag++; count_linked++; continue;
+      }
     }
 
     String vname = "";
@@ -495,7 +511,15 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
       if (sp_archived) continue;
     }
 
-    if (!archived_only && !link_cu_ok && spoolHasAnyTag(spool)) continue;
+    if (!archived_only && !link_cu_ok) {
+      if (backendMode() == BACKEND_FILAMAN) {
+        const char* u1 = spool.containsKey("extra") ? (spool["extra"]["tag"] | "") : "";
+        const char* u2 = spool.containsKey("extra") ? (spool["extra"]["tag2"] | "") : "";
+        if (u1[0] && u2[0]) continue;
+      } else if (spoolHasAnyTag(spool)) {
+        continue;
+      }
+    }
 
     String vname = "";
     if (spool["filament"].containsKey("vendor") && !spool["filament"]["vendor"].isNull())
@@ -554,6 +578,9 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
                key, s.id, (int)v.length());
       }
     }
+    const char* tag2_raw = spool.containsKey("extra") ? (spool["extra"]["tag2"] | "") : "";
+    strncpy(s.tag2, tag2_raw, sizeof(s.tag2)-1);
+    s.tag2[sizeof(s.tag2)-1] = '\0';
 
     String fname = spool["filament"]["name"] | String("?");
     fname.trim();
@@ -633,7 +660,7 @@ static void closeLinkOverlays() {
 // it covers.
 static int tagwrite_ask_spool_id = 0;
 
-void doLinkPatch(int spool_id, bool is_bambu) {
+void doLinkPatch(int spool_id, bool is_bambu, int slot) {
   const char* link_uuid = is_bambu ? g_tag.tray_uuid : link_tag_uid;
   Serial.printf("doLinkPatch: ID=%d uuid='%s'\n", spool_id, link_uuid ? link_uuid : "");
 
@@ -662,7 +689,7 @@ void doLinkPatch(int spool_id, bool is_bambu) {
   // Both stores go along: the list is appended to when there is one, and the
   // tag field's UID becomes the list's first entry when there is not. Null for
   // an unbound spool, and for every spool at all while the switch is off.
-  if (!patchSpoolTag(spool_id, link_uuid, linkTargetValues(spool_id))) {
+  if (!patchSpoolTag(spool_id, link_uuid, linkTargetValues(spool_id), slot)) {
     // Nothing was written - the list was full, or the request failed. Saying
     // nothing here would look like a successful link right up to the next scan.
     logSDf("LINK ABORT: tag field of spool %d not written", spool_id);
@@ -820,47 +847,70 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
   warn_a_spool_id = spool_id;
   warn_a_is_bambu = is_bambu;
 
+  bool is_filaman_dual = false;
+  if (backendMode() == BACKEND_FILAMAN) {
+    for (int i = 0; i < link_spool_count; i++) {
+      if (link_spools[i].id == spool_id) {
+        if (!link_spools[i].tag2[0]) is_filaman_dual = true;
+        break;
+      }
+    }
+  }
+
   lv_obj_t *btn_force = lv_btn_create(box);
   lv_obj_set_size(btn_force, 420, 44);
   lv_obj_set_pos(btn_force, 10, 114);
-  // Adding is not the destructive act overwriting is, so it gets the calm
-  // green of a normal confirmation rather than the warning amber.
-  lv_obj_set_style_bg_color(btn_force, lv_color_hex(add_mode ? 0x1a3020 : 0x3a2800), 0);
-  lv_obj_set_style_bg_color(btn_force, lv_color_hex(add_mode ? 0x2a5030 : 0x5a4000), LV_STATE_PRESSED);
+  bool btn1_green = add_mode || is_filaman_dual;
+  lv_obj_set_style_bg_color(btn_force, lv_color_hex(btn1_green ? 0x1a3020 : 0x3a2800), 0);
+  lv_obj_set_style_bg_color(btn_force, lv_color_hex(btn1_green ? 0x2a5030 : 0x5a4000), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_force, 8, 0);
   lv_obj_set_style_shadow_width(btn_force, 0, 0);
   lv_obj_set_style_border_width(btn_force, 0, 0);
   lv_obj_add_event_cb(btn_force, [](lv_event_t *e) {
+    bool is_dual = (bool)(intptr_t)lv_event_get_user_data(e);
     if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
     if (scr_link_id)     { lv_obj_del(scr_link_id);     scr_link_id = nullptr; }
-    doLinkPatch(warn_a_spool_id, warn_a_is_bambu);
-  }, LV_EVENT_CLICKED, NULL);
+    doLinkPatch(warn_a_spool_id, warn_a_is_bambu, is_dual ? 2 : 1);
+  }, LV_EVENT_CLICKED, (void*)(intptr_t)is_filaman_dual);
   lv_obj_t *lbl_force = lv_label_create(btn_force);
-  lv_label_set_text(lbl_force, T(add_mode ? STR_BTN_ADD_UID : STR_BTN_OVERWRITE));
-  lv_obj_set_style_text_color(lbl_force, lv_color_hex(add_mode ? 0x40c080 : 0xf0b838), 0);
+  lv_label_set_text(lbl_force, T(add_mode ? STR_BTN_ADD_UID : (is_filaman_dual ? STR_BTN_ADD_UID : STR_BTN_OVERWRITE)));
+  lv_obj_set_style_text_color(lbl_force, lv_color_hex(btn1_green ? 0x40c080 : 0xf0b838), 0);
   lv_obj_set_style_text_font(lbl_force, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_force);
 
   lv_obj_t *btn_retry = lv_btn_create(box);
   lv_obj_set_size(btn_retry, 420, 44);
   lv_obj_set_pos(btn_retry, 10, 166);  // 114+44+8
-  lv_obj_set_style_bg_color(btn_retry, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_retry, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  if (is_filaman_dual) {
+    lv_obj_set_style_bg_color(btn_retry, lv_color_hex(0x3a2800), 0);
+    lv_obj_set_style_bg_color(btn_retry, lv_color_hex(0x5a4000), LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(btn_retry, 0, 0);
+  } else {
+    lv_obj_set_style_bg_color(btn_retry, lv_color_hex(0x0a1828), 0);
+    lv_obj_set_style_bg_color(btn_retry, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(btn_retry, 1, 0);
+    lv_obj_set_style_border_color(btn_retry, lv_color_hex(0x1a3060), 0);
+  }
   lv_obj_set_style_radius(btn_retry, 8, 0);
   lv_obj_set_style_shadow_width(btn_retry, 0, 0);
-  lv_obj_set_style_border_width(btn_retry, 1, 0);
-  lv_obj_set_style_border_color(btn_retry, lv_color_hex(0x1a3060), 0);
   lv_obj_add_event_cb(btn_retry, [](lv_event_t *e) {
-    logSD("BTN: WarnA -> retry IdInput (flag)");
-    if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
-    if (scr_link_id)     { lv_obj_del(scr_link_id);     scr_link_id     = nullptr; }
-    link_id_input[0] = '\0';
-    link_id_lookup_pending = 0;
-    show_id_input_rebuild = true;  // loop rebuilds IdInputPopup safely
-  }, LV_EVENT_CLICKED, NULL);
+    bool is_dual = (bool)(intptr_t)lv_event_get_user_data(e);
+    if (is_dual) {
+      if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
+      if (scr_link_id)     { lv_obj_del(scr_link_id);     scr_link_id = nullptr; }
+      doLinkPatch(warn_a_spool_id, warn_a_is_bambu, 1);
+    } else {
+      logSD("BTN: WarnA -> retry IdInput (flag)");
+      if (scr_link_warn_a) { lv_obj_del(scr_link_warn_a); scr_link_warn_a = nullptr; }
+      if (scr_link_id)     { lv_obj_del(scr_link_id);     scr_link_id     = nullptr; }
+      link_id_input[0] = '\0';
+      link_id_lookup_pending = 0;
+      show_id_input_rebuild = true;  // loop rebuilds IdInputPopup safely
+    }
+  }, LV_EVENT_CLICKED, (void*)(intptr_t)is_filaman_dual);
   lv_obj_t *lbl_retry = lv_label_create(btn_retry);
-  lv_label_set_text(lbl_retry, T(STR_ENTER_NEW_ID));
-  lv_obj_set_style_text_color(lbl_retry, lv_color_hex(0xc8d8f0), 0);
+  lv_label_set_text(lbl_retry, T(is_filaman_dual ? STR_BTN_OVERWRITE : STR_ENTER_NEW_ID));
+  lv_obj_set_style_text_color(lbl_retry, lv_color_hex(is_filaman_dual ? 0xf0b838 : 0xc8d8f0), 0);
   lv_obj_set_style_text_font(lbl_retry, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_retry);
 
@@ -1075,6 +1125,10 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
         s.tag_values[f][CARD_UIDS_MAX - 1] = '\0';
       }
     }
+    const char* tag2_raw = doc.containsKey("extra") ? (doc["extra"]["tag2"] | "") : "";
+    strncpy(s.tag2, tag2_raw, sizeof(s.tag2)-1);
+    s.tag2[sizeof(s.tag2)-1] = '\0';
+
     String mat = doc["filament"]["material"] | String("");
     mat.trim(); strncpy(s.material, mat.c_str(), sizeof(s.material)-1);
     s.material[sizeof(s.material)-1] = '\0';
@@ -1113,7 +1167,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     showWarnPopupA(entered_id, existing_cu.c_str(), is_bambu, "", false);
     return;
   }
-  if (is_bambu && g_tag.material[0]) {
+  if (g_tag.material[0]) {
     String sm_mat = doc["filament"]["material"] | String("");
     sm_mat.trim();
     if (sm_mat.length() >= 3 && strlen(g_tag.material) >= 3) {
@@ -1691,7 +1745,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
               snprintf(copy_confirm_name, sizeof(copy_confirm_name), "%s %s (%s)", cs.material, cs.name, cs.vendor);
           }
           copy_confirm_pending = true;
-        } else if (link_cu_ok && linkTargetBase(link_spools[cidx].id)) {
+        } else if ((link_cu_ok || backendMode() == BACKEND_FILAMAN) && linkTargetBase(link_spools[cidx].id)) {
           // Only bound spools get a second dialog, and only because they are
           // the ones the list would have hidden before the switch existed.
           // The confirmation behind us says which spool, this one says that it
