@@ -4,6 +4,7 @@
 #include "app/app_state.h"
 #include "services/backend.h"
 #include "services/breadcrumb.h"
+#include "services/prefs_store.h"
 
 #include "pins.h"
 
@@ -21,6 +22,12 @@
 static SPIClass spiSD(HSPI);
 bool sd_available = false;
 bool sd_verbose = false;
+bool sd_logging = true;
+
+// Absent means on: a device that never touched the switch keeps logging
+// exactly as it did before the switch existed.
+#define SD_LOG_PREF_KEY "sd_log"
+
 // How many bytes the file named below already holds. A counter rather than a
 // question to the card on every line, because this check sits in front of
 // every single log call.
@@ -208,7 +215,7 @@ void logSD(const char* msg) {
     stamp[sizeof(stamp) - 1] = '\0';
   }
 
-  if (!sd_available) return;
+  if (!sd_available || !sd_logging) return;
   if (!onLoopTask()) { queueLine(stamp, msg); return; }
   sdWriteLine(stamp, msg);
 }
@@ -309,7 +316,7 @@ void writeBootBlock(const char* boot_or_reboot) {
            crumbPrevious(), (unsigned long)(crumbPreviousUptimeMs() / 1000));
   }
 
-  if (!sd_available) return;
+  if (!sd_available || !sd_logging) return;
 
   String fname = getCurrentLogFilename();
   File f = SD.open(fname.c_str(), FILE_APPEND);
@@ -421,6 +428,9 @@ void cleanOldLogs() {
 void initSD() {
   // setup() runs on the same task loop() does, so this is the loop task.
   loopTaskRemember();
+  // Before the card is looked at, so the boot block already knows whether it
+  // is allowed to write.
+  sd_logging = prefsGetBool(SD_LOG_PREF_KEY, true);
   spiSD.begin(hw_pins::SD_SCK, hw_pins::SD_MISO, hw_pins::SD_MOSI, hw_pins::SD_CS);
   if (SD.begin(hw_pins::SD_CS, spiSD)) {
     sd_available = true;
@@ -434,10 +444,25 @@ void initSD() {
       case CARD_NONE: typeStr = "NONE"; break;
     }
     uint64_t cardSize = SD.cardSize() / (1024 * 1024);
-    Serial.printf("SD OK: type=%s size=%lluMB verbose=%s\n",
-      typeStr, cardSize, sd_verbose ? "yes" : "no");
+    Serial.printf("SD OK: type=%s size=%lluMB log=%s verbose=%s\n",
+      typeStr, cardSize, sd_logging ? "yes" : "no", sd_verbose ? "yes" : "no");
   } else {
     Serial.println("SD: not available (card missing or init failed)");
     sd_available = false;
   }
+}
+
+bool sdLoggingSet(bool on) {
+  if (on == sd_logging) return true;
+  if (!prefsPutBool(SD_LOG_PREF_KEY, on)) return false;
+  // The last line before the card goes quiet says why it did, so a file that
+  // simply stops is not read as a crash. Both lines reach the ring as well.
+  if (on) {
+    sd_logging = true;
+    logSD("SD logging: switched on");
+  } else {
+    logSD("SD logging: switched off");
+    sd_logging = false;
+  }
+  return true;
 }

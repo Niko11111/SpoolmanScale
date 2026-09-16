@@ -57,7 +57,7 @@ static lv_obj_t* addRow(int index, const char *label) {
 // what they are about to get.
 static void ipBarModeText(char *buf, size_t len) {
   if (g_ip_bar_mode == IP_BAR_DEVICE)       copyT(buf, len, STR_IP_BAR_DEVICE);
-  else if (g_ip_bar_mode == IP_BAR_BACKEND) strncpy(buf, backendName(), len - 1);
+  else if (g_ip_bar_mode == IP_BAR_BACKEND) snprintf(buf, len, "%s", backendName());
   // Reads the same in German and English, so it stays a literal - the same
   // reasoning the row labels at the top of this file are kept literal for.
   // No longer ".local": the bar shows the device label, and the suffix it

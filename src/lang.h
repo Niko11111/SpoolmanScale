@@ -364,6 +364,7 @@ enum StringID {
   STR_AMSV_HUM_PCT,
   STR_AMSV_HUM_LEVEL,
   STR_AMSV_OFFLINE,
+  STR_AMSV_UNKNOWN,
   STR_AMSV_NO_AMS,
   STR_AMSV_NO_PRINTER,
   STR_AMSV_ERR_HTTP,
@@ -372,6 +373,11 @@ enum StringID {
   STR_AMSV_DRYING_TIME,   // "%d C, %d min" - two arguments
   STR_AMSV_DRYING_TEMP,   // "%d C" - one argument
   STR_AMSV_JOB,
+  STR_AMSV_JOB_PAUSED,
+  STR_AMSV_STATE_FINISH,
+  STR_AMSV_STATE_FAILED,
+  STR_AMSV_STATE_IDLE,
+  STR_AMSV_STATE_PREPARE,
   STR_AMSV_PRN_OF,
   STR_AMSV_PICK_HEAD,
   STR_AMSV_ASSIGNED,
@@ -653,6 +659,7 @@ enum StringID {
   STR_W_R_BACKEND,
   STR_W_R_REACHABLE,
   STR_W_R_SCANS,
+  STR_W_R_SDLOG,
   STR_W_R_VERBOSE,
   STR_W_S_READY,
   STR_W_S_MISSING,
@@ -1125,6 +1132,22 @@ enum StringID {
   STR_PORTAL_PAGE_ERR_PASS,
   STR_BB_KEY_MISSING,         // address test: BamBuddy answers, no key yet
   STR_BB_KEY_REJECTED,
+
+  // The AMS view's info mode, and the detail card behind a bay.
+  STR_AMSV_INFO,
+  STR_AMSV_INFO_HINT,
+  STR_AMSV_EXT_NO_PICK,
+  STR_AMSD_BAY,               // "%s - bay %d", the unit name and the tray
+  STR_AMSD_REMAINING,
+  STR_AMSD_OF,                // "%s of %s", two weights already formatted
+  STR_AMSD_NO_WEIGHT,
+  STR_AMSD_NO_SPOOL,
+  STR_AMSD_LOADING,
+  STR_AMSD_FAIL,
+  STR_AMSD_BACKUP,            // "Backup %s", a bay label
+  STR_AMSD_DRIED_Q,           // confirm: record today's drying for this bay
+  STR_AMSD_SAVING,
+  STR_AMSD_WRITE_FAIL,
 
   STR_COUNT
 };

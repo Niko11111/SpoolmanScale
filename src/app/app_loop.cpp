@@ -43,6 +43,8 @@
 #include "services/bambuddy_device.h"
 #include "services/ams_presence.h"
 #include "services/ams_pick.h"
+#include "ui/ams_detail_popup.h"
+#include "ui/status_picker.h"
 #include "ui/ams_view.h"
 #include "services/wifi_manager.h"
 #include "services/improv_serial.h"
@@ -715,9 +717,14 @@ void appLoop() {
     if (scr_info) { lv_obj_del(scr_info); scr_info = nullptr; }
     showInfoScreen();  // builds + shows scr_info
   }
+  // Before the two screens that use it: it releases its overlay in one pass
+  // and hands the answer over in the next, and the handler that acts on that
+  // answer should see it in the same pass rather than the one after.
+  handleStatusPickerDeferredActions();
   handleMoreInfoDeferredActions();
   handleAmsAssignDeferredActions();
   handleAmsViewDeferredActions();
+  handleAmsDetailDeferredActions();
   amsPickTick();
   amsPresenceTick();
   // Watches the reader for the tag on the other flange while its question

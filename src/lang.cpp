@@ -516,6 +516,10 @@ const char* const STRINGS[][2] = {
   // fault in the scale unless the line explains it.
   { "offline, letzter Stand",
     "offline, last known state"                                           },  // STR_AMSV_OFFLINE
+  // Not the same as offline: the server has simply never heard from its
+  // driver. Saying "offline" there blames the printer for the server.
+  { "Status unbekannt",
+    "state unknown"                                                       },  // STR_AMSV_UNKNOWN
   { "Kein AMS gemeldet",
     "No AMS reported"                                                 },  // STR_AMSV_NO_AMS
   { "Kein Drucker gefunden",
@@ -532,6 +536,19 @@ const char* const STRINGS[][2] = {
     "Drying %d °C"                                                     },  // STR_AMSV_DRYING_TEMP
   { "druckt %d%%",
     "printing %d%%"                                                   },  // STR_AMSV_JOB
+  // The printer's own states, in words. Bambu keeps the last job and its
+  // 100 % on the wire after a print until the next one starts, so the
+  // percentage alone would read "printing 100%" for days.
+  { "pausiert bei %d%%",
+    "paused at %d%%"                                                  },  // STR_AMSV_JOB_PAUSED
+  { "Druck fertig",
+    "print finished"                                                  },  // STR_AMSV_STATE_FINISH
+  { "Druck abgebrochen",
+    "print failed"                                                    },  // STR_AMSV_STATE_FAILED
+  { "bereit",
+    "idle"                                                            },  // STR_AMSV_STATE_IDLE
+  { "bereitet vor",
+    "preparing"                                                       },  // STR_AMSV_STATE_PREPARE
   // Which of several printers is on screen. Same in both languages, but
   // it goes through T() so a language that numbers differently can change it.
   { "%d/%d",
@@ -1003,6 +1020,8 @@ const char* const STRINGS[][2] = {
     "Reachable" },  // STR_W_R_REACHABLE
   { "Tags gescannt",
     "Tags scanned" },  // STR_W_R_SCANS
+  { "Protokoll auf SD-Karte",
+    "Log to SD card" },  // STR_W_R_SDLOG
   { "Ausführliches Protokoll",
     "Verbose logging" },  // STR_W_R_VERBOSE
   { "bereit",
@@ -1175,8 +1194,8 @@ const char* const STRINGS[][2] = {
     "Delete this file?" },  // STR_W_LOG_DELETE_ASK
   { "Keine SD-Karte erkannt",
     "No SD card detected" },  // STR_W_LOG_NOSD
-  { "Eine FAT32-formatierte Karte einlegen, um die Diagnoseprotokolle zu aktivieren. Mit Karte dauert der Start rund 20 Sekunden länger.",
-    "Insert a FAT32 formatted card to enable diagnostic logging. Booting with a card takes about 20 seconds longer." },  // STR_W_LOG_NOSD_HINT
+  { "Eine FAT32-formatierte Karte einlegen, um die Diagnoseprotokolle zu aktivieren.",
+    "Insert a FAT32 formatted card to enable diagnostic logging." },  // STR_W_LOG_NOSD_HINT
   { "Noch keine Protokolle.",
     "No logs yet." },  // STR_W_LOG_EMPTY
   { "Firmware",
@@ -1255,8 +1274,8 @@ const char* const STRINGS[][2] = {
     "Weight" },  // STR_W_R_WEIGHT
   { "Konnte nicht geladen werden.",
     "Could not be loaded." },  // STR_W_LOAD_FAIL
-  { "Eine eingelegte SD-Karte verlängert den Start um rund 20 Sekunden. Für den normalen Betrieb ohne Karte laufen lassen und sie nur zum Suchen eines Fehlers einlegen.",
-    "A fitted SD card makes the device take about 20 seconds longer to start. Run it without a card normally and insert one only to chase a fault." },  // STR_W_LOG_NOTE
+  { "Jede Zeile auf der Karte ist ein eigener Schreibzugriff. Läuft alles rund, lässt sich das Protokoll oben abschalten, ohne die Karte zu ziehen. Das Sitzungsprotokoll weiter unten läuft immer weiter.",
+    "Every line on the card is a write of its own. When everything runs fine, switch the log off above instead of pulling the card. The session log further down keeps running either way." },  // STR_W_LOG_NOTE
   { "Sitzungsprotokoll",
     "Session log" },  // STR_W_C_SESSION
   { "Die letzten Zeilen seit dem Start, im Arbeitsspeicher gehalten und beim Neustart weg. Eine SD-Karte braucht es nur, um Protokolle zu behalten.",
@@ -1285,8 +1304,8 @@ const char* const STRINGS[][2] = {
     "Place a writable NTAG on the reader, pick a spool, and write it. Whatever is already on the tag is replaced. Factory tags are usually MIFARE Classic or locked, and can only be read." },  // STR_W_TAG_NOTE
   { "<b>Welcher Tag für welches Format.</b> OpenSpool braucht rund 180 Byte und damit einen <b>NTAG215</b> (496 Byte) oder <b>NTAG216</b> (872 Byte). Auf einen NTAG213 (144 Byte) passt davon nichts, dort geht nur Anycubic ACE, das mit 112 Byte auskommt. Meldet ein Tag keine Größe, rechnet die Waage sicherheitshalber mit den 144 Byte eines NTAG213 - dann den Tag einmal mit einer NFC-App als NDEF formatieren, das trägt die Größe ein.",
     "<b>Which tag for which format.</b> OpenSpool needs about 180 bytes, so it wants an <b>NTAG215</b> (496 bytes) or an <b>NTAG216</b> (872 bytes). None of it fits an NTAG213 (144 bytes), which leaves Anycubic ACE, and that needs only 112. A tag that reports no size at all is treated as the 144 bytes of an NTAG213 to stay safe - format such a tag as NDEF once with any NFC app and it will report its real size." },  // STR_W_TAG_SIZES
-  { "In FilaMan auf den Benutzernamen klicken, dort <b>API keys</b> wählen und einen Schlüssel anlegen. Er wird nur einmal angezeigt, also gleich kopieren. Danach zeigt FilaMan einen sechsstelligen Gerätecode - den unten eintragen und registrieren.",
-    "In FilaMan, click your user name, choose <b>API keys</b> and create a key. It is shown once, so copy it right away. FilaMan then shows a six character device code - enter it below and register." },  // STR_W_FM_SETUP
+  { "FilaMan legt beides an verschiedenen Stellen an und zeigt es jeweils nur einmal.<br><b>API-Key:</b> auf das Zahnrad neben dem Benutzernamen klicken, <b>API Keys</b> öffnen und einen Key erstellen. Oben eintragen und speichern.<br><b>Gerätecode:</b> <b>Admin-Bereich &gt; Geräte</b> öffnen und <b>Gerät erstellen</b> klicken. Den sechsstelligen Code oben eintragen und registrieren.<br>Ein Gerät anlegen kann nur ein Admin. Den Key mit demselben Konto erstellen, sonst lehnt FilaMan die AMS-Zuordnung ab.",
+    "FilaMan creates the two in different places and shows each only once.<br><b>API key:</b> click the gear icon next to your user name, open <b>API Keys</b> and create a key. Enter it above and save.<br><b>Device code:</b> open <b>Admin Panel &gt; Devices</b> and click <b>Create Device</b>. Enter the six character code above and register.<br>Only an admin can create a device. Create the key with the same account, or FilaMan refuses the AMS assignment." },  // STR_W_FM_SETUP
   { "Der Schlüssel steht in BamBuddy unter den Einstellungen. Läuft die Instanz ohne Anmeldung, bleibt das Feld leer.",
     "The key is in BamBuddy under settings. Leave the field empty if the instance runs without authentication." },  // STR_W_BB_SETUP
   { "Strom nicht trennen",
@@ -1927,6 +1946,27 @@ const char* const STRINGS[][2] = {
     "The password has 8 to 64 characters, or stays empty for an open network." },  // STR_PORTAL_PAGE_ERR_PASS
   { "API-Key fehlt noch",        "API key still missing"      },  // STR_BB_KEY_MISSING
   { "API-Key abgelehnt",         "API key rejected"           },  // STR_BB_KEY_REJECTED
+
+  // AMS view: info mode and the detail card
+  { "Info",                      "Info"                       },  // STR_AMSV_INFO
+  { "Fach antippen zeigt die Spule",
+    "Tap a bay to see its spool"                              },  // STR_AMSV_INFO_HINT
+  { "Der externe Halter kann nicht zugewiesen werden",
+    "The external holder cannot be assigned"                   },  // STR_AMSV_EXT_NO_PICK
+  { "%s - Fach %d",              "%s - bay %d"                },  // STR_AMSD_BAY
+  { "Restmenge",                 "Remaining"                  },  // STR_AMSD_REMAINING
+  { "%s von %s",                 "%s of %s"                   },  // STR_AMSD_OF
+  { "Kein Gewicht im Backend hinterlegt",
+    "No weight stored in the backend"                          },  // STR_AMSD_NO_WEIGHT
+  { "Keine Spule im Backend verknüpft",
+    "No spool linked in the backend"                           },  // STR_AMSD_NO_SPOOL
+  { "Details werden geladen ...", "Loading details ..."        },  // STR_AMSD_LOADING
+  { "Details nicht abrufbar",    "Details unavailable"        },  // STR_AMSD_FAIL
+  { "Ersatz %s",                 "Backup %s"                  },  // STR_AMSD_BACKUP
+  { "Trocknung von heute für\ndiese Spule speichern?",
+    "Record today's drying for\nthis spool?"                    },  // STR_AMSD_DRIED_Q
+  { "Wird gespeichert ...",      "Saving ..."                 },  // STR_AMSD_SAVING
+  { "Speichern fehlgeschlagen",  "Saving failed"              },  // STR_AMSD_WRITE_FAIL
 };
 
 StringID tagWriteResultString(uint8_t code) {

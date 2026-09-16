@@ -7,6 +7,8 @@
 #include "services/ams_slots.h"
 #include "services/backend_api.h"
 #include "ui/ams_view.h"
+#include "ui/header_status.h"
+#include "ui/main_screen_helpers.h"
 #include "ui/ui_common.h"
 
 namespace {
@@ -83,11 +85,25 @@ void amsPresenceTick() {
     if (!st.unit[u].is_ext) { has_unit = true; break; }
   }
 
+  const bool changed = (!s_known || s_has_ams != has_unit);
+
   // Logged on the first answer and on a change, not every five minutes.
-  if (!s_known || s_has_ams != has_unit) {
+  if (changed) {
     logSDf("AMS: printer %d %s an AMS", s_printer_id,
            has_unit ? "has" : "has no");
   }
   s_known   = true;
   s_has_ams = has_unit;
+
+  // The answer lands about twenty seconds after boot, long after the header
+  // was built and hid the chip for want of one, and nothing repaints that row
+  // on a schedule: updateHeaderStatus() hangs on events - a reachability flip,
+  // a way back from another screen - so the chip stayed away until one of them
+  // happened to fire. Only on a change, so this is silent every five minutes.
+  // Both functions test their own object pointers, and this runs on the loop
+  // task, which is the one allowed to touch LVGL.
+  if (changed) {
+    updateAmsAffordance();
+    layoutHeaderChips();
+  }
 }

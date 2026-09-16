@@ -99,6 +99,10 @@ void setupPortalStop() {
   wifiManagerStopAp();
   s_active    = false;
   s_submitted = false;
+  // A form that was sent but not handed over yet is dropped with the access
+  // point, as the header promises. The tick raises the flag again right after
+  // this call on the one path that means to hand over.
+  s_handoff_ready = false;
   logSD("Portal: access point down");
 }
 

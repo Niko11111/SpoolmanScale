@@ -9,6 +9,8 @@
 #include "hardware/sd_logger.h"
 #include "services/backend_api.h"
 #include "services/prefs_store.h"
+#include "ui/ams_detail_popup.h"
+#include "ui/loading_overlay.h"
 #include "ui/navigation.h"
 #include "ui/theme.h"
 #include "ui/ui_common.h"
@@ -31,18 +33,40 @@
 #define AMSV_UNIT_H       (AMSV_UNIT_HDR_H + AMSV_TILE_H + 9)
 #define AMSV_BODY_TOP     40
 #define AMSV_HEADLINE_H   24
-// The status line and the reload chip share one row.
-#define AMSV_STATUS_ROW_H 28
+// The status row: the printer's name, as a chip when there is more than one
+// printer to step through, and what the printer is doing beside it. The row
+// has the whole width since the reload chip moved up into the header - it
+// used to share this row, which squeezed the printer into 12 px of text that
+// was hard to read and, with two printers, did not look like the switch it is.
+#define AMSV_STATUS_ROW_H 36
+#define AMSV_CHIP_H       28
+#define AMSV_CHIP_PAD_X   12
+// The label inside the chip gets this much more than its text, so the
+// simulator's check does not count a chip sized to its text as tight.
+#define AMSV_CHIP_TXT_SLACK 10
+#define AMSV_CHIP_GAP     10
+// Room the status keeps beside the widest printer chip, so a long name cuts
+// with dots inside the chip rather than pushing the status off the row.
+#define AMSV_STATUS_MIN_W 120
 #define AMSV_RELOAD_W     88
-#define AMSV_RELOAD_H     24
-// How far the chip stays clear of the header's close button: the X reaches
-// down to 40 and is 48 wide, and a chip tucked under its corner reads as
-// belonging to it.
-#define AMSV_CLOSE_CLEAR  56
-// The status line is 12 px of text; this makes it a finger sized target.
-#define AMSV_STATUS_EXT_CLICK 12
-// What is left of the row once the reload chip and its margins are taken off.
-#define AMSV_STATUS_W     (480 - AMSV_MARGIN - (AMSV_MARGIN + AMSV_CLOSE_CLEAR) - AMSV_RELOAD_W - 8)
+// The header's buttons are 44 px tall and 2 px down (addBackButton and
+// addCloseButton in ui_common.cpp), so their middle is at 24; the reload chip
+// sits on that line, centred between the title and the close button.
+#define AMSV_HDR_MID      24
+#define AMSV_HDR_BTN_W    44
+#define AMSV_HDR_BTN_IN   4
+// Finger room around the printer chip beyond its 28 px. Four, not more:
+// the chip sits under the back button's corner, and a wider halo would take
+// that button's lowest taps.
+#define AMSV_STATUS_EXT_CLICK 4
+// Air between the printer chip and the back button above it. The row and
+// the grid move down by this much, but only with two or more printers -
+// only then is there a chip, and a single printer page should not lose
+// height to a control it does not have.
+#define AMSV_CHIP_AIR     8
+// What the row offers a line of text: from the left margin to the scrollbar's
+// margin on the right.
+#define AMSV_STATUS_W     (480 - AMSV_MARGIN - AMSV_MARGIN_R)
 // How the page is pumped before a blocking fetch, so the loading line is
 // drawn and a tap on back is seen: passes and the pause between them.
 #define AMSV_PUMP_PASSES  5
@@ -74,6 +98,15 @@
 static lv_obj_t*    s_scr       = nullptr;
 static lv_obj_t*    s_body      = nullptr;   // scrolling container
 static lv_obj_t*    s_status    = nullptr;   // the line shown while loading
+// The printer's name as a chip, built once and shown only with two or more
+// printers; the status label moves right to make room for it.
+static lv_obj_t*    s_printer_btn = nullptr;
+static lv_obj_t*    s_printer_lbl = nullptr;
+// Where the status row and the body were built, so applyRowDrop() can move
+// them by AMSV_CHIP_AIR once the printers are known and there are two.
+static int          s_row_top  = 0;
+static int          s_body_top = 0;
+static int          s_body_h   = 0;
 static AmsViewMode  s_mode      = AMS_VIEW_BROWSE;
 static AmsPickCb    s_cb        = nullptr;
 static char         s_headline[AMSV_HEADLINE_MAX] = "";
@@ -90,6 +123,16 @@ static bool s_pick_pending  = false;
 static int  s_pick_ams      = -1;
 static int  s_pick_tray     = -1;
 static int  s_printer_id    = 0;
+// A bay was tapped for its detail card. Carried like every other answer:
+// parked here, acted on from the loop, because the fetch behind it blocks.
+static bool s_detail_pending = false;
+static int  s_detail_ams     = -1;
+static int  s_detail_tray    = -1;
+// PICK only. While it is on, a tap opens the card instead of answering the
+// question, so the bays can be read before one of them is chosen.
+static bool s_info_mode      = false;
+static lv_obj_t* s_info_btn  = nullptr;
+static lv_obj_t* s_headline_lbl = nullptr;
 // Where the page goes back to. Opened from the scale menu it returns there;
 // from the header chip, the zone-4 button or the picker it lands on the main
 // screen, which is where those were pressed.
@@ -110,7 +153,7 @@ void requestAmsView(AmsViewMode mode, AmsPickCb cb, const char* headline) {
   s_mode = mode;
   s_cb   = cb;
   s_headline[0] = '\0';
-  if (headline) strncpy(s_headline, headline, sizeof(s_headline) - 1);
+  if (headline) snprintf(s_headline, sizeof(s_headline), "%s", headline);
   // Re-read on every opening. One request more per visit, and in exchange a
   // backend switch, a renamed printer or a removed one can never leave a
   // stale name on the line - this screen is opened rarely enough that the
@@ -121,6 +164,15 @@ void requestAmsView(AmsViewMode mode, AmsPickCb cb, const char* headline) {
   s_pick_pending = false;
   s_pick_ams     = -1;
   s_pick_tray    = -1;
+  // And a fresh switch. Only the close through showMainScreen() reaches
+  // destroyAmsView(); coming back from the scale menu does not, so without
+  // this an info mode left on once would still be on the next time a
+  // question was asked - and the tap that was meant to choose a bay would
+  // open a card instead.
+  s_info_mode      = false;
+  s_detail_pending = false;
+  s_detail_ams     = -1;
+  s_detail_tray    = -1;
   s_return_to_scale_menu = false;
   s_build_pending = true;
 }
@@ -138,12 +190,20 @@ int  amsViewPrinterId() { return s_printer_id; }
 // have to be cleared together with the screen: a stale s_body outliving its
 // parent is the kind of leftover that writes into freed memory later.
 static void closeAmsView() {
+  // The card sits on lv_scr_act(), not inside the page, so freeing the page
+  // would leave it standing over whatever comes next.
+  closeAmsDetailPopup();
   releaseScreen(&s_scr);
-  s_body   = nullptr;
-  s_status = nullptr;
+  s_body     = nullptr;
+  s_status   = nullptr;
+  s_info_btn = nullptr;
+  s_headline_lbl = nullptr;
+  s_printer_btn  = nullptr;
+  s_printer_lbl  = nullptr;
 }
 
 void hideAmsViewOverlays() {
+  closeAmsDetailPopup();
   if (s_scr) lv_obj_add_flag(s_scr, LV_OBJ_FLAG_HIDDEN);
 }
 
@@ -169,14 +229,49 @@ void destroyAmsView() {
   s_fetch_pending = false;
   s_close_pending = false;
   s_return_to_scale_menu = false;
+  // Unlike s_pick_pending below, this one goes: it opens a card over a page
+  // that is being torn down, and there is nothing left to open it against.
+  s_detail_pending = false;
+  s_info_mode = false;
   // s_pick_pending stays. Every pick closes the page first, and that close
   // goes through showMainScreen() and lands here - clearing the flag would
   // swallow the user's answer one pass before it runs, which is exactly what
   // beta.28 did: no bay was ever assigned.
 }
 
+// The row as one line of text: the printer chip hidden, the label from the
+// margin across the width. What every message wants - loading, an error, a
+// note - and what a single printer setup shows all the time. The chip comes
+// back with the next drawn state.
+// Keyed on the printer count rather than on the chip's visibility, so a
+// reload - which lays the row plain while it loads - does not bounce the
+// grid up and down by eight pixels every time.
+static int rowDrop() { return (s_printers.count > 1) ? AMSV_CHIP_AIR : 0; }
+
+static void applyRowDrop() {
+  const int drop   = rowDrop();
+  const int chip_y = s_row_top + (AMSV_STATUS_ROW_H - AMSV_CHIP_H) / 2 + drop;
+  const lv_coord_t lh = lv_font_get_line_height(UI_FONT_BODY);
+  if (s_printer_btn) lv_obj_set_y(s_printer_btn, chip_y);
+  if (s_status)      lv_obj_set_y(s_status, chip_y + (AMSV_CHIP_H - lh) / 2);
+  if (s_body) {
+    lv_obj_set_y(s_body, s_body_top + drop);
+    lv_obj_set_height(s_body, s_body_h - drop);
+  }
+}
+
+static void statusRowPlain() {
+  applyRowDrop();
+  if (s_printer_btn) lv_obj_add_flag(s_printer_btn, LV_OBJ_FLAG_HIDDEN);
+  if (s_status) {
+    lv_obj_set_x(s_status, AMSV_MARGIN);
+    lv_obj_set_width(s_status, AMSV_STATUS_W);
+  }
+}
+
 static void setStatus(const char* text) {
   if (!s_status) return;
+  statusRowPlain();
   char buf[64];
   strncpy(buf, text ? text : "", sizeof(buf) - 1);
   buf[sizeof(buf) - 1] = '\0';
@@ -186,6 +281,7 @@ static void setStatus(const char* text) {
 
 static void setStatusFmt(int str_id, int value) {
   if (!s_status) return;
+  statusRowPlain();
   char fmt[48], buf[64];
   copyT(fmt, sizeof(fmt), str_id);
   snprintf(buf, sizeof(buf), fmt, value);
@@ -193,14 +289,75 @@ static void setStatusFmt(int str_id, int value) {
   lv_obj_clear_flag(s_status, LV_OBJ_FLAG_HIDDEN);
 }
 
+// The bay behind a packed key, or nullptr. Looked up by the pair rather than
+// by a grid index for the same reason the callback carries the pair: a
+// refresh can reorder the grid between the tap and the answer.
+static const AmsSlotTray* findTray(int ams_id, int tray_id,
+                                   const AmsSlotUnit** out_unit) {
+  for (uint8_t u = 0; u < s_state.unit_count; u++) {
+    const AmsSlotUnit& unit = s_state.unit[u];
+    if (unit.ams_id != (uint8_t)ams_id) continue;
+    for (uint8_t t = 0; t < unit.tray_count; t++) {
+      if (unit.tray[t].tray_id != (uint8_t)tray_id) continue;
+      if (out_unit) *out_unit = &unit;
+      return &unit.tray[t];
+    }
+  }
+  return nullptr;
+}
+
+static bool trayExists(int ams_id, int tray_id) {
+  const AmsSlotTray* t = findTray(ams_id, tray_id, nullptr);
+  return t && t->exists;
+}
+
+static bool unitIsExt(int ams_id) {
+  for (uint8_t u = 0; u < s_state.unit_count; u++) {
+    if (s_state.unit[u].ams_id == (uint8_t)ams_id) return s_state.unit[u].is_ext;
+  }
+  return false;
+}
+
+// Whether a tap means "show me this spool" rather than "put it here".
+// Everywhere except a question, and inside a question while the info switch
+// is on. The future FilaMan picker will be AMS_VIEW_PICK as well, so it
+// inherits this without a line of its own.
+static bool modeShowsDetail() {
+  return s_mode != AMS_VIEW_PICK || s_info_mode;
+}
+
 static void tileClicked(lv_event_t* e) {
-  if (s_mode != AMS_VIEW_PICK || !s_cb) return;
-  void* key = lv_obj_get_user_data(lv_event_get_target(e));
+  lv_obj_t* tile = lv_event_get_target(e);
+  void* key = lv_obj_get_user_data(tile);
+  const int ams  = AMSV_KEY_AMS(key);
+  const int tray = AMSV_KEY_TRAY(key);
+
+  if (modeShowsDetail()) {
+    // Only a bay with something in it has anything to tell. An empty one is
+    // not clickable outside PICK at all, and inside PICK the info switch
+    // makes it inert rather than answering the question by accident.
+    if (!trayExists(ams, tray)) return;
+    s_detail_ams     = ams;
+    s_detail_tray    = tray;
+    s_detail_pending = true;
+    // No close: the card lies over the page, and there is nothing to come
+    // back to because it answers nothing.
+    return;
+  }
+
+  if (!s_cb) return;
+  // The external holder is not a bay a spool can be pinned to - the server
+  // refuses it. It used to be built unclickable, which left a tap on it
+  // silent; now it says why.
+  if (unitIsExt(ams)) {
+    setStatus(T(STR_AMSV_EXT_NO_PICK));
+    return;
+  }
   // Nothing but remembering. The callback sends the assignment, and an HTTP
   // request out of an LVGL callback is what this firmware never does: the
   // page it would run from is still on screen and would freeze mid tap.
-  s_pick_ams   = AMSV_KEY_AMS(key);
-  s_pick_tray  = AMSV_KEY_TRAY(key);
+  s_pick_ams   = ams;
+  s_pick_tray  = tray;
   s_pick_pending  = true;
   s_close_pending = true;
 }
@@ -244,13 +401,26 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
     text_col = (luma > AMSV_LUMA_SWITCH) ? 0x000000 : 0xFFFFFF;
   }
 
+  // A filled bay is always three lines, in the same order, with a dash where
+  // a value is missing. Built the other way round - a line only when there is
+  // something to put on it - the same bay read as two lines on one tile and
+  // three on the next, and because the label is centred the text sat at a
+  // different height in each. Nothing was wrong with any single tile; the row
+  // of them looked broken.
   char line[72];
   if (!tray.exists) {
+    // An empty bay stays one line. There is nothing to line up with, and the
+    // difference between "nothing in here" and "something with no data"
+    // should stay visible at a glance.
     copyT(line, sizeof(line), STR_AMSV_EMPTY);
   } else {
     char name[AMS_NAME_MAX];
     strncpy(name, tray.name[0] ? tray.name : T(STR_AMSV_EMPTY), sizeof(name) - 1);
     name[sizeof(name) - 1] = '\0';
+
+    // color_name arrives cleaned - the parser drops a hex code and strips an
+    // article number before it stores anything, because the field is too
+    // short to hold "Charcoal (11101)" and clean it afterwards.
 
     // Grams say more than a percentage when both are known, and the
     // percentage is all there is on a spool the server never weighed.
@@ -262,7 +432,7 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
     }
 
     // The bay that stands in for this one, appended to the amount rather than
-    // given a line of its own: it is a footnote, and a third row of text on a
+    // given a line of its own: it is a footnote, and a fourth row of text on a
     // tile this size costs more than it tells.
     if (tray.backup_of[0]) {
       char b[16];
@@ -270,15 +440,10 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
       strncat(amount, b, sizeof(amount) - strlen(amount) - 1);
     }
 
-    // The colour name only when the server knows one. The tile already
-    // carries the colour itself, so this is the name for it, not a repeat.
-    if (tray.color_name[0]) {
-      snprintf(line, sizeof(line), "%s\n%s\n%s", name, tray.color_name, amount);
-    } else if (amount[0]) {
-      snprintf(line, sizeof(line), "%s\n%s", name, amount);
-    } else {
-      snprintf(line, sizeof(line), "%s", name);
-    }
+    snprintf(line, sizeof(line), "%s\n%s\n%s",
+             name,
+             tray.color_name[0] ? tray.color_name : "-",
+             amount[0]          ? amount          : "-");
   }
 
   lv_obj_t* lbl = lv_label_create(tile);
@@ -290,9 +455,11 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
   lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 0);
 
   lv_obj_set_user_data(tile, AMSV_KEY(unit.ams_id, tray.tray_id));
-  // The external holder is not a bay a spool can be pinned to: the server
-  // refuses it, so offering it would only ever answer "assignment failed".
-  const bool pickable = (s_mode == AMS_VIEW_PICK) && !unit.is_ext;
+  // In a question every bay answers, including the external holder, which
+  // tileClicked() then turns down with a reason - the tap used to land in
+  // silence. Elsewhere only a filled bay is worth a tap, because all it can
+  // do is show what is in it.
+  const bool pickable = (s_mode == AMS_VIEW_PICK) || tray.exists;
   if (pickable) {
     lv_obj_add_flag(tile, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(tile, tileClicked, LV_EVENT_CLICKED, nullptr);
@@ -452,6 +619,42 @@ static lv_obj_t* footButton(int x, int str_id, bool primary, lv_event_cb_t cb) {
   return b;
 }
 
+// Puts the info switch and the headline into whichever state s_info_mode is
+// in. Both change together and neither needs a redraw of the grid: the tiles
+// stay clickable either way, only what a tap means changes.
+static void applyInfoMode() {
+  if (s_info_btn) {
+    const bool on = s_info_mode;
+    lv_obj_set_style_border_width(s_info_btn, on ? 2 : 1, 0);
+    lv_obj_set_style_border_color(s_info_btn,
+      lv_color_hex(on ? UI_COL_ACCENT : UI_COL_LINE), 0);
+    lv_obj_set_style_bg_color(s_info_btn,
+      lv_color_hex(on ? UI_COL_ACCENT_DIM : UI_COL_SURFACE_2), 0);
+    lv_obj_t* l = lv_obj_get_child(s_info_btn, 0);
+    if (l) {
+      lv_obj_set_style_text_color(l,
+        lv_color_hex(on ? UI_COL_ACCENT : UI_COL_INK_2), 0);
+    }
+  }
+  if (s_headline_lbl) {
+    // The headline is the one line that says what a tap will do, so it is the
+    // line that has to change when that changes.
+    char buf[AMSV_HEADLINE_MAX];
+    if (s_info_mode) copyT(buf, sizeof(buf), STR_AMSV_INFO_HINT);
+    else             snprintf(buf, sizeof(buf), "%s", s_headline);
+    lv_label_set_text(s_headline_lbl, buf);
+    lv_obj_set_style_text_color(s_headline_lbl,
+      lv_color_hex(s_info_mode ? UI_COL_INK_SOFT : AMSV_COL_ACCENT), 0);
+  }
+}
+
+static void footInfoCb(lv_event_t* e) {
+  s_info_mode = !s_info_mode;
+  // Safe inside the callback: nothing is created or freed here, only styles
+  // and one label's text.
+  applyInfoMode();
+}
+
 static void reloadCb(lv_event_t* e) {
   s_fetch_pending = true;
 }
@@ -477,6 +680,36 @@ static void buildScreen() {
   copyT(title, sizeof(title), STR_AMSV_TITLE);
   buildSubHeader(s_scr, title, backCb);
 
+  // The reload chip, in the header between the title and the close button,
+  // centred in the gap. The title's width is measured rather than assumed: it
+  // differs per language, and a chip that is symmetric in one and off by
+  // twenty pixels in the other would read as a mistake in the second.
+  {
+    lv_obj_t* rl = lv_btn_create(s_scr);
+    if (rl) {
+      char rlab[20];
+      copyT(rlab, sizeof(rlab), STR_AMSV_RELOAD);
+      const lv_coord_t tw = lv_txt_get_width(title, (uint32_t)strlen(title),
+                                             UI_FONT_TITLE, 0, LV_TEXT_FLAG_NONE);
+      const int title_right = 240 + tw / 2;
+      const int close_left  = 480 - AMSV_HDR_BTN_IN - AMSV_HDR_BTN_W;
+      const int x = (title_right + close_left) / 2 - AMSV_RELOAD_W / 2;
+      lv_obj_set_size(rl, AMSV_RELOAD_W, AMSV_CHIP_H);
+      lv_obj_set_pos(rl, x, AMSV_HDR_MID - AMSV_CHIP_H / 2);
+      lv_obj_set_style_bg_color(rl, lv_color_hex(AMSV_COL_LINE), 0);
+      lv_obj_set_style_radius(rl, 6, 0);
+      lv_obj_set_style_shadow_width(rl, 0, 0);
+      lv_obj_add_event_cb(rl, reloadCb, LV_EVENT_CLICKED, nullptr);
+      lv_obj_t* rt = lv_label_create(rl);
+      if (rt) {
+        lv_label_set_text(rt, rlab);
+        lv_obj_set_style_text_color(rt, lv_color_hex(AMSV_COL_ACCENT), 0);
+        lv_obj_set_style_text_font(rt, UI_FONT_SMALL, 0);
+        lv_obj_align(rt, LV_ALIGN_CENTER, 0, 0);
+      }
+    }
+  }
+
   int top = AMSV_BODY_TOP;
 
   // The spool being placed, so the comparison with a bay is on one screen.
@@ -489,53 +722,62 @@ static void buildScreen() {
       lv_obj_set_style_text_color(h, lv_color_hex(AMSV_COL_ACCENT), 0);
       lv_obj_set_style_text_font(h, &lv_font_montserrat_ext_12, 0);
       lv_obj_set_pos(h, AMSV_MARGIN, top + 4);
+      // Kept so the info switch can rewrite it. Cleared in closeAmsView()
+      // along with the rest, because the page is rebuilt on every opening.
+      s_headline_lbl = h;
     }
     top += AMSV_HEADLINE_H;
   }
 
-  // Status and reload share one row. Stacked they cost 48 of the 280 pixels
-  // below the header, which is most of a row of bays.
-  lv_obj_t* rl = lv_btn_create(s_scr);
-  if (rl) {
-    char rlab[20];
-    copyT(rlab, sizeof(rlab), STR_AMSV_RELOAD);
-    lv_obj_set_size(rl, AMSV_RELOAD_W, AMSV_RELOAD_H);
-    lv_obj_align(rl, LV_ALIGN_TOP_RIGHT, -(AMSV_MARGIN + AMSV_CLOSE_CLEAR), top);
-    lv_obj_set_style_bg_color(rl, lv_color_hex(AMSV_COL_LINE), 0);
-    lv_obj_set_style_radius(rl, 6, 0);
-    lv_obj_set_style_shadow_width(rl, 0, 0);
-    lv_obj_add_event_cb(rl, reloadCb, LV_EVENT_CLICKED, nullptr);
-    lv_obj_t* rt = lv_label_create(rl);
-    if (rt) {
-      lv_label_set_text(rt, rlab);
-      lv_obj_set_style_text_color(rt, lv_color_hex(AMSV_COL_ACCENT), 0);
-      lv_obj_set_style_text_font(rt, &lv_font_montserrat_ext_12, 0);
-      lv_obj_align(rt, LV_ALIGN_CENTER, 0, 0);
+  // The status row: the printer chip first, hidden until the printers are
+  // known and there are two of them, and the status label after it - or from
+  // the margin, when the chip is away. Sized to its text when it is shown.
+  s_row_top = top;
+  const int chip_y = top + (AMSV_STATUS_ROW_H - AMSV_CHIP_H) / 2;
+  const lv_coord_t lh = lv_font_get_line_height(UI_FONT_BODY);
+  s_printer_btn = lv_btn_create(s_scr);
+  if (s_printer_btn) {
+    lv_obj_set_size(s_printer_btn, AMSV_RELOAD_W, AMSV_CHIP_H);
+    lv_obj_set_pos(s_printer_btn, AMSV_MARGIN, chip_y);
+    lv_obj_set_style_bg_color(s_printer_btn, lv_color_hex(AMSV_COL_LINE), 0);
+    lv_obj_set_style_radius(s_printer_btn, 6, 0);
+    lv_obj_set_style_shadow_width(s_printer_btn, 0, 0);
+    lv_obj_set_style_pad_all(s_printer_btn, 0, 0);
+    lv_obj_set_ext_click_area(s_printer_btn, AMSV_STATUS_EXT_CLICK);
+    lv_obj_add_flag(s_printer_btn, LV_OBJ_FLAG_HIDDEN);
+    // Attached once, here, and not where the text is written: a redraw runs
+    // that path again, and a second callback on the same object would step
+    // two printers per tap.
+    lv_obj_add_event_cb(s_printer_btn, nextPrinterCb, LV_EVENT_CLICKED, nullptr);
+    s_printer_lbl = lv_label_create(s_printer_btn);
+    if (s_printer_lbl) {
+      lv_label_set_text(s_printer_lbl, "");
+      lv_obj_set_style_text_color(s_printer_lbl, lv_color_hex(AMSV_COL_ACCENT), 0);
+      lv_obj_set_style_text_font(s_printer_lbl, UI_FONT_BODY, 0);
+      lv_obj_set_style_text_align(s_printer_lbl, LV_TEXT_ALIGN_CENTER, 0);
+      lv_label_set_long_mode(s_printer_lbl, LV_LABEL_LONG_DOT);
+      lv_obj_align(s_printer_lbl, LV_ALIGN_CENTER, 0, 0);
     }
   }
 
   s_status = lv_label_create(s_scr);
   if (s_status) {
     lv_label_set_text(s_status, "");
-    lv_obj_set_style_text_color(s_status, lv_color_hex(AMSV_COL_MUTED), 0);
-    lv_obj_set_style_text_font(s_status, &lv_font_montserrat_ext_12, 0);
-    lv_obj_set_pos(s_status, AMSV_MARGIN, top + 6);
-    // Bounded and clipped with an ellipsis: the line carries a printer name
-    // the user chose, and a long one would otherwise run straight under the
-    // reload chip.
-    lv_obj_set_width(s_status, AMSV_STATUS_W);
+    lv_obj_set_style_text_color(s_status, lv_color_hex(UI_COL_INK_2), 0);
+    lv_obj_set_style_text_font(s_status, UI_FONT_BODY, 0);
+    // One line with a real height, so a long printer name is cut with dots
+    // rather than wrapped into the grid below.
+    lv_obj_set_size(s_status, AMSV_STATUS_W, lh);
     lv_label_set_long_mode(s_status, LV_LABEL_LONG_DOT);
-    // Attached once, here, and not where the text is written: a redraw runs
-    // that path again, and a second callback on the same object would step
-    // two printers per tap.
-    lv_obj_set_ext_click_area(s_status, AMSV_STATUS_EXT_CLICK);
-    lv_obj_add_event_cb(s_status, nextPrinterCb, LV_EVENT_CLICKED, nullptr);
+    lv_obj_set_pos(s_status, AMSV_MARGIN, chip_y + (AMSV_CHIP_H - lh) / 2);
   }
   top += AMSV_STATUS_ROW_H;
 
   // A question leaves room for its footer; a look at the bays does not.
   const int foot = modeAsks() ? AMSV_FOOT_H : 0;
 
+  s_body_top = top;
+  s_body_h   = 320 - top - foot;
   s_body = lv_obj_create(s_scr);
   if (s_body) {
     lv_obj_set_pos(s_body, 0, top);
@@ -548,14 +790,48 @@ static void buildScreen() {
     lv_obj_set_scroll_dir(s_body, LV_DIR_VER);
   }
 
-  // The footer. PICK: a way out in words, the X alone was easy to miss.
+  // The footer. PICK: a way out in words, the X alone was easy to miss, and
+  // the info switch beside it - the one place a tap already means something,
+  // so the only place the two have to be told apart.
   // WINDOW: the one action this mode exists for, and the way out beside it.
   if (s_mode == AMS_VIEW_PICK) {
-    footButton((480 - AMSV_FOOT_BTN_W) / 2, STR_CANCEL, false, footCancelCb);
+    s_info_btn = footButton(240 - AMSV_FOOT_GAP / 2 - AMSV_FOOT_BTN_W,
+                            STR_AMSV_INFO, false, footInfoCb);
+    footButton(240 + AMSV_FOOT_GAP / 2, STR_CANCEL, false, footCancelCb);
+    applyInfoMode();
   } else if (s_mode == AMS_VIEW_WINDOW) {
     footButton(240 - AMSV_FOOT_GAP / 2 - AMSV_FOOT_BTN_W, STR_AMSV_BTN_WINDOW, true, footOpenCb);
     footButton(240 + AMSV_FOOT_GAP / 2, STR_CANCEL, false, footCancelCb);
   }
+}
+
+// What the printer's state word means, across the spellings the drivers
+// use. Bambu's gcode_state is RUNNING, PAUSE, FINISH, FAILED, IDLE, PREPARE
+// and SLICING; a driver that normalises writes the participle instead.
+// Matched without case, and anything else is PRINTER_OTHER, which the
+// status line prints as it came.
+enum PrinterActivity {
+  PRINTER_OTHER, PRINTER_PRINTING, PRINTER_PAUSED, PRINTER_FINISHED,
+  PRINTER_FAILED, PRINTER_IDLE, PRINTER_PREPARING
+};
+
+static PrinterActivity printerActivity(const char* st) {
+  if (!st || !st[0]) return PRINTER_OTHER;
+  static const struct { const char* word; PrinterActivity act; } WORDS[] = {
+    { "RUNNING",   PRINTER_PRINTING  }, { "PRINTING",  PRINTER_PRINTING  },
+    { "PAUSE",     PRINTER_PAUSED    }, { "PAUSED",    PRINTER_PAUSED    },
+    { "FINISH",    PRINTER_FINISHED  }, { "FINISHED",  PRINTER_FINISHED  },
+    { "COMPLETED", PRINTER_FINISHED  },
+    { "FAILED",    PRINTER_FAILED    }, { "FAILURE",   PRINTER_FAILED    },
+    { "ERROR",     PRINTER_FAILED    },
+    { "IDLE",      PRINTER_IDLE      }, { "READY",     PRINTER_IDLE      },
+    { "PREPARE",   PRINTER_PREPARING }, { "PREPARING", PRINTER_PREPARING },
+    { "SLICING",   PRINTER_PREPARING },
+  };
+  for (const auto& w : WORDS) {
+    if (strcasecmp(st, w.word) == 0) return w.act;
+  }
+  return PRINTER_OTHER;
 }
 
 // Fills the page. Blocks for the length of the request, so the screen is
@@ -619,52 +895,163 @@ static void fetchAndDraw() {
   // place the printer is named, and with several of them configured that is
   // the difference between a board and somebody else's board.
   {
-    char line[64];
-    char pos[16] = "";
-    // Only when there is something to step through. On one printer the
-    // "1/1" would be noise and the line would look like a control that does
-    // nothing.
-    if (s_printers.count > 1) {
-      char fmt[12];
-      copyT(fmt, sizeof(fmt), STR_AMSV_PRN_OF);
-      char n[12];
-      snprintf(n, sizeof(n), fmt, (int)s_printer_idx + 1, (int)s_printers.count);
-      snprintf(pos, sizeof(pos), "%s  ", n);
-    }
-    char body[64];
+    // What the printer is doing, without its name: offline, a job, a state,
+    // or nothing at all.
+    char what[48] = "";
+    const PrinterActivity act = printerActivity(s_state.state);
     if (!s_state.connected) {
       // An offline printer still has a last known state worth showing, so
       // this is a note next to the grid rather than a refusal to draw it.
-      snprintf(body, sizeof(body), "%s - %s", s_state.printer,
-               T(STR_AMSV_OFFLINE));
-    } else if (s_state.job_percent >= 0) {
+      // A backend that never said either way gets its own wording: blaming
+      // the printer for a driver that has not reported sends the user to
+      // the wrong machine.
+      copyT(what, sizeof(what), s_state.conn_known ? STR_AMSV_OFFLINE : STR_AMSV_UNKNOWN);
+    } else if (s_state.job_percent >= 0 &&
+               (act == PRINTER_PRINTING || act == PRINTER_PAUSED)) {
+      // The percentage only while it means something. Bambu reports the
+      // finished job and its 100 % until the next print starts, and FilaMan
+      // passes that through, so a printer that finished two days ago read
+      // "printing 100%" the whole time.
       char fmt[24];
-      copyT(fmt, sizeof(fmt), STR_AMSV_JOB);
-      char job[24];
-      snprintf(job, sizeof(job), fmt, (int)s_state.job_percent);
-      snprintf(body, sizeof(body), "%s - %s", s_state.printer, job);
+      copyT(fmt, sizeof(fmt), act == PRINTER_PAUSED ? STR_AMSV_JOB_PAUSED : STR_AMSV_JOB);
+      snprintf(what, sizeof(what), fmt, (int)s_state.job_percent);
+    } else if (act == PRINTER_FINISHED) {
+      copyT(what, sizeof(what), STR_AMSV_STATE_FINISH);
+    } else if (act == PRINTER_FAILED) {
+      copyT(what, sizeof(what), STR_AMSV_STATE_FAILED);
+    } else if (act == PRINTER_IDLE) {
+      copyT(what, sizeof(what), STR_AMSV_STATE_IDLE);
+    } else if (act == PRINTER_PREPARING) {
+      copyT(what, sizeof(what), STR_AMSV_STATE_PREPARE);
     } else if (s_state.state[0]) {
-      snprintf(body, sizeof(body), "%s - %s", s_state.printer, s_state.state);
-    } else {
-      snprintf(body, sizeof(body), "%s", s_state.printer);
+      // A state this list does not know is shown as the server wrote it,
+      // rather than hidden.
+      snprintf(what, sizeof(what), "%s", s_state.state);
     }
-    snprintf(line, sizeof(line), "%s%s", pos, body);
-    setStatus(line);
 
-    // Tapping the line steps to the next printer. The line names the printer
-    // anyway, so it is where a user looks for one - cheaper than a page of
-    // its own and it costs no room on a screen that has none. The accent
-    // colour is what says it can be tapped at all.
-    if (s_status) {
-      const bool switchable = (s_printers.count > 1);
-      if (switchable) lv_obj_add_flag(s_status, LV_OBJ_FLAG_CLICKABLE);
-      else            lv_obj_clear_flag(s_status, LV_OBJ_FLAG_CLICKABLE);
-      lv_obj_set_style_text_color(
-        s_status, lv_color_hex(switchable ? AMSV_COL_ACCENT : AMSV_COL_MUTED), 0);
+    // With two or more printers the name is the switch, and looks like one:
+    // the same chip as "reload", holding "2/3  P1S" so it also says where in
+    // the list the next tap goes. The status stands beside it in plain text.
+    // On one printer there is nothing to step through, so the line is text
+    // only - a chip that does nothing would be a promise the page cannot keep.
+    const bool switchable = (s_printers.count > 1);
+    if (switchable && s_printer_btn && s_printer_lbl && s_status) {
+      applyRowDrop();
+      char fmt[12], n[12], name[48];
+      copyT(fmt, sizeof(fmt), STR_AMSV_PRN_OF);
+      snprintf(n, sizeof(n), fmt, (int)s_printer_idx + 1, (int)s_printers.count);
+      snprintf(name, sizeof(name), "%s  %s", n, s_state.printer);
+      lv_label_set_text(s_printer_lbl, name);
+      // Sized to the name. A name of the user's choosing can be long; the chip
+      // stops where the status would have no room left, and the label inside
+      // cuts with dots.
+      lv_coord_t w = lv_txt_get_width(name, (uint32_t)strlen(name), UI_FONT_BODY,
+                                      0, LV_TEXT_FLAG_NONE) + 2 * AMSV_CHIP_PAD_X;
+      const lv_coord_t w_max = AMSV_STATUS_W - AMSV_CHIP_GAP - AMSV_STATUS_MIN_W;
+      if (w > w_max) w = w_max;
+      lv_obj_set_width(s_printer_btn, w);
+      lv_obj_set_size(s_printer_lbl, w - 2 * AMSV_CHIP_PAD_X + AMSV_CHIP_TXT_SLACK,
+                      lv_font_get_line_height(UI_FONT_BODY));
+      lv_obj_clear_flag(s_printer_btn, LV_OBJ_FLAG_HIDDEN);
+
+      const int x = AMSV_MARGIN + w + AMSV_CHIP_GAP;
+      lv_obj_set_x(s_status, x);
+      lv_obj_set_width(s_status, 480 - AMSV_MARGIN_R - x);
+      lv_label_set_text(s_status, what);
+      lv_obj_clear_flag(s_status, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      char line[80];
+      if (what[0]) snprintf(line, sizeof(line), "%s - %s", s_state.printer, what);
+      else         snprintf(line, sizeof(line), "%s", s_state.printer);
+      setStatus(line);
     }
   }
 
   layoutGrid(s_state);
+}
+
+// The bay's own name, the way the unit header writes it: a name the user gave
+// the unit where there is one, otherwise "AMS 2" or "AMS HT 1" built from the
+// number, and the bay counted from one.
+static void bayName(const AmsSlotUnit& unit, const AmsSlotTray& tray,
+                    char* out, size_t n) {
+  char unit_name[AMS_NAME_MAX + 8];
+  if (unit.label[0]) {
+    snprintf(unit_name, sizeof(unit_name), "%s", unit.label);
+  } else if (unit.is_ext) {
+    copyT(unit_name, sizeof(unit_name), STR_AMSV_UNIT_EXT);
+  } else {
+    char fmt[24];
+    copyT(fmt, sizeof(fmt), unit.is_ht ? STR_AMSV_UNIT_HT : STR_AMSV_UNIT);
+    const int shown = unit.is_ht ? (unit.ams_id - 127) : (unit.ams_id + 1);
+    snprintf(unit_name, sizeof(unit_name), fmt, shown > 0 ? shown : 1);
+  }
+
+  char fmt[24];
+  copyT(fmt, sizeof(fmt), STR_AMSD_BAY);
+  snprintf(out, n, fmt, unit_name, (int)tray.tray_id + 1);
+}
+
+// Everything the AMS answer already knows about a bay, before anything is
+// asked of the database. What the database then has lays over this; what it
+// has not stays as the printer reported it.
+static void detailFromTray(const AmsSlotUnit& unit, const AmsSlotTray& tray,
+                           AmsSpoolDetail& out) {
+  out = AmsSpoolDetail{};
+  out.remaining_g = SD_WEIGHT_NA;
+  out.total_g     = SD_WEIGHT_NA;
+
+  bayName(unit, tray, out.bay, sizeof(out.bay));
+  out.color      = tray.color;
+  out.has_color  = tray.has_color;
+  out.spool_id   = tray.spool_id;
+  out.remain_pct = tray.remain;
+  out.nozzle_min = tray.nozzle_min;
+  out.nozzle_max = tray.nozzle_max;
+  snprintf(out.material, sizeof(out.material), "%s", tray.name);
+  snprintf(out.backup_of, sizeof(out.backup_of), "%s", tray.backup_of);
+  snprintf(out.color_name, sizeof(out.color_name), "%s", tray.color_name);
+
+  // The grams the printer reports are a fill level, not a weighing, so they
+  // stand in only until the database says otherwise.
+  if (tray.remain_g > 0) out.remaining_g = (float)tray.remain_g;
+}
+
+// Reads one bay and shows it. Blocking, so it runs from the loop and never
+// from the tap that asked for it.
+static void openDetail(int ams_id, int tray_id) {
+  const AmsSlotUnit* unit = nullptr;
+  const AmsSlotTray* tray = findTray(ams_id, tray_id, &unit);
+  if (!tray || !unit) {
+    logSDf("AMSVIEW: detail for bay %d/%d, no such bay", ams_id, tray_id);
+    return;
+  }
+
+  static AmsSpoolDetail det;   // BSS: 200 bytes the loop task's stack is spared
+  detailFromTray(*unit, *tray, det);
+
+  loadingOverlayShow(T(STR_AMSD_LOADING));
+
+  // FilaMan names the spool per bay in the same answer the grid was drawn
+  // from, so there is nothing to look up. BamBuddy does not, and its
+  // assignment list is the only place the pair is resolved.
+  int spool_id = det.spool_id;
+  if (spool_id <= 0 && s_printer_id > 0) {
+    int found = backendFindBaySpool(s_printer_id, ams_id, tray_id);
+    if (found > 0) {
+      spool_id = found;
+      det.spool_id = found;
+    }
+  }
+
+  if (spool_id > 0) backendGetSpoolDetail(spool_id, det);
+
+  loadingOverlayHide();
+
+  // The page can have gone while the request ran - a tap on back is seen by
+  // the loading overlay's own refresh.
+  if (!s_scr) return;
+  showAmsDetailPopup(det);
 }
 
 void handleAmsViewDeferredActions() {
@@ -707,6 +1094,22 @@ void handleAmsViewDeferredActions() {
     s_pick_ams  = -1;
     s_pick_tray = -1;
     if (s_cb) s_cb(ams, tray);
+    return;
+  }
+
+  // The detail card. Also a request, and also run with the page standing -
+  // unlike a pick, because the card lies over that page and goes away again
+  // on its own. The loading overlay covers the seconds in between and eats
+  // the taps that would otherwise queue up behind it.
+  if (s_detail_pending) {
+    s_detail_pending = false;
+    // Latched before the blocking call, like the pick above: a tap that lands
+    // while the fetch runs must not find the pair already cleared.
+    const int ams  = s_detail_ams;
+    const int tray = s_detail_tray;
+    s_detail_ams  = -1;
+    s_detail_tray = -1;
+    openDetail(ams, tray);
     return;
   }
 

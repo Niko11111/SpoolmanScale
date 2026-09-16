@@ -97,6 +97,9 @@ static void buildWifiPortalScreen() {
 }
 
 static void fillWifiPortalScreen() {
+  // Nothing to fill without the screen. A label created on a null parent is
+  // a screen of its own to LVGL, never shown and never freed.
+  if (!scr_wifi_portal) return;
   char buf[96];
   char url[32];
   setupPortalUrl(url, sizeof(url));
@@ -166,6 +169,10 @@ void handleWifiPortalDeferredActions() {
     portal_start_pending = false;
     if (!visible) return;
     lv_timer_handler();   // the scan line is on screen before the scan blocks
+    // That pass can have dispatched the close button, which takes this screen
+    // down through showMainScreen(). Sampled again rather than trusted from
+    // above the handler.
+    if (!scr_wifi_portal) return;
     if (setupPortalStart()) {
       webServerSyncState();
       fillWifiPortalScreen();

@@ -47,14 +47,17 @@ void btn_dried_cb(lv_event_t *e) {
   // belongs to is the local one, so every reader goes through isoDayLocal()
   // rather than slicing the first ten characters off. Doing only one of the
   // two is what made the date read as yesterday just after midnight.
-  struct tm ti;
-  char iso_full_buf[32] = "2026-01-01T00:00:00.000Z";
-  if (getLocalTime(&ti)) {
-    time_t now = mktime(&ti);
-    struct tm *utc = gmtime(&now);
-    snprintf(iso_full_buf, sizeof(iso_full_buf), "%04d-%02d-%02dT%02d:%02d:%02d.000Z",
-      utc->tm_year+1900, utc->tm_mon+1, utc->tm_mday,
-      utc->tm_hour, utc->tm_min, utc->tm_sec);
+  //
+  // In time_service since the AMS detail card grew its own drying button:
+  // two places building the same stamp is two places for that pair to come
+  // apart again.
+  char iso_full_buf[32];
+  if (!nowIsoUtc(iso_full_buf, sizeof(iso_full_buf))) {
+    // No clock, no date. The fallback stamp would be booked as the day this
+    // spool was dried, and the first of January reads as months overdue.
+    logSD("Dried: clock not set, nothing written");
+    lv_label_set_text(lbl_spoolman_dried_val, T(STR_ERR_SAVE));
+    return;
   }
 
   strncpy(s_dried_iso, iso_full_buf, sizeof(s_dried_iso)-1);

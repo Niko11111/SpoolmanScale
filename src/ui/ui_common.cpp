@@ -7,13 +7,16 @@
 #include "hardware/sd_logger.h"
 #include "app/deferred_actions.h"
 #include "ams_assign_popup.h"
+#include "ams_detail_popup.h"
 #include "confirm_popup.h"
 #include "info_popup.h"
 #include "second_tag_popup.h"
 #include "spool_flow.h"
 #include "tag_write_popup.h"
 #include "services/backend.h"
+#include "services/filaman_api.h"
 #include "services/settings_registry.h"
+#include "theme.h"
 #include "lang.h"
 
 
@@ -32,7 +35,8 @@ bool uiModalWaiting() {
       || isSpoolFlowLinkEntryOpen()
       || isSecondTagPopupOpen()
       || isSpoolFlowTagMoveOpen()
-      || isAmsAssignPopupOpen();
+      || isAmsAssignPopupOpen()
+      || isAmsDetailPopupOpen();
 }
 
 lv_color_t swatchColorFromHex(const char* hex) {
@@ -220,18 +224,28 @@ bool lvPoolHasRoomForRow() {
          m.free_biggest_size >= LV_ROW_RESERVE_BYTES / 4u;
 }
 
-void utf8Cut(const char* s, size_t max_bytes, char* out, size_t out_size) {
-  if (!out || !out_size) return;
-  out[0] = '\0';
-  if (!s) return;
-  size_t n = strlen(s);
-  if (n > max_bytes) n = max_bytes;
-  if (n >= out_size) n = out_size - 1;
-  // Back off to the start of the sequence the cut landed in: a continuation
-  // byte is 10xxxxxx.
-  while (n > 0 && ((unsigned char)s[n] & 0xC0) == 0x80) n--;
-  memcpy(out, s, n);
-  out[n] = '\0';
+int filamanStatusStrId(int status_id) {
+  switch (status_id) {
+    case FILAMAN_STATUS_NEW:      return STR_STATUS_NEW;
+    case FILAMAN_STATUS_OPENED:   return STR_STATUS_OPENED;
+    case FILAMAN_STATUS_DRYING:   return STR_STATUS_DRYING;
+    case FILAMAN_STATUS_ACTIVE:   return STR_STATUS_ACTIVE;
+    case FILAMAN_STATUS_EMPTY:    return STR_STATUS_EMPTY;
+    case FILAMAN_STATUS_ARCHIVED: return STR_ARCHIVED;
+    default:                      return STR_STATUS_UNKNOWN;
+  }
+}
+
+uint32_t filamanStatusColor(int status_id) {
+  switch (status_id) {
+    case FILAMAN_STATUS_NEW:      return UI_COL_VALUE_BLUE;
+    case FILAMAN_STATUS_OPENED:   return UI_COL_ACCENT;
+    case FILAMAN_STATUS_DRYING:   return UI_COL_WARN;
+    case FILAMAN_STATUS_ACTIVE:   return UI_COL_ACCENT;
+    case FILAMAN_STATUS_EMPTY:    return UI_COL_BAD;
+    case FILAMAN_STATUS_ARCHIVED: return 0x808080;
+    default:                      return UI_COL_CAPTION;
+  }
 }
 
 lv_obj_t* addHeaderHelp(lv_obj_t *scr, int title_id, int text_id) {

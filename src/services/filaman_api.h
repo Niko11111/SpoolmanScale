@@ -65,6 +65,21 @@ int filamanCountActiveSpools(const char* base_url, const char* api_key,
 bool filamanGetLastMeasuredAt(const char* base_url, const char* api_key, int spool_id,
                               char* out_iso, size_t out_size, uint32_t timeout_ms = 6000);
 
+// When the spool was last used, from the same log. "Used" is any entry that
+// moved the weight: a print the consumption tracking booked off, or a
+// weighing. A move_location is not one - being reassigned to a bay is not
+// using the filament, and the driver writes those often enough to bury
+// everything else.
+//
+// Asked by the weight fields rather than by event_type, so a type FilaMan
+// adds later counts the moment it carries a delta.
+//
+// This is what last_used_at should hold and does not: FilaMan books the
+// consumption into the event log and leaves the spool field null, so a spool
+// that has been printed from for weeks still reads as never used.
+bool filamanGetLastUsedAt(const char* base_url, const char* api_key, int spool_id,
+                          char* out_iso, size_t out_size, uint32_t timeout_ms = 6000);
+
 // ---------- reading, translated to the Spoolman shape ----------
 //
 // FilaMan uses different field names than Spoolman. Rather than teach the
@@ -184,6 +199,26 @@ int filamanPatchExternalId(const char* base_url, const char* api_key, int spool_
 int filamanReportWeight(const char* base_url, const char* device_token,
                         int spool_id, const char* tag_uuid, float measured_g,
                         uint32_t timeout_ms = 8000);
+
+// Announces a tag the scale has just read, so a browser watching this reader
+// can follow it to the spool. FilaMan records the scan in its reader table -
+// the database is the hand-off, because its event bus is per Gunicorn worker
+// and an event would reach only the browsers on one of them.
+//
+// The answer carries matched_spool_id, so this doubles as a lookup, but unlike
+// Spoolman's /tag/scan it does not embed the spool: the caller still runs its
+// normal lookup. Device token, like the weight report.
+//
+// alt_uid is the other spelling of the same tag, when there is one. A Bambu
+// spool is on file under its tray uuid when the driver imported it and under
+// the chip uid when this scale linked it, and which one a server keeps is not
+// something the scale can know - so it offers both and lets the server match.
+// reader_id and reader_name are the same pair Spoolman's /tag/scan takes: a
+// stable id a browser can bind to, and the name its picker shows.
+int filamanTagScan(const char* base_url, const char* device_token, const char* uid,
+                   const char* alt_uid, const char* reader_id, const char* reader_name,
+                   const char* format, JsonDocument& doc, uint32_t timeout_ms = 5000,
+                   DeserializationError* out_err = nullptr);
 
 // Result of a remotely triggered tag operation, answering a trigger that
 // arrived on /api/v1/rfid/write. Authenticated with the device token, not the
@@ -342,8 +377,9 @@ void filamanForgetLocations();
 // out temperature, humidity and the gram figure, which is most of what the
 // unit row shows.
 //
-// Needs a user API key. The route carries no permission check of its own,
-// any valid principal is enough.
+// Needs a user API key whose principal has the display:read permission. A
+// device token carrying that scope would do as well: the route is meant for
+// panels and says so.
 int  filamanGetAmsState(const char* base_url, const char* api_key,
        int printer_id, AmsSlotState& out, uint32_t timeout_ms = 8000);
 

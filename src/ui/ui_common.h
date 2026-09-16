@@ -2,6 +2,8 @@
 
 #include <lvgl.h>
 
+#include "services/text_util.h"
+
 void addBackButton(lv_obj_t *parent, lv_event_cb_t cb);
 // The "?" circle in the header row, between the centred title and the close
 // button - the one gap on a sub screen nothing else wants. Opens the info
@@ -61,10 +63,17 @@ bool lvPoolHasRoomForRow();
 // uninitialised and gave the swatch a random colour off the stack.
 lv_color_t swatchColorFromHex(const char* hex);
 
-// At most max_bytes of s into out, never cutting through a multi-byte UTF-8
-// sequence. "%.8s" cut "Köln" between the two bytes of the ö and a box stood
-// where the letter was.
-void utf8Cut(const char* s, size_t max_bytes, char* out, size_t out_size);
+// utf8Cut(), isHexColorWord() and colorNameClean() moved to
+// services/text_util.h, which the AMS parsers can reach too. Included
+// above, so the screens that call them need no change.
+
+// FilaMan's six spool statuses, as the caption to print and the colour to
+// print it in. Shared rather than repeated: a status the server adds has to
+// reach every card that shows one, and two copies of the same switch is how
+// that stops being true. The id is a StringID, spelled int so this header
+// does not have to pull in the whole string table.
+int      filamanStatusStrId(int status_id);
+uint32_t filamanStatusColor(int status_id);
 
 // Two column info row: a muted label on the left, the value on the right.
 // Used by the WiFi status screen and by the summary on the WiFi connecting
