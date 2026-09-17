@@ -884,7 +884,13 @@ void querySpoolman(const char* tray_uuid) {
   if (!wifi_ok) return;
   strncpy(s_last_query, tray_uuid ? tray_uuid : "", sizeof(s_last_query) - 1);
   s_last_query[sizeof(s_last_query) - 1] = '\0';
-  logSDf("Spoolman: query tray_uuid=%.16s...", tray_uuid ? tray_uuid : "");
+  // A 4-byte MIFARE tag is looked up by its UID through the same call, so
+  // the log names what was actually sent.
+  if (tray_uuid && strlen(tray_uuid) == 32) {
+    logSDf("Spoolman: query tray_uuid=%.16s...", tray_uuid);
+  } else {
+    logSDf("Spoolman: query tag=%s", tray_uuid ? tray_uuid : "");
+  }
 
   // Reset all Spoolman labels before new query
   lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT));
