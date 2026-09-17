@@ -424,7 +424,14 @@
     LV_FONT_DECLARE(lv_font_montserrat_ext_30)  \
     LV_FONT_DECLARE(lv_font_montserrat_ext_32)  \
     LV_FONT_DECLARE(lv_font_montserrat_ext_34)  \
-    LV_FONT_DECLARE(lv_font_montserrat_ext_36)
+    LV_FONT_DECLARE(lv_font_montserrat_ext_36)  \
+    LV_FONT_DECLARE(lv_font_fr_supp_10)  \
+    LV_FONT_DECLARE(lv_font_fr_supp_12)  \
+    LV_FONT_DECLARE(lv_font_fr_supp_14)  \
+    LV_FONT_DECLARE(lv_font_fr_supp_16)  \
+    LV_FONT_DECLARE(lv_font_fr_supp_18)  \
+    LV_FONT_DECLARE(lv_font_fr_supp_20)  \
+    LV_FONT_DECLARE(lv_font_fr_supp_24)
 
 /*Always set a default font*/
 #define LV_FONT_DEFAULT &lv_font_montserrat_ext_14
