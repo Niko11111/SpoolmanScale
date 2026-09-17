@@ -1,0 +1,172 @@
+# SpoolmanScale - width budgets for the translated strings
+# Fork addition - Nanostra (Frédéric Dubus)
+#
+# Tab separated: StringID <TAB> font <TAB> budget in px <TAB> mode <TAB> site
+#
+# Why this file exists. Only 146 of the 743 T() call sites have a shape a script
+# can follow back to a widget width, so the widths cannot be harvested. The
+# general rule the checker applies instead needs no widths at all: French must
+# not be wider than the wider of German and English, because upstream already
+# made every layout fit both. This file is for the places where that rule is not
+# enough - either because the real budget is known and larger, or because the
+# failure mode is silent and we want a hard gate.
+#
+# mode:
+#   NEVER   must fit, no ellipsis allowed. fit_check --gate fails on these.
+#   DOT     may ellipsise (a spool name, an address) - not gated.
+#   WRAP:n  may wrap to at most n lines.
+#
+# It lives in tools/ so it is never compiled and upstream never sees a conflict
+# on it.
+
+# --- THE BUTTON RULE, arrived at by measuring against real screenshots --------
+# A label inside a button is CLIPPED at the button's own width, not at its
+# content box: "Plus d'infos" is 69 px in an 84 px button whose theme padding
+# would leave only 50, and it renders perfectly. lv_obj_center() centres on the
+# full area, and children clip to the parent's coords.
+#
+# But a label that reaches the border LOOKS wrong even when it is not clipped,
+# and that is what gets reported as "it does not fit". So:
+#
+#     budget = button width - 8      (4 px of air each side)
+#              - whatever the code concatenates onto the label
+#
+# Three real observations, all consistent with it (the labels as they were on
+# 16/09/2026, before two of them were shortened):
+#   "Séchée aujourd'hui"           157 px in 202  -> comfortable
+#   "Étalonner maintenant"         206 px in 210  -> 2 px of air, reported
+#   "Configurer dans le navigateur" 260 px in 216 -> clipped both ends, reported
+#
+# An id drawn in several widgets gets one row per widget. check() tests every
+# row, and keeps comparing with German and English at the sites no row names.
+
+# --- main screen status line (HDR_STATUS_W 292, narrow variant 262) ----------
+# src/ui/main_screen.cpp:258, LV_LABEL_LONG_DOT. The narrow value is the one to
+# respect: header_status.cpp:153 narrows it when the address shows a port.
+# Only the ids really written to lbl_status are listed here.
+STR_WAIT_SCAN	14	262	NEVER	src/app/app_loop.cpp:960 lbl_status, HDR_STATUS_W_NARROW
+STR_TAG_FOUND	14	262	NEVER	src/app/app_loop.cpp:1723 lbl_status
+STR_READING_TAG	14	262	NEVER	src/app/app_loop.cpp:1533 lbl_status
+STR_NOT_IN_SPOOLMAN	14	262	NEVER	src/app/app_loop.cpp:1597 lbl_status
+
+# --- main screen, the big weight column (f20, no width) ----------------------
+# lbl_spoolman_weight at x=8 (main_screen.cpp:527) has no width and runs until
+# the divider at x=210, so 202 px. The status messages below replace the weight
+# there, never the status line.
+STR_WAIT_SCAN_SM	20	202	NEVER	src/app/app_boot.cpp:87 lbl_spoolman_weight, divider at x=210
+STR_NO_WIFI	20	202	NEVER	src/app/app_boot.cpp:113 lbl_spoolman_weight, divider at x=210
+STR_WAIT	20	202	NEVER	src/ui/spoolman_lookup.cpp:896 lbl_spoolman_weight, divider at x=210
+STR_NOT_IN_SPOOLMAN	20	202	NEVER	src/ui/spoolman_lookup.cpp:1750 lbl_spoolman_weight, divider at x=210
+# German "Fehler beim Speichern" is already 230 px here and crosses the divider.
+# The gate keeps French from ever being wider than that.
+STR_ERR_SAVE	20	230	NEVER	src/services/spoolman_actions.cpp:139 lbl_spoolman_weight, German 230 px
+# The 'last dried' value, 204 px, LV_LABEL_LONG_DOT (main_screen.cpp:463).
+STR_WAIT_SCAN	16	204	NEVER	src/ui/dried_action.cpp:31 lbl_spoolman_dried_val
+STR_NO_WIFI	16	204	NEVER	src/ui/dried_action.cpp:27 lbl_spoolman_dried_val
+STR_ERR_SAVE	16	204	NEVER	src/ui/dried_action.cpp:102 lbl_spoolman_dried_val
+
+# --- main screen captions --------------------------------------------------
+# These have NO width set (LV_SIZE_CONTENT), so an over-long caption overlaps
+# the next column instead of ellipsising - no warning at all. The budget is the
+# gap to the neighbour, measured from the source coordinates. The Spoolman
+# caption at x=8, y=189 is left out: it shows the backend's product name, which
+# no table row reaches.
+STR_LBL_MATERIAL	12	132	NEVER	src/ui/main_screen.cpp:338 caption at x=112, next caption at x=244
+STR_LBL_VENDOR	12	236	NEVER	src/ui/main_screen.cpp:376 caption at x=8, next caption at x=244
+STR_LBL_LAST_USED	12	236	NEVER	src/ui/main_screen.cpp:440 caption at x=8, next caption at x=244
+STR_LASTUSED_OPT_WEIGHED	12	236	NEVER	src/ui/main_screen.cpp:434 same caption, weighed variant
+STR_LBL_LAST_DRIED	12	228	NEVER	src/ui/main_screen.cpp:454 caption at x=244, 8 px margin
+STR_LBL_TEMP	12	144	NEVER	src/ui/main_screen.cpp:390 caption, More-info button at x=388
+STR_LBL_SCALE_SPOOL_CAP	12	126	NEVER	src/ui/main_screen.cpp:580 caption at x=218, next caption at x=344
+STR_LBL_TOTAL_CAP	12	68	NEVER	src/ui/main_screen.cpp:608 caption at x=218, value at x=286
+STR_LBL_WO_BAG_CAP	12	68	NEVER	src/ui/main_screen.cpp:622 caption at x=218, value at x=286
+
+# --- main screen action buttons: 202 x 39 px -------------------------------
+# Measured from the source, not assumed: lv_obj_set_size(btn_dried, 202, 39).
+# STR_BTN_WEIGHT gets a smaller budget on purpose - main_screen.cpp:786 appends
+# " (A)" to it when automatic weighing is on, and that suffix measures 26 px.
+STR_BTN_MORE_INFO	12	76	NEVER	src/ui/main_screen.cpp:414 84 px button, -8 air
+STR_BTN_WEIGHT	16	168	NEVER	src/ui/main_screen.cpp:786 202 px button, -8 air, -26 for " (A)"
+STR_BTN_DRIED	16	194	NEVER	src/ui/main_screen.cpp:829 202 px button, -8 air
+STR_BTN_LINK	16	194	NEVER	src/ui/main_screen.cpp:868 202 px button, -8 air
+STR_BTN_LOCATION	16	194	NEVER	src/ui/main_screen.cpp:801 202 px button, -8 air
+STR_BTN_COPY_SPOOL	16	194	NEVER	src/ui/main_screen.cpp:878 202 px button, -8 air
+
+# --- the ON / OFF slot: the tightest place in the whole UI ------------------
+# 7 usable bytes and a 42 px slot - 42 with the help circle, 120 without, and
+# the tighter one is gated. "ARRÊT" measures 47 px and "DÉSACTIVÉ" is 11 bytes
+# with its accents, so French keeps ON / OFF - which is also what French
+# hardware does.
+STR_ON	14	42	NEVER	src/ui/ui_common.cpp:153 arrow slot, char[8]
+STR_OFF	14	42	NEVER	src/ui/ui_common.cpp:153 arrow slot, char[8]
+
+# --- settings rows (makeListBtn / addSettingRow) ----------------------------
+# Title 320 px, 290 with the help circle; subtitle 320 px at f12. The buffers
+# are tighter than the pixels (39 and 63 bytes), so the byte check usually bites
+# first - these are here for the ones with no copyT site.
+STR_TILE_CONNECTION	16	290	NEVER	src/ui/ui_common.cpp:96 row title with help
+STR_TILE_SCALE	16	290	NEVER	src/ui/ui_common.cpp:96
+STR_TILE_DISPLAY	16	290	NEVER	src/ui/ui_common.cpp:96
+STR_TILE_SYSTEM	16	290	NEVER	src/ui/ui_common.cpp:96
+
+# --- popups ----------------------------------------------------------------
+# Each row names a real site: these ids are drawn in several buttons of
+# different sizes, and the one listed is the narrowest found.
+STR_BTN_CONFIRMED	18	162	NEVER	src/ui/confirm_popup.cpp:762 170 px button, -8 air
+STR_CANCEL	18	162	NEVER	src/ui/confirm_popup.cpp:788 170 px button, -8 air
+STR_CONFIRM	16	172	NEVER	src/ui/extra_fields_screen.cpp:363 180 px button, -8 air
+STR_CONFIRM	14	185	NEVER	src/ui/extra_fields_screen.cpp:589 210 px button, -8 air, -17 for "  ->"
+STR_RETRY	16	192	NEVER	src/ui/wifi_setup_screen.cpp:686 200 px button, -8 air
+STR_BACK	16	192	NEVER	src/ui/info_popup.cpp:133 200 px button, -8 air
+STR_ARCHIVED	16	134	NEVER	src/ui/status_picker.cpp:89 status chip (More info, AMS bay card)
+
+# --- diagnostics banner ----------------------------------------------------
+# One 464 px label at f14 (diag_banner.cpp:61) holding the icon and two spaces
+# (24 px), the banner text, then STR_DIAG_TAP. The banner budget leaves room for
+# the widest tap hint of the three languages: English, 106 px. 464 - 24 - 106.
+
+# --- backend screen: the button that points at the web interface -------------
+# src/ui/backend_screen.cpp:143 appends "  " plus LV_SYMBOL_RIGHT to this label:
+#   snprintf(buf_web, sizeof(buf_web), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_WEB_SETUP));
+# The button is 216 px and that suffix measures 18 px at font 16, so the label
+# itself may use 198. This is the concatenation case that got through review:
+# the envelope rule did warn, but it was one warning among hundreds.
+STR_BTN_WEB_SETUP	16	190	NEVER	src/ui/backend_screen.cpp:143 216 px button, -8 air, -18 for "  ->"
+STR_CAL_REMINDER_NOW	16	202	NEVER	src/ui/cal_reminder_screen.cpp:136 210 px button, -8 air
+STR_CAL_REMINDER_LATER	16	202	NEVER	src/ui/cal_reminder_screen.cpp:115 210 px button, -8 air
+STR_REBOOT_BTN	14	172	NEVER	src/ui/reboot_popup.cpp:55 180 px button, -8 air
+STR_BTN_OPEN_BROWSER	12	128	NEVER	src/ui/drying_reminder_screen.cpp:196 150 px button, -8 air, -14 for "  ->"
+STR_BTN_MORE_OPTIONS	16	190	NEVER	src/ui/backend_screen.cpp:361 216 px button, -8 air, -18 for "  ->" (symmetry with STR_BTN_WEB_SETUP)
+STR_DIAG_BUS_EMPTY_BANNER	14	334	NEVER	src/ui/diag_banner.cpp:89 464 px label, -24 icon, -106 widest STR_DIAG_TAP
+STR_DIAG_NAU_MISSING_BANNER	14	334	NEVER	src/ui/diag_banner.cpp:89 464 px label, -24 icon, -106 widest STR_DIAG_TAP
+STR_DIAG_PN532_MISSING_BANNER	14	334	NEVER	src/ui/diag_banner.cpp:89 464 px label, -24 icon, -106 widest STR_DIAG_TAP
+STR_DIAG_PN532_MUTE_BANNER	14	334	NEVER	src/ui/diag_banner.cpp:89 464 px label, -24 icon, -106 widest STR_DIAG_TAP
+STR_DIAG_UNCAL_BANNER	14	334	NEVER	src/ui/diag_banner.cpp:89 464 px label, -24 icon, -106 widest STR_DIAG_TAP
+STR_DIAG_INVERTED_BANNER	14	334	NEVER	src/ui/diag_banner.cpp:89 464 px label, -24 icon, -106 widest STR_DIAG_TAP
+STR_DIAG_NOISY_BANNER	14	334	NEVER	src/ui/diag_banner.cpp:89 464 px label, -24 icon, -106 widest STR_DIAG_TAP
+
+# --- found by the width sweep of 16/09/2026 ---------------------------------
+# Every warning of check() was followed to its real widget. These are the places
+# where French was visibly broken and German and English were not; the wording
+# was shortened and the row keeps it that way.
+STR_WIFI_TITLE	18	156	NEVER	src/ui/wifi_setup_screen.cpp:164 centred title, rescan button starts at x=318
+STR_TAGMOVE_FROM	14	96	NEVER	src/ui/spool_flow.cpp:805 caption at x=20, swatch at x=124, -8 air
+STR_BTN_WIFI_PORTAL	14	182	NEVER	src/ui/wifi_setup_screen.cpp:243 190 px button, -8 air
+STR_PORTAL_STEP_JOIN	14	232	NEVER	src/ui/wifi_portal_screen.cpp:110 centred at x=120 in the left 240 px column, -8 air
+# settingSubtitle() writes "<sub> - <mode>" into one 290 px subtitle at f12
+# (ui_common.cpp:103, row with help circle); a wrap lands on the row title.
+STR_AMS_SUB	12	198	NEVER	src/ui/ui_common.cpp:103 290 px subtitle, -92 for the widest " - <mode>"
+STR_AMS_MODE_ALWAYS	12	103	NEVER	src/ui/ui_common.cpp:103 290 px subtitle, after STR_AMS_SUB and " - "
+STR_AMS_MODE_ASK	12	103	NEVER	src/ui/ui_common.cpp:103 290 px subtitle, after STR_AMS_SUB and " - "
+STR_AMS_MODE_OFF	12	103	NEVER	src/ui/ui_common.cpp:103 290 px subtitle, after STR_AMS_SUB and " - "
+
+# --- AMS page and bay detail card, added upstream in 0.7.3 --------------------
+# Only the widgets that fail without a sign: a label with no width, a button,
+# and a wrapped question with a row under it. The status line and the note line
+# of the card are LV_LABEL_LONG_DOT and show their dots.
+STR_AMSV_INFO	14	142	NEVER	src/ui/ams_view.cpp:799 150 px footer button, -8 air
+STR_AMSV_INFO_HINT	12	456	NEVER	src/ui/ams_view.cpp:723 headline at x=8 with no width, AMSV_MARGIN_R 16
+STR_AMSD_DRIED_Q	20	360	NEVER	src/ui/ams_detail_popup.cpp:198 360 px wrapped question, a third line reaches the swatch row at y=122
+# No width, aligned right on the note line (AMSD_NOTE_Y) it can overlap. The
+# gate keeps French from ever being wider than the German, 154 px.
+STR_AMSD_WRITE_FAIL	12	154	NEVER	src/ui/ams_detail_popup.cpp:815 caption at the right of the note line, German 154 px
