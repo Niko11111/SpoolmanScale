@@ -34,7 +34,7 @@ static String pageStart() {
   String h;
   h.reserve(PORTAL_PAGE_RESERVE);
   h += F("<!doctype html><html lang='");
-  h += (g_lang == LANG_DE) ? "de" : "en";
+  h += (g_lang == LANG_DE) ? "de" : (g_lang == LANG_FR) ? "fr" : "en";
   h += F("'><head><meta charset='utf-8'>"
          "<meta name='viewport' content='width=device-width,initial-scale=1'>"
          "<title>SpoolmanScale</title><style>");

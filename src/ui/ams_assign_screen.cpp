@@ -123,7 +123,7 @@ static void buildAmsWindowNumpad() {
     lv_obj_set_style_border_width(kb, 1, 0);
     lv_obj_set_style_border_color(kb, is_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3050), 0);
     lv_obj_t *kl = lv_label_create(kb);
-    lv_label_set_text(kl, is_ok ? LV_SYMBOL_OK : keys[i]);
+    lv_label_set_text(kl, is_ok ? LV_SYMBOL_OK : is_del ? T(STR_KEY_DEL) : keys[i]);
     lv_obj_set_style_text_color(kl, is_del ? lv_color_hex(0xe04040) :
                                      is_ok  ? lv_color_hex(0x28d49a) :
                                               lv_color_hex(0xe8f0ff), 0);

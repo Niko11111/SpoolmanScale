@@ -66,11 +66,11 @@ Over 100 people are running a SpoolmanScale, and it is tested daily against a Sp
 - 🌡️ **Drying reminder** – color-coded `last_dried` date showing whether a spool needs drying, with thresholds per material or set manually
 - 📱 **Touchscreen UI (LVGL 8.3, 480×320)** – settings menu, confirmation popups, sleep/wake
 - ⚙️ **On-device setup** – scan Wi-Fi networks, enter credentials and server address directly on the touchscreen
-- 🌐 **Web interface** – rebuilt from the ground up as separate pages, in both languages, as usable on a phone as on a desktop. Update the firmware straight from GitHub with the release notes in front of you, switch backends, write tags, read and follow the log. Areas you would rather not expose can be switched off individually
+- 🌐 **Web interface** – rebuilt from the ground up as separate pages, in all three languages, as usable on a phone as on a desktop. Update the firmware straight from GitHub with the release notes in front of you, switch backends, write tags, read and follow the log. Areas you would rather not expose can be switched off individually
 - 🩺 **Self-diagnosis** – when something is wrong, the scale says so in plain words instead of a four-character code: a chip that does not answer, an NFC reader that answers but does nothing, a missing calibration, a load cell wired the wrong way round, readings too unsteady to trust. Tap the message and it explains what to do, with a button that takes you there
 - 🔄 **Firmware updates (OTA)** – check and flash directly on the device or from the browser. No PC, no cables. Or upload a firmware file yourself
 - ⚡ **Web Flasher** – first-time flash via browser over USB. All you need is a browser and a USB cable: [niko11111.github.io/SpoolmanScale](https://niko11111.github.io/SpoolmanScale)
-- 🌍 **DE / EN language support** – chosen on first boot, switchable in settings, and it applies to the web interface as well
+- 🌍 **DE / EN / FR language support** – chosen on first boot, switchable in settings, and it applies to the web interface as well
 - 🌙 **Power management** – display dimming, deep sleep, and the display wakes on its own when you put something on the pad
 - 🪵 **SD card logging** – insert a microSD card and SpoolmanScale logs what it does. Read it in the browser, live if you want, no disassembly needed
 - ⏰ **Small things that add up** – timestamps in your own time zone, and the scale answers to `spoolmanscale.local` so there is no IP address to remember

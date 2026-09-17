@@ -698,7 +698,7 @@ void buildMoreInfoScreen() {
 
   // Cap: Material
   lv_obj_t *mi_mat_cap = lv_label_create(box);
-  lv_label_set_text(mi_mat_cap, "Material");
+  lv_label_set_text(mi_mat_cap, T(STR_LBL_MATERIAL));
   lv_obj_set_style_text_color(mi_mat_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(mi_mat_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(mi_mat_cap, 114, 60);
@@ -889,7 +889,7 @@ void buildMoreInfoScreen() {
 
   // Spoolman UUID left, unlink right - both ending on y=290
   lv_obj_t *c_uuid = lv_label_create(box);
-  { char ub[32]; snprintf(ub, sizeof(ub), "%s UUID", backendName()); lv_label_set_text(c_uuid, ub); }
+  { char ub[32]; snprintf(ub, sizeof(ub), T(STR_BACKEND_UUID), backendName()); lv_label_set_text(c_uuid, ub); }
   lv_obj_set_style_text_color(c_uuid, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(c_uuid, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(c_uuid, CA, R4);

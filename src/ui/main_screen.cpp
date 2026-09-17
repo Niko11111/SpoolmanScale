@@ -332,7 +332,7 @@ void buildUI() {
 
   // Cap: Material (x=112, y=53)
   lv_obj_t *lbl_mat_cap = lv_label_create(lv_scr_act());
-  lv_label_set_text(lbl_mat_cap, "Material");
+  lv_label_set_text(lbl_mat_cap, T(STR_LBL_MATERIAL));
   lv_obj_set_style_text_color(lbl_mat_cap, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(lbl_mat_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(lbl_mat_cap, 112, 53);

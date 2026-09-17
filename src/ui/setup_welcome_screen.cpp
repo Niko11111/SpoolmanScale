@@ -22,12 +22,13 @@
 // The choice, held across rebuilds of the screen: picking a language restyles
 // the buttons, and coming back from the time zone picker rebuilds it whole.
 // -1 means "not worked out yet".
-static int  wel_lang_sel   = -1;   // 0 = DE, 1 = EN, same values as the "lang" key
+static int  wel_lang_sel   = -1;   // 0 = DE, 1 = EN, 2 = FR, same values as the "lang" key
 static int  wel_tz_sel     = -1;   // index into TZ_LIST
 static bool wel_tz_touched = false;
 
 static lv_obj_t *wel_btn_en = nullptr, *wel_lbl_en = nullptr;
 static lv_obj_t *wel_btn_de = nullptr, *wel_lbl_de = nullptr;
+static lv_obj_t *wel_btn_fr = nullptr, *wel_lbl_fr = nullptr;
 static lv_obj_t *wel_lbl_tz = nullptr;
 
 static void welStyleLangBtn(lv_obj_t *btn, lv_obj_t *lbl, bool active) {
@@ -42,6 +43,7 @@ static void welStyleLangBtn(lv_obj_t *btn, lv_obj_t *lbl, bool active) {
 static void welRefresh() {
   welStyleLangBtn(wel_btn_en, wel_lbl_en, wel_lang_sel == 1);
   welStyleLangBtn(wel_btn_de, wel_lbl_de, wel_lang_sel == 0);
+  welStyleLangBtn(wel_btn_fr, wel_lbl_fr, wel_lang_sel == 2);
   if (wel_lbl_tz && wel_tz_sel >= 0 && (size_t)wel_tz_sel < TZ_COUNT) {
     char buf[48];
     strncpy(buf, TZ_LIST[wel_tz_sel].name, sizeof(buf) - 1);
@@ -72,7 +74,9 @@ void buildWelcomeScreen() {
   lv_obj_set_style_bg_color(scr_welcome, lv_color_hex(0x0a1020), 0);
 
   // First time through: start from whatever the device already believes.
-  if (wel_lang_sel < 0) wel_lang_sel = (g_lang == LANG_DE) ? 0 : 1;
+  // The enum values are the stored values, so this needs no mapping and stays
+  // right whatever languages exist.
+  if (wel_lang_sel < 0) wel_lang_sel = (int)g_lang;
   if (wel_tz_sel < 0) {
     const int stored = timeZoneIndex();
     wel_tz_sel = (stored >= 0) ? stored
@@ -114,17 +118,22 @@ void buildWelcomeScreen() {
   }
 
   // ---- language, a choice now rather than an action ------------------
-  const int LB_W = 218, LB_H = 52, LB_Y = 76;
+  // Three buttons on one row: 8 px margins, two 10 px gaps, so
+  // (480 - 16 - 20) / 3 = 148. Nothing else on this screen moves. The labels
+  // drop their "EN " / "DE " prefix to make room - "Deutsch" is 76 px at this
+  // font and "Français" 76, well inside 148.
+  const int LB_W = 148, LB_H = 52, LB_Y = 76;
+  const int LB_X_EN = 8, LB_X_DE = 166, LB_X_FR = 324;
 
   wel_btn_en = lv_btn_create(scr_welcome);
   lv_obj_set_size(wel_btn_en, LB_W, LB_H);
-  lv_obj_set_pos(wel_btn_en, 8, LB_Y);
+  lv_obj_set_pos(wel_btn_en, LB_X_EN, LB_Y);
   lv_obj_set_style_bg_color(wel_btn_en, lv_color_hex(0x1a4060), LV_STATE_PRESSED);
   lv_obj_set_style_radius(wel_btn_en, 10, 0);
   lv_obj_set_style_shadow_width(wel_btn_en, 0, 0);
   lv_obj_set_style_border_width(wel_btn_en, 2, 0);
   wel_lbl_en = lv_label_create(wel_btn_en);
-  lv_label_set_text(wel_lbl_en, "EN   English");
+  lv_label_set_text(wel_lbl_en, "English");
   lv_obj_set_style_text_font(wel_lbl_en, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(wel_lbl_en);
   lv_obj_add_event_cb(wel_btn_en, [](lv_event_t *e){
@@ -138,18 +147,39 @@ void buildWelcomeScreen() {
 
   wel_btn_de = lv_btn_create(scr_welcome);
   lv_obj_set_size(wel_btn_de, LB_W, LB_H);
-  lv_obj_set_pos(wel_btn_de, 254, LB_Y);
+  lv_obj_set_pos(wel_btn_de, LB_X_DE, LB_Y);
   lv_obj_set_style_bg_color(wel_btn_de, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
   lv_obj_set_style_radius(wel_btn_de, 10, 0);
   lv_obj_set_style_shadow_width(wel_btn_de, 0, 0);
   lv_obj_set_style_border_width(wel_btn_de, 2, 0);
   wel_lbl_de = lv_label_create(wel_btn_de);
-  lv_label_set_text(wel_lbl_de, "DE   Deutsch");
+  lv_label_set_text(wel_lbl_de, "Deutsch");
   lv_obj_set_style_text_font(wel_lbl_de, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(wel_lbl_de);
   lv_obj_add_event_cb(wel_btn_de, [](lv_event_t *e){
     wel_lang_sel = 0;
     if (!wel_tz_touched) wel_tz_sel = timeZoneDefaultIndexForLang(0);
+    welRefresh();
+  }, LV_EVENT_CLICKED, NULL);
+
+  // The cedilla comes from the Latin-1 supplement reached through the font's
+  // fallback, so this label needs src/fonts/lv_font_fr_supp_18.c to be present.
+  // This is the first screen a French owner sees, so a missing glyph would show
+  // as a hollow rectangle before anything else could be trusted.
+  wel_btn_fr = lv_btn_create(scr_welcome);
+  lv_obj_set_size(wel_btn_fr, LB_W, LB_H);
+  lv_obj_set_pos(wel_btn_fr, LB_X_FR, LB_Y);
+  lv_obj_set_style_bg_color(wel_btn_fr, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(wel_btn_fr, 10, 0);
+  lv_obj_set_style_shadow_width(wel_btn_fr, 0, 0);
+  lv_obj_set_style_border_width(wel_btn_fr, 2, 0);
+  wel_lbl_fr = lv_label_create(wel_btn_fr);
+  lv_label_set_text(wel_lbl_fr, "Français");
+  lv_obj_set_style_text_font(wel_lbl_fr, &lv_font_montserrat_ext_18, 0);
+  lv_obj_center(wel_lbl_fr);
+  lv_obj_add_event_cb(wel_btn_fr, [](lv_event_t *e){
+    wel_lang_sel = 2;
+    if (!wel_tz_touched) wel_tz_sel = timeZoneDefaultIndexForLang(2);
     welRefresh();
   }, LV_EVENT_CLICKED, NULL);
 
@@ -225,16 +255,23 @@ void buildWelcomeScreen() {
     // Both answers land together and the device restarts once. Picking German
     // used to restart on the spot, which meant the zone could only ever be
     // asked afterwards, on a device already running on the wrong clock.
-    const bool de = (wel_lang_sel == 0);
+    // Clamped anyway, and sized by its initializer: a language added to the
+    // enum without a tag here stops the build instead of handing logSDf a null
+    // pointer.
+    static const char *const LANG_TAG[] = { "DE", "EN", "FR" };
+    static_assert(sizeof(LANG_TAG) / sizeof(LANG_TAG[0]) == LANG_COUNT,
+                  "LANG_TAG is out of step with enum Lang");
+    const uint8_t lang = (wel_lang_sel >= 0 && wel_lang_sel < LANG_COUNT)
+                           ? (uint8_t)wel_lang_sel : (uint8_t)LANG_EN;
     if (wel_tz_sel >= 0 && (size_t)wel_tz_sel < TZ_COUNT) {
       timeZoneSet(TZ_LIST[wel_tz_sel].tz);
     }
-    prefsPutUChar("lang", de ? 0 : 1);
+    prefsPutUChar("lang", lang);
     prefsPutBool("lang_set", true);
     prefsPutBool("first_boot", true);
     prefsFlush();      // parked while LVGL dispatches; the restart comes next
     logSDf("Setup: language=%s zone=%s -> restart",
-           de ? "DE" : "EN",
+           LANG_TAG[lang],
            (wel_tz_sel >= 0 && (size_t)wel_tz_sel < TZ_COUNT) ? TZ_LIST[wel_tz_sel].name : "?");
     ESP.restart();
   }, LV_EVENT_CLICKED, NULL);

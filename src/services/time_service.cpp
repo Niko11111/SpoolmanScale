@@ -34,12 +34,16 @@ const size_t TZ_COUNT = sizeof(TZ_LIST) / sizeof(TZ_LIST[0]);
 #define PREF_KEY_LANG  "lang"
 #define PREF_KEY_TZ    "tz"
 #define LANG_VALUE_DE  0
+// France keeps the same zone as Germany. A number here too, for the reason the
+// comment above gives: this file stays clear of lang.h.
+#define LANG_VALUE_FR  2
 // Same default loadPrefs() uses, so a device that has never been asked lands
 // on the same language here as it does everywhere else.
 #define LANG_DEFAULT   1
 
 int timeZoneDefaultIndexForLang(uint8_t lang) {
-  return (lang == LANG_VALUE_DE) ? TZ_INDEX_CET : TZ_INDEX_UTC;
+  const bool cet = (lang == LANG_VALUE_DE) || (lang == LANG_VALUE_FR);
+  return cet ? TZ_INDEX_CET : TZ_INDEX_UTC;
 }
 
 String timeZoneGet() {

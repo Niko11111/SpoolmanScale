@@ -676,7 +676,7 @@ void buildWifiConnectingScreen() {
   // bottom edge), so the block stops just clear of them.
   conn_val_ssid = addInfoRow(scr_wifi_connecting, 134, "SSID",    &conn_lbl_ssid);
   conn_val_ip   = addInfoRow(scr_wifi_connecting, 164, "IP",      &conn_lbl_ip);
-  conn_val_gw   = addInfoRow(scr_wifi_connecting, 194, "Gateway", &conn_lbl_gw);
+  conn_val_gw   = addInfoRow(scr_wifi_connecting, 194, T(STR_WIFI_ROW_GATEWAY), &conn_lbl_gw);
   conn_val_rssi = addInfoRow(scr_wifi_connecting, 224, "Signal",  &conn_lbl_rssi);
   setConnSummaryHidden(true);
 
