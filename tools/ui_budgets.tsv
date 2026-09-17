@@ -118,7 +118,7 @@ STR_CONFIRM	16	172	NEVER	src/ui/extra_fields_screen.cpp:363 180 px button, -8 ai
 STR_CONFIRM	14	185	NEVER	src/ui/extra_fields_screen.cpp:589 210 px button, -8 air, -17 for "  ->"
 STR_RETRY	16	192	NEVER	src/ui/wifi_setup_screen.cpp:686 200 px button, -8 air
 STR_BACK	16	192	NEVER	src/ui/info_popup.cpp:133 200 px button, -8 air
-STR_ARCHIVED	16	134	NEVER	src/ui/status_picker.cpp:89 status chip (More info, AMS bay card)
+STR_ARCHIVED	16	134	NEVER	src/ui/status_picker.cpp:90 status chip (More info, AMS bay card)
 
 # --- diagnostics banner ----------------------------------------------------
 # One 464 px label at f14 (diag_banner.cpp:61) holding the icon and two spaces
@@ -170,3 +170,14 @@ STR_AMSD_DRIED_Q	20	360	NEVER	src/ui/ams_detail_popup.cpp:198 360 px wrapped que
 # No width, aligned right on the note line (AMSD_NOTE_Y) it can overlap. The
 # gate keeps French from ever being wider than the German, 154 px.
 STR_AMSD_WRITE_FAIL	12	154	NEVER	src/ui/ams_detail_popup.cpp:815 caption at the right of the note line, German 154 px
+
+# --- captions that used to be literals ----------------------------------------
+# German and English still show the literal they had; the budgets guard the
+# French. Info rows: label at INFO_ROW_LABEL_X 28, value at 172, -8 air.
+STR_WIFI_ROW_STATUS	14	136	NEVER	src/ui/wifi_info.cpp:153 info row label, value column at x=172
+STR_WIFI_ROW_GATEWAY	14	136	NEVER	src/ui/wifi_info.cpp:155 info row label, value column at x=172
+STR_WIFI_ROW_GATEWAY	14	136	NEVER	src/ui/wifi_setup_screen.cpp:679 info row label, value column at x=172
+# Centred title between the 44 px back button at x=4 and the close button at
+# x=432, 4 px of air each side.
+STR_LANG_SCREEN_TITLE	18	376	NEVER	src/ui/language_screen.cpp:89 centred title, buttons at 4-48 and 432-476
+STR_KEY_DEL	18	128	NEVER	src/ui/ams_assign_screen.cpp:126 136 px number pad key, -8 air (same key in drying_reminder_screen.cpp and web_screen.cpp)

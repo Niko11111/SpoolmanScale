@@ -2556,6 +2556,16 @@ const char* const STRINGS[][3] = {
 
   // The caption the main screen and More Info used to spell out as a literal.
   { "Material", "Material", "Matériau" },  // STR_LBL_MATERIAL
+
+  // More captions that used to be literals, for the same reason.
+  { "Status",             "Status",             "Statut" },  // STR_LBL_STATUS
+  { "Status",             "Status",             "État" },  // STR_WIFI_ROW_STATUS
+  { "Gateway",            "Gateway",            "Passerelle" },  // STR_WIFI_ROW_GATEWAY
+  { "Name",               "Name",               "Nom" },  // STR_IP_BAR_NAME
+  { "%s Server",          "%s Server",          "Serveur %s" },  // STR_SERVER_TITLE
+  { "%s UUID",            "%s UUID",            "UUID %s" },  // STR_BACKEND_UUID
+  { "Language / Sprache", "Language / Sprache", "Langue / Language / Sprache" },  // STR_LANG_SCREEN_TITLE
+  { "DEL",                "DEL",                "Effacer" },  // STR_KEY_DEL
 };
 
 StringID tagWriteResultString(uint8_t code) {

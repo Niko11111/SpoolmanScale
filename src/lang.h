@@ -1156,6 +1156,17 @@ enum StringID {
   // untranslated label on the busiest screen. Appended here rather than filed
   // with the other main screen labels: the table is positional.
   STR_LBL_MATERIAL,
+  // The same story for these: each was a literal because German and English
+  // happen to agree on it, and French does not. The number pads still compare
+  // their keys against "DEL"; only the label on the key comes from here.
+  STR_LBL_STATUS,             // status chip caption (More Info, AMS bay card)
+  STR_WIFI_ROW_STATUS,        // WiFi info row
+  STR_WIFI_ROW_GATEWAY,       // WiFi info and WiFi connected rows
+  STR_IP_BAR_NAME,            // IP bar mode that shows the device name
+  STR_SERVER_TITLE,           // "%s Server": backend address screen title
+  STR_BACKEND_UUID,           // "%s UUID": More Info caption
+  STR_LANG_SCREEN_TITLE,      // language screen title
+  STR_KEY_DEL,                // delete key of the number pads
 
   STR_COUNT
 };

@@ -69,10 +69,11 @@ lv_obj_t* buildStatusChip(lv_obj_t* parent, int x, int y, int status_id,
   lv_obj_clear_flag(chip, LV_OBJ_FLAG_SCROLLABLE);
   if (cb) lv_obj_add_event_cb(chip, cb, LV_EVENT_CLICKED, nullptr);
 
-  // Cap is identical in both languages, like "Filament" and "Material".
+  // Cap reads "Status" in German and English but not in French, so it comes
+  // from the table like "Material". "Filament" is the same in all three.
   lv_obj_t* cap = lv_label_create(chip);
   if (cap) {
-    lv_label_set_text(cap, "Status");
+    lv_label_set_text(cap, T(STR_LBL_STATUS));
     lv_obj_set_style_text_color(cap, lv_color_hex(0x4a6fa0), 0);
     lv_obj_set_style_text_font(cap, &lv_font_montserrat_ext_12, 0);
     lv_obj_align(cap, LV_ALIGN_CENTER, 0, -10);

@@ -214,10 +214,10 @@ void buildSpoolmanScreen() {
 
   sp_locked = !hostIsNumeric(backendHost());
 
-  // Header. The product name is not translated, so it is composed here
-  // instead of living in lang.cpp twice.
+  // Header. The product name is not translated, so the table holds only the
+  // words around it, and the name is filled in here.
   char buf_title[32];
-  snprintf(buf_title, sizeof(buf_title), "%s Server", backendName());
+  snprintf(buf_title, sizeof(buf_title), T(STR_SERVER_TITLE), backendName());
   buildSubHeader(scr_spoolman, buf_title,
     [](lv_event_t *e){
       logSD("BTN: Spoolman -> Back");

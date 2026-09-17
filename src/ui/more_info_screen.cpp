@@ -889,7 +889,7 @@ void buildMoreInfoScreen() {
 
   // Spoolman UUID left, unlink right - both ending on y=290
   lv_obj_t *c_uuid = lv_label_create(box);
-  { char ub[32]; snprintf(ub, sizeof(ub), "%s UUID", backendName()); lv_label_set_text(c_uuid, ub); }
+  { char ub[32]; snprintf(ub, sizeof(ub), T(STR_BACKEND_UUID), backendName()); lv_label_set_text(c_uuid, ub); }
   lv_obj_set_style_text_color(c_uuid, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(c_uuid, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(c_uuid, CA, R4);

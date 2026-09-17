@@ -86,7 +86,7 @@ void showLanguageScreen() {
   }, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *hdr = lv_label_create(scr);
-  lv_label_set_text(hdr, "Language / Sprache");
+  lv_label_set_text(hdr, T(STR_LANG_SCREEN_TITLE));
   lv_obj_set_style_text_color(hdr, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(hdr, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(hdr, LV_ALIGN_TOP_MID, 0, 12);
