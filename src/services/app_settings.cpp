@@ -71,7 +71,11 @@ void loadPrefs() {
   off_timeout_ms = off_min * 60000;
   sleep_timeout_ms = sleep_min * 60000;
 
-  g_lang = (Lang)prefsGetUChar("lang", 1);
+  // Range checked, unlike the bare cast this replaces. A stored byte outside
+  // the enum - a corrupt cell, or a language a newer build wrote - would index
+  // a column that does not exist and read whatever follows the row.
+  { const uint8_t v = prefsGetUChar("lang", LANG_EN);
+    g_lang = (v < LANG_COUNT) ? (Lang)v : LANG_EN; }
   g_date_fmt = prefsGetUChar("date_fmt", 0);
   // Before anything formats a time. The zone falls back to the language read
   // one line above, so this has to come after it.

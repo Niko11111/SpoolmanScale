@@ -1,14 +1,16 @@
 // ============================================================
 //  SpoolmanScale – Localization (i18n)
 //  lang.h - String IDs, enum, T() macro
-//  Languages: DE (0) | EN (1)
+//  Languages: DE (0) | EN (1) | FR (2)
 // ============================================================
 #pragma once
 #include <stdint.h>
 #include <stdio.h>
 #include <stddef.h>
 
-enum Lang { LANG_DE = 0, LANG_EN = 1 };
+// LANG_COUNT is the sentinel loadPrefs() clamps against: the NVS byte is not
+// trustworthy, and an out-of-range value would index a column that is not there.
+enum Lang { LANG_DE = 0, LANG_EN = 1, LANG_FR = 2, LANG_COUNT };
 extern Lang g_lang;
 
 // Date format: 0 = DD.MM.YYYY  |  1 = YYYY-MM-DD
@@ -1148,28 +1150,44 @@ enum StringID {
   STR_AMSD_DRIED_Q,           // confirm: record today's drying for this bay
   STR_AMSD_SAVING,
   STR_AMSD_WRITE_FAIL,
+  // The main screen and More Info spelled this caption out as the literal
+  // "Material", which reads the same in German and English and so never needed
+  // the table. It is not a French word, so in French it stood out as the one
+  // untranslated label on the busiest screen. Appended here rather than filed
+  // with the other main screen labels: the table is positional.
+  STR_LBL_MATERIAL,
 
   STR_COUNT
 };
 
 // Deliberately without a bound: it comes from the initializer in lang.cpp, so
-// the static_assert there can compare the two. Spelled [STR_COUNT][2] here,
+// the static_assert there can compare the two. Spelled [STR_COUNT][3] here,
 // the definition inherits that bound, a short initializer is padded with
 // nullptr, and nothing complains.
-extern const char* const STRINGS[][2];
+extern const char* const STRINGS[][3];
 
 // Which string explains a TagWriteResult. Lives here rather than in either
 // caller: the device popup and the tag page in the browser say the same thing
 // about the same code, and two tables would have drifted apart.
 StringID tagWriteResultString(uint8_t code);
 
+// The row in the current language, or in English when that cell is empty. A row
+// written with German and English only still compiles into the three-column
+// table - C pads the missing cell with nullptr - and a %s handed nullptr
+// restarts this board rather than printing "(null)". Falling back keeps such a
+// row readable until its French is added.
+static inline const char* langText(int id) {
+  const char* s = STRINGS[id][g_lang];
+  return s ? s : STRINGS[id][LANG_EN];
+}
+
 // Macro: T(STR_XXX) -> returns the string in the current language. LVGL can
 // take it directly; lv_label_set_text() copies.
-#define T(id) STRINGS[id][g_lang]
+#define T(id) langText(id)
 
 // A table string into a buffer, terminated - for the places that go on to
 // format or append. It replaces strncpy(buf, T(id), sizeof(buf) - 1), which
 // left the last byte to chance whenever a translation filled the buffer.
 static inline void copyT(char* dst, size_t n, int id) {
-  snprintf(dst, n, "%s", STRINGS[id][g_lang]);
+  snprintf(dst, n, "%s", langText(id));
 }
