@@ -48,6 +48,10 @@ static bool      pending = false;
 static int       pending_id = 0;
 static TagFormat pending_fmt = TAG_FMT_ACE;
 static bool      pending_link = false;
+static bool      pending_link_only = false;
+static int       pending_link_id = 0;
+static bool      selectWritableTag(uint8_t *uid, uint8_t *uid_len);
+static bool      selectAnyTag(uint8_t *uid, uint8_t *uid_len);
 static char      state[12] = "idle";
 static char      message[96] = "";
 static uint8_t   result = TW_NONE;
@@ -126,8 +130,22 @@ static void finish(const char *st, const char *msg, uint8_t code) {
   logSDf("TagWrite: %s - %s", st, msg);
 }
 
+bool tagLinkRequest(int spool_id) {
+  if (pending || pending_link_only || spool_id <= 0) return false;
+  pending_link_id   = spool_id;
+  pending_link_only = true;
+  result            = TW_BUSY;
+  memset(&report, 0, sizeof(report));
+  report.code     = TW_BUSY;
+  report.spool_id = spool_id;
+  report.fmt      = TAG_FMT_OPENSPOOL;
+  snprintf(state, sizeof(state), "pending");
+  snprintf(message, sizeof(message), "Linking tag to spool %d...", spool_id);
+  return true;
+}
+
 bool tagWriteRequest(int spool_id, TagFormat fmt, bool link) {
-  if (pending) return false;
+  if (pending || pending_link_only) return false;
   if (fmt != TAG_FMT_ERASE && spool_id <= 0) return false;
   pending_id   = spool_id;
   pending_fmt  = fmt;
@@ -349,7 +367,7 @@ static bool rdPageIs(uint8_t page, const uint8_t *expect) {
 // on, and the largest tag this firmware writes, an NTAG216, ends at 225.
 #define NTAG_PAGE_MAX         230
 // Without a readable capability container the smallest tag is assumed.
-#define NTAG_FALLBACK_LAST_PG  39
+#define NTAG_FALLBACK_LAST_PG  129
 // The page every record starts on, once the four the chip keeps for itself
 // are past.
 #define NTAG_FIRST_USER_PAGE    4
@@ -614,12 +632,9 @@ bool tagWriteRemotePayload() {
 
   uint8_t uid[NFC_UID_MAX], uid_len = 0;
   bool ok = false;
-  if (!nfcReadPassiveTarget(uid, &uid_len, 600)) {
-    finish("error", "No tag on the reader", TW_ERR_NO_TAG);
-  } else if (uid_len != 7) {
-    finish("error", "Not a writable NTAG, this tag can only be read",
-           TW_ERR_NOT_NTAG);
-  } else if (!writeNdefJson(remote_payload)) {
+  if (!selectWritableTag(uid, &uid_len)) return false;
+
+  if (!writeNdefJson(remote_payload)) {
     finish("error", write_err[0] ? write_err
                                  : "Write failed - keep the tag still on the reader",
            write_code);
@@ -642,29 +657,83 @@ static bool isSupportedRecord(const char *json) {
   JsonDocument d;
   if (deserializeJson(d, json)) return false;
   const char *proto = d["protocol"] | "";
-  return !strcmp(proto, "openspool") || !strcmp(proto, "filaman");
+  if (proto[0]) {
+    if (strcasecmp(proto, "openspool") == 0 ||
+        strcasecmp(proto, "filaman") == 0 ||
+        strcasecmp(proto, "openspoolman") == 0) {
+      return true;
+    }
+  }
+  return d.containsKey("type") || d.containsKey("material") ||
+         d.containsKey("brand") || d.containsKey("vendor");
 }
 
 // Reads the JSON payload back out of the NDEF wrapper.
 static bool readOpenSpool(char *out, size_t out_len) {
-  uint8_t buf[240];
+  uint8_t buf[480];
   if (!nfcReadNtagPage(4, buf)) return false;
-  if (buf[0] != 0x03) return false;          // not an NDEF TLV, stop here
-  int len = buf[1];
-  const int need = 2 + len;
+  
+  if (buf[0] == '{') {
+    // Raw JSON directly at page 4
+    for (int p = 1; p < (int)sizeof(buf)/4; p++) {
+      if (!nfcReadNtagPage(4 + p, buf + p * 4)) break;
+    }
+    size_t copy = sizeof(buf) < out_len - 1 ? sizeof(buf) : out_len - 1;
+    memcpy(out, buf, copy);
+    out[copy] = 0;
+    char *end = strchr(out, '}');
+    if (end) {
+      *(end + 1) = '\0';
+    }
+    return isSupportedRecord(out);
+  }
+  
+  if (buf[0] != 0x03) return false; // not an NDEF TLV
+  
+  int ndef_len;
+  int ndef_start;
+  if (buf[1] == 0xFF) {
+    if (!nfcReadNtagPage(5, buf + 4)) return false;
+    ndef_len = (buf[2] << 8) | buf[3];
+    ndef_start = 4;
+  } else {
+    ndef_len = buf[1];
+    ndef_start = 2;
+  }
+  
+  const int need = ndef_start + ndef_len;
   const int pages = (need + 3) / 4;
   if (pages > (int)sizeof(buf) / 4) return false;
-  for (int p2 = 1; p2 < pages; p2++)
-    if (!nfcReadNtagPage((uint8_t)(4 + p2), buf + p2 * 4)) return false;
-  if (len < 5 || 2 + len > (int)sizeof(buf)) return false;
-  int tlen = buf[3];
-  int plen = buf[4];
-  int start = 5 + tlen;
-  if (plen <= 0 || start + plen > (int)sizeof(buf)) return false;
-  size_t copy = (size_t)plen < out_len - 1 ? (size_t)plen : out_len - 1;
-  memcpy(out, buf + start, copy);
-  out[copy] = 0;
-  return isSupportedRecord(out);
+  
+  for (int p2 = 1; p2 < pages; p2++) {
+    if (!nfcReadNtagPage(4 + p2, buf + p2 * 4)) return false;
+  }
+  
+  uint8_t flags = buf[ndef_start];
+  bool sr = flags & 0x10;
+  bool il = flags & 0x08;
+  int p = ndef_start + 1;
+  uint8_t tlen = buf[p++];
+  uint32_t plen = 0;
+  
+  if (sr) {
+    plen = buf[p++];
+  } else {
+    plen = (buf[p] << 24) | (buf[p+1] << 16) | (buf[p+2] << 8) | buf[p+3];
+    p += 4;
+  }
+  
+  uint8_t id_len = il ? buf[p++] : 0;
+  p += tlen + id_len; // payload starts at p
+  
+  if (p + plen <= sizeof(buf)) {
+    size_t copy = (size_t)plen < out_len - 1 ? (size_t)plen : out_len - 1;
+    memcpy(out, buf + p, copy);
+    out[copy] = 0;
+    return isSupportedRecord(out);
+  }
+  
+  return false;
 }
 
 // OpenSpool carries the temperatures as JSON strings - "min_temp":"200" - and
@@ -681,13 +750,18 @@ static void describeOpenSpool(const char *json, char *out, size_t out_len, TagIn
   if (ti) { memset(ti, 0, sizeof(*ti)); snprintf(ti->fmt, sizeof(ti->fmt), "OpenSpool"); }
   JsonDocument d;
   if (deserializeJson(d, json)) { snprintf(out, out_len, "OpenSpool: unreadable"); return; }
+  
+  const char *brand = d["brand"] | (d["vendor"] | "?");
+  const char *type = d["type"] | (d["material"] | "?");
+  const char *color_hex = d["color_hex"] | (d["color"] | "?");
+  
   snprintf(out, out_len, "OpenSpool: %s %s, #%s, %s-%sC",
-           d["brand"] | "?", d["type"] | "?", d["color_hex"] | "?",
+           brand, type, color_hex,
            d["min_temp"] | "?", d["max_temp"] | "?");
   if (!ti) return;
-  snprintf(ti->brand, sizeof(ti->brand), "%s", d["brand"] | "");
-  snprintf(ti->material, sizeof(ti->material), "%s", d["type"] | "");
-  const char *hex = d["color_hex"] | "";
+  snprintf(ti->brand, sizeof(ti->brand), "%s", brand[0] != '?' ? brand : "");
+  snprintf(ti->material, sizeof(ti->material), "%s", type[0] != '?' ? type : "");
+  const char *hex = color_hex;
   if (*hex == '#') hex++;
   unsigned r = 0, g = 0, b = 0;
   if (strlen(hex) >= 6 && sscanf(hex, "%02x%02x%02x", &r, &g, &b) == 3) {
@@ -905,6 +979,7 @@ bool tagDiffersFromSpool(int spool_id, TagFormat fmt, TagInfo *want) {
 static void refreshCache(bool force = false) {
   static unsigned long last_ms = 0;
   static char last_uid[26] = "";
+  static bool last_inspected = false;
 
   if (!tag_present) {
     cached_uid[0] = 0; cached_kind[0] = 0; cached_content[0] = 0;
@@ -912,6 +987,7 @@ static void refreshCache(bool force = false) {
     cached_kindcode = TAG_KIND_NONE;
     memset(&cached_info, 0, sizeof(cached_info));
     last_uid[0] = 0;
+    last_inspected = false;
     return;
   }
 
@@ -924,16 +1000,20 @@ static void refreshCache(bool force = false) {
     cached_content[0] = 0;
     cached_bytes = 0;
     memset(&cached_info, 0, sizeof(cached_info));
+    last_inspected = true;
     return;
   }
 
   const bool changed = strcmp(last_uid, g_tag.uid_str) != 0 || cache_dirty;
-  if (!changed && cached_content[0]) return;
+  if (!changed && last_inspected) return;
   // Retry gap after a failed read. A forced read has just been handed a freshly
   // selected tag, so there is nothing to back off from.
   if (!force && millis() - last_ms < 500) return;
   last_ms = millis();
-  if (changed) snprintf(last_uid, sizeof(last_uid), "%s", g_tag.uid_str);
+  if (changed) {
+    snprintf(last_uid, sizeof(last_uid), "%s", g_tag.uid_str);
+    last_inspected = false;
+  }
 
   const uint16_t bytes = tagUserBytes();
   cached_bytes = bytes;
@@ -949,8 +1029,11 @@ static void refreshCache(bool force = false) {
   if (tagDescribe(tmp, sizeof(tmp), &ti) && tmp[0]) {
     snprintf(cached_content, sizeof(cached_content), "%s", tmp);
     cached_info = ti;
-    cache_dirty = false;
   }
+  
+  // Set these unconditionally since we attempted inspection
+  last_inspected = true;
+  cache_dirty = false;
 }
 
 void tagReadInfoNow() { refreshCache(true); }
@@ -1006,8 +1089,6 @@ static void scanTick() {
     // Bambu keys can only be theirs.
     snprintf(brand, sizeof(brand), "%s",
              g_tag.vendor[0] ? g_tag.vendor : "Bambu Lab");
-    // Empty for a clear filament, which names no hue: FilaMan then matches on
-    // material and brand alone instead of finding a black filament for it.
     const char *c = g_tag.color_hex;
     if (*c == '#') c++;
     snprintf(color, sizeof(color), "%s", c);
@@ -1035,16 +1116,54 @@ static void scanTick() {
 // start here, so the two refusals read the same wherever they came from.
 static bool selectWritableTag(uint8_t *uid, uint8_t *uid_len) {
   *uid_len = 0;
-  if (!nfcReadPassiveTarget(uid, uid_len, 600)) {
-    finish("error", "No tag on the reader", TW_ERR_NO_TAG);
+  if (nfcReadPassiveTarget(uid, uid_len, 200)) {
+    if (*uid_len == 7) return true;
+    finish("error", "Not a writable NTAG, this tag can only be read", TW_ERR_NOT_NTAG);
     return false;
   }
-  if (*uid_len != 7) {
-    finish("error", "Not a writable NTAG, this tag can only be read",
-           TW_ERR_NOT_NTAG);
-    return false;
+  uint32_t fw = 0;
+  if (nfcHardwareReinit(&fw)) {
+    delay(30);
+    if (nfcReadPassiveTarget(uid, uid_len, 400)) {
+      if (*uid_len == 7) return true;
+      finish("error", "Not a writable NTAG, this tag can only be read", TW_ERR_NOT_NTAG);
+      return false;
+    }
   }
-  return true;
+  const unsigned long start = millis();
+  while (millis() - start < 1500) {
+    delay(60);
+    if (nfcReadPassiveTarget(uid, uid_len, 300)) {
+      if (*uid_len == 7) return true;
+      finish("error", "Not a writable NTAG, this tag can only be read", TW_ERR_NOT_NTAG);
+      return false;
+    }
+  }
+  finish("error", "No tag on the reader", TW_ERR_NO_TAG);
+  return false;
+}
+
+static bool selectAnyTag(uint8_t *uid, uint8_t *uid_len) {
+  *uid_len = 0;
+  if (nfcReadPassiveTarget(uid, uid_len, 200)) {
+    if (*uid_len >= 4) return true;
+  }
+  uint32_t fw = 0;
+  if (nfcHardwareReinit(&fw)) {
+    delay(30);
+    if (nfcReadPassiveTarget(uid, uid_len, 400)) {
+      if (*uid_len >= 4) return true;
+    }
+  }
+  const unsigned long start = millis();
+  while (millis() - start < 1500) {
+    delay(60);
+    if (nfcReadPassiveTarget(uid, uid_len, 300)) {
+      if (*uid_len >= 4) return true;
+    }
+  }
+  finish("error", "No tag on the reader", TW_ERR_NO_TAG);
+  return false;
 }
 
 // Builds the record from the spool and puts it on the already selected tag.
@@ -1113,9 +1232,57 @@ bool tagWriteSpoolNow(int spool_id, TagFormat fmt) {
 }
 
 void tagWriteTick() {
-  refreshCache();
-  scanTick();
-  if (!pending) return;
+  if (!pending && !pending_link_only) {
+    refreshCache();
+    scanTick();
+    return;
+  }
+
+  if (pending_link_only) {
+    pending_link_only = false;
+    const int target_id = pending_link_id;
+    uint8_t uid[NFC_UID_MAX];
+    uint8_t uid_len = 0;
+    if (!selectAnyTag(uid, &uid_len)) return;
+
+    char uid_str[26];
+    int u = 0;
+    for (int i = 0; i < uid_len && u < (int)sizeof(uid_str) - 3; i++)
+      u += snprintf(uid_str + u, sizeof(uid_str) - u, i ? ":%02X" : "%02X", uid[i]);
+
+    char note[48] = "";
+    int code2 = backendLinkSpoolTag(backendBaseUrl(), target_id, uid_str,
+                                    note, sizeof(note));
+    if (code2 != 200) {
+      logSDf("TagLink: link failed (HTTP %d), retrying once", code2);
+      const unsigned long t0 = millis();
+      while (millis() - t0 < TAGWRITE_LINK_RETRY_MS) {
+        lv_timer_handler();
+        delay(10);
+      }
+      code2 = backendLinkSpoolTag(backendBaseUrl(), target_id, uid_str,
+                                  note, sizeof(note));
+    }
+
+    report.spool_id = target_id;
+    report.link_http = code2;
+    snprintf(report.link_note, sizeof(report.link_note), "%s", note);
+
+    char m[160];
+    if (code2 == 200) {
+      linked_spool = target_id;
+      report.link = TAG_LINK_OK;
+      if (note[0]) snprintf(m, sizeof(m), "Linked tag %s to spool %d (%s)", uid_str, target_id, note);
+      else         snprintf(m, sizeof(m), "Linked tag %s to spool %d", uid_str, target_id);
+      finish("ok", m, TW_OK);
+    } else {
+      report.link = TAG_LINK_FAIL;
+      snprintf(m, sizeof(m), "Failed to link tag %s to spool %d (HTTP %d)", uid_str, target_id, code2);
+      finish("error", m, TW_ERR_BACKEND);
+    }
+    return;
+  }
+
   pending = false;
 
   uint8_t uid[NFC_UID_MAX], uid_len = 0;
