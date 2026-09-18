@@ -1,10 +1,22 @@
-# SpoolmanScale – Custom Partition Table
-# ESP32-S3, 16MB Flash
-# Offset und Size in Hex
+# SpoolmanScale partition table, ESP32-S3 with 16 MB flash.
+#
+# Two equal app slots, because OTA writes the new image into the inactive one
+# and falls back to the other if it fails. 5 MB each: the firmware was 2.28 MB
+# in September 2026 and grew by about 270 kB in the three weeks before that.
+# Devices flashed before this table keep their 3 MB slots for good, OTA never
+# rewrites the table, so scripts/check.sh and CI refuse a binary over 3 MB
+# until that fleet has been re-flashed over USB.
+#
+# nvs and otadata stay where they were, so a re-flash over USB leaves every
+# setting in place. coredump lets the framework keep a crash dump in flash
+# (CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH is set). The data partition keeps the
+# label spiffs, which is where LittleFS looks by default; it is not mounted
+# yet.
 #
 # Name,     Type, SubType,  Offset,   Size,     Flags
 nvs,        data, nvs,      0x9000,   0x5000,
 otadata,    data, ota,      0xe000,   0x2000,
-app0,       app,  ota_0,    0x10000,  0x300000,
-app1,       app,  ota_1,    0x310000, 0x300000,
-spiffs,     data, spiffs,   0x610000, 0x9F0000,
+app0,       app,  ota_0,    0x10000,  0x500000,
+app1,       app,  ota_1,    0x510000, 0x500000,
+coredump,   data, coredump, 0xA10000, 0x10000,
+spiffs,     data, spiffs,   0xA20000, 0x5E0000,
