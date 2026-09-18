@@ -8,6 +8,7 @@
 #include "lang.h"
 #include "main_screen_helpers.h"
 #include "spool_flow.h"
+#include "ui_common.h"
 
 
 // ============================================================
@@ -42,7 +43,7 @@ void clearTagDisplay() {
   if (lbl_keys) lv_label_set_text(lbl_keys, "");
   if (lbl_raw_info) lv_label_set_text(lbl_raw_info, "");
   if (lbl_bag_sm_diff) lv_label_set_text(lbl_bag_sm_diff, "");
-  lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
+  swatchPaint(lbl_color_swatch, SpoolColor{});
   // Also reset Spoolman data
   // sm_archived belongs with sm_found: left standing it would make the next
   // spool look archived until a lookup corrected it, and everything that holds
@@ -57,6 +58,7 @@ void clearTagDisplay() {
   g_tag.uid_str[0] = '\0';
   g_tag.tray_uuid[0] = '\0';
   g_tag.material[0] = '\0';   // CRITICAL: otherwise is_ntag=false remains after Bambu scan
+  g_tag.color = SpoolColor{};
   g_tag.color_hex[0] = '\0';
   g_tag.vendor[0] = '\0';
   // Forgetting the tag means forgetting that it was handled. Unlinking a spool

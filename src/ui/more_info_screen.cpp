@@ -672,11 +672,12 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_border_width(swatch, 1, 0);
   lv_obj_set_style_pad_all(swatch, 0, 0);
   lv_obj_clear_flag(swatch, LV_OBJ_FLAG_SCROLLABLE);
-  // Swatch color: prefer tag color (Bambu), fall back to Spoolman color (NTAG)
-  const char* swatch_hex = (strlen(g_tag.color_hex) == 7) ? g_tag.color_hex :
-                           (strlen(sm_color_global) >= 6 ? sm_color_global : nullptr);
-  // swatchColorFromHex() handles the nullptr and malformed cases itself
-  lv_obj_set_style_bg_color(swatch, swatchColorFromHex(swatch_hex), 0);
+  // The same colour the home screen shows: the tag's where it names one, the
+  // server's where it does not. An NTAG has no tag colour here, so the server
+  // decides alone.
+  SpoolColor server_color;
+  spoolColorParse(sm_color_global, &server_color);
+  swatchPaint(swatch, spoolColorResolve(g_tag.color, server_color));
 
   // SM-ID value
   lv_obj_t *lbl_id = lv_label_create(box);
@@ -760,9 +761,13 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_text_font(c1, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(c1, CA, R1);
   lv_obj_t *v1 = lv_label_create(box);
-  const char* color_display = (strlen(g_tag.color_hex) > 1) ? g_tag.color_hex :
-                              (strlen(sm_color_global) > 1 ? sm_color_global : "-");
-  lv_label_set_text(v1, color_display);
+  // What the tag holds, alpha included - "#00000000" is how Bambu writes a
+  // clear filament, and showing it explains the swatch. The server's value
+  // where there is no tag colour.
+  char color_display[SPOOL_COLOR_HEX_MAX];
+  spoolColorFormat(g_tag.color.valid ? g_tag.color : server_color,
+                   color_display, sizeof(color_display));
+  lv_label_set_text(v1, color_display[0] ? color_display : "-");
   lv_obj_set_style_text_color(v1, lv_color_hex(0x8ab0d8), 0);
   lv_obj_set_style_text_font(v1, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_pos(v1, CA, R1 + VF);

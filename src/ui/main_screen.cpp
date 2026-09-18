@@ -55,12 +55,12 @@ void updateDisplay() {
   // Filament name: cleared until Spoolman responds
   lv_label_set_text(lbl_filament_name, "");
 
-  // Color swatch + hex text
-  lv_label_set_text(lbl_color,
-    strlen(g_tag.color_hex) > 1 ? g_tag.color_hex : "-");
-  if (strlen(g_tag.color_hex) == 7) {
-    lv_obj_set_style_bg_color(lbl_color_swatch, swatchColorFromHex(g_tag.color_hex), 0);
-  }
+  // Colour swatch + hex text, alpha included: the tag's own colour until the
+  // backend answers, which may still tint a clear spool.
+  char tag_hex[SPOOL_COLOR_HEX_MAX];
+  spoolColorFormat(g_tag.color, tag_hex, sizeof(tag_hex));
+  lv_label_set_text(lbl_color, tag_hex[0] ? tag_hex : "-");
+  if (g_tag.color.valid) swatchPaint(lbl_color_swatch, g_tag.color);
 
   // Temp (Zone 3 Row B)
   char temp_str[24];
@@ -98,10 +98,11 @@ void showTagInfoOnDisplay(const TagInfo *ti) {
   if (ti->brand[0])    lv_label_set_text(lbl_vendor, ti->brand);
 
   if (ti->has_color) {
-    char hex[8];
-    snprintf(hex, sizeof(hex), "#%02X%02X%02X", ti->r, ti->g, ti->b);
+    const SpoolColor c = spoolColorFromRgba(ti->r, ti->g, ti->b, SPOOL_ALPHA_OPAQUE);
+    char hex[SPOOL_COLOR_HEX_MAX];
+    spoolColorFormat(c, hex, sizeof(hex));
     lv_label_set_text(lbl_color, hex);
-    lv_obj_set_style_bg_color(lbl_color_swatch, swatchColorFromHex(hex), 0);
+    swatchPaint(lbl_color_swatch, c);
   }
 
   // Both ends or neither: a range printed from a single value would read as a

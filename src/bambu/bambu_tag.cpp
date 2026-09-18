@@ -33,16 +33,22 @@ void parseTagData(BambuTagData& tag) {
     tag.tray_uuid[32] = '\0';
   }
 
-  // Material: sector 2, block 8
-  // Material: block 4 (long form, e.g. "PETG HF")
+  // Material: block 4, the long form ("PETG HF"), all 16 bytes of it
   if (tag.block_ok[4]) {
-    copyPrintableField(tag.material, sizeof(tag.material), tag.blocks[4], 15);
+    copyPrintableField(tag.material, sizeof(tag.material), tag.blocks[4], 16);
   }
 
-  // Color: block 5, bytes 0-2 = R,G,B (verified: FF D0 0B = #FFD00B)
+  // Colour: block 5, bytes 0-3 = R,G,B,A (verified: FF D0 0B FF = #FFD00B).
+  // The alpha byte is what tells a clear filament (00000000) from a black
+  // one (000000FF), see services/spool_color.h.
+  tag.color = SpoolColor{};
+  tag.color_hex[0] = '\0';
   if (tag.block_ok[5]) {
-    sprintf(tag.color_hex, "#%02X%02X%02X",
-      tag.blocks[5][0], tag.blocks[5][1], tag.blocks[5][2]);
+    const uint8_t* c = tag.blocks[5];
+    tag.color = spoolColorFromRgba(c[0], c[1], c[2], c[3]);
+    if (spoolColorNamesHue(tag.color)) {
+      snprintf(tag.color_hex, sizeof(tag.color_hex), "#%06X", (unsigned)tag.color.rgb);
+    }
   }
 
   // Temperatures: block 6, bytes 8-9 = max, 10-11 = min (little endian, directly in C)

@@ -1685,6 +1685,7 @@ void appLoop() {
           g_tag.uid_str[sizeof(g_tag.uid_str)-1] = '\0';
           g_tag.tray_uuid[0] = '\0';
           g_tag.material[0] = '\0';
+          g_tag.color = SpoolColor{};
           g_tag.color_hex[0] = '\0';
           g_tag.vendor[0] = '\0';
           spoolman_queried_uid[0] = '\0';

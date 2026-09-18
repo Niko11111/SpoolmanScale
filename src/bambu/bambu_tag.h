@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+#include "../services/spool_color.h"
+
 struct BambuTagData {
   uint8_t  uid[4];
   char     uid_str[24];        // 4-byte UID: "XX:XX:XX:XX" = 11+1, 7-byte UID: "XX:XX:XX:XX:XX:XX:XX" = 23+1
@@ -12,8 +14,17 @@ struct BambuTagData {
   char     tray_uuid[36];
   char     material_variant_id[9];
   char     material_id[9];
-  char     material[16];
-  char     color_hex[8];       // #RRGGBB
+  // Block 4 holds up to 16 characters with no terminator when they are all
+  // used: "PETG Translucent" is exactly 16 and lost its last letter at [16].
+  char     material[17];
+  // What the tag says about the colour, alpha included. Invalid when block 5
+  // did not read.
+  SpoolColor color;
+  // The same as "#RRGGBB" for everything that compares colours, and empty
+  // when the tag names no hue: a clear filament is 00000000, and holding
+  // that against a spool as black kept every clear spool out of the link
+  // list. Use color for anything that is drawn.
+  char     color_hex[8];
   char     vendor[32];
   char     detailed_filament[64];
   int      temp_min;

@@ -1006,6 +1006,8 @@ static void scanTick() {
     // Bambu keys can only be theirs.
     snprintf(brand, sizeof(brand), "%s",
              g_tag.vendor[0] ? g_tag.vendor : "Bambu Lab");
+    // Empty for a clear filament, which names no hue: FilaMan then matches on
+    // material and brand alone instead of finding a black filament for it.
     const char *c = g_tag.color_hex;
     if (*c == '#') c++;
     snprintf(color, sizeof(color), "%s", c);

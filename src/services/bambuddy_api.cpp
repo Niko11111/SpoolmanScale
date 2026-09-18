@@ -10,6 +10,7 @@
 #include "hardware/sd_logger.h"
 #include "services/device_name.h"
 #include "services/http_progress.h"
+#include "services/spool_color.h"
 #include "services/tag_uid.h"
 #include "services/wifi_manager.h"
 #include "services/time_service.h"
@@ -857,21 +858,14 @@ int bbCreateSpool(const char* base_url, const char* api_key,
 // ------------------------------------------------------------
 
 // Bambu sends a tray colour as six hex digits, or eight with an alpha byte
-// on the end. An alpha of 00 is what an empty bay reports, and painting that
-// as black would claim a colour the bay does not have - so it is rejected
-// rather than truncated. Kept local instead of reaching for the UI helper:
-// a service that included ui_common would drag LVGL into the HTTP layer.
-static bool parseTrayColor(const char* hex, uint32_t* out) {
-  if (!hex || !out) return false;
-  const char* h = (hex[0] == '#') ? hex + 1 : hex;
-  const size_t len = strlen(h);
-  if (len != 6 && len != 8) return false;
-  if (len == 8 && h[6] == '0' && h[7] == '0') return false;
-
-  unsigned int r, g, b;
-  if (sscanf(h, "%02X%02X%02X", &r, &g, &b) != 3) return false;
-  *out = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-  return true;
+// on the end. 00000000 means two different things: an empty or unconfigured
+// bay reports it, and so does a clear filament - PETG Translucent Clear, PC
+// Transparent. The bay's material tells them apart. With one, the zeros are
+// a clear spool and drawn as glass; without, they say nothing, and painting
+// them as black or as glass would claim a colour the bay does not have.
+static void parseTrayColor(const char* hex, const char* tray_type, SpoolColor* out) {
+  spoolColorParse(hex, out);
+  if (!spoolColorNamesHue(*out) && !(tray_type && tray_type[0])) *out = SpoolColor{};
 }
 
 // One AMSTray object into one bay. Shared by the AMS units and the external
@@ -899,7 +893,7 @@ static void fillTray(JsonObjectConst t, AmsSlotTray& out, uint8_t tray_id) {
   // brand too.
   strncpy(out.type, type ? type : "", sizeof(out.type) - 1);
 
-  out.has_color = parseTrayColor(t["tray_color"] | "", &out.color);
+  parseTrayColor(t["tray_color"] | "", out.type, &out.color);
 
   // Bambu itself sends -1 for "no idea", and anything outside 0..100 is a
   // value we would only misdraw.

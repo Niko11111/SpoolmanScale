@@ -59,7 +59,7 @@ struct UnlinkedSpool {
   char  name[48];      // filament.name
   char  vendor[32];    // filament.vendor.name
   char  material[16];  // filament.material (PLA, PETG, ABS...)
-  char  color_hex[8];  // filament.color_hex (#RRGGBB)
+  char  color_hex[SPOOL_COLOR_HEX_MAX];  // filament.color_hex, #RRGGBB or #RRGGBBAA
   float remaining;     // remaining_weight
   float total;         // filament.weight
   // What the spool holds in each tag field, indexed by TagFieldId, quote
@@ -211,7 +211,7 @@ static lv_obj_t *btn_newtag_w[NEWTAG_LABEL_COUNT] = { nullptr };
 static int  newtag_label_weight    = 0;
 static char newtag_material[16]    = "";   // base material, "PETG"
 static char newtag_subtype[24]     = "";   // what follows it, "HF"
-static char newtag_rgba[10]        = "";   // RRGGBBAA
+static char newtag_rgba[SPOOL_COLOR_HEX_MAX] = "";   // RRGGBBAA
 // Snapshot too, and for a sharper reason than the others: the no-tag timer in
 // app_loop.cpp wipes g_tag 60 s after the tag was last seen. Reading the brand
 // live at confirm time meant a slow decision produced a spool with no vendor
@@ -475,7 +475,9 @@ static LinkFilterVerdict linkFilterVerdict(JsonObjectConst spool, bool is_bambu,
     }
   }
 
-  // Colour filter: a tag that names a colour skips spools far away from it
+  // Colour filter: a tag that names a colour skips spools far away from it.
+  // A clear filament names none - its color_hex stays empty - and is matched
+  // on material and subtype alone, like a support filament.
   if (g_tag.color_hex[0] == '#') {
     String col = spool["filament"]["color_hex"] | String("");
     char col_buf[8]; snprintf(col_buf, sizeof(col_buf), "#%s", col.c_str());
@@ -775,7 +777,7 @@ static char      s_move_uid[40]    = "";
 // What the popup shows of each spool: id, vendor, material, name, and the
 // colour as a swatch. Fetched when the question is about to be asked, so the
 // user decides between two spools they can recognise, not between two ids.
-struct SpoolSummary { char text[72]; char color[8]; };
+struct SpoolSummary { char text[72]; char color[SPOOL_COLOR_HEX_MAX]; };
 static SpoolSummary s_move_from_sum, s_move_to_sum;
 
 static void fetchSpoolSummary(int spool_id, SpoolSummary &out) {
@@ -792,7 +794,7 @@ static void fetchSpoolSummary(int spool_id, SpoolSummary &out) {
   const char* name     = f["name"]           | "";
   const char* color    = f["color_hex"]      | "";
   snprintf(out.text, sizeof(out.text), "#%d  %s %s  %s", spool_id, vendor, material, name);
-  if (strlen(color) >= 6) snprintf(out.color, sizeof(out.color), "%.6s", color);
+  snprintf(out.color, sizeof(out.color), "%s", color);
 }
 
 // One spool of the move question: caption column, swatch, words.
@@ -810,7 +812,7 @@ static void moveRow(lv_obj_t *box, int y, StringID caption_id, const SpoolSummar
     lv_obj_set_size(sw, 18, 18);
     lv_obj_set_pos(sw, x, y + 1);
     lv_obj_set_style_radius(sw, 4, 0);
-    lv_obj_set_style_bg_color(sw, swatchColorFromHex(sum.color), 0);
+    swatchPaintHex(sw, sum.color);
     lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(sw, 1, 0);
     lv_obj_set_style_border_color(sw, lv_color_hex(0x4a6fa0), 0);
@@ -2046,8 +2048,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     lv_obj_set_style_border_color(swatch, lv_color_hex(0x2a4060), 0);
     lv_obj_set_style_pad_all(swatch, 0, 0);
     lv_obj_clear_flag(swatch, LV_OBJ_FLAG_SCROLLABLE);
-    // Farbe setzen
-    lv_obj_set_style_bg_color(swatch, swatchColorFromHex(s.color_hex), 0);
+    swatchPaintHex(swatch, s.color_hex);
 
     // Gewicht neben Kachel
     lv_obj_t *lbl_rest = lv_label_create(row);
@@ -3339,7 +3340,7 @@ void showCopySpoolList() {
     lv_obj_set_style_border_color(swatch, lv_color_hex(0x2a4060), 0);
     lv_obj_set_style_pad_all(swatch, 0, 0);
     lv_obj_clear_flag(swatch, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(swatch, swatchColorFromHex(s.color_hex), 0);
+    swatchPaintHex(swatch, s.color_hex);
 
     lv_obj_t *lbl_rest = lv_label_create(row);
     char rest_buf[24];
@@ -3422,10 +3423,14 @@ static void newTagRefresh() {
     lv_obj_set_style_border_color(btn_newtag_w[i], lv_color_hex(on ? 0x28d49a : 0x1a3060), 0);
   }
   if (lbl_newtag_info) {
+    // The snapshot, not g_tag: a clear filament has no color_hex to show, and
+    // the snapshot is what the spool will be created with.
+    char rgba[SPOOL_COLOR_HEX_MAX + 1];
+    snprintf(rgba, sizeof(rgba), "#%s", newtag_rgba);
     char msg[192];
     snprintf(msg, sizeof(msg), T(STR_NEWTAG_MSG),
              newtag_brand, g_tag.material,
-             newtag_color_name[0] ? newtag_color_name : g_tag.color_hex,
+             newtag_color_name[0] ? newtag_color_name : (newtag_rgba[0] ? rgba : "-"),
              newTagNetto());
     lv_label_set_text(lbl_newtag_info, msg);
   }
@@ -3442,9 +3447,9 @@ void doCreateSpoolFromTag() {
                                        g_tag.temp_min, g_tag.temp_max, &new_id, 8000);
   if ((code == 200 || code == 201) && new_id > 0) {
     Serial.printf("New spool from tag: new ID=%d\n", new_id);
-    logSDf("New spool from tag: mat=%s sub=%s brand=%s col=%s label=%d new_spool_id=%d",
+    logSDf("New spool from tag: mat=%s sub=%s brand=%s col=%s rgba=%s label=%d new_spool_id=%d",
            newtag_material, newtag_subtype, newtag_brand, newtag_color_name,
-           newtag_label_weight, new_id);
+           newtag_rgba, newtag_label_weight, new_id);
     finishCopyFlow(new_id, newtag_tray);
     char ok_buf[40]; copyT(ok_buf, sizeof(ok_buf), STR_NEWTAG_OK);
     lv_label_set_text(lbl_status, ok_buf);
@@ -3478,18 +3483,25 @@ void showNewFromTagPopup() {
   strncpy(newtag_tray, g_tag.tray_uuid, sizeof(newtag_tray)-1);
   newtag_tray[sizeof(newtag_tray)-1] = '\0';
 
-  // #RRGGBB on the tag, RRGGBBAA on the server. Fully opaque. Left empty when
-  // the colour block did not read - "FF" alone would be a malformed colour,
-  // and an absent field is the honest answer.
-  const char* hex = g_tag.color_hex[0] == '#' ? g_tag.color_hex + 1 : g_tag.color_hex;
-  if (strlen(hex) >= 6) snprintf(newtag_rgba, sizeof(newtag_rgba), "%.6sFF", hex);
-  else                  newtag_rgba[0] = '\0';
+  // RRGGBBAA as the tag holds it, alpha included. It used to be forced to FF,
+  // which created a clear spool as opaque black and a translucent one as solid.
+  // BamBuddy stores the same four bytes the printer reports for the tray, so
+  // 00000000 reaches it as the clear spool it is. Left empty when the colour
+  // block did not read - an absent field is the honest answer.
+  if (g_tag.color.valid) {
+    snprintf(newtag_rgba, sizeof(newtag_rgba), "%06X%02X",
+             (unsigned)g_tag.color.rgb, (unsigned)g_tag.color.alpha);
+  } else {
+    newtag_rgba[0] = '\0';
+  }
 
   // The tag has the colour as a value only. Ask the backend for its name, so
   // the new spool reads "PETG HF Orange" rather than a bare hex nobody can
-  // shop for. An unknown colour simply leaves the field empty.
+  // shop for. An unknown colour simply leaves the field empty, and so does a
+  // clear one: the catalogue is keyed on RGB alone, and 000000 would come back
+  // as "Black".
   newtag_color_name[0] = '\0';
-  if (newtag_rgba[0]) {
+  if (newtag_rgba[0] && spoolColorNamesHue(g_tag.color)) {
     backendLookupColorName(newtag_rgba, g_tag.material,
                            newtag_color_name, sizeof(newtag_color_name));
   }

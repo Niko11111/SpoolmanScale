@@ -10,6 +10,7 @@
 #include "services/user_options.h"
 #include "services/backend.h"
 #include "services/http_progress.h"
+#include "services/spool_color.h"
 #include "services/tag_uid.h"
 #include "services/text_util.h"
 
@@ -1569,19 +1570,6 @@ int filamanSetDeviceAutoAssign(const char* base_url, const char* api_key,
 //  AMS SLOTS
 // ------------------------------------------------------------
 
-// FilaMan sends "#RRGGBB". An empty bay carries the placeholder #202020,
-// which is a real colour in the JSON and not a real colour on the spool, so
-// the caller decides by empty and only then asks for this.
-static bool parseDisplayColor(const char* hex, uint32_t* out) {
-  if (!hex || !out) return false;
-  const char* h = (hex[0] == '#') ? hex + 1 : hex;
-  if (strlen(h) < 6) return false;
-  unsigned int r, g, b;
-  if (sscanf(h, "%02X%02X%02X", &r, &g, &b) != 3) return false;
-  *out = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-  return true;
-}
-
 // The filter both calls share. Written once because the two only differ in
 // how much of it they use, and a second copy would drift.
 static void buildDisplayFilter(JsonDocument& filter, bool with_slots) {
@@ -1809,8 +1797,11 @@ int filamanGetAmsState(const char* base_url, const char* api_key, int printer_id
       strncpy(t.backup_of, sl["backup_of"] | "", sizeof(t.backup_of) - 1);
 
       // Only an occupied bay has a colour worth drawing; an empty one
-      // carries the placeholder grey.
-      t.has_color = t.exists && parseDisplayColor(sl["color"] | "", &t.color);
+      // carries the placeholder #202020, a real colour in the JSON and not on
+      // any spool. FilaMan's display service cuts the colour to "#RRGGBB", so
+      // a clear spool arrives here as whatever its filament is filed under -
+      // the alpha is gone before it leaves the server.
+      if (t.exists) spoolColorParse(sl["color"] | "", &t.color);
 
       int pct = sl["remaining_percent"] | AMS_REMAIN_NA;
       if (pct < 0 || pct > 100) pct = AMS_REMAIN_NA;

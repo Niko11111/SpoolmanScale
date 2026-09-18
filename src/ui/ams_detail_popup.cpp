@@ -299,8 +299,8 @@ static void showDriedAsk() {
       lv_obj_set_style_border_width(sw, 1, 0);
       lv_obj_set_style_pad_all(sw, 0, 0);
       lv_obj_clear_flag(sw, LV_OBJ_FLAG_SCROLLABLE);
-      lv_obj_set_style_bg_color(sw,
-        lv_color_hex(s_det.has_color ? s_det.color : UI_COL_EMPTY), 0);
+      if (s_det.color.valid) swatchPaint(sw, s_det.color);
+      else lv_obj_set_style_bg_color(sw, lv_color_hex(UI_COL_EMPTY), 0);
     }
 
     // "Spule 294 - PLA Cyan (12601)": the id to look it up by, the material
@@ -596,8 +596,8 @@ static void buildIdentity(lv_obj_t* box, const AmsSpoolDetail& d) {
     lv_obj_set_style_border_width(sw, 1, 0);
     lv_obj_set_style_pad_all(sw, 0, 0);
     lv_obj_clear_flag(sw, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(sw,
-      lv_color_hex(d.has_color ? d.color : UI_COL_EMPTY), 0);
+    if (d.color.valid) swatchPaint(sw, d.color);
+    else lv_obj_set_style_bg_color(sw, lv_color_hex(UI_COL_EMPTY), 0);
   }
 
   // The id caption doubles as the place the tag binding is reported: a spool

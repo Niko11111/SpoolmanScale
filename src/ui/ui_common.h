@@ -2,6 +2,7 @@
 
 #include <lvgl.h>
 
+#include "services/spool_color.h"
 #include "services/text_util.h"
 
 void addBackButton(lv_obj_t *parent, lv_event_cb_t cb);
@@ -56,12 +57,34 @@ bool lvPoolHasRoomForRow();
 // Neutral grey for a colour swatch with no usable colour behind it.
 #define SWATCH_FALLBACK_COLOR 0x333333
 
-// Parse "#RRGGBB" or "RRGGBB" into a swatch colour, falling back to
-// SWATCH_FALLBACK_COLOR when the string is absent, too short or malformed.
-// Both Spoolman and FilaMan hand out empty and truncated colour fields, and the
-// call sites used to run sscanf without checking its result, which left r/g/b
-// uninitialised and gave the swatch a random colour off the stack.
-lv_color_t swatchColorFromHex(const char* hex);
+// What a clear filament is drawn in when nothing names a tint for it: the
+// glass white the filament databases use for "clear".
+#define SWATCH_GLASS_COLOR    0xDCE6F0
+
+// A filament that lets light through is drawn as a vertical fade, from its
+// hue at the top into the screen ground at the bottom. It reads as glass, the
+// hue stays recognisable at the top, and it cannot be mistaken for an opaque
+// spool of a darker colour, which a plain half-transparent fill was. These
+// say how much of the hue is left at the bottom, out of 255: a translucent
+// filament keeps some, a clear one almost none.
+#define SWATCH_FADE_TRANSLUCENT 110
+#define SWATCH_FADE_CLEAR        40
+
+// Paints a filament colour onto a swatch: flat when opaque, the fade above
+// when it lets light through, SWATCH_FALLBACK_COLOR when nothing is known.
+// Touches the background only, so a border the caller chose - the AMS tile's
+// accent for the active bay - stays. Safe on an object that showed another
+// spool before: a fade left over from it is removed.
+void swatchPaint(lv_obj_t* obj, const SpoolColor& c);
+
+// The same from a server's colour field, "#RRGGBB" or "RRGGBBAA". Both
+// Spoolman and FilaMan hand out empty and truncated colour fields, which
+// paint as SWATCH_FALLBACK_COLOR rather than as a random colour off the stack.
+void swatchPaintHex(lv_obj_t* obj, const char* hex);
+
+// The colour in the middle of a painted swatch as 0xRRGGBB, for choosing the
+// colour of text drawn across it.
+uint32_t swatchCenterRgb(const SpoolColor& c);
 
 // utf8Cut(), isHexColorWord() and colorNameClean() moved to
 // services/text_util.h, which the AMS parsers can reach too. Included

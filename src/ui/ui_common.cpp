@@ -39,14 +39,54 @@ bool uiModalWaiting() {
       || isAmsDetailPopupOpen();
 }
 
-lv_color_t swatchColorFromHex(const char* hex) {
-  if (!hex) return lv_color_hex(SWATCH_FALLBACK_COLOR);
-  const char* h = (hex[0] == '#') ? hex + 1 : hex;
-  if (strlen(h) < 6) return lv_color_hex(SWATCH_FALLBACK_COLOR);
+// The hue a swatch is drawn in: its own, or glass for a filament that names
+// none.
+static uint32_t swatchHue(const SpoolColor& c) {
+  return spoolColorNamesHue(c) ? c.rgb : SWATCH_GLASS_COLOR;
+}
 
-  unsigned int r, g, b;
-  if (sscanf(h, "%02X%02X%02X", &r, &g, &b) != 3) return lv_color_hex(SWATCH_FALLBACK_COLOR);
-  return lv_color_hex(((uint32_t)r << 16) | ((uint32_t)g << 8) | b);
+static uint8_t swatchFade(const SpoolColor& c) {
+  return c.alpha == SPOOL_ALPHA_CLEAR ? SWATCH_FADE_CLEAR : SWATCH_FADE_TRANSLUCENT;
+}
+
+// a * mix + b * (255 - mix), per channel, as lv_color_mix() does it but on
+// 24 bit values, so the result can be judged before it is drawn.
+static uint32_t rgbMix(uint32_t a, uint32_t b, uint8_t mix) {
+  uint32_t out = 0;
+  for (int shift = 0; shift <= 16; shift += 8) {
+    const uint32_t ca = (a >> shift) & 0xFF;
+    const uint32_t cb = (b >> shift) & 0xFF;
+    out |= ((ca * mix + cb * (255u - mix)) / 255u) << shift;
+  }
+  return out;
+}
+
+void swatchPaint(lv_obj_t* obj, const SpoolColor& c) {
+  if (!obj) return;
+  if (!spoolColorSeeThrough(c)) {
+    lv_obj_set_style_bg_color(obj, lv_color_hex(c.valid ? c.rgb : SWATCH_FALLBACK_COLOR), 0);
+    lv_obj_remove_local_style_prop(obj, LV_STYLE_BG_GRAD_DIR, LV_PART_MAIN);
+    return;
+  }
+  const lv_color_t hue = lv_color_hex(swatchHue(c));
+  lv_obj_set_style_bg_color(obj, hue, 0);
+  lv_obj_set_style_bg_grad_color(obj,
+    lv_color_mix(hue, lv_color_hex(UI_COL_GROUND), swatchFade(c)), 0);
+  lv_obj_set_style_bg_grad_dir(obj, LV_GRAD_DIR_VER, 0);
+}
+
+void swatchPaintHex(lv_obj_t* obj, const char* hex) {
+  SpoolColor c;
+  spoolColorParse(hex, &c);
+  swatchPaint(obj, c);
+}
+
+uint32_t swatchCenterRgb(const SpoolColor& c) {
+  if (!c.valid) return SWATCH_FALLBACK_COLOR;
+  if (!spoolColorSeeThrough(c)) return c.rgb;
+  // Halfway down the fade: the hue weighted (255 + fade) / 2 against the ground.
+  const uint8_t mix = (uint8_t)((255u + swatchFade(c)) / 2u);
+  return rgbMix(swatchHue(c), UI_COL_GROUND, mix);
 }
 
 

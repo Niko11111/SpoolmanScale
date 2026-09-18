@@ -74,7 +74,7 @@ struct AmsSpoolDetail {
   // backend does not pass it on. Never overwritten by the database: it is the
   // one field that says what is physically there.
   char     printer_type[AMS_TYPE_MAX];
-  uint32_t color;                     // 0xRRGGBB
+  SpoolColor color;                   // the bay's, see AmsSlotTray::color
   float    remaining_g;               // SD_WEIGHT_NA when unknown
   float    total_g;                   // SD_WEIGHT_NA when unknown
   int      spool_id;                  // 0 when the bay has no spool on file
@@ -82,7 +82,6 @@ struct AmsSpoolDetail {
   int16_t  nozzle_min;                // AMS_REMAIN_NA when unknown
   int16_t  nozzle_max;
   int8_t   remain_pct;                // AMS_REMAIN_NA when unknown
-  bool     has_color;
   bool     tag_linked;                // a tag is bound to this spool
   bool     archived;
   // The backend answered for this spool. False means the card shows only what

@@ -574,6 +574,23 @@ static void setFromServerOrTag(lv_obj_t *lbl, const char *server, const char *fr
   else                          lv_label_set_text(lbl, "-");
 }
 
+// The server's colour for the spool just found. On an NTAG it is the colour,
+// as it always was. On a Bambu tag it fills only what the tag leaves open -
+// an unread colour block, or the tint of a clear filament - because the tag
+// holds the manufacturer's value, see spoolColorResolve(). Kept in
+// sm_color_global for both, so the More Info screen resolves the same way.
+static void applyServerColor(const String& sm_color, bool is_bambu_tag) {
+  snprintf(sm_color_global, sizeof(sm_color_global), "%s", sm_color.c_str());
+  SpoolColor server;
+  spoolColorParse(sm_color.c_str(), &server);
+  const SpoolColor shown = is_bambu_tag ? spoolColorResolve(g_tag.color, server) : server;
+  if (!shown.valid) return;
+  swatchPaint(lbl_color_swatch, shown);
+  // The raw server value rather than the parsed one, so a malformed colour is
+  // visible in the log instead of silently reading as grey.
+  Serial.printf("Color set: tag %s, server '%s'\n", g_tag.color_hex, sm_color.c_str());
+}
+
 void querySpoolmanById(int spool_id) {
   if (!wifi_ok) return;
   Serial.printf("querySpoolmanById: ID=%d\n", spool_id);
@@ -657,7 +674,8 @@ void querySpoolmanById(int spool_id) {
 
   captureBindings(spool);
 
-  // Material, vendor, color - only for NTAG (Bambu has it from tag itself)
+  // Material and vendor only for an NTAG, a Bambu tag carries its own. The
+  // colour for both, through applyServerColor().
   String sm_material = spool["filament"]["material"] | String("");
   sm_material.trim();
   String sm_vendor_name = "";
@@ -677,8 +695,6 @@ void querySpoolmanById(int spool_id) {
     setFromServerOrTag(lbl_vendor, sm_vendor_name.c_str(), from_tag ? ti->brand : "");
     strncpy(sm_material_global, sm_material.c_str(), sizeof(sm_material_global)-1);
     sm_material_global[sizeof(sm_material_global)-1] = '\0';
-    strncpy(sm_color_global, sm_color.c_str(), sizeof(sm_color_global)-1);
-    sm_color_global[sizeof(sm_color_global)-1] = '\0';
   } else {
     // Bambu-Tag: Material aus g_tag.material in sm_material_global schreiben
     // damit dryingAlertLevel() das Material korrekt auflösen kann
@@ -687,9 +703,7 @@ void querySpoolmanById(int spool_id) {
       sm_material_global[sizeof(sm_material_global)-1] = '\0';
     }
   }
-  if (is_ntag && sm_color.length() >= 6) {
-    lv_obj_set_style_bg_color(lbl_color_swatch, swatchColorFromHex(sm_color.c_str()), 0);
-  }
+  applyServerColor(sm_color, is_bambu_tag);
 
   // Update display labels
   char weight_str[32];
@@ -915,7 +929,7 @@ void querySpoolman(const char* tray_uuid) {
   if (!is_bambu_tag && !tagCachedHasRecord()) {
     lv_label_set_text(lbl_material, "-");
     lv_label_set_text(lbl_vendor, "-");
-    lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
+    swatchPaint(lbl_color_swatch, SpoolColor{});
   }
   sm_last_dried[0] = '\0';
   sm_article_nr[0] = '\0';
@@ -1473,8 +1487,9 @@ void querySpoolman(const char* tray_uuid) {
     Serial.printf("Spoolman: ID=%d, %.1fg, dried: %s\n",
       sm_id, sm_remaining, sm_last_dried);
 
-    // Read material, vendor, color from Spoolman
-    // → shown when no Bambu tag (g_tag.material empty)
+    // Material, vendor and colour from the server. Material and vendor are
+    // shown only without a Bambu tag (g_tag.material empty); the colour goes
+    // through applyServerColor(), which lets a Bambu tag keep its own.
     String sm_material = spool["filament"]["material"] | String("");
     sm_material.trim();
     String sm_vendor_name = "";
@@ -1486,7 +1501,6 @@ void querySpoolman(const char* tray_uuid) {
     String sm_color = spool["filament"]["color_hex"] | String("");
     sm_color.trim();
 
-    // Only fill fields from Spoolman if no Bambu tag present
     bool is_ntag = !is_bambu_tag;
     logSDf("Spool %d identified: %s %s, %.0fg of %.0fg", sm_id,
            sm_vendor_name.length() ? sm_vendor_name.c_str() : "?",
@@ -1501,16 +1515,8 @@ void querySpoolman(const char* tray_uuid) {
       setFromServerOrTag(lbl_vendor, sm_vendor_name.c_str(), from_tag ? ti->brand : "");
       strncpy(sm_material_global, sm_material.c_str(), sizeof(sm_material_global)-1);
       sm_material_global[sizeof(sm_material_global)-1] = '\0';
-      strncpy(sm_color_global, sm_color.c_str(), sizeof(sm_color_global)-1);
-      sm_color_global[sizeof(sm_color_global)-1] = '\0';
-      // Color swatch from Spoolman color_hex (#RRGGBB or RRGGBB)
-      if (sm_color.length() >= 6) {
-        lv_obj_set_style_bg_color(lbl_color_swatch, swatchColorFromHex(sm_color.c_str()), 0);
-        // Logs the raw server value rather than the parsed one, so a malformed
-        // colour is visible in the log instead of silently reading as grey.
-        Serial.printf("Color set: %s\n", sm_color.c_str());
-      }
     }
+    applyServerColor(sm_color, is_bambu_tag);
 
     // Update display - Fix 5: color based on remaining %
     char weight_str[32];

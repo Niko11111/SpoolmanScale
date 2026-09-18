@@ -386,9 +386,11 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
   lv_obj_set_style_pad_all(tile, 0, 0);
   lv_obj_set_style_shadow_width(tile, 0, 0);
 
-  const bool filled = tray.exists && tray.has_color;
-  uint32_t bg = filled ? tray.color : AMSV_COL_EMPTY;
-  lv_obj_set_style_bg_color(tile, lv_color_hex(bg), 0);
+  // A see-through filament fades from its hue into the ground, like every
+  // other swatch, so a clear spool reads as glass instead of an empty bay.
+  const bool filled = tray.exists && tray.color.valid;
+  if (filled) swatchPaint(tile, tray.color);
+  else        lv_obj_set_style_bg_color(tile, lv_color_hex(AMSV_COL_EMPTY), 0);
 
   // The loaded bay is the one thing on this page that says "this is printing
   // right now", so it gets the accent border rather than a colour change.
@@ -401,9 +403,12 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
   if (!filled) {
     text_col = AMSV_COL_MUTED;
   } else {
-    const uint32_t r = (tray.color >> 16) & 0xFF;
-    const uint32_t g = (tray.color >> 8) & 0xFF;
-    const uint32_t b = tray.color & 0xFF;
+    // Judged where the text sits, the middle of the tile, which on a fade is
+    // darker than the hue at the top.
+    const uint32_t mid = swatchCenterRgb(tray.color);
+    const uint32_t r = (mid >> 16) & 0xFF;
+    const uint32_t g = (mid >> 8) & 0xFF;
+    const uint32_t b = mid & 0xFF;
     const uint32_t luma = (299 * r + 587 * g + 114 * b) / 1000;
     text_col = (luma > AMSV_LUMA_SWITCH) ? 0x000000 : 0xFFFFFF;
   }
@@ -1052,7 +1057,6 @@ static void detailFromTray(const AmsSlotUnit& unit, const AmsSlotTray& tray,
 
   bayName(unit, tray, out.bay, sizeof(out.bay));
   out.color      = tray.color;
-  out.has_color  = tray.has_color;
   out.spool_id   = tray.spool_id;
   out.remain_pct = tray.remain;
   out.nozzle_min = tray.nozzle_min;

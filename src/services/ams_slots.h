@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "services/spool_color.h"
+
 // ============================================================
 //  AMS SLOT MODEL
 //
@@ -97,7 +99,9 @@ enum AmsModel : uint8_t {
 
 // A single bay.
 struct AmsSlotTray {
-  uint32_t color;                  // 0xRRGGBB, alpha dropped
+  // Alpha included: a clear spool is 00000000 and is drawn as glass, not as
+  // an empty bay. Invalid means unknown, not black.
+  SpoolColor color;
   int      spool_id;               // 0 when no spool is known for this bay
   char     name[AMS_NAME_MAX];     // sub brand or trade name, else material
   char     color_name[AMS_COLOR_NAME_MAX];  // manufacturer's name, may be empty
@@ -123,7 +127,6 @@ struct AmsSlotTray {
   // for the bay, see sdMaterialContradicts().
   char     type[AMS_TYPE_MAX];
   bool     exists;                 // a spool is physically in the bay
-  bool     has_color;              // false means unknown, not black
   // The bay the printer currently feeds from. Worth its own byte: it is the
   // one thing on the screen that says "this is what is printing right now",
   // and both backends report it.

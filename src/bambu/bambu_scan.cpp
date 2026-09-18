@@ -143,7 +143,12 @@ BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
   Serial.printf("MaterialVariantID:   %s\n", scan_buf.material_variant_id);
   Serial.printf("MaterialID: %s\n", scan_buf.material_id);
   Serial.printf("Material:  %s\n", scan_buf.material);
-  Serial.printf("Color:     %s\n", scan_buf.color_hex);
+  // RGBA, because the alpha byte is what separates clear from black. Also on
+  // the card: a swatch that looks wrong is otherwise not traceable to the tag.
+  char rgba[SPOOL_COLOR_HEX_MAX];
+  spoolColorFormat(scan_buf.color, rgba, sizeof(rgba));
+  Serial.printf("Color:     %s\n", rgba[0] ? rgba : "-");
+  logSDf("NFC: material '%s', colour %s", scan_buf.material, rgba[0] ? rgba : "-");
   Serial.printf("Temp:      %d - %d C\n", scan_buf.temp_min, scan_buf.temp_max);
   Serial.printf("Vendor:    %s\n", scan_buf.vendor);
   Serial.printf("Date:      %s\n", scan_buf.production_date);

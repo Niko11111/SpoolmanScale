@@ -127,7 +127,7 @@ void showRemoteLinkPopup(int spool_id) {
   // real: reading needs the API key, linking only needs the device token.
   char name[40]     = "";
   char material[24] = "";
-  char color_hex[8] = "";
+  char color_hex[SPOOL_COLOR_HEX_MAX] = "";   // "#RRGGBB", or "#RRGGBBAA" from Spoolman
   char vendor[32]   = "";
   float remaining   = -1.0f;      // negative means the server did not say
   bool have_details = false;
@@ -183,7 +183,11 @@ void showRemoteLinkPopup(int spool_id) {
       }
     }
     // Same threshold the manual flow uses to drop far off colours from the list.
-    if (g_tag.color_hex[0] == '#' && color_hex[0] == '#') {
+    // g_tag.color_hex is empty for a clear filament, which names no hue to hold
+    // against the spool - and neither does a spool stored as 00000000.
+    SpoolColor server_color;
+    spoolColorParse(color_hex, &server_color);
+    if (g_tag.color_hex[0] == '#' && spoolColorNamesHue(server_color)) {
       mismatch_color = (colorDistance(g_tag.color_hex, color_hex) > 120);
     }
   }
@@ -255,7 +259,7 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_set_style_border_width(swatch, 1, 0);
   lv_obj_clear_flag(swatch, LV_OBJ_FLAG_SCROLLABLE);
   // Handles the empty and malformed cases itself, including the fallback grey.
-  lv_obj_set_style_bg_color(swatch, swatchColorFromHex(color_hex), 0);
+  swatchPaintHex(swatch, color_hex);
 
   // Header line: id, material and name on top, vendor under it, remaining
   // weight on the right where there was nothing but empty box before.
@@ -361,8 +365,8 @@ void showRemoteLinkPopup(int spool_id) {
       lv_obj_set_style_border_width(sw, 1, 0);
       lv_obj_set_style_pad_all(sw, 0, 0);
       lv_obj_clear_flag(sw, LV_OBJ_FLAG_SCROLLABLE);
-      lv_obj_set_style_bg_color(sw,
-        swatchColorFromHex(i == 0 ? g_tag.color_hex : color_hex), 0);
+      if (i == 0) swatchPaint(sw, g_tag.color);
+      else        swatchPaintHex(sw, color_hex);
     }
     y_after_head += 70;
   } else {
