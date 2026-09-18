@@ -199,9 +199,18 @@ static uint8_t scale_recover_tries = 0;
 // pass - which would block lv_timer_handler() for twice the timeout - a miss
 // shortens the next poll interval. Every retry is therefore a separate loop
 // pass and the UI keeps running between them.
+//
+// The slow timeout is what an empty reader costs: the poll waits it out on
+// this task every time, and no touch is read meanwhile. At 150 ms that was 30 %
+// of all time with nothing on the scale. Measured over 926 successful polls
+// with NTAG, Bambu and a plain MIFARE Classic 1k: a tag that is there answers
+// in 26 to 38 ms, never more. Only a tag arriving while the poll was already
+// waiting took longer, and that one is found by the next poll instead. A tag
+// needing longer than the timeout would never be found, since every poll
+// starts the search again, so this stays at twice the slowest answer seen.
 constexpr unsigned long NFC_POLL_SLOW_MS   = 500;
 constexpr unsigned long NFC_POLL_FAST_MS   = 60;
-constexpr uint16_t      NFC_TIMEOUT_SLOW_MS = 150;
+constexpr uint16_t      NFC_TIMEOUT_SLOW_MS = 80;
 constexpr uint16_t      NFC_TIMEOUT_FAST_MS = 100;
 // Raised from 5 to 7 after hardware testing: three of four recovered dropouts
 // needed all five attempts and ran 1.2 to 1.4 s, so the old limit was only
@@ -1480,7 +1489,9 @@ void appLoop() {
       last_nfc_check_ms = millis();
       uint8_t uid[NFC_UID_MAX], uidLen = 0;
       crumbSet("nfc poll");
+      const unsigned long poll_start_ms = millis();
       bool found = nfcReadPassiveTarget(uid, &uidLen, poll_timeout);
+      perfNfcPoll(found, (uint32_t)(millis() - poll_start_ms));
 
       nfc_stat_scans++;
       if (found) {

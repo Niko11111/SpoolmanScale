@@ -27,6 +27,32 @@ void perfLoopMark() {
   s_last_mark_ms = now;
 }
 
+// Successful polls only count towards the hit figures. The two thresholds are
+// the timeouts under discussion: 100 ms is what the fast re-poll already runs
+// with, 80 ms is the candidate for the slow one.
+static constexpr uint32_t NFC_HIT_SLOW_MS     = 50;
+static constexpr uint32_t NFC_HIT_CRITICAL_MS = 80;
+static uint32_t s_nfc_polls      = 0;
+static uint32_t s_nfc_hits       = 0;
+static uint32_t s_nfc_hit_max_ms = 0;
+static uint32_t s_nfc_hit_sum_ms = 0;
+static uint32_t s_nfc_hit_over50 = 0;
+static uint32_t s_nfc_hit_over80 = 0;
+static uint32_t s_nfc_miss_max_ms = 0;
+
+void perfNfcPoll(bool found, uint32_t poll_ms) {
+  s_nfc_polls++;
+  if (!found) {
+    if (poll_ms > s_nfc_miss_max_ms) s_nfc_miss_max_ms = poll_ms;
+    return;
+  }
+  s_nfc_hits++;
+  s_nfc_hit_sum_ms += poll_ms;
+  if (poll_ms > s_nfc_hit_max_ms)    s_nfc_hit_max_ms = poll_ms;
+  if (poll_ms > NFC_HIT_SLOW_MS)     s_nfc_hit_over50++;
+  if (poll_ms > NFC_HIT_CRITICAL_MS) s_nfc_hit_over80++;
+}
+
 void perfUiDone() {
   const uint32_t ui_us = micros() - s_ui_start_us;
   if (ui_us > s_ui_max_us) s_ui_max_us = ui_us;
@@ -58,6 +84,18 @@ void perfLogWindow() {
   s_ui_max_us = 0;
   s_ui_sum_us = 0;
   s_ui_calls  = 0;
+
+  // Only while a tag answers: an empty reader has nothing to say here.
+  if (s_nfc_hits > 0) {
+    logSDf("[verbose] nfc: polls=%u hits=%u hit_avg=%ums hit_max=%ums "
+           "hit_over50=%u hit_over80=%u miss_max=%ums",
+      (unsigned)s_nfc_polls, (unsigned)s_nfc_hits,
+      (unsigned)(s_nfc_hit_sum_ms / s_nfc_hits), (unsigned)s_nfc_hit_max_ms,
+      (unsigned)s_nfc_hit_over50, (unsigned)s_nfc_hit_over80,
+      (unsigned)s_nfc_miss_max_ms);
+  }
+  s_nfc_polls = s_nfc_hits = s_nfc_hit_max_ms = s_nfc_hit_sum_ms = 0;
+  s_nfc_hit_over50 = s_nfc_hit_over80 = s_nfc_miss_max_ms = 0;
 
   // The heartbeat and this line are two writes to the card in one pass, some
   // 55 ms that exist only because verbose logging is on. Dropping the mark
