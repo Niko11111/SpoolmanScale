@@ -135,7 +135,10 @@ def write_lf(path, text):
     helper here rather than a keyword argument that is easy to forget on the
     next write site.
     """
-    path.write_text(text, encoding="utf-8", newline=LF)
+    # open() rather than Path.write_text(): the newline argument reached
+    # write_text() only in Python 3.10, and macOS still ships 3.9 as python3.
+    with open(path, "w", encoding="utf-8", newline=LF) as f:
+        f.write(text)
 
 
 # --------------------------------------------------------------------------

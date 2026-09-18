@@ -502,11 +502,17 @@ def load_work():
     return out
 
 
+def write_lf(path, text):
+    # open() rather than Path.write_text(): the newline argument reached
+    # write_text() only in Python 3.10, and macOS still ships 3.9 as python3.
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+
+
 def save_work(rows):
-    WORK.write_text(
-        "".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n"
-                for r in rows),
-        encoding="utf-8", newline="\n")
+    write_lf(WORK,
+             "".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n"
+                     for r in rows))
 
 
 HUMAN = ("fr", "st", "note", "wover")
@@ -1027,7 +1033,7 @@ def emit():
                       "//  lang.cpp - String table DE / EN / FR\n")
     new = new.replace("gap onwards reads as the wrong one, in both languages, and",
                       "gap onwards reads as the wrong one, in every language, and")
-    LANG_CPP.write_text(new, encoding="utf-8", newline="\n")
+    write_lf(LANG_CPP, new)
 
     # Content preservation: re-read and prove no German or English text moved.
     _, _, _, _, again = load_table()

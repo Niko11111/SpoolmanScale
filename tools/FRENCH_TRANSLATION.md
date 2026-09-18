@@ -2,8 +2,9 @@
 
 <!-- Fork addition – Nanostra (Frédéric Dubus) -->
 
-SpoolmanScale speaks German and English. This fork adds **French**, on the display and in the web
-interface. This page explains the one real problem we hit (accents), how we solved it without moving a
+SpoolmanScale started out in German and English. **French** came in as a third language with PR #33,
+on the display and in the web interface. This page was written on the fork that built it, so
+"upstream" below means this repository. It explains the one real problem we hit (accents), how we solved it without moving a
 single pixel of the German and English screens, how we checked that, and how to keep the French texts
 in step when the firmware changes.
 
@@ -185,7 +186,7 @@ and stays usable.
 ### Add a new text (for maintainers who do not speak French)
 
 Nothing changes in how you work: append the row at the end of the table as usual, with German and
-English. The French cell may stay missing — `T()` shows the English there until someone translates it.
+English. The French cell may stay missing - `T()` shows the English there until someone translates it.
 
 If you want to fill it at once, copy the English into the third cell, or run:
 
@@ -209,7 +210,7 @@ python tools/gen_fr_fonts.py --all
 - **Going back to a firmware without French.** The language is stored as a number. If the device is
   set to French (`2`) and a firmware that only knows `0` and `1` is installed, that firmware reads a
   column that does not exist, and the screens show garbled text. **Switch the language to German or
-  English before installing an older or upstream firmware.**
+  English before installing a firmware from before French was added (v0.7.3 and older).**
 - **Decimal point.** Numbers formatted by the code keep a dot (`1.5`): there is no locale support in
   the firmware, and translating cannot change that.
 - **A few server-side English words** in the web interface (for example some log page messages and
