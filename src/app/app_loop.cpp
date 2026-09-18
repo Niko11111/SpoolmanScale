@@ -1539,6 +1539,7 @@ void appLoop() {
       if (found && uidLen == 4) {
         // ── MIFARE Classic (Bambu) ────────────────────────────
         last_tag_seen_ms = millis();
+        const bool newly_placed = !tag_present;
         tag_present = true;
         // A successful read means zero consecutive misses, by definition.
         // This used to be reset only when the UID changed, so after the very
@@ -1547,7 +1548,10 @@ void appLoop() {
         // apart, and the fifth glitch of a session declared the spool removed
         // while it was still lying on the scale.
         nfc_absent_count = 0;
-        resetActivityTimer();
+        // Putting a tag down wakes the screen, a tag lying there does not: see
+        // handlePowerManagement(). One that merely dropped out and came back
+        // under a spool that never moved is not news either.
+        if (newly_placed && !weightSaysSpoolStayed()) resetActivityTimer();
 
         char uid_str[24];
         snprintf(uid_str, sizeof(uid_str), "%02X:%02X:%02X:%02X",
@@ -1560,6 +1564,7 @@ void appLoop() {
 
         if (uid_changed) {
           Serial.printf("NFC: New 4-byte UID %s\n", uid_str);
+          resetActivityTimer();   // a different tag is always news
           nfc_retry_count = 0; nfc_absent_count = 0;
           last_bambu_retry_ms = 0;
           bambu_uid_probed = false;
@@ -1687,9 +1692,10 @@ void appLoop() {
       } else if (found && uidLen == 7) {
         // ── NTAG detected ──────────────────────────────────────
         last_tag_seen_ms = millis();
+        const bool newly_placed = !tag_present;
         tag_present = true;
         nfc_absent_count = 0;   // see the comment in the Bambu branch above
-        resetActivityTimer();
+        if (newly_placed && !weightSaysSpoolStayed()) resetActivityTimer();
 
         char uid_str[24];
         snprintf(uid_str, sizeof(uid_str), "%02X:%02X:%02X:%02X:%02X:%02X:%02X",
@@ -1715,7 +1721,10 @@ void appLoop() {
         // actually runs. With no WiFi, or with the manual id input open, it
         // stays empty and every poll would look like a new tag.
         bool uid_changed_ntag = (strcmp(uid_str, ntag_handled_uid) != 0);
-        if (uid_changed_ntag) logSDf("NFC: NTAG UID=%s", uid_str);
+        if (uid_changed_ntag) {
+          logSDf("NFC: NTAG UID=%s", uid_str);
+          resetActivityTimer();   // a different tag is always news
+        }
 
         lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
         lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);

@@ -59,12 +59,29 @@ void displayNoteWeight(float grams) {
 }
 
 void handlePowerManagement() {
+  // A tag on the reader is not activity: it used to reset the timer on every
+  // poll, so a spool left on the scale kept the panel at full brightness for
+  // good. It dims now like an idle scale. What the tag still does is hold off
+  // deep sleep, because a scale with a spool on it has always stayed online
+  // and a backend would otherwise see it vanish after twenty minutes. When the
+  // tag goes, the countdown starts from that moment rather than from whenever
+  // the screen was last touched, or the first dropout of a weakly coupling
+  // NTAG would switch the device off on the spot. Brightness stays as it is.
+  static bool tag_held_sleep = false;
+  if (tag_present) {
+    tag_held_sleep = true;
+  } else if (tag_held_sleep) {
+    tag_held_sleep = false;
+    last_activity_ms = millis();
+  }
+
   unsigned long elapsed = millis() - last_activity_ms;
 
   // A sleep timeout of zero means never. Without the first test the
   // comparison would be true on the very first pass and the scale would drop
   // into deep sleep right after booting.
-  if (sleep_timeout_ms > 0 && elapsed >= (unsigned long)sleep_timeout_ms) {
+  if (sleep_timeout_ms > 0 && !tag_present &&
+      elapsed >= (unsigned long)sleep_timeout_ms) {
     Serial.println("Deep sleep...");
     logSD("Deep sleep: entering");
     displayPrepareDeepSleep();
