@@ -30,6 +30,17 @@ jobs:
         run: pip install --upgrade platformio
       - name: Build ${{ matrix.env }}
         run: pio run -e ${{ matrix.env }}
+      - name: Refuse a binary an installed device could not take
+        # Every device flashed so far has a 3 MB app slot, and OTA never
+        # rewrites the partition table. A larger binary would be refused by
+        # esp_ota_begin() on all of them, so the build fails here first.
+        run: |
+          SIZE=$(stat -c %s .pio/build/${{ matrix.env }}/firmware.bin)
+          echo "firmware.bin: $SIZE bytes of 3145728"
+          if [ "$SIZE" -gt 3145728 ]; then
+            echo "::error::firmware.bin is $SIZE bytes, more than the 3 MB app slot of installed devices"
+            exit 1
+          fi
       - name: Read version from app_config.h
         id: version
         run: |
@@ -113,6 +124,9 @@ jobs:
           VERSION=${{ steps.version.outputs.version }}
           cp .pio/build/${{ matrix.env }}/bootloader.bin webflasher/bootloader.bin
           cp .pio/build/${{ matrix.env }}/partitions.bin  webflasher/partitions.bin
+          # otadata, blank: boots app0 after a flash. Without it a device that
+          # last ran from app1 keeps booting the old firmware from there.
+          cp "$(find ~/.platformio/packages -path '*framework-arduinoespressif32*' -name boot_app0.bin | head -1)" webflasher/boot_app0.bin
           cp .pio/build/${{ matrix.env }}/firmware.bin    webflasher/SpoolmanScale.bin
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" manifest.json
           # The whole suffix is optional, in both directions. Without the
@@ -183,7 +197,7 @@ jobs:
           cp version.json /tmp/ci-out/
           if [ -z "$(echo "$VERSION" | grep -E -- '-beta\.[0-9]+$')" ]; then
             cp manifest.json index.html /tmp/ci-out/
-            cp webflasher/bootloader.bin webflasher/partitions.bin webflasher/SpoolmanScale.bin /tmp/ci-out/webflasher/
+            cp webflasher/bootloader.bin webflasher/partitions.bin webflasher/boot_app0.bin webflasher/SpoolmanScale.bin /tmp/ci-out/webflasher/
           fi
 
           git config user.name  "github-actions[bot]"
@@ -203,7 +217,7 @@ jobs:
             cp /tmp/ci-out/manifest.json manifest.json
             cp /tmp/ci-out/index.html index.html
             cp /tmp/ci-out/webflasher/*.bin webflasher/
-            git add manifest.json index.html webflasher/bootloader.bin webflasher/partitions.bin webflasher/SpoolmanScale.bin
+            git add manifest.json index.html webflasher/bootloader.bin webflasher/partitions.bin webflasher/boot_app0.bin webflasher/SpoolmanScale.bin
           fi
 
           git diff --cached --quiet || git commit -m "CI: publish $VERSION"

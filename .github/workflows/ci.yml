@@ -52,6 +52,17 @@ jobs:
         run: pip install --upgrade platformio
       - name: Build
         run: pio run -e ${{ matrix.env }}
+      - name: Refuse a binary an installed device could not take
+        # Every device flashed so far has a 3 MB app slot, and OTA never
+        # rewrites the partition table. A larger binary would be refused by
+        # esp_ota_begin() on all of them, so the build fails here first.
+        run: |
+          SIZE=$(stat -c %s .pio/build/${{ matrix.env }}/firmware.bin)
+          echo "firmware.bin: $SIZE bytes of 3145728"
+          if [ "$SIZE" -gt 3145728 ]; then
+            echo "::error::firmware.bin is $SIZE bytes, more than the 3 MB app slot of installed devices"
+            exit 1
+          fi
       # Here rather than in the house-rules job: both tools measure icons from
       # LVGL's symbol header, and that only exists once the build has unpacked
       # the library.

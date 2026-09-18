@@ -161,6 +161,23 @@ else
   fi
 fi
 
+# 12. The binary fits the app slot of every installed device. OTA never
+#     rewrites the partition table, so whatever table new devices get, a
+#     device flashed before it keeps its 3 MB slot and esp_ota_begin() refuses
+#     anything larger. Only checkable once the firmware has been built.
+FW_BIN=.pio/build/wt32-sc01-plus/firmware.bin
+OTA_MAX_APP_BYTES=3145728
+if [ ! -f "$FW_BIN" ]; then
+  warnf "binary size skipped: $FW_BIN is missing, build the firmware once"
+else
+  size=$(wc -c < "$FW_BIN" | tr -d ' ')
+  if [ "$size" -gt "$OTA_MAX_APP_BYTES" ]; then
+    bad "firmware.bin is $size bytes, more than the $OTA_MAX_APP_BYTES byte app slot of installed devices"
+  else
+    ok "firmware.bin: $size of $OTA_MAX_APP_BYTES bytes ($(( size * 100 / OTA_MAX_APP_BYTES )) %)"
+  fi
+fi
+
 echo
 if [ "$fail" -ne 0 ]; then echo "check.sh: FAILED"; exit 1; fi
 if [ "$warn" -ne 0 ]; then echo "check.sh: passed with warnings"; else echo "check.sh: all checks passed"; fi

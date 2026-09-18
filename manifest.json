@@ -17,6 +17,10 @@
           "offset": 32768
         },
         {
+          "path": "webflasher/boot_app0.bin",
+          "offset": 57344
+        },
+        {
           "path": "webflasher/SpoolmanScale.bin",
           "offset": 65536
         }
