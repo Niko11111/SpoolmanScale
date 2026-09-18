@@ -4,6 +4,7 @@
 #include "hardware/nfc.h"
 #include "hardware/sd_logger.h"
 #include "bambu/bambu_tag.h"
+#include "services/spool_color.h"
 #include <Arduino.h>
 #include <cstring>
 #include <stdio.h>
@@ -17,7 +18,7 @@ SnapmakerScanResult scanSnapmakerTag(uint8_t *uid, uint8_t uid_len) {
   }
   
   char uid_str[24];
-  sprintf(uid_str, "%02X:%02X:%02X:%02X", uid[0], uid[1], uid[2], uid[3]);
+  snprintf(uid_str, sizeof(uid_str), "%02X:%02X:%02X:%02X", uid[0], uid[1], uid[2], uid[3]);
 
   uint8_t sec0_blocks[4][16];
   
@@ -25,27 +26,18 @@ SnapmakerScanResult scanSnapmakerTag(uint8_t *uid, uint8_t uid_len) {
   uint8_t dummy_uid_len = 0;
   nfcReadPassiveTarget(dummy_uid, &dummy_uid_len, 150); // Wake from HALT
 
-  logSDf("[RFID] Snapmaker KDF - UID: %02X%02X%02X%02X, KeyA: %02X%02X%02X%02X%02X%02X", 
-         uid[0], uid[1], uid[2], uid[3], 
-         keyA[0][0], keyA[0][1], keyA[0][2], keyA[0][3], keyA[0][4], keyA[0][5]);
-  
-  Serial.printf("[RFID] Snapmaker KDF - UID: %02X%02X%02X%02X, KeyA: %02X%02X%02X%02X%02X%02X\n", 
-         uid[0], uid[1], uid[2], uid[3], 
-         keyA[0][0], keyA[0][1], keyA[0][2], keyA[0][3], keyA[0][4], keyA[0][5]);
-
+  // No key in any log: logs get passed around, and a line to the card holds
+  // the loop for some 26 ms. A tag that is not Snapmaker's says nothing at all
+  // here, the caller already logged that it is no Bambu tag either.
   if (!nfcReadMifareSector(0, keyA[0], uid, sec0_blocks, NFC_KEY_A)) {
-    logSDf("[RFID] Snapmaker Sector 0: FAIL");
     return SNAPMAKER_SCAN_NO_AUTH; // Fast fail
   }
-  logSDf("[RFID] Snapmaker Sector 0: OK");
 
   uint8_t sec1_blocks[4][16];
   bool sec1_ok = nfcReadMifareSector(1, keyA[1], uid, sec1_blocks, NFC_KEY_A);
-  logSDf("[RFID] Snapmaker Sector 1: %s", sec1_ok ? "OK" : "FAIL");
-  
+
   uint8_t sec2_blocks[4][16];
   bool sec2_ok = nfcReadMifareSector(2, keyA[2], uid, sec2_blocks, NFC_KEY_A);
-  logSDf("[RFID] Snapmaker Sector 2: %s", sec2_ok ? "OK" : "FAIL");
   
   SnapmakerScanResult result = (sec1_ok && sec2_ok) ? SNAPMAKER_SCAN_OK : SNAPMAKER_SCAN_PARTIAL;
   
@@ -108,7 +100,12 @@ SnapmakerScanResult scanSnapmakerTag(uint8_t *uid, uint8_t uid_len) {
     g_tag.material[sizeof(g_tag.material)-1] = '\0';
     
     // Block 1
-    sprintf(g_tag.color_hex, "#%02X%02X%02X", sec1_blocks[1][0], sec1_blocks[1][1], sec1_blocks[1][2]);
+    snprintf(g_tag.color_hex, sizeof(g_tag.color_hex), "#%02X%02X%02X",
+             sec1_blocks[1][0], sec1_blocks[1][1], sec1_blocks[1][2]);
+    // The swatch is drawn from g_tag.color, not from the hex string. Opaque:
+    // what the fourth byte of this block means is not established.
+    g_tag.color = spoolColorFromRgba(sec1_blocks[1][0], sec1_blocks[1][1],
+                                     sec1_blocks[1][2], 0xFF);
   }
   
   if (sec2_ok) {
@@ -126,7 +123,16 @@ SnapmakerScanResult scanSnapmakerTag(uint8_t *uid, uint8_t uid_len) {
   
   strncpy(g_tag.tray_uuid, uid_str, sizeof(g_tag.tray_uuid) - 1);
   g_tag.tray_uuid[sizeof(g_tag.tray_uuid)-1] = '\0';
-  
+
+  // A sector that authenticates with a key derived from Snapmaker's salt is
+  // Snapmaker's, whatever the vendor block says.
+  if (!g_tag.vendor[0]) snprintf(g_tag.vendor, sizeof(g_tag.vendor), "Snapmaker");
+
+  logSDf("NFC: Snapmaker tag %s, %s, colour %s%s", uid_str,
+         g_tag.material[0] ? g_tag.material : "-",
+         g_tag.color_hex[0] ? g_tag.color_hex : "-",
+         result == SNAPMAKER_SCAN_OK ? "" : " (partial read)");
+
   g_tag_ready = true;
   return result;
 }

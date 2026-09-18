@@ -238,6 +238,19 @@ static String body() {
   h += T(STR_W_WAKE_HINT);
   h += F("</span><span class='msg' id='wk-s'></span></div>");
 
+  // Snapmaker tags, between the two: it takes effect with the next tag and
+  // needs no restart, so it sits above the scale switch, whose restart button
+  // has to stay the last thing in the card.
+  h += F("<div class='field'>"
+         "<label class='check'><span class='switch'>"
+         "<input id='sn' type='checkbox'");
+  if (g_snapmaker_tags) h += F(" checked");
+  h += F("><i></i></span>");
+  h += T(STR_W_SNAPMAKER);
+  h += F("</label><span class='hint'>");
+  h += T(STR_W_SNAPMAKER_HINT);
+  h += F("</span><span class='msg' id='sn-s'></span></div>");
+
   // Second switch in the same card, because both answer "what kind of device
   // is this". Unlike every other switch on this page it needs a restart: the
   // home screen reads it once while it is built, so the restart button that
@@ -332,6 +345,11 @@ static String body() {
          "post('/api/scalefitted',want?'1':'0').then(r=>{"
          "if(!r.ok)$('sf').checked=!want;"
          "flash('sf-s',r.ok?WS.ok:WS.err,!r.ok,4000);});});"
+         "$('sn').addEventListener('change',()=>{"
+         "const want=$('sn').checked;"
+         "post('/api/snapmaker',want?'1':'0').then(r=>{"
+         "if(!r.ok)$('sn').checked=!want;"
+         "flash('sn-s',r.ok?WS.ok:WS.err,!r.ok,4000);});});"
          "$('sf-rb').addEventListener('click',doRestart);"
          "$('ll-b').addEventListener('click',setLimits);"
          "$('gn-b').addEventListener('click',setGain);"
@@ -461,6 +479,16 @@ static void routes(WebServer &srv) {
     g_wake_on_load = on;
     prefsPutBool("wake_load", on);
     logSDf("Web: wake on load -> %s", on ? "ON" : "OFF");
+    srv.send(200, "application/json", on ? "{\"ok\":true,\"v\":1}"
+                                         : "{\"ok\":true,\"v\":0}");
+  });
+
+  srv.on("/api/snapmaker", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
+    const bool on = (srv.arg("plain").toInt() != 0);
+    g_snapmaker_tags = on;
+    prefsPutBool("snapmaker", on);
+    logSDf("Web: Snapmaker tags -> %s", on ? "ON" : "OFF");
     srv.send(200, "application/json", on ? "{\"ok\":true,\"v\":1}"
                                          : "{\"ok\":true,\"v\":0}");
   });

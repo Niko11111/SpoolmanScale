@@ -89,6 +89,7 @@ void loadPrefs() {
   // device that never touched it follows this default.
   g_whole_gram = prefsGetBool("whole_gram", true);
   g_wake_on_load = prefsGetBool("wake_load", true);
+  g_snapmaker_tags = prefsGetBool("snapmaker", false);
   // Same default and the same reason: a device that was never told otherwise
   // has a scale. Only one built without a load cell says so once.
   g_scale_fitted = prefsGetBool("scale_fitted", true);

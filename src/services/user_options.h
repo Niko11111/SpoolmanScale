@@ -70,6 +70,13 @@ extern bool g_flm_tagless;
 // scale that shares a bench with something that knocks it.
 extern bool g_wake_on_load;
 
+// Try Snapmaker's keys on a 4 byte tag that refused the Bambu ones. Off by
+// default, and off means not one extra byte goes to the reader: nobody here
+// owns a Snapmaker spool, so the decoding is proven on a contributor's tag
+// only, and the attempt costs every other 4 byte tag about half a second.
+// Only in the web interface, the device has no screen to spare for it.
+extern bool g_snapmaker_tags;
+
 // Where the drying date goes in BamBuddy mode. BamBuddy has no field for it
 // at all - upstream issues #2863 and #1754 are open and waiting for votes -
 // so the scale needs somewhere to put it, and none of the choices is obvious

@@ -2582,6 +2582,10 @@ const char* const STRINGS[][3] = {
   { "Drucker meldet %s - Zuordnung im Backend prüfen",
     "Printer reports %s - check the assignment in the backend",
     "Printer reports %s - check the assignment in the backend" },  // STR_AMSD_TYPE_CONFLICT
+  { "Snapmaker-Tags lesen", "Read Snapmaker tags", "Read Snapmaker tags" },  // STR_W_SNAPMAKER
+  { "Versucht bei einem 4-Byte-Tag, der kein Bambu-Tag ist, die Snapmaker-Schlüssel und liest Material und Farbe vom Tag. Kostet jeden anderen 4-Byte-Tag etwa eine halbe Sekunde beim Auflegen. Aus lassen, wenn keine Snapmaker-Spulen im Haus sind.",
+    "Tries Snapmaker's keys on a 4 byte tag that is not a Bambu tag and reads material and colour off the tag. Costs every other 4 byte tag about half a second when it is put down. Leave it off if there are no Snapmaker spools around.",
+    "Tries Snapmaker's keys on a 4 byte tag that is not a Bambu tag and reads material and colour off the tag. Costs every other 4 byte tag about half a second when it is put down. Leave it off if there are no Snapmaker spools around." },  // STR_W_SNAPMAKER_HINT
 };
 
 StringID tagWriteResultString(uint8_t code) {

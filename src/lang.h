@@ -1175,6 +1175,8 @@ enum StringID {
   STR_AMSV_DRYING_MIN,        // "Drying %d min" - a cycle without a target temperature
   STR_AMSV_DRYING,            // "Drying" - neither figure reported
   STR_AMSD_TYPE_CONFLICT,     // "Printer reports %s - ...", the printer's material
+  STR_W_SNAPMAKER,            // web config: the switch for Snapmaker tags
+  STR_W_SNAPMAKER_HINT,       // what it costs and why it is off
 
   STR_COUNT
 };

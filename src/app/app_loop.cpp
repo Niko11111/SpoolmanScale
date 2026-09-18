@@ -15,6 +15,7 @@
 #include "app/perf_monitor.h"
 #include "bambu/bambu_scan.h"
 #include "bambu/bambu_tag.h"
+#include "snapmaker/snapmaker_scan.h"
 #include "hardware/display_power.h"
 #include "hardware/nfc.h"
 #include "hardware/scale.h"
@@ -1486,6 +1487,7 @@ void appLoop() {
 
     static unsigned long last_nfc_check_ms = 0;
     static bool bambu_uid_probed = false;   // see NFC_UID_PROBE_AFTER_RETRIES
+    static bool snapmaker_decoded = false;  // this placement read as a Snapmaker tag
     static unsigned long last_nfc_stats_ms = 0;
     static uint8_t last_uid_len = 0;   // 4 = Bambu, 7 = NTAG, for the removal delay
 
@@ -1568,11 +1570,23 @@ void appLoop() {
           nfc_retry_count = 0; nfc_absent_count = 0;
           last_bambu_retry_ms = 0;
           bambu_uid_probed = false;
+          snapmaker_decoded = false;
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
           lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
           scanTag(uid, uidLen);
+          // Opt-in, off by default, and then none of this touches the reader.
+          // Once per placement, right after the first Bambu probe came back
+          // with nothing. A tag that answers to Snapmaker's keys is no Bambu
+          // tag, so the Bambu retries are skipped and the branch below for a
+          // plain 4 byte card looks the spool up by its UID.
+          if (g_snapmaker_tags && countBambuDataBlocksRead(g_tag) == 0 &&
+              scanSnapmakerTag(uid, uidLen) != SNAPMAKER_SCAN_NO_AUTH) {
+            snapmaker_decoded = true;
+            nfc_retry_count = NFC_MAX_RETRIES;
+            last_nfc_check_ms = 0;
+          }
         } else if (bambu_blocks_read == 0 && !bambu_uid_probed &&
                    nfc_retry_count >= NFC_UID_PROBE_AFTER_RETRIES &&
                    nfc_retry_count < NFC_MAX_RETRIES &&
@@ -1609,7 +1623,8 @@ void appLoop() {
           // MIFARE once the retries are spent with nothing. In between,
           // while the retries run, nothing is logged yet.
           if (bambu_blocks_read > 0 || nfc_retry_count >= NFC_MAX_RETRIES) {
-            TagSeen::note(uid_str, bambu_blocks_read > 0 ? "Bambu" : "MIFARE");
+            TagSeen::note(uid_str, bambu_blocks_read > 0 ? "Bambu"
+                                   : snapmaker_decoded   ? "Snapmaker" : "MIFARE");
           }
           if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES &&
               bambu_blocks_read == 0) {
