@@ -14,6 +14,7 @@
 #include "app/deferred_actions.h"
 #include "bambu/bambu_scan.h"
 #include "bambu/bambu_tag.h"
+#include "snapmaker/snapmaker_scan.h"
 #include "hardware/display_power.h"
 #include "hardware/nfc.h"
 #include "hardware/scale.h"
@@ -39,7 +40,6 @@
 #include "services/ams_assign.h"
 #include "services/spoolman_actions.h"
 #include "services/backend_api.h"
-#include "services/dried_batch.h"
 #include "services/tag_field.h"
 #include "services/bambuddy_device.h"
 #include "services/ams_presence.h"
@@ -736,9 +736,6 @@ void appLoop() {
   handleAmsAssignDeferredActions();
   handleAmsViewDeferredActions();
   handleAmsDetailDeferredActions();
-  // Right after the card's own handler, so a batch that finished inline (as
-  // it does in the simulator) is collected in the pass that started it.
-  amsDetailBatchTick();
   amsPickTick();
   amsPresenceTick();
   // Watches the reader for the tag on the other flange while its question
@@ -1304,9 +1301,7 @@ void appLoop() {
       // running. That does not fail on our side, it just starts addressing
       // the other database - so the mode is re-asked here rather than only
       // at boot.
-      // Not while a drying batch writes on the other core: its requests read
-      // the inventory mode, and a refresh in their middle is a second writer.
-      if (sm_reachable && !driedBatchBusy()) backendRefreshMode();
+      if (sm_reachable) backendRefreshMode();
     }
   }
 
@@ -1525,10 +1520,11 @@ void appLoop() {
         snprintf(uid_str, sizeof(uid_str), "%02X:%02X:%02X:%02X",
           uid[0], uid[1], uid[2], uid[3]);
 
+        bool is_snapmaker = (strcmp(g_tag.vendor, "Snapmaker") == 0);
         bool uid_changed = (strcmp(uid_str, g_tag.uid_str) != 0);
         int bambu_blocks_read = countBambuDataBlocksRead(g_tag);
-        bool uuid_missing = (strlen(g_tag.tray_uuid) < 32);
-        bool contents_incomplete = (bambu_blocks_read < 48);
+        bool uuid_missing = !is_snapmaker && (strlen(g_tag.tray_uuid) < 32);
+        bool contents_incomplete = !is_snapmaker && (bambu_blocks_read < 48);
 
         if (uid_changed) {
           Serial.printf("NFC: New 4-byte UID %s\n", uid_str);
@@ -1538,8 +1534,19 @@ void appLoop() {
           lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
-          scanTag(uid, uidLen);
-        } else if ((uuid_missing || contents_incomplete) && nfc_retry_count < NFC_MAX_RETRIES &&
+          
+          BambuScanResult bres = scanTag(uid, uidLen);
+          if (bres == BAMBU_SCAN_NO_AUTH || countBambuDataBlocksRead(g_tag) == 0) {
+            SnapmakerScanResult sres = scanSnapmakerTag(uid, uidLen);
+            if (sres != SNAPMAKER_SCAN_NO_AUTH) {
+               TagSeen::note(uid_str, "Snapmaker");
+               updateDisplay();
+               querySpoolman(uid_str);
+               strncpy(spoolman_queried_uid, uid_str, sizeof(spoolman_queried_uid)-1);
+               spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';
+            }
+          }
+        } else if ((uuid_missing || contents_incomplete) && !is_snapmaker && nfc_retry_count < NFC_MAX_RETRIES &&
                    millis() - last_bambu_retry_ms >= NFC_BAMBU_RETRY_BACKOFF_MS) {
           last_bambu_retry_ms = millis();
           nfc_retry_count++;
@@ -1552,14 +1559,25 @@ void appLoop() {
           lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
-          scanTag(uid, uidLen);
+          
+          BambuScanResult bres = scanTag(uid, uidLen);
+          if (bres == BAMBU_SCAN_NO_AUTH || countBambuDataBlocksRead(g_tag) == 0) {
+            SnapmakerScanResult sres = scanSnapmakerTag(uid, uidLen);
+            if (sres != SNAPMAKER_SCAN_NO_AUTH) {
+               TagSeen::note(uid_str, "Snapmaker");
+               updateDisplay();
+               querySpoolman(uid_str);
+               strncpy(spoolman_queried_uid, uid_str, sizeof(spoolman_queried_uid)-1);
+               spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';
+            }
+          }
         } else {
           // The "Tag placed" line waits until the scan has settled, so it
           // says what the scale concluded: Bambu once any sector has read,
           // MIFARE once the retries are spent with nothing. In between,
           // while the retries run, nothing is logged yet.
           if (bambu_blocks_read > 0 || nfc_retry_count >= NFC_MAX_RETRIES) {
-            TagSeen::note(uid_str, bambu_blocks_read > 0 ? "Bambu" : "MIFARE");
+            TagSeen::note(uid_str, bambu_blocks_read > 0 ? "Bambu" : (is_snapmaker ? "Snapmaker" : "MIFARE"));
           }
           if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES &&
               bambu_blocks_read == 0) {
@@ -1613,7 +1631,7 @@ void appLoop() {
           } else {
             // tray_uuid present - query Spoolman if not done yet
             if (!isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen() &&
-                strcmp(g_tag.uid_str, spoolman_queried_uid) != 0 && strlen(g_tag.tray_uuid) == 32) {
+                strcmp(g_tag.uid_str, spoolman_queried_uid) != 0 && (strlen(g_tag.tray_uuid) == 32 || is_snapmaker)) {
               crumbSet("backend lookup");
               querySpoolman(g_tag.tray_uuid);
               strncpy(spoolman_queried_uid, g_tag.uid_str, sizeof(spoolman_queried_uid)-1);
@@ -1623,7 +1641,7 @@ void appLoop() {
                 link_popup_dismissed = false;
               }
             } else if (!sm_found && !link_popup_dismissed && !isSpoolFlowLinkEntryOpen() &&
-                       wifi_ok && strlen(g_tag.tray_uuid) == 32) {
+                       wifi_ok && (strlen(g_tag.tray_uuid) == 32 || is_snapmaker)) {
               // Auto-popup disabled - user uses the Link/Copy buttons in Zone 5
               (void)link_tag_first_seen_ms;
             }
@@ -1685,7 +1703,6 @@ void appLoop() {
           g_tag.uid_str[sizeof(g_tag.uid_str)-1] = '\0';
           g_tag.tray_uuid[0] = '\0';
           g_tag.material[0] = '\0';
-          g_tag.color = SpoolColor{};
           g_tag.color_hex[0] = '\0';
           g_tag.vendor[0] = '\0';
           spoolman_queried_uid[0] = '\0';
