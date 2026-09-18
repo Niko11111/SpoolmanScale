@@ -37,7 +37,7 @@ def copy_release_files(source, target, env):
     for d in [webflasher_dir, ota_github_dir, ota_browser_dir, source_dir]:
         os.makedirs(d, exist_ok=True)
 
-    # Webflasher — alle drei Binaries
+    # Webflasher - alle drei Binaries
     for src_name, dst_name in [
         ("bootloader.bin", "bootloader.bin"),
         ("partitions.bin", "partitions.bin"),

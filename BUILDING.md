@@ -76,7 +76,7 @@ The more precise your reference weight, the more accurate your results.
 
 ## Wiring
 
-All components connect to the **I/O connector** on the WT32-SC01 Plus using the included 7-pin cable. The I/O socket has 8 pins — plug the 7-pin cable in flush to the left.
+All components connect to the **I/O connector** on the WT32-SC01 Plus using the included 7-pin cable. The I/O socket has 8 pins - plug the 7-pin cable in flush to the left.
 
 The PN532 and NAU7802 share the same I2C bus (SDA/SCL) and are wired in parallel. **Do not daisy-chain them via the NAU7802's STEMMA QT passthrough** – that port only supplies 3.3 V and the PN532 requires 5 V.
 
@@ -88,13 +88,13 @@ The PN532 and NAU7802 share the same I2C bus (SDA/SCL) and are wired in parallel
 | 2 | Black | GND | PN532 GND + NAU7802 GND |
 | 3 | Yellow | GPIO10 (SDA) | PN532 SDA + NAU7802 SDA |
 | 4 | Green | GPIO11 (SCL) | PN532 SCL + NAU7802 SCL |
-| 5 | Blue | — | unused |
-| 6 | White | — | unused |
+| 5 | Blue | - | unused |
+| 6 | White | - | unused |
 | 7 | Brown | GPIO12 (RST) | PN532 RST |
 
 ### PN532 – Soldering & Assembly
 
-The PN532 has no connector — wires must be soldered directly. **Always solder from the back of the PCB** — there is not enough clearance on the front once it's mounted.
+The PN532 has no connector - wires must be soldered directly. **Always solder from the back of the PCB** - there is not enough clearance on the front once it's mounted.
 
 **Recommended assembly order:**
 
@@ -105,7 +105,7 @@ The PN532 has no connector — wires must be soldered directly. **Always solder 
 5. Slide the PN532 into its mount and pull the excess cable back down into the enclosure
 6. Route and secure cables so they don't press against the weighing platform
 
-If you use a 5-pin JST SH 1.0mm connector on the PN532 pigtail, the mount opening is just large enough to pass the connector through — meaning you can do all soldering outside the enclosure and simply plug it in during final assembly.
+If you use a 5-pin JST SH 1.0mm connector on the PN532 pigtail, the mount opening is just large enough to pass the connector through - meaning you can do all soldering outside the enclosure and simply plug it in during final assembly.
 
 ### PN532 – Cable Pinout (JST SH 1.0mm 5-pin, 3rd party colors)
 
@@ -119,7 +119,7 @@ If you use a 5-pin JST SH 1.0mm connector on the PN532 pigtail, the mount openin
 
 ### NAU7802 – STEMMA QT Connector (JST SH 1.0mm 4-pin)
 
-Soldering directly to the labeled pads (VIN, GND, SDA, SCL) on the NAU7802 is the safest option. If you prefer the STEMMA QT connector, note that the pin order of 3rd-party JST SH 1.0mm cables does **not** match the WT32 cable — you will need to re-pin or swap wires:
+Soldering directly to the labeled pads (VIN, GND, SDA, SCL) on the NAU7802 is the safest option. If you prefer the STEMMA QT connector, note that the pin order of 3rd-party JST SH 1.0mm cables does **not** match the WT32 cable - you will need to re-pin or swap wires:
 
 | STEMMA QT Pin | Color (3rd party) | Signal | WT32 Cable |
 |---|---|---|---|

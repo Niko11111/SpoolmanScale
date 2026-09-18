@@ -1,0 +1,69 @@
+name: CI
+
+# Every push to a working branch and every pull request: the house rules
+# from CLAUDE.md as a script, and a firmware build. The release itself stays
+# in build-all-boards.yml and runs on a tag push only.
+on:
+  push:
+    branches: [dev, main, 'feature/**', 'fix/**', 'feat/**']
+    paths-ignore: ['manifest.json', 'index.html', 'version.json', 'webflasher/**', 'images/**', '*.md']
+  pull_request:
+    paths-ignore: ['manifest.json', 'index.html', 'version.json', 'webflasher/**', 'images/**', '*.md']
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: House rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node (node --check for the page scripts)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run scripts/check.sh
+        run: scripts/check.sh
+
+  build:
+    name: Build ${{ matrix.env }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        env: [wt32-sc01-plus]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio/.cache
+          key: ${{ runner.os }}-pio-${{ hashFiles('**/platformio.ini') }}
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+      - name: Build
+        run: pio run -e ${{ matrix.env }}
+      # Here rather than in the house-rules job: both tools measure icons from
+      # LVGL's symbol header, and that only exists once the build has unpacked
+      # the library.
+      - name: French column and width budgets
+        run: |
+          if [ -f tools/lang_fr.py ]; then
+            python3 tools/lang_fr.py check
+            python3 tools/fit_check.py --gate
+          fi
+      - name: Upload firmware.bin
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.env }}-${{ github.sha }}
+          path: .pio/build/${{ matrix.env }}/firmware.bin
+          retention-days: 14
