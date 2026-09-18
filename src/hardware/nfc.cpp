@@ -58,14 +58,24 @@ static bool reselectMifareUid(const uint8_t expected_uid[4], uint16_t timeout_ms
          memcmp(uid, expected_uid, 4) == 0;
 }
 
-static bool authenticateMifareTrailer(uint8_t trailer_block, uint8_t key[6], uint8_t uid[4]) {
+static bool authenticateMifareTrailer(uint8_t trailer_block, uint8_t key[6], uint8_t uid[4],
+                                      uint8_t key_type) {
+  if (key_type == NFC_KEY_A) {
+    return nfc->mifareclassic_AuthenticateBlock(uid, 4, trailer_block, NFC_KEY_A, key);
+  }
+  // Reads as "key B, then key A" and never was: the library turns its key
+  // argument into a command with (keyNumber) ? AUTH_B : AUTH_A, and both
+  // opcodes passed here are non-zero, so the second call is key B once more.
+  // Bambu tags read with key B and have been proven on hardware with exactly
+  // these two calls, so they stay as they are.
   if (nfc->mifareclassic_AuthenticateBlock(uid, 4, trailer_block, MIFARE_CMD_AUTH_B, key)) {
     return true;
   }
   return nfc->mifareclassic_AuthenticateBlock(uid, 4, trailer_block, MIFARE_CMD_AUTH_A, key);
 }
 
-bool nfcReadMifareSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blocks[4][16]) {
+bool nfcReadMifareSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blocks[4][16],
+                         uint8_t key_type) {
   uint8_t trailer_block = sector * 4 + 3;
 
   if (!nfc) return false;
@@ -78,7 +88,7 @@ bool nfcReadMifareSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blo
       }
     }
 
-    if (!authenticateMifareTrailer(trailer_block, key, uid)) {
+    if (!authenticateMifareTrailer(trailer_block, key, uid, key_type)) {
       continue;
     }
 
