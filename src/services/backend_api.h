@@ -306,6 +306,13 @@ int  backendPatchSpoolLocation(const char* base_url, int spool_id,
 int  backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* iso_datetime,
        uint32_t timeout_ms = 5000);
 
+// Whether backendPatchSpoolLastDried() has anywhere to write right now,
+// without asking the server. False on BamBuddy with the drying target off,
+// or pointed at a Spoolman the inventory is not kept in. Asked before an
+// answer is offered that would write several spools from a worker task, so
+// such a batch never starts only to fail spool by spool.
+bool backendCanPatchLastDried();
+
 // --- ams slots -----------------------------------------------
 
 // Whether the active backend can show the AMS at all. BamBuddy reads it from
@@ -348,6 +355,17 @@ int  backendFindSpoolSlot(int spool_id, int printer_id, int* out_ams,
 // state carries the id and no request is due at all.
 int  backendFindBaySpool(int printer_id, int ams_id, int tray_id,
        uint32_t timeout_ms = 8000);
+
+// Every assigned bay of a printer, from a single request. BamBuddy only:
+// FilaMan's display answer already names the spool per bay.
+int  backendFindPrinterSpools(int printer_id, AmsSlotSpool* out, uint8_t max,
+       uint8_t* out_count, uint32_t timeout_ms = 8000);
+
+// The same for every bay of one unit, from a single request: out_by_tray[i]
+// is the spool in bay i, 0 where none is on file. BamBuddy only, for the
+// same reason. Returns 200 or a negative code.
+int  backendFindUnitSpools(int printer_id, int ams_id, int* out_by_tray,
+       uint8_t n, uint32_t timeout_ms = 8000);
 
 // Everything the database holds about one spool, for the detail card behind
 // an AMS bay. Reads through backendGetSpoolJson(), so it needs no backend

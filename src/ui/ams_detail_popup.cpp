@@ -6,10 +6,12 @@
 
 #include "app/app_state.h"
 #include "date_display.h"
+#include "dried_action.h"
 #include "hardware/sd_logger.h"
 #include "loading_overlay.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/dried_batch.h"
 #include "services/filaman_api.h"
 #include "services/time_service.h"
 #include "services/user_options.h"
@@ -89,12 +91,23 @@ static lv_obj_t* s_ask  = nullptr;   // record today's drying?
 // what the server has just been told.
 static AmsSpoolDetail s_det;
 
-static bool s_dried_pending  = false;
-static bool s_status_pending = false;
-static int  s_status_pick    = 0;
+// The unit the bay belongs to, when that unit is an AMS 2 Pro and the card
+// may offer to record the drying for all of it. count 0 otherwise.
+static AmsUnitSpools s_unit;
+
+static bool s_dried_pending     = false;
+static bool s_dried_all_pending = false;
+static bool s_status_pending    = false;
+static int  s_status_pick       = 0;
 // Set when a write failed, so the redraw can say so instead of looking as if
 // nothing had happened.
 static bool s_write_failed   = false;
+// The last batch on this card's unit has come back: how many of how many.
+static bool    s_batch_note  = false;
+static uint8_t s_batch_ok    = 0;
+static uint8_t s_batch_total = 0;
+// A batch result wants the card redrawn, as soon as nothing stands above it.
+static bool s_redraw_pending = false;
 
 bool isAmsDetailPopupOpen() { return s_pop != nullptr; }
 
@@ -130,6 +143,32 @@ static void askYesCb(lv_event_t* e) {
   s_dried_pending = true;
 }
 
+static void askAllCb(lv_event_t* e) {
+  releaseScreen(&s_ask);
+  s_dried_all_pending = true;
+}
+
+static bool unitHolds(int spool_id) {
+  if (spool_id <= 0) return false;
+  for (uint8_t i = 0; i < s_unit.count; i++) {
+    if (s_unit.spool_id[i] == spool_id) return true;
+  }
+  return false;
+}
+
+// Below this "all" and "this one" are the same answer, and the question keeps
+// its two buttons.
+#define AMSD_DRIED_ALL_MIN 2
+
+// Whether the question offers the whole unit. The bay's own spool has to be
+// one of them: "all" that leaves out the spool the user tapped would not be
+// all, and a bay whose spool is not in the unit's list is one the printer
+// reports empty.
+static bool offerDriedAll() {
+  return s_unit.count >= AMSD_DRIED_ALL_MIN && !driedBatchBusy() &&
+         unitHolds(s_det.spool_id);
+}
+
 // The same question the main screen asks after a weighing, in the same shape:
 // the drop icon, the sentence at font 20, two 170x56 buttons. Only one thing
 // is added, and it is the one thing that differs - which spool is meant. On
@@ -149,9 +188,38 @@ static void askYesCb(lv_event_t* e) {
 #define AMSD_ASK_ID_CHARS 39
 #define AMSD_ASK_ID_KEEP  36
 
+// The same question with a third answer, for an AMS 2 Pro: the whole unit.
+// Stacked rather than three abreast, because "Nur diese Spule" and "Alle 3
+// Spulen in AMS 1" do not fit a third of 400 px at font 20. The two answers
+// of the plain question keep their size and their row; the unit's goes above
+// them at full width, and the box grows by what that row needs. Everything
+// above the buttons moves up a little to make room without crowding them.
+#define AMSD_ASK_H_ALL      290
+#define AMSD_ASK_Q_Y_ALL    58
+// One line of font 20 fits the German sentence (337 of 360 px), but a longer
+// translation may wrap; the slot holds two and the text is centred in it.
+#define AMSD_ASK_Q_SLOT_H   46
+#define AMSD_ASK_ROW_Y      122
+#define AMSD_ASK_ROW_Y_ALL  116
+#define AMSD_ASK_ICON_Y     14
+#define AMSD_ASK_Q_Y        62
+#define AMSD_ASK_BTN_W      170
+#define AMSD_ASK_BTN_X_L    12
+#define AMSD_ASK_BTN_X_R    218
+#define AMSD_ASK_BTN_GAP_B  18
+#define AMSD_ASK_ALL_Y      154
+#define AMSD_ASK_ALL_H      48
+#define AMSD_ASK_ALL_W      376
+#define AMSD_ASK_ALL_TEXT_W (AMSD_ASK_ALL_W - 24)
+
+static void oneLine(lv_obj_t* l, int w, const lv_font_t* font);
+
 static void showDriedAsk() {
   releaseScreen(&s_ask);
   if (!lvPoolHasRoomForRow()) return;
+  // Decided once, so the whole box is drawn for one question or the other.
+  const bool all = offerDriedAll();
+  const int  box_h = all ? AMSD_ASK_H_ALL : AMSD_ASK_H;
 
   s_ask = lv_obj_create(lv_scr_act());
   if (!s_ask) return;
@@ -167,7 +235,7 @@ static void showDriedAsk() {
 
   lv_obj_t* box = lv_obj_create(s_ask);
   if (!box) { releaseScreen(&s_ask); return; }
-  lv_obj_set_size(box, AMSD_ASK_W, AMSD_ASK_H);
+  lv_obj_set_size(box, AMSD_ASK_W, box_h);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
   lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_POPUP_BORDER), 0);
@@ -184,19 +252,28 @@ static void showDriedAsk() {
     lv_label_set_text(icon, LV_SYMBOL_TINT);
     lv_obj_set_style_text_color(icon, lv_color_hex(0x5ad1ff), 0);
     lv_obj_set_style_text_font(icon, UI_FONT_ICON, 0);
-    lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, 14);
+    lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, AMSD_ASK_ICON_Y);
   }
 
   lv_obj_t* q = lv_label_create(box);
   if (q) {
     char buf[96];
-    copyT(buf, sizeof(buf), STR_AMSD_DRIED_Q);
+    // "for this spool" only where the question is about one spool: with the
+    // unit on offer, which spool is meant is what the answer says.
+    copyT(buf, sizeof(buf), all ? STR_AMSD_DRIED_Q_ALL : STR_AMSD_DRIED_Q);
     lv_label_set_text(q, buf);
     lv_obj_set_style_text_color(q, lv_color_hex(UI_COL_INK), 0);
     lv_obj_set_style_text_font(q, UI_FONT_HEADLINE, 0);
     lv_obj_set_style_text_align(q, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(q, AMSD_ASK_W - 40);
-    lv_obj_align(q, LV_ALIGN_TOP_MID, 0, 62);
+    if (all) {
+      lv_obj_update_layout(q);
+      const lv_coord_t h = lv_obj_get_height(q);
+      const int y = AMSD_ASK_Q_Y_ALL + (h < AMSD_ASK_Q_SLOT_H ? (AMSD_ASK_Q_SLOT_H - h) / 2 : 0);
+      lv_obj_align(q, LV_ALIGN_TOP_MID, 0, y);
+    } else {
+      lv_obj_align(q, LV_ALIGN_TOP_MID, 0, AMSD_ASK_Q_Y);
+    }
   }
 
   // Swatch and name as one centred pair, laid out by flex so neither has to
@@ -204,7 +281,7 @@ static void showDriedAsk() {
   lv_obj_t* row = lv_obj_create(box);
   if (row) {
     lv_obj_set_size(row, AMSD_ASK_W - 24, 26);
-    lv_obj_align(row, LV_ALIGN_TOP_MID, 0, 122);
+    lv_obj_align(row, LV_ALIGN_TOP_MID, 0, all ? AMSD_ASK_ROW_Y_ALL : AMSD_ASK_ROW_Y);
     lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(row, 0, 0);
     lv_obj_set_style_pad_all(row, 0, 0);
@@ -261,15 +338,46 @@ static void showDriedAsk() {
     }
   }
 
+  // The unit, above the two answers the plain question has. In the outline
+  // an active choice wears on the AMS page, so it reads as an answer of its
+  // own beside the solid "this spool only" rather than as a second copy of it.
+  if (all) {
+    lv_obj_t* btn = lv_btn_create(box);
+    if (btn) {
+      lv_obj_set_size(btn, AMSD_ASK_ALL_W, AMSD_ASK_ALL_H);
+      lv_obj_set_pos(btn, AMSD_ASK_BTN_X_L, AMSD_ASK_ALL_Y);
+      lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ACCENT_DIM), 0);
+      lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
+      lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_ACCENT), 0);
+      lv_obj_set_style_border_width(btn, 1, 0);
+      lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
+      lv_obj_set_style_shadow_width(btn, 0, 0);
+      lv_obj_add_event_cb(btn, askAllCb, LV_EVENT_CLICKED, nullptr);
+      lv_obj_t* l = lv_label_create(btn);
+      if (l) {
+        char fmt[48], t[64];
+        copyT(fmt, sizeof(fmt), STR_AMSD_DRIED_ALL);
+        snprintf(t, sizeof(t), fmt, (int)s_unit.count, s_unit.name);
+        lv_label_set_text(l, t);
+        lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ACCENT), 0);
+        lv_obj_set_style_text_font(l, UI_FONT_TITLE, 0);
+        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+        oneLine(l, AMSD_ASK_ALL_TEXT_W, UI_FONT_TITLE);
+        lv_obj_center(l);
+      }
+    }
+  }
+
   struct { int str_id; bool primary; lv_event_cb_t cb; } b[2] = {
-    { STR_BTN_CONFIRMED, true,  askYesCb   },
-    { STR_CANCEL,        false, askCloseCb },
+    { all ? STR_AMSD_DRIED_ONE : STR_BTN_CONFIRMED, true,  askYesCb   },
+    { STR_CANCEL,                                   false, askCloseCb },
   };
   for (int i = 0; i < 2; i++) {
     lv_obj_t* btn = lv_btn_create(box);
     if (!btn) continue;
-    lv_obj_set_size(btn, 170, AMSD_ASK_BTN_H);
-    lv_obj_set_pos(btn, i == 0 ? 12 : 218, AMSD_ASK_H - AMSD_ASK_BTN_H - 18);
+    lv_obj_set_size(btn, AMSD_ASK_BTN_W, AMSD_ASK_BTN_H);
+    lv_obj_set_pos(btn, i == 0 ? AMSD_ASK_BTN_X_L : AMSD_ASK_BTN_X_R,
+                   box_h - AMSD_ASK_BTN_H - AMSD_ASK_BTN_GAP_B);
     lv_obj_set_style_bg_color(btn,
       lv_color_hex(b[i].primary ? UI_COL_OK_BG : UI_COL_BAD_BG), 0);
     lv_obj_set_style_bg_color(btn,
@@ -292,7 +400,7 @@ static void showDriedAsk() {
 }
 
 static void driedCellCb(lv_event_t* e) {
-  if (!canEdit(s_det)) return;
+  if (!canEdit(s_det) || driedBatchBusy()) return;
   showDriedAsk();
 }
 
@@ -537,7 +645,11 @@ static void buildIdentity(lv_obj_t* box, const AmsSpoolDetail& d) {
   lv_obj_t* mv = lv_label_create(box);
   if (mv) {
     lv_label_set_text(mv, d.material[0] ? d.material : "-");
-    lv_obj_set_style_text_color(mv, lv_color_hex(UI_COL_INK), 0);
+    // In the warning colour when the printer reports another material: this
+    // is the field the note under the bar is about, and the eye should land
+    // on it without reading the note first.
+    lv_obj_set_style_text_color(mv,
+      lv_color_hex(d.type_conflict ? UI_COL_WARN : UI_COL_INK), 0);
     lv_obj_set_style_text_font(mv, UI_FONT_BODY, 0);
     oneLine(mv, AMSD_MAT_W, UI_FONT_BODY);
     lv_obj_set_pos(mv, AMSD_MAT_X, AMSD_IDENT_VAL_Y);
@@ -566,7 +678,9 @@ static void buildIdentity(lv_obj_t* box, const AmsSpoolDetail& d) {
 // The reason this card exists. A bay can carry filament whose weight nobody
 // ever recorded, and the tile can only fall silent about it - here it says so
 // in words, in the place the figure would have been.
-static void buildWeight(lv_obj_t* box, const AmsSpoolDetail& d) {
+// reserve_right is the width the status on the right of the note line takes,
+// 0 when there is none: the note gives that much up rather than run under it.
+static void buildWeight(lv_obj_t* box, const AmsSpoolDetail& d, int reserve_right) {
   lv_obj_t* cap = lv_label_create(box);
   if (cap) {
     char buf[24];
@@ -645,16 +759,28 @@ static void buildWeight(lv_obj_t* box, const AmsSpoolDetail& d) {
   }
 
   // One line for everything the figures above could not say: why there is no
-  // weight, why there is no spool, and which bay carries the same filament.
-  // Joined rather than given a place each, because at most one of the first
-  // two can be true and the third is a footnote either way.
+  // weight, why there is no spool, that the printer reports another material,
+  // and which bay carries the same filament. Joined rather than given a place
+  // each, because only one of the first three is shown and the last is a
+  // footnote either way.
   //
   // This is also what a card full of dashes needs. Six empty fields with no
   // sentence anywhere read as a fault in the scale; the sentence says the
   // fault is not here.
-  char note[96] = "";
+  //
+  // The printer disagreeing with the database goes before a missing weight:
+  // the dash above already says the weight is missing, and a card that may be
+  // showing the wrong spool altogether is the bigger thing to know. It names
+  // the fact and leaves the conclusion to the user - a PCTG spool a printer
+  // was told to treat as PETG trips this too, and is no fault at all.
+  char note[112] = "";
   if (!d.found) {
     copyT(note, sizeof(note), d.spool_id > 0 ? STR_AMSD_FAIL : STR_AMSD_NO_SPOOL);
+  } else if (d.type_conflict) {
+    char fmt[72], said[88];
+    copyT(fmt, sizeof(fmt), STR_AMSD_TYPE_CONFLICT);
+    snprintf(said, sizeof(said), fmt, d.printer_type);
+    snprintf(note, sizeof(note), LV_SYMBOL_WARNING " %s", said);
   } else if (!known) {
     copyT(note, sizeof(note), STR_AMSD_NO_WEIGHT);
   }
@@ -669,12 +795,14 @@ static void buildWeight(lv_obj_t* box, const AmsSpoolDetail& d) {
     lv_obj_t* n = lv_label_create(box);
     if (n) {
       lv_label_set_text(n, note);
-      lv_obj_set_style_text_color(n, lv_color_hex(UI_COL_INK_SOFT), 0);
+      lv_obj_set_style_text_color(n,
+        lv_color_hex(d.type_conflict ? UI_COL_WARN : UI_COL_INK_SOFT), 0);
       lv_obj_set_style_text_font(n, UI_FONT_CAPTION, 0);
       // Size before position, and a real height: with LV_SIZE_CONTENT the
       // label grows downwards instead of ellipsising, which is how the second
       // line ended up on top of the divider.
-      lv_obj_set_size(n, AMSD_BAR_W, AMSD_NOTE_H);
+      lv_obj_set_size(n, AMSD_BAR_W - (reserve_right > 0 ? reserve_right + AMSD_PAD : 0),
+                      AMSD_NOTE_H);
       lv_label_set_long_mode(n, LV_LABEL_LONG_DOT);
       lv_obj_set_pos(n, AMSD_CA, AMSD_NOTE_Y);
     }
@@ -721,7 +849,11 @@ static void buildGrid(lv_obj_t* box, const AmsSpoolDetail& d) {
   // The drying date, with the same traffic light and the same "(N days ago)"
   // the main screen puts on it. The material is this bay's, not the pad's.
   char de[16] = "", dried_txt[48] = "";
-  if (d.last_dried[0]) {
+  if (driedBatchContains(d.spool_id)) {
+    // Being written in the background. Neither the old date nor its traffic
+    // light is the truth any more, and the new one is not in yet.
+    snprintf(dried_txt, sizeof(dried_txt), "...");
+  } else if (d.last_dried[0]) {
     isoToDe(d.last_dried, de, sizeof(de));
     driedDisplayStr(de, dried_txt, sizeof(dried_txt));
   }
@@ -730,7 +862,8 @@ static void buildGrid(lv_obj_t* box, const AmsSpoolDetail& d) {
   // it out and putting it on the pad.
   lv_obj_t* dried = cell(box, AMSD_CB, AMSD_R3, STR_LBL_LAST_DRIED,
                          dried_txt[0] ? dried_txt : nullptr, UI_COL_VALUE_BLUE,
-                         UI_FONT_SMALL, canEdit(d) ? driedCellCb : nullptr);
+                         UI_FONT_SMALL,
+                         (canEdit(d) && !driedBatchBusy()) ? driedCellCb : nullptr);
   if (dried && de[0]) {
     const uint32_t col = driedAlertColor(de, d.material);
     lv_obj_set_style_text_color(dried, lv_color_hex(col), 0);
@@ -749,6 +882,41 @@ static void buildGrid(lv_obj_t* box, const AmsSpoolDetail& d) {
   }
 }
 
+// The right half of the note line: what a write on this card did, or is
+// doing. First match wins - a batch on this unit that is still running, the
+// result of one that came back, a single write that did not take.
+static bool cardStatus(char* out, size_t n, uint32_t* col) {
+  out[0] = '\0';
+  const DriedBatchResult& r = driedBatchResult();
+  if (driedBatchBusy() && s_unit.count > 0 && r.printer_id == s_unit.printer_id &&
+      r.ams_id == s_unit.ams_id) {
+    char fmt[48];
+    copyT(fmt, sizeof(fmt), STR_AMSD_BATCH_RUNNING);
+    snprintf(out, n, fmt, (int)r.count);
+    *col = UI_COL_INK_SOFT;
+    return true;
+  }
+  if (s_batch_note) {
+    char fmt[48];
+    copyT(fmt, sizeof(fmt), STR_AMSD_BATCH_DONE);
+    snprintf(out, n, fmt, (int)s_batch_ok, (int)s_batch_total);
+    *col = (s_batch_ok == s_batch_total) ? UI_COL_ACCENT
+         : (s_batch_ok > 0)              ? UI_COL_WARN
+                                         : UI_COL_BAD_TEXT;
+    return true;
+  }
+  if (s_write_failed) {
+    copyT(out, n, STR_AMSD_WRITE_FAIL);
+    *col = UI_COL_BAD_TEXT;
+    return true;
+  }
+  return false;
+}
+
+void amsDetailSetUnit(const AmsUnitSpools* unit) {
+  s_unit = unit ? *unit : AmsUnitSpools{};
+}
+
 void showAmsDetailPopup(const AmsSpoolDetail& d) {
   // Kept so a write can update one field and redraw from it. Guarded against
   // self-assignment, because the redraw after a write passes s_det back in.
@@ -758,6 +926,7 @@ void showAmsDetailPopup(const AmsSpoolDetail& d) {
     // back in, and only that one may carry the flag a failed write set - left
     // standing, it reappeared on every bay opened afterwards.
     s_write_failed = false;
+    s_batch_note   = false;
   }
 
   // Open-replace rather than stack: a second tap on a bay while the card
@@ -794,23 +963,29 @@ void showAmsDetailPopup(const AmsSpoolDetail& d) {
   lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
+  // Worked out before the weight block, whose note has to leave room for it.
+  char status[64];
+  uint32_t status_col = UI_COL_INK_SOFT;
+  const bool has_status = cardStatus(status, sizeof(status), &status_col);
+  const int status_w = has_status
+    ? lv_txt_get_width(status, strlen(status), UI_FONT_CAPTION, 0, LV_TEXT_FLAG_NONE)
+    : 0;
+
   buildHeader(box, s_det);
   buildDivider(box, AMSD_HDR_H);
   buildIdentity(box, s_det);
   buildDivider(box, AMSD_DIV1_Y);
-  buildWeight(box, s_det);
+  buildWeight(box, s_det, status_w);
   buildDivider(box, AMSD_DIV2_Y);
   buildGrid(box, s_det);
 
-  // Sits under the grid, in the strip the box leaves free. Only after a write
-  // that did not take, so the card never looks as if nothing had happened.
-  if (s_write_failed) {
+  // On the note line, right aligned. Only after a write, so the card never
+  // looks as if nothing had happened.
+  if (has_status) {
     lv_obj_t* w = lv_label_create(box);
     if (w) {
-      char buf[40];
-      copyT(buf, sizeof(buf), STR_AMSD_WRITE_FAIL);
-      lv_label_set_text(w, buf);
-      lv_obj_set_style_text_color(w, lv_color_hex(UI_COL_BAD_TEXT), 0);
+      lv_label_set_text(w, status);
+      lv_obj_set_style_text_color(w, lv_color_hex(status_col), 0);
       lv_obj_set_style_text_font(w, UI_FONT_CAPTION, 0);
       lv_obj_align(w, LV_ALIGN_TOP_RIGHT, -AMSD_PAD, AMSD_NOTE_Y);
     }
@@ -822,13 +997,36 @@ void showAmsDetailPopup(const AmsSpoolDetail& d) {
 }
 
 void handleAmsDetailDeferredActions() {
-  if (!s_dried_pending && !s_status_pending) return;
-  // The card has to be up: both writes redraw it, and a card taken down while
-  // the question stood means the user moved on.
-  if (!s_pop) { s_dried_pending = s_status_pending = false; return; }
+  if (!s_dried_pending && !s_dried_all_pending && !s_status_pending) return;
+  // The card has to be up: every write redraws it, and a card taken down
+  // while the question stood means the user moved on.
+  if (!s_pop) {
+    s_dried_pending = s_dried_all_pending = s_status_pending = false;
+    return;
+  }
 
   const int spool_id = s_det.spool_id;
   s_write_failed = false;
+
+  // The whole unit, handed to a task of its own. Only started here: the card
+  // is redrawn below showing it running, and amsDetailBatchTick() collects
+  // the result when it comes back.
+  if (s_dried_all_pending) {
+    s_dried_all_pending = false;
+    s_batch_note = false;
+    char iso[32];
+    if (!nowIsoUtc(iso, sizeof(iso))) {
+      logSDf("AMSDETAIL: clock not set, dried date for %s not written", s_unit.name);
+      s_write_failed = true;
+    } else if (!driedBatchStart(s_unit.printer_id, s_unit.ams_id, s_unit.spool_id,
+                                s_unit.count, iso)) {
+      logSDf("AMSDETAIL: dried batch for %s not started", s_unit.name);
+      s_write_failed = true;
+    } else {
+      logSDf("AMSDETAIL: dried %s for %u spools of %s started", iso,
+             (unsigned)s_unit.count, s_unit.name);
+    }
+  }
 
   if (s_dried_pending) {
     s_dried_pending = false;
@@ -882,4 +1080,42 @@ void handleAmsDetailDeferredActions() {
     s_pop = nullptr;
     showAmsDetailPopup(s_det);
   }
+}
+
+void amsDetailBatchTick() {
+  if (driedBatchState() == DBS_DONE) {
+    const DriedBatchResult& r = driedBatchResult();
+    logSDf("AMSDETAIL: batch on unit %d of printer %d, %u of %u saved",
+           (int)r.ams_id, r.printer_id, (unsigned)r.ok, (unsigned)r.count);
+    driedActionApplyBatch(r);
+
+    if (s_pop) {
+      // Whatever card is up, its drying cell was locked while the batch ran
+      // and has to come back.
+      s_redraw_pending = true;
+      for (uint8_t i = 0; i < r.count; i++) {
+        if (r.spool_id[i] != s_det.spool_id || r.code[i] != 200) continue;
+        isoDayLocal(r.iso, s_det.last_dried, sizeof(s_det.last_dried));
+      }
+      if (s_unit.count > 0 && s_unit.printer_id == r.printer_id &&
+          s_unit.ams_id == r.ams_id) {
+        s_batch_note  = true;
+        s_batch_ok    = r.ok;
+        s_batch_total = r.count;
+      }
+    }
+    // Always collected in the same pass, card or not: an uncollected result
+    // keeps the batch busy, and that locks every drying button there is.
+    driedBatchTake();
+  }
+
+  if (!s_redraw_pending) return;
+  if (!s_pop) { s_redraw_pending = false; return; }
+  // Not under an open question or picker: the redraw would close them.
+  if (s_ask || isStatusPickerOpen()) return;
+  s_redraw_pending = false;
+  // Synchronous delete, for the reason handleAmsDetailDeferredActions() gives.
+  lv_obj_del(s_pop);
+  s_pop = nullptr;
+  showAmsDetailPopup(s_det);
 }

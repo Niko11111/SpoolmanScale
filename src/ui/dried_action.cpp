@@ -9,6 +9,7 @@
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/dried_batch.h"
 #include "services/time_service.h"
 #include "lang.h"
 
@@ -20,6 +21,20 @@
 static bool  s_dried_pending = false;
 static int   s_dried_spool_id = 0;
 static char  s_dried_iso[32]  = "";
+// The button was pressed for a spool the AMS card's batch was already
+// writing. Nothing was queued; the batch's result answers it instead.
+static bool  s_batch_tap_waiting = false;
+
+// Today's drying on the label, and in sm_last_dried behind it.
+static void applyDriedToday(const char* iso) {
+  char today[11];
+  isoDayLocal(iso, today, sizeof(today));
+  char de_date[12];
+  isoToDe(today, de_date, sizeof(de_date));
+  strncpy(sm_last_dried, de_date, sizeof(sm_last_dried)-1);
+  sm_last_dried[sizeof(sm_last_dried)-1] = '\0';
+  applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, de_date);
+}
 
 void btn_dried_cb(lv_event_t *e) {
   logSD("UI: Button -> Dried Today");
@@ -36,6 +51,15 @@ void btn_dried_cb(lv_event_t *e) {
   // archived spool, so this only catches the paths that call in directly.
   if (sm_archived) {
     lv_label_set_text(lbl_spoolman_dried_val, T(STR_ARCHIVED));
+    return;
+  }
+  // The AMS card is writing this very spool in the background. A second
+  // write beside it would race it - on FilaMan both read custom_fields and
+  // write them back - and would only record the same day twice.
+  if (driedBatchContains(sm_id)) {
+    s_batch_tap_waiting = true;
+    lv_label_set_text(lbl_spoolman_dried_val, "...");
+    logSDf("Dried: spool %d is in the AMS batch, waiting for it", sm_id);
     return;
   }
 
@@ -89,16 +113,28 @@ void handleDriedDeferredAction() {
   }
 
   if (code == 200) {
-    char today[11];
-    isoDayLocal(iso, today, sizeof(today));
-    char de_date[12];
-    isoToDe(today, de_date, sizeof(de_date));
-    strncpy(sm_last_dried, de_date, sizeof(sm_last_dried)-1);
-    sm_last_dried[sizeof(sm_last_dried)-1] = '\0';
-    applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, de_date);
+    applyDriedToday(iso);
     logSDf("Dried: last_dried set for spool %d", spool_id);
   } else {
     logSDf("Dried: write failed for spool %d, HTTP %d", spool_id, code);
     lv_label_set_text(lbl_spoolman_dried_val, T(STR_ERR_SAVE));
+  }
+}
+
+void driedActionApplyBatch(const DriedBatchResult& r) {
+  const bool waiting = s_batch_tap_waiting;
+  s_batch_tap_waiting = false;
+  if (!sm_found || sm_id == 0 || !lbl_spoolman_dried_val) return;
+  for (uint8_t i = 0; i < r.count; i++) {
+    if (r.spool_id[i] != sm_id) continue;
+    if (r.code[i] == 200) {
+      applyDriedToday(r.iso);
+      logSDf("Dried: spool %d on the pad took the AMS batch's date", sm_id);
+    } else if (waiting) {
+      // Only when the button asked: otherwise the label never showed "..."
+      // and still holds the date it had, which is still true.
+      lv_label_set_text(lbl_spoolman_dried_val, T(STR_ERR_SAVE));
+    }
+    return;
   }
 }

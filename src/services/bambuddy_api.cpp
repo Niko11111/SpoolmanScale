@@ -138,9 +138,17 @@ static int sendJson(const char* method, const char* url, const char* api_key,
 
 int bbDetectInventoryMode(const char* base_url, const char* api_key,
                           uint32_t timeout_ms) {
-  s_mode = BB_INV_LOCAL;
-  s_spoolman_url[0] = '\0';
-  if (!hasBaseUrl(base_url)) return -1;
+  // Decided in locals and published once at the end. Clearing the globals
+  // first left them saying "local" for the whole request, and a write from
+  // the drying worker on the other core could land in that window and go to
+  // the wrong inventory.
+  BbInventoryMode mode = BB_INV_LOCAL;
+  char spoolman_url[sizeof(s_spoolman_url)] = "";
+  if (!hasBaseUrl(base_url)) {
+    s_mode = mode;
+    s_spoolman_url[0] = '\0';
+    return -1;
+  }
 
   char url[160];
   snprintf(url, sizeof(url), "%s/api/v1/settings/spoolman", base_url);
@@ -152,21 +160,24 @@ int bbDetectInventoryMode(const char* base_url, const char* api_key,
     // right guess then: it is what a fresh install runs, and a wrong guess
     // surfaces as a 404 on the first spool read rather than silently.
     logSDf("BamBuddy: inventory mode unknown (HTTP %d), assuming local", code);
+    s_mode = mode;
+    s_spoolman_url[0] = '\0';
     return code;
   }
 
   // Both values arrive as strings, not as JSON booleans.
   const char* enabled = doc["spoolman_enabled"] | "false";
   if (strcasecmp(enabled, "true") == 0) {
-    s_mode = BB_INV_SPOOLMAN;
-    const char* url_s = doc["spoolman_url"] | "";
-    strncpy(s_spoolman_url, url_s, sizeof(s_spoolman_url) - 1);
-    s_spoolman_url[sizeof(s_spoolman_url) - 1] = '\0';
+    mode = BB_INV_SPOOLMAN;
+    snprintf(spoolman_url, sizeof(spoolman_url), "%s", doc["spoolman_url"] | "");
     // Reported with a trailing slash, which would double up when paths are
     // appended.
-    size_t n = strlen(s_spoolman_url);
-    while (n > 0 && s_spoolman_url[n - 1] == '/') s_spoolman_url[--n] = '\0';
+    size_t n = strlen(spoolman_url);
+    while (n > 0 && spoolman_url[n - 1] == '/') spoolman_url[--n] = '\0';
   }
+  // The url first: a reader that sees the new mode then also sees its url.
+  memcpy(s_spoolman_url, spoolman_url, sizeof(s_spoolman_url));
+  s_mode = mode;
 
   // Logged on the first look and on every change, not on every check - this
   // runs with the health check now and a line every 30 s would bury the log.
@@ -882,6 +893,11 @@ static void fillTray(JsonObjectConst t, AmsSlotTray& out, uint8_t tray_id) {
   const char* type = t["tray_type"] | "";
   const char* name = (sub && sub[0]) ? sub : type;
   strncpy(out.name, name ? name : "", sizeof(out.name) - 1);
+  // The bare type as well, on its own: it is the printer's word for what is
+  // in the bay, and the detail card holds it against the spool the assignment
+  // list names. The name above cannot do that - "Support for PLA" is a sub
+  // brand too.
+  strncpy(out.type, type ? type : "", sizeof(out.type) - 1);
 
   out.has_color = parseTrayColor(t["tray_color"] | "", &out.color);
 
@@ -916,6 +932,14 @@ int bbGetAmsState(const char* base_url, const char* api_key, int printer_id,
   fu["humidity"]  = true;
   fu["temp"]      = true;
   fu["is_ams_ht"] = true;
+  // "n3f", "ams", "n3s": which hardware the unit is. Only an AMS 2 Pro gets
+  // the card's "all spools in this unit" drying answer.
+  fu["module_type"] = true;
+  // The running cycle. Without these the view never showed a drying unit on
+  // this backend at all, although BamBuddy reports all three.
+  fu["dry_status"]      = true;
+  fu["dry_time"]        = true;
+  fu["dry_target_temp"] = true;
   JsonObject ft = fu["tray"].to<JsonArray>().add<JsonObject>();
   ft["id"]              = true;
   ft["tray_color"]      = true;
@@ -969,7 +993,28 @@ int bbGetAmsState(const char* base_url, const char* api_key, int printer_id,
     AmsSlotUnit& dst = out.unit[out.unit_count];
     dst = AmsSlotUnit{};
     dst.ams_id = (uint8_t)(u["id"] | 0);
-    dst.is_ht  = (u["is_ams_ht"] | false) || dst.ams_id >= 128;
+    const char* module_type = u["module_type"] | "";
+    dst.model  = amsModelFromModuleType(module_type);
+    dst.is_ht  = (u["is_ams_ht"] | false) || dst.ams_id >= 128 ||
+                 dst.model == AMS_MODEL_AMS_HT;
+    // A cycle counts as running on either signal, the same rule FilaMan
+    // applies: a status of 1 to 4 (checking, drying, cooling, stopping), or
+    // minutes still to go. An idle AMS 2 Pro reports status 0, and an AMS HT
+    // reports the minutes while leaving the status at 0 and sending no target
+    // temperature at all.
+    const int dry_status = u["dry_status"] | 0;
+    const int dry_time   = u["dry_time"] | 0;
+    dst.drying      = (dry_status >= 1 && dry_status <= 4) || dry_time > 0;
+    dst.dry_minutes = (dry_time > 0) ? (int16_t)dry_time : (int16_t)AMS_REMAIN_NA;
+    JsonVariantConst dry_temp = u["dry_target_temp"];
+    dst.dry_target_c = dry_temp.isNull() ? (int8_t)AMS_REMAIN_NA
+                                         : (int8_t)lroundf(dry_temp.as<float>());
+
+    if (sd_verbose) {
+      logSDf("[verbose] BamBuddy: unit %d module_type=%s model=%d drying=%d %d min %d C",
+             (int)dst.ams_id, module_type[0] ? module_type : "-", (int)dst.model,
+             (int)dst.drying, (int)dst.dry_minutes, (int)dst.dry_target_c);
+    }
 
     JsonVariantConst hum = u["humidity"];
     if (hum.isNull()) {
@@ -1184,6 +1229,10 @@ static int bbGetAssignments(const char* base_url, const char* api_key,
   f["ams_id"]  = true;
   f["tray_id"] = true;
   f[*id_key]   = true;
+  // The local answer carries the whole spool per assignment, so the weight
+  // comes with the list rather than costing a request of its own. The proxy
+  // mode names the id alone and this key is simply absent there.
+  f["spool"]["remaining_weight"] = true;
 
   return getJson(url, api_key, doc, timeout_ms, nullptr, &filter);
 }
@@ -1217,7 +1266,9 @@ int bbFindBaySpool(const char* base_url, const char* api_key, int printer_id,
   JsonDocument doc;
   const char* id_key = nullptr;
   int code = bbGetAssignments(base_url, api_key, printer_id, doc, &id_key, timeout_ms);
-  if (code != 200) return code;
+  // Negated: the answer is a spool id when positive, and a 404 handed back
+  // as it came was shown on the card as spool 404.
+  if (code != 200) return code > 0 ? -code : code;
 
   for (JsonVariantConst av : doc.as<JsonArrayConst>()) {
     JsonObjectConst a = av.as<JsonObjectConst>();
@@ -1230,6 +1281,67 @@ int bbFindBaySpool(const char* base_url, const char* api_key, int printer_id,
   // The printer has no assignment for this bay. Not an error: a bay can hold
   // filament the inventory never heard of.
   return 0;
+}
+
+int bbFindPrinterSpools(const char* base_url, const char* api_key, int printer_id,
+                        AmsSlotSpool* out, uint8_t max, uint8_t* out_count,
+                        uint32_t timeout_ms) {
+  if (out_count) *out_count = 0;
+  if (!out || max == 0) return -1;
+  if (!hasBaseUrl(base_url) || printer_id <= 0) return -1;
+
+  JsonDocument doc;
+  const char* id_key = nullptr;
+  int code = bbGetAssignments(base_url, api_key, printer_id, doc, &id_key, timeout_ms);
+  if (code != 200) return code > 0 ? -code : code;
+
+  uint8_t n = 0;
+  for (JsonVariantConst av : doc.as<JsonArrayConst>()) {
+    if (n >= max) break;
+    JsonObjectConst a = av.as<JsonObjectConst>();
+    const int ams  = a["ams_id"]  | -1;
+    const int tray = a["tray_id"] | -1;
+    const int id   = a[id_key] | 0;
+    if (ams < 0 || tray < 0 || id <= 0) continue;
+    out[n].ams_id   = (uint8_t)ams;
+    out[n].tray_id  = (uint8_t)tray;
+    out[n].spool_id = id;
+    out[n].grams    = AMS_REMAIN_NA;
+    JsonVariantConst left = a["spool"]["remaining_weight"];
+    if (!left.isNull()) {
+      const long g = lroundf(left.as<float>());
+      if (g >= 0 && g <= INT16_MAX) out[n].grams = (int16_t)g;
+    }
+    n++;
+  }
+  if (out_count) *out_count = n;
+  logSDf("BamBuddy: printer %d has %u assigned bay(s)", printer_id, (unsigned)n);
+  return 200;
+}
+
+int bbFindUnitSpools(const char* base_url, const char* api_key, int printer_id,
+                     int ams_id, int* out_by_tray, uint8_t n, uint32_t timeout_ms) {
+  if (!out_by_tray) return -1;
+  for (uint8_t i = 0; i < n; i++) out_by_tray[i] = 0;
+  if (!hasBaseUrl(base_url) || printer_id <= 0 || ams_id < 0) return -1;
+
+  JsonDocument doc;
+  const char* id_key = nullptr;
+  int code = bbGetAssignments(base_url, api_key, printer_id, doc, &id_key, timeout_ms);
+  if (code != 200) return code > 0 ? -code : code;
+
+  for (JsonVariantConst av : doc.as<JsonArrayConst>()) {
+    JsonObjectConst a = av.as<JsonObjectConst>();
+    if ((a["ams_id"] | -1) != ams_id) continue;
+    const int tray_id = a["tray_id"] | -1;
+    const int id = a[id_key] | 0;
+    if (tray_id < 0 || tray_id >= n || id <= 0) continue;
+    out_by_tray[tray_id] = id;
+  }
+  logSDf("BamBuddy: unit %d of printer %d holds spools %d/%d/%d/%d", ams_id,
+         printer_id, n > 0 ? out_by_tray[0] : 0, n > 1 ? out_by_tray[1] : 0,
+         n > 2 ? out_by_tray[2] : 0, n > 3 ? out_by_tray[3] : 0);
+  return 200;
 }
 
 // ------------------------------------------------------------

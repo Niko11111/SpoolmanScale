@@ -9,6 +9,7 @@
 #include "services/ams_presence.h"
 #include "services/backend_api.h"
 #include "services/bambuddy_device.h"
+#include "services/dried_batch.h"
 #include "services/filaman_api.h"
 
 #include "app/app_state.h"
@@ -25,6 +26,8 @@
 #include "web/web_server.h"
 
 void backendApplyHost(const char *host) {
+  // A drying batch still running would carry on against the new address.
+  driedBatchCancel();
   backendSetHost(host);
   filamanForgetLocations();
   backendInvalidateExtraFieldCache();
@@ -34,6 +37,9 @@ void backendApplyHost(const char *host) {
 
 void backendApplyMode(BackendMode mode) {
   if (mode == backendMode()) return;
+  // Before the mode changes under it: the rest of a drying batch would
+  // otherwise be written through the other backend.
+  driedBatchCancel();
 
   const char *from = backendName();
 

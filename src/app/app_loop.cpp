@@ -39,6 +39,7 @@
 #include "services/ams_assign.h"
 #include "services/spoolman_actions.h"
 #include "services/backend_api.h"
+#include "services/dried_batch.h"
 #include "services/tag_field.h"
 #include "services/bambuddy_device.h"
 #include "services/ams_presence.h"
@@ -735,6 +736,9 @@ void appLoop() {
   handleAmsAssignDeferredActions();
   handleAmsViewDeferredActions();
   handleAmsDetailDeferredActions();
+  // Right after the card's own handler, so a batch that finished inline (as
+  // it does in the simulator) is collected in the pass that started it.
+  amsDetailBatchTick();
   amsPickTick();
   amsPresenceTick();
   // Watches the reader for the tag on the other flange while its question
@@ -1300,7 +1304,9 @@ void appLoop() {
       // running. That does not fail on our side, it just starts addressing
       // the other database - so the mode is re-asked here rather than only
       // at boot.
-      if (sm_reachable) backendRefreshMode();
+      // Not while a drying batch writes on the other core: its requests read
+      // the inventory mode, and a refresh in their middle is a second writer.
+      if (sm_reachable && !driedBatchBusy()) backendRefreshMode();
     }
   }
 

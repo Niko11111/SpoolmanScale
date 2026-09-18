@@ -1022,6 +1022,23 @@ int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* i
   }
 }
 
+// Mirrors the switch above, branch for branch, minus the request.
+bool backendCanPatchLastDried() {
+  switch (backendMode()) {
+    case BACKEND_BAMBUDDY:
+      switch (g_bb_dried_target) {
+        case BB_DRIED_SPOOLMAN:
+          return bbInventoryMode() == BB_INV_SPOOLMAN && bbSpoolmanUrl()[0];
+        case BB_DRIED_NOTE:
+          return true;
+        default:
+          return false;
+      }
+    default:
+      return true;
+  }
+}
+
 // ------------------------------------------------------------
 //  AMS SLOTS
 // ------------------------------------------------------------
@@ -1107,6 +1124,26 @@ int backendFindBaySpool(int printer_id, int ams_id, int tray_id,
   if (backendMode() != BACKEND_BAMBUDDY) return notSupported("FindBaySpool");
   return bbFindBaySpool(backendBaseUrl(), bambuddyApiKey(), printer_id,
                         ams_id, tray_id, timeout_ms);
+}
+
+int backendFindPrinterSpools(int printer_id, AmsSlotSpool* out, uint8_t max,
+                             uint8_t* out_count, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
+  if (out_count) *out_count = 0;
+  if (backendMode() != BACKEND_BAMBUDDY) return notSupported("FindPrinterSpools");
+  return bbFindPrinterSpools(backendBaseUrl(), bambuddyApiKey(), printer_id,
+                             out, max, out_count, timeout_ms);
+}
+
+int backendFindUnitSpools(int printer_id, int ams_id, int* out_by_tray,
+                          uint8_t n, uint32_t timeout_ms) {
+  HttpStallTime stall;   // the loop stands still for this call
+  if (out_by_tray) {
+    for (uint8_t i = 0; i < n; i++) out_by_tray[i] = 0;
+  }
+  if (backendMode() != BACKEND_BAMBUDDY) return notSupported("FindUnitSpools");
+  return bbFindUnitSpools(backendBaseUrl(), bambuddyApiKey(), printer_id,
+                          ams_id, out_by_tray, n, timeout_ms);
 }
 
 // Copies a string out of the answer, and leaves the destination alone when

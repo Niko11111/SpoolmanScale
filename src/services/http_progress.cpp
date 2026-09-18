@@ -37,7 +37,10 @@ uint32_t httpStallTotalMs() {
 
 void           httpSetProgressHook(HttpProgressFn fn) { s_progress = fn; }
 HttpProgressFn httpProgressHook()                     { return s_progress; }
-bool           httpProgressActive()                   { return s_progress != nullptr; }
+// A hook paints into LVGL, and only the loop task may. The loop sets one
+// around its own blocking fetch, and a worker on the other core requesting at
+// that moment would otherwise find it set and call it from there.
+bool           httpProgressActive() { return s_progress != nullptr && onLoopTask(); }
 
 // The hook is called every PROGRESS_STEP bytes rather than per byte: the count
 // itself is free, but a hook that redraws is not, and ArduinoJson pulls one
@@ -49,5 +52,5 @@ void HttpProgressStream::count(size_t n) {
   total_ += n;
   if (total_ - last_ < PROGRESS_STEP) return;
   last_ = total_;
-  if (s_progress) s_progress(total_);
+  if (s_progress && onLoopTask()) s_progress(total_);
 }

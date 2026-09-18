@@ -1600,6 +1600,9 @@ static void buildDisplayFilter(JsonDocument& filter, bool with_slots) {
   JsonObject u = p["ams"].to<JsonArray>().add<JsonObject>();
   u["ams_id"]      = true;
   u["kind"]        = true;
+  // Which hardware: "ams_2_pro" and the like. Absent before the display API
+  // carried it, and null where the driver does not report it.
+  u["model"]       = true;
   u["label"]       = true;
   u["temperature"]    = true;
   u["humidity"]       = true;
@@ -1713,6 +1716,17 @@ int filamanGetAmsState(const char* base_url, const char* api_key, int printer_id
     dst.ams_id = (uint8_t)(u["ams_id"] | 0);
     dst.is_ext = (strcmp(kind, "external") == 0);
     dst.is_ht  = (strcmp(kind, "ams_ht") == 0);
+    // The model where the display API names it. Up to FilaMan 1.3.7 it does
+    // not, and then the kind is all there is: it tells an AMS HT apart, while
+    // an AMS 2 Pro and a first generation unit both arrive as "ams" and stay
+    // UNKNOWN - so the card offers no drying for the whole unit there.
+    const char* model = u["model"] | "";
+    dst.model  = amsModelFromModuleType(model);
+    if (dst.model == AMS_MODEL_UNKNOWN && dst.is_ht) dst.model = AMS_MODEL_AMS_HT;
+    if (sd_verbose) {
+      logSDf("[verbose] FilaMan: unit %d kind=%s model=%s -> %d", (int)dst.ams_id,
+             kind, model[0] ? model : "-", (int)dst.model);
+    }
 
     // A name the user gave the unit. "AMS A" and "External" are FilaMan's
     // own generated labels, and repeating those would put an untranslated

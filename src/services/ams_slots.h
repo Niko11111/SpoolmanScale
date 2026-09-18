@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <string.h>
 
 // ============================================================
 //  AMS SLOT MODEL
@@ -66,6 +67,10 @@
 // Slot labels are "A1".."D4", "HT1", "Ext1" - four characters and a
 // terminator is enough for every one FilaMan generates.
 #define AMS_LABEL_MAX        6
+// The printer's own word for the material in a bay. "PLA-AERO" is the longest
+// a Bambu printer sends, and a longer one may be cut: only the part before
+// the dash is ever compared.
+#define AMS_TYPE_MAX         10
 
 // The external holder. Its bay numbering is not stable across servers:
 // FilaMan 1.3.1 reported ams_id 255 with bays 254 (Ext-L) and 255 (Ext-R),
@@ -75,6 +80,20 @@
 // only for a backend that names the holder without numbering its bay.
 #define AMS_EXT_AMS_ID       255
 #define AMS_EXT_TRAY_ID      0
+
+// Which hardware a unit is. BamBuddy names it by the module the printer
+// reports ("n3f" for an AMS 2 Pro); FilaMan's display API names it in words
+// ("ams_2_pro"), from a version that carries the field on. An older FilaMan
+// says nothing finer than ams, ams_ht or external, so UNKNOWN is a normal
+// value there, not an error, and nothing may treat it as "the first
+// generation".
+enum AmsModel : uint8_t {
+  AMS_MODEL_UNKNOWN = 0,   // the backend does not say, or a code not listed here
+  AMS_MODEL_AMS,           // "ams", the first generation
+  AMS_MODEL_AMS_2_PRO,     // "n3f" / "ams_2_pro", four bays and a heater
+  AMS_MODEL_AMS_HT,        // "n3s" / "ams_ht", one bay and a heater
+  AMS_MODEL_AMS_LITE,      // "ams_lite", the A1's four open bays
+};
 
 // A single bay.
 struct AmsSlotTray {
@@ -95,6 +114,14 @@ struct AmsSlotTray {
   // A label like "B2", not a number: FilaMan names the partner rather than
   // numbering it, and the partner can sit in a different unit.
   char     backup_of[AMS_LABEL_MAX];
+  // The bare material as the printer itself reports it ("PETG"), empty when
+  // the backend does not hand that over on its own. BamBuddy passes the
+  // printer's tray_type through and fills this. FilaMan's display answer
+  // merges the material from the spool it has assigned before the printer's,
+  // so what arrives there proves nothing about the bay and is not stored
+  // here. The detail card holds this against the spool the database names
+  // for the bay, see sdMaterialContradicts().
+  char     type[AMS_TYPE_MAX];
   bool     exists;                 // a spool is physically in the bay
   bool     has_color;              // false means unknown, not black
   // The bay the printer currently feeds from. Worth its own byte: it is the
@@ -128,6 +155,42 @@ struct AmsSlotUnit {
   // "33%" or "step 2", so the parser records which it stored instead of
   // leaving the view to guess from the range.
   bool        humidity_is_level;
+  // Stored in the padding the bools above leave, so the unit does not grow.
+  AmsModel    model;
+};
+
+// The model, from either spelling: Bambu's module name as BamBuddy passes it
+// on, or the word FilaMan's display API uses. Anything else stays UNKNOWN
+// rather than being guessed at.
+static inline AmsModel amsModelFromModuleType(const char* s) {
+  if (!s || !s[0])                  return AMS_MODEL_UNKNOWN;
+  if (strcmp(s, "ams") == 0)        return AMS_MODEL_AMS;
+  if (strcmp(s, "n3f") == 0 ||
+      strcmp(s, "ams_2_pro") == 0)  return AMS_MODEL_AMS_2_PRO;
+  if (strcmp(s, "n3s") == 0 ||
+      strcmp(s, "ams_ht") == 0)     return AMS_MODEL_AMS_HT;
+  if (strcmp(s, "ams_lite") == 0)   return AMS_MODEL_AMS_LITE;
+  return AMS_MODEL_UNKNOWN;
+}
+
+// Whether a bay's card may offer to record a drying for the whole unit. Only
+// an AMS 2 Pro dries four spools at once; an AMS HT holds one, and on the
+// first generation the spools in one unit have nothing in common.
+static inline bool amsUnitOffersDriedAll(const AmsSlotUnit& u) {
+  return !u.is_ext && u.model == AMS_MODEL_AMS_2_PRO;
+}
+
+// One bay and the spool a backend has on file for it. Used where a whole
+// printer is resolved at once rather than bay by bay.
+struct AmsSlotSpool {
+  int     spool_id;
+  uint8_t ams_id;
+  uint8_t tray_id;
+  // Grams left on that spool where the same answer already said so, else
+  // AMS_REMAIN_NA. BamBuddy's own inventory embeds the whole spool in every
+  // assignment; behind Spoolman it names the id alone and the weight is a
+  // second request.
+  int16_t grams;
 };
 
 // Everything the view needs for one printer.

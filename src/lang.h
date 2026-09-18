@@ -1167,6 +1167,14 @@ enum StringID {
   STR_BACKEND_UUID,           // "%s UUID": More Info caption
   STR_LANG_SCREEN_TITLE,      // language screen title
   STR_KEY_DEL,                // delete key of the number pads
+  STR_AMSD_DRIED_Q_ALL,       // confirm, when the whole unit is on offer too
+  STR_AMSD_DRIED_ALL,         // "All %d spools in %s", count and unit name
+  STR_AMSD_DRIED_ONE,         // the single-spool answer beside it
+  STR_AMSD_BATCH_RUNNING,     // "Saving %d spools ...", count
+  STR_AMSD_BATCH_DONE,        // "%d of %d saved", saved and total
+  STR_AMSV_DRYING_MIN,        // "Drying %d min" - a cycle without a target temperature
+  STR_AMSV_DRYING,            // "Drying" - neither figure reported
+  STR_AMSD_TYPE_CONFLICT,     // "Printer reports %s - ...", the printer's material
 
   STR_COUNT
 };

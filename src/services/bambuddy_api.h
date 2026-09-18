@@ -266,6 +266,19 @@ int  bbFindSpoolSlot(const char* base_url, const char* api_key, int spool_id,
 int  bbFindBaySpool(const char* base_url, const char* api_key, int printer_id,
        int ams_id, int tray_id, uint32_t timeout_ms = 8000);
 
+// Every assignment of a printer, from one request. For the AMS view, which
+// wants a weight per bay and would otherwise ask per bay. Returns 200 and
+// fills out_count, or a negative code.
+int  bbFindPrinterSpools(const char* base_url, const char* api_key, int printer_id,
+       AmsSlotSpool* out, uint8_t max, uint8_t* out_count, uint32_t timeout_ms = 8000);
+
+// Every bay of one unit at once, from the same single request: out_by_tray[i]
+// is the spool in bay i, 0 where none is assigned. For the card's "all spools
+// in this unit" drying answer, which needs the whole unit before it can say
+// how many spools it would write. Returns 200 or a negative code.
+int  bbFindUnitSpools(const char* base_url, const char* api_key, int printer_id,
+       int ams_id, int* out_by_tray, uint8_t n, uint32_t timeout_ms = 8000);
+
 // --- device protocol -----------------------------------------
 
 // Registers the scale so it shows up under Settings > SpoolBuddy. The

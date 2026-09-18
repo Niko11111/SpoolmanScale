@@ -2566,6 +2566,22 @@ const char* const STRINGS[][3] = {
   { "%s UUID",            "%s UUID",            "UUID %s" },  // STR_BACKEND_UUID
   { "Language / Sprache", "Language / Sprache", "Langue / Language / Sprache" },  // STR_LANG_SCREEN_TITLE
   { "DEL",                "DEL",                "Effacer" },  // STR_KEY_DEL
+
+  // AMS detail card: drying for the whole unit, and the material conflict hint
+  { "Trocknung von heute speichern?",
+    "Record today's drying?",
+    "Record today's drying?" },  // STR_AMSD_DRIED_Q_ALL
+  { "Alle %d Spulen in %s", "All %d spools in %s", "All %d spools in %s" },  // STR_AMSD_DRIED_ALL
+  { "Nur diese Spule",      "This spool only",     "This spool only" },  // STR_AMSD_DRIED_ONE
+  { "%d Spulen werden gespeichert ...",
+    "Saving %d spools ...",
+    "Saving %d spools ..." },  // STR_AMSD_BATCH_RUNNING
+  { "%d von %d gespeichert", "%d of %d saved", "%d of %d saved" },  // STR_AMSD_BATCH_DONE
+  { "Trocknet %d min",       "Drying %d min",  "Séchage %d min" },  // STR_AMSV_DRYING_MIN
+  { "Trocknet",              "Drying",         "Séchage" },  // STR_AMSV_DRYING
+  { "Drucker meldet %s - Zuordnung im Backend prüfen",
+    "Printer reports %s - check the assignment in the backend",
+    "Printer reports %s - check the assignment in the backend" },  // STR_AMSD_TYPE_CONFLICT
 };
 
 StringID tagWriteResultString(uint8_t code) {
