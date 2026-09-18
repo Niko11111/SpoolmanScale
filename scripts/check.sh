@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# House rules from CLAUDE.md, checked by machine instead of by memory.
+# House rules of this project, checked by machine instead of by memory.
 # Runs locally (scripts/check.sh) and in CI on every push and pull request.
 # Exit 1 on any finding. Warnings are printed but do not fail the run.
 set -u
@@ -137,6 +137,28 @@ else
   sum=$(echo "$out" | grep -E 'budget\(s\) measured' | tail -1 | sed 's/^[[:space:]]*//')
   if [ "$rc" -ne 0 ]; then bad "tools/fit_check.py --gate: ${sum:-failed}"; echo "$out" | tail -12 | sed 's/^/        /';
   else ok "French widths: ${sum:-checked}"; fi
+fi
+
+# 11. The countable conventions, held against a committed baseline: what an
+#     LVGL handler does, colours written as numbers, captions past the string
+#     table, German comments. A number may stay or fall, never rise. A file
+#     already over 1000 lines may grow, which is reported and does not fail
+#     the run; a file that crosses the limit does. The scanners are tested
+#     first, so that a broken one cannot report a clean tree.
+if ! python3 scripts/check_conventions.py --selftest >/dev/null 2>&1; then
+  bad "conventions: the ratchet fails its own self-test (run it with --selftest)"
+else
+  out=$(python3 scripts/check_conventions.py 2>&1); rc=$?
+  sum=$(echo "$out" | grep -E '^ratchet: ' | tail -1)
+  if [ "$rc" -ne 0 ]; then
+    bad "conventions ${sum:-ratchet: failed}"
+    echo "$out" | grep -E '^(fail|warn): ' | sed 's/^/        /'
+    echo "        python3 scripts/check_conventions.py --verbose lists every finding"
+  else
+    ok "conventions ${sum:-ratchet: checked}"
+    grown=$(echo "$out" | grep -E '^warn: ' || true)
+    if [ -n "$grown" ]; then warnf "files already over 1000 lines grew:"; echo "$grown" | sed 's/^warn: /        /'; fi
+  fi
 fi
 
 echo

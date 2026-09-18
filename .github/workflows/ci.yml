@@ -1,7 +1,7 @@
 name: CI
 
-# Every push to a working branch and every pull request: the house rules
-# from CLAUDE.md as a script, and a firmware build. The release itself stays
+# Every push to a working branch and every pull request: the house rules of
+# this project as a script, and a firmware build. The release itself stays
 # in build-all-boards.yml and runs on a tag push only.
 on:
   push:
