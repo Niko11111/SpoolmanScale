@@ -1511,6 +1511,7 @@ void appLoop() {
       if (found && uidLen == 4) {
         // ── MIFARE Classic (Bambu) ────────────────────────────
         last_tag_seen_ms = millis();
+        const bool newly_placed = !tag_present;
         tag_present = true;
         // A successful read means zero consecutive misses, by definition.
         // This used to be reset only when the UID changed, so after the very
@@ -1519,7 +1520,6 @@ void appLoop() {
         // apart, and the fifth glitch of a session declared the spool removed
         // while it was still lying on the scale.
         nfc_absent_count = 0;
-        resetActivityTimer();
 
         char uid_str[24];
         snprintf(uid_str, sizeof(uid_str), "%02X:%02X:%02X:%02X",
@@ -1530,7 +1530,8 @@ void appLoop() {
         bool uuid_missing = (strlen(g_tag.tray_uuid) < 32);
         bool contents_incomplete = (bambu_blocks_read < 48);
 
-        if (uid_changed) {
+        if (uid_changed || newly_placed) {
+          resetActivityTimer();
           Serial.printf("NFC: New 4-byte UID %s\n", uid_str);
           nfc_retry_count = 0; nfc_absent_count = 0;
           last_bambu_retry_ms = 0;
@@ -1642,9 +1643,9 @@ void appLoop() {
       } else if (found && uidLen == 7) {
         // ── NTAG detected ──────────────────────────────────────
         last_tag_seen_ms = millis();
+        const bool newly_placed = !tag_present;
         tag_present = true;
         nfc_absent_count = 0;   // see the comment in the Bambu branch above
-        resetActivityTimer();
 
         char uid_str[24];
         snprintf(uid_str, sizeof(uid_str), "%02X:%02X:%02X:%02X:%02X:%02X:%02X",
@@ -1675,7 +1676,8 @@ void appLoop() {
         lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
         lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
 
-        if (uid_changed_ntag) {
+        if (uid_changed_ntag || newly_placed) {
+          resetActivityTimer();
           // Marked handled straight away and unconditionally, whatever the
           // query below decides to do.
           strncpy(ntag_handled_uid, uid_str, sizeof(ntag_handled_uid)-1);
@@ -1775,6 +1777,12 @@ void appLoop() {
           const unsigned long absent_limit =
             (last_uid_len == 7) ? NFC_ABSENT_NTAG_MS : NFC_ABSENT_BAMBU_MS;
           if (!retrying && millis() - first_miss_ms >= absent_limit) {
+            if (weightSaysSpoolStayed() || scale_weight_g >= 100.0f) {
+              // Spool is physically resting on the pad. Do not flap the UI or declare removal on RF dropouts.
+              first_miss_ms = millis();
+              nfc_fast_polls = 0;
+              return;
+            }
             nfc_stat_removals++;
             nfc_fast_polls = 0;
             Serial.printf("NFC: tag removed (gap %u ms, %d fast re-polls exhausted)\n",

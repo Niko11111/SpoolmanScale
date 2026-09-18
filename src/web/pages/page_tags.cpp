@@ -77,6 +77,7 @@ static String body() {
   h += F("</label>"
          "<div class='inrow' style='margin-top:16px'>"
          "<button id='tg-btn' onclick='writeTag()' disabled></button>"
+         "<button id='tg-lbtn' class='tg-lbtn' onclick='linkTag()' disabled>Link tag to spool</button>"
          "<button id='tg-erase' class='danger' onclick='eraseTag()' disabled>");
   h += T(STR_W_TAG_ERASE);
   h += F("</button><span class='msg' id='tg-s'></span></div>"
@@ -245,6 +246,9 @@ static String body() {
          ":(tgLinked?M.relink.replace('%s',tgLinked):'');"
          "const er=document.getElementById('tg-erase');"
          "if(er)er.disabled=!tgUid||tgCur=='blank';"
+         "const lb=document.getElementById('tg-lbtn');"
+         "const vid=parseInt(document.getElementById('tg-id').value);"
+         "if(lb)lb.disabled=!vid;"
          "if(!tgNew){b.disabled=true;b.textContent=M.write;return;}"
          "if(small){b.disabled=true;b.textContent=M.write;return;}"
          "if(tgCur===tgNew){b.disabled=true;b.textContent=M.match;}"
@@ -293,6 +297,11 @@ static String body() {
          "fetch('/api/tag/write',{method:'POST',body:v+','+f+','+l})"
          ".then(r=>r.json()).then(d=>{document.getElementById('tg-s').textContent="
          "d.message||M.queued;}).catch(()=>{});after();}"
+         "function linkTag(){const v=parseInt(document.getElementById('tg-id').value);"
+         "if(!v){document.getElementById('tg-s').textContent=M.pickf;return;}"
+         "fetch('/api/tag/link',{method:'POST',body:String(v)})"
+         ".then(r=>r.json()).then(d=>{document.getElementById('tg-s').textContent="
+         "d.message||M.queued;}).catch(()=>{});after();}"
          "document.addEventListener('DOMContentLoaded',()=>{"
          "tgPoll();setInterval(tgPoll,3000);loadSpools();tgSync();});"
          "</script>");
@@ -323,6 +332,7 @@ static String tagWriteMessageLocal() {
 
   if (!strcmp(st, "pending")) {
     if (r->erase) return String(T(STR_W_TW_ERASING));
+    if (r->spool_id > 0 && !r->name[0]) return String(tagWriteMessage());
     snprintf(buf, sizeof(buf), T(STR_W_TW_WRITING), r->spool_id);
     return String(buf);
   }
@@ -332,9 +342,11 @@ static String tagWriteMessageLocal() {
 
   String out;
   if (r->code == TW_OK) {
-    snprintf(buf, sizeof(buf), T(STR_W_TW_WROTE), r->spool_id, r->name,
-             tagFormatLabel(r->fmt));
-    out = buf;
+    if (r->name[0]) {
+      snprintf(buf, sizeof(buf), T(STR_W_TW_WROTE), r->spool_id, r->name,
+               tagFormatLabel(r->fmt));
+      out = buf;
+    }
   } else {
     out = T(tagWriteResultString(r->code));
   }
@@ -342,15 +354,23 @@ static String tagWriteMessageLocal() {
   // The link is its own sentence half: a tag can be written and still not be
   // bound, which is exactly the case that has to be readable.
   if (r->link == TAG_LINK_OK) {
-    if (r->link_note[0]) {
-      snprintf(buf, sizeof(buf), T(STR_W_TW_LINKED_NOTE), r->link_note);
-      out += buf;
+    if (out.length() > 0) {
+      if (r->link_note[0]) {
+        snprintf(buf, sizeof(buf), T(STR_W_TW_LINKED_NOTE), r->link_note);
+        out += buf;
+      } else {
+        out += T(STR_W_TW_LINKED);
+      }
     } else {
-      out += T(STR_W_TW_LINKED);
+      out = String(tagWriteMessage());
     }
   } else if (r->link == TAG_LINK_FAIL) {
-    snprintf(buf, sizeof(buf), T(STR_W_TW_LINK_FAIL), r->link_http);
-    out += buf;
+    if (out.length() > 0) {
+      snprintf(buf, sizeof(buf), T(STR_W_TW_LINK_FAIL), r->link_http);
+      out += buf;
+    } else {
+      out = String(tagWriteMessage());
+    }
   }
   return out;
 }
@@ -493,6 +513,20 @@ static void routes(WebServer &srv) {
     int fmt = c1 < 0 ? 0 : body.substring(c1 + 1, c2 < 0 ? body.length() : c2).toInt();
     bool link = c2 >= 0 && body.substring(c2 + 1).toInt() == 1;
     bool ok = tagWriteRequest(id, fmtFromInt(fmt), link);
+    srv.send(200, "application/json",
+      ok ? "{\"message\":\"Queued, keep the tag on the reader.\"}"
+         : "{\"message\":\"Busy or invalid spool ID.\"}");
+  });
+
+  srv.on("/api/tag/link", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
+    int id = 0;
+    if (srv.hasArg("plain")) {
+      id = srv.arg("plain").toInt();
+    } else if (srv.hasArg("id")) {
+      id = srv.arg("id").toInt();
+    }
+    bool ok = tagLinkRequest(id);
     srv.send(200, "application/json",
       ok ? "{\"message\":\"Queued, keep the tag on the reader.\"}"
          : "{\"message\":\"Busy or invalid spool ID.\"}");
