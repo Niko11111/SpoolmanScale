@@ -787,27 +787,12 @@ static char s_last_query[48] = {0};
 // one flag rather than each keeping half the story.
 static bool s_scan_deferred = false;
 
-void spoolmanRecheckTick() {
-  if (!wifi_ok || !tag_present || sm_found) return;
-  if (!s_last_query[0]) return;
-  if (isSpoolFlowIdInputOpen()) return;   // the user is busy picking a spool
-
-  // A lookup that stood aside for a question owes one full pass. Forgetting
-  // the markers is how that is asked for: the scan loop then treats the tag on
-  // the pad as new and runs the whole lookup, scan included. Done before the
-  // cheap probe below rather than instead of it, because this costs nothing
-  // and the probe costs a request.
-  if (s_scan_deferred && !uiModalWaiting()) {
-    s_scan_deferred = false;
-    logSD("Spoolman: the question is gone, asking for the full lookup again");
-    tagLookupForget();
-    return;
-  }
-
-  static uint32_t last_ms = 0;
-  // Signed difference, so this survives the millis() rollover.
-  if (last_ms && (int32_t)(millis() - last_ms) < (int32_t)TAG_RECHECK_MS) return;
-  last_ms = millis();
+// Whether the backend knows a spool by this tag, asked the cheap way: the
+// server side lookup, a handful of fields, no inventory scan and no /tag/scan,
+// so nothing is announced to a paired browser. Says nothing about which spool
+// it is - whoever gets a yes runs the normal lookup next.
+bool spoolmanTagResolves(const char* query) {
+  if (!query || !query[0]) return false;
 
   // Only the fields the verification reads. The point of this pass is that it
   // stays small: a real miss still falls through to the inventory scan in
@@ -830,24 +815,48 @@ void spoolmanRecheckTick() {
   // one split: with Spoolman's own relation selected there is no extra field
   // to filter on, and backendFindSpoolByTag() would answer NOT_SUPPORTED.
   if (backendHasNativeTags()) {
-    const char* nu = tagNativeUid(s_last_query);
+    const char* nu = tagNativeUid(query);
     if (backendFindSpoolByNativeTag(cfg_spoolman_base, nu, doc, 5000, &filter, &err) == 200 && !err) {
       for (JsonObjectConst cand : doc.as<JsonArrayConst>())
-        if (spoolMatchesTag(cand, s_last_query)) { hit = true; break; }
+        if (spoolMatchesTag(cand, query)) { hit = true; break; }
     }
     if (!hit) { doc.clear(); err = DeserializationError::Ok; }
   }
 
   if (!hit) {
-    if (backendFindSpoolByTag(cfg_spoolman_base, s_last_query, doc, 5000, &err, &filter) == 200 && !err) {
+    if (backendFindSpoolByTag(cfg_spoolman_base, query, doc, 5000, &err, &filter) == 200 && !err) {
       // Verified exactly: FilaMan's search is a substring match, so an
       // unverified hit would announce somebody else's spool.
       for (JsonObjectConst cand : doc.as<JsonArrayConst>())
-        if (spoolMatchesTag(cand, s_last_query)) { hit = true; break; }
+        if (spoolMatchesTag(cand, query)) { hit = true; break; }
     }
   }
+  return hit;
+}
 
-  if (!hit) return;
+void spoolmanRecheckTick() {
+  if (!wifi_ok || !tag_present || sm_found) return;
+  if (!s_last_query[0]) return;
+  if (isSpoolFlowIdInputOpen()) return;   // the user is busy picking a spool
+
+  // A lookup that stood aside for a question owes one full pass. Forgetting
+  // the markers is how that is asked for: the scan loop then treats the tag on
+  // the pad as new and runs the whole lookup, scan included. Done before the
+  // cheap probe below rather than instead of it, because this costs nothing
+  // and the probe costs a request.
+  if (s_scan_deferred && !uiModalWaiting()) {
+    s_scan_deferred = false;
+    logSD("Spoolman: the question is gone, asking for the full lookup again");
+    tagLookupForget();
+    return;
+  }
+
+  static uint32_t last_ms = 0;
+  // Signed difference, so this survives the millis() rollover.
+  if (last_ms && (int32_t)(millis() - last_ms) < (int32_t)TAG_RECHECK_MS) return;
+  last_ms = millis();
+
+  if (!spoolmanTagResolves(s_last_query)) return;
 
   // Known now. Forgetting the lookup is what the loop reads as "ask again",
   // the same thing lifting the spool off the pad does, so the normal path

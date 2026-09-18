@@ -23,3 +23,7 @@ void spoolmanRescanTick();
 // has, never the inventory scan that a real miss falls through to. Call from
 // the loop.
 void spoolmanRecheckTick();
+// Whether the backend knows a spool by this tag: the recheck's cheap lookup,
+// without the inventory scan and without announcing the tag to a browser.
+// Blocks for one small request, so never from an LVGL event handler.
+bool spoolmanTagResolves(const char* query);

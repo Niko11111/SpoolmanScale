@@ -237,6 +237,15 @@ constexpr unsigned long NFC_STATS_LOG_INTERVAL_MS = 300000;
 // help it, so the retries are spaced out.
 constexpr unsigned long NFC_BAMBU_RETRY_BACKOFF_MS = 1500;
 
+// A 4 byte tag that refuses every sector is either a Bambu tag lying badly or
+// not a Bambu tag at all, and only the retries can tell: over four days one
+// real Bambu spool in fifty needed all six attempts. A plain MIFARE card
+// therefore sat through them all, ten seconds, before its UID was looked up.
+// After this many refused retries the backend is asked, cheaply, whether it
+// knows the UID. A yes ends the probing. A no changes nothing: the retries go
+// on, so no Bambu tag is given up on any earlier than before.
+constexpr int NFC_UID_PROBE_AFTER_RETRIES = 1;
+
 // A tag that has used up its retries must stay given up on. Clearing the retry
 // counter on every removal let a tag that never authenticates restart the
 // count each time and re-scan forever. The counter is only cleared once the
@@ -1476,6 +1485,7 @@ void appLoop() {
     };
 
     static unsigned long last_nfc_check_ms = 0;
+    static bool bambu_uid_probed = false;   // see NFC_UID_PROBE_AFTER_RETRIES
     static unsigned long last_nfc_stats_ms = 0;
     static uint8_t last_uid_len = 0;   // 4 = Bambu, 7 = NTAG, for the removal delay
 
@@ -1500,7 +1510,10 @@ void appLoop() {
         // this a tag that keeps failing to authenticate would be re-scanned
         // indefinitely, five seconds per attempt.
         if (tag_absent_since_ms != 0) {
-          if (millis() - tag_absent_since_ms > NFC_RETRY_RESET_ABSENT_MS) nfc_retry_count = 0;
+          if (millis() - tag_absent_since_ms > NFC_RETRY_RESET_ABSENT_MS) {
+            nfc_retry_count = 0;
+            bambu_uid_probed = false;
+          }
           tag_absent_since_ms = 0;
         }
         if (nfc_fast_polls > 0) {
@@ -1549,11 +1562,28 @@ void appLoop() {
           Serial.printf("NFC: New 4-byte UID %s\n", uid_str);
           nfc_retry_count = 0; nfc_absent_count = 0;
           last_bambu_retry_ms = 0;
+          bambu_uid_probed = false;
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
           lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
           scanTag(uid, uidLen);
+        } else if (bambu_blocks_read == 0 && !bambu_uid_probed &&
+                   nfc_retry_count >= NFC_UID_PROBE_AFTER_RETRIES &&
+                   nfc_retry_count < NFC_MAX_RETRIES &&
+                   wifi_ok && !isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen()) {
+          // Once per placement, see NFC_UID_PROBE_AFTER_RETRIES.
+          bambu_uid_probed = true;
+          crumbSet("uid probe");
+          if (spoolmanTagResolves(uid_str)) {
+            logSDf("NFC: %s refused %d probes, but the backend knows the UID - not a Bambu tag to wait for",
+                   uid_str, nfc_retry_count + 1);
+            // The branch below for a tag that has used up its retries does the
+            // real lookup and all the bookkeeping. Poll again at once rather
+            // than half a second from now.
+            nfc_retry_count = NFC_MAX_RETRIES;
+            last_nfc_check_ms = 0;
+          }
         } else if ((uuid_missing || contents_incomplete) && nfc_retry_count < NFC_MAX_RETRIES &&
                    millis() - last_bambu_retry_ms >= NFC_BAMBU_RETRY_BACKOFF_MS) {
           last_bambu_retry_ms = millis();
