@@ -25,6 +25,9 @@ tools/serial_logger.py
 # file in every directory it covers - it turned up in src/ next.
 **/.DS_Store
 images/*~lock~
+# Full-size originals and working images - the MakerWorld exports, raw photos,
+# simulator shots. The repository carries the web-sized JPEGs made from them.
+images/images_not_for_github/
 !platformio.ini
 !partitions.csv
 !copy_release.py
