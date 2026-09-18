@@ -15,8 +15,11 @@ bool nfcHardwareReinit(uint32_t* firmware_version = nullptr);
 // chip reports without looking at the buffer. Every buffer used to be 7 or 8:
 // a triple size card wrote three bytes past it, onto the loop task's stack.
 #define NFC_UID_MAX 10
+#define NFC_KEY_A 0
+#define NFC_KEY_B 1
+
 bool nfcReadPassiveTarget(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms);
-bool nfcReadMifareSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blocks[4][16]);
+bool nfcReadMifareSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blocks[4][16], uint8_t key_type = NFC_KEY_B);
 bool nfcReadMifareBlock(uint8_t block, uint8_t data[16]);
 bool nfcReadNtagPage(uint8_t page, uint8_t* data);
 bool nfcWriteNtagPage(uint8_t page, uint8_t* data);
