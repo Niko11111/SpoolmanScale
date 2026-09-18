@@ -897,6 +897,9 @@ bool tagDiffersFromSpool(int spool_id, TagFormat fmt, TagInfo *want) {
   return false;
 }
 
+// How many reads in a row may describe nothing before a tag is left alone.
+static constexpr uint8_t TAG_UNREADABLE_LIMIT = 3;
+
 // Uses what the main NFC poll already found. Selecting the tag again here
 // would compete with that poll, and the loser gets nothing back.
 //
@@ -905,6 +908,7 @@ bool tagDiffersFromSpool(int spool_id, TagFormat fmt, TagInfo *want) {
 static void refreshCache(bool force = false) {
   static unsigned long last_ms = 0;
   static char last_uid[26] = "";
+  static uint8_t unreadable = 0;   // reads in a row that described nothing
 
   if (!tag_present) {
     cached_uid[0] = 0; cached_kind[0] = 0; cached_content[0] = 0;
@@ -912,6 +916,7 @@ static void refreshCache(bool force = false) {
     cached_kindcode = TAG_KIND_NONE;
     memset(&cached_info, 0, sizeof(cached_info));
     last_uid[0] = 0;
+    unreadable = 0;
     return;
   }
 
@@ -927,8 +932,16 @@ static void refreshCache(bool force = false) {
     return;
   }
 
-  const bool changed = strcmp(last_uid, g_tag.uid_str) != 0 || cache_dirty;
+  const bool uid_changed = strcmp(last_uid, g_tag.uid_str) != 0;
+  const bool changed = uid_changed || cache_dirty;
+  if (uid_changed) unreadable = 0;
   if (!changed && cached_content[0]) return;
+  // A blank NTAG, or one written by something this firmware does not know,
+  // never yields a description. Returning only on content meant such a tag had
+  // its pages read again every 500 ms for as long as it lay there, next to the
+  // main poll and on the same reader. A few tries cover a read that merely
+  // failed, then it is left alone until the tag changes or is written to.
+  if (!changed && unreadable >= TAG_UNREADABLE_LIMIT) return;
   // Retry gap after a failed read. A forced read has just been handed a freshly
   // selected tag, so there is nothing to back off from.
   if (!force && millis() - last_ms < 500) return;
@@ -949,6 +962,15 @@ static void refreshCache(bool force = false) {
   if (tagDescribe(tmp, sizeof(tmp), &ti) && tmp[0]) {
     snprintf(cached_content, sizeof(cached_content), "%s", tmp);
     cached_info = ti;
+    cache_dirty = false;
+    unreadable = 0;
+  } else if (unreadable < TAG_UNREADABLE_LIMIT && ++unreadable >= TAG_UNREADABLE_LIMIT &&
+             cache_dirty) {
+    // Written or erased, and nothing readable came back since. What the cache
+    // still holds describes the tag as it was before, so it goes rather than
+    // being shown as current, and the retrying ends here as well.
+    cached_content[0] = 0;
+    memset(&cached_info, 0, sizeof(cached_info));
     cache_dirty = false;
   }
 }
