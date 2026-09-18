@@ -691,8 +691,12 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     s.filament_id = spool["filament"]["id"] | 0;
     s.spool_weight = spool["spool_weight"] | 0.0f;
 
+    // On Serial, not on the card. A line to the card is an open, an append and
+    // a close, 26 ms each on the loop task: for an inventory of 227 spools that
+    // was 6 s of a frozen screen after a download that took one, and a third
+    // of a day's log. The card keeps the totals written above and below.
     if (sd_verbose) {
-      logSDf("[verbose] link spool %d: vendor='%s' mat='%s' name='%s' fid=%d spw=%.0f",
+      Serial.printf("link spool %d: vendor='%s' mat='%s' name='%s' fid=%d spw=%.0f\n",
         s.id, s.vendor, s.material, s.name, s.filament_id, s.spool_weight);
     }
 
