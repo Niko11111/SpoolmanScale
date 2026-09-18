@@ -177,6 +177,24 @@ static portMUX_TYPE   s_queue_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static void sdWriteLine(const char* stamp, const char* msg);
 
+// The longest a single line held up the loop since the last
+// sdWriteMaxTakeMs(). Every line is an open, an append and a close on the
+// card, and all of them run on the loop task.
+static uint32_t s_write_max_ms = 0;
+
+static void sdWriteLineTimed(const char* stamp, const char* msg) {
+  const unsigned long write_start_ms = millis();
+  sdWriteLine(stamp, msg);
+  const uint32_t write_ms = (uint32_t)(millis() - write_start_ms);
+  if (write_ms > s_write_max_ms) s_write_max_ms = write_ms;
+}
+
+uint32_t sdWriteMaxTakeMs() {
+  const uint32_t taken = s_write_max_ms;
+  s_write_max_ms = 0;
+  return taken;
+}
+
 static void queueLine(const char* stamp, const char* msg) {
   portENTER_CRITICAL(&s_queue_mux);
   if (s_queue_len < SD_QUEUE_LEN) {
@@ -196,7 +214,7 @@ void sdLoggerTick() {
   memcpy(batch, s_queue, sizeof(QueuedLine) * n);
   s_queue_len = 0;
   portEXIT_CRITICAL(&s_queue_mux);
-  for (uint8_t i = 0; i < n; i++) sdWriteLine(batch[i].stamp, batch[i].msg);
+  for (uint8_t i = 0; i < n; i++) sdWriteLineTimed(batch[i].stamp, batch[i].msg);
 }
 
 void logSD(const char* msg) {
@@ -217,7 +235,7 @@ void logSD(const char* msg) {
 
   if (!sd_available || !sd_logging) return;
   if (!onLoopTask()) { queueLine(stamp, msg); return; }
-  sdWriteLine(stamp, msg);
+  sdWriteLineTimed(stamp, msg);
 }
 
 static void sdWriteLine(const char* stamp, const char* msg) {

@@ -5,6 +5,7 @@
 
 #include <LovyanGFX.hpp>
 #include <math.h>
+#include <esp_heap_caps.h>
 #include <esp_sleep.h>
 #include <lvgl.h>
 
@@ -16,6 +17,15 @@
 // false. A second TwoWire(0) used to be created and begun here and then never
 // read or written, which initialised I2C port 0 twice over the same pins.
 static constexpr uint8_t BL_PWM_CHANNEL = 7;
+
+// Write clock of the 8 bit panel bus. Left unset, LovyanGFX runs it at 16 MHz,
+// which is 19 ms on the bus for one full 480x320 frame before a pixel has been
+// rendered. The ST7796S datasheet asks for a write cycle of 66 ns (15 MHz) and
+// 15 ns for each half of the pulse, so the default already sat on the limit
+// and this is past it. 20 MHz is what nearly every published configuration of
+// this board runs. A wrong pixel, a colour fringe or a shifted line, above all
+// on a device that has warmed up, means going back down.
+static constexpr uint32_t LCD_BUS_WRITE_HZ = 20000000;
 
 static void (*touch_activity_callback)() = nullptr;
 
@@ -31,6 +41,7 @@ public:
       cfg.pin_d0=9;  cfg.pin_d1=46; cfg.pin_d2=3;
       cfg.pin_d3=8;  cfg.pin_d4=18; cfg.pin_d5=17;
       cfg.pin_d6=16; cfg.pin_d7=15;
+      cfg.freq_write=LCD_BUS_WRITE_HZ;
       _bus.config(cfg); _panel.setBus(&_bus); }
     { auto cfg = _panel.config();
       cfg.pin_cs=-1; cfg.pin_rst=4; cfg.pin_busy=-1;
@@ -59,7 +70,22 @@ public:
 
 static LGFX tft;
 static lv_disp_draw_buf_t draw_buf;
-static lv_color_t disp_buf[480 * 10];
+// Lines LVGL renders and flushes in one go. It walks the object tree once per
+// strip, so the stock 10 lines made a full frame 32 walks: measured while
+// scrolling, a frame took 78 ms and over 60 of them were rendering, not the
+// bus. 20 lines cut the time per drawn line by 30 %.
+//
+// The buffer lives in PSRAM, which measured within 4 % of internal RAM at this
+// size and leaves the internal heap to WiFi and TLS. It is not larger because
+// of the data cache: 32 kB, shared with the fonts read from flash. 19 kB fit,
+// and an 80 line buffer (77 kB) rendered a quarter slower per line than this.
+static constexpr uint32_t DRAW_BUF_LINES          = 20;
+// Only for a device whose PSRAM does not answer, taken from the internal heap
+// at boot, when there is plenty of it.
+static constexpr uint32_t DRAW_BUF_FALLBACK_LINES = 10;
+static char draw_buf_info[16] = "";
+
+const char* displayDrawBufInfo() { return draw_buf_info; }
 
 // RGB565 gamma lookup. Two small tables (5-bit R/B, 6-bit G) keep the
 // per-pixel cost to two array reads and some shifting.
@@ -85,7 +111,19 @@ void displaySetUiGain(uint16_t gamma_x100) {
   if (lv_disp_get_default()) lv_obj_invalidate(lv_scr_act());
 }
 
+// Flush timing since the last displayFlushStatsTake(). Written by lvgl_flush()
+// and read by the performance line in the log, both on the loop task.
+static DisplayFlushStats flush_stats = {0, 0, 0};
+
+DisplayFlushStats displayFlushStatsTake() {
+  const DisplayFlushStats taken = flush_stats;
+  flush_stats = {0, 0, 0};
+  return taken;
+}
+
 static void lvgl_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p) {
+  // The gamma pass counts: it is part of what a flush costs.
+  const uint32_t flush_start_us = micros();
   uint32_t w = area->x2 - area->x1 + 1;
   uint32_t h = area->y2 - area->y1 + 1;
   if (ui_gain > 100) {
@@ -101,6 +139,10 @@ static void lvgl_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *co
   tft.setAddrWindow(area->x1, area->y1, w, h);
   tft.writePixels((lgfx::rgb565_t*)color_p, w * h);
   tft.endWrite();
+  const uint32_t flush_us = micros() - flush_start_us;
+  if (flush_us > flush_stats.max_us) flush_stats.max_us = flush_us;
+  flush_stats.sum_us += flush_us;
+  flush_stats.count++;
   lv_disp_flush_ready(drv);
 }
 
@@ -137,7 +179,24 @@ bool displayHardwareBegin(void (*touch_activity_cb)()) {
   tft.fillScreen(TFT_BLACK);
 
   lv_init();
-  lv_disp_draw_buf_init(&draw_buf, disp_buf, NULL, 480 * 10);
+  uint32_t buf_lines = DRAW_BUF_LINES;
+  const char* buf_where = "psram";
+  lv_color_t* buf = (lv_color_t*)heap_caps_malloc(
+      480 * buf_lines * sizeof(lv_color_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  if (!buf) {
+    Serial.println("Display: no PSRAM for the draw buffer, using internal RAM");
+    buf_lines = DRAW_BUF_FALLBACK_LINES;
+    buf_where = "int";
+    buf = (lv_color_t*)heap_caps_malloc(
+        480 * buf_lines * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  }
+  if (!buf) {
+    Serial.println("Display: no memory for the draw buffer");
+    return false;
+  }
+  const uint32_t buf_px = 480 * buf_lines;
+  snprintf(draw_buf_info, sizeof(draw_buf_info), "%s/%u", buf_where, (unsigned)buf_lines);
+  lv_disp_draw_buf_init(&draw_buf, buf, NULL, buf_px);
   static lv_disp_drv_t disp_drv;
   lv_disp_drv_init(&disp_drv);
   disp_drv.hor_res = 480;

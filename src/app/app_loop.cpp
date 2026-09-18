@@ -12,6 +12,7 @@
 #include "app/app_state.h"
 #include "app/backend_switch.h"
 #include "app/deferred_actions.h"
+#include "app/perf_monitor.h"
 #include "bambu/bambu_scan.h"
 #include "bambu/bambu_tag.h"
 #include "hardware/display_power.h"
@@ -297,7 +298,9 @@ void appLoop() {
   // Settings changed by a button are parked while LVGL dispatches and written
   // the moment it is done, so no flash write runs inside an event callback.
   prefsDeferWrites(true);
+  perfLoopMark();
   lv_timer_handler();
+  perfUiDone();
   prefsDeferWrites(false);
   prefsFlush();
   handlePowerManagement();
@@ -393,6 +396,7 @@ void appLoop() {
         (unsigned)lv_mem.used_pct, (unsigned)lv_mem.frag_pct,
         (unsigned)stack_min_bytes,
         wifi_up ? "up" : "DOWN", wifi_up ? WiFi.RSSI() : 0);
+      perfLogWindow();
     }
   }
 

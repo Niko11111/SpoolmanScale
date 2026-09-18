@@ -85,10 +85,19 @@
  *====================*/
 
 /*Default display refresh period. LVG will redraw changed areas with this period time*/
-#define LV_DISP_DEF_REFR_PERIOD 30      /*[ms]*/
+/* 16, not the stock 30, which capped the UI at 33 frames a second. LVGL runs
+ * its animations off the same figure, and they are timed, so they keep their
+ * length and gain steps. Whether a redraw makes 16 ms is a question of the
+ * panel bus: see LCD_BUS_WRITE_HZ in hardware/display.cpp. */
+#define LV_DISP_DEF_REFR_PERIOD 16      /*[ms]*/
 
 /*Input device read period in milliseconds*/
-#define LV_INDEV_DEF_READ_PERIOD 30     /*[ms]*/
+/* 10, not the stock 30: a finger sampled 33 times a second makes dragging look
+ * stepped. The touch controller has its INT line wired, so an untouched panel
+ * costs no bus traffic at any rate. LVGL measures a flick per read, so this
+ * figure also scales how far a list coasts after the finger lifts - see
+ * scroll_throw on the input driver before changing it again. */
+#define LV_INDEV_DEF_READ_PERIOD 10     /*[ms]*/
 
 /*Use a custom tick source that tells the elapsed time in milliseconds.
  *It removes the need to manually update the tick with `lv_tick_inc()`)*/

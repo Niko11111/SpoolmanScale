@@ -15,6 +15,9 @@ void logSD(const char* msg);
 void logSDf(const char* fmt, ...);
 // Writes the lines other tasks queued. From appLoop().
 void sdLoggerTick();
+// The longest a single line held up the loop since the last call, in
+// milliseconds, then reset. Zero without a card. Loop task only.
+uint32_t sdWriteMaxTakeMs();
 void initSD();
 
 // Stores the switch and applies it. False when NVS refused the write, and then

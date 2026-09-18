@@ -16,3 +16,17 @@ void displayBacklightOn(uint8_t brightness);
 // lever on perceived brightness.
 void displaySetUiGain(uint16_t gamma_x100);
 uint16_t displayGetUiGain();
+
+// What flushing to the panel cost since the last call, then reset: the longest
+// single flush, the time spent in all of them, and how many there were. Loop
+// task only, like the flush itself.
+struct DisplayFlushStats {
+  uint32_t max_us;
+  uint32_t sum_us;
+  uint32_t count;
+};
+DisplayFlushStats displayFlushStatsTake();
+
+// Where LVGL's draw buffer lives and how many lines it holds, as "int/20" or
+// "psram/40". For the log, so that a timing line says what it was measured on.
+const char* displayDrawBufInfo();
