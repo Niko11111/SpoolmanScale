@@ -52,6 +52,7 @@ enum TagWriteResult : uint8_t {
 // link also writes the tag's UID onto the spool record, so presenting it
 // selects that spool.
 bool tagWriteRequest(int spool_id, TagFormat fmt, bool link);
+bool tagLinkRequest(int spool_id);
 void tagWriteTick();
 
 // The same write without the detour through the parking slot: fetches the
