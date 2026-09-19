@@ -13,6 +13,8 @@
 #include "app/backend_switch.h"
 #include "app/deferred_actions.h"
 #include "app/perf_monitor.h"
+#include "services/partition_layout.h"
+#include "ui/partition_popup.h"
 #include "bambu/bambu_scan.h"
 #include "bambu/bambu_tag.h"
 #include "snapmaker/snapmaker_scan.h"
@@ -725,7 +727,10 @@ void appLoop() {
   static bool hint_checked = false;
   if (!hint_checked && millis() > 12000) {
     hint_checked = true;
-    if (nfcResetHintDue()) showNfcResetHint();
+    // One hint per boot at most: the storage note waits for a boot on which
+    // the reader has nothing to say.
+    if (nfcResetHintDue())        showNfcResetHint();
+    else if (partitionHintDue())  showPartitionHint();
   }
 
   if (nfc_reset_probe_pending) {

@@ -1177,6 +1177,18 @@ enum StringID {
   STR_AMSD_TYPE_CONFLICT,     // "Printer reports %s - ...", the printer's material
   STR_W_SNAPMAKER,            // web config: the switch for Snapmaker tags
   STR_W_SNAPMAKER_HINT,       // what it costs and why it is off
+  STR_PART_HINT_TITLE,        // device popup: the old partition table
+  STR_PART_HINT_TEXT,
+  STR_W_R_LAYOUT,             // status page, hardware card
+  STR_W_S_LAYOUT_NEW,         // pill: "current"
+  STR_W_S_LAYOUT_OLD,         // pill: "outdated"
+  STR_W_S_LAYOUT_OLD_HINT,    // the line under the rows on the old table
+  STR_W_R_FIRMWARE,
+  STR_W_S_MB_OF,              // "%s of %s MB"
+  STR_W_R_DATA_AREA,
+  STR_W_S_DATA_UNUSED,        // "%s MB, not used yet"
+  STR_W_S_NONE,
+  STR_W_R_COREDUMP,
 
   STR_COUNT
 };

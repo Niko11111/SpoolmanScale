@@ -153,16 +153,18 @@
       <ol>
         <li>Connect <span>USB cable</span> to PC</li>
         <li>Disconnect debug board <span>(ZXACC-ESPDB)</span></li>
-        <li>Click <span>"Install"</span> below</li>
+        <li>Click <span>"Install"</span> below. A scale that is already running SpoolmanScale is offered <span>"Update"</span> instead.</li>
         <li>Select port &amp; confirm</li>
         <li>After flashing: enter your <span>WiFi</span> right in the browser, or skip this and set it up on the scale later, on the touchscreen or with your phone.</li>
       </ol>
     </div>
 
     <div class="warning">
-      <strong>⚠ Note on First Flash</strong>
-      The first flash will erase all saved settings (WiFi, calibration).
-      These can be re-entered on the device afterwards.
+      <strong>⚠ Your settings</strong>
+      <strong>"Update"</strong> keeps everything: WiFi, calibration, backend access.
+      If the flasher offers <strong>"Install"</strong> and asks whether to erase the device,
+      leave that box <strong>unticked</strong> and your settings survive as well.
+      Only tick it if you want a clean start.
     </div>
 
     <esp-web-install-button manifest="manifest.json">

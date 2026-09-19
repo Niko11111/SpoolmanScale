@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.7.4-beta.36"
+#define FW_VERSION  "v0.7.4-beta.39"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -47,6 +47,11 @@
 
 #define CAL_FACTOR_DEFAULT  1.0f
 #define SCALE_FILTER_SIZE   8
+
+// The app slot size of the partition table this firmware ships with. A device
+// whose slots are smaller was flashed with the old table and is told so once:
+// OTA never rewrites the table, only a flash over USB does.
+#define PARTITION_APP_SLOT_CURRENT_BYTES  0x500000
 
 // The two chips on I2C_EXT. Named because a bare 0x2A stood in three files and
 // meant nothing to anyone reading a bus scan.

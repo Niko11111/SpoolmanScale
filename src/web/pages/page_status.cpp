@@ -13,6 +13,7 @@
 #include "services/device_name.h"
 #include "services/diagnostics.h"
 #include "services/mdns_service.h"
+#include "services/partition_layout.h"
 #include "services/wifi_manager.h"
 #include "services/user_options.h"
 #include "ui/weight_format.h"
@@ -225,6 +226,32 @@ static String body() {
     h += F("</span></div>");
   }
   h += row(T(STR_W_R_SD),    pill(sd_available, STR_W_S_READY, STR_W_S_MISSING, true));
+  // The flash, in plain words: whether this device still runs on the old
+  // partition table. Rows in this card rather than a card of their own, which
+  // would leave one card alone in the second row on a three column screen.
+  {
+    const PartitionLayout &pl = partitionLayout();
+    char a[64], b[16], c[16];
+    // The pill alone: the slot size stands in the firmware row right below.
+    h += row(T(STR_W_R_LAYOUT), pill(pl.current, STR_W_S_LAYOUT_NEW, STR_W_S_LAYOUT_OLD, true));
+    snprintf(b, sizeof(b), "%.1f", pl.app_used_bytes / 1048576.0);
+    snprintf(c, sizeof(c), "%.1f", pl.app_slot_bytes / 1048576.0);
+    snprintf(a, sizeof(a), T(STR_W_S_MB_OF), b, c);
+    h += row(T(STR_W_R_FIRMWARE), htmlEsc(a));
+    if (pl.data_bytes) {
+      snprintf(b, sizeof(b), "%.1f", pl.data_bytes / 1048576.0);
+      snprintf(a, sizeof(a), T(STR_W_S_DATA_UNUSED), b);
+      h += row(T(STR_W_R_DATA_AREA), htmlEsc(a));
+    } else {
+      h += row(T(STR_W_R_DATA_AREA), htmlEsc(T(STR_W_S_NONE)));
+    }
+    h += row(T(STR_W_R_COREDUMP), pill(pl.has_coredump, STR_W_S_YES, STR_W_S_NO));
+    if (!pl.current) {
+      h += F("<span class='hint'>");
+      h += T(STR_W_S_LAYOUT_OLD_HINT);
+      h += F("</span>");
+    }
+  }
   // The rescan holds the I2C bus for a moment, so it sits behind the config
   // gate now; the button is only offered where the request would get through.
   if (webGateOpen(GATE_CONFIG)) {

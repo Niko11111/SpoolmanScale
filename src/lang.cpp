@@ -2586,6 +2586,22 @@ const char* const STRINGS[][3] = {
   { "Versucht bei einem 4-Byte-Tag, der kein Bambu-Tag ist, die Snapmaker-Schlüssel und liest Material und Farbe vom Tag. Kostet jeden anderen 4-Byte-Tag etwa eine halbe Sekunde beim Auflegen. Aus lassen, wenn keine Snapmaker-Spulen im Haus sind.",
     "Tries Snapmaker's keys on a 4 byte tag that is not a Bambu tag and reads material and colour off the tag. Costs every other 4 byte tag about half a second when it is put down. Leave it off if there are no Snapmaker spools around.",
     "Tries Snapmaker's keys on a 4 byte tag that is not a Bambu tag and reads material and colour off the tag. Costs every other 4 byte tag about half a second when it is put down. Leave it off if there are no Snapmaker spools around." },  // STR_W_SNAPMAKER_HINT
+  { "Speicheraufteilung veraltet", "Storage layout outdated", "Storage layout outdated" },  // STR_PART_HINT_TITLE
+  { "Diese Waage wurde mit der alten Speicheraufteilung geflasht: 3 MB je Firmware-Slot. Neue Geräte bekommen 5 MB je Slot und einen Datenbereich für künftige Funktionen.\n\nUpdates funktionieren weiterhin. Für die neue Aufteilung ist einmal ein Flash per USB über den Web Flasher nötig. Läuft die Waage dabei, bietet der Flasher 'Update' an, und alle Einstellungen bleiben erhalten. Erscheint stattdessen 'Install', den Haken bei 'Erase' nicht setzen.",
+    "This scale was flashed with the old storage layout: 3 MB per firmware slot. New devices get 5 MB per slot and a data area for future features.\n\nUpdates keep working. The new layout needs one flash over USB with the web flasher. If the scale is running, the flasher offers 'Update' and every setting is kept. If it offers 'Install' instead, leave the 'Erase' box unticked.",
+    "This scale was flashed with the old storage layout: 3 MB per firmware slot. New devices get 5 MB per slot and a data area for future features.\n\nUpdates keep working. The new layout needs one flash over USB with the web flasher. If the scale is running, the flasher offers 'Update' and every setting is kept. If it offers 'Install' instead, leave the 'Erase' box unticked." },  // STR_PART_HINT_TEXT
+  { "Layout",   "Layout",   "Layout" },  // STR_W_R_LAYOUT
+  { "aktuell",  "current",  "current" },  // STR_W_S_LAYOUT_NEW
+  { "veraltet", "outdated", "outdated" },  // STR_W_S_LAYOUT_OLD
+  { "Einmal per USB über den Web Flasher neu flashen bringt das aktuelle Layout. Die Einstellungen bleiben dabei erhalten.",
+    "One flash over USB with the web flasher brings the current layout. Your settings are kept.",
+    "One flash over USB with the web flasher brings the current layout. Your settings are kept." },  // STR_W_S_LAYOUT_OLD_HINT
+  { "Firmware",                  "Firmware",            "Firmware" },  // STR_W_R_FIRMWARE
+  { "%s von %s MB",              "%s of %s MB",         "%s of %s MB" },  // STR_W_S_MB_OF
+  { "Datenbereich",              "Data area",           "Data area" },  // STR_W_R_DATA_AREA
+  { "%s MB, noch nicht genutzt", "%s MB, not used yet", "%s MB, not used yet" },  // STR_W_S_DATA_UNUSED
+  { "nicht vorhanden",           "not present",         "not present" },  // STR_W_S_NONE
+  { "Absturzspeicher",           "Crash dump",          "Crash dump" },  // STR_W_R_COREDUMP
 };
 
 StringID tagWriteResultString(uint8_t code) {
