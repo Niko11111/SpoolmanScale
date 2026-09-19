@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.7.4-beta.39"
+#define FW_VERSION  "v0.7.4-beta.40"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -52,6 +52,12 @@
 // whose slots are smaller was flashed with the old table and is told so once:
 // OTA never rewrites the table, only a flash over USB does.
 #define PARTITION_APP_SLOT_CURRENT_BYTES  0x500000
+// Whether the public web flasher already carries that table. It only does
+// from the first public release after the table changed: a beta tag never
+// updates the flasher. Until then the hint must stay silent, because it would
+// send people to a flasher whose "Update" hands them the previous release with
+// the old table, a downgrade. Set to 1 in the release commit and leave it.
+#define FLASHER_HAS_CURRENT_LAYOUT  0
 
 // The two chips on I2C_EXT. Named because a bare 0x2A stood in three files and
 // meant nothing to anyone reading a bus scan.

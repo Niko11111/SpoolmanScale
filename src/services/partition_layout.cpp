@@ -35,6 +35,7 @@ const PartitionLayout& partitionLayout() {
 }
 
 bool partitionHintDue() {
+  if (!FLASHER_HAS_CURRENT_LAYOUT) return false;   // nothing to send them to yet
   if (s_shown) return false;
   if (partitionLayout().current) return false;
   return !prefsGetBool(KEY_PART_NEVER, false);

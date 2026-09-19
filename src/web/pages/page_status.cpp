@@ -246,7 +246,7 @@ static String body() {
       h += row(T(STR_W_R_DATA_AREA), htmlEsc(T(STR_W_S_NONE)));
     }
     h += row(T(STR_W_R_COREDUMP), pill(pl.has_coredump, STR_W_S_YES, STR_W_S_NO));
-    if (!pl.current) {
+    if (!pl.current && FLASHER_HAS_CURRENT_LAYOUT) {
       h += F("<span class='hint'>");
       h += T(STR_W_S_LAYOUT_OLD_HINT);
       h += F("</span>");
