@@ -19,6 +19,7 @@
 #include "services/ams_pick.h"
 #include "services/location_state.h"
 #include "services/remote_link.h"
+#include "services/spool_cache.h"
 #include "services/tag_field.h"
 #include "services/user_options.h"
 #include "ui/header_status.h"
@@ -32,6 +33,7 @@ void backendApplyHost(const char *host) {
   filamanForgetLocations();
   backendInvalidateExtraFieldCache();
   amsPresenceForget();
+  spoolCacheForget("host changed");
   sm_reachable = false;          // unknown until the new address answers
 }
 
@@ -79,6 +81,12 @@ void backendApplyMode(BackendMode mode) {
   // The extra field probe is keyed by base URL and invalidates itself, but the
   // text field list is not - it would still name the fields of the old server.
   backendInvalidateExtraFieldCache();
+
+  // Keyed by address and backend as well, so it would notice on its own. Said
+  // anyway: a spool id resolved against the wrong server is the most expensive
+  // mistake there is here, and this gives the PSRAM back a loop pass later
+  // instead of at the next link.
+  spoolCacheForget("backend changed");
 
   // Resets the BamBuddy registration and asks the new server whether it keeps
   // its own database or proxies to Spoolman. That answer decides where every

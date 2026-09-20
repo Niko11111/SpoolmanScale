@@ -16,6 +16,7 @@
 #include "services/list_limits.h"
 #include "services/spoolman_actions.h"
 #include "services/server_reach.h"
+#include "services/spool_cache.h"
 #include "services/http_progress.h"
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
@@ -512,13 +513,23 @@ bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
            link_cu_ok ? 1 : 0, tagFieldKeyName(), is_list ? 1 : 0,
            g_card_uids_write ? 1 : 0, present ? 1 : 0); }
 
-  // TEMPORARY, first step of the list cache: the stamp is taken and logged,
-  // nothing reads it yet. It moves into the proof in front of the download.
-  { InventoryStamp st;
+  // The stamp first, the list after - see spoolCacheFill() for why the order
+  // matters. The copy flow stays out of it: what it picks from the list goes
+  // into a new spool unread, and the cache must never be what a write is
+  // built on.
+  //
+  // SECOND STEP of the list cache: the copy is filled, nothing is served from
+  // it yet.
+  const bool may_cache = (!archived_only && !copy_flow_via_list);
+  InventoryStamp stamp = { -1, 0 };
+  bool have_stamp = false;
+  if (may_cache) {
     const uint32_t t0 = millis();
-    const int sc = backendInventoryStamp(cfg_spoolman_base, &st);
+    const int sc = backendInventoryStamp(cfg_spoolman_base, &stamp);
+    have_stamp = (sc == 200);
     logSDf("link fetch: stamp code=%d count=%d witness=%d (%lu ms)",
-           sc, st.count, st.witness_id, (unsigned long)(millis() - t0)); }
+           sc, stamp.count, stamp.witness_id, (unsigned long)(millis() - t0));
+  }
 
   // Up before the blocking work, and painted before this returns. The reader
   // below moves it along, so the wait stops looking like a hang.
@@ -560,6 +571,11 @@ bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     serverReachNote(code, true);
     return false;
   }
+
+  // Not a list FilaMan gave up on halfway: its stamp would vouch for spools
+  // that were never read.
+  if (may_cache && !backendLastListPartial())
+    spoolCacheFill(doc.as<JsonArrayConst>(), spoolHasAnyTag, have_stamp ? &stamp : nullptr);
 
   JsonArray spools = doc.as<JsonArray>();
   int total_in_api = 0;
