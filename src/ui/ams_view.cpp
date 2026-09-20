@@ -9,6 +9,7 @@
 #include "hardware/sd_logger.h"
 #include "services/ams_weights.h"
 #include "services/backend_api.h"
+#include "services/server_reach.h"
 #include "services/prefs_store.h"
 #include "ui/ams_detail_popup.h"
 #include "ui/loading_overlay.h"
@@ -874,7 +875,7 @@ static void fetchAndDraw() {
   }
 
   if (s_printers.count == 0) {
-    int code = backendListPrinters(s_printers, 8000);
+    int code = serverReachNote(backendListPrinters(s_printers, 8000), true);
     if (!s_scr) return;
     if (code != 200) {
       setStatusFmt(STR_AMSV_ERR_HTTP, code);
@@ -896,7 +897,7 @@ static void fetchAndDraw() {
     s_printer_id = s_printers.p[s_printer_idx].id;
   }
 
-  int code = backendGetAmsState(s_printer_id, s_state, 8000);
+  int code = serverReachNote(backendGetAmsState(s_printer_id, s_state, 8000), true);
   if (!s_scr) return;
   if (code != 200) {
     setStatusFmt(STR_AMSV_ERR_HTTP, code);

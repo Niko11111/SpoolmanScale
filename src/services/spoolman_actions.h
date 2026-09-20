@@ -45,6 +45,12 @@ bool reactivateSpool(float remaining);
 // say why it went somewhere else.
 bool patchSpoolTagTakeNativeMissing();
 
+// Whether the last patchSpoolTag() or unlinkCardUid() had a request that could
+// not reach the server, or found no WiFi at all. The screen names the
+// connection then: a link that failed says so instead of a bare "not added",
+// and an unlink that never arrived is not reported as done.
+bool tagBindingFailedOnNetwork();
+
 bool patchSpoolTag(int spool_id, const char* uuid,
                    const char* const* field_values = nullptr,
                    bool additional = false);

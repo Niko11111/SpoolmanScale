@@ -7,6 +7,7 @@
 #include "hardware/sd_logger.h"
 #include "services/auto_weight_state.h"
 #include "services/backend_api.h"
+#include "services/server_reach.h"
 #include "services/location_state.h"
 #include "services/user_options.h"
 #include "ui/ams_view.h"
@@ -113,7 +114,7 @@ static void onPicked(int ams_id, int tray_id) {
   int was_ams = -1, was_tray = -1;
   backendFindSpoolSlot(spool_id, printer_id, &was_ams, &was_tray, 6000);
 
-  const int code = backendAssignAmsSlot(spool_id, printer_id, ams_id, tray_id, 8000);
+  const int code = serverReachNote(backendAssignAmsSlot(spool_id, printer_id, ams_id, tray_id, 8000), true);
   amsPickDropPending();
 
   if (code == 200) {

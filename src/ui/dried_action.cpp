@@ -9,6 +9,7 @@
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/server_reach.h"
 #include "services/dried_batch.h"
 #include "services/time_service.h"
 #include "lang.h"
@@ -103,7 +104,7 @@ void handleDriedDeferredAction() {
   strncpy(iso, s_dried_iso, sizeof(iso)-1);
   iso[sizeof(iso)-1] = '\0';
 
-  int code = backendPatchSpoolLastDried(cfg_spoolman_base, spool_id, iso);
+  int code = serverReachNote(backendPatchSpoolLastDried(cfg_spoolman_base, spool_id, iso), true);
 
   // The spool may have been swapped while the request was in flight.
   if (spool_id != sm_id) {

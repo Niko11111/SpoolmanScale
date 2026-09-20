@@ -11,6 +11,7 @@
 #include "loading_overlay.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/server_reach.h"
 #include "services/dried_batch.h"
 #include "services/filaman_api.h"
 #include "services/time_service.h"
@@ -1038,7 +1039,7 @@ void handleAmsDetailDeferredActions() {
       s_write_failed = true;
     } else {
       loadingOverlayShow(T(STR_AMSD_SAVING));
-      const int code = backendPatchSpoolLastDried(cfg_spoolman_base, spool_id, iso);
+      const int code = serverReachNote(backendPatchSpoolLastDried(cfg_spoolman_base, spool_id, iso), true);
       loadingOverlayHide();
       logSDf("AMSDETAIL: dried %s for spool %d, HTTP %d", iso, spool_id, code);
       if (code == 200) {
@@ -1055,7 +1056,7 @@ void handleAmsDetailDeferredActions() {
     const char* key = filamanStatusKey(want);
     if (key) {
       loadingOverlayShow(T(STR_AMSD_SAVING));
-      const int code = backendSetSpoolStatus(cfg_spoolman_base, spool_id, key);
+      const int code = serverReachNote(backendSetSpoolStatus(cfg_spoolman_base, spool_id, key), true);
       loadingOverlayHide();
       logSDf("AMSDETAIL: status spool %d -> %s, HTTP %d", spool_id, key, code);
       if (code == 200) {

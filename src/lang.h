@@ -1189,6 +1189,12 @@ enum StringID {
   STR_W_S_DATA_UNUSED,        // "%s MB, not used yet"
   STR_W_S_NONE,
   STR_W_R_COREDUMP,
+  STR_LINK_NO_CONNECTION,     // status line: the link request never got an answer
+  STR_UNLINK_NO_CONNECTION,   // status line: the unlink never reached the server
+  STR_NO_CONNECTION,          // weight line and id entry: the server did not answer
+  STR_NO_CONNECTION_TO,       // status line, with the backend's name in it
+  STR_SERVER_DOWN_TITLE,      // popup after an action found no server
+  STR_SERVER_DOWN_TEXT,
 
   STR_COUNT
 };

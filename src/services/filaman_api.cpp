@@ -866,8 +866,13 @@ bool filamanRfidSlot2Known(const char* base_url) {
   return strncmp(s_slot2_probed_for, base_url, sizeof(s_slot2_probed_for) - 1) == 0;
 }
 
+// The HTTP code of the last probe that went out, so a caller refusing on an
+// unanswered probe can pass on why. 0 when the answer came from the cache.
+static int s_slot2_probe_code = 0;
+
 bool filamanHasRfidSlot2(const char* base_url, const char* api_key,
                          uint32_t timeout_ms) {
+  s_slot2_probe_code = 0;
   if (!hasBaseUrl(base_url)) return false;
   if (strncmp(s_slot2_probed_for, base_url, sizeof(s_slot2_probed_for) - 1) == 0)
     return s_slot2_present;
@@ -877,6 +882,7 @@ bool filamanHasRfidSlot2(const char* base_url, const char* api_key,
   http.setTimeout(timeout_ms);
   addApiKey(http, api_key);
   const int code = http.GET();
+  s_slot2_probe_code = code;
   if (code != 200) {
     http.end();
     // Says nothing about the feature - an unreachable server, a proxy, a
@@ -934,7 +940,9 @@ int filamanClearRfidUids(const char* base_url, const char* api_key, int spool_id
     // probes again.
     logSDf("FilaMan: cannot tell whether spool %d has a second rfid slot, unlink refused",
            spool_id);
-    return -2;
+    // A probe that never reached the server hands its own code on, so the
+    // caller can say "no connection" instead of a bare refusal.
+    return s_slot2_probe_code < 0 ? s_slot2_probe_code : -2;
   }
   if (slot2) body["rfid_uid_2"] = nullptr;
 

@@ -43,6 +43,7 @@
 #include "services/ams_assign.h"
 #include "services/spoolman_actions.h"
 #include "services/backend_api.h"
+#include "services/server_reach.h"
 #include "services/dried_batch.h"
 #include "services/tag_field.h"
 #include "services/bambuddy_device.h"
@@ -764,6 +765,14 @@ void appLoop() {
   handleAmsAssignDeferredActions();
   handleAmsViewDeferredActions();
   handleAmsDetailDeferredActions();
+  // A request found no server, see server_reach.h. After every handler above,
+  // so the popup comes up over whatever the failed action left on screen, and
+  // the header badge turns red now instead of on the next health check. An
+  // info popup already showing keeps the request waiting for the next pass.
+  if (!isInfoPopupOpen() && serverReachPopupTake()) {
+    updateHeaderStatus();
+    showInfoPopup(STR_SERVER_DOWN_TITLE, STR_SERVER_DOWN_TEXT, INFO_WARN);
+  }
   // Right after the card's own handler, so a batch that finished inline (as
   // it does in the simulator) is collected in the pass that started it.
   amsDetailBatchTick();
@@ -1328,6 +1337,7 @@ void appLoop() {
       bool was_reachable = sm_reachable;
       sm_reachable = (code == 200);
       if (sm_reachable != was_reachable) updateHeaderStatus();
+      if (sm_reachable && !was_reachable) serverReachRestored();
       // Someone can switch BamBuddy's filament manager while the scale is
       // running. That does not fail on our side, it just starts addressing
       // the other database - so the mode is re-asked here rather than only
@@ -1666,15 +1676,7 @@ void appLoop() {
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
             lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
-            // Archived is its own answer: saying "tag detected" in green while the
-            // line below reads "Archived" tells the user two different things.
-            { char sb[48]; backendText(sm_archived ? T(STR_ARCHIVED)
-                                       : sm_found ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
-                                                  : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb));
-              lv_label_set_text(lbl_status, sb); }
-            lv_obj_set_style_text_color(lbl_status,
-              sm_archived ? lv_color_hex(0x808080)
-                          : sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
+            paintTagStatus();
           } else if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES) {
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
             lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
@@ -1699,13 +1701,7 @@ void appLoop() {
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
             lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
-            { char sb[48]; backendText(sm_archived ? T(STR_ARCHIVED)
-                                       : sm_found ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
-                                                  : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb));
-              lv_label_set_text(lbl_status, sb); }
-            lv_obj_set_style_text_color(lbl_status,
-              sm_archived ? lv_color_hex(0x808080)
-                          : sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
+            paintTagStatus();
           }
         }
 
@@ -1815,13 +1811,7 @@ void appLoop() {
           // Same UID - show popup after delay if not dismissed
           // Auto-popup disabled - user uses the Link/Copy buttons in Zone 5
           (void)link_tag_first_seen_ms;
-          { char sb[48]; backendText(sm_archived ? T(STR_ARCHIVED)
-                                     : sm_found ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
-                                                : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb));
-            lv_label_set_text(lbl_status, sb); }
-          lv_obj_set_style_text_color(lbl_status,
-            sm_archived ? lv_color_hex(0x808080)
-                        : sm_found ? lv_color_hex(0x28d49a) : lv_color_hex(0xf0b838), 0);
+          paintTagStatus();
         }
 
       } else {

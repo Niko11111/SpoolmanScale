@@ -15,6 +15,7 @@
 #include "lang.h"
 #include "services/list_limits.h"
 #include "services/spoolman_actions.h"
+#include "services/server_reach.h"
 #include "services/http_progress.h"
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
@@ -29,6 +30,7 @@
 #include "ui/second_tag_popup.h"
 #include "ui/spoolman_lookup.h"
 #include "ui/tag_write_popup.h"
+#include "ui/theme.h"
 #include "ui/ui_common.h"
 #include "services/backend.h"
 #include "services/breadcrumb.h"
@@ -486,7 +488,7 @@ static LinkFilterVerdict linkFilterVerdict(JsonObjectConst spool, bool is_bambu,
   return LINK_KEEP;
 }
 
-void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool archived_only) {
+bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool archived_only) {
   crumbSet("link fetch");
   // Free any previous allocation
   linkSpoolsFree();
@@ -495,7 +497,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   // verdict standing, and the next list would drop its material filter for no
   // reason and say so.
   link_material_ignored = false;
-  if (!wifi_ok) return;
+  if (!wifi_ok) return false;
 
   // Settled here, once, for every decision the flow makes afterwards. Offering
   // an already bound spool the scale then could not append to would put the
@@ -545,7 +547,11 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     HttpStall stall(loadingOverlayProgress);
     code = backendGetSpoolListJson(cfg_spoolman_base, archived_only, doc, 8000, &filterL, &err);
   }
-  if (code != 200 || err) { loadingOverlayHide(); return; }
+  if (code != 200 || err) {
+    loadingOverlayHide();
+    serverReachNote(code, true);
+    return false;
+  }
 
   JsonArray spools = doc.as<JsonArray>();
   int total_in_api = 0;
@@ -608,7 +614,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   Serial.printf("link fetch: total=%d matched=%d (skip_tag=%d skip_vendor=%d skip_mat=%d)\n",
     total_in_api, matched, skipped_tag, skipped_vendor, skipped_material);
 
-  if (matched == 0) { loadingOverlayHide(); return; }
+  if (matched == 0) { loadingOverlayHide(); return true; }
 
   // Store ALL matched spools - the display limit is applied at render time (showFilteredSpoolList)
   // This allows Vendor and Material lists to see the full dataset
@@ -622,7 +628,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     link_spools = (UnlinkedSpool*)malloc(alloc_count * sizeof(UnlinkedSpool));
     logSD("link fetch: PSRAM alloc failed, using internal RAM");
   }
-  if (!link_spools) { logSD("link fetch: alloc failed completely"); loadingOverlayHide(); return; }
+  if (!link_spools) { logSD("link fetch: alloc failed completely"); loadingOverlayHide(); return true; }
   link_spools_capacity = alloc_count;
 
   // ── Pass 2: fill array (same filter, same verdict) ─────────
@@ -716,6 +722,7 @@ void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   loadingOverlayHide();
   Serial.printf("fetchAllSpoolsForLink: %d spools loaded (PSRAM, sorted)\n", link_spool_count);
   logSDf("link fetch done: %d spools in list", link_spool_count);
+  return true;
 }
 
 // Legacy wrapper for compatibility
@@ -915,12 +922,7 @@ void doLinkPatch(int spool_id, bool is_bambu) {
   if (!link_uuid || !link_uuid[0]) {
     logSDf("LINK ABORT: no tag UID for spool %d (bambu=%d)", spool_id, is_bambu ? 1 : 0);
     Serial.println("doLinkPatch: aborted, no tag UID");
-    if (lbl_status) {
-      char buf[48];
-      copyT(buf, sizeof(buf), STR_LINK_NO_TAG);
-      lv_label_set_text(lbl_status, buf);
-      lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
-    }
+    statusMessageShow(T(STR_LINK_NO_TAG), UI_COL_BAD_TEXT);
     closeLinkOverlays();
     return;
   }
@@ -948,14 +950,15 @@ void doLinkPatch(int spool_id, bool is_bambu) {
         tagmove_ask_pending = true;
       }
       sm_tag_conflict_spool = 0;
+    } else if (tagBindingFailedOnNetwork()) {
+      // The server never answered. "Not added" sent people looking for a
+      // fault in the spool or the tag, when the link simply has to be retried.
+      copyT(buf, sizeof(buf), STR_LINK_NO_CONNECTION);
     } else {
       copyT(buf, sizeof(buf), STR_CU_NOT_WRITTEN);
     }
     buf[sizeof(buf) - 1] = '\0';
-    if (lbl_status) {
-      lv_label_set_text(lbl_status, buf);
-      lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
-    }
+    statusMessageShow(buf, UI_COL_BAD_TEXT);
     closeLinkOverlays();
     return;
   }
@@ -1130,7 +1133,7 @@ static void showTagMovePopup() {
 // loop task: two requests.
 static void runTagMove() {
   const char* native_uid = tagNativeUid(s_move_uid);
-  const int code = backendUnlinkTag(cfg_spoolman_base, s_move_from_id, native_uid, 8000);
+  const int code = serverReachNote(backendUnlinkTag(cfg_spoolman_base, s_move_from_id, native_uid, 8000), true);
   logSDf("TAG MOVE: '%s' off spool %d HTTP %d", native_uid, s_move_from_id, code);
   if (code < 200 || code >= 300) {
     showInfoPopup(STR_TAGMOVE_FAILED, STR_CU_NOT_WRITTEN, INFO_WARN);
@@ -1463,7 +1466,13 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
 
   JsonDocument doc;
   DeserializationError err = DeserializationError::Ok;
-  int code = backendGetSpoolJson(cfg_spoolman_base, entered_id, doc, 5000, &err);
+  int code = serverReachNote(backendGetSpoolJson(cfg_spoolman_base, entered_id, doc, 5000, &err), true);
+  // Before the "not found" below, which takes every negative code: a server
+  // that never answered said nothing about the id.
+  if (serverReachIsNetworkFailure(code)) {
+    if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_NO_CONNECTION));
+    return;
+  }
   if (code == 404 || code < 0) {
     if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_LINK_ID_NOT_FOUND));
     return;
@@ -2927,8 +2936,8 @@ void doCopySpoolCreate(int template_spool_id, int template_filament_id,
   if (netto < 0) netto = 0;
 
   int new_id = 0;
-  int code = backendCreateSpool(cfg_spoolman_base, template_spool_id, template_filament_id,
-    template_initial, template_spool_w, netto, &new_id, 8000);
+  int code = serverReachNote(backendCreateSpool(cfg_spoolman_base, template_spool_id, template_filament_id,
+    template_initial, template_spool_w, netto, &new_id, 8000), true);
   if ((code == 200 || code == 201) && new_id > 0) {
     Serial.printf("Copy spool created: new ID=%d\n", new_id);
     logSDf("Copy spool created: tmpl_spool=%d fid=%d new_spool_id=%d",
@@ -3046,11 +3055,11 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
 
 // Fetch spools for copy list (active or archived, material-filtered)
 // Uses PSRAM allocator. Max spool_list_limit entries shown.
-void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bambu_tag) {
+bool fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bambu_tag) {
   // Free previous list
   linkSpoolsFree();
 
-  if (!wifi_ok) return;
+  if (!wifi_ok) return false;
 
   loadingOverlayShow(T(STR_LOADING_SPOOLS));
 
@@ -3065,7 +3074,8 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
   if (code != 200 || err) {
     loadingOverlayHide();
     Serial.printf("fetchSpoolsForCopy JSON error: %s\n", err.c_str());
-    return;
+    serverReachNote(code, true);
+    return false;
   }
 
   JsonArray arr = doc.as<JsonArray>();
@@ -3115,7 +3125,7 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
 
   link_spools = (UnlinkedSpool*)heap_caps_malloc(alloc_count * sizeof(UnlinkedSpool), MALLOC_CAP_SPIRAM);
   if (!link_spools) link_spools = (UnlinkedSpool*)malloc(alloc_count * sizeof(UnlinkedSpool));
-  if (!link_spools) { link_spool_count = 0; loadingOverlayHide(); return; }
+  if (!link_spools) { link_spool_count = 0; loadingOverlayHide(); return true; }
   link_spools_capacity = alloc_count;
 
   int idx = 0;
@@ -3182,6 +3192,7 @@ void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
     link_spools[0].id, link_spools[0].filament_id, link_spools[0].spool_weight);
   Serial.printf("fetchSpoolsForCopy: %d spools loaded (archived=%d mat=%s)\n",
     link_spool_count, (int)archived, material_filter ? material_filter : "");
+  return true;
 }
 
 // Spool list for copy flow - identical layout to FilteredSpoolList
@@ -3445,10 +3456,10 @@ void doCreateSpoolFromTag() {
   if (!wifi_ok) return;
 
   int new_id = 0;
-  int code = backendCreateSpoolFromTag(newtag_material, newtag_subtype, newtag_brand,
+  int code = serverReachNote(backendCreateSpoolFromTag(newtag_material, newtag_subtype, newtag_brand,
                                        newtag_rgba, newtag_color_name, newtag_label_weight,
                                        BAMBU_CORE_WEIGHT_G, newTagNetto(),
-                                       g_tag.temp_min, g_tag.temp_max, &new_id, 8000);
+                                       g_tag.temp_min, g_tag.temp_max, &new_id, 8000), true);
   if ((code == 200 || code == 201) && new_id > 0) {
     Serial.printf("New spool from tag: new ID=%d\n", new_id);
     logSDf("New spool from tag: mat=%s sub=%s brand=%s col=%s rgba=%s label=%d new_spool_id=%d",
@@ -3921,9 +3932,12 @@ void handleSpoolFlowDeferredActions() {
   if (link_list_fetch_pending) {
     link_list_fetch_pending = false;
     // Load and pre-filter spools, then start the appropriate flow.
-    fetchAllSpoolsForLink(link_flow_is_bambu, link_flow_is_bambu ? g_tag.material : "");
-    if (link_flow_is_bambu) showFilteredSpoolList("", "", "");   // Flow A: direct list
-    else                    showVendorList();                    // Flow B: 3-step
+    // A list that never arrived is not an empty one: the popup says why, and
+    // the picker is not opened on nothing that reads as "no spools".
+    if (fetchAllSpoolsForLink(link_flow_is_bambu, link_flow_is_bambu ? g_tag.material : "")) {
+      if (link_flow_is_bambu) showFilteredSpoolList("", "", "");   // Flow A: direct list
+      else                    showVendorList();                    // Flow B: 3-step
+    }
   }
   if (copy_fetch_pending) {
     copy_fetch_pending = false;
@@ -3931,9 +3945,9 @@ void handleSpoolFlowDeferredActions() {
     const bool is_bambu_tag = (strlen(g_tag.tray_uuid) == 32);
     if (is_bambu_tag) {
       // Bambu: use the material filter if available, else show all.
-      fetchSpoolsForCopy(copy_fetch_archived,
-                         strlen(g_tag.material) > 0 ? g_tag.material : "", true);
-      showCopySpoolList();
+      if (fetchSpoolsForCopy(copy_fetch_archived,
+                             strlen(g_tag.material) > 0 ? g_tag.material : "", true))
+        showCopySpoolList();
     } else {
       // NTAG: always through the vendor/material picker.
       copy_flow_via_list = true;
@@ -3941,8 +3955,10 @@ void handleSpoolFlowDeferredActions() {
       link_selected_material[0] = 0;
       link_selected_material_full[0] = 0;
       link_stage3_shown = false;
-      fetchAllSpoolsForLink(false, "", copy_fetch_archived);
-      showVendorList();
+      // Without a picker there is no copy flow either. Left set, the flag
+      // would turn the next plain link through the same picker into a copy.
+      if (fetchAllSpoolsForLink(false, "", copy_fetch_archived)) showVendorList();
+      else copy_flow_via_list = false;
     }
   }
   if (copy_create_pending) {
@@ -4094,9 +4110,11 @@ void handleSpoolFlowDeferredActions() {
     // Fetch spool data for copy confirm - done in loop to avoid stack overflow in lambda.
     JsonDocument cdoc;
     DeserializationError derr2 = DeserializationError::Ok;
-    int hcode = backendGetSpoolJson(cfg_spoolman_base, cid, cdoc, 5000, &derr2);
+    int hcode = serverReachNote(backendGetSpoolJson(cfg_spoolman_base, cid, cdoc, 5000, &derr2), true);
     if (hcode != 200) {
-      if (lbl_link_id_status) lv_label_set_text(lbl_link_id_status, T(STR_LINK_ID_NOT_FOUND));
+      if (lbl_link_id_status)
+        lv_label_set_text(lbl_link_id_status, T(serverReachIsNetworkFailure(hcode)
+                                                ? STR_NO_CONNECTION : STR_LINK_ID_NOT_FOUND));
     } else {
       if (!derr2) {
         int cfid   = cdoc["filament"]["id"] | 0;

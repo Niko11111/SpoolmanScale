@@ -20,6 +20,7 @@
 #include "services/backend_api.h"
 #include "services/filaman_api.h"
 #include "services/http_progress.h"
+#include "services/server_reach.h"
 #include "services/spoolman_actions.h"
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
@@ -30,6 +31,7 @@
 #include "services/user_options.h"
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
+#include "ui/theme.h"
 #include "ui_common.h"
 
 namespace {
@@ -600,7 +602,9 @@ void querySpoolmanById(int spool_id) {
 
   JsonDocument doc;
   DeserializationError err = DeserializationError::Ok;
-  int code = backendGetSpoolJson(cfg_spoolman_base, spool_id, doc, 8000, &err);
+  // Reached after something the user did - a link, a copy, a reactivation -
+  // so a server that is gone gets the popup every time.
+  int code = serverReachNote(backendGetSpoolJson(cfg_spoolman_base, spool_id, doc, 8000, &err), true);
   if (code != 200) {
     Serial.printf("querySpoolmanById HTTP error: %d\n", code);
     logSDf("Spoolman byID: HTTP error %d", code);
@@ -787,6 +791,19 @@ static char s_last_query[48] = {0};
 // one flag rather than each keeping half the story.
 static bool s_scan_deferred = false;
 
+// Whether the last lookup ended in a real "not in the inventory", the only
+// answer that makes a later hit a binding made from outside. A lookup that
+// failed on the way, or withheld its verdict over a partial list, says nothing
+// about the tag: on 19.09.2026 the lookup right after the scale's own link
+// failed like that, the recheck then found the spool, took the link for a
+// foreign one, and wrote the tag and asked for the second tag a second time.
+static bool s_verdict_unknown = false;
+
+// Whether the last lookup ended on a server it could not reach. The status
+// line reads it: without it the resting text said "not in Spoolman" about a
+// spool nobody had been able to ask about.
+static bool s_lost_connection = false;
+
 // Whether the backend knows a spool by this tag, asked the cheap way: the
 // server side lookup, a handful of fields, no inventory scan and no /tag/scan,
 // so nothing is announced to a paired browser. Says nothing about which spool
@@ -869,8 +886,10 @@ void spoolmanRecheckTick() {
   logSDf("Recheck: %s resolves now, re-reading", s_last_query);
   tagLookupForget();
   // Bound from outside. What a link from the scale would do next is armed
-  // once the re-read has the spool.
-  spoolFlowExpectRemoteLink();
+  // once the re-read has the spool. Only when the tag was known to be
+  // unknown: after a failed lookup the spool was bound all along.
+  if (s_verdict_unknown) spoolFlowExpectRemoteLink();
+  else logSDf("Recheck: %s was not proven unknown, no follow-ups", s_last_query);
 }
 
 void spoolmanRescanTick() {
@@ -903,10 +922,71 @@ void spoolmanRescanTick() {
          uid, (int)(doc["matched_spool_id"] | 0), code);
 }
 
+// The weight line when a lookup ends without an answer. It starts the lookup
+// green ("wait"), and the failures used to change only the text, so "API
+// Error" stood there in green. A server that could not be reached at all is
+// named as such, and counts as a placement for the popup: the lookup is what
+// laying a spool down starts on its own.
+static void paintLookupFailure(int code, int fallback_id) {
+  const bool no_conn = serverReachIsNetworkFailure(serverReachNote(code, false));
+  s_lost_connection = no_conn;
+  lv_label_set_text(lbl_spoolman_weight, T(no_conn ? STR_NO_CONNECTION : fallback_id));
+  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_BAD_TEXT), 0);
+}
+
+// ============================================================
+//  THE SPOOL FILAMAN'S SCAN NAMED
+//
+//  FilaMan's /tag/scan answers with the id of the matching spool but never
+//  with the spool, so the lookup goes on to the search. When that search comes
+//  back without the spool anyway, it failed on the way: the scan has just said
+//  the spool exists and is bound by this tag. The whole inventory is the
+//  worst request to try next over a connection that just failed - on
+//  19.09.2026 a 15 s search miss right after a link grew into 47 s that way,
+//  and ended without a spool. The named spool alone is one small request.
+// ============================================================
+
+enum ScanMatchFetch : uint8_t {
+  SCAN_MATCH_FOUND,    // fetched, carries the tag; `doc` holds it
+  SCAN_MATCH_OTHER,    // fetched, but not bound by this tag
+  SCAN_MATCH_FAILED    // the request itself failed
+};
+
+constexpr uint32_t SCAN_MATCH_TIMEOUT_MS = 8000;
+
+// On a hit `doc` holds the spool as the one element array the rest of
+// querySpoolman() reads. Verified like every other short cut, so a spool that
+// answers but does not carry the tag is left to the inventory scan.
+static ScanMatchFetch fetchScanMatch(int spool_id, const char* tray_uuid,
+                                     JsonDocument& doc, int* out_code) {
+  SpiRamAllocator psram_alloc;
+  JsonDocument one(&psram_alloc);
+  DeserializationError err = DeserializationError::Ok;
+  const int code = backendGetSpoolJson(cfg_spoolman_base, spool_id, one,
+                                       SCAN_MATCH_TIMEOUT_MS, &err);
+  *out_code = code;
+  if (code != 200 || err) {
+    logSDf("Backend: spool %d named by the scan, fetch failed, code=%d err=%s",
+           spool_id, code, err.c_str());
+    return SCAN_MATCH_FAILED;
+  }
+  if (!spoolMatchesTag(one.as<JsonObjectConst>(), tray_uuid)) {
+    logSDf("Backend: spool %d named by the scan does not carry %s", spool_id, tray_uuid);
+    return SCAN_MATCH_OTHER;
+  }
+  doc.clear();
+  doc.to<JsonArray>().add(one.as<JsonObjectConst>());
+  logSDf("Backend: spool %d named by the scan, fetched by id", spool_id);
+  return SCAN_MATCH_FOUND;
+}
+
 void querySpoolman(const char* tray_uuid) {
   if (!wifi_ok) return;
   strncpy(s_last_query, tray_uuid ? tray_uuid : "", sizeof(s_last_query) - 1);
   s_last_query[sizeof(s_last_query) - 1] = '\0';
+  // Only the one line below "Truly not found" sets it again.
+  s_verdict_unknown = false;
+  s_lost_connection = false;
   // A 4-byte MIFARE tag is looked up by its UID through the same call, so
   // the log names what was actually sent.
   if (tray_uuid && strlen(tray_uuid) == 32) {
@@ -1050,6 +1130,8 @@ void querySpoolman(const char* tray_uuid) {
   // probe needs the network and boot does not have it yet.
   tagFieldAutoSelect();
 
+  // The spool a scan named without sending it, see fetchScanMatch().
+  int scan_matched_id = 0;
   if (backendReportsScans()) {
     JsonDocument scan(&psram_alloc);
     DeserializationError serr = DeserializationError::Ok;
@@ -1076,8 +1158,9 @@ void querySpoolman(const char* tray_uuid) {
       // FilaMan always lands here: it reports the match but never embeds the
       // spool, so the chain below does the looking up and this call was the
       // announcement. On Spoolman it means the uid has no native tag.
+      scan_matched_id = scan["matched_spool_id"] | 0;
       logSDf("Backend: tag scan announced, uid=%s matched=%d, no spool embedded",
-             scan_uid, (int)(scan["matched_spool_id"] | 0));
+             scan_uid, scan_matched_id);
     } else if (scode != BACKEND_NOT_SUPPORTED) {
       logSDf("Backend: native tag scan failed, code=%d err=%s", scode, serr.c_str());
     }
@@ -1195,6 +1278,20 @@ void querySpoolman(const char* tray_uuid) {
    }
   }
 
+  // The scan named the spool and every search above still missed it. A failed
+  // fetch ends the lookup here: the inventory would have to cross the same
+  // connection, and the recheck asks again while the tag stays on the pad.
+  if (!have_result && scan_matched_id > 0) {
+    int mcode = 0;
+    const ScanMatchFetch m = fetchScanMatch(scan_matched_id, tray_uuid, doc, &mcode);
+    if (m == SCAN_MATCH_FOUND) {
+      have_result = true;
+    } else if (m == SCAN_MATCH_FAILED) {
+      paintLookupFailure(mcode, STR_API_ERROR);
+      return;
+    }
+  }
+
   // The fast lookups have all missed, so the whole inventory is coming. That is
   // seconds on a large library, and until now the display kept saying "reading
   // tag" throughout - the read was long done, and a wait that says the wrong
@@ -1268,7 +1365,7 @@ void querySpoolman(const char* tray_uuid) {
       Serial.printf("Spoolman HTTP error: %d (attempt %d)\n", code, attempt);
       logSDf("Spoolman: HTTP error %d (attempt %d)", code, attempt);
       if (attempt == 2) {
-        lv_label_set_text(lbl_spoolman_weight, code == -2 ? T(STR_LINK_JSON_ERR) : T(STR_API_ERROR));
+        paintLookupFailure(code, code == -2 ? STR_LINK_JSON_ERR : STR_API_ERROR);
         return;
       }
       if (code == -2 &&
@@ -1296,7 +1393,7 @@ void querySpoolman(const char* tray_uuid) {
   if (err) {
     Serial.printf("Spoolman JSON error (final): %s\n", err.c_str());
     logSDf("Spoolman: JSON error final=%s", err.c_str());
-    lv_label_set_text(lbl_spoolman_weight, T(STR_LINK_JSON_ERR));
+    paintLookupFailure(0, STR_LINK_JSON_ERR);
     return;
   }
 
@@ -1327,7 +1424,7 @@ void querySpoolman(const char* tray_uuid) {
   // duplicate per scan. A match in the part that did arrive still counts.
   if (best_rank == TAG_RANK_NONE && backendLastListPartial()) {
     logSDf("Backend: tag %s not in a partial inventory, verdict withheld", tray_uuid);
-    lv_label_set_text(lbl_spoolman_weight, T(STR_API_ERROR));
+    paintLookupFailure(0, STR_API_ERROR);
     return;
   }
 
@@ -1765,5 +1862,10 @@ void querySpoolman(const char* tray_uuid) {
   { char nb[40]; backendText(T(STR_NOT_IN_SPOOLMAN), nb, sizeof(nb)); lv_label_set_text(lbl_spoolman_weight, nb); }
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
   sm_found = false;
+  // A scan that stood aside for a question lands here too, with nothing
+  // searched. That is not a verdict.
+  s_verdict_unknown = !s_scan_deferred;
   updateLinkButton();
 }
+
+bool lookupLostConnection() { return s_lost_connection; }

@@ -3,7 +3,9 @@
 #include <lvgl.h>
 
 void fetchUnlinkedSpools();
-void fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool archived_only = false);
+// Both list fetches return whether the server answered at all. False means
+// no list to show: the popup explains, the picker stays shut.
+bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool archived_only = false);
 void closeLinkList();
 void showLinkList();
 void showLinkEntryPopup(bool is_bambu);
@@ -51,7 +53,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
 
 void showCopyEntryPopup();
 void closeCopyEntryPopup();
-void fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bambu_tag = false);
+bool fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bambu_tag = false);
 void showCopySpoolList();
 void showCopyConfirmPopup(int template_spool_id, int template_filament_id, const char* template_name,
                           float template_remaining, float template_initial, float template_spool_w);

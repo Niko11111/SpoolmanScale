@@ -20,6 +20,7 @@
 #include "ui/date_display.h"
 #include "lang.h"
 #include "services/backend.h"
+#include "services/server_reach.h"
 #include "ui/main_screen_helpers.h"
 
 
@@ -39,7 +40,7 @@ bool reactivateSpool(float remaining) {
   // the weight path does it: the callers computed remaining as pad minus
   // sm_spool_weight, so adding it back is what the pad showed.
   const float gross = remaining + sm_spool_weight;
-  int code = backendReactivateSpool(cfg_spoolman_base, sm_id, remaining, gross);
+  int code = serverReachNote(backendReactivateSpool(cfg_spoolman_base, sm_id, remaining, gross), true);
   logSDf("REACTIVATE ID=%d remaining=%.1fg gross=%.1fg HTTP %d",
          sm_id, remaining, gross, code);
   if (code < 200 || code >= 300) return false;
@@ -93,8 +94,8 @@ int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
   // itself. The callers computed remaining as scale minus sm_spool_weight,
   // so adding it back gives exactly what the scale showed.
   float measured = remaining + sm_spool_weight;
-  int code = backendPatchSpoolRemaining(cfg_spoolman_base, sm_id, remaining,
-                                        today[0] ? today : nullptr, nullptr, measured);
+  int code = serverReachNote(backendPatchSpoolRemaining(cfg_spoolman_base, sm_id, remaining,
+                                        today[0] ? today : nullptr, nullptr, measured), true);
   logSDf("PATCH weight=%.1fg ID=%d HTTP %d", remaining, sm_id, code);
   if (code == 200) {
     sm_remaining = remaining;
@@ -132,7 +133,7 @@ void patchArchiveSpool() {
   if (!wifi_ok) { Serial.println("patchArchiveSpool: no WiFi"); return; }
   if (!sm_found || sm_id == 0) { Serial.println("patchArchiveSpool: no spool"); return; }
   Serial.printf("PATCH archive: spool ID %d\n", sm_id);
-  int code = backendPatchArchiveSpool(cfg_spoolman_base, sm_id);
+  int code = serverReachNote(backendPatchArchiveSpool(cfg_spoolman_base, sm_id), true);
   logSDf("PATCH archive ID=%d HTTP %d", sm_id, code);
   if (code != 200) {
     Serial.printf("PATCH archive error: %d\n", code);
@@ -193,6 +194,22 @@ static void clearMigrationSource(int spool_id, uint8_t src, const char* value) {
 }
 
 
+// Whether a request of the current link or unlink failed to reach the server.
+// Cleared when patchSpoolTag() or unlinkCardUid() starts, set by noteCode().
+// The screen reads it through tagBindingFailedOnNetwork(), so the UI never
+// deals in HTTP codes.
+static bool s_net_failed = false;
+
+// Wrapped around every request a link or an unlink sends: passes the code
+// through, remembers a connection that failed for the message on the status
+// line, and reports it for the popup, see server_reach.h.
+static int noteCode(int code) {
+  if (serverReachIsNetworkFailure(code)) s_net_failed = true;
+  return serverReachNote(code, true);
+}
+
+bool tagBindingFailedOnNetwork() { return s_net_failed; }
+
 // Drops every native tag the spool holds, taken from the list the lookup
 // captured, and falls back to the one identity in hand when nothing was.
 //
@@ -210,7 +227,7 @@ static void unlinkAllNativeTags(int spool_id, const char* fallback_uid) {
       logSDf("UNLINK native ID=%d: nothing captured and no uid in hand", spool_id);
       return;
     }
-    int c = backendUnlinkTag(cfg_spoolman_base, spool_id, fallback_uid);
+    int c = noteCode(backendUnlinkTag(cfg_spoolman_base, spool_id, fallback_uid));
     logSDf("UNLINK native ID=%d uuid='%s' (no list captured) HTTP %d",
            spool_id, fallback_uid, c);
     return;
@@ -219,7 +236,7 @@ static void unlinkAllNativeTags(int spool_id, const char* fallback_uid) {
   char* save = nullptr;
   for (char* one = strtok_r(list, ",", &save); one;
        one = strtok_r(nullptr, ",", &save)) {
-    int c = backendUnlinkTag(cfg_spoolman_base, spool_id, one);
+    int c = noteCode(backendUnlinkTag(cfg_spoolman_base, spool_id, one));
     logSDf("UNLINK native ID=%d uuid='%s' HTTP %d", spool_id, one, c);
   }
 }
@@ -329,7 +346,7 @@ static void unlinkHwUidField(int spool_id, const char* scanned, bool all) {
     // flange - which this scale can name only because captureBindings() read
     // the list. Leaving that one behind is exactly the half-unlink the tag
     // fields go out of their way to avoid.
-    int c = backendPatchExtraField(cfg_spoolman_base, spool_id, RFID_TAG_FIELD, "");
+    int c = noteCode(backendPatchExtraField(cfg_spoolman_base, spool_id, RFID_TAG_FIELD, ""));
     logSDf("UNLINK ID=%d cleared %s ('%s'), HTTP %d",
            spool_id, RFID_TAG_FIELD, sm_hw_uid_value, c);
     if (c >= 200 && c < 300) sm_hw_uid_value[0] = '\0';
@@ -342,7 +359,7 @@ static void unlinkHwUidField(int spool_id, const char* scanned, bool all) {
   char rest[CARD_UIDS_MAX];
   if (!cardUidsRemove(sm_hw_uid_value, uid, rest, sizeof(rest))) return;
 
-  int c = backendPatchExtraField(cfg_spoolman_base, spool_id, RFID_TAG_FIELD, rest);
+  int c = noteCode(backendPatchExtraField(cfg_spoolman_base, spool_id, RFID_TAG_FIELD, rest));
   logSDf("UNLINK one ID=%d uid='%s' left %s='%s' HTTP %d",
          spool_id, uid, RFID_TAG_FIELD, rest, c);
   if (c >= 200 && c < 300) {
@@ -353,6 +370,8 @@ static void unlinkHwUidField(int spool_id, const char* scanned, bool all) {
 
 bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_values,
                    bool additional) {
+  // No WiFi is the plainest way of not reaching the server.
+  s_net_failed = !wifi_ok;
   if (!wifi_ok) return false;
   const bool clearing = (!uuid || !uuid[0]);
   sm_tag_conflict_spool = 0;   // stale from an earlier attempt would mislead
@@ -366,7 +385,7 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     if (backendIsFilaMan()) {
       // Its own column, not the one the first tag sits in. Everything below
       // would aim at rfid_uid and take the first chip off the spool.
-      const int code = backendPatchSpoolTagSlot2(cfg_spoolman_base, spool_id, uuid);
+      const int code = noteCode(backendPatchSpoolTagSlot2(cfg_spoolman_base, spool_id, uuid));
       logSDf("LINK slot2 ID=%d uuid='%s' HTTP %d", spool_id, uuid, code);
       return code >= 200 && code < 300;
     }
@@ -399,8 +418,8 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     // phone to an ESPHome box to Spoolman's own Add tag dialog, so it is the
     // identity that makes the spool findable outside this firmware.
     int conflict = 0;
-    int code = backendLinkTag(cfg_spoolman_base, spool_id, native_uid,
-                              tagFormatName(scanned), &conflict);
+    int code = noteCode(backendLinkTag(cfg_spoolman_base, spool_id, native_uid,
+                              tagFormatName(scanned), &conflict));
     logSDf("LINK native ID=%d uuid='%s' format=%s HTTP %d%s",
            spool_id, native_uid, tagFormatName(scanned), code,
            code == 409 ? " CONFLICT" : "");
@@ -434,7 +453,7 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
       }
       char val[CARD_UIDS_MAX];
       tagFieldFormat(fb, scanned, val, sizeof(val));
-      const int c = backendPatchExtraField(cfg_spoolman_base, spool_id, fb.key, val);
+      const int c = noteCode(backendPatchExtraField(cfg_spoolman_base, spool_id, fb.key, val));
       logSDf("LINK native: this server has no tag relation, wrote %s='%s' "
              "instead, HTTP %d", fb.key, val, c);
       if (c < 200 || c >= 300) return false;
@@ -561,7 +580,7 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
       return false;
     }
 
-    int code = backendPatchExtraField(cfg_spoolman_base, spool_id, spec.key, merged);
+    int code = noteCode(backendPatchExtraField(cfg_spoolman_base, spool_id, spec.key, merged));
     Serial.printf("PATCH %s: '%s' HTTP %d\n", spec.key, merged, code);
     logSDf("PATCH %s ID=%d uuid='%s' -> '%s' HTTP %d",
            spec.key, spool_id, uuid, merged, code);
@@ -575,7 +594,7 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
   // keeps its tags - the selected extra field on Spoolman, rfid_uid on
   // FilaMan, the device protocol on BamBuddy - formatted for that field.
   Serial.printf("PATCH tag: '%s'%s\n", uuid ? uuid : "", clearing ? "  (UNLINK)" : "");
-  int code = backendPatchSpoolTag(cfg_spoolman_base, spool_id, uuid);
+  int code = noteCode(backendPatchSpoolTag(cfg_spoolman_base, spool_id, uuid));
   Serial.printf("patchSpoolTag: HTTP %d\n", code);
   // The uuid is part of the log line on purpose. An empty one is a valid
   // unlink and a silent disaster for a link, and the old line could not tell
@@ -606,12 +625,13 @@ static bool clearBoundFieldIfSet(int spool_id, uint8_t field) {
   const char* v = sm_tag_values[field];
   if (!v[0]) return false;
   const TagFieldSpec& s = tagFieldSpec(field);
-  int code = backendPatchExtraField(cfg_spoolman_base, spool_id, s.key, "");
+  int code = noteCode(backendPatchExtraField(cfg_spoolman_base, spool_id, s.key, ""));
   logSDf("UNLINK ID=%d cleared %s ('%s'), HTTP %d", spool_id, s.key, v, code);
   return true;
 }
 
 void unlinkCardUid(int spool_id, const char* uid, bool all) {
+  s_net_failed = !wifi_ok;
   if (!wifi_ok) return;
 
   // A natively bound spool keeps its tags in the relation, not in a field.
@@ -630,7 +650,7 @@ void unlinkCardUid(int spool_id, const char* uid, bool all) {
     } else {
       // Just the tag that is physically on the reader. The others stay, which
       // is the whole point of the popup's second answer.
-      int c = backendUnlinkTag(cfg_spoolman_base, spool_id, native_uid);
+      int c = noteCode(backendUnlinkTag(cfg_spoolman_base, spool_id, native_uid));
       logSDf("UNLINK native ID=%d uuid='%s' HTTP %d", spool_id, native_uid, c);
     }
   }
@@ -659,7 +679,7 @@ void unlinkCardUid(int spool_id, const char* uid, bool all) {
     char rest[CARD_UIDS_MAX];
     if (!cardUidsRemove(sm_tag_values[i], uid, rest, sizeof(rest))) continue;
 
-    int code = backendPatchExtraField(cfg_spoolman_base, spool_id, s.key, rest);
+    int code = noteCode(backendPatchExtraField(cfg_spoolman_base, spool_id, s.key, rest));
     logSDf("UNLINK one ID=%d uuid='%s' left %s='%s' HTTP %d",
            spool_id, uid ? uid : "", s.key, rest, code);
     return;
@@ -678,7 +698,7 @@ void patchInitialWeight(float initial_w) {
   if (!wifi_ok) { Serial.println("patchInitialWeight: kein WiFi"); return; }
   if (!sm_found || sm_id == 0) { Serial.println("patchInitialWeight: keine Spule"); return; }
   Serial.printf("PATCH initial_weight: %.1fg\n", initial_w);
-  int code = backendPatchInitialWeight(cfg_spoolman_base, sm_id, initial_w);
+  int code = serverReachNote(backendPatchInitialWeight(cfg_spoolman_base, sm_id, initial_w), true);
   if (code == 200) {
     sm_remaining = initial_w;
     sm_total = initial_w;
@@ -692,7 +712,7 @@ void patchSpoolWeight(float spool_w) {
   if (!wifi_ok) { Serial.println("patchSpoolWeight: no WiFi"); return; }
   if (!sm_found || sm_id == 0) { Serial.println("patchSpoolWeight: no spool"); return; }
   Serial.printf("PATCH spool_weight: %.1fg\n", spool_w);
-  int code = backendPatchSpoolWeight(cfg_spoolman_base, sm_id, spool_w);
+  int code = serverReachNote(backendPatchSpoolWeight(cfg_spoolman_base, sm_id, spool_w), true);
   logSDf("PATCH spool_weight=%.1fg ID=%d HTTP %d", spool_w, sm_id, code);
   if (code == 200) {
     sm_spool_weight = spool_w;
@@ -710,7 +730,7 @@ void patchFilamentSpoolWeight(float spool_w) {
   if (!wifi_ok) return;
   if (sm_filament_id == 0) { Serial.println("patchFilamentSpoolWeight: keine filament_id"); return; }
   Serial.printf("PATCH filament spool_weight: ID=%d %.1fg\n", sm_filament_id, spool_w);
-  int code = backendPatchFilamentSpoolWeight(cfg_spoolman_base, sm_filament_id, spool_w);
+  int code = serverReachNote(backendPatchFilamentSpoolWeight(cfg_spoolman_base, sm_filament_id, spool_w), true);
   Serial.printf("patchFilamentSpoolWeight: HTTP %d\n", code);
   logSDf("PATCH filament_spool_weight=%.1fg fil_ID=%d HTTP %d", spool_w, sm_filament_id, code);
 }
@@ -719,7 +739,7 @@ void patchVendorSpoolWeight(float spool_w) {
   if (!wifi_ok) return;
   if (sm_vendor_id == 0) { Serial.println("patchVendorSpoolWeight: keine vendor_id"); return; }
   Serial.printf("PATCH vendor empty_spool_weight: ID=%d %.1fg\n", sm_vendor_id, spool_w);
-  int code = backendPatchVendorEmptySpoolWeight(cfg_spoolman_base, sm_vendor_id, spool_w);
+  int code = serverReachNote(backendPatchVendorEmptySpoolWeight(cfg_spoolman_base, sm_vendor_id, spool_w), true);
   Serial.printf("patchVendorSpoolWeight: HTTP %d\n", code);
   logSDf("PATCH vendor_empty_spool=%.1fg vendor_ID=%d HTTP %d", spool_w, sm_vendor_id, code);
 }

@@ -2,11 +2,67 @@
 #include "app/app_state.h"
 
 #include <lvgl.h>
+#include <stdio.h>
+#include <string.h>
 #include "services/ams_presence.h"
+#include "services/backend.h"
 #include "services/user_options.h"
 #include "app_config.h"
 #include "services/backend_api.h"
 #include "ui/spool_flow.h"
+#include "ui/spoolman_lookup.h"
+#include "ui/theme.h"
+// After backend_api.h and the ArduinoJson it brings: the T() macro would
+// otherwise expand inside ArduinoJson's own templates.
+#include "lang.h"
+
+// Long enough to read a line of red twice, short enough that the resting text
+// is back before anyone wonders why it says nothing about the spool.
+#define STATUS_MESSAGE_HOLD_MS  8000UL
+// The resting text for an archived spool, grey like the weight line beside it.
+#define STATUS_COL_ARCHIVED     0x808080
+
+static unsigned long s_msg_ms = 0;                       // 0: nothing held
+static char          s_msg_uid[sizeof(g_tag.uid_str)] = "";
+
+void statusMessageShow(const char* text, uint32_t color) {
+  if (!lbl_status || !text) return;
+  lv_label_set_text(lbl_status, text);
+  lv_obj_set_style_text_color(lbl_status, lv_color_hex(color), 0);
+  snprintf(s_msg_uid, sizeof(s_msg_uid), "%s", g_tag.uid_str);
+  s_msg_ms = millis() ? millis() : 1;
+}
+
+static bool statusMessageHeld() {
+  if (s_msg_ms == 0) return false;
+  if (millis() - s_msg_ms < STATUS_MESSAGE_HOLD_MS &&
+      strcmp(s_msg_uid, g_tag.uid_str) == 0) return true;
+  s_msg_ms = 0;
+  return false;
+}
+
+void paintTagStatus() {
+  if (!lbl_status || statusMessageHeld()) return;
+  // A lookup that never reached the server says nothing about the spool, so
+  // the line names the connection rather than the backend the spool is
+  // supposedly not in. backendText() puts the backend's own name in.
+  if (!sm_found && lookupLostConnection()) {
+    char nb[48];
+    backendText(T(STR_NO_CONNECTION_TO), nb, sizeof(nb));
+    lv_label_set_text(lbl_status, nb);
+    lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_BAD_TEXT), 0);
+    return;
+  }
+  // Archived is its own answer: saying "tag detected" in green while the
+  // line below reads "Archived" tells the user two different things.
+  char sb[48];
+  backendText(sm_archived ? T(STR_ARCHIVED)
+              : sm_found  ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
+                          : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb));
+  lv_label_set_text(lbl_status, sb);
+  lv_obj_set_style_text_color(lbl_status, lv_color_hex(
+      sm_archived ? STATUS_COL_ARCHIVED : sm_found ? UI_COL_ACCENT : UI_COL_WARN), 0);
+}
 
 void updateLinkButton() {
   // Whichever button buildUI() put in the left slot. With a load cell that is

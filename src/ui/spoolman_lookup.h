@@ -27,3 +27,8 @@ void spoolmanRecheckTick();
 // without the inventory scan and without announcing the tag to a browser.
 // Blocks for one small request, so never from an LVGL event handler.
 bool spoolmanTagResolves(const char* query);
+
+// Whether the last lookup failed because the server could not be reached, as
+// opposed to answering that it does not know the tag. The status line says so
+// instead of naming the backend the spool is supposedly missing from.
+bool lookupLostConnection();

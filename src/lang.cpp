@@ -2596,12 +2596,26 @@ const char* const STRINGS[][3] = {
   { "Einmal per USB über den Web Flasher neu flashen bringt das aktuelle Layout. Die Einstellungen bleiben dabei erhalten.",
     "One flash over USB with the web flasher brings the current layout. Your settings are kept.",
     "One flash over USB with the web flasher brings the current layout. Your settings are kept." },  // STR_W_S_LAYOUT_OLD_HINT
-  { "Firmware",                  "Firmware",            "Firmware" },  // STR_W_R_FIRMWARE
-  { "%s von %s MB",              "%s of %s MB",         "%s of %s MB" },  // STR_W_S_MB_OF
-  { "Datenbereich",              "Data area",           "Data area" },  // STR_W_R_DATA_AREA
-  { "%s MB, noch nicht genutzt", "%s MB, not used yet", "%s MB, not used yet" },  // STR_W_S_DATA_UNUSED
-  { "nicht vorhanden",           "not present",         "not present" },  // STR_W_S_NONE
-  { "Absturzspeicher",           "Crash dump",          "Crash dump" },  // STR_W_R_COREDUMP
+  { "Firmware",                                "Firmware",                    "Firmware" },  // STR_W_R_FIRMWARE
+  { "%s von %s MB",                            "%s of %s MB",                 "%s of %s MB" },  // STR_W_S_MB_OF
+  { "Datenbereich",                            "Data area",                   "Data area" },  // STR_W_R_DATA_AREA
+  { "%s MB, noch nicht genutzt", "%s MB, not used yet",
+    "%s MB, not used yet" },  // STR_W_S_DATA_UNUSED
+  { "nicht vorhanden",                         "not present",                 "not present" },  // STR_W_S_NONE
+  { "Absturzspeicher",                         "Crash dump",                  "Crash dump" },  // STR_W_R_COREDUMP
+  { "Nicht verknüpft: keine Verbindung", "Not linked: no connection",
+    "Non lié : pas de connexion" },  // STR_LINK_NO_CONNECTION
+  { "Unlink fehlgeschlagen: keine Verbindung", "Not unlinked: no connection",
+    "Non dissocié : pas de connexion" },  // STR_UNLINK_NO_CONNECTION
+  { "Keine Verbindung", "No connection",
+    "Pas de connexion" },  // STR_NO_CONNECTION
+  { "Keine Verbindung zu Spoolman", "No connection to Spoolman",
+    "Pas de connexion à Spoolman" },  // STR_NO_CONNECTION_TO
+  { "Keine Verbindung zum Server", "No connection to the server",
+    "Pas de connexion au serveur" },  // STR_SERVER_DOWN_TITLE
+  { "Der Server hat nicht geantwortet. Prüfe, ob er läuft und ob die Waage im WLAN ist, und versuche es dann noch einmal.",
+    "The server did not answer. Check that it is running and that the scale is on the WiFi, then try again.",
+    "Le serveur n'a pas répondu. Vérifiez qu'il fonctionne et que la balance est connectée au WiFi, puis réessayez." },  // STR_SERVER_DOWN_TEXT
 };
 
 StringID tagWriteResultString(uint8_t code) {

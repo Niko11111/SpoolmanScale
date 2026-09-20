@@ -18,13 +18,16 @@
 #include "services/backend.h"
 #include "services/breadcrumb.h"
 #include "services/backend_api.h"
+#include "services/server_reach.h"
 #include "services/filaman_api.h"
 #include "services/wifi_manager.h"
 #include "lang.h"
 #include "confirm_popup.h"
 #include "status_picker.h"
 #include "tag_display.h"
+#include "ui/main_screen_helpers.h"
 #include "ui/tag_write_popup.h"
+#include "ui/theme.h"
 #include "ui_common.h"
 
 
@@ -103,7 +106,9 @@ static void runUnlink() {
     // would otherwise find the spool on the very next scan and the migration
     // would write rfid_uid back, so an unlink that looked done did not hold.
     // Only what this scale itself writes is taken back, see the function.
-    if (backendIsFilaMan()) {
+    // Not after a request that found no server: this one would only wait out
+    // the same timeout again.
+    if (backendIsFilaMan() && !tagBindingFailedOnNetwork()) {
       char chip[24];
       tagUidNormalize(g_tag.uid_str, chip, sizeof(chip));
       filamanUnlinkBambuFields(backendBaseUrl(), filamanApiKey(), spool_id, chip);
@@ -111,6 +116,18 @@ static void runUnlink() {
     logSDf("Unlink spool ID=%d", spool_id);
   }
   Serial.printf("Unlink spool ID=%d all=%d\n", spool_id, all ? 1 : 0);
+
+  // An unlink that never reached the server leaves the spool bound, so the
+  // screen keeps it and says so. Reported as done, it cleared the display and
+  // offered to erase the tag while the server still held the binding - and the
+  // next scan found the spool again, which read as the unlink not working.
+  if (tagBindingFailedOnNetwork()) {
+    logSDf("UNLINK ABORT: spool %d not reached, binding kept", spool_id);
+    if (scr_more_info) { lv_obj_del(scr_more_info); scr_more_info = nullptr; }
+    showMainScreen();
+    statusMessageShow(T(STR_UNLINK_NO_CONNECTION), UI_COL_BAD_TEXT);
+    return;
+  }
 
   // The binding is gone, but the tag on the reader still carries the spool
   // data - the next reader to see it would still name a spool this one no
@@ -148,8 +165,8 @@ void handleMoreInfoDeferredActions() {
     closeLocationPicker();
     if (sm_id > 0) {
       const bool clear = (loc_patch_name[0] == '\0');
-      const int code = backendPatchSpoolLocation(cfg_spoolman_base, sm_id,
-                                                 clear ? nullptr : loc_patch_name, 8000);
+      const int code = serverReachNote(backendPatchSpoolLocation(cfg_spoolman_base, sm_id,
+                                                 clear ? nullptr : loc_patch_name, 8000), true);
       if (code == 200) {
         if (clear) {
           sm_location_id = 0;
@@ -385,7 +402,7 @@ void fetchAndFillLocationList() {
   logSDf("LOC: GET locations from %s", backendBaseUrl());
   JsonDocument doc;
   DeserializationError err = DeserializationError::Ok;
-  int code = backendGetLocationsJson(cfg_spoolman_base, doc, 8000, &err);
+  int code = serverReachNote(backendGetLocationsJson(cfg_spoolman_base, doc, 8000, &err), true);
   logSDf("LOC: HTTP code=%d", code);
   if (code != 200) {
     char buf[48];
@@ -544,7 +561,7 @@ static void applyPickedStatus(int status_id) {
   if (!key || sm_id <= 0) return;
   if (!wifiManagerIsConnected()) return;
 
-  int code = backendSetSpoolStatus(cfg_spoolman_base, sm_id, key, 5000);
+  int code = serverReachNote(backendSetSpoolStatus(cfg_spoolman_base, sm_id, key, 5000), true);
   logSDf("status: spool %d -> %s HTTP %d", sm_id, key, code);
   if (code == 200) sm_status_id = status_id;
   // Rebuilt either way. On failure the chip goes back to showing the truth.
