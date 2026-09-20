@@ -331,7 +331,10 @@ unsigned long link_tag_first_seen_ms = 0;       // time of first detection
 // and SpoolSense write nfc_id. Asking only about the selected one would offer
 // a spool bound elsewhere as free and let it collect a second, redundant
 // binding.
-static bool spoolHasAnyTag(JsonObjectConst spool) {
+//
+// Not static: the tag lookup hands it to the list cache together with the
+// inventory it has just scanned, so that there stays one version of this rule.
+bool spoolHasAnyTag(JsonObjectConst spool) {
   JsonObjectConst extra = spool["extra"];
   if (extra.isNull()) return false;
 

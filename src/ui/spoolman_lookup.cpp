@@ -12,6 +12,14 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 
+// From ui/spool_flow.cpp: whether a spool of an inventory list is bound to a
+// tag, through whichever of the tag fields. Handed to services/spool_cache with
+// the inventory the full scan fetches, so the link flow's rule stays the only
+// one. Declared here and not in spool_flow.h, which cannot include ArduinoJson:
+// it is included behind lang.h elsewhere, and the T() macro breaks the
+// library's templates.
+bool spoolHasAnyTag(JsonObjectConst spool);
+
 // How long the inventory scan waits before its one retry, panel kept alive.
 #define SPOOLMAN_RETRY_PAUSE_MS  300
 #include "services/location_state.h"
@@ -21,6 +29,7 @@
 #include "services/filaman_api.h"
 #include "services/http_progress.h"
 #include "services/server_reach.h"
+#include "services/spool_cache.h"
 #include "services/spoolman_actions.h"
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
@@ -1320,6 +1329,24 @@ void querySpoolman(const char* tray_uuid) {
   // in the firmware then subtracted its whole elapsed time - the AMS question
   // stood at ten seconds for the rest of the boot and the location prompt
   // behind it was never asked again.
+  // The inventory that is about to come in is the very list the link flow
+  // fetches a few seconds later - an unknown tag is what "Link" usually
+  // follows. So it is handed to the list cache further down instead of being
+  // thrown away. The stamp has to be taken in front of the download, see
+  // spoolCacheFill(); not from a server already known to be gone, which would
+  // only add its timeout to the ones this lookup has sat through.
+  //
+  // Nothing about the lookup changes: it reads and decides from its own fresh
+  // document as before, and never looks into the cache.
+  //
+  // In front of the bracket below and not inside it: the stall log names a
+  // span after the first call in it, and inside, the seconds the inventory
+  // takes were being blamed on this request of fifty milliseconds.
+  bool scanned_inventory = false;   // doc holds the whole inventory, not one hit
+  InventoryStamp stamp = { -1, 0 };
+  bool have_stamp = false;
+  if (!have_result && !uiModalWaiting() && sm_reachable)
+    have_stamp = (backendInventoryStamp(cfg_spoolman_base, &stamp) == 200);
   {
   HttpStall stall(searchProgress);
 
@@ -1344,6 +1371,8 @@ void querySpoolman(const char* tray_uuid) {
     s_scan_deferred = true;
     logSD("Spoolman: full scan stood aside, a question is waiting on screen");
   }
+
+  scanned_inventory = (!have_result && !defer_scan);
 
   for (int attempt = 1; !have_result && !defer_scan && attempt <= 2; attempt++) {
     if (attempt > 1) {
@@ -1398,6 +1427,13 @@ void querySpoolman(const char* tray_uuid) {
   }
 
   JsonArray spools = doc.as<JsonArray>();
+
+  // Here and not further down: the scan below returns from the middle of this
+  // function on the first spool it accepts. Only a scan that ran and came in
+  // whole - every way out of a failed one has returned above, and a list
+  // FilaMan gave up on halfway is not the inventory.
+  if (scanned_inventory && !backendLastListPartial())
+    spoolCacheFill(doc.as<JsonArrayConst>(), spoolHasAnyTag, have_stamp ? &stamp : nullptr);
 
   // Which rank the best match reaches, and how many spools answer to this tag
   // at all. Both need the whole list, so they are settled before anything is

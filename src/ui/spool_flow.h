@@ -2,6 +2,11 @@
 
 #include <lvgl.h>
 
+// spoolHasAnyTag(JsonObjectConst), the link flow's rule for what counts as
+// bound, is public as well but declared where it is used, in
+// spoolman_lookup.cpp: this header is included after lang.h in places, and
+// ArduinoJson's templates do not survive the T() macro in front of them.
+
 void fetchUnlinkedSpools();
 // Both list fetches return whether the server answered at all. False means
 // no list to show: the popup explains, the picker stays shut.

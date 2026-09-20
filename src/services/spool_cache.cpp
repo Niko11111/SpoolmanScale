@@ -129,6 +129,15 @@ void spoolCacheFill(JsonArrayConst spools, SpoolBoundFn is_bound,
     if (!(spool["archived"] | false)) n++;
 
   if (n == 0) return;
+  // The stamp counted the very spools this list holds. A different number
+  // means the two do not describe the same set - a spool added between the
+  // two requests, or a list that is not the inventory at all - and a stamp
+  // vouching for some other list is worse than no copy.
+  if (stamp && stamp->count != n) {
+    logSDf("spool cache: the stamp counted %d spools, the list has %d, not kept",
+           stamp->count, n);
+    return;
+  }
   if (n > SPOOL_CACHE_MAX) {
     logSDf("spool cache: %d spools, more than %d, not kept", n, SPOOL_CACHE_MAX);
     return;
