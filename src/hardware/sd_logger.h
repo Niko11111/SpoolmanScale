@@ -3,12 +3,45 @@
 #include <Arduino.h>
 
 extern bool sd_available;
+// Whether the verbose lines are produced at all. Derived from the level
+// below rather than stored: 36 call sites ask it before they even build
+// their message, and that has to stay a plain read.
 extern bool sd_verbose;
-// Whether lines go to the card at all. On unless switched off in the browser,
-// and kept in NVS rather than on the card: it is a setting of the device, so
-// a swapped card does not quietly turn it back on. The session ring below
-// fills either way.
-extern bool sd_logging;
+
+// ---- where the lines are kept and how many of them ------------------
+//
+// One destination at a time. Writing to the card and to the flash at once
+// would cost both, and the card alone already costs 26 to 28 ms of loop time
+// per line; the flash ring costs 0.43 ms. The session ring below fills
+// whatever is chosen, including OFF.
+enum LogDest : uint8_t {
+  LOG_DEST_OFF      = 0,
+  LOG_DEST_SD       = 1,
+  LOG_DEST_INTERNAL = 2,
+};
+
+// The scope, smallest first. MIN leaves out the screen trace - which screen
+// was built, which one was shown - and keeps everything a fault report needs,
+// the button presses included. NORMAL is what the card has always written.
+// VERBOSE adds the lines the firmware only produces when it is asked to.
+enum LogLevel : uint8_t {
+  LOG_LVL_MIN     = 0,
+  LOG_LVL_NORMAL  = 1,
+  LOG_LVL_VERBOSE = 2,
+};
+
+// What the owner asked for, and what this boot can actually do: a card that
+// is not in is not a setting that changed, so the stored value stays put and
+// only the effective one falls back.
+LogDest  logDestStored();
+LogDest  logDestEffective();
+LogLevel logLevel();
+
+// Store and apply. False when NVS refused the write, and then nothing
+// changed: a switch that flips for this boot only would come back at the next
+// restart without a word.
+bool logDestSet(LogDest d);
+bool logLevelSet(LogLevel l);
 
 String getCurrentLogFilename();
 void logSD(const char* msg);
@@ -20,10 +53,6 @@ void sdLoggerTick();
 uint32_t sdWriteMaxTakeMs();
 void initSD();
 
-// Stores the switch and applies it. False when NVS refused the write, and then
-// nothing changed: a switch that flips for this boot only would come back on
-// after the next restart without a word.
-bool sdLoggingSet(bool on);
 
 // ---- session log --------------------------------------------------
 //

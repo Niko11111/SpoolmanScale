@@ -127,6 +127,15 @@ String prefsGetString(const char* key, const char* default_value) {
   return value;
 }
 
+bool prefsHasKey(const char* key) {
+  if (prefsQueued(key)) return true;
+  Preferences prefs;
+  if (!prefsOpen(prefs, key)) return false;
+  const bool there = prefs.isKey(key);
+  prefs.end();
+  return there;
+}
+
 float prefsGetFloat(const char* key, float default_value) {
   if (const PrefsQueued* q = prefsQueued(key)) if (q->type == PT_FLOAT) return q->v.f;
   Preferences prefs;

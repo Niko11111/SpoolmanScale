@@ -2616,6 +2616,45 @@ const char* const STRINGS[][3] = {
   { "Der Server hat nicht geantwortet. Prüfe, ob er läuft und ob die Waage im WLAN ist, und versuche es dann noch einmal.",
     "The server did not answer. Check that it is running and that the scale is on the WiFi, then try again.",
     "Le serveur n'a pas répondu. Vérifiez qu'il fonctionne et que la balance est connectée au WiFi, puis réessayez." },  // STR_SERVER_DOWN_TEXT
+  { "Protokoll schreiben",
+    "Write the log",
+    "Write the log" },  // STR_W_R_LOGDEST
+  { "Aus",
+    "Off",
+    "Off" },  // STR_W_S_DEST_OFF
+  { "SD-Karte",
+    "SD card",
+    "SD card" },  // STR_W_S_DEST_SD
+  { "Intern",
+    "Internal",
+    "Internal" },  // STR_W_S_DEST_INT
+  { "Umfang",
+    "Scope",
+    "Scope" },  // STR_W_R_LOGLVL
+  { "Knapp",
+    "Minimal",
+    "Minimal" },  // STR_W_S_LVL_MIN
+  { "Normal",
+    "Normal",
+    "Normal" },  // STR_W_S_LVL_NORM
+  { "Ausführlich",
+    "Verbose",
+    "Verbose" },  // STR_W_S_LVL_VERB
+  { "Interner Speicher",
+    "Internal storage",
+    "Internal storage" },  // STR_W_LOG_INTERNAL
+  { "{a} von {b} Zeilen",
+    "{a} of {b} lines",
+    "{a} of {b} lines" },  // STR_W_LOG_LINES_OF
+  { "Alle",
+    "All",
+    "All" },  // STR_W_LOG_SRC_ALL
+  { "Nicht verfügbar",
+    "Not available",
+    "Not available" },  // STR_W_LOG_INT_NONE
+  { "Der interne Speicher fasst 16.384 Zeilen und überschreibt die ältesten. Gemessen an einem vollen Tag sind das rund eine Woche im Umfang \"Normal\" und gut einen Tag im Umfang \"Ausführlich\".",
+    "The internal storage holds 16,384 lines and overwrites the oldest. Measured against a full day that is about a week at normal scope and a good day at verbose.",
+    "The internal storage holds 16,384 lines and overwrites the oldest. Measured against a full day that is about a week at normal scope and a good day at verbose." },  // STR_W_LOG_INT_NOTE
 };
 
 StringID tagWriteResultString(uint8_t code) {

@@ -7,6 +7,7 @@
 #include "services/prefs_store.h"
 
 #include "pins.h"
+#include "flash_log.h"
 
 #include <SD.h>
 #include <SPI.h>
@@ -22,11 +23,36 @@
 static SPIClass spiSD(HSPI);
 bool sd_available = false;
 bool sd_verbose = false;
-bool sd_logging = true;
 
-// Absent means on: a device that never touched the switch keeps logging
-// exactly as it did before the switch existed.
+// The old switch, kept for one reason only: it is still written alongside the
+// new key so a device that is put back on an older firmware finds what it
+// expects instead of logging again after somebody switched it off.
 #define SD_LOG_PREF_KEY "sd_log"
+#define LOG_DEST_PREF_KEY "log_dest"
+#define LOG_LVL_PREF_KEY  "log_lvl"
+
+static LogDest  s_dest = LOG_DEST_SD;
+static LogLevel s_lvl  = LOG_LVL_NORMAL;
+// What this boot can really do. Set once initSD() knows whether a card came
+// up and whether the ring in flash opened.
+static LogDest  s_dest_eff = LOG_DEST_OFF;
+
+static const char* destName(LogDest d) {
+  switch (d) {
+    case LOG_DEST_SD:       return "SD card";
+    case LOG_DEST_INTERNAL: return "internal storage";
+    default:                return "off";
+  }
+}
+
+static const char* levelName(LogLevel l) {
+  switch (l) {
+    case LOG_LVL_VERBOSE: return "verbose";
+    case LOG_LVL_NORMAL:  return "normal";
+    default:              return "minimal";
+  }
+}
+
 
 // How many bytes the file named below already holds. A counter rather than a
 // question to the card on every line, because this check sits in front of
@@ -170,7 +196,7 @@ void sdLogResetSize() {
 // with its stamp and written by sdLoggerTick() on the next loop pass.
 #define SD_QUEUE_LEN      8
 #define SD_QUEUE_LINE_MAX 160
-struct QueuedLine { char stamp[10]; char msg[SD_QUEUE_LINE_MAX]; };
+struct QueuedLine { char stamp[10]; char msg[SD_QUEUE_LINE_MAX]; time_t when; uint32_t up_s; };
 static QueuedLine     s_queue[SD_QUEUE_LEN];
 static uint8_t        s_queue_len = 0;
 static portMUX_TYPE   s_queue_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -182,9 +208,41 @@ static void sdWriteLine(const char* stamp, const char* msg);
 // card, and all of them run on the loop task.
 static uint32_t s_write_max_ms = 0;
 
-static void sdWriteLineTimed(const char* stamp, const char* msg) {
+// The only place a line is judged. It sits behind the session ring on
+// purpose: what "smallest scope" leaves out is still worth seeing live in the
+// browser, it is just not worth a flash write and a place in the history.
+//
+// What MIN drops is the screen trace, 115 of the roughly 763 call sites. On a
+// real day that is small: of 13,179 lines on 19.09.2026, 10,682 were verbose
+// and only 190 were this trace. The scope that saves the space is VERBOSE
+// being off; MIN saves the last 1.4 percent on top.
+//
+// BTN: stays, because what somebody pressed is the most useful thing there is
+// for working out what happened before a fault, and it is cheap: 33 lines in
+// that whole day.
+static bool logLineWanted(const char* msg) {
+  if (!msg) return false;
+  if (strncmp(msg, "[verbose]", 9) == 0) return s_lvl >= LOG_LVL_VERBOSE;
+  if (s_lvl > LOG_LVL_MIN) return true;
+  static const char* const SCREEN_TRACE[] = { "SHOW:", "UI:", "BUILD:" };
+  for (size_t i = 0; i < sizeof(SCREEN_TRACE) / sizeof(SCREEN_TRACE[0]); i++) {
+    const size_t n = strlen(SCREEN_TRACE[i]);
+    if (strncmp(msg, SCREEN_TRACE[i], n) == 0) return false;
+  }
+  return true;
+}
+
+// One figure for both destinations, because only one of them is ever active.
+// That keeps the number in the perf line comparable with the 26 to 28 ms the
+// card was measured at.
+static void writeLineTimed(const char* stamp, const char* msg,
+                           time_t when, uint32_t up_s) {
   const unsigned long write_start_ms = millis();
-  sdWriteLine(stamp, msg);
+  if (s_dest_eff == LOG_DEST_INTERNAL) {
+    flashLogWrite(when, up_s, msg);
+  } else if (s_dest_eff == LOG_DEST_SD) {
+    sdWriteLine(stamp, msg);
+  }
   const uint32_t write_ms = (uint32_t)(millis() - write_start_ms);
   if (write_ms > s_write_max_ms) s_write_max_ms = write_ms;
 }
@@ -195,12 +253,14 @@ uint32_t sdWriteMaxTakeMs() {
   return taken;
 }
 
-static void queueLine(const char* stamp, const char* msg) {
+static void queueLine(const char* stamp, const char* msg, time_t when) {
   portENTER_CRITICAL(&s_queue_mux);
   if (s_queue_len < SD_QUEUE_LEN) {
     QueuedLine& q = s_queue[s_queue_len++];
     strncpy(q.stamp, stamp, sizeof(q.stamp) - 1); q.stamp[sizeof(q.stamp) - 1] = '\0';
     strncpy(q.msg, msg, sizeof(q.msg) - 1);       q.msg[sizeof(q.msg) - 1] = '\0';
+    q.when = when;
+    q.up_s = (uint32_t)(millis() / 1000);
   }
   portEXIT_CRITICAL(&s_queue_mux);
 }
@@ -214,7 +274,8 @@ void sdLoggerTick() {
   memcpy(batch, s_queue, sizeof(QueuedLine) * n);
   s_queue_len = 0;
   portEXIT_CRITICAL(&s_queue_mux);
-  for (uint8_t i = 0; i < n; i++) sdWriteLineTimed(batch[i].stamp, batch[i].msg);
+  for (uint8_t i = 0; i < n; i++)
+    writeLineTimed(batch[i].stamp, batch[i].msg, batch[i].when, batch[i].up_s);
 }
 
 void logSD(const char* msg) {
@@ -233,9 +294,12 @@ void logSD(const char* msg) {
     stamp[sizeof(stamp) - 1] = '\0';
   }
 
-  if (!sd_available || !sd_logging) return;
-  if (!onLoopTask()) { queueLine(stamp, msg); return; }
-  sdWriteLineTimed(stamp, msg);
+  if (!logLineWanted(msg)) return;
+  if (s_dest_eff == LOG_DEST_OFF) return;
+  if (s_dest_eff == LOG_DEST_SD && !sd_available) return;
+  const time_t when = synced ? time(nullptr) : (time_t)0;
+  if (!onLoopTask()) { queueLine(stamp, msg, when); return; }
+  writeLineTimed(stamp, msg, when, (uint32_t)(millis() / 1000));
 }
 
 static void sdWriteLine(const char* stamp, const char* msg) {
@@ -334,12 +398,10 @@ void writeBootBlock(const char* boot_or_reboot) {
            crumbPrevious(), (unsigned long)(crumbPreviousUptimeMs() / 1000));
   }
 
-  if (!sd_available || !sd_logging) return;
+  if (s_dest_eff == LOG_DEST_OFF) return;
 
-  String fname = getCurrentLogFilename();
-  File f = SD.open(fname.c_str(), FILE_APPEND);
-  if (!f) return;
-
+  // Built once and handed to whichever destination is active, so the card and
+  // the flash ring carry the same block rather than two versions of it.
   char dt_buf[32];
   struct tm t;
   if (getLocalTime(&t)) {
@@ -348,32 +410,59 @@ void writeBootBlock(const char* boot_or_reboot) {
       t.tm_hour, t.tm_min, t.tm_sec);
   } else {
     strncpy(dt_buf, "(time not synced)", sizeof(dt_buf)-1);
+    dt_buf[sizeof(dt_buf)-1] = '\0';
   }
 
-  f.println("=====================================");
-  f.printf("SpoolmanScale %s\n", FW_VERSION);
-  f.printf("%s: %s\n", boot_or_reboot, dt_buf);
-  f.printf("Reset reason: %s\n", resetReasonStr());
+  char backend_line[160];
+  backendStatusLine(backend_line, sizeof(backend_line));
+
+  String block;
+  block.reserve(512);
+  block += F("=====================================\n");
+  block += "SpoolmanScale " FW_VERSION "\n";
+  block += String(boot_or_reboot) + ": " + dt_buf + "\n";
+  block += String("Reset reason: ") + resetReasonStr() + "\n";
   if (crashed && crumbPrevious()[0]) {
-    f.printf("Last seen before the reset: %s (after %lus)\n",
-             crumbPrevious(), (unsigned long)(crumbPreviousUptimeMs() / 1000));
+    block += "Last seen before the reset: " + String(crumbPrevious()) +
+             " (after " + String((unsigned long)(crumbPreviousUptimeMs() / 1000)) + "s)\n";
   }
   if (wifi_ok) {
-    f.printf("WiFi: %s | IP: %s\n",
-      cfg_wifi_ssid, WiFi.localIP().toString().c_str());
+    block += "WiFi: " + String(cfg_wifi_ssid) + " | IP: " +
+             WiFi.localIP().toString() + "\n";
   } else {
-    f.println("WiFi: (not connected)");
+    block += F("WiFi: (not connected)\n");
   }
   // Which backend the device talks to. Without this a log tells nobody
   // whether Spoolman or FilaMan is in play, which is the first thing needed
   // to read the rest of the file.
-  char backend_line[160];
-  backendStatusLine(backend_line, sizeof(backend_line));
-  f.printf("Backend: %s\n", backend_line);
-  f.printf("Free heap: %d | PSRAM: %d\n",
-    ESP.getFreeHeap(), ESP.getFreePsram());
-  if (sd_verbose) f.println("Verbose logging: ON");
-  f.println("=====================================");
+  block += String("Backend: ") + backend_line + "\n";
+  block += "Free heap: " + String(ESP.getFreeHeap()) +
+           " | PSRAM: " + String(ESP.getFreePsram()) + "\n";
+  block += String("Log: ") + destName(s_dest_eff) + ", scope " + levelName(s_lvl) + "\n";
+  block += F("=====================================\n");
+
+  if (s_dest_eff == LOG_DEST_INTERNAL) {
+    // A record per line, so the ring renders the block the way it renders
+    // everything else and the reader needs no special case.
+    int from = 0;
+    while (from < (int)block.length()) {
+      const int nl = block.indexOf('\n', from);
+      const int to = (nl < 0) ? block.length() : nl;
+      if (to > from) {
+        const String one = block.substring(from, to);
+        flashLogWrite(getLocalTime(&t) ? time(nullptr) : (time_t)0,
+                      (uint32_t)(millis() / 1000), one.c_str());
+      }
+      from = to + 1;
+    }
+    return;
+  }
+
+  if (!sd_available) return;
+  String fname = getCurrentLogFilename();
+  File f = SD.open(fname.c_str(), FILE_APPEND);
+  if (!f) return;
+  f.print(block);
   f.close();
 
   // Written past the cap and never counted. Dropping the count here makes the
@@ -443,16 +532,56 @@ void cleanOldLogs() {
   if (deleted > 0) Serial.printf("cleanOldLogs: %d file(s) deleted\n", deleted);
 }
 
+// What the owner wants, read once. A getter cannot tell "never stored" from
+// "stored as the default", which is why prefsHasKey() exists: an upgraded
+// device has to keep doing what it did, a fresh one starts on the flash.
+static void loadLogSettings() {
+  if (prefsHasKey(LOG_DEST_PREF_KEY)) {
+    const uint8_t v = prefsGetUChar(LOG_DEST_PREF_KEY, (uint8_t)LOG_DEST_INTERNAL);
+    s_dest = (v > LOG_DEST_INTERNAL) ? LOG_DEST_INTERNAL : (LogDest)v;
+  } else if (prefsHasKey(SD_LOG_PREF_KEY)) {
+    // Whether a card happens to be in the slot today says nothing about what
+    // the owner wants, so it plays no part in this. The card question is
+    // asked again on every boot, in applyEffectiveDest().
+    s_dest = prefsGetBool(SD_LOG_PREF_KEY, true) ? LOG_DEST_SD : LOG_DEST_OFF;
+    prefsPutUChar(LOG_DEST_PREF_KEY, (uint8_t)s_dest);
+  } else {
+    s_dest = LOG_DEST_INTERNAL;          // a device out of the box
+  }
+
+  if (prefsHasKey(LOG_LVL_PREF_KEY)) {
+    const uint8_t v = prefsGetUChar(LOG_LVL_PREF_KEY, (uint8_t)LOG_LVL_MIN);
+    s_lvl = (v > LOG_LVL_VERBOSE) ? LOG_LVL_VERBOSE : (LogLevel)v;
+  } else {
+    // A device that was already writing to a card keeps the scope it had;
+    // nothing about its log should change because of this update.
+    s_lvl = (s_dest == LOG_DEST_SD) ? LOG_LVL_NORMAL : LOG_LVL_MIN;
+    prefsPutUChar(LOG_LVL_PREF_KEY, (uint8_t)s_lvl);
+  }
+  sd_verbose = (s_lvl >= LOG_LVL_VERBOSE);
+}
+
+// A destination that is not there falls back rather than going quiet, and the
+// stored wish stays untouched so the card coming back restores it by itself.
+static void applyEffectiveDest() {
+  LogDest want = s_dest;
+  if (want == LOG_DEST_SD && !sd_available) {
+    want = flashLogAvailable() ? LOG_DEST_INTERNAL : LOG_DEST_OFF;
+  } else if (want == LOG_DEST_INTERNAL && !flashLogAvailable()) {
+    want = sd_available ? LOG_DEST_SD : LOG_DEST_OFF;
+  }
+  s_dest_eff = want;
+}
+
 void initSD() {
   // setup() runs on the same task loop() does, so this is the loop task.
   loopTaskRemember();
   // Before the card is looked at, so the boot block already knows whether it
   // is allowed to write.
-  sd_logging = prefsGetBool(SD_LOG_PREF_KEY, true);
+  loadLogSettings();
   spiSD.begin(hw_pins::SD_SCK, hw_pins::SD_MISO, hw_pins::SD_MOSI, hw_pins::SD_CS);
   if (SD.begin(hw_pins::SD_CS, spiSD)) {
     sd_available = true;
-    sd_verbose = SD.exists("/verbose.txt");
     uint8_t cardType = SD.cardType();
     const char* typeStr = "UNKNOWN";
     switch (cardType) {
@@ -462,25 +591,48 @@ void initSD() {
       case CARD_NONE: typeStr = "NONE"; break;
     }
     uint64_t cardSize = SD.cardSize() / (1024 * 1024);
-    Serial.printf("SD OK: type=%s size=%lluMB log=%s verbose=%s\n",
-      typeStr, cardSize, sd_logging ? "yes" : "no", sd_verbose ? "yes" : "no");
+    Serial.printf("SD OK: type=%s size=%lluMB\n", typeStr, cardSize);
   } else {
     Serial.println("SD: not available (card missing or init failed)");
     sd_available = false;
   }
+
+  // The ring in flash is opened whether or not it is the chosen destination:
+  // the status page reports what is stored either way, and switching over in
+  // the browser must not need a restart.
+  flashLogBegin();
+  applyEffectiveDest();
+  Serial.printf("Log: %s, scope %s%s\n", destName(s_dest_eff), levelName(s_lvl),
+                (s_dest_eff != s_dest) ? " (fell back, the chosen one is not there)" : "");
 }
 
-bool sdLoggingSet(bool on) {
-  if (on == sd_logging) return true;
-  if (!prefsPutBool(SD_LOG_PREF_KEY, on)) return false;
-  // The last line before the card goes quiet says why it did, so a file that
-  // simply stops is not read as a crash. Both lines reach the ring as well.
-  if (on) {
-    sd_logging = true;
-    logSD("SD logging: switched on");
-  } else {
-    logSD("SD logging: switched off");
-    sd_logging = false;
-  }
+LogDest  logDestStored()    { return s_dest; }
+LogDest  logDestEffective() { return s_dest_eff; }
+LogLevel logLevel()         { return s_lvl; }
+
+bool logDestSet(LogDest d) {
+  if (d == s_dest) return true;
+  if (!prefsPutUChar(LOG_DEST_PREF_KEY, (uint8_t)d)) return false;
+  // Kept in step so a device put back on an older firmware still knows that
+  // somebody had switched the card log off.
+  prefsPutBool(SD_LOG_PREF_KEY, d != LOG_DEST_OFF);
+  // The last line before a destination goes quiet says why it did, so a log
+  // that simply stops is not read as a crash. Both lines reach the ring.
+  logSDf("Log: destination -> %s", destName(d));
+  s_dest = d;
+  applyEffectiveDest();
+  logSDf("Log: destination is %s", destName(s_dest_eff));
+  return true;
+}
+
+bool logLevelSet(LogLevel l) {
+  if (l == s_lvl) return true;
+  if (!prefsPutUChar(LOG_LVL_PREF_KEY, (uint8_t)l)) return false;
+  // Raised before the line is written, lowered after it, so the line that
+  // records the change is never the one the change throws away.
+  if (l > s_lvl) { s_lvl = l; sd_verbose = (l >= LOG_LVL_VERBOSE); }
+  logSDf("Log: scope -> %s", levelName(l));
+  s_lvl = l;
+  sd_verbose = (l >= LOG_LVL_VERBOSE);
   return true;
 }

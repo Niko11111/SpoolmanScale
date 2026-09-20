@@ -15,6 +15,13 @@ uint32_t prefsGetUInt(const char* key, uint32_t default_value);
 uint8_t prefsGetUChar(const char* key, uint8_t default_value);
 bool prefsGetBool(const char* key, bool default_value);
 
+// Whether a key has ever been written. A getter cannot answer this: its
+// default comes back for "never stored" and for "stored as the default"
+// alike, so a migration that has to tell a fresh device from an upgraded one
+// needs its own question. A value parked by prefsDeferWrites() counts as
+// present - it is on its way to flash.
+bool prefsHasKey(const char* key);
+
 bool prefsPutString(const char* key, const char* value);
 bool prefsPutFloat(const char* key, float value);
 bool prefsPutInt(const char* key, int value);

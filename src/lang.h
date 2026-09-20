@@ -1196,6 +1196,20 @@ enum StringID {
   STR_SERVER_DOWN_TITLE,      // popup after an action found no server
   STR_SERVER_DOWN_TEXT,
 
+  STR_W_R_LOGDEST,   // where the lines are kept
+  STR_W_S_DEST_OFF,
+  STR_W_S_DEST_SD,
+  STR_W_S_DEST_INT,
+  STR_W_R_LOGLVL,   // how much of it is kept
+  STR_W_S_LVL_MIN,
+  STR_W_S_LVL_NORM,
+  STR_W_S_LVL_VERB,
+  STR_W_LOG_INTERNAL,   // the ring in flash, in the file list
+  STR_W_LOG_LINES_OF,
+  STR_W_LOG_SRC_ALL,   // filter above the list
+  STR_W_LOG_INT_NONE,
+  STR_W_LOG_INT_NOTE,
+
   STR_COUNT
 };
 

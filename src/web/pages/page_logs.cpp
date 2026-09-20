@@ -1,4 +1,5 @@
-// The SD card log browser and the endpoints it polls.
+// The log browser - the files on the card and the ring in flash - and the
+// endpoints it polls.
 #include "web/web_pages.h"
 
 #include <Arduino.h>
@@ -7,6 +8,7 @@
 
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
+#include "hardware/flash_log.h"
 #include "web/web_access.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
@@ -15,28 +17,62 @@
 
 static const char* label() { return T(STR_W_NAV_LOGS); }
 
+// Lines leave the ring in chunks rather than one String: two megabytes of log
+// would not fit on the internal heap this handler runs on.
+#define RING_OUT_CHUNK 1024
+struct RingOut { WebServer *srv; String buf; };
+static void ringOutLine(const char *line, void *ctx) {
+  RingOut *out = (RingOut *)ctx;
+  out->buf += line;
+  out->buf += '\n';
+  if (out->buf.length() >= RING_OUT_CHUNK) {
+    out->srv->sendContent(out->buf);
+    out->buf = "";
+  }
+}
+
 static String body() {
   String h;
   h.reserve(7000);
   h += F("<div class='grid'><div class='card wide'><h2>");
   h += T(STR_W_C_LOGS);
-  h += F("</h2><div id='lg'></div>"
-         "<div class='rows' style='margin-top:16px'><div class='row'>"
-         "<span class='k'>");
-  h += T(STR_W_R_SDLOG);
-  h += F("</span><span class='v'>"
-         "<label class='check' style='justify-content:flex-end'><span class='switch'>"
-         "<input id='sdl' type='checkbox' onchange='toggleSdLog()'><i></i></span></label>"
-         "</span></div><div class='row' id='vbrow'>"
-         "<span class='k'>");
-  h += T(STR_W_R_VERBOSE);
-  h += F("</span><span class='v'>"
-         "<label class='check' style='justify-content:flex-end'><span class='switch'>"
-         "<input id='vb' type='checkbox' onchange='toggleVerbose()'><i></i></span></label>"
-         "</span></div><div class='row' id='darow'>"
+  h += F("</h2>");
+  // The two settings first, then what came out of them. Both are a strip of
+  // buttons rather than a switch: the destination has three states now, and
+  // two controls that look the same read better than one switch beside one
+  // strip.
+  h += F("<div class='k' style='margin-bottom:6px'>");
+  h += T(STR_W_R_LOGDEST);
+  h += F("</div><div class='btabs' id='dst' style='margin-bottom:16px'>"
+         "<button class='btab' data-d='0'>");
+  h += T(STR_W_S_DEST_OFF);
+  h += F("</button><button class='btab' data-d='1'>");
+  h += T(STR_W_S_DEST_SD);
+  h += F("</button><button class='btab' data-d='2'>");
+  h += T(STR_W_S_DEST_INT);
+  h += F("</button></div><div class='k' style='margin-bottom:6px'>");
+  h += T(STR_W_R_LOGLVL);
+  h += F("</div><div class='btabs' id='lvl' style='margin-bottom:6px'>"
+         "<button class='btab' data-l='0'>");
+  h += T(STR_W_S_LVL_MIN);
+  h += F("</button><button class='btab' data-l='1'>");
+  h += T(STR_W_S_LVL_NORM);
+  h += F("</button><button class='btab' data-l='2'>");
+  h += T(STR_W_S_LVL_VERB);
+  h += F("</button></div><p class='note'>");
+  h += T(STR_W_LOG_INT_NOTE);
+  h += F("</p><div class='btabs' id='flt' style='margin:16px 0 12px'>"
+         "<button class='btab on' data-f='all'>");
+  h += T(STR_W_LOG_SRC_ALL);
+  h += F("</button><button class='btab' data-f='int'>");
+  h += T(STR_W_S_DEST_INT);
+  h += F("</button><button class='btab' data-f='sd'>");
+  h += T(STR_W_S_DEST_SD);
+  h += F("</button></div><div id='lg'></div>"
+         "<div class='rows' style='margin-top:16px'><div class='row' id='darow'>"
          "<span class='k' id='dsum'></span>"
          "<span class='v'>"
-         "<button id='da' class='danger' onclick='delAll()' disabled></button>"
+         "<button id='da' class='danger' disabled></button>"
          "</span></div></div><p class='note'>");
   h += T(STR_W_LOG_NOTE);
   h += F("</p></div>");
@@ -74,26 +110,27 @@ static String body() {
 
   h += F("<script>const M={view:");
   h += jsStr(T(STR_W_LOG_VIEW));
-  h += F(",dl:");     h += jsStr(T(STR_W_LOG_DOWNLOAD));
-  h += F(",del:");    h += jsStr(T(STR_W_LOG_DELETE));
-  h += F(",ask:");    h += jsStr(T(STR_W_LOG_DELETE_ASK));
-  h += F(",nosd:");   h += jsStr(T(STR_W_LOG_NOSD));
-  h += F(",nosdh:");  h += jsStr(T(STR_W_LOG_NOSD_HINT));
-  h += F(",empty:");  h += jsStr(T(STR_W_LOG_EMPTY));
-  h += F(",on:");     h += jsStr(T(STR_W_S_ON));
-  h += F(",off:");    h += jsStr(T(STR_W_S_OFF));
-  h += F(",err:");    h += jsStr(T(STR_W_LOAD_FAIL));
-  h += F(",all:");    h += jsStr(T(STR_W_LOG_DELETE_ALL));
-  h += F(",allask:"); h += jsStr(T(STR_W_LOG_DELETE_ALL_ASK));
-  h += F(",count:");  h += jsStr(T(STR_W_LOG_COUNT));
-  h += F(",count1:"); h += jsStr(T(STR_W_LOG_COUNT_ONE));
-  h += F(",allask1:");h += jsStr(T(STR_W_LOG_DELETE_ALL_ASK_ONE));
+  h += F(",dl:");      h += jsStr(T(STR_W_LOG_DOWNLOAD));
+  h += F(",del:");     h += jsStr(T(STR_W_LOG_DELETE));
+  h += F(",ask:");     h += jsStr(T(STR_W_LOG_DELETE_ASK));
+  h += F(",nosd:");    h += jsStr(T(STR_W_LOG_NOSD));
+  h += F(",nosdh:");   h += jsStr(T(STR_W_LOG_NOSD_HINT));
+  h += F(",empty:");   h += jsStr(T(STR_W_LOG_EMPTY));
+  h += F(",err:");     h += jsStr(T(STR_W_LOAD_FAIL));
+  h += F(",all:");     h += jsStr(T(STR_W_LOG_DELETE_ALL));
+  h += F(",allask:");  h += jsStr(T(STR_W_LOG_DELETE_ALL_ASK));
+  h += F(",count:");   h += jsStr(T(STR_W_LOG_COUNT));
+  h += F(",count1:");  h += jsStr(T(STR_W_LOG_COUNT_ONE));
+  h += F(",allask1:"); h += jsStr(T(STR_W_LOG_DELETE_ALL_ASK_ONE));
+  h += F(",intname:"); h += jsStr(T(STR_W_LOG_INTERNAL));
+  h += F(",linesof:"); h += jsStr(T(STR_W_LOG_LINES_OF));
+  h += F(",intnone:"); h += jsStr(T(STR_W_LOG_INT_NONE));
   h += F("};"
          "function kb(n){return n>=1048576?(n/1048576).toFixed(2)+' MB'"
          ":(n/1024).toFixed(0)+' KB';}"
          "function say(t){document.getElementById('lg').innerHTML="
          "'<div class=\"note\">'+t+'</div>';}"
-         "var slSeq=0,slFollow=true,slPend=0,slAuto=false;"
+         "var slSeq=0,slFollow=true,slPend=0,slAuto=false,flt='all',last=null;"
          "function slNote(s,n){if(!s)return;"
          "s.textContent=slFollow?(SESSION_AT+' '+new Date().toLocaleTimeString()"
          "+' - '+n+' '+SESSION_LINES)"
@@ -122,11 +159,6 @@ static String body() {
          "var txt=e.textContent||'';"
          "var done=function(ok){b.textContent=ok?SESSION_COPIED:SESSION_COPYFAIL;"
          "setTimeout(function(){b.textContent=SESSION_COPY;},1500);};"
-         // navigator.clipboard only exists in a secure context. This page is
-         // served over plain http on a LAN address, so it is undefined in
-         // every current browser and the older path below is the one that
-         // actually runs. The modern call stays first for the day the scale
-         // is reached over https or through localhost.
          "if(navigator.clipboard&&window.isSecureContext){"
          "navigator.clipboard.writeText(txt).then(function(){done(true);},"
          "function(){done(false);});return;}"
@@ -144,49 +176,36 @@ static String body() {
          "if(slFollow){slFollow=false;"
          "slNote(document.getElementById('sls'),0);}});"
          "setInterval(function(){if(!document.hidden)loadSession(false);},3000);}"
-         "function loadLogs(){fetch('/api/logs').then(r=>{"
-         "if(!r.ok)throw 0;return r.json();}).then(d=>{"
-         "const c=document.getElementById('lg');"
-         // Verbose lines only ever go to the card, so with the card log off,
-         // or no card at all, that switch would change nothing anyone sees.
-         "const sdl=document.getElementById('sdl'),vb=document.getElementById('vb');"
-         "sdl.checked=!!d.log;sdl.disabled=!d.sd;"
-         "vb.checked=!!d.verbose;vb.disabled=!d.sd||!d.log;"
-         "const da=document.getElementById('da');"
-         "da.textContent=M.all;"
-         // With nothing to delete the whole row goes, not just the button.
-         // The rule that strips the border from the last row still counts a
-         // display:none one, so hiding this one alone would leave the divider
-         // under Verbose hanging into empty space.
-         "const has=!!(d.files&&d.files.length);"
-         "document.getElementById('darow').style.display=has?'':'none';"
-         "document.getElementById('vbrow').style.borderBottom=has?'':'0';"
-         "da.disabled=!has;"
-         // Says what pressing it would free, which is the number someone
-         // wants before pressing it rather than after.
-         "const n=d.files?d.files.length:0;"
-         "document.getElementById('dsum').textContent=n"
-         "?(n===1?M.count1:M.count.replace('{n}',n))+' \u00b7 '"
-         "+kb(d.files.reduce((s,f)=>s+f.size,0)):'';"
-         // Sorted here rather than on the device: the browser already holds
-         // the array. What arrives is FAT directory order, and the seven day
-         // rotation frees entries that later files drop into, so it reads as
-         // shuffled. Names are log_YYYY-MM-DD, which orders lexically the same
-         // as chronologically.
-         //
-         // log_pre_ntp carries no date and is checked separately so it lands
-         // at the bottom. The obvious shortcut - prefixing it with a low
-         // character and letting one comparison handle both - does not work:
-         // localeCompare ignores control characters and left it on top.
-         "if(d.files)d.files.sort((a,b)=>{"
-         "const A=a.name.startsWith('log_2'),B=b.name.startsWith('log_2');"
-         "if(A!==B)return A?-1:1;"
-         "return a.name<b.name?1:(a.name>b.name?-1:0);});"
-         "if(!d.sd){c.innerHTML='<div class=\"note\"><b>'+M.nosd+'</b><br>'"
-         "+M.nosdh+'</div>';return;}"
-         "if(!d.files||!d.files.length){say(M.empty);return;}"
-         "c.innerHTML=d.files.map(f=>"
-         "'<div class=\"listrow\"><span class=\"nm\">'+f.name+'</span>'"
+         // The active choice is the one that is disabled, the way the backend
+         // page marks its tabs. A destination the device cannot reach - no
+         // card in, or no data partition - is dimmed and refuses the press
+         // rather than being hidden: it says the option exists.
+         "function paint(d){"
+         "document.querySelectorAll('#dst .btab').forEach(function(b){"
+         "var v=+b.dataset.d,na=(v===1&&!d.sd)||(v===2&&!d.int_ready);"
+         "b.classList.toggle('on',v===d.dest);"
+         "b.disabled=na||v===d.dest;b.style.opacity=na?'0.45':'';});"
+         "document.querySelectorAll('#lvl .btab').forEach(function(b){"
+         "var v=+b.dataset.l;b.classList.toggle('on',v===d.lvl);"
+         "b.disabled=v===d.lvl;});"
+         "document.querySelectorAll('#flt .btab').forEach(function(b){"
+         "b.classList.toggle('on',b.dataset.f===flt);"
+         "b.disabled=b.dataset.f===flt;});}"
+         // One row for the ring in flash, then the files on the card. The
+         // ring has no name and no date, so it carries its fill instead.
+         "function intRow(d){"
+         "return '<div class=\"listrow\"><span class=\"nm\">'+M.intname+'</span>'"
+         "+'<span style=\"display:flex;align-items:center;gap:10px\">'"
+         "+'<span class=\"sz\">'+M.linesof.replace('{a}',d.int_lines)"
+         ".replace('{b}',d.int_max)+'</span>'"
+         "+'<a href=\"/api/log?src=int\" target=\"_blank\">'"
+         "+'<button class=\"quiet\">'+M.view+'</button></a>'"
+         "+'<a href=\"/api/log?src=int&dl=1\" download=\"spoolmanscale-internal.txt\">'"
+         "+'<button class=\"quiet\">'+M.dl+'</button></a>'"
+         "+'<button class=\"danger\" data-cint=\"1\">'+M.del+'</button>'"
+         "+'</span></div>';}"
+         "function fileRow(f){"
+         "return '<div class=\"listrow\"><span class=\"nm\">'+f.name+'</span>'"
          "+'<span style=\"display:flex;align-items:center;gap:10px\">'"
          "+'<span class=\"sz\">'+kb(f.size)+'</span>'"
          "+'<a href=\"/api/log?file='+encodeURIComponent(f.name)+'\" target=\"_blank\">'"
@@ -203,34 +222,72 @@ static String body() {
          // in that order, and one backslash lost on the way took the entire
          // script block down without a word on the page.
          "+'<button class=\"danger\" data-del=\"'+f.name+'\">'+M.del+'</button>'"
-         "+'</span></div>').join('');"
+         "+'</span></div>';}"
+         "function render(){var d=last;if(!d)return;"
+         "const c=document.getElementById('lg');"
+         "paint(d);"
+         // Sorted here rather than on the device: the browser already holds
+         // the array. What arrives is FAT directory order, and the seven day
+         // rotation frees entries that later files drop into, so it reads as
+         // shuffled. Names are log_YYYY-MM-DD, which orders lexically the same
+         // as chronologically.
+         //
+         // log_pre_ntp carries no date and is checked separately so it lands
+         // at the bottom. The obvious shortcut - prefixing it with a low
+         // character and letting one comparison handle both - does not work:
+         // localeCompare ignores control characters and left it on top.
+         "var fs=(d.files||[]).slice().sort((a,b)=>{"
+         "const A=a.name.startsWith('log_2'),B=b.name.startsWith('log_2');"
+         "if(A!==B)return A?-1:1;"
+         "return a.name<b.name?1:(a.name>b.name?-1:0);});"
+         "var html='';"
+         "if(flt!=='sd'&&d.int_ready)html+=intRow(d);"
+         "if(flt!=='int')html+=fs.map(fileRow).join('');"
+         "var da=document.getElementById('da');da.textContent=M.all;"
+         // With nothing to delete the whole row goes, not just the button.
+         "var n=(flt==='int')?0:fs.length;"
+         "document.getElementById('darow').style.display=n?'':'none';"
+         "da.disabled=!n;"
+         // Says what pressing it would free, which is the number someone
+         // wants before pressing it rather than after.
+         "document.getElementById('dsum').textContent=n"
+         "?(n===1?M.count1:M.count.replace('{n}',n))+' · '"
+         "+kb(fs.reduce((s,f)=>s+f.size,0)):'';"
+         "if(!html){"
+         "c.innerHTML=(!d.sd&&!d.int_ready)"
+         "?'<div class=\"note\"><b>'+M.nosd+'</b><br>'+M.nosdh+'</div>'"
+         ":'<div class=\"note\">'+M.empty+'</div>';return;}"
+         "c.innerHTML=html;"
          "c.querySelectorAll('[data-del]').forEach(b=>"
          "b.onclick=()=>delLog(b.dataset.del));"
-         "}).catch(()=>say(M.err));}"
-         // Every fetch here ends in a catch. Without one a closed gate, a
-         // dropped connection or a 403 arriving as text/plain died as a silent
-         // rejection, and the card just stayed empty.
+         "c.querySelectorAll('[data-cint]').forEach(b=>b.onclick=clearInt);}"
+         // getJson resolves with null instead of rejecting, which is how a
+         // closed gate answering 403 as text/plain is handled here.
+         "function loadLogs(){return getJson('/api/logs').then(d=>{"
+         "if(!d){say(M.err);return;}last=d;render();});}"
          "function delLog(n){if(!confirm(M.ask))return;"
-         "fetch('/api/deletelog?file='+encodeURIComponent(n),{method:'POST'})"
-         ".then(()=>loadLogs()).catch(()=>say(M.err));}"
+         "post('/api/deletelog?file='+encodeURIComponent(n),'').then(loadLogs);}"
+         "function clearInt(){if(!confirm(M.ask))return;"
+         "post('/api/deletelogs?src=int','').then(loadLogs);}"
          "function delAll(){"
-         "const n=document.querySelectorAll('.listrow').length;"
+         "var n=document.querySelectorAll('[data-del]').length;"
          "if(!n||!confirm(n===1?M.allask1:M.allask.replace('{n}',n)))return;"
-         "fetch('/api/deletelogs',{method:'POST'})"
-         ".then(()=>loadLogs()).catch(()=>say(M.err));}"
-         // Reloads rather than trusting its own answer: the verbose switch
-         // greys out with this one, and a failure puts both back where the
-         // device says they are.
-         "function toggleSdLog(){fetch('/api/sdlog',{method:'POST'})"
-         ".then(r=>{if(!r.ok)throw 0;return r.json();}).then(()=>loadLogs())"
-         ".catch(()=>{say(M.err);loadLogs();});}"
-         "function toggleVerbose(){fetch('/api/verbose',{method:'POST'})"
-         ".then(r=>r.json()).then(d=>{"
-         "document.getElementById('vb').checked=!!d.verbose;})"
-         // The switch already moved under the finger; a failed request puts
-         // it back where the device says it is.
-         ".catch(()=>{say(M.err);loadLogs();});}"
-"loadLogs();loadSession(true);slWatch();"
+         "post('/api/deletelogs?src=sd','').then(loadLogs);}"
+         // Reloads rather than trusting its own answer: a destination can
+         // fall back on the device, and the strip has to show where the lines
+         // really go, not where they were asked to go.
+         "function setDest(v){post('/api/logdest?d='+v,'').then(loadLogs);}"
+         "function setLvl(v){post('/api/loglevel?l='+v,'').then(loadLogs);}"
+         "function bind(){"
+         "document.querySelectorAll('#dst .btab').forEach(function(b){"
+         "b.addEventListener('click',function(){setDest(+b.dataset.d);});});"
+         "document.querySelectorAll('#lvl .btab').forEach(function(b){"
+         "b.addEventListener('click',function(){setLvl(+b.dataset.l);});});"
+         "document.querySelectorAll('#flt .btab').forEach(function(b){"
+         "b.addEventListener('click',function(){flt=b.dataset.f;render();});});"
+         "var da=document.getElementById('da');"
+         "if(da)da.addEventListener('click',delAll);}"
+         "bind();loadLogs();loadSession(true);slWatch();"
          // Was in the page until beta.33 and fell out of the 720px rebuild
          // without anyone noticing. Back, but idle while the tab sits in the
          // background - a forgotten tab should not poll the scale all day.
@@ -246,36 +303,42 @@ static void routes(WebServer &srv) {
   // GET /logs -> JSON list of available log files
   srv.on("/api/logs", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
-    if (!sd_available) {
-      srv.send(200, "application/json", "{\"sd\":false,\"verbose\":false,\"files\":[]}");
-      return;
-    }
-    String json = "{\"sd\":true,\"log\":";
-    json += sd_logging ? "true" : "false";
-    json += ",\"verbose\":";
-    json += sd_verbose ? "true" : "false";
+    // Both stores in one answer: the page draws one list and one set of
+    // switches, so asking twice would only let the two disagree.
+    String json = "{\"sd\":";
+    json += sd_available ? "true" : "false";
+    json += ",\"dest\":";     json += String((int)logDestStored());
+    json += ",\"dest_eff\":"; json += String((int)logDestEffective());
+    json += ",\"lvl\":";      json += String((int)logLevel());
+    json += ",\"int_ready\":";
+    json += flashLogAvailable() ? "true" : "false";
+    json += ",\"int_lines\":"; json += String((unsigned long)flashLogLines());
+    json += ",\"int_max\":";   json += String((unsigned long)FLASH_LOG_LINE_CAPACITY);
+    json += ",\"int_used\":";  json += String((unsigned long)flashLogUsedBytes());
     json += ",\"files\":[";
-    File root = SD.open("/");
     bool first = true;
-    if (root && root.isDirectory()) {
-      File entry = root.openNextFile();
-      while (entry) {
-        if (!entry.isDirectory()) {
-          String name = entry.name();
-          if (name.startsWith("/")) name = name.substring(1);
-          if (name.startsWith("log_") && name.endsWith(".txt")) {
-            if (!first) json += ",";
-            json += "{\"name\":\"";
-            json += name;
-            json += "\",\"size\":";
-            json += String((unsigned long)entry.size());
-            json += "}";
-            first = false;
+    if (sd_available) {
+      File root = SD.open("/");
+      if (root && root.isDirectory()) {
+        File entry = root.openNextFile();
+        while (entry) {
+          if (!entry.isDirectory()) {
+            String name = entry.name();
+            if (name.startsWith("/")) name = name.substring(1);
+            if (name.startsWith("log_") && name.endsWith(".txt")) {
+              if (!first) json += ",";
+              json += "{\"name\":\"";
+              json += name;
+              json += "\",\"size\":";
+              json += String((unsigned long)entry.size());
+              json += "}";
+              first = false;
+            }
           }
+          entry = root.openNextFile();
         }
-        entry = root.openNextFile();
+        root.close();
       }
-      root.close();
     }
     json += "]}";
     srv.send(200, "application/json", json);
@@ -284,6 +347,24 @@ static void routes(WebServer &srv) {
   // GET /log?file=<filename> -> serve log file content
   srv.on("/api/log", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
+    // The ring in flash has no file name, so it is asked for by source alone
+    // and streamed the way the session log is: it can be two megabytes, and
+    // this handler runs on the internal heap.
+    if (srv.arg("src") == "int") {
+      if (!flashLogAvailable()) { srv.send(404, "text/plain", "No internal storage"); return; }
+      if (srv.hasArg("dl")) {
+        srv.sendHeader("Content-Disposition",
+                       "attachment; filename=\"spoolmanscale-internal.txt\"");
+      }
+      srv.setContentLength(CONTENT_LENGTH_UNKNOWN);
+      srv.send(200, "text/plain", "");
+      RingOut out{&srv, String()};
+      out.buf.reserve(RING_OUT_CHUNK + 256);
+      flashLogEmit(ringOutLine, &out);
+      if (out.buf.length()) srv.sendContent(out.buf);
+      srv.sendContent("");
+      return;
+    }
     if (!sd_available) { srv.send(404, "text/plain", "No SD card"); return; }
     if (!srv.hasArg("file")) {
       srv.send(400, "text/plain", "Missing file param");
@@ -344,6 +425,16 @@ static void routes(WebServer &srv) {
   // POST /deletelogs -> remove every log file at once
   srv.on("/api/deletelogs", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
+    // Clearing the ring answers at once and erases in the background, a
+    // sector per loop pass: erasing all 512 of them here would hold the
+    // request, and the loop with it, for half a minute.
+    if (srv.arg("src") == "int") {
+      if (!flashLogAvailable()) { srv.send(404, "text/plain", "No internal storage"); return; }
+      flashLogClear();
+      Serial.println("Internal log cleared via web");
+      srv.send(200, "application/json", "{\"deleted\":1}");
+      return;
+    }
     if (!sd_available) { srv.send(404, "text/plain", "No SD card"); return; }
 
     // Same walk-and-remove as cleanOldLogs(): close the entry, remove it, then
@@ -426,50 +517,36 @@ static void routes(WebServer &srv) {
     srv.sendContent("");
   });
 
-  // POST /api/sdlog -> switch writing to the card on or off. Only the writing:
-  // the files already there stay listed, readable and deletable either way.
-  srv.on("/api/sdlog", HTTP_POST, [&srv]() {
+  // POST /api/logdest?d=0|1|2 -> off, SD card, internal
+  srv.on("/api/logdest", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
-    if (!sd_available) {
-      srv.send(404, "application/json", "{\"error\":\"No SD card\"}");
+    const int d = srv.arg("d").toInt();
+    if (d < LOG_DEST_OFF || d > LOG_DEST_INTERNAL) {
+      srv.send(400, "application/json", "{\"error\":\"Unknown destination\"}");
       return;
     }
-    if (!sdLoggingSet(!sd_logging)) {
+    if (!logDestSet((LogDest)d)) {
       srv.send(500, "application/json", "{\"error\":\"Failed to store the setting\"}");
       return;
     }
-    srv.send(200, "application/json", sd_logging ? "{\"log\":true}" : "{\"log\":false}");
+    srv.send(200, "application/json",
+             String("{\"dest\":") + (int)logDestStored() +
+             ",\"dest_eff\":" + (int)logDestEffective() + "}");
   });
 
-  // POST /verbose -> toggle verbose.txt on SD root
-  srv.on("/api/verbose", HTTP_POST, [&srv]() {
+  // POST /api/loglevel?l=0|1|2 -> minimal, normal, verbose
+  srv.on("/api/loglevel", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
-    if (!sd_available) {
-      srv.send(404, "application/json", "{\"error\":\"No SD card\"}");
+    const int l = srv.arg("l").toInt();
+    if (l < LOG_LVL_MIN || l > LOG_LVL_VERBOSE) {
+      srv.send(400, "application/json", "{\"error\":\"Unknown scope\"}");
       return;
     }
-    if (sd_verbose) {
-      // currently ON -> remove file
-      if (SD.remove("/verbose.txt")) {
-        sd_verbose = false;
-        logSD("Verbose logging: DISABLED via web");
-        srv.send(200, "application/json", "{\"verbose\":false}");
-      } else {
-        srv.send(500, "application/json", "{\"error\":\"Failed to remove verbose.txt\"}");
-      }
-    } else {
-      // currently OFF -> create file
-      File f = SD.open("/verbose.txt", FILE_WRITE);
-      if (f) {
-        f.println("Verbose logging marker. Delete this file to disable verbose mode.");
-        f.close();
-        sd_verbose = true;
-        logSD("Verbose logging: ENABLED via web");
-        srv.send(200, "application/json", "{\"verbose\":true}");
-      } else {
-        srv.send(500, "application/json", "{\"error\":\"Failed to create verbose.txt\"}");
-      }
+    if (!logLevelSet((LogLevel)l)) {
+      srv.send(500, "application/json", "{\"error\":\"Failed to store the setting\"}");
+      return;
     }
+    srv.send(200, "application/json", String("{\"lvl\":") + (int)logLevel() + "}");
   });
 }
 

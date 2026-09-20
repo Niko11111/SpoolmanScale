@@ -23,6 +23,7 @@
 #include "hardware/scale.h"
 #include "hardware/scale_state.h"
 #include "hardware/sd_logger.h"
+#include "hardware/flash_log.h"
 #include "services/nfc_reset.h"
 #include "ui/reboot_popup.h"
 #include "ui/info_popup.h"
@@ -439,6 +440,9 @@ void appLoop() {
   // browser shows up here without lifting the spool off and back on.
   spoolmanRecheckTick();
   sdLoggerTick();
+  // Keeps a sector erased ahead of the ring in flash, so a log line never
+  // waits for one, and carries out a clear a sector at a time.
+  flashLogTick();
   webJobsTick();
   // And once the spool is known, whether the tag still says the same thing it
   // does. Costs a request only while the switch for it is on.

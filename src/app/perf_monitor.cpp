@@ -76,11 +76,17 @@ void perfLogWindow() {
   // heap_min is the lowest the internal heap has been since boot, and
   // dma_biggest the largest block a DMA buffer could still get. Both decide
   // how large the draw buffers may become.
+  // log_dest says which store sd_write_max was measured against: the card
+  // was 26 to 28 ms a line, the ring in flash is under one, so the number
+  // means nothing without it.
+  static const char* const DEST_TAG[] = { "off", "sd", "int" };
   logSDf("[verbose] perf: win=%us loop_gap_max=%ums flush_max=%uus "
-         "flush_sum=%ums flushes=%u sd_write_max=%ums heap_min=%u dma_biggest=%u "
+         "flush_sum=%ums flushes=%u log_dest=%s sd_write_max=%ums "
+         "heap_min=%u dma_biggest=%u "
          "ui_max=%uus ui_sum=%ums loops=%u buf=%s",
     (unsigned)window_s, (unsigned)loop_gap_max_ms, (unsigned)flush.max_us,
     (unsigned)(flush.sum_us / 1000UL), (unsigned)flush.count,
+    DEST_TAG[(int)logDestEffective()],
     (unsigned)sd_write_max_ms, (unsigned)ESP.getMinFreeHeap(),
     (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA),
     (unsigned)s_ui_max_us, (unsigned)(s_ui_sum_us / 1000UL), (unsigned)s_ui_calls,

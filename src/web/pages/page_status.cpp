@@ -14,6 +14,7 @@
 #include "services/diagnostics.h"
 #include "services/mdns_service.h"
 #include "services/partition_layout.h"
+#include "hardware/flash_log.h"
 #include "services/wifi_manager.h"
 #include "services/user_options.h"
 #include "ui/weight_format.h"
@@ -238,7 +239,14 @@ static String body() {
     snprintf(c, sizeof(c), "%.1f", pl.app_slot_bytes / 1048576.0);
     snprintf(a, sizeof(a), T(STR_W_S_MB_OF), b, c);
     h += row(T(STR_W_R_FIRMWARE), htmlEsc(a));
-    if (pl.data_bytes) {
+    if (pl.data_bytes && flashLogAvailable()) {
+      // Once the log lives there the size of the partition is the less
+      // interesting number: what the owner wants is how full the log is.
+      snprintf(b, sizeof(b), "%.1f", flashLogUsedBytes() / 1048576.0);
+      snprintf(c, sizeof(c), "%.1f", flashLogCapacityBytes() / 1048576.0);
+      snprintf(a, sizeof(a), T(STR_W_S_MB_OF), b, c);
+      h += row(T(STR_W_R_DATA_AREA), htmlEsc(a));
+    } else if (pl.data_bytes) {
       snprintf(b, sizeof(b), "%.1f", pl.data_bytes / 1048576.0);
       snprintf(a, sizeof(a), T(STR_W_S_DATA_UNUSED), b);
       h += row(T(STR_W_R_DATA_AREA), htmlEsc(a));
