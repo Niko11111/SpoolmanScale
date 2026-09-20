@@ -996,6 +996,11 @@ void querySpoolman(const char* tray_uuid) {
   // Only the one line below "Truly not found" sets it again.
   s_verdict_unknown = false;
   s_lost_connection = false;
+  // Every lookup settles for itself whether it owes a scan. Left standing from
+  // the one before, the marker made spoolmanRecheckTick() order a second full
+  // lookup for a tag that had just had one, inventory and archive included -
+  // and "not found" after a complete scan counted as no verdict.
+  s_scan_deferred = false;
   // A 4-byte MIFARE tag is looked up by its UID through the same call, so
   // the log names what was actually sent.
   if (tray_uuid && strlen(tray_uuid) == 32) {
@@ -1361,7 +1366,13 @@ void querySpoolman(const char* tray_uuid) {
   // Standing aside costs nothing that is not recovered: spoolmanRecheckTick()
   // keeps asking the cheap server side lookup every few seconds while an
   // unknown tag lies on the pad, and clears the marker on a hit.
-  const bool defer_scan = uiModalWaiting();
+  // Only a scan that was owed can stand aside. With a spool already found by
+  // one of the fast lookups there is none to skip, and saying otherwise left
+  // the marker set with nobody to clear it: spoolmanRecheckTick() does not
+  // run while a spool is on screen. It then fired at the next unknown tag,
+  // right after that tag's own complete lookup - 5.4 s instead of 2.4 on
+  // Spoolman, 11.1 s instead of 5.5 on FilaMan, measured.
+  const bool defer_scan = !have_result && uiModalWaiting();
   if (defer_scan) {
     // Remembered, not just skipped. The cheap lookup has already missed, so a
     // spool findable only by the scan - a uid in FilaMan's custom_fields, or
