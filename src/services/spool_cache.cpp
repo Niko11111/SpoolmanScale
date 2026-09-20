@@ -264,7 +264,15 @@ void spoolCacheForget(const char* why) {
 }
 
 void spoolCacheTick() {
-  if (!s_rows) { s_forget = false; return; }
+  if (!s_rows) {
+    // Said under verbose only, and only so that a hook can be seen firing on
+    // the device without first having to arrange for a copy to be there.
+    if (s_forget && sd_verbose)
+      logSDf("[verbose] spool cache: nothing kept (%s)",
+             s_forget_why ? s_forget_why : "forgotten");
+    s_forget = false;
+    return;
+  }
   if (s_forget) { drop(s_forget_why); return; }
   if (millis() - s_filled_ms > ageLimitMs()) drop("too old");
 }
