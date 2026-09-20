@@ -53,6 +53,30 @@ bool backendGetVersion(const char* base_url, char* out_version, size_t out_size,
        uint32_t timeout_ms = 3000);
 int  backendCountActiveSpools(const char* base_url, uint32_t timeout_ms = 6000);
 
+// A fingerprint of the active inventory: how many spools, and the id of one
+// witness among them - the newest where the server can sort. Under a kilobyte
+// where the list is 176 kB, so a caller holding a copy of the list can ask
+// whether it still describes the same set of spools.
+//
+// It proves the set, not the content: a weight written elsewhere moves
+// neither number.
+//
+// Beside backendCountActiveSpools() rather than in its place, because on
+// BamBuddy the two part ways - the count can be had for the price of the
+// list, the stamp cannot and answers BACKEND_NOT_SUPPORTED without a request.
+// So does a server that answered but sends no count. Every other return is
+// the HTTP code as it came, so serverReachIsNetworkFailure() can read it.
+//
+// Two seconds, not the usual five or more: this runs without a loading
+// overlay, and the screen stands still for as long as it takes.
+#define SPOOL_STAMP_TIMEOUT_MS 2000
+struct InventoryStamp {
+  int count;        // active spools, -1 until a request succeeded
+  int witness_id;   // 0 for an empty inventory
+};
+int  backendInventoryStamp(const char* base_url, InventoryStamp* out,
+       uint32_t timeout_ms = SPOOL_STAMP_TIMEOUT_MS);
+
 // Date of the last weighing, taken from FilaMan's spool event log. Spoolman
 // keeps no such history and answers false, there the scale writes the date
 // into last_used itself.

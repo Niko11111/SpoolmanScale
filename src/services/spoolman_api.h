@@ -22,6 +22,12 @@ int spoolmanGetHealthCode(const char* base_url, uint32_t timeout_ms = 3000);
 bool spoolmanIsReachable(const char* base_url, uint32_t timeout_ms = 3000);
 bool spoolmanGetVersion(const char* base_url, char* out_version, size_t out_size, uint32_t timeout_ms = 3000);
 int spoolmanCountActiveSpools(const char* base_url, uint32_t timeout_ms = 6000);
+// Count of the active spools and the highest id among them, from one request
+// of under a kilobyte. Returns the HTTP code as it came, -2 for a body that
+// did not parse. 200 with *out_count at -1 is a server too old to send the
+// count header.
+int spoolmanInventoryStamp(const char* base_url, int* out_count, int* out_witness_id,
+                           uint32_t timeout_ms);
 int spoolmanCreateSpool(const char* base_url, int filament_id, float initial_weight,
   float spool_weight, float remaining_weight, int* out_spool_id = nullptr, uint32_t timeout_ms = 8000);
 int spoolmanCreateSpoolField(const char* base_url, const char* field_name, uint32_t timeout_ms = 3000);

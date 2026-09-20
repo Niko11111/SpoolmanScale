@@ -584,6 +584,42 @@ int filamanCountActiveSpools(const char* base_url, const char* api_key,
   return doc["total"] | -1;
 }
 
+int filamanInventoryStamp(const char* base_url, const char* api_key,
+                          int* out_count, int* out_witness_id, uint32_t timeout_ms) {
+  if (out_count)      *out_count = -1;
+  if (out_witness_id) *out_witness_id = 0;
+  if (!hasBaseUrl(base_url) || !out_count || !out_witness_id) return -1;
+
+  // The request of the count above and nothing added to it. No sort: FilaMan
+  // answers an unknown parameter with a validation error, and nothing says it
+  // takes one here. The witness is then whichever spool its default order
+  // puts first - less sharp than the newest one, but taken the same way every
+  // time, which is all a comparison needs.
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/spools?page_size=1");
+  // Both clocks, see spoolmanInventoryStamp().
+  http.setConnectTimeout(timeout_ms);
+  http.setTimeout(timeout_ms);
+  addApiKey(http, api_key);
+  // The code as it came: the caller tells a server that did not answer from
+  // one that answered 500.
+  const int code = http.GET();
+  if (code != 200) { http.end(); return code; }
+
+  JsonDocument filter;
+  filter["total"] = true;
+  filter["items"][0]["id"] = true;
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, http.getStream(),
+                                             DeserializationOption::Filter(filter));
+  http.end();
+  if (err) return -2;
+
+  *out_count      = doc["total"] | -1;
+  *out_witness_id = doc["items"][0]["id"] | 0;   // 0 for an empty inventory
+  return 200;
+}
+
 // How many events to look at. The log is newest first, and moves, status
 // changes and drying sit between the entries that matter, so a single entry is
 // not enough. Twenty rather than five because the driver writes a

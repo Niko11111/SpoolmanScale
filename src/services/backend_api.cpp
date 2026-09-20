@@ -541,6 +541,41 @@ int backendCountActiveSpools(const char* base_url, uint32_t timeout_ms) {
   }
 }
 
+int backendInventoryStamp(const char* base_url, InventoryStamp* out, uint32_t timeout_ms) {
+  HttpStallTime stall(__func__);   // the loop stands still for this call
+  if (!out) return -1;
+  out->count      = -1;
+  out->witness_id = 0;
+
+  int code;
+  switch (backendMode()) {
+    case BACKEND_FILAMAN:
+      code = filamanInventoryStamp(backendBaseUrl(), filamanApiKey(),
+                                   &out->count, &out->witness_id, timeout_ms);
+      break;
+    case BACKEND_BAMBUDDY:
+      // Neither a count header nor a page size, see bbCountActiveSpools(): the
+      // count there costs the whole list, which is what a stamp exists to
+      // avoid. Answered here, without a request.
+      return notSupported("InventoryStamp");
+    default:
+      code = spoolmanInventoryStamp(base_url, &out->count, &out->witness_id, timeout_ms);
+      break;
+  }
+  // The server answered and had no count to give - a Spoolman from before
+  // the header. Not a failure of the connection, so not one of its codes.
+  // Said once: the caller asks again before every list.
+  if (code == 200 && out->count < 0) {
+    static bool said = false;
+    if (!said) {
+      said = true;
+      logSDf("Backend: %s sends no spool count, no inventory stamp", backendName());
+    }
+    return BACKEND_NOT_SUPPORTED;
+  }
+  return code;
+}
+
 bool backendGetLastWeighedAt(const char* base_url, int spool_id,
                              char* out_iso, size_t out_size, uint32_t timeout_ms) {
   HttpStallTime stall(__func__);   // the loop stands still for this call

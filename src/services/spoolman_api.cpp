@@ -349,6 +349,52 @@ int spoolmanCountActiveSpools(const char* base_url, uint32_t timeout_ms) {
   return total.toInt();
 }
 
+int spoolmanInventoryStamp(const char* base_url, int* out_count, int* out_witness_id,
+                           uint32_t timeout_ms) {
+  if (out_count)      *out_count = -1;
+  if (out_witness_id) *out_witness_id = 0;
+  if (!hasBaseUrl(base_url) || !out_count || !out_witness_id) return -1;
+
+  // The same small request as the count above, sorted so the one spool that
+  // comes back is the newest: a spool added and another archived leaves the
+  // count where it was, and the id is what gives that away.
+  HTTPClient http;
+  http.begin(String(base_url) + "/api/v1/spool?allow_archived=false&limit=1&sort=id:desc");
+  // Both clocks. setTimeout() only covers reading, and the client's own five
+  // seconds for the connect would otherwise decide how long a server that is
+  // gone holds the loop.
+  http.setConnectTimeout(timeout_ms);
+  http.setTimeout(timeout_ms);
+  const char* collect[] = { "x-total-count" };
+  http.collectHeaders(collect, 1);
+  // The code as it came, unlike the count above: the caller tells a server
+  // that did not answer from one that answered 500, and a flat -1 is the
+  // client's code for a refused connection.
+  const int code = http.GET();
+  if (code != 200) {
+    http.end();
+    return code;
+  }
+
+  String total = http.header("x-total-count");
+
+  JsonDocument filter;
+  filter.to<JsonArray>().add<JsonObject>()["id"] = true;
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, *http.getStreamPtr(),
+                                             DeserializationOption::Filter(filter));
+  http.end();
+  if (err) return -2;
+
+  // An older Spoolman without the header: the request worked, there is just
+  // nothing to fingerprint with. The count stays at -1 for the caller to see.
+  if (total.length() == 0) return 200;
+
+  *out_count      = total.toInt();
+  *out_witness_id = doc[0]["id"] | 0;   // 0 for an empty inventory
+  return 200;
+}
+
 int spoolmanCreateSpool(const char* base_url, int filament_id, float initial_weight,
                         float spool_weight, float remaining_weight, int* out_spool_id, uint32_t timeout_ms) {
   if (out_spool_id) *out_spool_id = 0;

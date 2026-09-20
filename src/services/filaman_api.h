@@ -51,6 +51,12 @@ bool filamanGetVersion(const char* base_url, char* out_version, size_t out_size,
 int filamanCountActiveSpools(const char* base_url, const char* api_key,
                              uint32_t timeout_ms = 6000);
 
+// That count and the id of the first spool on the same one item page. Returns
+// the HTTP code as it came, -2 for a body that did not parse. 200 with
+// *out_count at -1 is an answer without a total.
+int filamanInventoryStamp(const char* base_url, const char* api_key,
+                          int* out_count, int* out_witness_id, uint32_t timeout_ms);
+
 // Timestamp of the most recent weighing, read from the spool event log.
 // FilaMan records every measurement itself, including the ones this scale
 // reports, so nothing has to be written to get a "last weighed" date.

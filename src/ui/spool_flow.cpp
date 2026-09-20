@@ -512,6 +512,14 @@ bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
            link_cu_ok ? 1 : 0, tagFieldKeyName(), is_list ? 1 : 0,
            g_card_uids_write ? 1 : 0, present ? 1 : 0); }
 
+  // TEMPORARY, first step of the list cache: the stamp is taken and logged,
+  // nothing reads it yet. It moves into the proof in front of the download.
+  { InventoryStamp st;
+    const uint32_t t0 = millis();
+    const int sc = backendInventoryStamp(cfg_spoolman_base, &st);
+    logSDf("link fetch: stamp code=%d count=%d witness=%d (%lu ms)",
+           sc, st.count, st.witness_id, (unsigned long)(millis() - t0)); }
+
   // Up before the blocking work, and painted before this returns. The reader
   // below moves it along, so the wait stops looking like a hang.
   loadingOverlayShow(T(STR_LOADING_SPOOLS));
