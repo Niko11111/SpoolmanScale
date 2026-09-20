@@ -83,7 +83,8 @@ void spoolCacheSetRemaining(int spool_id, float remaining);
 void spoolCacheForget(const char* why = nullptr);
 
 // Once per loop pass. Frees the rows once they are forgotten or too old, so
-// forty kilobytes do not sit in PSRAM for days after one afternoon of linking.
+// forty-odd kilobytes do not sit in PSRAM for days after one afternoon of
+// linking.
 void spoolCacheTick();
 
 // For the log and the status line. 0 when there is no copy.

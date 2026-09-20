@@ -37,22 +37,25 @@ struct CachedSpool {
   char  material[24];                    //  84  filament.material
   // FilaMan and BamBuddy only. Their lists are built field by field and never
   // pass through the Spoolman read filter, so the subtype test does see this.
-  char  subgroup[16];                    // 108  filament.material_subgroup
+  // 32, because 16 was one short on the first real library it met:
+  // "silk-multi-color" came back out as "silk-multi-colo". Harmless there, but
+  // a "silk-translucent" cut the same way no longer says Translucent.
+  char  subgroup[32];                    // 108  filament.material_subgroup
   // As it stood in the document, without a '#': both readers put their own
   // in front, and a second one would make every colour compare as far away.
-  char  color_hex[SPOOL_COLOR_HEX_MAX];  // 124  filament.color_hex
-  bool  bound;                           // 134  some tag field holds something
+  char  color_hex[SPOOL_COLOR_HEX_MAX];  // 140  filament.color_hex
+  bool  bound;                           // 150  some tag field holds something
   // The row of a spool without a name shows "?", one with an empty name shows
   // nothing. Kept apart so the second list reads like the first.
-  bool  name_missing;                    // 135
-  float remaining;                       // 136  remaining_weight
+  bool  name_missing;                    // 151
+  float remaining;                       // 152  remaining_weight
   // NAN where the filament has no weight: the row then falls back to 1000 g,
   // and a 0 written back would be read as a weight.
-  float total;                           // 140  filament.weight
-  int   filament_id;                     // 144  filament.id
-  float spool_weight;                    // 148  spool_weight
+  float total;                           // 156  filament.weight
+  int   filament_id;                     // 160  filament.id
+  float spool_weight;                    // 164  spool_weight
 };
-static_assert(sizeof(CachedSpool) == 152, "CachedSpool grew, the numbers in the header are off");
+static_assert(sizeof(CachedSpool) == 168, "CachedSpool grew, the numbers in the header are off");
 
 CachedSpool*   s_rows      = nullptr;
 int            s_count     = 0;
