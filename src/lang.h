@@ -1212,6 +1212,8 @@ enum StringID {
 
   // The link flow's spool list, when it was handed out by the list cache
   STR_LIST_SPOOL_CHANGED,     // on top of a list rebuilt because a tapped spool had changed
+  STR_LIST_AS_OF,             // under such a list: the clock time it was loaded, %02d:%02d
+  STR_LIST_RELOAD,            // and the button beside it
 
   STR_COUNT
 };

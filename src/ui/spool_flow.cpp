@@ -282,6 +282,7 @@ static int   link_patch_id           = 0;
 static bool  link_patch_bambu        = false;
 static bool  link_list_fetch_pending = false;   // "from the list" on the link entry
 static int   link_row_refresh_pending = -1;     // a cached row was tapped: index into link_spools
+static bool  link_reload_pending      = false;  // "Reload" under a list that came out of the cache
 static bool  copy_fetch_pending      = false;   // copy entry: active or archived spools
 static bool  copy_fetch_archived     = false;
 static bool  copy_create_pending     = false;   // copy confirm OK
@@ -2083,6 +2084,14 @@ static bool linkRowMatches(const UnlinkedSpool &s, const char* vendor_name,
   return true;
 }
 
+// Under a spool list that came out of the cache: when it was loaded, and a
+// button that loads it again. A list fresh off the wire has neither and keeps
+// its full height.
+#define LINK_LIST_H        264
+#define LINK_STRIP_H        36
+#define LINK_RELOAD_W      110
+#define LINK_RELOAD_H       28
+
 // The question in front of a link or a copy: this spool, yes or no. Opened by
 // a row of the spool list. A function of its own rather than the body of the
 // row's callback, so that it can be opened from the loop as well.
@@ -2330,7 +2339,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
 
   // Scrollable list - full height below header
   lv_obj_t *list = lv_obj_create(scr_link_spools);
-  lv_obj_set_size(list, 460, 264);
+  lv_obj_set_size(list, 460, link_list_from_cache ? LINK_LIST_H - LINK_STRIP_H : LINK_LIST_H);
   lv_obj_set_pos(list, 10, 56);
   lv_obj_set_style_bg_color(list, lv_color_hex(0x0a1020), 0);
   lv_obj_set_style_border_width(list, 0, 0);
@@ -2338,6 +2347,51 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   lv_obj_set_style_radius(list, 0, 0);
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_scroll_dir(list, LV_DIR_VER);
+
+  // A list that was not fetched just now says so, and offers the way out.
+  //
+  // Built before the rows, not after them: when the LVGL pool runs short the
+  // row loop below cuts itself off, and built last, the one thing missing
+  // would be the button that gets the user out of a stale list. A child of
+  // the screen rather than of the list, so it is there for an empty list too.
+  //
+  // The clock time of the download, not an age: it is written once and stays
+  // true for as long as the list is open. An age would need a tick to keep it
+  // honest, and a pointer to a label whose life hangs on this screen.
+  if (link_list_from_cache) {
+    const int strip_y = 56 + LINK_LIST_H - LINK_STRIP_H;
+
+    const time_t at = spoolCacheFilledAt();
+    if (at) {
+      struct tm ti;
+      localtime_r(&at, &ti);
+      char as_of[32];
+      snprintf(as_of, sizeof(as_of), T(STR_LIST_AS_OF), ti.tm_hour, ti.tm_min);
+      lv_obj_t *lbl_as_of = lv_label_create(scr_link_spools);
+      lv_label_set_text(lbl_as_of, as_of);
+      lv_obj_set_style_text_color(lbl_as_of, lv_color_hex(UI_COL_INK_SOFT), 0);
+      lv_obj_set_style_text_font(lbl_as_of, UI_FONT_SMALL, 0);
+      lv_obj_set_pos(lbl_as_of, 16, strip_y + (LINK_STRIP_H - 16) / 2);
+    }
+
+    lv_obj_t *btn_reload = lv_btn_create(scr_link_spools);
+    lv_obj_set_size(btn_reload, LINK_RELOAD_W, LINK_RELOAD_H);
+    lv_obj_set_pos(btn_reload, 480 - 12 - LINK_RELOAD_W, strip_y + (LINK_STRIP_H - LINK_RELOAD_H) / 2);
+    lv_obj_set_style_bg_color(btn_reload, lv_color_hex(UI_COL_ROW_PRESSED), 0);
+    lv_obj_set_style_bg_color(btn_reload, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btn_reload, UI_RADIUS_INPUT, 0);
+    lv_obj_set_style_shadow_width(btn_reload, 0, 0);
+    lv_obj_set_style_border_width(btn_reload, 0, 0);
+    lv_obj_add_event_cb(btn_reload, [](lv_event_t *e) {
+      logSD("BTN: SpoolList -> Reload");
+      link_reload_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_reload = lv_label_create(btn_reload);
+    lv_label_set_text(lbl_reload, T(STR_LIST_RELOAD));
+    lv_obj_set_style_text_color(lbl_reload, lv_color_hex(UI_COL_ACCENT), 0);
+    lv_obj_set_style_text_font(lbl_reload, UI_FONT_SMALL, 0);
+    lv_obj_center(lbl_reload);
+  }
   logLvMem("spoollist/pre", 0);
 
   // Before the rows, not after them: it explains what the whole list is, and
@@ -4200,6 +4254,16 @@ void handleSpoolFlowDeferredActions() {
         case LINK_ROW_NETWORK:
           break;   // said by a popup, the list stays as it is
       }
+    }
+  }
+
+  // ---- "Reload" under a list out of the cache ------------------------------
+  if (link_reload_pending) {
+    link_reload_pending = false;
+    // The same guard as above: the list and its screen can be gone by now.
+    if (link_spools && scr_link_spools) {
+      spoolCacheForget("reload asked for");
+      linkReloadSpoolList();
     }
   }
 
