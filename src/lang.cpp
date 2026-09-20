@@ -2655,6 +2655,9 @@ const char* const STRINGS[][3] = {
   { "Der interne Speicher fasst 16.384 Zeilen und überschreibt die ältesten. Gemessen an einem vollen Tag sind das rund eine Woche im Umfang \"Normal\" und gut einen Tag im Umfang \"Ausführlich\".",
     "The internal storage holds 16,384 lines and overwrites the oldest. Measured against a full day that is about a week at normal scope and a good day at verbose.",
     "The internal storage holds 16,384 lines and overwrites the oldest. Measured against a full day that is about a week at normal scope and a good day at verbose." },  // STR_W_LOG_INT_NOTE
+  { "Spule hat sich geändert, Liste neu geladen",
+    "That spool changed, the list was reloaded",
+    "That spool changed, the list was reloaded" },  // STR_LIST_SPOOL_CHANGED
 };
 
 StringID tagWriteResultString(uint8_t code) {

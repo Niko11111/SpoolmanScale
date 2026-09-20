@@ -63,6 +63,17 @@ struct UnlinkedSpool {
   char  vendor[32];    // filament.vendor.name
   char  material[16];  // filament.material (PLA, PETG, ABS...)
   char  color_hex[SPOOL_COLOR_HEX_MAX];  // filament.color_hex, #RRGGBB or #RRGGBBAA
+  // The row was handed out by services/spool_cache and nobody has read the
+  // spool from the server since. Its tag_values are then EMPTY whatever the
+  // spool holds, because the cache keeps no tag values - and empty is what a
+  // write takes for "unbound". So a row with this set must never reach
+  // patchSpoolTag(): linkRefreshRow() reads the spool and clears it.
+  //
+  // In the row and not beside it, because qsort() moves whole rows. In the two
+  // bytes of padding that were here anyway, the row stays at 896. Every place
+  // that fills a row has to set it: the block comes from heap_caps_malloc(),
+  // which does not zero.
+  bool  from_cache;
   float remaining;     // remaining_weight
   float total;         // filament.weight
   // What the spool holds in each tag field, indexed by TagFieldId, quote
@@ -184,6 +195,11 @@ static lv_obj_t *lbl_link_id_status  = nullptr; // Error label in numeric keypad
 static char link_selected_vendor[32]   = "";   // selected vendor
 static char link_selected_material[8]  = "";   // 3-char material prefix
 static char link_selected_material_full[32] = ""; // full material name (Stufe 3)
+// What the spool list on screen was built with, so that it can be built again
+// after a reload - see linkReloadSpoolList().
+static char link_list_vendor[32]   = "";
+static char link_list_mat[8]       = "";
+static char link_list_mat_full[32] = "";
 static bool link_stage3_shown = false;          // true if stage 3 actually rendered (not auto-skipped)
 static bool link_flow_is_bambu = false;         // which flow is active
 
@@ -249,6 +265,11 @@ static bool link_id_lookup_is_bambu = false;
 // workable, a list of nothing is a dead end, but the user still has to know
 // which of the two they are looking at.
 bool link_material_ignored = false;
+// The list on screen came out of services/spool_cache rather than off the wire.
+static bool link_list_from_cache = false;
+// One line on top of the next spool list, then cleared: a row was tapped, the
+// server said something else about that spool, and the list was built again.
+static bool link_list_changed_note = false;
 static bool link_overlays_close_pending = false;
 static bool show_id_input_pending = false;   // deferred re-open of IdInputPopup from Back button
 
@@ -260,6 +281,7 @@ static bool  link_patch_pending      = false;   // doLinkPatch(id, bambu)
 static int   link_patch_id           = 0;
 static bool  link_patch_bambu        = false;
 static bool  link_list_fetch_pending = false;   // "from the list" on the link entry
+static int   link_row_refresh_pending = -1;     // a cached row was tapped: index into link_spools
 static bool  copy_fetch_pending      = false;   // copy entry: active or archived spools
 static bool  copy_fetch_archived     = false;
 static bool  copy_create_pending     = false;   // copy confirm OK
@@ -526,6 +548,7 @@ bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   // verdict standing, and the next list would drop its material filter for no
   // reason and say so.
   link_material_ignored = false;
+  link_list_from_cache  = false;
   if (!wifi_ok) return false;
 
   // Settled here, once, for every decision the flow makes afterwards. Offering
@@ -540,28 +563,6 @@ bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     logSDf("link fetch: append=%d (field=%s list=%d write=%d present=%d)",
            link_cu_ok ? 1 : 0, tagFieldKeyName(), is_list ? 1 : 0,
            g_card_uids_write ? 1 : 0, present ? 1 : 0); }
-
-  // The stamp first, the list after - see spoolCacheFill() for why the order
-  // matters. The copy flow stays out of it: what it picks from the list goes
-  // into a new spool unread, and the cache must never be what a write is
-  // built on.
-  //
-  // SECOND STEP of the list cache: the copy is filled, nothing is served from
-  // it yet.
-  const bool may_cache = (!archived_only && !copy_flow_via_list);
-  InventoryStamp stamp = { -1, 0 };
-  bool have_stamp = false;
-  if (may_cache) {
-    const uint32_t t0 = millis();
-    const int sc = backendInventoryStamp(cfg_spoolman_base, &stamp);
-    have_stamp = (sc == 200);
-    logSDf("link fetch: stamp code=%d count=%d witness=%d (%lu ms)",
-           sc, stamp.count, stamp.witness_id, (unsigned long)(millis() - t0));
-  }
-
-  // Up before the blocking work, and painted before this returns. The reader
-  // below moves it along, so the wait stops looking like a hang.
-  loadingOverlayShow(T(STR_LOADING_SPOOLS));
 
   logSDf("link fetch: is_bambu=%d material_filter='%s' archived_only=%d",
     is_bambu, material_filter ? material_filter : "", (int)archived_only);
@@ -587,23 +588,65 @@ bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     logSD("link fetch: filter overflowed, fields will be missing");
   SpiRamAllocator psram_alloc;
   JsonDocument doc(&psram_alloc);
-  DeserializationError err = DeserializationError::Ok;
-  int code;
-  { // The clocks stop with the loop - see httpStallTotalMs(). A scope so no
-    // return can leave the bracket open.
-    HttpStall stall(loadingOverlayProgress);
-    code = backendGetSpoolListJson(cfg_spoolman_base, archived_only, doc, 8000, &filterL, &err);
-  }
-  if (code != 200 || err) {
-    loadingOverlayHide();
-    serverReachNote(code, true);
-    return false;
+
+  // ---- from the copy kept in PSRAM, if it can be proven ---------------------
+  //
+  // The stamp first and exactly once: it either proves the copy, or it becomes
+  // the stamp of the download that follows. Never taken after the download -
+  // see spoolCacheFill().
+  //
+  // The copy flow stays out of it, both ways: what it picks from the list goes
+  // into a new spool unread, and the cache must never be what a write is built
+  // on.
+  const bool may_cache = (!archived_only && !copy_flow_via_list);
+  InventoryStamp stamp = { -1, 0 };
+  bool have_stamp = false;
+  bool from_cache = false;
+  if (may_cache) {
+    const uint32_t t0 = millis();
+    const int sc = backendInventoryStamp(cfg_spoolman_base, &stamp);
+    logSDf("link fetch: stamp code=%d count=%d witness=%d (%lu ms)",
+           sc, stamp.count, stamp.witness_id, (unsigned long)(millis() - t0));
+    // The server is gone. The download would only find that out again, eight
+    // seconds later and behind a loading overlay.
+    if (serverReachIsNetworkFailure(sc)) {
+      serverReachNote(sc, true);
+      return false;
+    }
+    have_stamp = (sc == 200);
+    // The placeholder of a bound spool goes under the first tag field. Which
+    // one does not matter: spoolHasAnyTag() asks all of them.
+    if (spoolCacheUsable(have_stamp ? &stamp : nullptr))
+      from_cache = spoolCacheToJson(doc, tagFieldSpec(0).key);
   }
 
-  // Not a list FilaMan gave up on halfway: its stamp would vouch for spools
-  // that were never read.
-  if (may_cache && !backendLastListPartial())
-    spoolCacheFill(doc.as<JsonArrayConst>(), spoolHasAnyTag, have_stamp ? &stamp : nullptr);
+  // ---- or off the wire --------------------------------------------------------
+  if (!from_cache) {
+    // Up before the blocking work, and painted before this returns. The reader
+    // below moves it along, so the wait stops looking like a hang.
+    loadingOverlayShow(T(STR_LOADING_SPOOLS));
+
+    DeserializationError err = DeserializationError::Ok;
+    int code;
+    { // The clocks stop with the loop - see httpStallTotalMs(). A scope so no
+      // return can leave the bracket open.
+      HttpStall stall(loadingOverlayProgress);
+      code = backendGetSpoolListJson(cfg_spoolman_base, archived_only, doc, 8000, &filterL, &err);
+    }
+    if (code != 200 || err) {
+      loadingOverlayHide();
+      serverReachNote(code, true);
+      return false;
+    }
+
+    // Not a list FilaMan gave up on halfway: its stamp would vouch for spools
+    // that were never read.
+    if (may_cache && !backendLastListPartial())
+      spoolCacheFill(doc.as<JsonArrayConst>(), spoolHasAnyTag, have_stamp ? &stamp : nullptr);
+  }
+  link_list_from_cache = from_cache;
+  // The line that says afterwards whether the cache was hit.
+  logSDf("link fetch: list %s", from_cache ? "from cache" : "downloaded");
 
   JsonArray spools = doc.as<JsonArray>();
   int total_in_api = 0;
@@ -694,7 +737,15 @@ bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = spool["id"] | 0;
 
-    linkFillTagValues(s, spool);
+    // A row out of the cache carries no tag values, only the placeholder that
+    // made the filter above answer as it did for the original. That must not
+    // land in the row: a write would take it for a UID to append to.
+    s.from_cache = from_cache;
+    if (from_cache) {
+      for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++) s.tag_values[f][0] = '\0';
+    } else {
+      linkFillTagValues(s, spool);
+    }
 
     String fname = spool["filament"]["name"] | String("?");
     fname.trim();
@@ -757,6 +808,92 @@ bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
 
 // Legacy wrapper for compatibility
 void fetchUnlinkedSpools() { fetchAllSpoolsForLink(false, ""); }
+
+// ============================================================
+//  A ROW OUT OF THE CACHE IS READ AGAIN BEFORE IT IS USED
+// ============================================================
+// How long a tapped row may hold the loop while it is read. Shorter than the
+// usual five seconds: this runs without a loading overlay. It covers the read
+// only - the connect has the client's own five seconds, as everywhere else.
+#define LINK_ROW_REFRESH_TIMEOUT_MS 3000
+
+enum LinkRowRefresh : uint8_t {
+  LINK_ROW_OK = 0,     // read, the row is true again
+  LINK_ROW_CHANGED,    // not what the list said: gone, archived, bound meanwhile
+  LINK_ROW_NETWORK,    // no answer worth acting on, so nothing is known
+};
+
+// The cache decides what a list shows, never what is written. Between a row
+// out of the cache and anything that describes it or writes to it stands this:
+// the spool is read from the server, the row gets its real tag values and its
+// numbers, and from_cache is cleared.
+//
+// Two callers. The tap on a row, before the confirmation opens - that is the
+// place that matters, because what the dialogs then show (the grams, and in
+// the warning behind them the number of UIDs the spool already holds) is what
+// the write is built on. And doLinkPatch(), as the bolt on the one door every
+// write goes through.
+//
+// Reaches the network: from the loop only, never from an event callback.
+static LinkRowRefresh linkRefreshRow(int idx) {
+  if (!link_spools || idx < 0 || idx >= link_spool_count) return LINK_ROW_CHANGED;
+  UnlinkedSpool &s = link_spools[idx];
+
+  JsonDocument doc;
+  DeserializationError err = DeserializationError::Ok;
+  const uint32_t t0 = millis();
+  const int code = serverReachNote(
+      backendGetSpoolJson(cfg_spoolman_base, s.id, doc, LINK_ROW_REFRESH_TIMEOUT_MS, &err), true);
+  const unsigned long took = (unsigned long)(millis() - t0);
+
+  // The server did not answer. serverReachNote() has asked for the popup; the
+  // cache is kept, because nothing was learned that speaks against it.
+  if (serverReachIsNetworkFailure(code)) {
+    logSDf("link row: spool %d not read, no connection (%d, %lu ms)", s.id, code, took);
+    return LINK_ROW_NETWORK;
+  }
+  if (code == 404) {
+    logSDf("link row: spool %d is gone (%lu ms)", s.id, took);
+    spoolCacheForget("a listed spool is gone");
+    return LINK_ROW_CHANGED;
+  }
+  // Anything else that is not a spool: a 500, a body that did not parse. Not
+  // a statement about the spool, so the list stays - but it has to be said,
+  // or the tap looks as if it had not been felt.
+  if (code != 200 || err) {
+    logSDf("link row: spool %d not read, HTTP %d %s (%lu ms)", s.id, code,
+           err ? err.c_str() : "", took);
+    showInfoPopup(STR_SERVER_DOWN_TITLE, STR_SERVER_DOWN_TEXT, INFO_WARN);
+    return LINK_ROW_NETWORK;
+  }
+
+  JsonObjectConst spool = doc.as<JsonObjectConst>();
+  if (spool["archived"] | false) {
+    logSDf("link row: spool %d was archived meanwhile (%lu ms)", s.id, took);
+    spoolCacheForget("a listed spool was archived");
+    return LINK_ROW_CHANGED;
+  }
+  const bool bound = spoolHasAnyTag(spool);
+  if (bound && !link_cu_ok) {
+    // It would never have been in this list. Only this one row of the cache
+    // was wrong, so only that is put right: the list that follows comes out of
+    // the cache again, without the spool.
+    logSDf("link row: spool %d was bound meanwhile (%lu ms)", s.id, took);
+    spoolCacheSetBound(s.id, true);
+    return LINK_ROW_CHANGED;
+  }
+
+  linkFillTagValues(s, spool);
+  s.remaining    = spool["remaining_weight"] | 0.0f;
+  s.total        = spool["filament"]["weight"] | 1000.0f;
+  s.filament_id  = spool["filament"]["id"] | 0;
+  s.spool_weight = spool["spool_weight"] | 0.0f;
+  s.from_cache   = false;
+  spoolCacheSetBound(s.id, bound);
+  spoolCacheSetRemaining(s.id, s.remaining);
+  logSDf("link row: spool %d read fresh, bound=%d (%lu ms)", s.id, bound ? 1 : 0, took);
+  return LINK_ROW_OK;
+}
 
 // ============================================================
 //  SPOOLMAN: SAVE TAG UUID (extra.tag)
@@ -957,6 +1094,26 @@ void doLinkPatch(int spool_id, bool is_bambu) {
     return;
   }
 
+  // The bolt on the one door every write goes through. A row out of the cache
+  // holds no tag values, and linkTargetValues() below would hand that on as
+  // "unbound": a spool with two UIDs would come out with one. Every way here
+  // has read the row already - the tap on it, the numpad - so this should
+  // never find anything. If it does, it reads the spool itself rather than
+  // refuse, and the line in the log says that a way around the refresh exists.
+  for (int i = 0; i < link_spool_count; i++) {
+    if (link_spools[i].id != spool_id || !link_spools[i].from_cache) continue;
+    logSDf("link patch: row of spool %d still cached, refreshed late", spool_id);
+    const LinkRowRefresh r = linkRefreshRow(i);
+    if (r != LINK_ROW_OK) {
+      logSDf("LINK ABORT: spool %d could not be read before the write (%d)", spool_id, (int)r);
+      statusMessageShow(T(r == LINK_ROW_NETWORK ? STR_LINK_NO_CONNECTION : STR_LIST_SPOOL_CHANGED),
+                        UI_COL_BAD_TEXT);
+      closeLinkOverlays();
+      return;
+    }
+    break;
+  }
+
   // Both stores go along: the list is appended to when there is one, and the
   // tag field's UID becomes the list's first entry when there is not. Null for
   // an unbound spool, and for every spool at all while the switch is off.
@@ -995,6 +1152,12 @@ void doLinkPatch(int spool_id, bool is_bambu) {
 
   // Asked before the reload below, because the answer to it is already in.
   if (patchSpoolTagTakeNativeMissing()) nativemissing_pending = true;
+
+  // The next list comes out of the cache, and this spool is no longer free.
+  // Not for Spoolman's own tag relation: spoolHasAnyTag() does not see it, so
+  // a downloaded list keeps offering such a spool, and the cache has to say
+  // what a download would say - no more and no less.
+  if (!tagFieldSelected().is_native) spoolCacheSetBound(spool_id, true);
 
   closeLinkOverlays();
 
@@ -1533,7 +1696,26 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
 
   bool found_in_list = false;
   for (int i = 0; i < link_spool_count; i++) {
-    if (link_spools[i].id == entered_id) { found_in_list = true; break; }
+    if (link_spools[i].id != entered_id) continue;
+    found_in_list = true;
+    // The row is already there, so nothing below appends one - and until the
+    // list cache that was the end of it, because the row was seconds old and
+    // held the spool's real tag values. A row out of the cache holds none.
+    // Left like that, the warning below would count the UIDs in the fresh
+    // document while doLinkPatch() reads this row through linkTargetValues(),
+    // finds it empty, takes the spool for unbound and writes a new list over
+    // the one it has. The document is in hand, so the row is made true here.
+    if (link_spools[i].from_cache) {
+      UnlinkedSpool &row = link_spools[i];
+      linkFillTagValues(row, doc.as<JsonObjectConst>());
+      row.remaining    = doc["remaining_weight"] | 0.0f;
+      row.total        = doc["filament"]["weight"] | 0.0f;
+      row.filament_id  = doc["filament"]["id"] | 0;
+      row.spool_weight = doc["spool_weight"] | 0.0f;
+      row.from_cache   = false;
+      logSDf("link: row of spool %d read fresh behind the numpad", entered_id);
+    }
+    break;
   }
   // A hand entered ID is appended to the list so the rest of the flow can look
   // it up like any other spool. The list is either absent (no list loaded) or
@@ -1543,6 +1725,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
   if (!found_in_list && linkSpoolsEnsureCapacity(link_spool_count + 1)) {
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = entered_id;
+    s.from_cache = false;   // read from the server a moment ago
     // Same rule as the list fetch: too long is stored as empty, never cut.
     linkFillTagValues(s, doc.as<JsonObjectConst>());
     String mat = doc["filament"]["material"] | String("");
@@ -2038,6 +2221,15 @@ static void showLinkConfirmPopup(int idx) {
 
 void showFilteredSpoolList(const char* vendor_name, const char* material_prefix, const char* material_full) {
   crumbSet("spool list build");
+  // snprintf() and not strncpy(): the reload hands these very buffers' copies
+  // back in, and the material may be null.
+  { char v[sizeof(link_list_vendor)], m[sizeof(link_list_mat)], mf[sizeof(link_list_mat_full)];
+    snprintf(v,  sizeof(v),  "%s", vendor_name     ? vendor_name     : "");
+    snprintf(m,  sizeof(m),  "%s", material_prefix ? material_prefix : "");
+    snprintf(mf, sizeof(mf), "%s", material_full   ? material_full   : "");
+    memcpy(link_list_vendor,   v,  sizeof(v));
+    memcpy(link_list_mat,      m,  sizeof(m));
+    memcpy(link_list_mat_full, mf, sizeof(mf)); }
   logSDf("SHOW: FilteredSpoolList vendor=%s mat=%s matf=%s", vendor_name, material_prefix, material_full ? material_full : "");
   releaseScreen(&scr_link_spools);
 
@@ -2148,6 +2340,11 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   // Before the rows, not after them: it explains what the whole list is, and
   // at the bottom of a long list nobody would find it.
   if (link_material_ignored) addListMoreInfo(list, STR_LIST_MAT_IGNORED);
+  // Said once, on the list that was rebuilt because of it.
+  if (link_list_changed_note) {
+    link_list_changed_note = false;
+    addListMoreInfo(list, STR_LIST_SPOOL_CHANGED);
+  }
 
   int count = 0;
   for (int i = 0; i < link_spool_count; i++) {
@@ -2236,7 +2433,15 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
 
     // Click → Sicherheits-Popup
     lv_obj_add_event_cb(row, [](lv_event_t *e) {
-      showLinkConfirmPopup((int)(intptr_t)lv_event_get_user_data(e));
+      const int idx = (int)(intptr_t)lv_event_get_user_data(e);
+      // A row that was downloaded a moment ago opens the question as it always
+      // did. One out of the cache is read from the server first, and that is a
+      // request: parked for the loop, which opens the question afterwards.
+      if (link_spools && idx >= 0 && idx < link_spool_count && link_spools[idx].from_cache) {
+        link_row_refresh_pending = idx;
+        return;
+      }
+      showLinkConfirmPopup(idx);
     }, LV_EVENT_CLICKED, (void*)(intptr_t)i);
   }
 
@@ -3188,6 +3393,7 @@ bool fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bamb
     }
     UnlinkedSpool& s = link_spools[idx];
     s.id = spool["id"] | 0;
+    s.from_cache = false;   // the copy flow never reads the cache
     // Not a tag here, and deliberately emptied rather than left alone:
     // link_spools[] lives in PSRAM and is not zeroed, and the shared list
     // builders skip every row that is already bound, see linkSpoolBound().
@@ -3882,6 +4088,30 @@ void deleteSpoolFlowOverlays() {
   releaseScreen(&scr_copy_confirm);
 }
 
+// The spool list on screen, fetched and built again at the same filter level.
+// From the loop only: it reaches the network and deletes a screen.
+static void linkReloadSpoolList() {
+  // Copies, because showFilteredSpoolList() writes into the buffers these
+  // come from.
+  char vendor[sizeof(link_list_vendor)], mat[sizeof(link_list_mat)], mat_full[sizeof(link_list_mat_full)];
+  memcpy(vendor,   link_list_vendor,   sizeof(vendor));
+  memcpy(mat,      link_list_mat,      sizeof(mat));
+  memcpy(mat_full, link_list_mat_full, sizeof(mat_full));
+
+  // The rows hold indexes into the array the fetch is about to free.
+  if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
+
+  if (!fetchAllSpoolsForLink(link_flow_is_bambu, link_flow_is_bambu ? g_tag.material : "")) {
+    // No list, and the pickers underneath were built from the one that is
+    // gone. The fetch has said why; the flow ends here rather than on screens
+    // that point into nothing.
+    link_list_changed_note = false;
+    closeLinkOverlays();
+    return;
+  }
+  showFilteredSpoolList(vendor, mat, mat_full);
+}
+
 void handleSpoolFlowDeferredActions() {
   // First, so nothing below builds on top of an overlay that is already dead.
   // closeLinkOverlays() deletes exactly the nine screens hidden there and frees
@@ -3940,6 +4170,28 @@ void handleSpoolFlowDeferredActions() {
           break;
         case LNAV_NONE:
           break;
+      }
+    }
+  }
+
+  // ---- a row out of the cache was tapped ----------------------------------
+  // Before the patch below, so a row is read before anything can write to it.
+  if (link_row_refresh_pending >= 0) {
+    const int idx = link_row_refresh_pending;
+    link_row_refresh_pending = -1;
+    // Between the tap and this pass a backend switch from the browser can have
+    // taken the list away, and the screen with it.
+    if (link_spools && idx < link_spool_count && scr_link_spools) {
+      switch (linkRefreshRow(idx)) {
+        case LINK_ROW_OK:
+          showLinkConfirmPopup(idx);
+          break;
+        case LINK_ROW_CHANGED:
+          link_list_changed_note = true;
+          linkReloadSpoolList();
+          break;
+        case LINK_ROW_NETWORK:
+          break;   // said by a popup, the list stays as it is
       }
     }
   }

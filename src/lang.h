@@ -1210,6 +1210,9 @@ enum StringID {
   STR_W_LOG_INT_NONE,
   STR_W_LOG_INT_NOTE,
 
+  // The link flow's spool list, when it was handed out by the list cache
+  STR_LIST_SPOOL_CHANGED,     // on top of a list rebuilt because a tapped spool had changed
+
   STR_COUNT
 };
 

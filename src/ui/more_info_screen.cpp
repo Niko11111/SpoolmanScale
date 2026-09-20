@@ -21,6 +21,7 @@
 #include "services/server_reach.h"
 #include "services/filaman_api.h"
 #include "services/wifi_manager.h"
+#include "services/spool_cache.h"
 #include "lang.h"
 #include "confirm_popup.h"
 #include "status_picker.h"
@@ -128,6 +129,11 @@ static void runUnlink() {
     statusMessageShow(T(STR_UNLINK_NO_CONNECTION), UI_COL_BAD_TEXT);
     return;
   }
+
+  // The kept spool list still has the spool as bound and would leave it out.
+  // Free is the safe way to be wrong: if another tag still binds it, the row
+  // is read again when it is tapped, and that puts it right.
+  spoolCacheSetBound(spool_id, false);
 
   // The binding is gone, but the tag on the reader still carries the spool
   // data - the next reader to see it would still name a spool this one no
