@@ -326,6 +326,34 @@ static bool spoolHasAnyTag(JsonObjectConst spool) {
   return false;
 }
 
+// What the spool holds in each tag field, into the row. Which field binds a
+// spool decides everything the flow does next: whether it is offered at all,
+// whether the warning says "overwrite" or "add", and whether the write appends
+// to a list or migrates a UID out of one field into another.
+//
+// Never keep a shortened value: appending to a truncated list would drop the
+// entries that fell off the end. Empty means "unknown", and the write then
+// treats the spool as unbound rather than acting on half a list.
+//
+// s.id has to be set, the log line names it.
+static void linkFillTagValues(UnlinkedSpool& s, JsonObjectConst spool) {
+  for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++) {
+    s.tag_values[f][0] = '\0';
+    const char* key = tagFieldSpec(f).key;
+    if (spool["extra"][key].isNull()) continue;
+    String v = spool["extra"][key].as<String>();
+    v.replace("\"",""); v.trim();
+    if (v.length() == 0) continue;
+    if (v.length() < CARD_UIDS_MAX) {
+      strncpy(s.tag_values[f], v.c_str(), CARD_UIDS_MAX - 1);
+      s.tag_values[f][CARD_UIDS_MAX - 1] = '\0';
+    } else {
+      logSDf("link: %s of spool %d too long (%d), ignored",
+             key, s.id, (int)v.length());
+    }
+  }
+}
+
 // True when any tag field of this spool holds something, whichever one it is.
 static bool linkSpoolBound(const UnlinkedSpool& s) {
   for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++)
@@ -666,29 +694,7 @@ bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = spool["id"] | 0;
 
-    // Which field binds this spool decides everything the flow does next:
-    // whether it is offered at all, whether the warning says "overwrite" or
-    // "add", and whether the write appends to a list or migrates a UID out of
-    // one field into another.
-    //
-    // Never keep a shortened value: appending to a truncated list would drop
-    // the entries that fell off the end. Empty means "unknown", and the write
-    // then treats the spool as unbound rather than acting on half a list.
-    for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++) {
-      s.tag_values[f][0] = '\0';
-      const char* key = tagFieldSpec(f).key;
-      if (spool["extra"][key].isNull()) continue;
-      String v = spool["extra"][key].as<String>();
-      v.replace("\"",""); v.trim();
-      if (v.length() == 0) continue;
-      if (v.length() < CARD_UIDS_MAX) {
-        strncpy(s.tag_values[f], v.c_str(), CARD_UIDS_MAX - 1);
-        s.tag_values[f][CARD_UIDS_MAX - 1] = '\0';
-      } else {
-        logSDf("link fetch: %s of spool %d too long (%d), ignored",
-               key, s.id, (int)v.length());
-      }
-    }
+    linkFillTagValues(s, spool);
 
     String fname = spool["filament"]["name"] | String("?");
     fname.trim();
@@ -1538,17 +1544,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = entered_id;
     // Same rule as the list fetch: too long is stored as empty, never cut.
-    for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++) {
-      s.tag_values[f][0] = '\0';
-      const char* key = tagFieldSpec(f).key;
-      if (doc["extra"][key].isNull()) continue;
-      String v = doc["extra"][key].as<String>();
-      v.replace("\"",""); v.trim();
-      if (v.length() > 0 && v.length() < CARD_UIDS_MAX) {
-        strncpy(s.tag_values[f], v.c_str(), CARD_UIDS_MAX - 1);
-        s.tag_values[f][CARD_UIDS_MAX - 1] = '\0';
-      }
-    }
+    linkFillTagValues(s, doc.as<JsonObjectConst>());
     String mat = doc["filament"]["material"] | String("");
     mat.trim(); strncpy(s.material, mat.c_str(), sizeof(s.material)-1);
     s.material[sizeof(s.material)-1] = '\0';
@@ -1901,6 +1897,145 @@ static bool linkRowMatches(const UnlinkedSpool &s, const char* vendor_name,
   return true;
 }
 
+// The question in front of a link or a copy: this spool, yes or no. Opened by
+// a row of the spool list. A function of its own rather than the body of the
+// row's callback, so that it can be opened from the loop as well.
+static void showLinkConfirmPopup(int idx) {
+  if (idx < 0 || idx >= link_spool_count) return;
+  UnlinkedSpool &s = link_spools[idx];
+
+  // Sicherheits-Popup (halbtransparentes Overlay)
+  releaseScreen(&scr_link_confirm);
+  lv_obj_t *popup = lv_obj_create(lv_scr_act());
+  scr_link_confirm = popup;
+  lv_obj_set_size(popup, 480, 320);
+  lv_obj_set_pos(popup, 0, 0);
+  lv_obj_set_style_bg_color(popup, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_opa(popup, LV_OPA_70, 0);
+  lv_obj_set_style_border_width(popup, 0, 0);
+  lv_obj_set_style_radius(popup, 0, 0);
+  lv_obj_set_style_pad_all(popup, 0, 0);
+  lv_obj_clear_flag(popup, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t *box = lv_obj_create(popup);
+  lv_obj_set_size(box, 440, 220);
+  lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_border_width(box, 2, 0);
+  lv_obj_set_style_radius(box, 12, 0);
+  lv_obj_set_style_pad_all(box, 0, 0);
+  lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t *lbl_q = lv_label_create(box);
+  lv_label_set_text(lbl_q, copy_flow_via_list ? T(STR_COPY_CONFIRM_TITLE) : T(STR_CONFIRM_LINK));
+  lv_obj_set_style_text_color(lbl_q, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_font(lbl_q, &lv_font_montserrat_ext_18, 0);
+  lv_obj_set_style_text_align(lbl_q, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(lbl_q, LV_ALIGN_TOP_MID, 0, 16);
+
+  // Spulen-Info
+  char info[80];
+  bool name_has_mat = (s.material[0] && s.name[0] &&
+                       strncasecmp(s.name, s.material, strlen(s.material)) == 0);
+  if (name_has_mat) {
+    snprintf(info, sizeof(info), "#%d  %s\n%.0f g / %.0f g",
+      s.id, s.name, s.remaining, s.total);
+  } else {
+    snprintf(info, sizeof(info), "#%d  %s %s\n%.0f g / %.0f g",
+      s.id, s.material, s.name, s.remaining, s.total);
+  }
+  lv_obj_t *lbl_info = lv_label_create(box);
+  lv_label_set_text(lbl_info, info);
+  lv_obj_set_style_text_color(lbl_info, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_font(lbl_info, &lv_font_montserrat_ext_16, 0);
+  lv_obj_set_style_text_align(lbl_info, LV_TEXT_ALIGN_CENTER, 0);
+  lv_label_set_long_mode(lbl_info, LV_LABEL_LONG_WRAP);
+  lv_obj_set_width(lbl_info, 400);
+  lv_obj_align(lbl_info, LV_ALIGN_TOP_MID, 0, 48);
+
+  // Link button - y=110, h=46
+  lv_obj_t *btn_yes = lv_btn_create(box);
+  lv_obj_set_size(btn_yes, 420, 46);
+  lv_obj_set_pos(btn_yes, 10, 110);
+  lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x1a3020), 0);
+  lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_yes, 8, 0);
+  lv_obj_set_style_shadow_width(btn_yes, 0, 0);
+  lv_obj_set_style_border_width(btn_yes, 0, 0);
+  lv_obj_set_user_data(btn_yes, (void*)(intptr_t)idx);
+  lv_obj_add_event_cb(btn_yes, [](lv_event_t *e) {
+    int cidx = (intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
+    // Asynchronously: the popup is this button's grandparent, and the rest
+    // of this callback still runs inside its event dispatch.
+    releaseScreen(&scr_link_confirm);
+    // The same test the row callback does before it opens this popup. It is
+    // needed twice because the array can be freed between the two taps:
+    // anything that reaches hideAllOverlays() does that, a backend switch
+    // from the browser among them, and the popup outlives it.
+    if (!link_spools || cidx < 0 || cidx >= link_spool_count) {
+      logSDf("Link confirm: spool list gone, ignoring idx=%d", cidx);
+      return;
+    }
+    if (copy_flow_via_list) {
+      // Copy flow via vendor/material picker - flag pattern
+      copy_flow_via_list = false;
+      UnlinkedSpool &cs = link_spools[cidx];
+      logSDf("CopyConfirm via list: spool_id=%d fid=%d spw=%.0f", cs.id, cs.filament_id, cs.spool_weight);
+      copy_confirm_fid = cs.filament_id;
+      copy_confirm_spool_id = cs.id;
+      copy_confirm_remaining = cs.remaining;
+      copy_confirm_initial = cs.total;
+      copy_confirm_spool_w = cs.spool_weight;
+      {
+        bool nm = (cs.material[0] && cs.name[0] &&
+                   strncasecmp(cs.name, cs.material, strlen(cs.material)) == 0);
+        if (nm)
+          snprintf(copy_confirm_name, sizeof(copy_confirm_name), "%s (%s)", cs.name, cs.vendor);
+        else
+          snprintf(copy_confirm_name, sizeof(copy_confirm_name), "%s %s (%s)", cs.material, cs.name, cs.vendor);
+      }
+      copy_confirm_pending = true;
+    } else if (link_cu_ok && linkTargetBase(link_spools[cidx].id)) {
+      // Only bound spools get a second dialog, and only because they are
+      // the ones the list would have hidden before the switch existed.
+      // The confirmation behind us says which spool, this one says that it
+      // is already bound and that nothing will be replaced.
+      showWarnPopupA(link_spools[cidx].id, linkTargetBase(link_spools[cidx].id),
+                     link_flow_is_bambu, "", true);
+    } else {
+      // The id is copied now; the list it came from may be freed before
+      // the handler runs.
+      link_patch_id    = link_spools[cidx].id;
+      link_patch_bambu = link_flow_is_bambu;
+      link_patch_pending = true;
+    }
+  }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lbl_yes = lv_label_create(btn_yes);
+  lv_label_set_text(lbl_yes, copy_flow_via_list ? T(STR_BTN_CONFIRMED) : T(STR_LINK_OK));
+  lv_obj_set_style_text_color(lbl_yes, lv_color_hex(0x40c080), 0);
+  lv_obj_set_style_text_font(lbl_yes, &lv_font_montserrat_ext_18, 0);
+  lv_obj_center(lbl_yes);
+
+  // Cancel button - y=164 (gap=8 after btn_yes ends at 156)
+  lv_obj_t *btn_no = lv_btn_create(box);
+  lv_obj_set_size(btn_no, 420, 40);
+  lv_obj_set_pos(btn_no, 10, 164);
+  lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x3a1010), 0);
+  lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x602020), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_no, 8, 0);
+  lv_obj_set_style_shadow_width(btn_no, 0, 0);
+  lv_obj_set_style_border_width(btn_no, 0, 0);
+  lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
+    releaseScreen(&scr_link_confirm);
+  }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lbl_no = lv_label_create(btn_no);
+  lv_label_set_text(lbl_no, T(STR_CANCEL));
+  lv_obj_set_style_text_color(lbl_no, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_14, 0);
+  lv_obj_center(lbl_no);
+}
+
 void showFilteredSpoolList(const char* vendor_name, const char* material_prefix, const char* material_full) {
   crumbSet("spool list build");
   logSDf("SHOW: FilteredSpoolList vendor=%s mat=%s matf=%s", vendor_name, material_prefix, material_full ? material_full : "");
@@ -2101,141 +2236,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
 
     // Click → Sicherheits-Popup
     lv_obj_add_event_cb(row, [](lv_event_t *e) {
-      int idx = (intptr_t)lv_event_get_user_data(e);
-      if (idx < 0 || idx >= link_spool_count) return;
-      UnlinkedSpool &s = link_spools[idx];
-
-      // Sicherheits-Popup (halbtransparentes Overlay)
-      releaseScreen(&scr_link_confirm);
-      lv_obj_t *popup = lv_obj_create(lv_scr_act());
-      scr_link_confirm = popup;
-      lv_obj_set_size(popup, 480, 320);
-      lv_obj_set_pos(popup, 0, 0);
-      lv_obj_set_style_bg_color(popup, lv_color_hex(0x000000), 0);
-      lv_obj_set_style_bg_opa(popup, LV_OPA_70, 0);
-      lv_obj_set_style_border_width(popup, 0, 0);
-      lv_obj_set_style_radius(popup, 0, 0);
-      lv_obj_set_style_pad_all(popup, 0, 0);
-      lv_obj_clear_flag(popup, LV_OBJ_FLAG_SCROLLABLE);
-
-      lv_obj_t *box = lv_obj_create(popup);
-      lv_obj_set_size(box, 440, 220);
-      lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-      lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
-      lv_obj_set_style_border_color(box, lv_color_hex(0x28d49a), 0);
-      lv_obj_set_style_border_width(box, 2, 0);
-      lv_obj_set_style_radius(box, 12, 0);
-      lv_obj_set_style_pad_all(box, 0, 0);
-      lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
-
-      lv_obj_t *lbl_q = lv_label_create(box);
-      lv_label_set_text(lbl_q, copy_flow_via_list ? T(STR_COPY_CONFIRM_TITLE) : T(STR_CONFIRM_LINK));
-      lv_obj_set_style_text_color(lbl_q, lv_color_hex(0x28d49a), 0);
-      lv_obj_set_style_text_font(lbl_q, &lv_font_montserrat_ext_18, 0);
-      lv_obj_set_style_text_align(lbl_q, LV_TEXT_ALIGN_CENTER, 0);
-      lv_obj_align(lbl_q, LV_ALIGN_TOP_MID, 0, 16);
-
-      // Spulen-Info
-      char info[80];
-      bool name_has_mat = (s.material[0] && s.name[0] &&
-                           strncasecmp(s.name, s.material, strlen(s.material)) == 0);
-      if (name_has_mat) {
-        snprintf(info, sizeof(info), "#%d  %s\n%.0f g / %.0f g",
-          s.id, s.name, s.remaining, s.total);
-      } else {
-        snprintf(info, sizeof(info), "#%d  %s %s\n%.0f g / %.0f g",
-          s.id, s.material, s.name, s.remaining, s.total);
-      }
-      lv_obj_t *lbl_info = lv_label_create(box);
-      lv_label_set_text(lbl_info, info);
-      lv_obj_set_style_text_color(lbl_info, lv_color_hex(0xc8d8f0), 0);
-      lv_obj_set_style_text_font(lbl_info, &lv_font_montserrat_ext_16, 0);
-      lv_obj_set_style_text_align(lbl_info, LV_TEXT_ALIGN_CENTER, 0);
-      lv_label_set_long_mode(lbl_info, LV_LABEL_LONG_WRAP);
-      lv_obj_set_width(lbl_info, 400);
-      lv_obj_align(lbl_info, LV_ALIGN_TOP_MID, 0, 48);
-
-      // Link button - y=110, h=46
-      lv_obj_t *btn_yes = lv_btn_create(box);
-      lv_obj_set_size(btn_yes, 420, 46);
-      lv_obj_set_pos(btn_yes, 10, 110);
-      lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x1a3020), 0);
-      lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-      lv_obj_set_style_radius(btn_yes, 8, 0);
-      lv_obj_set_style_shadow_width(btn_yes, 0, 0);
-      lv_obj_set_style_border_width(btn_yes, 0, 0);
-      lv_obj_set_user_data(btn_yes, (void*)(intptr_t)idx);
-      lv_obj_add_event_cb(btn_yes, [](lv_event_t *e) {
-        int cidx = (intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
-        // Asynchronously: the popup is this button's grandparent, and the rest
-        // of this callback still runs inside its event dispatch.
-        releaseScreen(&scr_link_confirm);
-        // The same test the row callback does before it opens this popup. It is
-        // needed twice because the array can be freed between the two taps:
-        // anything that reaches hideAllOverlays() does that, a backend switch
-        // from the browser among them, and the popup outlives it.
-        if (!link_spools || cidx < 0 || cidx >= link_spool_count) {
-          logSDf("Link confirm: spool list gone, ignoring idx=%d", cidx);
-          return;
-        }
-        if (copy_flow_via_list) {
-          // Copy flow via vendor/material picker - flag pattern
-          copy_flow_via_list = false;
-          UnlinkedSpool &cs = link_spools[cidx];
-          logSDf("CopyConfirm via list: spool_id=%d fid=%d spw=%.0f", cs.id, cs.filament_id, cs.spool_weight);
-          copy_confirm_fid = cs.filament_id;
-          copy_confirm_spool_id = cs.id;
-          copy_confirm_remaining = cs.remaining;
-          copy_confirm_initial = cs.total;
-          copy_confirm_spool_w = cs.spool_weight;
-          {
-            bool nm = (cs.material[0] && cs.name[0] &&
-                       strncasecmp(cs.name, cs.material, strlen(cs.material)) == 0);
-            if (nm)
-              snprintf(copy_confirm_name, sizeof(copy_confirm_name), "%s (%s)", cs.name, cs.vendor);
-            else
-              snprintf(copy_confirm_name, sizeof(copy_confirm_name), "%s %s (%s)", cs.material, cs.name, cs.vendor);
-          }
-          copy_confirm_pending = true;
-        } else if (link_cu_ok && linkTargetBase(link_spools[cidx].id)) {
-          // Only bound spools get a second dialog, and only because they are
-          // the ones the list would have hidden before the switch existed.
-          // The confirmation behind us says which spool, this one says that it
-          // is already bound and that nothing will be replaced.
-          showWarnPopupA(link_spools[cidx].id, linkTargetBase(link_spools[cidx].id),
-                         link_flow_is_bambu, "", true);
-        } else {
-          // The id is copied now; the list it came from may be freed before
-          // the handler runs.
-          link_patch_id    = link_spools[cidx].id;
-          link_patch_bambu = link_flow_is_bambu;
-          link_patch_pending = true;
-        }
-      }, LV_EVENT_CLICKED, NULL);
-      lv_obj_t *lbl_yes = lv_label_create(btn_yes);
-      lv_label_set_text(lbl_yes, copy_flow_via_list ? T(STR_BTN_CONFIRMED) : T(STR_LINK_OK));
-      lv_obj_set_style_text_color(lbl_yes, lv_color_hex(0x40c080), 0);
-      lv_obj_set_style_text_font(lbl_yes, &lv_font_montserrat_ext_18, 0);
-      lv_obj_center(lbl_yes);
-
-      // Cancel button - y=164 (gap=8 after btn_yes ends at 156)
-      lv_obj_t *btn_no = lv_btn_create(box);
-      lv_obj_set_size(btn_no, 420, 40);
-      lv_obj_set_pos(btn_no, 10, 164);
-      lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x3a1010), 0);
-      lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x602020), LV_STATE_PRESSED);
-      lv_obj_set_style_radius(btn_no, 8, 0);
-      lv_obj_set_style_shadow_width(btn_no, 0, 0);
-      lv_obj_set_style_border_width(btn_no, 0, 0);
-      lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
-        releaseScreen(&scr_link_confirm);
-      }, LV_EVENT_CLICKED, NULL);
-      lv_obj_t *lbl_no = lv_label_create(btn_no);
-      lv_label_set_text(lbl_no, T(STR_CANCEL));
-      lv_obj_set_style_text_color(lbl_no, lv_color_hex(0xff8080), 0);
-      lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_14, 0);
-      lv_obj_center(lbl_no);
-
+      showLinkConfirmPopup((int)(intptr_t)lv_event_get_user_data(e));
     }, LV_EVENT_CLICKED, (void*)(intptr_t)i);
   }
 
