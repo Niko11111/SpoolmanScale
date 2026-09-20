@@ -3175,6 +3175,9 @@ void doCopySpoolCreate(int template_spool_id, int template_filament_id,
     Serial.printf("Copy spool created: new ID=%d\n", new_id);
     logSDf("Copy spool created: tmpl_spool=%d fid=%d new_spool_id=%d",
            template_spool_id, template_filament_id, new_id);
+    // A spool the kept list does not have, and a row for it cannot be made up
+    // from here. The stamp would catch it; BamBuddy has none.
+    spoolCacheForget("spool created by copy");
     finishCopyFlow(new_id);
     lv_label_set_text(lbl_status, T(STR_COPY_OK));
     lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
@@ -3699,6 +3702,7 @@ void doCreateSpoolFromTag() {
     logSDf("New spool from tag: mat=%s sub=%s brand=%s col=%s rgba=%s label=%d new_spool_id=%d",
            newtag_material, newtag_subtype, newtag_brand, newtag_color_name,
            newtag_rgba, newtag_label_weight, new_id);
+    spoolCacheForget("spool created from a tag");
     finishCopyFlow(new_id, newtag_tray);
     char ok_buf[40]; copyT(ok_buf, sizeof(ok_buf), STR_NEWTAG_OK);
     lv_label_set_text(lbl_status, ok_buf);

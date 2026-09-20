@@ -1573,6 +1573,10 @@ void querySpoolman(const char* tray_uuid) {
       int mc = backendPatchSpoolTag(cfg_spoolman_base, sm_id, tray_uuid, 4000);
       logSDf("FilaMan: spool %d found at rank %d, wrote rfid_uid, HTTP %d",
              sm_id, rank, mc);
+      // Free a moment ago, as the link list sees it, and bound from here on.
+      // Comfort only: left out, the spool would be offered once more and the
+      // read on the tap would turn it down.
+      if (mc == 200) spoolCacheSetBound(sm_id, true);
     }
 
     if (backendIsFilaMan() && sm_id > 0) {
@@ -1818,6 +1822,9 @@ void querySpoolman(const char* tray_uuid) {
           if (c >= 200 && c < 300) {
             strncpy(sm_tag_values[TAG_FIELD_TAG], val, CARD_UIDS_MAX - 1);
             sm_tag_values[TAG_FIELD_TAG][CARD_UIDS_MAX - 1] = '\0';
+            // Spoolman's own relation does not count as bound in the link
+            // list, a value in extra.tag does.
+            spoolCacheSetBound(sm_id, true);
           }
         } else {
           logSDf("Auto-link: %s missing on the server, tray uuid not kept",

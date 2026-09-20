@@ -10,6 +10,7 @@
 #include "hardware/sd_logger.h"
 #include "services/device_name.h"
 #include "services/http_progress.h"
+#include "services/spool_cache.h"
 #include "services/spool_color.h"
 #include "services/tag_uid.h"
 #include "services/wifi_manager.h"
@@ -193,6 +194,11 @@ int bbDetectInventoryMode(const char* base_url, const char* api_key,
            s_spoolman_url[0] ? s_spoolman_url : "");
     seen = true;
     last = s_mode;
+    // Same server, same address, another inventory behind it: spool 12 of
+    // BamBuddy's own database is not spool 12 of the Spoolman it proxies. The
+    // kept list is keyed by address and backend and would not notice. Only a
+    // flag, so it does not matter which task the health check runs on.
+    spoolCacheForget("BamBuddy inventory moved");
   }
   return 200;
 }

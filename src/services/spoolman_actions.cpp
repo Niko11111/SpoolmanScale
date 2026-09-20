@@ -21,6 +21,7 @@
 #include "lang.h"
 #include "services/backend.h"
 #include "services/server_reach.h"
+#include "services/spool_cache.h"
 #include "ui/main_screen_helpers.h"
 
 
@@ -44,6 +45,10 @@ bool reactivateSpool(float remaining) {
   logSDf("REACTIVATE ID=%d remaining=%.1fg gross=%.1fg HTTP %d",
          sm_id, remaining, gross, code);
   if (code < 200 || code >= 300) return false;
+
+  // One more active spool than the kept list knows. The stamp would notice at
+  // the next link - where there is one; BamBuddy has none.
+  spoolCacheForget("spool reactivated");
 
   // Reloading rather than patching the globals by hand: the spool comes back
   // with a used_weight the server recalculated, and guessing it here is how
@@ -99,6 +104,9 @@ int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
   logSDf("PATCH weight=%.1fg ID=%d HTTP %d", remaining, sm_id, code);
   if (code == 200) {
     sm_remaining = remaining;
+    // The grams the kept spool list shows for this spool. Display only: a row
+    // is read from the server again before anything is written to it.
+    spoolCacheSetRemaining(sm_id, remaining);
     char w_str[16];
     snprintf(w_str, sizeof(w_str), "%.0f g", sm_remaining);
     lv_label_set_text(lbl_spoolman_weight, w_str);
@@ -143,6 +151,8 @@ void patchArchiveSpool() {
 
   Serial.println("Spool archived!");
   sm_remaining = 0;
+  // Gone from the active inventory, so gone from the list a link would show.
+  spoolCacheForget("spool archived");
 
   // Show the archived state straight away. Without this the labels kept the
   // values from before and only caught up when the tag was scanned again.
@@ -733,6 +743,9 @@ void patchFilamentSpoolWeight(float spool_w) {
   int code = serverReachNote(backendPatchFilamentSpoolWeight(cfg_spoolman_base, sm_filament_id, spool_w), true);
   Serial.printf("patchFilamentSpoolWeight: HTTP %d\n", code);
   logSDf("PATCH filament_spool_weight=%.1fg fil_ID=%d HTTP %d", spool_w, sm_filament_id, code);
+  // Every spool of this filament may carry another tare now, and the stamp
+  // cannot see that: it proves which spools there are, not what they hold.
+  if (code >= 200 && code < 300) spoolCacheForget("filament tare changed");
 }
 
 void patchVendorSpoolWeight(float spool_w) {
@@ -742,4 +755,6 @@ void patchVendorSpoolWeight(float spool_w) {
   int code = serverReachNote(backendPatchVendorEmptySpoolWeight(cfg_spoolman_base, sm_vendor_id, spool_w), true);
   Serial.printf("patchVendorSpoolWeight: HTTP %d\n", code);
   logSDf("PATCH vendor_empty_spool=%.1fg vendor_ID=%d HTTP %d", spool_w, sm_vendor_id, code);
+  // As above, only wider: every spool of this brand.
+  if (code >= 200 && code < 300) spoolCacheForget("vendor tare changed");
 }
