@@ -47,13 +47,29 @@ typedef void (*HttpProgressFn)(size_t bytes_read);
 // boot. That made the AMS countdown subtract exactly as much as had elapsed,
 // so it stood at ten seconds forever, and the location prompt that hangs off
 // its timeout was never asked again.
-void httpStallBegin();
+//
+// `what` names the call for the verbose log and must outlive the bracket:
+// __func__ or a string literal. The first name inside an outermost bracket
+// becomes that bracket's name.
+void httpStallBegin(const char* what = nullptr);
 void httpStallEnd();
 
 // Total milliseconds spent inside those brackets since boot. A clock takes it
 // when it opens and subtracts the difference from its elapsed time; while a
 // fetch runs the clock therefore stands still instead of running out.
 uint32_t httpStallTotalMs();
+
+// The longest outermost bracket closed since the previous take, for the perf
+// log: which call held the loop, and for how long. `calls` counts the named
+// brackets inside it, so a paged fetch shows as one bracket with three calls.
+// Taking it starts the next window.
+struct HttpStallWorst {
+  uint32_t    ms;
+  const char* what;     // null when nothing named ran inside it
+  uint8_t     calls;
+  uint16_t    spans;    // outermost brackets closed in the window
+};
+HttpStallWorst httpStallWorstTake();
 
 void           httpSetProgressHook(HttpProgressFn fn);
 
@@ -84,9 +100,10 @@ public:
 // that takes a timeout holds the loop for up to that long, so each opens one
 // of these on its first line. It leaves the progress hook alone - the caller
 // that set one, the spool list say, is still using it when this scope ends.
+// The dispatcher passes __func__, so the log names the call that held the loop.
 class HttpStallTime {
 public:
-  HttpStallTime()  { httpStallBegin(); }
+  explicit HttpStallTime(const char* what = nullptr) { httpStallBegin(what); }
   ~HttpStallTime() { httpStallEnd(); }
   HttpStallTime(const HttpStallTime&) = delete;
   HttpStallTime& operator=(const HttpStallTime&) = delete;

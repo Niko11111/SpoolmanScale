@@ -5,6 +5,7 @@
 
 #include "hardware/display.h"
 #include "hardware/sd_logger.h"
+#include "services/http_progress.h"
 
 static unsigned long s_last_mark_ms    = 0;
 static unsigned long s_window_start_ms = 0;
@@ -39,6 +40,9 @@ static uint32_t s_nfc_hit_sum_ms = 0;
 static uint32_t s_nfc_hit_over50 = 0;
 static uint32_t s_nfc_hit_over80 = 0;
 static uint32_t s_nfc_miss_max_ms = 0;
+
+// httpStallTotalMs() runs since boot; the window's share is the difference.
+static uint32_t s_stall_total_prev_ms = 0;
 
 void perfNfcPoll(bool found, uint32_t poll_ms) {
   s_nfc_polls++;
@@ -96,6 +100,18 @@ void perfLogWindow() {
   }
   s_nfc_polls = s_nfc_hits = s_nfc_hit_max_ms = s_nfc_hit_sum_ms = 0;
   s_nfc_hit_over50 = s_nfc_hit_over80 = s_nfc_miss_max_ms = 0;
+
+  // The loop's own blocking backend calls in this window, and the longest one
+  // by name. Its own line: the perf line above is close to the 256 bytes
+  // logSDf() formats into. Only when a call ran, like the NFC line.
+  const uint32_t stall_total_ms = httpStallTotalMs();
+  const HttpStallWorst worst = httpStallWorstTake();
+  if (worst.spans > 0) {
+    logSDf("[verbose] stall: sum=%ums spans=%u max=%ums in=%s calls=%u",
+      (unsigned)(stall_total_ms - s_stall_total_prev_ms), (unsigned)worst.spans,
+      (unsigned)worst.ms, worst.what ? worst.what : "-", (unsigned)worst.calls);
+  }
+  s_stall_total_prev_ms = stall_total_ms;
 
   // The heartbeat and this line are two writes to the card in one pass, some
   // 55 ms that exist only because verbose logging is on. Dropping the mark

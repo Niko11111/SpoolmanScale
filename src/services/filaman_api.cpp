@@ -433,6 +433,9 @@ int filamanRegisterDevice(const char* base_url, const char* device_code,
 int filamanHeartbeat(const char* base_url, const char* device_token,
                      const char* ip_address, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || !device_token || !device_token[0]) return -1;
+  // appLoop() calls this directly, past the dispatcher and its brackets, and
+  // it runs once a minute on the loop task.
+  HttpStallTime stall(__func__);
 
   HTTPClient http;
   http.begin(String(base_url) + "/api/v1/devices/heartbeat");

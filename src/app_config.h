@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.8.0-beta.1"
+#define FW_VERSION  "v0.8.0-beta.2"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a

@@ -10,11 +10,25 @@ static uint32_t s_stall_total_ms = 0;
 static uint32_t s_stall_started   = 0;
 static uint8_t  s_stall_depth     = 0;
 
-void httpStallBegin() {
+// The open outermost bracket's name and call count, and the worst one closed
+// since the last take. Loop task only, like everything above.
+static const char*    s_stall_what  = nullptr;
+static uint8_t        s_stall_calls = 0;
+static HttpStallWorst s_worst       = {0, nullptr, 0, 0};
+
+void httpStallBegin(const char* what) {
   // The web worker's requests hold nothing on screen up; only the loop's own
   // waits are time a countdown must give back.
   if (!onLoopTask()) return;
-  if (s_stall_depth == 0) s_stall_started = millis();
+  if (s_stall_depth == 0) {
+    s_stall_started = millis();
+    s_stall_what    = nullptr;
+    s_stall_calls   = 0;
+  }
+  if (what) {
+    if (!s_stall_what) s_stall_what = what;
+    if (s_stall_calls < 255) s_stall_calls++;
+  }
   if (s_stall_depth < 255) s_stall_depth++;
 }
 
@@ -24,7 +38,21 @@ void httpStallEnd() {
   s_stall_depth--;
   // Only the outermost bracket adds anything: the inner ones are already
   // inside the span it is measuring.
-  if (s_stall_depth == 0) s_stall_total_ms += millis() - s_stall_started;
+  if (s_stall_depth != 0) return;
+  const uint32_t span_ms = millis() - s_stall_started;
+  s_stall_total_ms += span_ms;
+  if (s_worst.spans < UINT16_MAX) s_worst.spans++;
+  if (span_ms >= s_worst.ms) {
+    s_worst.ms    = span_ms;
+    s_worst.what  = s_stall_what;
+    s_worst.calls = s_stall_calls;
+  }
+}
+
+HttpStallWorst httpStallWorstTake() {
+  const HttpStallWorst taken = s_worst;
+  s_worst = {0, nullptr, 0, 0};
+  return taken;
 }
 
 uint32_t httpStallTotalMs() {
