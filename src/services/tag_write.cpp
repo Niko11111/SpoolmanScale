@@ -307,6 +307,18 @@ void tagInfoJson(const TagInfo *ti, char *out, size_t out_len) {
     jesc(ti->material, e, sizeof(e));
     n = appendf(out, out_len, n, ",\"material\":\"%s\"", e);
   }
+  if (ti->uid[0]) {
+    jesc(ti->uid, e, sizeof(e));
+    n = appendf(out, out_len, n, ",\"uid\":\"%s\"", e);
+  }
+  if (ti->tray_uuid[0]) {
+    jesc(ti->tray_uuid, e, sizeof(e));
+    n = appendf(out, out_len, n, ",\"tray_uuid\":\"%s\"", e);
+  }
+  if (ti->prod_date[0]) {
+    jesc(ti->prod_date, e, sizeof(e));
+    n = appendf(out, out_len, n, ",\"prod_date\":\"%s\"", e);
+  }
   if (ti->sku[0]) {
     jesc(ti->sku, e, sizeof(e));
     n = appendf(out, out_len, n, ",\"sku\":\"%s\"", e);
@@ -926,9 +938,32 @@ static void refreshCache(bool force = false) {
   if (!is_ntag) {
     snprintf(cached_kind, sizeof(cached_kind), "MIFARE Classic, read-only");
     cached_kindcode = TAG_KIND_MIFARE;
-    cached_content[0] = 0;
     cached_bytes = 0;
     memset(&cached_info, 0, sizeof(cached_info));
+    snprintf(cached_info.uid, sizeof(cached_info.uid), "%s", g_tag.uid_str);
+    if (g_tag_ready && (g_tag.vendor[0] || g_tag.material[0])) {
+      snprintf(cached_info.fmt, sizeof(cached_info.fmt), "%s", g_tag.vendor[0] ? g_tag.vendor : "Bambu Lab");
+      snprintf(cached_info.brand, sizeof(cached_info.brand), "%s", g_tag.vendor[0] ? g_tag.vendor : "Bambu Lab");
+      snprintf(cached_info.material, sizeof(cached_info.material), "%s", g_tag.material);
+      snprintf(cached_info.tray_uuid, sizeof(cached_info.tray_uuid), "%s", g_tag.tray_uuid[0] ? g_tag.tray_uuid : g_tag.short_uid);
+      snprintf(cached_info.prod_date, sizeof(cached_info.prod_date), "%s", g_tag.production_date);
+      const char *hex = g_tag.color_hex;
+      if (*hex == '#') hex++;
+      unsigned r = 0, g = 0, b = 0;
+      if (strlen(hex) >= 6 && sscanf(hex, "%02x%02x%02x", &r, &g, &b) == 3) {
+        cached_info.has_color = true;
+        cached_info.r = r; cached_info.g = g; cached_info.b = b;
+      }
+      cached_info.et_lo = g_tag.temp_min;
+      cached_info.et_hi = g_tag.temp_max;
+      cached_info.bed_lo = g_tag.bed_temp_min;
+      cached_info.bed_hi = g_tag.bed_temp_max;
+      cached_info.weight_g = g_tag.spool_weight;
+      snprintf(cached_content, sizeof(cached_content), "%s %s", g_tag.vendor[0] ? g_tag.vendor : "Bambu Lab", g_tag.material);
+    } else {
+      snprintf(cached_info.fmt, sizeof(cached_info.fmt), "unsupported");
+      cached_content[0] = 0;
+    }
     return;
   }
 
@@ -959,6 +994,8 @@ static void refreshCache(bool force = false) {
   // the last good description rather than blanking the page.
   char tmp[128];
   TagInfo ti;
+  memset(&ti, 0, sizeof(ti));
+  snprintf(ti.uid, sizeof(ti.uid), "%s", g_tag.uid_str);
   if (tagDescribe(tmp, sizeof(tmp), &ti) && tmp[0]) {
     snprintf(cached_content, sizeof(cached_content), "%s", tmp);
     cached_info = ti;

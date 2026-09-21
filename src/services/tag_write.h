@@ -162,13 +162,19 @@ size_t      tagNdefSizeFor(size_t json_len);
 // carry that field.
 struct TagInfo {
   char     fmt[12];        // ACE, OpenSpool, blank, unknown
-  char     sku[17];
-  char     brand[17];
-  char     material[17];
+  char     uid[24];
+  char     tray_uuid[37];
+  char     prod_date[16];
+  char     sku[24];
+  char     brand[32];
+  char     material[32];
+  char     subtype[32];
   bool     has_color;
   uint8_t  r, g, b;
   uint16_t et_lo, et_hi, bed_lo, bed_hi;
-  uint16_t dia_x100, length_m, weight_g;
+  uint16_t dia_x100;
+  uint16_t length_m;
+  uint16_t weight_g;
 };
 
 // Serialises a TagInfo as a JSON object, omitting fields the format lacks.
