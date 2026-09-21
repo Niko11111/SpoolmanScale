@@ -13,6 +13,9 @@
 //
 //  So this says what is going on and what not to do, from the tap to the
 //  result. No button: there is nothing to decide, and nobody could press it.
+//  The bar follows the pages the tag has taken, which the writer reports
+//  through tagWriteSetProgress() - the one thing on it that moves, and the
+//  proof that the scale has not hung.
 //
 //  Loop task only. Never from an LVGL callback: showing it redraws the screen
 //  on the spot, because the very next thing the caller does is block.

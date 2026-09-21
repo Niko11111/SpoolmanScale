@@ -2,19 +2,43 @@
 
 #include <lvgl.h>
 
+#include <Arduino.h>
+
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/tag_write.h"
 #include "ui/theme.h"
 
 // The width of every question, so the card stands where the question stood.
 // Lower than one: it has no buttons to make room for.
-#define BUSY_BOX_H      170
+#define BUSY_BOX_H      190
 #define BUSY_ICON_Y      16
 #define BUSY_TITLE_Y     56
 #define BUSY_HINT_Y      98
 #define BUSY_TEXT_PAD    40   // what the two lines stay clear of, left and right together
+#define BUSY_BAR_W      320
+#define BUSY_BAR_H       10
+#define BUSY_BAR_Y      158
+// How often the bar is redrawn at most. A page takes about 30 ms and a redraw
+// a few, so following every page would make the write one tenth longer for
+// steps nobody can see.
+#define BUSY_BAR_TICK_MS  120
 
 static lv_obj_t *scr_tag_busy = nullptr;
+static lv_obj_t *bar_tag_busy = nullptr;
+
+// From inside the write, after every page, see tagWriteSetProgress(). Draws
+// on the spot: the loop stands still until the job is done, so nothing else
+// would put a moved bar on the screen before the result replaces it.
+static void busyProgress(uint16_t done, uint16_t total) {
+  if (!bar_tag_busy || !total) return;
+  static unsigned long last = 0;
+  const unsigned long now = millis();
+  if (done < total && done > 0 && now - last < BUSY_BAR_TICK_MS) return;
+  last = now;
+  lv_bar_set_value(bar_tag_busy, (int32_t)((uint32_t)done * 100U / total), LV_ANIM_OFF);
+  lv_refr_now(NULL);
+}
 
 void tagBusyShow(bool erase) {
   if (scr_tag_busy) return;
@@ -64,6 +88,20 @@ void tagBusyShow(bool erase) {
   lv_obj_set_width(hint, UI_POPUP_W - BUSY_TEXT_PAD);
   lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, BUSY_HINT_Y);
 
+  // Empty until the first page is on the tag. A write fetches the spool from
+  // the server first, and for that part there is nothing to count.
+  bar_tag_busy = lv_bar_create(box);
+  lv_obj_set_size(bar_tag_busy, BUSY_BAR_W, BUSY_BAR_H);
+  lv_obj_align(bar_tag_busy, LV_ALIGN_TOP_MID, 0, BUSY_BAR_Y);
+  lv_bar_set_range(bar_tag_busy, 0, 100);
+  lv_bar_set_value(bar_tag_busy, 0, LV_ANIM_OFF);
+  lv_obj_set_style_bg_color(bar_tag_busy, lv_color_hex(UI_COL_LINE), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(bar_tag_busy, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_bg_color(bar_tag_busy, lv_color_hex(UI_COL_ACCENT), LV_PART_INDICATOR);
+  lv_obj_set_style_radius(bar_tag_busy, BUSY_BAR_H / 2, LV_PART_MAIN);
+  lv_obj_set_style_radius(bar_tag_busy, BUSY_BAR_H / 2, LV_PART_INDICATOR);
+  tagWriteSetProgress(busyProgress);
+
   // Now, not at the next lv_timer_handler(): the write starts on the next loop
   // pass and holds the loop until it is done, and a card that is first drawn
   // together with the result is no card.
@@ -72,6 +110,10 @@ void tagBusyShow(bool erase) {
 
 void tagBusyHide() {
   if (!scr_tag_busy) return;
+  // First, so that a write nobody is watching - the web page starts those -
+  // never reaches for a bar that is gone.
+  tagWriteSetProgress(nullptr);
+  bar_tag_busy = nullptr;
   lv_obj_del(scr_tag_busy);
   scr_tag_busy = nullptr;
 }

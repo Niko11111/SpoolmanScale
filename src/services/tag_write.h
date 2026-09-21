@@ -47,6 +47,14 @@ enum TagWriteResult : uint8_t {
   TW_ERR_WRITE,       // a page write failed part way through
 };
 
+// How far a write or an erase has come, in pages, for a bar on the device.
+// Called from inside the job after every page the tag took, on the loop task,
+// with the tag still selected: the listener may redraw, and must not go near
+// the reader or the network. `total` is what this job will write, 0 done is
+// said once before the first page. nullptr stops the calls.
+typedef void (*TagWriteProgressFn)(uint16_t done, uint16_t total);
+void tagWriteSetProgress(TagWriteProgressFn fn);
+
 // Parks a request. The write itself runs in tagWriteTick(), because the NFC
 // bus belongs to the loop task and the HTTP handler is not on it.
 // link also writes the tag's UID onto the spool record, so presenting it

@@ -331,11 +331,30 @@ static void describeAce(const AceFields *f, char *out, size_t out_len) {
            (unsigned)f->weight_g, f->sku);
 }
 
+// Pages of the running job, counted where every one of them passes. A job
+// says how many it is going to write before its first, see progressBegin().
+static TagWriteProgressFn s_progress    = nullptr;
+static uint16_t           s_pages_done  = 0;
+static uint16_t           s_pages_total = 0;
+
+void tagWriteSetProgress(TagWriteProgressFn fn) { s_progress = fn; }
+
+static void progressBegin(uint16_t total) {
+  s_pages_done  = 0;
+  s_pages_total = total;
+  if (s_progress && total) s_progress(0, total);
+}
+
 static bool wrPage(uint8_t page, const uint8_t *d) {
   if (page < 4) return false;          // UID, lock bytes, CC
   uint8_t buf[4];
   memcpy(buf, d, 4);
-  return nfcWriteNtagPage(page, buf);
+  if (!nfcWriteNtagPage(page, buf)) return false;
+  // After the page, never around it: the listener redraws, and that takes a
+  // few milliseconds the chip should not spend waiting in the middle of one.
+  if (s_pages_done < s_pages_total) s_pages_done++;
+  if (s_progress && s_pages_total) s_progress(s_pages_done, s_pages_total);
+  return true;
 }
 
 // Reads a page back and compares. A write the chip acknowledged is not yet a
@@ -400,15 +419,21 @@ static bool wrU16Pair(uint8_t page, uint16_t a, uint16_t b) {
 static bool eraseTag() {
   const uint8_t zero[4] = {0, 0, 0, 0};
   const uint8_t last = lastUserPage();
+  progressBegin((uint16_t)(last - NTAG_FIRST_USER_PAGE + 1));
   for (uint8_t pg = 4; pg <= last; pg++)
     if (!wrPage(pg, zero)) return false;
   return true;
 }
 
+// What writeAce() puts on the tag: the magic page twice, three texts of five
+// pages each, the colour and four pairs of numbers.
+#define ACE_PAGES_WRITTEN  (2 + 3 * 5 + 1 + 4)
+
 static bool writeAce(const AceFields *f) {
   const uint8_t magic[4] = { 0x7B, 0x00, 0x65, 0x00 };
   const uint8_t color[4] = { 0xFF, f->b, f->g, f->r };
   const uint8_t zero[4]  = { 0, 0, 0, 0 };
+  progressBegin(ACE_PAGES_WRITTEN);
   // The magic page goes last, and is blanked first. The magic used to be
   // written before the fields, so a spool lifted mid-write left a tag that
   // announced an ACE record over whatever the pages held before - and the
@@ -499,6 +524,8 @@ static bool writeNdefJson(const char *json) {
   // before. The header and the last page are read back - the two that
   // decide whether a reader sees a whole record.
   const uint8_t zero[4] = { 0, 0, 0, 0 };
+  // Every page of the record, and the first one twice.
+  progressBegin((uint16_t)(i / 4 + 1));
   if (!wrPage(NTAG_FIRST_USER_PAGE, zero)) return false;
   for (int off = 4; off < i; off += 4)
     if (!wrPage((uint8_t)(NTAG_FIRST_USER_PAGE + off / 4), buf + off)) return false;
