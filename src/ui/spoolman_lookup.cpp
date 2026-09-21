@@ -36,6 +36,7 @@ bool spoolHasAnyTag(JsonObjectConst spool);
 #include "services/tag_write.h"
 #include "services/tag_uid.h"
 #include "services/time_service.h"
+#include "services/uid_index.h"
 #include "ui/spool_flow.h"
 #include "services/user_options.h"
 #include "ui/date_display.h"
@@ -1881,6 +1882,15 @@ void querySpoolman(const char* tray_uuid) {
 
   // Not found in active spools - check if archived
   Serial.println("Backend: not in active spools, checking archive...");
+  // Every identifier this list holds goes into the uid index before the
+  // document is given up. Only from a scan that ran and came in whole, the
+  // same test the list cache makes above. The index stays open until the
+  // archive pass below is in as well; a lookup that leaves before that leaves
+  // none behind, see uidIndexTick(). Nothing reads it yet.
+  if (scanned_inventory && !backendLastListPartial()) {
+    uidIndexBegin();
+    uidIndexAdd(doc.as<JsonArrayConst>(), false);
+  }
   doc.clear();  // RAM freigeben vor zweitem Call
 
   // Second call with allow_archived=true.
@@ -1915,6 +1925,13 @@ void querySpoolman(const char* tray_uuid) {
   if (code2 == 200) {
     if (!err2) {
       JsonArray spools2 = doc2.as<JsonArray>();
+      // With the archive in, the index has seen what this scan saw. In front
+      // of the loop, which returns from its middle and clears the document.
+      // Both calls do nothing when the active list did not open an index.
+      if (!backendLastListPartial()) {
+        uidIndexAdd(doc2.as<JsonArrayConst>(), true);
+        uidIndexCommit(have_stamp ? &stamp : nullptr);
+      }
       for (JsonObject spool : spools2) {
         // Only check truly archived spools (explicit bool cast needed for JsonVariant)
         bool is_archived = spool["archived"].as<bool>();

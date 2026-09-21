@@ -46,6 +46,7 @@
 #include "services/backend_api.h"
 #include "services/server_reach.h"
 #include "services/spool_cache.h"
+#include "services/uid_index.h"
 #include "services/dried_batch.h"
 #include "services/tag_field.h"
 #include "services/bambuddy_device.h"
@@ -448,6 +449,9 @@ void appLoop() {
   // Gives the kept spool list back once it is too old or was called off. Two
   // comparisons while there is none.
   spoolCacheTick();
+  // The same for the identifiers the last full scan saw, which live two
+  // minutes, and for an index a lookup opened and left unfinished.
+  uidIndexTick();
   // And once the spool is known, whether the tag still says the same thing it
   // does. Costs a request only while the switch for it is on.
   tagMismatchTick();

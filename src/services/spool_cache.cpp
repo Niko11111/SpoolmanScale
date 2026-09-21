@@ -8,6 +8,7 @@
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/spool_color.h"   // SPOOL_COLOR_HEX_MAX
+#include "services/uid_index.h"
 
 namespace {
 
@@ -261,6 +262,10 @@ void spoolCacheSetRemaining(int spool_id, float remaining) {
 void spoolCacheForget(const char* why) {
   s_forget_why = why;
   s_forget     = true;
+  // Whatever makes the list worthless does the same to the identifiers the
+  // scan took out of it. Passed on from here so that no caller has to know
+  // there are two.
+  uidIndexForget(why);
 }
 
 void spoolCacheTick() {
