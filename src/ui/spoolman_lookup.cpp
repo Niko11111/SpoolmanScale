@@ -990,6 +990,45 @@ static ScanMatchFetch fetchScanMatch(int spool_id, const char* tray_uuid,
   return SCAN_MATCH_FOUND;
 }
 
+// ============================================================
+//  THE UID INDEX, IN SHADOW
+//
+//  Before the full scan the index is asked what it would have said, the scan
+//  runs regardless, and the two are compared in the log. Nothing acts on the
+//  answer yet. "DISAGREED" means the index called a tag unknown that the scan
+//  then found - the one mistake it must not make, and the line this whole
+//  step exists to never print.
+// ============================================================
+
+enum ShadowVerdict : uint8_t {
+  SHADOW_NOT_ASKED,    // no scan was coming, or a rule kept the index out of it
+  SHADOW_MAY_HOLD,     // it would have left the tag to the scan
+  SHADOW_ABSENT,       // it would have said "unknown"
+};
+static ShadowVerdict s_shadow = SHADOW_NOT_ASKED;
+
+// What the scan found, held against what the index said. spool_id 0 for "not
+// found". Says nothing unless the index was asked, and only once per lookup.
+static void uidShadowReport(int spool_id, int rank, bool archived) {
+  const ShadowVerdict said = s_shadow;
+  s_shadow = SHADOW_NOT_ASKED;
+  if (said == SHADOW_NOT_ASKED) return;
+
+  if (said == SHADOW_ABSENT) {
+    if (spool_id > 0)
+      logSDf("uid index: DISAGREED - scan found spool %d at rank %d%s",
+             spool_id, rank, archived ? ", archived" : "");
+    else
+      logSD("uid index: scan agreed");
+    return;
+  }
+  if (spool_id > 0)
+    logSDf("uid index: scan found spool %d at rank %d%s, as it had to",
+           spool_id, rank, archived ? ", archived" : "");
+  else
+    logSD("uid index: held the identifier, the scan found nothing - costs a scan, no error");
+}
+
 // An archived spool answers to the tag on the pad. Fetched whole rather than
 // painted as a dead end: the user has to see which spool this is before
 // deciding to bring it back, and that means name, filament and tare.
@@ -1025,6 +1064,7 @@ void querySpoolman(const char* tray_uuid) {
   // lookup for a tag that had just had one, inventory and archive included -
   // and "not found" after a complete scan counted as no verdict.
   s_scan_deferred = false;
+  s_shadow = SHADOW_NOT_ASKED;
   // A 4-byte MIFARE tag is looked up by its UID through the same call, so
   // the log names what was actually sent.
   if (tray_uuid && strlen(tray_uuid) == 32) {
@@ -1170,6 +1210,11 @@ void querySpoolman(const char* tray_uuid) {
 
   // The spool a scan named without sending it, see fetchScanMatch().
   int scan_matched_id = 0;
+  // Whether every search below that went out came back readable. The full
+  // scan is the net under a search that failed, and the uid index must not
+  // take that net away: it only knows what the scan saw, not what a search
+  // would have said. BACKEND_NOT_SUPPORTED is no failure, no request went out.
+  bool searches_answered = true;
   if (backendReportsScans()) {
     JsonDocument scan(&psram_alloc);
     DeserializationError serr = DeserializationError::Ok;
@@ -1199,8 +1244,10 @@ void querySpoolman(const char* tray_uuid) {
       scan_matched_id = scan["matched_spool_id"] | 0;
       logSDf("Backend: tag scan announced, uid=%s matched=%d, no spool embedded",
              scan_uid, scan_matched_id);
+      if (serr) searches_answered = false;     // 200, but nothing to read
     } else if (scode != BACKEND_NOT_SUPPORTED) {
       logSDf("Backend: native tag scan failed, code=%d err=%s", scode, serr.c_str());
+      searches_answered = false;
     }
     if (!have_result) { doc.clear(); err = DeserializationError::Ok; }
   }
@@ -1228,6 +1275,7 @@ void querySpoolman(const char* tray_uuid) {
                (int)doc.as<JsonArrayConst>().size());
     } else if (ncode != BACKEND_NOT_SUPPORTED) {
       logSDf("Backend: native tag lookup failed, code=%d err=%s", ncode, err.c_str());
+      searches_answered = false;
     }
     if (!have_result) { doc.clear(); err = DeserializationError::Ok; }
   }
@@ -1254,6 +1302,7 @@ void querySpoolman(const char* tray_uuid) {
       // Every backend has a route for this by now, so NOT_SUPPORTED is only a
       // guard. Anything else is a real failure and should not disappear.
       logSDf("Backend: tag search failed, code=%d err=%s", fcode, err.c_str());
+      searches_answered = false;
     }
     if (!have_result) {
       doc.clear();
@@ -1308,6 +1357,7 @@ void querySpoolman(const char* tray_uuid) {
     } else if (ccode != BACKEND_NOT_SUPPORTED) {
       logSDf("Backend: %s search failed, code=%d err=%s",
              tagFieldSpec(f).key, ccode, err.c_str());
+      searches_answered = false;
     }
     if (!have_result) {
       doc.clear();
@@ -1376,6 +1426,42 @@ void querySpoolman(const char* tray_uuid) {
   bool have_stamp = false;
   if (!have_result && !uiModalWaiting() && sm_reachable)
     have_stamp = (backendInventoryStamp(cfg_spoolman_base, &stamp) == 200);
+
+  // What the uid index would say, asked before the scan below replaces it. In
+  // shadow: the answer goes into the log and the scan runs whatever it was,
+  // see uidShadowReport(). Only where a scan is coming, so that there is
+  // something to hold the answer against.
+  //
+  // Two rules keep the index out altogether. A search that did not answer:
+  // the scan is the net under it, and the index only knows what the last scan
+  // saw, not what that search would have said. And a Bambu tag on FilaMan:
+  // its Bambu plugin writes bambu_rfid_tag_1 when the AMS reads a spool, into
+  // a field no search covers, so a spool taken out of the AMS and put on the
+  // scale within the two minutes would be called unknown.
+  if (!have_result && !uiModalWaiting()) {
+    if (!searches_answered) {
+      logSD("uid index: not asked, a search did not answer");
+    } else if (backendIsFilaMan() && tagIsBambu(tray_uuid)) {
+      logSD("uid index: not asked, a Bambu tag on FilaMan is always scanned");
+    } else {
+      // Every identity spoolTagRank() compares with: the tray uuid, the chip
+      // behind it, and what the reader reported. The same string three times
+      // for anything but a Bambu tag.
+      const char* ids[3] = { tray_uuid, tagNativeUid(tray_uuid), g_tag.uid_str };
+      const UidIndexReply r = uidIndexAsk(ids, 3, have_stamp ? &stamp : nullptr);
+      if (r.answer == UID_INDEX_ABSENT) {
+        s_shadow = SHADOW_ABSENT;
+        logSDf("uid index: would answer UNKNOWN (%d ids, %lu s old)",
+               r.ids, (unsigned long)r.age_s);
+      } else if (r.answer == UID_INDEX_MAY_HOLD) {
+        s_shadow = SHADOW_MAY_HOLD;
+        logSDf("uid index: would not answer (%s)", r.why);
+      } else {
+        logSDf("uid index: silent (%s)", r.why);
+      }
+    }
+  }
+
   {
   HttpStall stall(searchProgress);
 
@@ -1505,6 +1591,10 @@ void querySpoolman(const char* tray_uuid) {
 
     int rank = spoolTagRank(spool, tray_uuid);
     if (rank == TAG_RANK_NONE || rank != best_rank) continue;
+
+    // Says nothing after a short cut: the index is only asked when a scan is
+    // coming, and then this spool came out of that scan.
+    uidShadowReport(spool["id"] | 0, rank, spool["archived"] | false);
 
     // No short cut promises an active spool. FilaMan's scan names an archived
     // one as readily as any other, and the fetch by id that follows brought
@@ -1886,7 +1976,7 @@ void querySpoolman(const char* tray_uuid) {
   // document is given up. Only from a scan that ran and came in whole, the
   // same test the list cache makes above. The index stays open until the
   // archive pass below is in as well; a lookup that leaves before that leaves
-  // none behind, see uidIndexTick(). Nothing reads it yet.
+  // none behind, see uidIndexTick(). Asked further up, in shadow for now.
   if (scanned_inventory && !backendLastListPartial()) {
     uidIndexBegin();
     uidIndexAdd(doc.as<JsonArrayConst>(), false);
@@ -1922,13 +2012,15 @@ void querySpoolman(const char* tray_uuid) {
   int code2 = skip_archived
                 ? 0
                 : backendGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
+  bool archive_whole = false;       // the second half of the scan came in, all of it
   if (code2 == 200) {
     if (!err2) {
       JsonArray spools2 = doc2.as<JsonArray>();
+      archive_whole = !backendLastListPartial();
       // With the archive in, the index has seen what this scan saw. In front
       // of the loop, which returns from its middle and clears the document.
       // Both calls do nothing when the active list did not open an index.
-      if (!backendLastListPartial()) {
+      if (archive_whole) {
         uidIndexAdd(doc2.as<JsonArrayConst>(), true);
         uidIndexCommit(have_stamp ? &stamp : nullptr);
       }
@@ -1936,10 +2028,12 @@ void querySpoolman(const char* tray_uuid) {
         // Only check truly archived spools (explicit bool cast needed for JsonVariant)
         bool is_archived = spool["archived"].as<bool>();
         if (!is_archived) continue;
-        if (spoolTagRank(spool, tray_uuid) == TAG_RANK_NONE) continue;
+        const int archived_rank = spoolTagRank(spool, tray_uuid);
+        if (archived_rank == TAG_RANK_NONE) continue;
         // Archived, but found. None of what the screen needs is in the lean
         // archive filter, see showArchivedSpool().
         const int archived_id = spool["id"] | 0;
+        uidShadowReport(archived_id, archived_rank, true);
         doc2.clear();          // the byId fetch wants the PSRAM back
         showArchivedSpool(archived_id);
         return;
@@ -1950,6 +2044,13 @@ void querySpoolman(const char* tray_uuid) {
   // Truly not found
   Serial.println("Backend: spool not found");
   logSD("Backend: spool not found");
+  // Only a scan that ran to its end is an answer to hold the index against.
+  if (scanned_inventory && archive_whole) {
+    uidShadowReport(0, TAG_RANK_NONE, false);
+  } else if (s_shadow != SHADOW_NOT_ASKED) {
+    s_shadow = SHADOW_NOT_ASKED;
+    logSD("uid index: the scan did not run to its end, nothing to compare");
+  }
   { char nb[40]; backendText(T(STR_NOT_IN_SPOOLMAN), nb, sizeof(nb)); lv_label_set_text(lbl_spoolman_weight, nb); }
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
   sm_found = false;

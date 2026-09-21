@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "hardware/sd_logger.h"
+#include "services/backend.h"
 #include "services/tag_field.h"     // LAST_DRIED_FIELD
 
 namespace {
@@ -33,6 +34,14 @@ int            s_archived  = 0;
 uint32_t       s_filled_ms = 0;
 bool           s_has_stamp = false;
 InventoryStamp s_stamp     = { -1, 0 };
+
+// The server the identifiers came from. An address or backend change drops
+// them even if somebody forgot to say so.
+char    s_key[96] = "";
+uint8_t s_mode    = 0;
+
+// Where uidIndexAsk() puts a reason that needs numbers in it.
+char s_why[64] = "";
 
 // Set from any task, acted on by the loop. The reason is a string literal, so
 // the pointer is all that crosses over.
@@ -141,6 +150,13 @@ void walk(JsonArrayConst spools, bool archived_only, Sink& sink,
   }
 }
 
+bool sameServer() {
+  const char* base = backendBaseUrl();
+  if (!base) base = "";
+  return s_mode == (uint8_t)backendMode() &&
+         strncmp(s_key, base, sizeof(s_key) - 1) == 0;
+}
+
 int cmpId(const void* a, const void* b) {
   const uint64_t x = *(const uint64_t*)a;
   const uint64_t y = *(const uint64_t*)b;
@@ -218,6 +234,9 @@ void uidIndexCommit(const InventoryStamp* stamp) {
     s_n = w;
   }
 
+  const char* base = backendBaseUrl();
+  snprintf(s_key, sizeof(s_key), "%s", base ? base : "");
+  s_mode      = (uint8_t)backendMode();
   s_filled_ms = millis();
   if (!s_filled_ms) s_filled_ms = 1;
   s_has_stamp = (stamp != nullptr);
@@ -231,6 +250,53 @@ void uidIndexCommit(const InventoryStamp* stamp) {
   else
     logSDf("uid index: %u ids from %d active + %d archived spools, %u B, blind",
            (unsigned)s_n, s_active, s_archived, (unsigned)s_bytes);
+}
+
+UidIndexReply uidIndexAsk(const char* const* ids, uint8_t count,
+                          const InventoryStamp* stamp) {
+  UidIndexReply r = { UID_INDEX_SILENT, 0, 0, "" };
+
+  if (s_state != IDX_READY) { r.why = "no index"; return r; }
+  r.ids   = (int)s_n;
+  r.age_s = (millis() - s_filled_ms) / 1000UL;
+  if (s_forget)      { r.why = s_forget_why ? s_forget_why : "forgotten"; return r; }
+  if (!sameServer()) { r.why = "other server"; return r; }
+  if (millis() - s_filled_ms > UID_INDEX_MAX_AGE_MS) { r.why = "too old"; return r; }
+
+  if ((stamp != nullptr) != s_has_stamp) {
+    r.why = s_has_stamp ? "no stamp this time" : "a stamp where there was none";
+    return r;
+  }
+  if (stamp && (stamp->count != s_stamp.count || stamp->witness_id != s_stamp.witness_id)) {
+    snprintf(s_why, sizeof(s_why), "stamp %d/%d is now %d/%d", s_stamp.count,
+             s_stamp.witness_id, stamp->count, stamp->witness_id);
+    r.why = s_why;
+    return r;
+  }
+
+  bool asked_any = false;
+  for (uint8_t i = 0; i < count; i++) {
+    const char* id = ids[i];
+    if (!id || !id[0]) continue;
+    size_t d = 0;
+    const uint64_t h = hashHex(id, id + strlen(id), SIZE_MAX, &d);
+    // Nothing of that length is ever taken in, so not finding it says nothing.
+    if (d < UID_INDEX_ID_MIN_HEX || d > UID_INDEX_ID_MAX_HEX) {
+      r.answer = UID_INDEX_MAY_HOLD;
+      r.why    = "an identifier is outside the lengths it holds";
+      return r;
+    }
+    asked_any = true;
+    if (s_n && bsearch(&h, s_ids, s_n, sizeof(uint64_t), cmpId)) {
+      r.answer = UID_INDEX_MAY_HOLD;
+      r.why    = "an identifier is in the index";
+      return r;
+    }
+  }
+  if (!asked_any) { r.why = "no identifier to ask for"; return r; }
+
+  r.answer = UID_INDEX_ABSENT;
+  return r;
 }
 
 void uidIndexForget(const char* why) {

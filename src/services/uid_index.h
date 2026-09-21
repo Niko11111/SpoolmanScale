@@ -67,6 +67,37 @@ void uidIndexAdd(JsonArrayConst spools, bool archived_only);
 // went in vouches for some other set, and nothing is kept.
 void uidIndexCommit(const InventoryStamp* stamp);
 
+// What the index says about the tag on the pad.
+enum UidIndexAnswer : uint8_t {
+  UID_INDEX_SILENT,     // it may not answer: `why` says what stands in the way
+  UID_INDEX_MAY_HOLD,   // one of the identifiers is in it, or could be: scan
+  UID_INDEX_ABSENT,     // the scan this was built from saw none of them
+};
+
+// For the log line of whoever asked. `why` is a string literal or points into
+// a buffer of this module that the next question overwrites.
+struct UidIndexReply {
+  UidIndexAnswer answer;
+  int            ids;      // how many the index holds
+  uint32_t       age_s;    // since the scan that filled it
+  const char*    why;      // never null, empty for UID_INDEX_ABSENT
+};
+
+// Asks for every identity the tag can be stored under at once - the tray
+// uuid, the chip uid, whatever the reader reported. Empty ones are passed
+// over. ABSENT only when all of this holds: the index is complete, not
+// forgotten, young enough, of this server and backend, `stamp` equals the one
+// it was filled under (a stamped index is not asked blind, nor the other way
+// round), and every identifier has between UID_INDEX_ID_MIN_HEX and
+// UID_INDEX_ID_MAX_HEX hex digits - outside that range the index holds
+// nothing by construction and therefore knows nothing.
+//
+// ABSENT is a statement about the scan, not about the server: the caller
+// still has to have asked the server's own searches, and all of them have to
+// have answered. Loop task only.
+UidIndexReply uidIndexAsk(const char* const* ids, uint8_t count,
+                          const InventoryStamp* stamp);
+
 // Marks the index as worthless. Only a flag, freed by the loop. `why` has to
 // be a string literal - only the pointer is kept.
 void uidIndexForget(const char* why = nullptr);
