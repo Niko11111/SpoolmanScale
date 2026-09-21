@@ -941,23 +941,32 @@ static void refreshCache(bool force = false) {
     cached_bytes = 0;
     memset(&cached_info, 0, sizeof(cached_info));
     snprintf(cached_info.uid, sizeof(cached_info.uid), "%s", g_tag.uid_str);
-    if (g_tag_ready && (g_tag.vendor[0] || g_tag.material[0])) {
+    if (g_tag.vendor[0] || g_tag.material[0]) {
       snprintf(cached_info.fmt, sizeof(cached_info.fmt), "%s", g_tag.vendor[0] ? g_tag.vendor : "Bambu Lab");
       snprintf(cached_info.brand, sizeof(cached_info.brand), "%s", g_tag.vendor[0] ? g_tag.vendor : "Bambu Lab");
       snprintf(cached_info.material, sizeof(cached_info.material), "%s", g_tag.material);
       snprintf(cached_info.tray_uuid, sizeof(cached_info.tray_uuid), "%s", g_tag.tray_uuid[0] ? g_tag.tray_uuid : g_tag.short_uid);
       snprintf(cached_info.prod_date, sizeof(cached_info.prod_date), "%s", g_tag.production_date);
-      const char *hex = g_tag.color_hex;
-      if (*hex == '#') hex++;
-      unsigned r = 0, g = 0, b = 0;
-      if (strlen(hex) >= 6 && sscanf(hex, "%02x%02x%02x", &r, &g, &b) == 3) {
+
+      if (g_tag.color.valid) {
         cached_info.has_color = true;
-        cached_info.r = r; cached_info.g = g; cached_info.b = b;
+        cached_info.r = (g_tag.color.rgb >> 16) & 0xFF;
+        cached_info.g = (g_tag.color.rgb >> 8) & 0xFF;
+        cached_info.b = g_tag.color.rgb & 0xFF;
+      } else if (g_tag.color_hex[0]) {
+        const char *hex = g_tag.color_hex;
+        if (*hex == '#') hex++;
+        unsigned r = 0, g = 0, b = 0;
+        if (strlen(hex) >= 6 && sscanf(hex, "%02x%02x%02x", &r, &g, &b) == 3) {
+          cached_info.has_color = true;
+          cached_info.r = (uint8_t)r; cached_info.g = (uint8_t)g; cached_info.b = (uint8_t)b;
+        }
       }
+
       cached_info.et_lo = g_tag.temp_min;
       cached_info.et_hi = g_tag.temp_max;
-      cached_info.bed_lo = g_tag.bed_temp_min;
-      cached_info.bed_hi = g_tag.bed_temp_max;
+      cached_info.bed_lo = 0;
+      cached_info.bed_hi = 0;
       cached_info.weight_g = g_tag.spool_weight;
       snprintf(cached_content, sizeof(cached_content), "%s %s", g_tag.vendor[0] ? g_tag.vendor : "Bambu Lab", g_tag.material);
     } else {

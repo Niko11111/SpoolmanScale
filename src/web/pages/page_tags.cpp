@@ -51,7 +51,21 @@ static String body() {
   String h;
   h.reserve(7600);
 
-  h += F("<div class='grid'><div class='card wide'><h2>");
+  h += F("<style>"
+         "#tg-cur h3, #tg-matched h3, #tg-new h3 {"
+         "  font-size: 10.5px; font-weight: 650; letter-spacing: .1em;"
+         "  text-transform: uppercase; color: var(--ink-soft); margin-bottom: 10px;"
+         "}"
+         "#tg-cur table td, #tg-matched table td, #tg-new table td {"
+         "  font-size: 11.5px; font-family: var(--mono); color: var(--ink-3);"
+         "  padding: 3px 8px 3px 0; border: 0;"
+         "}"
+         ".chip-inline {"
+         "  display: inline-block; width: 13px; height: 13px; border-radius: 3px;"
+         "  border: 1px solid #ffffff33; vertical-align: -2px; margin-right: 6px;"
+         "}"
+         "</style>"
+         "<div class='grid'><div class='card wide'><h2>");
   h += T(STR_W_C_WRITETAG);
   h += F("</h2>"
          "<div id='tg-uid' class='hint' style='margin-bottom:14px'></div>"
@@ -197,29 +211,32 @@ static String body() {
   h += F(",toosmall:"); h += jsStr(T(STR_W_TAG_TOOSMALL));
   h += F("};"
          "let tgCur='',tgNew='',tgLinked='',tgUid='',tgCurI=null,tgNewI=null,tgMatched=null,"
-         "tgBytes=0,tgNeed=0;"
+         "tgBytes=0,tgNeed=0,tgKindCode=0;"
          "function esc(t){return String(t).replace(/[<>&]/g,c=>"
          "({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}"
-         "function row(k,a,b){if(a===undefined&&b===undefined)return '';"
+         "function row(k,a,b,noesc){if(a===undefined&&b===undefined)return '';"
          "const d=(a!==undefined&&b!==undefined&&a!==b)?' class=\"diff\"':'';"
-         "return '<tr'+d+'><td>'+k+'</td><td>'+esc(a===undefined?'-':a)+'</td></tr>';}"
+         "const va=noesc?a:esc(a);return '<tr'+d+'><td>'+k+'</td><td>'+(a===undefined?'-':va)+'</td></tr>';}"
+         "function fixCol(c){if(!c)return '';c=String(c).trim();return c.startsWith('#')?c:'#'+c;}"
          "function plain(el,t,x){el.innerHTML='<h3>'+t+'</h3>'"
          "+'<div class=\"hint\">'+x+'</div>';}"
          "function swatch(el,i,o,t,empty){if(!el)return;"
-         "if(!i||!i.fmt||i.fmt=='unsupported'){plain(el,t,tgUid?'UID: '+tgUid+'<br>Tag on reader has no readable record (read-only or unsupported format)':empty);return;}"
+         "if(!i||!i.fmt||i.fmt=='unsupported'){plain(el,t,(t==M.cur&&tgUid)?'UID: '+tgUid+'<br>Tag on reader has no readable record (read-only or unsupported format)':empty);return;}"
          "if(i.fmt=='blank'){plain(el,t,M.blank);return;}"
          "if(i.fmt=='unknown'){plain(el,t,M.unk);return;}"
          "o=o||{};"
+         "const cCol=i.color?('<span class=\"chip-inline\" style=\"background:'+fixCol(i.color)+'\"></span>'+fixCol(i.color)):undefined;"
+         "const oCol=o.color?('<span class=\"chip-inline\" style=\"background:'+fixCol(o.color)+'\"></span>'+fixCol(o.color)):undefined;"
          "el.innerHTML='<h3>'+t+'</h3>'"
-         "+'<div class=\"tgline\"><div class=\"chip\" style=\"background:'"
-         "+(i.color||'#101828')+'\"></div>'"
-         "+'<div><div class=\"tgname\">'+esc(i.brand||'')+' '+esc(i.material||'')+'</div>'"
-         "+'<div class=\"hint\">'+esc(i.fmt)+(i.color?' - '+esc(i.color):'')+'</div></div></div>'"
          "+'<table>'"
+         "+row('Format',i.fmt,o.fmt)"
+         "+row('Brand',i.brand,o.brand)"
+         "+row('Material',i.material,o.material)"
+         "+row('Color',cCol,oCol,1)"
          "+row('UID',i.uid,o.uid)"
          "+row('Tag / Tray ID',i.tray_uuid,o.tray_uuid)"
-         "+row(M.sku,i.sku,o.sku)"
          "+row('Production Date',i.prod_date,o.prod_date)"
+         "+row(M.sku,i.sku,o.sku)"
          "+row(M.nozzle,i.nozzle?i.nozzle+' C':undefined,o.nozzle?o.nozzle+' C':undefined)"
          "+row(M.bed,i.bed?i.bed+' C':undefined,o.bed?o.bed+' C':undefined)"
          "+row(M.weight,i.weight?i.weight+' g':undefined,o.weight?o.weight+' g':undefined)"
@@ -231,12 +248,28 @@ static String body() {
          "swatch(document.getElementById('tg-new'),tgNewI,tgCurI,M.will,M.pickf);"
          "const m=document.getElementById('tg-matched');"
          "if(m){if(tgMatched&&tgMatched.found){"
+         "const mcCol=tgMatched.color?('<span class=\"chip-inline\" style=\"background:'+fixCol(tgMatched.color)+'\"></span>'+fixCol(tgMatched.color)):undefined;"
+         "const spoolLink=tgMatched.url?('<a href=\"'+esc(tgMatched.url)+'\" target=\"_blank\" style=\"color:var(--accent);text-decoration:underline\">#'+tgMatched.id+'</a>'):('#'+tgMatched.id);"
          "m.innerHTML='<h3>MATCHED SPOOL</h3>'"
-         "+'<div class=\"tgline\"><div class=\"chip\" style=\"background:'"
-         "+(tgMatched.color||'#101828')+'\"></div>'"
-         "+'<div><div class=\"tgname\">'+esc(tgMatched.name)+'</div>'"
-         "+'<div class=\"hint\">#'+tgMatched.id+' - '+esc(tgMatched.material)+'</div></div></div>'"
-         "+'<table><tr><td>Remaining</td><td>'+tgMatched.remaining+'g of '+tgMatched.total+'g</td></tr></table>';"
+         "+'<table>'"
+         "+row('Spool ID',spoolLink,undefined,1)"
+         "+row('Name',tgMatched.name,undefined)"
+         "+row('Vendor',tgMatched.vendor,undefined)"
+         "+row('Material',tgMatched.material,undefined)"
+         "+row('Color',mcCol,undefined,1)"
+         "+row('Remaining',tgMatched.remaining+' g',undefined)"
+         "+row('Total',tgMatched.total+' g',undefined)"
+         "+row('Tare',tgMatched.tare?tgMatched.tare+' g':undefined,undefined)"
+         "+row('Location',tgMatched.location,undefined)"
+         "+row('Article #',tgMatched.article_nr,undefined)"
+         "+row('Last Used',tgMatched.last_used,undefined)"
+         "+row('Last Dried',tgMatched.last_dried,undefined)"
+         "+row('Tag (extra.tag)',tgMatched.tag,undefined)"
+         "+row('NFC ID (extra.nfc_id)',tgMatched.nfc_id,undefined)"
+         "+row('Card UIDs',tgMatched.card_uids,undefined)"
+         "+row('RFID Tag (HH)',tgMatched.rfid_tag,undefined)"
+         "+row('Native Tags',tgMatched.native_tags,undefined)"
+         "+'</table>';"
          "}else{plain(m,'MATCHED SPOOL','No spool linked to this tag');}}"
          "}"
          "function tgSync(){tgDraw();const b=document.getElementById('tg-btn');if(!b)return;"
@@ -244,10 +277,12 @@ static String body() {
          "const fs=document.getElementById('tg-fmt');"
          "const fn=fs&&fs.selectedOptions[0]?fs.selectedOptions[0].textContent:'';"
          "const n=document.getElementById('tg-note');"
-         "if(n)n.textContent=!tgNew?M.pickf:small"
-         "?M.toosmall.replace('%s',fn).replace('%u',tgNeed).replace('%u',tgBytes)"
-         ":(tgLinked?M.relink.replace('%s',tgLinked):'');"
          "const er=document.getElementById('tg-erase');"
+         "const readOnly=tgUid&&(!tgBytes||tgKindCode===1);"
+         "if(n){if(readOnly)n.textContent='Tag on the reader is read-only.';else n.textContent=!tgNew?M.pickf:small"
+         "?M.toosmall.replace('%s',fn).replace('%u',tgNeed).replace('%u',tgBytes)"
+         ":(tgLinked?M.relink.replace('%s',tgLinked):'');}"
+         "if(readOnly){b.disabled=true;b.textContent=(tgCur&&tgCur!='blank')?M.over:M.write;if(er)er.disabled=true;return;}"
          "if(er)er.disabled=!tgUid||tgCur=='blank';"
          "if(!tgNew){b.disabled=true;b.textContent=M.write;return;}"
          "if(small){b.disabled=true;b.textContent=M.write;return;}"
@@ -255,7 +290,7 @@ static String body() {
          "else{b.disabled=false;b.textContent=tgCur&&tgCur!='blank'?M.over:M.write;}}"
          "function loadPreview(){const v=parseInt(document.getElementById('tg-id').value);"
          "const f=document.getElementById('tg-fmt').value;"
-         "if(!v){tgNew='';tgNewI=null;tgSync();return;}"
+         "if(!v){document.getElementById('tg-pick').value='';tgNew='';tgNewI=null;tgSync();return;}"
          "fetch('/api/tag/preview?id='+v+'&fmt='+f).then(r=>r.json()).then(d=>{"
          "tgNew=d.ok?d.preview:'';tgLinked=d.ok?(d.linked||''):'';"
          "tgNeed=d.ok?(d.need||0):0;"
@@ -264,7 +299,7 @@ static String body() {
          "function setOpt(p,t){p.innerHTML='';const o=document.createElement('option');"
          "o.value='';o.textContent=t;p.appendChild(o);}"
          "function pickSpool(){const p=document.getElementById('tg-pick');"
-         "if(p.value)document.getElementById('tg-id').value=p.value;loadPreview();}"
+         "document.getElementById('tg-id').value=p.value||'';loadPreview();}"
          "function loadSpools(n){const p=document.getElementById('tg-pick');if(!p)return;"
          "if(!n)setOpt(p,M.pick);"
          "fetch('/api/spools',{cache:'no-store'}).then(r=>{"
@@ -279,7 +314,7 @@ static String body() {
          "function tgPoll(){fetch('/api/tag').then(r=>r.json()).then(d=>{"
          "document.getElementById('tg-uid').textContent="
          "d.uid?(M.onread+' '+d.uid+' ('+d.kind+')'):M.notag;"
-         "tgUid=d.uid||'';tgCurI=d.uid?d.info:null;tgBytes=d.bytes||0;"
+         "tgUid=d.uid||'';tgCurI=d.uid?d.info:null;tgBytes=d.bytes||0;tgKindCode=d.kindcode||0;"
          "tgCur=d.content||'';tgMatched=d.matched;tgSync();"
          "const s=document.getElementById('tg-s');"
          "if(d.state!='idle'){s.textContent=d.message;"
@@ -435,6 +470,7 @@ static void routes(WebServer &srv) {
     tagInfoJson(tagCachedInfo(), info, sizeof(info));
     String j = String("{\"info\":") + info +
                ",\"bytes\":"    + String((unsigned)tagCachedBytes()) +
+               ",\"kindcode\":" + String((int)tagCachedKindCode()) +
                ",\"uid\":\""     + jsonEsc(tagCachedUid()) +
                "\",\"kind\":\""    + jsonEsc(tagKindLocal().c_str()) +
                "\",\"state\":\""   + jsonEsc(tagWriteState()) +
@@ -442,12 +478,25 @@ static void routes(WebServer &srv) {
                "\",\"content\":\"" + jsonEsc(tagCachedContent()) + "\"";
 
     if (sm_found && sm_id > 0) {
+      String spoolUrl = String(backendBaseUrl()) + "/spool/" + String(sm_id);
       j += ",\"matched\":{\"found\":true,\"id\":" + String(sm_id) +
+           ",\"url\":\"" + jsonEsc(spoolUrl.c_str()) + "\"" +
            ",\"name\":\"" + jsonEsc(sm_filament_name) + "\"" +
+           ",\"vendor\":\"" + jsonEsc(sm_vendor_g) + "\"" +
            ",\"material\":\"" + jsonEsc(sm_material_global) + "\"" +
            ",\"color\":\"" + jsonEsc(sm_color_global) + "\"" +
            ",\"remaining\":" + String(sm_remaining) +
-           ",\"total\":" + String(sm_total) + "}";
+           ",\"total\":" + String(sm_total) +
+           ",\"tare\":" + String(sm_spool_weight) +
+           ",\"location\":\"" + jsonEsc(sm_location_name) + "\"" +
+           ",\"article_nr\":\"" + jsonEsc(sm_article_nr) + "\"" +
+           ",\"last_used\":\"" + jsonEsc(sm_last_used) + "\"" +
+           ",\"last_dried\":\"" + jsonEsc(sm_last_dried) + "\"" +
+           ",\"rfid_tag\":\"" + jsonEsc(sm_hw_uid_value) + "\"" +
+           ",\"tag\":\"" + jsonEsc(sm_tag_values[TAG_FIELD_TAG]) + "\"" +
+           ",\"nfc_id\":\"" + jsonEsc(sm_tag_values[TAG_FIELD_NFC_ID]) + "\"" +
+           ",\"card_uids\":\"" + jsonEsc(sm_tag_values[TAG_FIELD_CARD_UIDS]) + "\"" +
+           ",\"native_tags\":\"" + jsonEsc(sm_tag_values[TAG_FIELD_NATIVE]) + "\"}";
     } else {
       j += ",\"matched\":{\"found\":false}";
     }
