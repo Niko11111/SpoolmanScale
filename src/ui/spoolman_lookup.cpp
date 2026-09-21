@@ -989,6 +989,29 @@ static ScanMatchFetch fetchScanMatch(int spool_id, const char* tray_uuid,
   return SCAN_MATCH_FOUND;
 }
 
+// An archived spool answers to the tag on the pad. Fetched whole rather than
+// painted as a dead end: the user has to see which spool this is before
+// deciding to bring it back, and that means name, filament and tare.
+// querySpoolmanById() reads `archived` and sets sm_archived, so everything
+// that writes holds off. The caller gives its own document up first - the
+// fetch wants the PSRAM back - and returns after this.
+static void showArchivedSpool(int archived_id) {
+  Serial.printf("Spoolman: spool archived (ID=%d)\n", archived_id);
+  logSDf("Spoolman: found ID=%d, archived", archived_id);
+  querySpoolmanById(archived_id);
+
+  // Said after the fetch, which has just painted the ordinary weight.
+  // Zero grams is what archiving leaves behind, and showing that number
+  // would read as a measurement rather than as a state.
+  if (sm_archived) {
+    lv_label_set_text(lbl_spoolman_weight, T(STR_ARCHIVED));
+    lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x808080), 0);
+    lv_label_set_text(lbl_spoolman_pct, "");
+    if (lbl_scale_diff) lv_obj_set_width(lbl_scale_diff, 0);
+  }
+  updateLinkButton();
+}
+
 void querySpoolman(const char* tray_uuid) {
   if (!wifi_ok) return;
   strncpy(s_last_query, tray_uuid ? tray_uuid : "", sizeof(s_last_query) - 1);
@@ -1482,6 +1505,19 @@ void querySpoolman(const char* tray_uuid) {
     int rank = spoolTagRank(spool, tray_uuid);
     if (rank == TAG_RANK_NONE || rank != best_rank) continue;
 
+    // No short cut promises an active spool. FilaMan's scan names an archived
+    // one as readily as any other, and the fetch by id that follows brought
+    // spool 285 in here on 21.09.2026: shown with its 966 g as if it were on
+    // the shelf, sm_archived false, every write open. Asked here rather than
+    // in each short cut, so that one added later cannot forget it, and in
+    // front of everything below that writes.
+    if (spool["archived"] | false) {
+      const int archived_id = spool["id"] | 0;
+      doc.clear();             // the byId fetch wants the PSRAM back
+      showArchivedSpool(archived_id);
+      return;
+    }
+
     // Read after the match, not as part of it: the FilaMan migration below
     // writes this value back and wants the tag field's own notation. A spool
     // matched through card_uids has no tag field, which leaves this empty -
@@ -1884,27 +1920,11 @@ void querySpoolman(const char* tray_uuid) {
         bool is_archived = spool["archived"].as<bool>();
         if (!is_archived) continue;
         if (spoolTagRank(spool, tray_uuid) == TAG_RANK_NONE) continue;
-        // Archived, but found. Fetching it whole rather than painting a dead
-        // end here: the user has to see which spool this is before deciding to
-        // bring it back, and that means name, filament and tare, none of which
-        // the lean archive filter carries. querySpoolmanById() reads `archived`
-        // and sets sm_archived, so everything that writes holds off.
+        // Archived, but found. None of what the screen needs is in the lean
+        // archive filter, see showArchivedSpool().
         const int archived_id = spool["id"] | 0;
-        Serial.printf("Spoolman: spool archived (ID=%d)\n", archived_id);
-        logSDf("Spoolman: found ID=%d, archived", archived_id);
         doc2.clear();          // the byId fetch wants the PSRAM back
-        querySpoolmanById(archived_id);
-
-        // Said after the fetch, which has just painted the ordinary weight.
-        // Zero grams is what archiving leaves behind, and showing that number
-        // would read as a measurement rather than as a state.
-        if (sm_archived) {
-          lv_label_set_text(lbl_spoolman_weight, T(STR_ARCHIVED));
-          lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x808080), 0);
-          lv_label_set_text(lbl_spoolman_pct, "");
-          if (lbl_scale_diff) lv_obj_set_width(lbl_scale_diff, 0);
-        }
-        updateLinkButton();
+        showArchivedSpool(archived_id);
         return;
       }
     }
