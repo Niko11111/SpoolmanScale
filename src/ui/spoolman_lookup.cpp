@@ -605,7 +605,7 @@ static void applyServerColor(const String& sm_color, bool is_bambu_tag) {
 void querySpoolmanById(int spool_id) {
   if (!wifi_ok) return;
   Serial.printf("querySpoolmanById: ID=%d\n", spool_id);
-  logSDf("Spoolman: query by ID=%d", spool_id);
+  logSDf("Backend: query by ID=%d", spool_id);
   if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (before byID GET)",
     ESP.getFreeHeap(), ESP.getFreePsram());
 
@@ -616,10 +616,10 @@ void querySpoolmanById(int spool_id) {
   int code = serverReachNote(backendGetSpoolJson(cfg_spoolman_base, spool_id, doc, 8000, &err), true);
   if (code != 200) {
     Serial.printf("querySpoolmanById HTTP error: %d\n", code);
-    logSDf("Spoolman byID: HTTP error %d", code);
+    logSDf("Backend byID: HTTP error %d", code);
     if (code == -2) {
       Serial.println("querySpoolmanById: JSON error");
-      logSD("Spoolman byID: JSON error");
+      logSD("Backend byID: JSON error");
     }
     return;
   }
@@ -642,7 +642,7 @@ void querySpoolmanById(int spool_id) {
   sm_remaining    = spool["remaining_weight"] | 0.0f;
   sm_total        = resolveInitial(spool);
   sm_spool_weight = resolveTare(spool, &sm_tare_source);
-  logSDf("Spoolman: byID OK ID=%d remaining=%.1fg tare=%.0fg (%s)",
+  logSDf("Backend: byID OK ID=%d remaining=%.1fg tare=%.0fg (%s)",
     sm_id, sm_remaining, sm_spool_weight, tareSourceName(sm_tare_source));
 
   String art_nr = spool["filament"]["article_number"] | "";
@@ -872,7 +872,7 @@ void spoolmanRecheckTick() {
   // and the probe costs a request.
   if (s_scan_deferred && !uiModalWaiting()) {
     s_scan_deferred = false;
-    logSD("Spoolman: the question is gone, asking for the full lookup again");
+    logSD("Backend: the question is gone, asking for the full lookup again");
     tagLookupForget();
     return;
   }
@@ -996,8 +996,8 @@ static ScanMatchFetch fetchScanMatch(int spool_id, const char* tray_uuid,
 // that writes holds off. The caller gives its own document up first - the
 // fetch wants the PSRAM back - and returns after this.
 static void showArchivedSpool(int archived_id) {
-  Serial.printf("Spoolman: spool archived (ID=%d)\n", archived_id);
-  logSDf("Spoolman: found ID=%d, archived", archived_id);
+  Serial.printf("Backend: spool archived (ID=%d)\n", archived_id);
+  logSDf("Backend: found ID=%d, archived", archived_id);
   querySpoolmanById(archived_id);
 
   // Said after the fetch, which has just painted the ordinary weight.
@@ -1027,9 +1027,9 @@ void querySpoolman(const char* tray_uuid) {
   // A 4-byte MIFARE tag is looked up by its UID through the same call, so
   // the log names what was actually sent.
   if (tray_uuid && strlen(tray_uuid) == 32) {
-    logSDf("Spoolman: query tray_uuid=%.16s...", tray_uuid);
+    logSDf("Backend: query tray_uuid=%.16s...", tray_uuid);
   } else {
-    logSDf("Spoolman: query tag=%s", tray_uuid ? tray_uuid : "");
+    logSDf("Backend: query tag=%s", tray_uuid ? tray_uuid : "");
   }
 
   // Reset all Spoolman labels before new query
@@ -1133,7 +1133,7 @@ void querySpoolman(const char* tray_uuid) {
   // filament or brand default instead of being weighed as if empty.
   filter_spool["filament"]["vendor"]["empty_spool_weight"] = true;
   if (filter.overflowed())
-    logSD("Spoolman: scan filter overflowed, fields will be missing");
+    logSD("Backend: scan filter overflowed, fields will be missing");
 
   // Use PSRAM for this document - frees internal RAM for LVGL
   SpiRamAllocator psram_alloc;
@@ -1403,15 +1403,15 @@ void querySpoolman(const char* tray_uuid) {
     // until the tag is lifted and put back. spoolmanRecheckTick() makes it
     // good as soon as the screen is free again.
     s_scan_deferred = true;
-    logSD("Spoolman: full scan stood aside, a question is waiting on screen");
+    logSD("Backend: full scan stood aside, a question is waiting on screen");
   }
 
   scanned_inventory = (!have_result && !defer_scan);
 
   for (int attempt = 1; !have_result && !defer_scan && attempt <= 2; attempt++) {
     if (attempt > 1) {
-      Serial.printf("Spoolman: retry attempt %d after %s\n", attempt, err.c_str());
-      logSDf("Spoolman: retry attempt %d (prev err=%s)", attempt, err.c_str());
+      Serial.printf("Backend: retry attempt %d after %s\n", attempt, err.c_str());
+      logSDf("Backend: retry attempt %d (prev err=%s)", attempt, err.c_str());
       // A pause that keeps the panel alive. This runs from appLoop(); a plain
       // delay() froze the touch for its length, on top of a request that
       // had just spent its timeout.
@@ -1425,8 +1425,8 @@ void querySpoolman(const char* tray_uuid) {
 
     int code = backendGetSpoolListJson(cfg_spoolman_base, false, doc, 20000, &filter, &err);
     if (code != 200) {
-      Serial.printf("Spoolman HTTP error: %d (attempt %d)\n", code, attempt);
-      logSDf("Spoolman: HTTP error %d (attempt %d)", code, attempt);
+      Serial.printf("Backend HTTP error: %d (attempt %d)\n", code, attempt);
+      logSDf("Backend: HTTP error %d (attempt %d)", code, attempt);
       if (attempt == 2) {
         paintLookupFailure(code, code == -2 ? STR_LINK_JSON_ERR : STR_API_ERROR);
         return;
@@ -1454,8 +1454,8 @@ void querySpoolman(const char* tray_uuid) {
   if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (after Spoolman parse)",
     ESP.getFreeHeap(), ESP.getFreePsram());
   if (err) {
-    Serial.printf("Spoolman JSON error (final): %s\n", err.c_str());
-    logSDf("Spoolman: JSON error final=%s", err.c_str());
+    Serial.printf("Backend JSON error (final): %s\n", err.c_str());
+    logSDf("Backend: JSON error final=%s", err.c_str());
     paintLookupFailure(0, STR_LINK_JSON_ERR);
     return;
   }
@@ -1641,7 +1641,7 @@ void querySpoolman(const char* tray_uuid) {
     sm_remaining = spool["remaining_weight"] | 0.0f;
     sm_total    = resolveInitial(spool);
     sm_spool_weight = resolveTare(spool, &sm_tare_source);
-    logSDf("Spoolman: found ID=%d remaining=%.1fg total=%.0fg",
+    logSDf("Backend: found ID=%d remaining=%.1fg total=%.0fg",
       sm_id, sm_remaining, sm_total);
     logSDf("[verbose] LOC: querySpoolman id=%d shown_for=%d", sm_id, g_loc_popup_shown_for_id);
     String art_nr = spool["filament"]["article_number"] | "";
@@ -1677,7 +1677,7 @@ void querySpoolman(const char* tray_uuid) {
       strncpy(sm_last_dried, "-", sizeof(sm_last_dried)-1);
     }
 
-    Serial.printf("Spoolman: ID=%d, %.1fg, dried: %s\n",
+    Serial.printf("Backend: ID=%d, %.1fg, dried: %s\n",
       sm_id, sm_remaining, sm_last_dried);
 
     // Material, vendor and colour from the server. Material and vendor are
@@ -1880,7 +1880,7 @@ void querySpoolman(const char* tray_uuid) {
   }
 
   // Not found in active spools - check if archived
-  Serial.println("Spoolman: not in active spools, checking archive...");
+  Serial.println("Backend: not in active spools, checking archive...");
   doc.clear();  // RAM freigeben vor zweitem Call
 
   // Second call with allow_archived=true.
@@ -1908,7 +1908,7 @@ void querySpoolman(const char* tray_uuid) {
   // spoolmanRecheckTick() corrects it within seconds if it was wrong.
   const bool skip_archived = uiModalWaiting();
   if (skip_archived)
-    logSD("Spoolman: archived pass stood aside, a question is waiting on screen");
+    logSD("Backend: archived pass stood aside, a question is waiting on screen");
   int code2 = skip_archived
                 ? 0
                 : backendGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
@@ -1931,8 +1931,8 @@ void querySpoolman(const char* tray_uuid) {
   }
 
   // Truly not found
-  Serial.println("Spoolman: spool not found");
-  logSD("Spoolman: spool not found");
+  Serial.println("Backend: spool not found");
+  logSD("Backend: spool not found");
   { char nb[40]; backendText(T(STR_NOT_IN_SPOOLMAN), nb, sizeof(nb)); lv_label_set_text(lbl_spoolman_weight, nb); }
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
   sm_found = false;

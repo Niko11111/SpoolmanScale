@@ -704,9 +704,9 @@ bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     snprintf(buf, sizeof(buf), T(STR_LOADING_FILTER), total_in_api);
     loadingOverlaySetText(buf); }
 
-  logSDf("Spoolman inventory: %d total | %d linked | %d unlinked | %d Bambu",
+  logSDf("Inventory: %d total | %d linked | %d unlinked | %d Bambu",
     total_in_api, count_linked, total_in_api - count_linked, count_bambu);
-  Serial.printf("Spoolman inventory: %d total | %d linked | %d unlinked | %d Bambu\n",
+  Serial.printf("Inventory: %d total | %d linked | %d unlinked | %d Bambu\n",
     total_in_api, count_linked, total_in_api - count_linked, count_bambu);
   logSDf("link fetch: total=%d matched=%d (skip_tag=%d skip_vendor=%d skip_mat=%d)",
     total_in_api, matched, skipped_tag, skipped_vendor, skipped_material);
