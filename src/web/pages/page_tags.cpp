@@ -57,6 +57,7 @@ static String body() {
          "<div id='tg-uid' class='hint' style='margin-bottom:14px'></div>"
          "<div class='grid' style='gap:12px'>"
          "<div class='card' style='background:var(--surface-2);padding:14px' id='tg-cur'></div>"
+         "<div class='card' style='background:var(--surface-2);padding:14px' id='tg-matched'></div>"
          "<div class='card' style='background:var(--surface-2);padding:14px' id='tg-new'></div>"
          "</div>"
          "<div class='field' style='margin-top:14px'><label>");
@@ -195,20 +196,17 @@ static String body() {
   h += F(",len:");     h += jsStr(T(STR_W_TAG_LENGTH));
   h += F(",toosmall:"); h += jsStr(T(STR_W_TAG_TOOSMALL));
   h += F("};"
-         "let tgCur='',tgNew='',tgLinked='',tgUid='',tgCurI=null,tgNewI=null,"
+         "let tgCur='',tgNew='',tgLinked='',tgUid='',tgCurI=null,tgNewI=null,tgMatched=null,"
          "tgBytes=0,tgNeed=0;"
          "function esc(t){return String(t).replace(/[<>&]/g,c=>"
          "({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}"
-         // A row is only drawn when the side it belongs to has the field, and
-         // it is highlighted when the two sides disagree - that difference is
-         // the whole reason both are shown.
          "function row(k,a,b){if(a===undefined&&b===undefined)return '';"
          "const d=(a!==undefined&&b!==undefined&&a!==b)?' class=\"diff\"':'';"
          "return '<tr'+d+'><td>'+k+'</td><td>'+esc(a===undefined?'-':a)+'</td></tr>';}"
          "function plain(el,t,x){el.innerHTML='<h3>'+t+'</h3>'"
          "+'<div class=\"hint\">'+x+'</div>';}"
          "function swatch(el,i,o,t,empty){if(!el)return;"
-         "if(!i||!i.fmt){plain(el,t,empty);return;}"
+         "if(!i||!i.fmt||i.fmt=='unsupported'){plain(el,t,tgUid?'UID: '+tgUid+'<br>Tag on reader has no readable record (read-only or unsupported format)':empty);return;}"
          "if(i.fmt=='blank'){plain(el,t,M.blank);return;}"
          "if(i.fmt=='unknown'){plain(el,t,M.unk);return;}"
          "o=o||{};"
@@ -218,7 +216,10 @@ static String body() {
          "+'<div><div class=\"tgname\">'+esc(i.brand||'')+' '+esc(i.material||'')+'</div>'"
          "+'<div class=\"hint\">'+esc(i.fmt)+(i.color?' - '+esc(i.color):'')+'</div></div></div>'"
          "+'<table>'"
+         "+row('UID',i.uid,o.uid)"
+         "+row('Tag / Tray ID',i.tray_uuid,o.tray_uuid)"
          "+row(M.sku,i.sku,o.sku)"
+         "+row('Production Date',i.prod_date,o.prod_date)"
          "+row(M.nozzle,i.nozzle?i.nozzle+' C':undefined,o.nozzle?o.nozzle+' C':undefined)"
          "+row(M.bed,i.bed?i.bed+' C':undefined,o.bed?o.bed+' C':undefined)"
          "+row(M.weight,i.weight?i.weight+' g':undefined,o.weight?o.weight+' g':undefined)"
@@ -227,21 +228,24 @@ static String body() {
          "+'</table>';}"
          "function tgDraw(){"
          "swatch(document.getElementById('tg-cur'),tgCurI,tgNewI,M.cur,M.notag);"
-         "swatch(document.getElementById('tg-new'),tgNewI,tgCurI,M.will,M.pickf);}"
+         "swatch(document.getElementById('tg-new'),tgNewI,tgCurI,M.will,M.pickf);"
+         "const m=document.getElementById('tg-matched');"
+         "if(m){if(tgMatched&&tgMatched.found){"
+         "m.innerHTML='<h3>MATCHED SPOOL</h3>'"
+         "+'<div class=\"tgline\"><div class=\"chip\" style=\"background:'"
+         "+(tgMatched.color||'#101828')+'\"></div>'"
+         "+'<div><div class=\"tgname\">'+esc(tgMatched.name)+'</div>'"
+         "+'<div class=\"hint\">#'+tgMatched.id+' - '+esc(tgMatched.material)+'</div></div></div>'"
+         "+'<table><tr><td>Remaining</td><td>'+tgMatched.remaining+'g of '+tgMatched.total+'g</td></tr></table>';"
+         "}else{plain(m,'MATCHED SPOOL','No spool linked to this tag');}}"
+         "}"
          "function tgSync(){tgDraw();const b=document.getElementById('tg-btn');if(!b)return;"
-         // Said before the write, not after it. The capacity check inside the
-         // firmware refuses the same tag, but only once the user has already
-         // pressed the button and put the tag on the reader.
          "const small=tgNeed&&tgBytes&&tgNeed>tgBytes;"
          "const fs=document.getElementById('tg-fmt');"
          "const fn=fs&&fs.selectedOptions[0]?fs.selectedOptions[0].textContent:'';"
          "const n=document.getElementById('tg-note');"
          "if(n)n.textContent=!tgNew?M.pickf:small"
          "?M.toosmall.replace('%s',fn).replace('%u',tgNeed).replace('%u',tgBytes)"
-         // tgLinked is already "a different tag than the one on the reader" - the
-         // comparison used to happen here and compared "047F3ABBD12A81" against
-         // "04:7F:3A:BB:D1:2A:81", so the warning appeared for the very tag the
-         // user was holding.
          ":(tgLinked?M.relink.replace('%s',tgLinked):'');"
          "const er=document.getElementById('tg-erase');"
          "if(er)er.disabled=!tgUid||tgCur=='blank';"
@@ -261,7 +265,6 @@ static String body() {
          "o.value='';o.textContent=t;p.appendChild(o);}"
          "function pickSpool(){const p=document.getElementById('tg-pick');"
          "if(p.value)document.getElementById('tg-id').value=p.value;loadPreview();}"
-         // 202 means the device is still fetching; asked again until it is not.
          "function loadSpools(n){const p=document.getElementById('tg-pick');if(!p)return;"
          "if(!n)setOpt(p,M.pick);"
          "fetch('/api/spools',{cache:'no-store'}).then(r=>{"
@@ -277,7 +280,7 @@ static String body() {
          "document.getElementById('tg-uid').textContent="
          "d.uid?(M.onread+' '+d.uid+' ('+d.kind+')'):M.notag;"
          "tgUid=d.uid||'';tgCurI=d.uid?d.info:null;tgBytes=d.bytes||0;"
-         "tgCur=d.content||'';tgSync();"
+         "tgCur=d.content||'';tgMatched=d.matched;tgSync();"
          "const s=document.getElementById('tg-s');"
          "if(d.state!='idle'){s.textContent=d.message;"
          "s.className='msg'+(d.state=='error'?' bad':'');}}).catch(()=>{});}"
@@ -436,7 +439,19 @@ static void routes(WebServer &srv) {
                "\",\"kind\":\""    + jsonEsc(tagKindLocal().c_str()) +
                "\",\"state\":\""   + jsonEsc(tagWriteState()) +
                "\",\"message\":\"" + jsonEsc(tagWriteMessageLocal().c_str()) +
-               "\",\"content\":\"" + jsonEsc(tagCachedContent()) + "\"}";
+               "\",\"content\":\"" + jsonEsc(tagCachedContent()) + "\"";
+
+    if (sm_found && sm_id > 0) {
+      j += ",\"matched\":{\"found\":true,\"id\":" + String(sm_id) +
+           ",\"name\":\"" + jsonEsc(sm_filament_name) + "\"" +
+           ",\"material\":\"" + jsonEsc(sm_material_global) + "\"" +
+           ",\"color\":\"" + jsonEsc(sm_color_global) + "\"" +
+           ",\"remaining\":" + String(sm_remaining) +
+           ",\"total\":" + String(sm_total) + "}";
+    } else {
+      j += ",\"matched\":{\"found\":false}";
+    }
+    j += "}";
     srv.send(200, "application/json", j);
   });
 
