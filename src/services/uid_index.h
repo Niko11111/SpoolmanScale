@@ -98,6 +98,14 @@ struct UidIndexReply {
 UidIndexReply uidIndexAsk(const char* const* ids, uint8_t count,
                           const InventoryStamp* stamp);
 
+// After a link this scale made itself: the identifiers of that tag go in, so
+// the tag can never again be called unknown from here - the index has to
+// outlive an afternoon of linking, or it is of no use, and it must not turn
+// on the very tags it watched being bound. Does nothing without a finished
+// index. An unlink takes nothing out: an entry too many costs one scan.
+// Loop task only.
+void uidIndexNote(const char* const* ids, uint8_t count);
+
 // Marks the index as worthless. Only a flag, freed by the loop. `why` has to
 // be a string literal - only the pointer is kept.
 void uidIndexForget(const char* why = nullptr);

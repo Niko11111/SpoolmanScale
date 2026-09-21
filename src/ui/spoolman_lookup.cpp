@@ -991,14 +991,21 @@ static ScanMatchFetch fetchScanMatch(int spool_id, const char* tray_uuid,
 }
 
 // ============================================================
-//  THE UID INDEX, IN SHADOW
+//  THE UID INDEX
 //
-//  Before the full scan the index is asked what it would have said, the scan
-//  runs regardless, and the two are compared in the log. Nothing acts on the
-//  answer yet. "DISAGREED" means the index called a tag unknown that the scan
-//  then found - the one mistake it must not make, and the line this whole
-//  step exists to never print.
+//  Before the full scan the index left by the last one is asked. Where it
+//  says that scan saw none of this tag's identifiers, the two downloads of
+//  the inventory are left out and the tag is unknown after the searches
+//  alone: about 0.3 s instead of 2.2 to 6.6.
+//
+//  UID_INDEX_LIVE 0 is the shadow it was proven in: the answer only goes into
+//  the log, the scan runs regardless, and the two are compared. "DISAGREED"
+//  means the index called a tag unknown that the scan then found - the one
+//  mistake it must not make. A build for testers can go back to that to have
+//  it looked for on libraries other than the ones it was written against.
 // ============================================================
+
+#define UID_INDEX_LIVE  1
 
 enum ShadowVerdict : uint8_t {
   SHADOW_NOT_ASKED,    // no scan was coming, or a rule kept the index out of it
@@ -1427,10 +1434,10 @@ void querySpoolman(const char* tray_uuid) {
   if (!have_result && !uiModalWaiting() && sm_reachable)
     have_stamp = (backendInventoryStamp(cfg_spoolman_base, &stamp) == 200);
 
-  // What the uid index would say, asked before the scan below replaces it. In
-  // shadow: the answer goes into the log and the scan runs whatever it was,
-  // see uidShadowReport(). Only where a scan is coming, so that there is
-  // something to hold the answer against.
+  // What the uid index says, asked before the scan below replaces it. Only
+  // where a scan is coming: while a question is on screen it stands aside,
+  // spoolmanRecheckTick() orders the lookup again once the question is gone,
+  // and that lookup lands here.
   //
   // Two rules keep the index out altogether. A search that did not answer:
   // the scan is the net under it, and the index only knows what the last scan
@@ -1438,6 +1445,7 @@ void querySpoolman(const char* tray_uuid) {
   // its Bambu plugin writes bambu_rfid_tag_1 when the AMS reads a spool, into
   // a field no search covers, so a spool taken out of the AMS and put on the
   // scale within the two minutes would be called unknown.
+  bool index_unknown = false;       // the index answered, no scan is owed
   if (!have_result && !uiModalWaiting()) {
     if (!searches_answered) {
       logSD("uid index: not asked, a search did not answer");
@@ -1449,13 +1457,17 @@ void querySpoolman(const char* tray_uuid) {
       // for anything but a Bambu tag.
       const char* ids[3] = { tray_uuid, tagNativeUid(tray_uuid), g_tag.uid_str };
       const UidIndexReply r = uidIndexAsk(ids, 3, have_stamp ? &stamp : nullptr);
-      if (r.answer == UID_INDEX_ABSENT) {
+      if (r.answer == UID_INDEX_ABSENT && UID_INDEX_LIVE) {
+        index_unknown = true;
+        logSDf("Backend: not in the index of %d ids (%lu s old), scan skipped",
+               r.ids, (unsigned long)r.age_s);
+      } else if (r.answer == UID_INDEX_ABSENT) {
         s_shadow = SHADOW_ABSENT;
         logSDf("uid index: would answer UNKNOWN (%d ids, %lu s old)",
                r.ids, (unsigned long)r.age_s);
       } else if (r.answer == UID_INDEX_MAY_HOLD) {
         s_shadow = SHADOW_MAY_HOLD;
-        logSDf("uid index: would not answer (%s)", r.why);
+        logSDf("uid index: left to the scan (%s)", r.why);
       } else {
         logSDf("uid index: silent (%s)", r.why);
       }
@@ -1493,9 +1505,9 @@ void querySpoolman(const char* tray_uuid) {
     logSD("Backend: full scan stood aside, a question is waiting on screen");
   }
 
-  scanned_inventory = (!have_result && !defer_scan);
+  scanned_inventory = (!have_result && !defer_scan && !index_unknown);
 
-  for (int attempt = 1; !have_result && !defer_scan && attempt <= 2; attempt++) {
+  for (int attempt = 1; scanned_inventory && attempt <= 2; attempt++) {
     if (attempt > 1) {
       Serial.printf("Backend: retry attempt %d after %s\n", attempt, err.c_str());
       logSDf("Backend: retry attempt %d (prev err=%s)", attempt, err.c_str());
@@ -1579,7 +1591,9 @@ void querySpoolman(const char* tray_uuid) {
   // nothing about a tag it does not contain. Read as "not there", the scale
   // offered to link or create the spool, and a library over the cap grew a
   // duplicate per scan. A match in the part that did arrive still counts.
-  if (best_rank == TAG_RANK_NONE && backendLastListPartial()) {
+  // Only after a list of this lookup: the flag is the last list call's, and
+  // without one it would be some earlier lookup's.
+  if (scanned_inventory && best_rank == TAG_RANK_NONE && backendLastListPartial()) {
     logSDf("Backend: tag %s not in a partial inventory, verdict withheld", tray_uuid);
     paintLookupFailure(0, STR_API_ERROR);
     return;
@@ -2009,7 +2023,9 @@ void querySpoolman(const char* tray_uuid) {
   const bool skip_archived = uiModalWaiting();
   if (skip_archived)
     logSD("Backend: archived pass stood aside, a question is waiting on screen");
-  int code2 = skip_archived
+  // Nor after the index has answered: what it holds came out of the archive
+  // as much as out of the active list.
+  int code2 = (skip_archived || index_unknown)
                 ? 0
                 : backendGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
   bool archive_whole = false;       // the second half of the scan came in, all of it

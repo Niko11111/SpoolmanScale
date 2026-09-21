@@ -17,6 +17,7 @@
 #include "services/spoolman_actions.h"
 #include "services/server_reach.h"
 #include "services/spool_cache.h"
+#include "services/uid_index.h"
 #include "services/http_progress.h"
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
@@ -1162,6 +1163,14 @@ void doLinkPatch(int spool_id, bool is_bambu) {
   // a downloaded list keeps offering such a spool, and the cache has to say
   // what a download would say - no more and no less.
   if (!tagFieldSelected().is_native) spoolCacheSetBound(spool_id, true);
+
+  // And the uid index learns the tag it has just watched being bound. The
+  // searches find it from now on, but the index must not be what calls it
+  // unknown on the day one of them says no by mistake.
+  {
+    const char* linked[3] = { link_uuid, tagNativeUid(link_uuid), g_tag.uid_str };
+    uidIndexNote(linked, 3);
+  }
 
   closeLinkOverlays();
 

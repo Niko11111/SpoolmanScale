@@ -299,6 +299,37 @@ UidIndexReply uidIndexAsk(const char* const* ids, uint8_t count,
   return r;
 }
 
+void uidIndexNote(const char* const* ids, uint8_t count) {
+  if (s_state != IDX_READY || s_forget) return;
+
+  int added = 0;
+  for (uint8_t i = 0; i < count; i++) {
+    const char* id = ids[i];
+    if (!id || !id[0]) continue;
+    size_t d = 0;
+    const uint64_t h = hashHex(id, id + strlen(id), SIZE_MAX, &d);
+    if (d < UID_INDEX_ID_MIN_HEX || d > UID_INDEX_ID_MAX_HEX) continue;
+    if (s_n && bsearch(&h, s_ids, s_n, sizeof(uint64_t), cmpId)) continue;
+    if (s_n + 1 > UID_INDEX_MAX_IDS) { drop("full"); return; }
+
+    // One longer and a copy, in order, so the search above keeps working.
+    uint64_t* blk = (uint64_t*)heap_caps_malloc((s_n + 1) * sizeof(uint64_t), MALLOC_CAP_SPIRAM);
+    if (!blk) { drop("no PSRAM for a linked tag"); return; }
+    size_t at = 0;
+    while (at < s_n && s_ids[at] < h) at++;
+    if (at)        memcpy(blk, s_ids, at * sizeof(uint64_t));
+    blk[at] = h;
+    if (at < s_n)  memcpy(blk + at + 1, s_ids + at, (s_n - at) * sizeof(uint64_t));
+    if (s_ids) free(s_ids);
+    s_ids   = blk;
+    s_n    += 1;
+    s_bytes = s_n * sizeof(uint64_t);
+    added++;
+  }
+  if (added) logSDf("uid index: %d id(s) of the tag just linked taken in, %u now",
+                    added, (unsigned)s_n);
+}
+
 void uidIndexForget(const char* why) {
   s_forget_why = why;
   s_forget     = true;
