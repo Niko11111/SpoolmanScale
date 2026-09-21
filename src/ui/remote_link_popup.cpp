@@ -18,6 +18,7 @@
 #include "services/tag_write.h"
 #include "ui/spool_flow.h"
 #include "ui/spoolman_lookup.h"
+#include "ui/tag_busy_popup.h"
 #include "bambu/material_match.h"
 #include "ui_common.h"
 
@@ -491,9 +492,13 @@ void handleRemoteLinkDeferredActions() {
       // OpenSpool record the tag page writes - FilaMan only sends one with
       // "write extended data" switched on in its admin settings, and that is
       // off by default, so building it here is the ordinary case.
+      // The write runs right here and holds the loop for its length. The card
+      // says so; the question this followed was taken down above.
+      tagBusyShow(false);
       const bool ok = tagRemotePayloadPending()
                         ? tagWriteRemotePayload()
                         : tagWriteSpoolNow(spool_id, TAG_FMT_OPENSPOOL);
+      tagBusyHide();
       if (!ok) {
         // The write failed, but the spool still belongs to this tag. FilaMan
         // only sets rfid_uid when the result says success, so reporting the

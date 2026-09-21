@@ -2664,6 +2664,15 @@ const char* const STRINGS[][3] = {
   { "Neu laden",
     "Reload",
     "Reload" },  // STR_LIST_RELOAD
+  { "Tag wird beschrieben",
+    "Writing the tag",
+    "Writing the tag" },  // STR_TW_BUSY_WRITE
+  { "Tag wird gelöscht",
+    "Erasing the tag",
+    "Erasing the tag" },  // STR_TW_BUSY_ERASE
+  { "Spule bitte liegen lassen, bis die Bestätigung kommt.",
+    "Please leave the spool where it is until this is confirmed.",
+    "Please leave the spool where it is until this is confirmed." },  // STR_TW_BUSY_HINT
 };
 
 StringID tagWriteResultString(uint8_t code) {

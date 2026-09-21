@@ -12,6 +12,7 @@
 #include "confirm_popup.h"
 #include "info_popup.h"
 #include "second_tag_popup.h"
+#include "tag_busy_popup.h"
 #include "tag_display.h"
 #include "spool_flow.h"
 #include "ui_common.h"
@@ -229,6 +230,7 @@ void startTagWriteNoAsk(int spool_id) {
     // The same watch a confirmed question sets, so the result popup appears
     // through the one path that already knows how to show it.
     s_watching = true;
+    tagBusyShow(false);
   } else {
     showResult(TW_ERR_WRITE);
     logSD("TagWrite: writer busy, nothing queued");
@@ -323,6 +325,7 @@ void handleTagWritePopupDeferredActions() {
   if (s_watching && strcmp(tagWriteState(), "pending") != 0) {
     s_watching = false;
     const uint8_t code = tagWriteResultCode();
+    tagBusyHide();
     showResult(code);
     logSDf("TagWritePopup: finished, mode=%d code=%u", (int)s_mode,
            (unsigned)code);
@@ -376,6 +379,10 @@ void handleTagWritePopupDeferredActions() {
                         : tagWriteRequest(s_spool_id, (TagFormat)g_tagwrite_fmt, false);
   if (queued) {
     s_watching = true;
+    // From here to the result the loop is busy with the tag and the screen
+    // would say nothing. The question is gone by now, so the pool holds one
+    // of the two at a time.
+    tagBusyShow(s_mode == ASK_ERASE);
   } else {
     // Only reachable when another write is still parked, which the tag page
     // could have started. Saying so beats a popup that closes and does nothing.

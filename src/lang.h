@@ -1214,6 +1214,9 @@ enum StringID {
   STR_LIST_SPOOL_CHANGED,     // on top of a list rebuilt because a tapped spool had changed
   STR_LIST_AS_OF,             // under such a list: the clock time it was loaded, %02d:%02d
   STR_LIST_RELOAD,            // and the button beside it
+  STR_TW_BUSY_WRITE,          // the card that stands while a tag is being written
+  STR_TW_BUSY_ERASE,          // the same while it is being erased
+  STR_TW_BUSY_HINT,           // below either: the spool has to stay where it is
 
   STR_COUNT
 };
