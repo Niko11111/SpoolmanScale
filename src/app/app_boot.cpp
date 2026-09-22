@@ -88,6 +88,19 @@ void wifiOnConnected() {
   lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
   lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
   lv_timer_handler();
+
+  // A spool put on the pad before the network came up was read but never
+  // looked up: the NTAG branch marks a tag handled whether or not its query
+  // ran, and the Bambu branch marks it queried although querySpoolman()
+  // returns at once without WiFi. Forgetting both is what lifting the spool
+  // off and back on does, so the next poll runs the whole lookup. At boot the
+  // pad is still unread; this is for the reconnect watchdog, which on
+  // 21.09.2026 brought the network at 14 s to a tag placed at 13 s - and the
+  // link that followed ended in "no tag UID".
+  if (tag_present) {
+    logSD("WiFi: a tag is already on the pad, looking it up now");
+    tagLookupForget();
+  }
 }
 
 // ============================================================
