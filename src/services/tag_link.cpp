@@ -170,6 +170,9 @@ void tagLinkTick() {
   // A tag write reports through its own state and may link as well. The two
   // never run in the same pass, and the link waits for the write.
   if (!strcmp(tagWriteState(), "pending")) return;
+  // Nor while the lookup of the tag on the reader waits for its inventory:
+  // its verdict would land on top of the link and paint the tag unknown.
+  if (lookupPending()) return;
   s_pending = false;
 
   s_report.code = runLink();

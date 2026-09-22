@@ -6,6 +6,7 @@
 #include "app/app_state.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/backend_job.h"
 #include "services/github_release.h"
 #include "web/web_shell.h"
 
@@ -134,6 +135,8 @@ static void webJobTask(void* arg) {
 
 bool webJobStart(WebJobKind kind, const char* arg, bool flag) {
   if (s_state != WJS_IDLE || kind == WJ_NONE) return false;
+  // One inventory at a time, device wide, see backend_job.h.
+  if (kind == WJ_SPOOLS && backendJobState() == BJS_RUNNING) return false;
   // Checked here rather than inside the task: the stack comes out of the
   // heap the moment the task is created, so testing afterwards would be
   // testing the wrong number.

@@ -25,3 +25,9 @@ void backendApplyMode(BackendMode mode);
 // location within that window was PATCHed with an id that belonged to the
 // instance just left - HTTP 200, wrong shelf.
 void backendApplyHost(const char *host);
+
+// Counts every switch of mode or host. Work that runs on another task takes
+// it at the start, and a result that comes back under a different number is
+// about a server the scale no longer talks to: it is dropped, never shown and
+// never put into a cache.
+uint32_t backendGeneration();

@@ -444,6 +444,9 @@ void appLoop() {
   // Asks again while an unknown tag sits on the pad, so linking it in a
   // browser shows up here without lifting the spool off and back on.
   spoolmanRecheckTick();
+  // Collects the inventory an unknown tag's lookup handed to the backend
+  // worker, and reads the verdict out of it.
+  lookupScanTick();
   sdLoggerTick();
   // Keeps a sector erased ahead of the ring in flash, so a log line never
   // waits for one, and carries out a clear a sector at a time.
@@ -454,7 +457,8 @@ void appLoop() {
   spoolCacheTick();
   // The same for the identifiers the last full scan saw, which live two
   // minutes, and for an index a lookup opened and left unfinished.
-  uidIndexTick();
+  // Not while a scan still has to add its archive pass to an index it opened.
+  if (!lookupScanBusy()) uidIndexTick();
   // And once the spool is known, whether the tag still says the same thing it
   // does. Costs a request only while the switch for it is on.
   tagMismatchTick();
@@ -1002,13 +1006,10 @@ void appLoop() {
     // chip uid.
     if (!isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen() &&
         strlen(g_tag.tray_uuid) == 32 && strcmp(g_tag.uid_str, spoolman_queried_uid) != 0) {
-      querySpoolman(g_tag.tray_uuid);
+      querySpoolman(g_tag.tray_uuid, LOOKUP_FROM_BAMBU);
       strncpy(spoolman_queried_uid, g_tag.uid_str, sizeof(spoolman_queried_uid)-1);
       spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';
-      if (!sm_found && wifi_ok) {
-        link_tag_first_seen_ms = millis();
-        link_popup_dismissed = false;
-      }
+      if (!lookupPending()) lookupFollowUp(LOOKUP_FROM_BAMBU, g_tag.tray_uuid);
     }
   }
 
@@ -1683,21 +1684,10 @@ void appLoop() {
             // honest answer rather than "not in Spoolman".
             if (wifi_ok && !isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen() &&
                 strcmp(uid_str, spoolman_queried_uid) != 0) {
-              querySpoolman(uid_str);
+              querySpoolman(uid_str, LOOKUP_FROM_UID);
               strncpy(spoolman_queried_uid, uid_str, sizeof(spoolman_queried_uid)-1);
               spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';
-              if (!sm_found) {
-                strncpy(link_tag_uid, uid_str, sizeof(link_tag_uid)-1);
-                link_tag_uid[sizeof(link_tag_uid)-1] = '\0';
-                link_tag_first_seen_ms = millis();
-                link_popup_dismissed = false;
-              } else {
-                // Stays shorter than 32 characters, so everything that tells a
-                // Bambu tag apart by that length keeps saying no.
-                strncpy(g_tag.tray_uuid, uid_str, sizeof(g_tag.tray_uuid)-1);
-                g_tag.tray_uuid[sizeof(g_tag.tray_uuid)-1] = '\0';
-                updateLinkButton();
-              }
+              if (!lookupPending()) lookupFollowUp(LOOKUP_FROM_UID, uid_str);
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
             lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
@@ -1712,13 +1702,10 @@ void appLoop() {
             if (!isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen() &&
                 strcmp(g_tag.uid_str, spoolman_queried_uid) != 0 && strlen(g_tag.tray_uuid) == 32) {
               crumbSet("backend lookup");
-              querySpoolman(g_tag.tray_uuid);
+              querySpoolman(g_tag.tray_uuid, LOOKUP_FROM_BAMBU);
               strncpy(spoolman_queried_uid, g_tag.uid_str, sizeof(spoolman_queried_uid)-1);
               spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';
-              if (!sm_found && wifi_ok) {
-                link_tag_first_seen_ms = millis();  // Start timer
-                link_popup_dismissed = false;
-              }
+              if (!lookupPending()) lookupFollowUp(LOOKUP_FROM_BAMBU, g_tag.tray_uuid);
             } else if (!sm_found && !link_popup_dismissed && !isSpoolFlowLinkEntryOpen() &&
                        wifi_ok && strlen(g_tag.tray_uuid) == 32) {
               // Auto-popup disabled - user uses the Link/Copy buttons in Zone 5
@@ -1811,23 +1798,12 @@ void appLoop() {
           lv_timer_handler();
 
           if (wifi_ok && !isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen()) {
-            querySpoolman(uid_str);
+            querySpoolman(uid_str, LOOKUP_FROM_NTAG);
             strncpy(spoolman_queried_uid, uid_str, sizeof(spoolman_queried_uid)-1);
             spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';
-
-            if (!sm_found) {
-              Serial.println("NTAG: not in Spoolman -> waiting for delay");
-              strncpy(link_tag_uid, uid_str, sizeof(link_tag_uid)-1);
-              link_tag_uid[sizeof(link_tag_uid)-1] = '\0';
-              link_tag_first_seen_ms = millis();
-              link_popup_dismissed = false;
-            } else {
-              lv_label_set_text(lbl_status, T(STR_TAG_FOUND));
-              lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
-              strncpy(g_tag.tray_uuid, uid_str, sizeof(g_tag.tray_uuid)-1);
-              g_tag.tray_uuid[sizeof(g_tag.tray_uuid)-1] = '\0';
-              updateLinkButton();
-            }
+            // A verdict that waits for the inventory is followed up by
+            // lookupScanTick() once it is in.
+            if (!lookupPending()) lookupFollowUp(LOOKUP_FROM_NTAG, uid_str);
           } else {
             lv_label_set_text(lbl_status, T(STR_TAG_FOUND));
             lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
@@ -1979,7 +1955,10 @@ void appLoop() {
   // edge check keeps it from invalidating four LVGL objects every pass.
   {
     static int link_bar_state = -1;
-    const int s = (tag_present && !sm_found) ? 1 : 0;
+    // A lookup waiting for its inventory is a state of its own: no buttons
+    // until the verdict is in, see updateLinkButton().
+    const int s = (tag_present && lookupPending()) ? 2
+                : (tag_present && !sm_found)       ? 1 : 0;
     if (s != link_bar_state) { link_bar_state = s; updateLinkButton(); }
   }
 

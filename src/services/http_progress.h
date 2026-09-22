@@ -111,6 +111,13 @@ public:
 
 HttpProgressFn httpProgressHook();
 
+// The byte count for a download on another task. The hook above paints and
+// therefore only ever runs on the loop task; a worker has nothing to paint
+// with and only wants the number, which the loop then reads and paints
+// itself. The calling task registers `into`, and every response read on that
+// task keeps it up to date. nullptr ends it. One such task at a time.
+void httpCountBytesInto(volatile size_t* into);
+
 // True while a hook is registered. Call sites use it to skip the wrapper
 // entirely rather than paying for a virtual call per byte.
 bool httpProgressActive();

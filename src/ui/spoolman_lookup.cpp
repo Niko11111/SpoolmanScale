@@ -1,4 +1,5 @@
 #include "spoolman_lookup.h"
+#include "spoolman_lookup_internal.h"
 #include "app/app_state.h"
 
 #include <Arduino.h>
@@ -20,8 +21,6 @@
 // library's templates.
 bool spoolHasAnyTag(JsonObjectConst spool);
 
-// How long the inventory scan waits before its one retry, panel kept alive.
-#define SPOOLMAN_RETRY_PAUSE_MS  300
 #include "services/location_state.h"
 #include "services/backend.h"
 #include "services/breadcrumb.h"
@@ -71,48 +70,14 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 //
 // Both server side searches are partial matches, so this runs on their results
 // too, not only on the full scan.
-// Longest identifier the scale compares is a Bambu tray uuid at 32 characters.
-#define TAG_UID_CMP_MAX  48
-
-// How a spool was recognised. Lower is better, and rank 1 has to keep
-// winning: every installation runs on it, and nothing added below may be able
-// to cost it a match. It also decides which of two spools wins when both
-// answer to the same tag, which is what the Bambu plugin's duplicates look
-// like from here.
-#define TAG_RANK_NONE        0
-#define TAG_RANK_FIELD       1   // a tag field, or Spoolman's tag relation
-#define TAG_RANK_BAMBU_EXT   2   // FilaMan external_id, bambulab:<tray uuid>
-#define TAG_RANK_BAMBU_CHIP  3   // chip uid in bambu_rfid_tag_1 / _2
-// Any other text extra field the server happens to keep, compared without
-// knowing what it means. Last on purpose: a field this firmware writes must
-// always win over a value that merely looks the same somewhere else.
-#define TAG_RANK_EXTRA_OTHER 4
+// TAG_UID_CMP_MAX and the TAG_RANK_* ranks stand in spoolman_lookup_internal.h,
+// the verdict in lookup_scan.cpp reads them too.
 
 // A 4 byte chip uid is 8 characters, and the plugin pads it to 16 with a
 // fixed tail. Both lengths are checked rather than the tail itself: the tail
 // is what the AMS reported, not something this firmware gets to define.
 #define BAMBU_CHIP_UID_LEN    8
 #define BAMBU_TAG_FIELD_LEN  16
-
-// How often the inventory scan repaints its status line. Ten a second reads as
-// motion and each one costs a partial flush that the transfer is waiting on.
-#define SEARCH_TICK_MS  100
-
-// Writes the progress of the full inventory load into the main screen's status
-// line. Registered only for the duration of that load; the rest of the
-// firmware's requests never see it.
-static void searchProgress(size_t bytes_read) {
-  if (!lbl_status) return;
-  static unsigned long last = 0;
-  const unsigned long now = millis();
-  if (now - last < SEARCH_TICK_MS) return;
-  last = now;
-
-  char buf[48];
-  snprintf(buf, sizeof(buf), T(STR_SEARCHING_INVENTORY_KB), (unsigned)(bytes_read / 1024));
-  lv_label_set_text(lbl_status, buf);
-  lv_refr_now(NULL);
-}
 
 // Whether a stored value names this uid, comparing normalised so the colon
 // form and plain hex are the same thing. `is_list` picks whole entry
@@ -155,7 +120,7 @@ static bool knownTagFieldKey(const char* key) {
   return false;
 }
 
-static int spoolTagRank(JsonObjectConst spool, const char* uid) {
+int spoolTagRank(JsonObjectConst spool, const char* uid) {
   if (!uid || !uid[0]) return TAG_RANK_NONE;
 
   // Spoolman's own tag relation, which a server on master fills. Asked first
@@ -329,7 +294,7 @@ static void captureExtraField(JsonObjectConst extra, const char* key,
 // Filled on every lookup rather than only with the write switch on, so that
 // flipping the switch while a spool sits on the scale does not land on an
 // empty buffer.
-static void captureBindings(JsonObjectConst spool) {
+void captureBindings(JsonObjectConst spool) {
   JsonObjectConst extra = spool["extra"];
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
     const TagFieldSpec& spec = tagFieldSpec(i);
@@ -386,8 +351,8 @@ static void captureBindings(JsonObjectConst spool) {
 // Only for a genuine Bambu tag. A four byte card that happens to be linked to
 // a spool has no business in a field called "Bambu RFID Tag", and it has no
 // tray uuid to put in external_id either.
-static void filamanSyncBambuFields(int spool_id, JsonObjectConst extra,
-                                   const char* tray_uuid) {
+void filamanSyncBambuFields(int spool_id, JsonObjectConst extra,
+                            const char* tray_uuid) {
   if (spool_id <= 0 || !tray_uuid || strlen(tray_uuid) != 32) return;
 
   const char* base = backendBaseUrl();
@@ -459,7 +424,7 @@ static void filamanSyncBambuFields(int spool_id, JsonObjectConst extra,
 // consumption and stays empty without a printer integration, while every
 // weighing lands in the spool event log, including the ones this scale
 // reports. native_iso is the value from the spool object, or null.
-static void applyLastUsed(const char* native_iso, const char* weighed_iso, int spool_id) {
+void applyLastUsed(const char* native_iso, const char* weighed_iso, int spool_id) {
   char iso[40] = "";
   if (native_iso && native_iso[0]) {
     strncpy(iso, native_iso, sizeof(iso) - 1);
@@ -536,7 +501,7 @@ static void applyLastUsed(const char* native_iso, const char* weighed_iso, int s
 // Reports which level answered, because an inherited default can be well off a
 // measured one (a Sunlu spool measured at 130 g against a 180 g brand default),
 // and the difference should be visible rather than silently applied.
-static float resolveTare(JsonVariantConst spool, uint8_t *source) {
+float resolveTare(JsonVariantConst spool, uint8_t *source) {
   float w = spool["spool_weight"] | 0.0f;
   if (w > 0) { *source = TARE_SPOOL; return w; }
 
@@ -559,7 +524,7 @@ static float resolveTare(JsonVariantConst spool, uint8_t *source) {
 // Reading this back is what makes measuring it worth anything. Until now the
 // value was written and never read, so it survived exactly until the next scan
 // and then snapped back to the type nominal.
-static float resolveInitial(JsonVariantConst spool) {
+float resolveInitial(JsonVariantConst spool) {
   float w = spool["initial_weight"] | 0.0f;
   if (w > 0) return w;                                  // measured for this spool
   w = spool["filament"]["weight"] | 0.0f;
@@ -580,7 +545,7 @@ static const char* tareSourceName(uint8_t s) {
 // the tag carried stays on screen, and only when both are empty does the field
 // fall back to a dash. Before this, a spool whose filament had no material
 // wiped the value the tag had just shown.
-static void setFromServerOrTag(lv_obj_t *lbl, const char *server, const char *from_tag) {
+void setFromServerOrTag(lv_obj_t *lbl, const char *server, const char *from_tag) {
   if (server && server[0])      lv_label_set_text(lbl, server);
   else if (from_tag && from_tag[0]) lv_label_set_text(lbl, from_tag);
   else                          lv_label_set_text(lbl, "-");
@@ -591,7 +556,7 @@ static void setFromServerOrTag(lv_obj_t *lbl, const char *server, const char *fr
 // an unread colour block, or the tint of a clear filament - because the tag
 // holds the manufacturer's value, see spoolColorResolve(). Kept in
 // sm_color_global for both, so the More Info screen resolves the same way.
-static void applyServerColor(const String& sm_color, bool is_bambu_tag) {
+void applyServerColor(const String& sm_color, bool is_bambu_tag) {
   snprintf(sm_color_global, sizeof(sm_color_global), "%s", sm_color.c_str());
   SpoolColor server;
   spoolColorParse(sm_color.c_str(), &server);
@@ -782,7 +747,7 @@ static char     s_rescan_uid[40]    = {0};
 static char     s_rescan_format[16] = {0};
 static uint32_t s_rescan_due_ms     = 0;
 
-static void scheduleRescan(const char* uid, const char* format) {
+void scheduleRescan(const char* uid, const char* format) {
   if (!uid || !uid[0]) return;
   strncpy(s_rescan_uid, uid, sizeof(s_rescan_uid) - 1);
   s_rescan_uid[sizeof(s_rescan_uid) - 1] = '\0';
@@ -799,7 +764,7 @@ static char s_last_query[48] = {0};
 // Set when a lookup skipped its inventory scan because a question was waiting
 // to be answered. Declared here so the tick below and querySpoolman() share
 // one flag rather than each keeping half the story.
-static bool s_scan_deferred = false;
+bool s_scan_deferred = false;
 
 // Whether the last lookup ended in a real "not in the inventory", the only
 // answer that makes a later hit a binding made from outside. A lookup that
@@ -807,7 +772,7 @@ static bool s_scan_deferred = false;
 // about the tag: on 19.09.2026 the lookup right after the scale's own link
 // failed like that, the recheck then found the spool, took the link for a
 // foreign one, and wrote the tag and asked for the second tag a second time.
-static bool s_verdict_unknown = false;
+bool s_verdict_unknown = false;
 
 // Whether the last lookup ended on a server it could not reach. The status
 // line reads it: without it the resting text said "not in Spoolman" about a
@@ -887,6 +852,8 @@ bool spoolmanTagResolves(const char* query, bool* out_unanswered, int* out_spool
 
 void spoolmanRecheckTick() {
   if (!wifi_ok || !tag_present || sm_found) return;
+  // The verdict is still coming, sm_found is only reset.
+  if (lookupPending()) return;
   if (!s_last_query[0]) return;
   // A server marked down is asked by the health check alone, which marks it up
   // again. Probing it here as well only added more 5 s stalls to the loop.
@@ -977,7 +944,7 @@ void spoolmanRescanTick() {
 // Error" stood there in green. A server that could not be reached at all is
 // named as such, and counts as a placement for the popup: the lookup is what
 // laying a spool down starts on its own.
-static void paintLookupFailure(int code, int fallback_id) {
+void paintLookupFailure(int code, int fallback_id) {
   const bool no_conn = serverReachIsNetworkFailure(serverReachNote(code, false));
   s_lost_connection = no_conn;
   lv_label_set_text(lbl_spoolman_weight, T(no_conn ? STR_NO_CONNECTION : fallback_id));
@@ -1047,16 +1014,12 @@ static ScanMatchFetch fetchScanMatch(int spool_id, const char* tray_uuid,
 
 #define UID_INDEX_LIVE  1
 
-enum ShadowVerdict : uint8_t {
-  SHADOW_NOT_ASKED,    // no scan was coming, or a rule kept the index out of it
-  SHADOW_MAY_HOLD,     // it would have left the tag to the scan
-  SHADOW_ABSENT,       // it would have said "unknown"
-};
-static ShadowVerdict s_shadow = SHADOW_NOT_ASKED;
+// ShadowVerdict stands in spoolman_lookup_internal.h.
+ShadowVerdict s_shadow = SHADOW_NOT_ASKED;
 
 // What the scan found, held against what the index said. spool_id 0 for "not
 // found". Says nothing unless the index was asked, and only once per lookup.
-static void uidShadowReport(int spool_id, int rank, bool archived) {
+void uidShadowReport(int spool_id, int rank, bool archived) {
   const ShadowVerdict said = s_shadow;
   s_shadow = SHADOW_NOT_ASKED;
   if (said == SHADOW_NOT_ASKED) return;
@@ -1082,7 +1045,7 @@ static void uidShadowReport(int spool_id, int rank, bool archived) {
 // querySpoolmanById() reads `archived` and sets sm_archived, so everything
 // that writes holds off. The caller gives its own document up first - the
 // fetch wants the PSRAM back - and returns after this.
-static void showArchivedSpool(int archived_id) {
+void showArchivedSpool(int archived_id) {
   Serial.printf("Backend: spool archived (ID=%d)\n", archived_id);
   logSDf("Backend: found ID=%d, archived", archived_id);
   querySpoolmanById(archived_id);
@@ -1099,8 +1062,45 @@ static void showArchivedSpool(int archived_id) {
   updateLinkButton();
 }
 
-void querySpoolman(const char* tray_uuid) {
+// What the uid index says about the tag, asked before a scan replaces it.
+// Also from lookup_scan.cpp, when a lookup waited for another one's scan and
+// that scan has just filled the index.
+bool askUidIndex(const char* tray_uuid, bool searches_answered,
+                 const InventoryStamp* stamp) {
+  bool unknown = false;
+  if (!searches_answered) {
+    logSD("uid index: not asked, a search did not answer");
+  } else if (backendIsFilaMan() && tagIsBambu(tray_uuid)) {
+    logSD("uid index: not asked, a Bambu tag on FilaMan is always scanned");
+  } else {
+    // Every identity spoolTagRank() compares with: the tray uuid, the chip
+    // behind it, and what the reader reported. The same string three times
+    // for anything but a Bambu tag.
+    const char* ids[3] = { tray_uuid, tagNativeUid(tray_uuid), g_tag.uid_str };
+    const UidIndexReply r = uidIndexAsk(ids, 3, stamp);
+    if (r.answer == UID_INDEX_ABSENT && UID_INDEX_LIVE) {
+      unknown = true;
+      logSDf("Backend: not in the index of %d ids (%lu s old), scan skipped",
+             r.ids, (unsigned long)r.age_s);
+    } else if (r.answer == UID_INDEX_ABSENT) {
+      s_shadow = SHADOW_ABSENT;
+      logSDf("uid index: would answer UNKNOWN (%d ids, %lu s old)",
+             r.ids, (unsigned long)r.age_s);
+    } else if (r.answer == UID_INDEX_MAY_HOLD) {
+      s_shadow = SHADOW_MAY_HOLD;
+      logSDf("uid index: left to the scan (%s)", r.why);
+    } else {
+      logSDf("uid index: silent (%s)", r.why);
+    }
+  }
+  return unknown;
+}
+
+void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   if (!wifi_ok) return;
+  // A lookup still waiting for its inventory was for a tag that is no longer
+  // the one being asked about. Its download runs on for cache and index.
+  lookupAbandon();
   strncpy(s_last_query, tray_uuid ? tray_uuid : "", sizeof(s_last_query) - 1);
   s_last_query[sizeof(s_last_query) - 1] = '\0';
   // Only the one line below "Truly not found" sets it again.
@@ -1501,39 +1501,9 @@ void querySpoolman(const char* tray_uuid) {
   // a field no search covers, so a spool taken out of the AMS and put on the
   // scale within the two minutes would be called unknown.
   bool index_unknown = false;       // the index answered, no scan is owed
-  if (!have_result && !uiModalWaiting()) {
-    if (!searches_answered) {
-      logSD("uid index: not asked, a search did not answer");
-    } else if (backendIsFilaMan() && tagIsBambu(tray_uuid)) {
-      logSD("uid index: not asked, a Bambu tag on FilaMan is always scanned");
-    } else {
-      // Every identity spoolTagRank() compares with: the tray uuid, the chip
-      // behind it, and what the reader reported. The same string three times
-      // for anything but a Bambu tag.
-      const char* ids[3] = { tray_uuid, tagNativeUid(tray_uuid), g_tag.uid_str };
-      const UidIndexReply r = uidIndexAsk(ids, 3, have_stamp ? &stamp : nullptr);
-      if (r.answer == UID_INDEX_ABSENT && UID_INDEX_LIVE) {
-        index_unknown = true;
-        logSDf("Backend: not in the index of %d ids (%lu s old), scan skipped",
-               r.ids, (unsigned long)r.age_s);
-      } else if (r.answer == UID_INDEX_ABSENT) {
-        s_shadow = SHADOW_ABSENT;
-        logSDf("uid index: would answer UNKNOWN (%d ids, %lu s old)",
-               r.ids, (unsigned long)r.age_s);
-      } else if (r.answer == UID_INDEX_MAY_HOLD) {
-        s_shadow = SHADOW_MAY_HOLD;
-        logSDf("uid index: left to the scan (%s)", r.why);
-      } else {
-        logSDf("uid index: silent (%s)", r.why);
-      }
-    }
-  }
+  if (!have_result && !uiModalWaiting())
+    index_unknown = askUidIndex(tray_uuid, searches_answered, have_stamp ? &stamp : nullptr);
 
-  {
-  HttpStall stall(searchProgress);
-
-  // Up to 2 attempts: first try, then 1 retry on IncompleteInput / connection issues.
-  // 20s timeout is generous for large Spoolman datasets (200+ spools over WiFi).
   // Not while a question is waiting to be answered. This is the only part of a
   // lookup long enough to matter: 249 active spools plus 254 including the
   // archive, three pages each, six seconds in which the touch panel is not
@@ -1562,573 +1532,30 @@ void querySpoolman(const char* tray_uuid) {
 
   scanned_inventory = (!have_result && !defer_scan && !index_unknown);
 
-  for (int attempt = 1; scanned_inventory && attempt <= 2; attempt++) {
-    if (attempt > 1) {
-      Serial.printf("Backend: retry attempt %d after %s\n", attempt, err.c_str());
-      logSDf("Backend: retry attempt %d (prev err=%s)", attempt, err.c_str());
-      // A pause that keeps the panel alive. This runs from appLoop(); a plain
-      // delay() froze the touch for its length, on top of a request that
-      // had just spent its timeout.
-      const unsigned long t0 = millis();
-      while (millis() - t0 < SPOOLMAN_RETRY_PAUSE_MS) {
-        lv_timer_handler();
-        delay(10);
-      }
-      doc.clear();
-    }
+  LookupCtx c;
+  snprintf(c.tray, sizeof(c.tray), "%s", tray_uuid);
+  c.origin            = origin;
+  c.is_bambu_tag      = is_bambu_tag;
+  c.scanned_inventory = scanned_inventory;
+  c.searches_answered = searches_answered;
+  c.have_stamp        = have_stamp;
+  c.stamp             = stamp;
+  c.index_unknown     = index_unknown;
 
-    int code = backendGetSpoolListJson(cfg_spoolman_base, false, doc, 20000, &filter, &err);
-    if (code != 200) {
-      Serial.printf("Backend HTTP error: %d (attempt %d)\n", code, attempt);
-      logSDf("Backend: HTTP error %d (attempt %d)", code, attempt);
-      if (attempt == 2) {
-        paintLookupFailure(code, code == -2 ? STR_LINK_JSON_ERR : STR_API_ERROR);
-        return;
-      }
-      if (code == -2 &&
-          err != DeserializationError::IncompleteInput &&
-          err != DeserializationError::EmptyInput) {
-        break;
-      }
-      continue;  // retry on HTTP or transient parse error too
-    }
-
-    // Stream directly from HTTP - avoids allocating a 40KB+ String in RAM
-
-    if (!err) break;  // success
-    // Parse failed -> retry only on transient stream issues
-    if (err != DeserializationError::IncompleteInput &&
-        err != DeserializationError::EmptyInput) {
-      break;  // other errors are not transient -> don't retry
-    }
-  }
-  }   // HttpStall: hook cleared and the bracket closed, whichever way we left
-
-  Serial.printf("DBG free heap after parse: %d bytes  free PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
-  if (sd_verbose) logSDf("[verbose] heap=%d PSRAM=%d (after Spoolman parse)",
-    ESP.getFreeHeap(), ESP.getFreePsram());
-  if (err) {
-    Serial.printf("Backend JSON error (final): %s\n", err.c_str());
-    logSDf("Backend: JSON error final=%s", err.c_str());
-    paintLookupFailure(0, STR_LINK_JSON_ERR);
+  // The inventory is loaded on the backend worker, and the verdict is read
+  // out of it by lookupScanTick() on a later pass. Until then the loop keeps
+  // going: the touch panel is read, the AMS and location questions can be
+  // answered, the weight moves. It used to stand here for the whole download,
+  // 14 s on FilaMan and 51 s on BamBuddy with a large library.
+  if (scanned_inventory) {
+    lookupScanBegin(c, filter);
     return;
   }
 
-  JsonArray spools = doc.as<JsonArray>();
-
-  // Here and not further down: the scan below returns from the middle of this
-  // function on the first spool it accepts. Only a scan that ran and came in
-  // whole - every way out of a failed one has returned above, and a list
-  // FilaMan gave up on halfway is not the inventory.
-  if (scanned_inventory && !backendLastListPartial())
-    spoolCacheFill(doc.as<JsonArrayConst>(), spoolHasAnyTag, have_stamp ? &stamp : nullptr);
-
-  // Which rank the best match reaches, and how many spools answer to this tag
-  // at all. Both need the whole list, so they are settled before anything is
-  // shown: the loop below returns on the first spool it accepts, and taking
-  // the first match in list order would hand a Bambu plugin duplicate the win
-  // over the record this scale linked itself. FilaMan answers id descending,
-  // so the duplicate comes first.
-  int best_rank = TAG_RANK_NONE;
-  sm_dup_count  = 0;
-  for (JsonObjectConst cand : spools) {
-    int rank = spoolTagRank(cand, tray_uuid);
-    if (rank == TAG_RANK_NONE) continue;
-    sm_dup_count++;
-    if (best_rank == TAG_RANK_NONE || rank < best_rank) best_rank = rank;
-  }
-  if (sm_dup_count > 1) {
-    logSDf("Backend: tag %s answers %d spools, taking rank %d",
-           tray_uuid, sm_dup_count, best_rank);
-  }
-
-  // A list that stopped short - FilaMan's timeout or page cap - proves
-  // nothing about a tag it does not contain. Read as "not there", the scale
-  // offered to link or create the spool, and a library over the cap grew a
-  // duplicate per scan. A match in the part that did arrive still counts.
-  // Only after a list of this lookup: the flag is the last list call's, and
-  // without one it would be some earlier lookup's.
-  if (scanned_inventory && best_rank == TAG_RANK_NONE && backendLastListPartial()) {
-    logSDf("Backend: tag %s not in a partial inventory, verdict withheld", tray_uuid);
-    paintLookupFailure(0, STR_API_ERROR);
-    return;
-  }
-
-  for (JsonObject spool : spools) {
-    if (spool["extra"].isNull()) continue;
-    JsonObject extra = spool["extra"];
-
-    int rank = spoolTagRank(spool, tray_uuid);
-    if (rank == TAG_RANK_NONE || rank != best_rank) continue;
-
-    // Says nothing after a short cut: the index is only asked when a scan is
-    // coming, and then this spool came out of that scan.
-    uidShadowReport(spool["id"] | 0, rank, spool["archived"] | false);
-
-    // No short cut promises an active spool. FilaMan's scan names an archived
-    // one as readily as any other, and the fetch by id that follows brought
-    // spool 285 in here on 21.09.2026: shown with its 966 g as if it were on
-    // the shelf, sm_archived false, every write open. Asked here rather than
-    // in each short cut, so that one added later cannot forget it, and in
-    // front of everything below that writes.
-    if (spool["archived"] | false) {
-      const int archived_id = spool["id"] | 0;
-      doc.clear();             // the byId fetch wants the PSRAM back
-      showArchivedSpool(archived_id);
-      return;
-    }
-
-    // Read after the match, not as part of it: the FilaMan migration below
-    // writes this value back and wants the tag field's own notation. A spool
-    // matched through card_uids has no tag field, which leaves this empty -
-    // harmless, because that migration only runs in FilaMan mode.
-    String tag_val;
-    if (!extra["tag"].isNull()) {
-      tag_val = extra["tag"].as<String>();
-      tag_val.replace("\"", "");
-      tag_val.trim();
-    }
-
-    // FOUND
-    sm_found    = true;
-    sm_id       = spool["id"] | 0;
-
-    // One-off migration to the plain hex notation. Older firmware wrote an
-    // NTAG uid into extra.tag with colons, which is the one notation the
-    // server side ilike cannot find once the scale asks in plain hex - the
-    // spool is still found, but only by pulling the whole inventory. Writing
-    // it back once puts it on the fast path for good.
-    //
-    // Deliberately narrow:
-    //  - only the native Spoolman backend. FilaMan has its own migration two
-    //    blocks down, and BamBuddy normalised from the start.
-    //  - only a match through the tag field itself. A spool found through the
-    //    Bambu plugin's bookkeeping has nothing to correct here.
-    //  - never a list field. card_uids holds several entries and writing one
-    //    value into it would drop the rest.
-    //  - only when the stored value really differs, so a correct entry is not
-    //    patched on every scan.
-    //
-    // A failed write is remembered rather than retried. A key without write
-    // permission would otherwise stall and log on every single placement, and
-    // the spool is found either way - the migration is a speed-up, not a
-    // requirement.
-    // Both backends that store a tag in a text field are covered. BamBuddy is
-    // not: it normalised from the start and its tag never reaches this loop.
-    //
-    // The value differs by backend but the question does not. Spoolman keeps
-    // it in whichever extra field the user picked, FilaMan in the native
-    // rfid_uid, which the mapping presents here as extra.tag.
-    const bool notation_backend =
-        (backendMode() == BACKEND_SPOOLMAN &&
-         !tagFieldIsNative() && !tagFieldIsList() && tagFieldKey()) ||
-        // tag_legacy has its own migration below and would double patch.
-        (backendIsFilaMan() && !(spool["extra"]["tag_legacy"] | false));
-    if (notation_backend && sm_id > 0 && rank == TAG_RANK_FIELD) {
-      static int s_migrate_failed_id = 0;    // do not hammer a read-only key
-      String stored;
-      const char* key = backendIsFilaMan() ? "tag" : tagFieldKey();
-      if (!extra[key].isNull()) {
-        stored = extra[key].as<String>();
-        stored.replace("\"", "");
-        stored.trim();
-      }
-      char want[TAG_UID_CMP_MAX];
-      tagUidNormalize(stored.c_str(), want, sizeof(want));
-      if (stored.length() && want[0] && stored != want && sm_id != s_migrate_failed_id) {
-        int mc = backendPatchSpoolTag(cfg_spoolman_base, sm_id, want, 4000);
-        logSDf("%s: rewrote tag of spool %d to plain hex, HTTP %d",
-               backendIsFilaMan() ? "FilaMan" : "Spoolman", sm_id, mc);
-        s_migrate_failed_id = (mc == 200) ? 0 : sm_id;
-      }
-    }
-
-    // One-off migration for spools imported from Spoolman. Their UID lives in
-    // custom_fields, where FilaMan's ?search= cannot see it, so every scan
-    // would pull the whole inventory. Writing it to the native rfid_uid once
-    // puts the spool on the fast path for good. Silent by design, the user
-    // has nothing to decide here.
-    //
-    // Keyed off the flag the reader set, not off which path found the spool:
-    // a failed tag search also lands here, and re-patching an already correct
-    // rfid_uid on every scan would be a pointless write and a needless stall.
-    if (backendIsFilaMan() && sm_id > 0 && (spool["extra"]["tag_legacy"] | false)) {
-      int mc = backendPatchSpoolTag(cfg_spoolman_base, sm_id, tag_val.c_str(), 4000);
-      logSDf("FilaMan: migrated tag of spool %d to rfid_uid, HTTP %d", sm_id, mc);
-    }
-
-    // The same idea, one field over: a spool found through the Bambu plugin's
-    // own bookkeeping has nothing in rfid_uid, so ?search= cannot see it and
-    // every scan would pull the whole inventory again. Writing the tray uuid
-    // there once puts it on the fast path for good.
-    //
-    // Only from rank 2 or 3, which is what "found through the plugin" means.
-    // A rank 1 match already has the field, and re-patching it on every scan
-    // would be a pointless write and a needless stall.
-    if (backendIsFilaMan() && sm_id > 0 && rank > TAG_RANK_FIELD && tag_val.length() == 0) {
-      int mc = backendPatchSpoolTag(cfg_spoolman_base, sm_id, tray_uuid, 4000);
-      logSDf("FilaMan: spool %d found at rank %d, wrote rfid_uid, HTTP %d",
-             sm_id, rank, mc);
-      // Free a moment ago, as the link list sees it, and bound from here on.
-      // Comfort only: left out, the spool would be offered once more and the
-      // read on the tap would turn it down.
-      if (mc == 200) spoolCacheSetBound(sm_id, true);
-    }
-
-    if (backendIsFilaMan() && sm_id > 0) {
-      filamanSyncBambuFields(sm_id, extra, tray_uuid);
-    }
-
-    captureBindings(spool);
-
-    // In step with the tag on the reader rather than with the binding. A Bambu
-    // spool carries a chip per side and only the one lying on the pad can be
-    // reported, so the field would stay half filled if this waited for an
-    // explicit link - and a library that is already bound would never reach
-    // one at all.
-    //
-    // What makes it fill itself is a detail of the scan loop: the marker that
-    // stops a tag from being looked up twice is keyed on g_tag.uid_str, the
-    // chip, while the lookup goes out with the tray uuid (app_loop.cpp:849 and
-    // :1510). Turning the spool over is therefore a new tag to that marker and
-    // a fresh lookup lands here, where the second chip is appended beside the
-    // first. Anything that starts deduplicating on the tray uuid takes that
-    // away without touching a line of this.
-    syncHwUidField(sm_id, tray_uuid);
-
-    sm_filament_id = spool["filament"]["id"] | 0;
-    sm_vendor_id   = spool["filament"]["vendor"]["id"] | 0;
-    sm_remaining = spool["remaining_weight"] | 0.0f;
-    sm_total    = resolveInitial(spool);
-    sm_spool_weight = resolveTare(spool, &sm_tare_source);
-    logSDf("Backend: found ID=%d remaining=%.1fg total=%.0fg",
-      sm_id, sm_remaining, sm_total);
-    logSDf("[verbose] LOC: querySpoolman id=%d shown_for=%d", sm_id, g_loc_popup_shown_for_id);
-    String art_nr = spool["filament"]["article_number"] | "";
-    art_nr.trim();
-    strncpy(sm_article_nr, art_nr.c_str(), sizeof(sm_article_nr)-1);
-    sm_article_nr[sizeof(sm_article_nr)-1] = '\0';
-    String fil_name = spool["filament"]["name"] | String("");
-    fil_name.trim();
-    strncpy(sm_filament_name, fil_name.c_str(), sizeof(sm_filament_name)-1);
-    sm_filament_name[sizeof(sm_filament_name)-1] = '\0';
-
-    // Location - einfacher String in Spoolman
-    sm_location_name[0] = '\0';
-    if (!spool["location"].isNull() && spool["location"].is<const char*>()) {
-      String loc = spool["location"] | String("");
-      loc.trim();
-      strncpy(sm_location_name, loc.c_str(), sizeof(sm_location_name)-1);
-      sm_location_name[sizeof(sm_location_name)-1] = '\0';
-    }
-
-    // Spool status. Only FilaMan maps it, the others leave the key unset.
-    sm_status_id = spool["status_id"] | 0;
-    if (!extra["last_dried"].isNull()) {
-      String dried = extra["last_dried"].as<String>();
-      dried.replace("\"", "");
-      char day[11];
-      isoDayLocal(dried.c_str(), day, sizeof(day));
-      char de_date[12];
-      isoToDe(day, de_date, sizeof(de_date));
-      strncpy(sm_last_dried, de_date, sizeof(sm_last_dried)-1);
-      sm_last_dried[sizeof(sm_last_dried)-1] = '\0';
-    } else {
-      strncpy(sm_last_dried, "-", sizeof(sm_last_dried)-1);
-    }
-
-    Serial.printf("Backend: ID=%d, %.1fg, dried: %s\n",
-      sm_id, sm_remaining, sm_last_dried);
-
-    // Material, vendor and colour from the server. Material and vendor are
-    // shown only without a Bambu tag (g_tag.material empty); the colour goes
-    // through applyServerColor(), which lets a Bambu tag keep its own.
-    String sm_material = spool["filament"]["material"] | String("");
-    sm_material.trim();
-    String sm_vendor_name = "";
-    if (!spool["filament"]["vendor"].isNull()) {
-      sm_vendor_name = spool["filament"]["vendor"]["name"] | String("");
-      sm_vendor_name.trim();
-    snprintf(sm_vendor_g, sizeof(sm_vendor_g), "%s", sm_vendor_name.c_str());
-    }
-    String sm_color = spool["filament"]["color_hex"] | String("");
-    sm_color.trim();
-
-    bool is_ntag = !is_bambu_tag;
-    logSDf("Spool %d identified: %s %s, %.0fg of %.0fg", sm_id,
-           sm_vendor_name.length() ? sm_vendor_name.c_str() : "?",
-           sm_material.length() ? sm_material.c_str() : "?",
-           sm_remaining, sm_total);
-    Serial.printf("is_ntag=%d material='%s' vendor='%s' color='%s'\n",
-      is_ntag, sm_material.c_str(), sm_vendor_name.c_str(), sm_color.c_str());
-    if (is_ntag) {
-      const TagInfo *ti = tagCachedInfo();
-      const bool from_tag = tagCachedHasRecord();
-      setFromServerOrTag(lbl_material, sm_material.c_str(), from_tag ? ti->material : "");
-      setFromServerOrTag(lbl_vendor, sm_vendor_name.c_str(), from_tag ? ti->brand : "");
-      strncpy(sm_material_global, sm_material.c_str(), sizeof(sm_material_global)-1);
-      sm_material_global[sizeof(sm_material_global)-1] = '\0';
-    }
-    applyServerColor(sm_color, is_bambu_tag);
-
-    // Update display - Fix 5: color based on remaining %
-    char weight_str[32];
-    snprintf(weight_str, sizeof(weight_str), "%.0f g", sm_remaining);
-    lv_label_set_text(lbl_spoolman_weight, weight_str);
-    float pct = (sm_total > 0) ? (sm_remaining / sm_total) * 100.0f : 0;
-
-    // Choose color: 0-10% red, 11-30% orange, 31-100% green
-    uint32_t pct_color;
-    if (pct <= 10.0f)       pct_color = 0xe04040;
-    else if (pct <= 30.0f)  pct_color = 0xf0b838;
-    else                    pct_color = 0x28d49a;
-
-    lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(pct_color), 0);
-
-    char pct_str[16];
-    snprintf(pct_str, sizeof(pct_str), "%.1f %%", pct);
-    lv_label_set_text(lbl_spoolman_pct, pct_str);
-    lv_obj_set_style_text_color(lbl_spoolman_pct, lv_color_hex(pct_color), 0);
-
-    // Update progress bar fill width (max 190px) with same color
-    if (lbl_scale_diff) {
-      int bar_w = (int)((pct / 100.0f) * (float)MAIN_BAR_W);
-      if (bar_w < 0) bar_w = 0;
-      if (bar_w > MAIN_BAR_W) bar_w = MAIN_BAR_W;
-      lv_obj_set_width(lbl_scale_diff, bar_w);
-      lv_obj_set_style_bg_color(lbl_scale_diff, lv_color_hex(pct_color), 0);
-    }
-
-    // Show SM-ID in green (linked)
-    char sm_id_str[16];
-    snprintf(sm_id_str, sizeof(sm_id_str), "%d", sm_id);
-    lv_label_set_text(lbl_spoolman_id, sm_id_str);
-    lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0x28d49a), 0);
-
-    applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, sm_last_dried);
-
-    lv_label_set_text(lbl_detail, strlen(sm_article_nr) > 0 ? sm_article_nr : "-");
-    lv_label_set_text(lbl_filament_name, strlen(sm_filament_name) > 0 ? sm_filament_name : "-");
-
-    // last_used is directly in the spool object (not in extra!)
-    applyLastUsed(spool["last_used"] | (const char*)nullptr,
-                spool["extra"]["last_weighed"] | (const char*)nullptr, sm_id);
-
-    // Bring Spoolman's relation up to what is physically on the reader. Two
-    // groups of users end up here: somebody whose spools are bound through an
-    // extra field, whose bindings move over on the first placement, and
-    // somebody with Bambu spools, which collect one entry per side as each
-    // side gets read.
-    //
-    // A Bambu spool ends up with up to three entries, and each earns its place:
-    //   chip uid, one per side  every reader can report these, so they are
-    //                           what makes the spool findable by a phone, an
-    //                           ESPHome box, or Spoolman's Add tag dialog
-    //   tray uuid               only a Bambu-aware reader can produce it, but
-    //                           it identifies the spool from either side at
-    //                           once, without waiting for both chips
-    //
-    // What is already linked comes from captureBindings() above, so nothing is
-    // sent that Spoolman already holds and a settled spool costs no requests
-    // at all.
-    //
-    // Only while the native source is the selected one. Somebody who picked
-    // extra.nfc_id did so because another tool reads that field, and writing
-    // into a store they did not choose is not this scale's call.
-    //
-    // Nothing is cleared here, unlike the explicit link in patchSpoolTag().
-    // This runs on its own, without anybody asking for it, and a store that
-    // silently empties a field the user never touched is worse than one that
-    // leaves a duplicate behind.
-    if (tagFieldIsNative() && sm_id > 0 && backendHasNativeTags()) {
-      char* have = sm_tag_values[TAG_FIELD_NATIVE];
-
-      struct AutoLink {
-        // Whether anything was actually linked, which is what decides if the
-        // tag is worth announcing a second time.
-        static bool add(int spool_id, const char* uid, const char* format) {
-          int conflict = 0;
-          int code = backendLinkTag(cfg_spoolman_base, spool_id, uid,
-                                    format, &conflict);
-          if (code == 409) {
-            // Nobody asked for this link, so a tag that belongs to another
-            // spool is not an error to put on screen. It is worth a line in
-            // the log, because it means two spools claim one identity.
-            logSDf("Auto-link: uid=%s belongs to spool %d, left alone",
-                   uid, conflict);
-            return false;
-          } else if (code >= 200 && code < 300) {
-            logSDf("Auto-link: uid=%s added to spool %d", uid, spool_id);
-            return true;
-          }
-          logSDf("Auto-link: uid=%s to spool %d failed, HTTP %d",
-                 uid, spool_id, code);
-          return false;
-        }
-
-        // Keeps the captured list in step with what was just linked. It was
-        // read before these links existed, and an unlink straight afterwards
-        // reads that same list to decide what to drop. Without this it would
-        // leave the new entries behind, and a spool the user was told is
-        // unlinked would still be found by them.
-        static void remember(char* list, const char* uid) {
-          char merged[CARD_UIDS_MAX];
-          if (cardUidsAppend(list, uid, merged, sizeof(merged)) != CARD_UIDS_ADDED)
-            return;
-          strncpy(list, merged, CARD_UIDS_MAX - 1);
-          list[CARD_UIDS_MAX - 1] = '\0';
-        }
-      };
-
-      bool linked = false;
-      const char* chip = tagNativeUid(tray_uuid);
-      if (chip && chip[0] && !cardUidsContain(have, chip)) {
-        if (AutoLink::add(sm_id, chip, tagFormatName(tray_uuid))) {
-          AutoLink::remember(have, chip);
-          linked = true;
-        }
-      }
-
-      if (tagIsBambu(tray_uuid) && !cardUidsContain(have, tray_uuid)) {
-        if (AutoLink::add(sm_id, tray_uuid, "bambu")) {
-          AutoLink::remember(have, tray_uuid);
-          linked = true;
-        }
-      }
-
-      // OpenSpoolman reads a spool's tray uuid out of extra.tag and knows
-      // nothing about Spoolman's relation yet. A spool that migrates over
-       // through this path - found by a chip uid in card_uids, say - would
-      // otherwise drop out of its view, and this is the very path a whole
-      // library gets adopted through. The explicit link in patchSpoolTag()
-      // does the same thing for the same reason.
-      //
-      // Only into an empty field. Filling a blank is an addition; overwriting
-      // a value somebody put there would be an opinion, and this runs without
-      // anybody asking for it.
-      if (tagIsBambu(tray_uuid) && !sm_tag_values[TAG_FIELD_TAG][0]) {
-        const TagFieldSpec& companion = tagFieldSpec(TAG_FIELD_TAG);
-        if (backendHasExtraField(companion.key)) {
-          char val[40];
-          tagFieldFormat(companion, tray_uuid, val, sizeof(val));
-          int c = backendPatchExtraField(cfg_spoolman_base, sm_id,
-                                         companion.key, val);
-          logSDf("Auto-link: kept tray uuid in %s='%s' of spool %d HTTP %d",
-                 companion.key, val, sm_id, c);
-          if (c >= 200 && c < 300) {
-            strncpy(sm_tag_values[TAG_FIELD_TAG], val, CARD_UIDS_MAX - 1);
-            sm_tag_values[TAG_FIELD_TAG][CARD_UIDS_MAX - 1] = '\0';
-            // Spoolman's own relation does not count as bound in the link
-            // list, a value in extra.tag does.
-            spoolCacheSetBound(sm_id, true);
-          }
-        } else {
-          logSDf("Auto-link: %s missing on the server, tray uuid not kept",
-                 companion.key);
-        }
-      }
-
-      // The scan that started this lookup went out before the link existed, so
-      // any browser paired with this scale was told the tag is unknown. Say it
-      // again, now that it resolves.
-      if (linked && chip && chip[0])
-        scheduleRescan(chip, tagFormatName(tray_uuid));
-    }
-
-    updateLinkButton();
-    return;
-  }
-
-  // Not found in active spools - check if archived
-  Serial.println("Backend: not in active spools, checking archive...");
-  // Every identifier this list holds goes into the uid index before the
-  // document is given up. Only from a scan that ran and came in whole, the
-  // same test the list cache makes above. The index stays open until the
-  // archive pass below is in as well; a lookup that leaves before that leaves
-  // none behind, see uidIndexTick(). Asked further up, in shadow for now.
-  if (scanned_inventory && !backendLastListPartial()) {
-    uidIndexBegin();
-    uidIndexAdd(doc.as<JsonArrayConst>(), false);
-  }
-  doc.clear();  // RAM freigeben vor zweitem Call
-
-  // Second call with allow_archived=true.
-  // DynamicJsonDocument is the deprecated v6 shim in ArduinoJson 7: the
-  // capacity argument is ignored and it allocates from the internal heap
-  // without limit. With a large FilaMan archive that is a way to run the
-  // internal RAM dry, so this one uses PSRAM like the active list above.
-  JsonDocument doc2(&psram_alloc);
-  DeserializationError err2 = DeserializationError::Ok;
-  JsonDocument filter2;
-  JsonArray filter2_arr = filter2.to<JsonArray>();
-  JsonObject f2 = filter2_arr.add<JsonObject>();
-  f2["id"] = true;
-  f2["archived"] = true;
-  for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
-    f2["extra"][tagFieldSpec(i).key] = true;
-  // The other half of the six seconds, and stood aside for the same reason.
-  // An archived spool is a rare answer to begin with; a question nobody can
-  // answer is worse than finding it one placement later.
-  //
-  // Not a return: the tail below is what sets sm_found and paints "not in
-  // Spoolman", and skipping it would leave the screen showing the spool
-  // before. A code of 0 falls through to exactly that, which is also the
-  // honest answer - the cheap lookup has already missed, and
-  // spoolmanRecheckTick() corrects it within seconds if it was wrong.
-  const bool skip_archived = uiModalWaiting();
-  if (skip_archived)
-    logSD("Backend: archived pass stood aside, a question is waiting on screen");
-  // Nor after the index has answered: what it holds came out of the archive
-  // as much as out of the active list.
-  int code2 = (skip_archived || index_unknown)
-                ? 0
-                : backendGetSpoolListJson(cfg_spoolman_base, true, doc2, 8000, &filter2, &err2);
-  bool archive_whole = false;       // the second half of the scan came in, all of it
-  if (code2 == 200) {
-    if (!err2) {
-      JsonArray spools2 = doc2.as<JsonArray>();
-      archive_whole = !backendLastListPartial();
-      // With the archive in, the index has seen what this scan saw. In front
-      // of the loop, which returns from its middle and clears the document.
-      // Both calls do nothing when the active list did not open an index.
-      if (archive_whole) {
-        uidIndexAdd(doc2.as<JsonArrayConst>(), true);
-        uidIndexCommit(have_stamp ? &stamp : nullptr);
-      }
-      for (JsonObject spool : spools2) {
-        // Only check truly archived spools (explicit bool cast needed for JsonVariant)
-        bool is_archived = spool["archived"].as<bool>();
-        if (!is_archived) continue;
-        const int archived_rank = spoolTagRank(spool, tray_uuid);
-        if (archived_rank == TAG_RANK_NONE) continue;
-        // Archived, but found. None of what the screen needs is in the lean
-        // archive filter, see showArchivedSpool().
-        const int archived_id = spool["id"] | 0;
-        uidShadowReport(archived_id, archived_rank, true);
-        doc2.clear();          // the byId fetch wants the PSRAM back
-        showArchivedSpool(archived_id);
-        return;
-      }
-    }
-  }
-
-  // Truly not found
-  Serial.println("Backend: spool not found");
-  logSD("Backend: spool not found");
-  // Only a scan that ran to its end is an answer to hold the index against.
-  if (scanned_inventory && archive_whole) {
-    uidShadowReport(0, TAG_RANK_NONE, false);
-  } else if (s_shadow != SHADOW_NOT_ASKED) {
-    s_shadow = SHADOW_NOT_ASKED;
-    logSD("uid index: the scan did not run to its end, nothing to compare");
-  }
-  { char nb[40]; backendText(T(STR_NOT_IN_SPOOLMAN), nb, sizeof(nb)); lv_label_set_text(lbl_spoolman_weight, nb); }
-  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
-  sm_found = false;
-  // A scan that stood aside for a question lands here too, with nothing
-  // searched. That is not a verdict.
-  s_verdict_unknown = !s_scan_deferred;
-  updateLinkButton();
+  // A short cut found the spool, or no scan is owed: the verdict is read right
+  // here, out of what the searches brought, the way it always was.
+  if (lookupResolveActive(c, doc, nullptr, err) == LOOKUP_NEEDS_ARCHIVE)
+    lookupArchiveBegin(c);
 }
 
 bool lookupLostConnection() { return s_lost_connection; }

@@ -26,7 +26,12 @@
 #include "ui/tag_display.h"
 #include "web/web_server.h"
 
+static volatile uint32_t s_generation = 0;
+
+uint32_t backendGeneration() { return s_generation; }
+
 void backendApplyHost(const char *host) {
+  s_generation++;
   // A drying batch still running would carry on against the new address.
   driedBatchCancel();
   backendSetHost(host);
@@ -39,6 +44,7 @@ void backendApplyHost(const char *host) {
 
 void backendApplyMode(BackendMode mode) {
   if (mode == backendMode()) return;
+  s_generation++;
   // Before the mode changes under it: the rest of a drying batch would
   // otherwise be written through the other backend.
   driedBatchCancel();

@@ -8,6 +8,7 @@
 #include "lang.h"
 #include "main_screen_helpers.h"
 #include "spool_flow.h"
+#include "spoolman_lookup.h"
 #include "ui_common.h"
 
 
@@ -15,6 +16,8 @@
 //  CLEAR DISPLAY (no tag detected)
 // ============================================================
 void clearTagDisplay() {
+  // Whatever lookup is still out, its verdict has nothing left to paint on.
+  lookupAbandon();
   lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
   lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);  // yellow = kein Tag
   lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));

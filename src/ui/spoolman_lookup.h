@@ -1,6 +1,49 @@
 #pragma once
 
-void querySpoolman(const char* tray_uuid);
+#include <stdint.h>
+
+// Who asked for a lookup, and so what happens with the verdict: a Bambu tag
+// arms the link timer, a tag known by its uid alone (MIFARE, NTAG) also
+// becomes the link target or, when found, the tag the spool is bound by.
+enum LookupOrigin : uint8_t {
+  LOOKUP_FROM_OTHER = 0,   // nothing to follow up
+  LOOKUP_FROM_BAMBU,
+  LOOKUP_FROM_UID,         // a MIFARE card read by its uid
+  LOOKUP_FROM_NTAG
+};
+
+// Looks the tag up and paints what the backend knows about it. The cheap
+// questions are asked right here; when none of them knows the tag, the whole
+// inventory is loaded on the backend worker and the call returns before the
+// verdict is in. lookupPending() says which: while it is false the caller
+// follows up itself with lookupFollowUp(), otherwise lookupScanTick() does
+// once the verdict is in.
+void querySpoolman(const char* tray_uuid, LookupOrigin origin = LOOKUP_FROM_OTHER);
+
+// True between a lookup handing its inventory to the worker and its verdict.
+// Everything that acts on sm_found waits while it is: the verdict is not in,
+// and sm_found says "not found" only because it was reset.
+bool lookupPending();
+
+// What the caller of querySpoolman() does with the verdict. See LookupOrigin.
+void lookupFollowUp(LookupOrigin origin, const char* uid);
+
+// From appLoop(): collects the inventory from the worker and reads the
+// verdict out of it, repaints the status line while it comes in.
+void lookupScanTick();
+
+// True while the worker loads a list for a lookup, or a lookup waits for it.
+// The uid index a scan opens stays open for that long, see uidIndexTick().
+bool lookupScanBusy();
+
+// The tag the pending lookup was for is gone: another one was put down, or
+// the display was cleared. No verdict will be painted; the inventory still
+// comes in and feeds the spool cache and the uid index.
+void lookupAbandon();
+
+// The status line while the inventory comes in: "searching", with the
+// kilobytes read so far once there are any.
+void lookupPaintSearching();
 void querySpoolmanById(int spool_id);
 
 // Re-announces a tag once, a moment after the auto-link has made it

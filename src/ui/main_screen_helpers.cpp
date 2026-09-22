@@ -43,6 +43,8 @@ static bool statusMessageHeld() {
 
 void paintTagStatus() {
   if (!lbl_status || statusMessageHeld()) return;
+  // Neither found nor unknown yet: the inventory is still coming in.
+  if (lookupPending()) { lookupPaintSearching(); return; }
   // A lookup that never reached the server says nothing about the spool, so
   // the line names the connection rather than the backend the spool is
   // supposedly not in. backendText() puts the backend's own name in.
@@ -92,6 +94,16 @@ void updateLinkButton() {
     lv_obj_add_flag(btn_dried,         LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(btn_link,          LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(btn_copy,        LV_OBJ_FLAG_HIDDEN);
+    return;
+  }
+
+  // While the inventory comes in the tag is neither known nor unknown, and
+  // "Link" would load the same inventory a second time next to it.
+  if (tag_present && lookupPending()) {
+    lv_obj_add_flag(slot1,             LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(btn_dried,         LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(btn_link,          LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(btn_copy,          LV_OBJ_FLAG_HIDDEN);
     return;
   }
 

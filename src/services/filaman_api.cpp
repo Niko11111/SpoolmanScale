@@ -10,6 +10,7 @@
 #include "services/user_options.h"
 #include "services/backend.h"
 #include "services/http_progress.h"
+#include "services/loop_task.h"
 #include "services/spool_color.h"
 #include "services/tag_uid.h"
 #include "services/text_util.h"
@@ -54,8 +55,17 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 // Whether the last inventory fetch stopped short - the timeout or the page
 // cap - so a caller that did not find a tag in it can say "unknown" rather
 // than "not there". Read through filamanLastListPartial().
-static bool s_last_list_partial = false;
-bool filamanLastListPartial() { return s_last_list_partial; }
+//
+// One flag per side: the loop task, and whichever worker is loading a list on
+// the other core (backend_job.cpp, the tags page's web job). The two can run
+// at the same time, and with a single flag the one that finished last would
+// decide for both whether a list was whole.
+static bool s_last_list_partial_loop  = false;
+static bool s_last_list_partial_other = false;
+static bool& lastListPartial() {
+  return onLoopTask() ? s_last_list_partial_loop : s_last_list_partial_other;
+}
+bool filamanLastListPartial() { return lastListPartial(); }
 
 // What goes into a query string. The Spoolman client has the same helper;
 // the search term here is whatever a tag carried, and a '&' or a '#' in it
@@ -137,6 +147,10 @@ static bool fetchLocations(const char* base_url, const char* api_key, bool force
   if (!hasBaseUrl(base_url)) return false;
   if (!force && s_loc_count > 0 &&
       (millis() - s_loc_fetched_ms) < FILAMAN_LOC_TTL_MS) return true;
+  // A worker loading the inventory on the other core keeps the names it
+  // finds, however old: refilling the table under the loop, which reads it
+  // for the location popup, would hand it half a list. The loop refreshes it.
+  if (!force && s_loc_count > 0 && !onLoopTask()) return true;
 
   HTTPClient http;
   http.begin(String(base_url) + "/api/v1/locations?page_size=" + FILAMAN_LOC_MAX);
@@ -1424,7 +1438,7 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
                             const char* search_term, int page_size,
                             uint32_t timeout_ms, DeserializationError* out_err) {
   if (out_err) *out_err = DeserializationError::Ok;
-  s_last_list_partial = false;
+  lastListPartial() = false;
   if (!hasBaseUrl(base_url)) return -1;
 
   // FilaMan rejects page_size above 200 with a validation error, so an
@@ -1461,7 +1475,7 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
     uint32_t elapsed = millis() - started_ms;
     if (elapsed >= timeout_ms) {
       logSDf("FilaMan: spool list timed out after %d of %d spools", fetched, total);
-      s_last_list_partial = true;
+      lastListPartial() = true;
       break;   // keep what was fetched, the caller sees a shorter list
     }
 
@@ -1511,7 +1525,7 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
     if (page >= FILAMAN_MAX_PAGES) {
       logSDf("FilaMan: stopped after %d pages, %d of %d spools fetched",
              page, fetched, total);
-      s_last_list_partial = true;
+      lastListPartial() = true;
       break;
     }
     page++;

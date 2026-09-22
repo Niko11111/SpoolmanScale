@@ -15,6 +15,7 @@
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/backend_job.h"
 #include "services/prefs_store.h"
 #include "services/tag_field.h"
 #include "services/tag_link.h"
@@ -572,8 +573,9 @@ static void routes(WebServer &srv) {
       webJobTake();
       return;
     }
-    if (webJobState() == WJS_RUNNING) {
-      // Ours or another job's: the page asks again either way.
+    if (webJobState() == WJS_RUNNING || backendJobState() == BJS_RUNNING) {
+      // Ours, another job's, or the lookup's inventory on the backend
+      // worker: the page asks again either way.
       srv.send(202, "application/json", "{\"pending\":true}");
       return;
     }
