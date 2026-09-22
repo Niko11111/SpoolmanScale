@@ -2685,13 +2685,12 @@ const char* const STRINGS[][3] = {
     "The scale shows no spool right now." },  // STR_W_TAG_NOSPOOL
 
   // Tag view on the device, from the NFC chip in the header
-  { "NFC-Tag",   "NFC tag",  "NFC tag" },  // STR_TV_TITLE
-  { "Filament",  "Filament", "Filament" },  // STR_TV_FILAMENT
-  { "UID",       "UID",      "UID" },  // STR_TV_UID
-  { "Chip",      "Chip",     "Chip" },  // STR_TV_CHIP
-  { "leer",      "blank",    "blank" },  // STR_TV_FMT_BLANK
-  { "unbekannt", "unknown",  "unknown" },  // STR_TV_FMT_UNKNOWN
-  { "keins",     "none",     "none" },  // STR_TV_FMT_NONE
+  { "NFC-Tag",   "NFC tag", "NFC tag" },  // STR_TV_TITLE
+  { "UID",       "UID",     "UID" },  // STR_TV_UID
+  { "Chip",      "Chip",    "Chip" },  // STR_TV_CHIP
+  { "leer",      "blank",   "blank" },  // STR_TV_FMT_BLANK
+  { "unbekannt", "unknown", "unknown" },  // STR_TV_FMT_UNKNOWN
+  { "keins",     "none",    "none" },  // STR_TV_FMT_NONE
   { "Auf dem Tag steht nichts. Er kann beschrieben werden.",
     "There is nothing on the tag. It can be written.",
     "There is nothing on the tag. It can be written." },  // STR_TV_BLANK_NOTE

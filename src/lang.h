@@ -1226,7 +1226,6 @@ enum StringID {
 
   // Tag view on the device, from the NFC chip in the header
   STR_TV_TITLE,               // header of the card
-  STR_TV_FILAMENT,            // caption over brand and material
   STR_TV_UID,                 // caption
   STR_TV_CHIP,                // caption over NTAG215, 496 bytes
   STR_TV_FMT_BLANK,           // the format cell of a blank NTAG

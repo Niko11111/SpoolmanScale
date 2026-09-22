@@ -37,8 +37,8 @@
 #define TV_VF           16
 
 #define TV_SWATCH       42
-#define TV_FMT_X        60
-#define TV_FMT_W        166
+#define TV_MAT_X        60
+#define TV_MAT_W        166
 
 #define TV_IDENT_CAP_Y  60
 #define TV_IDENT_VAL_Y  76
@@ -50,6 +50,13 @@
 #define TV_BTN_Y        246
 #define TV_BTN_H        UI_TOUCH_MIN
 #define TV_BTN_W        ((TV_BOX_W - 3 * TV_PAD) / 2)
+
+// The format chip in the header, the More Info status chip's footprint and
+// place: the format is how the tag is written, not what the spool is, so it
+// sits apart from the swatch and the filament.
+#define TV_FMT_CHIP_W   150
+#define TV_FMT_CHIP_H   44
+#define TV_FMT_CHIP_Y   4
 
 // What the capability container reports for the three NTAG21x sizes: the NDEF
 // area, which is what tagCachedBytes() hands out, and which names the chip.
@@ -127,15 +134,16 @@ static void caption(lv_obj_t* box, int x, int y, const char* text) {
   lv_obj_set_pos(c, x, y);
 }
 
-static void cell(lv_obj_t* box, int x, int y, int w, const char* cap, const char* value) {
+static void cell(lv_obj_t* box, int x, int y, int w, const char* cap, const char* value,
+                 const lv_font_t* font = UI_FONT_BODY) {
   caption(box, x, y, cap);
   lv_obj_t* v = lv_label_create(box);
   if (!v) return;
   const bool has = value && value[0];
   lv_label_set_text(v, has ? value : "-");
   lv_obj_set_style_text_color(v, lv_color_hex(has ? UI_COL_INK : UI_COL_CAPTION), 0);
-  lv_obj_set_style_text_font(v, UI_FONT_BODY, 0);
-  oneLine(v, w, UI_FONT_BODY);
+  lv_obj_set_style_text_font(v, font, 0);
+  oneLine(v, w, font);
   lv_obj_set_pos(v, x, y + TV_VF);
 }
 
@@ -193,7 +201,44 @@ static void rangeText(char* out, size_t n, uint16_t lo, uint16_t hi) {
   else                      snprintf(out, n, "%u °C", (unsigned)(hi ? hi : lo));
 }
 
-static void buildHeader(lv_obj_t* box) {
+// A format the scale recognised, as opposed to one of the three answers that
+// are not a format: blank, unknown, none.
+static bool isRealFormat(const TagInfo& i) {
+  return i.fmt[0] && strcmp(i.fmt, "blank") && strcmp(i.fmt, "unknown") &&
+         strcmp(i.fmt, "unsupported");
+}
+
+// Caption over value in a frame, the status chip's look from More Info.
+static void formatChip(lv_obj_t* hdr, const TagInfo& i) {
+  lv_obj_t* chip = lv_obj_create(hdr);
+  if (!chip) return;
+  lv_obj_set_size(chip, TV_FMT_CHIP_W, TV_FMT_CHIP_H);
+  lv_obj_set_pos(chip, TV_PAD, TV_FMT_CHIP_Y);
+  lv_obj_set_style_bg_color(chip, lv_color_hex(UI_COL_CHIP), 0);
+  lv_obj_set_style_border_color(chip, lv_color_hex(isRealFormat(i) ? UI_COL_ACCENT
+                                                                   : UI_COL_CAPTION), 0);
+  lv_obj_set_style_border_width(chip, 1, 0);
+  lv_obj_set_style_radius(chip, UI_RADIUS_BTN, 0);
+  lv_obj_set_style_pad_all(chip, 0, 0);
+  lv_obj_clear_flag(chip, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_t* cap = lv_label_create(chip);
+  if (cap) {
+    lv_label_set_text(cap, T(STR_TW_OPT_FMT));
+    lv_obj_set_style_text_color(cap, lv_color_hex(UI_COL_CAPTION), 0);
+    lv_obj_set_style_text_font(cap, UI_FONT_CAPTION, 0);
+    lv_obj_align(cap, LV_ALIGN_CENTER, 0, -10);
+  }
+  lv_obj_t* val = lv_label_create(chip);
+  if (val) {
+    lv_label_set_text(val, formatText(i));
+    lv_obj_set_style_text_color(val, lv_color_hex(isRealFormat(i) ? UI_COL_ACCENT
+                                                                  : UI_COL_INK_SOFT), 0);
+    lv_obj_set_style_text_font(val, UI_FONT_SMALL, 0);
+    lv_obj_align(val, LV_ALIGN_CENTER, 0, 8);
+  }
+}
+
+static void buildHeader(lv_obj_t* box, const Shown& s) {
   lv_obj_t* hdr = lv_obj_create(box);
   if (!hdr) return;
   lv_obj_set_size(hdr, TV_BOX_W, TV_HDR_H);
@@ -209,8 +254,9 @@ static void buildHeader(lv_obj_t* box) {
     lv_label_set_text(title, T(STR_TV_TITLE));
     lv_obj_set_style_text_color(title, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_text_font(title, UI_FONT_BODY, 0);
-    lv_obj_align(title, LV_ALIGN_LEFT_MID, TV_PAD, 0);
+    lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
   }
+  if (s.reader_ok && s.uid[0] && s.info.fmt[0]) formatChip(hdr, s.info);
 
   lv_obj_t* x = lv_btn_create(hdr);
   if (!x) return;
@@ -232,7 +278,8 @@ static void buildHeader(lv_obj_t* box) {
   }
 }
 
-// Swatch, format, and brand and material - what the tag says it is.
+// Swatch, material and vendor, the main screen's order - what the tag says the
+// spool is.
 static void buildIdentity(lv_obj_t* box, const Shown& s) {
   const TagInfo& i = s.info;
 
@@ -253,12 +300,8 @@ static void buildIdentity(lv_obj_t* box, const Shown& s) {
     }
   }
 
-  cell(box, TV_FMT_X, TV_IDENT_CAP_Y, TV_FMT_W, T(STR_TW_OPT_FMT), formatText(i));
-
-  char name[40] = "";
-  if (i.brand[0] && i.material[0]) snprintf(name, sizeof(name), "%s %s", i.brand, i.material);
-  else                             snprintf(name, sizeof(name), "%s", i.material[0] ? i.material : i.brand);
-  cell(box, TV_CB, TV_IDENT_CAP_Y, TV_CW, T(STR_TV_FILAMENT), name);
+  cell(box, TV_MAT_X, TV_IDENT_CAP_Y, TV_MAT_W, T(STR_LBL_MATERIAL), i.material, UI_FONT_TITLE);
+  cell(box, TV_CB, TV_IDENT_CAP_Y, TV_CW, T(STR_LBL_VENDOR), i.brand);
 }
 
 // UID and chip first, then whatever the record carries, in two columns and
@@ -415,7 +458,7 @@ static void build() {
   lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
-  buildHeader(box);
+  buildHeader(box, s_shown);
   divider(box, TV_HDR_H);
 
   if (!s_shown.reader_ok) {
