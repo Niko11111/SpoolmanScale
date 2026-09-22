@@ -9,6 +9,8 @@
 #include <esp_sleep.h>
 #include <lvgl.h>
 
+#include "ui/touch_feedback.h"
+
 // Set to 1 to enable touch coordinate debug output on Serial.
 #define TOUCH_DEBUG 0
 
@@ -209,6 +211,7 @@ bool displayHardwareBegin(void (*touch_activity_cb)()) {
   lv_indev_drv_init(&indev_drv);
   indev_drv.type = LV_INDEV_TYPE_POINTER;
   indev_drv.read_cb = lvgl_touch;
+  indev_drv.feedback_cb = touchFeedback;
   lv_indev_drv_register(&indev_drv);
 
   return true;
