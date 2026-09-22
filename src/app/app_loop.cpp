@@ -1594,6 +1594,12 @@ void appLoop() {
         if (uid_changed) {
           Serial.printf("NFC: New 4-byte UID %s\n", uid_str);
           resetActivityTimer();   // a different tag is always news
+          // The NTAG marker belongs to the NTAG that was read last, and a
+          // different tag has been read since. Left standing, the same NTAG
+          // put back without a removal in between counted as handled and was
+          // never looked up: on 22.09.2026 an NTAG after two Bambu tags kept
+          // the Bambu spool on screen, "Update weight" included.
+          ntag_handled_uid[0] = '\0';
           nfc_retry_count = 0; nfc_absent_count = 0;
           last_bambu_retry_ms = 0;
           bambu_uid_probed = false;
