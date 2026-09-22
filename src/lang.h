@@ -1218,6 +1218,12 @@ enum StringID {
   STR_TW_BUSY_ERASE,          // the same while it is being erased
   STR_TW_BUSY_HINT,           // below either: the spool has to stay where it is
 
+  // Tag page in the browser: a MIFARE tag, and the spool the scale shows
+  STR_W_TAG_NOREC,            // a MIFARE tag that is neither Bambu's nor Snapmaker's
+  STR_W_TAG_TRAY,             // row caption, Bambu's tray UUID
+  STR_W_TAG_ONSCALE,          // title of the middle card
+  STR_W_TAG_NOSPOOL,          // that card when the scale shows no spool
+
   STR_COUNT
 };
 

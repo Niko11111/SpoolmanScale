@@ -16,6 +16,7 @@
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/prefs_store.h"
+#include "services/tag_field.h"
 #include "services/tag_write.h"
 #include "services/user_options.h"
 #include "web/web_access.h"
@@ -51,28 +52,16 @@ static String body() {
   String h;
   h.reserve(7600);
 
-  h += F("<style>"
-         "#tg-cur h3, #tg-matched h3, #tg-new h3 {"
-         "  font-size: 10.5px; font-weight: 650; letter-spacing: .1em;"
-         "  text-transform: uppercase; color: var(--ink-soft); margin-bottom: 10px;"
-         "}"
-         "#tg-cur table td, #tg-matched table td, #tg-new table td {"
-         "  font-size: 11.5px; font-family: var(--mono); color: var(--ink-3);"
-         "  padding: 3px 8px 3px 0; border: 0;"
-         "}"
-         ".chip-inline {"
-         "  display: inline-block; width: 13px; height: 13px; border-radius: 3px;"
-         "  border: 1px solid #ffffff33; vertical-align: -2px; margin-right: 6px;"
-         "}"
-         "</style>"
-         "<div class='grid'><div class='card wide'><h2>");
+  h += F("<div class='grid'><div class='card wide'><h2>");
   h += T(STR_W_C_WRITETAG);
   h += F("</h2>"
          "<div id='tg-uid' class='hint' style='margin-bottom:14px'></div>"
          "<div class='grid' style='gap:12px'>"
          "<div class='card' style='background:var(--surface-2);padding:14px' id='tg-cur'></div>"
-         "<div class='card' style='background:var(--surface-2);padding:14px' id='tg-matched'></div>"
          "<div class='card' style='background:var(--surface-2);padding:14px' id='tg-new'></div>"
+         // Below the pair and across both columns: the two tag cards stay side
+         // by side, which is what the compare note under the buttons describes.
+         "<div class='card wide' style='background:var(--surface-2);padding:14px' id='tg-matched'></div>"
          "</div>"
          "<div class='field' style='margin-top:14px'><label>");
   h += T(STR_W_TAG_SPOOL);
@@ -149,13 +138,17 @@ static String body() {
   // Its own script. When the pages were split the shared block stayed behind
   // on the drying page, so every function this page calls was missing and the
   // whole page did nothing at all.
-  h += F("<style>#tg-cur h3,#tg-new h3{font-size:10.5px;font-weight:650;letter-spacing:.1em;"
-         "text-transform:uppercase;color:var(--ink-soft);margin-bottom:10px}"
+  h += F("<style>#tg-cur h3,#tg-matched h3,#tg-new h3{font-size:10.5px;font-weight:650;"
+         "letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:10px}"
          ".tgline{display:flex;align-items:center;gap:9px;margin-bottom:8px}"
          ".chip{width:26px;height:26px;border-radius:7px;border:1px solid #ffffff22;flex:none}"
          ".tgname{font-size:13.5px;color:var(--ink);line-height:1.3}"
-         "#tg-cur table td,#tg-new table td{font-size:11.5px;font-family:var(--mono);"
-         "color:var(--ink-3);padding:3px 8px 3px 0;border:0}"
+         ".tglink{color:var(--accent)}"
+         "#tg-cur table td,#tg-matched table td,#tg-new table td{font-size:11.5px;"
+         "font-family:var(--mono);color:var(--ink-3);padding:3px 8px 3px 0;border:0;"
+         "overflow-wrap:anywhere}"
+         // Across both columns the values would otherwise start in the middle.
+         "#tg-matched table{width:auto}"
          "tr.diff td{color:var(--warn)}</style>");
 
   h += F("<script>const TO={saved:");
@@ -209,80 +202,101 @@ static String body() {
   h += F(",dia:");     h += jsStr(T(STR_W_TAG_DIA));
   h += F(",len:");     h += jsStr(T(STR_W_TAG_LENGTH));
   h += F(",toosmall:"); h += jsStr(T(STR_W_TAG_TOOSMALL));
+  h += F(",norec:");   h += jsStr(T(STR_W_TAG_NOREC));
+  h += F(",ro:");      h += jsStr(T(STR_TW_ERR_NOT_NTAG));
+  h += F(",tray:");    h += jsStr(T(STR_W_TAG_TRAY));
+  h += F(",prod:");    h += jsStr(T(STR_LBL_PRODUCTION_DATE));
+  h += F(",onscale:"); h += jsStr(T(STR_W_TAG_ONSCALE));
+  h += F(",nospool:"); h += jsStr(T(STR_W_TAG_NOSPOOL));
+  h += F(",remain:");  h += jsStr(T(STR_AMSD_REMAINING));
+  h += F(",total:");   h += jsStr(T(STR_LBL_TOTAL_CAP));
+  h += F(",tare:");    h += jsStr(T(STR_LBL_SPOOL_WEIGHT_EMPTY));
+  h += F(",loc:");     h += jsStr(T(STR_BTN_LOCATION));
+  h += F(",art:");     h += jsStr(T(STR_LBL_ARTICLE_NO_SHORT));
+  h += F(",used:");    h += jsStr(T(STR_LBL_LAST_USED));
+  h += F(",dried:");   h += jsStr(T(STR_LBL_LAST_DRIED));
   h += F("};"
          "let tgCur='',tgNew='',tgLinked='',tgUid='',tgCurI=null,tgNewI=null,tgMatched=null,"
          "tgBytes=0,tgNeed=0,tgKindCode=0;"
-         "function esc(t){return String(t).replace(/[<>&]/g,c=>"
-         "({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}"
-         "function row(k,a,b,noesc){if(a===undefined&&b===undefined)return '';"
+         // The quote as well: esc() also fills an href.
+         "function esc(t){return String(t).replace(/[<>&\"]/g,c=>"
+         "({'<':'&lt;','>':'&gt;','&':'&amp;','\"':'&quot;'}[c]));}"
+         // A row is only drawn when the side it belongs to has the field, and
+         // it is highlighted when the two sides disagree - that difference is
+         // the whole reason both are shown.
+         "function row(k,a,b){if(a===undefined&&b===undefined)return '';"
          "const d=(a!==undefined&&b!==undefined&&a!==b)?' class=\"diff\"':'';"
-         "const va=noesc?a:esc(a);return '<tr'+d+'><td>'+k+'</td><td>'+(a===undefined?'-':va)+'</td></tr>';}"
-         "function fixCol(c){if(!c)return '';c=String(c).trim();return c.startsWith('#')?c:'#'+c;}"
+         "return '<tr'+d+'><td>'+k+'</td><td>'+esc(a===undefined?'-':a)+'</td></tr>';}"
+         // The spool card has one side only, and an empty field is no row -
+         // "-" included, which is how the device says "never" for a date.
+         "function one(k,v){return(v===undefined||v===null||v===''||v==='-')?'':row(k,v);}"
          "function plain(el,t,x){el.innerHTML='<h3>'+t+'</h3>'"
          "+'<div class=\"hint\">'+x+'</div>';}"
+         "function head(c,n,x){return '<div class=\"tgline\"><div class=\"chip\" style=\"background:'"
+         "+(c||'#101828')+'\"></div><div><div class=\"tgname\">'+n+'</div>'"
+         "+'<div class=\"hint\">'+x+'</div></div></div>';}"
          "function swatch(el,i,o,t,empty){if(!el)return;"
-         "if(!i||!i.fmt||i.fmt=='unsupported'){plain(el,t,(t==M.cur&&tgUid)?'UID: '+tgUid+'<br>Tag on reader has no readable record (read-only or unsupported format)':empty);return;}"
+         "if(!i||!i.fmt){plain(el,t,empty);return;}"
+         // A MIFARE tag that is neither Bambu's nor Snapmaker's. The UID is in
+         // the line above the cards already.
+         "if(i.fmt=='unsupported'){plain(el,t,M.norec);return;}"
          "if(i.fmt=='blank'){plain(el,t,M.blank);return;}"
          "if(i.fmt=='unknown'){plain(el,t,M.unk);return;}"
          "o=o||{};"
-         "const cCol=i.color?('<span class=\"chip-inline\" style=\"background:'+fixCol(i.color)+'\"></span>'+fixCol(i.color)):undefined;"
-         "const oCol=o.color?('<span class=\"chip-inline\" style=\"background:'+fixCol(o.color)+'\"></span>'+fixCol(o.color)):undefined;"
          "el.innerHTML='<h3>'+t+'</h3>'"
+         "+head(i.color,esc(i.brand||'')+' '+esc(i.material||''),"
+         "esc(i.fmt)+(i.color?' - '+esc(i.color):''))"
          "+'<table>'"
-         "+row('Format',i.fmt,o.fmt)"
-         "+row('Brand',i.brand,o.brand)"
-         "+row('Material',i.material,o.material)"
-         "+row('Color',cCol,oCol,1)"
-         "+row('UID',i.uid,o.uid)"
-         "+row('Tag / Tray ID',i.tray_uuid,o.tray_uuid)"
-         "+row('Production Date',i.prod_date,o.prod_date)"
          "+row(M.sku,i.sku,o.sku)"
          "+row(M.nozzle,i.nozzle?i.nozzle+' C':undefined,o.nozzle?o.nozzle+' C':undefined)"
          "+row(M.bed,i.bed?i.bed+' C':undefined,o.bed?o.bed+' C':undefined)"
          "+row(M.weight,i.weight?i.weight+' g':undefined,o.weight?o.weight+' g':undefined)"
          "+row(M.dia,i.dia?i.dia+' mm':undefined,o.dia?o.dia+' mm':undefined)"
          "+row(M.len,i.len?i.len+' m':undefined,o.len?o.len+' m':undefined)"
+         "+row(M.prod,i.prod_date,o.prod_date)"
+         "+row(M.tray,i.tray_uuid,o.tray_uuid)"
+         "+'</table>';}"
+         // The spool the scale shows, which is not necessarily the tag's: one
+         // picked from the list stays after its tag is lifted. Hence its own
+         // title rather than "matched".
+         "function spool(el){if(!el)return;const m=tgMatched;"
+         "if(!m||!m.found){plain(el,M.onscale,M.nospool);return;}"
+         "const id=m.url?'<a class=\"tglink\" href=\"'+esc(m.url)+'\" target=\"_blank\" rel=\"noopener\">#'"
+         "+m.id+'</a>':'#'+m.id;"
+         "const vm=[m.vendor,m.material].filter(Boolean).map(esc).join(' ');"
+         "let b='';(m.binds||[]).forEach(x=>{b+=one(esc(x.k),x.v);});"
+         "el.innerHTML='<h3>'+M.onscale+'</h3>'"
+         "+head(m.color,esc(m.name||''),id+(vm?' - '+vm:''))"
+         "+'<table>'"
+         "+one(M.remain,m.total?m.remaining+' / '+m.total+' g':undefined)"
+         "+one(M.tare,m.tare?m.tare+' g':undefined)"
+         "+one(M.loc,m.location)+one(M.art,m.article_nr)"
+         "+one(M.used,m.last_used)+one(M.dried,m.last_dried)+b"
          "+'</table>';}"
          "function tgDraw(){"
          "swatch(document.getElementById('tg-cur'),tgCurI,tgNewI,M.cur,M.notag);"
-         "swatch(document.getElementById('tg-new'),tgNewI,tgCurI,M.will,M.pickf);"
-         "const m=document.getElementById('tg-matched');"
-         "if(m){if(tgMatched&&tgMatched.found){"
-         "const mcCol=tgMatched.color?('<span class=\"chip-inline\" style=\"background:'+fixCol(tgMatched.color)+'\"></span>'+fixCol(tgMatched.color)):undefined;"
-         "const spoolLink=tgMatched.url?('<a href=\"'+esc(tgMatched.url)+'\" target=\"_blank\" style=\"color:var(--accent);text-decoration:underline\">#'+tgMatched.id+'</a>'):('#'+tgMatched.id);"
-         "m.innerHTML='<h3>MATCHED SPOOL</h3>'"
-         "+'<table>'"
-         "+row('Spool ID',spoolLink,undefined,1)"
-         "+row('Name',tgMatched.name,undefined)"
-         "+row('Vendor',tgMatched.vendor,undefined)"
-         "+row('Material',tgMatched.material,undefined)"
-         "+row('Color',mcCol,undefined,1)"
-         "+row('Remaining',tgMatched.remaining+' g',undefined)"
-         "+row('Total',tgMatched.total+' g',undefined)"
-         "+row('Tare',tgMatched.tare?tgMatched.tare+' g':undefined,undefined)"
-         "+row('Location',tgMatched.location,undefined)"
-         "+row('Article #',tgMatched.article_nr,undefined)"
-         "+row('Last Used',tgMatched.last_used,undefined)"
-         "+row('Last Dried',tgMatched.last_dried,undefined)"
-         "+row('Tag (extra.tag)',tgMatched.tag,undefined)"
-         "+row('NFC ID (extra.nfc_id)',tgMatched.nfc_id,undefined)"
-         "+row('Card UIDs',tgMatched.card_uids,undefined)"
-         "+row('RFID Tag (HH)',tgMatched.rfid_tag,undefined)"
-         "+row('Native Tags',tgMatched.native_tags,undefined)"
-         "+'</table>';"
-         "}else{plain(m,'MATCHED SPOOL','No spool linked to this tag');}}"
-         "}"
+         "spool(document.getElementById('tg-matched'));"
+         "swatch(document.getElementById('tg-new'),tgNewI,tgCurI,M.will,M.pickf);}"
          "function tgSync(){tgDraw();const b=document.getElementById('tg-btn');if(!b)return;"
+         // Said before the write, not after it. The capacity check inside the
+         // firmware refuses the same tag, but only once the user has already
+         // pressed the button and put the tag on the reader.
          "const small=tgNeed&&tgBytes&&tgNeed>tgBytes;"
          "const fs=document.getElementById('tg-fmt');"
          "const fn=fs&&fs.selectedOptions[0]?fs.selectedOptions[0].textContent:'';"
          "const n=document.getElementById('tg-note');"
          "const er=document.getElementById('tg-erase');"
-         "const readOnly=tgUid&&(!tgBytes||tgKindCode===1);"
-         "if(n){if(readOnly)n.textContent='Tag on the reader is read-only.';else n.textContent=!tgNew?M.pickf:small"
+         // The kind alone decides. An NTAG that reports no size is still
+         // writable, and the write itself says so if it does not fit.
+         "const ro=tgKindCode===1;"
+         "if(n)n.textContent=ro?M.ro:!tgNew?M.pickf:small"
          "?M.toosmall.replace('%s',fn).replace('%u',tgNeed).replace('%u',tgBytes)"
-         ":(tgLinked?M.relink.replace('%s',tgLinked):'');}"
-         "if(readOnly){b.disabled=true;b.textContent=(tgCur&&tgCur!='blank')?M.over:M.write;if(er)er.disabled=true;return;}"
+         // tgLinked is already "a different tag than the one on the reader" - the
+         // comparison used to happen here and compared "047F3ABBD12A81" against
+         // "04:7F:3A:BB:D1:2A:81", so the warning appeared for the very tag the
+         // user was holding.
+         ":(tgLinked?M.relink.replace('%s',tgLinked):'');"
+         "if(ro){b.disabled=true;b.textContent=M.write;if(er)er.disabled=true;return;}"
          "if(er)er.disabled=!tgUid||tgCur=='blank';"
          "if(!tgNew){b.disabled=true;b.textContent=M.write;return;}"
          "if(small){b.disabled=true;b.textContent=M.write;return;}"
@@ -298,8 +312,11 @@ static String body() {
          ".catch(()=>{tgNew='';tgNewI=null;tgNeed=0;tgSync();});}"
          "function setOpt(p,t){p.innerHTML='';const o=document.createElement('option');"
          "o.value='';o.textContent=t;p.appendChild(o);}"
+         // Back to "pick a spool" empties the number too, or the preview of
+         // the spool picked before would stay standing.
          "function pickSpool(){const p=document.getElementById('tg-pick');"
          "document.getElementById('tg-id').value=p.value||'';loadPreview();}"
+         // 202 means the device is still fetching; asked again until it is not.
          "function loadSpools(n){const p=document.getElementById('tg-pick');if(!p)return;"
          "if(!n)setOpt(p,M.pick);"
          "fetch('/api/spools',{cache:'no-store'}).then(r=>{"
@@ -410,6 +427,52 @@ static String tagKindLocal() {
   return out;
 }
 
+// The spool the scale shows, for the card between the two tag cards. All of
+// it is in RAM already: the page asks every three seconds and must not cost
+// the backend a request each time.
+static String spoolJson() {
+  if (!sm_found || sm_id <= 0) return String("{\"found\":false}");
+
+  char url[160];
+  backendSpoolPageUrl(sm_id, url, sizeof(url));
+
+  // Only six plain hex digits reach the style attribute the card puts this
+  // in. A spool with several colours, or anything odd, shows no chip.
+  char col[8] = "";
+  const char *c = sm_color_global[0] == '#' ? sm_color_global + 1 : sm_color_global;
+  bool hex = true;
+  for (int i = 0; i < 6 && hex; i++) hex = isxdigit((unsigned char)c[i]) != 0;
+  if (hex) snprintf(col, sizeof(col), "#%.6s", c);
+
+  // Every tag field that holds something, captioned the way the settings
+  // name it, so the card shows which one binds this spool.
+  String binds = "[";
+  auto add = [&binds](const char *k, const char *v) {
+    if (!v || !v[0]) return;
+    if (binds.length() > 1) binds += ',';
+    binds += String("{\"k\":\"") + jsonEsc(k) + "\",\"v\":\"" + jsonEsc(v) + "\"}";
+  };
+  for (uint8_t i = 0; i < TAG_FIELD_COUNT; i++)
+    add(T(tagFieldSpec(i).str_name), sm_tag_values[i]);
+  add("extra." RFID_TAG_FIELD, sm_hw_uid_value);
+  binds += ']';
+
+  return String("{\"found\":true,\"id\":") + sm_id +
+         ",\"url\":\""        + jsonEsc(url) +
+         "\",\"name\":\""     + jsonEsc(sm_filament_name) +
+         "\",\"vendor\":\""   + jsonEsc(sm_vendor_g) +
+         "\",\"material\":\"" + jsonEsc(sm_material_global) +
+         "\",\"color\":\""    + col +
+         "\",\"remaining\":"  + String(lroundf(sm_remaining)) +
+         ",\"total\":"        + String(lroundf(sm_total)) +
+         ",\"tare\":"         + String(lroundf(sm_spool_weight)) +
+         ",\"location\":\""   + jsonEsc(sm_location_name) +
+         "\",\"article_nr\":\"" + jsonEsc(sm_article_nr) +
+         "\",\"last_used\":\""  + jsonEsc(sm_last_used) +
+         "\",\"last_dried\":\"" + jsonEsc(sm_last_dried) +
+         "\",\"binds\":" + binds + "}";
+}
+
 static void routes(WebServer &srv) {
   srv.on("/api/tag/preview", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
@@ -475,32 +538,8 @@ static void routes(WebServer &srv) {
                "\",\"kind\":\""    + jsonEsc(tagKindLocal().c_str()) +
                "\",\"state\":\""   + jsonEsc(tagWriteState()) +
                "\",\"message\":\"" + jsonEsc(tagWriteMessageLocal().c_str()) +
-               "\",\"content\":\"" + jsonEsc(tagCachedContent()) + "\"";
-
-    if (sm_found && sm_id > 0) {
-      String spoolUrl = String(backendBaseUrl()) + "/spool/" + String(sm_id);
-      j += ",\"matched\":{\"found\":true,\"id\":" + String(sm_id) +
-           ",\"url\":\"" + jsonEsc(spoolUrl.c_str()) + "\"" +
-           ",\"name\":\"" + jsonEsc(sm_filament_name) + "\"" +
-           ",\"vendor\":\"" + jsonEsc(sm_vendor_g) + "\"" +
-           ",\"material\":\"" + jsonEsc(sm_material_global) + "\"" +
-           ",\"color\":\"" + jsonEsc(sm_color_global) + "\"" +
-           ",\"remaining\":" + String(sm_remaining) +
-           ",\"total\":" + String(sm_total) +
-           ",\"tare\":" + String(sm_spool_weight) +
-           ",\"location\":\"" + jsonEsc(sm_location_name) + "\"" +
-           ",\"article_nr\":\"" + jsonEsc(sm_article_nr) + "\"" +
-           ",\"last_used\":\"" + jsonEsc(sm_last_used) + "\"" +
-           ",\"last_dried\":\"" + jsonEsc(sm_last_dried) + "\"" +
-           ",\"rfid_tag\":\"" + jsonEsc(sm_hw_uid_value) + "\"" +
-           ",\"tag\":\"" + jsonEsc(sm_tag_values[TAG_FIELD_TAG]) + "\"" +
-           ",\"nfc_id\":\"" + jsonEsc(sm_tag_values[TAG_FIELD_NFC_ID]) + "\"" +
-           ",\"card_uids\":\"" + jsonEsc(sm_tag_values[TAG_FIELD_CARD_UIDS]) + "\"" +
-           ",\"native_tags\":\"" + jsonEsc(sm_tag_values[TAG_FIELD_NATIVE]) + "\"}";
-    } else {
-      j += ",\"matched\":{\"found\":false}";
-    }
-    j += "}";
+               "\",\"content\":\"" + jsonEsc(tagCachedContent()) +
+               "\",\"matched\":" + spoolJson() + "}";
     srv.send(200, "application/json", j);
   });
 

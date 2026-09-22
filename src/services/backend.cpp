@@ -223,6 +223,23 @@ void backendCaption(char* out, size_t out_size) {
   snprintf(out, out_size, "%s", backendName());
 }
 
+bool backendSpoolPageUrl(int spool_id, char* out, size_t out_size) {
+  if (!out || out_size == 0) return false;
+  out[0] = '\0';
+  const char* base = backendBaseUrl();
+  if (spool_id <= 0 || !base || !base[0]) return false;
+  switch (s_mode) {
+    case BACKEND_SPOOLMAN:
+      snprintf(out, out_size, "%s/spool/show/%d", base, spool_id);
+      return true;
+    case BACKEND_FILAMAN:
+      snprintf(out, out_size, "%s/spools/%d", base, spool_id);
+      return true;
+    default:
+      return false;
+  }
+}
+
 void backendStatusLine(char* out, size_t out_size) {
   if (!out || out_size == 0) return;
 

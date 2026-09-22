@@ -97,6 +97,17 @@ const char* backendBadge();
 // Written into a caller supplied buffer because LVGL cannot read Flash.
 void backendCaption(char* out, size_t out_size);
 
+// Address of the spool's own page in the active backend's web interface, for
+// a link a person follows. Not an API address. False with out empty where
+// there is no such page to name:
+//
+//   Spoolman   http://host/spool/show/12
+//   FilaMan    http://host/spools/12
+//   BamBuddy   none yet. Its inventory page opens a spool through a query
+//              that has not been checked on a running instance, and with a
+//              Spoolman server behind it the id is that server's.
+bool backendSpoolPageUrl(int spool_id, char* out, size_t out_size);
+
 // One line summary of the active backend for boot logs and diagnostics.
 //
 //   Spoolman | host=192.168.1.50 | configured=yes

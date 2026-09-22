@@ -2673,6 +2673,16 @@ const char* const STRINGS[][3] = {
   { "Spule bitte liegen lassen, bis die Bestätigung kommt.",
     "Please leave the spool where it is until this is confirmed.",
     "Please leave the spool where it is until this is confirmed." },  // STR_TW_BUSY_HINT
+
+  // Tag page in the browser: a MIFARE tag, and the spool the scale shows
+  { "Nur lesbar, und nichts darauf, was die Waage kennt.",
+    "Read-only, and nothing on it this scale knows.",
+    "Read-only, and nothing on it this scale knows." },  // STR_W_TAG_NOREC
+  { "Tray-UUID",           "Tray UUID",          "Tray UUID" },  // STR_W_TAG_TRAY
+  { "Spule auf der Waage", "Spool on the scale", "Spool on the scale" },  // STR_W_TAG_ONSCALE
+  { "Die Waage zeigt gerade keine Spule.",
+    "The scale shows no spool right now.",
+    "The scale shows no spool right now." },  // STR_W_TAG_NOSPOOL
 };
 
 StringID tagWriteResultString(uint8_t code) {

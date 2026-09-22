@@ -10,6 +10,7 @@
 #include "hardware/nfc.h"
 #include "hardware/sd_logger.h"
 #include "app/app_state.h"
+#include "bambu/bambu_scan.h"
 #include "bambu/bambu_tag.h"
 #include "bambu/material_match.h"
 #include "services/backend.h"
@@ -86,8 +87,14 @@ uint8_t  tagCachedKindCode()   { return cached_kindcode; }
 // "blank" and "unknown" are answers, not records: one says the pages are
 // empty, the other that they hold something no format claims. Neither has a
 // brand or a material to show, and both are asked about in three places.
+//
+// A MIFARE tag never counts. Its fields are cached for the pages that show
+// them, but scanTick() would otherwise answer FilaMan for a Bambu tag from
+// here rather than from g_tag: "PETG Basic" instead of "PETG", black for a
+// clear filament, and no spool id.
 bool tagCachedHasRecord() {
-  return cached_info.fmt[0] && strcmp(cached_info.fmt, "blank") != 0 &&
+  return cached_kindcode == TAG_KIND_NTAG &&
+         cached_info.fmt[0] && strcmp(cached_info.fmt, "blank") != 0 &&
          strcmp(cached_info.fmt, "unknown") != 0;
 }
 void tagScanRequest() { scan_pending = true; scan_since = millis(); }
@@ -306,10 +313,6 @@ void tagInfoJson(const TagInfo *ti, char *out, size_t out_len) {
   if (ti->material[0]) {
     jesc(ti->material, e, sizeof(e));
     n = appendf(out, out_len, n, ",\"material\":\"%s\"", e);
-  }
-  if (ti->uid[0]) {
-    jesc(ti->uid, e, sizeof(e));
-    n = appendf(out, out_len, n, ",\"uid\":\"%s\"", e);
   }
   if (ti->tray_uuid[0]) {
     jesc(ti->tray_uuid, e, sizeof(e));
@@ -939,6 +942,54 @@ bool tagDiffersFromSpool(int spool_id, TagFormat fmt, TagInfo *want) {
 // How many reads in a row may describe nothing before a tag is left alone.
 static constexpr uint8_t TAG_UNREADABLE_LIMIT = 3;
 
+// Printable ASCII only, up to the first byte that is not. jesc() relies on
+// that, and readText() guarantees it for an NTAG; the MIFARE decoders copy
+// sector bytes as they come, and one control character in the reply made the
+// tag page's r.json() throw.
+static void copyPrintable(char *out, size_t out_len, const char *in) {
+  size_t j = 0;
+  for (const char *p = in; *p && j + 1 < out_len; p++) {
+    if (*p < 0x20 || *p > 0x7E) break;
+    out[j++] = *p;
+  }
+  out[j] = '\0';
+}
+
+// What a MIFARE tag holds, out of what the main flow already decoded into
+// g_tag, so the tag page and the tag view can show a Bambu or Snapmaker tag
+// the way they show an NTAG record. Nothing here touches the reader.
+//
+// Bambu is told from Snapmaker by the blocks that read with Bambu's keys: the
+// Snapmaker decoder starts from a cleared g_tag and fills none of them.
+static void infoFromMifare(TagInfo *ti) {
+  memset(ti, 0, sizeof(*ti));
+  const bool bambu = countBambuDataBlocksRead(g_tag) > 0;
+  if (!bambu && !g_tag.material[0] && !g_tag.vendor[0]) {
+    snprintf(ti->fmt, sizeof(ti->fmt), "unsupported");
+    return;
+  }
+  snprintf(ti->fmt, sizeof(ti->fmt), "%s", bambu ? "Bambu" : "Snapmaker");
+  // Most Bambu tags carry no vendor string, but a tag that reads with the
+  // Bambu keys can only be theirs - the answer scanTick() gives as well.
+  copyPrintable(ti->brand, sizeof(ti->brand),
+                g_tag.vendor[0] ? g_tag.vendor : (bambu ? "Bambu Lab" : ""));
+  copyPrintable(ti->material, sizeof(ti->material), g_tag.material);
+  // The Snapmaker decoder puts the UID there, which says nothing new.
+  if (bambu) copyPrintable(ti->tray_uuid, sizeof(ti->tray_uuid), g_tag.tray_uuid);
+  copyPrintable(ti->prod_date, sizeof(ti->prod_date), g_tag.production_date);
+  // color_hex decides, not color.valid: it is empty for a clear filament,
+  // which names no hue and would otherwise be drawn as black.
+  if (g_tag.color.valid && g_tag.color_hex[0]) {
+    ti->has_color = true;
+    ti->r = (uint8_t)(g_tag.color.rgb >> 16);
+    ti->g = (uint8_t)(g_tag.color.rgb >> 8);
+    ti->b = (uint8_t)g_tag.color.rgb;
+  }
+  if (g_tag.temp_min > 0) ti->et_lo = (uint16_t)g_tag.temp_min;
+  if (g_tag.temp_max > 0) ti->et_hi = (uint16_t)g_tag.temp_max;
+  if (g_tag.spool_weight > 0) ti->weight_g = (uint16_t)g_tag.spool_weight;
+}
+
 // Uses what the main NFC poll already found. Selecting the tag again here
 // would compete with that poll, and the loser gets nothing back.
 //
@@ -965,41 +1016,11 @@ static void refreshCache(bool force = false) {
   if (!is_ntag) {
     snprintf(cached_kind, sizeof(cached_kind), "MIFARE Classic, read-only");
     cached_kindcode = TAG_KIND_MIFARE;
+    cached_content[0] = 0;
     cached_bytes = 0;
-    memset(&cached_info, 0, sizeof(cached_info));
-    snprintf(cached_info.uid, sizeof(cached_info.uid), "%s", g_tag.uid_str);
-    if (g_tag.vendor[0] || g_tag.material[0]) {
-      snprintf(cached_info.fmt, sizeof(cached_info.fmt), "%s", g_tag.vendor[0] ? g_tag.vendor : "Bambu Lab");
-      snprintf(cached_info.brand, sizeof(cached_info.brand), "%s", g_tag.vendor[0] ? g_tag.vendor : "Bambu Lab");
-      snprintf(cached_info.material, sizeof(cached_info.material), "%s", g_tag.material);
-      snprintf(cached_info.tray_uuid, sizeof(cached_info.tray_uuid), "%s", g_tag.tray_uuid[0] ? g_tag.tray_uuid : g_tag.short_uid);
-      snprintf(cached_info.prod_date, sizeof(cached_info.prod_date), "%s", g_tag.production_date);
-
-      if (g_tag.color.valid) {
-        cached_info.has_color = true;
-        cached_info.r = (g_tag.color.rgb >> 16) & 0xFF;
-        cached_info.g = (g_tag.color.rgb >> 8) & 0xFF;
-        cached_info.b = g_tag.color.rgb & 0xFF;
-      } else if (g_tag.color_hex[0]) {
-        const char *hex = g_tag.color_hex;
-        if (*hex == '#') hex++;
-        unsigned r = 0, g = 0, b = 0;
-        if (strlen(hex) >= 6 && sscanf(hex, "%02x%02x%02x", &r, &g, &b) == 3) {
-          cached_info.has_color = true;
-          cached_info.r = (uint8_t)r; cached_info.g = (uint8_t)g; cached_info.b = (uint8_t)b;
-        }
-      }
-
-      cached_info.et_lo = g_tag.temp_min;
-      cached_info.et_hi = g_tag.temp_max;
-      cached_info.bed_lo = 0;
-      cached_info.bed_hi = 0;
-      cached_info.weight_g = g_tag.spool_weight;
-      snprintf(cached_content, sizeof(cached_content), "%s %s", g_tag.vendor[0] ? g_tag.vendor : "Bambu Lab", g_tag.material);
-    } else {
-      snprintf(cached_info.fmt, sizeof(cached_info.fmt), "unsupported");
-      cached_content[0] = 0;
-    }
+    // On every pass: the main poll fills g_tag over several passes while its
+    // retries run, and this is a copy of a few strings, not a read.
+    infoFromMifare(&cached_info);
     return;
   }
 
@@ -1030,8 +1051,6 @@ static void refreshCache(bool force = false) {
   // the last good description rather than blanking the page.
   char tmp[128];
   TagInfo ti;
-  memset(&ti, 0, sizeof(ti));
-  snprintf(ti.uid, sizeof(ti.uid), "%s", g_tag.uid_str);
   if (tagDescribe(tmp, sizeof(tmp), &ti) && tmp[0]) {
     snprintf(cached_content, sizeof(cached_content), "%s", tmp);
     cached_info = ti;

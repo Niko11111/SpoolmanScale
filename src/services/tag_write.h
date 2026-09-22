@@ -168,21 +168,22 @@ size_t      tagNdefSizeFor(size_t json_len);
 // Field by field view of a tag, so the page can show it as a swatch rather
 // than one line of text. Empty strings and zeros mean the format does not
 // carry that field.
+//
+// brand and material stay at 16 characters: tagDiffersFromSpool() compares
+// them against a record built from the backend, and an ACE tag holds no more
+// than 16. Longer on one side only would call every long vendor a mismatch.
 struct TagInfo {
-  char     fmt[12];        // ACE, OpenSpool, blank, unknown
-  char     uid[24];
-  char     tray_uuid[37];
-  char     prod_date[16];
-  char     sku[24];
-  char     brand[32];
-  char     material[32];
-  char     subtype[32];
+  char     fmt[12];        // ACE, OpenSpool, blank, unknown; Bambu, Snapmaker,
+                           // unsupported for a MIFARE tag
+  char     tray_uuid[33];  // Bambu only, 32 hex characters
+  char     prod_date[16];  // as the tag's decoder left it
+  char     sku[17];
+  char     brand[17];
+  char     material[17];
   bool     has_color;
   uint8_t  r, g, b;
   uint16_t et_lo, et_hi, bed_lo, bed_hi;
-  uint16_t dia_x100;
-  uint16_t length_m;
-  uint16_t weight_g;
+  uint16_t dia_x100, length_m, weight_g;
 };
 
 // Serialises a TagInfo as a JSON object, omitting fields the format lacks.
@@ -199,6 +200,9 @@ void tagReadInfoNow();
 
 // True when the cached read holds a record worth showing: a format that was
 // recognised, rather than an empty tag or bytes nothing could make sense of.
+// NTAG records only. A Bambu or Snapmaker tag is in the cache for the pages
+// that show it, but every caller of this means a record the scale wrote or
+// can write, and the FilaMan scan answers a Bambu tag from g_tag instead.
 bool tagCachedHasRecord();
 
 // Whether the record on the tag disagrees with the spool it is bound to.
