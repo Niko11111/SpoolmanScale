@@ -212,6 +212,42 @@ const char* bbInventoryBase() {
 
 const char* bbSpoolmanUrl() { return s_spoolman_url; }
 
+// How long the mode question may take when a read has just been refused. The
+// same four seconds backendRefreshMode() gives it with the health check.
+#define BB_MODE_RECHECK_MS  4000
+
+// BamBuddy refuses the Spoolman proxy with 400 once its inventory has been
+// switched back to its own database. The scale learns of a switch with the
+// next mode check, which runs with the health check every 30 s, and until
+// then every read went to the proxy: on 22.09.2026 a Bambu tag came back as
+// "API error" three times in a row. A 400 there is the cue to ask at once.
+// Only this direction is loud. Switched the other way, the local routes keep
+// answering and the next regular check moves the scale over.
+static bool bbModeMovedAway(int code, const char* base_url, const char* api_key) {
+  if (code != 400 || s_mode != BB_INV_SPOOLMAN) return false;
+  bbDetectInventoryMode(base_url, api_key, BB_MODE_RECHECK_MS);
+  if (s_mode == BB_INV_SPOOLMAN) return false;
+  logSD("BamBuddy: the Spoolman proxy refused a read, the inventory is local now - asking again");
+  return true;
+}
+
+// A read on the active inventory's path, `suffix` appended to the prefix.
+// Asked a second time only when the mode has demonstrably changed under it.
+// Reads only: a write that went to the wrong inventory is not repeated
+// behind the user's back.
+static int getInventoryJson(const char* base_url, const char* api_key, const char* suffix,
+                            JsonDocument& doc, uint32_t timeout_ms,
+                            DeserializationError* out_err) {
+  char url[224];
+  snprintf(url, sizeof(url), "%s%s%s", base_url, bbInventoryBase(), suffix);
+  const int code = getJson(url, api_key, doc, timeout_ms, out_err, nullptr);
+  if (!bbModeMovedAway(code, base_url, api_key)) return code;
+  doc.clear();
+  if (out_err) *out_err = DeserializationError::Ok;
+  snprintf(url, sizeof(url), "%s%s%s", base_url, bbInventoryBase(), suffix);
+  return getJson(url, api_key, doc, timeout_ms, out_err, nullptr);
+}
+
 // Moved to wifi_manager so mDNS can advertise the same identity. Kept as a
 // pass-through rather than replaced at the call sites, because "device id"
 // means something specific to BamBuddy and the name carries that here.
@@ -402,9 +438,9 @@ int bbGetSpoolRawJson(const char* base_url, const char* api_key, int spool_id,
                       DeserializationError* out_err) {
   if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
 
-  char url[192];
-  snprintf(url, sizeof(url), "%s%s/spools/%d", base_url, bbInventoryBase(), spool_id);
-  return getJson(url, api_key, doc, timeout_ms, out_err, nullptr);
+  char suffix[24];
+  snprintf(suffix, sizeof(suffix), "/spools/%d", spool_id);
+  return getInventoryJson(base_url, api_key, suffix, doc, timeout_ms, out_err);
 }
 
 int bbGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
@@ -412,12 +448,12 @@ int bbGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
                    DeserializationError* out_err) {
   if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
 
-  char url[192];
-  snprintf(url, sizeof(url), "%s%s/spools/%d", base_url, bbInventoryBase(), spool_id);
+  char suffix[24];
+  snprintf(suffix, sizeof(suffix), "/spools/%d", spool_id);
 
   SpiRamAllocator alloc;
   JsonDocument raw(&alloc);
-  int code = getJson(url, api_key, raw, timeout_ms, out_err, nullptr);
+  int code = getInventoryJson(base_url, api_key, suffix, raw, timeout_ms, out_err);
   if (code != 200) return code;
 
   JsonObject out = doc.to<JsonObject>();
@@ -441,13 +477,11 @@ int bbGetSpoolListJson(const char* base_url, const char* api_key,
                        uint32_t timeout_ms, DeserializationError* out_err) {
   if (!hasBaseUrl(base_url)) return -1;
 
-  char url[224];
-  snprintf(url, sizeof(url), "%s%s/spools%s", base_url, bbInventoryBase(),
-           allow_archived ? "?include_archived=true" : "");
-
   SpiRamAllocator alloc;
   JsonDocument raw(&alloc);
-  int code = getJson(url, api_key, raw, timeout_ms, out_err, nullptr);
+  int code = getInventoryJson(base_url, api_key,
+                              allow_archived ? "/spools?include_archived=true" : "/spools",
+                              raw, timeout_ms, out_err);
   if (code != 200) return code;
 
   JsonArray out = doc.to<JsonArray>();
