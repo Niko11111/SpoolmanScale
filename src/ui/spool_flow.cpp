@@ -2364,9 +2364,11 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   // would be the button that gets the user out of a stale list. A child of
   // the screen rather than of the list, so it is there for an empty list too.
   //
-  // The clock time of the download, not an age: it is written once and stays
-  // true for as long as the list is open. An age would need a tick to keep it
-  // honest, and a pointer to a label whose life hangs on this screen.
+  // The clock time of the download, and its age as of building this screen.
+  // The time stays true for as long as the list is open; the age is not kept
+  // current, which would need a tick and a pointer to a label whose life hangs
+  // on this screen. Every list screen is built anew, so it is right whenever
+  // the list comes up, which is when someone reads it.
   if (link_list_from_cache) {
     const int strip_y = 56 + LINK_LIST_H - LINK_STRIP_H;
 
@@ -2374,8 +2376,13 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     if (at) {
       struct tm ti;
       localtime_r(&at, &ti);
-      char as_of[32];
-      snprintf(as_of, sizeof(as_of), T(STR_LIST_AS_OF), ti.tm_hour, ti.tm_min);
+      // "<1" rather than "0": a list loaded seconds ago is not zero minutes old.
+      char age[8];
+      const unsigned long age_min = spoolCacheAgeMs() / 60000UL;
+      if (age_min) snprintf(age, sizeof(age), "%lu", age_min);
+      else         snprintf(age, sizeof(age), "<1");
+      char as_of[48];
+      snprintf(as_of, sizeof(as_of), T(STR_LIST_AS_OF), ti.tm_hour, ti.tm_min, age);
       lv_obj_t *lbl_as_of = lv_label_create(scr_link_spools);
       lv_label_set_text(lbl_as_of, as_of);
       lv_obj_set_style_text_color(lbl_as_of, lv_color_hex(UI_COL_INK_SOFT), 0);

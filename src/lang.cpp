@@ -2658,9 +2658,9 @@ const char* const STRINGS[][3] = {
   { "Spule hat sich geändert, Liste neu geladen",
     "That spool changed, the list was reloaded",
     "That spool changed, the list was reloaded" },  // STR_LIST_SPOOL_CHANGED
-  { "Stand: %02d:%02d",
-    "As of %02d:%02d",
-    "As of %02d:%02d" },  // STR_LIST_AS_OF
+  { "Stand: %02d:%02d (vor %s min)",
+    "As of %02d:%02d (%s min ago)",
+    "As of %02d:%02d (%s min ago)" },  // STR_LIST_AS_OF
   { "Neu laden",
     "Reload",
     "Reload" },  // STR_LIST_RELOAD
