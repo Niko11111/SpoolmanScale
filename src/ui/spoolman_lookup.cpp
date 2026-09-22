@@ -1255,6 +1255,11 @@ void querySpoolman(const char* tray_uuid) {
   // take that net away: it only knows what the scan saw, not what a search
   // would have said. BACKEND_NOT_SUPPORTED is no failure, no request went out.
   bool searches_answered = true;
+  // Whether any request of this lookup got an HTTP answer at all. It proves the
+  // server is there right now, which sm_reachable cannot after a backend
+  // switch: that says "not known yet" until the health check has run, up to
+  // 30 s later. See the stamp further down.
+  bool server_answered = false;
   if (backendReportsScans()) {
     JsonDocument scan(&psram_alloc);
     DeserializationError serr = DeserializationError::Ok;
@@ -1268,6 +1273,7 @@ void querySpoolman(const char* tray_uuid) {
     // both. Ignored by Spoolman, which keys on the hardware uid alone.
     int scode = backendTagScan(cfg_spoolman_base, scan_uid, tray_uuid,
                                tagFormatName(tray_uuid), scan, 8000, &serr);
+    if (scode > 0) server_answered = true;
     if (scode == 200 && !serr && !scan["spool"].isNull()) {
       // Reshaped into the one element array the rest of this function reads,
       // so nothing downstream has to know where the spool came from.
@@ -1306,6 +1312,7 @@ void querySpoolman(const char* tray_uuid) {
   if (!have_result && tagIsBambu(tray_uuid) && backendMode() == BACKEND_SPOOLMAN) {
     int ncode = backendFindSpoolByNativeTag(cfg_spoolman_base, tray_uuid,
                                             doc, 8000, &filter, &err);
+    if (ncode > 0) server_answered = true;
     if (ncode == 200 && !err) {
       for (JsonObjectConst cand : doc.as<JsonArrayConst>()) {
         if (spoolMatchesTag(cand, tray_uuid)) { have_result = true; break; }
@@ -1322,6 +1329,7 @@ void querySpoolman(const char* tray_uuid) {
 
   if (!have_result) {
     int fcode = backendFindSpoolByTag(cfg_spoolman_base, tray_uuid, doc, 8000, &err, &filter);
+    if (fcode > 0) server_answered = true;
     if (fcode == 200 && !err) {
       // The server side search is a text filter, not an exact tag match. A
       // substring hit on some other spool must not suppress the full scan,
@@ -1381,6 +1389,7 @@ void querySpoolman(const char* tray_uuid) {
 
     int ccode = backendFindSpoolByTagField(f, cfg_spoolman_base, candidates[c],
                                            doc, 8000, &err, &filter);
+    if (ccode > 0) server_answered = true;
     if (ccode == 200 && !err) {
       // Every hit is verified: the filter is an ilike, so a four byte UID
       // matches inside a seven byte one belonging to a different spool.
@@ -1453,7 +1462,11 @@ void querySpoolman(const char* tray_uuid) {
   // follows. So it is handed to the list cache further down instead of being
   // thrown away. The stamp has to be taken in front of the download, see
   // spoolCacheFill(); not from a server already known to be gone, which would
-  // only add its timeout to the ones this lookup has sat through.
+  // only add its timeout to the ones this lookup has sat through. A search of
+  // this lookup that got an answer counts as known to be there: right after a
+  // backend switch sm_reachable is still false, and a scan without a stamp
+  // left an index the next tag had to throw away ("a stamp where there was
+  // none"), so the index only started to answer at the third tag.
   //
   // Nothing about the lookup changes: it reads and decides from its own fresh
   // document as before, and never looks into the cache.
@@ -1464,7 +1477,7 @@ void querySpoolman(const char* tray_uuid) {
   bool scanned_inventory = false;   // doc holds the whole inventory, not one hit
   InventoryStamp stamp = { -1, 0 };
   bool have_stamp = false;
-  if (!have_result && !uiModalWaiting() && sm_reachable)
+  if (!have_result && !uiModalWaiting() && (sm_reachable || server_answered))
     have_stamp = (backendInventoryStamp(cfg_spoolman_base, &stamp) == 200);
 
   // What the uid index says, asked before the scan below replaces it. Only
