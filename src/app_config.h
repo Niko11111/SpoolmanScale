@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.8.0-beta.27"
+#define FW_VERSION  "v0.8.0-beta.28"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -138,6 +138,12 @@
 // cheap server side lookup - never the full inventory scan, and never
 // /tag/scan, which would broadcast an unknown tag on every attempt.
 #define TAG_RECHECK_MS  4000
+
+// The longest the recheck waits after probes that got no answer. Each such
+// probe doubles the gap up to this: a probe blocks the loop for up to the 5 s
+// connect timeout, and on 21.09.2026 two of them back to back left the loop
+// one pass in 12 s, which read as a frozen scale.
+#define TAG_RECHECK_MAX_MS  60000
 
 // ============================================================
 //  Hardware self diagnosis

@@ -814,11 +814,20 @@ static bool s_verdict_unknown = false;
 // spool nobody had been able to ask about.
 static bool s_lost_connection = false;
 
+// The recheck's pace. The gap is measured from the END of the last probe, 0
+// until the tick has seen the current lookup: measured from its start, a probe
+// that took the whole 5 s connect timeout was already due again on the next
+// loop pass. querySpoolman() resets both, so every lookup starts on the short
+// gap and the first probe waits a full gap after the lookup itself.
+static uint32_t s_recheck_end_ms = 0;
+static uint32_t s_recheck_gap_ms = TAG_RECHECK_MS;
+
 // Whether the backend knows a spool by this tag, asked the cheap way: the
 // server side lookup, a handful of fields, no inventory scan and no /tag/scan,
 // so nothing is announced to a paired browser. Says nothing about which spool
 // it is - whoever gets a yes runs the normal lookup next.
-bool spoolmanTagResolves(const char* query) {
+bool spoolmanTagResolves(const char* query, bool* out_unanswered) {
+  if (out_unanswered) *out_unanswered = false;
   if (!query || !query[0]) return false;
 
   // Only the fields the verification reads. The point of this pass is that it
@@ -837,33 +846,42 @@ bool spoolmanTagResolves(const char* query) {
   JsonDocument doc(&psram_alloc);
   DeserializationError err = DeserializationError::Ok;
   bool hit = false;
+  int code = 0;
 
   // Every backend has a cheap lookup by tag, so this works for all three. The
   // one split: with Spoolman's own relation selected there is no extra field
   // to filter on, and backendFindSpoolByTag() would answer NOT_SUPPORTED.
   if (backendHasNativeTags()) {
     const char* nu = tagNativeUid(query);
-    if (backendFindSpoolByNativeTag(cfg_spoolman_base, nu, doc, 5000, &filter, &err) == 200 && !err) {
+    code = backendFindSpoolByNativeTag(cfg_spoolman_base, nu, doc, 5000, &filter, &err);
+    if (code == 200 && !err) {
       for (JsonObjectConst cand : doc.as<JsonArrayConst>())
         if (spoolMatchesTag(cand, query)) { hit = true; break; }
     }
     if (!hit) { doc.clear(); err = DeserializationError::Ok; }
   }
 
-  if (!hit) {
-    if (backendFindSpoolByTag(cfg_spoolman_base, query, doc, 5000, &err, &filter) == 200 && !err) {
+  // A server that did not answer the first request will not answer the second
+  // either, and each of them can hold the loop for the whole connect timeout.
+  if (!hit && !serverReachIsNetworkFailure(code)) {
+    code = backendFindSpoolByTag(cfg_spoolman_base, query, doc, 5000, &err, &filter);
+    if (code == 200 && !err) {
       // Verified exactly: FilaMan's search is a substring match, so an
       // unverified hit would announce somebody else's spool.
       for (JsonObjectConst cand : doc.as<JsonArrayConst>())
         if (spoolMatchesTag(cand, query)) { hit = true; break; }
     }
   }
+  if (out_unanswered) *out_unanswered = !hit && serverReachIsNetworkFailure(code);
   return hit;
 }
 
 void spoolmanRecheckTick() {
   if (!wifi_ok || !tag_present || sm_found) return;
   if (!s_last_query[0]) return;
+  // A server marked down is asked by the health check alone, which marks it up
+  // again. Probing it here as well only added more 5 s stalls to the loop.
+  if (!sm_reachable) return;
   if (isSpoolFlowIdInputOpen()) return;   // the user is busy picking a spool
 
   // A lookup that stood aside for a question owes one full pass. Forgetting
@@ -878,12 +896,25 @@ void spoolmanRecheckTick() {
     return;
   }
 
-  static uint32_t last_ms = 0;
+  // `| 1` keeps a probe that ends at millis() == 0 from reading as "not seen".
+  if (!s_recheck_end_ms) { s_recheck_end_ms = millis() | 1; return; }
   // Signed difference, so this survives the millis() rollover.
-  if (last_ms && (int32_t)(millis() - last_ms) < (int32_t)TAG_RECHECK_MS) return;
-  last_ms = millis();
+  if ((int32_t)(millis() - s_recheck_end_ms) < (int32_t)s_recheck_gap_ms) return;
 
-  if (!spoolmanTagResolves(s_last_query)) return;
+  bool unanswered = false;
+  const bool hit = spoolmanTagResolves(s_last_query, &unanswered);
+  s_recheck_end_ms = millis() | 1;
+  if (unanswered) {
+    // Doubled until the server answers again: a probe that gets no answer
+    // costs the loop the whole connect timeout.
+    s_recheck_gap_ms = s_recheck_gap_ms >= TAG_RECHECK_MAX_MS / 2
+                         ? TAG_RECHECK_MAX_MS : s_recheck_gap_ms * 2;
+    logSDf("Recheck: no answer from the backend, next try in %lus",
+           (unsigned long)(s_recheck_gap_ms / 1000));
+    return;
+  }
+  s_recheck_gap_ms = TAG_RECHECK_MS;
+  if (!hit) return;
 
   // Known now. Forgetting the lookup is what the loop reads as "ask again",
   // the same thing lifting the spool off the pad does, so the normal path
@@ -1066,6 +1097,8 @@ void querySpoolman(const char* tray_uuid) {
   // Only the one line below "Truly not found" sets it again.
   s_verdict_unknown = false;
   s_lost_connection = false;
+  s_recheck_end_ms = 0;
+  s_recheck_gap_ms = TAG_RECHECK_MS;
   // Every lookup settles for itself whether it owes a scan. Left standing from
   // the one before, the marker made spoolmanRecheckTick() order a second full
   // lookup for a tag that had just had one, inventory and archive included -

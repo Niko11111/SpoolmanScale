@@ -26,7 +26,9 @@ void spoolmanRecheckTick();
 // Whether the backend knows a spool by this tag: the recheck's cheap lookup,
 // without the inventory scan and without announcing the tag to a browser.
 // Blocks for one small request, so never from an LVGL event handler.
-bool spoolmanTagResolves(const char* query);
+// `out_unanswered`, when given, says whether the server never answered, which
+// is not the same as answering that it does not know the tag.
+bool spoolmanTagResolves(const char* query, bool* out_unanswered = nullptr);
 
 // Whether the last lookup failed because the server could not be reached, as
 // opposed to answering that it does not know the tag. The status line says so
