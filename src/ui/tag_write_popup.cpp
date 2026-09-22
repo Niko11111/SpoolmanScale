@@ -16,6 +16,7 @@
 #include "tag_display.h"
 #include "spool_flow.h"
 #include "ui_common.h"
+#include "ui/theme.h"
 
 // The house measurements for a two button question, same as confirm_popup.cpp:
 // buttons 170 wide with 12 px gutters on a 400 px box, and 18 px of air below
@@ -142,9 +143,13 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
   lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
+  // The erase is the one of the three that destroys something: a bin in red,
+  // the same glyph the tag view's erase button carries. The write and the
+  // rewrite keep the amber warning.
+  const bool erase = (s_mode == ASK_ERASE);
   lv_obj_t *icon = lv_label_create(box);
-  lv_label_set_text(icon, LV_SYMBOL_WARNING);
-  lv_obj_set_style_text_color(icon, lv_color_hex(0xf0b838), 0);
+  lv_label_set_text(icon, erase ? LV_SYMBOL_TRASH : LV_SYMBOL_WARNING);
+  lv_obj_set_style_text_color(icon, lv_color_hex(erase ? UI_COL_BAD_TEXT : UI_COL_WARN), 0);
   lv_obj_set_style_text_font(icon, &lv_font_montserrat_ext_24, 0);
   lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, 14);
 
@@ -188,8 +193,12 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
   lv_obj_t *btn_ok = lv_btn_create(box);
   lv_obj_set_size(btn_ok, BTN_W, BTN_H);
   lv_obj_set_pos(btn_ok, 12, BTN_Y);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x1a4020), 0);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x2a7030), LV_STATE_PRESSED);
+  // Green says "this is the good outcome", red "this stops something". For an
+  // erase that is backwards: the confirming answer is the destructive one, so
+  // it is red, and keeping the tag is the neutral way out.
+  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(erase ? UI_COL_BAD_BG : UI_COL_OK_BG), 0);
+  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(erase ? UI_COL_BAD_BG_PRESSED : UI_COL_OK_BG_PRESSED),
+                            LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ok, 8, 0);
   lv_obj_set_style_shadow_width(btn_ok, 0, 0);
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
@@ -199,16 +208,20 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
     close_pending   = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
-  { char bb[32]; copyT(bb, sizeof(bb), yes); lv_label_set_text(lbl_ok, bb); }
-  lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0x80ffb0), 0);
+  { char bb[40];
+    if (erase) snprintf(bb, sizeof(bb), LV_SYMBOL_TRASH " %s", T(yes));
+    else       copyT(bb, sizeof(bb), yes);
+    lv_label_set_text(lbl_ok, bb); }
+  lv_obj_set_style_text_color(lbl_ok, lv_color_hex(erase ? UI_COL_BAD_TEXT : UI_COL_OK_TEXT), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_ok);
 
   lv_obj_t *btn_no = lv_btn_create(box);
   lv_obj_set_size(btn_no, BTN_W, BTN_H);
   lv_obj_set_pos(btn_no, BOX_W - BTN_W - 12, BTN_Y);
-  lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x602020), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_no, lv_color_hex(erase ? UI_COL_LINE : UI_COL_BAD_BG), 0);
+  lv_obj_set_style_bg_color(btn_no, lv_color_hex(erase ? UI_COL_POPUP_BORDER : UI_COL_BAD_BG_PRESSED),
+                            LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_no, 8, 0);
   lv_obj_set_style_shadow_width(btn_no, 0, 0);
   lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
@@ -216,7 +229,7 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_no = lv_label_create(btn_no);
   { char cb[32]; copyT(cb, sizeof(cb), no); lv_label_set_text(lbl_no, cb); }
-  lv_obj_set_style_text_color(lbl_no, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_color(lbl_no, lv_color_hex(erase ? UI_COL_INK_2 : UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_no);
 }

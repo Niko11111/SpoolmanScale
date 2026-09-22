@@ -11,9 +11,18 @@
 #include "services/tag_uid.h"
 #include "ui/spool_flow.h"
 #include "ui_common.h"
+#include "ui/theme.h"
+
+// The card's answer row, the whole width like the result's OK. The prompt
+// starts a line below the spool's name, the seconds sit just above the row.
+#define TAG2_BTN_W     (UI_POPUP_W - 2 * UI_CARD_ROW_X)
+#define TAG2_PROMPT_Y  (UI_CARD_TEXT_Y + 24)
+#define TAG2_COUNT_Y   (UI_CARD_ROW_Y - 22)
 
 static lv_obj_t *scr_tag2      = nullptr;
 static lv_obj_t *lbl_tag2_count = nullptr;
+static lv_obj_t *bar_tag2_fill  = nullptr;
+static lv_coord_t s_fill_w      = -1;   // the width last set, so a pass without a change draws nothing
 
 // Captured when the popup is built. The button callback only raises a flag;
 // the link behind it costs HTTP requests and happens one loop pass later.
@@ -41,20 +50,35 @@ bool isSecondTagPopupOpen() { return scr_tag2 != nullptr; }
 static void closeSecondTagPopup() {
   if (scr_tag2) { lv_obj_del(scr_tag2); scr_tag2 = nullptr; }
   lbl_tag2_count = nullptr;
+  bar_tag2_fill  = nullptr;
+  s_fill_w       = -1;
   s_last_shown_s = -1;
 }
 
-// Seconds still on the clock, never below zero. Measured as an elapsed
+// Milliseconds still on the clock, never below zero. Measured as an elapsed
 // difference rather than against an absolute deadline, so the millis()
 // rollover after 49 days cannot make it expire on the spot.
-static int remainingSeconds() {
+static unsigned long remainingMs() {
   unsigned long elapsed = millis() - s_opened_ms;
   const uint32_t stalled = httpStallTotalMs() - s_opened_stall;
   // Guarded rather than trusted: the two are measured independently, and a
   // stall longer than the elapsed time would wrap the subtraction.
   elapsed = (stalled >= elapsed) ? 0 : (elapsed - stalled);
   if (elapsed >= SECOND_TAG_COUNTDOWN_MS) return 0;
-  return (int)((SECOND_TAG_COUNTDOWN_MS - elapsed + 999) / 1000);
+  return SECOND_TAG_COUNTDOWN_MS - elapsed;
+}
+
+static int remainingSeconds() { return (int)((remainingMs() + 999) / 1000); }
+
+// The button's fill, to the pixel. At 376 px over 30 s that is a dozen
+// small redraws a second, each only the strip that changed.
+static void updateCountdownFill() {
+  if (!bar_tag2_fill) return;
+  const lv_coord_t w = (lv_coord_t)((uint64_t)TAG2_BTN_W * remainingMs()
+                                    / SECOND_TAG_COUNTDOWN_MS);
+  if (w == s_fill_w) return;
+  s_fill_w = w;
+  lv_obj_set_width(bar_tag2_fill, w);
 }
 
 static void updateCountdownLabel() {
@@ -79,30 +103,39 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   s_opened_stall  = httpStallTotalMs();
 
   scr_tag2 = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(scr_tag2, 480, 320);
+  lv_obj_set_size(scr_tag2, LV_HOR_RES, LV_VER_RES);
   lv_obj_set_pos(scr_tag2, 0, 0);
-  lv_obj_set_style_bg_color(scr_tag2, lv_color_hex(0x000000), 0);
-  lv_obj_set_style_bg_opa(scr_tag2, LV_OPA_70, 0);
+  lv_obj_set_style_bg_color(scr_tag2, lv_color_hex(UI_COL_SCRIM), 0);
+  lv_obj_set_style_bg_opa(scr_tag2, UI_OPA_SCRIM, 0);
   lv_obj_set_style_border_width(scr_tag2, 0, 0);
   lv_obj_set_style_radius(scr_tag2, 0, 0);
   lv_obj_set_style_pad_all(scr_tag2, 0, 0);
   lv_obj_clear_flag(scr_tag2, LV_OBJ_FLAG_SCROLLABLE);
 
+  // The card the link's result and the second tag's result stand on, so the
+  // answer takes this question's place without anything moving.
   lv_obj_t *box = lv_obj_create(scr_tag2);
-  lv_obj_set_size(box, 400, 236);
+  lv_obj_set_size(box, UI_POPUP_W, UI_CARD_H);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
-  lv_obj_set_style_border_color(box, lv_color_hex(0x2a4080), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_POPUP_BORDER), 0);
   lv_obj_set_style_border_width(box, 2, 0);
-  lv_obj_set_style_radius(box, 12, 0);
+  lv_obj_set_style_radius(box, UI_RADIUS_BOX, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
+  // Turn the spool over: the two arrows say it before the title does.
+  lv_obj_t *icon = lv_label_create(box);
+  lv_label_set_text(icon, LV_SYMBOL_LOOP);
+  lv_obj_set_style_text_color(icon, lv_color_hex(UI_COL_WARN), 0);
+  lv_obj_set_style_text_font(icon, UI_FONT_ICON, 0);
+  lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, UI_CARD_ICON_Y);
+
   lv_obj_t *lbl_title = lv_label_create(box);
-  { char tbuf[32]; copyT(tbuf, sizeof(tbuf), STR_TAG2_TITLE); lv_label_set_text(lbl_title, tbuf); }
-  lv_obj_set_style_text_color(lbl_title, lv_color_hex(0xe8f0ff), 0);
-  lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
-  lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 14);
+  lv_label_set_text(lbl_title, T(STR_TAG2_TITLE));
+  lv_obj_set_style_text_color(lbl_title, lv_color_hex(UI_COL_INK), 0);
+  lv_obj_set_style_text_font(lbl_title, UI_FONT_HEADLINE, 0);
+  lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, UI_CARD_TITLE_Y);
 
   // Which spool this is about. Two links in quick succession are the normal
   // case at a shelf, and without the name the question is ambiguous.
@@ -112,49 +145,70 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
                                       sm_filament_name, spool_id);
     else                     snprintf(sbuf, sizeof(sbuf), "ID %d", spool_id);
     lv_label_set_text(lbl_spool, sbuf); }
-  lv_obj_set_style_text_color(lbl_spool, lv_color_hex(0x28d49a), 0);
-  lv_obj_set_style_text_font(lbl_spool, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_width(lbl_spool, 360);
-  lv_label_set_long_mode(lbl_spool, LV_LABEL_LONG_DOT);
+  lv_obj_set_style_text_color(lbl_spool, lv_color_hex(UI_COL_ACCENT), 0);
+  lv_obj_set_style_text_font(lbl_spool, UI_FONT_BODY, 0);
   lv_obj_set_style_text_align(lbl_spool, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_spool, LV_ALIGN_TOP_MID, 0, 46);
+  lv_label_set_long_mode(lbl_spool, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(lbl_spool, UI_POPUP_W - UI_CARD_TEXT_PAD);
+  lv_obj_align(lbl_spool, LV_ALIGN_TOP_MID, 0, UI_CARD_TEXT_Y);
 
   lv_obj_t *lbl_prompt = lv_label_create(box);
-  { char pbuf[96]; copyT(pbuf, sizeof(pbuf), STR_TAG2_PROMPT); lv_label_set_text(lbl_prompt, pbuf); }
-  lv_obj_set_style_text_color(lbl_prompt, lv_color_hex(0xe8f0ff), 0);
-  lv_obj_set_style_text_font(lbl_prompt, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_width(lbl_prompt, 360);
-  lv_label_set_long_mode(lbl_prompt, LV_LABEL_LONG_WRAP);
+  lv_label_set_text(lbl_prompt, T(STR_TAG2_PROMPT));
+  lv_obj_set_style_text_color(lbl_prompt, lv_color_hex(UI_COL_INK_2), 0);
+  lv_obj_set_style_text_font(lbl_prompt, UI_FONT_BODY, 0);
   lv_obj_set_style_text_align(lbl_prompt, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_prompt, LV_ALIGN_TOP_MID, 0, 74);
+  lv_label_set_long_mode(lbl_prompt, LV_LABEL_LONG_WRAP);
+  lv_obj_set_width(lbl_prompt, UI_POPUP_W - UI_CARD_TEXT_PAD);
+  lv_obj_align(lbl_prompt, LV_ALIGN_TOP_MID, 0, TAG2_PROMPT_Y);
 
-  // The countdown says out loud that this closes by itself, so a user who
-  // does not want a second tag can simply walk away.
+  // The seconds in words, quietly: the draining button below says the same
+  // at a glance, this line says it to anyone who reads.
   lbl_tag2_count = lv_label_create(box);
   lv_label_set_text(lbl_tag2_count, "");
-  lv_obj_set_style_text_color(lbl_tag2_count, lv_color_hex(0xf0b838), 0);
-  lv_obj_set_style_text_font(lbl_tag2_count, &lv_font_montserrat_ext_14, 0);
+  lv_obj_set_style_text_color(lbl_tag2_count, lv_color_hex(UI_COL_INK_SOFT), 0);
+  lv_obj_set_style_text_font(lbl_tag2_count, UI_FONT_SMALL, 0);
   lv_obj_set_style_text_align(lbl_tag2_count, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl_tag2_count, LV_ALIGN_TOP_MID, 0, 132);
+  lv_obj_align(lbl_tag2_count, LV_ALIGN_TOP_MID, 0, TAG2_COUNT_Y);
   updateCountdownLabel();
 
   // One button, because there is only one answer to give. The other answer is
-  // a tag on the reader, and waiting is the third.
+  // a tag on the reader, and waiting is the third. The whole row, like the
+  // result's OK that follows it, and neutral rather than green: nothing has
+  // happened yet, time is only running out.
   lv_obj_t *btn_done = lv_btn_create(box);
-  lv_obj_set_size(btn_done, 170, 56);
-  lv_obj_set_pos(btn_done, (400 - 170) / 2, 160);
-  lv_obj_set_style_bg_color(btn_done, lv_color_hex(0x1a2840), 0);
-  lv_obj_set_style_bg_color(btn_done, lv_color_hex(0x2a4080), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_done, 8, 0);
+  lv_obj_set_size(btn_done, TAG2_BTN_W, UI_POPUP_BTN_H);
+  lv_obj_set_pos(btn_done, UI_CARD_ROW_X, UI_CARD_ROW_Y);
+  lv_obj_set_style_bg_color(btn_done, lv_color_hex(UI_COL_LINE), 0);
+  lv_obj_set_style_bg_color(btn_done, lv_color_hex(UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_done, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(btn_done, 0, 0);
+  lv_obj_set_style_border_width(btn_done, 0, 0);
+  lv_obj_set_style_pad_all(btn_done, 0, 0);
+  lv_obj_clear_flag(btn_done, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(btn_done, [](lv_event_t *e) {
     // No HTTP and no delete in here, both happen one loop pass later.
     s_close_pending = true;
   }, LV_EVENT_CLICKED, NULL);
+
+  // The countdown as a lighter fill that drains from the right, behind the
+  // label and not clickable. Not an lv_anim like the result's OK: the time a
+  // blocking fetch holds the loop does not count against the question, and
+  // an animation would run through it and then jump. The width is set from
+  // the same remaining time the question closes on, every loop pass.
+  bar_tag2_fill = lv_obj_create(btn_done);
+  lv_obj_remove_style_all(bar_tag2_fill);
+  lv_obj_set_size(bar_tag2_fill, TAG2_BTN_W, UI_POPUP_BTN_H);
+  lv_obj_set_pos(bar_tag2_fill, 0, 0);
+  lv_obj_set_style_bg_color(bar_tag2_fill, lv_color_hex(UI_COL_POPUP_BORDER), 0);
+  lv_obj_set_style_bg_opa(bar_tag2_fill, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(bar_tag2_fill, UI_RADIUS_BTN, 0);
+  lv_obj_clear_flag(bar_tag2_fill, LV_OBJ_FLAG_CLICKABLE);
+  s_fill_w = TAG2_BTN_W;
+
   lv_obj_t *lbl_done = lv_label_create(btn_done);
-  { char dbuf[24]; copyT(dbuf, sizeof(dbuf), STR_TAG2_BTN_DONE); lv_label_set_text(lbl_done, dbuf); }
-  lv_obj_set_style_text_color(lbl_done, lv_color_hex(0xe8f0ff), 0);
-  lv_obj_set_style_text_font(lbl_done, &lv_font_montserrat_ext_16, 0);
+  lv_label_set_text(lbl_done, T(STR_TAG2_BTN_DONE));
+  lv_obj_set_style_text_color(lbl_done, lv_color_hex(UI_COL_INK_2), 0);
+  lv_obj_set_style_text_font(lbl_done, UI_FONT_TITLE, 0);
   lv_obj_center(lbl_done);
 
   logSDf("TAG2: asking for a second tag on spool %d, first is '%s', %lus",
@@ -165,6 +219,7 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
 void handleSecondTagDeferredActions() {
   if (scr_tag2 && !s_close_pending) {
     updateCountdownLabel();
+    updateCountdownFill();
 
     // What the reader currently has. g_tag.uid_str is written by both scan
     // branches the moment a new UID turns up - the NTAG one directly, the
