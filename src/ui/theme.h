@@ -28,6 +28,7 @@
 #define UI_COL_LINE_SOFT       0x1a2840   // the fainter border of an input
 #define UI_COL_POPUP_BORDER    0x2a4080   // the frame of a question
 #define UI_COL_EMPTY           0x101f33   // an empty bay
+#define UI_COL_CHIP            0x0d2040   // a header chip that is a button, pressed: UI_COL_LINE
 #define UI_COL_SCRIM           0x000000   // behind a popup, at UI_OPA_SCRIM
 
 #define UI_OPA_SCRIM           LV_OPA_70

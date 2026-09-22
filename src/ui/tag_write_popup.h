@@ -32,6 +32,11 @@ void startTagWriteNoAsk(int spool_id);
 
 void requestTagEraseAsk();
 
+// The tag view's erase button. Its own words, because nothing was unlinked,
+// and any NTAG that is not blank qualifies: a record this scale cannot read is
+// as worth erasing as one it can. Built at once, so from appLoop() only.
+void askTagEraseFromView();
+
 // Checks the tag on the reader against the spool it is bound to and offers to
 // write it again when the two disagree. Loop task only - it fetches the spool.
 // Does nothing unless g_tagmismatch_ask is on.

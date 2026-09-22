@@ -27,6 +27,7 @@
 #include "ui/header_status.h"
 #include "ui/settings_screen.h"
 #include "ui/spool_flow.h"
+#include "ui/tag_view.h"
 
 
 void hideAllOverlays() {
@@ -101,6 +102,7 @@ void hideAllOverlays() {
   closeFactoryResetPopup();
   closeExtraFieldsPopup();
   closeMoreInfoPopups();
+  closeTagView();
 }
 
 void deleteOtaScreens() {

@@ -105,6 +105,7 @@
 #include "ui/wifi_setup_screen.h"
 #include "ui/system_screen.h"
 #include "ui/tag_display.h"
+#include "ui/tag_view.h"
 #include "ui/weight_format.h"
 #include "lang.h"
 
@@ -777,6 +778,7 @@ void appLoop() {
   handleAmsAssignDeferredActions();
   handleAmsViewDeferredActions();
   handleAmsDetailDeferredActions();
+  handleTagViewDeferredActions();
   // A request found no server, see server_reach.h. After every handler above,
   // so the popup comes up over whatever the failed action left on screen, and
   // the header badge turns red now instead of on the next health check. An

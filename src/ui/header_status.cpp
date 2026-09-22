@@ -10,6 +10,7 @@
 #include "services/mdns_service.h"
 #include "services/user_options.h"
 #include "ui/main_screen_helpers.h"
+#include "ui/theme.h"
 #include "services/wifi_manager.h"
 
 
@@ -40,7 +41,7 @@ void layoutHeaderChips() {
   lv_obj_t *prev = lbl_hdr_sm;
   // AMS first, so it lands directly left of the backend badge: it belongs to
   // the backend, and the two read as a pair.
-  lv_obj_t *chain[] = { btn_hdr_ams, lbl_hdr_scl, lbl_hdr_nfc, lbl_hdr_wifi, lbl_hdr_sd };
+  lv_obj_t *chain[] = { btn_hdr_ams, lbl_hdr_scl, btn_hdr_nfc, lbl_hdr_wifi, lbl_hdr_sd };
   for (unsigned i = 0; i < sizeof(chain) / sizeof(chain[0]); i++) {
     // Hidden counts as absent. lv_obj_align_to() reads nothing but the
     // reference object's geometry - the hidden flag never reaches it - so a
@@ -65,8 +66,10 @@ void updateHeaderStatus() {
 
   if (lbl_hdr_nfc) {
     lv_label_set_text(lbl_hdr_nfc, nfc_ok ? "NFC" : "NFC!");
-    lv_obj_set_style_text_color(lbl_hdr_nfc,
-      nfc_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
+    const lv_color_t c = lv_color_hex(nfc_ok ? UI_COL_ACCENT : UI_COL_BAD);
+    lv_obj_set_style_text_color(lbl_hdr_nfc, c, 0);
+    // The chip's frame follows its label, so a fault shows on the button too.
+    if (btn_hdr_nfc) lv_obj_set_style_border_color(btn_hdr_nfc, c, 0);
   }
 
   // The chip is not built at all when the device starts without a load cell.

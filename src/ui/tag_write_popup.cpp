@@ -254,6 +254,17 @@ static void showTagEraseAskPopup() {
            STR_TW_BTN_ERASE, STR_TW_BTN_KEEP);
 }
 
+void askTagEraseFromView() {
+  if (scr_tag_write || !tagIsWritableNtag()) return;
+  // Kept for the log and for the gate showTagEraseAskPopup() shares; the
+  // question itself names no format, it says what erasing does.
+  snprintf(s_erase_fmt, sizeof(s_erase_fmt), "%s",
+           tagCachedInfo()->fmt[0] ? tagCachedInfo()->fmt : "?");
+  s_mode = ASK_ERASE;
+  logSDf("SHOW: TagEraseAskPopup from the tag view, tag holds %s", s_erase_fmt);
+  buildAsk(STR_TV_ERASE_TITLE, STR_TV_ERASE_HINT, STR_TW_BTN_ERASE, STR_TW_BTN_KEEP);
+}
+
 // The decision was taken in tagMismatchTick(), which also built the two lines.
 static void showTagMismatchPopup() {
   if (scr_tag_write || !s_mismatch_detail[0]) return;

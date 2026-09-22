@@ -295,6 +295,9 @@ extern lv_obj_t *btn_ams_main;
 // that answer costs a blocking round trip and lives nowhere a chip could read
 // it. Colour is therefore an affordance here, not a verdict.
 extern lv_obj_t *btn_hdr_ams;
+// The NFC chip, the second button among them: it opens the tag view. Its
+// label is lbl_hdr_nfc, which still says whether the reader answers.
+extern lv_obj_t *btn_hdr_nfc;
 extern lv_obj_t *scr_more_info;
 extern int scan_count;
 extern lv_obj_t *page_main;

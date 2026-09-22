@@ -2683,6 +2683,31 @@ const char* const STRINGS[][3] = {
   { "Die Waage zeigt gerade keine Spule.",
     "The scale shows no spool right now.",
     "The scale shows no spool right now." },  // STR_W_TAG_NOSPOOL
+
+  // Tag view on the device, from the NFC chip in the header
+  { "NFC-Tag",   "NFC tag",  "NFC tag" },  // STR_TV_TITLE
+  { "Filament",  "Filament", "Filament" },  // STR_TV_FILAMENT
+  { "UID",       "UID",      "UID" },  // STR_TV_UID
+  { "Chip",      "Chip",     "Chip" },  // STR_TV_CHIP
+  { "leer",      "blank",    "blank" },  // STR_TV_FMT_BLANK
+  { "unbekannt", "unknown",  "unknown" },  // STR_TV_FMT_UNKNOWN
+  { "keins",     "none",     "none" },  // STR_TV_FMT_NONE
+  { "Auf dem Tag steht nichts. Er kann beschrieben werden.",
+    "There is nothing on the tag. It can be written.",
+    "There is nothing on the tag. It can be written." },  // STR_TV_BLANK_NOTE
+  { "Kein Tag auf dem Leser. Leg einen auf, er erscheint hier sofort.",
+    "No tag on the reader. Put one down and it shows up here right away.",
+    "No tag on the reader. Put one down and it shows up here right away." },  // STR_TV_PLACE
+  { "Der NFC-Leser antwortet gerade nicht. Tags werden erst wieder gelesen, wenn er zurück ist.",
+    "The NFC reader is not answering right now. Tags are read again once it is back.",
+    "The NFC reader is not answering right now. Tags are read again once it is back." },  // STR_TV_READER_DOWN
+  { "Spule #%d schreiben", "Write spool #%d",     "Write spool #%d" },  // STR_TV_WRITE
+  { "Keine Spule erkannt", "No spool recognised", "No spool recognised" },  // STR_TV_NOSPOOL
+  { "Tag zu klein",        "Tag too small",       "Tag too small" },  // STR_TV_TOOSMALL
+  { "Tag löschen?",        "Erase the tag?",      "Erase the tag?" },  // STR_TV_ERASE_TITLE
+  { "Was darauf steht, geht verloren. Eine Verknüpfung mit einer Spule bleibt bestehen.",
+    "Whatever is on it is lost. A link to a spool stays as it is.",
+    "Whatever is on it is lost. A link to a spool stays as it is." },  // STR_TV_ERASE_HINT
 };
 
 StringID tagWriteResultString(uint8_t code) {

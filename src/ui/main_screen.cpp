@@ -29,6 +29,7 @@
 #include "ui/more_info_screen.h"
 #include "ui/settings_screen.h"
 #include "ui/spool_flow.h"
+#include "ui/theme.h"
 #include "ui_common.h"
 
 // ============================================================
@@ -170,10 +171,32 @@ void buildUI() {
   lv_obj_set_style_text_color(lbl_hdr_wifi, lv_color_hex(0x606060), 0);
   lv_obj_set_style_text_font(lbl_hdr_wifi, &lv_font_montserrat_ext_12, 0);
 
-  lbl_hdr_nfc = lv_label_create(hdr);
+  // A button like the AMS chip, and built the same way: it opens the tag
+  // view. The label inside is still the reader's state - green "NFC", red
+  // "NFC!" - and updateHeaderStatus() colours the border to match, so the
+  // chip says the same thing it always said and can now also be pressed.
+  btn_hdr_nfc = lv_btn_create(hdr);
+  lv_obj_set_width(btn_hdr_nfc, LV_SIZE_CONTENT);
+  lv_obj_set_height(btn_hdr_nfc, HDR_AMS_H);
+  lv_obj_set_style_pad_hor(btn_hdr_nfc, HDR_AMS_PAD_X, 0);
+  lv_obj_set_style_pad_ver(btn_hdr_nfc, 0, 0);
+  lv_obj_set_style_bg_color(btn_hdr_nfc, lv_color_hex(UI_COL_CHIP), 0);
+  lv_obj_set_style_bg_color(btn_hdr_nfc, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_border_width(btn_hdr_nfc, 1, 0);
+  lv_obj_set_style_border_color(btn_hdr_nfc, lv_color_hex(UI_COL_RULE), 0);
+  lv_obj_set_style_radius(btn_hdr_nfc, 4, 0);
+  lv_obj_set_style_shadow_width(btn_hdr_nfc, 0, 0);
+  // The AMS chip's touch pad, for the same reason and with the same ceiling.
+  lv_obj_set_ext_click_area(btn_hdr_nfc, HDR_AMS_TOUCH_PAD);
+  lv_obj_add_event_cb(btn_hdr_nfc, [](lv_event_t *e) {
+    logSD("UI: Header chip -> tag view");
+    show_tag_view_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+  lbl_hdr_nfc = lv_label_create(btn_hdr_nfc);
   lv_label_set_text(lbl_hdr_nfc, "NFC");
   lv_obj_set_style_text_color(lbl_hdr_nfc, lv_color_hex(0x606060), 0);
   lv_obj_set_style_text_font(lbl_hdr_nfc, &lv_font_montserrat_ext_12, 0);
+  lv_obj_center(lbl_hdr_nfc);
 
   // Not built at all without a load cell, rather than built and hidden. The
   // packing does skip hidden objects now, so this is no longer load bearing -
@@ -185,9 +208,9 @@ void buildUI() {
     lv_obj_set_style_text_font(lbl_hdr_scl, &lv_font_montserrat_ext_12, 0);
   }
 
-  // The one chip that is a button. Bordered and filled where its neighbours
-  // are bare text, because it does something when pressed and they do not -
-  // among five status labels that difference has to be visible.
+  // One of the two chips that are buttons. Bordered and filled where its
+  // neighbours are bare text, because it does something when pressed and they
+  // do not - among five status labels that difference has to be visible.
   //
   // Sized to its content so the packing can measure it, 18 px tall so it sits
   // inside the 26 px header with room above and below. Built in both modes and
@@ -197,10 +220,10 @@ void buildUI() {
   lv_obj_set_height(btn_hdr_ams, HDR_AMS_H);
   lv_obj_set_style_pad_hor(btn_hdr_ams, HDR_AMS_PAD_X, 0);
   lv_obj_set_style_pad_ver(btn_hdr_ams, 0, 0);
-  lv_obj_set_style_bg_color(btn_hdr_ams, lv_color_hex(0x0d2040), 0);
-  lv_obj_set_style_bg_color(btn_hdr_ams, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_hdr_ams, lv_color_hex(UI_COL_CHIP), 0);
+  lv_obj_set_style_bg_color(btn_hdr_ams, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_hdr_ams, 1, 0);
-  lv_obj_set_style_border_color(btn_hdr_ams, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_border_color(btn_hdr_ams, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_radius(btn_hdr_ams, 4, 0);
   lv_obj_set_style_shadow_width(btn_hdr_ams, 0, 0);
   lv_obj_add_flag(btn_hdr_ams, LV_OBJ_FLAG_HIDDEN);

@@ -38,6 +38,9 @@ extern bool show_ams_assign_pending;
 extern bool show_ams_view_pending;
 // The same page opened from Settings > Scale, which is where it goes back to.
 extern bool show_ams_view_scale_pending;
+// The tag view, from the NFC chip in the header. A flag like the AMS view's,
+// so the card is built on the loop and never inside the chip's callback.
+extern bool show_tag_view_pending;
 extern bool show_filaman_fields_pending;
 extern bool show_bambuddy_options_pending;
 extern bool show_bambuddy_dried_pending;

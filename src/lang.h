@@ -1224,6 +1224,23 @@ enum StringID {
   STR_W_TAG_ONSCALE,          // title of the middle card
   STR_W_TAG_NOSPOOL,          // that card when the scale shows no spool
 
+  // Tag view on the device, from the NFC chip in the header
+  STR_TV_TITLE,               // header of the card
+  STR_TV_FILAMENT,            // caption over brand and material
+  STR_TV_UID,                 // caption
+  STR_TV_CHIP,                // caption over NTAG215, 496 bytes
+  STR_TV_FMT_BLANK,           // the format cell of a blank NTAG
+  STR_TV_FMT_UNKNOWN,         // of an NTAG holding something unreadable
+  STR_TV_FMT_NONE,            // of a MIFARE tag that is neither Bambu's nor Snapmaker's
+  STR_TV_BLANK_NOTE,          // in place of the fields, blank NTAG
+  STR_TV_PLACE,               // the whole card, no tag on the reader
+  STR_TV_READER_DOWN,         // the whole card, reader not answering
+  STR_TV_WRITE,               // button, %d = spool id
+  STR_TV_NOSPOOL,             // the same button, disabled: no spool to write
+  STR_TV_TOOSMALL,            // disabled: the record does not fit
+  STR_TV_ERASE_TITLE,         // the question behind the erase button
+  STR_TV_ERASE_HINT,          // and its consequence
+
   STR_COUNT
 };
 
