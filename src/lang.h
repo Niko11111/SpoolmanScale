@@ -1240,6 +1240,19 @@ enum StringID {
   STR_TV_ERASE_TITLE,         // the question behind the erase button
   STR_TV_ERASE_HINT,          // and its consequence
 
+  // Tag page in the browser: linking the tag on the reader without writing it
+  STR_W_TAG_LINKONLY,         // the button
+  STR_W_TAG_RO_LINK,          // the note under the buttons for a read-only tag
+  STR_W_TL_ASK_REPLACE,       // the spool has another tag, this one takes its place; %d, %s
+  STR_W_TL_ASK_ADD,           // the same where both stay bound; %d, %s
+  STR_W_TL_REFUSED,           // the request was not taken
+  STR_W_TL_BUSY,              // %d = spool
+  STR_W_TL_OK,                // %d = spool
+  STR_W_TL_ALREADY,           // %d = spool
+  STR_W_TL_HELD,              // %d = the spool that holds the tag
+  STR_W_TL_CHANGED,           // another tag on the reader by the time it ran
+  STR_W_TL_FAILED,            // the server answered no
+
   STR_COUNT
 };
 

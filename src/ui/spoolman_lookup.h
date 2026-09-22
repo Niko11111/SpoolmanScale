@@ -28,7 +28,9 @@ void spoolmanRecheckTick();
 // Blocks for one small request, so never from an LVGL event handler.
 // `out_unanswered`, when given, says whether the server never answered, which
 // is not the same as answering that it does not know the tag.
-bool spoolmanTagResolves(const char* query, bool* out_unanswered = nullptr);
+// `out_spool_id`, when given, receives the id of the spool that matched.
+bool spoolmanTagResolves(const char* query, bool* out_unanswered = nullptr,
+                         int* out_spool_id = nullptr);
 
 // Whether the last lookup failed because the server could not be reached, as
 // opposed to answering that it does not know the tag. The status line says so

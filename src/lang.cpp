@@ -2707,6 +2707,35 @@ const char* const STRINGS[][3] = {
   { "Was darauf steht, geht verloren. Eine Verknüpfung mit einer Spule bleibt bestehen.",
     "Whatever is on it is lost. A link to a spool stays as it is.",
     "Whatever is on it is lost. A link to a spool stays as it is." },  // STR_TV_ERASE_HINT
+
+  // Tag page in the browser: linking the tag on the reader without writing it
+  { "Nur verknüpfen", "Link only", "Link only" },  // STR_W_TAG_LINKONLY
+  { "Dieser Tag ist nur lesbar. Verknüpfen geht trotzdem.",
+    "This tag can only be read. It can still be linked.",
+    "This tag can only be read. It can still be linked." },  // STR_W_TAG_RO_LINK
+  { "Spule #%d ist schon mit Tag %s verknüpft. Stattdessen diesen Tag verknüpfen? Der bisherige verliert die Verknüpfung.",
+    "Spool #%d is already linked to tag %s. Link this tag instead? The old one loses its link.",
+    "Spool #%d is already linked to tag %s. Link this tag instead? The old one loses its link." },  // STR_W_TL_ASK_REPLACE
+  { "Spule #%d ist schon mit Tag %s verknüpft. Diesen Tag dazu verknüpfen? Beide führen danach zur Spule.",
+    "Spool #%d is already linked to tag %s. Link this tag as well? Both lead to the spool afterwards.",
+    "Spool #%d is already linked to tag %s. Link this tag as well? Both lead to the spool afterwards." },  // STR_W_TL_ASK_ADD
+  { "Nicht angenommen: es läuft schon eine Verknüpfung, oder Spule oder Tag fehlen.",
+    "Not accepted: a link is already running, or the spool or the tag is missing.",
+    "Not accepted: a link is already running, or the spool or the tag is missing." },  // STR_W_TL_REFUSED
+  { "Verknüpfe mit Spule #%d ...", "Linking to spool #%d ...",
+    "Linking to spool #%d ..." },  // STR_W_TL_BUSY
+  { "Tag mit Spule #%d verknüpft.", "Tag linked to spool #%d.",
+    "Tag linked to spool #%d." },  // STR_W_TL_OK
+  { "Der Tag ist schon mit Spule #%d verknüpft.", "The tag is already linked to spool #%d.",
+    "The tag is already linked to spool #%d." },  // STR_W_TL_ALREADY
+  { "Der Tag gehört zu Spule #%d. Dort zuerst die Verknüpfung lösen.",
+    "The tag belongs to spool #%d. Unlink it there first.",
+    "The tag belongs to spool #%d. Unlink it there first." },  // STR_W_TL_HELD
+  { "Auf dem Leser liegt inzwischen ein anderer Tag. Nichts verknüpft.",
+    "A different tag is on the reader now. Nothing was linked.",
+    "A different tag is on the reader now. Nothing was linked." },  // STR_W_TL_CHANGED
+  { "Der Server hat die Verknüpfung abgelehnt.", "The server refused the link.",
+    "The server refused the link." },  // STR_W_TL_FAILED
 };
 
 StringID tagWriteResultString(uint8_t code) {

@@ -17,6 +17,7 @@
 #include "services/backend_api.h"
 #include "services/prefs_store.h"
 #include "services/tag_field.h"
+#include "services/tag_link.h"
 #include "services/tag_write.h"
 #include "services/user_options.h"
 #include "web/web_access.h"
@@ -83,7 +84,14 @@ static String body() {
          "<button id='tg-btn' onclick='writeTag()' disabled></button>"
          "<button id='tg-erase' class='danger' onclick='eraseTag()' disabled>");
   h += T(STR_W_TAG_ERASE);
+  // Binds the tag without writing it: the one way in the browser for a tag
+  // that can only be read, and for an NTAG whose contents should stay.
+  h += F("</button><button id='tg-lnk' class='quiet' disabled>");
+  h += T(STR_W_TAG_LINKONLY);
   h += F("</button><span class='msg' id='tg-s'></span></div>"
+         // Its own line: a write keeps its result standing in tg-s, and the
+         // poll would paint over a link's answer every three seconds.
+         "<div id='tg-ls' class='msg' style='margin-top:10px'></div>"
          // Right under the buttons rather than above the fields: it is about
          // whether the write can happen at all, so it belongs where the write
          // is started.
@@ -215,9 +223,13 @@ static String body() {
   h += F(",art:");     h += jsStr(T(STR_LBL_ARTICLE_NO_SHORT));
   h += F(",used:");    h += jsStr(T(STR_LBL_LAST_USED));
   h += F(",dried:");   h += jsStr(T(STR_LBL_LAST_DRIED));
+  h += F(",rolink:");  h += jsStr(T(STR_W_TAG_RO_LINK));
+  h += F(",lask:");    h += jsStr(T(STR_W_TL_ASK_REPLACE));
+  h += F(",ladd:");    h += jsStr(T(STR_W_TL_ASK_ADD));
+  h += F(",lbusy:");   h += jsStr(T(STR_W_TL_REFUSED));
   h += F("};"
          "let tgCur='',tgNew='',tgLinked='',tgUid='',tgCurI=null,tgNewI=null,tgMatched=null,"
-         "tgBytes=0,tgNeed=0,tgKindCode=0;"
+         "tgBytes=0,tgNeed=0,tgKindCode=0,tgAdds=false;"
          // The quote as well: esc() also fills an href.
          "function esc(t){return String(t).replace(/[<>&\"]/g,c=>"
          "({'<':'&lt;','>':'&gt;','&':'&amp;','\"':'&quot;'}[c]));}"
@@ -289,7 +301,10 @@ static String body() {
          // The kind alone decides. An NTAG that reports no size is still
          // writable, and the write itself says so if it does not fit.
          "const ro=tgKindCode===1;"
-         "if(n)n.textContent=ro?M.ro:!tgNew?M.pickf:small"
+         // Any tag can be linked, a read-only one included; it needs a spool.
+         "const lk=document.getElementById('tg-lnk');"
+         "if(lk)lk.disabled=!tgUid||!parseInt(document.getElementById('tg-id').value);"
+         "if(n)n.textContent=ro?M.rolink:!tgNew?M.pickf:small"
          "?M.toosmall.replace('%s',fn).replace('%u',tgNeed).replace('%u',tgBytes)"
          // tgLinked is already "a different tag than the one on the reader" - the
          // comparison used to happen here and compared "047F3ABBD12A81" against
@@ -332,7 +347,10 @@ static String body() {
          "document.getElementById('tg-uid').textContent="
          "d.uid?(M.onread+' '+d.uid+' ('+d.kind+')'):M.notag;"
          "tgUid=d.uid||'';tgCurI=d.uid?d.info:null;tgBytes=d.bytes||0;tgKindCode=d.kindcode||0;"
-         "tgCur=d.content||'';tgMatched=d.matched;tgSync();"
+         "tgCur=d.content||'';tgMatched=d.matched;tgAdds=!!d.linkadds;tgSync();"
+         "const ls=document.getElementById('tg-ls');"
+         "if(ls){ls.textContent=d.linkstate&&d.linkstate!='idle'?d.linkmsg:'';"
+         "ls.className='msg'+(d.linkstate=='error'?' bad':'');}"
          "const s=document.getElementById('tg-s');"
          "if(d.state!='idle'){s.textContent=d.message;"
          "s.className='msg'+(d.state=='error'?' bad':'');}}).catch(()=>{});}"
@@ -348,7 +366,18 @@ static String body() {
          "fetch('/api/tag/write',{method:'POST',body:v+','+f+','+l})"
          ".then(r=>r.json()).then(d=>{document.getElementById('tg-s').textContent="
          "d.message||M.queued;}).catch(()=>{});after();}"
+         // The spool already carries a different tag: say what linking does to
+         // it before doing it. tgLinked comes from the preview of the picked
+         // spool and is empty when that tag is the one on the reader.
+         "function linkTag(){const v=parseInt(document.getElementById('tg-id').value);"
+         "if(!v||!tgUid)return;"
+         "if(tgLinked&&!confirm((tgAdds?M.ladd:M.lask).replace('%d',v).replace('%s',tgLinked)))return;"
+         "const ls=document.getElementById('tg-ls');"
+         "fetch('/api/tag/link',{method:'POST',body:v+','+tgUid})"
+         ".then(r=>r.json()).then(d=>{if(!d.ok&&ls)ls.textContent=M.lbusy;})"
+         ".catch(()=>{});after();}"
          "document.addEventListener('DOMContentLoaded',()=>{"
+         "const lk=document.getElementById('tg-lnk');if(lk)lk.addEventListener('click',linkTag);"
          "tgPoll();setInterval(tgPoll,3000);loadSpools();tgSync();});"
          "</script>");
   return h;
@@ -425,6 +454,37 @@ static String tagKindLocal() {
     out += buf;
   }
   return out;
+}
+
+// Where a link from this page stands, for the poll. OK covers "already bound",
+// which is not a failure: the spool is found by that tag either way.
+static const char* tagLinkStateName() {
+  switch (tagLinkReportData()->code) {
+    case TL_NONE:    return "idle";
+    case TL_BUSY:    return "pending";
+    case TL_OK:
+    case TL_ALREADY: return "ok";
+    default:         return "error";
+  }
+}
+
+// The same for the sentence, which tag_link.cpp cannot build in the user's
+// language.
+static String tagLinkMessageLocal() {
+  const TagLinkReport *r = tagLinkReportData();
+  char buf[192];
+  switch (r->code) {
+    case TL_NONE:    return String("");
+    case TL_BUSY:    snprintf(buf, sizeof(buf), T(STR_W_TL_BUSY), r->spool_id); break;
+    case TL_OK:      snprintf(buf, sizeof(buf), T(STR_W_TL_OK), r->spool_id); break;
+    case TL_ALREADY: snprintf(buf, sizeof(buf), T(STR_W_TL_ALREADY), r->spool_id); break;
+    case TL_HELD:    snprintf(buf, sizeof(buf), T(STR_W_TL_HELD), r->other_spool); break;
+    case TL_CHANGED: copyT(buf, sizeof(buf), STR_W_TL_CHANGED); break;
+    case TL_NO_TAG:  copyT(buf, sizeof(buf), STR_TW_ERR_NO_TAG); break;
+    case TL_NETWORK: copyT(buf, sizeof(buf), STR_LINK_NO_CONNECTION); break;
+    default:         copyT(buf, sizeof(buf), STR_W_TL_FAILED); break;
+  }
+  return String(buf);
 }
 
 // The spool the scale shows, for the card between the two tag cards. All of
@@ -539,7 +599,10 @@ static void routes(WebServer &srv) {
                "\",\"state\":\""   + jsonEsc(tagWriteState()) +
                "\",\"message\":\"" + jsonEsc(tagWriteMessageLocal().c_str()) +
                "\",\"content\":\"" + jsonEsc(tagCachedContent()) +
-               "\",\"matched\":" + spoolJson() + "}";
+               "\",\"linkstate\":\"" + tagLinkStateName() +
+               "\",\"linkmsg\":\"" + jsonEsc(tagLinkMessageLocal().c_str()) +
+               "\",\"linkadds\":" + (tagLinkKeepsOtherTags() ? "true" : "false") +
+               ",\"matched\":" + spoolJson() + "}";
     srv.send(200, "application/json", j);
   });
 
@@ -584,6 +647,21 @@ static void routes(WebServer &srv) {
     logSDf("Web: tag write mode=%d mismatch ask=%d format=%s",
            (int)g_tagwrite_mode, (int)g_tagmismatch_ask, tagFormatLabel(g_tagwrite_fmt));
     srv.send(200, "application/json", "{\"ok\":true}");
+  });
+
+  // "id,uid": the spool, and the tag the page was showing when it was asked.
+  // Parked only; tagLinkTick() makes the request on the loop task and refuses
+  // if a different tag lies on the reader by then.
+  srv.on("/api/tag/link", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
+    if (!srv.hasArg("plain")) { srv.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
+    String body = srv.arg("plain");
+    const int c = body.indexOf(',');
+    const int id = body.substring(0, c < 0 ? body.length() : c).toInt();
+    String uid = c < 0 ? String("") : body.substring(c + 1);
+    uid.trim();
+    const bool ok = tagLinkRequest(id, uid.c_str());
+    srv.send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
   });
 
   srv.on("/api/tag/write", HTTP_POST, [&srv]() {

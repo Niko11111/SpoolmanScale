@@ -831,16 +831,22 @@ bool tagPreview(int spool_id, TagFormat fmt, char *out, size_t out_len,
     JsonObjectConst extra = sp["extra"];
     JsonArrayConst  tags  = sp["tags"];
     const char* here = cached_uid;
+    // A Bambu spool is bound by the tray uuid both of its chips carry, not by
+    // the chip on the reader. Checked as well, or the page calls the very tag
+    // lying there "another tag" - and the link button would ask to replace it.
+    const char* tray = (tag_present && strlen(g_tag.tray_uuid) == 32) ? g_tag.tray_uuid : "";
+    auto isHere = [&](const char* raw) {
+      return raw[0] && ((here[0] && cardUidsContain(raw, here)) ||
+                        (tray[0] && cardUidsContain(raw, tray)));
+    };
     bool bound_here = false;
 
     for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT && !bound_here; i++) {
-      const char* raw = extra[tagFieldSpec(i).key] | "";
-      if (raw[0] && here[0] && cardUidsContain(raw, here)) bound_here = true;
+      if (isHere(extra[tagFieldSpec(i).key] | "")) bound_here = true;
     }
     if (!bound_here && !tags.isNull()) {
       for (JsonObjectConst t : tags) {
-        const char* raw = t["uid"] | "";
-        if (raw[0] && here[0] && cardUidsContain(raw, here)) { bound_here = true; break; }
+        if (isHere(t["uid"] | "")) { bound_here = true; break; }
       }
     }
 

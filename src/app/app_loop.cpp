@@ -35,6 +35,7 @@
 #include "services/user_options.h"
 #include "web/web_access.h"
 #include "services/tag_write.h"
+#include "services/tag_link.h"
 #include "ui/ota_github.h"
 #include "services/ota_state.h"
 #include "services/update_check.h"
@@ -436,6 +437,7 @@ void appLoop() {
   // OTA web server bedienen wenn aktiv
   handleOtaServerClient();
   tagWriteTick();
+  tagLinkTick();
   // Says a freshly linked tag once more, so a paired browser opens the spool
   // instead of being left with the unknown-tag toast the first scan produced.
   spoolmanRescanTick();
@@ -931,7 +933,10 @@ void appLoop() {
   // A write from the web page just bound the tag on the reader to a spool.
   // Showing it is the confirmation that matters - the browser reports the
   // write, but the scale kept displaying whatever was there before.
-  if (const int linked_id = tagWriteTakeLinkedSpool()) {
+  // A link from the tag page that wrote nothing ends the same way.
+  int linked_id = tagWriteTakeLinkedSpool();
+  if (!linked_id) linked_id = tagLinkTakeLinkedSpool();
+  if (linked_id) {
     if (!isSpoolFlowIdInputOpen() && !isSpoolFlowLinkEntryOpen() &&
         !isConfirmPopupOpen()) {
       logSDf("TagWrite: showing spool %d after the link", linked_id);

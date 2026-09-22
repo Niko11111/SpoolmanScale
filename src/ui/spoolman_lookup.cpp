@@ -826,8 +826,9 @@ static uint32_t s_recheck_gap_ms = TAG_RECHECK_MS;
 // server side lookup, a handful of fields, no inventory scan and no /tag/scan,
 // so nothing is announced to a paired browser. Says nothing about which spool
 // it is - whoever gets a yes runs the normal lookup next.
-bool spoolmanTagResolves(const char* query, bool* out_unanswered) {
+bool spoolmanTagResolves(const char* query, bool* out_unanswered, int* out_spool_id) {
   if (out_unanswered) *out_unanswered = false;
+  if (out_spool_id) *out_spool_id = 0;
   if (!query || !query[0]) return false;
 
   // Only the fields the verification reads. The point of this pass is that it
@@ -856,7 +857,11 @@ bool spoolmanTagResolves(const char* query, bool* out_unanswered) {
     code = backendFindSpoolByNativeTag(cfg_spoolman_base, nu, doc, 5000, &filter, &err);
     if (code == 200 && !err) {
       for (JsonObjectConst cand : doc.as<JsonArrayConst>())
-        if (spoolMatchesTag(cand, query)) { hit = true; break; }
+        if (spoolMatchesTag(cand, query)) {
+          hit = true;
+          if (out_spool_id) *out_spool_id = cand["id"] | 0;
+          break;
+        }
     }
     if (!hit) { doc.clear(); err = DeserializationError::Ok; }
   }
@@ -869,7 +874,11 @@ bool spoolmanTagResolves(const char* query, bool* out_unanswered) {
       // Verified exactly: FilaMan's search is a substring match, so an
       // unverified hit would announce somebody else's spool.
       for (JsonObjectConst cand : doc.as<JsonArrayConst>())
-        if (spoolMatchesTag(cand, query)) { hit = true; break; }
+        if (spoolMatchesTag(cand, query)) {
+          hit = true;
+          if (out_spool_id) *out_spool_id = cand["id"] | 0;
+          break;
+        }
     }
   }
   if (out_unanswered) *out_unanswered = !hit && serverReachIsNetworkFailure(code);
