@@ -51,12 +51,11 @@
 #define TV_BTN_H        UI_TOUCH_MIN
 #define TV_BTN_W        ((TV_BOX_W - 3 * TV_PAD) / 2)
 
-// The format chip in the header, the More Info status chip's footprint and
-// place: the format is how the tag is written, not what the spool is, so it
-// sits apart from the swatch and the filament.
-#define TV_FMT_CHIP_W   150
-#define TV_FMT_CHIP_H   44
-#define TV_FMT_CHIP_Y   4
+// The format, on the left of the header where More Info keeps its status: it
+// is how the tag is written, not what the spool is, so it sits apart from the
+// swatch and the filament. As wide as the room left of the centred title.
+#define TV_FMT_W        150
+#define TV_FMT_CAP_Y    8
 
 // What the capability container reports for the three NTAG21x sizes: the NDEF
 // area, which is what tagCachedBytes() hands out, and which names the chip.
@@ -208,34 +207,20 @@ static bool isRealFormat(const TagInfo& i) {
          strcmp(i.fmt, "unsupported");
 }
 
-// Caption over value in a frame, the status chip's look from More Info.
-static void formatChip(lv_obj_t* hdr, const TagInfo& i) {
-  lv_obj_t* chip = lv_obj_create(hdr);
-  if (!chip) return;
-  lv_obj_set_size(chip, TV_FMT_CHIP_W, TV_FMT_CHIP_H);
-  lv_obj_set_pos(chip, TV_PAD, TV_FMT_CHIP_Y);
-  lv_obj_set_style_bg_color(chip, lv_color_hex(UI_COL_CHIP), 0);
-  lv_obj_set_style_border_color(chip, lv_color_hex(isRealFormat(i) ? UI_COL_ACCENT
-                                                                   : UI_COL_CAPTION), 0);
-  lv_obj_set_style_border_width(chip, 1, 0);
-  lv_obj_set_style_radius(chip, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_pad_all(chip, 0, 0);
-  lv_obj_clear_flag(chip, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_t* cap = lv_label_create(chip);
-  if (cap) {
-    lv_label_set_text(cap, T(STR_TW_OPT_FMT));
-    lv_obj_set_style_text_color(cap, lv_color_hex(UI_COL_CAPTION), 0);
-    lv_obj_set_style_text_font(cap, UI_FONT_CAPTION, 0);
-    lv_obj_align(cap, LV_ALIGN_CENTER, 0, -10);
-  }
-  lv_obj_t* val = lv_label_create(chip);
-  if (val) {
-    lv_label_set_text(val, formatText(i));
-    lv_obj_set_style_text_color(val, lv_color_hex(isRealFormat(i) ? UI_COL_ACCENT
-                                                                  : UI_COL_INK_SOFT), 0);
-    lv_obj_set_style_text_font(val, UI_FONT_SMALL, 0);
-    lv_obj_align(val, LV_ALIGN_CENTER, 0, 8);
-  }
+// Caption over value like every field on the card, and no frame: on this
+// device a frame with a fill is a button, and this cannot be pressed. Green
+// when the scale knows the format, quiet for blank, unknown and none, so the
+// header says at a glance whether the tag is one it understands.
+static void formatInfo(lv_obj_t* hdr, const TagInfo& i) {
+  caption(hdr, TV_PAD, TV_FMT_CAP_Y, T(STR_TW_OPT_FMT));
+  lv_obj_t* val = lv_label_create(hdr);
+  if (!val) return;
+  lv_label_set_text(val, formatText(i));
+  lv_obj_set_style_text_color(val, lv_color_hex(isRealFormat(i) ? UI_COL_ACCENT
+                                                                : UI_COL_INK_SOFT), 0);
+  lv_obj_set_style_text_font(val, UI_FONT_BODY, 0);
+  oneLine(val, TV_FMT_W, UI_FONT_BODY);
+  lv_obj_set_pos(val, TV_PAD, TV_FMT_CAP_Y + TV_VF);
 }
 
 static void buildHeader(lv_obj_t* box, const Shown& s) {
@@ -256,7 +241,7 @@ static void buildHeader(lv_obj_t* box, const Shown& s) {
     lv_obj_set_style_text_font(title, UI_FONT_BODY, 0);
     lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
   }
-  if (s.reader_ok && s.uid[0] && s.info.fmt[0]) formatChip(hdr, s.info);
+  if (s.reader_ok && s.uid[0] && s.info.fmt[0]) formatInfo(hdr, s.info);
 
   lv_obj_t* x = lv_btn_create(hdr);
   if (!x) return;
