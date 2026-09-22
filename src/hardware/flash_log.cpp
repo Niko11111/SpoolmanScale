@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "services/prefs_store.h"
+
 // ---- layout ---------------------------------------------------------
 //
 // A record is 128 bytes and 32 of them fill a 4 kB sector exactly. That is
@@ -66,6 +68,17 @@ static uint32_t s_clear_next = 0;
 
 static uint32_t s_erase_retry_at_ms = 0;
 static uint32_t s_erase_complained_ms = 0;
+
+// The first line the last clear left visible, kept in NVS. A clear hides by
+// sequence at once and erases for the next 512 loop passes. The hiding lived
+// in RAM only, so a restart inside that stretch let the boot find the sectors
+// not yet erased and show their lines again - very likely what brought every
+// line of the morning back on 21.09.2026, with two restarts after a clear.
+// With the boundary stored, what the erase did not reach stays hidden.
+// Sequences never restart at 0 for the same reason: the stored boundary has to
+// stay below every new line.
+#define CLEAR_SEQ_PREF_KEY "log_clr_seq"
+static uint32_t s_cleared_below = 0;
 
 static inline uint32_t recOffset(uint32_t rec) { return rec * REC_BYTES; }
 static inline uint32_t sectorOf(uint32_t rec)  { return rec / RECS_PER_SECTOR; }
@@ -144,7 +157,8 @@ static void findHead() {
   }
 
   if (!any) {                       // never written, or cleared and left empty
-    s_next_rec = 0; s_next_seq = 0; s_first_seq = 0; s_lapped = false;
+    s_next_rec = 0; s_lapped = false;
+    s_next_seq = s_first_seq = s_cleared_below;
     return;
   }
 
@@ -160,6 +174,8 @@ static void findHead() {
   }
   s_next_seq  = last_seq + 1;
   s_first_seq = low_seq;
+  if (s_first_seq < s_cleared_below) s_first_seq = s_cleared_below;
+  if (s_next_seq  < s_cleared_below) s_next_seq  = s_cleared_below;
   // Before the first lap the used sectors are exactly the ones up to the head;
   // afterwards every sector holds something except the one erased ahead.
   s_lapped = (non_empty > best_sector + 1);
@@ -178,6 +194,7 @@ bool flashLogBegin() {
     s_part = nullptr;
     return false;
   }
+  s_cleared_below = prefsGetUInt(CLEAR_SEQ_PREF_KEY, 0);
   findHead();
   // The sector in front of the head was very likely erased before the last
   // restart. Asking costs one read and saves erasing it a second time, which
@@ -252,7 +269,9 @@ void flashLogTick() {
     eraseSector(s_clear_next);
     if (++s_clear_next >= SECTOR_COUNT) {
       s_clearing = false;
-      s_next_rec = 0; s_next_seq = 0; s_first_seq = 0;
+      // The sequence carries on: the boundary in NVS names it, and a line
+      // numbered below it would be hidden after the next restart.
+      s_next_rec = 0; s_first_seq = s_next_seq;
       s_lapped = false; s_erased_sector = NO_SECTOR;
       Serial.println("Flash log: cleared");
     }
@@ -282,6 +301,11 @@ void flashLogClear() {
   s_clearing   = true;
   s_clear_next = 0;
   s_first_seq  = s_next_seq;   // hides everything from the reader at once
+  // Stored before the first sector is erased, so a restart at any point of
+  // the erase keeps hiding what it has not reached yet.
+  s_cleared_below = s_first_seq;
+  if (!prefsPutUInt(CLEAR_SEQ_PREF_KEY, s_cleared_below))
+    Serial.println("Flash log: clear boundary not stored, a restart before the erase ends brings lines back");
 }
 
 bool flashLogClearBusy() { return s_clearing; }
