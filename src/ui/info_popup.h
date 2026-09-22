@@ -12,9 +12,11 @@
 //
 // The same modal also reports the outcome of something the user set in motion,
 // and that has to look different from a help text or it reads as an
-// explanation rather than an answer. Those two tones carry a glyph, take the
-// colours of the question that preceded them, and end in OK rather than Back -
-// there is nothing to go back to.
+// explanation rather than an answer. Those two tones stand on the card of the
+// question that preceded them (UI_CARD_* in theme.h), carry a glyph, and end
+// in OK rather than Back - there is nothing to go back to. A success counts
+// down in its OK button and closes itself after a few seconds; a warning stays
+// until OK is pressed.
 enum InfoPopupTone : uint8_t {
   INFO_PLAIN = 0,   // help text behind a settings row
   INFO_WARN,        // something did not work
@@ -23,8 +25,9 @@ enum InfoPopupTone : uint8_t {
 
 void showInfoPopup(int title_id, int text_id, uint8_t tone = INFO_PLAIN);
 
-// True while one is on screen. It carries a button and no countdown, so it is
-// waiting for the user exactly like the questions are - see uiModalWaiting().
+// True while one is on screen. It carries a button, so it is waiting for the
+// user exactly like the questions are - see uiModalWaiting(). A success that
+// counts down still counts: it is read during those seconds.
 bool isInfoPopupOpen();
 
 // Ready-made LV_EVENT_CLICKED handler. Attach it to the help button that

@@ -70,3 +70,18 @@
 #define UI_POPUP_W             400  // a two button question
 #define UI_POPUP_BTN_W         170
 #define UI_POPUP_BTN_H         56
+
+// ---- the card: question, waiting, result ---------------------
+// One footprint for the three stages of something the user set off: the
+// question, the card that stands while it runs, and the result. Measured off
+// the tag write question (BOX_H and BTN_Y in tag_write_popup.cpp), so each
+// stage appears exactly where the one before stood and only its contents
+// change. The row of answers is where the waiting card's bar runs and where
+// the result's OK button counts down.
+#define UI_CARD_H              260
+#define UI_CARD_ICON_Y          14
+#define UI_CARD_TITLE_Y         52
+#define UI_CARD_TEXT_Y          98
+#define UI_CARD_TEXT_PAD        40   // what the text stays clear of, left and right together
+#define UI_CARD_ROW_X           12   // the answer row's inset, left and right
+#define UI_CARD_ROW_Y          186   // its top, UI_POPUP_BTN_H high

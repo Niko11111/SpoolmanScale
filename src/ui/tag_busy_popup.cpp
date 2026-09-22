@@ -9,16 +9,12 @@
 #include "services/tag_write.h"
 #include "ui/theme.h"
 
-// The width of every question, so the card stands where the question stood.
-// Lower than one: it has no buttons to make room for.
-#define BUSY_BOX_H      190
-#define BUSY_ICON_Y      16
-#define BUSY_TITLE_Y     56
-#define BUSY_HINT_Y      98
-#define BUSY_TEXT_PAD    40   // what the two lines stay clear of, left and right together
-#define BUSY_BAR_W      320
+// The card every question and every result uses, so it stands where the
+// question stood and the result takes its place without moving. The bar runs
+// in the row of answers, as wide as the OK button that replaces it.
+#define BUSY_BAR_W      (UI_POPUP_W - 2 * UI_CARD_ROW_X)
 #define BUSY_BAR_H       10
-#define BUSY_BAR_Y      158
+#define BUSY_BAR_Y      (UI_CARD_ROW_Y + (UI_POPUP_BTN_H - BUSY_BAR_H) / 2)
 // How often the bar is redrawn at most. A page takes about 30 ms and a redraw
 // a few, so following every page would make the write one tenth longer for
 // steps nobody can see.
@@ -55,7 +51,7 @@ void tagBusyShow(bool erase) {
   lv_obj_clear_flag(scr_tag_busy, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *box = lv_obj_create(scr_tag_busy);
-  lv_obj_set_size(box, UI_POPUP_W, BUSY_BOX_H);
+  lv_obj_set_size(box, UI_POPUP_W, UI_CARD_H);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
   lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_POPUP_BORDER), 0);
@@ -68,7 +64,7 @@ void tagBusyShow(bool erase) {
   lv_label_set_text(icon, LV_SYMBOL_REFRESH);
   lv_obj_set_style_text_color(icon, lv_color_hex(UI_COL_WARN), 0);
   lv_obj_set_style_text_font(icon, UI_FONT_ICON, 0);
-  lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, BUSY_ICON_Y);
+  lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, UI_CARD_ICON_Y);
 
   lv_obj_t *title = lv_label_create(box);
   lv_label_set_text(title, T(erase ? STR_TW_BUSY_ERASE : STR_TW_BUSY_WRITE));
@@ -76,8 +72,8 @@ void tagBusyShow(bool erase) {
   lv_obj_set_style_text_font(title, UI_FONT_HEADLINE, 0);
   lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(title, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(title, UI_POPUP_W - BUSY_TEXT_PAD);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, BUSY_TITLE_Y);
+  lv_obj_set_width(title, UI_POPUP_W - UI_CARD_TEXT_PAD);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, UI_CARD_TITLE_Y);
 
   lv_obj_t *hint = lv_label_create(box);
   lv_label_set_text(hint, T(STR_TW_BUSY_HINT));
@@ -85,8 +81,8 @@ void tagBusyShow(bool erase) {
   lv_obj_set_style_text_font(hint, UI_FONT_BODY, 0);
   lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(hint, UI_POPUP_W - BUSY_TEXT_PAD);
-  lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, BUSY_HINT_Y);
+  lv_obj_set_width(hint, UI_POPUP_W - UI_CARD_TEXT_PAD);
+  lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, UI_CARD_TEXT_Y);
 
   // Empty until the first page is on the tag. A write fetches the spool from
   // the server first, and for that part there is nothing to count.
