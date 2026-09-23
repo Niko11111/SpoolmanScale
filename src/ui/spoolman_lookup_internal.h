@@ -66,7 +66,6 @@ enum LookupStep : uint8_t {
 
 // ---- in spoolman_lookup.cpp ------------------------------------------------
 
-extern bool          s_scan_deferred;
 extern bool          s_verdict_unknown;
 extern ShadowVerdict s_shadow;
 

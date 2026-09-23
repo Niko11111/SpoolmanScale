@@ -1863,6 +1863,11 @@ void appLoop() {
                      scale_weight_g, loc_weight_ref);
             } else {
               ntag_handled_uid[0] = '\0';
+              // The spool left before its verdict was in: nothing to paint it
+              // on. The inventory still comes in for cache and index. Not in
+              // the branch above, where the spool is still there and nothing
+              // would look it up again.
+              lookupAbandon();
             }
             TagSeen::forget();
             link_popup_dismissed = false;   // Reset flag → next spool can show popup

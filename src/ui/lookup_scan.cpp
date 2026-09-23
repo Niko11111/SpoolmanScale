@@ -239,21 +239,10 @@ void lookupArchiveBegin(const LookupCtx& c) {
   // Second call with allow_archived=true, on the worker like the active list
   // and into PSRAM like it.
   buildArchiveFilter(s_filter2);
-  // The other half of the six seconds, and stood aside for the same reason.
-  // An archived spool is a rare answer to begin with; a question nobody can
-  // answer is worse than finding it one placement later.
-  //
-  // Not a return: the tail below is what sets sm_found and paints "not in
-  // Spoolman", and skipping it would leave the screen showing the spool
-  // before. A code of 0 falls through to exactly that, which is also the
-  // honest answer - the cheap lookup has already missed, and
-  // spoolmanRecheckTick() corrects it within seconds if it was wrong.
-  const bool skip_archived = uiModalWaiting();
-  if (skip_archived)
-    logSD("Backend: archived pass stood aside, a question is waiting on screen");
-  // Nor after the index has answered: what it holds came out of the archive
-  // as much as out of the active list.
-  if (skip_archived || c.index_unknown) {
+  // Not after the index has answered: what it holds came out of the archive
+  // as much as out of the active list. Then a code of 0 falls through to the
+  // tail, which is what sets sm_found and paints "not in Spoolman".
+  if (c.index_unknown) {
     lookupResolveArchive(s_lk, nullptr, nullptr);
     finishLookup();
     return;
@@ -345,8 +334,13 @@ void lookupScanTick() {
            LOOKUP_SLOT_WAIT_MS / 1000);
     const WantStage stage = s_want;
     s_want = WANT_NONE;
-    if (stage == WANT_ARCHIVE) lookupResolveArchive(s_lk, nullptr, nullptr);
-    else                       paintLookupFailure(0, STR_API_ERROR);
+    if (stage == WANT_ARCHIVE) {
+      lookupResolveArchive(s_lk, nullptr, nullptr);
+      // The archive was never read: "not found" without it is no verdict.
+      s_verdict_unknown = false;
+    } else {
+      paintLookupFailure(0, STR_API_ERROR);
+    }
     finishLookup();
     return;
   }
@@ -899,8 +893,6 @@ void lookupResolveArchive(const LookupCtx& c, JsonDocument* doc2p,
   { char nb[40]; backendText(T(STR_NOT_IN_SPOOLMAN), nb, sizeof(nb)); lv_label_set_text(lbl_spoolman_weight, nb); }
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
   sm_found = false;
-  // A scan that stood aside for a question lands here too, with nothing
-  // searched. That is not a verdict.
-  s_verdict_unknown = !s_scan_deferred;
+  s_verdict_unknown = true;
   updateLinkButton();
 }

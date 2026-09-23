@@ -761,11 +761,6 @@ void scheduleRescan(const char* uid, const char* format) {
 // plain uid, and g_tag only carries the former reliably.
 static char s_last_query[48] = {0};
 
-// Set when a lookup skipped its inventory scan because a question was waiting
-// to be answered. Declared here so the tick below and querySpoolman() share
-// one flag rather than each keeping half the story.
-bool s_scan_deferred = false;
-
 // Whether the last lookup ended in a real "not in the inventory", the only
 // answer that makes a later hit a binding made from outside. A lookup that
 // failed on the way, or withheld its verdict over a partial list, says nothing
@@ -859,18 +854,6 @@ void spoolmanRecheckTick() {
   // again. Probing it here as well only added more 5 s stalls to the loop.
   if (!sm_reachable) return;
   if (isSpoolFlowIdInputOpen()) return;   // the user is busy picking a spool
-
-  // A lookup that stood aside for a question owes one full pass. Forgetting
-  // the markers is how that is asked for: the scan loop then treats the tag on
-  // the pad as new and runs the whole lookup, scan included. Done before the
-  // cheap probe below rather than instead of it, because this costs nothing
-  // and the probe costs a request.
-  if (s_scan_deferred && !uiModalWaiting()) {
-    s_scan_deferred = false;
-    logSD("Backend: the question is gone, asking for the full lookup again");
-    tagLookupForget();
-    return;
-  }
 
   // `| 1` keeps a probe that ends at millis() == 0 from reading as "not seen".
   if (!s_recheck_end_ms) { s_recheck_end_ms = millis() | 1; return; }
@@ -1108,11 +1091,6 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   s_lost_connection = false;
   s_recheck_end_ms = 0;
   s_recheck_gap_ms = TAG_RECHECK_MS;
-  // Every lookup settles for itself whether it owes a scan. Left standing from
-  // the one before, the marker made spoolmanRecheckTick() order a second full
-  // lookup for a tag that had just had one, inventory and archive included -
-  // and "not found" after a complete scan counted as no verdict.
-  s_scan_deferred = false;
   s_shadow = SHADOW_NOT_ASKED;
   // A 4-byte MIFARE tag is looked up by its UID through the same call, so
   // the log names what was actually sent.
@@ -1486,13 +1464,11 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   bool scanned_inventory = false;   // doc holds the whole inventory, not one hit
   InventoryStamp stamp = { -1, 0 };
   bool have_stamp = false;
-  if (!have_result && !uiModalWaiting() && (sm_reachable || server_answered))
+  if (!have_result && (sm_reachable || server_answered))
     have_stamp = (backendInventoryStamp(cfg_spoolman_base, &stamp) == 200);
 
   // What the uid index says, asked before the scan below replaces it. Only
-  // where a scan is coming: while a question is on screen it stands aside,
-  // spoolmanRecheckTick() orders the lookup again once the question is gone,
-  // and that lookup lands here.
+  // where a scan is coming.
   //
   // Two rules keep the index out altogether. A search that did not answer:
   // the scan is the net under it, and the index only knows what the last scan
@@ -1501,36 +1477,14 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   // a field no search covers, so a spool taken out of the AMS and put on the
   // scale within the two minutes would be called unknown.
   bool index_unknown = false;       // the index answered, no scan is owed
-  if (!have_result && !uiModalWaiting())
+  if (!have_result)
     index_unknown = askUidIndex(tray_uuid, searches_answered, have_stamp ? &stamp : nullptr);
 
-  // Not while a question is waiting to be answered. This is the only part of a
-  // lookup long enough to matter: 249 active spools plus 254 including the
-  // archive, three pages each, six seconds in which the touch panel is not
-  // read at all - which is what made the erase question impossible to answer.
-  // See uiModalWaiting() for why pumping LVGL instead is not an option.
-  //
-  // Standing aside costs nothing that is not recovered: spoolmanRecheckTick()
-  // keeps asking the cheap server side lookup every few seconds while an
-  // unknown tag lies on the pad, and clears the marker on a hit.
-  // Only a scan that was owed can stand aside. With a spool already found by
-  // one of the fast lookups there is none to skip, and saying otherwise left
-  // the marker set with nobody to clear it: spoolmanRecheckTick() does not
-  // run while a spool is on screen. It then fired at the next unknown tag,
-  // right after that tag's own complete lookup - 5.4 s instead of 2.4 on
-  // Spoolman, 11.1 s instead of 5.5 on FilaMan, measured.
-  const bool defer_scan = !have_result && uiModalWaiting();
-  if (defer_scan) {
-    // Remembered, not just skipped. The cheap lookup has already missed, so a
-    // spool findable only by the scan - a uid in FilaMan's custom_fields, or
-    // in an extra field nobody agreed on - would otherwise read as unknown
-    // until the tag is lifted and put back. spoolmanRecheckTick() makes it
-    // good as soon as the screen is free again.
-    s_scan_deferred = true;
-    logSD("Backend: full scan stood aside, a question is waiting on screen");
-  }
-
-  scanned_inventory = (!have_result && !defer_scan && !index_unknown);
+  // No longer stood aside while a question is on screen: the scan runs on the
+  // worker, and the question can be answered while it does. Standing aside
+  // made the lookup run twice, once without the scan and once more when the
+  // question was gone.
+  scanned_inventory = (!have_result && !index_unknown);
 
   LookupCtx c;
   snprintf(c.tray, sizeof(c.tray), "%s", tray_uuid);
