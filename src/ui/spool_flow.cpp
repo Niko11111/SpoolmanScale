@@ -24,6 +24,9 @@
 #include "services/tag_uid.h"
 #include "services/user_options.h"
 #include "services/backend_api.h"
+#include "services/backend_job.h"
+#include "app/backend_switch.h"
+#include "ui/link_wait_card.h"
 #include "services/tag_write.h"
 #include "ui/confirm_popup.h"
 #include "ui/info_popup.h"
@@ -268,6 +271,11 @@ static bool link_id_lookup_is_bambu = false;
 bool link_material_ignored = false;
 // The list on screen came out of services/spool_cache rather than off the wire.
 static bool link_list_from_cache = false;
+// Whether the list on screen gets the strip with its time and "Reload": one
+// out of the cache, and one just downloaded into it. Only the second used to
+// be missing, so a reload took the button away with it - and with it the way
+// to ask again after a change in the backend that still did not show.
+static bool link_list_reloadable = false;
 // One line on top of the next spool list, then cleared: a row was tapped, the
 // server said something else about that spool, and the list was built again.
 static bool link_list_changed_note = false;
@@ -544,7 +552,23 @@ static LinkFilterVerdict linkFilterVerdict(JsonObjectConst spool, bool is_bambu,
   return LINK_KEEP;
 }
 
-bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool archived_only) {
+static bool linkFetchBuild(JsonDocument& doc, bool from_cache, bool is_bambu,
+                           const char* material_filter, bool archived_only);
+static void linkFetchTryStart();
+
+// A link list on its way from the backend worker, see fetchAllSpoolsForLink().
+enum LinkFetchState : uint8_t { LF_IDLE, LF_WAIT_SLOT, LF_LOADING };
+static LinkFetchState s_lf_state      = LF_IDLE;
+static bool           s_lf_cancelled  = false;
+static bool           s_lf_is_bambu   = false;
+static char           s_lf_material[24] = "";
+static bool           s_lf_archived   = false;
+static bool           s_lf_may_cache  = false;
+static bool           s_lf_have_stamp = false;
+static InventoryStamp s_lf_stamp      = { -1, 0 };
+static JsonDocument   s_lf_filter;
+
+LinkFetch fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool archived_only) {
   crumbSet("link fetch");
   // Free any previous allocation
   linkSpoolsFree();
@@ -554,7 +578,8 @@ bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   // reason and say so.
   link_material_ignored = false;
   link_list_from_cache  = false;
-  if (!wifi_ok) return false;
+  link_list_reloadable  = false;
+  if (!wifi_ok) return LINK_FETCH_FAILED;
 
   // Settled here, once, for every decision the flow makes afterwards. Offering
   // an already bound spool the scale then could not append to would put the
@@ -616,7 +641,7 @@ bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
     // seconds later and behind a loading overlay.
     if (serverReachIsNetworkFailure(sc)) {
       serverReachNote(sc, true);
-      return false;
+      return LINK_FETCH_FAILED;
     }
     have_stamp = (sc == 200);
     // The placeholder of a bound spool goes under the first tag field. Which
@@ -625,31 +650,36 @@ bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
       from_cache = spoolCacheToJson(doc, tagFieldSpec(0).key);
   }
 
-  // ---- or off the wire --------------------------------------------------------
+  // ---- or off the wire, on the backend worker -------------------------------
+  //
+  // The loop keeps running while it comes in: the card counts the kilobytes
+  // and offers Cancel. linkFetchTick() takes the list when it is in.
   if (!from_cache) {
-    // Up before the blocking work, and painted before this returns. The reader
-    // below moves it along, so the wait stops looking like a hang.
-    loadingOverlayShow(T(STR_LOADING_SPOOLS));
-
-    DeserializationError err = DeserializationError::Ok;
-    int code;
-    { // The clocks stop with the loop - see httpStallTotalMs(). A scope so no
-      // return can leave the bracket open.
-      HttpStall stall(loadingOverlayProgress);
-      code = backendGetSpoolListJson(cfg_spoolman_base, archived_only, doc, 8000, &filterL, &err);
-    }
-    if (code != 200 || err) {
-      loadingOverlayHide();
-      serverReachNote(code, true);
-      return false;
-    }
-
-    // Not a list FilaMan gave up on halfway: its stamp would vouch for spools
-    // that were never read.
-    if (may_cache && !backendLastListPartial())
-      spoolCacheFill(doc.as<JsonArrayConst>(), spoolHasAnyTag, have_stamp ? &stamp : nullptr);
+    s_lf_filter.set(filterL.as<JsonVariantConst>());
+    s_lf_is_bambu   = is_bambu;
+    snprintf(s_lf_material, sizeof(s_lf_material), "%s", material_filter ? material_filter : "");
+    s_lf_archived   = archived_only;
+    s_lf_may_cache  = may_cache;
+    s_lf_have_stamp = have_stamp;
+    s_lf_stamp      = stamp;
+    s_lf_cancelled  = false;
+    s_lf_state      = LF_WAIT_SLOT;
+    linkWaitCardShow();
+    linkFetchTryStart();
+    return LINK_FETCH_PENDING;
   }
+  return linkFetchBuild(doc, true, is_bambu, material_filter, archived_only)
+           ? LINK_FETCH_DONE : LINK_FETCH_FAILED;
+}
+
+// Everything after the list is in, whichever way it came: the two filter
+// passes, the rows in PSRAM, the sort.
+static bool linkFetchBuild(JsonDocument& doc, bool from_cache, bool is_bambu,
+                           const char* material_filter, bool archived_only) {
   link_list_from_cache = from_cache;
+  // A download may be kept exactly when a list out of the cache could have
+  // been served: not the archive, not the copy flow.
+  link_list_reloadable = from_cache || s_lf_may_cache;
   // The line that says afterwards whether the cache was hit.
   logSDf("link fetch: list %s", from_cache ? "from cache" : "downloaded");
 
@@ -811,8 +841,185 @@ bool fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool arch
   return true;
 }
 
+// ============================================================
+//  THE LINK LIST ON THE BACKEND WORKER
+//
+//  What opens once the list is in depends on the way into it, so each caller
+//  hands that over instead of acting on a return value: the list may come in
+//  passes later. Cancel on the card ends the wait, not the download - the
+//  list still comes in and fills the spool cache, so the next "Link" is
+//  instant.
+// ============================================================
+// The link list always had eight seconds.
+#define LINK_FETCH_TIMEOUT_MS  8000
+
+enum LinkFetchNext : uint8_t {
+  LF_NEXT_NONE = 0,
+  LF_NEXT_DIRECT_LIST,   // Flow A, a Bambu tag: the list itself
+  LF_NEXT_VENDOR_LIST,   // Flow B: the three step picker
+  LF_NEXT_RELOAD,        // the list on screen, built again at its filter level
+  LF_NEXT_COPY_VENDOR    // the copy flow through the picker
+};
+
+static void closeLinkOverlays();
+
+static LinkFetchNext s_lf_next = LF_NEXT_NONE;
+// The filter level of a reload, copied: showFilteredSpoolList() writes into
+// the buffers they come from.
+static char s_lf_vendor[sizeof(link_list_vendor)]     = "";
+static char s_lf_mat[sizeof(link_list_mat)]           = "";
+static char s_lf_mat_full[sizeof(link_list_mat_full)] = "";
+// "Link" pressed again while a cancelled list is still coming in: run once it
+// is in, which then finds it in the cache.
+static bool          s_lf_queued          = false;
+static bool          s_lf_queued_bambu    = false;
+static char          s_lf_queued_mat[sizeof(s_lf_material)] = "";
+static bool          s_lf_queued_archived = false;
+
+static void linkFetchFinish(bool ok) {
+  const LinkFetchNext next = s_lf_next;
+  s_lf_next = LF_NEXT_NONE;
+  switch (next) {
+    case LF_NEXT_DIRECT_LIST:
+      if (ok) showFilteredSpoolList("", "", "");
+      break;
+    case LF_NEXT_VENDOR_LIST:
+      if (ok) showVendorList();
+      break;
+    case LF_NEXT_RELOAD:
+      // No list, and the pickers underneath were built from the one that is
+      // gone. The flow ends here rather than on screens that point into
+      // nothing.
+      if (ok) {
+        showFilteredSpoolList(s_lf_vendor, s_lf_mat, s_lf_mat_full);
+      } else {
+        link_list_changed_note = false;
+        closeLinkOverlays();
+      }
+      break;
+    case LF_NEXT_COPY_VENDOR:
+      // Without a picker there is no copy flow either. Left set, the flag
+      // would turn the next plain link through the same picker into a copy.
+      if (ok) showVendorList();
+      else    copy_flow_via_list = false;
+      break;
+    default:
+      break;
+  }
+}
+
+// Loads the list and opens `next` on it: at once when it came out of the
+// cache, from linkFetchTick() when the worker had to fetch it. A list that
+// never arrived is not an empty one: the popup says why, and nothing opens.
+static void linkFetchRun(bool is_bambu, const char* material_filter, bool archived_only,
+                         LinkFetchNext next) {
+  if (s_lf_state == LF_LOADING && s_lf_cancelled) {
+    s_lf_queued          = true;
+    s_lf_queued_bambu    = is_bambu;
+    snprintf(s_lf_queued_mat, sizeof(s_lf_queued_mat), "%s", material_filter ? material_filter : "");
+    s_lf_queued_archived = archived_only;
+    s_lf_next            = next;
+    linkWaitCardShow();
+    return;
+  }
+  if (s_lf_state != LF_IDLE) return;   // the card is up, it swallows the second tap
+  s_lf_next = next;
+  const LinkFetch f = fetchAllSpoolsForLink(is_bambu, material_filter, archived_only);
+  if (f != LINK_FETCH_PENDING) linkFetchFinish(f == LINK_FETCH_DONE);
+}
+
+// The worker is free: take the list from the cache if a scan has just filled
+// it, otherwise fetch it. Retried on every pass while it cannot start.
+static void linkFetchTryStart() {
+  if (s_lf_state != LF_WAIT_SLOT) return;
+  if (backendListBusy() || backendJobState() != BJS_IDLE) return;
+
+  // What held the worker was most likely this very inventory: the scan of the
+  // unknown tag on the pad, which fills the spool cache as it comes in.
+  if (s_lf_may_cache && spoolCacheUsable(s_lf_have_stamp ? &s_lf_stamp : nullptr)) {
+    SpiRamAllocator psram_alloc;
+    JsonDocument doc(&psram_alloc);
+    if (spoolCacheToJson(doc, tagFieldSpec(0).key)) {
+      logSD("link fetch: list from the cache a scan has just filled");
+      s_lf_state = LF_IDLE;
+      linkWaitCardHide();
+      linkFetchFinish(linkFetchBuild(doc, true, s_lf_is_bambu, s_lf_material, s_lf_archived));
+      return;
+    }
+  }
+  if (!backendJobStartList(s_lf_archived, &s_lf_filter, LINK_FETCH_TIMEOUT_MS, 1, 0)) return;
+  s_lf_state = LF_LOADING;
+}
+
+static void linkFetchTick() {
+  if (s_lf_state == LF_IDLE) return;
+
+  if (linkWaitCardCancelTake()) {
+    linkWaitCardHide();
+    if (s_lf_state == LF_LOADING && !s_lf_cancelled) {
+      logSD("link fetch: cancelled, the list still comes in for the cache");
+      s_lf_cancelled = true;
+    } else if (s_lf_state == LF_WAIT_SLOT) {
+      logSD("link fetch: cancelled while waiting for the worker");
+      s_lf_state = LF_IDLE;
+    } else {
+      s_lf_queued = false;   // the second "Link", cancelled as well
+    }
+    linkFetchFinish(false);
+    return;
+  }
+
+  // Whichever list is coming in, this one or the scan it waits for.
+  linkWaitCardBytes(backendJobBytes());
+  if (s_lf_state == LF_WAIT_SLOT) { linkFetchTryStart(); return; }
+  if (backendJobState() != BJS_DONE) return;
+
+  const BackendListResult r = backendJobResult();
+  JsonDocument& doc = backendJobDoc();
+  const bool cancelled = s_lf_cancelled;
+  s_lf_state     = LF_IDLE;
+  s_lf_cancelled = false;
+
+  if (r.gen != backendGeneration()) {
+    backendJobTake();
+    logSD("link fetch: the list is from before a backend switch, dropped");
+    s_lf_queued = false;
+    linkWaitCardHide();
+    linkFetchFinish(false);
+    return;
+  }
+  const bool ok = (r.code == 200 && !r.err);
+  // Not a list FilaMan gave up on halfway: its stamp would vouch for spools
+  // that were never read.
+  if (ok && s_lf_may_cache && !r.partial)
+    spoolCacheFill(doc.as<JsonArrayConst>(), spoolHasAnyTag,
+                   s_lf_have_stamp ? &s_lf_stamp : nullptr);
+
+  if (cancelled) {
+    backendJobTake();
+    if (s_lf_queued) {
+      s_lf_queued = false;
+      const LinkFetchNext next = s_lf_next;
+      linkWaitCardHide();
+      linkFetchRun(s_lf_queued_bambu, s_lf_queued_mat, s_lf_queued_archived, next);
+    }
+    return;
+  }
+
+  linkWaitCardHide();
+  if (!ok) {
+    backendJobTake();
+    serverReachNote(r.code, true);
+    linkFetchFinish(false);
+    return;
+  }
+  const bool built = linkFetchBuild(doc, false, s_lf_is_bambu, s_lf_material, s_lf_archived);
+  backendJobTake();
+  linkFetchFinish(built);
+}
+
 // Legacy wrapper for compatibility
-void fetchUnlinkedSpools() { fetchAllSpoolsForLink(false, ""); }
+void fetchUnlinkedSpools() { linkFetchRun(false, "", false, LF_NEXT_NONE); }
 
 // ============================================================
 //  A ROW OUT OF THE CACHE IS READ AGAIN BEFORE IT IS USED
@@ -2348,7 +2555,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
 
   // Scrollable list - full height below header
   lv_obj_t *list = lv_obj_create(scr_link_spools);
-  lv_obj_set_size(list, 460, link_list_from_cache ? LINK_LIST_H - LINK_STRIP_H : LINK_LIST_H);
+  lv_obj_set_size(list, 460, link_list_reloadable ? LINK_LIST_H - LINK_STRIP_H : LINK_LIST_H);
   lv_obj_set_pos(list, 10, 56);
   lv_obj_set_style_bg_color(list, lv_color_hex(0x0a1020), 0);
   lv_obj_set_style_border_width(list, 0, 0);
@@ -2369,7 +2576,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   // current, which would need a tick and a pointer to a label whose life hangs
   // on this screen. Every list screen is built anew, so it is right whenever
   // the list comes up, which is when someone reads it.
-  if (link_list_from_cache) {
+  if (link_list_reloadable) {
     const int strip_y = 56 + LINK_LIST_H - LINK_STRIP_H;
 
     const time_t at = spoolCacheFilledAt();
@@ -4178,18 +4385,16 @@ static void linkReloadSpoolList() {
   // The rows hold indexes into the array the fetch is about to free.
   if (scr_link_spools) { lv_obj_del(scr_link_spools); scr_link_spools = nullptr; }
 
-  if (!fetchAllSpoolsForLink(link_flow_is_bambu, link_flow_is_bambu ? g_tag.material : "")) {
-    // No list, and the pickers underneath were built from the one that is
-    // gone. The fetch has said why; the flow ends here rather than on screens
-    // that point into nothing.
-    link_list_changed_note = false;
-    closeLinkOverlays();
-    return;
-  }
-  showFilteredSpoolList(vendor, mat, mat_full);
+  memcpy(s_lf_vendor,   vendor,   sizeof(s_lf_vendor));
+  memcpy(s_lf_mat,      mat,      sizeof(s_lf_mat));
+  memcpy(s_lf_mat_full, mat_full, sizeof(s_lf_mat_full));
+  linkFetchRun(link_flow_is_bambu, link_flow_is_bambu ? g_tag.material : "", false,
+               LF_NEXT_RELOAD);
 }
 
 void handleSpoolFlowDeferredActions() {
+  // A link list on its way from the backend worker.
+  linkFetchTick();
   // First, so nothing below builds on top of an overlay that is already dead.
   // closeLinkOverlays() deletes exactly the nine screens hidden there and frees
   // the array again, which is a no-op the second time around.
@@ -4298,10 +4503,9 @@ void handleSpoolFlowDeferredActions() {
     // Load and pre-filter spools, then start the appropriate flow.
     // A list that never arrived is not an empty one: the popup says why, and
     // the picker is not opened on nothing that reads as "no spools".
-    if (fetchAllSpoolsForLink(link_flow_is_bambu, link_flow_is_bambu ? g_tag.material : "")) {
-      if (link_flow_is_bambu) showFilteredSpoolList("", "", "");   // Flow A: direct list
-      else                    showVendorList();                    // Flow B: 3-step
-    }
+    linkFetchRun(link_flow_is_bambu, link_flow_is_bambu ? g_tag.material : "", false,
+                 link_flow_is_bambu ? LF_NEXT_DIRECT_LIST     // Flow A: direct list
+                                    : LF_NEXT_VENDOR_LIST);   // Flow B: 3-step
   }
   if (copy_fetch_pending) {
     copy_fetch_pending = false;
@@ -4319,10 +4523,7 @@ void handleSpoolFlowDeferredActions() {
       link_selected_material[0] = 0;
       link_selected_material_full[0] = 0;
       link_stage3_shown = false;
-      // Without a picker there is no copy flow either. Left set, the flag
-      // would turn the next plain link through the same picker into a copy.
-      if (fetchAllSpoolsForLink(false, "", copy_fetch_archived)) showVendorList();
-      else copy_flow_via_list = false;
+      linkFetchRun(false, "", copy_fetch_archived, LF_NEXT_COPY_VENDOR);
     }
   }
   if (copy_create_pending) {
