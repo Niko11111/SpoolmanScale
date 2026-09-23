@@ -603,6 +603,7 @@ static String spoolJson() {
 
 static void routes(WebServer &srv) {
   srv.on("/api/tag/dump", HTTP_GET, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
     String j = "{\"uid\":\"" + jsonEsc(tagCachedUid()) + "\",\"pages\":[";
     uint8_t d[4];
     for (int pg = 0; pg < 135; pg++) {
