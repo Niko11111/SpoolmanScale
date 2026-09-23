@@ -315,6 +315,7 @@ static String body() {
          "function renderMatchedSpool(el){if(!el)return;"
          "const bName=tgBackend||'Backend';"
          "const h=cardHead('Database Record','Source: '+esc(bName));"
+         "if(!tgUid){el.innerHTML=h+'<div class=\"hint\">No spool on scale</div>';return;}"
          "const m=tgMatched;"
          "if(!m||!m.found){el.innerHTML=h+'<div class=\"hint\">Tag not linked to any spool in '+esc(bName)+'</div>';return;}"
          "const id=m.url?'<a class=\"tglink\" href=\"'+esc(m.url)+'\" target=\"_blank\" rel=\"noopener\">#'"
@@ -558,7 +559,7 @@ static String tagLinkMessageLocal() {
 // it is in RAM already: the page asks every three seconds and must not cost
 // the backend a request each time.
 static String spoolJson() {
-  if (!sm_found || sm_id <= 0) return String("{\"found\":false}");
+  if (!tag_present || !sm_found || sm_id <= 0) return String("{\"found\":false}");
 
   char url[160];
   backendSpoolPageUrl(sm_id, url, sizeof(url));
