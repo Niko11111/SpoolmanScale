@@ -181,3 +181,19 @@ STR_WIFI_ROW_GATEWAY	14	136	NEVER	src/ui/wifi_setup_screen.cpp:679 info row labe
 # x=432, 4 px of air each side.
 STR_LANG_SCREEN_TITLE	18	376	NEVER	src/ui/language_screen.cpp:89 centred title, buttons at 4-48 and 432-476
 STR_KEY_DEL	18	128	NEVER	src/ui/ams_assign_screen.cpp:126 136 px number pad key, -8 air (same key in drying_reminder_screen.cpp and web_screen.cpp)
+# Added with the French drafts of v0.8.0-beta.52, read off the code. A draft
+# wider than German and English needs its widget here, or check fails.
+STR_TV_UID	12	218	NEVER	src/ui/tag_view.cpp:299 caption of a TV_CW cell (218 px)
+STR_TV_CHIP	12	218	NEVER	src/ui/tag_view.cpp:300 caption of a TV_CW cell (218 px)
+STR_TV_FMT_BLANK	16	150	NEVER	src/ui/tag_view.cpp:222 format in the header, oneLine TV_FMT_W
+STR_TV_FMT_UNKNOWN	16	150	NEVER	src/ui/tag_view.cpp:222 format in the header, oneLine TV_FMT_W
+STR_TV_FMT_NONE	16	150	NEVER	src/ui/tag_view.cpp:222 format in the header, oneLine TV_FMT_W
+STR_TV_NOSPOOL	16	197	NEVER	src/ui/tag_view.cpp:376 button label, oneLine TV_BTN_W - 2 * TV_PAD
+STR_TV_TOOSMALL	16	197	NEVER	src/ui/tag_view.cpp:376 button label, oneLine TV_BTN_W - 2 * TV_PAD
+STR_TV_WRITE	16	197	NEVER	src/ui/tag_view.cpp:376 button label with a spool id, oneLine TV_BTN_W - 2 * TV_PAD
+STR_TV_ERASE_TITLE	20	360	NEVER	src/ui/tag_write_popup.cpp:163 question title, BOX_W - 40
+STR_TW_BUSY_WRITE	20	360	NEVER	src/ui/tag_busy_popup.cpp:70 card title, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TW_BUSY_ERASE	20	360	NEVER	src/ui/tag_busy_popup.cpp:70 card title, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_LIST_RELOAD	14	94	NEVER	src/ui/spool_flow.cpp listReloadStrip: LINK_RELOAD_W 110 button, 8 px air each side
+STR_COPY_CARD_WEIGHT	16	360	NEVER	src/ui/copy_confirm_popup.cpp line 3 of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_COPY_CARD_CREATE	18	150	NEVER	src/ui/copy_confirm_popup.cpp 170 px answer button, 10 px air each side

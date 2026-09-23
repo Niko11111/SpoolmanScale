@@ -45,7 +45,9 @@ fi
 
 # 6. Every string has a German and an English text. The row count itself is a
 #    static_assert in lang.cpp; this catches an empty cell, which compiles.
-#    French may be missing: langText() shows the English there. The table is
+#    Whether every row has French is rule 10's coverage, which reads the
+#    working file: the cell here holds the English for a row nobody has
+#    translated, so it cannot tell. The table is
 #    tokenized rather than matched by a regex, which skipped every row that
 #    starts with an LV_SYMBOL macro or spans several literals and still said
 #    "ok". The rows found are counted against the enum, so a parser that has
@@ -124,6 +126,15 @@ fi
 #     how much is translated: an untranslated row is written with its English
 #     text in the French cell, and only tools/lang_fr.jsonl knows the difference.
 LVGL_SYMBOLS=.pio/libdeps/wt32-sc01-plus/lvgl/src/font/lv_symbol_def.h
+# Coverage first and always: it needs no fonts. A new text comes with a French
+# draft (lang_fr.py apply --draft); left out, the gap grew to 71 rows between
+# two reviews without anyone noticing. Drafts ship and are counted, not failed.
+if [ -f tools/lang_fr.py ]; then
+  out=$(python3 tools/lang_fr.py coverage 2>&1); rc=$?
+  sum=$(echo "$out" | grep -E '^[[:space:]]*[0-9]+ rows, ' | tail -1 | sed 's/^[[:space:]]*//')
+  if [ "$rc" -ne 0 ]; then bad "French coverage: ${sum:-failed} - add drafts with tools/lang_fr.py apply --draft"; echo "$out" | grep -E '^[[:space:]]+E ' | head -20 | sed 's/^/      /';
+  else ok "French coverage: ${sum:-checked}"; fi
+fi
 if [ ! -f tools/lang_fr.py ]; then
   ok "no French tooling in this tree - nothing to check"
 elif [ ! -f "$LVGL_SYMBOLS" ]; then

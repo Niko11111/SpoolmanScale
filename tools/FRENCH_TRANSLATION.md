@@ -131,7 +131,8 @@ All tools are plain Python 3 scripts in `tools/`. Each one starts with a detaile
 | `gen_fr_fonts.py` | Builds the supplement fonts and reports clipped glyphs | `--audit` |
 
 In `lang_fr.jsonl`, only `fr` (the translation), `note` (why a choice was made) and `st` (status) are
-written by hand. Everything else (German, English, where the text is used, its budgets) is rebuilt from
+written by hand. `st` is one of `todo` (no French yet), `draft` (written by whoever added the text,
+not reviewed yet), `ok` (reviewed), `stale` (the German changed since) and `locked`. Everything else (German, English, where the text is used, its budgets) is rebuilt from
 the sources by `seed`.
 
 `lang_fr.py` modes:
@@ -141,6 +142,10 @@ python tools/lang_fr.py roundtrip   # prove the parser on the current lang.cpp (
 python tools/lang_fr.py seed        # refresh German, English and call sites; French is kept
 python tools/lang_fr.py dump        # the texts still to translate, with their limits
 python tools/lang_fr.py apply       # read {"STR_X": "texte"} as JSON on stdin
+python tools/lang_fr.py apply --draft   # the same, marked as a draft to be reviewed
+python tools/lang_fr.py dump --drafts   # the drafts waiting for review
+python tools/lang_fr.py approve     # mark drafts as reviewed: ids, --group or --all
+python tools/lang_fr.py coverage    # fails while a row has no French at all
 python tools/lang_fr.py check       # all the checks; --strict also demands every row in French
 python tools/lang_fr.py emit        # write src/lang.cpp with its three columns
 python tools/lang_fr.py report      # progress per group, and the tightest buffers
@@ -183,19 +188,39 @@ Avoid `--ours` / `--theirs` here: during a rebase their meaning is swapped, and 
 A text that is not translated yet is emitted with its **English** text, so the firmware always builds
 and stays usable.
 
-### Add a new text (for maintainers who do not speak French)
+### Add a new text
 
-Nothing changes in how you work: append the row at the end of the table as usual, with German and
-English. The French cell may stay missing - `T()` shows the English there until someone translates it.
-
-If you want to fill it at once, copy the English into the third cell, or run:
+Every new text comes with a French **draft**, in the same change. `scripts/check.sh` runs
+`lang_fr.py coverage` on every push and pull request and fails while a row has no French; before this
+rule the gap had grown to 71 rows between two reviews.
 
 ```sh
-python tools/lang_fr.py seed    # picks up the new row
-python tools/lang_fr.py emit    # writes it with the English in the French column
+python tools/lang_fr.py seed                                    # picks up the new row
+echo '{"STR_NEW_TEXT": "Texte"}' | python tools/lang_fr.py apply --draft
+python tools/lang_fr.py check                                   # the draft must pass
+python tools/lang_fr.py emit
 ```
 
-`python tools/lang_fr.py check` lists the rows still missing their French cell.
+A draft ships: a French user sees it instead of the English. Two rules keep a draft from doing harm:
+
+- **Shorter, not longer.** `check` fails when a draft is wider than both the German and the English
+  and `ui_budgets.tsv` knows no width for its widget. Either shorten the draft, or read the widget's
+  real width off the code and add a `NEVER` line to `ui_budgets.tsv`, as was done for the tag view,
+  the waiting cards and the copy confirmation.
+- **Marked as a draft.** It stays `draft` until the owner of the French column has read it.
+
+### Review the drafts
+
+```sh
+python tools/lang_fr.py dump --drafts                  # everything waiting, with German and English
+python tools/lang_fr.py dump --drafts --group "tag"    # one section
+echo '{"STR_TV_TITLE": "Tag NFC"}' | python tools/lang_fr.py apply   # a correction, marked ok
+python tools/lang_fr.py approve STR_TV_UID STR_TV_CHIP # accepted as written
+python tools/lang_fr.py approve --group "Tag view"     # a whole section
+python tools/lang_fr.py emit
+```
+
+`report` shows per group how many rows are drafts.
 
 ### Regenerate the supplement fonts
 

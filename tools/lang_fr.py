@@ -37,6 +37,9 @@
 #   python tools/lang_fr.py seed        (re)build the working file
 #   python tools/lang_fr.py dump        the rows left, with their constraints
 #   python tools/lang_fr.py apply       read {"STR_X": "french"} JSON on stdin
+#                                       (--draft: written as a draft, see below)
+#   python tools/lang_fr.py approve     mark drafts as reviewed (--group, or ids)
+#   python tools/lang_fr.py coverage    fails while a row has no French at all
 #   python tools/lang_fr.py check       every rule; --strict also demands French
 #   python tools/lang_fr.py emit        write src/lang.cpp with three columns
 #   python tools/lang_fr.py report      coverage, and the tightest rows
@@ -44,6 +47,16 @@
 # A line break inside a string is written <NL> in an `apply` batch - see the
 # comment on NL_TOKEN for why a backslash cannot be trusted through three
 # layers of quoting.
+#
+# Status of a row ("st" in the working file):
+#   todo    no French yet - `coverage` fails, the display shows the English
+#   draft   French written by whoever added the text, not yet read by the
+#           person who owns the French column. It ships; `approve` makes it ok.
+#           A draft must not be wider than the wider of German and English
+#           unless ui_budgets.tsv knows its widget: `check` fails on that.
+#   ok      reviewed
+#   stale   the German was reworded after the French was written
+#   locked  deliberately left as it is
 # ============================================================
 import argparse
 import json
@@ -594,8 +607,11 @@ NL_TOKEN = "<NL>"
 NL_ESCAPE = chr(92) + "n"
 
 
-def apply_batch(stream=None):
+def apply_batch(stream=None, draft=False):
     """Read {"STR_X": "french", ...} as JSON and write it into the working file.
+
+    With draft=True the rows are marked "draft" instead of "ok": written by
+    someone adding a feature, waiting for the owner of the French column.
 
     Only 'fr' and 'st' are touched, so the derived fields stay as `seed` left
     them. An unknown id is refused outright rather than silently dropped: a
@@ -622,7 +638,7 @@ def apply_batch(stream=None):
     for sid, rec in work.items():
         if sid in batch:
             rec["fr"] = batch[sid]
-            rec["st"] = "ok"
+            rec["st"] = "draft" if draft else "ok"
         rows.append(rec)
     # The working file keeps enum order, which is what makes a diff readable.
     order = {sid: i for i, (sid, _) in enumerate(enum_ids())}
@@ -634,6 +650,70 @@ def apply_batch(stream=None):
     print("%d row(s) written%s - %d of %d translated"
           % (len(batch), note, done, len(rows)))
     return True
+
+
+def approve(patterns, ids):
+    """Mark drafts as reviewed without touching their text.
+
+        python tools/lang_fr.py approve STR_TV_TITLE STR_TV_UID   these rows
+        python tools/lang_fr.py approve --group "Tag view"        a section
+        python tools/lang_fr.py approve --all                     every draft
+
+    Only drafts change. A correction goes through `apply`, which marks the
+    row ok by itself.
+    """
+    work = load_work()
+    if not work:
+        print("no working file - run seed")
+        return False
+    unknown = sorted(i for i in ids if i not in work)
+    if unknown:
+        print("unknown id(s), nothing written: %s" % ", ".join(unknown))
+        return False
+    pats = [p.lower() for p in patterns]
+    changed = 0
+    for rec in work.values():
+        if rec.get("st") != "draft":
+            continue
+        grp = (rec.get("grp") or "").lower()
+        hit = (rec["id"] in ids or APPROVE_ALL in pats or
+               (pats and any(p in grp or p in rec["id"].lower() for p in pats)))
+        if hit:
+            rec["st"] = "ok"
+            changed += 1
+    save_work(list(work.values()))
+    left = sum(1 for r in work.values() if r.get("st") == "draft")
+    print("%d draft(s) approved, %d still to review" % (changed, left))
+    return True
+
+
+APPROVE_ALL = "\x00all"
+
+
+def coverage():
+    """Fails while a row has no French: missing from the working file, never
+    translated, or translated before its German was reworded.
+
+    Needs no fonts, so it runs in the house-rules job before anything is built.
+    A new text comes with a French draft (`apply --draft`); leaving the French
+    out is what used to let the gap grow to 71 rows without anyone noticing.
+    """
+    work = load_work()
+    ids = [i for i, _ in enum_ids()]
+    missing = [i for i in ids if i not in work]
+    todo = [i for i in ids if i in work and not work[i].get("fr")]
+    stale = [i for i in ids if i in work and work[i].get("st") == "stale"]
+    drafts = sum(1 for i in ids if i in work and work[i].get("st") == "draft")
+    for sid in missing:
+        print("  E %-34s not in the working file - run seed" % sid)
+    for sid in todo:
+        print("  E %-34s no French - add a draft with apply --draft" % sid)
+    for sid in stale:
+        print("  E %-34s German reworded since the French was written" % sid)
+    bad = len(missing) + len(todo) + len(stale)
+    print("\n  %d rows, %d without French, %d draft(s) waiting for review"
+          % (len(ids), bad, drafts))
+    return bad == 0
 
 
 # --------------------------------------------------------------------------
@@ -878,6 +958,14 @@ def check(strict=False):
                 if over > 0 and (worst is None or over > worst[0]):
                     worst = (over, wf, max(wd, we), s)
             if worst:
+                # A draft has not been read by anyone who knows the screens, so
+                # the envelope is a rule for it, not a hint: shorten it, or put
+                # its widget into ui_budgets.tsv.
+                if rec.get("st") == "draft" and not rows_b:
+                    err(sid, "draft line %d is %d px, wider than German and English "
+                             "(%d px, f%d) - shorten it or give it a budget"
+                        % (i + 1, worst[1], worst[2], worst[3]))
+                    continue
                 wider.append((worst[0], sid, i + 1, worst[1], worst[2], worst[3],
                               budget is None))
 
@@ -906,8 +994,9 @@ def check(strict=False):
                     ", fonts?" if guessed else ""))
 
     done = sum(1 for r in work.values() if r.get("fr"))
-    print("\n  %d rows, %d translated, %d error(s), %d warning(s)"
-          % (len(rows), done, errors, warnings))
+    drafts = sum(1 for r in work.values() if r.get("st") == "draft")
+    print("\n  %d rows, %d translated (%d draft(s) to review), %d error(s), %d warning(s)"
+          % (len(rows), done, drafts, errors, warnings))
     return errors == 0
 
 
@@ -1078,7 +1167,7 @@ def roundtrip():
     return False
 
 
-def dump(patterns, todo_only=True):
+def dump(patterns, todo_only=True, drafts_only=False):
     """Print the rows to translate, with everything needed to translate them.
 
     One row per entry: the German it comes from, the English that settles an
@@ -1097,7 +1186,10 @@ def dump(patterns, todo_only=True):
     pats = [p.lower() for p in patterns]
     shown = 0
     for rec in work.values():
-        if todo_only and rec.get("fr"):
+        if drafts_only:
+            if rec.get("st") != "draft":
+                continue
+        elif todo_only and rec.get("fr"):
             continue
         grp = (rec.get("grp") or "").lower()
         if pats and not any(p in grp or p in rec["id"].lower() for p in pats):
@@ -1122,7 +1214,8 @@ def dump(patterns, todo_only=True):
         if rec.get("fr"):
             print("FR: %s" % rec["fr"])
         shown += 1
-    print("\n# %d row(s)%s" % (shown, " still to translate" if todo_only else ""))
+    print("\n# %d row(s)%s" % (shown, " waiting for review" if drafts_only
+                                  else " still to translate" if todo_only else ""))
     return True
 
 
@@ -1133,13 +1226,15 @@ def report():
         return False
     groups = {}
     for r in work.values():
-        g = groups.setdefault(r["grp"] or "(no group)", [0, 0])
+        g = groups.setdefault(r["grp"] or "(no group)", [0, 0, 0])
         g[0] += 1
         g[1] += 1 if r.get("fr") else 0
-    print("%-46s %6s %6s" % ("group", "rows", "done"))
+        g[2] += 1 if r.get("st") == "draft" else 0
+    print("%-46s %6s %6s %6s" % ("group", "rows", "done", "draft"))
     for g in sorted(groups):
-        n, d = groups[g]
-        print("%-46s %6d %6d%s" % (g[:46], n, d, "  <-- complete" if n == d else ""))
+        n, d, dr = groups[g]
+        print("%-46s %6d %6d %6s%s" % (g[:46], n, d, dr or "",
+                                       "  <-- complete" if n == d and not dr else ""))
     tight = sorted((r for r in work.values() if r.get("bmax")),
                    key=lambda r: r["bmax"])[:20]
     print("\ntightest buffers:")
@@ -1153,17 +1248,28 @@ def report():
 def main():
     ap = argparse.ArgumentParser(description="The French column of lang.cpp.")
     ap.add_argument("mode", choices=("roundtrip", "seed", "dump", "apply",
-                                     "check", "emit", "report"))
+                                     "approve", "coverage", "check", "emit",
+                                     "report"))
+    ap.add_argument("ids", nargs="*", metavar="STR_X",
+                    help="approve: the rows to approve")
+    ap.add_argument("--draft", action="store_true",
+                    help="apply: write the rows as drafts, not as reviewed")
+    ap.add_argument("--drafts", action="store_true",
+                    help="dump: only the drafts waiting for review")
     ap.add_argument("--strict", action="store_true",
                     help="check: every row must be translated")
     ap.add_argument("--group", action="append", default=[], metavar="TEXT",
                     help="dump: only sections or ids matching TEXT")
     ap.add_argument("--all", action="store_true",
-                    help="dump: include the rows already translated")
+                    help="dump: include the rows already translated; "
+                         "approve: every draft")
     a = ap.parse_args()
-    fn = {"roundtrip": roundtrip, "seed": seed, "apply": apply_batch,
+    fn = {"roundtrip": roundtrip, "seed": seed,
+          "apply": lambda: apply_batch(draft=a.draft),
+          "approve": lambda: approve(a.group + ([APPROVE_ALL] if a.all else []), a.ids),
+          "coverage": coverage,
           "emit": emit, "report": report,
-          "dump": lambda: dump(a.group, not a.all),
+          "dump": lambda: dump(a.group, not a.all, a.drafts),
           "check": lambda: check(a.strict)}[a.mode]
     return 0 if fn() else 1
 
