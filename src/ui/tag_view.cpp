@@ -307,10 +307,10 @@ static void buildGrid(lv_obj_t* box, const Shown& s) {
   else if (!strcmp(i.fmt, "unsupported")) why = T(STR_W_TAG_NOREC);
   if (why) { note(box, TV_R2, why); return; }
 
-  struct Item { int cap; char val[40]; bool wide; };
-  Item items[8];
+  struct Item { const char* cap; char val[40]; bool wide; };
+  Item items[10];
   int n = 0;
-  auto add = [&](int cap, const char* v, bool wide) {
+  auto add = [&](const char* cap, const char* v, bool wide) {
     if (!v || !v[0] || n >= (int)(sizeof(items) / sizeof(items[0]))) return;
     items[n].cap = cap;
     items[n].wide = wide;
@@ -318,14 +318,18 @@ static void buildGrid(lv_obj_t* box, const Shown& s) {
     n++;
   };
   char buf[24];
-  rangeText(buf, sizeof(buf), i.et_lo, i.et_hi);   add(STR_W_TAG_NOZZLE, buf, false);
-  rangeText(buf, sizeof(buf), i.bed_lo, i.bed_hi); add(STR_W_TAG_BED, buf, false);
+  if (i.spool_id > 0) {
+    snprintf(buf, sizeof(buf), "#%d", i.spool_id);
+    add("Spool ID", buf, false);
+  }
+  rangeText(buf, sizeof(buf), i.et_lo, i.et_hi);   add(T(STR_W_TAG_NOZZLE), buf, false);
+  rangeText(buf, sizeof(buf), i.bed_lo, i.bed_hi); add(T(STR_W_TAG_BED), buf, false);
   buf[0] = '\0';
   if (i.weight_g) snprintf(buf, sizeof(buf), "%u g", (unsigned)i.weight_g);
-  add(STR_W_TAG_WEIGHT, buf, false);
-  add(STR_LBL_PRODUCTION_DATE, i.prod_date, false);
-  add(STR_W_TAG_SKU, i.sku, false);
-  add(STR_W_TAG_TRAY, i.tray_uuid, true);
+  add(T(STR_W_TAG_WEIGHT), buf, false);
+  add(T(STR_LBL_PRODUCTION_DATE), i.prod_date, false);
+  add(T(STR_W_TAG_SKU), i.sku, false);
+  add(T(STR_W_TAG_TRAY), i.tray_uuid, true);
 
   const int rows[] = { TV_R2, TV_R3 };
   int row = 0, col = 0;
@@ -333,11 +337,11 @@ static void buildGrid(lv_obj_t* box, const Shown& s) {
     if (items[k].wide) {
       if (col) { row++; col = 0; }
       if (row >= 2) break;
-      cell(box, TV_CA, rows[row], TV_FULL_W, T(items[k].cap), items[k].val);
+      cell(box, TV_CA, rows[row], TV_FULL_W, items[k].cap, items[k].val);
       row++;
       continue;
     }
-    cell(box, col ? TV_CB : TV_CA, rows[row], TV_CW, T(items[k].cap), items[k].val);
+    cell(box, col ? TV_CB : TV_CA, rows[row], TV_CW, items[k].cap, items[k].val);
     if (col) { row++; col = 0; } else col = 1;
   }
 }

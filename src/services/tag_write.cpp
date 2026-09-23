@@ -70,6 +70,7 @@ static char      cached_kind[34] = "";
 // web page is translated. 0 nothing, 1 MIFARE Classic read-only, 2 NTAG.
 static uint8_t   cached_kindcode = TAG_KIND_NONE;
 static char      cached_content[128] = "";
+static char      cached_raw[512] = "";
 static TagInfo   cached_info;
 static uint16_t  cached_bytes = 0;
 static bool      cache_dirty = false;
@@ -80,6 +81,7 @@ static unsigned long scan_since = 0;
 const char* tagCachedUid()     { return cached_uid; }
 const char* tagCachedKind()    { return cached_kind; }
 const char* tagCachedContent() { return cached_content; }
+const char* tagCachedRaw()     { return cached_raw; }
 const TagInfo* tagCachedInfo() { return &cached_info; }
 uint16_t tagCachedBytes()      { return cached_bytes; }
 uint8_t  tagCachedKindCode()   { return cached_kindcode; }
@@ -313,6 +315,15 @@ void tagInfoJson(const TagInfo *ti, char *out, size_t out_len) {
   if (ti->material[0]) {
     jesc(ti->material, e, sizeof(e));
     n = appendf(out, out_len, n, ",\"material\":\"%s\"", e);
+  }
+  if (ti->spool_id > 0) n = appendf(out, out_len, n, ",\"spool_id\":%d", ti->spool_id);
+  if (ti->proto[0]) {
+    jesc(ti->proto, e, sizeof(e));
+    n = appendf(out, out_len, n, ",\"proto\":\"%s\"", e);
+  }
+  if (ti->version[0]) {
+    jesc(ti->version, e, sizeof(e));
+    n = appendf(out, out_len, n, ",\"version\":\"%s\"", e);
   }
   if (ti->tray_uuid[0]) {
     jesc(ti->tray_uuid, e, sizeof(e));
@@ -727,6 +738,9 @@ static void describeOpenSpool(const char *json, char *out, size_t out_len, TagIn
            d["brand"] | "?", d["type"] | "?", d["color_hex"] | "?",
            d["min_temp"] | "?", d["max_temp"] | "?");
   if (!ti) return;
+  ti->spool_id = d["spool_id"] | (d["sm_id"] | 0);
+  snprintf(ti->proto, sizeof(ti->proto), "%s", d["protocol"] | "");
+  snprintf(ti->version, sizeof(ti->version), "%s", d["version"] | "");
   snprintf(ti->brand, sizeof(ti->brand), "%s", d["brand"] | "");
   snprintf(ti->material, sizeof(ti->material), "%s", d["type"] | "");
   const char *hex = d["color_hex"] | "";
@@ -781,14 +795,27 @@ static bool tagDescribe(char *out, size_t out_len, TagInfo *ti) {
     f.dia_x100 = rdU16(dl);   f.length_m = rdU16(dl + 2);
     describeAce(&f, out, out_len);
     if (ti) aceToInfo(&f, ti);
+    snprintf(cached_raw, sizeof(cached_raw),
+      "{\"format\":\"Anycubic ACE\",\"sku\":\"%s\",\"brand\":\"%s\",\"material\":\"%s\","
+      "\"color\":\"#%02X%02X%02X\",\"empty_weight_g\":%u,\"nozzle\":\"%u-%u\","
+      "\"bed\":\"%u-%u\",\"diameter_mm\":\"%u.%02u\",\"length_m\":%u}",
+      f.sku, f.brand, f.material, f.r, f.g, f.b, f.weight_g,
+      f.et_lo, f.et_hi, f.bed_lo, f.bed_hi,
+      (unsigned)(f.dia_x100 / 100), (unsigned)(f.dia_x100 % 100), (unsigned)f.length_m);
     return f.material[0] && f.brand[0];
   }
 
   char json[224];
+  json[0] = 0;
   if (readOpenSpool(json, sizeof(json))) {
+    snprintf(cached_raw, sizeof(cached_raw), "%s", json);
     describeOpenSpool(json, out, out_len, ti);
     return true;
   }
+  if (json[0]) {
+    snprintf(cached_raw, sizeof(cached_raw), "%s", json);
+  }
+  if (p4[0] == 0x03 && !json[0]) return false;
 
   // A page that will not read is not an empty page. Reporting blank here let
   // a badly seated tag look erased, and the result was cached as trusted.
@@ -800,6 +827,22 @@ static bool tagDescribe(char *out, size_t out_len, TagInfo *ti) {
   }
   snprintf(out, out_len, "%s", blank ? "blank" : "unrecognised data");
   if (ti) snprintf(ti->fmt, sizeof(ti->fmt), "%s", blank ? "blank" : "unknown");
+  if (blank) {
+    snprintf(cached_raw, sizeof(cached_raw),
+      "{\"format\":\"NTAG\",\"uid\":\"%s\",\"state\":\"blank\",\"user_bytes\":%u}",
+      g_tag.uid_str, (unsigned)cached_bytes);
+  } else if (!cached_raw[0]) {
+    uint8_t p5[4] = {0}, p6[4] = {0}, p7[4] = {0};
+    nfcReadNtagPage(5, p5); nfcReadNtagPage(6, p6); nfcReadNtagPage(7, p7);
+    snprintf(cached_raw, sizeof(cached_raw),
+      "{\"format\":\"NTAG\",\"uid\":\"%s\",\"state\":\"unrecognised data\","
+      "\"p4_p7_hex\":\"%02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X\"}",
+      g_tag.uid_str,
+      p4[0], p4[1], p4[2], p4[3],
+      p5[0], p5[1], p5[2], p5[3],
+      p6[0], p6[1], p6[2], p6[3],
+      p7[0], p7[1], p7[2], p7[3]);
+  }
   return true;
 }
 
@@ -881,6 +924,9 @@ bool tagPreview(int spool_id, TagFormat fmt, char *out, size_t out_len,
       info->sku[0] = 0;
       info->bed_lo = info->bed_hi = 0;
       info->dia_x100 = info->length_m = info->weight_g = 0;
+      info->spool_id = spool_id;
+      snprintf(info->proto, sizeof(info->proto), "%s", fmt == TAG_FMT_FILAMAN ? "filaman" : "openspool");
+      snprintf(info->version, sizeof(info->version), "1.0");
     }
   }
   if (TAG_FMT_IS_NDEF(fmt)) {
@@ -1008,6 +1054,7 @@ static void refreshCache(bool force = false) {
 
   if (!tag_present) {
     cached_uid[0] = 0; cached_kind[0] = 0; cached_content[0] = 0;
+    cached_raw[0] = 0;
     cached_bytes = 0;
     cached_kindcode = TAG_KIND_NONE;
     memset(&cached_info, 0, sizeof(cached_info));
@@ -1027,12 +1074,32 @@ static void refreshCache(bool force = false) {
     // On every pass: the main poll fills g_tag over several passes while its
     // retries run, and this is a copy of a few strings, not a read.
     infoFromMifare(&cached_info);
+    const char *chex = g_tag.color_hex[0] == '#' ? g_tag.color_hex + 1 : g_tag.color_hex;
+    if (!strcmp(cached_info.fmt, "Bambu")) {
+      snprintf(cached_raw, sizeof(cached_raw),
+        "{\"format\":\"Bambu Lab\",\"uid\":\"%s\",\"tray_uuid\":\"%s\",\"vendor\":\"%s\","
+        "\"material\":\"%s\",\"color\":\"#%s\",\"nozzle\":\"%d-%d\",\"spool_weight_g\":%.0f,"
+        "\"production_date\":\"%s\",\"blocks_read\":%d}",
+        g_tag.uid_str, g_tag.tray_uuid, g_tag.vendor, g_tag.material,
+        chex, g_tag.temp_min, g_tag.temp_max, (double)g_tag.spool_weight,
+        g_tag.production_date, countBambuDataBlocksRead(g_tag));
+    } else if (!strcmp(cached_info.fmt, "Snapmaker")) {
+      snprintf(cached_raw, sizeof(cached_raw),
+        "{\"format\":\"Snapmaker\",\"uid\":\"%s\",\"material\":\"%s\",\"color\":\"#%s\","
+        "\"nozzle\":\"%d-%d\",\"spool_weight_g\":%.0f}",
+        g_tag.uid_str, g_tag.material, chex,
+        g_tag.temp_min, g_tag.temp_max, (double)g_tag.spool_weight);
+    } else {
+      snprintf(cached_raw, sizeof(cached_raw),
+        "{\"format\":\"MIFARE Classic\",\"uid\":\"%s\",\"type\":\"Read-only / Unregistered\",\"sectors\":16,\"blocks\":64}",
+        g_tag.uid_str);
+    }
     return;
   }
 
   const bool uid_changed = strcmp(last_uid, g_tag.uid_str) != 0;
   const bool changed = uid_changed || cache_dirty;
-  if (uid_changed) unreadable = 0;
+  if (uid_changed) { unreadable = 0; cached_raw[0] = 0; }
   if (!changed && cached_content[0]) return;
   // A blank NTAG, or one written by something this firmware does not know,
   // never yields a description. Returning only on content meant such a tag had
@@ -1068,6 +1135,7 @@ static void refreshCache(bool force = false) {
     // still holds describes the tag as it was before, so it goes rather than
     // being shown as current, and the retrying ends here as well.
     cached_content[0] = 0;
+    cached_raw[0] = 0;
     memset(&cached_info, 0, sizeof(cached_info));
     cache_dirty = false;
   }
