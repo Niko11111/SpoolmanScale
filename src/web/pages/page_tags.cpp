@@ -13,6 +13,7 @@
 
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
+#include "hardware/nfc.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/backend_job.h"
@@ -52,18 +53,24 @@ static const char* label() { return T(STR_W_NAV_TAGS); }
 
 static String body() {
   String h;
-  h.reserve(7600);
+  h.reserve(10000);
 
-  h += F("<div class='grid'><div class='card wide'><h2>");
+  h += F("<div class='grid'>"
+         "<div class='card wide'>"
+         "<div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px'>"
+         "<h2 style='margin:0'>Current Spool on Scale</h2>"
+         "<div id='tg-uid' class='hint' style='margin:0'></div>"
+         "</div>"
+         "<div style='display:flex;flex-wrap:wrap;gap:12px'>"
+         "<div class='card' style='background:var(--surface-2);padding:14px;flex:1 1 280px;min-width:0' id='tg-cur'></div>"
+         "<div class='card' style='background:var(--surface-2);padding:14px;flex:1 1 280px;min-width:0' id='tg-matched'></div>"
+         "</div>"
+         "</div>"
+         "<div class='card wide'><h2>");
   h += T(STR_W_C_WRITETAG);
   h += F("</h2>"
-         "<div id='tg-uid' class='hint' style='margin-bottom:14px'></div>"
-         "<div class='grid' style='gap:12px'>"
-         "<div class='card' style='background:var(--surface-2);padding:14px' id='tg-cur'></div>"
+         "<div style='margin-bottom:14px'>"
          "<div class='card' style='background:var(--surface-2);padding:14px' id='tg-new'></div>"
-         // Below the pair and across both columns: the two tag cards stay side
-         // by side, which is what the compare note under the buttons describes.
-         "<div class='card wide' style='background:var(--surface-2);padding:14px' id='tg-matched'></div>"
          "</div>"
          "<div class='field' style='margin-top:14px'><label>");
   h += T(STR_W_TAG_SPOOL);
@@ -142,13 +149,27 @@ static String body() {
          "<span class='msg' id='to-s'></span></div>"
          "<p class='note' style='margin-top:10px'>");
   h += T(STR_W_TAGOPT_NOTE);
-  h += F("</p></div></div>");
+  h += F("</p></div></div>"
+         "<div id='tg-modal' style='display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;align-items:center;justify-content:center;padding:16px' onclick='if(event.target===this)closeRawModal()'>"
+         "<div class='card' style='max-width:560px;width:100%;margin:auto;box-shadow:0 10px 30px rgba(0,0,0,.6);background:var(--surface-1);padding:18px'>"
+         "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px'>"
+         "<h3 style='margin:0;font-size:14px;color:var(--ink)'>Raw Tag Data</h3>"
+         "<button type='button' class='quiet' style='padding:2px 8px;font-size:16px;line-height:1' onclick='closeRawModal()'>&times;</button>"
+         "</div>"
+         "<pre id='tg-raw-text' style='background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:12px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2);max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin:0'></pre>"
+         "<div style='display:flex;justify-content:flex-end;gap:10px;margin-top:14px'>"
+         "<button type='button' id='tg-copy-btn' onclick='copyRawData()'>Copy</button>"
+         "<button type='button' class='quiet' onclick='closeRawModal()'>Close</button>"
+         "</div></div></div>");
 
   // Its own script. When the pages were split the shared block stayed behind
   // on the drying page, so every function this page calls was missing and the
   // whole page did nothing at all.
-  h += F("<style>#tg-cur h3,#tg-matched h3,#tg-new h3{font-size:10.5px;font-weight:650;"
-         "letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:10px}"
+  h += F("<style>"
+         ".tghead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}"
+         ".tgbadge{font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:var(--surface-1);border:1px solid var(--border);color:var(--ink-soft)}"
+         "#tg-cur h3,#tg-matched h3,#tg-new h3{font-size:10.5px;font-weight:650;"
+         "letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin:0}"
          ".tgline{display:flex;align-items:center;gap:9px;margin-bottom:8px}"
          ".chip{width:26px;height:26px;border-radius:7px;border:1px solid #ffffff22;flex:none}"
          ".tgname{font-size:13.5px;color:var(--ink);line-height:1.3}"
@@ -156,7 +177,6 @@ static String body() {
          "#tg-cur table td,#tg-matched table td,#tg-new table td{font-size:11.5px;"
          "font-family:var(--mono);color:var(--ink-3);padding:3px 8px 3px 0;border:0;"
          "overflow-wrap:anywhere}"
-         // Across both columns the values would otherwise start in the middle.
          "#tg-matched table{width:auto}"
          "tr.diff td{color:var(--warn)}</style>");
 
@@ -229,8 +249,22 @@ static String body() {
   h += F(",ladd:");    h += jsStr(T(STR_W_TL_ASK_ADD));
   h += F(",lbusy:");   h += jsStr(T(STR_W_TL_REFUSED));
   h += F("};"
-         "let tgCur='',tgNew='',tgLinked='',tgUid='',tgCurI=null,tgNewI=null,tgMatched=null,"
+          "let tgCur='',tgRaw='',tgNew='',tgLinked='',tgUid='',tgBackend='',tgCurI=null,tgNewI=null,tgMatched=null,"
          "tgBytes=0,tgNeed=0,tgKindCode=0,tgAdds=false;"
+         "function showRawModal(){"
+         "const m=document.getElementById('tg-modal');"
+         "const t=document.getElementById('tg-raw-text');"
+         "if(!m||!t)return;let txt=tgRaw||'';"
+         "try{txt=JSON.stringify(JSON.parse(txt),null,2);}catch(e){}"
+         "t.textContent=txt;m.style.display='flex';}"
+         "function closeRawModal(){"
+         "const m=document.getElementById('tg-modal');if(m)m.style.display='none';}"
+         "function copyRawData(){"
+         "const t=document.getElementById('tg-raw-text');if(!t)return;"
+         "navigator.clipboard.writeText(t.textContent).then(()=>{"
+         "const b=document.getElementById('tg-copy-btn');"
+         "if(b){const o=b.textContent;b.textContent='Copied!';setTimeout(()=>{b.textContent=o;},2000);}"
+         "}).catch(()=>{});}"
          // The quote as well: esc() also fills an href.
          "function esc(t){return String(t).replace(/[<>&\"]/g,c=>"
          "({'<':'&lt;','>':'&gt;','&':'&amp;','\"':'&quot;'}[c]));}"
@@ -243,42 +277,51 @@ static String body() {
          // The spool card has one side only, and an empty field is no row -
          // "-" included, which is how the device says "never" for a date.
          "function one(k,v){return(v===undefined||v===null||v===''||v==='-')?'':row(k,v);}"
-         "function plain(el,t,x){el.innerHTML='<h3>'+t+'</h3>'"
-         "+'<div class=\"hint\">'+x+'</div>';}"
+         "function cardHead(t,b){return '<div class=\"tghead\"><h3>'+t+'</h3><span class=\"tgbadge\">'+b+'</span></div>';}"
          "function head(c,n,x){return '<div class=\"tgline\"><div class=\"chip\" style=\"background:'"
          "+(c||'#101828')+'\"></div><div><div class=\"tgname\">'+n+'</div>'"
          "+'<div class=\"hint\">'+x+'</div></div></div>';}"
-         "function swatch(el,i,o,t,empty){if(!el)return;"
-         "if(!i||!i.fmt){plain(el,t,empty);return;}"
-         // A MIFARE tag that is neither Bambu's nor Snapmaker's. The UID is in
-         // the line above the cards already.
-         "if(i.fmt=='unsupported'){plain(el,t,M.norec);return;}"
-         "if(i.fmt=='blank'){plain(el,t,M.blank);return;}"
-         "if(i.fmt=='unknown'){plain(el,t,M.unk);return;}"
-         "o=o||{};"
-         "el.innerHTML='<h3>'+t+'</h3>'"
+         "function renderCurTag(el){if(!el)return;"
+         "const h=cardHead('Physical Tag','Source: Physical NFC Chip');"
+         "if(!tgUid){el.innerHTML=h+'<div class=\"hint\">No physical tag on scale pad</div>';return;}"
+         "const rawBtn='<div style=\"margin-top:12px\"><button type=\"button\" class=\"quiet\" style=\"font-size:11px;padding:3px 8px\" onclick=\"showRawModal()\">Raw Tag Data</button></div>';"
+         "const i=tgCurI;"
+         "if(!i||!i.fmt||i.fmt==='blank'){"
+         "const bStr=tgBytes?(' | '+tgBytes+' bytes'):'';"
+         "el.innerHTML=h+'<div class=\"hint\">Blank Tag ('+esc(tgUid)+bStr+') &mdash; Ready to write</div>'+rawBtn;return;}"
+         "if(i.fmt==='unknown'){"
+         "el.innerHTML=h+'<div class=\"hint\">Unrecognised tag data ('+esc(tgUid)+')</div>'+rawBtn;return;}"
+         "if(i.fmt==='unsupported'){"
+         "el.innerHTML=h+'<div class=\"hint\">Unsupported tag ('+esc(tgUid)+')</div>'+rawBtn;return;}"
+         "const o=tgNewI||{};"
+         "let rows='';"
+         "if(i.spool_id||o.spool_id)rows+=row('Spool ID',i.spool_id?'#'+i.spool_id:undefined,o.spool_id?'#'+o.spool_id:undefined);"
+         "if(i.proto||o.proto){"
+         "const pA=i.proto?(i.proto+(i.version?' v'+i.version:'')):undefined;"
+         "const pB=o.proto?(o.proto+(o.version?' v'+o.version:'')):undefined;"
+         "rows+=row('Protocol',pA,pB);}"
+         "rows+=row(M.sku,i.sku,o.sku);"
+         "rows+=row(M.nozzle,i.nozzle?i.nozzle+' C':undefined,o.nozzle?o.nozzle+' C':undefined);"
+         "rows+=row(M.bed,i.bed?i.bed+' C':undefined,o.bed?o.bed+' C':undefined);"
+         "rows+=row(M.weight,i.weight?i.weight+' g':undefined,o.weight?o.weight+' g':undefined);"
+         "rows+=row(M.dia,i.dia?i.dia+' mm':undefined,o.dia?o.dia+' mm':undefined);"
+         "rows+=row(M.len,i.len?i.len+' m':undefined,o.len?o.len+' m':undefined);"
+         "rows+=row(M.prod,i.prod_date,o.prod_date);"
+         "rows+=row(M.tray,i.tray_uuid,o.tray_uuid);"
+         "el.innerHTML=h"
          "+head(i.color,esc(i.brand||'')+' '+esc(i.material||''),"
          "esc(i.fmt)+(i.color?' - '+esc(i.color):''))"
-         "+'<table>'"
-         "+row(M.sku,i.sku,o.sku)"
-         "+row(M.nozzle,i.nozzle?i.nozzle+' C':undefined,o.nozzle?o.nozzle+' C':undefined)"
-         "+row(M.bed,i.bed?i.bed+' C':undefined,o.bed?o.bed+' C':undefined)"
-         "+row(M.weight,i.weight?i.weight+' g':undefined,o.weight?o.weight+' g':undefined)"
-         "+row(M.dia,i.dia?i.dia+' mm':undefined,o.dia?o.dia+' mm':undefined)"
-         "+row(M.len,i.len?i.len+' m':undefined,o.len?o.len+' m':undefined)"
-         "+row(M.prod,i.prod_date,o.prod_date)"
-         "+row(M.tray,i.tray_uuid,o.tray_uuid)"
-         "+'</table>';}"
-         // The spool the scale shows, which is not necessarily the tag's: one
-         // picked from the list stays after its tag is lifted. Hence its own
-         // title rather than "matched".
-         "function spool(el){if(!el)return;const m=tgMatched;"
-         "if(!m||!m.found){plain(el,M.onscale,M.nospool);return;}"
+         "+'<table>'+rows+'</table>'+rawBtn;}"
+         "function renderMatchedSpool(el){if(!el)return;"
+         "const bName=tgBackend||'Backend';"
+         "const h=cardHead('Database Record','Source: '+esc(bName));"
+         "const m=tgMatched;"
+         "if(!m||!m.found){el.innerHTML=h+'<div class=\"hint\">Tag not linked to any spool in '+esc(bName)+'</div>';return;}"
          "const id=m.url?'<a class=\"tglink\" href=\"'+esc(m.url)+'\" target=\"_blank\" rel=\"noopener\">#'"
          "+m.id+'</a>':'#'+m.id;"
          "const vm=[m.vendor,m.material].filter(Boolean).map(esc).join(' ');"
          "let b='';(m.binds||[]).forEach(x=>{b+=one(esc(x.k),x.v);});"
-         "el.innerHTML='<h3>'+M.onscale+'</h3>'"
+         "el.innerHTML=h"
          "+head(m.color,esc(m.name||''),id+(vm?' - '+vm:''))"
          "+'<table>'"
          "+one(M.remain,m.total?m.remaining+' / '+m.total+' g':undefined)"
@@ -286,10 +329,33 @@ static String body() {
          "+one(M.loc,m.location)+one(M.art,m.article_nr)"
          "+one(M.used,m.last_used)+one(M.dried,m.last_dried)+b"
          "+'</table>';}"
+         "function renderNewPreview(el){if(!el)return;"
+         "const h=cardHead('Target Write Payload','Preview');"
+         "const i=tgNewI;"
+         "if(!i||!i.fmt){el.innerHTML=h+'<div class=\"hint\">'+M.pickf+'</div>';return;}"
+         "const o=tgCurI||{};"
+         "let rows='';"
+         "if(i.spool_id||o.spool_id)rows+=row('Spool ID',i.spool_id?'#'+i.spool_id:undefined,o.spool_id?'#'+o.spool_id:undefined);"
+         "if(i.proto||o.proto){"
+         "const pA=i.proto?(i.proto+(i.version?' v'+i.version:'')):undefined;"
+         "const pB=o.proto?(o.proto+(o.version?' v'+o.version:'')):undefined;"
+         "rows+=row('Protocol',pA,pB);}"
+         "rows+=row(M.sku,i.sku,o.sku);"
+         "rows+=row(M.nozzle,i.nozzle?i.nozzle+' C':undefined,o.nozzle?o.nozzle+' C':undefined);"
+         "rows+=row(M.bed,i.bed?i.bed+' C':undefined,o.bed?o.bed+' C':undefined);"
+         "rows+=row(M.weight,i.weight?i.weight+' g':undefined,o.weight?o.weight+' g':undefined);"
+         "rows+=row(M.dia,i.dia?i.dia+' mm':undefined,o.dia?o.dia+' mm':undefined);"
+         "rows+=row(M.len,i.len?i.len+' m':undefined,o.len?o.len+' m':undefined);"
+         "rows+=row(M.prod,i.prod_date,o.prod_date);"
+         "rows+=row(M.tray,i.tray_uuid,o.tray_uuid);"
+         "el.innerHTML=h"
+         "+head(i.color,esc(i.brand||'')+' '+esc(i.material||''),"
+         "esc(i.fmt)+(i.color?' - '+esc(i.color):''))"
+         "+'<table>'+rows+'</table>';}"
          "function tgDraw(){"
-         "swatch(document.getElementById('tg-cur'),tgCurI,tgNewI,M.cur,M.notag);"
-         "spool(document.getElementById('tg-matched'));"
-         "swatch(document.getElementById('tg-new'),tgNewI,tgCurI,M.will,M.pickf);}"
+         "renderCurTag(document.getElementById('tg-cur'));"
+         "renderMatchedSpool(document.getElementById('tg-matched'));"
+         "renderNewPreview(document.getElementById('tg-new'));}"
          "function tgSync(){tgDraw();const b=document.getElementById('tg-btn');if(!b)return;"
          // Said before the write, not after it. The capacity check inside the
          // firmware refuses the same tag, but only once the user has already
@@ -348,7 +414,7 @@ static String body() {
          "document.getElementById('tg-uid').textContent="
          "d.uid?(M.onread+' '+d.uid+' ('+d.kind+')'):M.notag;"
          "tgUid=d.uid||'';tgCurI=d.uid?d.info:null;tgBytes=d.bytes||0;tgKindCode=d.kindcode||0;"
-         "tgCur=d.content||'';tgMatched=d.matched;tgAdds=!!d.linkadds;tgSync();"
+         "tgBackend=d.backend||'';tgCur=d.content||'';tgRaw=d.raw||'';tgMatched=d.matched;tgAdds=!!d.linkadds;tgSync();"
          "const ls=document.getElementById('tg-ls');"
          "if(ls){ls.textContent=d.linkstate&&d.linkstate!='idle'?d.linkmsg:'';"
          "ls.className='msg'+(d.linkstate=='error'?' bad':'');}"
@@ -535,6 +601,24 @@ static String spoolJson() {
 }
 
 static void routes(WebServer &srv) {
+  srv.on("/api/tag/dump", HTTP_GET, [&srv]() {
+    String j = "{\"uid\":\"" + jsonEsc(tagCachedUid()) + "\",\"pages\":[";
+    uint8_t d[4];
+    for (int pg = 0; pg < 135; pg++) {
+      if (pg > 0) j += ",";
+      if (nfcReadNtagPage(pg, d)) {
+        char hex[16];
+        snprintf(hex, sizeof(hex), "\"%02X%02X%02X%02X\"", d[0], d[1], d[2], d[3]);
+        j += hex;
+      } else {
+        j += "null";
+        if (pg > 16) break;
+      }
+    }
+    j += "]}";
+    srv.send(200, "application/json", j);
+  });
+
   srv.on("/api/tag/preview", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
     int id  = srv.arg("id").toInt();
@@ -544,7 +628,7 @@ static void routes(WebServer &srv) {
     uint16_t need = 0;
     bool ok = tagPreview(id, fmtFromInt(fmt),
                          prev, sizeof(prev), linked, sizeof(linked), &ti, &need);
-    char info[320];
+    char info[384];
     tagInfoJson(&ti, info, sizeof(info));
     // jsonEsc on both: prev carries the backend's vendor and filament names,
     // and a quotation mark in a brand made the reply malformed. r.json() then
@@ -591,16 +675,18 @@ static void routes(WebServer &srv) {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
     // Reader state comes from the loop task; touching the reader here would
     // race the main NFC poll.
-    char info[320];
+    char info[384];
     tagInfoJson(tagCachedInfo(), info, sizeof(info));
     String j = String("{\"info\":") + info +
                ",\"bytes\":"    + String((unsigned)tagCachedBytes()) +
                ",\"kindcode\":" + String((int)tagCachedKindCode()) +
                ",\"uid\":\""     + jsonEsc(tagCachedUid()) +
                "\",\"kind\":\""    + jsonEsc(tagKindLocal().c_str()) +
+               "\",\"backend\":\"" + jsonEsc(backendName()) +
                "\",\"state\":\""   + jsonEsc(tagWriteState()) +
                "\",\"message\":\"" + jsonEsc(tagWriteMessageLocal().c_str()) +
                "\",\"content\":\"" + jsonEsc(tagCachedContent()) +
+               "\",\"raw\":\""     + jsonEsc(tagCachedRaw()) +
                "\",\"linkstate\":\"" + tagLinkStateName() +
                "\",\"linkmsg\":\"" + jsonEsc(tagLinkMessageLocal().c_str()) +
                "\",\"linkadds\":" + (tagLinkKeepsOtherTags() ? "true" : "false") +

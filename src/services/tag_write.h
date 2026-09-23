@@ -150,6 +150,7 @@ enum TagKind : uint8_t {
 };
 uint8_t     tagCachedKindCode();
 const char* tagCachedContent();
+const char* tagCachedRaw();
 // User memory of the tag on the reader, 0 when there is none or it reports no
 // size. Read on the loop task with everything else, so a web handler can ask
 // without touching the reader.
@@ -184,6 +185,9 @@ struct TagInfo {
   uint8_t  r, g, b;
   uint16_t et_lo, et_hi, bed_lo, bed_hi;
   uint16_t dia_x100, length_m, weight_g;
+  int      spool_id;      // 0 if none
+  char     proto[17];     // e.g. "openspool"
+  char     version[12];   // e.g. "1.0"
 };
 
 // Serialises a TagInfo as a JSON object, omitting fields the format lacks.

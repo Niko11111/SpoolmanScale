@@ -113,7 +113,12 @@ bool nfcReadMifareBlock(uint8_t block, uint8_t data[16]) {
 }
 
 bool nfcReadNtagPage(uint8_t page, uint8_t* data) {
-  return nfc && nfc->ntag2xx_ReadPage(page, data);
+  if (!nfc) return false;
+  for (int retry = 0; retry < 3; retry++) {
+    if (nfc->ntag2xx_ReadPage(page, data)) return true;
+    delay(2);
+  }
+  return false;
 }
 
 bool nfcWriteNtagPage(uint8_t page, uint8_t* data) {
