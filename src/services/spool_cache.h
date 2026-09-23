@@ -87,6 +87,34 @@ void spoolCacheForget(const char* why = nullptr);
 // linking.
 void spoolCacheTick();
 
+// ---- the archive, beside the active list -----------------------------------
+//
+// The archived spools, for the copy flow's "archived spools": 2 to 5 s of
+// download for a handful of rows, every time (Nikolai, 23.09.2026). Kept in a
+// slot of its own, so that loading the archive never pushes the active list
+// out, and under the same proof:
+//
+//  - the stamp the caller took BEFORE the download. It counts the active
+//    spools, and archiving a spool or bringing one back changes that count;
+//  - the same ages, thirty minutes with a stamp and two without;
+//  - dropped together with the active list by spoolCacheForget().
+//
+// One change moves no number: an archived spool deleted outright. The copy
+// flow reads a template fresh before it builds on it, which catches that one.
+// Rows are served with "archived": true and never carry a bound mark.
+
+// Takes the archived rows of a freshly downloaded list that holds active and
+// archived spools alike. Loop task only.
+void spoolCacheArchiveFill(JsonArrayConst spools, const InventoryStamp* stamp);
+// The test spoolCacheUsable() makes, for the archive. Loop task only.
+bool spoolCacheArchiveUsable(const InventoryStamp* stamp);
+// The archived rows as the download would have given them. Loop task only.
+bool spoolCacheArchiveToJson(JsonDocument& doc);
+// Its rows, age and wall clock, like the three below. 0 when there is no copy.
+int      spoolCacheArchiveRows();
+uint32_t spoolCacheArchiveAgeMs();
+time_t   spoolCacheArchiveFilledAt();
+
 // For the log and the status line. 0 when there is no copy.
 int      spoolCacheRows();
 uint32_t spoolCacheAgeMs();

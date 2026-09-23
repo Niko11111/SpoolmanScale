@@ -28,6 +28,14 @@
 static lv_obj_t *scr_wait   = nullptr;
 static lv_obj_t *lbl_bytes  = nullptr;
 static unsigned  shown_kb   = 0;
+// What the card has seen come in so far. The worker's count starts at zero
+// with every list, and a card that waits for the lookup's scan sees its active
+// list, then its archive, then its own download: shown as they came, the
+// number fell back to zero twice and started over (Nikolai, 23.09.2026). The
+// card adds them up instead - it says how much has arrived, not which request
+// brought it.
+static size_t    done_bytes = 0;   // lists finished while the card stood
+static size_t    last_bytes = 0;   // the running list's count, last seen
 static bool      cancel_hit = false;
 
 void linkWaitCardShow() {
@@ -35,6 +43,8 @@ void linkWaitCardShow() {
   logSD("SHOW: LinkWaitCard");
   cancel_hit = false;
   shown_kb   = 0;
+  done_bytes = 0;
+  last_bytes = 0;
 
   scr_wait = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_wait, LV_HOR_RES, LV_VER_RES);
@@ -120,7 +130,10 @@ bool linkWaitCardOpen() { return scr_wait != nullptr; }
 
 void linkWaitCardBytes(size_t bytes) {
   if (!lbl_bytes) return;
-  const unsigned kb = (unsigned)(bytes / 1024);
+  // A smaller count than last time is the next list, started from zero.
+  if (bytes < last_bytes) done_bytes += last_bytes;
+  last_bytes = bytes;
+  const unsigned kb = (unsigned)((done_bytes + bytes) / 1024);
   if (kb == shown_kb) return;
   shown_kb = kb;
   char buf[24];

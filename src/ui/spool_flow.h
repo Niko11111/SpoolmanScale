@@ -61,10 +61,11 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
 
 void showCopyEntryPopup();
 void closeCopyEntryPopup();
-bool fetchSpoolsForCopy(bool archived, const char* material_filter, bool is_bambu_tag = false);
 void showCopySpoolList();
+struct CopyLook;   // spool_flow_internal.h
 void showCopyConfirmPopup(int template_spool_id, int template_filament_id, const char* template_name,
-                          float template_remaining, float template_initial, float template_spool_w);
+                          float template_remaining, float template_initial, float template_spool_w,
+                          const CopyLook* look = nullptr);
 void doCopySpoolCreate(int template_spool_id, int template_filament_id,
                        float template_initial, float template_spool_w);
 

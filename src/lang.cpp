@@ -2570,39 +2570,41 @@ const char* const STRINGS[][3] = {
   // AMS detail card: drying for the whole unit, and the material conflict hint
   { "Trocknung von heute speichern?",
     "Record today's drying?",
-    "Record today's drying?" },  // STR_AMSD_DRIED_Q_ALL
-  { "Alle %d Spulen in %s", "All %d spools in %s", "All %d spools in %s" },  // STR_AMSD_DRIED_ALL
-  { "Nur diese Spule",      "This spool only",     "This spool only" },  // STR_AMSD_DRIED_ONE
+    "Noter le séchage du jour ?" },  // STR_AMSD_DRIED_Q_ALL
+  { "Alle %d Spulen in %s", "All %d spools in %s", "%d bobines de %s" },  // STR_AMSD_DRIED_ALL
+  { "Nur diese Spule",      "This spool only",     "Celle-ci seule" },  // STR_AMSD_DRIED_ONE
   { "%d Spulen werden gespeichert ...",
     "Saving %d spools ...",
-    "Saving %d spools ..." },  // STR_AMSD_BATCH_RUNNING
-  { "%d von %d gespeichert", "%d of %d saved", "%d of %d saved" },  // STR_AMSD_BATCH_DONE
+    "Sauvegarde de %d bobines ..." },  // STR_AMSD_BATCH_RUNNING
+  { "%d von %d gespeichert", "%d of %d saved", "%d sur %d sauvées" },  // STR_AMSD_BATCH_DONE
   { "Trocknet %d min",       "Drying %d min",  "Séchage %d min" },  // STR_AMSV_DRYING_MIN
   { "Trocknet",              "Drying",         "Séchage" },  // STR_AMSV_DRYING
   { "Drucker meldet %s - Zuordnung im Backend prüfen",
     "Printer reports %s - check the assignment in the backend",
-    "Printer reports %s - check the assignment in the backend" },  // STR_AMSD_TYPE_CONFLICT
-  { "Snapmaker-Tags lesen", "Read Snapmaker tags", "Read Snapmaker tags" },  // STR_W_SNAPMAKER
+    "L'imprimante indique %s - vérifier le backend" },  // STR_AMSD_TYPE_CONFLICT
+  { "Snapmaker-Tags lesen", "Read Snapmaker tags", "Lire les tags Snapmaker" },  // STR_W_SNAPMAKER
   { "Versucht bei einem 4-Byte-Tag, der kein Bambu-Tag ist, die Snapmaker-Schlüssel und liest Material und Farbe vom Tag. Kostet jeden anderen 4-Byte-Tag etwa eine halbe Sekunde beim Auflegen. Aus lassen, wenn keine Snapmaker-Spulen im Haus sind.",
     "Tries Snapmaker's keys on a 4 byte tag that is not a Bambu tag and reads material and colour off the tag. Costs every other 4 byte tag about half a second when it is put down. Leave it off if there are no Snapmaker spools around.",
-    "Tries Snapmaker's keys on a 4 byte tag that is not a Bambu tag and reads material and colour off the tag. Costs every other 4 byte tag about half a second when it is put down. Leave it off if there are no Snapmaker spools around." },  // STR_W_SNAPMAKER_HINT
-  { "Speicheraufteilung veraltet", "Storage layout outdated", "Storage layout outdated" },  // STR_PART_HINT_TITLE
+    "Essaie les clés Snapmaker sur un tag de 4 octets qui n'est pas un tag Bambu, et lit le matériau et la couleur sur le tag. Chaque autre tag de 4 octets met alors environ une demi-seconde de plus à être reconnu. À laisser désactivé s'il n'y a pas de bobines Snapmaker." },  // STR_W_SNAPMAKER_HINT
+  { "Speicheraufteilung veraltet", "Storage layout outdated", "Partitionnement obsolète" },  // STR_PART_HINT_TITLE
   { "Diese Waage wurde mit der alten Speicheraufteilung geflasht: 3 MB je Firmware-Slot. Neue Geräte bekommen 5 MB je Slot und einen Datenbereich für künftige Funktionen.\n\nUpdates funktionieren weiterhin. Für die neue Aufteilung ist einmal ein Flash per USB über den Web Flasher nötig. Läuft die Waage dabei, bietet der Flasher 'Update' an, und alle Einstellungen bleiben erhalten. Erscheint stattdessen 'Install', den Haken bei 'Erase' nicht setzen.",
     "This scale was flashed with the old storage layout: 3 MB per firmware slot. New devices get 5 MB per slot and a data area for future features.\n\nUpdates keep working. The new layout needs one flash over USB with the web flasher. If the scale is running, the flasher offers 'Update' and every setting is kept. If it offers 'Install' instead, leave the 'Erase' box unticked.",
-    "This scale was flashed with the old storage layout: 3 MB per firmware slot. New devices get 5 MB per slot and a data area for future features.\n\nUpdates keep working. The new layout needs one flash over USB with the web flasher. If the scale is running, the flasher offers 'Update' and every setting is kept. If it offers 'Install' instead, leave the 'Erase' box unticked." },  // STR_PART_HINT_TEXT
-  { "Layout",   "Layout",   "Layout" },  // STR_W_R_LAYOUT
-  { "aktuell",  "current",  "current" },  // STR_W_S_LAYOUT_NEW
-  { "veraltet", "outdated", "outdated" },  // STR_W_S_LAYOUT_OLD
+    "Cette balance a l'ancien partitionnement : 3 Mo par emplacement de firmware. Les nouveaux appareils ont 5 Mo par emplacement et une zone de données en plus.\n\nLes mises à jour fonctionnent toujours. Le nouveau partitionnement demande un flash USB via le Web Flasher. Balance en marche, le flasher propose 'Update' et les réglages restent. S'il propose 'Install', ne cochez pas 'Erase'." },  // STR_PART_HINT_TEXT
+  { "Layout",   "Layout",   "Partitionnement" },  // STR_W_R_LAYOUT
+  { "aktuell",  "current",  "actuel" },  // STR_W_S_LAYOUT_NEW
+  { "veraltet", "outdated", "obsolète" },  // STR_W_S_LAYOUT_OLD
   { "Einmal per USB über den Web Flasher neu flashen bringt das aktuelle Layout. Die Einstellungen bleiben dabei erhalten.",
     "One flash over USB with the web flasher brings the current layout. Your settings are kept.",
-    "One flash over USB with the web flasher brings the current layout. Your settings are kept." },  // STR_W_S_LAYOUT_OLD_HINT
+    "Un flash par USB avec le Web Flasher apporte le partitionnement actuel. Les réglages sont conservés." },  // STR_W_S_LAYOUT_OLD_HINT
   { "Firmware",                                "Firmware",                    "Firmware" },  // STR_W_R_FIRMWARE
-  { "%s von %s MB",                            "%s of %s MB",                 "%s of %s MB" },  // STR_W_S_MB_OF
-  { "Datenbereich",                            "Data area",                   "Data area" },  // STR_W_R_DATA_AREA
+  { "%s von %s MB",                            "%s of %s MB",                 "%s sur %s Mo" },  // STR_W_S_MB_OF
+  { "Datenbereich", "Data area",
+    "Zone de données" },  // STR_W_R_DATA_AREA
   { "%s MB, noch nicht genutzt", "%s MB, not used yet",
-    "%s MB, not used yet" },  // STR_W_S_DATA_UNUSED
-  { "nicht vorhanden",                         "not present",                 "not present" },  // STR_W_S_NONE
-  { "Absturzspeicher",                         "Crash dump",                  "Crash dump" },  // STR_W_R_COREDUMP
+    "%s Mo, pas encore utilisée" },  // STR_W_S_DATA_UNUSED
+  { "nicht vorhanden",                         "not present",                 "absent" },  // STR_W_S_NONE
+  { "Absturzspeicher", "Crash dump",
+    "Rapport de plantage" },  // STR_W_R_COREDUMP
   { "Nicht verknüpft: keine Verbindung", "Not linked: no connection",
     "Non lié : pas de connexion" },  // STR_LINK_NO_CONNECTION
   { "Unlink fehlgeschlagen: keine Verbindung", "Not unlinked: no connection",
@@ -2618,19 +2620,19 @@ const char* const STRINGS[][3] = {
     "Le serveur n'a pas répondu. Vérifiez qu'il fonctionne et que la balance est connectée au WiFi, puis réessayez." },  // STR_SERVER_DOWN_TEXT
   { "Protokoll schreiben",
     "Write the log",
-    "Write the log" },  // STR_W_R_LOGDEST
+    "Écrire le journal" },  // STR_W_R_LOGDEST
   { "Aus",
     "Off",
-    "Off" },  // STR_W_S_DEST_OFF
+    "Désactivé" },  // STR_W_S_DEST_OFF
   { "SD-Karte",
     "SD card",
-    "SD card" },  // STR_W_S_DEST_SD
+    "Carte SD" },  // STR_W_S_DEST_SD
   { "Intern",
     "Internal",
-    "Internal" },  // STR_W_S_DEST_INT
+    "Interne" },  // STR_W_S_DEST_INT
   { "Umfang",
     "Scope",
-    "Scope" },  // STR_W_R_LOGLVL
+    "Niveau" },  // STR_W_R_LOGLVL
   { "Knapp",
     "Minimal",
     "Minimal" },  // STR_W_S_LVL_MIN
@@ -2639,103 +2641,109 @@ const char* const STRINGS[][3] = {
     "Normal" },  // STR_W_S_LVL_NORM
   { "Ausführlich",
     "Verbose",
-    "Verbose" },  // STR_W_S_LVL_VERB
+    "Détaillé" },  // STR_W_S_LVL_VERB
   { "Interner Speicher",
     "Internal storage",
-    "Internal storage" },  // STR_W_LOG_INTERNAL
+    "Mémoire interne" },  // STR_W_LOG_INTERNAL
   { "{a} von {b} Zeilen",
     "{a} of {b} lines",
-    "{a} of {b} lines" },  // STR_W_LOG_LINES_OF
+    "{a} sur {b} lignes" },  // STR_W_LOG_LINES_OF
   { "Alle",
     "All",
-    "All" },  // STR_W_LOG_SRC_ALL
+    "Tous" },  // STR_W_LOG_SRC_ALL
   { "Nicht verfügbar",
     "Not available",
-    "Not available" },  // STR_W_LOG_INT_NONE
+    "Non disponible" },  // STR_W_LOG_INT_NONE
   { "Der interne Speicher fasst 16.384 Zeilen und überschreibt die ältesten. Gemessen an einem vollen Tag sind das rund eine Woche im Umfang \"Normal\" und gut einen Tag im Umfang \"Ausführlich\".",
     "The internal storage holds 16,384 lines and overwrites the oldest. Measured against a full day that is about a week at normal scope and a good day at verbose.",
-    "The internal storage holds 16,384 lines and overwrites the oldest. Measured against a full day that is about a week at normal scope and a good day at verbose." },  // STR_W_LOG_INT_NOTE
+    "La mémoire interne contient 16 384 lignes et écrase les plus anciennes. Sur une journée pleine, cela fait environ une semaine au niveau « Normal » et un bon jour au niveau « Détaillé »." },  // STR_W_LOG_INT_NOTE
   { "Spule hat sich geändert, Liste neu geladen",
     "That spool changed, the list was reloaded",
-    "That spool changed, the list was reloaded" },  // STR_LIST_SPOOL_CHANGED
+    "La bobine a changé, liste rechargée" },  // STR_LIST_SPOOL_CHANGED
   { "Stand: %02d:%02d (vor %s min)",
     "As of %02d:%02d (%s min ago)",
-    "As of %02d:%02d (%s min ago)" },  // STR_LIST_AS_OF
+    "À %02d:%02d (il y a %s min)" },  // STR_LIST_AS_OF
   { "Neu laden",
     "Reload",
-    "Reload" },  // STR_LIST_RELOAD
+    "Recharger" },  // STR_LIST_RELOAD
   { "Tag wird beschrieben",
     "Writing the tag",
-    "Writing the tag" },  // STR_TW_BUSY_WRITE
+    "Écriture du tag" },  // STR_TW_BUSY_WRITE
   { "Tag wird gelöscht",
     "Erasing the tag",
-    "Erasing the tag" },  // STR_TW_BUSY_ERASE
+    "Effacement du tag" },  // STR_TW_BUSY_ERASE
   { "Spule bitte liegen lassen, bis die Bestätigung kommt.",
     "Please leave the spool where it is until this is confirmed.",
-    "Please leave the spool where it is until this is confirmed." },  // STR_TW_BUSY_HINT
+    "Laissez la bobine en place jusqu'à la confirmation." },  // STR_TW_BUSY_HINT
 
   // Tag page in the browser: a MIFARE tag, and the spool the scale shows
   { "Nur lesbar, und nichts darauf, was die Waage kennt.",
     "Read-only, and nothing on it this scale knows.",
-    "Read-only, and nothing on it this scale knows." },  // STR_W_TAG_NOREC
+    "Lecture seule, et rien dessus que cette balance connaisse." },  // STR_W_TAG_NOREC
   { "Tray-UUID",           "Tray UUID",          "Tray UUID" },  // STR_W_TAG_TRAY
-  { "Spule auf der Waage", "Spool on the scale", "Spool on the scale" },  // STR_W_TAG_ONSCALE
+  { "Spule auf der Waage", "Spool on the scale", "Bobine sur la balance" },  // STR_W_TAG_ONSCALE
   { "Die Waage zeigt gerade keine Spule.",
     "The scale shows no spool right now.",
-    "The scale shows no spool right now." },  // STR_W_TAG_NOSPOOL
+    "La balance n'affiche aucune bobine pour le moment." },  // STR_W_TAG_NOSPOOL
 
   // Tag view on the device, from the NFC chip in the header
-  { "NFC-Tag",   "NFC tag", "NFC tag" },  // STR_TV_TITLE
+  { "NFC-Tag",   "NFC tag", "Tag NFC" },  // STR_TV_TITLE
   { "UID",       "UID",     "UID" },  // STR_TV_UID
-  { "Chip",      "Chip",    "Chip" },  // STR_TV_CHIP
-  { "leer",      "blank",   "blank" },  // STR_TV_FMT_BLANK
-  { "unbekannt", "unknown", "unknown" },  // STR_TV_FMT_UNKNOWN
-  { "keins",     "none",    "none" },  // STR_TV_FMT_NONE
+  { "Chip",      "Chip",    "Puce" },  // STR_TV_CHIP
+  { "leer",      "blank",   "vierge" },  // STR_TV_FMT_BLANK
+  { "unbekannt", "unknown", "inconnu" },  // STR_TV_FMT_UNKNOWN
+  { "keins",     "none",    "aucun" },  // STR_TV_FMT_NONE
   { "Auf dem Tag steht nichts. Er kann beschrieben werden.",
     "There is nothing on the tag. It can be written.",
-    "There is nothing on the tag. It can be written." },  // STR_TV_BLANK_NOTE
+    "Le tag est vide. Il peut être écrit." },  // STR_TV_BLANK_NOTE
   { "Kein Tag auf dem Leser. Leg einen auf, er erscheint hier sofort.",
     "No tag on the reader. Put one down and it shows up here right away.",
-    "No tag on the reader. Put one down and it shows up here right away." },  // STR_TV_PLACE
+    "Aucun tag sur le lecteur. Posez-en un, il s'affiche ici aussitôt." },  // STR_TV_PLACE
   { "Der NFC-Leser antwortet gerade nicht. Tags werden erst wieder gelesen, wenn er zurück ist.",
     "The NFC reader is not answering right now. Tags are read again once it is back.",
-    "The NFC reader is not answering right now. Tags are read again once it is back." },  // STR_TV_READER_DOWN
-  { "Spule #%d schreiben", "Write spool #%d",     "Write spool #%d" },  // STR_TV_WRITE
-  { "Keine Spule erkannt", "No spool recognised", "No spool recognised" },  // STR_TV_NOSPOOL
-  { "Tag zu klein",        "Tag too small",       "Tag too small" },  // STR_TV_TOOSMALL
-  { "Tag löschen?",        "Erase the tag?",      "Erase the tag?" },  // STR_TV_ERASE_TITLE
+    "Le lecteur NFC ne répond pas. Les tags seront relus dès son retour." },  // STR_TV_READER_DOWN
+  { "Spule #%d schreiben", "Write spool #%d",     "Écrire bobine #%d" },  // STR_TV_WRITE
+  { "Keine Spule erkannt", "No spool recognised", "Aucune bobine" },  // STR_TV_NOSPOOL
+  { "Tag zu klein",        "Tag too small",       "Tag trop petit" },  // STR_TV_TOOSMALL
+  { "Tag löschen?",        "Erase the tag?",      "Effacer le tag ?" },  // STR_TV_ERASE_TITLE
   { "Was darauf steht, geht verloren. Eine Verknüpfung mit einer Spule bleibt bestehen.",
     "Whatever is on it is lost. A link to a spool stays as it is.",
-    "Whatever is on it is lost. A link to a spool stays as it is." },  // STR_TV_ERASE_HINT
+    "Son contenu sera perdu. Une liaison avec une bobine reste en place." },  // STR_TV_ERASE_HINT
 
   // Tag page in the browser: linking the tag on the reader without writing it
-  { "Nur verknüpfen", "Link only", "Link only" },  // STR_W_TAG_LINKONLY
+  { "Nur verknüpfen", "Link only", "Lier seulement" },  // STR_W_TAG_LINKONLY
   { "Dieser Tag ist nur lesbar. Verknüpfen geht trotzdem.",
     "This tag can only be read. It can still be linked.",
-    "This tag can only be read. It can still be linked." },  // STR_W_TAG_RO_LINK
+    "Ce tag est en lecture seule. On peut quand même le lier." },  // STR_W_TAG_RO_LINK
   { "Spule #%d ist schon mit Tag %s verknüpft. Stattdessen diesen Tag verknüpfen? Der bisherige verliert die Verknüpfung.",
     "Spool #%d is already linked to tag %s. Link this tag instead? The old one loses its link.",
-    "Spool #%d is already linked to tag %s. Link this tag instead? The old one loses its link." },  // STR_W_TL_ASK_REPLACE
+    "La bobine #%d est déjà liée au tag %s. Lier ce tag à la place ? L'ancien perd sa liaison." },  // STR_W_TL_ASK_REPLACE
   { "Spule #%d ist schon mit Tag %s verknüpft. Diesen Tag dazu verknüpfen? Beide führen danach zur Spule.",
     "Spool #%d is already linked to tag %s. Link this tag as well? Both lead to the spool afterwards.",
-    "Spool #%d is already linked to tag %s. Link this tag as well? Both lead to the spool afterwards." },  // STR_W_TL_ASK_ADD
+    "La bobine #%d est déjà liée au tag %s. Lier aussi ce tag ? Les deux mèneront ensuite à la bobine." },  // STR_W_TL_ASK_ADD
   { "Nicht angenommen: es läuft schon eine Verknüpfung, oder Spule oder Tag fehlen.",
     "Not accepted: a link is already running, or the spool or the tag is missing.",
-    "Not accepted: a link is already running, or the spool or the tag is missing." },  // STR_W_TL_REFUSED
+    "Refusé : une liaison est déjà en cours, ou la bobine ou le tag manque." },  // STR_W_TL_REFUSED
   { "Verknüpfe mit Spule #%d ...", "Linking to spool #%d ...",
-    "Linking to spool #%d ..." },  // STR_W_TL_BUSY
+    "Liaison avec la bobine #%d ..." },  // STR_W_TL_BUSY
   { "Tag mit Spule #%d verknüpft.", "Tag linked to spool #%d.",
-    "Tag linked to spool #%d." },  // STR_W_TL_OK
+    "Tag lié à la bobine #%d." },  // STR_W_TL_OK
   { "Der Tag ist schon mit Spule #%d verknüpft.", "The tag is already linked to spool #%d.",
-    "The tag is already linked to spool #%d." },  // STR_W_TL_ALREADY
+    "Le tag est déjà lié à la bobine #%d." },  // STR_W_TL_ALREADY
   { "Der Tag gehört zu Spule #%d. Dort zuerst die Verknüpfung lösen.",
     "The tag belongs to spool #%d. Unlink it there first.",
-    "The tag belongs to spool #%d. Unlink it there first." },  // STR_W_TL_HELD
+    "Le tag appartient à la bobine #%d. Dissociez-le d'abord là-bas." },  // STR_W_TL_HELD
   { "Auf dem Leser liegt inzwischen ein anderer Tag. Nichts verknüpft.",
     "A different tag is on the reader now. Nothing was linked.",
-    "A different tag is on the reader now. Nothing was linked." },  // STR_W_TL_CHANGED
+    "Un autre tag est maintenant sur le lecteur. Rien n'a été lié." },  // STR_W_TL_CHANGED
   { "Der Server hat die Verknüpfung abgelehnt.", "The server refused the link.",
-    "The server refused the link." },  // STR_W_TL_FAILED
+    "Le serveur a refusé la liaison." },  // STR_W_TL_FAILED
+  { "%s | Vorlage #%d", "%s | template #%d",
+    "%s | modèle #%d" },  // STR_COPY_CARD_TEMPLATE
+  { "Neue Spule: %.0f g netto | leer %.0f g", "New spool: %.0f g net | empty %.0f g",
+    "Bobine neuve : %.0f g net | vide %.0f g" },  // STR_COPY_CARD_WEIGHT
+  { "Anlegen", "Create",
+    "Créer" },  // STR_COPY_CARD_CREATE
 };
 
 StringID tagWriteResultString(uint8_t code) {

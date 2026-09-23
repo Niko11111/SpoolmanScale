@@ -1252,6 +1252,9 @@ enum StringID {
   STR_W_TL_HELD,              // %d = the spool that holds the tag
   STR_W_TL_CHANGED,           // another tag on the reader by the time it ran
   STR_W_TL_FAILED,            // the server answered no
+  STR_COPY_CARD_TEMPLATE,     // copy confirmation: %s vendor, %d template spool id
+  STR_COPY_CARD_WEIGHT,       // copy confirmation: %.0f net on the scale, %.0f empty spool
+  STR_COPY_CARD_CREATE,       // copy confirmation: the confirming button
 
   STR_COUNT
 };

@@ -20,8 +20,9 @@ void linkWaitCardShow();
 void linkWaitCardHide();
 bool linkWaitCardOpen();
 
-// The kilobytes read so far; 0 leaves the line empty. Cheap enough to call
-// every loop pass, it only redraws when the number changed.
+// The worker's byte count, every loop pass. The card adds up the lists that
+// come in while it stands, so its number only ever goes up; 0 leaves the line
+// empty. It only redraws when the kilobytes changed.
 void linkWaitCardBytes(size_t bytes);
 
 // True once after Cancel was pressed.

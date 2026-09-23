@@ -108,6 +108,39 @@ void copyStr(char* dst, size_t n, JsonVariantConst v) {
 // and take all N-1 bytes for the length, whatever follows the terminator.
 inline const char* str(const char* s) { return s; }
 
+// One row out of one spool of a downloaded list. Shared by the active list and
+// the archive, so the two can never disagree on what a row holds.
+void fillRow(CachedSpool& r, JsonObjectConst spool, bool bound) {
+  JsonObjectConst fil = spool["filament"];
+  r.id           = spool["id"] | 0;
+  r.name_missing = fil["name"].isNull();
+  copyStr(r.name,      sizeof(r.name),      fil["name"]);
+  copyStr(r.vendor,    sizeof(r.vendor),    fil["vendor"]["name"]);
+  copyStr(r.material,  sizeof(r.material),  fil["material"]);
+  copyStr(r.subgroup,  sizeof(r.subgroup),  fil["material_subgroup"]);
+  copyStr(r.color_hex, sizeof(r.color_hex), fil["color_hex"]);
+  r.bound        = bound;
+  r.remaining    = spool["remaining_weight"] | 0.0f;
+  r.total        = fil["weight"].is<float>() ? fil["weight"].as<float>() : NAN;
+  r.filament_id  = fil["id"] | 0;
+  r.spool_weight = spool["spool_weight"] | 0.0f;
+}
+
+// The same fields spoolCacheToJson() writes, for one row.
+void rowToJson(JsonObject o, const CachedSpool& r) {
+  o["id"]               = r.id;
+  o["remaining_weight"] = r.remaining;
+  o["spool_weight"]     = r.spool_weight;
+  JsonObject f = o["filament"].to<JsonObject>();
+  f["id"] = r.filament_id;
+  if (!r.name_missing) f["name"]              = str(r.name);
+  f["material"]                               = str(r.material);
+  if (r.subgroup[0])   f["material_subgroup"] = str(r.subgroup);
+  if (!isnan(r.total)) f["weight"]            = r.total;
+  f["color_hex"]                              = str(r.color_hex);
+  if (r.vendor[0])     f["vendor"]["name"]    = str(r.vendor);
+}
+
 CachedSpool* rowById(int spool_id) {
   if (!s_rows || s_forget) return nullptr;
   for (int i = 0; i < s_count; i++)
@@ -115,7 +148,137 @@ CachedSpool* rowById(int spool_id) {
   return nullptr;
 }
 
+// ---- the archive ----------------------------------------------------------
+// A slot of its own beside the active list, so that loading the archive never
+// pushes the active list out. The same proof and the same ages; see the header.
+CachedSpool*   a_rows      = nullptr;
+int            a_count     = 0;
+uint32_t       a_filled_ms = 0;
+bool           a_has_stamp = false;
+InventoryStamp a_stamp     = { -1, 0 };
+char           a_key[96]   = "";
+uint8_t        a_mode      = 0;
+time_t         a_filled_at = 0;
+volatile bool  a_forget    = false;
+
+void archiveRelease() {
+  if (a_rows) { free(a_rows); a_rows = nullptr; }
+  a_count     = 0;
+  a_filled_ms = 0;
+  a_filled_at = 0;
+  a_has_stamp = false;
+  a_forget    = false;
+}
+
+void archiveDrop(const char* why) {
+  if (!a_rows) { a_forget = false; return; }
+  logSDf("spool cache: %d archived rows dropped (%s)", a_count, why ? why : "forgotten");
+  archiveRelease();
+}
+
+uint32_t archiveAgeLimitMs() { return a_has_stamp ? SPOOL_CACHE_MAX_AGE_MS : SPOOL_CACHE_BLIND_MS; }
+
+bool archiveSameServer() {
+  const char* base = backendBaseUrl();
+  if (!base) base = "";
+  return a_mode == (uint8_t)backendMode() &&
+         strncmp(a_key, base, sizeof(a_key) - 1) == 0;
+}
+
+void archiveForget() { a_forget = true; }
+
+void archiveTick() {
+  if (!a_rows) { a_forget = false; return; }
+  if (a_forget) { archiveDrop(s_forget_why); return; }
+  if (millis() - a_filled_ms > archiveAgeLimitMs()) archiveDrop("too old");
+}
+
 }  // namespace
+
+void spoolCacheArchiveFill(JsonArrayConst spools, const InventoryStamp* stamp) {
+  archiveRelease();
+
+  int active = 0, archived = 0;
+  for (JsonObjectConst spool : spools) {
+    if (spool["archived"] | false) archived++;
+    else                           active++;
+  }
+  if (archived == 0) return;
+  // The stamp counts the active spools. The list carries them too, and a list
+  // whose active part disagrees with it is not the set the stamp vouches for.
+  if (stamp && stamp->count != active) {
+    logSDf("spool cache: the stamp counted %d spools, the archive list has %d active, not kept",
+           stamp->count, active);
+    return;
+  }
+  if (archived > SPOOL_CACHE_MAX) {
+    logSDf("spool cache: %d archived spools, more than %d, not kept", archived, SPOOL_CACHE_MAX);
+    return;
+  }
+
+  a_rows = (CachedSpool*)heap_caps_malloc((size_t)archived * sizeof(CachedSpool), MALLOC_CAP_SPIRAM);
+  if (!a_rows) {
+    logSDf("spool cache: no PSRAM for %d archived rows, not kept", archived);
+    return;
+  }
+  for (JsonObjectConst spool : spools) {
+    if (!(spool["archived"] | false)) continue;
+    if (a_count >= archived) break;
+    fillRow(a_rows[a_count++], spool, false);
+  }
+
+  const char* base = backendBaseUrl();
+  snprintf(a_key, sizeof(a_key), "%s", base ? base : "");
+  a_mode      = (uint8_t)backendMode();
+  a_filled_ms = millis();
+  if (!a_filled_ms) a_filled_ms = 1;
+  struct tm ti;
+  a_filled_at = getLocalTime(&ti, 0) ? time(nullptr) : 0;
+  a_has_stamp = (stamp != nullptr);
+  if (stamp) a_stamp = *stamp;
+  if (a_has_stamp)
+    logSDf("spool cache: %d archived rows, stamp %d/%d", a_count, a_stamp.count, a_stamp.witness_id);
+  else
+    logSDf("spool cache: %d archived rows, blind", a_count);
+}
+
+bool spoolCacheArchiveUsable(const InventoryStamp* stamp) {
+  if (!a_rows) { a_forget = false; return false; }
+  if (a_forget)             { archiveDrop(s_forget_why); return false; }
+  if (!archiveSameServer()) { archiveDrop("other server"); return false; }
+  if (millis() - a_filled_ms > archiveAgeLimitMs()) { archiveDrop("too old"); return false; }
+  if ((stamp != nullptr) != a_has_stamp) {
+    archiveDrop(a_has_stamp ? "no stamp this time" : "a stamp where there was none");
+    return false;
+  }
+  if (stamp && (stamp->count != a_stamp.count || stamp->witness_id != a_stamp.witness_id)) {
+    char why[64];
+    snprintf(why, sizeof(why), "stamp %d/%d is now %d/%d", a_stamp.count,
+             a_stamp.witness_id, stamp->count, stamp->witness_id);
+    archiveDrop(why);
+    return false;
+  }
+  return true;
+}
+
+bool spoolCacheArchiveToJson(JsonDocument& doc) {
+  if (!a_rows || a_forget || a_count <= 0) return false;
+  doc.clear();
+  JsonArray out = doc.to<JsonArray>();
+  for (int i = 0; i < a_count; i++) {
+    JsonObject o = out.add<JsonObject>();
+    rowToJson(o, a_rows[i]);
+    o["archived"] = true;
+  }
+  if (doc.overflowed()) {
+    logSDf("spool cache: no memory to hand out %d archived rows, downloading instead", a_count);
+    doc.clear();
+    return false;
+  }
+  logSDf("spool cache: %d archived rows served, %lu s old%s", a_count,
+         (unsigned long)((millis() - a_filled_ms) / 1000UL), a_has_stamp ? "" : ", blind");
+  return true;
+}
 
 void spoolCacheFill(JsonArrayConst spools, SpoolBoundFn is_bound,
                     const InventoryStamp* stamp) {
@@ -161,19 +324,7 @@ void spoolCacheFill(JsonArrayConst spools, SpoolBoundFn is_bound,
     if (s_count >= n) break;
 
     CachedSpool& r = s_rows[s_count++];
-    JsonObjectConst fil = spool["filament"];
-    r.id           = spool["id"] | 0;
-    r.name_missing = fil["name"].isNull();
-    copyStr(r.name,      sizeof(r.name),      fil["name"]);
-    copyStr(r.vendor,    sizeof(r.vendor),    fil["vendor"]["name"]);
-    copyStr(r.material,  sizeof(r.material),  fil["material"]);
-    copyStr(r.subgroup,  sizeof(r.subgroup),  fil["material_subgroup"]);
-    copyStr(r.color_hex, sizeof(r.color_hex), fil["color_hex"]);
-    r.bound        = is_bound(spool);
-    r.remaining    = spool["remaining_weight"] | 0.0f;
-    r.total        = fil["weight"].is<float>() ? fil["weight"].as<float>() : NAN;
-    r.filament_id  = fil["id"] | 0;
-    r.spool_weight = spool["spool_weight"] | 0.0f;
+    fillRow(r, spool, is_bound(spool));
   }
 
   const char* base = backendBaseUrl();
@@ -224,19 +375,8 @@ bool spoolCacheToJson(JsonDocument& doc, const char* bound_key) {
   for (int i = 0; i < s_count; i++) {
     const CachedSpool& r = s_rows[i];
     JsonObject o = out.add<JsonObject>();
-    o["id"]               = r.id;
-    o["remaining_weight"] = r.remaining;
-    o["spool_weight"]     = r.spool_weight;
+    rowToJson(o, r);
     if (r.bound) o["extra"][str(bound_key)] = SPOOL_CACHE_BOUND_MARK;
-
-    JsonObject f = o["filament"].to<JsonObject>();
-    f["id"] = r.filament_id;
-    if (!r.name_missing) f["name"]              = str(r.name);
-    f["material"]                               = str(r.material);
-    if (r.subgroup[0])   f["material_subgroup"] = str(r.subgroup);
-    if (!isnan(r.total)) f["weight"]            = r.total;
-    f["color_hex"]                              = str(r.color_hex);
-    if (r.vendor[0])     f["vendor"]["name"]    = str(r.vendor);
   }
 
   if (doc.overflowed()) {
@@ -262,6 +402,7 @@ void spoolCacheSetRemaining(int spool_id, float remaining) {
 void spoolCacheForget(const char* why) {
   s_forget_why = why;
   s_forget     = true;
+  archiveForget();
   // Whatever makes the list worthless does the same to the identifiers the
   // scan took out of it. Passed on from here so that no caller has to know
   // there are two.
@@ -269,6 +410,7 @@ void spoolCacheForget(const char* why) {
 }
 
 void spoolCacheTick() {
+  archiveTick();
   if (!s_rows) {
     // Said under verbose only, and only so that a hook can be seen firing on
     // the device without first having to arrange for a copy to be there.
@@ -287,3 +429,9 @@ int spoolCacheRows() { return (s_rows && !s_forget) ? s_count : 0; }
 uint32_t spoolCacheAgeMs() { return (s_rows && s_filled_ms) ? millis() - s_filled_ms : 0; }
 
 time_t spoolCacheFilledAt() { return (s_rows && !s_forget) ? s_filled_at : 0; }
+
+int spoolCacheArchiveRows() { return (a_rows && !a_forget) ? a_count : 0; }
+
+uint32_t spoolCacheArchiveAgeMs() { return (a_rows && a_filled_ms) ? millis() - a_filled_ms : 0; }
+
+time_t spoolCacheArchiveFilledAt() { return (a_rows && !a_forget) ? a_filled_at : 0; }
