@@ -6,6 +6,7 @@
 #include <lvgl.h>
 #include <cmath>
 #include <cstring>
+#include <esp_heap_caps.h>
 
 #include "app_config.h"
 #include "app/app_boot.h"
@@ -13,6 +14,7 @@
 #include "app/backend_switch.h"
 #include "app/deferred_actions.h"
 #include "app/perf_monitor.h"
+#include "hardware/lvgl_mem.h"
 #include "services/partition_layout.h"
 #include "ui/partition_popup.h"
 #include "bambu/bambu_scan.h"
@@ -373,22 +375,26 @@ void appLoop() {
   static uint32_t heartbeat_count = 0;
   static bool     hb_have_prev    = false;
   static uint32_t hb_prev_heap    = 0;
-  static uint32_t hb_prev_lv_free = 0;
+  static uint32_t hb_prev_lv_int  = 0;
+  static uint32_t hb_prev_lv_ps   = 0;
   static uint32_t hb_prev_stack   = 0;
-  static uint8_t  hb_prev_frag    = 0;
+  static uint32_t hb_prev_ps_allocs = 0;
   static bool     hb_prev_wifi    = false;
   if (sd_verbose && millis() - last_heartbeat_ms >= 5000) {
     last_heartbeat_ms = millis();
     heartbeat_count++;
-    // LVGL runs on its own pool (LV_MEM_SIZE), separate from the ESP heap.
-    // Exhausting it triggers LV_ASSERT_MALLOC, which halts in while(1) with
-    // no reboot and no panic output. Log it so screen leaks become visible.
-    lv_mem_monitor_t lv_mem;
-    lv_mem_monitor(&lv_mem);
+    // LVGL takes its memory from the heap, internal RAM under a budget and
+    // PSRAM past it (hardware/lvgl_mem.h). A screen leak shows as lv_int
+    // climbing, a crowded heap as lv_psallocs rising.
+    const LvMemStats lv_mem = lvMemStats();
+    // Free blocks of the internal heap: how many pieces the free memory lies
+    // in. With LVGL's blocks now in the same heap, this number and heap_big
+    // are what shows fragmentation. One walk of the heap every 5 s.
+    multi_heap_info_t heap_info;
+    heap_caps_get_info(&heap_info, MALLOC_CAP_INTERNAL);
     bool wifi_up = (WiFi.status() == WL_CONNECTED);
 
     const uint32_t heap    = (uint32_t)ESP.getFreeHeap();
-    const uint32_t lv_free = (uint32_t)lv_mem.free_size;
     const uint32_t stack   = (uint32_t)stack_min_bytes;
 
     // Small drifts are normal and not worth a line. A kilobyte is well below
@@ -398,9 +404,10 @@ void appLoop() {
     };
     const bool changed = !hb_have_prev
                       || moved(heap, hb_prev_heap)
-                      || moved(lv_free, hb_prev_lv_free)
+                      || moved(lv_mem.int_used, hb_prev_lv_int)
+                      || moved(lv_mem.ps_used, hb_prev_lv_ps)
                       || stack < hb_prev_stack          // only ever falls
-                      || lv_mem.frag_pct != hb_prev_frag
+                      || lv_mem.ps_allocs != hb_prev_ps_allocs
                       || wifi_up != hb_prev_wifi;
     // A line every so often even when nothing moves, so that the last
     // timestamp still says how far the loop got before it stopped - which is
@@ -411,16 +418,19 @@ void appLoop() {
       last_hb_logged_ms = millis();
       hb_have_prev    = true;
       hb_prev_heap    = heap;
-      hb_prev_lv_free = lv_free;
+      hb_prev_lv_int  = lv_mem.int_used;
+      hb_prev_lv_ps   = lv_mem.ps_used;
       hb_prev_stack   = stack;
-      hb_prev_frag    = lv_mem.frag_pct;
+      hb_prev_ps_allocs = lv_mem.ps_allocs;
       hb_prev_wifi    = wifi_up;
       logSDf("[verbose] heartbeat #%u heap=%d PSRAM=%d uptime=%lus "
-             "lv_free=%u lv_biggest=%u lv_used=%u%% lv_frag=%u%% "
-             "stack_min=%u wifi=%s rssi=%d",
+             "heap_big=%u heap_holes=%u lv_int=%u lv_peak=%u lv_used=%u%% lv_ps=%u "
+             "lv_psallocs=%u stack_min=%u wifi=%s rssi=%d",
         heartbeat_count, ESP.getFreeHeap(), ESP.getFreePsram(), millis() / 1000,
-        (unsigned)lv_mem.free_size, (unsigned)lv_mem.free_biggest_size,
-        (unsigned)lv_mem.used_pct, (unsigned)lv_mem.frag_pct,
+        (unsigned)heap_info.largest_free_block, (unsigned)heap_info.free_blocks,
+        (unsigned)lv_mem.int_used, (unsigned)lv_mem.int_peak,
+        (unsigned)lv_mem.used_pct, (unsigned)lv_mem.ps_used,
+        (unsigned)lv_mem.ps_allocs,
         (unsigned)stack_min_bytes,
         wifi_up ? "up" : "DOWN", wifi_up ? WiFi.RSSI() : 0);
       perfLogWindow();

@@ -397,6 +397,9 @@ void writeBootBlock(const char* boot_or_reboot) {
     logSDf("Last seen before the reset: %s (after %lus)",
            crumbPrevious(), (unsigned long)(crumbPreviousUptimeMs() / 1000));
   }
+  if (rr == ESP_RST_TASK_WDT && crumbWatchdogTasks()[0]) {
+    logSDf("Task watchdog: running then %s", crumbWatchdogTasks());
+  }
 
   if (s_dest_eff == LOG_DEST_OFF) return;
 

@@ -46,16 +46,16 @@
  *=========================*/
 
 /*1: use custom malloc/free, 0: use the built-in `lv_mem_alloc()` and `lv_mem_free()`*/
-#define LV_MEM_CUSTOM 0
+/* Custom since v0.8.0-beta.69. The fixed pool held 96 kB of internal RAM for
+ * good, while the idle UI uses about 20 kB of it - the rest was out of reach
+ * of WiFi, TLS and the Bluetooth stack. LVGL now takes what it needs from the
+ * system heap, internal RAM first, under an internal budget of the old pool's
+ * size, and falls back to PSRAM when the budget or the heap's reserve would be
+ * broken. Rules and figures: src/hardware/lvgl_mem.cpp.
+ * lv_mem_monitor() reports nothing in this mode; ask lvMemStats(). */
+#define LV_MEM_CUSTOM 1
 #if LV_MEM_CUSTOM == 0
     /*Size of the memory available for `lv_mem_alloc()` in bytes (>= 2kB)*/
-    /* 48 kB was too small for this UI. Overlay screens are hidden but never
-     * freed, so every visited screen stays resident. The main screen alone
-     * needs ~19 kB and the drying reminder table another ~20 kB, which fills
-     * the old pool before any leak is involved. Running out halts the CPU in
-     * LV_ASSERT_HANDLER (while(1)), which looks like a freeze and heats the
-     * board. Raising this to 96 kB fits all screens at once with headroom;
-     * static RAM use goes from ~35% to ~50%. */
     #define LV_MEM_SIZE (96U * 1024U)          /*[bytes]*/
 
     /*Set an address for the memory pool instead of allocating it as a normal array. Can be in external SRAM too.*/
@@ -67,10 +67,22 @@
     #endif
 
 #else       /*LV_MEM_CUSTOM*/
-    #define LV_MEM_CUSTOM_INCLUDE <stdlib.h>   /*Header for the dynamic memory function*/
-    #define LV_MEM_CUSTOM_ALLOC   malloc
-    #define LV_MEM_CUSTOM_FREE    free
-    #define LV_MEM_CUSTOM_REALLOC realloc
+    /* The allocator is declared here rather than in a header of its own:
+     * lv_conf.h is the one file every LVGL source already finds. */
+    #define LV_MEM_CUSTOM_INCLUDE <stddef.h>   /*Header for the dynamic memory function*/
+    #define LV_MEM_CUSTOM_ALLOC   lvMemAlloc
+    #define LV_MEM_CUSTOM_FREE    lvMemFree
+    #define LV_MEM_CUSTOM_REALLOC lvMemRealloc
+    #include <stddef.h>
+    #ifdef __cplusplus
+    extern "C" {
+    #endif
+    void *lvMemAlloc(size_t size);
+    void  lvMemFree(void *p);
+    void *lvMemRealloc(void *p, size_t size);
+    #ifdef __cplusplus
+    }
+    #endif
 #endif     /*LV_MEM_CUSTOM*/
 
 /*Number of the intermediate memory buffer used during rendering and other internal processing mechanisms.

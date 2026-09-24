@@ -4,7 +4,9 @@
 #include <cstdio>
 #include <cstring>
 
+#include "hardware/lvgl_mem.h"
 #include "hardware/sd_logger.h"
+#include <esp_heap_caps.h>
 #include "app/deferred_actions.h"
 #include "ams_assign_popup.h"
 #include "ams_detail_popup.h"
@@ -246,22 +248,18 @@ void buildSubHeader(lv_obj_t *parent, const char *title,
 
 void logLvMem(const char* tag, int rows) {
   if (!sd_verbose) return;
-  lv_mem_monitor_t m;
-  lv_mem_monitor(&m);
-  logSDf("[verbose] lvmem %s rows=%d free=%u biggest=%u used=%u%% frag=%u%%",
-    tag, rows, (unsigned)m.free_size, (unsigned)m.free_biggest_size,
-    (unsigned)m.used_pct, (unsigned)m.frag_pct);
+  const LvMemStats m = lvMemStats();
+  logSDf("[verbose] lvmem %s rows=%d free=%u used=%u%% int=%u ps=%u blocks=%u heap=%u",
+    tag, rows, (unsigned)(LVGL_MEM_INTERNAL_BUDGET - m.int_used), (unsigned)m.used_pct,
+    (unsigned)m.int_used, (unsigned)m.ps_used, (unsigned)m.blocks,
+    (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 }
 
 bool lvPoolHasRoomForRow() {
-  lv_mem_monitor_t m;
-  lv_mem_monitor(&m);
-  // Both numbers, because they fail differently: free_size runs out when the
-  // list is simply too long, free_biggest_size when the pool is fragmented by
-  // the screens that were opened before it - which is the state the field logs
-  // show, sitting at 40 to 55 percent fragmentation after some navigating.
-  return m.free_size >= LV_ROW_RESERVE_BYTES &&
-         m.free_biggest_size >= LV_ROW_RESERVE_BYTES / 4u;
+  // Fragmentation, the second thing the old pool check watched, is the heap's
+  // business now: a row's blocks are small enough for any gap it has, and a
+  // block that finds none goes to PSRAM instead of failing.
+  return lvMemInternalRoom(LV_ROW_RESERVE_BYTES);
 }
 
 int filamanStatusStrId(int status_id) {

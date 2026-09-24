@@ -36,3 +36,8 @@ const char* crumbPrevious();
 // Milliseconds the previous boot had been up when its crumb was set. Zero when
 // there is no crumb. Says whether the fault came seconds or hours after start.
 uint32_t crumbPreviousUptimeMs();
+
+// The tasks running on CPU 0 and CPU 1 when the task watchdog fired in the
+// previous boot, as "cpu0=<name> cpu1=<name>", or "" when it did not.
+void crumbWatchdogBegin();
+const char* crumbWatchdogTasks();

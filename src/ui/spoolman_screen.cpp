@@ -192,15 +192,9 @@ static void runAddressTest() {
 void buildSpoolmanScreen() {
   logSD("BUILD: SpoolmanScreen");
   // This is the most object-heavy screen in the project (numpad + header,
-  // ~40 LVGL objects). Log the LVGL pool state before allocating so an
-  // exhausted pool is visible in the log instead of an unexplained halt.
-  if (sd_verbose) {
-    lv_mem_monitor_t lv_mem;
-    lv_mem_monitor(&lv_mem);
-    logSDf("[verbose] buildSpoolmanScreen: lv_free=%u lv_biggest=%u lv_used=%u%%",
-      (unsigned)lv_mem.free_size, (unsigned)lv_mem.free_biggest_size,
-      (unsigned)lv_mem.used_pct);
-  }
+  // ~40 LVGL objects). Log LVGL's memory before allocating, so a screen that
+  // ends up in PSRAM is visible in the log.
+  logLvMem("spoolman", 0);
   releaseScreen(&scr_spoolman);
   scr_spoolman = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_spoolman, 480, 320);

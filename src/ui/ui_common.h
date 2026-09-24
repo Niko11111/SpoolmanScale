@@ -17,7 +17,7 @@ lv_obj_t* buildOverlayScreen();
 
 // Frees a screen object that is about to be replaced and clears the pointer.
 // Call at the top of every build*Screen() function: without it the previous
-// object is orphaned in the LVGL pool (LV_MEM_SIZE) and never reclaimed.
+// object is orphaned in LVGL's memory and never reclaimed.
 // Uses lv_obj_del_async(), so the object is destroyed at the end of the
 // current lv_timer_handler() pass. That keeps it safe even when called from
 // an event callback belonging to the screen itself.
@@ -25,11 +25,12 @@ lv_obj_t* buildOverlayScreen();
 // own stay correct.
 void releaseScreen(lv_obj_t **scr);
 
-// One snapshot of the LVGL pool, tagged so a log can be read back per list.
-// LV_MEM_SIZE is a static pool in internal SRAM and PSRAM does not feed it, so
-// the numbers that matter are the ones taken before the rows exist.
+// One snapshot of LVGL's memory (hardware/lvgl_mem.h), tagged so a log can be
+// read back per list. free= is what is left of the internal budget, the
+// figure a list runs into, so the numbers that matter are the ones taken
+// before the rows exist.
 //
-// What an exhausted pool does was long noted here as while(1) from
+// What an exhausted pool did was long noted here as while(1) from
 // LV_USE_ASSERT_MALLOC - a freeze, no reboot. That is wrong for the case that
 // matters: lv_obj_class_create_obj() (lv_obj_class.c:47) returns NULL without
 // asserting anything, and lv_obj_create() / lv_label_create() hand that
@@ -44,9 +45,12 @@ void releaseScreen(lv_obj_t **scr);
 // Silent unless sd_verbose is on, so it costs nothing in normal operation.
 void logLvMem(const char* tag, int rows);
 
-// Whether the pool can still take one more list row. Asked before a row is
+// Whether internal RAM can still take one more list row. Asked before a row is
 // built rather than after each object in it: a row is five objects, and
-// running out between the second and the third is the crash above.
+// running out between the second and the third was the crash above. Since
+// LVGL can fall back to PSRAM that crash is gone, but a list still stops
+// here: rows in PSRAM scroll with a stutter, so a list is no longer than the
+// old pool allowed.
 //
 // The reserve scales with the pointer width, so the same number covers the
 // device and the 64 bit host the simulator runs on, where every object is
