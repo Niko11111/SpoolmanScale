@@ -91,10 +91,27 @@ bool           httpProgressActive() {
 // this only keeps the call out of the innermost loop.
 #define PROGRESS_STEP  512
 
+// How long a worker may read and parse without giving CPU 0 away. While the
+// response arrives faster than ArduinoJson takes it apart, the read never
+// blocks, and a FilaMan inventory is 4.5 to 7.5 s of that. The idle task of
+// CPU 0 starved, and the task watchdog reset the device 5 s in: twice on
+// 24.09.2026 with "cpu0=backendjob", once already on beta.63. One tick every
+// 100 ms costs the download about 1 %.
+#define WORKER_YIELD_MS  100
+
+static uint32_t s_worker_yield_ms = 0;
+
 void HttpProgressStream::count(size_t n) {
   total_ += n;
   if (total_ - last_ < PROGRESS_STEP) return;
   last_ = total_;
-  if (countingHere()) { *s_count_into = total_; return; }
+  if (countingHere()) {
+    *s_count_into = total_;
+    if (millis() - s_worker_yield_ms >= WORKER_YIELD_MS) {
+      vTaskDelay(1);
+      s_worker_yield_ms = millis();
+    }
+    return;
+  }
   if (s_progress && onLoopTask()) s_progress(total_);
 }
