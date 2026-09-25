@@ -328,10 +328,13 @@ void appLoop() {
   // the moment it is done, so no flash write runs inside an event callback.
   prefsDeferWrites(true);
   perfLoopMark();
+  perfSection("ui");
   lv_timer_handler();
   perfUiDone();
+  perfSection("prefs");
   prefsDeferWrites(false);
   prefsFlush();
+  perfSection("power");
   handlePowerManagement();
 
   // ── Stack watermark of the loop task ─────────────────────
@@ -439,28 +442,39 @@ void appLoop() {
 
   // Before the watchdog, so a connect attempt from the browser is already
   // known to be running when the watchdog asks.
+  perfSection("improv");
   improvSerialTick();
   // DNS answers for the setup portal, and the hand-off of what its form sent.
+  perfSection("portal");
   setupPortalTick();
+  perfSection("wifi");
   handleWifiReconnect();
 
   // OTA web server bedienen wenn aktiv
+  perfSection("web");
   handleOtaServerClient();
+  perfSection("tagwrite");
   tagWriteTick();
   tagLinkTick();
   // Says a freshly linked tag once more, so a paired browser opens the spool
   // instead of being left with the unknown-tag toast the first scan produced.
+  perfSection("rescan");
   spoolmanRescanTick();
   // Asks again while an unknown tag sits on the pad, so linking it in a
   // browser shows up here without lifting the spool off and back on.
+  perfSection("recheck");
   spoolmanRecheckTick();
   // Collects the inventory an unknown tag's lookup handed to the backend
   // worker, and reads the verdict out of it.
+  perfSection("lookup");
   lookupScanTick();
+  perfSection("sdlog");
   sdLoggerTick();
   // Keeps a sector erased ahead of the ring in flash, so a log line never
   // waits for one, and carries out a clear a sector at a time.
+  perfSection("flashlog");
   flashLogTick();
+  perfSection("jobs");
   webJobsTick();
   // Gives the kept spool list back once it is too old or was called off. Two
   // comparisons while there is none.
@@ -478,6 +492,7 @@ void appLoop() {
 
   // Background update check. Cheap: a few comparisons per pass, and the actual
   // request happens in its own task on the other core.
+  perfSection("updchk");
   updateCheckTick();
 
   firmwareStampTick();
@@ -508,6 +523,7 @@ void appLoop() {
   }
 
   // Extra fields check/create - deferred from LVGL event callback to loop
+  perfSection("deferred");
   handleExtraFieldsDeferredActions();
   handleSpoolmanScreenDeferredActions();
   // Before the WiFi setup actions: a form the portal handed over becomes their
@@ -575,7 +591,8 @@ void appLoop() {
     // not come back as present, or the header lights up again.
     if (g_scale_fitted) scl_ok = scaleHardwarePresent();
     diagnosticsRecheckNow();
-    diagnosticsTick();
+    perfSection("diag");
+  diagnosticsTick();
     updateDiagBanner();
     updateHeaderStatus();
   }
@@ -789,6 +806,7 @@ void appLoop() {
   // Before the two screens that use it: it releases its overlay in one pass
   // and hands the answer over in the next, and the handler that acts on that
   // answer should see it in the same pass rather than the one after.
+  perfSection("deferred2");
   handleStatusPickerDeferredActions();
   handleMoreInfoDeferredActions();
   handleAmsAssignDeferredActions();
@@ -805,6 +823,7 @@ void appLoop() {
   }
   // Right after the card's own handler, so a batch that finished inline (as
   // it does in the simulator) is collected in the pass that started it.
+  perfSection("ams");
   amsDetailBatchTick();
   amsPickTick();
   amsPresenceTick();
@@ -867,6 +886,7 @@ void appLoop() {
     }
   }
   // Cancel pending popups if tag came back
+  perfSection("tagstate");
   if (tag_present) {
     if (loc_popup_pending_id > 0) {
       logSDf("[verbose] LOC: debounce cancelled - tag back id=%d", loc_popup_pending_id);
@@ -1038,6 +1058,7 @@ void appLoop() {
   // register read is all ones through Adafruit_BusIO, which available() reads
   // as "conversion ready" and read() as a sample of -1. Tare or calibrate on
   // that and the nonsense is stored for good.
+  perfSection("scale");
   if (scale_ready && millis() - last_scale_ms >= 200 && !scaleHardwarePresent()) {
     last_scale_ms = millis();
     scale_ready = false;
@@ -1359,6 +1380,7 @@ void appLoop() {
   }
 
   // Fix 10: Spoolman health check every 30s
+  perfSection("netsvc");
   if (wifi_ok) {
     static unsigned long last_sm_check_ms = 0;
     if (millis() - last_sm_check_ms >= 30000 && !isSpoolFlowIdInputOpen()) {
@@ -1408,6 +1430,7 @@ void appLoop() {
   // BamBuddy presence: registration, heartbeat, queued commands, live weight
   // and tag removal. Paces itself, so it is called unconditionally and costs
   // a mode check on the passes where it has nothing to do.
+  perfSection("bambuddy");
   bambuddyDeviceTick();
 
   // The one owner of port 80. Derived from the conditions once a second, so
@@ -1542,6 +1565,7 @@ void appLoop() {
     const unsigned long poll_interval = fast_mode ? NFC_POLL_FAST_MS : NFC_POLL_SLOW_MS;
     const uint16_t poll_timeout = fast_mode ? NFC_TIMEOUT_FAST_MS : NFC_TIMEOUT_SLOW_MS;
 
+    perfSection("nfc");
     if (millis() - last_nfc_check_ms >= poll_interval) {
       last_nfc_check_ms = millis();
       uint8_t uid[NFC_UID_MAX], uidLen = 0;
@@ -1977,5 +2001,6 @@ void appLoop() {
     if (s != link_bar_state) { link_bar_state = s; updateLinkButton(); }
   }
 
+  perfSection("tail");
   delay(5);
 }

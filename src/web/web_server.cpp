@@ -5,6 +5,7 @@
 #include <WiFi.h>
 
 #include "app/app_state.h"
+#include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/filaman_api.h"
 #include "services/remote_link.h"
@@ -79,7 +80,14 @@ class ScaleWebServer : public WebServer {
           _currentClient.setTimeout(HTTP_MAX_SEND_WAIT / 1000);
           _contentLength = CONTENT_LENGTH_NOT_SET;
 #endif
+          const String req_uri = uri();
+          const uint32_t t0 = millis();
           _handleRequest();
+          const uint32_t took = millis() - t0;
+          if (took >= 300) {
+            logSDf("[verbose] web: %s from %s took %u ms", req_uri.c_str(),
+                   _currentClient.remoteIP().toString().c_str(), (unsigned)took);
+          }
         }
       } else {
         // An idle socket keeps its second only while nobody is waiting behind

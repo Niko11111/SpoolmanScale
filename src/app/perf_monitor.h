@@ -25,3 +25,9 @@ void perfNfcPoll(bool found, uint32_t poll_ms);
 // Writes one line with everything gathered since the previous one, then
 // starts over. From the heartbeat, so it shares that line's restraint.
 void perfLogWindow();
+
+// Names the part of appLoop() that starts here. The time until the next mark
+// is booked to this name, and the perf window reports the slowest one: a loop
+// that stands still for a second says where, without a log line per pass.
+// `name` must outlive the call, a string literal.
+void perfSection(const char* name);

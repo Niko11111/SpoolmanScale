@@ -15,6 +15,9 @@
 // parameter, so lang.h has to come after anything that pulls it in.
 #include "lang.h"
 
+// One TCP segment of log lines, see /api/log/session.
+#define WEB_LOG_BLOCK_BYTES 1400
+
 static const char* label() { return T(STR_W_NAV_LOGS); }
 
 // Lines leave the ring in chunks rather than one String: two megabytes of log
@@ -493,7 +496,13 @@ static void routes(WebServer &srv) {
     srv.sendHeader("X-Log-Reset", (!have_since || stale) ? "1" : "0");
     srv.setContentLength(CONTENT_LENGTH_UNKNOWN);
     srv.send(200, "text/plain", "");
+    // Lines go out in blocks rather than one chunk each. A chunk is three
+    // writes to the socket, and with Nagle off each is a packet of its own:
+    // 30 lines were 90 packets and held the loop for 300 to 400 ms on core 3
+    // (24.09.2026), every time the log page polled.
     char line[176], out[200];
+    char block[WEB_LOG_BLOCK_BYTES];
+    size_t block_len = 0;
     for (uint32_t q = since; q < seq; q++) {
       time_t when = 0;
       uint32_t up = 0;
@@ -511,9 +520,16 @@ static void routes(WebServer &srv) {
         // Written before the clock was set. Uptime beats a wrong wall time.
         snprintf(stamp, sizeof(stamp), "+%lus", (unsigned long)up);
       }
-      snprintf(out, sizeof(out), "[%s] %s\n", stamp, line);
-      srv.sendContent(out);
+      const int n = snprintf(out, sizeof(out), "[%s] %s\n", stamp, line);
+      const size_t len = (n < 0) ? 0 : ((size_t)n < sizeof(out) ? (size_t)n : sizeof(out) - 1);
+      if (block_len + len > sizeof(block)) {
+        srv.sendContent(block, block_len);
+        block_len = 0;
+      }
+      memcpy(block + block_len, out, len);
+      block_len += len;
     }
+    if (block_len) srv.sendContent(block, block_len);
     srv.sendContent("");
   });
 

@@ -28,6 +28,21 @@ void perfLoopMark() {
   s_last_mark_ms = now;
 }
 
+static const char* s_sec_name     = nullptr;
+static uint32_t    s_sec_start_us = 0;
+static uint32_t    s_sec_max_us   = 0;
+static const char* s_sec_max_name = nullptr;
+
+void perfSection(const char* name) {
+  const uint32_t now = micros();
+  if (s_sec_name) {
+    const uint32_t d = now - s_sec_start_us;
+    if (d > s_sec_max_us) { s_sec_max_us = d; s_sec_max_name = s_sec_name; }
+  }
+  s_sec_name     = name;
+  s_sec_start_us = now;
+}
+
 // Successful polls only count towards the hit figures. The two thresholds are
 // the timeouts under discussion: 100 ms is what the fast re-poll already runs
 // with, 80 ms is the candidate for the slow one.
@@ -94,6 +109,14 @@ void perfLogWindow() {
   s_ui_max_us = 0;
   s_ui_sum_us = 0;
   s_ui_calls  = 0;
+
+  // The slowest part of a pass, when one was slow enough to feel.
+  if (s_sec_max_us >= 50000 && s_sec_max_name) {
+    logSDf("[verbose] slow: max=%ums in=%s", (unsigned)(s_sec_max_us / 1000),
+           s_sec_max_name);
+  }
+  s_sec_max_us = 0;
+  s_sec_max_name = nullptr;
 
   // Only while a tag answers: an empty reader has nothing to say here.
   if (s_nfc_hits > 0) {
