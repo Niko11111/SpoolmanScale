@@ -1256,6 +1256,25 @@ enum StringID {
   STR_COPY_CARD_WEIGHT,       // copy confirmation: %.0f net on the scale, %.0f empty spool
   STR_COPY_CARD_CREATE,       // copy confirmation: the confirming button
 
+  // Bluetooth: the Connection tile, the screen behind it, the device scan
+  STR_BT_TITLE,               // tile and screen title
+  STR_BT_SWITCH,              // the master switch row
+  STR_BT_SWITCH_SUB,          // what on means
+  STR_BT_SCANNING,            // the loading overlay
+  STR_BT_NONE_FOUND,          // after a scan that saw nothing
+  STR_BT_UNNAMED,             // a device that did not say its name
+  STR_BT_INIT_FAILED,         // the stack could not start
+  STR_BT_HELP,                // the ? on the screen
+  STR_BT_DEVICES,             // the row into the list, and the list's title
+  STR_BT_DEVICES_NONE_YET,    // the row before the first scan
+  STR_BT_DEVICES_FMT,         // %d = devices the last scan saw
+  STR_BT_SIG_STRONG,          // signal in words, three steps
+  STR_BT_SIG_MEDIUM,
+  STR_BT_SIG_WEAK,
+  STR_BT_CARD_ADDRESS,        // the card's lines
+  STR_BT_CARD_SIGNAL,
+  STR_BT_CLOSE,               // the card's one button
+
   STR_COUNT
 };
 

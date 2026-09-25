@@ -2744,6 +2744,31 @@ const char* const STRINGS[][3] = {
     "Bobine neuve : %.0f g net | vide %.0f g" },  // STR_COPY_CARD_WEIGHT
   { "Anlegen", "Create",
     "Créer" },  // STR_COPY_CARD_CREATE
+
+  // Bluetooth: the Connection tile, the screen behind it, the device scan
+  { "Bluetooth",                  "Bluetooth",                         "Bluetooth" },  // STR_BT_TITLE
+  { "Bluetooth nutzen",           "Use Bluetooth",                     "Bluetooth" },  // STR_BT_SWITCH
+  { "Funk nur bei Bedarf an", "Radio only on when needed",
+    "Radio active au besoin" },  // STR_BT_SWITCH_SUB
+  { "Bluetooth-Geräte suchen...", "Scanning for Bluetooth devices...", "Recherche Bluetooth..." },  // STR_BT_SCANNING
+  { "Keine Geräte gefunden", "No devices found",
+    "Aucun appareil trouvé" },  // STR_BT_NONE_FOUND
+  { "(ohne Namen)",               "(no name)",                         "(sans nom)" },  // STR_BT_UNNAMED
+  { "Bluetooth konnte nicht gestartet werden. Zu wenig freier Speicher, siehe Log.",
+    "Bluetooth could not be started. Not enough free memory, see the log.",
+    "Bluetooth n'a pas démarré. Mémoire insuffisante, voir le journal." },  // STR_BT_INIT_FAILED
+  { "Aus: kein Bluetooth, nichts läuft im Hintergrund. An: Funktionen wie die Gerätesuche starten den Funk bei Bedarf und geben ihn danach wieder frei. Die Suche zeigt nur, was in Reichweite ist, und verbindet nichts.",
+    "Off: no Bluetooth, nothing runs in the background. On: features such as the device scan start the radio when needed and release it afterwards. The scan only lists what is in range and connects to nothing.",
+    "Désactivé : pas de Bluetooth, rien en arrière-plan. Activé : la recherche d'appareils et les autres fonctions allument la radio au besoin, puis la libèrent. La recherche liste ce qui est à portée et ne connecte rien." },  // STR_BT_HELP
+  { "Geräte",             "Devices",          "Appareils" },  // STR_BT_DEVICES
+  { "Noch nicht gesucht", "Not searched yet", "Aucune recherche" },  // STR_BT_DEVICES_NONE_YET
+  { "%d in Reichweite",   "%d in range",      "%d à portée" },  // STR_BT_DEVICES_FMT
+  { "stark",              "strong",           "fort" },  // STR_BT_SIG_STRONG
+  { "mittel",             "medium",           "moyen" },  // STR_BT_SIG_MEDIUM
+  { "schwach",            "weak",             "faible" },  // STR_BT_SIG_WEAK
+  { "Adresse",            "Address",          "Adresse" },  // STR_BT_CARD_ADDRESS
+  { "Signal",             "Signal",           "Signal" },  // STR_BT_CARD_SIGNAL
+  { "Schließen",          "Close",            "Fermer" },  // STR_BT_CLOSE
 };
 
 StringID tagWriteResultString(uint8_t code) {

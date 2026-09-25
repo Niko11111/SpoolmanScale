@@ -2,6 +2,7 @@
 #include "navigation.h"
 #include "app/app_state.h"
 #include "services/backend.h"
+#include "services/ble_service.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -158,7 +159,7 @@ void buildUI() {
   lv_obj_align(hdr_lbl, LV_ALIGN_LEFT_MID, 8, 0);
 
   // SD card indicator in header - only visible when sd_available.
-  // Positions of this and the four chips right of it come from
+  // Positions of this and the five chips right of it come from
   // layoutHeaderChips() at the end of this function, not from fixed offsets.
   lbl_hdr_sd = lv_label_create(hdr);
   lv_label_set_text(lbl_hdr_sd, LV_SYMBOL_SD_CARD);
@@ -170,6 +171,15 @@ void buildUI() {
   lv_label_set_text(lbl_hdr_wifi, LV_SYMBOL_WIFI);
   lv_obj_set_style_text_color(lbl_hdr_wifi, lv_color_hex(0x606060), 0);
   lv_obj_set_style_text_font(lbl_hdr_wifi, &lv_font_montserrat_ext_12, 0);
+
+  // Bluetooth, left of WiFi. Hidden while the master switch is off, so a
+  // device that never uses BLE never shows it; updateHeaderStatus() follows
+  // the switch. Quiet by design: on means allowed, not connected.
+  lbl_hdr_bt = lv_label_create(hdr);
+  lv_label_set_text(lbl_hdr_bt, LV_SYMBOL_BLUETOOTH);
+  lv_obj_set_style_text_color(lbl_hdr_bt, lv_color_hex(UI_COL_CAPTION), 0);
+  lv_obj_set_style_text_font(lbl_hdr_bt, UI_FONT_CAPTION, 0);
+  if (!bleEnabled()) lv_obj_add_flag(lbl_hdr_bt, LV_OBJ_FLAG_HIDDEN);
 
   // A button like the AMS chip, and built the same way: it opens the tag
   // view. The label inside is still the reader's state - green "NFC", red

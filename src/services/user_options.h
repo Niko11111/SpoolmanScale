@@ -236,3 +236,10 @@ extern bool g_tag2_ask;
 // and every weighing opens a window; here there is no window and no implicit
 // bay, so an "always" would have nothing to do.
 extern bool g_ams_pick_ask;
+
+// Whether the device may use Bluetooth Low Energy at all. Off by default, and
+// off means the BLE stack is never started: no radio time shared with WiFi,
+// no internal RAM taken. On means the features that need it (a device scan,
+// the label printer) start the stack when they run and release it right
+// after; nothing stays up between uses. Settings > Connection > Bluetooth.
+extern bool g_ble_enabled;

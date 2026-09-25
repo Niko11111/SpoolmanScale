@@ -24,3 +24,4 @@ bool g_flm_ext_id = true;
 uint8_t g_tagwrite_mode = TAGWRITE_OFF;
 bool g_tagmismatch_ask = false;
 uint8_t g_tagwrite_fmt = TAG_FMT_OPENSPOOL;
+bool g_ble_enabled = false;

@@ -83,6 +83,8 @@
 #include "services/prefs_store.h"
 #include "web/web_jobs.h"
 #include "ui/confirm_popup.h"
+#include "ui/ble_devices_screen.h"
+#include "ui/bluetooth_screen.h"
 #include "ui/connection_screen.h"
 #include "ui/dried_action.h"
 #include "ui/drying_reminder_screen.h"
@@ -106,6 +108,7 @@
 #include "ui/spoolman_lookup.h"
 #include "ui/spoolman_screen.h"
 #include "ui/wifi_setup_screen.h"
+#include "ui/wifi_menu_screen.h"
 #include "ui/system_screen.h"
 #include "ui/tag_display.h"
 #include "ui/tag_view.h"
@@ -530,6 +533,8 @@ void appLoop() {
   // connect in the same pass.
   handleWifiPortalDeferredActions();
   handleWifiSetupDeferredActions();
+  handleBluetoothDeferredActions();
+  handleBleDevicesDeferredActions();
   handleConfirmPopupDeferredActions();
   handleDriedDeferredAction();
   // Bringing an archived spool back. Out here rather than in the button's
@@ -768,6 +773,27 @@ void appLoop() {
     buildConnectionScreen();
     hideAllOverlays();
     lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_wifi_menu_pending) {
+    show_wifi_menu_pending = false;
+    buildWifiMenuScreen();         // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_wifi_menu, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_bluetooth_pending) {
+    show_bluetooth_pending = false;
+    buildBluetoothScreen();        // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_bluetooth, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_ble_devices_pending) {
+    show_ble_devices_pending = false;
+    buildBleDevicesScreen();       // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_ble_devices, LV_OBJ_FLAG_HIDDEN);
+    // A list that was never filled scans on the way in; the button in the
+    // header is for scanning again.
+    if (!bleDevicesScanned()) ble_scan_pending = true;
   }
   // Shown once the device has settled, not during boot: a modal that appears
   // while the first screen is still assembling reads as a fault.

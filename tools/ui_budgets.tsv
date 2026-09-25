@@ -197,3 +197,4 @@ STR_TW_BUSY_ERASE	20	360	NEVER	src/ui/tag_busy_popup.cpp:70 card title, UI_POPUP
 STR_LIST_RELOAD	14	94	NEVER	src/ui/spool_flow.cpp listReloadStrip: LINK_RELOAD_W 110 button, 8 px air each side
 STR_COPY_CARD_WEIGHT	16	360	NEVER	src/ui/copy_confirm_popup.cpp line 3 of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
 STR_COPY_CARD_CREATE	18	150	NEVER	src/ui/copy_confirm_popup.cpp 170 px answer button, 10 px air each side
+STR_BT_DEVICES	16	320	NEVER	src/ui/bluetooth_screen.cpp makeListBtn title, text_w 320

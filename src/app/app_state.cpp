@@ -58,6 +58,9 @@ lv_obj_t *scr_bag        = nullptr;
 lv_obj_t *scr_lastused   = nullptr;
 
 lv_obj_t *scr_connection = nullptr;
+lv_obj_t *scr_wifi_menu  = nullptr;
+lv_obj_t *scr_bluetooth  = nullptr;
+lv_obj_t *scr_ble_devices = nullptr;
 lv_obj_t *scr_scale_sub  = nullptr;
 lv_obj_t *scr_drying_reminder = nullptr;
 lv_obj_t *scr_display    = nullptr;
@@ -201,6 +204,7 @@ lv_obj_t* s_ams_numpad_scr = nullptr;
 lv_obj_t* s_ams_numpad_lbl = nullptr;
 lv_obj_t *lbl_nfc_dot;
 lv_obj_t *lbl_hdr_wifi;
+lv_obj_t *lbl_hdr_bt = nullptr;
 lv_obj_t *lbl_hdr_nfc;
 lv_obj_t *lbl_hdr_scl = nullptr;
 lv_obj_t *lbl_hdr_scans;

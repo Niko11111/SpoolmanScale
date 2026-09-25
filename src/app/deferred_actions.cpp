@@ -50,3 +50,11 @@ float bb_cap_label_g      = 0.0f;
 
 bool i2c_rescan_pending = false;
 bool cal_now_pending    = false;
+
+bool show_wifi_menu_pending     = false;
+bool show_bluetooth_pending     = false;
+bool bluetooth_rebuild_pending  = false;
+bool ble_scan_pending           = false;
+bool show_ble_devices_pending   = false;
+int  ble_card_pending           = -1;
+bool ble_card_close_pending     = false;

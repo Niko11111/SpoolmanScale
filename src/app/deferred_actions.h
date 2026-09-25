@@ -65,6 +65,8 @@ extern bool show_tag_field_pending;
 // "create the field" and has to do exactly that.
 extern bool create_tag_field_pending;
 extern bool show_spoolman_pending;
+// Back to the Connection screen, rebuilt: from the Spoolman screen, and from
+// the WiFi menu and the Bluetooth screen, whose tiles it has to redraw.
 extern bool show_connection_from_spoolman_pending;
 extern bool show_system_pending;
 extern bool show_ota_pending;
@@ -111,3 +113,23 @@ extern bool i2c_rescan_pending;
 // a fixed order - leave the setup, then open the calibration - so it cannot be
 // expressed with show_factor_pending alone.
 extern bool cal_now_pending;
+
+// The WiFi menu behind the Connection tile, and the way back into it from
+// the WiFi setup and status screens: built on the loop, never from inside
+// the callback of the screen it replaces.
+extern bool show_wifi_menu_pending;
+// The Bluetooth screen behind its Connection tile.
+extern bool show_bluetooth_pending;
+// The Bluetooth switch was flipped or a scan finished: the screen is rebuilt
+// to show it, which deletes the row the tap landed on - so not from there.
+extern bool bluetooth_rebuild_pending;
+// A device scan. It starts the BLE stack and blocks for seconds: loop only.
+extern bool ble_scan_pending;
+// The device list behind the Bluetooth screen's row.
+extern bool show_ble_devices_pending;
+// A device row was tapped: the index of the card to build, -1 for none. The
+// card is a popup over the list and is built on the loop like every popup.
+extern int  ble_card_pending;
+// The card's Close button: the card goes on the next pass, not from inside
+// the callback of the button that sits on it.
+extern bool ble_card_close_pending;

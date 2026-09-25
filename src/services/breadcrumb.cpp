@@ -2,7 +2,6 @@
 
 #include <Arduino.h>
 #include <esp_attr.h>
-#include <esp_idf_version.h>
 #include <cstring>
 
 // RTC_NOINIT_ATTR is the point of the whole file: the startup code does not
@@ -60,6 +59,7 @@ RTC_NOINIT_ATTR static char     s_wdt_task[2][WDT_NAME_LEN];
 static char s_wdt_prev[2 * WDT_NAME_LEN + 16] = "";
 
 #ifndef SPOOLMANSCALE_SIM
+#include <esp_idf_version.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 

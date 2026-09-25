@@ -7,7 +7,6 @@
 #include <lvgl.h>
 #include <cstring>
 
-#include "connection_screen.h"
 #include "header_status.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
@@ -176,9 +175,9 @@ void buildWifiSetupScreen() {
       // settings menu in the middle of the setup.
       wifi_reconnect_pending = true;
     } else {
-      hideAllOverlays();
-      buildConnectionScreen();
-      lv_obj_clear_flag(scr_connection, LV_OBJ_FLAG_HIDDEN);
+      // Into the WiFi menu the setup is reached from. Deferred: the menu is
+      // built on the loop, not inside this callback.
+      show_wifi_menu_pending = true;
     }
   });
 
