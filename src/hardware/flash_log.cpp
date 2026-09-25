@@ -95,6 +95,20 @@ static bool readRec(uint32_t rec, Rec *out) {
 // Erasing a sector destroys up to 32 lines at once, so the oldest sequence
 // still worth looking for moves past the highest one that stood in it. Doing
 // that here rather than at the call sites means no path can erase and forget.
+// What erasing costs, for the perf window: the one thing about this ring that
+// holds both cores (the flash cache is off while a sector erases). Counted
+// here and logged there, because a line written from inside the log would
+// land in this very code again.
+static uint32_t s_erase_max_us = 0;
+static uint32_t s_erase_count  = 0;
+
+void flashLogEraseStatsTake(uint32_t* count, uint32_t* max_us) {
+  if (count)  *count  = s_erase_count;
+  if (max_us) *max_us = s_erase_max_us;
+  s_erase_count = 0;
+  s_erase_max_us = 0;
+}
+
 static bool eraseSector(uint32_t sector) {
   if (!s_part) return false;
   const uint32_t first = sector * RECS_PER_SECTOR;
@@ -104,8 +118,12 @@ static bool eraseSector(uint32_t sector) {
     if (r.seq >= s_first_seq) s_first_seq = r.seq + 1;
     break;                                  // sequences rise inside a sector
   }
+  const uint32_t t0 = micros();
   const esp_err_t e = esp_partition_erase_range(s_part, sector * SECTOR_BYTES,
                                                 SECTOR_BYTES);
+  const uint32_t took = micros() - t0;
+  if (took > s_erase_max_us) s_erase_max_us = took;
+  s_erase_count++;
   if (e != ESP_OK) {
     const uint32_t now = millis();
     if (!s_erase_complained_ms || now - s_erase_complained_ms >= ERASE_COMPLAIN_MS) {

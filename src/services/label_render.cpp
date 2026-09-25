@@ -16,7 +16,6 @@
 // The fonts, from src/fonts/: the large ones are compiled in by their own
 // guard and were unused until now. Only the sizes up to 24 have the French
 // supplement behind them; a line the big ones cannot spell drops to 24.
-LV_FONT_DECLARE(lv_font_montserrat_ext_44);
 LV_FONT_DECLARE(lv_font_montserrat_ext_36);
 LV_FONT_DECLARE(lv_font_montserrat_ext_28);
 LV_FONT_DECLARE(lv_font_montserrat_ext_24);
@@ -234,8 +233,8 @@ static bool renderLabel(const LabelPrinterConfig& printer, const SpoolLabelData&
   // The maker, as large as the width carries.
   if (d.vendor[0]) {
     static const lv_font_t* const base[] = { &lv_font_montserrat_ext_36, &lv_font_montserrat_ext_28, &lv_font_montserrat_ext_24 };
-    static const lv_font_t* const big[]  = { &lv_font_montserrat_ext_44, &lv_font_montserrat_ext_36, &lv_font_montserrat_ext_28, &lv_font_montserrat_ext_24 };
-    const lv_font_t* f = tall ? fitFont(d.vendor, W, big, 4) : fitFont(d.vendor, W, base, 3);
+    // No 44 px on the larger sizes: that one line cost 85 KB of flash.
+    const lv_font_t* f = fitFont(d.vendor, W, base, 3);
     drawLine(canvas, M, y, W, f, black, LV_TEXT_ALIGN_CENTER, d.vendor);
     y += f->line_height + LR_GAP_PX;
   }

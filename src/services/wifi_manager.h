@@ -6,6 +6,12 @@
 
 void wifiManagerPrepareScan();
 int wifiManagerScanNetworks();
+// The same scan without holding the loop: start it, then poll. The poll says
+// -1 while it runs and the network count once it is done; a scan that could
+// not start, or failed, reads -2. The accessors below then work as after
+// wifiManagerScanNetworks().
+bool wifiManagerStartScanAsync();
+int wifiManagerScanPoll();
 String wifiManagerScannedSSID(int index);
 int wifiManagerScannedRSSI(int index);
 void wifiManagerClearScan();

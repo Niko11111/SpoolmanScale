@@ -74,3 +74,7 @@ bool flashLogClearBusy();
 // "[HH:MM:SS] text" the way the card writes it. Returns the number of lines.
 // The callback must not log: it would write into the ring it is reading.
 uint32_t flashLogEmit(void (*emit)(const char* line, void* ctx), void* ctx);
+
+// Sector erases since the last call and the longest of them, then reset. For
+// the perf window.
+void flashLogEraseStatsTake(uint32_t* count, uint32_t* max_us);

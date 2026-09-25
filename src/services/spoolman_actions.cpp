@@ -107,13 +107,7 @@ int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
     // The grams the kept spool list shows for this spool. Display only: a row
     // is read from the server again before anything is written to it.
     spoolCacheSetRemaining(sm_id, remaining);
-    char w_str[16];
-    snprintf(w_str, sizeof(w_str), "%.0f g", sm_remaining);
-    lv_label_set_text(lbl_spoolman_weight, w_str);
-    float pct = (sm_total > 0) ? (sm_remaining / sm_total * 100.0f) : 0;
-    char p_str[16];
-    snprintf(p_str, sizeof(p_str), "%.1f %%", pct);
-    lv_label_set_text(lbl_spoolman_pct, p_str);
+    showSpoolRemaining();
     struct tm* t = nullptr;
     if (last_used_mode == 1 && lbl_last_used) {
       time_t now = time(nullptr);

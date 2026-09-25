@@ -9,23 +9,34 @@
 #include "app_config.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "ui/theme.h"
 #include "extra/libs/qrcode/lv_qrcode.h"
 
 
 
-static const char* QR_TITLES[] = { "Ko-fi", "GitHub", "Discord", "MakerWorld" };
-static const char* QR_URLS[]   = {
+// The manual is last in the arrays and first on the screen: most questions
+// people ask are answered there (Nikolai, 25.09.2026).
+#define QR_COUNT 5
+#define QR_DOCS  4
+static const char* QR_TITLES[QR_COUNT] = { "Ko-fi", "GitHub", "Discord", "MakerWorld", nullptr };
+static const char* QR_URLS[QR_COUNT]   = {
   "https://ko-fi.com/formfollowsfunction",
   "https://github.com/Niko11111/SpoolmanScale",
   "https://discord.gg/xadskCrPFu",
-  "https://makerworld.com/de/@FormFollowsF/upload"
+  "https://makerworld.com/de/@FormFollowsF/upload",
+  "https://niko11111.github.io/SpoolmanScale-Docs/"
 };
-static const char* QR_URLS_DISPLAY[] = {
+static const char* QR_URLS_DISPLAY[QR_COUNT] = {
   "ko-fi.com/formfollowsfunction",
   "github.com/Niko11111/SpoolmanScale",
   "discord.gg/xadskCrPFu",
-  "makerworld.com/de/@FormFollowsF/upload"
+  "makerworld.com/de/@FormFollowsF/upload",
+  "niko11111.github.io/SpoolmanScale-Docs"
 };
+
+static const char* qrTitle(int idx) {
+  return idx == QR_DOCS ? T(STR_QR_DOCS_TITLE) : QR_TITLES[idx];
+}
 
 static const char* getQRDesc(int idx) {
   switch(idx) {
@@ -33,15 +44,16 @@ static const char* getQRDesc(int idx) {
     case 1: return T(STR_QR_GITHUB_DESC);
     case 2: return T(STR_QR_DISCORD_DESC);
     case 3: return T(STR_QR_MAKER_DESC);
+    case QR_DOCS: return T(STR_QR_DOCS_DESC);
     default: return "";
   }
 }
 
 void showQRPopup(int idx) {
-  if (idx < 0 || idx >= 4) return;
+  if (idx < 0 || idx >= QR_COUNT) return;
 
   logSDf("SHOW: QRPopup idx=%d", idx);
-  const char* names[4] = {"Ko-fi", "GitHub", "Discord", "MakerWorld"};
+  const char* names[QR_COUNT] = {"Ko-fi", "GitHub", "Discord", "MakerWorld", "Docs"};
   logSDf("UI: Screen -> QR Popup (%s)", names[idx]);
   lv_obj_t *popup = lv_obj_create(lv_scr_act());
   lv_obj_set_size(popup, 480, 320);
@@ -70,7 +82,7 @@ void showQRPopup(int idx) {
   }, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *lbl_title = lv_label_create(popup);
-  lv_label_set_text(lbl_title, QR_TITLES[idx]);
+  lv_label_set_text(lbl_title, qrTitle(idx));
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 12);
@@ -119,6 +131,32 @@ void showQRPopup(int idx) {
   logSDf("QR: %s update done res=%d heap=%d", names[idx], (int)qr_res, ESP.getFreeHeap());
   lv_obj_align(qr, LV_ALIGN_BOTTOM_MID, 0, -20);
   logSDf("QR: %s align done", names[idx]);
+}
+
+// One target: a framed tile in its own colour, icon and name on one line.
+static void qrTile(lv_obj_t* parent, int x, int y, int w, int h, int idx,
+                   const char* symbol, uint32_t bg, uint32_t fg) {
+  lv_obj_t* b = lv_btn_create(parent);
+  lv_obj_set_size(b, w, h);
+  lv_obj_set_pos(b, x, y);
+  lv_obj_set_style_bg_color(b, lv_color_hex(bg), 0);
+  lv_obj_set_style_bg_color(b, lv_color_hex(bg + 0x101010), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(b, UI_RADIUS_BOX, 0);
+  lv_obj_set_style_shadow_width(b, 0, 0);
+  lv_obj_set_style_border_width(b, 1, 0);
+  lv_obj_set_style_border_color(b, lv_color_hex(fg), 0);
+  char text[48];
+  snprintf(text, sizeof(text), "%s   %s", symbol, qrTitle(idx));
+  lv_obj_t* l = lv_label_create(b);
+  lv_label_set_text(l, text);
+  lv_obj_set_style_text_color(l, lv_color_hex(fg), 0);
+  lv_obj_set_style_text_font(l, idx == QR_DOCS ? UI_FONT_TITLE : UI_FONT_BODY, 0);
+  lv_obj_center(l);
+  lv_obj_add_event_cb(b, [](lv_event_t* e) {
+    const int i = (int)(intptr_t)lv_event_get_user_data(e);
+    logSDf("BTN: Info -> QR %d", i);
+    showQRPopup(i);
+  }, LV_EVENT_CLICKED, (void*)(intptr_t)idx);
 }
 
 void showInfoScreen() {
@@ -185,79 +223,19 @@ void showInfoScreen() {
   lv_obj_set_style_text_align(ver_lbl, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(ver_lbl, LV_ALIGN_TOP_MID, 0, 54);
 
-  const int QB_W = 228, QB_H = 90, QB_GAP = 8;
-  const int QB_X0 = (480 - 2*QB_W - QB_GAP) / 2;
-  const int QB_Y0 = 82;
-  static const uint32_t QB_COLS[] = { 0x1a2800, 0x0a1828, 0x12103a, 0x1a0a18 };
-  static const uint32_t QB_TEXT[] = { 0xa0d840, 0x28d49a, 0x8090ff, 0xc060e0 };
-
-  lv_obj_t *btn_kofi = lv_btn_create(scr_info);
-  lv_obj_set_size(btn_kofi, QB_W, QB_H);
-  lv_obj_set_pos(btn_kofi, QB_X0, QB_Y0);
-  lv_obj_set_style_bg_color(btn_kofi, lv_color_hex(QB_COLS[0]), 0);
-  lv_obj_set_style_bg_color(btn_kofi, lv_color_hex(QB_COLS[0]+0x101010), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_kofi, 12, 0); lv_obj_set_style_shadow_width(btn_kofi, 0, 0);
-  lv_obj_set_style_border_width(btn_kofi, 1, 0); lv_obj_set_style_border_color(btn_kofi, lv_color_hex(QB_TEXT[0]), 0);
-  { lv_obj_t *ico = lv_label_create(btn_kofi); lv_label_set_text(ico, LV_SYMBOL_BELL);
-    lv_obj_set_style_text_color(ico, lv_color_hex(QB_TEXT[0]), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -14);
-    lv_obj_t *l = lv_label_create(btn_kofi); lv_label_set_text(l, "Ko-fi");
-    lv_obj_set_style_text_color(l, lv_color_hex(QB_TEXT[0]), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-    lv_obj_align(l, LV_ALIGN_CENTER, 0, 14); }
-  lv_obj_add_event_cb(btn_kofi, [](lv_event_t *e){ logSD("BTN: Info -> QR kofi"); showQRPopup(0); }, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t *btn_gh = lv_btn_create(scr_info);
-  lv_obj_set_size(btn_gh, QB_W, QB_H);
-  lv_obj_set_pos(btn_gh, QB_X0 + QB_W + QB_GAP, QB_Y0);
-  lv_obj_set_style_bg_color(btn_gh, lv_color_hex(QB_COLS[1]), 0);
-  lv_obj_set_style_bg_color(btn_gh, lv_color_hex(QB_COLS[1]+0x101010), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_gh, 12, 0); lv_obj_set_style_shadow_width(btn_gh, 0, 0);
-  lv_obj_set_style_border_width(btn_gh, 1, 0); lv_obj_set_style_border_color(btn_gh, lv_color_hex(QB_TEXT[1]), 0);
-  { lv_obj_t *ico = lv_label_create(btn_gh); lv_label_set_text(ico, LV_SYMBOL_DOWNLOAD);
-    lv_obj_set_style_text_color(ico, lv_color_hex(QB_TEXT[1]), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -14);
-    lv_obj_t *l = lv_label_create(btn_gh); lv_label_set_text(l, "GitHub");
-    lv_obj_set_style_text_color(l, lv_color_hex(QB_TEXT[1]), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-    lv_obj_align(l, LV_ALIGN_CENTER, 0, 14); }
-  lv_obj_add_event_cb(btn_gh, [](lv_event_t *e){ logSD("BTN: Info -> QR github"); showQRPopup(1); }, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t *btn_dc = lv_btn_create(scr_info);
-  lv_obj_set_size(btn_dc, QB_W, QB_H);
-  lv_obj_set_pos(btn_dc, QB_X0, QB_Y0 + QB_H + QB_GAP);
-  lv_obj_set_style_bg_color(btn_dc, lv_color_hex(QB_COLS[2]), 0);
-  lv_obj_set_style_bg_color(btn_dc, lv_color_hex(QB_COLS[2]+0x101010), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_dc, 12, 0); lv_obj_set_style_shadow_width(btn_dc, 0, 0);
-  lv_obj_set_style_border_width(btn_dc, 1, 0); lv_obj_set_style_border_color(btn_dc, lv_color_hex(QB_TEXT[2]), 0);
-  { lv_obj_t *ico = lv_label_create(btn_dc); lv_label_set_text(ico, LV_SYMBOL_BELL);
-    lv_obj_set_style_text_color(ico, lv_color_hex(QB_TEXT[2]), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -14);
-    lv_obj_t *l = lv_label_create(btn_dc); lv_label_set_text(l, "Discord");
-    lv_obj_set_style_text_color(l, lv_color_hex(QB_TEXT[2]), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-    lv_obj_align(l, LV_ALIGN_CENTER, 0, 14); }
-  lv_obj_add_event_cb(btn_dc, [](lv_event_t *e){ logSD("BTN: Info -> QR discord"); showQRPopup(2); }, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t *btn_mw = lv_btn_create(scr_info);
-  lv_obj_set_size(btn_mw, QB_W, QB_H);
-  lv_obj_set_pos(btn_mw, QB_X0 + QB_W + QB_GAP, QB_Y0 + QB_H + QB_GAP);
-  lv_obj_set_style_bg_color(btn_mw, lv_color_hex(QB_COLS[3]), 0);
-  lv_obj_set_style_bg_color(btn_mw, lv_color_hex(QB_COLS[3]+0x101010), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn_mw, 12, 0); lv_obj_set_style_shadow_width(btn_mw, 0, 0);
-  lv_obj_set_style_border_width(btn_mw, 1, 0); lv_obj_set_style_border_color(btn_mw, lv_color_hex(QB_TEXT[3]), 0);
-  { lv_obj_t *ico = lv_label_create(btn_mw); lv_label_set_text(ico, LV_SYMBOL_UPLOAD);
-    lv_obj_set_style_text_color(ico, lv_color_hex(QB_TEXT[3]), 0);
-    lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
-    lv_obj_align(ico, LV_ALIGN_CENTER, 0, -14);
-    lv_obj_t *l = lv_label_create(btn_mw); lv_label_set_text(l, "MakerWorld");
-    lv_obj_set_style_text_color(l, lv_color_hex(QB_TEXT[3]), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-    lv_obj_align(l, LV_ALIGN_CENTER, 0, 14); }
-  lv_obj_add_event_cb(btn_mw, [](lv_event_t *e){ logSD("BTN: Info -> QR makerworld"); showQRPopup(3); }, LV_EVENT_CLICKED, NULL);
+  // The manual across the top, the four others in two rows under it: five
+  // targets in the room the four had. Icon and name side by side, so a tile
+  // needs only a line's height.
+  const int QB_GAP = 8, QB_Y0 = 78, QB_DOCS_H = 56, QB_H = 62;
+  const int QB_W = (480 - 16 - QB_GAP) / 2;
+  const int QB_X0 = 8;
+  qrTile(scr_info, QB_X0, QB_Y0, 2 * QB_W + QB_GAP, QB_DOCS_H, QR_DOCS,
+         LV_SYMBOL_LIST, UI_COL_ACCENT_DIM, UI_COL_ACCENT);
+  const int y1 = QB_Y0 + QB_DOCS_H + QB_GAP, y2 = y1 + QB_H + QB_GAP;
+  qrTile(scr_info, QB_X0, y1, QB_W, QB_H, 0, LV_SYMBOL_BELL, 0x1a2800, 0xa0d840);
+  qrTile(scr_info, QB_X0 + QB_W + QB_GAP, y1, QB_W, QB_H, 1, LV_SYMBOL_DOWNLOAD, 0x0a1828, 0x28d49a);
+  qrTile(scr_info, QB_X0, y2, QB_W, QB_H, 2, LV_SYMBOL_BELL, 0x12103a, 0x8090ff);
+  qrTile(scr_info, QB_X0 + QB_W + QB_GAP, y2, QB_W, QB_H, 3, LV_SYMBOL_UPLOAD, 0x1a0a18, 0xc060e0);
 
   // The disclaimer only existed in the web interface and the README, so
   // anyone who never opened either never saw it. The device is called

@@ -4,6 +4,7 @@
 #include <esp_heap_caps.h>
 
 #include "hardware/display.h"
+#include "hardware/flash_log.h"
 #include "hardware/sd_logger.h"
 #include "services/http_progress.h"
 
@@ -117,6 +118,14 @@ void perfLogWindow() {
   }
   s_sec_max_us = 0;
   s_sec_max_name = nullptr;
+
+  // Only when the log ring erased: see flashLogEraseStatsTake().
+  {
+    uint32_t erases = 0, erase_max_us = 0;
+    flashLogEraseStatsTake(&erases, &erase_max_us);
+    if (erases) logSDf("[verbose] flash: erases=%u erase_max=%uus",
+                       (unsigned)erases, (unsigned)erase_max_us);
+  }
 
   // Only while a tag answers: an empty reader has nothing to say here.
   if (s_nfc_hits > 0) {

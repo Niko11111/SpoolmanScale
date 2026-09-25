@@ -17,6 +17,14 @@ int wifiManagerScanNetworks() {
   return WiFi.scanNetworks();
 }
 
+bool wifiManagerStartScanAsync() {
+  return WiFi.scanNetworks(true) == WIFI_SCAN_RUNNING;
+}
+
+int wifiManagerScanPoll() {
+  return WiFi.scanComplete();
+}
+
 String wifiManagerScannedSSID(int index) {
   return WiFi.SSID(index);
 }

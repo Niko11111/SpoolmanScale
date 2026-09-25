@@ -568,6 +568,36 @@ void applyServerColor(const String& sm_color, bool is_bambu_tag) {
   Serial.printf("Color set: tag %s, server '%s'\n", g_tag.color_hex, sm_color.c_str());
 }
 
+// The remaining filament on the main screen: grams, percent, their colour and
+// the bar. One place for the scan and for a weight written from the scale:
+// the write used to set the two texts only, and the bar kept the length and
+// colour of the weight before until the next scan (Nikolai, 25.09.2026).
+void showSpoolRemaining() {
+  char weight_str[32];
+  snprintf(weight_str, sizeof(weight_str), "%.0f g", sm_remaining);
+  lv_label_set_text(lbl_spoolman_weight, weight_str);
+  float pct = (sm_total > 0) ? (sm_remaining / sm_total) * 100.0f : 0;
+  uint32_t pct_color;
+  if (pct <= 10.0f)      pct_color = 0xe04040;
+  else if (pct <= 30.0f) pct_color = 0xf0b838;
+  else                   pct_color = 0x28d49a;
+  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(pct_color), 0);
+
+  char pct_str[16];
+  snprintf(pct_str, sizeof(pct_str), "%.1f %%", pct);
+  lv_label_set_text(lbl_spoolman_pct, pct_str);
+  lv_obj_set_style_text_color(lbl_spoolman_pct, lv_color_hex(pct_color), 0);
+
+  if (lbl_scale_diff) {
+    int bar_w = (int)((pct / 100.0f) * (float)MAIN_BAR_W);
+    if (bar_w < 0) bar_w = 0;
+    if (bar_w > MAIN_BAR_W) bar_w = MAIN_BAR_W;
+    lv_obj_set_width(lbl_scale_diff, bar_w);
+    lv_obj_set_style_bg_color(lbl_scale_diff, lv_color_hex(pct_color), 0);
+  }
+}
+
+
 void querySpoolmanById(int spool_id) {
   if (!wifi_ok) return;
   Serial.printf("querySpoolmanById: ID=%d\n", spool_id);
@@ -685,28 +715,7 @@ void querySpoolmanById(int spool_id) {
   applyServerColor(sm_color, is_bambu_tag);
 
   // Update display labels
-  char weight_str[32];
-  snprintf(weight_str, sizeof(weight_str), "%.0f g", sm_remaining);
-  lv_label_set_text(lbl_spoolman_weight, weight_str);
-  float pct = (sm_total > 0) ? (sm_remaining / sm_total) * 100.0f : 0;
-  uint32_t pct_color;
-  if (pct <= 10.0f)      pct_color = 0xe04040;
-  else if (pct <= 30.0f) pct_color = 0xf0b838;
-  else                   pct_color = 0x28d49a;
-  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(pct_color), 0);
-
-  char pct_str[16];
-  snprintf(pct_str, sizeof(pct_str), "%.1f %%", pct);
-  lv_label_set_text(lbl_spoolman_pct, pct_str);
-  lv_obj_set_style_text_color(lbl_spoolman_pct, lv_color_hex(pct_color), 0);
-
-  if (lbl_scale_diff) {
-    int bar_w = (int)((pct / 100.0f) * (float)MAIN_BAR_W);
-    if (bar_w < 0) bar_w = 0;
-    if (bar_w > MAIN_BAR_W) bar_w = MAIN_BAR_W;
-    lv_obj_set_width(lbl_scale_diff, bar_w);
-    lv_obj_set_style_bg_color(lbl_scale_diff, lv_color_hex(pct_color), 0);
-  }
+  showSpoolRemaining();
 
   char sm_id_str[16];
   snprintf(sm_id_str, sizeof(sm_id_str), "%d", sm_id);

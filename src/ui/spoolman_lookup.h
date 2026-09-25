@@ -44,6 +44,10 @@ void lookupAbandon();
 // The status line while the inventory comes in: "searching", with the
 // kilobytes read so far once there are any.
 void lookupPaintSearching();
+
+// Grams, percent, colour and bar of the spool on the pad, from sm_remaining
+// and sm_total.
+void showSpoolRemaining();
 void querySpoolmanById(int spool_id);
 
 // Re-announces a tag once, a moment after the auto-link has made it
