@@ -9,14 +9,21 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/ble_service.h"
+#include "services/label_printer.h"
 #include "ui/info_popup.h"
 #include "ui/loading_overlay.h"
 #include "ui/theme.h"
 #include "ui_common.h"
 
-// How many devices the list keeps. A room with a dozen BLE things in it is
-// ordinary; the pool, not the radio, is what caps the list.
-#define BLE_SCAN_MAX 12
+// How many devices a scan keeps, named ones first. The list shows only the
+// named ones unless asked for all: a printer always says its name, and the
+// nameless (phones, beacons, the neighbour's lamp) are most of what a scan
+// sees. Twelve rows took 69 % of the old LVGL pool (23.09.2026), so "all"
+// stops at that; lvPoolHasRoomForRow() guards it on top.
+#define BLE_SCAN_MAX      16
+#define BLE_LIST_MAX_ROWS 12
+// The note under a filtered list, clear of the list's own padding.
+#define BLE_NOTE_W        440
 // How long one scan runs. The overlay stands for exactly this long.
 #define BLE_SCAN_MS  5000
 
@@ -32,23 +39,30 @@
 #define BLE_HDR_BTN_SIZE 34
 #define BLE_HDR_BTN_EXT  6
 
-// The card: title, two lines, one button. Top to bottom 18 - title - 12 -
-// address - 6 - signal - 14 - button 56 - 12.
-#define BLE_CARD_H         196
+// The card: title, three lines, two buttons. Top to bottom 18 - title - 12 -
+// address - 6 - signal - 6 - role - 14 - buttons 56 - 12.
+#define BLE_CARD_H         236
 #define BLE_CARD_TITLE_Y   18
 #define BLE_CARD_ADDR_Y    62
 #define BLE_CARD_SIGNAL_Y  92
+#define BLE_CARD_ROLE_Y    120
+#define BLE_CARD_BTN_GAP   8
 #define BLE_CARD_ROW_Y     (BLE_CARD_H - UI_CARD_ROW_X - UI_POPUP_BTN_H)
 
 static BleDevice ble_devices[BLE_SCAN_MAX];
 static int  ble_device_count = 0;
 static bool ble_scanned = false;   // a scan has run since the switch went on
 static bool ble_failed  = false;   // the last scan could not start the stack
+static bool ble_show_all = false;  // the nameless ones too, until the next restart
 
 static lv_obj_t *scr_card = nullptr;
 
 bool bleDevicesScanned() { return ble_scanned; }
 int  bleDevicesCount()   { return ble_device_count; }
+const BleDevice* bleDevicesAt(int index) {
+  return index >= 0 && index < ble_device_count ? &ble_devices[index] : nullptr;
+}
+bool bleDevicesScanning() { return ble_scan_pending; }
 
 static int signalString(int8_t rssi) {
   if (rssi >= BLE_RSSI_STRONG) return STR_BT_SIG_STRONG;
@@ -133,11 +147,50 @@ static void showBleDeviceCard(int index) {
   lv_obj_set_width(sig, UI_POPUP_W - UI_CARD_TEXT_PAD);
   lv_obj_align(sig, LV_ALIGN_TOP_MID, 0, BLE_CARD_SIGNAL_Y);
 
-  // The whole row of answers, like the warning's OK: a way out, not a choice.
-  const lv_coord_t btn_w = UI_POPUP_W - 2 * UI_CARD_ROW_X;
+  // The role line: what this device is to the scale, when it is anything.
+  const bool is_printer = labelPrinterIsDevice(d.address);
+  if (is_printer) {
+    lv_obj_t *role = lv_label_create(box);
+    lv_label_set_text(role, T(STR_BT_CARD_IS_PRINTER));
+    lv_obj_set_style_text_color(role, lv_color_hex(UI_COL_ACCENT), 0);
+    lv_obj_set_style_text_font(role, UI_FONT_SMALL, 0);
+    lv_obj_set_style_text_align(role, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(role, UI_POPUP_W - UI_CARD_TEXT_PAD);
+    lv_obj_align(role, LV_ALIGN_TOP_MID, 0, BLE_CARD_ROLE_Y);
+  }
+
+  // The row of answers: the action on the left, the way out on the right.
+  // Both run from the loop: the buttons sit on the card that would go.
+  const lv_coord_t btn_w = (UI_POPUP_W - 2 * UI_CARD_ROW_X - BLE_CARD_BTN_GAP) / 2;
+  lv_obj_t *act = lv_btn_create(box);
+  lv_obj_set_size(act, btn_w, UI_POPUP_BTN_H);
+  lv_obj_set_pos(act, UI_CARD_ROW_X, BLE_CARD_ROW_Y);
+  lv_obj_set_style_bg_color(act, lv_color_hex(is_printer ? UI_COL_LINE : UI_COL_OK_BG), 0);
+  lv_obj_set_style_bg_color(act, lv_color_hex(is_printer ? UI_COL_POPUP_BORDER : UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(act, UI_RADIUS_BTN, 0);
+  lv_obj_set_style_shadow_width(act, 0, 0);
+  lv_obj_set_style_border_width(act, 0, 0);
+  lv_obj_set_style_pad_all(act, 0, 0);
+  lv_obj_clear_flag(act, LV_OBJ_FLAG_SCROLLABLE);
+  if (is_printer) {
+    lv_obj_add_event_cb(act, [](lv_event_t *e) {
+      (void)e;
+      ble_card_forget_printer_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+  } else {
+    lv_obj_add_event_cb(act, [](lv_event_t *e) {
+      ble_card_set_printer_pending = (int)(intptr_t)lv_event_get_user_data(e);
+    }, LV_EVENT_CLICKED, (void*)(intptr_t)index);
+  }
+  lv_obj_t *al = lv_label_create(act);
+  lv_label_set_text(al, T(is_printer ? STR_BT_CARD_FORGET_PRINTER : STR_BT_CARD_USE_PRINTER));
+  lv_obj_set_style_text_color(al, lv_color_hex(UI_COL_INK_2), 0);
+  lv_obj_set_style_text_font(al, UI_FONT_TITLE, 0);
+  lv_obj_center(al);
+
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, btn_w, UI_POPUP_BTN_H);
-  lv_obj_set_pos(btn, UI_CARD_ROW_X, BLE_CARD_ROW_Y);
+  lv_obj_set_pos(btn, UI_CARD_ROW_X + btn_w + BLE_CARD_BTN_GAP, BLE_CARD_ROW_Y);
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
@@ -147,7 +200,6 @@ static void showBleDeviceCard(int index) {
   lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(btn, [](lv_event_t *e) {
     (void)e;
-    // Closed from the loop: this button sits on the card that would go.
     ble_card_close_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *l = lv_label_create(btn);
@@ -202,6 +254,8 @@ void buildBleDevicesScreen() {
 
   lv_obj_t *list = buildOptionList(scr_ble_devices);
   int rows = 0;
+  int unnamed = 0;
+  for (int i = 0; i < ble_device_count; i++) if (!ble_devices[i].name[0]) unnamed++;
   if (ble_scanned && !ble_device_count) {
     char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_BT_NONE_FOUND);
     lv_obj_t *row = makeListBtn(list, LV_SYMBOL_BLUETOOTH, buf_t, "");
@@ -211,26 +265,64 @@ void buildBleDevicesScreen() {
     rows++;
   }
   for (int i = 0; i < ble_device_count; i++) {
+    if (!ble_show_all && !ble_devices[i].name[0]) continue;
+    if (rows >= BLE_LIST_MAX_ROWS) break;
     if (!lvPoolHasRoomForRow()) { logSDf("BLE: list cut at %d rows", i); break; }
     char name[BLE_NAME_LEN];
     deviceName(ble_devices[i], name, sizeof(name));
     char sub[48];
     snprintf(sub, sizeof(sub), "%s  %s", ble_devices[i].address,
              T(signalString(ble_devices[i].rssi)));
-    lv_obj_t *row = makeListBtn(list, LV_SYMBOL_BLUETOOTH, name, sub);
+    lv_obj_t *row = makeListBtn(list, LV_SYMBOL_BLUETOOTH, name, sub,
+                                labelPrinterIsDevice(ble_devices[i].address));
+    // The role stands where the arrow is, like a switch's state.
+    if (labelPrinterIsDevice(ble_devices[i].address)) {
+      lv_obj_t *arr_lbl = lv_obj_get_child(row, -1);
+      if (arr_lbl) {
+        lv_label_set_text(arr_lbl, T(STR_PRN_TITLE));
+        lv_obj_set_style_text_color(arr_lbl, lv_color_hex(UI_COL_ACCENT), 0);
+        lv_obj_set_style_text_font(arr_lbl, UI_FONT_SMALL, 0);
+      }
+    }
     // The card is built from the loop, never inside the row's own callback.
     lv_obj_add_event_cb(row, [](lv_event_t *e) {
       ble_card_pending = (int)(intptr_t)lv_event_get_user_data(e);
     }, LV_EVENT_CLICKED, (void*)(intptr_t)i);
     rows++;
   }
+
+  // Under a filtered list, what it leaves out and how to get it back; the
+  // way back to the filter once everything is shown.
+  if (ble_scanned && unnamed > 0) {
+    if (!ble_show_all) {
+      lv_obj_t *note = lv_label_create(list);
+      lv_label_set_text(note, T(STR_BT_FILTER_NOTE));
+      lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
+      lv_obj_set_width(note, BLE_NOTE_W);
+      lv_obj_set_style_text_font(note, UI_FONT_SMALL, 0);
+      lv_obj_set_style_text_color(note, lv_color_hex(UI_COL_INK_SOFT), 0);
+    }
+    char buf_t[48];
+    if (ble_show_all) copyT(buf_t, sizeof(buf_t), STR_BT_SHOW_NAMED);
+    else snprintf(buf_t, sizeof(buf_t), T(STR_BT_SHOW_ALL_FMT), unnamed);
+    lv_obj_t *tog = makeListBtn(list, ble_show_all ? LV_SYMBOL_EYE_CLOSE : LV_SYMBOL_EYE_OPEN,
+                                buf_t, "");
+    lv_obj_add_event_cb(tog, [](lv_event_t *e) {
+      (void)e;
+      ble_show_all = !ble_show_all;
+      logSDf("BTN: BleDevices -> %s", ble_show_all ? "show all" : "named only");
+      // A rebuild of the screen this button sits on: from the loop.
+      show_ble_devices_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+  }
   logLvMem("ble_devices", rows);
 }
 
 void handleBleDevicesDeferredActions() {
   if (ble_scan_pending) {
-    ble_scan_pending = false;
-    if (bleEnabled() && scr_ble_devices) {
+    // The scan runs whether the list is on screen or not: the browser page
+    // asks for one too. The overlay stands over whatever is showing.
+    if (bleEnabled()) {
       closeBleDeviceCard();
       loadingOverlayShow(T(STR_BT_SCANNING));
       const int n = bleScan(ble_devices, BLE_SCAN_MAX, BLE_SCAN_MS, loadingOverlayTick);
@@ -238,14 +330,18 @@ void handleBleDevicesDeferredActions() {
       ble_scanned = true;
       ble_device_count = n < 0 ? 0 : n;
       ble_failed = n < 0;
-      buildBleDevicesScreen();       // releases the previous instance itself
-      lv_obj_clear_flag(scr_ble_devices, LV_OBJ_FLAG_HIDDEN);
+      if (scr_ble_devices) {
+        buildBleDevicesScreen();     // releases the previous instance itself
+        lv_obj_clear_flag(scr_ble_devices, LV_OBJ_FLAG_HIDDEN);
+      }
       // After the rebuild, so the popup is not taken down with the old screen.
       if (ble_failed) {
         ble_failed = false;
         showInfoPopup(STR_BT_TITLE, STR_BT_INIT_FAILED, INFO_WARN);
       }
     }
+    // Cleared last: the browser page reads it as "still scanning" until here.
+    ble_scan_pending = false;
   }
   if (ble_card_pending >= 0) {
     const int index = ble_card_pending;
@@ -255,6 +351,32 @@ void handleBleDevicesDeferredActions() {
   if (ble_card_close_pending) {
     ble_card_close_pending = false;
     closeBleDeviceCard();
+  }
+  if (ble_card_set_printer_pending >= 0) {
+    const int index = ble_card_set_printer_pending;
+    ble_card_set_printer_pending = -1;
+    closeBleDeviceCard();
+    if (index >= 0 && index < ble_device_count) {
+      LabelPrinterConfig c = labelPrinterLoadConfig();
+      snprintf(c.name, sizeof(c.name), "%s", ble_devices[index].name);
+      snprintf(c.address, sizeof(c.address), "%s", ble_devices[index].address);
+      if (!labelPrinterSaveConfig(c)) showInfoPopup(STR_PRN_TITLE, STR_ERR_SAVE, INFO_WARN);
+      logSDf("BTN: BleDevices -> printer is %s", c.address);
+    }
+    if (scr_ble_devices) {
+      buildBleDevicesScreen();
+      lv_obj_clear_flag(scr_ble_devices, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+  if (ble_card_forget_printer_pending) {
+    ble_card_forget_printer_pending = false;
+    closeBleDeviceCard();
+    labelPrinterForget();
+    logSD("BTN: BleDevices -> printer forgotten");
+    if (scr_ble_devices) {
+      buildBleDevicesScreen();
+      lv_obj_clear_flag(scr_ble_devices, LV_OBJ_FLAG_HIDDEN);
+    }
   }
 }
 

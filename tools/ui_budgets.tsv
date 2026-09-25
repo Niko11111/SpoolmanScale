@@ -198,3 +198,29 @@ STR_LIST_RELOAD	14	94	NEVER	src/ui/spool_flow.cpp listReloadStrip: LINK_RELOAD_W
 STR_COPY_CARD_WEIGHT	16	360	NEVER	src/ui/copy_confirm_popup.cpp line 3 of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
 STR_COPY_CARD_CREATE	18	150	NEVER	src/ui/copy_confirm_popup.cpp 170 px answer button, 10 px air each side
 STR_BT_DEVICES	16	320	NEVER	src/ui/bluetooth_screen.cpp makeListBtn title, text_w 320
+STR_PRN_TITLE	14	90	NEVER	src/ui/ble_devices_screen.cpp the role in a row arrow slot
+STR_PRN_NONE	12	320	NEVER	src/ui/bluetooth_screen.cpp makeListBtn sub, text_w 320
+STR_PRN_DEVICE	16	320	NEVER	src/ui/printer_screen.cpp makeListBtn title, text_w 320
+STR_PRN_MODEL	16	320	NEVER	src/ui/printer_screen.cpp makeListBtn title, text_w 320
+STR_PRN_TEST	16	320	NEVER	src/ui/printer_screen.cpp makeListBtn title, text_w 320
+STR_PRN_FORGET	16	320	NEVER	src/ui/printer_screen.cpp makeListBtn title, text_w 320
+STR_BT_CARD_USE_PRINTER	18	170	NEVER	src/ui/ble_devices_screen.cpp card action button, 184 px wide
+STR_PRN_PRINTING	18	300	NEVER	src/ui/printer_screen.cpp loading overlay text
+STR_LBL_L_LEFT	16	120	NEVER	src/services/label_render.cpp fact caption on the label, 16 px
+STR_LBL_L_COLOR	16	120	NEVER	src/services/label_render.cpp fact caption on the label, 16 px
+
+# The print card (src/ui/print_card.cpp): 400 px box, text 360 px wide.
+STR_PRN_PH_RENDER	20	360	WRAP:2	src/ui/print_card.cpp busy title
+STR_PRN_PH_FIND	20	360	WRAP:2	src/ui/print_card.cpp busy title
+STR_PRN_PH_CONNECT	20	360	WRAP:2	src/ui/print_card.cpp busy title
+STR_PRN_PH_SEND	20	360	WRAP:2	src/ui/print_card.cpp busy title
+STR_PRN_PH_AWAIT	20	360	WRAP:2	src/ui/print_card.cpp busy title
+STR_PRN_DONE_TITLE	20	360	NEVER	src/ui/print_card.cpp result title
+STR_PRN_UNCONF_TITLE	20	360	NEVER	src/ui/print_card.cpp result title
+STR_PRN_FAIL_TITLE	20	360	NEVER	src/ui/print_card.cpp result title
+STR_PRN_DONE_MSG	16	360	WRAP:3	src/ui/print_card.cpp result text
+STR_PRN_UNCONF_MSG	16	360	WRAP:3	src/ui/print_card.cpp result text
+# The Bluetooth device list's filter (src/ui/ble_devices_screen.cpp).
+STR_BT_FILTER_NOTE	14	440	WRAP:3	src/ui/ble_devices_screen.cpp note under the list
+STR_BT_SHOW_ALL_FMT	16	320	NEVER	src/ui/ble_devices_screen.cpp list row title
+STR_BT_SHOW_NAMED	16	320	NEVER	src/ui/ble_devices_screen.cpp list row title

@@ -1273,7 +1273,73 @@ enum StringID {
   STR_BT_SIG_WEAK,
   STR_BT_CARD_ADDRESS,        // the card's lines
   STR_BT_CARD_SIGNAL,
-  STR_BT_CLOSE,               // the card's one button
+  STR_BT_CLOSE,               // the card's way out
+  STR_BT_CARD_USE_PRINTER,    // the card's action: make this the printer
+  STR_BT_CARD_IS_PRINTER,     // the card's role line
+  STR_BT_CARD_FORGET_PRINTER, // the card's action when it is the printer
+
+  // The label printer: its screen, its rows, what a print came back with
+  STR_PRN_TITLE,              // row on the Bluetooth screen, the screen, popups
+  STR_PRN_NONE,               // the row's subtitle without a printer
+  STR_PRN_DEVICE,             // the device row
+  STR_PRN_DEVICE_NONE,        // its subtitle without a printer
+  STR_PRN_MODEL,
+  STR_PRN_EXPERIMENTAL,       // after a model nobody printed on yet
+  STR_PRN_MEDIA,              // the label stock row
+  STR_PRN_MEDIA_FMT,          // %u x %u mm
+  STR_PRN_TEST,
+  STR_PRN_TEST_SUB,
+  STR_PRN_PRINTING,           // the overlay
+  STR_PRN_FORGET,
+  STR_PRN_OK,
+  STR_PRN_ERR_NO_PRINTER,
+  STR_PRN_ERR_RASTER,
+  STR_PRN_ERR_TOO_WIDE,
+  STR_PRN_ERR_MEDIA,
+  STR_PRN_ERR_BLE_OFF,
+  STR_PRN_ERR_CONNECT,
+  STR_PRN_ERR_NOT_PRINTER,
+  STR_PRN_ERR_STUCK,
+  STR_PRN_ERR_WRITE,
+  STR_PRN_HELP,               // the ? on the printer screen
+
+  // The printer page in the browser
+  STR_W_NAV_PRINTER,          // the tab
+  STR_W_P_BLE_HINT,           // under the master switch
+  STR_W_P_SUPPORTED,          // card: which printers the scale can drive
+  STR_W_P_TESTED,             // the M220's verdict
+  STR_W_P_SUPPORTED_HINT,
+  STR_W_P_DEVICES,            // the device list's label
+  STR_BT_SCAN_WEB,            // the scan button
+  STR_W_P_SCAN_HINT,
+  STR_W_P_MEDIA_HINT,         // which way the two numbers go
+  STR_W_P_TEST_HINT,
+  STR_W_P_LAST_TEST,
+  STR_W_P_QUEUED,             // a route's answer when the scale took the job
+  STR_PRN_LABEL_PRINT,        // the button in the More info header
+  STR_PRN_ERR_NO_SPOOL,       // pressed with nothing the backend knows on the pad
+  // The captions on a printed label, short: the lines are 16 px on a 40 mm roll
+  STR_LBL_L_ID,
+  STR_LBL_L_LEFT,             // weight left
+  STR_LBL_L_COLOR,
+  STR_LBL_L_LOC,              // location
+
+  // The print card, while the raster is drawn
+  STR_PRN_PH_RENDER,
+  STR_PRN_PH_FIND,
+  STR_PRN_PH_CONNECT,
+  STR_PRN_PH_SEND,
+  STR_PRN_PH_AWAIT,
+  // Result card titles
+  STR_PRN_DONE_TITLE,
+  STR_PRN_DONE_MSG,
+  STR_PRN_UNCONF_TITLE,
+  STR_PRN_UNCONF_MSG,
+  STR_PRN_FAIL_TITLE,
+  // Below the device list while it hides the nameless ones
+  STR_BT_FILTER_NOTE,
+  STR_BT_SHOW_ALL_FMT,
+  STR_BT_SHOW_NAMED,
 
   STR_COUNT
 };

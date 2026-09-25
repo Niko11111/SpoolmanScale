@@ -61,6 +61,7 @@ lv_obj_t *scr_connection = nullptr;
 lv_obj_t *scr_wifi_menu  = nullptr;
 lv_obj_t *scr_bluetooth  = nullptr;
 lv_obj_t *scr_ble_devices = nullptr;
+lv_obj_t *scr_printer     = nullptr;
 lv_obj_t *scr_scale_sub  = nullptr;
 lv_obj_t *scr_drying_reminder = nullptr;
 lv_obj_t *scr_display    = nullptr;

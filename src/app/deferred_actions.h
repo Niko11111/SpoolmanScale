@@ -133,3 +133,17 @@ extern int  ble_card_pending;
 // The card's Close button: the card goes on the next pass, not from inside
 // the callback of the button that sits on it.
 extern bool ble_card_close_pending;
+// The card's action: make this device the label printer (index), or drop
+// the printer. Both write NVS and rebuild the list, so from the loop.
+extern int  ble_card_set_printer_pending;
+extern bool ble_card_forget_printer_pending;
+// The printer screen behind the Bluetooth screen's row, and its rows: each
+// change is saved and the screen rebuilt, the test print blocks for seconds.
+extern bool show_printer_pending;
+extern bool printer_cycle_model_pending;
+extern bool printer_cycle_media_pending;
+extern bool printer_test_pending;
+extern bool printer_forget_pending;
+// The label of the spool on the pad, from the More info header. Rendered
+// and printed from the loop: the print starts the BLE stack and blocks.
+extern bool print_spool_label_pending;

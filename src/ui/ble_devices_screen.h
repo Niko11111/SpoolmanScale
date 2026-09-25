@@ -29,3 +29,8 @@ bool bleDevicesScanned();
 int  bleDevicesCount();
 // Called when the switch goes off: what the list knew is no longer true.
 void bleDevicesForget();
+// The devices themselves, for the browser page: null past the end.
+struct BleDevice;
+const BleDevice* bleDevicesAt(int index);
+// True while a scan is parked or running: the browser page polls on it.
+bool bleDevicesScanning();

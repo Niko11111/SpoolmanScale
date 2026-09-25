@@ -1,6 +1,7 @@
 #include "more_info_screen.h"
 #include "navigation.h"
 #include "app/app_state.h"
+#include "app/deferred_actions.h"
 #include "services/tag_field.h"
 
 #include <Arduino.h>
@@ -18,6 +19,8 @@
 #include "services/backend.h"
 #include "services/breadcrumb.h"
 #include "services/backend_api.h"
+#include "services/ble_service.h"
+#include "services/label_printer.h"
 #include "services/server_reach.h"
 #include "services/filaman_api.h"
 #include "services/wifi_manager.h"
@@ -647,6 +650,30 @@ void buildMoreInfoScreen() {
       if (!wifiManagerIsConnected()) return;
       show_status_picker_pending = true;
     });
+  }
+
+  // Print label, left of the X. Only when it can do anything: Bluetooth on,
+  // a printer picked, a spool the backend knows. The print itself runs from
+  // the loop; it starts the BLE stack and blocks for seconds.
+  if (bleEnabled() && labelPrinterConfigured(labelPrinterLoadConfig()) && sm_found && sm_id > 0) {
+    lv_obj_t *btn_print = lv_btn_create(hdr);
+    lv_obj_set_size(btn_print, 116, 34);
+    lv_obj_set_pos(btn_print, 282, 9);
+    lv_obj_set_style_bg_color(btn_print, lv_color_hex(UI_COL_ROW), 0);
+    lv_obj_set_style_bg_color(btn_print, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(btn_print, lv_color_hex(UI_COL_ACCENT), 0);
+    lv_obj_set_style_border_width(btn_print, 1, 0);
+    lv_obj_set_style_radius(btn_print, UI_RADIUS_BTN, 0);
+    lv_obj_set_style_shadow_width(btn_print, 0, 0);
+    lv_obj_add_event_cb(btn_print, [](lv_event_t *e) {
+      logSD("BTN: MoreInfo -> print label");
+      print_spool_label_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_print = lv_label_create(btn_print);
+    lv_label_set_text(lbl_print, T(STR_PRN_LABEL_PRINT));
+    lv_obj_set_style_text_color(lbl_print, lv_color_hex(UI_COL_ACCENT), 0);
+    lv_obj_set_style_text_font(lbl_print, UI_FONT_SMALL, 0);
+    lv_obj_center(lbl_print);
   }
 
   // Close X button - Fix 10: 44x44px proper size

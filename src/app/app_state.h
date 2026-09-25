@@ -75,6 +75,7 @@ extern lv_obj_t *scr_connection;
 extern lv_obj_t *scr_wifi_menu;
 extern lv_obj_t *scr_bluetooth;
 extern lv_obj_t *scr_ble_devices;
+extern lv_obj_t *scr_printer;
 extern lv_obj_t *scr_scale_sub;
 extern lv_obj_t *scr_drying_reminder;
 extern lv_obj_t *scr_display;

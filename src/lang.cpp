@@ -2760,15 +2760,139 @@ const char* const STRINGS[][3] = {
   { "Aus: kein Bluetooth, nichts läuft im Hintergrund. An: Funktionen wie die Gerätesuche starten den Funk bei Bedarf und geben ihn danach wieder frei. Die Suche zeigt nur, was in Reichweite ist, und verbindet nichts.",
     "Off: no Bluetooth, nothing runs in the background. On: features such as the device scan start the radio when needed and release it afterwards. The scan only lists what is in range and connects to nothing.",
     "Désactivé : pas de Bluetooth, rien en arrière-plan. Activé : la recherche d'appareils et les autres fonctions allument la radio au besoin, puis la libèrent. La recherche liste ce qui est à portée et ne connecte rien." },  // STR_BT_HELP
-  { "Geräte",             "Devices",          "Appareils" },  // STR_BT_DEVICES
-  { "Noch nicht gesucht", "Not searched yet", "Aucune recherche" },  // STR_BT_DEVICES_NONE_YET
-  { "%d in Reichweite",   "%d in range",      "%d à portée" },  // STR_BT_DEVICES_FMT
-  { "stark",              "strong",           "fort" },  // STR_BT_SIG_STRONG
-  { "mittel",             "medium",           "moyen" },  // STR_BT_SIG_MEDIUM
-  { "schwach",            "weak",             "faible" },  // STR_BT_SIG_WEAK
-  { "Adresse",            "Address",          "Adresse" },  // STR_BT_CARD_ADDRESS
-  { "Signal",             "Signal",           "Signal" },  // STR_BT_CARD_SIGNAL
-  { "Schließen",          "Close",            "Fermer" },  // STR_BT_CLOSE
+  { "Geräte",                "Devices",          "Appareils" },  // STR_BT_DEVICES
+  { "Noch nicht gesucht",    "Not searched yet", "Aucune recherche" },  // STR_BT_DEVICES_NONE_YET
+  { "%d in Reichweite",      "%d in range",      "%d à portée" },  // STR_BT_DEVICES_FMT
+  { "stark",                 "strong",           "fort" },  // STR_BT_SIG_STRONG
+  { "mittel",                "medium",           "moyen" },  // STR_BT_SIG_MEDIUM
+  { "schwach",               "weak",             "faible" },  // STR_BT_SIG_WEAK
+  { "Adresse",               "Address",          "Adresse" },  // STR_BT_CARD_ADDRESS
+  { "Signal",                "Signal",           "Signal" },  // STR_BT_CARD_SIGNAL
+  { "Schließen",             "Close",            "Fermer" },  // STR_BT_CLOSE
+  { "Als Drucker",           "As printer",       "Imprimante" },  // STR_BT_CARD_USE_PRINTER
+  { "Eingestellter Drucker", "The printer",      "Imprimante choisie" },  // STR_BT_CARD_IS_PRINTER
+  { "Entfernen",             "Remove",           "Retirer" },  // STR_BT_CARD_FORGET_PRINTER
+
+  // The label printer: its screen, its rows, what a print came back with
+  { "Drucker", "Printer",
+    "Imprimante" },  // STR_PRN_TITLE
+  { "Kein Drucker", "No printer",
+    "Aucune imprimante" },  // STR_PRN_NONE
+  { "Gerät", "Device",
+    "Appareil" },  // STR_PRN_DEVICE
+  { "Keines gewählt, auf der Gerätekarte wählen", "None picked, pick one on the device card",
+    "Aucun choisi, à choisir sur la carte" },  // STR_PRN_DEVICE_NONE
+  { "Modell", "Model",
+    "Modèle" },  // STR_PRN_MODEL
+  { "(experimentell, ungetestet)", "(experimental, untested)",
+    "(expérimental, non testé)" },  // STR_PRN_EXPERIMENTAL
+  { "Etikett", "Label stock",
+    "Étiquette" },  // STR_PRN_MEDIA
+  { "%u x %u mm", "%u x %u mm",
+    "%u x %u mm" },  // STR_PRN_MEDIA_FMT
+  { "Testdruck", "Test print",
+    "Test d'impression" },  // STR_PRN_TEST
+  { "Rahmen, Name und QR-Code auf dem eingelegten Etikett", "Frame, name and QR code on the loaded label",
+    "Cadre, nom et code QR sur l'étiquette chargée" },  // STR_PRN_TEST_SUB
+  { "Drucke...", "Printing...",
+    "Imprime..." },  // STR_PRN_PRINTING
+  { "Drucker entfernen", "Remove printer",
+    "Retirer l'imprimante" },  // STR_PRN_FORGET
+  { "Das Etikett wurde an den Drucker übertragen.", "The label was sent to the printer.",
+    "L'étiquette a été envoyée à l'imprimante." },  // STR_PRN_OK
+  { "Kein Drucker gewählt.", "No printer picked.",
+    "Aucune imprimante." },  // STR_PRN_ERR_NO_PRINTER
+  { "Das Etikett konnte nicht gerendert werden.", "The label could not be rendered.",
+    "Étiquette impossible à rendre." },  // STR_PRN_ERR_RASTER
+  { "Das Etikett ist breiter als der Druckkopf.", "The label is wider than the print head.",
+    "Étiquette plus large que la tête." },  // STR_PRN_ERR_TOO_WIDE
+  { "Das Etikett passt nicht zum eingelegten Format.", "The label does not match the loaded stock.",
+    "Étiquette et format chargé différents." },  // STR_PRN_ERR_MEDIA
+  { "Bluetooth ist aus.", "Bluetooth is off.",
+    "Bluetooth inactif." },  // STR_PRN_ERR_BLE_OFF
+  { "Der Drucker antwortet nicht. Ist er eingeschaltet und in Reichweite?",
+    "The printer does not answer. Is it on and in range?",
+    "L'imprimante ne répond pas. Allumée et à portée ?" },  // STR_PRN_ERR_CONNECT
+  { "Das Gerät ist kein Phomemo-Drucker.", "The device is not a Phomemo printer.",
+    "Pas une imprimante Phomemo." },  // STR_PRN_ERR_NOT_PRINTER
+  { "Die Verbindung ließ sich nicht trennen. Bitte neu starten.",
+    "The link would not close. Please restart.",
+    "Liaison impossible à fermer. Redémarrez." },  // STR_PRN_ERR_STUCK
+  { "Die Übertragung ist abgebrochen.", "The transfer was cut off.", "Transfert interrompu." },  // STR_PRN_ERR_WRITE
+  { "Der Drucker wird auf der Gerätekarte gewählt. Modell und Etikett passen den Druck an den Druckkopf und das eingelegte Etikett an; der Testdruck zeigt, ob beides stimmt. Beim Drucken steht die Waage einige Sekunden.",
+    "The printer is picked on the device card. Model and label stock fit the print to the head and the loaded label; the test print shows whether both are right. The scale pauses for a few seconds while printing.",
+    "L'imprimante se choisit sur la carte d'appareil. Modèle et étiquette adaptent l'impression à la tête et au support ; le test montre si les deux sont bons. La balance s'arrête quelques secondes pendant l'impression." },  // STR_PRN_HELP
+
+  // The printer page in the browser
+  { "Drucker", "Printer", "Imprimante" },  // STR_W_NAV_PRINTER
+  { "Nur bei Bedarf an: der Funk läuft, während ein Gerät ihn braucht, und wird danach freigegeben.",
+    "Only when needed: the radio runs while a device needs it and is released afterwards.",
+    "Seulement au besoin : la radio tourne tant qu'un appareil l'utilise, puis est libérée." },  // STR_W_P_BLE_HINT
+  { "Unterstützte Drucker", "Supported printers", "Imprimantes prises en charge" },  // STR_W_P_SUPPORTED
+  { "getestet",             "tested",             "testée" },  // STR_W_P_TESTED
+  { "Thermodrucker der Phomemo-M-Serie über Bluetooth. Weitere Modelle kommen mit Rückmeldungen aus der Community.",
+    "Phomemo M-series thermal printers over Bluetooth. More models come with feedback from the community.",
+    "Imprimantes thermiques Phomemo série M en Bluetooth. D'autres modèles viendront avec les retours de la communauté." },  // STR_W_P_SUPPORTED_HINT
+  { "Geräte in Reichweite", "Devices in range", "Appareils à portée" },  // STR_W_P_DEVICES
+  { "Geräte suchen",        "Scan for devices", "Rechercher" },  // STR_BT_SCAN_WEB
+  { "Die Suche läuft auf der Waage und dauert etwa 5 Sekunden; solange steht sie.",
+    "The scan runs on the scale and takes about 5 seconds; the scale pauses meanwhile.",
+    "La recherche tourne sur la balance, environ 5 secondes ; elle est en pause pendant ce temps." },  // STR_W_P_SCAN_HINT
+  { "Breite quer zum Druckkopf mal Länge in Laufrichtung, wie auf der Rolle angegeben.",
+    "Width across the head by length along the feed, as printed on the roll.",
+    "Largeur devant la tête par longueur dans le sens du défilement, comme sur le rouleau." },  // STR_W_P_MEDIA_HINT
+  { "Druckt Rahmen, Name und QR-Code auf das eingelegte Etikett. Das Ergebnis erscheint auch auf der Waage.",
+    "Prints a frame, the name and a QR code on the loaded label. The verdict also shows on the scale.",
+    "Imprime un cadre, le nom et un code QR sur l'étiquette chargée. Le résultat s'affiche aussi sur la balance." },  // STR_W_P_TEST_HINT
+  { "Letzter Testdruck",               "Last test print",            "Dernier test" },  // STR_W_P_LAST_TEST
+  { "An die Waage übergeben",          "Handed to the scale",        "Transmis à la balance" },  // STR_W_P_QUEUED
+  { "Etikett drucken",                 "Print label",                "Imprimer" },  // STR_PRN_LABEL_PRINT
+  { "Keine bekannte Spule aufgelegt.", "No known spool on the pad.",
+    "Aucune bobine connue posée." },  // STR_PRN_ERR_NO_SPOOL
+  // The captions on a printed label, short: the lines are 16 px on a 40 mm roll
+  { "ID",    "ID",       "ID" },  // STR_LBL_L_ID
+  { "Rest",  "Left",     "Reste" },  // STR_LBL_L_LEFT
+  { "Farbe", "Colour",   "Couleur" },  // STR_LBL_L_COLOR
+  { "Lager", "Location", "Lieu" },  // STR_LBL_L_LOC
+  { "Etikett wird erstellt...",
+    "Preparing the label...",
+    "Préparation..." },  // STR_PRN_PH_RENDER
+  { "Drucker wird gesucht...",
+    "Looking for the printer...",
+    "Recherche en cours..." },  // STR_PRN_PH_FIND
+  { "Verbinde mit dem Drucker...",
+    "Connecting to the printer...",
+    "Connexion à l'imprimante..." },  // STR_PRN_PH_CONNECT
+  { "Etikett wird gesendet",
+    "Sending the label",
+    "Envoi de l'étiquette" },  // STR_PRN_PH_SEND
+  { "Drucker druckt...",
+    "The printer is printing...",
+    "Impression en cours..." },  // STR_PRN_PH_AWAIT
+  { "Gedruckt",
+    "Printed",
+    "Imprimé" },  // STR_PRN_DONE_TITLE
+  { "Der Drucker hat den Druck bestätigt.",
+    "The printer confirmed the print.",
+    "L'imprimante a confirmé." },  // STR_PRN_DONE_MSG
+  { "Gesendet",
+    "Sent",
+    "Envoyé" },  // STR_PRN_UNCONF_TITLE
+  { "Der Drucker hat den Druck nicht bestätigt. Papier und Deckel prüfen.",
+    "The printer did not confirm the print. Check the paper and the lid.",
+    "L'imprimante n'a pas confirmé. Vérifiez papier et capot." },  // STR_PRN_UNCONF_MSG
+  { "Nicht gedruckt",
+    "Not printed",
+    "Non imprimé" },  // STR_PRN_FAIL_TITLE
+  { "Nur Geräte mit Namen. Fehlt deins? Näher an die Waage bringen und neu suchen.",
+    "Only devices with a name. Yours is missing? Bring it closer to the scale and scan again.",
+    "Seulement les appareils nommés. Le vôtre manque ? Rapprochez-le et relancez." },  // STR_BT_FILTER_NOTE
+  { "Alle anzeigen (+%d ohne Namen)",
+    "Show all (+%d without a name)",
+    "Tout afficher (+%d sans nom)" },  // STR_BT_SHOW_ALL_FMT
+  { "Nur Geräte mit Namen",
+    "Only devices with a name",
+    "Appareils nommés seulement" },  // STR_BT_SHOW_NAMED
 };
 
 StringID tagWriteResultString(uint8_t code) {

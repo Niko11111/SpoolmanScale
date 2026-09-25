@@ -9,6 +9,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/ble_service.h"
+#include "services/label_printer.h"
 #include "ui/ble_devices_screen.h"
 #include "ui/reboot_popup.h"
 #include "ui/header_status.h"
@@ -84,6 +85,19 @@ void buildBluetoothScreen() {
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Bluetooth -> Devices");
       show_ble_devices_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+
+    // The printer: the one BLE device the scale has a use for so far.
+    const LabelPrinterConfig c = labelPrinterLoadConfig();
+    char buf_p[40]; copyT(buf_p, sizeof(buf_p), STR_PRN_TITLE);
+    char buf_ps[64];
+    if (!labelPrinterConfigured(c)) copyT(buf_ps, sizeof(buf_ps), STR_PRN_NONE);
+    else snprintf(buf_ps, sizeof(buf_ps), "%s  %s", labelPrinterProfile(c.model).name,
+                  c.name[0] ? c.name : c.address);
+    lv_obj_t *pbtn = makeListBtn(list, LV_SYMBOL_IMAGE, buf_p, buf_ps, labelPrinterConfigured(c));
+    lv_obj_add_event_cb(pbtn, [](lv_event_t *e){
+      logSD("BTN: Bluetooth -> Printer");
+      show_printer_pending = true;
     }, LV_EVENT_CLICKED, NULL);
   }
 }

@@ -101,6 +101,7 @@
 #include "ui/more_info_screen.h"
 #include "ui/navigation.h"
 #include "ui/ota_menu.h"
+#include "ui/printer_screen.h"
 #include "ui/scale_menu.h"
 #include "ui/settings_screen.h"
 #include "ui/setup_welcome_screen.h"
@@ -535,6 +536,7 @@ void appLoop() {
   handleWifiSetupDeferredActions();
   handleBluetoothDeferredActions();
   handleBleDevicesDeferredActions();
+  handlePrinterDeferredActions();
   handleConfirmPopupDeferredActions();
   handleDriedDeferredAction();
   // Bringing an archived spool back. Out here rather than in the button's
@@ -794,6 +796,12 @@ void appLoop() {
     // A list that was never filled scans on the way in; the button in the
     // header is for scanning again.
     if (!bleDevicesScanned()) ble_scan_pending = true;
+  }
+  if (show_printer_pending) {
+    show_printer_pending = false;
+    buildPrinterScreen();          // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_printer, LV_OBJ_FLAG_HIDDEN);
   }
   // Shown once the device has settled, not during boot: a modal that appears
   // while the first screen is still assembling reads as a fault.
