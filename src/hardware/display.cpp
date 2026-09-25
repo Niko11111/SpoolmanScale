@@ -225,14 +225,24 @@ void displaySetBrightness(uint8_t brightness) {
 // unregulated low-side switch. Hold the pin low instead.
 void displayBacklightOff() {
   displaySetBrightness(0);
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcDetach(hw_pins::LCD_BACKLIGHT);
+#else
   ledcDetachPin(hw_pins::LCD_BACKLIGHT);
+#endif
   pinMode(hw_pins::LCD_BACKLIGHT, OUTPUT);
   digitalWrite(hw_pins::LCD_BACKLIGHT, LOW);
 }
 
 void displayBacklightOn(uint8_t brightness) {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  // Core 3 hands a pin to LEDC through its peripheral manager, and
+  // LovyanGFX drives it by pin number. Its own init attaches it again.
+  if (tft.light()) tft.light()->init(brightness);
+#else
   ledcAttachPin(hw_pins::LCD_BACKLIGHT, BL_PWM_CHANNEL);
   displaySetBrightness(brightness);
+#endif
 }
 
 void displayPrepareDeepSleep() {

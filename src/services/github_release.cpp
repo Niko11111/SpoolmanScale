@@ -24,9 +24,10 @@
 // the release assets and GitHub Pages to Let's Encrypt; the bundle carries
 // both and whatever they move to next.
 extern const uint8_t x509_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
+extern const uint8_t x509_crt_bundle_end[] asm("_binary_x509_crt_bundle_end");
 
 void githubTrust(WiFiClientSecure &client) {
-  client.setCACertBundle(x509_crt_bundle_start);
+  client.setCACertBundle(x509_crt_bundle_start, x509_crt_bundle_end - x509_crt_bundle_start);
 }
 
 bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
@@ -314,7 +315,7 @@ bool githubFlashTag(const char *tag, const char *sha256_hex,
   // was written rather than over what was received.
   mbedtls_sha256_context sha;
   mbedtls_sha256_init(&sha);
-  mbedtls_sha256_starts_ret(&sha, 0);
+  mbedtls_sha256_starts(&sha, 0);
 
   uint8_t buf8[512];
   while (http.connected() && (len > 0 || len == -1)) {
@@ -323,7 +324,7 @@ bool githubFlashTag(const char *tag, const char *sha256_hex,
       size_t toRead = min(available, sizeof(buf8));
       size_t rd = stream->readBytes(buf8, toRead);
       if (Update.write(buf8, rd) != rd) { write_failed = true; break; }
-      mbedtls_sha256_update_ret(&sha, buf8, rd);
+      mbedtls_sha256_update(&sha, buf8, rd);
       done += rd;
       last_data = millis();
       if (len > 0) len -= rd;
@@ -341,7 +342,7 @@ bool githubFlashTag(const char *tag, const char *sha256_hex,
   http.end();
 
   unsigned char digest[32];
-  mbedtls_sha256_finish_ret(&sha, digest);
+  mbedtls_sha256_finish(&sha, digest);
   mbedtls_sha256_free(&sha);
   char got[65];
   hexDigest(digest, sizeof(digest), got, sizeof(got));

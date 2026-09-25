@@ -35,6 +35,8 @@ static void stopResponder() {
   s_advertised[0] = '\0';
 }
 
+void mdnsStop() { stopResponder(); }
+
 // The service is advertised only while there is something behind it. Without
 // this a Bonjour browser would list a scale whose page refuses to load
 // whenever the web server is down.

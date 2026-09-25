@@ -1,6 +1,7 @@
 #include "backend_api.h"
 
 #include <ctype.h>
+#include <esp_mac.h>
 #include <string.h>
 
 #include "app/app_state.h"

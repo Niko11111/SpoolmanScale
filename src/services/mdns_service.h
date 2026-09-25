@@ -23,3 +23,10 @@ bool mdnsRunning();
 // listening, so nothing has to be remembered at the point where any of those
 // change - a rename takes effect on the next pass, without a reboot.
 void mdnsSyncState();
+
+// Takes the responder down now, while the network interface still exists.
+// Called before anything that switches WiFi off or changes its mode: on
+// core 3 the interface goes with the mode, and the responder freed after
+// that walks a dead interface (panic in mdns_free(), seen on the first
+// WiFi scan). The next mdnsSyncState() brings it back once the link is up.
+void mdnsStop();

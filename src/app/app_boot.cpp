@@ -136,6 +136,14 @@ void wifiConnect() {
 // ============================================================
 void appSetup() {
   Serial.begin(115200);
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  // With the cable in a computer that does not read the port, core 3 waits
+  // up to 100 ms for every line that does not fit the USB buffer; core 2
+  // dropped them. At some 20 lines a pass that held the loop for 2 s, 30
+  // passes a minute instead of 7400 (24.09.2026). 0 drops them again, and a
+  // monitor that reads still gets everything.
+  Serial.setTxTimeoutMs(0);
+#endif
   delay(500);
   // Before anything else can leave one of its own: this reads what the
   // previous boot was doing when it stopped. writeBootBlock() prints it.

@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-class WiFiClientSecure;
+#include <WiFiClientSecure.h>
 
 // Trust for every connection to GitHub: the certificate bundle the ESP-IDF
 // ships (Mozilla's root store, 64 kB of flash, linked only because this

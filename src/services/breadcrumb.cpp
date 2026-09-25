@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <esp_attr.h>
+#include <esp_idf_version.h>
 #include <cstring>
 
 // RTC_NOINIT_ATTR is the point of the whole file: the startup code does not
@@ -64,7 +65,11 @@ static char s_wdt_prev[2 * WDT_NAME_LEN + 16] = "";
 
 extern "C" void IRAM_ATTR esp_task_wdt_isr_user_handler(void) {
   for (int cpu = 0; cpu < 2; cpu++) {
+#if ESP_IDF_VERSION_MAJOR >= 5
+    TaskHandle_t t = xTaskGetCurrentTaskHandleForCore(cpu);
+#else
     TaskHandle_t t = xTaskGetCurrentTaskHandleForCPU(cpu);
+#endif
     const char* n = t ? pcTaskGetName(t) : nullptr;
     int i = 0;
     for (; n && n[i] && i < WDT_NAME_LEN - 1; i++) s_wdt_task[cpu][i] = n[i];

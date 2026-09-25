@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <WebServer.h>
+#include <WiFi.h>
 
 #include "app/app_state.h"
 #include "services/backend.h"
@@ -46,7 +47,11 @@ class ScaleWebServer : public WebServer {
 
   void handleClient() override {
     if (_currentStatus == HC_NONE) {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+      _currentClient = _server.accept();
+#else
       _currentClient = _server.available();
+#endif
       if (!_currentClient) {
         if (_nullDelay) delay(1);
         return;
@@ -61,8 +66,19 @@ class ScaleWebServer : public WebServer {
     if (_currentClient.connected() && _currentStatus == HC_WAIT_READ) {
       if (_currentClient.available()) {
         if (_parseRequest(_currentClient)) {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+          // Core 3 counts this timeout in milliseconds, and keeps the
+          // response headers of every request in a list that the library's
+          // own handleClient() empties. Left out, each request kept its
+          // headers for good: about 170 bytes of internal heap per request.
+          _currentClient.setTimeout(HTTP_MAX_SEND_WAIT);
+          _contentLength = CONTENT_LENGTH_NOT_SET;
+          _responseCode  = 0;
+          _clearResponseHeaders();
+#else
           _currentClient.setTimeout(HTTP_MAX_SEND_WAIT / 1000);
           _contentLength = CONTENT_LENGTH_NOT_SET;
+#endif
           _handleRequest();
         }
       } else {

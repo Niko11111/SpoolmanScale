@@ -3,8 +3,10 @@
 #include <WiFi.h>
 
 #include "services/device_name.h"
+#include "services/mdns_service.h"
 
 void wifiManagerPrepareScan() {
+  mdnsStop();
   WiFi.disconnect(true);
   delay(100);
   WiFi.mode(WIFI_STA);
@@ -68,6 +70,7 @@ void wifiManagerClearScan() {
 }
 
 bool wifiManagerStartAp(const char* ssid, const char* password, IPAddress ip, IPAddress netmask) {
+  mdnsStop();
   if (!WiFi.mode(WIFI_AP)) return false;
   if (!WiFi.softAP(ssid, password)) return false;
   // The scale is its own gateway: a phone only looks for a captive portal on
@@ -87,6 +90,15 @@ void wifiManagerBegin(const char* ssid, const char* password) {
   // sticks to the netif, which is why the reconnect watchdog in appLoop()
   // does not need to repeat it.
   WiFi.setHostname(deviceLabel());
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  // Modem sleep off. The loop serves every web request itself, and on core 3
+  // a sleeping radio made each one crawl: /api/logs took 0.1 to 2.9 s instead
+  // of 0.07 s, the log page's poll 0.7 s, and the UI stood still meanwhile.
+  // Ping 76 ms -> 7 ms. Core 2 slept too and still answered in 0.1 s.
+  // Bluetooth, once it runs next to WiFi, needs modem sleep back on for as
+  // long as it is up (ESP-IDF coexistence).
+  WiFi.setSleep(false);
+#endif
   WiFi.begin(ssid, password);
 }
 
