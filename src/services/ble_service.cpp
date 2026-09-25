@@ -4,6 +4,7 @@
 #include <NimBLEDevice.h>
 #include <WiFi.h>
 #include <esp_heap_caps.h>
+#include <nvs.h>
 #include <stdio.h>
 
 #include "hardware/sd_logger.h"
@@ -17,11 +18,37 @@
 // continue rather than start over.
 #define BLE_SCAN_SLICE_MS 1000
 
+// Arduino gives the Bluetooth controller's memory back to the heap at boot,
+// about 36 kB of internal RAM, unless a Bluetooth library is linked in -
+// NimBLE is, so it kept it whether the switch was on or not: 141 instead of
+// 174 kB free at idle (25.09.2026). bleInUse() is the core's hook for that
+// decision, asked in initArduino() before setup(). It answers with the
+// switch, read straight from NVS because nothing else is up yet. Memory given
+// back cannot be taken again, so switching Bluetooth on later needs a restart
+// (ui/bluetooth_screen.cpp asks for it).
+#define BLE_PREFS_NS  "spoolscale"
+#define BLE_PREFS_KEY "ble_on"
+
+static bool s_mem_kept = false;
+
+extern "C" bool bleInUse(void) {
+  uint8_t on = 0;
+  nvs_handle_t h;
+  if (nvs_open(BLE_PREFS_NS, NVS_READONLY, &h) == ESP_OK) {
+    if (nvs_get_u8(h, BLE_PREFS_KEY, &on) != ESP_OK) on = 0;
+    nvs_close(h);
+  }
+  s_mem_kept = (on != 0);
+  return s_mem_kept;
+}
+
+bool bleStackAvailable() { return s_mem_kept; }
+
 bool bleEnabled() { return g_ble_enabled; }
 
 void bleSetEnabled(bool on) {
   g_ble_enabled = on;
-  prefsPutBool("ble_on", on);
+  prefsPutBool(BLE_PREFS_KEY, on);
 }
 
 // The numbers the RAM question is decided on: how much internal heap the
@@ -83,6 +110,10 @@ static void copyDevice(BleDevice& out, const NimBLEAdvertisedDevice* dev) {
 int bleScan(BleDevice* out, int capacity, uint32_t duration_ms, BleProgressFn progress) {
   if (!out || capacity <= 0) return 0;
   if (!g_ble_enabled) return -1;
+  if (!s_mem_kept) {
+    logSD("BLE: controller memory was given back at boot, a restart is needed");
+    return -1;
+  }
   if (!stackMayStart(progress)) return -1;
 
   crumbSet("ble scan init");

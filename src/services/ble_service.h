@@ -29,6 +29,10 @@ typedef void (*BleProgressFn)();
 
 // The master switch, cached from NVS at boot (services/app_settings.cpp).
 bool bleEnabled();
+
+// Whether this boot kept the Bluetooth controller's memory, which it does only
+// when the switch was on at boot. False means switching on takes a restart.
+bool bleStackAvailable();
 // Sets it and writes the key. Called from an LVGL callback, so the write is
 // parked by prefs_store and lands on the next loop pass like every other one.
 void bleSetEnabled(bool on);

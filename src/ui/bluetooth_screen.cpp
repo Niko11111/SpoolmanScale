@@ -10,8 +10,10 @@
 #include "lang.h"
 #include "services/ble_service.h"
 #include "ui/ble_devices_screen.h"
+#include "ui/reboot_popup.h"
 #include "ui/header_status.h"
 #include "ui/theme.h"
+#include "reboot_popup.h"
 #include "ui_common.h"
 
 // ============================================================
@@ -56,6 +58,14 @@ void buildBluetoothScreen() {
       lv_obj_set_style_text_font(arr_lbl, UI_FONT_SMALL, 0);
     }
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      // This boot gave the controller's memory back because the switch was
+      // off; only a restart brings it back. The switch is written by the
+      // restart button, so cancelling leaves it off.
+      if (!bleEnabled() && !bleStackAvailable()) {
+        logSD("BTN: Bluetooth -> on, restart asked");
+        showRebootPopup([]() { bleSetEnabled(true); });
+        return;
+      }
       bleSetEnabled(!bleEnabled());
       if (!bleEnabled()) bleDevicesForget();
       logSDf("BTN: Bluetooth -> %s", bleEnabled() ? "on" : "off");
