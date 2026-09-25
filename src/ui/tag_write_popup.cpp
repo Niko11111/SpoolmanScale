@@ -239,6 +239,8 @@ void startTagWriteNoAsk(int spool_id) {
   s_spool_id = spool_id;
   s_mode     = ASK_WRITE;
   logSDf("TagWrite: writing spool %d without asking", spool_id);
+  // A question about the same tag waiting to be shown is answered by this.
+  mismatch_ask_pending = false;
   if (tagWriteRequest(spool_id, (TagFormat)g_tagwrite_fmt, false)) {
     // The same watch a confirmed question sets, so the result popup appears
     // through the one path that already knows how to show it.
@@ -293,11 +295,24 @@ static void showTagMismatchPopup() {
 // The marker survives lifting the spool off the pad on purpose: answering
 // "keep" and being asked again the next time the same spool is weighed is the
 // behaviour testers reported as the most annoying thing the scale did.
-void tagMismatchTick() {
-  static char asked_uid[26] = "";
-  static int  asked_id = 0;
+// The tag and spool last asked about, or written: see tagMismatchTick().
+static char s_mism_asked_uid[26] = "";
+static int  s_mism_asked_id = 0;
 
+// A write of this spool to this tag settles the question. The cached record
+// the comparison reads is the one from before the write, so without this the
+// question came up right after a write that had worked, and "rewrite" wrote
+// the same thing a second and third time (log 25.09.2026, spool 226).
+static void mismatchSettle(const char* uid, int spool_id) {
+  snprintf(s_mism_asked_uid, sizeof(s_mism_asked_uid), "%s", uid);
+  s_mism_asked_id = spool_id;
+  mismatch_ask_pending = false;
+}
+
+void tagMismatchTick() {
   if (!g_tagmismatch_ask) return;
+  // Not while a write runs: it compares against what the tag held before.
+  if (s_watching || strcmp(tagWriteState(), "pending") == 0) return;
   if (!wifi_ok || !tag_present || !sm_found || sm_id <= 0) return;
   if (!tagIsWritableNtag() || !tagCachedHasRecord()) return;
   if (scr_tag_write || erase_ask_pending || mismatch_ask_pending) return;
@@ -311,11 +326,11 @@ void tagMismatchTick() {
       isSpoolFlowLinkEntryOpen() || isSecondTagPopupOpen())
     return;
 
-  if (asked_id == sm_id && strcmp(asked_uid, g_tag.uid_str) == 0) return;
+  if (s_mism_asked_id == sm_id && strcmp(s_mism_asked_uid, g_tag.uid_str) == 0) return;
   // Before the request, not after: the comparison costs a GET, and a pair that
   // turns out to agree must not pay for it again on the very next pass.
-  snprintf(asked_uid, sizeof(asked_uid), "%s", g_tag.uid_str);
-  asked_id = sm_id;
+  snprintf(s_mism_asked_uid, sizeof(s_mism_asked_uid), "%s", g_tag.uid_str);
+  s_mism_asked_id = sm_id;
 
   TagInfo want;
   if (!tagDiffersFromSpool(sm_id, (TagFormat)g_tagwrite_fmt, &want)) return;
@@ -343,6 +358,20 @@ void tagMismatchTick() {
   logSDf("Tag: spool %d disagrees with the tag, asking", sm_id);
 }
 
+int tagWriteAskSpool() {
+  if (!scr_tag_write || close_pending || s_mode == ASK_ERASE) return 0;
+  return s_spool_id;
+}
+
+bool tagWriteAskIsRewrite() { return s_mode == ASK_REWRITE; }
+
+void tagWriteAskAnswer(bool yes) {
+  if (!tagWriteAskSpool()) return;
+  logSDf("TagWritePopup: answered from the browser, %s", yes ? "yes" : "no");
+  confirm_pending = yes;
+  close_pending   = true;
+}
+
 void handleTagWritePopupDeferredActions() {
   // The result of a write or erase that is already running. tagWriteTick()
   // carries it out on this same loop task, so the state settles within a pass.
@@ -350,6 +379,7 @@ void handleTagWritePopupDeferredActions() {
     s_watching = false;
     const uint8_t code = tagWriteResultCode();
     tagBusyHide();
+    if (code == TW_OK && s_mode != ASK_ERASE) mismatchSettle(g_tag.uid_str, s_spool_id);
     showResult(code);
     logSDf("TagWritePopup: finished, mode=%d code=%u", (int)s_mode,
            (unsigned)code);
@@ -379,7 +409,8 @@ void handleTagWritePopupDeferredActions() {
 
   if (mismatch_ask_pending) {
     mismatch_ask_pending = false;
-    showTagMismatchPopup();
+    // A write that started after the question was taken answers it.
+    if (!s_watching) showTagMismatchPopup();
   }
 
   if (!close_pending) return;

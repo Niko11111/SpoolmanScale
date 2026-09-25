@@ -1008,6 +1008,9 @@ void appLoop() {
     if (!isSpoolFlowIdInputOpen() && !isSpoolFlowLinkEntryOpen() &&
         !isConfirmPopupOpen()) {
       logSDf("TagWrite: showing spool %d after the link", linked_id);
+      // Asked here, on the loop, so the tag page can read the answer from a
+      // web handler without reaching the server: see backendSecondTagKnown().
+      backendCanHoldSecondTag();
       tagLookupForget();
       querySpoolmanById(linked_id);
       spoolFlowAskSecondTag(linked_id);

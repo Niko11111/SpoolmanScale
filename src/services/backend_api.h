@@ -171,6 +171,9 @@ bool backendNativeTagsAbsent();
 // whether the server has the second column at all - so it belongs in the loop,
 // never in a screen build and never in an LVGL callback.
 bool backendCanHoldSecondTag();
+// What backendCanHoldSecondTag() answered last, without asking anything:
+// 1 or 0, -1 before it was asked for the first time.
+int backendSecondTagKnown();
 
 // This scale's id in Spoolman's reader list, stable across reboots.
 const char* backendReaderId();

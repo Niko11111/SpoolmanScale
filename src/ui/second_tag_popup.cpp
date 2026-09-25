@@ -47,6 +47,20 @@ static int           s_last_shown_s = -1;
 
 bool isSecondTagPopupOpen() { return scr_tag2 != nullptr; }
 
+static SecondTagState s_state = T2_IDLE;
+static unsigned long  s_state_ms = 0;
+static int  s_web_start_id = 0;
+static bool s_web_cancel   = false;
+
+static void setState(SecondTagState st) {
+  s_state = st;
+  s_state_ms = millis();
+}
+
+void secondTagLinked(bool ok) { setState(ok ? T2_OK : T2_FAILED); }
+void secondTagWebStart(int spool_id) { if (spool_id > 0) s_web_start_id = spool_id; }
+void secondTagWebCancel() { s_web_cancel = true; }
+
 static void closeSecondTagPopup() {
   if (scr_tag2) { lv_obj_del(scr_tag2); scr_tag2 = nullptr; }
   lbl_tag2_count = nullptr;
@@ -69,6 +83,15 @@ static unsigned long remainingMs() {
 }
 
 static int remainingSeconds() { return (int)((remainingMs() + 999) / 1000); }
+
+SecondTagReport secondTagReport() {
+  SecondTagReport r;
+  r.state = s_state;
+  r.spool_id = s_spool_id;
+  r.seconds_left = scr_tag2 ? remainingSeconds() : 0;
+  r.age_ms = millis() - s_state_ms;
+  return r;
+}
 
 // The button's fill, to the pixel. At 376 px over 30 s that is a dozen
 // small redraws a second, each only the strip that changed.
@@ -101,6 +124,7 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   tagUidNormalize(first_uid, s_first_uid, sizeof(s_first_uid));
   s_opened_ms     = millis();
   s_opened_stall  = httpStallTotalMs();
+  setState(T2_WAITING);
 
   scr_tag2 = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_tag2, LV_HOR_RES, LV_VER_RES);
@@ -188,6 +212,7 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   lv_obj_add_event_cb(btn_done, [](lv_event_t *e) {
     // No HTTP and no delete in here, both happen one loop pass later.
     s_close_pending = true;
+    setState(T2_CANCELLED);
   }, LV_EVENT_CLICKED, NULL);
 
   // The countdown as a lighter fill that drains from the right, behind the
@@ -217,6 +242,29 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
 }
 
 void handleSecondTagDeferredActions() {
+  // Asked for from the browser. The same question the scale asks after a
+  // link, for the spool that is on it and the tag that is on the reader.
+  if (s_web_start_id) {
+    const int id = s_web_start_id;
+    s_web_start_id = 0;
+    if (!scr_tag2 && tag_present && sm_found && sm_id == id) {
+      logSDf("TAG2: asked for from the browser, spool %d", id);
+      showSecondTagPopup(id, g_tag.uid_str);
+    } else if (!scr_tag2) {
+      logSDf("TAG2: browser asked for spool %d, but the scale shows %d", id, sm_id);
+      s_spool_id = id;
+      setState(T2_FAILED);
+    }
+  }
+  if (s_web_cancel) {
+    s_web_cancel = false;
+    if (scr_tag2 && !s_close_pending) {
+      logSD("TAG2: cancelled from the browser");
+      s_close_pending = true;
+      setState(T2_CANCELLED);
+    }
+  }
+
   if (scr_tag2 && !s_close_pending) {
     updateCountdownLabel();
     updateCountdownFill();
@@ -236,8 +284,10 @@ void handleSecondTagDeferredActions() {
       s_second_uid[sizeof(s_second_uid) - 1] = '\0';
       s_link_pending  = true;
       s_close_pending = true;
+      setState(T2_LINKING);
     } else if (remainingSeconds() == 0) {
       s_close_pending = true;
+      setState(T2_EXPIRED);
       logSDf("TAG2: no second tag for spool %d, question expired", s_spool_id);
     }
   }
@@ -256,6 +306,7 @@ void handleSecondTagDeferredActions() {
   // comparison and the alternative is binding a tag to whatever came after.
   if (sm_id != spool_id) {
     logSDf("TAG2: discarded, spool moved from %d to %d", spool_id, sm_id);
+    setState(T2_FAILED);
     return;
   }
 

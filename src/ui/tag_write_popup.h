@@ -48,3 +48,10 @@ bool isTagWritePopupOpen();
 // the write or the erase, and shows the result when it is done. Called from
 // appLoop() like the other deferred UI work.
 void handleTagWritePopupDeferredActions();
+
+// The write or rewrite question as the browser sees it: the spool it is about,
+// 0 while none stands. An erase question is not offered there.
+int  tagWriteAskSpool();
+bool tagWriteAskIsRewrite();
+// The browser's answer, parked exactly like the buttons park theirs.
+void tagWriteAskAnswer(bool yes);

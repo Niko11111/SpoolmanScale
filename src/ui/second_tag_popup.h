@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 // ============================================================
 //  SECOND TAG POPUP
 //
@@ -36,3 +38,31 @@ bool isSecondTagPopupOpen();
 // Called from appLoop(): the link costs HTTP requests, which is exactly what
 // an LVGL callback must not carry.
 void handleSecondTagDeferredActions();
+
+// The same flow as the tag page in the browser sees and drives it. The page
+// never runs a flow of its own: it starts this one, cancels it, and reads
+// where it stands, so the scale and the browser always show the same thing.
+enum SecondTagState : uint8_t {
+  T2_IDLE = 0,
+  T2_WAITING,      // the question stands, seconds_left counts down
+  T2_LINKING,      // a second tag turned up and is being linked
+  T2_OK,
+  T2_FAILED,
+  T2_EXPIRED,
+  T2_CANCELLED,
+};
+struct SecondTagReport {
+  SecondTagState state;
+  int      spool_id;
+  int      seconds_left;
+  uint32_t age_ms;       // since the state last changed
+};
+SecondTagReport secondTagReport();
+
+// From a web handler: parked, carried out by handleSecondTagDeferredActions().
+// Start only asks for the spool on the scale, with its tag on the reader.
+void secondTagWebStart(int spool_id);
+void secondTagWebCancel();
+
+// linkAdditionalTag() says how the link ended.
+void secondTagLinked(bool ok);

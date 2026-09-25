@@ -150,8 +150,8 @@ const char* const STRINGS[][3] = {
     "Navigateur ou GitHub" },  // STR_BTN_FW_SUB
   { "Info & Unterstützung", "Info & Support",
     "Info et soutien" },  // STR_BTN_INFO
-  { "Ko-fi - GitHub - Discord - MakerWorld", "Ko-fi - GitHub - Discord - MakerWorld",
-    "Ko-fi - GitHub - Discord - MakerWorld" },  // STR_BTN_INFO_SUB
+  { "Anleitung - Ko-fi - GitHub - Discord - MakerWorld", "Manual - Ko-fi - GitHub - Discord - MakerWorld",
+    "Manuel - Ko-fi - GitHub - Discord - MakerWorld" },  // STR_BTN_INFO_SUB
 
   // Language screen
   { "Sprache / Language", "Sprache / Language", "Langue / Language" },  // STR_LANG_TITLE
@@ -2048,12 +2048,12 @@ const char* const STRINGS[][3] = {
     "material, colour, nozzle and bed temperature, diameter, length and "
     "weight. The ACE reads those itself.",
     "Le format décide qui pourra lire le tag.\n\nOpenSpool est un enregistrement NDEF contenant le matériau, la couleur, la marque, les températures et l'ID de la bobine ; FilaMan et les lecteurs OpenSpool savent le lire.\n\nFilaMan est le même enregistrement, sous le nom de protocole qu'attend une installation FilaMan.\n\nAnycubic ACE n'écrit aucun enregistrement, mais des pages brutes contenant la référence article, la marque, le matériau, la couleur, les températures de buse et de plateau, le diamètre, la longueur et le poids. L'ACE les lit directement." },  // STR_TW_OPT_FMT_INFO
-  { "OpenSpool",          "OpenSpool",     "OpenSpool" },  // STR_TW_FMT_OPENSPOOL
-  { "FilaMan",            "FilaMan",       "FilaMan" },  // STR_TW_FMT_FILAMAN
-  { "Anycubic ACE",       "Anycubic ACE",  "Anycubic ACE" },  // STR_TW_FMT_ACE
-  { "Tag beschreiben",    "Writing tags",  "Écriture des tags" },  // STR_W_C_TAGOPTS
-  { "Nach dem Verlinken", "After linking", "Après la liaison" },  // STR_W_TAGOPT_ASK
-  { "Format",             "Format",        "Format" },  // STR_W_TAGOPT_FMT
+  { "OpenSpool",              "OpenSpool",              "OpenSpool" },  // STR_TW_FMT_OPENSPOOL
+  { "FilaMan",                "FilaMan",                "FilaMan" },  // STR_TW_FMT_FILAMAN
+  { "Anycubic ACE",           "Anycubic ACE",           "Anycubic ACE" },  // STR_TW_FMT_ACE
+  { "Automatik an der Waage", "Automatic on the scale", "Automatique sur la balance" },  // STR_W_C_TAGOPTS
+  { "Nach dem Verlinken",     "After linking",          "Après la liaison" },  // STR_W_TAGOPT_ASK
+  { "Format",                 "Format",                 "Format" },  // STR_W_TAGOPT_FMT
   { "Gilt für das, was die Waage nach einem Verlinken selbst tut. "
     "Das Schreiben auf dieser Seite hat seine eigene Formatauswahl.",
     "Applies to what the scale does on its own after a link. Writing from this "
@@ -2893,6 +2893,105 @@ const char* const STRINGS[][3] = {
   { "Nur Geräte mit Namen",
     "Only devices with a name",
     "Appareils nommés seulement" },  // STR_BT_SHOW_NAMED
+  { "Anleitung",
+    "Manual",
+    "Manuel" },  // STR_QR_DOCS_TITLE
+  { "Einrichtung, Funktionen, häufige Fragen",
+    "Setup, features, common questions",
+    "Installation, fonctions, questions" },  // STR_QR_DOCS_DESC
+  { "Auf der Waage",
+    "On the scale",
+    "Sur la balance" },  // STR_W_C_ONSCALE
+  { "NFC-Tag",
+    "NFC tag",
+    "Tag NFC" },  // STR_W_TAG_BADGE_TAG
+  { "Vorschau",
+    "Preview",
+    "Aperçu" },  // STR_W_TAG_PREVIEW
+  { "Kein Eintrag in %s für diesen Tag.",
+    "No record in %s for this tag.",
+    "Aucune fiche dans %s pour ce tag." },  // STR_W_TAG_NOTLINKED
+  { "Spulen-ID",
+    "Spool ID",
+    "ID bobine" },  // STR_W_TAG_SPOOLID
+  { "Protokoll",
+    "Protocol",
+    "Protocole" },  // STR_W_TAG_PROTO
+  { "Rohdaten",
+    "Raw data",
+    "Données brutes" },  // STR_W_TAG_RAW
+  { "Rohdaten des Tags",
+    "Raw tag data",
+    "Données brutes du tag" },  // STR_W_TAG_RAW_TITLE
+  { "Kopieren",
+    "Copy",
+    "Copier" },  // STR_W_COPY
+  { "Kopiert",
+    "Copied",
+    "Copié" },  // STR_W_COPIED
+  { "Schreibe...",
+    "Writing...",
+    "Écriture..." },  // STR_W_TW_BUSY_BTN
+  { "Tag auf dem Leser liegen lassen",
+    "Keep the tag on the reader",
+    "Laisser le tag sur le lecteur" },  // STR_W_TW_KEEP
+  { "Tag auflegen und noch einmal versuchen",
+    "Put the tag on and try again",
+    "Posez le tag et réessayez" },  // STR_W_TW_RETRY
+  { "Zweiten Tag für diese Spule?",
+    "A second tag for this spool?",
+    "Un second tag pour cette bobine ?" },  // STR_W_T2_OFFER
+  { "Etwa für den Halter oder die Box. Beide Tags finden dieselbe Spule.",
+    "For the holder or the box, say. Both tags find the same spool.",
+    "Pour le support ou la boîte. Les deux trouvent la même bobine." },  // STR_W_T2_OFFER_HINT
+  { "Zweiten Tag schreiben",
+    "Write a second tag",
+    "Écrire un second tag" },  // STR_W_T2_START
+  { "Fertig",
+    "Done",
+    "Terminé" },  // STR_W_T2_DONE_BTN
+  { "Jetzt den zweiten Tag auflegen",
+    "Now put the second tag on",
+    "Posez le second tag" },  // STR_W_T2_WAIT
+  { "Ersten Tag abnehmen, zweiten auf den Leser legen. Die Waage zeigt dieselbe Frage.",
+    "Take the first tag off, put the second on the reader. The scale asks the same.",
+    "Retirez le premier tag, posez le second. La balance demande la même chose." },  // STR_W_T2_WAIT_HINT
+  { "Noch %d s",
+    "%d s left",
+    "Encore %d s" },  // STR_W_T2_LEFT
+  { "Zweiter Tag wird verknüpft...",
+    "Linking the second tag...",
+    "Liaison du second tag..." },  // STR_W_T2_LINKING
+  { "Zweiter Tag verknüpft",
+    "Second tag linked",
+    "Second tag lié" },  // STR_W_T2_OK
+  { "Spule #%d wird jetzt von beiden Tags gefunden.",
+    "Spool #%d is now found by both tags.",
+    "La bobine #%d est trouvée par les deux." },  // STR_W_T2_OK_HINT
+  { "Zweiter Tag nicht verknüpft",
+    "Second tag not linked",
+    "Second tag non lié" },  // STR_W_T2_FAIL
+  { "Kein zweiter Tag aufgelegt.",
+    "No second tag was put on.",
+    "Aucun second tag posé." },  // STR_W_T2_EXPIRED
+  { "Diesen Tag mit Spule #%d beschreiben?",
+    "Write spool #%d to this tag?",
+    "Écrire la bobine #%d sur ce tag ?" },  // STR_W_ASK_WRITE
+  { "Auf diesem Tag steht schon etwas",
+    "This tag already holds something",
+    "Ce tag contient déjà quelque chose" },  // STR_W_ASK_OVER_TITLE
+  { "Überschreiben mit Spule #%d?",
+    "Overwrite it with spool #%d?",
+    "L'écraser avec la bobine #%d ?" },  // STR_W_ASK_OVER
+  { "Überschreiben",
+    "Overwrite",
+    "Écraser" },  // STR_W_ASK_YES_OVER
+  { "Beschreiben",
+    "Write",
+    "Écrire" },  // STR_W_ASK_YES_WRITE
+  { "Nicht angenommen: es wird schon geschrieben, oder die Spulen-ID fehlt.",
+    "Not accepted: a write is already running, or the spool ID is missing.",
+    "Refusé : une écriture est déjà en cours, ou l'ID de bobine manque." },  // STR_W_TW_REFUSED
 };
 
 StringID tagWriteResultString(uint8_t code) {

@@ -290,7 +290,19 @@ bool backendNativeTagsAbsent() {
   return !s_tagapi_present;
 }
 
+// The last answer below, for callers that must not reach the network - the
+// tag page asks every three seconds from a web handler. -1 until the first.
+static int8_t s_second_tag_known = -1;
+int backendSecondTagKnown() { return s_second_tag_known; }
+
+static bool secondTagAnswer();
 bool backendCanHoldSecondTag() {
+  const bool can = secondTagAnswer();
+  s_second_tag_known = can ? 1 : 0;
+  return can;
+}
+
+static bool secondTagAnswer() {
   // The structural half first, because it needs no network and rules out the
   // two cases that no server version will ever change.
   if (!tagFieldHoldsSeveral()) return false;

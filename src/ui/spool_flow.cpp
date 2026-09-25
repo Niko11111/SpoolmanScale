@@ -1442,8 +1442,10 @@ void linkAdditionalTag(int spool_id, const char* uid) {
     // repaints a moment later. A conflict opens the move question instead;
     // everything else is said in a modal, or it was never seen.
     if (!tagmove_ask_pending) showInfoPopup(STR_TAG2_FAILED, STR_CU_NOT_WRITTEN, INFO_WARN);
+    secondTagLinked(false);
     return;
   }
+  secondTagLinked(true);
 
   // The chip that is now on the reader belongs in the field an MMU gate reads
   // as well. querySpoolmanById() above refreshed sm_hw_uid_value but does not

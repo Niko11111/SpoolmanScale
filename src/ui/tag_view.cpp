@@ -320,7 +320,7 @@ static void buildGrid(lv_obj_t* box, const Shown& s) {
   char buf[24];
   if (i.spool_id > 0) {
     snprintf(buf, sizeof(buf), "#%d", i.spool_id);
-    add("Spool ID", buf, false);
+    add(T(STR_W_TAG_SPOOLID), buf, false);
   }
   rangeText(buf, sizeof(buf), i.et_lo, i.et_hi);   add(T(STR_W_TAG_NOZZLE), buf, false);
   rangeText(buf, sizeof(buf), i.bed_lo, i.bed_hi); add(T(STR_W_TAG_BED), buf, false);
@@ -362,6 +362,11 @@ static lv_obj_t* button(lv_obj_t* box, int x, const char* text, bool danger,
     lv_obj_set_style_bg_color(b, lv_color_hex(danger ? UI_COL_BAD_BG : UI_COL_OK_BG), 0);
     lv_obj_set_style_bg_color(b, lv_color_hex(danger ? UI_COL_BAD_BG_PRESSED : UI_COL_OK_BG_PRESSED),
                               LV_STATE_PRESSED);
+    // The close button's frame: without it the dark red of Erase read as
+    // switched off (Nikolai, 25.09.2026); the red one in the signal red.
+    lv_obj_set_style_border_width(b, 1, 0);
+    lv_obj_set_style_border_color(b, lv_color_hex(danger ? UI_COL_BAD : UI_COL_OK_BG_PRESSED), 0);
+    if (danger) lv_obj_set_style_border_opa(b, LV_OPA_60, 0);
     lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, nullptr);
   } else {
     lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_SURFACE_2), 0);

@@ -1341,6 +1341,47 @@ enum StringID {
   STR_BT_SHOW_ALL_FMT,
   STR_BT_SHOW_NAMED,
 
+  // The info screen's fifth code, the manual
+  STR_QR_DOCS_TITLE,
+  STR_QR_DOCS_DESC,
+
+  // Tag page: Simon's cards, translated
+  STR_W_C_ONSCALE,
+  STR_W_TAG_BADGE_TAG,
+  STR_W_TAG_PREVIEW,
+  STR_W_TAG_NOTLINKED,
+  STR_W_TAG_SPOOLID,
+  STR_W_TAG_PROTO,
+  STR_W_TAG_RAW,
+  STR_W_TAG_RAW_TITLE,
+  STR_W_COPY,
+  STR_W_COPIED,
+  // Tag page: status while writing
+  STR_W_TW_BUSY_BTN,
+  STR_W_TW_KEEP,
+  STR_W_TW_RETRY,
+  // Tag page: the second tag, driving the scale's own flow
+  STR_W_T2_OFFER,
+  STR_W_T2_OFFER_HINT,
+  STR_W_T2_START,
+  STR_W_T2_DONE_BTN,
+  STR_W_T2_WAIT,
+  STR_W_T2_WAIT_HINT,
+  STR_W_T2_LEFT,
+  STR_W_T2_LINKING,
+  STR_W_T2_OK,
+  STR_W_T2_OK_HINT,
+  STR_W_T2_FAIL,
+  STR_W_T2_EXPIRED,
+  // Tag page: the scale's write question, answered here
+  STR_W_ASK_WRITE,
+  STR_W_ASK_OVER_TITLE,
+  STR_W_ASK_OVER,
+  STR_W_ASK_YES_OVER,
+  STR_W_ASK_YES_WRITE,
+  // Tag page: a write the scale did not take
+  STR_W_TW_REFUSED,
+
   STR_COUNT
 };
 
