@@ -2586,10 +2586,12 @@ const char* const STRINGS[][3] = {
   { "Versucht bei einem 4-Byte-Tag, der kein Bambu-Tag ist, die Snapmaker-Schlüssel und liest Material und Farbe vom Tag. Kostet jeden anderen 4-Byte-Tag etwa eine halbe Sekunde beim Auflegen. Aus lassen, wenn keine Snapmaker-Spulen im Haus sind.",
     "Tries Snapmaker's keys on a 4 byte tag that is not a Bambu tag and reads material and colour off the tag. Costs every other 4 byte tag about half a second when it is put down. Leave it off if there are no Snapmaker spools around.",
     "Essaie les clés Snapmaker sur un tag de 4 octets qui n'est pas un tag Bambu, et lit le matériau et la couleur sur le tag. Chaque autre tag de 4 octets met alors environ une demi-seconde de plus à être reconnu. À laisser désactivé s'il n'y a pas de bobines Snapmaker." },  // STR_W_SNAPMAKER_HINT
-  { "Speicheraufteilung veraltet", "Storage layout outdated", "Partitionnement obsolète" },  // STR_PART_HINT_TITLE
-  { "Diese Waage wurde mit der alten Speicheraufteilung geflasht: 3 MB je Firmware-Slot. Neue Geräte bekommen 5 MB je Slot und einen Datenbereich für künftige Funktionen.\n\nUpdates funktionieren weiterhin. Für die neue Aufteilung ist einmal ein Flash per USB über den Web Flasher nötig. Läuft die Waage dabei, bietet der Flasher 'Update' an, und alle Einstellungen bleiben erhalten. Erscheint stattdessen 'Install', den Haken bei 'Erase' nicht setzen.",
-    "This scale was flashed with the old storage layout: 3 MB per firmware slot. New devices get 5 MB per slot and a data area for future features.\n\nUpdates keep working. The new layout needs one flash over USB with the web flasher. If the scale is running, the flasher offers 'Update' and every setting is kept. If it offers 'Install' instead, leave the 'Erase' box unticked.",
-    "Cette balance a l'ancien partitionnement : 3 Mo par emplacement de firmware. Les nouveaux appareils ont 5 Mo par emplacement et une zone de données en plus.\n\nLes mises à jour fonctionnent toujours. Le nouveau partitionnement demande un flash USB via le Web Flasher. Balance en marche, le flasher propose 'Update' et les réglages restent. S'il propose 'Install', ne cochez pas 'Erase'." },  // STR_PART_HINT_TEXT
+  { "Einmalig kurz per USB aktualisieren",
+    "A quick one-time update over USB",
+    "Mise à jour USB rapide, une fois" },  // STR_PART_HINT_TITLE
+  { "Für künftige Updates mit neuen Funktionen muss der Speicherbereich für die Firmware vergrößert werden. Das geht nur einmalig per USB-Kabel über den Web-Flasher: etwa 2 Minuten, alle Einstellungen bleiben erhalten. Danach kommen Updates wieder wie gewohnt drahtlos.",
+    "For future updates with new features, the storage area for the firmware has to be enlarged. That only works once over a USB cable with the web flasher: about 2 minutes, every setting is kept. After that, updates arrive over the air as usual.",
+    "Pour les futures mises à jour, la zone mémoire du firmware doit être agrandie. Cela ne se fait qu'une fois, par câble USB avec le Web Flasher : environ 2 minutes, tous les réglages sont conservés. Ensuite, les mises à jour arrivent sans fil comme avant." },  // STR_PART_HINT_TEXT
   { "Layout",   "Layout",   "Partitionnement" },  // STR_W_R_LAYOUT
   { "aktuell",  "current",  "actuel" },  // STR_W_S_LAYOUT_NEW
   { "veraltet", "outdated", "obsolète" },  // STR_W_S_LAYOUT_OLD
@@ -2654,9 +2656,9 @@ const char* const STRINGS[][3] = {
   { "Nicht verfügbar",
     "Not available",
     "Non disponible" },  // STR_W_LOG_INT_NONE
-  { "Der interne Speicher fasst 16.384 Zeilen und überschreibt die ältesten. Gemessen an einem vollen Tag sind das rund eine Woche im Umfang \"Normal\" und gut einen Tag im Umfang \"Ausführlich\".",
-    "The internal storage holds 16,384 lines and overwrites the oldest. Measured against a full day that is about a week at normal scope and a good day at verbose.",
-    "La mémoire interne contient 16 384 lignes et écrase les plus anciennes. Sur une journée pleine, cela fait environ une semaine au niveau « Normal » et un bon jour au niveau « Détaillé »." },  // STR_W_LOG_INT_NOTE
+  { "Der interne Speicher fasst 4.096 Zeilen und überschreibt die ältesten. Das sind etwa zwei Tage im Umfang \"Normal\" und gut zwei Stunden im Umfang \"Ausführlich\".",
+    "The internal storage holds 4,096 lines and overwrites the oldest. That is about two days at normal scope and a good two hours at verbose.",
+    "La mémoire interne contient 4 096 lignes et écrase les plus anciennes. Cela fait environ deux jours au niveau « Normal » et un peu plus de deux heures au niveau « Détaillé »." },  // STR_W_LOG_INT_NOTE
   { "Spule hat sich geändert, Liste neu geladen",
     "That spool changed, the list was reloaded",
     "La bobine a changé, liste rechargée" },  // STR_LIST_SPOOL_CHANGED
@@ -3007,6 +3009,23 @@ const char* const STRINGS[][3] = {
   { "Es fehlen Felder",   "Fields are missing", "Champs absents" },  // STR_EF_HEAD_MISSING
   { "Anlegen",            "Create",             "Créer" },  // STR_EF_BTN_CREATE
   { "Kein Feld nötig",    "No field needed",    "Pas de champ" },  // STR_EF_NATIVE_SUB
+  { "Für das Update %s muss der Speicherbereich für die Firmware vergrößert werden. Das geht nur einmalig per USB-Kabel über den Web-Flasher: etwa 2 Minuten, alle Einstellungen bleiben erhalten. Danach kommen Updates wieder wie gewohnt drahtlos.",
+    "For the update %s, the storage area for the firmware has to be enlarged. That only works once over a USB cable with the web flasher: about 2 minutes, every setting is kept. After that, updates arrive over the air as usual.",
+    "Pour la mise à jour %s, la zone mémoire du firmware doit être agrandie. Cela ne se fait qu'une fois, par câble USB avec le Web Flasher : environ 2 minutes, tous les réglages sont conservés. Ensuite, les mises à jour arrivent sans fil comme avant." },  // STR_PART_HINT_BLOCKED
+  { "Später", "Later",
+    "Plus tard" },  // STR_PART_HINT_LATER
+  { "Web-Flasher", "Web flasher",
+    "Web Flasher" },  // STR_PART_HINT_QR
+  { "%s passt nicht mehr: einmal per USB flashen", "%s no longer fits: flash once over USB",
+    "%s trop grand : flasher par USB" },  // STR_GH_OTA_TOO_BIG
+  { "Firmware wird hochgeladen", "Uploading the firmware",
+    "Envoi du firmware" },  // STR_W_FW_UPLOADING
+  { "Die Datei ist größer als der Speicher dieser Waage ({s}). Einmal per USB über den Web-Flasher aktualisieren, dann passt sie.",
+    "The file is larger than the storage of this scale ({s}). Update once over USB with the web flasher, then it fits.",
+    "Le fichier est plus grand que la mémoire de cette balance ({s}). Mettez à jour une fois par USB avec le Web Flasher, ensuite il tiendra." },  // STR_W_FW_TOOBIG
+  { "Bietet der Flasher \"Install\" statt \"Update\" an, das Häkchen bei \"Erase\" nicht setzen, sonst sind WLAN und Kalibrierung weg.",
+    "If the flasher offers \"Install\" instead of \"Update\", leave the \"Erase\" box unticked, or WiFi and calibration are gone.",
+    "Si le flasher propose « Install » au lieu de « Update », ne cochez pas « Erase », sinon le WiFi et l'étalonnage sont perdus." },  // STR_PART_HINT_ERASE
 };
 
 StringID tagWriteResultString(uint8_t code) {

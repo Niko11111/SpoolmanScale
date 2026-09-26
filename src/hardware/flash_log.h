@@ -7,9 +7,9 @@
 //  THE LOG THAT NEEDS NO CARD
 // ============================================================
 //
-//  The scale has a data partition it never used: 5.875 MB behind the label
+//  The scale has a data partition it never used: 3.875 MB behind the label
 //  "spiffs" on the table shipped since September 2026, 9.938 MB at the same
-//  label on every device flashed before it. This file takes the first 2 MB of
+//  label on every device flashed before it. This file takes the first 512 kB of
 //  it and runs a ring of fixed records through it, without a filesystem.
 //
 //  Why no filesystem. LittleFS was measured on the device against the shape
@@ -35,9 +35,11 @@
 //  together when it is read, so nothing is truncated that the card would
 //  have kept.
 
-// How much of the partition the log owns. The rest stays free for whatever
-// comes next; both partition tables are far larger than this.
-#define FLASH_LOG_BYTES      (2UL * 1024UL * 1024UL)
+// How much of the partition the log owns: 4096 lines, about half an hour to an
+// hour of a busy session. 16384 were more than anyone scrolled through, and
+// the rest of the data area is wanted for fonts and label layouts
+// (Nikolai, 26.09.2026). Both partition tables are far larger than this.
+#define FLASH_LOG_BYTES      (512UL * 1024UL)
 
 // How many lines fit before the oldest is overwritten. A line of ordinary
 // length takes one 128 byte record; a long one takes two, so this is the

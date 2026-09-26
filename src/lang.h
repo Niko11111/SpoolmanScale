@@ -1395,6 +1395,15 @@ enum StringID {
   STR_EF_HEAD_MISSING,
   STR_EF_BTN_CREATE,
   STR_EF_NATIVE_SUB,
+  // The old partition table: an update that no longer fits
+  STR_PART_HINT_BLOCKED,
+  STR_PART_HINT_LATER,
+  STR_PART_HINT_QR,
+  STR_GH_OTA_TOO_BIG,
+  // Firmware page: the upload with its own progress
+  STR_W_FW_UPLOADING,
+  STR_W_FW_TOOBIG,
+  STR_PART_HINT_ERASE,
 
   STR_COUNT
 };

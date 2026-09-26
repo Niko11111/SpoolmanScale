@@ -28,6 +28,11 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
                      char *published, size_t pub_len,
                      char *err, size_t err_len);
 
+// The size of the image in the release the last githubLatestTag() found, 0
+// when that release carried none or the lookup failed. Asked before a download
+// that would not fit the app slot of a device on the old partition table.
+uint32_t githubLastImageSize();
+
 // One release as GitHub describes it. notes is the release body, markdown as
 // written, capped so a long one cannot take the heap with it.
 struct GithubRelease {

@@ -1,8 +1,11 @@
 # SpoolmanScale partition table, ESP32-S3 with 16 MB flash.
 #
 # Two equal app slots, because OTA writes the new image into the inactive one
-# and falls back to the other if it fails. 5 MB each: the firmware was 2.28 MB
-# in September 2026 and grew by about 270 kB in the three weeks before that.
+# and falls back to the other if it fails. 6 MB each: the firmware was 2.94 MB
+# on Core 3 with Bluetooth in September 2026, and cloud backends, printers and
+# label work are still to come. A slot too small means every user flashing
+# over USB again; a smaller data area only means moving less into it
+# (Nikolai, 26.09.2026).
 # Devices flashed before this table keep their 3 MB slots for good, OTA never
 # rewrites the table, so scripts/check.sh and CI refuse a binary over 3 MB
 # until that fleet has been re-flashed over USB.
@@ -16,7 +19,7 @@
 # Name,     Type, SubType,  Offset,   Size,     Flags
 nvs,        data, nvs,      0x9000,   0x5000,
 otadata,    data, ota,      0xe000,   0x2000,
-app0,       app,  ota_0,    0x10000,  0x500000,
-app1,       app,  ota_1,    0x510000, 0x500000,
-coredump,   data, coredump, 0xA10000, 0x10000,
-spiffs,     data, spiffs,   0xA20000, 0x5E0000,
+app0,       app,  ota_0,    0x10000,  0x600000,
+app1,       app,  ota_1,    0x610000, 0x600000,
+coredump,   data, coredump, 0xC10000, 0x10000,
+spiffs,     data, spiffs,   0xC20000, 0x3E0000,

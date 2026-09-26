@@ -224,3 +224,7 @@ STR_PRN_UNCONF_MSG	16	360	WRAP:3	src/ui/print_card.cpp result text
 STR_BT_FILTER_NOTE	14	440	WRAP:3	src/ui/ble_devices_screen.cpp note under the list
 STR_BT_SHOW_ALL_FMT	16	320	NEVER	src/ui/ble_devices_screen.cpp list row title
 STR_BT_SHOW_NAMED	16	320	NEVER	src/ui/ble_devices_screen.cpp list row title
+STR_PART_HINT_TITLE	18	424	NEVER	src/ui/partition_popup.cpp title, HINT_BOX_W - 16
+STR_PART_HINT_LATER	16	180	NEVER	src/ui/partition_popup.cpp button, HINT_BTN_W 200
+STR_PART_HINT_TEXT	14	256	WRAP:14	src/ui/partition_popup.cpp text column, scrolls
+STR_PART_HINT_BLOCKED	14	256	WRAP:14	src/ui/partition_popup.cpp text column, scrolls

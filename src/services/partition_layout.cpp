@@ -2,16 +2,14 @@
 
 #include <Arduino.h>
 #include <esp_partition.h>
+#include <string.h>
 
 #include "app_config.h"
 #include "hardware/sd_logger.h"
-#include "services/prefs_store.h"
-
-#define KEY_PART_NEVER "part_never"
-
 static PartitionLayout s_layout;
 static bool s_read  = false;
 static bool s_shown = false;
+static char s_too_big[40] = "";
 
 const PartitionLayout& partitionLayout() {
   if (s_read) return s_layout;
@@ -34,16 +32,25 @@ const PartitionLayout& partitionLayout() {
   return s_layout;
 }
 
+bool partitionImageFits(uint32_t image_bytes) {
+  return image_bytes == 0 || image_bytes <= partitionLayout().app_slot_bytes;
+}
+
+void partitionNoteTooBig(const char* version, uint32_t image_bytes) {
+  if (!version || !version[0]) return;
+  if (strcmp(s_too_big, version) == 0) return;   // said once per version and boot
+  snprintf(s_too_big, sizeof(s_too_big), "%s", version);
+  s_shown = false;
+  logSDf("Storage: %s is %.2f MB, the slot holds %.2f MB - needs a flash over USB",
+         version, image_bytes / 1048576.0, partitionLayout().app_slot_bytes / 1048576.0);
+}
+
+const char* partitionTooBigVersion() { return s_too_big; }
+
 bool partitionHintDue() {
   if (!FLASHER_HAS_CURRENT_LAYOUT) return false;   // nothing to send them to yet
   if (s_shown) return false;
-  if (partitionLayout().current) return false;
-  return !prefsGetBool(KEY_PART_NEVER, false);
+  return !partitionLayout().current;
 }
 
 void partitionHintShown() { s_shown = true; }
-
-void partitionHintNever() {
-  s_shown = true;
-  prefsPutBool(KEY_PART_NEVER, true);
-}

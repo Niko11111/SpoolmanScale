@@ -806,13 +806,17 @@ void appLoop() {
   // Shown once the device has settled, not during boot: a modal that appears
   // while the first screen is still assembling reads as a fault.
   static bool hint_checked = false;
+  static bool nfc_hint_this_boot = false;
   if (!hint_checked && millis() > 12000) {
     hint_checked = true;
-    // One hint per boot at most: the storage note waits for a boot on which
-    // the reader has nothing to say.
-    if (nfcResetHintDue())        showNfcResetHint();
-    else if (partitionHintDue())  showPartitionHint();
+    if (nfcResetHintDue()) { showNfcResetHint(); nfc_hint_this_boot = true; }
   }
+  // The storage note waits for a boot on which the reader has nothing to say,
+  // except when an update was found that no longer fits: then it comes at
+  // once, over whatever screen asked.
+  if (hint_checked && partitionHintDue() &&
+      (!nfc_hint_this_boot || partitionTooBigVersion()[0]))
+    showPartitionHint();
 
   if (nfc_reset_probe_pending) {
     nfc_reset_probe_pending = false;

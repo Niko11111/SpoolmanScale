@@ -14,6 +14,19 @@
 #include "services/ota_state.h"
 
 #define GH_REPO "Niko11111/SpoolmanScale"
+// The release asset the device flashes, see githubFlashTag().
+#define GH_IMAGE_ASSET "SpoolmanScale.bin"
+
+// The size of that asset in the release the last lookup found, 0 when unknown.
+static uint32_t s_image_size = 0;
+uint32_t githubLastImageSize() { return s_image_size; }
+
+// The image's size out of a release's asset list.
+static uint32_t imageSizeOf(JsonVariantConst rel) {
+  for (JsonObjectConst a : rel["assets"].as<JsonArrayConst>())
+    if (strcmp(a["name"] | "", GH_IMAGE_ASSET) == 0) return a["size"] | 0u;
+  return 0;
+}
 
 // No bytes for this long while the socket is still open: the download is
 // stuck, not slow. GitHub's CDN streams a 2 MB image in a few seconds.
@@ -35,6 +48,7 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
                      char *err, size_t err_len) {
   if (!tag || tag_len == 0) return false;
   tag[0] = '\0';
+  s_image_size = 0;
   if (published && pub_len) published[0] = '\0';
   if (err && err_len) err[0] = '\0';
 
@@ -81,6 +95,8 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
     f["tag_name"] = true;
     f["published_at"] = true;
     f["draft"] = true;
+    f["assets"][0]["name"] = true;
+    f["assets"][0]["size"] = true;
 
     JsonDocument doc;
     jerr = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
@@ -98,6 +114,7 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
             strncpy(published, rel["published_at"] | "", pub_len - 1);
             published[pub_len - 1] = '\0';
           }
+          s_image_size = imageSizeOf(rel);
           break;
         }
       }
@@ -106,6 +123,8 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
     JsonDocument filter;
     filter["tag_name"] = true;
     filter["published_at"] = true;
+    filter["assets"][0]["name"] = true;
+    filter["assets"][0]["size"] = true;
 
     JsonDocument doc;
     jerr = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
@@ -118,15 +137,16 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
         strncpy(published, doc["published_at"] | "", pub_len - 1);
         published[pub_len - 1] = '\0';
       }
+      s_image_size = imageSizeOf(doc);
     }
   }
 
   // Enough to diagnose the next failure without guessing. "No release found"
   // and "JSON error" looked identical from the outside before this, and both
   // have several possible causes.
-  logSDf("OTA check: HTTP %d len=%d heap %u->%u pre=%d err=%s entries=%d tag='%s'",
+  logSDf("OTA check: HTTP %d len=%d heap %u->%u pre=%d err=%s entries=%d tag='%s' image=%u",
          code, payload_len, (unsigned)heap_before, (unsigned)heap_parse,
-         prerelease ? 1 : 0, jerr.c_str(), entries, tag);
+         prerelease ? 1 : 0, jerr.c_str(), entries, tag, (unsigned)s_image_size);
   Serial.printf("OTA check: len=%d heap %u->%u err=%s entries=%d tag='%s'\n",
                 payload_len, (unsigned)heap_before, (unsigned)heap_parse,
                 jerr.c_str(), entries, tag);
@@ -274,7 +294,7 @@ bool githubFlashTag(const char *tag, const char *sha256_hex,
   // that works for both kinds.
   String url = "https://github.com/" GH_REPO "/releases/download/";
   url += tag;
-  url += "/SpoolmanScale.bin";
+  url += "/" GH_IMAGE_ASSET;
   Serial.printf("GitHub OTA URL: %s\n", url.c_str());
   http.begin(client, url);
   http.addHeader("User-Agent", "SpoolmanScale-ESP32");

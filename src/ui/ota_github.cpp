@@ -1,4 +1,6 @@
 #include "ota_github.h"
+#include "ui/theme.h"
+#include "services/partition_layout.h"
 #include "navigation.h"
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
@@ -204,6 +206,17 @@ void doGithubOtaCheck() {
     char upd[48]; copyT(upd, sizeof(upd), STR_GH_OTA_UP_TO_DATE); upd[sizeof(upd)-1]=0;
     lv_label_set_text(lbl_gh_status, upd);
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0x40c080), 0);
+    update_available = false;
+    showUpdateBadges(false);
+  } else if (!partitionImageFits(githubLastImageSize())) {
+    // Larger than this device's app slot: the old partition table. The
+    // download would be refused at the end anyway; saying so now, with the
+    // way out, beats a failed update (Nikolai, 26.09.2026).
+    char big[96];
+    snprintf(big, sizeof(big), T(STR_GH_OTA_TOO_BIG), gh_latest_version);
+    lv_label_set_text(lbl_gh_status, big);
+    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_WARN), 0);
+    partitionNoteTooBig(gh_latest_version, githubLastImageSize());
     update_available = false;
     showUpdateBadges(false);
   } else {

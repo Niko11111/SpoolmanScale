@@ -257,7 +257,9 @@ static String body() {
     if (!pl.current && FLASHER_HAS_CURRENT_LAYOUT) {
       h += F("<span class='hint'>");
       h += T(STR_W_S_LAYOUT_OLD_HINT);
-      h += F("</span>");
+      h += F(" <a href='" FLASHER_URL "' target='_blank' rel='noopener' style='color:var(--accent)'>");
+      h += T(STR_PART_HINT_QR);
+      h += F(" &#8599;</a></span>");
     }
   }
   // The rescan holds the I2C bus for a moment, so it sits behind the config

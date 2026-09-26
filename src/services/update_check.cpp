@@ -11,6 +11,7 @@
 #include "app_config.h"
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
+#include "services/partition_layout.h"
 #include "services/github_release.h"
 #include "services/ota_state.h"
 #include "web/web_server.h"
@@ -87,6 +88,9 @@ volatile uint32_t s_persist_epoch = 0;   // non-zero: tick writes it to NVS
 // string. Only updateCheckTick() copies it across.
 char s_found_version[32] = "";
 char s_found_sha[65]     = "";
+// The image's size, next to its checksum in version.json; 0 from a file
+// written before the workflow published it.
+volatile uint32_t s_found_size = 0;
 
 unsigned long s_due_ms = 0;
 bool s_scheduled = false;
@@ -140,14 +144,18 @@ void updateCheckTask(void* arg) {
   // separate pre-release, which is the case right after a public release.
   const char* tag = nullptr;
   const char* sha = nullptr;
+  uint32_t size = 0;
   if (gh_prerelease) {
     tag = doc["prerelease"].as<const char*>();
     sha = doc["prerelease_sha256"].as<const char*>();
+    size = doc["prerelease_size"] | 0u;
   }
   if (!tag || tag[0] == '\0') {
     tag = doc["stable"].as<const char*>();
     sha = doc["stable_sha256"].as<const char*>();
+    size = doc["stable_size"] | 0u;
   }
+  s_found_size = size;
 
   if (!tag || tag[0] == '\0') {
     s_result = RES_FAIL_JSON;
@@ -278,6 +286,12 @@ void updateCheckTick() {
     s_result = RES_NONE;
     switch (result) {
       case RES_AVAILABLE:
+        // Larger than this device's app slot: no badge that leads to a
+        // download bound to fail, the hint with the way to the flasher instead.
+        if (!partitionImageFits(s_found_size)) {
+          partitionNoteTooBig(s_found_version, s_found_size);
+          break;
+        }
         strncpy(gh_latest_version, s_found_version, sizeof(gh_latest_version) - 1);
         gh_latest_version[sizeof(gh_latest_version) - 1] = '\0';
         strncpy(gh_latest_sha, s_found_sha, sizeof(gh_latest_sha) - 1);
