@@ -14,6 +14,9 @@
 #include "services/tag_uid.h"
 #include "services/user_options.h"
 
+// Set once the move from extra.tag to the native tags was decided, either way.
+#define TAG_NATIVE_MOVE_KEY "tag_mv27"
+
 // The whole feature in one table. Adding a fourth convention is a row here
 // plus three strings; nothing else in the firmware asks for a field by name.
 //
@@ -117,7 +120,9 @@ void tagFieldAutoSelect() {
   // the native source is the choice. On extra.tag or card_uids the probe
   // decides nothing, and an inconclusive one (a proxy, a timeout) is not
   // cached - so there it would be one blocking request per scan, forever.
-  const bool need_probe = !g_tag_field_chosen || g_tag_field == TAG_FIELD_NATIVE;
+  // extra.tag as well, once: see the move to the native tags below.
+  const bool move_pending = g_tag_field == TAG_FIELD_TAG && !prefsHasKey(TAG_NATIVE_MOVE_KEY);
+  const bool need_probe = !g_tag_field_chosen || g_tag_field == TAG_FIELD_NATIVE || move_pending;
   const bool has_native = need_probe && backendHasNativeTags();
 
   // A server that answered no while the native source is selected. Said once
@@ -134,13 +139,46 @@ void tagFieldAutoSelect() {
     s_absence_logged = false;
   }
 
-  if (g_tag_field_chosen) return;          // a decision, even an implicit one
-  if (!has_native) return;
+  // extra.tag was this firmware's own default for as long as there was no
+  // relation, so a scale on it is on it by habit rather than by choice. Once
+  // its server has the relation (Spoolman 0.27) it moves over, once: the
+  // marker keeps a later choice of extra.tag from being undone on every scan.
+  // Nothing is emptied - the spools move one by one as they are placed, see
+  // the auto link in lookup_scan.cpp - and extra.tag keeps being written for
+  // OpenSpoolman. nfc_id and card_uids were chosen for another tool and stay.
+  if (move_pending && has_native) {
+    prefsPutBool(TAG_NATIVE_MOVE_KEY, true);
+    g_tag_field = TAG_FIELD_NATIVE;
+    prefsPutUChar("tag_field", TAG_FIELD_NATIVE);
+    g_osm_tag = true;
+    prefsPutBool(OSM_TAG_KEY, true);
+    logSD("Tag field: server has native tags, moved from extra.tag to them; "
+          "extra.tag stays and is still written for OpenSpoolman");
+    return;
+  }
+  // Not marked on a server without the relation: the day it is updated to
+  // 0.27 the move still has to happen. The probe caches that server's 404,
+  // so waiting costs no request per scan.
 
-  g_tag_field = TAG_FIELD_NATIVE;
-  g_tag_field_chosen = true;
-  prefsPutUChar("tag_field", TAG_FIELD_NATIVE);
-  logSD("Tag field: server has native tags, selected them");
+  if (!g_tag_field_chosen && has_native) {
+    g_tag_field = TAG_FIELD_NATIVE;
+    g_tag_field_chosen = true;
+    prefsPutUChar("tag_field", TAG_FIELD_NATIVE);
+    logSD("Tag field: server has native tags, selected them");
+  }
+
+  // Whether OpenSpoolman gets its extra.tag, decided the first time the
+  // native tags are in force: on when the field is already there, which means
+  // some tool already reads it; off on a server that never had it.
+  if (g_tag_field == TAG_FIELD_NATIVE && has_native && !prefsHasKey(OSM_TAG_KEY)) {
+    g_osm_tag = backendHasExtraField(tagFieldSpec(TAG_FIELD_TAG).key);
+    prefsPutBool(OSM_TAG_KEY, g_osm_tag);
+    logSDf("Tag field: extra.tag for OpenSpoolman %s", g_osm_tag ? "on (field exists)" : "off");
+  }
+}
+
+void tagFieldNoteChoice() {
+  prefsPutBool(TAG_NATIVE_MOVE_KEY, true);
 }
 
 void tagFieldFormat(const TagFieldSpec& spec, const char* uid,

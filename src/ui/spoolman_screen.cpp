@@ -461,13 +461,19 @@ void buildSpoolmanScreen() {
     if (backendMode() != BACKEND_SPOOLMAN) {
       // Next comes the credential step, and those are entered in a browser.
       showOtaBrowserScreen(WEB_CTX_SETUP);
+    } else if (setup_active) {
+      // Spoolman needs no step of its own any more: the tag source is picked
+      // on the first scan and a missing field is created on its first write
+      // (Nikolai, 25.09.2026). Deferred, never from the callback.
+      cal_reminder_pending = true;
     } else {
-      showExtraFieldsScreen(setup_active);
+      showExtraFieldsScreen(false);
     }
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ef = lv_label_create(btn_sp_extra_fields);
   { char ef_buf[32];
-    if (backendMode() != BACKEND_SPOOLMAN) snprintf(ef_buf, sizeof(ef_buf), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_NEXT));
+    if (backendMode() != BACKEND_SPOOLMAN || setup_active)
+      snprintf(ef_buf, sizeof(ef_buf), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_NEXT));
     else                                   snprintf(ef_buf, sizeof(ef_buf), "Extra Fields  " LV_SYMBOL_RIGHT);
     lv_label_set_text(lbl_ef, ef_buf); }
   lv_obj_set_style_text_color(lbl_ef, lv_color_hex(0x28d49a), 0);
@@ -577,7 +583,7 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
     // Delete this screen first to avoid it being accessed during navigation
     if (scr_spoolman_fail) { lv_obj_del(scr_spoolman_fail); scr_spoolman_fail = nullptr; }
     if (spoolman_fail_is_setup) {
-      showExtraFieldsScreen(true);
+      cal_reminder_pending = true;
     } else {
       closeConnectionScreen();
       buildConnectionScreen();

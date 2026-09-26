@@ -38,16 +38,22 @@ static bool appliesCardUids() { return tagFieldIsList(); }
 // backendCanHoldSecondTag(), at the moment the question would be asked.
 static bool appliesSecondTag() { return tagFieldHoldsSeveral(); }
 
+// extra.tag for OpenSpoolman is a question only beside the native tags: on
+// extra.tag itself the tray uuid is the binding and always written.
+static bool appliesOsmTag() { return tagFieldIsNative(); }
+
 // The two fields the scale needs, named rather than described: the field names
 // are what the user sees on the Spoolman side and are not translated. The tag
 // field is whichever one is selected, so the row says which without being
 // opened.
 static const char* subExtraFields() {
-  static char buf[48];
+  static char buf[64];
   // The Happy Hare field joins the list only while the switch that writes it
   // is on, which is the same rule the screen behind this row applies. Naming a
   // field the scale does not need would send the user creating columns.
-  snprintf(buf, sizeof(buf), "%s, " LAST_DRIED_FIELD "%s", tagFieldKeyName(),
+  // The native tags have no key; they are named as the tag field screen does.
+  snprintf(buf, sizeof(buf), "%s, " LAST_DRIED_FIELD "%s",
+           tagFieldIsNative() ? T(STR_TF_NATIVE) : tagFieldKeyName(),
            g_hw_uid_write ? ", " RFID_TAG_FIELD : "");
   return buf;
 }
@@ -87,6 +93,14 @@ const SettingDesc SETTINGS[] = {
     STR_EXTRA_FIELDS_TITLE, 0, 0, LV_SYMBOL_LIST,
     0, 0, nullptr,
     nullptr, subExtraFields, nullptr, OPEN_SP_EXTRA_FIELDS, nullptr, false },
+
+  // The tray uuid in extra.tag as well, for OpenSpoolman. Right under the
+  // fields because it is one more field the scale may write. The id is the
+  // NVS key tagFieldAutoSelect() decides the default under (OSM_TAG_KEY).
+  { OSM_TAG_KEY, SET_BOOL, SC_SPOOLMAN, &g_osm_tag,
+    STR_OSM_TAG, STR_OSM_TAG_SUB, STR_OSM_TAG_INFO, LV_SYMBOL_SHUFFLE,
+    0, 0, nullptr,
+    appliesOsmTag, nullptr, nullptr, OPEN_NONE, nullptr, false },
 
   // Linking more than one tag to a spool. Below the extra fields because it
   // depends on one of them being selected, and because it is the rarer setting.

@@ -32,6 +32,9 @@ bool spoolHasAnyTag(JsonObjectConst spool);
 #include "services/spoolman_actions.h"
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
+#include "services/tag_probe_job.h"
+#include "services/backend_job.h"
+#include "app/backend_switch.h"
 #include "services/tag_write.h"
 #include "services/tag_uid.h"
 #include "services/time_service.h"
@@ -790,12 +793,21 @@ static bool s_lost_connection = false;
 // gap and the first probe waits a full gap after the lookup itself.
 static uint32_t s_recheck_end_ms = 0;
 static uint32_t s_recheck_gap_ms = TAG_RECHECK_MS;
+// Counts lookups. A probe started under one lookup and answered after the
+// next has begun is about a verdict that no longer stands.
+static uint32_t s_lookup_epoch = 0;
+static uint32_t s_probe_epoch = 0;
 
 // Whether the backend knows a spool by this tag, asked the cheap way: the
 // server side lookup, a handful of fields, no inventory scan and no /tag/scan,
 // so nothing is announced to a paired browser. Says nothing about which spool
 // it is - whoever gets a yes runs the normal lookup next.
 bool spoolmanTagResolves(const char* query, bool* out_unanswered, int* out_spool_id) {
+  return spoolmanTagResolvesAt(cfg_spoolman_base, query, out_unanswered, out_spool_id);
+}
+
+bool spoolmanTagResolvesAt(const char* base, const char* query, bool* out_unanswered,
+                           int* out_spool_id) {
   if (out_unanswered) *out_unanswered = false;
   if (out_spool_id) *out_spool_id = 0;
   if (!query || !query[0]) return false;
@@ -823,7 +835,7 @@ bool spoolmanTagResolves(const char* query, bool* out_unanswered, int* out_spool
   // to filter on, and backendFindSpoolByTag() would answer NOT_SUPPORTED.
   if (backendHasNativeTags()) {
     const char* nu = tagNativeUid(query);
-    code = backendFindSpoolByNativeTag(cfg_spoolman_base, nu, doc, 5000, &filter, &err);
+    code = backendFindSpoolByNativeTag(base, nu, doc, 5000, &filter, &err);
     if (code == 200 && !err) {
       for (JsonObjectConst cand : doc.as<JsonArrayConst>())
         if (spoolMatchesTag(cand, query)) {
@@ -838,7 +850,7 @@ bool spoolmanTagResolves(const char* query, bool* out_unanswered, int* out_spool
   // A server that did not answer the first request will not answer the second
   // either, and each of them can hold the loop for the whole connect timeout.
   if (!hit && !serverReachIsNetworkFailure(code)) {
-    code = backendFindSpoolByTag(cfg_spoolman_base, query, doc, 5000, &err, &filter);
+    code = backendFindSpoolByTag(base, query, doc, 5000, &err, &filter);
     if (code == 200 && !err) {
       // Verified exactly: FilaMan's search is a substring match, so an
       // unverified hit would announce somebody else's spool.
@@ -854,31 +866,59 @@ bool spoolmanTagResolves(const char* query, bool* out_unanswered, int* out_spool
   return hit;
 }
 
-void spoolmanRecheckTick() {
-  if (!wifi_ok || !tag_present || sm_found) return;
-  // The verdict is still coming, sm_found is only reset.
-  if (lookupPending()) return;
-  if (!s_last_query[0]) return;
-  // A server marked down is asked by the health check alone, which marks it up
-  // again. Probing it here as well only added more 5 s stalls to the loop.
-  if (!sm_reachable) return;
-  if (isSpoolFlowIdInputOpen()) return;   // the user is busy picking a spool
-
-  // `| 1` keeps a probe that ends at millis() == 0 from reading as "not seen".
-  if (!s_recheck_end_ms) { s_recheck_end_ms = millis() | 1; return; }
-  // Signed difference, so this survives the millis() rollover.
-  if ((int32_t)(millis() - s_recheck_end_ms) < (int32_t)s_recheck_gap_ms) return;
-
-  bool unanswered = false;
-  const bool hit = spoolmanTagResolves(s_last_query, &unanswered);
+// The probe's answer, on the loop. Dropped when the tag, the lookup or the
+// server it was about has changed while it ran.
+static bool recheckCollect(bool* out_hit) {
+  const TagProbeResult r = tagProbeResult();
+  tagProbeTake();
   s_recheck_end_ms = millis() | 1;
-  if (unanswered) {
-    // Doubled until the server answers again: a probe that gets no answer
-    // costs the loop the whole connect timeout.
+  if (r.gen != backendGeneration() || s_probe_epoch != s_lookup_epoch ||
+      strcmp(r.query, s_last_query) != 0 ||
+      !wifi_ok || !tag_present || sm_found || lookupPending()) return false;
+  if (r.unanswered) {
+    // Doubled until the server answers again. The loop no longer waits for
+    // the probe, but a server that does not answer needs no more questions.
     s_recheck_gap_ms = s_recheck_gap_ms >= TAG_RECHECK_MAX_MS / 2
                          ? TAG_RECHECK_MAX_MS : s_recheck_gap_ms * 2;
-    logSDf("Recheck: no answer from the backend, next try in %lus",
-           (unsigned long)(s_recheck_gap_ms / 1000));
+    logSDf("Recheck: no answer from the backend after %lu ms, next try in %lus",
+           (unsigned long)r.ms, (unsigned long)(s_recheck_gap_ms / 1000));
+    return false;
+  }
+  *out_hit = r.hit;
+  return true;
+}
+
+void spoolmanRecheckTick() {
+  // A probe on its way is waited for; a finished one is collected before
+  // anything else, so the slot never stays taken by an answer nobody reads.
+  if (tagProbeState() == TPS_RUNNING) return;
+  bool hit = false;
+  if (tagProbeState() == TPS_DONE) {
+    if (!recheckCollect(&hit)) return;
+  } else {
+    if (!wifi_ok || !tag_present || sm_found) return;
+    // The verdict is still coming, sm_found is only reset.
+    if (lookupPending()) return;
+    if (!s_last_query[0]) return;
+    // A server marked down is asked by the health check alone, which marks it
+    // up again.
+    if (!sm_reachable) return;
+    if (isSpoolFlowIdInputOpen()) return;   // the user is busy picking a spool
+
+    // `| 1` keeps a probe that ends at millis() == 0 from reading as "not seen".
+    if (!s_recheck_end_ms) { s_recheck_end_ms = millis() | 1; return; }
+    // Signed difference, so this survives the millis() rollover.
+    if ((int32_t)(millis() - s_recheck_end_ms) < (int32_t)s_recheck_gap_ms) return;
+    // FilaMan keeps one "list stopped short" flag for everything off the loop:
+    // a probe beside a list on the other core could set it for that list.
+    if (backendListBusy()) return;
+
+    // Asked on the loop, where it may still reach the server once: the probe
+    // task then only reads what is cached.
+    (void)backendHasNativeTags();
+    s_probe_epoch = s_lookup_epoch;
+    // Heap too low or no task: tried again after a full gap.
+    if (!tagProbeStart(s_last_query)) s_recheck_end_ms = millis() | 1;
     return;
   }
   s_recheck_gap_ms = TAG_RECHECK_MS;
@@ -1100,6 +1140,7 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   s_lost_connection = false;
   s_recheck_end_ms = 0;
   s_recheck_gap_ms = TAG_RECHECK_MS;
+  s_lookup_epoch++;
   s_shadow = SHADOW_NOT_ASKED;
   // A 4-byte MIFARE tag is looked up by its UID through the same call, so
   // the log names what was actually sent.

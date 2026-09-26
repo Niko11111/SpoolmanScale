@@ -24,6 +24,8 @@
 // the caller; this used to be "spool_list_limit if above 100, else 100", and
 // the limit is clamped to 100, so it was always 100.
 #define FILAMAN_LIST_PAGE_ROWS  100
+// Creating a missing extra field before its first write: one small POST.
+#define FIELD_CREATE_TIMEOUT_MS 4000
 
 // A missing backend path must show up in the log instead of looking like a
 // silent failure, but the periodic health check would repeat the same line
@@ -93,8 +95,11 @@ int backendGetSpoolJson(const char* base_url, int spool_id, JsonDocument& doc,
 
 int backendGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocument& doc,
                             uint32_t timeout_ms, JsonDocument* filter,
-                            DeserializationError* out_err) {
+                            DeserializationError* out_err, bool archived_only) {
   HttpStallTime stall(__func__);   // the loop stands still for this call
+  // Spoolman and BamBuddy have no such filter (allow_archived / include_archived
+  // is all or active only): they are asked for everything.
+  if (archived_only) allow_archived = true;
   switch (backendMode()) {
     case BACKEND_FILAMAN:
       // The Spoolman JSON filter does not apply, FilaMan is translated field by
@@ -102,7 +107,7 @@ int backendGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocum
       (void)filter;
       return filamanGetSpoolListJson(backendBaseUrl(), filamanApiKey(), allow_archived,
                                      doc, nullptr, FILAMAN_LIST_PAGE_ROWS,
-                                     timeout_ms, out_err);
+                                     timeout_ms, out_err, archived_only);
     case BACKEND_BAMBUDDY:
       // Same reason as FilaMan: the answer is rebuilt field by field, so a
       // Spoolman field filter has nothing to act on.
@@ -469,10 +474,29 @@ const char* backendSpoolTextFieldKey(uint8_t index) {
   return index < s_text_field_count ? s_text_fields[index] : "";
 }
 
+// A field the scale writes is created the first time it writes to it, in
+// place of the setup step that used to ask for it (Nikolai, 25.09.2026).
+// Spoolman answers a PATCH on an unknown field with 400, so without this the
+// first drying date or tag would simply be lost. Only when the probe answered
+// and said "absent": an unreachable server gets no create, and only the keys
+// the scale knows, never whatever a caller passes.
+static void ensureSpoolmanField(const char* key) {
+  if (backendMode() != BACKEND_SPOOLMAN || knownFieldIndex(key) < 0) return;
+  if (backendHasExtraField(key)) return;
+  const char* base = backendBaseUrl();
+  if (!base || !base[0] ||
+      strncmp(s_fields_probed_for, base, sizeof(s_fields_probed_for) - 1) != 0) return;
+  const int c = backendCreateSpoolField(base, key, FIELD_CREATE_TIMEOUT_MS);
+  logSDf("extra fields: '%s' was missing, created on first write, HTTP %d", key, c);
+}
+
 int backendPatchExtraField(const char* base_url, int spool_id, const char* key,
                            const char* value, uint32_t timeout_ms) {
   HttpStallTime stall(__func__);   // the loop stands still for this call
   if (backendMode() != BACKEND_SPOOLMAN) return notSupported("PatchExtraField");
+  // Not for an empty value: clearing a field that does not exist is no reason
+  // to create it.
+  if (value && value[0]) ensureSpoolmanField(key);
   int code = spoolmanPatchExtraField(base_url, spool_id, key, value, timeout_ms);
 
   // A write that succeeds against a field the cache calls absent means the
@@ -1066,6 +1090,7 @@ int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* i
           return notSupported("PatchSpoolLastDried");
       }
     default:
+      ensureSpoolmanField(LAST_DRIED_FIELD);
       return spoolmanPatchSpoolLastDried(base_url, spool_id, iso_datetime, timeout_ms);
   }
 }

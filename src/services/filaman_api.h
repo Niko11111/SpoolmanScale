@@ -319,11 +319,14 @@ int filamanPatchSpoolLocation(const char* base_url, const char* api_key, int spo
 // FilaMan's {items,page,page_size,total} envelope already unwrapped.
 // When search_term is given, the server filters and usually returns a single
 // entry, which avoids pulling the whole inventory for a tag lookup.
+// archived_only asks for the archived spools alone (status 6), which is what
+// the lookup's archive pass reads: 12 kB instead of the whole 450 kB again.
 int filamanGetSpoolListJson(const char* base_url, const char* api_key,
                             bool include_archived, JsonDocument& out_doc,
                             const char* search_term = nullptr,
                             int page_size = 100, uint32_t timeout_ms = 15000,
-                            DeserializationError* out_err = nullptr);
+                            DeserializationError* out_err = nullptr,
+                            bool archived_only = false);
 
 // ---------- the device's own auto-assign settings ----------
 //

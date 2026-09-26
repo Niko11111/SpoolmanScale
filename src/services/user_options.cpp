@@ -17,6 +17,7 @@ uint8_t g_tag_field = TAG_FIELD_TAG;
 bool g_tag_field_chosen = false;
 bool g_card_uids_write = false;
 bool g_hw_uid_write = false;
+bool g_osm_tag = false;
 bool g_ams_pick_ask = false;
 bool g_tag2_ask = false;
 bool g_flm_bambu_tags = false;

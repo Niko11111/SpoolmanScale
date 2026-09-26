@@ -207,6 +207,15 @@ extern bool g_card_uids_write;
 // relinked spool by spool to get anything out of it.
 extern bool g_hw_uid_write;
 
+// Whether a Bambu spool's tray uuid also goes into extra.tag while Spoolman's
+// native tags are the tag source. OpenSpoolman reads that field and knows
+// nothing of the relation yet, and has had no update in a long time. On, the
+// field is created when missing; off, extra.tag is left alone entirely.
+// Decided once by tagFieldAutoSelect() when it is not in NVS: on when the
+// server already has extra.tag, i.e. some tool already uses it.
+#define OSM_TAG_KEY "osm_tag"
+extern bool g_osm_tag;
+
 // Whether the scale asks for a second tag right after a link succeeded.
 // Off by default.
 //

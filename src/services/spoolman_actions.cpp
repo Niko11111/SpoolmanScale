@@ -305,10 +305,7 @@ bool syncHwUidField(int spool_id, const char* scanned) {
   // document this lookup parsed, so it cannot be stale.
   if (cardUidsContain(sm_hw_uid_value, uid)) return false;
 
-  if (!backendHasExtraField(RFID_TAG_FIELD)) {
-    logSDf("HW uid: %s missing on the server, '%s' not written", RFID_TAG_FIELD, uid);
-    return false;
-  }
+  // A missing field is created by the write below: the switch is the ask.
 
   char merged[CARD_UIDS_MAX];
   CardUidsResult r = cardUidsAppend(sm_hw_uid_value, uid, merged, sizeof(merged));
@@ -449,12 +446,8 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     // function moves it into the relation the first time a link runs against a
     // server that has one.
     if (code == BACKEND_NOT_SUPPORTED) {
+      // Created by the write when the server does not have it either.
       const TagFieldSpec& fb = tagFieldSpec(TAG_FIELD_TAG);
-      if (!backendHasExtraField(fb.key)) {
-        logSDf("LINK native: no relation on this server and no %s either, "
-               "nothing written", fb.key);
-        return false;
-      }
       char val[CARD_UIDS_MAX];
       tagFieldFormat(fb, scanned, val, sizeof(val));
       const int c = noteCode(backendPatchExtraField(cfg_spoolman_base, spool_id, fb.key, val));
@@ -491,40 +484,23 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     // asked for, and it is dropped again the day OpenSpoolman reads the
     // relation.
     //
-    // This is also why the migration below skips extra.tag for a Bambu tag:
-    // clearing it is exactly what would break that setup.
-    const bool keep_tag_field = tagIsBambu(scanned);
-    if (keep_tag_field && !additional) {
+    // Behind its switch (g_osm_tag), and the field is created on the first
+    // write when the server does not have it yet.
+    if (g_osm_tag && tagIsBambu(scanned) && !additional) {
       const TagFieldSpec& companion = tagFieldSpec(TAG_FIELD_TAG);
-      if (!backendHasExtraField(companion.key)) {
-        logSDf("LINK native: %s missing on the server, tray uuid not kept",
-               companion.key);
-      } else {
-        char val[40];
-        tagFieldFormat(companion, scanned, val, sizeof(val));
-        int c = backendPatchExtraField(cfg_spoolman_base, spool_id,
-                                       companion.key, val);
-        logSDf("LINK native ID=%d kept tray uuid in %s='%s' HTTP %d",
-               spool_id, companion.key, val, c);
-      }
+      char val[40];
+      tagFieldFormat(companion, scanned, val, sizeof(val));
+      int c = backendPatchExtraField(cfg_spoolman_base, spool_id,
+                                     companion.key, val);
+      logSDf("LINK native ID=%d kept tray uuid in %s='%s' HTTP %d",
+             spool_id, companion.key, val, c);
     }
 
-    // Bound natively now, so a UID left in an extra field would keep the spool
-    // findable through a store nobody writes any more. Same rule as the
-    // migration between fields, including the refusal to empty a list that
-    // still holds somebody else's tag.
-    //
-    // Not for a further tag. The first link cleared what had to go, and
-    // running it again would meet an extra.tag this very function refused to
-    // rewrite two blocks up - so it would delete the tray uuid OpenSpoolman
-    // reads instead of leaving it where the first link deliberately put it.
-    if (field_values && !additional) {
-      for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) {
-        if (keep_tag_field && i == TAG_FIELD_TAG) continue;
-        if (field_values[i] && field_values[i][0])
-          clearMigrationSource(spool_id, i, field_values[i]);
-      }
-    }
+    // What an extra field held before stays there (Nikolai, 25.09.2026): other
+    // tools may read it, and the spool is the same one either way. An unlink
+    // still clears every field, see unlinkCardUid(), so nothing keeps a spool
+    // findable after the user was told it is gone.
+    (void)field_values;
     return true;
   }
   const uint8_t eff = tagFieldEffective();

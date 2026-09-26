@@ -2992,6 +2992,21 @@ const char* const STRINGS[][3] = {
   { "Nicht angenommen: es wird schon geschrieben, oder die Spulen-ID fehlt.",
     "Not accepted: a write is already running, or the spool ID is missing.",
     "Refusé : une écriture est déjà en cours, ou l'ID de bobine manque." },  // STR_W_TW_REFUSED
+  { "Erstnutzung", "First used", "1re util." },  // STR_LBL_L_FIRST
+  { "Angelegt",    "Added",      "Ajoutée" },  // STR_LBL_L_ADDED
+  { "TESTDRUCK",   "TEST PRINT", "TEST" },  // STR_LBL_TEST_BAND
+  { "Dieses Feature hat viel Zeit gekostet. Ich freue mich über eine Spende.",
+    "This feature took a lot of time. I'd be glad about a donation.",
+    "Cette fonction a pris beaucoup de temps. Un don me ferait plaisir." },  // STR_LBL_TEST_DONATE
+  { "Für OpenSpoolman",             "For OpenSpoolman",             "OpenSpoolman" },  // STR_OSM_TAG
+  { "Bambu-UUID auch in extra.tag", "Bambu UUID also in extra.tag", "UUID Bambu en extra.tag" },  // STR_OSM_TAG_SUB
+  { "OpenSpoolman kennt die nativen Tags von Spoolman noch nicht. Es findet eine Bambu-Spule über die UUID im Feld extra.tag.\n\nIst das an, schreibt die Waage die UUID beim Verknüpfen zusätzlich dort hinein und legt das Feld an, falls es fehlt. Andere Tags betrifft das nicht.",
+    "OpenSpoolman does not know Spoolman's native tags yet. It finds a Bambu spool by the UUID in the field extra.tag.\n\nWith this on, the scale also writes the UUID there when linking, and creates the field if it is missing. Other tags are not affected.",
+    "OpenSpoolman ignore encore les tags natifs. Il trouve une bobine Bambu par l'UUID dans extra.tag.\n\nActivé, la balance y écrit aussi l'UUID lors d'une liaison et crée le champ s'il manque. Les autres tags ne sont pas concernés." },  // STR_OSM_TAG_INFO
+  { "Alles eingerichtet", "All set",            "Tout est prêt" },  // STR_EF_HEAD_OK
+  { "Es fehlen Felder",   "Fields are missing", "Champs absents" },  // STR_EF_HEAD_MISSING
+  { "Anlegen",            "Create",             "Créer" },  // STR_EF_BTN_CREATE
+  { "Kein Feld nötig",    "No field needed",    "Pas de champ" },  // STR_EF_NATIVE_SUB
 };
 
 StringID tagWriteResultString(uint8_t code) {

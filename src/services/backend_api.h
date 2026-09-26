@@ -42,8 +42,12 @@ void backendRefreshMode();
 // --- reading -------------------------------------------------
 int  backendGetSpoolJson(const char* base_url, int spool_id, JsonDocument& doc,
        uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr);
+// archived_only: a backend that can filter on it answers with the archived
+// spools alone (FilaMan); the others answer as for allow_archived, active
+// ones included, so a caller still checks each spool's "archived".
 int  backendGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocument& doc,
-       uint32_t timeout_ms = 8000, JsonDocument* filter = nullptr, DeserializationError* out_err = nullptr);
+       uint32_t timeout_ms = 8000, JsonDocument* filter = nullptr, DeserializationError* out_err = nullptr,
+       bool archived_only = false);
 int  backendGetLocationsJson(const char* base_url, JsonDocument& doc,
        uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr);
 int  backendGetSpoolFieldsJson(const char* base_url, JsonDocument& doc,

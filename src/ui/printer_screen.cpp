@@ -1,3 +1,7 @@
+// ArduinoJson ahead of lang.h, whose T() macro it would otherwise meet.
+#include <ArduinoJson.h>
+#include <esp_heap_caps.h>
+
 #include "printer_screen.h"
 #include "navigation.h"
 #include "app/app_state.h"
@@ -9,6 +13,8 @@
 
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/backend.h"
+#include "services/backend_api.h"
 #include "services/ble_service.h"
 #include "services/label_printer.h"
 #include "services/label_render.h"
@@ -16,6 +22,24 @@
 #include "ui/print_card.h"
 #include "ui/theme.h"
 #include "ui_common.h"
+
+
+// One spool by id, a small answer: a slow server only costs the label its date.
+#define LABEL_DATE_TIMEOUT_MS  4000
+
+struct SpiRamAllocator : ArduinoJson::Allocator {
+  void* allocate(size_t size) override {
+    void* ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
+    if (!ptr) ptr = malloc(size);
+    return ptr;
+  }
+  void deallocate(void* pointer) override { heap_caps_free(pointer); }
+  void* reallocate(void* ptr, size_t new_size) override {
+    void* p = heap_caps_realloc(ptr, new_size, MALLOC_CAP_SPIRAM);
+    if (!p) p = realloc(ptr, new_size);
+    return p;
+  }
+};
 
 static int s_last_test = -1;
 int printerLastTestResult() { return s_last_test; }
@@ -46,6 +70,25 @@ static void nextMedia(LabelPrinterConfig& c) {
       return;
     }
   }
+}
+
+// The label's date, asked of the backend once per print: the scan keeps only
+// the last use. The first use where the backend records one (Spoolman), else
+// the day the spool was added. ISO as the servers send it, the date part only.
+static void labelDateFor(int spool_id, SpoolLabelData* d) {
+  SpiRamAllocator alloc;
+  JsonDocument doc(&alloc);
+  if (backendGetSpoolJson(backendBaseUrl(), spool_id, doc, LABEL_DATE_TIMEOUT_MS) != 200) {
+    logSDf("Printer: no date for spool #%d, the label goes without", spool_id);
+    return;
+  }
+  const char* first = doc["first_used"] | "";
+  const char* added = doc["registered"] | "";
+  const char* iso = first[0] ? first : added;
+  int y = 0, m = 0, day = 0;
+  if (sscanf(iso, "%4d-%2d-%2d", &y, &m, &day) != 3) return;
+  snprintf(d->date, sizeof(d->date), "%02d.%02d.%04d", day, m, y);
+  d->date_first_used = first[0] != '\0';
 }
 
 void buildPrinterScreen() {
@@ -184,9 +227,8 @@ void handlePrinterDeferredActions() {
       // else what the Bambu tag says.
       snprintf(spool.material, sizeof(spool.material), "%s",
                sm_material_global[0] ? sm_material_global : g_tag.material);
-      snprintf(spool.location, sizeof(spool.location), "%s", sm_location_name);
       snprintf(spool.color, sizeof(spool.color), "%s", sm_color_global);
-      spool.remaining_g = sm_remaining;
+      labelDateFor(sm_id, &spool);
       printCardShow();
       LabelRaster raster{};
       if (!labelRenderSpool(c, spool, &raster)) result = LP_BAD_RASTER;

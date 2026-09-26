@@ -124,6 +124,7 @@ static void addFieldRow(lv_obj_t *list, uint8_t value) {
     g_tag_field = v;
     g_tag_field_chosen = true;
     prefsPutUChar("tag_field", v);
+    tagFieldNoteChoice();
 
     // The multi tag switch only means anything on a list field. Clearing it
     // here rather than leaving it set keeps a stale "on" from reaching a write

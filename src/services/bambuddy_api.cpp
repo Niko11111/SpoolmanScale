@@ -306,6 +306,9 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
 
   const char* last_used = src["last_used"] | (const char*)nullptr;
   if (last_used) dst["last_used"] = last_used;
+  // The day the spool was added, under Spoolman's name, for the label.
+  const char* created = src["created_at"] | (const char*)nullptr;
+  if (created) dst["registered"] = created;
 
   const char* loc = src["storage_location"] | (const char*)nullptr;
   if (loc && loc[0]) dst["location"] = loc;

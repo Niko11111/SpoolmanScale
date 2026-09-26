@@ -108,7 +108,6 @@ void hideAllOverlays() {
   closeRebootPopup();
   closeNfcResetHint();
   closeFactoryResetPopup();
-  closeExtraFieldsPopup();
   closeMoreInfoPopups();
   closeTagView();
   closeBleDeviceCard();

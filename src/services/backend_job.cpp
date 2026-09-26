@@ -71,7 +71,8 @@ static void runList() {
     }
     s_res.err  = DeserializationError::Ok;
     s_res.code = backendGetSpoolListJson(s_base, s_res.archived, s_doc,
-                                         s_timeout_ms, filter, &s_res.err);
+                                         s_timeout_ms, filter, &s_res.err,
+                                         s_res.archived_only);
     // Right after the call, before anything else can ask for a list: the flag
     // is the backend layer's, and it is what makes a short list no answer.
     s_res.partial = backendLastListPartial();
@@ -93,7 +94,8 @@ static void backendJobTask(void* arg) {
   runList();
   httpCountBytesInto(nullptr);
   logSDf("Backend job: list%s done in %lu ms, code=%d err=%s partial=%d, %u bytes, stack left %u",
-         s_res.archived ? " with archive" : "", (unsigned long)s_res.ms, s_res.code,
+         s_res.archived_only ? " of the archive" : s_res.archived ? " with archive" : "",
+         (unsigned long)s_res.ms, s_res.code,
          s_res.err.c_str(), (int)s_res.partial, (unsigned)s_bytes,
          (unsigned)uxTaskGetStackHighWaterMark(NULL));
   // Everything above is written before the state says so: the loop on the
@@ -105,7 +107,7 @@ static void backendJobTask(void* arg) {
 
 bool backendJobStartList(bool allow_archived, const JsonDocument* filter,
                          uint32_t timeout_ms, uint8_t attempts,
-                         uint32_t retry_pause_ms) {
+                         uint32_t retry_pause_ms, bool archived_only) {
   if (backendListBusy() || s_state != BJS_IDLE) return false;
   // Checked here rather than inside the task: the stack comes out of the
   // heap the moment the task is created.
@@ -122,6 +124,7 @@ bool backendJobStartList(bool allow_archived, const JsonDocument* filter,
   s_res.partial  = false;
   s_res.gave_up  = false;
   s_res.archived = allow_archived;
+  s_res.archived_only = archived_only;
   s_res.attempts = attempts ? attempts : 1;
   s_res.gen      = backendGeneration();
   s_res.ms       = 0;

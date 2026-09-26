@@ -274,6 +274,10 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   // It reflects real consumption, tracked through its printer integration.
   const char* last_used = src["last_used_at"] | (const char*)nullptr;
   if (last_used) dst["last_used"] = last_used;
+  // The day the spool was added, under Spoolman's name for it: the label
+  // prints it when there is no first use, which FilaMan does not record.
+  const char* created = src["created_at"] | (const char*)nullptr;
+  if (created) dst["registered"] = created;
 
   // Spoolman carries the location as a plain string, FilaMan as an id.
   // Resolved from the cache; if it is cold the field stays unset and the UI
@@ -1437,7 +1441,8 @@ int filamanGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
 int filamanGetSpoolListJson(const char* base_url, const char* api_key,
                             bool include_archived, JsonDocument& out_doc,
                             const char* search_term, int page_size,
-                            uint32_t timeout_ms, DeserializationError* out_err) {
+                            uint32_t timeout_ms, DeserializationError* out_err,
+                            bool archived_only) {
   if (out_err) *out_err = DeserializationError::Ok;
   lastListPartial() = false;
   if (!hasBaseUrl(base_url)) return -1;
@@ -1467,7 +1472,8 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
   while (true) {
     String url = String(base_url) + "/api/v1/spools?page=" + page
                + "&page_size=" + page_size;
-    if (include_archived) url += "&include_archived=true";
+    if (include_archived || archived_only) url += "&include_archived=true";
+    if (archived_only) { url += "&status_id="; url += FILAMAN_STATUS_ARCHIVED; }
     if (search_term && search_term[0]) {
       url += "&search=";
       url += urlEncodeQuery(search_term);

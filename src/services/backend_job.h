@@ -43,6 +43,7 @@ struct BackendListResult {
   DeserializationError err;
   bool     partial;     // FilaMan stopped short, see backendLastListPartial()
   bool     archived;    // what was asked for: allow_archived
+  bool     archived_only; // and whether only the archived spools were wanted
   uint8_t  attempts;    // how many were allowed
   bool     gave_up;     // the last attempt allowed ended without a 200
   uint32_t gen;         // backendGeneration() at the start
@@ -54,10 +55,11 @@ struct BackendListResult {
 // failed first try is repeated once after `retry_pause_ms`, on the same terms
 // the lookup always used: an HTTP error, or a stream that broke off.
 // False when a list is already running, the heap is too low for a second
-// task, or the task could not be created.
+// task, or the task could not be created. archived_only: see
+// backendGetSpoolListJson().
 bool backendJobStartList(bool allow_archived, const JsonDocument* filter,
                          uint32_t timeout_ms, uint8_t attempts,
-                         uint32_t retry_pause_ms);
+                         uint32_t retry_pause_ms, bool archived_only = false);
 
 BackendJobState backendJobState();
 

@@ -52,6 +52,7 @@ bool spoolHasAnyTag(JsonObjectConst spool);
 #include "services/spool_cache.h"
 #include "services/spoolman_actions.h"
 #include "services/tag_field.h"
+#include "services/user_options.h"
 #include "services/tag_uid.h"
 #include "services/tag_write.h"
 #include "services/time_service.h"
@@ -206,7 +207,7 @@ static void tryStartArchive() {
     wantWorker(WANT_ARCHIVE, false);
     return;
   }
-  if (!backendJobStartList(true, &s_filter2, ARCHIVE_TIMEOUT_MS, 1, 0)) {
+  if (!backendJobStartList(true, &s_filter2, ARCHIVE_TIMEOUT_MS, 1, 0, true)) {
     wantWorker(WANT_ARCHIVE, false);
     return;
   }
@@ -268,7 +269,7 @@ static void harvest(RunStage stage, const BackendListResult& r, JsonDocument& do
            whole ? "whole" : "not whole");
     if (!whole) return;
     buildArchiveFilter(s_filter2);
-    if (backendJobStartList(true, &s_filter2, ARCHIVE_TIMEOUT_MS, 1, 0)) {
+    if (backendJobStartList(true, &s_filter2, ARCHIVE_TIMEOUT_MS, 1, 0, true)) {
       s_run      = RUN_ARCHIVE;
       s_run_live = false;
     }
@@ -793,9 +794,10 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
       // Only into an empty field. Filling a blank is an addition; overwriting
       // a value somebody put there would be an opinion, and this runs without
       // anybody asking for it.
-      if (tagIsBambu(tray_uuid) && !sm_tag_values[TAG_FIELD_TAG][0]) {
+      // Behind its switch, and created on the first write when missing.
+      if (g_osm_tag && tagIsBambu(tray_uuid) && !sm_tag_values[TAG_FIELD_TAG][0]) {
         const TagFieldSpec& companion = tagFieldSpec(TAG_FIELD_TAG);
-        if (backendHasExtraField(companion.key)) {
+        {
           char val[40];
           tagFieldFormat(companion, tray_uuid, val, sizeof(val));
           int c = backendPatchExtraField(cfg_spoolman_base, sm_id,
@@ -809,9 +811,6 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
             // list, a value in extra.tag does.
             spoolCacheSetBound(sm_id, true);
           }
-        } else {
-          logSDf("Auto-link: %s missing on the server, tray uuid not kept",
-                 companion.key);
         }
       }
 

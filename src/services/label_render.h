@@ -28,8 +28,8 @@ struct SpoolLabelData {
   char  vendor[LABEL_LINE_LEN];
   char  material[LABEL_LINE_LEN];
   char  color[16];                  // hex or a name, whatever the backend gave
-  char  location[LABEL_LINE_LEN];   // empty when the spool has none
-  float remaining_g;                // below zero when unknown
+  char  date[12];                   // dd.mm.yyyy, empty when the backend has none
+  bool  date_first_used;            // the first use; else the day it was added
 };
 
 // The test label for the printer's loaded stock. The raster is allocated in

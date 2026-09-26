@@ -108,13 +108,19 @@ const char*         tagFieldKeyName();
 bool tagFieldHoldsSeveral();
 
 // Picks the native source once, on a server that has it, for an installation
-// that has never chosen. An explicit choice is never overridden: somebody on
+// that has never chosen - and moves one on extra.tag over once, since that was
+// this firmware's own default (extra.tag is still written for OpenSpoolman,
+// see g_osm_tag). nfc_id and card_uids are never overridden: somebody on
 // card_uids is running SpoolLink beside Spoolman and still needs that list
 // written, and taking that away because the server learned a new trick would
 // break exactly the compatibility they set up.
 //
 // Reaches the network on the first call, so never from an LVGL callback.
 void tagFieldAutoSelect();
+
+// A choice made on the tag field screen. It settles the one-time move from
+// extra.tag to the native tags as well, so a deliberate extra.tag stays.
+void tagFieldNoteChoice();
 
 // Writes `uid` the way `spec` wants it: verbatim for a field that stores what
 // it is given, normalised uppercase hex for the ones that expect it. Always

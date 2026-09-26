@@ -78,6 +78,10 @@ void spoolmanRecheckTick();
 // `out_spool_id`, when given, receives the id of the spool that matched.
 bool spoolmanTagResolves(const char* query, bool* out_unanswered = nullptr,
                          int* out_spool_id = nullptr);
+// The same against an address given here, for the probe task, which must
+// not read cfg_spoolman_base while the loop may be rewriting it.
+bool spoolmanTagResolvesAt(const char* base, const char* query, bool* out_unanswered,
+                           int* out_spool_id);
 
 // Whether the last lookup failed because the server could not be reached, as
 // opposed to answering that it does not know the tag. The status line says so

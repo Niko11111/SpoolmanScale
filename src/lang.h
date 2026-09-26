@@ -1381,6 +1381,20 @@ enum StringID {
   STR_W_ASK_YES_WRITE,
   // Tag page: a write the scale did not take
   STR_W_TW_REFUSED,
+  // Label: the date line, and the test label
+  STR_LBL_L_FIRST,
+  STR_LBL_L_ADDED,
+  STR_LBL_TEST_BAND,
+  STR_LBL_TEST_DONATE,
+  // Spoolman: extra.tag for OpenSpoolman beside the native tags
+  STR_OSM_TAG,
+  STR_OSM_TAG_SUB,
+  STR_OSM_TAG_INFO,
+  // Extra fields screen: the verdict at the top
+  STR_EF_HEAD_OK,
+  STR_EF_HEAD_MISSING,
+  STR_EF_BTN_CREATE,
+  STR_EF_NATIVE_SUB,
 
   STR_COUNT
 };
