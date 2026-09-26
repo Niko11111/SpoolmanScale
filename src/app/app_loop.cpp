@@ -516,8 +516,10 @@ void appLoop() {
   // A manual check that ran into the background task. Retried as soon as the
   // TLS connection is free again, dropped after GH_CHECK_WAIT_MS so a task that
   // never returns cannot leave the screen waiting on it.
+  // The web worker holds a TLS connection of its own at times; two handshakes
+  // at once want more internal heap than there is.
   if (gh_check_pending) {
-    if (!updateCheckBusy()) {
+    if (!updateCheckBusy() && webJobState() != WJS_RUNNING) {
       gh_check_pending = false;
       doGithubOtaCheck();
     } else if (millis() - gh_check_wait_since > GH_CHECK_WAIT_MS) {

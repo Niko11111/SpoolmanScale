@@ -35,10 +35,11 @@
 //  together when it is read, so nothing is truncated that the card would
 //  have kept.
 
-// How much of the partition the log owns: 4096 lines, about half an hour to an
-// hour of a busy session. 16384 were more than anyone scrolled through, and
-// the rest of the data area is wanted for fonts and label layouts
-// (Nikolai, 26.09.2026). Both partition tables are far larger than this.
+// How much of the partition the log owns: 4096 lines, several hours of
+// verbose logging (about 1000 lines an hour in use, 400 idle, measured
+// 26.09.2026). 16384 were more than anyone scrolled through, and the rest of
+// the data area is wanted for fonts and label layouts (Nikolai, 26.09.2026).
+// Both partition tables are far larger than this.
 #define FLASH_LOG_BYTES      (512UL * 1024UL)
 
 // How many lines fit before the oldest is overwritten. A line of ordinary

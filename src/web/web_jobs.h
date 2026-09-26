@@ -46,6 +46,7 @@ struct WebJobResult {
   char   err[80];     // why not, when ok is false
   char   tag[40];     // GH check: the tag found
   char   pub[24];     // GH check: when it was published
+  uint32_t image_size; // GH check: the firmware image's size, 0 when unknown
   String body;        // a ready made reply body, for the jobs that have one
 };
 

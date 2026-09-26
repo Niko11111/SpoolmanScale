@@ -1320,7 +1320,10 @@ int filamanCreateSpool(const char* base_url, const char* api_key, int filament_i
 
   JsonDocument body;
   body["filament_id"]            = filament_id;
-  body["initial_total_weight_g"] = roundGrams(initial_weight);
+  // Gross in FilaMan, filament and empty spool together; initial_weight is the
+  // net figure the mapping hands out. Unchanged, every copy of a copy lost the
+  // empty spool's weight once more.
+  body["initial_total_weight_g"] = roundGrams(initial_weight + (spool_weight > 0.0f ? spool_weight : 0.0f));
   body["empty_spool_weight_g"]   = roundGrams(spool_weight);
   body["remaining_weight_g"]     = roundGrams(remaining_weight);
   // A spool that lands on the scale has been unwrapped, and FilaMan would

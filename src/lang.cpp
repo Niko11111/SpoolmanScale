@@ -71,7 +71,7 @@ const char* const STRINGS[][3] = {
   // Settings
   { "Einstellungen",               "Settings",                 "Réglages" },  // STR_SETTINGS_TITLE
   { "Verbindung",                  "Connection",               "Connexion" },  // STR_TILE_CONNECTION
-  { "WLAN & Server",               "WiFi & server",            "WiFi et serveur" },  // STR_TILE_CONN_SUB
+  { "WLAN, Bluetooth & Server",    "WiFi, Bluetooth & server", "WiFi, Bluetooth, serveur" },  // STR_TILE_CONN_SUB
   { "Waage",                       "Scale",                    "Balance" },  // STR_TILE_SCALE
   { "Kalibrieren | Beutel | Mehr", "Calibrate | Bag | More",   "Étalonnage | Sachet | Plus" },  // STR_TILE_SCALE_SUB
   { "Display",                     "Display",                  "Affichage" },  // STR_TILE_DISPLAY
@@ -497,7 +497,7 @@ const char* const STRINGS[][3] = {
   { "Installiert: %s",
     "Installed: %s",
     "Installée : %s" },  // STR_GH_OTA_INSTALLED
-  { "Aktuell: %s",
+  { "Neueste: %s",
     "Latest: %s",
     "Dernière : %s" },  // STR_GH_OTA_LATEST
   { "Pre-release",
@@ -1093,38 +1093,33 @@ const char* const STRINGS[][3] = {
 
   { "Tag-Feld", "Tag field", "Champ du tag" },  // STR_TAG_FIELD
   { "Jedes Projekt legt die Tag-UID in ein anderes Extra-Feld, weil Spoolman "
-    "lange keines dafür hatte. Das ändert sich gerade: Spoolman bekommt ein "
-    "eigenes Tag-Modell.\n\n"
+    "lange keines dafür hatte. Seit Version 0.27 hat Spoolman ein eigenes "
+    "Tag-Modell.\n\n"
     "Hier wird bestimmt, wohin die Waage schreibt. Kann der Server das native "
     "Modell, wählt sie es beim ersten Scan von selbst - eine Auswahl, die du "
     "selbst getroffen hast, bleibt stehen.\n\n"
     "Gelesen wird immer aus allen Quellen, damit beim Umstellen keine Spule "
     "unsichtbar wird. Beim nächsten Verknüpfen wandert eine anderswo gefundene "
     "UID in die gewählte Quelle.\n\n"
-    "Ein Extra-Feld muss dafür auf dem Server existieren - sonst lehnt Spoolman "
-    "jedes Schreiben mit HTTP 400 ab und die schnelle Suche fällt auf das Laden "
-    "des ganzen Inventars zurück. Für Spoolman NFC gilt das nicht, dort ist "
-    "kein Feld anzulegen.",
+    "Fehlt das gewählte Extra-Feld auf dem Server, legt die Waage es beim "
+    "ersten Schreiben selbst an. Für Spoolman NFC ist kein Feld nötig.",
     "Every project puts the tag UID in a different extra field, because "
-    "Spoolman had none for it for a long time. That is changing: Spoolman has "
-    "grown a tag model of its own.\n\n"
+    "Spoolman had none for it for a long time. Since version 0.27 Spoolman has "
+    "a tag model of its own.\n\n"
     "This is where you say what the scale writes to. On a server that has the "
     "native model it picks that by itself on the first scan; a choice you made "
     "yourself is left alone.\n\n"
     "Every source is always read, so nothing goes missing when you switch. On "
     "the next link a UID found elsewhere moves into the selected source.\n\n"
-    "An extra field has to exist on the server for that - otherwise Spoolman "
-    "rejects every write with HTTP 400 and the fast search falls back to "
-    "loading the whole inventory. Spoolman NFC is exempt: there is no field to "
-    "create.",
-    "Chaque logiciel range l'identifiant (UID) du tag dans son propre champ supplémentaire, car Spoolman n'en a longtemps proposé aucun. Cela change : Spoolman se dote de sa propre gestion des tags.\n\nCe réglage indique où la balance écrit. Si le serveur gère les tags nativement, elle choisit cette gestion d'elle-même au premier tag lu, sauf si vous avez déjà fait votre choix.\n\nToutes les sources sont toujours lues, pour qu'aucune bobine ne devienne introuvable si vous changez de source. Quand vous liez à nouveau une bobine, son UID trouvé ailleurs passe dans la source choisie.\n\nLe champ supplémentaire doit exister sur le serveur - sinon Spoolman refuse toute écriture (erreur HTTP 400), et la balance charge tout l'inventaire au lieu d'une recherche rapide. Spoolman NFC n'est pas concerné : aucun champ à créer." },  // STR_TAG_FIELD_INFO
+    "If the selected extra field is missing on the server, the scale creates "
+    "it on the first write. Spoolman NFC needs no field.",
+    "Chaque logiciel range l'identifiant (UID) du tag dans son propre champ supplémentaire, car Spoolman n'en a longtemps proposé aucun. Depuis la version 0.27, Spoolman a sa propre gestion des tags.\n\nCe réglage indique où la balance écrit. Si le serveur gère les tags nativement, elle choisit cette gestion d'elle-même au premier tag lu, sauf si vous avez déjà fait votre choix.\n\nToutes les sources sont toujours lues, pour qu'aucune bobine ne devienne introuvable si vous changez de source. Quand vous liez à nouveau une bobine, son UID trouvé ailleurs passe dans la source choisie.\n\nSi le champ choisi manque sur le serveur, la balance le crée à la première écriture. Spoolman NFC n'a besoin d'aucun champ." },  // STR_TAG_FIELD_INFO
 
   { "Spoolman NFC (nativ)",   "Spoolman NFC (native)",    "Spoolman NFC (natif)" },  // STR_TF_NATIVE
   { "Vom Server unterstützt", "Supported by the server",  "Pris en charge par le serveur" },  // STR_TF_NATIVE_SUB
   { "Erst ab Spoolman v0.27", "Spoolman v0.27 and later", "À partir de Spoolman v0.27" },  // STR_TF_NATIVE_NA
-  { "Spoolman hat inzwischen ein eigenes Tag-Modell, statt einer UID in einem "
-    "Extra-Feld. Es ist noch in keiner Version enthalten - diese Zeile wird "
-    "erst wählbar, wenn der Server es kann.\n\n"
+  { "Spoolman hat seit Version 0.27 ein eigenes Tag-Modell, statt einer UID in "
+    "einem Extra-Feld. Diese Zeile ist wählbar, sobald der Server es kann.\n\n"
     "Was es besser macht: eine Spule kann mehrere Tags tragen, ohne Liste in "
     "einem Textfeld. Ein Scan ist eine einzige Anfrage, die die Spule gleich "
     "mitliefert, statt Suche plus Nachprüfung. Und ein Tag, der schon an einer "
@@ -1133,9 +1128,8 @@ const char* const STRINGS[][3] = {
     "Die Extra-Felder bleiben trotzdem wählbar: SpoolLink, SpoolSense und "
     "FilaMan schreiben weiter ihre eigenen, und wer eines davon parallel "
     "betreibt, braucht es.",
-    "Spoolman has grown a tag model of its own, instead of a UID in an extra "
-    "field. No release carries it yet - this entry only becomes selectable "
-    "once the server has it.\n\n"
+    "Since version 0.27 Spoolman has a tag model of its own, instead of a UID "
+    "in an extra field. This entry is selectable once the server has it.\n\n"
     "What it does better: a spool can hold several tags with no list squeezed "
     "into a text field. A scan is one request that returns the spool with it, "
     "rather than a search plus a verification pass. And a tag that already "
@@ -1144,20 +1138,20 @@ const char* const STRINGS[][3] = {
     "The extra fields stay selectable regardless: SpoolLink, SpoolSense and "
     "FilaMan keep writing their own, and anyone running one of them alongside "
     "still needs it.",
-    "Spoolman gère désormais les tags lui-même, au lieu d'un UID dans un champ supplémentaire. Aucune version publiée ne l'inclut encore - cette ligne ne devient sélectionnable que si le serveur le permet.\n\nAvantages : une bobine peut porter plusieurs tags, sans liste tassée dans un champ texte. Lire un tag ne demande qu'une requête, qui renvoie directement la bobine, au lieu d'une recherche puis d'une vérification. Et un tag déjà lié à une autre bobine est signalé, au lieu d'être écrasé sans prévenir.\n\nLes champs supplémentaires restent malgré tout sélectionnables : SpoolLink, SpoolSense et FilaMan continuent d'écrire dans les leurs, et si vous utilisez l'un d'eux en parallèle, il vous faut son champ." },  // STR_TF_NATIVE_INFO
+    "Depuis la version 0.27, Spoolman gère les tags lui-même, au lieu d'un UID dans un champ supplémentaire. Cette ligne est sélectionnable dès que le serveur le permet.\n\nAvantages : une bobine peut porter plusieurs tags, sans liste tassée dans un champ texte. Lire un tag ne demande qu'une requête, qui renvoie directement la bobine, au lieu d'une recherche puis d'une vérification. Et un tag déjà lié à une autre bobine est signalé, au lieu d'être écrasé sans prévenir.\n\nLes champs supplémentaires restent malgré tout sélectionnables : SpoolLink, SpoolSense et FilaMan continuent d'écrire dans les leurs, et si vous utilisez l'un d'eux en parallèle, il vous faut son champ." },  // STR_TF_NATIVE_INFO
   { "extra.tag",                 "extra.tag",                "extra.tag" },  // STR_TF_TAG
   { "Diese Waage, OpenSpoolman", "This scale, OpenSpoolman", "Cette balance, OpenSpoolman" },  // STR_TF_TAG_SUB
   { "Das Feld, das diese Waage seit jeher benutzt, und das auch OpenSpoolman "
     "und spoolnymous schreiben.\n\n"
     "Ein Wert pro Spule, kein Listenformat. Die Waage legt die UID so ab, wie "
-    "sie sie liest - mit Doppelpunkten, bei Bambu-Tags die tray_uuid. "
+    "sie sie liest - als reines Hex ohne Trenner, bei Bambu-Tags die tray_uuid. "
     "OpenSpoolman legt dort eine eigene UUID ab, die Feldbelegung ist also "
     "gleich, der Inhalt nicht zwingend.\n\n"
     "Die richtige Wahl, wenn nichts dagegen spricht.",
     "The field this scale has always used, and the one OpenSpoolman and "
     "spoolnymous write as well.\n\n"
     "One value per spool, no list format. The scale stores the UID the way it "
-    "reads it, with colons, and the tray_uuid for Bambu tags. OpenSpoolman "
+    "reads it, as plain hex without separators, and the tray_uuid for Bambu tags. OpenSpoolman "
     "puts a UUID of its own in there, so the field matches but the contents "
     "need not.\n\n"
     "The right choice unless something speaks against it.",
@@ -1169,7 +1163,7 @@ const char* const STRINGS[][3] = {
   { "Das Feld, auf das sich FilaMan, nfc2klipper und SpoolSense geeinigt "
     "haben.\n\n"
     "Ein Wert pro Spule, kein Listenformat. Erwartet wird reines Hex in "
-    "Grossbuchstaben ohne Trenner - die Waage schreibt hier also "
+    "Großbuchstaben ohne Trenner - die Waage schreibt hier also "
     "04A1B2C3D4E5F6 statt 04:A1:B2:C3:D4:E5:F6, sonst finden die anderen "
     "Programme die UID nicht.\n\n"
     "Sinnvoll, wenn eines davon parallel auf dieselbe Spoolman-Datenbank "
@@ -1187,7 +1181,7 @@ const char* const STRINGS[][3] = {
   { "Das Feld, das SpoolLink in der Snapmaker-Firmware und Spool Studio "
     "benutzen.\n\n"
     "Das einzige Extra-Feld, das eine Liste aufnimmt: mehrere UIDs, "
-    "kommagetrennt, reines Hex in Grossbuchstaben. Beim Snapmaker U1 ist das "
+    "kommagetrennt, reines Hex in Großbuchstaben. Beim Snapmaker U1 ist das "
     "die Regel, weil eine Spule je ein Tag pro Flansch trägt und auf beide "
     "Seiten des Druckers passen muss.\n\n"
     "Von den Extra-Feldern lässt nur dieses die Option \"Mehrere Tags "
@@ -1210,13 +1204,13 @@ const char* const STRINGS[][3] = {
   { "Trocknungsdatum", "Drying date", "Date de séchage" },  // STR_EF_LAST_DRIED
   { "Wann die Spule zuletzt getrocknet wurde. Spoolman hat dafür kein eigenes "
     "Feld, deshalb schreibt die Waage es nach extra.last_dried.\n\n"
-    "Fehlt das Feld, bleibt die Trocknungsanzeige leer und der Knopf "
-    "\"Getrocknet\" kann nichts speichern. Sonst ändert sich nichts.",
+    "Fehlt das Feld, legt die Waage es beim ersten Speichern einer Trocknung "
+    "selbst an.",
     "When the spool was last dried. Spoolman has no field of its own for it, "
     "so the scale writes it to extra.last_dried.\n\n"
-    "Without the field the drying line stays empty and the \"Dried\" button "
-    "has nowhere to save. Nothing else changes.",
-    "Date du dernier séchage de la bobine. Spoolman n'a pas de champ pour cela : la balance l'écrit donc dans extra.last_dried.\n\nSans ce champ, l'indication « Dernier séchage » reste vide et le bouton « Noter le séchage » ne peut rien enregistrer. Rien d'autre ne change." },  // STR_EF_LAST_DRIED_INFO
+    "If the field is missing, the scale creates it the first time a drying is "
+    "saved.",
+    "Date du dernier séchage de la bobine. Spoolman n'a pas de champ pour cela : la balance l'écrit donc dans extra.last_dried.\n\nS'il manque, la balance le crée au premier séchage enregistré." },  // STR_EF_LAST_DRIED_INFO
 
   { "vorhanden",                   "present",                        "présent" },  // STR_EF_PRESENT
   { "fehlt auf dem Server",        "missing on the server",          "absent du serveur" },  // STR_EF_MISSING
@@ -1249,7 +1243,7 @@ const char* const STRINGS[][3] = {
   { "Firmware",
     "Firmware",
     "Firmware" },  // STR_W_NAV_FIRMWARE
-  { "Keine Verbindung zu Spoolman, FilaMan oder BamBuddy - Open-Source-Projekt",
+  { "Unabhängig von Spoolman, FilaMan und BamBuddy - Open-Source-Projekt",
     "Not affiliated with Spoolman, FilaMan or BamBuddy - Open Source Project",
     "Sans lien avec Spoolman, FilaMan ou BamBuddy - projet open source" },  // STR_W_DISCLAIMER
   { "Speichern",
@@ -1747,7 +1741,7 @@ const char* const STRINGS[][3] = {
   { "Kopiert",
     "Copied",
     "Copié" },  // STR_W_SESSION_COPIED
-  { "Kopieren nicht moeglich, bitte markieren",
+  { "Kopieren nicht möglich, bitte markieren",
     "Cannot copy, please select the text",
     "Copie impossible, sélectionnez le texte" },  // STR_W_SESSION_COPYFAIL
   { "Einen beschreibbaren NTAG auflegen, Spule wählen, schreiben. Was auf dem Tag steht, wird ersetzt. Tags ab Werk sind meist MIFARE Classic oder gesperrt und lassen sich nur lesen.",
@@ -2068,8 +2062,8 @@ const char* const STRINGS[][3] = {
   { "Wenn der Tag nicht zur Spule passt",
     "When the tag disagrees with the spool",
     "Si le tag ne correspond pas à la bobine" },  // STR_TW_OPT_MISM_SUB
-  { "Traegt der Tag ein anderes Material, eine andere Marke oder eine deutlich "
-    "andere Farbe als die verknuepfte Spule, bietet die Waage an, ihn neu zu "
+  { "Trägt der Tag ein anderes Material, eine andere Marke oder eine deutlich "
+    "andere Farbe als die verknüpfte Spule, bietet die Waage an, ihn neu zu "
     "beschreiben. Verglichen wird nur der Inhalt, nicht das Format. Aus "
     "bleibt der Tag unangetastet.",
     "If the tag carries a different material, brand or a clearly different "
@@ -2296,7 +2290,7 @@ const char* const STRINGS[][3] = {
   { "An: die Hardware-UID des Chips, der gerade auf dem Leser liegt, kommt "
     "zusätzlich in das Extra-Feld rfid_tag, als kommagetrennte Liste. Die "
     "Bindung selbst bleibt unverändert in dem Feld, das oben gewählt ist.\n\n"
-    "Happy Hare an einem Voron liest ausschliesslich rfid_tag, und die Leser "
+    "Happy Hare an einem Voron liest ausschließlich rfid_tag, und die Leser "
     "an den Gates sehen nur die Hardware-UID des Chips, nie die tray_uuid "
     "einer Bambu-Spule. Ohne dieses Feld findet der Drucker die Spule nicht, "
     "die auf der Waage längst erkannt wird.\n\n"
@@ -2304,8 +2298,8 @@ const char* const STRINGS[][3] = {
     "selbst: einmal jede Seite auflegen, danach antwortet die Spule an beiden "
     "Gates.\n\n"
     "Die Waage schreibt dabei in jede Spule, die sie erkennt, nicht erst beim "
-    "Verknüpfen. Steht die UID schon drin, geht keine Anfrage mehr raus. Das "
-    "Feld legt Happy Hare selbst an.",
+    "Verknüpfen. Steht die UID schon drin, geht keine Anfrage mehr raus. Fehlt "
+    "das Feld, legt die Waage es beim ersten Schreiben an.",
     "On: the hardware UID of the chip currently on the reader goes into the "
     "rfid_tag extra field as well, as a comma separated list. The binding "
     "itself stays untouched in the field selected above.\n\n"
@@ -2317,30 +2311,26 @@ const char* const STRINGS[][3] = {
     "its own: put each side on the reader once and the spool answers at both "
     "gates.\n\n"
     "The scale writes this into every spool it recognises, not only when a "
-    "link is made. Once the UID is in there, no request goes out again. Happy "
-    "Hare creates the field itself.",
-    "Activé : l'UID matériel de la puce posée sur le lecteur est aussi ajouté au champ supplémentaire rfid_tag, dans une liste séparée par des virgules. La liaison elle-même reste inchangée, dans le champ choisi plus haut.\n\nSur une Voron, Happy Hare ne lit que rfid_tag, et les lecteurs placés à ses entrées (gates) ne voient que l'UID matériel de la puce, jamais la tray_uuid d'une bobine Bambu. Sans ce champ, l'imprimante ne trouve pas une bobine que la balance reconnaît pourtant très bien.\n\nUne bobine Bambu porte deux puces, donc deux UID. La liste se complète toute seule : posez une fois chaque côté de la bobine sur le lecteur, et elle sera reconnue aux deux entrées.\n\nLa balance renseigne ce champ pour chaque bobine qu'elle reconnaît, pas seulement lors d'une liaison. Si l'UID y figure déjà, elle n'envoie plus aucune requête. Le champ est créé par Happy Hare lui-même." },  // STR_HW_UID_WRITE_INFO
+    "link is made. Once the UID is in there, no request goes out again. If the "
+    "field is missing, the scale creates it on the first write.",
+    "Activé : l'UID matériel de la puce posée sur le lecteur est aussi ajouté au champ supplémentaire rfid_tag, dans une liste séparée par des virgules. La liaison elle-même reste inchangée, dans le champ choisi plus haut.\n\nSur une Voron, Happy Hare ne lit que rfid_tag, et les lecteurs placés à ses entrées (gates) ne voient que l'UID matériel de la puce, jamais la tray_uuid d'une bobine Bambu. Sans ce champ, l'imprimante ne trouve pas une bobine que la balance reconnaît pourtant très bien.\n\nUne bobine Bambu porte deux puces, donc deux UID. La liste se complète toute seule : posez une fois chaque côté de la bobine sur le lecteur, et elle sera reconnue aux deux entrées.\n\nLa balance renseigne ce champ pour chaque bobine qu'elle reconnaît, pas seulement lors d'une liaison. Si l'UID y figure déjà, elle n'envoie plus aucune requête. Si le champ manque, la balance le crée à la première écriture." },  // STR_HW_UID_WRITE_INFO
 
   // ── A link that could not use the selected source ──
   { "Tag-Quelle nicht verfügbar", "Tag source unavailable", "Source de tag indisponible" },  // STR_TF_NOREL_TITLE
   { "Dieser Spoolman hat noch keine eigene Tag-Relation - die gibt es erst ab "
     "v0.27. Als Quelle sind aber die nativen Tags gewählt.\n\n"
-    "Der Tag wurde deshalb in das Extra-Feld tag geschrieben, das jeder "
-    "Spoolman hat. Die Spule wird damit gefunden, nur nicht auf dem "
-    "schnellsten Weg.\n\n"
-    "Dauerhaft besser: unter Einstellungen die Tag-Quelle auf card_uids "
-    "stellen. Das Feld hält auch mehrere UIDs je Spule, also auch einen "
-    "zweiten Tag. Sobald der Server auf v0.27 steht, zieht die Waage die "
-    "Bindung beim nächsten Verknüpfen von selbst in die Relation um.",
+    "Der Tag wurde deshalb in das Extra-Feld tag geschrieben. Die Spule wird "
+    "damit gefunden, nur nicht auf dem schnellsten Weg.\n\n"
+    "Dauerhaft besser: Spoolman auf v0.27 oder neuer aktualisieren. Dann zieht "
+    "die Waage die Bindung beim nächsten Verknüpfen von selbst in die Relation "
+    "um.",
     "This Spoolman has no tag relation of its own yet - that arrives in v0.27. "
     "The selected source is native tags all the same.\n\n"
-    "The tag went into the extra field tag instead, which every Spoolman has. "
-    "The spool is found by it, just not by the fastest route.\n\n"
-    "Better for good: set the tag source to card_uids under Settings. That "
-    "field also holds several UIDs per spool, so a second tag fits too. Once "
-    "the server is on v0.27 the scale moves the binding into the relation by "
-    "itself, on the next link.",
-    "Ce serveur Spoolman ne gère pas encore les tags nativement - cette fonction n'arrive qu'en v0.27. La source choisie est pourtant « Spoolman NFC (natif) ».\n\nLe tag a donc été enregistré dans le champ supplémentaire extra.tag, que tout Spoolman possède. La bobine est bien retrouvée grâce à lui, mais pas par le chemin le plus rapide.\n\nSolution durable : dans les réglages, choisissez extra.card_uids comme champ du tag. Ce champ accepte plusieurs UID par bobine, donc aussi un second tag. Dès que le serveur sera en v0.27, la balance déplacera d'elle-même le tag vers la gestion native, lors de la prochaine liaison." },  // STR_TF_NOREL_TEXT
+    "The tag went into the extra field tag instead. The spool is found by it, "
+    "just not by the fastest route.\n\n"
+    "Better for good: update Spoolman to v0.27 or newer. The scale then moves "
+    "the binding into the relation by itself, on the next link.",
+    "Ce serveur Spoolman ne gère pas encore les tags nativement - cette fonction n'arrive qu'en v0.27. La source choisie est pourtant « Spoolman NFC (natif) ».\n\nLe tag a donc été enregistré dans le champ supplémentaire extra.tag, La bobine est bien retrouvée grâce à lui, mais pas par le chemin le plus rapide.\n\nSolution durable : mettre Spoolman à jour en v0.27 ou plus récent. La balance déplacera alors d'elle-même le tag vers la gestion native, lors de la prochaine liaison." },  // STR_TF_NOREL_TEXT
 
   // ── The tag on the other flange ──
   { "Zweites Tag abfragen", "Ask for a second tag", "Demander un second tag" },  // STR_TAG2_ASK
@@ -2656,9 +2646,9 @@ const char* const STRINGS[][3] = {
   { "Nicht verfügbar",
     "Not available",
     "Non disponible" },  // STR_W_LOG_INT_NONE
-  { "Der interne Speicher fasst 4.096 Zeilen und überschreibt die ältesten. Das sind etwa zwei Tage im Umfang \"Normal\" und gut zwei Stunden im Umfang \"Ausführlich\".",
-    "The internal storage holds 4,096 lines and overwrites the oldest. That is about two days at normal scope and a good two hours at verbose.",
-    "La mémoire interne contient 4 096 lignes et écrase les plus anciennes. Cela fait environ deux jours au niveau « Normal » et un peu plus de deux heures au niveau « Détaillé »." },  // STR_W_LOG_INT_NOTE
+  { "Der interne Speicher fasst 4.096 Zeilen und überschreibt die ältesten. Das sind etwa zwei Tage im Umfang \"Normal\" und mehrere Stunden im Umfang \"Ausführlich\".",
+    "The internal storage holds 4,096 lines and overwrites the oldest. That is about two days at normal scope and several hours at verbose.",
+    "La mémoire interne contient 4 096 lignes et écrase les plus anciennes. Cela fait environ deux jours au niveau « Normal » et plusieurs heures au niveau « Détaillé »." },  // STR_W_LOG_INT_NOTE
   { "Spule hat sich geändert, Liste neu geladen",
     "That spool changed, the list was reloaded",
     "La bobine a changé, liste rechargée" },  // STR_LIST_SPOOL_CHANGED
@@ -2759,9 +2749,9 @@ const char* const STRINGS[][3] = {
   { "Bluetooth konnte nicht gestartet werden. Zu wenig freier Speicher, siehe Log.",
     "Bluetooth could not be started. Not enough free memory, see the log.",
     "Bluetooth n'a pas démarré. Mémoire insuffisante, voir le journal." },  // STR_BT_INIT_FAILED
-  { "Aus: kein Bluetooth, nichts läuft im Hintergrund. An: Funktionen wie die Gerätesuche starten den Funk bei Bedarf und geben ihn danach wieder frei. Die Suche zeigt nur, was in Reichweite ist, und verbindet nichts.",
-    "Off: no Bluetooth, nothing runs in the background. On: features such as the device scan start the radio when needed and release it afterwards. The scan only lists what is in range and connects to nothing.",
-    "Désactivé : pas de Bluetooth, rien en arrière-plan. Activé : la recherche d'appareils et les autres fonctions allument la radio au besoin, puis la libèrent. La recherche liste ce qui est à portée et ne connecte rien." },  // STR_BT_HELP
+  { "Aus: kein Bluetooth, nichts läuft im Hintergrund. An: Funktionen wie die Gerätesuche starten den Funk bei Bedarf und geben ihn danach wieder frei. Die Suche zeigt, was in Reichweite ist. Verbunden wird nur zum Drucken, mit dem eingerichteten Drucker. Nach dem Einschalten startet die Waage einmal neu.",
+    "Off: no Bluetooth, nothing runs in the background. On: features such as the device scan start the radio when needed and release it afterwards. The scan lists what is in range. A connection is only made to print, to the printer that is set up. After switching it on, the scale restarts once.",
+    "Désactivé : pas de Bluetooth, rien en arrière-plan. Activé : la recherche d'appareils et les autres fonctions allument la radio au besoin, puis la libèrent. La recherche montre ce qui est à portée. Une connexion n'est établie que pour imprimer, avec l'imprimante configurée. Après l'activation, la balance redémarre une fois." },  // STR_BT_HELP
   { "Geräte",                "Devices",          "Appareils" },  // STR_BT_DEVICES
   { "Noch nicht gesucht",    "Not searched yet", "Aucune recherche" },  // STR_BT_DEVICES_NONE_YET
   { "%d in Reichweite",      "%d in range",      "%d à portée" },  // STR_BT_DEVICES_FMT
@@ -2827,9 +2817,9 @@ const char* const STRINGS[][3] = {
 
   // The printer page in the browser
   { "Drucker", "Printer", "Imprimante" },  // STR_W_NAV_PRINTER
-  { "Nur bei Bedarf an: der Funk läuft, während ein Gerät ihn braucht, und wird danach freigegeben.",
-    "Only when needed: the radio runs while a device needs it and is released afterwards.",
-    "Seulement au besoin : la radio tourne tant qu'un appareil l'utilise, puis est libérée." },  // STR_W_P_BLE_HINT
+  { "Nur bei Bedarf an: der Funk läuft, während ein Gerät ihn braucht, und wird danach freigegeben. Nach dem Einschalten startet die Waage einmal neu.",
+    "Only when needed: the radio runs while a device needs it and is released afterwards. After switching it on, the scale restarts once.",
+    "Seulement au besoin : la radio tourne tant qu'un appareil l'utilise, puis est libérée. Après l'activation, la balance redémarre une fois." },  // STR_W_P_BLE_HINT
   { "Unterstützte Drucker", "Supported printers", "Imprimantes prises en charge" },  // STR_W_P_SUPPORTED
   { "getestet",             "tested",             "testée" },  // STR_W_P_TESTED
   { "Thermodrucker der Phomemo-M-Serie über Bluetooth. Weitere Modelle kommen mit Rückmeldungen aus der Community.",

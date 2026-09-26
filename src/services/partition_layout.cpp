@@ -47,6 +47,10 @@ void partitionNoteTooBig(const char* version, uint32_t image_bytes) {
 
 const char* partitionTooBigVersion() { return s_too_big; }
 
+bool partitionTagTooBig(const char* tag) {
+  return tag && tag[0] && s_too_big[0] && strcmp(s_too_big, tag) == 0;
+}
+
 bool partitionHintDue() {
   if (!FLASHER_HAS_CURRENT_LAYOUT) return false;   // nothing to send them to yet
   if (s_shown) return false;

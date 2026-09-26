@@ -15,8 +15,8 @@
 #define REC_BYTES        128
 #define SECTOR_BYTES     4096
 #define RECS_PER_SECTOR  (SECTOR_BYTES / REC_BYTES)          // 32
-#define SECTOR_COUNT     (FLASH_LOG_BYTES / SECTOR_BYTES)    // 512
-#define REC_COUNT        (SECTOR_COUNT * RECS_PER_SECTOR)    // 16384
+#define SECTOR_COUNT     (FLASH_LOG_BYTES / SECTOR_BYTES)    // 128
+#define REC_COUNT        (SECTOR_COUNT * RECS_PER_SECTOR)    // 4096
 #define REC_HEADER       20
 #define REC_TEXT         (REC_BYTES - REC_HEADER)            // 108
 #define REC_MAX_PARTS    4
@@ -330,7 +330,11 @@ bool flashLogClearBusy() { return s_clearing; }
 
 uint32_t flashLogLines() {
   if (!s_part || s_clearing || s_next_seq <= s_first_seq) return 0;
-  return s_next_seq - s_first_seq;
+  // Never more than the ring holds. A ring written while it was larger
+  // (2 MB until beta.82) leaves older sequence numbers behind, and the span
+  // read 7835 of 4096 until one full turn had overwritten them.
+  const uint32_t span = s_next_seq - s_first_seq;
+  return span < REC_COUNT ? span : REC_COUNT;
 }
 
 uint32_t flashLogUsedBytes() {

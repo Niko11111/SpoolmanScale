@@ -240,10 +240,10 @@ static String body() {
     snprintf(a, sizeof(a), T(STR_W_S_MB_OF), b, c);
     h += row(T(STR_W_R_FIRMWARE), htmlEsc(a));
     if (pl.data_bytes && flashLogAvailable()) {
-      // Once the log lives there the size of the partition is the less
-      // interesting number: what the owner wants is how full the log is.
+      // What the log uses of the whole area. Its own capacity (0.5 MB) read
+      // as the size of the data area, which is 3.9 MB on the current table.
       snprintf(b, sizeof(b), "%.1f", flashLogUsedBytes() / 1048576.0);
-      snprintf(c, sizeof(c), "%.1f", flashLogCapacityBytes() / 1048576.0);
+      snprintf(c, sizeof(c), "%.1f", pl.data_bytes / 1048576.0);
       snprintf(a, sizeof(a), T(STR_W_S_MB_OF), b, c);
       h += row(T(STR_W_R_DATA_AREA), htmlEsc(a));
     } else if (pl.data_bytes) {

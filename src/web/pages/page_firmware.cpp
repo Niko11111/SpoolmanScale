@@ -57,6 +57,7 @@ static bool          s_check_pre = false; // the channel it was for
 static bool          s_check_new = false;
 static bool          s_check_old = false;  // found something below the running build
 static char          s_check_pub[24] = "";  // when that release was published
+static bool          s_check_big = false;   // newer, but larger than this device's slot
 
 // How far the GitHub download has got. Read by /api/ota/progress, which is the
 // only route answered while an image is being written.
@@ -297,6 +298,7 @@ static String body() {
   h += F(",restarting:"); h += jsStr(T(STR_W_FW_RESTARTING));
   h += F(",upfail:");     h += jsStr(T(STR_W_FW_FAIL));
   h += F(",toobig:");     h += jsStr(T(STR_W_FW_TOOBIG));
+  h += F(",ghbig:");      h += jsStr(T(STR_GH_OTA_TOO_BIG));
   h += F("};"
          "function ghSay(t,bad){var m=document.getElementById('ghmsg');"
          "m.className=bad?'msg bad':'msg';m.textContent=t;}"
@@ -436,7 +438,8 @@ static String body() {
          // A different tag than whatever the notes pane last showed.
          "LATEST=null;document.getElementById('ghn').style.display='none';"
          "n.textContent=G.whatsnew;"
-         "ghSay(d.update?G.avail:(d.older?G.older:G.uptodate),false);"
+         "if(d.toobig){ghSay(G.ghbig.replace('%s',d.tag),true);}"
+         "else ghSay(d.update?G.avail:(d.older?G.older:G.uptodate),false);"
          "}).catch(()=>{if(!auto)ghSay(G.fail,true);})"
          ".finally(()=>{if(!again){b.disabled=false;b.textContent=G.check;}});}"
          "var LATEST=null,OLDER=false;"
@@ -563,7 +566,8 @@ static void routes(WebServer &srv) {
                "\",\"installed\":\"" + jsonEsc(FW_VERSION) +
                "\",\"published\":\"" + jsonEsc(s_check_pub) +
                "\",\"update\":" + (s_check_new ? "true" : "false") +
-               ",\"older\":" + (s_check_old ? "true" : "false") + "}");
+               ",\"older\":" + (s_check_old ? "true" : "false") +
+               ",\"toobig\":" + (s_check_big ? "true" : "false") + "}");
       return;
     }
 
@@ -622,13 +626,18 @@ static void ghCheckFinish(WebServer &srv) {
   char tag[40], pub[24];
   strncpy(tag, r.tag, sizeof(tag) - 1); tag[sizeof(tag) - 1] = '\0';
   strncpy(pub, r.pub, sizeof(pub) - 1); pub[sizeof(pub) - 1] = '\0';
+  const uint32_t image_size = r.image_size;
   webJobTake();
 
   {
     strncpy(gh_latest_version, tag, sizeof(gh_latest_version) - 1);
     gh_latest_version[sizeof(gh_latest_version) - 1] = '\0';
     const uint64_t remote = parseVersion(tag), running = parseVersion(FW_VERSION);
-    const bool newer = remote > running;
+    // Newer but larger than this device's slot: not offered, the way to the
+    // flasher instead - the same rule as the device's own check.
+    const bool too_big = remote > running && !partitionImageFits(image_size);
+    if (too_big) partitionNoteTooBig(tag, image_size);
+    const bool newer = remote > running && !too_big;
     // Offered, not pushed. Someone who tested a pre-release and moved the
     // channel back is asking for the release below the running build, and the
     // page has to be able to say so rather than only "already up to date".
@@ -648,6 +657,7 @@ static void ghCheckFinish(WebServer &srv) {
     s_check_pre = gh_prerelease;
     s_check_new = newer;
     s_check_old = older;
+    s_check_big = too_big;
     snprintf(s_check_pub, sizeof(s_check_pub), "%s", pub);
     logSDf("OTA check: web asked, latest %s%s", tag,
            newer ? " (newer)" : (older ? " (older)" : ""));
@@ -656,7 +666,8 @@ static void ghCheckFinish(WebServer &srv) {
              "\",\"installed\":\"" + jsonEsc(FW_VERSION) +
              "\",\"published\":\"" + jsonEsc(pub) +
              "\",\"update\":" + (newer ? "true" : "false") +
-             ",\"older\":" + (older ? "true" : "false") + "}");
+             ",\"older\":" + (older ? "true" : "false") +
+             ",\"toobig\":" + (too_big ? "true" : "false") + "}");
   }
 }
 
@@ -676,6 +687,12 @@ static void routesTail(WebServer &srv) {
     }
     if (gh_latest_version[0] == '\0') {
       srv.send(200, "application/json", "{\"ok\":false,\"error\":\"nocheck\"}");
+      return;
+    }
+    // A release a check found too large for the slot - this page's or the
+    // device's - is refused here too, not only left without a button.
+    if (s_check_big || partitionTagTooBig(gh_latest_version)) {
+      srv.send(200, "application/json", "{\"ok\":false,\"error\":\"toobig\"}");
       return;
     }
     strncpy(gh_web_flash_tag, gh_latest_version, sizeof(gh_web_flash_tag) - 1);

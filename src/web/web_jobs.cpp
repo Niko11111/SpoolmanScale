@@ -92,9 +92,10 @@ static void runSpools() {
 }
 
 static void runGhCheck() {
+  s_res.image_size = 0;
   s_res.ok = githubLatestTag(s_flag, s_res.tag, sizeof(s_res.tag),
                              s_res.pub, sizeof(s_res.pub),
-                             s_res.err, sizeof(s_res.err));
+                             s_res.err, sizeof(s_res.err), &s_res.image_size);
 }
 
 static void runGhNotes() {

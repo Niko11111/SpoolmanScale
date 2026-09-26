@@ -228,3 +228,4 @@ STR_PART_HINT_TITLE	18	424	NEVER	src/ui/partition_popup.cpp title, HINT_BOX_W - 
 STR_PART_HINT_LATER	16	180	NEVER	src/ui/partition_popup.cpp button, HINT_BTN_W 200
 STR_PART_HINT_TEXT	14	256	WRAP:14	src/ui/partition_popup.cpp text column, scrolls
 STR_PART_HINT_BLOCKED	14	256	WRAP:14	src/ui/partition_popup.cpp text column, scrolls
+STR_GH_OTA_LATEST	14	440	NEVER	src/ui/ota_github.cpp:366 lbl_gh_latest, centred on the 480 px screen

@@ -918,14 +918,32 @@ int backendPatchInitialWeight(const char* base_url, int spool_id, float initial_
                               uint32_t timeout_ms) {
   HttpStallTime stall(__func__);   // the loop stands still for this call
   switch (backendMode()) {
-    case BACKEND_FILAMAN:
+    case BACKEND_FILAMAN: {
       // Both fields, like the Spoolman side does. Writing only the initial weight
       // leaves the old remaining in place, so the spool reads as full on the
       // device - which updates its copy optimistically - and as half empty on the
       // server until the next scan corrects the display back.
+      //
+      // initial_total_weight_g is gross, filament and empty spool together
+      // (spool 230: 810 = 600 + 210), and the mapping reads it back as net by
+      // subtracting the empty weight. The net value went in unchanged, so a spool
+      // set to 1000 g came back as 750 g with a 1000 g rest, 133 %. The empty
+      // weight is read off the server, the same number the mapping subtracts.
+      //
+      // Without it nothing is written: a net value in the gross field is the
+      // old fault again (spool 230 set to 600 g would read 390 g, 154 %), and
+      // the caller reports a failure rather than a wrong number.
+      float empty = 0.0f;
+      {
+        JsonDocument doc;
+        const int rc = filamanGetSpoolJson(backendBaseUrl(), filamanApiKey(), spool_id, doc, timeout_ms);
+        if (rc != 200) return rc;
+        empty = doc["spool_weight"] | 0.0f;
+      }
       return filamanPatchSpoolFloat2(backendBaseUrl(), filamanApiKey(), spool_id,
-                                     "initial_total_weight_g", initial_weight,
+                                     "initial_total_weight_g", initial_weight + empty,
                                      "remaining_weight_g", initial_weight, timeout_ms);
+    }
     case BACKEND_BAMBUDDY: {
       // Both numbers again, for the same reason as FilaMan. BamBuddy stores
       // what was consumed, so a full spool is label_weight with nothing used.

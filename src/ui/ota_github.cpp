@@ -176,8 +176,9 @@ void doGithubOtaCheck() {
   }
 
   char tag[40] = "", cerr[80] = "";
+  uint32_t image_size = 0;
   if (!githubLatestTag(gh_prerelease, tag, sizeof(tag), nullptr, 0,
-                       cerr, sizeof(cerr))) {
+                       cerr, sizeof(cerr), &image_size)) {
     lv_label_set_text(lbl_gh_status, cerr[0] ? cerr : T(STR_GH_OTA_FLASH_FAIL));
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
     return;
@@ -208,7 +209,8 @@ void doGithubOtaCheck() {
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0x40c080), 0);
     update_available = false;
     showUpdateBadges(false);
-  } else if (!partitionImageFits(githubLastImageSize())) {
+    if (btn_gh_update) lv_obj_add_state(btn_gh_update, LV_STATE_DISABLED);
+  } else if (!gh_found_older && !partitionImageFits(image_size)) {
     // Larger than this device's app slot: the old partition table. The
     // download would be refused at the end anyway; saying so now, with the
     // way out, beats a failed update (Nikolai, 26.09.2026).
@@ -216,9 +218,11 @@ void doGithubOtaCheck() {
     snprintf(big, sizeof(big), T(STR_GH_OTA_TOO_BIG), gh_latest_version);
     lv_label_set_text(lbl_gh_status, big);
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_WARN), 0);
-    partitionNoteTooBig(gh_latest_version, githubLastImageSize());
+    partitionNoteTooBig(gh_latest_version, image_size);
     update_available = false;
     showUpdateBadges(false);
+    // Off even when an earlier check on this screen had armed it.
+    if (btn_gh_update) lv_obj_add_state(btn_gh_update, LV_STATE_DISABLED);
   } else {
     // Older is also an answer worth acting on: someone testing a pre-release
     // and moving the channel back wants the release below, and it is the same
@@ -259,6 +263,16 @@ void doGithubOtaFlash(const char* version) {
   if (tag[0] == '\0') {
     lv_label_set_text(lbl_gh_status, T(STR_GH_OTA_FLASH_FAIL));
     lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
+    return;
+  }
+  // A version found too large for this slot - by the browser, say, while this
+  // screen still showed an earlier, fitting one. Refused before the download
+  // rather than by Update.begin() at its start.
+  if (partitionTagTooBig(tag)) {
+    char big[96];
+    snprintf(big, sizeof(big), T(STR_GH_OTA_TOO_BIG), tag);
+    lv_label_set_text(lbl_gh_status, big);
+    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_WARN), 0);
     return;
   }
 
@@ -322,7 +336,16 @@ void buildOtaGithubScreen() {
   lv_obj_set_style_shadow_width(btn_check, 0, 0);
   lv_obj_set_style_border_width(btn_check, 1, 0);
   lv_obj_set_style_border_color(btn_check, lv_color_hex(0x1a3060), 0);
-  lv_obj_add_event_cb(btn_check, [](lv_event_t *e){ doGithubOtaCheck(); }, LV_EVENT_CLICKED, NULL);
+  // The check is a TLS request of up to eight seconds: from the loop, never
+  // from this callback, where "checking" was never drawn and the screen froze.
+  lv_obj_add_event_cb(btn_check, [](lv_event_t *e) {
+    if (lbl_gh_status) {
+      lv_label_set_text(lbl_gh_status, T(STR_GH_OTA_CHECKING));
+      lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_CAPTION), 0);
+    }
+    gh_check_pending = true;
+    gh_check_wait_since = millis();
+  }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_check = lv_label_create(btn_check);
   char buf_check[48]; copyT(buf_check, sizeof(buf_check), STR_GH_OTA_CHECK_BTN); buf_check[sizeof(buf_check)-1]=0;
   lv_label_set_text(lbl_check, buf_check);

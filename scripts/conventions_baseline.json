@@ -2,9 +2,9 @@
   "created": "2026-09-22",
   "commit": "351331a",
   "metrics": {
-    "german_comment_lines": 78,
-    "http_in_handler": 1,
-    "inline_color_hex": 1224,
+    "german_comment_lines": 77,
+    "http_in_handler": 0,
+    "inline_color_hex": 1130,
     "label_literal_captions": 14,
     "lines:src/app/app_loop.cpp": 1974,
     "lines:src/services/backend_api.cpp": 1337,

@@ -346,8 +346,13 @@ void updateCheckTick() {
     // The tag goes with it. Only the timestamp used to be kept, and since the
     // check skips itself for a day, a reboot inside that window left the badge
     // off while an update was in fact waiting.
-    prefsPutString("upd_ver", gh_latest_version);
-    prefsPutString("upd_sha", gh_latest_sha);
+    //
+    // Only a version the badge stands for. gh_latest_version also holds one
+    // found too large for this device's slot, and stored here it came back
+    // after a reboot as "update available" through updateCheckRestoreBadge().
+    const bool keep = update_available && !partitionTagTooBig(gh_latest_version);
+    prefsPutString("upd_ver", keep ? gh_latest_version : "");
+    prefsPutString("upd_sha", keep ? gh_latest_sha : "");
   } else if (answered) {
     // The server answered but NTP has not, so the daily window cannot be
     // measured in wall clock time. Count uptime instead, otherwise the retry

@@ -11,7 +11,7 @@
 // slots for good, while the table shipped since then gives 6 MB per slot, a
 // core dump partition and a data area. One firmware runs on both, as long as
 // it fits the smaller slot, and the only way onto the new table is a flash
-// over USB. This tells the owner that, once, and shows the state on the
+// over USB. This tells the owner that, with every boot, and shows the state on the
 // status page. Nothing here changes anything.
 
 struct PartitionLayout {
@@ -35,6 +35,10 @@ bool partitionImageFits(uint32_t image_bytes);
 void partitionNoteTooBig(const char* version, uint32_t image_bytes);
 // The version noted above, "" while none was.
 const char* partitionTooBigVersion();
+// Whether this tag is the one noted as too large. Asked wherever a version is
+// about to be installed or remembered: gh_latest_version can hold one a check
+// found too large while an earlier, fitting one keeps the badge lit.
+bool partitionTagTooBig(const char* tag);
 
 // The hint on the device: an old layout and not yet closed this boot. It comes
 // back with every boot until the scale is on the current layout - more

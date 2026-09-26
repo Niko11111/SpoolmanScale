@@ -700,7 +700,9 @@ static bool isSupportedRecord(const char *json) {
 
 // Reads the JSON payload back out of the NDEF wrapper.
 static bool readOpenSpool(char *out, size_t out_len) {
-  uint8_t buf[240];
+  // Zeroed: only the pages the TLV claims are read, and a record that says it
+  // reaches past them must copy zeros, not whatever the stack held before.
+  uint8_t buf[240] = {0};
   if (!nfcReadNtagPage(4, buf)) return false;
   if (buf[0] != 0x03) return false;          // not an NDEF TLV, stop here
   int len = buf[1];
@@ -713,7 +715,8 @@ static bool readOpenSpool(char *out, size_t out_len) {
   int tlen = buf[3];
   int plen = buf[4];
   int start = 5 + tlen;
-  if (plen <= 0 || start + plen > (int)sizeof(buf)) return false;
+  // Within what was read (2 + len), not merely within the buffer.
+  if (plen <= 0 || start + plen > 2 + len) return false;
   size_t copy = (size_t)plen < out_len - 1 ? (size_t)plen : out_len - 1;
   memcpy(out, buf + start, copy);
   out[copy] = 0;

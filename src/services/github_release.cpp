@@ -17,10 +17,6 @@
 // The release asset the device flashes, see githubFlashTag().
 #define GH_IMAGE_ASSET "SpoolmanScale.bin"
 
-// The size of that asset in the release the last lookup found, 0 when unknown.
-static uint32_t s_image_size = 0;
-uint32_t githubLastImageSize() { return s_image_size; }
-
 // The image's size out of a release's asset list.
 static uint32_t imageSizeOf(JsonVariantConst rel) {
   for (JsonObjectConst a : rel["assets"].as<JsonArrayConst>())
@@ -45,10 +41,11 @@ void githubTrust(WiFiClientSecure &client) {
 
 bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
                      char *published, size_t pub_len,
-                     char *err, size_t err_len) {
+                     char *err, size_t err_len, uint32_t *image_size) {
   if (!tag || tag_len == 0) return false;
   tag[0] = '\0';
-  s_image_size = 0;
+  uint32_t found_size = 0;
+  if (image_size) *image_size = 0;
   if (published && pub_len) published[0] = '\0';
   if (err && err_len) err[0] = '\0';
 
@@ -114,7 +111,8 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
             strncpy(published, rel["published_at"] | "", pub_len - 1);
             published[pub_len - 1] = '\0';
           }
-          s_image_size = imageSizeOf(rel);
+          found_size = imageSizeOf(rel);
+          if (image_size) *image_size = found_size;
           break;
         }
       }
@@ -137,7 +135,8 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
         strncpy(published, doc["published_at"] | "", pub_len - 1);
         published[pub_len - 1] = '\0';
       }
-      s_image_size = imageSizeOf(doc);
+      found_size = imageSizeOf(doc);
+      if (image_size) *image_size = found_size;
     }
   }
 
@@ -146,7 +145,7 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
   // have several possible causes.
   logSDf("OTA check: HTTP %d len=%d heap %u->%u pre=%d err=%s entries=%d tag='%s' image=%u",
          code, payload_len, (unsigned)heap_before, (unsigned)heap_parse,
-         prerelease ? 1 : 0, jerr.c_str(), entries, tag, (unsigned)s_image_size);
+         prerelease ? 1 : 0, jerr.c_str(), entries, tag, (unsigned)found_size);
   Serial.printf("OTA check: len=%d heap %u->%u err=%s entries=%d tag='%s'\n",
                 payload_len, (unsigned)heap_before, (unsigned)heap_parse,
                 jerr.c_str(), entries, tag);
