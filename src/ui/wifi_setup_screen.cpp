@@ -351,8 +351,12 @@ void doWifiScan() {
   lv_obj_clear_flag(spin, LV_OBJ_FLAG_CLICKABLE);
 
   // Disconnect required after failed WiFi.begin() -
-  // otherwise scanNetworks() returns 0
-  wifiManagerPrepareScan();
+  // otherwise scanNetworks() returns 0. Only then: a connected station scans
+  // beside its link. Taking the link down first turned the driver off while
+  // the loop kept serving, and the web server freed a waiting connection's
+  // buffers through the driver that was gone - PANIC in esp_pbuf_free under
+  // lwip_accept on 26.09.2026. The blocking scan never served meanwhile.
+  if (!wifiManagerIsConnected()) wifiManagerPrepareScan();
   if (!wifiManagerStartScanAsync()) {
     finishWifiScan(-2);
     return;

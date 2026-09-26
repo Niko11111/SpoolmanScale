@@ -31,8 +31,11 @@ static const LabelPrinterProfile PROFILE_M110 = {
   LP_MODEL_M110, "M110", 40, 30, 20, 48, 10, 150, 384, 384, true
 };
 
+// The two sizes printed and checked on the M220 for 0.8.0 (Nikolai,
+// 26.09.2026). 40 x 20 and 30 x 20 leave no room for the code; the larger
+// ones come back with the label presets.
 const LabelMediaSize LABEL_MEDIA_SIZES[] = {
-  {40, 30}, {30, 40}, {50, 30}, {60, 40}, {30, 20}, {40, 60}, {50, 50}, {50, 80}, {75, 50},
+  {40, 30}, {50, 30},
 };
 const int LABEL_MEDIA_SIZE_COUNT = sizeof(LABEL_MEDIA_SIZES) / sizeof(LABEL_MEDIA_SIZES[0]);
 

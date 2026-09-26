@@ -536,5 +536,8 @@ void handleRemoteLinkDeferredActions() {
     showLinkedSpool(spool_id, s_is_bambu, s_link_uuid);
     logSDf("RemoteLink: linked spool %d%s", spool_id,
            want_write ? " and wrote the tag" : "");
+    // The second tag question as after a link made on the scale: the spool
+    // has a chip on the other flange just the same (Nikolai, 26.09.2026).
+    spoolFlowAskSecondTag(spool_id);
   }
 }

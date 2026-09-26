@@ -1330,7 +1330,11 @@ bool doLinkPatchUid(int spool_id, bool is_bambu, const char* link_uuid) {
   // has read the row already - the tap on it, the numpad - so this should
   // never find anything. If it does, it reads the spool itself rather than
   // refuse, and the line in the log says that a way around the refresh exists.
-  for (int i = 0; i < link_spool_count; i++) {
+  //
+  // Not for a further tag: its spool is not picked from a list, and it is
+  // bound by the first tag on purpose. A row left from an earlier list read
+  // that as "bound meanwhile" and turned the second tag away (26.09.2026).
+  for (int i = 0; i < link_spool_count && !s_additional_link; i++) {
     if (link_spools[i].id != spool_id || !link_spools[i].from_cache) continue;
     logSDf("link patch: row of spool %d still cached, refreshed late", spool_id);
     const LinkRowRefresh r = linkRefreshRow(i);
