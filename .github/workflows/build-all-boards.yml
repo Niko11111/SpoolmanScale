@@ -152,9 +152,13 @@ jobs:
           # path, this covers the bytes.
           VERSION=${{ steps.version.outputs.version }}
           SHA=$(sha256sum SpoolmanScale.bin | cut -d' ' -f1)
-          python3 - "$VERSION" "$SHA" <<'PY'
+          # The size too: a device on the old 3 MB partition table compares it
+          # with its app slot and offers the web flasher instead of an update
+          # that would not fit. Firmware from before this ignores the key.
+          SIZE=$(stat -c%s SpoolmanScale.bin)
+          python3 - "$VERSION" "$SHA" "$SIZE" <<'PY'
           import json, re, sys
-          version, sha = sys.argv[1], sys.argv[2]
+          version, sha, size = sys.argv[1], sys.argv[2], int(sys.argv[3])
           data = {
               "stable": "",
               "stable_sha256": "",
@@ -169,9 +173,11 @@ jobs:
               pass
           data["prerelease"] = version
           data["prerelease_sha256"] = sha
+          data["prerelease_size"] = size
           if not re.search(r"-beta\.\d+$", version):
               data["stable"] = version
               data["stable_sha256"] = sha
+              data["stable_size"] = size
           with open("version.json", "w") as f:
               json.dump(data, f, indent=2)
               f.write("\n")
