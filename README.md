@@ -16,7 +16,7 @@
 > [!IMPORTANT]
 > **SpoolmanScale is a front end, not a database.** It needs one of three filament managers running on your network - [Spoolman](https://github.com/Donkie/Spoolman), [FilaMan](https://github.com/Fire-Devils/filaman-system) or [BamBuddy](https://github.com/maziggy/BamBuddy). That is where your spools live; the scale reads them, weighs them and writes the result back.
 >
-> No server yet? Any always-on machine will do, a Raspberry Pi included. [SpoolmanScale Pro](https://github.com/Niko11111/SpoolmanScalePro-Pi) sets one up for you almost entirely through a web UI.
+> No server yet? Any always-on machine will do, a Raspberry Pi included.
 
 **SpoolmanScale** is an open-source ESP32-based filament scale with an NFC reader. It works with [Spoolman](https://github.com/Donkie/Spoolman), [FilaMan](https://github.com/Fire-Devils/filaman-system) and [BamBuddy](https://github.com/maziggy/BamBuddy), and you can switch between them at any time.
 
@@ -196,12 +196,6 @@ One thing only BamBuddy can do: create a spool straight from a Bambu tag. Materi
 - 🏷️ **Label printing, the next steps** – the first version prints a label the scale renders itself. Next: labels straight from the backend (FilaMan first, where @akira69 is working on label printing), a small editor in the browser to choose what a label shows, the printer's status (paper, lid), and more printers and label sizes. I cannot buy every printer, so help from the community is very welcome
 - 🧹 **First-time setup polish** – language and time zone have their own welcome screen; Wi-Fi and the server address still borrow the settings screens
 - 🌍 **Filament managers on the internet** – not only servers on your own network, but also filament managers that run online. Early development
-
-### Also in the works
-
-- 🖥️ **SpoolmanScale Pro** – not yet a Spoolman or FilaMan user? No Raspberry Pi at home, and the words "terminal", "SSH", "Docker" and "YAML" make you want to close the tab? That's exactly what SpoolmanScale Pro is for. A Pi Zero 2W inside the same enclosure, or any other Pi outside, running Spoolman or FilaMan locally, set up almost entirely through a web UI. Only a few commands to get the Pi up and running, that's it. Sneak peek: [github.com/Niko11111/SpoolmanScalePro-Pi](https://github.com/Niko11111/SpoolmanScalePro-Pi)
-
-- 📦 **SpoolmanScale Pro, pre-assembled** – want all of that, but don't know how to solder and just want something that works straight out of the box? I'm considering a small production run of fully assembled, ready-to-use SpoolmanScale Pro units. No soldering, no setup headaches, just plug it in. Nothing is decided yet, a lot still needs to be figured out, and it all depends on interest. **Would a finished, assembled unit be worth it to you? Let me know in the [Discord](https://discord.gg/xadskCrPFu) or drop a comment on [MakerWorld](https://makerworld.com/de/models/2713675-spoolmanscale#profileId-3005075)!**
 
 ### Community requests & ideas
 
