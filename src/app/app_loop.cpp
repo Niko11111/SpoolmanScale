@@ -136,10 +136,14 @@ constexpr float LOC_WEIGHT_TOLERANCE_G = 30.0f;
 // spool off does that. Then the popup need not wait for the full debounce.
 constexpr float LOC_WEIGHT_GONE_FRACTION = 0.5f;
 constexpr unsigned long LOC_DEBOUNCE_MS = 2500;
-// The filter averages 8 samples at 200 ms, so after 1200 ms it has taken in
-// six readings of the new weight. That is far more than enough to tell a
-// removed spool from a flickering tag.
-constexpr unsigned long LOC_DEBOUNCE_FAST_MS = 1200;
+// With the drop confirmed the removal itself is settled, so this only covers
+// a spool lifted to be set down again a moment later. It used to be 1200 ms,
+// counted after the NFC grace period of 2.5 s: the question came four seconds
+// after the lift (Nikolai, 27.09.2026: too slow).
+constexpr unsigned long LOC_DEBOUNCE_FAST_MS = 500;
+// Two missed reads in a row, 60 ms apart, plus a halved weight: the spool is
+// off the pad. Without the weight the NFC grace period decides, as before.
+constexpr int NFC_GONE_MIN_MISSES = 2;
 
 // Weight while the tag was last actually readable. Frozen at the first miss,
 // not at the point where the tag counts as removed: by then the spool may
@@ -150,6 +154,15 @@ static bool  loc_weight_valid = false;
 // Set on the first sample of a new tag presence, cleared when the tag is
 // gone. Only used to know when a fresh spool has arrived.
 static unsigned long loc_weight_since_ms = 0;
+
+// The weight left the pad while the tag was unreadable. Proof that the next
+// placement is a real one, which is what lets the location question be asked
+// again for a spool that was already asked about once.
+static bool loc_left_pad = false;
+// The reader lost the tag but the spool stayed: the questions were held back.
+// They stay pending and fire when the weight goes, because the reader, having
+// lost the tag already, will report no removal when the spool is lifted.
+static bool loc_kept = false;
 
 // Did the spool actually leave, or did the reader merely lose the tag?
 //
@@ -871,6 +884,7 @@ void appLoop() {
   // stands. It has to run every pass, not only when something happened: the
   // countdown is what it is mostly doing.
   handleSecondTagDeferredActions();
+  if (!tag_present && weightSaysSpoolGone()) loc_left_pad = true;
   // Debounced popups after a removal, cross-checked against the scale.
   // The AMS question and the location question hang off the same event, so
   // the verdict is worked out once and the AMS side gets it first: a spool
@@ -883,10 +897,22 @@ void appLoop() {
     const bool weight_says_stay = weightSaysSpoolStayed();
 
     // A clear drop needs no further waiting, the spool is demonstrably off.
-    const bool due = (since >= LOC_DEBOUNCE_MS) ||
-                     (weight_says_gone && since >= LOC_DEBOUNCE_FAST_MS);
+    const bool due = loc_kept
+      ? weight_says_gone   // held back: only the weight leaving ends it
+      : (since >= LOC_DEBOUNCE_MS) || (weight_says_gone && since >= LOC_DEBOUNCE_FAST_MS);
 
-    if (due) {
+    if (due && weight_says_stay) {
+      // The reader lost the tag but the spool never moved. Typical for
+      // NTAGs. Not a removal, so no popup yet - but the questions stay
+      // pending rather than being dropped: this was the only removal event
+      // the reader will report, and the real lift later must still ask.
+      if (!loc_kept) {
+        loc_kept = true;
+        logSDf("LOC: popup held back, weight unchanged (%.0fg vs %.0fg), spool still on the scale",
+               scale_weight_g, loc_weight_ref);
+      }
+    } else if (due) {
+      loc_kept = false;
       int pending_id = loc_popup_pending_id;
       int ams_id     = ams_popup_pending_id;
       int pick_id    = pick_popup_pending_id;
@@ -894,14 +920,7 @@ void appLoop() {
       ams_popup_pending_id  = -1;
       pick_popup_pending_id = -1;
 
-      if (weight_says_stay) {
-        // The reader lost the tag but the spool never moved. Typical for
-        // NTAGs. Not a removal, so no popup and no note that it was already
-        // shown: the real removal later still deserves one. A parked
-        // measurement stays parked for exactly the same reason.
-        logSDf("LOC: popup suppressed, weight unchanged (%.0fg vs %.0fg), spool still on the scale",
-               scale_weight_g, loc_weight_ref);
-      } else if (pick_id > 0 && amsPickHasPending() &&
+      if (pick_id > 0 && amsPickHasPending() &&
                  amsPickPendingSpoolId() == pick_id) {
         logSDf("AMSPICK: asking after %lums id=%d (weight %.0fg -> %.0fg%s)",
                since, pick_id, loc_weight_ref, scale_weight_g,
@@ -928,6 +947,7 @@ void appLoop() {
   // Cancel pending popups if tag came back
   perfSection("tagstate");
   if (tag_present) {
+    loc_kept = false;
     if (loc_popup_pending_id > 0) {
       logSDf("[verbose] LOC: debounce cancelled - tag back id=%d", loc_popup_pending_id);
       loc_popup_pending_id = -1;
@@ -1666,6 +1686,10 @@ void appLoop() {
         // handlePowerManagement(). One that merely dropped out and came back
         // under a spool that never moved is not news either.
         if (newly_placed && !weightSaysSpoolStayed()) resetActivityTimer();
+        // Back after it demonstrably left the pad: whatever was answered
+        // for it last time was about that trip, this is a new one.
+        if (newly_placed && loc_left_pad) g_loc_popup_shown_for_id = -1;
+        if (newly_placed) loc_left_pad = false;
 
         char uid_str[24];
         snprintf(uid_str, sizeof(uid_str), "%02X:%02X:%02X:%02X",
@@ -1801,6 +1825,10 @@ void appLoop() {
         tag_present = true;
         nfc_absent_count = 0;   // see the comment in the Bambu branch above
         if (newly_placed && !weightSaysSpoolStayed()) resetActivityTimer();
+        // Back after it demonstrably left the pad: whatever was answered
+        // for it last time was about that trip, this is a new one.
+        if (newly_placed && loc_left_pad) g_loc_popup_shown_for_id = -1;
+        if (newly_placed) loc_left_pad = false;
 
         char uid_str[24];
         snprintf(uid_str, sizeof(uid_str), "%02X:%02X:%02X:%02X:%02X:%02X:%02X",
@@ -1916,12 +1944,20 @@ void appLoop() {
           // forever on a tag that would not authenticate.
           const unsigned long absent_limit =
             (last_uid_len == 7) ? NFC_ABSENT_NTAG_MS : NFC_ABSENT_BAMBU_MS;
-          if (!retrying && millis() - first_miss_ms >= absent_limit) {
+          // Unless the scale already says the spool is gone: then the grace
+          // period only holds the old spool on the screen, the touch slowed by
+          // the fast re-polls, and the location question back by 2.5 s.
+          const bool weight_gone = weightSaysSpoolGone() &&
+                                   nfc_fast_polls >= NFC_GONE_MIN_MISSES;
+          if (weight_gone || (!retrying && millis() - first_miss_ms >= absent_limit)) {
             nfc_stat_removals++;
+            Serial.printf("NFC: tag removed (gap %u ms, %d fast re-polls, %s)\n",
+              (unsigned)(millis() - first_miss_ms), nfc_fast_polls,
+              weight_gone ? "weight gone" : "grace period over");
+            logSDf("NFC: tag removed after %u ms (%s)",
+                   (unsigned)(millis() - first_miss_ms),
+                   weight_gone ? "weight gone" : "grace period over");
             nfc_fast_polls = 0;
-            Serial.printf("NFC: tag removed (gap %u ms, %d fast re-polls exhausted)\n",
-              (unsigned)(millis() - first_miss_ms), NFC_FAST_POLL_MAX);
-            logSD("NFC: tag removed");
             tag_present = false;
             tag_absent_since_ms = millis();
             nfc_absent_count = 0;
