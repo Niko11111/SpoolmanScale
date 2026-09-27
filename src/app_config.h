@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.8.0-beta.85"
+#define FW_VERSION  "v0.8.0"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -57,7 +57,7 @@
 // updates the flasher. Until then the hint must stay silent, because it would
 // send people to a flasher whose "Update" hands them the previous release with
 // the old table, a downgrade. Set to 1 in the release commit and leave it.
-#define FLASHER_HAS_CURRENT_LAYOUT  0
+#define FLASHER_HAS_CURRENT_LAYOUT  1
 // The public web flasher, where the hint sends a device on the old layout.
 #define FLASHER_URL "https://niko11111.github.io/SpoolmanScale/"
 
