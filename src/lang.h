@@ -268,14 +268,10 @@ enum StringID {
   STR_EXTRA_FIELDS_CHECKING,
   STR_EXTRA_FIELDS_ALL_OK,
   STR_EXTRA_FIELDS_MISSING,
-  STR_EXTRA_FIELDS_CREATE_BTN,
-  STR_EXTRA_FIELDS_CONFIRM_TITLE,
-  STR_EXTRA_FIELDS_CONFIRM_MSG,
   STR_EXTRA_FIELDS_CREATING,
   STR_EXTRA_FIELDS_CREATE_FAIL,
   STR_EXTRA_FIELDS_NO_WIFI,
   STR_EXTRA_FIELDS_NO_SPOOLMAN,
-  STR_EXTRA_FIELDS_SKIP,
 
   // Calibration reminder screen (end of first setup)
   STR_CAL_REMINDER_TITLE,
@@ -287,10 +283,6 @@ enum StringID {
   STR_CAL_TARE_HINT,
 
   // Extra fields test button
-  STR_EF_TEST_BTN,
-  STR_EF_TEST_CREATED,
-  STR_EF_TEST_EXISTS,
-  STR_EF_TEST_FAIL,
 
   // Spoolman IP validation
   STR_SPOOLMAN_TESTING,
@@ -403,7 +395,6 @@ enum StringID {
   STR_COPY_ACTIVE_BTN,
   STR_COPY_ARCHIVED_BTN,
   STR_COPY_CONFIRM_TITLE,
-  STR_COPY_CONFIRM_MSG,
   STR_COPY_OK,
   STR_COPY_FAIL,
   STR_COPY_NO_SPOOLS,
@@ -661,8 +652,6 @@ enum StringID {
   STR_W_R_BACKEND,
   STR_W_R_REACHABLE,
   STR_W_R_SCANS,
-  STR_W_R_SDLOG,
-  STR_W_R_VERBOSE,
   STR_W_S_READY,
   STR_W_S_MISSING,
   STR_W_S_ON,
@@ -1289,7 +1278,6 @@ enum StringID {
   STR_PRN_MEDIA_FMT,          // %u x %u mm
   STR_PRN_TEST,
   STR_PRN_TEST_SUB,
-  STR_PRN_PRINTING,           // the overlay
   STR_PRN_FORGET,
   STR_PRN_OK,
   STR_PRN_ERR_NO_PRINTER,
@@ -1319,10 +1307,7 @@ enum StringID {
   STR_PRN_LABEL_PRINT,        // the button in the More info header
   STR_PRN_ERR_NO_SPOOL,       // pressed with nothing the backend knows on the pad
   // The captions on a printed label, short: the lines are 16 px on a 40 mm roll
-  STR_LBL_L_ID,
-  STR_LBL_L_LEFT,             // weight left
   STR_LBL_L_COLOR,
-  STR_LBL_L_LOC,              // location
 
   // The print card, while the raster is drawn
   STR_PRN_PH_RENDER,
@@ -1404,6 +1389,7 @@ enum StringID {
   STR_W_FW_UPLOADING,
   STR_W_FW_TOOBIG,
   STR_PART_HINT_ERASE,
+  STR_INIT_W_FAIL_TEXT,
 
   STR_COUNT
 };

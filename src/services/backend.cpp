@@ -44,6 +44,20 @@ static void rebuildBamBuddyBase() {
   }
 }
 
+// A credential goes into an HTTP header as it is, so a CR or LF inside it
+// would end the header line and start one the sender chose. The web form
+// trims the ends only; everything below a space and DEL is dropped here,
+// for every key and token on its way in, from the form and from NVS.
+static void copyCredential(char* dst, size_t n, const char* src) {
+  size_t j = 0;
+  for (size_t i = 0; src[i] && j + 1 < n; i++) {
+    const unsigned char c = (unsigned char)src[i];
+    if (c < 0x20 || c == 0x7f) continue;
+    dst[j++] = (char)c;
+  }
+  dst[j] = '\0';
+}
+
 void backendLoadSettings() {
   uint8_t raw = prefsGetUChar(NVS_BACKEND_MODE, BACKEND_SPOOLMAN);
   // Anything unknown falls back to Spoolman, so a value written by a newer
@@ -53,12 +67,10 @@ void backendLoadSettings() {
                                      : BACKEND_SPOOLMAN;
 
   String key = prefsGetString(NVS_FILAMAN_KEY, "");
-  strncpy(s_api_key, key.c_str(), sizeof(s_api_key) - 1);
-  s_api_key[sizeof(s_api_key) - 1] = '\0';
+  copyCredential(s_api_key, sizeof(s_api_key), key.c_str());
 
   String dev = prefsGetString(NVS_FILAMAN_DEVICE, "");
-  strncpy(s_device_token, dev.c_str(), sizeof(s_device_token) - 1);
-  s_device_token[sizeof(s_device_token) - 1] = '\0';
+  copyCredential(s_device_token, sizeof(s_device_token), dev.c_str());
 
   String host = prefsGetString(NVS_FILAMAN_HOST, "");
   strncpy(s_filaman_host, host.c_str(), sizeof(s_filaman_host) - 1);
@@ -66,8 +78,7 @@ void backendLoadSettings() {
   rebuildFilamanBase();
 
   String bb_key = prefsGetString(NVS_BAMBUDDY_KEY, "");
-  strncpy(s_bambuddy_key, bb_key.c_str(), sizeof(s_bambuddy_key) - 1);
-  s_bambuddy_key[sizeof(s_bambuddy_key) - 1] = '\0';
+  copyCredential(s_bambuddy_key, sizeof(s_bambuddy_key), bb_key.c_str());
 
   String bb_host = prefsGetString(NVS_BAMBUDDY_HOST, "");
   strncpy(s_bambuddy_host, bb_host.c_str(), sizeof(s_bambuddy_host) - 1);
@@ -174,16 +185,14 @@ const char* filamanDeviceToken() { return s_device_token; }
 
 void filamanSetApiKey(const char* key) {
   if (!key) return;
-  strncpy(s_api_key, key, sizeof(s_api_key) - 1);
-  s_api_key[sizeof(s_api_key) - 1] = '\0';
+  copyCredential(s_api_key, sizeof(s_api_key), key);
   prefsPutString(NVS_FILAMAN_KEY, s_api_key);
   logSDf("Backend: FilaMan API key %s", s_api_key[0] ? "stored" : "cleared");
 }
 
 void filamanSetDeviceToken(const char* token) {
   if (!token) return;
-  strncpy(s_device_token, token, sizeof(s_device_token) - 1);
-  s_device_token[sizeof(s_device_token) - 1] = '\0';
+  copyCredential(s_device_token, sizeof(s_device_token), token);
   prefsPutString(NVS_FILAMAN_DEVICE, s_device_token);
   logSDf("Backend: FilaMan device token %s", s_device_token[0] ? "stored" : "cleared");
 }
@@ -192,8 +201,7 @@ const char* bambuddyApiKey() { return s_bambuddy_key; }
 
 void bambuddySetApiKey(const char* key) {
   if (!key) return;
-  strncpy(s_bambuddy_key, key, sizeof(s_bambuddy_key) - 1);
-  s_bambuddy_key[sizeof(s_bambuddy_key) - 1] = '\0';
+  copyCredential(s_bambuddy_key, sizeof(s_bambuddy_key), key);
   prefsPutString(NVS_BAMBUDDY_KEY, s_bambuddy_key);
   logSDf("Backend: BamBuddy API key %s", s_bambuddy_key[0] ? "stored" : "cleared");
 }

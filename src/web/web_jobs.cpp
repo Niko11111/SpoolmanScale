@@ -81,11 +81,12 @@ static void runSpools() {
     if (label.length() && name.length()) label += " ";
     label += name;
     if (mat.length()) label += " (" + mat + ")";
-    label.replace("\\", "");
-    label.replace("\"", "'");
     if (!first) out += ",";
     first = false;
-    out += "{\"id\":" + String(id) + ",\"label\":\"" + label + "\"}";
+    // Escaped rather than stripped of two characters: a tab or a line break in
+    // a name made the reply malformed just the same, and the page's r.json()
+    // then threw and left the list empty.
+    out += "{\"id\":" + String(id) + ",\"label\":\"" + jsonEsc(label.c_str()) + "\"}";
   }
   out += "]";
   s_res.ok = true;

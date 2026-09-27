@@ -275,6 +275,12 @@ bool githubFlashTag(const char *tag, const char *sha256_hex,
     if (err && err_len) snprintf(err, err_len, "%s", "No release selected");
     return false;
   }
+  // The tag becomes part of the download URL below, and it can come from the
+  // web form. The same shape check the release lookup already makes.
+  if (!tagLooksSafe(tag)) {
+    if (err && err_len) snprintf(err, err_len, "%s", "Bad tag");
+    return false;
+  }
   const bool check_sha = (sha256_hex && strlen(sha256_hex) == 64);
 
   // Keeps the background check from opening a second TLS connection while the

@@ -205,8 +205,6 @@ STR_PRN_MODEL	16	320	NEVER	src/ui/printer_screen.cpp makeListBtn title, text_w 3
 STR_PRN_TEST	16	320	NEVER	src/ui/printer_screen.cpp makeListBtn title, text_w 320
 STR_PRN_FORGET	16	320	NEVER	src/ui/printer_screen.cpp makeListBtn title, text_w 320
 STR_BT_CARD_USE_PRINTER	18	170	NEVER	src/ui/ble_devices_screen.cpp card action button, 184 px wide
-STR_PRN_PRINTING	18	300	NEVER	src/ui/printer_screen.cpp loading overlay text
-STR_LBL_L_LEFT	16	120	NEVER	src/services/label_render.cpp fact caption on the label, 16 px
 STR_LBL_L_COLOR	16	120	NEVER	src/services/label_render.cpp fact caption on the label, 16 px
 
 # The print card (src/ui/print_card.cpp): 400 px box, text 360 px wide.

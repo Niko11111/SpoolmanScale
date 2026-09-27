@@ -233,6 +233,10 @@ static void registerRoutes() {
       html += webShellNav(pg->path);
       html += pg->body();
       html += webShellFoot();   // links and disclaimer close the page
+      // No page of the scale inside somebody else's frame: a site on the
+      // same network could otherwise lay its own buttons over Flash, Erase or
+      // Restart and have a visitor click them.
+      ota_server.sendHeader("X-Frame-Options", "DENY");
       ota_server.send(200, "text/html", html);
     });
     if (pg->routes) pg->routes(ota_server);

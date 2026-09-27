@@ -23,6 +23,7 @@
 #include "services/server_reach.h"
 #include "services/spool_cache.h"
 #include "ui/main_screen_helpers.h"
+#include "ui/info_popup.h"
 
 
 
@@ -684,7 +685,14 @@ void patchInitialWeight(float initial_w) {
     sm_total = initial_w;
     Serial.printf("initial_weight OK: %.1fg\n", initial_w);
   } else {
-    Serial.printf("PATCH initial_weight Fehler: %d\n", code);
+    logSDf("PATCH initial_weight=%.1fg ID=%d HTTP %d", initial_w, sm_id, code);
+    // A server that could not be reached already has its popup from
+    // serverReachNote(). A refusal (4xx, or -2 for an answer that did not
+    // parse) had nothing: the display kept the old weight and nobody said
+    // why. Runs from the loop, like every caller of this.
+    if (!serverReachIsNetworkFailure(code)) {
+      showInfoPopup(STR_AMSD_WRITE_FAIL, STR_INIT_W_FAIL_TEXT, INFO_WARN);
+    }
   }
 }
 

@@ -386,15 +386,6 @@ const char* const STRINGS[][3] = {
   { LV_SYMBOL_WARNING "  Fehlende Felder: %s",
     LV_SYMBOL_WARNING "  Missing fields: %s",
     LV_SYMBOL_WARNING "  Champs manquants : %s" },  // STR_EXTRA_FIELDS_MISSING
-  { LV_SYMBOL_PLUS "  Fehlende Felder anlegen",
-    LV_SYMBOL_PLUS "  Create missing fields",
-    LV_SYMBOL_PLUS "  Créer les champs manquants" },  // STR_EXTRA_FIELDS_CREATE_BTN
-  { "Felder anlegen?",
-    "Create fields?",
-    "Créer les champs ?" },  // STR_EXTRA_FIELDS_CONFIRM_TITLE
-  { "SpoolmanScale legt die fehlenden\nExtra-Felder in Spoolman an.\n\nFortfahren?",
-    "SpoolmanScale will create the\nmissing extra fields in Spoolman.\n\nProceed?",
-    "SpoolmanScale va créer les champs\nsupplémentaires manquants dans Spoolman.\n\nContinuer ?" },  // STR_EXTRA_FIELDS_CONFIRM_MSG
   { "Lege Felder an...",
     "Creating fields...",
     "Création des champs..." },  // STR_EXTRA_FIELDS_CREATING
@@ -407,9 +398,6 @@ const char* const STRINGS[][3] = {
   { LV_SYMBOL_WARNING "  Kein Spoolman konfiguriert",
     LV_SYMBOL_WARNING "  No Spoolman configured",
     LV_SYMBOL_WARNING "  Aucun Spoolman configuré" },  // STR_EXTRA_FIELDS_NO_SPOOLMAN
-  { "Überspringen",
-    "Skip",
-    "Ignorer" },  // STR_EXTRA_FIELDS_SKIP
 
   // Calibration reminder screen
   { "Waage kalibrieren",
@@ -431,18 +419,6 @@ const char* const STRINGS[][3] = {
     "Plateau vide, appuyez sur TARE, puis posez le poids et calculez." },  // STR_CAL_TARE_HINT
 
   // Extra fields test button
-  { LV_SYMBOL_EDIT "  Testfeld erstellen",
-    LV_SYMBOL_EDIT "  Generate test field",
-    LV_SYMBOL_EDIT "  Créer un champ de test" },  // STR_EF_TEST_BTN
-  { LV_SYMBOL_OK "  'spoolscale_test' erstellt!\nIn Spoolman nach dem Test löschen.",
-    LV_SYMBOL_OK "  'spoolscale_test' created!\nDelete it in Spoolman after testing.",
-    LV_SYMBOL_OK "  'spoolscale_test' créé !\nÀ supprimer dans Spoolman après le test." },  // STR_EF_TEST_CREATED
-  { LV_SYMBOL_WARNING "  Feld existiert bereits in Spoolman.",
-    LV_SYMBOL_WARNING "  Field already exists in Spoolman.",
-    LV_SYMBOL_WARNING "  Le champ existe déjà dans Spoolman." },  // STR_EF_TEST_EXISTS
-  { LV_SYMBOL_WARNING "  Testfeld konnte nicht erstellt werden.",
-    LV_SYMBOL_WARNING "  Test field creation failed.",
-    LV_SYMBOL_WARNING "  Le champ de test n'a pas pu être créé." },  // STR_EF_TEST_FAIL
 
   // Spoolman IP validation
   { "Verbindung wird geprüft...",
@@ -745,34 +721,19 @@ const char* const STRINGS[][3] = {
   { "Alle Einstellungen werden gelöscht:\nWLAN, Server-Adresse, Kalibrierung,\nSprache und alle anderen Daten.\nDanach startet das Gerät neu.",
     "All settings will be erased:\nWiFi, server address, calibration,\nlanguage and all other data.\nThe device will restart afterwards.",
     "Tous les réglages seront effacés :\nWiFi, adresse du serveur, étalonnage,\nlangue et toutes les autres données.\nL'appareil redémarre ensuite." },  // STR_FACTORY_RESET_MSG
-  { "Ja, alles löschen", "Yes, erase everything",
-    "Oui, tout effacer" },  // STR_FACTORY_RESET_CONFIRM
-  { "Spule kopieren", "Copy spool",
-    "Copier la bobine" },  // STR_BTN_COPY_SPOOL
-  { "Spule kopieren", "Copy spool",
-    "Copier la bobine" },  // STR_COPY_TITLE
-  { "Spoolman-ID eingeben", "Enter Spoolman ID",
-    "Saisir l'ID Spoolman" },  // STR_COPY_ID_BTN
-  { "Aktive Spulen", "Active spools",
-    "Bobines actives" },  // STR_COPY_ACTIVE_BTN
-  { "Archivierte Spulen", "Archived spools",
-    "Bobines archivées" },  // STR_COPY_ARCHIVED_BTN
-  { "Neue Spule anlegen?", "Create new spool?",
-    "Créer une bobine ?" },  // STR_COPY_CONFIRM_TITLE
-  { "Vorlage: %s\nZuletzt bekannt: %.0f g\nWaagengewicht (netto): %.0f g\n-> wird übernommen", "Template: %s\nLast known: %.0f g\nNew spool weight (net): %.0f g\n-> will be saved",
-    "Modèle : %s\nDernier poids connu : %.0f g\nPoids sur la balance (net) : %.0f g\n-> sera enregistré" },  // STR_COPY_CONFIRM_MSG
-  { "Spule erstellt!", "Spool created!",
-    "Bobine créée !" },  // STR_COPY_OK
-  { "Fehler beim Erstellen", "Error creating spool",
-    "Échec de la création" },  // STR_COPY_FAIL
-  { "Keine Spulen gefunden", "No spools found",
-    "Aucune bobine trouvée" },  // STR_COPY_NO_SPOOLS
-  { "Setup überspringen", "Skip setup",
-    "Passer la config." },  // STR_BTN_SKIP_SETUP
-  { "Unlink", "Unlink",
-    "Dissocier" },  // STR_UNLINK_BTN
-  { "Spule unlinken?", "Unlink spool?",
-    "Dissocier la bobine ?" },  // STR_UNLINK_TITLE
+  { "Ja, alles löschen",     "Yes, erase everything", "Oui, tout effacer" },  // STR_FACTORY_RESET_CONFIRM
+  { "Spule kopieren",        "Copy spool",            "Copier la bobine" },  // STR_BTN_COPY_SPOOL
+  { "Spule kopieren",        "Copy spool",            "Copier la bobine" },  // STR_COPY_TITLE
+  { "Spoolman-ID eingeben",  "Enter Spoolman ID",     "Saisir l'ID Spoolman" },  // STR_COPY_ID_BTN
+  { "Aktive Spulen",         "Active spools",         "Bobines actives" },  // STR_COPY_ACTIVE_BTN
+  { "Archivierte Spulen",    "Archived spools",       "Bobines archivées" },  // STR_COPY_ARCHIVED_BTN
+  { "Neue Spule anlegen?",   "Create new spool?",     "Créer une bobine ?" },  // STR_COPY_CONFIRM_TITLE
+  { "Spule erstellt!",       "Spool created!",        "Bobine créée !" },  // STR_COPY_OK
+  { "Fehler beim Erstellen", "Error creating spool",  "Échec de la création" },  // STR_COPY_FAIL
+  { "Keine Spulen gefunden", "No spools found",       "Aucune bobine trouvée" },  // STR_COPY_NO_SPOOLS
+  { "Setup überspringen",    "Skip setup",            "Passer la config." },  // STR_BTN_SKIP_SETUP
+  { "Unlink",                "Unlink",                "Dissocier" },  // STR_UNLINK_BTN
+  { "Spule unlinken?",       "Unlink spool?",         "Dissocier la bobine ?" },  // STR_UNLINK_TITLE
   { "Löscht den Eintrag im Tag-Feld in Spoolman.\nDie Spule bleibt erhalten.",
     "Clears the tag field entry in Spoolman.\nThe spool itself is kept.",
     "Efface l'entrée du champ tag dans Spoolman.\nLa bobine elle-même est conservée." },  // STR_UNLINK_MSG
@@ -1324,12 +1285,6 @@ const char* const STRINGS[][3] = {
   { "Tags gescannt",
     "Tags scanned",
     "Tags scannés" },  // STR_W_R_SCANS
-  { "Protokoll auf SD-Karte",
-    "Log to SD card",
-    "Journal sur carte SD" },  // STR_W_R_SDLOG
-  { "Ausführliches Protokoll",
-    "Verbose logging",
-    "Journal détaillé" },  // STR_W_R_VERBOSE
   { "bereit",
     "ready",
     "en service" },  // STR_W_S_READY
@@ -2786,8 +2741,6 @@ const char* const STRINGS[][3] = {
     "Test d'impression" },  // STR_PRN_TEST
   { "Rahmen, Name und QR-Code auf dem eingelegten Etikett", "Frame, name and QR code on the loaded label",
     "Cadre, nom et code QR sur l'étiquette chargée" },  // STR_PRN_TEST_SUB
-  { "Drucke...", "Printing...",
-    "Imprime..." },  // STR_PRN_PRINTING
   { "Drucker entfernen", "Remove printer",
     "Retirer l'imprimante" },  // STR_PRN_FORGET
   { "Das Etikett wurde an den Drucker übertragen.", "The label was sent to the printer.",
@@ -2842,10 +2795,7 @@ const char* const STRINGS[][3] = {
   { "Keine bekannte Spule aufgelegt.", "No known spool on the pad.",
     "Aucune bobine connue posée." },  // STR_PRN_ERR_NO_SPOOL
   // The captions on a printed label, short: the lines are 16 px on a 40 mm roll
-  { "ID",    "ID",       "ID" },  // STR_LBL_L_ID
-  { "Rest",  "Left",     "Reste" },  // STR_LBL_L_LEFT
-  { "Farbe", "Colour",   "Couleur" },  // STR_LBL_L_COLOR
-  { "Lager", "Location", "Lieu" },  // STR_LBL_L_LOC
+  { "Farbe", "Colour", "Couleur" },  // STR_LBL_L_COLOR
   { "Etikett wird erstellt...",
     "Preparing the label...",
     "Préparation..." },  // STR_PRN_PH_RENDER
@@ -3016,6 +2966,9 @@ const char* const STRINGS[][3] = {
   { "Bietet der Flasher \"Install\" statt \"Update\" an, das Häkchen bei \"Erase\" nicht setzen, sonst sind WLAN und Kalibrierung weg.",
     "If the flasher offers \"Install\" instead of \"Update\", leave the \"Erase\" box unticked, or WiFi and calibration are gone.",
     "Si le flasher propose « Install » au lieu de « Update », ne cochez pas « Erase », sinon le WiFi et l'étalonnage sont perdus." },  // STR_PART_HINT_ERASE
+  { "Der Server hat das Anfangsgewicht nicht übernommen. Es gilt weiter der alte Wert.",
+    "The server did not accept the initial weight. The old value still stands.",
+    "Le serveur n'a pas accepté le poids initial. L'ancienne valeur reste valable." },  // STR_INIT_W_FAIL_TEXT
 };
 
 StringID tagWriteResultString(uint8_t code) {
