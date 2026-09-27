@@ -255,11 +255,13 @@ static String body() {
     }
     h += row(T(STR_W_R_COREDUMP), pill(pl.has_coredump, STR_W_S_YES, STR_W_S_NO));
     if (!pl.current && FLASHER_HAS_CURRENT_LAYOUT) {
-      h += F("<span class='hint'>");
+      // A block of its own with air around it: inline, it sat on the last row
+      // and on the rescan button below.
+      h += F("<p class='hint' style='margin:14px 0 18px;line-height:1.6'>");
       h += T(STR_W_S_LAYOUT_OLD_HINT);
       h += F(" <a href='" FLASHER_URL "' target='_blank' rel='noopener' style='color:var(--accent)'>");
       h += T(STR_PART_HINT_QR);
-      h += F(" &#8599;</a></span>");
+      h += F(" &#8599;</a></p>");
     }
   }
   // The rescan holds the I2C bus for a moment, so it sits behind the config

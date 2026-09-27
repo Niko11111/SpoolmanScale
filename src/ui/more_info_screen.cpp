@@ -18,6 +18,7 @@
 #include "services/user_options.h"
 #include "services/backend.h"
 #include "services/breadcrumb.h"
+#include "services/http_progress.h"
 #include "services/backend_api.h"
 #include "services/ble_service.h"
 #include "services/label_printer.h"
@@ -153,12 +154,53 @@ static void runUnlink() {
 static lv_obj_t *loc_list_obj = nullptr;
 static lv_obj_t *loc_status_obj = nullptr;
 
+// A picker that opened by itself after a spool was lifted has a Cancel at the
+// bottom that drains over PICK_COUNTDOWN_MS, and closes as if it was pressed.
+// Opened from More Info it waits: somebody asked for it. The clock restarts
+// when the list has loaded and whenever it is scrolled, and does not count
+// the time a blocking fetch held the loop.
+#define LOC_CANCEL_H    44
+#define LOC_CANCEL_GAP  8
+#define LOC_CANCEL_W    380
+#define LOC_FILL_W      (LOC_CANCEL_W - 2)   // inside the button's 1 px border
+#define LOC_FILL_H      (LOC_CANCEL_H - 2)
+static lv_obj_t     *loc_cancel_fill   = nullptr;
+static lv_coord_t    loc_cancel_fill_w = -1;
+static unsigned long loc_count_ms      = 0;
+static uint32_t      loc_count_stall   = 0;
+
+static void locCountRestart() {
+  loc_count_ms    = millis();
+  loc_count_stall = httpStallTotalMs();
+}
+
+// Returns true when the picker ran out and was asked to close.
+static bool locCountTick() {
+  if (!loc_cancel_fill || !scr_location_picker) return false;
+  if (loc_cancel_pending || loc_patch_pending) return false;
+  unsigned long elapsed = millis() - loc_count_ms;
+  const uint32_t stalled = httpStallTotalMs() - loc_count_stall;
+  elapsed = (stalled >= elapsed) ? 0 : (elapsed - stalled);
+  const unsigned long rem = (elapsed >= PICK_COUNTDOWN_MS) ? 0 : PICK_COUNTDOWN_MS - elapsed;
+  const lv_coord_t w = (lv_coord_t)((uint64_t)LOC_FILL_W * rem / PICK_COUNTDOWN_MS);
+  if (w != loc_cancel_fill_w) {
+    loc_cancel_fill_w = w;
+    lv_obj_set_width(loc_cancel_fill, w);
+  }
+  if (rem > 0) return false;
+  logSDf("LOC: no location chosen in %lus, closed as Cancel id=%d",
+         (unsigned long)(PICK_COUNTDOWN_MS / 1000), sm_id);
+  loc_cancel_pending = true;
+  return true;
+}
+
 void requestLocationPicker(bool from_popup) {
   g_loc_picker_from_popup = from_popup;
   show_location_picker_pending = true;
 }
 
 void handleMoreInfoDeferredActions() {
+  locCountTick();
   if (unlink_pending) {
     unlink_pending = false;
     runUnlink();
@@ -203,6 +245,8 @@ void handleMoreInfoDeferredActions() {
   if (fetch_locations_pending) {
     fetch_locations_pending = false;
     fetchAndFillLocationList();
+    // The list stands to be chosen from once it is drawn.
+    locCountRestart();
   }
   if (show_more_info_pending) {
     show_more_info_pending = false;
@@ -233,8 +277,9 @@ void handleMoreInfoDeferredActions() {
 void hideMoreInfoOverlays() {
   releaseScreen(&scr_location_picker);
   closeStatusPicker();
-  loc_status_obj = nullptr;
-  loc_list_obj   = nullptr;
+  loc_status_obj  = nullptr;
+  loc_list_obj    = nullptr;
+  loc_cancel_fill = nullptr;
 }
 
 // The picker and the two labels inside it, always together. The three buttons
@@ -245,8 +290,9 @@ void hideMoreInfoOverlays() {
 // that on the way through.
 static void closeLocationPicker() {
   if (scr_location_picker) { lv_obj_del(scr_location_picker); scr_location_picker = nullptr; }
-  loc_status_obj = nullptr;
-  loc_list_obj   = nullptr;
+  loc_status_obj  = nullptr;
+  loc_list_obj    = nullptr;
+  loc_cancel_fill = nullptr;
 }
 
 // ============================================================
@@ -360,9 +406,10 @@ void showLocationPicker() {
   lv_obj_set_style_text_font(lbl_loc_status, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(lbl_loc_status, LV_ALIGN_CENTER, 0, 10);
 
-  // Scrollable list container
+  // Scrollable list container, shorter by the Cancel row when there is one.
+  const bool with_cancel = g_loc_picker_from_popup;
   lv_obj_t *list = lv_obj_create(box);
-  lv_obj_set_size(list, 380, 220);
+  lv_obj_set_size(list, 380, with_cancel ? 220 - LOC_CANCEL_H - LOC_CANCEL_GAP : 220);
   lv_obj_set_pos(list, 10, 50);
   lv_obj_set_style_bg_color(list, lv_color_hex(0x0b1525), 0);
   lv_obj_set_style_border_width(list, 0, 0);
@@ -371,6 +418,44 @@ void showLocationPicker() {
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_scroll_dir(list, LV_DIR_VER);
   lv_obj_add_flag(list, LV_OBJ_FLAG_HIDDEN);
+
+  if (with_cancel) {
+    // Scrolling is reading: the clock starts again rather than closing the
+    // list under a finger that is still looking for the right shelf.
+    lv_obj_add_event_cb(list, [](lv_event_t *e) { locCountRestart(); },
+                        LV_EVENT_SCROLL_BEGIN, NULL);
+
+    lv_obj_t *btn_c = lv_btn_create(box);
+    lv_obj_set_size(btn_c, LOC_CANCEL_W, LOC_CANCEL_H);
+    lv_obj_set_pos(btn_c, 10, 270 - LOC_CANCEL_H);
+    lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(btn_c, 1, 0);
+    lv_obj_set_style_border_color(btn_c, lv_color_hex(UI_COL_LINE), 0);
+    lv_obj_set_style_radius(btn_c, UI_RADIUS_BTN, 0);
+    lv_obj_set_style_shadow_width(btn_c, 0, 0);
+    lv_obj_set_style_pad_all(btn_c, 0, 0);
+    lv_obj_add_event_cb(btn_c, [](lv_event_t *e) {
+      // Parked like the X, for the same reason.
+      loc_cancel_pending = true;
+    }, LV_EVENT_CLICKED, NULL);
+    // Behind the label and not clickable, so the tap still lands on the button.
+    loc_cancel_fill = lv_obj_create(btn_c);
+    lv_obj_remove_style_all(loc_cancel_fill);
+    lv_obj_set_size(loc_cancel_fill, LOC_FILL_W, LOC_FILL_H);
+    lv_obj_set_pos(loc_cancel_fill, 0, 0);
+    lv_obj_set_style_bg_color(loc_cancel_fill, lv_color_hex(UI_COL_LINE), 0);
+    lv_obj_set_style_bg_opa(loc_cancel_fill, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(loc_cancel_fill, UI_RADIUS_BTN, 0);
+    lv_obj_clear_flag(loc_cancel_fill, LV_OBJ_FLAG_CLICKABLE);
+    loc_cancel_fill_w = LOC_FILL_W;
+    lv_obj_t *lbl_c = lv_label_create(btn_c);
+    lv_label_set_text(lbl_c, T(STR_CANCEL));
+    lv_obj_set_style_text_color(lbl_c, lv_color_hex(UI_COL_INK_2), 0);
+    lv_obj_set_style_text_font(lbl_c, UI_FONT_BODY, 0);
+    lv_obj_center(lbl_c);
+    locCountRestart();
+  }
 
   // Store refs for async fetch
   loc_status_obj = lbl_loc_status;

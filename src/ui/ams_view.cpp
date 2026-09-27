@@ -4,11 +4,13 @@
 #include <lvgl.h>
 #include <string.h>
 
+#include "app_config.h"
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
 #include "hardware/sd_logger.h"
 #include "services/ams_weights.h"
 #include "services/backend_api.h"
+#include "services/http_progress.h"
 #include "services/server_reach.h"
 #include "services/prefs_store.h"
 #include "ui/ams_detail_popup.h"
@@ -141,6 +143,15 @@ static int  s_detail_tray    = -1;
 static bool s_info_mode      = false;
 static lv_obj_t* s_info_btn  = nullptr;
 static lv_obj_t* s_headline_lbl = nullptr;
+// PICK only: the footer's Cancel drains over PICK_COUNTDOWN_MS and the page
+// closes as if it was pressed. The clock restarts on every tap on the page
+// and stands still while a detail card is open, so it only runs out on a
+// question nobody is looking at. Measured like the AMS question's, minus the
+// time a blocking fetch held the loop.
+static lv_obj_t*     s_cancel_fill   = nullptr;
+static lv_coord_t    s_cancel_fill_w = -1;
+static unsigned long s_pick_start_ms = 0;
+static uint32_t      s_pick_stall    = 0;
 // Where the page goes back to. Opened from the scale menu it returns there;
 // from the header chip, the zone-4 button or the picker it lands on the main
 // screen, which is where those were pressed.
@@ -208,6 +219,8 @@ static void closeAmsView() {
   s_headline_lbl = nullptr;
   s_printer_btn  = nullptr;
   s_printer_lbl  = nullptr;
+  s_cancel_fill  = nullptr;
+  s_cancel_fill_w = -1;
 }
 
 void hideAmsViewOverlays() {
@@ -670,7 +683,62 @@ static void applyInfoMode() {
   }
 }
 
+static void restartPickCountdown() {
+  s_pick_start_ms = millis();
+  s_pick_stall    = httpStallTotalMs();
+}
+
+static unsigned long pickRemainingMs() {
+  unsigned long elapsed = millis() - s_pick_start_ms;
+  const uint32_t stalled = httpStallTotalMs() - s_pick_stall;
+  elapsed = (stalled >= elapsed) ? 0 : (elapsed - stalled);
+  if (elapsed >= PICK_COUNTDOWN_MS) return 0;
+  return PICK_COUNTDOWN_MS - elapsed;
+}
+
+// Inside the button's 1 px border, behind its label, not clickable.
+#define AMSV_FILL_W  (AMSV_FOOT_BTN_W - 2)
+#define AMSV_FILL_H  (AMSV_FOOT_BTN_H - 2)
+
+static void addCancelFill(lv_obj_t* btn) {
+  if (!btn) return;
+  lv_obj_set_style_pad_all(btn, 0, 0);
+  s_cancel_fill = lv_obj_create(btn);
+  if (!s_cancel_fill) return;
+  lv_obj_remove_style_all(s_cancel_fill);
+  lv_obj_set_size(s_cancel_fill, AMSV_FILL_W, AMSV_FILL_H);
+  lv_obj_set_pos(s_cancel_fill, 0, 0);
+  lv_obj_set_style_bg_color(s_cancel_fill, lv_color_hex(UI_COL_LINE), 0);
+  lv_obj_set_style_bg_opa(s_cancel_fill, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(s_cancel_fill, UI_RADIUS_BTN, 0);
+  lv_obj_clear_flag(s_cancel_fill, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_move_to_index(s_cancel_fill, 0);
+  s_cancel_fill_w = AMSV_FILL_W;
+  restartPickCountdown();
+}
+
+// From the loop, every pass the page stands. Returns true when the question
+// ran out and the page was asked to close.
+static bool tickPickCountdown() {
+  if (!s_cancel_fill || !s_scr || s_close_pending || s_pick_pending) return false;
+  if (lv_obj_has_flag(s_scr, LV_OBJ_FLAG_HIDDEN) || isAmsDetailPopupOpen()) {
+    restartPickCountdown();
+  }
+  const unsigned long rem = pickRemainingMs();
+  const lv_coord_t w = (lv_coord_t)((uint64_t)AMSV_FILL_W * rem / PICK_COUNTDOWN_MS);
+  if (w != s_cancel_fill_w) {
+    s_cancel_fill_w = w;
+    lv_obj_set_width(s_cancel_fill, w);
+  }
+  if (rem > 0) return false;
+  logSDf("AMSV: no bay chosen in %lus, closed as Cancel",
+         (unsigned long)(PICK_COUNTDOWN_MS / 1000));
+  s_close_pending = true;
+  return true;
+}
+
 static void footInfoCb(lv_event_t* e) {
+  restartPickCountdown();
   s_info_mode = !s_info_mode;
   // Safe inside the callback: nothing is created or freed here, only styles
   // and one label's text.
@@ -819,7 +887,7 @@ static void buildScreen() {
   if (s_mode == AMS_VIEW_PICK) {
     s_info_btn = footButton(240 - AMSV_FOOT_GAP / 2 - AMSV_FOOT_BTN_W,
                             STR_AMSV_INFO, false, footInfoCb);
-    footButton(240 + AMSV_FOOT_GAP / 2, STR_CANCEL, false, footCancelCb);
+    addCancelFill(footButton(240 + AMSV_FOOT_GAP / 2, STR_CANCEL, false, footCancelCb));
     applyInfoMode();
   } else if (s_mode == AMS_VIEW_WINDOW) {
     footButton(240 - AMSV_FOOT_GAP / 2 - AMSV_FOOT_BTN_W, STR_AMSV_BTN_WINDOW, true, footOpenCb);
@@ -1242,8 +1310,13 @@ void handleAmsViewDeferredActions() {
   if (s_fetch_pending) {
     s_fetch_pending = false;
     fetchAndDraw();
+    // A reload or a printer switch is a tap on the page, and the list only
+    // stands to be chosen from once it is drawn.
+    restartPickCountdown();
     return;
   }
+
+  if (tickPickCountdown()) return;
 
   // The weights that came in behind the first frame. Redrawn only with the
   // page really in front: rebuilding the tiles under an open detail card

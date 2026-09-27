@@ -18,6 +18,13 @@
 
 static lv_obj_t *scr_ams_popup = nullptr;
 static lv_obj_t *lbl_ams_count = nullptr;
+static lv_obj_t *bar_ams_fill  = nullptr;
+static lv_coord_t s_fill_w     = -1;   // the width last set, so a pass without a change draws nothing
+
+// Yes and No share one size; the fill sits in whichever of the two the
+// countdown answers with.
+#define AMS_ANSWER_BTN_W  118
+#define AMS_ANSWER_BTN_H  56
 
 // Captured when the popup is built. The callbacks stay free of any lookup,
 // they only raise a flag; the work happens one loop pass later.
@@ -44,13 +51,15 @@ bool isAmsAssignPopupOpen() { return scr_ams_popup != nullptr; }
 static void closeAmsAssignPopup() {
   if (scr_ams_popup) { lv_obj_del(scr_ams_popup); scr_ams_popup = nullptr; }
   lbl_ams_count = nullptr;
+  bar_ams_fill  = nullptr;
+  s_fill_w       = -1;
   s_last_shown_s = -1;
 }
 
 // Seconds still on the clock, never below zero. Measured as an elapsed
 // difference rather than against an absolute deadline, so the millis()
 // rollover after 49 days cannot make it expire on the spot.
-static int remainingSeconds() {
+static unsigned long remainingMs() {
   unsigned long elapsed = millis() - s_opened_ms;
   // Minus whatever of that time the loop spent inside a blocking backend call.
   // Guarded rather than trusted: the two are measured independently, and a
@@ -58,7 +67,39 @@ static int remainingSeconds() {
   const uint32_t stalled = httpStallTotalMs() - s_opened_stall;
   elapsed = (stalled >= elapsed) ? 0 : (elapsed - stalled);
   if (elapsed >= AMS_ASK_COUNTDOWN_MS) return 0;
-  return (int)((AMS_ASK_COUNTDOWN_MS - elapsed + 999) / 1000);
+  return AMS_ASK_COUNTDOWN_MS - elapsed;
+}
+
+static int remainingSeconds() { return (int)((remainingMs() + 999) / 1000); }
+
+// The answer the countdown gives, as a lighter fill draining from the right
+// of its button, the way the second tag's Done does. Set from the same
+// remaining time the question closes on, every loop pass, and not an lv_anim:
+// a blocking fetch does not count against the question, and an animation
+// would run through it and then jump.
+static void updateCountdownFill() {
+  if (!bar_ams_fill) return;
+  const lv_coord_t w = (lv_coord_t)((uint64_t)AMS_ANSWER_BTN_W * remainingMs()
+                                    / AMS_ASK_COUNTDOWN_MS);
+  if (w == s_fill_w) return;
+  s_fill_w = w;
+  lv_obj_set_width(bar_ams_fill, w);
+}
+
+// Behind the label and not clickable, so a tap anywhere on the button still
+// lands on the button. Called before the label is created, which puts it
+// underneath.
+static void addCountdownFill(lv_obj_t *btn, uint32_t color) {
+  bar_ams_fill = lv_obj_create(btn);
+  lv_obj_remove_style_all(bar_ams_fill);
+  lv_obj_set_size(bar_ams_fill, AMS_ANSWER_BTN_W, AMS_ANSWER_BTN_H);
+  lv_obj_set_pos(bar_ams_fill, 0, 0);
+  lv_obj_set_style_bg_color(bar_ams_fill, lv_color_hex(color), 0);
+  lv_obj_set_style_bg_opa(bar_ams_fill, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(bar_ams_fill, UI_RADIUS_BTN, 0);
+  lv_obj_clear_flag(bar_ams_fill, LV_OBJ_FLAG_CLICKABLE);
+  s_fill_w = AMS_ANSWER_BTN_W;
+  updateCountdownFill();
 }
 
 static void updateCountdownLabel() {
@@ -166,17 +207,19 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   // Three answers in the row that held two: yes, a look at the bays first,
   // no. 118 + 124 + 118 with the 8 px gutters the pair had.
   lv_obj_t *btn_yes = lv_btn_create(box);
-  lv_obj_set_size(btn_yes, 118, 56);
+  lv_obj_set_size(btn_yes, AMS_ANSWER_BTN_W, AMS_ANSWER_BTN_H);
   lv_obj_set_pos(btn_yes, 12, 156);
   lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x1a4020), 0);
   lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x2a7030), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_yes, 8, 0);
   lv_obj_set_style_shadow_width(btn_yes, 0, 0);
+  lv_obj_set_style_pad_all(btn_yes, 0, 0);
   lv_obj_add_event_cb(btn_yes, [](lv_event_t *e) {
     // No HTTP and no delete in here, both happen one loop pass later.
     s_confirm_pending = true;
     s_close_pending   = true;
   }, LV_EVENT_CLICKED, NULL);
+  if (g_ams_timer_yes) addCountdownFill(btn_yes, UI_COL_OK_BG_PRESSED);
   lv_obj_t *lbl_yes = lv_label_create(btn_yes);
   { char ybuf[24]; copyT(ybuf, sizeof(ybuf), STR_AMS_BTN_YES); lv_label_set_text(lbl_yes, ybuf); }
   lv_obj_set_style_text_color(lbl_yes, lv_color_hex(0x80ffa0), 0);
@@ -203,16 +246,18 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   lv_obj_center(lbl_view);
 
   lv_obj_t *btn_no = lv_btn_create(box);
-  lv_obj_set_size(btn_no, 118, 56);
+  lv_obj_set_size(btn_no, AMS_ANSWER_BTN_W, AMS_ANSWER_BTN_H);
   lv_obj_set_pos(btn_no, 270, 156);
   lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x3a1010), 0);
   lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x702020), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_no, 8, 0);
   lv_obj_set_style_shadow_width(btn_no, 0, 0);
+  lv_obj_set_style_pad_all(btn_no, 0, 0);
   lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
     s_cancel_pending = true;
     s_close_pending  = true;
   }, LV_EVENT_CLICKED, NULL);
+  if (!g_ams_timer_yes) addCountdownFill(btn_no, UI_COL_BAD_BG_PRESSED);
   lv_obj_t *lbl_no = lv_label_create(btn_no);
   { char nbuf[24]; copyT(nbuf, sizeof(nbuf), STR_AMS_TIMER_NO); lv_label_set_text(lbl_no, nbuf); }
   lv_obj_set_style_text_color(lbl_no, lv_color_hex(0xffa0a0), 0);
@@ -279,6 +324,7 @@ void handleAmsAssignDeferredActions() {
   // Countdown first: while the popup stands it is the only thing moving.
   if (scr_ams_popup && !s_close_pending) {
     updateCountdownLabel();
+    updateCountdownFill();
     if (remainingSeconds() == 0) {
       if (g_ams_timer_yes) s_confirm_pending = true;
       else                 s_cancel_pending  = true;

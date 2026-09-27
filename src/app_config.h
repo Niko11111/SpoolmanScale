@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.8.0-beta.83"
+#define FW_VERSION  "v0.8.0-beta.84"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -146,6 +146,12 @@
 // connect timeout, and on 21.09.2026 two of them back to back left the loop
 // one pass in 12 s, which read as a frozen scale.
 #define TAG_RECHECK_MAX_MS  60000
+
+// How long a picker that opened by itself - the location list after a spool
+// was lifted, BamBuddy's bay choice - waits for a tap before it closes as if
+// Cancel was pressed. The same 30 s as the second tag question. Its Cancel
+// drains over that time, so the close never comes as a surprise.
+#define PICK_COUNTDOWN_MS  30000
 
 // ============================================================
 //  Hardware self diagnosis
