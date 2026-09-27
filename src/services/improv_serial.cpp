@@ -9,6 +9,7 @@
 #include "hardware/sd_logger.h"
 #include "services/app_settings.h"
 #include "services/device_name.h"
+#include "services/partition_layout.h"
 #include "services/prefs_store.h"
 #include "services/setup_portal.h"
 #include "services/time_service.h"
@@ -146,11 +147,21 @@ static void sendCurrentState() {
   }
 }
 
+// The web flasher offers "Update" only when this version differs from the one
+// in its manifest. A scale that took the current release over the air still
+// has the old partition table, and with equal versions the flasher offered it
+// no way to the new one short of erasing everything (v0.8.0, 27.09.2026). On
+// the old table the version says so, which makes it differ.
+#define IMPROV_OLD_LAYOUT_SUFFIX " (old layout)"
+
 static void sendDeviceInfo() {
+  char version[sizeof(FW_VERSION) + sizeof(IMPROV_OLD_LAYOUT_SUFFIX)];
+  snprintf(version, sizeof(version), "%s%s", FW_VERSION,
+           partitionLayout().current ? "" : IMPROV_OLD_LAYOUT_SUFFIX);
   ImprovResult r;
   resultBegin(r, IMPROV_CMD_GET_INFO);
   resultAdd(r, "SpoolmanScale");
-  resultAdd(r, FW_VERSION);
+  resultAdd(r, version);
   resultAdd(r, "ESP32-S3");
   resultAdd(r, deviceLabel());
   resultSend(r);
