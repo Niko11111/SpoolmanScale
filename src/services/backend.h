@@ -64,6 +64,9 @@ void backendSetHost(const char* host);
 // Applied by backendSetHost() itself; exposed so a caller can show the user
 // what will actually be stored before storing it. Returns the length written.
 size_t backendCleanHost(const char* in, char* out, size_t out_size);
+// Base URL out of a stored address: "https://..." as it is, anything else
+// with "http://" in front.
+void backendComposeBase(char* out, size_t n, const char* host);
 
 // FilaMan credentials. Empty strings when unset.
 const char* filamanApiKey();

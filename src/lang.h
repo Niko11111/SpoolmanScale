@@ -1412,6 +1412,9 @@ enum StringID {
   STR_W_BCAT_UPDATE,
   STR_W_BCAT_NOTE,
   STR_W_BCAT_UNCHANGED,
+  // https to the backend
+  STR_W_TLS_INSECURE,
+  STR_W_TLS_INSECURE_HINT,
 
   STR_COUNT
 };

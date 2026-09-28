@@ -531,7 +531,7 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
 
   // IP entered
   char ip_buf[80];
-  snprintf(ip_buf, sizeof(ip_buf), "http://%s", cfg_spoolman_ip);
+  backendComposeBase(ip_buf, sizeof(ip_buf), cfg_spoolman_ip);
   lv_obj_t *lbl_ip = lv_label_create(scr_spoolman_fail);
   lv_label_set_text(lbl_ip, ip_buf);
   lv_obj_set_style_text_color(lbl_ip, lv_color_hex(0xf0b838), 0);

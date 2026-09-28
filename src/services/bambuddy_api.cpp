@@ -1,4 +1,5 @@
 #include "bambuddy_api.h"
+#include "services/backend_http.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -69,7 +70,7 @@ static void addKey(HTTPClient& http, const char* api_key) {
 static int getJson(const char* url, const char* api_key, JsonDocument& doc,
                    uint32_t timeout_ms, DeserializationError* out_err,
                    JsonDocument* filter) {
-  HTTPClient http;
+  BackendHttp http;
   if (!http.begin(url)) return -1;
   http.setTimeout(timeout_ms);
   addKey(http, api_key);
@@ -108,7 +109,7 @@ static int getJson(const char* url, const char* api_key, JsonDocument& doc,
 // Any 2xx is normalised to 200 so call sites can compare against one value.
 static int sendJson(const char* method, const char* url, const char* api_key,
                     const String& body, uint32_t timeout_ms, String* out_body) {
-  HTTPClient http;
+  BackendHttp http;
   if (!http.begin(url)) return -1;
   http.setTimeout(timeout_ms);
   http.addHeader("Content-Type", "application/json");
@@ -413,7 +414,7 @@ int bbGetHealthCode(const char* base_url, const char* api_key,
   char url[160];
   snprintf(url, sizeof(url), "%s/api/v1/updates/version", base_url);
   {
-    HTTPClient http;
+    BackendHttp http;
     if (!http.begin(url)) return -1;
     http.setTimeout(timeout_ms);
     int code = http.GET();
@@ -425,7 +426,7 @@ int bbGetHealthCode(const char* base_url, const char* api_key,
   // which the connection test can report as a credential problem rather than
   // an unreachable server.
   snprintf(url, sizeof(url), "%s/api/v1/system/info", base_url);
-  HTTPClient http;
+  BackendHttp http;
   if (!http.begin(url)) return -1;
   http.setTimeout(timeout_ms);
   addKey(http, api_key);

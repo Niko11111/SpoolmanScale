@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "services/backend_http.h"
 
 #include <Arduino.h>
 #include <string.h>
@@ -28,20 +29,22 @@ static char s_bambuddy_key[80]  = "";
 static char s_bambuddy_host[64] = "";
 static char s_bambuddy_base[80] = "";
 
+// The one place an address becomes a base URL. A stored address carries its
+// scheme only when it is https; a bare one is http, as every address was
+// before https existed, so nothing already stored changes meaning.
+void backendComposeBase(char* out, size_t n, const char* host) {
+  if (!out || n == 0) return;
+  if (!host || !host[0])                     out[0] = '\0';
+  else if (strncasecmp(host, "https://", 8) == 0) snprintf(out, n, "%s", host);
+  else                                       snprintf(out, n, "http://%s", host);
+}
+
 static void rebuildFilamanBase() {
-  if (s_filaman_host[0]) {
-    snprintf(s_filaman_base, sizeof(s_filaman_base), "http://%s", s_filaman_host);
-  } else {
-    s_filaman_base[0] = '\0';
-  }
+  backendComposeBase(s_filaman_base, sizeof(s_filaman_base), s_filaman_host);
 }
 
 static void rebuildBamBuddyBase() {
-  if (s_bambuddy_host[0]) {
-    snprintf(s_bambuddy_base, sizeof(s_bambuddy_base), "http://%s", s_bambuddy_host);
-  } else {
-    s_bambuddy_base[0] = '\0';
-  }
+  backendComposeBase(s_bambuddy_base, sizeof(s_bambuddy_base), s_bambuddy_host);
 }
 
 // A credential goes into an HTTP header as it is, so a CR or LF inside it
@@ -59,6 +62,7 @@ static void copyCredential(char* dst, size_t n, const char* src) {
 }
 
 void backendLoadSettings() {
+  backendTlsLoad();
   uint8_t raw = prefsGetUChar(NVS_BACKEND_MODE, BACKEND_SPOOLMAN);
   // Anything unknown falls back to Spoolman, so a value written by a newer
   // firmware cannot leave the device in a mode this build has no code for.
@@ -129,19 +133,25 @@ const char* backendHost() {
 // type, and rebuildFilamanBase() would have turned it into
 // "http://http://spoolman.local/".
 //
-// https is not stripped here. Refusing it is the caller's job, because only
-// the caller can say so: the request would otherwise be sent as plain http to
-// port 80 and fail in a way that looks like the server is down.
+// "https://" is kept, in lower case, and becomes the scheme of the base URL
+// (backendComposeBase); "http://" is dropped, because a bare address already
+// means http.
 size_t backendCleanHost(const char* in, char* out, size_t out_size) {
   if (!in || !out || out_size == 0) return 0;
   while (*in == ' ' || *in == '\t') in++;
   if (strncasecmp(in, "http://", 7) == 0) in += 7;
+  size_t lead = 0;
+  if (strncasecmp(in, "https://", 8) == 0 && out_size > 9) {
+    memcpy(out, "https://", 8);
+    lead = 8;
+    in += 8;
+  }
 
   // Only what an address is made of: letters, digits, dot, colon, hyphen,
   // underscore, slash. A quote or a bracket has no place in one, and the
   // value goes into a page attribute later - escaped there as well, but a
   // host that cannot carry one is the cheaper of the two locks.
-  size_t n = 0;
+  size_t n = lead;
   for (; *in && n + 1 < out_size; in++) {
     const char c = *in;
     const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
@@ -149,7 +159,8 @@ size_t backendCleanHost(const char* in, char* out, size_t out_size) {
                     c == '-' || c == '_' || c == '/';
     if (ok) out[n++] = c;
   }
-  while (n > 0 && (out[n-1] == ' ' || out[n-1] == '\t' || out[n-1] == '/')) n--;
+  while (n > lead && (out[n-1] == ' ' || out[n-1] == '\t' || out[n-1] == '/')) n--;
+  if (n == lead) n = 0;   // a scheme with nothing behind it is no address
   out[n] = '\0';
   return n;
 }

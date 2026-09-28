@@ -3007,6 +3007,12 @@ const char* const STRINGS[][3] = {
     "La balance récupère la table des couleurs de BambuStudio (GitHub, environ 230 Ko) et en garde une copie compacte. Elle affiche ensuite le nom de la couleur et la référence de chaque tag Bambu, même hors ligne. Bambu complète la table à la sortie de nouvelles couleurs : la balance vérifie une fois par jour et ne télécharge que si quelque chose a changé. Cela suit l'interrupteur de la recherche automatique de mises à jour." },  // STR_W_BCAT_NOTE
   { "Unverändert, nichts neu geladen.", "Unchanged, nothing downloaded.",
     "Inchangé, rien téléchargé." },  // STR_W_BCAT_UNCHANGED
+  // https to the backend
+  { "Zertifikat nicht prüfen (nur bei https)", "Do not check the certificate (https only)",
+    "Ne pas vérifier le certificat (https uniquement)" },  // STR_W_TLS_INSECURE
+  { "Eine Adresse mit https:// wird verschlüsselt angesprochen. Öffentliche Zertifikate wie Let's Encrypt prüft die Waage selbst. Zeigt der Browser bei deinem Server eine Warnung, weil das Zertifikat selbst signiert ist, schalte das hier ein: Die Verbindung bleibt verschlüsselt, die Waage prüft aber nicht, wer antwortet.",
+    "An address with https:// is reached encrypted. Public certificates such as Let's Encrypt are checked by the scale itself. If your browser warns about your server because its certificate is self-signed, switch this on: the connection stays encrypted, but the scale does not check who answers.",
+    "Une adresse en https:// est contactée de façon chiffrée. La balance vérifie elle-même les certificats publics comme Let's Encrypt. Si votre navigateur affiche un avertissement pour votre serveur parce que son certificat est auto-signé, activez ceci : la connexion reste chiffrée, mais la balance ne vérifie pas qui répond." },  // STR_W_TLS_INSECURE_HINT
 };
 
 StringID tagWriteResultString(uint8_t code) {
