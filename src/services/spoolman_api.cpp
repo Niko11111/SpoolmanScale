@@ -1,5 +1,6 @@
 #include "spoolman_api.h"
 #include "services/backend_http.h"
+#include "hardware/sd_logger.h"
 #include "http_progress.h"
 #include "tag_uid.h"
 
@@ -115,6 +116,9 @@ static int getJson(const String& url, JsonDocument& doc, uint32_t timeout_ms,
   }
   http.end();
   if (out_err) *out_err = err;
+  // Which way the parse failed says whether the answer was cut, malformed or
+  // too large - a bare -2 in the caller's log says none of it.
+  if (err) logSDf("Spoolman: answer of %s did not parse: %s", url.c_str(), err.c_str());
   return err ? -2 : 200;
 }
 

@@ -1415,6 +1415,8 @@ enum StringID {
   // https to the backend
   STR_W_TLS_INSECURE,
   STR_W_TLS_INSECURE_HINT,
+  STR_W_TLS_KEEP,
+  STR_W_TLS_KEEP_HINT,
 
   STR_COUNT
 };

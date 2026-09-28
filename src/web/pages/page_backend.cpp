@@ -97,7 +97,18 @@ static String body() {
   h += T(STR_W_TLS_INSECURE);
   h += F("</label><span class='msg' id='ti-s'></span><span class='hint'>");
   h += T(STR_W_TLS_INSECURE_HINT);
-  h += F("</span><div class='rows' style='margin-top:16px'><div class='row'>"
+  h += F("</span><div class='field' style='margin-top:14px'><label>");
+  h += T(STR_W_TLS_KEEP);
+  h += F("</label><div class='inrow'><select id='tk' style='min-width:140px'>");
+  { static const uint8_t KEEP[] = { 1, 5, 30 };
+    for (uint8_t m : KEEP) {
+      h += F("<option value='"); h += m; h += F("'");
+      if (m == backendKeepMinutes()) h += F(" selected");
+      h += F(">"); h += m; h += F(" min</option>");
+    } }
+  h += F("</select><span class='msg' id='tk-s'></span></div><span class='hint'>");
+  h += T(STR_W_TLS_KEEP_HINT);
+  h += F("</span></div><div class='rows' style='margin-top:16px'><div class='row'>"
          "<span class='k'>URL</span><span class='v mono'>");
   h += htmlEsc(backendBaseUrl());
   h += F("</span></div><div class='row'><span class='k'>");
@@ -207,6 +218,8 @@ static String body() {
          ".then(function(r){if(r.ok)hostPoll(0);});}"
          "$('ti').addEventListener('change',function(){"
          "postFlash('/api/tls',$('ti').checked?'1':'0','ti-s');});"
+         "$('tk').addEventListener('change',function(){"
+         "postFlash('/api/tlskeep',$('tk').value,'tk-s');});"
          "function setKey(){const v=$('fk').value;"
          "if(!guard(v))return;postFlash('/api/filaman/key',v,'fk-s');}"
          "function reg(){flash('fc-s',M.test,false);"
@@ -423,6 +436,14 @@ static void routes(WebServer &srv) {
     const bool on = srv.arg("plain") == "1";
     backendSetTlsInsecure(on);
     logSDf("Web: backend certificate check %s", on ? "off" : "on");
+    srv.send(200, "text/plain", T(STR_W_SAVED));
+  });
+
+  // How long an https connection is kept open. Changes behaviour: settings.
+  srv.on("/api/tlskeep", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
+    backendSetKeepMinutes((uint8_t)srv.arg("plain").toInt());
+    logSDf("Web: https keep-alive %u min", (unsigned)backendKeepMinutes());
     srv.send(200, "text/plain", T(STR_W_SAVED));
   });
 

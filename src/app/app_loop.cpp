@@ -11,6 +11,7 @@
 #include "app_config.h"
 #include "bambu/bambu_catalog_sync.h"
 #include "services/drying_sync.h"
+#include "services/backend_http.h"
 #include "app/app_boot.h"
 #include "app/app_state.h"
 #include "app/backend_switch.h"
@@ -515,6 +516,7 @@ void appLoop() {
   updateCheckTick();
   bambuCatalogSyncTick();
   dryingSyncTick();
+  backendConnTick();
 
   firmwareStampTick();
   otaWebGithubTick();

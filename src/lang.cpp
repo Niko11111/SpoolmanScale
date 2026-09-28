@@ -3013,6 +3013,11 @@ const char* const STRINGS[][3] = {
   { "Eine Adresse mit https:// wird verschlüsselt angesprochen. Öffentliche Zertifikate wie Let's Encrypt prüft die Waage selbst. Zeigt der Browser bei deinem Server eine Warnung, weil das Zertifikat selbst signiert ist, schalte das hier ein: Die Verbindung bleibt verschlüsselt, die Waage prüft aber nicht, wer antwortet.",
     "An address with https:// is reached encrypted. Public certificates such as Let's Encrypt are checked by the scale itself. If your browser warns about your server because its certificate is self-signed, switch this on: the connection stays encrypted, but the scale does not check who answers.",
     "Une adresse en https:// est contactée de façon chiffrée. La balance vérifie elle-même les certificats publics comme Let's Encrypt. Si votre navigateur affiche un avertissement pour votre serveur parce que son certificat est auto-signé, activez ceci : la connexion reste chiffrée, mais la balance ne vérifie pas qui répond." },  // STR_W_TLS_INSECURE_HINT
+  { "Verbindung offen halten (nur bei https)", "Keep the connection open (https only)",
+    "Garder la connexion ouverte (https uniquement)" },  // STR_W_TLS_KEEP
+  { "Der Aufbau einer https-Verbindung dauert auf der Waage etwa 0,6 s, eine offene Verbindung antwortet in rund 30 ms. Die Waage öffnet sie schon, wenn eine Spule aufgelegt wird, und schließt sie nach der gewählten Zeit ohne Anfrage. 30 Minuten lohnen sich nur, wenn dein Server die Verbindung so lange offen lässt.",
+    "Opening an https connection takes the scale about 0.6 s, an open connection answers in about 30 ms. The scale opens it as soon as a spool is put on, and closes it after the chosen time without a request. 30 minutes only pay off if your server keeps the connection open that long.",
+    "Ouvrir une connexion https prend environ 0,6 s à la balance, une connexion ouverte répond en 30 ms environ. La balance l'ouvre dès qu'une bobine est posée et la ferme après le délai choisi sans requête. 30 minutes ne servent que si votre serveur garde la connexion ouverte aussi longtemps." },  // STR_W_TLS_KEEP_HINT
 };
 
 StringID tagWriteResultString(uint8_t code) {

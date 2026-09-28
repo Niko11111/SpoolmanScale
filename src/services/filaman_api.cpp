@@ -558,7 +558,7 @@ bool filamanGetVersion(const char* base_url, char* out_version, size_t out_size,
   // from being transferred.
   char head[256];
   size_t got = 0;
-  WiFiClient* stream = http.getStreamPtr();
+  Stream* stream = http.getStreamPtr();
   uint32_t started = millis();
   while (got < sizeof(head) - 1 && (millis() - started) < timeout_ms) {
     if (!stream->available()) {
@@ -566,7 +566,9 @@ bool filamanGetVersion(const char* base_url, char* out_version, size_t out_size,
       delay(5);
       continue;
     }
-    int r = stream->read((uint8_t*)head + got, sizeof(head) - 1 - got);
+    const size_t want = sizeof(head) - 1 - got;
+    const size_t have = (size_t)stream->available();
+    int r = (int)stream->readBytes(head + got, have < want ? have : want);
     if (r <= 0) break;
     got += r;
   }
