@@ -224,10 +224,9 @@ const char* const STRINGS[][3] = {
     "Enregistrer le séchage\nd'aujourd'hui ?" },  // STR_POPUP_DRIED_Q
   { "Gewicht in\nSpoolman updaten?", "Update weight\nin Spoolman?",
     "Mettre le poids à jour\ndans Spoolman ?" },  // STR_POPUP_WEIGHT_Q
-  { "Leere Spule\n(Spule + Kern messen)", "Empty spool\n(measure spool + core)",
-    "Bobine vide\n(mesurer bobine + moyeu)" },  // STR_BTN_EMPTY_SPOOL
-  { "Ja, bestätigen", "Yes, confirm",
-    "Oui, confirmer" },  // STR_BTN_CONFIRMED
+  { "Leergewicht\nmessen / eingeben", "Empty spool weight\nweigh / type in",
+    "Poids à vide\nmesurer / saisir" },  // STR_BTN_EMPTY_SPOOL
+  { "Ja, bestätigen",                 "Yes, confirm",                        "Oui, confirmer" },  // STR_BTN_CONFIRMED
 
   // Spool weight sub-popup
   { "Spulengewicht: %.0f g speichern als...",
@@ -2969,6 +2968,21 @@ const char* const STRINGS[][3] = {
   { "Der Server hat das Anfangsgewicht nicht übernommen. Es gilt weiter der alte Wert.",
     "The server did not accept the initial weight. The old value still stands.",
     "Le serveur n'a pas accepté le poids initial. L'ancienne valeur reste valable." },  // STR_INIT_W_FAIL_TEXT
+  // Empty spool weight, weighed or typed in (issue #40)
+  { "Leergewicht der Spule", "Empty spool weight",
+    "Poids de la bobine vide" },  // STR_TARE_CHOICE_TITLE
+  { "Leere Spule wiegen\njetzt auf der Waage: %.0f g", "Weigh the empty spool\non the scale now: %.0f g",
+    "Peser la bobine vide\nsur la balance : %.0f g" },  // STR_TARE_CHOICE_WEIGH
+  { "Wert eingeben\nbekannt oder vom Hersteller", "Type in a value\nknown or from the maker",
+    "Saisir une valeur\nconnue ou du fabricant" },  // STR_TARE_CHOICE_TYPE
+  { "Leergewicht eingeben", "Enter empty spool weight",
+    "Saisir le poids à vide" },  // STR_TARE_ENTER_TITLE
+  { "Waage %.0f g\n- Spule %.0f g\n= Rest %.0f g", "Scale %.0f g\n- spool %.0f g\n= %.0f g left",
+    "Balance %.0f g\n- bobine %.0f g\n= reste %.0f g" },  // STR_TARE_ENTER_REST
+  { "Leergewicht der Spule ohne Filament, %.0f bis %.0f g", "Weight of the spool without filament, %.0f to %.0f g",
+    "Poids de la bobine sans filament, %.0f à %.0f g" },  // STR_TARE_ENTER_RANGE
+  { "Mehr als auf der Waage liegt", "More than is on the scale",
+    "Plus que sur la balance" },  // STR_TARE_ENTER_OVER
 };
 
 StringID tagWriteResultString(uint8_t code) {

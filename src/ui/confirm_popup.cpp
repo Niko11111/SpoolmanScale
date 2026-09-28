@@ -18,6 +18,7 @@
 #include "dried_action.h"
 #include "app/deferred_actions.h"
 #include "spoolman_screen.h"
+#include "tare_entry.h"
 #include "lang.h"
 
 
@@ -36,6 +37,7 @@ void closeConfirmPopups() {
   releaseScreen(&s_scope_popup);
   releaseScreen(&s_auto_popup);
   releaseScreen(&s_cap_popup);
+  closeTareEntry();
 }
 
 bool isConfirmPopupOpen() {
@@ -173,7 +175,9 @@ static bool newSpoolDerivesTare(float* out_tare) {
   return true;
 }
 
-static void showSpoolWeightPopup(float grams, bool then_new_spool) {
+// measured: the value is a reading off the pad, so a bag on it would be in
+// there too. A typed value knows nothing of the bag.
+static void showSpoolWeightPopup(float grams, bool then_new_spool, bool measured = true) {
   s_tare_prompt_g = grams;
   s_tare_then_new = then_new_spool;
 
@@ -287,7 +291,7 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
       // written to an entire brand. The device cannot tell whether one is
       // there, so it says so rather than silently subtracting a weight that
       // might not be on the scale at all.
-      if (bag_weight_g > 0.0f) {
+      if (measured && bag_weight_g > 0.0f) {
         lv_obj_t *bag_hint = lv_label_create(popup);
         char bag_buf[64];
         snprintf(bag_buf, sizeof(bag_buf), T(STR_SPOOL_WEIGHT_BAG_HINT), bag_weight_g);
@@ -298,6 +302,10 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool) {
       }
 
     }
+
+void showSpoolWeightScope(float grams, bool measured) {
+  showSpoolWeightPopup(grams, false, measured);
+}
 
 void showConfirmPopup(const char* msg, int action) {
   closeConfirmPopup();
@@ -462,7 +470,7 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_set_style_text_align(l3, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(l3);
 
-    // ── Row 2 right: empty spool + core ──
+    // ── Row 2 right: empty spool weight, weighed or typed in ──
     // Dropped entirely where no tare scope can be written - which is the case
     // for BamBuddy behind Spoolman. The place stays empty on purpose rather
     // than letting the neighbour grow into it: a button that changes width
@@ -477,12 +485,10 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_set_style_shadow_width(btn4, 0, 0);
     lv_obj_add_event_cb(btn4, [](lv_event_t *e) {
       closeConfirmPopup();
-      showSpoolWeightPopup(scale_weight_g, false);
+      showTareChoice();
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l4 = lv_label_create(btn4);
-    char buf4[56];
-    snprintf(buf4, sizeof(buf4), T(STR_BTN_EMPTY_SPOOL), scale_weight_g);
-    lv_label_set_text(l4, buf4);
+    lv_label_set_text(l4, T(STR_BTN_EMPTY_SPOOL));
     lv_obj_set_style_text_color(l4, lv_color_hex(0x80c0ff), 0);
     lv_obj_set_style_text_font(l4, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(l4, LV_TEXT_ALIGN_CENTER, 0);

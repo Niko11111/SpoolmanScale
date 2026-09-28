@@ -723,7 +723,16 @@ void patchFilamentSpoolWeight(float spool_w) {
   logSDf("PATCH filament_spool_weight=%.1fg fil_ID=%d HTTP %d", spool_w, sm_filament_id, code);
   // Every spool of this filament may carry another tare now, and the stamp
   // cannot see that: it proves which spools there are, not what they hold.
-  if (code >= 200 && code < 300) spoolCacheForget("filament tare changed");
+  if (code >= 200 && code < 300) {
+    spoolCacheForget("filament tare changed");
+    // The spool on the pad inherits it unless it carries its own, and the
+    // next weighing is computed against sm_spool_weight - so without this it
+    // would still use the old tare until the tag is read again.
+    if (sm_tare_source != TARE_SPOOL) {
+      sm_spool_weight = spool_w;
+      sm_tare_source = TARE_FILAMENT;
+    }
+  }
 }
 
 void patchVendorSpoolWeight(float spool_w) {
@@ -734,5 +743,13 @@ void patchVendorSpoolWeight(float spool_w) {
   Serial.printf("patchVendorSpoolWeight: HTTP %d\n", code);
   logSDf("PATCH vendor_empty_spool=%.1fg vendor_ID=%d HTTP %d", spool_w, sm_vendor_id, code);
   // As above, only wider: every spool of this brand.
-  if (code >= 200 && code < 300) spoolCacheForget("vendor tare changed");
+  if (code >= 200 && code < 300) {
+    spoolCacheForget("vendor tare changed");
+    // As above, one level further down the chain: only where neither the
+    // spool nor its filament names a tare of its own.
+    if (sm_tare_source == TARE_NONE || sm_tare_source == TARE_VENDOR) {
+      sm_spool_weight = spool_w;
+      sm_tare_source = TARE_VENDOR;
+    }
+  }
 }
