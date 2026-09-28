@@ -15,6 +15,7 @@
 #include "services/app_settings.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/backend_http.h"
 #include "services/bambuddy_api.h"
 #include "header_status.h"
 #include "services/device_name.h"
@@ -231,11 +232,16 @@ void buildSpoolmanScreen() {
   const char* def_port = (backendMode() == BACKEND_FILAMAN)  ? "8083"
                        : (backendMode() == BACKEND_BAMBUDDY) ? "8000"
                                                              : "7912";
-  char buf_hint[48];
+  char buf_hint[80];
   if (sp_locked) {
-    copyT(buf_hint, sizeof(buf_hint), STR_SP_LOCKED_TITLE);
+    // An https address is locked for the same reason as a name - the pad has
+    // no letters - but says what it is, so nobody takes it for a typo.
+    copyT(buf_hint, sizeof(buf_hint),
+          backendUrlIsHttps(backendHost()) ? STR_SP_HTTPS_TITLE : STR_SP_LOCKED_TITLE);
   } else {
-    snprintf(buf_hint, sizeof(buf_hint), "192.168.x.x:%s", def_port);
+    // The pad takes an IP only; an https address is set up in the browser,
+    // and this is the one line that says so before anyone looks for it.
+    snprintf(buf_hint, sizeof(buf_hint), "192.168.x.x:%s  -  %s", def_port, T(STR_SP_HTTPS_HINT));
   }
   lv_obj_t *lbl_hint = lv_label_create(scr_spoolman);
   lv_label_set_text(lbl_hint, buf_hint);

@@ -3018,6 +3018,9 @@ const char* const STRINGS[][3] = {
   { "Der Aufbau einer https-Verbindung dauert auf der Waage etwa 0,6 s, eine offene Verbindung antwortet in rund 30 ms. Die Waage öffnet sie schon, wenn eine Spule aufgelegt wird, und schließt sie nach der gewählten Zeit ohne Anfrage. 30 Minuten lohnen sich nur, wenn dein Server die Verbindung so lange offen lässt.",
     "Opening an https connection takes the scale about 0.6 s, an open connection answers in about 30 ms. The scale opens it as soon as a spool is put on, and closes it after the chosen time without a request. 30 minutes only pay off if your server keeps the connection open that long.",
     "Ouvrir une connexion https prend environ 0,6 s à la balance, une connexion ouverte répond en 30 ms environ. La balance l'ouvre dès qu'une bobine est posée et la ferme après le délai choisi sans requête. 30 minutes ne servent que si votre serveur garde la connexion ouverte aussi longtemps." },  // STR_W_TLS_KEEP_HINT
+  // The address screen on the device
+  { "https: im Browser", "https: in the browser", "https : navigateur" },  // STR_SP_HTTPS_HINT
+  { "https-Adresse",     "https address",         "Adresse https" },  // STR_SP_HTTPS_TITLE
 };
 
 StringID tagWriteResultString(uint8_t code) {

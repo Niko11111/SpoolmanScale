@@ -182,12 +182,24 @@ bool BackendHttp::begin(const String& url) {
 
   String host;
   uint16_t port = 0;
+  // Begun again on the same object - a list read page by page - while it
+  // still holds the kept connection: taking the mutex a second time would
+  // fail and open a second connection beside the first.
+  if (pooled_ && splitHost(url.c_str(), host, port) && poolFor(host, port)) {
+    _host = host;
+    return Http::begin(*s_pool, url);
+  }
   if (s_keep_min && splitHost(url.c_str(), host, port) && ensureMux()) {
     const TickType_t wait = s_warming ? pdMS_TO_TICKS(WARM_WAIT_MS) : 0;
     if (xSemaphoreTake(s_mux, wait) == pdTRUE) {
       if (poolFor(host, port)) {
         pooled_ = true;
         setReuse(true);
+        // HTTPClient drops an open connection when the host it last used
+        // differs from the new one - and a fresh object has used none, so
+        // every request closed the kept connection (beta.15, reuse 600 ms
+        // instead of 16). It is the same server: say so before begin().
+        _host = host;
         return Http::begin(*s_pool, url);
       }
       xSemaphoreGive(s_mux);
