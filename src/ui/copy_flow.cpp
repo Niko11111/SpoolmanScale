@@ -243,6 +243,7 @@ static bool copyListBuild(JsonDocument& doc, bool archived, const char* material
     // Out of the cache the template is read fresh when its row is tapped,
     // see copyRowRefresh(): a new spool is never built on the cache.
     s.from_cache = from_cache;
+    s.article_hit = false;   // the copy list is not ranked by article (yet)
     // Not a tag here, and deliberately emptied rather than left alone:
     // link_spools[] lives in PSRAM and is not zeroed, and the shared list
     // builders skip every row that is already bound, see linkSpoolBound().

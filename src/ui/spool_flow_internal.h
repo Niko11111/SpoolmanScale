@@ -41,6 +41,10 @@ struct UnlinkedSpool {
   // that fills a row has to set it: the block comes from heap_caps_malloc(),
   // which does not zero.
   bool  from_cache;
+  // The spool's filament carries the article number Bambu's catalog names
+  // for the tag on the reader: exactly this product in exactly this colour.
+  // Sorted to the top and framed in the list. In the padding too.
+  bool  article_hit;
   float remaining;     // remaining_weight
   float total;         // filament.weight
   // What the spool holds in each tag field, indexed by TagFieldId, quote

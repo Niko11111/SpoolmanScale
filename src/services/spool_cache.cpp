@@ -55,8 +55,12 @@ struct CachedSpool {
   float total;                           // 156  filament.weight
   int   filament_id;                     // 160  filament.id
   float spool_weight;                    // 164  spool_weight
+  // Bambu's article number for a Bambu filament, "12601": the link filter
+  // keeps a spool whose filament names the article the tag's catalog entry
+  // does, whatever its name says. 16 for the odd shop number beside it.
+  char  article[16];                     // 168  filament.article_number
 };
-static_assert(sizeof(CachedSpool) == 168, "CachedSpool grew, the numbers in the header are off");
+static_assert(sizeof(CachedSpool) == 184, "CachedSpool grew, the numbers in the header are off");
 
 CachedSpool*   s_rows      = nullptr;
 int            s_count     = 0;
@@ -124,6 +128,7 @@ void fillRow(CachedSpool& r, JsonObjectConst spool, bool bound) {
   r.total        = fil["weight"].is<float>() ? fil["weight"].as<float>() : NAN;
   r.filament_id  = fil["id"] | 0;
   r.spool_weight = spool["spool_weight"] | 0.0f;
+  copyStr(r.article,   sizeof(r.article),   fil["article_number"]);
 }
 
 // The same fields spoolCacheToJson() writes, for one row.
@@ -139,6 +144,7 @@ void rowToJson(JsonObject o, const CachedSpool& r) {
   if (!isnan(r.total)) f["weight"]            = r.total;
   f["color_hex"]                              = str(r.color_hex);
   if (r.vendor[0])     f["vendor"]["name"]    = str(r.vendor);
+  if (r.article[0])    f["article_number"]    = str(r.article);
 }
 
 CachedSpool* rowById(int spool_id) {

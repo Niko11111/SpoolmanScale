@@ -9,6 +9,7 @@
 #include <cstring>
 
 #include "app_config.h"
+#include "bambu/bambu_catalog.h"
 #include "bambu/bambu_tag.h"
 #include "bambu/material_match.h"
 #include "hardware/sd_logger.h"
@@ -90,6 +91,10 @@ bool nameStartsWithMaterial(const char* name, const char* material) {
 static int compareLinkSpools(const void* a, const void* b) {
   const UnlinkedSpool* x = (const UnlinkedSpool*)a;
   const UnlinkedSpool* y = (const UnlinkedSpool*)b;
+
+  // An exact product match first, whatever its vendor or name: it is the
+  // spool the tag is most likely to belong to.
+  if (x->article_hit != y->article_hit) return x->article_hit ? -1 : 1;
 
   const bool xv = (x->vendor[0] != '\0');
   const bool yv = (y->vendor[0] != '\0');
@@ -443,6 +448,17 @@ enum LinkFilterVerdict : uint8_t {
 // longer look like what the tag says: with FilamentDB imports renaming
 // "PLA Tough+" to "Tough Plus", the three-character test at the heart of this
 // rejects every spool, and an empty list is worse than a long one.
+// The article number Bambu's catalog names for the tag on the reader, taken
+// once per list; empty when there is no catalog, no hit, or no Bambu tag.
+static char s_link_article[16] = "";
+
+static bool linkArticleHit(JsonObjectConst spool) {
+  if (!s_link_article[0]) return false;
+  String art = spool["filament"]["article_number"] | String("");
+  art.trim();
+  return art.length() && strcasecmp(art.c_str(), s_link_article) == 0;
+}
+
 static LinkFilterVerdict linkFilterVerdict(JsonObjectConst spool, bool is_bambu,
                                            const char* material_filter,
                                            bool archived_only, bool ignore_material) {
@@ -469,6 +485,11 @@ static LinkFilterVerdict linkFilterVerdict(JsonObjectConst spool, bool is_bambu,
     vname = spool["filament"]["vendor"]["name"] | String("");
   vname.trim();
   if (strncasecmp(vname.c_str(), "Bambu", 5) != 0) return LINK_SKIP_VENDOR;
+
+  // The article number names product and colour at once, so it settles what
+  // material, subtype and colour below would only approximate: a FilaMan
+  // designation "Cyan (12601)" names no subtype at all.
+  if (linkArticleHit(spool)) return LINK_KEEP;
 
   if (ignore_material || !material_filter || !material_filter[0]) return LINK_KEEP;
 
@@ -563,6 +584,15 @@ LinkFetch fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool
   logSDf("link fetch: is_bambu=%d material_filter='%s' archived_only=%d",
     is_bambu, material_filter ? material_filter : "", (int)archived_only);
 
+  s_link_article[0] = '\0';
+  BambuCatalogHit hit;
+  if (is_bambu && bambuCatalogFind(g_tag.material_id, g_tag.material_variant_id,
+                                   g_tag.color, &hit)) {
+    snprintf(s_link_article, sizeof(s_link_article), "%s", hit.article);
+    logSDf("link fetch: catalog names article %s (%s %s)", s_link_article,
+           hit.product, hit.color_name);
+  }
+
   JsonDocument filterL;
   JsonArray filterL_arr = filterL.to<JsonArray>();
   JsonObject fL = filterL_arr.add<JsonObject>();
@@ -579,6 +609,7 @@ LinkFetch fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool
   fL["filament"]["weight"] = true;
   fL["filament"]["color_hex"] = true;
   fL["filament"]["vendor"]["name"] = true;
+  fL["filament"]["article_number"] = true;
   fL["spool_weight"] = true;
   if (filterL.overflowed())
     logSD("link fetch: filter overflowed, fields will be missing");
@@ -751,6 +782,7 @@ static bool linkFetchBuild(JsonDocument& doc, bool from_cache, bool is_bambu,
     // made the filter above answer as it did for the original. That must not
     // land in the row: a write would take it for a UID to append to.
     s.from_cache = from_cache;
+    s.article_hit = linkArticleHit(spool);
     if (from_cache) {
       for (uint8_t f = 0; f < TAG_FIELD_EXTRA_COUNT; f++) s.tag_values[f][0] = '\0';
     } else {
@@ -1971,6 +2003,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = entered_id;
     s.from_cache = false;   // read from the server a moment ago
+    s.article_hit = false;  // typed in, not offered by the list
     // Same rule as the list fetch: too long is stored as empty, never cut.
     linkFillTagValues(s, doc.as<JsonObjectConst>());
     String mat = doc["filament"]["material"] | String("");
@@ -2704,8 +2737,10 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     lv_obj_set_style_bg_color(row, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
     lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_shadow_width(row, 0, 0);
-    lv_obj_set_style_border_width(row, 1, 0);
-    lv_obj_set_style_border_color(row, lv_color_hex(0x1a2840), 0);
+    // An article number hit is framed in the house green: the same row, no
+    // extra object, which the pool could not spare for every row.
+    lv_obj_set_style_border_width(row, s.article_hit ? 2 : 1, 0);
+    lv_obj_set_style_border_color(row, lv_color_hex(s.article_hit ? UI_COL_ACCENT : 0x1a2840), 0);
     lv_obj_set_style_pad_all(row, 0, 0);
 
     // ── Zeile 1: #ID + Material+Name ──────────────────────
