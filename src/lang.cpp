@@ -2983,6 +2983,30 @@ const char* const STRINGS[][3] = {
     "Poids de la bobine sans filament, %.0f à %.0f g" },  // STR_TARE_ENTER_RANGE
   { "Mehr als auf der Waage liegt", "More than is on the scale",
     "Plus que sur la balance" },  // STR_TARE_ENTER_OVER
+  // What else a Bambu tag says, on the tag card and the tags page
+  { "Trocknen",     "Drying",        "Séchage" },  // STR_W_TAG_DRY
+  { "Bambu-Code",   "Bambu code",    "Code Bambu" },  // STR_W_TAG_CODE
+  { "Zweite Farbe", "Second colour", "2e couleur" },  // STR_W_TAG_COLOR2
+  // The Bambu catalog's card on the tags page
+  { "Bambu-Katalog", "Bambu catalog",
+    "Catalogue Bambu" },  // STR_W_BCAT_TITLE
+  { "Noch nicht geladen.", "Not loaded yet.",
+    "Pas encore chargé." },  // STR_W_BCAT_NONE
+  { "%d Farben, geladen am %s, zuletzt geprüft am %s.", "%d colours, loaded on %s, last checked on %s.",
+    "%d couleurs, chargé le %s, vérifié le %s." },  // STR_W_BCAT_STATE
+  { "Wird geladen ...", "Loading ...",
+    "Chargement ..." },  // STR_W_BCAT_BUSY
+  { "Laden fehlgeschlagen: %s.", "Loading failed: %s.",
+    "Échec du chargement : %s." },  // STR_W_BCAT_FAIL
+  { "Laden", "Load",
+    "Charger" },  // STR_W_BCAT_LOAD
+  { "Aktualisieren", "Update",
+    "Mettre à jour" },  // STR_W_BCAT_UPDATE
+  { "Die Waage holt die Farbtabelle aus BambuStudio (GitHub, rund 230 KB) und speichert eine kompakte Kopie. Danach zeigt sie bei jedem Bambu-Tag den Farbnamen und die Artikelnummer, auch ohne Internet. Bambu ergänzt die Tabelle, wenn neue Farben erscheinen: Die Waage sieht einmal am Tag nach und lädt nur, wenn sich etwas geändert hat. Das folgt dem Schalter für den automatischen Update-Check.",
+    "The scale fetches the colour table from BambuStudio (GitHub, about 230 KB) and keeps a compact copy. From then on it shows the colour name and article number of every Bambu tag, offline as well. Bambu extends the table when new colours come out: the scale looks once a day and only downloads when something changed. This follows the switch for the automatic update check.",
+    "La balance récupère la table des couleurs de BambuStudio (GitHub, environ 230 Ko) et en garde une copie compacte. Elle affiche ensuite le nom de la couleur et la référence de chaque tag Bambu, même hors ligne. Bambu complète la table à la sortie de nouvelles couleurs : la balance vérifie une fois par jour et ne télécharge que si quelque chose a changé. Cela suit l'interrupteur de la recherche automatique de mises à jour." },  // STR_W_BCAT_NOTE
+  { "Unverändert, nichts neu geladen.", "Unchanged, nothing downloaded.",
+    "Inchangé, rien téléchargé." },  // STR_W_BCAT_UNCHANGED
 };
 
 StringID tagWriteResultString(uint8_t code) {

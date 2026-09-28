@@ -460,6 +460,31 @@ int spoolmanPatchExtraField(const char* base_url, int spool_id, const char* key,
   return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, payload, timeout_ms);
 }
 
+// A text extra field on the filament rather than the spool: what belongs to
+// the product, like the drying the maker recommends, is kept once for every
+// spool of it.
+int spoolmanCreateFilamentField(const char* base_url, const char* key, const char* name,
+                                uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || !key || !key[0]) return -1;
+  JsonDocument body;
+  body["name"]          = (name && name[0]) ? name : key;
+  body["field_type"]    = "text";
+  body["default_value"] = "\"\"";
+  String payload;
+  serializeJson(body, payload);
+  return postJson(String(base_url) + "/api/v1/field/filament/" + urlEncode(key), payload, timeout_ms);
+}
+
+int spoolmanPatchFilamentExtra(const char* base_url, int filament_id, const char* key,
+                               const char* value, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || filament_id <= 0 || !key || !key[0] || !value) return -1;
+  JsonDocument body;
+  body["extra"][key] = jsonQuoted(value);
+  String payload;
+  serializeJson(body, payload);
+  return patchJson(String(base_url) + "/api/v1/filament/" + filament_id, payload, timeout_ms);
+}
+
 int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remaining, const char* last_used_iso, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
   char body[128];

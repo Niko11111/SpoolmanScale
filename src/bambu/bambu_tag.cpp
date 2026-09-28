@@ -3,6 +3,20 @@
 #include <stdio.h>
 #include <string.h>
 
+// What a real Bambu tag holds lies well inside these; outside them the block
+// did not read what it should, and the field stays 0.
+#define BAMBU_NET_WEIGHT_MIN_G     50
+#define BAMBU_NET_WEIGHT_MAX_G   5000
+#define BAMBU_DIAMETER_MIN_MM    1.0f
+#define BAMBU_DIAMETER_MAX_MM    3.5f
+#define BAMBU_DRY_TEMP_MIN_C       30
+#define BAMBU_DRY_TEMP_MAX_C      120
+#define BAMBU_DRY_HOURS_MAX        48
+#define BAMBU_LENGTH_MIN_M         10
+#define BAMBU_LENGTH_MAX_M       2000
+#define BAMBU_BLOCK16_COLOR_INFO    2
+#define BAMBU_COLOR_COUNT_MAX       8
+
 static void copyPrintableField(char* dest, size_t dest_size, const uint8_t* src, size_t src_size) {
   if (!dest || dest_size == 0) return;
   memset(dest, 0, dest_size);
@@ -33,6 +47,11 @@ void parseTagData(BambuTagData& tag) {
     tag.tray_uuid[32] = '\0';
   }
 
+  // Base type: block 2, what the printer groups by ("PLA" for PLA Matte)
+  if (tag.block_ok[2]) {
+    copyPrintableField(tag.filament_type, sizeof(tag.filament_type), tag.blocks[2], 16);
+  }
+
   // Material: block 4, the long form ("PETG HF"), all 16 bytes of it
   if (tag.block_ok[4]) {
     copyPrintableField(tag.material, sizeof(tag.material), tag.blocks[4], 16);
@@ -49,6 +68,13 @@ void parseTagData(BambuTagData& tag) {
     if (spoolColorNamesHue(tag.color)) {
       snprintf(tag.color_hex, sizeof(tag.color_hex), "#%06X", (unsigned)tag.color.rgb);
     }
+    // Bytes 4-5: net weight in g (E8 03 = 1000), bytes 8-11: diameter as a
+    // float. Seen on real tags: 1000, 500 (support, PVA) and 250 g, 1.75 mm.
+    const int net = c[4] | (c[5] << 8);
+    if (net >= BAMBU_NET_WEIGHT_MIN_G && net <= BAMBU_NET_WEIGHT_MAX_G) tag.spool_weight = net;
+    float dia = 0.0f;
+    memcpy(&dia, c + 8, sizeof(dia));   // little endian, as the ESP32 is
+    if (dia >= BAMBU_DIAMETER_MIN_MM && dia <= BAMBU_DIAMETER_MAX_MM) tag.diameter_mm = dia;
   }
 
   // Temperatures: block 6, bytes 8-9 = max, 10-11 = min (little endian, directly in C)
@@ -57,6 +83,35 @@ void parseTagData(BambuTagData& tag) {
     int t2 = tag.blocks[6][10] | (tag.blocks[6][11] << 8);
     if (t1 > 100 && t1 < 400) tag.temp_max = t1;
     if (t2 > 100 && t2 < 400) tag.temp_min = t2;
+    // Bytes 0-1: drying temperature in C, 2-3: drying time in hours. Real
+    // tags: PLA 55/8, PETG 65/8, ABS and ASA 80/8, PA 80/12, TPU 70/8.
+    // Bytes 4-7 would be the bed, but real tags mostly leave them at 0.
+    const int dt = tag.blocks[6][0] | (tag.blocks[6][1] << 8);
+    const int dh = tag.blocks[6][2] | (tag.blocks[6][3] << 8);
+    if (dt >= BAMBU_DRY_TEMP_MIN_C && dt <= BAMBU_DRY_TEMP_MAX_C &&
+        dh >= 1 && dh <= BAMBU_DRY_HOURS_MAX) {
+      tag.dry_temp_c = dt;
+      tag.dry_hours  = dh;
+    }
+  }
+
+  // Filament length: block 14, bytes 4-5, metres (PLA Basic 330, PVA 164)
+  if (tag.block_ok[14]) {
+    const int m = tag.blocks[14][4] | (tag.blocks[14][5] << 8);
+    if (m >= BAMBU_LENGTH_MIN_M && m <= BAMBU_LENGTH_MAX_M) tag.length_m = m;
+  }
+
+  // Extra colour: block 16. Bytes 0-1 name the format, 02 00 is colour
+  // info; 2-3 count the colours, 4-7 hold the second one as A, B, G, R.
+  // Block 5 stays the first colour either way.
+  if (tag.block_ok[16]) {
+    const uint8_t* x = tag.blocks[16];
+    const int fmt   = x[0] | (x[1] << 8);
+    const int count = x[2] | (x[3] << 8);
+    if (fmt == BAMBU_BLOCK16_COLOR_INFO && count >= 1 && count <= BAMBU_COLOR_COUNT_MAX) {
+      tag.color_count = (uint8_t)count;
+      if (count >= 2) tag.color2 = spoolColorFromRgba(x[7], x[6], x[5], x[4]);
+    }
   }
 
   // Vendor: block 16 (ASCII, e.g. "Bambu Lab")

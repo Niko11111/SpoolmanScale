@@ -21,6 +21,7 @@
 // library's templates.
 bool spoolHasAnyTag(JsonObjectConst spool);
 
+#include "services/drying_sync.h"
 #include "services/location_state.h"
 #include "services/backend.h"
 #include "services/breadcrumb.h"
@@ -685,6 +686,7 @@ void querySpoolmanById(int spool_id) {
   }
 
   captureBindings(spool);
+  dryingSyncNote(spool);
 
   // Material and vendor only for an NTAG, a Bambu tag carries its own. The
   // colour for both, through applyServerColor().

@@ -43,6 +43,7 @@
 bool spoolHasAnyTag(JsonObjectConst spool);
 
 #include "app/backend_switch.h"
+#include "services/drying_sync.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/backend_job.h"
@@ -568,6 +569,7 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
     }
 
     captureBindings(spool);
+    dryingSyncNote(spool);
 
     // In step with the tag on the reader rather than with the binding. A Bambu
     // spool carries a chip per side and only the one lying on the pad can be

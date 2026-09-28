@@ -1113,6 +1113,38 @@ int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* i
   }
 }
 
+// The drying a Bambu tag recommends, on the filament where there is one. One
+// text field, "55 °C, 8 h", so temperature and time cannot drift apart.
+int backendPatchFilamentDrying(int filament_id, int spool_id, const char* value,
+                               uint32_t timeout_ms) {
+  HttpStallTime stall(__func__);   // the loop stands still for this call
+  switch (backendMode()) {
+    case BACKEND_FILAMAN:
+      return filamanPatchFilamentCustomField(backendBaseUrl(), filamanApiKey(), filament_id,
+                                             DRYING_FIELD, value, timeout_ms);
+    case BACKEND_BAMBUDDY:
+      // No filament object and no field: the spool's note, as for the date.
+      return bbPatchDryingNote(backendBaseUrl(), bambuddyApiKey(), spool_id, value, timeout_ms);
+    default: {
+      // Spoolman refuses an extra key it has no field for. The field is made
+      // on that answer and the write tried once more, which costs nothing on
+      // every later write - no probe up front.
+      int code = spoolmanPatchFilamentExtra(backendBaseUrl(), filament_id, DRYING_FIELD,
+                                            value, timeout_ms);
+      if (code == 400) {
+        const int c = spoolmanCreateFilamentField(backendBaseUrl(), DRYING_FIELD,
+                                                  DRYING_FIELD_NAME, timeout_ms);
+        logSDf("extra fields: filament field '%s' was missing, created, HTTP %d", DRYING_FIELD, c);
+        if (c == 200 || c == 201) {
+          code = spoolmanPatchFilamentExtra(backendBaseUrl(), filament_id, DRYING_FIELD,
+                                            value, timeout_ms);
+        }
+      }
+      return code;
+    }
+  }
+}
+
 // Mirrors the switch above, branch for branch, minus the request.
 bool backendCanPatchLastDried() {
   switch (backendMode()) {

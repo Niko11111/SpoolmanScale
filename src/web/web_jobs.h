@@ -30,7 +30,8 @@ enum WebJobKind : uint8_t {
   WJ_HOST_TEST,   // GET the backend's health, 4 s
   WJ_SPOOLS,      // the spool list for the tags page, 8 s
   WJ_GH_CHECK,    // the latest tag on the chosen channel, TLS
-  WJ_GH_NOTES     // one release's notes, TLS
+  WJ_GH_NOTES,    // one release's notes, TLS
+  WJ_BAMBU_CATALOG // BambuStudio's colour table, TLS, converted and stored
 };
 
 enum WebJobState : uint8_t {

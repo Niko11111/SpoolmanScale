@@ -35,6 +35,11 @@ int spoolmanCreateSpoolField(const char* base_url, const char* field_name, uint3
 // field the merge already happened in cardUidsAppend() / cardUidsRemove(), and
 // for a single valued one it is the formatted UID. An empty value clears the
 // field, which is what an unlink writes.
+// Filament level text extra field: created on demand, written merged per key.
+int spoolmanCreateFilamentField(const char* base_url, const char* key, const char* name,
+                                uint32_t timeout_ms);
+int spoolmanPatchFilamentExtra(const char* base_url, int filament_id, const char* key,
+                               const char* value, uint32_t timeout_ms);
 int spoolmanPatchExtraField(const char* base_url, int spool_id, const char* key,
                             const char* value, uint32_t timeout_ms = 5000);
 

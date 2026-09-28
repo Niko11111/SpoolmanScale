@@ -174,6 +174,9 @@ int filamanLinkRfidUid(const char* base_url, const char* api_key, int spool_id,
 
 // Writes one key inside custom_fields while preserving the others.
 // Costs a GET before the PATCH, which is why nothing else uses this path.
+// Like filamanPatchCustomField(), on the filament instead of the spool.
+int filamanPatchFilamentCustomField(const char* base_url, const char* api_key, int filament_id,
+                                    const char* key, const char* value, uint32_t timeout_ms);
 int filamanPatchCustomField(const char* base_url, const char* api_key, int spool_id,
                             const char* key, const char* value,
                             uint32_t timeout_ms = 8000);

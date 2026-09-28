@@ -152,6 +152,15 @@ BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
   Serial.printf("Temp:      %d - %d C\n", scan_buf.temp_min, scan_buf.temp_max);
   Serial.printf("Vendor:    %s\n", scan_buf.vendor);
   Serial.printf("Date:      %s\n", scan_buf.production_date);
+  // The rest of what the tag says about the filament, one line so a scan can
+  // be checked against the box.
+  char rgba2[SPOOL_COLOR_HEX_MAX] = "";
+  if (scan_buf.color_count >= 2) spoolColorFormat(scan_buf.color2, rgba2, sizeof(rgba2));
+  logSDf("NFC: bambu %s/%s type '%s', %.0f g, %.2f mm, dry %d C %d h, %d m, colours %d %s",
+         scan_buf.material_id, scan_buf.material_variant_id, scan_buf.filament_type,
+         (double)scan_buf.spool_weight, (double)scan_buf.diameter_mm,
+         scan_buf.dry_temp_c, scan_buf.dry_hours, scan_buf.length_m,
+         (int)scan_buf.color_count, rgba2);
 
   // Adopt only on a new tag or on an improvement. A retry that read fewer
   // blocks than the attempt before it is discarded, so the display keeps the

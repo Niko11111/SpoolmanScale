@@ -29,7 +29,22 @@ struct BambuTagData {
   char     detailed_filament[64];
   int      temp_min;
   int      temp_max;
+  // Net filament on a full spool, g: Bambu block 5, Snapmaker sector 2.
+  // Not the empty spool, whatever the name suggests.
   float    spool_weight;
+  // What else a Bambu tag says about the filament, for creating a spool from
+  // it. Checked against 69 real tags across 39 products (Bambu Research
+  // Group's RFID-Tag-Guide, queengooborg/Bambu-Lab-RFID-Library). Each is 0
+  // or empty when its block did not read or the value is implausible.
+  char     filament_type[17];  // block 2: the base type, "PLA", "PETG", "PA-GF"
+  float    diameter_mm;        // block 5
+  int      dry_temp_c;         // block 6: drying as the maker recommends it
+  int      dry_hours;
+  int      length_m;           // block 14: filament length on a full spool
+  // Block 16: gradient and dual colour spools name a second colour. The
+  // count is 1 on a plain spool, and color2 is only valid from 2 up.
+  uint8_t  color_count;
+  SpoolColor color2;
   char     production_date[12];
   char     short_uid[20];
 

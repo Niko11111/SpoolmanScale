@@ -286,6 +286,21 @@ static bool driedFromNote(const char* note, char* out, size_t out_size) {
   return true;
 }
 
+// "[drying:55 °C, 8 h]": the drying a Bambu tag recommends, kept in the note
+// for want of a field, like the drying date above.
+#define BB_DRYING_MARKER "[drying:"
+static bool dryingFromNote(const char* note, char* out, size_t out_size) {
+  if (!note || !out || out_size < 2) return false;
+  const char* p = strstr(note, BB_DRYING_MARKER);
+  if (!p) return false;
+  p += strlen(BB_DRYING_MARKER);
+  const char* end = strchr(p, ']');
+  if (!end || end == p || (size_t)(end - p) >= out_size) return false;
+  memcpy(out, p, end - p);
+  out[end - p] = '\0';
+  return true;
+}
+
 static void mapSpool(JsonObjectConst src, JsonObject dst) {
   const int   label = src["label_weight"] | 1000;
   const int   core  = src["core_weight"]  | 250;
@@ -327,6 +342,8 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
 
   char dried[12];
   if (driedFromNote(note, dried, sizeof(dried))) extra["last_dried"] = dried;
+  char drying[32];
+  if (dryingFromNote(note, drying, sizeof(drying))) extra["drying"] = drying;
 
   // Only the built-in inventory keeps this; behind the Spoolman proxy it is
   // always null. Carried along in the document so the display needs no second
@@ -706,6 +723,41 @@ int bbPatchSpoolFields(const char* base_url, const char* api_key, int spool_id,
   char url[192];
   snprintf(url, sizeof(url), "%s%s/spools/%d", base_url, bbInventoryBase(), spool_id);
 
+  String out;
+  serializeJson(body, out);
+  return sendJson("PATCH", url, api_key, out, timeout_ms, nullptr);
+}
+
+int bbPatchDryingNote(const char* base_url, const char* api_key, int spool_id,
+                      const char* value, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || !value || !value[0]) return -1;
+  char url[192];
+  snprintf(url, sizeof(url), "%s%s/spools/%d", base_url, bbInventoryBase(), spool_id);
+  // Read first: the note is the user's, and only the marker is the scale's.
+  JsonDocument cur;
+  const int code = getJson(url, api_key, cur, timeout_ms, nullptr, nullptr);
+  if (code != 200) {
+    logSDf("BamBuddy: note not read (HTTP %d), drying recommendation not written", code);
+    return (code < 0) ? code : -2;
+  }
+  String note(cur["note"] | "");
+  const String marker = String(BB_DRYING_MARKER) + value + "]";
+  const int at = note.indexOf(BB_DRYING_MARKER);
+  if (at >= 0) {
+    int end = note.indexOf(']', at);
+    if (end < 0) end = note.length() - 1;
+    note = note.substring(0, at) + marker + note.substring(end + 1);
+  } else {
+    if (note.length()) note += " ";
+    note += marker;
+  }
+  note.trim();
+  if (note.length() > 500) {
+    logSD("BamBuddy: note would exceed 500 characters, drying recommendation not written");
+    return -2;
+  }
+  JsonDocument body;
+  body["note"] = note;
   String out;
   serializeJson(body, out);
   return sendJson("PATCH", url, api_key, out, timeout_ms, nullptr);

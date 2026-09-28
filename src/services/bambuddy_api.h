@@ -162,6 +162,9 @@ int  bbRestoreSpool(const char* base_url, const char* api_key, int spool_id,
 // text BamBuddy offers. Read modify write: the rest of the note has to
 // survive, so a failed read means no write at all rather than an overwrite.
 // iso may be longer than the date, only the first ten characters are used.
+// Writes "[drying:<value>]" into the spool's note, replacing an earlier one.
+int  bbPatchDryingNote(const char* base_url, const char* api_key, int spool_id,
+                       const char* value, uint32_t timeout_ms);
 int  bbPatchDriedNote(const char* base_url, const char* api_key, int spool_id,
        const char* iso, uint32_t timeout_ms = 8000);
 

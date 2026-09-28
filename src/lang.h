@@ -1398,6 +1398,20 @@ enum StringID {
   STR_TARE_ENTER_REST,
   STR_TARE_ENTER_RANGE,
   STR_TARE_ENTER_OVER,
+  // What else a Bambu tag says, on the tag card and the tags page
+  STR_W_TAG_DRY,
+  STR_W_TAG_CODE,
+  STR_W_TAG_COLOR2,
+  // The Bambu catalog's card on the tags page
+  STR_W_BCAT_TITLE,
+  STR_W_BCAT_NONE,
+  STR_W_BCAT_STATE,
+  STR_W_BCAT_BUSY,
+  STR_W_BCAT_FAIL,
+  STR_W_BCAT_LOAD,
+  STR_W_BCAT_UPDATE,
+  STR_W_BCAT_NOTE,
+  STR_W_BCAT_UNCHANGED,
 
   STR_COUNT
 };

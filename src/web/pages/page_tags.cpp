@@ -22,6 +22,7 @@
 #include "services/tag_write.h"
 #include "services/user_options.h"
 #include "web/web_access.h"
+#include "web/web_bambu_catalog.h"
 #include "web/web_jobs.h"
 #include "web/web_shell.h"
 #include "ui/second_tag_popup.h"
@@ -155,7 +156,9 @@ static String body() {
          "<span class='msg' id='to-s'></span></div>"
          "<p class='note' style='margin-top:10px'>");
   h += T(STR_W_TAGOPT_NOTE);
-  h += F("</p></div></div>"
+  h += F("</p></div>");
+  bambuCatalogCard(h);
+  h += F("</div>"
          "<div id='tg-modal' style='display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;align-items:center;justify-content:center;padding:16px'>"
          "<div class='card' style='max-width:560px;width:100%;margin:auto;box-shadow:0 10px 30px rgba(0,0,0,.6);background:var(--surface);padding:18px'>"
          "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px'>"
@@ -260,6 +263,10 @@ static String body() {
   h += F(",weight:");  h += jsStr(T(STR_W_TAG_WEIGHT));
   h += F(",dia:");     h += jsStr(T(STR_W_TAG_DIA));
   h += F(",len:");     h += jsStr(T(STR_W_TAG_LENGTH));
+  h += F(",dry:");     h += jsStr(T(STR_W_TAG_DRY));
+  h += F(",code:");    h += jsStr(T(STR_W_TAG_CODE));
+  h += F(",col2:");    h += jsStr(T(STR_W_TAG_COLOR2));
+  h += F(",cname:");   h += jsStr(T(STR_LBL_L_COLOR));
   h += F(",toosmall:"); h += jsStr(T(STR_W_TAG_TOOSMALL));
   h += F(",norec:");   h += jsStr(T(STR_W_TAG_NOREC));
   h += F(",ro:");      h += jsStr(T(STR_TW_ERR_NOT_NTAG));
@@ -339,6 +346,8 @@ static String body() {
          "return '<tr'+d+'><td>'+k+'</td><td>'+esc(a===undefined?'-':a)+'</td></tr>';}"
          // The spool card has one side only, and an empty field is no row -
          // "-" included, which is how the device says "never" for a date.
+         // Drying as a Bambu tag gives it: temperature and hours.
+         "function dryT(x){return x.dry_c?x.dry_c+' C, '+x.dry_h+' h':undefined;}"
          "function one(k,v){return(v===undefined||v===null||v===''||v==='-')?'':row(k,v);}"
          "function cardHead(t,b){return '<div class=\"tghead\"><h3>'+t+'</h3><span class=\"tgbadge\">'+b+'</span></div>';}"
          "function head(c,n,x){return '<div class=\"tgline\"><div class=\"chip\" style=\"background:'"
@@ -363,17 +372,22 @@ static String body() {
          "const pA=i.proto?(i.proto+(i.version?' v'+i.version:'')):undefined;"
          "const pB=o.proto?(o.proto+(o.version?' v'+o.version:'')):undefined;"
          "rows+=row(M.proto,pA,pB);}"
+         "rows+=row(M.cname,i.cname,o.cname);"
+         "rows+=row(M.art,i.article,o.article);"
          "rows+=row(M.sku,i.sku,o.sku);"
          "rows+=row(M.nozzle,i.nozzle?i.nozzle+' C':undefined,o.nozzle?o.nozzle+' C':undefined);"
          "rows+=row(M.bed,i.bed?i.bed+' C':undefined,o.bed?o.bed+' C':undefined);"
          "rows+=row(M.weight,i.weight?i.weight+' g':undefined,o.weight?o.weight+' g':undefined);"
          "rows+=row(M.dia,i.dia?i.dia+' mm':undefined,o.dia?o.dia+' mm':undefined);"
          "rows+=row(M.len,i.len?i.len+' m':undefined,o.len?o.len+' m':undefined);"
+         "rows+=row(M.dry,dryT(i),dryT(o));"
+         "rows+=row(M.code,i.code,o.code);"
+         "rows+=row(M.col2,i.color2,o.color2);"
          "rows+=row(M.prod,i.prod_date,o.prod_date);"
          "rows+=row(M.tray,i.tray_uuid,o.tray_uuid);"
          "const bm=[i.brand,i.material].filter(Boolean).map(esc).join(' ');"
          "el.innerHTML=h"
-         "+head(i.color,bm||M.spool,"
+         "+head(i.color&&i.color2?'linear-gradient(135deg,'+i.color+','+i.color2+')':i.color,bm||M.spool,"
          "esc(i.fmt)+(i.color?' - '+esc(i.color):''))"
          "+'<table>'+rows+'</table>'+rawBtn;}"
          "function renderMatchedSpool(el){if(!el)return;"
@@ -411,12 +425,17 @@ static String body() {
          "const pA=i.proto?(i.proto+(i.version?' v'+i.version:'')):undefined;"
          "const pB=o.proto?(o.proto+(o.version?' v'+o.version:'')):undefined;"
          "rows+=row(M.proto,pA,pB);}"
+         "rows+=row(M.cname,i.cname,o.cname);"
+         "rows+=row(M.art,i.article,o.article);"
          "rows+=row(M.sku,i.sku,o.sku);"
          "rows+=row(M.nozzle,i.nozzle?i.nozzle+' C':undefined,o.nozzle?o.nozzle+' C':undefined);"
          "rows+=row(M.bed,i.bed?i.bed+' C':undefined,o.bed?o.bed+' C':undefined);"
          "rows+=row(M.weight,i.weight?i.weight+' g':undefined,o.weight?o.weight+' g':undefined);"
          "rows+=row(M.dia,i.dia?i.dia+' mm':undefined,o.dia?o.dia+' mm':undefined);"
          "rows+=row(M.len,i.len?i.len+' m':undefined,o.len?o.len+' m':undefined);"
+         "rows+=row(M.dry,dryT(i),dryT(o));"
+         "rows+=row(M.code,i.code,o.code);"
+         "rows+=row(M.col2,i.color2,o.color2);"
          "rows+=row(M.prod,i.prod_date,o.prod_date);"
          "rows+=row(M.tray,i.tray_uuid,o.tray_uuid);"
          "const bm=[i.brand,i.material].filter(Boolean).map(esc).join(' ');"
@@ -736,6 +755,7 @@ static String secondTagJson() {
 }
 
 static void routes(WebServer &srv) {
+  bambuCatalogRoutes(srv);
   srv.on("/api/tag/preview", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
     int id  = srv.arg("id").toInt();
@@ -745,7 +765,7 @@ static void routes(WebServer &srv) {
     uint16_t need = 0;
     bool ok = tagPreview(id, fmtFromInt(fmt),
                          prev, sizeof(prev), linked, sizeof(linked), &ti, &need);
-    char info[384];
+    char info[TAG_INFO_JSON_MAX];
     tagInfoJson(&ti, info, sizeof(info));
     // jsonEsc on both: prev carries the backend's vendor and filament names,
     // and a quotation mark in a brand made the reply malformed. r.json() then
@@ -792,7 +812,7 @@ static void routes(WebServer &srv) {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
     // Reader state comes from the loop task; touching the reader here would
     // race the main NFC poll.
-    char info[384];
+    char info[TAG_INFO_JSON_MAX];
     tagInfoJson(tagCachedInfo(), info, sizeof(info));
     String j = String("{\"info\":") + info +
                ",\"bytes\":"    + String((unsigned)tagCachedBytes()) +

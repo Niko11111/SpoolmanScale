@@ -334,6 +334,13 @@ int  backendPatchVendorEmptySpoolWeight(const char* base_url, int vendor_id, flo
        uint32_t timeout_ms = 5000);
 int  backendPatchSpoolLocation(const char* base_url, int spool_id,
        const char* location_name = nullptr, uint32_t timeout_ms = 8000);
+// The drying a Bambu tag recommends: filament extra field / custom field
+// "drying" on Spoolman and FilaMan, "[drying:...]" in the spool's note on
+// BamBuddy. filament_id for the first two, spool_id for BamBuddy.
+#define DRYING_FIELD       "drying"
+#define DRYING_FIELD_NAME  "Drying"
+int  backendPatchFilamentDrying(int filament_id, int spool_id, const char* value,
+                                uint32_t timeout_ms);
 int  backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* iso_datetime,
        uint32_t timeout_ms = 5000);
 

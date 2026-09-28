@@ -185,12 +185,25 @@ struct TagInfo {
   uint8_t  r, g, b;
   uint16_t et_lo, et_hi, bed_lo, bed_hi;
   uint16_t dia_x100, length_m, weight_g;
+  // Bambu only so far: the product code (material id / variant id, "GFA00 /
+  // A00-K0"), drying as the maker recommends it, and the second colour of a
+  // gradient or dual colour spool.
+  char     code[20];
+  // From the Bambu catalog, when one is installed and knows the tag: the
+  // colour as Bambu names it, and the article number it is sold under.
+  char     color_name[48];
+  char     article[8];
+  uint16_t dry_c, dry_h;
+  bool     has_color2;
+  uint8_t  r2, g2, b2;
   int      spool_id;      // 0 if none
   char     proto[17];     // e.g. "openspool"
   char     version[12];   // e.g. "1.0"
 };
 
 // Serialises a TagInfo as a JSON object, omitting fields the format lacks.
+// A Bambu tag with a catalog hit is the longest, a little over 400 bytes.
+#define TAG_INFO_JSON_MAX  512
 void tagInfoJson(const TagInfo *ti, char *out, size_t out_len);
 
 // Last complete read of the tag on the reader. fmt is empty when there is none.

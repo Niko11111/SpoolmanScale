@@ -9,6 +9,8 @@
 #include <esp_heap_caps.h>
 
 #include "app_config.h"
+#include "bambu/bambu_catalog_sync.h"
+#include "services/drying_sync.h"
 #include "app/app_boot.h"
 #include "app/app_state.h"
 #include "app/backend_switch.h"
@@ -511,6 +513,8 @@ void appLoop() {
   // request happens in its own task on the other core.
   perfSection("updchk");
   updateCheckTick();
+  bambuCatalogSyncTick();
+  dryingSyncTick();
 
   firmwareStampTick();
   otaWebGithubTick();

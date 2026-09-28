@@ -372,6 +372,9 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
     f["weight"]       = fil["raw_material_weight_g"]    | 0.0f;
     f["spool_weight"] = fil["default_spool_weight_g"]   | 0.0f;
     f["article_number"] = articleNumber(fil);
+    // The drying the scale took off a Bambu tag, kept on the filament.
+    const char* drying = fil["custom_fields"]["drying"] | (const char*)nullptr;
+    if (drying && drying[0]) f["extra"]["drying"] = drying;
 
     // FilaMan supports multi colour filaments, so colours are an array and
     // the hex code arrives with a leading '#'. Spoolman has neither.
@@ -1148,6 +1151,53 @@ int filamanPatchCustomField(const char* base_url, const char* api_key, int spool
   String payload;
   serializeJson(body, payload);
   return patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
+                    payload, timeout_ms);
+}
+
+// The filament's custom_fields, read, merged and written back whole - the
+// same read-modify-write as filamanPatchCustomField() above, one level up,
+// for what belongs to the product rather than to one spool.
+int filamanPatchFilamentCustomField(const char* base_url, const char* api_key, int filament_id,
+                                    const char* key, const char* value, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || filament_id <= 0 || !key || !key[0]) return -1;
+  HTTPClient get;
+  get.begin(String(base_url) + "/api/v1/filaments/" + filament_id);
+  get.setTimeout(timeout_ms);
+  addApiKey(get, api_key);
+  const int gcode = get.GET();
+  if (gcode != 200) {
+    get.end();
+    logSDf("FilaMan: filament custom field GET failed, HTTP %d", gcode);
+    return gcode;
+  }
+  SpiRamAllocator alloc;
+  JsonDocument raw(&alloc);
+  DeserializationError err = deserializeJson(raw, get.getStream());
+  get.end();
+  if (err) {
+    logSDf("FilaMan: filament custom field GET parse error: %s", err.c_str());
+    return -2;
+  }
+  JsonDocument body(&alloc);
+  JsonObject cf = body["custom_fields"].to<JsonObject>();
+  JsonObjectConst existing = raw["custom_fields"];
+  if (!existing.isNull()) {
+    for (JsonPairConst kv : existing) {
+      if (strcmp(kv.key().c_str(), key) == 0) continue;   // replaced below
+      cf[kv.key()] = kv.value();
+    }
+  } else if (!raw["custom_fields"].isNull()) {
+    logSD("FilaMan: filament custom_fields is not an object, nothing written");
+    return -2;
+  }
+  cf[key] = value ? value : "";
+  if (body.overflowed()) {
+    logSD("FilaMan: filament custom_fields copy overflowed, PATCH aborted to avoid data loss");
+    return -2;
+  }
+  String payload;
+  serializeJson(body, payload);
+  return patchSpool(base_url, api_key, (String("/api/v1/filaments/") + filament_id).c_str(),
                     payload, timeout_ms);
 }
 

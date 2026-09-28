@@ -46,6 +46,8 @@
 #define TV_R1           110
 #define TV_R2           152
 #define TV_R3           194
+#define TV_ROW_STEP     (TV_R2 - TV_R1)   // one row of the scrolling field area
+#define TV_ITEMS_MAX    16
 #define TV_DIV2_Y       238
 #define TV_BTN_Y        246
 #define TV_BTN_H        UI_TOUCH_MIN
@@ -280,6 +282,12 @@ static void buildIdentity(lv_obj_t* box, const Shown& s) {
     if (i.has_color) {
       const SpoolColor c = { ((uint32_t)i.r << 16) | ((uint32_t)i.g << 8) | i.b, 0xFF, true };
       swatchPaint(sw, c);
+      // A gradient or dual colour spool: both colours, the way the spool
+      // looks, rather than only the one block 5 names.
+      if (i.has_color2) {
+        lv_obj_set_style_bg_grad_color(sw, lv_color_make(i.r2, i.g2, i.b2), 0);
+        lv_obj_set_style_bg_grad_dir(sw, LV_GRAD_DIR_VER, 0);
+      }
     } else {
       lv_obj_set_style_bg_color(sw, lv_color_hex(UI_COL_EMPTY), 0);
     }
@@ -289,15 +297,28 @@ static void buildIdentity(lv_obj_t* box, const Shown& s) {
   cell(box, TV_CB, TV_IDENT_CAP_Y, TV_CW, T(STR_LBL_VENDOR), i.brand);
 }
 
-// UID and chip first, then whatever the record carries, in two columns and
-// two more rows. A value too long for a column - Bambu's tray UUID - takes a
-// row of its own.
+// UID and chip first, then whatever the record carries, in two columns. A
+// value too long for a column - Bambu's tray UUID - takes a row of its own.
+// A Bambu tag says more than the three rows between the dividers hold, so the
+// rows scroll; the ones a user looks for come first.
 static void buildGrid(lv_obj_t* box, const Shown& s) {
   const TagInfo& i = s.info;
+
+  lv_obj_t* area = lv_obj_create(box);
+  if (!area) return;
+  lv_obj_set_size(area, TV_BOX_W - 4, TV_DIV2_Y - TV_R1 - 2);
+  lv_obj_set_pos(area, 0, TV_R1);
+  lv_obj_set_style_bg_opa(area, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_width(area, 0, 0);
+  lv_obj_set_style_radius(area, 0, 0);
+  lv_obj_set_style_pad_all(area, 0, 0);
+  lv_obj_set_scroll_dir(area, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(area, LV_SCROLLBAR_MODE_AUTO);
+
   char chip[40];
   chipText(chip, sizeof(chip), s.kind, s.bytes);
-  cell(box, TV_CA, TV_R1, TV_CW, T(STR_TV_UID), s.uid);
-  cell(box, TV_CB, TV_R1, TV_CW, T(STR_TV_CHIP), chip);
+  cell(area, TV_CA, 0, TV_CW, T(STR_TV_UID), s.uid);
+  cell(area, TV_CB, 0, TV_CW, T(STR_TV_CHIP), chip);
 
   // Nothing to list: say what the tag is instead.
   const char* why = nullptr;
@@ -305,13 +326,13 @@ static void buildGrid(lv_obj_t* box, const Shown& s) {
   else if (!strcmp(i.fmt, "blank"))       why = T(STR_TV_BLANK_NOTE);
   else if (!strcmp(i.fmt, "unknown"))     why = T(STR_W_TAG_UNKNOWN);
   else if (!strcmp(i.fmt, "unsupported")) why = T(STR_W_TAG_NOREC);
-  if (why) { note(box, TV_R2, why); return; }
+  if (why) { note(area, TV_ROW_STEP, why); return; }
 
   struct Item { const char* cap; char val[40]; bool wide; };
-  Item items[10];
+  Item items[TV_ITEMS_MAX];
   int n = 0;
   auto add = [&](const char* cap, const char* v, bool wide) {
-    if (!v || !v[0] || n >= (int)(sizeof(items) / sizeof(items[0]))) return;
+    if (!v || !v[0] || n >= TV_ITEMS_MAX) return;
     items[n].cap = cap;
     items[n].wide = wide;
     snprintf(items[n].val, sizeof(items[n].val), "%s", v);
@@ -322,26 +343,42 @@ static void buildGrid(lv_obj_t* box, const Shown& s) {
     snprintf(buf, sizeof(buf), "#%d", i.spool_id);
     add(T(STR_W_TAG_SPOOLID), buf, false);
   }
+  // What Bambu calls the colour, from the catalog, and the number it is sold
+  // under - the two things a person compares against the box.
+  add(T(STR_LBL_L_COLOR), i.color_name, false);
+  add(T(STR_LBL_ARTICLE_NO_SHORT), i.article, false);
   rangeText(buf, sizeof(buf), i.et_lo, i.et_hi);   add(T(STR_W_TAG_NOZZLE), buf, false);
+  buf[0] = '\0';
+  if (i.dry_c) snprintf(buf, sizeof(buf), "%u °C, %u h", (unsigned)i.dry_c, (unsigned)i.dry_h);
+  add(T(STR_W_TAG_DRY), buf, false);
   rangeText(buf, sizeof(buf), i.bed_lo, i.bed_hi); add(T(STR_W_TAG_BED), buf, false);
   buf[0] = '\0';
   if (i.weight_g) snprintf(buf, sizeof(buf), "%u g", (unsigned)i.weight_g);
   add(T(STR_W_TAG_WEIGHT), buf, false);
+  buf[0] = '\0';
+  if (i.length_m) snprintf(buf, sizeof(buf), "%u m", (unsigned)i.length_m);
+  add(T(STR_W_TAG_LENGTH), buf, false);
+  buf[0] = '\0';
+  if (i.dia_x100) snprintf(buf, sizeof(buf), "%u.%02u mm",
+                           (unsigned)(i.dia_x100 / 100), (unsigned)(i.dia_x100 % 100));
+  add(T(STR_W_TAG_DIA), buf, false);
+  add(T(STR_W_TAG_CODE), i.code, false);
+  buf[0] = '\0';
+  if (i.has_color2) snprintf(buf, sizeof(buf), "#%02X%02X%02X", i.r2, i.g2, i.b2);
+  add(T(STR_W_TAG_COLOR2), buf, false);
   add(T(STR_LBL_PRODUCTION_DATE), i.prod_date, false);
   add(T(STR_W_TAG_SKU), i.sku, false);
   add(T(STR_W_TAG_TRAY), i.tray_uuid, true);
 
-  const int rows[] = { TV_R2, TV_R3 };
-  int row = 0, col = 0;
-  for (int k = 0; k < n && row < 2; k++) {
+  int row = 1, col = 0;
+  for (int k = 0; k < n; k++) {
     if (items[k].wide) {
       if (col) { row++; col = 0; }
-      if (row >= 2) break;
-      cell(box, TV_CA, rows[row], TV_FULL_W, items[k].cap, items[k].val);
+      cell(area, TV_CA, row * TV_ROW_STEP, TV_FULL_W, items[k].cap, items[k].val);
       row++;
       continue;
     }
-    cell(box, col ? TV_CB : TV_CA, rows[row], TV_CW, items[k].cap, items[k].val);
+    cell(area, col ? TV_CB : TV_CA, row * TV_ROW_STEP, TV_CW, items[k].cap, items[k].val);
     if (col) { row++; col = 0; } else col = 1;
   }
 }
