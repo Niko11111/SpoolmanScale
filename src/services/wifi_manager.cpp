@@ -91,8 +91,31 @@ void wifiManagerStopAp() {
   WiFi.mode(WIFI_STA);
 }
 
-void wifiManagerBegin(const char* ssid, const char* password) {
+// Written from the WiFi event task, read from the loop. One byte, so no lock.
+static volatile uint8_t s_last_disconnect_reason = 0;
+
+static void onStaDisconnected(arduino_event_id_t event, arduino_event_info_t info) {
+  (void)event;
+  s_last_disconnect_reason = info.wifi_sta_disconnected.reason;
+}
+
+void wifiManagerBegin(const char* ssid, const char* password,
+                      int32_t channel, const uint8_t* bssid) {
+  static bool event_registered = false;
+  if (!event_registered) {
+    WiFi.onEvent(onStaDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+    event_registered = true;
+  }
   WiFi.mode(WIFI_STA);
+  // The core's default is a fast scan, which joins the first access point it
+  // hears on the SSID and never sorts by signal. With several access points
+  // on one SSID that could be the weakest in the house, every time: a report
+  // on 28.09.2026 had a scale retry the same dying one for 40 minutes. The
+  // full scan costs a second or two per connect, in the background. The core
+  // keeps the setting for its own reconnects, so boot, the watchdog and a
+  // dropped link all get it from here.
+  WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+  WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
   // Has to happen before begin(): the DHCP client sends it with the request,
   // so the router lists the scale by name instead of as "espressif". It
   // sticks to the netif, which is why the reconnect watchdog in appLoop()
@@ -107,7 +130,43 @@ void wifiManagerBegin(const char* ssid, const char* password) {
   // long as it is up (ESP-IDF coexistence).
   WiFi.setSleep(false);
 #endif
-  WiFi.begin(ssid, password);
+  WiFi.begin(ssid, password, channel, bssid);
+}
+
+uint8_t wifiManagerLastDisconnectReason() {
+  return s_last_disconnect_reason;
+}
+
+const char* wifiManagerReasonName(uint8_t reason) {
+  if (!reason) return "none";
+  return WiFi.STA.disconnectReasonName((wifi_err_reason_t)reason);
+}
+
+void wifiManagerBssidStr(const uint8_t* bssid, char* out, size_t len) {
+  if (!bssid) {
+    snprintf(out, len, "?");
+    return;
+  }
+  snprintf(out, len, "%02x:%02x:%02x:%02x:%02x:%02x",
+           bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
+}
+
+void wifiManagerLinkLine(char* out, size_t len) {
+  char b[18];
+  wifiManagerBssidStr(WiFi.BSSID(), b, sizeof(b));
+  snprintf(out, len, "%s ch %d, %d dBm", b, (int)WiFi.channel(), (int)WiFi.RSSI());
+}
+
+bool wifiManagerStartSsidScan(const char* ssid, uint32_t ms_per_chan) {
+  return WiFi.scanNetworks(true, false, false, ms_per_chan, 0, ssid) == WIFI_SCAN_RUNNING;
+}
+
+const uint8_t* wifiManagerScannedBSSID(int index) {
+  return WiFi.BSSID(index);
+}
+
+int wifiManagerScannedChannel(int index) {
+  return WiFi.channel(index);
 }
 
 bool wifiManagerConnect(const char* ssid, const char* password, int attempts, uint32_t interval_ms) {

@@ -60,3 +60,9 @@ bool webAllowed(WebServer &srv, WebGate g);
 bool webRequire(WebServer &srv, WebGate g, const char *what);
 
 void webSendDisabled(WebServer &srv, const char *what, const char *menu);
+
+// Whether a browser has asked the web interface for anything within the last
+// ms milliseconds. An open status page polls, so a tab left open counts as
+// someone looking. The roaming check in services/wifi_roam.h stays away
+// while this is true.
+bool webBrowserSeenWithin(uint32_t ms);
