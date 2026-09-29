@@ -50,7 +50,11 @@ void closePrinterScreen() {
 
 // The next model in the profile order, NONE never included.
 static LabelPrinterModel nextModel(LabelPrinterModel m) {
-  return m == LP_MODEL_M220 ? LP_MODEL_M110 : LP_MODEL_M220;
+  switch (m) {
+    case LP_MODEL_M220: return LP_MODEL_M110;
+    case LP_MODEL_M110: return LP_MODEL_M100;
+    default:            return LP_MODEL_M220;
+  }
 }
 
 // The next stock size the model can take, after the current one; the first

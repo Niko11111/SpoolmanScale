@@ -25,10 +25,14 @@ static const LabelPrinterProfile PROFILE_NONE = {};
 static const LabelPrinterProfile PROFILE_M220 = {
   LP_MODEL_M220, "M220", 40, 30, 20, 75, 10, 150, 576, 648, false
 };
-// M110: 48 mm head, 384 dots. Same transport, own preamble, nobody here has
-// printed on one yet.
+// M110: 48 mm head, 384 dots. Same transport, own preamble. A user printed
+// with this profile on an M100 (09.2026), which proves the M110 bytes.
 static const LabelPrinterProfile PROFILE_M110 = {
-  LP_MODEL_M110, "M110", 40, 30, 20, 48, 10, 150, 384, 384, true
+  LP_MODEL_M110, "M110", 40, 30, 20, 48, 10, 150, 384, 384, false
+};
+// M100: the M110's head and bytes under its own name, so a user finds it.
+static const LabelPrinterProfile PROFILE_M100 = {
+  LP_MODEL_M100, "M100", 40, 30, 20, 48, 10, 150, 384, 384, false
 };
 
 // The two sizes printed and checked on the M220 for 0.8.0 (Nikolai,
@@ -46,6 +50,7 @@ const LabelPrinterProfile& labelPrinterProfile(LabelPrinterModel model) {
   switch (model) {
     case LP_MODEL_M220: return PROFILE_M220;
     case LP_MODEL_M110: return PROFILE_M110;
+    case LP_MODEL_M100: return PROFILE_M100;
     default:            return PROFILE_NONE;
   }
 }
@@ -153,7 +158,7 @@ LabelPrintResult labelPrinterPrint(const LabelPrinterConfig& c, const LabelRaste
   if (image.width > p.max_raster_width) return LP_TOO_WIDE;
   if (!labelPrinterRasterFits(c.model, image, c.media_width_mm, c.media_length_mm))
     return LP_MEDIA_MISMATCH;
-  const PhomemoModel pm = c.model == LP_MODEL_M110 ? PHOMEMO_M110 : PHOMEMO_M220;
+  const PhomemoModel pm = c.model == LP_MODEL_M220 ? PHOMEMO_M220 : PHOMEMO_M110;
   switch (phomemoMSeriesPrint(pm, c.address, image, progress)) {
     case BLE_WRITE_OK:                return LP_OK;
     case BLE_WRITE_OFF:               return LP_BLE_OFF;

@@ -371,10 +371,14 @@ bool labelRenderTest(const LabelPrinterConfig& printer, LabelRaster* out) {
 void labelQrForSpool(int spool_id, char* out, size_t n) {
   if (!out || !n) return;
   // FilaMan's label designer defaults its code to /spools/{id}; BamBuddy's
-  // labels carry the inventory page; Spoolman's own labels carry its tag
-  // format, which its scanner and the printer plugins read.
-  if (backendIsFilaMan())       snprintf(out, n, "%s/spools/%d", backendBaseUrl(), spool_id);
-  else if (backendIsBamBuddy()) snprintf(out, n, "%s/inventory?spool=%d", backendBaseUrl(), spool_id);
+  // labels carry the inventory page. Spoolman's label dialog offers its tag
+  // format or the spool page, and its scanner reads both; only the page
+  // opens on a phone - "WEB+SPOOLMAN:S-239" left the iPhone with plain text
+  // (Nikolai, 30.09.2026). The tag format stays for a scale with no address.
+  const char* base = backendBaseUrl();
+  if (backendIsFilaMan())       snprintf(out, n, "%s/spools/%d", base, spool_id);
+  else if (backendIsBamBuddy()) snprintf(out, n, "%s/inventory?spool=%d", base, spool_id);
+  else if (base[0] && strcmp(base, "http://") != 0) snprintf(out, n, "%s/spool/show/%d", base, spool_id);
   else                          snprintf(out, n, "WEB+SPOOLMAN:S-%d", spool_id);
 }
 

@@ -20,7 +20,9 @@
 //  here so the renderer and the screens agree on them.
 // ============================================================
 
-enum LabelPrinterModel : uint8_t { LP_MODEL_NONE = 0, LP_MODEL_M220 = 1, LP_MODEL_M110 = 2 };
+enum LabelPrinterModel : uint8_t {
+  LP_MODEL_NONE = 0, LP_MODEL_M220 = 1, LP_MODEL_M110 = 2, LP_MODEL_M100 = 3
+};
 
 struct LabelPrinterProfile {
   LabelPrinterModel model;

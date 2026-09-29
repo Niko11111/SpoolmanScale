@@ -112,8 +112,8 @@ static String body() {
   h += T(STR_W_P_SUPPORTED);
   h += F("</h2><div class='row'><span class='k'>Phomemo M220</span><span class='v'>");
   h += T(STR_W_P_TESTED);
-  h += F("</span></div><div class='row'><span class='k'>Phomemo M110</span><span class='v'>");
-  h += T(STR_PRN_EXPERIMENTAL);
+  h += F("</span></div><div class='row'><span class='k'>Phomemo M110, M100</span><span class='v'>");
+  h += T(STR_W_P_TESTED);
   h += F("</span></div><span class='hint'>");
   h += T(STR_W_P_SUPPORTED_HINT);
   h += F("</span></div>");
@@ -142,7 +142,7 @@ static String body() {
   h += T(STR_PRN_MODEL);
   h += F("</label><select id='pm'>");
   {
-    const LabelPrinterModel models[] = { LP_MODEL_M220, LP_MODEL_M110 };
+    const LabelPrinterModel models[] = { LP_MODEL_M220, LP_MODEL_M110, LP_MODEL_M100 };
     for (const LabelPrinterModel m : models) {
       const LabelPrinterProfile& p = labelPrinterProfile(m);
       h += F("<option value='");
@@ -332,7 +332,10 @@ static void routes(WebServer &srv) {
   srv.on("/api/printer/model", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_PRINTER))) return;
     const int m = srv.arg("plain").toInt();
-    if (m != LP_MODEL_M220 && m != LP_MODEL_M110) { srv.send(400, "text/plain", "unknown model"); return; }
+    if (m != LP_MODEL_M220 && m != LP_MODEL_M110 && m != LP_MODEL_M100) {
+      srv.send(400, "text/plain", "unknown model");
+      return;
+    }
     LabelPrinterConfig c = labelPrinterLoadConfig();
     c.model = (LabelPrinterModel)m;
     const bool ok = labelPrinterSaveConfig(c);
