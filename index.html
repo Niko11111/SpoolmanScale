@@ -107,7 +107,16 @@
       line-height: 1.6;
     }
 
-    .warning strong {
+    .warning.help summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .warning.help[open] summary {
+      margin-bottom: 4px;
+    }
+
+    .warning strong:first-child {
       display: block;
       margin-bottom: 4px;
     }
@@ -177,6 +186,16 @@
         <strong>localhost</strong>.
       </span>
     </esp-web-install-button>
+
+    <details class="warning help">
+      <summary>Flashing fails with "Failed to initialize"?</summary>
+      Close anything else that uses the USB port (Arduino IDE, a slicer, a second
+      flasher tab) and use a data cable plugged straight into the computer, no hub.
+      Still failing: use the two small buttons on the back of the display board.
+      Hold <b>BOOT</b>, press and release <b>RST</b>, release <b>BOOT</b>, then
+      click the button again and pick the port. Press <b>RST</b> once when
+      flashing is done.
+    </details>
 
     <div class="links">
       <a href="https://github.com/Niko11111/SpoolmanScale" target="_blank">GitHub</a>
