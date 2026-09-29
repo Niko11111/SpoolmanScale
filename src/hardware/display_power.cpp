@@ -25,6 +25,10 @@ void displayPowerInit() {
   displaySetBrightness((uint8_t)bright_normal);
 }
 
+bool displayIdleFor(uint32_t ms) {
+  return is_dimmed && (millis() - last_activity_ms) >= ms;
+}
+
 void resetActivityTimer() {
   last_activity_ms = millis();
   if (is_off) {

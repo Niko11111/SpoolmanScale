@@ -1,4 +1,5 @@
 #include "filaman_api.h"
+#include "services/backend_http.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -153,7 +154,7 @@ static bool fetchLocations(const char* base_url, const char* api_key, bool force
   // for the location popup, would hand it half a list. The loop refreshes it.
   if (!force && s_loc_count > 0 && !onLoopTask()) return true;
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/locations?page_size=" + FILAMAN_LOC_MAX);
   http.setTimeout(6000);
   addApiKey(http, api_key);
@@ -409,7 +410,7 @@ int filamanRegisterDevice(const char* base_url, const char* device_code,
   String url = String(base_url) + "/api/v1/devices/register";
   logSDf("FilaMan: registering device at %s", url.c_str());
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(url);
   http.setTimeout(timeout_ms);
   http.addHeader("X-Device-Code", device_code);
@@ -459,7 +460,7 @@ int filamanHeartbeat(const char* base_url, const char* device_token,
   // it runs once a minute on the loop task.
   HttpStallTime stall(__func__);
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/devices/heartbeat");
   http.setTimeout(timeout_ms);
   http.addHeader("Authorization", String("Device ") + device_token);
@@ -480,7 +481,7 @@ int filamanRfidResult(const char* base_url, const char* device_token,
                       const char* error_message, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || !device_token || !device_token[0]) return -1;
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/devices/rfid-result");
   http.setTimeout(timeout_ms);
   http.addHeader("Authorization", String("Device ") + device_token);
@@ -511,7 +512,7 @@ int filamanSendTagData(const char* base_url, const char* device_token,
   if (!hasBaseUrl(base_url) || !device_token || !device_token[0]) return -1;
   if (!tag_json || !tag_json[0]) return -1;
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/devices/tag-data");
   http.setTimeout(timeout_ms);
   http.addHeader("Authorization", String("Device ") + device_token);
@@ -531,7 +532,7 @@ int filamanSendTagData(const char* base_url, const char* device_token,
 int filamanGetHealthCode(const char* base_url, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url)) return -1;
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/health");   // no /api/v1 prefix
   http.setTimeout(timeout_ms);
   int code = http.GET();
@@ -544,7 +545,7 @@ bool filamanGetVersion(const char* base_url, char* out_version, size_t out_size,
   if (out_version && out_size > 0) out_version[0] = '\0';
   if (!hasBaseUrl(base_url) || !out_version || out_size == 0) return false;
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/openapi.json");
   http.setTimeout(timeout_ms);
   int code = http.GET();
@@ -557,7 +558,7 @@ bool filamanGetVersion(const char* base_url, char* out_version, size_t out_size,
   // from being transferred.
   char head[256];
   size_t got = 0;
-  WiFiClient* stream = http.getStreamPtr();
+  Stream* stream = http.getStreamPtr();
   uint32_t started = millis();
   while (got < sizeof(head) - 1 && (millis() - started) < timeout_ms) {
     if (!stream->available()) {
@@ -565,7 +566,9 @@ bool filamanGetVersion(const char* base_url, char* out_version, size_t out_size,
       delay(5);
       continue;
     }
-    int r = stream->read((uint8_t*)head + got, sizeof(head) - 1 - got);
+    const size_t want = sizeof(head) - 1 - got;
+    const size_t have = (size_t)stream->available();
+    int r = (int)stream->readBytes(head + got, have < want ? have : want);
     if (r <= 0) break;
     got += r;
   }
@@ -593,7 +596,7 @@ int filamanCountActiveSpools(const char* base_url, const char* api_key,
                              uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url)) return -1;
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/spools?page_size=1");
   http.setTimeout(timeout_ms);
   addApiKey(http, api_key);
@@ -617,7 +620,7 @@ int filamanInventoryStamp(const char* base_url, const char* api_key,
   // takes one here. The witness is then whichever spool its default order
   // puts first - less sharp than the newest one, but taken the same way every
   // time, which is all a comparison needs.
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/spools?page_size=1");
   // Both clocks, see spoolmanInventoryStamp().
   http.setConnectTimeout(timeout_ms);
@@ -658,7 +661,7 @@ static bool filamanFindEvent(const char* base_url, const char* api_key, int spoo
   if (out_iso && out_size > 0) out_iso[0] = '\0';
   if (!hasBaseUrl(base_url) || spool_id <= 0 || !out_iso || out_size == 0) return false;
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/spools/" + spool_id +
              "/events?page_size=" + FILAMAN_EVENT_SCAN);
   http.setTimeout(timeout_ms);
@@ -720,7 +723,7 @@ static int patchSpool(const char* base_url, const char* api_key, const char* pat
                       const String& body, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url)) return -1;
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + path);
   http.setTimeout(timeout_ms);
   addApiKey(http, api_key);
@@ -755,7 +758,7 @@ int filamanUnlinkBambuFields(const char* base_url, const char* api_key, int spoo
   if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
   if (!g_flm_ext_id && !g_flm_bambu_tags) return 200;   // nothing we maintain
 
-  HTTPClient get;
+  BackendHttp get;
   get.begin(String(base_url) + "/api/v1/spools/" + spool_id);
   get.setTimeout(timeout_ms);
   addApiKey(get, api_key);
@@ -824,7 +827,7 @@ int filamanUnlinkBambuFields(const char* base_url, const char* api_key, int spoo
 // a rare and deliberate action. Returns 200 when there was nothing to clear.
 static int filamanClearLegacyTag(const char* base_url, const char* api_key, int spool_id,
                                  uint32_t timeout_ms) {
-  HTTPClient get;
+  BackendHttp get;
   get.begin(String(base_url) + "/api/v1/spools/" + spool_id);
   get.setTimeout(timeout_ms);
   addApiKey(get, api_key);
@@ -935,7 +938,7 @@ bool filamanHasRfidSlot2(const char* base_url, const char* api_key,
   if (strncmp(s_slot2_probed_for, base_url, sizeof(s_slot2_probed_for) - 1) == 0)
     return s_slot2_present;
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/spools?page_size=1");
   http.setTimeout(timeout_ms);
   addApiKey(http, api_key);
@@ -1106,7 +1109,7 @@ int filamanPatchCustomField(const char* base_url, const char* api_key, int spool
   // so everything already there has to be read and sent back along with the
   // new value. Verified on a live instance: without this, last_dried and the
   // Spoolman import data would be wiped on the first write.
-  HTTPClient get;
+  BackendHttp get;
   get.begin(String(base_url) + "/api/v1/spools/" + spool_id);
   get.setTimeout(timeout_ms);
   addApiKey(get, api_key);
@@ -1160,7 +1163,7 @@ int filamanPatchCustomField(const char* base_url, const char* api_key, int spool
 int filamanPatchFilamentCustomField(const char* base_url, const char* api_key, int filament_id,
                                     const char* key, const char* value, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || filament_id <= 0 || !key || !key[0]) return -1;
-  HTTPClient get;
+  BackendHttp get;
   get.begin(String(base_url) + "/api/v1/filaments/" + filament_id);
   get.setTimeout(timeout_ms);
   addApiKey(get, api_key);
@@ -1219,7 +1222,7 @@ int filamanReportWeight(const char* base_url, const char* device_token,
   String payload;
   serializeJson(body, payload);
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/devices/scale/weight");
   http.setTimeout(timeout_ms);
   http.addHeader("Authorization", String("Device ") + device_token);
@@ -1254,7 +1257,7 @@ int filamanTagScan(const char* base_url, const char* device_token, const char* u
   String payload;
   serializeJson(body, payload);
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/tag/scan");
   http.setTimeout(timeout_ms);
   http.addHeader("Authorization", String("Device ") + device_token);
@@ -1290,7 +1293,7 @@ int filamanSetStatus(const char* base_url, const char* api_key, int spool_id,
   String payload;
   serializeJson(body, payload);
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/spools/" + spool_id + "/status");
   http.setTimeout(timeout_ms);
   addApiKey(http, api_key);
@@ -1386,7 +1389,7 @@ int filamanCreateSpool(const char* base_url, const char* api_key, int filament_i
   String payload;
   serializeJson(body, payload);
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/spools");
   http.setTimeout(timeout_ms);
   addApiKey(http, api_key);
@@ -1465,7 +1468,7 @@ int filamanGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
   if (out_err) *out_err = DeserializationError::Ok;
   if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/spools/" + spool_id);
   http.setTimeout(timeout_ms);
   addApiKey(http, api_key);
@@ -1539,7 +1542,7 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
       break;   // keep what was fetched, the caller sees a shorter list
     }
 
-    HTTPClient http;
+    BackendHttp http;
     http.begin(url);
     http.setTimeout(timeout_ms - elapsed);
     addApiKey(http, api_key);
@@ -1612,7 +1615,7 @@ int filamanGetDeviceAutoAssign(const char* base_url, const char* api_key,
   if (!hasBaseUrl(base_url) || device_id <= 0) return -1;
 
   // There is no GET for a single device, only the list.
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/admin/devices?page_size=" + FILAMAN_PAGE_MAX);
   http.setTimeout(timeout_ms);
   addApiKey(http, api_key);
@@ -1672,7 +1675,7 @@ int filamanSetDeviceAutoAssign(const char* base_url, const char* api_key,
   }
   body += "}";
 
-  HTTPClient http;
+  BackendHttp http;
   http.begin(String(base_url) + "/api/v1/admin/devices/" + device_id);
   http.setTimeout(timeout_ms);
   addApiKey(http, api_key);
@@ -1747,7 +1750,7 @@ static void buildDisplayFilter(JsonDocument& filter, bool with_slots) {
 // kilobytes and every caller here wants the same handling.
 static int getDisplay(const char* base_url, const char* api_key, const char* path,
                       JsonDocument& doc, JsonDocument& filter, uint32_t timeout_ms) {
-  HTTPClient http;
+  BackendHttp http;
   if (!http.begin(String(base_url) + path)) return -1;
   http.setTimeout(timeout_ms);
   addApiKey(http, api_key);

@@ -6,6 +6,7 @@
 // bambuddy_api.h and backend_api.h pull in ArduinoJson, which has to be parsed
 // before lang.h defines T() - ArduinoJson uses T as a template parameter.
 // Nothing here needs lang.h, so the plain includes are safe.
+#include "services/backend_http.h"
 #include "services/ams_presence.h"
 #include "services/backend_api.h"
 #include "services/bambuddy_device.h"
@@ -35,6 +36,7 @@ void backendApplyHost(const char *host) {
   // A drying batch still running would carry on against the new address.
   driedBatchCancel();
   backendSetHost(host);
+  backendConnClose();
   filamanForgetLocations();
   backendInvalidateExtraFieldCache();
   amsPresenceForget();
@@ -45,6 +47,7 @@ void backendApplyHost(const char *host) {
 void backendApplyMode(BackendMode mode) {
   if (mode == backendMode()) return;
   s_generation++;
+  backendConnClose();   // open to the old backend's server
   // Before the mode changes under it: the rest of a drying batch would
   // otherwise be written through the other backend.
   driedBatchCancel();

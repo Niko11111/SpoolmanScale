@@ -11,6 +11,7 @@
 #include "app_config.h"
 #include "bambu/bambu_catalog_sync.h"
 #include "services/drying_sync.h"
+#include "services/backend_http.h"
 #include "app/app_boot.h"
 #include "app/app_state.h"
 #include "app/backend_switch.h"
@@ -61,6 +62,9 @@
 #include "ui/status_picker.h"
 #include "ui/ams_view.h"
 #include "services/wifi_manager.h"
+#include "services/wifi_roam.h"
+#include "services/backend_job.h"
+#include "services/ams_weights.h"
 #include "services/improv_serial.h"
 #include "services/setup_portal.h"
 #include "ui/wifi_portal_screen.h"
@@ -209,6 +213,15 @@ static float         ams_settled_g    = 0.0f;
 static bool          ams_settled_ok   = false;
 constexpr int NFC_MAX_RETRIES = 5;
 constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
+// While the link is down the retries go on every 10 s, but the log gets the
+// loss, then a line this often, then the reconnect. One line per retry filled
+// the 240 line session ring in 40 minutes with nothing else.
+constexpr unsigned long WIFI_OUTAGE_LOG_MS = 5UL * 60UL * 1000UL;
+// What counts as nobody using the scale, for the roaming check: this long
+// without a touch or a weight change, with the display dimmed or dark, and no
+// browser on the web interface for WIFI_ROAM_WEB_QUIET_MS.
+constexpr unsigned long WIFI_ROAM_IDLE_MS      = 10UL * 60UL * 1000UL;
+constexpr unsigned long WIFI_ROAM_WEB_QUIET_MS = 2UL * 60UL * 1000UL;
 
 // ── Scale on the bus ───────────────────────────────────────────────────────
 // Bringing the ADC back is only attempted for one that was working and then
@@ -291,6 +304,48 @@ constexpr unsigned long NFC_RETRY_RESET_ABSENT_MS = 10000;
 // This watchdog restores the connection. WiFi.begin() is non-blocking, the
 // association happens in the background and is picked up on a later pass.
 // It stays out of the way while any WiFi setup screen is on display.
+static bool wifiUiVisible() {
+  return (scr_wifi_setup     && !lv_obj_has_flag(scr_wifi_setup,     LV_OBJ_FLAG_HIDDEN)) ||
+         (scr_wifi_pass      && !lv_obj_has_flag(scr_wifi_pass,      LV_OBJ_FLAG_HIDDEN)) ||
+         (scr_wifi_connecting && !lv_obj_has_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN));
+}
+
+// The link as the watchdog last saw it, and the outage it is in, if any.
+static bool          wifi_link_up         = false;
+static bool          wifi_outage          = false;
+static unsigned long wifi_outage_start_ms = 0;
+static unsigned long wifi_outage_log_ms   = 0;
+static uint32_t      wifi_outage_attempts = 0;
+
+// One line when the link comes up: which access point, on which channel, how
+// strong. With several access points on one SSID that is the first thing to
+// know about any WiFi trouble.
+static void noteWifiUp() {
+  if (wifi_link_up) return;
+  wifi_link_up = true;
+  char line[64];
+  wifiManagerLinkLine(line, sizeof(line));
+  if (wifi_outage) {
+    logSDf("WiFi: reconnected to %s after %lus and %u attempts, %s", cfg_wifi_ssid,
+           (millis() - wifi_outage_start_ms) / 1000, (unsigned)wifi_outage_attempts, line);
+  } else {
+    logSDf("WiFi: connected to %s, %s", cfg_wifi_ssid, line);
+  }
+  wifi_outage = false;
+}
+
+static void noteWifiDown() {
+  if (wifi_outage) return;
+  wifi_link_up = false;
+  wifi_outage = true;
+  wifi_outage_start_ms = millis();
+  wifi_outage_log_ms = millis();
+  wifi_outage_attempts = 0;
+  const uint8_t reason = wifiManagerLastDisconnectReason();
+  logSDf("WiFi: connection lost (reason %u, %s), reconnecting to %s",
+         reason, wifiManagerReasonName(reason), cfg_wifi_ssid);
+}
+
 static void handleWifiReconnect() {
   if (cfg_wifi_ssid[0] == '\0') return;
   // The browser is trying a network of its own; a begin() with the stored
@@ -298,14 +353,13 @@ static void handleWifiReconnect() {
   if (improvSerialBusy()) return;
   // The setup portal's access point is the network while it runs.
   if (setupPortalActive()) return;
-
-  bool wifi_ui_visible =
-    (scr_wifi_setup     && !lv_obj_has_flag(scr_wifi_setup,     LV_OBJ_FLAG_HIDDEN)) ||
-    (scr_wifi_pass      && !lv_obj_has_flag(scr_wifi_pass,      LV_OBJ_FLAG_HIDDEN)) ||
-    (scr_wifi_connecting && !lv_obj_has_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN));
-  if (wifi_ui_visible) return;
+  if (wifiUiVisible()) return;
+  // Joining the access point the roaming check chose. A begin() of our own
+  // would cancel that; if it fails, the roaming check lets go.
+  if (wifiRoamSwitching()) return;
 
   if (WiFi.status() == WL_CONNECTED) {
+    noteWifiUp();
     // Connected, but boot gave up before the network answered, so nothing that
     // a connection starts has run yet. The guards above apply here as well:
     // each of those flows sets wifi_ok on its own once it succeeds.
@@ -316,12 +370,36 @@ static void handleWifiReconnect() {
     return;
   }
 
+  noteWifiDown();
+
   static unsigned long last_retry_ms = 0;
   if (last_retry_ms != 0 && millis() - last_retry_ms < WIFI_RETRY_INTERVAL_MS) return;
   last_retry_ms = millis();
+  wifi_outage_attempts++;
 
-  logSDf("WiFi: connection lost, reconnecting to %s", cfg_wifi_ssid);
-  WiFi.begin(cfg_wifi_ssid, cfg_wifi_password);
+  if (millis() - wifi_outage_log_ms >= WIFI_OUTAGE_LOG_MS) {
+    wifi_outage_log_ms = millis();
+    const uint8_t reason = wifiManagerLastDisconnectReason();
+    logSDf("WiFi: still offline after %lu min, %u attempts, last reason %u (%s)",
+           (millis() - wifi_outage_start_ms) / 60000, (unsigned)wifi_outage_attempts,
+           reason, wifiManagerReasonName(reason));
+  }
+  // Through the manager rather than WiFi.begin(): the scan over every channel
+  // that joins the strongest access point is set there. Called directly, the
+  // core's fast scan went back to the first one it heard, every time.
+  wifiManagerBegin(cfg_wifi_ssid, cfg_wifi_password);
+}
+
+// Nobody is using the scale, so a scan for a better access point cannot get
+// in anyone's way. See services/wifi_roam.h.
+static bool wifiRoamQuiet() {
+  if (!displayIdleFor(WIFI_ROAM_IDLE_MS)) return false;
+  if (webBrowserSeenWithin(WIFI_ROAM_WEB_QUIET_MS)) return false;
+  if (improvSerialBusy() || setupPortalActive() || wifiUiVisible()) return false;
+  if (gh_flash_active || otaWebUploadActive() || updateCheckBusy()) return false;
+  if (webJobState() == WJS_RUNNING || backendListBusy()) return false;
+  if (amsWeightsBusy() || driedBatchBusy()) return false;
+  return true;
 }
 
 static unsigned long tare_msg_ms = 0;
@@ -468,6 +546,7 @@ void appLoop() {
   setupPortalTick();
   perfSection("wifi");
   handleWifiReconnect();
+  wifiRoamTick(wifiRoamQuiet(), cfg_wifi_ssid, cfg_wifi_password);
 
   // OTA web server bedienen wenn aktiv
   perfSection("web");
@@ -515,6 +594,7 @@ void appLoop() {
   updateCheckTick();
   bambuCatalogSyncTick();
   dryingSyncTick();
+  backendConnTick();
 
   firmwareStampTick();
   otaWebGithubTick();

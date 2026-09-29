@@ -220,7 +220,20 @@ static bool fromBackendHost(WebServer &srv) {
   return cached_ok && srv.client().remoteIP() == cached_ip;
 }
 
+// When a browser last asked for anything, answered or refused. FilaMan's
+// device protocol is a server, not a person, and does not count.
+static uint32_t s_last_browser_ms = 0;
+static bool     s_browser_seen    = false;
+
+bool webBrowserSeenWithin(uint32_t ms) {
+  return s_browser_seen && (millis() - s_last_browser_ms) < ms;
+}
+
 static WebVerdict verdict(WebServer &srv, WebGate g) {
+  if (g != GATE_ALWAYS) {
+    s_last_browser_ms = millis();
+    s_browser_seen = true;
+  }
   // Writing firmware holds the loop, and the progress view is served from
   // inside that loop so the bar can move. Nothing else is: a page built while
   // an image is being written would come out of the same heap, and a

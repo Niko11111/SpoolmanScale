@@ -20,6 +20,7 @@
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
 #include "hardware/sd_logger.h"
+#include "services/backend_http.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/filaman_api.h"
@@ -87,6 +88,26 @@ static String body() {
   h += T(STR_W_HOST_HINT);
   h += F(" ");
   h += T(STR_W_HOST_PORTHINT);
+  // Only means anything for an https address, and is shown with every one so
+  // the way to a self-signed server is where the address is typed.
+  h += F("</span></div><label class='check' style='margin-top:12px'><span class='switch'>"
+         "<input id='ti' type='checkbox'");
+  if (backendTlsInsecure()) h += F(" checked");
+  h += F("><i></i></span>");
+  h += T(STR_W_TLS_INSECURE);
+  h += F("</label><span class='msg' id='ti-s'></span><span class='hint'>");
+  h += T(STR_W_TLS_INSECURE_HINT);
+  h += F("</span><div class='field' style='margin-top:14px'><label>");
+  h += T(STR_W_TLS_KEEP);
+  h += F("</label><div class='inrow'><select id='tk' style='min-width:140px'>");
+  { static const uint8_t KEEP[] = { 1, 5, 30 };
+    for (uint8_t m : KEEP) {
+      h += F("<option value='"); h += m; h += F("'");
+      if (m == backendKeepMinutes()) h += F(" selected");
+      h += F(">"); h += m; h += F(" min</option>");
+    } }
+  h += F("</select><span class='msg' id='tk-s'></span></div><span class='hint'>");
+  h += T(STR_W_TLS_KEEP_HINT);
   h += F("</span></div><div class='rows' style='margin-top:16px'><div class='row'>"
          "<span class='k'>URL</span><span class='v mono'>");
   h += htmlEsc(backendBaseUrl());
@@ -195,6 +216,10 @@ static String body() {
          "function setBb(){const v=$('bk').value;"
          "if(!guard(v))return;postFlash('/api/bambuddy/key',v,'bk-s')"
          ".then(function(r){if(r.ok)hostPoll(0);});}"
+         "$('ti').addEventListener('change',function(){"
+         "postFlash('/api/tls',$('ti').checked?'1':'0','ti-s');});"
+         "$('tk').addEventListener('change',function(){"
+         "postFlash('/api/tlskeep',$('tk').value,'tk-s');});"
          "function setKey(){const v=$('fk').value;"
          "if(!guard(v))return;postFlash('/api/filaman/key',v,'fk-s');}"
          "function reg(){flash('fc-s',M.test,false);"
@@ -404,18 +429,30 @@ static void routes(WebServer &srv) {
     srv.send(200, "text/plain", T(STR_W_SAVED));
   });
 
-  // Address. Sanitised in backendSetHost(), but https has to be refused here:
-  // only the caller can say so, and letting it through would send the request
-  // as plain http to port 80 and fail in a way that looks like the server is
-  // down.
+  // Whether an https backend's certificate is checked. Changes behaviour, so
+  // the settings gate.
+  srv.on("/api/tls", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
+    const bool on = srv.arg("plain") == "1";
+    backendSetTlsInsecure(on);
+    logSDf("Web: backend certificate check %s", on ? "off" : "on");
+    srv.send(200, "text/plain", T(STR_W_SAVED));
+  });
+
+  // How long an https connection is kept open. Changes behaviour: settings.
+  srv.on("/api/tlskeep", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
+    backendSetKeepMinutes((uint8_t)srv.arg("plain").toInt());
+    logSDf("Web: https keep-alive %u min", (unsigned)backendKeepMinutes());
+    srv.send(200, "text/plain", T(STR_W_SAVED));
+  });
+
+  // Address. Sanitised in backendSetHost(), which keeps an "https://" in
+  // front: the request then goes out over TLS (services/backend_http.h).
   srv.on("/api/host", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
     String host = srv.arg("plain");
     host.trim();
-    if (host.startsWith("https://") || host.startsWith("HTTPS://")) {
-      srv.send(400, "text/plain", T(STR_W_HOST_HTTPS));
-      return;
-    }
     char clean[64];
     if (backendCleanHost(host.c_str(), clean, sizeof(clean)) == 0) {
       srv.send(400, "text/plain", T(STR_W_HOST_EMPTY));

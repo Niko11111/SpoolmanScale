@@ -1412,6 +1412,14 @@ enum StringID {
   STR_W_BCAT_UPDATE,
   STR_W_BCAT_NOTE,
   STR_W_BCAT_UNCHANGED,
+  // https to the backend
+  STR_W_TLS_INSECURE,
+  STR_W_TLS_INSECURE_HINT,
+  STR_W_TLS_KEEP,
+  STR_W_TLS_KEEP_HINT,
+  // The address screen on the device
+  STR_SP_HTTPS_HINT,
+  STR_SP_HTTPS_TITLE,
 
   STR_COUNT
 };

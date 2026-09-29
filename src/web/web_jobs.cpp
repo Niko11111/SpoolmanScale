@@ -9,6 +9,7 @@
 #include "services/backend_job.h"
 #include "bambu/bambu_catalog.h"
 #include "services/github_release.h"
+#include "web/web_net_probe.h"
 #include "web/web_shell.h"
 
 // The same numbers the update check task runs with, for the same reasons: a
@@ -41,7 +42,7 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 
 static volatile WebJobState s_state = WJS_IDLE;
 static WebJobResult         s_res;
-static char                 s_arg[40] = "";
+static char                 s_arg[160] = "";   // a release tag, or a whole address for the probe
 static bool                 s_flag    = false;
 static unsigned long        s_done_ms = 0;
 
@@ -137,6 +138,7 @@ static void webJobTask(void* arg) {
     case WJ_GH_CHECK:  runGhCheck();  break;
     case WJ_GH_NOTES:  runGhNotes();  break;
     case WJ_BAMBU_CATALOG: runBambuCatalog(); break;
+    case WJ_NET_PROBE: netProbeRun(s_arg, s_res.body); s_res.ok = true; break;
     default: break;
   }
   Serial.printf("[webjob] kind %d done, ok=%d code=%d, stack left %u\n",

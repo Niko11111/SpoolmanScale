@@ -7,6 +7,7 @@
 
 #include "ams_assign.h"
 #include "app_config.h"
+#include "backend.h"
 #include "auto_weight_state.h"
 #include "drying_config.h"
 #include "lang.h"
@@ -33,7 +34,7 @@ void loadPrefs() {
   cfg_wifi_password[sizeof(cfg_wifi_password)-1] = '\0';
   strncpy(cfg_spoolman_ip, ip.c_str(), sizeof(cfg_spoolman_ip) - 1);
   cfg_spoolman_ip[sizeof(cfg_spoolman_ip)-1] = '\0';
-  snprintf(cfg_spoolman_base, sizeof(cfg_spoolman_base), "http://%s", cfg_spoolman_ip);
+  backendComposeBase(cfg_spoolman_base, sizeof(cfg_spoolman_base), cfg_spoolman_ip);
 
   cal_factor = prefsGetFloat("cal_factor", CAL_FACTOR_DEFAULT);
   // Only the impossible is repaired, not the merely unusual. A factor of zero
@@ -181,6 +182,6 @@ void saveWifiCredentials(const char* ssid, const char* pass) {
 void saveSpoolmanIP(const char* ip) {
   strncpy(cfg_spoolman_ip, ip, sizeof(cfg_spoolman_ip) - 1);
   cfg_spoolman_ip[sizeof(cfg_spoolman_ip)-1] = '\0';
-  snprintf(cfg_spoolman_base, sizeof(cfg_spoolman_base), "http://%s", ip);
+  backendComposeBase(cfg_spoolman_base, sizeof(cfg_spoolman_base), ip);
   prefsPutString("spoolman_ip", ip);
 }
