@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <lwip/dns.h>
 #include <lwip/ip_addr.h>
+#include <lwip/tcpip.h>
 #include <string.h>
 
 #include "app/app_state.h"
@@ -221,11 +222,19 @@ static void startLookup() {
   ip_addr_t addr;
   s_dns_state    = DEV_DNS_CHECKING;
   s_dns_start_ms = millis();
-  // Called straight from the loop task, the way the Arduino core's own
-  // hostByName() does. Unlike hostByName() it does not wait: a blocking
-  // resolve would freeze LVGL for the length of the DNS timeout.
+  // Called from the loop task and does not wait: a blocking resolve would
+  // freeze LVGL for the length of the DNS timeout. Core 3 asserts that lwIP
+  // is only entered with the core lock held (CONFIG_LWIP_CHECK_THREAD_SAFETY),
+  // and without it the query's udp_sendto() aborted and restarted the scale
+  // right after WiFi came up, on every boot, once a domain was set.
+#ifdef CONFIG_LWIP_TCPIP_CORE_LOCKING
+  LOCK_TCPIP_CORE();
+#endif
   const err_t e = dns_gethostbyname(s_fqdn, &addr, dnsFound,
                                     (void*)(uintptr_t)s_dns_gen);
+#ifdef CONFIG_LWIP_TCPIP_CORE_LOCKING
+  UNLOCK_TCPIP_CORE();
+#endif
   if (e == ERR_OK) {
     // Already in the cache, answered inline - the callback did not run.
     s_dns_ip    = ip4_addr_get_u32(ip_2_ip4(&addr));
