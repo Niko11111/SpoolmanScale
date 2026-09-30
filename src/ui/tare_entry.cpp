@@ -77,7 +77,7 @@ static void refreshPad() {
     // What a weighing would store once this tare is in - the number the
     // issue asked to see before anything is saved.
     snprintf(info, sizeof(info), T(STR_TARE_ENTER_REST), scale_weight_g, v, scale_weight_g - v);
-    info_col = UI_COL_ACCENT;
+    info_col = UI_COL_GOOD;
   } else if (s_input[0] && padHoldsSpool() && atof(s_input) >= scale_weight_g) {
     copyT(info, sizeof(info), STR_TARE_ENTER_OVER);
     info_col = UI_COL_WARN;

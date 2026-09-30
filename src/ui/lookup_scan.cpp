@@ -145,7 +145,7 @@ void lookupFollowUp(LookupOrigin origin, const char* uid) {
       } else {
         if (origin == LOOKUP_FROM_NTAG) {
           lv_label_set_text(lbl_status, T(STR_TAG_FOUND));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
         }
         // Stays shorter than 32 characters, so everything that tells a
         // Bambu tag apart by that length keeps saying no.
@@ -678,7 +678,7 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
     uint32_t pct_color;
     if (pct <= 10.0f)       pct_color = UI_COL_BAD;
     else if (pct <= 30.0f)  pct_color = UI_COL_WARN;
-    else                    pct_color = UI_COL_ACCENT;
+    else                    pct_color = UI_COL_GOOD;
 
     lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(pct_color), 0);
 
@@ -899,7 +899,7 @@ void lookupResolveArchive(const LookupCtx& c, JsonDocument* doc2p,
     logSD("uid index: the scan did not run to its end, nothing to compare");
   }
   { char nb[40]; backendText(T(STR_NOT_IN_SPOOLMAN), nb, sizeof(nb)); lv_label_set_text(lbl_spoolman_weight, nb); }
-  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_ACCENT), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_GOOD), 0);
   sm_found = false;
   s_verdict_unknown = true;
   updateLinkButton();

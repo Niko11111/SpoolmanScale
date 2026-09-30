@@ -419,7 +419,7 @@ static void finishWifiScan(int n) {
 
     // Signal color
     uint32_t sig_color;
-    if      (rssi >= -65) sig_color = UI_COL_ACCENT;  // green
+    if      (rssi >= -65) sig_color = UI_COL_GOOD;  // green
     else if (rssi >= -80) sig_color = UI_COL_WARN;  // yellow
     else                  sig_color = UI_COL_SIGNAL_LOW_LIST;   // orange
 
@@ -592,7 +592,7 @@ static void fillConnSuccess() {
   snprintf(ok_buf, sizeof(ok_buf), LV_SYMBOL_OK "  %s", T(STR_WIFI_SUCCESS));
   if (lbl_conn_status) {
     lv_label_set_text(lbl_conn_status, ok_buf);
-    lv_obj_set_style_text_color(lbl_conn_status, lv_color_hex(UI_COL_ACCENT), 0);
+    lv_obj_set_style_text_color(lbl_conn_status, lv_color_hex(UI_COL_GOOD), 0);
   }
 
   if (conn_val_ssid) {

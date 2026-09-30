@@ -833,7 +833,7 @@ void buildMoreInfoScreen() {
   else strncpy(id_buf, "?", sizeof(id_buf)-1);
   lv_label_set_text(lbl_id, id_buf);
   lv_obj_set_style_text_color(lbl_id,
-    (sm_found && sm_id > 0) ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_WARN), 0);
+    (sm_found && sm_id > 0) ? lv_color_hex(UI_COL_GOOD) : lv_color_hex(UI_COL_WARN), 0);
   lv_obj_set_style_text_font(lbl_id, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_pos(lbl_id, 60, 76);
   // Every value label on this card gets a real height, one line of its font:

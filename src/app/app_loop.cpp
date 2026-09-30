@@ -1103,7 +1103,7 @@ void appLoop() {
         char buf[48];
         copyT(buf, sizeof(buf), STR_REMOTE_LINK_WEIGH);
         lv_label_set_text(lbl_status, buf);
-        lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
       }
     }
   }
@@ -1799,9 +1799,9 @@ void appLoop() {
           bambu_uid_probed = false;
           snapmaker_decoded = false;
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_ACCENT), 0);
+          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
           scanTag(uid, uidLen);
           // Opt-in, off by default, and then none of this touches the reader.
           // Once per placement, right after the first Bambu probe came back
@@ -1840,9 +1840,9 @@ void appLoop() {
             nfc_retry_count,
             NFC_MAX_RETRIES);
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_ACCENT), 0);
+          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
           scanTag(uid, uidLen);
         } else {
           // The "Tag placed" line waits until the scan has settled, so it
@@ -1876,7 +1876,7 @@ void appLoop() {
               if (!lookupPending()) lookupFollowUp(LOOKUP_FROM_UID, uid_str);
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_ACCENT), 0);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
             paintTagStatus();
           } else if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES) {
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
@@ -1898,7 +1898,7 @@ void appLoop() {
               (void)link_tag_first_seen_ms;
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_ACCENT), 0);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
             paintTagStatus();
           }
         }
@@ -1945,7 +1945,7 @@ void appLoop() {
         }
 
         lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-        lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_ACCENT), 0);
+        lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
 
         if (uid_changed_ntag) {
           // Marked handled straight away and unconditionally, whatever the
@@ -1972,7 +1972,7 @@ void appLoop() {
         if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
           lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(UI_COL_SWATCH_NONE), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
 
           // What the tag itself says, before anyone is asked about it. The poll
           // has the tag selected right now, so this is the one moment the pages
@@ -1996,7 +1996,7 @@ void appLoop() {
             if (!lookupPending()) lookupFollowUp(LOOKUP_FROM_NTAG, uid_str);
           } else {
             lv_label_set_text(lbl_status, T(STR_TAG_FOUND));
-            lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
+            lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
           }
         } else {
           // Same UID - show popup after delay if not dismissed

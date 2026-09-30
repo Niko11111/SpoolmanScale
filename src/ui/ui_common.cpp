@@ -277,9 +277,9 @@ int filamanStatusStrId(int status_id) {
 uint32_t filamanStatusColor(int status_id) {
   switch (status_id) {
     case FILAMAN_STATUS_NEW:      return UI_COL_VALUE_BLUE;
-    case FILAMAN_STATUS_OPENED:   return UI_COL_ACCENT;
+    case FILAMAN_STATUS_OPENED:   return UI_COL_GOOD;
     case FILAMAN_STATUS_DRYING:   return UI_COL_WARN;
-    case FILAMAN_STATUS_ACTIVE:   return UI_COL_ACCENT;
+    case FILAMAN_STATUS_ACTIVE:   return UI_COL_GOOD;
     case FILAMAN_STATUS_EMPTY:    return UI_COL_BAD;
     case FILAMAN_STATUS_ARCHIVED: return UI_COL_ARCHIVED;
     default:                      return UI_COL_CAPTION;

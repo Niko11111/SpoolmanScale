@@ -42,9 +42,9 @@ void updateDisplay() {
 
   // Status bar: green dot + tag found
   lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-  lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_ACCENT), 0);
+  lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
   lv_label_set_text(lbl_status, T(STR_TAG_FOUND));
-  lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
+  lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
 
   // Material (Zone 3 Row A)
   lv_label_set_text(lbl_material,
@@ -557,14 +557,14 @@ void buildUI() {
   // Spoolman filament remaining - BIG
   lbl_spoolman_weight = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_spoolman_weight, wifi_ok ? "..." : T(STR_NO_WIFI));
-  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_ACCENT), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_GOOD), 0);
   lv_obj_set_style_text_font(lbl_spoolman_weight, &lv_font_montserrat_ext_20, 0);
   lv_obj_set_pos(lbl_spoolman_weight, 8, 201);
 
   // Percent - Fix 3: right of weight, same row
   lbl_spoolman_pct = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_spoolman_pct, "");
-  lv_obj_set_style_text_color(lbl_spoolman_pct, lv_color_hex(UI_COL_ACCENT), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_pct, lv_color_hex(UI_COL_GOOD), 0);
   lv_obj_set_style_text_font(lbl_spoolman_pct, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_pos(lbl_spoolman_pct, 88, 207);  // shares baseline 220 with the weight
 
@@ -581,7 +581,7 @@ void buildUI() {
   lv_obj_t *bar_fill = lv_obj_create(bar_bg);
   lv_obj_set_size(bar_fill, 0, 8);
   lv_obj_set_pos(bar_fill, 0, 0);
-  lv_obj_set_style_bg_color(bar_fill, lv_color_hex(UI_COL_ACCENT), 0);
+  lv_obj_set_style_bg_color(bar_fill, lv_color_hex(UI_COL_GOOD), 0);
   lv_obj_set_style_border_width(bar_fill, 0, 0);
   lv_obj_set_style_radius(bar_fill, 4, 0);
   lv_obj_set_style_pad_all(bar_fill, 0, 0);

@@ -38,7 +38,8 @@ UI_COLOUR(DISABLED_BG,            0x111820, 0xe6ebf3)   // a button that cannot 
 UI_COLOUR(DISABLED_TEXT,          0x2a3848, 0x707b8a)   // its label, and an option that is off
 
 // ---- meaning -------------------------------------------------
-UI_COLOUR(ACCENT,                 0x28d49a, 0x008c58)   // the house green: active, found, ok
+UI_COLOUR(ACCENT,                 0x28d49a, 0x008c58)   // the house colour: titles, active choices, sliders, links
+UI_COLOUR(GOOD,                   0x28d49a, 0x008c58)   // a good state: found, connected, enough left, saved
 UI_COLOUR(OK_BG,                  0x1a4020, 0xaecaaf)   // a confirming button
 UI_COLOUR(OK_BG_PRESSED,          0x2a7030, 0x7cbf82)
 UI_COLOUR(OK_TEXT,                0x80ffb0, 0x008b46)   // its label

@@ -585,7 +585,7 @@ void showSpoolRemaining() {
   uint32_t pct_color;
   if (pct <= 10.0f)      pct_color = UI_COL_BAD;
   else if (pct <= 30.0f) pct_color = UI_COL_WARN;
-  else                   pct_color = UI_COL_ACCENT;
+  else                   pct_color = UI_COL_GOOD;
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(pct_color), 0);
 
   char pct_str[16];
@@ -1161,7 +1161,7 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
 
   // Reset all Spoolman labels before new query
   lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT));
-  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_ACCENT), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_GOOD), 0);
   lv_label_set_text(lbl_spoolman_pct, "");
   lv_label_set_text(lbl_spoolman_dried_val, "");
   if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);

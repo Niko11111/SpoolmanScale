@@ -287,7 +287,7 @@ void buildBackendScreen() {
     const bool port_missing = h && h[0] && !strchr(h, ':');
 
     addNavRow(scr_backend, 122, buf_addr, host_buf,
-              port_missing ? UI_COL_WARN : UI_COL_ACCENT,
+              port_missing ? UI_COL_WARN : UI_COL_GOOD,
               [](lv_event_t *e) {
                 logSD("BTN: Backend -> Address");
                 show_spoolman_pending = true;

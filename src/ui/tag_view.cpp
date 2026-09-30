@@ -218,7 +218,7 @@ static void formatInfo(lv_obj_t* hdr, const TagInfo& i) {
   lv_obj_t* val = lv_label_create(hdr);
   if (!val) return;
   lv_label_set_text(val, formatText(i));
-  lv_obj_set_style_text_color(val, lv_color_hex(isRealFormat(i) ? UI_COL_ACCENT
+  lv_obj_set_style_text_color(val, lv_color_hex(isRealFormat(i) ? UI_COL_GOOD
                                                                 : UI_COL_INK_SOFT), 0);
   lv_obj_set_style_text_font(val, UI_FONT_BODY, 0);
   oneLine(val, TV_FMT_W, UI_FONT_BODY);

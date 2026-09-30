@@ -217,7 +217,7 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
   lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_color(box,
-    mismatch ? lv_color_hex(UI_COL_BAD_TEXT) : lv_color_hex(UI_COL_ACCENT), 0);
+    mismatch ? lv_color_hex(UI_COL_BAD_TEXT) : lv_color_hex(UI_COL_GOOD), 0);
   lv_obj_set_style_border_width(box, 2, 0);
   lv_obj_set_style_radius(box, 12, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
@@ -226,7 +226,7 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_t *lbl_title = lv_label_create(box);
   { char tb[48]; copyT(tb, sizeof(tb), STR_REMOTE_LINK_TITLE); lv_label_set_text(lbl_title, tb); }
   lv_obj_set_style_text_color(lbl_title,
-    mismatch ? lv_color_hex(UI_COL_BAD_TEXT) : lv_color_hex(UI_COL_ACCENT), 0);
+    mismatch ? lv_color_hex(UI_COL_BAD_TEXT) : lv_color_hex(UI_COL_GOOD), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 14);
 
@@ -401,7 +401,7 @@ void showRemoteLinkPopup(int spool_id) {
             sizeof(bb) - 1);
     bb[sizeof(bb) - 1] = '\0'; lv_label_set_text(lbl_ok, bb); }
   lv_obj_set_style_text_color(lbl_ok,
-    mismatch ? lv_color_hex(UI_COL_BAD_TEXT) : lv_color_hex(UI_COL_ACCENT), 0);
+    mismatch ? lv_color_hex(UI_COL_BAD_TEXT) : lv_color_hex(UI_COL_GOOD), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_ok);
 

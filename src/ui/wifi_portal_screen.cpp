@@ -200,7 +200,7 @@ void handleWifiPortalDeferredActions() {
   if (visible && setupPortalSubmitted() && !portal_received_shown && lbl_portal_status) {
     portal_received_shown = true;
     lv_label_set_text(lbl_portal_status, T(STR_PORTAL_RECEIVED));
-    lv_obj_set_style_text_color(lbl_portal_status, lv_color_hex(UI_COL_ACCENT), 0);
+    lv_obj_set_style_text_color(lbl_portal_status, lv_color_hex(UI_COL_GOOD), 0);
   }
 
   // Whatever took the screen away also takes the access point down.

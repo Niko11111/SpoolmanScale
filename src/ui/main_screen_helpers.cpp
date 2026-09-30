@@ -120,7 +120,7 @@ void paintTagStatus() {
   lv_label_set_text(lbl_status, sb);
   lv_obj_set_style_text_color(lbl_status, lv_color_hex(
       sm_archived ? STATUS_COL_ARCHIVED : differs ? UI_COL_WARN
-      : sm_found ? UI_COL_ACCENT : UI_COL_WARN), 0);
+      : sm_found ? UI_COL_GOOD : UI_COL_WARN), 0);
 }
 
 void updateLinkButton() {

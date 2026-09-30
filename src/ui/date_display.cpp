@@ -134,7 +134,7 @@ uint32_t driedAlertColor(const char* de_date, const char* material) {
   switch (dryingAlertLevel(de_date, material)) {
     case 2:  return UI_COL_BAD;   // rot
     case 1:  return UI_COL_WARN;   // gelb
-    case 0:  return UI_COL_ACCENT;   // gruen
+    case 0:  return UI_COL_GOOD;   // gruen
     default: return UI_COL_STATUS_BLUE;   // kein Modus / kein Datum -> neutral blau
   }
 }

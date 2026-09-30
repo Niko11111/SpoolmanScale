@@ -1515,7 +1515,7 @@ void linkAdditionalTag(int spool_id, const char* uid) {
     char buf[48];
     copyT(buf, sizeof(buf), STR_TAG2_LINKED);
     lv_label_set_text(lbl_status, buf);
-    lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
+    lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
   }
   // Said in a modal as well, because that status line is repainted by the
   // NFC poll on the next pass and the link had no visible outcome. Not when a
@@ -2534,7 +2534,7 @@ static void showLinkConfirmPopup(int idx) {
   lv_obj_set_size(box, 440, 220);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
   lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
-  lv_obj_set_style_border_color(box, lv_color_hex(mismatch ? UI_COL_BAD_TEXT : UI_COL_ACCENT), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(mismatch ? UI_COL_BAD_TEXT : UI_COL_GOOD), 0);
   lv_obj_set_style_border_width(box, 2, 0);
   lv_obj_set_style_radius(box, 12, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
@@ -2544,7 +2544,7 @@ static void showLinkConfirmPopup(int idx) {
   lv_label_set_text(lbl_q, copy_flow_via_list ? T(STR_COPY_CONFIRM_TITLE)
                          : mismatch           ? T(STR_LINK_MISMATCH_TITLE)
                                               : T(STR_CONFIRM_LINK));
-  lv_obj_set_style_text_color(lbl_q, lv_color_hex(mismatch ? UI_COL_BAD_TEXT : UI_COL_ACCENT), 0);
+  lv_obj_set_style_text_color(lbl_q, lv_color_hex(mismatch ? UI_COL_BAD_TEXT : UI_COL_GOOD), 0);
   lv_obj_set_style_text_font(lbl_q, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_style_text_align(lbl_q, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_q, LV_ALIGN_TOP_MID, 0, 16);
@@ -2863,7 +2863,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     // An article number hit is framed in the house green: the same row, no
     // extra object, which the pool could not spare for every row.
     lv_obj_set_style_border_width(row, s.article_hit ? 2 : 1, 0);
-    lv_obj_set_style_border_color(row, lv_color_hex(s.article_hit ? UI_COL_ACCENT : UI_COL_LINE_SOFT), 0);
+    lv_obj_set_style_border_color(row, lv_color_hex(s.article_hit ? UI_COL_GOOD : UI_COL_LINE_SOFT), 0);
     lv_obj_set_style_pad_all(row, 0, 0);
 
     // ── Zeile 1: #ID + Material+Name ──────────────────────
@@ -2915,7 +2915,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     // A weight that matches the scale in the house green, on the label that
     // is there anyway: the frame already says "article number".
     if (weight_hit) weight_hits++;
-    lv_obj_set_style_text_color(lbl_rest, lv_color_hex(weight_hit ? UI_COL_ACCENT : UI_COL_CAPTION), 0);
+    lv_obj_set_style_text_color(lbl_rest, lv_color_hex(weight_hit ? UI_COL_GOOD : UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(lbl_rest, &lv_font_montserrat_ext_14, 0);
     lv_obj_align(lbl_rest, LV_ALIGN_BOTTOM_LEFT, 26, -5);
 
@@ -3698,7 +3698,7 @@ void doCreateSpoolFromTag() {
     spoolCacheForget("spool created from a tag");
     // The spool exists either way; a tag that could not be bound has said so
     // on the status line, and that must stay readable.
-    if (finishCopyFlow(new_id, newtag_tray)) statusMessageShow(T(STR_NEWTAG_OK), UI_COL_ACCENT);
+    if (finishCopyFlow(new_id, newtag_tray)) statusMessageShow(T(STR_NEWTAG_OK), UI_COL_GOOD);
     return;
   }
   logSDf("New spool from tag failed: HTTP %d", code);

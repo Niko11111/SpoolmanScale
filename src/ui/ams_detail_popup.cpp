@@ -616,7 +616,7 @@ static void buildIdentity(lv_obj_t* box, const AmsSpoolDetail& d) {
     }
     lv_label_set_text(cap, buf);
     lv_obj_set_style_text_color(cap,
-      lv_color_hex(d.tag_linked ? UI_COL_ACCENT : UI_COL_CAPTION), 0);
+      lv_color_hex(d.tag_linked ? UI_COL_GOOD : UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(cap, UI_FONT_CAPTION, 0);
     lv_obj_set_pos(cap, AMSD_ID_X, AMSD_IDENT_CAP_Y);
   }
@@ -628,7 +628,7 @@ static void buildIdentity(lv_obj_t* box, const AmsSpoolDetail& d) {
     else                snprintf(buf, sizeof(buf), "-");
     lv_label_set_text(id, buf);
     lv_obj_set_style_text_color(id,
-      lv_color_hex(d.spool_id > 0 ? UI_COL_ACCENT : UI_COL_WARN), 0);
+      lv_color_hex(d.spool_id > 0 ? UI_COL_GOOD : UI_COL_WARN), 0);
     lv_obj_set_style_text_font(id, UI_FONT_BODY, 0);
     oneLine(id, AMSD_ID_W, UI_FONT_BODY);
     lv_obj_set_pos(id, AMSD_ID_X, AMSD_IDENT_VAL_Y);
@@ -739,7 +739,7 @@ static void buildWeight(lv_obj_t* box, const AmsSpoolDetail& d, int reserve_righ
       snprintf(buf, sizeof(buf), "%d %%", share);
       lv_label_set_text(pct, buf);
       lv_obj_set_style_text_color(pct,
-        lv_color_hex(share < AMSD_LOW_PCT ? UI_COL_WARN : UI_COL_ACCENT), 0);
+        lv_color_hex(share < AMSD_LOW_PCT ? UI_COL_WARN : UI_COL_GOOD), 0);
       lv_obj_set_style_text_font(pct, UI_FONT_TITLE, 0);
       lv_obj_align(pct, LV_ALIGN_TOP_RIGHT, -AMSD_PAD, AMSD_WEIGHT_VAL_Y);
     }
@@ -750,7 +750,7 @@ static void buildWeight(lv_obj_t* box, const AmsSpoolDetail& d, int reserve_righ
       lv_obj_set_pos(bar, AMSD_CA, AMSD_BAR_Y);
       lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COL_RULE), LV_PART_MAIN);
       lv_obj_set_style_bg_color(bar,
-        lv_color_hex(share < AMSD_LOW_PCT ? UI_COL_WARN : UI_COL_ACCENT),
+        lv_color_hex(share < AMSD_LOW_PCT ? UI_COL_WARN : UI_COL_GOOD),
         LV_PART_INDICATOR);
       lv_obj_set_style_radius(bar, AMSD_BAR_H / 2, LV_PART_MAIN);
       lv_obj_set_style_radius(bar, AMSD_BAR_H / 2, LV_PART_INDICATOR);
@@ -901,7 +901,7 @@ static bool cardStatus(char* out, size_t n, uint32_t* col) {
     char fmt[48];
     copyT(fmt, sizeof(fmt), STR_AMSD_BATCH_DONE);
     snprintf(out, n, fmt, (int)s_batch_ok, (int)s_batch_total);
-    *col = (s_batch_ok == s_batch_total) ? UI_COL_ACCENT
+    *col = (s_batch_ok == s_batch_total) ? UI_COL_GOOD
          : (s_batch_ok > 0)              ? UI_COL_WARN
                                          : UI_COL_BAD_TEXT;
     return true;

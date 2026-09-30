@@ -139,7 +139,7 @@ void doCopySpoolCreate(int template_spool_id, int template_filament_id,
     spoolCacheForget("spool created by copy");
     // The spool exists either way; a tag that could not be bound has said so
     // on the status line, and that must stay readable.
-    if (finishCopyFlow(new_id)) statusMessageShow(T(STR_COPY_OK), UI_COL_ACCENT);
+    if (finishCopyFlow(new_id)) statusMessageShow(T(STR_COPY_OK), UI_COL_GOOD);
     return;
   }
   Serial.printf("Copy spool POST failed: HTTP %d\n", code);
