@@ -131,6 +131,8 @@ static String body() {
   h += T(STR_W_P_TESTED);
   h += F("</span></div><span class='hint'>");
   h += T(STR_W_P_SUPPORTED_HINT);
+  h += ' ';
+  h += T(STR_PRN_HEAT_SHORT);
   h += F("</span></div>");
 
   // ---- the printer ---------------------------------------------------------

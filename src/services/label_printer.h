@@ -32,6 +32,9 @@ struct LabelPrinterProfile {
   uint16_t min_length_mm, max_length_mm;
   uint16_t base_raster_width, max_raster_width;   // dots in one print row
   bool     experimental;
+  // Prints by heat on heat-sensitive paper, no ribbon: the label turns black
+  // wherever it gets hot enough, a spool in the dryer included.
+  bool     direct_thermal;
 };
 
 struct LabelPrinterConfig {

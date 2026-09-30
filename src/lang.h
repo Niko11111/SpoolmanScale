@@ -1434,6 +1434,9 @@ enum StringID {
   // The print position screen on the device
   STR_PRN_OFFSET_HINT,
   STR_PRN_OFFSET_HELP,
+  // Thermal labels and the dryer
+  STR_PRN_HEAT_SHORT,
+  STR_PRN_HEAT_HELP,
 
   STR_COUNT
 };

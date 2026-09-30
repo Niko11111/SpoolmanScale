@@ -28,16 +28,16 @@ static const LabelPrinterProfile PROFILE_NONE = {};
 // M220: 2 inch head, 576 dots, takes stock from 20 to 75 mm wide; the vendor
 // app pads narrower rows to 576 and wider ones to 648. Hardware proven.
 static const LabelPrinterProfile PROFILE_M220 = {
-  LP_MODEL_M220, "M220", 40, 30, 20, 75, 10, 150, 576, 648, false
+  LP_MODEL_M220, "M220", 40, 30, 20, 75, 10, 150, 576, 648, false, true
 };
 // M110: 48 mm head, 384 dots. Same transport, own preamble. A user printed
 // with this profile on an M100 (09.2026), which proves the M110 bytes.
 static const LabelPrinterProfile PROFILE_M110 = {
-  LP_MODEL_M110, "M110", 40, 30, 20, 48, 10, 150, 384, 384, false
+  LP_MODEL_M110, "M110", 40, 30, 20, 48, 10, 150, 384, 384, false, true
 };
 // M100: the M110's head and bytes under its own name, so a user finds it.
 static const LabelPrinterProfile PROFILE_M100 = {
-  LP_MODEL_M100, "M100", 40, 30, 20, 48, 10, 150, 384, 384, false
+  LP_MODEL_M100, "M100", 40, 30, 20, 48, 10, 150, 384, 384, false, true
 };
 
 // The two sizes printed and checked on the M220 for 0.8.0 (Nikolai,

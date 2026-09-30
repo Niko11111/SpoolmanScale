@@ -3043,6 +3043,13 @@ const char* const STRINGS[][3] = {
   { "Wo die Rolle unter dem Druckkopf läuft, hängt davon ab, wie sie im Halter sitzt. Die Kalibrierseite druckt ein Lineal über den ganzen Kopf: Die erste Zahl links auf dem Etikett ist der Versatz. Sitzt der Rahmen danach mit gleichem Rand links und rechts, passt es. Gedrückt halten zählt schnell.",
     "Where the roll runs under the head depends on how it sits in the holder. The calibration page prints a ruler across the whole head: the first number on the left of the label is the offset. Once the frame has the same margin left and right, it is right. Hold a button to count fast.",
     "L'endroit où le rouleau passe sous la tête dépend de son support. La page de calibrage imprime une règle sur toute la tête : le premier nombre à gauche de l'étiquette est le décalage. Quand le cadre a la même marge des deux côtés, c'est bon. Maintenez un bouton pour aller vite." },  // STR_PRN_OFFSET_HELP
+  // Thermal labels and the dryer
+  { "Beim Trocknen mit hoher Temperatur wird das Etikett auf der Spule schwarz.",
+    "Drying at a high temperature turns the label on the spool black.",
+    "Un séchage à haute température noircit l'étiquette sur la bobine." },  // STR_PRN_HEAT_SHORT
+  { "Die Etiketten sind Thermopapier: Der Drucker färbt sie ohne Tinte, allein mit Wärme. Dieselbe Reaktion löst auch das Trocknen aus. Auf einer Spule, die mit hoher Temperatur getrocknet wird, färbt sich das ganze Etikett schwarz, im AMS HT bei 85 °C meist schon beim ersten Mal. Bei niedrigeren Temperaturen geschieht das langsamer und kann sich über mehrere Trocknungen aufbauen. Schrift und QR-Code sind danach nicht mehr lesbar.",
+    "The labels are thermal paper: the printer colours them without ink, by heat alone. Drying sets off the same reaction. On a spool dried at a high temperature the whole label turns black, in the AMS HT at 85 °C mostly the very first time. At lower temperatures it happens more slowly and can build up over several drying runs. Text and QR code can no longer be read afterwards.",
+    "Les étiquettes sont en papier thermique : l'imprimante les colore sans encre, par la chaleur. Le séchage déclenche la même réaction. Sur une bobine séchée à haute température, toute l'étiquette noircit, dans l'AMS HT à 85 °C souvent dès la première fois. Plus bas, cela va plus lentement et peut s'accumuler sur plusieurs séchages. Texte et code QR deviennent illisibles." },  // STR_PRN_HEAT_HELP
 };
 
 StringID tagWriteResultString(uint8_t code) {

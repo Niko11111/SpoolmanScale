@@ -157,12 +157,17 @@ void buildPrinterScreen() {
       printer_cycle_model_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
-  // The label stock, cycled with a tap through what the model takes.
+  // The label stock, cycled with a tap through what the model takes. On
+  // thermal paper its "?" says what a dryer does to it.
   { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_PRN_MEDIA);
     char buf_s[48];
     snprintf(buf_s, sizeof(buf_s), T(STR_PRN_MEDIA_FMT),
              (unsigned)c.media_width_mm, (unsigned)c.media_length_mm);
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_IMAGE, buf_t, buf_s);
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_IMAGE, buf_t, buf_s, false,
+                                p.direct_thermal ? &help : nullptr);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_PRN_MEDIA, STR_PRN_HEAT_HELP));
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Printer -> next media");
       printer_cycle_media_pending = true;
@@ -203,6 +208,15 @@ void buildPrinterScreen() {
   if (have) {
     char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_PRN_FORGET);
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_TRASH, buf_t, "");
+    // In the red of every row that deletes something, like the factory reset
+    // in the system screen: set apart from the green rows, not shouting.
+    lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_DANGER_ROW), 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_BAD_BG), LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_BAD_BG_PRESSED), 0);
+    for (uint32_t i = 0; i < 2; i++) {   // child 0 the icon, 1 the title
+      lv_obj_t *l = lv_obj_get_child(btn, i);
+      if (l) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_DANGER_TEXT), 0);
+    }
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Printer -> forget");
       printer_forget_pending = true;

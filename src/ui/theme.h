@@ -53,6 +53,10 @@
 #define UI_COL_BAD_TEXT        0xff8080   // a red label on a dark button
 #define UI_COL_BAD_BG          0x3a1010   // a declining or destructive button
 #define UI_COL_BAD_BG_PRESSED  0x602020
+// A settings row that deletes something: the factory reset's row in the
+// system screen (TONE_DANGER there), dark red with the pressed red as border.
+#define UI_COL_DANGER_ROW      0x180a0e
+#define UI_COL_DANGER_TEXT     0xff6060
 
 // ---- type ----------------------------------------------------
 #define UI_FONT_CAPTION        (&lv_font_montserrat_ext_12)

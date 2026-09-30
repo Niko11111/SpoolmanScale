@@ -155,7 +155,12 @@ void printCardResult(LabelPrintResult result) {
   const uint32_t tone = ok ? UI_COL_ACCENT : (unconfirmed ? UI_COL_WARN : UI_COL_BAD);
   const int title = ok ? STR_PRN_DONE_TITLE
                   : unconfirmed ? STR_PRN_UNCONF_TITLE : STR_PRN_FAIL_TITLE;
-  const int text = ok ? STR_PRN_DONE_MSG : labelPrintResultString(result);
+  // A label that went onto thermal paper gets the one thing to know about
+  // it: the dryer blackens it (Nikolai, 30.09.2026). "The printer confirmed"
+  // said nothing the title had not.
+  const bool thermal = labelPrinterProfile(labelPrinterLoadConfig().model).direct_thermal;
+  const int text = !ok ? labelPrintResultString(result)
+                 : thermal ? STR_PRN_HEAT_SHORT : STR_PRN_DONE_MSG;
 
   lv_obj_set_size(s_box, UI_POPUP_W, UI_CARD_H);
   lv_obj_align(s_box, LV_ALIGN_CENTER, 0, 0);
