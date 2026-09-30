@@ -152,7 +152,7 @@ int backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocume
       // works in both of BamBuddy's inventory modes.
       (void)filter;
       return bbFindSpoolByTag(backendBaseUrl(), bambuddyApiKey(), tag_uuid,
-                              doc, timeout_ms, out_err);
+                              doc, timeout_ms, out_err, tagNativeUid(tag_uuid));
     default:
       // Spoolman goes through whichever extra field the user selected. The
       // field filter is passed along because a server that ignores the query

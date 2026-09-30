@@ -607,7 +607,7 @@ int bbCountActiveSpools(const char* base_url, const char* api_key,
 
 int bbFindSpoolByTag(const char* base_url, const char* api_key, const char* tag,
                      JsonDocument& doc, uint32_t timeout_ms,
-                     DeserializationError* out_err) {
+                     DeserializationError* out_err, const char* chip_uid) {
   doc.to<JsonArray>();
   if (!hasBaseUrl(base_url) || !tag || !tag[0]) return -1;
 
@@ -622,8 +622,20 @@ int bbFindSpoolByTag(const char* base_url, const char* api_key, const char* tag,
   // Bambu spool the AMS already knows resolve without any linking.
   const bool is_tray = (strlen(hex) == 32);
 
+  // A Bambu tag has a second identity, the chip of the side on the reader.
+  // tag_uid carried the tray uuid a second time; the chip goes there instead.
+  // BamBuddy still matches the tray uuid first and asks the chip only after a
+  // miss, so a spool it knows by the chip alone is found too, and with native
+  // tags (Spoolman 0.27, BamBuddy #3168) the chip is kept on the spool, where
+  // before it only ever learnt the tray uuid.
+  char chip[24] = "";
+  if (is_tray && chip_uid) {
+    tagUidNormalize(chip_uid, chip, sizeof(chip));
+    if (strlen(chip) >= 32) chip[0] = '\0';   // no chip known, only the tray uuid again
+  }
+
   int spool_id = 0;
-  int code = bbTagScanned(base_url, api_key, is_tray ? nullptr : hex,
+  int code = bbTagScanned(base_url, api_key, is_tray ? (chip[0] ? chip : nullptr) : hex,
                           is_tray ? hex : nullptr, &spool_id, timeout_ms);
   if (code != 200) return code;
 
