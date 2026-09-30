@@ -121,6 +121,7 @@
 #include "ui/tag_view.h"
 #include "ui/weight_format.h"
 #include "lang.h"
+#include "ui/theme.h"
 
 namespace {
 constexpr unsigned long NO_TAG_CLEAR_MS = 60000;
@@ -649,7 +650,7 @@ void appLoop() {
         char buf[48];
         copyT(buf, sizeof(buf), STR_CU_NOT_WRITTEN);
         lv_label_set_text(lbl_status, buf);
-        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_BAD_TEXT), 0);
       }
     }
   }
@@ -1068,7 +1069,7 @@ void appLoop() {
         char buf[48];
         copyT(buf, sizeof(buf), STR_REMOTE_LINK_TIMEOUT);
         lv_label_set_text(lbl_status, buf);
-        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
       }
     } else if (tag_present && !isConfirmPopupOpen() &&
                !isSpoolFlowIdInputOpen() && !isSpoolFlowLinkEntryOpen()) {
@@ -1102,7 +1103,7 @@ void appLoop() {
         char buf[48];
         copyT(buf, sizeof(buf), STR_REMOTE_LINK_WEIGH);
         lv_label_set_text(lbl_status, buf);
-        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
       }
     }
   }
@@ -1194,9 +1195,9 @@ void appLoop() {
   if (g_tag_displayed && millis() - g_tag_shown_ms > 10000) {
     g_tag_displayed = false;
     lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-    lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);  // yellow
+    lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_WARN), 0);  // yellow
     lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-    lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+    lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
   }
 
   // The ADC can leave the bus while the device is running - a plug working
@@ -1331,7 +1332,7 @@ void appLoop() {
         snprintf(sd_str, sizeof(sd_str), sm_diff >= 0 ? "+%.0f g" : "%.0f g", sm_diff);
         lv_label_set_text(lbl_raw_info, sd_str);
         lv_obj_set_style_text_color(lbl_raw_info,
-          sm_diff >= 0 ? lv_color_hex(0x40c080) : lv_color_hex(0xe04040), 0);
+          sm_diff >= 0 ? lv_color_hex(UI_COL_OK_TEXT_2) : lv_color_hex(UI_COL_BAD), 0);
       }
 
       // Live total (with spool)
@@ -1339,7 +1340,7 @@ void appLoop() {
         char lt_str[16];
         fmtG(lt_str, sizeof(lt_str), scale_weight_g);
         lv_label_set_text(lbl_spoolman_dried, lt_str);
-        lv_obj_set_style_text_color(lbl_spoolman_dried, lv_color_hex(0x8ab0d8), 0);
+        lv_obj_set_style_text_color(lbl_spoolman_dried, lv_color_hex(UI_COL_VALUE_BLUE), 0);
       }
 
       // Fix 4: ohne Beutel = live - spool - bag; fixed color like scale netto; diff green/red
@@ -1349,7 +1350,7 @@ void appLoop() {
         char b_str[16];
         fmtG(b_str, sizeof(b_str), ohne_beutel);
         lv_label_set_text(lbl_keys, b_str);
-        lv_obj_set_style_text_color(lbl_keys, lv_color_hex(0xf0b838), 0);  // same as scale netto
+        lv_obj_set_style_text_color(lbl_keys, lv_color_hex(UI_COL_WARN), 0);  // same as scale netto
 
         // bag SM diff
         if (lbl_bag_sm_diff && sm_remaining > 0) {
@@ -1358,7 +1359,7 @@ void appLoop() {
           snprintf(bd_str, sizeof(bd_str), bag_diff >= 0 ? "+%.0f g" : "%.0f g", bag_diff);
           lv_label_set_text(lbl_bag_sm_diff, bd_str);
           lv_obj_set_style_text_color(lbl_bag_sm_diff,
-            bag_diff >= 0 ? lv_color_hex(0x40c080) : lv_color_hex(0xe04040), 0);
+            bag_diff >= 0 ? lv_color_hex(UI_COL_OK_TEXT_2) : lv_color_hex(UI_COL_BAD), 0);
         }
       }
     } else if (sm_found) {
@@ -1407,7 +1408,7 @@ void appLoop() {
         char wmbuf[48];
         snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
         lv_label_set_text(lbl_weight_main_lbl, wmbuf);
-        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x28d49a), 0);
+        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_ACCENT), 0);
       }
     }
 
@@ -1438,7 +1439,7 @@ void appLoop() {
           char wmbuf[48];
           snprintf(wmbuf, sizeof(wmbuf), "%s " LV_SYMBOL_OK, T(STR_BTN_WEIGHT));
           lv_label_set_text(lbl_weight_main_lbl, wmbuf);
-          lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x40ff80), 0);
+          lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_WEIGHT_SENT), 0);
         }
         patchSpoolmanWeight(netto);
         // Remembered, not held back: the value is in FilaMan now, this only
@@ -1458,7 +1459,7 @@ void appLoop() {
           char wmbuf[48];
           snprintf(wmbuf, sizeof(wmbuf), "%s %ds", T(STR_BTN_WEIGHT), rem);
           lv_label_set_text(lbl_weight_main_lbl, wmbuf);
-          lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x60f0c0), 0);
+          lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_WEIGHT_COUNT), 0);
         }
       }
     } else if (!aw_done && !tag_present) {
@@ -1475,7 +1476,7 @@ void appLoop() {
         char wmbuf[48];
         snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
         lv_label_set_text(lbl_weight_main_lbl, wmbuf);
-        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x28d49a), 0);
+        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_ACCENT), 0);
       }
     }
   } else {
@@ -1512,7 +1513,7 @@ void appLoop() {
         char wbuf[48];
         snprintf(wbuf, sizeof(wbuf), T(STR_AMS_WINDOW_RUNNING), rem);
         lv_label_set_text(lbl_status, wbuf);
-        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
       }
     } else if (ams_owns_status) {
       // Hand the line back once, not on every pass. Only when the pad is still
@@ -1521,7 +1522,7 @@ void appLoop() {
       ams_last_shown_s = -1;
       if (lbl_status && !tag_present) {
         lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
       }
     }
   }
@@ -1798,9 +1799,9 @@ void appLoop() {
           bambu_uid_probed = false;
           snapmaker_decoded = false;
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_ACCENT), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
           scanTag(uid, uidLen);
           // Opt-in, off by default, and then none of this touches the reader.
           // Once per placement, right after the first Bambu probe came back
@@ -1839,9 +1840,9 @@ void appLoop() {
             nfc_retry_count,
             NFC_MAX_RETRIES);
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_ACCENT), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
           scanTag(uid, uidLen);
         } else {
           // The "Tag placed" line waits until the scan has settled, so it
@@ -1875,13 +1876,13 @@ void appLoop() {
               if (!lookupPending()) lookupFollowUp(LOOKUP_FROM_UID, uid_str);
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_ACCENT), 0);
             paintTagStatus();
           } else if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES) {
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_WARN), 0);
             lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-            lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+            lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
           } else {
             // tray_uuid present - query Spoolman if not done yet
             if (!isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen() &&
@@ -1897,7 +1898,7 @@ void appLoop() {
               (void)link_tag_first_seen_ms;
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_ACCENT), 0);
             paintTagStatus();
           }
         }
@@ -1944,7 +1945,7 @@ void appLoop() {
         }
 
         lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-        lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+        lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_ACCENT), 0);
 
         if (uid_changed_ntag) {
           // Marked handled straight away and unconditionally, whatever the
@@ -1969,9 +1970,9 @@ void appLoop() {
           lv_label_set_text(lbl_last_used, "-");
           lv_label_set_text(lbl_spoolman_dried_val, "-");
         if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
-          lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
+          lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(UI_COL_SWATCH_NONE), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
 
           // What the tag itself says, before anyone is asked about it. The poll
           // has the tag selected right now, so this is the one moment the pages
@@ -1995,7 +1996,7 @@ void appLoop() {
             if (!lookupPending()) lookupFollowUp(LOOKUP_FROM_NTAG, uid_str);
           } else {
             lv_label_set_text(lbl_status, T(STR_TAG_FOUND));
-            lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+            lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
           }
         } else {
           // Same UID - show popup after delay if not dismissed
@@ -2070,9 +2071,9 @@ void appLoop() {
             link_popup_dismissed = false;   // Reset flag → next spool can show popup
             link_tag_first_seen_ms = 0;
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_WARN), 0);
             lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-            lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+            lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
             // Auto location popup: if enabled, spool is linked, and not shown for this spool yet
             // Debounce: only trigger after 1500ms - avoids spurious remove during NTAG read
             // Not for an archived spool: asking where to store something that

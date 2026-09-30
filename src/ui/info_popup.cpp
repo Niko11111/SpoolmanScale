@@ -188,7 +188,7 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   s_info_pop = pop;
   lv_obj_set_size(pop, 480, 320);
   lv_obj_set_pos(pop, 0, 0);
-  lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(pop, lv_color_hex(UI_COL_SCRIM), 0);
   lv_obj_set_style_bg_opa(pop, LV_OPA_70, 0);
   lv_obj_set_style_border_width(pop, 0, 0);
   lv_obj_set_style_radius(pop, 0, 0);
@@ -204,8 +204,8 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   lv_obj_t *box = lv_obj_create(pop);
   lv_obj_set_size(box, 440, 250);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
-  lv_obj_set_style_border_color(box, lv_color_hex(0x2a4080), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_POPUP_BORDER), 0);
   lv_obj_set_style_border_width(box, 2, 0);
   lv_obj_set_style_radius(box, 12, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
@@ -217,7 +217,7 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   char tbuf[INFO_TITLE_BUF];
   copyT(tbuf, sizeof(tbuf), title_id);
   lv_label_set_text(title, tbuf);
-  lv_obj_set_style_text_color(title, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(title, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_width(title, 424);
@@ -238,7 +238,7 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
 
   lv_obj_t *info = lv_label_create(scroll);
   lv_label_set_text(info, infoText(text_id));
-  lv_obj_set_style_text_color(info, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(info, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(info, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(info, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
@@ -255,8 +255,8 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, 200, 48);
   lv_obj_set_pos(btn, 120, 188);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(0x1a3060), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(0x2a4080), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_LINE), 0);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, 8, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
@@ -277,7 +277,7 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   char bbuf[24];
   copyT(bbuf, sizeof(bbuf), STR_BACK);
   lv_label_set_text(l, bbuf);
-  lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(l, LV_ALIGN_CENTER, 0, 0);

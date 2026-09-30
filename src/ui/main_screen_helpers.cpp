@@ -24,7 +24,7 @@
 // is back before anyone wonders why it says nothing about the spool.
 #define STATUS_MESSAGE_HOLD_MS  8000UL
 // The resting text for an archived spool, grey like the weight line beside it.
-#define STATUS_COL_ARCHIVED     0x808080
+#define STATUS_COL_ARCHIVED     UI_COL_ARCHIVED
 // How far past its own box the status line answers a tap, so the whole bar
 // is the target when it switches between tag and spool.
 #define STATUS_TAP_EXT_PX       5

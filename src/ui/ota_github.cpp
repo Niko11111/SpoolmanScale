@@ -53,7 +53,7 @@ void otaGithubOverlayShow() {
   gh_overlay = lv_obj_create(lv_layer_top());
   lv_obj_set_size(gh_overlay, 480, 320);
   lv_obj_set_pos(gh_overlay, 0, 0);
-  lv_obj_set_style_bg_color(gh_overlay, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(gh_overlay, lv_color_hex(UI_COL_GROUND), 0);
   lv_obj_set_style_bg_opa(gh_overlay, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(gh_overlay, 0, 0);
   lv_obj_set_style_pad_all(gh_overlay, 0, 0);
@@ -67,14 +67,14 @@ void otaGithubOverlayShow() {
 
   lv_obj_t *ico = lv_label_create(gh_overlay);
   lv_label_set_text(ico, LV_SYMBOL_DOWNLOAD);
-  lv_obj_set_style_text_color(ico, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(ico, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_24, 0);
   lv_obj_align(ico, LV_ALIGN_CENTER, 0, -52);
 
   lv_obj_t *lbl_ov = lv_label_create(gh_overlay);
   char buf_ov[64]; copyT(buf_ov, sizeof(buf_ov), STR_GH_OTA_FLASHING); buf_ov[sizeof(buf_ov)-1]=0;
   lv_label_set_text(lbl_ov, buf_ov);
-  lv_obj_set_style_text_color(lbl_ov, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_ov, lv_color_hex(UI_COL_WARN), 0);
   lv_obj_set_style_text_font(lbl_ov, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_style_text_align(lbl_ov, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_ov, LV_ALIGN_CENTER, 0, -14);
@@ -86,8 +86,8 @@ void otaGithubOverlayShow() {
   gh_bar = lv_bar_create(gh_overlay);
   lv_obj_set_size(gh_bar, 300, 8);
   lv_obj_align(gh_bar, LV_ALIGN_CENTER, 0, 18);
-  lv_obj_set_style_bg_color(gh_bar, lv_color_hex(0x1a3060), 0);
-  lv_obj_set_style_bg_color(gh_bar, lv_color_hex(0x28d49a), LV_PART_INDICATOR);
+  lv_obj_set_style_bg_color(gh_bar, lv_color_hex(UI_COL_LINE), 0);
+  lv_obj_set_style_bg_color(gh_bar, lv_color_hex(UI_COL_ACCENT), LV_PART_INDICATOR);
   lv_obj_set_style_radius(gh_bar, 4, 0);
   lv_obj_set_style_radius(gh_bar, 4, LV_PART_INDICATOR);
   lv_bar_set_range(gh_bar, 0, 100);
@@ -95,7 +95,7 @@ void otaGithubOverlayShow() {
 
   gh_hint = lv_label_create(gh_overlay);
   lv_label_set_text(gh_hint, "");
-  lv_obj_set_style_text_color(gh_hint, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(gh_hint, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(gh_hint, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(gh_hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(gh_hint, LV_ALIGN_CENTER, 0, 42);
@@ -105,7 +105,7 @@ void otaGithubOverlayShow() {
   copyT(buf_keep, sizeof(buf_keep), STR_OTA_KEEP_POWER);
   buf_keep[sizeof(buf_keep)-1] = 0;
   lv_label_set_text(lbl_keep, buf_keep);
-  lv_obj_set_style_text_color(lbl_keep, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_keep, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_keep, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_keep, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_keep, LV_ALIGN_CENTER, 0, 70);
@@ -155,13 +155,13 @@ void doGithubOtaCheck() {
   if (!wifi_ok) {
     char buf[64]; copyT(buf, sizeof(buf), STR_GH_OTA_NO_WIFI); buf[sizeof(buf)-1]=0;
     lv_label_set_text(lbl_gh_status, buf);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_BAD_TEXT), 0);
     return;
   }
 
   char buf[64]; copyT(buf, sizeof(buf), STR_GH_OTA_CHECKING); buf[sizeof(buf)-1]=0;
   lv_label_set_text(lbl_gh_status, buf);
-  lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_CAPTION), 0);
   lv_timer_handler();
 
   // The background check holds its own TLS connection, and two handshakes want
@@ -180,7 +180,7 @@ void doGithubOtaCheck() {
   if (!githubLatestTag(gh_prerelease, tag, sizeof(tag), nullptr, 0,
                        cerr, sizeof(cerr), &image_size)) {
     lv_label_set_text(lbl_gh_status, cerr[0] ? cerr : T(STR_GH_OTA_FLASH_FAIL));
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_BAD_TEXT), 0);
     return;
   }
 
@@ -206,7 +206,7 @@ void doGithubOtaCheck() {
   if (remote == cur) {
     char upd[48]; copyT(upd, sizeof(upd), STR_GH_OTA_UP_TO_DATE); upd[sizeof(upd)-1]=0;
     lv_label_set_text(lbl_gh_status, upd);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0x40c080), 0);
+    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_OK_TEXT_2), 0);
     update_available = false;
     showUpdateBadges(false);
     if (btn_gh_update) lv_obj_add_state(btn_gh_update, LV_STATE_DISABLED);
@@ -232,19 +232,19 @@ void doGithubOtaCheck() {
              T(gh_found_older ? STR_GH_OTA_OLDER : STR_GH_OTA_UPDATE_AVAIL),
              gh_latest_version);
     lv_label_set_text(lbl_gh_status, avail);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xf0b838), 0);
+    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_WARN), 0);
     if (btn_gh_update) {
       lv_obj_clear_state(btn_gh_update, LV_STATE_DISABLED);
-      lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x1a3020), 0);
-      lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-      lv_obj_set_style_border_color(btn_gh_update, lv_color_hex(0x28d49a), 0);
+      lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(UI_COL_GO_BG), 0);
+      lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
+      lv_obj_set_style_border_color(btn_gh_update, lv_color_hex(UI_COL_ACCENT), 0);
       if (lbl_gh_update_btn) {
         char ubtn[48];
         copyT(ubtn, sizeof(ubtn), gh_found_older ? STR_GH_OTA_DOWNGRADE_BTN
                                        : STR_GH_OTA_UPDATE_BTN);
         ubtn[sizeof(ubtn)-1]=0;
         lv_label_set_text(lbl_gh_update_btn, ubtn);
-        lv_obj_set_style_text_color(lbl_gh_update_btn, lv_color_hex(0x40c080), 0);
+        lv_obj_set_style_text_color(lbl_gh_update_btn, lv_color_hex(UI_COL_OK_TEXT_2), 0);
       }
     }
     // The badge means an update is waiting, so an older release must not light
@@ -262,7 +262,7 @@ void doGithubOtaFlash(const char* version) {
   const char* tag = (version && version[0]) ? version : gh_latest_version;
   if (tag[0] == '\0') {
     lv_label_set_text(lbl_gh_status, T(STR_GH_OTA_FLASH_FAIL));
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_BAD_TEXT), 0);
     return;
   }
   // A version found too large for this slot - by the browser, say, while this
@@ -280,7 +280,7 @@ void doGithubOtaFlash(const char* version) {
 
   char buf[64]; copyT(buf, sizeof(buf), STR_GH_OTA_FLASHING); buf[sizeof(buf)-1]=0;
   lv_label_set_text(lbl_gh_status, buf);
-  lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_WARN), 0);
   if (btn_gh_update) lv_obj_add_flag(btn_gh_update, LV_OBJ_FLAG_HIDDEN);
   lv_timer_handler();
 
@@ -292,7 +292,7 @@ void doGithubOtaFlash(const char* version) {
   if (flashed) {
     char okmsg[64]; copyT(okmsg, sizeof(okmsg), STR_GH_OTA_FLASH_OK); okmsg[sizeof(okmsg)-1]=0;
     lv_label_set_text(lbl_gh_status, okmsg);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0x40c080), 0);
+    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_OK_TEXT_2), 0);
     lv_timer_handler();
     delay(2000);
     logSD("Reboot: GitHub update written");
@@ -301,7 +301,7 @@ void doGithubOtaFlash(const char* version) {
     snprintf(buf, sizeof(buf), "%s%s%s", T(STR_GH_OTA_FLASH_FAIL),
              ferr[0] ? " - " : "", ferr);
     lv_label_set_text(lbl_gh_status, buf);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_BAD_TEXT), 0);
   }
 }
 
@@ -330,12 +330,12 @@ void buildOtaGithubScreen() {
   lv_obj_t *btn_check = lv_btn_create(scr_ota_github);
   lv_obj_set_size(btn_check, 280, 44);
   lv_obj_align(btn_check, LV_ALIGN_TOP_MID, 0, 56);
-  lv_obj_set_style_bg_color(btn_check, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_check, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_check, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_bg_color(btn_check, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_check, 8, 0);
   lv_obj_set_style_shadow_width(btn_check, 0, 0);
   lv_obj_set_style_border_width(btn_check, 1, 0);
-  lv_obj_set_style_border_color(btn_check, lv_color_hex(0x1a3060), 0);
+  lv_obj_set_style_border_color(btn_check, lv_color_hex(UI_COL_LINE), 0);
   // The check is a TLS request of up to eight seconds: from the loop, never
   // from this callback, where "checking" was never drawn and the screen froze.
   lv_obj_add_event_cb(btn_check, [](lv_event_t *e) {
@@ -349,14 +349,14 @@ void buildOtaGithubScreen() {
   lv_obj_t *lbl_check = lv_label_create(btn_check);
   char buf_check[48]; copyT(buf_check, sizeof(buf_check), STR_GH_OTA_CHECK_BTN); buf_check[sizeof(buf_check)-1]=0;
   lv_label_set_text(lbl_check, buf_check);
-  lv_obj_set_style_text_color(lbl_check, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_check, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_check, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_check, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_check, LV_ALIGN_CENTER, 0, 0);
 
   lbl_gh_status = lv_label_create(scr_ota_github);
   lv_label_set_text(lbl_gh_status, "");
-  lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_gh_status, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_gh_status, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_gh_status, LV_LABEL_LONG_WRAP);
@@ -365,7 +365,7 @@ void buildOtaGithubScreen() {
 
   lbl_gh_installed = lv_label_create(scr_ota_github);
   lv_label_set_text(lbl_gh_installed, "");
-  lv_obj_set_style_text_color(lbl_gh_installed, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_gh_installed, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_gh_installed, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_gh_installed, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_gh_installed, LV_ALIGN_TOP_MID, 0, 148);
@@ -373,7 +373,7 @@ void buildOtaGithubScreen() {
 
   lbl_gh_latest = lv_label_create(scr_ota_github);
   lv_label_set_text(lbl_gh_latest, "");
-  lv_obj_set_style_text_color(lbl_gh_latest, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_gh_latest, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_gh_latest, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_gh_latest, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_gh_latest, LV_ALIGN_TOP_MID, 0, 170);
@@ -385,12 +385,12 @@ void buildOtaGithubScreen() {
   lv_obj_t *btn_auto = lv_btn_create(scr_ota_github);
   lv_obj_set_size(btn_auto, 280, 36);
   lv_obj_align(btn_auto, LV_ALIGN_TOP_MID, 0, 200);
-  lv_obj_set_style_bg_color(btn_auto, g_upd_autocheck ? lv_color_hex(0x0a2040) : lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_bg_color(btn_auto, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_auto, g_upd_autocheck ? lv_color_hex(UI_COL_BLUE_BG) : lv_color_hex(UI_COL_GROUND), 0);
+  lv_obj_set_style_bg_color(btn_auto, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_auto, 8, 0);
   lv_obj_set_style_shadow_width(btn_auto, 0, 0);
   lv_obj_set_style_border_width(btn_auto, 1, 0);
-  lv_obj_set_style_border_color(btn_auto, g_upd_autocheck ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a2030), 0);
+  lv_obj_set_style_border_color(btn_auto, g_upd_autocheck ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_QUIET_BG), 0);
   lv_obj_add_event_cb(btn_auto, [](lv_event_t *e) {
     g_upd_autocheck = !g_upd_autocheck;
     prefsPutBool("upd_check", g_upd_autocheck);
@@ -414,7 +414,7 @@ void buildOtaGithubScreen() {
   snprintf(auto_buf, sizeof(auto_buf), "%s  %s", T(STR_GH_OTA_AUTOCHECK),
            g_upd_autocheck ? "[ ON ]" : "[ OFF ]");
   lv_label_set_text(lbl_auto, auto_buf);
-  lv_obj_set_style_text_color(lbl_auto, g_upd_autocheck ? lv_color_hex(0x28d49a) : lv_color_hex(0x2a3848), 0);
+  lv_obj_set_style_text_color(lbl_auto, g_upd_autocheck ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_DISABLED_TEXT), 0);
   lv_obj_set_style_text_font(lbl_auto, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(lbl_auto, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_auto, LV_ALIGN_CENTER, 0, 0);
@@ -422,12 +422,12 @@ void buildOtaGithubScreen() {
   lv_obj_t *btn_pre = lv_btn_create(scr_ota_github);
   lv_obj_set_size(btn_pre, 140, 48);
   lv_obj_align(btn_pre, LV_ALIGN_BOTTOM_LEFT, 12, -24);
-  lv_obj_set_style_bg_color(btn_pre, gh_prerelease ? lv_color_hex(0x0a2040) : lv_color_hex(0x0a1020), 0);
-  lv_obj_set_style_bg_color(btn_pre, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_pre, gh_prerelease ? lv_color_hex(UI_COL_BLUE_BG) : lv_color_hex(UI_COL_GROUND), 0);
+  lv_obj_set_style_bg_color(btn_pre, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_pre, 8, 0);
   lv_obj_set_style_shadow_width(btn_pre, 0, 0);
   lv_obj_set_style_border_width(btn_pre, 1, 0);
-  lv_obj_set_style_border_color(btn_pre, gh_prerelease ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a2030), 0);
+  lv_obj_set_style_border_color(btn_pre, gh_prerelease ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_QUIET_BG), 0);
   lv_obj_add_event_cb(btn_pre, [](lv_event_t *e) {
     gh_prerelease = !gh_prerelease;
     // Was written to the "spool" namespace while loadPrefs() reads from
@@ -442,7 +442,7 @@ void buildOtaGithubScreen() {
   char pre_buf[32];
   snprintf(pre_buf, sizeof(pre_buf), "%s\n%s", T(STR_GH_OTA_PRERELEASE), gh_prerelease ? "[ ON ]" : "[ OFF ]");
   lv_label_set_text(lbl_pre, pre_buf);
-  lv_obj_set_style_text_color(lbl_pre, gh_prerelease ? lv_color_hex(0x28d49a) : lv_color_hex(0x2a3848), 0);
+  lv_obj_set_style_text_color(lbl_pre, gh_prerelease ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_DISABLED_TEXT), 0);
   lv_obj_set_style_text_font(lbl_pre, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(lbl_pre, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_pre, LV_ALIGN_CENTER, 0, 0);
@@ -450,12 +450,12 @@ void buildOtaGithubScreen() {
   btn_gh_update = lv_btn_create(scr_ota_github);
   lv_obj_set_size(btn_gh_update, 310, 48);
   lv_obj_align(btn_gh_update, LV_ALIGN_BOTTOM_RIGHT, -12, -24);
-  lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x111820), 0);
-  lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x111820), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(UI_COL_DISABLED_BG), 0);
+  lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(UI_COL_DISABLED_BG), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_gh_update, 8, 0);
   lv_obj_set_style_shadow_width(btn_gh_update, 0, 0);
   lv_obj_set_style_border_width(btn_gh_update, 1, 0);
-  lv_obj_set_style_border_color(btn_gh_update, lv_color_hex(0x1a2030), 0);
+  lv_obj_set_style_border_color(btn_gh_update, lv_color_hex(UI_COL_QUIET_BG), 0);
   lv_obj_add_state(btn_gh_update, LV_STATE_DISABLED);
   lv_obj_add_event_cb(btn_gh_update, [](lv_event_t *e){
     // Going back costs the same minute and the same restart as going forward,
@@ -475,22 +475,22 @@ void buildOtaGithubScreen() {
   lbl_gh_update_btn = lv_label_create(btn_gh_update);
   char buf_ubtn[48]; copyT(buf_ubtn, sizeof(buf_ubtn), STR_GH_OTA_UPDATE_BTN); buf_ubtn[sizeof(buf_ubtn)-1]=0;
   lv_label_set_text(lbl_gh_update_btn, buf_ubtn);
-  lv_obj_set_style_text_color(lbl_gh_update_btn, lv_color_hex(0x2a3848), 0);
+  lv_obj_set_style_text_color(lbl_gh_update_btn, lv_color_hex(UI_COL_DISABLED_TEXT), 0);
   lv_obj_set_style_text_font(lbl_gh_update_btn, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_gh_update_btn, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_gh_update_btn, LV_ALIGN_CENTER, 0, 0);
 
   if (update_available && gh_latest_version[0] != '\0') {
     lv_obj_clear_state(btn_gh_update, LV_STATE_DISABLED);
-    lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x1a3020), 0);
-    lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(btn_gh_update, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(UI_COL_GO_BG), 0);
+    lv_obj_set_style_bg_color(btn_gh_update, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(btn_gh_update, lv_color_hex(UI_COL_ACCENT), 0);
     char ubtn2[48]; copyT(ubtn2, sizeof(ubtn2), STR_GH_OTA_UPDATE_BTN); ubtn2[sizeof(ubtn2)-1]=0;
     lv_label_set_text(lbl_gh_update_btn, ubtn2);
-    lv_obj_set_style_text_color(lbl_gh_update_btn, lv_color_hex(0x40c080), 0);
+    lv_obj_set_style_text_color(lbl_gh_update_btn, lv_color_hex(UI_COL_OK_TEXT_2), 0);
     char avail[64]; snprintf(avail, sizeof(avail), T(STR_GH_OTA_UPDATE_AVAIL), gh_latest_version);
     lv_label_set_text(lbl_gh_status, avail);
-    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(0xf0b838), 0);
+    lv_obj_set_style_text_color(lbl_gh_status, lv_color_hex(UI_COL_WARN), 0);
     char inst[48]; snprintf(inst, sizeof(inst), T(STR_GH_OTA_INSTALLED), FW_VERSION);
     lv_label_set_text(lbl_gh_installed, inst);
     lv_obj_clear_flag(lbl_gh_installed, LV_OBJ_FLAG_HIDDEN);

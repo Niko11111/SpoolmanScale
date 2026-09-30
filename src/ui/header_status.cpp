@@ -16,11 +16,11 @@
 
 
 static lv_color_t wifiColor() {
-  if (!wifi_ok) return lv_color_hex(0xe04040);
+  if (!wifi_ok) return lv_color_hex(UI_COL_BAD);
   int rssi = wifiManagerRSSI();
-  if (rssi >= -65) return lv_color_hex(0x28d49a);
-  if (rssi >= -75) return lv_color_hex(0xf0b838);
-  return lv_color_hex(0xe06020);
+  if (rssi >= -65) return lv_color_hex(UI_COL_ACCENT);
+  if (rssi >= -75) return lv_color_hex(UI_COL_WARN);
+  return lv_color_hex(UI_COL_SIGNAL_LOW);
 }
 
 // Right to left, one gap between neighbours. Fixed offsets were what made the
@@ -91,7 +91,7 @@ void updateHeaderStatus() {
       lv_obj_clear_flag(lbl_hdr_scl, LV_OBJ_FLAG_HIDDEN);
       lv_label_set_text(lbl_hdr_scl, scl_ok ? "SCL" : "SCL!");
       lv_obj_set_style_text_color(lbl_hdr_scl,
-        scl_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
+        scl_ok ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_BAD), 0);
     }
   }
 
@@ -100,7 +100,7 @@ void updateHeaderStatus() {
   if (lbl_hdr_sm) {
     lv_label_set_text(lbl_hdr_sm, backendBadge());
     lv_obj_set_style_text_color(lbl_hdr_sm,
-      sm_reachable ? lv_color_hex(0x28d49a) : lv_color_hex(0xe04040), 0);
+      sm_reachable ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_BAD), 0);
   }
 
   if (lbl_sm_cap) {

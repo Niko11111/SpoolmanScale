@@ -6,16 +6,23 @@
 //  THEME
 //
 //  The one table for what the panel looks like: colours, type
-//  sizes, radii, the house measurements of a button. Around 900
-//  call sites still carry these as literals; a module moves onto
-//  this table when it is next touched, and a new module starts
-//  here. Once the literals are gone, a second palette - light,
-//  or one per backend - is a second copy of the colour block and
-//  a switch, not a hunt through the tree.
+//  sizes, radii, the house measurements of a button. Every colour
+//  in src/ui and src/app is named here; the ratchet counts one
+//  written as a number (inline_color_hex, raw_color_hex). A second
+//  palette - light, or one per backend - is a second copy of the
+//  colour block and a switch, not a hunt through the tree.
 //
 //  Names say what a colour is for, not what it looks like:
 //  UI_COL_CAPTION rather than "dim blue". A palette that swaps
 //  the blue for grey changes one line and every caption follows.
+//  Two names may share a value when their roles differ (INK_FAINT
+//  and RULE): a palette can then set them apart. A name that
+//  carries a widget (UI_COL_COPY_*) is a colour only that widget
+//  uses.
+//
+//  For a palette chosen at runtime these become variables. Keep
+//  them out of #if, constexpr and static initialisers so that
+//  step stays a change to this file.
 // ============================================================
 
 // ---- surfaces ------------------------------------------------
@@ -31,15 +38,36 @@
 #define UI_COL_CHIP            0x0d2040   // a header chip that is a button, pressed: UI_COL_LINE
 #define UI_COL_SCRIM           0x000000   // behind a popup, at UI_OPA_SCRIM
 
+#define UI_COL_WELL            0x050f1e   // a sunken box: a value on a settings row, the drying table
+#define UI_COL_SHEET           0x0b1525   // a full-screen picker's box: location, status, more info
+#define UI_COL_DIVIDER         0x0f1e30   // the faint separators of the main and more-info screens
+#define UI_COL_TEXTAREA        0x1e2e4a   // a text field being typed into
+#define UI_COL_KEYBOARD        0x182238   // the on-screen keyboard under it
+#define UI_COL_DANGER_BOX      0x1a0808   // a box that asks before deleting, or names a limit
+
 #define UI_OPA_SCRIM           LV_OPA_70
+
+// Steps added to a tile's own colour for its pressed state and its border.
+#define UI_SHADE_PRESSED       0x101010
+#define UI_SHADE_BORDER        0x181818
 
 // ---- text ----------------------------------------------------
 #define UI_COL_INK             0xe8f0ff   // titles and values
 #define UI_COL_INK_2           0xc8d8f0   // body text
 #define UI_COL_INK_SOFT        0x8fa8c8   // secondary body text, still readable
 #define UI_COL_CAPTION         0x4a6fa0   // captions and hints
-#define UI_COL_RULE            0x2a4060   // rules and inactive bars - never text
+#define UI_COL_RULE            0x2a4060   // rules and inactive bars; as text it is INK_FAINT
+#define UI_COL_INK_FAINT       0x2a4060   // header captions and the faintest hints
 #define UI_COL_VALUE_BLUE      0x8ab0d8   // dates and similar quiet values
+#define UI_COL_INK_MAX         0xffffff   // what must be typed exactly: a network password
+#define UI_COL_INK_BRIGHT      0xf0f0f0   // a spool's material and name, a list row
+#define UI_COL_ON_ACCENT       0x0a1020   // a label on a button filled with the accent
+#define UI_COL_OFF_TEXT        0x8098b8   // the label of an option not chosen
+#define UI_COL_ID_TEXT         0x4a7080   // a UUID and similar machine values
+#define UI_COL_STATUS_BLUE     0x5090e0   // a neutral status line, a date with no drying mode
+#define UI_COL_HDR_OFF         0x606060   // a header icon whose device is not there
+#define UI_COL_DISABLED_BG     0x111820   // a button that cannot be used now
+#define UI_COL_DISABLED_TEXT   0x2a3848   // its label, and an option that is off
 
 // ---- meaning -------------------------------------------------
 #define UI_COL_ACCENT          0x28d49a   // the house green: active, found, ok
@@ -57,6 +85,91 @@
 // system screen (TONE_DANGER there), dark red with the pressed red as border.
 #define UI_COL_DANGER_ROW      0x180a0e
 #define UI_COL_DANGER_TEXT     0xff6060
+#define UI_COL_ARCHIVED        0x808080   // an archived spool, a weight nobody reported
+#define UI_COL_ARCHIVE_TEXT    0xffb060   // archiving: its label, the bin icon
+#define UI_COL_ARCHIVE_BG      0x3a1a00
+#define UI_COL_ARCHIVE_BG_PRESSED 0x6a3000   // also its border
+#define UI_COL_RESTORE_BG      0x0a3020   // taking a spool out of the archive
+#define UI_COL_RESTORE_BG_PRESSED 0x156040
+#define UI_COL_DRY             0x5ad1ff   // drying: the drop icon
+#define UI_COL_SIGNAL_LOW      0xe06020   // weak WiFi in the header
+#define UI_COL_SIGNAL_LOW_LIST 0xff8000   // weak WiFi in the network list
+#define UI_COL_ALERT_BG        0x3a1410   // the diagnostics banner
+#define UI_COL_ALERT_BG_PRESSED 0x5a2418
+#define UI_COL_ALERT_TEXT      0xffb0a0
+
+// ---- buttons by role -----------------------------------------
+#define UI_COL_GO_BG           0x1a3020   // go ahead: next, save, an active toggle
+#define UI_COL_GO_BG_PRESSED   0x2a5030   // also its border
+#define UI_COL_QUIET_BG        0x1a2030   // cancel, delete a value; an idle toggle's border
+#define UI_COL_QUIET_BG_PRESSED 0x2a3040
+#define UI_COL_CHOICE_BG       0x0a2a40   // a chosen language or date format
+#define UI_COL_CHOICE_BG_PRESSED 0x1a4060
+#define UI_COL_BLUE_BG         0x0a2040   // a blue action: dried, this spool, an OTA toggle that is on
+#define UI_COL_BLUE_BG_PRESSED 0x1a4080   // also its border
+#define UI_COL_AMBER_BG        0x2a2010   // tare, the factor keys
+#define UI_COL_AMBER_BG_PRESSED 0x4a4020
+#define UI_COL_AMBER_LINE      0x3a3010   // their border, and a hint row's
+#define UI_COL_AMBER_ROW       0x1a1a08   // a hint row
+#define UI_COL_CAUTION_BG      0x3a2800   // go ahead despite a warning; a caution row's border
+#define UI_COL_CAUTION_BG_PRESSED 0x5a4000
+#define UI_COL_CAUTION_ROW     0x161206   // a settings row that needs care
+#define UI_COL_CAUTION_ROW_PRESSED 0x3a2c10
+#define UI_COL_CLOSE_LINE      0x601010   // the border of a close or unlink button
+#define UI_COL_CURRENT_BG      0x0d3020   // the list row of what is set now
+#define UI_COL_PICKED_BG       0x14402e   // a chosen backend, the raise-capacity answer
+#define UI_COL_ALT_BG          0x1a2a40   // a neutral answer beside a green one: empty spool, keep
+#define UI_COL_ALT_TEXT        0x80c0ff
+#define UI_COL_TOGGLE_OFF_BG   0x101820   // a switch-like button that is off
+#define UI_COL_TOGGLE_OFF_BG_PRESSED 0x1a2a38
+#define UI_COL_KEY_DEL         0x1a1020   // the delete key of a number pad
+#define UI_COL_KEY_OK          0x1a4030   // its OK key
+#define UI_COL_MATCH_BG        0x0d3d2e   // a remote link that matches the spool
+#define UI_COL_MATCH_BG_PRESSED 0x18705a
+#define UI_COL_LATER_BG        0x141c30   // "got it" on the calibration reminder
+#define UI_COL_LATER_BG_PRESSED 0x1e2a44
+#define UI_COL_NFC_FRAME       0x3a6ea8   // the frame of the NFC reset question
+
+// One widget each
+#define UI_COL_MORE_BG         0x0d1f38   // main screen: More
+#define UI_COL_LINK_BG         0x1e3000   // main screen: link a spool
+#define UI_COL_LINK_BG_PRESSED 0x2e5000
+#define UI_COL_LINK_LINE       0x4a7800
+#define UI_COL_LINK_TEXT       0xb8e030
+#define UI_COL_COPY_BG         0x00222a   // main screen: copy a spool
+#define UI_COL_COPY_BG_PRESSED 0x003a48
+#define UI_COL_COPY_LINE       0x00b8d4
+#define UI_COL_COPY_TEXT       0x20d8f8
+#define UI_COL_WEIGHT_SENT     0x40ff80   // the weight button once the value is sent
+#define UI_COL_WEIGHT_COUNT    0x60f0c0   // its countdown
+#define UI_COL_AMS_YES_TEXT    0x80ffa0   // AMS assignment question
+#define UI_COL_AMS_NO_TEXT     0xffa0a0
+#define UI_COL_AMS_NO_PRESSED  0x702020
+#define UI_COL_FILAMENT_BG     0x0a2820   // weight question: this filament
+#define UI_COL_VENDOR_BG       0x281a00   // weight question: vendor
+#define UI_COL_BAG_BG          0x1a3a20   // weight question: with bag
+#define UI_COL_BAG_BG_PRESSED  0x2a6030
+#define UI_COL_NEW_SPOOL_BG    0x102040   // weight question: new spool
+#define UI_COL_NEW_SPOOL_BG_PRESSED 0x1a3870
+#define UI_COL_NEW_SPOOL_TEXT  0x80c8ff
+#define UI_COL_FROM_TAG_BG     0x0a2818   // copy: create from the tag
+#define UI_COL_FROM_TAG_BG_PRESSED 0x1a4a30
+#define UI_COL_KOFI_BG         0x1a2800   // info screen tiles
+#define UI_COL_KOFI_INK        0xa0d840
+#define UI_COL_DISCORD_BG      0x12103a
+#define UI_COL_DISCORD_INK     0x8090ff
+#define UI_COL_MAKERWORLD_BG   0x1a0a18
+#define UI_COL_MAKERWORLD_INK  0xc060e0
+
+// ---- content -------------------------------------------------
+// Fixed colours next to data, not part of the look: a palette may
+// leave them alone. Colours that come from a spool are never here.
+#define UI_COL_ON_BRIGHT_FILL  0x000000   // a label on a light filament colour
+#define UI_COL_ON_DARK_FILL    0xffffff   // a label on a dark one
+#define UI_COL_QR_DARK         0x000000   // a QR code must stay black on white to scan
+#define UI_COL_QR_LIGHT        0xffffff
+#define UI_COL_SWATCH_NONE     0x333333   // a spool without a colour
+#define UI_COL_SWATCH_GLASS    0xdce6f0   // a transparent filament
 
 // ---- type ----------------------------------------------------
 #define UI_FONT_CAPTION        (&lv_font_montserrat_ext_12)

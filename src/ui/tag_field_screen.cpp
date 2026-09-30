@@ -21,6 +21,7 @@
 #include "services/tag_field.h"
 #include "services/user_options.h"
 #include "ui_common.h"
+#include "theme.h"
 
 // Set by the extra fields menu before it defers to this screen, so the header
 // can leave the back button out during first setup the way every other setup
@@ -104,7 +105,7 @@ static void addFieldRow(lv_obj_t *list, uint8_t value) {
   lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
   if (arr_lbl) {
     lv_label_set_text(arr_lbl, active ? LV_SYMBOL_OK : "");
-    lv_obj_set_style_text_color(arr_lbl, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(arr_lbl, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_16, 0);
   }
 
@@ -181,7 +182,7 @@ void buildTagFieldScreen() {
     char buf[40];
     copyT(buf, sizeof(buf), STR_TAG_FIELD);
     lv_label_set_text(title, buf);
-    lv_obj_set_style_text_color(title, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 12);
     addCloseButton(scr_tag_field);

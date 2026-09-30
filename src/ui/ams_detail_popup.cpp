@@ -251,7 +251,7 @@ static void showDriedAsk() {
   lv_obj_t* icon = lv_label_create(box);
   if (icon) {
     lv_label_set_text(icon, LV_SYMBOL_TINT);
-    lv_obj_set_style_text_color(icon, lv_color_hex(0x5ad1ff), 0);
+    lv_obj_set_style_text_color(icon, lv_color_hex(UI_COL_DRY), 0);
     lv_obj_set_style_text_font(icon, UI_FONT_ICON, 0);
     lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, AMSD_ASK_ICON_Y);
   }
@@ -458,9 +458,9 @@ static lv_obj_t* cell(lv_obj_t* box, int x, int y, int cap_id,
     if (frame) {
       lv_obj_set_size(frame, AMSD_CW + 2 * AMSD_FIELD_PAD_X, AMSD_FIELD_H);
       lv_obj_set_pos(frame, x - AMSD_FIELD_PAD_X, y - AMSD_FIELD_PAD_Y);
-      lv_obj_set_style_bg_color(frame, lv_color_hex(0x0d2040), 0);
-      lv_obj_set_style_bg_color(frame, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-      lv_obj_set_style_border_color(frame, lv_color_hex(0x1a3060), 0);
+      lv_obj_set_style_bg_color(frame, lv_color_hex(UI_COL_CHIP), 0);
+      lv_obj_set_style_bg_color(frame, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+      lv_obj_set_style_border_color(frame, lv_color_hex(UI_COL_LINE), 0);
       lv_obj_set_style_border_width(frame, 1, 0);
       lv_obj_set_style_radius(frame, 8, 0);
       lv_obj_set_style_shadow_width(frame, 0, 0);

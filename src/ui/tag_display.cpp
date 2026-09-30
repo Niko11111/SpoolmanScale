@@ -10,6 +10,7 @@
 #include "spool_flow.h"
 #include "spoolman_lookup.h"
 #include "ui_common.h"
+#include "theme.h"
 
 
 // ============================================================
@@ -19,15 +20,15 @@ void clearTagDisplay() {
   // Whatever lookup is still out, its verdict has nothing left to paint on.
   lookupAbandon();
   lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-  lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);  // yellow = kein Tag
+  lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_WARN), 0);  // yellow = kein Tag
   lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
   lv_label_set_text(lbl_uid, "-");
   lv_label_set_text(lbl_tray_uuid, "-");
   lv_label_set_text(lbl_material, "-");
   lv_label_set_text(lbl_date, "-");
   lv_label_set_text(lbl_spoolman_id, "?");
-  lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(UI_COL_WARN), 0);
   lv_label_set_text(lbl_color, "-");
   lv_label_set_text(lbl_temp, "-");
   lv_label_set_text(lbl_vendor, "-");

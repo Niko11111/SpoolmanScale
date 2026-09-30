@@ -8,6 +8,7 @@
 #include "app_config.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "theme.h"
 
 // The longest body in the table is around 400 bytes once the umlauts are
 // counted as the two bytes they really are. 1024 matches info_popup.cpp, for
@@ -45,9 +46,9 @@ static lv_obj_t *mkButton(lv_obj_t *box, int x, int w, int str_id, bool primary,
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, w, 48);
   lv_obj_set_pos(btn, x, 208);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(primary ? 0x1a3020 : 0x1a3060), 0);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(primary ? UI_COL_GO_BG : UI_COL_LINE), 0);
   lv_obj_set_style_bg_color(btn,
-    lv_color_hex(primary ? 0x2a5030 : 0x2a4080), LV_STATE_PRESSED);
+    lv_color_hex(primary ? UI_COL_GO_BG_PRESSED : UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, 8, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
@@ -58,7 +59,7 @@ static lv_obj_t *mkButton(lv_obj_t *box, int x, int w, int str_id, bool primary,
   copyT(bbuf, sizeof(bbuf), str_id);
   lv_label_set_text(l, bbuf);
   lv_obj_set_style_text_color(l,
-    lv_color_hex(primary ? 0x40c080 : 0xc8d8f0), 0);
+    lv_color_hex(primary ? UI_COL_OK_TEXT_2 : UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(l, LV_ALIGN_CENTER, 0, 0);
@@ -73,7 +74,7 @@ void showDiagPopup(DiagCode c) {
   lv_obj_t *pop = lv_obj_create(lv_scr_act());
   lv_obj_set_size(pop, 480, 320);
   lv_obj_set_pos(pop, 0, 0);
-  lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(pop, lv_color_hex(UI_COL_SCRIM), 0);
   lv_obj_set_style_bg_opa(pop, LV_OPA_70, 0);
   lv_obj_set_style_border_width(pop, 0, 0);
   lv_obj_set_style_radius(pop, 0, 0);
@@ -83,10 +84,10 @@ void showDiagPopup(DiagCode c) {
   lv_obj_t *box = lv_obj_create(pop);
   lv_obj_set_size(box, 440, 270);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
   // Amber rather than the usual blue, matching the warning modal in the spool
   // flow: this is a finding, not an explanation someone asked for.
-  lv_obj_set_style_border_color(box, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_WARN), 0);
   lv_obj_set_style_border_width(box, 2, 0);
   lv_obj_set_style_radius(box, 12, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
@@ -94,7 +95,7 @@ void showDiagPopup(DiagCode c) {
 
   lv_obj_t *icon = lv_label_create(box);
   lv_label_set_text(icon, LV_SYMBOL_WARNING);
-  lv_obj_set_style_text_color(icon, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(icon, lv_color_hex(UI_COL_WARN), 0);
   lv_obj_set_style_text_font(icon, &lv_font_montserrat_ext_24, 0);
   lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, 10);
 
@@ -102,7 +103,7 @@ void showDiagPopup(DiagCode c) {
   char tbuf[DIAG_TITLE_BUF];
   copyT(tbuf, sizeof(tbuf), diagTitleString(c));
   lv_label_set_text(title, tbuf);
-  lv_obj_set_style_text_color(title, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_color(title, lv_color_hex(UI_COL_INK), 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_width(title, 424);
@@ -131,7 +132,7 @@ void showDiagPopup(DiagCode c) {
   // through the same call.
   snprintf(ibuf, sizeof(ibuf), T(diagTextString(c)), (int)DIAG_NOISE_G);
   lv_label_set_text(info, ibuf);
-  lv_obj_set_style_text_color(info, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(info, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(info, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(info, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);

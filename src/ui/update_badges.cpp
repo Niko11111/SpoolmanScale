@@ -3,18 +3,12 @@
 #include "services/ota_state.h"
 
 #include <lvgl.h>
+#include "theme.h"
 
 
 namespace {
 constexpr int BADGE_SIZE   = 18;
 constexpr int BADGE_BORDER = 2;
-// Amber, not red: red is this UI's colour for something being wrong, and a
-// waiting update is a notice. 0xf0b838 is the amber the rest of the project
-// already uses rather than a new one invented here.
-constexpr uint32_t BADGE_COLOR        = 0xf0b838;
-// Drawn in the screen background colour, so the dot keeps a clean rim where it
-// overlaps the button underneath.
-constexpr uint32_t BADGE_BORDER_COLOR = 0x0a1020;
 }  // namespace
 
 
@@ -35,8 +29,12 @@ lv_obj_t* createUpdateBadge(lv_obj_t* parent, lv_obj_t* anchor) {
   lv_obj_t *badge = lv_obj_create(parent);
   lv_obj_set_size(badge, BADGE_SIZE, BADGE_SIZE);
   lv_obj_set_style_radius(badge, BADGE_SIZE / 2, 0);
-  lv_obj_set_style_bg_color(badge, lv_color_hex(BADGE_COLOR), 0);
-  lv_obj_set_style_border_color(badge, lv_color_hex(BADGE_BORDER_COLOR), 0);
+  // Amber, not red: red is this UI's colour for something being wrong, and a
+  // waiting update is a notice.
+  lv_obj_set_style_bg_color(badge, lv_color_hex(UI_COL_WARN), 0);
+  // Drawn in the screen background colour, so the dot keeps a clean rim where
+  // it overlaps the button underneath.
+  lv_obj_set_style_border_color(badge, lv_color_hex(UI_COL_GROUND), 0);
   lv_obj_set_style_border_width(badge, BADGE_BORDER, 0);
   lv_obj_set_style_pad_all(badge, 0, 0);
   lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);

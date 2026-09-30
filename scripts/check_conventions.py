@@ -350,6 +350,20 @@ def scan_inline_color_hex(src):
     return [(src.line_of(m.start()), m.group(0)) for m in COLOR_RE.finditer(src.code)]
 
 
+RAW_COLOR_RE = re.compile(r'\b0[xX][0-9A-Fa-f]{6}\b')
+# The one file where a colour is a number.
+THEME_FILE = "src/ui/theme.h"
+
+
+def scan_raw_color_hex(src):
+    """A six-digit hex number outside lv_color_hex(): a colour handed to a
+    helper, a ternary, a local #define. In src/ui and src/app nothing else is
+    written with six hex digits, so every one is a colour theme.h should name."""
+    inline = [(m.start(), m.end()) for m in COLOR_RE.finditer(src.code)]
+    return [(src.line_of(m.start()), m.group(0)) for m in RAW_COLOR_RE.finditer(src.code)
+            if not any(a <= m.start() < b for a, b in inline)]
+
+
 LABEL_RE = re.compile(r'\blv_label_set_text(?:_fmt|_static)?\s*\(')
 PRINTF_RE = re.compile(r'%%|%[-+ 0#]*\d*(?:\.\d+)?(?:hh|h|ll|l|z|j|t)?[a-zA-Z]')
 ESCAPE_RE = re.compile(r'\\(?:x[0-9A-Fa-f]{1,2}|[0-7]{1,3}|.)')
@@ -590,7 +604,7 @@ def collect():
     """(metrics, findings, stats). findings maps a metric to printable lines."""
     texts = dict((rel, _read(rel)) for rel in source_files())
     sources = dict((rel, Source(text)) for rel, text in texts.items())
-    names = ("inline_color_hex", "label_literal_captions", "german_comment_lines",
+    names = ("inline_color_hex", "raw_color_hex", "label_literal_captions", "german_comment_lines",
              "obj_del_in_handler", "strncpy_with_T", "http_in_handler") + MUST_BE_ZERO
     found = dict((name, []) for name in names)
     stats = {"files": len(sources), "handlers": 0, "routes": 0, "label calls": 0,
@@ -608,6 +622,8 @@ def collect():
         if rel.startswith(UI_SCOPE):
             stats["label calls"] += len(label_calls(src))
             add("inline_color_hex", rel, scan_inline_color_hex(src))
+            if rel != THEME_FILE:
+                add("raw_color_hex", rel, scan_raw_color_hex(src))
             add("label_literal_captions", rel, scan_label_literal_captions(src))
         if rel not in GERMAN_EXEMPT:
             add("german_comment_lines", rel, scan_german_comment_lines(src))
@@ -778,6 +794,10 @@ def selftest():
     check("colour literal", count(scan_inline_color_hex, "c = lv_color_hex(0x1a3060);"), 1)
     check("colour constant", count(scan_inline_color_hex, "c = lv_color_hex(UI_COL_INK);"), 0)
     check("two on a line", count(scan_inline_color_hex, "c = on ? lv_color_hex(0x1) : lv_color_hex(0x2);"), 2)
+    check("raw colour in a ternary", count(scan_raw_color_hex, "c = lv_color_hex(on ? 0x28d49a : UI_COL_INK);"), 1)
+    check("raw colour to a helper", count(scan_raw_color_hex, "row(p, 0x28d49a, 124);"), 1)
+    check("raw leaves lv_color_hex to inline", count(scan_raw_color_hex, "c = lv_color_hex(0x1a3060);"), 0)
+    check("raw ignores bytes and comments", count(scan_raw_color_hex, "b = 0xFF; m = 0xFFFF; // 0x28d49a"), 0)
 
     # captions
     lab = "lv_label_set_text(l, %s);"

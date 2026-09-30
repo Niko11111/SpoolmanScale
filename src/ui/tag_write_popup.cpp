@@ -72,7 +72,7 @@ static void mismatchRow(lv_obj_t *box, int y, StringID caption, const char *text
   lv_obj_clear_flag(row, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_t *cap = lv_label_create(row);
   { char cb[24]; snprintf(cb, sizeof(cb), "%s:", T(caption)); lv_label_set_text(cap, cb); }
-  lv_obj_set_style_text_color(cap, lv_color_hex(0x8fa8c8), 0);
+  lv_obj_set_style_text_color(cap, lv_color_hex(UI_COL_INK_SOFT), 0);
   lv_obj_set_style_text_font(cap, &lv_font_montserrat_ext_16, 0);
   if (has_color) {
     lv_obj_t *sw = lv_obj_create(row);
@@ -82,12 +82,12 @@ static void mismatchRow(lv_obj_t *box, int y, StringID caption, const char *text
     lv_obj_set_style_bg_color(sw, lv_color_hex(rgb), 0);
     lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(sw, 1, 0);
-    lv_obj_set_style_border_color(sw, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_border_color(sw, lv_color_hex(UI_COL_CAPTION), 0);
     lv_obj_clear_flag(sw, LV_OBJ_FLAG_CLICKABLE);
   }
   lv_obj_t *l = lv_label_create(row);
   lv_label_set_text(l, text);
-  lv_obj_set_style_text_color(l, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
 }
 
@@ -126,7 +126,7 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
   scr_tag_write = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_tag_write, 480, 320);
   lv_obj_set_pos(scr_tag_write, 0, 0);
-  lv_obj_set_style_bg_color(scr_tag_write, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(scr_tag_write, lv_color_hex(UI_COL_SCRIM), 0);
   lv_obj_set_style_bg_opa(scr_tag_write, LV_OPA_70, 0);
   lv_obj_set_style_border_width(scr_tag_write, 0, 0);
   lv_obj_set_style_radius(scr_tag_write, 0, 0);
@@ -136,8 +136,8 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
   lv_obj_t *box = lv_obj_create(scr_tag_write);
   lv_obj_set_size(box, BOX_W, BOX_H);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
-  lv_obj_set_style_border_color(box, lv_color_hex(0x2a4080), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_POPUP_BORDER), 0);
   lv_obj_set_style_border_width(box, 2, 0);
   lv_obj_set_style_radius(box, 12, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
@@ -155,7 +155,7 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
 
   lv_obj_t *lbl_q = lv_label_create(box);
   { char qb[48]; copyT(qb, sizeof(qb), title); lv_label_set_text(lbl_q, qb); }
-  lv_obj_set_style_text_color(lbl_q, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_color(lbl_q, lv_color_hex(UI_COL_INK), 0);
   lv_obj_set_style_text_font(lbl_q, &lv_font_montserrat_ext_20, 0);
   lv_obj_set_style_text_align(lbl_q, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_q, LV_LABEL_LONG_WRAP);
@@ -182,7 +182,7 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
     // Body text, not a caption: this line carries what is about to be written
     // or lost, and at 14 px in the caption colour it was the one thing on the
     // popup people could not read from where they stand.
-    lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_color(lbl_hint, lv_color_hex(UI_COL_INK_2), 0);
     lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_ext_16, 0);
     lv_obj_set_style_text_align(lbl_hint, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(lbl_hint, LV_LABEL_LONG_WRAP);

@@ -424,7 +424,7 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
     const uint32_t g = (mid >> 8) & 0xFF;
     const uint32_t b = mid & 0xFF;
     const uint32_t luma = (299 * r + 587 * g + 114 * b) / 1000;
-    text_col = (luma > AMSV_LUMA_SWITCH) ? 0x000000 : 0xFFFFFF;
+    text_col = (luma > AMSV_LUMA_SWITCH) ? UI_COL_ON_BRIGHT_FILL : UI_COL_ON_DARK_FILL;
   }
 
   // A filled bay is always three lines, in the same order, with a dash where

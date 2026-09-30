@@ -12,6 +12,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "ui_common.h"
+#include "theme.h"
 
 
 
@@ -58,7 +59,7 @@ void buildCalReminderScreen() {
   lv_obj_set_style_border_width(scr_cal_reminder, 0, 0);
   lv_obj_set_style_pad_all(scr_cal_reminder, 0, 0);
   lv_obj_clear_flag(scr_cal_reminder, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_cal_reminder, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(scr_cal_reminder, lv_color_hex(UI_COL_GROUND), 0);
 
   // Static buffers - must outlive the function since LVGL holds pointers to them
   static char buf_title[48], buf_msg[256], buf_later[32], buf_now[48];
@@ -71,7 +72,7 @@ void buildCalReminderScreen() {
   // Title
   lv_obj_t *lbl_title = lv_label_create(scr_cal_reminder);
   lv_label_set_text(lbl_title, buf_title);
-  lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_title, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 20);
 
@@ -81,14 +82,14 @@ void buildCalReminderScreen() {
   // Icon
   lv_obj_t *lbl_icon = lv_label_create(scr_cal_reminder);
   lv_label_set_text(lbl_icon, LV_SYMBOL_EDIT);
-  lv_obj_set_style_text_color(lbl_icon, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_icon, lv_color_hex(UI_COL_WARN), 0);
   lv_obj_set_style_text_font(lbl_icon, &lv_font_montserrat_ext_24, 0);
   lv_obj_align(lbl_icon, LV_ALIGN_TOP_MID, 0, 52);
 
   // Message
   lv_obj_t *lbl_msg = lv_label_create(scr_cal_reminder);
   lv_label_set_text(lbl_msg, buf_msg);
-  lv_obj_set_style_text_color(lbl_msg, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_msg, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(lbl_msg, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_msg, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_msg, LV_LABEL_LONG_WRAP);
@@ -102,30 +103,30 @@ void buildCalReminderScreen() {
   lv_obj_t *btn_got = lv_btn_create(scr_cal_reminder);
   lv_obj_set_size(btn_got, 210, 48);
   lv_obj_align(btn_got, LV_ALIGN_BOTTOM_LEFT, 20, -20);
-  lv_obj_set_style_bg_color(btn_got, lv_color_hex(0x141c30), 0);
-  lv_obj_set_style_bg_color(btn_got, lv_color_hex(0x1e2a44), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_got, lv_color_hex(UI_COL_LATER_BG), 0);
+  lv_obj_set_style_bg_color(btn_got, lv_color_hex(UI_COL_LATER_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_got, 8, 0);
   lv_obj_set_style_shadow_width(btn_got, 0, 0);
   lv_obj_set_style_border_width(btn_got, 1, 0);
-  lv_obj_set_style_border_color(btn_got, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_border_color(btn_got, lv_color_hex(UI_COL_RULE), 0);
   lv_obj_add_event_cb(btn_got, [](lv_event_t *e) {
     showMainScreen();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_got = lv_label_create(btn_got);
   lv_label_set_text(lbl_got, buf_later);
-  lv_obj_set_style_text_color(lbl_got, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_got, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(lbl_got, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_got);
 
   lv_obj_t *btn_now = lv_btn_create(scr_cal_reminder);
   lv_obj_set_size(btn_now, 210, 48);
   lv_obj_align(btn_now, LV_ALIGN_BOTTOM_RIGHT, -20, -20);
-  lv_obj_set_style_bg_color(btn_now, lv_color_hex(0x1a3020), 0);
-  lv_obj_set_style_bg_color(btn_now, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_now, lv_color_hex(UI_COL_GO_BG), 0);
+  lv_obj_set_style_bg_color(btn_now, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_now, 8, 0);
   lv_obj_set_style_shadow_width(btn_now, 0, 0);
   lv_obj_set_style_border_width(btn_now, 1, 0);
-  lv_obj_set_style_border_color(btn_now, lv_color_hex(0x2a5030), 0);
+  lv_obj_set_style_border_color(btn_now, lv_color_hex(UI_COL_GO_BG_PRESSED), 0);
   lv_obj_add_event_cb(btn_now, [](lv_event_t *e) {
     // Deferred, and not only out of habit: this has to leave the setup before
     // it opens the calibration, which means tearing down the screen this
@@ -134,7 +135,7 @@ void buildCalReminderScreen() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_now = lv_label_create(btn_now);
   lv_label_set_text(lbl_now, buf_now);
-  lv_obj_set_style_text_color(lbl_now, lv_color_hex(0x40c080), 0);
+  lv_obj_set_style_text_color(lbl_now, lv_color_hex(UI_COL_OK_TEXT_2), 0);
   lv_obj_set_style_text_font(lbl_now, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_now);
 }

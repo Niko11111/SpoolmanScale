@@ -19,6 +19,7 @@
 #include "tag_display.h"
 #include "app/backend_switch.h"
 #include "ui_common.h"
+#include "theme.h"
 
 // Switching the mode has to happen outside this screen's own event callback,
 // otherwise the callback would delete the button it is currently running on.
@@ -43,17 +44,17 @@ static lv_obj_t* addNavRow(lv_obj_t *parent, int y, const char *title,
   lv_obj_t *row = lv_btn_create(parent);
   lv_obj_set_size(row, 448, 56);
   lv_obj_set_pos(row, 16, y);
-  lv_obj_set_style_bg_color(row, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(row, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(row, 10, 0);
   lv_obj_set_style_shadow_width(row, 0, 0);
   lv_obj_set_style_border_width(row, 1, 0);
-  lv_obj_set_style_border_color(row, lv_color_hex(0x1a3050), 0);
+  lv_obj_set_style_border_color(row, lv_color_hex(UI_COL_ROW_PRESSED), 0);
   lv_obj_add_event_cb(row, cb, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *l = lv_label_create(row);
   lv_label_set_text(l, title);
-  lv_obj_set_style_text_color(l, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK), 0);
   lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(l, LV_ALIGN_LEFT_MID, 8, -11);
 
@@ -65,7 +66,7 @@ static lv_obj_t* addNavRow(lv_obj_t *parent, int y, const char *title,
 
   lv_obj_t *a = lv_label_create(row);
   lv_label_set_text(a, LV_SYMBOL_RIGHT);
-  lv_obj_set_style_text_color(a, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(a, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(a, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(a, LV_ALIGN_RIGHT_MID, -10, 0);
   return row;
@@ -97,7 +98,7 @@ static void addCredentialsRow(lv_obj_t *parent, int y,
 
     lv_obj_t *l = lv_label_create(parent);
     lv_label_set_text(l, lbl_buf);
-    lv_obj_set_style_text_color(l, lv_color_hex(0xe8f0ff), 0);
+    lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
     lv_obj_set_pos(l, x, y);
 
@@ -112,8 +113,8 @@ static void addCredentialsRow(lv_obj_t *parent, int y,
     lv_label_set_text(v, val_buf);
     // A free value is a statement of fact, not a warning - it gets the calm
     // colour rather than the green/amber of a credential.
-    lv_obj_set_style_text_color(v, free_value ? lv_color_hex(0xc8d8f0)
-                                : lv_color_hex(present[i] ? 0x40c080 : 0xf0b838), 0);
+    lv_obj_set_style_text_color(v, free_value ? lv_color_hex(UI_COL_INK_2)
+                                : lv_color_hex(present[i] ? UI_COL_OK_TEXT_2 : UI_COL_WARN), 0);
     lv_obj_set_style_text_font(v, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_pos(v, x, y + 22);
   }
@@ -125,12 +126,12 @@ static void addWebSetupButton(lv_obj_t *parent, int x) {
   lv_obj_t *btn_web = lv_btn_create(parent);
   lv_obj_set_size(btn_web, 216, 44);
   lv_obj_set_pos(btn_web, x, 244);
-  lv_obj_set_style_bg_color(btn_web, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(btn_web, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_web, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_bg_color(btn_web, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_web, 8, 0);
   lv_obj_set_style_shadow_width(btn_web, 0, 0);
   lv_obj_set_style_border_width(btn_web, 1, 0);
-  lv_obj_set_style_border_color(btn_web, lv_color_hex(0x1a3060), 0);
+  lv_obj_set_style_border_color(btn_web, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_add_event_cb(btn_web, [](lv_event_t *e) {
     logSD("BTN: Backend -> Web interface");
     // Safe to call directly: this only hides the backend screen, the one it
@@ -142,7 +143,7 @@ static void addWebSetupButton(lv_obj_t *parent, int x) {
   char buf_web[40];
   snprintf(buf_web, sizeof(buf_web), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_WEB_SETUP));
   lv_label_set_text(lbl_web, buf_web);
-  lv_obj_set_style_text_color(lbl_web, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_web, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_web, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_web);
 }
@@ -162,15 +163,15 @@ void buildBackendScreen() {
   if (setup_active) {
     lv_obj_t *lbl_title = lv_label_create(scr_backend);
     lv_label_set_text(lbl_title, buf_title);
-    lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(lbl_title, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
     lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 12);
 
     lv_obj_t *btn_x = lv_btn_create(scr_backend);
     lv_obj_set_size(btn_x, 44, 44);
     lv_obj_align(btn_x, LV_ALIGN_TOP_RIGHT, -4, 2);
-    lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
-    lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_x, lv_color_hex(UI_COL_BAD_BG), 0);
+    lv_obj_set_style_bg_color(btn_x, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_x, 8, 0);
     lv_obj_set_style_shadow_width(btn_x, 0, 0);
     lv_obj_set_style_border_width(btn_x, 0, 0);
@@ -180,7 +181,7 @@ void buildBackendScreen() {
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_x = lv_label_create(btn_x);
     lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-    lv_obj_set_style_text_color(lbl_x, lv_color_hex(0xff8080), 0);
+    lv_obj_set_style_text_color(lbl_x, lv_color_hex(UI_COL_BAD_TEXT), 0);
     lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
     lv_obj_center(lbl_x);
   } else {
@@ -208,16 +209,16 @@ void buildBackendScreen() {
     lv_obj_t *b = lv_btn_create(scr_backend);
     lv_obj_set_size(b, SEG_W, SEG_H);
     lv_obj_set_pos(b, segs[i].x, SEG_Y);
-    lv_obj_set_style_bg_color(b, lv_color_hex(active ? 0x14402e : 0x0a1828), 0);
-    lv_obj_set_style_bg_color(b, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(b, lv_color_hex(active ? UI_COL_PICKED_BG : UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
     lv_obj_set_style_radius(b, 10, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, active ? 2 : 1, 0);
-    lv_obj_set_style_border_color(b, lv_color_hex(active ? 0x28d49a : 0x1a2840), 0);
+    lv_obj_set_style_border_color(b, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_LINE_SOFT), 0);
 
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, backendModeName(segs[i].mode));
-    lv_obj_set_style_text_color(l, lv_color_hex(active ? 0x28d49a : 0x8098b8), 0);
+    lv_obj_set_style_text_color(l, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_OFF_TEXT), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_18, 0);
     lv_obj_center(l);
 
@@ -241,7 +242,7 @@ void buildBackendScreen() {
 
     lv_obj_t *hint = lv_label_create(scr_backend);
     lv_label_set_text(hint, buf_hint);
-    lv_obj_set_style_text_color(hint, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
@@ -251,8 +252,8 @@ void buildBackendScreen() {
     lv_obj_t *btn_next = lv_btn_create(scr_backend);
     lv_obj_set_size(btn_next, 200, 48);
     lv_obj_align(btn_next, LV_ALIGN_BOTTOM_MID, 0, -20);
-    lv_obj_set_style_bg_color(btn_next, lv_color_hex(0x1a3020), 0);
-    lv_obj_set_style_bg_color(btn_next, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_next, lv_color_hex(UI_COL_GO_BG), 0);
+    lv_obj_set_style_bg_color(btn_next, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_next, 8, 0);
     lv_obj_set_style_shadow_width(btn_next, 0, 0);
     lv_obj_set_style_border_width(btn_next, 0, 0);
@@ -264,7 +265,7 @@ void buildBackendScreen() {
     char next_buf[32];
     snprintf(next_buf, sizeof(next_buf), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_NEXT));
     lv_label_set_text(lbl_next, next_buf);
-    lv_obj_set_style_text_color(lbl_next, lv_color_hex(0x40c080), 0);
+    lv_obj_set_style_text_color(lbl_next, lv_color_hex(UI_COL_OK_TEXT_2), 0);
     lv_obj_set_style_text_font(lbl_next, &lv_font_montserrat_ext_16, 0);
     lv_obj_center(lbl_next);
     return;
@@ -286,7 +287,7 @@ void buildBackendScreen() {
     const bool port_missing = h && h[0] && !strchr(h, ':');
 
     addNavRow(scr_backend, 122, buf_addr, host_buf,
-              port_missing ? 0xf0b838 : 0x28d49a,
+              port_missing ? UI_COL_WARN : UI_COL_ACCENT,
               [](lv_event_t *e) {
                 logSD("BTN: Backend -> Address");
                 show_spoolman_pending = true;
@@ -311,12 +312,12 @@ void buildBackendScreen() {
     // Right under the address row. It sat at 244 like the two backends that
     // have credential rows in between, and here nothing is in between.
     lv_obj_set_pos(btn_opts, 132, 194);
-    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(0x0a1e30), 0);
-    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW), 0);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_opts, 8, 0);
     lv_obj_set_style_shadow_width(btn_opts, 0, 0);
     lv_obj_set_style_border_width(btn_opts, 1, 0);
-    lv_obj_set_style_border_color(btn_opts, lv_color_hex(0x1a3060), 0);
+    lv_obj_set_style_border_color(btn_opts, lv_color_hex(UI_COL_LINE), 0);
     lv_obj_add_event_cb(btn_opts, [](lv_event_t *e) {
       logSD("BTN: Backend -> Spoolman options");
       show_spoolman_options_pending = true;
@@ -325,7 +326,7 @@ void buildBackendScreen() {
     { char ob[40];
       snprintf(ob, sizeof(ob), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_MORE_OPTIONS));
       lv_label_set_text(lbl_opts, ob); }
-    lv_obj_set_style_text_color(lbl_opts, lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_color(lbl_opts, lv_color_hex(UI_COL_INK_2), 0);
     lv_obj_set_style_text_font(lbl_opts, &lv_font_montserrat_ext_16, 0);
     lv_obj_center(lbl_opts);
   }
@@ -346,12 +347,12 @@ void buildBackendScreen() {
     lv_obj_t *btn_opts = lv_btn_create(scr_backend);
     lv_obj_set_size(btn_opts, 216, 44);
     lv_obj_set_pos(btn_opts, 16, 244);
-    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(0x0a1e30), 0);
-    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW), 0);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_opts, 8, 0);
     lv_obj_set_style_shadow_width(btn_opts, 0, 0);
     lv_obj_set_style_border_width(btn_opts, 1, 0);
-    lv_obj_set_style_border_color(btn_opts, lv_color_hex(0x1a3060), 0);
+    lv_obj_set_style_border_color(btn_opts, lv_color_hex(UI_COL_LINE), 0);
     lv_obj_add_event_cb(btn_opts, [](lv_event_t *e) {
       logSD("BTN: Backend -> FilaMan options");
       show_filaman_options_pending = true;
@@ -360,7 +361,7 @@ void buildBackendScreen() {
     { char ob[40];
       snprintf(ob, sizeof(ob), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_MORE_OPTIONS));
       lv_label_set_text(lbl_opts, ob); }
-    lv_obj_set_style_text_color(lbl_opts, lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_color(lbl_opts, lv_color_hex(UI_COL_INK_2), 0);
     lv_obj_set_style_text_font(lbl_opts, &lv_font_montserrat_ext_16, 0);
     lv_obj_center(lbl_opts);
 
@@ -390,12 +391,12 @@ void buildBackendScreen() {
     lv_obj_t *btn_opts = lv_btn_create(scr_backend);
     lv_obj_set_size(btn_opts, 216, 44);
     lv_obj_set_pos(btn_opts, 16, 244);
-    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(0x0a1e30), 0);
-    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW), 0);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_opts, 8, 0);
     lv_obj_set_style_shadow_width(btn_opts, 0, 0);
     lv_obj_set_style_border_width(btn_opts, 1, 0);
-    lv_obj_set_style_border_color(btn_opts, lv_color_hex(0x1a3060), 0);
+    lv_obj_set_style_border_color(btn_opts, lv_color_hex(UI_COL_LINE), 0);
     lv_obj_add_event_cb(btn_opts, [](lv_event_t *e) {
       logSD("BTN: Backend -> BamBuddy options");
       show_bambuddy_options_pending = true;
@@ -404,7 +405,7 @@ void buildBackendScreen() {
     { char ob[40];
       snprintf(ob, sizeof(ob), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_MORE_OPTIONS));
       lv_label_set_text(lbl_opts, ob); }
-    lv_obj_set_style_text_color(lbl_opts, lv_color_hex(0xc8d8f0), 0);
+    lv_obj_set_style_text_color(lbl_opts, lv_color_hex(UI_COL_INK_2), 0);
     lv_obj_set_style_text_font(lbl_opts, &lv_font_montserrat_ext_16, 0);
     lv_obj_center(lbl_opts);
 

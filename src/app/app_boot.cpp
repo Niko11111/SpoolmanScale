@@ -31,6 +31,7 @@
 #include "ui/setup_welcome_screen.h"
 #include "ui/wifi_setup_screen.h"
 #include "lang.h"
+#include "ui/theme.h"
 
 // ============================================================
 //  WIFI CONNECTED
@@ -86,7 +87,7 @@ void wifiOnConnected() {
   updateHeaderStatus();
   lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT_SCAN_SM));
   lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
   lv_timer_handler();
 
   // A spool put on the pad before the network came up was read but never
@@ -113,7 +114,7 @@ void wifiConnect() {
     char wifi_buf[32];
     copyT(wifi_buf, sizeof(wifi_buf), STR_WIFI_CONNECTING_BOOT);
     lv_label_set_text(lbl_status, wifi_buf);
-    lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x5090e0), 0);
+    lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_STATUS_BLUE), 0);
     lv_timer_handler();
   }
   if (wifiManagerConnect(cfg_wifi_ssid, cfg_wifi_password, 20, 500)) {
@@ -125,7 +126,7 @@ void wifiConnect() {
   updateHeaderStatus();
   lv_label_set_text(lbl_spoolman_weight, T(STR_NO_WIFI));
   lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-  lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
   lv_timer_handler();
 }
 

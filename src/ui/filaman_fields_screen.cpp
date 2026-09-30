@@ -13,6 +13,7 @@
 #include "services/user_options.h"
 #include "info_popup.h"
 #include "ui_common.h"
+#include "theme.h"
 
 // The field the scale writes a tag into. Not a setting, and the row says so -
 // see STR_FLM_TAGFIELD_INFO for why there is nothing to choose here.
@@ -27,7 +28,7 @@ static void rowAsToggle(lv_obj_t *btn, bool on) {
   copyT(buf_v, sizeof(buf_v), on ? STR_ON : STR_OFF);
   lv_label_set_text(arr_lbl, buf_v);
   lv_obj_set_style_text_color(arr_lbl,
-    on ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+    on ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
 }
 
