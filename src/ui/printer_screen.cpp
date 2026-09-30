@@ -42,6 +42,27 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 };
 
 static int s_last_test = -1;
+
+// A label that needs no spool, the test label or the calibration page, under
+// the print card; the verdict is kept for the browser's last-print line.
+static void printFixedLabel(bool (*render)(const LabelPrinterConfig&, LabelRaster*),
+                            const char* what) {
+  const LabelPrinterConfig c = labelPrinterLoadConfig();
+  LabelPrintResult result = LP_NO_PRINTER;
+  if (labelPrinterConfigured(c)) {
+    if (!bleEnabled()) result = LP_BLE_OFF;
+    else {
+      printCardShow();
+      LabelRaster raster{};
+      if (!render(c, &raster)) result = LP_BAD_RASTER;
+      else result = labelPrinterPrint(c, raster, printCardTick);
+      labelRasterFree(&raster);
+    }
+  }
+  logSDf("Printer: %s result=%d", what, (int)result);
+  s_last_test = labelPrintResultString(result);
+  printCardResult(result);
+}
 int printerLastTestResult() { return s_last_test; }
 
 void closePrinterScreen() {
@@ -195,21 +216,11 @@ void handlePrinterDeferredActions() {
   }
   if (printer_test_pending) {
     printer_test_pending = false;
-    const LabelPrinterConfig c = labelPrinterLoadConfig();
-    LabelPrintResult result = LP_NO_PRINTER;
-    if (labelPrinterConfigured(c)) {
-      if (!bleEnabled()) result = LP_BLE_OFF;
-      else {
-        printCardShow();
-        LabelRaster raster{};
-        if (!labelRenderTest(c, &raster)) result = LP_BAD_RASTER;
-        else result = labelPrinterPrint(c, raster, printCardTick);
-        labelRasterFree(&raster);
-      }
-    }
-    logSDf("Printer: test print result=%d", (int)result);
-    s_last_test = labelPrintResultString(result);
-    printCardResult(result);
+    printFixedLabel(labelRenderTest, "test print");
+  }
+  if (printer_calib_pending) {
+    printer_calib_pending = false;
+    printFixedLabel(labelRenderCalibration, "calibration page");
   }
   if (print_spool_label_pending) {
     print_spool_label_pending = false;

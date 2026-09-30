@@ -1420,6 +1420,17 @@ enum StringID {
   // The address screen on the device
   STR_SP_HTTPS_HINT,
   STR_SP_HTTPS_TITLE,
+  // The printer page's print position card, and the calibration page
+  STR_W_P_CAL_TITLE,
+  STR_W_P_CAL_ROLL,
+  STR_W_P_CAL_LEFT,
+  STR_W_P_CAL_CENTER,
+  STR_W_P_CAL_RIGHT,
+  STR_W_P_CAL_OFFSET,
+  STR_W_P_CAL_PRINT,
+  STR_W_P_CAL_HINT,
+  STR_LBL_CAL_EDGE,
+  STR_W_P_CAL_HINT2,
 
   STR_COUNT
 };

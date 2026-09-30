@@ -143,6 +143,7 @@ extern bool show_printer_pending;
 extern bool printer_cycle_model_pending;
 extern bool printer_cycle_media_pending;
 extern bool printer_test_pending;
+extern bool printer_calib_pending;   // the calibration page, from the browser
 extern bool printer_forget_pending;
 // The label of the spool on the pad, from the More info header. Rendered
 // and printed from the loop: the print starts the BLE stack and blocks.

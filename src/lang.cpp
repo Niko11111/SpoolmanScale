@@ -3021,6 +3021,21 @@ const char* const STRINGS[][3] = {
   // The address screen on the device
   { "https: im Browser", "https: in the browser", "https : navigateur" },  // STR_SP_HTTPS_HINT
   { "https-Adresse",     "https address",         "Adresse https" },  // STR_SP_HTTPS_TITLE
+  // The printer page's print position card, and the calibration page
+  { "Druckposition",          "Print position",         "Position d'impression" },  // STR_W_P_CAL_TITLE
+  { "Lage der Rolle",         "Roll position",          "Position du rouleau" },  // STR_W_P_CAL_ROLL
+  { "Links",                  "Left",                   "Gauche" },  // STR_W_P_CAL_LEFT
+  { "Mitte",                  "Centre",                 "Centre" },  // STR_W_P_CAL_CENTER
+  { "Rechts",                 "Right",                  "Droite" },  // STR_W_P_CAL_RIGHT
+  { "Versatz",                "Offset",                 "Décalage" },  // STR_W_P_CAL_OFFSET
+  { "Kalibrierseite drucken", "Print calibration page", "Imprimer la page de calibrage" },  // STR_W_P_CAL_PRINT
+  { "Trag die erste Zahl ein, die links auf dem Etikett steht. Sitzt der Rahmen danach nicht mittig, stell mit − und + nach.",
+    "Enter the first number on the left of the label. If the frame is not centred afterwards, adjust with − and +.",
+    "Saisissez le premier nombre à gauche de l'étiquette. Si le cadre n'est pas centré ensuite, ajustez avec − et +." },  // STR_W_P_CAL_HINT
+  { "Erste Zahl links = Versatz", "Leftmost number = offset", "Nombre à gauche = décalage" },  // STR_LBL_CAL_EDGE
+  { "Mehr als 1 mm Rand links und rechts vom Rahmen: Etikettgröße prüfen.",
+    "More than 1 mm margin left and right of the frame: check the label size.",
+    "Plus de 1 mm de marge à gauche et à droite du cadre : vérifiez la taille de l'étiquette." },  // STR_W_P_CAL_HINT2
 };
 
 StringID tagWriteResultString(uint8_t code) {

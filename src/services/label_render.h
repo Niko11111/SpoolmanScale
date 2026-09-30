@@ -37,6 +37,12 @@ struct SpoolLabelData {
 // the canvas or the printer has no usable stock.
 bool labelRenderTest(const LabelPrinterConfig& printer, LabelRaster* out);
 
+// The calibration page: a ruler across the whole print row, numbered in the
+// offset that would put the label's left edge there, and a frame where the
+// scale takes the label to be now. Read the number at the label's left edge,
+// or check that the frame sits evenly.
+bool labelRenderCalibration(const LabelPrinterConfig& printer, LabelRaster* out);
+
 // A spool's label, with a QR code carrying what the active backend's own
 // scanner reads.
 bool labelRenderSpool(const LabelPrinterConfig& printer, const SpoolLabelData& spool,

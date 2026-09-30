@@ -81,6 +81,21 @@ static String stateJson() {
   j += String((unsigned)c.media_width_mm);
   j += F(",\"h\":");
   j += String((unsigned)c.media_length_mm);
+  // Where the label runs in the print row, for the strip on the page.
+  int16_t lo, hi;
+  labelPrinterOffsetRange(c, &lo, &hi);
+  j += F("},\"pos\":{\"off\":");
+  j += String((int)labelPrinterOffset(c));
+  j += F(",\"min\":");
+  j += String((int)lo);
+  j += F(",\"max\":");
+  j += String((int)hi);
+  j += F(",\"row\":");
+  j += String((unsigned)labelPrinterRasterWidth(c.model, c.media_width_mm));
+  j += F(",\"cx\":");
+  j += String((unsigned)labelPrinterContentX(c));
+  j += F(",\"cw\":");
+  j += String((unsigned)labelPrinterDotsForMm(c.media_width_mm));
   j += F("},\"lastTest\":");
   const int last = printerLastTestResult();
   if (last < 0) j += F("null");
@@ -92,7 +107,7 @@ static String stateJson() {
 static String body() {
   const LabelPrinterConfig c = labelPrinterLoadConfig();
   String h;
-  h.reserve(6000);
+  h.reserve(9000);
 
   // ---- the master switch ---------------------------------------------------
   h += F("<div class='grid'><div class='card'><h2>");
@@ -191,7 +206,90 @@ static String body() {
   h += F("</span></div><span class='msg' id='tb-s'></span>"
          "<div class='row'><span class='k'>");
   h += T(STR_W_P_LAST_TEST);
-  h += F("</span><span class='v' id='lt'></span></div></div></div></div>");
+  h += F("</span><span class='v' id='lt'></span></div></div></div>");
+
+  // ---- where the label runs under the head ---------------------------------
+  // The strip is the print row, the block on it the label: it moves with
+  // every change, so the setting reads without words.
+  h += F("<style>"
+         ".pp-track{position:relative;height:38px;margin-top:4px;border-radius:9px;"
+         "background:var(--surface-2);border:1px solid var(--line)}"
+         ".pp-mid{position:absolute;left:50%;top:6px;bottom:6px;"
+         "border-left:1px dashed var(--ink-4)}"
+         ".pp-lab{position:absolute;top:4px;bottom:4px;border-radius:6px;"
+         "background:var(--accent-dim);border:1px solid var(--accent-line);"
+         "color:var(--accent);font-family:var(--mono);font-size:12px;"
+         "display:flex;align-items:center;justify-content:center;"
+         "transition:left .2s,width .2s}"
+         ".pp-scale{display:flex;justify-content:space-between;margin-top:6px;"
+         "font-family:var(--mono);font-size:11px;color:var(--ink-soft)}"
+         ".pp-set{display:grid;grid-template-columns:1fr 1fr;gap:16px 24px;margin-top:18px}"
+         ".pp-set .field{margin-top:0}"
+         ".pp-step{min-width:40px;padding-left:0;padding-right:0;justify-content:center}"
+         "#cb-s:empty{display:none}"
+         // The example: a calibration label in miniature, 6 px to the mm,
+         // its left edge on 8, and that number going into the field.
+         ".pp-ex{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px}"
+         ".pp-paper{position:relative;flex:0 0 124px;height:72px;border-radius:7px;"
+         "background:var(--ink-2);overflow:hidden}"
+         ".pp-flags{position:absolute;left:0;right:0;top:6px;height:16px;"
+         "border-bottom:1px solid var(--ground);background:repeating-linear-gradient("
+         "90deg,var(--ground) 0 1px,transparent 1px 24px)}"
+         ".pp-ticks{position:absolute;left:0;right:0;top:18px;height:4px;"
+         "background:repeating-linear-gradient(90deg,var(--ground) 0 1px,transparent 1px 6px)}"
+         ".pp-n{position:absolute;top:5px;font:700 10px/12px var(--mono);color:var(--ground);"
+         "padding:0 2px;background:var(--ink-2)}"
+         ".pp-n.hit{background:var(--accent);border-radius:3px}"
+         ".pp-fr{position:absolute;left:5px;right:5px;top:30px;bottom:5px;"
+         "border:1.5px solid var(--ground)}"
+         ".pp-go{display:flex;align-items:center;gap:8px;color:var(--accent);"
+         "font:600 22px var(--mono)}"
+         ".pp-go b{font-size:15px}"
+         ".pp-go b{font-weight:600;padding:6px 12px;border-radius:9px;"
+         "background:var(--ground);border:1px solid var(--line);color:var(--ink)}"
+         ".pp-txt{flex:1 1 260px;display:flex;flex-direction:column;gap:6px}"
+         ".pp-txt span:first-child{font-size:13px;color:var(--ink-2);line-height:1.5}"
+         "@media(max-width:620px){.pp-set{grid-template-columns:1fr}}"
+         "</style>");
+  h += F("<div class='card wide'><h2>");
+  h += T(STR_W_P_CAL_TITLE);
+  h += F("</h2><div class='pp-track'><div class='pp-mid'></div>"
+         "<div class='pp-lab' id='pl'></div></div>"
+         "<div class='pp-scale'><span>0</span><span id='pr'></span></div>"
+         "<div class='pp-set'><div class='field'><label>");
+  h += T(STR_W_P_CAL_ROLL);
+  h += F("</label><div class='btabs' id='pa'><button class='btab' data-a='left'>");
+  h += T(STR_W_P_CAL_LEFT);
+  h += F("</button><button class='btab' data-a='0'>");
+  h += T(STR_W_P_CAL_CENTER);
+  h += F("</button><button class='btab' data-a='right'>");
+  h += T(STR_W_P_CAL_RIGHT);
+  h += F("</button></div></div><div class='field'><label for='xo'>");
+  h += T(STR_W_P_CAL_OFFSET);
+  h += F("</label><div class='inrow'>"
+         "<button class='quiet pp-step' id='xm' aria-label='-1 mm'>&minus;</button>"
+         "<input id='xo' type='number' step='1'>"
+         "<button class='quiet pp-step' id='xp' aria-label='+1 mm'>+</button>"
+         "<span class='suffix'>mm</span></div>"
+         "<span class='msg' id='xo-s'></span></div></div>"
+         "<div class='field'><div class='inrow'><button id='cb'>");
+  h += T(STR_W_P_CAL_PRINT);
+  h += F("</button></div><span class='msg' id='cb-s'></span>"
+         "<div class='pp-ex'><div class='pp-paper' aria-hidden='true'>"
+         "<div class='pp-flags'></div><div class='pp-ticks'></div>"
+         "<span class='pp-n hit' style='left:2px'>8</span>"
+         "<span class='pp-n' style='left:26px'>12</span>"
+         "<span class='pp-n' style='left:50px'>16</span>"
+         "<span class='pp-n' style='left:74px'>20</span>"
+         "<span class='pp-n' style='left:98px'>24</span>"
+         "<div class='pp-fr'></div></div>"
+         "<div class='pp-go' aria-hidden='true'>&rarr;<b>8</b></div>"
+         "<div class='pp-txt'><span>");
+  h += T(STR_W_P_CAL_HINT);
+  h += F("</span><span class='hint'>");
+  h += T(STR_W_P_CAL_HINT2);
+  // pp-txt, pp-ex, the field, the card, and the grid the page opened.
+  h += F("</span></div></div></div></div></div>");
 
   // Every handler is bound here rather than written into an onclick
   // attribute: a page body is JavaScript inside a C++ string literal, and an
@@ -251,10 +349,30 @@ static String body() {
          "$('lt').textContent=d.lastTest||'';"
          "$('sc').disabled=!d.ble||d.stuck||d.scanning;"
          "$('tb').disabled=!d.ble||d.stuck||!d.printer.configured;"
+         "$('cb').disabled=$('tb').disabled;"
+         "pos(d);"
          "rows(d);"
          // While the scale scans, ask again in two seconds; the scan itself
          // takes five.
          "clearTimeout(timer);if(d.scanning)timer=setTimeout(load,2000);}"
+         // The strip in percent of the row; the buttons light up for the
+         // edge or the middle the offset stands at.
+         // 203 dpi, 8 dots to the millimetre; a tenth only where it is one.
+         "function mm(v){return String(Math.round(v*10/8)/10);}"
+         "function pos(d){const p=d.pos,row=p.row||1,l=$('pl');"
+         "l.style.left=(p.cx*100/row)+'%';l.style.width=(p.cw*100/row)+'%';"
+         "l.textContent=d.printer.w+' mm';$('pr').textContent=mm(p.row)+' mm';"
+         // The offset is kept in dots and shown in millimetres, the unit
+         // the calibration page's ruler counts in.
+         "const x=$('xo');x.min=Math.ceil(p.min/8);x.max=Math.floor(p.max/8);"
+         "if(document.activeElement!==x)x.value=Math.round(p.off/8);"
+         "const fixed=p.min===p.max;"
+         "document.querySelectorAll('#pa .btab').forEach(function(b){"
+         "const a=b.dataset.a;"
+         "b.classList.toggle('on',a==='left'?p.off===p.min:a==='right'?p.off===p.max:p.off===0);"
+         "b.disabled=fixed;});"
+         "x.disabled=fixed;$('xm').disabled=fixed||p.off<=p.min;$('xp').disabled=fixed||p.off>=p.max;}"
+         "function setOff(v){postFlash('/api/printer/offset',String(v),'xo-s',3000).then(load);}"
          "function load(){getJson('/api/printer').then(function(d){if(d)paint(d);});}"
          // The box already shows what was asked for, so a failure has to put
          // it back. Same shape as every switch on the settings page.
@@ -273,6 +391,13 @@ static String body() {
          // fetched after that and shown on the last line.
          "$('tb').addEventListener('click',function(){"
          "postFlash('/api/printer/test','','tb-s',4000).then(function(){setTimeout(load,12000);});});"
+         "document.querySelectorAll('#pa .btab').forEach(function(b){"
+         "b.addEventListener('click',function(){setOff(b.dataset.a);});});"
+         "$('xm').addEventListener('click',function(){setOff(((+$('xo').value||0)-1)*8);});"
+         "$('xp').addEventListener('click',function(){setOff(((+$('xo').value||0)+1)*8);});"
+         "$('xo').addEventListener('change',function(){setOff(Math.round(+$('xo').value||0)*8);});"
+         "$('cb').addEventListener('click',function(){"
+         "postFlash('/api/printer/calib','','cb-s',4000).then(function(){setTimeout(load,12000);});});"
          "$('fb').addEventListener('click',function(){"
          "postFlash('/api/printer/forget','','pd-s',4000).then(load);});"
          "load();"
@@ -372,6 +497,38 @@ static void routes(WebServer &srv) {
     if (bleStackStuck()) { srv.send(409, "text/plain", T(STR_PRN_ERR_STUCK)); return; }
     printer_test_pending = true;
     logSD("Web: test print requested");
+    srv.send(200, "text/plain", T(STR_W_P_QUEUED));
+  });
+
+  // A number of dots, or "left" and "right" for a roll against a wall: those
+  // are stored beyond the head and clamped when used, so they hold for every
+  // label width.
+  srv.on("/api/printer/offset", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_PRINTER))) return;
+    const String v = srv.arg("plain");
+    LabelPrinterConfig c = labelPrinterLoadConfig();
+    if (v == "left")       c.x_offset = LP_OFFSET_LEFT;
+    else if (v == "right") c.x_offset = LP_OFFSET_RIGHT;
+    else {
+      // Clamped here too, so the stored number is the one the page shows.
+      int16_t lo, hi;
+      labelPrinterOffsetRange(c, &lo, &hi);
+      const long n = strtol(v.c_str(), nullptr, 10);
+      c.x_offset = (int16_t)(n < lo ? lo : n > hi ? hi : n);
+    }
+    const bool ok = labelPrinterSaveConfig(c);
+    logSDf("Web: label offset -> %s (%d dots)", v.c_str(), (int)labelPrinterOffset(c));
+    srv.send(ok ? 200 : 500, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
+  });
+
+  // Parks the calibration page, the same way as the test print.
+  srv.on("/api/printer/calib", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_PRINTER))) return;
+    if (!labelPrinterConfigured(labelPrinterLoadConfig())) { srv.send(409, "text/plain", T(STR_PRN_ERR_NO_PRINTER)); return; }
+    if (!bleEnabled()) { srv.send(409, "text/plain", T(STR_PRN_ERR_BLE_OFF)); return; }
+    if (bleStackStuck()) { srv.send(409, "text/plain", T(STR_PRN_ERR_STUCK)); return; }
+    printer_calib_pending = true;
+    logSD("Web: calibration page requested");
     srv.send(200, "text/plain", T(STR_W_P_QUEUED));
   });
 
