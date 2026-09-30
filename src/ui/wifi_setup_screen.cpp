@@ -196,7 +196,7 @@ void buildWifiSetupScreen() {
   lv_obj_t *btn_scan = lv_btn_create(scr_wifi_setup);
   lv_obj_set_size(btn_scan, 44, 36);
   lv_obj_align(btn_scan, LV_ALIGN_TOP_MID, 100, 4);
-  lv_obj_set_style_bg_color(btn_scan, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_scan, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_scan, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_scan, 6, 0);
   lv_obj_set_style_shadow_width(btn_scan, 0, 0);
@@ -236,7 +236,7 @@ void buildWifiSetupScreen() {
   lv_obj_t *btn_portal = lv_btn_create(scr_wifi_setup);
   lv_obj_set_size(btn_portal, 190, 40);
   lv_obj_align(btn_portal, LV_ALIGN_BOTTOM_RIGHT, -10, -8);
-  lv_obj_set_style_bg_color(btn_portal, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_portal, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_portal, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_portal, 8, 0);
   lv_obj_set_style_shadow_width(btn_portal, 0, 0);
@@ -426,7 +426,7 @@ static void finishWifiScan(int n) {
     // Row button
     lv_obj_t *row = lv_btn_create(lbl_wifi_scan_list);
     lv_obj_set_size(row, 452, 46);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
     lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_shadow_width(row, 0, 0);
@@ -537,7 +537,7 @@ void buildWifiPassScreen() {
   lv_obj_align(ta_wifi_pass, LV_ALIGN_TOP_MID, 0, 74);
   lv_obj_set_style_text_font(ta_wifi_pass, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_color(ta_wifi_pass, lv_color_hex(UI_COL_INK_MAX), 0);
-  lv_obj_set_style_bg_color(ta_wifi_pass, lv_color_hex(UI_COL_TEXTAREA), 0);
+  lv_obj_set_style_bg_color(ta_wifi_pass, lv_color_hex(UI_COL_ROW_PRESSED), 0);
   lv_obj_set_style_border_color(ta_wifi_pass, lv_color_hex(UI_COL_POPUP_BORDER), 0);
 
   // Keyboard
@@ -551,7 +551,7 @@ void buildWifiPassScreen() {
   lv_keyboard_set_textarea(kb_wifi_pass, ta_wifi_pass);
   lv_obj_set_size(kb_wifi_pass, 480, 160);
   lv_obj_align(kb_wifi_pass, LV_ALIGN_BOTTOM_MID, 0, 0);
-  lv_obj_set_style_bg_color(kb_wifi_pass, lv_color_hex(UI_COL_KEYBOARD), 0);
+  lv_obj_set_style_bg_color(kb_wifi_pass, lv_color_hex(UI_COL_EMPTY), 0);
   lv_obj_set_style_border_width(kb_wifi_pass, 0, 0);
 
   // Both confirm keys connect. ✓ reports READY on the keyboard, ↵ only on the
@@ -750,7 +750,7 @@ void buildWifiConnectingScreen() {
   lv_obj_set_size(btn_conn_change, 200, 48);
   lv_obj_align(btn_conn_change, LV_ALIGN_BOTTOM_MID, -110, -20);
   lv_obj_add_flag(btn_conn_change, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_style_bg_color(btn_conn_change, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_conn_change, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_conn_change, lv_color_hex(UI_COL_LINE_SOFT), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_conn_change, 8, 0);
   lv_obj_set_style_shadow_width(btn_conn_change, 0, 0);

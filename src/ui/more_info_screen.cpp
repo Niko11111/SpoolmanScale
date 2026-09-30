@@ -352,7 +352,7 @@ void showLocationPicker() {
   lv_obj_t *box = lv_obj_create(scr_location_picker);
   lv_obj_set_size(box, 400, 280);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SHEET), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, 10, 0);
@@ -412,7 +412,7 @@ void showLocationPicker() {
   lv_obj_t *list = lv_obj_create(box);
   lv_obj_set_size(list, 380, with_cancel ? 220 - LOC_CANCEL_H - LOC_CANCEL_GAP : 220);
   lv_obj_set_pos(list, 10, 50);
-  lv_obj_set_style_bg_color(list, lv_color_hex(UI_COL_SHEET), 0);
+  lv_obj_set_style_bg_color(list, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_width(list, 0, 0);
   lv_obj_set_style_radius(list, 0, 0);
   lv_obj_set_style_pad_all(list, 0, 0);
@@ -429,7 +429,7 @@ void showLocationPicker() {
     lv_obj_t *btn_c = lv_btn_create(box);
     lv_obj_set_size(btn_c, LOC_CANCEL_W, LOC_CANCEL_H);
     lv_obj_set_pos(btn_c, 10, 270 - LOC_CANCEL_H);
-    lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
     lv_obj_set_style_border_width(btn_c, 1, 0);
     lv_obj_set_style_border_color(btn_c, lv_color_hex(UI_COL_LINE), 0);
@@ -535,7 +535,7 @@ void fetchAndFillLocationList() {
   lv_obj_set_size(btn_none, 370, 44);
   lv_obj_set_style_bg_color(btn_none, lv_color_hex(UI_COL_CHIP), 0);
   lv_obj_set_style_bg_color(btn_none, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
-  lv_obj_set_style_border_color(btn_none, lv_color_hex(UI_COL_DIVIDER), 0);
+  lv_obj_set_style_border_color(btn_none, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_set_style_border_width(btn_none, 1, 0);
   lv_obj_set_style_radius(btn_none, 6, 0);
   lv_obj_set_style_shadow_width(btn_none, 0, 0);
@@ -571,9 +571,9 @@ void fetchAndFillLocationList() {
     if (!row) { logSDf("LOC: no room for a row, list cut at %d", loc_shown); break; }
     lv_obj_set_size(row, 370, 44);
     bool is_current = (strlen(sm_location_name) > 0 && strcmp(loc_name, sm_location_name) == 0);
-    lv_obj_set_style_bg_color(row, is_current ? lv_color_hex(UI_COL_CURRENT_BG) : lv_color_hex(UI_COL_CHIP), 0);
+    lv_obj_set_style_bg_color(row, is_current ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_CHIP), 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(row, is_current ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_DIVIDER), 0);
+    lv_obj_set_style_border_color(row, is_current ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_ROW), 0);
     lv_obj_set_style_border_width(row, 1, 0);
     lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_shadow_width(row, 0, 0);
@@ -602,7 +602,7 @@ void fetchAndFillLocationList() {
   if (loc_limit_hit) {
     lv_obj_t *limit_row = lv_obj_create(loc_list_obj);
     lv_obj_set_size(limit_row, 360, 40);
-    lv_obj_set_style_bg_color(limit_row, lv_color_hex(UI_COL_DANGER_BOX), 0);
+    lv_obj_set_style_bg_color(limit_row, lv_color_hex(UI_COL_DANGER_ROW), 0);
     lv_obj_set_style_radius(limit_row, 6, 0);
     lv_obj_set_style_border_width(limit_row, 1, 0);
     lv_obj_set_style_border_color(limit_row, lv_color_hex(UI_COL_BAD_BG), 0);
@@ -706,7 +706,7 @@ void buildMoreInfoScreen() {
   lv_obj_t *box = lv_obj_create(scr_more_info);
   lv_obj_set_size(box, 464, 300);
   lv_obj_set_pos(box, 8, 10);
-  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SHEET), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, 10, 0);
@@ -883,7 +883,7 @@ void buildMoreInfoScreen() {
   lv_obj_t *div1 = lv_obj_create(box);
   lv_obj_set_size(div1, 444, 1);
   lv_obj_set_pos(div1, 10, 104);
-  lv_obj_set_style_bg_color(div1, lv_color_hex(UI_COL_DIVIDER), 0);
+  lv_obj_set_style_bg_color(div1, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_set_style_border_width(div1, 0, 0);
   lv_obj_set_style_radius(div1, 0, 0);
   lv_obj_set_style_pad_all(div1, 0, 0);
@@ -1004,7 +1004,7 @@ void buildMoreInfoScreen() {
   lv_obj_t *div2 = lv_obj_create(box);
   lv_obj_set_size(div2, 444, 1);
   lv_obj_set_pos(div2, 10, 196);
-  lv_obj_set_style_bg_color(div2, lv_color_hex(UI_COL_DIVIDER), 0);
+  lv_obj_set_style_bg_color(div2, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_set_style_border_width(div2, 0, 0);
   lv_obj_set_style_radius(div2, 0, 0);
   lv_obj_set_style_pad_all(div2, 0, 0);
@@ -1129,7 +1129,7 @@ void buildMoreInfoScreen() {
       lv_obj_t *box2 = lv_obj_create(pop);
       lv_obj_set_size(box2, 420, cu_multi ? 262 : 210);
       lv_obj_align(box2, LV_ALIGN_CENTER, 0, 0);
-      lv_obj_set_style_bg_color(box2, lv_color_hex(UI_COL_DANGER_BOX), 0);
+      lv_obj_set_style_bg_color(box2, lv_color_hex(UI_COL_DANGER_ROW), 0);
       lv_obj_set_style_border_color(box2, lv_color_hex(UI_COL_BAD_BG_PRESSED), 0);
       lv_obj_set_style_border_width(box2, 2, 0);
       lv_obj_set_style_radius(box2, 12, 0);
@@ -1166,7 +1166,7 @@ void buildMoreInfoScreen() {
       lv_obj_t *btn_no = lv_btn_create(box2);
       lv_obj_set_size(btn_no, cu_multi ? 396 : 170, 44);
       lv_obj_set_pos(btn_no, 12, cu_multi ? 204 : 154);
-      lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_SURFACE_2), 0);
+      lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_SURFACE), 0);
       lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_LINE_SOFT), LV_STATE_PRESSED);
       lv_obj_set_style_radius(btn_no, 8, 0);
       lv_obj_set_style_shadow_width(btn_no, 0, 0);

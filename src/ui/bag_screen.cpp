@@ -63,7 +63,7 @@ void buildBagScreen() {
   lv_obj_t *input_box_b = lv_obj_create(scr_bag);
   lv_obj_set_size(input_box_b, 260, 38);
   lv_obj_align(input_box_b, LV_ALIGN_TOP_MID, 0, 98);
-  lv_obj_set_style_bg_color(input_box_b, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(input_box_b, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_color(input_box_b, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(input_box_b, 1, 0);
   lv_obj_set_style_radius(input_box_b, 6, 0);
@@ -88,7 +88,7 @@ void buildBagScreen() {
     lv_obj_t *btn = lv_btn_create(scr_bag);
     lv_obj_set_size(btn, NP_W, NP_H);
     lv_obj_set_pos(btn, NP_PAD_X + col*(NP_W+NP_GAP), NP_START_Y + row*(NP_H+NP_GAP));
-    lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn, 6, 0);
     lv_obj_set_style_shadow_width(btn, 0, 0);
@@ -116,7 +116,7 @@ void buildBagScreen() {
   lv_obj_t *btn_del_b = lv_btn_create(scr_bag);
   lv_obj_set_size(btn_del_b, bw5_b, NP_H);
   lv_obj_set_pos(btn_del_b, NP_PAD_X, by5_b);
-  lv_obj_set_style_bg_color(btn_del_b, lv_color_hex(UI_COL_QUIET_BG), 0);
+  lv_obj_set_style_bg_color(btn_del_b, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_set_style_bg_color(btn_del_b, lv_color_hex(UI_COL_QUIET_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_del_b, 6, 0);
   lv_obj_set_style_shadow_width(btn_del_b, 0, 0);

@@ -265,7 +265,7 @@ void buildSpoolmanScreen() {
   lv_obj_t *input_box = lv_obj_create(scr_spoolman);
   lv_obj_set_size(input_box, 420, 34);
   lv_obj_align(input_box, LV_ALIGN_TOP_MID, 0, 68);
-  lv_obj_set_style_bg_color(input_box, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(input_box, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_color(input_box, lv_color_hex(sp_locked ? UI_COL_WARN : UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(input_box, 1, 0);
   lv_obj_set_style_radius(input_box, 6, 0);
@@ -351,7 +351,7 @@ void buildSpoolmanScreen() {
     lv_obj_t *btn = lv_btn_create(scr_spoolman);
     lv_obj_set_size(btn, NP_W, NP_H);
     lv_obj_set_pos(btn, bx, by);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn, 6, 0);
     lv_obj_set_style_shadow_width(btn, 0, 0);
@@ -382,7 +382,7 @@ void buildSpoolmanScreen() {
   lv_obj_t *btn_del = lv_btn_create(scr_spoolman);
   lv_obj_set_size(btn_del, bw5, NP_H);
   lv_obj_set_pos(btn_del, NP_PAD_X, by5);
-  lv_obj_set_style_bg_color(btn_del, lv_color_hex(UI_COL_QUIET_BG), 0);
+  lv_obj_set_style_bg_color(btn_del, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_set_style_bg_color(btn_del, lv_color_hex(UI_COL_QUIET_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_del, 6, 0);
   lv_obj_set_style_shadow_width(btn_del, 0, 0);
@@ -581,7 +581,7 @@ void showSpoolmanFailScreen(bool is_setup_flow) {
   lv_obj_t *btn_cont = lv_btn_create(scr_spoolman_fail);
   lv_obj_set_size(btn_cont, 210, 50);
   lv_obj_set_pos(btn_cont, 254, 248);
-  lv_obj_set_style_bg_color(btn_cont, lv_color_hex(UI_COL_QUIET_BG), 0);
+  lv_obj_set_style_bg_color(btn_cont, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_set_style_bg_color(btn_cont, lv_color_hex(UI_COL_QUIET_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_cont, 8, 0);
   lv_obj_set_style_shadow_width(btn_cont, 0, 0);

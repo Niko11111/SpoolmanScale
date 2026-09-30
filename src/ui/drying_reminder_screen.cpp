@@ -43,7 +43,7 @@ static void buildDryNumpadScreen(int target) {
   lv_obj_t *val_box = lv_obj_create(s_dry_numpad_scr);
   lv_obj_set_size(val_box, 380, 44);
   lv_obj_set_pos(val_box, 50, 68);
-  lv_obj_set_style_bg_color(val_box, lv_color_hex(UI_COL_WELL), 0);
+  lv_obj_set_style_bg_color(val_box, lv_color_hex(UI_COL_GROUND), 0);
   lv_obj_set_style_border_color(val_box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(val_box, 1, 0);
   lv_obj_set_style_radius(val_box, 8, 0);
@@ -71,8 +71,8 @@ static void buildDryNumpadScreen(int target) {
     lv_obj_set_size(kb, NP_W, NP_H);
     lv_obj_set_pos(kb, bx, by);
     lv_obj_set_style_bg_color(kb, is_del ? lv_color_hex(UI_COL_KEY_DEL) :
-                                  is_ok  ? lv_color_hex(UI_COL_KEY_OK) :
-                                           lv_color_hex(UI_COL_SURFACE_2), 0);
+                                  is_ok  ? lv_color_hex(UI_COL_PICKED_BG) :
+                                           lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(kb, 6, 0);
     lv_obj_set_style_shadow_width(kb, 0, 0);
@@ -142,7 +142,7 @@ void showDryingReminderScreen() {
     lv_obj_t *mb = lv_btn_create(scr_drying_reminder);
     lv_obj_set_size(mb, btn_w, btn_h);
     lv_obj_set_pos(mb, btn_x0 + m*(btn_w+btn_gap), btn_y);
-    lv_obj_set_style_bg_color(mb, active ? lv_color_hex(UI_COL_ACCENT_DIM) : lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(mb, active ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(mb, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_border_color(mb, active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_ROW_PRESSED), 0);
     lv_obj_set_style_border_width(mb, 1, 0);
@@ -219,7 +219,7 @@ void showDryingReminderScreen() {
     lv_obj_t *tbl_cont = lv_obj_create(scr_drying_reminder);
     lv_obj_set_size(tbl_cont, 456, 150);
     lv_obj_set_pos(tbl_cont, 12, content_y + 4);
-    lv_obj_set_style_bg_color(tbl_cont, lv_color_hex(UI_COL_WELL), 0);
+    lv_obj_set_style_bg_color(tbl_cont, lv_color_hex(UI_COL_GROUND), 0);
     lv_obj_set_style_border_color(tbl_cont, lv_color_hex(UI_COL_ROW_PRESSED), 0);
     lv_obj_set_style_border_width(tbl_cont, 1, 0);
     lv_obj_set_style_radius(tbl_cont, 8, 0);

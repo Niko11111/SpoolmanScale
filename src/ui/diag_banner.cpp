@@ -40,7 +40,7 @@ static void buildBanner() {
   // than crowded.
   lv_obj_set_size(banner, 480, 22);
   lv_obj_set_pos(banner, 0, 0);
-  lv_obj_set_style_bg_color(banner, lv_color_hex(UI_COL_ALERT_BG), 0);
+  lv_obj_set_style_bg_color(banner, lv_color_hex(UI_COL_BAD_BG), 0);
   lv_obj_set_style_bg_color(banner, lv_color_hex(UI_COL_ALERT_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(banner, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(banner, 0, 0);

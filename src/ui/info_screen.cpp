@@ -67,7 +67,7 @@ void showQRPopup(int idx) {
   lv_obj_t *btn_back = lv_btn_create(popup);
   lv_obj_set_size(btn_back, 44, 44);
   lv_obj_set_pos(btn_back, 4, 2);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_back, 8, 0);
   lv_obj_set_style_shadow_width(btn_back, 0, 0);
@@ -175,7 +175,7 @@ void showInfoScreen() {
   lv_obj_t *btn_back = lv_btn_create(scr_info);
   lv_obj_set_size(btn_back, 44, 44);
   lv_obj_set_pos(btn_back, 4, 2);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_back, 8, 0);
   lv_obj_set_style_shadow_width(btn_back, 0, 0);
@@ -230,10 +230,10 @@ void showInfoScreen() {
   const int QB_W = (480 - 16 - QB_GAP) / 2;
   const int QB_X0 = 8;
   qrTile(scr_info, QB_X0, QB_Y0, 2 * QB_W + QB_GAP, QB_DOCS_H, QR_DOCS,
-         LV_SYMBOL_LIST, UI_COL_ACCENT_DIM, UI_COL_ACCENT);
+         LV_SYMBOL_LIST, UI_COL_GO_BG, UI_COL_ACCENT);
   const int y1 = QB_Y0 + QB_DOCS_H + QB_GAP, y2 = y1 + QB_H + QB_GAP;
   qrTile(scr_info, QB_X0, y1, QB_W, QB_H, 0, LV_SYMBOL_BELL, UI_COL_KOFI_BG, UI_COL_KOFI_INK);
-  qrTile(scr_info, QB_X0 + QB_W + QB_GAP, y1, QB_W, QB_H, 1, LV_SYMBOL_DOWNLOAD, UI_COL_SURFACE_2, UI_COL_ACCENT);
+  qrTile(scr_info, QB_X0 + QB_W + QB_GAP, y1, QB_W, QB_H, 1, LV_SYMBOL_DOWNLOAD, UI_COL_SURFACE, UI_COL_ACCENT);
   qrTile(scr_info, QB_X0, y2, QB_W, QB_H, 2, LV_SYMBOL_BELL, UI_COL_DISCORD_BG, UI_COL_DISCORD_INK);
   qrTile(scr_info, QB_X0 + QB_W + QB_GAP, y2, QB_W, QB_H, 3, LV_SYMBOL_UPLOAD, UI_COL_MAKERWORLD_BG, UI_COL_MAKERWORLD_INK);
 

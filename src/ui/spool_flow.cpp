@@ -1776,7 +1776,7 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
   lv_obj_t *btn_retry = lv_btn_create(box);
   lv_obj_set_size(btn_retry, 420, 44);
   lv_obj_set_pos(btn_retry, 10, 166);  // 114+44+8
-  lv_obj_set_style_bg_color(btn_retry, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_retry, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_retry, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_retry, 8, 0);
   lv_obj_set_style_shadow_width(btn_retry, 0, 0);
@@ -1924,7 +1924,7 @@ void showWarnPopupB(int spool_id, bool is_bambu) {
   lv_obj_t *btn_retry = lv_btn_create(box);
   lv_obj_set_size(btn_retry, 420, 44);
   lv_obj_align(btn_retry, LV_ALIGN_TOP_MID, 0, retry_y);
-  lv_obj_set_style_bg_color(btn_retry, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_retry, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_retry, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_retry, 8, 0);
   lv_obj_set_style_shadow_width(btn_retry, 0, 0);
@@ -1948,7 +1948,7 @@ void showWarnPopupB(int spool_id, bool is_bambu) {
   lv_obj_t *btn_cancel = lv_btn_create(box);
   lv_obj_set_size(btn_cancel, 420, WARN_B_CANCEL_H);
   lv_obj_align(btn_cancel, LV_ALIGN_TOP_MID, 0, cancel_y);
-  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_QUIET_BG), 0);
+  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_QUIET_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_cancel, 8, 0);
   lv_obj_set_style_shadow_width(btn_cancel, 0, 0);
@@ -2142,7 +2142,7 @@ void showIdInputPopup(bool is_bambu, bool is_copy) {
   lv_obj_t *btn_back = lv_btn_create(scr_link_id);
   lv_obj_set_size(btn_back, 44, 44);
   lv_obj_set_pos(btn_back, 4, 2);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_back, 8, 0);
   lv_obj_set_style_shadow_width(btn_back, 0, 0);
@@ -2224,7 +2224,7 @@ void showIdInputPopup(bool is_bambu, bool is_copy) {
   lv_obj_t *input_box = lv_obj_create(scr_link_id);
   lv_obj_set_size(input_box, 260, 44);
   lv_obj_align(input_box, LV_ALIGN_TOP_MID, 0, 76);
-  lv_obj_set_style_bg_color(input_box, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(input_box, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_color(input_box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(input_box, 1, 0);
   lv_obj_set_style_radius(input_box, 6, 0);
@@ -2732,7 +2732,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   lv_obj_t *btn_hdr_back = lv_btn_create(hdr);
   lv_obj_set_size(btn_hdr_back, 44, 44);
   lv_obj_set_pos(btn_hdr_back, 4, 4);
-  lv_obj_set_style_bg_color(btn_hdr_back, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_hdr_back, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_hdr_back, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_hdr_back, 8, 0);
   lv_obj_set_style_shadow_width(btn_hdr_back, 0, 0);
@@ -2856,7 +2856,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     // count == 0 and the "no spools" message below still appears.
     count++;
     lv_obj_set_size(row, 452, 56);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
     lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_shadow_width(row, 0, 0);
@@ -2979,7 +2979,7 @@ void showMaterialList(const char* vendor_name) {
   lv_obj_align(lbl_title, LV_ALIGN_CENTER, 0, 0);
   lv_obj_t *btn_mat_back = lv_btn_create(hdr_mat);
   lv_obj_set_size(btn_mat_back, 44, 44); lv_obj_set_pos(btn_mat_back, 4, 4);
-  lv_obj_set_style_bg_color(btn_mat_back, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_mat_back, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_mat_back, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_mat_back, 8, 0);
   lv_obj_set_style_shadow_width(btn_mat_back, 0, 0);
@@ -3069,7 +3069,7 @@ void showMaterialList(const char* vendor_name) {
     lv_obj_t *row = lv_btn_create(list);
     if (!row) { logSDf("MaterialList: no room for a row, list cut at %d", m); break; }
     lv_obj_set_size(row, 452, 50);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
     lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_shadow_width(row, 0, 0);
@@ -3183,7 +3183,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
 
   lv_obj_t *btn_ms_back = lv_btn_create(hdr_ms);
   lv_obj_set_size(btn_ms_back, 44, 44); lv_obj_set_pos(btn_ms_back, 4, 4);
-  lv_obj_set_style_bg_color(btn_ms_back, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_ms_back, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_ms_back, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ms_back, 8, 0);
   lv_obj_set_style_shadow_width(btn_ms_back, 0, 0);
@@ -3248,7 +3248,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
     lv_obj_t *row = lv_btn_create(list);
     if (!row) { logSDf("MaterialSubList: no room for a row, list cut at %d", m); break; }
     lv_obj_set_size(row, 452, 50);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
     lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_shadow_width(row, 0, 0);
@@ -3327,7 +3327,7 @@ void showVendorList() {
   // Back: go back to entry popup
   lv_obj_t *btn_vnd_back = lv_btn_create(hdr_vnd);
   lv_obj_set_size(btn_vnd_back, 44, 44); lv_obj_set_pos(btn_vnd_back, 4, 4);
-  lv_obj_set_style_bg_color(btn_vnd_back, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_vnd_back, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_vnd_back, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_vnd_back, 8, 0);
   lv_obj_set_style_shadow_width(btn_vnd_back, 0, 0);
@@ -3415,7 +3415,7 @@ void showVendorList() {
     lv_obj_t *row = lv_btn_create(list);
     if (!row) { logSDf("VendorList: no room for a row, list cut at %d", v); break; }
     lv_obj_set_size(row, 452, 50);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
     lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_shadow_width(row, 0, 0);

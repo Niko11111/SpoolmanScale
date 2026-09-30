@@ -92,7 +92,7 @@ static void buildAmsWindowNumpad() {
   lv_obj_t *val_box = lv_obj_create(s_ams_numpad_scr);
   lv_obj_set_size(val_box, 380, 44);
   lv_obj_set_pos(val_box, 50, 68);
-  lv_obj_set_style_bg_color(val_box, lv_color_hex(UI_COL_WELL), 0);
+  lv_obj_set_style_bg_color(val_box, lv_color_hex(UI_COL_GROUND), 0);
   lv_obj_set_style_border_color(val_box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(val_box, 1, 0);
   lv_obj_set_style_radius(val_box, 8, 0);
@@ -116,8 +116,8 @@ static void buildAmsWindowNumpad() {
     lv_obj_set_size(kb, NP_W, NP_H);
     lv_obj_set_pos(kb, NP_X0 + col * (NP_W + NP_GAP), NP_Y0 + row * (NP_H + NP_GAP));
     lv_obj_set_style_bg_color(kb, is_del ? lv_color_hex(UI_COL_KEY_DEL) :
-                                  is_ok  ? lv_color_hex(UI_COL_KEY_OK) :
-                                           lv_color_hex(UI_COL_SURFACE_2), 0);
+                                  is_ok  ? lv_color_hex(UI_COL_PICKED_BG) :
+                                           lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(kb, 6, 0);
     lv_obj_set_style_shadow_width(kb, 0, 0);
@@ -224,7 +224,7 @@ void buildAmsAssignScreen() {
     lv_obj_t *mb = lv_btn_create(scr_ams_assign);
     lv_obj_set_size(mb, btn_w, btn_h);
     lv_obj_set_pos(mb, btn_x0 + m*(btn_w+btn_gap), btn_y);
-    lv_obj_set_style_bg_color(mb, active ? lv_color_hex(UI_COL_ACCENT_DIM) : lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(mb, active ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(mb, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_border_color(mb, active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_ROW_PRESSED), 0);
     lv_obj_set_style_border_width(mb, 1, 0);

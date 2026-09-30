@@ -219,7 +219,7 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool, bool measured
       lv_obj_set_size(b1, 460, 60); lv_obj_set_pos(b1, 10, row_y);
       if (!scope_spool) lv_obj_add_flag(b1, LV_OBJ_FLAG_HIDDEN);
       else row_y += 70;
-      lv_obj_set_style_bg_color(b1, lv_color_hex(UI_COL_BLUE_BG), 0);
+      lv_obj_set_style_bg_color(b1, lv_color_hex(UI_COL_CHIP), 0);
       lv_obj_set_style_radius(b1, 8, 0); lv_obj_set_style_shadow_width(b1, 0, 0);
       { lv_obj_t *l = lv_label_create(b1);
         lv_label_set_text(l, T(backendIsFilaMan() ? STR_BTN_THIS_SPOOL_FM
@@ -257,7 +257,7 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool, bool measured
       lv_obj_set_size(b3, 460, 60); lv_obj_set_pos(b3, 10, row_y);
       if (!scope_shared) lv_obj_add_flag(b3, LV_OBJ_FLAG_HIDDEN);
       else row_y += 70;
-      lv_obj_set_style_bg_color(b3, lv_color_hex(UI_COL_VENDOR_BG), 0);
+      lv_obj_set_style_bg_color(b3, lv_color_hex(UI_COL_AMBER_BG), 0);
       lv_obj_set_style_radius(b3, 8, 0); lv_obj_set_style_shadow_width(b3, 0, 0);
       { lv_obj_t *l = lv_label_create(b3);
         // Spoolman's vendor is FilaMan's manufacturer, and the bracketed field
@@ -407,7 +407,7 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_t *btn2 = lv_btn_create(box);
     lv_obj_set_size(btn2, BW2, H_ROW1);
     lv_obj_set_pos(btn2, XR, Y1);
-    lv_obj_set_style_bg_color(btn2, lv_color_hex(UI_COL_BAG_BG), 0);
+    lv_obj_set_style_bg_color(btn2, lv_color_hex(UI_COL_OK_BG), 0);
     lv_obj_set_style_bg_color(btn2, lv_color_hex(UI_COL_BAG_BG_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn2, 8, 0);
     lv_obj_set_style_shadow_width(btn2, 0, 0);
@@ -432,8 +432,8 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_t *btn3 = lv_btn_create(box);
     lv_obj_set_size(btn3, BW2, H_ROW2);
     lv_obj_set_pos(btn3, XL, Y2);
-    lv_obj_set_style_bg_color(btn3, lv_color_hex(UI_COL_NEW_SPOOL_BG), 0);
-    lv_obj_set_style_bg_color(btn3, lv_color_hex(UI_COL_NEW_SPOOL_BG_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn3, lv_color_hex(UI_COL_CHIP), 0);
+    lv_obj_set_style_bg_color(btn3, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn3, 8, 0);
     lv_obj_set_style_shadow_width(btn3, 0, 0);
     lv_obj_add_event_cb(btn3, [](lv_event_t *e) {
@@ -466,7 +466,7 @@ void showConfirmPopup(const char* msg, int action) {
       snprintf(buf3 + used, sizeof(buf3) - used, "%s", tare_note);
     }
     lv_label_set_text(l3, buf3);
-    lv_obj_set_style_text_color(l3, lv_color_hex(UI_COL_NEW_SPOOL_TEXT), 0);
+    lv_obj_set_style_text_color(l3, lv_color_hex(UI_COL_ALT_TEXT), 0);
     lv_obj_set_style_text_font(l3, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(l3, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(l3);
@@ -480,7 +480,7 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_t *btn4 = lv_btn_create(box);
     lv_obj_set_size(btn4, BW2, H_ROW2);
     lv_obj_set_pos(btn4, XR, Y2);
-    lv_obj_set_style_bg_color(btn4, lv_color_hex(UI_COL_ALT_BG), 0);
+    lv_obj_set_style_bg_color(btn4, lv_color_hex(UI_COL_LINE_SOFT), 0);
     lv_obj_set_style_bg_color(btn4, lv_color_hex(UI_COL_RULE), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn4, 8, 0);
     lv_obj_set_style_shadow_width(btn4, 0, 0);
@@ -502,8 +502,8 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_t *btn5 = lv_btn_create(box);
     lv_obj_set_size(btn5, BW2, H_ROW3);
     lv_obj_set_pos(btn5, XL, Y3);
-    lv_obj_set_style_bg_color(btn5, g_auto_weight ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_TOGGLE_OFF_BG), 0);
-    lv_obj_set_style_bg_color(btn5, g_auto_weight ? lv_color_hex(UI_COL_GO_BG_PRESSED) : lv_color_hex(UI_COL_TOGGLE_OFF_BG_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn5, g_auto_weight ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_DISABLED_BG), 0);
+    lv_obj_set_style_bg_color(btn5, g_auto_weight ? lv_color_hex(UI_COL_GO_BG_PRESSED) : lv_color_hex(UI_COL_QUIET_BG_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_border_width(btn5, 1, 0);
     lv_obj_set_style_border_color(btn5, g_auto_weight ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_LINE_SOFT), 0);
     lv_obj_set_style_radius(btn5, 8, 0);
@@ -665,7 +665,7 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_t *btn6 = lv_btn_create(box);
     lv_obj_set_size(btn6, BW2, H_ROW3);
     lv_obj_set_pos(btn6, XR, Y3);
-    lv_obj_set_style_bg_color(btn6, lv_color_hex(sm_archived ? UI_COL_RESTORE_BG : UI_COL_ARCHIVE_BG), 0);
+    lv_obj_set_style_bg_color(btn6, lv_color_hex(sm_archived ? UI_COL_GO_BG : UI_COL_ARCHIVE_BG), 0);
     lv_obj_set_style_bg_color(btn6, lv_color_hex(sm_archived ? UI_COL_RESTORE_BG_PRESSED : UI_COL_ARCHIVE_BG_PRESSED),
                               LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn6, 8, 0);
@@ -868,7 +868,7 @@ void showBamBuddyCapPopup(float measured_g, float label_g) {
 
   lv_obj_t *b_keep = lv_btn_create(popup);
   lv_obj_set_size(b_keep, 440, 48); lv_obj_set_pos(b_keep, 20, 216);
-  lv_obj_set_style_bg_color(b_keep, lv_color_hex(UI_COL_ALT_BG), 0);
+  lv_obj_set_style_bg_color(b_keep, lv_color_hex(UI_COL_LINE_SOFT), 0);
   lv_obj_set_style_radius(b_keep, 8, 0);
   lv_obj_set_style_shadow_width(b_keep, 0, 0);
   { lv_obj_t *l = lv_label_create(b_keep);

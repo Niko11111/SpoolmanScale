@@ -27,23 +27,15 @@
 
 // ---- surfaces ------------------------------------------------
 #define UI_COL_GROUND          0x0a1020   // the screen behind everything
-#define UI_COL_SURFACE         0x0c1828   // a popup's box
-#define UI_COL_SURFACE_2       0x0a1828   // inputs, quiet buttons, list bodies
-#define UI_COL_ROW             0x0a1e30   // a settings row
+#define UI_COL_SURFACE         0x0c1828   // a popup's box, a picker's box, inputs, quiet buttons, list bodies
+#define UI_COL_ROW             0x1a2030   // a settings row, a divider, a quiet button: cancel, delete a value
 #define UI_COL_ROW_PRESSED     0x1a3050   // the same row under the finger, and its border
-#define UI_COL_LINE            0x1a3060   // dividers, the slider track, a quiet border
-#define UI_COL_LINE_SOFT       0x1a2840   // the fainter border of an input
-#define UI_COL_POPUP_BORDER    0x2a4080   // the frame of a question
-#define UI_COL_EMPTY           0x101f33   // an empty bay
-#define UI_COL_CHIP            0x0d2040   // a header chip that is a button, pressed: UI_COL_LINE
+#define UI_COL_LINE            0x1a3870   // dividers, the slider track, a quiet border
+#define UI_COL_LINE_SOFT       0x1e2a44   // the fainter border of an input; a neutral answer beside a green one
+#define UI_COL_POPUP_BORDER    0x2a4080   // the frame of a question; a blue action pressed
+#define UI_COL_EMPTY           0x182238   // an empty bay, the keyboard, More, "got it"
+#define UI_COL_CHIP            0x102040   // a header chip that is a button; a blue action: dried, this spool, new spool
 #define UI_COL_SCRIM           0x000000   // behind a popup, at UI_OPA_SCRIM
-
-#define UI_COL_WELL            0x050f1e   // a sunken box: a value on a settings row, the drying table
-#define UI_COL_SHEET           0x0b1525   // a full-screen picker's box: location, status, more info
-#define UI_COL_DIVIDER         0x0f1e30   // the faint separators of the main and more-info screens
-#define UI_COL_TEXTAREA        0x1e2e4a   // a text field being typed into
-#define UI_COL_KEYBOARD        0x182238   // the on-screen keyboard under it
-#define UI_COL_DANGER_BOX      0x1a0808   // a box that asks before deleting, or names a limit
 
 #define UI_OPA_SCRIM           LV_OPA_70
 
@@ -66,12 +58,11 @@
 #define UI_COL_ID_TEXT         0x4a7080   // a UUID and similar machine values
 #define UI_COL_STATUS_BLUE     0x5090e0   // a neutral status line, a date with no drying mode
 #define UI_COL_HDR_OFF         0x606060   // a header icon whose device is not there
-#define UI_COL_DISABLED_BG     0x111820   // a button that cannot be used now
+#define UI_COL_DISABLED_BG     0x111820   // a button that cannot be used now, a switch that is off
 #define UI_COL_DISABLED_TEXT   0x2a3848   // its label, and an option that is off
 
 // ---- meaning -------------------------------------------------
 #define UI_COL_ACCENT          0x28d49a   // the house green: active, found, ok
-#define UI_COL_ACCENT_DIM      0x0d2e1a   // the fill behind an active choice
 #define UI_COL_OK_BG           0x1a4020   // a confirming button
 #define UI_COL_OK_BG_PRESSED   0x2a7030
 #define UI_COL_OK_TEXT         0x80ffb0   // its label
@@ -79,7 +70,7 @@
 #define UI_COL_WARN            0xf0b838   // amber: attention, waiting, the scale's own figure
 #define UI_COL_BAD             0xe04040   // red: wrong, failed
 #define UI_COL_BAD_TEXT        0xff8080   // a red label on a dark button
-#define UI_COL_BAD_BG          0x3a1010   // a declining or destructive button
+#define UI_COL_BAD_BG          0x3a1410   // a declining or destructive button
 #define UI_COL_BAD_BG_PRESSED  0x602020
 // A settings row that deletes something: the factory reset's row in the
 // system screen (TONE_DANGER there), dark red with the pressed red as border.
@@ -89,49 +80,34 @@
 #define UI_COL_ARCHIVE_TEXT    0xffb060   // archiving: its label, the bin icon
 #define UI_COL_ARCHIVE_BG      0x3a1a00
 #define UI_COL_ARCHIVE_BG_PRESSED 0x6a3000   // also its border
-#define UI_COL_RESTORE_BG      0x0a3020   // taking a spool out of the archive
 #define UI_COL_RESTORE_BG_PRESSED 0x156040
 #define UI_COL_DRY             0x5ad1ff   // drying: the drop icon
 #define UI_COL_SIGNAL_LOW      0xe06020   // weak WiFi in the header
 #define UI_COL_SIGNAL_LOW_LIST 0xff8000   // weak WiFi in the network list
-#define UI_COL_ALERT_BG        0x3a1410   // the diagnostics banner
 #define UI_COL_ALERT_BG_PRESSED 0x5a2418
 #define UI_COL_ALERT_TEXT      0xffb0a0
 
 // ---- buttons by role -----------------------------------------
-#define UI_COL_GO_BG           0x1a3020   // go ahead: next, save, an active toggle
+#define UI_COL_GO_BG           0x1a3020   // the green fill: go ahead, an active choice, the current row, restore
 #define UI_COL_GO_BG_PRESSED   0x2a5030   // also its border
-#define UI_COL_QUIET_BG        0x1a2030   // cancel, delete a value; an idle toggle's border
-#define UI_COL_QUIET_BG_PRESSED 0x2a3040
+#define UI_COL_QUIET_BG_PRESSED 0x2a3040   // a quiet button pressed, a switch that is off pressed
 #define UI_COL_CHOICE_BG       0x0a2a40   // a chosen language or date format
 #define UI_COL_CHOICE_BG_PRESSED 0x1a4060
-#define UI_COL_BLUE_BG         0x0a2040   // a blue action: dried, this spool, an OTA toggle that is on
-#define UI_COL_BLUE_BG_PRESSED 0x1a4080   // also its border
-#define UI_COL_AMBER_BG        0x2a2010   // tare, the factor keys
+#define UI_COL_AMBER_BG        0x2a2010   // tare, the factor keys, the vendor answer
 #define UI_COL_AMBER_BG_PRESSED 0x4a4020
 #define UI_COL_AMBER_LINE      0x3a3010   // their border, and a hint row's
 #define UI_COL_AMBER_ROW       0x1a1a08   // a hint row
 #define UI_COL_CAUTION_BG      0x3a2800   // go ahead despite a warning; a caution row's border
 #define UI_COL_CAUTION_BG_PRESSED 0x5a4000
 #define UI_COL_CAUTION_ROW     0x161206   // a settings row that needs care
-#define UI_COL_CAUTION_ROW_PRESSED 0x3a2c10
 #define UI_COL_CLOSE_LINE      0x601010   // the border of a close or unlink button
-#define UI_COL_CURRENT_BG      0x0d3020   // the list row of what is set now
-#define UI_COL_PICKED_BG       0x14402e   // a chosen backend, the raise-capacity answer
-#define UI_COL_ALT_BG          0x1a2a40   // a neutral answer beside a green one: empty spool, keep
-#define UI_COL_ALT_TEXT        0x80c0ff
-#define UI_COL_TOGGLE_OFF_BG   0x101820   // a switch-like button that is off
-#define UI_COL_TOGGLE_OFF_BG_PRESSED 0x1a2a38
+#define UI_COL_PICKED_BG       0x1a4030   // a chosen answer: backend, raise capacity, a matching link, a keypad's OK
+#define UI_COL_ALT_TEXT        0x80c8ff   // a blue answer's label: empty spool, new spool
 #define UI_COL_KEY_DEL         0x1a1020   // the delete key of a number pad
-#define UI_COL_KEY_OK          0x1a4030   // its OK key
-#define UI_COL_MATCH_BG        0x0d3d2e   // a remote link that matches the spool
 #define UI_COL_MATCH_BG_PRESSED 0x18705a
-#define UI_COL_LATER_BG        0x141c30   // "got it" on the calibration reminder
-#define UI_COL_LATER_BG_PRESSED 0x1e2a44
 #define UI_COL_NFC_FRAME       0x3a6ea8   // the frame of the NFC reset question
 
 // One widget each
-#define UI_COL_MORE_BG         0x0d1f38   // main screen: More
 #define UI_COL_LINK_BG         0x1e3000   // main screen: link a spool
 #define UI_COL_LINK_BG_PRESSED 0x2e5000
 #define UI_COL_LINK_LINE       0x4a7800
@@ -146,14 +122,7 @@
 #define UI_COL_AMS_NO_TEXT     0xffa0a0
 #define UI_COL_AMS_NO_PRESSED  0x702020
 #define UI_COL_FILAMENT_BG     0x0a2820   // weight question: this filament
-#define UI_COL_VENDOR_BG       0x281a00   // weight question: vendor
-#define UI_COL_BAG_BG          0x1a3a20   // weight question: with bag
 #define UI_COL_BAG_BG_PRESSED  0x2a6030
-#define UI_COL_NEW_SPOOL_BG    0x102040   // weight question: new spool
-#define UI_COL_NEW_SPOOL_BG_PRESSED 0x1a3870
-#define UI_COL_NEW_SPOOL_TEXT  0x80c8ff
-#define UI_COL_FROM_TAG_BG     0x0a2818   // copy: create from the tag
-#define UI_COL_FROM_TAG_BG_PRESSED 0x1a4a30
 #define UI_COL_KOFI_BG         0x1a2800   // info screen tiles
 #define UI_COL_KOFI_INK        0xa0d840
 #define UI_COL_DISCORD_BG      0x12103a

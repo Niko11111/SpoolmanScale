@@ -127,7 +127,7 @@ static lv_obj_t* makeStepButton(lv_obj_t* parent, lv_coord_t x, const char* sym,
   lv_obj_set_pos(b, x, PO_STEP_Y);
   lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
-  lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_SURFACE_2), LV_STATE_DISABLED);
+  lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_SURFACE), LV_STATE_DISABLED);
   lv_obj_set_style_border_width(b, 1, 0);
   lv_obj_set_style_border_color(b, lv_color_hex(UI_COL_ROW_PRESSED), 0);
   lv_obj_set_style_border_color(b, lv_color_hex(UI_COL_LINE_SOFT), LV_STATE_DISABLED);
@@ -204,7 +204,7 @@ void buildPrinterOffsetScreen() {
   lv_obj_t* strip = lv_obj_create(s_scr);
   lv_obj_set_size(strip, PO_W, PO_STRIP_H);
   lv_obj_set_pos(strip, PO_X, PO_STRIP_Y);
-  lv_obj_set_style_bg_color(strip, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(strip, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_width(strip, 1, 0);
   lv_obj_set_style_border_color(strip, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_radius(strip, UI_RADIUS_BTN, 0);
@@ -214,7 +214,7 @@ void buildPrinterOffsetScreen() {
   s_block = lv_obj_create(strip);
   lv_obj_set_size(s_block, PO_W / 2, PO_STRIP_H - 2 * PO_STRIP_PAD - 2);
   lv_obj_set_y(s_block, 0);
-  lv_obj_set_style_bg_color(s_block, lv_color_hex(UI_COL_ACCENT_DIM), 0);
+  lv_obj_set_style_bg_color(s_block, lv_color_hex(UI_COL_GO_BG), 0);
   lv_obj_set_style_border_width(s_block, 1, 0);
   lv_obj_set_style_border_color(s_block, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_radius(s_block, UI_RADIUS_INPUT, 0);
@@ -246,7 +246,7 @@ void buildPrinterOffsetScreen() {
   lv_obj_t* box = lv_obj_create(s_scr);
   lv_obj_set_size(box, PO_W - 2 * (PO_STEP_W + PO_STEP_GAP), PO_STEP_H);
   lv_obj_set_pos(box, PO_X + PO_STEP_W + PO_STEP_GAP, PO_STEP_Y);
-  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_LINE_SOFT), 0);
   lv_obj_set_style_radius(box, UI_RADIUS_ROW, 0);

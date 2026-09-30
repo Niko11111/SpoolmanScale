@@ -337,7 +337,7 @@ void showCopySpoolList() {
   lv_obj_t *btn_hdr_back = lv_btn_create(hdr);
   lv_obj_set_size(btn_hdr_back, 44, 44);
   lv_obj_set_pos(btn_hdr_back, 4, 4);
-  lv_obj_set_style_bg_color(btn_hdr_back, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_hdr_back, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_hdr_back, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_hdr_back, 8, 0);
   lv_obj_set_style_shadow_width(btn_hdr_back, 0, 0);
@@ -432,7 +432,7 @@ void showCopySpoolList() {
     lv_obj_t *row = lv_btn_create(list);
     if (!row) { logSDf("CopySpoolList: no room for a row, list cut at %d", i); break; }
     lv_obj_set_size(row, 452, 56);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
     lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_shadow_width(row, 0, 0);
@@ -647,8 +647,8 @@ void showCopyEntryPopup() {
     lv_obj_t *btnt = lv_btn_create(scr_copy_entry);
     lv_obj_set_size(btnt, BTN_W, BTN_H);
     lv_obj_align(btnt, LV_ALIGN_TOP_MID, 0, Y4);
-    lv_obj_set_style_bg_color(btnt, lv_color_hex(UI_COL_FROM_TAG_BG), 0);
-    lv_obj_set_style_bg_color(btnt, lv_color_hex(UI_COL_FROM_TAG_BG_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btnt, lv_color_hex(UI_COL_GO_BG), 0);
+    lv_obj_set_style_bg_color(btnt, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btnt, 10, 0);
     lv_obj_set_style_shadow_width(btnt, 0, 0);
     lv_obj_set_style_border_width(btnt, 1, 0);

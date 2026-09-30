@@ -34,7 +34,7 @@ static lv_obj_t *wel_lbl_tz = nullptr;
 
 static void welStyleLangBtn(lv_obj_t *btn, lv_obj_t *lbl, bool active) {
   if (!btn || !lbl) return;
-  lv_obj_set_style_bg_color(btn, lv_color_hex(active ? UI_COL_CHOICE_BG : UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(active ? UI_COL_CHOICE_BG : UI_COL_SURFACE), 0);
   lv_obj_set_style_border_color(btn, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_LINE), 0);
   lv_obj_set_style_text_color(lbl, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_CAPTION), 0);
 }
@@ -377,7 +377,7 @@ void buildFirstBootScreen() {
   lv_obj_t *btn_skip = lv_btn_create(scr_first_boot);
   lv_obj_set_size(btn_skip, 226, 48);
   lv_obj_set_pos(btn_skip, 242, 252);
-  lv_obj_set_style_bg_color(btn_skip, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_skip, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_skip, lv_color_hex(UI_COL_LINE_SOFT), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_skip, 10, 0);
   lv_obj_set_style_shadow_width(btn_skip, 0, 0);

@@ -437,7 +437,7 @@ void buildUI() {
   lv_obj_t *btn_more = lv_btn_create(lv_scr_act());
   lv_obj_set_size(btn_more, 84, 34);
   lv_obj_set_pos(btn_more, 388, 100);
-  lv_obj_set_style_bg_color(btn_more, lv_color_hex(UI_COL_MORE_BG), 0);
+  lv_obj_set_style_bg_color(btn_more, lv_color_hex(UI_COL_EMPTY), 0);
   lv_obj_set_style_bg_color(btn_more, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_more, 1, 0);
   lv_obj_set_style_border_color(btn_more, lv_color_hex(UI_COL_ACCENT), 0);  // teal border
@@ -455,7 +455,7 @@ void buildUI() {
   lv_obj_t *sep_inner = lv_obj_create(lv_scr_act());
   lv_obj_set_size(sep_inner, 464, 1);
   lv_obj_set_pos(sep_inner, 8, 140);
-  lv_obj_set_style_bg_color(sep_inner, lv_color_hex(UI_COL_DIVIDER), 0);
+  lv_obj_set_style_bg_color(sep_inner, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_set_style_border_width(sep_inner, 0, 0);
   lv_obj_set_style_radius(sep_inner, 0, 0);
   lv_obj_set_style_pad_all(sep_inner, 0, 0);
@@ -572,7 +572,7 @@ void buildUI() {
   lv_obj_t *bar_bg = lv_obj_create(lv_scr_act());
   lv_obj_set_size(bar_bg, MAIN_BAR_W, 8);
   lv_obj_set_pos(bar_bg, 8, 248);
-  lv_obj_set_style_bg_color(bar_bg, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(bar_bg, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_width(bar_bg, 0, 0);
   lv_obj_set_style_radius(bar_bg, 4, 0);
   lv_obj_set_style_pad_all(bar_bg, 0, 0);
@@ -592,7 +592,7 @@ void buildUI() {
   lv_obj_t *vdiv1 = lv_obj_create(lv_scr_act());
   lv_obj_set_size(vdiv1, 1, 70);
   lv_obj_set_pos(vdiv1, 210, 189);
-  lv_obj_set_style_bg_color(vdiv1, lv_color_hex(UI_COL_DIVIDER), 0);
+  lv_obj_set_style_bg_color(vdiv1, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_set_style_border_width(vdiv1, 0, 0);
   lv_obj_set_style_radius(vdiv1, 0, 0);
   lv_obj_set_style_pad_all(vdiv1, 0, 0);
@@ -675,7 +675,7 @@ void buildUI() {
     lv_obj_t *vdiv2 = lv_obj_create(lv_scr_act());
     lv_obj_set_size(vdiv2, 1, 70);
     lv_obj_set_pos(vdiv2, 408, 189);
-    lv_obj_set_style_bg_color(vdiv2, lv_color_hex(UI_COL_DIVIDER), 0);
+    lv_obj_set_style_bg_color(vdiv2, lv_color_hex(UI_COL_ROW), 0);
     lv_obj_set_style_border_width(vdiv2, 0, 0);
     lv_obj_set_style_radius(vdiv2, 0, 0);
     lv_obj_set_style_pad_all(vdiv2, 0, 0);
@@ -863,10 +863,10 @@ void buildUI() {
   btn_dried = lv_btn_create(btn_bar);
   lv_obj_set_size(btn_dried, 202, 39);
   lv_obj_set_pos(btn_dried, 218, 8);
-  lv_obj_set_style_bg_color(btn_dried, lv_color_hex(UI_COL_BLUE_BG), 0);
-  lv_obj_set_style_bg_color(btn_dried, lv_color_hex(UI_COL_BLUE_BG_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_dried, lv_color_hex(UI_COL_CHIP), 0);
+  lv_obj_set_style_bg_color(btn_dried, lv_color_hex(UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_dried, 1, 0);
-  lv_obj_set_style_border_color(btn_dried, lv_color_hex(UI_COL_BLUE_BG_PRESSED), 0);
+  lv_obj_set_style_border_color(btn_dried, lv_color_hex(UI_COL_POPUP_BORDER), 0);
   lv_obj_set_style_radius(btn_dried, 8, 0);
   lv_obj_set_style_shadow_width(btn_dried, 0, 0);
   lv_obj_add_event_cb(btn_dried, [](lv_event_t *e) {
@@ -935,7 +935,7 @@ void buildUI() {
   lv_obj_t *btn_menu = lv_btn_create(btn_bar);
   lv_obj_set_size(btn_menu, 44, 39);
   lv_obj_set_pos(btn_menu, 428, 8);
-  lv_obj_set_style_bg_color(btn_menu, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_menu, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_menu, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_menu, 1, 0);
   lv_obj_set_style_border_color(btn_menu, lv_color_hex(UI_COL_LINE_SOFT), 0);

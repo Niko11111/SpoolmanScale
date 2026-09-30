@@ -45,7 +45,7 @@ void buildLastUsedScreen() {
   lv_obj_set_size(btn_osm, 210, 50);
   lv_obj_set_pos(btn_osm, 12, 58);
   bool osm_active = (last_used_mode == 0);
-  lv_obj_set_style_bg_color(btn_osm, lv_color_hex(osm_active ? UI_COL_GO_BG : UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_osm, lv_color_hex(osm_active ? UI_COL_GO_BG : UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_osm, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_osm, 1, 0);
   lv_obj_set_style_border_color(btn_osm, lv_color_hex(osm_active ? UI_COL_ACCENT : UI_COL_LINE), 0);
@@ -73,7 +73,7 @@ void buildLastUsedScreen() {
   lv_obj_set_size(btn_lw, 210, 50);
   lv_obj_set_pos(btn_lw, 238, 58);
   bool lw_active = (last_used_mode == 1);
-  lv_obj_set_style_bg_color(btn_lw, lv_color_hex(lw_active ? UI_COL_GO_BG : UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_lw, lv_color_hex(lw_active ? UI_COL_GO_BG : UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_lw, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_lw, 1, 0);
   lv_obj_set_style_border_color(btn_lw, lv_color_hex(lw_active ? UI_COL_ACCENT : UI_COL_LINE), 0);

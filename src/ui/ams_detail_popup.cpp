@@ -347,7 +347,7 @@ static void showDriedAsk() {
     if (btn) {
       lv_obj_set_size(btn, AMSD_ASK_ALL_W, AMSD_ASK_ALL_H);
       lv_obj_set_pos(btn, AMSD_ASK_BTN_X_L, AMSD_ASK_ALL_Y);
-      lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ACCENT_DIM), 0);
+      lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_GO_BG), 0);
       lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
       lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_ACCENT), 0);
       lv_obj_set_style_border_width(btn, 1, 0);

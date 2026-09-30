@@ -209,7 +209,7 @@ void buildBackendScreen() {
     lv_obj_t *b = lv_btn_create(scr_backend);
     lv_obj_set_size(b, SEG_W, SEG_H);
     lv_obj_set_pos(b, segs[i].x, SEG_Y);
-    lv_obj_set_style_bg_color(b, lv_color_hex(active ? UI_COL_PICKED_BG : UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(active ? UI_COL_PICKED_BG : UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
     lv_obj_set_style_radius(b, 10, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);

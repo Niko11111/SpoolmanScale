@@ -406,7 +406,7 @@ static lv_obj_t* button(lv_obj_t* box, int x, const char* text, bool danger,
     if (danger) lv_obj_set_style_border_opa(b, LV_OPA_60, 0);
     lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, nullptr);
   } else {
-    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_border_color(b, lv_color_hex(UI_COL_LINE_SOFT), 0);
     lv_obj_set_style_border_width(b, 1, 0);
     lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);

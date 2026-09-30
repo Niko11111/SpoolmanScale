@@ -118,7 +118,7 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
   if (!box) { releaseScreen(&s_scr); return; }
   lv_obj_set_size(box, SP_BOX_W, SP_BOX_H);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SHEET), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, 10, 0);
@@ -189,7 +189,7 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
     uint32_t txt_col;
     if (is_current) {
       // Same "this is the one you have" language as the location rows.
-      lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_CURRENT_BG), 0);
+      lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_GO_BG), 0);
       lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
       lv_obj_set_style_border_color(cell, lv_color_hex(UI_COL_ACCENT), 0);
       txt_col = UI_COL_ACCENT;
@@ -203,7 +203,7 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
     } else {
       lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_CHIP), 0);
       lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
-      lv_obj_set_style_border_color(cell, lv_color_hex(UI_COL_DIVIDER), 0);
+      lv_obj_set_style_border_color(cell, lv_color_hex(UI_COL_ROW), 0);
       txt_col = UI_COL_INK_BRIGHT;
     }
 

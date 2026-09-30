@@ -440,7 +440,7 @@ void checkAndCreateExtraFields(bool create_missing) {
     char ok_buf[128];
     snprintf(ok_buf, sizeof(ok_buf), T(STR_EXTRA_FIELDS_ALL_OK), have_buf);
     lv_label_set_text(lbl_extra_fields_status, ok_buf);
-    setVerdict(LV_SYMBOL_OK, UI_COL_ACCENT, UI_COL_ACCENT_DIM, UI_COL_OK_BG_PRESSED,
+    setVerdict(LV_SYMBOL_OK, UI_COL_ACCENT, UI_COL_GO_BG, UI_COL_OK_BG_PRESSED,
                T(STR_EF_HEAD_OK), false);
     Serial.println("Extra fields: all present");
     return;

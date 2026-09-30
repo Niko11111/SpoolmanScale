@@ -44,7 +44,7 @@ static void showFactoryResetPopup() {
   lv_obj_t *box = lv_obj_create(pop);
   lv_obj_set_size(box, 440, 240);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_DANGER_BOX), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_DANGER_ROW), 0);
   lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_BAD_BG_PRESSED), 0);
   lv_obj_set_style_border_width(box, 2, 0);
   lv_obj_set_style_radius(box, 12, 0);
@@ -72,7 +72,7 @@ static void showFactoryResetPopup() {
   lv_obj_t *btn_c = lv_btn_create(box);
   lv_obj_set_size(btn_c, 180, 44);
   lv_obj_set_pos(btn_c, 12, 184);
-  lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_LINE_SOFT), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_c, 8, 0);
   lv_obj_set_style_shadow_width(btn_c, 0, 0);
@@ -141,7 +141,7 @@ static lv_obj_t* addRow(lv_obj_t *list, const char *ico, const char *title,
     // red the same one the reset dialog uses, so neither introduces a colour.
     const uint32_t border  = (tone == TONE_DANGER) ? UI_COL_BAD_BG_PRESSED : UI_COL_CAUTION_BG;
     const uint32_t bg      = (tone == TONE_DANGER) ? UI_COL_DANGER_ROW : UI_COL_CAUTION_ROW;
-    const uint32_t pressed = (tone == TONE_DANGER) ? UI_COL_BAD_BG : UI_COL_CAUTION_ROW_PRESSED;
+    const uint32_t pressed = (tone == TONE_DANGER) ? UI_COL_BAD_BG : UI_COL_AMBER_LINE;
     const uint32_t text    = (tone == TONE_DANGER) ? UI_COL_DANGER_TEXT : UI_COL_WARN;
     lv_obj_set_style_border_color(btn, lv_color_hex(border), 0);
     lv_obj_set_style_bg_color(btn, lv_color_hex(bg), 0);

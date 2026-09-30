@@ -63,7 +63,7 @@ static void buildWebPinScreen() {
   lv_obj_t *val_box = lv_obj_create(s_pin_scr);
   lv_obj_set_size(val_box, 380, 40);
   lv_obj_set_pos(val_box, 50, 80);
-  lv_obj_set_style_bg_color(val_box, lv_color_hex(UI_COL_WELL), 0);
+  lv_obj_set_style_bg_color(val_box, lv_color_hex(UI_COL_GROUND), 0);
   lv_obj_set_style_border_color(val_box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(val_box, 1, 0);
   lv_obj_set_style_radius(val_box, 8, 0);
@@ -86,8 +86,8 @@ static void buildWebPinScreen() {
     lv_obj_set_size(kb, NP_W, NP_H);
     lv_obj_set_pos(kb, NP_X0 + col * (NP_W + NP_GAP), NP_Y0 + row * (NP_H + NP_GAP));
     lv_obj_set_style_bg_color(kb, is_del ? lv_color_hex(UI_COL_KEY_DEL) :
-                                  is_ok  ? lv_color_hex(UI_COL_KEY_OK) :
-                                           lv_color_hex(UI_COL_SURFACE_2), 0);
+                                  is_ok  ? lv_color_hex(UI_COL_PICKED_BG) :
+                                           lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(kb, 6, 0);
     lv_obj_set_style_shadow_width(kb, 0, 0);

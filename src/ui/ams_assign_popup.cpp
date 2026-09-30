@@ -229,7 +229,7 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   lv_obj_t *btn_view = lv_btn_create(box);
   lv_obj_set_size(btn_view, 124, 56);
   lv_obj_set_pos(btn_view, 138, 156);
-  lv_obj_set_style_bg_color(btn_view, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_view, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_view, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_view, 1, 0);
   lv_obj_set_style_border_color(btn_view, lv_color_hex(UI_COL_LINE), 0);

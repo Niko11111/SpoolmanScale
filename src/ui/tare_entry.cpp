@@ -88,7 +88,7 @@ static void refreshPad() {
   lv_label_set_text(s_lbl_info, info);
   lv_obj_set_style_text_color(s_lbl_info, lv_color_hex(info_col), 0);
 
-  lv_obj_set_style_bg_color(s_btn_next, lv_color_hex(ok ? UI_COL_OK_BG : UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(s_btn_next, lv_color_hex(ok ? UI_COL_OK_BG : UI_COL_SURFACE), 0);
   lv_obj_set_style_text_color(lv_obj_get_child(s_btn_next, 0),
                               lv_color_hex(ok ? UI_COL_OK_TEXT : UI_COL_CAPTION), 0);
 }
@@ -165,7 +165,7 @@ static void showTarePad() {
   lv_obj_t *box = lv_obj_create(scr);
   lv_obj_set_size(box, PAD_W, 52);
   lv_obj_set_pos(box, EDGE, 38);
-  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, UI_RADIUS_INPUT, 0);
@@ -186,7 +186,7 @@ static void showTarePad() {
   for (int i = 0; i < 12; i++) {
     const int x = EDGE + (i % 3) * (KEY_W + GAP);
     const int y = KEYS_Y + (i / 3) * (KEY_H + GAP);
-    lv_obj_t *b = padButton(scr, x, y, KEY_W, KEY_H, UI_COL_SURFACE_2, UI_COL_LINE);
+    lv_obj_t *b = padButton(scr, x, y, KEY_W, KEY_H, UI_COL_SURFACE, UI_COL_LINE);
     if (KEYS[i][0]) {
       padLabel(b, KEYS[i], UI_COL_INK, UI_FONT_HEADLINE);
       lv_obj_add_event_cb(b, onKey, LV_EVENT_CLICKED, NULL);

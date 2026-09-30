@@ -385,12 +385,12 @@ void buildOtaGithubScreen() {
   lv_obj_t *btn_auto = lv_btn_create(scr_ota_github);
   lv_obj_set_size(btn_auto, 280, 36);
   lv_obj_align(btn_auto, LV_ALIGN_TOP_MID, 0, 200);
-  lv_obj_set_style_bg_color(btn_auto, g_upd_autocheck ? lv_color_hex(UI_COL_BLUE_BG) : lv_color_hex(UI_COL_GROUND), 0);
+  lv_obj_set_style_bg_color(btn_auto, g_upd_autocheck ? lv_color_hex(UI_COL_CHIP) : lv_color_hex(UI_COL_GROUND), 0);
   lv_obj_set_style_bg_color(btn_auto, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_auto, 8, 0);
   lv_obj_set_style_shadow_width(btn_auto, 0, 0);
   lv_obj_set_style_border_width(btn_auto, 1, 0);
-  lv_obj_set_style_border_color(btn_auto, g_upd_autocheck ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_QUIET_BG), 0);
+  lv_obj_set_style_border_color(btn_auto, g_upd_autocheck ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_ROW), 0);
   lv_obj_add_event_cb(btn_auto, [](lv_event_t *e) {
     g_upd_autocheck = !g_upd_autocheck;
     prefsPutBool("upd_check", g_upd_autocheck);
@@ -422,12 +422,12 @@ void buildOtaGithubScreen() {
   lv_obj_t *btn_pre = lv_btn_create(scr_ota_github);
   lv_obj_set_size(btn_pre, 140, 48);
   lv_obj_align(btn_pre, LV_ALIGN_BOTTOM_LEFT, 12, -24);
-  lv_obj_set_style_bg_color(btn_pre, gh_prerelease ? lv_color_hex(UI_COL_BLUE_BG) : lv_color_hex(UI_COL_GROUND), 0);
+  lv_obj_set_style_bg_color(btn_pre, gh_prerelease ? lv_color_hex(UI_COL_CHIP) : lv_color_hex(UI_COL_GROUND), 0);
   lv_obj_set_style_bg_color(btn_pre, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_pre, 8, 0);
   lv_obj_set_style_shadow_width(btn_pre, 0, 0);
   lv_obj_set_style_border_width(btn_pre, 1, 0);
-  lv_obj_set_style_border_color(btn_pre, gh_prerelease ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_QUIET_BG), 0);
+  lv_obj_set_style_border_color(btn_pre, gh_prerelease ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_ROW), 0);
   lv_obj_add_event_cb(btn_pre, [](lv_event_t *e) {
     gh_prerelease = !gh_prerelease;
     // Was written to the "spool" namespace while loadPrefs() reads from
@@ -455,7 +455,7 @@ void buildOtaGithubScreen() {
   lv_obj_set_style_radius(btn_gh_update, 8, 0);
   lv_obj_set_style_shadow_width(btn_gh_update, 0, 0);
   lv_obj_set_style_border_width(btn_gh_update, 1, 0);
-  lv_obj_set_style_border_color(btn_gh_update, lv_color_hex(UI_COL_QUIET_BG), 0);
+  lv_obj_set_style_border_color(btn_gh_update, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_add_state(btn_gh_update, LV_STATE_DISABLED);
   lv_obj_add_event_cb(btn_gh_update, [](lv_event_t *e){
     // Going back costs the same minute and the same restart as going forward,

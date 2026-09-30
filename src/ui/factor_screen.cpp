@@ -129,7 +129,7 @@ void buildFactorScreen() {
   lv_obj_t *input_box_f = lv_obj_create(scr_factor);
   lv_obj_set_size(input_box_f, 260, 34);
   lv_obj_align(input_box_f, LV_ALIGN_TOP_MID, 0, 94);
-  lv_obj_set_style_bg_color(input_box_f, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(input_box_f, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_color(input_box_f, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(input_box_f, 1, 0);
   lv_obj_set_style_radius(input_box_f, 6, 0);
@@ -160,7 +160,7 @@ void buildFactorScreen() {
     lv_obj_set_style_radius(btn_wg, 8, 0);
     lv_obj_set_style_shadow_width(btn_wg, 0, 0);
     lv_obj_set_style_border_width(btn_wg, 1, 0);
-    lv_obj_set_style_bg_color(btn_wg, g_whole_gram ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(btn_wg, g_whole_gram ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_border_color(btn_wg, g_whole_gram ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_LINE_SOFT), 0);
     lv_obj_set_style_bg_color(btn_wg, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
 
@@ -178,7 +178,7 @@ void buildFactorScreen() {
       prefsPutBool("whole_gram", g_whole_gram);
       lv_obj_t *b = lv_event_get_target(e);
       lv_obj_t *l = lv_obj_get_child(b, 0);
-      lv_obj_set_style_bg_color(b, g_whole_gram ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_SURFACE_2), 0);
+      lv_obj_set_style_bg_color(b, g_whole_gram ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_SURFACE), 0);
       lv_obj_set_style_border_color(b, g_whole_gram ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_LINE_SOFT), 0);
       lv_obj_set_style_text_color(l, g_whole_gram ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_CAPTION), 0);
     }, LV_EVENT_CLICKED, NULL);
@@ -203,7 +203,7 @@ void buildFactorScreen() {
     // Quiet surface, amber words: a red block at the screen's edge read as
     // Cancel, and this is not a way out of the screen but a setting to undo.
     // The confirmation it opens carries the red.
-    lv_obj_set_style_bg_color(btn_rst, lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(btn_rst, lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(btn_rst, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
     lv_obj_set_style_border_color(btn_rst, lv_color_hex(UI_COL_LINE_SOFT), 0);
 
@@ -261,7 +261,7 @@ void buildFactorScreen() {
       lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
       lv_obj_center(lbl);
     } else {
-      lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_SURFACE_2), 0);
+      lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_SURFACE), 0);
       lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
       lv_obj_set_style_radius(btn, 6, 0);
       lv_obj_set_style_shadow_width(btn, 0, 0);
@@ -289,7 +289,7 @@ void buildFactorScreen() {
   lv_obj_t *btn_del_f = lv_btn_create(scr_factor);
   lv_obj_set_size(btn_del_f, bw5_f, NP_H);
   lv_obj_set_pos(btn_del_f, NP_PAD_X, by5_f);
-  lv_obj_set_style_bg_color(btn_del_f, lv_color_hex(UI_COL_QUIET_BG), 0);
+  lv_obj_set_style_bg_color(btn_del_f, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_set_style_bg_color(btn_del_f, lv_color_hex(UI_COL_QUIET_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_del_f, 6, 0);
   lv_obj_set_style_shadow_width(btn_del_f, 0, 0);

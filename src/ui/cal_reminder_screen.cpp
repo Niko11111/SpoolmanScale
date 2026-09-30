@@ -103,8 +103,8 @@ void buildCalReminderScreen() {
   lv_obj_t *btn_got = lv_btn_create(scr_cal_reminder);
   lv_obj_set_size(btn_got, 210, 48);
   lv_obj_align(btn_got, LV_ALIGN_BOTTOM_LEFT, 20, -20);
-  lv_obj_set_style_bg_color(btn_got, lv_color_hex(UI_COL_LATER_BG), 0);
-  lv_obj_set_style_bg_color(btn_got, lv_color_hex(UI_COL_LATER_BG_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_got, lv_color_hex(UI_COL_EMPTY), 0);
+  lv_obj_set_style_bg_color(btn_got, lv_color_hex(UI_COL_LINE_SOFT), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_got, 8, 0);
   lv_obj_set_style_shadow_width(btn_got, 0, 0);
   lv_obj_set_style_border_width(btn_got, 1, 0);

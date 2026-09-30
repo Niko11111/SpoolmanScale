@@ -382,7 +382,7 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_set_size(btn_ok, 420, 48);
   lv_obj_align(btn_ok, LV_ALIGN_TOP_MID, 0, y_after_head);
   lv_obj_set_style_bg_color(btn_ok,
-    mismatch ? lv_color_hex(UI_COL_BAD_BG) : lv_color_hex(UI_COL_MATCH_BG), 0);
+    mismatch ? lv_color_hex(UI_COL_BAD_BG) : lv_color_hex(UI_COL_PICKED_BG), 0);
   lv_obj_set_style_bg_color(btn_ok,
     mismatch ? lv_color_hex(UI_COL_BAD_BG_PRESSED) : lv_color_hex(UI_COL_MATCH_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ok, 8, 0);
@@ -408,7 +408,7 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_t *btn_cancel = lv_btn_create(box);
   lv_obj_set_size(btn_cancel, 420, 44);
   lv_obj_align(btn_cancel, LV_ALIGN_TOP_MID, 0, y_after_head + 56);
-  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_cancel, 8, 0);
   lv_obj_set_style_shadow_width(btn_cancel, 0, 0);
