@@ -52,6 +52,40 @@ static bool hasBaseUrl(const char* base_url) {
 // BamBuddy stores label_weight and core_weight as integers and rejects
 // nothing, but a fractional gram would be silently truncated. A load cell
 // has no meaningful accuracy below a gram, so round on the way out.
+// How many characters at the front of `part` the end of `name` already says,
+// in whole words and ignoring case: "PLA Tough+" and "Tough+ White" share 6,
+// "ASA Jet Black" and "ASA Jet Black" all 13. The longest overlap wins.
+static size_t nameOverlap(const char* name, const char* part) {
+  const size_t nlen = strlen(name);
+  size_t best = 0;
+  for (size_t j = 1; ; j++) {
+    if (part[j] == ' ' || part[j] == '\0') {
+      if (j <= nlen && strncasecmp(name + nlen - j, part, j) == 0 &&
+          (j == nlen || name[nlen - j - 1] == ' '))
+        best = j;
+    }
+    if (part[j] == '\0') break;
+  }
+  return best;
+}
+
+// True when `part` says everything `name` does and goes on from there, read
+// without spaces and up to a word end: an import split "ABS+ Grey" into "ABS"
+// and "+ Grey" and kept "ABS+ Grey" as the colour name. "PLAtinum" does not
+// restate "PLA".
+static bool partRestatesName(const char* name, const char* part) {
+  if (!name[0]) return false;
+  const char* n = name;
+  const char* q = part;
+  while (true) {
+    while (*n == ' ') n++;
+    while (*q == ' ' && *n) q++;
+    if (!*n) return *q == '\0' || *q == ' ';
+    if (!*q || tolower((unsigned char)*n) != tolower((unsigned char)*q)) return false;
+    n++; q++;
+  }
+}
+
 static int roundGrams(float g) {
   return (int)lroundf(g);
 }
@@ -376,7 +410,20 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   size_t nl = 0;
   for (int i = 0; i < 3; i++) {
     if (!parts[i][0]) continue;
-    int w = snprintf(name + nl, sizeof(name) - nl, "%s%s", nl ? " " : "", parts[i]);
+    // The three fields overlap more often than not: whatever wrote them, a
+    // Spoolman inventory behind BamBuddy or an import into its own, repeated
+    // words from the field before. Real shapes, each read twice before this:
+    //   "PLA" + "Matt Ozean"       + "Matt Ozean"
+    //   "ASA" + "Jet Black"        + "ASA Jet Black"
+    //   "PLA Tough+" + "Tough+ White" + "Tough+ White"
+    // Whatever the name so far already ends with is left off the front of the
+    // next part, in whole words, so each of these reads once. A part that
+    // restates the whole name, "ABS" + "+ Grey" + "ABS+ Grey", replaces it.
+    if (partRestatesName(name, parts[i])) { name[0] = '\0'; nl = 0; }
+    const char* part = parts[i] + nameOverlap(name, parts[i]);
+    while (*part == ' ') part++;
+    if (!*part) continue;
+    int w = snprintf(name + nl, sizeof(name) - nl, "%s%s", nl ? " " : "", part);
     if (w < 0) break;
     nl += (size_t)w;
     if (nl >= sizeof(name) - 1) break;   // snprintf already truncated

@@ -84,6 +84,26 @@ bool nameStartsWithMaterial(const char* name, const char* material) {
   return strncasecmp(name, material, strlen(material)) == 0;
 }
 
+// Material and filament name as one line, without saying anything twice.
+// Besides a name that repeats the whole material, a name may repeat its
+// subtype: Spoolman libraries hold "PLA Tough+" with "Tough+ Cyan" and
+// "PETG Translucent" with "Translucent Gray", which read "PLA Tough+ Tough+
+// Cyan". The words the two share are written once, and only whole words.
+void joinMaterialName(const char* material, const char* name, char* out, size_t out_size) {
+  if (!name) name = "";
+  if (!material) material = "";
+  if (nameStartsWithMaterial(name, material)) { snprintf(out, out_size, "%s", name); return; }
+  for (const char* p = strchr(material, ' '); p; p = strchr(p + 1, ' ')) {
+    const char* tail = p + 1;
+    const size_t n = strlen(tail);
+    if (n && strncasecmp(name, tail, n) == 0 && (name[n] == '\0' || name[n] == ' ')) {
+      snprintf(out, out_size, "%s%s", material, name + n);
+      return;
+    }
+  }
+  snprintf(out, out_size, "%s %s", material, name);
+}
+
 // Sort order of the link and copy lists: vendor, material, name, id, all
 // case insensitive except the id. Spools without a vendor go last rather
 // than first, because they are shown as "unknown" and belong at the end of
@@ -2799,11 +2819,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     lv_obj_t *lbl_name = lv_label_create(row);
     char full_name[64];
     if (s.material[0]) {
-      bool name_has_mat = (s.name[0] && strncasecmp(s.name, s.material, strlen(s.material)) == 0);
-      if (name_has_mat)
-        strncpy(full_name, s.name, sizeof(full_name)-1);
-      else
-        snprintf(full_name, sizeof(full_name), "%s %s", s.material, s.name);
+      joinMaterialName(s.material, s.name, full_name, sizeof(full_name));
     } else {
       strncpy(full_name, s.name, sizeof(full_name)-1);
     }
@@ -4127,10 +4143,9 @@ void handleSpoolFlowDeferredActions() {
         const char *cfmat  = cdoc["filament"]["material"] | "";
         const char *cfvnd  = cdoc["filament"]["vendor"]["name"] | "";
         char ctmpl[80];
-        if (nameStartsWithMaterial(cfname, cfmat))
-          snprintf(ctmpl, sizeof(ctmpl), "%s (%s)", cfname, cfvnd);
-        else
-          snprintf(ctmpl, sizeof(ctmpl), "%s %s (%s)", cfmat, cfname, cfvnd);
+        char cjoined[64];
+        joinMaterialName(cfmat, cfname, cjoined, sizeof(cjoined));
+        snprintf(ctmpl, sizeof(ctmpl), "%s (%s)", cjoined, cfvnd);
         lbl_link_id_display = nullptr;
         lbl_link_id_status  = nullptr;
         releaseScreen(&scr_link_id);

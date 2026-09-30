@@ -283,10 +283,9 @@ static void copyConfirmFromRow(int idx) {
   int fid = sel.filament_id;
   float spw = sel.spool_weight;
   char tmpl_name[80];
-  if (nameStartsWithMaterial(sel.name, sel.material))
-    snprintf(tmpl_name, sizeof(tmpl_name), "%s (%s)", sel.name, sel.vendor);
-  else
-    snprintf(tmpl_name, sizeof(tmpl_name), "%s %s (%s)", sel.material, sel.name, sel.vendor);
+  char joined[64];
+  joinMaterialName(sel.material, sel.name, joined, sizeof(joined));
+  snprintf(tmpl_name, sizeof(tmpl_name), "%s (%s)", joined, sel.vendor);
   logSDf("BTN: CopyList row -> spool id=%d fid=%d", sel.id, fid);
   // Flag pattern: do not build new LVGL objects inside a list row callback
   copy_confirm_pending = true;
@@ -451,9 +450,7 @@ void showCopySpoolList() {
     lv_obj_t *lbl_name = lv_label_create(row);
     char full_name[64];
     if (s.material[0]) {
-      bool nm = (s.name[0] && strncasecmp(s.name, s.material, strlen(s.material)) == 0);
-      if (nm) strncpy(full_name, s.name, sizeof(full_name)-1);
-      else snprintf(full_name, sizeof(full_name), "%s %s", s.material, s.name);
+      joinMaterialName(s.material, s.name, full_name, sizeof(full_name));
     } else {
       strncpy(full_name, s.name, sizeof(full_name)-1);
     }
