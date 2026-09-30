@@ -2559,6 +2559,38 @@ static void showLinkConfirmPopup(int idx) {
   lv_obj_center(lbl_no);
 }
 
+// What is on the scale as the list opens, or -1 when nothing may be compared
+// against it. Read here and not in the fetch: a list out of the cache is there
+// before the spool has settled on the pad. A copy picks a template, and a
+// template's stored weight says nothing about the spool on the scale.
+static float linkListGross() {
+  if (copy_flow_via_list || !scale_ready) return -1.0f;
+  return scale_weight_g;
+}
+
+// The spool's stored remaining weight matches what is on the scale. Compared
+// is the number the row shows, so a hit is one the user can check by eye. The
+// empty weight is the spool's own; a Bambu spool without one falls back to the
+// core weight the new-tag flow assumes too, which is also where BamBuddy
+// leaves its spools, with the core weight on the filament only.
+static bool linkWeightHit(const UnlinkedSpool& s, float gross) {
+  if (gross <= 0.0f) return false;
+  float tare = s.spool_weight;
+  if (tare <= 0.0f && strncasecmp(s.vendor, "Bambu", 5) == 0) tare = (float)BAMBU_CORE_WEIGHT_G;
+  if (tare <= 0.0f) return false;
+  const float net = gross - tare;
+  if (net < 0.0f) return false;
+  const float stored = (s.remaining <= 0 && s.total > 0) ? s.total : s.remaining;
+  return fabsf(net - stored) <= LINK_WEIGHT_TOLERANCE_G;
+}
+
+// Order of the rows in the final list: article number and weight, article
+// number only, weight only, the rest. Within one rank the fetch's order stands.
+static int linkRowRank(bool article_hit, bool weight_hit) {
+  return (article_hit ? 2 : 0) + (weight_hit ? 1 : 0);
+}
+#define LINK_ROW_RANKS 4
+
 void showFilteredSpoolList(const char* vendor_name, const char* material_prefix, const char* material_full) {
   crumbSet("spool list build");
   // snprintf() and not strncpy(): the reload hands these very buffers' copies
@@ -2710,13 +2742,23 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     addListMoreInfo(list, STR_LIST_SPOOL_CHANGED);
   }
 
+  // One walk per rank, best first, folded into one loop so a cut below still
+  // ends the whole list with a single break. The array keeps its order: the
+  // vendor and material lists are built from it, and a spool that happens to
+  // weigh the same must not reorder those.
+  const float gross = linkListGross();
+  int weight_hits = 0;
   int count = 0;
-  for (int i = 0; i < link_spool_count; i++) {
+  for (int k = 0; k < LINK_ROW_RANKS * link_spool_count; k++) {
+    const int rank = LINK_ROW_RANKS - 1 - k / link_spool_count;
+    const int i = k % link_spool_count;
     if (count >= spool_list_limit) break;  // render limit - full data is still in link_spools[]
     UnlinkedSpool &s = link_spools[i];
 
     // The same question the count above asked, asked once.
     if (!linkRowMatches(s, vendor_name, material_prefix, material_full)) continue;
+    const bool weight_hit = linkWeightHit(s, gross);
+    if (linkRowRank(s.article_hit, weight_hit) != rank) continue;
 
     // A row is five objects. LVGL 8.3 answers an exhausted pool with NULL and
     // asserts nothing, and every widget constructor writes through that pointer
@@ -2793,7 +2835,10 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     else
       snprintf(rest_buf, sizeof(rest_buf), "%.0f g", s.remaining);
     lv_label_set_text(lbl_rest, rest_buf);
-    lv_obj_set_style_text_color(lbl_rest, lv_color_hex(0x4a6fa0), 0);
+    // A weight that matches the scale in the house green, on the label that
+    // is there anyway: the frame already says "article number".
+    if (weight_hit) weight_hits++;
+    lv_obj_set_style_text_color(lbl_rest, lv_color_hex(weight_hit ? UI_COL_ACCENT : UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(lbl_rest, &lv_font_montserrat_ext_14, 0);
     lv_obj_align(lbl_rest, LV_ALIGN_BOTTOM_LEFT, 26, -5);
 
@@ -2812,6 +2857,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   }
 
   logLvMem("spoollist/post", count);
+  logSDf("SHOW: FilteredSpoolList rows=%d gross=%.0f weight_hits=%d", count, gross, weight_hits);
   if (count == 0) {
     lv_obj_t *lbl_empty = lv_label_create(scr_link_spools);
     lv_label_set_text(lbl_empty, T(STR_NO_SPOOLS));

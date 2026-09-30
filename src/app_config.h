@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.8.2-beta.21"
+#define FW_VERSION  "v0.8.2-beta.22"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -104,6 +104,12 @@
 // A spool that reads a few grams over its label weight is simply full, not
 // mislabelled. Only a real difference is worth interrupting the weighing for.
 #define BB_CAP_TOLERANCE_G   2.0f
+
+// How far the net reading may be from a spool's stored remaining weight for
+// the link list to put that spool first. Bambu cores alone vary by 11 g (241
+// to 252 in a real library), and the stored figure lags behind a print that
+// was never booked against it.
+#define LINK_WEIGHT_TOLERANCE_G  20.0f
 
 // Creating a spool straight from a Bambu tag. The tag carries material,
 // brand, colour and temperatures, but no weights at all - a Bambu Lab core
