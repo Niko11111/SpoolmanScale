@@ -290,6 +290,7 @@ void buildUI() {
   // 245 px, so 292 leaves room without reaching the address slot.
   lv_label_set_long_mode(lbl_status, LV_LABEL_LONG_DOT);
   lv_obj_set_width(lbl_status, HDR_STATUS_W);
+  tagSpoolViewAttach(lbl_status);
 
   // Optional address, left of the scan counter. Filled by updateHeaderStatus()
   // according to g_ip_bar_mode, hidden while the mode is off.

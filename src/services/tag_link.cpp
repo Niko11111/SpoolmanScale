@@ -12,6 +12,7 @@
 #include "services/spool_cache.h"
 #include "services/spoolman_actions.h"
 #include "services/tag_field.h"
+#include "services/tag_spool_match.h"
 #include "services/tag_uid.h"
 #include "services/tag_write.h"
 #include "services/uid_index.h"
@@ -37,6 +38,7 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 }
 
 static bool          s_pending      = false;
+static bool          s_force        = false;
 static int           s_spool_id     = 0;
 static char          s_uid[26]      = "";
 static TagLinkReport s_report       = { TL_NONE, 0, 0 };
@@ -51,13 +53,42 @@ static char          s_answered_uid[26] = "";
 // fetch that filled them.
 static char s_fetched[TAG_FIELD_EXTRA_COUNT][CARD_UIDS_MAX];
 
-bool tagLinkRequest(int spool_id, const char* uid) {
+bool tagLinkRequest(int spool_id, const char* uid, bool force) {
   if (s_pending || spool_id <= 0 || !uid || !uid[0]) return false;
   s_pending  = true;
+  s_force    = force;
   s_spool_id = spool_id;
   snprintf(s_uid, sizeof(s_uid), "%s", uid);
-  s_report = { TL_BUSY, spool_id, 0 };
-  logSDf("TagLink: tag %s to spool %d requested", s_uid, spool_id);
+  s_report = { TL_BUSY, spool_id, 0, "", "" };
+  logSDf("TagLink: tag %s to spool %d requested%s", s_uid, spool_id,
+         force ? " (mismatch accepted)" : "");
+  return true;
+}
+
+// A Bambu tag against the spool it is about to be linked to, by the verdict
+// every link shares. True when they differ, with both sides described in the
+// report for the page's question. A spool that cannot be read is not held
+// against the link: the write below reports the network on its own.
+static bool bambuMismatch(int spool_id) {
+  SpiRamAllocator psram;
+  JsonDocument doc(&psram);
+  if (backendGetSpoolJson(backendBaseUrl(), spool_id, doc) != 200 || doc.isNull()) return false;
+  const TagSpoolVerdict v = tagSpoolCompareTag(doc.as<JsonObjectConst>());
+  if (!v.any()) return false;
+
+  JsonObjectConst fil = doc["filament"];
+  const char* mat  = fil["material"]  | "";
+  const char* name = fil["name"]      | "";
+  const char* col  = fil["color_hex"] | "";
+  const bool name_has_mat = mat[0] && strncasecmp(name, mat, strlen(mat)) == 0;
+  snprintf(s_report.tag_desc, sizeof(s_report.tag_desc), "%s %s",
+           g_tag.material, g_tag.color_hex);
+  snprintf(s_report.spool_desc, sizeof(s_report.spool_desc), "%s%s%s %s%s",
+           name_has_mat ? "" : mat, name_has_mat || !mat[0] ? "" : " ", name,
+           col[0] && col[0] != '#' ? "#" : "", col);
+  char why[32];
+  tagSpoolVerdictText(v, why, sizeof(why));
+  logSDf("TagLink: spool %d does not match the tag (%s), asking", spool_id, why);
   return true;
 }
 
@@ -126,6 +157,10 @@ static uint8_t runLink() {
     if (holder > 0) { s_report.other_spool = holder; return TL_HELD; }
   }
   if (unanswered) return TL_NETWORK;
+
+  // Asked once on the page, the way the device's own link asks; the answer
+  // comes back as a second request with force set.
+  if (bambu && !s_force && bambuMismatch(id)) return TL_MISMATCH;
 
   // The target's tag fields, which patchSpoolTag() needs on Spoolman to grow
   // a list instead of starting it over and to move a binding out of another

@@ -318,6 +318,9 @@ static String body() {
   h += F("};"
          "let tgCur='',tgRaw='',tgNew='',tgLinked='',tgUid='',tgBackend='',tgCurI=null,tgNewI=null,tgMatched=null,"
          "tgBytes=0,tgNeed=0,tgKindCode=0,tgAdds=false,tgState='idle',"
+         // The question about a Bambu tag that does not match the spool, asked
+         // once per answer the scale gives.
+         "tgMisAsked='',"
          // The second tag: which spool this page wrote, when, and whether the
          // offer was turned down.
          "tgWroteId=0,tgWroteAt=0,tgT2Off=false,tgT2Tick=0;"
@@ -517,6 +520,14 @@ static String body() {
          "else if(d.linkstate=='pending')stat('busy',d.linkmsg,'',true);"
          "else if(d.linkstate=='ok')stat('ok',d.linkmsg,'');"
          "else if(d.linkstate=='error')stat('bad',d.linkmsg,'');"
+         // Nothing written yet: the scale asks back. Yes sends the same link
+         // again with the mismatch accepted, no leaves it standing as refused.
+         "else if(d.linkstate=='mismatch'){stat('bad',d.linkmsg,'');"
+         "if(tgMisAsked!==d.linkmsg){tgMisAsked=d.linkmsg;"
+         "if(d.linkspool&&confirm(d.linkmsg)){"
+         "fetch('/api/tag/link',{method:'POST',body:d.linkspool+','+tgUid+',1'})"
+         ".then(r=>r.json()).then(x=>{if(!x.ok)stat('bad',M.lbusy,'');})"
+         ".catch(()=>{});after();}}}"
          "else stat('','','');"
          "second(d);}).catch(()=>{});}"
          // One panel for whatever runs: a spinner and a moving bar while it
@@ -678,6 +689,7 @@ static const char* tagLinkStateName() {
     case TL_BUSY:    return "pending";
     case TL_OK:
     case TL_ALREADY: return "ok";
+    case TL_MISMATCH: return "mismatch";
     default:         return "error";
   }
 }
@@ -693,6 +705,8 @@ static String tagLinkMessageLocal() {
     case TL_OK:      snprintf(buf, sizeof(buf), T(STR_W_TL_OK), r->spool_id); break;
     case TL_ALREADY: snprintf(buf, sizeof(buf), T(STR_W_TL_ALREADY), r->spool_id); break;
     case TL_HELD:    snprintf(buf, sizeof(buf), T(STR_W_TL_HELD), r->other_spool); break;
+    case TL_MISMATCH: snprintf(buf, sizeof(buf), T(STR_W_TL_MISMATCH), r->spool_id,
+                               r->tag_desc, r->spool_desc); break;
     case TL_CHANGED: copyT(buf, sizeof(buf), STR_W_TL_CHANGED); break;
     case TL_NO_TAG:  copyT(buf, sizeof(buf), STR_TW_ERR_NO_TAG); break;
     case TL_NETWORK: copyT(buf, sizeof(buf), STR_LINK_NO_CONNECTION); break;
@@ -824,7 +838,8 @@ static void routes(WebServer &srv) {
                "\",\"message\":\"" + jsonEsc(tagWriteMessageLocal().c_str()) +
                "\",\"content\":\"" + jsonEsc(tagCachedContent()) +
                "\",\"raw\":\""     + jsonEsc(tagCachedRaw()) +
-               "\",\"linkstate\":\"" + tagLinkStateName() +
+               "\",\"linkspool\":" + String(tagLinkReportData()->spool_id) +
+               ",\"linkstate\":\"" + tagLinkStateName() +
                "\",\"linkmsg\":\"" + jsonEsc(tagLinkMessageLocal().c_str()) +
                "\",\"linkadds\":" + (tagLinkKeepsOtherTags() ? "true" : "false") +
                ",\"matched\":" + spoolJson() +
@@ -877,9 +892,10 @@ static void routes(WebServer &srv) {
     srv.send(200, "application/json", "{\"ok\":true}");
   });
 
-  // "id,uid": the spool, and the tag the page was showing when it was asked.
-  // Parked only; tagLinkTick() makes the request on the loop task and refuses
-  // if a different tag lies on the reader by then.
+  // "id,uid" or "id,uid,1": the spool, the tag the page was showing when it
+  // was asked, and whether a Bambu tag that does not match the spool was
+  // accepted. Parked only; tagLinkTick() makes the request on the loop task
+  // and refuses if a different tag lies on the reader by then.
   srv.on("/api/tag/link", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
     if (!srv.hasArg("plain")) { srv.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
@@ -887,8 +903,11 @@ static void routes(WebServer &srv) {
     const int c = body.indexOf(',');
     const int id = body.substring(0, c < 0 ? body.length() : c).toInt();
     String uid = c < 0 ? String("") : body.substring(c + 1);
+    const int c2 = uid.indexOf(',');
+    const bool force = c2 >= 0 && uid.substring(c2 + 1).toInt() == 1;
+    if (c2 >= 0) uid = uid.substring(0, c2);
     uid.trim();
-    const bool ok = tagLinkRequest(id, uid.c_str());
+    const bool ok = tagLinkRequest(id, uid.c_str(), force);
     srv.send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
   });
 

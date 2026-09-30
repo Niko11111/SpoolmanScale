@@ -58,6 +58,7 @@ bool spoolHasAnyTag(JsonObjectConst spool);
 #include "services/tag_write.h"
 #include "services/time_service.h"
 #include "services/uid_index.h"
+#include "services/tag_spool_match.h"
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/spool_flow.h"
@@ -644,6 +645,11 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
     String sm_color = spool["filament"]["color_hex"] | String("");
     sm_color.trim();
 
+    // A Bambu tag against the spool it is linked to. The screen keeps its
+    // fields, material, maker and temperature from the tag and the rest from
+    // the server; the status line says when the two do not belong together.
+    if (is_bambu_tag) tagSpoolLookupNote(spool, sm_id);
+
     bool is_ntag = !is_bambu_tag;
     logSDf("Spool %d identified: %s %s, %.0fg of %.0fg", sm_id,
            sm_vendor_name.length() ? sm_vendor_name.c_str() : "?",
@@ -660,6 +666,7 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
       sm_material_global[sizeof(sm_material_global)-1] = '\0';
     }
     applyServerColor(sm_color, is_bambu_tag);
+    if (tagSpoolLookupShowsSpool()) applyTagSpoolView();
 
     // Update display - Fix 5: color based on remaining %
     char weight_str[32];

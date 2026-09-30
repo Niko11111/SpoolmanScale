@@ -9,9 +9,13 @@
 #include "services/user_options.h"
 #include "app_config.h"
 #include "services/backend_api.h"
+#include "services/tag_spool_match.h"
 #include "ui/spool_flow.h"
 #include "ui/spoolman_lookup.h"
 #include "ui/theme.h"
+#include "ui/ui_common.h"
+#include "services/spool_color.h"
+#include "hardware/sd_logger.h"
 // After backend_api.h and the ArduinoJson it brings: the T() macro would
 // otherwise expand inside ArduinoJson's own templates.
 #include "lang.h"
@@ -21,6 +25,9 @@
 #define STATUS_MESSAGE_HOLD_MS  8000UL
 // The resting text for an archived spool, grey like the weight line beside it.
 #define STATUS_COL_ARCHIVED     0x808080
+// How far past its own box the status line answers a tap, so the whole bar
+// is the target when it switches between tag and spool.
+#define STATUS_TAP_EXT_PX       5
 
 static unsigned long s_msg_ms = 0;                       // 0: nothing held
 static char          s_msg_uid[sizeof(g_tag.uid_str)] = "";
@@ -31,6 +38,43 @@ void statusMessageShow(const char* text, uint32_t color) {
   lv_obj_set_style_text_color(lbl_status, lv_color_hex(color), 0);
   snprintf(s_msg_uid, sizeof(s_msg_uid), "%s", g_tag.uid_str);
   s_msg_ms = millis() ? millis() : 1;
+}
+
+void applyTagSpoolView() {
+  if (!lbl_material || !lbl_vendor || !lbl_color_swatch) return;
+  if (tagSpoolLookupShowsSpool()) {
+    const char* m = tagSpoolLookupMaterial();
+    const char* v = tagSpoolLookupVendor();
+    lv_label_set_text(lbl_material, m[0] ? m : "-");
+    lv_label_set_text(lbl_vendor,   v[0] ? v : "-");
+    SpoolColor c;
+    if (spoolColorParse(tagSpoolLookupColor(), &c)) swatchPaint(lbl_color_swatch, c);
+    return;
+  }
+  // The tag's side, painted exactly as updateDisplay() and applyServerColor()
+  // paint it after a scan.
+  lv_label_set_text(lbl_material, g_tag.material[0] ? g_tag.material : T(STR_UNKNOWN));
+  lv_label_set_text(lbl_vendor,   g_tag.vendor[0]   ? g_tag.vendor   : BAMBU_VENDOR_NAME);
+  SpoolColor server;
+  spoolColorParse(sm_color_global, &server);
+  const SpoolColor shown = spoolColorResolve(g_tag.color, server);
+  if (shown.valid) swatchPaint(lbl_color_swatch, shown);
+}
+
+void tagSpoolViewAttach(lv_obj_t* status_label) {
+  if (!status_label) return;
+  lv_obj_add_flag(status_label, LV_OBJ_FLAG_CLICKABLE);
+  // The line is 14 px type in a 26 px bar; this makes the whole bar height
+  // a target without reaching into the header above.
+  lv_obj_set_ext_click_area(status_label, STATUS_TAP_EXT_PX);
+  lv_obj_add_event_cb(status_label, [](lv_event_t* e) {
+    if (!sm_found || !tagSpoolLookupDiffers()) return;
+    tagSpoolLookupToggleView();
+    logSDf("UI: status line -> showing the %s of spool %d",
+           tagSpoolLookupShowsSpool() ? "spool" : "tag", sm_id);
+    applyTagSpoolView();
+    paintTagStatus();
+  }, LV_EVENT_CLICKED, NULL);
 }
 
 static bool statusMessageHeld() {
@@ -57,13 +101,26 @@ void paintTagStatus() {
   }
   // Archived is its own answer: saying "tag detected" in green while the
   // line below reads "Archived" tells the user two different things.
+  // Found, but the Bambu tag describes another filament than the spool it is
+  // linked to: said in amber, because half the screen is the tag's and half
+  // the spool's and neither half says so.
+  const bool differs = sm_found && !sm_archived && tagSpoolLookupDiffers();
   char sb[48];
   backendText(sm_archived ? T(STR_ARCHIVED)
+              : differs   ? T(STR_TAG_MISMATCH_STATUS)
               : sm_found  ? T(sm_dup_count > 1 ? STR_TAG_FOUND_DUP : STR_TAG_FOUND)
                           : T(STR_NOT_IN_SPOOLMAN), sb, sizeof(sb));
+  // The arrow says the line can be tapped, and which side it would show.
+  if (differs) {
+    char view[40];
+    if (tagSpoolLookupShowsSpool()) snprintf(view, sizeof(view), T(STR_TAG_VIEW_SPOOL), sm_id);
+    else                            copyT(view, sizeof(view), STR_TAG_MISMATCH_STATUS);
+    snprintf(sb, sizeof(sb), "%s  " LV_SYMBOL_RIGHT, view);
+  }
   lv_label_set_text(lbl_status, sb);
   lv_obj_set_style_text_color(lbl_status, lv_color_hex(
-      sm_archived ? STATUS_COL_ARCHIVED : sm_found ? UI_COL_ACCENT : UI_COL_WARN), 0);
+      sm_archived ? STATUS_COL_ARCHIVED : differs ? UI_COL_WARN
+      : sm_found ? UI_COL_ACCENT : UI_COL_WARN), 0);
 }
 
 void updateLinkButton() {

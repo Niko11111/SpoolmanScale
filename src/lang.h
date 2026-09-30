@@ -1437,6 +1437,12 @@ enum StringID {
   // Thermal labels and the dryer
   STR_PRN_HEAT_SHORT,
   STR_PRN_HEAT_HELP,
+  // A Bambu tag that does not describe the spool it is linked to
+  STR_LINK_MISMATCH_TITLE,
+  STR_BTN_LINK_ANYWAY,
+  STR_TAG_MISMATCH_STATUS,
+  STR_W_TL_MISMATCH,
+  STR_TAG_VIEW_SPOOL,
 
   STR_COUNT
 };

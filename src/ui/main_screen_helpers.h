@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <lvgl.h>
 
 void updateLinkButton();
 
@@ -14,6 +15,15 @@ void paintTagStatus();
 // so nobody ever saw one. Held while the same tag stays on the pad, for
 // STATUS_MESSAGE_HOLD_MS; a different tag ends it at once.
 void statusMessageShow(const char* text, uint32_t color);
+
+// Material, maker and colour swatch of a Bambu tag that does not match its
+// spool, from whichever side tagSpoolLookupShowsSpool() names. Temperature and
+// everything else stay as they are. Nothing but repainting three labels.
+void applyTagSpoolView();
+
+// Makes the status line the switch between the two: tappable, and only
+// answering while tag and spool differ. Once, where the line is built.
+void tagSpoolViewAttach(lv_obj_t* status_label);
 
 // Shows or hides every way into the AMS view: the header chip on any device,
 // and on one without a load cell zone 4's right half, which also decides where

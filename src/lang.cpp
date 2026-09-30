@@ -3050,6 +3050,15 @@ const char* const STRINGS[][3] = {
   { "Die Etiketten sind Thermopapier: Der Drucker färbt sie ohne Tinte, allein mit Wärme. Dieselbe Reaktion löst auch das Trocknen aus. Auf einer Spule, die mit hoher Temperatur getrocknet wird, färbt sich das ganze Etikett schwarz, im AMS HT bei 85 °C meist schon beim ersten Mal. Bei niedrigeren Temperaturen geschieht das langsamer und kann sich über mehrere Trocknungen aufbauen. Schrift und QR-Code sind danach nicht mehr lesbar.",
     "The labels are thermal paper: the printer colours them without ink, by heat alone. Drying sets off the same reaction. On a spool dried at a high temperature the whole label turns black, in the AMS HT at 85 °C mostly the very first time. At lower temperatures it happens more slowly and can build up over several drying runs. Text and QR code can no longer be read afterwards.",
     "Les étiquettes sont en papier thermique : l'imprimante les colore sans encre, par la chaleur. Le séchage déclenche la même réaction. Sur une bobine séchée à haute température, toute l'étiquette noircit, dans l'AMS HT à 85 °C souvent dès la première fois. Plus bas, cela va plus lentement et peut s'accumuler sur plusieurs séchages. Texte et code QR deviennent illisibles." },  // STR_PRN_HEAT_HELP
+  // A Bambu tag that does not describe the spool it is linked to
+  { "Passt nicht zum Tag",       "Does not match the tag",       "Diffère du tag" },  // STR_LINK_MISMATCH_TITLE
+  { "Trotzdem verknüpfen",       "Link anyway",                  "Lier quand même" },  // STR_BTN_LINK_ANYWAY
+  { "Tag passt nicht zur Spule", "Tag does not match the spool",
+    "Le tag ne correspond pas" },  // STR_TAG_MISMATCH_STATUS
+  { "Der Tag passt nicht zu Spule #%d.\nTag: %s\nSpule: %s\nTrotzdem verknüpfen?",
+    "The tag does not match spool #%d.\nTag: %s\nSpool: %s\nLink anyway?",
+    "Le tag ne correspond pas à la bobine #%d.\nTag : %s\nBobine : %s\nLier quand même ?" },  // STR_W_TL_MISMATCH
+  { "Anzeige: Spule #%d", "Showing spool #%d", "Vue : bobine #%d" },  // STR_TAG_VIEW_SPOOL
 };
 
 StringID tagWriteResultString(uint8_t code) {

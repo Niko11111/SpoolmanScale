@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.8.2-beta.26"
+#define FW_VERSION  "v0.8.2-beta.27"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -87,6 +87,11 @@
 // seconds the FilaMan frontend polls for a result, so both sides give up at
 // the same time instead of one waiting on the other.
 #define REMOTE_LINK_TIMEOUT_MS  60000
+
+// How far apart a Bambu tag's colour and a spool's may lie, as the sum of
+// the three channel differences, before the two count as different colours.
+// The link list has filtered by this since it compared colours at all.
+#define TAG_SPOOL_COLOR_DIST_MAX  120
 
 // Deriving the empty-spool weight from a brand new spool: the reading minus
 // the nominal filament weight. Outside these bounds the reading is not a full

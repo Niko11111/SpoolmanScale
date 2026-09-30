@@ -31,6 +31,7 @@ enum TagLinkResult : uint8_t {
   TL_NO_TAG,      // no tag on the reader any more
   TL_NETWORK,     // the server did not answer
   TL_FAILED,      // the server answered and refused
+  TL_MISMATCH,    // a Bambu tag that does not describe the spool, nothing written
 };
 
 // Codes and ids rather than a sentence: this file cannot include lang.h (T()
@@ -39,11 +40,17 @@ struct TagLinkReport {
   uint8_t code;
   int     spool_id;
   int     other_spool;
+  // TL_MISMATCH: what the tag and the spool say, material and colour, for the
+  // page's question. Data, not a sentence.
+  char    tag_desc[40];
+  char    spool_desc[64];
 };
 
 // Parks a link of the tag the page showed - uid as tagCachedUid() gave it -
 // to spool_id. False when a link is already waiting or an argument is empty.
-bool tagLinkRequest(int spool_id, const char* uid);
+// force: the page has asked about a Bambu tag that does not match the spool
+// (TL_MISMATCH) and the answer was to link it all the same.
+bool tagLinkRequest(int spool_id, const char* uid, bool force = false);
 
 // From appLoop(), after tagWriteTick(). Waits while a tag write is running.
 void tagLinkTick();

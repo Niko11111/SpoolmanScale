@@ -37,10 +37,12 @@
 #include "ui/second_tag_popup.h"
 #include "ui/spoolman_lookup.h"
 #include "ui/tag_write_popup.h"
+#include "ui/tag_spool_compare.h"
 #include "ui/theme.h"
 #include "ui/ui_common.h"
 #include "services/backend.h"
 #include "services/breadcrumb.h"
+#include "services/tag_spool_match.h"
 
 namespace {
 
@@ -1814,9 +1816,25 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
 }
 
 // ============================================================
-//  LINK FLOW: WARNING POPUP B (material mismatch)
+//  LINK FLOW: WARNING POPUP B (the tag does not match the spool)
 //  Nur Flow A (Bambu), Pfad 1
 // ============================================================
+// What B is about: the verdict its rows show, and the question about a bound
+// spool that still has to follow once the difference is accepted. That one
+// used to come first and return, so a bound spool never reached this popup.
+static TagSpoolVerdict s_warn_b_verdict;
+static bool   s_warn_b_then_a = false;
+static String s_warn_b_a_tag;
+static bool   s_warn_b_a_add  = false;
+
+// Where B's tag-against-spool rows start, and the room between the blocks.
+#define WARN_B_ROWS_Y       52
+#define WARN_B_ROWS_GAP     16
+#define WARN_B_BTN_STEP     56
+#define WARN_B_CANCEL_STEP  52
+#define WARN_B_CANCEL_H     36
+#define WARN_B_BOTTOM_PAD   10
+
 void showWarnPopupB(int spool_id, bool is_bambu) {
   logSDf("SHOW: WarnPopupB spool=%d", spool_id);
   releaseScreen(&scr_link_warn_b);
@@ -1837,7 +1855,7 @@ void showWarnPopupB(int spool_id, bool is_bambu) {
   lv_obj_clear_flag(scr_link_warn_b, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *box = lv_obj_create(scr_link_warn_b);
-  lv_obj_set_size(box, 440, 260);
+  lv_obj_set_size(box, 440, 260);   // grown to fit below, once the rows are in
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
   lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
   lv_obj_set_style_border_color(box, lv_color_hex(0xff8080), 0);
@@ -1847,7 +1865,7 @@ void showWarnPopupB(int spool_id, bool is_bambu) {
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *lbl_title = lv_label_create(box);
-  lv_label_set_text(lbl_title, T(STR_WARN_B_TITLE));
+  lv_label_set_text(lbl_title, T(STR_LINK_MISMATCH_TITLE));
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(0xff8080), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_title, LV_TEXT_ALIGN_CENTER, 0);
@@ -1861,47 +1879,51 @@ void showWarnPopupB(int spool_id, bool is_bambu) {
   lv_obj_set_style_radius(line, 0, 0);
   lv_obj_set_style_pad_all(line, 0, 0);
 
-  // Material-Vergleich anzeigen
-  char mat_buf[80];
-  // Spoolman-Material finden
-  const char* sm_mat = "-";
+  // Tag and spool side by side. The spool's side comes from its row, which
+  // linkIdLookupAndPatch() made from the document it just read.
+  const UnlinkedSpool* row = nullptr;
   for (int i = 0; i < link_spool_count; i++) {
-    if (link_spools[i].id == spool_id) { sm_mat = link_spools[i].material; break; }
+    if (link_spools[i].id == spool_id) { row = &link_spools[i]; break; }
   }
-  char fmt_b[160]; backendText(T(STR_WARN_B_DETAILS), fmt_b, sizeof(fmt_b));
-  snprintf(mat_buf, sizeof(mat_buf), fmt_b,
-    g_tag.material[0] ? g_tag.material : "?", sm_mat, spool_id);
-  lv_obj_t *lbl_info = lv_label_create(box);
-  lv_label_set_text(lbl_info, mat_buf);
-  lv_obj_set_style_text_color(lbl_info, lv_color_hex(0xc8d8f0), 0);
-  lv_obj_set_style_text_font(lbl_info, &lv_font_montserrat_ext_14, 0);
-  lv_obj_set_style_text_align(lbl_info, LV_TEXT_ALIGN_CENTER, 0);
-  lv_label_set_long_mode(lbl_info, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(lbl_info, 400);
-  lv_obj_align(lbl_info, LV_ALIGN_TOP_MID, 0, 52);
+  const int rows_h = tagSpoolCompareRows(box, WARN_B_ROWS_Y, s_warn_b_verdict,
+                                         row ? row->material : "", row ? row->color_hex : "",
+                                         row ? row->vendor : "");
+  const int force_y  = WARN_B_ROWS_Y + rows_h + WARN_B_ROWS_GAP;
+  const int retry_y  = force_y + WARN_B_BTN_STEP;
+  const int cancel_y = retry_y + WARN_B_CANCEL_STEP;
+  lv_obj_set_height(box, cancel_y + WARN_B_CANCEL_H + WARN_B_BOTTOM_PAD);
 
   lv_obj_t *btn_force = lv_btn_create(box);
   lv_obj_set_size(btn_force, 420, 48);
-  lv_obj_align(btn_force, LV_ALIGN_TOP_MID, 0, 142);
+  lv_obj_align(btn_force, LV_ALIGN_TOP_MID, 0, force_y);
   lv_obj_set_style_bg_color(btn_force, lv_color_hex(0x3a1010), 0);
   lv_obj_set_style_bg_color(btn_force, lv_color_hex(0x602020), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_force, 8, 0);
   lv_obj_set_style_shadow_width(btn_force, 0, 0);
   lv_obj_set_style_border_width(btn_force, 0, 0);
   lv_obj_add_event_cb(btn_force, [](lv_event_t *e) {
+    // A bound spool still gets its own question: this one accepted the
+    // difference, that one decides between replacing and adding the tag.
+    if (s_warn_b_then_a) {
+      s_warn_b_then_a = false;
+      releaseScreen(&scr_link_warn_b);
+      showWarnPopupA(warn_b_spool_id, s_warn_b_a_tag.c_str(), warn_b_is_bambu, "",
+                     s_warn_b_a_add);
+      return;
+    }
     link_patch_id    = warn_b_spool_id;
     link_patch_bambu = warn_b_is_bambu;
     link_patch_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_force = lv_label_create(btn_force);
-  lv_label_set_text(lbl_force, T(STR_BTN_OVERWRITE));
+  lv_label_set_text(lbl_force, T(STR_BTN_LINK_ANYWAY));
   lv_obj_set_style_text_color(lbl_force, lv_color_hex(0xff8080), 0);
   lv_obj_set_style_text_font(lbl_force, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_force);
 
   lv_obj_t *btn_retry = lv_btn_create(box);
   lv_obj_set_size(btn_retry, 420, 44);
-  lv_obj_align(btn_retry, LV_ALIGN_TOP_MID, 0, 198);
+  lv_obj_align(btn_retry, LV_ALIGN_TOP_MID, 0, retry_y);
   lv_obj_set_style_bg_color(btn_retry, lv_color_hex(0x0a1828), 0);
   lv_obj_set_style_bg_color(btn_retry, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_retry, 8, 0);
@@ -1924,8 +1946,8 @@ void showWarnPopupB(int spool_id, bool is_bambu) {
   lv_obj_center(lbl_retry);
 
   lv_obj_t *btn_cancel = lv_btn_create(box);
-  lv_obj_set_size(btn_cancel, 420, 36);
-  lv_obj_align(btn_cancel, LV_ALIGN_BOTTOM_MID, 0, -8);
+  lv_obj_set_size(btn_cancel, 420, WARN_B_CANCEL_H);
+  lv_obj_align(btn_cancel, LV_ALIGN_TOP_MID, 0, cancel_y);
   lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(0x1a2030), 0);
   lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(0x2a3040), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_cancel, 8, 0);
@@ -2059,29 +2081,39 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
   //
   // Without it the tag field wins instead: overwriting it is the destructive
   // case and has to be asked about first.
+  bool   ask_a = true;
+  String a_tag;
+  bool   a_add = false;
   if (link_cu_ok && (existing_cu.length() > 0 || existing.length() > 0)) {
-    showWarnPopupA(entered_id,
-                   existing_cu.length() > 0 ? existing_cu.c_str() : existing.c_str(),
-                   is_bambu, "", true);
-    return;
+    a_tag = existing_cu.length() > 0 ? existing_cu : existing;
+    a_add = true;
+  } else if (existing.length() > 0) {
+    a_tag = existing;
+  } else if (existing_cu.length() > 0) {
+    a_tag = existing_cu;
+  } else {
+    ask_a = false;
   }
-  if (existing.length() > 0) {
-    showWarnPopupA(entered_id, existing.c_str(), is_bambu, "");
-    return;
-  }
-  if (existing_cu.length() > 0) {
-    showWarnPopupA(entered_id, existing_cu.c_str(), is_bambu, "", false);
-    return;
-  }
-  if (is_bambu && g_tag.material[0]) {
-    String sm_mat = doc["filament"]["material"] | String("");
-    sm_mat.trim();
-    if (sm_mat.length() >= 3 && strlen(g_tag.material) >= 3) {
-      if (strncasecmp(g_tag.material, sm_mat.c_str(), 3) != 0) {
-        showWarnPopupB(entered_id, is_bambu);
-        return;
-      }
+
+  // The Bambu tag against the spool typed in, by the verdict every other link
+  // uses. First, because a wrong spool is wrong whether it is bound or not;
+  // the question about its tag follows from B once the difference is accepted.
+  if (is_bambu && strlen(g_tag.tray_uuid) == 32) {
+    s_warn_b_verdict = tagSpoolCompareTag(doc.as<JsonObjectConst>());
+    if (s_warn_b_verdict.any()) {
+      char why[32];
+      tagSpoolVerdictText(s_warn_b_verdict, why, sizeof(why));
+      logSDf("Link by id: spool %d does not match the tag (%s)", entered_id, why);
+      s_warn_b_then_a = ask_a;
+      s_warn_b_a_tag  = a_tag;
+      s_warn_b_a_add  = a_add;
+      showWarnPopupB(entered_id, is_bambu);
+      return;
     }
+  }
+  if (ask_a) {
+    showWarnPopupA(entered_id, a_tag.c_str(), is_bambu, "", a_add);
+    return;
   }
   doLinkPatch(entered_id, is_bambu);
 }
@@ -2460,9 +2492,30 @@ static void linkRowChosen(int idx) {
   else                    showLinkConfirmPopup(idx);
 }
 
+// Where the tag-against-spool rows start in the link confirmation, right
+// under the two lines of spool info, and the room kept under them.
+#define LINK_CONFIRM_ROWS_Y    96
+#define LINK_CONFIRM_ROWS_GAP   6
+
 static void showLinkConfirmPopup(int idx) {
   if (idx < 0 || idx >= link_spool_count) return;
   UnlinkedSpool &s = link_spools[idx];
+
+  // A Bambu tag says what is on the spool; the row says what the spool on
+  // file is. When the list fell back to "without the material filter" every
+  // row is some other filament, and a tap linked it without a word. The row
+  // carries all the verdict needs, a row out of the cache included.
+  TagSpoolVerdict verdict;
+  if (link_flow_is_bambu && !copy_flow_via_list && strlen(g_tag.tray_uuid) == 32) {
+    verdict = tagSpoolCompare(g_tag.material, g_tag.color_hex, s.material, s.name,
+                              s.vendor, s.color_hex, s.article_hit);
+  }
+  const bool mismatch = verdict.any();
+  if (mismatch) {
+    char why[32];
+    tagSpoolVerdictText(verdict, why, sizeof(why));
+    logSDf("Link confirm: spool %d does not match the tag (%s)", s.id, why);
+  }
 
   // Sicherheits-Popup (halbtransparentes Overlay)
   releaseScreen(&scr_link_confirm);
@@ -2481,30 +2534,27 @@ static void showLinkConfirmPopup(int idx) {
   lv_obj_set_size(box, 440, 220);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
   lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
-  lv_obj_set_style_border_color(box, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(mismatch ? UI_COL_BAD_TEXT : UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(box, 2, 0);
   lv_obj_set_style_radius(box, 12, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *lbl_q = lv_label_create(box);
-  lv_label_set_text(lbl_q, copy_flow_via_list ? T(STR_COPY_CONFIRM_TITLE) : T(STR_CONFIRM_LINK));
-  lv_obj_set_style_text_color(lbl_q, lv_color_hex(0x28d49a), 0);
+  lv_label_set_text(lbl_q, copy_flow_via_list ? T(STR_COPY_CONFIRM_TITLE)
+                         : mismatch           ? T(STR_LINK_MISMATCH_TITLE)
+                                              : T(STR_CONFIRM_LINK));
+  lv_obj_set_style_text_color(lbl_q, lv_color_hex(mismatch ? UI_COL_BAD_TEXT : UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_q, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_style_text_align(lbl_q, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_q, LV_ALIGN_TOP_MID, 0, 16);
 
   // Spulen-Info
   char info[80];
-  bool name_has_mat = (s.material[0] && s.name[0] &&
-                       strncasecmp(s.name, s.material, strlen(s.material)) == 0);
-  if (name_has_mat) {
-    snprintf(info, sizeof(info), "#%d  %s\n%.0f g / %.0f g",
-      s.id, s.name, s.remaining, s.total);
-  } else {
-    snprintf(info, sizeof(info), "#%d  %s %s\n%.0f g / %.0f g",
-      s.id, s.material, s.name, s.remaining, s.total);
-  }
+  char joined[64];
+  joinMaterialName(s.material, s.name, joined, sizeof(joined));
+  snprintf(info, sizeof(info), "#%d  %s\n%.0f g / %.0f g",
+    s.id, joined, s.remaining, s.total);
   lv_obj_t *lbl_info = lv_label_create(box);
   lv_label_set_text(lbl_info, info);
   lv_obj_set_style_text_color(lbl_info, lv_color_hex(0xc8d8f0), 0);
@@ -2514,12 +2564,21 @@ static void showLinkConfirmPopup(int idx) {
   lv_obj_set_width(lbl_info, 400);
   lv_obj_align(lbl_info, LV_ALIGN_TOP_MID, 0, 48);
 
+  // The tag and the spool side by side, and the buttons below them move down
+  // by as much. Built only when there is something to show.
+  int extra = 0;
+  if (mismatch) {
+    extra = tagSpoolCompareRows(box, LINK_CONFIRM_ROWS_Y, verdict, s.material,
+                                s.color_hex, s.vendor) + LINK_CONFIRM_ROWS_GAP;
+    lv_obj_set_height(box, 220 + extra);
+  }
+
   // Link button - y=110, h=46
   lv_obj_t *btn_yes = lv_btn_create(box);
   lv_obj_set_size(btn_yes, 420, 46);
-  lv_obj_set_pos(btn_yes, 10, 110);
-  lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x1a3020), 0);
-  lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+  lv_obj_set_pos(btn_yes, 10, 110 + extra);
+  lv_obj_set_style_bg_color(btn_yes, lv_color_hex(mismatch ? UI_COL_BAD_BG : 0x1a3020), 0);
+  lv_obj_set_style_bg_color(btn_yes, lv_color_hex(mismatch ? UI_COL_BAD_BG_PRESSED : 0x2a5030), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_yes, 8, 0);
   lv_obj_set_style_shadow_width(btn_yes, 0, 0);
   lv_obj_set_style_border_width(btn_yes, 0, 0);
@@ -2555,15 +2614,17 @@ static void showLinkConfirmPopup(int idx) {
     }
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_yes = lv_label_create(btn_yes);
-  lv_label_set_text(lbl_yes, copy_flow_via_list ? T(STR_BTN_CONFIRMED) : T(STR_LINK_OK));
-  lv_obj_set_style_text_color(lbl_yes, lv_color_hex(0x40c080), 0);
+  lv_label_set_text(lbl_yes, copy_flow_via_list ? T(STR_BTN_CONFIRMED)
+                          : mismatch           ? T(STR_BTN_LINK_ANYWAY)
+                                               : T(STR_LINK_OK));
+  lv_obj_set_style_text_color(lbl_yes, lv_color_hex(mismatch ? UI_COL_BAD_TEXT : UI_COL_OK_TEXT_2), 0);
   lv_obj_set_style_text_font(lbl_yes, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_yes);
 
   // Cancel button - y=164 (gap=8 after btn_yes ends at 156)
   lv_obj_t *btn_no = lv_btn_create(box);
   lv_obj_set_size(btn_no, 420, 40);
-  lv_obj_set_pos(btn_no, 10, 164);
+  lv_obj_set_pos(btn_no, 10, 164 + extra);
   lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x3a1010), 0);
   lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x602020), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_no, 8, 0);

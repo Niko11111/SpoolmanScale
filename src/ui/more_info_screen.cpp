@@ -26,6 +26,7 @@
 #include "services/filaman_api.h"
 #include "services/wifi_manager.h"
 #include "services/spool_cache.h"
+#include "services/tag_spool_match.h"
 #include "lang.h"
 #include "confirm_popup.h"
 #include "status_picker.h"
@@ -683,6 +684,11 @@ static void openStatusPicker() {
   showStatusPicker(sm_status_id, onStatusPicked);
 }
 
+// The spool's colour beside its material when the tag does not match it.
+#define MI_SPOOL_SWATCH      18
+#define MI_SPOOL_SWATCH_DY    3
+#define MI_SPOOL_SWATCH_GAP   8
+
 void buildMoreInfoScreen() {
   logSD("BUILD: MoreInfoScreen");
   // Full-screen dimmed backdrop
@@ -717,10 +723,16 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_pad_all(hdr, 0, 0);
   lv_obj_clear_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
 
+  // The Bambu tag on the reader describes another filament than the spool it
+  // is linked to. The card has no row to spare for a comparison, so the title
+  // says it, the tag's material turns red, and the production date gives its
+  // place to the spool's side.
+  const bool differs = sm_found && tagSpoolLookupDiffers();
+
   // Title - Fix 12: always "More info filament" in both languages
   lv_obj_t *lbl_title = lv_label_create(hdr);
-  lv_label_set_text(lbl_title, "Filament");
-  lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
+  lv_label_set_text(lbl_title, differs ? T(STR_TAG_MISMATCH_STATUS) : "Filament");
+  lv_obj_set_style_text_color(lbl_title, lv_color_hex(differs ? UI_COL_WARN : UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(lbl_title, LV_ALIGN_CENTER, 0, 0);
 
@@ -844,7 +856,8 @@ void buildMoreInfoScreen() {
   const char* mat_val = (strlen(sm_material_global) > 0) ? sm_material_global :
                         (strlen(g_tag.material) > 0 ? g_tag.material : "-");
   lv_label_set_text(lbl_mat, mat_val);
-  lv_obj_set_style_text_color(lbl_mat, lv_color_hex(0xf0f0f0), 0);
+  lv_obj_set_style_text_color(lbl_mat, lv_color_hex(
+      differs && tagSpoolLookupVerdict().material ? UI_COL_BAD_TEXT : 0xf0f0f0), 0);
   lv_obj_set_style_text_font(lbl_mat, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_pos(lbl_mat, 114, 74);
   lv_obj_set_size(lbl_mat, 114, lv_font_get_line_height(&lv_font_montserrat_ext_18));
@@ -909,19 +922,41 @@ void buildMoreInfoScreen() {
   lv_obj_set_size(v1, CW, lv_font_get_line_height(&lv_font_montserrat_ext_18));
   lv_label_set_long_mode(v1, LV_LABEL_LONG_DOT);
 
-  // Row 1 Right: production date
-  char prod_cap[24]; copyT(prod_cap, sizeof(prod_cap), STR_LBL_PRODUCTION_DATE);
+  // Row 1 Right: production date, or the spool's side of a mismatch - its
+  // colour as a swatch and its material, what the tag's cells are held against.
+  char prod_cap[24]; copyT(prod_cap, sizeof(prod_cap), differs ? STR_REMOTE_LINK_COL_SPOOL
+                                                               : STR_LBL_PRODUCTION_DATE);
   lv_obj_t *c2 = lv_label_create(box);
   lv_label_set_text(c2, prod_cap);
   lv_obj_set_style_text_color(c2, lv_color_hex(0x4a6fa0), 0);
   lv_obj_set_style_text_font(c2, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(c2, CB, R1);
+  int v2_x = CB;
+  if (differs) {
+    lv_obj_t *ssw = lv_obj_create(box);
+    lv_obj_set_size(ssw, MI_SPOOL_SWATCH, MI_SPOOL_SWATCH);
+    lv_obj_set_pos(ssw, CB, R1 + VF + MI_SPOOL_SWATCH_DY);
+    lv_obj_set_style_radius(ssw, UI_RADIUS_INPUT, 0);
+    lv_obj_set_style_border_color(ssw, lv_color_hex(
+        tagSpoolLookupVerdict().color ? UI_COL_BAD_TEXT : UI_COL_LINE), 0);
+    lv_obj_set_style_border_width(ssw, 1, 0);
+    lv_obj_set_style_pad_all(ssw, 0, 0);
+    lv_obj_clear_flag(ssw, LV_OBJ_FLAG_SCROLLABLE);
+    swatchPaintHex(ssw, tagSpoolLookupColor());
+    v2_x = CB + MI_SPOOL_SWATCH + MI_SPOOL_SWATCH_GAP;
+  }
   lv_obj_t *v2 = lv_label_create(box);
-  lv_label_set_text(v2, strlen(g_tag.production_date) > 4 ? g_tag.production_date : "-");
-  lv_obj_set_style_text_color(v2, lv_color_hex(0x8ab0d8), 0);
+  if (differs) {
+    const char* sm = tagSpoolLookupMaterial();
+    lv_label_set_text(v2, sm[0] ? sm : "-");
+  } else {
+    lv_label_set_text(v2, strlen(g_tag.production_date) > 4 ? g_tag.production_date : "-");
+  }
+  lv_obj_set_style_text_color(v2, lv_color_hex(
+      differs && tagSpoolLookupVerdict().material ? UI_COL_BAD_TEXT : 0x8ab0d8), 0);
   lv_obj_set_style_text_font(v2, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_pos(v2, CB, R1 + VF);
-  lv_obj_set_size(v2, CW, lv_font_get_line_height(&lv_font_montserrat_ext_18));
+  lv_obj_set_pos(v2, v2_x, R1 + VF);
+  lv_obj_set_size(v2, CW - (v2_x - CB), lv_font_get_line_height(&lv_font_montserrat_ext_18));
   lv_label_set_long_mode(v2, LV_LABEL_LONG_DOT);
 
   // Row 2 Left: Article no.

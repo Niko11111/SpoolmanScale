@@ -42,6 +42,7 @@ bool spoolHasAnyTag(JsonObjectConst spool);
 #include "services/uid_index.h"
 #include "ui/spool_flow.h"
 #include "services/user_options.h"
+#include "services/tag_spool_match.h"
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/theme.h"
@@ -701,6 +702,10 @@ void querySpoolmanById(int spool_id) {
   String sm_color = spool["filament"]["color_hex"] | String("");
   sm_color.trim();
 
+  // After a link as after a scan: does the Bambu tag describe this spool?
+  if (is_bambu_tag) tagSpoolLookupNote(spool, sm_id);
+  else              tagSpoolLookupClear();
+
   bool is_ntag = !is_bambu_tag;
   if (is_ntag) {
     const TagInfo *ti = tagCachedInfo();
@@ -718,6 +723,7 @@ void querySpoolmanById(int spool_id) {
     }
   }
   applyServerColor(sm_color, is_bambu_tag);
+  if (tagSpoolLookupShowsSpool()) applyTagSpoolView();
 
   // Update display labels
   showSpoolRemaining();
@@ -737,6 +743,7 @@ void querySpoolmanById(int spool_id) {
 
   Serial.printf("querySpoolmanById OK: ID=%d %.1fg dried=%s\n", sm_id, sm_remaining, sm_last_dried);
   updateLinkButton();
+  if (tagSpoolLookupDiffers()) paintTagStatus();
 }
 
 // ============================================================
@@ -1189,6 +1196,7 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   sm_archived = false;
   sm_id = 0;
   sm_dup_count = 0;
+  tagSpoolLookupClear();
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) sm_tag_values[i][0] = '\0';
   sm_hw_uid_value[0] = '\0';
   sm_spool_weight = 0;

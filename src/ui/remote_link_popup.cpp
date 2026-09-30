@@ -20,6 +20,7 @@
 #include "ui/spoolman_lookup.h"
 #include "ui/tag_busy_popup.h"
 #include "bambu/material_match.h"
+#include "services/tag_spool_match.h"
 #include "ui_common.h"
 
 static lv_obj_t *scr_remote_link = nullptr;
@@ -130,6 +131,7 @@ void showRemoteLinkPopup(int spool_id) {
   char material[24] = "";
   char color_hex[SPOOL_COLOR_HEX_MAX] = "";   // "#RRGGBB", or "#RRGGBBAA" from Spoolman
   char vendor[32]   = "";
+  char article[16]  = "";
   float remaining   = -1.0f;      // negative means the server did not say
   bool have_details = false;
 
@@ -149,6 +151,7 @@ void showRemoteLinkPopup(int spool_id) {
       strncpy(name,     n, sizeof(name) - 1);
       strncpy(material, m, sizeof(material) - 1);
       strncpy(vendor,   v, sizeof(vendor) - 1);
+      strncpy(article,  doc["filament"]["article_number"] | "", sizeof(article) - 1);
       if (c[0]) {
         snprintf(color_hex, sizeof(color_hex), "%s%s", c[0] == '#' ? "" : "#", c);
       }
@@ -157,42 +160,25 @@ void showRemoteLinkPopup(int spool_id) {
     }
   }
 
-  // Cross-check the tag against the spool. Comparing three characters of the
-  // material was not enough: a "PLA Tough+" tag matched a plain "PLA" spool
-  // because both start with PLA, and the colour was never looked at, so a blue
-  // tag linked to an orange spool without a word.
-  //
-  // Both extra tests reuse what the manual link flow already applies when it
-  // filters its list, so device and web trigger judge a pair the same way.
+  // Cross-check the tag against the spool, by the verdict every link shares
+  // (services/tag_spool_match.h): material and subtype, colour, maker, and an
+  // article number both sides agree on settles all of it. Comparing three
+  // characters of the material was not enough once: a "PLA Tough+" tag passed
+  // a plain "PLA" spool, and a blue tag linked to an orange one.
   bool mismatch_material = false;
   bool mismatch_color    = false;
+  bool mismatch_vendor   = false;
   if (s_is_bambu && have_details) {
-    if (g_tag.material[0] && material[0] &&
-        strlen(material) >= 3 && strlen(g_tag.material) >= 3) {
-      mismatch_material = (strncasecmp(g_tag.material, material, 3) != 0);
-
-      // Subtype: "PLA Tough+" must not pass as plain "PLA". The keyword has to
-      // turn up in either the spool's material or its name, same as the list
-      // filter in fetchAllSpoolsForLink().
-      char subkw[16];
-      if (!mismatch_material && extractBambuSubtype(g_tag.material, subkw, sizeof(subkw))) {
-        // Same tolerant compare as the link flow: the tag writes "Tough+",
-        // the library writes "Tough Plus", and a literal search made every
-        // one of them look like a material mismatch.
-        mismatch_material = !bambuSubtypeMatches(material, subkw) &&
-                            !bambuSubtypeMatches(name, subkw);
-      }
-    }
-    // Same threshold the manual flow uses to drop far off colours from the list.
-    // g_tag.color_hex is empty for a clear filament, which names no hue to hold
-    // against the spool - and neither does a spool stored as 00000000.
-    SpoolColor server_color;
-    spoolColorParse(color_hex, &server_color);
-    if (g_tag.color_hex[0] == '#' && spoolColorNamesHue(server_color)) {
-      mismatch_color = (colorDistance(g_tag.color_hex, color_hex) > 120);
-    }
+    char tag_article[16];
+    tagSpoolTagArticle(tag_article, sizeof(tag_article));
+    const TagSpoolVerdict v = tagSpoolCompare(
+        g_tag.material, g_tag.color_hex, material, name, vendor, color_hex,
+        tag_article[0] && strcasecmp(tag_article, article) == 0);
+    mismatch_material = v.material;
+    mismatch_color    = v.color;
+    mismatch_vendor   = v.vendor;
   }
-  const bool mismatch = mismatch_material || mismatch_color;
+  const bool mismatch = mismatch_material || mismatch_color || mismatch_vendor;
 
   // Link without asking, if the user turned that on and the spool was already
   // lying there when they clicked. A mismatch always falls through to the
