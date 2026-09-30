@@ -10,6 +10,7 @@
 #include "app/app_state.h"
 #include "services/device_name.h"
 #include "services/wifi_manager.h"
+#include "ui/theme.h"
 #include "web/web_access.h"
 #include "web/web_pages.h"
 #include "web/web_static.h"
@@ -101,7 +102,12 @@ String webShellHead(const char *subtitle) {
 
   String h;
   h.reserve(600);   // the stylesheet is a route now, this is just the head
-  h += F("<!DOCTYPE html><html><head>"
+  // The page follows the palette the scale runs, so the stylesheet carries
+  // both and this attribute picks one. Not a cached file: a new palette shows
+  // on the next page load without a new firmware.
+  h += F("<!DOCTYPE html><html data-theme='");
+  h += uiThemeKey(uiThemeActive());
+  h += F("'><head>"
       "<meta charset='utf-8'>"
       "<meta name='viewport' content='width=device-width,initial-scale=1'>"
       "<link rel='icon' type='image/png' href='/favicon.png'>"

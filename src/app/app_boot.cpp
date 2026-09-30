@@ -165,6 +165,9 @@ void appSetup() {
   backendLoadSettings();
 
   displayHardwareBegin(resetActivityTimer);
+  // The palette, before anything is drawn: every UI_COL_* is read when an
+  // object is made, and LVGL's default theme hangs off the display driver.
+  uiThemeBegin();
   // Apply the stored brightness and arm the idle timer from a real
   // millis() reading, not from 0.
   displayPowerInit();

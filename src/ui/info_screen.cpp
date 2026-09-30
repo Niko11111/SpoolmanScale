@@ -140,7 +140,7 @@ static void qrTile(lv_obj_t* parent, int x, int y, int w, int h, int idx,
   lv_obj_set_size(b, w, h);
   lv_obj_set_pos(b, x, y);
   lv_obj_set_style_bg_color(b, lv_color_hex(bg), 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(bg + UI_SHADE_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(b, lv_color_hex(uiShade(bg, UI_SHADE_PRESSED)), LV_STATE_PRESSED);
   lv_obj_set_style_radius(b, UI_RADIUS_BOX, 0);
   lv_obj_set_style_shadow_width(b, 0, 0);
   lv_obj_set_style_border_width(b, 1, 0);

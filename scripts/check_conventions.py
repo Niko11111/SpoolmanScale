@@ -351,8 +351,9 @@ def scan_inline_color_hex(src):
 
 
 RAW_COLOR_RE = re.compile(r'\b0[xX][0-9A-Fa-f]{6}\b')
-# The one file where a colour is a number.
-THEME_FILE = "src/ui/theme.h"
+# Where a colour is a number: the palette, and the few fixed content colours
+# beside it in theme.h.
+THEME_FILES = ("src/ui/theme.h", "src/ui/theme_palette.h")
 
 
 def scan_raw_color_hex(src):
@@ -622,7 +623,7 @@ def collect():
         if rel.startswith(UI_SCOPE):
             stats["label calls"] += len(label_calls(src))
             add("inline_color_hex", rel, scan_inline_color_hex(src))
-            if rel != THEME_FILE:
+            if rel not in THEME_FILES:
                 add("raw_color_hex", rel, scan_raw_color_hex(src))
             add("label_literal_captions", rel, scan_label_literal_captions(src))
         if rel not in GERMAN_EXEMPT:

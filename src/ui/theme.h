@@ -1,16 +1,16 @@
 #pragma once
 
 #include <lvgl.h>
+#include <stdint.h>
 
 // ============================================================
 //  THEME
 //
 //  The one table for what the panel looks like: colours, type
 //  sizes, radii, the house measurements of a button. Every colour
-//  in src/ui and src/app is named here; the ratchet counts one
-//  written as a number (inline_color_hex, raw_color_hex). A second
-//  palette - light, or one per backend - is a second copy of the
-//  colour block and a switch, not a hunt through the tree.
+//  in src/ui and src/app has a name; the ratchet counts one written
+//  as a number (inline_color_hex, raw_color_hex). The colours
+//  themselves stand in theme_palette.h, dark and light side by side.
 //
 //  Names say what a colour is for, not what it looks like:
 //  UI_COL_CAPTION rather than "dim blue". A palette that swaps
@@ -20,115 +20,51 @@
 //  carries a widget (UI_COL_COPY_*) is a colour only that widget
 //  uses.
 //
-//  For a palette chosen at runtime these become variables. Keep
-//  them out of #if, constexpr and static initialisers so that
-//  step stays a change to this file.
+//  UI_COL_<name> is a variable, filled at boot from the palette the
+//  user chose (uiThemeBegin). Written in capitals so a call site
+//  reads the same as when these were constants. Never read one in
+//  #if, constexpr or a static initialiser: that would take the dark
+//  value before the palette is chosen. A change of palette takes
+//  effect with a restart, because LVGL copies a colour into the
+//  object when the object is made.
 // ============================================================
 
-// ---- surfaces ------------------------------------------------
-#define UI_COL_GROUND          0x0a1020   // the screen behind everything
-#define UI_COL_SURFACE         0x0c1828   // a popup's box, a picker's box, inputs, quiet buttons, list bodies
-#define UI_COL_ROW             0x1a2030   // a settings row, a divider, a quiet button: cancel, delete a value
-#define UI_COL_ROW_PRESSED     0x1a3050   // the same row under the finger, and its border
-#define UI_COL_LINE            0x1a3870   // dividers, the slider track, a quiet border
-#define UI_COL_LINE_SOFT       0x1e2a44   // the fainter border of an input; a neutral answer beside a green one
-#define UI_COL_POPUP_BORDER    0x2a4080   // the frame of a question; a blue action pressed
-#define UI_COL_EMPTY           0x182238   // an empty bay, the keyboard, More, "got it"
-#define UI_COL_CHIP            0x102040   // a header chip that is a button; a blue action: dried, this spool, new spool
-#define UI_COL_SCRIM           0x000000   // behind a popup, at UI_OPA_SCRIM
+// ---- colours -------------------------------------------------
+#define UI_COLOUR(name, dark, light) extern uint32_t UI_COL_##name;
+#include "theme_palette.h"
+#undef UI_COLOUR
 
 #define UI_OPA_SCRIM           LV_OPA_70
 
-// Steps added to a tile's own colour for its pressed state and its border.
-#define UI_SHADE_PRESSED       0x101010
-#define UI_SHADE_BORDER        0x181818
+// Steps added to a tile's own colour, per channel, for its pressed state and
+// its border: lighter on a dark palette, darker on a light one.
+extern int UI_SHADE_PRESSED;
+extern int UI_SHADE_BORDER;
+uint32_t uiShade(uint32_t colour, int step);
 
-// ---- text ----------------------------------------------------
-#define UI_COL_INK             0xe8f0ff   // titles and values
-#define UI_COL_INK_2           0xc8d8f0   // body text
-#define UI_COL_INK_SOFT        0x8fa8c8   // secondary body text, still readable
-#define UI_COL_CAPTION         0x4a6fa0   // captions and hints
-#define UI_COL_RULE            0x2a4060   // rules and inactive bars; as text it is INK_FAINT
-#define UI_COL_INK_FAINT       0x2a4060   // header captions and the faintest hints
-#define UI_COL_VALUE_BLUE      0x8ab0d8   // dates and similar quiet values
-#define UI_COL_INK_MAX         0xffffff   // what must be typed exactly: a network password
-#define UI_COL_INK_BRIGHT      0xf0f0f0   // a spool's material and name, a list row
-#define UI_COL_ON_ACCENT       0x0a1020   // a label on a button filled with the accent
-#define UI_COL_OFF_TEXT        0x8098b8   // the label of an option not chosen
-#define UI_COL_ID_TEXT         0x4a7080   // a UUID and similar machine values
-#define UI_COL_STATUS_BLUE     0x5090e0   // a neutral status line, a date with no drying mode
-#define UI_COL_HDR_OFF         0x606060   // a header icon whose device is not there
-#define UI_COL_DISABLED_BG     0x111820   // a button that cannot be used now, a switch that is off
-#define UI_COL_DISABLED_TEXT   0x2a3848   // its label, and an option that is off
+// ---- palettes ------------------------------------------------
+enum UiThemeId : uint8_t {
+  UI_THEME_DARK  = 0,
+  UI_THEME_LIGHT = 1,
+  UI_THEME_COUNT
+};
 
-// ---- meaning -------------------------------------------------
-#define UI_COL_ACCENT          0x28d49a   // the house green: active, found, ok
-#define UI_COL_OK_BG           0x1a4020   // a confirming button
-#define UI_COL_OK_BG_PRESSED   0x2a7030
-#define UI_COL_OK_TEXT         0x80ffb0   // its label
-#define UI_COL_OK_TEXT_2       0x40c080   // the smaller confirming label
-#define UI_COL_WARN            0xf0b838   // amber: attention, waiting, the scale's own figure
-#define UI_COL_BAD             0xe04040   // red: wrong, failed
-#define UI_COL_BAD_TEXT        0xff8080   // a red label on a dark button
-#define UI_COL_BAD_BG          0x3a1410   // a declining or destructive button
-#define UI_COL_BAD_BG_PRESSED  0x602020
-// A settings row that deletes something: the factory reset's row in the
-// system screen (TONE_DANGER there), dark red with the pressed red as border.
-#define UI_COL_DANGER_ROW      0x180a0e
-#define UI_COL_DANGER_TEXT     0xff6060
-#define UI_COL_ARCHIVED        0x808080   // an archived spool, a weight nobody reported
-#define UI_COL_ARCHIVE_TEXT    0xffb060   // archiving: its label, the bin icon
-#define UI_COL_ARCHIVE_BG      0x3a1a00
-#define UI_COL_ARCHIVE_BG_PRESSED 0x6a3000   // also its border
-#define UI_COL_RESTORE_BG_PRESSED 0x156040
-#define UI_COL_DRY             0x5ad1ff   // drying: the drop icon
-#define UI_COL_SIGNAL_LOW      0xe06020   // weak WiFi in the header
-#define UI_COL_SIGNAL_LOW_LIST 0xff8000   // weak WiFi in the network list
-#define UI_COL_ALERT_BG_PRESSED 0x5a2418
-#define UI_COL_ALERT_TEXT      0xffb0a0
+// Reads the stored choice and fills every UI_COL_* from it, then hands LVGL's
+// default theme its two colours. After loadPrefs() and the display driver,
+// before the first screen is built.
+void uiThemeBegin();
+UiThemeId uiThemeActive();
+UiThemeId uiThemeStored();
+// Stores the choice for the next boot. The running palette stays.
+bool uiThemeStore(UiThemeId id);
+// "dark", "light": the id the web interface speaks.
+const char* uiThemeKey(UiThemeId id);
+bool uiThemeFromKey(const char* key, UiThemeId* out);
 
-// ---- buttons by role -----------------------------------------
-#define UI_COL_GO_BG           0x1a3020   // the green fill: go ahead, an active choice, the current row, restore
-#define UI_COL_GO_BG_PRESSED   0x2a5030   // also its border
-#define UI_COL_QUIET_BG_PRESSED 0x2a3040   // a quiet button pressed, a switch that is off pressed
-#define UI_COL_CHOICE_BG       0x0a2a40   // a chosen language or date format
-#define UI_COL_CHOICE_BG_PRESSED 0x1a4060
-#define UI_COL_AMBER_BG        0x2a2010   // tare, the factor keys, the vendor answer
-#define UI_COL_AMBER_BG_PRESSED 0x4a4020
-#define UI_COL_AMBER_LINE      0x3a3010   // their border, and a hint row's
-#define UI_COL_AMBER_ROW       0x1a1a08   // a hint row
-#define UI_COL_CAUTION_BG      0x3a2800   // go ahead despite a warning; a caution row's border
-#define UI_COL_CAUTION_BG_PRESSED 0x5a4000
-#define UI_COL_CAUTION_ROW     0x161206   // a settings row that needs care
-#define UI_COL_CLOSE_LINE      0x601010   // the border of a close or unlink button
-#define UI_COL_PICKED_BG       0x1a4030   // a chosen answer: backend, raise capacity, a matching link, a keypad's OK
-#define UI_COL_ALT_TEXT        0x80c8ff   // a blue answer's label: empty spool, new spool
-#define UI_COL_KEY_DEL         0x1a1020   // the delete key of a number pad
-#define UI_COL_MATCH_BG_PRESSED 0x18705a
-#define UI_COL_NFC_FRAME       0x3a6ea8   // the frame of the NFC reset question
-
-// One widget each
-#define UI_COL_LINK_BG         0x1e3000   // main screen: link a spool
-#define UI_COL_LINK_BG_PRESSED 0x2e5000
-#define UI_COL_LINK_LINE       0x4a7800
-#define UI_COL_LINK_TEXT       0xb8e030
-#define UI_COL_COPY_BG         0x00222a   // main screen: copy a spool
-#define UI_COL_COPY_BG_PRESSED 0x003a48
-#define UI_COL_COPY_LINE       0x00b8d4
-#define UI_COL_COPY_TEXT       0x20d8f8
-#define UI_COL_WEIGHT_SENT     0x40ff80   // the weight button once the value is sent
-#define UI_COL_WEIGHT_COUNT    0x60f0c0   // its countdown
-#define UI_COL_AMS_YES_TEXT    0x80ffa0   // AMS assignment question
-#define UI_COL_AMS_NO_TEXT     0xffa0a0
-#define UI_COL_AMS_NO_PRESSED  0x702020
-#define UI_COL_FILAMENT_BG     0x0a2820   // weight question: this filament
-#define UI_COL_BAG_BG_PRESSED  0x2a6030
-#define UI_COL_KOFI_BG         0x1a2800   // info screen tiles
-#define UI_COL_KOFI_INK        0xa0d840
-#define UI_COL_DISCORD_BG      0x12103a
-#define UI_COL_DISCORD_INK     0x8090ff
-#define UI_COL_MAKERWORLD_BG   0x1a0a18
-#define UI_COL_MAKERWORLD_INK  0xc060e0
+// The palette as a table, for the web preview.
+size_t uiPaletteCount();
+const char* uiPaletteName(size_t i);
+uint32_t uiPaletteValue(UiThemeId id, size_t i);
 
 // ---- content -------------------------------------------------
 // Fixed colours next to data, not part of the look: a palette may

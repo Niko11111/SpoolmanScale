@@ -73,11 +73,11 @@ void buildSettingsScreen() {
     lv_obj_set_size(tile, 226, 118);
     lv_obj_set_pos(tile, tx[i], ty[i]);
     lv_obj_set_style_bg_color(tile, lv_color_hex(tiles[i].col), 0);
-    lv_obj_set_style_bg_color(tile, lv_color_hex(tiles[i].col + UI_SHADE_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(tile, lv_color_hex(uiShade(tiles[i].col, UI_SHADE_PRESSED)), LV_STATE_PRESSED);
     lv_obj_set_style_radius(tile, 10, 0);
     lv_obj_set_style_shadow_width(tile, 0, 0);
     lv_obj_set_style_border_width(tile, 1, 0);
-    lv_obj_set_style_border_color(tile, lv_color_hex(tiles[i].col + UI_SHADE_BORDER), 0);
+    lv_obj_set_style_border_color(tile, lv_color_hex(uiShade(tiles[i].col, UI_SHADE_BORDER)), 0);
 
     lv_obj_t *ico = lv_label_create(tile);
     lv_label_set_text(ico, tiles[i].icon);
