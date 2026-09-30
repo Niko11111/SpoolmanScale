@@ -1,6 +1,7 @@
 #include "services/label_printer.h"
 
 #include <stdio.h>
+#include <ctype.h>
 #include <string.h>
 
 #include "hardware/sd_logger.h"
@@ -18,7 +19,10 @@
 #define LP_KEY_NAME  "printer_name"
 #define LP_KEY_W     "printer_w"
 #define LP_KEY_H     "printer_h"
-#define LP_KEY_XOFF  "printer_xoff"
+// The offset belongs to one printer, not to the scale: "px" and the device's
+// address without colons, 14 characters. A second printer starts at 0, and
+// the first gets its own back when it is picked again (Nikolai, 30.09.2026).
+#define LP_KEY_XOFF_PREFIX "px"
 
 static const LabelPrinterProfile PROFILE_NONE = {};
 // M220: 2 inch head, 576 dots, takes stock from 20 to 75 mm wide; the vendor
@@ -46,6 +50,22 @@ const int LABEL_MEDIA_SIZE_COUNT = sizeof(LABEL_MEDIA_SIZES) / sizeof(LABEL_MEDI
 
 static LabelPrinterConfig s_config{};
 static bool s_loaded = false;
+
+// The NVS key of a printer's offset; false for no printer. An address is
+// 17 characters, six pairs of hex digits and five colons.
+static bool offsetKey(const char* address, char* key, size_t n) {
+  if (!address || !address[0]) return false;
+  size_t k = snprintf(key, n, "%s", LP_KEY_XOFF_PREFIX);
+  for (const char* a = address; *a && k + 1 < n; a++)
+    if (*a != ':') key[k++] = (char)tolower((unsigned char)*a);
+  key[k] = '\0';
+  return true;
+}
+
+static int16_t loadOffset(const char* address) {
+  char key[20];
+  return offsetKey(address, key, sizeof(key)) ? (int16_t)prefsGetInt(key, 0) : 0;
+}
 // The label size the user picked, which is what NVS keeps. The config holds
 // the size in effect: the picked one, or the model's default while the model
 // cannot take it. Going M220 -> M110 -> M220 lost a picked 50 x 30 for good
@@ -97,7 +117,7 @@ LabelPrinterConfig labelPrinterLoadConfig() {
   snprintf(c.address, sizeof(c.address), "%s", prefsGetString(LP_KEY_ADDR, "").c_str());
   c.media_width_mm  = prefsGetInt(LP_KEY_W, PROFILE_M220.default_width_mm);
   c.media_length_mm = prefsGetInt(LP_KEY_H, PROFILE_M220.default_length_mm);
-  c.x_offset = (int16_t)prefsGetInt(LP_KEY_XOFF, 0);
+  c.x_offset = loadOffset(c.address);
   s_want_w = c.media_width_mm;
   s_want_l = c.media_length_mm;
   s_config = normalized(c);
@@ -115,14 +135,18 @@ bool labelPrinterSaveConfig(const LabelPrinterConfig& in) {
     s_want_w = in.media_width_mm;
     s_want_l = in.media_length_mm;
   }
-  const LabelPrinterConfig c = normalized(in);
+  LabelPrinterConfig c = normalized(in);
+  // Another device is another printer: its own offset, whatever the caller
+  // carried over from the one before.
+  if (strcmp(in.address, before.address) != 0) c.x_offset = loadOffset(c.address);
   bool ok = true;
   ok = prefsPutInt(LP_KEY_MODEL, (int)c.model) && ok;
   ok = prefsPutString(LP_KEY_ADDR, c.address) && ok;
   ok = prefsPutString(LP_KEY_NAME, c.name) && ok;
   ok = prefsPutInt(LP_KEY_W, s_want_w) && ok;
   ok = prefsPutInt(LP_KEY_H, s_want_l) && ok;
-  ok = prefsPutInt(LP_KEY_XOFF, c.x_offset) && ok;
+  char key[20];
+  if (offsetKey(c.address, key, sizeof(key))) ok = prefsPutInt(key, c.x_offset) && ok;
   if (ok) { s_config = c; s_loaded = true; }
   else { s_want_w = want_w; s_want_l = want_l; }
   logSDf("Printer: config %s %s '%s' %ux%u mm offset %d (%d) %s",

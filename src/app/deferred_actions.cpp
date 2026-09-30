@@ -65,5 +65,6 @@ bool printer_cycle_model_pending = false;
 bool printer_cycle_media_pending = false;
 bool printer_test_pending        = false;
 bool printer_calib_pending       = false;
+bool show_printer_offset_pending = false;
 bool printer_forget_pending      = false;
 bool print_spool_label_pending   = false;

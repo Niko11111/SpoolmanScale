@@ -3036,6 +3036,13 @@ const char* const STRINGS[][3] = {
   { "Mehr als 1 mm Rand links und rechts vom Rahmen: Etikettgröße prüfen.",
     "More than 1 mm margin left and right of the frame: check the label size.",
     "Plus de 1 mm de marge à gauche et à droite du cadre : vérifiez la taille de l'étiquette." },  // STR_W_P_CAL_HINT2
+  // The print position screen on the device
+  { "Kalibrierseite drucken, dann die erste Zahl links auf dem Etikett einstellen.",
+    "Print the calibration page, then set the first number on the left of the label.",
+    "Imprimez la page de calibrage, puis réglez le 1er nombre à gauche." },  // STR_PRN_OFFSET_HINT
+  { "Wo die Rolle unter dem Druckkopf läuft, hängt davon ab, wie sie im Halter sitzt. Die Kalibrierseite druckt ein Lineal über den ganzen Kopf: Die erste Zahl links auf dem Etikett ist der Versatz. Sitzt der Rahmen danach mit gleichem Rand links und rechts, passt es. Gedrückt halten zählt schnell.",
+    "Where the roll runs under the head depends on how it sits in the holder. The calibration page prints a ruler across the whole head: the first number on the left of the label is the offset. Once the frame has the same margin left and right, it is right. Hold a button to count fast.",
+    "L'endroit où le rouleau passe sous la tête dépend de son support. La page de calibrage imprime une règle sur toute la tête : le premier nombre à gauche de l'étiquette est le décalage. Quand le cadre a la même marge des deux côtés, c'est bon. Maintenez un bouton pour aller vite." },  // STR_PRN_OFFSET_HELP
 };
 
 StringID tagWriteResultString(uint8_t code) {

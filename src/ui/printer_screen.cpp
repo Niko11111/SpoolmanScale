@@ -20,6 +20,7 @@
 #include "services/label_render.h"
 #include "ui/info_popup.h"
 #include "ui/print_card.h"
+#include "ui/printer_offset_screen.h"
 #include "ui/theme.h"
 #include "ui_common.h"
 
@@ -47,6 +48,7 @@ static int s_last_test = -1;
 // the print card; the verdict is kept for the browser's last-print line.
 static void printFixedLabel(bool (*render)(const LabelPrinterConfig&, LabelRaster*),
                             const char* what) {
+  printerOffsetFlush();
   const LabelPrinterConfig c = labelPrinterLoadConfig();
   LabelPrintResult result = LP_NO_PRINTER;
   if (labelPrinterConfigured(c)) {
@@ -176,6 +178,28 @@ void buildPrinterScreen() {
       printer_test_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
+  // Where the roll runs under the head: its own screen, with the
+  // calibration page. The row says the offset and, at an edge or the
+  // middle, which one.
+  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_W_P_CAL_TITLE);
+    int16_t lo, hi;
+    labelPrinterOffsetRange(c, &lo, &hi);
+    const int off = labelPrinterOffset(c);
+    const int per = labelPrinterDotsForMm(1);
+    const int mm = (off + (off < 0 ? -per / 2 : per / 2)) / per;
+    int where = -1;
+    if (off == 0) where = STR_W_P_CAL_CENTER;
+    else if (off == hi && hi > 0) where = STR_W_P_CAL_RIGHT;
+    else if (off == lo && lo < 0) where = STR_W_P_CAL_LEFT;
+    char buf_s[64];
+    if (where < 0) snprintf(buf_s, sizeof(buf_s), "%s%d mm", mm > 0 ? "+" : "", mm);
+    else snprintf(buf_s, sizeof(buf_s), "%s%d mm  \xE2\x80\xA2  %s", mm > 0 ? "+" : "", mm, T(where));
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, buf_t, buf_s);
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      logSD("BTN: Printer -> print position");
+      show_printer_offset_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
   if (have) {
     char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_PRN_FORGET);
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_TRASH, buf_t, "");
@@ -194,6 +218,14 @@ static void rebuild() {
 
 void handlePrinterDeferredActions() {
   printCardLoop();
+  printerOffsetTick();
+  if (show_printer_offset_pending) {
+    show_printer_offset_pending = false;
+    buildPrinterOffsetScreen();
+    hideAllOverlays();
+    // Built hidden like every overlay; shown once the others are down.
+    showPrinterOffsetScreen();
+  }
   if (printer_cycle_model_pending) {
     printer_cycle_model_pending = false;
     LabelPrinterConfig c = labelPrinterLoadConfig();
@@ -224,6 +256,7 @@ void handlePrinterDeferredActions() {
   }
   if (print_spool_label_pending) {
     print_spool_label_pending = false;
+    printerOffsetFlush();
     const LabelPrinterConfig c = labelPrinterLoadConfig();
     LabelPrintResult result = LP_NO_PRINTER;
     if (!(sm_found && sm_id > 0)) {

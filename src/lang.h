@@ -1431,6 +1431,9 @@ enum StringID {
   STR_W_P_CAL_HINT,
   STR_LBL_CAL_EDGE,
   STR_W_P_CAL_HINT2,
+  // The print position screen on the device
+  STR_PRN_OFFSET_HINT,
+  STR_PRN_OFFSET_HELP,
 
   STR_COUNT
 };
