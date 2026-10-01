@@ -1045,7 +1045,7 @@ void handleAmsDetailDeferredActions() {
       const int code = serverReachNote(backendPatchSpoolLastDried(cfg_spoolman_base, spool_id, iso), true);
       loadingOverlayHide();
       logSDf("AMSDETAIL: dried %s for spool %d, HTTP %d", iso, spool_id, code);
-      if (code == 200) {
+      if (backendWriteOk(code)) {
         isoDayLocal(iso, s_det.last_dried, sizeof(s_det.last_dried));
       } else {
         s_write_failed = true;

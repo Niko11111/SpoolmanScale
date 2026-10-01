@@ -86,10 +86,12 @@ int spoolmanTagScan(const char* base_url, const char* uid, const char* reader_id
 // Links a tag. 201 on success, 404 for an unknown spool, and 409 when another
 // spool already holds the UID - in which case out_conflict_spool_id carries
 // that spool's id, because a tag belongs to exactly one spool and the useful
-// offer is to move it rather than to fail.
+// offer is to move it rather than to fail. Since 0.27 a tag can also belong
+// to a filament; the 409 then names it in out_conflict_filament_id and the
+// spool id is 0.
 int spoolmanLinkTag(const char* base_url, int spool_id, const char* uid,
                     const char* format, int* out_conflict_spool_id = nullptr,
-                    uint32_t timeout_ms = 5000);
+                    uint32_t timeout_ms = 5000, int* out_conflict_filament_id = nullptr);
 
 int spoolmanUnlinkTag(const char* base_url, int spool_id, const char* uid,
                       uint32_t timeout_ms = 5000);

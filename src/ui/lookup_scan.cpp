@@ -445,7 +445,8 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
   }
 
   for (JsonObject spool : spools) {
-    if (spool["extra"].isNull()) continue;
+    // No `extra` is no reason to pass a spool by: it can still answer through
+    // Spoolman's own tag relation. Every read of it below is null-safe.
     JsonObject extra = spool["extra"];
 
     int rank = spoolTagRank(spool, tray_uuid);
@@ -529,7 +530,7 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
         int mc = backendPatchSpoolTag(cfg_spoolman_base, sm_id, want, 4000);
         logSDf("%s: rewrote tag of spool %d to plain hex, HTTP %d",
                backendIsFilaMan() ? "FilaMan" : "Spoolman", sm_id, mc);
-        s_migrate_failed_id = (mc == 200) ? 0 : sm_id;
+        s_migrate_failed_id = backendWriteOk(mc) ? 0 : sm_id;
       }
     }
 
@@ -562,7 +563,7 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
       // Free a moment ago, as the link list sees it, and bound from here on.
       // Comfort only: left out, the spool would be offered once more and the
       // read on the tap would turn it down.
-      if (mc == 200) spoolCacheSetBound(sm_id, true);
+      if (backendWriteOk(mc)) spoolCacheSetBound(sm_id, true);
     }
 
     if (backendIsFilaMan() && sm_id > 0) {

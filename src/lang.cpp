@@ -3081,6 +3081,30 @@ const char* const STRINGS[][3] = {
     "Spoolman sombre" },  // STR_W_THEME_SPOOLMAN_DARK
   { "Spoolman hell", "Spoolman light",
     "Spoolman clair" },  // STR_W_THEME_SPOOLMAN_LIGHT
+  { "Tag gehört zu Filament #%d", "Tag belongs to filament #%d",
+    "Tag lié au filament #%d" },  // STR_TAG_ON_FILAMENT
+  { "Server verlangt einen Zugang", "Server asks for access",
+    "Le serveur exige un accès" },  // STR_SM_AUTH_MISSING
+  { "Zugang abgelehnt", "Access rejected",
+    "Accès refusé" },  // STR_SM_AUTH_REJECTED
+  { "Nur ausfüllen, wenn ein Proxy mit Passwort davor steht oder der Server einen Schlüssel verlangt.", "Only fill this in when a proxy with a password sits in front of it or the server asks for a key.",
+    "À remplir seulement si un proxy avec mot de passe est devant ou si le serveur demande une clé." },  // STR_W_SM_AUTH_HINT
+  { "Zugang", "Access",
+    "Accès" },  // STR_W_SM_AUTH_KIND
+  { "Keiner", "None",
+    "Aucun" },  // STR_W_SM_AUTH_NONE
+  { "API-Key (X-API-Key)", "API key (X-API-Key)",
+    "Clé d'API (X-API-Key)" },  // STR_W_SM_AUTH_KEY
+  { "Token (Bearer)", "Token (Bearer)",
+    "Jeton (Bearer)" },  // STR_W_SM_AUTH_BEARER
+  { "Benutzer und Passwort", "User and password",
+    "Utilisateur et mot de passe" },  // STR_W_SM_AUTH_BASIC
+  { "Benutzer", "User",
+    "Utilisateur" },  // STR_W_SM_USER
+  { "Schlüssel oder Passwort", "Key or password",
+    "Clé ou mot de passe" },  // STR_W_SM_SECRET
+  { "Die Adresse beginnt mit http://, der Zugang geht also unverschlüsselt durchs Netz. Schützt vor fremden Schreibzugriffen, nicht vor Mitlesen im selben Netz.", "The address starts with http://, so the access crosses the network unencrypted. It keeps others from writing, not from listening on the same network.",
+    "L'adresse commence par http://, l'accès circule donc sans chiffrement. Il empêche les écritures d'autrui, pas l'écoute sur le même réseau." },  // STR_W_SM_AUTH_PLAIN
 };
 
 StringID tagWriteResultString(uint8_t code) {

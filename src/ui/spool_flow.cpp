@@ -36,6 +36,7 @@
 #include "ui/main_screen_helpers.h"
 #include "ui/second_tag_popup.h"
 #include "ui/spoolman_lookup.h"
+#include "services/spool_tare.h"
 #include "ui/tag_write_popup.h"
 #include "ui/tag_spool_compare.h"
 #include "ui/theme.h"
@@ -552,11 +553,17 @@ static LinkFilterVerdict linkFilterVerdict(JsonObjectConst spool, bool is_bambu,
 
   // Colour filter: a tag that names a colour skips spools far away from it.
   // A clear filament names none - its color_hex stays empty - and is matched
-  // on material and subtype alone, like a support filament.
+  // on material and subtype alone, like a support filament. So is a spool
+  // without a colour of its own: a multi-colour filament keeps its colours
+  // in multi_color_hexes and leaves color_hex empty, and "#" alone used to
+  // measure as far away from everything.
   if (g_tag.color_hex[0] == '#') {
-    String col = spool["filament"]["color_hex"] | String("");
-    char col_buf[8]; snprintf(col_buf, sizeof(col_buf), "#%s", col.c_str());
-    if (colorDistance(g_tag.color_hex, col_buf) > 120) return LINK_SKIP_MATERIAL;
+    const char* col = spool["filament"]["color_hex"] | "";
+    if (col[0] == '#') col++;   // a server that sends it with the '#'
+    if (col[0]) {
+      char col_buf[8]; snprintf(col_buf, sizeof(col_buf), "#%s", col);
+      if (colorDistance(g_tag.color_hex, col_buf) > 120) return LINK_SKIP_MATERIAL;
+    }
   }
   return LINK_KEEP;
 }
@@ -633,6 +640,10 @@ LinkFetch fetchAllSpoolsForLink(bool is_bambu, const char* material_filter, bool
   fL["filament"]["vendor"]["name"] = true;
   fL["filament"]["article_number"] = true;
   fL["spool_weight"] = true;
+  // The two levels below the spool's own tare, for spoolTare(): a copy built
+  // from a spool without one would otherwise book the core as filament.
+  fL["filament"]["spool_weight"] = true;
+  fL["filament"]["vendor"]["empty_spool_weight"] = true;
   if (filterL.overflowed())
     logSD("link fetch: filter overflowed, fields will be missing");
   SpiRamAllocator psram_alloc;
@@ -840,7 +851,7 @@ static bool linkFetchBuild(JsonDocument& doc, bool from_cache, bool is_bambu,
     s.remaining = spool["remaining_weight"] | 0.0f;
     s.total = spool["filament"]["weight"] | 1000.0f;
     s.filament_id = spool["filament"]["id"] | 0;
-    s.spool_weight = spool["spool_weight"] | 0.0f;
+    s.spool_weight = spoolTare(spool);
 
     // On Serial, not on the card. A line to the card is an open, an append and
     // a close, 26 ms each on the loop task: for an inventory of 227 spools that
@@ -1164,7 +1175,7 @@ static LinkRowRefresh linkRefreshRow(int idx) {
   s.remaining    = spool["remaining_weight"] | 0.0f;
   s.total        = spool["filament"]["weight"] | 1000.0f;
   s.filament_id  = spool["filament"]["id"] | 0;
-  s.spool_weight = spool["spool_weight"] | 0.0f;
+  s.spool_weight = spoolTare(spool);
   s.from_cache   = false;
   spoolCacheSetBound(s.id, bound);
   spoolCacheSetRemaining(s.id, s.remaining);
@@ -1425,6 +1436,11 @@ bool doLinkPatchUid(int spool_id, bool is_bambu, const char* link_uuid) {
         tagmove_ask_pending = true;
       }
       sm_tag_conflict_spool = 0;
+    } else if (sm_tag_conflict_filament > 0) {
+      // Spoolman 0.27 binds tags to filaments too. Such a tag cannot be moved
+      // from here, but naming the filament says where to look.
+      snprintf(buf, sizeof(buf), T(STR_TAG_ON_FILAMENT), sm_tag_conflict_filament);
+      sm_tag_conflict_filament = 0;
     } else if (tagBindingFailedOnNetwork()) {
       // The server never answered. "Not added" sent people looking for a
       // fault in the spool or the tag, when the link simply has to be retried.
@@ -2030,7 +2046,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
       row.remaining    = doc["remaining_weight"] | 0.0f;
       row.total        = doc["filament"]["weight"] | 0.0f;
       row.filament_id  = doc["filament"]["id"] | 0;
-      row.spool_weight = doc["spool_weight"] | 0.0f;
+      row.spool_weight = spoolTare(doc);
       row.from_cache   = false;
       logSDf("link: row of spool %d read fresh behind the numpad", entered_id);
     }
@@ -2070,7 +2086,7 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     s.remaining    = doc["remaining_weight"] | 0.0f;
     s.total        = doc["filament"]["weight"] | 0.0f;
     s.filament_id  = doc["filament"]["id"] | 0;
-    s.spool_weight = doc["spool_weight"] | 0.0f;
+    s.spool_weight = spoolTare(doc);
     link_spool_count++;
   }
 
@@ -4198,7 +4214,7 @@ void handleSpoolFlowDeferredActions() {
       if (!derr2) {
         int cfid   = cdoc["filament"]["id"] | 0;
         float cini = cdoc["filament"]["weight"] | 1000.0f;
-        float cspw = cdoc["spool_weight"] | 0.0f;
+        float cspw = spoolTare(cdoc);
         float crem = cdoc["remaining_weight"] | 0.0f;
         const char *cfname = cdoc["filament"]["name"] | "?";
         const char *cfmat  = cdoc["filament"]["material"] | "";
@@ -4215,6 +4231,7 @@ void handleSpoolFlowDeferredActions() {
         snprintf(look.name,     sizeof(look.name),     "%s", cfname);
         snprintf(look.vendor,   sizeof(look.vendor),   "%s", cfvnd);
         const char *ccol = cdoc["filament"]["color_hex"] | "";
+        if (ccol[0] == '#') ccol++;
         if (ccol[0]) snprintf(look.color_hex, sizeof(look.color_hex), "#%s", ccol);
         showCopyConfirmPopup(cid, cfid, ctmpl, crem, cini, cspw, &look);
       } else {

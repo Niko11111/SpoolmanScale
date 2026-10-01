@@ -9,6 +9,7 @@
 #include "services/backend.h"
 #include "services/spool_color.h"   // SPOOL_COLOR_HEX_MAX
 #include "services/uid_index.h"
+#include "services/spool_tare.h"
 
 namespace {
 
@@ -127,7 +128,7 @@ void fillRow(CachedSpool& r, JsonObjectConst spool, bool bound) {
   r.remaining    = spool["remaining_weight"] | 0.0f;
   r.total        = fil["weight"].is<float>() ? fil["weight"].as<float>() : NAN;
   r.filament_id  = fil["id"] | 0;
-  r.spool_weight = spool["spool_weight"] | 0.0f;
+  r.spool_weight = spoolTare(spool);
   copyStr(r.article,   sizeof(r.article),   fil["article_number"]);
 }
 

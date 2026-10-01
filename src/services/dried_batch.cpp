@@ -35,7 +35,7 @@ static void driedBatchTask(void* arg) {
     const int code = backendPatchSpoolLastDried(s_base, s_res.spool_id[i], s_res.iso,
                                                 DRIED_BATCH_TIMEOUT_MS);
     s_res.code[i] = code;
-    if (code == 200) s_res.ok++;
+    if (backendWriteOk(code)) s_res.ok++;
     logSDf("DRIEDBATCH: spool %d -> HTTP %d", s_res.spool_id[i], code);
   }
   logSDf("DRIEDBATCH: %u of %u written, stack left %u", (unsigned)s_res.ok,

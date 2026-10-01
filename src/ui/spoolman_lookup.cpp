@@ -30,6 +30,7 @@ bool spoolHasAnyTag(JsonObjectConst spool);
 #include "services/http_progress.h"
 #include "services/server_reach.h"
 #include "services/spool_cache.h"
+#include "services/spool_tare.h"
 #include "services/spoolman_actions.h"
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
@@ -506,18 +507,10 @@ void applyLastUsed(const char* native_iso, const char* weighed_iso, int spool_id
 // Reports which level answered, because an inherited default can be well off a
 // measured one (a Sunlu spool measured at 130 g against a 180 g brand default),
 // and the difference should be visible rather than silently applied.
+//
+// The chain itself is spoolTare(), shared with the link and copy lists.
 float resolveTare(JsonVariantConst spool, uint8_t *source) {
-  float w = spool["spool_weight"] | 0.0f;
-  if (w > 0) { *source = TARE_SPOOL; return w; }
-
-  w = spool["filament"]["spool_weight"] | 0.0f;
-  if (w > 0) { *source = TARE_FILAMENT; return w; }
-
-  w = spool["filament"]["vendor"]["empty_spool_weight"] | 0.0f;
-  if (w > 0) { *source = TARE_VENDOR; return w; }
-
-  *source = TARE_NONE;
-  return 0.0f;
+  return spoolTare(spool, source);
 }
 
 // How much filament this spool started with. The nominal weight of the
@@ -1260,6 +1253,11 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   // Fetched so a spool with no tare of its own can fall back to the
   // filament or brand default instead of being weighed as if empty.
   filter_spool["filament"]["vendor"]["empty_spool_weight"] = true;
+  // What dryingSyncNote() compares against. Without it every spool found
+  // through this filter read as having no drying advice, and the filament
+  // was patched again on each Bambu lookup.
+  filter_spool["filament"]["extra"][DRYING_FIELD] = true;
+  filter_spool["extra"][DRYING_FIELD] = true;
   if (filter.overflowed())
     logSD("Backend: scan filter overflowed, fields will be missing");
 
@@ -1337,6 +1335,11 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
       scan_matched_id = scan["matched_spool_id"] | 0;
       logSDf("Backend: tag scan announced, uid=%s matched=%d, no spool embedded",
              scan_uid, scan_matched_id);
+      // Spoolman 0.27 can bind a tag to a filament. No spool answers to it,
+      // so the lookup goes on and ends as "not found"; the log says why.
+      const int scan_filament = scan["matched_filament_id"] | 0;
+      if (scan_filament > 0)
+        logSDf("Backend: uid=%s belongs to filament %d, not to a spool", scan_uid, scan_filament);
       if (serr) searches_answered = false;     // 200, but nothing to read
     } else if (scode != BACKEND_NOT_SUPPORTED) {
       logSDf("Backend: native tag scan failed, code=%d err=%s", scode, serr.c_str());

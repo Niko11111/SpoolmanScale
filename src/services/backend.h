@@ -79,6 +79,25 @@ void        filamanSetDeviceToken(const char* token);   // persists
 const char* bambuddyApiKey();
 void        bambuddySetApiKey(const char* key);         // persists
 
+// Access to a Spoolman server. Spoolman itself has none ("no authentication by
+// design"), so this is for Spoolman behind a proxy with a password, and for a
+// server that speaks Spoolman's API and wants a key. Nothing is sent until a
+// secret is stored: a plain Spoolman setup stays exactly as it was.
+enum SpoolmanAuth : uint8_t {
+  SM_AUTH_NONE   = 0,
+  SM_AUTH_KEY    = 1,   // X-API-Key: <secret>
+  SM_AUTH_BEARER = 2,   // Authorization: Bearer <secret>
+  SM_AUTH_BASIC  = 3    // Authorization: Basic, user and secret
+};
+uint8_t     spoolmanAuthMode();
+const char* spoolmanAuthUser();
+const char* spoolmanAuthSecret();
+// True when a request to Spoolman carries credentials.
+bool        spoolmanAuthActive();
+// Persists. A null secret keeps the stored one, so the form can change the
+// kind or the user without the secret being typed again.
+void        spoolmanSetAuth(uint8_t mode, const char* user, const char* secret);
+
 // True when the active backend has everything it needs to talk to
 // its server. Spoolman and BamBuddy only need a base URL.
 bool backendIsConfigured();

@@ -229,6 +229,14 @@ static uint8_t s_text_field_count = 0;
 
 // Same idea for the native tag API, kept beside the field cache because both
 // answer "what can this server do" and both go stale for the same reason.
+//
+// Which answers to a probe say "this server does not have it": 404 from
+// Spoolman before 0.27, 405 and 501 from a server that speaks Spoolman's API
+// but left this part out. Anything else - no answer, a 5xx, a rejected key -
+// says nothing about the feature and is asked again later.
+static bool backendAnswerMeansAbsent(int code) {
+  return code == 404 || code == 405 || code == 501;
+}
 static char s_tagapi_probed_for[96] = {0};
 static bool s_tagapi_present = false;
 
@@ -265,7 +273,7 @@ bool backendHasNativeTags() {
   int code = spoolmanHasTagApi(base);
   if (code == 200) {
     s_tagapi_present = true;
-  } else if (code == 404) {
+  } else if (backendAnswerMeansAbsent(code)) {
     s_tagapi_present = false;
   } else {
     // Anything else says nothing about the feature - an unreachable server, a
@@ -376,10 +384,12 @@ int backendTagScan(const char* base_url, const char* uid, const char* alt_uid,
 }
 
 int backendLinkTag(const char* base_url, int spool_id, const char* uid,
-                   const char* format, int* out_conflict_spool_id, uint32_t timeout_ms) {
+                   const char* format, int* out_conflict_spool_id, uint32_t timeout_ms,
+                   int* out_conflict_filament_id) {
   HttpStallTime stall(__func__);   // the loop stands still for this call
   if (!backendHasNativeTags()) return notSupported("LinkTag");
-  return spoolmanLinkTag(base_url, spool_id, uid, format, out_conflict_spool_id, timeout_ms);
+  return spoolmanLinkTag(base_url, spool_id, uid, format, out_conflict_spool_id, timeout_ms,
+                         out_conflict_filament_id);
 }
 
 int backendUnlinkTag(const char* base_url, int spool_id, const char* uid,
@@ -418,6 +428,16 @@ bool backendHasExtraField(const char* key) {
     JsonDocument doc;
     DeserializationError err = DeserializationError::Ok;
     int code = spoolmanGetSpoolFieldsJson(base, doc, 5000, &err);
+    if (backendAnswerMeansAbsent(code)) {
+      // A server that has no field list has no fields either. Cached like an
+      // empty list, so the scan does not ask again for every spool it reads.
+      logSDf("extra fields: %s has no field list (HTTP %d), none assumed", base, code);
+      s_fields_mask = 0;
+      s_text_field_count = 0;
+      strncpy(s_fields_probed_for, base, sizeof(s_fields_probed_for) - 1);
+      s_fields_probed_for[sizeof(s_fields_probed_for) - 1] = '\0';
+      return false;
+    }
     if (code != 200 || err) {
       // Not cached: an unreachable server now says nothing about the fields,
       // and caching a "no" here would keep them off for the whole session.
@@ -903,10 +923,11 @@ int backendPatchSpoolRemaining(const char* base_url, int spool_id, float remaini
       // stays, where this firmware has already subtracted the right number.
       if (measured_g >= 0.0f && sm_tare_source != TARE_VENDOR) {
         int code = spoolmanMeasureSpool(base_url, spool_id, measured_g, timeout_ms);
-        // 404 is the spool, 405 a server that predates the endpoint. Anything
-        // in that range means "not this way", and the spool still needs its
-        // weight, so fall through rather than report a failure.
-        if (code != 404 && code != 405) return code;
+        // 404 or 405 is a server that predates the endpoint, 501 one that
+        // speaks Spoolman's API without it (Spoolman itself answers an unknown
+        // spool with 400 here). All of them mean "not this way", and the spool
+        // still needs its weight, so fall through rather than report a failure.
+        if (!backendAnswerMeansAbsent(code)) return code;
         logSDf("measure not available (HTTP %d), falling back to PATCH", code);
       }
       return spoolmanPatchSpoolRemaining(base_url, spool_id, remaining, last_used_iso, timeout_ms);

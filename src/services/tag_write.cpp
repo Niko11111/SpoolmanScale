@@ -18,6 +18,7 @@
 #include "services/backend_api.h"
 #include "services/filaman_api.h"
 #include "services/tag_field.h"
+#include "services/tag_link.h"
 #include "services/tag_uid.h"
 #include "services/backend.h"
 
@@ -1400,14 +1401,20 @@ void tagWriteTick() {
     int u = 0;
     for (int i = 0; i < uid_len && u < (int)sizeof(uid_str) - 3; i++)
       u += snprintf(uid_str + u, sizeof(uid_str) - u, i ? ":%02X" : "%02X", uid[i]);
-    char note[48];
-    int code2 = backendLinkSpoolTag(backendBaseUrl(), pending_id, uid_str,
-                                    note, sizeof(note));
+    char note[48] = "";
+    // Spoolman links the way the device's link flow does. The plain field
+    // write below has no key for Spoolman's own tag relation, the source every
+    // 0.27 server is moved to, so there it failed every time with -1.
+    const bool via_link_flow = backendMode() == BACKEND_SPOOLMAN;
+    int code2 = via_link_flow
+      ? tagLinkAfterWrite(pending_id, uid_str)
+      : backendLinkSpoolTag(backendBaseUrl(), pending_id, uid_str, note, sizeof(note));
     // One retry. The failure seen in the field was HTTP -1, a connection error,
     // and it left a written tag on a spool that names no tag - the exact state
     // this step exists to prevent. A second attempt costs 300 ms and only ever
-    // runs after something already went wrong.
-    if (code2 != 200) {
+    // runs after something already went wrong. Not after a 409: the tag
+    // belongs to another spool, and asking again cannot change that.
+    if (!backendWriteOk(code2) && code2 != 409) {
       logSDf("TagWrite: link failed (HTTP %d), retrying once", code2);
       // Paused with the panel kept alive: this runs from appLoop(), and a
       // plain delay() here froze the touch for its length on top of the
@@ -1417,15 +1424,16 @@ void tagWriteTick() {
         lv_timer_handler();
         delay(10);
       }
-      code2 = backendLinkSpoolTag(backendBaseUrl(), pending_id, uid_str,
-                                  note, sizeof(note));
+      code2 = via_link_flow
+        ? tagLinkAfterWrite(pending_id, uid_str)
+        : backendLinkSpoolTag(backendBaseUrl(), pending_id, uid_str, note, sizeof(note));
     }
     // appendf, not m + n: a long filament name makes snprintf report a length
     // it never wrote, and then m + n points past the buffer while
     // sizeof(m) - n underflows. Same reason the rest of this file moved off it.
     report.link_http = code2;
     snprintf(report.link_note, sizeof(report.link_note), "%s", note);
-    if (code2 == 200) {
+    if (backendWriteOk(code2)) {
       // The tag on the reader now points at this spool, so the screen should
       // say so rather than keep whatever it showed before. Handed over as an
       // id: the lookup repaints the main screen and belongs on the UI side.

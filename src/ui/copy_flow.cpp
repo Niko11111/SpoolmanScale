@@ -29,6 +29,7 @@
 #include "ui/main_screen_helpers.h"
 #include "ui/navigation.h"
 #include "ui/spoolman_lookup.h"
+#include "services/spool_tare.h"
 #include "ui/theme.h"
 
 // From ui/spool_flow.cpp, see the same line in spoolman_lookup.cpp: what counts
@@ -182,10 +183,15 @@ static bool copyListBuild(JsonDocument& doc, bool archived, const char* material
           if (!bambuSubtypeMatches(mat, subkw) && !bambuSubtypeMatches(fname, subkw) &&
               !bambuSubtypeMatches(fname_sub, subkw)) continue;
         }
+        // No colour of its own (multi-colour) is no reason to drop a
+        // spool, see linkFilterVerdict() in spool_flow.cpp.
         if (g_tag.color_hex[0] == '#') {
           const char* col = spool["filament"]["color_hex"] | "";
-          char col_buf[8]; snprintf(col_buf, sizeof(col_buf), "#%s", col);
-          if (colorDistance(g_tag.color_hex, col_buf) > 120) continue;
+          if (col[0] == '#') col++;
+          if (col[0]) {
+            char col_buf[8]; snprintf(col_buf, sizeof(col_buf), "#%s", col);
+            if (colorDistance(g_tag.color_hex, col_buf) > 120) continue;
+          }
         }
       }
     }
@@ -233,8 +239,11 @@ static bool copyListBuild(JsonDocument& doc, bool archived, const char* material
         }
         if (g_tag.color_hex[0] == '#') {
           const char* col2 = spool["filament"]["color_hex"] | "";
-          char col_buf2[8]; snprintf(col_buf2, sizeof(col_buf2), "#%s", col2);
-          if (colorDistance(g_tag.color_hex, col_buf2) > 120) continue;
+          if (col2[0] == '#') col2++;
+          if (col2[0]) {
+            char col_buf2[8]; snprintf(col_buf2, sizeof(col_buf2), "#%s", col2);
+            if (colorDistance(g_tag.color_hex, col_buf2) > 120) continue;
+          }
         }
       }
     }
@@ -255,10 +264,11 @@ static bool copyListBuild(JsonDocument& doc, bool archived, const char* material
     strncpy(s.material, mat,                                      sizeof(s.material)-1);
     s.material[sizeof(s.material)-1] = '\0';
     const char* col = spool["filament"]["color_hex"] | "333333";
+    if (col[0] == '#') col++;
     snprintf(s.color_hex, sizeof(s.color_hex), "#%s", col);
     s.total     = spool["filament"]["weight"]  | 1000.0f;
     s.remaining = spool["remaining_weight"]    | 0.0f;
-    float spw = spool["spool_weight"] | 0.0f;
+    float spw = spoolTare(spool);
     s.filament_id  = spool["filament"]["id"] | 0;
     s.spool_weight = spw;
     idx++;
@@ -862,7 +872,7 @@ static void copyRowRefresh(int idx) {
   s.remaining    = doc["remaining_weight"] | 0.0f;
   s.total        = doc["filament"]["weight"] | 1000.0f;
   s.filament_id  = doc["filament"]["id"] | 0;
-  s.spool_weight = doc["spool_weight"] | 0.0f;
+  s.spool_weight = spoolTare(doc);
   s.from_cache   = false;
   spoolCacheSetRemaining(s.id, s.remaining);
   logSDf("copy row: spool %d read fresh (%lu ms)", s.id, took);

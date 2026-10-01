@@ -61,6 +61,15 @@ const TagLinkReport* tagLinkReportData();
 // it, the way tagWriteTakeLinkedSpool() does for a write. 0 otherwise.
 int tagLinkTakeLinkedSpool();
 
+// The link a tag write asks for on Spoolman, made the way the device's own
+// link makes it: through patchSpoolTag(), so it reaches Spoolman's own tag
+// relation and grows a list field instead of overwriting it. The plain field
+// write the other backends use has no key to write to for the relation.
+// From the loop only. Answers in HTTP terms for the write's report: 200
+// linked, 409 another spool holds the tag, -1 the server was not reached,
+// 400 the server refused.
+int tagLinkAfterWrite(int spool_id, const char* uid);
+
 // Whether a link leaves the spool's other tags bound: Spoolman's own relation,
 // and a list field with appending switched on. Everywhere else the new tag
 // takes the place of the old one, and the page's question has to say so.
