@@ -9,7 +9,7 @@
 
 // Every colour starts out dark, so anything that runs before uiThemeBegin()
 // still draws in the palette the scale has always had.
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light) uint32_t UI_COL_##name = dark;
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) uint32_t UI_COL_##name = dark;
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
 
@@ -23,7 +23,7 @@ int UI_SHADE_BORDER  = SHADE_BORDER_STEP;
 static UiThemeId s_active = UI_THEME_DARK;
 
 static const char* const PALETTE_NAMES[] = {
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light) #name,
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) #name,
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
 };
@@ -33,29 +33,39 @@ static const char* const PALETTE_NAMES[] = {
 // Where each colour lands, in table order: one loop fills them all instead of
 // one assignment per colour and palette.
 static uint32_t* const PALETTE_VARS[PALETTE_SIZE] = {
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light) &UI_COL_##name,
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) &UI_COL_##name,
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
 };
 
 static const uint32_t PALETTES[UI_THEME_COUNT][PALETTE_SIZE] = {
   {
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light) dark,
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) dark,
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
   },
   {
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light) light,
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) light,
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
   },
   {
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light) sm_dark,
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) sm_dark,
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
   },
   {
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light) sm_light,
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) sm_light,
+#include "ui/theme_palette.h"
+#undef UI_COLOUR
+  },
+  {
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) fm_dark,
+#include "ui/theme_palette.h"
+#undef UI_COLOUR
+  },
+  {
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) fm_light,
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
   },
@@ -71,6 +81,8 @@ static const ThemeInfo THEMES[UI_THEME_COUNT] = {
   { "light",          false },
   { "spoolman_dark",  true  },
   { "spoolman_light", false },
+  { "filaman_dark",   true  },
+  { "filaman_light",  false },
 };
 
 uint32_t uiShade(uint32_t colour, int step) {
@@ -93,7 +105,10 @@ static void applyPalette(UiThemeId id) {
 }
 
 void uiThemeBegin() {
-  applyPalette(uiThemeStored());
+  // After backendLoadSettings(): following the backend needs its mode.
+  const UiThemeCustom own = uiThemeCustomStored();
+  applyPalette(uiThemeResolve(uiThemeStored(), own.follow));
+  uiThemeApplyCustom(own);
 
   // LVGL builds its default theme when the display driver registers, from
   // lv_conf.h. Re-initialised here with the palette's two colours; the mode

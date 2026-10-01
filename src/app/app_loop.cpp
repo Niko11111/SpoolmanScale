@@ -1408,7 +1408,7 @@ void appLoop() {
         char wmbuf[48];
         snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
         lv_label_set_text(lbl_weight_main_lbl, wmbuf);
-        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_ACCENT), 0);
+        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_WEIGHT_AUTO), 0);
       }
     }
 
@@ -1476,7 +1476,7 @@ void appLoop() {
         char wmbuf[48];
         snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
         lv_label_set_text(lbl_weight_main_lbl, wmbuf);
-        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_ACCENT), 0);
+        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_WEIGHT_AUTO), 0);
       }
     }
   } else {

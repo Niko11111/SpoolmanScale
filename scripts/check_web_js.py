@@ -267,6 +267,11 @@ _PURE_JS = re.compile(r"^\s*[A-Za-z_$][\w$.]*\s*=[^=]")
 
 
 def blocks_for(name: str, text: str):
+    # A static JS literal is checked whole even when it compares with "<":
+    # looking for <script> tags in it would find none and skip it silently.
+    if name.endswith("JS"):
+        yield 0, text
+        return
     if "<" not in text:
         # Buffers that are JavaScript with no <script> tag around them: the
         # static app.js literal and the shell's WS strings. CSS buffers start

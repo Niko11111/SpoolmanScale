@@ -786,7 +786,7 @@ static void buildScreen() {
       const int x = (title_right + close_left) / 2 - AMSV_RELOAD_W / 2;
       lv_obj_set_size(rl, AMSV_RELOAD_W, AMSV_CHIP_H);
       lv_obj_set_pos(rl, x, AMSV_HDR_MID - AMSV_CHIP_H / 2);
-      lv_obj_set_style_bg_color(rl, lv_color_hex(AMSV_COL_LINE), 0);
+      lv_obj_set_style_bg_color(rl, lv_color_hex(UI_COL_ACCENT_CHIP), 0);
       lv_obj_set_style_radius(rl, 6, 0);
       lv_obj_set_style_shadow_width(rl, 0, 0);
       lv_obj_add_event_cb(rl, reloadCb, LV_EVENT_CLICKED, nullptr);
@@ -829,7 +829,7 @@ static void buildScreen() {
   if (s_printer_btn) {
     lv_obj_set_size(s_printer_btn, AMSV_RELOAD_W, AMSV_CHIP_H);
     lv_obj_set_pos(s_printer_btn, AMSV_MARGIN, chip_y);
-    lv_obj_set_style_bg_color(s_printer_btn, lv_color_hex(AMSV_COL_LINE), 0);
+    lv_obj_set_style_bg_color(s_printer_btn, lv_color_hex(UI_COL_ACCENT_CHIP), 0);
     lv_obj_set_style_radius(s_printer_btn, 6, 0);
     lv_obj_set_style_shadow_width(s_printer_btn, 0, 0);
     lv_obj_set_style_pad_all(s_printer_btn, 0, 0);

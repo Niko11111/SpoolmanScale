@@ -30,7 +30,7 @@
 // ============================================================
 
 // ---- colours -------------------------------------------------
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light) extern uint32_t UI_COL_##name;
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) extern uint32_t UI_COL_##name;
 #include "theme_palette.h"
 #undef UI_COLOUR
 
@@ -50,6 +50,8 @@ enum UiThemeId : uint8_t {
   UI_THEME_LIGHT          = 1,
   UI_THEME_SPOOLMAN_DARK  = 2,
   UI_THEME_SPOOLMAN_LIGHT = 3,
+  UI_THEME_FILAMAN_DARK   = 4,
+  UI_THEME_FILAMAN_LIGHT  = 5,
   UI_THEME_COUNT
 };
 
@@ -61,8 +63,9 @@ UiThemeId uiThemeActive();
 UiThemeId uiThemeStored();
 // Stores the choice for the next boot. The running palette stays.
 bool uiThemeStore(UiThemeId id);
-// "dark", "light", "spoolman_dark", "spoolman_light": the id the web
-// interface speaks, and the data-theme of its pages.
+// "dark", "light", "spoolman_dark", "spoolman_light", "filaman_dark",
+// "filaman_light": the id the web interface speaks, and the data-theme of
+// its pages.
 const char* uiThemeKey(UiThemeId id);
 bool uiThemeFromKey(const char* key, UiThemeId* out);
 
@@ -70,6 +73,35 @@ bool uiThemeFromKey(const char* key, UiThemeId* out);
 size_t uiPaletteCount();
 const char* uiPaletteName(size_t i);
 uint32_t uiPaletteValue(UiThemeId id, size_t i);
+
+// ---- own colours ---------------------------------------------
+// Laid over the chosen palette at boot (theme_custom.cpp). The accent
+// replaces the house colour; the tone turns the hue of the ground, the
+// surfaces, the lines and the grey text while every colour keeps its
+// lightness, so no contrast changes. Strength scales their saturation.
+#define UI_TONE_NONE          -1     // the palette's own hue
+#define UI_TONE_STRENGTH_SAME 50     // the palette's own saturation
+#define UI_TONE_STRENGTH_MAX  100
+#define UI_RGB_MASK           0xFFFFFFu
+// The label on an accent the user chose: whichever reads better on it.
+#define UI_COL_ON_ACCENT_DARK  0x0b0f0d
+#define UI_COL_ON_ACCENT_LIGHT 0xffffff
+struct UiThemeCustom {
+  bool     has_accent;
+  uint32_t accent;        // 0xRRGGBB
+  int16_t  tone;          // UI_TONE_NONE or a hue, 0..359
+  uint8_t  strength;      // 0 grey .. UI_TONE_STRENGTH_SAME .. UI_TONE_STRENGTH_MAX
+  bool     follow;        // the palette's family follows the backend
+};
+UiThemeCustom uiThemeCustomStored();
+bool uiThemeCustomStore(const UiThemeCustom& c);
+// The palette that runs for a stored choice: with follow on, the backend's
+// family in the choice's lightness (BamBuddy has none and keeps the standard).
+UiThemeId uiThemeResolve(UiThemeId chosen, bool follow);
+// Over the palette that was just applied. Nothing to do for a default.
+void uiThemeApplyCustom(const UiThemeCustom& c);
+// What uiThemeApplyCustom() laid over the running palette at boot.
+UiThemeCustom uiThemeCustomActive();
 
 // ---- content -------------------------------------------------
 // Fixed colours next to data, not part of the look: a palette may

@@ -107,6 +107,17 @@ String webShellHead(const char *subtitle) {
   // on the next page load without a new firmware.
   h += F("<!DOCTYPE html><html data-theme='");
   h += uiThemeKey(uiThemeActive());
+  // Own colours ride along as attributes; app.js lays them over the palette.
+  const UiThemeCustom own = uiThemeCustomActive();
+  char attr[48];
+  if (own.has_accent) {
+    snprintf(attr, sizeof(attr), "' data-accent='%06lx", (unsigned long)own.accent);
+    h += attr;
+  }
+  if (own.tone != UI_TONE_NONE || own.strength != UI_TONE_STRENGTH_SAME) {
+    snprintf(attr, sizeof(attr), "' data-tone='%d' data-tstr='%u", (int)own.tone, (unsigned)own.strength);
+    h += attr;
+  }
   h += F("'><head>"
       "<meta charset='utf-8'>"
       "<meta name='viewport' content='width=device-width,initial-scale=1'>"
