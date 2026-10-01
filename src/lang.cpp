@@ -3081,6 +3081,73 @@ const char* const STRINGS[][3] = {
     "Spoolman sombre" },  // STR_W_THEME_SPOOLMAN_DARK
   { "Spoolman hell", "Spoolman light",
     "Spoolman clair" },  // STR_W_THEME_SPOOLMAN_LIGHT
+  { "FilaMan dunkel", "FilaMan dark",
+    "FilaMan sombre" },  // STR_W_THEME_FILAMAN_DARK
+  { "FilaMan hell", "FilaMan light",
+    "FilaMan clair" },  // STR_W_THEME_FILAMAN_LIGHT
+  { "Farben vom Backend", "Backend colours",
+    "Couleurs du backend" },  // STR_W_THEME_FOLLOW_H
+  { "Farben folgen dem Backend", "Colours follow the backend",
+    "Les couleurs suivent le backend" },  // STR_W_THEME_FOLLOW
+  { "FilaMan und Spoolman bringen eigene Farben mit, BamBuddy behält die Standardfarben. Hell oder dunkel kommt aus deiner Wahl oben.", "FilaMan and Spoolman bring their own colours, BamBuddy keeps the standard ones. Light or dark comes from your choice above.",
+    "FilaMan et Spoolman apportent leurs propres couleurs, BamBuddy garde les couleurs standard. Clair ou sombre suit votre choix ci-dessus." },  // STR_W_THEME_FOLLOW_HINT
+  { "Schema nach dem Neustart", "Scheme after restart",
+    "Thème après redémarrage" },  // STR_W_THEME_AFTER
+  { "Eigene Farben", "Your own colours",
+    "Vos couleurs" },  // STR_W_THEME_OWN_H
+  { "Auf dem gewählten Schema. Jede Farbe behält ihre Helligkeit, Text bleibt so gut lesbar wie vorher.", "On top of the scheme. Every colour keeps its brightness, so text stays as readable as before.",
+    "Par-dessus le thème. Chaque couleur garde sa luminosité, le texte reste aussi lisible qu'avant." },  // STR_W_THEME_OWN_HINT
+  { "Akzent", "Accent",
+    "Accent" },  // STR_W_THEME_ACCENT
+  { "Titel, aktive Auswahl, Schieberegler, Links.", "Titles, the active choice, sliders, links.",
+    "Titres, choix actif, curseurs, liens." },  // STR_W_THEME_ACCENT_HINT
+  { "Grundton", "Ground tone",
+    "Teinte de fond" },  // STR_W_THEME_TONE
+  { "Hintergrund, Flächen, Linien und die graue Schrift.", "Background, surfaces, lines and the grey text.",
+    "Fond, surfaces, lignes et texte gris." },  // STR_W_THEME_TONE_HINT
+  { "Vom Schema", "Scheme's own",
+    "Celle du thème" },  // STR_W_THEME_SCHEME_OWN
+  { "Eigene Farbe", "Own colour",
+    "Couleur libre" },  // STR_W_THEME_OWN_COLOUR
+  { "Farbton", "Hue",
+    "Teinte" },  // STR_W_THEME_HUE
+  { "Stärke", "Strength",
+    "Intensité" },  // STR_W_THEME_STRENGTH
+  { "Links grau, in der Mitte wie das Schema, rechts kräftiger.", "Grey on the left, as the scheme in the middle, stronger on the right.",
+    "Gris à gauche, comme le thème au milieu, plus soutenu à droite." },  // STR_W_THEME_STRENGTH_HINT
+  { "Vorschau", "Preview",
+    "Aperçu" },  // STR_W_THEME_PREVIEW
+  { "Zurück zu den Farben des Schemas", "Back to the scheme's colours",
+    "Revenir aux couleurs du thème" },  // STR_W_THEME_RESET
+  { "auf dem Hintergrund", "on the background",
+    "sur le fond" },  // STR_W_THEME_ON_BG
+  { "Zu blass auf diesem Hintergrund: Titel und Regler wären schwer zu sehen.", "Too faint on this background: titles and sliders would be hard to see.",
+    "Trop pâle sur ce fond : titres et curseurs seraient difficiles à voir." },  // STR_W_THEME_FAINT
+  { "Gut für Titel und Knöpfe, kleine Schrift in dieser Farbe liest sich schwächer.", "Fine for titles and buttons, small text in this colour reads weaker.",
+    "Bien pour les titres et les boutons, un petit texte dans cette couleur se lit moins bien." },  // STR_W_THEME_WEAKER
+  { "+ eigene Farben", "+ own colours",
+    "+ couleurs perso" },  // STR_W_THEME_PLUS_OWN
+  { "Orange", "Orange",
+    "Orange" },  // STR_W_COL_ORANGE
+  { "Pink", "Pink",
+    "Rose" },  // STR_W_COL_PINK
+  { "Blau", "Blue",
+    "Bleu" },  // STR_W_COL_BLUE
+  { "Violett", "Violet",
+    "Violet" },  // STR_W_COL_VIOLET
+  { "Gelb", "Yellow",
+    "Jaune" },  // STR_W_COL_YELLOW
+  { "Petrol", "Petrol",
+    "Pétrole" },  // STR_W_COL_PETROL
+  { "Rot", "Red",
+    "Rouge" },  // STR_W_COL_RED
+  { "Grün", "Green",
+    "Vert" },  // STR_W_COL_GREEN
+  { "Sand", "Sand",
+    "Sable" },  // STR_W_COL_SAND
+  { "Helle Schemata: Beim Scrollen und beim Wechsel zwischen Screens zeigt das Display sichtbare Schlieren, weil es jedes Bild in Streifen aufbaut. Dunkle Schemata wirken dabei ruhiger.",
+    "Light schemes: while scrolling and when screens change, the display shows visible smearing, because it builds every frame in strips. Dark schemes look calmer there.",
+    "Thèmes clairs : pendant le défilement et lors des changements d'écran, l'affichage laisse des traînées visibles, car il construit chaque image par bandes. Les thèmes sombres paraissent plus calmes." },  // STR_W_THEME_LIGHT_NOTE
 };
 
 StringID tagWriteResultString(uint8_t code) {

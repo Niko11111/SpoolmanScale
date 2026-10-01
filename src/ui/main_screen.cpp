@@ -803,10 +803,10 @@ void buildUI() {
     btn_weight_main = lv_btn_create(btn_bar);
     lv_obj_set_size(btn_weight_main, 202, 39);
     lv_obj_set_pos(btn_weight_main, 8, 8);
-    lv_obj_set_style_bg_color(btn_weight_main, lv_color_hex(UI_COL_GO_BG), 0);
-    lv_obj_set_style_bg_color(btn_weight_main, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_weight_main, lv_color_hex(UI_COL_WEIGHT_BG), 0);
+    lv_obj_set_style_bg_color(btn_weight_main, lv_color_hex(UI_COL_WEIGHT_BG_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_border_width(btn_weight_main, 1, 0);
-    lv_obj_set_style_border_color(btn_weight_main, lv_color_hex(UI_COL_GO_BG_PRESSED), 0);
+    lv_obj_set_style_border_color(btn_weight_main, lv_color_hex(UI_COL_WEIGHT_BG_PRESSED), 0);
     lv_obj_set_style_radius(btn_weight_main, 8, 0);
     lv_obj_set_style_shadow_width(btn_weight_main, 0, 0);
     lv_obj_add_event_cb(btn_weight_main, [](lv_event_t *e) {
@@ -824,7 +824,7 @@ void buildUI() {
       }
       lv_label_set_text(lbl_wm, wmbuf);
     }
-    lv_obj_set_style_text_color(lbl_wm, g_auto_weight ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_OK_TEXT_2), 0);
+    lv_obj_set_style_text_color(lbl_wm, g_auto_weight ? lv_color_hex(UI_COL_WEIGHT_AUTO) : lv_color_hex(UI_COL_WEIGHT_TEXT), 0);
     lv_obj_set_style_text_font(lbl_wm, &lv_font_montserrat_ext_16, 0);
     lv_obj_set_style_text_align(lbl_wm, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(lbl_wm, LV_ALIGN_CENTER, 0, 0);
