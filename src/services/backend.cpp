@@ -18,6 +18,9 @@
 #define NVS_FILAMAN_HOST    "filaman_host"
 #define NVS_BAMBUDDY_KEY    "bb_key"
 #define NVS_BAMBUDDY_HOST   "bb_host"
+#define NVS_SM_AUTH         "sm_auth"
+#define NVS_SM_USER         "sm_user"
+#define NVS_SM_SECRET       "sm_secret"
 
 static BackendMode s_mode = BACKEND_SPOOLMAN;
 static char s_api_key[80]      = "";
@@ -28,6 +31,9 @@ static char s_filaman_base[80] = "";
 static char s_bambuddy_key[80]  = "";
 static char s_bambuddy_host[64] = "";
 static char s_bambuddy_base[80] = "";
+static uint8_t s_sm_auth        = SM_AUTH_NONE;
+static char    s_sm_user[64]    = "";
+static char    s_sm_secret[128] = "";
 
 // The one place an address becomes a base URL. A stored address carries its
 // scheme only when it is https; a bare one is http, as every address was
@@ -83,6 +89,13 @@ void backendLoadSettings() {
 
   String bb_key = prefsGetString(NVS_BAMBUDDY_KEY, "");
   copyCredential(s_bambuddy_key, sizeof(s_bambuddy_key), bb_key.c_str());
+
+  const uint8_t sm_auth = prefsGetUChar(NVS_SM_AUTH, SM_AUTH_NONE);
+  s_sm_auth = (sm_auth <= SM_AUTH_BASIC) ? sm_auth : SM_AUTH_NONE;
+  String sm_user = prefsGetString(NVS_SM_USER, "");
+  copyCredential(s_sm_user, sizeof(s_sm_user), sm_user.c_str());
+  String sm_secret = prefsGetString(NVS_SM_SECRET, "");
+  copyCredential(s_sm_secret, sizeof(s_sm_secret), sm_secret.c_str());
 
   String bb_host = prefsGetString(NVS_BAMBUDDY_HOST, "");
   strncpy(s_bambuddy_host, bb_host.c_str(), sizeof(s_bambuddy_host) - 1);
@@ -217,6 +230,25 @@ void bambuddySetApiKey(const char* key) {
   logSDf("Backend: BamBuddy API key %s", s_bambuddy_key[0] ? "stored" : "cleared");
 }
 
+uint8_t     spoolmanAuthMode()   { return s_sm_auth; }
+const char* spoolmanAuthUser()   { return s_sm_user; }
+const char* spoolmanAuthSecret() { return s_sm_secret; }
+bool spoolmanAuthActive() { return s_sm_auth != SM_AUTH_NONE && s_sm_secret[0]; }
+
+void spoolmanSetAuth(uint8_t mode, const char* user, const char* secret) {
+  s_sm_auth = (mode <= SM_AUTH_BASIC) ? mode : SM_AUTH_NONE;
+  copyCredential(s_sm_user, sizeof(s_sm_user), user ? user : "");
+  if (secret) copyCredential(s_sm_secret, sizeof(s_sm_secret), secret);
+  // No access chosen means none stored either, so nothing lingers in NVS.
+  if (s_sm_auth == SM_AUTH_NONE) { s_sm_user[0] = '\0'; s_sm_secret[0] = '\0'; }
+  prefsPutUChar(NVS_SM_AUTH, s_sm_auth);
+  prefsPutString(NVS_SM_USER, s_sm_user);
+  prefsPutString(NVS_SM_SECRET, s_sm_secret);
+  // A connection kept open was made with the old credentials.
+  backendConnClose();
+  logSDf("Backend: Spoolman access %s", spoolmanAuthActive() ? "stored" : "cleared");
+}
+
 const char* backendModeName(BackendMode mode) {
   switch (mode) {
     case BACKEND_FILAMAN:  return "FilaMan";
@@ -282,9 +314,11 @@ void backendStatusLine(char* out, size_t out_size) {
       s_bambuddy_key[0] ? "set" : "empty",
       backendIsConfigured() ? "yes" : "no");
   } else {
-    snprintf(out, out_size, "%s | host=%s | configured=%s",
+    static const char* const AUTH[] = { "none", "key", "bearer", "basic" };
+    snprintf(out, out_size, "%s | host=%s | auth=%s | configured=%s",
       backendName(),
       host[0] ? host : "-",
+      spoolmanAuthActive() ? AUTH[s_sm_auth] : "none",
       backendIsConfigured() ? "yes" : "no");
   }
 }

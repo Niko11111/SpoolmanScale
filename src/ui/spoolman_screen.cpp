@@ -128,6 +128,24 @@ static void runAddressTest() {
     return;
   }
 
+  // Spoolman behind a proxy with a password, or a server that speaks its API
+  // with a key, answers the same way BamBuddy does above: there, but not open.
+  // Said as such rather than as an API error, which reads like a broken server.
+  if (!sm_reachable && backendMode() == BACKEND_SPOOLMAN && (hcode == 401 || hcode == 403)) {
+    const bool has_access = spoolmanAuthActive();
+    if (lbl_sp_test_result) {
+      char buf[64];
+      snprintf(buf, sizeof(buf), "%s (HTTP %d)",
+               T(has_access ? STR_SM_AUTH_REJECTED : STR_SM_AUTH_MISSING), hcode);
+      lv_label_set_text(lbl_sp_test_result, buf);
+      lv_obj_set_style_text_color(lbl_sp_test_result, lv_color_hex(UI_COL_BAD_TEXT), 0);
+    }
+    logSDf("Spoolman IP test: server wants access, %s (HTTP %d)",
+           has_access ? "rejected" : "none set", hcode);
+    updateHeaderStatus();
+    return;
+  }
+
   if (!sm_reachable) {
     if (lbl_sp_test_result) {
       char buf[64];

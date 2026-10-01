@@ -132,6 +132,8 @@ static bool fetchTagValues(int spool_id, const char* values[]) {
   return true;
 }
 
+static uint8_t bindToSpool(int id, const char* value, int* held_by);
+
 static uint8_t runLink() {
   const int id = s_spool_id;
   if (!tag_present || !g_tag.uid_str[0]) return TL_NO_TAG;
@@ -162,6 +164,17 @@ static uint8_t runLink() {
   // comes back as a second request with force set.
   if (bambu && !s_force && bambuMismatch(id)) return TL_MISMATCH;
 
+  int held_by = 0;
+  const uint8_t r = bindToSpool(id, value, &held_by);
+  if (r == TL_HELD) s_report.other_spool = held_by;
+  if (r == TL_OK)   s_linked_spool = id;
+  return r;
+}
+
+// The binding itself, shared by the page's link and the link a tag write asks
+// for: the same write the device's link flow ends in, and the same records
+// kept afterwards.
+static uint8_t bindToSpool(int id, const char* value, int* held_by) {
   // The target's tag fields, which patchSpoolTag() needs on Spoolman to grow
   // a list instead of starting it over and to move a binding out of another
   // field. The other backends keep one place for a tag and read none of this.
@@ -180,7 +193,7 @@ static uint8_t runLink() {
   if (!patchSpoolTag(id, value, field_values, false)) {
     // Spoolman's relation says who holds the tag in its 409.
     if (sm_tag_conflict_spool > 0) {
-      s_report.other_spool = sm_tag_conflict_spool;
+      *held_by = sm_tag_conflict_spool;
       return TL_HELD;
     }
     return tagBindingFailedOnNetwork() ? TL_NETWORK : TL_FAILED;
@@ -191,8 +204,25 @@ static uint8_t runLink() {
   if (!tagFieldSelected().is_native) spoolCacheSetBound(id, true);
   const char* linked[3] = { value, tagNativeUid(value), g_tag.uid_str };
   uidIndexNote(linked, 3);
-  s_linked_spool = id;
   return TL_OK;
+}
+
+int tagLinkAfterWrite(int spool_id, const char* uid) {
+  // -1 is the HTTP client's "connection refused", the code a link that never
+  // reached the server has always reported here.
+  if (spool_id <= 0 || !uid || !uid[0] || !wifi_ok) return -1;
+  int held_by = 0;
+  const uint8_t r = bindToSpool(spool_id, uid, &held_by);
+  logSDf("TagLink: written tag %s to spool %d -> result %u%s", uid, spool_id,
+         (unsigned)r, held_by ? " (held elsewhere)" : "");
+  switch (r) {
+    case TL_OK:      return 200;
+    case TL_HELD:    return 409;
+    case TL_NETWORK: return -1;
+    // patchSpoolTag() logged the server's own code; the page only needs to
+    // know that the server said no.
+    default:         return 400;
+  }
 }
 
 void tagLinkTick() {

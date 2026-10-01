@@ -16,6 +16,7 @@
 
 #include <Arduino.h>
 #include <WebServer.h>
+#include <strings.h>
 
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
@@ -120,11 +121,53 @@ static String body() {
 
   // ---- credentials, only where there are any ----------------------------
   if (!creds) {
+    // Spoolman needs none, and says so first. Below that the access for the
+    // cases that do: Spoolman behind a proxy with a password, or a server
+    // that speaks Spoolman's API and wants a key.
+    const uint8_t am = spoolmanAuthMode();
     h += F("<div class='card wide'><h2>");
     h += T(STR_W_C_CREDS);
     h += F("</h2><p class='hint'>");
     h += T(STR_W_NO_CREDS);
-    h += F("</p></div>");
+    h += F(" ");
+    h += T(STR_W_SM_AUTH_HINT);
+    h += F("</p><div class='field'><label>");
+    h += T(STR_W_SM_AUTH_KIND);
+    h += F("</label><div class='inrow'><select id='sa' style='min-width:200px'>");
+    { static const int KIND[] = { STR_W_SM_AUTH_NONE, STR_W_SM_AUTH_KEY,
+                                  STR_W_SM_AUTH_BEARER, STR_W_SM_AUTH_BASIC };
+      for (uint8_t m = 0; m < 4; m++) {
+        h += F("<option value='"); h += m; h += F("'");
+        if (m == am) h += F(" selected");
+        h += F(">"); h += T(KIND[m]); h += F("</option>");
+      } }
+    h += F("</select></div></div><div class='field' id='su-f'");
+    if (am != SM_AUTH_BASIC) h += F(" style='display:none'");
+    h += F("><label>");
+    h += T(STR_W_SM_USER);
+    h += F("</label><div class='inrow'><input id='su' type='text' autocomplete='off' "
+           "spellcheck='false' value='");
+    h += htmlEsc(spoolmanAuthUser());
+    h += F("'></div></div><div class='field' id='sk-f'");
+    if (am == SM_AUTH_NONE) h += F(" style='display:none'");
+    h += F("><label>");
+    h += T(STR_W_SM_SECRET);
+    h += F(" &middot; ");
+    h += T(spoolmanAuthSecret()[0] ? STR_W_SET : STR_W_UNSET);
+    h += F("</label><div class='inrow'><input id='sk' type='password' "
+           "autocomplete='new-password' value='");
+    h += spoolmanAuthSecret()[0] ? F("________________") : F("");
+    h += F("'></div></div><div class='inrow'><button id='sa-b'>");
+    h += T(STR_W_SAVE);
+    h += F("</button><span class='msg' id='sa-s'></span></div>");
+    // Over http the secret crosses the network as it is. Said where it is
+    // set, not hidden in the manual.
+    if (spoolmanAuthActive() && strncasecmp(backendBaseUrl(), "https://", 8) != 0) {
+      h += F("<p class='note'>");
+      h += T(STR_W_SM_AUTH_PLAIN);
+      h += F("</p>");
+    }
+    h += F("</div>");
   } else if (backendIsBamBuddy()) {
     // One key rather than two, and it may legitimately stay empty: an
     // instance with authentication switched off answers without it.
@@ -220,6 +263,18 @@ static String body() {
          "postFlash('/api/tls',$('ti').checked?'1':'0','ti-s');});"
          "$('tk').addEventListener('change',function(){"
          "postFlash('/api/tlskeep',$('tk').value,'tk-s');});"
+         // Spoolman's access. The secret field shows underscores for a stored
+         // one; sending those would replace it with them, so "0" keeps it and
+         // "1" puts a new one in front of what was typed.
+         "if($('sa')){"
+         "const smShow=function(){const m=$('sa').value;"
+         "$('su-f').style.display=m==='3'?'':'none';"
+         "$('sk-f').style.display=m==='0'?'none':'';};"
+         "$('sa').addEventListener('change',smShow);"
+         "$('sa-b').addEventListener('click',function(){"
+         "const k=$('sk').value;"
+         "postFlash('/api/spoolman/auth',$('sa').value+'\\n'+$('su').value+'\\n'+"
+         "(guard(k)?'1'+k:'0'),'sa-s').then(function(r){if(r.ok)hostPoll(0);});});}"
          "function setKey(){const v=$('fk').value;"
          "if(!guard(v))return;postFlash('/api/filaman/key',v,'fk-s');}"
          "function reg(){flash('fc-s',M.test,false);"
@@ -490,10 +545,17 @@ static void routes(WebServer &srv) {
       // then, and "not reachable" sent people looking for a network fault.
       const bool bb_auth = !r.ok && backendIsBamBuddy() && (r.code == 401 || r.code == 403);
       const bool no_key  = bb_auth && !bambuddyApiKey()[0];
-      String msg = String((r.ok || bb_auth) ? T(STR_W_HOST_OK) : T(STR_W_HOST_FAIL))
+      // The same for Spoolman behind a password, or a server speaking its API
+      // with a key. Shown in red either way: nothing works until it is right.
+      const bool sm_auth = !r.ok && backendMode() == BACKEND_SPOOLMAN &&
+                           (r.code == 401 || r.code == 403);
+      String msg = String((r.ok || bb_auth || sm_auth) ? T(STR_W_HOST_OK) : T(STR_W_HOST_FAIL))
                  + " - " + backendBaseUrl();
       if (no_key)       msg += String(" (") + T(STR_BB_KEY_MISSING) + ")";
       else if (bb_auth) msg += String(" (") + T(STR_BB_KEY_REJECTED) + ", HTTP " + String(r.code) + ")";
+      else if (sm_auth) msg += String(" (") + T(spoolmanAuthActive() ? STR_SM_AUTH_REJECTED
+                                                                      : STR_SM_AUTH_MISSING)
+                             + ", HTTP " + String(r.code) + ")";
       else if (!r.ok)   msg += " (HTTP " + String(r.code) + ")";
       // A key that is simply not entered yet is the normal state halfway
       // through the setup, not a fault, so it is not shown in red.
@@ -532,6 +594,34 @@ static void routes(WebServer &srv) {
     // Tested again right away, so the address line can stop saying the key is
     // missing. The page asks GET /api/host for the answer; if the worker is
     // busy there is simply no new one, and nothing to test without an address.
+    if (strlen(backendBaseUrl()) > 7) {   // longer than "http://"
+      if (webJobState() == WJS_DONE) webJobTake();
+      webJobStart(WJ_HOST_TEST, nullptr, false);
+    }
+    srv.send(200, "text/plain", T(STR_W_SAVED));
+  });
+
+  // Body: kind, user and secret on three lines. The secret line starts with
+  // "1" when a new one follows and is "0" to keep the stored one.
+  srv.on("/api/spoolman/auth", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
+    const String body = srv.arg("plain");
+    const int a = body.indexOf('\n');
+    const int b = a < 0 ? -1 : body.indexOf('\n', a + 1);
+    if (a < 0 || b < 0) { srv.send(400, "text/plain", T(STR_W_ERROR)); return; }
+    const int mode = body.substring(0, a).toInt();
+    String user = body.substring(a + 1, b);
+    String rest = body.substring(b + 1);
+    user.trim();
+    if (mode < SM_AUTH_NONE || mode > SM_AUTH_BASIC || rest.length() == 0) {
+      srv.send(400, "text/plain", T(STR_W_ERROR));
+      return;
+    }
+    String secret = rest.substring(1);
+    secret.trim();
+    spoolmanSetAuth((uint8_t)mode, user.c_str(), rest[0] == '1' ? secret.c_str() : nullptr);
+    // What the server can do may look different with access than without.
+    backendInvalidateExtraFieldCache();
     if (strlen(backendBaseUrl()) > 7) {   // longer than "http://"
       if (webJobState() == WJS_DONE) webJobTake();
       webJobStart(WJ_HOST_TEST, nullptr, false);

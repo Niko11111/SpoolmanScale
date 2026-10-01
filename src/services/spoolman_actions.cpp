@@ -22,6 +22,7 @@
 #include "services/backend.h"
 #include "services/server_reach.h"
 #include "services/spool_cache.h"
+#include "services/time_service.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/info_popup.h"
 
@@ -89,21 +90,21 @@ int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
     return PATCH_WEIGHT_ASKING;
   }
 
-  char today[12] = "";
-  if (last_used_mode == 1) {
-    time_t now = time(nullptr);
-    struct tm* t = localtime(&now);
-    if (t) snprintf(today, sizeof(today), "%04d-%02d-%02d", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday);
-  }
+  // A full UTC time, not the local date it used to be: Spoolman reads a value
+  // without a zone as midnight on the server's own clock, so the date could
+  // land on the day before. Left out while the clock is not set; nowIsoUtc()
+  // then holds a placeholder that must never reach a server.
+  char now_iso[32] = "";
+  if (last_used_mode == 1 && !nowIsoUtc(now_iso, sizeof(now_iso))) now_iso[0] = '\0';
   Serial.printf("PATCH weight: %.1fg\n", remaining);
   // FilaMan wants the gross weight and subtracts the empty spool weight
   // itself. The callers computed remaining as scale minus sm_spool_weight,
   // so adding it back gives exactly what the scale showed.
   float measured = remaining + sm_spool_weight;
   int code = serverReachNote(backendPatchSpoolRemaining(cfg_spoolman_base, sm_id, remaining,
-                                        today[0] ? today : nullptr, nullptr, measured), true);
+                                        now_iso[0] ? now_iso : nullptr, nullptr, measured), true);
   logSDf("PATCH weight=%.1fg ID=%d HTTP %d", remaining, sm_id, code);
-  if (code == 200) {
+  if (backendWriteOk(code)) {
     sm_remaining = remaining;
     // The grams the kept spool list shows for this spool. Display only: a row
     // is read from the server again before anything is written to it.
@@ -138,7 +139,7 @@ void patchArchiveSpool() {
   Serial.printf("PATCH archive: spool ID %d\n", sm_id);
   int code = serverReachNote(backendPatchArchiveSpool(cfg_spoolman_base, sm_id), true);
   logSDf("PATCH archive ID=%d HTTP %d", sm_id, code);
-  if (code != 200) {
+  if (!backendWriteOk(code)) {
     Serial.printf("PATCH archive error: %d\n", code);
     lv_label_set_text(lbl_spoolman_weight, T(STR_ERR_SAVE));
     return;
@@ -377,6 +378,7 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
   if (!wifi_ok) return false;
   const bool clearing = (!uuid || !uuid[0]);
   sm_tag_conflict_spool = 0;   // stale from an earlier attempt would mislead
+  sm_tag_conflict_filament = 0;
 
   const TagFieldSpec& spec = tagFieldSelected();
 
@@ -419,9 +421,10 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     // The chip that is on the reader. Every reader can report this one, from a
     // phone to an ESPHome box to Spoolman's own Add tag dialog, so it is the
     // identity that makes the spool findable outside this firmware.
-    int conflict = 0;
+    int conflict = 0, conflict_filament = 0;
     int code = noteCode(backendLinkTag(cfg_spoolman_base, spool_id, native_uid,
-                              tagFormatName(scanned), &conflict));
+                              tagFormatName(scanned), &conflict,
+                              BACKEND_LINK_TIMEOUT_MS, &conflict_filament));
     logSDf("LINK native ID=%d uuid='%s' format=%s HTTP %d%s",
            spool_id, native_uid, tagFormatName(scanned), code,
            code == 409 ? " CONFLICT" : "");
@@ -429,8 +432,12 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     if (code == 409) {
       // A tag belongs to exactly one spool. Saying which one holds it beats a
       // bare failure - it is the whole reason Spoolman puts the id in the body.
-      sm_tag_conflict_spool = conflict;
-      logSDf("LINK native: uuid='%s' already on spool %d", native_uid, conflict);
+      sm_tag_conflict_spool    = conflict;
+      sm_tag_conflict_filament = conflict_filament;
+      if (conflict_filament > 0)
+        logSDf("LINK native: uuid='%s' belongs to filament %d", native_uid, conflict_filament);
+      else
+        logSDf("LINK native: uuid='%s' already on spool %d", native_uid, conflict);
       return false;
     }
 
@@ -565,7 +572,7 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     Serial.printf("PATCH %s: '%s' HTTP %d\n", spec.key, merged, code);
     logSDf("PATCH %s ID=%d uuid='%s' -> '%s' HTTP %d",
            spec.key, spool_id, uuid, merged, code);
-    if (code != 200) return false;
+    if (!backendWriteOk(code)) return false;
 
     if (!has_value && src >= 0) clearMigrationSource(spool_id, (uint8_t)src, field_values[src]);
     return true;
@@ -680,7 +687,7 @@ void patchInitialWeight(float initial_w) {
   if (!sm_found || sm_id == 0) { Serial.println("patchInitialWeight: keine Spule"); return; }
   Serial.printf("PATCH initial_weight: %.1fg\n", initial_w);
   int code = serverReachNote(backendPatchInitialWeight(cfg_spoolman_base, sm_id, initial_w), true);
-  if (code == 200) {
+  if (backendWriteOk(code)) {
     sm_remaining = initial_w;
     sm_total = initial_w;
     Serial.printf("initial_weight OK: %.1fg\n", initial_w);
@@ -702,7 +709,7 @@ void patchSpoolWeight(float spool_w) {
   Serial.printf("PATCH spool_weight: %.1fg\n", spool_w);
   int code = serverReachNote(backendPatchSpoolWeight(cfg_spoolman_base, sm_id, spool_w), true);
   logSDf("PATCH spool_weight=%.1fg ID=%d HTTP %d", spool_w, sm_id, code);
-  if (code == 200) {
+  if (backendWriteOk(code)) {
     sm_spool_weight = spool_w;
     // The value now comes from this spool, so drop any inherited source.
     // Without this the details screen keeps claiming "(filament)" over a

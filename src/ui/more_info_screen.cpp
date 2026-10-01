@@ -8,6 +8,7 @@
 #include <ArduinoJson.h>
 #include <lvgl.h>
 #include <cstring>
+#include <esp_heap_caps.h>
 
 #include "bambu/bambu_tag.h"
 #include "hardware/sd_logger.h"
@@ -68,7 +69,26 @@ static bool unlink_pending  = false;
 static bool unlink_all      = false;
 static int  unlink_spool_id = 0;
 static bool loc_patch_pending  = false;
-static char loc_patch_name[48] = "";      // empty: clear the location
+static char loc_patch_name[LOCATION_NAME_MAX] = "";   // empty: clear the location
+// The picker row is 370 px wide; its label keeps 10 px off each edge.
+#define LOC_ROW_LABEL_W  350
+// Most rows the picker shows, the upper bound of location_list_limit.
+#define LOC_ROWS_MAX     100
+
+// The whole name behind each picker row. A label in dot mode writes the dots
+// into its own text, so the tap cannot read the name back out of it, and a
+// name cut there would be written back as a new location. One block in PSRAM,
+// taken on the first picker and kept: 13 kB, and no lifetime to get wrong.
+static char (*s_loc_names)[LOCATION_NAME_MAX] = nullptr;
+
+static bool locNamesReady() {
+  if (s_loc_names) return true;
+  const size_t bytes = (size_t)LOC_ROWS_MAX * LOCATION_NAME_MAX;
+  void* p = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM);
+  if (!p) p = malloc(bytes);
+  s_loc_names = (char (*)[LOCATION_NAME_MAX])p;
+  return s_loc_names != nullptr;
+}
 static bool loc_cancel_pending = false;   // the picker's X
 static void closeLocationPicker();
 // The unlink confirmation. A local of the button's callback until now, so no
@@ -219,7 +239,7 @@ void handleMoreInfoDeferredActions() {
       const bool clear = (loc_patch_name[0] == '\0');
       const int code = serverReachNote(backendPatchSpoolLocation(cfg_spoolman_base, sm_id,
                                                  clear ? nullptr : loc_patch_name, 8000), true);
-      if (code == 200) {
+      if (backendWriteOk(code)) {
         if (clear) {
           sm_location_id = 0;
           sm_location_name[0] = '\0';
@@ -561,9 +581,12 @@ void fetchAndFillLocationList() {
   bool loc_limit_hit = false;
   for (JsonVariant v : locs) {
     if (loc_shown >= location_list_limit) { loc_limit_hit = true; break; }
-    char loc_name[48];
-    strncpy(loc_name, v.as<const char*>() ? v.as<const char*>() : "-", sizeof(loc_name)-1);
-    loc_name[sizeof(loc_name)-1] = '\0';
+    // The whole name: it is what the tap below writes back, and a cut one
+    // would be a different location on the server. The label shortens it
+    // for the eye only.
+    if (loc_shown >= LOC_ROWS_MAX || !locNamesReady()) { loc_limit_hit = true; break; }
+    char* loc_name = s_loc_names[loc_shown];
+    snprintf(loc_name, LOCATION_NAME_MAX, "%s", v.as<const char*>() ? v.as<const char*>() : "-");
 
     // Same reserve as the spool lists, same reason - see lvPoolHasRoomForRow().
     if (!lvPoolHasRoomForRow()) {
@@ -586,16 +609,20 @@ void fetchAndFillLocationList() {
     lv_label_set_text(lbl_row, loc_name);
     lv_obj_set_style_text_color(lbl_row, is_current ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_INK_BRIGHT), 0);
     lv_obj_set_style_text_font(lbl_row, &lv_font_montserrat_ext_16, 0);
+    lv_obj_set_style_text_align(lbl_row, LV_TEXT_ALIGN_CENTER, 0);
+    // One line high, so dot mode shortens a long name instead of wrapping it.
+    lv_obj_set_size(lbl_row, LOC_ROW_LABEL_W, lv_font_get_line_height(&lv_font_montserrat_ext_16));
+    lv_label_set_long_mode(lbl_row, LV_LABEL_LONG_DOT);
     lv_obj_center(lbl_row);
+    lv_obj_set_user_data(row, (void*)(intptr_t)loc_shown);
 
     lv_obj_add_event_cb(row, [](lv_event_t *e) {
-      lv_obj_t *lbl = lv_obj_get_child(lv_event_get_target(e), 0);
-      if (!lbl || !wifiManagerIsConnected() || sm_id <= 0) return;
-      // Copied out of the label now: the picker is gone by the time the
-      // PATCH runs from the loop.
-      const char* sel_name = lv_label_get_text(lbl);
-      strncpy(loc_patch_name, sel_name ? sel_name : "", sizeof(loc_patch_name) - 1);
-      loc_patch_name[sizeof(loc_patch_name) - 1] = '\0';
+      if (!s_loc_names || !wifiManagerIsConnected() || sm_id <= 0) return;
+      const intptr_t idx = (intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
+      if (idx < 0 || idx >= LOC_ROWS_MAX) return;
+      // Copied now: the picker is gone by the time the PATCH runs from the
+      // loop, and the next picker reuses the table.
+      snprintf(loc_patch_name, sizeof(loc_patch_name), "%s", s_loc_names[idx]);
       loc_patch_pending = true;
     }, LV_EVENT_CLICKED, NULL);
     loc_shown++;
@@ -1051,9 +1078,9 @@ void buildMoreInfoScreen() {
   lv_obj_align(btn_loc_cap, LV_ALIGN_CENTER, 0, -11);
   // Value label - centered
   lv_obj_t *btn_loc_val = lv_label_create(btn_loc);
-  char loc_val_buf[48];
-  strncpy(loc_val_buf, sm_location_name[0] ? sm_location_name : "-", sizeof(loc_val_buf)-1);
-  loc_val_buf[sizeof(loc_val_buf)-1] = '\0';
+  // Whole, the label's dot mode shortens it; a byte cut could split an umlaut.
+  char loc_val_buf[LOCATION_NAME_MAX];
+  snprintf(loc_val_buf, sizeof(loc_val_buf), "%s", sm_location_name[0] ? sm_location_name : "-");
   lv_label_set_text(btn_loc_val, loc_val_buf);
   lv_obj_set_style_text_color(btn_loc_val, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(btn_loc_val, &lv_font_montserrat_ext_16, 0);
