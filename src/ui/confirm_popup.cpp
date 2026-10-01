@@ -522,7 +522,7 @@ void showConfirmPopup(const char* msg, int action) {
           char wmbuf[40];
           copyT(wmbuf, sizeof(wmbuf), STR_BTN_WEIGHT);
           lv_label_set_text(lbl_weight_main_lbl, wmbuf);
-          lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_OK_TEXT_2), 0);
+          lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_WEIGHT_TEXT), 0);
         }
         closeConfirmPopup();
       } else {
@@ -603,7 +603,7 @@ void showConfirmPopup(const char* msg, int action) {
             char wmbuf[48];
             snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
             lv_label_set_text(lbl_weight_main_lbl, wmbuf);
-            lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_ACCENT), 0);
+            lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_WEIGHT_AUTO), 0);
           }
           releaseScreen(&s_auto_popup);   // zweites Popup weg
           closeConfirmPopup();            // erstes Popup weg
