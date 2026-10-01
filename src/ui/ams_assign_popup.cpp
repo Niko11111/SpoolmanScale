@@ -133,7 +133,7 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   scr_ams_popup = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_ams_popup, 480, 320);
   lv_obj_set_pos(scr_ams_popup, 0, 0);
-  lv_obj_set_style_bg_color(scr_ams_popup, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(scr_ams_popup, lv_color_hex(UI_COL_SCRIM), 0);
   lv_obj_set_style_bg_opa(scr_ams_popup, LV_OPA_70, 0);
   lv_obj_set_style_border_width(scr_ams_popup, 0, 0);
   lv_obj_set_style_radius(scr_ams_popup, 0, 0);
@@ -143,8 +143,8 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   lv_obj_t *box = lv_obj_create(scr_ams_popup);
   lv_obj_set_size(box, 400, 236);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
-  lv_obj_set_style_border_color(box, lv_color_hex(0x2a4080), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_POPUP_BORDER), 0);
   lv_obj_set_style_border_width(box, 2, 0);
   lv_obj_set_style_radius(box, 12, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
@@ -160,7 +160,7 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
       snprintf(sbuf, sizeof(sbuf), "%.0f g", netto_g);
     }
     lv_label_set_text(lbl_spool, sbuf); }
-  lv_obj_set_style_text_color(lbl_spool, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_spool, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_spool, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_width(lbl_spool, 360);
   lv_label_set_long_mode(lbl_spool, LV_LABEL_LONG_DOT);
@@ -170,7 +170,7 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   lv_obj_t *lbl_q = lv_label_create(box);
   { char qbuf[64]; copyT(qbuf, sizeof(qbuf), STR_AMS_POPUP_Q);
     lv_label_set_text(lbl_q, qbuf); }
-  lv_obj_set_style_text_color(lbl_q, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_color(lbl_q, lv_color_hex(UI_COL_INK), 0);
   lv_obj_set_style_text_font(lbl_q, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_width(lbl_q, 360);
   lv_label_set_long_mode(lbl_q, LV_LABEL_LONG_WRAP);
@@ -187,7 +187,7 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
              T(already_saved ? STR_AMS_POPUP_SAVED : STR_AMS_POPUP_WILL_SAVE),
              netto_g);
     lv_label_set_text(lbl_saved, vbuf); }
-  lv_obj_set_style_text_color(lbl_saved, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_saved, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_saved, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_saved, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_width(lbl_saved, 360);
@@ -198,7 +198,7 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   // surprised by an answer they did not give.
   lbl_ams_count = lv_label_create(box);
   lv_label_set_text(lbl_ams_count, "");
-  lv_obj_set_style_text_color(lbl_ams_count, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_ams_count, lv_color_hex(UI_COL_WARN), 0);
   lv_obj_set_style_text_font(lbl_ams_count, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_ams_count, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_ams_count, LV_ALIGN_TOP_MID, 0, 106);
@@ -209,8 +209,8 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   lv_obj_t *btn_yes = lv_btn_create(box);
   lv_obj_set_size(btn_yes, AMS_ANSWER_BTN_W, AMS_ANSWER_BTN_H);
   lv_obj_set_pos(btn_yes, 12, 156);
-  lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x1a4020), 0);
-  lv_obj_set_style_bg_color(btn_yes, lv_color_hex(0x2a7030), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_yes, lv_color_hex(UI_COL_OK_BG), 0);
+  lv_obj_set_style_bg_color(btn_yes, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_yes, 8, 0);
   lv_obj_set_style_shadow_width(btn_yes, 0, 0);
   lv_obj_set_style_pad_all(btn_yes, 0, 0);
@@ -222,14 +222,14 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   if (g_ams_timer_yes) addCountdownFill(btn_yes, UI_COL_OK_BG_PRESSED);
   lv_obj_t *lbl_yes = lv_label_create(btn_yes);
   { char ybuf[24]; copyT(ybuf, sizeof(ybuf), STR_AMS_BTN_YES); lv_label_set_text(lbl_yes, ybuf); }
-  lv_obj_set_style_text_color(lbl_yes, lv_color_hex(0x80ffa0), 0);
+  lv_obj_set_style_text_color(lbl_yes, lv_color_hex(UI_COL_AMS_YES_TEXT), 0);
   lv_obj_set_style_text_font(lbl_yes, UI_FONT_SMALL, 0);
   lv_obj_center(lbl_yes);
 
   lv_obj_t *btn_view = lv_btn_create(box);
   lv_obj_set_size(btn_view, 124, 56);
   lv_obj_set_pos(btn_view, 138, 156);
-  lv_obj_set_style_bg_color(btn_view, lv_color_hex(UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(btn_view, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(btn_view, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_view, 1, 0);
   lv_obj_set_style_border_color(btn_view, lv_color_hex(UI_COL_LINE), 0);
@@ -248,8 +248,8 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   lv_obj_t *btn_no = lv_btn_create(box);
   lv_obj_set_size(btn_no, AMS_ANSWER_BTN_W, AMS_ANSWER_BTN_H);
   lv_obj_set_pos(btn_no, 270, 156);
-  lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_no, lv_color_hex(0x702020), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_BAD_BG), 0);
+  lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_AMS_NO_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_no, 8, 0);
   lv_obj_set_style_shadow_width(btn_no, 0, 0);
   lv_obj_set_style_pad_all(btn_no, 0, 0);
@@ -260,7 +260,7 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   if (!g_ams_timer_yes) addCountdownFill(btn_no, UI_COL_BAD_BG_PRESSED);
   lv_obj_t *lbl_no = lv_label_create(btn_no);
   { char nbuf[24]; copyT(nbuf, sizeof(nbuf), STR_AMS_TIMER_NO); lv_label_set_text(lbl_no, nbuf); }
-  lv_obj_set_style_text_color(lbl_no, lv_color_hex(0xffa0a0), 0);
+  lv_obj_set_style_text_color(lbl_no, lv_color_hex(UI_COL_AMS_NO_TEXT), 0);
   lv_obj_set_style_text_font(lbl_no, UI_FONT_SMALL, 0);
   lv_obj_center(lbl_no);
 

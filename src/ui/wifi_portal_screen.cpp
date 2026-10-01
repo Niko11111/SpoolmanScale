@@ -13,6 +13,7 @@
 #include "ui_common.h"
 #include "web/web_server.h"
 #include "wifi_setup_screen.h"
+#include "theme.h"
 
 // Two columns, one per step: a QR code in a white frame with its text below.
 // The frame is the quiet zone a phone camera needs on the dark screen; the
@@ -49,13 +50,13 @@ static void portalQr(const char *data, lv_coord_t x_ofs) {
   lv_obj_t *frame = lv_obj_create(scr_wifi_portal);
   lv_obj_set_size(frame, PORTAL_QR_SIZE + 2 * PORTAL_QR_FRAME, PORTAL_QR_SIZE + 2 * PORTAL_QR_FRAME);
   lv_obj_align(frame, LV_ALIGN_TOP_MID, x_ofs, PORTAL_QR_Y);
-  lv_obj_set_style_bg_color(frame, lv_color_hex(0xffffff), 0);
+  lv_obj_set_style_bg_color(frame, lv_color_hex(UI_COL_QR_LIGHT), 0);
   lv_obj_set_style_border_width(frame, 0, 0);
   lv_obj_set_style_radius(frame, 4, 0);
   lv_obj_set_style_pad_all(frame, PORTAL_QR_FRAME, 0);
   lv_obj_clear_flag(frame, LV_OBJ_FLAG_SCROLLABLE);
 
-  lv_obj_t *qr = lv_qrcode_create(frame, PORTAL_QR_SIZE, lv_color_hex(0x000000), lv_color_hex(0xffffff));
+  lv_obj_t *qr = lv_qrcode_create(frame, PORTAL_QR_SIZE, lv_color_hex(UI_COL_QR_DARK), lv_color_hex(UI_COL_QR_LIGHT));
   if (!qr) {
     logSD("Portal: no room for a QR code in the LVGL pool");
     return;
@@ -77,9 +78,9 @@ static void buildWifiPortalScreen() {
   lv_obj_set_style_border_width(scr_wifi_portal, 0, 0);
   lv_obj_set_style_pad_all(scr_wifi_portal, 0, 0);
   lv_obj_clear_flag(scr_wifi_portal, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_wifi_portal, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(scr_wifi_portal, lv_color_hex(UI_COL_GROUND), 0);
 
-  portalLabel(T(STR_PORTAL_TITLE), &lv_font_montserrat_ext_18, 0x28d49a, 0, 14);
+  portalLabel(T(STR_PORTAL_TITLE), &lv_font_montserrat_ext_18, UI_COL_ACCENT, 0, 14);
   // Parked for the loop: going back takes the access point down, and the
   // screen this button sits on is deleted on the way.
   addBackButton(scr_wifi_portal, [](lv_event_t *e) { portal_close_pending = true; });
@@ -88,7 +89,7 @@ static void buildWifiPortalScreen() {
   // In the middle while the scan runs; moves under the codes once they exist.
   lbl_portal_status = lv_label_create(scr_wifi_portal);
   lv_label_set_text(lbl_portal_status, T(STR_WIFI_SCAN));
-  lv_obj_set_style_text_color(lbl_portal_status, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_portal_status, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(lbl_portal_status, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_portal_status, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_portal_status, LV_LABEL_LONG_WRAP);
@@ -107,21 +108,21 @@ static void fillWifiPortalScreen() {
   // Step 1: join the scale's network. The standard WiFi QR payload; neither
   // the generated name nor the generated password has a character it would
   // need escaped.
-  portalLabel(T(STR_PORTAL_STEP_JOIN), &lv_font_montserrat_ext_14, 0xe8f0ff, -PORTAL_COL_OFFSET, PORTAL_STEP_Y);
+  portalLabel(T(STR_PORTAL_STEP_JOIN), &lv_font_montserrat_ext_14, UI_COL_INK, -PORTAL_COL_OFFSET, PORTAL_STEP_Y);
   snprintf(buf, sizeof(buf), "WIFI:T:WPA;S:%s;P:%s;;", setupPortalSsid(), setupPortalPassword());
   portalQr(buf, -PORTAL_COL_OFFSET);
   snprintf(buf, sizeof(buf), T(STR_PORTAL_NET_FMT), setupPortalSsid());
-  portalLabel(buf, &lv_font_montserrat_ext_14, 0xc8d8f0, -PORTAL_COL_OFFSET, PORTAL_LINE1_Y);
+  portalLabel(buf, &lv_font_montserrat_ext_14, UI_COL_INK_2, -PORTAL_COL_OFFSET, PORTAL_LINE1_Y);
   snprintf(buf, sizeof(buf), T(STR_PORTAL_PASS_FMT), setupPortalPassword());
-  portalLabel(buf, &lv_font_montserrat_ext_16, 0xffffff, -PORTAL_COL_OFFSET, PORTAL_LINE2_Y);
+  portalLabel(buf, &lv_font_montserrat_ext_16, UI_COL_INK_MAX, -PORTAL_COL_OFFSET, PORTAL_LINE2_Y);
 
   // Step 2: the page, for a phone that does not open it by itself.
-  portalLabel(T(STR_PORTAL_STEP_OPEN), &lv_font_montserrat_ext_14, 0xe8f0ff, PORTAL_COL_OFFSET, PORTAL_STEP_Y);
+  portalLabel(T(STR_PORTAL_STEP_OPEN), &lv_font_montserrat_ext_14, UI_COL_INK, PORTAL_COL_OFFSET, PORTAL_STEP_Y);
   portalQr(url, PORTAL_COL_OFFSET);
-  portalLabel(url, &lv_font_montserrat_ext_14, 0xc8d8f0, PORTAL_COL_OFFSET, PORTAL_LINE1_Y);
-  portalLabel(T(STR_PORTAL_OPENS_ITSELF), &lv_font_montserrat_ext_12, 0x4a6fa0, PORTAL_COL_OFFSET, PORTAL_LINE2_Y + 2);
+  portalLabel(url, &lv_font_montserrat_ext_14, UI_COL_INK_2, PORTAL_COL_OFFSET, PORTAL_LINE1_Y);
+  portalLabel(T(STR_PORTAL_OPENS_ITSELF), &lv_font_montserrat_ext_12, UI_COL_CAPTION, PORTAL_COL_OFFSET, PORTAL_LINE2_Y + 2);
 
-  lv_obj_t *hint = portalLabel(T(STR_PORTAL_ANDROID_HINT), &lv_font_montserrat_ext_12, 0x4a6fa0, 0, PORTAL_HINT_Y);
+  lv_obj_t *hint = portalLabel(T(STR_PORTAL_ANDROID_HINT), &lv_font_montserrat_ext_12, UI_COL_CAPTION, 0, PORTAL_HINT_Y);
   lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(hint, PORTAL_TEXT_W);
@@ -179,7 +180,7 @@ void handleWifiPortalDeferredActions() {
       portal_up_shown = true;
     } else if (lbl_portal_status) {
       lv_label_set_text(lbl_portal_status, T(STR_PORTAL_START_FAILED));
-      lv_obj_set_style_text_color(lbl_portal_status, lv_color_hex(0xff8080), 0);
+      lv_obj_set_style_text_color(lbl_portal_status, lv_color_hex(UI_COL_BAD_TEXT), 0);
     }
     return;
   }
@@ -199,7 +200,7 @@ void handleWifiPortalDeferredActions() {
   if (visible && setupPortalSubmitted() && !portal_received_shown && lbl_portal_status) {
     portal_received_shown = true;
     lv_label_set_text(lbl_portal_status, T(STR_PORTAL_RECEIVED));
-    lv_obj_set_style_text_color(lbl_portal_status, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(lbl_portal_status, lv_color_hex(UI_COL_GOOD), 0);
   }
 
   // Whatever took the screen away also takes the access point down.

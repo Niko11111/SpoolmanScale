@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "lang.h"
+#include "theme.h"
 
 // Redraw rate. Ten frames a second is enough to read as motion, and every
 // frame costs a partial flush of a 480x320 panel that the transfer is waiting
@@ -35,7 +36,7 @@ void loadingOverlayShow(const char* text) {
   scr_loading = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_loading, 480, 320);
   lv_obj_set_pos(scr_loading, 0, 0);
-  lv_obj_set_style_bg_color(scr_loading, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(scr_loading, lv_color_hex(UI_COL_SCRIM), 0);
   lv_obj_set_style_bg_opa(scr_loading, LV_OPA_70, 0);
   lv_obj_set_style_border_width(scr_loading, 0, 0);
   lv_obj_set_style_radius(scr_loading, 0, 0);
@@ -48,8 +49,8 @@ void loadingOverlayShow(const char* text) {
   lv_obj_t *box = lv_obj_create(scr_loading);
   lv_obj_set_size(box, 320, 170);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
-  lv_obj_set_style_border_color(box, lv_color_hex(0x2a4080), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_POPUP_BORDER), 0);
   lv_obj_set_style_border_width(box, 2, 0);
   lv_obj_set_style_radius(box, 12, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
@@ -68,11 +69,11 @@ void loadingOverlayShow(const char* text) {
   lv_obj_clear_flag(arc_loading, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_style_arc_width(arc_loading, 6, LV_PART_MAIN);
   lv_obj_set_style_arc_width(arc_loading, 6, LV_PART_INDICATOR);
-  lv_obj_set_style_arc_color(arc_loading, lv_color_hex(0x1a3050), LV_PART_MAIN);
-  lv_obj_set_style_arc_color(arc_loading, lv_color_hex(0x28d49a), LV_PART_INDICATOR);
+  lv_obj_set_style_arc_color(arc_loading, lv_color_hex(UI_COL_ROW_PRESSED), LV_PART_MAIN);
+  lv_obj_set_style_arc_color(arc_loading, lv_color_hex(UI_COL_ACCENT), LV_PART_INDICATOR);
 
   lbl_loading = lv_label_create(box);
-  lv_obj_set_style_text_color(lbl_loading, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_loading, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(lbl_loading, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_loading, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_loading, LV_LABEL_LONG_WRAP);
@@ -81,7 +82,7 @@ void loadingOverlayShow(const char* text) {
 
   lbl_bytes = lv_label_create(box);
   lv_label_set_text(lbl_bytes, "");
-  lv_obj_set_style_text_color(lbl_bytes, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_bytes, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_bytes, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(lbl_bytes, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_width(lbl_bytes, 290);

@@ -1,62 +1,85 @@
 #pragma once
 
 #include <lvgl.h>
+#include <stdint.h>
 
 // ============================================================
 //  THEME
 //
 //  The one table for what the panel looks like: colours, type
-//  sizes, radii, the house measurements of a button. Around 900
-//  call sites still carry these as literals; a module moves onto
-//  this table when it is next touched, and a new module starts
-//  here. Once the literals are gone, a second palette - light,
-//  or one per backend - is a second copy of the colour block and
-//  a switch, not a hunt through the tree.
+//  sizes, radii, the house measurements of a button. Every colour
+//  in src/ui and src/app has a name; the ratchet counts one written
+//  as a number (inline_color_hex, raw_color_hex). The colours
+//  themselves stand in theme_palette.h, one column per palette.
 //
 //  Names say what a colour is for, not what it looks like:
 //  UI_COL_CAPTION rather than "dim blue". A palette that swaps
 //  the blue for grey changes one line and every caption follows.
+//  Two names may share a value when their roles differ (INK_FAINT
+//  and RULE): a palette can then set them apart. A name that
+//  carries a widget (UI_COL_COPY_*) is a colour only that widget
+//  uses.
+//
+//  UI_COL_<name> is a variable, filled at boot from the palette the
+//  user chose (uiThemeBegin). Written in capitals so a call site
+//  reads the same as when these were constants. Never read one in
+//  #if, constexpr or a static initialiser: that would take the dark
+//  value before the palette is chosen. A change of palette takes
+//  effect with a restart, because LVGL copies a colour into the
+//  object when the object is made.
 // ============================================================
 
-// ---- surfaces ------------------------------------------------
-#define UI_COL_GROUND          0x0a1020   // the screen behind everything
-#define UI_COL_SURFACE         0x0c1828   // a popup's box
-#define UI_COL_SURFACE_2       0x0a1828   // inputs, quiet buttons, list bodies
-#define UI_COL_ROW             0x0a1e30   // a settings row
-#define UI_COL_ROW_PRESSED     0x1a3050   // the same row under the finger, and its border
-#define UI_COL_LINE            0x1a3060   // dividers, the slider track, a quiet border
-#define UI_COL_LINE_SOFT       0x1a2840   // the fainter border of an input
-#define UI_COL_POPUP_BORDER    0x2a4080   // the frame of a question
-#define UI_COL_EMPTY           0x101f33   // an empty bay
-#define UI_COL_CHIP            0x0d2040   // a header chip that is a button, pressed: UI_COL_LINE
-#define UI_COL_SCRIM           0x000000   // behind a popup, at UI_OPA_SCRIM
+// ---- colours -------------------------------------------------
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light) extern uint32_t UI_COL_##name;
+#include "theme_palette.h"
+#undef UI_COLOUR
 
 #define UI_OPA_SCRIM           LV_OPA_70
 
-// ---- text ----------------------------------------------------
-#define UI_COL_INK             0xe8f0ff   // titles and values
-#define UI_COL_INK_2           0xc8d8f0   // body text
-#define UI_COL_INK_SOFT        0x8fa8c8   // secondary body text, still readable
-#define UI_COL_CAPTION         0x4a6fa0   // captions and hints
-#define UI_COL_RULE            0x2a4060   // rules and inactive bars - never text
-#define UI_COL_VALUE_BLUE      0x8ab0d8   // dates and similar quiet values
+// Steps added to a tile's own colour, per channel, for its pressed state and
+// its border: lighter on a dark palette, darker on a light one.
+extern int UI_SHADE_PRESSED;
+extern int UI_SHADE_BORDER;
+uint32_t uiShade(uint32_t colour, int step);
 
-// ---- meaning -------------------------------------------------
-#define UI_COL_ACCENT          0x28d49a   // the house green: active, found, ok
-#define UI_COL_ACCENT_DIM      0x0d2e1a   // the fill behind an active choice
-#define UI_COL_OK_BG           0x1a4020   // a confirming button
-#define UI_COL_OK_BG_PRESSED   0x2a7030
-#define UI_COL_OK_TEXT         0x80ffb0   // its label
-#define UI_COL_OK_TEXT_2       0x40c080   // the smaller confirming label
-#define UI_COL_WARN            0xf0b838   // amber: attention, waiting, the scale's own figure
-#define UI_COL_BAD             0xe04040   // red: wrong, failed
-#define UI_COL_BAD_TEXT        0xff8080   // a red label on a dark button
-#define UI_COL_BAD_BG          0x3a1010   // a declining or destructive button
-#define UI_COL_BAD_BG_PRESSED  0x602020
-// A settings row that deletes something: the factory reset's row in the
-// system screen (TONE_DANGER there), dark red with the pressed red as border.
-#define UI_COL_DANGER_ROW      0x180a0e
-#define UI_COL_DANGER_TEXT     0xff6060
+// ---- palettes ------------------------------------------------
+// Stored in NVS by number: append, never reorder. The columns of
+// theme_palette.h follow this order.
+enum UiThemeId : uint8_t {
+  UI_THEME_DARK           = 0,
+  UI_THEME_LIGHT          = 1,
+  UI_THEME_SPOOLMAN_DARK  = 2,
+  UI_THEME_SPOOLMAN_LIGHT = 3,
+  UI_THEME_COUNT
+};
+
+// Reads the stored choice and fills every UI_COL_* from it, then hands LVGL's
+// default theme its two colours. After loadPrefs() and the display driver,
+// before the first screen is built.
+void uiThemeBegin();
+UiThemeId uiThemeActive();
+UiThemeId uiThemeStored();
+// Stores the choice for the next boot. The running palette stays.
+bool uiThemeStore(UiThemeId id);
+// "dark", "light", "spoolman_dark", "spoolman_light": the id the web
+// interface speaks, and the data-theme of its pages.
+const char* uiThemeKey(UiThemeId id);
+bool uiThemeFromKey(const char* key, UiThemeId* out);
+
+// The palette as a table, for the web preview.
+size_t uiPaletteCount();
+const char* uiPaletteName(size_t i);
+uint32_t uiPaletteValue(UiThemeId id, size_t i);
+
+// ---- content -------------------------------------------------
+// Fixed colours next to data, not part of the look: a palette may
+// leave them alone. Colours that come from a spool are never here.
+#define UI_COL_ON_BRIGHT_FILL  0x000000   // a label on a light filament colour
+#define UI_COL_ON_DARK_FILL    0xffffff   // a label on a dark one
+#define UI_COL_QR_DARK         0x000000   // a QR code must stay black on white to scan
+#define UI_COL_QR_LIGHT        0xffffff
+#define UI_COL_SWATCH_NONE     0x333333   // a spool without a colour
+#define UI_COL_SWATCH_GLASS    0xdce6f0   // a transparent filament
 
 // ---- type ----------------------------------------------------
 #define UI_FONT_CAPTION        (&lv_font_montserrat_ext_12)

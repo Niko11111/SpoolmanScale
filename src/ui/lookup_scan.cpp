@@ -145,7 +145,7 @@ void lookupFollowUp(LookupOrigin origin, const char* uid) {
       } else {
         if (origin == LOOKUP_FROM_NTAG) {
           lv_label_set_text(lbl_status, T(STR_TAG_FOUND));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
         }
         // Stays shorter than 32 characters, so everything that tells a
         // Bambu tag apart by that length keeps saying no.
@@ -676,9 +676,9 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
 
     // Choose color: 0-10% red, 11-30% orange, 31-100% green
     uint32_t pct_color;
-    if (pct <= 10.0f)       pct_color = 0xe04040;
-    else if (pct <= 30.0f)  pct_color = 0xf0b838;
-    else                    pct_color = 0x28d49a;
+    if (pct <= 10.0f)       pct_color = UI_COL_BAD;
+    else if (pct <= 30.0f)  pct_color = UI_COL_WARN;
+    else                    pct_color = UI_COL_GOOD;
 
     lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(pct_color), 0);
 
@@ -700,7 +700,7 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
     char sm_id_str[16];
     snprintf(sm_id_str, sizeof(sm_id_str), "%d", sm_id);
     lv_label_set_text(lbl_spoolman_id, sm_id_str);
-    lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(UI_COL_ACCENT), 0);
 
     applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, sm_last_dried);
 
@@ -899,7 +899,7 @@ void lookupResolveArchive(const LookupCtx& c, JsonDocument* doc2p,
     logSD("uid index: the scan did not run to its end, nothing to compare");
   }
   { char nb[40]; backendText(T(STR_NOT_IN_SPOOLMAN), nb, sizeof(nb)); lv_label_set_text(lbl_spoolman_weight, nb); }
-  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_GOOD), 0);
   sm_found = false;
   s_verdict_unknown = true;
   updateLinkButton();

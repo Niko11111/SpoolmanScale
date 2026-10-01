@@ -152,7 +152,7 @@ void printCardResult(LabelPrintResult result) {
   const bool ok = (result == LP_OK);
   const bool unconfirmed = (result == LP_SENT_UNCONFIRMED);
   const char* symbol = ok ? LV_SYMBOL_OK : LV_SYMBOL_WARNING;
-  const uint32_t tone = ok ? UI_COL_ACCENT : (unconfirmed ? UI_COL_WARN : UI_COL_BAD);
+  const uint32_t tone = ok ? UI_COL_GOOD : (unconfirmed ? UI_COL_WARN : UI_COL_BAD);
   const int title = ok ? STR_PRN_DONE_TITLE
                   : unconfirmed ? STR_PRN_UNCONF_TITLE : STR_PRN_FAIL_TITLE;
   // A label that went onto thermal paper gets the one thing to know about

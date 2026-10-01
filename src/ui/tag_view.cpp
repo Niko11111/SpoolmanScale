@@ -218,7 +218,7 @@ static void formatInfo(lv_obj_t* hdr, const TagInfo& i) {
   lv_obj_t* val = lv_label_create(hdr);
   if (!val) return;
   lv_label_set_text(val, formatText(i));
-  lv_obj_set_style_text_color(val, lv_color_hex(isRealFormat(i) ? UI_COL_ACCENT
+  lv_obj_set_style_text_color(val, lv_color_hex(isRealFormat(i) ? UI_COL_GOOD
                                                                 : UI_COL_INK_SOFT), 0);
   lv_obj_set_style_text_font(val, UI_FONT_BODY, 0);
   oneLine(val, TV_FMT_W, UI_FONT_BODY);
@@ -406,7 +406,7 @@ static lv_obj_t* button(lv_obj_t* box, int x, const char* text, bool danger,
     if (danger) lv_obj_set_style_border_opa(b, LV_OPA_60, 0);
     lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, nullptr);
   } else {
-    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_SURFACE_2), 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_border_color(b, lv_color_hex(UI_COL_LINE_SOFT), 0);
     lv_obj_set_style_border_width(b, 1, 0);
     lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
@@ -486,6 +486,9 @@ static void build() {
   lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, UI_RADIUS_BOX, 0);
+  // The header strip inside is square; clipped here it follows the
+  // rounded corners instead of poking out past them.
+  lv_obj_set_style_clip_corner(box, true, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 

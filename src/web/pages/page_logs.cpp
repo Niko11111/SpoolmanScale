@@ -88,7 +88,7 @@ static String body() {
   h += F("</h2><p class='note'>");
   h += T(STR_W_SESSION_NOTE);
   h += F("</p><pre id='sl' style='max-height:340px;overflow:auto;"
-         "background:#06080f;border:1px solid #1a3060;border-radius:8px;"
+         "background:var(--ground);border:1px solid var(--line);border-radius:8px;"
          "padding:10px;font-size:12px;line-height:1.5;white-space:pre-wrap;"
          "word-break:break-word;margin:12px 0'></pre>"
          "<div style='display:flex;gap:12px;align-items:center'>"

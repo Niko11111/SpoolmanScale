@@ -583,9 +583,9 @@ void showSpoolRemaining() {
   lv_label_set_text(lbl_spoolman_weight, weight_str);
   float pct = (sm_total > 0) ? (sm_remaining / sm_total) * 100.0f : 0;
   uint32_t pct_color;
-  if (pct <= 10.0f)      pct_color = 0xe04040;
-  else if (pct <= 30.0f) pct_color = 0xf0b838;
-  else                   pct_color = 0x28d49a;
+  if (pct <= 10.0f)      pct_color = UI_COL_BAD;
+  else if (pct <= 30.0f) pct_color = UI_COL_WARN;
+  else                   pct_color = UI_COL_GOOD;
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(pct_color), 0);
 
   char pct_str[16];
@@ -731,7 +731,7 @@ void querySpoolmanById(int spool_id) {
   char sm_id_str[16];
   snprintf(sm_id_str, sizeof(sm_id_str), "%d", sm_id);
   lv_label_set_text(lbl_spoolman_id, sm_id_str);
-  lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(UI_COL_ACCENT), 0);
 
   applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, sm_last_dried);
 
@@ -1096,7 +1096,7 @@ void showArchivedSpool(int archived_id) {
   // would read as a measurement rather than as a state.
   if (sm_archived) {
     lv_label_set_text(lbl_spoolman_weight, T(STR_ARCHIVED));
-    lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x808080), 0);
+    lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_ARCHIVED), 0);
     lv_label_set_text(lbl_spoolman_pct, "");
     if (lbl_scale_diff) lv_obj_set_width(lbl_scale_diff, 0);
   }
@@ -1161,7 +1161,7 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
 
   // Reset all Spoolman labels before new query
   lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT));
-  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_GOOD), 0);
   lv_label_set_text(lbl_spoolman_pct, "");
   lv_label_set_text(lbl_spoolman_dried_val, "");
   if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);

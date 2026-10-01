@@ -17,6 +17,7 @@
 #include "ui_common.h"
 #include "update_badges.h"
 #include "web_screen.h"
+#include "theme.h"
 
 
 void showLanguageScreen();
@@ -33,7 +34,7 @@ static void showFactoryResetPopup() {
   s_reset_pop = pop;
   lv_obj_set_size(pop, 480, 320);
   lv_obj_set_pos(pop, 0, 0);
-  lv_obj_set_style_bg_color(pop, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(pop, lv_color_hex(UI_COL_SCRIM), 0);
   lv_obj_set_style_bg_opa(pop, LV_OPA_80, 0);
   lv_obj_set_style_border_width(pop, 0, 0);
   lv_obj_set_style_radius(pop, 0, 0);
@@ -43,8 +44,8 @@ static void showFactoryResetPopup() {
   lv_obj_t *box = lv_obj_create(pop);
   lv_obj_set_size(box, 440, 240);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(0x1a0808), 0);
-  lv_obj_set_style_border_color(box, lv_color_hex(0x602020), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_DANGER_ROW), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_BAD_BG_PRESSED), 0);
   lv_obj_set_style_border_width(box, 2, 0);
   lv_obj_set_style_radius(box, 12, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
@@ -53,14 +54,14 @@ static void showFactoryResetPopup() {
   lv_obj_t *lbl_t = lv_label_create(box);
   char buf_t[48]; copyT(buf_t, sizeof(buf_t), STR_FACTORY_RESET_TITLE);
   lv_label_set_text(lbl_t, buf_t);
-  lv_obj_set_style_text_color(lbl_t, lv_color_hex(0xff6060), 0);
+  lv_obj_set_style_text_color(lbl_t, lv_color_hex(UI_COL_DANGER_TEXT), 0);
   lv_obj_set_style_text_font(lbl_t, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(lbl_t, LV_ALIGN_TOP_MID, 0, 16);
 
   lv_obj_t *lbl_m = lv_label_create(box);
   char buf_m[256]; backendText(T(STR_FACTORY_RESET_MSG), buf_m, sizeof(buf_m));
   lv_label_set_text(lbl_m, buf_m);
-  lv_obj_set_style_text_color(lbl_m, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_m, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(lbl_m, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_style_text_align(lbl_m, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_m, LV_LABEL_LONG_WRAP);
@@ -71,19 +72,19 @@ static void showFactoryResetPopup() {
   lv_obj_t *btn_c = lv_btn_create(box);
   lv_obj_set_size(btn_c, 180, 44);
   lv_obj_set_pos(btn_c, 12, 184);
-  lv_obj_set_style_bg_color(btn_c, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_c, lv_color_hex(0x1a2840), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_SURFACE), 0);
+  lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_LINE_SOFT), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_c, 8, 0);
   lv_obj_set_style_shadow_width(btn_c, 0, 0);
   lv_obj_set_style_border_width(btn_c, 1, 0);
-  lv_obj_set_style_border_color(btn_c, lv_color_hex(0x1a2840), 0);
+  lv_obj_set_style_border_color(btn_c, lv_color_hex(UI_COL_LINE_SOFT), 0);
   lv_obj_add_event_cb(btn_c, [](lv_event_t *e){
     releaseScreen(&s_reset_pop);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_c = lv_label_create(btn_c);
   char buf_c[32]; copyT(buf_c, sizeof(buf_c), STR_CANCEL);
   lv_label_set_text(lbl_c, buf_c);
-  lv_obj_set_style_text_color(lbl_c, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_c, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_c, &lv_font_montserrat_ext_14, 0);
   lv_obj_align(lbl_c, LV_ALIGN_CENTER, 0, 0);
 
@@ -91,12 +92,12 @@ static void showFactoryResetPopup() {
   lv_obj_t *btn_ok = lv_btn_create(box);
   lv_obj_set_size(btn_ok, 228, 44);
   lv_obj_set_pos(btn_ok, 200, 184);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x3a1010), 0);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(0x602020), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(UI_COL_BAD_BG), 0);
+  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ok, 8, 0);
   lv_obj_set_style_shadow_width(btn_ok, 0, 0);
   lv_obj_set_style_border_width(btn_ok, 1, 0);
-  lv_obj_set_style_border_color(btn_ok, lv_color_hex(0x602020), 0);
+  lv_obj_set_style_border_color(btn_ok, lv_color_hex(UI_COL_BAD_BG_PRESSED), 0);
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e){
     logSD("Factory Reset: erasing NVS flash partition");
     Serial.println("Factory Reset: erasing NVS flash partition");
@@ -114,7 +115,7 @@ static void showFactoryResetPopup() {
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
   char buf_ok[48]; copyT(buf_ok, sizeof(buf_ok), STR_FACTORY_RESET_CONFIRM);
   lv_label_set_text(lbl_ok, buf_ok);
-  lv_obj_set_style_text_color(lbl_ok, lv_color_hex(0xff8080), 0);
+  lv_obj_set_style_text_color(lbl_ok, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_14, 0);
   lv_obj_align(lbl_ok, LV_ALIGN_CENTER, 0, 0);
 }
@@ -138,10 +139,10 @@ static lv_obj_t* addRow(lv_obj_t *list, const char *ico, const char *title,
   if (tone != TONE_PLAIN) {
     // Amber is the same one the status bar and the web UI already warn in,
     // red the same one the reset dialog uses, so neither introduces a colour.
-    const uint32_t border  = (tone == TONE_DANGER) ? 0x602020 : 0x3a2800;
-    const uint32_t bg      = (tone == TONE_DANGER) ? 0x180a0e : 0x161206;
-    const uint32_t pressed = (tone == TONE_DANGER) ? 0x3a1010 : 0x3a2c10;
-    const uint32_t text    = (tone == TONE_DANGER) ? 0xff6060 : 0xf0b838;
+    const uint32_t border  = (tone == TONE_DANGER) ? UI_COL_BAD_BG_PRESSED : UI_COL_CAUTION_BG;
+    const uint32_t bg      = (tone == TONE_DANGER) ? UI_COL_DANGER_ROW : UI_COL_CAUTION_ROW;
+    const uint32_t pressed = (tone == TONE_DANGER) ? UI_COL_BAD_BG : UI_COL_AMBER_LINE;
+    const uint32_t text    = (tone == TONE_DANGER) ? UI_COL_DANGER_TEXT : UI_COL_WARN;
     lv_obj_set_style_border_color(btn, lv_color_hex(border), 0);
     lv_obj_set_style_bg_color(btn, lv_color_hex(bg), 0);
     lv_obj_set_style_bg_color(btn, lv_color_hex(pressed), LV_STATE_PRESSED);

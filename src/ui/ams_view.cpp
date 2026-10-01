@@ -88,7 +88,7 @@
 
 // Palette, from the one table in theme.h. The local names stay so the
 // drawing code below reads as before; what they mean is decided there.
-#define AMSV_COL_BG       UI_COL_SURFACE_2
+#define AMSV_COL_BG       UI_COL_SURFACE
 #define AMSV_COL_LINE     UI_COL_ROW_PRESSED
 #define AMSV_COL_ACCENT   UI_COL_ACCENT
 #define AMSV_COL_MUTED    UI_COL_CAPTION
@@ -424,7 +424,7 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
     const uint32_t g = (mid >> 8) & 0xFF;
     const uint32_t b = mid & 0xFF;
     const uint32_t luma = (299 * r + 587 * g + 114 * b) / 1000;
-    text_col = (luma > AMSV_LUMA_SWITCH) ? 0x000000 : 0xFFFFFF;
+    text_col = (luma > AMSV_LUMA_SWITCH) ? UI_COL_ON_BRIGHT_FILL : UI_COL_ON_DARK_FILL;
   }
 
   // A filled bay is always three lines, in the same order, with a dash where
@@ -632,7 +632,7 @@ static lv_obj_t* footButton(int x, int str_id, bool primary, lv_event_cb_t cb) {
   if (!b) return nullptr;
   lv_obj_set_size(b, AMSV_FOOT_BTN_W, AMSV_FOOT_BTN_H);
   lv_obj_set_pos(b, x, 320 - AMSV_FOOT_H + (AMSV_FOOT_H - AMSV_FOOT_BTN_H) / 2);
-  lv_obj_set_style_bg_color(b, lv_color_hex(primary ? UI_COL_OK_BG : UI_COL_SURFACE_2), 0);
+  lv_obj_set_style_bg_color(b, lv_color_hex(primary ? UI_COL_OK_BG : UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(b, lv_color_hex(primary ? UI_COL_OK_BG_PRESSED : UI_COL_LINE), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(b, 1, 0);
   lv_obj_set_style_border_color(b, lv_color_hex(primary ? UI_COL_OK_BG_PRESSED : UI_COL_LINE), 0);
@@ -664,7 +664,7 @@ static void applyInfoMode() {
     lv_obj_set_style_border_color(s_info_btn,
       lv_color_hex(on ? UI_COL_ACCENT : UI_COL_LINE), 0);
     lv_obj_set_style_bg_color(s_info_btn,
-      lv_color_hex(on ? UI_COL_ACCENT_DIM : UI_COL_SURFACE_2), 0);
+      lv_color_hex(on ? UI_COL_GO_BG : UI_COL_SURFACE), 0);
     lv_obj_t* l = lv_obj_get_child(s_info_btn, 0);
     if (l) {
       lv_obj_set_style_text_color(l,

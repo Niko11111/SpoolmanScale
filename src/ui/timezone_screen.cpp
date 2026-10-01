@@ -11,6 +11,7 @@
 #include "lang.h"
 #include "services/time_service.h"
 #include "ui_common.h"
+#include "theme.h"
 
 static bool tz_return_welcome = false;
 
@@ -49,7 +50,7 @@ static void addZoneRow(lv_obj_t *list, size_t idx, int active_idx) {
   lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
   if (arr_lbl) {
     lv_label_set_text(arr_lbl, active ? LV_SYMBOL_OK : "");
-    lv_obj_set_style_text_color(arr_lbl, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(arr_lbl, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_16, 0);
   }
 
@@ -93,7 +94,7 @@ void buildTimeZoneScreen() {
     });
     lv_obj_t *lbl_title = lv_label_create(scr_timezone);
     lv_label_set_text(lbl_title, title);
-    lv_obj_set_style_text_color(lbl_title, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(lbl_title, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
     lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 12);
   } else {
@@ -112,7 +113,7 @@ void buildTimeZoneScreen() {
   copyT(hint_buf, sizeof(hint_buf), STR_TZ_HINT);
   lv_obj_t *hint = lv_label_create(scr_timezone);
   lv_label_set_text(hint, hint_buf);
-  lv_obj_set_style_text_color(hint, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(hint, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);

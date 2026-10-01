@@ -3059,6 +3059,28 @@ const char* const STRINGS[][3] = {
     "The tag does not match spool #%d.\nTag: %s\nSpool: %s\nLink anyway?",
     "Le tag ne correspond pas à la bobine #%d.\nTag : %s\nBobine : %s\nLier quand même ?" },  // STR_W_TL_MISMATCH
   { "Anzeige: Spule #%d", "Showing spool #%d", "Vue : bobine #%d" },  // STR_TAG_VIEW_SPOOL
+  // Web: colour scheme
+  { "Design",     "Theme",         "Thème" },  // STR_W_NAV_THEME
+  { "Farbschema", "Colour scheme", "Palette de couleurs" },  // STR_W_C_THEME
+  { "Gilt für die Waage und diese Weboberfläche. Die Waage startet dafür neu, alle Einstellungen bleiben erhalten.",
+    "Applies to the scale and to this web interface. The scale restarts for it; every setting is kept.",
+    "S'applique à la balance et à cette interface web. La balance redémarre pour cela, tous les réglages sont conservés." },  // STR_W_THEME_HINT
+  { "Dunkel", "Dark",
+    "Sombre" },  // STR_W_THEME_DARK
+  { "Hell", "Light",
+    "Clair" },  // STR_W_THEME_LIGHT
+  { "Aktiv", "Active",
+    "Actif" },  // STR_W_THEME_ACTIVE
+  { "Übernehmen und neu starten", "Apply and restart",
+    "Appliquer et redémarrer" },  // STR_W_THEME_APPLY
+  { "Gespeichert. Gilt ab dem nächsten Neustart der Waage.", "Saved. Takes effect when the scale next restarts.",
+    "Enregistré. Actif au prochain redémarrage de la balance." },  // STR_W_THEME_LATER
+  { "Die Waage startet neu, die Seite lädt gleich von selbst.", "The scale is restarting, this page reloads by itself.",
+    "La balance redémarre, la page se recharge d'elle-même." },  // STR_W_THEME_RESTARTING
+  { "Spoolman dunkel", "Spoolman dark",
+    "Spoolman sombre" },  // STR_W_THEME_SPOOLMAN_DARK
+  { "Spoolman hell", "Spoolman light",
+    "Spoolman clair" },  // STR_W_THEME_SPOOLMAN_LIGHT
 };
 
 StringID tagWriteResultString(uint8_t code) {

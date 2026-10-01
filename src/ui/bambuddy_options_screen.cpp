@@ -12,6 +12,7 @@
 #include "services/settings_registry.h"
 #include "services/user_options.h"
 #include "ui_common.h"
+#include "theme.h"
 
 // ============================================================
 //  MORE OPTIONS
@@ -76,7 +77,7 @@ static void addDriedRow(lv_obj_t *list, const SettingDesc &s, uint8_t value) {
   lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
   if (arr_lbl) {
     lv_label_set_text(arr_lbl, active ? LV_SYMBOL_OK : "");
-    lv_obj_set_style_text_color(arr_lbl, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(arr_lbl, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_16, 0);
   }
 

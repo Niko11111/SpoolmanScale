@@ -13,6 +13,7 @@
 #include "services/backend.h"
 #include "services/prefs_store.h"
 #include "ui_common.h"
+#include "theme.h"
 
 // Work parked by a button callback and carried out at the top of the next
 // build. Every one of these costs an HTTP request, which is exactly what a
@@ -42,8 +43,8 @@ static lv_obj_t* makeValueRow(lv_obj_t* parent, const char* label, const char* h
   lv_obj_t *row = lv_btn_create(parent);
   lv_obj_set_size(row, 456, 56);
   lv_obj_set_pos(row, 12, y);
-  lv_obj_set_style_bg_color(row, lv_color_hex(0x0a1e30), 0);
-  lv_obj_set_style_bg_color(row, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(row, 10, 0);
   lv_obj_set_style_shadow_width(row, 0, 0);
   lv_obj_set_style_border_width(row, 1, 0);
@@ -52,13 +53,13 @@ static lv_obj_t* makeValueRow(lv_obj_t* parent, const char* label, const char* h
 
   lv_obj_t *lbl = lv_label_create(row);
   lv_label_set_text(lbl, label);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_INK), 0);
   lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
   lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 16, -8);
 
   lv_obj_t *slbl = lv_label_create(row);
   lv_label_set_text(slbl, hint);
-  lv_obj_set_style_text_color(slbl, lv_color_hex(0x2a4060), 0);
+  lv_obj_set_style_text_color(slbl, lv_color_hex(UI_COL_INK_FAINT), 0);
   lv_obj_set_style_text_font(slbl, &lv_font_montserrat_ext_12, 0);
   lv_obj_align(slbl, LV_ALIGN_LEFT_MID, 16, 12);
 
@@ -91,15 +92,15 @@ static void buildAmsWindowNumpad() {
   lv_obj_t *val_box = lv_obj_create(s_ams_numpad_scr);
   lv_obj_set_size(val_box, 380, 44);
   lv_obj_set_pos(val_box, 50, 68);
-  lv_obj_set_style_bg_color(val_box, lv_color_hex(0x050f1e), 0);
-  lv_obj_set_style_border_color(val_box, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_bg_color(val_box, lv_color_hex(UI_COL_GROUND), 0);
+  lv_obj_set_style_border_color(val_box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(val_box, 1, 0);
   lv_obj_set_style_radius(val_box, 8, 0);
   s_ams_numpad_lbl = lv_label_create(val_box);
   { char vbuf[16];
     snprintf(vbuf, sizeof(vbuf), "%d %s", s_ams_numpad_value, T(STR_AMS_SEC_UNIT));
     lv_label_set_text(s_ams_numpad_lbl, vbuf); }
-  lv_obj_set_style_text_color(s_ams_numpad_lbl, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(s_ams_numpad_lbl, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(s_ams_numpad_lbl, &lv_font_montserrat_ext_24, 0);
   lv_obj_align(s_ams_numpad_lbl, LV_ALIGN_CENTER, 0, 0);
 
@@ -114,19 +115,19 @@ static void buildAmsWindowNumpad() {
     lv_obj_t *kb = lv_btn_create(s_ams_numpad_scr);
     lv_obj_set_size(kb, NP_W, NP_H);
     lv_obj_set_pos(kb, NP_X0 + col * (NP_W + NP_GAP), NP_Y0 + row * (NP_H + NP_GAP));
-    lv_obj_set_style_bg_color(kb, is_del ? lv_color_hex(0x1a1020) :
-                                  is_ok  ? lv_color_hex(0x1a4030) :
-                                           lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_bg_color(kb, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(kb, is_del ? lv_color_hex(UI_COL_KEY_DEL) :
+                                  is_ok  ? lv_color_hex(UI_COL_PICKED_BG) :
+                                           lv_color_hex(UI_COL_SURFACE), 0);
+    lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(kb, 6, 0);
     lv_obj_set_style_shadow_width(kb, 0, 0);
     lv_obj_set_style_border_width(kb, 1, 0);
-    lv_obj_set_style_border_color(kb, is_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3050), 0);
+    lv_obj_set_style_border_color(kb, is_ok ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_ROW_PRESSED), 0);
     lv_obj_t *kl = lv_label_create(kb);
     lv_label_set_text(kl, is_ok ? LV_SYMBOL_OK : is_del ? T(STR_KEY_DEL) : keys[i]);
-    lv_obj_set_style_text_color(kl, is_del ? lv_color_hex(0xe04040) :
-                                     is_ok  ? lv_color_hex(0x28d49a) :
-                                              lv_color_hex(0xe8f0ff), 0);
+    lv_obj_set_style_text_color(kl, is_del ? lv_color_hex(UI_COL_BAD) :
+                                     is_ok  ? lv_color_hex(UI_COL_ACCENT) :
+                                              lv_color_hex(UI_COL_INK), 0);
     lv_obj_set_style_text_font(kl, &lv_font_montserrat_ext_18, 0);
     lv_obj_align(kl, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_user_data(kb, (void*)keys[i]);
@@ -223,15 +224,15 @@ void buildAmsAssignScreen() {
     lv_obj_t *mb = lv_btn_create(scr_ams_assign);
     lv_obj_set_size(mb, btn_w, btn_h);
     lv_obj_set_pos(mb, btn_x0 + m*(btn_w+btn_gap), btn_y);
-    lv_obj_set_style_bg_color(mb, active ? lv_color_hex(0x0d2e1a) : lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_bg_color(mb, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(mb, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3050), 0);
+    lv_obj_set_style_bg_color(mb, active ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_SURFACE), 0);
+    lv_obj_set_style_bg_color(mb, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(mb, active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_ROW_PRESSED), 0);
     lv_obj_set_style_border_width(mb, 1, 0);
     lv_obj_set_style_radius(mb, 8, 0);
     lv_obj_set_style_shadow_width(mb, 0, 0);
     lv_obj_t *ml = lv_label_create(mb);
     lv_label_set_text(ml, mode_labels[m]);
-    lv_obj_set_style_text_color(ml, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(ml, active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(ml, &lv_font_montserrat_ext_16, 0);
     lv_obj_align(ml, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_user_data(mb, (void*)(intptr_t)m);
@@ -252,7 +253,7 @@ void buildAmsAssignScreen() {
                T(s_server_enabled ? STR_AMS_SRV_ON : STR_AMS_SRV_OFF));
       lv_label_set_text(srv, sbuf); }
     lv_obj_set_style_text_color(srv,
-      s_server_enabled ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+      s_server_enabled ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(srv, &lv_font_montserrat_ext_12, 0);
     lv_obj_align(srv, LV_ALIGN_TOP_MID, 0, 104);
   }
@@ -276,17 +277,17 @@ void buildAmsAssignScreen() {
     char th[40];  copyT(th, sizeof(th), STR_AMS_TIMER_HINT);
     char tv[16];  copyT(tv, sizeof(tv), g_ams_timer_yes ? STR_AMS_TIMER_YES : STR_AMS_TIMER_NO);
     makeValueRow(scr_ams_assign, tl, th, tv,
-                 g_ams_timer_yes ? 0x28d49a : 0xf0b838, 124,
+                 g_ams_timer_yes ? UI_COL_ACCENT : UI_COL_WARN, 124,
                  [](lv_event_t *e){
                    g_ams_timer_yes = !g_ams_timer_yes;
                    prefsPutBool("ams_tmr_yes", g_ams_timer_yes);
                    logSDf("AMS: timeout means %s", g_ams_timer_yes ? "yes" : "no");
                    show_ams_assign_pending = true;
                  });
-    makeValueRow(scr_ams_assign, win_lbl, win_hint, win_val, 0x28d49a, 186, windowRowCb);
+    makeValueRow(scr_ams_assign, win_lbl, win_hint, win_val, UI_COL_ACCENT, 186, windowRowCb);
     desc_y = 250;
   } else if (g_ams_mode == AMS_ALWAYS) {
-    makeValueRow(scr_ams_assign, win_lbl, win_hint, win_val, 0x28d49a, 124, windowRowCb);
+    makeValueRow(scr_ams_assign, win_lbl, win_hint, win_val, UI_COL_ACCENT, 124, windowRowCb);
     desc_y = 188;
   }
 
@@ -300,7 +301,7 @@ void buildAmsAssignScreen() {
     copyT(dbuf, sizeof(dbuf), desc_id);
     lv_obj_t *lbl = lv_label_create(scr_ams_assign);
     lv_label_set_text(lbl, dbuf);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(lbl, 452);
@@ -319,7 +320,7 @@ void buildAmsAssignScreen() {
     }
     lv_obj_t *err = lv_label_create(scr_ams_assign);
     lv_label_set_text(err, ebuf);
-    lv_obj_set_style_text_color(err, lv_color_hex(0xe04040), 0);
+    lv_obj_set_style_text_color(err, lv_color_hex(UI_COL_BAD), 0);
     lv_obj_set_style_text_font(err, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(err, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(err, 452);

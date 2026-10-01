@@ -4,6 +4,7 @@
 
 #include "services/spool_color.h"
 #include "services/text_util.h"
+#include "theme.h"
 
 void addBackButton(lv_obj_t *parent, lv_event_cb_t cb);
 // The "?" circle in the header row, between the centred title and the close
@@ -59,11 +60,11 @@ void logLvMem(const char* tag, int rows);
 bool lvPoolHasRoomForRow();
 
 // Neutral grey for a colour swatch with no usable colour behind it.
-#define SWATCH_FALLBACK_COLOR 0x333333
+#define SWATCH_FALLBACK_COLOR UI_COL_SWATCH_NONE
 
 // What a clear filament is drawn in when nothing names a tint for it: the
 // glass white the filament databases use for "clear".
-#define SWATCH_GLASS_COLOR    0xDCE6F0
+#define SWATCH_GLASS_COLOR    UI_COL_SWATCH_GLASS
 
 // A filament that lets light through is drawn as a vertical fade, from its
 // hue at the top into the screen ground at the bottom. It reads as glass, the
