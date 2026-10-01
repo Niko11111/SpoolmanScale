@@ -10,7 +10,7 @@
 //  sizes, radii, the house measurements of a button. Every colour
 //  in src/ui and src/app has a name; the ratchet counts one written
 //  as a number (inline_color_hex, raw_color_hex). The colours
-//  themselves stand in theme_palette.h, dark and light side by side.
+//  themselves stand in theme_palette.h, one column per palette.
 //
 //  Names say what a colour is for, not what it looks like:
 //  UI_COL_CAPTION rather than "dim blue". A palette that swaps
@@ -30,7 +30,7 @@
 // ============================================================
 
 // ---- colours -------------------------------------------------
-#define UI_COLOUR(name, dark, light) extern uint32_t UI_COL_##name;
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light) extern uint32_t UI_COL_##name;
 #include "theme_palette.h"
 #undef UI_COLOUR
 
@@ -43,9 +43,13 @@ extern int UI_SHADE_BORDER;
 uint32_t uiShade(uint32_t colour, int step);
 
 // ---- palettes ------------------------------------------------
+// Stored in NVS by number: append, never reorder. The columns of
+// theme_palette.h follow this order.
 enum UiThemeId : uint8_t {
-  UI_THEME_DARK  = 0,
-  UI_THEME_LIGHT = 1,
+  UI_THEME_DARK           = 0,
+  UI_THEME_LIGHT          = 1,
+  UI_THEME_SPOOLMAN_DARK  = 2,
+  UI_THEME_SPOOLMAN_LIGHT = 3,
   UI_THEME_COUNT
 };
 
@@ -57,7 +61,8 @@ UiThemeId uiThemeActive();
 UiThemeId uiThemeStored();
 // Stores the choice for the next boot. The running palette stays.
 bool uiThemeStore(UiThemeId id);
-// "dark", "light": the id the web interface speaks.
+// "dark", "light", "spoolman_dark", "spoolman_light": the id the web
+// interface speaks, and the data-theme of its pages.
 const char* uiThemeKey(UiThemeId id);
 bool uiThemeFromKey(const char* key, UiThemeId* out);
 

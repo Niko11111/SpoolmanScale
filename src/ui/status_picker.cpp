@@ -122,6 +122,9 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
   lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, 10, 0);
+  // The header strip inside is square; clipped here it follows the
+  // rounded corners instead of poking out past them.
+  lv_obj_set_style_clip_corner(box, true, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -203,7 +206,7 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
     } else {
       lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_CHIP), 0);
       lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
-      lv_obj_set_style_border_color(cell, lv_color_hex(UI_COL_ROW), 0);
+      lv_obj_set_style_border_color(cell, lv_color_hex(UI_COL_DIVIDER), 0);
       txt_col = UI_COL_INK_BRIGHT;
     }
 

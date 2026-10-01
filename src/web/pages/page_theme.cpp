@@ -1,5 +1,5 @@
 // Colour scheme. The scale and this interface share one palette; this is where
-// it is chosen, with a preview of both palettes drawn in the browser from the
+// it is chosen, with a preview card per palette drawn in the browser from the
 // same table the scale reads (ui/theme_palette.h). The scale takes a new
 // palette with a restart, because LVGL copies a colour into an object when
 // the object is made.
@@ -89,6 +89,10 @@ static String body() {
   h += jsStr(T(STR_W_THEME_DARK));
   h += F(",light:");
   h += jsStr(T(STR_W_THEME_LIGHT));
+  h += F(",spoolman_dark:");
+  h += jsStr(T(STR_W_THEME_SPOOLMAN_DARK));
+  h += F(",spoolman_light:");
+  h += jsStr(T(STR_W_THEME_SPOOLMAN_LIGHT));
   h += F("},active:");
   h += jsStr(T(STR_W_THEME_ACTIVE));
   h += F(",later:");

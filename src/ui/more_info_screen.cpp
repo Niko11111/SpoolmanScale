@@ -356,6 +356,9 @@ void showLocationPicker() {
   lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, 10, 0);
+  // The header strip inside is square; clipped here it follows the
+  // rounded corners instead of poking out past them.
+  lv_obj_set_style_clip_corner(box, true, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -535,7 +538,7 @@ void fetchAndFillLocationList() {
   lv_obj_set_size(btn_none, 370, 44);
   lv_obj_set_style_bg_color(btn_none, lv_color_hex(UI_COL_CHIP), 0);
   lv_obj_set_style_bg_color(btn_none, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
-  lv_obj_set_style_border_color(btn_none, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_border_color(btn_none, lv_color_hex(UI_COL_DIVIDER), 0);
   lv_obj_set_style_border_width(btn_none, 1, 0);
   lv_obj_set_style_radius(btn_none, 6, 0);
   lv_obj_set_style_shadow_width(btn_none, 0, 0);
@@ -573,7 +576,7 @@ void fetchAndFillLocationList() {
     bool is_current = (strlen(sm_location_name) > 0 && strcmp(loc_name, sm_location_name) == 0);
     lv_obj_set_style_bg_color(row, is_current ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_CHIP), 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(row, is_current ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_ROW), 0);
+    lv_obj_set_style_border_color(row, is_current ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_DIVIDER), 0);
     lv_obj_set_style_border_width(row, 1, 0);
     lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_shadow_width(row, 0, 0);
@@ -710,6 +713,9 @@ void buildMoreInfoScreen() {
   lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, 10, 0);
+  // The header strip inside is square; clipped here it follows the
+  // rounded corners instead of poking out past them.
+  lv_obj_set_style_clip_corner(box, true, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -883,7 +889,7 @@ void buildMoreInfoScreen() {
   lv_obj_t *div1 = lv_obj_create(box);
   lv_obj_set_size(div1, 444, 1);
   lv_obj_set_pos(div1, 10, 104);
-  lv_obj_set_style_bg_color(div1, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_bg_color(div1, lv_color_hex(UI_COL_DIVIDER), 0);
   lv_obj_set_style_border_width(div1, 0, 0);
   lv_obj_set_style_radius(div1, 0, 0);
   lv_obj_set_style_pad_all(div1, 0, 0);
@@ -1004,7 +1010,7 @@ void buildMoreInfoScreen() {
   lv_obj_t *div2 = lv_obj_create(box);
   lv_obj_set_size(div2, 444, 1);
   lv_obj_set_pos(div2, 10, 196);
-  lv_obj_set_style_bg_color(div2, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_bg_color(div2, lv_color_hex(UI_COL_DIVIDER), 0);
   lv_obj_set_style_border_width(div2, 0, 0);
   lv_obj_set_style_radius(div2, 0, 0);
   lv_obj_set_style_pad_all(div2, 0, 0);

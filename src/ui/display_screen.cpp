@@ -131,7 +131,7 @@ void buildDisplayScreen() {
     lv_label_set_text(l, buf);
     lv_obj_set_style_text_color(l, active ? lv_color_hex(UI_COL_ON_ACCENT)
                                  : (allowed ? lv_color_hex(UI_COL_INK_2)
-                                            : lv_color_hex(UI_COL_CAPTION)), 0);
+                                            : lv_color_hex(UI_COL_UNAVAILABLE)), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
@@ -179,7 +179,7 @@ void buildDisplayScreen() {
     lv_label_set_text(l, buf);
     lv_obj_set_style_text_color(l, active ? lv_color_hex(UI_COL_ON_ACCENT)
                                  : (allowed ? lv_color_hex(UI_COL_INK_2)
-                                            : lv_color_hex(UI_COL_CAPTION)), 0);
+                                            : lv_color_hex(UI_COL_UNAVAILABLE)), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
@@ -230,7 +230,7 @@ void buildDisplayScreen() {
     lv_label_set_text(l, buf);
     lv_obj_set_style_text_color(l, active ? lv_color_hex(UI_COL_ON_ACCENT)
                                  : (allowed ? lv_color_hex(UI_COL_INK_2)
-                                            : lv_color_hex(UI_COL_CAPTION)), 0);
+                                            : lv_color_hex(UI_COL_UNAVAILABLE)), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {

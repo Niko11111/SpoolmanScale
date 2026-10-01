@@ -3077,6 +3077,10 @@ const char* const STRINGS[][3] = {
     "Enregistré. Actif au prochain redémarrage de la balance." },  // STR_W_THEME_LATER
   { "Die Waage startet neu, die Seite lädt gleich von selbst.", "The scale is restarting, this page reloads by itself.",
     "La balance redémarre, la page se recharge d'elle-même." },  // STR_W_THEME_RESTARTING
+  { "Spoolman dunkel", "Spoolman dark",
+    "Spoolman sombre" },  // STR_W_THEME_SPOOLMAN_DARK
+  { "Spoolman hell", "Spoolman light",
+    "Spoolman clair" },  // STR_W_THEME_SPOOLMAN_LIGHT
 };
 
 StringID tagWriteResultString(uint8_t code) {

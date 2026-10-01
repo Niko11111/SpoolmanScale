@@ -455,7 +455,7 @@ void buildUI() {
   lv_obj_t *sep_inner = lv_obj_create(lv_scr_act());
   lv_obj_set_size(sep_inner, 464, 1);
   lv_obj_set_pos(sep_inner, 8, 140);
-  lv_obj_set_style_bg_color(sep_inner, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_bg_color(sep_inner, lv_color_hex(UI_COL_DIVIDER), 0);
   lv_obj_set_style_border_width(sep_inner, 0, 0);
   lv_obj_set_style_radius(sep_inner, 0, 0);
   lv_obj_set_style_pad_all(sep_inner, 0, 0);
@@ -592,7 +592,7 @@ void buildUI() {
   lv_obj_t *vdiv1 = lv_obj_create(lv_scr_act());
   lv_obj_set_size(vdiv1, 1, 70);
   lv_obj_set_pos(vdiv1, 210, 189);
-  lv_obj_set_style_bg_color(vdiv1, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_bg_color(vdiv1, lv_color_hex(UI_COL_DIVIDER), 0);
   lv_obj_set_style_border_width(vdiv1, 0, 0);
   lv_obj_set_style_radius(vdiv1, 0, 0);
   lv_obj_set_style_pad_all(vdiv1, 0, 0);
@@ -675,7 +675,7 @@ void buildUI() {
     lv_obj_t *vdiv2 = lv_obj_create(lv_scr_act());
     lv_obj_set_size(vdiv2, 1, 70);
     lv_obj_set_pos(vdiv2, 408, 189);
-    lv_obj_set_style_bg_color(vdiv2, lv_color_hex(UI_COL_ROW), 0);
+    lv_obj_set_style_bg_color(vdiv2, lv_color_hex(UI_COL_DIVIDER), 0);
     lv_obj_set_style_border_width(vdiv2, 0, 0);
     lv_obj_set_style_radius(vdiv2, 0, 0);
     lv_obj_set_style_pad_all(vdiv2, 0, 0);

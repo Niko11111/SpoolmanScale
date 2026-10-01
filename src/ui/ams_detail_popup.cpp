@@ -961,6 +961,9 @@ void showAmsDetailPopup(const AmsSpoolDetail& d) {
   lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, UI_RADIUS_BOX, 0);
+  // The header strip inside is square; clipped here it follows the
+  // rounded corners instead of poking out past them.
+  lv_obj_set_style_clip_corner(box, true, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
