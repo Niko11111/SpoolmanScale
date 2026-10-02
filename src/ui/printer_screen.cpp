@@ -185,8 +185,10 @@ void buildPrinterScreen() {
 
   // Where the roll runs under the head: its own screen, with the
   // calibration page. The row says the offset and, at an edge or the
-  // middle, which one.
-  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_W_P_CAL_TITLE);
+  // middle, which one. Only with a printer: the offset is kept per device
+  // (its address is the key), and without one a value set here was reported
+  // saved and was 0 again after a restart.
+  if (have) { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_W_P_CAL_TITLE);
     int16_t lo, hi;
     labelPrinterOffsetRange(c, &lo, &hi);
     const int off = labelPrinterOffset(c);

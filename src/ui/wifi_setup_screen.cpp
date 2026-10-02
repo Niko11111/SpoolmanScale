@@ -643,7 +643,11 @@ void showWifiConnectingScreen() {
 
   lv_obj_t *status_lbl = lbl_conn_status;
 
-  wifiManagerPrepareScan();
+  // Only without a link, as in doWifiScan(): a connected station (another
+  // network picked after "change") is switched over directly. The reset would
+  // turn the driver off under the web server, which is still listening:
+  // wifi_ok was cleared just above, and no state sync has run since.
+  if (!wifiManagerIsConnected()) wifiManagerPrepareScan();
   wifi_ok = wifiManagerConnect(cfg_wifi_ssid, cfg_wifi_password, 20, 500);
   lv_timer_handler();
 

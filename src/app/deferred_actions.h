@@ -12,7 +12,7 @@ extern bool show_factor_pending;
 extern bool cal_reset_pending;
 // A row of the scale menu changed a setting and the screen has to show it.
 // Deferred rather than rebuilt on the spot: the rebuild deletes the screen the
-// button that set it sits on, which is what CLAUDE.md rules out.
+// button that set it sits on, which the house rules rule out.
 extern bool scale_sub_rebuild_pending;
 // A setting changed that is only read while the interface is built, so it
 // takes a restart to show. Its own flag rather than a call from the callback:

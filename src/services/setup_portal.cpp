@@ -52,8 +52,12 @@ bool setupPortalStart() {
   if (s_active) return true;
 
   // The list for the form. The radio is reset first, the same way the setup
-  // screen does it: after a failed begin() a scan returns nothing.
-  wifiManagerPrepareScan();
+  // screen does it: after a failed begin() a scan returns nothing. Not on a
+  // connected station, which scans beside its link: the web server is still
+  // listening until the state sync after this call, and the reset turned the
+  // driver off under it (the PANIC doWifiScan() avoids the same way). The
+  // access point below ends the link without taking the driver down.
+  if (!wifiManagerIsConnected()) wifiManagerPrepareScan();
   const int n = wifiManagerScanSorted(s_nets, SETUP_PORTAL_SCAN_MAX);
   if (n < 0) logSDf("Portal: WiFi scan failed (rc=%d)", n);
   s_net_count = n > 0 ? n : 0;

@@ -45,6 +45,10 @@ bool isConfirmPopupOpen() {
   return confirm_popup != nullptr;
 }
 
+bool isSpoolWeightScopeOpen() {
+  return s_scope_popup != nullptr;
+}
+
 void closeConfirmPopup() {
   // Deleted on the next timer pass, not here: every caller of this is one of
   // the popup's own buttons, and deleting a button's ancestor from inside its
@@ -73,13 +77,27 @@ enum ConfirmJob : uint8_t {
 static ConfirmJob s_job       = CJ_NONE;
 static float      s_job_value = 0.0f;
 static float      s_job_gross = 0.0f;   // the pad reading the AMS note wants
+// The spool an empty spool weight was meant for. Every tare write goes to
+// whatever spool is loaded when it runs, and a spool swapped while the scope
+// question stood would take a tare that belongs to the one before it.
+static int        s_tare_spool_id = 0;  // the spool the scope question is for
+static int        s_job_spool_id  = 0;  // ... carried with the parked write
 
 static void tareFollowUp();
+static void tareDropFollowUp();
 
 void handleConfirmPopupDeferredActions() {
   if (s_job == CJ_NONE) return;
   const ConfirmJob job = s_job;
   s_job = CJ_NONE;
+  const bool tare_job = job == CJ_TARE_SPOOL || job == CJ_TARE_FILAMENT ||
+                        job == CJ_TARE_VENDOR;
+  if (tare_job && sm_id != s_job_spool_id) {
+    logSDf("Tare: %.1f g was for spool %d, spool %d is loaded now - not stored",
+           s_job_value, s_job_spool_id, sm_id);
+    tareDropFollowUp();   // its initial weight would follow the same tare
+    return;
+  }
   switch (job) {
     case CJ_WEIGHT:
       patchSpoolmanWeight(s_job_value);
@@ -143,6 +161,10 @@ static void tareFollowUp() {
   patchInitialWeight(sm_total);
 }
 
+static void tareDropFollowUp() {
+  s_tare_then_new = false;
+}
+
 // Whether New spool has to derive the tare from this reading because nothing
 // else is known, and what it would store.
 //
@@ -181,6 +203,9 @@ static bool newSpoolDerivesTare(float* out_tare) {
 static void showSpoolWeightPopup(float grams, bool then_new_spool, bool measured = true) {
   s_tare_prompt_g = grams;
   s_tare_then_new = then_new_spool;
+  // The typed value only gets here for the spool its entry was opened for,
+  // see tare_entry.cpp.
+  s_tare_spool_id = sm_id;
 
       // Sub-popup: where should the spool weight be written?
       const float w = s_tare_prompt_g;
@@ -229,7 +254,7 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool, bool measured
         lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_center(l); }
       lv_obj_add_event_cb(b1, [](lv_event_t *e) {
-        s_job = CJ_TARE_SPOOL; s_job_value = s_tare_prompt_g;
+        s_job = CJ_TARE_SPOOL; s_job_value = s_tare_prompt_g; s_job_spool_id = s_tare_spool_id;
         releaseScreen(&s_scope_popup);
       }, LV_EVENT_CLICKED, NULL);
 
@@ -248,7 +273,7 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool, bool measured
         lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_center(l); }
       lv_obj_add_event_cb(b2, [](lv_event_t *e) {
-        s_job = CJ_TARE_FILAMENT; s_job_value = s_tare_prompt_g;
+        s_job = CJ_TARE_FILAMENT; s_job_value = s_tare_prompt_g; s_job_spool_id = s_tare_spool_id;
         releaseScreen(&s_scope_popup);
       }, LV_EVENT_CLICKED, NULL);
 
@@ -269,7 +294,7 @@ static void showSpoolWeightPopup(float grams, bool then_new_spool, bool measured
         lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_center(l); }
       lv_obj_add_event_cb(b3, [](lv_event_t *e) {
-        s_job = CJ_TARE_VENDOR; s_job_value = s_tare_prompt_g;
+        s_job = CJ_TARE_VENDOR; s_job_value = s_tare_prompt_g; s_job_spool_id = s_tare_spool_id;
         releaseScreen(&s_scope_popup);
       }, LV_EVENT_CLICKED, NULL);
 

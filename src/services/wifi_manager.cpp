@@ -5,10 +5,22 @@
 #include "services/device_name.h"
 #include "services/mdns_service.h"
 
+// The name the DHCP client sends, so the router lists the scale by name
+// instead of as "esp32s3-XXXXXX". Core 3 only stores it here and hands it to
+// the station's netif when mode() switches the station on
+// (WiFiGenericClass::mode()); a mode() that finds the station on already
+// leaves the netif alone. Set after mode() on a cold start, the first DHCP
+// request still carried the default. So it goes in before every mode() below
+// that can switch the station on.
+static void stageHostname() {
+  WiFi.setHostname(deviceLabel());
+}
+
 void wifiManagerPrepareScan() {
   mdnsStop();
   WiFi.disconnect(true);
   delay(100);
+  stageHostname();
   WiFi.mode(WIFI_STA);
   delay(100);
 }
@@ -88,6 +100,7 @@ bool wifiManagerStartAp(const char* ssid, const char* password, IPAddress ip, IP
 
 void wifiManagerStopAp() {
   WiFi.softAPdisconnect(true);
+  stageHostname();
   WiFi.mode(WIFI_STA);
 }
 
@@ -99,13 +112,25 @@ static void onStaDisconnected(arduino_event_id_t event, arduino_event_info_t inf
   s_last_disconnect_reason = info.wifi_sta_disconnected.reason;
 }
 
+// Addresses handed out so far, written from the same task. One writer and a
+// single word, so no lock either.
+static volatile uint32_t s_got_ip_count = 0;
+
+static void onStaGotIp(arduino_event_id_t event, arduino_event_info_t info) {
+  (void)event;
+  (void)info;
+  s_got_ip_count = s_got_ip_count + 1;
+}
+
 void wifiManagerBegin(const char* ssid, const char* password,
                       int32_t channel, const uint8_t* bssid) {
   static bool event_registered = false;
   if (!event_registered) {
     WiFi.onEvent(onStaDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+    WiFi.onEvent(onStaGotIp, ARDUINO_EVENT_WIFI_STA_GOT_IP);
     event_registered = true;
   }
+  stageHostname();
   WiFi.mode(WIFI_STA);
   // The core's default is a fast scan, which joins the first access point it
   // hears on the SSID and never sorts by signal. With several access points
@@ -116,11 +141,6 @@ void wifiManagerBegin(const char* ssid, const char* password,
   // dropped link all get it from here.
   WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
   WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
-  // Has to happen before begin(): the DHCP client sends it with the request,
-  // so the router lists the scale by name instead of as "espressif". It
-  // sticks to the netif, which is why the reconnect watchdog in appLoop()
-  // does not need to repeat it.
-  WiFi.setHostname(deviceLabel());
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
   // Modem sleep off. The loop serves every web request itself, and on core 3
   // a sleeping radio made each one crawl: /api/logs took 0.1 to 2.9 s instead
@@ -170,12 +190,25 @@ int wifiManagerScannedChannel(int index) {
 }
 
 bool wifiManagerConnect(const char* ssid, const char* password, int attempts, uint32_t interval_ms) {
+  const uint32_t ip_before = wifiManagerGotIpCount();
   wifiManagerBegin(ssid, password);
   for (int i = 0; i < attempts; i++) {
     delay(interval_ms);
-    if (WiFi.status() == WL_CONNECTED) return true;
+    if (wifiManagerLinkUpSince(ip_before)) return true;
   }
   return false;
+}
+
+void wifiManagerStopConnect() {
+  WiFi.disconnect();
+}
+
+uint32_t wifiManagerGotIpCount() {
+  return s_got_ip_count;
+}
+
+bool wifiManagerLinkUpSince(uint32_t got_ip_count) {
+  return WiFi.status() == WL_CONNECTED && s_got_ip_count != got_ip_count;
 }
 
 bool wifiManagerIsConnected() {

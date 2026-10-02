@@ -90,6 +90,7 @@
 #include "services/prefs_store.h"
 #include "web/web_jobs.h"
 #include "ui/confirm_popup.h"
+#include "ui/tare_entry.h"
 #include "ui/ble_devices_screen.h"
 #include "ui/bluetooth_screen.h"
 #include "ui/connection_screen.h"
@@ -971,14 +972,20 @@ void appLoop() {
   // stands. It has to run every pass, not only when something happened: the
   // countdown is what it is mostly doing.
   handleSecondTagDeferredActions();
+  // Before the questions below: a spool lifted while its empty weight is being
+  // typed in takes the entry down unsaved first, and is asked about after.
+  tareEntryTick();
   if (!tag_present && weightSaysSpoolGone()) loc_left_pad = true;
   // Debounced popups after a removal, cross-checked against the scale.
   // The AMS question and the location question hang off the same event, so
   // the verdict is worked out once and the AMS side gets it first: a spool
   // on its way into a printer has no shelf worth asking about. The "no"
   // branch of that popup raises the location question again.
+  // Held, not dropped, while the empty spool weight is being entered: the
+  // questions wait for that dialog like for any other modal.
   if ((loc_popup_pending_id > 0 || ams_popup_pending_id > 0 ||
-       pick_popup_pending_id > 0) && !tag_present) {
+       pick_popup_pending_id > 0) && !tag_present &&
+      !isTareEntryOpen() && !isSpoolWeightScopeOpen()) {
     const unsigned long since = millis() - last_tag_seen_ms;
     const bool weight_says_gone = weightSaysSpoolGone();
     const bool weight_says_stay = weightSaysSpoolStayed();
@@ -1420,7 +1427,10 @@ void appLoop() {
     // sm_archived is excluded on purpose: an archived spool reads 0 g by
     // definition, so weighing it silently would file a full spool as empty
     // stock. Bringing it back is a decision, and it has its own button.
-    if (!aw_done && !isConfirmPopupOpen() && sm_found && !sm_archived && sm_id > 0 && scale_ready &&
+    // Nor while an empty spool weight is being entered: the weighing would
+    // be computed against the tare that is about to be replaced.
+    if (!aw_done && !isConfirmPopupOpen() && !isTareEntryOpen() && !isSpoolWeightScopeOpen() &&
+        sm_found && !sm_archived && sm_id > 0 && scale_ready &&
         (tag_present || aw_adopted)) {
       float cur = scale_weight_g;
       if (fabsf(cur - auto_weight_last_val) > AUTO_WEIGHT_THRESH_G) {
