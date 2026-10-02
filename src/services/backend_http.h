@@ -70,6 +70,10 @@ class ChunkedStream : public Stream {
   int    peek() override;
   size_t write(uint8_t) override { return 0; }
   void   flush() override {}
+  // Nothing more will come: the last chunk was read, or the stream broke off.
+  // For a reader that cannot wait for the socket to close - a kept-alive one
+  // stays open after the body.
+  bool   done() const { return done_ && peeked_ < 0; }
  private:
   int  nextByte();      // one byte of the raw stream, waiting up to the timeout
   bool nextChunk();     // reads a size line; false at the end or on garbage

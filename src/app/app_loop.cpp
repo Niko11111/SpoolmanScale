@@ -1855,6 +1855,11 @@ void appLoop() {
             TagSeen::note(uid_str, bambu_blocks_read > 0 ? "Bambu"
                                    : snapmaker_decoded   ? "Snapmaker" : "MIFARE");
           }
+          // What the read attempts came to, once: read in full, or out of
+          // retries. Logging only.
+          if (!(uuid_missing || contents_incomplete) || nfc_retry_count >= NFC_MAX_RETRIES) {
+            bambuScanReport();
+          }
           if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES &&
               bambu_blocks_read == 0) {
             // Not a Bambu tag at all. Every sector failed authentication, so
@@ -2038,6 +2043,7 @@ void appLoop() {
                                    nfc_fast_polls >= NFC_GONE_MIN_MISSES;
           if (weight_gone || (!retrying && millis() - first_miss_ms >= absent_limit)) {
             nfc_stat_removals++;
+            bambuScanReport();   // a Bambu tag that left before its reads settled
             Serial.printf("NFC: tag removed (gap %u ms, %d fast re-polls, %s)\n",
               (unsigned)(millis() - first_miss_ms), nfc_fast_polls,
               weight_gone ? "weight gone" : "grace period over");

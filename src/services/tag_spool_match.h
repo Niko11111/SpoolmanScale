@@ -33,8 +33,9 @@ struct TagSpoolVerdict {
 // The rules the link list has filtered by for months, and the browser link
 // has warned by: three characters of the material, then the subtype
 // ("Tough+" must not pass as plain PLA) against the spool's material or name,
-// then the colour where both name one. An article number both sides agree on
-// settles all of it: it names product and colour at once.
+// then the colour where both name one. A support tag ("Support for PLA")
+// wants a "-S" spool of the base it names (PLA-S). An article number both
+// sides agree on settles all of it: it names product and colour at once.
 TagSpoolVerdict tagSpoolCompare(const char* tag_material, const char* tag_color_hex,
                                 const char* spool_material, const char* spool_name,
                                 const char* spool_vendor, const char* spool_color_hex,

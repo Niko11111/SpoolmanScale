@@ -10,6 +10,7 @@
 
 #include "hardware/flash_log.h"
 #include "hardware/sd_logger.h"
+#include "services/backend_http.h"
 #include "services/github_release.h"
 
 // Last: T() is a macro, and ArduinoJson uses T as a template parameter.
@@ -372,8 +373,8 @@ BambuCatalogOutcome bambuCatalogDownload(bool conditional, char* err, size_t err
     snprintf(err, err_len, "connection failed");
     return BCO_FAILED;
   }
-  const char* keep[] = { "ETag" };
-  http.collectHeaders(keep, 1);
+  const char* keep[] = { "ETag", "Transfer-Encoding" };
+  http.collectHeaders(keep, 2);
   char etag[96];
   if (conditional && storedEtag(etag, sizeof(etag))) http.addHeader("If-None-Match", etag);
   const int code = http.GET();
@@ -403,6 +404,19 @@ BambuCatalogOutcome bambuCatalogDownload(bool conditional, char* err, size_t err
   char* raw = (char*)heap_caps_malloc(cap + 1, MALLOC_CAP_SPIRAM);
   if (!raw) { snprintf(err, err_len, "no memory"); http.end(); return BCO_FAILED; }
   Stream* in = http.getStreamPtr();
+  // GitHub sends the file with a Content-Length. Sent chunked instead, the
+  // raw socket carries a size line before every piece, and the parser would
+  // take those for JSON; ChunkedStream takes them out. Its timeout is 0
+  // because it waits on the socket itself, and the end is its last chunk,
+  // not a closed socket.
+  const bool chunked = http.header("Transfer-Encoding").equalsIgnoreCase("chunked");
+  ChunkedStream dechunk;
+  if (chunked) {
+    dechunk.reset(in);
+    dechunk.setTimeout(0);
+    in = &dechunk;
+    logSD("Bambu catalog: the answer is chunked, size lines taken out");
+  }
   size_t got = 0;
   unsigned long last = millis();
   while (got < cap) {
@@ -413,6 +427,7 @@ BambuCatalogOutcome bambuCatalogDownload(bool conditional, char* err, size_t err
       if (n > 0) { got += (size_t)n; last = millis(); }
       continue;
     }
+    if (chunked && dechunk.done()) break;
     if (!http.connected()) break;
     if (millis() - last > BAMBU_CATALOG_STALL_MS) break;
     delay(BAMBU_CATALOG_POLL_MS);

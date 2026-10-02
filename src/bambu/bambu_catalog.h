@@ -17,11 +17,16 @@
 //  Spoolman's article_number holds for the same spool) and the colour's name
 //  in twelve languages.
 //
-//  The scale downloads that table itself, from BambuStudio's repository, on
-//  request from the tags page - it is not shipped with the firmware, whose
-//  licence is not BambuStudio's. What it keeps is a compact copy in the data
-//  partition, behind the log ring: 318 colours come to about 20 kB there.
-//  Nothing is fetched or written unless someone asks.
+//  The scale downloads that table itself, from BambuStudio's repository - it
+//  is not shipped with the firmware, whose licence is not BambuStudio's. What
+//  it keeps is a compact copy in the data partition, behind the log ring: 318
+//  colours come to about 20 kB there.
+//
+//  When: on request from the tags page, and on its own a few minutes after
+//  boot and then once a day, while the automatic update check is switched on
+//  (bambu_catalog_sync.h). That daily request is conditional: while the file
+//  is unchanged GitHub answers 304 and nothing is downloaded or written. With
+//  the update check off, nothing is fetched unless someone asks.
 // ============================================================
 
 // Where the catalog lives: straight after the log ring's 512 kB.

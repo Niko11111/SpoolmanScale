@@ -25,6 +25,9 @@
 static bool          s_init    = false;
 static unsigned long s_due_ms  = 0;
 static bool          s_started = false;   // a check of ours is on the worker
+// That check reached GitHub: a download stored, or a 304. Known here even when
+// somebody else collects the result, see collect().
+static bool          s_reached = false;
 static uint32_t      s_last    = 0;       // from NVS, kept here
 
 uint32_t bambuCatalogLastCheck() {
@@ -35,17 +38,20 @@ uint32_t bambuCatalogLastCheck() {
 bool bambuCatalogSyncNow() {
   if (!webJobStart(WJ_BAMBU_CATALOG, "check", false)) return false;
   s_started = true;
+  s_reached = false;
   return true;
 }
 
 // The result of a check this module started, if nobody collected it first.
-// The tags page may, when it happens to be open; the outcome is then logged
-// there already and only the schedule is set here.
+// The tags page may, when it happens to be open, and the network probe clears
+// any leftover; the outcome is then logged there already and only the
+// schedule is set here. From s_reached, not assumed good: a failure taken
+// away by another page used to set the 24 h pause instead of the hour.
 static void collect() {
   if (!s_started) return;
   if (webJobKind() == WJ_BAMBU_CATALOG && webJobState() == WJS_RUNNING) return;
   s_started = false;
-  bool ok = true;
+  bool ok = s_reached;
   if (webJobKind() == WJ_BAMBU_CATALOG && webJobState() == WJS_DONE) {
     const WebJobResult& r = webJobResult();
     ok = r.ok;
@@ -69,6 +75,9 @@ void bambuCatalogSyncTick() {
   if (checked) {
     s_last = checked;
     if (checked >= BCAT_TIME_SYNCED) prefsPutUInt(BCAT_PREF_KEY, checked);
+    // Noted on the worker before the job reports done, so it is here by the
+    // time collect() below sees the job finished.
+    if (s_started) s_reached = true;
   }
 
   collect();
@@ -92,4 +101,5 @@ void bambuCatalogSyncTick() {
     return;
   }
   s_started = true;
+  s_reached = false;
 }

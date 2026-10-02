@@ -680,7 +680,6 @@ void querySpoolmanById(int spool_id) {
   }
 
   captureBindings(spool);
-  dryingSyncNote(spool);
 
   // Material and vendor only for an NTAG, a Bambu tag carries its own. The
   // colour for both, through applyServerColor().
@@ -698,6 +697,9 @@ void querySpoolmanById(int spool_id) {
   // After a link as after a scan: does the Bambu tag describe this spool?
   if (is_bambu_tag) tagSpoolLookupNote(spool, sm_id);
   else              tagSpoolLookupClear();
+  // After the verdict above: a tag that does not describe this spool must
+  // not hand it its drying advice.
+  dryingSyncNote(spool);
 
   bool is_ntag = !is_bambu_tag;
   if (is_ntag) {

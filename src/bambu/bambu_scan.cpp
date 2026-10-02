@@ -43,6 +43,13 @@ int countBambuDataBlocksRead(const BambuTagData& tag) {
 // off the loop task stack.
 static BambuTagData scan_buf;
 
+// The attempts on the tag on the reader, for the one SD line
+// bambuScanReport() writes once the placement has settled. Each attempt used
+// to write four lines of its own, and a placement takes up to six.
+static int  s_attempts = 0;
+static bool s_probe_refused = false;   // the last attempt stopped at the probe
+static char s_attempt_uid[sizeof(g_tag.uid_str)] = "";
+
 BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
   char uid_str[24];
   sprintf(uid_str, "%02X:%02X:%02X:%02X", uid[0], uid[1], uid[2], uid[3]);
@@ -52,6 +59,13 @@ BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
   const bool uid_changed = (strcmp(uid_str, g_tag.uid_str) != 0);
   const int  prev_blocks = uid_changed ? -1 : countBambuDataBlocksRead(g_tag);
 
+  if (strcmp(uid_str, s_attempt_uid) != 0) {
+    snprintf(s_attempt_uid, sizeof(s_attempt_uid), "%s", uid_str);
+    s_attempts = 0;
+  }
+  s_attempts++;
+  s_probe_refused = false;
+
   memset(&scan_buf, 0, sizeof(scan_buf));
   memcpy(scan_buf.uid, uid, 4);
   strncpy(scan_buf.uid_str, uid_str, sizeof(scan_buf.uid_str) - 1);
@@ -60,7 +74,7 @@ BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
   Serial.printf("\n=== Tag gefunden: %s ===\n", scan_buf.uid_str);
   // Not "Bambu tag found": a 4 byte UID says MIFARE Classic, and whether it
   // is a Bambu tag is what the sectors below decide.
-  logSDf("NFC: 4-byte MIFARE tag found UID=%s", scan_buf.uid_str);
+  if (sd_verbose) logSDf("[verbose] NFC: 4-byte MIFARE tag found UID=%s", scan_buf.uid_str);
 
   Serial.println("Deriving keys...");
   if (!deriveKeys(uid, uid_len, scan_buf.keys)) {
@@ -121,7 +135,9 @@ BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
     // through in about ten seconds instead of thirty-five.
     if (sector == BAMBU_PROBE_SECTORS - 1 && success_count == 0) {
       Serial.printf("First %d sectors refused auth, scan aborted\n", BAMBU_PROBE_SECTORS);
-      logSDf("NFC: first %d sectors refused auth, scan aborted", BAMBU_PROBE_SECTORS);
+      if (sd_verbose) logSDf("[verbose] NFC: first %d sectors refused auth, scan aborted",
+                             BAMBU_PROBE_SECTORS);
+      s_probe_refused = true;
       result = BAMBU_SCAN_NO_AUTH;
       break;
     }
@@ -129,7 +145,7 @@ BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
   if (sd_verbose) logSDf("[verbose] sectors: %s", sector_summary);
 
   Serial.printf("%d/48 blocks read\n", success_count);
-  logSDf("NFC: %d/48 blocks read", success_count);
+  if (sd_verbose) logSDf("[verbose] NFC: %d/48 blocks read", success_count);
 
   uint8_t block0[16];
   if (nfcReadMifareBlock(0, block0)) {
@@ -148,7 +164,8 @@ BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
   char rgba[SPOOL_COLOR_HEX_MAX];
   spoolColorFormat(scan_buf.color, rgba, sizeof(rgba));
   Serial.printf("Color:     %s\n", rgba[0] ? rgba : "-");
-  logSDf("NFC: material '%s', colour %s", scan_buf.material, rgba[0] ? rgba : "-");
+  if (sd_verbose) logSDf("[verbose] NFC: material '%s', colour %s", scan_buf.material,
+                         rgba[0] ? rgba : "-");
   Serial.printf("Temp:      %d - %d C\n", scan_buf.temp_min, scan_buf.temp_max);
   Serial.printf("Vendor:    %s\n", scan_buf.vendor);
   Serial.printf("Date:      %s\n", scan_buf.production_date);
@@ -156,11 +173,12 @@ BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
   // be checked against the box.
   char rgba2[SPOOL_COLOR_HEX_MAX] = "";
   if (scan_buf.color_count >= 2) spoolColorFormat(scan_buf.color2, rgba2, sizeof(rgba2));
-  logSDf("NFC: bambu %s/%s type '%s', %.0f g, %.2f mm, dry %d C %d h, %d m, colours %d %s",
-         scan_buf.material_id, scan_buf.material_variant_id, scan_buf.filament_type,
-         (double)scan_buf.spool_weight, (double)scan_buf.diameter_mm,
-         scan_buf.dry_temp_c, scan_buf.dry_hours, scan_buf.length_m,
-         (int)scan_buf.color_count, rgba2);
+  if (sd_verbose)
+    logSDf("[verbose] NFC: bambu %s/%s type '%s', %.0f g, %.2f mm, dry %d C %d h, %d m, colours %d %s",
+           scan_buf.material_id, scan_buf.material_variant_id, scan_buf.filament_type,
+           (double)scan_buf.spool_weight, (double)scan_buf.diameter_mm,
+           scan_buf.dry_temp_c, scan_buf.dry_hours, scan_buf.length_m,
+           (int)scan_buf.color_count, rgba2);
 
   // Adopt only on a new tag or on an improvement. A retry that read fewer
   // blocks than the attempt before it is discarded, so the display keeps the
@@ -172,9 +190,37 @@ BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
   } else {
     Serial.printf("NFC: retry read worse (%d < %d blocks), keeping previous data\n",
       new_blocks, prev_blocks);
-    logSDf("NFC: retry read worse (%d < %d blocks), previous data kept",
-      new_blocks, prev_blocks);
+    if (sd_verbose) logSDf("[verbose] NFC: retry read worse (%d < %d blocks), previous data kept",
+                           new_blocks, prev_blocks);
   }
 
   return result;
+}
+
+void bambuScanReport() {
+  if (s_attempts == 0) return;
+  const int attempts = s_attempts;
+  s_attempts = 0;
+  // g_tag holds the best attempt, unless another tag has been read since.
+  if (strcmp(g_tag.uid_str, s_attempt_uid) != 0) {
+    logSDf("NFC: %s left after %d attempt(s)", s_attempt_uid, attempts);
+    return;
+  }
+  const int blocks = countBambuDataBlocksRead(g_tag);
+  if (blocks == 0) {
+    logSDf("NFC: %s refused the Bambu keys, %d attempt(s)%s", s_attempt_uid, attempts,
+           s_probe_refused ? ", the last stopped at the probe" : "");
+    return;
+  }
+  char rgba[SPOOL_COLOR_HEX_MAX];
+  spoolColorFormat(g_tag.color, rgba, sizeof(rgba));
+  char rgba2[SPOOL_COLOR_HEX_MAX] = "";
+  if (g_tag.color_count >= 2) spoolColorFormat(g_tag.color2, rgba2, sizeof(rgba2));
+  logSDf("NFC: Bambu %s, %d/48 blocks after %d attempt(s): '%s' %s, %s/%s type '%s', "
+         "%.0f g, %.2f mm, dry %d C %d h, %d m, colours %d %s",
+         s_attempt_uid, blocks, attempts, g_tag.material, rgba[0] ? rgba : "-",
+         g_tag.material_id, g_tag.material_variant_id, g_tag.filament_type,
+         (double)g_tag.spool_weight, (double)g_tag.diameter_mm,
+         g_tag.dry_temp_c, g_tag.dry_hours, g_tag.length_m,
+         (int)g_tag.color_count, rgba2);
 }

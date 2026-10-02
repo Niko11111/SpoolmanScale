@@ -104,7 +104,8 @@ void joinMaterialName(const char* material, const char* name, char* out, size_t 
       return;
     }
   }
-  snprintf(out, out_size, "%s %s", material, name);
+  // No name: the material alone, without a trailing space.
+  snprintf(out, out_size, "%s%s%s", material, name[0] ? " " : "", name);
 }
 
 // Sort order of the link and copy lists: vendor, material, name, id, all
