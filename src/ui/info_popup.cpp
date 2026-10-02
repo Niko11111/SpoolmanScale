@@ -7,6 +7,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "ui/theme.h"
+#include "ui_common.h"
 
 // Twice now a text has outgrown this buffer and been cut mid sentence, at 256
 // and again at 352. The reason it keeps happening is that nothing complains:
@@ -138,6 +139,7 @@ static void buildResultCard(lv_obj_t *pop, int title_id, int text_id, uint8_t to
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
+  if (!done) uiSecondaryFill(btn);
   lv_obj_set_style_pad_all(btn, 0, 0);
   lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(btn, [](lv_event_t *e) {
@@ -255,11 +257,11 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, 200, 48);
   lv_obj_set_pos(btn, 120, 188);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, 8, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
+  uiSecondaryFill(btn);
   lv_obj_add_event_cb(btn, [](lv_event_t *e) {
     // Two levels up from the button: box, then the scrim that owns everything.
     // Deleted asynchronously because this runs inside the dispatch of an event

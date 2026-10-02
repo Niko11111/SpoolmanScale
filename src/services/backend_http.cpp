@@ -29,8 +29,8 @@
 // The connect timeout of the ahead-of-time open: the 5 s HTTPClient gives
 // every backend request, so a server that is gone holds the kept connection
 // - and every request waiting for it - no longer than a request of its own
-// would. The TLS client's own default is 30 s. The handshake keeps the
-// client's default, as it does for every request.
+// would. The TLS client's own default is 30 s. The handshake is bounded
+// by BackendTls itself, as for every request.
 #define WARM_CONNECT_MS      HTTPCLIENT_DEFAULT_TCP_TIMEOUT
 // What is left of an answer nobody read is read and dropped before the kept
 // connection serves the next request: up to this much, waiting this long for

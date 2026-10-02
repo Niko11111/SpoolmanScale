@@ -3121,10 +3121,6 @@ const char* const STRINGS[][3] = {
     "Revenir aux couleurs du thème" },  // STR_W_THEME_RESET
   { "auf dem Hintergrund", "on the background",
     "sur le fond" },  // STR_W_THEME_ON_BG
-  { "Zu blass auf diesem Hintergrund: Titel und Regler wären schwer zu sehen.", "Too faint on this background: titles and sliders would be hard to see.",
-    "Trop pâle sur ce fond : titres et curseurs seraient difficiles à voir." },  // STR_W_THEME_FAINT
-  { "Gut für Titel und Knöpfe, kleine Schrift in dieser Farbe liest sich schwächer.", "Fine for titles and buttons, small text in this colour reads weaker.",
-    "Bien pour les titres et les boutons, un petit texte dans cette couleur se lit moins bien." },  // STR_W_THEME_WEAKER
   { "+ eigene Farben", "+ own colours",
     "+ couleurs perso" },  // STR_W_THEME_PLUS_OWN
   { "Orange", "Orange",

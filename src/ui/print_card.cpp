@@ -7,6 +7,7 @@
 #include "lang.h"
 #include "services/ble_service.h"
 #include "ui/theme.h"
+#include "ui_common.h"
 
 // Busy, the card is as short as the wait card, which looked empty at the
 // house card's height (Nikolai, 23.09.2026). The answer takes the house
@@ -187,6 +188,7 @@ void printCardResult(LabelPrintResult result) {
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
+  if (!ok) uiSecondaryFill(btn);
   lv_obj_set_style_pad_all(btn, 0, 0);
   lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(btn, [](lv_event_t*) { s_close_req = true; }, LV_EVENT_CLICKED, NULL);

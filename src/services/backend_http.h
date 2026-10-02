@@ -41,9 +41,16 @@
 // function whose body names the client class as one that talks HTTP, and
 // every read() in the firmware - the load cell's among them - would inherit
 // that from these two.
+//
+// The handshake is bounded: the client's own default is 120 s, so a server
+// that took the connection and then said nothing held a request - and the
+// screen waiting on it - for two minutes. One takes about 0.6 s here.
+#define BACKEND_TLS_HANDSHAKE_S  10
+
 class BackendTls : public WiFiClientSecure {
   using Base = WiFiClientSecure;
  public:
+  BackendTls() { setHandshakeTimeout(BACKEND_TLS_HANDSHAKE_S); }
   int read(uint8_t* buf, size_t size) override {
     const int r = Base::read(buf, size);
     return (r < 0 && _connected) ? 0 : r;

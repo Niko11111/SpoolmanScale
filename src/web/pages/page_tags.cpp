@@ -178,7 +178,7 @@ static String body() {
   // whole page did nothing at all.
   h += F("<style>"
          ".tghead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}"
-         ".tgbadge{font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:var(--surface-1);border:1px solid var(--border);color:var(--ink-soft)}"
+         ".tgbadge{font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-soft)}"
          "#tg-cur h3,#tg-matched h3,#tg-new h3{font-size:10.5px;font-weight:650;"
          "letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin:0}"
          ".tgline{display:flex;align-items:center;gap:9px;margin-bottom:8px}"

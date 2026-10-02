@@ -7,6 +7,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "ui/theme.h"
+#include "ui_common.h"
 
 // The house card's width and its row of answers, but not its height: 260 is
 // room for a question of several lines, and a card that only waits looked
@@ -99,11 +100,11 @@ void linkWaitCardShow() {
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, btn_w, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn, UI_CARD_ROW_X, WAIT_ROW_Y);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
+  uiSecondaryFill(btn);
   lv_obj_set_style_pad_all(btn, 0, 0);
   lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(btn, [](lv_event_t *e) {

@@ -7,6 +7,7 @@
 
 #include "hardware/sd_logger.h"
 #include "services/wifi_manager.h"
+#include "web/web_server.h"
 
 // A network of its own. The access point default, 192.168.4.1, is a common
 // home subnet as well, which makes an address on the screen ambiguous.
@@ -100,8 +101,13 @@ bool setupPortalStart() {
 void setupPortalStop() {
   if (!s_active) return;
   s_dns.stop();
-  wifiManagerStopAp();
+  // The portal's web server goes first. Taking the access point down turns
+  // the driver off, and a phone's connection still open on that server was
+  // then freed through a driver that was gone - the PANIC in esp_pbuf_free
+  // that doWifiScan() avoids. Inactive, the sync closes the portal's socket.
   s_active    = false;
+  webServerSyncState();
+  wifiManagerStopAp();
   s_submitted = false;
   // A form that was sent but not handed over yet is dropped with the access
   // point, as the header promises. The tick raises the flag again right after

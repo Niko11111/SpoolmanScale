@@ -62,6 +62,8 @@ enum UiThemeId : uint8_t {
 // before the first screen is built.
 void uiThemeBegin();
 UiThemeId uiThemeActive();
+// Whether the running palette is a dark one.
+bool uiThemeIsDark();
 UiThemeId uiThemeStored();
 // Stores the choice for the next boot. The running palette stays.
 bool uiThemeStore(UiThemeId id);

@@ -15,6 +15,12 @@ void addCloseButton(lv_obj_t *parent);
 void buildSubHeader(lv_obj_t *parent, const char *title,
                     lv_event_cb_t back_cb, const char *back_hint = nullptr);
 lv_obj_t* buildOverlayScreen();
+// The resting look of a secondary button: "Later", an option not chosen.
+// After the button's own border width, which it overrides. Dark fills it with
+// LINE as it always has; on a light palette LINE is a mid tone that weighs
+// more than the light green primary beside it, so the button takes the
+// quiet row fill with the row's border.
+void uiSecondaryFill(lv_obj_t *btn);
 
 // Frees a screen object that is about to be replaced and clears the pointer.
 // Call at the top of every build*Screen() function: without it the previous
