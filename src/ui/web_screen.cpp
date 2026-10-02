@@ -88,7 +88,7 @@ static void buildWebPinScreen() {
     lv_obj_set_style_bg_color(kb, is_del ? lv_color_hex(UI_COL_KEY_DEL) :
                                   is_ok  ? lv_color_hex(UI_COL_PICKED_BG) :
                                            lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_radius(kb, 6, 0);
     lv_obj_set_style_shadow_width(kb, 0, 0);
     lv_obj_set_style_border_width(kb, 1, 0);

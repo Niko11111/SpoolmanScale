@@ -73,7 +73,7 @@ void showLanguageScreen() {
   lv_obj_set_size(btn_back, 44, 44);
   lv_obj_set_pos(btn_back, 4, 2);
   lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_SURFACE), 0);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_back, 8, 0);
   lv_obj_set_style_shadow_width(btn_back, 0, 0);
   lv_obj_set_style_border_width(btn_back, 0, 0);
@@ -252,7 +252,7 @@ void showLanguageScreen() {
   lv_obj_set_size(btn_tz, 464, 44);
   lv_obj_set_pos(btn_tz, 8, 258);
   lv_obj_set_style_bg_color(btn_tz, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn_tz, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_tz, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_tz, 10, 0);
   lv_obj_set_style_shadow_width(btn_tz, 0, 0);
   lv_obj_set_style_border_width(btn_tz, 1, 0);

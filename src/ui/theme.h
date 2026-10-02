@@ -69,6 +69,15 @@ bool uiThemeStore(UiThemeId id);
 const char* uiThemeKey(UiThemeId id);
 bool uiThemeFromKey(const char* key, UiThemeId* out);
 
+// The same family in the other lightness: palettes come in pairs, dark first.
+UiThemeId uiThemeInFamily(UiThemeId id, bool dark);
+
+// Whether the web pages take light or dark from the browser instead of from
+// the scale. Theirs only: the panel keeps its palette, so this needs no
+// restart and applies to the next page load.
+bool uiWebFollowsSystem();
+bool uiWebFollowsSystemStore(bool on);
+
 // The palette as a table, for the web preview.
 size_t uiPaletteCount();
 const char* uiPaletteName(size_t i);

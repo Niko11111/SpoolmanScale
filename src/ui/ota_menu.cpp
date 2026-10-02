@@ -40,7 +40,7 @@ void buildOtaScreen() {
   lv_obj_set_size(btn_browser, 456, 80);
   lv_obj_set_pos(btn_browser, 12, 58);
   lv_obj_set_style_bg_color(btn_browser, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn_browser, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_browser, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_browser, 10, 0);
   lv_obj_set_style_shadow_width(btn_browser, 0, 0);
   lv_obj_set_style_border_width(btn_browser, 1, 0);
@@ -70,7 +70,7 @@ void buildOtaScreen() {
   lv_obj_set_size(btn_gh, 456, 80);
   lv_obj_set_pos(btn_gh, 12, 150);
   lv_obj_set_style_bg_color(btn_gh, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn_gh, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_gh, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_gh, 10, 0);
   lv_obj_set_style_shadow_width(btn_gh, 0, 0);
   lv_obj_set_style_border_width(btn_gh, 1, 0);

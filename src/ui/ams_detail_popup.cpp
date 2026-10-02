@@ -459,7 +459,7 @@ static lv_obj_t* cell(lv_obj_t* box, int x, int y, int cap_id,
       lv_obj_set_size(frame, AMSD_CW + 2 * AMSD_FIELD_PAD_X, AMSD_FIELD_H);
       lv_obj_set_pos(frame, x - AMSD_FIELD_PAD_X, y - AMSD_FIELD_PAD_Y);
       lv_obj_set_style_bg_color(frame, lv_color_hex(UI_COL_CHIP), 0);
-      lv_obj_set_style_bg_color(frame, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+      lv_obj_set_style_bg_color(frame, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
       lv_obj_set_style_border_color(frame, lv_color_hex(UI_COL_LINE), 0);
       lv_obj_set_style_border_width(frame, 1, 0);
       lv_obj_set_style_radius(frame, 8, 0);

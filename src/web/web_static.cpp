@@ -369,7 +369,7 @@ static const char APP_JS[] PROGMEM =
   // the head where the stylesheet is already in and nothing is drawn yet.
   // web_shell.cpp writes the choice into data-accent, data-tone, data-tstr.
   "var TC=(function(){\n"
-  "var TINT=[['GROUND',0],['SURFACE',0],['ROW',0],['ROW_PRESSED',0],['LINE',0],['LINE_SOFT',0],['DIVIDER',0],['POPUP_BORDER',0],['EMPTY',0],['SCRIM',0],['RULE',0],['DISABLED_BG',0],['QUIET_BG_PRESSED',0],['DISABLED_TEXT',1],['UNAVAILABLE',1],['INK',1],['INK_2',1],['INK_SOFT',1],['CAPTION',1],['INK_FAINT',1],['INK_BRIGHT',1],['OFF_TEXT',1],['ID_TEXT',1]];\n"
+  "var TINT=[['GROUND',0],['SURFACE',0],['ROW',0],['ROW_PRESSED',0],['LINE',0],['LINE_SOFT',0],['DIVIDER',0],['POPUP_BORDER',0],['EMPTY',0],['SCRIM',0],['RULE',0],['DISABLED_BG',0],['QUIET_BG_PRESSED',0],['PRESS_FILL',0],['ROW_PRESS_FILL',0],['DISABLED_TEXT',1],['UNAVAILABLE',1],['INK',1],['INK_2',1],['INK_SOFT',1],['CAPTION',1],['INK_FAINT',1],['INK_BRIGHT',1],['OFF_TEXT',1],['ID_TEXT',1]];\n"
   "var WEB_TINT=[['--ground',0],['--surface',0],['--surface-2',0],['--line',0],['--line-soft',0],['--hover',0],['--quiet',0],['--quiet-hover',0],['--ink',1],['--ink-2',1],['--ink-3',1],['--ink-4',1],['--ink-soft',1]];\n"
   "var WEB_ACC=['--accent-dim','--accent-line','--btn','--btn-hover'];\n"
   "function lin(c){c/=255;return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4);}\n"
@@ -397,7 +397,7 @@ static const char APP_JS[] PROGMEM =
   "if(c.accent){p.ACCENT=c.accent;p.LV_PRIMARY=c.accent;\n"
   "p.ON_ACCENT=contrast('0b0f0d',c.accent)>=contrast('ffffff',c.accent)?'0b0f0d':'ffffff';p.ACCENT_CHIP=toward(base.ACCENT_CHIP,c.accent);\n"
   "['CAPTION','INK_FAINT'].forEach(function(n){p[n]=toward(p[n],c.accent,0.10);});\n"
-  "['DIVIDER','RULE','LINE','CHIP','POPUP_BORDER'].forEach(function(n){p[n]=toward(p[n],c.accent);});\n"
+  "['DIVIDER','RULE','LINE','PRESS_FILL','CHIP','POPUP_BORDER'].forEach(function(n){p[n]=toward(p[n],c.accent);});\n"
   "p.STATUS_BLUE=c.accent;p.ALT_TEXT=c.accent;p.WEIGHT_BG=c.accent;p.WEIGHT_BG_PRESSED=shade(c.accent,dark?16:-16);\n"
   "['WEIGHT_TEXT','WEIGHT_AUTO','WEIGHT_SENT','WEIGHT_COUNT'].forEach(function(n){p[n]=p.ON_ACCENT;});}\n"
   "return p;}\n"
@@ -407,6 +407,21 @@ static const char APP_JS[] PROGMEM =
   "if(tinting(c))WEB_TINT.forEach(function(r){var v=get(r[0]);if(v)d.style.setProperty(r[0],'#'+tint(v,c.tone,c.strength/50,r[1]));});\n"
   "if(c.accent){d.style.setProperty('--accent','#'+c.accent);WEB_ACC.forEach(function(v){var x=get(v);if(x)d.style.setProperty(v,'#'+toward(x,c.accent));});}}\n"
   "return{apply:apply,contrast:contrast,page:page};})();\n"
+  // Light or dark from the browser, when the scale says so: data-tdark and
+  // data-tlight name the family's two palettes, data-theme the scale's own.
+  // Set before the body is drawn, and again when the system switches, with
+  // the own colours laid over the new palette.
+  "var SCH=(function(){var d=document.documentElement,own=d.getAttribute('data-theme'),"
+  "mq=window.matchMedia?window.matchMedia('(prefers-color-scheme: light)'):null;\n"
+  "function want(){var k=d.getAttribute('data-tdark'),l=d.getAttribute('data-tlight');"
+  "return k&&l&&mq?(mq.matches?l:k):own;}\n"
+  "function apply(){var t=want();if(d.getAttribute('data-theme')===t)return;"
+  "d.setAttribute('data-theme',t);d.removeAttribute('style');TC.page();}\n"
+  "function set(on,k,l){if(on){d.setAttribute('data-tdark',k);d.setAttribute('data-tlight',l);}"
+  "else{d.removeAttribute('data-tdark');d.removeAttribute('data-tlight');}apply();}\n"
+  "if(mq){if(mq.addEventListener)mq.addEventListener('change',apply);else if(mq.addListener)mq.addListener(apply);}\n"
+  "d.setAttribute('data-theme',want());\n"
+  "return{set:set};})();\n"
   "TC.page();\n"
 ;
 

@@ -7,6 +7,7 @@
 #include <WebServer.h>
 
 #include "app/app_state.h"
+#include "app/render_bench.h"
 #include "hardware/sd_logger.h"
 #include "hardware/flash_log.h"
 #include "web/web_access.h"
@@ -550,6 +551,14 @@ static void routes(WebServer &srv) {
     srv.send(200, "application/json",
              String("{\"dest\":") + (int)logDestStored() +
              ",\"dest_eff\":" + (int)logDestEffective() + "}");
+  });
+
+  // POST /api/log/bench -> one run of the render bench, its result lands in
+  // the log a few seconds later as "bench:".
+  srv.on("/api/log/bench", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
+    renderBenchRequest();
+    srv.send(200, "application/json", "{\"queued\":true}");
   });
 
   // POST /api/loglevel?l=0|1|2 -> minimal, normal, verbose

@@ -98,7 +98,7 @@ static void buildIpBarSelector() {
   lv_obj_set_size(btn_ipbar, 456, 44);
   lv_obj_set_pos(btn_ipbar, 12, SELECTOR_Y);
   lv_obj_set_style_bg_color(btn_ipbar, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn_ipbar, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_ipbar, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ipbar, 10, 0);
   lv_obj_set_style_shadow_width(btn_ipbar, 0, 0);
   lv_obj_set_style_border_width(btn_ipbar, 1, 0);

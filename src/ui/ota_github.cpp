@@ -331,7 +331,7 @@ void buildOtaGithubScreen() {
   lv_obj_set_size(btn_check, 280, 44);
   lv_obj_align(btn_check, LV_ALIGN_TOP_MID, 0, 56);
   lv_obj_set_style_bg_color(btn_check, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn_check, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_check, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_check, 8, 0);
   lv_obj_set_style_shadow_width(btn_check, 0, 0);
   lv_obj_set_style_border_width(btn_check, 1, 0);
@@ -386,7 +386,7 @@ void buildOtaGithubScreen() {
   lv_obj_set_size(btn_auto, 280, 36);
   lv_obj_align(btn_auto, LV_ALIGN_TOP_MID, 0, 200);
   lv_obj_set_style_bg_color(btn_auto, g_upd_autocheck ? lv_color_hex(UI_COL_CHIP) : lv_color_hex(UI_COL_GROUND), 0);
-  lv_obj_set_style_bg_color(btn_auto, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_auto, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_auto, 8, 0);
   lv_obj_set_style_shadow_width(btn_auto, 0, 0);
   lv_obj_set_style_border_width(btn_auto, 1, 0);
@@ -423,7 +423,7 @@ void buildOtaGithubScreen() {
   lv_obj_set_size(btn_pre, 140, 48);
   lv_obj_align(btn_pre, LV_ALIGN_BOTTOM_LEFT, 12, -24);
   lv_obj_set_style_bg_color(btn_pre, gh_prerelease ? lv_color_hex(UI_COL_CHIP) : lv_color_hex(UI_COL_GROUND), 0);
-  lv_obj_set_style_bg_color(btn_pre, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_pre, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_pre, 8, 0);
   lv_obj_set_style_shadow_width(btn_pre, 0, 0);
   lv_obj_set_style_border_width(btn_pre, 1, 0);

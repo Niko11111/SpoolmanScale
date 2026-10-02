@@ -433,7 +433,7 @@ void showConfirmPopup(const char* msg, int action) {
     lv_obj_set_size(btn3, BW2, H_ROW2);
     lv_obj_set_pos(btn3, XL, Y2);
     lv_obj_set_style_bg_color(btn3, lv_color_hex(UI_COL_CHIP), 0);
-    lv_obj_set_style_bg_color(btn3, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn3, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn3, 8, 0);
     lv_obj_set_style_shadow_width(btn3, 0, 0);
     lv_obj_add_event_cb(btn3, [](lv_event_t *e) {

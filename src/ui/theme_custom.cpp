@@ -47,6 +47,7 @@ static const TintRole TINT_ROLES[] = {
   { &UI_COL_EMPTY, false },        { &UI_COL_SCRIM, false },
   { &UI_COL_RULE, false },         { &UI_COL_DISABLED_BG, false },
   { &UI_COL_QUIET_BG_PRESSED, false },
+  { &UI_COL_PRESS_FILL, false },   { &UI_COL_ROW_PRESS_FILL, false },
   { &UI_COL_DISABLED_TEXT, true }, { &UI_COL_UNAVAILABLE, true },
   { &UI_COL_INK, true },           { &UI_COL_INK_2, true },
   { &UI_COL_INK_SOFT, true },      { &UI_COL_CAPTION, true },
@@ -206,6 +207,7 @@ void uiThemeApplyCustom(const UiThemeCustom& c) {
     UI_COL_DIVIDER   = towardAccent(UI_COL_DIVIDER, c.accent);
     UI_COL_RULE      = towardAccent(UI_COL_RULE, c.accent);
     UI_COL_LINE      = towardAccent(UI_COL_LINE, c.accent);
+    UI_COL_PRESS_FILL = towardAccent(UI_COL_PRESS_FILL, c.accent);
     UI_COL_CHIP         = towardAccent(UI_COL_CHIP, c.accent);
     UI_COL_POPUP_BORDER = towardAccent(UI_COL_POPUP_BORDER, c.accent);
     UI_COL_STATUS_BLUE  = c.accent;

@@ -204,7 +204,7 @@ void buildFactorScreen() {
     // Cancel, and this is not a way out of the screen but a setting to undo.
     // The confirmation it opens carries the red.
     lv_obj_set_style_bg_color(btn_rst, lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(btn_rst, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_rst, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_border_color(btn_rst, lv_color_hex(UI_COL_LINE_SOFT), 0);
 
     lv_obj_t *lbl_rst = lv_label_create(btn_rst);
@@ -262,7 +262,7 @@ void buildFactorScreen() {
       lv_obj_center(lbl);
     } else {
       lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_SURFACE), 0);
-      lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+      lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
       lv_obj_set_style_radius(btn, 6, 0);
       lv_obj_set_style_shadow_width(btn, 0, 0);
       lv_obj_set_style_border_width(btn, 1, 0);

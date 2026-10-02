@@ -217,7 +217,7 @@ static void addScanButton(lv_obj_t *scr) {
   lv_obj_set_size(btn, BLE_HDR_BTN_SIZE, BLE_HDR_BTN_SIZE);
   lv_obj_set_pos(btn, BLE_HDR_BTN_X, BLE_HDR_BTN_Y);
   lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_STATE_PRESSED);
   lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(btn, 1, 0);

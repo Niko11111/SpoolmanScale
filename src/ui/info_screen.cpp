@@ -68,7 +68,7 @@ void showQRPopup(int idx) {
   lv_obj_set_size(btn_back, 44, 44);
   lv_obj_set_pos(btn_back, 4, 2);
   lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_SURFACE), 0);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_back, 8, 0);
   lv_obj_set_style_shadow_width(btn_back, 0, 0);
   lv_obj_set_style_border_width(btn_back, 0, 0);
@@ -176,7 +176,7 @@ void showInfoScreen() {
   lv_obj_set_size(btn_back, 44, 44);
   lv_obj_set_pos(btn_back, 4, 2);
   lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_SURFACE), 0);
-  lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_back, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_back, 8, 0);
   lv_obj_set_style_shadow_width(btn_back, 0, 0);
   lv_obj_set_style_border_width(btn_back, 0, 0);

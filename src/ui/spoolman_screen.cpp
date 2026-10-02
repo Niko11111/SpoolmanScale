@@ -370,7 +370,7 @@ void buildSpoolmanScreen() {
     lv_obj_set_size(btn, NP_W, NP_H);
     lv_obj_set_pos(btn, bx, by);
     lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn, 6, 0);
     lv_obj_set_style_shadow_width(btn, 0, 0);
     lv_obj_set_style_border_width(btn, 1, 0);
@@ -469,7 +469,7 @@ void buildSpoolmanScreen() {
   lv_obj_set_size(btn_sp_extra_fields, 170, BOT_H);
   lv_obj_set_pos(btn_sp_extra_fields, 480 - NP_PAD_X - 170, BOT_Y);
   lv_obj_set_style_bg_color(btn_sp_extra_fields, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn_sp_extra_fields, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_sp_extra_fields, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_sp_extra_fields, 8, 0);
   lv_obj_set_style_shadow_width(btn_sp_extra_fields, 0, 0);
   lv_obj_set_style_border_width(btn_sp_extra_fields, 1, 0);

@@ -101,12 +101,20 @@ String webShellHead(const char *subtitle) {
   ver[sizeof(ver) - 1] = '\0';
 
   String h;
-  h.reserve(600);   // the stylesheet is a route now, this is just the head
+  h.reserve(680);   // the stylesheet is a route now, this is just the head
   // The page follows the palette the scale runs, so the stylesheet carries
   // both and this attribute picks one. Not a cached file: a new palette shows
   // on the next page load without a new firmware.
   h += F("<!DOCTYPE html><html data-theme='");
   h += uiThemeKey(uiThemeActive());
+  // Light or dark from the browser instead: both palettes of the family the
+  // scale runs, app.js picks one before the body is drawn.
+  if (uiWebFollowsSystem()) {
+    h += F("' data-tdark='");
+    h += uiThemeKey(uiThemeInFamily(uiThemeActive(), true));
+    h += F("' data-tlight='");
+    h += uiThemeKey(uiThemeInFamily(uiThemeActive(), false));
+  }
   // Own colours ride along as attributes; app.js lays them over the palette.
   const UiThemeCustom own = uiThemeCustomActive();
   char attr[48];

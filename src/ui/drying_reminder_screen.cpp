@@ -73,7 +73,7 @@ static void buildDryNumpadScreen(int target) {
     lv_obj_set_style_bg_color(kb, is_del ? lv_color_hex(UI_COL_KEY_DEL) :
                                   is_ok  ? lv_color_hex(UI_COL_PICKED_BG) :
                                            lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_radius(kb, 6, 0);
     lv_obj_set_style_shadow_width(kb, 0, 0);
     lv_obj_set_style_border_width(kb, 1, 0);
@@ -143,7 +143,7 @@ void showDryingReminderScreen() {
     lv_obj_set_size(mb, btn_w, btn_h);
     lv_obj_set_pos(mb, btn_x0 + m*(btn_w+btn_gap), btn_y);
     lv_obj_set_style_bg_color(mb, active ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(mb, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(mb, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_border_color(mb, active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_ROW_PRESSED), 0);
     lv_obj_set_style_border_width(mb, 1, 0);
     lv_obj_set_style_radius(mb, 8, 0);
@@ -197,7 +197,7 @@ void showDryingReminderScreen() {
     lv_obj_set_size(btn_web, 150, 26);
     lv_obj_set_pos(btn_web, 318, content_y - 6);
     lv_obj_set_style_bg_color(btn_web, lv_color_hex(UI_COL_ROW), 0);
-    lv_obj_set_style_bg_color(btn_web, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_web, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_web, 6, 0);
     lv_obj_set_style_shadow_width(btn_web, 0, 0);
     lv_obj_set_style_border_width(btn_web, 1, 0);
@@ -299,7 +299,7 @@ void showDryingReminderScreen() {
       lv_obj_set_size(row_btn, 456, 56);
       lv_obj_set_pos(row_btn, 12, y);
       lv_obj_set_style_bg_color(row_btn, lv_color_hex(UI_COL_ROW), 0);
-      lv_obj_set_style_bg_color(row_btn, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+      lv_obj_set_style_bg_color(row_btn, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
       lv_obj_set_style_radius(row_btn, 10, 0);
       lv_obj_set_style_shadow_width(row_btn, 0, 0);
       lv_obj_set_style_border_width(row_btn, 1, 0);

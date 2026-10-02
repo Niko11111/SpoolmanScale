@@ -17,6 +17,7 @@
 #include "app/backend_switch.h"
 #include "app/deferred_actions.h"
 #include "app/perf_monitor.h"
+#include "app/render_bench.h"
 #include "hardware/lvgl_mem.h"
 #include "services/partition_layout.h"
 #include "ui/partition_popup.h"
@@ -429,6 +430,7 @@ void appLoop() {
   perfSection("ui");
   lv_timer_handler();
   perfUiDone();
+  renderBenchTick();
   perfSection("prefs");
   prefsDeferWrites(false);
   prefsFlush();

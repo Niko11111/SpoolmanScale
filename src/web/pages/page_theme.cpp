@@ -112,6 +112,17 @@ static String body() {
   h += T(STR_W_THEME_AFTER);
   h += F("</span><b id='fres' class='clbl'></b></div></div></div>");
 
+  // This page alone in light or dark as the browser says. Saved on the spot:
+  // the panel is not touched, so there is nothing to apply or restart.
+  h += F("<div class='card wide'><h2>");
+  h += T(STR_W_THEME_WEB_H);
+  h += F("</h2><div class='rows'><div class='row' style='align-items:center'><div><div class='clbl'>");
+  h += T(STR_W_THEME_WEB_OS);
+  h += F("</div><div class='hint'>");
+  h += T(STR_W_THEME_WEB_OS_HINT);
+  h += F("</div><span class='msg' id='wmsg'></span></div>"
+         "<label class='switch'><input type='checkbox' id='webos'><i></i></label></div></div></div>");
+
   // Own colours over it: an accent, a tone and its strength.
   h += F("<div class='card wide'><h2>");
   h += T(STR_W_THEME_OWN_H);
@@ -250,7 +261,7 @@ static String body() {
          "<span class=\"tm-ok\">'+esc(TT.yes)+'</span></div></div></div>';}"
          // The chosen palette and the own colours over it. CS is what the
          // controls say, CS0 what is stored: Apply is live only in between.
-         "var sel=null,stored=null,BASE={},BACKEND='',CS0='',"
+         "var sel=null,stored=null,BASE={},BACKEND='',CS0='',WEBK=['dark','light'],"
          "CS={accent:null,tone:-1,strength:50,follow:false},DARK={dark:1,spoolman_dark:1,filaman_dark:1};"
          "var ACC=[['ff9442','orange'],['ff5fa2','pink'],['2563eb','blue'],['8b5cf6','violet'],['e0b100','yellow'],['0e7490','petrol'],['e5484d','red']];"
          "var HUES=[[255,'4f7fd6','blue'],[200,'2f9aa6','petrol'],[150,'3f9f6a','green'],[300,'8a63d2','violet'],[20,'c85a5a','red'],[75,'c49a5c','sand']];"
@@ -291,8 +302,13 @@ static String body() {
          "c.querySelectorAll('.tm').forEach(function(m){paint(m,th.c);});"
          "c.addEventListener('click',function(){pick(th.id);});g.appendChild(c);});"
          "if(CS.accent)$('accpick').value='#'+CS.accent;if(CS.tone>=0)$('huerange').value=CS.tone;"
-         "sel=d.stored;CS0=key();pick(d.stored);}"
+         "sel=d.stored;CS0=key();pick(d.stored);"
+         "WEBK=[d.web_dark,d.web_light];$('webos').checked=!!d.web_os;}"
          "$('follow').addEventListener('change',function(){CS.follow=this.checked;update();});"
+         "$('webos').addEventListener('change',function(){var on=this.checked,box=this;"
+         "post('/api/theme/web',on?'1':'0').then(function(r){"
+         "if(!r.ok||!r.json||!r.json.ok){box.checked=!on;flash('wmsg',WS.err,true,4000);return;}"
+         "SCH.set(on,WEBK[0],WEBK[1]);flash('wmsg',WS.ok,false,2500);});});"
          "$('accpick').addEventListener('input',function(){CS.accent=this.value.slice(1);update();});"
          "$('huerange').addEventListener('input',function(){CS.tone=+this.value;update();});"
          "$('strrange').addEventListener('input',function(){CS.strength=+this.value;update();});"
@@ -386,7 +402,15 @@ static void routes(WebServer &srv) {
     json += (int)own.strength;
     json += F(",\"follow\":");
     json += own.follow ? F("true") : F("false");
-    json += F("}}");
+    // The web pages' own setting, and the two palettes they would switch
+    // between: the family the scale runs now.
+    json += F("},\"web_os\":");
+    json += uiWebFollowsSystem() ? F("true") : F("false");
+    json += F(",\"web_dark\":\"");
+    json += uiThemeKey(uiThemeInFamily(uiThemeActive(), true));
+    json += F("\",\"web_light\":\"");
+    json += uiThemeKey(uiThemeInFamily(uiThemeActive(), false));
+    json += F("\"}");
     srv.send(200, "application/json", json);
   });
 
@@ -409,6 +433,24 @@ static void routes(WebServer &srv) {
     srv.send(200, "application/json",
              webGateOpen(GATE_MAINT) ? "{\"ok\":true,\"restart\":true}"
                                      : "{\"ok\":true,\"restart\":false}");
+  });
+
+  // Body: "1" or "0". The web pages take light or dark from the browser, or
+  // the scale's palette. Nothing on the panel changes, so no restart.
+  srv.on("/api/theme/web", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_THEME))) return;
+    const String b = srv.arg("plain");
+    if (b != "0" && b != "1") {
+      srv.send(400, "application/json", "{\"ok\":false}");
+      return;
+    }
+    if (!uiWebFollowsSystemStore(b == "1")) {
+      logSD("Theme: storing the web setting failed");
+      srv.send(500, "application/json", "{\"ok\":false}");
+      return;
+    }
+    logSDf("Theme: web pages %s", b == "1" ? "follow the browser" : "follow the scale");
+    srv.send(200, "application/json", "{\"ok\":true}");
   });
 
   // Body: "accent,tone,strength,follow", e.g. "ff9442,300,50,1"; "-" for no

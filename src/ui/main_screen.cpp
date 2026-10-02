@@ -191,7 +191,7 @@ void buildUI() {
   lv_obj_set_style_pad_hor(btn_hdr_nfc, HDR_AMS_PAD_X, 0);
   lv_obj_set_style_pad_ver(btn_hdr_nfc, 0, 0);
   lv_obj_set_style_bg_color(btn_hdr_nfc, lv_color_hex(UI_COL_CHIP), 0);
-  lv_obj_set_style_bg_color(btn_hdr_nfc, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_hdr_nfc, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_hdr_nfc, 1, 0);
   lv_obj_set_style_border_color(btn_hdr_nfc, lv_color_hex(UI_COL_RULE), 0);
   lv_obj_set_style_radius(btn_hdr_nfc, 4, 0);
@@ -231,7 +231,7 @@ void buildUI() {
   lv_obj_set_style_pad_hor(btn_hdr_ams, HDR_AMS_PAD_X, 0);
   lv_obj_set_style_pad_ver(btn_hdr_ams, 0, 0);
   lv_obj_set_style_bg_color(btn_hdr_ams, lv_color_hex(UI_COL_CHIP), 0);
-  lv_obj_set_style_bg_color(btn_hdr_ams, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_hdr_ams, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_hdr_ams, 1, 0);
   lv_obj_set_style_border_color(btn_hdr_ams, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_radius(btn_hdr_ams, 4, 0);
@@ -438,7 +438,7 @@ void buildUI() {
   lv_obj_set_size(btn_more, 84, 34);
   lv_obj_set_pos(btn_more, 388, 100);
   lv_obj_set_style_bg_color(btn_more, lv_color_hex(UI_COL_EMPTY), 0);
-  lv_obj_set_style_bg_color(btn_more, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_more, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_more, 1, 0);
   lv_obj_set_style_border_color(btn_more, lv_color_hex(UI_COL_ACCENT), 0);  // teal border
   lv_obj_set_style_radius(btn_more, 6, 0);
@@ -748,7 +748,7 @@ void buildUI() {
     lv_obj_set_size(btn_ams_main, MAIN_NOSCALE_W, MAIN_AMS_BTN_H);
     lv_obj_set_pos(btn_ams_main, MAIN_NOSCALE_X, MAIN_AMS_BTN_Y);
     lv_obj_set_style_bg_color(btn_ams_main, lv_color_hex(UI_COL_CHIP), 0);
-    lv_obj_set_style_bg_color(btn_ams_main, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_ams_main, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_border_width(btn_ams_main, 1, 0);
     lv_obj_set_style_border_color(btn_ams_main, lv_color_hex(UI_COL_LINE), 0);
     lv_obj_set_style_radius(btn_ams_main, 8, 0);
@@ -836,7 +836,7 @@ void buildUI() {
     lv_obj_set_size(btn_location, 202, 39);
     lv_obj_set_pos(btn_location, 8, 8);
     lv_obj_set_style_bg_color(btn_location, lv_color_hex(UI_COL_CHIP), 0);
-    lv_obj_set_style_bg_color(btn_location, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_location, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_border_width(btn_location, 1, 0);
     lv_obj_set_style_border_color(btn_location, lv_color_hex(UI_COL_LINE), 0);
     lv_obj_set_style_radius(btn_location, 8, 0);
@@ -936,7 +936,7 @@ void buildUI() {
   lv_obj_set_size(btn_menu, 44, 39);
   lv_obj_set_pos(btn_menu, 428, 8);
   lv_obj_set_style_bg_color(btn_menu, lv_color_hex(UI_COL_SURFACE), 0);
-  lv_obj_set_style_bg_color(btn_menu, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_menu, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn_menu, 1, 0);
   lv_obj_set_style_border_color(btn_menu, lv_color_hex(UI_COL_LINE_SOFT), 0);
   lv_obj_set_style_radius(btn_menu, 8, 0);
