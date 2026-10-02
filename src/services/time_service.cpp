@@ -20,6 +20,7 @@ const TimeZoneEntry TZ_LIST[] = {
   { "US Pacific",          "PST8PDT,M3.2.0,M11.1.0",        "UTC-8 / -7"  },
   { "Australia Eastern",   "AEST-10AEDT,M10.1.0,M4.1.0/3",  "UTC+10 / +11"},
   { "Japan",               "JST-9",                         "UTC+9"       },
+  { "Singapore",           "<+08>-8",                       "UTC+8"       },
   { "India",               "IST-5:30",                      "UTC+5:30"    },
   { "Brazil (Sao Paulo)",  "<-03>3",                        "UTC-3"       },
 };
