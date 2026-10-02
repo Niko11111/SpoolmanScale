@@ -182,7 +182,9 @@ static String body() {
          "#tg-cur h3,#tg-matched h3,#tg-new h3{font-size:10.5px;font-weight:650;"
          "letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin:0}"
          ".tgline{display:flex;align-items:center;gap:9px;margin-bottom:8px}"
-         ".chip{width:26px;height:26px;border-radius:7px;border:1px solid #ffffff22;flex:none}"
+         // The edge from the palette: a white hairline vanished on the light
+         // ones, and with it a chip that has no colour of its own.
+         ".chip{width:26px;height:26px;border-radius:7px;border:1px solid var(--line);flex:none}"
          ".tgname{font-size:13.5px;color:var(--ink);line-height:1.3}"
          ".tglink{color:var(--accent)}"
          "#tg-cur table td,#tg-matched table td,#tg-new table td{font-size:11.5px;"
@@ -354,7 +356,7 @@ static String body() {
          "function one(k,v){return(v===undefined||v===null||v===''||v==='-')?'':row(k,v);}"
          "function cardHead(t,b){return '<div class=\"tghead\"><h3>'+t+'</h3><span class=\"tgbadge\">'+b+'</span></div>';}"
          "function head(c,n,x){return '<div class=\"tgline\"><div class=\"chip\" style=\"background:'"
-         "+(c||'#101828')+'\"></div><div><div class=\"tgname\">'+n+'</div>'"
+         "+(c||'var(--surface-2)')+'\"></div><div><div class=\"tgname\">'+n+'</div>'"
          "+'<div class=\"hint\">'+x+'</div></div></div>';}"
          "function renderCurTag(el){if(!el)return;"
          "const h=cardHead(M.cur,M.badge);"

@@ -392,20 +392,28 @@ static const char APP_JS[] PROGMEM =
   "function toward(f,a,cap){var o=lch(f),p=lch(a);o[2]=p[2];o[1]=Math.min(p[1],cap||0.06);return from(o);}\n"
   "function shade(h,s){return hex(rgb(h).map(function(x){return Math.max(0,Math.min(255,x+s));}));}\n"
   "function tinting(c){return c.tone>=0||c.strength!==50;}\n"
+  // The accent as text: lightness walked away from the ground until 4.5:1,
+  // the steps readableOn() takes in ui/theme_custom.cpp. Fills keep the
+  // chosen colour.
+  "function readable(h,g){if(contrast(h,g)>=4.5)return h;var st=contrast('0b0f0d',g)>=contrast('ffffff',g)?-0.005:0.005,o=lch(h),out=h;\n"
+  "while(contrast(out,g)<4.5&&o[0]>0&&o[0]<1){o[0]=Math.min(1,Math.max(0,o[0]+st));out=from([o[0],o[1],o[2]]);}return out;}\n"
+  "function onc(a){return contrast('0b0f0d',a)>=contrast('ffffff',a)?'0b0f0d':'ffffff';}\n"
   "function apply(base,c,dark){var p={},k;for(k in base)p[k]=base[k];\n"
   "if(tinting(c))TINT.forEach(function(r){p[r[0]]=tint(base[r[0]],c.tone,c.strength/50,r[1]);});\n"
-  "if(c.accent){p.ACCENT=c.accent;p.LV_PRIMARY=c.accent;\n"
-  "p.ON_ACCENT=contrast('0b0f0d',c.accent)>=contrast('ffffff',c.accent)?'0b0f0d':'ffffff';p.ACCENT_CHIP=toward(base.ACCENT_CHIP,c.accent);\n"
+  "if(c.accent){var tx=readable(c.accent,p.GROUND);p.ACCENT=tx;p.LV_PRIMARY=c.accent;\n"
+  "p.ON_ACCENT=onc(tx);p.ACCENT_CHIP=toward(base.ACCENT_CHIP,c.accent);\n"
   "['CAPTION','INK_FAINT'].forEach(function(n){p[n]=toward(p[n],c.accent,0.10);});\n"
   "['DIVIDER','RULE','LINE','PRESS_FILL','CHIP','POPUP_BORDER'].forEach(function(n){p[n]=toward(p[n],c.accent);});\n"
-  "p.STATUS_BLUE=c.accent;p.ALT_TEXT=c.accent;p.WEIGHT_BG=c.accent;p.WEIGHT_BG_PRESSED=shade(c.accent,dark?16:-16);\n"
-  "['WEIGHT_TEXT','WEIGHT_AUTO','WEIGHT_SENT','WEIGHT_COUNT'].forEach(function(n){p[n]=p.ON_ACCENT;});}\n"
+  "p.STATUS_BLUE=tx;p.ALT_TEXT=tx;p.WEIGHT_BG=c.accent;p.WEIGHT_BG_PRESSED=shade(c.accent,dark?16:-16);\n"
+  "['WEIGHT_TEXT','WEIGHT_AUTO','WEIGHT_SENT','WEIGHT_COUNT'].forEach(function(n){p[n]=onc(c.accent);});}\n"
   "return p;}\n"
+  // --accent is text on these pages (buttons, links, messages), so it takes
+  // the readable form against the page's own ground, tinted or not.
   "function page(){var d=document.documentElement,a=d.getAttribute('data-accent'),t=d.getAttribute('data-tone');if(!a&&!t)return;\n"
   "var c={accent:a||null,tone:t?+t:-1,strength:+(d.getAttribute('data-tstr')||50)},cs=getComputedStyle(d);\n"
   "function get(v){return cs.getPropertyValue(v).trim();}\n"
   "if(tinting(c))WEB_TINT.forEach(function(r){var v=get(r[0]);if(v)d.style.setProperty(r[0],'#'+tint(v,c.tone,c.strength/50,r[1]));});\n"
-  "if(c.accent){d.style.setProperty('--accent','#'+c.accent);WEB_ACC.forEach(function(v){var x=get(v);if(x)d.style.setProperty(v,'#'+toward(x,c.accent));});}}\n"
+  "if(c.accent){d.style.setProperty('--accent','#'+readable(c.accent,get('--ground')));WEB_ACC.forEach(function(v){var x=get(v);if(x)d.style.setProperty(v,'#'+toward(x,c.accent));});}}\n"
   "return{apply:apply,contrast:contrast,page:page};})();\n"
   // Light or dark from the browser, when the scale says so: data-tdark and
   // data-tlight name the family's two palettes, data-theme the scale's own.

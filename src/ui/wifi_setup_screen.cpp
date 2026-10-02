@@ -537,6 +537,10 @@ void buildWifiPassScreen() {
   lv_obj_align(ta_wifi_pass, LV_ALIGN_TOP_MID, 0, 74);
   lv_obj_set_style_text_font(ta_wifi_pass, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_color(ta_wifi_pass, lv_color_hex(UI_COL_INK_MAX), 0);
+  // The only textarea there is. LVGL's default theme greys its placeholder
+  // for a dark ground on every palette (theme.cpp), 1.7 to 2.2:1 on this
+  // fill; the quiet text colour reads at 3.7 to 5.4:1.
+  lv_obj_set_style_text_color(ta_wifi_pass, lv_color_hex(UI_COL_INK_SOFT), LV_PART_TEXTAREA_PLACEHOLDER);
   lv_obj_set_style_bg_color(ta_wifi_pass, lv_color_hex(UI_COL_ROW_PRESSED), 0);
   lv_obj_set_style_border_color(ta_wifi_pass, lv_color_hex(UI_COL_POPUP_BORDER), 0);
 

@@ -17,6 +17,7 @@
 #include "ui_common.h"
 #include "update_badges.h"
 #include "web_screen.h"
+#include "reboot_popup.h"
 #include "theme.h"
 
 
@@ -210,6 +211,26 @@ void buildSystemScreen() {
       [](lv_event_t *e){
         logSD("BTN: System -> NFC reset probe");
         nfc_reset_probe_pending = true;
+      });
+  }
+
+  // Own colours chosen in the web interface, taken back on the device: an
+  // accent that cannot be read here could otherwise only be undone in a
+  // browser. Written by the restart button, like a language change, so a
+  // cancelled question leaves them as they were. The follow switch stays.
+  if (uiThemeCustomIsSet(uiThemeCustomStored())) {
+    addRow(list, LV_SYMBOL_IMAGE, T(STR_THEME_RESET_OWN), T(STR_THEME_RESET_OWN_SUB),
+      [](lv_event_t *e){
+        logSD("BTN: System -> Reset own colours");
+        showRebootPopup([]() {
+          UiThemeCustom c = uiThemeCustomStored();
+          c.has_accent = false;
+          c.accent = 0;
+          c.tone = UI_TONE_NONE;
+          c.strength = UI_TONE_STRENGTH_SAME;
+          if (uiThemeCustomStore(c)) logSD("Theme: own colours reset on the device");
+          else logSD("Theme: resetting the own colours failed");
+        });
       });
   }
 

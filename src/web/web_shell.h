@@ -11,6 +11,11 @@
 //   <the page's cards>
 //   webShellFoot()        community links, disclaimer, closes everything
 String webShellHead(const char *title);
+// The parts of the head a page standing outside the shell needs too, so it
+// takes the palette the scale runs: the doctype with the <html> tag that
+// names the palette and the own colours, and the stylesheet with /app.js.
+String webShellDocOpen();
+String webShellAssets();
 String webShellHeader();
 String webShellNav(const char *active);
 String webShellLinks();

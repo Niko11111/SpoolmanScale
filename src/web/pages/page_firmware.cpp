@@ -709,23 +709,32 @@ static void routesTail(WebServer &srv) {
       if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_FIRMWARE))) return;
       const bool ok = s_upload_ok;
       s_upload_ok = false;
-      String msg = ok
-        ? "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-          "<meta http-equiv='refresh' content='5;url=/'>"
-          "<style>body{background:#06080f;color:#28d49a;font-family:-apple-system,sans-serif;"
-          "display:flex;flex-direction:column;align-items:center;justify-content:center;"
-          "min-height:100vh;gap:12px}"
-          "h1{font-size:28px}p{color:#4a6fa0;font-size:14px}</style></head>"
-          "<body><h1>&#10003; " + String(T(STR_W_FW_OK)) + "</h1>"
-          "<p>" + String(T(STR_W_FW_RESTARTING)) + "</p></body></html>"
-        : "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-          "<style>body{background:#06080f;color:#ff8080;font-family:-apple-system,sans-serif;"
-          "display:flex;flex-direction:column;align-items:center;justify-content:center;"
-          "min-height:100vh;gap:12px}"
-          "h1{font-size:28px}p{color:#4a6fa0;font-size:14px}"
-          "a{color:#28d49a}</style></head>"
-          "<body><h1>&#10007; " + String(T(STR_W_FW_FAIL)) + "</h1>"
-          "<p>" + String(T(STR_W_FW_RETRY)) + "</p><a href='/'>&#8592; " + String(T(STR_W_BACK_STATUS)) + "</a></body></html>";
+      // In the palette the scale runs. The stylesheet comes from the browser's
+      // cache: the upload page linked the same versioned URL, and the scale
+      // restarts right after this answer.
+      String msg = webShellDocOpen();
+      msg += F("<head><meta charset='utf-8'>");
+      if (ok) msg += F("<meta http-equiv='refresh' content='5;url=/'>");
+      msg += webShellAssets();
+      msg += F("<style>body{justify-content:center;gap:12px}"
+               "h1{font-size:28px}p{color:var(--ink-soft);font-size:14px}"
+               ".fw-ok{color:var(--good)}.fw-bad{color:var(--bad)}"
+               "a{color:var(--accent)}</style></head><body>");
+      if (ok) {
+        msg += F("<h1 class='fw-ok'>&#10003; ");
+        msg += T(STR_W_FW_OK);
+        msg += F("</h1><p>");
+        msg += T(STR_W_FW_RESTARTING);
+        msg += F("</p></body></html>");
+      } else {
+        msg += F("<h1 class='fw-bad'>&#10007; ");
+        msg += T(STR_W_FW_FAIL);
+        msg += F("</h1><p>");
+        msg += T(STR_W_FW_RETRY);
+        msg += F("</p><a href='/'>&#8592; ");
+        msg += T(STR_W_BACK_STATUS);
+        msg += F("</a></body></html>");
+      }
       srv.send(200, "text/html", msg);
       if (ok) {
         if (lbl_ota_status) lv_label_set_text(lbl_ota_status,

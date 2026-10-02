@@ -29,6 +29,7 @@
 #include "web/web_access.h"
 #include "web/web_jobs.h"
 #include "web/web_shell.h"
+#include "ui/theme.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
 // parameter, so lang.h has to come after anything that pulls it in.
 #include "lang.h"
@@ -69,7 +70,24 @@ static String body() {
   h += F("</div><span class='msg' id='bm-s'></span>"
          "<p class='note'>");
   h += T(STR_W_BACKEND_NOTE);
-  h += F("</p></div>");
+  h += F("</p>");
+  // With the colours following the backend, a switch takes the panel to the
+  // new backend's palette on the next boot. Said after the reload that
+  // follows a switch, with the restart button when this browser may restart
+  // the scale - the design page's rule.
+  const bool palette_waits = uiThemeFollowWaits();
+  const bool can_restart = palette_waits && webGateOpen(GATE_MAINT);
+  if (palette_waits) {
+    h += F("<p class='note'>");
+    h += T(STR_W_BACKEND_THEME_NOTE);
+    h += F("</p>");
+    if (can_restart) {
+      h += F("<div class='inrow' style='margin-top:10px'><button class='quiet' id='bm-rb' type='button'>");
+      h += T(STR_W_RESTART);
+      h += F("</button></div>");
+    }
+  }
+  h += F("</div>");
 
   // ---- address ----------------------------------------------------------
   h += F("<div class='card wide'><h2>");
@@ -234,9 +252,11 @@ static String body() {
   h += T(STR_W_LOADING);
   h += F("</p></div></div>");
 
+  h += F("</div>");
+  if (can_restart) h += webShellRestartUi();
   // $, flash and post come from /app.js. Only the one string this page has
   // beyond the shared pair stays here.
-  h += F("</div><script>");
+  h += F("<script>");
   h += webShellJsStrings();
   h += F("const M={test:");
   h += jsStr(T(STR_W_HOST_TESTING));
@@ -361,6 +381,9 @@ static String body() {
          // first - the action stays possible, the intent has to be deliberate.
          // The reload is what redraws address, credentials and options for the
          // backend now active; the device needs a moment to settle first.
+         // doRestart() comes from webShellRestartUi(), on the page only
+         // together with the button.
+         "if($('bm-rb'))$('bm-rb').addEventListener('click',doRestart);"
          "document.querySelectorAll('.btab').forEach(b=>{"
          "b.addEventListener('click',()=>{"
          "const n=b.textContent;"

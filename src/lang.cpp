@@ -3182,6 +3182,16 @@ const char* const STRINGS[][3] = {
     "Trop long : %u caractères au maximum. Rien enregistré." },  // STR_W_SM_SECRET_LONG
   { "Der Zugang wurde für %s eingegeben und geht nicht an die neue Adresse. Bitte für diese Adresse neu eingeben.", "This access was entered for %s and is not sent to the new address. Enter it again for this address.",
     "Cet accès a été saisi pour %s et n'est pas envoyé à la nouvelle adresse. Saisissez-le à nouveau pour celle-ci." },  // STR_W_SM_AUTH_REBIND
+  { "Für Schrift wird die Helligkeit angepasst, bis sie lesbar ist, auf der Waage wie hier. Flächen behalten die gewählte Farbe.",
+    "For text its lightness is adjusted until it reads, on the scale as here. Fills keep the chosen colour.",
+    "Pour le texte, la luminosité est ajustée jusqu'à ce qu'il soit lisible, sur la balance comme ici. Les surfaces gardent la couleur choisie." },  // STR_W_THEME_TEXT_ADJUSTED
+  { "Die Farben folgen dem Backend und wechseln beim nächsten Neustart der Waage.",
+    "The colours follow the backend and change when the scale next restarts.",
+    "Les couleurs suivent le backend et changent au prochain redémarrage de la balance." },  // STR_W_BACKEND_THEME_NOTE
+  { "Eigene Farben zurücksetzen", "Reset own colours",
+    "Effacer les couleurs perso" },  // STR_THEME_RESET_OWN
+  { "Akzent und Grundton aus dem Web", "Accent and ground tone from the web",
+    "Accent et teinte de fond du web" },  // STR_THEME_RESET_OWN_SUB
 };
 
 StringID tagWriteResultString(uint8_t code) {

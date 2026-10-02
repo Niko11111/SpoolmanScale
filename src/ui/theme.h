@@ -3,6 +3,8 @@
 #include <lvgl.h>
 #include <stdint.h>
 
+#include "services/backend.h"
+
 // ============================================================
 //  THEME
 //
@@ -85,7 +87,8 @@ uint32_t uiPaletteValue(UiThemeId id, size_t i);
 
 // ---- own colours ---------------------------------------------
 // Laid over the chosen palette at boot (theme_custom.cpp). The accent
-// replaces the house colour; the tone turns the hue of the ground, the
+// replaces the house colour: as text at a lightness that reads at 4.5:1 on
+// the ground, as a fill as chosen. The tone turns the hue of the ground, the
 // surfaces, the lines and the grey text while every colour keeps its
 // lightness, so no contrast changes. Strength scales their saturation.
 #define UI_TONE_NONE          -1     // the palette's own hue
@@ -107,6 +110,15 @@ bool uiThemeCustomStore(const UiThemeCustom& c);
 // The palette that runs for a stored choice: with follow on, the backend's
 // family in the choice's lightness (BamBuddy has none and keeps the standard).
 UiThemeId uiThemeResolve(UiThemeId chosen, bool follow);
+// Whether switching to `to` moves the palette the next boot runs into another
+// family. Only with follow on: without it a backend has no say in the colours.
+bool uiThemeFollowMoves(BackendMode to);
+// Whether the stored choice, resolved for the backend now active, differs
+// from the palette running: a restart would change the colours. Only with
+// follow on, for the note after a backend switch.
+bool uiThemeFollowWaits();
+// Own colours set beyond the palette: an accent, a tone or a strength.
+bool uiThemeCustomIsSet(const UiThemeCustom& c);
 // Over the palette that was just applied. Nothing to do for a default.
 void uiThemeApplyCustom(const UiThemeCustom& c);
 // What uiThemeApplyCustom() laid over the running palette at boot.

@@ -95,13 +95,9 @@ String htmlEsc(const char *s) {
 // the internet, so a font link would fail silently and drop to whatever the
 // browser picked.
 // ---------------------------------------------------------------------------
-String webShellHead(const char *subtitle) {
-  char ver[24];
-  strncpy(ver, FW_VERSION, sizeof(ver) - 1);
-  ver[sizeof(ver) - 1] = '\0';
-
+String webShellDocOpen() {
   String h;
-  h.reserve(680);   // the stylesheet is a route now, this is just the head
+  h.reserve(200);
   // The page follows the palette the scale runs, so the stylesheet carries
   // both and this attribute picks one. Not a cached file: a new palette shows
   // on the next page load without a new firmware.
@@ -126,24 +122,38 @@ String webShellHead(const char *subtitle) {
     snprintf(attr, sizeof(attr), "' data-tone='%d' data-tstr='%u", (int)own.tone, (unsigned)own.strength);
     h += attr;
   }
-  h += F("'><head>"
+  h += F("'>");
+  return h;
+}
+
+String webShellAssets() {
+  // The stylesheet is a route now, not 4 kB rebuilt on the internal heap for
+  // every request. Keyed by firmware version so a cached copy can never
+  // outlive the page it styles - see web_static.cpp.
+  String h = F("<link rel='stylesheet' href='/app.css?v=");
+  h += webStaticVersion();
+  // In the head and without defer, so $, flash and post exist by the time a
+  // page's own script runs at the end of the body.
+  h += F("'><script src='/app.js?v=");
+  h += webStaticVersion();
+  h += F("'></script>");
+  return h;
+}
+
+String webShellHead(const char *subtitle) {
+  String h;
+  h.reserve(680);   // the stylesheet is a route now, this is just the head
+  h += webShellDocOpen();
+  h += F("<head>"
       "<meta charset='utf-8'>"
       "<meta name='viewport' content='width=device-width,initial-scale=1'>"
       "<link rel='icon' type='image/png' href='/favicon.png'>"
       "<link rel='apple-touch-icon' href='/apple-touch-icon.png'>"
       "<title>SpoolmanScale - ");
   h += subtitle;
-  h += F("</title>"
-      // The stylesheet is a route now, not 4 kB rebuilt on the internal heap
-      // for every request. Keyed by firmware version so a cached copy can
-      // never outlive the page it styles - see web_static.cpp.
-      "<link rel='stylesheet' href='/app.css?v=");
-  h += webStaticVersion();
-  // In the head and without defer, so $, flash and post exist by the time a
-  // page's own script runs at the end of the body.
-  h += F("'><script src='/app.js?v=");
-  h += webStaticVersion();
-  h += F("'></script></head><body><div class='wrap'>");
+  h += F("</title>");
+  h += webShellAssets();
+  h += F("</head><body><div class='wrap'>");
   return h;
 }
 
@@ -331,7 +341,10 @@ String webShellRestartUi() {
   String h;
   h.reserve(2600);
   h += F("<style>"
-         "#rbox{display:none;position:fixed;inset:0;background:rgba(6,8,15,.92);z-index:99;"
+         // The page's own ground, nearly opaque: the scrim follows the
+         // palette. A browser without color-mix() keeps the solid ground.
+         "#rbox{display:none;position:fixed;inset:0;background:var(--ground);"
+         "background:color-mix(in srgb,var(--ground) 92%,transparent);z-index:99;"
          "align-items:center;justify-content:center}"
          "#rbox .rc{background:var(--surface);border:1px solid var(--line);border-radius:14px;"
          "padding:32px 40px;text-align:center;max-width:360px}"
