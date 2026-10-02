@@ -235,7 +235,7 @@ void showLanguageScreen() {
     showRebootPopup(commitLanguageChoice);
   }, LV_EVENT_CLICKED, NULL);
 
-  // Time zone. A row rather than a pair of buttons, because there are twelve
+  // Time zone. A row rather than a pair of buttons, because there are too many
   // of them: the button carries the current zone so the setting can be read
   // without opening the picker.
   //
