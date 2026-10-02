@@ -42,7 +42,7 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 
 static volatile WebJobState s_state = WJS_IDLE;
 static WebJobResult         s_res;
-static char                 s_arg[160] = "";   // a release tag, or a whole address for the probe
+static char                 s_arg[160] = "";   // a release tag, or the backend address for the probe
 static bool                 s_flag    = false;
 static unsigned long        s_done_ms = 0;
 

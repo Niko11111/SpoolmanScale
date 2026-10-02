@@ -3178,6 +3178,10 @@ const char* const STRINGS[][3] = {
     "Clair ou sombre selon le système" },  // STR_W_THEME_WEB_OS
   { "Nur diese Webseite: Sie folgt der Einstellung von Gerät oder Browser, in der Farbfamilie der Waage. Die Waage bleibt, wie oben gewählt. Wirkt sofort, ohne Neustart.", "This web page only: it follows the device or browser setting, in the scale's colour family. The scale stays as chosen above. Takes effect at once, without a restart.",
     "Cette page web uniquement : elle suit le réglage de l'appareil ou du navigateur, dans la famille de couleurs de la balance. La balance reste comme choisi ci-dessus. Effet immédiat, sans redémarrage." },  // STR_W_THEME_WEB_OS_HINT
+  { "Zu lang: höchstens %u Zeichen. Nichts gespeichert.", "Too long: %u characters at most. Nothing saved.",
+    "Trop long : %u caractères au maximum. Rien enregistré." },  // STR_W_SM_SECRET_LONG
+  { "Der Zugang wurde für %s eingegeben und geht nicht an die neue Adresse. Bitte für diese Adresse neu eingeben.", "This access was entered for %s and is not sent to the new address. Enter it again for this address.",
+    "Cet accès a été saisi pour %s et n'est pas envoyé à la nouvelle adresse. Saisissez-le à nouveau pour celle-ci." },  // STR_W_SM_AUTH_REBIND
 };
 
 StringID tagWriteResultString(uint8_t code) {

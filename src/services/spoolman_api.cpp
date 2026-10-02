@@ -30,10 +30,11 @@ static bool hasBaseUrl(const char* base_url) {
 // Every request to Spoolman starts here, so the access the user set up goes
 // out with each of them. Only in Spoolman mode: BamBuddy reaches the Spoolman
 // behind it through this file too, and that server has nothing to do with
-// these settings.
+// these settings. And only to the address the secret was entered for: a new
+// address gets none until the access is entered again for it.
 static void smBegin(BackendHttp& http, const String& url) {
   http.begin(url);
-  if (backendMode() != BACKEND_SPOOLMAN || !spoolmanAuthActive()) return;
+  if (backendMode() != BACKEND_SPOOLMAN || !spoolmanAuthSendsTo(url.c_str())) return;
   switch (spoolmanAuthMode()) {
     case SM_AUTH_KEY:
       http.addHeader("X-API-Key", spoolmanAuthSecret());

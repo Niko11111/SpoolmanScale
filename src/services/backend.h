@@ -89,14 +89,30 @@ enum SpoolmanAuth : uint8_t {
   SM_AUTH_BEARER = 2,   // Authorization: Bearer <secret>
   SM_AUTH_BASIC  = 3    // Authorization: Basic, user and secret
 };
+// The longest secret that is kept. A JWT or an OAuth bearer token runs to
+// several hundred characters; a longer one is refused, never cut - a cut
+// token fails at the server with nothing to say why.
+#define SM_SECRET_MAX_LEN 511
+
 uint8_t     spoolmanAuthMode();
 const char* spoolmanAuthUser();
 const char* spoolmanAuthSecret();
-// True when a request to Spoolman carries credentials.
+// The secret belongs to the address it was entered for, "host[:port]" in
+// lower case, scheme and path left out: https to the same server is the same
+// server. Changing the address does not take the secret along to the new one.
+const char* spoolmanAuthBoundHost();
+// True when a secret is stored, whichever address it was entered for.
+bool        spoolmanAuthStored();
+// True when a request to Spoolman carries credentials: a secret is stored
+// and was entered for the address now set.
 bool        spoolmanAuthActive();
+// True when credentials go with a request to this URL.
+bool        spoolmanAuthSendsTo(const char* url);
 // Persists. A null secret keeps the stored one, so the form can change the
-// kind or the user without the secret being typed again.
-void        spoolmanSetAuth(uint8_t mode, const char* user, const char* secret);
+// kind or the user without the secret being typed again; a new one is bound
+// to the address now set. False, with nothing changed, for a secret longer
+// than SM_SECRET_MAX_LEN.
+bool        spoolmanSetAuth(uint8_t mode, const char* user, const char* secret);
 
 // True when the active backend has everything it needs to talk to
 // its server. Spoolman and BamBuddy only need a base URL.

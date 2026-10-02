@@ -160,6 +160,16 @@ static String body() {
     h += F("'></div></div><div class='inrow'><button id='sa-b'>");
     h += T(STR_W_SAVE);
     h += F("</button><span class='msg' id='sa-s'></span></div>");
+    // The address changed since the secret was entered: it stays stored, but
+    // goes nowhere until it is entered again for this address.
+    if (spoolmanAuthStored() && !spoolmanAuthActive()) {
+      char line[320];
+      snprintf(line, sizeof(line), T(STR_W_SM_AUTH_REBIND),
+               spoolmanAuthBoundHost()[0] ? spoolmanAuthBoundHost() : "-");
+      h += F("<p class='note' id='sa-r'>");
+      h += htmlEsc(line);
+      h += F("</p>");
+    }
     // Over http the secret crosses the network as it is. Said where it is
     // set, not hidden in the manual.
     if (spoolmanAuthActive() && strncasecmp(backendBaseUrl(), "https://", 8) != 0) {
@@ -274,7 +284,10 @@ static String body() {
          "$('sa-b').addEventListener('click',function(){"
          "const k=$('sk').value;"
          "postFlash('/api/spoolman/auth',$('sa').value+'\\n'+$('su').value+'\\n'+"
-         "(guard(k)?'1'+k:'0'),'sa-s').then(function(r){if(r.ok)hostPoll(0);});});}"
+         "(guard(k)?'1'+k:'0'),'sa-s').then(function(r){if(!r.ok)return;hostPoll(0);"
+         // A secret typed in now belongs to this address: the line asking
+         // for it goes.
+         "if(guard(k)&&$('sa-r'))$('sa-r').style.display='none';});});}"
          "function setKey(){const v=$('fk').value;"
          "if(!guard(v))return;postFlash('/api/filaman/key',v,'fk-s');}"
          "function reg(){flash('fc-s',M.test,false);"
@@ -619,7 +632,14 @@ static void routes(WebServer &srv) {
     }
     String secret = rest.substring(1);
     secret.trim();
-    spoolmanSetAuth((uint8_t)mode, user.c_str(), rest[0] == '1' ? secret.c_str() : nullptr);
+    // Refused whole rather than cut: a cut token fails at the server later,
+    // with nothing to say why.
+    if (!spoolmanSetAuth((uint8_t)mode, user.c_str(), rest[0] == '1' ? secret.c_str() : nullptr)) {
+      char msg[160];
+      snprintf(msg, sizeof(msg), T(STR_W_SM_SECRET_LONG), (unsigned)SM_SECRET_MAX_LEN);
+      srv.send(400, "text/plain", msg);
+      return;
+    }
     // What the server can do may look different with access than without.
     backendInvalidateExtraFieldCache();
     if (strlen(backendBaseUrl()) > 7) {   // longer than "http://"
