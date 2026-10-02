@@ -1,0 +1,85 @@
+{
+ "--accent/ACCENT": {
+  "light": "0a8a60/006b35",
+  "spoolman_dark": "e38c47/ff9442",
+  "spoolman_light": "a8501a/9a4312"
+ },
+ "--bad-bg/BAD_BG": {
+  "dark": "2a0f0f/3a1410",
+  "filaman_light": "fbe9e6/f6ddd6",
+  "light": "fdeaea/dcbcb5",
+  "spoolman_light": "fbe9e6/f6ddd6"
+ },
+ "--bad/BAD": {
+  "dark": "ff6b6b/e04040",
+  "filaman_dark": "fca5a5/ef4444",
+  "light": "c62f2f/c9252c",
+  "spoolman_dark": "f08a78/e05a42"
+ },
+ "--good/GOOD": {
+  "light": "0a8a60/006b35",
+  "spoolman_dark": "7fcd7f/5fe06f",
+  "spoolman_light": "2a7a2e/1f6b22"
+ },
+ "--ground/GROUND": {
+  "dark": "06080f/0a1020",
+  "filaman_light": "f8f6f1/ebe6dc",
+  "light": "eef3f9/dde3ec",
+  "spoolman_light": "efece6/e9e6e0"
+ },
+ "--ink-2/INK_2": {
+  "filaman_light": "2a352f/22302a",
+  "light": "243449/0f1c2b"
+ },
+ "--ink-3/CAPTION": {
+  "filaman_dark": "b5c7bd/8fa89b",
+  "filaman_light": "53645a/3f5247",
+  "light": "4a6488/20436b",
+  "spoolman_dark": "a7a7a7/959595",
+  "spoolman_light": "525252/3f3f3f"
+ },
+ "--ink-4/RULE": {
+  "light": "a6b6cc/8594b5",
+  "spoolman_dark": "4a4a4a/3a3a3a"
+ },
+ "--ink-soft/INK_SOFT": {
+  "dark": "6d8cb8/8fa8c8",
+  "filaman_dark": "b5c7bd/a7bcb0",
+  "filaman_light": "53645a/34463b",
+  "light": "50627c/172e44",
+  "spoolman_light": "4f4f4f/3a3a3a"
+ },
+ "--ink/INK": {
+  "light": "0f1a2a/0e141d"
+ },
+ "--line-soft/LINE_SOFT": {
+  "dark": "14243c/1e2a44",
+  "filaman_dark": "1f3a2c/22392d",
+  "filaman_light": "dcdcd6/aab5ac",
+  "light": "dbe3ee/95a2c3",
+  "spoolman_light": "dcd9d2/b3aea4"
+ },
+ "--line/LINE": {
+  "dark": "1a3060/1a3870",
+  "filaman_light": "b9bdb3/7d8a80",
+  "light": "b9c8dd/7383ad",
+  "spoolman_dark": "3d3d3d/424242",
+  "spoolman_light": "b8b5ae/8a857b"
+ },
+ "--ok-bg/OK_BG": {
+  "dark": "0b2b23/1a4020",
+  "filaman_light": "e1f3e8/d9ecdf",
+  "light": "e1f5ec/85a987",
+  "spoolman_light": "e3eedf/dfeadb"
+ },
+ "--surface/SURFACE": {
+  "filaman_light": "ffffff/fbfaf7",
+  "light": "ffffff/f4f6fa",
+  "spoolman_light": "fbfaf8/f8f7f5"
+ },
+ "--warn/WARN": {
+  "light": "9a6a00/945000",
+  "spoolman_dark": "f4c542/ffd23a",
+  "spoolman_light": "8a6500/8a5000"
+ }
+}

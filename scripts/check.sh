@@ -189,6 +189,23 @@ else
   fi
 fi
 
+# 13. The web pages' palettes against the panel's. The stylesheet in
+#     web/web_static.cpp is written by hand, not generated from
+#     ui/theme_palette.h, so a colour changed on one side stays as it was on
+#     the other. Paired tokens may differ only by a recorded difference
+#     (scripts/palette_baseline.json); every palette needs its web block, and
+#     every block every colour.
+out=$(python3 scripts/check_palettes.py 2>&1); rc=$?
+sum=$(echo "$out" | grep -E '^palettes: ' | tail -1)
+sum=${sum:-palettes: the tables could not be read}
+if [ "$rc" -ne 0 ]; then
+  bad "web palettes: ${sum#palettes: }"
+  echo "$out" | grep -E '^fail: ' | sed 's/^/        /'
+  echo "        python3 scripts/check_palettes.py --write-baseline records a difference once it is decided"
+else
+  ok "web palettes: ${sum#palettes: }"
+fi
+
 echo
 if [ "$fail" -ne 0 ]; then echo "check.sh: FAILED"; exit 1; fi
 if [ "$warn" -ne 0 ]; then echo "check.sh: passed with warnings"; else echo "check.sh: all checks passed"; fi
