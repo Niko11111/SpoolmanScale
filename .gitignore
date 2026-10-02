@@ -31,6 +31,7 @@ images/images_not_for_github/
 !platformio.ini
 !partitions.csv
 !copy_release.py
+!lvgl_speed.py
 !manifest.json
 !version.json
 !README.md

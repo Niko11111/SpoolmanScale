@@ -126,7 +126,7 @@ static lv_obj_t* makeStepButton(lv_obj_t* parent, lv_coord_t x, const char* sym,
   lv_obj_set_size(b, PO_STEP_W, PO_STEP_H);
   lv_obj_set_pos(b, x, PO_STEP_Y);
   lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_SURFACE), LV_STATE_DISABLED);
   lv_obj_set_style_border_width(b, 1, 0);
   lv_obj_set_style_border_color(b, lv_color_hex(UI_COL_ROW_PRESSED), 0);

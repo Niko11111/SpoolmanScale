@@ -233,7 +233,7 @@ static lv_obj_t *choiceButton(lv_obj_t *box, int y, int w, int h, const char *te
   lv_obj_set_size(b, w, h);
   lv_obj_set_pos(b, 12, y);
   lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_CHIP), 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(b, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(b, 0, 0);
   padLabel(b, text, UI_COL_INK_2, UI_FONT_SMALL);

@@ -61,7 +61,7 @@ lv_obj_t* buildStatusChip(lv_obj_t* parent, int x, int y, int status_id,
   lv_obj_set_size(chip, STATUS_CHIP_W, STATUS_CHIP_H);
   lv_obj_set_pos(chip, x, y);
   lv_obj_set_style_bg_color(chip, lv_color_hex(UI_COL_CHIP), 0);
-  lv_obj_set_style_bg_color(chip, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(chip, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_border_color(chip, lv_color_hex(col), 0);
   lv_obj_set_style_border_width(chip, 1, 0);
   lv_obj_set_style_radius(chip, 8, 0);
@@ -193,7 +193,7 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
     if (is_current) {
       // Same "this is the one you have" language as the location rows.
       lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_GO_BG), 0);
-      lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+      lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
       lv_obj_set_style_border_color(cell, lv_color_hex(UI_COL_ACCENT), 0);
       txt_col = UI_COL_ACCENT;
     } else if (is_archive) {
@@ -205,7 +205,7 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
       txt_col = UI_COL_ARCHIVE_TEXT;
     } else {
       lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_CHIP), 0);
-      lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+      lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
       lv_obj_set_style_border_color(cell, lv_color_hex(UI_COL_DIVIDER), 0);
       txt_col = UI_COL_INK_BRIGHT;
     }

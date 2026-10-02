@@ -453,7 +453,7 @@ void showLocationPicker() {
     lv_obj_set_size(btn_c, LOC_CANCEL_W, LOC_CANCEL_H);
     lv_obj_set_pos(btn_c, 10, 270 - LOC_CANCEL_H);
     lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_border_width(btn_c, 1, 0);
     lv_obj_set_style_border_color(btn_c, lv_color_hex(UI_COL_LINE), 0);
     lv_obj_set_style_radius(btn_c, UI_RADIUS_BTN, 0);
@@ -557,7 +557,7 @@ void fetchAndFillLocationList() {
   if (!btn_none) { logSD("LOC: LVGL pool exhausted, no rows built"); return; }
   lv_obj_set_size(btn_none, 370, 44);
   lv_obj_set_style_bg_color(btn_none, lv_color_hex(UI_COL_CHIP), 0);
-  lv_obj_set_style_bg_color(btn_none, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_none, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_border_color(btn_none, lv_color_hex(UI_COL_DIVIDER), 0);
   lv_obj_set_style_border_width(btn_none, 1, 0);
   lv_obj_set_style_radius(btn_none, 6, 0);
@@ -598,7 +598,7 @@ void fetchAndFillLocationList() {
     lv_obj_set_size(row, 370, 44);
     bool is_current = (strlen(sm_location_name) > 0 && strcmp(loc_name, sm_location_name) == 0);
     lv_obj_set_style_bg_color(row, is_current ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_CHIP), 0);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_border_color(row, is_current ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_DIVIDER), 0);
     lv_obj_set_style_border_width(row, 1, 0);
     lv_obj_set_style_radius(row, 6, 0);
@@ -790,7 +790,7 @@ void buildMoreInfoScreen() {
     lv_obj_set_size(btn_print, 116, 34);
     lv_obj_set_pos(btn_print, 282, 9);
     lv_obj_set_style_bg_color(btn_print, lv_color_hex(UI_COL_ROW), 0);
-    lv_obj_set_style_bg_color(btn_print, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_print, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_border_color(btn_print, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_border_width(btn_print, 1, 0);
     lv_obj_set_style_radius(btn_print, UI_RADIUS_BTN, 0);
@@ -1061,7 +1061,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_size(btn_loc, CW, 46);
   lv_obj_set_pos(btn_loc, CB, R3);
   lv_obj_set_style_bg_color(btn_loc, lv_color_hex(UI_COL_CHIP), 0);
-  lv_obj_set_style_bg_color(btn_loc, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_loc, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_border_color(btn_loc, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_border_width(btn_loc, 1, 0);
   lv_obj_set_style_radius(btn_loc, 8, 0);

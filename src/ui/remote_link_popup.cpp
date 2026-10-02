@@ -409,7 +409,7 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_set_size(btn_cancel, 420, 44);
   lv_obj_align(btn_cancel, LV_ALIGN_TOP_MID, 0, y_after_head + 56);
   lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_SURFACE), 0);
-  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_cancel, 8, 0);
   lv_obj_set_style_shadow_width(btn_cancel, 0, 0);
   lv_obj_set_style_border_width(btn_cancel, 1, 0);

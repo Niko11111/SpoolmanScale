@@ -348,7 +348,7 @@ void showCopySpoolList() {
   lv_obj_set_size(btn_hdr_back, 44, 44);
   lv_obj_set_pos(btn_hdr_back, 4, 4);
   lv_obj_set_style_bg_color(btn_hdr_back, lv_color_hex(UI_COL_SURFACE), 0);
-  lv_obj_set_style_bg_color(btn_hdr_back, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_hdr_back, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_hdr_back, 8, 0);
   lv_obj_set_style_shadow_width(btn_hdr_back, 0, 0);
   lv_obj_set_style_border_width(btn_hdr_back, 0, 0);
@@ -443,7 +443,7 @@ void showCopySpoolList() {
     if (!row) { logSDf("CopySpoolList: no room for a row, list cut at %d", i); break; }
     lv_obj_set_size(row, 452, 56);
     lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_shadow_width(row, 0, 0);
     lv_obj_set_style_border_width(row, 1, 0);
@@ -592,7 +592,7 @@ void showCopyEntryPopup() {
   lv_obj_set_size(btn1, BTN_W, BTN_H);
   lv_obj_align(btn1, LV_ALIGN_TOP_MID, 0, Y1);
   lv_obj_set_style_bg_color(btn1, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn1, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn1, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn1, 10, 0);
   lv_obj_set_style_shadow_width(btn1, 0, 0);
   lv_obj_set_style_border_width(btn1, 1, 0);
@@ -611,7 +611,7 @@ void showCopyEntryPopup() {
   lv_obj_set_size(btn2, BTN_W, BTN_H);
   lv_obj_align(btn2, LV_ALIGN_TOP_MID, 0, Y2);
   lv_obj_set_style_bg_color(btn2, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn2, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn2, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn2, 10, 0);
   lv_obj_set_style_shadow_width(btn2, 0, 0);
   lv_obj_set_style_border_width(btn2, 1, 0);
@@ -634,7 +634,7 @@ void showCopyEntryPopup() {
   lv_obj_set_size(btn3, BTN_W, BTN_H);
   lv_obj_align(btn3, LV_ALIGN_TOP_MID, 0, Y3);
   lv_obj_set_style_bg_color(btn3, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn3, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn3, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn3, 10, 0);
   lv_obj_set_style_shadow_width(btn3, 0, 0);
   lv_obj_set_style_border_width(btn3, 1, 0);

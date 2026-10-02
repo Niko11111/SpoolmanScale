@@ -45,7 +45,7 @@ static lv_obj_t* addNavRow(lv_obj_t *parent, int y, const char *title,
   lv_obj_set_size(row, 448, 56);
   lv_obj_set_pos(row, 16, y);
   lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(row, 10, 0);
   lv_obj_set_style_shadow_width(row, 0, 0);
   lv_obj_set_style_border_width(row, 1, 0);
@@ -127,7 +127,7 @@ static void addWebSetupButton(lv_obj_t *parent, int x) {
   lv_obj_set_size(btn_web, 216, 44);
   lv_obj_set_pos(btn_web, x, 244);
   lv_obj_set_style_bg_color(btn_web, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn_web, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_web, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_web, 8, 0);
   lv_obj_set_style_shadow_width(btn_web, 0, 0);
   lv_obj_set_style_border_width(btn_web, 1, 0);
@@ -210,7 +210,7 @@ void buildBackendScreen() {
     lv_obj_set_size(b, SEG_W, SEG_H);
     lv_obj_set_pos(b, segs[i].x, SEG_Y);
     lv_obj_set_style_bg_color(b, lv_color_hex(active ? UI_COL_PICKED_BG : UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_radius(b, 10, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, active ? 2 : 1, 0);
@@ -313,7 +313,7 @@ void buildBackendScreen() {
     // have credential rows in between, and here nothing is in between.
     lv_obj_set_pos(btn_opts, 132, 194);
     lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW), 0);
-    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_opts, 8, 0);
     lv_obj_set_style_shadow_width(btn_opts, 0, 0);
     lv_obj_set_style_border_width(btn_opts, 1, 0);
@@ -348,7 +348,7 @@ void buildBackendScreen() {
     lv_obj_set_size(btn_opts, 216, 44);
     lv_obj_set_pos(btn_opts, 16, 244);
     lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW), 0);
-    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_opts, 8, 0);
     lv_obj_set_style_shadow_width(btn_opts, 0, 0);
     lv_obj_set_style_border_width(btn_opts, 1, 0);
@@ -392,7 +392,7 @@ void buildBackendScreen() {
     lv_obj_set_size(btn_opts, 216, 44);
     lv_obj_set_pos(btn_opts, 16, 244);
     lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW), 0);
-    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_opts, 8, 0);
     lv_obj_set_style_shadow_width(btn_opts, 0, 0);
     lv_obj_set_style_border_width(btn_opts, 1, 0);

@@ -3172,6 +3172,12 @@ const char* const STRINGS[][3] = {
     "Clé ou mot de passe" },  // STR_W_SM_SECRET
   { "Die Adresse beginnt mit http://, der Zugang geht also unverschlüsselt durchs Netz. Schützt vor fremden Schreibzugriffen, nicht vor Mitlesen im selben Netz.", "The address starts with http://, so the access crosses the network unencrypted. It keeps others from writing, not from listening on the same network.",
     "L'adresse commence par http://, l'accès circule donc sans chiffrement. Il empêche les écritures d'autrui, pas l'écoute sur le même réseau." },  // STR_W_SM_AUTH_PLAIN
+  { "Webseite", "Web page",
+    "Page web" },  // STR_W_THEME_WEB_H
+  { "Hell oder dunkel wie das System", "Light or dark as the system sets it",
+    "Clair ou sombre selon le système" },  // STR_W_THEME_WEB_OS
+  { "Nur diese Webseite: Sie folgt der Einstellung von Gerät oder Browser, in der Farbfamilie der Waage. Die Waage bleibt, wie oben gewählt. Wirkt sofort, ohne Neustart.", "This web page only: it follows the device or browser setting, in the scale's colour family. The scale stays as chosen above. Takes effect at once, without a restart.",
+    "Cette page web uniquement : elle suit le réglage de l'appareil ou du navigateur, dans la famille de couleurs de la balance. La balance reste comme choisi ci-dessus. Effet immédiat, sans redémarrage." },  // STR_W_THEME_WEB_OS_HINT
 };
 
 StringID tagWriteResultString(uint8_t code) {

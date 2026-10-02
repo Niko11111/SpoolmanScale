@@ -121,7 +121,7 @@ lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
   lv_obj_t *btn = lv_btn_create(list);
   lv_obj_set_size(btn, 456, 64);
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, 10, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 1, 0);
@@ -164,7 +164,7 @@ lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
     lv_obj_set_size(help, 34, 34);
     lv_obj_align(help, LV_ALIGN_RIGHT_MID, -56, 0);
     lv_obj_set_style_bg_opa(help, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_bg_color(help, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(help, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(help, LV_OPA_COVER, LV_STATE_PRESSED);
     lv_obj_set_style_border_color(help, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_border_width(help, 1, 0);
@@ -203,7 +203,7 @@ void addBackButton(lv_obj_t *parent, lv_event_cb_t cb) {
   lv_obj_set_size(btn, 44, 44);
   lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 4, 2);
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_SURFACE), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, 8, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
@@ -291,7 +291,7 @@ lv_obj_t* addHeaderHelp(lv_obj_t *scr, int title_id, int text_id) {
   lv_obj_set_size(help, 34, 34);
   lv_obj_set_pos(help, 386, 5);
   lv_obj_set_style_bg_opa(help, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_bg_color(help, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(help, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(help, LV_OPA_COVER, LV_STATE_PRESSED);
   lv_obj_set_style_border_color(help, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(help, 1, 0);

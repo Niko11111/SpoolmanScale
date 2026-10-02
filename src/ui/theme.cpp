@@ -6,6 +6,7 @@
 
 // NVS key of the chosen palette. A uchar: UiThemeId.
 #define THEME_PREF_KEY  "ui_theme"
+#define WEB_OS_PREF_KEY "ui_web_os"     // bool
 
 // Every colour starts out dark, so anything that runs before uiThemeBegin()
 // still draws in the palette the scale has always had.
@@ -137,6 +138,15 @@ bool uiThemeStore(UiThemeId id) {
 const char* uiThemeKey(UiThemeId id) {
   return THEMES[id < UI_THEME_COUNT ? id : UI_THEME_DARK].key;
 }
+
+UiThemeId uiThemeInFamily(UiThemeId id, bool dark) {
+  const uint8_t first = (uint8_t)(id < UI_THEME_COUNT ? id : UI_THEME_DARK) & ~1u;
+  return (UiThemeId)(dark ? first : first + 1);
+}
+
+bool uiWebFollowsSystem() { return prefsGetBool(WEB_OS_PREF_KEY, false); }
+
+bool uiWebFollowsSystemStore(bool on) { return prefsPutBool(WEB_OS_PREF_KEY, on); }
 
 bool uiThemeFromKey(const char* key, UiThemeId* out) {
   if (!key || !out) return false;

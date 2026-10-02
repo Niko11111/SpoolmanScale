@@ -149,7 +149,7 @@ void buildWelcomeScreen() {
   wel_btn_de = lv_btn_create(scr_welcome);
   lv_obj_set_size(wel_btn_de, LB_W, LB_H);
   lv_obj_set_pos(wel_btn_de, LB_X_DE, LB_Y);
-  lv_obj_set_style_bg_color(wel_btn_de, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(wel_btn_de, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(wel_btn_de, 10, 0);
   lv_obj_set_style_shadow_width(wel_btn_de, 0, 0);
   lv_obj_set_style_border_width(wel_btn_de, 2, 0);
@@ -170,7 +170,7 @@ void buildWelcomeScreen() {
   wel_btn_fr = lv_btn_create(scr_welcome);
   lv_obj_set_size(wel_btn_fr, LB_W, LB_H);
   lv_obj_set_pos(wel_btn_fr, LB_X_FR, LB_Y);
-  lv_obj_set_style_bg_color(wel_btn_fr, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(wel_btn_fr, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(wel_btn_fr, 10, 0);
   lv_obj_set_style_shadow_width(wel_btn_fr, 0, 0);
   lv_obj_set_style_border_width(wel_btn_fr, 2, 0);
@@ -196,7 +196,7 @@ void buildWelcomeScreen() {
   lv_obj_set_size(btn_tz, 464, 44);
   lv_obj_set_pos(btn_tz, 8, 160);
   lv_obj_set_style_bg_color(btn_tz, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn_tz, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_tz, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_tz, 10, 0);
   lv_obj_set_style_shadow_width(btn_tz, 0, 0);
   lv_obj_set_style_border_width(btn_tz, 1, 0);

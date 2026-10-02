@@ -17,6 +17,12 @@ UI_COLOUR(ROW,                   0x1a2030, 0xf8fafd, 0x2e2e2e, 0xfbfaf8, 0x18322
 UI_COLOUR(ROW_PRESSED,           0x1a3050, 0x7d8db3, 0x3d3d3d, 0x9a958b, 0x24473a, 0x8fa094)   // the same row under the finger, and its border
 UI_COLOUR(LINE,                  0x1a3870, 0x7383ad, 0x424242, 0x8a857b, 0x2c4a3c, 0x7d8a80)   // dividers, the slider track, a quiet border
 UI_COLOUR(LINE_SOFT,             0x1e2a44, 0x95a2c3, 0x333333, 0xb3aea4, 0x22392d, 0xaab5ac)   // the fainter border of an input; a neutral answer beside a green one
+// What a pressed button or row is filled with while the finger is on it.
+// Dark keeps what these were (LINE and ROW_PRESSED); the light palettes
+// fill softer, 1.5:1 against a card instead of 3.5:1, because the panel
+// shows a dark block on white as a smear while it moves and redraws.
+UI_COLOUR(PRESS_FILL,            0x1a3870, 0xc4cbdd, 0x424242, 0xcecbc6, 0x2c4a3c, 0xcbcfca)   // under the finger, where a line colour filled it
+UI_COLOUR(ROW_PRESS_FILL,        0x1a3050, 0xc4cbdd, 0x3d3d3d, 0xcecbc6, 0x24473a, 0xcbcfca)   // under the finger, where ROW_PRESSED filled it
 UI_COLOUR(DIVIDER,               0x1a2030, 0x6f7ea3, 0x2e2e2e, 0x8a857b, 0x1f3a2c, 0x7d8a80)   // the separators of the main and more-info screens
 UI_COLOUR(POPUP_BORDER,          0x2a4080, 0x6072ad, 0x4a4239, 0x8a857b, 0x2f6a50, 0x6b7d70)   // the frame of a question; a blue action pressed
 UI_COLOUR(EMPTY,                 0x182238, 0xe8ecf2, 0x262626, 0xe0ddd6, 0x142a20, 0xe4ded2)   // an empty bay, the keyboard, More, "got it"

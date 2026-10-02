@@ -40,7 +40,7 @@ void buildConnectionScreen() {
   lv_obj_set_size(btn_wifi, HALF_W, BTN_H);
   lv_obj_set_pos(btn_wifi, BTN_X, BTN_Y[0]);
   lv_obj_set_style_bg_color(btn_wifi, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn_wifi, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_wifi, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_wifi, UI_RADIUS_ROW, 0);
   lv_obj_set_style_shadow_width(btn_wifi, 0, 0);
   lv_obj_set_style_border_width(btn_wifi, 1, 0);
@@ -76,7 +76,7 @@ void buildConnectionScreen() {
   lv_obj_set_size(btn_bt, HALF_W, BTN_H);
   lv_obj_set_pos(btn_bt, HALF_X2, BTN_Y[0]);
   lv_obj_set_style_bg_color(btn_bt, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn_bt, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_bt, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_bt, UI_RADIUS_ROW, 0);
   lv_obj_set_style_shadow_width(btn_bt, 0, 0);
   lv_obj_set_style_border_width(btn_bt, 1, 0);
@@ -109,7 +109,7 @@ void buildConnectionScreen() {
   lv_obj_set_size(btn_sp, BTN_W, BTN_H);
   lv_obj_set_pos(btn_sp, BTN_X, BTN_Y[1]);
   lv_obj_set_style_bg_color(btn_sp, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn_sp, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_sp, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_sp, 10, 0);
   lv_obj_set_style_shadow_width(btn_sp, 0, 0);
   lv_obj_set_style_border_width(btn_sp, 1, 0);
@@ -152,7 +152,7 @@ void buildConnectionScreen() {
   lv_obj_set_size(btn_opts, BTN_W, BTN_H);
   lv_obj_set_pos(btn_opts, BTN_X, BTN_Y[2]);
   lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_opts, UI_RADIUS_ROW, 0);
   lv_obj_set_style_shadow_width(btn_opts, 0, 0);
   lv_obj_set_style_border_width(btn_opts, 1, 0);

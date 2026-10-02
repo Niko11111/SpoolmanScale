@@ -197,7 +197,7 @@ void buildWifiSetupScreen() {
   lv_obj_set_size(btn_scan, 44, 36);
   lv_obj_align(btn_scan, LV_ALIGN_TOP_MID, 100, 4);
   lv_obj_set_style_bg_color(btn_scan, lv_color_hex(UI_COL_SURFACE), 0);
-  lv_obj_set_style_bg_color(btn_scan, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_scan, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_scan, 6, 0);
   lv_obj_set_style_shadow_width(btn_scan, 0, 0);
   lv_obj_set_style_border_width(btn_scan, 0, 0);
@@ -237,7 +237,7 @@ void buildWifiSetupScreen() {
   lv_obj_set_size(btn_portal, 190, 40);
   lv_obj_align(btn_portal, LV_ALIGN_BOTTOM_RIGHT, -10, -8);
   lv_obj_set_style_bg_color(btn_portal, lv_color_hex(UI_COL_SURFACE), 0);
-  lv_obj_set_style_bg_color(btn_portal, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_portal, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_portal, 8, 0);
   lv_obj_set_style_shadow_width(btn_portal, 0, 0);
   lv_obj_set_style_border_width(btn_portal, 1, 0);
@@ -427,7 +427,7 @@ static void finishWifiScan(int n) {
     lv_obj_t *row = lv_btn_create(lbl_wifi_scan_list);
     lv_obj_set_size(row, 452, 46);
     lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_LINE), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_shadow_width(row, 0, 0);
     lv_obj_set_style_border_color(row, lv_color_hex(UI_COL_LINE_SOFT), 0);
