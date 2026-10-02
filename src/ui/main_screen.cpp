@@ -847,7 +847,7 @@ void buildUI() {
       // picker was opened from here, which is what sends its exits back to the
       // main screen instead of to More Info.
       if (!wifiManagerIsConnected()) return;
-      requestLocationPicker(true);
+      tapLocationButton(true);
     }, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_loc = lv_label_create(btn_location);
     char locbuf[32];

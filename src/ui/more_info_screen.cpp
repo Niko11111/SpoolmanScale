@@ -48,6 +48,9 @@ static bool show_location_picker_pending = false;
 static bool show_more_info_pending = false;
 static bool fetch_locations_pending = false;
 static bool g_loc_picker_from_popup = false;
+// Set when the location button asked, cleared by every other request: an
+// archived spool gets the picker when someone taps for it, never unasked.
+static bool g_loc_picker_by_tap = false;
 
 static lv_obj_t *scr_location_picker = nullptr;
 
@@ -217,7 +220,13 @@ static bool locCountTick() {
 
 void requestLocationPicker(bool from_popup) {
   g_loc_picker_from_popup = from_popup;
+  g_loc_picker_by_tap = false;
   show_location_picker_pending = true;
+}
+
+void tapLocationButton(bool from_popup) {
+  requestLocationPicker(from_popup);
+  g_loc_picker_by_tap = true;
 }
 
 void handleMoreInfoDeferredActions() {
@@ -344,14 +353,15 @@ void showLocationPicker() {
   // screen that was just deleted here.
   closeLocationPicker();
   // A storage location on an archived spool describes a shelf nobody will look
-  // on. Bringing it back first is the step that makes the question meaningful.
+  // on, so the automatic offers leave it out. A tap on the location button is
+  // someone asking, and every backend takes a location on an archived spool.
   //
   // Logged, because this used to be the one path in the whole chain that
   // produced no trace at all: by the time this runs, one loop pass after the
   // prompt was scheduled, the next spool's lookup may already have moved
   // sm_id - and then the question simply never appeared, with nothing on the
   // card to say why.
-  if (!sm_found || sm_archived || sm_id <= 0) {
+  if (!sm_found || (sm_archived && !g_loc_picker_by_tap) || sm_id <= 0) {
     logSDf("LOC: picker not shown, sm_found=%d archived=%d sm_id=%d",
            (int)sm_found, (int)sm_archived, sm_id);
     return;
@@ -1092,7 +1102,7 @@ void buildMoreInfoScreen() {
     if (!wifiManagerIsConnected()) {
       return;
     }
-    requestLocationPicker(false);
+    tapLocationButton(false);
   }, LV_EVENT_CLICKED, NULL);
 
   // Spoolman UUID left, unlink right - both ending on y=290
