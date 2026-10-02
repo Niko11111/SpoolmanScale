@@ -8,21 +8,38 @@
 
 // A short list rather than every zone there is: these cover where the device
 // actually gets used. The value is the POSIX string the C library wants,
-// rules included, so daylight saving is handled rather than assumed.
+// rules included, so daylight saving is handled rather than assumed. A zone
+// without daylight saving gets its own row even where one with the same
+// offset exists: Queensland on "Australia Eastern" would run an hour ahead
+// for half the year. Only UTC and CET are addressed by index (below); the
+// preference stores the string, so rows may go anywhere else.
 const TimeZoneEntry TZ_LIST[] = {
-  { "UTC",                 "UTC0",                          "UTC+0"       },
-  { "Europe (CET/CEST)",   "CET-1CEST,M3.5.0,M10.5.0/3",    "UTC+1 / +2"  },
-  { "Europe (UK)",         "GMT0BST,M3.5.0/1,M10.5.0",      "UTC+0 / +1"  },
-  { "Europe (EET/EEST)",   "EET-2EEST,M3.5.0/3,M10.5.0/4",  "UTC+2 / +3"  },
-  { "US Eastern",          "EST5EDT,M3.2.0,M11.1.0",        "UTC-5 / -4"  },
-  { "US Central",          "CST6CDT,M3.2.0,M11.1.0",        "UTC-6 / -5"  },
-  { "US Mountain",         "MST7MDT,M3.2.0,M11.1.0",        "UTC-7 / -6"  },
-  { "US Pacific",          "PST8PDT,M3.2.0,M11.1.0",        "UTC-8 / -7"  },
-  { "Australia Eastern",   "AEST-10AEDT,M10.1.0,M4.1.0/3",  "UTC+10 / +11"},
-  { "Japan",               "JST-9",                         "UTC+9"       },
-  { "Singapore",           "<+08>-8",                       "UTC+8"       },
-  { "India",               "IST-5:30",                      "UTC+5:30"    },
-  { "Brazil (Sao Paulo)",  "<-03>3",                        "UTC-3"       },
+  { "UTC",                   "UTC0",                            "UTC+0"            },
+  { "Europe (CET/CEST)",     "CET-1CEST,M3.5.0,M10.5.0/3",      "UTC+1 / +2"       },
+  { "Europe (UK)",           "GMT0BST,M3.5.0/1,M10.5.0",        "UTC+0 / +1"       },
+  { "Europe (EET/EEST)",     "EET-2EEST,M3.5.0/3,M10.5.0/4",    "UTC+2 / +3"       },
+  { "Turkey / Moscow",       "<+03>-3",                         "UTC+3"            },
+  { "South Africa",          "SAST-2",                          "UTC+2"            },
+  { "West Africa",           "WAT-1",                           "UTC+1"            },
+  { "Canada Atlantic",       "AST4ADT,M3.2.0,M11.1.0",          "UTC-4 / -3"       },
+  { "US Eastern",            "EST5EDT,M3.2.0,M11.1.0",          "UTC-5 / -4"       },
+  { "US Central",            "CST6CDT,M3.2.0,M11.1.0",          "UTC-6 / -5"       },
+  { "Mexico City",           "CST6",                            "UTC-6"            },
+  { "US Mountain",           "MST7MDT,M3.2.0,M11.1.0",          "UTC-7 / -6"       },
+  { "US Arizona",            "MST7",                            "UTC-7"            },
+  { "US Pacific",            "PST8PDT,M3.2.0,M11.1.0",          "UTC-8 / -7"       },
+  { "US Alaska",             "AKST9AKDT,M3.2.0,M11.1.0",        "UTC-9 / -8"       },
+  { "US Hawaii",             "HST10",                           "UTC-10"           },
+  { "New Zealand",           "NZST-12NZDT,M9.5.0,M4.1.0/3",     "UTC+12 / +13"     },
+  { "Australia Eastern",     "AEST-10AEDT,M10.1.0,M4.1.0/3",    "UTC+10 / +11"     },
+  { "Australia Queensland",  "AEST-10",                         "UTC+10"           },
+  { "Australia Central",     "ACST-9:30ACDT,M10.1.0,M4.1.0/3",  "UTC+9:30 / +10:30"},
+  { "Japan",                 "JST-9",                           "UTC+9"            },
+  { "Singapore",             "<+08>-8",                         "UTC+8"            },
+  { "Thailand / Vietnam",    "<+07>-7",                         "UTC+7"            },
+  { "India",                 "IST-5:30",                        "UTC+5:30"         },
+  { "Gulf (Dubai)",          "<+04>-4",                         "UTC+4"            },
+  { "Brazil (Sao Paulo)",    "<-03>3",                          "UTC-3"            },
 };
 const size_t TZ_COUNT = sizeof(TZ_LIST) / sizeof(TZ_LIST[0]);
 
