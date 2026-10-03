@@ -210,6 +210,33 @@ static bool weightSaysSpoolGone() {
 // weighed on purpose, and that value gets written to FilaMan - so it must not
 // be a number the average was still chasing. Same criterion the auto weight
 // path uses: within AUTO_WEIGHT_THRESH_G for AUTO_WEIGHT_STABLE_MS.
+// The weight button's countdown in auto mode, made visible beyond the number:
+// each second its border flashes, thicker and in the countdown's own label
+// colour, for a moment. Timed from the loop with millis(), not an lv_timer,
+// and on the button that is always there - nothing new on the main screen.
+#define AW_PULSE_MS         150
+#define AW_PULSE_BORDER_PX  3
+#define AW_REST_BORDER_PX   1
+static unsigned long aw_pulse_ms = 0;   // when the current flash began, 0 = none
+
+static void weightPulseStart() {
+  if (!btn_weight_main) return;
+  lv_obj_set_style_border_width(btn_weight_main, AW_PULSE_BORDER_PX, 0);
+  lv_obj_set_style_border_color(btn_weight_main, lv_color_hex(UI_COL_WEIGHT_COUNT), 0);
+  aw_pulse_ms = millis();
+  if (aw_pulse_ms == 0) aw_pulse_ms = 1;
+}
+
+// Back to the border main_screen.cpp gives the button, once the flash is
+// over - also when the countdown ended or broke off in the middle of one.
+static void weightPulseTick() {
+  if (!aw_pulse_ms || millis() - aw_pulse_ms < AW_PULSE_MS) return;
+  aw_pulse_ms = 0;
+  if (!btn_weight_main) return;
+  lv_obj_set_style_border_width(btn_weight_main, AW_REST_BORDER_PX, 0);
+  lv_obj_set_style_border_color(btn_weight_main, lv_color_hex(UI_COL_WEIGHT_BG_PRESSED), 0);
+}
+
 static float         ams_settle_last  = -9999.0f;
 static unsigned long ams_settle_since = 0;
 static float         ams_settled_g    = 0.0f;
@@ -1472,6 +1499,7 @@ void appLoop() {
           snprintf(wmbuf, sizeof(wmbuf), "%s %ds", T(STR_BTN_WEIGHT), rem);
           lv_label_set_text(lbl_weight_main_lbl, wmbuf);
           lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_WEIGHT_COUNT), 0);
+          weightPulseStart();
         }
       }
     } else if (!aw_done && !tag_present) {
@@ -1498,6 +1526,8 @@ void appLoop() {
       auto_weight_last_val = -9999.0f;
     }
   }
+
+  weightPulseTick();
 
   // The offer goes stale when the spool is left sitting on the pad. Only the
   // note is dropped, the weight went out when it was measured.

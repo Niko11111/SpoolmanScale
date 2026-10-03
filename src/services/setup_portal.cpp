@@ -7,7 +7,6 @@
 
 #include "hardware/sd_logger.h"
 #include "services/wifi_manager.h"
-#include "web/web_server.h"
 
 // A network of its own. The access point default, 192.168.4.1, is a common
 // home subnet as well, which makes an address on the screen ambiguous.
@@ -53,12 +52,8 @@ bool setupPortalStart() {
   if (s_active) return true;
 
   // The list for the form. The radio is reset first, the same way the setup
-  // screen does it: after a failed begin() a scan returns nothing. Not on a
-  // connected station, which scans beside its link: the web server is still
-  // listening until the state sync after this call, and the reset turned the
-  // driver off under it (the PANIC doWifiScan() avoids the same way). The
-  // access point below ends the link without taking the driver down.
-  if (!wifiManagerIsConnected()) wifiManagerPrepareScan();
+  // screen does it: after a failed begin() a scan returns nothing.
+  wifiManagerPrepareScan();
   const int n = wifiManagerScanSorted(s_nets, SETUP_PORTAL_SCAN_MAX);
   if (n < 0) logSDf("Portal: WiFi scan failed (rc=%d)", n);
   s_net_count = n > 0 ? n : 0;
@@ -101,13 +96,8 @@ bool setupPortalStart() {
 void setupPortalStop() {
   if (!s_active) return;
   s_dns.stop();
-  // The portal's web server goes first. Taking the access point down turns
-  // the driver off, and a phone's connection still open on that server was
-  // then freed through a driver that was gone - the PANIC in esp_pbuf_free
-  // that doWifiScan() avoids. Inactive, the sync closes the portal's socket.
-  s_active    = false;
-  webServerSyncState();
   wifiManagerStopAp();
+  s_active    = false;
   s_submitted = false;
   // A form that was sent but not handed over yet is dropped with the access
   // point, as the header promises. The tick raises the flag again right after

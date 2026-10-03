@@ -63,8 +63,8 @@ UI_COLOUR(OK_TEXT_2,             0x40c080, 0x00411f, 0x5fe06f, 0x1f5f22, 0x5fd69
 UI_COLOUR(WARN,                  0xf0b838, 0x945000, 0xffd23a, 0x8a5000, 0xf7c86a, 0x8a5a00)   // amber: attention, waiting, the scale's own figure
 UI_COLOUR(BAD,                   0xe04040, 0xc9252c, 0xe05a42, 0xb3261e, 0xef4444, 0xb91c1c)   // red: wrong, failed
 UI_COLOUR(BAD_TEXT,              0xff8080, 0xb01520, 0xff6e5c, 0xa5140e, 0xfca5a5, 0xa5140e)   // a red label on a dark button
-UI_COLOUR(BAD_BG,                0x3a1410, 0xdcbcb5, 0x36261f, 0xf6ddd6, 0x3a1616, 0xf6ddd6)   // a declining or destructive button
-UI_COLOUR(BAD_BG_PRESSED,        0x602020, 0xc58f89, 0x5a3028, 0xecbcb0, 0x5e2424, 0xecbcb0)
+UI_COLOUR(BAD_BG,                0x3a1410, 0xdcbcb5, 0x36261f, 0xeec1b4, 0x3a1616, 0xeec1b4)   // a declining or destructive button
+UI_COLOUR(BAD_BG_PRESSED,        0x602020, 0xc58f89, 0x5a3028, 0xe4ab9b, 0x5e2424, 0xe4ab9b)
 // A settings row that deletes something: the factory reset's row in the
 // system screen (TONE_DANGER there), dark red with the pressed red as border.
 UI_COLOUR(DANGER_ROW,            0x180a0e, 0xf4ebed, 0x2a1f1d, 0xfaece8, 0x241414, 0xfaece8)

@@ -6,9 +6,9 @@
  },
  "--bad-bg/BAD_BG": {
   "dark": "2a0f0f/3a1410",
-  "filaman_light": "fbe9e6/f6ddd6",
+  "filaman_light": "fbe9e6/eec1b4",
   "light": "fdeaea/dcbcb5",
-  "spoolman_light": "fbe9e6/f6ddd6"
+  "spoolman_light": "fbe9e6/eec1b4"
  },
  "--bad/BAD": {
   "dark": "ff6b6b/e04040",
