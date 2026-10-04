@@ -3188,6 +3188,8 @@ const char* const STRINGS[][3] = {
     "Effacer les couleurs perso" },  // STR_THEME_RESET_OWN
   { "Akzent und Grundton aus dem Web", "Accent and ground tone from the web",
     "Accent et teinte de fond du web" },  // STR_THEME_RESET_OWN_SUB
+  { "Noch nicht übernommen", "Not applied yet",
+    "Pas encore appliqué" },  // STR_W_THEME_UNSAVED
 };
 
 StringID tagWriteResultString(uint8_t code) {

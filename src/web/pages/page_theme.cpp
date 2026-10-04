@@ -31,6 +31,16 @@ static const char THEME_CSS[] PROGMEM =
     "container-type:inline-size}"
     // The shared button look would repaint the card on hover.
     ".tcard:hover{background:var(--surface-2)}"
+    // Apply stays in view while the page scrolls: a choice made at the top
+    // with the button far below looked like nothing happened. Something
+    // changed and not applied yet fills it and says so.
+    ".tbar{position:sticky;bottom:12px;z-index:5;display:flex;gap:12px;align-items:center;"
+    "flex-wrap:wrap;margin-top:14px;padding:12px 16px;border-radius:12px;"
+    "background:var(--surface);border:1px solid var(--line)}"
+    ".tbar .tdirty{display:none;font-size:12.5px;color:var(--ink-soft)}"
+    ".tbar.dirty{border-color:var(--accent)}"
+    ".tbar.dirty .tdirty{display:inline}"
+    ".tbar.dirty #tapply{background:var(--accent);color:var(--ground);border-color:var(--accent)}"
     ".tcard[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}"
     ".tcard .thead{display:flex;align-items:center;justify-content:space-between;gap:8px;"
     "font-size:14px;font-weight:600;color:var(--ink)}"
@@ -153,9 +163,11 @@ static String body() {
   h += T(STR_W_THEME_RESET);
   h += F("</button></div></div></div></div>");
 
-  h += F("<div class='inrow'><button id='tapply' disabled>");
+  h += F("<div class='tbar' id='tbar'><button id='tapply' disabled>");
   h += T(STR_W_THEME_APPLY);
-  h += F("</button><span class='msg' id='tmsg'></span></div>");
+  h += F("</button><span class='tdirty'>");
+  h += T(STR_W_THEME_UNSAVED);
+  h += F("</span><span class='msg' id='tmsg'></span></div>");
 
   h += F("<script>");
   h += webShellJsStrings();
@@ -287,7 +299,7 @@ static String body() {
          "$('strrange').value=CS.strength;$('strlbl').textContent=CS.strength+'%';$('follow').checked=CS.follow;"
          "var v=$('cprev');v.textContent='';[mockMain(),mockSettings()].forEach(function(m){"
          "var c=document.createElement('div');c.className='tcard';c.innerHTML=m;paint(c.querySelector('.tm'),p);v.appendChild(c);});"
-         "$('tapply').disabled=(key()===CS0);}"
+         "var dirty=key()!==CS0;$('tapply').disabled=!dirty;$('tbar').classList.toggle('dirty',dirty);}"
          "function pick(id){sel=id;document.querySelectorAll('.tcard[data-id]').forEach(function(c){"
          "c.setAttribute('aria-pressed',c.dataset.id===id?'true':'false');});update();}"
          "function render(d){stored=d.stored;BACKEND=d.backend;var o=d.custom||{};"
@@ -320,7 +332,7 @@ static String body() {
          "post('/api/theme',[sel,CS.accent||'-',CS.tone,CS.strength,CS.follow?1:0].join(','))"
          ".then(function(r){"
          "if(!r.ok||!r.json||!r.json.ok){flash('tmsg',WS.err,true,4000);$('tapply').disabled=false;return;}"
-         "stored=sel;CS0=key();"
+         "stored=sel;CS0=key();$('tbar').classList.remove('dirty');"
          "if(!r.json.restart){flash('tmsg',TT.later,false);return;}"
          "post('/api/restart','').then(function(){flash('tmsg',TT.restarting,false);"
          "setTimeout(function(){location.reload();},9000);});});});"
