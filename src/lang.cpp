@@ -3121,10 +3121,6 @@ const char* const STRINGS[][3] = {
     "Revenir aux couleurs du thème" },  // STR_W_THEME_RESET
   { "auf dem Hintergrund", "on the background",
     "sur le fond" },  // STR_W_THEME_ON_BG
-  { "Zu blass auf diesem Hintergrund: Titel und Regler wären schwer zu sehen.", "Too faint on this background: titles and sliders would be hard to see.",
-    "Trop pâle sur ce fond : titres et curseurs seraient difficiles à voir." },  // STR_W_THEME_FAINT
-  { "Gut für Titel und Knöpfe, kleine Schrift in dieser Farbe liest sich schwächer.", "Fine for titles and buttons, small text in this colour reads weaker.",
-    "Bien pour les titres et les boutons, un petit texte dans cette couleur se lit moins bien." },  // STR_W_THEME_WEAKER
   { "+ eigene Farben", "+ own colours",
     "+ couleurs perso" },  // STR_W_THEME_PLUS_OWN
   { "Orange", "Orange",
@@ -3178,6 +3174,22 @@ const char* const STRINGS[][3] = {
     "Clair ou sombre selon le système" },  // STR_W_THEME_WEB_OS
   { "Nur diese Webseite: Sie folgt der Einstellung von Gerät oder Browser, in der Farbfamilie der Waage. Die Waage bleibt, wie oben gewählt. Wirkt sofort, ohne Neustart.", "This web page only: it follows the device or browser setting, in the scale's colour family. The scale stays as chosen above. Takes effect at once, without a restart.",
     "Cette page web uniquement : elle suit le réglage de l'appareil ou du navigateur, dans la famille de couleurs de la balance. La balance reste comme choisi ci-dessus. Effet immédiat, sans redémarrage." },  // STR_W_THEME_WEB_OS_HINT
+  { "Zu lang: höchstens %u Zeichen. Nichts gespeichert.", "Too long: %u characters at most. Nothing saved.",
+    "Trop long : %u caractères au maximum. Rien enregistré." },  // STR_W_SM_SECRET_LONG
+  { "Der Zugang wurde für %s eingegeben und geht nicht an die neue Adresse. Bitte für diese Adresse neu eingeben.", "This access was entered for %s and is not sent to the new address. Enter it again for this address.",
+    "Cet accès a été saisi pour %s et n'est pas envoyé à la nouvelle adresse. Saisissez-le à nouveau pour celle-ci." },  // STR_W_SM_AUTH_REBIND
+  { "Für Schrift wird die Helligkeit angepasst, bis sie lesbar ist, auf der Waage wie hier. Flächen behalten die gewählte Farbe.",
+    "For text its lightness is adjusted until it reads, on the scale as here. Fills keep the chosen colour.",
+    "Pour le texte, la luminosité est ajustée jusqu'à ce qu'il soit lisible, sur la balance comme ici. Les surfaces gardent la couleur choisie." },  // STR_W_THEME_TEXT_ADJUSTED
+  { "Die Farben folgen dem Backend und wechseln beim nächsten Neustart der Waage.",
+    "The colours follow the backend and change when the scale next restarts.",
+    "Les couleurs suivent le backend et changent au prochain redémarrage de la balance." },  // STR_W_BACKEND_THEME_NOTE
+  { "Eigene Farben zurücksetzen", "Reset own colours",
+    "Effacer les couleurs perso" },  // STR_THEME_RESET_OWN
+  { "Akzent und Grundton aus dem Web", "Accent and ground tone from the web",
+    "Accent et teinte de fond du web" },  // STR_THEME_RESET_OWN_SUB
+  { "Noch nicht übernommen", "Not applied yet",
+    "Pas encore appliqué" },  // STR_W_THEME_UNSAVED
 };
 
 StringID tagWriteResultString(uint8_t code) {

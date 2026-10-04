@@ -2,6 +2,7 @@
 #include "services/backend_http.h"
 
 #include <Arduino.h>
+#include <ctype.h>
 #include <string.h>
 #include <strings.h>
 
@@ -21,6 +22,7 @@
 #define NVS_SM_AUTH         "sm_auth"
 #define NVS_SM_USER         "sm_user"
 #define NVS_SM_SECRET       "sm_secret"
+#define NVS_SM_BIND         "sm_bind"
 
 static BackendMode s_mode = BACKEND_SPOOLMAN;
 static char s_api_key[80]      = "";
@@ -33,7 +35,8 @@ static char s_bambuddy_host[64] = "";
 static char s_bambuddy_base[80] = "";
 static uint8_t s_sm_auth        = SM_AUTH_NONE;
 static char    s_sm_user[64]    = "";
-static char    s_sm_secret[128] = "";
+static char    s_sm_secret[SM_SECRET_MAX_LEN + 1] = "";
+static char    s_sm_bind[64]    = "";   // the address the secret was entered for
 
 // The one place an address becomes a base URL. A stored address carries its
 // scheme only when it is https; a bare one is http, as every address was
@@ -67,6 +70,40 @@ static void copyCredential(char* dst, size_t n, const char* src) {
   dst[j] = '\0';
 }
 
+// How long a credential is once copyCredential() has dropped what it drops.
+static size_t credentialLen(const char* src) {
+  size_t n = 0;
+  for (size_t i = 0; src[i]; i++) {
+    const unsigned char c = (unsigned char)src[i];
+    if (c >= 0x20 && c != 0x7f) n++;
+  }
+  return n;
+}
+
+// "https://Spoolman.lan:7912/x" -> "spoolman.lan:7912": what the Spoolman
+// secret is bound to, from a stored address or from a request's URL alike.
+static void smBindKey(const char* addr, char* out, size_t n) {
+  if (!out || n == 0) return;
+  out[0] = '\0';
+  if (!addr) return;
+  if (strncasecmp(addr, "https://", 8) == 0)     addr += 8;
+  else if (strncasecmp(addr, "http://", 7) == 0) addr += 7;
+  size_t j = 0;
+  for (; *addr && *addr != '/' && *addr != '?' && *addr != '#' && j + 1 < n; addr++) {
+    out[j++] = (char)tolower((unsigned char)*addr);
+  }
+  out[j] = '\0';
+}
+
+// An empty binding matches nothing: a secret entered while no address was
+// set goes nowhere until it is entered again.
+static bool smBoundTo(const char* addr) {
+  if (!spoolmanAuthStored() || !s_sm_bind[0]) return false;
+  char key[sizeof(s_sm_bind)];
+  smBindKey(addr, key, sizeof(key));
+  return strcmp(key, s_sm_bind) == 0;
+}
+
 void backendLoadSettings() {
   backendTlsLoad();
   uint8_t raw = prefsGetUChar(NVS_BACKEND_MODE, BACKEND_SPOOLMAN);
@@ -96,6 +133,15 @@ void backendLoadSettings() {
   copyCredential(s_sm_user, sizeof(s_sm_user), sm_user.c_str());
   String sm_secret = prefsGetString(NVS_SM_SECRET, "");
   copyCredential(s_sm_secret, sizeof(s_sm_secret), sm_secret.c_str());
+  String sm_bind = prefsGetString(NVS_SM_BIND, "");
+  snprintf(s_sm_bind, sizeof(s_sm_bind), "%s", sm_bind.c_str());
+  // A secret stored before it was bound to an address belongs to the one it
+  // has been going to all along. loadPrefs() has read that address already.
+  if (s_sm_secret[0] && !prefsHasKey(NVS_SM_BIND)) {
+    smBindKey(cfg_spoolman_ip, s_sm_bind, sizeof(s_sm_bind));
+    prefsPutString(NVS_SM_BIND, s_sm_bind);
+    logSDf("Backend: Spoolman access bound to %s", s_sm_bind[0] ? s_sm_bind : "-");
+  }
 
   String bb_host = prefsGetString(NVS_BAMBUDDY_HOST, "");
   strncpy(s_bambuddy_host, bb_host.c_str(), sizeof(s_bambuddy_host) - 1);
@@ -233,20 +279,37 @@ void bambuddySetApiKey(const char* key) {
 uint8_t     spoolmanAuthMode()   { return s_sm_auth; }
 const char* spoolmanAuthUser()   { return s_sm_user; }
 const char* spoolmanAuthSecret() { return s_sm_secret; }
-bool spoolmanAuthActive() { return s_sm_auth != SM_AUTH_NONE && s_sm_secret[0]; }
+const char* spoolmanAuthBoundHost() { return s_sm_bind; }
+bool spoolmanAuthStored() { return s_sm_auth != SM_AUTH_NONE && s_sm_secret[0]; }
+bool spoolmanAuthActive() { return smBoundTo(cfg_spoolman_ip); }
+bool spoolmanAuthSendsTo(const char* url) { return smBoundTo(url); }
 
-void spoolmanSetAuth(uint8_t mode, const char* user, const char* secret) {
+bool spoolmanSetAuth(uint8_t mode, const char* user, const char* secret) {
+  if (secret && credentialLen(secret) > SM_SECRET_MAX_LEN) {
+    logSDf("Backend: Spoolman secret refused, %u characters, at most %u",
+           (unsigned)credentialLen(secret), (unsigned)SM_SECRET_MAX_LEN);
+    return false;
+  }
   s_sm_auth = (mode <= SM_AUTH_BASIC) ? mode : SM_AUTH_NONE;
   copyCredential(s_sm_user, sizeof(s_sm_user), user ? user : "");
-  if (secret) copyCredential(s_sm_secret, sizeof(s_sm_secret), secret);
+  if (secret) {
+    copyCredential(s_sm_secret, sizeof(s_sm_secret), secret);
+    smBindKey(cfg_spoolman_ip, s_sm_bind, sizeof(s_sm_bind));
+  }
   // No access chosen means none stored either, so nothing lingers in NVS.
   if (s_sm_auth == SM_AUTH_NONE) { s_sm_user[0] = '\0'; s_sm_secret[0] = '\0'; }
+  // No secret, nothing to bind.
+  if (!s_sm_secret[0]) s_sm_bind[0] = '\0';
   prefsPutUChar(NVS_SM_AUTH, s_sm_auth);
   prefsPutString(NVS_SM_USER, s_sm_user);
   prefsPutString(NVS_SM_SECRET, s_sm_secret);
+  prefsPutString(NVS_SM_BIND, s_sm_bind);
   // A connection kept open was made with the old credentials.
   backendConnClose();
-  logSDf("Backend: Spoolman access %s", spoolmanAuthActive() ? "stored" : "cleared");
+  logSDf("Backend: Spoolman access %s",
+         spoolmanAuthActive() ? "stored" : spoolmanAuthStored() ? "stored, for another address"
+                                                                : "cleared");
+  return true;
 }
 
 const char* backendModeName(BackendMode mode) {
@@ -318,7 +381,7 @@ void backendStatusLine(char* out, size_t out_size) {
     snprintf(out, out_size, "%s | host=%s | auth=%s | configured=%s",
       backendName(),
       host[0] ? host : "-",
-      spoolmanAuthActive() ? AUTH[s_sm_auth] : "none",
+      spoolmanAuthActive() ? AUTH[s_sm_auth] : spoolmanAuthStored() ? "other-address" : "none",
       backendIsConfigured() ? "yes" : "no");
   }
 }

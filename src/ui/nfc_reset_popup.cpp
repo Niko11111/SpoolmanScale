@@ -46,6 +46,7 @@ static void mkButton(lv_obj_t *box, int x, int w, int str_id, bool primary,
   lv_obj_set_style_radius(btn, 8, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
+  if (!primary) uiSecondaryFill(btn);
   lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *l = lv_label_create(btn);

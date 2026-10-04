@@ -8,6 +8,7 @@
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/tag_spool_match.h"
 
 #define DRYING_TEXT_MAX       24
 #define DRYING_WRITE_TIMEOUT  4000
@@ -55,6 +56,9 @@ void dryingSyncNote(JsonObjectConst spool) {
   // whenever another kind of tag is read, the drying values are not, so it
   // is what keeps an old Bambu reading off an NTAG's spool.
   if (!g_tag.tray_uuid[0] || g_tag.dry_temp_c <= 0 || g_tag.dry_hours <= 0) return;
+  // A tag linked to the wrong spool would hand its advice to a filament it
+  // does not describe. The lookup has judged the pair just before this.
+  if (tagSpoolLookupDiffers()) return;
 
   const bool bambuddy = backendIsBamBuddy();
   const int filament_id = spool["filament"]["id"] | 0;
@@ -64,10 +68,12 @@ void dryingSyncNote(JsonObjectConst spool) {
 
   // Spoolman keeps text extras JSON encoded, with their own quotes; the
   // parse below skips anything that is not a digit, quotes included.
+  //
+  // Only an empty field is filled. A value already there stays, also one
+  // that differs from the tag: somebody may have put their own drying in.
   const char* have = spool["filament"]["extra"]["drying"] | (const char*)nullptr;
   if (!have) have = spool["extra"]["drying"] | "";
-  int t = 0, h = 0;
-  if (dryingParse(have, &t, &h) && t == g_tag.dry_temp_c && h == g_tag.dry_hours) return;
+  if (dryingParse(have, nullptr, nullptr)) return;
 
   char want[DRYING_TEXT_MAX];
   dryingFormat(g_tag.dry_temp_c, g_tag.dry_hours, want, sizeof(want));

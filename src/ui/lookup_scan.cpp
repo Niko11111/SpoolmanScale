@@ -571,7 +571,6 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
     }
 
     captureBindings(spool);
-    dryingSyncNote(spool);
 
     // In step with the tag on the reader rather than with the binding. A Bambu
     // spool carries a chip per side and only the one lying on the pad can be
@@ -650,6 +649,9 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
     // fields, material, maker and temperature from the tag and the rest from
     // the server; the status line says when the two do not belong together.
     if (is_bambu_tag) tagSpoolLookupNote(spool, sm_id);
+    // After the verdict above: a tag that does not describe this spool must
+    // not hand it its drying advice.
+    dryingSyncNote(spool);
 
     bool is_ntag = !is_bambu_tag;
     logSDf("Spool %d identified: %s %s, %.0fg of %.0fg", sm_id,

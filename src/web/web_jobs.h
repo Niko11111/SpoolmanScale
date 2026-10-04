@@ -32,7 +32,7 @@ enum WebJobKind : uint8_t {
   WJ_GH_CHECK,    // the latest tag on the chosen channel, TLS
   WJ_GH_NOTES,    // one release's notes, TLS
   WJ_BAMBU_CATALOG, // BambuStudio's colour table, TLS, converted and stored
-  WJ_NET_PROBE     // timing requests to any address, see web_net_probe.h
+  WJ_NET_PROBE     // timing requests to the backend, see web_net_probe.h
 };
 
 enum WebJobState : uint8_t {

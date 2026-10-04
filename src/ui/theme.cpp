@@ -125,6 +125,8 @@ void uiThemeBegin() {
 
 UiThemeId uiThemeActive() { return s_active; }
 
+bool uiThemeIsDark() { return THEMES[s_active].dark; }
+
 UiThemeId uiThemeStored() {
   uint8_t stored = prefsGetUChar(THEME_PREF_KEY, UI_THEME_DARK);
   return stored < UI_THEME_COUNT ? (UiThemeId)stored : UI_THEME_DARK;

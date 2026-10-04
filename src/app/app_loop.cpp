@@ -90,6 +90,7 @@
 #include "services/prefs_store.h"
 #include "web/web_jobs.h"
 #include "ui/confirm_popup.h"
+#include "ui/tare_entry.h"
 #include "ui/ble_devices_screen.h"
 #include "ui/bluetooth_screen.h"
 #include "ui/connection_screen.h"
@@ -209,6 +210,33 @@ static bool weightSaysSpoolGone() {
 // weighed on purpose, and that value gets written to FilaMan - so it must not
 // be a number the average was still chasing. Same criterion the auto weight
 // path uses: within AUTO_WEIGHT_THRESH_G for AUTO_WEIGHT_STABLE_MS.
+// The weight button's countdown in auto mode, made visible beyond the number:
+// each second its border flashes, thicker and in the countdown's own label
+// colour, for a moment. Timed from the loop with millis(), not an lv_timer,
+// and on the button that is always there - nothing new on the main screen.
+#define AW_PULSE_MS         150
+#define AW_PULSE_BORDER_PX  3
+#define AW_REST_BORDER_PX   1
+static unsigned long aw_pulse_ms = 0;   // when the current flash began, 0 = none
+
+static void weightPulseStart() {
+  if (!btn_weight_main) return;
+  lv_obj_set_style_border_width(btn_weight_main, AW_PULSE_BORDER_PX, 0);
+  lv_obj_set_style_border_color(btn_weight_main, lv_color_hex(UI_COL_WEIGHT_COUNT), 0);
+  aw_pulse_ms = millis();
+  if (aw_pulse_ms == 0) aw_pulse_ms = 1;
+}
+
+// Back to the border main_screen.cpp gives the button, once the flash is
+// over - also when the countdown ended or broke off in the middle of one.
+static void weightPulseTick() {
+  if (!aw_pulse_ms || millis() - aw_pulse_ms < AW_PULSE_MS) return;
+  aw_pulse_ms = 0;
+  if (!btn_weight_main) return;
+  lv_obj_set_style_border_width(btn_weight_main, AW_REST_BORDER_PX, 0);
+  lv_obj_set_style_border_color(btn_weight_main, lv_color_hex(UI_COL_WEIGHT_BG_PRESSED), 0);
+}
+
 static float         ams_settle_last  = -9999.0f;
 static unsigned long ams_settle_since = 0;
 static float         ams_settled_g    = 0.0f;
@@ -971,14 +999,20 @@ void appLoop() {
   // stands. It has to run every pass, not only when something happened: the
   // countdown is what it is mostly doing.
   handleSecondTagDeferredActions();
+  // Before the questions below: a spool lifted while its empty weight is being
+  // typed in takes the entry down unsaved first, and is asked about after.
+  tareEntryTick();
   if (!tag_present && weightSaysSpoolGone()) loc_left_pad = true;
   // Debounced popups after a removal, cross-checked against the scale.
   // The AMS question and the location question hang off the same event, so
   // the verdict is worked out once and the AMS side gets it first: a spool
   // on its way into a printer has no shelf worth asking about. The "no"
   // branch of that popup raises the location question again.
+  // Held, not dropped, while the empty spool weight is being entered: the
+  // questions wait for that dialog like for any other modal.
   if ((loc_popup_pending_id > 0 || ams_popup_pending_id > 0 ||
-       pick_popup_pending_id > 0) && !tag_present) {
+       pick_popup_pending_id > 0) && !tag_present &&
+      !isTareEntryOpen() && !isSpoolWeightScopeOpen()) {
     const unsigned long since = millis() - last_tag_seen_ms;
     const bool weight_says_gone = weightSaysSpoolGone();
     const bool weight_says_stay = weightSaysSpoolStayed();
@@ -1420,7 +1454,10 @@ void appLoop() {
     // sm_archived is excluded on purpose: an archived spool reads 0 g by
     // definition, so weighing it silently would file a full spool as empty
     // stock. Bringing it back is a decision, and it has its own button.
-    if (!aw_done && !isConfirmPopupOpen() && sm_found && !sm_archived && sm_id > 0 && scale_ready &&
+    // Nor while an empty spool weight is being entered: the weighing would
+    // be computed against the tare that is about to be replaced.
+    if (!aw_done && !isConfirmPopupOpen() && !isTareEntryOpen() && !isSpoolWeightScopeOpen() &&
+        sm_found && !sm_archived && sm_id > 0 && scale_ready &&
         (tag_present || aw_adopted)) {
       float cur = scale_weight_g;
       if (fabsf(cur - auto_weight_last_val) > AUTO_WEIGHT_THRESH_G) {
@@ -1462,6 +1499,7 @@ void appLoop() {
           snprintf(wmbuf, sizeof(wmbuf), "%s %ds", T(STR_BTN_WEIGHT), rem);
           lv_label_set_text(lbl_weight_main_lbl, wmbuf);
           lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_WEIGHT_COUNT), 0);
+          weightPulseStart();
         }
       }
     } else if (!aw_done && !tag_present) {
@@ -1488,6 +1526,8 @@ void appLoop() {
       auto_weight_last_val = -9999.0f;
     }
   }
+
+  weightPulseTick();
 
   // The offer goes stale when the spool is left sitting on the pad. Only the
   // note is dropped, the weight went out when it was measured.
@@ -1855,6 +1895,11 @@ void appLoop() {
             TagSeen::note(uid_str, bambu_blocks_read > 0 ? "Bambu"
                                    : snapmaker_decoded   ? "Snapmaker" : "MIFARE");
           }
+          // What the read attempts came to, once: read in full, or out of
+          // retries. Logging only.
+          if (!(uuid_missing || contents_incomplete) || nfc_retry_count >= NFC_MAX_RETRIES) {
+            bambuScanReport();
+          }
           if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES &&
               bambu_blocks_read == 0) {
             // Not a Bambu tag at all. Every sector failed authentication, so
@@ -2038,6 +2083,7 @@ void appLoop() {
                                    nfc_fast_polls >= NFC_GONE_MIN_MISSES;
           if (weight_gone || (!retrying && millis() - first_miss_ms >= absent_limit)) {
             nfc_stat_removals++;
+            bambuScanReport();   // a Bambu tag that left before its reads settled
             Serial.printf("NFC: tag removed (gap %u ms, %d fast re-polls, %s)\n",
               (unsigned)(millis() - first_miss_ms), nfc_fast_polls,
               weight_gone ? "weight gone" : "grace period over");

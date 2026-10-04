@@ -8,6 +8,10 @@
 // Light and the backend palettes were chosen against the simulator and
 // then the panel, which shows less contrast in the bright range than a
 // monitor: cards lighter than a tinted ground, outlines and text strong.
+// A label on a filled button reads at 4.5:1 against that fill in light
+// (OK_TEXT, OK_TEXT_2, WEIGHT_TEXT, WEIGHT_AUTO, WEIGHT_SENT, WEIGHT_COUNT,
+// LINK_TEXT, ARCHIVE_TEXT were 2.6 to 4.45:1): the label was darkened, the
+// fill kept.
 //
 //        name                  dark      light     sm dark   sm light  fm dark   fm light
 // ---- surfaces ------------------------------------------------
@@ -54,19 +58,19 @@ UI_COLOUR(ACCENT,                0x28d49a, 0x006b35, 0xff9442, 0x9a4312, 0x4ee3a
 UI_COLOUR(GOOD,                  0x28d49a, 0x006b35, 0x5fe06f, 0x1f6b22, 0x86efac, 0x15803d)   // a good state: found, connected, enough left, saved
 UI_COLOUR(OK_BG,                 0x1a4020, 0x85a987, 0x2a352a, 0xdfeadb, 0x1a4a33, 0xd9ecdf)   // a confirming button
 UI_COLOUR(OK_BG_PRESSED,         0x2a7030, 0x389449, 0x3f6b3f, 0xbcd4b6, 0x2a6e4e, 0xb3d8bf)
-UI_COLOUR(OK_TEXT,               0x80ffb0, 0x006b2c, 0x8ff29a, 0x1f5f22, 0x86efac, 0x136b33)   // its label
-UI_COLOUR(OK_TEXT_2,             0x40c080, 0x005c2c, 0x5fe06f, 0x1f5f22, 0x5fd69a, 0x136b33)   // the smaller confirming label
+UI_COLOUR(OK_TEXT,               0x80ffb0, 0x004118, 0x8ff29a, 0x1f5f22, 0x86efac, 0x136b33)   // its label
+UI_COLOUR(OK_TEXT_2,             0x40c080, 0x00411f, 0x5fe06f, 0x1f5f22, 0x5fd69a, 0x136b33)   // the smaller confirming label
 UI_COLOUR(WARN,                  0xf0b838, 0x945000, 0xffd23a, 0x8a5000, 0xf7c86a, 0x8a5a00)   // amber: attention, waiting, the scale's own figure
 UI_COLOUR(BAD,                   0xe04040, 0xc9252c, 0xe05a42, 0xb3261e, 0xef4444, 0xb91c1c)   // red: wrong, failed
 UI_COLOUR(BAD_TEXT,              0xff8080, 0xb01520, 0xff6e5c, 0xa5140e, 0xfca5a5, 0xa5140e)   // a red label on a dark button
-UI_COLOUR(BAD_BG,                0x3a1410, 0xdcbcb5, 0x36261f, 0xf6ddd6, 0x3a1616, 0xf6ddd6)   // a declining or destructive button
-UI_COLOUR(BAD_BG_PRESSED,        0x602020, 0xc58f89, 0x5a3028, 0xecbcb0, 0x5e2424, 0xecbcb0)
+UI_COLOUR(BAD_BG,                0x3a1410, 0xdcbcb5, 0x36261f, 0xeec1b4, 0x3a1616, 0xeec1b4)   // a declining or destructive button
+UI_COLOUR(BAD_BG_PRESSED,        0x602020, 0xc58f89, 0x5a3028, 0xe4ab9b, 0x5e2424, 0xe4ab9b)
 // A settings row that deletes something: the factory reset's row in the
 // system screen (TONE_DANGER there), dark red with the pressed red as border.
 UI_COLOUR(DANGER_ROW,            0x180a0e, 0xf4ebed, 0x2a1f1d, 0xfaece8, 0x241414, 0xfaece8)
 UI_COLOUR(DANGER_TEXT,           0xff6060, 0xce1731, 0xd98a7a, 0xa33a28, 0xfca5a5, 0xa33a28)
-UI_COLOUR(ARCHIVED,              0x808080, 0x0e0e0e, 0x808080, 0x707070, 0x808080, 0x707070)   // an archived spool, a weight nobody reported
-UI_COLOUR(ARCHIVE_TEXT,          0xffb060, 0x9c5700, 0xd0a479, 0x8a5a2a, 0xf3a05f, 0x8a5a2a)   // archiving: its label, the bin icon
+UI_COLOUR(ARCHIVED,              0x808080, 0x656565, 0x808080, 0x707070, 0x808080, 0x707070)   // an archived spool, a weight nobody reported
+UI_COLOUR(ARCHIVE_TEXT,          0xffb060, 0x784200, 0xd0a479, 0x8a5a2a, 0xf3a05f, 0x8a5a2a)   // archiving: its label, the bin icon
 UI_COLOUR(ARCHIVE_BG,            0x3a1a00, 0xdbbca5, 0x33302c, 0xf0e3d3, 0x33261a, 0xf0e3d3)
 UI_COLOUR(ARCHIVE_BG_PRESSED,    0x6a3000, 0xbf8359, 0x4a4239, 0xe0c7a8, 0x54391f, 0xe0c7a8)   // also its border
 UI_COLOUR(RESTORE_BG_PRESSED,    0x156040, 0x36a876, 0x3f6b3f, 0xbcd4b6, 0x2a6e4e, 0xb3d8bf)
@@ -100,17 +104,17 @@ UI_COLOUR(NFC_FRAME,             0x3a6ea8, 0x14609e, 0x4a4239, 0x9e9a91, 0x2f6a8
 UI_COLOUR(LINK_BG,               0x1e3000, 0xaebe92, 0x35291f, 0xf3e2d4, 0x1a4436, 0xd3eee0)   // main screen: link a spool
 UI_COLOUR(LINK_BG_PRESSED,       0x2e5000, 0x75904e, 0x4a3424, 0xe6c9b0, 0x2a5e4a, 0xb3d8c4)
 UI_COLOUR(LINK_LINE,             0x4a7800, 0x346a00, 0x8a6a4d, 0xb25c26, 0x3fa77a, 0x0f7a52)
-UI_COLOUR(LINK_TEXT,             0xb8e030, 0x417600, 0xff9442, 0x8f4a1d, 0x4ee3a2, 0x0f6a47)
+UI_COLOUR(LINK_TEXT,             0xb8e030, 0x2c5300, 0xff9442, 0x8f4a1d, 0x4ee3a2, 0x0f6a47)
 UI_COLOUR(COPY_BG,               0x00222a, 0xb9d5de, 0x262626, 0xf3f1ed, 0x0f2a3a, 0xdbeaf6)   // main screen: copy a spool
 UI_COLOUR(COPY_BG_PRESSED,       0x003a48, 0x87adbb, 0x333333, 0xdcd9d3, 0x1a4058, 0xb8d3ea)
 UI_COLOUR(COPY_LINE,             0x00b8d4, 0x007895, 0x5a5a5a, 0x8a8680, 0x6cc6ff, 0x2b7bc7)
 UI_COLOUR(COPY_TEXT,             0x20d8f8, 0x007999, 0xc9c9c9, 0x3a3a3a, 0x6cc6ff, 0x1f6aa8)
 UI_COLOUR(WEIGHT_BG,             0x1a3020, 0x9ccaa6, 0xff9442, 0x9a4312, 0x4ee3a2, 0x0f7a52)   // main screen: the weight button, the screen's main action
 UI_COLOUR(WEIGHT_BG_PRESSED,     0x2a5030, 0x5f9a69, 0xffa452, 0x8a3302, 0x5ef3b2, 0x006a42)   // also its border
-UI_COLOUR(WEIGHT_TEXT,           0x40c080, 0x005c2c, 0x1f1f1f, 0xffffff, 0x0b120e, 0xffffff)   // its label
-UI_COLOUR(WEIGHT_AUTO,           0x28d49a, 0x006b35, 0x1f1f1f, 0xffffff, 0x0b120e, 0xffffff)   // its label while the weight goes out by itself
-UI_COLOUR(WEIGHT_SENT,           0x40ff80, 0x008100, 0x1f1f1f, 0xffffff, 0x0b120e, 0xffffff)   // the weight button once the value is sent
-UI_COLOUR(WEIGHT_COUNT,          0x60f0c0, 0x007c50, 0x1f1f1f, 0xffffff, 0x0b120e, 0xffffff)   // its countdown
+UI_COLOUR(WEIGHT_TEXT,           0x40c080, 0x005a2b, 0x1f1f1f, 0xffffff, 0x0b120e, 0xffffff)   // its label
+UI_COLOUR(WEIGHT_AUTO,           0x28d49a, 0x005a2d, 0x1f1f1f, 0xffffff, 0x0b120e, 0xffffff)   // its label while the weight goes out by itself
+UI_COLOUR(WEIGHT_SENT,           0x40ff80, 0x005c00, 0x1f1f1f, 0xffffff, 0x0b120e, 0xffffff)   // the weight button once the value is sent
+UI_COLOUR(WEIGHT_COUNT,          0x60f0c0, 0x005a38, 0x1f1f1f, 0xffffff, 0x0b120e, 0xffffff)   // its countdown
 UI_COLOUR(AMS_YES_TEXT,          0x80ffa0, 0x007c20, 0x8fd18f, 0x2f6a2f, 0x86efac, 0x15803d)   // AMS assignment question
 UI_COLOUR(AMS_NO_TEXT,           0xffa0a0, 0xa84a4e, 0xd98a7a, 0xa33a28, 0xfca5a5, 0xa33a28)
 UI_COLOUR(AMS_NO_PRESSED,        0x702020, 0xba7b75, 0x5a3028, 0xecbcb0, 0x5e2424, 0xecbcb0)

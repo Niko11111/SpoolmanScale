@@ -253,7 +253,12 @@ static String body() {
          ".pp-txt span:first-child{font-size:13px;color:var(--ink-2);line-height:1.5}"
          "@media(max-width:620px){.pp-set{grid-template-columns:1fr}}"
          "</style>");
-  h += F("<div class='card wide'><h2>");
+  // Only with a printer, like the row on the scale: the offset is kept per
+  // device, and without one there is nothing to keep it for. paint() follows
+  // a printer picked or forgotten on this page.
+  h += F("<div class='card wide' id='pc'");
+  if (!labelPrinterConfigured(c)) h += F(" style='display:none'");
+  h += F("><h2>");
   h += T(STR_W_P_CAL_TITLE);
   h += F("</h2><div class='pp-track'><div class='pp-mid'></div>"
          "<div class='pp-lab' id='pl'></div></div>"
@@ -346,6 +351,7 @@ static String body() {
          "$('bl').checked=d.ble;"
          "$('pd').textContent=d.printer.configured?((d.printer.name||P.unnamed)+'  '+d.printer.address):P.none;"
          "$('fb').style.display=d.printer.configured?'':'none';"
+         "$('pc').style.display=d.printer.configured?'':'none';"
          "$('pm').value=String(d.printer.model);"
          "$('ps').value=d.printer.w+'x'+d.printer.h;"
          "$('lt').textContent=d.lastTest||'';"
@@ -509,6 +515,8 @@ static void routes(WebServer &srv) {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_PRINTER))) return;
     const String v = srv.arg("plain");
     LabelPrinterConfig c = labelPrinterLoadConfig();
+    // Not stored without a printer (its address is the key), so not "ok".
+    if (!labelPrinterConfigured(c)) { srv.send(409, "text/plain", T(STR_PRN_ERR_NO_PRINTER)); return; }
     if (v == "left")       c.x_offset = LP_OFFSET_LEFT;
     else if (v == "right") c.x_offset = LP_OFFSET_RIGHT;
     else {

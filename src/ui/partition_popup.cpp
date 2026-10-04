@@ -111,11 +111,11 @@ void showPartitionHint() {
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, HINT_BTN_W, HINT_BTN_H);
   lv_obj_set_pos(btn, (HINT_BOX_W - HINT_BTN_W) / 2, HINT_BTN_Y);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
+  uiSecondaryFill(btn);
   lv_obj_add_event_cb(btn, laterCb, LV_EVENT_CLICKED, NULL);
   lv_obj_t *l = lv_label_create(btn);
   lv_label_set_text(l, T(STR_PART_HINT_LATER));

@@ -758,16 +758,20 @@ int filamanUnlinkBambuFields(const char* base_url, const char* api_key, int spoo
   if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
   if (!g_flm_ext_id && !g_flm_bambu_tags) return 200;   // nothing we maintain
 
-  BackendHttp get;
-  get.begin(String(base_url) + "/api/v1/spools/" + spool_id);
-  get.setTimeout(timeout_ms);
-  addApiKey(get, api_key);
-  if (get.GET() != 200) { get.end(); return 200; }   // nothing readable, nothing to clear
-
   SpiRamAllocator alloc;
   JsonDocument raw(&alloc);
-  DeserializationError err = deserializeJson(raw, get.getStream());
-  get.end();
+  DeserializationError err = DeserializationError::Ok;
+  // In a block of its own: the GET holds the kept https connection until it
+  // is destroyed, and the PATCH below would otherwise open a second one.
+  {
+    BackendHttp get;
+    get.begin(String(base_url) + "/api/v1/spools/" + spool_id);
+    get.setTimeout(timeout_ms);
+    addApiKey(get, api_key);
+    if (get.GET() != 200) { get.end(); return 200; }   // nothing readable, nothing to clear
+    err = deserializeJson(raw, get.getStream());
+    get.end();
+  }
   if (err) return 200;
 
   JsonDocument body(&alloc);
@@ -827,16 +831,19 @@ int filamanUnlinkBambuFields(const char* base_url, const char* api_key, int spoo
 // a rare and deliberate action. Returns 200 when there was nothing to clear.
 static int filamanClearLegacyTag(const char* base_url, const char* api_key, int spool_id,
                                  uint32_t timeout_ms) {
-  BackendHttp get;
-  get.begin(String(base_url) + "/api/v1/spools/" + spool_id);
-  get.setTimeout(timeout_ms);
-  addApiKey(get, api_key);
-  if (get.GET() != 200) { get.end(); return 200; }   // nothing readable, nothing to clear
-
   SpiRamAllocator alloc;
   JsonDocument raw(&alloc);
-  DeserializationError err = deserializeJson(raw, get.getStream());
-  get.end();
+  DeserializationError err = DeserializationError::Ok;
+  // In a block of its own, see filamanUnlinkBambuFields().
+  {
+    BackendHttp get;
+    get.begin(String(base_url) + "/api/v1/spools/" + spool_id);
+    get.setTimeout(timeout_ms);
+    addApiKey(get, api_key);
+    if (get.GET() != 200) { get.end(); return 200; }   // nothing readable, nothing to clear
+    err = deserializeJson(raw, get.getStream());
+    get.end();
+  }
   if (err) return 200;
 
   JsonObjectConst existing = raw["custom_fields"];
@@ -1109,21 +1116,24 @@ int filamanPatchCustomField(const char* base_url, const char* api_key, int spool
   // so everything already there has to be read and sent back along with the
   // new value. Verified on a live instance: without this, last_dried and the
   // Spoolman import data would be wiped on the first write.
-  BackendHttp get;
-  get.begin(String(base_url) + "/api/v1/spools/" + spool_id);
-  get.setTimeout(timeout_ms);
-  addApiKey(get, api_key);
-  int gcode = get.GET();
-  if (gcode != 200) {
-    get.end();
-    logSDf("FilaMan: custom field GET failed, HTTP %d", gcode);
-    return gcode;
-  }
-
   SpiRamAllocator alloc;
   JsonDocument raw(&alloc);
-  DeserializationError err = deserializeJson(raw, get.getStream());
-  get.end();
+  DeserializationError err = DeserializationError::Ok;
+  // In a block of its own, see filamanUnlinkBambuFields().
+  {
+    BackendHttp get;
+    get.begin(String(base_url) + "/api/v1/spools/" + spool_id);
+    get.setTimeout(timeout_ms);
+    addApiKey(get, api_key);
+    int gcode = get.GET();
+    if (gcode != 200) {
+      get.end();
+      logSDf("FilaMan: custom field GET failed, HTTP %d", gcode);
+      return gcode;
+    }
+    err = deserializeJson(raw, get.getStream());
+    get.end();
+  }
   if (err) {
     logSDf("FilaMan: custom field GET parse error: %s", err.c_str());
     return -2;
@@ -1163,20 +1173,24 @@ int filamanPatchCustomField(const char* base_url, const char* api_key, int spool
 int filamanPatchFilamentCustomField(const char* base_url, const char* api_key, int filament_id,
                                     const char* key, const char* value, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || filament_id <= 0 || !key || !key[0]) return -1;
-  BackendHttp get;
-  get.begin(String(base_url) + "/api/v1/filaments/" + filament_id);
-  get.setTimeout(timeout_ms);
-  addApiKey(get, api_key);
-  const int gcode = get.GET();
-  if (gcode != 200) {
-    get.end();
-    logSDf("FilaMan: filament custom field GET failed, HTTP %d", gcode);
-    return gcode;
-  }
   SpiRamAllocator alloc;
   JsonDocument raw(&alloc);
-  DeserializationError err = deserializeJson(raw, get.getStream());
-  get.end();
+  DeserializationError err = DeserializationError::Ok;
+  // In a block of its own, see filamanUnlinkBambuFields().
+  {
+    BackendHttp get;
+    get.begin(String(base_url) + "/api/v1/filaments/" + filament_id);
+    get.setTimeout(timeout_ms);
+    addApiKey(get, api_key);
+    const int gcode = get.GET();
+    if (gcode != 200) {
+      get.end();
+      logSDf("FilaMan: filament custom field GET failed, HTTP %d", gcode);
+      return gcode;
+    }
+    err = deserializeJson(raw, get.getStream());
+    get.end();
+  }
   if (err) {
     logSDf("FilaMan: filament custom field GET parse error: %s", err.c_str());
     return -2;

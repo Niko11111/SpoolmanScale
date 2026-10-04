@@ -30,6 +30,20 @@ static lv_obj_t *s_btn_next  = nullptr;
 // Longest input: "600.0", plus room for the one decimal digit being typed.
 #define TARE_INPUT_MAX_CHARS  5
 
+// Lifted, by the same measure the removal check in app_loop.cpp uses: more
+// than half of what was on the pad when the entry opened has left it.
+#define TARE_ENTRY_GONE_FRACTION 0.5f
+
+// The spool the entry was opened for, and what the pad carried then. Typing
+// takes long enough for the spool to be swapped meanwhile, and a number typed
+// for one spool must not land on the next (issue #40 follow-up).
+static int   s_spool_id = 0;
+static float s_open_g   = 0.0f;
+
+bool isTareEntryOpen() {
+  return s_choice != nullptr || s_pad != nullptr;
+}
+
 void closeTareEntry() {
   releaseScreen(&s_choice);
   releaseScreen(&s_pad);
@@ -211,6 +225,14 @@ static void showTarePad() {
   lv_obj_add_event_cb(s_btn_next, [](lv_event_t *e) {
     float v = 0.0f;
     if (!inputValue(&v)) return;          // the button is greyed, the press is ignored
+    // tareEntryTick() closes the pad on a swap; this covers a swap that
+    // landed in the same pass as the press.
+    if (sm_id != s_spool_id) {
+      logSDf("UI: tare %.1f g typed for spool %d, spool %d loaded now - dropped",
+             v, s_spool_id, sm_id);
+      closeTareEntry();
+      return;
+    }
     logSDf("UI: tare typed in, %.1f g", v);
     closeTareEntry();
     showSpoolWeightScope(v, false);
@@ -243,6 +265,8 @@ static lv_obj_t *choiceButton(lv_obj_t *box, int y, int w, int h, const char *te
 void showTareChoice() {
   logSD("SHOW: TareChoice");
   closeTareEntry();
+  s_spool_id = sm_id;
+  s_open_g   = scale_weight_g;
 
   lv_obj_t *scrim = lv_obj_create(lv_scr_act());
   s_choice = scrim;
@@ -300,4 +324,20 @@ void showTareChoice() {
   lv_obj_set_style_border_width(cancel, 0, 0);
   padLabel(cancel, T(STR_CANCEL), UI_COL_BAD_TEXT, UI_FONT_SMALL);
   lv_obj_add_event_cb(cancel, [](lv_event_t *e) { closeTareEntry(); }, LV_EVENT_CLICKED, NULL);
+}
+
+void tareEntryTick() {
+  if (!isTareEntryOpen()) return;
+  const bool swapped = sm_id != s_spool_id;
+  // Only where a spool was on the pad to begin with: the entry also serves a
+  // spool that sits in the printer, and an empty pad has nothing to lose.
+  const bool lifted = s_open_g > NEW_SPOOL_TARE_MIN_G &&
+                      (s_open_g - scale_weight_g) > s_open_g * TARE_ENTRY_GONE_FRACTION;
+  if (!swapped && !lifted) return;
+  logSDf("UI: tare entry for spool %d closed unsaved, %s (%.0f g -> %.0f g)",
+         s_spool_id, swapped ? "another spool loaded" : "spool lifted",
+         s_open_g, scale_weight_g);
+  // From the loop, not from a callback; releaseScreen() deletes on the next
+  // timer pass either way.
+  closeTareEntry();
 }

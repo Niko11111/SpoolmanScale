@@ -9,6 +9,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "theme.h"
+#include "ui_common.h"
 
 // The longest body in the table is around 400 bytes once the umlauts are
 // counted as the two bytes they really are. 1024 matches info_popup.cpp, for
@@ -52,6 +53,7 @@ static lv_obj_t *mkButton(lv_obj_t *box, int x, int w, int str_id, bool primary,
   lv_obj_set_style_radius(btn, 8, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
+  if (!primary) uiSecondaryFill(btn);
   lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, user_data);
 
   lv_obj_t *l = lv_label_create(btn);

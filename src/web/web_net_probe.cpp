@@ -2,6 +2,7 @@
 
 #include <esp_heap_caps.h>
 
+#include "services/backend.h"
 #include "services/backend_http.h"
 #include "web/web_access.h"
 #include "web/web_jobs.h"
@@ -16,7 +17,7 @@
 
 // Reads the answer to the end, so the time includes the body, and returns
 // how many bytes it was.
-static size_t drain(HTTPClient& http) {
+static size_t drain(BackendHttp& http) {
   Stream* in = http.getStreamPtr();
   size_t got = 0;
   uint8_t buf[256];
@@ -42,8 +43,12 @@ void netProbeRun(const char* url, String& body) {
 
   body = "{\"url\":\"" + jsonEsc(url) + "\",\"tls\":" +
          (backendUrlIsHttps(url) ? "true" : "false") + ",\"cold\":[";
+  // Connections of their own throughout, never the kept one: the probe
+  // measures what a connection costs, and must not leave the kept one
+  // pointing elsewhere or closed under a request that is waiting for it.
   for (int i = 0; i < PROBE_COLD_RUNS; i++) {
     BackendHttp http;
+    http.noPool();
     http.setTimeout(PROBE_TIMEOUT_MS);
     const unsigned long t0 = millis();
     int code = -1;
@@ -64,6 +69,7 @@ void netProbeRun(const char* url, String& body) {
   body += "],\"reuse\":[";
   {
     BackendHttp http;
+    http.noPool();
     http.setTimeout(PROBE_TIMEOUT_MS);
     http.setReuse(true);
     for (int i = 0; i < 2; i++) {
@@ -90,8 +96,9 @@ void netProbeRun(const char* url, String& body) {
 }
 
 void netProbeRoutes(WebServer& srv) {
-  // Asked again with the same url until the answer is in, like the other
-  // worker jobs.
+  // Asked again until the answer is in, like the other worker jobs. It
+  // measures the backend that is set up and nothing else: an address taken
+  // from the request made the scale fetch whatever a caller named.
   srv.on("/api/net/probe", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
     if (webJobKind() == WJ_NET_PROBE) {
@@ -106,13 +113,13 @@ void netProbeRoutes(WebServer& srv) {
         return;
       }
     }
-    const String url = srv.arg("url");
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      srv.send(400, "application/json", "{\"error\":\"url must start with http:// or https://\"}");
+    const char* url = backendBaseUrl();
+    if (strlen(url) <= 7) {   // no longer than "http://"
+      srv.send(400, "application/json", "{\"error\":\"no backend address set\"}");
       return;
     }
     if (webJobState() == WJS_DONE) webJobTake();   // somebody else's leftover
-    if (!webJobStart(WJ_NET_PROBE, url.c_str(), false)) {
+    if (!webJobStart(WJ_NET_PROBE, url, false)) {
       srv.send(200, "application/json", "{\"error\":\"busy\"}");
       return;
     }

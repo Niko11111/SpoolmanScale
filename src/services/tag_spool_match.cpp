@@ -11,6 +11,30 @@
 #include "hardware/sd_logger.h"
 #include "services/spool_color.h"
 
+// A Bambu support tag names what it holds up: "Support for PLA", "Support
+// For PLA/PETG", "Support for ABS", "Support For PA/PET". Spoolman keeps the
+// same filament as that base with "-S": PLA-S, ABS-S, PA-S. So a support
+// spool whose base is one of the tag's matches; for "PLA/PETG" either does.
+// "Support W" and "Support G" name no base, and any support spool may carry
+// them - the same as the link list, which keeps every "-S" spool for a
+// support tag.
+static bool supportSpoolMatches(const char* tag_material, const char* spool_material) {
+  if (!isSupportSpoolmanMat(spool_material)) return false;
+  const size_t base_len = strlen(spool_material) - 2;   // without the "-S"
+  const char* p = tag_material + 7;                     // past "Support"
+  while (*p == ' ') p++;
+  if (strncasecmp(p, "for ", 4) != 0) return true;
+  p += 4;
+  while (*p) {
+    while (*p == ' ' || *p == '/') p++;
+    const char* start = p;
+    while (*p && *p != ' ' && *p != '/') p++;
+    const size_t len = (size_t)(p - start);
+    if (len && len == base_len && strncasecmp(start, spool_material, len) == 0) return true;
+  }
+  return false;
+}
+
 TagSpoolVerdict tagSpoolCompare(const char* tag_material, const char* tag_color_hex,
                                 const char* spool_material, const char* spool_name,
                                 const char* spool_vendor, const char* spool_color_hex,
@@ -24,7 +48,11 @@ TagSpoolVerdict tagSpoolCompare(const char* tag_material, const char* tag_color_
   if (!spool_vendor)    spool_vendor = "";
   if (!spool_color_hex) spool_color_hex = "";
 
-  if (strlen(tag_material) >= 3 && strlen(spool_material) >= 3) {
+  if (isSupportMaterial(tag_material)) {
+    // Three characters of "Support for PLA" against "PLA-S" never agree, so
+    // a support tag was a mismatch with every spool, its own included.
+    if (spool_material[0]) v.material = !supportSpoolMatches(tag_material, spool_material);
+  } else if (strlen(tag_material) >= 3 && strlen(spool_material) >= 3) {
     v.material = (strncasecmp(tag_material, spool_material, 3) != 0);
     // The tag writes "Tough+", a library "Tough Plus" or leaves it to the name
     // ("PLA" with "PLA Tough+"), and bambuSubtypeMatches() reads them as one.

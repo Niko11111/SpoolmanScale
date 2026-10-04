@@ -33,6 +33,11 @@
 #define LIGHTNESS_BLACK  0.002f
 #define LIGHTNESS_WHITE  0.998f
 
+// What the accent keeps as text against the ground: WCAG AA for body text.
+// Walked towards it in steps of OKLCH lightness; app.js takes the same steps.
+#define ACCENT_TEXT_CONTRAST  4.5f
+#define LIGHTNESS_STEP        0.005f
+
 struct TintRole {
   uint32_t* var;
   bool text;
@@ -147,6 +152,23 @@ static uint32_t towardAccentText(uint32_t ink, uint32_t accent) {
   return fromOklch(f);
 }
 
+// The accent as text: same hue and chroma, its lightness moved away from the
+// ground until it reads at ACCENT_TEXT_CONTRAST, darker on a light palette and
+// lighter on a dark one. Any colour on any palette, also after a switch: a
+// yellow chosen on dark stays legible when the palette turns light.
+static uint32_t readableOn(uint32_t ink, uint32_t ground) {
+  if (contrast(ink, ground) >= ACCENT_TEXT_CONTRAST) return ink;
+  const float step = contrast(UI_COL_ON_ACCENT_DARK, ground) >= contrast(UI_COL_ON_ACCENT_LIGHT, ground)
+                     ? -LIGHTNESS_STEP : LIGHTNESS_STEP;
+  Oklch o = toOklch(ink);
+  uint32_t out = ink;
+  while (contrast(out, ground) < ACCENT_TEXT_CONTRAST && o.l > 0.0f && o.l < 1.0f) {
+    o.l = fminf(1.0f, fmaxf(0.0f, o.l + step));
+    out = fromOklch(o);
+  }
+  return out;
+}
+
 // ---- stored choice -------------------------------------------
 // What runs, as opposed to what is stored for the next boot.
 static UiThemeCustom s_active = { false, 0, UI_TONE_NONE, UI_TONE_STRENGTH_SAME, false };
@@ -174,15 +196,34 @@ bool uiThemeCustomStore(const UiThemeCustom& c) {
   return ok;
 }
 
-UiThemeId uiThemeResolve(UiThemeId chosen, bool follow) {
+static UiThemeId resolveFor(UiThemeId chosen, bool follow, BackendMode mode) {
   if (!follow) return chosen;
   const bool dark = chosen == UI_THEME_DARK || chosen == UI_THEME_SPOOLMAN_DARK ||
                     chosen == UI_THEME_FILAMAN_DARK;
-  switch (backendMode()) {
+  switch (mode) {
     case BACKEND_FILAMAN:  return dark ? UI_THEME_FILAMAN_DARK  : UI_THEME_FILAMAN_LIGHT;
     case BACKEND_SPOOLMAN: return dark ? UI_THEME_SPOOLMAN_DARK : UI_THEME_SPOOLMAN_LIGHT;
     default:               return dark ? UI_THEME_DARK          : UI_THEME_LIGHT;
   }
+}
+
+UiThemeId uiThemeResolve(UiThemeId chosen, bool follow) {
+  return resolveFor(chosen, follow, backendMode());
+}
+
+bool uiThemeFollowMoves(BackendMode to) {
+  if (!uiThemeCustomStored().follow) return false;
+  const UiThemeId chosen = uiThemeStored();
+  return resolveFor(chosen, true, to) != resolveFor(chosen, true, backendMode());
+}
+
+bool uiThemeFollowWaits() {
+  if (!uiThemeCustomStored().follow) return false;
+  return uiThemeResolve(uiThemeStored(), true) != uiThemeActive();
+}
+
+bool uiThemeCustomIsSet(const UiThemeCustom& c) {
+  return c.has_accent || c.tone != UI_TONE_NONE || c.strength != UI_TONE_STRENGTH_SAME;
 }
 
 void uiThemeApplyCustom(const UiThemeCustom& c) {
@@ -192,9 +233,14 @@ void uiThemeApplyCustom(const UiThemeCustom& c) {
     for (const TintRole& r : TINT_ROLES) *r.var = tint(*r.var, c.tone, k, r.text);
   }
   if (c.has_accent) {
-    UI_COL_ACCENT = c.accent;
+    // ACCENT is mostly text (titles, values, links: 124 text uses against 7
+    // fills), so it takes the readable form. The pure fills, LVGL's primary
+    // and the weight button, keep the colour as chosen.
+    const uint32_t text = readableOn(c.accent, UI_COL_GROUND);
+    UI_COL_ACCENT = text;
     UI_COL_LV_PRIMARY = c.accent;
-    UI_COL_ON_ACCENT = contrast(UI_COL_ON_ACCENT_DARK, c.accent) >= contrast(UI_COL_ON_ACCENT_LIGHT, c.accent)
+    // The label on a button filled with ACCENT, so measured against that.
+    UI_COL_ON_ACCENT = contrast(UI_COL_ON_ACCENT_DARK, text) >= contrast(UI_COL_ON_ACCENT_LIGHT, text)
                        ? UI_COL_ON_ACCENT_DARK : UI_COL_ON_ACCENT_LIGHT;
     UI_COL_ACCENT_CHIP = towardAccent(UI_COL_ACCENT_CHIP, c.accent);
 
@@ -210,13 +256,16 @@ void uiThemeApplyCustom(const UiThemeCustom& c) {
     UI_COL_PRESS_FILL = towardAccent(UI_COL_PRESS_FILL, c.accent);
     UI_COL_CHIP         = towardAccent(UI_COL_CHIP, c.accent);
     UI_COL_POPUP_BORDER = towardAccent(UI_COL_POPUP_BORDER, c.accent);
-    UI_COL_STATUS_BLUE  = c.accent;
-    UI_COL_ALT_TEXT     = c.accent;
+    UI_COL_STATUS_BLUE  = text;
+    UI_COL_ALT_TEXT     = text;
     UI_COL_WEIGHT_BG         = c.accent;
     UI_COL_WEIGHT_BG_PRESSED = uiShade(c.accent, UI_SHADE_PRESSED);
-    UI_COL_WEIGHT_TEXT  = UI_COL_ON_ACCENT;
-    UI_COL_WEIGHT_AUTO  = UI_COL_ON_ACCENT;
-    UI_COL_WEIGHT_SENT  = UI_COL_ON_ACCENT;
-    UI_COL_WEIGHT_COUNT = UI_COL_ON_ACCENT;
+    // Its labels against the chosen colour itself, which fills it.
+    const uint32_t on_fill = contrast(UI_COL_ON_ACCENT_DARK, c.accent) >= contrast(UI_COL_ON_ACCENT_LIGHT, c.accent)
+                             ? UI_COL_ON_ACCENT_DARK : UI_COL_ON_ACCENT_LIGHT;
+    UI_COL_WEIGHT_TEXT  = on_fill;
+    UI_COL_WEIGHT_AUTO  = on_fill;
+    UI_COL_WEIGHT_SENT  = on_fill;
+    UI_COL_WEIGHT_COUNT = on_fill;
   }
 }

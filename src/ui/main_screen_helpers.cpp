@@ -73,6 +73,8 @@ void tagSpoolViewAttach(lv_obj_t* status_label) {
     logSDf("UI: status line -> showing the %s of spool %d",
            tagSpoolLookupShowsSpool() ? "spool" : "tag", sm_id);
     applyTagSpoolView();
+    // Stands aside while a message is held (statusMessageHeld()): the tap
+    // switches the fields at once, the line follows when the hold ends.
     paintTagStatus();
   }, LV_EVENT_CLICKED, NULL);
 }

@@ -30,9 +30,19 @@ static bool s_mode_change_pending = false;
 static void applyPendingModeChange() {
   if (!s_mode_change_pending) return;
   s_mode_change_pending = false;
+  // With the colours following the backend, this switch may move the panel
+  // into another family. A palette is read at boot, so the restart is offered
+  // the way the language screen offers it; appLoop() opens the question on
+  // its next pass, over the rebuilt screen. Asked before the switch, which
+  // changes what "the current backend" is.
+  const bool palette_moves = !setup_active && uiThemeFollowMoves(s_pending_mode);
   // One switch for both entry points. What it lets go of used to be spelled
   // out here and stopped after three steps - see app/backend_switch.cpp.
   backendApplyMode(s_pending_mode);
+  if (palette_moves) {
+    logSD("Theme: the backend switch moves the palette, restart offered");
+    show_reboot_pending = true;
+  }
 }
 
 // Full width row that opens another screen: title on top, a value line under

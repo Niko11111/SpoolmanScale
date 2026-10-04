@@ -31,6 +31,16 @@ static const char THEME_CSS[] PROGMEM =
     "container-type:inline-size}"
     // The shared button look would repaint the card on hover.
     ".tcard:hover{background:var(--surface-2)}"
+    // Apply stays in view while the page scrolls: a choice made at the top
+    // with the button far below looked like nothing happened. Something
+    // changed and not applied yet fills it and says so.
+    ".tbar{position:sticky;bottom:12px;z-index:5;display:flex;gap:12px;align-items:center;"
+    "flex-wrap:wrap;margin-top:14px;padding:12px 16px;border-radius:12px;"
+    "background:var(--surface);border:1px solid var(--line)}"
+    ".tbar .tdirty{display:none;font-size:12.5px;color:var(--ink-soft)}"
+    ".tbar.dirty{border-color:var(--accent)}"
+    ".tbar.dirty .tdirty{display:inline}"
+    ".tbar.dirty #tapply{background:var(--accent);color:var(--ground);border-color:var(--accent)}"
     ".tcard[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}"
     ".tcard .thead{display:flex;align-items:center;justify-content:space-between;gap:8px;"
     "font-size:14px;font-weight:600;color:var(--ink)}"
@@ -153,9 +163,11 @@ static String body() {
   h += T(STR_W_THEME_RESET);
   h += F("</button></div></div></div></div>");
 
-  h += F("<div class='inrow'><button id='tapply' disabled>");
+  h += F("<div class='tbar' id='tbar'><button id='tapply' disabled>");
   h += T(STR_W_THEME_APPLY);
-  h += F("</button><span class='msg' id='tmsg'></span></div>");
+  h += F("</button><span class='tdirty'>");
+  h += T(STR_W_THEME_UNSAVED);
+  h += F("</span><span class='msg' id='tmsg'></span></div>");
 
   h += F("<script>");
   h += webShellJsStrings();
@@ -207,10 +219,8 @@ static String body() {
   h += jsStr(T(STR_W_THEME_SCHEME_OWN));
   h += F(",onbg:");
   h += jsStr(T(STR_W_THEME_ON_BG));
-  h += F(",faint:");
-  h += jsStr(T(STR_W_THEME_FAINT));
-  h += F(",weaker:");
-  h += jsStr(T(STR_W_THEME_WEAKER));
+  h += F(",adj:");
+  h += jsStr(T(STR_W_THEME_TEXT_ADJUSTED));
   h += F(",plus:");
   h += jsStr(T(STR_W_THEME_PLUS_OWN));
   h += F(",cn:{orange:");
@@ -280,14 +290,16 @@ static String body() {
          "ACC.forEach(function(a){chip(g,a[0],TT.cn[a[1]],CS.accent===a[0],function(){CS.accent=a[0];$('accpick').value='#'+a[0];update();});});"
          "g=$('hue');g.textContent='';chip(g,b.GROUND,TT.own,CS.tone<0,function(){CS.tone=-1;update();});"
          "HUES.forEach(function(h){chip(g,h[1],TT.cn[h[2]],CS.tone===h[0],function(){CS.tone=h[0];$('huerange').value=h[0];update();});});"
-         "var cr=TC.contrast(p.ACCENT,p.GROUND),pl=$('accpill');pl.textContent=cr.toFixed(1)+':1 '+TT.onbg;"
+         // The colour as chosen, not the readable form the preview draws its
+         // text in: the pill says how far the scale has to move it.
+         "var cr=TC.contrast(CS.accent||p.ACCENT,p.GROUND),pl=$('accpill');pl.textContent=cr.toFixed(1)+':1 '+TT.onbg;"
          "pl.style.color=cr>=4.5?'var(--good)':cr>=3?'var(--warn)':'var(--bad)';"
-         "$('acchint').textContent=cr<3?TT.faint:cr<4.5?TT.weaker:'';"
+         "$('acchint').textContent=cr<4.5?TT.adj:'';"
          "$('hsw').style.setProperty('--c','hsl('+$('huerange').value+',45%,50%)');"
          "$('strrange').value=CS.strength;$('strlbl').textContent=CS.strength+'%';$('follow').checked=CS.follow;"
          "var v=$('cprev');v.textContent='';[mockMain(),mockSettings()].forEach(function(m){"
          "var c=document.createElement('div');c.className='tcard';c.innerHTML=m;paint(c.querySelector('.tm'),p);v.appendChild(c);});"
-         "$('tapply').disabled=(key()===CS0);}"
+         "var dirty=key()!==CS0;$('tapply').disabled=!dirty;$('tbar').classList.toggle('dirty',dirty);}"
          "function pick(id){sel=id;document.querySelectorAll('.tcard[data-id]').forEach(function(c){"
          "c.setAttribute('aria-pressed',c.dataset.id===id?'true':'false');});update();}"
          "function render(d){stored=d.stored;BACKEND=d.backend;var o=d.custom||{};"
@@ -313,15 +325,14 @@ static String body() {
          "$('huerange').addEventListener('input',function(){CS.tone=+this.value;update();});"
          "$('strrange').addEventListener('input',function(){CS.strength=+this.value;update();});"
          "$('creset').addEventListener('click',function(){CS.accent=null;CS.tone=-1;CS.strength=50;update();});"
-         // The palette first, then the own colours: the second answer carries
-         // the restart decision.
+         // Palette and own colours in one request: two could leave the new
+         // palette stored and the colours not.
          "$('tapply').addEventListener('click',function(){"
          "if(!sel)return;$('tapply').disabled=true;"
-         "post('/api/theme',sel).then(function(r){if(!r.ok||!r.json||!r.json.ok)return r;"
-         "return post('/api/theme/custom',[CS.accent||'-',CS.tone,CS.strength,CS.follow?1:0].join(','));})"
+         "post('/api/theme',[sel,CS.accent||'-',CS.tone,CS.strength,CS.follow?1:0].join(','))"
          ".then(function(r){"
          "if(!r.ok||!r.json||!r.json.ok){flash('tmsg',WS.err,true,4000);$('tapply').disabled=false;return;}"
-         "stored=sel;CS0=key();"
+         "stored=sel;CS0=key();$('tbar').classList.remove('dirty');"
          "if(!r.json.restart){flash('tmsg',TT.later,false);return;}"
          "post('/api/restart','').then(function(){flash('tmsg',TT.restarting,false);"
          "setTimeout(function(){location.reload();},9000);});});});"
@@ -414,22 +425,37 @@ static void routes(WebServer &srv) {
     srv.send(200, "application/json", json);
   });
 
-  // Body: the palette's key as plain text. Stored for the next boot; the
-  // answer says whether this browser may restart the scale right away, which
-  // is the maintenance gate's call, not this one's.
+  // Body: "key,accent,tone,strength,follow", e.g. "light,ff9442,300,50,1";
+  // "-" for no accent, -1 for the palette's own tone. Palette and own colours
+  // in one request, checked whole before anything is written, and put back
+  // as they were if a write fails: two requests could leave the new palette
+  // stored and the colours not. Stored for the next boot; the answer says
+  // whether this browser may restart the scale right away, which is the
+  // maintenance gate's call, not this one's.
   srv.on("/api/theme", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_THEME))) return;
+    const String body = srv.arg("plain");
+    const int comma = body.indexOf(',');
     UiThemeId id;
-    if (!uiThemeFromKey(srv.arg("plain").c_str(), &id)) {
+    UiThemeCustom c;
+    if (comma <= 0 || !uiThemeFromKey(body.substring(0, comma).c_str(), &id) ||
+        !parseCustom(body.c_str() + comma + 1, &c)) {
       srv.send(400, "application/json", "{\"ok\":false}");
       return;
     }
-    if (!uiThemeStore(id)) {
-      logSD("Theme: storing the choice failed");
+    const UiThemeId old_id = uiThemeStored();
+    const UiThemeCustom old_c = uiThemeCustomStored();
+    if (!uiThemeStore(id) || !uiThemeCustomStore(c)) {
+      uiThemeStore(old_id);
+      uiThemeCustomStore(old_c);
+      logSD("Theme: storing the choice failed, the old one put back");
       srv.send(500, "application/json", "{\"ok\":false}");
       return;
     }
-    logSDf("Theme: %s chosen, active after restart", uiThemeKey(id));
+    logSDf("Theme: %s chosen, own colours accent %s%06lx, tone %d, strength %u, follow %d,"
+           " active after restart", uiThemeKey(id),
+           c.has_accent ? "#" : "none ", (unsigned long)c.accent, (int)c.tone,
+           (unsigned)c.strength, c.follow ? 1 : 0);
     srv.send(200, "application/json",
              webGateOpen(GATE_MAINT) ? "{\"ok\":true,\"restart\":true}"
                                      : "{\"ok\":true,\"restart\":false}");
@@ -451,28 +477,6 @@ static void routes(WebServer &srv) {
     }
     logSDf("Theme: web pages %s", b == "1" ? "follow the browser" : "follow the scale");
     srv.send(200, "application/json", "{\"ok\":true}");
-  });
-
-  // Body: "accent,tone,strength,follow", e.g. "ff9442,300,50,1"; "-" for no
-  // accent, -1 for the palette's own tone. Stored for the next boot.
-  srv.on("/api/theme/custom", HTTP_POST, [&srv]() {
-    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_THEME))) return;
-    UiThemeCustom c;
-    if (!parseCustom(srv.arg("plain").c_str(), &c)) {
-      srv.send(400, "application/json", "{\"ok\":false}");
-      return;
-    }
-    if (!uiThemeCustomStore(c)) {
-      logSD("Theme: storing the own colours failed");
-      srv.send(500, "application/json", "{\"ok\":false}");
-      return;
-    }
-    logSDf("Theme: own colours accent %s%06lx, tone %d, strength %u, follow %d",
-           c.has_accent ? "#" : "none ", (unsigned long)c.accent, (int)c.tone,
-           (unsigned)c.strength, c.follow ? 1 : 0);
-    srv.send(200, "application/json",
-             webGateOpen(GATE_MAINT) ? "{\"ok\":true,\"restart\":true}"
-                                     : "{\"ok\":true,\"restart\":false}");
   });
 }
 

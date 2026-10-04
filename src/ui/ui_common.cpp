@@ -15,6 +15,7 @@
 #include "second_tag_popup.h"
 #include "spool_flow.h"
 #include "tag_write_popup.h"
+#include "tare_entry.h"
 #include "services/backend.h"
 #include "services/filaman_api.h"
 #include "services/settings_registry.h"
@@ -33,6 +34,8 @@ bool uiModalWaiting() {
   return isInfoPopupOpen()
       || isTagWritePopupOpen()
       || isConfirmPopupOpen()
+      || isTareEntryOpen()
+      || isSpoolWeightScopeOpen()
       || isSpoolFlowIdInputOpen()
       || isSpoolFlowLinkEntryOpen()
       || isSecondTagPopupOpen()
@@ -230,6 +233,19 @@ void addCloseButton(lv_obj_t *parent) {
   lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_center(lbl);
+}
+
+void uiSecondaryFill(lv_obj_t *btn) {
+  if (uiThemeIsDark()) {
+    lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_LINE), 0);
+    return;
+  }
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_border_width(btn, 1, 0);
+  lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_ROW_PRESSED), 0);
+  // Under the finger a shade darker than the row, not the dark frame colour
+  // the callers set for the dark palettes: on a light one that flashed black.
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
 }
 
 void buildSubHeader(lv_obj_t *parent, const char *title,

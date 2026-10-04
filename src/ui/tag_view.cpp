@@ -328,14 +328,16 @@ static void buildGrid(lv_obj_t* box, const Shown& s) {
   else if (!strcmp(i.fmt, "unsupported")) why = T(STR_W_TAG_NOREC);
   if (why) { note(area, TV_ROW_STEP, why); return; }
 
-  struct Item { const char* cap; char val[40]; bool wide; };
+  // As long as the longest value, the catalog's colour name. Cut, if ever,
+  // on a character boundary: an accent split in half draws a box.
+  struct Item { const char* cap; char val[sizeof(TagInfo::color_name)]; bool wide; };
   Item items[TV_ITEMS_MAX];
   int n = 0;
   auto add = [&](const char* cap, const char* v, bool wide) {
     if (!v || !v[0] || n >= TV_ITEMS_MAX) return;
     items[n].cap = cap;
     items[n].wide = wide;
-    snprintf(items[n].val, sizeof(items[n].val), "%s", v);
+    utf8Cut(v, sizeof(items[n].val) - 1, items[n].val, sizeof(items[n].val));
     n++;
   };
   char buf[24];

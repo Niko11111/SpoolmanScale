@@ -360,6 +360,15 @@ void logSDf(const char* fmt, ...) {
   logSD(buf);
 }
 
+// The five reasons IDF 5 added after SDIO. Checked against the IDF 5.5 that
+// core 3.3 builds on; an older IDF may lack some of them, and there they read
+// OTHER as before. The simulator defines no IDF version and leaves them out.
+#if ESP_IDF_VERSION_MAJOR > 5 || (ESP_IDF_VERSION_MAJOR == 5 && ESP_IDF_VERSION_MINOR >= 5)
+#define SD_LOG_IDF5_RESET_REASONS 1
+#else
+#define SD_LOG_IDF5_RESET_REASONS 0
+#endif
+
 const char* resetReasonStr() {
   esp_reset_reason_t r = esp_reset_reason();
   switch (r) {
@@ -374,6 +383,13 @@ const char* resetReasonStr() {
     case ESP_RST_DEEPSLEEP:  return "DEEPSLEEP (wake from sleep)";
     case ESP_RST_BROWNOUT:   return "BROWNOUT (voltage drop)";
     case ESP_RST_SDIO:       return "SDIO";
+#if SD_LOG_IDF5_RESET_REASONS
+    case ESP_RST_USB:        return "USB (USB peripheral)";
+    case ESP_RST_JTAG:       return "JTAG (debugger)";
+    case ESP_RST_EFUSE:      return "EFUSE (efuse error)";
+    case ESP_RST_PWR_GLITCH: return "PWR_GLITCH (power glitch)";
+    case ESP_RST_CPU_LOCKUP: return "CPU_LOCKUP (double exception)";
+#endif
     default:                 return "OTHER";
   }
 }
@@ -390,9 +406,14 @@ void writeBootBlock(const char* boot_or_reboot) {
   // it did not stop on purpose: after a clean restart the crumb names the
   // restart, which says nothing anyone needs.
   const esp_reset_reason_t rr = esp_reset_reason();
-  const bool crashed = (rr == ESP_RST_PANIC || rr == ESP_RST_INT_WDT ||
-                        rr == ESP_RST_TASK_WDT || rr == ESP_RST_WDT ||
-                        rr == ESP_RST_BROWNOUT);
+  bool crashed = (rr == ESP_RST_PANIC || rr == ESP_RST_INT_WDT ||
+                  rr == ESP_RST_TASK_WDT || rr == ESP_RST_WDT ||
+                  rr == ESP_RST_BROWNOUT);
+#if SD_LOG_IDF5_RESET_REASONS
+  // A lockup is a crash the panic handler never got to, a glitch a power
+  // problem like the brownout: neither was meant.
+  crashed = crashed || rr == ESP_RST_CPU_LOCKUP || rr == ESP_RST_PWR_GLITCH;
+#endif
   if (crashed && crumbPrevious()[0]) {
     logSDf("Last seen before the reset: %s (after %lus)",
            crumbPrevious(), (unsigned long)(crumbPreviousUptimeMs() / 1000));

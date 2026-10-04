@@ -202,11 +202,11 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   lv_obj_t *btn_done = lv_btn_create(box);
   lv_obj_set_size(btn_done, TAG2_BTN_W, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn_done, UI_CARD_ROW_X, UI_CARD_ROW_Y);
-  lv_obj_set_style_bg_color(btn_done, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_bg_color(btn_done, lv_color_hex(UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_done, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(btn_done, 0, 0);
   lv_obj_set_style_border_width(btn_done, 0, 0);
+  uiSecondaryFill(btn_done);
   lv_obj_set_style_pad_all(btn_done, 0, 0);
   lv_obj_clear_flag(btn_done, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(btn_done, [](lv_event_t *e) {

@@ -121,6 +121,7 @@ void buildDisplayScreen() {
     lv_obj_set_style_radius(b, 8, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, 0, 0);
+    if (!active) uiSecondaryFill(b);
     char buf[16];
     if (dim_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
@@ -169,6 +170,7 @@ void buildDisplayScreen() {
     lv_obj_set_style_radius(b, 8, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, 0, 0);
+    if (!active) uiSecondaryFill(b);
     char buf[16];
     if (off_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
@@ -220,6 +222,7 @@ void buildDisplayScreen() {
     lv_obj_set_style_radius(b, 8, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, 0, 0);
+    if (!active) uiSecondaryFill(b);
     char buf[16];
     if (sleep_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
