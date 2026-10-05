@@ -1,9 +1,9 @@
 {
   "stable": "v0.8.1",
   "stable_sha256": "717fa8e04fc1d7f1250a9fedffffea4089604a29115131b3193c457ca580919b",
-  "prerelease": "v0.8.2-beta.71",
-  "prerelease_sha256": "9976e524417c1caf21128fcbba3f65f75fd0bd9aecc5ad39e0a220e42e5107ca",
+  "prerelease": "v0.8.2-beta.72",
+  "prerelease_sha256": "004c8782957c4dc7e009be0988dfdb9f944dbafb90b1e15c2f2ac191614c4264",
   "url": "https://github.com/Niko11111/SpoolmanScale/releases/latest",
-  "prerelease_size": 3133712,
+  "prerelease_size": 3134112,
   "stable_size": 2938816
 }
