@@ -4,6 +4,7 @@
 #include <lvgl.h>
 #include <stdio.h>
 #include <string.h>
+#include "services/ams_assign.h"
 #include "services/ams_presence.h"
 #include "services/backend.h"
 #include "services/user_options.h"
@@ -224,4 +225,62 @@ void updateAmsAffordance() {
   const lv_coord_t h = lv_obj_get_height(lbl_no_scale);
   lv_obj_set_pos(lbl_no_scale, MAIN_NOSCALE_X,
                  MAIN_ZONE4_Y + (MAIN_ZONE4_H - h) / 2);
+}
+
+
+bool amsMainCanAssign() {
+  if (g_scale_fitted || !btn_ams_main) return false;
+  if (!sm_found || sm_archived || sm_id <= 0) return false;
+  // BamBuddy assigns a bay directly, nothing else is needed.
+  if (backendCanAssignAmsSlot()) return true;
+  // FilaMan only opens a window through a weight report, and without a load
+  // cell the stored weight is the report. It goes out gross, remaining plus
+  // the empty spool, and FilaMan takes the empty spool off again - without
+  // that weight the spool would be booked lighter than it is.
+  return backendIsFilaMan() && filamanDeviceToken()[0] != '\0' &&
+         sm_spool_weight > 0.0f;
+}
+
+void updateAmsMainButton() {
+  if (!lbl_ams_main || !bar_ams_main_fill) return;
+
+  // What was last drawn, so a pass without a change touches nothing. Tied to
+  // the label it was drawn on: a rebuilt main screen starts from scratch.
+  static lv_obj_t  *s_drawn_on = nullptr;
+  static int        s_shown    = -2;     // -1 view, 0 assign, >0 seconds left
+  static lv_coord_t s_fill_w   = -1;
+  if (s_drawn_on != lbl_ams_main) {
+    s_drawn_on = lbl_ams_main;
+    s_shown    = -2;
+    s_fill_w   = -1;
+  }
+
+  const unsigned long rem_ms = amsWindowRemainingMs();
+  const int state = rem_ms > 0 ? (int)((rem_ms + 999) / 1000)
+                               : (amsMainCanAssign() ? 0 : -1);
+  if (state != s_shown) {
+    s_shown = state;
+    if (state > 0) {
+      char buf[48];
+      snprintf(buf, sizeof(buf), "%s  %d s", T(STR_AMS_MAIN_ASSIGN), state);
+      lv_label_set_text(lbl_ams_main, buf);
+      lv_obj_set_style_text_color(lbl_ams_main, lv_color_hex(UI_COL_WARN), 0);
+    } else {
+      lv_label_set_text(lbl_ams_main, T(state == 0 ? STR_AMS_MAIN_ASSIGN : STR_AMSV_BTN));
+      lv_obj_set_style_text_color(lbl_ams_main, lv_color_hex(UI_COL_ACCENT), 0);
+    }
+  }
+
+  // Drains from the right with the time the window has left, set from that
+  // time on every pass rather than run as an lv_anim: a blocking request
+  // would leave an animation running ahead of the window it shows.
+  lv_coord_t w = 0;
+  if (rem_ms > 0 && g_ams_window_s > 0) {
+    w = (lv_coord_t)((uint64_t)MAIN_AMS_FILL_W * rem_ms /
+                     ((uint64_t)g_ams_window_s * 1000UL));
+  }
+  if (w != s_fill_w) {
+    s_fill_w = w;
+    lv_obj_set_width(bar_ams_main_fill, w);
+  }
 }

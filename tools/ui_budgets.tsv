@@ -237,3 +237,4 @@ STR_TARE_ENTER_REST	12	168	NEVER	src/ui/tare_entry.cpp s_lbl_info, COL_W = 168, 
 STR_TARE_ENTER_RANGE	12	168	WRAP:4	src/ui/tare_entry.cpp s_lbl_info, COL_W = 168
 STR_TARE_ENTER_OVER	12	168	WRAP:3	src/ui/tare_entry.cpp s_lbl_info, COL_W = 168
 STR_LBL_CAL_EDGE	16	289	NEVER	src/services/label_render.cpp calibration page, 40 mm label less frame and margins, one bold dot
+STR_AMS_MAIN_ASSIGN	16	190	NEVER	src/ui/main_screen.cpp zone 4 AMS button 254 px, -8 air, -56 for the window countdown

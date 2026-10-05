@@ -298,6 +298,10 @@ extern lv_obj_t *btn_location;
 // and in the middle when it is alone, which is why it needs a pointer at all.
 extern lv_obj_t *lbl_no_scale;
 extern lv_obj_t *btn_ams_main;
+// Its caption, which says what a tap does, and the fill behind it that drains
+// while a FilaMan assignment window runs. Rewritten by updateAmsMainButton().
+extern lv_obj_t *lbl_ams_main;
+extern lv_obj_t *bar_ams_main_fill;
 
 // The AMS chip in the header, and the only one of the chips that is a button
 // rather than a state. It exists in both modes: a device with a load cell has

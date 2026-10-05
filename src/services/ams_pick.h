@@ -45,5 +45,10 @@ void          amsPickDropPending();
 // safe from anywhere.
 void amsPickShow();
 
+// The same picker, asked for by a tap rather than by a removal: the AMS button
+// on a device without a load cell. Notes the spool and opens the page whether
+// or not the removal question is switched on - the tap is the question.
+void amsPickOpenFor(int spool_id, const char* spool_name);
+
 // Drops a note nobody acted on. Called from appLoop().
 void amsPickTick();
