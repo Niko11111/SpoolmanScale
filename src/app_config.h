@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.8.2-beta.71"
+#define FW_VERSION  "v0.8.2-beta.72"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -171,6 +171,13 @@
 // so this is the extra bus traffic it costs; everything else it reads is
 // state the loop already keeps.
 #define DIAG_TICK_MS  2000
+
+// A bus with a loose contact flips the finding on almost every tick, which
+// wrote a log line every two to four seconds and buried everything else. Per
+// window, only the first few changes get a line of their own; the rest are
+// counted and reported in one line when the window closes.
+#define DIAG_LOG_WINDOW_MS  60000
+#define DIAG_LOG_BURST      4
 
 // Peak to peak spread of the moving average window that stops being noise and
 // starts being a wiring fault. A settled pad sits inside a gram or two; a

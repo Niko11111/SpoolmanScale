@@ -254,8 +254,8 @@ constexpr unsigned long WIFI_ROAM_IDLE_MS      = 10UL * 60UL * 1000UL;
 constexpr unsigned long WIFI_ROAM_WEB_QUIET_MS = 2UL * 60UL * 1000UL;
 
 // ── Scale on the bus ───────────────────────────────────────────────────────
-// Bringing the ADC back is only attempted for one that was working and then
-// dropped off, and only a few times. A chip that answers on its address but
+// Bringing the ADC back is only attempted for one that dropped off or never
+// came up at boot, and only a few times per loss or "Check again". A chip that answers on its address but
 // never finishes its internal calibration - a dead load cell does that - would
 // otherwise stall the loop for the three seconds scaleHardwareBegin() spends
 // retrying, every five seconds, for as long as the device is switched on. A
@@ -727,6 +727,10 @@ void appLoop() {
     // 5 s probe: a chip that is wired but switched off in the settings must
     // not come back as present, or the header lights up again.
     if (g_scale_fitted) scl_ok = scaleHardwarePresent();
+    // Someone who just touched the wiring gets a fresh set of attempts at
+    // bringing the scale back, not the remainder of an old one. The 5 s
+    // watchdog makes them, so the stall stays where it always was.
+    if (scale_lost) scale_recover_tries = 0;
     diagnosticsRecheckNow();
     perfSection("diag");
   diagnosticsTick();
@@ -1647,6 +1651,16 @@ void appLoop() {
   // dead until someone restarts it, over a plug that is already seated again.
   {
     static unsigned long last_scl_check_ms = 0;
+    // A scale that failed at boot counts as lost from the first pass on. It
+    // used to be skipped, so a plug pushed back in after the diagnosis said
+    // "NAU7802 missing" only took effect after a restart. Decided once, here:
+    // a scale switched on in the settings later is still the restart's job,
+    // because the home screen was built without it.
+    static bool boot_state_seen = false;
+    if (!boot_state_seen) {
+      boot_state_seen = true;
+      if (g_scale_fitted && !scale_ready) scale_lost = true;
+    }
     // Nothing to find and nothing to bring back on a device that was built
     // without the load cell, so the bus is left alone entirely.
     if (g_scale_fitted && millis() - last_scl_check_ms >= 5000) {
@@ -1668,6 +1682,8 @@ void appLoop() {
           scl_ok = false;
           Serial.printf("Scale: re-init failed (%u/%u)\n",
                         scale_recover_tries, SCALE_RECOVER_ATTEMPTS);
+          logSDf("Scale: re-init failed (%u/%u)",
+                 scale_recover_tries, SCALE_RECOVER_ATTEMPTS);
         }
       }
       if (scl_ok != prev) updateHeaderStatus();
@@ -1709,6 +1725,8 @@ void appLoop() {
         } else {
           Serial.printf("NFC: re-init failed (%u/%u)\n",
                         nfc_recover_tries, NFC_RECOVER_ATTEMPTS);
+          logSDf("NFC: re-init failed (%u/%u)",
+                 nfc_recover_tries, NFC_RECOVER_ATTEMPTS);
         }
       }
     } else if (nfc_ok) {

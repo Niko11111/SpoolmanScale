@@ -31,6 +31,11 @@ static DiagCode current      = DIAG_NONE;
 static unsigned long last_tick_ms = 0;
 static bool     first_tick   = true;
 
+// The log window for changes, see DIAG_LOG_BURST.
+static unsigned long log_window_start = 0;
+static uint8_t  log_burst_used = 0;
+static unsigned log_suppressed = 0;
+
 void diagnosticsNoteSample(float weight_g, float spread_g) {
   const unsigned long now = millis();
 
@@ -110,12 +115,33 @@ void diagnosticsTick() {
     next = DIAG_SCALE_NOISY;
   }
 
+  // One line per change, never per tick. A device sitting on a stable
+  // finding has to leave the log quiet, or the log stops being readable
+  // exactly when someone needs to read it. A flapping one is held to
+  // DIAG_LOG_BURST lines per window plus a count - the flapping itself is the
+  // finding, and the count says so without drowning the rest of the log.
+  if (now - log_window_start >= DIAG_LOG_WINDOW_MS) {
+    if (log_suppressed > 0) {
+      Serial.printf("Diag: %u more changes in %u s, bus unstable? now %s\n",
+                    log_suppressed, (unsigned)(DIAG_LOG_WINDOW_MS / 1000),
+                    diagName(current));
+      logSDf("Diag: %u more changes in %u s, bus unstable? now %s",
+             log_suppressed, (unsigned)(DIAG_LOG_WINDOW_MS / 1000),
+             diagName(current));
+    }
+    log_window_start = now;
+    log_burst_used   = 0;
+    log_suppressed   = 0;
+  }
+
   if (next != current) {
-    // One line per change, never per tick. A device sitting on a stable
-    // finding has to leave the log quiet, or the log stops being readable
-    // exactly when someone needs to read it.
-    Serial.printf("Diag: %s -> %s\n", diagName(current), diagName(next));
-    logSDf("Diag: %s -> %s", diagName(current), diagName(next));
+    if (log_burst_used < DIAG_LOG_BURST) {
+      log_burst_used++;
+      Serial.printf("Diag: %s -> %s\n", diagName(current), diagName(next));
+      logSDf("Diag: %s -> %s", diagName(current), diagName(next));
+    } else {
+      log_suppressed++;
+    }
     current = next;
   }
 }
