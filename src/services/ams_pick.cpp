@@ -61,6 +61,9 @@ void amsPickDropPending() { s_pending.active = false; }
 // branch in ams_assign_popup.cpp: the NFC poll kept running under the page,
 // and a spool that landed meanwhile moved sm_id.
 static void offerLocationAfterPick(int spool_id) {
+  // Without a load cell nothing is asked on its own: the location has its
+  // own button there, and the picker was opened by a tap, not by a removal.
+  if (!g_scale_fitted) return;
   if (!g_auto_loc_popup || !wifi_ok) return;
   if (!sm_found || sm_archived || sm_id != spool_id) {
     logSDf("LOC: not offered after the picker, id=%d sm_id=%d found=%d archived=%d",
@@ -135,6 +138,15 @@ static void onPicked(int ams_id, int tray_id) {
   }
 }
 
+// The page itself, headed with the remembered spool's name.
+static void openPicker() {
+  char fmt[48], head[80];
+  copyT(fmt, sizeof(fmt), STR_AMSV_PICK_HEAD);
+  snprintf(head, sizeof(head), fmt,
+           s_pending.name[0] ? s_pending.name : "");
+  requestAmsView(AMS_VIEW_PICK, onPicked, head);
+}
+
 void amsPickShow() {
   if (!s_pending.active) return;
   // A note taken under one backend can be asked about under another only if
@@ -144,11 +156,14 @@ void amsPickShow() {
     return;
   }
 
-  char fmt[48], head[80];
-  copyT(fmt, sizeof(fmt), STR_AMSV_PICK_HEAD);
-  snprintf(head, sizeof(head), fmt,
-           s_pending.name[0] ? s_pending.name : "");
-  requestAmsView(AMS_VIEW_PICK, onPicked, head);
+  openPicker();
+}
+
+void amsPickOpenFor(int spool_id, const char* spool_name) {
+  if (spool_id <= 0 || !backendCanAssignAmsSlot()) return;
+  amsPickNote(spool_id, spool_name);
+  logSDf("AMSPICK: picker opened by the AMS button for id=%d", spool_id);
+  openPicker();
 }
 
 void amsPickTick() {

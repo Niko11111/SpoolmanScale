@@ -17,6 +17,7 @@
 #include "hardware/scale_state.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/ams_assign.h"
 #include "services/auto_weight_state.h"
 #include "services/tag_write.h"
 #include "services/user_options.h"
@@ -755,19 +756,37 @@ void buildUI() {
     lv_obj_set_style_shadow_width(btn_ams_main, 0, 0);
     lv_obj_add_flag(btn_ams_main, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_event_cb(btn_ams_main, [](lv_event_t *e) {
+      // The same test the caption was written from, so a tap does what the
+      // button says. While a window runs the spool is already on its way and
+      // the view is the useful answer: it shows the bay being taken.
+      if (amsMainCanAssign() && !amsWindowOpen()) {
+        logSDf("UI: Button -> AMS assign (main), id=%d", sm_id);
+        ams_main_assign_pending = true;
+        return;
+      }
       logSD("UI: Button -> AMS view (main)");
       // No WiFi check here on purpose: the view reports a missing connection
       // itself, which is better than a button that does nothing.
       show_ams_view_pending = true;
     }, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *lbl_ams = lv_label_create(btn_ams_main);
-    char ams_buf[32];
-    copyT(ams_buf, sizeof(ams_buf), STR_AMSV_BTN);
-    lv_label_set_text(lbl_ams, ams_buf);
-    lv_obj_set_style_text_color(lbl_ams, lv_color_hex(UI_COL_ACCENT), 0);
-    lv_obj_set_style_text_font(lbl_ams, &lv_font_montserrat_ext_16, 0);
-    lv_obj_set_style_text_align(lbl_ams, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl_ams, LV_ALIGN_CENTER, 0, 0);
+    // Behind the caption and not clickable, so a tap anywhere still lands on
+    // the button. Zero wide until a window opens. No padding on the button,
+    // so the fill starts at its edge; the caption is centred either way.
+    lv_obj_set_style_pad_all(btn_ams_main, 0, 0);
+    bar_ams_main_fill = lv_obj_create(btn_ams_main);
+    lv_obj_remove_style_all(bar_ams_main_fill);
+    lv_obj_set_size(bar_ams_main_fill, 0, MAIN_AMS_FILL_H);
+    lv_obj_set_pos(bar_ams_main_fill, 0, 0);
+    lv_obj_set_style_bg_color(bar_ams_main_fill, lv_color_hex(UI_COL_AMBER_BG), 0);
+    lv_obj_set_style_bg_opa(bar_ams_main_fill, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(bar_ams_main_fill, UI_RADIUS_BTN, 0);
+    lv_obj_clear_flag(bar_ams_main_fill, LV_OBJ_FLAG_CLICKABLE);
+    lbl_ams_main = lv_label_create(btn_ams_main);
+    lv_label_set_text(lbl_ams_main, T(STR_AMSV_BTN));
+    lv_obj_set_style_text_color(lbl_ams_main, lv_color_hex(UI_COL_ACCENT), 0);
+    lv_obj_set_style_text_font(lbl_ams_main, &lv_font_montserrat_ext_16, 0);
+    lv_obj_set_style_text_align(lbl_ams_main, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lbl_ams_main, LV_ALIGN_CENTER, 0, 0);
 
     // Places the note, and decides whether the button is there at all.
     updateAmsAffordance();

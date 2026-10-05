@@ -3190,6 +3190,7 @@ const char* const STRINGS[][3] = {
     "Accent et teinte de fond du web" },  // STR_THEME_RESET_OWN_SUB
   { "Noch nicht übernommen", "Not applied yet",
     "Pas encore appliqué" },  // STR_W_THEME_UNSAVED
+  { "Ins AMS",                         "Into AMS",                            "Dans l'AMS" },  // STR_AMS_MAIN_ASSIGN
 };
 
 StringID tagWriteResultString(uint8_t code) {

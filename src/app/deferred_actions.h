@@ -38,6 +38,11 @@ extern bool show_ams_assign_pending;
 extern bool show_ams_view_pending;
 // The same page opened from Settings > Scale, which is where it goes back to.
 extern bool show_ams_view_scale_pending;
+// The AMS button on a device without a load cell, pressed while a spool is
+// shown: assign that spool. FilaMan reports its stored weight to open the
+// window, BamBuddy opens the bay picker - both make requests, so the button
+// only raises this and appLoop() does the rest.
+extern bool ams_main_assign_pending;
 // The tag view, from the NFC chip in the header. A flag like the AMS view's,
 // so the card is built on the loop and never inside the chip's callback.
 extern bool show_tag_view_pending;

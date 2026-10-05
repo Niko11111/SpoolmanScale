@@ -81,6 +81,13 @@ int amsWindowRemainingS() {
   return g_ams_window_s - (int)elapsed_s;
 }
 
+unsigned long amsWindowRemainingMs() {
+  if (!amsWindowOpen()) return 0;
+  const unsigned long total   = (unsigned long)g_ams_window_s * 1000UL;
+  const unsigned long elapsed = millis() - s_window_started_ms;
+  return elapsed >= total ? 0 : total - elapsed;
+}
+
 int amsWriteEnabled(bool enabled) {
   const int id = filamanDeviceId();
   if (id <= 0) return FILAMAN_NO_DEVICE_TOKEN;
@@ -145,8 +152,10 @@ bool amsCommitWithWindow() {
 
   // Closed again immediately: the driver holds its own countdown, so this
   // does not shorten the window, it only stops the next weighing from
-  // opening one by itself.
-  int off = amsWriteEnabled(false);
+  // opening one by itself. Back to what the mode says rather than to false:
+  // the AMS button on a device without a load cell commits in every mode,
+  // and under "always" the flag is meant to stay up.
+  int off = amsWriteEnabled(g_ams_mode == AMS_ALWAYS);
   if (off != 200) {
     logSDf("AMS: WARNING could not clear auto_assign_enabled, HTTP %d", off);
   }

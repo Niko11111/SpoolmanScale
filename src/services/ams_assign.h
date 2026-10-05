@@ -87,6 +87,9 @@ bool amsCommitWithWindow();
 // button. Zero when none is running.
 bool amsWindowOpen();
 int  amsWindowRemainingS();
+// The same in milliseconds, for a fill that drains smoothly rather than in
+// one-second steps. Zero when none is running.
+unsigned long amsWindowRemainingMs();
 
 // Writes auto_assign_enabled on this device. Returns the HTTP status, or a
 // negative sentinel from the filaman layer.

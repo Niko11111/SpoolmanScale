@@ -444,6 +444,28 @@ static int  loc_popup_pending_id = -1;              // debounced popup: sm_id sc
 static int  ams_popup_pending_id = -1;              // same, for the AMS question; answered first when both are due
 static int  pick_popup_pending_id = -1;             // same, for the AMS bay picker; only one of the three is ever set per backend
 
+// The AMS button on a device without a load cell, one pass after the tap.
+// Asked again rather than trusted: a spool can have left the screen between
+// the tap and this pass.
+static void amsMainAssignRun() {
+  if (!amsMainCanAssign()) {
+    logSD("AMS: button assign dropped, the spool is no longer offered");
+    return;
+  }
+  if (backendCanAssignAmsSlot()) {
+    amsPickOpenFor(sm_id, sm_filament_name);
+    return;
+  }
+  // FilaMan. The stored weight stands in for a weighing: the value does not
+  // change, the spool log gains one measurement, and the window opens.
+  logSDf("AMS: no load cell, stored %.0fg reported to open the window for id=%d",
+         sm_remaining, sm_id);
+  amsNoteMeasurement(sm_id, sm_remaining, sm_remaining + sm_spool_weight, false);
+  if (!amsCommitWithWindow()) {
+    showInfoPopup(STR_AMSV_TITLE, STR_AMSV_ASSIGN_FAIL, INFO_WARN);
+  }
+}
+
 void appLoop() {
   // Overwritten every pass, so a crumb from a marked section only stands while
   // that section runs. Three stores and a short copy into RTC memory.
@@ -880,6 +902,10 @@ void appLoop() {
     buildWelcomeScreen();
     hideAllOverlays();
     lv_obj_clear_flag(scr_welcome, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (ams_main_assign_pending) {
+    ams_main_assign_pending = false;
+    amsMainAssignRun();
   }
   if (show_ams_assign_pending) {
     show_ams_assign_pending = false;
@@ -1573,6 +1599,10 @@ void appLoop() {
     }
   }
 
+  // The AMS button without a load cell: its caption follows the spool on
+  // screen, and its fill the window the button opened.
+  updateAmsMainButton();
+
   // Fix 10: Spoolman health check every 30s
   perfSection("netsvc");
   if (wifi_ok) {
@@ -2145,11 +2175,16 @@ void appLoop() {
             // Not for an archived spool: asking where to store something that
             // was just taken out of the inventory is a question about a spool
             // nobody is looking for.
-            if (g_auto_loc_popup && sm_found && !sm_archived && sm_id > 0 && wifi_ok &&
+            // None of the three questions below without a load cell. They hang
+            // off the weight - it confirms the spool really left, and FilaMan's
+            // needs it outright - and without one a removal is only a tag
+            // leaving the reader, every time anyone looks at a spool. Zone 4's
+            // AMS button and the location button ask the same on a tap.
+            if (g_scale_fitted && g_auto_loc_popup && sm_found && !sm_archived && sm_id > 0 && wifi_ok &&
                 g_loc_popup_shown_for_id != sm_id) {
               loc_popup_pending_id = sm_id;  // schedule - will fire after debounce in loop
               logSDf("[verbose] LOC: tag removed, popup scheduled id=%d (debounce 2500ms)", sm_id);
-            } else if (g_auto_loc_popup) {
+            } else if (g_scale_fitted && g_auto_loc_popup) {
               logSDf("[verbose] LOC: tag removed, popup suppressed id=%d shown_for=%d sm_found=%d wifi=%d", sm_id, g_loc_popup_shown_for_id, (int)sm_found, (int)wifi_ok);
             }
             // The AMS question hangs off the same removal, on the same
@@ -2157,7 +2192,7 @@ void appLoop() {
             // Same for the AMS question, and here it matters more than tidiness:
             // it notes a measurement against the spool id, which turns into a
             // weight write later on.
-            if (amsAskActive() && wifi_ok && sm_found && !sm_archived && sm_id > 0) {
+            if (g_scale_fitted && amsAskActive() && wifi_ok && sm_found && !sm_archived && sm_id > 0) {
               // On Serial, not through logSD(): that one returns early when no
               // SD card is present, so on a card-less scale none of this exists.
               Serial.printf("AMS: removal id=%d settled=%d %.0fg pending=%d\n",
@@ -2181,7 +2216,7 @@ void appLoop() {
             // The bay picker hangs off the same removal. Its own branch rather
             // than a shared one: this flow has no measurement to stand in for
             // anything, it only needs to know which spool was just taken off.
-            if (amsPickActive() && wifi_ok && sm_found && !sm_archived && sm_id > 0) {
+            if (g_scale_fitted && amsPickActive() && wifi_ok && sm_found && !sm_archived && sm_id > 0) {
               if (!amsPickHasPending()) amsPickNote(sm_id, sm_filament_name);
               if (amsPickPendingSpoolId() == sm_id) {
                 pick_popup_pending_id = sm_id;

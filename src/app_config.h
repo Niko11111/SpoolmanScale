@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.8.2-beta.72"
+#define FW_VERSION  "v0.8.2-beta.73"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -37,6 +37,9 @@
 // edge on 255 - inside the zone, level with the progress bar opposite.
 #define MAIN_AMS_BTN_Y  209
 #define MAIN_AMS_BTN_H   46
+// The countdown fill inside that button: inside its 1 px border.
+#define MAIN_AMS_FILL_W  (MAIN_NOSCALE_W - 2)
+#define MAIN_AMS_FILL_H  (MAIN_AMS_BTN_H - 2)
 
 // The AMS chip in the header. 18 px is the label's 16 plus its border, which
 // centres inside the 26 px header with 4 px above and below. The touch pad is
