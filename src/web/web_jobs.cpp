@@ -7,7 +7,9 @@
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/backend_job.h"
+#include "bambu/bambu_catalog.h"
 #include "services/github_release.h"
+#include "web/web_net_probe.h"
 #include "web/web_shell.h"
 
 // The same numbers the update check task runs with, for the same reasons: a
@@ -40,7 +42,7 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 
 static volatile WebJobState s_state = WJS_IDLE;
 static WebJobResult         s_res;
-static char                 s_arg[40] = "";
+static char                 s_arg[160] = "";   // a release tag, or the backend address for the probe
 static bool                 s_flag    = false;
 static unsigned long        s_done_ms = 0;
 
@@ -115,6 +117,19 @@ static void runGhNotes() {
   s_res.ok = true;
 }
 
+// "check" and "auto" ask with the stored ETag, the button without it.
+static void runBambuCatalog() {
+  int count = 0;
+  const bool conditional = s_arg[0] != '\0';
+  const BambuCatalogOutcome o = bambuCatalogDownload(conditional, s_res.err,
+                                                     sizeof(s_res.err), &count);
+  s_res.ok   = (o != BCO_FAILED);
+  s_res.code = count;
+  snprintf(s_res.tag, sizeof(s_res.tag), "%s",
+           o == BCO_UNCHANGED ? "unchanged" : o == BCO_UPDATED ? "updated" : "");
+  snprintf(s_res.pub, sizeof(s_res.pub), "%s", s_arg);
+}
+
 static void webJobTask(void* arg) {
   (void)arg;
   switch (s_res.kind) {
@@ -122,6 +137,8 @@ static void webJobTask(void* arg) {
     case WJ_SPOOLS:    runSpools();   break;
     case WJ_GH_CHECK:  runGhCheck();  break;
     case WJ_GH_NOTES:  runGhNotes();  break;
+    case WJ_BAMBU_CATALOG: runBambuCatalog(); break;
+    case WJ_NET_PROBE: netProbeRun(s_arg, s_res.body); s_res.ok = true; break;
     default: break;
   }
   Serial.printf("[webjob] kind %d done, ok=%d code=%d, stack left %u\n",

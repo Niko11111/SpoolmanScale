@@ -20,6 +20,7 @@
 #include "services/label_render.h"
 #include "ui/info_popup.h"
 #include "ui/print_card.h"
+#include "ui/printer_offset_screen.h"
 #include "ui/theme.h"
 #include "ui_common.h"
 
@@ -42,6 +43,28 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 };
 
 static int s_last_test = -1;
+
+// A label that needs no spool, the test label or the calibration page, under
+// the print card; the verdict is kept for the browser's last-print line.
+static void printFixedLabel(bool (*render)(const LabelPrinterConfig&, LabelRaster*),
+                            const char* what) {
+  printerOffsetFlush();
+  const LabelPrinterConfig c = labelPrinterLoadConfig();
+  LabelPrintResult result = LP_NO_PRINTER;
+  if (labelPrinterConfigured(c)) {
+    if (!bleEnabled()) result = LP_BLE_OFF;
+    else {
+      printCardShow();
+      LabelRaster raster{};
+      if (!render(c, &raster)) result = LP_BAD_RASTER;
+      else result = labelPrinterPrint(c, raster, printCardTick);
+      labelRasterFree(&raster);
+    }
+  }
+  logSDf("Printer: %s result=%d", what, (int)result);
+  s_last_test = labelPrintResultString(result);
+  printCardResult(result);
+}
 int printerLastTestResult() { return s_last_test; }
 
 void closePrinterScreen() {
@@ -50,7 +73,11 @@ void closePrinterScreen() {
 
 // The next model in the profile order, NONE never included.
 static LabelPrinterModel nextModel(LabelPrinterModel m) {
-  return m == LP_MODEL_M220 ? LP_MODEL_M110 : LP_MODEL_M220;
+  switch (m) {
+    case LP_MODEL_M220: return LP_MODEL_M110;
+    case LP_MODEL_M110: return LP_MODEL_M100;
+    default:            return LP_MODEL_M220;
+  }
 }
 
 // The next stock size the model can take, after the current one; the first
@@ -130,12 +157,17 @@ void buildPrinterScreen() {
       printer_cycle_model_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
-  // The label stock, cycled with a tap through what the model takes.
+  // The label stock, cycled with a tap through what the model takes. On
+  // thermal paper its "?" says what a dryer does to it.
   { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_PRN_MEDIA);
     char buf_s[48];
     snprintf(buf_s, sizeof(buf_s), T(STR_PRN_MEDIA_FMT),
              (unsigned)c.media_width_mm, (unsigned)c.media_length_mm);
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_IMAGE, buf_t, buf_s);
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_IMAGE, buf_t, buf_s, false,
+                                p.direct_thermal ? &help : nullptr);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_PRN_MEDIA, STR_PRN_HEAT_HELP));
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Printer -> next media");
       printer_cycle_media_pending = true;
@@ -151,9 +183,42 @@ void buildPrinterScreen() {
       printer_test_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
+  // Where the roll runs under the head: its own screen, with the
+  // calibration page. The row says the offset and, at an edge or the
+  // middle, which one. Only with a printer: the offset is kept per device
+  // (its address is the key), and without one a value set here was reported
+  // saved and was 0 again after a restart.
+  if (have) { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_W_P_CAL_TITLE);
+    int16_t lo, hi;
+    labelPrinterOffsetRange(c, &lo, &hi);
+    const int off = labelPrinterOffset(c);
+    const int per = labelPrinterDotsForMm(1);
+    const int mm = (off + (off < 0 ? -per / 2 : per / 2)) / per;
+    int where = -1;
+    if (off == 0) where = STR_W_P_CAL_CENTER;
+    else if (off == hi && hi > 0) where = STR_W_P_CAL_RIGHT;
+    else if (off == lo && lo < 0) where = STR_W_P_CAL_LEFT;
+    char buf_s[64];
+    if (where < 0) snprintf(buf_s, sizeof(buf_s), "%s%d mm", mm > 0 ? "+" : "", mm);
+    else snprintf(buf_s, sizeof(buf_s), "%s%d mm  \xE2\x80\xA2  %s", mm > 0 ? "+" : "", mm, T(where));
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_EDIT, buf_t, buf_s);
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      logSD("BTN: Printer -> print position");
+      show_printer_offset_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
   if (have) {
     char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_PRN_FORGET);
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_TRASH, buf_t, "");
+    // In the red of every row that deletes something, like the factory reset
+    // in the system screen: set apart from the green rows, not shouting.
+    lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_DANGER_ROW), 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_BAD_BG), LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_BAD_BG_PRESSED), 0);
+    for (uint32_t i = 0; i < 2; i++) {   // child 0 the icon, 1 the title
+      lv_obj_t *l = lv_obj_get_child(btn, i);
+      if (l) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_DANGER_TEXT), 0);
+    }
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Printer -> forget");
       printer_forget_pending = true;
@@ -169,6 +234,14 @@ static void rebuild() {
 
 void handlePrinterDeferredActions() {
   printCardLoop();
+  printerOffsetTick();
+  if (show_printer_offset_pending) {
+    show_printer_offset_pending = false;
+    buildPrinterOffsetScreen();
+    hideAllOverlays();
+    // Built hidden like every overlay; shown once the others are down.
+    showPrinterOffsetScreen();
+  }
   if (printer_cycle_model_pending) {
     printer_cycle_model_pending = false;
     LabelPrinterConfig c = labelPrinterLoadConfig();
@@ -191,24 +264,15 @@ void handlePrinterDeferredActions() {
   }
   if (printer_test_pending) {
     printer_test_pending = false;
-    const LabelPrinterConfig c = labelPrinterLoadConfig();
-    LabelPrintResult result = LP_NO_PRINTER;
-    if (labelPrinterConfigured(c)) {
-      if (!bleEnabled()) result = LP_BLE_OFF;
-      else {
-        printCardShow();
-        LabelRaster raster{};
-        if (!labelRenderTest(c, &raster)) result = LP_BAD_RASTER;
-        else result = labelPrinterPrint(c, raster, printCardTick);
-        labelRasterFree(&raster);
-      }
-    }
-    logSDf("Printer: test print result=%d", (int)result);
-    s_last_test = labelPrintResultString(result);
-    printCardResult(result);
+    printFixedLabel(labelRenderTest, "test print");
+  }
+  if (printer_calib_pending) {
+    printer_calib_pending = false;
+    printFixedLabel(labelRenderCalibration, "calibration page");
   }
   if (print_spool_label_pending) {
     print_spool_label_pending = false;
+    printerOffsetFlush();
     const LabelPrinterConfig c = labelPrinterLoadConfig();
     LabelPrintResult result = LP_NO_PRINTER;
     if (!(sm_found && sm_id > 0)) {

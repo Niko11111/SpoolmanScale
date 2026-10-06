@@ -1,4 +1,5 @@
 #include "bambuddy_api.h"
+#include "services/backend_http.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -51,6 +52,40 @@ static bool hasBaseUrl(const char* base_url) {
 // BamBuddy stores label_weight and core_weight as integers and rejects
 // nothing, but a fractional gram would be silently truncated. A load cell
 // has no meaningful accuracy below a gram, so round on the way out.
+// How many characters at the front of `part` the end of `name` already says,
+// in whole words and ignoring case: "PLA Tough+" and "Tough+ White" share 6,
+// "ASA Jet Black" and "ASA Jet Black" all 13. The longest overlap wins.
+static size_t nameOverlap(const char* name, const char* part) {
+  const size_t nlen = strlen(name);
+  size_t best = 0;
+  for (size_t j = 1; ; j++) {
+    if (part[j] == ' ' || part[j] == '\0') {
+      if (j <= nlen && strncasecmp(name + nlen - j, part, j) == 0 &&
+          (j == nlen || name[nlen - j - 1] == ' '))
+        best = j;
+    }
+    if (part[j] == '\0') break;
+  }
+  return best;
+}
+
+// True when `part` says everything `name` does and goes on from there, read
+// without spaces and up to a word end: an import split "ABS+ Grey" into "ABS"
+// and "+ Grey" and kept "ABS+ Grey" as the colour name. "PLAtinum" does not
+// restate "PLA".
+static bool partRestatesName(const char* name, const char* part) {
+  if (!name[0]) return false;
+  const char* n = name;
+  const char* q = part;
+  while (true) {
+    while (*n == ' ') n++;
+    while (*q == ' ' && *n) q++;
+    if (!*n) return *q == '\0' || *q == ' ';
+    if (!*q || tolower((unsigned char)*n) != tolower((unsigned char)*q)) return false;
+    n++; q++;
+  }
+}
+
 static int roundGrams(float g) {
   return (int)lroundf(g);
 }
@@ -69,7 +104,7 @@ static void addKey(HTTPClient& http, const char* api_key) {
 static int getJson(const char* url, const char* api_key, JsonDocument& doc,
                    uint32_t timeout_ms, DeserializationError* out_err,
                    JsonDocument* filter) {
-  HTTPClient http;
+  BackendHttp http;
   if (!http.begin(url)) return -1;
   http.setTimeout(timeout_ms);
   addKey(http, api_key);
@@ -108,7 +143,7 @@ static int getJson(const char* url, const char* api_key, JsonDocument& doc,
 // Any 2xx is normalised to 200 so call sites can compare against one value.
 static int sendJson(const char* method, const char* url, const char* api_key,
                     const String& body, uint32_t timeout_ms, String* out_body) {
-  HTTPClient http;
+  BackendHttp http;
   if (!http.begin(url)) return -1;
   http.setTimeout(timeout_ms);
   http.addHeader("Content-Type", "application/json");
@@ -286,6 +321,21 @@ static bool driedFromNote(const char* note, char* out, size_t out_size) {
   return true;
 }
 
+// "[drying:55 °C, 8 h]": the drying a Bambu tag recommends, kept in the note
+// for want of a field, like the drying date above.
+#define BB_DRYING_MARKER "[drying:"
+static bool dryingFromNote(const char* note, char* out, size_t out_size) {
+  if (!note || !out || out_size < 2) return false;
+  const char* p = strstr(note, BB_DRYING_MARKER);
+  if (!p) return false;
+  p += strlen(BB_DRYING_MARKER);
+  const char* end = strchr(p, ']');
+  if (!end || end == p || (size_t)(end - p) >= out_size) return false;
+  memcpy(out, p, end - p);
+  out[end - p] = '\0';
+  return true;
+}
+
 static void mapSpool(JsonObjectConst src, JsonObject dst) {
   const int   label = src["label_weight"] | 1000;
   const int   core  = src["core_weight"]  | 250;
@@ -327,6 +377,8 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
 
   char dried[12];
   if (driedFromNote(note, dried, sizeof(dried))) extra["last_dried"] = dried;
+  char drying[32];
+  if (dryingFromNote(note, drying, sizeof(drying))) extra["drying"] = drying;
 
   // Only the built-in inventory keeps this; behind the Spoolman proxy it is
   // always null. Carried along in the document so the display needs no second
@@ -358,7 +410,20 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   size_t nl = 0;
   for (int i = 0; i < 3; i++) {
     if (!parts[i][0]) continue;
-    int w = snprintf(name + nl, sizeof(name) - nl, "%s%s", nl ? " " : "", parts[i]);
+    // The three fields overlap more often than not: whatever wrote them, a
+    // Spoolman inventory behind BamBuddy or an import into its own, repeated
+    // words from the field before. Real shapes, each read twice before this:
+    //   "PLA" + "Matt Ozean"       + "Matt Ozean"
+    //   "ASA" + "Jet Black"        + "ASA Jet Black"
+    //   "PLA Tough+" + "Tough+ White" + "Tough+ White"
+    // Whatever the name so far already ends with is left off the front of the
+    // next part, in whole words, so each of these reads once. A part that
+    // restates the whole name, "ABS" + "+ Grey" + "ABS+ Grey", replaces it.
+    if (partRestatesName(name, parts[i])) { name[0] = '\0'; nl = 0; }
+    const char* part = parts[i] + nameOverlap(name, parts[i]);
+    while (*part == ' ') part++;
+    if (!*part) continue;
+    int w = snprintf(name + nl, sizeof(name) - nl, "%s%s", nl ? " " : "", part);
     if (w < 0) break;
     nl += (size_t)w;
     if (nl >= sizeof(name) - 1) break;   // snprintf already truncated
@@ -396,7 +461,7 @@ int bbGetHealthCode(const char* base_url, const char* api_key,
   char url[160];
   snprintf(url, sizeof(url), "%s/api/v1/updates/version", base_url);
   {
-    HTTPClient http;
+    BackendHttp http;
     if (!http.begin(url)) return -1;
     http.setTimeout(timeout_ms);
     int code = http.GET();
@@ -408,7 +473,7 @@ int bbGetHealthCode(const char* base_url, const char* api_key,
   // which the connection test can report as a credential problem rather than
   // an unreachable server.
   snprintf(url, sizeof(url), "%s/api/v1/system/info", base_url);
-  HTTPClient http;
+  BackendHttp http;
   if (!http.begin(url)) return -1;
   http.setTimeout(timeout_ms);
   addKey(http, api_key);
@@ -542,7 +607,7 @@ int bbCountActiveSpools(const char* base_url, const char* api_key,
 
 int bbFindSpoolByTag(const char* base_url, const char* api_key, const char* tag,
                      JsonDocument& doc, uint32_t timeout_ms,
-                     DeserializationError* out_err) {
+                     DeserializationError* out_err, const char* chip_uid) {
   doc.to<JsonArray>();
   if (!hasBaseUrl(base_url) || !tag || !tag[0]) return -1;
 
@@ -557,8 +622,20 @@ int bbFindSpoolByTag(const char* base_url, const char* api_key, const char* tag,
   // Bambu spool the AMS already knows resolve without any linking.
   const bool is_tray = (strlen(hex) == 32);
 
+  // A Bambu tag has a second identity, the chip of the side on the reader.
+  // tag_uid carried the tray uuid a second time; the chip goes there instead.
+  // BamBuddy still matches the tray uuid first and asks the chip only after a
+  // miss, so a spool it knows by the chip alone is found too, and with native
+  // tags (Spoolman 0.27, BamBuddy #3168) the chip is kept on the spool, where
+  // before it only ever learnt the tray uuid.
+  char chip[24] = "";
+  if (is_tray && chip_uid) {
+    tagUidNormalize(chip_uid, chip, sizeof(chip));
+    if (strlen(chip) >= 32) chip[0] = '\0';   // no chip known, only the tray uuid again
+  }
+
   int spool_id = 0;
-  int code = bbTagScanned(base_url, api_key, is_tray ? nullptr : hex,
+  int code = bbTagScanned(base_url, api_key, is_tray ? (chip[0] ? chip : nullptr) : hex,
                           is_tray ? hex : nullptr, &spool_id, timeout_ms);
   if (code != 200) return code;
 
@@ -706,6 +783,41 @@ int bbPatchSpoolFields(const char* base_url, const char* api_key, int spool_id,
   char url[192];
   snprintf(url, sizeof(url), "%s%s/spools/%d", base_url, bbInventoryBase(), spool_id);
 
+  String out;
+  serializeJson(body, out);
+  return sendJson("PATCH", url, api_key, out, timeout_ms, nullptr);
+}
+
+int bbPatchDryingNote(const char* base_url, const char* api_key, int spool_id,
+                      const char* value, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || !value || !value[0]) return -1;
+  char url[192];
+  snprintf(url, sizeof(url), "%s%s/spools/%d", base_url, bbInventoryBase(), spool_id);
+  // Read first: the note is the user's, and only the marker is the scale's.
+  JsonDocument cur;
+  const int code = getJson(url, api_key, cur, timeout_ms, nullptr, nullptr);
+  if (code != 200) {
+    logSDf("BamBuddy: note not read (HTTP %d), drying recommendation not written", code);
+    return (code < 0) ? code : -2;
+  }
+  String note(cur["note"] | "");
+  const String marker = String(BB_DRYING_MARKER) + value + "]";
+  const int at = note.indexOf(BB_DRYING_MARKER);
+  if (at >= 0) {
+    int end = note.indexOf(']', at);
+    if (end < 0) end = note.length() - 1;
+    note = note.substring(0, at) + marker + note.substring(end + 1);
+  } else {
+    if (note.length()) note += " ";
+    note += marker;
+  }
+  note.trim();
+  if (note.length() > 500) {
+    logSD("BamBuddy: note would exceed 500 characters, drying recommendation not written");
+    return -2;
+  }
+  JsonDocument body;
+  body["note"] = note;
   String out;
   serializeJson(body, out);
   return sendJson("PATCH", url, api_key, out, timeout_ms, nullptr);

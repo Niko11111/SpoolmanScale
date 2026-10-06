@@ -12,7 +12,7 @@ extern bool show_factor_pending;
 extern bool cal_reset_pending;
 // A row of the scale menu changed a setting and the screen has to show it.
 // Deferred rather than rebuilt on the spot: the rebuild deletes the screen the
-// button that set it sits on, which is what CLAUDE.md rules out.
+// button that set it sits on, which the house rules rule out.
 extern bool scale_sub_rebuild_pending;
 // A setting changed that is only read while the interface is built, so it
 // takes a restart to show. Its own flag rather than a call from the callback:
@@ -38,6 +38,11 @@ extern bool show_ams_assign_pending;
 extern bool show_ams_view_pending;
 // The same page opened from Settings > Scale, which is where it goes back to.
 extern bool show_ams_view_scale_pending;
+// The AMS button on a device without a load cell, pressed while a spool is
+// shown: assign that spool. FilaMan reports its stored weight to open the
+// window, BamBuddy opens the bay picker - both make requests, so the button
+// only raises this and appLoop() does the rest.
+extern bool ams_main_assign_pending;
 // The tag view, from the NFC chip in the header. A flag like the AMS view's,
 // so the card is built on the loop and never inside the chip's callback.
 extern bool show_tag_view_pending;
@@ -143,6 +148,8 @@ extern bool show_printer_pending;
 extern bool printer_cycle_model_pending;
 extern bool printer_cycle_media_pending;
 extern bool printer_test_pending;
+extern bool printer_calib_pending;   // the calibration page, browser or device
+extern bool show_printer_offset_pending;
 extern bool printer_forget_pending;
 // The label of the spool on the pad, from the More info header. Rendered
 // and printed from the loop: the print starts the BLE stack and blocks.

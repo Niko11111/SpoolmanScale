@@ -35,9 +35,39 @@ bool wifiManagerStartAp(const char* ssid, const char* password, IPAddress ip, IP
 void wifiManagerStopAp();
 
 // Starts the association and returns at once; the link comes up later.
-void wifiManagerBegin(const char* ssid, const char* password);
-// wifiManagerBegin() plus a wait of up to attempts * interval_ms.
+// Scans every channel and joins the strongest access point on the SSID.
+// With a bssid (and its channel) it joins that one access point instead:
+// the roaming check in services/wifi_roam.h, and nothing else.
+void wifiManagerBegin(const char* ssid, const char* password,
+                      int32_t channel = 0, const uint8_t* bssid = nullptr);
+// The reason code of the last lost or refused association, 0 before any.
+// 200 is the access point gone quiet (beacon timeout), 201 none found.
+uint8_t wifiManagerLastDisconnectReason();
+const char* wifiManagerReasonName(uint8_t reason);
+// "aa:bb:cc:dd:ee:ff", or "?" for a null pointer.
+void wifiManagerBssidStr(const uint8_t* bssid, char* out, size_t len);
+// The access point the station is on: "aa:bb:.. ch 6, -58 dBm".
+void wifiManagerLinkLine(char* out, size_t len);
+// An async scan for one SSID only, while connected or not. Polled with
+// wifiManagerScanPoll(), read with the accessors above plus these two.
+bool wifiManagerStartSsidScan(const char* ssid, uint32_t ms_per_chan);
+const uint8_t* wifiManagerScannedBSSID(int index);
+int wifiManagerScannedChannel(int index);
+// wifiManagerBegin() plus a wait of up to attempts * interval_ms. Succeeds
+// only on an address handed out after the begin(), see below.
 bool wifiManagerConnect(const char* ssid, const char* password, int attempts = 20, uint32_t interval_ms = 500);
+// begin() on a station that is connected switches it over without taking the
+// driver down (STAClass::connect() drops the old link first). Until the core
+// has seen that drop, the status still reads WL_CONNECTED for the old link,
+// and if the drop does not happen within its second, begin() gives up and the
+// old link stays. Either would pass for the new network. So a connect counts
+// once an address was handed out after it began: take the count before
+// wifiManagerBegin(), then ask with it.
+uint32_t wifiManagerGotIpCount();
+bool wifiManagerLinkUpSince(uint32_t got_ip_count);
+// Ends a link or an attempt and leaves driver and netif up, unlike
+// wifiManagerPrepareScan(). For while port 80 may still be serving.
+void wifiManagerStopConnect();
 bool wifiManagerIsConnected();
 IPAddress wifiManagerLocalIP();
 IPAddress wifiManagerGatewayIP();

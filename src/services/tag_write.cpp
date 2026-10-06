@@ -10,6 +10,7 @@
 #include "hardware/nfc.h"
 #include "hardware/sd_logger.h"
 #include "app/app_state.h"
+#include "bambu/bambu_catalog.h"
 #include "bambu/bambu_scan.h"
 #include "bambu/bambu_tag.h"
 #include "bambu/material_match.h"
@@ -17,6 +18,7 @@
 #include "services/backend_api.h"
 #include "services/filaman_api.h"
 #include "services/tag_field.h"
+#include "services/tag_link.h"
 #include "services/tag_uid.h"
 #include "services/backend.h"
 
@@ -347,6 +349,23 @@ void tagInfoJson(const TagInfo *ti, char *out, size_t out_len) {
   if (ti->dia_x100)    n = appendf(out, out_len, n, ",\"dia\":\"%u.%02u\"",
                                    (unsigned)(ti->dia_x100 / 100), (unsigned)(ti->dia_x100 % 100));
   if (ti->length_m)    n = appendf(out, out_len, n, ",\"len\":%u", (unsigned)ti->length_m);
+  if (ti->code[0]) {
+    jesc(ti->code, e, sizeof(e));
+    n = appendf(out, out_len, n, ",\"code\":\"%s\"", e);
+  }
+  if (ti->dry_c)       n = appendf(out, out_len, n, ",\"dry_c\":%u,\"dry_h\":%u",
+                                   (unsigned)ti->dry_c, (unsigned)ti->dry_h);
+  if (ti->has_color2)  n = appendf(out, out_len, n, ",\"color2\":\"#%02X%02X%02X\"",
+                                   ti->r2, ti->g2, ti->b2);
+  if (ti->color_name[0]) {
+    char en[100];
+    jesc(ti->color_name, en, sizeof(en));
+    n = appendf(out, out_len, n, ",\"cname\":\"%s\"", en);
+  }
+  if (ti->article[0]) {
+    jesc(ti->article, e, sizeof(e));
+    n = appendf(out, out_len, n, ",\"article\":\"%s\"", e);
+  }
   appendf(out, out_len, n, "}");
 }
 
@@ -1043,6 +1062,28 @@ static void infoFromMifare(TagInfo *ti) {
   if (g_tag.temp_min > 0) ti->et_lo = (uint16_t)g_tag.temp_min;
   if (g_tag.temp_max > 0) ti->et_hi = (uint16_t)g_tag.temp_max;
   if (g_tag.spool_weight > 0) ti->weight_g = (uint16_t)g_tag.spool_weight;
+  if (!bambu) return;
+  if (g_tag.diameter_mm > 0) ti->dia_x100 = (uint16_t)lroundf(g_tag.diameter_mm * 100.0f);
+  if (g_tag.length_m > 0)    ti->length_m = (uint16_t)g_tag.length_m;
+  if (g_tag.material_id[0]) {
+    snprintf(ti->code, sizeof(ti->code), g_tag.material_variant_id[0] ? "%s / %s" : "%s",
+             g_tag.material_id, g_tag.material_variant_id);
+  }
+  if (g_tag.dry_temp_c > 0) {
+    ti->dry_c = (uint16_t)g_tag.dry_temp_c;
+    ti->dry_h = (uint16_t)g_tag.dry_hours;
+  }
+  if (g_tag.color_count >= 2 && g_tag.color2.valid) {
+    ti->has_color2 = true;
+    ti->r2 = (uint8_t)(g_tag.color2.rgb >> 16);
+    ti->g2 = (uint8_t)(g_tag.color2.rgb >> 8);
+    ti->b2 = (uint8_t)g_tag.color2.rgb;
+  }
+  BambuCatalogHit hit;
+  if (bambuCatalogFind(g_tag.material_id, g_tag.material_variant_id, g_tag.color, &hit)) {
+    snprintf(ti->color_name, sizeof(ti->color_name), "%s", hit.color_name);
+    snprintf(ti->article, sizeof(ti->article), "%s", hit.article);
+  }
 }
 
 // Uses what the main NFC poll already found. Selecting the tag again here
@@ -1079,12 +1120,19 @@ static void refreshCache(bool force = false) {
     infoFromMifare(&cached_info);
     const char *chex = g_tag.color_hex[0] == '#' ? g_tag.color_hex + 1 : g_tag.color_hex;
     if (!strcmp(cached_info.fmt, "Bambu")) {
+      char c2[SPOOL_COLOR_HEX_MAX] = "";
+      if (g_tag.color_count >= 2) spoolColorFormat(g_tag.color2, c2, sizeof(c2));
       snprintf(cached_raw, sizeof(cached_raw),
         "{\"format\":\"Bambu Lab\",\"uid\":\"%s\",\"tray_uuid\":\"%s\",\"vendor\":\"%s\","
-        "\"material\":\"%s\",\"color\":\"#%s\",\"nozzle\":\"%d-%d\",\"spool_weight_g\":%.0f,"
-        "\"production_date\":\"%s\",\"blocks_read\":%d}",
+        "\"material\":\"%s\",\"type\":\"%s\",\"material_id\":\"%s\",\"variant_id\":\"%s\","
+        "\"color\":\"#%s\",\"colors\":%d,\"color2\":\"%s\",\"nozzle\":\"%d-%d\","
+        "\"spool_weight_g\":%.0f,\"diameter_mm\":%.2f,\"length_m\":%d,"
+        "\"dry_c\":%d,\"dry_h\":%d,\"production_date\":\"%s\",\"blocks_read\":%d}",
         g_tag.uid_str, g_tag.tray_uuid, g_tag.vendor, g_tag.material,
-        chex, g_tag.temp_min, g_tag.temp_max, (double)g_tag.spool_weight,
+        g_tag.filament_type, g_tag.material_id, g_tag.material_variant_id,
+        chex, (int)g_tag.color_count, c2, g_tag.temp_min, g_tag.temp_max,
+        (double)g_tag.spool_weight, (double)g_tag.diameter_mm, g_tag.length_m,
+        g_tag.dry_temp_c, g_tag.dry_hours,
         g_tag.production_date, countBambuDataBlocksRead(g_tag));
     } else if (!strcmp(cached_info.fmt, "Snapmaker")) {
       snprintf(cached_raw, sizeof(cached_raw),
@@ -1353,14 +1401,20 @@ void tagWriteTick() {
     int u = 0;
     for (int i = 0; i < uid_len && u < (int)sizeof(uid_str) - 3; i++)
       u += snprintf(uid_str + u, sizeof(uid_str) - u, i ? ":%02X" : "%02X", uid[i]);
-    char note[48];
-    int code2 = backendLinkSpoolTag(backendBaseUrl(), pending_id, uid_str,
-                                    note, sizeof(note));
+    char note[48] = "";
+    // Spoolman links the way the device's link flow does. The plain field
+    // write below has no key for Spoolman's own tag relation, the source every
+    // 0.27 server is moved to, so there it failed every time with -1.
+    const bool via_link_flow = backendMode() == BACKEND_SPOOLMAN;
+    int code2 = via_link_flow
+      ? tagLinkAfterWrite(pending_id, uid_str)
+      : backendLinkSpoolTag(backendBaseUrl(), pending_id, uid_str, note, sizeof(note));
     // One retry. The failure seen in the field was HTTP -1, a connection error,
     // and it left a written tag on a spool that names no tag - the exact state
     // this step exists to prevent. A second attempt costs 300 ms and only ever
-    // runs after something already went wrong.
-    if (code2 != 200) {
+    // runs after something already went wrong. Not after a 409: the tag
+    // belongs to another spool, and asking again cannot change that.
+    if (!backendWriteOk(code2) && code2 != 409) {
       logSDf("TagWrite: link failed (HTTP %d), retrying once", code2);
       // Paused with the panel kept alive: this runs from appLoop(), and a
       // plain delay() here froze the touch for its length on top of the
@@ -1370,15 +1424,16 @@ void tagWriteTick() {
         lv_timer_handler();
         delay(10);
       }
-      code2 = backendLinkSpoolTag(backendBaseUrl(), pending_id, uid_str,
-                                  note, sizeof(note));
+      code2 = via_link_flow
+        ? tagLinkAfterWrite(pending_id, uid_str)
+        : backendLinkSpoolTag(backendBaseUrl(), pending_id, uid_str, note, sizeof(note));
     }
     // appendf, not m + n: a long filament name makes snprintf report a length
     // it never wrote, and then m + n points past the buffer while
     // sizeof(m) - n underflows. Same reason the rest of this file moved off it.
     report.link_http = code2;
     snprintf(report.link_note, sizeof(report.link_note), "%s", note);
-    if (code2 == 200) {
+    if (backendWriteOk(code2)) {
       // The tag on the reader now points at this spool, so the screen should
       // say so rather than keep whatever it showed before. Handed over as an
       // id: the lookup repaints the main screen and belongs on the UI side.

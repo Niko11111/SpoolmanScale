@@ -101,6 +101,7 @@ char  sm_tag_values[TAG_FIELD_COUNT][CARD_UIDS_MAX] = {};
 char  sm_hw_uid_value[CARD_UIDS_MAX] = "";
 bool  sm_archived = false;
 int   sm_tag_conflict_spool = 0;
+int   sm_tag_conflict_filament = 0;
 
 const char* smSelectedTagValue() {
   return sm_tag_values[tagFieldEffective()];
@@ -134,7 +135,7 @@ char  sm_filament_name[32] = "";
 char  sm_material_global[32] = "";
 char  sm_vendor_g[32] = "";
 char  sm_color_global[16] = "";
-char  sm_location_name[48] = "";
+char  sm_location_name[LOCATION_NAME_MAX] = "";
 int   sm_location_id = 0;
 int   sm_status_id = 0;
 
@@ -221,6 +222,8 @@ lv_obj_t *btn_weight_main = nullptr;
 lv_obj_t *btn_location = nullptr;
 lv_obj_t *lbl_no_scale = nullptr;
 lv_obj_t *btn_ams_main = nullptr;
+lv_obj_t *lbl_ams_main = nullptr;
+lv_obj_t *bar_ams_main_fill = nullptr;
 lv_obj_t *btn_hdr_ams = nullptr;
 lv_obj_t *btn_hdr_nfc = nullptr;
 

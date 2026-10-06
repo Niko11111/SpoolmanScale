@@ -405,7 +405,7 @@ void checkAndCreateExtraFields(bool create_missing) {
     if (row < 0 || !lbl_field_state[row]) continue;
     lv_label_set_text(lbl_field_state[row], field_exists[i] ? LV_SYMBOL_OK : LV_SYMBOL_WARNING);
     lv_obj_set_style_text_color(lbl_field_state[row],
-      lv_color_hex(field_exists[i] ? UI_COL_ACCENT : UI_COL_WARN), 0);
+      lv_color_hex(field_exists[i] ? UI_COL_GOOD : UI_COL_WARN), 0);
   }
 
   // The native tags have no field; their row says whether the relation is
@@ -414,7 +414,7 @@ void checkAndCreateExtraFields(bool create_missing) {
     const bool rel = backendNativeTagsCached() == 1;
     lv_label_set_text(lbl_field_state[FIELD_ROW_TAG], rel ? LV_SYMBOL_OK : LV_SYMBOL_WARNING);
     lv_obj_set_style_text_color(lbl_field_state[FIELD_ROW_TAG],
-      lv_color_hex(rel ? UI_COL_ACCENT : UI_COL_WARN), 0);
+      lv_color_hex(rel ? UI_COL_GOOD : UI_COL_WARN), 0);
   }
 
   // Build missing list
@@ -440,7 +440,7 @@ void checkAndCreateExtraFields(bool create_missing) {
     char ok_buf[128];
     snprintf(ok_buf, sizeof(ok_buf), T(STR_EXTRA_FIELDS_ALL_OK), have_buf);
     lv_label_set_text(lbl_extra_fields_status, ok_buf);
-    setVerdict(LV_SYMBOL_OK, UI_COL_ACCENT, UI_COL_ACCENT_DIM, UI_COL_OK_BG_PRESSED,
+    setVerdict(LV_SYMBOL_OK, UI_COL_GOOD, UI_COL_GO_BG, UI_COL_OK_BG_PRESSED,
                T(STR_EF_HEAD_OK), false);
     Serial.println("Extra fields: all present");
     return;

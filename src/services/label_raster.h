@@ -9,9 +9,9 @@
 //  One bit per pixel, rows top to bottom, each row starting on
 //  a byte, most significant bit first, 1 is black. Width is the
 //  print row the head expects (576 dots on an M220), and the
-//  label's content sits right-aligned in it, because that is
-//  where the label stock runs on the M-series: content_width
-//  says how much of the row is label. The pixels live in PSRAM
+//  label's content sits where the stock runs in it, see
+//  labelPrinterContentX(): content_width says how much of the
+//  row is label. The pixels live in PSRAM
 //  and belong to whoever built the raster; labelRasterFree()
 //  gives them back.
 // ============================================================

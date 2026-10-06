@@ -15,3 +15,10 @@ enum BambuScanResult {
 
 int countBambuDataBlocksRead(const BambuTagData& tag);
 BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len);
+
+// One SD line for the attempts scanTag() made on the tag since the last
+// report: read, how complete, after how many attempts, and what it says.
+// From the NFC poll once the placement has settled - read in full or out of
+// retries - and when the tag leaves before that. Nothing when no attempt ran
+// since the last call. The per attempt lines are verbose only.
+void bambuScanReport();

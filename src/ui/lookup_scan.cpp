@@ -43,6 +43,7 @@
 bool spoolHasAnyTag(JsonObjectConst spool);
 
 #include "app/backend_switch.h"
+#include "services/drying_sync.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/backend_job.h"
@@ -57,6 +58,7 @@ bool spoolHasAnyTag(JsonObjectConst spool);
 #include "services/tag_write.h"
 #include "services/time_service.h"
 #include "services/uid_index.h"
+#include "services/tag_spool_match.h"
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/spool_flow.h"
@@ -143,7 +145,7 @@ void lookupFollowUp(LookupOrigin origin, const char* uid) {
       } else {
         if (origin == LOOKUP_FROM_NTAG) {
           lv_label_set_text(lbl_status, T(STR_TAG_FOUND));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_ACCENT), 0);
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
         }
         // Stays shorter than 32 characters, so everything that tells a
         // Bambu tag apart by that length keeps saying no.
@@ -443,7 +445,8 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
   }
 
   for (JsonObject spool : spools) {
-    if (spool["extra"].isNull()) continue;
+    // No `extra` is no reason to pass a spool by: it can still answer through
+    // Spoolman's own tag relation. Every read of it below is null-safe.
     JsonObject extra = spool["extra"];
 
     int rank = spoolTagRank(spool, tray_uuid);
@@ -527,7 +530,7 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
         int mc = backendPatchSpoolTag(cfg_spoolman_base, sm_id, want, 4000);
         logSDf("%s: rewrote tag of spool %d to plain hex, HTTP %d",
                backendIsFilaMan() ? "FilaMan" : "Spoolman", sm_id, mc);
-        s_migrate_failed_id = (mc == 200) ? 0 : sm_id;
+        s_migrate_failed_id = backendWriteOk(mc) ? 0 : sm_id;
       }
     }
 
@@ -560,7 +563,7 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
       // Free a moment ago, as the link list sees it, and bound from here on.
       // Comfort only: left out, the spool would be offered once more and the
       // read on the tap would turn it down.
-      if (mc == 200) spoolCacheSetBound(sm_id, true);
+      if (backendWriteOk(mc)) spoolCacheSetBound(sm_id, true);
     }
 
     if (backendIsFilaMan() && sm_id > 0) {
@@ -642,6 +645,14 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
     String sm_color = spool["filament"]["color_hex"] | String("");
     sm_color.trim();
 
+    // A Bambu tag against the spool it is linked to. The screen keeps its
+    // fields, material, maker and temperature from the tag and the rest from
+    // the server; the status line says when the two do not belong together.
+    if (is_bambu_tag) tagSpoolLookupNote(spool, sm_id);
+    // After the verdict above: a tag that does not describe this spool must
+    // not hand it its drying advice.
+    dryingSyncNote(spool);
+
     bool is_ntag = !is_bambu_tag;
     logSDf("Spool %d identified: %s %s, %.0fg of %.0fg", sm_id,
            sm_vendor_name.length() ? sm_vendor_name.c_str() : "?",
@@ -658,6 +669,7 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
       sm_material_global[sizeof(sm_material_global)-1] = '\0';
     }
     applyServerColor(sm_color, is_bambu_tag);
+    if (tagSpoolLookupShowsSpool()) applyTagSpoolView();
 
     // Update display - Fix 5: color based on remaining %
     char weight_str[32];
@@ -667,9 +679,9 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
 
     // Choose color: 0-10% red, 11-30% orange, 31-100% green
     uint32_t pct_color;
-    if (pct <= 10.0f)       pct_color = 0xe04040;
-    else if (pct <= 30.0f)  pct_color = 0xf0b838;
-    else                    pct_color = 0x28d49a;
+    if (pct <= 10.0f)       pct_color = UI_COL_BAD;
+    else if (pct <= 30.0f)  pct_color = UI_COL_WARN;
+    else                    pct_color = UI_COL_GOOD;
 
     lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(pct_color), 0);
 
@@ -691,7 +703,7 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
     char sm_id_str[16];
     snprintf(sm_id_str, sizeof(sm_id_str), "%d", sm_id);
     lv_label_set_text(lbl_spoolman_id, sm_id_str);
-    lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(UI_COL_ACCENT), 0);
 
     applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, sm_last_dried);
 
@@ -890,7 +902,7 @@ void lookupResolveArchive(const LookupCtx& c, JsonDocument* doc2p,
     logSD("uid index: the scan did not run to its end, nothing to compare");
   }
   { char nb[40]; backendText(T(STR_NOT_IN_SPOOLMAN), nb, sizeof(nb)); lv_label_set_text(lbl_spoolman_weight, nb); }
-  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_GOOD), 0);
   sm_found = false;
   s_verdict_unknown = true;
   updateLinkButton();

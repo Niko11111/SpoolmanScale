@@ -23,6 +23,7 @@
 #include "services/user_options.h"
 #include "info_popup.h"
 #include "ui_common.h"
+#include "theme.h"
 
 
 
@@ -116,7 +117,7 @@ void buildScaleSubScreen() {
     lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
     if (arr_lbl) {
       lv_label_set_text(arr_lbl, buf_s);
-      lv_obj_set_style_text_color(arr_lbl, g_auto_loc_popup ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_color(arr_lbl, g_auto_loc_popup ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_CAPTION), 0);
       lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
     }
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
@@ -186,8 +187,8 @@ void buildScaleSubScreen() {
     lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
     if (arr_lbl) {
       lv_label_set_text(arr_lbl, buf_s);
-      lv_obj_set_style_text_color(arr_lbl, g_scale_fitted ? lv_color_hex(0x28d49a)
-                                                          : lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_color(arr_lbl, g_scale_fitted ? lv_color_hex(UI_COL_ACCENT)
+                                                          : lv_color_hex(UI_COL_CAPTION), 0);
       lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
     }
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
@@ -247,7 +248,7 @@ static void addTagFormatRow(lv_obj_t *list, uint8_t idx) {
   lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
   if (arr_lbl) {
     lv_label_set_text(arr_lbl, active ? LV_SYMBOL_OK : "");
-    lv_obj_set_style_text_color(arr_lbl, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(arr_lbl, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_16, 0);
   }
 
@@ -280,7 +281,7 @@ static void addTagModeRow(lv_obj_t *list, uint8_t value) {
   lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
   if (arr_lbl) {
     lv_label_set_text(arr_lbl, active ? LV_SYMBOL_OK : "");
-    lv_obj_set_style_text_color(arr_lbl, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(arr_lbl, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_16, 0);
   }
 
@@ -332,8 +333,8 @@ void buildTagWriteScreen() {
     if (arr_lbl) {
       char on_off[8]; copyT(on_off, sizeof(on_off), g_tagmismatch_ask ? STR_ON : STR_OFF);
       lv_label_set_text(arr_lbl, on_off);
-      lv_obj_set_style_text_color(arr_lbl, g_tagmismatch_ask ? lv_color_hex(0x28d49a)
-                                                             : lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_text_color(arr_lbl, g_tagmismatch_ask ? lv_color_hex(UI_COL_ACCENT)
+                                                             : lv_color_hex(UI_COL_CAPTION), 0);
       lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
     }
     lv_obj_add_event_cb(btn, [](lv_event_t *e){

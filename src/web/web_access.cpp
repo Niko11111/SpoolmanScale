@@ -12,6 +12,7 @@
 #include "services/device_name.h"
 #include "services/prefs_store.h"
 #include "services/wifi_manager.h"
+#include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
 // parameter, so lang.h has to come after anything that pulls it in.
 #include "lang.h"
@@ -220,7 +221,20 @@ static bool fromBackendHost(WebServer &srv) {
   return cached_ok && srv.client().remoteIP() == cached_ip;
 }
 
+// When a browser last asked for anything, answered or refused. FilaMan's
+// device protocol is a server, not a person, and does not count.
+static uint32_t s_last_browser_ms = 0;
+static bool     s_browser_seen    = false;
+
+bool webBrowserSeenWithin(uint32_t ms) {
+  return s_browser_seen && (millis() - s_last_browser_ms) < ms;
+}
+
 static WebVerdict verdict(WebServer &srv, WebGate g) {
+  if (g != GATE_ALWAYS) {
+    s_last_browser_ms = millis();
+    s_browser_seen = true;
+  }
   // Writing firmware holds the loop, and the progress view is served from
   // inside that loop so the bar can move. Nothing else is: a page built while
   // an image is being written would come out of the same heap, and a
@@ -310,28 +324,28 @@ bool webRequire(WebServer &srv, WebGate g, const char *what) {
 }
 
 // The one small page this file serves by itself, for the gate that is shut
-// and for the password prompt. Self-contained on purpose: it is served when
-// the rest of the interface is not, so it links no stylesheet.
+// and for the password prompt. It stands outside the shell, no tab strip and
+// no footer, but takes the palette the scale runs: /app.css and /app.js are
+// behind no gate and no password, so they load where this page is served.
+// The rules after them are this page's own and win over the shared ones.
 static void sendTinyPage(WebServer &srv, int code, const char *title, const String &body) {
   String h;
-  h.reserve(2000);
-  h += F("<!DOCTYPE html><html><head><meta charset='utf-8'>"
+  h.reserve(2200);
+  h += webShellDocOpen();
+  h += F("<head><meta charset='utf-8'>"
          "<meta name='viewport' content='width=device-width,initial-scale=1'>"
          "<link rel='icon' type='image/png' href='/favicon.png'>"
-         "<title>SpoolmanScale</title><style>"
-         "*{box-sizing:border-box;margin:0;padding:0}"
-         "body{background:#06080f;color:#e8f0ff;"
-         "font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;"
-         "min-height:100vh;display:flex;flex-direction:column;align-items:center;"
-         "justify-content:center;padding:32px 16px;text-align:center}"
-         ".card{background:#0c1828;border:1px solid #14243c;border-radius:14px;"
-         "padding:28px;max-width:460px}"
-         "h1{color:#f0b838;font-size:19px;margin-bottom:12px}"
-         "p{color:#c8d8f0;font-size:14px;line-height:1.6;margin-bottom:10px}"
-         ".path{font-family:ui-monospace,Menlo,Consolas,monospace;color:#28d49a;"
-         "background:#0a1220;border:1px solid #14243c;border-radius:8px;"
+         "<title>SpoolmanScale</title>");
+  h += webShellAssets();
+  h += F("<style>"
+         "body{justify-content:center;padding:32px 16px;text-align:center}"
+         ".card{padding:28px;max-width:460px}"
+         "h1{color:var(--warn);font-size:19px;margin-bottom:12px}"
+         "p{color:var(--ink-2);font-size:14px;line-height:1.6;margin-bottom:10px}"
+         ".path{font-family:var(--mono);color:var(--accent);"
+         "background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px;"
          "padding:8px 12px;display:inline-block;margin:6px 0;font-size:13px}"
-         "a{color:#28d49a;text-decoration:none;font-size:14px}"
+         "a{color:var(--accent);text-decoration:none;font-size:14px}"
          "a:hover{text-decoration:underline}"
          "</style></head><body><div class='card'><h1>");
   h += title;

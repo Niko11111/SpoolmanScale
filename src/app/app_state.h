@@ -159,6 +159,9 @@ extern bool sm_archived;
 // Written by patchSpoolTag() on Spoolman's 409, read by the link flow so it
 // can name that spool instead of reporting a bare failure.
 extern int sm_tag_conflict_spool;
+// Same for a tag that Spoolman (0.27 and later) has on a filament instead of a
+// spool. It cannot be moved from here, only named.
+extern int sm_tag_conflict_filament;
 
 // Shorthand for the field the user selected, which is the one most callers
 // mean. Never null.
@@ -180,7 +183,11 @@ extern char sm_filament_name[32];
 extern char sm_material_global[32];
 extern char sm_vendor_g[32];
 extern char sm_color_global[16];
-extern char sm_location_name[48];
+// Room for a whole location name: Spoolman allows 64 characters, and with
+// umlauts that is more than 64 bytes. A name cut here and written back would
+// become a new location on the server.
+#define LOCATION_NAME_MAX 130
+extern char sm_location_name[LOCATION_NAME_MAX];
 extern int sm_location_id;
 // FilaMan spool status, 1..6 (see FILAMAN_STATUS_* in filaman_api.h).
 // 0 means unknown, which is also what Spoolman and BamBuddy always leave here.
@@ -291,6 +298,10 @@ extern lv_obj_t *btn_location;
 // and in the middle when it is alone, which is why it needs a pointer at all.
 extern lv_obj_t *lbl_no_scale;
 extern lv_obj_t *btn_ams_main;
+// Its caption, which says what a tap does, and the fill behind it that drains
+// while a FilaMan assignment window runs. Rewritten by updateAmsMainButton().
+extern lv_obj_t *lbl_ams_main;
+extern lv_obj_t *bar_ams_main_fill;
 
 // The AMS chip in the header, and the only one of the chips that is a button
 // rather than a state. It exists in both modes: a device with a load cell has

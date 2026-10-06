@@ -9,6 +9,7 @@
 
 // Last, and after everything that pulls in ArduinoJson.
 #include "lang.h"
+#include "theme.h"
 
 // The literals are the ones this came over with. Deliberately not translated
 // into theme.h tokens in the same step: the whole point of the move was that
@@ -59,8 +60,8 @@ lv_obj_t* buildStatusChip(lv_obj_t* parent, int x, int y, int status_id,
   if (!chip) return nullptr;
   lv_obj_set_size(chip, STATUS_CHIP_W, STATUS_CHIP_H);
   lv_obj_set_pos(chip, x, y);
-  lv_obj_set_style_bg_color(chip, lv_color_hex(0x0d2040), 0);
-  lv_obj_set_style_bg_color(chip, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(chip, lv_color_hex(UI_COL_CHIP), 0);
+  lv_obj_set_style_bg_color(chip, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_border_color(chip, lv_color_hex(col), 0);
   lv_obj_set_style_border_width(chip, 1, 0);
   lv_obj_set_style_radius(chip, 8, 0);
@@ -74,7 +75,7 @@ lv_obj_t* buildStatusChip(lv_obj_t* parent, int x, int y, int status_id,
   lv_obj_t* cap = lv_label_create(chip);
   if (cap) {
     lv_label_set_text(cap, T(STR_LBL_STATUS));
-    lv_obj_set_style_text_color(cap, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(cap, lv_color_hex(UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(cap, &lv_font_montserrat_ext_12, 0);
     lv_obj_align(cap, LV_ALIGN_CENTER, 0, -10);
   }
@@ -105,7 +106,7 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
   if (!s_scr) return;
   lv_obj_set_size(s_scr, 480, 320);
   lv_obj_set_pos(s_scr, 0, 0);
-  lv_obj_set_style_bg_color(s_scr, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(s_scr, lv_color_hex(UI_COL_SCRIM), 0);
   lv_obj_set_style_bg_opa(s_scr, LV_OPA_70, 0);
   lv_obj_set_style_border_width(s_scr, 0, 0);
   lv_obj_set_style_radius(s_scr, 0, 0);
@@ -117,10 +118,13 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
   if (!box) { releaseScreen(&s_scr); return; }
   lv_obj_set_size(box, SP_BOX_W, SP_BOX_H);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(0x0b1525), 0);
-  lv_obj_set_style_border_color(box, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, 10, 0);
+  // The header strip inside is square; clipped here it follows the
+  // rounded corners instead of poking out past them.
+  lv_obj_set_style_clip_corner(box, true, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -129,7 +133,7 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
   if (hdr) {
     lv_obj_set_size(hdr, SP_BOX_W, SP_HDR_H);
     lv_obj_set_pos(hdr, 0, 0);
-    lv_obj_set_style_bg_color(hdr, lv_color_hex(0x0a1020), 0);
+    lv_obj_set_style_bg_color(hdr, lv_color_hex(UI_COL_GROUND), 0);
     lv_obj_set_style_border_width(hdr, 0, 0);
     lv_obj_set_style_radius(hdr, 0, 0);
     lv_obj_set_style_pad_all(hdr, 0, 0);
@@ -140,7 +144,7 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
       char buf[48];
       copyT(buf, sizeof(buf), STR_STATUS_TITLE);
       lv_label_set_text(title, buf);
-      lv_obj_set_style_text_color(title, lv_color_hex(0x28d49a), 0);
+      lv_obj_set_style_text_color(title, lv_color_hex(UI_COL_ACCENT), 0);
       lv_obj_set_style_text_font(title, &lv_font_montserrat_ext_18, 0);
       lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
     }
@@ -149,17 +153,17 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
     if (btn_x) {
       lv_obj_set_size(btn_x, 40, 40);
       lv_obj_align(btn_x, LV_ALIGN_RIGHT_MID, -4, 0);
-      lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x3a1010), 0);
-      lv_obj_set_style_bg_color(btn_x, lv_color_hex(0x602020), LV_STATE_PRESSED);
+      lv_obj_set_style_bg_color(btn_x, lv_color_hex(UI_COL_BAD_BG), 0);
+      lv_obj_set_style_bg_color(btn_x, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
       lv_obj_set_style_border_width(btn_x, 1, 0);
-      lv_obj_set_style_border_color(btn_x, lv_color_hex(0x601010), 0);
+      lv_obj_set_style_border_color(btn_x, lv_color_hex(UI_COL_CLOSE_LINE), 0);
       lv_obj_set_style_radius(btn_x, 8, 0);
       lv_obj_set_style_shadow_width(btn_x, 0, 0);
       lv_obj_add_event_cb(btn_x, cancelCb, LV_EVENT_CLICKED, nullptr);
       lv_obj_t* lbl_x = lv_label_create(btn_x);
       if (lbl_x) {
         lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-        lv_obj_set_style_text_color(lbl_x, lv_color_hex(0xff8080), 0);
+        lv_obj_set_style_text_color(lbl_x, lv_color_hex(UI_COL_BAD_TEXT), 0);
         lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
         lv_obj_center(lbl_x);
       }
@@ -188,22 +192,22 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
     uint32_t txt_col;
     if (is_current) {
       // Same "this is the one you have" language as the location rows.
-      lv_obj_set_style_bg_color(cell, lv_color_hex(0x0d3020), 0);
-      lv_obj_set_style_bg_color(cell, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-      lv_obj_set_style_border_color(cell, lv_color_hex(0x28d49a), 0);
-      txt_col = 0x28d49a;
+      lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_GO_BG), 0);
+      lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
+      lv_obj_set_style_border_color(cell, lv_color_hex(UI_COL_ACCENT), 0);
+      txt_col = UI_COL_ACCENT;
     } else if (is_archive) {
       // The archive vocabulary from the weight popup, so the one cell that
       // asks a question before it acts announces itself.
-      lv_obj_set_style_bg_color(cell, lv_color_hex(0x3a1a00), 0);
-      lv_obj_set_style_bg_color(cell, lv_color_hex(0x6a3000), LV_STATE_PRESSED);
-      lv_obj_set_style_border_color(cell, lv_color_hex(0x6a3000), 0);
-      txt_col = 0xffb060;
+      lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_ARCHIVE_BG), 0);
+      lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_ARCHIVE_BG_PRESSED), LV_STATE_PRESSED);
+      lv_obj_set_style_border_color(cell, lv_color_hex(UI_COL_ARCHIVE_BG_PRESSED), 0);
+      txt_col = UI_COL_ARCHIVE_TEXT;
     } else {
-      lv_obj_set_style_bg_color(cell, lv_color_hex(0x0d2040), 0);
-      lv_obj_set_style_bg_color(cell, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-      lv_obj_set_style_border_color(cell, lv_color_hex(0x0f1e30), 0);
-      txt_col = 0xf0f0f0;
+      lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_CHIP), 0);
+      lv_obj_set_style_bg_color(cell, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
+      lv_obj_set_style_border_color(cell, lv_color_hex(UI_COL_DIVIDER), 0);
+      txt_col = UI_COL_INK_BRIGHT;
     }
 
     lv_obj_set_user_data(cell, (void*)(intptr_t)id);

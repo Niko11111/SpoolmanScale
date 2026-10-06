@@ -7,6 +7,7 @@
 #include "lang.h"
 #include "services/ble_service.h"
 #include "ui/theme.h"
+#include "ui_common.h"
 
 // Busy, the card is as short as the wait card, which looked empty at the
 // house card's height (Nikolai, 23.09.2026). The answer takes the house
@@ -152,10 +153,15 @@ void printCardResult(LabelPrintResult result) {
   const bool ok = (result == LP_OK);
   const bool unconfirmed = (result == LP_SENT_UNCONFIRMED);
   const char* symbol = ok ? LV_SYMBOL_OK : LV_SYMBOL_WARNING;
-  const uint32_t tone = ok ? UI_COL_ACCENT : (unconfirmed ? UI_COL_WARN : UI_COL_BAD);
+  const uint32_t tone = ok ? UI_COL_GOOD : (unconfirmed ? UI_COL_WARN : UI_COL_BAD);
   const int title = ok ? STR_PRN_DONE_TITLE
                   : unconfirmed ? STR_PRN_UNCONF_TITLE : STR_PRN_FAIL_TITLE;
-  const int text = ok ? STR_PRN_DONE_MSG : labelPrintResultString(result);
+  // A label that went onto thermal paper gets the one thing to know about
+  // it: the dryer blackens it (Nikolai, 30.09.2026). "The printer confirmed"
+  // said nothing the title had not.
+  const bool thermal = labelPrinterProfile(labelPrinterLoadConfig().model).direct_thermal;
+  const int text = !ok ? labelPrintResultString(result)
+                 : thermal ? STR_PRN_HEAT_SHORT : STR_PRN_DONE_MSG;
 
   lv_obj_set_size(s_box, UI_POPUP_W, UI_CARD_H);
   lv_obj_align(s_box, LV_ALIGN_CENTER, 0, 0);
@@ -182,6 +188,7 @@ void printCardResult(LabelPrintResult result) {
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
+  if (!ok) uiSecondaryFill(btn);
   lv_obj_set_style_pad_all(btn, 0, 0);
   lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(btn, [](lv_event_t*) { s_close_req = true; }, LV_EVENT_CLICKED, NULL);

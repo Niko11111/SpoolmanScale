@@ -11,6 +11,7 @@
 #include "lang.h"
 #include "services/prefs_store.h"
 #include "ui_common.h"
+#include "theme.h"
 
 
 
@@ -60,7 +61,7 @@ void buildDisplayScreen() {
 
   lv_obj_t *lbl_bright = lv_label_create(body);
   lv_label_set_text(lbl_bright, T(STR_BRIGHT_LABEL));
-  lv_obj_set_style_text_color(lbl_bright, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_bright, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(lbl_bright, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_bright, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_bright, LV_ALIGN_TOP_MID, 0, Y_BRIGHT_LBL);
@@ -72,9 +73,9 @@ void buildDisplayScreen() {
   lv_obj_set_pos(slider, 20, Y_BRIGHT_SLIDER);
   lv_slider_set_range(slider, BRIGHT_MIN, BRIGHT_MAX);
   lv_slider_set_value(slider, bright_normal, LV_ANIM_OFF);
-  lv_obj_set_style_bg_color(slider, lv_color_hex(0x1a3060), LV_PART_MAIN);
-  lv_obj_set_style_bg_color(slider, lv_color_hex(0x28d49a), LV_PART_INDICATOR);
-  lv_obj_set_style_bg_color(slider, lv_color_hex(0x28d49a), LV_PART_KNOB);
+  lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COL_LINE), LV_PART_MAIN);
+  lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COL_ACCENT), LV_PART_INDICATOR);
+  lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COL_ACCENT), LV_PART_KNOB);
 
   lv_obj_add_event_cb(slider, [](lv_event_t *e) {
     lv_obj_t *s = lv_event_get_target(e);
@@ -96,7 +97,7 @@ void buildDisplayScreen() {
 
   lv_obj_t *lbl_dim = lv_label_create(body);
   lv_label_set_text(lbl_dim, T(STR_DIM_LABEL));
-  lv_obj_set_style_text_color(lbl_dim, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_dim, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(lbl_dim, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_dim, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_dim, LV_ALIGN_TOP_MID, 0, Y_DIM_LBL);
@@ -112,7 +113,7 @@ void buildDisplayScreen() {
     const bool allowed = dim_vals[i] == 0 ||
                          ((cur_off == 0 || dim_vals[i] < cur_off) &&
                           (cur_sleep == 0 || dim_vals[i] < cur_sleep));
-    lv_obj_set_style_bg_color(b, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
+    lv_obj_set_style_bg_color(b, active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_LINE), 0);
     if (!allowed) {
       lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
       lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
@@ -120,6 +121,7 @@ void buildDisplayScreen() {
     lv_obj_set_style_radius(b, 8, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, 0, 0);
+    if (!active) uiSecondaryFill(b);
     char buf[16];
     if (dim_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
@@ -128,9 +130,9 @@ void buildDisplayScreen() {
     }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);
-    lv_obj_set_style_text_color(l, active ? lv_color_hex(0x0a1020)
-                                 : (allowed ? lv_color_hex(0xc8d8f0)
-                                            : lv_color_hex(0x4a6fa0)), 0);
+    lv_obj_set_style_text_color(l, active ? lv_color_hex(UI_COL_ON_ACCENT)
+                                 : (allowed ? lv_color_hex(UI_COL_INK_2)
+                                            : lv_color_hex(UI_COL_UNAVAILABLE)), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
@@ -144,7 +146,7 @@ void buildDisplayScreen() {
 
   lv_obj_t *lbl_off = lv_label_create(body);
   lv_label_set_text(lbl_off, T(STR_SCREENOFF_LABEL));
-  lv_obj_set_style_text_color(lbl_off, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_off, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(lbl_off, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_off, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_off, LV_ALIGN_TOP_MID, 0, Y_OFF_LBL);
@@ -160,7 +162,7 @@ void buildDisplayScreen() {
     const bool allowed = off_vals[i] == 0 ||
                          ((cur_dim == 0 || off_vals[i] > cur_dim) &&
                           (cur_sleep == 0 || off_vals[i] < cur_sleep));
-    lv_obj_set_style_bg_color(b, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
+    lv_obj_set_style_bg_color(b, active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_LINE), 0);
     if (!allowed) {
       lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
       lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
@@ -168,6 +170,7 @@ void buildDisplayScreen() {
     lv_obj_set_style_radius(b, 8, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, 0, 0);
+    if (!active) uiSecondaryFill(b);
     char buf[16];
     if (off_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
@@ -176,9 +179,9 @@ void buildDisplayScreen() {
     }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);
-    lv_obj_set_style_text_color(l, active ? lv_color_hex(0x0a1020)
-                                 : (allowed ? lv_color_hex(0xc8d8f0)
-                                            : lv_color_hex(0x4a6fa0)), 0);
+    lv_obj_set_style_text_color(l, active ? lv_color_hex(UI_COL_ON_ACCENT)
+                                 : (allowed ? lv_color_hex(UI_COL_INK_2)
+                                            : lv_color_hex(UI_COL_UNAVAILABLE)), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
@@ -192,7 +195,7 @@ void buildDisplayScreen() {
 
   lv_obj_t *lbl_sleep = lv_label_create(body);
   lv_label_set_text(lbl_sleep, T(STR_SLEEP_LABEL));
-  lv_obj_set_style_text_color(lbl_sleep, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_sleep, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(lbl_sleep, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_sleep, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_sleep, LV_ALIGN_TOP_MID, 0, Y_SLEEP_LBL);
@@ -211,7 +214,7 @@ void buildDisplayScreen() {
     const bool allowed = sleep_vals[i] == 0 ||
                          ((cur_dim == 0 || sleep_vals[i] > cur_dim) &&
                           (cur_off == 0 || sleep_vals[i] > cur_off));
-    lv_obj_set_style_bg_color(b, active ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3060), 0);
+    lv_obj_set_style_bg_color(b, active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_LINE), 0);
     if (!allowed) {
       lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
       lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
@@ -219,6 +222,7 @@ void buildDisplayScreen() {
     lv_obj_set_style_radius(b, 8, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, 0, 0);
+    if (!active) uiSecondaryFill(b);
     char buf[16];
     if (sleep_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
@@ -227,9 +231,9 @@ void buildDisplayScreen() {
     }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);
-    lv_obj_set_style_text_color(l, active ? lv_color_hex(0x0a1020)
-                                 : (allowed ? lv_color_hex(0xc8d8f0)
-                                            : lv_color_hex(0x4a6fa0)), 0);
+    lv_obj_set_style_text_color(l, active ? lv_color_hex(UI_COL_ON_ACCENT)
+                                 : (allowed ? lv_color_hex(UI_COL_INK_2)
+                                            : lv_color_hex(UI_COL_UNAVAILABLE)), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {

@@ -8,6 +8,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/drying_config.h"
+#include "theme.h"
 
 static int dryingAlertLevel(const char* last_dried_local, const char* material);
 
@@ -131,10 +132,10 @@ int driedAlertLevel(const char* de_date, const char* material) {
 
 uint32_t driedAlertColor(const char* de_date, const char* material) {
   switch (dryingAlertLevel(de_date, material)) {
-    case 2:  return 0xe04040;   // rot
-    case 1:  return 0xf0b838;   // gelb
-    case 0:  return 0x28d49a;   // gruen
-    default: return 0x5090e0;   // kein Modus / kein Datum -> neutral blau
+    case 2:  return UI_COL_BAD;   // rot
+    case 1:  return UI_COL_WARN;   // gelb
+    case 0:  return UI_COL_GOOD;   // gruen
+    default: return UI_COL_STATUS_BLUE;   // kein Modus / kein Datum -> neutral blau
   }
 }
 

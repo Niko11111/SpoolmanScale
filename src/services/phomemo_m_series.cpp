@@ -18,7 +18,7 @@ static const uint8_t M220_DENSITY[] = { 0x1b, 0x37, 0x07, 0x64, 0x64 };
 static const uint8_t M220_FEED[]    = { 0x1b, 0x4a, 0x20 };
 
 // M110: speed, density and media type in its own ESC N and US commands, and
-// a footer pair that ends the print. Untested on hardware, see the header.
+// a footer pair that ends the print. The M100 takes the same, see the header.
 static const uint8_t M110_SPEED[]   = { 0x1b, 0x4e, 0x0d, 0x05 };
 static const uint8_t M110_DENSITY[] = { 0x1b, 0x4e, 0x04, 0x0a };
 static const uint8_t M110_MEDIA[]   = { 0x1f, 0x11, 0x0a };
@@ -39,7 +39,7 @@ BleWriteResult phomemoMSeriesPrint(PhomemoModel model, const char* address,
   uint8_t header[8];
   rasterHeader(header, image.width, image.height);
   logSDf("Phomemo: %s %ux%u (%u bytes) to %s",
-         model == PHOMEMO_M220 ? "M220" : "M110",
+         model == PHOMEMO_M220 ? "M220" : "M110/M100",
          (unsigned)image.width, (unsigned)image.height, (unsigned)image.length, address);
 
   if (model == PHOMEMO_M220) {

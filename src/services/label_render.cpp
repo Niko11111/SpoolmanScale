@@ -55,6 +55,20 @@ LV_FONT_DECLARE(lv_font_montserrat_ext_14);
 #define LR_QR_GOOD_PX     96    // under this, smaller fact lines buy code size
 #define LR_BLACK_BELOW   128    // brightness under which a canvas pixel prints
 #define LR_MAX_FACTS       4
+// The calibration page's ruler, in dots from the top of the label.
+#define LC_NUM_Y          12    // the numbers' row, and the top of their ticks
+#define LC_NUM_EVERY       4    // a number every 4 mm
+#define LC_NUM_GAP         2    // from a tick to its number
+#define LC_NUM_W          28    // "-12" in 16 px: the rest of the 4 mm to the next
+#define LC_NUM_EXTRA       3    // numbers past where the edge can be, each side
+#define LC_BASE_Y         44    // the ruler's line; the ticks stand on it
+#define LC_BASE_PX         2
+#define LC_TICK_PX         2
+#define LC_TICK_MM         6    // every millimetre
+#define LC_TICK_2MM       12    // every second one
+#define LC_BOX_GAP        12    // from the ruler to the frame
+#define LC_FRAME_PX        3
+#define LC_TEXT_GAP       14    // from the frame's top to the first line
 
 void labelRasterFree(LabelRaster* image) {
   if (!image) return;
@@ -63,15 +77,13 @@ void labelRasterFree(LabelRaster* image) {
 }
 
 // The canvas into the raster: black is anything darker than mid grey, and the
-// content sits centred in the print row, where the stock runs: a ruler across
-// the M220's 576 dots put a 40 mm label under dots 128 to 448 (24.09.2026).
+// canvas starts at dot x0 of the print row, where the stock runs.
 static bool packCanvas(lv_obj_t* canvas, uint16_t content_w, uint16_t h,
-                       uint16_t row_w, LabelRaster* out) {
+                       uint16_t row_w, uint16_t x0, LabelRaster* out) {
   const uint16_t row_bytes = (row_w + 7) / 8;
   const size_t length = size_t(row_bytes) * h;
   uint8_t* px = (uint8_t*)heap_caps_calloc(length, 1, MALLOC_CAP_SPIRAM);
   if (!px) { logSD("Label: no PSRAM for the raster"); return false; }
-  const uint16_t x0 = (row_w - content_w) / 2;
   for (uint16_t y = 0; y < h; y++) {
     uint8_t* row = px + size_t(y) * row_bytes;
     for (uint16_t x = 0; x < content_w; x++) {
@@ -342,12 +354,13 @@ static bool renderLabel(const LabelPrinterConfig& printer, const SpoolLabelData&
     drawQr(canvas, qx, qy, code, qr_text);
   }
 
-  const bool ok = packCanvas(canvas, content_w, h, row_w, out);
+  const uint16_t x0 = labelPrinterContentX(printer);
+  const bool ok = packCanvas(canvas, content_w, h, row_w, x0, out);
   lv_obj_del(parent);
   heap_caps_free(buf);
-  logSDf("Label: %s %ux%u in a %u dot row, qr=%d %s, %s", what, (unsigned)content_w,
-         (unsigned)h, (unsigned)row_w, with_qr ? (int)qr : 0,
-         beside ? "beside" : "below", ok ? "ok" : "failed");
+  logSDf("Label: %s %ux%u at dot %u of a %u dot row, qr=%d %s, %s", what,
+         (unsigned)content_w, (unsigned)h, (unsigned)x0, (unsigned)row_w,
+         with_qr ? (int)qr : 0, beside ? "beside" : "below", ok ? "ok" : "failed");
   return ok;
 }
 
@@ -368,13 +381,123 @@ bool labelRenderTest(const LabelPrinterConfig& printer, LabelRaster* out) {
   return renderLabel(printer, d, lines, 1, true, "https://" DONATION_URL, "test", out);
 }
 
+bool labelRenderCalibration(const LabelPrinterConfig& printer, LabelRaster* out) {
+  if (!out) return false;
+  *out = LabelRaster{};
+  const uint16_t content_w = labelPrinterDotsForMm(printer.media_width_mm);
+  const uint16_t h = labelPrinterDotsForMm(printer.media_length_mm);
+  const uint16_t row_w = labelPrinterRasterWidth(printer.model, printer.media_width_mm);
+  if (!row_w || !h || content_w > row_w) return false;
+
+  // The whole row, not just the label: the ruler has to run under the roll
+  // wherever it sits.
+  const size_t buf_bytes = LV_CANVAS_BUF_SIZE_TRUE_COLOR(row_w, h);
+  void* buf = heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM);
+  if (!buf) { logSD("Label: no PSRAM for the canvas"); return false; }
+  lv_obj_t* parent = lv_obj_create(NULL);
+  lv_obj_t* canvas = lv_canvas_create(parent);
+  lv_canvas_set_buffer(canvas, buf, row_w, h, LV_IMG_CF_TRUE_COLOR);
+  lv_canvas_fill_bg(canvas, lv_color_white(), LV_OPA_COVER);
+  const lv_color_t black = lv_color_black();
+
+  int16_t lo;
+  labelPrinterOffsetRange(printer, &lo, nullptr);
+  const lv_coord_t centre = -lo;          // the label's first dot at offset 0
+  const lv_coord_t x = labelPrinterContentX(printer);
+  const int16_t offset = labelPrinterOffset(printer);
+
+  // The ruler across the row, in millimetres of offset, read like any
+  // ruler: a tick every millimetre, a longer one every second, and every
+  // fourth a number right of a tick that reaches up to it. So the number
+  // at the label's left edge is still whole: that is the offset. Numbers
+  // where the left edge can be and three more each side, in case a roll sits
+  // further out than the head suggests (Nikolai, 30.09.2026); past that the
+  // row has ticks alone, and "+48" would not fit the 4 mm anyway.
+  int16_t lo_n, hi;
+  labelPrinterOffsetRange(printer, &lo_n, &hi);
+  const lv_coord_t extra = LC_NUM_EXTRA * LC_NUM_EVERY * labelPrinterDotsForMm(1);
+  const lv_coord_t per_mm = labelPrinterDotsForMm(1);
+  const lv_font_t* num_font = &lv_font_montserrat_ext_16;
+  fillRect(canvas, 0, LC_BASE_Y, row_w, LC_BASE_PX, black);
+  for (lv_coord_t d = centre % per_mm; d < row_w; d += per_mm) {
+    const int v = (d - centre) / per_mm;
+    if (v % LC_NUM_EVERY || d - centre > hi + extra || d - centre < lo_n - extra) {
+      const lv_coord_t len = v % 2 ? LC_TICK_MM : LC_TICK_2MM;
+      fillRect(canvas, d, LC_BASE_Y - len, LC_TICK_PX, len, black);
+      continue;
+    }
+    fillRect(canvas, d, LC_NUM_Y, LC_TICK_PX, LC_BASE_Y - LC_NUM_Y, black);
+    // No plus sign, as on any ruler: "+20" did not fit the 4 mm in 16 px.
+    char num[8];
+    snprintf(num, sizeof(num), "%d", v);
+    drawLine(canvas, d + LC_TICK_PX + LC_NUM_GAP, LC_NUM_Y, LC_NUM_W, num_font, black,
+             LV_TEXT_ALIGN_LEFT, num);
+  }
+
+  // The frame, under the ruler and 1 mm inside where the scale takes the
+  // label to be: with the offset right, the same white shows left and right.
+  const lv_coord_t M = LR_MARGIN_PX;
+  const lv_coord_t F = LC_FRAME_PX;
+  const lv_coord_t box_y = LC_BASE_Y + LC_BASE_PX + LC_BOX_GAP;
+  const lv_coord_t box_h = h - M - box_y;
+  if (box_h > 2 * F) {
+    fillRect(canvas, x + M, box_y, content_w - 2 * M, F, black);
+    fillRect(canvas, x + M, h - M - F, content_w - 2 * M, F, black);
+    fillRect(canvas, x + M, box_y, F, box_h, black);
+    fillRect(canvas, x + content_w - M - F, box_y, F, box_h, black);
+  }
+
+  // What to read off, and what was set when this was printed: the photo of
+  // a calibration page says both.
+  const lv_coord_t tx = x + M + F + LR_GAP_PX;
+  const lv_coord_t tw = content_w - 2 * (M + F + LR_GAP_PX);
+  const lv_coord_t ty = box_y + F + LC_TEXT_GAP;
+  const lv_font_t* big = &lv_font_montserrat_ext_16;
+  const lv_font_t* small = &lv_font_montserrat_ext_14;
+  const int off_mm = (offset + (offset < 0 ? -per_mm / 2 : per_mm / 2)) / per_mm;
+  // Each line only where it fits, so a flatter label keeps ruler and frame.
+  const lv_coord_t bottom = h - M - F;
+  lv_coord_t ly = ty;
+  if (ly + big->line_height < bottom) {
+    drawLine(canvas, tx, ly, tw, big, black, LV_TEXT_ALIGN_CENTER, T(STR_LBL_CAL_EDGE));
+    ly += big->line_height + LR_GAP_PX;
+  }
+  if (ly + small->line_height < bottom) {
+    drawLine(canvas, tx, ly, tw, small, black, LV_TEXT_ALIGN_CENTER, "SpoolmanScale");
+    ly += small->line_height + LR_GAP_PX;
+  }
+  if (ly + small->line_height < bottom) {
+    const char* dash = strrchr(FW_VERSION, '-');
+    char info[LABEL_LINE_LEN];
+    snprintf(info, sizeof(info), "%s  %ux%u  %s %s%d mm  %s",
+             labelPrinterProfile(printer.model).name, (unsigned)printer.media_width_mm,
+             (unsigned)printer.media_length_mm, T(STR_W_P_CAL_OFFSET), off_mm > 0 ? "+" : "",
+             off_mm, dash ? dash + 1 : FW_VERSION);
+    drawLine(canvas, tx, ly, tw, small, black, LV_TEXT_ALIGN_CENTER, info);
+  }
+
+  const bool ok = packCanvas(canvas, row_w, h, row_w, 0, out);
+  // The label's width, for the check against the loaded stock; the rest of
+  // the row carries the ruler on purpose.
+  out->content_width = content_w;
+  lv_obj_del(parent);
+  heap_caps_free(buf);
+  logSDf("Label: calibration %ux%u, label at dot %u, offset %d, %s", (unsigned)row_w,
+         (unsigned)h, (unsigned)x, (int)offset, ok ? "ok" : "failed");
+  return ok;
+}
+
 void labelQrForSpool(int spool_id, char* out, size_t n) {
   if (!out || !n) return;
   // FilaMan's label designer defaults its code to /spools/{id}; BamBuddy's
-  // labels carry the inventory page; Spoolman's own labels carry its tag
-  // format, which its scanner and the printer plugins read.
-  if (backendIsFilaMan())       snprintf(out, n, "%s/spools/%d", backendBaseUrl(), spool_id);
-  else if (backendIsBamBuddy()) snprintf(out, n, "%s/inventory?spool=%d", backendBaseUrl(), spool_id);
+  // labels carry the inventory page. Spoolman's label dialog offers its tag
+  // format or the spool page, and its scanner reads both; only the page
+  // opens on a phone - "WEB+SPOOLMAN:S-239" left the iPhone with plain text
+  // (Nikolai, 30.09.2026). The tag format stays for a scale with no address.
+  const char* base = backendBaseUrl();
+  if (backendIsFilaMan())       snprintf(out, n, "%s/spools/%d", base, spool_id);
+  else if (backendIsBamBuddy()) snprintf(out, n, "%s/inventory?spool=%d", base, spool_id);
+  else if (base[0] && strcmp(base, "http://") != 0) snprintf(out, n, "%s/spool/show/%d", base, spool_id);
   else                          snprintf(out, n, "WEB+SPOOLMAN:S-%d", spool_id);
 }
 

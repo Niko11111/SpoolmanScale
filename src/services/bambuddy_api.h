@@ -120,11 +120,14 @@ int  bbCountActiveSpools(const char* base_url, const char* api_key,
 // separators in Spoolman's extra.tag and would be missed, so a failed lookup
 // is retried once with the string exactly as the caller supplied it.
 //
+// chip_uid is the chip of a Bambu tag on the reader, tagNativeUid(): it goes
+// out beside the tray uuid, see the definition.
+//
 // Returns a Spoolman shaped array with one entry, or an empty array when
 // nothing matched.
 int  bbFindSpoolByTag(const char* base_url, const char* api_key,
        const char* tag, JsonDocument& doc, uint32_t timeout_ms = 10000,
-       DeserializationError* out_err = nullptr);
+       DeserializationError* out_err = nullptr, const char* chip_uid = nullptr);
 
 // --- writing -------------------------------------------------
 
@@ -162,6 +165,9 @@ int  bbRestoreSpool(const char* base_url, const char* api_key, int spool_id,
 // text BamBuddy offers. Read modify write: the rest of the note has to
 // survive, so a failed read means no write at all rather than an overwrite.
 // iso may be longer than the date, only the first ten characters are used.
+// Writes "[drying:<value>]" into the spool's note, replacing an earlier one.
+int  bbPatchDryingNote(const char* base_url, const char* api_key, int spool_id,
+                       const char* value, uint32_t timeout_ms);
 int  bbPatchDriedNote(const char* base_url, const char* api_key, int spool_id,
        const char* iso, uint32_t timeout_ms = 8000);
 

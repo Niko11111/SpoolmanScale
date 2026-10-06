@@ -1,6 +1,7 @@
 #include "services/label_printer.h"
 
 #include <stdio.h>
+#include <ctype.h>
 #include <string.h>
 
 #include "hardware/sd_logger.h"
@@ -18,17 +19,25 @@
 #define LP_KEY_NAME  "printer_name"
 #define LP_KEY_W     "printer_w"
 #define LP_KEY_H     "printer_h"
+// The offset belongs to one printer, not to the scale: "px" and the device's
+// address without colons, 14 characters. A second printer starts at 0, and
+// the first gets its own back when it is picked again (Nikolai, 30.09.2026).
+#define LP_KEY_XOFF_PREFIX "px"
 
 static const LabelPrinterProfile PROFILE_NONE = {};
 // M220: 2 inch head, 576 dots, takes stock from 20 to 75 mm wide; the vendor
 // app pads narrower rows to 576 and wider ones to 648. Hardware proven.
 static const LabelPrinterProfile PROFILE_M220 = {
-  LP_MODEL_M220, "M220", 40, 30, 20, 75, 10, 150, 576, 648, false
+  LP_MODEL_M220, "M220", 40, 30, 20, 75, 10, 150, 576, 648, false, true
 };
-// M110: 48 mm head, 384 dots. Same transport, own preamble, nobody here has
-// printed on one yet.
+// M110: 48 mm head, 384 dots. Same transport, own preamble. A user printed
+// with this profile on an M100 (09.2026), which proves the M110 bytes.
 static const LabelPrinterProfile PROFILE_M110 = {
-  LP_MODEL_M110, "M110", 40, 30, 20, 48, 10, 150, 384, 384, true
+  LP_MODEL_M110, "M110", 40, 30, 20, 48, 10, 150, 384, 384, false, true
+};
+// M100: the M110's head and bytes under its own name, so a user finds it.
+static const LabelPrinterProfile PROFILE_M100 = {
+  LP_MODEL_M100, "M100", 40, 30, 20, 48, 10, 150, 384, 384, false, true
 };
 
 // The two sizes printed and checked on the M220 for 0.8.0 (Nikolai,
@@ -42,10 +51,32 @@ const int LABEL_MEDIA_SIZE_COUNT = sizeof(LABEL_MEDIA_SIZES) / sizeof(LABEL_MEDI
 static LabelPrinterConfig s_config{};
 static bool s_loaded = false;
 
+// The NVS key of a printer's offset; false for no printer. An address is
+// 17 characters, six pairs of hex digits and five colons.
+static bool offsetKey(const char* address, char* key, size_t n) {
+  if (!address || !address[0]) return false;
+  size_t k = snprintf(key, n, "%s", LP_KEY_XOFF_PREFIX);
+  for (const char* a = address; *a && k + 1 < n; a++)
+    if (*a != ':') key[k++] = (char)tolower((unsigned char)*a);
+  key[k] = '\0';
+  return true;
+}
+
+static int16_t loadOffset(const char* address) {
+  char key[20];
+  return offsetKey(address, key, sizeof(key)) ? (int16_t)prefsGetInt(key, 0) : 0;
+}
+// The label size the user picked, which is what NVS keeps. The config holds
+// the size in effect: the picked one, or the model's default while the model
+// cannot take it. Going M220 -> M110 -> M220 lost a picked 50 x 30 for good
+// before this (30.09.2026): the M110 took 40 x 30 and that was saved.
+static uint16_t s_want_w = 0, s_want_l = 0;
+
 const LabelPrinterProfile& labelPrinterProfile(LabelPrinterModel model) {
   switch (model) {
     case LP_MODEL_M220: return PROFILE_M220;
     case LP_MODEL_M110: return PROFILE_M110;
+    case LP_MODEL_M100: return PROFILE_M100;
     default:            return PROFILE_NONE;
   }
 }
@@ -58,7 +89,7 @@ static bool mediaFits(const LabelPrinterProfile& p, uint16_t w, uint16_t h) {
 
 // What is stored is taken as it is, except for two things that would leave
 // the printer unusable: no model becomes the M220, and a label size the model
-// cannot take becomes its default.
+// cannot take becomes the picked one where it fits, else the model's default.
 static LabelPrinterConfig normalized(const LabelPrinterConfig& in) {
   LabelPrinterConfig c = in;
   const LabelPrinterProfile& p = labelPrinterProfile(c.model);
@@ -66,7 +97,12 @@ static LabelPrinterConfig normalized(const LabelPrinterConfig& in) {
   c.model = use.model;
   c.name[sizeof(c.name) - 1] = '\0';
   c.address[sizeof(c.address) - 1] = '\0';
-  if (!mediaFits(use, c.media_width_mm, c.media_length_mm)) {
+  if (c.x_offset > LP_OFFSET_RIGHT) c.x_offset = LP_OFFSET_RIGHT;
+  if (c.x_offset < LP_OFFSET_LEFT)  c.x_offset = LP_OFFSET_LEFT;
+  if (mediaFits(use, s_want_w, s_want_l)) {
+    c.media_width_mm  = s_want_w;
+    c.media_length_mm = s_want_l;
+  } else if (!mediaFits(use, c.media_width_mm, c.media_length_mm)) {
     c.media_width_mm  = use.default_width_mm;
     c.media_length_mm = use.default_length_mm;
   }
@@ -81,23 +117,42 @@ LabelPrinterConfig labelPrinterLoadConfig() {
   snprintf(c.address, sizeof(c.address), "%s", prefsGetString(LP_KEY_ADDR, "").c_str());
   c.media_width_mm  = prefsGetInt(LP_KEY_W, PROFILE_M220.default_width_mm);
   c.media_length_mm = prefsGetInt(LP_KEY_H, PROFILE_M220.default_length_mm);
+  c.x_offset = loadOffset(c.address);
+  s_want_w = c.media_width_mm;
+  s_want_l = c.media_length_mm;
   s_config = normalized(c);
   s_loaded = true;
   return s_config;
 }
 
 bool labelPrinterSaveConfig(const LabelPrinterConfig& in) {
-  const LabelPrinterConfig c = normalized(in);
+  const LabelPrinterConfig before = labelPrinterLoadConfig();
+  // A size other than the one in effect is a new pick; the same size with
+  // another model is not, and leaves the picked one as it was.
+  const uint16_t want_w = s_want_w, want_l = s_want_l;
+  if (in.media_width_mm != before.media_width_mm ||
+      in.media_length_mm != before.media_length_mm) {
+    s_want_w = in.media_width_mm;
+    s_want_l = in.media_length_mm;
+  }
+  LabelPrinterConfig c = normalized(in);
+  // Another device is another printer: its own offset, whatever the caller
+  // carried over from the one before.
+  if (strcmp(in.address, before.address) != 0) c.x_offset = loadOffset(c.address);
   bool ok = true;
   ok = prefsPutInt(LP_KEY_MODEL, (int)c.model) && ok;
   ok = prefsPutString(LP_KEY_ADDR, c.address) && ok;
   ok = prefsPutString(LP_KEY_NAME, c.name) && ok;
-  ok = prefsPutInt(LP_KEY_W, c.media_width_mm) && ok;
-  ok = prefsPutInt(LP_KEY_H, c.media_length_mm) && ok;
+  ok = prefsPutInt(LP_KEY_W, s_want_w) && ok;
+  ok = prefsPutInt(LP_KEY_H, s_want_l) && ok;
+  char key[20];
+  if (offsetKey(c.address, key, sizeof(key))) ok = prefsPutInt(key, c.x_offset) && ok;
   if (ok) { s_config = c; s_loaded = true; }
-  logSDf("Printer: config %s %s '%s' %ux%u mm %s", labelPrinterProfile(c.model).name,
-         c.address[0] ? c.address : "-", c.name, (unsigned)c.media_width_mm,
-         (unsigned)c.media_length_mm, ok ? "saved" : "NOT saved");
+  else { s_want_w = want_w; s_want_l = want_l; }
+  logSDf("Printer: config %s %s '%s' %ux%u mm offset %d (%d) %s",
+         labelPrinterProfile(c.model).name, c.address[0] ? c.address : "-", c.name,
+         (unsigned)c.media_width_mm, (unsigned)c.media_length_mm, (int)c.x_offset,
+         (int)labelPrinterOffset(c), ok ? "saved" : "NOT saved");
   return ok;
 }
 
@@ -129,6 +184,31 @@ uint16_t labelPrinterRasterWidth(LabelPrinterModel model, uint16_t media_width_m
   return width > p.max_raster_width ? p.max_raster_width : width;
 }
 
+// A ruler across the M220's 576 dots put Nikolai's 40 mm roll under dots 128
+// to 448, the middle (24.09.2026); a user's roll sat 16 mm further right, at
+// the fixed wall of the roll holder (30.09.2026). Where the roll runs is how
+// it sits in the holder, not the model, so it is a setting of its own.
+void labelPrinterOffsetRange(const LabelPrinterConfig& c, int16_t* min, int16_t* max) {
+  const uint16_t row = labelPrinterRasterWidth(c.model, c.media_width_mm);
+  const uint16_t content = labelPrinterDotsForMm(c.media_width_mm);
+  const int16_t slack = content < row ? int16_t(row - content) : 0;
+  const int16_t centre = slack / 2;
+  if (min) *min = -centre;
+  if (max) *max = slack - centre;
+}
+
+int16_t labelPrinterOffset(const LabelPrinterConfig& c) {
+  int16_t lo, hi;
+  labelPrinterOffsetRange(c, &lo, &hi);
+  return c.x_offset < lo ? lo : c.x_offset > hi ? hi : c.x_offset;
+}
+
+uint16_t labelPrinterContentX(const LabelPrinterConfig& c) {
+  int16_t lo;
+  labelPrinterOffsetRange(c, &lo, nullptr);
+  return uint16_t(labelPrinterOffset(c) - lo);
+}
+
 // The renderer works in whole dots from the same conversion, so the content
 // matches exactly; one dot of slack is left for a raster from elsewhere.
 static bool nearDots(uint16_t px, uint16_t mm) {
@@ -153,7 +233,7 @@ LabelPrintResult labelPrinterPrint(const LabelPrinterConfig& c, const LabelRaste
   if (image.width > p.max_raster_width) return LP_TOO_WIDE;
   if (!labelPrinterRasterFits(c.model, image, c.media_width_mm, c.media_length_mm))
     return LP_MEDIA_MISMATCH;
-  const PhomemoModel pm = c.model == LP_MODEL_M110 ? PHOMEMO_M110 : PHOMEMO_M220;
+  const PhomemoModel pm = c.model == LP_MODEL_M220 ? PHOMEMO_M220 : PHOMEMO_M110;
   switch (phomemoMSeriesPrint(pm, c.address, image, progress)) {
     case BLE_WRITE_OK:                return LP_OK;
     case BLE_WRITE_OFF:               return LP_BLE_OFF;

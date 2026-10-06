@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.8.1"
+#define FW_VERSION  "v0.8.2"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -37,6 +37,9 @@
 // edge on 255 - inside the zone, level with the progress bar opposite.
 #define MAIN_AMS_BTN_Y  209
 #define MAIN_AMS_BTN_H   46
+// The countdown fill inside that button: inside its 1 px border.
+#define MAIN_AMS_FILL_W  (MAIN_NOSCALE_W - 2)
+#define MAIN_AMS_FILL_H  (MAIN_AMS_BTN_H - 2)
 
 // The AMS chip in the header. 18 px is the label's 16 plus its border, which
 // centres inside the 26 px header with 4 px above and below. The touch pad is
@@ -88,6 +91,11 @@
 // the same time instead of one waiting on the other.
 #define REMOTE_LINK_TIMEOUT_MS  60000
 
+// How far apart a Bambu tag's colour and a spool's may lie, as the sum of
+// the three channel differences, before the two count as different colours.
+// The link list has filtered by this since it compared colours at all.
+#define TAG_SPOOL_COLOR_DIST_MAX  120
+
 // Deriving the empty-spool weight from a brand new spool: the reading minus
 // the nominal filament weight. Outside these bounds the reading is not a full
 // spool of the expected filament - a half-used one, or a nominal weight that
@@ -104,6 +112,12 @@
 // A spool that reads a few grams over its label weight is simply full, not
 // mislabelled. Only a real difference is worth interrupting the weighing for.
 #define BB_CAP_TOLERANCE_G   2.0f
+
+// How far the net reading may be from a spool's stored remaining weight for
+// the link list to put that spool first. Bambu cores alone vary by 11 g (241
+// to 252 in a real library), and the stored figure lags behind a print that
+// was never booked against it.
+#define LINK_WEIGHT_TOLERANCE_G  20.0f
 
 // Creating a spool straight from a Bambu tag. The tag carries material,
 // brand, colour and temperatures, but no weights at all - a Bambu Lab core
@@ -160,6 +174,13 @@
 // so this is the extra bus traffic it costs; everything else it reads is
 // state the loop already keeps.
 #define DIAG_TICK_MS  2000
+
+// A bus with a loose contact flips the finding on almost every tick, which
+// wrote a log line every two to four seconds and buried everything else. Per
+// window, only the first few changes get a line of their own; the rest are
+// counted and reported in one line when the window closes.
+#define DIAG_LOG_WINDOW_MS  60000
+#define DIAG_LOG_BURST      4
 
 // Peak to peak spread of the moving average window that stops being noise and
 // starts being a wiring fault. A settled pad sits inside a gram or two; a

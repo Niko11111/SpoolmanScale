@@ -227,3 +227,14 @@ STR_PART_HINT_LATER	16	180	NEVER	src/ui/partition_popup.cpp button, HINT_BTN_W 2
 STR_PART_HINT_TEXT	14	256	WRAP:14	src/ui/partition_popup.cpp text column, scrolls
 STR_PART_HINT_BLOCKED	14	256	WRAP:14	src/ui/partition_popup.cpp text column, scrolls
 STR_GH_OTA_LATEST	14	440	NEVER	src/ui/ota_github.cpp:366 lbl_gh_latest, centred on the 480 px screen
+
+STR_BTN_EMPTY_SPOOL	14	211	NEVER	src/ui/confirm_popup.cpp weight popup row 2 right, BW2 = 219
+STR_TARE_CHOICE_TITLE	18	416	NEVER	src/ui/tare_entry.cpp showTareChoice() title, box 440
+STR_TARE_CHOICE_WEIGH	14	400	NEVER	src/ui/tare_entry.cpp showTareChoice() button, 416 wide
+STR_TARE_CHOICE_TYPE	14	380	NEVER	src/ui/tare_entry.cpp showTareChoice() button, 416 wide, keyboard symbol in front
+STR_TARE_ENTER_TITLE	14	460	NEVER	src/ui/tare_entry.cpp showTarePad() title
+STR_TARE_ENTER_REST	12	168	NEVER	src/ui/tare_entry.cpp s_lbl_info, COL_W = 168, one figure per line
+STR_TARE_ENTER_RANGE	12	168	WRAP:4	src/ui/tare_entry.cpp s_lbl_info, COL_W = 168
+STR_TARE_ENTER_OVER	12	168	WRAP:3	src/ui/tare_entry.cpp s_lbl_info, COL_W = 168
+STR_LBL_CAL_EDGE	16	289	NEVER	src/services/label_render.cpp calibration page, 40 mm label less frame and margins, one bold dot
+STR_AMS_MAIN_ASSIGN	16	190	NEVER	src/ui/main_screen.cpp zone 4 AMS button 254 px, -8 air, -56 for the window countdown

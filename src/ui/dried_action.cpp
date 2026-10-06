@@ -113,7 +113,7 @@ void handleDriedDeferredAction() {
     return;
   }
 
-  if (code == 200) {
+  if (backendWriteOk(code)) {
     applyDriedToday(iso);
     logSDf("Dried: last_dried set for spool %d", spool_id);
   } else {
@@ -128,7 +128,7 @@ void driedActionApplyBatch(const DriedBatchResult& r) {
   if (!sm_found || sm_id == 0 || !lbl_spoolman_dried_val) return;
   for (uint8_t i = 0; i < r.count; i++) {
     if (r.spool_id[i] != sm_id) continue;
-    if (r.code[i] == 200) {
+    if (backendWriteOk(r.code[i])) {
       applyDriedToday(r.iso);
       logSDf("Dried: spool %d on the pad took the AMS batch's date", sm_id);
     } else if (waiting) {

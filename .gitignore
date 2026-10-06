@@ -29,8 +29,15 @@ images/*~lock~
 # simulator shots. The repository carries the web-sized JPEGs made from them.
 images/images_not_for_github/
 !platformio.ini
+# The ESP-IDF component versions the tested builds used. The hybrid build
+# (custom_sdkconfig) asks the component registry for ranges such as
+# espressif/mdns ^1.11.2; with this file it keeps the locked versions instead
+# of whatever is newest that day. The builder deletes it after compiling the
+# IDF libraries, so a local rebuild leaves it deleted: git checkout it.
+!dependencies.lock
 !partitions.csv
 !copy_release.py
+!lvgl_speed.py
 !manifest.json
 !version.json
 !README.md

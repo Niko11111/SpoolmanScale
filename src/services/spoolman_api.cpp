@@ -1,4 +1,7 @@
 #include "spoolman_api.h"
+#include "services/backend.h"
+#include "services/backend_http.h"
+#include "hardware/sd_logger.h"
 #include "http_progress.h"
 #include "tag_uid.h"
 
@@ -24,9 +27,32 @@ static bool hasBaseUrl(const char* base_url) {
   return base_url && strlen(base_url) > 4;
 }
 
-static int patchJson(const String& url, const String& body, uint32_t timeout_ms) {
-  HTTPClient http;
+// Every request to Spoolman starts here, so the access the user set up goes
+// out with each of them. Only in Spoolman mode: BamBuddy reaches the Spoolman
+// behind it through this file too, and that server has nothing to do with
+// these settings. And only to the address the secret was entered for: a new
+// address gets none until the access is entered again for it.
+static void smBegin(BackendHttp& http, const String& url) {
   http.begin(url);
+  if (backendMode() != BACKEND_SPOOLMAN || !spoolmanAuthSendsTo(url.c_str())) return;
+  switch (spoolmanAuthMode()) {
+    case SM_AUTH_KEY:
+      http.addHeader("X-API-Key", spoolmanAuthSecret());
+      break;
+    case SM_AUTH_BEARER:
+      http.addHeader("Authorization", String("Bearer ") + spoolmanAuthSecret());
+      break;
+    case SM_AUTH_BASIC:
+      http.setAuthorization(spoolmanAuthUser(), spoolmanAuthSecret());
+      break;
+    default:
+      break;
+  }
+}
+
+static int patchJson(const String& url, const String& body, uint32_t timeout_ms) {
+  BackendHttp http;
+  smBegin(http, url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(timeout_ms);
   int code = http.PATCH(body);
@@ -35,8 +61,8 @@ static int patchJson(const String& url, const String& body, uint32_t timeout_ms)
 }
 
 static int putJson(const String& url, const String& body, uint32_t timeout_ms) {
-  HTTPClient http;
-  http.begin(url);
+  BackendHttp http;
+  smBegin(http, url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(timeout_ms);
   int code = http.PUT(body);
@@ -45,8 +71,8 @@ static int putJson(const String& url, const String& body, uint32_t timeout_ms) {
 }
 
 static int postJson(const String& url, const String& body, uint32_t timeout_ms) {
-  HTTPClient http;
-  http.begin(url);
+  BackendHttp http;
+  smBegin(http, url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(timeout_ms);
   int code = http.POST(body);
@@ -63,8 +89,8 @@ static int postJsonDoc(const String& url, const String& body, JsonDocument& doc,
                        uint32_t timeout_ms, DeserializationError* out_err) {
   if (out_err) *out_err = DeserializationError::Ok;
 
-  HTTPClient http;
-  http.begin(url);
+  BackendHttp http;
+  smBegin(http, url);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(timeout_ms);
   int code = http.POST(body);
@@ -79,8 +105,8 @@ static int postJsonDoc(const String& url, const String& body, JsonDocument& doc,
 }
 
 static int deleteReq(const String& url, uint32_t timeout_ms) {
-  HTTPClient http;
-  http.begin(url);
+  BackendHttp http;
+  smBegin(http, url);
   http.setTimeout(timeout_ms);
   int code = http.sendRequest("DELETE");
   http.end();
@@ -91,8 +117,8 @@ static int getJson(const String& url, JsonDocument& doc, uint32_t timeout_ms,
                    JsonDocument* filter, DeserializationError* out_err) {
   if (out_err) *out_err = DeserializationError::Ok;
 
-  HTTPClient http;
-  http.begin(url);
+  BackendHttp http;
+  smBegin(http, url);
   http.setTimeout(timeout_ms);
   int code = http.GET();
   if (code != 200) {
@@ -114,6 +140,9 @@ static int getJson(const String& url, JsonDocument& doc, uint32_t timeout_ms,
   }
   http.end();
   if (out_err) *out_err = err;
+  // Which way the parse failed says whether the answer was cut, malformed or
+  // too large - a bare -2 in the caller's log says none of it.
+  if (err) logSDf("Spoolman: answer of %s did not parse: %s", url.c_str(), err.c_str());
   return err ? -2 : 200;
 }
 
@@ -210,8 +239,8 @@ int spoolmanHasTagApi(const char* base_url, uint32_t timeout_ms) {
   // has the feature and 404 on one that does not. Asking /api/v1/info instead
   // would only give a version number, and comparing against a release that has
   // not been cut yet is guesswork.
-  HTTPClient http;
-  http.begin(String(base_url) + "/api/v1/tag/reader");
+  BackendHttp http;
+  smBegin(http, String(base_url) + "/api/v1/tag/reader");
   http.setTimeout(timeout_ms);
   int code = http.GET();
   http.end();
@@ -237,8 +266,9 @@ int spoolmanTagScan(const char* base_url, const char* uid, const char* reader_id
 
 int spoolmanLinkTag(const char* base_url, int spool_id, const char* uid,
                     const char* format, int* out_conflict_spool_id,
-                    uint32_t timeout_ms) {
+                    uint32_t timeout_ms, int* out_conflict_filament_id) {
   if (out_conflict_spool_id) *out_conflict_spool_id = 0;
+  if (out_conflict_filament_id) *out_conflict_filament_id = 0;
   if (!hasBaseUrl(base_url) || spool_id <= 0 || !uid || !uid[0]) return -1;
 
   String body = String("{\"uid\":\"") + uid + "\"";
@@ -253,6 +283,8 @@ int spoolmanLinkTag(const char* base_url, int spool_id, const char* uid,
                          body, doc, timeout_ms, nullptr);
   if (code == 409 && out_conflict_spool_id)
     *out_conflict_spool_id = doc["spool_id"] | 0;
+  if (code == 409 && out_conflict_filament_id)
+    *out_conflict_filament_id = doc["filament_id"] | 0;
   return code;
 }
 
@@ -286,8 +318,8 @@ int spoolmanGetSpoolFieldsJson(const char* base_url, JsonDocument& doc,
 int spoolmanGetHealthCode(const char* base_url, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url)) return -1;
 
-  HTTPClient http;
-  http.begin(String(base_url) + "/api/v1/health");
+  BackendHttp http;
+  smBegin(http, String(base_url) + "/api/v1/health");
   http.setTimeout(timeout_ms);
   int code = http.GET();
   http.end();
@@ -302,8 +334,8 @@ bool spoolmanGetVersion(const char* base_url, char* out_version, size_t out_size
   if (out_version && out_size > 0) out_version[0] = '\0';
   if (!hasBaseUrl(base_url) || !out_version || out_size == 0) return false;
 
-  HTTPClient http;
-  http.begin(String(base_url) + "/api/v1/info");
+  BackendHttp http;
+  smBegin(http, String(base_url) + "/api/v1/info");
   http.setTimeout(timeout_ms);
   int code = http.GET();
   if (code != 200) {
@@ -333,8 +365,8 @@ int spoolmanCountActiveSpools(const char* base_url, uint32_t timeout_ms) {
   // moment. That happens at every TCP packet boundary, so it counted the
   // first packet and stopped, which is why a large library reported a
   // handful of spools.
-  HTTPClient http;
-  http.begin(String(base_url) + "/api/v1/spool?allow_archived=false&limit=1");
+  BackendHttp http;
+  smBegin(http, String(base_url) + "/api/v1/spool?allow_archived=false&limit=1");
   http.setTimeout(timeout_ms);
   const char* collect[] = { "x-total-count" };
   http.collectHeaders(collect, 1);
@@ -358,8 +390,8 @@ int spoolmanInventoryStamp(const char* base_url, int* out_count, int* out_witnes
   // The same small request as the count above, sorted so the one spool that
   // comes back is the newest: a spool added and another archived leaves the
   // count where it was, and the id is what gives that away.
-  HTTPClient http;
-  http.begin(String(base_url) + "/api/v1/spool?allow_archived=false&limit=1&sort=id:desc");
+  BackendHttp http;
+  smBegin(http, String(base_url) + "/api/v1/spool?allow_archived=false&limit=1&sort=id:desc");
   // Both clocks. setTimeout() only covers reading, and the client's own five
   // seconds for the connect would otherwise decide how long a server that is
   // gone holds the loop.
@@ -400,8 +432,8 @@ int spoolmanCreateSpool(const char* base_url, int filament_id, float initial_wei
   if (out_spool_id) *out_spool_id = 0;
   if (!hasBaseUrl(base_url) || filament_id <= 0) return -1;
 
-  HTTPClient http;
-  http.begin(String(base_url) + "/api/v1/spool");
+  BackendHttp http;
+  smBegin(http, String(base_url) + "/api/v1/spool");
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(timeout_ms);
 
@@ -458,6 +490,31 @@ int spoolmanPatchExtraField(const char* base_url, int spool_id, const char* key,
   String payload;
   serializeJson(body, payload);
   return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, payload, timeout_ms);
+}
+
+// A text extra field on the filament rather than the spool: what belongs to
+// the product, like the drying the maker recommends, is kept once for every
+// spool of it.
+int spoolmanCreateFilamentField(const char* base_url, const char* key, const char* name,
+                                uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || !key || !key[0]) return -1;
+  JsonDocument body;
+  body["name"]          = (name && name[0]) ? name : key;
+  body["field_type"]    = "text";
+  body["default_value"] = "\"\"";
+  String payload;
+  serializeJson(body, payload);
+  return postJson(String(base_url) + "/api/v1/field/filament/" + urlEncode(key), payload, timeout_ms);
+}
+
+int spoolmanPatchFilamentExtra(const char* base_url, int filament_id, const char* key,
+                               const char* value, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || filament_id <= 0 || !key || !key[0] || !value) return -1;
+  JsonDocument body;
+  body["extra"][key] = jsonQuoted(value);
+  String payload;
+  serializeJson(body, payload);
+  return patchJson(String(base_url) + "/api/v1/filament/" + filament_id, payload, timeout_ms);
 }
 
 int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remaining, const char* last_used_iso, uint32_t timeout_ms) {

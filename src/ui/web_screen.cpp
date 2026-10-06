@@ -15,6 +15,7 @@
 #include "ui_common.h"
 #include "web/web_access.h"
 #include "web/web_server.h"
+#include "theme.h"
 
 lv_obj_t *scr_web = nullptr;
 
@@ -53,7 +54,7 @@ static void buildWebPinScreen() {
   { char hb[96];
     copyT(hb, sizeof(hb), STR_WEB_PASS_HINT);
     lv_label_set_text(hint, hb); }
-  lv_obj_set_style_text_color(hint, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(hint, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(hint, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_width(hint, 464);
@@ -62,13 +63,13 @@ static void buildWebPinScreen() {
   lv_obj_t *val_box = lv_obj_create(s_pin_scr);
   lv_obj_set_size(val_box, 380, 40);
   lv_obj_set_pos(val_box, 50, 80);
-  lv_obj_set_style_bg_color(val_box, lv_color_hex(0x050f1e), 0);
-  lv_obj_set_style_border_color(val_box, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_bg_color(val_box, lv_color_hex(UI_COL_GROUND), 0);
+  lv_obj_set_style_border_color(val_box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(val_box, 1, 0);
   lv_obj_set_style_radius(val_box, 8, 0);
   lv_obj_clear_flag(val_box, LV_OBJ_FLAG_SCROLLABLE);
   s_pin_lbl = lv_label_create(val_box);
-  lv_obj_set_style_text_color(s_pin_lbl, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(s_pin_lbl, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(s_pin_lbl, &lv_font_montserrat_ext_24, 0);
   lv_obj_align(s_pin_lbl, LV_ALIGN_CENTER, 0, 0);
   pinRefresh();
@@ -84,19 +85,19 @@ static void buildWebPinScreen() {
     lv_obj_t *kb = lv_btn_create(s_pin_scr);
     lv_obj_set_size(kb, NP_W, NP_H);
     lv_obj_set_pos(kb, NP_X0 + col * (NP_W + NP_GAP), NP_Y0 + row * (NP_H + NP_GAP));
-    lv_obj_set_style_bg_color(kb, is_del ? lv_color_hex(0x1a1020) :
-                                  is_ok  ? lv_color_hex(0x1a4030) :
-                                           lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_bg_color(kb, lv_color_hex(0x1a3050), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(kb, is_del ? lv_color_hex(UI_COL_KEY_DEL) :
+                                  is_ok  ? lv_color_hex(UI_COL_PICKED_BG) :
+                                           lv_color_hex(UI_COL_SURFACE), 0);
+    lv_obj_set_style_bg_color(kb, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
     lv_obj_set_style_radius(kb, 6, 0);
     lv_obj_set_style_shadow_width(kb, 0, 0);
     lv_obj_set_style_border_width(kb, 1, 0);
-    lv_obj_set_style_border_color(kb, is_ok ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a3050), 0);
+    lv_obj_set_style_border_color(kb, is_ok ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_ROW_PRESSED), 0);
     lv_obj_t *kl = lv_label_create(kb);
     lv_label_set_text(kl, is_ok ? LV_SYMBOL_OK : is_del ? T(STR_KEY_DEL) : keys[i]);
-    lv_obj_set_style_text_color(kl, is_del ? lv_color_hex(0xe04040) :
-                                     is_ok  ? lv_color_hex(0x28d49a) :
-                                              lv_color_hex(0xe8f0ff), 0);
+    lv_obj_set_style_text_color(kl, is_del ? lv_color_hex(UI_COL_BAD) :
+                                     is_ok  ? lv_color_hex(UI_COL_ACCENT) :
+                                              lv_color_hex(UI_COL_INK), 0);
     lv_obj_set_style_text_font(kl, &lv_font_montserrat_ext_18, 0);
     lv_obj_align(kl, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_user_data(kb, (void*)keys[i]);
@@ -144,7 +145,7 @@ static void addGateRow(lv_obj_t *list, const char *ico, int title_id,
     copyT(buf_v, sizeof(buf_v), on ? STR_ON : STR_OFF);
     lv_label_set_text(arr, buf_v);
     lv_obj_set_style_text_color(arr,
-      lv_color_hex(on ? 0x28d49a : 0x4a6fa0), 0);
+      lv_color_hex(on ? UI_COL_ACCENT : UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(arr, &lv_font_montserrat_ext_14, 0);
   }
   lv_obj_add_event_cb(btn, on_click, LV_EVENT_CLICKED, NULL);

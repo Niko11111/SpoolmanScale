@@ -33,5 +33,12 @@ static const char* const BAMBU_PLA_SUBTYPE_BLACKLIST[] = {
   // matches and the colour filter narrows the list on its own, exactly as it
   // does today.
   "Pure",
+  // Both read off real tags ("PLA Silk+", "PLA Tough") in the RFID library,
+  // 28.09.2026. Silk+ keeps plain Silk spools out of a Silk+ list. Tough keeps
+  // Basic and Matte out of a Tough list; Tough+ spools stay in it, because
+  // "tough" is part of "toughplus" - the compare in bambuSubtypeMatches()
+  // looks for the keyword inside the name, not for a whole word.
+  "Silk+",
+  "Tough",
   nullptr  // End marker – do not remove!
 };

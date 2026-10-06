@@ -251,7 +251,7 @@ static void showDriedAsk() {
   lv_obj_t* icon = lv_label_create(box);
   if (icon) {
     lv_label_set_text(icon, LV_SYMBOL_TINT);
-    lv_obj_set_style_text_color(icon, lv_color_hex(0x5ad1ff), 0);
+    lv_obj_set_style_text_color(icon, lv_color_hex(UI_COL_DRY), 0);
     lv_obj_set_style_text_font(icon, UI_FONT_ICON, 0);
     lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, AMSD_ASK_ICON_Y);
   }
@@ -347,7 +347,7 @@ static void showDriedAsk() {
     if (btn) {
       lv_obj_set_size(btn, AMSD_ASK_ALL_W, AMSD_ASK_ALL_H);
       lv_obj_set_pos(btn, AMSD_ASK_BTN_X_L, AMSD_ASK_ALL_Y);
-      lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ACCENT_DIM), 0);
+      lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_GO_BG), 0);
       lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
       lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_ACCENT), 0);
       lv_obj_set_style_border_width(btn, 1, 0);
@@ -458,9 +458,9 @@ static lv_obj_t* cell(lv_obj_t* box, int x, int y, int cap_id,
     if (frame) {
       lv_obj_set_size(frame, AMSD_CW + 2 * AMSD_FIELD_PAD_X, AMSD_FIELD_H);
       lv_obj_set_pos(frame, x - AMSD_FIELD_PAD_X, y - AMSD_FIELD_PAD_Y);
-      lv_obj_set_style_bg_color(frame, lv_color_hex(0x0d2040), 0);
-      lv_obj_set_style_bg_color(frame, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-      lv_obj_set_style_border_color(frame, lv_color_hex(0x1a3060), 0);
+      lv_obj_set_style_bg_color(frame, lv_color_hex(UI_COL_CHIP), 0);
+      lv_obj_set_style_bg_color(frame, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
+      lv_obj_set_style_border_color(frame, lv_color_hex(UI_COL_LINE), 0);
       lv_obj_set_style_border_width(frame, 1, 0);
       lv_obj_set_style_radius(frame, 8, 0);
       lv_obj_set_style_shadow_width(frame, 0, 0);
@@ -616,7 +616,7 @@ static void buildIdentity(lv_obj_t* box, const AmsSpoolDetail& d) {
     }
     lv_label_set_text(cap, buf);
     lv_obj_set_style_text_color(cap,
-      lv_color_hex(d.tag_linked ? UI_COL_ACCENT : UI_COL_CAPTION), 0);
+      lv_color_hex(d.tag_linked ? UI_COL_GOOD : UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(cap, UI_FONT_CAPTION, 0);
     lv_obj_set_pos(cap, AMSD_ID_X, AMSD_IDENT_CAP_Y);
   }
@@ -628,7 +628,7 @@ static void buildIdentity(lv_obj_t* box, const AmsSpoolDetail& d) {
     else                snprintf(buf, sizeof(buf), "-");
     lv_label_set_text(id, buf);
     lv_obj_set_style_text_color(id,
-      lv_color_hex(d.spool_id > 0 ? UI_COL_ACCENT : UI_COL_WARN), 0);
+      lv_color_hex(d.spool_id > 0 ? UI_COL_GOOD : UI_COL_WARN), 0);
     lv_obj_set_style_text_font(id, UI_FONT_BODY, 0);
     oneLine(id, AMSD_ID_W, UI_FONT_BODY);
     lv_obj_set_pos(id, AMSD_ID_X, AMSD_IDENT_VAL_Y);
@@ -739,7 +739,7 @@ static void buildWeight(lv_obj_t* box, const AmsSpoolDetail& d, int reserve_righ
       snprintf(buf, sizeof(buf), "%d %%", share);
       lv_label_set_text(pct, buf);
       lv_obj_set_style_text_color(pct,
-        lv_color_hex(share < AMSD_LOW_PCT ? UI_COL_WARN : UI_COL_ACCENT), 0);
+        lv_color_hex(share < AMSD_LOW_PCT ? UI_COL_WARN : UI_COL_GOOD), 0);
       lv_obj_set_style_text_font(pct, UI_FONT_TITLE, 0);
       lv_obj_align(pct, LV_ALIGN_TOP_RIGHT, -AMSD_PAD, AMSD_WEIGHT_VAL_Y);
     }
@@ -750,7 +750,7 @@ static void buildWeight(lv_obj_t* box, const AmsSpoolDetail& d, int reserve_righ
       lv_obj_set_pos(bar, AMSD_CA, AMSD_BAR_Y);
       lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COL_RULE), LV_PART_MAIN);
       lv_obj_set_style_bg_color(bar,
-        lv_color_hex(share < AMSD_LOW_PCT ? UI_COL_WARN : UI_COL_ACCENT),
+        lv_color_hex(share < AMSD_LOW_PCT ? UI_COL_WARN : UI_COL_GOOD),
         LV_PART_INDICATOR);
       lv_obj_set_style_radius(bar, AMSD_BAR_H / 2, LV_PART_MAIN);
       lv_obj_set_style_radius(bar, AMSD_BAR_H / 2, LV_PART_INDICATOR);
@@ -901,7 +901,7 @@ static bool cardStatus(char* out, size_t n, uint32_t* col) {
     char fmt[48];
     copyT(fmt, sizeof(fmt), STR_AMSD_BATCH_DONE);
     snprintf(out, n, fmt, (int)s_batch_ok, (int)s_batch_total);
-    *col = (s_batch_ok == s_batch_total) ? UI_COL_ACCENT
+    *col = (s_batch_ok == s_batch_total) ? UI_COL_GOOD
          : (s_batch_ok > 0)              ? UI_COL_WARN
                                          : UI_COL_BAD_TEXT;
     return true;
@@ -961,6 +961,9 @@ void showAmsDetailPopup(const AmsSpoolDetail& d) {
   lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(box, 1, 0);
   lv_obj_set_style_radius(box, UI_RADIUS_BOX, 0);
+  // The header strip inside is square; clipped here it follows the
+  // rounded corners instead of poking out past them.
+  lv_obj_set_style_clip_corner(box, true, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -1042,7 +1045,7 @@ void handleAmsDetailDeferredActions() {
       const int code = serverReachNote(backendPatchSpoolLastDried(cfg_spoolman_base, spool_id, iso), true);
       loadingOverlayHide();
       logSDf("AMSDETAIL: dried %s for spool %d, HTTP %d", iso, spool_id, code);
-      if (code == 200) {
+      if (backendWriteOk(code)) {
         isoDayLocal(iso, s_det.last_dried, sizeof(s_det.last_dried));
       } else {
         s_write_failed = true;

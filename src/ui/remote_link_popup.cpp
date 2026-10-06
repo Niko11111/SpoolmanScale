@@ -20,7 +20,9 @@
 #include "ui/spoolman_lookup.h"
 #include "ui/tag_busy_popup.h"
 #include "bambu/material_match.h"
+#include "services/tag_spool_match.h"
 #include "ui_common.h"
+#include "theme.h"
 
 static lv_obj_t *scr_remote_link = nullptr;
 static bool close_remote_link_pending = false;
@@ -130,6 +132,7 @@ void showRemoteLinkPopup(int spool_id) {
   char material[24] = "";
   char color_hex[SPOOL_COLOR_HEX_MAX] = "";   // "#RRGGBB", or "#RRGGBBAA" from Spoolman
   char vendor[32]   = "";
+  char article[16]  = "";
   float remaining   = -1.0f;      // negative means the server did not say
   bool have_details = false;
 
@@ -149,6 +152,7 @@ void showRemoteLinkPopup(int spool_id) {
       strncpy(name,     n, sizeof(name) - 1);
       strncpy(material, m, sizeof(material) - 1);
       strncpy(vendor,   v, sizeof(vendor) - 1);
+      strncpy(article,  doc["filament"]["article_number"] | "", sizeof(article) - 1);
       if (c[0]) {
         snprintf(color_hex, sizeof(color_hex), "%s%s", c[0] == '#' ? "" : "#", c);
       }
@@ -157,42 +161,25 @@ void showRemoteLinkPopup(int spool_id) {
     }
   }
 
-  // Cross-check the tag against the spool. Comparing three characters of the
-  // material was not enough: a "PLA Tough+" tag matched a plain "PLA" spool
-  // because both start with PLA, and the colour was never looked at, so a blue
-  // tag linked to an orange spool without a word.
-  //
-  // Both extra tests reuse what the manual link flow already applies when it
-  // filters its list, so device and web trigger judge a pair the same way.
+  // Cross-check the tag against the spool, by the verdict every link shares
+  // (services/tag_spool_match.h): material and subtype, colour, maker, and an
+  // article number both sides agree on settles all of it. Comparing three
+  // characters of the material was not enough once: a "PLA Tough+" tag passed
+  // a plain "PLA" spool, and a blue tag linked to an orange one.
   bool mismatch_material = false;
   bool mismatch_color    = false;
+  bool mismatch_vendor   = false;
   if (s_is_bambu && have_details) {
-    if (g_tag.material[0] && material[0] &&
-        strlen(material) >= 3 && strlen(g_tag.material) >= 3) {
-      mismatch_material = (strncasecmp(g_tag.material, material, 3) != 0);
-
-      // Subtype: "PLA Tough+" must not pass as plain "PLA". The keyword has to
-      // turn up in either the spool's material or its name, same as the list
-      // filter in fetchAllSpoolsForLink().
-      char subkw[16];
-      if (!mismatch_material && extractBambuSubtype(g_tag.material, subkw, sizeof(subkw))) {
-        // Same tolerant compare as the link flow: the tag writes "Tough+",
-        // the library writes "Tough Plus", and a literal search made every
-        // one of them look like a material mismatch.
-        mismatch_material = !bambuSubtypeMatches(material, subkw) &&
-                            !bambuSubtypeMatches(name, subkw);
-      }
-    }
-    // Same threshold the manual flow uses to drop far off colours from the list.
-    // g_tag.color_hex is empty for a clear filament, which names no hue to hold
-    // against the spool - and neither does a spool stored as 00000000.
-    SpoolColor server_color;
-    spoolColorParse(color_hex, &server_color);
-    if (g_tag.color_hex[0] == '#' && spoolColorNamesHue(server_color)) {
-      mismatch_color = (colorDistance(g_tag.color_hex, color_hex) > 120);
-    }
+    char tag_article[16];
+    tagSpoolTagArticle(tag_article, sizeof(tag_article));
+    const TagSpoolVerdict v = tagSpoolCompare(
+        g_tag.material, g_tag.color_hex, material, name, vendor, color_hex,
+        tag_article[0] && strcasecmp(tag_article, article) == 0);
+    mismatch_material = v.material;
+    mismatch_color    = v.color;
+    mismatch_vendor   = v.vendor;
   }
-  const bool mismatch = mismatch_material || mismatch_color;
+  const bool mismatch = mismatch_material || mismatch_color || mismatch_vendor;
 
   // Link without asking, if the user turned that on and the spool was already
   // lying there when they clicked. A mismatch always falls through to the
@@ -216,7 +203,7 @@ void showRemoteLinkPopup(int spool_id) {
   scr_remote_link = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_remote_link, 480, 320);
   lv_obj_set_pos(scr_remote_link, 0, 0);
-  lv_obj_set_style_bg_color(scr_remote_link, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(scr_remote_link, lv_color_hex(UI_COL_SCRIM), 0);
   lv_obj_set_style_bg_opa(scr_remote_link, LV_OPA_80, 0);
   lv_obj_set_style_border_width(scr_remote_link, 0, 0);
   lv_obj_set_style_radius(scr_remote_link, 0, 0);
@@ -228,9 +215,9 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_t *box = lv_obj_create(scr_remote_link);
   lv_obj_set_size(box, 440, mismatch ? 300 : 260);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(box, lv_color_hex(0x0c1828), 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_color(box,
-    mismatch ? lv_color_hex(0xff8080) : lv_color_hex(0x28d49a), 0);
+    mismatch ? lv_color_hex(UI_COL_BAD_TEXT) : lv_color_hex(UI_COL_GOOD), 0);
   lv_obj_set_style_border_width(box, 2, 0);
   lv_obj_set_style_radius(box, 12, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
@@ -239,14 +226,14 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_t *lbl_title = lv_label_create(box);
   { char tb[48]; copyT(tb, sizeof(tb), STR_REMOTE_LINK_TITLE); lv_label_set_text(lbl_title, tb); }
   lv_obj_set_style_text_color(lbl_title,
-    mismatch ? lv_color_hex(0xff8080) : lv_color_hex(0x28d49a), 0);
+    mismatch ? lv_color_hex(UI_COL_BAD_TEXT) : lv_color_hex(UI_COL_GOOD), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
   lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 14);
 
   lv_obj_t *line = lv_obj_create(box);
   lv_obj_set_size(line, 420, 1);
   lv_obj_set_pos(line, 10, 44);
-  lv_obj_set_style_bg_color(line, lv_color_hex(0x1a3060), 0);
+  lv_obj_set_style_bg_color(line, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_border_width(line, 0, 0);
   lv_obj_set_style_radius(line, 0, 0);
   lv_obj_set_style_pad_all(line, 0, 0);
@@ -256,7 +243,7 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_set_size(swatch, 42, 42);
   lv_obj_set_pos(swatch, 16, 56);
   lv_obj_set_style_radius(swatch, 6, 0);
-  lv_obj_set_style_border_color(swatch, lv_color_hex(0x1a3060), 0);
+  lv_obj_set_style_border_color(swatch, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_border_width(swatch, 1, 0);
   lv_obj_clear_flag(swatch, LV_OBJ_FLAG_SCROLLABLE);
   // Handles the empty and malformed cases itself, including the fallback grey.
@@ -283,7 +270,7 @@ void showRemoteLinkPopup(int spool_id) {
   }
   lv_obj_t *lbl_head = lv_label_create(box);
   lv_label_set_text(lbl_head, head);
-  lv_obj_set_style_text_color(lbl_head, lv_color_hex(0xe8f0ff), 0);
+  lv_obj_set_style_text_color(lbl_head, lv_color_hex(UI_COL_INK), 0);
   lv_obj_set_style_text_font(lbl_head, &lv_font_montserrat_ext_16, 0);
   lv_label_set_long_mode(lbl_head, LV_LABEL_LONG_DOT);
   lv_obj_set_width(lbl_head, 250);
@@ -291,7 +278,7 @@ void showRemoteLinkPopup(int spool_id) {
 
   lv_obj_t *lbl_vendor = lv_label_create(box);
   lv_label_set_text(lbl_vendor, vendor[0] ? vendor : "-");
-  lv_obj_set_style_text_color(lbl_vendor, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_vendor, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_vendor, &lv_font_montserrat_ext_14, 0);
   lv_label_set_long_mode(lbl_vendor, LV_LABEL_LONG_DOT);
   lv_obj_set_width(lbl_vendor, 250);
@@ -302,7 +289,7 @@ void showRemoteLinkPopup(int spool_id) {
     snprintf(wbuf, sizeof(wbuf), "%.0f g", remaining);
     lv_obj_t *lbl_w = lv_label_create(box);
     lv_label_set_text(lbl_w, wbuf);
-    lv_obj_set_style_text_color(lbl_w, lv_color_hex(0x28d49a), 0);
+    lv_obj_set_style_text_color(lbl_w, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_text_font(lbl_w, &lv_font_montserrat_ext_18, 0);
     lv_obj_align(lbl_w, LV_ALIGN_TOP_RIGHT, -16, 62);
   }
@@ -315,24 +302,24 @@ void showRemoteLinkPopup(int spool_id) {
 
     lv_obj_t *h_tag = lv_label_create(box);
     lv_label_set_text(h_tag, T(STR_REMOTE_LINK_COL_TAG));
-    lv_obj_set_style_text_color(h_tag, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(h_tag, lv_color_hex(UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(h_tag, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_pos(h_tag, COL_TAG, y_after_head);
 
     lv_obj_t *h_sp = lv_label_create(box);
     lv_label_set_text(h_sp, T(STR_REMOTE_LINK_COL_SPOOL));
-    lv_obj_set_style_text_color(h_sp, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(h_sp, lv_color_hex(UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(h_sp, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_pos(h_sp, COL_SPOOL, y_after_head);
 
     // Material row, values in red only where they actually differ.
     lv_obj_t *l_mat = lv_label_create(box);
     lv_label_set_text(l_mat, T(STR_REMOTE_LINK_ROW_MATERIAL));
-    lv_obj_set_style_text_color(l_mat, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(l_mat, lv_color_hex(UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(l_mat, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_pos(l_mat, 16, y_after_head + 20);
 
-    uint32_t mat_col = mismatch_material ? 0xff8080 : 0xc8d8f0;
+    uint32_t mat_col = mismatch_material ? UI_COL_BAD_TEXT : UI_COL_INK_2;
     lv_obj_t *v_mt = lv_label_create(box);
     lv_label_set_text(v_mt, g_tag.material[0] ? g_tag.material : "?");
     lv_obj_set_style_text_color(v_mt, lv_color_hex(mat_col), 0);
@@ -352,11 +339,11 @@ void showRemoteLinkPopup(int spool_id) {
     // Colour row as two swatches, which says more than two hex strings.
     lv_obj_t *l_col = lv_label_create(box);
     lv_label_set_text(l_col, T(STR_REMOTE_LINK_ROW_COLOR));
-    lv_obj_set_style_text_color(l_col, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(l_col, lv_color_hex(UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(l_col, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_pos(l_col, 16, y_after_head + 44);
 
-    uint32_t border = mismatch_color ? 0xff8080 : 0x1a3060;
+    uint32_t border = mismatch_color ? UI_COL_BAD_TEXT : UI_COL_LINE;
     for (int i = 0; i < 2; i++) {
       lv_obj_t *sw = lv_obj_create(box);
       lv_obj_set_size(sw, 22, 18);
@@ -382,7 +369,7 @@ void showRemoteLinkPopup(int spool_id) {
       else
         copyT(qb, sizeof(qb), STR_REMOTE_LINK_QUESTION);
       lv_label_set_text(lbl_q, qb); }
-    lv_obj_set_style_text_color(lbl_q, lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(lbl_q, lv_color_hex(UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(lbl_q, &lv_font_montserrat_ext_14, 0);
     lv_obj_set_style_text_align(lbl_q, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(lbl_q, LV_LABEL_LONG_WRAP);
@@ -395,9 +382,9 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_set_size(btn_ok, 420, 48);
   lv_obj_align(btn_ok, LV_ALIGN_TOP_MID, 0, y_after_head);
   lv_obj_set_style_bg_color(btn_ok,
-    mismatch ? lv_color_hex(0x3a1010) : lv_color_hex(0x0d3d2e), 0);
+    mismatch ? lv_color_hex(UI_COL_BAD_BG) : lv_color_hex(UI_COL_PICKED_BG), 0);
   lv_obj_set_style_bg_color(btn_ok,
-    mismatch ? lv_color_hex(0x602020) : lv_color_hex(0x18705a), LV_STATE_PRESSED);
+    mismatch ? lv_color_hex(UI_COL_BAD_BG_PRESSED) : lv_color_hex(UI_COL_MATCH_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ok, 8, 0);
   lv_obj_set_style_shadow_width(btn_ok, 0, 0);
   lv_obj_set_style_border_width(btn_ok, 0, 0);
@@ -414,26 +401,26 @@ void showRemoteLinkPopup(int spool_id) {
             sizeof(bb) - 1);
     bb[sizeof(bb) - 1] = '\0'; lv_label_set_text(lbl_ok, bb); }
   lv_obj_set_style_text_color(lbl_ok,
-    mismatch ? lv_color_hex(0xff8080) : lv_color_hex(0x28d49a), 0);
+    mismatch ? lv_color_hex(UI_COL_BAD_TEXT) : lv_color_hex(UI_COL_GOOD), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_ok);
 
   lv_obj_t *btn_cancel = lv_btn_create(box);
   lv_obj_set_size(btn_cancel, 420, 44);
   lv_obj_align(btn_cancel, LV_ALIGN_TOP_MID, 0, y_after_head + 56);
-  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_SURFACE), 0);
+  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_cancel, 8, 0);
   lv_obj_set_style_shadow_width(btn_cancel, 0, 0);
   lv_obj_set_style_border_width(btn_cancel, 1, 0);
-  lv_obj_set_style_border_color(btn_cancel, lv_color_hex(0x1a3060), 0);
+  lv_obj_set_style_border_color(btn_cancel, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_add_event_cb(btn_cancel, [](lv_event_t *e) {
     s_cancel_pending = true;
     close_remote_link_pending = true;
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_cancel = lv_label_create(btn_cancel);
   { char cb[32]; copyT(cb, sizeof(cb), STR_CANCEL); lv_label_set_text(lbl_cancel, cb); }
-  lv_obj_set_style_text_color(lbl_cancel, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_cancel, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(lbl_cancel, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_cancel);
 }

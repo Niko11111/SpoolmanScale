@@ -224,10 +224,9 @@ const char* const STRINGS[][3] = {
     "Enregistrer le séchage\nd'aujourd'hui ?" },  // STR_POPUP_DRIED_Q
   { "Gewicht in\nSpoolman updaten?", "Update weight\nin Spoolman?",
     "Mettre le poids à jour\ndans Spoolman ?" },  // STR_POPUP_WEIGHT_Q
-  { "Leere Spule\n(Spule + Kern messen)", "Empty spool\n(measure spool + core)",
-    "Bobine vide\n(mesurer bobine + moyeu)" },  // STR_BTN_EMPTY_SPOOL
-  { "Ja, bestätigen", "Yes, confirm",
-    "Oui, confirmer" },  // STR_BTN_CONFIRMED
+  { "Leergewicht\nmessen / eingeben", "Empty spool weight\nweigh / type in",
+    "Poids à vide\nmesurer / saisir" },  // STR_BTN_EMPTY_SPOOL
+  { "Ja, bestätigen",                 "Yes, confirm",                        "Oui, confirmer" },  // STR_BTN_CONFIRMED
 
   // Spool weight sub-popup
   { "Spulengewicht: %.0f g speichern als...",
@@ -2969,6 +2968,229 @@ const char* const STRINGS[][3] = {
   { "Der Server hat das Anfangsgewicht nicht übernommen. Es gilt weiter der alte Wert.",
     "The server did not accept the initial weight. The old value still stands.",
     "Le serveur n'a pas accepté le poids initial. L'ancienne valeur reste valable." },  // STR_INIT_W_FAIL_TEXT
+  // Empty spool weight, weighed or typed in (issue #40)
+  { "Leergewicht der Spule", "Empty spool weight",
+    "Poids de la bobine vide" },  // STR_TARE_CHOICE_TITLE
+  { "Leere Spule wiegen\njetzt auf der Waage: %.0f g", "Weigh the empty spool\non the scale now: %.0f g",
+    "Peser la bobine vide\nsur la balance : %.0f g" },  // STR_TARE_CHOICE_WEIGH
+  { "Wert eingeben\nbekannt oder vom Hersteller", "Type in a value\nknown or from the maker",
+    "Saisir une valeur\nconnue ou du fabricant" },  // STR_TARE_CHOICE_TYPE
+  { "Leergewicht eingeben", "Enter empty spool weight",
+    "Saisir le poids à vide" },  // STR_TARE_ENTER_TITLE
+  { "Waage %.0f g\n- Spule %.0f g\n= Rest %.0f g", "Scale %.0f g\n- spool %.0f g\n= %.0f g left",
+    "Balance %.0f g\n- bobine %.0f g\n= reste %.0f g" },  // STR_TARE_ENTER_REST
+  { "Leergewicht der Spule ohne Filament, %.0f bis %.0f g", "Weight of the spool without filament, %.0f to %.0f g",
+    "Poids de la bobine sans filament, %.0f à %.0f g" },  // STR_TARE_ENTER_RANGE
+  { "Mehr als auf der Waage liegt", "More than is on the scale",
+    "Plus que sur la balance" },  // STR_TARE_ENTER_OVER
+  // What else a Bambu tag says, on the tag card and the tags page
+  { "Trocknen",     "Drying",        "Séchage" },  // STR_W_TAG_DRY
+  { "Bambu-Code",   "Bambu code",    "Code Bambu" },  // STR_W_TAG_CODE
+  { "Zweite Farbe", "Second colour", "2e couleur" },  // STR_W_TAG_COLOR2
+  // The Bambu catalog's card on the tags page
+  { "Bambu-Katalog", "Bambu catalog",
+    "Catalogue Bambu" },  // STR_W_BCAT_TITLE
+  { "Noch nicht geladen.", "Not loaded yet.",
+    "Pas encore chargé." },  // STR_W_BCAT_NONE
+  { "%d Farben, geladen am %s, zuletzt geprüft am %s.", "%d colours, loaded on %s, last checked on %s.",
+    "%d couleurs, chargé le %s, vérifié le %s." },  // STR_W_BCAT_STATE
+  { "Wird geladen ...", "Loading ...",
+    "Chargement ..." },  // STR_W_BCAT_BUSY
+  { "Laden fehlgeschlagen: %s.", "Loading failed: %s.",
+    "Échec du chargement : %s." },  // STR_W_BCAT_FAIL
+  { "Laden", "Load",
+    "Charger" },  // STR_W_BCAT_LOAD
+  { "Aktualisieren", "Update",
+    "Mettre à jour" },  // STR_W_BCAT_UPDATE
+  { "Die Waage holt die Farbtabelle aus BambuStudio (GitHub, rund 230 KB) und speichert eine kompakte Kopie. Danach zeigt sie bei jedem Bambu-Tag den Farbnamen und die Artikelnummer, auch ohne Internet. Bambu ergänzt die Tabelle, wenn neue Farben erscheinen: Die Waage sieht einmal am Tag nach und lädt nur, wenn sich etwas geändert hat. Das folgt dem Schalter für den automatischen Update-Check.",
+    "The scale fetches the colour table from BambuStudio (GitHub, about 230 KB) and keeps a compact copy. From then on it shows the colour name and article number of every Bambu tag, offline as well. Bambu extends the table when new colours come out: the scale looks once a day and only downloads when something changed. This follows the switch for the automatic update check.",
+    "La balance récupère la table des couleurs de BambuStudio (GitHub, environ 230 Ko) et en garde une copie compacte. Elle affiche ensuite le nom de la couleur et la référence de chaque tag Bambu, même hors ligne. Bambu complète la table à la sortie de nouvelles couleurs : la balance vérifie une fois par jour et ne télécharge que si quelque chose a changé. Cela suit l'interrupteur de la recherche automatique de mises à jour." },  // STR_W_BCAT_NOTE
+  { "Unverändert, nichts neu geladen.", "Unchanged, nothing downloaded.",
+    "Inchangé, rien téléchargé." },  // STR_W_BCAT_UNCHANGED
+  // https to the backend
+  { "Zertifikat nicht prüfen (nur bei https)", "Do not check the certificate (https only)",
+    "Ne pas vérifier le certificat (https uniquement)" },  // STR_W_TLS_INSECURE
+  { "Eine Adresse mit https:// wird verschlüsselt angesprochen. Öffentliche Zertifikate wie Let's Encrypt prüft die Waage selbst. Zeigt der Browser bei deinem Server eine Warnung, weil das Zertifikat selbst signiert ist, schalte das hier ein: Die Verbindung bleibt verschlüsselt, die Waage prüft aber nicht, wer antwortet.",
+    "An address with https:// is reached encrypted. Public certificates such as Let's Encrypt are checked by the scale itself. If your browser warns about your server because its certificate is self-signed, switch this on: the connection stays encrypted, but the scale does not check who answers.",
+    "Une adresse en https:// est contactée de façon chiffrée. La balance vérifie elle-même les certificats publics comme Let's Encrypt. Si votre navigateur affiche un avertissement pour votre serveur parce que son certificat est auto-signé, activez ceci : la connexion reste chiffrée, mais la balance ne vérifie pas qui répond." },  // STR_W_TLS_INSECURE_HINT
+  { "Verbindung offen halten (nur bei https)", "Keep the connection open (https only)",
+    "Garder la connexion ouverte (https uniquement)" },  // STR_W_TLS_KEEP
+  { "Der Aufbau einer https-Verbindung dauert auf der Waage etwa 0,6 s, eine offene Verbindung antwortet in rund 30 ms. Die Waage öffnet sie schon, wenn eine Spule aufgelegt wird, und schließt sie nach der gewählten Zeit ohne Anfrage. 30 Minuten lohnen sich nur, wenn dein Server die Verbindung so lange offen lässt.",
+    "Opening an https connection takes the scale about 0.6 s, an open connection answers in about 30 ms. The scale opens it as soon as a spool is put on, and closes it after the chosen time without a request. 30 minutes only pay off if your server keeps the connection open that long.",
+    "Ouvrir une connexion https prend environ 0,6 s à la balance, une connexion ouverte répond en 30 ms environ. La balance l'ouvre dès qu'une bobine est posée et la ferme après le délai choisi sans requête. 30 minutes ne servent que si votre serveur garde la connexion ouverte aussi longtemps." },  // STR_W_TLS_KEEP_HINT
+  // The address screen on the device
+  { "https: im Browser", "https: in the browser", "https : navigateur" },  // STR_SP_HTTPS_HINT
+  { "https-Adresse",     "https address",         "Adresse https" },  // STR_SP_HTTPS_TITLE
+  // The printer page's print position card, and the calibration page
+  { "Druckposition",          "Print position",         "Position d'impression" },  // STR_W_P_CAL_TITLE
+  { "Lage der Rolle",         "Roll position",          "Position du rouleau" },  // STR_W_P_CAL_ROLL
+  { "Links",                  "Left",                   "Gauche" },  // STR_W_P_CAL_LEFT
+  { "Mitte",                  "Centre",                 "Centre" },  // STR_W_P_CAL_CENTER
+  { "Rechts",                 "Right",                  "Droite" },  // STR_W_P_CAL_RIGHT
+  { "Versatz",                "Offset",                 "Décalage" },  // STR_W_P_CAL_OFFSET
+  { "Kalibrierseite drucken", "Print calibration page", "Imprimer la page de calibrage" },  // STR_W_P_CAL_PRINT
+  { "Trag die erste Zahl ein, die links auf dem Etikett steht. Sitzt der Rahmen danach nicht mittig, stell mit − und + nach.",
+    "Enter the first number on the left of the label. If the frame is not centred afterwards, adjust with − and +.",
+    "Saisissez le premier nombre à gauche de l'étiquette. Si le cadre n'est pas centré ensuite, ajustez avec − et +." },  // STR_W_P_CAL_HINT
+  { "Erste Zahl links = Versatz", "Leftmost number = offset", "Nombre à gauche = décalage" },  // STR_LBL_CAL_EDGE
+  { "Mehr als 1 mm Rand links und rechts vom Rahmen: Etikettgröße prüfen.",
+    "More than 1 mm margin left and right of the frame: check the label size.",
+    "Plus de 1 mm de marge à gauche et à droite du cadre : vérifiez la taille de l'étiquette." },  // STR_W_P_CAL_HINT2
+  // The print position screen on the device
+  { "Kalibrierseite drucken, dann die erste Zahl links auf dem Etikett einstellen.",
+    "Print the calibration page, then set the first number on the left of the label.",
+    "Imprimez la page de calibrage, puis réglez le 1er nombre à gauche." },  // STR_PRN_OFFSET_HINT
+  { "Wo die Rolle unter dem Druckkopf läuft, hängt davon ab, wie sie im Halter sitzt. Die Kalibrierseite druckt ein Lineal über den ganzen Kopf: Die erste Zahl links auf dem Etikett ist der Versatz. Sitzt der Rahmen danach mit gleichem Rand links und rechts, passt es. Gedrückt halten zählt schnell.",
+    "Where the roll runs under the head depends on how it sits in the holder. The calibration page prints a ruler across the whole head: the first number on the left of the label is the offset. Once the frame has the same margin left and right, it is right. Hold a button to count fast.",
+    "L'endroit où le rouleau passe sous la tête dépend de son support. La page de calibrage imprime une règle sur toute la tête : le premier nombre à gauche de l'étiquette est le décalage. Quand le cadre a la même marge des deux côtés, c'est bon. Maintenez un bouton pour aller vite." },  // STR_PRN_OFFSET_HELP
+  // Thermal labels and the dryer
+  { "Beim Trocknen mit hoher Temperatur wird das Etikett auf der Spule schwarz.",
+    "Drying at a high temperature turns the label on the spool black.",
+    "Un séchage à haute température noircit l'étiquette sur la bobine." },  // STR_PRN_HEAT_SHORT
+  { "Die Etiketten sind Thermopapier: Der Drucker färbt sie ohne Tinte, allein mit Wärme. Dieselbe Reaktion löst auch das Trocknen aus. Auf einer Spule, die mit hoher Temperatur getrocknet wird, färbt sich das ganze Etikett schwarz, im AMS HT bei 85 °C meist schon beim ersten Mal. Bei niedrigeren Temperaturen geschieht das langsamer und kann sich über mehrere Trocknungen aufbauen. Schrift und QR-Code sind danach nicht mehr lesbar.",
+    "The labels are thermal paper: the printer colours them without ink, by heat alone. Drying sets off the same reaction. On a spool dried at a high temperature the whole label turns black, in the AMS HT at 85 °C mostly the very first time. At lower temperatures it happens more slowly and can build up over several drying runs. Text and QR code can no longer be read afterwards.",
+    "Les étiquettes sont en papier thermique : l'imprimante les colore sans encre, par la chaleur. Le séchage déclenche la même réaction. Sur une bobine séchée à haute température, toute l'étiquette noircit, dans l'AMS HT à 85 °C souvent dès la première fois. Plus bas, cela va plus lentement et peut s'accumuler sur plusieurs séchages. Texte et code QR deviennent illisibles." },  // STR_PRN_HEAT_HELP
+  // A Bambu tag that does not describe the spool it is linked to
+  { "Passt nicht zum Tag",       "Does not match the tag",       "Diffère du tag" },  // STR_LINK_MISMATCH_TITLE
+  { "Trotzdem verknüpfen",       "Link anyway",                  "Lier quand même" },  // STR_BTN_LINK_ANYWAY
+  { "Tag passt nicht zur Spule", "Tag does not match the spool",
+    "Le tag ne correspond pas" },  // STR_TAG_MISMATCH_STATUS
+  { "Der Tag passt nicht zu Spule #%d.\nTag: %s\nSpule: %s\nTrotzdem verknüpfen?",
+    "The tag does not match spool #%d.\nTag: %s\nSpool: %s\nLink anyway?",
+    "Le tag ne correspond pas à la bobine #%d.\nTag : %s\nBobine : %s\nLier quand même ?" },  // STR_W_TL_MISMATCH
+  { "Anzeige: Spule #%d", "Showing spool #%d", "Vue : bobine #%d" },  // STR_TAG_VIEW_SPOOL
+  // Web: colour scheme
+  { "Design",     "Theme",         "Thème" },  // STR_W_NAV_THEME
+  { "Farbschema", "Colour scheme", "Palette de couleurs" },  // STR_W_C_THEME
+  { "Gilt für die Waage und diese Weboberfläche. Die Waage startet dafür neu, alle Einstellungen bleiben erhalten.",
+    "Applies to the scale and to this web interface. The scale restarts for it; every setting is kept.",
+    "S'applique à la balance et à cette interface web. La balance redémarre pour cela, tous les réglages sont conservés." },  // STR_W_THEME_HINT
+  { "Dunkel", "Dark",
+    "Sombre" },  // STR_W_THEME_DARK
+  { "Hell", "Light",
+    "Clair" },  // STR_W_THEME_LIGHT
+  { "Aktiv", "Active",
+    "Actif" },  // STR_W_THEME_ACTIVE
+  { "Übernehmen und neu starten", "Apply and restart",
+    "Appliquer et redémarrer" },  // STR_W_THEME_APPLY
+  { "Gespeichert. Gilt ab dem nächsten Neustart der Waage.", "Saved. Takes effect when the scale next restarts.",
+    "Enregistré. Actif au prochain redémarrage de la balance." },  // STR_W_THEME_LATER
+  { "Die Waage startet neu, die Seite lädt gleich von selbst.", "The scale is restarting, this page reloads by itself.",
+    "La balance redémarre, la page se recharge d'elle-même." },  // STR_W_THEME_RESTARTING
+  { "Spoolman dunkel", "Spoolman dark",
+    "Spoolman sombre" },  // STR_W_THEME_SPOOLMAN_DARK
+  { "Spoolman hell", "Spoolman light",
+    "Spoolman clair" },  // STR_W_THEME_SPOOLMAN_LIGHT
+  { "FilaMan dunkel", "FilaMan dark",
+    "FilaMan sombre" },  // STR_W_THEME_FILAMAN_DARK
+  { "FilaMan hell", "FilaMan light",
+    "FilaMan clair" },  // STR_W_THEME_FILAMAN_LIGHT
+  { "Farben vom Backend", "Backend colours",
+    "Couleurs du backend" },  // STR_W_THEME_FOLLOW_H
+  { "Farben folgen dem Backend", "Colours follow the backend",
+    "Les couleurs suivent le backend" },  // STR_W_THEME_FOLLOW
+  { "FilaMan und Spoolman bringen eigene Farben mit, BamBuddy behält die Standardfarben. Hell oder dunkel kommt aus deiner Wahl oben.", "FilaMan and Spoolman bring their own colours, BamBuddy keeps the standard ones. Light or dark comes from your choice above.",
+    "FilaMan et Spoolman apportent leurs propres couleurs, BamBuddy garde les couleurs standard. Clair ou sombre suit votre choix ci-dessus." },  // STR_W_THEME_FOLLOW_HINT
+  { "Schema nach dem Neustart", "Scheme after restart",
+    "Thème après redémarrage" },  // STR_W_THEME_AFTER
+  { "Eigene Farben", "Your own colours",
+    "Vos couleurs" },  // STR_W_THEME_OWN_H
+  { "Auf dem gewählten Schema. Jede Farbe behält ihre Helligkeit, Text bleibt so gut lesbar wie vorher.", "On top of the scheme. Every colour keeps its brightness, so text stays as readable as before.",
+    "Par-dessus le thème. Chaque couleur garde sa luminosité, le texte reste aussi lisible qu'avant." },  // STR_W_THEME_OWN_HINT
+  { "Akzent", "Accent",
+    "Accent" },  // STR_W_THEME_ACCENT
+  { "Titel, aktive Auswahl, Schieberegler, Links.", "Titles, the active choice, sliders, links.",
+    "Titres, choix actif, curseurs, liens." },  // STR_W_THEME_ACCENT_HINT
+  { "Grundton", "Ground tone",
+    "Teinte de fond" },  // STR_W_THEME_TONE
+  { "Hintergrund, Flächen, Linien und die graue Schrift.", "Background, surfaces, lines and the grey text.",
+    "Fond, surfaces, lignes et texte gris." },  // STR_W_THEME_TONE_HINT
+  { "Vom Schema", "Scheme's own",
+    "Celle du thème" },  // STR_W_THEME_SCHEME_OWN
+  { "Eigene Farbe", "Own colour",
+    "Couleur libre" },  // STR_W_THEME_OWN_COLOUR
+  { "Farbton", "Hue",
+    "Teinte" },  // STR_W_THEME_HUE
+  { "Stärke", "Strength",
+    "Intensité" },  // STR_W_THEME_STRENGTH
+  { "Links grau, in der Mitte wie das Schema, rechts kräftiger.", "Grey on the left, as the scheme in the middle, stronger on the right.",
+    "Gris à gauche, comme le thème au milieu, plus soutenu à droite." },  // STR_W_THEME_STRENGTH_HINT
+  { "Vorschau", "Preview",
+    "Aperçu" },  // STR_W_THEME_PREVIEW
+  { "Zurück zu den Farben des Schemas", "Back to the scheme's colours",
+    "Revenir aux couleurs du thème" },  // STR_W_THEME_RESET
+  { "auf dem Hintergrund", "on the background",
+    "sur le fond" },  // STR_W_THEME_ON_BG
+  { "+ eigene Farben", "+ own colours",
+    "+ couleurs perso" },  // STR_W_THEME_PLUS_OWN
+  { "Orange", "Orange",
+    "Orange" },  // STR_W_COL_ORANGE
+  { "Pink", "Pink",
+    "Rose" },  // STR_W_COL_PINK
+  { "Blau", "Blue",
+    "Bleu" },  // STR_W_COL_BLUE
+  { "Violett", "Violet",
+    "Violet" },  // STR_W_COL_VIOLET
+  { "Gelb", "Yellow",
+    "Jaune" },  // STR_W_COL_YELLOW
+  { "Petrol", "Petrol",
+    "Pétrole" },  // STR_W_COL_PETROL
+  { "Rot", "Red",
+    "Rouge" },  // STR_W_COL_RED
+  { "Grün", "Green",
+    "Vert" },  // STR_W_COL_GREEN
+  { "Sand", "Sand",
+    "Sable" },  // STR_W_COL_SAND
+  { "Helle Schemata: Beim Scrollen und beim Wechsel zwischen Screens zeigt das Display sichtbare Schlieren, weil es jedes Bild in Streifen aufbaut. Dunkle Schemata wirken dabei ruhiger.",
+    "Light schemes: while scrolling and when screens change, the display shows visible smearing, because it builds every frame in strips. Dark schemes look calmer there.",
+    "Thèmes clairs : pendant le défilement et lors des changements d'écran, l'affichage laisse des traînées visibles, car il construit chaque image par bandes. Les thèmes sombres paraissent plus calmes." },  // STR_W_THEME_LIGHT_NOTE
+  { "Tag gehört zu Filament #%d", "Tag belongs to filament #%d",
+    "Tag lié au filament #%d" },  // STR_TAG_ON_FILAMENT
+  { "Server verlangt einen Zugang", "Server asks for access",
+    "Le serveur exige un accès" },  // STR_SM_AUTH_MISSING
+  { "Zugang abgelehnt", "Access rejected",
+    "Accès refusé" },  // STR_SM_AUTH_REJECTED
+  { "Nur ausfüllen, wenn ein Proxy mit Passwort davor steht oder der Server einen Schlüssel verlangt.", "Only fill this in when a proxy with a password sits in front of it or the server asks for a key.",
+    "À remplir seulement si un proxy avec mot de passe est devant ou si le serveur demande une clé." },  // STR_W_SM_AUTH_HINT
+  { "Zugang", "Access",
+    "Accès" },  // STR_W_SM_AUTH_KIND
+  { "Keiner", "None",
+    "Aucun" },  // STR_W_SM_AUTH_NONE
+  { "API-Key (X-API-Key)", "API key (X-API-Key)",
+    "Clé d'API (X-API-Key)" },  // STR_W_SM_AUTH_KEY
+  { "Token (Bearer)", "Token (Bearer)",
+    "Jeton (Bearer)" },  // STR_W_SM_AUTH_BEARER
+  { "Benutzer und Passwort", "User and password",
+    "Utilisateur et mot de passe" },  // STR_W_SM_AUTH_BASIC
+  { "Benutzer", "User",
+    "Utilisateur" },  // STR_W_SM_USER
+  { "Schlüssel oder Passwort", "Key or password",
+    "Clé ou mot de passe" },  // STR_W_SM_SECRET
+  { "Die Adresse beginnt mit http://, der Zugang geht also unverschlüsselt durchs Netz. Schützt vor fremden Schreibzugriffen, nicht vor Mitlesen im selben Netz.", "The address starts with http://, so the access crosses the network unencrypted. It keeps others from writing, not from listening on the same network.",
+    "L'adresse commence par http://, l'accès circule donc sans chiffrement. Il empêche les écritures d'autrui, pas l'écoute sur le même réseau." },  // STR_W_SM_AUTH_PLAIN
+  { "Webseite", "Web page",
+    "Page web" },  // STR_W_THEME_WEB_H
+  { "Hell oder dunkel wie das System", "Light or dark as the system sets it",
+    "Clair ou sombre selon le système" },  // STR_W_THEME_WEB_OS
+  { "Nur diese Webseite: Sie folgt der Einstellung von Gerät oder Browser, in der Farbfamilie der Waage. Die Waage bleibt, wie oben gewählt. Wirkt sofort, ohne Neustart.", "This web page only: it follows the device or browser setting, in the scale's colour family. The scale stays as chosen above. Takes effect at once, without a restart.",
+    "Cette page web uniquement : elle suit le réglage de l'appareil ou du navigateur, dans la famille de couleurs de la balance. La balance reste comme choisi ci-dessus. Effet immédiat, sans redémarrage." },  // STR_W_THEME_WEB_OS_HINT
+  { "Zu lang: höchstens %u Zeichen. Nichts gespeichert.", "Too long: %u characters at most. Nothing saved.",
+    "Trop long : %u caractères au maximum. Rien enregistré." },  // STR_W_SM_SECRET_LONG
+  { "Der Zugang wurde für %s eingegeben und geht nicht an die neue Adresse. Bitte für diese Adresse neu eingeben.", "This access was entered for %s and is not sent to the new address. Enter it again for this address.",
+    "Cet accès a été saisi pour %s et n'est pas envoyé à la nouvelle adresse. Saisissez-le à nouveau pour celle-ci." },  // STR_W_SM_AUTH_REBIND
+  { "Für Schrift wird die Helligkeit angepasst, bis sie lesbar ist, auf der Waage wie hier. Flächen behalten die gewählte Farbe.",
+    "For text its lightness is adjusted until it reads, on the scale as here. Fills keep the chosen colour.",
+    "Pour le texte, la luminosité est ajustée jusqu'à ce qu'il soit lisible, sur la balance comme ici. Les surfaces gardent la couleur choisie." },  // STR_W_THEME_TEXT_ADJUSTED
+  { "Die Farben folgen dem Backend und wechseln beim nächsten Neustart der Waage.",
+    "The colours follow the backend and change when the scale next restarts.",
+    "Les couleurs suivent le backend et changent au prochain redémarrage de la balance." },  // STR_W_BACKEND_THEME_NOTE
+  { "Eigene Farben zurücksetzen", "Reset own colours",
+    "Effacer les couleurs perso" },  // STR_THEME_RESET_OWN
+  { "Akzent und Grundton aus dem Web", "Accent and ground tone from the web",
+    "Accent et teinte de fond du web" },  // STR_THEME_RESET_OWN_SUB
+  { "Noch nicht übernommen", "Not applied yet",
+    "Pas encore appliqué" },  // STR_W_THEME_UNSAVED
+  { "Ins AMS",                         "Into AMS",                            "Dans l'AMS" },  // STR_AMS_MAIN_ASSIGN
 };
 
 StringID tagWriteResultString(uint8_t code) {

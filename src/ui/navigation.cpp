@@ -19,6 +19,7 @@
 #include "ui/nfc_reset_popup.h"
 #include "ui/ota_github.h"
 #include "ui/printer_screen.h"
+#include "ui/printer_offset_screen.h"
 #include "ui/reboot_popup.h"
 #include "ui/system_screen.h"
 #include "ui/spoolman_screen.h"
@@ -83,6 +84,7 @@ void hideAllOverlays() {
   if (scr_bluetooth)   lv_obj_add_flag(scr_bluetooth,   LV_OBJ_FLAG_HIDDEN);
   if (scr_ble_devices) lv_obj_add_flag(scr_ble_devices, LV_OBJ_FLAG_HIDDEN);
   if (scr_printer)     lv_obj_add_flag(scr_printer,     LV_OBJ_FLAG_HIDDEN);
+  hidePrinterOffsetScreen();
   if (scr_spoolman)    lv_obj_add_flag(scr_spoolman,    LV_OBJ_FLAG_HIDDEN);
   if (scr_welcome)     lv_obj_add_flag(scr_welcome,     LV_OBJ_FLAG_HIDDEN);
   if (scr_first_boot)  lv_obj_add_flag(scr_first_boot,  LV_OBJ_FLAG_HIDDEN);
@@ -134,6 +136,7 @@ static void deleteSecondaryScreens() {
   closeBluetoothScreen();
   closeBleDevicesScreen();
   closePrinterScreen();
+  closePrinterOffsetScreen();
   closeSpoolmanScreen();
   closeWifiConnectingScreen();
   closeWifiPortalScreen();

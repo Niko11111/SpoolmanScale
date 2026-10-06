@@ -31,6 +31,7 @@ enum TagLinkResult : uint8_t {
   TL_NO_TAG,      // no tag on the reader any more
   TL_NETWORK,     // the server did not answer
   TL_FAILED,      // the server answered and refused
+  TL_MISMATCH,    // a Bambu tag that does not describe the spool, nothing written
 };
 
 // Codes and ids rather than a sentence: this file cannot include lang.h (T()
@@ -39,11 +40,17 @@ struct TagLinkReport {
   uint8_t code;
   int     spool_id;
   int     other_spool;
+  // TL_MISMATCH: what the tag and the spool say, material and colour, for the
+  // page's question. Data, not a sentence.
+  char    tag_desc[40];
+  char    spool_desc[64];
 };
 
 // Parks a link of the tag the page showed - uid as tagCachedUid() gave it -
 // to spool_id. False when a link is already waiting or an argument is empty.
-bool tagLinkRequest(int spool_id, const char* uid);
+// force: the page has asked about a Bambu tag that does not match the spool
+// (TL_MISMATCH) and the answer was to link it all the same.
+bool tagLinkRequest(int spool_id, const char* uid, bool force = false);
 
 // From appLoop(), after tagWriteTick(). Waits while a tag write is running.
 void tagLinkTick();
@@ -53,6 +60,15 @@ const TagLinkReport* tagLinkReportData();
 // The spool a link has just bound, handed out once so the main screen can show
 // it, the way tagWriteTakeLinkedSpool() does for a write. 0 otherwise.
 int tagLinkTakeLinkedSpool();
+
+// The link a tag write asks for on Spoolman, made the way the device's own
+// link makes it: through patchSpoolTag(), so it reaches Spoolman's own tag
+// relation and grows a list field instead of overwriting it. The plain field
+// write the other backends use has no key to write to for the relation.
+// From the loop only. Answers in HTTP terms for the write's report: 200
+// linked, 409 another spool holds the tag, -1 the server was not reached,
+// 400 the server refused.
+int tagLinkAfterWrite(int spool_id, const char* uid);
 
 // Whether a link leaves the spool's other tags bound: Spoolman's own relation,
 // and a list field with appending switched on. Everywhere else the new tag

@@ -20,7 +20,9 @@
 //  here so the renderer and the screens agree on them.
 // ============================================================
 
-enum LabelPrinterModel : uint8_t { LP_MODEL_NONE = 0, LP_MODEL_M220 = 1, LP_MODEL_M110 = 2 };
+enum LabelPrinterModel : uint8_t {
+  LP_MODEL_NONE = 0, LP_MODEL_M220 = 1, LP_MODEL_M110 = 2, LP_MODEL_M100 = 3
+};
 
 struct LabelPrinterProfile {
   LabelPrinterModel model;
@@ -30,6 +32,9 @@ struct LabelPrinterProfile {
   uint16_t min_length_mm, max_length_mm;
   uint16_t base_raster_width, max_raster_width;   // dots in one print row
   bool     experimental;
+  // Prints by heat on heat-sensitive paper, no ribbon: the label turns black
+  // wherever it gets hot enough, a spool in the dryer included.
+  bool     direct_thermal;
 };
 
 struct LabelPrinterConfig {
@@ -37,7 +42,16 @@ struct LabelPrinterConfig {
   char     name[BLE_NAME_LEN];
   char     address[BLE_ADDR_LEN];
   uint16_t media_width_mm, media_length_mm;      // across the head, along the feed
+  // Where the stock runs under the head, in dots from the middle of the print
+  // row, positive to the right as the label reads. Stored as set and clamped
+  // to the row when used, so LP_OFFSET_RIGHT keeps a roll against the right
+  // wall there for every label width.
+  int16_t  x_offset;
 };
+
+// "Against the wall": beyond any head, clamped to the row's edge when used.
+#define LP_OFFSET_RIGHT  LABEL_RASTER_MAX_W
+#define LP_OFFSET_LEFT  (-LABEL_RASTER_MAX_W)
 
 // The label sizes offered on the printer screen: width across the head by
 // length along the feed, in mm. What the vendors sell for these printers.
@@ -75,6 +89,14 @@ uint16_t labelPrinterDotsForMm(uint16_t mm);
 // The print row for this model and label width: the head's base width or
 // the label, whichever is wider, rounded up to whole bytes, capped at the head.
 uint16_t labelPrinterRasterWidth(LabelPrinterModel model, uint16_t media_width_mm);
+// The first dot of the label in the print row: the middle plus the offset,
+// clamped so the label stays in the row.
+uint16_t labelPrinterContentX(const LabelPrinterConfig& config);
+// The offsets the loaded stock allows: the label at the row's left edge and
+// at its right edge. Both 0 when the label fills the row.
+void labelPrinterOffsetRange(const LabelPrinterConfig& config, int16_t* min, int16_t* max);
+// The offset in effect: the stored one, clamped to that range.
+int16_t labelPrinterOffset(const LabelPrinterConfig& config);
 bool labelPrinterRasterFits(LabelPrinterModel model, const LabelRaster& image,
                             uint16_t media_width_mm, uint16_t media_length_mm);
 

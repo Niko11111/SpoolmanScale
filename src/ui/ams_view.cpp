@@ -88,7 +88,7 @@
 
 // Palette, from the one table in theme.h. The local names stay so the
 // drawing code below reads as before; what they mean is decided there.
-#define AMSV_COL_BG       UI_COL_SURFACE_2
+#define AMSV_COL_BG       UI_COL_SURFACE
 #define AMSV_COL_LINE     UI_COL_ROW_PRESSED
 #define AMSV_COL_ACCENT   UI_COL_ACCENT
 #define AMSV_COL_MUTED    UI_COL_CAPTION
@@ -424,7 +424,7 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
     const uint32_t g = (mid >> 8) & 0xFF;
     const uint32_t b = mid & 0xFF;
     const uint32_t luma = (299 * r + 587 * g + 114 * b) / 1000;
-    text_col = (luma > AMSV_LUMA_SWITCH) ? 0x000000 : 0xFFFFFF;
+    text_col = (luma > AMSV_LUMA_SWITCH) ? UI_COL_ON_BRIGHT_FILL : UI_COL_ON_DARK_FILL;
   }
 
   // A filled bay is always three lines, in the same order, with a dash where
@@ -632,8 +632,8 @@ static lv_obj_t* footButton(int x, int str_id, bool primary, lv_event_cb_t cb) {
   if (!b) return nullptr;
   lv_obj_set_size(b, AMSV_FOOT_BTN_W, AMSV_FOOT_BTN_H);
   lv_obj_set_pos(b, x, 320 - AMSV_FOOT_H + (AMSV_FOOT_H - AMSV_FOOT_BTN_H) / 2);
-  lv_obj_set_style_bg_color(b, lv_color_hex(primary ? UI_COL_OK_BG : UI_COL_SURFACE_2), 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(primary ? UI_COL_OK_BG_PRESSED : UI_COL_LINE), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(b, lv_color_hex(primary ? UI_COL_OK_BG : UI_COL_SURFACE), 0);
+  lv_obj_set_style_bg_color(b, lv_color_hex(primary ? UI_COL_OK_BG_PRESSED : UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(b, 1, 0);
   lv_obj_set_style_border_color(b, lv_color_hex(primary ? UI_COL_OK_BG_PRESSED : UI_COL_LINE), 0);
   lv_obj_set_style_radius(b, UI_RADIUS_BTN, 0);
@@ -664,7 +664,7 @@ static void applyInfoMode() {
     lv_obj_set_style_border_color(s_info_btn,
       lv_color_hex(on ? UI_COL_ACCENT : UI_COL_LINE), 0);
     lv_obj_set_style_bg_color(s_info_btn,
-      lv_color_hex(on ? UI_COL_ACCENT_DIM : UI_COL_SURFACE_2), 0);
+      lv_color_hex(on ? UI_COL_GO_BG : UI_COL_SURFACE), 0);
     lv_obj_t* l = lv_obj_get_child(s_info_btn, 0);
     if (l) {
       lv_obj_set_style_text_color(l,
@@ -786,7 +786,7 @@ static void buildScreen() {
       const int x = (title_right + close_left) / 2 - AMSV_RELOAD_W / 2;
       lv_obj_set_size(rl, AMSV_RELOAD_W, AMSV_CHIP_H);
       lv_obj_set_pos(rl, x, AMSV_HDR_MID - AMSV_CHIP_H / 2);
-      lv_obj_set_style_bg_color(rl, lv_color_hex(AMSV_COL_LINE), 0);
+      lv_obj_set_style_bg_color(rl, lv_color_hex(UI_COL_ACCENT_CHIP), 0);
       lv_obj_set_style_radius(rl, 6, 0);
       lv_obj_set_style_shadow_width(rl, 0, 0);
       lv_obj_add_event_cb(rl, reloadCb, LV_EVENT_CLICKED, nullptr);
@@ -829,7 +829,7 @@ static void buildScreen() {
   if (s_printer_btn) {
     lv_obj_set_size(s_printer_btn, AMSV_RELOAD_W, AMSV_CHIP_H);
     lv_obj_set_pos(s_printer_btn, AMSV_MARGIN, chip_y);
-    lv_obj_set_style_bg_color(s_printer_btn, lv_color_hex(AMSV_COL_LINE), 0);
+    lv_obj_set_style_bg_color(s_printer_btn, lv_color_hex(UI_COL_ACCENT_CHIP), 0);
     lv_obj_set_style_radius(s_printer_btn, 6, 0);
     lv_obj_set_style_shadow_width(s_printer_btn, 0, 0);
     lv_obj_set_style_pad_all(s_printer_btn, 0, 0);

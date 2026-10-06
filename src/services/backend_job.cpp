@@ -12,10 +12,12 @@
 // The priority, core and heap floor of the web jobs, for the same reasons: the
 // task sits below the loop so the display keeps its share, it lives on the
 // other core, and the heap floor is checked before the stack is taken from it.
-// The stack is smaller than theirs, which carry a TLS handshake: a list on all
-// three backends left 13.6 of 16 kB unused (beta.43, 23.09.2026), so it needs
-// under 3 kB. 10 kB leaves more than twice that as margin.
-#define BACKEND_JOB_STACK_BYTES   10240
+// The stack is theirs as well. 10 kB was measured over plain http - a list on
+// all three backends left 13.6 of 16 kB unused (beta.43, 23.09.2026) - but an
+// https backend puts the TLS handshake on this task whenever the kept
+// connection is closed, and the warm-up task needs 14 kB for that very
+// handshake.
+#define BACKEND_JOB_STACK_BYTES   16384
 #define BACKEND_JOB_PRIORITY      1
 #define BACKEND_JOB_CORE          0
 #define BACKEND_JOB_MIN_HEAP      60000

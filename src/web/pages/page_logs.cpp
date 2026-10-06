@@ -7,9 +7,11 @@
 #include <WebServer.h>
 
 #include "app/app_state.h"
+#include "app/render_bench.h"
 #include "hardware/sd_logger.h"
 #include "hardware/flash_log.h"
 #include "web/web_access.h"
+#include "web/web_net_probe.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
 // parameter, so lang.h has to come after anything that pulls it in.
@@ -87,7 +89,7 @@ static String body() {
   h += F("</h2><p class='note'>");
   h += T(STR_W_SESSION_NOTE);
   h += F("</p><pre id='sl' style='max-height:340px;overflow:auto;"
-         "background:#06080f;border:1px solid #1a3060;border-radius:8px;"
+         "background:var(--ground);border:1px solid var(--line);border-radius:8px;"
          "padding:10px;font-size:12px;line-height:1.5;white-space:pre-wrap;"
          "word-break:break-word;margin:12px 0'></pre>"
          "<div style='display:flex;gap:12px;align-items:center'>"
@@ -302,6 +304,7 @@ static String body() {
 }
 
 static void routes(WebServer &srv) {
+  netProbeRoutes(srv);
   // ── SD-Card Log endpoints ─────────────────────────────────
   // GET /logs -> JSON list of available log files
   srv.on("/api/logs", HTTP_GET, [&srv]() {
@@ -548,6 +551,14 @@ static void routes(WebServer &srv) {
     srv.send(200, "application/json",
              String("{\"dest\":") + (int)logDestStored() +
              ",\"dest_eff\":" + (int)logDestEffective() + "}");
+  });
+
+  // POST /api/log/bench -> one run of the render bench, its result lands in
+  // the log a few seconds later as "bench:".
+  srv.on("/api/log/bench", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
+    renderBenchRequest();
+    srv.send(200, "application/json", "{\"queued\":true}");
   });
 
   // POST /api/loglevel?l=0|1|2 -> minimal, normal, verbose

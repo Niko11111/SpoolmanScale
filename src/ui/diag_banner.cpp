@@ -8,6 +8,7 @@
 #include "diag_popup.h"
 #include "lang.h"
 #include "services/diagnostics.h"
+#include "theme.h"
 
 // Own pointers rather than any in app_state: nothing outside this file has
 // business writing to them.
@@ -39,8 +40,8 @@ static void buildBanner() {
   // than crowded.
   lv_obj_set_size(banner, 480, 22);
   lv_obj_set_pos(banner, 0, 0);
-  lv_obj_set_style_bg_color(banner, lv_color_hex(0x3a1410), 0);
-  lv_obj_set_style_bg_color(banner, lv_color_hex(0x5a2418), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(banner, lv_color_hex(UI_COL_BAD_BG), 0);
+  lv_obj_set_style_bg_color(banner, lv_color_hex(UI_COL_ALERT_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(banner, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(banner, 0, 0);
   lv_obj_set_style_radius(banner, 0, 0);
@@ -52,7 +53,7 @@ static void buildBanner() {
 
   banner_lbl = lv_label_create(banner);
   lv_label_set_text(banner_lbl, "");
-  lv_obj_set_style_text_color(banner_lbl, lv_color_hex(0xffb0a0), 0);
+  lv_obj_set_style_text_color(banner_lbl, lv_color_hex(UI_COL_ALERT_TEXT), 0);
   lv_obj_set_style_text_font(banner_lbl, &lv_font_montserrat_ext_14, 0);
   lv_obj_align(banner_lbl, LV_ALIGN_LEFT_MID, 8, 0);
   // Bounded like every other label in this row. A long translation has to run

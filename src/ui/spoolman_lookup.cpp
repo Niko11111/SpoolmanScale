@@ -21,6 +21,7 @@
 // library's templates.
 bool spoolHasAnyTag(JsonObjectConst spool);
 
+#include "services/drying_sync.h"
 #include "services/location_state.h"
 #include "services/backend.h"
 #include "services/breadcrumb.h"
@@ -29,6 +30,7 @@ bool spoolHasAnyTag(JsonObjectConst spool);
 #include "services/http_progress.h"
 #include "services/server_reach.h"
 #include "services/spool_cache.h"
+#include "services/spool_tare.h"
 #include "services/spoolman_actions.h"
 #include "services/spoolman_api.h"
 #include "services/tag_field.h"
@@ -41,6 +43,7 @@ bool spoolHasAnyTag(JsonObjectConst spool);
 #include "services/uid_index.h"
 #include "ui/spool_flow.h"
 #include "services/user_options.h"
+#include "services/tag_spool_match.h"
 #include "ui/date_display.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/theme.h"
@@ -504,18 +507,10 @@ void applyLastUsed(const char* native_iso, const char* weighed_iso, int spool_id
 // Reports which level answered, because an inherited default can be well off a
 // measured one (a Sunlu spool measured at 130 g against a 180 g brand default),
 // and the difference should be visible rather than silently applied.
+//
+// The chain itself is spoolTare(), shared with the link and copy lists.
 float resolveTare(JsonVariantConst spool, uint8_t *source) {
-  float w = spool["spool_weight"] | 0.0f;
-  if (w > 0) { *source = TARE_SPOOL; return w; }
-
-  w = spool["filament"]["spool_weight"] | 0.0f;
-  if (w > 0) { *source = TARE_FILAMENT; return w; }
-
-  w = spool["filament"]["vendor"]["empty_spool_weight"] | 0.0f;
-  if (w > 0) { *source = TARE_VENDOR; return w; }
-
-  *source = TARE_NONE;
-  return 0.0f;
+  return spoolTare(spool, source);
 }
 
 // How much filament this spool started with. The nominal weight of the
@@ -581,9 +576,9 @@ void showSpoolRemaining() {
   lv_label_set_text(lbl_spoolman_weight, weight_str);
   float pct = (sm_total > 0) ? (sm_remaining / sm_total) * 100.0f : 0;
   uint32_t pct_color;
-  if (pct <= 10.0f)      pct_color = 0xe04040;
-  else if (pct <= 30.0f) pct_color = 0xf0b838;
-  else                   pct_color = 0x28d49a;
+  if (pct <= 10.0f)      pct_color = UI_COL_BAD;
+  else if (pct <= 30.0f) pct_color = UI_COL_WARN;
+  else                   pct_color = UI_COL_GOOD;
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(pct_color), 0);
 
   char pct_str[16];
@@ -699,6 +694,13 @@ void querySpoolmanById(int spool_id) {
   String sm_color = spool["filament"]["color_hex"] | String("");
   sm_color.trim();
 
+  // After a link as after a scan: does the Bambu tag describe this spool?
+  if (is_bambu_tag) tagSpoolLookupNote(spool, sm_id);
+  else              tagSpoolLookupClear();
+  // After the verdict above: a tag that does not describe this spool must
+  // not hand it its drying advice.
+  dryingSyncNote(spool);
+
   bool is_ntag = !is_bambu_tag;
   if (is_ntag) {
     const TagInfo *ti = tagCachedInfo();
@@ -716,6 +718,7 @@ void querySpoolmanById(int spool_id) {
     }
   }
   applyServerColor(sm_color, is_bambu_tag);
+  if (tagSpoolLookupShowsSpool()) applyTagSpoolView();
 
   // Update display labels
   showSpoolRemaining();
@@ -723,7 +726,7 @@ void querySpoolmanById(int spool_id) {
   char sm_id_str[16];
   snprintf(sm_id_str, sizeof(sm_id_str), "%d", sm_id);
   lv_label_set_text(lbl_spoolman_id, sm_id_str);
-  lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(UI_COL_ACCENT), 0);
 
   applyDriedLabel(lbl_spoolman_dried_val, lbl_dried_sym, sm_last_dried);
 
@@ -735,6 +738,7 @@ void querySpoolmanById(int spool_id) {
 
   Serial.printf("querySpoolmanById OK: ID=%d %.1fg dried=%s\n", sm_id, sm_remaining, sm_last_dried);
   updateLinkButton();
+  if (tagSpoolLookupDiffers()) paintTagStatus();
 }
 
 // ============================================================
@@ -1087,7 +1091,7 @@ void showArchivedSpool(int archived_id) {
   // would read as a measurement rather than as a state.
   if (sm_archived) {
     lv_label_set_text(lbl_spoolman_weight, T(STR_ARCHIVED));
-    lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x808080), 0);
+    lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_ARCHIVED), 0);
     lv_label_set_text(lbl_spoolman_pct, "");
     if (lbl_scale_diff) lv_obj_set_width(lbl_scale_diff, 0);
   }
@@ -1152,7 +1156,7 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
 
   // Reset all Spoolman labels before new query
   lv_label_set_text(lbl_spoolman_weight, T(STR_WAIT));
-  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_GOOD), 0);
   lv_label_set_text(lbl_spoolman_pct, "");
   lv_label_set_text(lbl_spoolman_dried_val, "");
   if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
@@ -1187,6 +1191,7 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   sm_archived = false;
   sm_id = 0;
   sm_dup_count = 0;
+  tagSpoolLookupClear();
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) sm_tag_values[i][0] = '\0';
   sm_hw_uid_value[0] = '\0';
   sm_spool_weight = 0;
@@ -1250,6 +1255,11 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   // Fetched so a spool with no tare of its own can fall back to the
   // filament or brand default instead of being weighed as if empty.
   filter_spool["filament"]["vendor"]["empty_spool_weight"] = true;
+  // What dryingSyncNote() compares against. Without it every spool found
+  // through this filter read as having no drying advice, and the filament
+  // was patched again on each Bambu lookup.
+  filter_spool["filament"]["extra"][DRYING_FIELD] = true;
+  filter_spool["extra"][DRYING_FIELD] = true;
   if (filter.overflowed())
     logSD("Backend: scan filter overflowed, fields will be missing");
 
@@ -1327,6 +1337,11 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
       scan_matched_id = scan["matched_spool_id"] | 0;
       logSDf("Backend: tag scan announced, uid=%s matched=%d, no spool embedded",
              scan_uid, scan_matched_id);
+      // Spoolman 0.27 can bind a tag to a filament. No spool answers to it,
+      // so the lookup goes on and ends as "not found"; the log says why.
+      const int scan_filament = scan["matched_filament_id"] | 0;
+      if (scan_filament > 0)
+        logSDf("Backend: uid=%s belongs to filament %d, not to a spool", scan_uid, scan_filament);
       if (serr) searches_answered = false;     // 200, but nothing to read
     } else if (scode != BACKEND_NOT_SUPPORTED) {
       logSDf("Backend: native tag scan failed, code=%d err=%s", scode, serr.c_str());

@@ -33,6 +33,12 @@ bool backendLastListPartial();
 // follows. A no-op for the other two backends.
 void backendAfterConnect();
 
+// Whether a write went through. Any 2xx: Spoolman answers its PATCHes with
+// 200, but a server that speaks its API may answer 204, and several write
+// paths used to take only an exact 200 - a weight that was saved then read
+// as an error.
+inline bool backendWriteOk(int code) { return code >= 200 && code < 300; }
+
 // Re-asks the server which inventory it is on. Cheap enough to run with the
 // periodic health check, and necessary: switching the filament manager in
 // BamBuddy does not fail loudly on our side, it silently points every read
@@ -201,10 +207,13 @@ int  backendTagScan(const char* base_url, const char* uid, const char* alt_uid,
        DeserializationError* out_err = nullptr);
 
 // 201 links, 409 means another spool holds the UID and out_conflict_spool_id
-// names it, 404 is an unknown spool.
+// names it, or a filament does and out_conflict_filament_id names that. 404
+// is an unknown spool.
+#define BACKEND_LINK_TIMEOUT_MS 5000
 int  backendLinkTag(const char* base_url, int spool_id, const char* uid,
        const char* format, int* out_conflict_spool_id = nullptr,
-       uint32_t timeout_ms = 5000);
+       uint32_t timeout_ms = BACKEND_LINK_TIMEOUT_MS,
+       int* out_conflict_filament_id = nullptr);
 
 int  backendUnlinkTag(const char* base_url, int spool_id, const char* uid,
        uint32_t timeout_ms = 5000);
@@ -334,6 +343,13 @@ int  backendPatchVendorEmptySpoolWeight(const char* base_url, int vendor_id, flo
        uint32_t timeout_ms = 5000);
 int  backendPatchSpoolLocation(const char* base_url, int spool_id,
        const char* location_name = nullptr, uint32_t timeout_ms = 8000);
+// The drying a Bambu tag recommends: filament extra field / custom field
+// "drying" on Spoolman and FilaMan, "[drying:...]" in the spool's note on
+// BamBuddy. filament_id for the first two, spool_id for BamBuddy.
+#define DRYING_FIELD       "drying"
+#define DRYING_FIELD_NAME  "Drying"
+int  backendPatchFilamentDrying(int filament_id, int spool_id, const char* value,
+                                uint32_t timeout_ms);
 int  backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* iso_datetime,
        uint32_t timeout_ms = 5000);
 

@@ -152,7 +152,7 @@ int backendFindSpoolByTag(const char* base_url, const char* tag_uuid, JsonDocume
       // works in both of BamBuddy's inventory modes.
       (void)filter;
       return bbFindSpoolByTag(backendBaseUrl(), bambuddyApiKey(), tag_uuid,
-                              doc, timeout_ms, out_err);
+                              doc, timeout_ms, out_err, tagNativeUid(tag_uuid));
     default:
       // Spoolman goes through whichever extra field the user selected. The
       // field filter is passed along because a server that ignores the query
@@ -229,6 +229,14 @@ static uint8_t s_text_field_count = 0;
 
 // Same idea for the native tag API, kept beside the field cache because both
 // answer "what can this server do" and both go stale for the same reason.
+//
+// Which answers to a probe say "this server does not have it": 404 from
+// Spoolman before 0.27, 405 and 501 from a server that speaks Spoolman's API
+// but left this part out. Anything else - no answer, a 5xx, a rejected key -
+// says nothing about the feature and is asked again later.
+static bool backendAnswerMeansAbsent(int code) {
+  return code == 404 || code == 405 || code == 501;
+}
 static char s_tagapi_probed_for[96] = {0};
 static bool s_tagapi_present = false;
 
@@ -265,7 +273,7 @@ bool backendHasNativeTags() {
   int code = spoolmanHasTagApi(base);
   if (code == 200) {
     s_tagapi_present = true;
-  } else if (code == 404) {
+  } else if (backendAnswerMeansAbsent(code)) {
     s_tagapi_present = false;
   } else {
     // Anything else says nothing about the feature - an unreachable server, a
@@ -376,10 +384,12 @@ int backendTagScan(const char* base_url, const char* uid, const char* alt_uid,
 }
 
 int backendLinkTag(const char* base_url, int spool_id, const char* uid,
-                   const char* format, int* out_conflict_spool_id, uint32_t timeout_ms) {
+                   const char* format, int* out_conflict_spool_id, uint32_t timeout_ms,
+                   int* out_conflict_filament_id) {
   HttpStallTime stall(__func__);   // the loop stands still for this call
   if (!backendHasNativeTags()) return notSupported("LinkTag");
-  return spoolmanLinkTag(base_url, spool_id, uid, format, out_conflict_spool_id, timeout_ms);
+  return spoolmanLinkTag(base_url, spool_id, uid, format, out_conflict_spool_id, timeout_ms,
+                         out_conflict_filament_id);
 }
 
 int backendUnlinkTag(const char* base_url, int spool_id, const char* uid,
@@ -418,6 +428,16 @@ bool backendHasExtraField(const char* key) {
     JsonDocument doc;
     DeserializationError err = DeserializationError::Ok;
     int code = spoolmanGetSpoolFieldsJson(base, doc, 5000, &err);
+    if (backendAnswerMeansAbsent(code)) {
+      // A server that has no field list has no fields either. Cached like an
+      // empty list, so the scan does not ask again for every spool it reads.
+      logSDf("extra fields: %s has no field list (HTTP %d), none assumed", base, code);
+      s_fields_mask = 0;
+      s_text_field_count = 0;
+      strncpy(s_fields_probed_for, base, sizeof(s_fields_probed_for) - 1);
+      s_fields_probed_for[sizeof(s_fields_probed_for) - 1] = '\0';
+      return false;
+    }
     if (code != 200 || err) {
       // Not cached: an unreachable server now says nothing about the fields,
       // and caching a "no" here would keep them off for the whole session.
@@ -903,10 +923,11 @@ int backendPatchSpoolRemaining(const char* base_url, int spool_id, float remaini
       // stays, where this firmware has already subtracted the right number.
       if (measured_g >= 0.0f && sm_tare_source != TARE_VENDOR) {
         int code = spoolmanMeasureSpool(base_url, spool_id, measured_g, timeout_ms);
-        // 404 is the spool, 405 a server that predates the endpoint. Anything
-        // in that range means "not this way", and the spool still needs its
-        // weight, so fall through rather than report a failure.
-        if (code != 404 && code != 405) return code;
+        // 404 or 405 is a server that predates the endpoint, 501 one that
+        // speaks Spoolman's API without it (Spoolman itself answers an unknown
+        // spool with 400 here). All of them mean "not this way", and the spool
+        // still needs its weight, so fall through rather than report a failure.
+        if (!backendAnswerMeansAbsent(code)) return code;
         logSDf("measure not available (HTTP %d), falling back to PATCH", code);
       }
       return spoolmanPatchSpoolRemaining(base_url, spool_id, remaining, last_used_iso, timeout_ms);
@@ -1110,6 +1131,38 @@ int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* i
     default:
       ensureSpoolmanField(LAST_DRIED_FIELD);
       return spoolmanPatchSpoolLastDried(base_url, spool_id, iso_datetime, timeout_ms);
+  }
+}
+
+// The drying a Bambu tag recommends, on the filament where there is one. One
+// text field, "55 °C, 8 h", so temperature and time cannot drift apart.
+int backendPatchFilamentDrying(int filament_id, int spool_id, const char* value,
+                               uint32_t timeout_ms) {
+  HttpStallTime stall(__func__);   // the loop stands still for this call
+  switch (backendMode()) {
+    case BACKEND_FILAMAN:
+      return filamanPatchFilamentCustomField(backendBaseUrl(), filamanApiKey(), filament_id,
+                                             DRYING_FIELD, value, timeout_ms);
+    case BACKEND_BAMBUDDY:
+      // No filament object and no field: the spool's note, as for the date.
+      return bbPatchDryingNote(backendBaseUrl(), bambuddyApiKey(), spool_id, value, timeout_ms);
+    default: {
+      // Spoolman refuses an extra key it has no field for. The field is made
+      // on that answer and the write tried once more, which costs nothing on
+      // every later write - no probe up front.
+      int code = spoolmanPatchFilamentExtra(backendBaseUrl(), filament_id, DRYING_FIELD,
+                                            value, timeout_ms);
+      if (code == 400) {
+        const int c = spoolmanCreateFilamentField(backendBaseUrl(), DRYING_FIELD,
+                                                  DRYING_FIELD_NAME, timeout_ms);
+        logSDf("extra fields: filament field '%s' was missing, created, HTTP %d", DRYING_FIELD, c);
+        if (c == 200 || c == 201) {
+          code = spoolmanPatchFilamentExtra(backendBaseUrl(), filament_id, DRYING_FIELD,
+                                            value, timeout_ms);
+        }
+      }
+      return code;
+    }
   }
 }
 

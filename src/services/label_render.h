@@ -20,7 +20,7 @@
 // ============================================================
 
 #define LABEL_LINE_LEN 48
-#define LABEL_QR_LEN   96
+#define LABEL_QR_LEN  128    // an 80-character server address plus the spool path
 
 struct SpoolLabelData {
   int   id;
@@ -37,11 +37,17 @@ struct SpoolLabelData {
 // the canvas or the printer has no usable stock.
 bool labelRenderTest(const LabelPrinterConfig& printer, LabelRaster* out);
 
+// The calibration page: a ruler across the whole print row, numbered in the
+// offset that would put the label's left edge there, and a frame where the
+// scale takes the label to be now. Read the number at the label's left edge,
+// or check that the frame sits evenly.
+bool labelRenderCalibration(const LabelPrinterConfig& printer, LabelRaster* out);
+
 // A spool's label, with a QR code carrying what the active backend's own
 // scanner reads.
 bool labelRenderSpool(const LabelPrinterConfig& printer, const SpoolLabelData& spool,
                       LabelRaster* out);
 
-// What the QR code on a spool label carries for the active backend:
-// Spoolman's own tag format, FilaMan's and BamBuddy's spool page.
+// What the QR code on a spool label carries for the active backend: the
+// spool's page on Spoolman, FilaMan and BamBuddy, so a phone opens it.
 void labelQrForSpool(int spool_id, char* out, size_t n);

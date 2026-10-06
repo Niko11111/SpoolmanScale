@@ -63,6 +63,8 @@ static unsigned long s_rx_last_ms = 0;
 
 static bool          s_connecting        = false;
 static unsigned long s_connect_start_ms  = 0;
+// Addresses handed out before this attempt began, see wifiManagerLinkUpSince().
+static uint32_t      s_connect_ip_count  = 0;
 static bool          s_provisioned_event = false;
 static char          s_ssid[sizeof(cfg_wifi_ssid)]     = "";
 static char          s_pass[sizeof(cfg_wifi_password)] = "";
@@ -216,8 +218,13 @@ static void startProvisioning(const uint8_t *p, size_t len) {
   // The browser wins over a setup portal that is still open: station mode
   // would end its access point anyway, and the portal screen notices.
   setupPortalStop();
-  // The same reset the setup screen does before it connects.
-  wifiManagerPrepareScan();
+  // The same reset the setup screen does before it connects, and only then:
+  // a connected station is switched over directly, begin() drops the old link
+  // itself. The reset turned the driver off while the loop kept serving port
+  // 80 (wifi_ok stays true until the new link is up), the pattern behind the
+  // PANIC in esp_pbuf_free that doWifiScan() avoids the same way.
+  if (!wifiManagerIsConnected()) wifiManagerPrepareScan();
+  s_connect_ip_count = wifiManagerGotIpCount();
   wifiManagerBegin(s_ssid, s_pass);
   s_connecting       = true;
   s_connect_start_ms = millis();
@@ -278,7 +285,9 @@ static void rxByte(uint8_t b) {
 }
 
 static void pollConnect() {
-  if (wifiManagerIsConnected()) {
+  // Not wifiManagerIsConnected(): right after the switch that still reports
+  // the old link.
+  if (wifiManagerLinkUpSince(s_connect_ip_count)) {
     s_connecting = false;
     saveWifiCredentials(s_ssid, s_pass);
     memset(s_pass, 0, sizeof(s_pass));
@@ -305,8 +314,10 @@ static void pollConnect() {
   logSDf("Improv: could not connect to %s", s_ssid);
   // Stops the attempt, so a slow access point cannot bring up a link whose
   // credentials were never stored. The stored network is untouched and the
-  // reconnect watchdog takes it back up.
-  wifiManagerPrepareScan();
+  // reconnect watchdog takes it back up. Without the radio reset while port
+  // 80 may still be open, for the reason in startProvisioning().
+  if (wifi_ok) wifiManagerStopConnect();
+  else         wifiManagerPrepareScan();
   sendError(IMPROV_ERR_UNABLE_CONNECT);
   sendState(IMPROV_STATE_READY);
 }

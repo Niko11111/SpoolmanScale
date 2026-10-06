@@ -22,6 +22,7 @@
 #include "services/tag_write.h"
 #include "services/user_options.h"
 #include "web/web_access.h"
+#include "web/web_bambu_catalog.h"
 #include "web/web_jobs.h"
 #include "web/web_shell.h"
 #include "ui/second_tag_popup.h"
@@ -155,7 +156,9 @@ static String body() {
          "<span class='msg' id='to-s'></span></div>"
          "<p class='note' style='margin-top:10px'>");
   h += T(STR_W_TAGOPT_NOTE);
-  h += F("</p></div></div>"
+  h += F("</p></div>");
+  bambuCatalogCard(h);
+  h += F("</div>"
          "<div id='tg-modal' style='display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;align-items:center;justify-content:center;padding:16px'>"
          "<div class='card' style='max-width:560px;width:100%;margin:auto;box-shadow:0 10px 30px rgba(0,0,0,.6);background:var(--surface);padding:18px'>"
          "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px'>"
@@ -175,11 +178,13 @@ static String body() {
   // whole page did nothing at all.
   h += F("<style>"
          ".tghead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}"
-         ".tgbadge{font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:var(--surface-1);border:1px solid var(--border);color:var(--ink-soft)}"
+         ".tgbadge{font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-soft)}"
          "#tg-cur h3,#tg-matched h3,#tg-new h3{font-size:10.5px;font-weight:650;"
          "letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin:0}"
          ".tgline{display:flex;align-items:center;gap:9px;margin-bottom:8px}"
-         ".chip{width:26px;height:26px;border-radius:7px;border:1px solid #ffffff22;flex:none}"
+         // The edge from the palette: a white hairline vanished on the light
+         // ones, and with it a chip that has no colour of its own.
+         ".chip{width:26px;height:26px;border-radius:7px;border:1px solid var(--line);flex:none}"
          ".tgname{font-size:13.5px;color:var(--ink);line-height:1.3}"
          ".tglink{color:var(--accent)}"
          "#tg-cur table td,#tg-matched table td,#tg-new table td{font-size:11.5px;"
@@ -260,6 +265,10 @@ static String body() {
   h += F(",weight:");  h += jsStr(T(STR_W_TAG_WEIGHT));
   h += F(",dia:");     h += jsStr(T(STR_W_TAG_DIA));
   h += F(",len:");     h += jsStr(T(STR_W_TAG_LENGTH));
+  h += F(",dry:");     h += jsStr(T(STR_W_TAG_DRY));
+  h += F(",code:");    h += jsStr(T(STR_W_TAG_CODE));
+  h += F(",col2:");    h += jsStr(T(STR_W_TAG_COLOR2));
+  h += F(",cname:");   h += jsStr(T(STR_LBL_L_COLOR));
   h += F(",toosmall:"); h += jsStr(T(STR_W_TAG_TOOSMALL));
   h += F(",norec:");   h += jsStr(T(STR_W_TAG_NOREC));
   h += F(",ro:");      h += jsStr(T(STR_TW_ERR_NOT_NTAG));
@@ -311,6 +320,9 @@ static String body() {
   h += F("};"
          "let tgCur='',tgRaw='',tgNew='',tgLinked='',tgUid='',tgBackend='',tgCurI=null,tgNewI=null,tgMatched=null,"
          "tgBytes=0,tgNeed=0,tgKindCode=0,tgAdds=false,tgState='idle',"
+         // The question about a Bambu tag that does not match the spool, asked
+         // once per answer the scale gives.
+         "tgMisAsked='',"
          // The second tag: which spool this page wrote, when, and whether the
          // offer was turned down.
          "tgWroteId=0,tgWroteAt=0,tgT2Off=false,tgT2Tick=0;"
@@ -339,10 +351,12 @@ static String body() {
          "return '<tr'+d+'><td>'+k+'</td><td>'+esc(a===undefined?'-':a)+'</td></tr>';}"
          // The spool card has one side only, and an empty field is no row -
          // "-" included, which is how the device says "never" for a date.
+         // Drying as a Bambu tag gives it: temperature and hours.
+         "function dryT(x){return x.dry_c?x.dry_c+' C, '+x.dry_h+' h':undefined;}"
          "function one(k,v){return(v===undefined||v===null||v===''||v==='-')?'':row(k,v);}"
          "function cardHead(t,b){return '<div class=\"tghead\"><h3>'+t+'</h3><span class=\"tgbadge\">'+b+'</span></div>';}"
          "function head(c,n,x){return '<div class=\"tgline\"><div class=\"chip\" style=\"background:'"
-         "+(c||'#101828')+'\"></div><div><div class=\"tgname\">'+n+'</div>'"
+         "+(c||'var(--surface-2)')+'\"></div><div><div class=\"tgname\">'+n+'</div>'"
          "+'<div class=\"hint\">'+x+'</div></div></div>';}"
          "function renderCurTag(el){if(!el)return;"
          "const h=cardHead(M.cur,M.badge);"
@@ -363,17 +377,22 @@ static String body() {
          "const pA=i.proto?(i.proto+(i.version?' v'+i.version:'')):undefined;"
          "const pB=o.proto?(o.proto+(o.version?' v'+o.version:'')):undefined;"
          "rows+=row(M.proto,pA,pB);}"
+         "rows+=row(M.cname,i.cname,o.cname);"
+         "rows+=row(M.art,i.article,o.article);"
          "rows+=row(M.sku,i.sku,o.sku);"
          "rows+=row(M.nozzle,i.nozzle?i.nozzle+' C':undefined,o.nozzle?o.nozzle+' C':undefined);"
          "rows+=row(M.bed,i.bed?i.bed+' C':undefined,o.bed?o.bed+' C':undefined);"
          "rows+=row(M.weight,i.weight?i.weight+' g':undefined,o.weight?o.weight+' g':undefined);"
          "rows+=row(M.dia,i.dia?i.dia+' mm':undefined,o.dia?o.dia+' mm':undefined);"
          "rows+=row(M.len,i.len?i.len+' m':undefined,o.len?o.len+' m':undefined);"
+         "rows+=row(M.dry,dryT(i),dryT(o));"
+         "rows+=row(M.code,i.code,o.code);"
+         "rows+=row(M.col2,i.color2,o.color2);"
          "rows+=row(M.prod,i.prod_date,o.prod_date);"
          "rows+=row(M.tray,i.tray_uuid,o.tray_uuid);"
          "const bm=[i.brand,i.material].filter(Boolean).map(esc).join(' ');"
          "el.innerHTML=h"
-         "+head(i.color,bm||M.spool,"
+         "+head(i.color&&i.color2?'linear-gradient(135deg,'+i.color+','+i.color2+')':i.color,bm||M.spool,"
          "esc(i.fmt)+(i.color?' - '+esc(i.color):''))"
          "+'<table>'+rows+'</table>'+rawBtn;}"
          "function renderMatchedSpool(el){if(!el)return;"
@@ -411,12 +430,17 @@ static String body() {
          "const pA=i.proto?(i.proto+(i.version?' v'+i.version:'')):undefined;"
          "const pB=o.proto?(o.proto+(o.version?' v'+o.version:'')):undefined;"
          "rows+=row(M.proto,pA,pB);}"
+         "rows+=row(M.cname,i.cname,o.cname);"
+         "rows+=row(M.art,i.article,o.article);"
          "rows+=row(M.sku,i.sku,o.sku);"
          "rows+=row(M.nozzle,i.nozzle?i.nozzle+' C':undefined,o.nozzle?o.nozzle+' C':undefined);"
          "rows+=row(M.bed,i.bed?i.bed+' C':undefined,o.bed?o.bed+' C':undefined);"
          "rows+=row(M.weight,i.weight?i.weight+' g':undefined,o.weight?o.weight+' g':undefined);"
          "rows+=row(M.dia,i.dia?i.dia+' mm':undefined,o.dia?o.dia+' mm':undefined);"
          "rows+=row(M.len,i.len?i.len+' m':undefined,o.len?o.len+' m':undefined);"
+         "rows+=row(M.dry,dryT(i),dryT(o));"
+         "rows+=row(M.code,i.code,o.code);"
+         "rows+=row(M.col2,i.color2,o.color2);"
          "rows+=row(M.prod,i.prod_date,o.prod_date);"
          "rows+=row(M.tray,i.tray_uuid,o.tray_uuid);"
          "const bm=[i.brand,i.material].filter(Boolean).map(esc).join(' ');"
@@ -498,6 +522,14 @@ static String body() {
          "else if(d.linkstate=='pending')stat('busy',d.linkmsg,'',true);"
          "else if(d.linkstate=='ok')stat('ok',d.linkmsg,'');"
          "else if(d.linkstate=='error')stat('bad',d.linkmsg,'');"
+         // Nothing written yet: the scale asks back. Yes sends the same link
+         // again with the mismatch accepted, no leaves it standing as refused.
+         "else if(d.linkstate=='mismatch'){stat('bad',d.linkmsg,'');"
+         "if(tgMisAsked!==d.linkmsg){tgMisAsked=d.linkmsg;"
+         "if(d.linkspool&&confirm(d.linkmsg)){"
+         "fetch('/api/tag/link',{method:'POST',body:d.linkspool+','+tgUid+',1'})"
+         ".then(r=>r.json()).then(x=>{if(!x.ok)stat('bad',M.lbusy,'');})"
+         ".catch(()=>{});after();}}}"
          "else stat('','','');"
          "second(d);}).catch(()=>{});}"
          // One panel for whatever runs: a spinner and a moving bar while it
@@ -659,6 +691,7 @@ static const char* tagLinkStateName() {
     case TL_BUSY:    return "pending";
     case TL_OK:
     case TL_ALREADY: return "ok";
+    case TL_MISMATCH: return "mismatch";
     default:         return "error";
   }
 }
@@ -674,6 +707,8 @@ static String tagLinkMessageLocal() {
     case TL_OK:      snprintf(buf, sizeof(buf), T(STR_W_TL_OK), r->spool_id); break;
     case TL_ALREADY: snprintf(buf, sizeof(buf), T(STR_W_TL_ALREADY), r->spool_id); break;
     case TL_HELD:    snprintf(buf, sizeof(buf), T(STR_W_TL_HELD), r->other_spool); break;
+    case TL_MISMATCH: snprintf(buf, sizeof(buf), T(STR_W_TL_MISMATCH), r->spool_id,
+                               r->tag_desc, r->spool_desc); break;
     case TL_CHANGED: copyT(buf, sizeof(buf), STR_W_TL_CHANGED); break;
     case TL_NO_TAG:  copyT(buf, sizeof(buf), STR_TW_ERR_NO_TAG); break;
     case TL_NETWORK: copyT(buf, sizeof(buf), STR_LINK_NO_CONNECTION); break;
@@ -736,6 +771,7 @@ static String secondTagJson() {
 }
 
 static void routes(WebServer &srv) {
+  bambuCatalogRoutes(srv);
   srv.on("/api/tag/preview", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
     int id  = srv.arg("id").toInt();
@@ -745,7 +781,7 @@ static void routes(WebServer &srv) {
     uint16_t need = 0;
     bool ok = tagPreview(id, fmtFromInt(fmt),
                          prev, sizeof(prev), linked, sizeof(linked), &ti, &need);
-    char info[384];
+    char info[TAG_INFO_JSON_MAX];
     tagInfoJson(&ti, info, sizeof(info));
     // jsonEsc on both: prev carries the backend's vendor and filament names,
     // and a quotation mark in a brand made the reply malformed. r.json() then
@@ -792,7 +828,7 @@ static void routes(WebServer &srv) {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
     // Reader state comes from the loop task; touching the reader here would
     // race the main NFC poll.
-    char info[384];
+    char info[TAG_INFO_JSON_MAX];
     tagInfoJson(tagCachedInfo(), info, sizeof(info));
     String j = String("{\"info\":") + info +
                ",\"bytes\":"    + String((unsigned)tagCachedBytes()) +
@@ -804,7 +840,8 @@ static void routes(WebServer &srv) {
                "\",\"message\":\"" + jsonEsc(tagWriteMessageLocal().c_str()) +
                "\",\"content\":\"" + jsonEsc(tagCachedContent()) +
                "\",\"raw\":\""     + jsonEsc(tagCachedRaw()) +
-               "\",\"linkstate\":\"" + tagLinkStateName() +
+               "\",\"linkspool\":" + String(tagLinkReportData()->spool_id) +
+               ",\"linkstate\":\"" + tagLinkStateName() +
                "\",\"linkmsg\":\"" + jsonEsc(tagLinkMessageLocal().c_str()) +
                "\",\"linkadds\":" + (tagLinkKeepsOtherTags() ? "true" : "false") +
                ",\"matched\":" + spoolJson() +
@@ -857,9 +894,10 @@ static void routes(WebServer &srv) {
     srv.send(200, "application/json", "{\"ok\":true}");
   });
 
-  // "id,uid": the spool, and the tag the page was showing when it was asked.
-  // Parked only; tagLinkTick() makes the request on the loop task and refuses
-  // if a different tag lies on the reader by then.
+  // "id,uid" or "id,uid,1": the spool, the tag the page was showing when it
+  // was asked, and whether a Bambu tag that does not match the spool was
+  // accepted. Parked only; tagLinkTick() makes the request on the loop task
+  // and refuses if a different tag lies on the reader by then.
   srv.on("/api/tag/link", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
     if (!srv.hasArg("plain")) { srv.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
@@ -867,8 +905,11 @@ static void routes(WebServer &srv) {
     const int c = body.indexOf(',');
     const int id = body.substring(0, c < 0 ? body.length() : c).toInt();
     String uid = c < 0 ? String("") : body.substring(c + 1);
+    const int c2 = uid.indexOf(',');
+    const bool force = c2 >= 0 && uid.substring(c2 + 1).toInt() == 1;
+    if (c2 >= 0) uid = uid.substring(0, c2);
     uid.trim();
-    const bool ok = tagLinkRequest(id, uid.c_str());
+    const bool ok = tagLinkRequest(id, uid.c_str(), force);
     srv.send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
   });
 

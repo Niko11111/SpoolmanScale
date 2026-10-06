@@ -18,6 +18,12 @@ bool serverReachIsNetworkFailure(int code) {
     case HTTPC_ERROR_CONNECTION_LOST:
     case HTTPC_ERROR_NO_HTTP_SERVER:
     case HTTPC_ERROR_READ_TIMEOUT:
+    // A reverse proxy in front of the backend answers for it when the server
+    // behind is gone: Caddy says 502 for a stopped FilaMan. Nothing reached
+    // the backend either way, and "API error" sent the user nowhere.
+    case HTTP_CODE_BAD_GATEWAY:
+    case HTTP_CODE_SERVICE_UNAVAILABLE:
+    case HTTP_CODE_GATEWAY_TIMEOUT:
       return true;
     default:
       return false;

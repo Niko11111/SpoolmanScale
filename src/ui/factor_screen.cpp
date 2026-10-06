@@ -19,6 +19,7 @@
 #include "services/prefs_store.h"
 #include "services/user_options.h"
 #include "ui_common.h"
+#include "theme.h"
 
 
 void resetActivityTimer();
@@ -60,7 +61,7 @@ void buildFactorScreen() {
   lv_obj_set_style_border_width(scr_factor, 0, 0);
   lv_obj_set_style_pad_all(scr_factor, 0, 0);
   lv_obj_clear_flag(scr_factor, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(scr_factor, lv_color_hex(0x0a1020), 0);
+  lv_obj_set_style_bg_color(scr_factor, lv_color_hex(UI_COL_GROUND), 0);
 
   // Crash protection: null label pointers (screen is rebuilt)
   lbl_factor_display = nullptr;
@@ -78,7 +79,7 @@ void buildFactorScreen() {
   // Description / hint - single line, compact
   lv_obj_t *lbl_desc = lv_label_create(scr_factor);
   lv_label_set_text(lbl_desc, T(STR_CAL_TARE_HINT));
-  lv_obj_set_style_text_color(lbl_desc, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_desc, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_desc, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(lbl_desc, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(lbl_desc, LV_LABEL_LONG_WRAP);
@@ -99,13 +100,13 @@ void buildFactorScreen() {
   // Single status row: "Scale: <value>" left | "Factor: --" right
   lv_obj_t *lbl_cal_w_title = lv_label_create(scr_factor);
   lv_label_set_text(lbl_cal_w_title, T(STR_LBL_SCALE));
-  lv_obj_set_style_text_color(lbl_cal_w_title, lv_color_hex(0x4a6fa0), 0);
+  lv_obj_set_style_text_color(lbl_cal_w_title, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_cal_w_title, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(lbl_cal_w_title, 12, 78);
 
   lbl_factor_cal_weight = lv_label_create(scr_factor);
   lv_label_set_text(lbl_factor_cal_weight, "-- g");
-  lv_obj_set_style_text_color(lbl_factor_cal_weight, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_factor_cal_weight, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_factor_cal_weight, &lv_font_montserrat_ext_12, 0);
   // Hung off the caption instead of a fixed 56. The caption is a translated
   // string and its width follows the language: "Scale:" is 38 px and left a
@@ -118,7 +119,7 @@ void buildFactorScreen() {
 
   lbl_factor_result = lv_label_create(scr_factor);
   lv_label_set_text(lbl_factor_result, T(STR_CAL_FACTOR));
-  lv_obj_set_style_text_color(lbl_factor_result, lv_color_hex(0xf0b838), 0);
+  lv_obj_set_style_text_color(lbl_factor_result, lv_color_hex(UI_COL_WARN), 0);
   lv_obj_set_style_text_font(lbl_factor_result, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(lbl_factor_result, LV_TEXT_ALIGN_RIGHT, 0);
   lv_obj_set_width(lbl_factor_result, 220);
@@ -128,8 +129,8 @@ void buildFactorScreen() {
   lv_obj_t *input_box_f = lv_obj_create(scr_factor);
   lv_obj_set_size(input_box_f, 260, 34);
   lv_obj_align(input_box_f, LV_ALIGN_TOP_MID, 0, 94);
-  lv_obj_set_style_bg_color(input_box_f, lv_color_hex(0x0a1828), 0);
-  lv_obj_set_style_border_color(input_box_f, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_bg_color(input_box_f, lv_color_hex(UI_COL_SURFACE), 0);
+  lv_obj_set_style_border_color(input_box_f, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(input_box_f, 1, 0);
   lv_obj_set_style_radius(input_box_f, 6, 0);
   lv_obj_set_style_pad_all(input_box_f, 0, 0);
@@ -137,7 +138,7 @@ void buildFactorScreen() {
 
   lbl_factor_display = lv_label_create(input_box_f);
   lv_label_set_text(lbl_factor_display, "_");
-  lv_obj_set_style_text_color(lbl_factor_display, lv_color_hex(0x28d49a), 0);
+  lv_obj_set_style_text_color(lbl_factor_display, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_factor_display, &lv_font_montserrat_ext_20, 0);
   lv_obj_set_style_text_align(lbl_factor_display, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_center(lbl_factor_display);
@@ -159,13 +160,13 @@ void buildFactorScreen() {
     lv_obj_set_style_radius(btn_wg, 8, 0);
     lv_obj_set_style_shadow_width(btn_wg, 0, 0);
     lv_obj_set_style_border_width(btn_wg, 1, 0);
-    lv_obj_set_style_bg_color(btn_wg, g_whole_gram ? lv_color_hex(0x1a3020) : lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_border_color(btn_wg, g_whole_gram ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a2840), 0);
-    lv_obj_set_style_bg_color(btn_wg, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn_wg, g_whole_gram ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_SURFACE), 0);
+    lv_obj_set_style_border_color(btn_wg, g_whole_gram ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_LINE_SOFT), 0);
+    lv_obj_set_style_bg_color(btn_wg, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
 
     lv_obj_t *lbl_wg = lv_label_create(btn_wg);
     lv_label_set_text(lbl_wg, T(STR_WHOLE_GRAM));
-    lv_obj_set_style_text_color(lbl_wg, g_whole_gram ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+    lv_obj_set_style_text_color(lbl_wg, g_whole_gram ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(lbl_wg, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(lbl_wg, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(lbl_wg, LV_LABEL_LONG_WRAP);
@@ -177,9 +178,9 @@ void buildFactorScreen() {
       prefsPutBool("whole_gram", g_whole_gram);
       lv_obj_t *b = lv_event_get_target(e);
       lv_obj_t *l = lv_obj_get_child(b, 0);
-      lv_obj_set_style_bg_color(b, g_whole_gram ? lv_color_hex(0x1a3020) : lv_color_hex(0x0a1828), 0);
-      lv_obj_set_style_border_color(b, g_whole_gram ? lv_color_hex(0x28d49a) : lv_color_hex(0x1a2840), 0);
-      lv_obj_set_style_text_color(l, g_whole_gram ? lv_color_hex(0x28d49a) : lv_color_hex(0x4a6fa0), 0);
+      lv_obj_set_style_bg_color(b, g_whole_gram ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_SURFACE), 0);
+      lv_obj_set_style_border_color(b, g_whole_gram ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_LINE_SOFT), 0);
+      lv_obj_set_style_text_color(l, g_whole_gram ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_CAPTION), 0);
     }, LV_EVENT_CLICKED, NULL);
   }
 
@@ -202,13 +203,13 @@ void buildFactorScreen() {
     // Quiet surface, amber words: a red block at the screen's edge read as
     // Cancel, and this is not a way out of the screen but a setting to undo.
     // The confirmation it opens carries the red.
-    lv_obj_set_style_bg_color(btn_rst, lv_color_hex(0x0a1828), 0);
-    lv_obj_set_style_bg_color(btn_rst, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(btn_rst, lv_color_hex(0x1a2840), 0);
+    lv_obj_set_style_bg_color(btn_rst, lv_color_hex(UI_COL_SURFACE), 0);
+    lv_obj_set_style_bg_color(btn_rst, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(btn_rst, lv_color_hex(UI_COL_LINE_SOFT), 0);
 
     lv_obj_t *lbl_rst = lv_label_create(btn_rst);
     { char rb[24]; copyT(rb, sizeof(rb), STR_BTN_CAL_RESET_SHORT); lv_label_set_text(lbl_rst, rb); }
-    lv_obj_set_style_text_color(lbl_rst, lv_color_hex(0xf0b838), 0);
+    lv_obj_set_style_text_color(lbl_rst, lv_color_hex(UI_COL_WARN), 0);
     lv_obj_set_style_text_font(lbl_rst, &lv_font_montserrat_ext_12, 0);
     lv_obj_set_style_text_align(lbl_rst, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(lbl_rst, LV_LABEL_LONG_WRAP);
@@ -232,12 +233,12 @@ void buildFactorScreen() {
 
     if (i == 11) {
       // TARE button in the free slot (bottom right of numpad)
-      lv_obj_set_style_bg_color(btn, lv_color_hex(0x2a2010), 0);
-      lv_obj_set_style_bg_color(btn, lv_color_hex(0x4a4020), LV_STATE_PRESSED);
+      lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_AMBER_BG), 0);
+      lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_AMBER_BG_PRESSED), LV_STATE_PRESSED);
       lv_obj_set_style_radius(btn, 6, 0);
       lv_obj_set_style_shadow_width(btn, 0, 0);
       lv_obj_set_style_border_width(btn, 1, 0);
-      lv_obj_set_style_border_color(btn, lv_color_hex(0x3a3010), 0);
+      lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_AMBER_LINE), 0);
       lv_obj_add_event_cb(btn, [](lv_event_t *e) {
         if (!lbl_factor_result) return;
         // Presence asked as well as scale_ready: an ADC that left the bus
@@ -256,19 +257,19 @@ void buildFactorScreen() {
       }, LV_EVENT_CLICKED, NULL);
       lv_obj_t *lbl = lv_label_create(btn);
       lv_label_set_text(lbl, LV_SYMBOL_REFRESH " TARE");
-      lv_obj_set_style_text_color(lbl, lv_color_hex(0xf0b838), 0);
+      lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_WARN), 0);
       lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_14, 0);
       lv_obj_center(lbl);
     } else {
-      lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a1828), 0);
-      lv_obj_set_style_bg_color(btn, lv_color_hex(0x1a3060), LV_STATE_PRESSED);
+      lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_SURFACE), 0);
+      lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
       lv_obj_set_style_radius(btn, 6, 0);
       lv_obj_set_style_shadow_width(btn, 0, 0);
       lv_obj_set_style_border_width(btn, 1, 0);
-      lv_obj_set_style_border_color(btn, lv_color_hex(0x1a2840), 0);
+      lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_LINE_SOFT), 0);
       lv_obj_t *lbl = lv_label_create(btn);
       lv_label_set_text(lbl, np_labels_f[i]);
-      lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8f0ff), 0);
+      lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_INK), 0);
       lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
       lv_obj_center(lbl);
       lv_obj_add_event_cb(btn, [](lv_event_t *e) {
@@ -288,12 +289,12 @@ void buildFactorScreen() {
   lv_obj_t *btn_del_f = lv_btn_create(scr_factor);
   lv_obj_set_size(btn_del_f, bw5_f, NP_H);
   lv_obj_set_pos(btn_del_f, NP_PAD_X, by5_f);
-  lv_obj_set_style_bg_color(btn_del_f, lv_color_hex(0x1a2030), 0);
-  lv_obj_set_style_bg_color(btn_del_f, lv_color_hex(0x2a3040), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_del_f, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_bg_color(btn_del_f, lv_color_hex(UI_COL_QUIET_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_del_f, 6, 0);
   lv_obj_set_style_shadow_width(btn_del_f, 0, 0);
   lv_obj_set_style_border_width(btn_del_f, 1, 0);
-  lv_obj_set_style_border_color(btn_del_f, lv_color_hex(0x1a2840), 0);
+  lv_obj_set_style_border_color(btn_del_f, lv_color_hex(UI_COL_LINE_SOFT), 0);
   lv_obj_add_event_cb(btn_del_f, [](lv_event_t *e) {
     if (!lbl_factor_display) return;
     int len = strlen(factor_input);
@@ -302,19 +303,19 @@ void buildFactorScreen() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_del_f = lv_label_create(btn_del_f);
   lv_label_set_text(lbl_del_f, LV_SYMBOL_BACKSPACE);
-  lv_obj_set_style_text_color(lbl_del_f, lv_color_hex(0xc8d8f0), 0);
+  lv_obj_set_style_text_color(lbl_del_f, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(lbl_del_f, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_del_f);
 
   lv_obj_t *btn_ok_f = lv_btn_create(scr_factor);
   lv_obj_set_size(btn_ok_f, bw5_f, NP_H);
   lv_obj_set_pos(btn_ok_f, NP_PAD_X + bw5_f + NP_GAP, by5_f);
-  lv_obj_set_style_bg_color(btn_ok_f, lv_color_hex(0x1a3020), 0);
-  lv_obj_set_style_bg_color(btn_ok_f, lv_color_hex(0x2a5030), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn_ok_f, lv_color_hex(UI_COL_GO_BG), 0);
+  lv_obj_set_style_bg_color(btn_ok_f, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ok_f, 6, 0);
   lv_obj_set_style_shadow_width(btn_ok_f, 0, 0);
   lv_obj_set_style_border_width(btn_ok_f, 1, 0);
-  lv_obj_set_style_border_color(btn_ok_f, lv_color_hex(0x2a5030), 0);
+  lv_obj_set_style_border_color(btn_ok_f, lv_color_hex(UI_COL_GO_BG_PRESSED), 0);
   lv_obj_add_event_cb(btn_ok_f, [](lv_event_t *e) {
     if (!lbl_factor_result) return;
     float known_g = atof(factor_input);
@@ -346,7 +347,7 @@ void buildFactorScreen() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok2_f = lv_label_create(btn_ok_f);
   lv_label_set_text(lbl_ok2_f, T(STR_BTN_CALCULATE));
-  lv_obj_set_style_text_color(lbl_ok2_f, lv_color_hex(0x40c080), 0);
+  lv_obj_set_style_text_color(lbl_ok2_f, lv_color_hex(UI_COL_OK_TEXT_2), 0);
   lv_obj_set_style_text_font(lbl_ok2_f, &lv_font_montserrat_ext_14, 0);
   lv_obj_center(lbl_ok2_f);
 }

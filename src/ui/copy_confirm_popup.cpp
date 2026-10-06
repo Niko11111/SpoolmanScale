@@ -113,10 +113,7 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
 
   char line1[80];
   if (look) {
-    if (nameStartsWithMaterial(look->name, look->material))
-      snprintf(line1, sizeof(line1), "%s", look->name);
-    else
-      snprintf(line1, sizeof(line1), "%s %s", look->material, look->name);
+    joinMaterialName(look->material, look->name, line1, sizeof(line1));
   } else {
     snprintf(line1, sizeof(line1), "%s", template_name ? template_name : "");
   }

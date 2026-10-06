@@ -191,11 +191,11 @@ static void showBleDeviceCard(int index) {
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, btn_w, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn, UI_CARD_ROW_X + btn_w + BLE_CARD_BTN_GAP, BLE_CARD_ROW_Y);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
+  uiSecondaryFill(btn);
   lv_obj_set_style_pad_all(btn, 0, 0);
   lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(btn, [](lv_event_t *e) {
@@ -217,7 +217,7 @@ static void addScanButton(lv_obj_t *scr) {
   lv_obj_set_size(btn, BLE_HDR_BTN_SIZE, BLE_HDR_BTN_SIZE);
   lv_obj_set_pos(btn, BLE_HDR_BTN_X, BLE_HDR_BTN_Y);
   lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_STATE_PRESSED);
   lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_border_width(btn, 1, 0);

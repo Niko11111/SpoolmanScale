@@ -9,11 +9,15 @@
 #include <esp_heap_caps.h>
 
 #include "app_config.h"
+#include "bambu/bambu_catalog_sync.h"
+#include "services/drying_sync.h"
+#include "services/backend_http.h"
 #include "app/app_boot.h"
 #include "app/app_state.h"
 #include "app/backend_switch.h"
 #include "app/deferred_actions.h"
 #include "app/perf_monitor.h"
+#include "app/render_bench.h"
 #include "hardware/lvgl_mem.h"
 #include "services/partition_layout.h"
 #include "ui/partition_popup.h"
@@ -59,6 +63,9 @@
 #include "ui/status_picker.h"
 #include "ui/ams_view.h"
 #include "services/wifi_manager.h"
+#include "services/wifi_roam.h"
+#include "services/backend_job.h"
+#include "services/ams_weights.h"
 #include "services/improv_serial.h"
 #include "services/setup_portal.h"
 #include "ui/wifi_portal_screen.h"
@@ -83,6 +90,7 @@
 #include "services/prefs_store.h"
 #include "web/web_jobs.h"
 #include "ui/confirm_popup.h"
+#include "ui/tare_entry.h"
 #include "ui/ble_devices_screen.h"
 #include "ui/bluetooth_screen.h"
 #include "ui/connection_screen.h"
@@ -115,6 +123,7 @@
 #include "ui/tag_view.h"
 #include "ui/weight_format.h"
 #include "lang.h"
+#include "ui/theme.h"
 
 namespace {
 constexpr unsigned long NO_TAG_CLEAR_MS = 60000;
@@ -201,16 +210,52 @@ static bool weightSaysSpoolGone() {
 // weighed on purpose, and that value gets written to FilaMan - so it must not
 // be a number the average was still chasing. Same criterion the auto weight
 // path uses: within AUTO_WEIGHT_THRESH_G for AUTO_WEIGHT_STABLE_MS.
+// The weight button's countdown in auto mode, made visible beyond the number:
+// each second its border flashes, thicker and in the countdown's own label
+// colour, for a moment. Timed from the loop with millis(), not an lv_timer,
+// and on the button that is always there - nothing new on the main screen.
+#define AW_PULSE_MS         150
+#define AW_PULSE_BORDER_PX  3
+#define AW_REST_BORDER_PX   1
+static unsigned long aw_pulse_ms = 0;   // when the current flash began, 0 = none
+
+static void weightPulseStart() {
+  if (!btn_weight_main) return;
+  lv_obj_set_style_border_width(btn_weight_main, AW_PULSE_BORDER_PX, 0);
+  lv_obj_set_style_border_color(btn_weight_main, lv_color_hex(UI_COL_WEIGHT_COUNT), 0);
+  aw_pulse_ms = millis();
+  if (aw_pulse_ms == 0) aw_pulse_ms = 1;
+}
+
+// Back to the border main_screen.cpp gives the button, once the flash is
+// over - also when the countdown ended or broke off in the middle of one.
+static void weightPulseTick() {
+  if (!aw_pulse_ms || millis() - aw_pulse_ms < AW_PULSE_MS) return;
+  aw_pulse_ms = 0;
+  if (!btn_weight_main) return;
+  lv_obj_set_style_border_width(btn_weight_main, AW_REST_BORDER_PX, 0);
+  lv_obj_set_style_border_color(btn_weight_main, lv_color_hex(UI_COL_WEIGHT_BG_PRESSED), 0);
+}
+
 static float         ams_settle_last  = -9999.0f;
 static unsigned long ams_settle_since = 0;
 static float         ams_settled_g    = 0.0f;
 static bool          ams_settled_ok   = false;
 constexpr int NFC_MAX_RETRIES = 5;
 constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
+// While the link is down the retries go on every 10 s, but the log gets the
+// loss, then a line this often, then the reconnect. One line per retry filled
+// the 240 line session ring in 40 minutes with nothing else.
+constexpr unsigned long WIFI_OUTAGE_LOG_MS = 5UL * 60UL * 1000UL;
+// What counts as nobody using the scale, for the roaming check: this long
+// without a touch or a weight change, with the display dimmed or dark, and no
+// browser on the web interface for WIFI_ROAM_WEB_QUIET_MS.
+constexpr unsigned long WIFI_ROAM_IDLE_MS      = 10UL * 60UL * 1000UL;
+constexpr unsigned long WIFI_ROAM_WEB_QUIET_MS = 2UL * 60UL * 1000UL;
 
 // ── Scale on the bus ───────────────────────────────────────────────────────
-// Bringing the ADC back is only attempted for one that was working and then
-// dropped off, and only a few times. A chip that answers on its address but
+// Bringing the ADC back is only attempted for one that dropped off or never
+// came up at boot, and only a few times per loss or "Check again". A chip that answers on its address but
 // never finishes its internal calibration - a dead load cell does that - would
 // otherwise stall the loop for the three seconds scaleHardwareBegin() spends
 // retrying, every five seconds, for as long as the device is switched on. A
@@ -289,6 +334,48 @@ constexpr unsigned long NFC_RETRY_RESET_ABSENT_MS = 10000;
 // This watchdog restores the connection. WiFi.begin() is non-blocking, the
 // association happens in the background and is picked up on a later pass.
 // It stays out of the way while any WiFi setup screen is on display.
+static bool wifiUiVisible() {
+  return (scr_wifi_setup     && !lv_obj_has_flag(scr_wifi_setup,     LV_OBJ_FLAG_HIDDEN)) ||
+         (scr_wifi_pass      && !lv_obj_has_flag(scr_wifi_pass,      LV_OBJ_FLAG_HIDDEN)) ||
+         (scr_wifi_connecting && !lv_obj_has_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN));
+}
+
+// The link as the watchdog last saw it, and the outage it is in, if any.
+static bool          wifi_link_up         = false;
+static bool          wifi_outage          = false;
+static unsigned long wifi_outage_start_ms = 0;
+static unsigned long wifi_outage_log_ms   = 0;
+static uint32_t      wifi_outage_attempts = 0;
+
+// One line when the link comes up: which access point, on which channel, how
+// strong. With several access points on one SSID that is the first thing to
+// know about any WiFi trouble.
+static void noteWifiUp() {
+  if (wifi_link_up) return;
+  wifi_link_up = true;
+  char line[64];
+  wifiManagerLinkLine(line, sizeof(line));
+  if (wifi_outage) {
+    logSDf("WiFi: reconnected to %s after %lus and %u attempts, %s", cfg_wifi_ssid,
+           (millis() - wifi_outage_start_ms) / 1000, (unsigned)wifi_outage_attempts, line);
+  } else {
+    logSDf("WiFi: connected to %s, %s", cfg_wifi_ssid, line);
+  }
+  wifi_outage = false;
+}
+
+static void noteWifiDown() {
+  if (wifi_outage) return;
+  wifi_link_up = false;
+  wifi_outage = true;
+  wifi_outage_start_ms = millis();
+  wifi_outage_log_ms = millis();
+  wifi_outage_attempts = 0;
+  const uint8_t reason = wifiManagerLastDisconnectReason();
+  logSDf("WiFi: connection lost (reason %u, %s), reconnecting to %s",
+         reason, wifiManagerReasonName(reason), cfg_wifi_ssid);
+}
+
 static void handleWifiReconnect() {
   if (cfg_wifi_ssid[0] == '\0') return;
   // The browser is trying a network of its own; a begin() with the stored
@@ -296,14 +383,13 @@ static void handleWifiReconnect() {
   if (improvSerialBusy()) return;
   // The setup portal's access point is the network while it runs.
   if (setupPortalActive()) return;
-
-  bool wifi_ui_visible =
-    (scr_wifi_setup     && !lv_obj_has_flag(scr_wifi_setup,     LV_OBJ_FLAG_HIDDEN)) ||
-    (scr_wifi_pass      && !lv_obj_has_flag(scr_wifi_pass,      LV_OBJ_FLAG_HIDDEN)) ||
-    (scr_wifi_connecting && !lv_obj_has_flag(scr_wifi_connecting, LV_OBJ_FLAG_HIDDEN));
-  if (wifi_ui_visible) return;
+  if (wifiUiVisible()) return;
+  // Joining the access point the roaming check chose. A begin() of our own
+  // would cancel that; if it fails, the roaming check lets go.
+  if (wifiRoamSwitching()) return;
 
   if (WiFi.status() == WL_CONNECTED) {
+    noteWifiUp();
     // Connected, but boot gave up before the network answered, so nothing that
     // a connection starts has run yet. The guards above apply here as well:
     // each of those flows sets wifi_ok on its own once it succeeds.
@@ -314,12 +400,36 @@ static void handleWifiReconnect() {
     return;
   }
 
+  noteWifiDown();
+
   static unsigned long last_retry_ms = 0;
   if (last_retry_ms != 0 && millis() - last_retry_ms < WIFI_RETRY_INTERVAL_MS) return;
   last_retry_ms = millis();
+  wifi_outage_attempts++;
 
-  logSDf("WiFi: connection lost, reconnecting to %s", cfg_wifi_ssid);
-  WiFi.begin(cfg_wifi_ssid, cfg_wifi_password);
+  if (millis() - wifi_outage_log_ms >= WIFI_OUTAGE_LOG_MS) {
+    wifi_outage_log_ms = millis();
+    const uint8_t reason = wifiManagerLastDisconnectReason();
+    logSDf("WiFi: still offline after %lu min, %u attempts, last reason %u (%s)",
+           (millis() - wifi_outage_start_ms) / 60000, (unsigned)wifi_outage_attempts,
+           reason, wifiManagerReasonName(reason));
+  }
+  // Through the manager rather than WiFi.begin(): the scan over every channel
+  // that joins the strongest access point is set there. Called directly, the
+  // core's fast scan went back to the first one it heard, every time.
+  wifiManagerBegin(cfg_wifi_ssid, cfg_wifi_password);
+}
+
+// Nobody is using the scale, so a scan for a better access point cannot get
+// in anyone's way. See services/wifi_roam.h.
+static bool wifiRoamQuiet() {
+  if (!displayIdleFor(WIFI_ROAM_IDLE_MS)) return false;
+  if (webBrowserSeenWithin(WIFI_ROAM_WEB_QUIET_MS)) return false;
+  if (improvSerialBusy() || setupPortalActive() || wifiUiVisible()) return false;
+  if (gh_flash_active || otaWebUploadActive() || updateCheckBusy()) return false;
+  if (webJobState() == WJS_RUNNING || backendListBusy()) return false;
+  if (amsWeightsBusy() || driedBatchBusy()) return false;
+  return true;
 }
 
 static unsigned long tare_msg_ms = 0;
@@ -333,6 +443,28 @@ static unsigned long last_scale_ms = 0;
 static int  loc_popup_pending_id = -1;              // debounced popup: sm_id scheduled, fires after 1500ms
 static int  ams_popup_pending_id = -1;              // same, for the AMS question; answered first when both are due
 static int  pick_popup_pending_id = -1;             // same, for the AMS bay picker; only one of the three is ever set per backend
+
+// The AMS button on a device without a load cell, one pass after the tap.
+// Asked again rather than trusted: a spool can have left the screen between
+// the tap and this pass.
+static void amsMainAssignRun() {
+  if (!amsMainCanAssign()) {
+    logSD("AMS: button assign dropped, the spool is no longer offered");
+    return;
+  }
+  if (backendCanAssignAmsSlot()) {
+    amsPickOpenFor(sm_id, sm_filament_name);
+    return;
+  }
+  // FilaMan. The stored weight stands in for a weighing: the value does not
+  // change, the spool log gains one measurement, and the window opens.
+  logSDf("AMS: no load cell, stored %.0fg reported to open the window for id=%d",
+         sm_remaining, sm_id);
+  amsNoteMeasurement(sm_id, sm_remaining, sm_remaining + sm_spool_weight, false);
+  if (!amsCommitWithWindow()) {
+    showInfoPopup(STR_AMSV_TITLE, STR_AMSV_ASSIGN_FAIL, INFO_WARN);
+  }
+}
 
 void appLoop() {
   // Overwritten every pass, so a crumb from a marked section only stands while
@@ -348,6 +480,7 @@ void appLoop() {
   perfSection("ui");
   lv_timer_handler();
   perfUiDone();
+  renderBenchTick();
   perfSection("prefs");
   prefsDeferWrites(false);
   prefsFlush();
@@ -466,6 +599,7 @@ void appLoop() {
   setupPortalTick();
   perfSection("wifi");
   handleWifiReconnect();
+  wifiRoamTick(wifiRoamQuiet(), cfg_wifi_ssid, cfg_wifi_password);
 
   // OTA web server bedienen wenn aktiv
   perfSection("web");
@@ -511,6 +645,9 @@ void appLoop() {
   // request happens in its own task on the other core.
   perfSection("updchk");
   updateCheckTick();
+  bambuCatalogSyncTick();
+  dryingSyncTick();
+  backendConnTick();
 
   firmwareStampTick();
   otaWebGithubTick();
@@ -565,7 +702,7 @@ void appLoop() {
         char buf[48];
         copyT(buf, sizeof(buf), STR_CU_NOT_WRITTEN);
         lv_label_set_text(lbl_status, buf);
-        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xff8080), 0);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_BAD_TEXT), 0);
       }
     }
   }
@@ -612,6 +749,10 @@ void appLoop() {
     // 5 s probe: a chip that is wired but switched off in the settings must
     // not come back as present, or the header lights up again.
     if (g_scale_fitted) scl_ok = scaleHardwarePresent();
+    // Someone who just touched the wiring gets a fresh set of attempts at
+    // bringing the scale back, not the remainder of an old one. The 5 s
+    // watchdog makes them, so the stall stays where it always was.
+    if (scale_lost) scale_recover_tries = 0;
     diagnosticsRecheckNow();
     perfSection("diag");
   diagnosticsTick();
@@ -762,6 +903,10 @@ void appLoop() {
     hideAllOverlays();
     lv_obj_clear_flag(scr_welcome, LV_OBJ_FLAG_HIDDEN);
   }
+  if (ams_main_assign_pending) {
+    ams_main_assign_pending = false;
+    amsMainAssignRun();
+  }
   if (show_ams_assign_pending) {
     show_ams_assign_pending = false;
     buildAmsAssignScreen();        // releases the previous instance itself
@@ -884,14 +1029,20 @@ void appLoop() {
   // stands. It has to run every pass, not only when something happened: the
   // countdown is what it is mostly doing.
   handleSecondTagDeferredActions();
+  // Before the questions below: a spool lifted while its empty weight is being
+  // typed in takes the entry down unsaved first, and is asked about after.
+  tareEntryTick();
   if (!tag_present && weightSaysSpoolGone()) loc_left_pad = true;
   // Debounced popups after a removal, cross-checked against the scale.
   // The AMS question and the location question hang off the same event, so
   // the verdict is worked out once and the AMS side gets it first: a spool
   // on its way into a printer has no shelf worth asking about. The "no"
   // branch of that popup raises the location question again.
+  // Held, not dropped, while the empty spool weight is being entered: the
+  // questions wait for that dialog like for any other modal.
   if ((loc_popup_pending_id > 0 || ams_popup_pending_id > 0 ||
-       pick_popup_pending_id > 0) && !tag_present) {
+       pick_popup_pending_id > 0) && !tag_present &&
+      !isTareEntryOpen() && !isSpoolWeightScopeOpen()) {
     const unsigned long since = millis() - last_tag_seen_ms;
     const bool weight_says_gone = weightSaysSpoolGone();
     const bool weight_says_stay = weightSaysSpoolStayed();
@@ -984,7 +1135,7 @@ void appLoop() {
         char buf[48];
         copyT(buf, sizeof(buf), STR_REMOTE_LINK_TIMEOUT);
         lv_label_set_text(lbl_status, buf);
-        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
       }
     } else if (tag_present && !isConfirmPopupOpen() &&
                !isSpoolFlowIdInputOpen() && !isSpoolFlowLinkEntryOpen()) {
@@ -1018,7 +1169,7 @@ void appLoop() {
         char buf[48];
         copyT(buf, sizeof(buf), STR_REMOTE_LINK_WEIGH);
         lv_label_set_text(lbl_status, buf);
-        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
       }
     }
   }
@@ -1110,9 +1261,9 @@ void appLoop() {
   if (g_tag_displayed && millis() - g_tag_shown_ms > 10000) {
     g_tag_displayed = false;
     lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-    lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);  // yellow
+    lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_WARN), 0);  // yellow
     lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-    lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+    lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
   }
 
   // The ADC can leave the bus while the device is running - a plug working
@@ -1247,7 +1398,7 @@ void appLoop() {
         snprintf(sd_str, sizeof(sd_str), sm_diff >= 0 ? "+%.0f g" : "%.0f g", sm_diff);
         lv_label_set_text(lbl_raw_info, sd_str);
         lv_obj_set_style_text_color(lbl_raw_info,
-          sm_diff >= 0 ? lv_color_hex(0x40c080) : lv_color_hex(0xe04040), 0);
+          sm_diff >= 0 ? lv_color_hex(UI_COL_OK_TEXT_2) : lv_color_hex(UI_COL_BAD), 0);
       }
 
       // Live total (with spool)
@@ -1255,7 +1406,7 @@ void appLoop() {
         char lt_str[16];
         fmtG(lt_str, sizeof(lt_str), scale_weight_g);
         lv_label_set_text(lbl_spoolman_dried, lt_str);
-        lv_obj_set_style_text_color(lbl_spoolman_dried, lv_color_hex(0x8ab0d8), 0);
+        lv_obj_set_style_text_color(lbl_spoolman_dried, lv_color_hex(UI_COL_VALUE_BLUE), 0);
       }
 
       // Fix 4: ohne Beutel = live - spool - bag; fixed color like scale netto; diff green/red
@@ -1265,7 +1416,7 @@ void appLoop() {
         char b_str[16];
         fmtG(b_str, sizeof(b_str), ohne_beutel);
         lv_label_set_text(lbl_keys, b_str);
-        lv_obj_set_style_text_color(lbl_keys, lv_color_hex(0xf0b838), 0);  // same as scale netto
+        lv_obj_set_style_text_color(lbl_keys, lv_color_hex(UI_COL_WARN), 0);  // same as scale netto
 
         // bag SM diff
         if (lbl_bag_sm_diff && sm_remaining > 0) {
@@ -1274,7 +1425,7 @@ void appLoop() {
           snprintf(bd_str, sizeof(bd_str), bag_diff >= 0 ? "+%.0f g" : "%.0f g", bag_diff);
           lv_label_set_text(lbl_bag_sm_diff, bd_str);
           lv_obj_set_style_text_color(lbl_bag_sm_diff,
-            bag_diff >= 0 ? lv_color_hex(0x40c080) : lv_color_hex(0xe04040), 0);
+            bag_diff >= 0 ? lv_color_hex(UI_COL_OK_TEXT_2) : lv_color_hex(UI_COL_BAD), 0);
         }
       }
     } else if (sm_found) {
@@ -1323,7 +1474,7 @@ void appLoop() {
         char wmbuf[48];
         snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
         lv_label_set_text(lbl_weight_main_lbl, wmbuf);
-        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x28d49a), 0);
+        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_WEIGHT_AUTO), 0);
       }
     }
 
@@ -1333,7 +1484,10 @@ void appLoop() {
     // sm_archived is excluded on purpose: an archived spool reads 0 g by
     // definition, so weighing it silently would file a full spool as empty
     // stock. Bringing it back is a decision, and it has its own button.
-    if (!aw_done && !isConfirmPopupOpen() && sm_found && !sm_archived && sm_id > 0 && scale_ready &&
+    // Nor while an empty spool weight is being entered: the weighing would
+    // be computed against the tare that is about to be replaced.
+    if (!aw_done && !isConfirmPopupOpen() && !isTareEntryOpen() && !isSpoolWeightScopeOpen() &&
+        sm_found && !sm_archived && sm_id > 0 && scale_ready &&
         (tag_present || aw_adopted)) {
       float cur = scale_weight_g;
       if (fabsf(cur - auto_weight_last_val) > AUTO_WEIGHT_THRESH_G) {
@@ -1354,7 +1508,7 @@ void appLoop() {
           char wmbuf[48];
           snprintf(wmbuf, sizeof(wmbuf), "%s " LV_SYMBOL_OK, T(STR_BTN_WEIGHT));
           lv_label_set_text(lbl_weight_main_lbl, wmbuf);
-          lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x40ff80), 0);
+          lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_WEIGHT_SENT), 0);
         }
         patchSpoolmanWeight(netto);
         // Remembered, not held back: the value is in FilaMan now, this only
@@ -1374,7 +1528,8 @@ void appLoop() {
           char wmbuf[48];
           snprintf(wmbuf, sizeof(wmbuf), "%s %ds", T(STR_BTN_WEIGHT), rem);
           lv_label_set_text(lbl_weight_main_lbl, wmbuf);
-          lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x60f0c0), 0);
+          lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_WEIGHT_COUNT), 0);
+          weightPulseStart();
         }
       }
     } else if (!aw_done && !tag_present) {
@@ -1391,7 +1546,7 @@ void appLoop() {
         char wmbuf[48];
         snprintf(wmbuf, sizeof(wmbuf), "%s (A)", T(STR_BTN_WEIGHT));
         lv_label_set_text(lbl_weight_main_lbl, wmbuf);
-        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(0x28d49a), 0);
+        lv_obj_set_style_text_color(lbl_weight_main_lbl, lv_color_hex(UI_COL_WEIGHT_AUTO), 0);
       }
     }
   } else {
@@ -1401,6 +1556,8 @@ void appLoop() {
       auto_weight_last_val = -9999.0f;
     }
   }
+
+  weightPulseTick();
 
   // The offer goes stale when the spool is left sitting on the pad. Only the
   // note is dropped, the weight went out when it was measured.
@@ -1428,7 +1585,7 @@ void appLoop() {
         char wbuf[48];
         snprintf(wbuf, sizeof(wbuf), T(STR_AMS_WINDOW_RUNNING), rem);
         lv_label_set_text(lbl_status, wbuf);
-        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
       }
     } else if (ams_owns_status) {
       // Hand the line back once, not on every pass. Only when the pad is still
@@ -1437,10 +1594,14 @@ void appLoop() {
       ams_last_shown_s = -1;
       if (lbl_status && !tag_present) {
         lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-        lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+        lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
       }
     }
   }
+
+  // The AMS button without a load cell: its caption follows the spool on
+  // screen, and its fill the window the button opened.
+  updateAmsMainButton();
 
   // Fix 10: Spoolman health check every 30s
   perfSection("netsvc");
@@ -1520,6 +1681,16 @@ void appLoop() {
   // dead until someone restarts it, over a plug that is already seated again.
   {
     static unsigned long last_scl_check_ms = 0;
+    // A scale that failed at boot counts as lost from the first pass on. It
+    // used to be skipped, so a plug pushed back in after the diagnosis said
+    // "NAU7802 missing" only took effect after a restart. Decided once, here:
+    // a scale switched on in the settings later is still the restart's job,
+    // because the home screen was built without it.
+    static bool boot_state_seen = false;
+    if (!boot_state_seen) {
+      boot_state_seen = true;
+      if (g_scale_fitted && !scale_ready) scale_lost = true;
+    }
     // Nothing to find and nothing to bring back on a device that was built
     // without the load cell, so the bus is left alone entirely.
     if (g_scale_fitted && millis() - last_scl_check_ms >= 5000) {
@@ -1541,6 +1712,8 @@ void appLoop() {
           scl_ok = false;
           Serial.printf("Scale: re-init failed (%u/%u)\n",
                         scale_recover_tries, SCALE_RECOVER_ATTEMPTS);
+          logSDf("Scale: re-init failed (%u/%u)",
+                 scale_recover_tries, SCALE_RECOVER_ATTEMPTS);
         }
       }
       if (scl_ok != prev) updateHeaderStatus();
@@ -1582,6 +1755,8 @@ void appLoop() {
         } else {
           Serial.printf("NFC: re-init failed (%u/%u)\n",
                         nfc_recover_tries, NFC_RECOVER_ATTEMPTS);
+          logSDf("NFC: re-init failed (%u/%u)",
+                 nfc_recover_tries, NFC_RECOVER_ATTEMPTS);
         }
       }
     } else if (nfc_ok) {
@@ -1714,9 +1889,9 @@ void appLoop() {
           bambu_uid_probed = false;
           snapmaker_decoded = false;
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
           scanTag(uid, uidLen);
           // Opt-in, off by default, and then none of this touches the reader.
           // Once per placement, right after the first Bambu probe came back
@@ -1755,9 +1930,9 @@ void appLoop() {
             nfc_retry_count,
             NFC_MAX_RETRIES);
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
           scanTag(uid, uidLen);
         } else {
           // The "Tag placed" line waits until the scan has settled, so it
@@ -1767,6 +1942,11 @@ void appLoop() {
           if (bambu_blocks_read > 0 || nfc_retry_count >= NFC_MAX_RETRIES) {
             TagSeen::note(uid_str, bambu_blocks_read > 0 ? "Bambu"
                                    : snapmaker_decoded   ? "Snapmaker" : "MIFARE");
+          }
+          // What the read attempts came to, once: read in full, or out of
+          // retries. Logging only.
+          if (!(uuid_missing || contents_incomplete) || nfc_retry_count >= NFC_MAX_RETRIES) {
+            bambuScanReport();
           }
           if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES &&
               bambu_blocks_read == 0) {
@@ -1791,13 +1971,13 @@ void appLoop() {
               if (!lookupPending()) lookupFollowUp(LOOKUP_FROM_UID, uid_str);
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
             paintTagStatus();
           } else if ((uuid_missing || contents_incomplete) && nfc_retry_count >= NFC_MAX_RETRIES) {
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_WARN), 0);
             lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-            lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+            lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
           } else {
             // tray_uuid present - query Spoolman if not done yet
             if (!isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen() &&
@@ -1813,7 +1993,7 @@ void appLoop() {
               (void)link_tag_first_seen_ms;
             }
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
             paintTagStatus();
           }
         }
@@ -1860,7 +2040,7 @@ void appLoop() {
         }
 
         lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-        lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0x28d49a), 0);
+        lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
 
         if (uid_changed_ntag) {
           // Marked handled straight away and unconditionally, whatever the
@@ -1885,9 +2065,9 @@ void appLoop() {
           lv_label_set_text(lbl_last_used, "-");
           lv_label_set_text(lbl_spoolman_dried_val, "-");
         if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
-          lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(0x333333), 0);
+          lv_obj_set_style_bg_color(lbl_color_swatch, lv_color_hex(UI_COL_SWATCH_NONE), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
-          lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+          lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
 
           // What the tag itself says, before anyone is asked about it. The poll
           // has the tag selected right now, so this is the one moment the pages
@@ -1911,7 +2091,7 @@ void appLoop() {
             if (!lookupPending()) lookupFollowUp(LOOKUP_FROM_NTAG, uid_str);
           } else {
             lv_label_set_text(lbl_status, T(STR_TAG_FOUND));
-            lv_obj_set_style_text_color(lbl_status, lv_color_hex(0x28d49a), 0);
+            lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
           }
         } else {
           // Same UID - show popup after delay if not dismissed
@@ -1951,6 +2131,7 @@ void appLoop() {
                                    nfc_fast_polls >= NFC_GONE_MIN_MISSES;
           if (weight_gone || (!retrying && millis() - first_miss_ms >= absent_limit)) {
             nfc_stat_removals++;
+            bambuScanReport();   // a Bambu tag that left before its reads settled
             Serial.printf("NFC: tag removed (gap %u ms, %d fast re-polls, %s)\n",
               (unsigned)(millis() - first_miss_ms), nfc_fast_polls,
               weight_gone ? "weight gone" : "grace period over");
@@ -1986,19 +2167,24 @@ void appLoop() {
             link_popup_dismissed = false;   // Reset flag → next spool can show popup
             link_tag_first_seen_ms = 0;
             lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
-            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(0xf0b838), 0);
+            lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_WARN), 0);
             lv_label_set_text(lbl_status, T(STR_WAIT_SCAN));
-            lv_obj_set_style_text_color(lbl_status, lv_color_hex(0xf0b838), 0);
+            lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
             // Auto location popup: if enabled, spool is linked, and not shown for this spool yet
             // Debounce: only trigger after 1500ms - avoids spurious remove during NTAG read
             // Not for an archived spool: asking where to store something that
             // was just taken out of the inventory is a question about a spool
             // nobody is looking for.
-            if (g_auto_loc_popup && sm_found && !sm_archived && sm_id > 0 && wifi_ok &&
+            // None of the three questions below without a load cell. They hang
+            // off the weight - it confirms the spool really left, and FilaMan's
+            // needs it outright - and without one a removal is only a tag
+            // leaving the reader, every time anyone looks at a spool. Zone 4's
+            // AMS button and the location button ask the same on a tap.
+            if (g_scale_fitted && g_auto_loc_popup && sm_found && !sm_archived && sm_id > 0 && wifi_ok &&
                 g_loc_popup_shown_for_id != sm_id) {
               loc_popup_pending_id = sm_id;  // schedule - will fire after debounce in loop
               logSDf("[verbose] LOC: tag removed, popup scheduled id=%d (debounce 2500ms)", sm_id);
-            } else if (g_auto_loc_popup) {
+            } else if (g_scale_fitted && g_auto_loc_popup) {
               logSDf("[verbose] LOC: tag removed, popup suppressed id=%d shown_for=%d sm_found=%d wifi=%d", sm_id, g_loc_popup_shown_for_id, (int)sm_found, (int)wifi_ok);
             }
             // The AMS question hangs off the same removal, on the same
@@ -2006,7 +2192,7 @@ void appLoop() {
             // Same for the AMS question, and here it matters more than tidiness:
             // it notes a measurement against the spool id, which turns into a
             // weight write later on.
-            if (amsAskActive() && wifi_ok && sm_found && !sm_archived && sm_id > 0) {
+            if (g_scale_fitted && amsAskActive() && wifi_ok && sm_found && !sm_archived && sm_id > 0) {
               // On Serial, not through logSD(): that one returns early when no
               // SD card is present, so on a card-less scale none of this exists.
               Serial.printf("AMS: removal id=%d settled=%d %.0fg pending=%d\n",
@@ -2030,7 +2216,7 @@ void appLoop() {
             // The bay picker hangs off the same removal. Its own branch rather
             // than a shared one: this flow has no measurement to stand in for
             // anything, it only needs to know which spool was just taken off.
-            if (amsPickActive() && wifi_ok && sm_found && !sm_archived && sm_id > 0) {
+            if (g_scale_fitted && amsPickActive() && wifi_ok && sm_found && !sm_archived && sm_id > 0) {
               if (!amsPickHasPending()) amsPickNote(sm_id, sm_filament_name);
               if (amsPickPendingSpoolId() == sm_id) {
                 pick_popup_pending_id = sm_id;

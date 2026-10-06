@@ -4,6 +4,7 @@
 
 #include "services/spool_color.h"
 #include "services/text_util.h"
+#include "theme.h"
 
 void addBackButton(lv_obj_t *parent, lv_event_cb_t cb);
 // The "?" circle in the header row, between the centred title and the close
@@ -14,6 +15,12 @@ void addCloseButton(lv_obj_t *parent);
 void buildSubHeader(lv_obj_t *parent, const char *title,
                     lv_event_cb_t back_cb, const char *back_hint = nullptr);
 lv_obj_t* buildOverlayScreen();
+// The resting look of a secondary button: "Later", an option not chosen.
+// After the button's own border width, which it overrides. Dark fills it with
+// LINE as it always has; on a light palette LINE is a mid tone that weighs
+// more than the light green primary beside it, so the button takes the
+// quiet row fill with the row's border.
+void uiSecondaryFill(lv_obj_t *btn);
 
 // Frees a screen object that is about to be replaced and clears the pointer.
 // Call at the top of every build*Screen() function: without it the previous
@@ -59,11 +66,11 @@ void logLvMem(const char* tag, int rows);
 bool lvPoolHasRoomForRow();
 
 // Neutral grey for a colour swatch with no usable colour behind it.
-#define SWATCH_FALLBACK_COLOR 0x333333
+#define SWATCH_FALLBACK_COLOR UI_COL_SWATCH_NONE
 
 // What a clear filament is drawn in when nothing names a tint for it: the
 // glass white the filament databases use for "clear".
-#define SWATCH_GLASS_COLOR    0xDCE6F0
+#define SWATCH_GLASS_COLOR    UI_COL_SWATCH_GLASS
 
 // A filament that lets light through is drawn as a vertical fade, from its
 // hue at the top into the screen ground at the bottom. It reads as glass, the
