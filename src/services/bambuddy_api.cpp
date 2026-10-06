@@ -11,6 +11,8 @@
 #include "hardware/sd_logger.h"
 #include "services/device_name.h"
 #include "services/http_progress.h"
+#include "services/json_util.h"
+#include "services/last_dried.h"
 #include "services/spool_cache.h"
 #include "services/spool_color.h"
 #include "services/tag_uid.h"
@@ -44,6 +46,9 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 
 static BbInventoryMode s_mode = BB_INV_LOCAL;
 static char s_spoolman_url[96] = "";
+// Whether the last spool BamBuddy sent carried last_dried_at (#2863), set in
+// mapSpool() on every read. See bbHasDriedField().
+static bool s_has_dried_field = false;
 
 static bool hasBaseUrl(const char* base_url) {
   return base_url && strlen(base_url) > 7;   // longer than "http://"
@@ -247,6 +252,8 @@ const char* bbInventoryBase() {
 
 const char* bbSpoolmanUrl() { return s_spoolman_url; }
 
+bool bbHasDriedField() { return s_has_dried_field; }
+
 // How long the mode question may take when a read has just been refused. The
 // same four seconds backendRefreshMode() gives it with the health check.
 #define BB_MODE_RECHECK_MS  4000
@@ -375,8 +382,14 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   if (tray[0])     extra["tag"] = tray;
   else if (uid[0]) extra["tag"] = uid;
 
-  char dried[12];
-  if (driedFromNote(note, dried, sizeof(dried))) extra["last_dried"] = dried;
+  // BamBuddy's own drying date (#2863) wins over the note marker, which is
+  // read only while the field is empty. Whether the server has the field is
+  // taken from every spool it sends, null or not: an older BamBuddy answers
+  // 200 to a PATCH with last_dried_at and drops it, so only a read can tell.
+  s_has_dried_field = jsonHasKey(src, "last_dried_at");
+  char dried[LAST_DRIED_ISO_MAX];
+  lastDriedUtc(src["last_dried_at"] | (const char*)nullptr, dried, sizeof(dried));
+  if (dried[0] || driedFromNote(note, dried, sizeof(dried))) extra["last_dried"] = dried;
   char drying[32];
   if (dryingFromNote(note, drying, sizeof(drying))) extra["drying"] = drying;
 
@@ -530,8 +543,9 @@ int bbGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
   // With the drying date kept on the Spoolman side, one small extra request
   // fetches it - BamBuddy's proxy hides the extra dict it lives in. Only in
   // that mode and only when the user picked it, so the normal scan stays at
-  // two requests.
-  if (g_bb_dried_target == BB_DRIED_SPOOLMAN && s_mode == BB_INV_SPOOLMAN) {
+  // two requests. Not when BamBuddy's own field has the date already.
+  if (g_bb_dried_target == BB_DRIED_SPOOLMAN && s_mode == BB_INV_SPOOLMAN &&
+      !(raw["last_dried_at"] | (const char*)nullptr)) {
     char dried[32];
     if (bbGetDriedFromSpoolman(spool_id, dried, sizeof(dried), timeout_ms)) {
       out["extra"]["last_dried"] = dried;
@@ -783,6 +797,23 @@ int bbPatchSpoolFields(const char* base_url, const char* api_key, int spool_id,
   char url[192];
   snprintf(url, sizeof(url), "%s%s/spools/%d", base_url, bbInventoryBase(), spool_id);
 
+  String out;
+  serializeJson(body, out);
+  return sendJson("PATCH", url, api_key, out, timeout_ms, nullptr);
+}
+
+int bbPatchLastDried(const char* base_url, const char* api_key, int spool_id,
+                     const char* iso, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || !iso || !iso[0]) return -1;
+
+  // Same route and key in both inventory modes: the Spoolman proxy stores it
+  // in bambu_last_dried_at itself. The instant goes out with its Z, which
+  // BamBuddy converts to the UTC it keeps.
+  char url[192];
+  snprintf(url, sizeof(url), "%s%s/spools/%d", base_url, bbInventoryBase(), spool_id);
+
+  JsonDocument body;
+  body["last_dried_at"] = iso;
   String out;
   serializeJson(body, out);
   return sendJson("PATCH", url, api_key, out, timeout_ms, nullptr);

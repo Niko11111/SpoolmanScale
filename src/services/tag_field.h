@@ -23,6 +23,11 @@
 // but it is probed and created alongside them, so it belongs in the same list.
 #define LAST_DRIED_FIELD  "last_dried"
 
+// BamBuddy's drying date on a Spoolman spool (#2863), written by BamBuddy
+// when an AMS drying ends or the date is set in its spool form. The scale
+// only reads it, next to its own field - see services/last_dried.h.
+#define BAMBU_LAST_DRIED_FIELD  "bambu_last_dried_at"
+
 // The extra field Happy Hare v4 reads its gate uids out of. Not a tag field
 // either, and never selectable - the binding stays wherever the choice below
 // puts it, and this only ever carries a copy of the hardware uid next to it.

@@ -33,6 +33,7 @@ bool spoolHasAnyTag(JsonObjectConst spool);
 #include "services/spool_tare.h"
 #include "services/spoolman_actions.h"
 #include "services/spoolman_api.h"
+#include "services/last_dried.h"
 #include "services/tag_field.h"
 #include "services/tag_probe_job.h"
 #include "services/backend_job.h"
@@ -664,13 +665,14 @@ void querySpoolmanById(int spool_id) {
 
   // last_dried
   sm_last_dried[0] = '\0';
-  if (!spool["extra"]["last_dried"].isNull()) {
-    String dried = spool["extra"]["last_dried"].as<String>();
-    dried.replace("\"", "");
-    // The stored value is a UTC instant; the day it belongs to is the local
-    // one, exactly as for last_used above.
+  // The scale's own date or BamBuddy's next to it, whichever is later. The
+  // stored value is a UTC instant; the day it belongs to is the local one,
+  // exactly as for last_used above.
+  char dried[LAST_DRIED_ISO_MAX];
+  lastDriedNewest(spool["extra"], dried, sizeof(dried));
+  if (dried[0]) {
     char day[11];
-    isoDayLocal(dried.c_str(), day, sizeof(day));
+    isoDayLocal(dried, day, sizeof(day));
     char de_date[12];
     isoToDe(day, de_date, sizeof(de_date));
     strncpy(sm_last_dried, de_date, sizeof(sm_last_dried)-1);
@@ -1229,6 +1231,7 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++)
     filter_spool["extra"][tagFieldSpec(i).key] = true;
   filter_spool["extra"][LAST_DRIED_FIELD] = true;
+  filter_spool["extra"][BAMBU_LAST_DRIED_FIELD] = true;
   // Named rather than left to the sweep below. That one stops at
   // BACKEND_TEXT_FIELDS_MAX, and this field decides whether a uid is appended
   // or written over: arriving empty would make every placement look like the

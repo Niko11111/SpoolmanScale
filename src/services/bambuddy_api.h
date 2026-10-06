@@ -61,6 +61,12 @@ const char* bbInventoryBase();
 // Spoolman because BamBuddy has no field for it.
 const char* bbSpoolmanUrl();
 
+// Whether this BamBuddy keeps a drying date of its own (#2863, from
+// v1.2.6b1-daily.20261006): the last spool it sent carried last_dried_at,
+// null included. Taken from reads only, because an older server answers a
+// PATCH with that key with 200 and ignores it. False until a spool was read.
+bool bbHasDriedField();
+
 // Stable device id derived from the MAC, "ssc-<12 hex>", mirroring the
 // "sb-<mac>" of BamBuddy's own daemon. Needs no NVS entry.
 const char* bbDeviceId();
@@ -169,6 +175,12 @@ int  bbRestoreSpool(const char* base_url, const char* api_key, int spool_id,
 int  bbPatchDryingNote(const char* base_url, const char* api_key, int spool_id,
                        const char* value, uint32_t timeout_ms);
 int  bbPatchDriedNote(const char* base_url, const char* api_key, int spool_id,
+       const char* iso, uint32_t timeout_ms = 8000);
+
+// Writes BamBuddy's own drying date, last_dried_at (#2863). Only for a server
+// where bbHasDriedField() said yes; BamBuddy clears the temperature and
+// hours of an AMS drying with it, as its own spool form does.
+int  bbPatchLastDried(const char* base_url, const char* api_key, int spool_id,
        const char* iso, uint32_t timeout_ms = 8000);
 
 // Reads extra.last_dried straight from the Spoolman server behind BamBuddy.

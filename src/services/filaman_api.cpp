@@ -12,21 +12,14 @@
 #include "services/user_options.h"
 #include "services/backend.h"
 #include "services/http_progress.h"
+#include "services/json_util.h"
 #include "services/loop_task.h"
 #include "services/spool_color.h"
 #include "services/tag_uid.h"
 #include "services/text_util.h"
 
-// Whether an object carries the key at all, a null value included. This is
-// what containsKey() answered; obj[key].isNull() also says "absent" for a key
-// that is present and null, and here the key's presence is the whole question:
-// a FilaMan that has the second rfid column answers null for a spool without
-// a second chip.
-static bool jsonHasKey(JsonObjectConst obj, const char* key) {
-  for (JsonPairConst kv : obj)
-    if (strcmp(kv.key().c_str(), key) == 0) return true;
-  return false;
-}
+// jsonHasKey() matters here because a FilaMan that has the second rfid column
+// answers null for a spool without a second chip: presence, not value.
 
 namespace {
 

@@ -13,6 +13,7 @@
 #include "services/filaman_api.h"
 #include "services/filaman_filament.h"
 #include "services/http_progress.h"
+#include "services/last_dried.h"
 #include "services/list_limits.h"
 #include "services/device_name.h"
 #include "services/spoolman_api.h"
@@ -1185,8 +1186,13 @@ int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* i
       return filamanPatchCustomField(backendBaseUrl(), filamanApiKey(), spool_id,
                                      "last_dried", iso_datetime, timeout_ms);
     case BACKEND_BAMBUDDY:
-      // BamBuddy has no field for this at all - upstream issues #2863 and
-      // #1754 are open. The user picks where it goes instead.
+      // A BamBuddy with its own field (#2863) takes the date there, whatever
+      // the setting says. Older ones have none, so the user picks where it
+      // goes instead.
+      if (bbHasDriedField()) {
+        return bbPatchLastDried(backendBaseUrl(), bambuddyApiKey(), spool_id,
+                                iso_datetime, timeout_ms);
+      }
       switch (g_bb_dried_target) {
         case BB_DRIED_SPOOLMAN:
           // Past BamBuddy, straight into the Spoolman database behind it.
@@ -1244,6 +1250,7 @@ int backendPatchFilamentDrying(int filament_id, int spool_id, const char* value,
 bool backendCanPatchLastDried() {
   switch (backendMode()) {
     case BACKEND_BAMBUDDY:
+      if (bbHasDriedField()) return true;
       switch (g_bb_dried_target) {
         case BB_DRIED_SPOOLMAN:
           return bbInventoryMode() == BB_INV_SPOOLMAN && bbSpoolmanUrl()[0];
@@ -1469,8 +1476,8 @@ int backendGetSpoolDetail(int spool_id, AmsSpoolDetail& out, uint32_t timeout_ms
     }
   }
 
-  char iso[32];
-  extraText(sp["extra"]["last_dried"], iso, sizeof(iso));
+  char iso[LAST_DRIED_ISO_MAX];
+  lastDriedNewest(sp["extra"], iso, sizeof(iso));
   if (iso[0]) isoDayLocal(iso, out.last_dried, sizeof(out.last_dried));
   // The same three step rule applyLastUsed() follows on the main screen, and
   // it has to be the same: a card that showed a dash where the screen behind
