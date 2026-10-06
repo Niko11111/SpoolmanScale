@@ -10,6 +10,7 @@ bool backendLastListPartial();
 #include <stdint.h>
 #include "services/ams_slots.h"
 #include "services/spool_detail.h"
+#include "services/tag_create.h"
 
 // ============================================================
 //  BACKEND API DISPATCH
@@ -260,9 +261,23 @@ int  backendCreateSpool(const char* base_url, int template_spool_id, int filamen
        float initial_weight, float spool_weight, float remaining_weight,
        int* out_spool_id = nullptr, uint32_t timeout_ms = 8000);
 
-// Creates a spool from what a Bambu tag carries, for the case where no
-// template fits. BamBuddy only - Spoolman and FilaMan want a filament_id, and
-// a tag cannot supply one. remaining_weight is the net reading of the scale.
+// A new spool from a Bambu tag, on every backend (services/tag_create.h).
+// First the plan, which only reads: whether the inventory has the tag's
+// filament, or how it would be created. BamBuddy keeps no filaments; its plan
+// carries the colour's name in plan->name. Then the creation, which writes
+// what the plan says is missing - vendor, colour, filament - and the spool.
+// label_weight is the nominal filament weight, remaining the net reading of
+// the scale.
+struct TagCreateResult {
+  int spool_id;
+  int filament_id;   // a filament created on the way, 0 when it existed
+};
+void backendPlanTagFilament(const TagCreateInput& in, TagFilamentPlan* plan);
+int  backendCreateFromTag(const TagCreateInput& in, const TagFilamentPlan& plan,
+       int label_weight, float remaining, TagCreateResult* out);
+
+// BamBuddy's part of the above: a spool is material, brand and colour as
+// strings, nothing to look up first. remaining_weight is the net reading.
 int  backendCreateSpoolFromTag(const char* material, const char* subtype,
        const char* brand, const char* rgba, const char* color_name,
        int label_weight, int core_weight,
@@ -274,8 +289,8 @@ int  backendCreateSpoolFromTag(const char* material, const char* subtype,
 void backendLookupColorName(const char* hex6, const char* material,
        char* out_name, size_t out_size);
 
-// True when backendCreateSpoolFromTag() has a path on the active backend, so
-// the UI can leave the button out instead of offering a dead end.
+// True when backendCreateFromTag() has a path on the active backend, so the
+// UI can leave the button out instead of offering a dead end.
 bool backendCanCreateFromTag();
 
 int  backendCreateSpoolField(const char* base_url, const char* field_name,

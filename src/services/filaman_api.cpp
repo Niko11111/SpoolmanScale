@@ -1778,11 +1778,40 @@ static int getDisplay(const char* base_url, const char* api_key, const char* pat
     deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
   http.end();
   if (err) {
-    logSDf("FilaMan: display JSON parse failed (%s)", err.c_str());
+    logSDf("FilaMan: answer of %s did not parse (%s)", path, err.c_str());
     return -2;
   }
   return 200;
 }
+
+int filamanGetJson(const char* base_url, const char* api_key, const char* path,
+                   JsonDocument& doc, JsonDocument& filter, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || !path) return -1;
+  return getDisplay(base_url, api_key, path, doc, filter, timeout_ms);
+}
+
+int filamanPostJson(const char* base_url, const char* api_key, const char* path,
+                    const String& body, JsonDocument& answer, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || !path) return -1;
+  BackendHttp http;
+  http.begin(String(base_url) + path);
+  http.setTimeout(timeout_ms);
+  addApiKey(http, api_key);
+  http.addHeader("Content-Type", "application/json");
+  const int code = http.POST(body);
+  const String resp = http.getString();
+  http.end();
+  if (code < 200 || code >= 300) {
+    logSDf("FilaMan: POST %s -> HTTP %d: %s", path, code, resp.substring(0, 120).c_str());
+    return code;
+  }
+  deserializeJson(answer, resp);
+  return 200;
+}
+
+String filamanUrlEncode(const char* s) { return urlEncodeQuery(s); }
+
+const char* filamanFilamentArticle(JsonObjectConst fil) { return articleNumber(fil); }
 
 int filamanGetAmsState(const char* base_url, const char* api_key, int printer_id,
                        AmsSlotState& out, uint32_t timeout_ms) {

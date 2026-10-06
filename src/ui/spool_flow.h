@@ -69,12 +69,6 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id, const
 void doCopySpoolCreate(int template_spool_id, int template_filament_id,
                        float template_initial, float template_spool_w);
 
-// Creating a spool from the tag itself, for when no template fits. BamBuddy
-// only - see backendCanCreateFromTag().
-void showNewFromTagPopup();
-void closeNewTagPopup();
-void doCreateSpoolFromTag();
-
 void hideSpoolFlowOverlays();
 void deleteSpoolFlowOverlays();
 void handleSpoolFlowDeferredActions();
