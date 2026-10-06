@@ -31,15 +31,16 @@ jobs:
       - name: Build ${{ matrix.env }}
         run: pio run -e ${{ matrix.env }}
       - name: Refuse a binary an installed device could not take
-        # Installs since v0.8.0 get 6 MB app slots, but OTA never rewrites
-        # the partition table: every scale first flashed before that still
-        # has 3 MB slots. A larger binary would be refused by esp_ota_begin()
-        # on all of them, so the build fails here first.
+        # Installs since v0.8.0 get 6 MB app slots (partitions.csv). Since
+        # v0.8.3 the firmware may outgrow the 3 MB slots of scales flashed
+        # before that: such a scale reads the size from version.json, offers
+        # the web flasher instead of the update, and moves to the new table
+        # over USB once. More than 6 MB fits no device at all.
         run: |
           SIZE=$(stat -c %s .pio/build/${{ matrix.env }}/firmware.bin)
-          echo "firmware.bin: $SIZE bytes of 3145728"
-          if [ "$SIZE" -gt 3145728 ]; then
-            echo "::error::firmware.bin is $SIZE bytes, more than the 3 MB app slot of installed devices"
+          echo "firmware.bin: $SIZE bytes of 6291456"
+          if [ "$SIZE" -gt 6291456 ]; then
+            echo "::error::firmware.bin is $SIZE bytes, more than the 6 MB app slot"
             exit 1
           fi
       - name: Read version from app_config.h
