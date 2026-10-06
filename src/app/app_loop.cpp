@@ -18,6 +18,7 @@
 #include "app/deferred_actions.h"
 #include "app/perf_monitor.h"
 #include "app/render_bench.h"
+#include "app/screenshot.h"
 #include "hardware/lvgl_mem.h"
 #include "services/partition_layout.h"
 #include "ui/partition_popup.h"
@@ -481,6 +482,7 @@ void appLoop() {
   lv_timer_handler();
   perfUiDone();
   renderBenchTick();
+  screenshotTick();
   perfSection("prefs");
   prefsDeferWrites(false);
   prefsFlush();

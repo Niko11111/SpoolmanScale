@@ -12,6 +12,7 @@
 #include "hardware/flash_log.h"
 #include "web/web_access.h"
 #include "web/web_net_probe.h"
+#include "web/web_screenshot.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
 // parameter, so lang.h has to come after anything that pulls it in.
@@ -98,7 +99,9 @@ static String body() {
   h += F("</button><button id='slc' class='quiet'>");
   h += T(STR_W_SESSION_COPY);
   h += F("</button><span id='sls' class='note' style='margin:0'></span>"
-         "</div></div></div>");
+         "</div></div>");
+  h += screenshotCard();
+  h += F("</div>");
 
   h += F("<script>const SESSION_EMPTY=");
   h += jsStr(T(STR_W_SESSION_EMPTY));
@@ -305,6 +308,7 @@ static String body() {
 
 static void routes(WebServer &srv) {
   netProbeRoutes(srv);
+  screenshotRoutes(srv);
   // ── SD-Card Log endpoints ─────────────────────────────────
   // GET /logs -> JSON list of available log files
   srv.on("/api/logs", HTTP_GET, [&srv]() {

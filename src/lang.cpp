@@ -3191,6 +3191,36 @@ const char* const STRINGS[][3] = {
   { "Noch nicht übernommen", "Not applied yet",
     "Pas encore appliqué" },  // STR_W_THEME_UNSAVED
   { "Ins AMS",                         "Into AMS",                            "Dans l'AMS" },  // STR_AMS_MAIN_ASSIGN
+  { "Display-Screenshot",
+    "Display screenshot",
+    "Capture d'écran" },  // STR_W_C_SHOT
+  { "Bilder der aktuellen Anzeige für Issues und Pull Requests. An der Waage selbst: zwei Finger eine Sekunde aufs Display legen, bis es kurz dunkel wird. Bis zu 6 Bilder bleiben bis zum Neustart hier, das älteste fällt zuerst raus.",
+    "Pictures of what the display shows, for issues and pull requests. On the scale itself: rest two fingers on the display for a second until it blinks dark. Up to 6 pictures stay here until the next restart, the oldest goes first.",
+    "Des images de l'affichage, pour les issues et pull requests. Sur la balance : poser deux doigts une seconde sur l'écran jusqu'à ce qu'il s'assombrisse. Jusqu'à 6 images restent ici jusqu'au prochain redémarrage, la plus ancienne part en premier." },  // STR_W_SHOT_NOTE
+  { "Aufnehmen",
+    "Capture",
+    "Capturer" },  // STR_W_SHOT_TAKE
+  { "Nimmt auf...",
+    "Capturing...",
+    "Capture..." },  // STR_W_SHOT_BUSY
+  { "Alle speichern",
+    "Save all",
+    "Tout enregistrer" },  // STR_W_SHOT_SAVE_ALL
+  { "Alle löschen",
+    "Delete all",
+    "Tout supprimer" },  // STR_W_SHOT_DROP_ALL
+  { "Aufgenommen um {t}",
+    "Captured at {t}",
+    "Capturée à {t}" },  // STR_W_SHOT_AT_WEB
+  { "An der Waage aufgenommen um {t}",
+    "Captured on the scale at {t}",
+    "Capturée sur la balance à {t}" },  // STR_W_SHOT_AT_PANEL
+  { "Screenshot fehlgeschlagen",
+    "Screenshot failed",
+    "Échec de la capture" },  // STR_W_SHOT_FAIL
+  { "Noch keine Screenshots.",
+    "No screenshots yet.",
+    "Aucune capture pour l'instant." },  // STR_W_SHOT_EMPTY
 };
 
 StringID tagWriteResultString(uint8_t code) {
