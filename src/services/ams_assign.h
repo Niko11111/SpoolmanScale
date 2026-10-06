@@ -91,6 +91,16 @@ int  amsWindowRemainingS();
 // one-second steps. Zero when none is running.
 unsigned long amsWindowRemainingMs();
 
+// The spool the running window was opened for, 0 when none runs.
+int amsWindowSpoolId();
+
+// Ends the countdown on the scale only. FilaMan has no way to cancel a
+// window: the driver drops it by itself the moment a tray is loaded, and a
+// new window replaces it. So once the spool is in, only this countdown was
+// still running. If it was not loaded yet, the driver keeps waiting for it
+// until its own timeout or the next window. No HTTP, safe in a handler.
+void amsWindowEnd(const char* why);
+
 // Writes auto_assign_enabled on this device. Returns the HTTP status, or a
 // negative sentinel from the filaman layer.
 int amsWriteEnabled(bool enabled);
