@@ -1,0 +1,32 @@
+name: Feature request
+description: An idea for the scale, its display or its web interface
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do, and what stops you today?
+      description: Describe the situation at your printer or shelf, not the solution yet.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How it could work. Sketches and photos welcome.
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend you use
+      multiple: true
+      options:
+        - Spoolman
+        - FilaMan
+        - BamBuddy
+        - Any / not backend specific
+  - type: checkboxes
+    id: implement
+    attributes:
+      label: Contributing
+      options:
+        - label: I would like to implement this myself (please wait for an OK before you start, see CONTRIBUTING)

@@ -1,0 +1,76 @@
+name: Bug report
+description: Something on the scale or in its web interface does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A log of the moment it happened is the fastest way to a fix.
+        Setup questions are often answered quicker
+        in the [manual](https://niko11111.github.io/SpoolmanScale-Docs/) or the
+        [Discord](https://discord.gg/xadskCrPFu).
+  - type: input
+    id: version
+    attributes:
+      label: Firmware version
+      description: Shown on the info screen and at the top of every web page, e.g. v0.8.2-beta.73
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend
+      options:
+        - Spoolman
+        - FilaMan
+        - BamBuddy (inventory in BamBuddy)
+        - BamBuddy (inventory in Spoolman behind BamBuddy)
+        - None / not set up yet
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Scale / weighing
+        - NFC tag reading or writing
+        - Display / touch
+        - Wi-Fi / connection to the server
+        - Web interface
+        - Firmware update
+        - AMS / 3D printer
+        - Label printer
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: Step by step, so it can be reproduced. A photo of the screen helps.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        From the web interface (page Logs) or the serial monitor at 115200 baud.
+        Please cover the moment the problem happened.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you already tried
+      description: Restart, other tag, other spool, other Wi-Fi ... and what changed.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you send it
+      options:
+        - label: I checked the open issues for the same problem
+          required: true
