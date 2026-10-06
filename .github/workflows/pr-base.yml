@@ -1,0 +1,20 @@
+name: Pull request base
+
+# Pull requests from forks go to dev: main only holds released versions, and
+# every pull request against it so far had to be moved by hand. No paths
+# filter on purpose, so the check also runs on a pull request that only
+# changes text.
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  base:
+    name: Target dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse a fork pull request against main
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::error::Pull requests go to dev, not main. Click 'Edit' next to the title and choose dev as the base branch. See .github/CONTRIBUTING.md"
+          exit 1
