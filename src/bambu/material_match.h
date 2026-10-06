@@ -19,4 +19,9 @@ bool containsIgnoreCase(const char* haystack, const char* needle);
 // literal search found neither, so every Tough+ spool was filtered out of the
 // link list and the list came up empty.
 bool bambuSubtypeMatches(const char* haystack, const char* subtype);
+
+// The same comparison for two subtypes on their own, equal rather than
+// contained: "tough" is part of "tough-plus", and PLA Tough is not PLA
+// Tough+. For deciding that a filament is the one on the tag.
+bool bambuSubtypeEquals(const char* a, const char* b);
 int colorDistance(const char* hex_a, const char* hex_b);

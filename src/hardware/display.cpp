@@ -123,11 +123,38 @@ DisplayFlushStats displayFlushStatsTake() {
   return taken;
 }
 
+// While displayCaptureFrame() runs, every strip also goes to this sink, row
+// by row. The panel cannot be read back (no RD line), so the flush is the
+// only place a finished frame passes through.
+struct CaptureState {
+  DisplayRowSink sink;
+  void*          ctx;
+  int            next_row;   // rows must arrive whole and in order
+  bool           ok;
+};
+static CaptureState* capture = nullptr;
+
+static void captureStrip(const lv_area_t *area, const lv_color_t *color_p, uint32_t w) {
+  if (!capture->ok) return;
+  if (area->x1 != 0 || (int)w != DISPLAY_W_PX || area->y1 != capture->next_row) {
+    capture->ok = false;
+    return;
+  }
+  for (int32_t y = area->y1; y <= area->y2 && capture->ok; y++) {
+    const uint16_t* row = (const uint16_t*)&color_p[(y - area->y1) * w];
+    capture->ok = capture->sink(row, (int)y, capture->ctx);
+  }
+  capture->next_row = area->y2 + 1;
+}
+
 static void lvgl_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p) {
   // The gamma pass counts: it is part of what a flush costs.
   const uint32_t flush_start_us = micros();
   uint32_t w = area->x2 - area->x1 + 1;
   uint32_t h = area->y2 - area->y1 + 1;
+  // Before the gamma pass: the picture as the UI drew it, the same colours the
+  // simulator shows, not the lift this one panel gets.
+  if (capture) captureStrip(area, color_p, w);
   if (ui_gain > 100) {
     const uint32_t n = w * h;
     for (uint32_t i = 0; i < n; i++) {
@@ -148,9 +175,55 @@ static void lvgl_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *co
   lv_disp_flush_ready(drv);
 }
 
+bool displayCaptureFrame(DisplayRowSink sink, void* ctx) {
+  if (!sink || !lv_disp_get_default()) return false;
+  CaptureState state = {sink, ctx, 0, true};
+  capture = &state;
+  // The whole area, so every layer in it is drawn again, lv_layer_top() too,
+  // and LVGL merges whatever else was pending into the one full-width area.
+  lv_obj_invalidate(lv_scr_act());
+  lv_refr_now(NULL);
+  capture = nullptr;
+  return state.ok && state.next_row == DISPLAY_H_PX;
+}
+
+static bool (*touch_gesture_hook)(uint8_t points) = nullptr;
+static bool touch_held_by_gesture = false;
+
+void displaySetTouchGestureHook(bool (*hook)(uint8_t points)) {
+  touch_gesture_hook = hook;
+}
+
+// What the first finger had pressed loses its look, and its release becomes
+// PRESS_LOST instead of a click: the way touch_feedback.cpp cancels a press
+// that slid off its button. Runs inside the read, where LVGL has set the
+// active input device.
+static void dropPressForGesture() {
+  lv_indev_t* indev = lv_indev_get_act();
+  if (!indev) return;
+  lv_obj_t* pressed = indev->proc.types.pointer.act_obj;
+  if (pressed) lv_obj_clear_state(pressed, LV_STATE_PRESSED);
+  lv_indev_wait_release(indev);
+}
+
+// The chip reports up to two points; LVGL only ever gets the first. Costs no
+// extra I2C traffic: the driver reads every point on each poll and used to
+// hand back one.
+static constexpr uint8_t TOUCH_POINTS_READ = 2;
+
 static void lvgl_touch(lv_indev_drv_t *drv, lv_indev_data_t *data) {
-  uint16_t x, y;
-  if (tft.getTouch(&x, &y)) {
+  lgfx::touch_point_t tp[TOUCH_POINTS_READ];
+  const uint8_t points = tft.getTouch(tp, TOUCH_POINTS_READ);
+  const bool gesture = touch_gesture_hook && touch_gesture_hook(points);
+  if (gesture && !touch_held_by_gesture) dropPressForGesture();
+  touch_held_by_gesture = gesture;
+  if (gesture) {
+    data->state = LV_INDEV_STATE_REL;
+    if (touch_activity_callback) touch_activity_callback();
+    return;
+  }
+  if (points > 0) {
+    const uint16_t x = tp[0].x, y = tp[0].y;
     data->state = LV_INDEV_STATE_PR;
     data->point.x = x;
     data->point.y = y;
@@ -201,8 +274,8 @@ bool displayHardwareBegin(void (*touch_activity_cb)()) {
   lv_disp_draw_buf_init(&draw_buf, buf, NULL, buf_px);
   static lv_disp_drv_t disp_drv;
   lv_disp_drv_init(&disp_drv);
-  disp_drv.hor_res = 480;
-  disp_drv.ver_res = 320;
+  disp_drv.hor_res = DISPLAY_W_PX;
+  disp_drv.ver_res = DISPLAY_H_PX;
   disp_drv.flush_cb = lvgl_flush;
   disp_drv.draw_buf = &draw_buf;
   lv_disp_drv_register(&disp_drv);

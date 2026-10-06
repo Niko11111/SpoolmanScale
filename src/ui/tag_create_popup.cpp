@@ -1,0 +1,347 @@
+#include "ui/tag_create_popup.h"
+
+#include <Arduino.h>
+#include <lvgl.h>
+#include <math.h>
+#include <string.h>
+
+// backend_api.h brings ArduinoJson, whose templates have a parameter T:
+// before lang.h, which defines T().
+#include "services/backend_api.h"
+#include "app/app_state.h"
+#include "app_config.h"
+#include "hardware/sd_logger.h"
+#include "lang.h"
+#include "services/server_reach.h"
+#include "services/spool_cache.h"
+#include "services/tag_create.h"
+#include "ui/main_screen_helpers.h"
+#include "ui/spool_flow_internal.h"
+#include "ui/theme.h"
+#include "ui/ui_common.h"
+
+// The lines of the card, as on the copy confirmation.
+#define TCP_LINE_H   26
+#define TCP_SWATCH   18
+#define TCP_GAP       8
+
+// What the loop is to do for the card on its next pass.
+enum TcpJob : uint8_t { TCP_IDLE = 0, TCP_PLAN, TCP_CREATE };
+
+static lv_obj_t*       s_scr    = nullptr;
+static lv_obj_t*       s_status = nullptr;
+static lv_obj_t*       s_btn_ok = nullptr;
+static TcpJob          s_job    = TCP_IDLE;
+static TagCreateInput  s_in;
+static TagFilamentPlan s_plan;
+static int             s_label_weight = 0;
+// Cancel hides the card from its own callback; the loop deletes it.
+static bool            s_close_pending = false;
+
+lv_obj_t* tagCreatePopupScreen() { return s_scr; }
+
+bool tagCreateOffered() {
+  TagCreateInput in;
+  return backendCanCreateFromTag() && tagCreateInputFromTag(&in);
+}
+
+lv_obj_t* tagCreateEntryButton(lv_obj_t* parent, int w, int h, int y) {
+  lv_obj_t* btn = lv_btn_create(parent);
+  lv_obj_set_size(btn, w, h);
+  lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, y);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_GO_BG), 0);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn, 10, 0);
+  lv_obj_set_style_shadow_width(btn, 0, 0);
+  lv_obj_set_style_border_width(btn, 1, 0);
+  lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_ACCENT), 0);
+  lv_obj_add_event_cb(btn, [](lv_event_t*) {
+    logSD("BTN: New from tag");
+    newtag_open_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t* l = lv_label_create(btn);
+  lv_label_set_text(l, T(STR_NEWTAG_BTN));
+  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_OK_TEXT), 0);
+  lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+  lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(l, LV_ALIGN_CENTER, 0, 0);
+  return btn;
+}
+
+void closeTagCreatePopup() {
+  releaseScreen(&s_scr);
+  s_status = nullptr;
+  s_btn_ok = nullptr;
+  s_job = TCP_IDLE;
+}
+
+// ------------------------------------------------------------
+//  Weights
+// ------------------------------------------------------------
+
+// What the new spool starts with: the net reading when the spool lies on the
+// pad, otherwise a full one - a spool still in its box has not been touched.
+// Without the empty spool's weight nothing can be subtracted: full as well.
+static float remainingWeight() {
+  const float core = (float)s_in.spool_weight_g;
+  if (core <= 0.0f || scale_weight_g < core) return (float)s_label_weight;
+  return scale_weight_g - core;
+}
+
+// The tag's own net weight; without it the nominal size nearest the reading.
+static int labelWeight() {
+  if (s_in.net_weight_g > 0) return s_in.net_weight_g;
+  static const int choices[NEWTAG_LABEL_COUNT] = NEWTAG_LABEL_CHOICES;
+  const float netto = scale_weight_g - (float)s_in.spool_weight_g;
+  int best = choices[NEWTAG_LABEL_COUNT - 1], best_diff = -1;
+  for (int i = 0; i < NEWTAG_LABEL_COUNT; i++) {
+    const int diff = (int)fabsf(netto - (float)choices[i]);
+    if (best_diff < 0 || diff < best_diff) { best_diff = diff; best = choices[i]; }
+  }
+  return best;
+}
+
+// ------------------------------------------------------------
+//  The status line and the create button
+// ------------------------------------------------------------
+
+static void showStatus(const char* text, uint32_t color, bool can_create) {
+  if (!s_status) return;
+  lv_label_set_text(s_status, text);
+  lv_obj_set_style_text_color(s_status, lv_color_hex(color), 0);
+  if (!s_btn_ok) return;
+  if (can_create) lv_obj_clear_state(s_btn_ok, LV_STATE_DISABLED);
+  else            lv_obj_add_state(s_btn_ok, LV_STATE_DISABLED);
+}
+
+static void showPlan() {
+  char buf[96];
+  switch (s_plan.state) {
+    case TFS_FOUND:
+      snprintf(buf, sizeof(buf), T(STR_TAGNEW_FOUND), s_plan.filament_id);
+      showStatus(buf, UI_COL_GOOD, true);
+      break;
+    case TFS_CREATE_DB:     showStatus(T(STR_TAGNEW_FROM_DB), UI_COL_ACCENT, true);         break;
+    case TFS_CREATE_TAG:    showStatus(T(STR_TAGNEW_FROM_TAG), UI_COL_ACCENT, true);        break;
+    case TFS_NOT_NEEDED:    showStatus(T(STR_TAGNEW_BAMBUDDY), UI_COL_INK_SOFT, true);      break;
+    case TFS_NEEDS_CATALOG: showStatus(T(STR_TAGNEW_NEEDS_CATALOG), UI_COL_WARN, false);    break;
+    default:
+      snprintf(buf, sizeof(buf), T(STR_TAGNEW_FAILED), s_plan.http_code);
+      showStatus(buf, UI_COL_BAD_TEXT, false);
+      break;
+  }
+}
+
+// ------------------------------------------------------------
+//  The card
+// ------------------------------------------------------------
+
+static lv_obj_t* buildBox() {
+  s_scr = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(s_scr, LV_HOR_RES, LV_VER_RES);
+  lv_obj_set_pos(s_scr, 0, 0);
+  lv_obj_set_style_bg_color(s_scr, lv_color_hex(UI_COL_SCRIM), 0);
+  lv_obj_set_style_bg_opa(s_scr, UI_OPA_SCRIM, 0);
+  lv_obj_set_style_border_width(s_scr, 0, 0);
+  lv_obj_set_style_radius(s_scr, 0, 0);
+  lv_obj_set_style_pad_all(s_scr, 0, 0);
+  lv_obj_clear_flag(s_scr, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t* box = lv_obj_create(s_scr);
+  lv_obj_set_size(box, UI_POPUP_W, UI_CARD_H);
+  lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_POPUP_BORDER), 0);
+  lv_obj_set_style_border_width(box, 2, 0);
+  lv_obj_set_style_radius(box, UI_RADIUS_BOX, 0);
+  lv_obj_set_style_pad_all(box, 0, 0);
+  lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+  return box;
+}
+
+static void buildHead(lv_obj_t* box) {
+  lv_obj_t* icon = lv_label_create(box);
+  lv_label_set_text(icon, LV_SYMBOL_PLUS);
+  lv_obj_set_style_text_color(icon, lv_color_hex(UI_COL_ACCENT), 0);
+  lv_obj_set_style_text_font(icon, UI_FONT_ICON, 0);
+  lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, UI_CARD_ICON_Y);
+
+  lv_obj_t* title = lv_label_create(box);
+  lv_label_set_text(title, T(STR_NEWTAG_TITLE));
+  lv_obj_set_style_text_color(title, lv_color_hex(UI_COL_INK), 0);
+  lv_obj_set_style_text_font(title, UI_FONT_HEADLINE, 0);
+  lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_width(title, UI_POPUP_W - UI_CARD_TEXT_PAD);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, UI_CARD_TITLE_Y);
+}
+
+// Line 1: the colour and the product, as one centred group.
+static void buildIdentity(lv_obj_t* box) {
+  lv_obj_t* row = lv_obj_create(box);
+  lv_obj_remove_style_all(row);
+  lv_obj_set_size(row, UI_POPUP_W - UI_CARD_TEXT_PAD, TCP_LINE_H);
+  lv_obj_align(row, LV_ALIGN_TOP_MID, 0, UI_CARD_TEXT_Y - 4);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(row, TCP_GAP, 0);
+  lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_clear_flag(row, LV_OBJ_FLAG_CLICKABLE);
+
+  lv_obj_t* sw = lv_obj_create(row);
+  lv_obj_set_size(sw, TCP_SWATCH, TCP_SWATCH);
+  lv_obj_set_style_radius(sw, 4, 0);
+  lv_obj_set_style_border_width(sw, 1, 0);
+  lv_obj_set_style_border_color(sw, lv_color_hex(UI_COL_POPUP_BORDER), 0);
+  lv_obj_set_style_pad_all(sw, 0, 0);
+  lv_obj_clear_flag(sw, LV_OBJ_FLAG_SCROLLABLE);
+  swatchPaint(sw, g_tag.color);
+
+  char name[80];
+  joinMaterialName(s_in.product, s_in.color_name, name, sizeof(name));
+  lv_obj_t* lbl = lv_label_create(row);
+  lv_label_set_text(lbl, name);
+  lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_INK), 0);
+  lv_obj_set_style_text_font(lbl, UI_FONT_TITLE, 0);
+  lv_label_set_long_mode(lbl, LV_LABEL_LONG_DOT);
+  lv_obj_set_style_max_width(lbl, UI_POPUP_W - UI_CARD_TEXT_PAD - TCP_SWATCH - TCP_GAP, 0);
+}
+
+static lv_obj_t* textLine(lv_obj_t* box, const lv_font_t* font, uint32_t color, int y) {
+  lv_obj_t* lbl = lv_label_create(box);
+  lv_obj_set_style_text_color(lbl, lv_color_hex(color), 0);
+  lv_obj_set_style_text_font(lbl, font, 0);
+  lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+  lv_label_set_long_mode(lbl, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(lbl, UI_POPUP_W - UI_CARD_TEXT_PAD);
+  lv_obj_align(lbl, LV_ALIGN_TOP_MID, 0, y);
+  return lbl;
+}
+
+// Line 2: whose it is, the article number, and what the spool starts with.
+// Line 3: the filament, filled in once the lookup has answered.
+static void buildLines(lv_obj_t* box) {
+  char meta[96];
+  if (s_in.article[0])
+    snprintf(meta, sizeof(meta), T(STR_TAGNEW_META_ART), s_in.vendor, s_in.article,
+             remainingWeight(), s_label_weight);
+  else
+    snprintf(meta, sizeof(meta), T(STR_TAGNEW_META), s_in.vendor, remainingWeight(), s_label_weight);
+  lv_obj_t* lbl = textLine(box, UI_FONT_SMALL, UI_COL_INK_SOFT, UI_CARD_TEXT_Y - 4 + TCP_LINE_H + 4);
+  lv_label_set_text(lbl, meta);
+
+  s_status = textLine(box, UI_FONT_BODY, UI_COL_INK_SOFT, UI_CARD_TEXT_Y - 4 + 2 * TCP_LINE_H + 8);
+  lv_label_set_text(s_status, T(STR_TAGNEW_SEARCHING));
+}
+
+static lv_obj_t* answerButton(lv_obj_t* box, int x, bool ok, int text_id) {
+  lv_obj_t* btn = lv_btn_create(box);
+  lv_obj_set_size(btn, UI_POPUP_BTN_W, UI_POPUP_BTN_H);
+  lv_obj_set_pos(btn, x, UI_CARD_ROW_Y);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(ok ? UI_COL_OK_BG : UI_COL_BAD_BG), 0);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(ok ? UI_COL_OK_BG_PRESSED : UI_COL_BAD_BG_PRESSED),
+                            LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_DISABLED_BG), LV_STATE_DISABLED);
+  lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
+  lv_obj_set_style_shadow_width(btn, 0, 0);
+  lv_obj_t* lbl = lv_label_create(btn);
+  lv_label_set_text(lbl, T(text_id));
+  lv_obj_set_style_text_color(lbl, lv_color_hex(ok ? UI_COL_OK_TEXT : UI_COL_BAD_TEXT), 0);
+  lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_DISABLED_TEXT), LV_STATE_DISABLED);
+  lv_obj_set_style_text_font(lbl, UI_FONT_TITLE, 0);
+  lv_obj_center(lbl);
+  return btn;
+}
+
+static void buildAnswers(lv_obj_t* box) {
+  s_btn_ok = answerButton(box, UI_CARD_ROW_X, true, STR_COPY_CARD_CREATE);
+  lv_obj_add_state(s_btn_ok, LV_STATE_DISABLED);   // until the lookup has answered
+  lv_obj_add_event_cb(s_btn_ok, [](lv_event_t*) {
+    if (s_job != TCP_IDLE) return;
+    logSD("BTN: TagCreate -> Create");
+    showStatus(T(STR_TAGNEW_CREATING), UI_COL_INK_SOFT, false);
+    s_job = TCP_CREATE;
+  }, LV_EVENT_CLICKED, NULL);
+
+  lv_obj_t* no = answerButton(box, UI_POPUP_W - UI_POPUP_BTN_W - UI_CARD_ROW_X, false, STR_CANCEL);
+  lv_obj_add_event_cb(no, [](lv_event_t*) {
+    logSD("BTN: TagCreate -> Cancel");
+    // Hidden here, deleted by the loop: this is the button's own callback.
+    if (s_scr) lv_obj_add_flag(s_scr, LV_OBJ_FLAG_HIDDEN);
+    s_job = TCP_IDLE;
+    s_close_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+}
+
+void showTagCreatePopup() {
+  logSD("SHOW: TagCreatePopup");
+  closeTagCreatePopup();
+  if (!tagCreateInputFromTag(&s_in)) {
+    logSD("TagCreate: no tag to create from");
+    return;
+  }
+  s_label_weight = labelWeight();
+  tagFilamentPlanClear(&s_plan);
+
+  lv_obj_t* box = buildBox();
+  buildHead(box);
+  buildIdentity(box);
+  buildLines(box);
+  buildAnswers(box);
+  s_job = TCP_PLAN;
+}
+
+// ------------------------------------------------------------
+//  The loop's part
+// ------------------------------------------------------------
+
+static void runPlan() {
+  if (!wifi_ok) { s_plan.state = TFS_FAILED; showPlan(); return; }
+  backendPlanTagFilament(s_in, &s_plan);
+  serverReachNote(s_plan.state == TFS_FAILED ? s_plan.http_code : 200, true);
+  showPlan();
+}
+
+static void runCreate() {
+  TagCreateResult r;
+  const int code = serverReachNote(
+    backendCreateFromTag(s_in, s_plan, s_label_weight, remainingWeight(), &r), true);
+  logSDf("TagCreate: HTTP %d, spool %d, filament %d, label %d g, link %s",
+         code, r.spool_id, r.filament_id, s_label_weight, s_in.link_id);
+  char buf[96];
+  if ((code == 200 || code == 201) && r.spool_id > 0) {
+    spoolCacheForget("spool created from a tag");
+    char link_id[sizeof(s_in.link_id)];
+    memcpy(link_id, s_in.link_id, sizeof(link_id));
+    const bool with_filament = r.filament_id > 0;
+    closeTagCreatePopup();
+    // The spool exists either way; a tag that could not be bound has said so
+    // on the status line, and that must stay readable.
+    if (finishCopyFlow(r.spool_id, link_id))
+      statusMessageShow(T(with_filament ? STR_TAGNEW_OK_BOTH : STR_NEWTAG_OK), UI_COL_GOOD);
+    return;
+  }
+  // A filament that was created stays; the next try uses it.
+  if (r.filament_id > 0) {
+    s_plan.state = TFS_FOUND;
+    s_plan.filament_id = r.filament_id;
+    snprintf(buf, sizeof(buf), T(STR_TAGNEW_FILAMENT_ONLY), r.filament_id, code);
+  } else {
+    snprintf(buf, sizeof(buf), T(STR_TAGNEW_CREATE_FAIL), code);
+  }
+  showStatus(buf, UI_COL_BAD_TEXT, true);
+}
+
+void tagCreatePopupTick() {
+  if (s_close_pending) {
+    s_close_pending = false;
+    closeTagCreatePopup();
+    return;
+  }
+  if (!s_scr || s_job == TCP_IDLE) return;
+  const TcpJob job = s_job;
+  s_job = TCP_IDLE;
+  // The card as it stands now, before the loop waits on the server.
+  lv_refr_now(NULL);
+  if (job == TCP_PLAN) runPlan();
+  else                 runCreate();
+}

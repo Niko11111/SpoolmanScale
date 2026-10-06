@@ -238,3 +238,15 @@ STR_TARE_ENTER_RANGE	12	168	WRAP:4	src/ui/tare_entry.cpp s_lbl_info, COL_W = 168
 STR_TARE_ENTER_OVER	12	168	WRAP:3	src/ui/tare_entry.cpp s_lbl_info, COL_W = 168
 STR_LBL_CAL_EDGE	16	289	NEVER	src/services/label_render.cpp calibration page, 40 mm label less frame and margins, one bold dot
 STR_AMS_MAIN_ASSIGN	16	190	NEVER	src/ui/main_screen.cpp zone 4 AMS button 254 px, -8 air, -56 for the window countdown
+STR_TAGNEW_SEARCHING	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TAGNEW_FOUND	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TAGNEW_FROM_DB	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TAGNEW_FROM_TAG	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TAGNEW_BAMBUDDY	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TAGNEW_NEEDS_CATALOG	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TAGNEW_FAILED	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TAGNEW_CREATING	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TAGNEW_CREATE_FAIL	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TAGNEW_FILAMENT_ONLY	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TAGNEW_META_ART	14	360	NEVER	src/ui/tag_create_popup.cpp line 2 of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TAGNEW_META	14	360	NEVER	src/ui/tag_create_popup.cpp line 2 of the card, UI_POPUP_W - UI_CARD_TEXT_PAD

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Arduino.h>
 #include <ArduinoJson.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -10,6 +11,12 @@
 
 int spoolmanGetJson(const char* base_url, const char* path, JsonDocument& doc,
   uint32_t timeout_ms = 8000, JsonDocument* filter = nullptr, DeserializationError* out_err = nullptr);
+// POST with the server's answer kept in `answer`. The status decides; an
+// answer that does not parse leaves `answer` empty.
+int spoolmanPostJson(const char* base_url, const char* path, const String& body,
+  JsonDocument& answer, uint32_t timeout_ms = 8000);
+// Percent-encodes a value for a query string: everything but [A-Za-z0-9].
+String spoolmanUrlEncode(const char* s);
 int spoolmanGetSpoolJson(const char* base_url, int spool_id, JsonDocument& doc,
   uint32_t timeout_ms = 8000, DeserializationError* out_err = nullptr);
 int spoolmanGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocument& doc,

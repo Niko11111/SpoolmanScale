@@ -174,6 +174,16 @@ int spoolmanGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocu
 // Percent-encodes everything outside [A-Za-z0-9]. Tag UIDs are hex in
 // practice, but the value ends up in a URL and a stray character there would
 // break the query rather than just miss.
+static String urlEncode(const char* s);
+
+String spoolmanUrlEncode(const char* s) { return urlEncode(s ? s : ""); }
+
+int spoolmanPostJson(const char* base_url, const char* path, const String& body,
+                     JsonDocument& answer, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || !path) return -1;
+  return postJsonDoc(String(base_url) + path, body, answer, timeout_ms, nullptr);
+}
+
 static String urlEncode(const char* s) {
   String out;
   for (const char* p = s; *p; p++) {

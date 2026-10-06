@@ -18,6 +18,7 @@
 #include "app/deferred_actions.h"
 #include "app/perf_monitor.h"
 #include "app/render_bench.h"
+#include "app/screenshot.h"
 #include "hardware/lvgl_mem.h"
 #include "services/partition_layout.h"
 #include "ui/partition_popup.h"
@@ -481,6 +482,7 @@ void appLoop() {
   lv_timer_handler();
   perfUiDone();
   renderBenchTick();
+  screenshotTick();
   perfSection("prefs");
   prefsDeferWrites(false);
   prefsFlush();
@@ -1600,7 +1602,13 @@ void appLoop() {
   }
 
   // The AMS button without a load cell: its caption follows the spool on
-  // screen, and its fill the window the button opened.
+  // screen, and its fill the window the button opened. Another spool on
+  // screen means the last one is dealt with, so its countdown ends and the
+  // button is free for the new one; a new window replaces the old on the
+  // server anyway. Only without a load cell, where the button opened it.
+  if (!g_scale_fitted && amsWindowOpen() && sm_found && sm_id != amsWindowSpoolId()) {
+    amsWindowEnd("another spool");
+  }
   updateAmsMainButton();
 
   // Fix 10: Spoolman health check every 30s

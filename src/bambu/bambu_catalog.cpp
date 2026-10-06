@@ -205,6 +205,7 @@ bool bambuCatalogFind(const char* material_id, const char* variant_id,
   const uint16_t local = g_lang == LANG_DE ? hit->de : g_lang == LANG_FR ? hit->fr : hit->en;
   const char* name = poolStr(local);
   snprintf(out->color_name, sizeof(out->color_name), "%s", name[0] ? name : poolStr(hit->en));
+  snprintf(out->color_name_en, sizeof(out->color_name_en), "%s", poolStr(hit->en));
   return true;
 }
 

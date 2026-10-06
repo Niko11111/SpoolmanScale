@@ -756,10 +756,18 @@ void buildUI() {
     lv_obj_set_style_shadow_width(btn_ams_main, 0, 0);
     lv_obj_add_flag(btn_ams_main, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_event_cb(btn_ams_main, [](lv_event_t *e) {
+      // A tap on a running countdown ends it. FilaMan closes the window by
+      // itself once the spool is loaded, so after that only this countdown
+      // stood between the user and the next spool. The view stays one tap
+      // away on the header chip.
+      if (amsWindowOpen()) {
+        logSD("UI: Button -> AMS countdown stopped (main)");
+        amsWindowEnd("tap");
+        return;
+      }
       // The same test the caption was written from, so a tap does what the
-      // button says. While a window runs the spool is already on its way and
-      // the view is the useful answer: it shows the bay being taken.
-      if (amsMainCanAssign() && !amsWindowOpen()) {
+      // button says.
+      if (amsMainCanAssign()) {
         logSDf("UI: Button -> AMS assign (main), id=%d", sm_id);
         ams_main_assign_pending = true;
         return;

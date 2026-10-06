@@ -33,6 +33,7 @@ Pending s_pending;
 // wraps after 49 days and a deadline comparison would expire on the spot.
 bool          s_window_open       = false;
 unsigned long s_window_started_ms = 0;
+int           s_window_spool_id   = 0;
 
 }  // namespace
 
@@ -86,6 +87,17 @@ unsigned long amsWindowRemainingMs() {
   const unsigned long total   = (unsigned long)g_ams_window_s * 1000UL;
   const unsigned long elapsed = millis() - s_window_started_ms;
   return elapsed >= total ? 0 : total - elapsed;
+}
+
+int amsWindowSpoolId() {
+  return amsWindowOpen() ? s_window_spool_id : 0;
+}
+
+void amsWindowEnd(const char* why) {
+  if (!amsWindowOpen()) return;
+  logSDf("AMS: countdown for id=%d ended (%s), FilaMan keeps its own timer",
+         s_window_spool_id, why);
+  s_window_open = false;
 }
 
 int amsWriteEnabled(bool enabled) {
@@ -167,6 +179,7 @@ bool amsCommitWithWindow() {
 
   s_window_open       = true;
   s_window_started_ms = millis();
+  s_window_spool_id   = spool_id;
   logSDf("AMS: window opened for id=%d, %d s (%.0fg %s)",
          spool_id, g_ams_window_s, gross,
          written ? "booked a second time" : "written for the first time");

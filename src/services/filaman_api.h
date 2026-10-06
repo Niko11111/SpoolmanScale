@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Arduino.h>
 #include <ArduinoJson.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -299,6 +300,18 @@ int filamanPatchManufacturerFloat(const char* base_url, const char* api_key, int
 // Creates a spool. Only filament_id is mandatory. The new id is written to
 // out_spool_id, which the copy flow needs in order to link the tag right
 // afterwards. rfid_uid may be passed to create and link in one request.
+// Plain requests for callers outside this file (filaman_filament.cpp). The
+// GET parses through filter; the POST maps any 2xx to 200 and keeps the
+// answer, and logs the start of an error body.
+int filamanGetJson(const char* base_url, const char* api_key, const char* path,
+                   JsonDocument& doc, JsonDocument& filter, uint32_t timeout_ms);
+int filamanPostJson(const char* base_url, const char* api_key, const char* path,
+                    const String& body, JsonDocument& answer, uint32_t timeout_ms);
+// Percent-encodes a value for a query string.
+String filamanUrlEncode(const char* s);
+// A filament's article number wherever FilaMan keeps one, "" when none.
+const char* filamanFilamentArticle(JsonObjectConst fil);
+
 int filamanCreateSpool(const char* base_url, const char* api_key, int filament_id,
                        float initial_weight, float spool_weight, float remaining_weight,
                        const char* rfid_uid = nullptr, int* out_spool_id = nullptr,

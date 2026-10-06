@@ -57,6 +57,14 @@ bool bambuSubtypeMatches(const char* haystack, const char* subtype) {
   return strstr(hay, need) != nullptr;
 }
 
+bool bambuSubtypeEquals(const char* a, const char* b) {
+  if (!a || !a[0] || !b || !b[0]) return false;
+  char na[32], nb[32];
+  normalizeSubtype(a, na, sizeof(na));
+  normalizeSubtype(b, nb, sizeof(nb));
+  return na[0] && strcmp(na, nb) == 0;
+}
+
 bool isSupportMaterial(const char* material_filter) {
   return material_filter && strncasecmp(material_filter, "Support", 7) == 0;
 }

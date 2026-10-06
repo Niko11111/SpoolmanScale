@@ -721,7 +721,7 @@ const char* const STRINGS[][3] = {
     "All settings will be erased:\nWiFi, server address, calibration,\nlanguage and all other data.\nThe device will restart afterwards.",
     "Tous les réglages seront effacés :\nWiFi, adresse du serveur, étalonnage,\nlangue et toutes les autres données.\nL'appareil redémarre ensuite." },  // STR_FACTORY_RESET_MSG
   { "Ja, alles löschen",     "Yes, erase everything", "Oui, tout effacer" },  // STR_FACTORY_RESET_CONFIRM
-  { "Spule kopieren",        "Copy spool",            "Copier la bobine" },  // STR_BTN_COPY_SPOOL
+  { "Neu / Kopie",           "New / Copy",            "Nouveau / Copie" },  // STR_BTN_COPY_SPOOL
   { "Spule kopieren",        "Copy spool",            "Copier la bobine" },  // STR_COPY_TITLE
   { "Spoolman-ID eingeben",  "Enter Spoolman ID",     "Saisir l'ID Spoolman" },  // STR_COPY_ID_BTN
   { "Aktive Spulen",         "Active spools",         "Bobines actives" },  // STR_COPY_ACTIVE_BTN
@@ -3191,6 +3191,75 @@ const char* const STRINGS[][3] = {
   { "Noch nicht übernommen", "Not applied yet",
     "Pas encore appliqué" },  // STR_W_THEME_UNSAVED
   { "Ins AMS",                         "Into AMS",                            "Dans l'AMS" },  // STR_AMS_MAIN_ASSIGN
+  { "Display-Screenshot",
+    "Display screenshot",
+    "Capture d'écran" },  // STR_W_C_SHOT
+  { "Bilder der aktuellen Anzeige für Issues und Pull Requests. An der Waage selbst: zwei Finger eine Sekunde aufs Display legen, bis es kurz dunkel wird. Bis zu 6 Bilder bleiben bis zum Neustart hier, das älteste fällt zuerst raus.",
+    "Pictures of what the display shows, for issues and pull requests. On the scale itself: rest two fingers on the display for a second until it blinks dark. Up to 6 pictures stay here until the next restart, the oldest goes first.",
+    "Des images de l'affichage, pour les issues et pull requests. Sur la balance : poser deux doigts une seconde sur l'écran jusqu'à ce qu'il s'assombrisse. Jusqu'à 6 images restent ici jusqu'au prochain redémarrage, la plus ancienne part en premier." },  // STR_W_SHOT_NOTE
+  { "Aufnehmen",
+    "Capture",
+    "Capturer" },  // STR_W_SHOT_TAKE
+  { "Nimmt auf...",
+    "Capturing...",
+    "Capture..." },  // STR_W_SHOT_BUSY
+  { "Alle speichern",
+    "Save all",
+    "Tout enregistrer" },  // STR_W_SHOT_SAVE_ALL
+  { "Alle löschen",
+    "Delete all",
+    "Tout supprimer" },  // STR_W_SHOT_DROP_ALL
+  { "Aufgenommen um {t}",
+    "Captured at {t}",
+    "Capturée à {t}" },  // STR_W_SHOT_AT_WEB
+  { "An der Waage aufgenommen um {t}",
+    "Captured on the scale at {t}",
+    "Capturée sur la balance à {t}" },  // STR_W_SHOT_AT_PANEL
+  { "Screenshot fehlgeschlagen",
+    "Screenshot failed",
+    "Échec de la capture" },  // STR_W_SHOT_FAIL
+  { "Noch keine Screenshots.",
+    "No screenshots yet.",
+    "Aucune capture pour l'instant." },  // STR_W_SHOT_EMPTY
+  { "%s | %s | %.0f von %d g",
+    "%s | %s | %.0f of %d g",
+    "%s | %s | %.0f sur %d g" },  // STR_TAGNEW_META_ART
+  { "%s | %.0f von %d g",
+    "%s | %.0f of %d g",
+    "%s | %.0f sur %d g" },  // STR_TAGNEW_META
+  { "Filament wird gesucht ...",
+    "Looking for the filament ...",
+    "Recherche du filament ..." },  // STR_TAGNEW_SEARCHING
+  { "Filament vorhanden: #%d",
+    "Filament exists: #%d",
+    "Filament existant : #%d" },  // STR_TAGNEW_FOUND
+  { "Neues Filament aus der SpoolmanDB",
+    "New filament from SpoolmanDB",
+    "Nouveau filament de SpoolmanDB" },  // STR_TAGNEW_FROM_DB
+  { "Neues Filament aus dem Tag",
+    "New filament from the tag",
+    "Nouveau filament du tag" },  // STR_TAGNEW_FROM_TAG
+  { "BamBuddy legt die Spule direkt an",
+    "BamBuddy creates the spool directly",
+    "BamBuddy crée la bobine" },  // STR_TAGNEW_BAMBUDDY
+  { "Bambu-Katalog fehlt (Tags-Seite)",
+    "Bambu catalog missing (tags page)",
+    "Catalogue Bambu absent (page Tags)" },  // STR_TAGNEW_NEEDS_CATALOG
+  { "Suche fehlgeschlagen (HTTP %d)",
+    "Lookup failed (HTTP %d)",
+    "Recherche échouée (HTTP %d)" },  // STR_TAGNEW_FAILED
+  { "Wird angelegt ...",
+    "Creating ...",
+    "Création ..." },  // STR_TAGNEW_CREATING
+  { "Anlegen fehlgeschlagen (HTTP %d)",
+    "Could not create (HTTP %d)",
+    "Création impossible (HTTP %d)" },  // STR_TAGNEW_CREATE_FAIL
+  { "Filament #%d angelegt, Spule nicht (HTTP %d)",
+    "Filament #%d created, spool not (HTTP %d)",
+    "Filament #%d créé, bobine non (HTTP %d)" },  // STR_TAGNEW_FILAMENT_ONLY
+  { "Filament und Spule angelegt!",
+    "Filament and spool created!",
+    "Filament et bobine créés !" },  // STR_TAGNEW_OK_BOTH
 };
 
 StringID tagWriteResultString(uint8_t code) {

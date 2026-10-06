@@ -52,6 +52,7 @@ bool spoolHasAnyTag(JsonObjectConst spool);
 #include "services/location_state.h"
 #include "services/spool_cache.h"
 #include "services/spoolman_actions.h"
+#include "services/last_dried.h"
 #include "services/tag_field.h"
 #include "services/user_options.h"
 #include "services/tag_uid.h"
@@ -615,11 +616,11 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
 
     // Spool status. Only FilaMan maps it, the others leave the key unset.
     sm_status_id = spool["status_id"] | 0;
-    if (!extra["last_dried"].isNull()) {
-      String dried = extra["last_dried"].as<String>();
-      dried.replace("\"", "");
+    char dried[LAST_DRIED_ISO_MAX];
+    lastDriedNewest(extra, dried, sizeof(dried));
+    if (dried[0]) {
       char day[11];
-      isoDayLocal(dried.c_str(), day, sizeof(day));
+      isoDayLocal(dried, day, sizeof(day));
       char de_date[12];
       isoToDe(day, de_date, sizeof(de_date));
       strncpy(sm_last_dried, de_date, sizeof(sm_last_dried)-1);
@@ -667,6 +668,13 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
       setFromServerOrTag(lbl_vendor, sm_vendor_name.c_str(), from_tag ? ti->brand : "");
       strncpy(sm_material_global, sm_material.c_str(), sizeof(sm_material_global)-1);
       sm_material_global[sizeof(sm_material_global)-1] = '\0';
+    } else {
+      // A Bambu tag needs it too: the drying traffic light in per-material
+      // mode reads its thresholds off sm_material_global, and left empty it
+      // stays neutral for every Bambu spool. The tag's material first, as
+      // querySpoolmanById() does, the server's when the tag carries none.
+      snprintf(sm_material_global, sizeof(sm_material_global), "%s",
+               g_tag.material[0] ? g_tag.material : sm_material.c_str());
     }
     applyServerColor(sm_color, is_bambu_tag);
     if (tagSpoolLookupShowsSpool()) applyTagSpoolView();

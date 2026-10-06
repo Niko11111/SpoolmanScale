@@ -5,15 +5,19 @@
 #include <string.h>
 
 #include "app/app_state.h"
+#include "app_config.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/bambuddy_api.h"
 #include "services/bambuddy_device.h"
 #include "services/filaman_api.h"
+#include "services/filaman_filament.h"
 #include "services/http_progress.h"
+#include "services/last_dried.h"
 #include "services/list_limits.h"
 #include "services/device_name.h"
 #include "services/spoolman_api.h"
+#include "services/spoolman_filament.h"
 #include "services/tag_field.h"
 #include "services/tag_uid.h"
 #include "services/text_util.h"
@@ -735,7 +739,7 @@ int backendCreateSpool(const char* base_url, int template_spool_id, int filament
 }
 
 bool backendCanCreateFromTag() {
-  return backendMode() == BACKEND_BAMBUDDY;
+  return true;
 }
 
 void backendLookupColorName(const char* hex6, const char* material,
@@ -772,6 +776,77 @@ int backendCreateSpoolFromTag(const char* material, const char* subtype,
   if (ns.weight_used < 0.0f) ns.weight_used = 0.0f;
 
   return bbCreateSpool(backendBaseUrl(), bambuddyApiKey(), ns, out_spool_id, timeout_ms);
+}
+
+// BamBuddy names the colour on the spool itself: the catalog's English
+// name, which is how BamBuddy names Bambu's colours too, or BamBuddy's own
+// when the catalog does not know the colour.
+static void planBamBuddyColor(const TagCreateInput& in, TagFilamentPlan* plan) {
+  plan->state = TFS_NOT_NEEDED;
+  if (in.color_name_en[0]) {
+    snprintf(plan->name, sizeof(plan->name), "%s", in.color_name_en);
+    return;
+  }
+  // A clear filament has no hue to name; BamBuddy would answer "Black".
+  if (in.color_hex[0])
+    bbLookupColorName(backendBaseUrl(), bambuddyApiKey(), in.rgba, in.material,
+                      plan->name, sizeof(plan->name));
+}
+
+void backendPlanTagFilament(const TagCreateInput& in, TagFilamentPlan* plan) {
+  HttpStallTime stall(__func__);   // the loop stands still for this call
+  tagFilamentPlanClear(plan);
+  switch (backendMode()) {
+    case BACKEND_FILAMAN:
+      filamanPlanTagFilament(backendBaseUrl(), filamanApiKey(), in, plan);
+      break;
+    case BACKEND_BAMBUDDY:
+      planBamBuddyColor(in, plan);
+      break;
+    default:
+      spoolmanPlanTagFilament(backendBaseUrl(), in, plan);
+      break;
+  }
+  logSDf("Tag create plan: %s %s %s art=%s -> state %d, filament %d \"%s\"",
+         in.vendor, in.material, in.subtype, in.article, (int)plan->state,
+         plan->filament_id, plan->name);
+}
+
+// The filament the new spool goes under: the one the plan found, or a new
+// one. 200 with *out_id set, or the failing request's code.
+static int filamentForSpool(const TagCreateInput& in, const TagFilamentPlan& plan,
+                            TagCreateResult* out, int* out_id) {
+  *out_id = plan.filament_id;
+  if (plan.state == TFS_FOUND) return 200;
+  if (plan.state != TFS_CREATE_DB && plan.state != TFS_CREATE_TAG) return -1;
+  const int code = backendIsFilaMan()
+    ? filamanCreateTagFilament(backendBaseUrl(), filamanApiKey(), in, plan, out_id)
+    : spoolmanCreateTagFilament(backendBaseUrl(), in, plan, out_id);
+  out->filament_id = *out_id;
+  if (*out_id > 0) return 200;
+  // A success without an id is no filament either.
+  return (code == 200 || code == 201) ? -1 : code;
+}
+
+int backendCreateFromTag(const TagCreateInput& in, const TagFilamentPlan& plan,
+                         int label_weight, float remaining, TagCreateResult* out) {
+  HttpStallTime stall(__func__);   // the loop stands still for this call
+  *out = TagCreateResult{};
+  // BamBuddy leaves out an empty spool of 0 and keeps its own default.
+  if (backendIsBamBuddy())
+    return backendCreateSpoolFromTag(in.material, in.subtype, in.vendor, in.rgba, plan.name,
+                                     label_weight, in.spool_weight_g, remaining,
+                                     in.temp_min, in.temp_max, &out->spool_id);
+  int filament_id = 0;
+  const int code = filamentForSpool(in, plan, out, &filament_id);
+  if (code != 200) return code;
+  // The tag's empty spool, else the one Spoolman's database gave the filament.
+  const float spool_w = (float)(in.spool_weight_g > 0 ? in.spool_weight_g : plan.spool_weight_g);
+  if (backendIsFilaMan())
+    return filamanCreateSpool(backendBaseUrl(), filamanApiKey(), filament_id, (float)label_weight,
+                              spool_w, remaining, nullptr, &out->spool_id);
+  return spoolmanCreateSpool(backendBaseUrl(), filament_id, (float)label_weight,
+                             spool_w, remaining, &out->spool_id);
 }
 
 int backendCreateSpoolField(const char* base_url, const char* field_name,
@@ -1111,8 +1186,13 @@ int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* i
       return filamanPatchCustomField(backendBaseUrl(), filamanApiKey(), spool_id,
                                      "last_dried", iso_datetime, timeout_ms);
     case BACKEND_BAMBUDDY:
-      // BamBuddy has no field for this at all - upstream issues #2863 and
-      // #1754 are open. The user picks where it goes instead.
+      // A BamBuddy with its own field (#2863) takes the date there, whatever
+      // the setting says. Older ones have none, so the user picks where it
+      // goes instead.
+      if (bbHasDriedField()) {
+        return bbPatchLastDried(backendBaseUrl(), bambuddyApiKey(), spool_id,
+                                iso_datetime, timeout_ms);
+      }
       switch (g_bb_dried_target) {
         case BB_DRIED_SPOOLMAN:
           // Past BamBuddy, straight into the Spoolman database behind it.
@@ -1170,6 +1250,7 @@ int backendPatchFilamentDrying(int filament_id, int spool_id, const char* value,
 bool backendCanPatchLastDried() {
   switch (backendMode()) {
     case BACKEND_BAMBUDDY:
+      if (bbHasDriedField()) return true;
       switch (g_bb_dried_target) {
         case BB_DRIED_SPOOLMAN:
           return bbInventoryMode() == BB_INV_SPOOLMAN && bbSpoolmanUrl()[0];
@@ -1395,8 +1476,8 @@ int backendGetSpoolDetail(int spool_id, AmsSpoolDetail& out, uint32_t timeout_ms
     }
   }
 
-  char iso[32];
-  extraText(sp["extra"]["last_dried"], iso, sizeof(iso));
+  char iso[LAST_DRIED_ISO_MAX];
+  lastDriedNewest(sp["extra"], iso, sizeof(iso));
   if (iso[0]) isoDayLocal(iso, out.last_dried, sizeof(out.last_dried));
   // The same three step rule applyLastUsed() follows on the main screen, and
   // it has to be the same: a card that showed a dash where the screen behind

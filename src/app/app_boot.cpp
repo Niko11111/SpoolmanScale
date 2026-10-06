@@ -7,6 +7,7 @@
 
 #include "app_config.h"
 #include "app/app_state.h"
+#include "app/screenshot.h"
 #include "app/setup_flow.h"
 #include "hardware/display.h"
 #include "hardware/display_power.h"
@@ -171,6 +172,7 @@ void appSetup() {
   // Apply the stored brightness and arm the idle timer from a real
   // millis() reading, not from 0.
   displayPowerInit();
+  screenshotBegin();
 
   I2C_EXT.begin(hw_pins::I2C_EXT_SDA, hw_pins::I2C_EXT_SCL, 100000);
 

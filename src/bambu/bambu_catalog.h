@@ -37,6 +37,8 @@ struct BambuCatalogHit {
   char article[8];      // "12601"
   char product[24];     // "PLA Tough+"
   char color_name[48];  // in the UI language, English where the table has none
+  // English always: what Spoolman's and FilaMan's filament databases call it.
+  char color_name_en[48];
 };
 
 // Looks the tag's two codes up, and its colour where the codes alone do not

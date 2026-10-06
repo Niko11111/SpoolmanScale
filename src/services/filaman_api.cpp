@@ -12,21 +12,14 @@
 #include "services/user_options.h"
 #include "services/backend.h"
 #include "services/http_progress.h"
+#include "services/json_util.h"
 #include "services/loop_task.h"
 #include "services/spool_color.h"
 #include "services/tag_uid.h"
 #include "services/text_util.h"
 
-// Whether an object carries the key at all, a null value included. This is
-// what containsKey() answered; obj[key].isNull() also says "absent" for a key
-// that is present and null, and here the key's presence is the whole question:
-// a FilaMan that has the second rfid column answers null for a spool without
-// a second chip.
-static bool jsonHasKey(JsonObjectConst obj, const char* key) {
-  for (JsonPairConst kv : obj)
-    if (strcmp(kv.key().c_str(), key) == 0) return true;
-  return false;
-}
+// jsonHasKey() matters here because a FilaMan that has the second rfid column
+// answers null for a spool without a second chip: presence, not value.
 
 namespace {
 
@@ -1778,11 +1771,40 @@ static int getDisplay(const char* base_url, const char* api_key, const char* pat
     deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
   http.end();
   if (err) {
-    logSDf("FilaMan: display JSON parse failed (%s)", err.c_str());
+    logSDf("FilaMan: answer of %s did not parse (%s)", path, err.c_str());
     return -2;
   }
   return 200;
 }
+
+int filamanGetJson(const char* base_url, const char* api_key, const char* path,
+                   JsonDocument& doc, JsonDocument& filter, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || !path) return -1;
+  return getDisplay(base_url, api_key, path, doc, filter, timeout_ms);
+}
+
+int filamanPostJson(const char* base_url, const char* api_key, const char* path,
+                    const String& body, JsonDocument& answer, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || !path) return -1;
+  BackendHttp http;
+  http.begin(String(base_url) + path);
+  http.setTimeout(timeout_ms);
+  addApiKey(http, api_key);
+  http.addHeader("Content-Type", "application/json");
+  const int code = http.POST(body);
+  const String resp = http.getString();
+  http.end();
+  if (code < 200 || code >= 300) {
+    logSDf("FilaMan: POST %s -> HTTP %d: %s", path, code, resp.substring(0, 120).c_str());
+    return code;
+  }
+  deserializeJson(answer, resp);
+  return 200;
+}
+
+String filamanUrlEncode(const char* s) { return urlEncodeQuery(s); }
+
+const char* filamanFilamentArticle(JsonObjectConst fil) { return articleNumber(fil); }
 
 int filamanGetAmsState(const char* base_url, const char* api_key, int printer_id,
                        AmsSlotState& out, uint32_t timeout_ms) {

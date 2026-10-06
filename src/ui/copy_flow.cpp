@@ -31,6 +31,7 @@
 #include "ui/spoolman_lookup.h"
 #include "services/spool_tare.h"
 #include "ui/theme.h"
+#include "ui/tag_create_popup.h"
 
 // From ui/spool_flow.cpp, see the same line in spoolman_lookup.cpp: what counts
 // as bound, for the spool cache a download here fills.
@@ -569,12 +570,7 @@ void showCopyEntryPopup() {
   lv_obj_set_width(lbl_ctx, 450);
   lv_obj_align(lbl_ctx, LV_ALIGN_TOP_MID, 0, 60);
 
-  // Creating from the tag needs a backend that can do it and a Bambu tag to
-  // read it from - an NTAG carries no material, and material is the one field
-  // BamBuddy insists on.
-  const bool offer_from_tag = backendCanCreateFromTag() &&
-                              strlen(g_tag.tray_uuid) == 32 &&
-                              g_tag.material[0] != '\0';
+  const bool offer_from_tag = tagCreateOffered();
 
   // Button layout: 3 buttons + cancel, ID= >100 recommended | List= <100
   // recommended. A fifth row only fits if every row gives up a few pixels, so
@@ -653,28 +649,7 @@ void showCopyEntryPopup() {
     lv_obj_align(l, LV_ALIGN_CENTER, 0, 0); }
 
   // Button 4: create from the tag, only where that leads anywhere
-  if (offer_from_tag) {
-    lv_obj_t *btnt = lv_btn_create(scr_copy_entry);
-    lv_obj_set_size(btnt, BTN_W, BTN_H);
-    lv_obj_align(btnt, LV_ALIGN_TOP_MID, 0, Y4);
-    lv_obj_set_style_bg_color(btnt, lv_color_hex(UI_COL_GO_BG), 0);
-    lv_obj_set_style_bg_color(btnt, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(btnt, 10, 0);
-    lv_obj_set_style_shadow_width(btnt, 0, 0);
-    lv_obj_set_style_border_width(btnt, 1, 0);
-    lv_obj_set_style_border_color(btnt, lv_color_hex(UI_COL_ACCENT), 0);
-    lv_obj_add_event_cb(btnt, [](lv_event_t *e) {
-      logSD("BTN: CopyEntry -> New from tag");
-      newtag_open_pending = true;
-    }, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *l = lv_label_create(btnt);
-    char b[40]; copyT(b, sizeof(b), STR_NEWTAG_BTN);
-    lv_label_set_text(l, b);
-    lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_OK_TEXT), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-    lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(l, LV_ALIGN_CENTER, 0, 0);
-  }
+  if (offer_from_tag) tagCreateEntryButton(scr_copy_entry, BTN_W, BTN_H, Y4);
 
   // Cancel
   lv_obj_t *btn4 = lv_btn_create(scr_copy_entry);
