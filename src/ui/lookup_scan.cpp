@@ -668,6 +668,13 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
       setFromServerOrTag(lbl_vendor, sm_vendor_name.c_str(), from_tag ? ti->brand : "");
       strncpy(sm_material_global, sm_material.c_str(), sizeof(sm_material_global)-1);
       sm_material_global[sizeof(sm_material_global)-1] = '\0';
+    } else {
+      // A Bambu tag needs it too: the drying traffic light in per-material
+      // mode reads its thresholds off sm_material_global, and left empty it
+      // stays neutral for every Bambu spool. The tag's material first, as
+      // querySpoolmanById() does, the server's when the tag carries none.
+      snprintf(sm_material_global, sizeof(sm_material_global), "%s",
+               g_tag.material[0] ? g_tag.material : sm_material.c_str());
     }
     applyServerColor(sm_color, is_bambu_tag);
     if (tagSpoolLookupShowsSpool()) applyTagSpoolView();
