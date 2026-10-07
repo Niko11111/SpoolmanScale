@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <esp_heap_caps.h>
+#include <esp_random.h>
 #include <string.h>
 
 #include "app/app_state.h"
@@ -95,7 +96,14 @@ static bool onTouchPoll(uint8_t points) {
   return held;
 }
 
+// Ids start at a random point on every boot. A browser tab keeps the images
+// it has fetched by id, and ids that began at 1 again after a restart had it
+// show an image from before the restart under the new one's id. Below 2^30,
+// so a String::toInt() on the way back reads it whole.
+#define SCREENSHOT_ID_SEED_MASK  0x3FFF0000UL
+
 void screenshotBegin() {
+  s_last_id = esp_random() & SCREENSHOT_ID_SEED_MASK;
   displaySetTouchGestureHook(onTouchPoll);
 }
 

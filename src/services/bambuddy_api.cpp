@@ -254,6 +254,8 @@ const char* bbSpoolmanUrl() { return s_spoolman_url; }
 
 bool bbHasDriedField() { return s_has_dried_field; }
 
+void bbForgetDriedField() { s_has_dried_field = false; }
+
 // How long the mode question may take when a read has just been refused. The
 // same four seconds backendRefreshMode() gives it with the health check.
 #define BB_MODE_RECHECK_MS  4000

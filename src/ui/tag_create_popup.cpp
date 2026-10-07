@@ -1,6 +1,7 @@
 #include "ui/tag_create_popup.h"
 
 #include <Arduino.h>
+#include <HTTPClient.h>
 #include <lvgl.h>
 #include <math.h>
 #include <string.h>
@@ -9,6 +10,7 @@
 // before lang.h, which defines T().
 #include "services/backend_api.h"
 #include "app/app_state.h"
+#include "app/backend_switch.h"
 #include "app_config.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
@@ -37,6 +39,12 @@ static TagFilamentPlan s_plan;
 static int             s_label_weight = 0;
 // Cancel hides the card from its own callback; the loop deletes it.
 static bool            s_close_pending = false;
+// The plan is asked again before a create when it may no longer hold: after
+// a failed try that left no filament behind, so a vendor made on the way, or
+// a filament the server made although its answer was lost, is found rather
+// than made twice; and after a switch of backend or host.
+static bool            s_plan_stale = false;
+static uint32_t        s_plan_gen   = 0;
 
 lv_obj_t* tagCreatePopupScreen() { return s_scr; }
 
@@ -295,13 +303,34 @@ void showTagCreatePopup() {
 // ------------------------------------------------------------
 
 static void runPlan() {
+  s_plan_stale = false;
+  s_plan_gen   = backendGeneration();
   if (!wifi_ok) { s_plan.state = TFS_FAILED; showPlan(); return; }
   backendPlanTagFilament(s_in, &s_plan);
   serverReachNote(s_plan.state == TFS_FAILED ? s_plan.http_code : 200, true);
   showPlan();
 }
 
+// What the create button can act on.
+static bool planCanCreate(TagFilamentState state) {
+  return state == TFS_FOUND || state == TFS_CREATE_DB ||
+         state == TFS_CREATE_TAG || state == TFS_NOT_NEEDED;
+}
+
+// The request reached the server but its answer did not come back, so the
+// server may have done it: a read timeout, a dropped link, a proxy that gave
+// up waiting. A refused connection or a 502 never got that far.
+static bool answerLost(int code) {
+  return code == HTTPC_ERROR_READ_TIMEOUT || code == HTTPC_ERROR_CONNECTION_LOST ||
+         code == HTTP_CODE_GATEWAY_TIMEOUT;
+}
+
 static void runCreate() {
+  if (s_plan_stale || s_plan_gen != backendGeneration()) {
+    logSD("TagCreate: plan asked again before the create");
+    runPlan();
+    if (!planCanCreate(s_plan.state)) return;   // showPlan() has said why
+  }
   TagCreateResult r;
   const int code = serverReachNote(
     backendCreateFromTag(s_in, s_plan, s_label_weight, remainingWeight(), &r), true);
@@ -320,12 +349,19 @@ static void runCreate() {
       statusMessageShow(T(with_filament ? STR_TAGNEW_OK_BOTH : STR_NEWTAG_OK), UI_COL_GOOD);
     return;
   }
+  // The spool may exist without the tag's link. Another try would make a
+  // second one, so the card stops here and the inventory has the answer.
+  if (r.spool_sent && answerLost(code)) {
+    showStatus(T(STR_TAGNEW_SPOOL_UNSURE), UI_COL_BAD_TEXT, false);
+    return;
+  }
   // A filament that was created stays; the next try uses it.
   if (r.filament_id > 0) {
     s_plan.state = TFS_FOUND;
     s_plan.filament_id = r.filament_id;
     snprintf(buf, sizeof(buf), T(STR_TAGNEW_FILAMENT_ONLY), r.filament_id, code);
   } else {
+    s_plan_stale = true;
     snprintf(buf, sizeof(buf), T(STR_TAGNEW_CREATE_FAIL), code);
   }
   showStatus(buf, UI_COL_BAD_TEXT, true);

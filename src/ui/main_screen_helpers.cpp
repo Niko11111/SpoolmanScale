@@ -236,9 +236,11 @@ bool amsMainCanAssign() {
   // FilaMan only opens a window through a weight report, and without a load
   // cell the stored weight is the report. It goes out gross, remaining plus
   // the empty spool, and FilaMan takes the empty spool off again - without
-  // that weight the spool would be booked lighter than it is.
+  // that weight the spool would be booked lighter than it is. A spool never
+  // weighed arrives as 0 g remaining (FilaMan has null), and the report would
+  // book it as 0 g, which FilaMan also takes for empty.
   return backendIsFilaMan() && filamanDeviceToken()[0] != '\0' &&
-         sm_spool_weight > 0.0f;
+         sm_spool_weight > 0.0f && sm_remaining > 0.0f;
 }
 
 void updateAmsMainButton() {

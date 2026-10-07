@@ -67,6 +67,12 @@ const char* bbSpoolmanUrl();
 // PATCH with that key with 200 and ignores it. False until a spool was read.
 bool bbHasDriedField();
 
+// Back to "not known yet", for when the server on the other end may be a
+// different one. The answer belongs to the server it was read from: kept
+// across a switch to an older BamBuddy, a drying date would go out as
+// last_dried_at and be dropped with a 200.
+void bbForgetDriedField();
+
 // Stable device id derived from the MAC, "ssc-<12 hex>", mirroring the
 // "sb-<mac>" of BamBuddy's own daemon. Needs no NVS entry.
 const char* bbDeviceId();

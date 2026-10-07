@@ -248,5 +248,6 @@ STR_TAGNEW_FAILED	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the ca
 STR_TAGNEW_CREATING	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
 STR_TAGNEW_CREATE_FAIL	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
 STR_TAGNEW_FILAMENT_ONLY	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TAGNEW_SPOOL_UNSURE	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
 STR_TAGNEW_META_ART	14	360	NEVER	src/ui/tag_create_popup.cpp line 2 of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
 STR_TAGNEW_META	14	360	NEVER	src/ui/tag_create_popup.cpp line 2 of the card, UI_POPUP_W - UI_CARD_TEXT_PAD

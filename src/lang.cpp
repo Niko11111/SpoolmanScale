@@ -3260,6 +3260,9 @@ const char* const STRINGS[][3] = {
   { "Filament und Spule angelegt!",
     "Filament and spool created!",
     "Filament et bobine créés !" },  // STR_TAGNEW_OK_BOTH
+  { "Ohne Antwort - erst Inventar prüfen",
+    "No answer - check inventory first",
+    "Sans réponse - vérifier l'inventaire" },  // STR_TAGNEW_SPOOL_UNSURE
 };
 
 StringID tagWriteResultString(uint8_t code) {

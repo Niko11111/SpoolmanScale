@@ -1650,7 +1650,8 @@ void appLoop() {
       }
       // One corrective write once the server is known to be reachable. A
       // crash between the two PUTs of an AMS commit would otherwise leave
-      // auto_assign_enabled standing, and "ask" would behave like "always".
+      // auto_assign_enabled standing, and "ask" or "off" would behave like
+      // "always".
       static bool ams_reconciled = false;
       if (ok && !ams_reconciled) {
         ams_reconciled = true;

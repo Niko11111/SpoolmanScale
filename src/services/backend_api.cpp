@@ -73,6 +73,9 @@ void backendAfterConnect() {
   // The server on the other end may be a different one than before, so the
   // device presence starts over rather than heartbeating at a stale id.
   bambuddyDeviceReset();
+  // Same for the drying date field: the next spool read tells again. Here and
+  // not in bbDetectInventoryMode(), which the health check runs every 30 s.
+  bbForgetDriedField();
   // Deliberately not cached behind a "done" flag: the address or the key can
   // change between two calls, and the answer is one small request.
   bbDetectInventoryMode(backendBaseUrl(), bambuddyApiKey());
@@ -833,15 +836,18 @@ int backendCreateFromTag(const TagCreateInput& in, const TagFilamentPlan& plan,
   HttpStallTime stall(__func__);   // the loop stands still for this call
   *out = TagCreateResult{};
   // BamBuddy leaves out an empty spool of 0 and keeps its own default.
-  if (backendIsBamBuddy())
+  if (backendIsBamBuddy()) {
+    out->spool_sent = true;
     return backendCreateSpoolFromTag(in.material, in.subtype, in.vendor, in.rgba, plan.name,
                                      label_weight, in.spool_weight_g, remaining,
                                      in.temp_min, in.temp_max, &out->spool_id);
+  }
   int filament_id = 0;
   const int code = filamentForSpool(in, plan, out, &filament_id);
   if (code != 200) return code;
   // The tag's empty spool, else the one Spoolman's database gave the filament.
   const float spool_w = (float)(in.spool_weight_g > 0 ? in.spool_weight_g : plan.spool_weight_g);
+  out->spool_sent = true;
   if (backendIsFilaMan())
     return filamanCreateSpool(backendBaseUrl(), filamanApiKey(), filament_id, (float)label_weight,
                               spool_w, remaining, nullptr, &out->spool_id);

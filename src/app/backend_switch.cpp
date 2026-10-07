@@ -59,8 +59,9 @@ void backendApplyMode(BackendMode mode) {
   // An armed AMS window belongs to the server the scale is about to stop
   // talking to. Switching away would leave auto_assign_enabled set on it
   // until the next boot, because amsBootReconcile() runs once per boot behind
-  // a function static and nothing else ever turns it off.
-  if (backendIsFilaMan() && g_ams_mode != AMS_OFF) {
+  // a function static and nothing else ever turns it off. Under "off" too:
+  // the AMS button on a scale without a load cell arms it in every mode.
+  if (backendIsFilaMan()) {
     amsWriteEnabled(false);
   }
   amsDropPending();

@@ -759,8 +759,13 @@ void buildUI() {
       // A tap on a running countdown ends it. FilaMan closes the window by
       // itself once the spool is loaded, so after that only this countdown
       // stood between the user and the next spool. The view stays one tap
-      // away on the header chip.
+      // away on the header chip. A tap right after the window opened belongs
+      // to the tap that opened it and is ignored.
       if (amsWindowOpen()) {
+        if (amsWindowJustOpened()) {
+          logSD("UI: Button -> AMS tap ignored, window just opened (main)");
+          return;
+        }
         logSD("UI: Button -> AMS countdown stopped (main)");
         amsWindowEnd("tap");
         return;

@@ -271,6 +271,9 @@ int  backendCreateSpool(const char* base_url, int template_spool_id, int filamen
 struct TagCreateResult {
   int spool_id;
   int filament_id;   // a filament created on the way, 0 when it existed
+  // The spool request went out. With the answer lost on the way back the
+  // server may have created the spool all the same.
+  bool spool_sent;
 };
 void backendPlanTagFilament(const TagCreateInput& in, TagFilamentPlan* plan);
 int  backendCreateFromTag(const TagCreateInput& in, const TagFilamentPlan& plan,

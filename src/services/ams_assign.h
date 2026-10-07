@@ -94,6 +94,11 @@ unsigned long amsWindowRemainingMs();
 // The spool the running window was opened for, 0 when none runs.
 int amsWindowSpoolId();
 
+// Whether the running window opened only a moment ago. A tap then is the
+// second half of an impatient double tap on "Assign", not a stop; false when
+// no window runs.
+bool amsWindowJustOpened();
+
 // Ends the countdown on the scale only. FilaMan has no way to cancel a
 // window: the driver drops it by itself the moment a tray is loaded, and a
 // new window replaces it. So once the spool is in, only this countdown was
@@ -111,7 +116,7 @@ int amsWriteWindow(int seconds);
 // Reads both fields off the server into g_ams_window_s and out_enabled.
 int amsReadServer(bool* out_enabled);
 
-// One corrective PUT false after boot. Without it a crash between the two
-// PUTs of a commit would leave the flag standing, and "ask" would silently
-// behave like "always".
+// One corrective PUT false after boot, in every mode but "always". Without it
+// a crash or a failed PUT between the two PUTs of a commit would leave the
+// flag standing, and "ask" or "off" would silently behave like "always".
 void amsBootReconcile();

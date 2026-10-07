@@ -51,6 +51,15 @@ bool dryingParse(const char* text, int* temp_c, int* hours) {
   return true;
 }
 
+// Whether a stored drying value says anything at all. Spaces and the quotes
+// Spoolman wraps a text extra in do not count; any other character does,
+// also in a value the parse below cannot read ("no drying needed", "65 °C").
+static bool dryingFieldHasText(const char* text) {
+  for (const char* p = text; p && *p; p++)
+    if (*p != ' ' && *p != '"') return true;
+  return false;
+}
+
 void dryingSyncNote(JsonObjectConst spool) {
   // A Bambu tag that said something about drying. The tray UUID is cleared
   // whenever another kind of tag is read, the drying values are not, so it
@@ -66,14 +75,12 @@ void dryingSyncNote(JsonObjectConst spool) {
   const int key = bambuddy ? spool_id : filament_id;
   if (key <= 0) return;
 
-  // Spoolman keeps text extras JSON encoded, with their own quotes; the
-  // parse below skips anything that is not a digit, quotes included.
-  //
   // Only an empty field is filled. A value already there stays, also one
-  // that differs from the tag: somebody may have put their own drying in.
+  // that differs from the tag or that the scale cannot read: somebody may
+  // have put their own drying in.
   const char* have = spool["filament"]["extra"]["drying"] | (const char*)nullptr;
   if (!have) have = spool["extra"]["drying"] | "";
-  if (dryingParse(have, nullptr, nullptr)) return;
+  if (dryingFieldHasText(have)) return;
 
   char want[DRYING_TEXT_MAX];
   dryingFormat(g_tag.dry_temp_c, g_tag.dry_hours, want, sizeof(want));
