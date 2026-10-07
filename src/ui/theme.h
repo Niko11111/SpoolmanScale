@@ -32,7 +32,7 @@
 // ============================================================
 
 // ---- colours -------------------------------------------------
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) extern uint32_t UI_COL_##name;
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light, bb_dark, bb_light) extern uint32_t UI_COL_##name;
 #include "theme_palette.h"
 #undef UI_COLOUR
 
@@ -54,6 +54,8 @@ enum UiThemeId : uint8_t {
   UI_THEME_SPOOLMAN_LIGHT = 3,
   UI_THEME_FILAMAN_DARK   = 4,
   UI_THEME_FILAMAN_LIGHT  = 5,
+  UI_THEME_BAMBUDDY_DARK  = 6,
+  UI_THEME_BAMBUDDY_LIGHT = 7,
   UI_THEME_COUNT
 };
 
@@ -68,7 +70,7 @@ UiThemeId uiThemeStored();
 // Stores the choice for the next boot. The running palette stays.
 bool uiThemeStore(UiThemeId id);
 // "dark", "light", "spoolman_dark", "spoolman_light", "filaman_dark",
-// "filaman_light": the id the web interface speaks, and the data-theme of
+// "filaman_light", "bambuddy_dark", "bambuddy_light": the id the web interface speaks, and the data-theme of
 // its pages.
 const char* uiThemeKey(UiThemeId id);
 bool uiThemeFromKey(const char* key, UiThemeId* out);
@@ -110,7 +112,7 @@ struct UiThemeCustom {
 UiThemeCustom uiThemeCustomStored();
 bool uiThemeCustomStore(const UiThemeCustom& c);
 // The palette that runs for a stored choice: with follow on, the backend's
-// family in the choice's lightness (BamBuddy has none and keeps the standard).
+// family in the choice's lightness.
 UiThemeId uiThemeResolve(UiThemeId chosen, bool follow);
 // Whether switching to `to` moves the palette the next boot runs into another
 // family. Only with follow on: without it a backend has no say in the colours.

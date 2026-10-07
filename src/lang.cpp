@@ -3089,8 +3089,8 @@ const char* const STRINGS[][3] = {
     "Couleurs du backend" },  // STR_W_THEME_FOLLOW_H
   { "Farben folgen dem Backend", "Colours follow the backend",
     "Les couleurs suivent le backend" },  // STR_W_THEME_FOLLOW
-  { "FilaMan und Spoolman bringen eigene Farben mit, BamBuddy behält die Standardfarben. Hell oder dunkel kommt aus deiner Wahl oben.", "FilaMan and Spoolman bring their own colours, BamBuddy keeps the standard ones. Light or dark comes from your choice above.",
-    "FilaMan et Spoolman apportent leurs propres couleurs, BamBuddy garde les couleurs standard. Clair ou sombre suit votre choix ci-dessus." },  // STR_W_THEME_FOLLOW_HINT
+  { "Spoolman, FilaMan und BamBuddy bringen je eigene Farben mit. Hell oder dunkel kommt aus deiner Wahl oben.", "Spoolman, FilaMan and BamBuddy each bring their own colours. Light or dark comes from your choice above.",
+    "Spoolman, FilaMan et BamBuddy apportent chacun leurs propres couleurs. Clair ou sombre suit votre choix ci-dessus." },  // STR_W_THEME_FOLLOW_HINT
   { "Schema nach dem Neustart", "Scheme after restart",
     "Thème après redémarrage" },  // STR_W_THEME_AFTER
   { "Eigene Farben", "Your own colours",
@@ -3267,6 +3267,10 @@ const char* const STRINGS[][3] = {
     "Modèles" },  // STR_W_THEME_PRESETS
   { "Setzt Akzent, Grundton und Stärke auf einmal. Hell oder dunkel bleibt wie oben gewählt.", "Sets accent, ground tone and strength at once. Light or dark stays as chosen above.",
     "Règle accent, teinte de fond et intensité d'un coup. Clair ou sombre reste comme choisi plus haut." },  // STR_W_THEME_PRESETS_HINT
+  { "BamBuddy dunkel", "BamBuddy dark",
+    "BamBuddy sombre" },  // STR_W_THEME_BAMBUDDY_DARK
+  { "BamBuddy hell", "BamBuddy light",
+    "BamBuddy clair" },  // STR_W_THEME_BAMBUDDY_LIGHT
 };
 
 StringID tagWriteResultString(uint8_t code) {

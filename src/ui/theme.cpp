@@ -10,7 +10,7 @@
 
 // Every colour starts out dark, so anything that runs before uiThemeBegin()
 // still draws in the palette the scale has always had.
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) uint32_t UI_COL_##name = dark;
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light, bb_dark, bb_light) uint32_t UI_COL_##name = dark;
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
 
@@ -24,7 +24,7 @@ int UI_SHADE_BORDER  = SHADE_BORDER_STEP;
 static UiThemeId s_active = UI_THEME_DARK;
 
 static const char* const PALETTE_NAMES[] = {
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) #name,
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light, bb_dark, bb_light) #name,
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
 };
@@ -34,39 +34,49 @@ static const char* const PALETTE_NAMES[] = {
 // Where each colour lands, in table order: one loop fills them all instead of
 // one assignment per colour and palette.
 static uint32_t* const PALETTE_VARS[PALETTE_SIZE] = {
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) &UI_COL_##name,
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light, bb_dark, bb_light) &UI_COL_##name,
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
 };
 
 static const uint32_t PALETTES[UI_THEME_COUNT][PALETTE_SIZE] = {
   {
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) dark,
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light, bb_dark, bb_light) dark,
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
   },
   {
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) light,
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light, bb_dark, bb_light) light,
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
   },
   {
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) sm_dark,
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light, bb_dark, bb_light) sm_dark,
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
   },
   {
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) sm_light,
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light, bb_dark, bb_light) sm_light,
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
   },
   {
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) fm_dark,
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light, bb_dark, bb_light) fm_dark,
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
   },
   {
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light) fm_light,
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light, bb_dark, bb_light) fm_light,
+#include "ui/theme_palette.h"
+#undef UI_COLOUR
+  },
+  {
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light, bb_dark, bb_light) bb_dark,
+#include "ui/theme_palette.h"
+#undef UI_COLOUR
+  },
+  {
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light, bb_dark, bb_light) bb_light,
 #include "ui/theme_palette.h"
 #undef UI_COLOUR
   },
@@ -84,6 +94,8 @@ static const ThemeInfo THEMES[UI_THEME_COUNT] = {
   { "spoolman_light", false },
   { "filaman_dark",   true  },
   { "filaman_light",  false },
+  { "bambuddy_dark",  true  },
+  { "bambuddy_light", false },
 };
 
 uint32_t uiShade(uint32_t colour, int step) {

@@ -198,11 +198,11 @@ bool uiThemeCustomStore(const UiThemeCustom& c) {
 
 static UiThemeId resolveFor(UiThemeId chosen, bool follow, BackendMode mode) {
   if (!follow) return chosen;
-  const bool dark = chosen == UI_THEME_DARK || chosen == UI_THEME_SPOOLMAN_DARK ||
-                    chosen == UI_THEME_FILAMAN_DARK;
+  const bool dark = chosen == uiThemeInFamily(chosen, true);
   switch (mode) {
     case BACKEND_FILAMAN:  return dark ? UI_THEME_FILAMAN_DARK  : UI_THEME_FILAMAN_LIGHT;
     case BACKEND_SPOOLMAN: return dark ? UI_THEME_SPOOLMAN_DARK : UI_THEME_SPOOLMAN_LIGHT;
+    case BACKEND_BAMBUDDY: return dark ? UI_THEME_BAMBUDDY_DARK : UI_THEME_BAMBUDDY_LIGHT;
     default:               return dark ? UI_THEME_DARK          : UI_THEME_LIGHT;
   }
 }

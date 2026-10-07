@@ -5,6 +5,7 @@
   "spoolman_light": "a8501a/9a4312"
  },
  "--bad-bg/BAD_BG": {
+  "bambuddy_light": "fbe9e6/eec1b4",
   "dark": "2a0f0f/3a1410",
   "filaman_light": "fbe9e6/eec1b4",
   "light": "fdeaea/dcbcb5",
@@ -22,6 +23,7 @@
   "spoolman_light": "2a7a2e/1f6b22"
  },
  "--ground/GROUND": {
+  "bambuddy_light": "f5f5f5/e6e6e6",
   "dark": "06080f/0a1020",
   "filaman_light": "f8f6f1/ebe6dc",
   "light": "eef3f9/dde3ec",
@@ -73,6 +75,7 @@
   "spoolman_light": "e3eedf/dfeadb"
  },
  "--surface/SURFACE": {
+  "bambuddy_light": "ffffff/f7f7f7",
   "filaman_light": "ffffff/fbfaf7",
   "light": "ffffff/f4f6fa",
   "spoolman_light": "fbfaf8/f8f7f5"

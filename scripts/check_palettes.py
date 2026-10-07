@@ -76,7 +76,7 @@ HEX6 = r"0x([0-9a-fA-F]{6})"
 def read_panel():
     """name -> [value per palette], and the palette keys in column order."""
     text = PALETTE_H.read_text(encoding="utf-8")
-    row = re.compile(r"^UI_COLOUR\((\w+),\s*" + r",\s*".join([HEX6] * 6) + r"\)", re.M)
+    row = re.compile(r"^UI_COLOUR\((\w+),\s*" + r",\s*".join([HEX6] * 8) + r"\)", re.M)
     panel = {m.group(1): [v.lower() for v in m.groups()[1:]] for m in row.finditer(text)}
     keys = re.findall(r'\{\s*"(\w+)",\s*(?:true|false)\s*\}', THEME_CPP.read_text(encoding="utf-8"))
     return panel, keys
