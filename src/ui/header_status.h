@@ -8,10 +8,17 @@
 // The port mode needs the extra 30 px - "192.168.4.100:7913" is about 113 px
 // in font 12 and would otherwise be cut to "192.168.4.1...", which is exactly
 // the thing that mode exists to show.
+//
+// An https address carries its scheme and needs 32 px more again:
+// "https://192.168.4.100:8443" measures 152 px in font 12, plus 4 px of
+// reserve. The status line keeps 245 px, which still holds its longest text,
+// "Keine Verbindung zu BamBuddy" at 235 px in font 14, with a "#999" counter.
 #define HDR_IP_W             94
 #define HDR_IP_W_PORT        124
+#define HDR_IP_W_HTTPS       156
 #define HDR_STATUS_W         292
 #define HDR_STATUS_W_NARROW  262
+#define HDR_STATUS_W_HTTPS   245
 
 void updateHeaderStatus();
 
