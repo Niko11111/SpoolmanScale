@@ -32,7 +32,11 @@ UI_COLOUR(POPUP_BORDER,          0x2a4080, 0x6072ad, 0x4a4239, 0x8a857b, 0x2f6a5
 UI_COLOUR(EMPTY,                 0x182238, 0xe8ecf2, 0x262626, 0xe0ddd6, 0x142a20, 0xe4ded2)   // an empty bay, the keyboard, More, "got it"
 UI_COLOUR(CHIP,                  0x102040, 0xcddcf5, 0x2e2e2e, 0xefcfb4, 0x12304a, 0xcfe2f4)   // a header chip that is a button; a blue action: dried, this spool, new spool
 UI_COLOUR(ACCENT_CHIP,           0x1a3050, 0xcfe6d6, 0x3d3d3d, 0xf3e2d4, 0x24473a, 0xe2f3ea)   // a chip with a label in the accent: reload, the printer's name
-UI_COLOUR(SCRIM,                 0x000000, 0x8090a8, 0x000000, 0x57544e, 0x000000, 0x5a6158)   // behind a popup, at UI_OPA_SCRIM
+// The Spoolman scrims are not plain black and grey on purpose: LVGL blends in
+// RGB565 and rounds down, which drops red and blue (5 bit) to 0 before green
+// (6 bit), so black over a neutral grey came out pure green (0x000800). A
+// trace less green in the scrim keeps the dimmed grey grey (0x080808).
+UI_COLOUR(SCRIM,                 0x000000, 0x8090a8, 0x080408, 0x585450, 0x000000, 0x5a6158)   // behind a popup, at UI_OPA_SCRIM
 
 // ---- text ----------------------------------------------------
 UI_COLOUR(INK,                   0xe8f0ff, 0x0e141d, 0xececec, 0x141414, 0xe9f3ec, 0x1a231e)   // titles and values

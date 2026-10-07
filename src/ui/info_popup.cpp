@@ -191,7 +191,7 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   lv_obj_set_size(pop, 480, 320);
   lv_obj_set_pos(pop, 0, 0);
   lv_obj_set_style_bg_color(pop, lv_color_hex(UI_COL_SCRIM), 0);
-  lv_obj_set_style_bg_opa(pop, LV_OPA_70, 0);
+  lv_obj_set_style_bg_opa(pop, UI_OPA_SCRIM, 0);
   lv_obj_set_style_border_width(pop, 0, 0);
   lv_obj_set_style_radius(pop, 0, 0);
   lv_obj_set_style_pad_all(pop, 0, 0);

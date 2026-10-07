@@ -1532,7 +1532,7 @@ static void showTagMovePopup() {
   lv_obj_set_size(scr_tag_move, 480, 320);
   lv_obj_set_pos(scr_tag_move, 0, 0);
   lv_obj_set_style_bg_color(scr_tag_move, lv_color_hex(UI_COL_SCRIM), 0);
-  lv_obj_set_style_bg_opa(scr_tag_move, LV_OPA_70, 0);
+  lv_obj_set_style_bg_opa(scr_tag_move, UI_OPA_SCRIM, 0);
   lv_obj_set_style_border_width(scr_tag_move, 0, 0);
   lv_obj_set_style_radius(scr_tag_move, 0, 0);
   lv_obj_set_style_pad_all(scr_tag_move, 0, 0);
@@ -1666,7 +1666,7 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
   lv_obj_set_size(scr_link_warn_a, 480, 320);
   lv_obj_set_pos(scr_link_warn_a, 0, 0);
   lv_obj_set_style_bg_color(scr_link_warn_a, lv_color_hex(UI_COL_SCRIM), 0);
-  lv_obj_set_style_bg_opa(scr_link_warn_a, LV_OPA_80, 0);
+  lv_obj_set_style_bg_opa(scr_link_warn_a, UI_OPA_SCRIM, 0);
   lv_obj_set_style_border_width(scr_link_warn_a, 0, 0);
   lv_obj_set_style_radius(scr_link_warn_a, 0, 0);
   lv_obj_set_style_pad_all(scr_link_warn_a, 0, 0);
@@ -1846,7 +1846,7 @@ void showWarnPopupB(int spool_id, bool is_bambu) {
   lv_obj_set_size(scr_link_warn_b, 480, 320);
   lv_obj_set_pos(scr_link_warn_b, 0, 0);
   lv_obj_set_style_bg_color(scr_link_warn_b, lv_color_hex(UI_COL_SCRIM), 0);
-  lv_obj_set_style_bg_opa(scr_link_warn_b, LV_OPA_80, 0);
+  lv_obj_set_style_bg_opa(scr_link_warn_b, UI_OPA_SCRIM, 0);
   lv_obj_set_style_border_width(scr_link_warn_b, 0, 0);
   lv_obj_set_style_radius(scr_link_warn_b, 0, 0);
   lv_obj_set_style_pad_all(scr_link_warn_b, 0, 0);
@@ -2522,7 +2522,7 @@ static void showLinkConfirmPopup(int idx) {
   lv_obj_set_size(popup, 480, 320);
   lv_obj_set_pos(popup, 0, 0);
   lv_obj_set_style_bg_color(popup, lv_color_hex(UI_COL_SCRIM), 0);
-  lv_obj_set_style_bg_opa(popup, LV_OPA_70, 0);
+  lv_obj_set_style_bg_opa(popup, UI_OPA_SCRIM, 0);
   lv_obj_set_style_border_width(popup, 0, 0);
   lv_obj_set_style_radius(popup, 0, 0);
   lv_obj_set_style_pad_all(popup, 0, 0);

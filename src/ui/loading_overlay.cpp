@@ -37,7 +37,7 @@ void loadingOverlayShow(const char* text) {
   lv_obj_set_size(scr_loading, 480, 320);
   lv_obj_set_pos(scr_loading, 0, 0);
   lv_obj_set_style_bg_color(scr_loading, lv_color_hex(UI_COL_SCRIM), 0);
-  lv_obj_set_style_bg_opa(scr_loading, LV_OPA_70, 0);
+  lv_obj_set_style_bg_opa(scr_loading, UI_OPA_SCRIM, 0);
   lv_obj_set_style_border_width(scr_loading, 0, 0);
   lv_obj_set_style_radius(scr_loading, 0, 0);
   lv_obj_set_style_pad_all(scr_loading, 0, 0);

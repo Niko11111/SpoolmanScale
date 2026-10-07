@@ -341,7 +341,7 @@ void showConfirmPopup(const char* msg, int action) {
   lv_obj_set_size(confirm_popup, 480, 320);
   lv_obj_set_pos(confirm_popup, 0, 0);
   lv_obj_set_style_bg_color(confirm_popup, lv_color_hex(UI_COL_SCRIM), 0);
-  lv_obj_set_style_bg_opa(confirm_popup, LV_OPA_70, 0);
+  lv_obj_set_style_bg_opa(confirm_popup, UI_OPA_SCRIM, 0);
   lv_obj_set_style_border_width(confirm_popup, 0, 0);
   lv_obj_set_style_radius(confirm_popup, 0, 0);
   lv_obj_set_style_pad_all(confirm_popup, 0, 0);  // KRITISCH: kein Default-Padding!
@@ -561,7 +561,7 @@ void showConfirmPopup(const char* msg, int action) {
         lv_obj_set_size(apop, 480, 320);
         lv_obj_set_pos(apop, 0, 0);
         lv_obj_set_style_bg_color(apop, lv_color_hex(UI_COL_SCRIM), 0);
-        lv_obj_set_style_bg_opa(apop, LV_OPA_70, 0);
+        lv_obj_set_style_bg_opa(apop, UI_OPA_SCRIM, 0);
         lv_obj_set_style_border_width(apop, 0, 0);
         lv_obj_set_style_radius(apop, 0, 0);
         lv_obj_set_style_pad_all(apop, 0, 0);

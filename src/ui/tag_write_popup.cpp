@@ -127,7 +127,7 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
   lv_obj_set_size(scr_tag_write, 480, 320);
   lv_obj_set_pos(scr_tag_write, 0, 0);
   lv_obj_set_style_bg_color(scr_tag_write, lv_color_hex(UI_COL_SCRIM), 0);
-  lv_obj_set_style_bg_opa(scr_tag_write, LV_OPA_70, 0);
+  lv_obj_set_style_bg_opa(scr_tag_write, UI_OPA_SCRIM, 0);
   lv_obj_set_style_border_width(scr_tag_write, 0, 0);
   lv_obj_set_style_radius(scr_tag_write, 0, 0);
   lv_obj_set_style_pad_all(scr_tag_write, 0, 0);

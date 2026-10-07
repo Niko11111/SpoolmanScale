@@ -372,7 +372,7 @@ void showLocationPicker() {
   lv_obj_set_size(scr_location_picker, 480, 320);
   lv_obj_set_pos(scr_location_picker, 0, 0);
   lv_obj_set_style_bg_color(scr_location_picker, lv_color_hex(UI_COL_SCRIM), 0);
-  lv_obj_set_style_bg_opa(scr_location_picker, LV_OPA_70, 0);
+  lv_obj_set_style_bg_opa(scr_location_picker, UI_OPA_SCRIM, 0);
   lv_obj_set_style_border_width(scr_location_picker, 0, 0);
   lv_obj_set_style_radius(scr_location_picker, 0, 0);
   lv_obj_set_style_pad_all(scr_location_picker, 0, 0);
@@ -736,7 +736,7 @@ void buildMoreInfoScreen() {
   lv_obj_set_size(scr_more_info, 480, 320);
   lv_obj_set_pos(scr_more_info, 0, 0);
   lv_obj_set_style_bg_color(scr_more_info, lv_color_hex(UI_COL_SCRIM), 0);
-  lv_obj_set_style_bg_opa(scr_more_info, LV_OPA_50, 0);
+  lv_obj_set_style_bg_opa(scr_more_info, UI_OPA_SCRIM, 0);
   lv_obj_set_style_border_width(scr_more_info, 0, 0);
   lv_obj_set_style_radius(scr_more_info, 0, 0);
   lv_obj_set_style_pad_all(scr_more_info, 0, 0);
@@ -1139,7 +1139,7 @@ void buildMoreInfoScreen() {
       lv_obj_set_size(pop, 480, 320);
       lv_obj_set_pos(pop, 0, 0);
       lv_obj_set_style_bg_color(pop, lv_color_hex(UI_COL_SCRIM), 0);
-      lv_obj_set_style_bg_opa(pop, LV_OPA_80, 0);
+      lv_obj_set_style_bg_opa(pop, UI_OPA_SCRIM, 0);
       lv_obj_set_style_border_width(pop, 0, 0);
       lv_obj_set_style_radius(pop, 0, 0);
       lv_obj_set_style_pad_all(pop, 0, 0);

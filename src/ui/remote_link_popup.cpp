@@ -204,7 +204,7 @@ void showRemoteLinkPopup(int spool_id) {
   lv_obj_set_size(scr_remote_link, 480, 320);
   lv_obj_set_pos(scr_remote_link, 0, 0);
   lv_obj_set_style_bg_color(scr_remote_link, lv_color_hex(UI_COL_SCRIM), 0);
-  lv_obj_set_style_bg_opa(scr_remote_link, LV_OPA_80, 0);
+  lv_obj_set_style_bg_opa(scr_remote_link, UI_OPA_SCRIM, 0);
   lv_obj_set_style_border_width(scr_remote_link, 0, 0);
   lv_obj_set_style_radius(scr_remote_link, 0, 0);
   lv_obj_set_style_pad_all(scr_remote_link, 0, 0);

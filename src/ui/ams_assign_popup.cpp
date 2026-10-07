@@ -134,7 +134,7 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   lv_obj_set_size(scr_ams_popup, 480, 320);
   lv_obj_set_pos(scr_ams_popup, 0, 0);
   lv_obj_set_style_bg_color(scr_ams_popup, lv_color_hex(UI_COL_SCRIM), 0);
-  lv_obj_set_style_bg_opa(scr_ams_popup, LV_OPA_70, 0);
+  lv_obj_set_style_bg_opa(scr_ams_popup, UI_OPA_SCRIM, 0);
   lv_obj_set_style_border_width(scr_ams_popup, 0, 0);
   lv_obj_set_style_radius(scr_ams_popup, 0, 0);
   lv_obj_set_style_pad_all(scr_ams_popup, 0, 0);  // no default padding

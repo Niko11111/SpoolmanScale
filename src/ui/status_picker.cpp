@@ -107,7 +107,7 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
   lv_obj_set_size(s_scr, 480, 320);
   lv_obj_set_pos(s_scr, 0, 0);
   lv_obj_set_style_bg_color(s_scr, lv_color_hex(UI_COL_SCRIM), 0);
-  lv_obj_set_style_bg_opa(s_scr, LV_OPA_70, 0);
+  lv_obj_set_style_bg_opa(s_scr, UI_OPA_SCRIM, 0);
   lv_obj_set_style_border_width(s_scr, 0, 0);
   lv_obj_set_style_radius(s_scr, 0, 0);
   lv_obj_set_style_pad_all(s_scr, 0, 0);
