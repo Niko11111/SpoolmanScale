@@ -1999,7 +1999,7 @@ const char* const STRINGS[][3] = {
   { "OpenSpool",              "OpenSpool",              "OpenSpool" },  // STR_TW_FMT_OPENSPOOL
   { "FilaMan",                "FilaMan",                "FilaMan" },  // STR_TW_FMT_FILAMAN
   { "Anycubic ACE",           "Anycubic ACE",           "Anycubic ACE" },  // STR_TW_FMT_ACE
-  { "Automatik an der Waage", "Automatic on the scale", "Automatique sur la balance" },  // STR_W_C_TAGOPTS
+  { "Automatik an der Waage", "Automatic on the scale", "Actions automatiques de la balance" },  // STR_W_C_TAGOPTS
   { "Nach dem Verlinken",     "After linking",          "Après la liaison" },  // STR_W_TAGOPT_ASK
   { "Format",                 "Format",                 "Format" },  // STR_W_TAGOPT_FMT
   { "Gilt für das, was die Waage nach einem Verlinken selbst tut. "
@@ -2284,7 +2284,7 @@ const char* const STRINGS[][3] = {
     "just not by the fastest route.\n\n"
     "Better for good: update Spoolman to v0.27 or newer. The scale then moves "
     "the binding into the relation by itself, on the next link.",
-    "Ce serveur Spoolman ne gère pas encore les tags nativement - cette fonction n'arrive qu'en v0.27. La source choisie est pourtant « Spoolman NFC (natif) ».\n\nLe tag a donc été enregistré dans le champ supplémentaire extra.tag, La bobine est bien retrouvée grâce à lui, mais pas par le chemin le plus rapide.\n\nSolution durable : mettre Spoolman à jour en v0.27 ou plus récent. La balance déplacera alors d'elle-même le tag vers la gestion native, lors de la prochaine liaison." },  // STR_TF_NOREL_TEXT
+    "Ce serveur Spoolman ne gère pas encore les tags nativement - cette fonction n'arrive qu'en v0.27. La source choisie est pourtant « Spoolman NFC (natif) ».\n\nLe tag a donc été enregistré dans le champ supplémentaire extra.tag. La bobine est bien retrouvée grâce à lui, mais pas par le chemin le plus rapide.\n\nSolution durable : mettre Spoolman à jour en v0.27 ou plus récent. La balance déplacera alors d'elle-même le tag vers la gestion native, lors de la prochaine liaison." },  // STR_TF_NOREL_TEXT
 
   // ── The tag on the other flange ──
   { "Zweites Tag abfragen", "Ask for a second tag", "Demander un second tag" },  // STR_TAG2_ASK
@@ -2515,7 +2515,7 @@ const char* const STRINGS[][3] = {
   { "Trocknung von heute speichern?",
     "Record today's drying?",
     "Noter le séchage du jour ?" },  // STR_AMSD_DRIED_Q_ALL
-  { "Alle %d Spulen in %s", "All %d spools in %s", "%d bobines de %s" },  // STR_AMSD_DRIED_ALL
+  { "Alle %d Spulen in %s", "All %d spools in %s", "%d bobines (%s)" },  // STR_AMSD_DRIED_ALL
   { "Nur diese Spule",      "This spool only",     "Celle-ci seule" },  // STR_AMSD_DRIED_ONE
   { "%d Spulen werden gespeichert ...",
     "Saving %d spools ...",
@@ -2525,7 +2525,7 @@ const char* const STRINGS[][3] = {
   { "Trocknet",              "Drying",         "Séchage" },  // STR_AMSV_DRYING
   { "Drucker meldet %s - Zuordnung im Backend prüfen",
     "Printer reports %s - check the assignment in the backend",
-    "L'imprimante indique %s - vérifier le backend" },  // STR_AMSD_TYPE_CONFLICT
+    "Imprimante : %s - vérifier l'affectation" },  // STR_AMSD_TYPE_CONFLICT
   { "Snapmaker-Tags lesen", "Read Snapmaker tags", "Lire les tags Snapmaker" },  // STR_W_SNAPMAKER
   { "Versucht bei einem 4-Byte-Tag, der kein Bambu-Tag ist, die Snapmaker-Schlüssel und liest Material und Farbe vom Tag. Kostet jeden anderen 4-Byte-Tag etwa eine halbe Sekunde beim Auflegen. Aus lassen, wenn keine Snapmaker-Spulen im Haus sind.",
     "Tries Snapmaker's keys on a 4 byte tag that is not a Bambu tag and reads material and colour off the tag. Costs every other 4 byte tag about half a second when it is put down. Leave it off if there are no Snapmaker spools around.",
@@ -2548,7 +2548,7 @@ const char* const STRINGS[][3] = {
     "Zone de données" },  // STR_W_R_DATA_AREA
   { "%s MB, noch nicht genutzt", "%s MB, not used yet",
     "%s Mo, pas encore utilisée" },  // STR_W_S_DATA_UNUSED
-  { "nicht vorhanden",                         "not present",                 "absent" },  // STR_W_S_NONE
+  { "nicht vorhanden",                         "not present",                 "absente" },  // STR_W_S_NONE
   { "Absturzspeicher", "Crash dump",
     "Rapport de plantage" },  // STR_W_R_COREDUMP
   { "Nicht verknüpft: keine Verbindung", "Not linked: no connection",
@@ -2625,7 +2625,7 @@ const char* const STRINGS[][3] = {
   // Tag page in the browser: a MIFARE tag, and the spool the scale shows
   { "Nur lesbar, und nichts darauf, was die Waage kennt.",
     "Read-only, and nothing on it this scale knows.",
-    "Lecture seule, et rien dessus que cette balance connaisse." },  // STR_W_TAG_NOREC
+    "Lecture seule, sans contenu connu de cette balance." },  // STR_W_TAG_NOREC
   { "Tray-UUID",           "Tray UUID",          "Tray UUID" },  // STR_W_TAG_TRAY
   { "Spule auf der Waage", "Spool on the scale", "Bobine sur la balance" },  // STR_W_TAG_ONSCALE
   { "Die Waage zeigt gerade keine Spule.",
@@ -2678,7 +2678,7 @@ const char* const STRINGS[][3] = {
     "Le tag est déjà lié à la bobine #%d." },  // STR_W_TL_ALREADY
   { "Der Tag gehört zu Spule #%d. Dort zuerst die Verknüpfung lösen.",
     "The tag belongs to spool #%d. Unlink it there first.",
-    "Le tag appartient à la bobine #%d. Dissociez-le d'abord là-bas." },  // STR_W_TL_HELD
+    "Le tag appartient à la bobine #%d. Dissociez-le d'abord de cette bobine." },  // STR_W_TL_HELD
   { "Auf dem Leser liegt inzwischen ein anderer Tag. Nichts verknüpft.",
     "A different tag is on the reader now. Nothing was linked.",
     "Un autre tag est maintenant sur le lecteur. Rien n'a été lié." },  // STR_W_TL_CHANGED
@@ -2727,7 +2727,7 @@ const char* const STRINGS[][3] = {
   { "Gerät", "Device",
     "Appareil" },  // STR_PRN_DEVICE
   { "Keines gewählt, auf der Gerätekarte wählen", "None picked, pick one on the device card",
-    "Aucun choisi, à choisir sur la carte" },  // STR_PRN_DEVICE_NONE
+    "Aucun, à choisir dans la liste" },  // STR_PRN_DEVICE_NONE
   { "Modell", "Model",
     "Modèle" },  // STR_PRN_MODEL
   { "(experimentell, ungetestet)", "(experimental, untested)",
@@ -2747,7 +2747,7 @@ const char* const STRINGS[][3] = {
   { "Kein Drucker gewählt.", "No printer picked.",
     "Aucune imprimante." },  // STR_PRN_ERR_NO_PRINTER
   { "Das Etikett konnte nicht gerendert werden.", "The label could not be rendered.",
-    "Étiquette impossible à rendre." },  // STR_PRN_ERR_RASTER
+    "Étiquette non générée." },  // STR_PRN_ERR_RASTER
   { "Das Etikett ist breiter als der Druckkopf.", "The label is wider than the print head.",
     "Étiquette plus large que la tête." },  // STR_PRN_ERR_TOO_WIDE
   { "Das Etikett passt nicht zum eingelegten Format.", "The label does not match the loaded stock.",
@@ -2761,11 +2761,11 @@ const char* const STRINGS[][3] = {
     "Pas une imprimante Phomemo." },  // STR_PRN_ERR_NOT_PRINTER
   { "Die Verbindung ließ sich nicht trennen. Bitte neu starten.",
     "The link would not close. Please restart.",
-    "Liaison impossible à fermer. Redémarrez." },  // STR_PRN_ERR_STUCK
+    "Connexion bloquée. Redémarrez." },  // STR_PRN_ERR_STUCK
   { "Die Übertragung ist abgebrochen.", "The transfer was cut off.", "Transfert interrompu." },  // STR_PRN_ERR_WRITE
   { "Der Drucker wird auf der Gerätekarte gewählt. Modell und Etikett passen den Druck an den Druckkopf und das eingelegte Etikett an; der Testdruck zeigt, ob beides stimmt. Beim Drucken steht die Waage einige Sekunden.",
     "The printer is picked on the device card. Model and label stock fit the print to the head and the loaded label; the test print shows whether both are right. The scale pauses for a few seconds while printing.",
-    "L'imprimante se choisit sur la carte d'appareil. Modèle et étiquette adaptent l'impression à la tête et au support ; le test montre si les deux sont bons. La balance s'arrête quelques secondes pendant l'impression." },  // STR_PRN_HELP
+    "L'imprimante se choisit parmi les appareils. Modèle et étiquette adaptent l'impression à la tête et au support ; le test montre si les deux sont bons. La balance s'arrête quelques secondes pendant l'impression." },  // STR_PRN_HELP
 
   // The printer page in the browser
   { "Drucker", "Printer", "Imprimante" },  // STR_W_NAV_PRINTER
@@ -2781,10 +2781,10 @@ const char* const STRINGS[][3] = {
   { "Geräte suchen",        "Scan for devices", "Rechercher" },  // STR_BT_SCAN_WEB
   { "Die Suche läuft auf der Waage und dauert etwa 5 Sekunden; solange steht sie.",
     "The scan runs on the scale and takes about 5 seconds; the scale pauses meanwhile.",
-    "La recherche tourne sur la balance, environ 5 secondes ; elle est en pause pendant ce temps." },  // STR_W_P_SCAN_HINT
+    "La recherche tourne sur la balance et dure environ 5 secondes ; la balance est en pause pendant ce temps." },  // STR_W_P_SCAN_HINT
   { "Breite quer zum Druckkopf mal Länge in Laufrichtung, wie auf der Rolle angegeben.",
     "Width across the head by length along the feed, as printed on the roll.",
-    "Largeur devant la tête par longueur dans le sens du défilement, comme sur le rouleau." },  // STR_W_P_MEDIA_HINT
+    "Largeur (le long de la tête d'impression) × longueur (dans le sens du défilement), comme indiqué sur le rouleau." },  // STR_W_P_MEDIA_HINT
   { "Druckt Rahmen, Name und QR-Code auf das eingelegte Etikett. Das Ergebnis erscheint auch auf der Waage.",
     "Prints a frame, the name and a QR code on the loaded label. The verdict also shows on the scale.",
     "Imprime un cadre, le nom et un code QR sur l'étiquette chargée. Le résultat s'affiche aussi sur la balance." },  // STR_W_P_TEST_HINT
@@ -2839,7 +2839,7 @@ const char* const STRINGS[][3] = {
     "Manuel" },  // STR_QR_DOCS_TITLE
   { "Einrichtung, Funktionen, häufige Fragen",
     "Setup, features, common questions",
-    "Installation, fonctions, questions" },  // STR_QR_DOCS_DESC
+    "Installation, fonctions, FAQ" },  // STR_QR_DOCS_DESC
   { "Auf der Waage",
     "On the scale",
     "Sur la balance" },  // STR_W_C_ONSCALE
@@ -2875,7 +2875,7 @@ const char* const STRINGS[][3] = {
     "Écriture..." },  // STR_W_TW_BUSY_BTN
   { "Tag auf dem Leser liegen lassen",
     "Keep the tag on the reader",
-    "Laisser le tag sur le lecteur" },  // STR_W_TW_KEEP
+    "Laissez le tag sur le lecteur" },  // STR_W_TW_KEEP
   { "Tag auflegen und noch einmal versuchen",
     "Put the tag on and try again",
     "Posez le tag et réessayez" },  // STR_W_TW_RETRY
@@ -2884,19 +2884,19 @@ const char* const STRINGS[][3] = {
     "Un second tag pour cette bobine ?" },  // STR_W_T2_OFFER
   { "Etwa für den Halter oder die Box. Beide Tags finden dieselbe Spule.",
     "For the holder or the box, say. Both tags find the same spool.",
-    "Pour le support ou la boîte. Les deux trouvent la même bobine." },  // STR_W_T2_OFFER_HINT
+    "Par exemple pour le support ou la boîte. Les deux tags renvoient à la même bobine." },  // STR_W_T2_OFFER_HINT
   { "Zweiten Tag schreiben",
     "Write a second tag",
     "Écrire un second tag" },  // STR_W_T2_START
   { "Fertig",
     "Done",
-    "Terminé" },  // STR_W_T2_DONE_BTN
+    "Terminer" },  // STR_W_T2_DONE_BTN
   { "Jetzt den zweiten Tag auflegen",
     "Now put the second tag on",
     "Posez le second tag" },  // STR_W_T2_WAIT
   { "Ersten Tag abnehmen, zweiten auf den Leser legen. Die Waage zeigt dieselbe Frage.",
     "Take the first tag off, put the second on the reader. The scale asks the same.",
-    "Retirez le premier tag, posez le second. La balance demande la même chose." },  // STR_W_T2_WAIT_HINT
+    "Retirez le premier tag et posez le second sur le lecteur. La balance affiche la même demande." },  // STR_W_T2_WAIT_HINT
   { "Noch %d s",
     "%d s left",
     "Encore %d s" },  // STR_W_T2_LEFT
@@ -2908,7 +2908,7 @@ const char* const STRINGS[][3] = {
     "Second tag lié" },  // STR_W_T2_OK
   { "Spule #%d wird jetzt von beiden Tags gefunden.",
     "Spool #%d is now found by both tags.",
-    "La bobine #%d est trouvée par les deux." },  // STR_W_T2_OK_HINT
+    "Les deux tags mènent désormais à la bobine #%d." },  // STR_W_T2_OK_HINT
   { "Zweiter Tag nicht verknüpft",
     "Second tag not linked",
     "Second tag non lié" },  // STR_W_T2_FAIL
@@ -2943,7 +2943,7 @@ const char* const STRINGS[][3] = {
   { "Bambu-UUID auch in extra.tag", "Bambu UUID also in extra.tag", "UUID Bambu en extra.tag" },  // STR_OSM_TAG_SUB
   { "OpenSpoolman kennt die nativen Tags von Spoolman noch nicht. Es findet eine Bambu-Spule über die UUID im Feld extra.tag.\n\nIst das an, schreibt die Waage die UUID beim Verknüpfen zusätzlich dort hinein und legt das Feld an, falls es fehlt. Andere Tags betrifft das nicht.",
     "OpenSpoolman does not know Spoolman's native tags yet. It finds a Bambu spool by the UUID in the field extra.tag.\n\nWith this on, the scale also writes the UUID there when linking, and creates the field if it is missing. Other tags are not affected.",
-    "OpenSpoolman ignore encore les tags natifs. Il trouve une bobine Bambu par l'UUID dans extra.tag.\n\nActivé, la balance y écrit aussi l'UUID lors d'une liaison et crée le champ s'il manque. Les autres tags ne sont pas concernés." },  // STR_OSM_TAG_INFO
+    "OpenSpoolman ne connaît pas encore les tags natifs. Il trouve une bobine Bambu par l'UUID dans extra.tag.\n\nActivé : la balance y écrit aussi l'UUID lors d'une liaison et crée le champ s'il manque. Les autres tags ne sont pas concernés." },  // STR_OSM_TAG_INFO
   { "Alles eingerichtet", "All set",            "Tout est prêt" },  // STR_EF_HEAD_OK
   { "Es fehlen Felder",   "Fields are missing", "Champs absents" },  // STR_EF_HEAD_MISSING
   { "Anlegen",            "Create",             "Créer" },  // STR_EF_BTN_CREATE
@@ -2956,7 +2956,7 @@ const char* const STRINGS[][3] = {
   { "Web-Flasher", "Web flasher",
     "Web Flasher" },  // STR_PART_HINT_QR
   { "%s passt nicht mehr: einmal per USB flashen", "%s no longer fits: flash once over USB",
-    "%s trop grand : flasher par USB" },  // STR_GH_OTA_TOO_BIG
+    "%s ne tient plus : flasher une fois par USB" },  // STR_GH_OTA_TOO_BIG
   { "Firmware wird hochgeladen", "Uploading the firmware",
     "Envoi du firmware" },  // STR_W_FW_UPLOADING
   { "Die Datei ist größer als der Speicher dieser Waage ({s}). Einmal per USB über den Web-Flasher aktualisieren, dann passt sie.",
@@ -2982,7 +2982,7 @@ const char* const STRINGS[][3] = {
   { "Leergewicht der Spule ohne Filament, %.0f bis %.0f g", "Weight of the spool without filament, %.0f to %.0f g",
     "Poids de la bobine sans filament, %.0f à %.0f g" },  // STR_TARE_ENTER_RANGE
   { "Mehr als auf der Waage liegt", "More than is on the scale",
-    "Plus que sur la balance" },  // STR_TARE_ENTER_OVER
+    "Dépasse le poids pesé" },  // STR_TARE_ENTER_OVER
   // What else a Bambu tag says, on the tag card and the tags page
   { "Trocknen",     "Drying",        "Séchage" },  // STR_W_TAG_DRY
   { "Bambu-Code",   "Bambu code",    "Code Bambu" },  // STR_W_TAG_CODE
@@ -2993,7 +2993,7 @@ const char* const STRINGS[][3] = {
   { "Noch nicht geladen.", "Not loaded yet.",
     "Pas encore chargé." },  // STR_W_BCAT_NONE
   { "%d Farben, geladen am %s, zuletzt geprüft am %s.", "%d colours, loaded on %s, last checked on %s.",
-    "%d couleurs, chargé le %s, vérifié le %s." },  // STR_W_BCAT_STATE
+    "%d couleurs, chargées le %s, dernière vérification le %s." },  // STR_W_BCAT_STATE
   { "Wird geladen ...", "Loading ...",
     "Chargement ..." },  // STR_W_BCAT_BUSY
   { "Laden fehlgeschlagen: %s.", "Loading failed: %s.",
@@ -3004,7 +3004,7 @@ const char* const STRINGS[][3] = {
     "Mettre à jour" },  // STR_W_BCAT_UPDATE
   { "Die Waage holt die Farbtabelle aus BambuStudio (GitHub, rund 230 KB) und speichert eine kompakte Kopie. Danach zeigt sie bei jedem Bambu-Tag den Farbnamen und die Artikelnummer, auch ohne Internet. Bambu ergänzt die Tabelle, wenn neue Farben erscheinen: Die Waage sieht einmal am Tag nach und lädt nur, wenn sich etwas geändert hat. Das folgt dem Schalter für den automatischen Update-Check.",
     "The scale fetches the colour table from BambuStudio (GitHub, about 230 KB) and keeps a compact copy. From then on it shows the colour name and article number of every Bambu tag, offline as well. Bambu extends the table when new colours come out: the scale looks once a day and only downloads when something changed. This follows the switch for the automatic update check.",
-    "La balance récupère la table des couleurs de BambuStudio (GitHub, environ 230 Ko) et en garde une copie compacte. Elle affiche ensuite le nom de la couleur et la référence de chaque tag Bambu, même hors ligne. Bambu complète la table à la sortie de nouvelles couleurs : la balance vérifie une fois par jour et ne télécharge que si quelque chose a changé. Cela suit l'interrupteur de la recherche automatique de mises à jour." },  // STR_W_BCAT_NOTE
+    "La balance récupère la table des couleurs de BambuStudio (GitHub, environ 230 ko) et en garde une copie compacte. Elle affiche ensuite le nom de la couleur et la référence article de chaque tag Bambu, même hors ligne. Bambu complète la table à la sortie de nouvelles couleurs : la balance vérifie une fois par jour et ne télécharge que si quelque chose a changé. Cela dépend de l'option de recherche automatique des mises à jour." },  // STR_W_BCAT_NOTE
   { "Unverändert, nichts neu geladen.", "Unchanged, nothing downloaded.",
     "Inchangé, rien téléchargé." },  // STR_W_BCAT_UNCHANGED
   // https to the backend
@@ -3017,7 +3017,7 @@ const char* const STRINGS[][3] = {
     "Garder la connexion ouverte (https uniquement)" },  // STR_W_TLS_KEEP
   { "Der Aufbau einer https-Verbindung dauert auf der Waage etwa 0,6 s, eine offene Verbindung antwortet in rund 30 ms. Die Waage öffnet sie schon, wenn eine Spule aufgelegt wird, und schließt sie nach der gewählten Zeit ohne Anfrage. 30 Minuten lohnen sich nur, wenn dein Server die Verbindung so lange offen lässt.",
     "Opening an https connection takes the scale about 0.6 s, an open connection answers in about 30 ms. The scale opens it as soon as a spool is put on, and closes it after the chosen time without a request. 30 minutes only pay off if your server keeps the connection open that long.",
-    "Ouvrir une connexion https prend environ 0,6 s à la balance, une connexion ouverte répond en 30 ms environ. La balance l'ouvre dès qu'une bobine est posée et la ferme après le délai choisi sans requête. 30 minutes ne servent que si votre serveur garde la connexion ouverte aussi longtemps." },  // STR_W_TLS_KEEP_HINT
+    "Ouvrir une connexion https prend environ 0,6 s à la balance, une connexion ouverte répond en 30 ms environ. La balance l'ouvre dès qu'une bobine est posée et la ferme si aucune requête n'arrive pendant le délai choisi. 30 minutes ne servent que si votre serveur garde la connexion ouverte aussi longtemps." },  // STR_W_TLS_KEEP_HINT
   // The address screen on the device
   { "https: im Browser", "https: in the browser", "https : navigateur" },  // STR_SP_HTTPS_HINT
   { "https-Adresse",     "https address",         "Adresse https" },  // STR_SP_HTTPS_TITLE
@@ -3039,10 +3039,10 @@ const char* const STRINGS[][3] = {
   // The print position screen on the device
   { "Kalibrierseite drucken, dann die erste Zahl links auf dem Etikett einstellen.",
     "Print the calibration page, then set the first number on the left of the label.",
-    "Imprimez la page de calibrage, puis réglez le 1er nombre à gauche." },  // STR_PRN_OFFSET_HINT
+    "Imprimez la page de calibrage, puis reportez ici le 1er nombre à gauche." },  // STR_PRN_OFFSET_HINT
   { "Wo die Rolle unter dem Druckkopf läuft, hängt davon ab, wie sie im Halter sitzt. Die Kalibrierseite druckt ein Lineal über den ganzen Kopf: Die erste Zahl links auf dem Etikett ist der Versatz. Sitzt der Rahmen danach mit gleichem Rand links und rechts, passt es. Gedrückt halten zählt schnell.",
     "Where the roll runs under the head depends on how it sits in the holder. The calibration page prints a ruler across the whole head: the first number on the left of the label is the offset. Once the frame has the same margin left and right, it is right. Hold a button to count fast.",
-    "L'endroit où le rouleau passe sous la tête dépend de son support. La page de calibrage imprime une règle sur toute la tête : le premier nombre à gauche de l'étiquette est le décalage. Quand le cadre a la même marge des deux côtés, c'est bon. Maintenez un bouton pour aller vite." },  // STR_PRN_OFFSET_HELP
+    "Le passage du rouleau sous la tête dépend de sa place dans le support. La page de calibrage imprime une règle sur toute la tête : le premier nombre à gauche de l'étiquette est le décalage. Quand le cadre a la même marge des deux côtés, c'est bon. Maintenez un bouton pour aller vite." },  // STR_PRN_OFFSET_HELP
   // Thermal labels and the dryer
   { "Beim Trocknen mit hoher Temperatur wird das Etikett auf der Spule schwarz.",
     "Drying at a high temperature turns the label on the spool black.",
@@ -3147,11 +3147,11 @@ const char* const STRINGS[][3] = {
   { "Tag gehört zu Filament #%d", "Tag belongs to filament #%d",
     "Tag lié au filament #%d" },  // STR_TAG_ON_FILAMENT
   { "Server verlangt einen Zugang", "Server asks for access",
-    "Le serveur exige un accès" },  // STR_SM_AUTH_MISSING
+    "Authentification requise" },  // STR_SM_AUTH_MISSING
   { "Zugang abgelehnt", "Access rejected",
     "Accès refusé" },  // STR_SM_AUTH_REJECTED
   { "Nur ausfüllen, wenn ein Proxy mit Passwort davor steht oder der Server einen Schlüssel verlangt.", "Only fill this in when a proxy with a password sits in front of it or the server asks for a key.",
-    "À remplir seulement si un proxy avec mot de passe est devant ou si le serveur demande une clé." },  // STR_W_SM_AUTH_HINT
+    "À remplir seulement si un proxy protégé par mot de passe se trouve devant le serveur, ou si le serveur demande une clé." },  // STR_W_SM_AUTH_HINT
   { "Zugang", "Access",
     "Accès" },  // STR_W_SM_AUTH_KIND
   { "Keiner", "None",
@@ -3167,17 +3167,17 @@ const char* const STRINGS[][3] = {
   { "Schlüssel oder Passwort", "Key or password",
     "Clé ou mot de passe" },  // STR_W_SM_SECRET
   { "Die Adresse beginnt mit http://, der Zugang geht also unverschlüsselt durchs Netz. Schützt vor fremden Schreibzugriffen, nicht vor Mitlesen im selben Netz.", "The address starts with http://, so the access crosses the network unencrypted. It keeps others from writing, not from listening on the same network.",
-    "L'adresse commence par http://, l'accès circule donc sans chiffrement. Il empêche les écritures d'autrui, pas l'écoute sur le même réseau." },  // STR_W_SM_AUTH_PLAIN
+    "L'adresse commence par http:// : les identifiants circulent donc en clair sur le réseau. Cela empêche les écritures par des tiers, mais pas l'écoute sur le même réseau." },  // STR_W_SM_AUTH_PLAIN
   { "Webseite", "Web page",
     "Page web" },  // STR_W_THEME_WEB_H
   { "Hell oder dunkel wie das System", "Light or dark as the system sets it",
     "Clair ou sombre selon le système" },  // STR_W_THEME_WEB_OS
   { "Nur diese Webseite: Sie folgt der Einstellung von Gerät oder Browser, in der Farbfamilie der Waage. Die Waage bleibt, wie oben gewählt. Wirkt sofort, ohne Neustart.", "This web page only: it follows the device or browser setting, in the scale's colour family. The scale stays as chosen above. Takes effect at once, without a restart.",
-    "Cette page web uniquement : elle suit le réglage de l'appareil ou du navigateur, dans la famille de couleurs de la balance. La balance reste comme choisi ci-dessus. Effet immédiat, sans redémarrage." },  // STR_W_THEME_WEB_OS_HINT
+    "Cette page web uniquement : elle suit le réglage de l'appareil ou du navigateur, dans la famille de couleurs de la balance. La balance garde le thème choisi ci-dessus. Effet immédiat, sans redémarrage." },  // STR_W_THEME_WEB_OS_HINT
   { "Zu lang: höchstens %u Zeichen. Nichts gespeichert.", "Too long: %u characters at most. Nothing saved.",
-    "Trop long : %u caractères au maximum. Rien enregistré." },  // STR_W_SM_SECRET_LONG
+    "Trop long : %u caractères au maximum. Rien n'a été enregistré." },  // STR_W_SM_SECRET_LONG
   { "Der Zugang wurde für %s eingegeben und geht nicht an die neue Adresse. Bitte für diese Adresse neu eingeben.", "This access was entered for %s and is not sent to the new address. Enter it again for this address.",
-    "Cet accès a été saisi pour %s et n'est pas envoyé à la nouvelle adresse. Saisissez-le à nouveau pour celle-ci." },  // STR_W_SM_AUTH_REBIND
+    "Ces identifiants ont été saisis pour %s et ne sont pas envoyés à la nouvelle adresse. Saisissez-les à nouveau pour cette adresse." },  // STR_W_SM_AUTH_REBIND
   { "Für Schrift wird die Helligkeit angepasst, bis sie lesbar ist, auf der Waage wie hier. Flächen behalten die gewählte Farbe.",
     "For text its lightness is adjusted until it reads, on the scale as here. Fills keep the chosen colour.",
     "Pour le texte, la luminosité est ajustée jusqu'à ce qu'il soit lisible, sur la balance comme ici. Les surfaces gardent la couleur choisie." },  // STR_W_THEME_TEXT_ADJUSTED
@@ -3196,13 +3196,13 @@ const char* const STRINGS[][3] = {
     "Capture d'écran" },  // STR_W_C_SHOT
   { "Bilder der aktuellen Anzeige für Issues und Pull Requests. An der Waage selbst: zwei Finger eine Sekunde aufs Display legen, bis es kurz dunkel wird. Bis zu 6 Bilder bleiben bis zum Neustart hier, das älteste fällt zuerst raus.",
     "Pictures of what the display shows, for issues and pull requests. On the scale itself: rest two fingers on the display for a second until it blinks dark. Up to 6 pictures stay here until the next restart, the oldest goes first.",
-    "Des images de l'affichage, pour les issues et pull requests. Sur la balance : poser deux doigts une seconde sur l'écran jusqu'à ce qu'il s'assombrisse. Jusqu'à 6 images restent ici jusqu'au prochain redémarrage, la plus ancienne part en premier." },  // STR_W_SHOT_NOTE
+    "Images de l'affichage actuel, pour les issues et les pull requests. Sur la balance elle-même : posez deux doigts sur l'écran pendant une seconde, jusqu'à ce qu'il s'assombrisse brièvement. Jusqu'à 6 images restent ici jusqu'au prochain redémarrage ; la plus ancienne est supprimée en premier." },  // STR_W_SHOT_NOTE
   { "Aufnehmen",
     "Capture",
     "Capturer" },  // STR_W_SHOT_TAKE
   { "Nimmt auf...",
     "Capturing...",
-    "Capture..." },  // STR_W_SHOT_BUSY
+    "Capture en cours..." },  // STR_W_SHOT_BUSY
   { "Alle speichern",
     "Save all",
     "Tout enregistrer" },  // STR_W_SHOT_SAVE_ALL

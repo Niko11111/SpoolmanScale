@@ -117,6 +117,9 @@ hint, not a guarantee. Most of those lines wrap or sit in a scrolling popup and 
 land in a fixed-width label and get cut. French ran over the German/English width in several hundred lines;
 we checked every one of them against its widget, fixed the ones that showed, and turned each of those
 widgets into a hard budget. The warnings are printed last, sorted by how much wider they are.
+Those checked lines are listed in `fr_width_baseline.txt`; for every other line without a budget,
+being wider than German and English **fails the check**, because nobody looks at the screens
+afterwards any more.
 
 ## 5. The tools
 
@@ -128,11 +131,12 @@ All tools are plain Python 3 scripts in `tools/`. Each one starts with a detaile
 | `lang_fr.py` | Keeps the working file and `src/lang.cpp` in sync, and checks the French | `check --strict` |
 | `fit_check.py` | Measures a text in pixels exactly as LVGL does, from the real font tables | `--measure 16 "Étalonnage"` |
 | `ui_budgets.tsv` | Hard width limits for the places where "not wider than German or English" is not enough | (read by `--gate`) |
+| `fr_width_baseline.txt` | The rows checked on the device that may stay wider than German and English without a budget. It only shrinks | (read by `check`) |
 | `gen_fr_fonts.py` | Builds the supplement fonts and reports clipped glyphs | `--audit` |
 
 In `lang_fr.jsonl`, only `fr` (the translation), `note` (why a choice was made) and `st` (status) are
-written by hand. `st` is one of `todo` (no French yet), `draft` (written by whoever added the text,
-not reviewed yet), `ok` (reviewed), `stale` (the German changed since) and `locked`. Everything else (German, English, where the text is used, its budgets) is rebuilt from
+written by hand. `st` is one of `todo` (no French yet), `ok` (translated), `stale` (the German
+changed since) and `locked`. Everything else (German, English, where the text is used, its budgets) is rebuilt from
 the sources by `seed`.
 
 `lang_fr.py` modes:
@@ -142,9 +146,6 @@ python tools/lang_fr.py roundtrip   # prove the parser on the current lang.cpp (
 python tools/lang_fr.py seed        # refresh German, English and call sites; French is kept
 python tools/lang_fr.py dump        # the texts still to translate, with their limits
 python tools/lang_fr.py apply       # read {"STR_X": "texte"} as JSON on stdin
-python tools/lang_fr.py apply --draft   # the same, marked as a draft to be reviewed
-python tools/lang_fr.py dump --drafts   # the drafts waiting for review
-python tools/lang_fr.py approve     # mark drafts as reviewed: ids, --group or --all
 python tools/lang_fr.py coverage    # fails while a row has no French at all
 python tools/lang_fr.py check       # all the checks; --strict also demands every row in French
 python tools/lang_fr.py emit        # write src/lang.cpp with its three columns
@@ -190,37 +191,29 @@ and stays usable.
 
 ### Add a new text
 
-Every new text comes with a French **draft**, in the same change. `scripts/check.sh` runs
+Every new text comes with its French, in the same change. `scripts/check.sh` runs
 `lang_fr.py coverage` on every push and pull request and fails while a row has no French; before this
-rule the gap had grown to 71 rows between two reviews.
+rule the gap had grown to 71 rows. There is no separate review afterwards: what you write is what
+French users see.
 
 ```sh
 python tools/lang_fr.py seed                                    # picks up the new row
-echo '{"STR_NEW_TEXT": "Texte"}' | python tools/lang_fr.py apply --draft
-python tools/lang_fr.py check                                   # the draft must pass
+echo '{"STR_NEW_TEXT": "Texte"}' | python tools/lang_fr.py apply
+python tools/lang_fr.py check                                   # must pass
 python tools/lang_fr.py emit
 ```
 
-A draft ships: a French user sees it instead of the English. Two rules keep a draft from doing harm:
+Two rules keep a new text from doing harm:
 
-- **Shorter, not longer.** `check` fails when a draft is wider than both the German and the English
-  and `ui_budgets.tsv` knows no width for its widget. Either shorten the draft, or read the widget's
+- **Translate from the code, not from the sentence.** Open the place where the text is drawn and
+  read what it is: a button, a title, a status line, what each `%s` stands for. A word translated
+  on its own often means something else in context. Use the terms the existing French rows already
+  use (`tools/lang_fr.jsonl`) and their form of address (`vous`).
+- **Shorter, not longer.** `check` fails when a line is wider than both the German and the English
+  and `ui_budgets.tsv` knows no width for its widget. Either shorten the text, or read the widget's
   real width off the code and add a `NEVER` line to `ui_budgets.tsv`, as was done for the tag view,
-  the waiting cards and the copy confirmation.
-- **Marked as a draft.** It stays `draft` until the owner of the French column has read it.
-
-### Review the drafts
-
-```sh
-python tools/lang_fr.py dump --drafts                  # everything waiting, with German and English
-python tools/lang_fr.py dump --drafts --group "tag"    # one section
-echo '{"STR_TV_TITLE": "Tag NFC"}' | python tools/lang_fr.py apply   # a correction, marked ok
-python tools/lang_fr.py approve STR_TV_UID STR_TV_CHIP # accepted as written
-python tools/lang_fr.py approve --group "Tag view"     # a whole section
-python tools/lang_fr.py emit
-```
-
-`report` shows per group how many rows are drafts.
+  the waiting cards and the copy confirmation. Only the rows listed in `fr_width_baseline.txt`,
+  checked on the device when French came in, are exempt.
 
 ### Regenerate the supplement fonts
 

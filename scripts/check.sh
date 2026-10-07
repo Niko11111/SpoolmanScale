@@ -126,13 +126,13 @@ fi
 #     how much is translated: an untranslated row is written with its English
 #     text in the French cell, and only tools/lang_fr.jsonl knows the difference.
 LVGL_SYMBOLS=.pio/libdeps/wt32-sc01-plus/lvgl/src/font/lv_symbol_def.h
-# Coverage first and always: it needs no fonts. A new text comes with a French
-# draft (lang_fr.py apply --draft); left out, the gap grew to 71 rows between
-# two reviews without anyone noticing. Drafts ship and are counted, not failed.
+# Coverage first and always: it needs no fonts. A new text comes with its
+# French (lang_fr.py apply); left out, the gap grew to 71 rows without anyone
+# noticing.
 if [ -f tools/lang_fr.py ]; then
   out=$(python3 tools/lang_fr.py coverage 2>&1); rc=$?
   sum=$(echo "$out" | grep -E '^[[:space:]]*[0-9]+ rows, ' | tail -1 | sed 's/^[[:space:]]*//')
-  if [ "$rc" -ne 0 ]; then bad "French coverage: ${sum:-failed} - add drafts with tools/lang_fr.py apply --draft"; echo "$out" | grep -E '^[[:space:]]+E ' | head -20 | sed 's/^/      /';
+  if [ "$rc" -ne 0 ]; then bad "French coverage: ${sum:-failed} - add the French with tools/lang_fr.py apply"; echo "$out" | grep -E '^[[:space:]]+E ' | head -20 | sed 's/^/      /';
   else ok "French coverage: ${sum:-checked}"; fi
 fi
 if [ ! -f tools/lang_fr.py ]; then

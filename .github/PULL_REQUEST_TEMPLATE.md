@@ -26,6 +26,6 @@ Related issue: #
 - [ ] Based on a fresh `dev`, one topic, no unrelated changes
 - [ ] `scripts/check.sh` is green and `pio run` builds
 - [ ] I searched for every caller of what I changed
-- [ ] New texts go through `T()`, with German, English and a French draft
+- [ ] New texts go through `T()`, with German, English and French
 - [ ] Version not bumped (the maintainer does that)
 - [ ] Manual (SpoolmanScale-Docs) needs an update: yes / no, because:
