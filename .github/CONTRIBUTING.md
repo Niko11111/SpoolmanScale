@@ -151,8 +151,8 @@ request there is welcome but not required.
 
 ## License
 
-SpoolmanScale is licensed under GPL-3.0-or-later (the `LICENSE` file follows
-with [issue #45](https://github.com/Niko11111/SpoolmanScale/issues/45)). By
+SpoolmanScale is licensed under GPL-3.0-or-later, see [`LICENSE`](../LICENSE)
+and [issue #45](https://github.com/Niko11111/SpoolmanScale/issues/45). By
 submitting a contribution you agree to license it under GPL-3.0-or-later, and
 you grant Nikolai Herrmann the right to also license it under other terms, so
 the project is not locked into one license for good. The GPL version stays free
