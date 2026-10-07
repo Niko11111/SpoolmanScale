@@ -10,6 +10,7 @@
 
 #include "app_config.h"
 #include "bambu/bambu_catalog_sync.h"
+#include "services/dried_migrate.h"
 #include "services/drying_sync.h"
 #include "services/backend_http.h"
 #include "app/app_boot.h"
@@ -649,6 +650,7 @@ void appLoop() {
   updateCheckTick();
   bambuCatalogSyncTick();
   dryingSyncTick();
+  driedMigrateTick();
   backendConnTick();
 
   firmwareStampTick();

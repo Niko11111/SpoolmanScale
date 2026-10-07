@@ -43,6 +43,7 @@
 bool spoolHasAnyTag(JsonObjectConst spool);
 
 #include "app/backend_switch.h"
+#include "services/dried_migrate.h"
 #include "services/drying_sync.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
@@ -653,6 +654,7 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
     // After the verdict above: a tag that does not describe this spool must
     // not hand it its drying advice.
     dryingSyncNote(spool);
+    driedMigrateNote(spool);
 
     bool is_ntag = !is_bambu_tag;
     logSDf("Spool %d identified: %s %s, %.0fg of %.0fg", sm_id,

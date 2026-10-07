@@ -155,6 +155,25 @@ void isoDayLocal(const char* iso, char* out_day, size_t out_size) {
   if (strlen(out_day) > 10) out_day[10] = '\0';
 }
 
+bool dayLocalNoonUtc(const char* day, char* out, size_t out_size) {
+  if (!day || !out || out_size == 0) return false;
+  int y, mo, d;
+  if (sscanf(day, "%4d-%2d-%2d", &y, &mo, &d) != 3) return false;
+  struct tm local = {};
+  local.tm_year  = y - 1900;
+  local.tm_mon   = mo - 1;
+  local.tm_mday  = d;
+  local.tm_hour  = 12;
+  local.tm_isdst = -1;   // let mktime() decide, see daysSince()
+  const time_t stamp = mktime(&local);
+  struct tm* utc = gmtime(&stamp);
+  if (stamp < 0 || !utc) return false;
+  snprintf(out, out_size, "%04d-%02d-%02dT%02d:%02d:%02d.000Z",
+           utc->tm_year + 1900, utc->tm_mon + 1, utc->tm_mday,
+           utc->tm_hour, utc->tm_min, utc->tm_sec);
+  return true;
+}
+
 bool nowIsoUtc(char* out, size_t out_size) {
   if (!out || out_size == 0) return false;
   snprintf(out, out_size, "2026-01-01T00:00:00.000Z");

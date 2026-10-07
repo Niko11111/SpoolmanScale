@@ -378,6 +378,16 @@ int  backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* 
 // such a batch never starts only to fail spool by spool.
 bool backendCanPatchLastDried();
 
+// Whether the backend keeps a drying date of its own that a date kept
+// elsewhere could be moved into: a BamBuddy that sends last_dried_at (#2863).
+bool backendHasNativeLastDried();
+
+// Moves the drying date the scale kept in a BamBuddy note, or in Spoolman's
+// extra.last_dried behind it, into BamBuddy's own field. 0 when there was
+// nothing to move, otherwise the HTTP status. BACKEND_NOT_SUPPORTED off
+// BamBuddy.
+int  backendMigrateLastDried(int spool_id, uint32_t timeout_ms);
+
 // --- ams slots -----------------------------------------------
 
 // Whether the active backend can show the AMS at all. BamBuddy reads it from

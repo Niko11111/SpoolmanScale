@@ -10,6 +10,7 @@
 
 #include "hardware/sd_logger.h"
 #include "services/device_name.h"
+#include "services/dried_marker.h"
 #include "services/http_progress.h"
 #include "services/json_util.h"
 #include "services/last_dried.h"
@@ -305,30 +306,10 @@ const char* bbDeviceId() { return wifiManagerDeviceId(); }
 //  names as the built in database, so one mapper serves both.
 // ============================================================
 
-// Pulls a "[last_dried:YYYY-MM-DD]" marker out of the note field. BamBuddy
-// has no column for a drying date, so the marker is where the scale keeps it.
-// Read unconditionally: a marker that is there is worth showing no matter
-// which write route the user picked.
-//
-// "[dried:...]" is the spelling the first builds wrote and is still accepted.
-// Nothing migrates it on its own; the next drying entry rewrites it, which is
-// enough for a marker that only matters while it is current.
-static bool driedFromNote(const char* note, char* out, size_t out_size) {
-  if (!note || !out || out_size < 11) return false;
-  const char* p = strstr(note, "[last_dried:");
-  if (p) {
-    p += 12;
-  } else {
-    p = strstr(note, "[dried:");
-    if (!p) return false;
-    p += 7;
-  }
-  const char* end = strchr(p, ']');
-  if (!end || (size_t)(end - p) != 10) return false;   // YYYY-MM-DD
-  memcpy(out, p, 10);
-  out[10] = '\0';
-  return true;
-}
+// The "[last_dried:YYYY-MM-DD]" marker in the note (services/dried_marker.h)
+// is read unconditionally: a marker that is there is worth showing no matter
+// which write route the user picked. On a BamBuddy with its own field it is
+// moved there by bbMigrateDried() the next time the spool is scanned.
 
 // "[drying:55 °C, 8 h]": the drying a Bambu tag recommends, kept in the note
 // for want of a field, like the drying date above.
@@ -391,7 +372,7 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   s_has_dried_field = jsonHasKey(src, "last_dried_at");
   char dried[LAST_DRIED_ISO_MAX];
   lastDriedUtc(src["last_dried_at"] | (const char*)nullptr, dried, sizeof(dried));
-  if (dried[0] || driedFromNote(note, dried, sizeof(dried))) extra["last_dried"] = dried;
+  if (dried[0] || driedMarkerParse(note, dried, sizeof(dried))) extra["last_dried"] = dried;
   char drying[32];
   if (dryingFromNote(note, drying, sizeof(drying))) extra["drying"] = drying;
 
@@ -941,6 +922,74 @@ bool bbGetDriedFromSpoolman(int spool_id, char* out_iso, size_t out_size,
   strncpy(out_iso, v.c_str(), out_size - 1);
   out_iso[out_size - 1] = '\0';
   return true;
+}
+
+// The note's marker moved into last_dried_at: the date when it is later than
+// what the field holds, the marker out of the note either way. False when
+// the note has none.
+static bool driedMoveFromNote(JsonObjectConst sp, JsonDocument& body) {
+  const char* note = sp["note"] | "";
+  char day[DRIED_MARKER_DAY_MAX];
+  if (!driedMarkerParse(note, day, sizeof(day))) return false;
+
+  char native[LAST_DRIED_ISO_MAX];
+  char native_day[DRIED_MARKER_DAY_MAX] = "";
+  lastDriedUtc(sp["last_dried_at"] | (const char*)nullptr, native, sizeof(native));
+  if (native[0]) isoDayLocal(native, native_day, sizeof(native_day));
+  if (driedMarkerNewer(day, native_day)) {
+    char iso[LAST_DRIED_ISO_MAX];
+    if (!dayLocalNoonUtc(day, iso, sizeof(iso))) return false;
+    body["last_dried_at"] = iso;
+  }
+
+  // A char*, so ArduinoJson keeps a copy rather than the pointer.
+  const size_t n = strlen(note) + 1;
+  char* stripped = (char*)malloc(n);
+  if (!stripped) return false;
+  driedMarkerStrip(note, stripped, n);
+  body["note"] = stripped;
+  free(stripped);
+  return true;
+}
+
+// The date the user had sent past BamBuddy into Spoolman's extra.last_dried,
+// copied into BamBuddy's own field while that is empty. extra.last_dried
+// stays: the scale reads the same field in its own Spoolman mode.
+static bool driedCopyFromSpoolman(JsonObjectConst sp, int spool_id,
+                                  JsonDocument& body, uint32_t timeout_ms) {
+  if (g_bb_dried_target != BB_DRIED_SPOOLMAN || s_mode != BB_INV_SPOOLMAN) return false;
+  if (sp["last_dried_at"] | (const char*)nullptr) return false;
+  char iso[LAST_DRIED_ISO_MAX];
+  if (!bbGetDriedFromSpoolman(spool_id, iso, sizeof(iso), timeout_ms)) return false;
+  body["last_dried_at"] = iso;
+  return true;
+}
+
+int bbMigrateDried(const char* base_url, const char* api_key, int spool_id,
+                   uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0) return -1;
+
+  // Read first, the note may have changed since the scan.
+  char url[192];
+  snprintf(url, sizeof(url), "%s%s/spools/%d", base_url, bbInventoryBase(), spool_id);
+  JsonDocument cur;
+  const int code = getJson(url, api_key, cur, timeout_ms, nullptr, nullptr);
+  if (code != 200) return (code < 0) ? code : -2;
+  JsonObjectConst sp = cur.as<JsonObjectConst>();
+
+  // An older BamBuddy has nowhere to move it to; the note stays as it is.
+  if (!jsonHasKey(sp, "last_dried_at")) return 0;
+
+  JsonDocument body;
+  const bool from_note = driedMoveFromNote(sp, body);
+  if (!from_note && !driedCopyFromSpoolman(sp, spool_id, body, timeout_ms)) return 0;
+
+  String out;
+  serializeJson(body, out);
+  logSDf("BamBuddy: drying date of spool %d moved from the %s, date %s",
+         spool_id, from_note ? "note" : "Spoolman extra",
+         body["last_dried_at"] | "kept");
+  return sendJson("PATCH", url, api_key, out, timeout_ms, nullptr);
 }
 
 // A Bambu tag stores the colour as a value, never as a name. BamBuddy keeps a

@@ -1252,6 +1252,16 @@ int backendPatchFilamentDrying(int filament_id, int spool_id, const char* value,
   }
 }
 
+bool backendHasNativeLastDried() {
+  return backendMode() == BACKEND_BAMBUDDY && bbHasDriedField();
+}
+
+int backendMigrateLastDried(int spool_id, uint32_t timeout_ms) {
+  HttpStallTime stall(__func__);   // the loop stands still for this call
+  if (backendMode() != BACKEND_BAMBUDDY) return notSupported("MigrateLastDried");
+  return bbMigrateDried(backendBaseUrl(), bambuddyApiKey(), spool_id, timeout_ms);
+}
+
 // Mirrors the switch above, branch for branch, minus the request.
 bool backendCanPatchLastDried() {
   switch (backendMode()) {

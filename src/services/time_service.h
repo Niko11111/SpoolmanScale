@@ -64,3 +64,9 @@ void isoDayLocal(const char* iso, char* out_day, size_t out_size);
 // carries something parseable rather than 1970. Returns false in that case, so
 // a caller that would rather not write at all can decide for itself.
 bool nowIsoUtc(char* out, size_t out_size);
+
+// A local calendar day "YYYY-MM-DD" as the UTC instant of its local noon,
+// in the same form as nowIsoUtc(). Noon, because a date without a time has
+// to come back as the same day through isoDayLocal() in any zone up to
+// twelve hours away. Needs the zone, not the clock. False on a malformed day.
+bool dayLocalNoonUtc(const char* day, char* out, size_t out_size);

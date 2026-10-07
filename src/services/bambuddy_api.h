@@ -195,6 +195,15 @@ int  bbPatchLastDried(const char* base_url, const char* api_key, int spool_id,
 bool bbGetDriedFromSpoolman(int spool_id, char* out_iso, size_t out_size,
        uint32_t timeout_ms = 6000);
 
+// Moves a drying date the scale kept outside BamBuddy into its own field
+// (#2863): a note marker always (the marker leaves the note, the date goes
+// in when it is later than the field's), Spoolman's extra.last_dried while
+// the field is empty and the user had picked that route. Reads the spool
+// first. 0 when there was nothing to move or the server has no such field,
+// otherwise the HTTP status of the PATCH, negative when the read failed.
+int  bbMigrateDried(const char* base_url, const char* api_key, int spool_id,
+       uint32_t timeout_ms = 6000);
+
 // Generic PATCH on the spool for the plain fields. Pass nullptr / a negative
 // number to leave a field untouched. Note that BamBuddy treats null as
 // "unchanged" and an empty string as "clear".

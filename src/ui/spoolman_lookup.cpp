@@ -21,6 +21,7 @@
 // library's templates.
 bool spoolHasAnyTag(JsonObjectConst spool);
 
+#include "services/dried_migrate.h"
 #include "services/drying_sync.h"
 #include "services/location_state.h"
 #include "services/backend.h"
@@ -702,6 +703,7 @@ void querySpoolmanById(int spool_id) {
   // After the verdict above: a tag that does not describe this spool must
   // not hand it its drying advice.
   dryingSyncNote(spool);
+  driedMigrateNote(spool);
 
   bool is_ntag = !is_bambu_tag;
   if (is_ntag) {
