@@ -3263,6 +3263,10 @@ const char* const STRINGS[][3] = {
   { "Ohne Antwort - erst Inventar prüfen",
     "No answer - check inventory first",
     "Sans réponse - vérifier l'inventaire" },  // STR_TAGNEW_SPOOL_UNSURE
+  { "Vorlagen", "Presets",
+    "Modèles" },  // STR_W_THEME_PRESETS
+  { "Setzt Akzent, Grundton und Stärke auf einmal. Hell oder dunkel bleibt wie oben gewählt.", "Sets accent, ground tone and strength at once. Light or dark stays as chosen above.",
+    "Règle accent, teinte de fond et intensité d'un coup. Clair ou sombre reste comme choisi plus haut." },  // STR_W_THEME_PRESETS_HINT
 };
 
 StringID tagWriteResultString(uint8_t code) {
