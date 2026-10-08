@@ -43,6 +43,9 @@ static lv_obj_t*       s_lbl_price = nullptr;
 static float           s_price  = 0.0f;
 static TcpJob          s_job    = TCP_IDLE;
 static TagCreateInput  s_in;
+// The input came from the database picker, not from the tag: its colours are
+// drawn from the input, the tag on the pad may have none.
+static bool            s_picked = false;
 static TagFilamentPlan s_plan;
 static int             s_label_weight = 0;
 // Cancel hides the card from its own callback; the loop deletes it.
@@ -185,7 +188,7 @@ static void buildHead(lv_obj_t* box) {
   lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, UI_CARD_ICON_Y);
 
   lv_obj_t* title = lv_label_create(box);
-  lv_label_set_text(title, T(STR_NEWTAG_TITLE));
+  lv_label_set_text(title, T(s_picked ? STR_COPY_CONFIRM_TITLE : STR_NEWTAG_TITLE));
   lv_obj_set_style_text_color(title, lv_color_hex(UI_COL_INK), 0);
   lv_obj_set_style_text_font(title, UI_FONT_HEADLINE, 0);
   lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
@@ -212,7 +215,13 @@ static void buildIdentity(lv_obj_t* box) {
   lv_obj_set_style_border_color(sw, lv_color_hex(UI_COL_POPUP_BORDER), 0);
   lv_obj_set_style_pad_all(sw, 0, 0);
   lv_obj_clear_flag(sw, LV_OBJ_FLAG_SCROLLABLE);
-  swatchPaint(sw, g_tag.color);
+  if (s_picked) {
+    char rgba[10];
+    snprintf(rgba, sizeof(rgba), "%s", s_in.clear ? "FFFFFF00" : s_in.color_hex);
+    swatchPaintHex(sw, rgba);
+  } else {
+    swatchPaint(sw, g_tag.color);
+  }
   // A gradient or dual colour spool: its first two colours, the way the tag
   // view draws it.
   if (s_in.color_count >= 2) {
@@ -335,13 +344,7 @@ static void buildAnswers(lv_obj_t* box) {
   }, LV_EVENT_CLICKED, NULL);
 }
 
-void showTagCreatePopup() {
-  logSD("SHOW: TagCreatePopup");
-  closeTagCreatePopup();
-  if (!tagCreateInputFromTag(&s_in)) {
-    logSD("TagCreate: no tag to create from");
-    return;
-  }
+static void buildCard() {
   s_label_weight = labelWeight();
   s_price = 0.0f;
   tagFilamentPlanClear(&s_plan);
@@ -352,6 +355,25 @@ void showTagCreatePopup() {
   buildLines(box);
   buildAnswers(box);
   s_job = TCP_PLAN;
+}
+
+void showTagCreatePopup() {
+  logSD("SHOW: TagCreatePopup");
+  closeTagCreatePopup();
+  if (!tagCreateInputFromTag(&s_in)) {
+    logSD("TagCreate: no tag to create from");
+    return;
+  }
+  s_picked = false;
+  buildCard();
+}
+
+void showTagCreatePopupFor(const TagCreateInput& in) {
+  logSD("SHOW: TagCreatePopup (picked)");
+  closeTagCreatePopup();
+  s_in = in;
+  s_picked = true;
+  buildCard();
 }
 
 // ------------------------------------------------------------

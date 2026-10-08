@@ -11,6 +11,12 @@
 
 int spoolmanGetJson(const char* base_url, const char* path, JsonDocument& doc,
   uint32_t timeout_ms = 8000, JsonDocument* filter = nullptr, DeserializationError* out_err = nullptr);
+// GET of an answer too large to hold as one document: read() gets the body
+// and reads it as it comes, false when it could not. Returns the HTTP code,
+// -2 when read() said false.
+typedef bool (*SpoolmanBodyReader)(Stream& body, void* ctx);
+int spoolmanGetStreamed(const char* base_url, const char* path, uint32_t timeout_ms,
+                        SpoolmanBodyReader read, void* ctx);
 // POST with the server's answer kept in `answer`. The status decides; an
 // answer that does not parse leaves `answer` empty.
 int spoolmanPostJson(const char* base_url, const char* path, const String& body,

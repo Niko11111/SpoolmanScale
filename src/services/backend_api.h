@@ -296,6 +296,15 @@ void backendLookupColorName(const char* hex6, const char* material,
 // UI can leave the button out instead of offering a dead end.
 bool backendCanCreateFromTag();
 
+// The backend's filament database, for a spool without a maker's chip
+// (services/filament_db.h holds what these load). Spoolman 0.27 and later
+// only, for now; FilaMan's FilamentDB and BamBuddy's colour catalogue follow.
+// Both loads block their caller and run on filament_db's own task, never on
+// the loop; base_url is the copy that task took. Each returns the HTTP code.
+bool backendCanBrowseFilamentDb();
+int  backendFdbLoadIndex(const char* base_url);
+int  backendFdbLoadEntries(const char* base_url, const char* maker, const char* material);
+
 int  backendCreateSpoolField(const char* base_url, const char* field_name,
        uint32_t timeout_ms = 3000);
 

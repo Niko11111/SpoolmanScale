@@ -3283,6 +3283,81 @@ const char* const STRINGS[][3] = {
   { "Spule angelegt, Preis nicht gespeichert",
     "Spool created, price not saved",
     "Bobine créée, prix non enregistré" },  // STR_TAGNEW_PRICE_LOST
+  { "Neu aus Datenbank",
+    "New from database",
+    "Nouvelle depuis la base" },  // STR_DBPICK_BTN
+  { "Filament-Datenbank wird geladen",
+    "Loading the filament database",
+    "Lecture de la base de filaments" },  // STR_DBPICK_LOADING
+  { "Hersteller wählen",
+    "Choose vendor",
+    "Choisir le fabricant" },  // STR_DBPICK_MAKER_TITLE
+  { "Schon im Bestand",
+    "Already in the inventory",
+    "Déjà dans l'inventaire" },  // STR_DBPICK_OWNED
+  { "Weitere Hersteller A-Z",
+    "Other vendors A-Z",
+    "Autres fabricants A-Z" },  // STR_DBPICK_OTHER_MAKERS
+  { "Nicht dabei? Dann direkt am Server anlegen.",
+    "Not listed? Create it on the server instead.",
+    "Absent ? Le créer sur le serveur." },  // STR_DBPICK_NOT_LISTED
+  { "Farbe wählen",
+    "Choose colour",
+    "Choisir la couleur" },  // STR_DBPICK_COLOR_TITLE
+  { "Alle (%d)",
+    "All (%d)",
+    "Toutes (%d)" },  // STR_DBPICK_ALL
+  { "Rot",
+    "Red",
+    "Rouge" },  // STR_DBPICK_FAM_RED
+  { "Orange",
+    "Orange",
+    "Orange" },  // STR_DBPICK_FAM_ORANGE
+  { "Gelb",
+    "Yellow",
+    "Jaune" },  // STR_DBPICK_FAM_YELLOW
+  { "Grün",
+    "Green",
+    "Vert" },  // STR_DBPICK_FAM_GREEN
+  { "Blau",
+    "Blue",
+    "Bleu" },  // STR_DBPICK_FAM_BLUE
+  { "Lila",
+    "Purple",
+    "Violet" },  // STR_DBPICK_FAM_PURPLE
+  { "Pink",
+    "Pink",
+    "Rose" },  // STR_DBPICK_FAM_PINK
+  { "Braun",
+    "Brown",
+    "Marron" },  // STR_DBPICK_FAM_BROWN
+  { "Schwarz",
+    "Black",
+    "Noir" },  // STR_DBPICK_FAM_BLACK
+  { "Grau",
+    "Grey",
+    "Gris" },  // STR_DBPICK_FAM_GREY
+  { "Weiß",
+    "White",
+    "Blanc" },  // STR_DBPICK_FAM_WHITE
+  { "Mehrfarbig",
+    "Multicolour",
+    "Multicolore" },  // STR_DBPICK_FAM_MULTI
+  { "Klar",
+    "Clear",
+    "Transparent" },  // STR_DBPICK_FAM_CLEAR
+  { "Welche Spulengröße?",
+    "Which spool size?",
+    "Quelle taille de bobine ?" },  // STR_DBPICK_SIZE_TITLE
+  { "Die Auswahl aus der Datenbank braucht Spoolman 0.27 oder neuer.",
+    "Picking from the database needs Spoolman 0.27 or newer.",
+    "Le choix dans la base demande Spoolman 0.27 ou plus récent." },  // STR_DBPICK_NEEDS_NEWER
+  { "Filament-Datenbank laden fehlgeschlagen (HTTP %d)",
+    "Loading the filament database failed (HTTP %d)",
+    "Échec de lecture de la base de filaments (HTTP %d)" },  // STR_DBPICK_FAILED
+  { "Keine Filamente mit 1,75 mm gefunden.",
+    "No 1.75 mm filaments found.",
+    "Aucun filament de 1,75 mm trouvé." },  // STR_DBPICK_EMPTY
 };
 
 StringID tagWriteResultString(uint8_t code) {

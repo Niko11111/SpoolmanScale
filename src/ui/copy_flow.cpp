@@ -31,6 +31,7 @@
 #include "ui/spoolman_lookup.h"
 #include "services/spool_tare.h"
 #include "ui/theme.h"
+#include "ui/db_pick_screen.h"
 #include "ui/tag_create_popup.h"
 
 // From ui/spool_flow.cpp, see the same line in spoolman_lookup.cpp: what counts
@@ -570,18 +571,22 @@ void showCopyEntryPopup() {
   lv_obj_set_width(lbl_ctx, 450);
   lv_obj_align(lbl_ctx, LV_ALIGN_TOP_MID, 0, 60);
 
+  // A Bambu tag can become a spool by itself; a blank NTAG through the
+  // filament database. Never both: the one is a Bambu tag, the other not.
   const bool offer_from_tag = tagCreateOffered();
+  const bool offer_from_db  = !offer_from_tag && dbPickOffered();
+  const bool offer_extra    = offer_from_tag || offer_from_db;
 
   // Button layout: 3 buttons + cancel, ID= >100 recommended | List= <100
   // recommended. A fifth row only fits if every row gives up a few pixels, so
   // the roomier spacing stays whenever the extra button is not offered.
   const int BTN_W = 380;
-  const int BTN_H   = offer_from_tag ? 42 : 48;
-  const int BTN_GAP = offer_from_tag ?  5 :  8;
-  const int Y1 = offer_from_tag ? 84 : 92;
+  const int BTN_H   = offer_extra ? 42 : 48;
+  const int BTN_GAP = offer_extra ?  5 :  8;
+  const int Y1 = offer_extra ? 84 : 92;
   const int Y2 = Y1+BTN_H+BTN_GAP, Y3 = Y2+BTN_H+BTN_GAP, Y4 = Y3+BTN_H+BTN_GAP;
   const int Y5 = Y4+BTN_H+BTN_GAP;
-  const int Y_CANCEL = offer_from_tag ? Y5 : Y4;
+  const int Y_CANCEL = offer_extra ? Y5 : Y4;
 
   // Button 1: Enter ID (works for active + archived, >100 spools recommended)
   lv_obj_t *btn1 = lv_btn_create(scr_copy_entry);
@@ -650,6 +655,7 @@ void showCopyEntryPopup() {
 
   // Button 4: create from the tag, only where that leads anywhere
   if (offer_from_tag) tagCreateEntryButton(scr_copy_entry, BTN_W, BTN_H, Y4);
+  if (offer_from_db)  dbPickEntryButton(scr_copy_entry, BTN_W, BTN_H, Y4);
 
   // Cancel
   lv_obj_t *btn4 = lv_btn_create(scr_copy_entry);

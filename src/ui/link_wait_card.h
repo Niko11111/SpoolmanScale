@@ -17,6 +17,9 @@
 // ============================================================
 
 void linkWaitCardShow();
+// Another title than the spool list's, for a card shown for another load.
+// After linkWaitCardShow(); LVGL copies the text.
+void linkWaitCardTitle(const char* text);
 void linkWaitCardHide();
 bool linkWaitCardOpen();
 

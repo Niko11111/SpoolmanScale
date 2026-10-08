@@ -254,3 +254,30 @@ STR_TAGNEW_META	14	360	NEVER	src/ui/tag_create_popup.cpp line 2 of the card, UI_
 STR_TAGNEW_PRICE_BTN	14	64	NEVER	src/ui/tag_create_popup.cpp 80 px price button, 8 px air each side
 STR_PRICE_PAD_TITLE	14	460	NEVER	src/ui/price_pad.cpp title above the keypad
 STR_PRICE_PAD_INFO	12	168	WRAP:3	src/ui/price_pad.cpp right column, PP_COL_W
+
+# --- the database picker (db_pick_screen.cpp), widths read off its constants ----
+STR_DBPICK_BTN	16	372	NEVER	src/ui/db_pick_screen.cpp:122 entry button, BTN_W 380 on the copy popup
+STR_DBPICK_LOADING	20	360	WRAP:2	src/ui/db_pick_screen.cpp:597 wait card title, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_DBPICK_MAKER_TITLE	16	376	NEVER	src/ui/db_pick_screen.cpp:341 header title, 480 - 2 * (44 + 2 * 4)
+STR_DBPICK_OWNED	14	452	NEVER	src/ui/db_pick_screen.cpp caption, DBP_ROW_W
+STR_DBPICK_OTHER_MAKERS	14	452	NEVER	src/ui/db_pick_screen.cpp caption, DBP_ROW_W
+STR_DBPICK_COLOR_TITLE	14	452	NEVER	src/ui/db_pick_screen.cpp caption, DBP_ROW_W
+STR_DBPICK_NOT_LISTED	14	452	WRAP:2	src/ui/db_pick_screen.cpp:354 caption, DBP_ROW_W
+STR_DBPICK_ALL	14	102	NEVER	src/ui/db_pick_screen.cpp:436 family tile, 110 - 2 * 4
+STR_DBPICK_FAM_RED	14	102	NEVER	src/ui/db_pick_screen.cpp:418 family tile, 110 - 2 * 4
+STR_DBPICK_FAM_ORANGE	14	102	NEVER	src/ui/db_pick_screen.cpp:418 family tile, 110 - 2 * 4
+STR_DBPICK_FAM_YELLOW	14	102	NEVER	src/ui/db_pick_screen.cpp:418 family tile, 110 - 2 * 4
+STR_DBPICK_FAM_GREEN	14	102	NEVER	src/ui/db_pick_screen.cpp:418 family tile, 110 - 2 * 4
+STR_DBPICK_FAM_BLUE	14	102	NEVER	src/ui/db_pick_screen.cpp:418 family tile, 110 - 2 * 4
+STR_DBPICK_FAM_PURPLE	14	102	NEVER	src/ui/db_pick_screen.cpp:418 family tile, 110 - 2 * 4
+STR_DBPICK_FAM_PINK	14	102	NEVER	src/ui/db_pick_screen.cpp:418 family tile, 110 - 2 * 4
+STR_DBPICK_FAM_BROWN	14	102	NEVER	src/ui/db_pick_screen.cpp:418 family tile, 110 - 2 * 4
+STR_DBPICK_FAM_BLACK	14	102	NEVER	src/ui/db_pick_screen.cpp:418 family tile, 110 - 2 * 4
+STR_DBPICK_FAM_GREY	14	102	NEVER	src/ui/db_pick_screen.cpp:418 family tile, 110 - 2 * 4
+STR_DBPICK_FAM_WHITE	14	102	NEVER	src/ui/db_pick_screen.cpp:418 family tile, 110 - 2 * 4
+STR_DBPICK_FAM_MULTI	14	102	NEVER	src/ui/db_pick_screen.cpp:418 family tile, 110 - 2 * 4
+STR_DBPICK_FAM_CLEAR	14	102	NEVER	src/ui/db_pick_screen.cpp:418 family tile, 110 - 2 * 4
+STR_DBPICK_SIZE_TITLE	20	376	NEVER	src/ui/db_pick_screen.cpp:559 size question, UI_POPUP_W - 2 * UI_CARD_ROW_X
+STR_DBPICK_NEEDS_NEWER	16	452	WRAP:3	src/ui/db_pick_screen.cpp message, DBP_ROW_W
+STR_DBPICK_FAILED	16	452	WRAP:3	src/ui/db_pick_screen.cpp message, DBP_ROW_W
+STR_DBPICK_EMPTY	16	452	WRAP:3	src/ui/db_pick_screen.cpp message, DBP_ROW_W

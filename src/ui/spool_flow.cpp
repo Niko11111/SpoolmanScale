@@ -40,6 +40,7 @@
 #include "ui/tag_write_popup.h"
 #include "ui/tag_spool_compare.h"
 #include "ui/theme.h"
+#include "ui/db_pick_screen.h"
 #include "ui/tag_create_popup.h"
 #include "ui/ui_common.h"
 #include "services/backend.h"
@@ -3654,7 +3655,7 @@ void hideSpoolFlowOverlays() {
     scr_link_entry, scr_link_id, scr_link_warn_a, scr_link_warn_b,
     scr_link_vendor, scr_link_mat, scr_link_mat_sub, scr_link_spools,
     scr_link_list, scr_link_confirm, scr_tag_move,
-    scr_copy_entry, scr_copy_list, scr_copy_confirm, tagCreatePopupScreen()
+    scr_copy_entry, scr_copy_list, scr_copy_confirm, tagCreatePopupScreen(), dbPickScreen()
   };
   for (unsigned i = 0; i < sizeof(link_scr) / sizeof(link_scr[0]); i++)
     if (link_scr[i]) {
@@ -3667,6 +3668,7 @@ void hideSpoolFlowOverlays() {
 
 void deleteSpoolFlowOverlays() {
   closeTagCreatePopup();
+  dbPickClose();
   releaseScreen(&scr_link_confirm);
   releaseScreen(&scr_tag_move);
   releaseScreen(&scr_copy_entry);
@@ -3814,6 +3816,8 @@ void handleSpoolFlowDeferredActions() {
   copyFlowDeferredActions();
   // A new spool from the tag: its lookup and its creation.
   tagCreatePopupTick();
+  // A new spool from the filament database: its lists as they come in.
+  dbPickTick();
   // ---- a tag another spool holds ------------------------------------------
   if (tagmove_ask_pending) {
     tagmove_ask_pending = false;

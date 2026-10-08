@@ -64,6 +64,14 @@ struct TagCreateInput {
   int   temp_min;
   int   temp_max;
   bool  names_known;         // article and colour name are known
+  // Picked from the backend's filament database (services/filament_db.h)
+  // rather than read off a tag: the entry's id and name as the database has
+  // them, and what it says that no tag does. Empty and 0 for a tag.
+  char  db_id[80];           // SpoolmanDB ids run to 74 characters
+  char  db_name[64];
+  char  db_color_hex[9];     // a single colour, spelled as the database does
+  float db_density;
+  int   db_bed_temp;
 };
 
 // Builds the input from the tag that was scanned last (g_tag), through the
@@ -96,7 +104,7 @@ struct TagFilamentPlan {
   int   filament_id;        // TFS_FOUND
   int   vendor_id;          // 0: the vendor is created along with the filament
   char  name[64];           // the filament as the inventory names it
-  char  external_id[64];    // Spoolman: the database entry it comes from
+  char  external_id[80];    // Spoolman: the database entry it comes from
   // Spoolman: the entry's colours as the database spells them, which a
   // filament created from it takes, the way Spoolman's own import does.
   char  db_color_hex[9];

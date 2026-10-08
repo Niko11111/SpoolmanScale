@@ -146,6 +146,22 @@ static int getJson(const String& url, JsonDocument& doc, uint32_t timeout_ms,
   return err ? -2 : 200;
 }
 
+int spoolmanGetStreamed(const char* base_url, const char* path, uint32_t timeout_ms,
+                        SpoolmanBodyReader read, void* ctx) {
+  if (!hasBaseUrl(base_url) || !path || !read) return -1;
+  BackendHttp http;
+  smBegin(http, String(base_url) + path);
+  http.setTimeout(timeout_ms);
+  const int code = http.GET();
+  if (code != 200) {
+    http.end();
+    return code;
+  }
+  const bool ok = read(*http.getStreamPtr(), ctx);
+  http.end();
+  return ok ? 200 : -2;
+}
+
 int spoolmanGetJson(const char* base_url, const char* path, JsonDocument& doc,
                     uint32_t timeout_ms, JsonDocument* filter, DeserializationError* out_err) {
   if (!hasBaseUrl(base_url) || !path) {

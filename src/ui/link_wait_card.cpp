@@ -27,6 +27,7 @@
 #define WAIT_SPINNER_DEG    70
 
 static lv_obj_t *scr_wait   = nullptr;
+static lv_obj_t *lbl_title  = nullptr;
 static lv_obj_t *lbl_bytes  = nullptr;
 static unsigned  shown_kb   = 0;
 // What the card has seen come in so far. The worker's count starts at zero
@@ -86,6 +87,7 @@ void linkWaitCardShow() {
   lv_label_set_long_mode(title, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(title, UI_POPUP_W - UI_CARD_TEXT_PAD);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, WAIT_TITLE_Y);
+  lbl_title = title;
 
   lbl_bytes = lv_label_create(box);
   lv_label_set_text(lbl_bytes, "");
@@ -123,11 +125,16 @@ void linkWaitCardHide() {
   if (!scr_wait) return;
   lv_obj_del(scr_wait);
   scr_wait   = nullptr;
+  lbl_title  = nullptr;
   lbl_bytes  = nullptr;
   cancel_hit = false;
 }
 
 bool linkWaitCardOpen() { return scr_wait != nullptr; }
+
+void linkWaitCardTitle(const char* text) {
+  if (lbl_title && text) lv_label_set_text(lbl_title, text);
+}
 
 void linkWaitCardBytes(size_t bytes) {
   if (!lbl_bytes) return;

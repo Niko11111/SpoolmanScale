@@ -1,0 +1,397 @@
+#include "filament_db.h"
+
+#include <Arduino.h>
+#include <esp_heap_caps.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+
+#include "../app/backend_switch.h"
+#include "../hardware/sd_logger.h"
+#include "backend.h"
+#include "backend_api.h"
+#include "text_util.h"
+
+// The task, on the terms of the backend job (backend_job.cpp): core 0, below
+// the loop, its stack from the heap and a floor checked before it is taken.
+#define FDB_STACK_BYTES   16384
+#define FDB_PRIORITY      1
+#define FDB_CORE          0
+#define FDB_MIN_HEAP      60000
+// The index is the whole database; read again after this long.
+#define FDB_INDEX_MAX_AGE_MS  (24UL * 60UL * 60UL * 1000UL)
+
+// ---- storage, in PSRAM while the picker is open -------------------
+
+static FdbMaker* s_makers  = nullptr;
+static FdbPair*  s_pairs   = nullptr;
+static FdbEntry* s_entries = nullptr;
+static int       s_maker_n = 0;
+static int       s_pair_n  = 0;
+static int       s_entry_n = 0;
+// The backend generation under which the server said it has no database.
+static bool      s_missing     = false;
+static uint32_t  s_missing_gen = 0;
+static bool      s_index_ok   = false;
+static uint32_t  s_index_gen  = 0;
+static uint32_t  s_index_ms   = 0;
+
+// ---- the job --------------------------------------------------------
+
+static volatile FdbState s_state = FDB_IDLE;
+static volatile size_t   s_bytes = 0;
+static FdbJob   s_job  = FDB_JOB_NONE;
+static int      s_code = 0;
+static uint32_t s_gen  = 0;
+// Copies of what the job works with: the loop may rewrite the originals
+// while the task reads them.
+static char     s_base[96]     = "";
+static char     s_maker[32]    = "";
+static char     s_material[17] = "";
+
+template <typename T>
+static T* psramArray(T* p, size_t n) {
+  if (p) return p;
+  void* m = heap_caps_calloc(n, sizeof(T), MALLOC_CAP_SPIRAM);
+  if (!m) m = calloc(n, sizeof(T));
+  return (T*)m;
+}
+
+static void freeIndex() {
+  heap_caps_free(s_makers);
+  heap_caps_free(s_pairs);
+  s_makers = nullptr;
+  s_pairs = nullptr;
+  s_maker_n = s_pair_n = 0;
+  s_index_ok = false;
+}
+
+static void freeEntries() {
+  heap_caps_free(s_entries);
+  s_entries = nullptr;
+  s_entry_n = 0;
+}
+
+void fdbReleaseEntries() {
+  if (s_state == FDB_RUNNING) return;   // the task may still write into them
+  freeEntries();
+}
+
+// ---- filling --------------------------------------------------------
+
+static int findMaker(const char* name) {
+  for (int i = 0; i < s_maker_n; i++)
+    if (strcasecmp(s_makers[i].name, name) == 0) return i;
+  return -1;
+}
+
+static int addMaker(const char* name) {
+  const int i = findMaker(name);
+  if (i >= 0 || s_maker_n >= FDB_MAKERS_MAX) return i;
+  FdbMaker& m = s_makers[s_maker_n];
+  snprintf(m.name, sizeof(m.name), "%s", name);
+  m.count = 0;
+  m.owned = false;
+  return s_maker_n++;
+}
+
+void fdbIndexAdd(const char* maker, const char* material) {
+  if (!s_makers || !s_pairs || !maker || !maker[0] || !material || !material[0]) return;
+  const int mi = addMaker(maker);
+  if (mi < 0) return;
+  s_makers[mi].count++;
+  for (int i = 0; i < s_pair_n; i++) {
+    if (s_pairs[i].maker == mi && strcasecmp(s_pairs[i].material, material) == 0) {
+      s_pairs[i].count++;
+      return;
+    }
+  }
+  if (s_pair_n >= FDB_PAIRS_MAX) return;
+  FdbPair& p = s_pairs[s_pair_n++];
+  p.maker = (uint16_t)mi;
+  snprintf(p.material, sizeof(p.material), "%s", material);
+  p.count = 1;
+}
+
+void fdbMarkOwned(const char* maker) {
+  if (!s_makers || !maker) return;
+  const int i = findMaker(maker);
+  if (i >= 0) s_makers[i].owned = true;
+}
+
+bool fdbEntryAdd(const FdbEntry& e) {
+  if (!s_entries || s_entry_n >= FDB_ENTRIES_MAX) return false;
+  s_entries[s_entry_n++] = e;
+  return true;
+}
+
+volatile size_t* fdbBytesCounter() { return &s_bytes; }
+
+// ---- sorting, once a load is in --------------------------------------
+
+// A-Z, case aside. The pairs point at makers by index, so they are moved to
+// the new positions too. Insertion sort: a database has a hundred makers.
+static void sortMakers() {
+  FdbMaker* old = (FdbMaker*)malloc(sizeof(FdbMaker) * (size_t)s_maker_n);
+  uint16_t* order = (uint16_t*)malloc(sizeof(uint16_t) * (size_t)s_maker_n);
+  uint16_t* new_of_old = (uint16_t*)malloc(sizeof(uint16_t) * (size_t)s_maker_n);
+  if (old && order && new_of_old) {
+    memcpy(old, s_makers, sizeof(FdbMaker) * (size_t)s_maker_n);
+    for (int i = 0; i < s_maker_n; i++) {
+      int j = i - 1;
+      while (j >= 0 && strcasecmp(old[order[j]].name, old[i].name) > 0) { order[j + 1] = order[j]; j--; }
+      order[j + 1] = (uint16_t)i;
+    }
+    for (int k = 0; k < s_maker_n; k++) {
+      s_makers[k] = old[order[k]];
+      new_of_old[order[k]] = (uint16_t)k;
+    }
+    for (int i = 0; i < s_pair_n; i++) s_pairs[i].maker = new_of_old[s_pairs[i].maker];
+  }
+  free(old);
+  free(order);
+  free(new_of_old);
+}
+
+static int byEntryName(const void* a, const void* b) {
+  const FdbEntry* x = (const FdbEntry*)a;
+  const FdbEntry* y = (const FdbEntry*)b;
+  const int c = strcasecmp(x->name, y->name);
+  return c ? c : (int)x->weight_g - (int)y->weight_g;
+}
+
+// ---- the task ---------------------------------------------------------
+
+static void runJob() {
+  if (s_job == FDB_JOB_INDEX) {
+    s_code = backendFdbLoadIndex(s_base);
+    return;
+  }
+  s_code = backendFdbLoadEntries(s_base, s_maker, s_material);
+}
+
+static void fdbTask(void* arg) {
+  (void)arg;
+  const uint32_t t0 = millis();
+  runJob();
+  logSDf("Filament DB: %s done in %lu ms, code=%d, %u bytes, %d makers, %d pairs, %d entries, stack left %u",
+         s_job == FDB_JOB_INDEX ? "index" : "entries", (unsigned long)(millis() - t0), s_code,
+         (unsigned)s_bytes, s_maker_n, s_pair_n, s_entry_n,
+         (unsigned)uxTaskGetStackHighWaterMark(NULL));
+  __sync_synchronize();   // the results before the state, see backend_job.cpp
+  s_state = FDB_DONE;
+  vTaskDelete(NULL);
+}
+
+static bool startTask(FdbJob job) {
+  if (s_state != FDB_IDLE) return false;
+  if (ESP.getFreeHeap() < FDB_MIN_HEAP) {
+    logSDf("Filament DB: postponed, heap %u", (unsigned)ESP.getFreeHeap());
+    return false;
+  }
+  s_job   = job;
+  s_code  = 0;
+  s_bytes = 0;
+  s_gen   = backendGeneration();
+  snprintf(s_base, sizeof(s_base), "%s", backendBaseUrl());
+  s_state = FDB_RUNNING;   // before the task exists: it may finish at once
+  if (xTaskCreatePinnedToCore(fdbTask, "filamentdb", FDB_STACK_BYTES, nullptr,
+                              FDB_PRIORITY, nullptr, FDB_CORE) != pdPASS) {
+    s_state = FDB_IDLE;
+    logSD("Filament DB: task creation failed");
+    return false;
+  }
+  return true;
+}
+
+bool fdbStartIndex() {
+  if (s_state != FDB_IDLE) return false;
+  freeIndex();
+  s_makers = psramArray(s_makers, FDB_MAKERS_MAX);
+  s_pairs  = psramArray(s_pairs, FDB_PAIRS_MAX);
+  if (!s_makers || !s_pairs) { freeIndex(); logSD("Filament DB: no memory for the index"); return false; }
+  return startTask(FDB_JOB_INDEX);
+}
+
+bool fdbStartEntries(const char* maker, const char* material) {
+  if (s_state != FDB_IDLE || !maker || !material) return false;
+  freeEntries();
+  s_entries = psramArray(s_entries, FDB_ENTRIES_MAX);
+  if (!s_entries) { logSD("Filament DB: no memory for the list"); return false; }
+  snprintf(s_maker, sizeof(s_maker), "%s", maker);
+  snprintf(s_material, sizeof(s_material), "%s", material);
+  return startTask(FDB_JOB_ENTRIES);
+}
+
+FdbState fdbState() { return s_state; }
+FdbJob   fdbJob()   { return s_job; }
+size_t   fdbBytes() { return s_bytes; }
+int      fdbResultCode() { return s_code; }
+bool     fdbResultCurrent() { return s_gen == backendGeneration(); }
+
+bool fdbOffered() {
+  if (!backendCanBrowseFilamentDb()) return false;
+  return !(s_missing && s_missing_gen == backendGeneration());
+}
+
+void fdbTake() {
+  if (s_state != FDB_DONE) return;
+  const bool ok = s_code == 200 && fdbResultCurrent();
+  if (s_code == 404 || s_code == 405) { s_missing = true; s_missing_gen = s_gen; }
+  if (s_job == FDB_JOB_INDEX) {
+    if (ok) {
+      sortMakers();
+      s_index_ok  = true;
+      s_index_gen = s_gen;
+      s_index_ms  = millis();
+    } else {
+      freeIndex();
+    }
+  } else if (ok) {
+    qsort(s_entries, (size_t)s_entry_n, sizeof(FdbEntry), byEntryName);
+  } else {
+    freeEntries();
+  }
+  s_job   = FDB_JOB_NONE;
+  s_state = FDB_IDLE;
+}
+
+bool fdbIndexReady() {
+  return s_index_ok && s_index_gen == backendGeneration() &&
+         millis() - s_index_ms < FDB_INDEX_MAX_AGE_MS;
+}
+
+// ---- reading ------------------------------------------------------------
+
+int             fdbMakerCount()      { return s_index_ok ? s_maker_n : 0; }
+const FdbMaker* fdbMaker(int i)      { return (s_index_ok && i >= 0 && i < s_maker_n) ? &s_makers[i] : nullptr; }
+const FdbPair*  fdbPair(int i)       { return (s_index_ok && i >= 0 && i < s_pair_n) ? &s_pairs[i] : nullptr; }
+int             fdbEntryCount()      { return s_entries ? s_entry_n : 0; }
+const FdbEntry* fdbEntry(int i)      { return (s_entries && i >= 0 && i < s_entry_n) ? &s_entries[i] : nullptr; }
+
+int fdbPairsOf(int maker, uint16_t* out, int out_max) {
+  int n = 0;
+  for (int i = 0; i < s_pair_n && n < out_max; i++)
+    if (s_pairs[i].maker == maker) out[n++] = (uint16_t)i;
+  // Most filaments first: PLA ahead of PVA. Insertion sort, a maker has a few.
+  for (int i = 1; i < n; i++) {
+    const uint16_t v = out[i];
+    int j = i - 1;
+    while (j >= 0 && s_pairs[out[j]].count < s_pairs[v].count) { out[j + 1] = out[j]; j--; }
+    out[j + 1] = v;
+  }
+  return n;
+}
+
+// ---- the name on the screen ------------------------------------------------
+
+// UTF-8 sequences the fonts cannot draw, and what stands in for them. The
+// fonts have ASCII, the German and the French letters (lang.h); SpoolmanDB
+// names use a few more.
+struct GlyphSwap { const char* from; const char* to; };
+static const GlyphSwap GLYPH_SWAPS[] = {
+  { "\xE2\x84\xA2", "" },    // ™
+  { "\xC2\xAE", "" },         // ®
+  { "\xC2\xA0", " " },        // no-break space
+  { "\xC3\xA1", "a" }, { "\xC3\xAD", "i" }, { "\xC3\xB3", "o" },
+  { "\xC3\xBA", "u" }, { "\xC3\xB1", "n" },
+};
+#define FDB_FORMERLY  "(Formerly "
+
+static void swapGlyphs(const char* in, char* out, size_t out_size) {
+  size_t o = 0;
+  while (*in && o + 1 < out_size) {
+    bool swapped = false;
+    for (const GlyphSwap& g : GLYPH_SWAPS) {
+      const size_t n = strlen(g.from);
+      if (strncmp(in, g.from, n) != 0) continue;
+      for (const char* t = g.to; *t && o + 1 < out_size; t++) out[o++] = *t;
+      in += n;
+      swapped = true;
+      break;
+    }
+    if (!swapped) out[o++] = *in++;
+  }
+  out[o] = '\0';
+}
+
+// Removes the characters from "from" up to "to", in place.
+static void cutSpan(char* from, const char* to) {
+  memmove(from, to, strlen(to) + 1);
+}
+
+// Drops every occurrence of word that stands as words of its own.
+static void dropWords(char* text, const char* word) {
+  const size_t n = strlen(word);
+  for (char* p = text; n && (p = strcasestr(p, word)) != nullptr; ) {
+    const bool starts = p == text || p[-1] == ' ';
+    const bool ends = p[n] == '\0' || p[n] == ' ';
+    if (starts && ends) cutSpan(p, p + n);
+    else p += n;
+  }
+}
+
+// Drops the "(Formerly ...)" note.
+static void dropFormerly(char* text) {
+  char* f = strcasestr(text, FDB_FORMERLY);
+  const char* close = f ? strchr(f, ')') : nullptr;
+  if (f && close) cutSpan(f, close + 1);
+}
+
+// Single spaces, none at either end.
+static void squeezeSpaces(char* text) {
+  char* o = text;
+  for (const char* p = text; *p; p++) {
+    if (*p == ' ' && (o == text || o[-1] == ' ')) continue;
+    *o++ = *p;
+  }
+  while (o > text && o[-1] == ' ') o--;
+  *o = '\0';
+}
+
+void fdbDisplayName(const char* name, const char* maker, const char* material,
+                    char* out, size_t out_size) {
+  if (!out || !out_size) return;
+  swapGlyphs(name ? name : "", out, out_size);
+  char shown[FDB_NAME_MAX];
+  snprintf(shown, sizeof(shown), "%s", out);
+  dropFormerly(shown);
+  dropWords(shown, maker ? maker : "");
+  dropWords(shown, material ? material : "");
+  squeezeSpaces(shown);
+  // A name that was nothing but maker and material keeps them.
+  if (shown[0]) snprintf(out, out_size, "%s", shown);
+}
+
+// ---- the input for a new spool -------------------------------------------
+
+void fdbEntryToInput(const FdbEntry& e, const char* maker, const char* material,
+                     TagCreateInput* in) {
+  memset(in, 0, sizeof(*in));
+  snprintf(in->vendor, sizeof(in->vendor), "%s", maker);
+  snprintf(in->material, sizeof(in->material), "%s", material);
+  snprintf(in->db_id, sizeof(in->db_id), "%s", e.id);
+  snprintf(in->db_name, sizeof(in->db_name), "%s", e.name);
+  snprintf(in->db_color_hex, sizeof(in->db_color_hex), "%s", e.db_hex);
+  // A clear filament names no hue, the way a clear Bambu tag is read.
+  in->clear = e.family == CF_CLEAR;
+  for (uint8_t i = 0; !in->clear && i < e.ncolors && i < TAG_CREATE_COLOURS; i++)
+    tagCreateAddColor(in, (uint32_t)strtoul(e.hex[i], nullptr, 16));
+  in->color_kind = e.kind;
+  // BamBuddy's colour with its alpha; a clear filament is 00000000.
+  if (in->clear) snprintf(in->rgba, sizeof(in->rgba), "00000000");
+  else           snprintf(in->rgba, sizeof(in->rgba), "%sFF", in->color_hex);
+  // What the card shows: the material, then the database's own name.
+  snprintf(in->product, sizeof(in->product), "%s", material);
+  char shown[sizeof(e.name)];
+  fdbDisplayName(e.name, maker, material, shown, sizeof(shown));
+  utf8Cut(shown, sizeof(in->color_name) - 1, in->color_name, sizeof(in->color_name));
+  in->net_weight_g   = e.weight_g;
+  in->spool_weight_g = e.spool_weight_g;
+  in->diameter_mm    = FDB_DIAMETER_MM;
+  in->temp_max       = e.extruder_temp;
+  in->db_density     = e.density;
+  in->db_bed_temp    = e.bed_temp;
+  in->names_known    = true;
+}

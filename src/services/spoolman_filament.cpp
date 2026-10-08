@@ -69,6 +69,9 @@ static bool acceptByLook(JsonObjectConst fil, const TagCreateInput& in) {
   if (!vendorIs(fil, in)) return false;
   if (strcasecmp(fil["material"] | "", in.material) != 0) return false;
   if (!colorsFit(fil["color_hex"], in)) return false;
+  // A database pick has the database's own name: PolyLite and PolyTerra
+  // Black share maker, material and nearly the colour, never the name.
+  if (in.db_name[0]) return strcasecmp(fil["name"] | "", in.db_name) == 0;
   return tagCreateNameMatches(fil["name"] | "", in);
 }
 
@@ -161,6 +164,24 @@ static bool findInDatabase(const char* base_url, const TagCreateInput& in, TagFi
     return true;
   }
   return false;
+}
+
+// A filament picked from SpoolmanDB on the scale: the entry is known already,
+// and filament_db.h brought everything the plan takes from it.
+static void takePickedEntry(const TagCreateInput& in, TagFilamentPlan* plan) {
+  snprintf(plan->external_id, sizeof(plan->external_id), "%s", in.db_id);
+  snprintf(plan->name, sizeof(plan->name), "%s", in.db_name);
+  plan->density        = in.db_density;
+  plan->spool_weight_g = in.spool_weight_g;
+  plan->extruder_temp  = in.temp_max;
+  plan->bed_temp       = in.db_bed_temp;
+  if (in.color_count >= 2) {
+    tagCreateColorList(in, plan->db_multi_hexes, sizeof(plan->db_multi_hexes));
+    snprintf(plan->db_multi_direction, sizeof(plan->db_multi_direction), "%s",
+             in.color_kind == TCK_DUAL ? SM_DIRECTION_ACROSS : SM_DIRECTION_ALONG);
+  } else {
+    snprintf(plan->db_color_hex, sizeof(plan->db_color_hex), "%s", in.db_color_hex);
+  }
 }
 
 // The density most of SpoolmanDB's filaments of exactly this material have,
@@ -262,11 +283,22 @@ void spoolmanPlanTagFilament(const char* base_url, const TagCreateInput& in,
                              TagFilamentPlan* plan) {
   tagFilamentPlanClear(plan);
   // The database first: its id also finds a filament imported from it.
-  const bool in_db = findInDatabase(base_url, in, plan);
+  const bool picked = in.db_id[0] != '\0';
+  if (picked) takePickedEntry(in, plan);
+  const bool in_db = picked || findInDatabase(base_url, in, plan);
   if (planExisting(base_url, in, plan)) return;
 
   plan->vendor_id = findVendor(base_url, in.vendor, plan);
   if (plan->vendor_id < 0) { plan->state = TFS_FAILED; return; }
+  // Spoolman requires a density; a picked entry without one borrows it the
+  // way a filament from a tag does.
+  if (picked && plan->density <= 0.0f) plan->density = databaseDensity(base_url, in.material);
+  if (picked && plan->density <= 0.0f) plan->density = materialDensity(base_url, in.material);
+  if (picked && plan->density <= 0.0f) {
+    logSDf("Spoolman: no density known for %s, filament not created", in.material);
+    plan->state = TFS_FAILED;
+    return;
+  }
   if (in_db) { plan->state = TFS_CREATE_DB; return; }
   planFromTag(base_url, in, plan);
 }

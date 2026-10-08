@@ -18,6 +18,7 @@
 #include "services/device_name.h"
 #include "services/spoolman_api.h"
 #include "services/spoolman_filament.h"
+#include "services/spoolman_filament_db.h"
 #include "services/tag_field.h"
 #include "services/tag_uid.h"
 #include "services/text_util.h"
@@ -743,6 +744,20 @@ int backendCreateSpool(const char* base_url, int template_spool_id, int filament
 
 bool backendCanCreateFromTag() {
   return true;
+}
+
+bool backendCanBrowseFilamentDb() {
+  return backendMode() == BACKEND_SPOOLMAN;
+}
+
+int backendFdbLoadIndex(const char* base_url) {
+  if (backendMode() != BACKEND_SPOOLMAN) return notSupported("FdbLoadIndex");
+  return spoolmanFdbLoadIndex(base_url);
+}
+
+int backendFdbLoadEntries(const char* base_url, const char* maker, const char* material) {
+  if (backendMode() != BACKEND_SPOOLMAN) return notSupported("FdbLoadEntries");
+  return spoolmanFdbLoadEntries(base_url, maker, material);
 }
 
 void backendLookupColorName(const char* hex6, const char* material,

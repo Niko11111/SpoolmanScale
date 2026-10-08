@@ -25,6 +25,12 @@ lv_obj_t* tagCreateEntryButton(lv_obj_t* parent, int w, int h, int y);
 // Builds the card for the tag that was scanned last. Loop task only.
 void showTagCreatePopup();
 
+// The same card for a filament picked from the backend's database
+// (db_pick_screen.h) rather than read off a tag. The tag on the pad is
+// linked to the new spool all the same. Loop task only.
+struct TagCreateInput;
+void showTagCreatePopupFor(const TagCreateInput& in);
+
 // The lookup and the creation, one loop pass after the card or its button
 // asked for them, so the card is drawn before the loop stands still.
 void tagCreatePopupTick();
