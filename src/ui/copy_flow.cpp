@@ -529,10 +529,9 @@ void showCopyEntryPopup() {
   lv_obj_set_style_radius(scr_copy_entry, 0, 0);
   lv_obj_clear_flag(scr_copy_entry, LV_OBJ_FLAG_SCROLLABLE);
 
-  // Title
+  // Title: named like the button that opens it, since it also offers new spools
   lv_obj_t *lbl_title = lv_label_create(scr_copy_entry);
-  char title_buf[32]; copyT(title_buf, sizeof(title_buf), STR_COPY_TITLE);
-  lv_label_set_text(lbl_title, title_buf);
+  lv_label_set_text(lbl_title, T(STR_BTN_COPY_SPOOL));
   lv_obj_set_style_text_color(lbl_title, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_ext_18, 0);
   lv_obj_set_style_text_align(lbl_title, LV_TEXT_ALIGN_CENTER, 0);

@@ -345,8 +345,11 @@ static int letterOf(const char* name) {
 
 static void onLetter(lv_event_t* e) {
   lv_obj_t* target = (lv_obj_t*)lv_event_get_user_data(e);
-  // Scrolling moves nothing that holds this button: allowed right here.
-  if (target) lv_obj_scroll_to_view(target, LV_ANIM_ON);
+  if (!target) return;
+  // To the top of the list rather than just into view, so the letter's first
+  // maker leads the rows under the strip. Scrolling moves nothing that holds
+  // this button: allowed right here.
+  lv_obj_scroll_to_y(lv_obj_get_parent(target), lv_obj_get_y(target), LV_ANIM_ON);
 }
 
 static void letterStrip() {
