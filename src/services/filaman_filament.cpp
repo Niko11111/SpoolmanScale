@@ -83,8 +83,37 @@ static int findManufacturer(const char* base_url, const char* api_key, const cha
   return 0;
 }
 
-// The colour's id, 0 when FilaMan has none yet, -1 on failure.
-static int findColor(const char* base_url, const char* api_key, const char* hex) {
+// The colours a new filament needs, as FilaMan spells them without "#":
+// the tag's colours, or 00000000 for a clear filament, which is how FilaMan
+// already holds Bambu's clear spools.
+struct ColorSet {
+  char hex[TAG_CREATE_COLOURS][9];
+  int  id[TAG_CREATE_COLOURS];
+  int  count;
+};
+
+static void colorSetFor(const TagCreateInput& in, ColorSet* set) {
+  memset(set, 0, sizeof(*set));
+  if (in.clear) { snprintf(set->hex[0], sizeof(set->hex[0]), "%s", in.rgba); set->count = 1; return; }
+  for (uint8_t i = 0; i < in.color_count; i++)
+    snprintf(set->hex[set->count++], sizeof(set->hex[0]), "%s", in.colors_hex[i]);
+}
+
+// Whether FilaMan's "#009bd8" is this colour. A six digit colour matches only
+// a seven character code: an eight digit one carries an alpha the hue lacks.
+static bool sameCode(const char* code, const char* hex) {
+  if (strlen(code) != strlen(hex) + 1) return false;
+  return strcasecmp(code + 1, hex) == 0;
+}
+
+static void noteColor(JsonObjectConst c, ColorSet* set) {
+  for (int i = 0; i < set->count; i++)
+    if (!set->id[i] && sameCode(c["hex_code"] | "", set->hex[i])) set->id[i] = c["id"] | 0;
+}
+
+// Fills in the ids of the colours FilaMan already has, in one walk through
+// its list; the rest stay 0. -1 on failure.
+static int findColors(const char* base_url, const char* api_key, ColorSet* set) {
   JsonDocument filter;
   JsonObject f = filter["items"].to<JsonArray>().add<JsonObject>();
   f["id"]       = true;
@@ -94,11 +123,7 @@ static int findColor(const char* base_url, const char* api_key, const char* hex)
     const String path = String("/api/v1/colors?page_size=") + FM_FIL_PAGE_SIZE + "&page=" + page;
     const int n = readPage(base_url, api_key, path, doc, filter);
     if (n < 0) return n;
-    for (JsonObjectConst c : doc["items"].as<JsonArrayConst>()) {
-      const char* h = c["hex_code"] | "";
-      // "#009bd8"; an eight digit one carries an alpha the tag's hue has not.
-      if (strlen(h) == 7 && tagCreateSameHex(h, hex)) return c["id"] | 0;
-    }
+    for (JsonObjectConst c : doc["items"].as<JsonArrayConst>()) noteColor(c, set);
     if (n < FM_FIL_PAGE_SIZE) break;
   }
   return 0;
@@ -112,6 +137,15 @@ static bool hasColor(JsonObjectConst fil, const char* hex) {
   for (JsonObjectConst c : fil["colors"].as<JsonArrayConst>())
     if (tagCreateSameHex(c["color"]["hex_code"] | "", hex)) return true;
   return false;
+}
+
+// The tag's colour is on the filament. A gradient, dual colour or clear spool
+// is told by its colour's name ("Arctic Whisper", "Clear (32101)"): FilaMan's
+// import keeps such a colour as one averaged value, A4BFDA for Arctic Whisper.
+static bool colorsFit(JsonObjectConst fil, const TagCreateInput& in) {
+  if (in.clear || in.color_count >= 2)
+    return tagCreateNameMatches(fil["manufacturer_color_name"] | "", in);
+  return in.color_count == 1 && hasColor(fil, in.color_hex);
 }
 
 static void keepLowest(int id, const char* name, int* best, char* best_name) {
@@ -131,7 +165,7 @@ static void judgeFilament(JsonObjectConst fil, FilamentSearch* s) {
     keepLowest(id, designation, &s->by_article, s->name_article);
     return;
   }
-  if (in.color_hex[0] && hasColor(fil, in.color_hex) &&
+  if (colorsFit(fil, in) &&
       tagCreateSubgroupMatches(fil["material_subgroup"] | "", designation, in))
     keepLowest(id, designation, &s->by_look, s->name_look);
 }
@@ -194,7 +228,7 @@ void filamanPlanTagFilament(const char* base_url, const char* api_key,
     }
     if (s.by_article > 0 || s.by_look > 0) { planFound(s, plan); return; }
   }
-  if (!in.names_known || !in.color_hex[0]) { plan->state = TFS_NEEDS_CATALOG; return; }
+  if (!in.names_known || (!in.color_count && !in.clear)) { plan->state = TFS_NEEDS_CATALOG; return; }
   tagCreateFilamanDesignation(in, plan->name, sizeof(plan->name));
   plan->state = TFS_CREATE_TAG;
 }
@@ -224,20 +258,26 @@ static int ensureVendor(const char* base_url, const char* api_key, const TagCrea
   return postForId(base_url, api_key, "/api/v1/manufacturers", body, out_id);
 }
 
-static int ensureColor(const char* base_url, const char* api_key, const char* hex6, int* out_id) {
-  *out_id = findColor(base_url, api_key, hex6);
-  if (*out_id < 0) return s_failed_code;
-  if (*out_id > 0) return 200;
-  // Named by its value, like the colours FilaMan's import creates.
-  char hex[8];
-  snprintf(hex, sizeof(hex), "#%s", hex6);
-  JsonDocument body;
-  body["name"]     = hex;
-  body["hex_code"] = hex;
-  return postForId(base_url, api_key, "/api/v1/colors", body, out_id);
+// The ids of every colour the filament needs, creating the ones FilaMan has
+// not got. 200, or the failing request's code.
+static int ensureColors(const char* base_url, const char* api_key, ColorSet* set) {
+  if (findColors(base_url, api_key, set) < 0) return s_failed_code;
+  for (int i = 0; i < set->count; i++) {
+    if (set->id[i] > 0) continue;
+    // Named by its value, like the colours FilaMan's import creates.
+    char hex[10];
+    snprintf(hex, sizeof(hex), "#%s", set->hex[i]);
+    JsonDocument body;
+    body["name"]     = hex;
+    body["hex_code"] = hex;
+    const int code = postForId(base_url, api_key, "/api/v1/colors", body, &set->id[i]);
+    if (set->id[i] <= 0) return code;
+  }
+  return 200;
 }
 
-static void filamentBody(const TagCreateInput& in, int vendor_id, int color_id, JsonDocument& body) {
+static void filamentBody(const TagCreateInput& in, int vendor_id, const ColorSet& set,
+                         JsonDocument& body) {
   char text[64];
   tagCreateFilamanDesignation(in, text, sizeof(text));
   body["designation"]     = text;
@@ -249,10 +289,15 @@ static void filamentBody(const TagCreateInput& in, int vendor_id, int color_id, 
   body["manufacturer_color_name"] = text;
   body["diameter_mm"] = in.diameter_mm > 0 ? in.diameter_mm : TAG_CREATE_DIAMETER_MM;
   if (in.net_weight_g > 0) body["raw_material_weight_g"] = in.net_weight_g;
-  body["color_mode"] = "single";
-  JsonObject color = body["colors"].to<JsonArray>().add<JsonObject>();
-  color["color_id"] = color_id;
-  color["position"] = 1;
+  // Several colours: along the filament a gradient, across it stripes.
+  body["color_mode"] = set.count >= 2 ? "multi" : "single";
+  if (set.count >= 2) body["multi_color_style"] = in.color_kind == TCK_DUAL ? "striped" : "gradient";
+  JsonArray colors = body["colors"].to<JsonArray>();
+  for (int i = 0; i < set.count; i++) {
+    JsonObject color = colors.add<JsonObject>();
+    color["color_id"] = set.id[i];
+    color["position"] = i + 1;
+  }
   // The keys FilaMan's FilamentDB import uses, so its forms show them.
   if (in.article[0])   body["custom_fields"]["article_number"]  = in.article;
   if (in.temp_min > 0) body["custom_fields"]["temp_nozzle_min"] = in.temp_min;
@@ -263,13 +308,15 @@ int filamanCreateTagFilament(const char* base_url, const char* api_key,
                              const TagCreateInput& in, const TagFilamentPlan& plan,
                              int* out_filament_id) {
   *out_filament_id = 0;
-  int vendor_id = 0, color_id = 0;
+  int vendor_id = 0;
   int code = ensureVendor(base_url, api_key, in, plan.vendor_id, &vendor_id);
   if (vendor_id <= 0) return code;
-  code = ensureColor(base_url, api_key, in.color_hex, &color_id);
-  if (color_id <= 0) return code;
+  ColorSet set;
+  colorSetFor(in, &set);
+  code = ensureColors(base_url, api_key, &set);
+  if (code != 200) return code;
 
   JsonDocument body;
-  filamentBody(in, vendor_id, color_id, body);
+  filamentBody(in, vendor_id, set, body);
   return postForId(base_url, api_key, "/api/v1/filaments", body, out_filament_id);
 }

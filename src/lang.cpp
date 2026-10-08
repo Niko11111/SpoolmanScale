@@ -3271,6 +3271,18 @@ const char* const STRINGS[][3] = {
     "BamBuddy sombre" },  // STR_W_THEME_BAMBUDDY_DARK
   { "BamBuddy hell", "BamBuddy light",
     "BamBuddy clair" },  // STR_W_THEME_BAMBUDDY_LIGHT
+  { "Preis",
+    "Price",
+    "Prix" },  // STR_TAGNEW_PRICE_BTN
+  { "Preis der Spule",
+    "Price of the spool",
+    "Prix de la bobine" },  // STR_PRICE_PAD_TITLE
+  { "Leer = kein Preis. Währung wie im Server eingestellt.",
+    "Empty = no price. Currency as set on the server.",
+    "Vide = sans prix. Devise réglée sur le serveur." },  // STR_PRICE_PAD_INFO
+  { "Spule angelegt, Preis nicht gespeichert",
+    "Spool created, price not saved",
+    "Bobine créée, prix non enregistré" },  // STR_TAGNEW_PRICE_LOST
 };
 
 StringID tagWriteResultString(uint8_t code) {

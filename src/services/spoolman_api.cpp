@@ -580,6 +580,14 @@ int spoolmanPatchSpoolWeight(const char* base_url, int spool_id, float spool_wei
   return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, String(body), timeout_ms);
 }
 
+// Cents, unlike every weight in this file: a price is not a gram.
+int spoolmanPatchSpoolPrice(const char* base_url, int spool_id, float price, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || price < 0.0f) return -1;
+  char body[48];
+  snprintf(body, sizeof(body), "{\"price\": %.2f}", price);
+  return patchJson(String(base_url) + "/api/v1/spool/" + spool_id, String(body), timeout_ms);
+}
+
 int spoolmanPatchFilamentSpoolWeight(const char* base_url, int filament_id, float spool_weight, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || filament_id <= 0) return -1;
   char body[64];

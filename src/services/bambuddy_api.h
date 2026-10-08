@@ -231,6 +231,11 @@ struct BbNewSpool {
   float       weight_used     = 0.0f;     // consumption, not remaining
   int         nozzle_temp_min = 0;
   int         nozzle_temp_max = 0;
+  // Built-in inventory only, like the temperatures.
+  const char* extra_colors    = nullptr;  // every colour of a multi colour spool, "aabbcc,ddeeff"
+  const char* effect_type     = nullptr;  // "gradient", "dual-color"
+  const char* material_number = nullptr;  // the article number
+  float       cost_per_kg     = 0.0f;     // 0: no price given
 };
 
 // Creates a spool in whichever inventory is active.

@@ -25,6 +25,15 @@
 
 // A diameter for a tag that names none.
 #define TAG_CREATE_DIAMETER_MM  1.75f
+// The most colours a spool is described with: Bambu's four colour gradient.
+#define TAG_CREATE_COLOURS      4
+
+// How the colours lie on the spool.
+enum TagColorKind : uint8_t {
+  TCK_SINGLE = 0,
+  TCK_GRADIENT,   // one colour turning into the next along the filament
+  TCK_DUAL        // colours side by side across it, dual and tri colour
+};
 
 // What a tag says about its filament, in the shape the backends need.
 struct TagCreateInput {
@@ -35,8 +44,13 @@ struct TagCreateInput {
   char  article[8];          // "12601"; empty when unknown
   char  color_name[48];      // in the UI language; empty when unknown
   char  color_name_en[48];   // English: the servers' databases are English
-  char  color_hex[7];        // "009BD8"; empty for a clear filament
-  char  color2_hex[7];       // second colour of a dual or gradient spool
+  char  color_hex[7];        // "009BD8", the first colour; empty for a clear one
+  // Every colour of a gradient or dual colour spool, color_hex first. One
+  // entry on a plain spool, none on a clear one.
+  char  colors_hex[TAG_CREATE_COLOURS][7];
+  uint8_t color_count;
+  uint8_t color_kind;        // TagColorKind, single unless a source says otherwise
+  bool  clear;               // the tag names no hue: clear filament, 00000000
   char  rgba[9];             // "009BD8FF", alpha included, for BamBuddy
   char  link_id[36];         // what the new spool is linked to the tag by
   // The maker's plain line, which the filament databases name by its colour
@@ -57,9 +71,15 @@ struct TagCreateInput {
 bool tagCreateInputFromTag(TagCreateInput* out);
 
 // For the input files: subtype from product and material ("PLA Tough+" and
-// "PLA" leave "Tough+"), and the colours of g_tag in all three spellings.
+// "PLA" leave "Tough+"), the colours of g_tag (its first and, on a spool with
+// two, its second), and one colour more for a source that knows them all.
 void tagCreateSplitProduct(TagCreateInput* in);
 void tagCreateColorsFromTag(TagCreateInput* in);
+void tagCreateAddColor(TagCreateInput* in, uint32_t rgb);
+
+// The colours as "9CDBD9,FFFFFF", for the backends that take a list.
+void tagCreateColorList(const TagCreateInput& in, char* out, size_t out_size);
+
 
 // What a lookup found out, before anything is written.
 enum TagFilamentState : uint8_t {
@@ -77,6 +97,11 @@ struct TagFilamentPlan {
   int   vendor_id;          // 0: the vendor is created along with the filament
   char  name[64];           // the filament as the inventory names it
   char  external_id[64];    // Spoolman: the database entry it comes from
+  // Spoolman: the entry's colours as the database spells them, which a
+  // filament created from it takes, the way Spoolman's own import does.
+  char  db_color_hex[9];
+  char  db_multi_hexes[32];
+  char  db_multi_direction[16];
   float density;            // g/cm3, Spoolman requires one
   int   spool_weight_g;     // empty spool, 0 when unknown
   int   extruder_temp;
@@ -100,6 +125,11 @@ bool tagCreateNameMatches(const char* name, const TagCreateInput& in);
 // Whether the tag's product is its maker's plain line ("PLA Basic"), which
 // the filament databases name by its colour alone.
 bool tagCreatePlainLine(const TagCreateInput& in);
+
+// Whether the databases name this filament by its colour alone: the plain
+// line, a gradient or dual colour spool ("Arctic Whisper", "Velvet Eclipse
+// (Black-Red)" in SpoolmanDB, without "Basic" or "Silk"), a clear one ("Clear").
+bool tagCreateNamedByColor(const TagCreateInput& in);
 
 // The same for FilaMan, whose FilamentDB imports keep the subtype in
 // material_subgroup ("tough", "tough-plus") and in front of the designation

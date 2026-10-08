@@ -251,3 +251,6 @@ STR_TAGNEW_FILAMENT_ONLY	16	360	NEVER	src/ui/tag_create_popup.cpp status line of
 STR_TAGNEW_SPOOL_UNSURE	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
 STR_TAGNEW_META_ART	14	360	NEVER	src/ui/tag_create_popup.cpp line 2 of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
 STR_TAGNEW_META	14	360	NEVER	src/ui/tag_create_popup.cpp line 2 of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TAGNEW_PRICE_BTN	14	64	NEVER	src/ui/tag_create_popup.cpp 80 px price button, 8 px air each side
+STR_PRICE_PAD_TITLE	14	460	NEVER	src/ui/price_pad.cpp title above the keypad
+STR_PRICE_PAD_INFO	12	168	WRAP:3	src/ui/price_pad.cpp right column, PP_COL_W

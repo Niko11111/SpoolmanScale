@@ -9,8 +9,6 @@
 #include "../bambu/material_match.h"
 #include "tag_create_bambu.h"
 
-// Room behind a colour name for FilaMan's " (10101)".
-#define TAG_CREATE_ARTICLE_SUFFIX_MAX  8
 
 void tagFilamentPlanClear(TagFilamentPlan* plan) {
   if (plan) memset(plan, 0, sizeof(*plan));
@@ -47,16 +45,32 @@ void tagCreateSplitProduct(TagCreateInput* in) {
   extractBambuSubtype(p, in->subtype, sizeof(in->subtype));
 }
 
+void tagCreateAddColor(TagCreateInput* in, uint32_t rgb) {
+  if (in->color_count >= TAG_CREATE_COLOURS) return;
+  snprintf(in->colors_hex[in->color_count], sizeof(in->colors_hex[0]), "%06X", (unsigned)(rgb & 0xFFFFFF));
+  if (in->color_count == 0) snprintf(in->color_hex, sizeof(in->color_hex), "%s", in->colors_hex[0]);
+  in->color_count++;
+}
+
 void tagCreateColorsFromTag(TagCreateInput* in) {
-  in->color_hex[0] = in->color2_hex[0] = in->rgba[0] = '\0';
+  in->color_hex[0] = in->rgba[0] = '\0';
+  in->color_count = 0;
+  in->clear = false;
   if (!g_tag.color.valid) return;
   snprintf(in->rgba, sizeof(in->rgba), "%06X%02X",
            (unsigned)g_tag.color.rgb, (unsigned)g_tag.color.alpha);
   // A clear filament names no hue; 000000 would make it black.
-  if (spoolColorNamesHue(g_tag.color))
-    snprintf(in->color_hex, sizeof(in->color_hex), "%06X", (unsigned)g_tag.color.rgb);
+  if (!spoolColorNamesHue(g_tag.color)) { in->clear = true; return; }
+  tagCreateAddColor(in, g_tag.color.rgb);
   if (g_tag.color_count >= 2 && g_tag.color2.valid && spoolColorNamesHue(g_tag.color2))
-    snprintf(in->color2_hex, sizeof(in->color2_hex), "%06X", (unsigned)g_tag.color2.rgb);
+    tagCreateAddColor(in, g_tag.color2.rgb);
+}
+
+void tagCreateColorList(const TagCreateInput& in, char* out, size_t out_size) {
+  size_t o = 0;
+  out[0] = '\0';
+  for (uint8_t i = 0; i < in.color_count && o + 8 < out_size; i++)
+    o += snprintf(out + o, out_size - o, i ? ",%s" : "%s", in.colors_hex[i]);
 }
 
 bool tagCreateStartsWithWord(const char* text, const char* word) {
@@ -74,17 +88,40 @@ static const char* afterMaterial(const char* name, const char* material) {
   return name;
 }
 
+// The colour's name with at most one bracket behind it: "Black",
+// "Black (10101)" and "Neon City (Blue-Magenta)" name the colour, "Tough+
+// Black" and "Black Matte" do not.
+static bool namedAsColor(const char* name, const TagCreateInput& in) {
+  if (!in.color_name_en[0] || !tagCreateStartsWithWord(name, in.color_name_en)) return false;
+  const char* rest = name + strlen(in.color_name_en);
+  while (*rest == ' ') rest++;
+  if (!*rest) return true;
+  const char* close = strchr(rest, ')');
+  return *rest == '(' && close && close[1] == '\0';
+}
+
 bool tagCreateNameMatches(const char* name, const TagCreateInput& in) {
   if (!name || !name[0]) return false;
   name = afterMaterial(name, in.material);
+  // A clear or multi colour spool shares its product line (and on a PC spool
+  // that line is the bare material) with every other colour of it, and its
+  // colour decides nothing: only its name tells "Transparent" from
+  // "Clear Black". With or without the product line in front.
+  if (in.clear || in.color_count >= 2) {
+    if (namedAsColor(name, in)) return true;
+    if (!in.subtype[0] || !tagCreateStartsWithWord(name, in.subtype)) return false;
+    name += strlen(in.subtype);
+    while (*name == ' ' || *name == '-') name++;
+    return namedAsColor(name, in);
+  }
   // A product without a subtype ("PLA" alone) has nothing more to compare.
   if (!in.subtype[0]) return true;
   if (tagCreateStartsWithWord(name, in.subtype)) return true;
-  // The plain line by its colour alone, and only by the whole name: "Black"
-  // is PLA Basic, "Tough+ Black" has the same colour and is not.
-  return tagCreatePlainLine(in) && in.color_name_en[0] &&
-         tagCreateStartsWithWord(name, in.color_name_en) &&
-         strlen(name) <= strlen(in.color_name_en) + TAG_CREATE_ARTICLE_SUFFIX_MAX;
+  return tagCreatePlainLine(in) && namedAsColor(name, in);
+}
+
+bool tagCreateNamedByColor(const TagCreateInput& in) {
+  return tagCreatePlainLine(in) || in.color_count >= 2 || in.clear;
 }
 
 bool tagCreatePlainLine(const TagCreateInput& in) {
@@ -120,8 +157,10 @@ static const char* colorWord(const TagCreateInput& in) {
 }
 
 void tagCreateSpoolmanName(const TagCreateInput& in, char* out, size_t out_size) {
-  if (in.subtype[0] && !tagCreatePlainLine(in)) snprintf(out, out_size, "%s %s", in.subtype, colorWord(in));
-  else                                          snprintf(out, out_size, "%s", colorWord(in));
+  // SpoolmanDB's style: the product line in front, except where it names the
+  // filament by its colour alone.
+  if (in.subtype[0] && !tagCreateNamedByColor(in)) snprintf(out, out_size, "%s %s", in.subtype, colorWord(in));
+  else                                             snprintf(out, out_size, "%s", colorWord(in));
 }
 
 void tagCreateFilamanColorName(const TagCreateInput& in, char* out, size_t out_size) {

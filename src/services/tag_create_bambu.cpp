@@ -24,6 +24,16 @@ static void baseMaterial(char* out, size_t out_size) {
   out[head] = '\0';
 }
 
+// A gradient or dual colour spool as the catalog knows it: every colour (the
+// tag holds two of Dawn Radiance's four) and how they lie on the spool.
+static void catalogColors(TagCreateInput* in, const BambuCatalogHit& hit) {
+  if (hit.ncol < 2) return;
+  in->color_count = 0;
+  for (uint8_t i = 0; i < hit.ncol; i++) tagCreateAddColor(in, hit.rgba[i] >> 8);
+  in->color_kind = hit.kind == BCK_GRADIENT ? TCK_GRADIENT
+                 : hit.kind == BCK_DUAL     ? TCK_DUAL : TCK_SINGLE;
+}
+
 // Article number and colour name, which the tag holds only as codes.
 static void catalogNames(TagCreateInput* in) {
   BambuCatalogHit hit;
@@ -37,6 +47,7 @@ static void catalogNames(TagCreateInput* in) {
   snprintf(in->article, sizeof(in->article), "%s", hit.article);
   snprintf(in->color_name, sizeof(in->color_name), "%s", hit.color_name);
   snprintf(in->color_name_en, sizeof(in->color_name_en), "%s", hit.color_name_en);
+  catalogColors(in, hit);
 }
 
 bool tagCreateInputFromBambu(TagCreateInput* in) {

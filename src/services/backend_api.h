@@ -261,31 +261,31 @@ int  backendCreateSpool(const char* base_url, int template_spool_id, int filamen
        float initial_weight, float spool_weight, float remaining_weight,
        int* out_spool_id = nullptr, uint32_t timeout_ms = 8000);
 
-// A new spool from a Bambu tag, on every backend (services/tag_create.h).
+// A new spool from a tag, on every backend (services/tag_create.h).
 // First the plan, which only reads: whether the inventory has the tag's
 // filament, or how it would be created. BamBuddy keeps no filaments; its plan
 // carries the colour's name in plan->name. Then the creation, which writes
 // what the plan says is missing - vendor, colour, filament - and the spool.
-// label_weight is the nominal filament weight, remaining the net reading of
-// the scale.
+struct TagSpoolValues {
+  int   label_weight;   // nominal filament weight, g
+  float remaining;      // what the spool starts with, g
+  float price;          // what it cost, in the backend's currency; 0: not given
+};
 struct TagCreateResult {
   int spool_id;
   int filament_id;   // a filament created on the way, 0 when it existed
   // The spool request went out. With the answer lost on the way back the
   // server may have created the spool all the same.
   bool spool_sent;
+  // A price was given and did not reach the server; the spool exists.
+  bool price_lost;
 };
+// The values travel as one struct since v0.8.3-beta.17; the simulator's
+// fake reads this to know which signature the tree has.
+#define BACKEND_TAG_SPOOL_VALUES 1
 void backendPlanTagFilament(const TagCreateInput& in, TagFilamentPlan* plan);
 int  backendCreateFromTag(const TagCreateInput& in, const TagFilamentPlan& plan,
-       int label_weight, float remaining, TagCreateResult* out);
-
-// BamBuddy's part of the above: a spool is material, brand and colour as
-// strings, nothing to look up first. remaining_weight is the net reading.
-int  backendCreateSpoolFromTag(const char* material, const char* subtype,
-       const char* brand, const char* rgba, const char* color_name,
-       int label_weight, int core_weight,
-       float remaining_weight, int nozzle_temp_min, int nozzle_temp_max,
-       int* out_spool_id = nullptr, uint32_t timeout_ms = 8000);
+       const TagSpoolValues& values, TagCreateResult* out);
 
 // Turns the colour value on a tag into a name the backend knows. Empty output
 // means "no name for this colour", which is not an error.

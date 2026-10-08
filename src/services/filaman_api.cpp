@@ -1336,6 +1336,18 @@ int filamanPatchSpoolFloat(const char* base_url, const char* api_key, int spool_
                     payload, timeout_ms);
 }
 
+int filamanPatchSpoolPrice(const char* base_url, const char* api_key, int spool_id,
+                           float price, uint32_t timeout_ms) {
+  if (spool_id <= 0 || price < 0.0f) return -1;
+  // To the cent, not through roundGrams(): a price is not a weight.
+  JsonDocument body;
+  body["purchase_price"] = roundf(price * 100.0f) / 100.0f;
+  String payload;
+  serializeJson(body, payload);
+  return patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
+                    payload, timeout_ms);
+}
+
 int filamanPatchSpoolFloat2(const char* base_url, const char* api_key, int spool_id,
                             const char* field_a, float value_a,
                             const char* field_b, float value_b, uint32_t timeout_ms) {

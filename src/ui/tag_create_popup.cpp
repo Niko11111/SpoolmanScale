@@ -4,6 +4,7 @@
 #include <HTTPClient.h>
 #include <lvgl.h>
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 // backend_api.h brings ArduinoJson, whose templates have a parameter T:
@@ -18,6 +19,7 @@
 #include "services/spool_cache.h"
 #include "services/tag_create.h"
 #include "ui/main_screen_helpers.h"
+#include "ui/price_pad.h"
 #include "ui/spool_flow_internal.h"
 #include "ui/theme.h"
 #include "ui/ui_common.h"
@@ -26,6 +28,9 @@
 #define TCP_LINE_H   26
 #define TCP_SWATCH   18
 #define TCP_GAP       8
+// The answer row: create and cancel on either side, the price between them.
+#define TCP_PRICE_W  80
+#define TCP_ANSWER_W ((UI_POPUP_W - 2 * UI_CARD_ROW_X - 2 * TCP_GAP - TCP_PRICE_W) / 2)
 
 // What the loop is to do for the card on its next pass.
 enum TcpJob : uint8_t { TCP_IDLE = 0, TCP_PLAN, TCP_CREATE };
@@ -33,6 +38,9 @@ enum TcpJob : uint8_t { TCP_IDLE = 0, TCP_PLAN, TCP_CREATE };
 static lv_obj_t*       s_scr    = nullptr;
 static lv_obj_t*       s_status = nullptr;
 static lv_obj_t*       s_btn_ok = nullptr;
+static lv_obj_t*       s_lbl_price = nullptr;
+// What the spool cost, 0 while none was typed in.
+static float           s_price  = 0.0f;
 static TcpJob          s_job    = TCP_IDLE;
 static TagCreateInput  s_in;
 static TagFilamentPlan s_plan;
@@ -77,9 +85,11 @@ lv_obj_t* tagCreateEntryButton(lv_obj_t* parent, int w, int h, int y) {
 }
 
 void closeTagCreatePopup() {
+  closePricePad();
   releaseScreen(&s_scr);
   s_status = nullptr;
   s_btn_ok = nullptr;
+  s_lbl_price = nullptr;
   s_job = TCP_IDLE;
 }
 
@@ -203,6 +213,12 @@ static void buildIdentity(lv_obj_t* box) {
   lv_obj_set_style_pad_all(sw, 0, 0);
   lv_obj_clear_flag(sw, LV_OBJ_FLAG_SCROLLABLE);
   swatchPaint(sw, g_tag.color);
+  // A gradient or dual colour spool: its first two colours, the way the tag
+  // view draws it.
+  if (s_in.color_count >= 2) {
+    lv_obj_set_style_bg_grad_color(sw, lv_color_hex(strtoul(s_in.colors_hex[1], nullptr, 16)), 0);
+    lv_obj_set_style_bg_grad_dir(sw, LV_GRAD_DIR_VER, 0);
+  }
 
   char name[80];
   joinMaterialName(s_in.product, s_in.color_name, name, sizeof(name));
@@ -241,9 +257,9 @@ static void buildLines(lv_obj_t* box) {
   lv_label_set_text(s_status, T(STR_TAGNEW_SEARCHING));
 }
 
-static lv_obj_t* answerButton(lv_obj_t* box, int x, bool ok, int text_id) {
+static lv_obj_t* answerButton(lv_obj_t* box, int x, int w, bool ok, int text_id) {
   lv_obj_t* btn = lv_btn_create(box);
-  lv_obj_set_size(btn, UI_POPUP_BTN_W, UI_POPUP_BTN_H);
+  lv_obj_set_size(btn, w, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn, x, UI_CARD_ROW_Y);
   lv_obj_set_style_bg_color(btn, lv_color_hex(ok ? UI_COL_OK_BG : UI_COL_BAD_BG), 0);
   lv_obj_set_style_bg_color(btn, lv_color_hex(ok ? UI_COL_OK_BG_PRESSED : UI_COL_BAD_BG_PRESSED),
@@ -260,8 +276,44 @@ static lv_obj_t* answerButton(lv_obj_t* box, int x, bool ok, int text_id) {
   return btn;
 }
 
+// The price button shows what was typed in, or that there is none yet.
+static void refreshPrice() {
+  if (!s_lbl_price) return;
+  if (s_price <= 0.0f) { lv_label_set_text(s_lbl_price, T(STR_TAGNEW_PRICE_BTN)); return; }
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%.2f", s_price);
+  lv_label_set_text(s_lbl_price, buf);
+}
+
+static void onPrice(float price) {
+  s_price = price;
+  refreshPrice();
+}
+
+static void buildPriceButton(lv_obj_t* box) {
+  lv_obj_t* btn = lv_btn_create(box);
+  lv_obj_set_size(btn, TCP_PRICE_W, UI_POPUP_BTN_H);
+  lv_obj_set_pos(btn, UI_CARD_ROW_X + TCP_ANSWER_W + TCP_GAP, UI_CARD_ROW_Y);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
+  lv_obj_set_style_border_width(btn, 1, 0);
+  lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_LINE), 0);
+  lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
+  lv_obj_set_style_shadow_width(btn, 0, 0);
+  lv_obj_add_event_cb(btn, [](lv_event_t*) {
+    if (s_job != TCP_IDLE) return;
+    logSD("BTN: TagCreate -> Price");
+    showPricePad(s_price, onPrice);
+  }, LV_EVENT_CLICKED, NULL);
+  s_lbl_price = lv_label_create(btn);
+  lv_obj_set_style_text_color(s_lbl_price, lv_color_hex(UI_COL_INK_2), 0);
+  lv_obj_set_style_text_font(s_lbl_price, UI_FONT_SMALL, 0);
+  lv_obj_center(s_lbl_price);
+  refreshPrice();
+}
+
 static void buildAnswers(lv_obj_t* box) {
-  s_btn_ok = answerButton(box, UI_CARD_ROW_X, true, STR_COPY_CARD_CREATE);
+  s_btn_ok = answerButton(box, UI_CARD_ROW_X, TCP_ANSWER_W, true, STR_COPY_CARD_CREATE);
   lv_obj_add_state(s_btn_ok, LV_STATE_DISABLED);   // until the lookup has answered
   lv_obj_add_event_cb(s_btn_ok, [](lv_event_t*) {
     if (s_job != TCP_IDLE) return;
@@ -270,7 +322,10 @@ static void buildAnswers(lv_obj_t* box) {
     s_job = TCP_CREATE;
   }, LV_EVENT_CLICKED, NULL);
 
-  lv_obj_t* no = answerButton(box, UI_POPUP_W - UI_POPUP_BTN_W - UI_CARD_ROW_X, false, STR_CANCEL);
+  buildPriceButton(box);
+
+  lv_obj_t* no = answerButton(box, UI_POPUP_W - TCP_ANSWER_W - UI_CARD_ROW_X, TCP_ANSWER_W,
+                              false, STR_CANCEL);
   lv_obj_add_event_cb(no, [](lv_event_t*) {
     logSD("BTN: TagCreate -> Cancel");
     // Hidden here, deleted by the loop: this is the button's own callback.
@@ -288,6 +343,7 @@ void showTagCreatePopup() {
     return;
   }
   s_label_weight = labelWeight();
+  s_price = 0.0f;
   tagFilamentPlanClear(&s_plan);
 
   lv_obj_t* box = buildBox();
@@ -332,21 +388,23 @@ static void runCreate() {
     if (!planCanCreate(s_plan.state)) return;   // showPlan() has said why
   }
   TagCreateResult r;
-  const int code = serverReachNote(
-    backendCreateFromTag(s_in, s_plan, s_label_weight, remainingWeight(), &r), true);
-  logSDf("TagCreate: HTTP %d, spool %d, filament %d, label %d g, link %s",
-         code, r.spool_id, r.filament_id, s_label_weight, s_in.link_id);
+  const TagSpoolValues values = { s_label_weight, remainingWeight(), s_price };
+  const int code = serverReachNote(backendCreateFromTag(s_in, s_plan, values, &r), true);
+  logSDf("TagCreate: HTTP %d, spool %d, filament %d, label %d g, price %.2f, link %s",
+         code, r.spool_id, r.filament_id, s_label_weight, s_price, s_in.link_id);
   char buf[96];
   if ((code == 200 || code == 201) && r.spool_id > 0) {
     spoolCacheForget("spool created from a tag");
     char link_id[sizeof(s_in.link_id)];
     memcpy(link_id, s_in.link_id, sizeof(link_id));
     const bool with_filament = r.filament_id > 0;
+    const bool price_lost = r.price_lost;
     closeTagCreatePopup();
     // The spool exists either way; a tag that could not be bound has said so
     // on the status line, and that must stay readable.
-    if (finishCopyFlow(r.spool_id, link_id))
-      statusMessageShow(T(with_filament ? STR_TAGNEW_OK_BOTH : STR_NEWTAG_OK), UI_COL_GOOD);
+    if (!finishCopyFlow(r.spool_id, link_id)) return;
+    if (price_lost) statusMessageShow(T(STR_TAGNEW_PRICE_LOST), UI_COL_WARN);
+    else statusMessageShow(T(with_filament ? STR_TAGNEW_OK_BOTH : STR_NEWTAG_OK), UI_COL_GOOD);
     return;
   }
   // The spool may exist without the tag's link. Another try would make a
@@ -368,6 +426,7 @@ static void runCreate() {
 }
 
 void tagCreatePopupTick() {
+  pricePadTick();
   if (s_close_pending) {
     s_close_pending = false;
     closeTagCreatePopup();

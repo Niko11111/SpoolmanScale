@@ -1057,6 +1057,10 @@ int bbCreateSpool(const char* base_url, const char* api_key,
   // not part of the schema and are dropped server side without complaint.
   if (spool.nozzle_temp_min > 0) body["nozzle_temp_min"] = spool.nozzle_temp_min;
   if (spool.nozzle_temp_max > 0) body["nozzle_temp_max"] = spool.nozzle_temp_max;
+  if (spool.extra_colors    && spool.extra_colors[0])    body["extra_colors"]    = spool.extra_colors;
+  if (spool.effect_type     && spool.effect_type[0])     body["effect_type"]     = spool.effect_type;
+  if (spool.material_number && spool.material_number[0]) body["material_number"] = spool.material_number;
+  if (spool.cost_per_kg > 0.0f) body["cost_per_kg"] = roundf(spool.cost_per_kg * 100.0f) / 100.0f;
 
   char url[192];
   snprintf(url, sizeof(url), "%s%s/spools", base_url, bbInventoryBase());

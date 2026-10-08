@@ -32,6 +32,16 @@
 // Where the catalog lives: straight after the log ring's 512 kB.
 #define BAMBU_CATALOG_BYTES   (64UL * 1024UL)
 
+// How the colours of a spool lie on it.
+enum BambuColorKind : uint8_t {
+  BCK_SINGLE = 0,
+  BCK_GRADIENT,   // one colour turning into the next along the filament
+  BCK_DUAL        // two or three colours side by side across it
+};
+
+// The most colours one entry of the table names.
+#define BAMBU_CATALOG_COLOURS  4
+
 // What the catalog knows about one colour of one product.
 struct BambuCatalogHit {
   char article[8];      // "12601"
@@ -39,6 +49,9 @@ struct BambuCatalogHit {
   char color_name[48];  // in the UI language, English where the table has none
   // English always: what Spoolman's and FilaMan's filament databases call it.
   char color_name_en[48];
+  uint8_t  kind;                            // BambuColorKind
+  uint8_t  ncol;                            // 1 for a plain colour
+  uint32_t rgba[BAMBU_CATALOG_COLOURS];     // 0xRRGGBBAA, the first colour first
 };
 
 // Looks the tag's two codes up, and its colour where the codes alone do not

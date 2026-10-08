@@ -283,6 +283,9 @@ int filamanPatchSpoolFloat(const char* base_url, const char* api_key, int spool_
 // behind, an archived spool leaves a stale remaining behind. Spoolman writes
 // both in a single request and FilaMan has to as well, or the two disagree for
 // as long as it takes the next scan to overwrite the display.
+// What the spool cost (purchase_price), to the cent.
+int filamanPatchSpoolPrice(const char* base_url, const char* api_key, int spool_id,
+                           float price, uint32_t timeout_ms = 5000);
 int filamanPatchSpoolFloat2(const char* base_url, const char* api_key, int spool_id,
                             const char* field_a, float value_a,
                             const char* field_b, float value_b,

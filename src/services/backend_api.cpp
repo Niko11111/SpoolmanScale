@@ -755,30 +755,31 @@ void backendLookupColorName(const char* hex6, const char* material,
                     out_name, out_size);
 }
 
-int backendCreateSpoolFromTag(const char* material, const char* subtype,
-                              const char* brand, const char* rgba,
-                              const char* color_name,
-                              int label_weight, int core_weight, float remaining_weight,
-                              int nozzle_temp_min, int nozzle_temp_max,
-                              int* out_spool_id, uint32_t timeout_ms) {
-  HttpStallTime stall(__func__);   // the loop stands still for this call
-  if (out_spool_id) *out_spool_id = 0;
-  if (backendMode() != BACKEND_BAMBUDDY) return notSupported("CreateSpoolFromTag");
-
+// A spool is material, brand and colour as strings in BamBuddy, nothing to
+// look up first. An empty spool of 0 is left out and BamBuddy keeps its own
+// default; the price goes in per kilogram, the way BamBuddy keeps it.
+static int bambuddyCreateFromTag(const TagCreateInput& in, const TagFilamentPlan& plan,
+                                 const TagSpoolValues& v, TagCreateResult* out) {
+  char colors[TAG_CREATE_COLOURS * 7 + 1] = "";
+  if (in.color_count >= 2) tagCreateColorList(in, colors, sizeof(colors));
   BbNewSpool ns;
-  ns.material        = material;
-  ns.subtype         = subtype;
-  ns.brand           = brand;
-  ns.rgba            = rgba;
-  ns.color_name      = color_name;
-  ns.label_weight    = label_weight;
-  ns.core_weight     = core_weight;
-  ns.nozzle_temp_min = nozzle_temp_min;
-  ns.nozzle_temp_max = nozzle_temp_max;
-  ns.weight_used = (float)label_weight - remaining_weight;
+  ns.material        = in.material;
+  ns.subtype         = in.subtype;
+  ns.brand           = in.vendor;
+  ns.rgba            = in.rgba;
+  ns.color_name      = plan.name;
+  ns.label_weight    = v.label_weight;
+  ns.core_weight     = in.spool_weight_g;
+  ns.nozzle_temp_min = in.temp_min;
+  ns.nozzle_temp_max = in.temp_max;
+  ns.extra_colors    = colors;
+  ns.effect_type     = in.color_count < 2 ? "" : in.color_kind == TCK_DUAL ? "dual-color" : "gradient";
+  ns.material_number = in.article;
+  if (v.price > 0.0f && v.label_weight > 0) ns.cost_per_kg = v.price * 1000.0f / (float)v.label_weight;
+  ns.weight_used = (float)v.label_weight - v.remaining;
   if (ns.weight_used < 0.0f) ns.weight_used = 0.0f;
-
-  return bbCreateSpool(backendBaseUrl(), bambuddyApiKey(), ns, out_spool_id, timeout_ms);
+  out->spool_sent = true;
+  return bbCreateSpool(backendBaseUrl(), bambuddyApiKey(), ns, &out->spool_id);
 }
 
 // BamBuddy names the colour on the spool itself: the catalog's English
@@ -831,28 +832,35 @@ static int filamentForSpool(const TagCreateInput& in, const TagFilamentPlan& pla
   return (code == 200 || code == 201) ? -1 : code;
 }
 
+// The price on a spool that exists now. Its own request: the create calls
+// are shared with the copy flow, which has no price.
+static void patchSpoolPrice(int spool_id, float price, TagCreateResult* out) {
+  if (price <= 0.0f || spool_id <= 0) return;
+  const int code = backendIsFilaMan()
+    ? filamanPatchSpoolPrice(backendBaseUrl(), filamanApiKey(), spool_id, price)
+    : spoolmanPatchSpoolPrice(backendBaseUrl(), spool_id, price);
+  out->price_lost = !backendWriteOk(code);
+  if (out->price_lost) logSDf("Tag create: price %.2f for spool %d -> HTTP %d", price, spool_id, code);
+}
+
 int backendCreateFromTag(const TagCreateInput& in, const TagFilamentPlan& plan,
-                         int label_weight, float remaining, TagCreateResult* out) {
+                         const TagSpoolValues& v, TagCreateResult* out) {
   HttpStallTime stall(__func__);   // the loop stands still for this call
   *out = TagCreateResult{};
-  // BamBuddy leaves out an empty spool of 0 and keeps its own default.
-  if (backendIsBamBuddy()) {
-    out->spool_sent = true;
-    return backendCreateSpoolFromTag(in.material, in.subtype, in.vendor, in.rgba, plan.name,
-                                     label_weight, in.spool_weight_g, remaining,
-                                     in.temp_min, in.temp_max, &out->spool_id);
-  }
+  if (backendIsBamBuddy()) return bambuddyCreateFromTag(in, plan, v, out);
   int filament_id = 0;
-  const int code = filamentForSpool(in, plan, out, &filament_id);
+  int code = filamentForSpool(in, plan, out, &filament_id);
   if (code != 200) return code;
   // The tag's empty spool, else the one Spoolman's database gave the filament.
   const float spool_w = (float)(in.spool_weight_g > 0 ? in.spool_weight_g : plan.spool_weight_g);
   out->spool_sent = true;
-  if (backendIsFilaMan())
-    return filamanCreateSpool(backendBaseUrl(), filamanApiKey(), filament_id, (float)label_weight,
-                              spool_w, remaining, nullptr, &out->spool_id);
-  return spoolmanCreateSpool(backendBaseUrl(), filament_id, (float)label_weight,
-                             spool_w, remaining, &out->spool_id);
+  code = backendIsFilaMan()
+    ? filamanCreateSpool(backendBaseUrl(), filamanApiKey(), filament_id, (float)v.label_weight,
+                         spool_w, v.remaining, nullptr, &out->spool_id)
+    : spoolmanCreateSpool(backendBaseUrl(), filament_id, (float)v.label_weight,
+                          spool_w, v.remaining, &out->spool_id);
+  if (backendWriteOk(code)) patchSpoolPrice(out->spool_id, v.price, out);
+  return code;
 }
 
 int backendCreateSpoolField(const char* base_url, const char* field_name,
