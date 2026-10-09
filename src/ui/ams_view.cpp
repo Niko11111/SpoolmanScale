@@ -700,16 +700,21 @@ static unsigned long pickRemainingMs() {
 #define AMSV_FILL_W  (AMSV_FOOT_BTN_W - 2)
 #define AMSV_FILL_H  (AMSV_FOOT_BTN_H - 2)
 
-// Red like every other cancel button (ui/entry_tile.cpp); the countdown
-// drains in the stronger red over it.
-static void addCancelFill(lv_obj_t* btn) {
-  if (!btn) return;
+// Red like every other cancel button (ui/entry_tile.cpp). The 1 px border
+// stays, in the same red: the countdown fill is sized to sit inside it.
+static lv_obj_t* redCancel(lv_obj_t* btn) {
+  if (!btn) return nullptr;
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_BAD_BG), 0);
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
-  // The 1 px border stays, in the same red: the fill is sized to sit inside it.
   lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_BAD_BG), 0);
   lv_obj_t* l = lv_obj_get_child(btn, 0);
   if (l) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_BAD_TEXT), 0);
+  return btn;
+}
+
+// The countdown drains in the stronger red over the cancel button.
+static void addCancelFill(lv_obj_t* btn) {
+  if (!btn) return;
   lv_obj_set_style_pad_all(btn, 0, 0);
   s_cancel_fill = lv_obj_create(btn);
   if (!s_cancel_fill) return;
@@ -895,11 +900,11 @@ static void buildScreen() {
   if (s_mode == AMS_VIEW_PICK) {
     s_info_btn = footButton(240 - AMSV_FOOT_GAP / 2 - AMSV_FOOT_BTN_W,
                             STR_AMSV_INFO, false, footInfoCb);
-    addCancelFill(footButton(240 + AMSV_FOOT_GAP / 2, STR_CANCEL, false, footCancelCb));
+    addCancelFill(redCancel(footButton(240 + AMSV_FOOT_GAP / 2, STR_CANCEL, false, footCancelCb)));
     applyInfoMode();
   } else if (s_mode == AMS_VIEW_WINDOW) {
     footButton(240 - AMSV_FOOT_GAP / 2 - AMSV_FOOT_BTN_W, STR_AMSV_BTN_WINDOW, true, footOpenCb);
-    footButton(240 + AMSV_FOOT_GAP / 2, STR_CANCEL, false, footCancelCb);
+    redCancel(footButton(240 + AMSV_FOOT_GAP / 2, STR_CANCEL, false, footCancelCb));
   }
 }
 
