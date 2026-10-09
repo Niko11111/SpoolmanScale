@@ -470,3 +470,283 @@ BleWriteResult bleWriteBlocks(const char* address, uint16_t service_uuid,
   crumbSet("loop");
   return result;
 }
+
+// ============================================================
+//  THE TALK SESSION (see the header)
+//
+//  The write session's steps again, as helpers of their own: the
+//  Phomemo path above is proven on hardware and stays as it is.
+//  Bytes from the device land in a ring from the host task; the
+//  driver drains it on the loop task and frames the packets.
+// ============================================================
+
+#define BLE_TALK_RX_SIZE   512   // a power of two; the driver reads often
+#define BLE_TALK_POLL_MS    10
+#define BLE_TALK_LOG_CHARS  12   // characteristics listed per open, at most
+
+static NimBLEClient* s_talk_client = nullptr;
+static NimBLERemoteCharacteristic* s_talk_chr = nullptr;
+static bool s_talk_response = false;   // the characteristic takes writes with response only
+// One writer (the host task) and one reader (the loop), each owning its own
+// index: no lock. A full ring drops bytes and counts them.
+static uint8_t s_rx[BLE_TALK_RX_SIZE];
+static volatile uint16_t s_rx_head = 0, s_rx_tail = 0;
+static volatile uint16_t s_rx_lost = 0;
+
+// Host task, 4 kB of stack: copy and leave, no log.
+static void onTalkNotify(NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+  for (size_t i = 0; i < len; i++) {
+    const uint16_t next = (s_rx_head + 1) & (BLE_TALK_RX_SIZE - 1);
+    if (next == s_rx_tail) { s_rx_lost = s_rx_lost + 1; continue; }
+    s_rx[s_rx_head] = data[i];
+    s_rx_head = next;
+  }
+}
+
+static bool talkStackUp(BleProgressFn progress) {
+  if (!stackMayStart(progress)) return false;
+  crumbSet("ble init");
+  logHeap("before init");
+  if (!stackUp()) {
+    crumbSet("loop");
+    logHeap("after failed init");
+    logSD("BLE: init failed");
+    return false;
+  }
+  logHeap("after init");
+  NimBLEDevice::setMTU(BLE_PREFERRED_MTU);
+  return true;
+}
+
+// The device as it advertises right now, address type included, or nullptr.
+static const NimBLEAdvertisedDevice* talkFind(const char* address, BleProgressFn progress) {
+  crumbSet("ble find");
+  s_phase = BLE_PHASE_FIND;
+  s_sent = s_total = 0;
+  NimBLEScan* scan = NimBLEDevice::getScan();
+  if (!scan) return nullptr;
+  scan->setActiveScan(false);
+  scan->setMaxResults(BLE_FIND_MAX_RESULTS);
+  const NimBLEAdvertisedDevice* found = nullptr;
+  uint32_t elapsed = 0;
+  while (!found && elapsed < BLE_FIND_MS) {
+    scan->getResults(BLE_FIND_SLICE_MS, elapsed > 0);
+    elapsed += BLE_FIND_SLICE_MS;
+    if (progress) progress();
+    const NimBLEScanResults results = scan->getResults();
+    for (int i = 0; i < results.getCount() && !found; i++) {
+      const NimBLEAdvertisedDevice* dev = results.getDevice(i);
+      if (dev && strcmp(dev->getAddress().toString().c_str(), address) == 0) found = dev;
+    }
+  }
+  if (!found) {
+    logSDf("BLE: %s not seen within %u ms", address, (unsigned)BLE_FIND_MS);
+    return nullptr;
+  }
+  logSDf("BLE: %s seen, type=%u rssi=%d", address, (unsigned)found->getAddressType(), found->getRSSI());
+  scan->stop();
+  delay(BLE_SETTLE_MS);
+  return found;
+}
+
+static bool talkConnect(NimBLEClient* client, const NimBLEAdvertisedDevice* found,
+                        const char* address, BleProgressFn progress) {
+  crumbSet("ble connect");
+  s_phase = BLE_PHASE_CONNECT;
+  if (progress) progress();
+  for (int attempt = 1; attempt <= BLE_CONNECT_TRIES; attempt++) {
+    if (client->connect(found)) return true;
+    const int rc = client->getLastError();
+    logSDf("BLE: connect to %s failed, rc=%d (try %d/%d)", address, rc, attempt, BLE_CONNECT_TRIES);
+    if (rc != BLE_ERR_CONN_NOT_ESTABLISHED) return false;
+    delay(BLE_CONNECT_RETRY_MS);
+  }
+  return false;
+}
+
+static void propsString(const NimBLERemoteCharacteristic* c, char* out, size_t n) {
+  snprintf(out, n, "%s%s%s%s%s", c->canRead() ? "R" : "", c->canWrite() ? "W" : "",
+           c->canWriteNoResponse() ? "w" : "", c->canNotify() ? "N" : "",
+           c->canIndicate() ? "I" : "");
+}
+
+// Every service and characteristic the device has, for the log: what a
+// tester sends back when the pick below comes up empty.
+static void talkLogServices(NimBLEClient* client) {
+  int lines = 0;
+  for (NimBLERemoteService* s : client->getServices(true)) {
+    for (NimBLERemoteCharacteristic* c : s->getCharacteristics(true)) {
+      if (lines++ >= BLE_TALK_LOG_CHARS) { logSD("BLE:   ... and more"); return; }
+      char props[8];
+      propsString(c, props, sizeof(props));
+      logSDf("BLE:   svc %s chr %s [%s]", s->getUUID().toString().c_str(),
+             c->getUUID().toString().c_str(), props);
+    }
+  }
+}
+
+static bool hasProps(const NimBLERemoteCharacteristic* c, uint8_t need) {
+  if ((need & BLE_PROP_WRITE) && !c->canWrite()) return false;
+  if ((need & BLE_PROP_WRITE_NR) && !c->canWriteNoResponse()) return false;
+  if ((need & BLE_PROP_NOTIFY) && !c->canNotify()) return false;
+  return true;
+}
+
+static NimBLERemoteCharacteristic* firstWithProps(NimBLERemoteService* s, uint8_t need) {
+  if (!s) return nullptr;
+  for (NimBLERemoteCharacteristic* c : s->getCharacteristics(false))
+    if (hasProps(c, need)) return c;
+  return nullptr;
+}
+
+// The service by UUID and the first characteristic in it of the shape asked
+// for; failing the service, the first such characteristic anywhere, which
+// the log calls a fallback so a wrong UUID in a driver shows.
+static NimBLERemoteCharacteristic* talkPick(NimBLEClient* client, const BleTalkEndpoint& ep) {
+  NimBLERemoteCharacteristic* c = firstWithProps(client->getService(ep.service_uuid), ep.need_props);
+  if (c) return c;
+  for (NimBLERemoteService* s : client->getServices(false)) {
+    c = firstWithProps(s, ep.need_props);
+    if (!c) continue;
+    logSDf("BLE: no service %s, fallback to %s", ep.service_uuid, s->getUUID().toString().c_str());
+    return c;
+  }
+  return nullptr;
+}
+
+// The way out of an open that never had a link: results, client, a moment,
+// stack. Deleting everything at once after a failed connect once panicked.
+static void talkAbort(NimBLEClient* client) {
+  s_phase = BLE_PHASE_IDLE;
+  NimBLEScan* scan = NimBLEDevice::getScan();
+  if (scan) scan->clearResults();
+  if (client) NimBLEDevice::deleteClient(client);
+  delay(BLE_SETTLE_MS);
+  crumbSet("ble deinit");
+  stackDown();
+  crumbSet("loop");
+  logHeap("after deinit");
+}
+
+BleWriteResult bleTalkOpen(const char* address, const BleTalkEndpoint& ep, BleProgressFn progress) {
+  if (!g_ble_enabled) return BLE_WRITE_OFF;
+  if (s_stuck) return BLE_WRITE_STUCK;
+  if (!address || !address[0] || !ep.service_uuid || s_talk_client) return BLE_WRITE_FAILED;
+  if (!talkStackUp(progress)) return BLE_WRITE_INIT_FAILED;
+
+  const NimBLEAdvertisedDevice* found = talkFind(address, progress);
+  if (!found) { talkAbort(nullptr); return BLE_WRITE_CONNECT_FAILED; }
+  NimBLEClient* client = NimBLEDevice::createClient();
+  if (!client) { logSD("BLE: no client"); talkAbort(nullptr); return BLE_WRITE_INIT_FAILED; }
+  client->setConnectTimeout(BLE_CONNECT_TIMEOUT_MS);
+  if (!talkConnect(client, found, address, progress)) {
+    talkAbort(client);
+    return BLE_WRITE_CONNECT_FAILED;
+  }
+
+  s_talk_client = client;
+  crumbSet("ble services");
+  talkLogServices(client);
+  NimBLERemoteCharacteristic* chr = talkPick(client, ep);
+  if (!chr) {
+    logSDf("BLE: %s has no characteristic of shape %02x in %s", address, ep.need_props, ep.service_uuid);
+    bleTalkClose();
+    return BLE_WRITE_NO_CHARACTERISTIC;
+  }
+  s_rx_head = 0;
+  s_rx_tail = 0;
+  s_rx_lost = 0;
+  if ((ep.need_props & BLE_PROP_NOTIFY) && !chr->subscribe(true, onTalkNotify)) {
+    logSDf("BLE: %s: subscribe to %s failed", address, chr->getUUID().toString().c_str());
+    bleTalkClose();
+    return BLE_WRITE_NO_CHARACTERISTIC;
+  }
+  s_talk_chr = chr;
+  s_talk_response = !chr->canWriteNoResponse();
+  logSDf("BLE: talk %s mtu=%u chr=%s response=%u", address, (unsigned)client->getMTU(),
+         chr->getUUID().toString().c_str(), (unsigned)s_talk_response);
+  return BLE_WRITE_OK;
+}
+
+size_t bleTalkMaxWrite() {
+  if (!s_talk_client || !s_talk_chr) return 0;
+  const uint16_t mtu = s_talk_client->getMTU();
+  return mtu > 3 + BLE_WRITE_CHUNK_MIN ? (size_t)(mtu - 3) : BLE_WRITE_CHUNK_MIN;
+}
+
+// One write, retried on back pressure as the write session's chunks are.
+static bool talkWritePiece(const uint8_t* data, size_t n) {
+  for (int tries = 0;; tries++) {
+    if (!s_talk_client->isConnected()) { logSD("BLE: link dropped during a write"); return false; }
+    if (s_talk_chr->writeValue(data, n, s_talk_response)) return true;
+    if (tries >= BLE_WRITE_RETRIES) {
+      logSDf("BLE: write refused, rc=%d, gave up after %d tries", s_talk_client->getLastError(), tries);
+      return false;
+    }
+    delay(BLE_WRITE_RETRY_MS);
+  }
+}
+
+bool bleTalkSend(const uint8_t* data, size_t n) {
+  if (!s_talk_client || !s_talk_chr || !data || !n) return false;
+  const size_t max = bleTalkMaxWrite();
+  if (n > max) logSDf("BLE: %u byte packet goes in pieces of %u", (unsigned)n, (unsigned)max);
+  for (size_t pos = 0; pos < n; pos += max) {
+    const size_t piece = n - pos < max ? n - pos : max;
+    if (!talkWritePiece(data + pos, piece)) return false;
+  }
+  return true;
+}
+
+size_t bleTalkRead(uint8_t* out, size_t max, uint32_t wait_ms) {
+  if (!out || !max || !s_talk_client) return 0;
+  const uint32_t from = millis();
+  while (s_rx_head == s_rx_tail) {
+    if (!s_talk_client->isConnected() || millis() - from >= wait_ms) return 0;
+    delay(BLE_TALK_POLL_MS);
+  }
+  size_t n = 0;
+  while (n < max && s_rx_tail != s_rx_head) {
+    out[n++] = s_rx[s_rx_tail];
+    s_rx_tail = (s_rx_tail + 1) & (BLE_TALK_RX_SIZE - 1);
+  }
+  if (s_rx_lost) {
+    logSDf("BLE: %u byte(s) from the device lost, ring full", (unsigned)s_rx_lost);
+    s_rx_lost = 0;
+  }
+  return n;
+}
+
+bool bleTalkConnected() { return s_talk_client && s_talk_client->isConnected(); }
+void bleTalkSetPhase(BleSessionPhase phase) { if (s_talk_client) s_phase = phase; }
+void bleTalkSetProgress(size_t done, size_t total) { s_sent = done; s_total = total; }
+
+BleWriteResult bleTalkClose() {
+  NimBLEClient* client = s_talk_client;
+  if (!client) return BLE_WRITE_OK;
+  s_talk_chr = nullptr;
+  s_phase = BLE_PHASE_IDLE;
+  crumbSet("ble disconnect");
+  if (client->isConnected()) client->disconnect();
+  const uint32_t until = millis() + BLE_DISCONNECT_WAIT_MS;
+  while (client->isConnected() && (int32_t)(until - millis()) > 0) delay(10);
+  if (client->isConnected()) {
+    // As after a write session: client and stack stay, see bleStackStuck().
+    s_stuck = true;
+    s_talk_client = nullptr;
+    logSD("BLE: disconnect timed out, stack kept up until restart");
+    logHeap("stuck");
+    return BLE_WRITE_STUCK;
+  }
+  NimBLEScan* scan = NimBLEDevice::getScan();
+  if (scan) scan->clearResults();
+  NimBLEDevice::deleteClient(client);
+  s_talk_client = nullptr;
+  delay(BLE_SETTLE_MS);
+  crumbSet("ble deinit");
+  stackDown();
+  logHeap("after deinit");
+  logSD("BLE: talk session closed");
+  crumbSet("loop");
+  return BLE_WRITE_OK;
+}
