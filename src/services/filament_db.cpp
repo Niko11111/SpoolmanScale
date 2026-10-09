@@ -27,9 +27,11 @@
 static FdbMaker* s_makers  = nullptr;
 static FdbPair*  s_pairs   = nullptr;
 static FdbEntry* s_entries = nullptr;
+static FdbCore*  s_cores   = nullptr;
 static int       s_maker_n = 0;
 static int       s_pair_n  = 0;
 static int       s_entry_n = 0;
+static int       s_core_n  = 0;
 // The backend generation under which the server said it has no database.
 static bool      s_missing     = false;
 static uint32_t  s_missing_gen = 0;
@@ -61,9 +63,11 @@ static T* psramArray(T* p, size_t n) {
 static void freeIndex() {
   heap_caps_free(s_makers);
   heap_caps_free(s_pairs);
+  heap_caps_free(s_cores);
   s_makers = nullptr;
   s_pairs = nullptr;
-  s_maker_n = s_pair_n = 0;
+  s_cores = nullptr;
+  s_maker_n = s_pair_n = s_core_n = 0;
   s_index_ok = false;
 }
 
@@ -545,4 +549,73 @@ void fdbEntryToInput(const FdbEntry& e, const char* maker, const char* material,
   in->db_density     = e.density;
   in->db_bed_temp    = e.bed_temp;
   in->names_known    = true;
+}
+
+// ---- empty spools ------------------------------------------------------------
+
+// The catalog spells the maker in front, " - " before the kind of spool:
+// "Sunlu - Plastic", "Sunlu 250g - Plastic". Case aside: "ProtoPasta" in the
+// catalog is "Protopasta" in the colours.
+#define FDB_CORE_KIND_SEP  " - "
+
+static bool coreOfMaker(const FdbCore& c, const char* maker) {
+  const size_t n = maker ? strlen(maker) : 0;
+  return n && strncasecmp(c.name, maker, n) == 0 && c.name[n] == ' ';
+}
+
+bool fdbCoreAdd(const char* name, uint16_t weight_g, int id) {
+  if (!name || !name[0] || weight_g == 0) return true;
+  s_cores = psramArray(s_cores, FDB_CORES_MAX);
+  if (!s_cores || s_core_n >= FDB_CORES_MAX) return false;
+  FdbCore& c = s_cores[s_core_n++];
+  snprintf(c.name, sizeof(c.name), "%s", name);
+  c.weight_g   = weight_g;
+  c.id         = id;
+  c.last_spool = 0;
+  return true;
+}
+
+static FdbCore* coreFor(const char* brand, int catalog_id, int core_weight_g) {
+  for (int i = 0; s_cores && i < s_core_n; i++) {
+    FdbCore& c = s_cores[i];
+    if (catalog_id > 0 ? c.id == catalog_id : (coreOfMaker(c, brand) && c.weight_g == core_weight_g))
+      return &c;
+  }
+  return nullptr;
+}
+
+void fdbCoreNoteOwned(const char* brand, int catalog_id, int core_weight_g, int spool_id) {
+  FdbCore* c = coreFor(brand, catalog_id, core_weight_g);
+  if (c && spool_id > c->last_spool) c->last_spool = spool_id;
+}
+
+int fdbCoreChoices(const char* maker, const FdbCore** out, int out_max) {
+  int n = 0, used = -1;
+  for (int i = 0; s_cores && i < s_core_n && n < out_max; i++) {
+    if (!coreOfMaker(s_cores[i], maker)) continue;
+    out[n] = &s_cores[i];
+    if (out[n]->last_spool > 0 && (used < 0 || out[n]->last_spool > out[used]->last_spool)) used = n;
+    n++;
+  }
+  // The one the inventory used last goes first, the rest keep the
+  // catalog's order.
+  for (int i = used; i > 0; i--) {
+    const FdbCore* t = out[i];
+    out[i] = out[i - 1];
+    out[i - 1] = t;
+  }
+  return n;
+}
+
+void fdbCoreShortName(const FdbCore& c, const char* maker, char* out, size_t out_size) {
+  if (!out || !out_size) return;
+  const char* rest = coreOfMaker(c, maker) ? c.name + strlen(maker) : c.name;
+  char head[FDB_CORE_NAME_MAX];
+  snprintf(head, sizeof(head), "%s", rest);
+  char* sep = strstr(head, FDB_CORE_KIND_SEP);
+  const char* kind = sep ? sep + strlen(FDB_CORE_KIND_SEP) : "";
+  if (sep) *sep = '\0';
+  squeezeSpaces(head);
+  const char* size = head[0] == ' ' ? head + 1 : head;
+  snprintf(out, out_size, "%s%s%s", size, size[0] && kind[0] ? " " : "", kind);
 }

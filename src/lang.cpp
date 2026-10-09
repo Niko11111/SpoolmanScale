@@ -3403,6 +3403,12 @@ const char* const STRINGS[][3] = {
   { "Aus dem Tag, ergänzt aus der Datenbank",
     "From the tag, completed from the database",
     "Du tag, complété par la base" },  // STR_TAGNEW_TAG_PLUS_DB
+  { "Welche Leerspule?",
+    "Which empty spool?",
+    "Quelle bobine vide ?" },  // STR_DBPICK_CORE_TITLE
+  { "Keine passt",
+    "None of these",
+    "Aucune ne convient" },  // STR_DBPICK_CORE_NONE
 };
 
 StringID tagWriteResultString(uint8_t code) {

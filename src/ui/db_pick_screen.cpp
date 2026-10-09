@@ -13,6 +13,7 @@
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "ui/db_pick_core_popup.h"
 #include "ui/link_wait_card.h"
 #include "ui/spool_flow.h"
 #include "ui/spool_flow_internal.h"
@@ -575,6 +576,9 @@ static void showLines() {
     lv_obj_t* t = tile(body, DBP_TILE_W, DBP_MAT_TILE_H, NAV_LINE, k);
     char text[32];
     fdbLineName(*fdbEntry(s_line_first[k]), T(STR_DBPICK_LINE_OTHER), text, sizeof(text));
+    // A product without a line is the material itself: BamBuddy's "PLA"
+    // next to its "PLA Matte".
+    if (!text[0]) snprintf(text, sizeof(text), "%s", s_material);
     // The smaller font: "High Speed Matte" fits a tile in it.
     tileText(t, text, &s_st_text, LV_ALIGN_TOP_MID, DBP_GAP);
     snprintf(text, sizeof(text), "%u", (unsigned)s_line_count[k]);
@@ -794,6 +798,7 @@ static void askSize(int first, int n) {
 
 void dbPickClose() {
   closeSizeQuestion();
+  dbPickCoreClose();
   if (s_wait != FDB_JOB_NONE) linkWaitCardHide();
   s_wait = s_want = FDB_JOB_NONE;
   s_body = nullptr;
@@ -897,7 +902,9 @@ static void pickEntry(int i) {
   if (!e) return;
   TagCreateInput in;
   fdbEntryToInput(*e, fdbMaker(s_maker)->name, s_material, &in);
+  backendFdbCompleteInput(&in);
   logSDf("DbPick: %s %s \"%s\" %d g, id %s", in.vendor, in.material, e->name, e->weight_g, e->id);
+  if (dbPickCoreAsk(&in)) return;
   showTagCreatePopupFor(in);
 }
 
@@ -936,6 +943,7 @@ static void runNav(DbpNav nav, int arg) {
 }
 
 void dbPickTick() {
+  dbPickCoreTick();
   collectLoad();
   if (s_wait != FDB_JOB_NONE) {
     linkWaitCardBytes(fdbBytes());

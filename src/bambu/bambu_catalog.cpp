@@ -6,6 +6,7 @@
 #include <esp_partition.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
 
 #include "hardware/flash_log.h"
@@ -186,6 +187,20 @@ static bool sameColour(uint32_t rgba, const SpoolColor& c) {
   return c.valid && (rgba >> 8) == c.rgb && (uint8_t)(rgba & 0xFF) == c.alpha;
 }
 
+// What a lookup hands back of one record, the colour's name in the UI
+// language where the table has it.
+static void fillHit(const CatRec& r, BambuCatalogHit* out) {
+  snprintf(out->article, sizeof(out->article), "%s", r.article);
+  snprintf(out->product, sizeof(out->product), "%s", poolStr(r.product));
+  const uint16_t local = g_lang == LANG_DE ? r.de : g_lang == LANG_FR ? r.fr : r.en;
+  const char* name = poolStr(local);
+  snprintf(out->color_name, sizeof(out->color_name), "%s", name[0] ? name : poolStr(r.en));
+  snprintf(out->color_name_en, sizeof(out->color_name_en), "%s", poolStr(r.en));
+  out->kind = r.kind;
+  out->ncol = r.ncol < CAT_COLOURS ? r.ncol : CAT_COLOURS;
+  for (uint8_t i = 0; i < out->ncol; i++) out->rgba[i] = r.rgba[i];
+}
+
 bool bambuCatalogFind(const char* material_id, const char* variant_id,
                       const SpoolColor& color, BambuCatalogHit* out) {
   ensureLoaded();
@@ -214,16 +229,23 @@ bool bambuCatalogFind(const char* material_id, const char* variant_id,
   }
   const CatRec* hit = by_colour ? by_colour : by_code;
   if (!hit) return false;
+  fillHit(*hit, out);
+  return true;
+}
 
-  snprintf(out->article, sizeof(out->article), "%s", hit->article);
-  snprintf(out->product, sizeof(out->product), "%s", poolStr(hit->product));
-  const uint16_t local = g_lang == LANG_DE ? hit->de : g_lang == LANG_FR ? hit->fr : hit->en;
-  const char* name = poolStr(local);
-  snprintf(out->color_name, sizeof(out->color_name), "%s", name[0] ? name : poolStr(hit->en));
-  snprintf(out->color_name_en, sizeof(out->color_name_en), "%s", poolStr(hit->en));
-  out->kind = hit->kind;
-  out->ncol = hit->ncol < CAT_COLOURS ? hit->ncol : CAT_COLOURS;
-  for (uint8_t i = 0; i < out->ncol; i++) out->rgba[i] = hit->rgba[i];
+bool bambuCatalogFindByLook(const char* product, uint32_t rgb, const char* name_en,
+                            BambuCatalogHit* out) {
+  ensureLoaded();
+  if (!s_hdr || !product || !product[0] || !out) return false;
+  const CatRec* by_name = nullptr;
+  for (int i = 0; i < s_hdr->count; i++) {
+    const CatRec& r = recs()[i];
+    if (strcasecmp(poolStr(r.product), product) != 0) continue;
+    if ((r.rgba[0] >> 8) == (rgb & 0xFFFFFFUL)) { fillHit(r, out); return true; }
+    if (!by_name && name_en && name_en[0] && strcasecmp(poolStr(r.en), name_en) == 0) by_name = &r;
+  }
+  if (!by_name) return false;
+  fillHit(*by_name, out);
   return true;
 }
 

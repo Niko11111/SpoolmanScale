@@ -10,6 +10,7 @@
 #include "services/backend.h"
 #include "services/bambuddy_api.h"
 #include "services/bambuddy_device.h"
+#include "services/bambuddy_filament_db.h"
 #include "services/filaman_api.h"
 #include "services/filaman_filament.h"
 #include "services/filaman_filament_db.h"
@@ -747,12 +748,20 @@ bool backendCanCreateFromTag() {
   return true;
 }
 
+// BamBuddy with Spoolman behind it creates through the proxy, which drops
+// most of a picked entry: its colour catalogue only for its own inventory.
+static bool bambuddyHasColorCatalog() {
+  return backendMode() == BACKEND_BAMBUDDY && bbInventoryMode() == BB_INV_LOCAL;
+}
+
 bool backendCanBrowseFilamentDb() {
-  return backendMode() == BACKEND_SPOOLMAN || backendMode() == BACKEND_FILAMAN;
+  return backendMode() == BACKEND_SPOOLMAN || backendMode() == BACKEND_FILAMAN ||
+         bambuddyHasColorCatalog();
 }
 
 int backendFdbLoadIndex(const char* base_url) {
   if (backendIsFilaMan()) return filamanFdbLoadIndex(base_url, filamanApiKey());
+  if (bambuddyHasColorCatalog()) return bambuddyFdbLoadIndex(base_url, bambuddyApiKey());
   if (backendMode() != BACKEND_SPOOLMAN) return notSupported("FdbLoadIndex");
   return spoolmanFdbLoadIndex(base_url);
 }
@@ -764,8 +773,13 @@ int backendFdbLoadPairs(const char* base_url, const char* maker) {
 
 int backendFdbLoadEntries(const char* base_url, const char* maker, const char* material) {
   if (backendIsFilaMan()) return filamanFdbLoadEntries(base_url, filamanApiKey(), maker, material);
+  if (bambuddyHasColorCatalog()) return bambuddyFdbLoadEntries(base_url, bambuddyApiKey(), maker, material);
   if (backendMode() != BACKEND_SPOOLMAN) return notSupported("FdbLoadEntries");
   return spoolmanFdbLoadEntries(base_url, maker, material);
+}
+
+void backendFdbCompleteInput(TagCreateInput* in) {
+  if (backendMode() == BACKEND_BAMBUDDY) bambuddyFdbCompleteInput(in);
 }
 
 void backendLookupColorName(const char* hex6, const char* material,
@@ -793,6 +807,7 @@ static int bambuddyCreateFromTag(const TagCreateInput& in, const TagFilamentPlan
   ns.color_name      = plan.name;
   ns.label_weight    = v.label_weight;
   ns.core_weight     = in.spool_weight_g;
+  ns.core_weight_catalog_id = in.spool_catalog_id;
   ns.nozzle_temp_min = in.temp_min;
   ns.nozzle_temp_max = in.temp_max;
   ns.extra_colors    = colors;
