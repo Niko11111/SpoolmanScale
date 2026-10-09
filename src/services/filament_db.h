@@ -24,7 +24,9 @@
 //  load, keeps running, and collects it on a later pass, the way
 //  backend_job.h does for the spool list. What is loaded is held in PSRAM -
 //  the index for a day, the entries until fdbReleaseEntries() - and belongs
-//  to the backend generation it was loaded under. How each backend fills it is its own business, behind
+//  to the backend generation it was loaded under. The index is also kept in
+//  flash for a week (filament_db_store.h), so a restart does not read the
+//  3 MB again. How each backend fills it is its own business, behind
 //  backend_api.h; nothing in here talks to a server or the screen.
 // ============================================================
 
@@ -100,8 +102,8 @@ void     fdbTake();
 bool fdbOffered();
 
 // Whether the index is loaded, for this backend, and young enough. It stays
-// between two openings of the picker (about 20 kB of PSRAM), so the 3 MB are
-// read once a day, not every time.
+// between two openings of the picker (about 20 kB of PSRAM), and comes back
+// from flash after a day or a restart; the 3 MB are read once a week.
 bool fdbIndexReady();
 // Drops the entries and gives their PSRAM back (up to 114 kB). When the
 // picker closes.
@@ -140,3 +142,11 @@ void fdbMarkOwned(const char* maker);
 bool fdbEntryAdd(const FdbEntry& e);
 // A byte count the loader keeps up to date.
 volatile size_t* fdbBytesCounter();
+
+// ---- the stored index (filament_db_store.h), on the job's task --
+
+// The index being loaded, as it lies, to keep in flash. Returns the makers.
+int  fdbIndexSnapshot(const FdbMaker** makers, const FdbPair** pairs, int* pair_n);
+// Puts a stored index in place of the one being loaded, owned cleared: the
+// inventory is asked again. False when it does not fit.
+bool fdbIndexRestore(const FdbMaker* makers, int maker_n, const FdbPair* pairs, int pair_n);

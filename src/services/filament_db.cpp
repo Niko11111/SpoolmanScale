@@ -128,6 +128,31 @@ bool fdbEntryAdd(const FdbEntry& e) {
 
 volatile size_t* fdbBytesCounter() { return &s_bytes; }
 
+int fdbIndexSnapshot(const FdbMaker** makers, const FdbPair** pairs, int* pair_n) {
+  if (!s_makers || !s_pairs) return 0;
+  *makers = s_makers;
+  *pairs  = s_pairs;
+  *pair_n = s_pair_n;
+  return s_maker_n;
+}
+
+bool fdbIndexRestore(const FdbMaker* makers, int maker_n, const FdbPair* pairs, int pair_n) {
+  if (!s_makers || !s_pairs || maker_n > FDB_MAKERS_MAX || pair_n > FDB_PAIRS_MAX) return false;
+  // A pair pointing past the makers would index out of the array later.
+  for (int i = 0; i < pair_n; i++)
+    if (pairs[i].maker >= maker_n) return false;
+  memcpy(s_makers, makers, sizeof(FdbMaker) * (size_t)maker_n);
+  memcpy(s_pairs, pairs, sizeof(FdbPair) * (size_t)pair_n);
+  for (int i = 0; i < maker_n; i++) {
+    s_makers[i].owned = false;
+    s_makers[i].name[sizeof(s_makers[i].name) - 1] = '\0';
+  }
+  for (int i = 0; i < pair_n; i++) s_pairs[i].material[sizeof(s_pairs[i].material) - 1] = '\0';
+  s_maker_n = maker_n;
+  s_pair_n  = pair_n;
+  return true;
+}
+
 // ---- sorting, once a load is in --------------------------------------
 
 // A-Z, case aside. The pairs point at makers by index, so they are moved to

@@ -9,6 +9,7 @@
 
 #include "../hardware/sd_logger.h"
 #include "filament_db.h"
+#include "filament_db_store.h"
 #include "spoolman_api.h"
 #include "tag_create.h"
 
@@ -168,6 +169,13 @@ static int searchAvailable(const char* base_url) {
 }
 
 int spoolmanFdbLoadIndex(const char* base_url) {
+  // After a restart the index of the last week is still in flash, and the
+  // 3 MB need not be read again. Whose spools the inventory has may have
+  // changed since, so that is asked either way.
+  if (fdbStoreLoad(base_url)) {
+    markOwnedMakers(base_url);
+    return 200;
+  }
   const int probe = searchAvailable(base_url);
   if (probe != 200) {
     logSDf("Filament DB: search -> HTTP %d", probe);
@@ -184,6 +192,7 @@ int spoolmanFdbLoadIndex(const char* base_url) {
     logSDf("Filament DB: index -> HTTP %d", code);
     return code;
   }
+  fdbStoreSave(base_url);   // before the marks: those are asked fresh each time
   markOwnedMakers(base_url);
   return 200;
 }
