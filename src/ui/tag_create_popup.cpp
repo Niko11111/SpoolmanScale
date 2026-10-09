@@ -64,27 +64,9 @@ bool tagCreateOffered() {
   return backendCanCreateFromTag() && tagCreateInputFromTag(&in);
 }
 
-lv_obj_t* tagCreateEntryButton(lv_obj_t* parent, int w, int h, int y) {
-  lv_obj_t* btn = lv_btn_create(parent);
-  lv_obj_set_size(btn, w, h);
-  lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, y);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_GO_BG), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn, 10, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 1, 0);
-  lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_ACCENT), 0);
-  lv_obj_add_event_cb(btn, [](lv_event_t*) {
-    logSD("BTN: New from tag");
-    newtag_open_pending = true;
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t* l = lv_label_create(btn);
-  lv_label_set_text(l, T(STR_NEWTAG_BTN));
-  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_OK_TEXT), 0);
-  lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(l, LV_ALIGN_CENTER, 0, 0);
-  return btn;
+void tagCreateEntryTap(lv_event_t*) {
+  logSD("BTN: New from tag");
+  newtag_open_pending = true;
 }
 
 void closeTagCreatePopup() {

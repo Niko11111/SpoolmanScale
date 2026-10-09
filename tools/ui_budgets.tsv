@@ -256,7 +256,12 @@ STR_PRICE_PAD_TITLE	14	460	NEVER	src/ui/price_pad.cpp title above the keypad
 STR_PRICE_PAD_INFO	12	168	WRAP:3	src/ui/price_pad.cpp right column, PP_COL_W
 
 # --- the database picker (db_pick_screen.cpp), widths read off its constants ----
-STR_DBPICK_BTN	16	372	NEVER	src/ui/db_pick_screen.cpp:122 entry button, BTN_W 380 on the copy popup
+# The copy popup's tiles (src/ui/entry_tile.cpp): three of 144 px, the caption
+# 12 px narrower, wrapped under the symbol to two lines at most.
+STR_DBPICK_BTN	16	132	WRAP:2	src/ui/copy_flow.cpp copyEntryTiles, tile caption
+STR_NEWTAG_BTN	16	132	WRAP:2	src/ui/copy_flow.cpp copyEntryTiles, tile caption
+STR_COPY_ACTIVE_BTN	16	132	WRAP:2	src/ui/copy_flow.cpp copyEntryTiles, tile caption
+STR_COPY_ARCHIVED_BTN	16	132	WRAP:2	src/ui/copy_flow.cpp copyEntryTiles, tile caption
 STR_DBPICK_LOADING	20	360	WRAP:2	src/ui/db_pick_screen.cpp:597 wait card title, UI_POPUP_W - UI_CARD_TEXT_PAD
 STR_DBPICK_MAKER_TITLE	16	376	NEVER	src/ui/db_pick_screen.cpp:341 header title, 480 - 2 * (44 + 2 * 4)
 STR_DBPICK_OWNED	14	452	NEVER	src/ui/db_pick_screen.cpp caption, DBP_ROW_W

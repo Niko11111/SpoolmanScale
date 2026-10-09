@@ -42,6 +42,7 @@
 #include "ui/theme.h"
 #include "ui/db_pick_screen.h"
 #include "ui/tag_create_popup.h"
+#include "ui/entry_tile.h"
 #include "ui/ui_common.h"
 #include "services/backend.h"
 #include "services/breadcrumb.h"
@@ -3542,75 +3543,22 @@ void showLinkEntryPopup(bool is_bambu) {
   lv_obj_set_width(lbl_ctx, 450);
   lv_obj_align(lbl_ctx, LV_ALIGN_TOP_MID, 0, 62);
 
-  // Button-Layout: 3 Buttons zentriert, je 380x60. A Bambu tag that can
-  // become a new spool adds a fourth row, and every row gives up a little.
-  const bool offer_create = is_bambu && tagCreateOffered();
-  const int BTN_W = 380, BTN_H = offer_create ? 48 : 60, BTN_GAP = offer_create ? 8 : 10;
-  const int Y1 = 100, Y2 = Y1 + BTN_H + BTN_GAP, Y3 = Y2 + BTN_H + BTN_GAP;
-  const int Y_CANCEL = offer_create ? Y3 + BTN_H + BTN_GAP : Y3;
-  const int H_CANCEL = offer_create ? UI_TOUCH_MIN : BTN_H - 14;
-
-  // Button 1: Spool-ID eingeben
-  lv_obj_t *btn1 = lv_btn_create(scr_link_entry);
-  lv_obj_set_size(btn1, BTN_W, BTN_H);
-  lv_obj_align(btn1, LV_ALIGN_TOP_MID, 0, Y1);
-  lv_obj_set_style_bg_color(btn1, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn1, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn1, 10, 0);
-  lv_obj_set_style_shadow_width(btn1, 0, 0);
-  lv_obj_set_style_border_width(btn1, 1, 0);
-  lv_obj_set_style_border_color(btn1, lv_color_hex(UI_COL_LINE), 0);
-  lv_obj_add_event_cb(btn1, [](lv_event_t *e) {
-    link_id_input[0] = '\0';
-    showIdInputPopup(link_flow_is_bambu);
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *l1 = lv_label_create(btn1);
-  lv_label_set_text(l1, T(STR_BTN_ENTER_ID));
-  lv_obj_set_style_text_color(l1, lv_color_hex(UI_COL_INK_2), 0);
-  lv_obj_set_style_text_font(l1, &lv_font_montserrat_ext_18, 0);
-  lv_obj_center(l1);
-
-  // Button 2: Aus Liste waehlen
-  lv_obj_t *btn2 = lv_btn_create(scr_link_entry);
-  lv_obj_set_size(btn2, BTN_W, BTN_H);
-  lv_obj_align(btn2, LV_ALIGN_TOP_MID, 0, Y2);
-  lv_obj_set_style_bg_color(btn2, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn2, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn2, 10, 0);
-  lv_obj_set_style_shadow_width(btn2, 0, 0);
-  lv_obj_set_style_border_width(btn2, 1, 0);
-  lv_obj_set_style_border_color(btn2, lv_color_hex(UI_COL_LINE), 0);
-  lv_obj_add_event_cb(btn2, [](lv_event_t *e) {
+  // One tile, the list; the ID and Cancel in the low row, as on New / Copy.
+  // A new spool is made there, never here: Link only joins a tag to a spool
+  // the inventory already has.
+  entryTile(scr_link_entry, entryTileRect(0, 1), LV_SYMBOL_LIST, T(STR_BTN_FROM_LIST),
+            [](lv_event_t *e) {
     // The inventory fetch takes seconds; it runs from the loop, then the
     // list or the vendor picker opens.
     link_list_fetch_pending = true;
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *l2 = lv_label_create(btn2);
-  lv_label_set_text(l2, T(STR_BTN_FROM_LIST));
-  lv_obj_set_style_text_color(l2, lv_color_hex(UI_COL_INK_2), 0);
-  lv_obj_set_style_text_font(l2, &lv_font_montserrat_ext_18, 0);
-  lv_obj_center(l2);
-
-  if (offer_create) tagCreateEntryButton(scr_link_entry, BTN_W, BTN_H, Y3);
-
-  // Button 3: Abbrechen
-  lv_obj_t *btn3 = lv_btn_create(scr_link_entry);
-  lv_obj_set_size(btn3, BTN_W, H_CANCEL);  // etwas kleiner
-  lv_obj_align(btn3, LV_ALIGN_TOP_MID, 0, Y_CANCEL);
-  lv_obj_set_style_bg_color(btn3, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn3, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn3, 10, 0);
-  lv_obj_set_style_shadow_width(btn3, 0, 0);
-  lv_obj_set_style_border_width(btn3, 0, 0);
-  lv_obj_add_event_cb(btn3, [](lv_event_t *e) {
+  });
+  entryBottomRow(scr_link_entry, T(STR_BTN_ENTER_ID), [](lv_event_t *e) {
+    link_id_input[0] = '\0';
+    showIdInputPopup(link_flow_is_bambu);
+  }, [](lv_event_t *e) {
     link_popup_dismissed = true;
     closeLinkEntryPopup();
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t *l3 = lv_label_create(btn3);
-  lv_label_set_text(l3, T(STR_CANCEL));
-  lv_obj_set_style_text_color(l3, lv_color_hex(UI_COL_BAD_TEXT), 0);
-  lv_obj_set_style_text_font(l3, &lv_font_montserrat_ext_16, 0);
-  lv_obj_center(l3);
+  });
 }
 
 // ============================================================

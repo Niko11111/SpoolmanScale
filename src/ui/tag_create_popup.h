@@ -17,10 +17,9 @@
 // and every backend needs one) and a backend with a way to do it.
 bool tagCreateOffered();
 
-// The entry to the card on the copy and the link popup: full width, in the
-// colour of going ahead. Raises newtag_open_pending; the loop closes the
-// popup it sits on and opens the card.
-lv_obj_t* tagCreateEntryButton(lv_obj_t* parent, int w, int h, int y);
+// The tap on the copy popup's tile: raises newtag_open_pending; the loop
+// closes the popup and opens the card.
+void tagCreateEntryTap(lv_event_t* e);
 
 // Builds the card for the tag that was scanned last. Loop task only.
 void showTagCreatePopup();

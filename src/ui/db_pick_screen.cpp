@@ -150,26 +150,9 @@ static void* navData(DbpNav nav, int arg) {
   return (void*)(intptr_t)(((intptr_t)nav << 16) | (arg & 0xFFFF));
 }
 
-lv_obj_t* dbPickEntryButton(lv_obj_t* parent, int w, int h, int y) {
-  lv_obj_t* btn = lv_btn_create(parent);
-  lv_obj_set_size(btn, w, h);
-  lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, y);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_GO_BG), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn, UI_RADIUS_ROW, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 1, 0);
-  lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_ACCENT), 0);
-  lv_obj_add_event_cb(btn, [](lv_event_t*) {
-    logSD("BTN: New from database");
-    park(NAV_OPEN, 0);
-  }, LV_EVENT_CLICKED, NULL);
-  lv_obj_t* l = lv_label_create(btn);
-  lv_label_set_text(l, T(STR_DBPICK_BTN));
-  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_OK_TEXT), 0);
-  lv_obj_set_style_text_font(l, UI_FONT_BODY, 0);
-  lv_obj_center(l);
-  return btn;
+void dbPickEntryTap(lv_event_t*) {
+  logSD("BTN: New from database");
+  park(NAV_OPEN, 0);
 }
 
 // ------------------------------------------------------------

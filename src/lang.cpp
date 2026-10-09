@@ -3285,7 +3285,7 @@ const char* const STRINGS[][3] = {
     "Bobine créée, prix non enregistré" },  // STR_TAGNEW_PRICE_LOST
   { "Neu aus Datenbank",
     "New from database",
-    "Nouvelle depuis la base" },  // STR_DBPICK_BTN
+    "Nouvelle de la base" },  // STR_DBPICK_BTN
   { "Filament-Datenbank wird geladen",
     "Loading the filament database",
     "Lecture de la base de filaments" },  // STR_DBPICK_LOADING

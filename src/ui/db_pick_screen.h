@@ -23,9 +23,9 @@
 // tag that is not a Bambu one, and a backend with a filament database.
 bool dbPickOffered();
 
-// The entry button on the copy popup, the same look as the one for a new
-// spool from a tag. Parks the open; dbPickTick() opens the picker.
-lv_obj_t* dbPickEntryButton(lv_obj_t* parent, int w, int h, int y);
+// The tap on the copy popup's tile. Parks the open; dbPickTick() opens the
+// picker.
+void dbPickEntryTap(lv_event_t* e);
 
 // Every loop pass, from the spool flow's deferred actions.
 void dbPickTick();
