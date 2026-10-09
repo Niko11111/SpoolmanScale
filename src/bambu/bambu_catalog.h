@@ -60,6 +60,13 @@ struct BambuCatalogHit {
 bool bambuCatalogFind(const char* material_id, const char* variant_id,
                       const SpoolColor& color, BambuCatalogHit* out);
 
+// The other way round, for a spool picked from a database rather than read
+// off a tag: one colour of one product ("PLA Matte"), by its first colour
+// (0xRRGGBB) and, where no entry has exactly that, by its English name. Case
+// aside. False when there is no catalog or no entry fits. Loop task only.
+bool bambuCatalogFindByLook(const char* product, uint32_t rgb, const char* name_en,
+                            BambuCatalogHit* out);
+
 // The installed catalog: how many colours, and when it was downloaded (UTC
 // seconds, 0 when the clock was not set). Count 0 when there is none.
 // Loop task only.

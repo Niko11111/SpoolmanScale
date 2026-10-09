@@ -579,6 +579,23 @@ int bbGetLocationsJson(const char* base_url, const char* api_key,
   return 200;
 }
 
+int bbGetStreamed(const char* base_url, const char* api_key, const char* path,
+                  uint32_t timeout_ms, BbBodyReader read, void* ctx) {
+  if (!hasBaseUrl(base_url) || !path || !read) return -1;
+  BackendHttp http;
+  if (!http.begin(String(base_url) + path)) return -1;
+  http.setTimeout(timeout_ms);
+  addKey(http, api_key);
+  const int code = http.GET();
+  if (code != 200) {
+    http.end();
+    return code;
+  }
+  const bool ok = read(*http.getStreamPtr(), ctx);
+  http.end();
+  return ok ? 200 : -2;
+}
+
 int bbCountActiveSpools(const char* base_url, const char* api_key,
                         uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url)) return -1;
@@ -1050,6 +1067,7 @@ int bbCreateSpool(const char* base_url, const char* api_key,
   if (spool.rgba       && spool.rgba[0])       body["rgba"]       = spool.rgba;
   if (spool.label_weight > 0) body["label_weight"] = spool.label_weight;
   if (spool.core_weight  > 0) body["core_weight"]  = spool.core_weight;
+  if (spool.core_weight_catalog_id > 0) body["core_weight_catalog_id"] = spool.core_weight_catalog_id;
   // Always written, zero included: BamBuddy stores what was consumed and
   // derives the rest, so leaving it out would make every new spool full.
   body["weight_used"] = roundGrams(spool.weight_used < 0.0f ? 0.0f : spool.weight_used);

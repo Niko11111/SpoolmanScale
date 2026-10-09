@@ -89,6 +89,21 @@ struct FdbEntry {
   int16_t  bed_temp;
 };
 
+// An empty spool the backend knows by name, for a database whose entries
+// weigh no spool: BamBuddy's spool catalog, "Overture - Plastic" 237 g, 91
+// of them (09.10.2026). Loaded with the index.
+#define FDB_CORES_MAX       128
+#define FDB_CORE_NAME_MAX   40
+
+struct FdbCore {
+  char     name[FDB_CORE_NAME_MAX];
+  uint16_t weight_g;
+  int32_t  id;           // the backend's own, sent with the new spool
+  // The newest spool of the inventory that sits on this one, 0 when none:
+  // the choice offered first.
+  int32_t  last_spool;
+};
+
 enum FdbJob : uint8_t { FDB_JOB_NONE = 0, FDB_JOB_INDEX, FDB_JOB_ENTRIES, FDB_JOB_PAIRS };
 enum FdbState : uint8_t { FDB_IDLE = 0, FDB_RUNNING, FDB_DONE };
 
@@ -163,6 +178,15 @@ void fdbLineName(const FdbEntry& e, const char* other_text, char* out, size_t ou
 void fdbEntryToInput(const FdbEntry& e, const char* maker, const char* material,
                      TagCreateInput* in);
 
+// The empty spools of one maker: those whose name begins with it ("Sunlu
+// 250g - Plastic" is Sunlu's), the one the inventory used last first.
+// Returns how many were written to out; none where the backend has no such
+// catalog.
+int fdbCoreChoices(const char* maker, const FdbCore** out, int out_max);
+// The part of a core's name after its maker, "250g Plastic" for "Sunlu
+// 250g - Plastic", for a button that already sits under the maker.
+void fdbCoreShortName(const FdbCore& c, const char* maker, char* out, size_t out_size);
+
 // ---- filling, for the backend's loader on the job's task ---------
 
 void fdbIndexAdd(const char* maker, const char* material);
@@ -177,6 +201,11 @@ bool fdbEntryAdd(const FdbEntry& e);
 bool fdbEntryListed(const FdbEntry& e);
 // A byte count the loader keeps up to date.
 volatile size_t* fdbBytesCounter();
+// An empty spool of the backend's catalog. False once the table is full.
+bool fdbCoreAdd(const char* name, uint16_t weight_g, int id);
+// A spool of the inventory, to put the empty spool it sits on first: by the
+// catalog id it was created with, else by the same weight under its brand.
+void fdbCoreNoteOwned(const char* brand, int catalog_id, int core_weight_g, int spool_id);
 
 // ---- the stored index (filament_db_store.h), on the job's task --
 

@@ -117,6 +117,14 @@ int  bbGetLocationsJson(const char* base_url, const char* api_key,
        JsonDocument& doc, uint32_t timeout_ms = 8000,
        DeserializationError* out_err = nullptr);
 
+// GET of any path under the base url, the body handed to read() as it
+// comes, as filamanGetStreamed() does it: for the filament database loader
+// (bambuddy_filament_db.cpp), which parses with its own filter. The HTTP
+// code, -2 when read() said false.
+typedef bool (*BbBodyReader)(Stream& body, void* ctx);
+int  bbGetStreamed(const char* base_url, const char* api_key, const char* path,
+       uint32_t timeout_ms, BbBodyReader read, void* ctx);
+
 // Counts active spools by fetching the list with a filter that keeps only
 // the ids. Returns the count, or a negative HTTP/parse error.
 int  bbCountActiveSpools(const char* base_url, const char* api_key,
@@ -228,6 +236,7 @@ struct BbNewSpool {
   const char* rgba            = nullptr;  // RRGGBBAA
   int         label_weight    = 0;
   int         core_weight     = 0;
+  int         core_weight_catalog_id = 0;   // the spool catalog entry core_weight came from, 0: none
   float       weight_used     = 0.0f;     // consumption, not remaining
   int         nozzle_temp_min = 0;
   int         nozzle_temp_max = 0;

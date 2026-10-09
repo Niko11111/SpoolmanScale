@@ -62,6 +62,9 @@ struct TagCreateInput {
   // The empty spool, 0 when unknown: the spool then counts as full, since
   // nothing can be subtracted from the reading.
   int   spool_weight_g;
+  // The backend's own entry for that empty spool (BamBuddy's spool catalog),
+  // 0 when none.
+  int   spool_catalog_id;
   float diameter_mm;         // 0 when unknown
   int   temp_min;
   int   temp_max;

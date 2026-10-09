@@ -1,6 +1,7 @@
 #include "tag_create_bambu.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "../app/app_state.h"
@@ -48,6 +49,19 @@ static void catalogNames(TagCreateInput* in) {
   snprintf(in->color_name, sizeof(in->color_name), "%s", hit.color_name);
   snprintf(in->color_name_en, sizeof(in->color_name_en), "%s", hit.color_name_en);
   catalogColors(in, hit);
+}
+
+bool tagCreateBambuFromCatalog(TagCreateInput* in) {
+  if (!in || in->clear || !in->color_hex[0]) return false;
+  BambuCatalogHit hit;
+  const uint32_t rgb = (uint32_t)strtoul(in->color_hex, nullptr, 16);
+  if (!bambuCatalogFindByLook(in->product, rgb, in->color_name_en, &hit)) return false;
+  snprintf(in->article, sizeof(in->article), "%s", hit.article);
+  snprintf(in->color_name, sizeof(in->color_name), "%s", hit.color_name);
+  snprintf(in->color_name_en, sizeof(in->color_name_en), "%s", hit.color_name_en);
+  catalogColors(in, hit);
+  in->names_known = true;
+  return true;
 }
 
 bool tagCreateInputFromBambu(TagCreateInput* in) {
