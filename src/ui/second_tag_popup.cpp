@@ -224,7 +224,7 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   lv_obj_remove_style_all(bar_tag2_fill);
   lv_obj_set_size(bar_tag2_fill, TAG2_BTN_W, UI_POPUP_BTN_H);
   lv_obj_set_pos(bar_tag2_fill, 0, 0);
-  lv_obj_set_style_bg_color(bar_tag2_fill, lv_color_hex(UI_COL_POPUP_BORDER), 0);
+  lv_obj_set_style_bg_color(bar_tag2_fill, lv_color_hex(UI_COL_COUNTDOWN_FILL), 0);
   lv_obj_set_style_bg_opa(bar_tag2_fill, LV_OPA_COVER, 0);
   lv_obj_set_style_radius(bar_tag2_fill, UI_RADIUS_BTN, 0);
   lv_obj_clear_flag(bar_tag2_fill, LV_OBJ_FLAG_CLICKABLE);

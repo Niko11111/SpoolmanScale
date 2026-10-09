@@ -33,6 +33,10 @@ UI_COLOUR(PRESS_FILL,            0x1a3870, 0xc4cbdd, 0x424242, 0xcecbc6, 0x2c4a3
 UI_COLOUR(ROW_PRESS_FILL,        0x1a3050, 0xc4cbdd, 0x3d3d3d, 0xcecbc6, 0x24473a, 0xcbcfca, 0x3d3d3d, 0xcbcbcb)   // under the finger, where ROW_PRESSED filled it
 UI_COLOUR(DIVIDER,               0x1a2030, 0x6f7ea3, 0x2e2e2e, 0x8a857b, 0x1f3a2c, 0x7d8a80, 0x2e2e2e, 0x858585)   // the separators of the main and more-info screens
 UI_COLOUR(POPUP_BORDER,          0x2a4080, 0x6072ad, 0x4a4239, 0x8a857b, 0x2f6a50, 0x6b7d70, 0x434343, 0x858585)   // the frame of a question; a blue action pressed
+// The time left on a neutral button, as a fill that drains over it. It was
+// POPUP_BORDER, which on the grey palettes is one step off LINE and so
+// invisible; the greys get a step that shows and keeps INK_2 at 4.5:1.
+UI_COLOUR(COUNTDOWN_FILL,        0x2a4080, 0x6072ad, 0x525252, 0x8a857b, 0x2f6a50, 0x6b7d70, 0x525252, 0x858585)   // the second tag's draining Done
 UI_COLOUR(EMPTY,                 0x182238, 0xe8ecf2, 0x262626, 0xe0ddd6, 0x142a20, 0xe4ded2, 0x262626, 0xdddddd)   // an empty bay, the keyboard, More, "got it"
 UI_COLOUR(CHIP,                  0x102040, 0xcddcf5, 0x2e2e2e, 0xefcfb4, 0x12304a, 0xcfe2f4, 0x2e2e2e, 0xd9d9d9)   // a header chip that is a button; a blue action: dried, this spool, new spool
 UI_COLOUR(ACCENT_CHIP,           0x1a3050, 0xcfe6d6, 0x3d3d3d, 0xf3e2d4, 0x24473a, 0xe2f3ea, 0x2e4631, 0xe2f3ea)   // a chip with a label in the accent: reload, the printer's name
