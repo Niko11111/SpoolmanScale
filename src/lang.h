@@ -444,6 +444,8 @@ enum StringID {
 
   // Auto location popup toggle
   STR_BTN_AUTO_LOC_POPUP,
+  STR_BTN_AUTO_TARE,
+  STR_BTN_AUTO_TARE_INFO,
 
   // Drying reminder
   STR_BTN_DRYING_REMINDER,
