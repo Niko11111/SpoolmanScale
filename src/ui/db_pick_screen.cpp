@@ -22,6 +22,11 @@
 
 // A list longer than this is cut by colour family first.
 #define DBP_FAMILY_MIN_ROWS   20
+// From this many makers on, a letter shows its makers instead of scrolling
+// to them: the FilamentDB's 311 tiles would not fit the LVGL pool.
+#define DBP_MAKER_FILTER_MIN  100
+// Product lines a list is cut by (SUNLU PLA in the FilamentDB: 32).
+#define DBP_LINES_MAX         48
 // The frame: the header of the link lists, the list below it.
 #define DBP_HEAD_H            52
 #define DBP_HEAD_BTN          44
@@ -54,10 +59,10 @@
 #define DBP_SIZES_MAX         4
 #define DBP_GRAMS_PER_KG      1000
 
-enum DbpStep : uint8_t { DBP_CLOSED = 0, DBP_MAKER, DBP_MATERIAL, DBP_FAMILY, DBP_ENTRIES };
+enum DbpStep : uint8_t { DBP_CLOSED = 0, DBP_MAKER, DBP_MATERIAL, DBP_LINE, DBP_FAMILY, DBP_ENTRIES };
 enum DbpNav : uint8_t {
   NAV_NONE = 0, NAV_OPEN, NAV_MAKER, NAV_MATERIAL, NAV_FAMILY, NAV_ENTRY,
-  NAV_SIZE, NAV_SIZE_CANCEL, NAV_BACK, NAV_CLOSE
+  NAV_SIZE, NAV_SIZE_CANCEL, NAV_BACK, NAV_CLOSE, NAV_LETTER, NAV_LINE
 };
 
 static lv_obj_t* s_scr   = nullptr;
@@ -70,12 +75,21 @@ static int       s_maker = -1;
 static char      s_material[17] = "";
 static int       s_family = -1;      // -1: every family
 static bool      s_family_step = false;
+// The product lines of the list: the first entry of each and its names.
+static int16_t   s_line_first[DBP_LINES_MAX];
+static uint16_t  s_line_count[DBP_LINES_MAX];
+static int       s_line_n = 0;
+static int       s_line = -1;        // -1: every line
+static bool      s_line_step = false;
+// The letter whose makers are shown, on a long maker list; -1: none yet.
+static int       s_letter = -1;
 // The load the screen waits for, and one that could not start yet.
 static FdbJob    s_wait = FDB_JOB_NONE;
 static FdbJob    s_want = FDB_JOB_NONE;
 static DbpNav    s_nav = NAV_NONE;
 static int       s_nav_arg = 0;
 static lv_obj_t* s_letter_target[DBP_LETTERS];
+static lv_obj_t* s_letter_btn[DBP_LETTERS];
 
 // Shared styles. A list of 67 makers is some 140 objects, and every local
 // style property is an allocation of its own in the LVGL pool: with local
@@ -209,10 +223,7 @@ static void buildFrame() {
 }
 
 // A scrolling container under the header: tiles flow in rows.
-static lv_obj_t* newBody(int y, int h) {
-  if (s_body) lv_obj_del(s_body);
-  if (s_strip) lv_obj_del(s_strip);
-  s_strip = nullptr;
+static lv_obj_t* makeBody(int y, int h) {
   s_body = lv_obj_create(s_scr);
   lv_obj_set_size(s_body, DBP_BODY_W, h);
   lv_obj_set_pos(s_body, (LV_HOR_RES - DBP_BODY_W) / 2, y);
@@ -225,6 +236,15 @@ static lv_obj_t* newBody(int y, int h) {
   lv_obj_set_flex_flow(s_body, LV_FLEX_FLOW_ROW_WRAP);
   lv_obj_set_scroll_dir(s_body, LV_DIR_VER);
   return s_body;
+}
+
+// The same in place of what the screen showed, the letters included.
+static lv_obj_t* newBody(int y, int h) {
+  if (s_body) lv_obj_del(s_body);
+  if (s_strip) lv_obj_del(s_strip);
+  s_strip = nullptr;
+  memset(s_letter_btn, 0, sizeof(s_letter_btn));
+  return makeBody(y, h);
 }
 
 static void setTitle(const char* text) {
@@ -291,6 +311,8 @@ static lv_obj_t* tileText(lv_obj_t* t, const char* text, lv_style_t* style, lv_a
   lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
   lv_obj_set_width(l, lv_obj_get_style_width(t, 0) - 2 * (DBP_TILE_PAD + 1));
   lv_obj_add_style(l, style, 0);
+  // One line: the dots need a height to end at, or the text wraps.
+  lv_obj_set_height(l, lv_font_get_line_height(lv_obj_get_style_text_font(l, 0)));
   lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(l, align, 0, y);
   return l;
@@ -335,7 +357,27 @@ static void onLetter(lv_event_t* e) {
   lv_obj_scroll_to_y(lv_obj_get_parent(target), lv_obj_get_y(target), LV_ANIM_ON);
 }
 
+// A long list: a letter shows its makers. Every letter that leads one.
+static bool filterMakers() { return fdbMakerCount() >= DBP_MAKER_FILTER_MIN; }
+
+static void lettersInUse(bool used[DBP_LETTERS]) {
+  memset(used, 0, sizeof(bool) * DBP_LETTERS);
+  for (int i = 0; i < fdbMakerCount(); i++) used[letterOf(fdbMaker(i)->name)] = true;
+}
+
+// The letter whose makers are shown has a frame.
+static void markLetter() {
+  for (int i = 0; i < DBP_LETTERS; i++) {
+    if (!s_letter_btn[i]) continue;
+    lv_obj_set_style_border_width(s_letter_btn[i], i == s_letter ? 2 : 0, 0);
+    lv_obj_set_style_border_color(s_letter_btn[i], lv_color_hex(UI_COL_ACCENT), 0);
+  }
+}
+
 static void letterStrip() {
+  bool used[DBP_LETTERS];
+  const bool filter = filterMakers();
+  if (filter) lettersInUse(used);
   lv_obj_t* strip = lv_obj_create(s_scr);
   s_strip = strip;
   lv_obj_set_size(strip, DBP_BODY_W, DBP_LETTER_H);
@@ -348,11 +390,14 @@ static void letterStrip() {
   lv_obj_set_scroll_dir(strip, LV_DIR_HOR);
   lv_obj_set_scrollbar_mode(strip, LV_SCROLLBAR_MODE_OFF);
   for (int i = 0; i < DBP_LETTERS; i++) {
-    if (!s_letter_target[i]) continue;
+    if (filter ? !used[i] : !s_letter_target[i]) continue;
     char text[2] = { i == 0 ? '#' : (char)('A' + i - 1), '\0' };
     lv_obj_t* b = labelTile(strip, DBP_LETTER_W, DBP_LETTER_H - 4, text, &s_st_letter);
-    lv_obj_add_event_cb(b, onLetter, LV_EVENT_CLICKED, s_letter_target[i]);
+    s_letter_btn[i] = b;
+    if (filter) lv_obj_add_event_cb(b, onNav, LV_EVENT_CLICKED, navData(NAV_LETTER, i));
+    else        lv_obj_add_event_cb(b, onLetter, LV_EVENT_CLICKED, s_letter_target[i]);
   }
+  markLetter();
 }
 
 static lv_obj_t* makerTile(lv_obj_t* body, int i, bool owned) {
@@ -376,6 +421,43 @@ static void addMakers(lv_obj_t* body, bool owned) {
   }
 }
 
+static bool anyOwned() {
+  for (int i = 0; i < fdbMakerCount(); i++)
+    if (fdbMaker(i)->owned) return true;
+  return false;
+}
+
+// Every maker: the inventory's on top, the rest A-Z.
+static void fillAllMakers(lv_obj_t* body) {
+  if (anyOwned()) {
+    caption(body, T(STR_DBPICK_OWNED));
+    addMakers(body, true);
+    caption(body, T(STR_DBPICK_OTHER_MAKERS));
+  }
+  addMakers(body, false);
+  caption(body, T(STR_DBPICK_NOT_LISTED));
+}
+
+// A long list: the inventory's makers until a letter is tapped, then that
+// letter's, the inventory's among them.
+static void fillFilteredMakers(lv_obj_t* body) {
+  if (s_letter < 0) {
+    if (anyOwned()) {
+      caption(body, T(STR_DBPICK_OWNED));
+      addMakers(body, true);
+    }
+    caption(body, T(STR_DBPICK_PICK_LETTER));
+    return;
+  }
+  for (int i = 0; i < fdbMakerCount(); i++) {
+    const FdbMaker* m = fdbMaker(i);
+    if (letterOf(m->name) != s_letter) continue;
+    if (!lvPoolHasRoomForRow()) { logSDf("DbPick: LVGL pool low, makers cut at %d", i); break; }
+    makerTile(body, i, m->owned);
+  }
+  caption(body, T(STR_DBPICK_NOT_LISTED));
+}
+
 static void showMakers() {
   s_step = DBP_MAKER;
   setTitle(T(STR_DBPICK_MAKER_TITLE));
@@ -383,17 +465,20 @@ static void showMakers() {
   memset(s_letter_target, 0, sizeof(s_letter_target));
   lv_obj_t* body = newBody(DBP_BODY_Y + DBP_LETTER_H, DBP_BODY_H - DBP_LETTER_H);
   logLvMem("dbpick-makers/pre", 0);
-  bool any_owned = false;
-  for (int i = 0; i < fdbMakerCount(); i++) any_owned |= fdbMaker(i)->owned;
-  if (any_owned) {
-    caption(body, T(STR_DBPICK_OWNED));
-    addMakers(body, true);
-    caption(body, T(STR_DBPICK_OTHER_MAKERS));
-  }
-  addMakers(body, false);
-  caption(body, T(STR_DBPICK_NOT_LISTED));
+  if (filterMakers()) fillFilteredMakers(body);
+  else                fillAllMakers(body);
   logLvMem("dbpick-makers/post", fdbMakerCount());
   letterStrip();
+}
+
+// A letter tapped on a long list: its makers in place of the others, the
+// letters stay.
+static void showLetter(int letter) {
+  s_letter = letter;
+  if (s_body) lv_obj_del(s_body);
+  fillFilteredMakers(makeBody(DBP_BODY_Y + DBP_LETTER_H, DBP_BODY_H - DBP_LETTER_H));
+  markLetter();
+  logLvMem("dbpick-letter", letter);
 }
 
 // ------------------------------------------------------------
@@ -407,6 +492,7 @@ static void showMaterials() {
   setTitle(m->name);
   uint16_t pairs[FDB_PAIRS_MAX];
   const int n = fdbPairsOf(s_maker, pairs, FDB_PAIRS_MAX);
+  if (n == 0) { showMessage(T(STR_DBPICK_EMPTY)); return; }
   lv_obj_t* body = newBody(DBP_BODY_Y, DBP_BODY_H);
   caption(body, T(STR_MAT_TITLE));
   for (int i = 0; i < n; i++) {
@@ -420,10 +506,6 @@ static void showMaterials() {
   }
 }
 
-// ------------------------------------------------------------
-//  Step 3: the colour family, where the list is long
-// ------------------------------------------------------------
-
 // Entries come sorted by name, then weight: one name, its sizes after it.
 static int sizesFrom(int first) {
   const FdbEntry* e = fdbEntry(first);
@@ -432,9 +514,81 @@ static int sizesFrom(int first) {
   return n;
 }
 
-static bool inFamily(const FdbEntry& e) {
-  return s_family < 0 || e.family == s_family;
+static bool inLine(const FdbEntry& e) {
+  return s_line < 0 || strcmp(e.line, fdbEntry(s_line_first[s_line])->line) == 0;
 }
+
+static bool inFamily(const FdbEntry& e) {
+  return inLine(e) && (s_family < 0 || e.family == s_family);
+}
+
+// "SUNLU PLA", with the line once one is picked: "SUNLU PLA Matte".
+static void listTitle(char* out, size_t out_size) {
+  char line[32] = "";
+  if (s_line >= 0) fdbLineName(*fdbEntry(s_line_first[s_line]), T(STR_DBPICK_LINE_OTHER), line, sizeof(line));
+  snprintf(out, out_size, "%s %s%s%s", fdbMaker(s_maker)->name, s_material, line[0] ? " " : "", line);
+}
+
+// ------------------------------------------------------------
+//  Step 3: the product line, where the database names them
+// ------------------------------------------------------------
+
+static int findLine(const char* line) {
+  for (int k = 0; k < s_line_n; k++)
+    if (strcmp(fdbEntry(s_line_first[k])->line, line) == 0) return k;
+  return -1;
+}
+
+// The lines of the list with their names, most first. A list past
+// DBP_LINES_MAX lines keeps the rest under "All".
+static void countLines() {
+  s_line_n = 0;
+  for (int i = 0; i < fdbEntryCount(); i += sizesFrom(i)) {
+    int k = findLine(fdbEntry(i)->line);
+    if (k < 0 && s_line_n < DBP_LINES_MAX) {
+      k = s_line_n++;
+      s_line_first[k] = (int16_t)i;
+      s_line_count[k] = 0;
+    }
+    if (k >= 0) s_line_count[k]++;
+  }
+  for (int a = 1; a < s_line_n; a++) {
+    for (int b = a; b > 0 && s_line_count[b - 1] < s_line_count[b]; b--) {
+      const int16_t f = s_line_first[b]; s_line_first[b] = s_line_first[b - 1]; s_line_first[b - 1] = f;
+      const uint16_t c = s_line_count[b]; s_line_count[b] = s_line_count[b - 1]; s_line_count[b - 1] = c;
+    }
+  }
+}
+
+static void showLines() {
+  s_step = DBP_LINE;
+  s_line = -1;
+  char title[64];
+  listTitle(title, sizeof(title));
+  setTitle(title);
+  lv_obj_t* body = newBody(DBP_BODY_Y, DBP_BODY_H);
+  caption(body, T(STR_DBPICK_LINE_TITLE));
+  int total = 0;
+  for (int k = 0; k < s_line_n; k++) {
+    total += s_line_count[k];
+    if (!lvPoolHasRoomForRow()) { logSDf("DbPick: LVGL pool low, lines cut at %d", k); break; }
+    lv_obj_t* t = tile(body, DBP_TILE_W, DBP_MAT_TILE_H, NAV_LINE, k);
+    char text[32];
+    fdbLineName(*fdbEntry(s_line_first[k]), T(STR_DBPICK_LINE_OTHER), text, sizeof(text));
+    // The smaller font: "High Speed Matte" fits a tile in it.
+    tileText(t, text, &s_st_text, LV_ALIGN_TOP_MID, DBP_GAP);
+    snprintf(text, sizeof(text), "%u", (unsigned)s_line_count[k]);
+    tileText(t, text, &s_st_text_soft, LV_ALIGN_BOTTOM_MID, 0);
+  }
+  lv_obj_t* all = tile(body, DBP_TILE_W, DBP_MAT_TILE_H, NAV_LINE, DBP_LINES_MAX);
+  char text[24];
+  snprintf(text, sizeof(text), T(STR_DBPICK_ALL), total);
+  tileText(all, text, &s_st_text, LV_ALIGN_CENTER, 0);
+}
+
+// ------------------------------------------------------------
+//  Step 4: the colour family, where the list is long
+// ------------------------------------------------------------
 
 // Names per family, and for each the entry that paints its tile: the most
 // typical of its colours.
@@ -443,6 +597,7 @@ static int countNames(int counts[CF_COUNT], int typical[CF_COUNT]) {
   for (int f = 0; f < CF_COUNT; f++) { counts[f] = 0; typical[f] = -1; best[f] = -1; }
   for (int i = 0; i < fdbEntryCount(); i += sizesFrom(i)) {
     const FdbEntry* e = fdbEntry(i);
+    if (!inLine(*e)) continue;
     const int f = e->family;
     const int score = colorFamilyTypicality(e->hex[0], (ColorFamily)f);
     if (score > best[f]) { best[f] = score; typical[f] = i; }
@@ -467,7 +622,7 @@ static void familyTile(lv_obj_t* body, int family, int count, int first) {
 static void showFamilies(const int counts[CF_COUNT], const int typical[CF_COUNT], int total) {
   s_step = DBP_FAMILY;
   char title[64];
-  snprintf(title, sizeof(title), "%s %s", fdbMaker(s_maker)->name, s_material);
+  listTitle(title, sizeof(title));
   setTitle(title);
   lv_obj_t* body = newBody(DBP_BODY_Y, DBP_BODY_H);
   caption(body, T(STR_DBPICK_COLOR_TITLE));
@@ -480,7 +635,7 @@ static void showFamilies(const int counts[CF_COUNT], const int typical[CF_COUNT]
 }
 
 // ------------------------------------------------------------
-//  Step 4: the entries
+//  Step 5: the entries
 // ------------------------------------------------------------
 
 static void weightText(int grams, char* out, size_t out_size) {
@@ -507,7 +662,7 @@ static void entryRow(lv_obj_t* body, int first, int n) {
   lv_obj_t* sw = swatch(row, DBP_ROW_SWATCH, DBP_ROW_SWATCH, *e);
   lv_obj_align(sw, LV_ALIGN_LEFT_MID, DBP_GAP, 0);
   char shown[FDB_NAME_MAX];
-  fdbDisplayName(e->name, fdbMaker(s_maker)->name, s_material, shown, sizeof(shown));
+  fdbEntryDisplayName(*e, fdbMaker(s_maker)->name, s_material, shown, sizeof(shown));
   lv_obj_t* name = lv_label_create(row);
   lv_label_set_text(name, shown);
   lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
@@ -523,10 +678,12 @@ static void entryRow(lv_obj_t* body, int first, int n) {
 
 static void showEntries() {
   s_step = DBP_ENTRIES;
-  char title[64];
-  if (s_family < 0) snprintf(title, sizeof(title), "%s %s", fdbMaker(s_maker)->name, s_material);
-  else snprintf(title, sizeof(title), "%s %s: %s", fdbMaker(s_maker)->name, s_material,
-                T(FAMILY_TEXT[s_family]));
+  char title[96];
+  listTitle(title, sizeof(title));
+  if (s_family >= 0) {
+    const size_t used = strlen(title);
+    snprintf(title + used, sizeof(title) - used, ": %s", T(FAMILY_TEXT[s_family]));
+  }
   setTitle(title);
   lv_obj_t* body = newBody(DBP_BODY_Y, DBP_BODY_H);
   logLvMem("dbpick-entries/pre", 0);
@@ -550,15 +707,25 @@ static void showFamilyStep() {
   showFamilies(counts, typical, total);
 }
 
-// The list has come in: straight to it, or through the families first.
-static void showLoadedList() {
+// The list of one line, or of all: straight to it, or through the families
+// first.
+static void showLineList() {
   int counts[CF_COUNT], typical[CF_COUNT];
+  s_family = -1;
   const int total = countNames(counts, typical);
   if (total == 0) { showMessage(T(STR_DBPICK_EMPTY)); return; }
-  s_family = -1;
   s_family_step = total > DBP_FAMILY_MIN_ROWS;
   if (s_family_step) showFamilies(counts, typical, total);
   else showEntries();
+}
+
+// The list has come in: through the product lines where it has two or more.
+static void showLoadedList() {
+  s_line = -1;
+  countLines();
+  s_line_step = s_line_n >= 2;
+  if (s_line_step) showLines();
+  else showLineList();
 }
 
 // ------------------------------------------------------------
@@ -640,9 +807,14 @@ void dbPickClose() {
 
 // Starts the load the screen needs, or keeps it wanted for the next pass:
 // the task cannot start while another load is still running.
+static bool startJob(FdbJob job) {
+  if (job == FDB_JOB_INDEX) return fdbStartIndex();
+  if (job == FDB_JOB_PAIRS) return fdbStartPairs(fdbMaker(s_maker)->name);
+  return fdbStartEntries(fdbMaker(s_maker)->name, s_material);
+}
+
 static void startLoad(FdbJob job) {
-  const bool started = job == FDB_JOB_INDEX ? fdbStartIndex()
-                                            : fdbStartEntries(fdbMaker(s_maker)->name, s_material);
+  const bool started = startJob(job);
   s_want = started ? FDB_JOB_NONE : job;
   if (!started) return;
   s_wait = job;
@@ -656,14 +828,18 @@ static void openPicker() {
   dbPickClose();
   initStyles();
   buildFrame();
+  s_letter = -1;
   setTitle(T(STR_DBPICK_MAKER_TITLE));
   if (fdbIndexReady()) showMakers();
   else startLoad(FDB_JOB_INDEX);
 }
 
-static void showLoadFailure(int code) {
+// An index the server says it has not got: an older Spoolman, or a FilaMan
+// without its FilamentDB plugin.
+static void showLoadFailure(FdbJob job, int code) {
   char text[96];
-  if (code == 404 || code == 405) copyT(text, sizeof(text), STR_DBPICK_NEEDS_NEWER);
+  const bool missing = job == FDB_JOB_INDEX && (code == 404 || code == 405);
+  if (missing) copyT(text, sizeof(text), backendIsFilaMan() ? STR_DBPICK_FM_NO_PLUGIN : STR_DBPICK_NEEDS_NEWER);
   else snprintf(text, sizeof(text), T(STR_DBPICK_FAILED), code);
   showMessage(text);
 }
@@ -680,12 +856,14 @@ static void collectLoad() {
   s_wait = FDB_JOB_NONE;
   linkWaitCardHide();
   if (code != 200 || !current) {
-    logSDf("DbPick: %s load failed, code %d, current %d",
-           job == FDB_JOB_INDEX ? "index" : "list", code, (int)current);
-    showLoadFailure(code);
+    logSDf("DbPick: load %d failed, code %d, current %d", (int)job, code, (int)current);
+    // Back from the message leads to the makers.
+    if (job == FDB_JOB_PAIRS) s_step = DBP_MATERIAL;
+    showLoadFailure(job, code);
     return;
   }
   if (job == FDB_JOB_INDEX) showMakers();
+  else if (job == FDB_JOB_PAIRS) showMaterials();
   else showLoadedList();
 }
 
@@ -697,9 +875,14 @@ static void goBack() {
   switch (s_step) {
     case DBP_ENTRIES:
       if (s_family_step) showFamilyStep();
+      else if (s_line_step) showLines();
       else showMaterials();
       break;
-    case DBP_FAMILY:   showMaterials(); break;
+    case DBP_FAMILY:
+      if (s_line_step) showLines();
+      else showMaterials();
+      break;
+    case DBP_LINE:     showMaterials(); break;
     case DBP_MATERIAL: showMakers();    break;
     default:
       dbPickClose();
@@ -724,7 +907,13 @@ static void runNav(DbpNav nav, int arg) {
     case NAV_OPEN:     openPicker(); break;
     case NAV_CLOSE:    dbPickClose(); break;
     case NAV_BACK:     goBack(); break;
-    case NAV_MAKER:    s_maker = arg; showMaterials(); break;
+    case NAV_LETTER:   showLetter(arg); break;
+    case NAV_MAKER:
+      s_maker = arg;
+      // The FilamentDB names a maker's materials only when asked.
+      if (fdbMakerHasPairs(arg)) showMaterials();
+      else startLoad(FDB_JOB_PAIRS);
+      break;
     case NAV_MATERIAL: {
       const FdbPair* p = fdbPair(arg);
       if (!p) return;
@@ -732,6 +921,7 @@ static void runNav(DbpNav nav, int arg) {
       startLoad(FDB_JOB_ENTRIES);
       break;
     }
+    case NAV_LINE:     s_line = arg < s_line_n ? arg : -1; showLineList(); break;
     case NAV_FAMILY:   s_family = arg < CF_COUNT ? arg : -1; showEntries(); break;
     case NAV_ENTRY: {
       const int n = sizesFrom(arg);

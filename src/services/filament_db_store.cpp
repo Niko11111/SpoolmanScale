@@ -13,8 +13,8 @@
 #include "../hardware/sd_logger.h"
 #include "filament_db.h"
 
-// Behind the log ring and the Bambu catalog. 20 kB at the most today
-// (160 makers, 640 pairs), in 32 kB so the database can grow.
+// Behind the log ring and the Bambu catalog. 28 kB at the most today
+// (400 makers, 640 pairs), in 32 kB so the database can grow.
 #define STORE_OFFSET        (FLASH_LOG_BYTES + BAMBU_CATALOG_BYTES)
 #define STORE_BYTES         (32UL * 1024UL)
 #define STORE_SECTOR        4096UL

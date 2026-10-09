@@ -93,14 +93,26 @@ static int addMaker(const char* name) {
   snprintf(m.name, sizeof(m.name), "%s", name);
   m.count = 0;
   m.owned = false;
+  m.pairs_known = false;
   return s_maker_n++;
+}
+
+void fdbMakerAdd(const char* maker, uint16_t count) {
+  if (!s_makers || !maker || !maker[0]) return;
+  const int mi = addMaker(maker);
+  if (mi >= 0) s_makers[mi].count = count;
 }
 
 void fdbIndexAdd(const char* maker, const char* material) {
   if (!s_makers || !s_pairs || !maker || !maker[0] || !material || !material[0]) return;
   const int mi = addMaker(maker);
   if (mi < 0) return;
-  s_makers[mi].count++;
+  // A maker that came without its materials keeps the database's own count;
+  // fdbTake() marks it once they are in.
+  if (s_job == FDB_JOB_INDEX) {
+    s_makers[mi].count++;
+    s_makers[mi].pairs_known = true;
+  }
   for (int i = 0; i < s_pair_n; i++) {
     if (s_pairs[i].maker == mi && strcasecmp(s_pairs[i].material, material) == 0) {
       s_pairs[i].count++;
@@ -126,6 +138,12 @@ bool fdbEntryAdd(const FdbEntry& e) {
   return true;
 }
 
+bool fdbEntryListed(const FdbEntry& e) {
+  for (int i = 0; s_entries && i < s_entry_n; i++)
+    if (s_entries[i].weight_g == e.weight_g && strcmp(s_entries[i].name, e.name) == 0) return true;
+  return false;
+}
+
 volatile size_t* fdbBytesCounter() { return &s_bytes; }
 
 int fdbIndexSnapshot(const FdbMaker** makers, const FdbPair** pairs, int* pair_n) {
@@ -145,6 +163,7 @@ bool fdbIndexRestore(const FdbMaker* makers, int maker_n, const FdbPair* pairs, 
   memcpy(s_pairs, pairs, sizeof(FdbPair) * (size_t)pair_n);
   for (int i = 0; i < maker_n; i++) {
     s_makers[i].owned = false;
+    s_makers[i].pairs_known = true;   // a stored index holds every pair
     s_makers[i].name[sizeof(s_makers[i].name) - 1] = '\0';
   }
   for (int i = 0; i < pair_n; i++) s_pairs[i].material[sizeof(s_pairs[i].material) - 1] = '\0';
@@ -193,7 +212,15 @@ static void runJob() {
     s_code = backendFdbLoadIndex(s_base);
     return;
   }
+  if (s_job == FDB_JOB_PAIRS) {
+    s_code = backendFdbLoadPairs(s_base, s_maker);
+    return;
+  }
   s_code = backendFdbLoadEntries(s_base, s_maker, s_material);
+}
+
+static const char* jobName(FdbJob job) {
+  return job == FDB_JOB_INDEX ? "index" : job == FDB_JOB_PAIRS ? "materials" : "entries";
 }
 
 static void fdbTask(void* arg) {
@@ -201,7 +228,7 @@ static void fdbTask(void* arg) {
   const uint32_t t0 = millis();
   runJob();
   logSDf("Filament DB: %s done in %lu ms, code=%d, %u bytes, %d makers, %d pairs, %d entries, stack left %u",
-         s_job == FDB_JOB_INDEX ? "index" : "entries", (unsigned long)(millis() - t0), s_code,
+         jobName(s_job), (unsigned long)(millis() - t0), s_code,
          (unsigned)s_bytes, s_maker_n, s_pair_n, s_entry_n,
          (unsigned)uxTaskGetStackHighWaterMark(NULL));
   __sync_synchronize();   // the results before the state, see backend_job.cpp
@@ -249,6 +276,22 @@ bool fdbStartEntries(const char* maker, const char* material) {
   return startTask(FDB_JOB_ENTRIES);
 }
 
+// The pairs of the makers looked at before are dropped when the next one
+// might not fit: a maker of the FilamentDB has up to 40 materials.
+#define FDB_PAIRS_ROOM  64
+
+static void dropLoadedPairs() {
+  for (int i = 0; i < s_maker_n; i++) s_makers[i].pairs_known = false;
+  s_pair_n = 0;
+}
+
+bool fdbStartPairs(const char* maker) {
+  if (s_state != FDB_IDLE || !maker || !s_index_ok) return false;
+  if (s_pair_n > FDB_PAIRS_MAX - FDB_PAIRS_ROOM) dropLoadedPairs();
+  snprintf(s_maker, sizeof(s_maker), "%s", maker);
+  return startTask(FDB_JOB_PAIRS);
+}
+
 FdbState fdbState() { return s_state; }
 FdbJob   fdbJob()   { return s_job; }
 size_t   fdbBytes() { return s_bytes; }
@@ -264,7 +307,12 @@ void fdbTake() {
   if (s_state != FDB_DONE) return;
   const bool ok = s_code == 200 && fdbResultCurrent();
   if (s_code == 404 || s_code == 405) { s_missing = true; s_missing_gen = s_gen; }
-  if (s_job == FDB_JOB_INDEX) {
+  if (s_job == FDB_JOB_PAIRS) {
+    // The maker counts as looked at even without a material of 1.75 mm; a
+    // failure leaves it to be asked again.
+    const int mi = findMaker(s_maker);
+    if (ok && mi >= 0) s_makers[mi].pairs_known = true;
+  } else if (s_job == FDB_JOB_INDEX) {
     if (ok) {
       sortMakers();
       s_index_ok  = true;
@@ -294,6 +342,11 @@ const FdbMaker* fdbMaker(int i)      { return (s_index_ok && i >= 0 && i < s_mak
 const FdbPair*  fdbPair(int i)       { return (s_index_ok && i >= 0 && i < s_pair_n) ? &s_pairs[i] : nullptr; }
 int             fdbEntryCount()      { return s_entries ? s_entry_n : 0; }
 const FdbEntry* fdbEntry(int i)      { return (s_entries && i >= 0 && i < s_entry_n) ? &s_entries[i] : nullptr; }
+
+bool fdbMakerHasPairs(int maker) {
+  const FdbMaker* m = fdbMaker(maker);
+  return m && m->pairs_known;
+}
 
 int fdbPairsOf(int maker, uint16_t* out, int out_max) {
   int n = 0;
@@ -389,6 +442,49 @@ void fdbDisplayName(const char* name, const char* maker, const char* material,
   if (shown[0]) snprintf(out, out_size, "%s", shown);
 }
 
+void fdbEntryDisplayName(const FdbEntry& e, const char* maker, const char* material,
+                         char* out, size_t out_size) {
+  const size_t at = e.color_at < strlen(e.name) ? e.color_at : 0;
+  fdbDisplayName(e.name + at, maker, material, out, out_size);
+}
+
+// The FilamentDB's line in front of the colour: "Panchroma Matte - " and
+// "   Other    - " leave "Panchroma Matte" and "Other".
+static void linePrefix(const FdbEntry& e, char* out, size_t out_size) {
+  out[0] = '\0';
+  if (e.color_at == 0 || e.color_at >= sizeof(e.name)) return;
+  char head[FDB_NAME_MAX];
+  snprintf(head, sizeof(head), "%.*s", (int)e.color_at, e.name);
+  char* dash = strstr(head, " - ");
+  if (dash) *dash = '\0';
+  squeezeSpaces(head);
+  char* start = head;
+  while (*start == ' ') start++;
+  swapGlyphs(start, out, out_size);
+}
+
+// "high-speed-matte" as "High Speed Matte".
+static void slugWords(const char* slug, char* out, size_t out_size) {
+  size_t o = 0;
+  bool word_start = true;
+  for (const char* p = slug; *p && o + 1 < out_size; p++) {
+    const char c = *p == '-' || *p == '_' ? ' ' : *p;
+    out[o++] = word_start && c >= 'a' && c <= 'z' ? (char)(c - 'a' + 'A') : c;
+    word_start = c == ' ';
+  }
+  out[o] = '\0';
+  squeezeSpaces(out);
+}
+
+#define FDB_LINE_OTHER  "---other---"
+
+void fdbLineName(const FdbEntry& e, const char* other_text, char* out, size_t out_size) {
+  if (!out || !out_size) return;
+  if (strcmp(e.line, FDB_LINE_OTHER) == 0) { snprintf(out, out_size, "%s", other_text); return; }
+  linePrefix(e, out, out_size);
+  if (!out[0]) slugWords(e.line, out, out_size);
+}
+
 // ---- the input for a new spool -------------------------------------------
 
 void fdbEntryToInput(const FdbEntry& e, const char* maker, const char* material,
@@ -398,6 +494,7 @@ void fdbEntryToInput(const FdbEntry& e, const char* maker, const char* material,
   snprintf(in->material, sizeof(in->material), "%s", material);
   snprintf(in->db_id, sizeof(in->db_id), "%s", e.id);
   snprintf(in->db_name, sizeof(in->db_name), "%s", e.name);
+  snprintf(in->subtype, sizeof(in->subtype), "%s", e.line);
   snprintf(in->db_color_hex, sizeof(in->db_color_hex), "%s", e.db_hex);
   // A clear filament names no hue, the way a clear Bambu tag is read.
   in->clear = e.family == CF_CLEAR;
@@ -410,7 +507,7 @@ void fdbEntryToInput(const FdbEntry& e, const char* maker, const char* material,
   // What the card shows: the material, then the database's own name.
   snprintf(in->product, sizeof(in->product), "%s", material);
   char shown[sizeof(e.name)];
-  fdbDisplayName(e.name, maker, material, shown, sizeof(shown));
+  fdbEntryDisplayName(e, maker, material, shown, sizeof(shown));
   utf8Cut(shown, sizeof(in->color_name) - 1, in->color_name, sizeof(in->color_name));
   in->net_weight_g   = e.weight_g;
   in->spool_weight_g = e.spool_weight_g;

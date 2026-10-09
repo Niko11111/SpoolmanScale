@@ -310,6 +310,12 @@ int filamanGetJson(const char* base_url, const char* api_key, const char* path,
                    JsonDocument& doc, JsonDocument& filter, uint32_t timeout_ms);
 int filamanPostJson(const char* base_url, const char* api_key, const char* path,
                     const String& body, JsonDocument& answer, uint32_t timeout_ms);
+// GET of an answer too large to hold as one document, as spoolmanGetStreamed()
+// does it: read() gets the body as it comes. The HTTP code, -2 when read()
+// said false.
+typedef bool (*FilamanBodyReader)(Stream& body, void* ctx);
+int filamanGetStreamed(const char* base_url, const char* api_key, const char* path,
+                       uint32_t timeout_ms, FilamanBodyReader read, void* ctx);
 // Percent-encodes a value for a query string.
 String filamanUrlEncode(const char* s);
 // A filament's article number wherever FilaMan keeps one, "" when none.

@@ -3358,6 +3358,21 @@ const char* const STRINGS[][3] = {
   { "Keine Filamente mit 1,75 mm gefunden.",
     "No 1.75 mm filaments found.",
     "Aucun filament de 1,75 mm trouvé." },  // STR_DBPICK_EMPTY
+  { "Produktlinie wählen",
+    "Choose product line",
+    "Choisir la gamme" },  // STR_DBPICK_LINE_TITLE
+  { "Sonstige",
+    "Other",
+    "Autres" },  // STR_DBPICK_LINE_OTHER
+  { "Hersteller über die Buchstaben oben wählen.",
+    "Pick a vendor by its letter above.",
+    "Choisissez le fabricant par sa lettre ci-dessus." },  // STR_DBPICK_PICK_LETTER
+  { "Die Auswahl aus der Datenbank braucht das FilamentDB-Plugin in FilaMan.",
+    "Picking from the database needs the FilamentDB plugin in FilaMan.",
+    "Le choix dans la base demande le plugin FilamentDB dans FilaMan." },  // STR_DBPICK_FM_NO_PLUGIN
+  { "Neues Filament aus der FilamentDB",
+    "New filament from the FilamentDB",
+    "Nouveau filament de la FilamentDB" },  // STR_TAGNEW_FROM_FDB
 };
 
 StringID tagWriteResultString(uint8_t code) {

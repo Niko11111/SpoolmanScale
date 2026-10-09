@@ -1814,6 +1814,23 @@ int filamanPostJson(const char* base_url, const char* api_key, const char* path,
   return 200;
 }
 
+int filamanGetStreamed(const char* base_url, const char* api_key, const char* path,
+                       uint32_t timeout_ms, FilamanBodyReader read, void* ctx) {
+  if (!hasBaseUrl(base_url) || !path || !read) return -1;
+  BackendHttp http;
+  if (!http.begin(String(base_url) + path)) return -1;
+  http.setTimeout(timeout_ms);
+  addApiKey(http, api_key);
+  const int code = http.GET();
+  if (code != 200) {
+    http.end();
+    return code;
+  }
+  const bool ok = read(*http.getStreamPtr(), ctx);
+  http.end();
+  return ok ? 200 : -2;
+}
+
 String filamanUrlEncode(const char* s) { return urlEncodeQuery(s); }
 
 const char* filamanFilamentArticle(JsonObjectConst fil) { return articleNumber(fil); }

@@ -10,14 +10,17 @@
 //  THE FILAMENT DATABASE, AS THE PICKER SEES IT
 //
 //  A spool without a maker's chip gets its filament from the backend's
-//  filament database instead: SpoolmanDB behind Spoolman. The picker asks
-//  in three steps - maker, material, colour - and each step needs only what
-//  this file holds:
+//  filament database instead: SpoolmanDB behind Spoolman, the FilamentDB
+//  behind FilaMan. The picker asks maker, material, product line and colour,
+//  and each step needs only what this file holds:
 //
 //  - the index: every maker, and every material each one has, with counts
-//    (SpoolmanDB: 67 makers, 6283 filaments of 1.75 mm, 08.10.2026);
+//    (SpoolmanDB: 67 makers, 6283 filaments of 1.75 mm, 08.10.2026). The
+//    FilamentDB names 311 makers but no materials per maker: those come with
+//    a load of their own when a maker is tapped (FDB_JOB_PAIRS);
 //  - the entries of one maker and material, with everything a new filament
-//    needs (Polymaker PLA, the longest: 224 names).
+//    needs (SpoolmanDB Polymaker PLA, the longest: 224 names; FilamentDB
+//    Polymaker PLA: 537 entries).
 //
 //  Both are loaded on a task of their own on core 0: the index is the whole
 //  database, 3 MB, read once and boiled down to a few kB. The loop starts a
@@ -31,14 +34,17 @@
 // ============================================================
 
 // Room for the index and one list. SpoolmanDB has 67 makers and 299 pairs of
-// maker and material; the longest list, Polymaker PLA, is 224 names and 444
-// entries counting the weights each comes in. An entry is about 190 bytes,
-// the full list 114 kB of PSRAM.
-#define FDB_MAKERS_MAX      160
+// maker and material, the FilamentDB 311 makers (09.10.2026); the longest
+// list, FilamentDB Polymaker PLA, is 537 entries. An entry is about 260
+// bytes, the full list 156 kB of PSRAM.
+#define FDB_MAKERS_MAX      400
 #define FDB_PAIRS_MAX       640
 #define FDB_ENTRIES_MAX     600
-// A name in SpoolmanDB is at most 58 bytes (08.10.2026).
-#define FDB_NAME_MAX        64
+// A name in SpoolmanDB is at most 58 bytes, a FilamentDB designation 84
+// (09.10.2026).
+#define FDB_NAME_MAX        96
+// A FilamentDB product line, "high-speed-matte": at most 24 bytes.
+#define FDB_LINE_MAX        25
 // The diameter the picker offers, and how close an entry has to be to it.
 #define FDB_DIAMETER_MM     1.75f
 #define FDB_DIAMETER_TOL_MM 0.02f
@@ -47,6 +53,9 @@ struct FdbMaker {
   char     name[32];
   uint16_t count;        // filaments of the diameter, all materials
   bool     owned;        // the inventory already has spools by this maker
+  // Its materials are in the index. In the byte that was padding: the
+  // record stays 36 bytes, and a stored index sets it on restore.
+  bool     pairs_known;
 };
 
 struct FdbPair {
@@ -58,7 +67,14 @@ struct FdbPair {
 // One filament of the database, in one weight.
 struct FdbEntry {
   char     id[80];       // SpoolmanDB ids run to 74 characters
-  char     name[FDB_NAME_MAX];   // "Tough+ Cyan", "PolyLite™ PLA Black"
+  char     name[FDB_NAME_MAX];   // "Tough+ Cyan", "Aero - Black (14103)"
+  // The product line as the database spells it ("aero", "---other---"),
+  // empty where the database has none (SpoolmanDB). The picker asks for it
+  // when a list has two or more.
+  char     line[FDB_LINE_MAX];
+  // Where the colour's name begins in name: the FilamentDB puts the line in
+  // front, "Aero - Black (14103)" from 7 on. 0 when the name is all colour.
+  uint8_t  color_at;
   char     hex[TAG_CREATE_COLOURS][7];   // "RRGGBB", for the screen
   // The single colour as the database spells it, which a filament created
   // from the entry takes over: SpoolmanDB writes see-through as AARRGGBB.
@@ -73,7 +89,7 @@ struct FdbEntry {
   int16_t  bed_temp;
 };
 
-enum FdbJob : uint8_t { FDB_JOB_NONE = 0, FDB_JOB_INDEX, FDB_JOB_ENTRIES };
+enum FdbJob : uint8_t { FDB_JOB_NONE = 0, FDB_JOB_INDEX, FDB_JOB_ENTRIES, FDB_JOB_PAIRS };
 enum FdbState : uint8_t { FDB_IDLE = 0, FDB_RUNNING, FDB_DONE };
 
 // ---- loading, from the loop task ---------------------------------
@@ -83,6 +99,9 @@ enum FdbState : uint8_t { FDB_IDLE = 0, FDB_RUNNING, FDB_DONE };
 // could not be created; the caller tries again on a later pass.
 bool fdbStartIndex();
 bool fdbStartEntries(const char* maker, const char* material);
+// The materials of one maker, for a database whose index names makers only
+// (the FilamentDB). They stay with the index.
+bool fdbStartPairs(const char* maker);
 
 FdbState fdbState();
 FdbJob   fdbJob();
@@ -116,6 +135,9 @@ const FdbMaker* fdbMaker(int i);
 // The pairs of one maker, by count, most first. Returns how many were
 // written to out (indices into fdbPair()).
 int             fdbPairsOf(int maker, uint16_t* out, int out_max);
+// Whether the maker's materials are known: always with SpoolmanDB, after
+// fdbStartPairs() with the FilamentDB.
+bool            fdbMakerHasPairs(int maker);
 const FdbPair*  fdbPair(int i);
 int             fdbEntryCount();
 const FdbEntry* fdbEntry(int i);
@@ -128,6 +150,14 @@ const FdbEntry* fdbEntry(int i);
 // plain letter. The server keeps the name as the database spells it.
 void fdbDisplayName(const char* name, const char* maker, const char* material,
                     char* out, size_t out_size);
+// The same for one entry: a FilamentDB entry shows the colour's name alone,
+// since maker, material and product line are picked already.
+void fdbEntryDisplayName(const FdbEntry& e, const char* maker, const char* material,
+                         char* out, size_t out_size);
+// The product line as a tile names it: the FilamentDB's own spelling in
+// front of the colour ("Panchroma Matte", "95A"), else the slug in words
+// ("basic" is "Basic"); other_text for "---other---".
+void fdbLineName(const FdbEntry& e, const char* other_text, char* out, size_t out_size);
 
 // Fills a new spool's input from one entry, maker and material.
 void fdbEntryToInput(const FdbEntry& e, const char* maker, const char* material,
@@ -136,10 +166,15 @@ void fdbEntryToInput(const FdbEntry& e, const char* maker, const char* material,
 // ---- filling, for the backend's loader on the job's task ---------
 
 void fdbIndexAdd(const char* maker, const char* material);
+// A maker without its materials yet, counted as the database counts it.
+void fdbMakerAdd(const char* maker, uint16_t count);
 // Marks a maker the inventory has. Case does not matter.
 void fdbMarkOwned(const char* maker);
 // False once the list is full.
 bool fdbEntryAdd(const FdbEntry& e);
+// Whether the list has the entry's name in its weight already: the same
+// filament on a cardboard and a plastic spool is one choice.
+bool fdbEntryListed(const FdbEntry& e);
 // A byte count the loader keeps up to date.
 volatile size_t* fdbBytesCounter();
 

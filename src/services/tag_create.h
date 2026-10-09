@@ -39,7 +39,9 @@ enum TagColorKind : uint8_t {
 struct TagCreateInput {
   char  vendor[32];          // "Bambu Lab"
   char  material[17];        // the base type, "PLA", "PETG"
-  char  subtype[24];         // "Tough+", "HF"; empty when the tag names none
+  // "Tough+", "HF"; empty when the tag names none. A FilamentDB product line
+  // ("high-speed-matte") runs to 24 bytes.
+  char  subtype[32];
   char  product[24];         // "PLA Tough+"
   char  article[8];          // "12601"; empty when unknown
   char  color_name[48];      // in the UI language; empty when unknown
@@ -68,7 +70,7 @@ struct TagCreateInput {
   // rather than read off a tag: the entry's id and name as the database has
   // them, and what it says that no tag does. Empty and 0 for a tag.
   char  db_id[80];           // SpoolmanDB ids run to 74 characters
-  char  db_name[64];
+  char  db_name[96];         // a FilamentDB designation runs to 84 bytes
   char  db_color_hex[9];     // a single colour, spelled as the database does
   float db_density;
   int   db_bed_temp;

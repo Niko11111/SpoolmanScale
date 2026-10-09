@@ -124,7 +124,9 @@ static void showPlan() {
       snprintf(buf, sizeof(buf), T(STR_TAGNEW_FOUND), s_plan.filament_id);
       showStatus(buf, UI_COL_GOOD, true);
       break;
-    case TFS_CREATE_DB:     showStatus(T(STR_TAGNEW_FROM_DB), UI_COL_ACCENT, true);         break;
+    case TFS_CREATE_DB:
+      showStatus(T(backendIsFilaMan() ? STR_TAGNEW_FROM_FDB : STR_TAGNEW_FROM_DB), UI_COL_ACCENT, true);
+      break;
     case TFS_CREATE_TAG:    showStatus(T(STR_TAGNEW_FROM_TAG), UI_COL_ACCENT, true);        break;
     case TFS_NOT_NEEDED:    showStatus(T(STR_TAGNEW_BAMBUDDY), UI_COL_INK_SOFT, true);      break;
     case TFS_NEEDS_CATALOG: showStatus(T(STR_TAGNEW_NEEDS_CATALOG), UI_COL_WARN, false);    break;

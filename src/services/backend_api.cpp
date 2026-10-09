@@ -12,6 +12,7 @@
 #include "services/bambuddy_device.h"
 #include "services/filaman_api.h"
 #include "services/filaman_filament.h"
+#include "services/filaman_filament_db.h"
 #include "services/http_progress.h"
 #include "services/last_dried.h"
 #include "services/list_limits.h"
@@ -747,15 +748,22 @@ bool backendCanCreateFromTag() {
 }
 
 bool backendCanBrowseFilamentDb() {
-  return backendMode() == BACKEND_SPOOLMAN;
+  return backendMode() == BACKEND_SPOOLMAN || backendMode() == BACKEND_FILAMAN;
 }
 
 int backendFdbLoadIndex(const char* base_url) {
+  if (backendIsFilaMan()) return filamanFdbLoadIndex(base_url, filamanApiKey());
   if (backendMode() != BACKEND_SPOOLMAN) return notSupported("FdbLoadIndex");
   return spoolmanFdbLoadIndex(base_url);
 }
 
+int backendFdbLoadPairs(const char* base_url, const char* maker) {
+  if (!backendIsFilaMan()) return notSupported("FdbLoadPairs");
+  return filamanFdbLoadPairs(base_url, filamanApiKey(), maker);
+}
+
 int backendFdbLoadEntries(const char* base_url, const char* maker, const char* material) {
+  if (backendIsFilaMan()) return filamanFdbLoadEntries(base_url, filamanApiKey(), maker, material);
   if (backendMode() != BACKEND_SPOOLMAN) return notSupported("FdbLoadEntries");
   return spoolmanFdbLoadEntries(base_url, maker, material);
 }

@@ -3,13 +3,18 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <esp_heap_caps.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
 #include "../hardware/sd_logger.h"
 #include "filaman_api.h"
+#include "filaman_filament_db.h"
 
 #define FM_FIL_TIMEOUT_MS   8000
+// prepare-filament fetches a new maker's two logos from the FilamentDB, 15 s
+// each at the most; usually it answers within a second.
+#define FM_PREPARE_TIMEOUT_MS  20000
 // FilaMan's page ceiling. Bambu's PLA alone came to 234 filaments on a test
 // instance, so a lookup reads more than one page.
 #define FM_FIL_PAGE_SIZE     200
@@ -37,9 +42,12 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 
 SpiRamAllocator s_psram;
 
-// What the walk through the vendor's filaments has found so far.
+// What the walk through the vendor's filaments has found so far. For an
+// entry picked from the FilamentDB the two mean the entry's id and its
+// designation instead (judgeDbFilament()).
 struct FilamentSearch {
   const TagCreateInput* in;
+  char material_type[24]; // FilamentDB entry: the type FilaMan files it under
   int  by_article;        // lowest id carrying the article number
   int  by_look;           // lowest id with the colour and the product line
   char name_article[64];
@@ -170,34 +178,76 @@ static void judgeFilament(JsonObjectConst fil, FilamentSearch* s) {
     keepLowest(id, designation, &s->by_look, s->name_look);
 }
 
+// The id FilaMan's FilamentDB import keeps on a filament, as text; it writes
+// a number.
+static void filamentDbId(JsonObjectConst fil, char* out, size_t out_size) {
+  JsonVariantConst v = fil["custom_fields"]["filamentdb_id"];
+  if (v.is<const char*>()) snprintf(out, out_size, "%s", v.as<const char*>());
+  else if (v.is<long>())   snprintf(out, out_size, "%ld", v.as<long>());
+  else                     out[0] = '\0';
+}
+
+// A filament picked from the FilamentDB is the one FilaMan imported from the
+// same entry, or one of the same designation and type.
+static void judgeDbFilament(JsonObjectConst fil, FilamentSearch* s) {
+  const int id = fil["id"] | 0;
+  const char* designation = fil["designation"] | "";
+  if (id <= 0) return;
+  char db_id[16];
+  filamentDbId(fil, db_id, sizeof(db_id));
+  if (db_id[0] && strcmp(db_id, s->in->db_id) == 0) {
+    keepLowest(id, designation, &s->by_article, s->name_article);
+    return;
+  }
+  if (strcasecmp(designation, s->in->db_name) == 0 &&
+      strcasecmp(fil["material_type"] | "", s->material_type) == 0)
+    keepLowest(id, designation, &s->by_look, s->name_look);
+}
+
 static void filamentFilter(JsonDocument& filter) {
   JsonObject f = filter["items"].to<JsonArray>().add<JsonObject>();
   f["id"]                      = true;
   f["designation"]             = true;
+  f["material_type"]           = true;
   f["material_subgroup"]       = true;
   f["manufacturer_color_name"] = true;
   f["shop_url"]                = true;
   f["custom_fields"]["article_number"]     = true;
   f["custom_fields"]["bambu_product_code"] = true;
+  f["custom_fields"]["filamentdb_id"]      = true;
   f["colors"].to<JsonArray>().add<JsonObject>()["color"]["hex_code"] = true;
 }
 
-// Walks the vendor's filaments of the tag's material. 0 when done, -1 when a
-// page could not be read.
+// Walks the vendor's filaments of the tag's material; for a FilamentDB entry
+// all of them, since the type it is filed under is FilaMan's own spelling.
+// 0 when done, -1 when a page could not be read.
 static int searchFilaments(const char* base_url, const char* api_key, int vendor_id,
                            FilamentSearch* s) {
   JsonDocument filter;
   filamentFilter(filter);
-  const String base = String("/api/v1/filaments?manufacturer_id=") + vendor_id + "&type=" +
-                      filamanUrlEncode(s->in->material) + "&page_size=" + FM_FIL_PAGE_SIZE + "&page=";
+  const bool picked = s->in->db_id[0] != '\0';
+  String base = String("/api/v1/filaments?manufacturer_id=") + vendor_id;
+  if (!picked) base += String("&type=") + filamanUrlEncode(s->in->material);
+  base += String("&page_size=") + FM_FIL_PAGE_SIZE + "&page=";
   for (int page = 1; page <= FM_FIL_MAX_PAGES; page++) {
     JsonDocument doc(&s_psram);
     const int n = readPage(base_url, api_key, base + page, doc, filter);
     if (n < 0) return n;
-    for (JsonObjectConst fil : doc["items"].as<JsonArrayConst>()) judgeFilament(fil, s);
+    for (JsonObjectConst fil : doc["items"].as<JsonArrayConst>()) {
+      if (picked) judgeDbFilament(fil, s);
+      else        judgeFilament(fil, s);
+    }
     if (n < FM_FIL_PAGE_SIZE) break;
   }
   return 0;
+}
+
+// The type FilaMan files a FilamentDB entry under, the way its own import
+// does: the material's key in capitals, "PLA-PLUS" for "PLA+/Pro". The name
+// itself when the key is not known.
+static void dbMaterialType(const TagCreateInput& in, char* out, size_t out_size) {
+  if (!filamanFdbMaterialKey(in.material, out, out_size)) snprintf(out, out_size, "%s", in.material);
+  for (char* p = out; *p; p++) if (*p >= 'a' && *p <= 'z') *p = (char)(*p - 'a' + 'A');
 }
 
 // ------------------------------------------------------------
@@ -221,12 +271,18 @@ void filamanPlanTagFilament(const char* base_url, const char* api_key,
   if (plan->vendor_id > 0) {
     FilamentSearch s = {};
     s.in = &in;
+    dbMaterialType(in, s.material_type, sizeof(s.material_type));
     if (searchFilaments(base_url, api_key, plan->vendor_id, &s) < 0) {
       plan->state = TFS_FAILED;
       plan->http_code = s_failed_code;
       return;
     }
     if (s.by_article > 0 || s.by_look > 0) { planFound(s, plan); return; }
+  }
+  if (in.db_id[0]) {
+    snprintf(plan->name, sizeof(plan->name), "%s", in.db_name);
+    plan->state = TFS_CREATE_DB;
+    return;
   }
   if (!in.names_known || (!in.color_count && !in.clear)) { plan->state = TFS_NEEDS_CATALOG; return; }
   tagCreateFilamanDesignation(in, plan->name, sizeof(plan->name));
@@ -304,10 +360,97 @@ static void filamentBody(const TagCreateInput& in, int vendor_id, const ColorSet
   if (in.temp_max > 0) body["custom_fields"]["temp_nozzle_max"] = in.temp_max;
 }
 
+// ------------------------------------------------------------
+//  Creating from the FilamentDB
+// ------------------------------------------------------------
+
+static void addColorMode(const TagCreateInput& in, JsonDocument& body) {
+  body["color_mode"] = in.color_count >= 2 ? "multi" : "single";
+  if (in.color_count >= 2) body["multi_color_style"] = in.color_kind == TCK_DUAL ? "striped" : "gradient";
+}
+
+// What prepare-filament takes: the maker as the FilamentDB knows it, so one
+// FilaMan has not got yet arrives with its logos, and the colours with their
+// names. It creates both where missing and answers their ids.
+static void prepareBody(const TagCreateInput& in, JsonDocument& body) {
+  body["manufacturer_name"] = in.vendor;
+  FmFdbMakerInfo maker;
+  if (filamanFdbMakerInfo(in.vendor, &maker)) {
+    body["manufacturer_slug"]           = maker.slug;
+    body["manufacturer_has_web_logo"]   = maker.web_logo;
+    body["manufacturer_has_label_logo"] = maker.label_logo;
+  }
+  body["designation"]   = in.db_name;
+  body["material_name"] = in.material;
+  char key[24];
+  if (filamanFdbMaterialKey(in.material, key, sizeof(key))) body["material_key"] = key;
+  if (in.subtype[0]) body["material_subtype"] = in.subtype;
+  body["diameter_mm"] = in.diameter_mm > 0 ? in.diameter_mm : TAG_CREATE_DIAMETER_MM;
+  if (in.spool_weight_g > 0) body["spool_profile_empty_weight_g"] = in.spool_weight_g;
+  addColorMode(in, body);
+  JsonArray colors = body["colors"].to<JsonArray>();
+  for (uint8_t i = 0; i < in.color_count; i++) {
+    JsonObject c = colors.add<JsonObject>();
+    char hex[8];
+    snprintf(hex, sizeof(hex), "#%s", in.colors_hex[i]);
+    c["hex_code"] = hex;
+    // The entry names its one colour; the colours of a multi colour entry
+    // have no names of their own.
+    if (in.color_count == 1) c["color_name"] = in.color_name;
+    c["position"] = i + 1;
+  }
+}
+
+// The filament, with the fields FilaMan's own FilamentDB import fills.
+static void dbFilamentBody(const TagCreateInput& in, JsonObjectConst prepared, JsonDocument& body) {
+  char type[24];
+  dbMaterialType(in, type, sizeof(type));
+  body["designation"]     = in.db_name;
+  body["manufacturer_id"] = prepared["manufacturer_id"] | 0;
+  body["material_type"]   = type;
+  if (in.subtype[0]) body["material_subgroup"] = in.subtype;
+  body["manufacturer_color_name"] = in.color_name;
+  body["diameter_mm"] = in.diameter_mm > 0 ? in.diameter_mm : TAG_CREATE_DIAMETER_MM;
+  if (in.db_density > 0.0f)  body["density_g_cm3"] = in.db_density;
+  if (in.net_weight_g > 0)   body["raw_material_weight_g"] = in.net_weight_g;
+  if (in.spool_weight_g > 0) body["default_spool_weight_g"] = in.spool_weight_g;
+  addColorMode(in, body);
+  JsonArray colors = body["colors"].to<JsonArray>();
+  int position = 1;
+  for (JsonVariantConst id : prepared["color_ids"].as<JsonArrayConst>()) {
+    JsonObject color = colors.add<JsonObject>();
+    color["color_id"] = id.as<int>();
+    color["position"] = position++;
+  }
+  body["custom_fields"]["filamentdb_id"] = atoi(in.db_id);
+  if (in.temp_max > 0)    body["custom_fields"]["temp_nozzle_max"] = in.temp_max;
+  if (in.db_bed_temp > 0) body["custom_fields"]["temp_bed"] = in.db_bed_temp;
+}
+
+static int createDbFilament(const char* base_url, const char* api_key, const TagCreateInput& in,
+                            int* out_filament_id) {
+  JsonDocument body;
+  prepareBody(in, body);
+  String payload;
+  serializeJson(body, payload);
+  JsonDocument prepared;
+  const int code = filamanPostJson(base_url, api_key, "/api/v1/filamentdb/prepare-filament", payload,
+                                   prepared, FM_PREPARE_TIMEOUT_MS);
+  const int maker_id = prepared["manufacturer_id"] | 0;
+  logSDf("FilaMan: prepare-filament \"%s\" -> HTTP %d, maker %d, %u colours", in.db_name, code,
+         maker_id, (unsigned)prepared["color_ids"].size());
+  if (code != 200) return code;
+  if (maker_id <= 0) return -1;
+  JsonDocument filament;
+  dbFilamentBody(in, prepared.as<JsonObjectConst>(), filament);
+  return postForId(base_url, api_key, "/api/v1/filaments", filament, out_filament_id);
+}
+
 int filamanCreateTagFilament(const char* base_url, const char* api_key,
                              const TagCreateInput& in, const TagFilamentPlan& plan,
                              int* out_filament_id) {
   *out_filament_id = 0;
+  if (plan.state == TFS_CREATE_DB) return createDbFilament(base_url, api_key, in, out_filament_id);
   int vendor_id = 0;
   int code = ensureVendor(base_url, api_key, in, plan.vendor_id, &vendor_id);
   if (vendor_id <= 0) return code;

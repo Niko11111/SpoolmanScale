@@ -8,6 +8,7 @@
 #include <strings.h>
 
 #include "../hardware/sd_logger.h"
+#include "fdb_block_stream.h"
 #include "filament_db.h"
 #include "filament_db_store.h"
 #include "spoolman_api.h"
@@ -20,9 +21,6 @@
 #define SM_FDB_PAGE            100
 // Polymaker PLA, the longest list, is 768 entries over every diameter.
 #define SM_FDB_PAGES_MAX       20
-// Read ahead from the socket in blocks: ArduinoJson asks for one byte at a
-// time, and one socket read per byte made 3 MB a matter of minutes.
-#define SM_FDB_READ_BUF        1024
 // The index counts each filament once, not once per weight it comes in:
 // hashes of maker, material and name in an open table, a power of two well
 // above the 4705 names of 1.75 mm.
@@ -32,44 +30,6 @@
 // ------------------------------------------------------------
 //  Reading the body
 // ------------------------------------------------------------
-
-// Hands the body on in blocks, never asking the socket for more than it
-// already has: on a kept connection a read past the end of the answer would
-// wait out the timeout. Counts what it read for the waiting card.
-class FdbBlockStream : public Stream {
- public:
-  explicit FdbBlockStream(Stream& in) : in_(in) {}
-  int available() override { return (int)(len_ - pos_) + in_.available(); }
-  int read() override { return fill() ? buf_[pos_++] : -1; }
-  int peek() override { return fill() ? buf_[pos_] : -1; }
-  size_t readBytes(char* out, size_t n) override {
-    size_t got = 0;
-    while (got < n && fill()) {
-      size_t k = len_ - pos_;
-      if (k > n - got) k = n - got;
-      memcpy(out + got, buf_ + pos_, k);
-      pos_ += k;
-      got += k;
-    }
-    return got;
-  }
-  size_t write(uint8_t) override { return 0; }
-  void   flush() override {}
- private:
-  bool fill() {
-    if (pos_ < len_) return true;
-    const int ready = in_.available();
-    const size_t want = ready > 0 ? (ready < SM_FDB_READ_BUF ? (size_t)ready : SM_FDB_READ_BUF) : 1;
-    len_ = in_.readBytes((char*)buf_, want);
-    pos_ = 0;
-    *fdbBytesCounter() += len_;
-    return len_ > 0;
-  }
-  Stream& in_;
-  uint8_t buf_[SM_FDB_READ_BUF];
-  size_t  len_ = 0;
-  size_t  pos_ = 0;
-};
 
 static int skipBlanks(Stream& s) {
   int c;
@@ -230,16 +190,6 @@ static void readColors(JsonArrayConst list, const char* direction, FdbEntry* e) 
   e->family = colorFamilyOf(e->hex[0], e->ncolors);
 }
 
-// One name in one weight: the same filament on a cardboard and a plastic
-// spool is one choice here.
-static bool alreadyListed(const FdbEntry& e) {
-  for (int i = 0; i < fdbEntryCount(); i++) {
-    const FdbEntry* o = fdbEntry(i);
-    if (o->weight_g == e.weight_g && strcmp(o->name, e.name) == 0) return true;
-  }
-  return false;
-}
-
 static void entryElement(JsonObjectConst j, void* p) {
   EntriesCtx* ctx = (EntriesCtx*)p;
   ctx->seen_on_page++;
@@ -257,7 +207,7 @@ static void entryElement(JsonObjectConst j, void* p) {
   JsonArrayConst multi = j["color_hexes"].as<JsonArrayConst>();
   if (multi.size() >= 2) readColors(multi, j["multi_color_direction"] | "", &e);
   else                   readColor(j["color_hex"] | "", &e);
-  if (!e.id[0] || !e.name[0] || alreadyListed(e)) return;
+  if (!e.id[0] || !e.name[0] || fdbEntryListed(e)) return;
   if (!fdbEntryAdd(e)) ctx->full = true;
 }
 

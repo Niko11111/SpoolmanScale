@@ -297,12 +297,14 @@ void backendLookupColorName(const char* hex6, const char* material,
 bool backendCanCreateFromTag();
 
 // The backend's filament database, for a spool without a maker's chip
-// (services/filament_db.h holds what these load). Spoolman 0.27 and later
-// only, for now; FilaMan's FilamentDB and BamBuddy's colour catalogue follow.
-// Both loads block their caller and run on filament_db's own task, never on
-// the loop; base_url is the copy that task took. Each returns the HTTP code.
+// (services/filament_db.h holds what these load): SpoolmanDB behind Spoolman
+// 0.27 and later, the FilamentDB behind FilaMan; BamBuddy's colour catalogue
+// follows. The loads block their caller and run on filament_db's own task,
+// never on the loop; base_url is the copy that task took. Each returns the
+// HTTP code. Only FilaMan needs the pairs load: its index names makers alone.
 bool backendCanBrowseFilamentDb();
 int  backendFdbLoadIndex(const char* base_url);
+int  backendFdbLoadPairs(const char* base_url, const char* maker);
 int  backendFdbLoadEntries(const char* base_url, const char* maker, const char* material);
 
 int  backendCreateSpoolField(const char* base_url, const char* field_name,

@@ -286,3 +286,8 @@ STR_DBPICK_SIZE_TITLE	20	376	NEVER	src/ui/db_pick_screen.cpp:559 size question, 
 STR_DBPICK_NEEDS_NEWER	16	452	WRAP:3	src/ui/db_pick_screen.cpp message, DBP_ROW_W
 STR_DBPICK_FAILED	16	452	WRAP:3	src/ui/db_pick_screen.cpp message, DBP_ROW_W
 STR_DBPICK_EMPTY	16	452	WRAP:3	src/ui/db_pick_screen.cpp message, DBP_ROW_W
+STR_DBPICK_LINE_TITLE	14	452	NEVER	src/ui/db_pick_screen.cpp caption, DBP_ROW_W
+STR_DBPICK_LINE_OTHER	16	140	NEVER	src/ui/db_pick_screen.cpp line tile, 148 - 2 * (2 + 1) - 2
+STR_DBPICK_PICK_LETTER	14	452	WRAP:2	src/ui/db_pick_screen.cpp caption, DBP_ROW_W
+STR_DBPICK_FM_NO_PLUGIN	16	452	WRAP:3	src/ui/db_pick_screen.cpp message, DBP_ROW_W
+STR_TAGNEW_FROM_FDB	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD

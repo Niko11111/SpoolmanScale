@@ -16,10 +16,14 @@
 //  A new filament is written the way FilaMan's FilamentDB import writes
 //  them ("Tough Plus - Cyan (12601)", subgroup "tough-plus"), so it sits
 //  among imported ones and the next lookup finds it by its article number.
+//  An entry picked from the FilamentDB (in.db_id set) is looked up by the
+//  id that import keeps in custom_fields.filamentdb_id, and created through
+//  FilaMan's prepare-filament, as its own form does it.
 //  Called through backend_api.h only.
 // ============================================================
 
-// Reads only: TFS_FOUND, TFS_CREATE_TAG, TFS_NEEDS_CATALOG or TFS_FAILED.
+// Reads only: TFS_FOUND, TFS_CREATE_TAG, TFS_CREATE_DB, TFS_NEEDS_CATALOG or
+// TFS_FAILED.
 void filamanPlanTagFilament(const char* base_url, const char* api_key,
                             const TagCreateInput& in, TagFilamentPlan* plan);
 
