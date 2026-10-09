@@ -73,6 +73,14 @@ bool bbHasDriedField();
 // last_dried_at and be dropped with a 200.
 void bbForgetDriedField();
 
+// bbHasDriedField() for a write: while nothing was read from this server
+// since boot or a switch, it reads the spool first and remembers the answer.
+// Without it, a date set on a spool still on screen from the server before
+// went to the note although the new server has the field. False when the
+// read fails, so the write falls back to the user's choice.
+bool bbProbeDriedField(const char* base_url, const char* api_key, int spool_id,
+                       uint32_t timeout_ms);
+
 // Stable device id derived from the MAC, "ssc-<12 hex>", mirroring the
 // "sb-<mac>" of BamBuddy's own daemon. Needs no NVS entry.
 const char* bbDeviceId();

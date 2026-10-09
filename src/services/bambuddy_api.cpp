@@ -48,8 +48,10 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 static BbInventoryMode s_mode = BB_INV_LOCAL;
 static char s_spoolman_url[96] = "";
 // Whether the last spool BamBuddy sent carried last_dried_at (#2863), set in
-// mapSpool() on every read. See bbHasDriedField().
-static bool s_has_dried_field = false;
+// mapSpool() on every read. See bbHasDriedField(). Known only once a spool
+// was read from this server; until then a write asks first.
+static bool s_has_dried_field   = false;
+static bool s_dried_field_known = false;
 
 static bool hasBaseUrl(const char* base_url) {
   return base_url && strlen(base_url) > 7;   // longer than "http://"
@@ -255,7 +257,26 @@ const char* bbSpoolmanUrl() { return s_spoolman_url; }
 
 bool bbHasDriedField() { return s_has_dried_field; }
 
-void bbForgetDriedField() { s_has_dried_field = false; }
+void bbForgetDriedField() {
+  s_has_dried_field   = false;
+  s_dried_field_known = false;
+}
+
+bool bbProbeDriedField(const char* base_url, const char* api_key, int spool_id,
+                       uint32_t timeout_ms) {
+  if (s_dried_field_known) return s_has_dried_field;
+  if (!hasBaseUrl(base_url) || spool_id <= 0) return false;
+
+  char url[192];
+  snprintf(url, sizeof(url), "%s%s/spools/%d", base_url, bbInventoryBase(), spool_id);
+  JsonDocument cur;
+  if (getJson(url, api_key, cur, timeout_ms, nullptr, nullptr) != 200) return false;
+  s_has_dried_field   = jsonHasKey(cur.as<JsonObjectConst>(), "last_dried_at");
+  s_dried_field_known = true;
+  logSDf("BamBuddy: own drying date field %s (asked before a write)",
+         s_has_dried_field ? "present" : "absent");
+  return s_has_dried_field;
+}
 
 // How long the mode question may take when a read has just been refused. The
 // same four seconds backendRefreshMode() gives it with the health check.
@@ -369,7 +390,8 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   // read only while the field is empty. Whether the server has the field is
   // taken from every spool it sends, null or not: an older BamBuddy answers
   // 200 to a PATCH with last_dried_at and drops it, so only a read can tell.
-  s_has_dried_field = jsonHasKey(src, "last_dried_at");
+  s_has_dried_field   = jsonHasKey(src, "last_dried_at");
+  s_dried_field_known = true;
   char dried[LAST_DRIED_ISO_MAX];
   lastDriedUtc(src["last_dried_at"] | (const char*)nullptr, dried, sizeof(dried));
   if (dried[0] || driedMarkerParse(note, dried, sizeof(dried))) extra["last_dried"] = dried;

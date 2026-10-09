@@ -1240,8 +1240,8 @@ int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* i
     case BACKEND_BAMBUDDY:
       // A BamBuddy with its own field (#2863) takes the date there, whatever
       // the setting says. Older ones have none, so the user picks where it
-      // goes instead.
-      if (bbHasDriedField()) {
+      // goes instead. Asked of the server when nothing was read from it yet.
+      if (bbProbeDriedField(backendBaseUrl(), bambuddyApiKey(), spool_id, timeout_ms)) {
         return bbPatchLastDried(backendBaseUrl(), bambuddyApiKey(), spool_id,
                                 iso_datetime, timeout_ms);
       }
