@@ -3373,6 +3373,36 @@ const char* const STRINGS[][3] = {
   { "Neues Filament aus der FilamentDB",
     "New filament from the FilamentDB",
     "Nouveau filament de la FilamentDB" },  // STR_TAGNEW_FROM_FDB
+  { "Tag und Datenbank weichen ab",
+    "Tag and database disagree",
+    "Le tag et la base diffèrent" },  // STR_TAGDB_TITLE
+  { "Tag",
+    "Tag",
+    "Tag" },  // STR_TAGDB_TAG
+  { "Datenbank",
+    "Database",
+    "Base" },  // STR_TAGDB_DB
+  { "Farbe",
+    "Colour",
+    "Couleur" },  // STR_TAGDB_COLOR
+  { "Düse min.",
+    "Nozzle min",
+    "Buse min." },  // STR_TAGDB_NOZZLE_MIN
+  { "Düse max.",
+    "Nozzle max",
+    "Buse max." },  // STR_TAGDB_NOZZLE_MAX
+  { "Gewicht",
+    "Weight",
+    "Poids" },  // STR_TAGDB_WEIGHT
+  { "Tag behalten",
+    "Keep the tag",
+    "Garder le tag" },  // STR_TAGDB_KEEP
+  { "Datenbank nehmen",
+    "Use the database",
+    "Prendre la base" },  // STR_TAGDB_TAKE
+  { "Aus dem Tag, ergänzt aus der Datenbank",
+    "From the tag, completed from the database",
+    "Du tag, complété par la base" },  // STR_TAGNEW_TAG_PLUS_DB
 };
 
 StringID tagWriteResultString(uint8_t code) {

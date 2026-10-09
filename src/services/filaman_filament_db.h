@@ -2,6 +2,8 @@
 
 #include <stddef.h>
 
+#include "tag_create.h"
+
 // ============================================================
 //  FILAMAN: THE FILAMENTDB FOR THE PICKER
 //
@@ -41,3 +43,12 @@ bool filamanFdbMakerInfo(const char* maker, FmFdbMakerInfo* out);
 // The FilamentDB's key of a material the picker names ("PLA+/Pro" is
 // "pla-plus"). False when no maker's materials named it yet.
 bool filamanFdbMaterialKey(const char* material, char* out, size_t out_size);
+
+// The FilamentDB entry of a tag's filament, found by its article number in
+// brackets ("Cyan (12601)", how the FilamentDB names Bambu colours) among
+// the maker's filaments. Of two entries for one article (the FilamentDB has
+// Tough+ Cyan once as PLA, once as PLA+), the one of the tag's material.
+// False when there is none, or the proxy could not be asked. On the loop,
+// for the plan; one request.
+bool filamanFdbFindForTag(const char* base_url, const char* api_key, const TagCreateInput& in,
+                          TagDbEntry* out);

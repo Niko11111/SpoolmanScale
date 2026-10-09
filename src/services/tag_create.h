@@ -74,6 +74,30 @@ struct TagCreateInput {
   char  db_color_hex[9];     // a single colour, spelled as the database does
   float db_density;
   int   db_bed_temp;
+  // The FilamentDB's own spellings, which a filament created from the entry
+  // takes: the colour's name ("Cyan (12601)"), the product line
+  // ("tough-plus") and the material's key ("pla"). Empty when unknown.
+  char  db_color_name[64];
+  char  db_line[32];
+  char  db_material_key[24];
+};
+
+// A database entry found for a tag's filament (services/tag_db_match.h
+// merges it into the tag's input). Only what the tag can be compared with
+// or lacks.
+struct TagDbEntry {
+  char  id[80];              // SpoolmanDB ids run to 74 characters
+  char  name[96];
+  char  color_name[64];
+  char  line[32];
+  char  material_key[24];
+  char  color_hex[7];        // the single colour, "RRGGBB"; empty when none
+  char  color_raw[9];        // the same as the database spells it
+  int   net_weight_g;        // 0 when unknown
+  float density;
+  int   nozzle_min;
+  int   nozzle_max;
+  int   bed_temp;
 };
 
 // Builds the input from the tag that was scanned last (g_tag), through the
@@ -117,6 +141,10 @@ struct TagFilamentPlan {
   int   extruder_temp;
   int   bed_temp;
   int   http_code;          // TFS_FAILED
+  // A tag's filament the database knows (TFS_CREATE_DB from a tag): the
+  // entry, for the card to merge in and compare (tag_db_match.h).
+  bool       db_found;
+  TagDbEntry db;
 };
 
 void tagFilamentPlanClear(TagFilamentPlan* plan);

@@ -10,6 +10,7 @@
 #include "../hardware/sd_logger.h"
 #include "filaman_api.h"
 #include "filaman_filament_db.h"
+#include "tag_db_match.h"
 
 #define FM_FIL_TIMEOUT_MS   8000
 // prepare-filament fetches a new maker's two logos from the FilamentDB, 15 s
@@ -246,7 +247,8 @@ static int searchFilaments(const char* base_url, const char* api_key, int vendor
 // does: the material's key in capitals, "PLA-PLUS" for "PLA+/Pro". The name
 // itself when the key is not known.
 static void dbMaterialType(const TagCreateInput& in, char* out, size_t out_size) {
-  if (!filamanFdbMaterialKey(in.material, out, out_size)) snprintf(out, out_size, "%s", in.material);
+  if (in.db_material_key[0]) snprintf(out, out_size, "%s", in.db_material_key);
+  else if (!filamanFdbMaterialKey(in.material, out, out_size)) snprintf(out, out_size, "%s", in.material);
   for (char* p = out; *p; p++) if (*p >= 'a' && *p <= 'z') *p = (char)(*p - 'a' + 'A');
 }
 
@@ -285,6 +287,14 @@ void filamanPlanTagFilament(const char* base_url, const char* api_key,
     return;
   }
   if (!in.names_known || (!in.color_count && !in.clear)) { plan->state = TFS_NEEDS_CATALOG; return; }
+  // The FilamentDB may know the tag's filament by its article number: the
+  // card then fills in from it what the tag lacks (tag_db_match.h).
+  if (filamanFdbFindForTag(base_url, api_key, in, &plan->db)) {
+    plan->db_found = true;
+    snprintf(plan->name, sizeof(plan->name), "%s", plan->db.name);
+    plan->state = TFS_CREATE_DB;
+    return;
+  }
   tagCreateFilamanDesignation(in, plan->name, sizeof(plan->name));
   plan->state = TFS_CREATE_TAG;
 }
@@ -364,6 +374,13 @@ static void filamentBody(const TagCreateInput& in, int vendor_id, const ColorSet
 //  Creating from the FilamentDB
 // ------------------------------------------------------------
 
+// The FilamentDB's own spellings, from a picked entry or from the entry of a
+// tag the FilamentDB knows. The tag's own subtype ("Tough+") is no line.
+static const char* dbLine(const TagCreateInput& in) { return in.db_line; }
+static const char* dbColorName(const TagCreateInput& in) {
+  return in.db_color_name[0] ? in.db_color_name : in.color_name;
+}
+
 static void addColorMode(const TagCreateInput& in, JsonDocument& body) {
   body["color_mode"] = in.color_count >= 2 ? "multi" : "single";
   if (in.color_count >= 2) body["multi_color_style"] = in.color_kind == TCK_DUAL ? "striped" : "gradient";
@@ -383,8 +400,10 @@ static void prepareBody(const TagCreateInput& in, JsonDocument& body) {
   body["designation"]   = in.db_name;
   body["material_name"] = in.material;
   char key[24];
-  if (filamanFdbMaterialKey(in.material, key, sizeof(key))) body["material_key"] = key;
-  if (in.subtype[0]) body["material_subtype"] = in.subtype;
+  if (in.db_material_key[0]) body["material_key"] = in.db_material_key;
+  else if (filamanFdbMaterialKey(in.material, key, sizeof(key))) body["material_key"] = key;
+  const char* line = dbLine(in);
+  if (line[0]) body["material_subtype"] = line;
   body["diameter_mm"] = in.diameter_mm > 0 ? in.diameter_mm : TAG_CREATE_DIAMETER_MM;
   if (in.spool_weight_g > 0) body["spool_profile_empty_weight_g"] = in.spool_weight_g;
   addColorMode(in, body);
@@ -396,7 +415,7 @@ static void prepareBody(const TagCreateInput& in, JsonDocument& body) {
     c["hex_code"] = hex;
     // The entry names its one colour; the colours of a multi colour entry
     // have no names of their own.
-    if (in.color_count == 1) c["color_name"] = in.color_name;
+    if (in.color_count == 1) c["color_name"] = dbColorName(in);
     c["position"] = i + 1;
   }
 }
@@ -408,8 +427,9 @@ static void dbFilamentBody(const TagCreateInput& in, JsonObjectConst prepared, J
   body["designation"]     = in.db_name;
   body["manufacturer_id"] = prepared["manufacturer_id"] | 0;
   body["material_type"]   = type;
-  if (in.subtype[0]) body["material_subgroup"] = in.subtype;
-  body["manufacturer_color_name"] = in.color_name;
+  const char* line = dbLine(in);
+  if (line[0]) body["material_subgroup"] = line;
+  body["manufacturer_color_name"] = dbColorName(in);
   body["diameter_mm"] = in.diameter_mm > 0 ? in.diameter_mm : TAG_CREATE_DIAMETER_MM;
   if (in.db_density > 0.0f)  body["density_g_cm3"] = in.db_density;
   if (in.net_weight_g > 0)   body["raw_material_weight_g"] = in.net_weight_g;
@@ -423,6 +443,9 @@ static void dbFilamentBody(const TagCreateInput& in, JsonObjectConst prepared, J
     color["position"] = position++;
   }
   body["custom_fields"]["filamentdb_id"] = atoi(in.db_id);
+  // From a tag also its article number, as a filament from the tag alone has.
+  if (in.article[0])      body["custom_fields"]["article_number"] = in.article;
+  if (in.temp_min > 0)    body["custom_fields"]["temp_nozzle_min"] = in.temp_min;
   if (in.temp_max > 0)    body["custom_fields"]["temp_nozzle_max"] = in.temp_max;
   if (in.db_bed_temp > 0) body["custom_fields"]["temp_bed"] = in.db_bed_temp;
 }
@@ -450,6 +473,13 @@ int filamanCreateTagFilament(const char* base_url, const char* api_key,
                              const TagCreateInput& in, const TagFilamentPlan& plan,
                              int* out_filament_id) {
   *out_filament_id = 0;
+  if (plan.state == TFS_CREATE_DB && plan.db_found && !in.db_id[0]) {
+    // The card merges the entry in before it creates; should it not have,
+    // the tag still wins over the entry.
+    TagCreateInput merged = in;
+    tagDbFill(&merged, plan.db);
+    return createDbFilament(base_url, api_key, merged, out_filament_id);
+  }
   if (plan.state == TFS_CREATE_DB) return createDbFilament(base_url, api_key, in, out_filament_id);
   int vendor_id = 0;
   int code = ensureVendor(base_url, api_key, in, plan.vendor_id, &vendor_id);

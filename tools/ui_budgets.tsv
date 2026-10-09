@@ -291,3 +291,13 @@ STR_DBPICK_LINE_OTHER	16	140	NEVER	src/ui/db_pick_screen.cpp line tile, 148 - 2 
 STR_DBPICK_PICK_LETTER	14	452	WRAP:2	src/ui/db_pick_screen.cpp caption, DBP_ROW_W
 STR_DBPICK_FM_NO_PLUGIN	16	452	WRAP:3	src/ui/db_pick_screen.cpp message, DBP_ROW_W
 STR_TAGNEW_FROM_FDB	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TAGDB_TITLE	20	400	NEVER	src/ui/tag_db_diff_popup.cpp title, UI_POPUP_W
+STR_TAGDB_TAG	14	116	NEVER	src/ui/tag_db_diff_popup.cpp column head, TDP_VALUE_W
+STR_TAGDB_DB	14	116	NEVER	src/ui/tag_db_diff_popup.cpp column head, TDP_VALUE_W
+STR_TAGDB_COLOR	16	120	NEVER	src/ui/tag_db_diff_popup.cpp row label, TDP_LABEL_W
+STR_TAGDB_NOZZLE_MIN	16	120	NEVER	src/ui/tag_db_diff_popup.cpp row label, TDP_LABEL_W
+STR_TAGDB_NOZZLE_MAX	16	120	NEVER	src/ui/tag_db_diff_popup.cpp row label, TDP_LABEL_W
+STR_TAGDB_WEIGHT	16	120	NEVER	src/ui/tag_db_diff_popup.cpp row label, TDP_LABEL_W
+STR_TAGDB_KEEP	16	184	NEVER	src/ui/tag_db_diff_popup.cpp button, TDP_BTN_W
+STR_TAGDB_TAKE	16	184	NEVER	src/ui/tag_db_diff_popup.cpp button, TDP_BTN_W
+STR_TAGNEW_TAG_PLUS_DB	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD

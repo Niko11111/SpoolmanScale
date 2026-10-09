@@ -495,6 +495,11 @@ void fdbEntryToInput(const FdbEntry& e, const char* maker, const char* material,
   snprintf(in->db_id, sizeof(in->db_id), "%s", e.id);
   snprintf(in->db_name, sizeof(in->db_name), "%s", e.name);
   snprintf(in->subtype, sizeof(in->subtype), "%s", e.line);
+  snprintf(in->db_line, sizeof(in->db_line), "%s", e.line);
+  // The colour's name as the database spells it, for a filament made from
+  // the entry: the end of a FilamentDB designation, a whole SpoolmanDB name.
+  const size_t at = e.color_at < strlen(e.name) ? e.color_at : 0;
+  snprintf(in->db_color_name, sizeof(in->db_color_name), "%s", e.name + at);
   snprintf(in->db_color_hex, sizeof(in->db_color_hex), "%s", e.db_hex);
   // A clear filament names no hue, the way a clear Bambu tag is read.
   in->clear = e.family == CF_CLEAR;

@@ -18,9 +18,11 @@
 #include "services/server_reach.h"
 #include "services/spool_cache.h"
 #include "services/tag_create.h"
+#include "services/tag_db_match.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/price_pad.h"
 #include "ui/spool_flow_internal.h"
+#include "ui/tag_db_diff_popup.h"
 #include "ui/theme.h"
 #include "ui/ui_common.h"
 
@@ -39,6 +41,11 @@ static lv_obj_t*       s_scr    = nullptr;
 static lv_obj_t*       s_status = nullptr;
 static lv_obj_t*       s_btn_ok = nullptr;
 static lv_obj_t*       s_lbl_price = nullptr;
+static lv_obj_t*       s_swatch = nullptr;
+static lv_obj_t*       s_meta   = nullptr;
+// Where the tag and the database entry for its filament disagree.
+static TagDbDiff       s_diffs[TAG_DB_DIFFS_MAX];
+static int             s_diff_n = 0;
 // What the spool cost, 0 while none was typed in.
 static float           s_price  = 0.0f;
 static TcpJob          s_job    = TCP_IDLE;
@@ -71,10 +78,13 @@ void tagCreateEntryTap(lv_event_t*) {
 
 void closeTagCreatePopup() {
   closePricePad();
+  closeTagDbDiffPopup();
   releaseScreen(&s_scr);
   s_status = nullptr;
   s_btn_ok = nullptr;
   s_lbl_price = nullptr;
+  s_swatch = nullptr;
+  s_meta = nullptr;
   s_job = TCP_IDLE;
 }
 
@@ -125,7 +135,11 @@ static void showPlan() {
       showStatus(buf, UI_COL_GOOD, true);
       break;
     case TFS_CREATE_DB:
-      showStatus(T(backendIsFilaMan() ? STR_TAGNEW_FROM_FDB : STR_TAGNEW_FROM_DB), UI_COL_ACCENT, true);
+      // A tag the database knows: the tag's values, the entry's for the rest.
+      if (!s_picked && (s_plan.db_found || s_in.db_id[0]))
+        showStatus(T(STR_TAGNEW_TAG_PLUS_DB), UI_COL_ACCENT, true);
+      else
+        showStatus(T(backendIsFilaMan() ? STR_TAGNEW_FROM_FDB : STR_TAGNEW_FROM_DB), UI_COL_ACCENT, true);
       break;
     case TFS_CREATE_TAG:    showStatus(T(STR_TAGNEW_FROM_TAG), UI_COL_ACCENT, true);        break;
     case TFS_NOT_NEEDED:    showStatus(T(STR_TAGNEW_BAMBUDDY), UI_COL_INK_SOFT, true);      break;
@@ -199,6 +213,7 @@ static void buildIdentity(lv_obj_t* box) {
   lv_obj_set_style_border_color(sw, lv_color_hex(UI_COL_POPUP_BORDER), 0);
   lv_obj_set_style_pad_all(sw, 0, 0);
   lv_obj_clear_flag(sw, LV_OBJ_FLAG_SCROLLABLE);
+  s_swatch = sw;
   if (s_picked) {
     char rgba[10];
     snprintf(rgba, sizeof(rgba), "%s", s_in.clear ? "FFFFFF00" : s_in.color_hex);
@@ -235,16 +250,21 @@ static lv_obj_t* textLine(lv_obj_t* box, const lv_font_t* font, uint32_t color, 
 }
 
 // Line 2: whose it is, the article number, and what the spool starts with.
-// Line 3: the filament, filled in once the lookup has answered.
-static void buildLines(lv_obj_t* box) {
+static void refreshMeta() {
+  if (!s_meta) return;
   char meta[96];
   if (s_in.article[0])
     snprintf(meta, sizeof(meta), T(STR_TAGNEW_META_ART), s_in.vendor, s_in.article,
              remainingWeight(), s_label_weight);
   else
     snprintf(meta, sizeof(meta), T(STR_TAGNEW_META), s_in.vendor, remainingWeight(), s_label_weight);
-  lv_obj_t* lbl = textLine(box, UI_FONT_SMALL, UI_COL_INK_SOFT, UI_CARD_TEXT_Y - 4 + TCP_LINE_H + 4);
-  lv_label_set_text(lbl, meta);
+  lv_label_set_text(s_meta, meta);
+}
+
+// Line 3: the filament, filled in once the lookup has answered.
+static void buildLines(lv_obj_t* box) {
+  s_meta = textLine(box, UI_FONT_SMALL, UI_COL_INK_SOFT, UI_CARD_TEXT_Y - 4 + TCP_LINE_H + 4);
+  refreshMeta();
 
   s_status = textLine(box, UI_FONT_BODY, UI_COL_INK_SOFT, UI_CARD_TEXT_Y - 4 + 2 * TCP_LINE_H + 8);
   lv_label_set_text(s_status, T(STR_TAGNEW_SEARCHING));
@@ -364,6 +384,34 @@ void showTagCreatePopupFor(const TagCreateInput& in) {
 //  The loop's part
 // ------------------------------------------------------------
 
+// The user's answer to the differences: the database's values, or the tag's
+// as they stand.
+static void onDiffAnswer(bool take_db) {
+  logSDf("TagCreate: %d difference(s), %s", s_diff_n, take_db ? "database taken" : "tag kept");
+  if (!take_db) return;
+  for (int i = 0; i < s_diff_n; i++) {
+    tagDbTake(&s_in, s_diffs[i]);
+    if (s_diffs[i].field == TDF_COLOR && s_swatch) swatchPaintHex(s_swatch, s_in.color_hex);
+  }
+  s_label_weight = labelWeight();
+  refreshMeta();
+}
+
+// The database knows the tag's filament: what the tag lacks comes from the
+// entry, and where both say something different, the user is asked. The
+// tag stays as it is until then (tag_db_match.h).
+static void mergeDbEntry() {
+  s_diff_n = tagDbCompare(s_in, s_plan.db, s_diffs, TAG_DB_DIFFS_MAX);
+  tagDbFill(&s_in, s_plan.db);
+  // The plan was made from the tag alone; the create asks it again with the
+  // entry linked, so the backend writes what the card now holds.
+  s_plan_stale = true;
+  logSDf("TagCreate: database entry #%s merged, %d difference(s)", s_plan.db.id, s_diff_n);
+  s_label_weight = labelWeight();
+  refreshMeta();
+  if (s_diff_n > 0) showTagDbDiffPopup(s_diffs, s_diff_n, onDiffAnswer);
+}
+
 static void runPlan() {
   s_plan_stale = false;
   s_plan_gen   = backendGeneration();
@@ -371,6 +419,7 @@ static void runPlan() {
   backendPlanTagFilament(s_in, &s_plan);
   serverReachNote(s_plan.state == TFS_FAILED ? s_plan.http_code : 200, true);
   showPlan();
+  if (s_plan.state == TFS_CREATE_DB && s_plan.db_found && !s_in.db_id[0]) mergeDbEntry();
 }
 
 // What the create button can act on.
@@ -433,6 +482,7 @@ static void runCreate() {
 
 void tagCreatePopupTick() {
   pricePadTick();
+  tagDbDiffPopupTick();
   if (s_close_pending) {
     s_close_pending = false;
     closeTagCreatePopup();

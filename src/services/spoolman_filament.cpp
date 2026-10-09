@@ -125,7 +125,26 @@ static bool dbEntryFits(JsonObjectConst e, const TagCreateInput& in) {
   return tagCreateNameMatches(e["name"] | "", in);
 }
 
+// The entry as the card compares it with the tag and fills in from it
+// (tag_db_match.h). SpoolmanDB names one print temperature, compared with the
+// top of the tag's range, and writes a see-through colour as AARRGGBB.
+static void noteDbEntry(JsonObjectConst e, TagDbEntry* db) {
+  memset(db, 0, sizeof(*db));
+  snprintf(db->id, sizeof(db->id), "%s", e["id"] | "");
+  snprintf(db->name, sizeof(db->name), "%s", e["name"] | "");
+  snprintf(db->color_name, sizeof(db->color_name), "%s", e["name"] | "");
+  const char* raw = e["color_hex"] | "";
+  snprintf(db->color_raw, sizeof(db->color_raw), "%s", raw);
+  snprintf(db->color_hex, sizeof(db->color_hex), "%.6s", strlen(raw) == 8 ? raw + 2 : raw);
+  db->net_weight_g = (int)lroundf(e["weight"] | 0.0f);
+  db->density      = e["density"] | 0.0f;
+  db->nozzle_max   = e["extruder_temp"] | 0;
+  db->bed_temp     = e["bed_temp"] | 0;
+}
+
 static void takeDbEntry(JsonObjectConst e, TagFilamentPlan* plan) {
+  noteDbEntry(e, &plan->db);
+  plan->db_found = true;
   snprintf(plan->external_id, sizeof(plan->external_id), "%s", e["id"] | "");
   snprintf(plan->name, sizeof(plan->name), "%s", e["name"] | "");
   plan->density        = e["density"] | 0.0f;

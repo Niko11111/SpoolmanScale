@@ -372,3 +372,76 @@ bool filamanFdbMaterialKey(const char* material, char* out, size_t out_size) {
   }
   return false;
 }
+
+// ------------------------------------------------------------
+//  A tag's entry
+// ------------------------------------------------------------
+
+// For one article the proxy answers with a handful at the most.
+#define FM_FDB_TAG_PAGE  20
+
+struct TagFind {
+  const TagCreateInput* in;
+  JsonObjectConst       best;
+  bool                  best_material;   // best is of the tag's material
+};
+
+static bool namesArticle(JsonObjectConst f, const char* article) {
+  return tagCreateArticleInText(f["designation"] | "", article) ||
+         tagCreateArticleInText(f["color_name"] | "", article);
+}
+
+static void judgeTagEntry(JsonObjectConst f, TagFind* find) {
+  if (!diameterFits(f) || !namesArticle(f, find->in->article)) return;
+  const bool material = strcasecmp(f["material"]["key"] | "", find->in->material) == 0;
+  if (!find->best.isNull() && (find->best_material || !material)) return;
+  find->best = f;
+  find->best_material = material;
+}
+
+static void takeTagEntry(JsonObjectConst f, TagDbEntry* out) {
+  memset(out, 0, sizeof(*out));
+  snprintf(out->id, sizeof(out->id), "%d", f["id"] | 0);
+  snprintf(out->name, sizeof(out->name), "%s", f["designation"] | "");
+  snprintf(out->color_name, sizeof(out->color_name), "%s", f["color_name"] | "");
+  snprintf(out->line, sizeof(out->line), "%s", f["material_subtype"] | "");
+  snprintf(out->material_key, sizeof(out->material_key), "%s", f["material"]["key"] | "");
+  const char* hex = f["hex_color"] | "";
+  if (plainHex(hex, out->color_hex, sizeof(out->color_hex)))
+    snprintf(out->color_raw, sizeof(out->color_raw), "%s", out->color_hex);
+  out->net_weight_g = f["nominal_weight_g"] | 0;
+  out->density      = f["density_g_cm3"] | 0.0f;
+  out->nozzle_min   = f["temp_nozzle_min"] | 0;
+  out->nozzle_max   = f["temp_nozzle_max"] | 0;
+  out->bed_temp     = f["temp_bed"] | 0;
+}
+
+bool filamanFdbFindForTag(const char* base_url, const char* api_key, const TagCreateInput& in,
+                          TagDbEntry* out) {
+  if (!in.article[0] || !in.vendor[0]) return false;
+  JsonDocument filter;
+  JsonObject f = itemFilter(filter);
+  for (const char* key : { "id", "designation", "color_name", "material_subtype", "hex_color",
+                           "diameter_mm", "density_g_cm3", "temp_nozzle_min", "temp_nozzle_max",
+                           "temp_bed", "nominal_weight_g" })
+    f[key] = true;
+  f["material"]["key"] = true;
+  const String path = String("/api/v1/filamentdb/filaments?manufacturer_name=") + filamanUrlEncode(in.vendor) +
+                      "&search=" + filamanUrlEncode(in.article) + "&page_size=" + FM_FDB_TAG_PAGE;
+  JsonDocument doc(&s_psram);
+  const int code = getPage(base_url, api_key, path, doc, filter);
+  if (code != 200) {
+    logSDf("Filament DB: tag %s %s -> HTTP %d", in.vendor, in.article, code);
+    return false;
+  }
+  TagFind find = { &in, JsonObjectConst(), false };
+  for (JsonObjectConst item : doc["items"].as<JsonArrayConst>()) judgeTagEntry(item, &find);
+  if (find.best.isNull()) {
+    logSDf("Filament DB: tag %s %s not in the FilamentDB", in.vendor, in.article);
+    return false;
+  }
+  takeTagEntry(find.best, out);
+  logSDf("Filament DB: tag %s %s is #%s \"%s\"%s", in.vendor, in.article, out->id, out->name,
+         find.best_material ? "" : " (other material)");
+  return true;
+}
