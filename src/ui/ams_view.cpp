@@ -700,15 +700,23 @@ static unsigned long pickRemainingMs() {
 #define AMSV_FILL_W  (AMSV_FOOT_BTN_W - 2)
 #define AMSV_FILL_H  (AMSV_FOOT_BTN_H - 2)
 
+// Red like every other cancel button (ui/entry_tile.cpp); the countdown
+// drains in the stronger red over it.
 static void addCancelFill(lv_obj_t* btn) {
   if (!btn) return;
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_BAD_BG), 0);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
+  // The 1 px border stays, in the same red: the fill is sized to sit inside it.
+  lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_BAD_BG), 0);
+  lv_obj_t* l = lv_obj_get_child(btn, 0);
+  if (l) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_pad_all(btn, 0, 0);
   s_cancel_fill = lv_obj_create(btn);
   if (!s_cancel_fill) return;
   lv_obj_remove_style_all(s_cancel_fill);
   lv_obj_set_size(s_cancel_fill, AMSV_FILL_W, AMSV_FILL_H);
   lv_obj_set_pos(s_cancel_fill, 0, 0);
-  lv_obj_set_style_bg_color(s_cancel_fill, lv_color_hex(UI_COL_LINE), 0);
+  lv_obj_set_style_bg_color(s_cancel_fill, lv_color_hex(UI_COL_BAD_BG_PRESSED), 0);
   lv_obj_set_style_bg_opa(s_cancel_fill, LV_OPA_COVER, 0);
   lv_obj_set_style_radius(s_cancel_fill, UI_RADIUS_BTN, 0);
   lv_obj_clear_flag(s_cancel_fill, LV_OBJ_FLAG_CLICKABLE);

@@ -303,3 +303,6 @@ STR_TAGDB_TAKE	16	184	NEVER	src/ui/tag_db_diff_popup.cpp button, TDP_BTN_W
 STR_DBPICK_CORE_TITLE	20	376	NEVER	src/ui/db_pick_core_popup.cpp title, UI_POPUP_W - 2 * UI_CARD_ROW_X
 STR_DBPICK_CORE_NONE	16	184	NEVER	src/ui/db_pick_core_popup.cpp bottom button, DBC_BTN_W
 STR_TAGNEW_TAG_PLUS_DB	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_BB_DRIED_NATIVE	16	320	NEVER	src/ui/bambuddy_options_screen.cpp makeListBtn title, text_w 320
+STR_BB_DRIED_NATIVE_SUB	12	320	NEVER	src/ui/bambuddy_options_screen.cpp makeListBtn sub, text_w 320
+STR_BB_DRIED_OLDER_ONLY	12	320	NEVER	src/ui/bambuddy_options_screen.cpp makeListBtn sub, text_w 320

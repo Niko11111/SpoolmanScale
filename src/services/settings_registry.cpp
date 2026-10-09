@@ -58,10 +58,13 @@ static const char* subExtraFields() {
   return buf;
 }
 
-// BamBuddy has no field for a drying date at all, so the scale needs somewhere
-// to put one. The Spoolman route only exists while BamBuddy is actually
-// proxying to a Spoolman server - past BamBuddy, into the same database.
+// An older BamBuddy has no field for a drying date, so the scale needs
+// somewhere to put one. A newer one has its own (#2863) and the date goes
+// there whatever is set here, so none of the three can be picked then. The
+// Spoolman route only exists while BamBuddy is actually proxying to a
+// Spoolman server - past BamBuddy, into the same database.
 static bool bbDriedOptOk(uint8_t value) {
+  if (bbHasDriedField()) return false;
   if (value != BB_DRIED_SPOOLMAN) return true;
   return (bbInventoryMode() == BB_INV_SPOOLMAN) && bbSpoolmanUrl()[0];
 }
@@ -69,6 +72,13 @@ static bool bbDriedOptOk(uint8_t value) {
 static const uint16_t OPT_BB_DRIED[] = {
   STR_BB_DRIED_OFF, STR_BB_DRIED_SPOOLMAN, STR_BB_DRIED_NOTE
 };
+
+// The row names where the date really goes: BamBuddy's own field when the
+// server has one, otherwise the route chosen here.
+static const char* bbDriedSub() {
+  if (bbHasDriedField()) return T(STR_BB_DRIED_NATIVE);
+  return T((StringID)OPT_BB_DRIED[g_bb_dried_target < BB_DRIED_COUNT ? g_bb_dried_target : BB_DRIED_NOTE]);
+}
 
 static const uint16_t OPT_AMS_MODE[] = {
   STR_AMS_MODE_OFF, STR_AMS_MODE_ASK, STR_AMS_MODE_ALWAYS
@@ -185,7 +195,7 @@ const SettingDesc SETTINGS[] = {
   { "bb_dried", SET_ENUM, SC_BAMBUDDY, &g_bb_dried_target,
     STR_BB_DRIED_TITLE, 0, STR_BB_DRIED_INFO, LV_SYMBOL_TINT,
     BB_DRIED_NOTE, BB_DRIED_COUNT, OPT_BB_DRIED,
-    nullptr, nullptr, nullptr, OPEN_BB_DRIED, bbDriedOptOk, false },
+    nullptr, bbDriedSub, nullptr, OPEN_BB_DRIED, bbDriedOptOk, false },
 
   // The bay picker after weighing. A plain switch: BamBuddy knows only "ask"
   // and "off" here, because without a time window there is no third thing an

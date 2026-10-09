@@ -7,6 +7,8 @@
 #include <lvgl.h>
 #include <cstring>
 
+// backend_api.h brings ArduinoJson; lang.h after it, which defines T().
+#include "services/backend_api.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/settings_registry.h"
@@ -39,8 +41,10 @@ void buildBamBuddyOptionsScreen() {
 // ============================================================
 //  DRYING DATE
 //
-//  Where the scale puts a drying date, given that BamBuddy has
-//  no field for one. A three way choice, so the rows carry no
+//  Where the scale puts a drying date on a BamBuddy without a
+//  field for one. A newer BamBuddy has its own (#2863) and the
+//  date always goes there: that row then stands on top, chosen,
+//  and the three below are inert. A three way choice, so the rows carry no
 //  icon of their own: a tick in front of every entry reads as
 //  "all three are on". The active one is marked on the right
 //  and by its border, the way the other pickers do it.
@@ -57,8 +61,27 @@ static const StringID DRIED_SUB[BB_DRIED_COUNT] = {
   STR_BB_DRIED_OFF_SUB, STR_BB_DRIED_SPOOLMAN_SUB, STR_BB_DRIED_NOTE_SUB
 };
 
-static void addDriedRow(lv_obj_t *list, const SettingDesc &s, uint8_t value) {
-  const bool active  = (settingGet(s) == value);
+// Last child is the arrow, which here shows which entry is the chosen one.
+static void markChosen(lv_obj_t *btn, bool active) {
+  lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
+  if (!arr_lbl) return;
+  lv_label_set_text(arr_lbl, active ? LV_SYMBOL_OK : "");
+  lv_obj_set_style_text_color(arr_lbl, lv_color_hex(UI_COL_ACCENT), 0);
+  lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_16, 0);
+}
+
+// BamBuddy's own field: shown as the choice in force, not something to tap.
+static void addNativeRow(lv_obj_t *list) {
+  char buf_t[40], buf_s[48];
+  copyT(buf_t, sizeof(buf_t), STR_BB_DRIED_NATIVE);
+  copyT(buf_s, sizeof(buf_s), STR_BB_DRIED_NATIVE_SUB);
+  lv_obj_t *btn = makeListBtn(list, "", buf_t, buf_s, true);
+  markChosen(btn, true);
+  lv_obj_clear_flag(btn, LV_OBJ_FLAG_CLICKABLE);
+}
+
+static void addDriedRow(lv_obj_t *list, const SettingDesc &s, uint8_t value, bool native) {
+  const bool active  = !native && settingGet(s) == value;
   const bool enabled = !s.opt_ok || s.opt_ok(value);
 
   char buf_t[40];
@@ -66,20 +89,14 @@ static void addDriedRow(lv_obj_t *list, const SettingDesc &s, uint8_t value) {
 
   // An unavailable choice says why in place of what it does - that is the more
   // useful line, and it is the only one the user can act on.
-  char buf_s[48];
-  const StringID sub = (!enabled && value == BB_DRIED_SPOOLMAN)
-                     ? STR_BB_DRIED_SPOOLMAN_NA : DRIED_SUB[value];
+  StringID sub = DRIED_SUB[value];
+  if (native)                                    sub = STR_BB_DRIED_OLDER_ONLY;
+  else if (!enabled && value == BB_DRIED_SPOOLMAN) sub = STR_BB_DRIED_SPOOLMAN_NA;
+  char buf_s[64];
   copyT(buf_s, sizeof(buf_s), sub);
 
   lv_obj_t *btn = makeListBtn(list, "", buf_t, buf_s, active);
-
-  // Last child is the arrow, which here shows which entry is the chosen one.
-  lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
-  if (arr_lbl) {
-    lv_label_set_text(arr_lbl, active ? LV_SYMBOL_OK : "");
-    lv_obj_set_style_text_color(arr_lbl, lv_color_hex(UI_COL_ACCENT), 0);
-    lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_16, 0);
-  }
+  markChosen(btn, active);
 
   if (!enabled) {
     // Left visible but inert: the reason it cannot be picked is the more
@@ -116,5 +133,9 @@ void buildBamBuddyDriedScreen() {
 
   const SettingDesc *s = settingById("bb_dried");
   if (!s || !s->opt_str) return;
-  for (uint8_t v = 0; v < s->opt_count; v++) addDriedRow(list, *s, v);
+  // Known once a spool was read from this server; until then the rows look
+  // as they do for an older BamBuddy.
+  const bool native = backendHasNativeLastDried();
+  if (native) addNativeRow(list);
+  for (uint8_t v = 0; v < s->opt_count; v++) addDriedRow(list, *s, v, native);
 }

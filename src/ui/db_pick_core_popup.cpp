@@ -103,7 +103,14 @@ static void bottomButton(lv_obj_t* box, int col, int y, int answer, int caption)
   const EntryRect r = { (lv_coord_t)(UI_CARD_ROW_X + col * (DBC_BTN_W + DBC_GAP)), (lv_coord_t)y,
                         DBC_BTN_W, DBC_BOTTOM_H };
   lv_obj_t* b = button(box, r, false, answer);
-  lv_obj_center(text(b, T(caption), UI_FONT_BODY, UI_COL_INK));
+  const bool cancel = answer == DBC_ANSWER_CANCEL;
+  // Red like every other cancel button (ui/entry_tile.cpp).
+  if (cancel) {
+    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_BAD_BG), 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(b, 0, 0);
+  }
+  lv_obj_center(text(b, T(caption), UI_FONT_BODY, cancel ? UI_COL_BAD_TEXT : UI_COL_INK));
 }
 
 static void build() {

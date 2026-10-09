@@ -580,9 +580,9 @@ const char* const STRINGS[][3] = {
   { "Als [last_dried:JJJJ-MM-TT] in der Notiz",
     "As [last_dried:YYYY-MM-DD] in the note",
     "[last_dried:AAAA-MM-JJ] dans la note" },  // STR_BB_DRIED_NOTE_SUB
-  { "BamBuddy hat kein Feld für ein Trocknungsdatum. Das Notizfeld geht immer und behält den übrigen Text. Der andere Weg schreibt in last_dried auf dem Spoolman-Server hinter BamBuddy.",
-    "BamBuddy has no field for a drying date. The note field always works and keeps the rest of the text. The other route writes into last_dried on the Spoolman server behind BamBuddy.",
-    "BamBuddy n'a aucun champ pour la date de séchage. Le champ note fonctionne dans tous les cas et garde le reste du texte. L'option 'Spoolman derrière BamBuddy' écrit dans last_dried, sur le serveur Spoolman relié à BamBuddy." },  // STR_BB_DRIED_INFO
+  { "Neuere BamBuddy-Versionen haben ein eigenes Feld für das Trocknungsdatum, die Waage schreibt dann immer dorthin. Ältere haben keines: Das Notizfeld geht immer und behält den übrigen Text, der andere Weg schreibt in last_dried auf dem Spoolman-Server hinter BamBuddy.",
+    "Newer BamBuddy versions have their own field for the drying date, and the scale always writes there. Older ones have none: the note field always works and keeps the rest of the text, the other route writes into last_dried on the Spoolman server behind BamBuddy.",
+    "Les versions récentes de BamBuddy ont leur propre champ pour la date de séchage, la balance y écrit alors toujours. Les anciennes n'en ont pas : le champ note fonctionne dans tous les cas et garde le reste du texte, l'option 'Spoolman derrière BamBuddy' écrit dans last_dried, sur le serveur Spoolman relié à BamBuddy." },  // STR_BB_DRIED_INFO
   // Short forms for the connection test line, which has room for about 34
   // characters. The "Inventar:" prefix is what says this names the data
   // source and not the backend - bare "Spoolman" always means the native one.
@@ -3409,6 +3409,15 @@ const char* const STRINGS[][3] = {
   { "Keine passt",
     "None of these",
     "Aucune ne convient" },  // STR_DBPICK_CORE_NONE
+  { "BamBuddy-Feld",
+    "BamBuddy field",
+    "Champ BamBuddy" },  // STR_BB_DRIED_NATIVE
+  { "Wird automatisch genutzt",
+    "Used automatically",
+    "Utilisé automatiquement" },  // STR_BB_DRIED_NATIVE_SUB
+  { "Nur für BamBuddy ohne eigenes Feld",
+    "Only for a BamBuddy without its own field",
+    "Seulement pour un BamBuddy sans ce champ" },  // STR_BB_DRIED_OLDER_ONLY
 };
 
 StringID tagWriteResultString(uint8_t code) {
