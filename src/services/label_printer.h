@@ -24,8 +24,8 @@
 // none is ever renumbered or reused.
 enum LabelPrinterModel : uint8_t {
   LP_MODEL_NONE = 0, LP_MODEL_M220 = 1, LP_MODEL_M110 = 2, LP_MODEL_M100 = 3,
-  LP_MODEL_NIIMBOT_B = 4,     // reserved: the 50 mm NIIMBOT class, driver to follow
-  LP_MODEL_NIIMBOT_M2 = 5,    // reserved: NIIMBOT M2, thermal transfer, driver to follow
+  LP_MODEL_NIIMBOT_B = 4,     // the 50 mm NIIMBOT class: B1, B21, B203 ...
+  LP_MODEL_NIIMBOT_M2 = 5,    // NIIMBOT M2, 300 dpi, thermal transfer
   LP_MODEL_M120 = 6, LP_MODEL_M200 = 7, LP_MODEL_M221 = 8
 };
 
@@ -91,6 +91,15 @@ enum LabelPrintResult : uint8_t {
   LP_BLE_WRITE,
   LP_BLE_STUCK,
   LP_SENT_UNCONFIRMED,  // all sent, the printer never said done
+  // What a printer that talks back can say, see services/niimbot.h.
+  LP_BLE_NOT_NIIMBOT,   // nothing of the protocol's shape on the device
+  LP_PRN_COVER,
+  LP_PRN_NO_PAPER,
+  LP_PRN_NO_RIBBON,
+  LP_PRN_BUSY,
+  LP_PRN_ERROR,         // another error code; it is in the log
+  LP_MODEL_MISMATCH,    // a known printer, but not of the picked class
+  LP_MODEL_UNKNOWN,     // an id the table does not have; it is in the log
 };
 
 const LabelPrinterProfile& labelPrinterProfile(LabelPrinterModel model);

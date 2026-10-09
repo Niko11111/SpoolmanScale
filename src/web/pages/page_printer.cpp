@@ -135,6 +135,7 @@ static String body() {
     h += p.brand; h += ' '; h += p.name;
     h += F("</span><span class='v'>");
     h += T(p.experimental ? STR_PRN_EXPERIMENTAL : STR_W_P_TESTED);
+    if (!p.direct_thermal) { h += F(", "); h += T(STR_PRN_RIBBON_SHORT); }
     h += F("</span></div>");
   }
   h += F("<span class='hint'>");

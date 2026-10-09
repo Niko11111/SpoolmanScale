@@ -218,6 +218,14 @@ STR_PRN_UNCONF_TITLE	20	360	NEVER	src/ui/print_card.cpp result title
 STR_PRN_FAIL_TITLE	20	360	NEVER	src/ui/print_card.cpp result title
 STR_PRN_DONE_MSG	16	360	WRAP:3	src/ui/print_card.cpp result text
 STR_PRN_UNCONF_MSG	16	360	WRAP:3	src/ui/print_card.cpp result text
+STR_PRN_ERR_NOT_NIIMBOT	16	360	WRAP:3	src/ui/print_card.cpp result text
+STR_PRN_ERR_COVER	16	360	WRAP:3	src/ui/print_card.cpp result text
+STR_PRN_ERR_NO_PAPER	16	360	WRAP:3	src/ui/print_card.cpp result text
+STR_PRN_ERR_NO_RIBBON	16	360	WRAP:3	src/ui/print_card.cpp result text
+STR_PRN_ERR_BUSY	16	360	WRAP:3	src/ui/print_card.cpp result text
+STR_PRN_ERR_PRINTER	16	360	WRAP:3	src/ui/print_card.cpp result text
+STR_PRN_ERR_MODEL_MISMATCH	16	360	WRAP:3	src/ui/print_card.cpp result text
+STR_PRN_ERR_MODEL_UNKNOWN	16	360	WRAP:3	src/ui/print_card.cpp result text
 # The Bluetooth device list's filter (src/ui/ble_devices_screen.cpp).
 STR_BT_FILTER_NOTE	14	440	WRAP:3	src/ui/ble_devices_screen.cpp note under the list
 STR_BT_SHOW_ALL_FMT	16	320	NEVER	src/ui/ble_devices_screen.cpp list row title

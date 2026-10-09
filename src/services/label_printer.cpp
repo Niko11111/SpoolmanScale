@@ -6,6 +6,7 @@
 
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/niimbot.h"
 #include "services/phomemo_m_series.h"
 #include "services/prefs_store.h"
 
@@ -55,8 +56,25 @@ static const LabelPrinterProfile PROFILE_M221 = {
   203, LP_PROTO_PHOMEMO_M220
 };
 
+// NIIMBOT's 50 mm class: B1, B21, B21S and B21 C2B at 384 dots, the B203 at
+// 400, all 203 dpi. The printer says which it is and the driver pads the
+// row. Its standard roll is 50 x 30, of which the 48 mm head prints 48. The
+// protocol is from niimbluelib; no NIIMBOT was at hand, testers decide.
+static const LabelPrinterProfile PROFILE_NIIMBOT_B = {
+  LP_MODEL_NIIMBOT_B, "NIIMBOT", "B1, B21, B203", 50, 30, 20, 50, 10, 150, 384, 384, true, true,
+  203, LP_PROTO_NIIMBOT
+};
+// NIIMBOT M2: 300 dpi, 567 dots, which is 71 bytes and so a 568 dot row.
+// Prints through a ribbon, so the label survives the dryer. Same protocol,
+// the B1's sequence.
+static const LabelPrinterProfile PROFILE_NIIMBOT_M2 = {
+  LP_MODEL_NIIMBOT_M2, "NIIMBOT", "M2", 40, 30, 20, 50, 10, 150, 568, 568, true, false,
+  300, LP_PROTO_NIIMBOT
+};
+
 const LabelPrinterModel LABEL_PRINTER_MODELS[] = {
   LP_MODEL_M220, LP_MODEL_M110, LP_MODEL_M100, LP_MODEL_M120, LP_MODEL_M200, LP_MODEL_M221,
+  LP_MODEL_NIIMBOT_B, LP_MODEL_NIIMBOT_M2,
 };
 const int LABEL_PRINTER_MODEL_COUNT = sizeof(LABEL_PRINTER_MODELS) / sizeof(LABEL_PRINTER_MODELS[0]);
 
@@ -100,6 +118,8 @@ const LabelPrinterProfile& labelPrinterProfile(LabelPrinterModel model) {
     case LP_MODEL_M120: return PROFILE_M120;
     case LP_MODEL_M200: return PROFILE_M200;
     case LP_MODEL_M221: return PROFILE_M221;
+    case LP_MODEL_NIIMBOT_B:  return PROFILE_NIIMBOT_B;
+    case LP_MODEL_NIIMBOT_M2: return PROFILE_NIIMBOT_M2;
     default:            return PROFILE_NONE;
   }
 }
@@ -258,16 +278,9 @@ bool labelPrinterRasterFits(LabelPrinterModel model, const LabelRaster& image,
          nearDots(image.height, labelPrinterDotsForMm(model, media_length_mm));
 }
 
-LabelPrintResult labelPrinterPrint(const LabelPrinterConfig& c, const LabelRaster& image,
-                                   BleProgressFn progress) {
-  const LabelPrinterProfile& p = labelPrinterProfile(c.model);
-  if (p.model == LP_MODEL_NONE || !labelPrinterConfigured(c)) return LP_NO_PRINTER;
-  if (!labelRasterValid(image)) return LP_BAD_RASTER;
-  if (image.width > p.max_raster_width) return LP_TOO_WIDE;
-  if (!labelPrinterRasterFits(c.model, image, c.media_width_mm, c.media_length_mm))
-    return LP_MEDIA_MISMATCH;
-  const PhomemoModel pm = p.protocol == LP_PROTO_PHOMEMO_M220 ? PHOMEMO_M220 : PHOMEMO_M110;
-  switch (phomemoMSeriesPrint(pm, c.address, image, progress)) {
+// What the transport says, in the printer's terms; both drivers share it.
+static LabelPrintResult fromBle(BleWriteResult r) {
+  switch (r) {
     case BLE_WRITE_OK:                return LP_OK;
     case BLE_WRITE_OFF:               return LP_BLE_OFF;
     case BLE_WRITE_INIT_FAILED:       return LP_BLE_INIT;
@@ -277,6 +290,42 @@ LabelPrintResult labelPrinterPrint(const LabelPrinterConfig& c, const LabelRaste
     case BLE_WRITE_SENT_UNCONFIRMED:  return LP_SENT_UNCONFIRMED;
     default:                          return LP_BLE_WRITE;
   }
+}
+
+static LabelPrintResult printNiimbot(const LabelPrinterProfile& p, const LabelPrinterConfig& c,
+                                     const LabelRaster& image, BleProgressFn progress) {
+  NiimbotJobInfo info{};
+  const NiimbotClass cls = p.model == LP_MODEL_NIIMBOT_M2 ? NB_CLASS_M2 : NB_CLASS_B;
+  const NiimbotResult r = niimbotPrint(c.address, image, cls, progress, &info);
+  logSDf("Printer: NIIMBOT %s result=%d model=0x%04X transport=%d", p.name, (int)r,
+         (unsigned)info.model_id, (int)info.transport);
+  switch (r) {
+    case NB_OK:             return LP_OK;
+    case NB_TRANSPORT:      return info.transport == BLE_WRITE_NO_CHARACTERISTIC
+                                 ? LP_BLE_NOT_NIIMBOT : fromBle(info.transport);
+    case NB_NO_REPLY:       return LP_BLE_NOT_NIIMBOT;
+    case NB_MODEL_UNKNOWN:  return LP_MODEL_UNKNOWN;
+    case NB_MODEL_MISMATCH: return LP_MODEL_MISMATCH;
+    case NB_PRN_COVER:      return LP_PRN_COVER;
+    case NB_PRN_NO_PAPER:   return LP_PRN_NO_PAPER;
+    case NB_PRN_NO_RIBBON:  return LP_PRN_NO_RIBBON;
+    case NB_PRN_BUSY:       return LP_PRN_BUSY;
+    case NB_UNCONFIRMED:    return LP_SENT_UNCONFIRMED;
+    default:                return LP_PRN_ERROR;   // rejected, or another error code
+  }
+}
+
+LabelPrintResult labelPrinterPrint(const LabelPrinterConfig& c, const LabelRaster& image,
+                                   BleProgressFn progress) {
+  const LabelPrinterProfile& p = labelPrinterProfile(c.model);
+  if (p.model == LP_MODEL_NONE || !labelPrinterConfigured(c)) return LP_NO_PRINTER;
+  if (!labelRasterValid(image)) return LP_BAD_RASTER;
+  if (image.width > p.max_raster_width) return LP_TOO_WIDE;
+  if (!labelPrinterRasterFits(c.model, image, c.media_width_mm, c.media_length_mm))
+    return LP_MEDIA_MISMATCH;
+  if (p.protocol == LP_PROTO_NIIMBOT) return printNiimbot(p, c, image, progress);
+  const PhomemoModel pm = p.protocol == LP_PROTO_PHOMEMO_M220 ? PHOMEMO_M220 : PHOMEMO_M110;
+  return fromBle(phomemoMSeriesPrint(pm, c.address, image, progress));
 }
 
 int labelPrintResultString(LabelPrintResult r) {
@@ -292,6 +341,14 @@ int labelPrintResultString(LabelPrintResult r) {
     case LP_BLE_CHARACTERISTIC: return STR_PRN_ERR_NOT_PRINTER;
     case LP_BLE_STUCK:          return STR_PRN_ERR_STUCK;
     case LP_SENT_UNCONFIRMED:   return STR_PRN_UNCONF_MSG;
+    case LP_BLE_NOT_NIIMBOT:    return STR_PRN_ERR_NOT_NIIMBOT;
+    case LP_PRN_COVER:          return STR_PRN_ERR_COVER;
+    case LP_PRN_NO_PAPER:       return STR_PRN_ERR_NO_PAPER;
+    case LP_PRN_NO_RIBBON:      return STR_PRN_ERR_NO_RIBBON;
+    case LP_PRN_BUSY:           return STR_PRN_ERR_BUSY;
+    case LP_PRN_ERROR:          return STR_PRN_ERR_PRINTER;
+    case LP_MODEL_MISMATCH:     return STR_PRN_ERR_MODEL_MISMATCH;
+    case LP_MODEL_UNKNOWN:      return STR_PRN_ERR_MODEL_UNKNOWN;
     default:                    return STR_PRN_ERR_WRITE;
   }
 }

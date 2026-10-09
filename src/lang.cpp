@@ -2774,9 +2774,9 @@ const char* const STRINGS[][3] = {
     "Seulement au besoin : la radio tourne tant qu'un appareil l'utilise, puis est libérée. Après l'activation, la balance redémarre une fois." },  // STR_W_P_BLE_HINT
   { "Unterstützte Drucker", "Supported printers", "Imprimantes prises en charge" },  // STR_W_P_SUPPORTED
   { "getestet",             "tested",             "testée" },  // STR_W_P_TESTED
-  { "Thermodrucker der Phomemo-M-Serie über Bluetooth. Weitere Modelle kommen mit Rückmeldungen aus der Community.",
-    "Phomemo M-series thermal printers over Bluetooth. More models come with feedback from the community.",
-    "Imprimantes thermiques Phomemo série M en Bluetooth. D'autres modèles viendront avec les retours de la communauté." },  // STR_W_P_SUPPORTED_HINT
+  { "Thermodrucker von Phomemo (M-Serie) und NIIMBOT über Bluetooth. Weitere Modelle kommen mit Rückmeldungen aus der Community.",
+    "Phomemo M-series and NIIMBOT thermal printers over Bluetooth. More models come with feedback from the community.",
+    "Imprimantes thermiques Phomemo (série M) et NIIMBOT en Bluetooth. D'autres modèles viendront avec les retours de la communauté." },  // STR_W_P_SUPPORTED_HINT
   { "Geräte in Reichweite", "Devices in range", "Appareils à portée" },  // STR_W_P_DEVICES
   { "Geräte suchen",        "Scan for devices", "Rechercher" },  // STR_BT_SCAN_WEB
   { "Die Suche läuft auf der Waage und dauert etwa 5 Sekunden; solange steht sie.",
@@ -3418,6 +3418,34 @@ const char* const STRINGS[][3] = {
   { "Nur für BamBuddy ohne eigenes Feld",
     "Only for a BamBuddy without its own field",
     "Seulement pour un BamBuddy sans ce champ" },  // STR_BB_DRIED_OLDER_ONLY
+  // A NIIMBOT printer and what it reports (services/niimbot.cpp)
+  { "Das Gerät ist kein NIIMBOT-Drucker.",
+    "The device is not a NIIMBOT printer.",
+    "Pas une imprimante NIIMBOT." },  // STR_PRN_ERR_NOT_NIIMBOT
+  { "Der Deckel des Druckers ist offen.",
+    "The printer's cover is open.",
+    "Capot de l'imprimante ouvert." },  // STR_PRN_ERR_COVER
+  { "Kein Etikett im Drucker.",
+    "No label in the printer.",
+    "Aucune étiquette." },  // STR_PRN_ERR_NO_PAPER
+  { "Kein oder falsches Farbband im Drucker.",
+    "No ribbon in the printer, or the wrong one.",
+    "Ruban absent ou inadapté." },  // STR_PRN_ERR_NO_RIBBON
+  { "Der Drucker ist beschäftigt. Kurz warten, dann noch einmal.",
+    "The printer is busy. Wait a moment, then try again.",
+    "Imprimante occupée. Patientez un instant, puis réessayez." },  // STR_PRN_ERR_BUSY
+  { "Der Drucker meldet einen Fehler. Der Code steht im Log.",
+    "The printer reports an error. The code is in the log.",
+    "L'imprimante signale une erreur, code dans le journal." },  // STR_PRN_ERR_PRINTER
+  { "Der Drucker ist ein anderes Modell als gewählt. Das Log nennt es.",
+    "The printer is another model than the one picked. The log names it.",
+    "Autre modèle que celui choisi. Le journal le nomme." },  // STR_PRN_ERR_MODEL_MISMATCH
+  { "Dieses NIIMBOT-Modell kennt die Waage noch nicht. Bitte die Kennung aus dem Log melden.",
+    "The scale does not know this NIIMBOT model yet. Please report the id from the log.",
+    "Modèle NIIMBOT encore inconnu de la balance. Merci de signaler l'identifiant du journal." },  // STR_PRN_ERR_MODEL_UNKNOWN
+  { "Thermotransfer mit Farbband",
+    "Thermal transfer with a ribbon",
+    "Transfert thermique à ruban" },  // STR_PRN_RIBBON_SHORT
 };
 
 StringID tagWriteResultString(uint8_t code) {
