@@ -16,16 +16,28 @@
 //  they take, whether anyone has printed on one yet.
 //
 //  Millimetres are what a person reads off the label roll; dots
-//  are what the head wants, at 203 dpi. The conversions live
-//  here so the renderer and the screens agree on them.
+//  are what the head wants, at the profile's resolution. The
+//  conversions live here so the renderer and the screens agree.
 // ============================================================
 
+// The values are NVS content (printer_model): a new model goes at the end,
+// none is ever renumbered or reused.
 enum LabelPrinterModel : uint8_t {
-  LP_MODEL_NONE = 0, LP_MODEL_M220 = 1, LP_MODEL_M110 = 2, LP_MODEL_M100 = 3
+  LP_MODEL_NONE = 0, LP_MODEL_M220 = 1, LP_MODEL_M110 = 2, LP_MODEL_M100 = 3,
+  LP_MODEL_NIIMBOT_B = 4,     // reserved: the 50 mm NIIMBOT class, driver to follow
+  LP_MODEL_NIIMBOT_M2 = 5,    // reserved: NIIMBOT M2, thermal transfer, driver to follow
+  LP_MODEL_M120 = 6, LP_MODEL_M200 = 7, LP_MODEL_M221 = 8
+};
+
+// Which bytes a model takes. Phomemo's two preambles share one write-only
+// transport; a NIIMBOT talks back and gets a driver of its own.
+enum LabelPrinterProtocol : uint8_t {
+  LP_PROTO_PHOMEMO_M220 = 0, LP_PROTO_PHOMEMO_M110 = 1, LP_PROTO_NIIMBOT = 2
 };
 
 struct LabelPrinterProfile {
   LabelPrinterModel model;
+  const char* brand;
   const char* name;
   uint16_t default_width_mm, default_length_mm;
   uint16_t min_width_mm, max_width_mm;
@@ -35,6 +47,8 @@ struct LabelPrinterProfile {
   // Prints by heat on heat-sensitive paper, no ribbon: the label turns black
   // wherever it gets hot enough, a spool in the dryer included.
   bool     direct_thermal;
+  uint16_t dpi;                 // the head's resolution: 203 or 300
+  LabelPrinterProtocol protocol;
 };
 
 struct LabelPrinterConfig {
@@ -58,6 +72,11 @@ struct LabelPrinterConfig {
 struct LabelMediaSize { uint8_t width_mm, length_mm; };
 extern const LabelMediaSize LABEL_MEDIA_SIZES[];
 extern const int LABEL_MEDIA_SIZE_COUNT;
+
+// The models in the order the printer screen cycles and the browser lists
+// them: proven first, experimental after. NONE is never in it.
+extern const LabelPrinterModel LABEL_PRINTER_MODELS[];
+extern const int LABEL_PRINTER_MODEL_COUNT;
 
 enum LabelPrintResult : uint8_t {
   LP_OK = 0,
@@ -85,10 +104,14 @@ bool labelPrinterForget();
 // True when this address is the picked printer.
 bool labelPrinterIsDevice(const char* address);
 
-uint16_t labelPrinterDotsForMm(uint16_t mm);
+// Millimetres to dots at the model's resolution; 0 for no model.
+uint16_t labelPrinterDotsForMm(LabelPrinterModel model, uint16_t mm);
 // The print row for this model and label width: the head's base width or
 // the label, whichever is wider, rounded up to whole bytes, capped at the head.
 uint16_t labelPrinterRasterWidth(LabelPrinterModel model, uint16_t media_width_mm);
+// The label's dots across the head, never more than the print row: a roll
+// wider than the head prints the head's width of it.
+uint16_t labelPrinterContentWidth(LabelPrinterModel model, uint16_t media_width_mm);
 // The first dot of the label in the print row: the middle plus the offset,
 // clamped so the label stays in the row.
 uint16_t labelPrinterContentX(const LabelPrinterConfig& config);

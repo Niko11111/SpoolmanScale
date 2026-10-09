@@ -247,8 +247,8 @@ static bool renderLabel(const LabelPrinterConfig& printer, const SpoolLabelData&
                         const char* qr_text, const char* what, LabelRaster* out) {
   if (!out) return false;
   *out = LabelRaster{};
-  const uint16_t content_w = labelPrinterDotsForMm(printer.media_width_mm);
-  const uint16_t h = labelPrinterDotsForMm(printer.media_length_mm);
+  const uint16_t content_w = labelPrinterContentWidth(printer.model, printer.media_width_mm);
+  const uint16_t h = labelPrinterDotsForMm(printer.model, printer.media_length_mm);
   const uint16_t row_w = labelPrinterRasterWidth(printer.model, printer.media_width_mm);
   if (!row_w || !h || content_w > row_w) return false;
 
@@ -381,11 +381,18 @@ bool labelRenderTest(const LabelPrinterConfig& printer, LabelRaster* out) {
   return renderLabel(printer, d, lines, 1, true, "https://" DONATION_URL, "test", out);
 }
 
+// The dot of millimetre v on the calibration ruler, counted from the label's
+// first dot at `centre`, negative to the left.
+static lv_coord_t rulerDot(LabelPrinterModel model, lv_coord_t centre, int v) {
+  const lv_coord_t d = labelPrinterDotsForMm(model, (uint16_t)(v < 0 ? -v : v));
+  return v < 0 ? centre - d : centre + d;
+}
+
 bool labelRenderCalibration(const LabelPrinterConfig& printer, LabelRaster* out) {
   if (!out) return false;
   *out = LabelRaster{};
-  const uint16_t content_w = labelPrinterDotsForMm(printer.media_width_mm);
-  const uint16_t h = labelPrinterDotsForMm(printer.media_length_mm);
+  const uint16_t content_w = labelPrinterContentWidth(printer.model, printer.media_width_mm);
+  const uint16_t h = labelPrinterDotsForMm(printer.model, printer.media_length_mm);
   const uint16_t row_w = labelPrinterRasterWidth(printer.model, printer.media_width_mm);
   if (!row_w || !h || content_w > row_w) return false;
 
@@ -415,12 +422,17 @@ bool labelRenderCalibration(const LabelPrinterConfig& printer, LabelRaster* out)
   // row has ticks alone, and "+48" would not fit the 4 mm anyway.
   int16_t lo_n, hi;
   labelPrinterOffsetRange(printer, &lo_n, &hi);
-  const lv_coord_t extra = LC_NUM_EXTRA * LC_NUM_EVERY * labelPrinterDotsForMm(1);
-  const lv_coord_t per_mm = labelPrinterDotsForMm(1);
+  const lv_coord_t per_mm = labelPrinterDotsForMm(printer.model, 1);
+  const lv_coord_t extra = LC_NUM_EXTRA * LC_NUM_EVERY * per_mm;
   const lv_font_t* num_font = &lv_font_montserrat_ext_16;
   fillRect(canvas, 0, LC_BASE_Y, row_w, LC_BASE_PX, black);
-  for (lv_coord_t d = centre % per_mm; d < row_w; d += per_mm) {
-    const int v = (d - centre) / per_mm;
+  // Each tick at its own millimetre's dot rather than per_mm on from the
+  // last: at 300 dpi a millimetre is 11.81 dots, and steps of 12 would drift
+  // a millimetre across the head.
+  for (int v = -(int)((centre + per_mm - 1) / per_mm); ; v++) {
+    const lv_coord_t d = rulerDot(printer.model, centre, v);
+    if (d >= row_w) break;
+    if (d < 0) continue;
     if (v % LC_NUM_EVERY || d - centre > hi + extra || d - centre < lo_n - extra) {
       const lv_coord_t len = v % 2 ? LC_TICK_MM : LC_TICK_2MM;
       fillRect(canvas, d, LC_BASE_Y - len, LC_TICK_PX, len, black);

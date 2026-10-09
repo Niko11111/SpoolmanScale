@@ -51,7 +51,7 @@ static bool     s_dirty = false;
 static uint32_t s_changed_ms = 0;
 static bool     s_leave = false;
 
-static int perMm() { return labelPrinterDotsForMm(1); }
+static int perMm() { return labelPrinterDotsForMm(s_cfg.model, 1); }
 
 static int roundMm(int dots) {
   const int per = perMm();
@@ -63,7 +63,7 @@ static void updateView() {
   int16_t lo, hi;
   labelPrinterOffsetRange(s_cfg, &lo, &hi);
   const int row = labelPrinterRasterWidth(s_cfg.model, s_cfg.media_width_mm);
-  const int cw = labelPrinterDotsForMm(s_cfg.media_width_mm);
+  const int cw = labelPrinterContentWidth(s_cfg.model, s_cfg.media_width_mm);
   const int cx = labelPrinterContentX(s_cfg);
   const int off = s_cfg.x_offset;
 

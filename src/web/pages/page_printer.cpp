@@ -95,7 +95,9 @@ static String stateJson() {
   j += F(",\"cx\":");
   j += String((unsigned)labelPrinterContentX(c));
   j += F(",\"cw\":");
-  j += String((unsigned)labelPrinterDotsForMm(c.media_width_mm));
+  j += String((unsigned)labelPrinterContentWidth(c.model, c.media_width_mm));
+  j += F(",\"dpi\":");
+  j += String((unsigned)labelPrinterProfile(c.model).dpi);
   j += F("},\"lastTest\":");
   const int last = printerLastTestResult();
   if (last < 0) j += F("null");
@@ -125,11 +127,17 @@ static String body() {
   // ---- which printers the scale can drive --------------------------------
   h += F("<div class='card'><h2>");
   h += T(STR_W_P_SUPPORTED);
-  h += F("</h2><div class='row'><span class='k'>Phomemo M220</span><span class='v'>");
-  h += T(STR_W_P_TESTED);
-  h += F("</span></div><div class='row'><span class='k'>Phomemo M110, M100</span><span class='v'>");
-  h += T(STR_W_P_TESTED);
-  h += F("</span></div><span class='hint'>");
+  h += F("</h2>");
+  // One row per profile, so the card and the model list never disagree.
+  for (int i = 0; i < LABEL_PRINTER_MODEL_COUNT; i++) {
+    const LabelPrinterProfile& p = labelPrinterProfile(LABEL_PRINTER_MODELS[i]);
+    h += F("<div class='row'><span class='k'>");
+    h += p.brand; h += ' '; h += p.name;
+    h += F("</span><span class='v'>");
+    h += T(p.experimental ? STR_PRN_EXPERIMENTAL : STR_W_P_TESTED);
+    h += F("</span></div>");
+  }
+  h += F("<span class='hint'>");
   h += T(STR_W_P_SUPPORTED_HINT);
   h += ' ';
   h += T(STR_PRN_HEAT_SHORT);
@@ -159,15 +167,15 @@ static String body() {
   h += T(STR_PRN_MODEL);
   h += F("</label><select id='pm'>");
   {
-    const LabelPrinterModel models[] = { LP_MODEL_M220, LP_MODEL_M110, LP_MODEL_M100 };
-    for (const LabelPrinterModel m : models) {
+    for (int i = 0; i < LABEL_PRINTER_MODEL_COUNT; i++) {
+      const LabelPrinterModel m = LABEL_PRINTER_MODELS[i];
       const LabelPrinterProfile& p = labelPrinterProfile(m);
       h += F("<option value='");
       h += String((int)m);
       h += F("'");
       if (c.model == m) h += F(" selected");
-      h += F(">Phomemo ");
-      h += p.name;
+      h += F(">");
+      h += p.brand; h += ' '; h += p.name;
       if (p.experimental) { h += ' '; h += T(STR_PRN_EXPERIMENTAL); }
       h += F("</option>");
     }
@@ -324,6 +332,8 @@ static String body() {
   h += jsStr(T(STR_PRN_ERR_STUCK));
   h += F("};"
          "let timer=0;"
+         // Dots to the millimetre of the model in use, from the state.
+         "let K=8;"
          // The device rows, from the JSON: createElement and textContent,
          // never markup, because a name is whatever the device advertised.
          "function rows(d){"
@@ -365,15 +375,15 @@ static String body() {
          "clearTimeout(timer);if(d.scanning)timer=setTimeout(load,2000);}"
          // The strip in percent of the row; the buttons light up for the
          // edge or the middle the offset stands at.
-         // 203 dpi, 8 dots to the millimetre; a tenth only where it is one.
-         "function mm(v){return String(Math.round(v*10/8)/10);}"
-         "function pos(d){const p=d.pos,row=p.row||1,l=$('pl');"
+         // A tenth of a millimetre only where it is one.
+         "function mm(v){return String(Math.round(v*10/K)/10);}"
+         "function pos(d){const p=d.pos,row=p.row||1,l=$('pl');K=(p.dpi||203)/25.4;"
          "l.style.left=(p.cx*100/row)+'%';l.style.width=(p.cw*100/row)+'%';"
          "l.textContent=d.printer.w+' mm';$('pr').textContent=mm(p.row)+' mm';"
          // The offset is kept in dots and shown in millimetres, the unit
          // the calibration page's ruler counts in.
-         "const x=$('xo');x.min=Math.ceil(p.min/8);x.max=Math.floor(p.max/8);"
-         "if(document.activeElement!==x)x.value=Math.round(p.off/8);"
+         "const x=$('xo');x.min=Math.ceil(p.min/K);x.max=Math.floor(p.max/K);"
+         "if(document.activeElement!==x)x.value=Math.round(p.off/K);"
          "const fixed=p.min===p.max;"
          "document.querySelectorAll('#pa .btab').forEach(function(b){"
          "const a=b.dataset.a;"
@@ -401,9 +411,9 @@ static String body() {
          "postFlash('/api/printer/test','','tb-s',4000).then(function(){setTimeout(load,12000);});});"
          "document.querySelectorAll('#pa .btab').forEach(function(b){"
          "b.addEventListener('click',function(){setOff(b.dataset.a);});});"
-         "$('xm').addEventListener('click',function(){setOff(((+$('xo').value||0)-1)*8);});"
-         "$('xp').addEventListener('click',function(){setOff(((+$('xo').value||0)+1)*8);});"
-         "$('xo').addEventListener('change',function(){setOff(Math.round(+$('xo').value||0)*8);});"
+         "$('xm').addEventListener('click',function(){setOff(Math.round(((+$('xo').value||0)-1)*K));});"
+         "$('xp').addEventListener('click',function(){setOff(Math.round(((+$('xo').value||0)+1)*K));});"
+         "$('xo').addEventListener('change',function(){setOff(Math.round((+$('xo').value||0)*K));});"
          "$('cb').addEventListener('click',function(){"
          "postFlash('/api/printer/calib','','cb-s',4000).then(function(){setTimeout(load,12000);});});"
          "$('fb').addEventListener('click',function(){"
@@ -465,7 +475,7 @@ static void routes(WebServer &srv) {
   srv.on("/api/printer/model", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_PRINTER))) return;
     const int m = srv.arg("plain").toInt();
-    if (m != LP_MODEL_M220 && m != LP_MODEL_M110 && m != LP_MODEL_M100) {
+    if (m < 1 || m > 255 || labelPrinterProfile((LabelPrinterModel)m).model == LP_MODEL_NONE) {
       srv.send(400, "text/plain", "unknown model");
       return;
     }

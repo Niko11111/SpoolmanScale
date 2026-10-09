@@ -71,13 +71,12 @@ void closePrinterScreen() {
   if (scr_printer) { lv_obj_del(scr_printer); scr_printer = nullptr; }
 }
 
-// The next model in the profile order, NONE never included.
+// The next model in the table's order, NONE never included.
 static LabelPrinterModel nextModel(LabelPrinterModel m) {
-  switch (m) {
-    case LP_MODEL_M220: return LP_MODEL_M110;
-    case LP_MODEL_M110: return LP_MODEL_M100;
-    default:            return LP_MODEL_M220;
-  }
+  for (int i = 0; i < LABEL_PRINTER_MODEL_COUNT; i++)
+    if (LABEL_PRINTER_MODELS[i] == m)
+      return LABEL_PRINTER_MODELS[(i + 1) % LABEL_PRINTER_MODEL_COUNT];
+  return LABEL_PRINTER_MODELS[0];
 }
 
 // The next stock size the model can take, after the current one; the first
@@ -149,8 +148,8 @@ void buildPrinterScreen() {
   // The model, cycled with a tap.
   { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_PRN_MODEL);
     char buf_s[64];
-    if (p.experimental) snprintf(buf_s, sizeof(buf_s), "%s  %s", p.name, T(STR_PRN_EXPERIMENTAL));
-    else snprintf(buf_s, sizeof(buf_s), "%s", p.name);
+    if (p.experimental) snprintf(buf_s, sizeof(buf_s), "%s %s  %s", p.brand, p.name, T(STR_PRN_EXPERIMENTAL));
+    else snprintf(buf_s, sizeof(buf_s), "%s %s", p.brand, p.name);
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_SETTINGS, buf_t, buf_s);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: Printer -> next model");
@@ -192,7 +191,7 @@ void buildPrinterScreen() {
     int16_t lo, hi;
     labelPrinterOffsetRange(c, &lo, &hi);
     const int off = labelPrinterOffset(c);
-    const int per = labelPrinterDotsForMm(1);
+    const int per = labelPrinterDotsForMm(c.model, 1);
     const int mm = (off + (off < 0 ? -per / 2 : per / 2)) / per;
     int where = -1;
     if (off == 0) where = STR_W_P_CAL_CENTER;

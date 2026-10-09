@@ -9,9 +9,6 @@
 #include "services/phomemo_m_series.h"
 #include "services/prefs_store.h"
 
-// 203 dpi: dots per millimetre, as a ratio so the rounding stays exact.
-#define LP_DOTS_PER_254MM 2030
-
 // The NVS keys. 15 characters at most, and never renamed: they sit in the
 // NVS of every device that ever picked a printer.
 #define LP_KEY_MODEL "printer_model"
@@ -28,17 +25,40 @@ static const LabelPrinterProfile PROFILE_NONE = {};
 // M220: 2 inch head, 576 dots, takes stock from 20 to 75 mm wide; the vendor
 // app pads narrower rows to 576 and wider ones to 648. Hardware proven.
 static const LabelPrinterProfile PROFILE_M220 = {
-  LP_MODEL_M220, "M220", 40, 30, 20, 75, 10, 150, 576, 648, false, true
+  LP_MODEL_M220, "Phomemo", "M220", 40, 30, 20, 75, 10, 150, 576, 648, false, true,
+  203, LP_PROTO_PHOMEMO_M220
 };
 // M110: 48 mm head, 384 dots. Same transport, own preamble. A user printed
 // with this profile on an M100 (09.2026), which proves the M110 bytes.
 static const LabelPrinterProfile PROFILE_M110 = {
-  LP_MODEL_M110, "M110", 40, 30, 20, 48, 10, 150, 384, 384, false, true
+  LP_MODEL_M110, "Phomemo", "M110", 40, 30, 20, 48, 10, 150, 384, 384, false, true,
+  203, LP_PROTO_PHOMEMO_M110
 };
 // M100: the M110's head and bytes under its own name, so a user finds it.
 static const LabelPrinterProfile PROFILE_M100 = {
-  LP_MODEL_M100, "M100", 40, 30, 20, 48, 10, 150, 384, 384, false, true
+  LP_MODEL_M100, "Phomemo", "M100", 40, 30, 20, 48, 10, 150, 384, 384, false, true,
+  203, LP_PROTO_PHOMEMO_M110
 };
+// The siblings Phomemo sells the same label rolls for. phomemo-tools shows
+// the M120 speaking the M110 protocol; the M200 and M221 take the M220's
+// 20 to 80 mm stock at 203 dpi. Experimental until a user has printed.
+static const LabelPrinterProfile PROFILE_M120 = {
+  LP_MODEL_M120, "Phomemo", "M120", 40, 30, 20, 48, 10, 150, 384, 384, true, true,
+  203, LP_PROTO_PHOMEMO_M110
+};
+static const LabelPrinterProfile PROFILE_M200 = {
+  LP_MODEL_M200, "Phomemo", "M200", 40, 30, 20, 75, 10, 150, 576, 648, true, true,
+  203, LP_PROTO_PHOMEMO_M220
+};
+static const LabelPrinterProfile PROFILE_M221 = {
+  LP_MODEL_M221, "Phomemo", "M221", 40, 30, 20, 75, 10, 150, 576, 648, true, true,
+  203, LP_PROTO_PHOMEMO_M220
+};
+
+const LabelPrinterModel LABEL_PRINTER_MODELS[] = {
+  LP_MODEL_M220, LP_MODEL_M110, LP_MODEL_M100, LP_MODEL_M120, LP_MODEL_M200, LP_MODEL_M221,
+};
+const int LABEL_PRINTER_MODEL_COUNT = sizeof(LABEL_PRINTER_MODELS) / sizeof(LABEL_PRINTER_MODELS[0]);
 
 // The two sizes printed and checked on the M220 for 0.8.0 (Nikolai,
 // 26.09.2026). 40 x 20 and 30 x 20 leave no room for the code; the larger
@@ -77,6 +97,9 @@ const LabelPrinterProfile& labelPrinterProfile(LabelPrinterModel model) {
     case LP_MODEL_M220: return PROFILE_M220;
     case LP_MODEL_M110: return PROFILE_M110;
     case LP_MODEL_M100: return PROFILE_M100;
+    case LP_MODEL_M120: return PROFILE_M120;
+    case LP_MODEL_M200: return PROFILE_M200;
+    case LP_MODEL_M221: return PROFILE_M221;
     default:            return PROFILE_NONE;
   }
 }
@@ -171,17 +194,28 @@ bool labelPrinterIsDevice(const char* address) {
   return c.address[0] && strcmp(c.address, address) == 0;
 }
 
-uint16_t labelPrinterDotsForMm(uint16_t mm) {
-  return (uint32_t(mm) * LP_DOTS_PER_254MM + 127) / 254;
+// As a ratio so the rounding stays exact: at 203 dpi this is the 8 dots to
+// the millimetre the M220 was measured with, bit for bit.
+uint16_t labelPrinterDotsForMm(LabelPrinterModel model, uint16_t mm) {
+  const uint32_t dpi = labelPrinterProfile(model).dpi;
+  return (uint32_t(mm) * dpi * 10 + 127) / 254;
 }
 
 uint16_t labelPrinterRasterWidth(LabelPrinterModel model, uint16_t media_width_mm) {
   const LabelPrinterProfile& p = labelPrinterProfile(model);
   if (p.model == LP_MODEL_NONE) return 0;
-  const uint16_t content = labelPrinterDotsForMm(media_width_mm);
+  const uint16_t content = labelPrinterDotsForMm(model, media_width_mm);
   const uint16_t canvas = content > p.base_raster_width ? content : p.base_raster_width;
   const uint16_t width = (canvas + 7) & ~uint16_t(7);
   return width > p.max_raster_width ? p.max_raster_width : width;
+}
+
+// Every Phomemo head is at least as wide as its widest stock, so there this
+// is the plain conversion; a 50 mm roll on a 48 mm head prints 48 mm of it.
+uint16_t labelPrinterContentWidth(LabelPrinterModel model, uint16_t media_width_mm) {
+  const uint16_t dots = labelPrinterDotsForMm(model, media_width_mm);
+  const uint16_t row = labelPrinterRasterWidth(model, media_width_mm);
+  return dots > row ? row : dots;
 }
 
 // A ruler across the M220's 576 dots put Nikolai's 40 mm roll under dots 128
@@ -190,7 +224,7 @@ uint16_t labelPrinterRasterWidth(LabelPrinterModel model, uint16_t media_width_m
 // it sits in the holder, not the model, so it is a setting of its own.
 void labelPrinterOffsetRange(const LabelPrinterConfig& c, int16_t* min, int16_t* max) {
   const uint16_t row = labelPrinterRasterWidth(c.model, c.media_width_mm);
-  const uint16_t content = labelPrinterDotsForMm(c.media_width_mm);
+  const uint16_t content = labelPrinterContentWidth(c.model, c.media_width_mm);
   const int16_t slack = content < row ? int16_t(row - content) : 0;
   const int16_t centre = slack / 2;
   if (min) *min = -centre;
@@ -211,8 +245,7 @@ uint16_t labelPrinterContentX(const LabelPrinterConfig& c) {
 
 // The renderer works in whole dots from the same conversion, so the content
 // matches exactly; one dot of slack is left for a raster from elsewhere.
-static bool nearDots(uint16_t px, uint16_t mm) {
-  const uint16_t d = labelPrinterDotsForMm(mm);
+static bool nearDots(uint16_t px, uint16_t d) {
   return px + 1 >= d && px <= d + 1;
 }
 
@@ -221,8 +254,8 @@ bool labelPrinterRasterFits(LabelPrinterModel model, const LabelRaster& image,
   const LabelPrinterProfile& p = labelPrinterProfile(model);
   return mediaFits(p, media_width_mm, media_length_mm) &&
          image.width == labelPrinterRasterWidth(model, media_width_mm) &&
-         nearDots(image.content_width, media_width_mm) &&
-         nearDots(image.height, media_length_mm);
+         nearDots(image.content_width, labelPrinterContentWidth(model, media_width_mm)) &&
+         nearDots(image.height, labelPrinterDotsForMm(model, media_length_mm));
 }
 
 LabelPrintResult labelPrinterPrint(const LabelPrinterConfig& c, const LabelRaster& image,
@@ -233,7 +266,7 @@ LabelPrintResult labelPrinterPrint(const LabelPrinterConfig& c, const LabelRaste
   if (image.width > p.max_raster_width) return LP_TOO_WIDE;
   if (!labelPrinterRasterFits(c.model, image, c.media_width_mm, c.media_length_mm))
     return LP_MEDIA_MISMATCH;
-  const PhomemoModel pm = c.model == LP_MODEL_M220 ? PHOMEMO_M220 : PHOMEMO_M110;
+  const PhomemoModel pm = p.protocol == LP_PROTO_PHOMEMO_M220 ? PHOMEMO_M220 : PHOMEMO_M110;
   switch (phomemoMSeriesPrint(pm, c.address, image, progress)) {
     case BLE_WRITE_OK:                return LP_OK;
     case BLE_WRITE_OFF:               return LP_BLE_OFF;
