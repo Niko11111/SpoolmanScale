@@ -336,7 +336,10 @@ int labelPrintResultString(LabelPrintResult r) {
     case LP_TOO_WIDE:           return STR_PRN_ERR_TOO_WIDE;
     case LP_MEDIA_MISMATCH:     return STR_PRN_ERR_MEDIA;
     case LP_BLE_OFF:            return STR_PRN_ERR_BLE_OFF;
-    case LP_BLE_INIT:           return STR_BT_INIT_FAILED;
+    // The stack does not start for two reasons: no memory, or the memory it
+    // needs went back to the heap at boot (see bleStackAvailable()).
+    case LP_BLE_INIT:           return bleStackAvailable() ? STR_BT_INIT_FAILED
+                                                           : STR_PRN_ERR_BLE_RESTART;
     case LP_BLE_CONNECT:        return STR_PRN_ERR_CONNECT;
     case LP_BLE_CHARACTERISTIC: return STR_PRN_ERR_NOT_PRINTER;
     case LP_BLE_STUCK:          return STR_PRN_ERR_STUCK;

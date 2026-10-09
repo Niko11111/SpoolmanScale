@@ -2769,9 +2769,9 @@ const char* const STRINGS[][3] = {
 
   // The printer page in the browser
   { "Drucker", "Printer", "Imprimante" },  // STR_W_NAV_PRINTER
-  { "Nur bei Bedarf an: der Funk läuft, während ein Gerät ihn braucht, und wird danach freigegeben. Nach dem Einschalten startet die Waage einmal neu.",
-    "Only when needed: the radio runs while a device needs it and is released afterwards. After switching it on, the scale restarts once.",
-    "Seulement au besoin : la radio tourne tant qu'un appareil l'utilise, puis est libérée. Après l'activation, la balance redémarre une fois." },  // STR_W_P_BLE_HINT
+  { "Nur bei Bedarf an: der Funk läuft, während ein Gerät ihn braucht, und wird danach freigegeben. Nach dem Einschalten braucht die Waage einmal einen Neustart.",
+    "Only when needed: the radio runs while a device needs it and is released afterwards. After switching it on, the scale needs one restart.",
+    "Seulement au besoin : la radio tourne tant qu'un appareil l'utilise, puis est libérée. Après l'activation, la balance a besoin d'un redémarrage." },  // STR_W_P_BLE_HINT
   { "Unterstützte Drucker", "Supported printers", "Imprimantes prises en charge" },  // STR_W_P_SUPPORTED
   { "getestet",             "tested",             "testée" },  // STR_W_P_TESTED
   { "Thermodrucker von Phomemo (M-Serie) und NIIMBOT über Bluetooth. Weitere Modelle kommen mit Rückmeldungen aus der Community.",
@@ -3446,6 +3446,13 @@ const char* const STRINGS[][3] = {
   { "Thermotransfer mit Farbband",
     "Thermal transfer with a ribbon",
     "Transfert thermique à ruban" },  // STR_PRN_RIBBON_SHORT
+  // Bluetooth switched on in the browser while the stack cannot start
+  { "Bluetooth ist eingeschaltet, braucht aber einmal einen Neustart der Waage: Der Funk-Speicher wurde beim Start freigegeben.",
+    "Bluetooth is on but needs one restart of the scale: its radio memory was released at boot.",
+    "Bluetooth est activé mais la balance doit redémarrer une fois : la mémoire radio a été libérée au démarrage." },  // STR_W_P_RESTART_HINT
+  { "Bluetooth braucht zuerst einen Neustart der Waage.",
+    "Bluetooth needs a restart of the scale first.",
+    "Bluetooth exige d'abord un redémarrage." },  // STR_PRN_ERR_BLE_RESTART
 };
 
 StringID tagWriteResultString(uint8_t code) {

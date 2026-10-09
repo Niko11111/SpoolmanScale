@@ -50,6 +50,10 @@ static String stateJson() {
   j += bleEnabled() ? F("true") : F("false");
   j += F(",\"stuck\":");
   j += bleStackStuck() ? F("true") : F("false");
+  // False when the controller's memory went back to the heap at boot: the
+  // switch is on, but only a restart brings the radio.
+  j += F(",\"stack\":");
+  j += bleStackAvailable() ? F("true") : F("false");
   j += F(",\"scanning\":");
   j += bleDevicesScanning() ? F("true") : F("false");
   j += F(",\"scanned\":");
@@ -122,7 +126,14 @@ static String body() {
   h += T(STR_BT_SWITCH);
   h += F("</label><span class='hint'>");
   h += T(STR_W_P_BLE_HINT);
-  h += F("</span><span class='msg' id='bl-s'></span></div></div>");
+  h += F("</span><span class='msg' id='bl-s'></span>"
+         // Shown while the switch is on and the stack cannot start: the
+         // touchscreen asks for the restart in a popup, the page asks here.
+         "<div id='br' style='display:none'><span class='msg bad'>");
+  h += T(STR_W_P_RESTART_HINT);
+  h += F("</span><div class='inrow'><button id='rb' class='quiet'>");
+  h += T(STR_W_RESTART);
+  h += F("</button><span class='msg' id='rb-s'></span></div></div></div></div>");
 
   // ---- which printers the scale can drive --------------------------------
   h += F("<div class='card'><h2>");
@@ -331,6 +342,8 @@ static String body() {
   h += jsStr(T(STR_PRN_ERR_BLE_OFF));
   h += F(",stuck:");
   h += jsStr(T(STR_PRN_ERR_STUCK));
+  h += F(",restarting:");
+  h += jsStr(T(STR_W_RESTARTING));
   h += F("};"
          "let timer=0;"
          // Dots to the millimetre of the model in use, from the state.
@@ -366,8 +379,9 @@ static String body() {
          "$('pm').value=String(d.printer.model);"
          "$('ps').value=d.printer.w+'x'+d.printer.h;"
          "$('lt').textContent=d.lastTest||'';"
-         "$('sc').disabled=!d.ble||d.stuck||d.scanning;"
-         "$('tb').disabled=!d.ble||d.stuck||!d.printer.configured;"
+         "$('br').style.display=(d.ble&&!d.stack)?'':'none';"
+         "$('sc').disabled=!d.ble||!d.stack||d.stuck||d.scanning;"
+         "$('tb').disabled=!d.ble||!d.stack||d.stuck||!d.printer.configured;"
          "$('cb').disabled=$('tb').disabled;"
          "pos(d);"
          "rows(d);"
@@ -419,6 +433,13 @@ static String body() {
          "postFlash('/api/printer/calib','','cb-s',4000).then(function(){setTimeout(load,12000);});});"
          "$('fb').addEventListener('click',function(){"
          "postFlash('/api/printer/forget','','pd-s',4000).then(load);});"
+         // The restart route sits behind the maintenance gate; a shut one
+         // answers 403 as text, which is shown as it is.
+         "$('rb').addEventListener('click',function(){"
+         "post('/api/restart','').then(function(r){"
+         "if(!r.ok){flash('rb-s',r.text||WS.err,true,5000);return;}"
+         "flash('rb-s',P.restarting,false);"
+         "setTimeout(function(){location.reload();},9000);});});"
          "load();"
          "</script>");
   return h;
