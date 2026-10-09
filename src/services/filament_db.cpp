@@ -126,6 +126,30 @@ void fdbIndexAdd(const char* maker, const char* material) {
   p.count = 1;
 }
 
+static uint16_t addCounts(uint16_t a, uint16_t b) {
+  const uint32_t sum = (uint32_t)a + b;
+  return sum > UINT16_MAX ? UINT16_MAX : (uint16_t)sum;
+}
+
+void fdbPairAdd(const char* maker, const char* material, uint16_t count) {
+  if (!s_makers || !s_pairs || !maker || !maker[0] || !material || !material[0]) return;
+  const int mi = addMaker(maker);
+  if (mi < 0) return;
+  s_makers[mi].pairs_known = true;
+  s_makers[mi].count = addCounts(s_makers[mi].count, count);
+  for (int i = 0; i < s_pair_n; i++) {
+    if (s_pairs[i].maker == mi && strcasecmp(s_pairs[i].material, material) == 0) {
+      s_pairs[i].count = addCounts(s_pairs[i].count, count);
+      return;
+    }
+  }
+  if (s_pair_n >= FDB_PAIRS_MAX) return;
+  FdbPair& p = s_pairs[s_pair_n++];
+  p.maker = (uint16_t)mi;
+  snprintf(p.material, sizeof(p.material), "%s", material);
+  p.count = count;
+}
+
 void fdbMarkOwned(const char* maker) {
   if (!s_makers || !maker) return;
   const int i = findMaker(maker);

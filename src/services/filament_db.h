@@ -168,6 +168,9 @@ void fdbEntryToInput(const FdbEntry& e, const char* maker, const char* material,
 void fdbIndexAdd(const char* maker, const char* material);
 // A maker without its materials yet, counted as the database counts it.
 void fdbMakerAdd(const char* maker, uint16_t count);
+// A maker's material with its count, for an index that comes counted (the
+// light form of the inventory contract): the maker's count grows by it.
+void fdbPairAdd(const char* maker, const char* material, uint16_t count);
 // Marks a maker the inventory has. Case does not matter.
 void fdbMarkOwned(const char* maker);
 // False once the list is full.

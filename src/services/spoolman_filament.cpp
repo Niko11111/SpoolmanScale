@@ -8,6 +8,7 @@
 
 #include "../hardware/sd_logger.h"
 #include "spoolman_api.h"
+#include "spoolman_filament_db.h"
 
 #define SM_FIL_TIMEOUT_MS        8000
 // The database search answers from a file of some 8000 entries.
@@ -157,10 +158,35 @@ static void takeDbEntry(JsonObjectConst e, TagFilamentPlan* plan) {
            e["multi_color_direction"] | "");
 }
 
-// Looks the product up in SpoolmanDB. True with plan filled from the entry.
-// An older Spoolman without the search (404) simply has no entry.
+struct DbLookup {
+  const TagCreateInput* in;
+  TagFilamentPlan*      plan;
+  bool                  found;
+};
+
+static void lookupElement(JsonObjectConst e, void* p) {
+  DbLookup* l = (DbLookup*)p;
+  if (l->found || !dbEntryFits(e, *l->in)) return;
+  takeDbEntry(e, l->plan);
+  l->found = true;
+}
+
+// The light form has no word search: the maker's entries of the material,
+// compared one by one as they come.
+static bool findInLightList(const char* base_url, const TagCreateInput& in, TagFilamentPlan* plan) {
+  DbLookup l = { &in, plan, false };
+  const int code = spoolmanFdbEachOf(base_url, in.vendor, in.material, lookupElement, &l);
+  if (code != 200) logSDf("Spoolman: filament database list -> HTTP %d", code);
+  return l.found;
+}
+
+// Looks the product up in the server's filament database. True with plan
+// filled from the entry. A server without one simply has no entry.
 static bool findInDatabase(const char* base_url, const TagCreateInput& in, TagFilamentPlan* plan) {
   if (!in.color_count && !in.clear) return false;
+  const SmFdbForm form = spoolmanFdbForm(base_url);
+  if (form == SM_FDB_NONE) return false;
+  if (form == SM_FDB_LIGHT) return findInLightList(base_url, in, plan);
   // The search matches word by word. A filament the database names by its
   // colour alone (the plain line, a gradient, a clear one) has no product
   // word there, so the colour's name narrows it instead: "Bambu Lab PLA"
@@ -203,33 +229,56 @@ static void takePickedEntry(const TagCreateInput& in, TagFilamentPlan* plan) {
   }
 }
 
-// The density most of SpoolmanDB's filaments of exactly this material have,
-// whoever makes them; 0 when it has none. Spoolman's material list below is
-// a short list of suggestions that spells TPU "Flexible (TPU)" and has no PA
-// at all, while the database holds 216 TPU (74 of them at 1.20 g/cm3).
-static float databaseDensity(const char* base_url, const char* material) {
-  JsonDocument filter;
-  JsonObject f = filter.to<JsonArray>().add<JsonObject>();
-  f["material"] = true;
-  f["density"]  = true;
-  const String path = String("/api/v1/external/filament/search?limit=") + SM_FIL_DB_LIMIT +
-                      "&query=" + spoolmanUrlEncode(material);
-  JsonDocument doc;
-  if (spoolmanGetJson(base_url, path.c_str(), doc, SM_FIL_DB_TIMEOUT_MS, &filter) != 200) return 0.0f;
+// The densities seen, counted in hundredths, the precision the database
+// writes, and which one most entries share.
+struct DensityCount {
+  const char* material;
+  int value[SM_FIL_DB_LIMIT];
+  int count[SM_FIL_DB_LIMIT];
+  int n;
+  int best;
+};
 
-  // Counted in hundredths, the precision the database writes.
-  int value[SM_FIL_DB_LIMIT], count[SM_FIL_DB_LIMIT], n = 0, best = -1;
-  for (JsonObjectConst e : doc.as<JsonArrayConst>()) {
-    if (strcasecmp(e["material"] | "", material) != 0) continue;
-    const int d = (int)lroundf((e["density"] | 0.0f) * 100.0f);
-    if (d <= 0) continue;
-    int i = 0;
-    while (i < n && value[i] != d) i++;
-    if (i == n) { if (n == SM_FIL_DB_LIMIT) continue; value[n] = d; count[n++] = 0; }
-    count[i]++;
-    if (best < 0 || count[i] > count[best]) best = i;
+static void countDensity(JsonObjectConst e, void* p) {
+  DensityCount* dc = (DensityCount*)p;
+  if (strcasecmp(e["material"] | "", dc->material) != 0) return;
+  const int d = (int)lroundf((e["density"] | 0.0f) * 100.0f);
+  if (d <= 0) return;
+  int i = 0;
+  while (i < dc->n && dc->value[i] != d) i++;
+  if (i == dc->n) {
+    if (dc->n == SM_FIL_DB_LIMIT) return;
+    dc->value[dc->n] = d;
+    dc->count[dc->n++] = 0;
   }
-  return best < 0 ? 0.0f : value[best] / 100.0f;
+  dc->count[i]++;
+  if (dc->best < 0 || dc->count[i] > dc->count[dc->best]) dc->best = i;
+}
+
+// The density most of the database's filaments of exactly this material
+// have: in the Spoolman form whoever makes them (a search for the material),
+// in the light form the maker's own list of it; 0 when there is none.
+// Spoolman's material list below is a short list of suggestions that spells
+// TPU "Flexible (TPU)" and has no PA at all, while the database holds 216
+// TPU (74 of them at 1.20 g/cm3).
+static float databaseDensity(const char* base_url, const char* vendor, const char* material) {
+  DensityCount dc = {};
+  dc.material = material;
+  dc.best = -1;
+  if (spoolmanFdbForm(base_url) == SM_FDB_LIGHT) {
+    if (spoolmanFdbEachOf(base_url, vendor, material, countDensity, &dc) != 200) return 0.0f;
+  } else {
+    JsonDocument filter;
+    JsonObject f = filter.to<JsonArray>().add<JsonObject>();
+    f["material"] = true;
+    f["density"]  = true;
+    const String path = String("/api/v1/external/filament/search?limit=") + SM_FIL_DB_LIMIT +
+                        "&query=" + spoolmanUrlEncode(material);
+    JsonDocument doc;
+    if (spoolmanGetJson(base_url, path.c_str(), doc, SM_FIL_DB_TIMEOUT_MS, &filter) != 200) return 0.0f;
+    for (JsonObjectConst e : doc.as<JsonArrayConst>()) countDensity(e, &dc);
+  }
+  return dc.best < 0 ? 0.0f : dc.value[dc.best] / 100.0f;
 }
 
 // The density Spoolman's material list gives the tag's material, 0 if none.
@@ -286,7 +335,7 @@ static bool planExisting(const char* base_url, const TagCreateInput& in, TagFila
 // colour), and only with a density, which Spoolman requires.
 static void planFromTag(const char* base_url, const TagCreateInput& in, TagFilamentPlan* plan) {
   if (!in.names_known || (!in.color_count && !in.clear)) { plan->state = TFS_NEEDS_CATALOG; return; }
-  plan->density = databaseDensity(base_url, in.material);
+  plan->density = databaseDensity(base_url, in.vendor, in.material);
   if (plan->density <= 0.0f) plan->density = materialDensity(base_url, in.material);
   if (plan->density <= 0.0f) {
     logSDf("Spoolman: no density known for %s, filament not created", in.material);
@@ -311,7 +360,7 @@ void spoolmanPlanTagFilament(const char* base_url, const TagCreateInput& in,
   if (plan->vendor_id < 0) { plan->state = TFS_FAILED; return; }
   // Spoolman requires a density; a picked entry without one borrows it the
   // way a filament from a tag does.
-  if (picked && plan->density <= 0.0f) plan->density = databaseDensity(base_url, in.material);
+  if (picked && plan->density <= 0.0f) plan->density = databaseDensity(base_url, in.vendor, in.material);
   if (picked && plan->density <= 0.0f) plan->density = materialDensity(base_url, in.material);
   if (picked && plan->density <= 0.0f) {
     logSDf("Spoolman: no density known for %s, filament not created", in.material);
