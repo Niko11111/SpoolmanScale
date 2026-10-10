@@ -1327,6 +1327,14 @@ void appLoop() {
     // comes back without having to touch it first.
     displayNoteWeight(scale_weight_g);
 
+    // Empty-pad drift correction. Held off while anything could be on the pad
+    // deliberately: a tag in range, a spool adopted without one, or a popup
+    // that is about to use the weight, or the calibration screen, where the
+    // zero the user just set has to hold until the factor is computed.
+    const bool calibrating = scr_factor && !lv_obj_has_flag(scr_factor, LV_OBJ_FLAG_HIDDEN);
+    scaleAutoTareTick(!tag_present && !aw_adopted && !calibrating && !isConfirmPopupOpen() &&
+                      !isTareEntryOpen() && !isSpoolWeightScopeOpen());
+
     // Keep the reference fresh only while the tag is genuinely being read.
     // The guard used to ask nfc_absent_count, which is written to 0 at every
     // one of its sites and never incremented - so it was always true and the

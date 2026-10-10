@@ -2,6 +2,7 @@
 
 extern bool g_auto_weight;
 extern bool g_auto_loc_popup;
+extern bool g_auto_tare;
 extern float auto_weight_last_val;
 extern unsigned long auto_weight_stable_ms;
 

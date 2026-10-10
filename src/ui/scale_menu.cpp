@@ -175,6 +175,27 @@ void buildScaleSubScreen() {
       show_factor_pending = true;
     }, LV_EVENT_CLICKED, NULL); }
 
+  // Only with a load cell, like the calibration above it.
+  if (g_scale_fitted)
+  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_BTN_AUTO_TARE);
+    char buf_s[8]; copyT(buf_s, sizeof(buf_s), g_auto_tare ? STR_ON : STR_OFF);
+    lv_obj_t *help = nullptr;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_REFRESH, buf_t, "", g_auto_tare, &help);
+    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                  INFO_POPUP_ARG(STR_BTN_AUTO_TARE, STR_BTN_AUTO_TARE_INFO));
+    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
+    if (arr_lbl) {
+      lv_label_set_text(arr_lbl, buf_s);
+      lv_obj_set_style_text_color(arr_lbl, g_auto_tare ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_CAPTION), 0);
+      lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
+    }
+    lv_obj_add_event_cb(btn, [](lv_event_t *e){
+      logSD("BTN: Scale-Sub -> Auto-tare Toggle");
+      g_auto_tare = !g_auto_tare;
+      prefsPutBool("auto_tare", g_auto_tare);
+      scale_sub_rebuild_pending = true;
+    }, LV_EVENT_CLICKED, NULL); }
+
   // Last, because it is the row that decides what the rest of this screen even
   // shows - and because on a device that has a scale nobody ever needs it.
   // It stays visible with the scale off: this is where it gets turned back on.

@@ -126,6 +126,7 @@ void loadPrefs() {
   g_ams_window_s  = (int)prefsGetInt("ams_window", AMS_WINDOW_DEFAULT_S);
   g_auto_weight = prefsGetBool("auto_weight", false);
   g_auto_loc_popup = prefsGetBool("auto_loc_popup", false);
+  g_auto_tare = prefsGetBool("auto_tare", false);
   // Three states now, where this used to be a yes/no switch. Nobody loses their
   // setting: an installation that had the question turned on comes back as
   // "ask", one that had it off as "off", and the old key is left in NVS rather
