@@ -11,6 +11,8 @@
 
 static const uint32_t FIELD_MASK  = (1u << LABEL_FIELD_COUNT) - 1;
 static const uint32_t OPTION_MASK = (1u << LABEL_OPTION_COUNT) - 1;
+// What the label printed before the editor: every field up to the brand.
+static const uint32_t DEFAULT_FIELDS = (1u << (LF_BRAND + 1)) - 1;
 
 static LabelLayout s_layout{};
 static bool s_loaded = false;
@@ -18,7 +20,7 @@ static bool s_loaded = false;
 LabelLayout labelLayoutDefault() {
   LabelLayout l{};
   l.preset = LABEL_PRESET_STANDARD;
-  l.fields = FIELD_MASK;
+  l.fields = DEFAULT_FIELDS;
   l.options = 0;
   return l;
 }

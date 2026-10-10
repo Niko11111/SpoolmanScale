@@ -43,6 +43,7 @@ static const FieldRow FIELD_ROWS[] = {
   { LF_NAME,     STR_W_L_F_NAME },
   { LF_SPOOL_ID, STR_W_TAG_SPOOLID },
   { LF_COLOR,    STR_LBL_L_COLOR },
+  { LF_ARTICLE,  STR_LBL_ARTICLE_NO_SHORT },
   { LF_DATE,     STR_W_L_F_DATE },
   { LF_QR,       STR_W_L_F_QR },
   { LF_BRAND,    STR_W_L_F_BRAND },
@@ -69,6 +70,7 @@ static void sampleSpool(SpoolLabelData* d) {
   snprintf(d->material, sizeof(d->material), "PLA");
   snprintf(d->name, sizeof(d->name), "PLA Basic Jade White");
   snprintf(d->color, sizeof(d->color), "F2F2E8");
+  snprintf(d->article, sizeof(d->article), "10100");
   snprintf(d->first_used, sizeof(d->first_used), "03.03.2026");
   snprintf(d->added, sizeof(d->added), "01.03.2026");
 }
@@ -194,9 +196,13 @@ static String body() {
   String h;
   h.reserve(7000);
   h += F("<style>"
+         // One print dot per CSS pixel, never stretched: scaled by an
+         // uneven factor the dots came out blurred and blocky. A label wider
+         // than the card shrinks to it.
          ".lb-paper{background:#fff;border:1px solid var(--line);border-radius:8px;"
-         "padding:6px;margin-bottom:12px;line-height:0}"
-         ".lb-paper img{width:100%;height:auto;display:block}"
+         "padding:6px;margin:0 auto 12px;line-height:0;width:fit-content;max-width:100%;"
+         "box-sizing:border-box}"
+         ".lb-paper img{max-width:100%;height:auto;display:block;image-rendering:pixelated}"
          ".lb-paper img:not([src]){visibility:hidden}"
          ".lb-sw{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}"
          ".lb-sw .check+.check{margin-top:0}"
@@ -258,6 +264,10 @@ static String body() {
          "i.addEventListener('change',function(){if(S)save(S.preset,mask('lf'),mask('lo'));});});"
          "$('lr').addEventListener('click',function(){postFlash('/api/label/reset','','ls-s',2500).then(load);});"
          "$('lp').addEventListener('error',function(){$('lp-s').textContent=L.fail;shown='';});"
+         // Hard dot edges only where the dots are enlarged; shrunk, the
+         // nearest dot would drop whole rows of them.
+         "$('lp').addEventListener('load',function(){var i=$('lp');"
+         "i.style.imageRendering=i.clientWidth*(window.devicePixelRatio||1)>=i.naturalWidth?'pixelated':'auto';});"
          // The print takes about ten seconds on the scale; the verdict is
          // fetched after that and shown on the last line.
          "$('lpb').addEventListener('click',function(){"

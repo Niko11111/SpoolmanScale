@@ -31,6 +31,9 @@ enum LabelPreset : uint8_t {
 enum LabelField : uint8_t {
   LF_VENDOR = 0, LF_MATERIAL = 1, LF_NAME = 2, LF_SPOOL_ID = 3,
   LF_COLOR = 4, LF_DATE = 5, LF_QR = 6, LF_BRAND = 7,
+  // Off by default: the default stays the label from before, and a mask
+  // saved before the field existed has the bit clear already.
+  LF_ARTICLE = 8,
   LABEL_FIELD_COUNT
 };
 
@@ -46,7 +49,7 @@ struct LabelLayout {
   uint32_t options;   // bit n set: LabelOption n applies
 };
 
-// Every field on, no option, the standard arrangement.
+// The fields of the label from before on, no option, the standard arrangement.
 LabelLayout labelLayoutDefault();
 // Known bits only, a known arrangement: what the browser sent may be anything.
 LabelLayout labelLayoutSanitized(const LabelLayout& in);

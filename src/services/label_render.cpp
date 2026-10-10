@@ -56,7 +56,7 @@ LV_FONT_DECLARE(lv_font_montserrat_ext_14);
 #define LR_QR_MAX_VERSION 10    // 57 modules: far more than a spool URL needs
 #define LR_QR_GOOD_PX     96    // under this, smaller fact lines buy code size
 #define LR_BLACK_BELOW   128    // brightness under which a canvas pixel prints
-#define LR_MAX_FACTS       5    // the compact arrangement adds the maker
+#define LR_MAX_FACTS       6    // every fact line on, the maker among them
 // The calibration page's ruler, in dots from the top of the label.
 #define LC_NUM_Y          12    // the numbers' row, and the top of their ticks
 #define LC_NUM_EVERY       4    // a number every 4 mm
@@ -241,10 +241,15 @@ static lv_coord_t drawQr(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y,
   return total;
 }
 
+// One fact as its caption and its value; either may be missing (the maker
+// has no caption, the project name no value).
+struct LabelFact { const char* caption; const char* value; };
+
 // What one label carries besides its layout: the header from `d`, under it
 // `lines` in small type next to the code, or, with `wrap`, lines[0] as one
 // paragraph wrapped into that column. No code without `qr`. `what` names the
-// label in the log.
+// label in the log. With `facts`, the same n lines as caption and value, so
+// the body can set them in two lines where the room allows.
 struct LabelContent {
   const SpoolLabelData* d;
   const char* const* lines;
@@ -252,6 +257,7 @@ struct LabelContent {
   bool wrap;
   const char* qr;
   const char* what;
+  const LabelFact* facts;
 };
 
 // The part of the canvas the blocks are laid into, in dots, and how the code
@@ -265,8 +271,8 @@ struct LabelArea {
   const lv_font_t* facts_font;   // null: by the label's size
 };
 
-// Where the body put the code, for the log.
-struct LabelBody { lv_coord_t qr; bool beside; };
+// Where the body put the code and how it set the facts, for the log.
+struct LabelBody { lv_coord_t qr; bool beside; const char* facts; };
 
 // The header, each block where the layout keeps it: the maker as large as
 // the width carries, the material white on a black band, the filament's name
@@ -318,40 +324,53 @@ static lv_coord_t textKeep(const LabelArea& a, const LabelContent& c, const lv_f
   return widest > most ? (most > LR_FACTS_MIN_W ? most : LR_FACTS_MIN_W) : widest;
 }
 
+// How the body sets the facts in one line each: their font and line, where
+// the code goes and how large it comes out (0: no code).
+struct BodyPlan {
+  const lv_font_t* font;
+  lv_coord_t line;
+  lv_coord_t qr;      // the code's box
+  lv_coord_t code;    // the code as drawn, whole dots per module
+  bool beside;
+};
+
 // The facts and the code under the header. The code goes where it comes out
 // larger: next to the facts on a wide label, under them on a tall one, and it
 // takes all the height it gets. When that leaves it small, the fact lines
 // step down a size first.
-static LabelBody drawBody(lv_obj_t* canvas, const LabelArea& a, bool tall,
-                          const LabelContent& c) {
-  const lv_coord_t facts_top = a.y;
-  const lv_coord_t avail_h = a.bottom - facts_top;
+static BodyPlan planOneLine(const LabelArea& a, bool tall, const LabelContent& c) {
+  const lv_coord_t avail_h = a.bottom - a.y;
   const int rows = c.wrap ? LR_WRAP_ROWS : c.n;
-  const lv_font_t* fact_font = tall ? &lv_font_montserrat_ext_20 : &lv_font_montserrat_ext_16;
-  lv_coord_t fact_line = tall ? LR_FACT_LINE_TALL_PX : LR_FACT_LINE_PX;
-  if (a.facts_font) { fact_font = a.facts_font; fact_line = LR_FACT_LINE_SMALL_PX; }
-  lv_coord_t qr = 0;
-  bool beside = true;
+  BodyPlan p{ tall ? &lv_font_montserrat_ext_20 : &lv_font_montserrat_ext_16,
+              tall ? (lv_coord_t)LR_FACT_LINE_TALL_PX : (lv_coord_t)LR_FACT_LINE_PX, 0, 0, true };
+  if (a.facts_font) { p.font = a.facts_font; p.line = LR_FACT_LINE_SMALL_PX; }
   for (int pass = 0; pass < 2; pass++) {
-    lv_coord_t qr_beside = a.w - textKeep(a, c, fact_font) - LR_GAP_PX;
+    lv_coord_t qr_beside = a.w - textKeep(a, c, p.font) - LR_GAP_PX;
     if (qr_beside > avail_h) qr_beside = avail_h;
-    lv_coord_t qr_below = avail_h - rows * fact_line - LR_GAP_PX;
+    lv_coord_t qr_below = avail_h - rows * p.line - LR_GAP_PX;
     if (qr_below > a.w) qr_below = a.w;
-    beside = qr_beside >= qr_below;
-    qr = beside ? qr_beside : qr_below;
-    if (qr > a.qr_max) qr = a.qr_max;
-    if (qr >= LR_QR_GOOD_PX || fact_font != &lv_font_montserrat_ext_20) break;
-    fact_font = &lv_font_montserrat_ext_16;
-    fact_line = LR_FACT_LINE_PX;
+    p.beside = qr_beside >= qr_below;
+    p.qr = p.beside ? qr_beside : qr_below;
+    if (p.qr > a.qr_max) p.qr = a.qr_max;
+    if (p.qr >= LR_QR_GOOD_PX || p.font != &lv_font_montserrat_ext_20) break;
+    p.font = &lv_font_montserrat_ext_16;
+    p.line = LR_FACT_LINE_PX;
   }
-  bool with_qr = qr >= LR_QR_MIN_PX && c.qr && c.qr[0];
   // The code comes out in whole dots per module and is mostly smaller than its
   // box: the text column reaches to the code, not to the box, which gave a
   // date line on 40 x 30 the room it was cut short of.
-  const lv_coord_t code = with_qr ? drawQr(nullptr, 0, 0, qr, c.qr) : 0;
-  if (!code) with_qr = false;
-  const lv_coord_t facts_w = (beside && with_qr) ? a.w - code - LR_GAP_PX : a.w;
-  lv_coord_t text_h = rows * fact_line;
+  if (p.qr >= LR_QR_MIN_PX && c.qr && c.qr[0]) p.code = drawQr(nullptr, 0, 0, p.qr, c.qr);
+  return p;
+}
+
+static void drawOneLine(lv_obj_t* canvas, const LabelArea& a, const LabelContent& c,
+                        const BodyPlan& p) {
+  const lv_coord_t facts_top = a.y;
+  const lv_coord_t avail_h = a.bottom - facts_top;
+  const int rows = c.wrap ? LR_WRAP_ROWS : c.n;
+  const lv_font_t* fact_font = p.font;
+  const lv_coord_t facts_w = (p.beside && p.code) ? a.w - p.code - LR_GAP_PX : a.w;
+  lv_coord_t text_h = rows * p.line;
   if (c.wrap && c.n > 0) {
     // One size down when the paragraph does not fit the height next to the code.
     text_h = paragraphHeight(c.lines[0], fact_font, facts_w);
@@ -359,22 +378,143 @@ static LabelBody drawBody(lv_obj_t* canvas, const LabelArea& a, bool tall,
       fact_font = &lv_font_montserrat_ext_14;
       text_h = paragraphHeight(c.lines[0], fact_font, facts_w);
     }
-    const lv_coord_t py = beside && text_h < avail_h ? facts_top + (avail_h - text_h) / 2 : facts_top;
+    const lv_coord_t py = p.beside && text_h < avail_h ? facts_top + (avail_h - text_h) / 2 : facts_top;
     drawParagraph(canvas, a.x, py, facts_w, fact_font, c.lines[0]);
   } else {
     // Next to the code the lines stand in the middle of the height they share.
-    const lv_coord_t block = c.n * fact_line;
-    const lv_coord_t fy = beside && block < avail_h ? facts_top + (avail_h - block) / 2 : facts_top;
+    const lv_coord_t block = c.n * p.line;
+    const lv_coord_t fy = p.beside && block < avail_h ? facts_top + (avail_h - block) / 2 : facts_top;
     for (int i = 0; i < c.n; i++)
-      drawLine(canvas, a.x, fy + i * fact_line, facts_w, fact_font,
+      drawLine(canvas, a.x, fy + i * p.line, facts_w, fact_font,
                lv_color_black(), LV_TEXT_ALIGN_LEFT, c.lines[i]);
   }
-  if (with_qr) {
-    const lv_coord_t qx = beside ? a.x + a.w - code : a.x + (a.w - code) / 2;
-    const lv_coord_t qy = beside ? facts_top + (avail_h - code) / 2 : facts_top + text_h + LR_GAP_PX;
-    drawQr(canvas, qx, qy, code, c.qr);
+  if (p.code) {
+    const lv_coord_t qx = p.beside ? a.x + a.w - p.code : a.x + (a.w - p.code) / 2;
+    const lv_coord_t qy = p.beside ? facts_top + (avail_h - p.code) / 2 : facts_top + text_h + LR_GAP_PX;
+    drawQr(canvas, qx, qy, p.code, c.qr);
   }
-  return LabelBody{ with_qr ? qr : (lv_coord_t)0, beside };
+}
+
+// The larger sizes for the facts, tried in this order: two lines each (the
+// caption small, the value large under it), then one line in a larger font.
+// A fact with no value, the project name, stays in the small font. The
+// largest is for the tall sizes only; on the base size no fact outgrows the
+// filament's name.
+struct FactStyle { const lv_font_t* value; const lv_font_t* caption; bool two_lines; };
+static const FactStyle FACT_STYLES[] = {
+  { &lv_font_montserrat_ext_28, &lv_font_montserrat_ext_16, true },
+  { &lv_font_montserrat_ext_24, &lv_font_montserrat_ext_14, true },
+  { &lv_font_montserrat_ext_20, &lv_font_montserrat_ext_14, true },
+  { &lv_font_montserrat_ext_24, &lv_font_montserrat_ext_14, false },
+  { &lv_font_montserrat_ext_20, &lv_font_montserrat_ext_14, false },
+};
+static const int FACT_STYLE_COUNT = sizeof(FACT_STYLES) / sizeof(FACT_STYLES[0]);
+
+struct FactsPlan { const FactStyle* style; lv_coord_t code; lv_coord_t text_h; };
+
+static bool hasText(const char* s) { return s && s[0]; }
+
+// What fact i draws in the value font: its value, or its whole line.
+static const char* largeText(const LabelContent& c, int i, const FactStyle& s) {
+  if (!hasText(c.facts[i].value)) return nullptr;
+  return s.two_lines ? c.facts[i].value : c.lines[i];
+}
+
+// What fact i draws in the caption font.
+static const char* smallText(const LabelContent& c, int i, const FactStyle& s) {
+  const LabelFact& f = c.facts[i];
+  if (!hasText(f.value)) return f.caption;
+  return s.two_lines && hasText(f.caption) ? f.caption : nullptr;
+}
+
+static lv_coord_t factsHeight(const LabelContent& c, const FactStyle& s) {
+  lv_coord_t h = 0;
+  for (int i = 0; i < c.n; i++) {
+    if (i) h += LR_GAP_PX;
+    if (smallText(c, i, s)) h += s.caption->line_height;
+    if (largeText(c, i, s)) h += s.value->line_height;
+  }
+  return h;
+}
+
+// The widest of the lines; 0 when one has a letter the font cannot spell.
+static lv_coord_t factsWidth(const LabelContent& c, const FactStyle& s) {
+  const bool big = s.value->line_height > lv_font_montserrat_ext_24.line_height;
+  lv_coord_t widest = 0;
+  for (int i = 0; i < c.n; i++) {
+    const char* small = smallText(c, i, s);
+    const char* large = largeText(c, i, s);
+    if (small) widest = LV_MAX(widest, textWidth(small, s.caption) + boldFor(s.caption));
+    if (!large) continue;
+    if (big && !bigFontCovers(large)) return 0;
+    widest = LV_MAX(widest, textWidth(large, s.value) + boldFor(s.value));
+  }
+  return widest;
+}
+
+// The facts larger, when the label has the room: the first style whose lines
+// fit the height, whose lines fit the width whole, and that leaves the code
+// no smaller than the small lines did. So a label with few fields reads
+// larger, and one with all of them prints as before.
+static bool planLarger(const LabelArea& a, bool tall, const LabelContent& c,
+                       const BodyPlan& one, FactsPlan* out) {
+  if (c.wrap || !c.facts || c.n == 0) return false;
+  const lv_coord_t avail_h = a.bottom - a.y;
+  for (int i = 0; i < FACT_STYLE_COUNT; i++) {
+    const FactStyle& s = FACT_STYLES[i];
+    if (s.value->line_height <= one.font->line_height) continue;
+    if (!tall && s.value->line_height > lv_font_montserrat_ext_24.line_height) continue;
+    const lv_coord_t w = factsWidth(c, s);
+    const lv_coord_t h = factsHeight(c, s);
+    if (w == 0 || w > a.w || h > avail_h) continue;
+    lv_coord_t code = 0;
+    if (one.code) {
+      lv_coord_t box = one.beside ? a.w - w - LR_GAP_PX : avail_h - h - LR_GAP_PX;
+      box = LV_MIN(box, one.beside ? avail_h : a.w);
+      box = LV_MIN(box, a.qr_max);
+      code = box >= LR_QR_MIN_PX ? drawQr(nullptr, 0, 0, box, c.qr) : 0;
+      if (code < one.code) continue;
+    }
+    *out = FactsPlan{ &s, code, h };
+    return true;
+  }
+  return false;
+}
+
+static void drawLarger(lv_obj_t* canvas, const LabelArea& a, const LabelContent& c,
+                       const FactsPlan& p, bool beside) {
+  const lv_coord_t avail_h = a.bottom - a.y;
+  const lv_coord_t text_w = (beside && p.code) ? a.w - p.code - LR_GAP_PX : a.w;
+  const FactStyle& s = *p.style;
+  lv_coord_t y = beside && p.text_h < avail_h ? a.y + (avail_h - p.text_h) / 2 : a.y;
+  for (int i = 0; i < c.n; i++) {
+    if (i) y += LR_GAP_PX;
+    if (const char* small = smallText(c, i, s)) {
+      drawLine(canvas, a.x, y, text_w, s.caption, lv_color_black(), LV_TEXT_ALIGN_LEFT, small);
+      y += s.caption->line_height;
+    }
+    if (const char* large = largeText(c, i, s)) {
+      drawLine(canvas, a.x, y, text_w, s.value, lv_color_black(), LV_TEXT_ALIGN_LEFT, large);
+      y += s.value->line_height;
+    }
+  }
+  if (p.code) {
+    const lv_coord_t qx = beside ? a.x + a.w - p.code : a.x + (a.w - p.code) / 2;
+    const lv_coord_t qy = beside ? a.y + (avail_h - p.code) / 2 : a.y + p.text_h + LR_GAP_PX;
+    drawQr(canvas, qx, qy, p.code, c.qr);
+  }
+}
+
+static LabelBody drawBody(lv_obj_t* canvas, const LabelArea& a, bool tall,
+                          const LabelContent& c) {
+  const BodyPlan one = planOneLine(a, tall, c);
+  FactsPlan larger;
+  if (planLarger(a, tall, c, one, &larger)) {
+    drawLarger(canvas, a, c, larger, one.beside);
+    return LabelBody{ larger.code, one.beside, larger.style->two_lines ? "two lines" : "large lines" };
+  }
+  drawOneLine(canvas, a, c, one);
+  return LabelBody{ one.code ? one.qr : (lv_coord_t)0, one.beside, "small lines" };
 }
 
 // The big-code arrangement: the code at the right edge, as tall as the label
@@ -442,10 +582,11 @@ static bool renderLabel(const LabelPrinterConfig& printer, const LabelLayout& la
   const bool ok = packCanvas(canvas, content_w, h, row_w, x0, out);
   lv_obj_del(parent);
   heap_caps_free(buf);
-  logSDf("Label: %s %ux%u at dot %u of a %u dot row, qr=%d %s, %s", c.what,
+  logSDf("Label: %s %ux%u at dot %u of a %u dot row, qr=%d %s, facts in %s, %s", c.what,
          (unsigned)content_w, (unsigned)h, (unsigned)x0, (unsigned)row_w,
          side_qr ? (int)side_qr : (int)placed.qr,
-         side_qr ? "side" : placed.beside ? "beside" : "below", ok ? "ok" : "failed");
+         side_qr ? "side" : placed.beside ? "beside" : "below",
+         placed.facts, ok ? "ok" : "failed");
   return ok;
 }
 
@@ -609,16 +750,34 @@ static bool isHex6(const char* s) {
   return true;
 }
 
-// The date line as the layout wants it: the first use where the backend
+// The date as the layout wants it: the first use where the backend
 // recorded one, else the day the spool was added; or always the latter.
-static void dateLine(const SpoolLabelData& spool, const LabelLayout& layout,
-                     char* out, size_t n) {
-  out[0] = '\0';
+// False when the backend gave neither.
+static bool dateFact(const SpoolLabelData& spool, const LabelLayout& layout, LabelFact* out) {
   const bool added_only = labelLayoutOption(layout, LO_DATE_ADDED);
-  if (!added_only && spool.first_used[0])
-    snprintf(out, n, "%s  %s", T(STR_LBL_L_FIRST), spool.first_used);
-  else if (spool.added[0])
-    snprintf(out, n, "%s  %s", T(STR_LBL_L_ADDED), spool.added);
+  if (!added_only && spool.first_used[0]) { *out = LabelFact{ T(STR_LBL_L_FIRST), spool.first_used }; return true; }
+  if (spool.added[0]) { *out = LabelFact{ T(STR_LBL_L_ADDED), spool.added }; return true; }
+  return false;
+}
+
+// The facts of a spool label, each as caption and value and as the one line
+// that joins them.
+struct FactList {
+  LabelFact facts[LR_MAX_FACTS];
+  char lines[LR_MAX_FACTS][LABEL_LINE_LEN + 16];
+  const char* line_ptrs[LR_MAX_FACTS];
+  int n;
+};
+
+static void addFact(FactList* l, const LabelFact& f) {
+  if (l->n >= LR_MAX_FACTS) return;
+  char* line = l->lines[l->n];
+  const size_t size = sizeof(l->lines[0]);
+  if (hasText(f.caption) && hasText(f.value)) snprintf(line, size, "%s  %s", f.caption, f.value);
+  else snprintf(line, size, "%s", hasText(f.caption) ? f.caption : f.value);
+  l->facts[l->n] = f;
+  l->line_ptrs[l->n] = line;
+  l->n++;
 }
 
 bool labelRenderSpool(const LabelPrinterConfig& printer, const LabelLayout& layout,
@@ -628,26 +787,24 @@ bool labelRenderSpool(const LabelPrinterConfig& printer, const LabelLayout& layo
   // What stays true for the spool's whole life: where it is kept, the colour
   // and when it came into use. The rest and the place change, and a label
   // that shows them is wrong a week later (Nikolai, 25.09.2026).
-  char facts[LR_MAX_FACTS][LABEL_LINE_LEN + 16];
-  const char* lines[LR_MAX_FACTS];
-  int n = 0;
+  FactList l{};
+  char id[12];
+  char color[sizeof(spool.color) + 1];
+  snprintf(id, sizeof(id), "#%d", spool.id);
+  snprintf(color, sizeof(color), isHex6(spool.color) ? "#%s" : "%s", spool.color);
   // The compact arrangement moves the maker down here, as the first fact.
   if (layout.preset == LABEL_PRESET_COMPACT && labelLayoutHas(layout, LF_VENDOR) &&
       spool.vendor[0])
-    snprintf(facts[n++], sizeof(facts[0]), "%s", spool.vendor);
-  if (labelLayoutHas(layout, LF_SPOOL_ID))
-    snprintf(facts[n++], sizeof(facts[0]), "%s  #%d", backendName(), spool.id);
+    addFact(&l, LabelFact{ nullptr, spool.vendor });
+  if (labelLayoutHas(layout, LF_SPOOL_ID)) addFact(&l, LabelFact{ backendName(), id });
   if (labelLayoutHas(layout, LF_COLOR) && spool.color[0])
-    snprintf(facts[n++], sizeof(facts[0]), isHex6(spool.color) ? "%s  #%s" : "%s  %s",
-             T(STR_LBL_L_COLOR), spool.color);
-  if (labelLayoutHas(layout, LF_DATE)) {
-    dateLine(spool, layout, facts[n], sizeof(facts[0]));
-    if (facts[n][0]) n++;
-  }
-  if (labelLayoutHas(layout, LF_BRAND))
-    snprintf(facts[n++], sizeof(facts[0]), "SpoolmanScale");
-  for (int i = 0; i < n; i++) lines[i] = facts[i];
-  const LabelContent c{ &spool, lines, n, false,
-                        labelLayoutHas(layout, LF_QR) ? qr : nullptr, "spool" };
+    addFact(&l, LabelFact{ T(STR_LBL_L_COLOR), color });
+  if (labelLayoutHas(layout, LF_ARTICLE) && spool.article[0])
+    addFact(&l, LabelFact{ T(STR_LBL_ARTICLE_NO_SHORT), spool.article });
+  LabelFact date;
+  if (labelLayoutHas(layout, LF_DATE) && dateFact(spool, layout, &date)) addFact(&l, date);
+  if (labelLayoutHas(layout, LF_BRAND)) addFact(&l, LabelFact{ "SpoolmanScale", nullptr });
+  const LabelContent c{ &spool, l.line_ptrs, l.n, false,
+                        labelLayoutHas(layout, LF_QR) ? qr : nullptr, "spool", l.facts };
   return renderLabel(printer, layout, c, out);
 }

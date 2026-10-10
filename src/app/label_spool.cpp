@@ -46,6 +46,7 @@ bool labelSpoolFromScan(SpoolLabelData* out) {
   snprintf(out->material, sizeof(out->material), "%s",
            sm_material_global[0] ? sm_material_global : g_tag.material);
   snprintf(out->color, sizeof(out->color), "%s", sm_color_global);
+  snprintf(out->article, sizeof(out->article), "%s", sm_article_nr);
   return true;
 }
 

@@ -15,7 +15,10 @@
 //  maker's name large at the top, a black band with the
 //  material in white, the filament's name as the title, the
 //  facts in small lines on the left, the QR code on the right,
-//  under the facts when the roll is narrow. The test label is
+//  under the facts when the roll is narrow. With few facts and
+//  room to spare, each takes two lines: the caption small, the
+//  value large under it, never at the cost of the code's size.
+//  The test label is
 //  the same layout with sample data, so a print says at once
 //  whether the head, the size and the alignment are right.
 // ============================================================
@@ -29,6 +32,7 @@ struct SpoolLabelData {
   char  vendor[LABEL_LINE_LEN];
   char  material[LABEL_LINE_LEN];
   char  color[16];                  // hex or a name, whatever the backend gave
+  char  article[32];                // the maker's article number, empty when unknown
   // dd.mm.yyyy, each empty when the backend has none. The layout picks one.
   char  first_used[12];
   char  added[12];

@@ -413,6 +413,9 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   f["material"]     = src["material"] | "";
   f["weight"]       = (float)label;
   f["spool_weight"] = (float)core;
+  // The maker's article number, Spoolman's article_number.
+  const char* article = src["material_number"] | "";
+  if (article[0]) f["article_number"] = article;
 
   // Spoolman shows one name. BamBuddy keeps the three parts apart, so they are
   // joined in the order they are printed on the spool itself: "PETG HF
