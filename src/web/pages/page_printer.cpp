@@ -447,11 +447,12 @@ static String body() {
          "b.classList.toggle('on',!fixed&&(a==='left'?p.off===p.min:a==='right'?p.off===p.max:p.off===0));"
          "b.disabled=fixed;});"
          "x.disabled=fixed;$('xm').disabled=fixed||p.off<=p.min;$('xp').disabled=fixed||p.off>=p.max;}"
-         // Millimetres to dots, onto the edge or the middle when it is under
+         // Millimetres to dots, onto the middle or the edge when it is under
          // half a millimetre away: 4 mm on the M2 are 47 dots, its edge 48,
-         // and the edge's button would light up only a click later.
+         // and the edge's button would light up only a click later. The middle
+         // first: with under a millimetre of play, 0 would land on an edge.
          "function dots(m){const v=Math.round(m*K);"
-         "for(const s of [R.min,R.max,0])if(Math.abs(v-s)<K/2)return s;return v;}"
+         "for(const s of [0,R.min,R.max])if(Math.abs(v-s)<K/2)return s;return v;}"
          "function setOff(v){postFlash('/api/printer/offset',String(v),'xo-s',3000).then(load);}"
          "function load(){getJson('/api/printer').then(function(d){if(d)paint(d);});}"
          // The box already shows what was asked for, so a failure has to put

@@ -28,6 +28,9 @@
 #define DBP_MAKER_FILTER_MIN  100
 // Product lines a list is cut by (SUNLU PLA in the FilamentDB: 32).
 #define DBP_LINES_MAX         48
+// A load refused while idle (heap, task) is asked again this much later,
+// not on every pass: each refusal writes a log line.
+#define DBP_RETRY_MS          2000
 // The frame: the header of the link lists, the list below it.
 #define DBP_HEAD_H            52
 #define DBP_HEAD_BTN          44
@@ -79,6 +82,7 @@ static bool      s_family_step = false;
 // The product lines of the list: the first entry of each and its names.
 static int16_t   s_line_first[DBP_LINES_MAX];
 static uint16_t  s_line_count[DBP_LINES_MAX];
+static uint16_t  s_line_rest = 0;   // the entries past the cap, only under "All"
 static int       s_line_n = 0;
 static int       s_line = -1;        // -1: every line
 static bool      s_line_step = false;
@@ -87,6 +91,7 @@ static int       s_letter = -1;
 // The load the screen waits for, and one that could not start yet.
 static FdbJob    s_wait = FDB_JOB_NONE;
 static FdbJob    s_want = FDB_JOB_NONE;
+static uint32_t  s_want_ms = 0;     // when s_want was refused while idle, 0 for never
 static DbpNav    s_nav = NAV_NONE;
 static int       s_nav_arg = 0;
 static lv_obj_t* s_letter_target[DBP_LETTERS];
@@ -544,6 +549,7 @@ static int findLine(const char* line) {
 // DBP_LINES_MAX lines keeps the rest under "All".
 static void countLines() {
   s_line_n = 0;
+  s_line_rest = 0;
   for (int i = 0; i < fdbEntryCount(); i += sizesFrom(i)) {
     int k = findLine(fdbEntry(i)->line);
     if (k < 0 && s_line_n < DBP_LINES_MAX) {
@@ -552,6 +558,7 @@ static void countLines() {
       s_line_count[k] = 0;
     }
     if (k >= 0) s_line_count[k]++;
+    else        s_line_rest++;
   }
   for (int a = 1; a < s_line_n; a++) {
     for (int b = a; b > 0 && s_line_count[b - 1] < s_line_count[b]; b--) {
@@ -569,7 +576,7 @@ static void showLines() {
   setTitle(title);
   lv_obj_t* body = newBody(DBP_BODY_Y, DBP_BODY_H);
   caption(body, T(STR_DBPICK_LINE_TITLE));
-  int total = 0;
+  int total = s_line_rest;
   for (int k = 0; k < s_line_n; k++) {
     total += s_line_count[k];
     if (!lvPoolHasRoomForRow()) { logSDf("DbPick: LVGL pool low, lines cut at %d", k); break; }
@@ -821,7 +828,12 @@ static bool startJob(FdbJob job) {
 static void startLoad(FdbJob job) {
   const bool started = startJob(job);
   s_want = started ? FDB_JOB_NONE : job;
-  if (!started) return;
+  if (!started) {
+    // Busy with another load: again as soon as it is done. Refused while
+    // idle: not before DBP_RETRY_MS.
+    s_want_ms = fdbState() == FDB_IDLE ? millis() : 0;
+    return;
+  }
   s_wait = job;
   linkWaitCardShow();
   linkWaitCardTitle(T(STR_DBPICK_LOADING));
@@ -956,7 +968,8 @@ void dbPickTick() {
       s_wait = FDB_JOB_NONE;
     }
   }
-  if (s_want != FDB_JOB_NONE && s_scr && fdbState() == FDB_IDLE) startLoad(s_want);
+  if (s_want != FDB_JOB_NONE && s_scr && fdbState() == FDB_IDLE &&
+      (s_want_ms == 0 || millis() - s_want_ms >= DBP_RETRY_MS)) startLoad(s_want);
   if (s_nav == NAV_NONE) return;
   const DbpNav nav = s_nav;
   const int arg = s_nav_arg;

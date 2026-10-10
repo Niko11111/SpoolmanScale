@@ -334,7 +334,12 @@ bool fdbOffered() {
 void fdbTake() {
   if (s_state != FDB_DONE) return;
   const bool ok = s_code == 200 && fdbResultCurrent();
-  if (s_code == 404 || s_code == 405) { s_missing = true; s_missing_gen = s_gen; }
+  // Only the index says whether the server has a database at all; a 404 on
+  // one maker's list is that maker's, and must not hide the picker.
+  if (s_job == FDB_JOB_INDEX && (s_code == 404 || s_code == 405)) {
+    s_missing = true;
+    s_missing_gen = s_gen;
+  }
   if (s_job == FDB_JOB_PAIRS) {
     // The maker counts as looked at even without a material of 1.75 mm; a
     // failure leaves it to be asked again.

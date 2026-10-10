@@ -201,14 +201,15 @@ static void fillRect(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y, lv_coord_t w,
 // The code, drawn module by module into a box of box x box dots at x, y:
 // whole dots per module, the quiet zone inside the box and white, the rest
 // centred. Returns the edge length used, 0 when it does not fit readably.
-// With no canvas it only measures.
+// With no canvas it only measures; `silent` keeps a measurement that tries
+// several boxes out of the log, the drawing call logs what it had to drop.
 static lv_coord_t drawQr(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y,
-                         lv_coord_t box, const char* text) {
+                         lv_coord_t box, const char* text, bool silent = false) {
   uint8_t tmp[qrcodegen_BUFFER_LEN_FOR_VERSION(LR_QR_MAX_VERSION)];
   uint8_t qr[qrcodegen_BUFFER_LEN_FOR_VERSION(LR_QR_MAX_VERSION)];
   if (!qrcodegen_encodeText(text, tmp, qr, qrcodegen_Ecc_MEDIUM, 1,
                             LR_QR_MAX_VERSION, qrcodegen_Mask_AUTO, true)) {
-    logSDf("Label: QR does not fit version %d: %s", LR_QR_MAX_VERSION, text);
+    if (!silent) logSDf("Label: QR does not fit version %d: %s", LR_QR_MAX_VERSION, text);
     return 0;
   }
   const int size = qrcodegen_getSize(qr);
@@ -219,7 +220,7 @@ static lv_coord_t drawQr(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y,
     scale = box / (size + 2 * quiet);
   }
   if (scale < LR_QR_MODULE_MIN) {
-    logSDf("Label: QR of %d modules does not fit %d dots", size, (int)box);
+    if (!silent) logSDf("Label: QR of %d modules does not fit %d dots", size, (int)box);
     return 0;
   }
   const lv_coord_t total = (size + 2 * quiet) * scale;
@@ -474,7 +475,7 @@ static bool planLarger(const LabelArea& a, bool tall, const LabelContent& c,
       lv_coord_t box = one.beside ? a.w - w - LR_GAP_PX : avail_h - h - LR_GAP_PX;
       box = LV_MIN(box, one.beside ? avail_h : a.w);
       box = LV_MIN(box, a.qr_max);
-      code = box >= LR_QR_MIN_PX ? drawQr(nullptr, 0, 0, box, c.qr) : 0;
+      code = box >= LR_QR_MIN_PX ? drawQr(nullptr, 0, 0, box, c.qr, true) : 0;
       if (code < one.code) continue;
     }
     *out = FactsPlan{ &s, code, h };

@@ -27,7 +27,7 @@ static constexpr size_t SCREENSHOT_BMP_FILE_BYTES   =
     SCREENSHOT_BMP_HEADER_BYTES + SCREENSHOT_BMP_ROW_BYTES * DISPLAY_H_PX;
 
 struct ScreenshotInfo {
-  uint32_t         id;       // counts up from 1 since boot, never reused
+  uint32_t         id;       // from a random start per boot, counting up, never reused
   uint32_t         age_ms;
   uint32_t         bytes;    // what it holds in PSRAM
   ScreenshotSource source;

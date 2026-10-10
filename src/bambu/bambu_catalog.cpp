@@ -33,9 +33,11 @@
 #define CAT_SECTOR        4096UL
 #define CAT_MAGIC         0x54414342UL   // "BCAT"
 // 2: the ETag the copy was downloaded under. 3: how the colours of a record
-// lie on the spool. A copy of an older version counts as none, so the scale
-// downloads the table again on its own (bambu_catalog_sync.cpp).
-#define CAT_VERSION       3
+// lie on the spool. 4: the same, read for real - version 3 had dropped the
+// colour type in the download filter, so every record was single. A copy of
+// an older version counts as none, so the scale downloads the table again on
+// its own (bambu_catalog_sync.cpp).
+#define CAT_VERSION       4
 #define CAT_COLOURS       BAMBU_CATALOG_COLOURS   // gradients and multi colour spools carry up to four
 #define CAT_MAX_ENTRIES   1200
 // A stamp before this is a clock that was never set, not a date.
@@ -482,8 +484,9 @@ BambuCatalogOutcome bambuCatalogDownload(bool conditional, char* err, size_t err
   }
   raw[got] = '\0';
 
-  // Seven fields per colour of a 230 kB file. The rest - the Chinese colour
-  // type, nine more languages - is dropped while it is parsed.
+  // Eight fields per colour of a 230 kB file, the colour type among them:
+  // bambuCatalogStore() reads it for the kind. The rest - nine more
+  // languages - is dropped while it is parsed.
   JsonDocument filter;
   JsonObject f = filter["data"].to<JsonArray>().add<JsonObject>();
   f["fila_id"] = true;
@@ -491,6 +494,7 @@ BambuCatalogOutcome bambuCatalogDownload(bool conditional, char* err, size_t err
   f["fila_color_code"] = true;
   f["fila_type"] = true;
   f["fila_color"] = true;
+  f["fila_color_type"] = true;
   f["fila_color_name"]["en"] = true;
   f["fila_color_name"]["de"] = true;
   f["fila_color_name"]["fr"] = true;

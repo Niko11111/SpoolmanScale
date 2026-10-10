@@ -1302,6 +1302,10 @@ bool backendHasNativeLastDried() {
   return backendMode() == BACKEND_BAMBUDDY && bbHasDriedField();
 }
 
+bool backendLastDriedFromSpoolman(int spool_id) {
+  return backendMode() == BACKEND_BAMBUDDY && bbLastDriedFromSpoolman(spool_id);
+}
+
 int backendMigrateLastDried(int spool_id, uint32_t timeout_ms) {
   HttpStallTime stall(__func__);   // the loop stands still for this call
   if (backendMode() != BACKEND_BAMBUDDY) return notSupported("MigrateLastDried");

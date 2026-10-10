@@ -208,7 +208,7 @@ static void buildIdentity(lv_obj_t* box) {
 
   lv_obj_t* sw = lv_obj_create(row);
   lv_obj_set_size(sw, TCP_SWATCH, TCP_SWATCH);
-  lv_obj_set_style_radius(sw, 4, 0);
+  lv_obj_set_style_radius(sw, UI_RADIUS_INPUT, 0);
   lv_obj_set_style_border_width(sw, 1, 0);
   lv_obj_set_style_border_color(sw, lv_color_hex(UI_COL_POPUP_BORDER), 0);
   lv_obj_set_style_pad_all(sw, 0, 0);
@@ -437,6 +437,9 @@ static bool answerLost(int code) {
 }
 
 static void runCreate() {
+  // Without Wi-Fi the create would sit in the HTTP stack until its connect
+  // timeout; the plan's own path says so on the card instead.
+  if (!wifi_ok) { runPlan(); return; }
   if (s_plan_stale || s_plan_gen != backendGeneration()) {
     logSD("TagCreate: plan asked again before the create");
     runPlan();

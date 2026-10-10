@@ -31,11 +31,13 @@ void driedMigrateNote(JsonObjectConst spool) {
 
   // The note arrives as Spoolman's "comment", whichever inventory BamBuddy
   // keeps. Spoolman's extra.last_dried only matters to someone who sent the
-  // date there, and only while BamBuddy showed nothing for this spool.
+  // date there, and only while BamBuddy's own field was empty: the read
+  // brings it over then, and remembers that it did. In the mapped spool the
+  // date looks the same either way, so the JSON alone cannot tell.
   char day[DRIED_MARKER_DAY_MAX];
   const bool marker = driedMarkerParse(spool["comment"] | "", day, sizeof(day));
   const bool side   = g_bb_dried_target == BB_DRIED_SPOOLMAN &&
-                      spool["extra"]["last_dried"].isNull();
+                      backendLastDriedFromSpoolman(spool_id);
   if (!marker && !side) return;
 
   s_pending  = true;

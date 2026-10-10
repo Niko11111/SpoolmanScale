@@ -157,8 +157,13 @@ void showPricePad(float current, void (*done)(float price)) {
   logSD("SHOW: PricePad");
   closePricePad();
   s_done = done;
-  if (current > 0.0f) snprintf(s_input, sizeof(s_input), "%.2f", current);
-  else                s_input[0] = '\0';
+  // A value the box cannot show whole starts it empty rather than cut: a
+  // cut one would go back to the server as a different price on OK.
+  char shown[16];
+  snprintf(shown, sizeof(shown), "%.2f", current);
+  const bool fits = current > 0.0f && strlen(shown) <= PRICE_INPUT_MAX_CHARS;
+  if (fits) snprintf(s_input, sizeof(s_input), "%s", shown);
+  else      s_input[0] = '\0';
 
   s_pad = lv_obj_create(lv_scr_act());
   lv_obj_set_size(s_pad, 480, 320);

@@ -52,6 +52,11 @@ static char s_spoolman_url[96] = "";
 // was read from this server; until then a write asks first.
 static bool s_has_dried_field   = false;
 static bool s_dried_field_known = false;
+// The spool whose drying date the last bbGetSpoolJson() brought over from
+// Spoolman's extra, 0 for none. In the mapped spool that date looks the
+// same as one from BamBuddy's own field; dried_migrate.cpp asks here which
+// it was before it moves one.
+static int  s_dried_from_spoolman_id = 0;
 
 static bool hasBaseUrl(const char* base_url) {
   return base_url && strlen(base_url) > 7;   // longer than "http://"
@@ -256,6 +261,10 @@ const char* bbInventoryBase() {
 const char* bbSpoolmanUrl() { return s_spoolman_url; }
 
 bool bbHasDriedField() { return s_has_dried_field; }
+
+bool bbLastDriedFromSpoolman(int spool_id) {
+  return spool_id > 0 && spool_id == s_dried_from_spoolman_id;
+}
 
 void bbForgetDriedField() {
   s_has_dried_field   = false;
@@ -542,6 +551,7 @@ int bbGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
 
   SpiRamAllocator alloc;
   JsonDocument raw(&alloc);
+  s_dried_from_spoolman_id = 0;
   int code = getInventoryJson(base_url, api_key, suffix, raw, timeout_ms, out_err);
   if (code != 200) return code;
 
@@ -557,6 +567,7 @@ int bbGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
     char dried[32];
     if (bbGetDriedFromSpoolman(spool_id, dried, sizeof(dried), timeout_ms)) {
       out["extra"]["last_dried"] = dried;
+      s_dried_from_spoolman_id = spool_id;
     }
   }
   return 200;

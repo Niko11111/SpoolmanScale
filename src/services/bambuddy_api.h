@@ -67,6 +67,11 @@ const char* bbSpoolmanUrl();
 // PATCH with that key with 200 and ignores it. False until a spool was read.
 bool bbHasDriedField();
 
+// Whether the last bbGetSpoolJson() of this spool filled extra.last_dried
+// from Spoolman's extra rather than from BamBuddy's own field: the one case
+// dried_migrate.cpp moves a date over.
+bool bbLastDriedFromSpoolman(int spool_id);
+
 // Back to "not known yet", for when the server on the other end may be a
 // different one. The answer belongs to the server it was read from: kept
 // across a switch to an older BamBuddy, a drying date would go out as

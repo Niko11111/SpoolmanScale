@@ -397,6 +397,9 @@ bool backendCanPatchLastDried();
 // Whether the backend keeps a drying date of its own that a date kept
 // elsewhere could be moved into: a BamBuddy that sends last_dried_at (#2863).
 bool backendHasNativeLastDried();
+// Whether the last read of this spool took its drying date from Spoolman's
+// extra behind BamBuddy, which is what the migration moves. False elsewhere.
+bool backendLastDriedFromSpoolman(int spool_id);
 
 // Moves the drying date the scale kept in a BamBuddy note, or in Spoolman's
 // extra.last_dried behind it, into BamBuddy's own field. 0 when there was

@@ -41,8 +41,13 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 
 static SpoolLabelData s_last{};
 static bool s_have_last = false;
-// The id whose dates s_last carries, 0 for none asked yet.
-static int s_dates_for = 0;
+// The id whose dates s_last carries, 0 for none asked yet, and whether the
+// server answered: asked once is enough for the browser, a print asks again
+// while the answer is missing.
+static int  s_dates_for = 0;
+static bool s_dates_ok  = false;
+// The browser's date task, see dateTask() below.
+static volatile bool s_job_running = false, s_job_done = false;
 
 bool labelSpoolFromScan(SpoolLabelData* out) {
   if (!out || !(sm_found && sm_id > 0)) return false;
@@ -68,6 +73,7 @@ static void takeFromScan() {
     snprintf(d.added, sizeof(d.added), "%s", s_last.added);
   } else {
     s_dates_for = 0;
+    s_dates_ok  = false;
   }
   s_last = d;
   s_have_last = true;
@@ -79,6 +85,7 @@ void labelSpoolForget() {
   s_last = SpoolLabelData{};
   s_have_last = false;
   s_dates_for = 0;
+  s_dates_ok  = false;
 }
 
 bool labelSpoolLast(SpoolLabelData* out) {
@@ -117,10 +124,18 @@ static bool fetchDates(const char* base_url, int id, char* first, char* added, s
 void labelSpoolFetchDates(SpoolLabelData* d) {
   if (!d) return;
   // The browser's copy already knows them: no second request, and no label
-  // that loses the date its preview showed because this one failed.
-  if (labelSpoolDatesKnown() && s_last.id == d->id) {
+  // that loses the date its preview showed because this one failed. A copy
+  // whose request failed is asked again here.
+  if (labelSpoolDatesKnown() && s_dates_ok && s_last.id == d->id) {
     snprintf(d->first_used, sizeof(d->first_used), "%s", s_last.first_used);
     snprintf(d->added, sizeof(d->added), "%s", s_last.added);
+    return;
+  }
+  // The browser's task is on its request right now and holds the pooled
+  // connection: a second one would open beside it, just before the printer's
+  // BLE stack needs the memory. The label goes without; the copy learns them.
+  if (s_job_running) {
+    logSDf("Label: dates of spool #%d still loading, the label goes without", d->id);
     return;
   }
   char first[sizeof(d->first_used)] = "", added[sizeof(d->added)] = "";
@@ -132,6 +147,7 @@ void labelSpoolFetchDates(SpoolLabelData* d) {
     snprintf(s_last.first_used, sizeof(s_last.first_used), "%s", first);
     snprintf(s_last.added, sizeof(s_last.added), "%s", added);
     s_dates_for = d->id;
+    s_dates_ok  = true;
   }
 }
 
@@ -145,7 +161,6 @@ struct DateJob {
   char first[12], added[12];
 };
 static DateJob s_job;
-static volatile bool s_job_running = false, s_job_done = false;
 
 static void dateTask(void*) {
   s_job.ok = fetchDates(s_job.url, s_job.id, s_job.first, s_job.added, sizeof(s_job.first));
@@ -185,8 +200,10 @@ static void collectDateJob() {
   if (s_job.ok) {
     snprintf(s_last.first_used, sizeof(s_last.first_used), "%s", s_job.first);
     snprintf(s_last.added, sizeof(s_last.added), "%s", s_job.added);
+    s_dates_ok = true;
   }
-  // Asked once, answered or not: a server without dates is not asked again.
+  // Asked once, answered or not: a server without dates is not asked again
+  // for the browser. A print asks once more while s_dates_ok is false.
   s_dates_for = s_job.id;
 }
 
