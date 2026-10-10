@@ -1,21 +1,16 @@
-// ArduinoJson ahead of lang.h, whose T() macro it would otherwise meet.
-#include <ArduinoJson.h>
-#include <esp_heap_caps.h>
-
 #include "printer_screen.h"
 #include "navigation.h"
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
-#include "bambu/bambu_tag.h"
+#include "app/label_spool.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
 
 #include "hardware/sd_logger.h"
 #include "lang.h"
-#include "services/backend.h"
-#include "services/backend_api.h"
 #include "services/ble_service.h"
+#include "services/label_layout.h"
 #include "services/label_printer.h"
 #include "services/label_render.h"
 #include "ui/info_popup.h"
@@ -24,23 +19,6 @@
 #include "ui/theme.h"
 #include "ui_common.h"
 
-
-// One spool by id, a small answer: a slow server only costs the label its date.
-#define LABEL_DATE_TIMEOUT_MS  4000
-
-struct SpiRamAllocator : ArduinoJson::Allocator {
-  void* allocate(size_t size) override {
-    void* ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
-    if (!ptr) ptr = malloc(size);
-    return ptr;
-  }
-  void deallocate(void* pointer) override { heap_caps_free(pointer); }
-  void* reallocate(void* ptr, size_t new_size) override {
-    void* p = heap_caps_realloc(ptr, new_size, MALLOC_CAP_SPIRAM);
-    if (!p) p = realloc(ptr, new_size);
-    return p;
-  }
-};
 
 static int s_last_test = -1;
 
@@ -66,6 +44,30 @@ static void printFixedLabel(bool (*render)(const LabelPrinterConfig&, LabelRaste
   printCardResult(result);
 }
 int printerLastTestResult() { return s_last_test; }
+
+static int s_last_label = -1;
+int printerLastLabelResult() { return s_last_label; }
+
+// A spool's label with the saved template, under the print card; the dates
+// are asked of the backend first, a slow one only costs the label its date.
+static void printSpoolLabel(SpoolLabelData spool) {
+  const LabelPrinterConfig c = labelPrinterLoadConfig();
+  LabelPrintResult result = LP_NO_PRINTER;
+  if (labelPrinterConfigured(c)) {
+    if (!bleEnabled()) result = LP_BLE_OFF;
+    else {
+      labelSpoolFetchDates(&spool);
+      printCardShow();
+      LabelRaster raster{};
+      if (!labelRenderSpool(c, labelLayoutLoad(), spool, &raster)) result = LP_BAD_RASTER;
+      else result = labelPrinterPrint(c, raster, printCardTick);
+      labelRasterFree(&raster);
+    }
+  }
+  logSDf("Printer: spool #%d label result=%d", spool.id, (int)result);
+  s_last_label = labelPrintResultString(result);
+  printCardResult(result);
+}
 
 void closePrinterScreen() {
   if (scr_printer) { lv_obj_del(scr_printer); scr_printer = nullptr; }
@@ -96,25 +98,6 @@ static void nextMedia(LabelPrinterConfig& c) {
       return;
     }
   }
-}
-
-// The label's date, asked of the backend once per print: the scan keeps only
-// the last use. The first use where the backend records one (Spoolman), else
-// the day the spool was added. ISO as the servers send it, the date part only.
-static void labelDateFor(int spool_id, SpoolLabelData* d) {
-  SpiRamAllocator alloc;
-  JsonDocument doc(&alloc);
-  if (backendGetSpoolJson(backendBaseUrl(), spool_id, doc, LABEL_DATE_TIMEOUT_MS) != 200) {
-    logSDf("Printer: no date for spool #%d, the label goes without", spool_id);
-    return;
-  }
-  const char* first = doc["first_used"] | "";
-  const char* added = doc["registered"] | "";
-  const char* iso = first[0] ? first : added;
-  int y = 0, m = 0, day = 0;
-  if (sscanf(iso, "%4d-%2d-%2d", &y, &m, &day) != 3) return;
-  snprintf(d->date, sizeof(d->date), "%02d.%02d.%04d", day, m, y);
-  d->date_first_used = first[0] != '\0';
 }
 
 void buildPrinterScreen() {
@@ -272,33 +255,23 @@ void handlePrinterDeferredActions() {
   if (print_spool_label_pending) {
     print_spool_label_pending = false;
     printerOffsetFlush();
-    const LabelPrinterConfig c = labelPrinterLoadConfig();
-    LabelPrintResult result = LP_NO_PRINTER;
-    if (!(sm_found && sm_id > 0)) {
+    SpoolLabelData spool{};
+    if (!labelSpoolFromScan(&spool)) {
       showInfoPopup(STR_PRN_TITLE, STR_PRN_ERR_NO_SPOOL, INFO_WARN);
       return;
     }
-    if (!labelPrinterConfigured(c)) result = LP_NO_PRINTER;
-    else if (!bleEnabled()) result = LP_BLE_OFF;
-    else {
-      // What the scan left in the globals, as the backend named it.
-      SpoolLabelData spool{};
-      spool.id = sm_id;
-      snprintf(spool.name, sizeof(spool.name), "%s", sm_filament_name);
-      snprintf(spool.vendor, sizeof(spool.vendor), "%s", sm_vendor_g);
-      // Like the More info card: the backend's material when it named one,
-      // else what the Bambu tag says.
-      snprintf(spool.material, sizeof(spool.material), "%s",
-               sm_material_global[0] ? sm_material_global : g_tag.material);
-      snprintf(spool.color, sizeof(spool.color), "%s", sm_color_global);
-      labelDateFor(sm_id, &spool);
-      printCardShow();
-      LabelRaster raster{};
-      if (!labelRenderSpool(c, spool, &raster)) result = LP_BAD_RASTER;
-      else result = labelPrinterPrint(c, raster, printCardTick);
-      labelRasterFree(&raster);
-    }
-    logSDf("Printer: spool #%d label result=%d", sm_id, (int)result);
-    printCardResult(result);
+    printSpoolLabel(spool);
   }
+  // The label editor's print: the last spool scanned, on the pad or not.
+  if (print_last_label_pending) {
+    print_last_label_pending = false;
+    printerOffsetFlush();
+    SpoolLabelData spool{};
+    if (!labelSpoolLast(&spool)) {
+      showInfoPopup(STR_PRN_TITLE, STR_PRN_ERR_NO_SPOOL, INFO_WARN);
+      return;
+    }
+    printSpoolLabel(spool);
+  }
+  labelSpoolTick();
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "services/label_layout.h"
 #include "services/label_printer.h"
 #include "services/label_raster.h"
 
@@ -28,8 +29,9 @@ struct SpoolLabelData {
   char  vendor[LABEL_LINE_LEN];
   char  material[LABEL_LINE_LEN];
   char  color[16];                  // hex or a name, whatever the backend gave
-  char  date[12];                   // dd.mm.yyyy, empty when the backend has none
-  bool  date_first_used;            // the first use; else the day it was added
+  // dd.mm.yyyy, each empty when the backend has none. The layout picks one.
+  char  first_used[12];
+  char  added[12];
 };
 
 // The test label for the printer's loaded stock. The raster is allocated in
@@ -43,10 +45,10 @@ bool labelRenderTest(const LabelPrinterConfig& printer, LabelRaster* out);
 // or check that the frame sits evenly.
 bool labelRenderCalibration(const LabelPrinterConfig& printer, LabelRaster* out);
 
-// A spool's label, with a QR code carrying what the active backend's own
-// scanner reads.
-bool labelRenderSpool(const LabelPrinterConfig& printer, const SpoolLabelData& spool,
-                      LabelRaster* out);
+// A spool's label as the layout has it, with a QR code carrying what the
+// active backend's own scanner reads.
+bool labelRenderSpool(const LabelPrinterConfig& printer, const LabelLayout& layout,
+                      const SpoolLabelData& spool, LabelRaster* out);
 
 // What the QR code on a spool label carries for the active backend: the
 // spool's page on Spoolman, FilaMan and BamBuddy, so a phone opens it.

@@ -3459,6 +3459,79 @@ const char* const STRINGS[][3] = {
   { "Das Etikett füllt den ganzen Druckkopf, hier gibt es nichts zu verschieben.",
     "The label fills the whole print head, so there is nothing to move here.",
     "L'étiquette occupe toute la tête d'impression, il n'y a rien à décaler ici." },  // STR_W_P_CAL_FILLS
+  // The label editor in the browser: its tab, the template card, the preview card
+  { "Etiketten",
+    "Labels",
+    "Étiquettes" },  // STR_W_NAV_LABEL
+  { "Vorlage",
+    "Template",
+    "Modèle" },  // STR_W_L_TEMPLATE
+  { "Anordnung",
+    "Arrangement",
+    "Disposition" },  // STR_W_L_ARRANGE
+  { "Standard",
+    "Standard",
+    "Standard" },  // STR_W_L_P_STANDARD
+  { "Kompakt",
+    "Compact",
+    "Compact" },  // STR_W_L_P_COMPACT
+  { "QR groß",
+    "Large QR",
+    "Grand QR" },  // STR_W_L_P_BIG_QR
+  { "Standard: Hersteller groß oben. Kompakt: Hersteller klein bei den Angaben, der QR-Code wird größer. QR groß: der Code über die ganze Höhe, der Text daneben.",
+    "Standard: the vendor large on top. Compact: the vendor small among the details, the QR code grows. Large QR: the code across the full height, the text beside it.",
+    "Standard : le fabricant en grand en haut. Compact : le fabricant en petit parmi les infos, le code QR grandit. Grand QR : le code sur toute la hauteur, le texte à côté." },  // STR_W_L_ARRANGE_HINT
+  { "Felder",
+    "Fields",
+    "Champs" },  // STR_W_L_FIELDS
+  { "Name",
+    "Name",
+    "Nom" },  // STR_W_L_F_NAME
+  { "Datum",
+    "Date",
+    "Date" },  // STR_W_L_F_DATE
+  { "QR-Code",
+    "QR code",
+    "Code QR" },  // STR_W_L_F_QR
+  { "Projektname",
+    "Project name",
+    "Nom du projet" },  // STR_W_L_F_BRAND
+  { "Optionen",
+    "Options",
+    "Options" },  // STR_W_L_OPTIONS
+  { "Material ohne schwarzen Balken",
+    "Material without the black band",
+    "Matériau sans bandeau noir" },  // STR_W_L_O_PLAIN
+  { "Immer das Anlagedatum",
+    "Always the date added",
+    "Toujours la date d'ajout" },  // STR_W_L_O_ADDED
+  { "Sonst steht als Datum die erste Nutzung, wo der Server sie kennt, und sonst der Tag, an dem die Spule angelegt wurde.",
+    "Otherwise the date is the first use where the server records it, else the day the spool was added.",
+    "Sinon, la date est la première utilisation si le serveur la connaît, sinon le jour d'ajout de la bobine." },  // STR_W_L_DATE_HINT
+  { "Spule",
+    "Spool",
+    "Bobine" },  // STR_W_L_SPOOL
+  { "Beispieldaten: Seit dem Start hat die Waage noch keine Spule erkannt. Danach zeigt die Vorschau die zuletzt gescannte.",
+    "Sample data: the scale has not recognised a spool since it started. After that the preview shows the last one scanned.",
+    "Données d'exemple : la balance n'a reconnu aucune bobine depuis son démarrage. Ensuite, l'aperçu montre la dernière scannée." },  // STR_W_L_SAMPLE
+  { "Noch kein Drucker eingerichtet. Gerät, Modell und Etikett stehen unter",
+    "No printer set up yet. Device, model and label stock are under",
+    "Aucune imprimante configurée. Appareil, modèle et étiquette se règlent sous" },  // STR_W_L_NO_PRINTER
+  { "Etikett drucken",
+    "Print label",
+    "Imprimer l'étiquette" },  // STR_W_L_PRINT
+  { "Druckt die Spule aus der Vorschau mit dieser Vorlage. Das Ergebnis erscheint auch auf der Waage.",
+    "Prints the spool in the preview with this template. The result also shows on the scale.",
+    "Imprime la bobine de l'aperçu avec ce modèle. Le résultat s'affiche aussi sur la balance." },  // STR_W_L_PRINT_HINT
+  { "Letzter Etikettendruck",
+    "Last label print",
+    "Dernière étiquette imprimée" },  // STR_W_L_LAST_PRINT
+  { "Vorschau nicht möglich: Druckermodell und Etikett prüfen.",
+    "No preview: check the printer model and label stock.",
+    "Aperçu impossible : vérifiez le modèle d'imprimante et l'étiquette." },  // STR_W_L_PREVIEW_FAIL
+  { "(nicht mehr auf der Waage)",
+    "(no longer on the scale)",
+    "(plus sur la balance)" },  // STR_W_L_OFF_PAD
 };
 
 StringID tagWriteResultString(uint8_t code) {

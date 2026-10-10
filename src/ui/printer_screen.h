@@ -20,3 +20,5 @@ void handlePrinterDeferredActions();
 // What the last test print came back with, as a StringID, or -1 for none
 // since boot. The browser page shows it; the device shows a popup.
 int printerLastTestResult();
+// The same for the last spool label, printed from the device or the browser.
+int printerLastLabelResult();

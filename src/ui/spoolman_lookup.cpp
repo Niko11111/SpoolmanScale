@@ -39,6 +39,7 @@ bool spoolHasAnyTag(JsonObjectConst spool);
 #include "services/tag_probe_job.h"
 #include "services/backend_job.h"
 #include "app/backend_switch.h"
+#include "app/label_spool.h"
 #include "services/tag_write.h"
 #include "services/tag_uid.h"
 #include "services/time_service.h"
@@ -1141,6 +1142,7 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   // A lookup still waiting for its inventory was for a tag that is no longer
   // the one being asked about. Its download runs on for cache and index.
   lookupAbandon();
+  labelSpoolRemember();   // the spool found before, for the label editor
   strncpy(s_last_query, tray_uuid ? tray_uuid : "", sizeof(s_last_query) - 1);
   s_last_query[sizeof(s_last_query) - 1] = '\0';
   // Only the one line below "Truly not found" sets it again.
