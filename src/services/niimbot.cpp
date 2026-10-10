@@ -69,6 +69,14 @@
 #define NB_ERR_NO_RIBBON      0x0D
 #define NB_ERR_WRONG_RIBBON   0x0E
 #define NB_ERR_USED_RIBBON    0x0F
+// Where the replies keep what is read out of them.
+#define NB_STATUS_DATA_MIN_LEN  13  // the status data up to its version bytes
+#define NB_STATUS_DATA_VER_HI   11  // the version as hi * 100 + lo
+#define NB_STATUS_DATA_VER_LO   12
+#define NB_PROTO_V4_FROM       300  // the first status version of protocol 4
+#define NB_PROTO_V3_FROM       204  // and of protocol 3
+#define NB_PRINT_STATUS_ERR_LEN 10  // a print status this long carries an error code
+#define NB_PRINT_STATUS_ERR_AT   6
 
 // id, name, task, head dots, dpi, direction, ribbon, task guessed. Ids and
 // heads from niimbluelib printer_models.ts, the task from its print_tasks
@@ -271,9 +279,10 @@ static NiimbotResult nbRequest1(NbJob& job, uint8_t cmd, uint8_t value, uint8_t 
 // Newer firmware answers the connect with 3 and tells its protocol version
 // in the status data; nothing here depends on it yet, the log keeps it.
 static void nbLogProtocolVersion(NbJob& job) {
-  if (nbRequest1(job, NB_CMD_STATUS_DATA, 1, NB_RPL_STATUS_DATA) != NB_OK || job.len < 13) return;
-  const unsigned n = job.data[11] * 100u + job.data[12];
-  const uint8_t v = n >= 300 ? 4 : n >= 204 ? 3 : 0;
+  if (nbRequest1(job, NB_CMD_STATUS_DATA, 1, NB_RPL_STATUS_DATA) != NB_OK ||
+      job.len < NB_STATUS_DATA_MIN_LEN) return;
+  const unsigned n = job.data[NB_STATUS_DATA_VER_HI] * 100u + job.data[NB_STATUS_DATA_VER_LO];
+  const uint8_t v = n >= NB_PROTO_V4_FROM ? 4 : n >= NB_PROTO_V3_FROM ? 3 : 0;
   if (job.info) job.info->protocol_version = v;
   logSDf("NIIMBOT: protocol version %u (status %u)", (unsigned)v, n);
 }
@@ -368,7 +377,9 @@ static NiimbotResult nbPageStart(NbJob& job, uint16_t rows, uint16_t cols) {
   r = nbRequest1(job, NB_CMD_PAGE_START, 1, NB_RPL_PAGE_START);
   if (r != NB_OK) return r;
   // rows along the feed, cols across the head, and on the B1's task the
-  // copies as well; the other two set the quantity on their own.
+  // copies as well. The D110's task sends the quantity in a packet of its
+  // own after this; the B21's sends none and repeats the page for a second
+  // copy (niimbluelib's B21V1PrintTask).
   uint8_t size[6];
   putU16(size, rows);
   putU16(size + 2, cols);
@@ -495,7 +506,8 @@ static NiimbotResult nbFinishByStatus(NbJob& job) {
     const uint16_t page = job.len >= 2 ? (uint16_t)((job.data[0] << 8) | job.data[1]) : 0;
     logSDf("NIIMBOT: status page=%u print=%u feed=%u (poll %u)", page,
            job.len >= 3 ? job.data[2] : 0, job.len >= 4 ? job.data[3] : 0, polls);
-    if (job.len == 10 && job.data[6]) return nbErrorResult(job, job.data[6]);
+    if (job.len == NB_PRINT_STATUS_ERR_LEN && job.data[NB_PRINT_STATUS_ERR_AT])
+      return nbErrorResult(job, job.data[NB_PRINT_STATUS_ERR_AT]);
     printed = page >= 1;
     if (!printed) delay(NB_STATUS_POLL_MS);
     if (job.progress) job.progress();
@@ -522,8 +534,10 @@ static NiimbotResult nbRun(NbJob& job, const LabelRaster& image, NiimbotClass cl
   r = nbSendRows(job, image);
   if (r != NB_OK) return r;
   r = nbRequest1(job, NB_CMD_PAGE_END, 1, NB_RPL_PAGE_END);
-  if (r != NB_OK) return r;
-  return nbFinish(job);
+  if (r == NB_OK) r = nbFinish(job);
+  // Every row went out: a printer that falls silent now may well have
+  // printed, which is what "unconfirmed" says, not "no NIIMBOT".
+  return r == NB_NO_REPLY ? NB_UNCONFIRMED : r;
 }
 
 NiimbotResult niimbotPrint(const char* address, const LabelRaster& image, NiimbotClass cls,

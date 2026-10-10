@@ -192,9 +192,8 @@ static void previewCard(String& h) {
   h += F("</span><span class='v' id='ll'></span></div></div></div>");
 }
 
-static String body() {
-  String h;
-  h.reserve(7000);
+// The page's own look: the label as paper, the switches in two columns.
+static void styles(String& h) {
   h += F("<style>"
          // One print dot per CSS pixel, never stretched: scaled by an
          // uneven factor the dots came out blurred and blocky. A label wider
@@ -213,15 +212,12 @@ static String body() {
          // effect without scrolling.
          "@media(max-width:700px){.lb-prev{order:-1}}"
          "@media(max-width:420px){.lb-sw{grid-template-columns:1fr}}"
-         "</style><div class='grid'>");
-  templateCard(h);
-  previewCard(h);
-  h += F("</div>");
+         "</style>");
+}
 
-  // Every handler is bound here rather than written into an onclick
-  // attribute: a page body is JavaScript inside a C++ string literal, and an
-  // attribute is the one place where the two levels of quoting collide.
-  // $, flash, post, postFlash and getJson come from /app.js.
+// The state, the preview and the saving; the handlers are bound below.
+// $, flash, post, postFlash and getJson come from /app.js.
+static void scriptFunctions(String& h) {
   h += F("<script>");
   h += webShellJsStrings();
   h += F("const L={fail:");
@@ -257,8 +253,14 @@ static String body() {
          "function load(){if(document.hidden)return;"
          "getJson('/api/label').then(function(d){if(d)paint(d);});}"
          "function save(p,f,o){"
-         "postFlash('/api/label',p+','+f+','+o,'ls-s',2500).then(load);}"
-         "document.querySelectorAll('#lpre .btab').forEach(function(b){"
+         "postFlash('/api/label',p+','+f+','+o,'ls-s',2500).then(load);}");
+}
+
+// Every handler is bound here rather than written into an onclick
+// attribute: a page body is JavaScript inside a C++ string literal, and an
+// attribute is the one place where the two levels of quoting collide.
+static void scriptBindings(String& h) {
+  h += F("document.querySelectorAll('#lpre .btab').forEach(function(b){"
          "b.addEventListener('click',function(){if(S)save(+b.dataset.p,S.fields,S.options);});});"
          "document.querySelectorAll('#lf input,#lo input').forEach(function(i){"
          "i.addEventListener('change',function(){if(S)save(S.preset,mask('lf'),mask('lo'));});});"
@@ -275,6 +277,18 @@ static String body() {
          "document.addEventListener('visibilitychange',load);"
          "load();"
          "</script>");
+}
+
+static String body() {
+  String h;
+  h.reserve(7000);
+  styles(h);
+  h += F("<div class='grid'>");
+  templateCard(h);
+  previewCard(h);
+  h += F("</div>");
+  scriptFunctions(h);
+  scriptBindings(h);
   return h;
 }
 

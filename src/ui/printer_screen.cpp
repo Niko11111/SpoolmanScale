@@ -50,14 +50,15 @@ int printerLastLabelResult() { return s_last_label; }
 
 // A spool's label with the saved template, under the print card; the dates
 // are asked of the backend first, a slow one only costs the label its date.
+// The card comes first, so the wait for them has something on screen.
 static void printSpoolLabel(SpoolLabelData spool) {
   const LabelPrinterConfig c = labelPrinterLoadConfig();
   LabelPrintResult result = LP_NO_PRINTER;
   if (labelPrinterConfigured(c)) {
     if (!bleEnabled()) result = LP_BLE_OFF;
     else {
-      labelSpoolFetchDates(&spool);
       printCardShow();
+      labelSpoolFetchDates(&spool);
       LabelRaster raster{};
       if (!labelRenderSpool(c, labelLayoutLoad(), spool, &raster)) result = LP_BAD_RASTER;
       else result = labelPrinterPrint(c, raster, printCardTick);

@@ -25,7 +25,9 @@ LV_FONT_DECLARE(lv_font_montserrat_ext_20);
 LV_FONT_DECLARE(lv_font_montserrat_ext_16);
 LV_FONT_DECLARE(lv_font_montserrat_ext_14);
 
-// The label's geometry in dots (203 dpi, 8 dots to the millimetre).
+// The label's geometry in dots (203 dpi, 8 dots to the millimetre). A 300 dpi
+// head prints these at 68 % of the millimetres meant here; only the newer
+// arrangements' code cap (LR_QR_MAX_MM) and the label size itself convert.
 #define LR_MARGIN_PX       8    // 1 mm: the stock is never cut exactly
 #define LR_GAP_PX          4    // between the blocks
 // The blocks grow with the roll. 40 x 30 is the base; from LR_TALL_PX in
@@ -37,7 +39,7 @@ LV_FONT_DECLARE(lv_font_montserrat_ext_14);
 #define LR_FACT_LINE_TALL_PX 28 // one in the 20 px font
 #define LR_FACT_LINE_SMALL_PX 19 // one in the 14 px font, next to a big code
 #define LR_FACTS_MIN_W   130    // the facts keep this much next to a code
-#define LR_QR_MAX_PX     200    // 25 mm: larger reads no better
+#define LR_QR_MAX_PX     200    // 25 mm at 203 dpi (17 at 300): larger reads no better
 #define LR_QR_MAX_MM      25    // the same in millimetres, for the newer arrangements
 #define LR_QR_MIN_PX      64
 // Extra stroke width of the small lines and the band. The large ones, the

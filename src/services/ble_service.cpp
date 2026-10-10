@@ -488,7 +488,9 @@ static NimBLEClient* s_talk_client = nullptr;
 static NimBLERemoteCharacteristic* s_talk_chr = nullptr;
 static bool s_talk_response = false;   // the characteristic takes writes with response only
 // One writer (the host task) and one reader (the loop), each owning its own
-// index: no lock. A full ring drops bytes and counts them.
+// index: no lock. A full ring drops bytes and counts them. The two run on
+// different cores: a barrier keeps each byte ahead of the index that hands
+// it over, both ways.
 static uint8_t s_rx[BLE_TALK_RX_SIZE];
 static volatile uint16_t s_rx_head = 0, s_rx_tail = 0;
 static volatile uint16_t s_rx_lost = 0;
@@ -499,6 +501,7 @@ static void onTalkNotify(NimBLERemoteCharacteristic*, uint8_t* data, size_t len,
     const uint16_t next = (s_rx_head + 1) & (BLE_TALK_RX_SIZE - 1);
     if (next == s_rx_tail) { s_rx_lost = s_rx_lost + 1; continue; }
     s_rx[s_rx_head] = data[i];
+    __sync_synchronize();   // the byte is in before the head says so
     s_rx_head = next;
   }
 }
@@ -706,8 +709,11 @@ size_t bleTalkRead(uint8_t* out, size_t max, uint32_t wait_ms) {
     delay(BLE_TALK_POLL_MS);
   }
   size_t n = 0;
-  while (n < max && s_rx_tail != s_rx_head) {
+  const uint16_t head = s_rx_head;
+  __sync_synchronize();     // no byte read ahead of the head that covers it
+  while (n < max && s_rx_tail != head) {
     out[n++] = s_rx[s_rx_tail];
+    __sync_synchronize();   // read before the tail frees its slot
     s_rx_tail = (s_rx_tail + 1) & (BLE_TALK_RX_SIZE - 1);
   }
   if (s_rx_lost) {

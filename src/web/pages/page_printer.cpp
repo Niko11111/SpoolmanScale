@@ -384,8 +384,9 @@ static String body() {
   h += jsStr(T(STR_W_RESTARTING));
   h += F("};"
          "let timer=0;"
-         // Dots to the millimetre of the model in use, from the state.
-         "let K=8;"
+         // Dots to the millimetre of the model in use and the offset's range,
+         // from the state.
+         "let K=8,R={min:0,max:0};"
          // The device rows, from the JSON: createElement and textContent,
          // never markup, because a name is whatever the device advertised.
          "function rows(d){"
@@ -429,9 +430,11 @@ static String body() {
          "clearTimeout(timer);if(d.scanning)timer=setTimeout(load,2000);}"
          // The strip in percent of the row; the buttons light up for the
          // edge or the middle the offset stands at.
-         // A tenth of a millimetre only where it is one.
-         "function mm(v){return String(Math.round(v*10/K)/10);}"
-         "function pos(d){const p=d.pos,row=p.row||1,l=$('pl');K=(p.dpi||203)/25.4;"
+         // A tenth of a millimetre only where it is one: 203 dpi is not quite
+         // 8 dots to the millimetre, and the M220's 72 mm head came out 72.1.
+         "function mm(v){const m=v/K,r=Math.round(m);"
+         "return String(Math.abs(m-r)<0.1?r:Math.round(m*10)/10);}"
+         "function pos(d){const p=d.pos,row=p.row||1,l=$('pl');K=(p.dpi||203)/25.4;R=p;"
          "l.style.left=(p.cx*100/row)+'%';l.style.width=(p.cw*100/row)+'%';"
          "l.textContent=d.printer.w+' mm';$('pr').textContent=mm(p.row)+' mm';"
          // The offset is kept in dots and shown in millimetres, the unit
@@ -444,6 +447,11 @@ static String body() {
          "b.classList.toggle('on',!fixed&&(a==='left'?p.off===p.min:a==='right'?p.off===p.max:p.off===0));"
          "b.disabled=fixed;});"
          "x.disabled=fixed;$('xm').disabled=fixed||p.off<=p.min;$('xp').disabled=fixed||p.off>=p.max;}"
+         // Millimetres to dots, onto the edge or the middle when it is under
+         // half a millimetre away: 4 mm on the M2 are 47 dots, its edge 48,
+         // and the edge's button would light up only a click later.
+         "function dots(m){const v=Math.round(m*K);"
+         "for(const s of [R.min,R.max,0])if(Math.abs(v-s)<K/2)return s;return v;}"
          "function setOff(v){postFlash('/api/printer/offset',String(v),'xo-s',3000).then(load);}"
          "function load(){getJson('/api/printer').then(function(d){if(d)paint(d);});}"
          // The box already shows what was asked for, so a failure has to put
@@ -465,9 +473,9 @@ static String body() {
          "postFlash('/api/printer/test','','tb-s',4000).then(function(){setTimeout(load,12000);});});"
          "document.querySelectorAll('#pa .btab').forEach(function(b){"
          "b.addEventListener('click',function(){setOff(b.dataset.a);});});"
-         "$('xm').addEventListener('click',function(){setOff(Math.round(((+$('xo').value||0)-1)*K));});"
-         "$('xp').addEventListener('click',function(){setOff(Math.round(((+$('xo').value||0)+1)*K));});"
-         "$('xo').addEventListener('change',function(){setOff(Math.round((+$('xo').value||0)*K));});"
+         "$('xm').addEventListener('click',function(){setOff(dots((+$('xo').value||0)-1));});"
+         "$('xp').addEventListener('click',function(){setOff(dots((+$('xo').value||0)+1));});"
+         "$('xo').addEventListener('change',function(){setOff(dots(+$('xo').value||0));});"
          "$('cb').addEventListener('click',function(){"
          "postFlash('/api/printer/calib','','cb-s',4000).then(function(){setTimeout(load,12000);});});"
          "$('fb').addEventListener('click',function(){"

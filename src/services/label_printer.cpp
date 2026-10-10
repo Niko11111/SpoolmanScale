@@ -301,9 +301,13 @@ static LabelPrintResult printNiimbot(const LabelPrinterProfile& p, const LabelPr
          (unsigned)info.model_id, (int)info.transport);
   switch (r) {
     case NB_OK:             return LP_OK;
-    case NB_TRANSPORT:      return info.transport == BLE_WRITE_NO_CHARACTERISTIC
-                                 ? LP_BLE_NOT_NIIMBOT : fromBle(info.transport);
-    case NB_NO_REPLY:       return LP_BLE_NOT_NIIMBOT;
+    // A transport failure that left no reason is still a failure, never "ok".
+    case NB_TRANSPORT:      return info.transport == BLE_WRITE_NO_CHARACTERISTIC ? LP_BLE_NOT_NIIMBOT
+                                 : info.transport == BLE_WRITE_OK ? LP_BLE_WRITE
+                                 : fromBle(info.transport);
+    // Silent from the start: not a NIIMBOT. Silent after it had answered: the
+    // printer dropped out mid-job.
+    case NB_NO_REPLY:       return info.packets_rx ? LP_BLE_WRITE : LP_BLE_NOT_NIIMBOT;
     case NB_MODEL_UNKNOWN:  return LP_MODEL_UNKNOWN;
     case NB_MODEL_MISMATCH: return LP_MODEL_MISMATCH;
     case NB_PRN_COVER:      return LP_PRN_COVER;

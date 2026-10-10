@@ -15,6 +15,7 @@
 
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
+#include "app/label_spool.h"
 #include "hardware/sd_logger.h"
 #include "services/ams_assign.h"
 #include "services/ams_pick.h"
@@ -41,6 +42,7 @@ void backendApplyHost(const char *host) {
   backendInvalidateExtraFieldCache();
   amsPresenceForget();
   spoolCacheForget("host changed");
+  labelSpoolForget();            // the label editor's spool is the old server's
   sm_reachable = false;          // unknown until the new address answers
 }
 
@@ -123,6 +125,9 @@ void backendApplyMode(BackendMode mode) {
   // the tag on the pad as new: it reads it again and asks the new backend
   // about it, without anyone having to lift the spool off.
   clearTagDisplay();
+  // It hands the spool to the label editor on its way out; that one is the
+  // old backend's too.
+  labelSpoolForget();
 
   // What clearTagDisplay() leaves behind. It is written for a spool being
   // taken off the pad, where these stay true for the 60 seconds the display

@@ -20,6 +20,10 @@ bool labelSpoolFromScan(SpoolLabelData* out);
 // before the scan state is cleared.
 void labelSpoolRemember();
 
+// Drops the last spool and its dates: they belong to the server the scale
+// just stopped talking to. From a switch of backend or host.
+void labelSpoolForget();
+
 // The spool on the pad, else the last one remembered, with the dates as far
 // as they are known. False when no spool has been found since boot.
 bool labelSpoolLast(SpoolLabelData* out);
@@ -28,9 +32,11 @@ bool labelSpoolLast(SpoolLabelData* out);
 // next labelSpoolTick() asks the backend, once.
 bool labelSpoolDatesKnown();
 
-// Asks the backend for a spool's dates and fills both into `d`. Makes an HTTP
-// request: from the loop only, never from a handler.
+// Fills a spool's dates into `d`: from the last spool's copy where it knows
+// them, else from the backend, and only on an answer. Makes an HTTP request:
+// from the loop only, never from a handler.
 void labelSpoolFetchDates(SpoolLabelData* d);
 
-// From the loop: fetches the dates the browser's preview is waiting for.
+// From the loop: starts the fetch of the dates the browser's preview is
+// waiting for on a task of its own, and takes its answer on a later pass.
 void labelSpoolTick();
