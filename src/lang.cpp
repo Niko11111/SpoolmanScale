@@ -2774,9 +2774,9 @@ const char* const STRINGS[][3] = {
     "Seulement au besoin : la radio tourne tant qu'un appareil l'utilise, puis est libérée. Après l'activation, la balance a besoin d'un redémarrage." },  // STR_W_P_BLE_HINT
   { "Unterstützte Drucker", "Supported printers", "Imprimantes prises en charge" },  // STR_W_P_SUPPORTED
   { "getestet",             "tested",             "testée" },  // STR_W_P_TESTED
-  { "Thermodrucker von Phomemo (M-Serie) und NIIMBOT über Bluetooth. Weitere Modelle kommen mit Rückmeldungen aus der Community.",
-    "Phomemo M-series and NIIMBOT thermal printers over Bluetooth. More models come with feedback from the community.",
-    "Imprimantes thermiques Phomemo (série M) et NIIMBOT en Bluetooth. D'autres modèles viendront avec les retours de la communauté." },  // STR_W_P_SUPPORTED_HINT
+  { "Weitere Modelle kommen mit Rückmeldungen aus der Community.",
+    "More models come with feedback from the community.",
+    "D'autres modèles viendront avec les retours de la communauté." },  // STR_W_P_SUPPORTED_HINT
   { "Geräte in Reichweite", "Devices in range", "Appareils à portée" },  // STR_W_P_DEVICES
   { "Geräte suchen",        "Scan for devices", "Rechercher" },  // STR_BT_SCAN_WEB
   { "Die Suche läuft auf der Waage und dauert etwa 5 Sekunden; solange steht sie.",
@@ -3453,6 +3453,12 @@ const char* const STRINGS[][3] = {
   { "Bluetooth braucht zuerst einen Neustart der Waage.",
     "Bluetooth needs a restart of the scale first.",
     "Bluetooth exige d'abord un redémarrage." },  // STR_PRN_ERR_BLE_RESTART
+  // The printer page: the legend under the supported printers, and the line
+  // under the print position strip when the label fills the whole head
+  { "experimentell", "experimental", "expérimentale" },  // STR_W_P_EXPERIMENTAL
+  { "Das Etikett füllt den ganzen Druckkopf, hier gibt es nichts zu verschieben.",
+    "The label fills the whole print head, so there is nothing to move here.",
+    "L'étiquette occupe toute la tête d'impression, il n'y a rien à décaler ici." },  // STR_W_P_CAL_FILLS
 };
 
 StringID tagWriteResultString(uint8_t code) {

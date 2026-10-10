@@ -110,6 +110,60 @@ static String stateJson() {
   return j;
 }
 
+// Which printers the scale can drive: a row per brand, a pill per model,
+// green where someone has printed on one. Built from the profiles, so the
+// card and the model list never disagree. It was a row per model, which
+// repeated "experimental, untested" five times and outgrew the Bluetooth
+// card next to it with every model added.
+static void supportedCard(String& h) {
+  h += F("<style>"
+         ".pr-m{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}"
+         ".pill.ex{color:var(--ink-soft);border-color:var(--line);background:var(--surface-2)}"
+         ".pr-leg{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 8px}"
+         "</style><div class='card'><h2>");
+  h += T(STR_W_P_SUPPORTED);
+  h += F("</h2>");
+  for (int i = 0; i < LABEL_PRINTER_MODEL_COUNT; i++) {
+    const char* brand = labelPrinterProfile(LABEL_PRINTER_MODELS[i]).brand;
+    bool seen = false;
+    for (int j = 0; j < i && !seen; j++)
+      seen = strcmp(labelPrinterProfile(LABEL_PRINTER_MODELS[j]).brand, brand) == 0;
+    if (seen) continue;
+    h += F("<div class='row'><span class='k'>");
+    h += brand;
+    h += F("</span><span class='v pr-m'>");
+    for (int j = i; j < LABEL_PRINTER_MODEL_COUNT; j++) {
+      const LabelPrinterProfile& p = labelPrinterProfile(LABEL_PRINTER_MODELS[j]);
+      if (strcmp(p.brand, brand) != 0) continue;
+      h += p.experimental ? F("<span class='pill ex'>") : F("<span class='pill ok'>");
+      h += p.name;
+      h += F("</span>");
+    }
+    h += F("</span></div>");
+  }
+  h += F("<div class='pr-leg'><span class='pill ok'>");
+  h += T(STR_W_P_TESTED);
+  h += F("</span><span class='pill ex'>");
+  h += T(STR_W_P_EXPERIMENTAL);
+  h += F("</span></div><span class='hint'>");
+  h += T(STR_W_P_SUPPORTED_HINT);
+  // The models that print through a ribbon, named once in the hint. In
+  // brackets rather than after a colon, which French spaces differently.
+  bool ribbon = false;
+  for (int i = 0; i < LABEL_PRINTER_MODEL_COUNT; i++) {
+    const LabelPrinterProfile& p = labelPrinterProfile(LABEL_PRINTER_MODELS[i]);
+    if (p.direct_thermal) continue;
+    h += ribbon ? F(", ") : F(" ");
+    if (!ribbon) { h += T(STR_PRN_RIBBON_SHORT); h += F(" ("); }
+    h += p.brand; h += ' '; h += p.name;
+    ribbon = true;
+  }
+  if (ribbon) h += F(").");
+  h += ' ';
+  h += T(STR_PRN_HEAT_SHORT);
+  h += F("</span></div>");
+}
+
 static String body() {
   const LabelPrinterConfig c = labelPrinterLoadConfig();
   String h;
@@ -135,25 +189,7 @@ static String body() {
   h += T(STR_W_RESTART);
   h += F("</button><span class='msg' id='rb-s'></span></div></div></div></div>");
 
-  // ---- which printers the scale can drive --------------------------------
-  h += F("<div class='card'><h2>");
-  h += T(STR_W_P_SUPPORTED);
-  h += F("</h2>");
-  // One row per profile, so the card and the model list never disagree.
-  for (int i = 0; i < LABEL_PRINTER_MODEL_COUNT; i++) {
-    const LabelPrinterProfile& p = labelPrinterProfile(LABEL_PRINTER_MODELS[i]);
-    h += F("<div class='row'><span class='k'>");
-    h += p.brand; h += ' '; h += p.name;
-    h += F("</span><span class='v'>");
-    h += T(p.experimental ? STR_PRN_EXPERIMENTAL : STR_W_P_TESTED);
-    if (!p.direct_thermal) { h += F(", "); h += T(STR_PRN_RIBBON_SHORT); }
-    h += F("</span></div>");
-  }
-  h += F("<span class='hint'>");
-  h += T(STR_W_P_SUPPORTED_HINT);
-  h += ' ';
-  h += T(STR_PRN_HEAT_SHORT);
-  h += F("</span></div>");
+  supportedCard(h);
 
   // ---- the printer ---------------------------------------------------------
   h += F("<div class='card wide'><h2>");
@@ -226,7 +262,7 @@ static String body() {
   h += F("</button><span class='hint' style='flex:1'>");
   h += T(STR_W_P_TEST_HINT);
   h += F("</span></div><span class='msg' id='tb-s'></span>"
-         "<div class='row'><span class='k'>");
+         "<div class='row' id='ltr'><span class='k'>");
   h += T(STR_W_P_LAST_TEST);
   h += F("</span><span class='v' id='lt'></span></div></div></div>");
 
@@ -283,7 +319,9 @@ static String body() {
   h += F("</h2><div class='pp-track'><div class='pp-mid'></div>"
          "<div class='pp-lab' id='pl'></div></div>"
          "<div class='pp-scale'><span>0</span><span id='pr'></span></div>"
-         "<div class='pp-set'><div class='field'><label>");
+         "<div class='hint' id='pf' style='display:none;margin-top:8px'>");
+  h += T(STR_W_P_CAL_FILLS);
+  h += F("</div><div class='pp-set'><div class='field'><label>");
   h += T(STR_W_P_CAL_ROLL);
   h += F("</label><div class='btabs' id='pa'><button class='btab' data-a='left'>");
   h += T(STR_W_P_CAL_LEFT);
@@ -379,6 +417,7 @@ static String body() {
          "$('pm').value=String(d.printer.model);"
          "$('ps').value=d.printer.w+'x'+d.printer.h;"
          "$('lt').textContent=d.lastTest||'';"
+         "$('ltr').style.display=d.lastTest?'':'none';"
          "$('br').style.display=(d.ble&&!d.stack)?'':'none';"
          "$('sc').disabled=!d.ble||!d.stack||d.stuck||d.scanning;"
          "$('tb').disabled=!d.ble||!d.stack||d.stuck||!d.printer.configured;"
@@ -399,10 +438,10 @@ static String body() {
          // the calibration page's ruler counts in.
          "const x=$('xo');x.min=Math.ceil(p.min/K);x.max=Math.floor(p.max/K);"
          "if(document.activeElement!==x)x.value=Math.round(p.off/K);"
-         "const fixed=p.min===p.max;"
+         "const fixed=p.min===p.max;$('pf').style.display=fixed?'':'none';"
          "document.querySelectorAll('#pa .btab').forEach(function(b){"
          "const a=b.dataset.a;"
-         "b.classList.toggle('on',a==='left'?p.off===p.min:a==='right'?p.off===p.max:p.off===0);"
+         "b.classList.toggle('on',!fixed&&(a==='left'?p.off===p.min:a==='right'?p.off===p.max:p.off===0));"
          "b.disabled=fixed;});"
          "x.disabled=fixed;$('xm').disabled=fixed||p.off<=p.min;$('xp').disabled=fixed||p.off>=p.max;}"
          "function setOff(v){postFlash('/api/printer/offset',String(v),'xo-s',3000).then(load);}"
