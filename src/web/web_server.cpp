@@ -142,6 +142,16 @@ static bool serverShouldRun() {
 
 static void registerRoutes();
 
+// Build the CORS origin header value from the configured backend.
+// For BamBuddy, this allows the scale's interface to be embedded as an iframe
+// on the BamBuddy server. Returns the base URL of the backend (e.g.
+// "http://192.168.1.50:8000") or empty if not configured.
+static String corsOriginFromBackend() {
+  const char* base = backendBaseUrl();
+  if (!base || !base[0]) return "";
+  return String(base);
+}
+
 static void serverEnsureRunning() {
   if (ota_server_running) return;
   registerRoutes();
@@ -233,10 +243,16 @@ static void registerRoutes() {
       html += webShellNav(pg->path);
       html += pg->body();
       html += webShellFoot();   // links and disclaimer close the page
-      // No page of the scale inside somebody else's frame: a site on the
-      // same network could otherwise lay its own buttons over Flash, Erase or
-      // Restart and have a visitor click them.
-      ota_server.sendHeader("X-Frame-Options", "DENY");
+      // Allow embedding in iframe on the configured backend server
+      // (e.g., BamBuddy). This enables portal mode. Security note: Host and
+      // Origin validation in webRequire() still apply, so this is safe.
+      String corsOrigin = corsOriginFromBackend();
+      if (corsOrigin.length() > 0) {
+        ota_server.sendHeader("X-Frame-Options", "ALLOWALL");
+        ota_server.sendHeader("Access-Control-Allow-Origin", corsOrigin.c_str());
+        ota_server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        ota_server.sendHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      }
       ota_server.send(200, "text/html", html);
     });
     if (pg->routes) pg->routes(ota_server);
@@ -256,6 +272,10 @@ static void registerRoutes() {
   ota_server.on("/api/v1/rfid/scan-request", HTTP_POST, []() {
     if (!webRequire(ota_server, GATE_ALWAYS, "FilaMan")) return;
     tagScanRequest();
+    String corsOrigin = corsOriginFromBackend();
+    if (corsOrigin.length() > 0) {
+      ota_server.sendHeader("Access-Control-Allow-Origin", corsOrigin.c_str());
+    }
     ota_server.send(200, "application/json", "{\"status\":\"ok\"}");
   });
 
@@ -265,6 +285,10 @@ static void registerRoutes() {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, ota_server.arg("plain"));
     if (err) {
+      String corsOrigin = corsOriginFromBackend();
+      if (corsOrigin.length() > 0) {
+        ota_server.sendHeader("Access-Control-Allow-Origin", corsOrigin.c_str());
+      }
       ota_server.send(400, "application/json", "{\"status\":\"error\"}");
       return;
     }
@@ -286,8 +310,12 @@ static void registerRoutes() {
     tagRemotePayloadSet(has_record ? ota_server.arg("plain").c_str() : "",
                         spool_id);
 
+    String corsOrigin = corsOriginFromBackend();
     if (spool_id > 0) {
       remoteLinkSetPending(spool_id);
+      if (corsOrigin.length() > 0) {
+        ota_server.sendHeader("Access-Control-Allow-Origin", corsOrigin.c_str());
+      }
       ota_server.send(200, "application/json", "{\"status\":\"ok\"}");
       return;
     }
@@ -296,8 +324,14 @@ static void registerRoutes() {
       // Turning the request down beats ignoring it: the web UI would
       // otherwise poll for a full minute before its own timeout.
       remote_link_reject_pending = true;
+      if (corsOrigin.length() > 0) {
+        ota_server.sendHeader("Access-Control-Allow-Origin", corsOrigin.c_str());
+      }
       ota_server.send(200, "application/json", "{\"status\":\"ok\"}");
       return;
+    }
+    if (corsOrigin.length() > 0) {
+      ota_server.sendHeader("Access-Control-Allow-Origin", corsOrigin.c_str());
     }
     ota_server.send(400, "application/json", "{\"status\":\"error\"}");
   });
