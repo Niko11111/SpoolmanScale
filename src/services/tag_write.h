@@ -11,6 +11,11 @@ enum TagFormat : uint8_t {
   // differs from OpenSpool in one string and nothing else. It exists so a tag
   // can be labelled the way a FilaMan installation expects to find it.
   TAG_FMT_FILAMAN = 3,
+  // Creality CFS: the encrypted record on a blank 4 byte MIFARE Classic tag,
+  // keyed to its UID. Never a setting: offered after a blank MIFARE tag was
+  // linked while Creality tags are on, and only ever written to a tag that is
+  // still on the factory key.
+  TAG_FMT_CREALITY = 4,
 };
 
 // True for the formats that go on the tag as an NDEF JSON record.
@@ -45,6 +50,7 @@ enum TagWriteResult : uint8_t {
   TW_ERR_BACKEND,     // the spool could not be fetched
   TW_ERR_SPACE,       // too small, or no NDEF capability container
   TW_ERR_WRITE,       // a page write failed part way through
+  TW_ERR_NOT_BLANK,   // MIFARE: not on the factory key or not empty, left alone
 };
 
 // How far a write or an erase has come, in pages, for a bar on the device.
@@ -54,6 +60,29 @@ enum TagWriteResult : uint8_t {
 // said once before the first page. nullptr stops the calls.
 typedef void (*TagWriteProgressFn)(uint16_t done, uint16_t total);
 void tagWriteSetProgress(TagWriteProgressFn fn);
+
+// For the next Creality CFS write only: the UID it is meant for ("6E:C6:DB:4F",
+// empty for any), and a callback while it waits for a tag that does not
+// answer to be put back - phase 0 once, then 1 about every 150 ms. Both are
+// used by one write and then forgotten.
+// overwrite: the tag may already be a Creality tag (an own tag whose spool
+// changed, or an original on a refilled spool); only on an explicit answer.
+void tagWriteCfsTarget(const char* uid_str, void (*wait)(int phase), bool overwrite = false);
+
+// Compares the Creality tag on the reader (as last read) with what the spool
+// in Spoolman would put on it now. own: the UID is in the spool's nfc_uid,
+// so a scale wrote it. differs: anything but the date is different. False
+// when it could not be decided (no record for that UID, spool not fetched).
+// Fetches the spool: loop task only.
+// serial_only: a foreign tag that describes the same filament and lacks only
+// the spool id in its serial - an original Creality tag on a spool that is
+// now in Spoolman. CFSync needs the id there to link the CFS slot.
+bool tagCrealityCheck(int spool_id, const char* uid_str, bool* own, bool* differs,
+                      bool* serial_only = nullptr);
+
+// Takes uid out of the spool's nfc_uid list, or empties the list (all).
+// Part of an unlink. Fetches the spool: loop task only.
+void tagNfcUidForget(int spool_id, const char* uid, bool all);
 
 // Parks a request. The write itself runs in tagWriteTick(), because the NFC
 // bus belongs to the loop task and the HTTP handler is not on it.

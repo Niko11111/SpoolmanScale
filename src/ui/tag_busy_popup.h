@@ -26,3 +26,7 @@ void tagBusyShow(bool erase);
 
 // Takes it down again. Safe to call when it is not there.
 void tagBusyHide();
+
+// Replaces the hint with the request to put the spool back: a CFS write is
+// waiting for a tag that stopped answering.
+void tagBusyAskReplace();

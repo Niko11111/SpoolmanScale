@@ -3632,6 +3632,34 @@ const char* const STRINGS[][3] = {
   { "Spoolman hinter BamBuddy ist von der Waage aus nicht erreichbar:\n%s",
     "Spoolman behind BamBuddy cannot be reached from the scale:\n%s",
     "Spoolman derrière BamBuddy est injoignable depuis la balance :\n%s" },  // STR_DBPICK_SM_UNREACHABLE
+  { "Creality-CFS-Tags lesen", "Read Creality CFS tags", "Lire les tags Creality CFS" },  // STR_W_CREALITY
+  { "Liest Creality-CFS-Tags (K2 Plus, K2 Pro, K2 Max, Hi): Material, Farbe und Gewicht. Ein unbekannter 4-Byte-Tag wird zuerst als Creality-Tag versucht, danach als Bambu-Tag. Die Waage merkt sich je Tag, was er ist, und liest ihn beim nächsten Mal direkt.",
+    "Reads Creality CFS tags (K2 Plus, K2 Pro, K2 Max, Hi): material, colour and weight. An unknown 4 byte tag is tried as a Creality tag first, then as a Bambu tag. The scale remembers per tag which it is and reads it directly the next time.",
+    "Lit les tags Creality CFS (K2 Plus, K2 Pro, K2 Max, Hi) : matériau, couleur et poids. Un tag de 4 octets inconnu est d'abord essayé comme tag Creality, puis comme tag Bambu. La balance retient pour chaque tag de quel type il est et le lit directement la fois suivante." },  // STR_W_CREALITY_HINT
+  { "Kein leerer Tag. Er wurde nicht verändert.",
+    "Not a blank tag. It was left as it is.",
+    "Tag non vierge. Il est resté tel quel." },  // STR_TW_ERR_NOT_BLANK
+  { "Als CFS-Tag beschreiben?", "Write as a CFS tag?", "Écrire comme tag CFS ?" },  // STR_TW_CFS_ASK_TITLE
+  { "Der leere Tag bekommt die Daten dieser Spule, damit das Creality CFS sie erkennt.",
+    "The blank tag gets this spool's data, so the Creality CFS recognises it.",
+    "Le tag vierge reçoit les données de la bobine, que le CFS Creality reconnaîtra." },  // STR_TW_CFS_ASK_HINT
+  { "Der Tag antwortet nicht. Spule kurz anheben und wieder genauso hinstellen.",
+    "The tag does not answer. Lift the spool briefly and put it back the same way.",
+    "Le tag ne répond pas. Soulevez un instant la bobine et reposez-la pareil." },  // STR_TW_CFS_REPLACE
+  { "CFS-Tag aktualisieren?", "Update the CFS tag?", "Actualiser le tag CFS ?" },  // STR_TW_CFS_UPD_TITLE
+  { "In Spoolman stehen andere Daten als auf dem Tag. Er wird mit den aktuellen Daten neu beschrieben.",
+    "Spoolman holds different data than the tag. It is written again with the current data.",
+    "Spoolman contient d'autres données que le tag. Il est réécrit avec les données actuelles." },  // STR_TW_CFS_UPD_HINT
+  { "Creality-Tag überschreiben?", "Overwrite the Creality tag?",
+    "Écraser le tag Creality ?" },  // STR_TW_CFS_OVR_TITLE
+  { "Der Tag trägt die Daten eines anderen Filaments. Nur überschreiben, wenn die Spule neu bespult wurde.",
+    "The tag carries another filament's data. Only overwrite it if the spool has been refilled.",
+    "Le tag porte les données d'un autre filament. À n'écraser que si la bobine a été rembobinée." },  // STR_TW_CFS_OVR_HINT
+  { "Spool-ID auf den Tag schreiben?", "Write the spool ID to the tag?",
+    "Écrire l'ID de bobine sur le tag ?" },  // STR_TW_CFS_SID_TITLE
+  { "Der Original-Tag trägt Crealitys Seriennummer statt der Spool-ID. Damit verknüpft CFSync die falsche Spule. Material und Farbe bleiben gleich.",
+    "The original tag carries Creality's serial instead of the spool ID, so CFSync links the wrong spool. Material and colour stay the same.",
+    "Le tag d'origine porte le numéro de Creality au lieu de l'ID de bobine, CFSync lie donc la mauvaise bobine. Matériau et couleur restent." },  // STR_TW_CFS_SID_HINT
 };
 
 StringID tagWriteResultString(uint8_t code) {
@@ -3641,6 +3669,7 @@ StringID tagWriteResultString(uint8_t code) {
     case TW_ERR_NOT_NTAG:  return STR_TW_ERR_NOT_NTAG;
     case TW_ERR_BACKEND:   return STR_TW_ERR_BACKEND;
     case TW_ERR_SPACE:     return STR_TW_ERR_SPACE;
+    case TW_ERR_NOT_BLANK: return STR_TW_ERR_NOT_BLANK;
     default:               return STR_TW_ERR_WRITE;
   }
 }

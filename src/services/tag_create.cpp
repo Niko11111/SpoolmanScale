@@ -8,6 +8,7 @@
 #include "../app/app_state.h"
 #include "../bambu/material_match.h"
 #include "tag_create_bambu.h"
+#include "tag_create_creality.h"
 
 
 void tagFilamentPlanClear(TagFilamentPlan* plan) {
@@ -20,6 +21,7 @@ void tagFilamentPlanClear(TagFilamentPlan* plan) {
 typedef bool (*TagCreateBuilder)(TagCreateInput* out);
 static const TagCreateBuilder TAG_CREATE_BUILDERS[] = {
   tagCreateInputFromBambu,
+  tagCreateInputFromCreality,
 };
 
 bool tagCreateInputFromTag(TagCreateInput* in) {

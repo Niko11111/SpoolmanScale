@@ -1,4 +1,5 @@
 #include "spoolman_actions.h"
+#include "services/tag_write.h"
 #include "services/tag_field.h"
 #include "services/tag_uid.h"
 #include "services/user_options.h"
@@ -646,6 +647,10 @@ void unlinkCardUid(int spool_id, const char* uid, bool all) {
   // The companion field, whichever way the popup was answered. It is not one
   // of the tag fields below, so the loop over them would never reach it.
   unlinkHwUidField(spool_id, uid, all);
+
+  // The list of tags a scale wrote (Creality CFS). The lookup searches every
+  // extra field, so a UID left there links the spool again at once.
+  tagNfcUidForget(spool_id, uid, all);
 
   if (all) {
     // Every field that holds something has to go. Leaving one behind would

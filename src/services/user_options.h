@@ -77,6 +77,12 @@ extern bool g_wake_on_load;
 // Only in the web interface, the device has no screen to spare for it.
 extern bool g_snapmaker_tags;
 
+// Try Creality's key on a 4 byte tag that refused the Bambu ones, and read
+// material, colour and weight off a CFS tag (K2 Plus, K2 Pro, K2 Max, Hi).
+// On by default: the key is derived from the UID without any guessing, so the
+// attempt costs other 4 byte tags one failed authentication.
+extern bool g_creality_tags;
+
 // Where the drying date goes in BamBuddy mode. BamBuddy has no field for it
 // at all - upstream issues #2863 and #1754 are open and waiting for votes -
 // so the scale needs somewhere to put it, and none of the choices is obvious

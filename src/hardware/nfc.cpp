@@ -50,6 +50,48 @@ bool nfcReadPassiveTarget(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms) {
   return nfc && nfc->readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, uid_len, timeout_ms);
 }
 
+// Sends one command the library has no function for and reads its response
+// off the bus. sendCommandCheckAck() returns once the response is ready but
+// leaves it unread (its own callers read it with a private function); left
+// unread, the next command would be written over a pending response, which is
+// the likely reason the first field reset (12.10.2026) left the chip hanging.
+// resp_len is the frame length without the leading ready byte; the check is
+// on the response code (command + 1) at frame byte 6.
+static bool rawCommand(uint8_t* cmd, uint8_t cmd_len, uint8_t resp_len) {
+  if (!nfc || !nfc_wire) return false;
+  if (!nfc->sendCommandCheckAck(cmd, cmd_len)) return false;
+  uint8_t rx[16] = {0};
+  const uint8_t want = (uint8_t)(resp_len + 1);
+  if (want > sizeof(rx)) return false;
+  size_t got = nfc_wire->requestFrom((uint8_t)PN532_I2C_ADDRESS, want);
+  for (size_t i = 0; i < got && i < sizeof(rx); i++) rx[i] = nfc_wire->read();
+  while (nfc_wire->available()) nfc_wire->read();
+  return got == want && rx[0] == PN532_I2C_READY && rx[6] == 0xD5 &&
+         rx[7] == (uint8_t)(cmd[0] + 1);
+}
+
+bool nfcInRelease() {
+  // InRelease, Tg 0 = every target. Response: 00 00 FF 03 FD D5 53 st DCS 00.
+  uint8_t cmd[2] = { 0x52, 0x00 };
+  return rawCommand(cmd, 2, 10);
+}
+
+uint8_t nfcRfFieldCycle() {
+  if (!nfc) return 0;
+  // RFConfiguration, item 1 (RF field). Response: 00 00 FF 02 FE D5 33 F8 00.
+  // 20 ms off woke a halted Creality tag about every second time; 100 ms off
+  // did worse (12.10.2026), so the short gap stays.
+  uint8_t r = 0;
+  uint8_t off[3] = { 0x32, 0x01, 0x00 };
+  uint8_t on[3]  = { 0x32, 0x01, 0x01 };
+  if (rawCommand(off, 3, 9)) r |= NFC_RF_OFF_OK;
+  delay(20);
+  if (rawCommand(on, 3, 9))  r |= NFC_RF_ON_OK;
+  delay(10);
+  if (nfc->getFirmwareVersion() != 0) r |= NFC_RF_CHIP_OK;
+  return r;
+}
+
 static bool reselectMifareUid(const uint8_t expected_uid[4], uint16_t timeout_ms) {
   uint8_t uid[NFC_UID_MAX] = {0};
   uint8_t uid_len = 0;
@@ -110,6 +152,23 @@ bool nfcReadMifareSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blo
 
 bool nfcReadMifareBlock(uint8_t block, uint8_t data[16]) {
   return nfc && nfc->mifareclassic_ReadDataBlock(block, data);
+}
+
+bool nfcAuthMifareSector(int sector, const uint8_t key[6], const uint8_t uid[4],
+                         uint8_t key_type) {
+  if (!nfc) return false;
+  uint8_t k[6], u[4];
+  memcpy(k, key, 6);
+  memcpy(u, uid, 4);
+  return nfc->mifareclassic_AuthenticateBlock(u, 4, sector * 4 + 3,
+                                              key_type == NFC_KEY_A ? 0 : 1, k);
+}
+
+bool nfcWriteMifareBlock(uint8_t block, const uint8_t data[16]) {
+  if (!nfc) return false;
+  uint8_t d[16];
+  memcpy(d, data, 16);
+  return nfc->mifareclassic_WriteDataBlock(block, d);
 }
 
 bool nfcReadNtagPage(uint8_t page, uint8_t* data) {

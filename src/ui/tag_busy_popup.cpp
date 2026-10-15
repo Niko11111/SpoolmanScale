@@ -22,6 +22,7 @@
 
 static lv_obj_t *scr_tag_busy = nullptr;
 static lv_obj_t *bar_tag_busy = nullptr;
+static lv_obj_t *lbl_busy_hint = nullptr;
 
 // From inside the write, after every page, see tagWriteSetProgress(). Draws
 // on the spot: the loop stands still until the job is done, so nothing else
@@ -77,6 +78,7 @@ void tagBusyShow(bool erase) {
 
   lv_obj_t *hint = lv_label_create(box);
   lv_label_set_text(hint, T(STR_TW_BUSY_HINT));
+  lbl_busy_hint = hint;
   lv_obj_set_style_text_color(hint, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(hint, UI_FONT_BODY, 0);
   lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
@@ -110,6 +112,13 @@ void tagBusyHide() {
   // never reaches for a bar that is gone.
   tagWriteSetProgress(nullptr);
   bar_tag_busy = nullptr;
+  lbl_busy_hint = nullptr;
   lv_obj_del(scr_tag_busy);
   scr_tag_busy = nullptr;
+}
+
+void tagBusyAskReplace() {
+  if (!lbl_busy_hint) return;
+  lv_label_set_text(lbl_busy_hint, T(STR_TW_CFS_REPLACE));
+  lv_obj_set_style_text_color(lbl_busy_hint, lv_color_hex(UI_COL_WARN), 0);
 }

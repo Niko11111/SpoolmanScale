@@ -26,6 +26,8 @@
 #include "bambu/bambu_scan.h"
 #include "bambu/bambu_tag.h"
 #include "snapmaker/snapmaker_scan.h"
+#include "creality/creality_scan.h"
+#include "services/tag_family.h"
 #include "hardware/display_power.h"
 #include "hardware/nfc.h"
 #include "hardware/scale.h"
@@ -174,6 +176,27 @@ static bool loc_left_pad = false;
 // They stay pending and fire when the weight goes, because the reader, having
 // lost the tag already, will report no removal when the spool is lifted.
 static bool loc_kept = false;
+// The tag went silent but the weight on the pad did not move: the spool is
+// still there, so it stays present (13.10.2026, hardware: tags read off-centre
+// on a side-mounted reader stop answering after a few seconds). Released the
+// moment the weight changes or the tag answers again. While set, the weight
+// reference stays frozen at what the pad carried when the tag was last read.
+static bool tag_kept_by_weight = false;
+// What the pad carried at the last poll that read the tag. A tag that stops
+// answering while the weight falls well below this was lifted, not lost.
+static float weight_at_last_read = 0.0f;
+
+// Something spool-sized lies on the pad, and it has not fallen to under half
+// of what the pad carried when the tag was last read. Independent of the
+// settled reference, which a spool put down a second ago does not have yet:
+// on 13.10.2026 a Bambu tag read once and went silent 1.5 s after the spool
+// was put down, before the weight had settled, so the spool was dropped and
+// never weighed although it lay there.
+static bool padCarriesSpool() {
+  if (!g_scale_fitted || !scale_ready) return false;
+  const float floor_g = fmaxf(LOC_WEIGHT_MIN_G, weight_at_last_read * LOC_WEIGHT_GONE_FRACTION);
+  return scale_weight_g >= floor_g;
+}
 
 // Did the spool actually leave, or did the reader merely lose the tag?
 //
@@ -1342,7 +1365,7 @@ void appLoop() {
     // reference followed the spool all the way down as it was lifted, which
     // also left the location cross-check below permanently mute.
     // nfc_fast_polls is the counter that actually rises on a missed read.
-    if (tag_present && nfc_fast_polls == 0) {
+    if (tag_present && nfc_fast_polls == 0 && !tag_kept_by_weight) {
       if (loc_weight_since_ms == 0) {
         // A fresh presence: start the stability window over, and do not carry
         // the previous spool's settled value into it.
@@ -1824,6 +1847,10 @@ void appLoop() {
     static unsigned long last_nfc_check_ms = 0;
     static bool bambu_uid_probed = false;   // see NFC_UID_PROBE_AFTER_RETRIES
     static bool snapmaker_decoded = false;  // this placement read as a Snapmaker tag
+    static bool creality_decoded = false;   // this placement read as a Creality CFS tag
+    static bool blank_mifare = false;       // this placement is a blank MIFARE tag
+    static char cfs_checked_uid[24] = "";   // own CFS tag compared with Spoolman this placement
+    static bool new_placement = false;      // same tag back after a long absence
     static unsigned long last_nfc_stats_ms = 0;
     static uint8_t last_uid_len = 0;   // 4 = Bambu, 7 = NTAG, for the removal delay
 
@@ -1845,6 +1872,8 @@ void appLoop() {
       nfc_stat_scans++;
       if (found) {
         last_uid_len = uidLen;
+        tag_kept_by_weight = false;
+        weight_at_last_read = scale_weight_g;
         // Only a genuinely long absence earns a fresh set of retries. Without
         // this a tag that keeps failing to authenticate would be re-scanned
         // indefinitely, five seconds per attempt.
@@ -1852,6 +1881,11 @@ void appLoop() {
           if (millis() - tag_absent_since_ms > NFC_RETRY_RESET_ABSENT_MS) {
             nfc_retry_count = 0;
             bambu_uid_probed = false;
+            // Back after a long absence: a new placement, even of the same
+            // tag. It goes through the family choice below like a new UID;
+            // until 12.10.2026 it only re-ran the Bambu scan, so a Creality
+            // tag put back after ten seconds was never tried with its key.
+            new_placement = true;
           }
           tag_absent_since_ms = 0;
         }
@@ -1900,7 +1934,8 @@ void appLoop() {
         snprintf(uid_str, sizeof(uid_str), "%02X:%02X:%02X:%02X",
           uid[0], uid[1], uid[2], uid[3]);
 
-        bool uid_changed = (strcmp(uid_str, g_tag.uid_str) != 0);
+        bool uid_changed = new_placement || (strcmp(uid_str, g_tag.uid_str) != 0);
+        new_placement = false;
         int bambu_blocks_read = countBambuDataBlocksRead(g_tag);
         bool uuid_missing = (strlen(g_tag.tray_uuid) < 32);
         bool contents_incomplete = (bambu_blocks_read < 48);
@@ -1918,17 +1953,125 @@ void appLoop() {
           last_bambu_retry_ms = 0;
           bambu_uid_probed = false;
           snapmaker_decoded = false;
+          creality_decoded = false;
+          blank_mifare = false;
+          cfs_checked_uid[0] = '\0';
           lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
           lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
-          scanTag(uid, uidLen);
+          // Which family to try first. A refused key leaves the card
+          // unreachable for a while (12.10.2026: Creality tags tried after the
+          // Bambu probe opened only now and then), so the first try has to be
+          // the right one. Known tags go straight to their family; see
+          // services/tag_family.h. An unknown tag gets Creality first when
+          // that is enabled: the key is a single AES derivation from the UID
+          // and a tag that opens with it is Creality's, so no Bambu scan and
+          // no Snapmaker probe, and the branch below for a plain 4 byte card
+          // looks the spool up by its UID. A tag that does not open is woken
+          // again inside scanCrealityTag(), so the Bambu scan still finds it.
+          TagFamily family = tagFamilyGet(uid);
+          // A tag known to be blank is asked with the factory key first, on
+          // the card the poll has just selected, so it never sees a refusal.
+          // One that has been written since (FilaStation, CFTag) refuses it
+          // and goes through the family choice as an unknown tag.
+          int factory = CREALITY_FACTORY_REFUSED;
+          // Refused the Creality key last time: the factory key goes first now,
+          // on the freshly selected card, ahead of the Bambu probe. A blank
+          // sticker that sits weakly on the reader may not come back from the
+          // refused Creality key at all (13.10.2026, 6E:C6:DB:4F: no answer to
+          // any wake), so asking it in second place found nothing. A Bambu tag
+          // pays one refusal on its first placement; after that its family is
+          // stored and it goes straight to the Bambu scan.
+          if (g_creality_tags && family == TAG_FAMILY_NOT_CREALITY) {
+            factory = crealityProbeFactory(uid, uid_str);
+          }
+          if (g_creality_tags && family == TAG_FAMILY_BLANK) {
+            factory = crealityProbeFactory(uid, uid_str);
+            if (factory != CREALITY_FACTORY_BLANK) {
+              tagFamilySet(uid, TAG_FAMILY_UNKNOWN);
+              family = TAG_FAMILY_UNKNOWN;
+            }
+          }
+          bool blank_now = (factory != CREALITY_FACTORY_REFUSED);
+          const bool creality_first = g_creality_tags &&
+              (family == TAG_FAMILY_UNKNOWN || family == TAG_FAMILY_CREALITY);
+          // An unknown tag alternates between placements: Creality first, then
+          // Bambu first, then Creality again, until one family reads it. On
+          // hardware (12.10.2026) one side of a Creality spool refused key A on
+          // the first try, was marked for Bambu, and never got Creality again:
+          // the mark was only dropped once the Bambu retries ran out, and a tag
+          // that keeps dropping out never runs them out. So the mark is used
+          // once and dropped right here.
+          if (family == TAG_FAMILY_NOT_CREALITY) tagFamilySet(uid, TAG_FAMILY_UNKNOWN);
+          if (blank_now) {
+            // Handled below, like a blank tag found after the Creality probe.
+          } else if (creality_first &&
+              scanCrealityTag(uid, uidLen, /*fresh=*/true) == CREALITY_SCAN_OK) {
+            creality_decoded = true;
+            tagFamilySet(uid, TAG_FAMILY_CREALITY);
+            nfc_retry_count = NFC_MAX_RETRIES;
+            last_nfc_check_ms = 0;
+          } else if (g_creality_tags && family == TAG_FAMILY_CREALITY &&
+                     (factory = crealityProbeFactory(uid, uid_str)) != CREALITY_FACTORY_REFUSED) {
+            // Remembered as Creality, but now on the factory key: erased
+            // since (CFtag, FilaStation). On 14.10.2026 both tags of spool 9
+            // were erased with CFtag and the scale kept trying the Creality
+            // key only, so it never offered to write them again. Treated like
+            // any blank sticker from here on. A weak Creality tag that did not
+            // answer refuses this key too and goes on below as before.
+            tagFamilySet(uid, TAG_FAMILY_UNKNOWN);
+            blank_now = true;
+          } else if (g_creality_tags && family == TAG_FAMILY_CREALITY) {
+            // A known Creality tag that did not open this time - one side of a
+            // spool lying badly on the pad (12.10.2026). The Bambu scan would
+            // only refuse it again. Start a clean record for this UID instead,
+            // so the retries below try Creality again on the next polls, and
+            // when they run out the spool is still looked up by its UID.
+            memset(&g_tag, 0, sizeof(g_tag));
+            memcpy(g_tag.uid, uid, 4);
+            snprintf(g_tag.uid_str, sizeof(g_tag.uid_str), "%s", uid_str);
+          } else if (creality_first && family == TAG_FAMILY_UNKNOWN &&
+                     (factory = crealityProbeFactory(uid, uid_str)) != CREALITY_FACTORY_REFUSED) {
+            // Refused the Creality key, opens with the factory key: a plain
+            // sticker, blank ones most likely waiting to be linked and written
+            // as a CFS tag. The Bambu probe would refuse it too and knock it
+            // off the reader (13.10.2026), so it is not run at all.
+            blank_now = true;
+          } else {
+            // Bambu first on the next placement (once, see above).
+            if (creality_first && family == TAG_FAMILY_UNKNOWN) {
+              tagFamilySet(uid, TAG_FAMILY_NOT_CREALITY);
+            }
+            scanTag(uid, uidLen);
+            // Remembered as soon as any sector read, not only once the scan
+            // has settled on a later poll: on 13.10.2026 a Bambu spool read
+            // 6/48 blocks and dropped out before that poll ever came.
+            if (countBambuDataBlocksRead(g_tag) > 0) tagFamilySet(uid, TAG_FAMILY_BAMBU);
+          }
           // Opt-in, off by default, and then none of this touches the reader.
           // Once per placement, right after the first Bambu probe came back
           // with nothing. A tag that answers to Snapmaker's keys is no Bambu
           // tag, so the Bambu retries are skipped and the branch below for a
           // plain 4 byte card looks the spool up by its UID.
-          if (g_snapmaker_tags && countBambuDataBlocksRead(g_tag) == 0 &&
+          if (blank_now) {
+            // Opens with the factory key. Kept on the reader like a Creality
+            // tag either way; only an empty one is remembered as blank and
+            // offered the CFS write.
+            blank_mifare = true;
+            if (factory == CREALITY_FACTORY_BLANK) tagFamilySet(uid, TAG_FAMILY_BLANK);
+            // A clean record for this UID: looked up by its UID like any
+            // plain 4 byte card, once the retries count as spent.
+            memset(&g_tag, 0, sizeof(g_tag));
+            memcpy(g_tag.uid, uid, 4);
+            snprintf(g_tag.uid_str, sizeof(g_tag.uid_str), "%s", uid_str);
+            snprintf(g_tag.tray_uuid, sizeof(g_tag.tray_uuid), "%s", uid_str);
+            nfc_retry_count = NFC_MAX_RETRIES;
+            last_nfc_check_ms = 0;
+          }
+          if (creality_decoded || blank_now) {
+            // Already settled above.
+          } else if (g_snapmaker_tags && countBambuDataBlocksRead(g_tag) == 0 &&
               scanSnapmakerTag(uid, uidLen) != SNAPMAKER_SCAN_NO_AUTH) {
             snapmaker_decoded = true;
             nfc_retry_count = NFC_MAX_RETRIES;
@@ -1963,14 +2106,29 @@ void appLoop() {
           lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
           lv_label_set_text(lbl_status, T(STR_READING_TAG));
           lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
-          scanTag(uid, uidLen);
+          if (g_creality_tags && tagFamilyGet(uid) == TAG_FAMILY_CREALITY) {
+            // A known Creality tag gets its own key again, on the card this
+            // poll has just selected, rather than the Bambu scan.
+            if (scanCrealityTag(uid, uidLen, /*fresh=*/true) == CREALITY_SCAN_OK) {
+              creality_decoded = true;
+              nfc_retry_count = NFC_MAX_RETRIES;
+              last_nfc_check_ms = 0;
+            }
+          } else {
+            scanTag(uid, uidLen);
+            if (countBambuDataBlocksRead(g_tag) > 0) tagFamilySet(uid, TAG_FAMILY_BAMBU);
+          }
         } else {
           // The "Tag placed" line waits until the scan has settled, so it
           // says what the scale concluded: Bambu once any sector has read,
           // MIFARE once the retries are spent with nothing. In between,
           // while the retries run, nothing is logged yet.
+          // Read as Bambu: remember it, so the next placement goes straight
+          // to the Bambu scan. No write when it is already known.
+          if (bambu_blocks_read > 0) tagFamilySet(uid, TAG_FAMILY_BAMBU);
           if (bambu_blocks_read > 0 || nfc_retry_count >= NFC_MAX_RETRIES) {
             TagSeen::note(uid_str, bambu_blocks_read > 0 ? "Bambu"
+                                   : creality_decoded    ? "Creality"
                                    : snapmaker_decoded   ? "Snapmaker" : "MIFARE");
           }
           // What the read attempts came to, once: read in full, or out of
@@ -2028,6 +2186,44 @@ void appLoop() {
           }
         }
 
+        // A blank tag that belongs to a spool already, and has not been asked
+        // about: offer the CFS write. Covers a write that found no tag (the
+        // card had dropped off the reader, 13.10.2026) once the spool is put
+        // back, and a blank tag linked from Spoolman's web page. Only while
+        // the tag answers right now and nothing else holds the screen.
+        if (blank_mifare && g_creality_tags && sm_found && sm_id > 0 &&
+            strcmp(g_tag.uid_str, uid_str) == 0 && lookupWasFor(uid_str) &&
+            tagFamilyGet(uid) == TAG_FAMILY_BLANK && !tagCfsAskedFor(uid_str) &&
+            !lookupPending() && !isTagWritePopupOpen() && !isConfirmPopupOpen() &&
+            !isSpoolFlowLinkEntryOpen() && !isSpoolFlowIdInputOpen() &&
+            !isSecondTagPopupOpen() && strcmp(tagWriteState(), "pending") != 0) {
+          logSDf("Tag write: %s is blank and belongs to spool %d, offering Creality CFS",
+                 uid_str, sm_id);
+          showTagWriteAskPopupFmt(sm_id, TAG_FMT_CREALITY);
+        }
+        // A Creality tag the scales wrote themselves (its UID in the spool's
+        // nfc_uid) whose spool has changed since - another colour, material
+        // or weight in Spoolman: offer to write it again. And an original tag
+        // that describes the spool's filament but carries Creality's serial
+        // instead of the spool id: offer to write the id, which is what
+        // CFSync links the CFS slot by. Once per placement; an original tag
+        // that describes another filament is only offered that after a link.
+        // lookupWasFor(): sm_id must be this tag's spool. On 14.10.2026 the
+        // tag of spool 13 was compared with spool 12, which had been lifted a
+        // moment before - with two spools of one filament that would have
+        // offered to write 12's id onto 13's tag.
+        if (creality_decoded && g_creality_tags && sm_found && sm_id > 0 &&
+            strcmp(cfs_checked_uid, uid_str) != 0 && strcmp(g_tag.uid_str, uid_str) == 0 &&
+            lookupWasFor(uid_str) && !lookupPending() && !isTagWritePopupOpen() && !isConfirmPopupOpen() &&
+            !isSpoolFlowLinkEntryOpen() && !isSpoolFlowIdInputOpen() &&
+            !isSecondTagPopupOpen() && strcmp(tagWriteState(), "pending") != 0) {
+          snprintf(cfs_checked_uid, sizeof(cfs_checked_uid), "%s", uid_str);
+          bool own = false, differs = false, serial_only = false;
+          if (tagCrealityCheck(sm_id, uid_str, &own, &differs, &serial_only) && differs) {
+            if (own)              showTagWriteAskPopupFmt(sm_id, TAG_FMT_CREALITY, 1);
+            else if (serial_only) showTagWriteAskPopupFmt(sm_id, TAG_FMT_CREALITY, 3);
+          }
+        }
       } else if (found && uidLen == 7) {
         // ── NTAG detected ──────────────────────────────────────
         last_tag_seen_ms = millis();
@@ -2132,7 +2328,62 @@ void appLoop() {
 
       } else {
         // No tag found
-        if (tag_present) {
+        // A Creality tag that was read and then stops answering is most often
+        // still lying there: on hardware (13.10.2026) it went quiet right after
+        // the read and the spool was declared removed while it sat on the pad.
+        // Wake it before counting the miss; at most every 400 ms, so a spool
+        // that really left costs a few wake attempts and not more.
+        static unsigned long last_presence_recover_ms = 0;
+        static char recover_uid[24] = "";
+        static int recover_count = 0;
+        bool recovered = false;
+        // Held by the weight: nothing to count while the pad still carries
+        // what it carried when the tag was last read.
+        bool held = false;
+        if (tag_present && tag_kept_by_weight) {
+          if (padCarriesSpool()) {
+            held = true;
+            last_tag_seen_ms = millis();
+          } else {
+            tag_kept_by_weight = false;
+            logSDf("NFC: the pad lost the spool (%.0fg, %.0fg at the last read) - checking the tag again",
+                   scale_weight_g, weight_at_last_read);
+          }
+        }
+        // Only for the first seconds after the tag last answered: a Creality
+        // tag sits off-centre on the flange, and a spool turned so the tag is
+        // out of the reader's reach (13.10.2026) does not come back from any
+        // wake. Beyond that the usual grace period decides.
+        // Lifted, not lost: the weight fell well below what the pad carried
+        // at the last read. No wakes then, so the removal comes at once.
+        const bool lifted = g_scale_fitted && weight_at_last_read >= LOC_WEIGHT_MIN_G &&
+                            scale_weight_g < weight_at_last_read - LOC_WEIGHT_TOLERANCE_G;
+        if (!held && !lifted && tag_present && (creality_decoded || blank_mifare) && last_uid_len == 4 &&
+            millis() - last_tag_seen_ms < 3000 &&
+            millis() - last_presence_recover_ms >= 400) {
+          last_presence_recover_ms = millis();
+          const int w = crealityRecoverCard(g_tag.uid, g_tag.uid_str);
+          if (strcmp(recover_uid, g_tag.uid_str) != 0) {
+            snprintf(recover_uid, sizeof(recover_uid), "%s", g_tag.uid_str);
+            recover_count = 0;
+          }
+          if (w) {
+            recovered = true;
+            if (++recover_count <= 3 || recover_count % 50 == 0) {
+              logSDf("NFC: %s stopped answering, woken again (woke=%d, %d so far)",
+                     g_tag.uid_str, w, recover_count);
+            }
+          }
+        }
+        if (held) {
+          nfc_fast_polls = 0;
+          nfc_miss_streak = 0;
+        } else if (recovered) {
+          last_tag_seen_ms = millis();
+          nfc_fast_polls = 0;
+          nfc_miss_streak = 0;
+          nfc_absent_count = 0;
+        } else if (tag_present) {
           // First close the gap with a few short-interval retries. Most NTAG
           // dropouts are a single missed read and come back on the next one.
           // Neither branch leaves appLoop() early any more: the two returns
@@ -2159,7 +2410,15 @@ void appLoop() {
           // the fast re-polls, and the location question back by 2.5 s.
           const bool weight_gone = weightSaysSpoolGone() &&
                                    nfc_fast_polls >= NFC_GONE_MIN_MISSES;
-          if (weight_gone || (!retrying && millis() - first_miss_ms >= absent_limit)) {
+          if (!weight_gone && !retrying && millis() - first_miss_ms >= absent_limit &&
+              padCarriesSpool()) {
+            // Silent tag, unchanged weight: the spool is still lying there.
+            tag_kept_by_weight = true;
+            nfc_fast_polls = 0;
+            last_tag_seen_ms = millis();
+            logSDf("NFC: tag silent, but the pad still carries %.0fg (%.0fg at the last read) - spool stays present",
+                   scale_weight_g, weight_at_last_read);
+          } else if (weight_gone || (!retrying && millis() - first_miss_ms >= absent_limit)) {
             nfc_stat_removals++;
             bambuScanReport();   // a Bambu tag that left before its reads settled
             Serial.printf("NFC: tag removed (gap %u ms, %d fast re-polls, %s)\n",
