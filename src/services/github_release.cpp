@@ -11,11 +11,16 @@
 #include "mbedtls/sha256.h"
 
 #include "hardware/sd_logger.h"
+#include "app_config.h"
 #include "services/ota_state.h"
 
 #define GH_REPO "Niko11111/SpoolmanScale"
 // The release asset the device flashes, see githubFlashTag().
+#if SCALE_ADC_HX711
+#define GH_IMAGE_ASSET "SpoolmanScale_HX711.bin"
+#else
 #define GH_IMAGE_ASSET "SpoolmanScale.bin"
+#endif
 
 // The image's size out of a release's asset list.
 static uint32_t imageSizeOf(JsonVariantConst rel) {
@@ -94,6 +99,12 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
     f["draft"] = true;
     f["assets"][0]["name"] = true;
     f["assets"][0]["size"] = true;
+    f["assets"][1]["name"] = true;
+    f["assets"][1]["size"] = true;
+    f["assets"][2]["name"] = true;
+    f["assets"][2]["size"] = true;
+    f["assets"][3]["name"] = true;
+    f["assets"][3]["size"] = true;
 
     JsonDocument doc;
     jerr = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
@@ -123,6 +134,12 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
     filter["published_at"] = true;
     filter["assets"][0]["name"] = true;
     filter["assets"][0]["size"] = true;
+    filter["assets"][1]["name"] = true;
+    filter["assets"][1]["size"] = true;
+    filter["assets"][2]["name"] = true;
+    filter["assets"][2]["size"] = true;
+    filter["assets"][3]["name"] = true;
+    filter["assets"][3]["size"] = true;
 
     JsonDocument doc;
     jerr = deserializeJson(doc, payload, DeserializationOption::Filter(filter));

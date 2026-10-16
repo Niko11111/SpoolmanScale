@@ -37,6 +37,10 @@ bool nfcResetVerified();
 // binds its reset pin in the constructor.
 bool nfcResetSelfTest();
 
+// Run the same probe once automatically after the NFC reader is available.
+// Retries on a later boot if the reader cannot be restored after the probe.
+void nfcResetAutoTest();
+
 // Whether the reader has ever had to be re-initialised on this device. The
 // hint is only worth showing to people this has actually happened to: on a
 // scale whose reader has never stumbled, the modification buys nothing.

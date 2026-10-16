@@ -78,6 +78,43 @@
       margin-bottom: 16px;
     }
 
+    esp-web-install-button[hidden] { display: none; }
+
+    .adc-choice {
+      text-align: left;
+      margin: 0 0 20px;
+      padding: 16px 18px;
+      background: #080d1a;
+      border: 1px solid #1a3060;
+      border-radius: 10px;
+    }
+
+    .adc-choice legend {
+      color: #c8d8f0;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 0 6px;
+    }
+
+    .adc-choice label {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      color: #c8d8f0;
+      font-size: 14px;
+      line-height: 1.5;
+      margin: 8px 0;
+      cursor: pointer;
+    }
+
+    .adc-choice input { accent-color: #28d49a; margin-top: 4px; }
+
+    .adc-choice small {
+      display: block;
+      color: #4a6fa0;
+      font-size: 12px;
+    }
+
     esp-web-install-button::part(button) {
       background: #1a3020;
       color: #40c080;
@@ -162,7 +199,7 @@
       <ol>
         <li>Connect <span>USB cable</span> to PC</li>
         <li>Disconnect debug board <span>(ZXACC-ESPDB)</span></li>
-        <li>Click <span>"Install"</span> below. A scale that is already running SpoolmanScale is offered <span>"Update"</span> instead.</li>
+        <li>Select the ADC fitted to your scale, then click <span>"Install"</span>. A scale already running SpoolmanScale is offered <span>"Update"</span> instead.</li>
         <li>Select port &amp; confirm</li>
         <li>After flashing: enter your <span>WiFi</span> right in the browser, or skip this and set it up on the scale later, on the touchscreen or with your phone.</li>
       </ol>
@@ -176,7 +213,31 @@
       Only tick it if you want a clean start.
     </div>
 
-    <esp-web-install-button manifest="manifest.json">
+    <fieldset class="adc-choice" aria-describedby="adc-help">
+      <legend>Which scale ADC is installed?</legend>
+      <label>
+        <input type="radio" name="scale-adc" value="nau7802" checked>
+        <span>NAU7802 <small>Original I²C scale hardware (GPIO 10/11)</small></span>
+      </label>
+      <label>
+        <input type="radio" name="scale-adc" value="hx711">
+        <span>HX711 <small>SCK on I/O pin 5 (GPIO12), DOUT on pin 6 (GPIO13); module powered from 3.3 V</small></span>
+      </label>
+      <small id="adc-help">Choose the firmware that matches the ADC board physically connected to your load cell.</small>
+    </fieldset>
+
+    <esp-web-install-button id="install-nau7802" manifest="manifest.json">
+      <span slot="unsupported">
+        This browser does not support WebUSB.<br>
+        Please use <strong>Chrome</strong> or <strong>Edge</strong>.
+      </span>
+      <span slot="not-allowed">
+        No USB access. Open this page via <strong>HTTPS</strong> or
+        <strong>localhost</strong>.
+      </span>
+    </esp-web-install-button>
+
+    <esp-web-install-button id="install-hx711" manifest="manifest-hx711.json" hidden>
       <span slot="unsupported">
         This browser does not support WebUSB.<br>
         Please use <strong>Chrome</strong> or <strong>Edge</strong>.
@@ -206,5 +267,18 @@
 
     <div class="version">Firmware v0.8.2 &nbsp;·&nbsp; ESP32-S3</div>
   </div>
+  <script>
+    const adcButtons = {
+      nau7802: document.getElementById('install-nau7802'),
+      hx711: document.getElementById('install-hx711'),
+    };
+    document.querySelectorAll('input[name="scale-adc"]').forEach((radio) => {
+      radio.addEventListener('change', () => {
+        Object.entries(adcButtons).forEach(([adc, button]) => {
+          button.hidden = adc !== radio.value;
+        });
+      });
+    });
+  </script>
 </body>
 </html>

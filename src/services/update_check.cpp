@@ -146,14 +146,26 @@ void updateCheckTask(void* arg) {
   const char* sha = nullptr;
   uint32_t size = 0;
   if (gh_prerelease) {
+#if SCALE_ADC_HX711
+    tag = doc["prerelease_hx711"].as<const char*>();
+    sha = doc["prerelease_hx711_sha256"].as<const char*>();
+    size = doc["prerelease_hx711_size"] | 0u;
+#else
     tag = doc["prerelease"].as<const char*>();
     sha = doc["prerelease_sha256"].as<const char*>();
     size = doc["prerelease_size"] | 0u;
+#endif
   }
   if (!tag || tag[0] == '\0') {
+#if SCALE_ADC_HX711
+    tag = doc["stable_hx711"].as<const char*>();
+    sha = doc["stable_hx711_sha256"].as<const char*>();
+    size = doc["stable_hx711_size"] | 0u;
+#else
     tag = doc["stable"].as<const char*>();
     sha = doc["stable_sha256"].as<const char*>();
     size = doc["stable_size"] | 0u;
+#endif
   }
   s_found_size = size;
 

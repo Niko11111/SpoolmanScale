@@ -105,7 +105,7 @@ void updateHeaderStatus() {
       lv_obj_add_flag(lbl_hdr_scl, LV_OBJ_FLAG_HIDDEN);
     } else {
       lv_obj_clear_flag(lbl_hdr_scl, LV_OBJ_FLAG_HIDDEN);
-      lv_label_set_text(lbl_hdr_scl, scl_ok ? "SCL" : "SCL!");
+      lv_label_set_text(lbl_hdr_scl, scl_ok ? "ADC" : "ADC!");
       lv_obj_set_style_text_color(lbl_hdr_scl,
         scl_ok ? lv_color_hex(UI_COL_GOOD) : lv_color_hex(UI_COL_BAD), 0);
     }

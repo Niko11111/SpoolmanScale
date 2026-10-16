@@ -11,7 +11,7 @@
 //
 // The firmware already knew the answer in almost every support case that
 // reached the Discord - it just never said so. The two red header chips
-// ("SCL!", "NFC!") are four characters wide, carry no explanation and lead
+// ("ADC!", "NFC!") are four characters wide, carry no explanation and lead
 // nowhere, so a wiring mistake and a missing calibration look identical from
 // the outside.
 //
@@ -22,7 +22,7 @@
 enum DiagCode : uint8_t {
   DIAG_NONE = 0,
   DIAG_BUS_EMPTY,           // neither chip acknowledges: power or the I/O plug
-  DIAG_NAU_MISSING,         // 0x2A silent, 0x24 answers
+  DIAG_SCALE_MISSING,       // selected scale ADC not responding
   DIAG_PN532_MISSING,       // 0x24 silent, 0x2A answers
   DIAG_PN532_MUTE,          // 0x24 acknowledges but answers no command
   DIAG_SCALE_UNCALIBRATED,  // cal_factor still CAL_FACTOR_DEFAULT

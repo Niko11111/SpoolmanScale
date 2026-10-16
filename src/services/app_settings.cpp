@@ -36,6 +36,22 @@ void loadPrefs() {
   cfg_spoolman_ip[sizeof(cfg_spoolman_ip)-1] = '\0';
   backendComposeBase(cfg_spoolman_base, sizeof(cfg_spoolman_base), cfg_spoolman_ip);
 
+  const String saved_scale_adc = prefsGetString("scale_adc", "");
+  const bool scale_adc_changed = saved_scale_adc.length() > 0 &&
+                                 saved_scale_adc != SCALE_ADC_NAME;
+  // Old firmware did not record the ADC type. Preserve its existing NAU7802
+  // calibration on the default profile, but do not carry it into a first HX711
+  // install where the old profile is unknowable.
+  const bool legacy_to_hx711 = saved_scale_adc.length() == 0 && SCALE_ADC_HX711;
+  if (scale_adc_changed || legacy_to_hx711) {
+    prefsPutFloat("cal_factor", CAL_FACTOR_DEFAULT);
+    prefsPutInt("zero_offset", 0);
+    Serial.printf("Scale ADC changed to %s; calibration reset\n", SCALE_ADC_NAME);
+  }
+  if (saved_scale_adc != SCALE_ADC_NAME) {
+    prefsPutString("scale_adc", SCALE_ADC_NAME);
+  }
+
   cal_factor = prefsGetFloat("cal_factor", CAL_FACTOR_DEFAULT);
   // Only the impossible is repaired, not the merely unusual. A factor of zero
   // divides every weight into infinity and a device carrying one cannot be

@@ -1,11 +1,12 @@
 #pragma once
 
 #include <stdint.h>
+#include "app_config.h"
 
 namespace hw_pins {
 
-constexpr int8_t I2C_EXT_SDA = 10;   // PN532 + NAU7802 bus
-constexpr int8_t I2C_EXT_SCL = 11;   // PN532 + NAU7802 bus
+constexpr int8_t I2C_EXT_SDA = 10;   // PN532 + NAU7802 (NAU7802 profile)
+constexpr int8_t I2C_EXT_SCL = 11;   // PN532 + NAU7802 (NAU7802 profile)
 
 // The PN532's reset line exists in two places, and which one is used is a
 // property of the device rather than of the firmware.
@@ -25,7 +26,10 @@ constexpr int8_t I2C_EXT_SCL = 11;   // PN532 + NAU7802 bus
 // a measurement on this very device says the wire was moved - see
 // services/nfc_reset.h.
 constexpr int8_t PN532_RESET_WIRE = 14;   // EXT_IO5, connector pin 7, brown
-constexpr int8_t PN532_RESET_SAFE = 12;   // EXT_IO3, pin 5, no build ever wired it
+// GPIO21 is EXT_IO6, connector pin 8, which the 7-pin cable leaves empty. Not
+// GPIO1/2: those run to the board's RS485 transceiver, and the library drives
+// this pin push-pull on every begin().
+constexpr int8_t PN532_RESET_SAFE = 21;   // Unwired placeholder in both ADC builds
 
 // The PN532's IRQ line is not wired, and in I2C mode the library never reads
 // it: isready() answers from the bus, and the branch that would call
@@ -33,9 +37,21 @@ constexpr int8_t PN532_RESET_SAFE = 12;   // EXT_IO3, pin 5, no build ever wired
 // still calls pinMode() on whatever pin number it is handed though, and -1
 // arrives there as 255, which logs "Invalid pin selected" on every single boot.
 // That line reads like a fault and is not one, so the constructor gets a pin
-// that exists and costs nothing: EXT_IO4 on the extension connector, unused by
-// this firmware and an input after reset anyway.
+// that exists and costs nothing. In the NAU7802 profile it is EXT_IO4 and
+// remains an input; GPIO13 is HX711 DOUT in the HX711 profile, which uses
+// GPIO2 (RS485 RTS on this board) instead. pinMode(INPUT) only, so it stays
+// high-impedance exactly as it is after reset.
+#if SCALE_ADC_HX711
+constexpr int8_t PN532_IRQ_UNUSED = 2;
+#else
 constexpr int8_t PN532_IRQ_UNUSED = 13;
+#endif
+
+// HX711 uses the otherwise-unused extension connector signals: GPIO12 on
+// connector pin 5 for SCK and GPIO13 on pin 6 for DOUT. The PN532 driver's
+// unwired placeholder pins move to GPIO21/2 in that profile to avoid conflict.
+constexpr int8_t HX711_SCK = 12;
+constexpr int8_t HX711_DOUT = 13;
 
 constexpr int8_t TOUCH_SDA = 6;      // FT6336U internal board bus
 constexpr int8_t TOUCH_SCL = 5;      // FT6336U internal board bus

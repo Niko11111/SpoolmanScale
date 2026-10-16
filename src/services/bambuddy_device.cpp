@@ -64,7 +64,12 @@ static void handleCommand(const char* base, const char* key, const char* cmd,
     }
     // Same three steps the tare button on the main screen performs. The
     // display picks the new value up on the next updateDisplay().
-    int32_t raw = scaleHardwareReadRaw();
+    int32_t raw;
+    if (!scaleHardwareReadRaw(&raw)) {
+      bbCommandResult(base, key, cmd, false, "Scale not ready");
+      logSD("BamBuddy: tare requested but no fresh scale sample was ready");
+      return;
+    }
     saveTareOffset(raw);
     scale_weight_g = 0.0f;
     resetScaleFilter();
@@ -204,7 +209,12 @@ void bambuddyDeviceTick() {
         // the web interface distinguish a spool being placed from one that
         // is lying still.
         const bool stable = (s_win_max - s_win_min) < AUTO_WEIGHT_THRESH_G;
-        bbScaleReading(base, key, scale_weight_g, stable, scaleHardwareReadRaw());
+        // The sample the filter last took, not a fresh read: a fresh one
+        // can wait a whole conversion, and on the HX711 it steals that
+        // conversion from the filter.
+        int32_t raw = 0;
+        scaleHardwareLastRaw(&raw);
+        bbScaleReading(base, key, scale_weight_g, stable, raw);
         s_last_weight_g = scale_weight_g;
       }
       s_last_weight_ms = millis();

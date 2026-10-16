@@ -13,6 +13,7 @@
 #define KEY_NEVER      "rst_never"
 #define KEY_BOOTS      "rst_boots"
 #define KEY_DUE_AT     "rst_due_at"
+#define KEY_AUTO       "rst_auto"
 
 // How long "later" lasts. Boots rather than days: the clock needs NTP and a
 // scale that sits unplugged between prints would otherwise be nagged on the
@@ -29,6 +30,7 @@ static bool     s_recovery = false;
 static bool     s_never    = false;
 static uint32_t s_boots    = 0;
 static uint32_t s_due_at   = 0;
+static bool     s_auto     = false;
 
 void nfcResetLoad() {
   s_verified = prefsGetBool(KEY_VERIFIED, false);
@@ -36,6 +38,7 @@ void nfcResetLoad() {
   s_never    = prefsGetBool(KEY_NEVER,    false);
   s_boots    = prefsGetUInt(KEY_BOOTS,   0) + 1;
   s_due_at   = prefsGetUInt(KEY_DUE_AT,  0);
+  s_auto     = prefsGetBool(KEY_AUTO,    false);
   prefsPutUInt(KEY_BOOTS, s_boots);
 }
 
@@ -74,6 +77,16 @@ bool nfcResetSelfTest() {
          back ? "answers" : "silent", (unsigned long)version,
          works ? "line works" : "no effect");
   return works;
+}
+
+void nfcResetAutoTest() {
+  if (s_auto) return;
+  nfcResetSelfTest();
+  // Only a completed probe counts. If the reader did not come back, retry on
+  // a later boot instead of permanently treating an interrupted test as done.
+  if (!nfcHardwarePing()) return;
+  s_auto = true;
+  prefsPutBool(KEY_AUTO, true);
 }
 
 bool nfcReaderNeededRecovery() { return s_recovery; }

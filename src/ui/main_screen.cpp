@@ -216,7 +216,7 @@ void buildUI() {
   // it simply saves an object that could never say anything.
   if (g_scale_fitted) {
     lbl_hdr_scl = lv_label_create(hdr);
-    lv_label_set_text(lbl_hdr_scl, "SCL");
+    lv_label_set_text(lbl_hdr_scl, "ADC");
     lv_obj_set_style_text_color(lbl_hdr_scl, lv_color_hex(UI_COL_HDR_OFF), 0);
     lv_obj_set_style_text_font(lbl_hdr_scl, &lv_font_montserrat_ext_12, 0);
   }
@@ -634,10 +634,9 @@ void buildUI() {
     lv_obj_set_style_shadow_width(btn_tare, 0, 0);
     lv_obj_add_event_cb(btn_tare, [](lv_event_t *e) {
       logSD("UI: Button -> TARE (main)");
-      // Presence as well as scale_ready: an ADC that left the bus reads back as
-      // all ones, and tare would store -1 as the zero point.
-      if (scale_ready && scaleHardwarePresent()) {
-        int32_t raw = scaleHardwareReadRaw();
+      // A failed or not-yet-ready conversion must never become a tare value.
+      int32_t raw;
+      if (scale_ready && scaleHardwareReadRaw(&raw)) {
         saveTareOffset(raw);
         scale_weight_g = 0.0f;
         resetScaleFilter();

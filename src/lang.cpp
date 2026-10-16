@@ -2066,57 +2066,48 @@ const char* const STRINGS[][3] = {
 
   { "Kein Modul am I2C-Bus", "Nothing on the I2C bus", "Rien sur le bus I2C" },  // STR_DIAG_BUS_EMPTY_BANNER
   { "Kein Modul am I2C-Bus", "Nothing on the I2C bus", "Rien sur le bus I2C" },  // STR_DIAG_BUS_EMPTY_TITLE
-  { "Weder der NFC-Reader noch der Waagen-ADC antworten.\n\n"
+  { "Weder PN532 noch Waagen-ADC werden erkannt.\n\n"
     "Das 7-polige Kabel muss bündig links in der 8-poligen I/O-Buchse sitzen. "
     "Ein Pin daneben und beide Module sind stromlos.\n\n"
-    "Prüfe Pin 1 (5V, rot), Pin 2 (GND, schwarz), Pin 3 (SDA, gelb) und "
-    "Pin 4 (SCL, grün).",
-    "Neither the NFC reader nor the scale ADC answers.\n\n"
-    "The 7 pin cable has to sit flush to the left in the 8 pin I/O socket. "
+    "Prüfe Pin 1 (5V, rot), Pin 2 (GND, schwarz) und die Signalpins des "
+    "ausgewählten ADCs.",
+    "Neither the PN532 nor the scale ADC is detected.\n\n"
+    "The 7-pin cable must sit flush to the left in the 8-pin I/O socket. "
     "One pin off and both modules are unpowered.\n\n"
-    "Check pin 1 (5V, red), pin 2 (GND, black), pin 3 (SDA, yellow) and "
-    "pin 4 (SCL, green).",
-    "Ni le lecteur NFC ni le convertisseur de la balance (NAU7802) ne répondent.\n\nDans la prise I/O à 8 broches, le câble à 7 broches doit être aligné sur le côté gauche. Décalé d'une seule broche, il n'alimente plus aucun des deux modules.\n\nVérifiez la broche 1 (5V, rouge), la broche 2 (GND, noir), la broche 3 (SDA, jaune) et la broche 4 (SCL, vert)." },  // STR_DIAG_BUS_EMPTY_TEXT
+    "Check pin 1 (5V, red), pin 2 (GND, black), and the signal pins for the "
+    "selected ADC.",
+    "Ni le PN532 ni le convertisseur de la balance ne sont détectés.\n\nLe câble à 7 broches doit être aligné à gauche dans la prise I/O à 8 broches. Décalé d'une broche, les deux modules ne sont plus alimentés.\n\nVérifiez la broche 1 (5V, rouge), la broche 2 (GND, noir) et les signaux du convertisseur sélectionné." },  // STR_DIAG_BUS_EMPTY_TEXT
 
-  { "Waagen-ADC fehlt (NAU7802)", "Scale ADC missing (NAU7802)",
-    "Convertisseur absent (NAU7802)" },  // STR_DIAG_NAU_MISSING_BANNER
-  { "Waagen-ADC fehlt", "Scale ADC missing",
-    "Convertisseur de la balance absent" },  // STR_DIAG_NAU_MISSING_TITLE
-  { "Die NAU7802 antwortet nicht auf 0x2A. Der NFC-Reader schon, SDA und SCL "
-    "sind also grundsätzlich in Ordnung.\n\n"
-    "Prüfe VIN, GND, SDA und SCL an der NAU7802.\n\n"
-    "Bei fertigen STEMMA-QT-Kabeln von Drittanbietern stimmt die "
-    "Pinreihenfolge oft nicht mit der des WT32-Kabels überein.\n\n"
+  { "Waagen-ADC fehlt", "Scale ADC missing", "Convertisseur de balance absent" },  // STR_DIAG_NAU_MISSING_BANNER
+  { "Waagen-ADC fehlt", "Scale ADC missing", "Convertisseur de la balance absent" },  // STR_DIAG_NAU_MISSING_TITLE
+  { "Der ausgewählte Waagen-ADC ist nicht betriebsbereit. Prüfe die Versorgung (VIN/VCC), GND und "
+    "die Signalpins. Für NAU7802: SDA/SCL (Pins 3/4); für HX711: DOUT/SCK "
+    "(Pins 6/5). Der ausgewählte Firmware-ADC muss zur Hardware passen.\n\n"
     "Ist dieses Gerät bewusst ohne Waage gebaut, schalte sie unter "
-    "Einstellungen > Waage ab - dann verschwindet diese Meldung.",
-    "The NAU7802 does not answer on 0x2A. The NFC reader does, so SDA and SCL "
-    "are basically fine.\n\n"
-    "Check VIN, GND, SDA and SCL on the NAU7802.\n\n"
-    "On third party STEMMA QT cables the pin order often does not match the "
-    "WT32 cable.\n\n"
+    "Einstellungen > Waage ab.",
+    "The selected scale ADC is not ready. Check power (VIN/VCC), GND, and its signal pins. "
+    "NAU7802 uses SDA/SCL (pins 3/4); HX711 uses DOUT/SCK (pins 6/5). The "
+    "firmware ADC selection must match the hardware.\n\n"
     "If this device was deliberately built without a scale, switch it off "
-    "under Settings > Scale and this finding goes away.",
-    "Le NAU7802 ne répond pas à l'adresse 0x2A. Le lecteur NFC, lui, répond : les fils SDA et SCL sont donc bons en principe.\n\nVérifiez les fils VIN, GND, SDA et SCL sur le NAU7802.\n\nSur les câbles STEMMA QT tout faits d'autres fabricants, l'ordre des broches diffère souvent de celui du câble WT32.\n\nSi cet appareil est volontairement monté sans balance, désactivez « Balance présente » dans Réglages > Balance : ce message disparaîtra." },  // STR_DIAG_NAU_MISSING_TEXT
+    "under Settings > Scale.",
+    "Le convertisseur sélectionné n'est pas prêt. Vérifiez l'alimentation (VIN/VCC), GND et ses signaux. Le NAU7802 utilise SDA/SCL (broches 3/4) ; le HX711 utilise DOUT/SCK (broches 6/5). Le choix du convertisseur dans le firmware doit correspondre au matériel.\n\nSi cet appareil est volontairement sans balance, désactivez-la dans Réglages > Balance." },  // STR_DIAG_NAU_MISSING_TEXT
 
   { "NFC-Reader fehlt (PN532)", "NFC reader missing (PN532)",
     "Lecteur NFC absent (PN532)" },  // STR_DIAG_PN532_MISSING_BANNER
   { "NFC-Reader fehlt",         "NFC reader missing",         "Lecteur NFC absent" },  // STR_DIAG_PN532_MISSING_TITLE
-  { "Der PN532 antwortet nicht auf 0x24. Der Waagen-ADC schon, SDA und SCL "
-    "sind also grundsätzlich in Ordnung.\n\n"
-    "Prüfe zuerst die beiden DIP-Schalter auf dem Modul: für I2C muss "
-    "SW1 = ON und SW2 = OFF stehen. In der HSU- oder SPI-Stellung meldet sich "
+  { "Der PN532 antwortet nicht auf 0x24. Prüfe zuerst die beiden DIP-Schalter "
+    "des Moduls: für I2C muss SW1 = ON und SW2 = OFF stehen.\n\n"
+    "In der HSU- oder SPI-Stellung meldet sich "
     "der Chip auf dem I2C-Bus überhaupt nicht - genau dieses Bild.\n\n"
-    "Sonst braucht der PN532 5V von Pin 1 des I/O-Kabels. Schließe ihn nicht "
-    "über den STEMMA-QT-Durchgang der NAU7802 an - der führt nur 3,3V.",
-    "The PN532 does not answer on 0x24. The scale ADC does, so SDA and SCL "
-    "are basically fine.\n\n"
-    "Check the two DIP switches on the module first: I2C needs SW1 = ON and "
+    "Der PN532 braucht außerdem 5V von Pin 1 des I/O-Kabels. Prüfe auch SDA "
+    "und SCL.",
+    "The PN532 does not answer on 0x24. Check the two DIP switches on the "
+    "module first: I2C needs SW1 = ON and "
     "SW2 = OFF. Set to HSU or SPI the chip does not answer on the I2C bus at "
     "all - which is exactly what is happening here.\n\n"
-    "Otherwise the PN532 needs 5V from pin 1 of the I/O cable. Do not daisy "
-    "chain it through the NAU7802 STEMMA QT passthrough - that one only "
-    "carries 3.3V.",
-    "Le PN532 ne répond pas à l'adresse 0x24. Le convertisseur de la balance, lui, répond : les fils SDA et SCL sont donc bons en principe.\n\nVérifiez d'abord les deux interrupteurs DIP du module : pour l'I2C, SW1 doit être sur ON et SW2 sur OFF. En position HSU ou SPI, la puce ne répond pas du tout sur le bus I2C - c'est exactement le symptôme observé.\n\nSinon, le PN532 doit recevoir le 5V de la broche 1 du câble I/O. Ne le branchez pas à la suite du NAU7802, par le connecteur STEMMA QT de celui-ci : ce connecteur ne fournit que du 3,3V." },  // STR_DIAG_PN532_MISSING_TEXT
+    "The PN532 also needs 5V from pin 1 of the I/O cable. Check SDA and SCL "
+    "as well.",
+    "Le PN532 ne répond pas à l'adresse 0x24. Vérifiez d'abord les deux interrupteurs DIP du module : pour l'I2C, SW1 doit être sur ON et SW2 sur OFF. En position HSU ou SPI, la puce ne répond pas sur le bus I2C.\n\nLe PN532 doit recevoir le 5V de la broche 1 du câble I/O. Vérifiez aussi SDA et SCL." },  // STR_DIAG_PN532_MISSING_TEXT
 
   { "NFC-Reader antwortet nicht", "NFC reader does not answer",
     "Le lecteur NFC ne répond pas" },  // STR_DIAG_PN532_MUTE_BANNER
@@ -2165,28 +2156,28 @@ const char* const STRINGS[][3] = {
   { "Die Waage liest bei leerer Plattform stark negativ und hat seit dem Start "
     "nie ein positives Gewicht gesehen. Auflegen macht die Zahl kleiner statt "
     "größer.\n\n"
-    "Tausche an der NAU7802 die beiden Signaladern: A+ (weiß) und A- (grün).\n\n"
+    "Tausche am ADC die beiden Signaladern: A+ (weiß) und A- (grün).\n\n"
     "Danach neu tarieren und kalibrieren.",
     "The scale reads far below zero with an empty platform and has never seen "
     "a positive weight since it started. Loading it makes the number go down "
     "instead of up.\n\n"
-    "Swap the two signal wires on the NAU7802: A+ (white) and A- (green).\n\n"
+    "Swap the two signal wires at the ADC: A+ (white) and A- (green).\n\n"
     "Then tare and calibrate again.",
-    "À vide, la balance affiche une valeur très négative et n'a mesuré aucun poids positif depuis le démarrage. Poser un objet la fait baisser au lieu de l'augmenter.\n\nInversez les deux fils de signal sur le NAU7802 : A+ (blanc) et A- (vert).\n\nRefaites ensuite la tare et l'étalonnage." },  // STR_DIAG_INVERTED_TEXT
+    "À vide, la balance affiche une valeur très négative et n'a mesuré aucun poids positif depuis le démarrage. Poser un objet la fait baisser au lieu de l'augmenter.\n\nInversez les deux fils de signal sur le convertisseur : A+ (blanc) et A- (vert).\n\nRefaites ensuite la tare et l'étalonnage." },  // STR_DIAG_INVERTED_TEXT
 
   { "Wägezelle unruhig", "Load cell unstable", "Capteur de pesée instable" },  // STR_DIAG_NOISY_BANNER
   { "Wägezelle unruhig", "Load cell unstable", "Capteur de pesée instable" },  // STR_DIAG_NOISY_TITLE
   { "Der Messwert schwankt dauerhaft um mehr als %d g, obwohl auf der "
     "Plattform nichts bewegt wird.\n\n"
-    "Das ist typisch für eine lose Ader an der NAU7802. Prüfe E+ (rot), "
+    "Das ist typisch für eine lose Ader am ADC. Prüfe E+ (rot), "
     "E- (schwarz), A+ (weiß) und A- (grün) auf kalte Lötstellen.\n\n"
     "Prüfe außerdem, ob ein Kabel gegen die Wiegeplattform drückt.",
     "The reading keeps swinging by more than %d g although nothing on the "
     "platform is moving.\n\n"
-    "That is typical for a loose wire on the NAU7802. Check E+ (red), "
+    "That is typical for a loose wire at the ADC. Check E+ (red), "
     "E- (black), A+ (white) and A- (green) for cold solder joints.\n\n"
     "Also check whether a cable is pressing against the weighing platform.",
-    "La mesure varie en permanence de plus de %d g alors que rien ne bouge sur le plateau.\n\nC'est typique d'un fil mal fixé sur le NAU7802. Vérifiez E+ (rouge), E- (noir), A+ (blanc) et A- (vert), à la recherche d'une soudure froide.\n\nVérifiez aussi qu'aucun câble n'appuie contre le plateau de pesée." },  // STR_DIAG_NOISY_TEXT
+    "La mesure varie en permanence de plus de %d g alors que rien ne bouge sur le plateau.\n\nC'est typique d'un fil mal fixé au convertisseur. Vérifiez E+ (rouge), E- (noir), A+ (blanc) et A- (vert), à la recherche d'une soudure froide.\n\nVérifiez aussi qu'aucun câble n'appuie contre le plateau de pesée." },  // STR_DIAG_NOISY_TEXT
 
   { "So kalibrierst du", "How to calibrate", "Comment étalonner" },  // STR_CAL_HELP_TITLE
   { "1. Plattform leer räumen und TARE drücken. Die Anzeige muss auf 0 gehen.\n\n"
@@ -2330,7 +2321,7 @@ const char* const STRINGS[][3] = {
   { "Keine Waage angeschlossen", "No scale connected", "Aucune balance connectée" },  // STR_NO_SCALE
   { "Waage vorhanden",           "Scale fitted",       "Balance présente" },  // STR_SCALE_FITTED
   { "An: das Gerät hat eine Wiegezelle und verhält sich wie bisher.\n\n"
-    "Aus: der ganze Waagenteil verschwindet. Der NAU7802 wird beim Start gar "
+    "Aus: der ganze Waagenteil verschwindet. Der ADC wird beim Start gar "
     "nicht erst gesucht, der Hauptbildschirm zeigt statt der Gewichte einen "
     "Hinweis und trägt an der Stelle von TARE nichts mehr, der Knopf "
     "\"Gewicht updaten\" wird zum Lagerort-Knopf, und Kalibrierung und "
@@ -2341,7 +2332,7 @@ const char* const STRINGS[][3] = {
     "\n\n"
     "Die Umstellung braucht einen Neustart.",
     "On: the device has a load cell and behaves exactly as before.\n\n"
-    "Off: the whole weighing side disappears. The NAU7802 is not even looked "
+    "Off: the whole weighing side disappears. The ADC is not even looked "
     "for at startup, the main screen carries a note instead of the weights and "
     "nothing where TARE used to be, the \"Update weight\" button becomes the "
     "location button, and calibration and bag weight leave this menu.\n\n"
@@ -2349,7 +2340,7 @@ const char* const STRINGS[][3] = {
     "against it, see the spool, give it a location and a printer. Without this "
     "switch such a device reports a fault it does not have, for good.\n\n"
     "Changing it needs a restart.",
-    "Activé : l'appareil a un capteur de pesée et fonctionne exactement comme avant.\n\nDésactivé : toute la partie pesée disparaît. Le NAU7802 n'est même plus recherché au démarrage, l'écran principal affiche un message à la place des poids et plus rien là où se trouvait TARE, le bouton « Envoyer le poids » devient le bouton « Emplacement », et Étalonnage et Poids du sachet disparaissent de ce menu.\n\nPrévu pour un appareil composé seulement d'un écran et d'un lecteur : poser un tag, voir la bobine, lui attribuer un emplacement et une imprimante. Sans ce réglage, un tel appareil signale en permanence une panne qu'il n'a pas.\n\nLe changement nécessite un redémarrage." },  // STR_SCALE_FITTED_INFO
+    "Activé : l'appareil a un capteur de pesée et fonctionne exactement comme avant.\n\nDésactivé : toute la partie pesée disparaît. Le convertisseur n'est même plus recherché au démarrage, l'écran principal affiche un message à la place des poids et plus rien là où se trouvait TARE, le bouton « Envoyer le poids » devient le bouton « Emplacement », et Étalonnage et Poids du sachet disparaissent de ce menu.\n\nPrévu pour un appareil composé seulement d'un écran et d'un lecteur : poser un tag, voir la bobine, lui attribuer un emplacement et une imprimante. Sans ce réglage, un tel appareil signale en permanence une panne qu'il n'a pas.\n\nLe changement nécessite un redémarrage." },  // STR_SCALE_FITTED_INFO
   { "Tags | Trocknung | Mehr", "Tags | Drying | More", "Tags | Séchage | Plus" },  // STR_TILE_SCALE_SUB_OFF
   { "Waage vorhanden",         "Scale fitted",         "Balance présente" },  // STR_W_SCALE_FITTED
   { "Aus, wenn das Gerät nur aus Display und Leser besteht. Braucht einen "

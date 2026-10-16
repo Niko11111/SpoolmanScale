@@ -9,9 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    strategy:
-      matrix:
-        env: [wt32-sc01-plus]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,8 +25,8 @@ jobs:
           python-version: '3.12'
       - name: Install PlatformIO
         run: pip install --upgrade platformio
-      - name: Build ${{ matrix.env }}
-        run: pio run -e ${{ matrix.env }}
+      - name: Build NAU7802 firmware
+        run: pio run -e wt32-sc01-plus
       - name: Refuse a binary an installed device could not take
         # Installs since v0.8.0 get 6 MB app slots (partitions.csv). Since
         # v0.8.3 the firmware may outgrow the 3 MB slots of scales flashed
@@ -37,10 +34,20 @@ jobs:
         # the web flasher instead of the update, and moves to the new table
         # over USB once. More than 6 MB fits no device at all.
         run: |
-          SIZE=$(stat -c %s .pio/build/${{ matrix.env }}/firmware.bin)
+          SIZE=$(stat -c %s .pio/build/wt32-sc01-plus/firmware.bin)
           echo "firmware.bin: $SIZE bytes of 6291456"
           if [ "$SIZE" -gt 6291456 ]; then
             echo "::error::firmware.bin is $SIZE bytes, more than the 6 MB app slot"
+            exit 1
+          fi
+      - name: Build HX711 firmware
+        run: pio run -e wt32-sc01-plus-hx711
+      - name: Refuse an HX711 binary larger than the app slot
+        run: |
+          SIZE=$(stat -c %s .pio/build/wt32-sc01-plus-hx711/firmware.bin)
+          echo "HX711 firmware.bin: $SIZE bytes of 6291456"
+          if [ "$SIZE" -gt 6291456 ]; then
+            echo "::error::HX711 firmware.bin is $SIZE bytes, more than the 6 MB app slot"
             exit 1
           fi
       - name: Read version from app_config.h
@@ -115,8 +122,10 @@ jobs:
           # built, not whatever webflasher/ happens to hold from the last public
           # release.
           VERSION=${{ steps.version.outputs.version }}
-          cp .pio/build/${{ matrix.env }}/firmware.bin SpoolmanScale.bin
-          cp .pio/build/${{ matrix.env }}/firmware.bin SpoolmanScale_${VERSION}.bin
+          cp .pio/build/wt32-sc01-plus/firmware.bin SpoolmanScale.bin
+          cp .pio/build/wt32-sc01-plus/firmware.bin SpoolmanScale_${VERSION}.bin
+          cp .pio/build/wt32-sc01-plus-hx711/firmware.bin SpoolmanScale_HX711.bin
+          cp .pio/build/wt32-sc01-plus-hx711/firmware.bin SpoolmanScale_HX711_${VERSION}.bin
       - name: Update the public web flasher
         # Public tags only. An internal beta.N build would otherwise switch the
         # flasher on the docs page to a test version that nobody outside the
@@ -124,13 +133,19 @@ jobs:
         if: "!contains(github.ref_name, '-beta.')"
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          cp .pio/build/${{ matrix.env }}/bootloader.bin webflasher/bootloader.bin
-          cp .pio/build/${{ matrix.env }}/partitions.bin  webflasher/partitions.bin
+          cp .pio/build/wt32-sc01-plus/bootloader.bin webflasher/bootloader.bin
+          cp .pio/build/wt32-sc01-plus/partitions.bin  webflasher/partitions.bin
           # otadata, blank: boots app0 after a flash. Without it a device that
           # last ran from app1 keeps booting the old firmware from there.
           cp "$(find ~/.platformio/packages -path '*framework-arduinoespressif32*' -name boot_app0.bin | head -1)" webflasher/boot_app0.bin
-          cp .pio/build/${{ matrix.env }}/firmware.bin    webflasher/SpoolmanScale.bin
+          cp .pio/build/wt32-sc01-plus/firmware.bin    webflasher/SpoolmanScale.bin
+          mkdir -p webflasher/hx711
+          cp .pio/build/wt32-sc01-plus-hx711/bootloader.bin webflasher/hx711/bootloader.bin
+          cp .pio/build/wt32-sc01-plus-hx711/partitions.bin  webflasher/hx711/partitions.bin
+          cp "$(find ~/.platformio/packages -path '*framework-arduinoespressif32*' -name boot_app0.bin | head -1)" webflasher/hx711/boot_app0.bin
+          cp .pio/build/wt32-sc01-plus-hx711/firmware.bin webflasher/hx711/SpoolmanScale.bin
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" manifest.json
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" manifest-hx711.json
           # The whole suffix is optional, in both directions. Without the
           # counter group a second beta.N in a row matched only the prefix and
           # produced "v0.6.3-beta.14.13"; without making "-beta" itself optional
@@ -154,18 +169,25 @@ jobs:
           # path, this covers the bytes.
           VERSION=${{ steps.version.outputs.version }}
           SHA=$(sha256sum SpoolmanScale.bin | cut -d' ' -f1)
+          SHA_HX711=$(sha256sum SpoolmanScale_HX711.bin | cut -d' ' -f1)
           # The size too: a device on the old 3 MB partition table compares it
           # with its app slot and offers the web flasher instead of an update
           # that would not fit. Firmware from before this ignores the key.
           SIZE=$(stat -c%s SpoolmanScale.bin)
-          python3 - "$VERSION" "$SHA" "$SIZE" <<'PY'
+          SIZE_HX711=$(stat -c%s SpoolmanScale_HX711.bin)
+          python3 - "$VERSION" "$SHA" "$SIZE" "$SHA_HX711" "$SIZE_HX711" <<'PY'
           import json, re, sys
           version, sha, size = sys.argv[1], sys.argv[2], int(sys.argv[3])
+          sha_hx711, size_hx711 = sys.argv[4], int(sys.argv[5])
           data = {
               "stable": "",
               "stable_sha256": "",
+              "stable_hx711": "",
+              "stable_hx711_sha256": "",
               "prerelease": "",
               "prerelease_sha256": "",
+              "prerelease_hx711": "",
+              "prerelease_hx711_sha256": "",
               "url": "https://github.com/Niko11111/SpoolmanScale/releases/latest",
           }
           try:
@@ -176,10 +198,16 @@ jobs:
           data["prerelease"] = version
           data["prerelease_sha256"] = sha
           data["prerelease_size"] = size
+          data["prerelease_hx711"] = version
+          data["prerelease_hx711_sha256"] = sha_hx711
+          data["prerelease_hx711_size"] = size_hx711
           if not re.search(r"-beta\.\d+$", version):
               data["stable"] = version
               data["stable_sha256"] = sha
               data["stable_size"] = size
+              data["stable_hx711"] = version
+              data["stable_hx711_sha256"] = sha_hx711
+              data["stable_hx711_size"] = size_hx711
           with open("version.json", "w") as f:
               json.dump(data, f, indent=2)
               f.write("\n")
@@ -187,7 +215,7 @@ jobs:
           PY
       - name: Publish the changed files to main
         run: |
-          # GitHub Pages serves version.json, index.html, manifest.json and
+          # GitHub Pages serves version.json, both manifests, index.html and
           # webflasher/ from main, so the files have to land there - but only
           # the files.
           #
@@ -204,8 +232,10 @@ jobs:
           mkdir -p /tmp/ci-out/webflasher
           cp version.json /tmp/ci-out/
           if [ -z "$(echo "$VERSION" | grep -E -- '-beta\.[0-9]+$')" ]; then
-            cp manifest.json index.html /tmp/ci-out/
+            cp manifest.json manifest-hx711.json index.html /tmp/ci-out/
             cp webflasher/bootloader.bin webflasher/partitions.bin webflasher/boot_app0.bin webflasher/SpoolmanScale.bin /tmp/ci-out/webflasher/
+            mkdir -p /tmp/ci-out/webflasher/hx711
+            cp webflasher/hx711/*.bin /tmp/ci-out/webflasher/hx711/
           fi
 
           git config user.name  "github-actions[bot]"
@@ -223,9 +253,12 @@ jobs:
           git add version.json
           if [ -f /tmp/ci-out/manifest.json ]; then
             cp /tmp/ci-out/manifest.json manifest.json
+            cp /tmp/ci-out/manifest-hx711.json manifest-hx711.json
             cp /tmp/ci-out/index.html index.html
             cp /tmp/ci-out/webflasher/*.bin webflasher/
-            git add manifest.json index.html webflasher/bootloader.bin webflasher/partitions.bin webflasher/boot_app0.bin webflasher/SpoolmanScale.bin
+            mkdir -p webflasher/hx711
+            cp /tmp/ci-out/webflasher/hx711/*.bin webflasher/hx711/
+            git add manifest.json manifest-hx711.json index.html webflasher/bootloader.bin webflasher/partitions.bin webflasher/boot_app0.bin webflasher/SpoolmanScale.bin webflasher/hx711/*.bin
           fi
 
           git diff --cached --quiet || git commit -m "CI: publish $VERSION"
@@ -244,5 +277,7 @@ jobs:
           files: |
             SpoolmanScale.bin
             SpoolmanScale_${{ steps.version.outputs.version }}.bin
+            SpoolmanScale_HX711.bin
+            SpoolmanScale_HX711_${{ steps.version.outputs.version }}.bin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
