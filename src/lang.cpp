@@ -2076,16 +2076,10 @@ const char* const STRINGS[][3] = {
     "One pin off and both modules are unpowered.\n\n"
     "Check pin 1 (5V, red), pin 2 (GND, black), and the signal pins for the "
     "selected ADC.",
-    "Ni le PN532 ni le convertisseur de la balance ne sont détectés.\n\n"
-    "Le câble à 7 broches doit être aligné à gauche dans la prise I/O à 8 broches. "
-    "Décalé d'une broche, les deux modules ne sont plus alimentés.\n\n"
-    "Vérifiez la broche 1 (5V, rouge), la broche 2 (GND, noir) et les signaux "
-    "du convertisseur sélectionné." },  // STR_DIAG_BUS_EMPTY_TEXT
+    "Ni le PN532 ni le convertisseur de la balance ne sont détectés.\n\nLe câble à 7 broches doit être aligné à gauche dans la prise I/O à 8 broches. Décalé d'une broche, les deux modules ne sont plus alimentés.\n\nVérifiez la broche 1 (5V, rouge), la broche 2 (GND, noir) et les signaux du convertisseur sélectionné." },  // STR_DIAG_BUS_EMPTY_TEXT
 
-  { "Waagen-ADC fehlt", "Scale ADC missing",
-    "Convertisseur de balance absent" },  // STR_DIAG_NAU_MISSING_BANNER
-  { "Waagen-ADC fehlt", "Scale ADC missing",
-    "Convertisseur de la balance absent" },  // STR_DIAG_NAU_MISSING_TITLE
+  { "Waagen-ADC fehlt", "Scale ADC missing", "Convertisseur de balance absent" },  // STR_DIAG_NAU_MISSING_BANNER
+  { "Waagen-ADC fehlt", "Scale ADC missing", "Convertisseur de la balance absent" },  // STR_DIAG_NAU_MISSING_TITLE
   { "Der ausgewählte Waagen-ADC ist nicht betriebsbereit. Prüfe die Versorgung (VIN/VCC), GND und "
     "die Signalpins. Für NAU7802: SDA/SCL (Pins 3/4); für HX711: DOUT/SCK "
     "(Pins 6/5). Der ausgewählte Firmware-ADC muss zur Hardware passen.\n\n"
@@ -2096,12 +2090,7 @@ const char* const STRINGS[][3] = {
     "firmware ADC selection must match the hardware.\n\n"
     "If this device was deliberately built without a scale, switch it off "
     "under Settings > Scale.",
-    "Le convertisseur sélectionné n'est pas prêt. Vérifiez l'alimentation (VIN/VCC), GND et ses "
-    "signaux. Le NAU7802 utilise SDA/SCL (broches 3/4) ; le HX711 utilise "
-    "DOUT/SCK (broches 6/5). Le choix du convertisseur dans le firmware doit "
-    "correspondre au matériel.\n\n"
-    "Si cet appareil est volontairement sans balance, désactivez-la dans "
-    "Réglages > Balance." },  // STR_DIAG_NAU_MISSING_TEXT
+    "Le convertisseur sélectionné n'est pas prêt. Vérifiez l'alimentation (VIN/VCC), GND et ses signaux. Le NAU7802 utilise SDA/SCL (broches 3/4) ; le HX711 utilise DOUT/SCK (broches 6/5). Le choix du convertisseur dans le firmware doit correspondre au matériel.\n\nSi cet appareil est volontairement sans balance, désactivez-la dans Réglages > Balance." },  // STR_DIAG_NAU_MISSING_TEXT
 
   { "NFC-Reader fehlt (PN532)", "NFC reader missing (PN532)",
     "Lecteur NFC absent (PN532)" },  // STR_DIAG_PN532_MISSING_BANNER

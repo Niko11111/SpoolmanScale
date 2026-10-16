@@ -18,7 +18,7 @@ For the project overview, features, and flashing instructions, see the [README](
 | Debug Board (recommended) | ZXACC-ESPDB | [AliExpress](https://a.aliexpress.com/_Eu5Y0Ug) |
 | NFC Reader | PN532 | [AliExpress](https://a.aliexpress.com/_ExScN8M) |
 | Scale ADC | NAU7802 or HX711 module | [NAU7802](https://a.aliexpress.com/_EvlFNj2) |
-| HX711 regulator (HX711 builds only) | AMS1117-3.3 V regulator module (5 V → 3.3 V) | — |
+| HX711 regulator (HX711 builds only) | AMS1117-3.3 V regulator module (5 V → 3.3 V) | - |
 | Load Cell | YZC-133 2 kg beam cell (5 kg works too) | [AliExpress](https://a.aliexpress.com/_EuhhVF2) |
 | Connector Cables | STEMMA QT / JST cables | [AliExpress](https://a.aliexpress.com/_Ezjg6fQ) |
 | Connector Cables (recommended) | Micro JST 1.0 SH 5-pin – easier assembly | [Amazon](https://amzn.eu/d/0aKJ4Va9) |
