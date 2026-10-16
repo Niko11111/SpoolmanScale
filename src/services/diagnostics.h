@@ -11,7 +11,7 @@
 //
 // The firmware already knew the answer in almost every support case that
 // reached the Discord - it just never said so. The two red header chips
-// ("SCL!", "NFC!") are four characters wide, carry no explanation and lead
+// ("ADC!", "NFC!") are four characters wide, carry no explanation and lead
 // nowhere, so a wiring mistake and a missing calibration look identical from
 // the outside.
 //

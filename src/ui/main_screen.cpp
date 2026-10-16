@@ -216,7 +216,7 @@ void buildUI() {
   // it simply saves an object that could never say anything.
   if (g_scale_fitted) {
     lbl_hdr_scl = lv_label_create(hdr);
-    lv_label_set_text(lbl_hdr_scl, "SCL");
+    lv_label_set_text(lbl_hdr_scl, "ADC");
     lv_obj_set_style_text_color(lbl_hdr_scl, lv_color_hex(UI_COL_HDR_OFF), 0);
     lv_obj_set_style_text_font(lbl_hdr_scl, &lv_font_montserrat_ext_12, 0);
   }
