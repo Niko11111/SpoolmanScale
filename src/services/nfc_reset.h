@@ -37,6 +37,12 @@ bool nfcResetVerified();
 // binds its reset pin in the constructor.
 bool nfcResetSelfTest();
 
+// The same probe, run once per device without anyone asking, so a scale whose
+// wire is on RSTPDN uses it from the next boot instead of only after someone
+// finds System > Check NFC reset. Repeated on later boots until the reader
+// was there to answer it. Call from the loop task, with the reader up.
+void nfcResetAutoTest();
+
 // Whether the reader has ever had to be re-initialised on this device. The
 // hint is only worth showing to people this has actually happened to: on a
 // scale whose reader has never stumbled, the modification buys nothing.

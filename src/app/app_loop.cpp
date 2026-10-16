@@ -973,6 +973,9 @@ void appLoop() {
   static bool nfc_hint_this_boot = false;
   if (!hint_checked && millis() > 12000) {
     hint_checked = true;
+    // Before the hint: a scale whose wire already sits on RSTPDN finds out
+    // here and is never told to move it.
+    if (nfc_ok) nfcResetAutoTest();
     if (nfcResetHintDue()) { showNfcResetHint(); nfc_hint_this_boot = true; }
   }
   // The storage note waits for a boot on which the reader has nothing to say,

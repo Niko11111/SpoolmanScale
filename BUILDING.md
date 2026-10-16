@@ -95,8 +95,7 @@ With the HX711, only the PN532 is on the I2C bus. The HX711 is not an I2C device
 | 4 | Green | GPIO11 (SCL) | PN532 SCL + NAU7802 SCL | PN532 SCL |
 | 5 | Blue | GPIO12 | unused | HX711 `SCK` (also labelled `CLK` / `PD_SCK`) |
 | 6 | White | GPIO13 | unused | HX711 `DOUT` (also labelled `DT` / `DAT`) |
-| 7 | Brown | GPIO14 | PN532 RST | PN532 RST |
-| 8 | – | GPIO21 | not connected (7-pin cable sits flush left) | not connected |
+| 7 | Brown | GPIO14 | PN532 RSTPDN | PN532 RSTPDN |
 
 ### HX711 wiring
 
@@ -150,7 +149,9 @@ If you use a 5-pin JST SH 1.0mm connector on the PN532 pigtail, the mount openin
 | 2 | Red | 5 V | Pin 1 (Red) |
 | 3 | Yellow | SDA | Pin 3 (Yellow) |
 | 4 | White | SCL | Pin 4 (Green) |
-| 5 | Orange | RST | Pin 7 (Brown) |
+| 5 | Orange | RSTPDN | Pin 7 (Brown) |
+
+> Solder the reset wire to the pad labelled **RSTPDN**, not **RSTO**. RSTO is an output of the module and cannot reset the reader. The scale checks the wire once on its own shortly after the first boot; with the wire on RSTPDN it can then reset a reader that locks up instead of needing a power cycle. The result is shown under **System → Check NFC reset**.
 
 ### NAU7802 – STEMMA QT Connector (JST SH 1.0mm 4-pin)
 

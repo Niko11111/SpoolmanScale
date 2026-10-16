@@ -13,6 +13,7 @@
 #define KEY_NEVER      "rst_never"
 #define KEY_BOOTS      "rst_boots"
 #define KEY_DUE_AT     "rst_due_at"
+#define KEY_AUTO       "rst_auto"
 
 // How long "later" lasts. Boots rather than days: the clock needs NTP and a
 // scale that sits unplugged between prints would otherwise be nagged on the
@@ -29,6 +30,7 @@ static bool     s_recovery = false;
 static bool     s_never    = false;
 static uint32_t s_boots    = 0;
 static uint32_t s_due_at   = 0;
+static bool     s_auto     = false;
 
 void nfcResetLoad() {
   s_verified = prefsGetBool(KEY_VERIFIED, false);
@@ -36,11 +38,19 @@ void nfcResetLoad() {
   s_never    = prefsGetBool(KEY_NEVER,    false);
   s_boots    = prefsGetUInt(KEY_BOOTS,   0) + 1;
   s_due_at   = prefsGetUInt(KEY_DUE_AT,  0);
+  s_auto     = prefsGetBool(KEY_AUTO,    false);
   prefsPutUInt(KEY_BOOTS, s_boots);
 }
 
 int8_t nfcResetPinForBoot() {
+#if SCALE_ADC_HX711
+  // Every HX711 scale is a build from after the wiring was corrected, so the
+  // line is trusted without a measurement. GPIO12, the placeholder of the
+  // NAU7802 build, is the HX711's clock in this one.
+  return hw_pins::PN532_RESET_WIRE;
+#else
   return s_verified ? hw_pins::PN532_RESET_WIRE : hw_pins::PN532_RESET_SAFE;
+#endif
 }
 
 bool nfcResetVerified() { return s_verified; }
@@ -74,6 +84,16 @@ bool nfcResetSelfTest() {
          back ? "answers" : "silent", (unsigned long)version,
          works ? "line works" : "no effect");
   return works;
+}
+
+void nfcResetAutoTest() {
+  if (s_auto) return;
+  nfcResetSelfTest();
+  // Only a probe the reader came back from counts. One that could not even
+  // reach the reader says nothing about the line, so it runs again next boot.
+  if (!nfcHardwarePing()) return;
+  s_auto = true;
+  prefsPutBool(KEY_AUTO, true);
 }
 
 bool nfcReaderNeededRecovery() { return s_recovery; }
