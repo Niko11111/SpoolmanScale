@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        env: [wt32-sc01-plus]
+        env: [wt32-sc01-plus, wt32-sc01-plus-hx711]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

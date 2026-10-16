@@ -752,7 +752,7 @@ void appLoop() {
     // The second writer of scl_ok, and it has to ask the same question as the
     // 5 s probe: a chip that is wired but switched off in the settings must
     // not come back as present, or the header lights up again.
-    if (g_scale_fitted) scl_ok = scaleHardwarePresent();
+    if (g_scale_fitted) scl_ok = scaleHardwareProbe();
     // Someone who just touched the wiring gets a fresh set of attempts at
     // bringing the scale back, not the remainder of an old one. The 5 s
     // watchdog makes them, so the stall stays where it always was.
@@ -1270,12 +1270,8 @@ void appLoop() {
     lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_WARN), 0);
   }
 
-  // The ADC can leave the bus while the device is running - a plug working
-  // loose is the usual way. Caught here rather than left to the 5 s probe
-  // below, because until it is noticed the firmware invents weights: a failed
-  // register read is all ones through Adafruit_BusIO, which available() reads
-  // as "conversion ready" and read() as a sample of -1. Tare or calibrate on
-  // that and the nonsense is stored for good.
+  // The ADC can disconnect while the device is running. Catch it before tare,
+  // calibration, or weight updates can consume an invalid sample.
   perfSection("scale");
   if (scale_ready && millis() - last_scale_ms >= 200 && !scaleHardwarePresent()) {
     last_scale_ms = millis();
@@ -1287,17 +1283,18 @@ void appLoop() {
     scale_weight_g = 0.0f;
     if (lbl_scale_weight) lv_label_set_text(lbl_scale_weight, "---");
     updateHeaderStatus();
-    Serial.println("Scale: NAU7802 stopped answering, readings suspended");
-    logSD("Scale: NAU7802 stopped answering");
+    Serial.printf("Scale: %s stopped responding, readings suspended\n", SCALE_ADC_NAME);
+    logSDf("Scale: %s stopped responding", SCALE_ADC_NAME);
   }
 
-  // NAU7802: read weight every 200ms and update labels.
+  // Read the selected ADC every 200ms and update labels.
   // The availability check matters when the loop stalls, for example during a
   // long NFC scan: without it the same ADC sample is read twice and counted
   // twice in the moving average below.
-  if (scale_ready && millis() - last_scale_ms >= 200 && scaleHardwareAvailable()) {
+  int32_t raw;
+  if (scale_ready && millis() - last_scale_ms >= 200 &&
+      scaleHardwareAvailable() && scaleHardwareReadRaw(&raw)) {
     last_scale_ms = millis();
-    int32_t raw = scaleHardwareReadRaw();
     float raw_g = (float)(raw - zero_offset) / cal_factor;
 
     // Moving average over SCALE_FILTER_SIZE readings
@@ -1704,16 +1701,15 @@ void appLoop() {
     }
   }
 
-  // Periodic NAU7802 I2C ping every 5s (independent of WiFi), and the way
-  // back: a chip that returns has been through a power cycle, so it lost its
-  // LDO, gain and rate settings and has to be set up again. Same shape as the
+  // Periodic ADC presence/readiness check every 5s (independent of WiFi), and
+  // the way back: a chip that returns has to be initialized again. Same shape as the
   // NFC reader watchdog further down - the alternative is a device that stays
   // dead until someone restarts it, over a plug that is already seated again.
   {
     static unsigned long last_scl_check_ms = 0;
     // A scale that failed at boot counts as lost from the first pass on. It
     // used to be skipped, so a plug pushed back in after the diagnosis said
-    // "NAU7802 missing" only took effect after a restart. Decided once, here:
+    // "Scale ADC missing" only took effect after a restart. Decided once, here:
     // a scale switched on in the settings later is still the restart's job,
     // because the home screen was built without it.
     static bool boot_state_seen = false;
@@ -1726,7 +1722,7 @@ void appLoop() {
     if (g_scale_fitted && millis() - last_scl_check_ms >= 5000) {
       last_scl_check_ms = millis();
       bool prev = scl_ok;
-      scl_ok = scaleHardwarePresent();
+      scl_ok = scaleHardwareProbe();
       if (scl_ok && !scale_ready && scale_lost &&
           scale_recover_tries < SCALE_RECOVER_ATTEMPTS) {
         scale_recover_tries++;
@@ -1736,8 +1732,8 @@ void appLoop() {
           scale_ready = true;
           scale_lost = false;
           resetScaleFilter();
-          Serial.println("Scale: NAU7802 back on the bus");
-          logSD("Scale: NAU7802 recovered");
+          Serial.printf("Scale: %s recovered\n", SCALE_ADC_NAME);
+          logSDf("Scale: %s recovered", SCALE_ADC_NAME);
         } else {
           scl_ok = false;
           Serial.printf("Scale: re-init failed (%u/%u)\n",

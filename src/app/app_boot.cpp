@@ -212,10 +212,10 @@ void appSetup() {
   // and there is nothing here to wait for. scl_ok and scale_ready stay false,
   // which is what every consumer already asks.
   if (!g_scale_fitted) {
-    Serial.println("Scale switched off in the settings, NAU7802 not probed");
-    logSD("Scale switched off in the settings, NAU7802 not probed");
+    Serial.printf("Scale switched off in the settings, %s not probed\n", SCALE_ADC_NAME);
+    logSDf("Scale switched off in the settings, %s not probed", SCALE_ADC_NAME);
   } else {
-    Serial.print("Looking for NAU7802... ");
+    Serial.printf("Looking for %s... ", SCALE_ADC_NAME);
     if (scaleHardwareBegin(&I2C_EXT, [](){
       Serial.print(".");
       delay(100);
@@ -226,12 +226,10 @@ void appSetup() {
       Serial.printf("OK! cal_factor=%.4f  zero_offset=%d\n", cal_factor, zero_offset);
       logSDf("Scale ready (cal=%.4f zero=%d)", cal_factor, zero_offset);
     } else {
-      // Two ways to land here: the chip did not answer on 0x2A at all, or it
-      // answered but never finished calibrating. scaleHardwareBegin() prints
-      // which one, so this must not claim a cause of its own.
-      Serial.printf("ERROR! Scale unavailable (NAU7802 on 0x%02X, bus: %s)\n",
-                    I2C_ADDR_NAU7802, i2cScanLast());
-      logSDf("Scale init FAILED (bus: %s)", i2cScanLast());
+      // The backend reports its own failure cause; do not imply every ADC is
+      // attached to the I2C bus.
+      Serial.printf("ERROR! Scale unavailable (%s)\n", SCALE_ADC_NAME);
+      logSDf("Scale init FAILED (%s)", SCALE_ADC_NAME);
     }
   }
 

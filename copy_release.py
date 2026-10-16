@@ -27,9 +27,13 @@ def copy_release_files(source, target, env):
 
     print(f"copy_release: version = {version}")
 
+    is_hx711 = env.subst("$PIOENV") == "wt32-sc01-plus-hx711"
+
     # Ordnerstruktur anlegen
     release_base    = os.path.join(project_dir, "releases", version)
     webflasher_dir  = os.path.join(release_base, "webflasher")
+    if is_hx711:
+        webflasher_dir = os.path.join(webflasher_dir, "hx711")
     ota_github_dir  = os.path.join(release_base, "ota_github")
     ota_browser_dir = os.path.join(release_base, "ota_browser")
     source_dir      = os.path.join(release_base, "source")
@@ -37,7 +41,8 @@ def copy_release_files(source, target, env):
     for d in [webflasher_dir, ota_github_dir, ota_browser_dir, source_dir]:
         os.makedirs(d, exist_ok=True)
 
-    # Webflasher - alle drei Binaries
+    # Webflasher binaries for the selected ADC profile. Keep the HX711 payload
+    # in its own subdirectory so a local build cannot replace the NAU7802 image.
     for src_name, dst_name in [
         ("bootloader.bin", "bootloader.bin"),
         ("partitions.bin", "partitions.bin"),
@@ -50,6 +55,17 @@ def copy_release_files(source, target, env):
             print(f"copy_release: -> webflasher/{dst_name}")
         else:
             print(f"copy_release: WARNING {src_name} not found at {src}")
+
+    # The web manifest also references the boot_app0 metadata image. It is
+    # supplied by a previously populated webflasher directory when available.
+    app0_candidates = [
+        os.path.join(project_dir, "webflasher", "hx711" if is_hx711 else "", "boot_app0.bin"),
+        os.path.join(project_dir, "webflasher", "boot_app0.bin"),
+    ]
+    for app0_src in app0_candidates:
+        if os.path.exists(app0_src):
+            shutil.copy2(app0_src, os.path.join(webflasher_dir, "boot_app0.bin"))
+            break
 
     firmware_bin = os.path.join(build_dir, "firmware.bin")
 
@@ -83,15 +99,16 @@ def copy_release_files(source, target, env):
             print(f"copy_release: -> source/{f}")
 
     # manifest.json updaten + in Release-Ordner kopieren
-    manifest_path = os.path.join(project_dir, "manifest.json")
+    manifest_name = "manifest-hx711.json" if is_hx711 else "manifest.json"
+    manifest_path = os.path.join(project_dir, manifest_name)
     if os.path.exists(manifest_path):
         with open(manifest_path, "r") as f:
             manifest = json.load(f)
         manifest["version"] = version
         with open(manifest_path, "w") as f:
             json.dump(manifest, f, indent=2)
-        shutil.copy2(manifest_path, os.path.join(release_base, "manifest.json"))
-        print(f"copy_release: manifest.json version -> {version}")
+        shutil.copy2(manifest_path, os.path.join(release_base, manifest_name))
+        print(f"copy_release: {manifest_name} version -> {version}")
 
     print(f"copy_release: done -> releases/{version}/")
 

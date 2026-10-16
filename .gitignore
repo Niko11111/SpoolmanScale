@@ -40,6 +40,7 @@ images/images_not_for_github/
 !copy_release.py
 !lvgl_speed.py
 !manifest.json
+!manifest-hx711.json
 !version.json
 !README.md
 !BUILDING.md

@@ -75,21 +75,21 @@ void diagnosticsTick() {
   first_tick   = false;
 
   // Probed live rather than read from the boot scan, so a connector that is
-  // pushed back in takes effect without a restart. 0x2A is already answered by
-  // the scale watchdog every 5 s, so only the reader costs a transaction here.
+  // pushed back in takes effect without a restart. The ADC watchdog tracks its
+  // own backend, so only the reader costs an I2C transaction here.
   pn532_on_bus = i2cPresent(I2C_EXT, I2C_ADDR_PN532);
-  // A device built without a load cell has no NAU7802 to miss, so its silence
+  // A device built without a load cell has no ADC to miss, so its silence
   // is the configuration rather than a finding. Asked as "is one missing" and
   // not as "is one there": the reader's own verdicts below have to go on
   // working, and pretending the chip answers would break the first branch.
-  const bool nau_missing = g_scale_fitted && !scl_ok;
+  const bool scale_missing = g_scale_fitted && !scl_ok;
 
   DiagCode next = DIAG_NONE;
 
-  if (!pn532_on_bus && nau_missing) {
+  if (!pn532_on_bus && scale_missing) {
     next = DIAG_BUS_EMPTY;
-  } else if (nau_missing) {
-    next = DIAG_NAU_MISSING;
+  } else if (scale_missing) {
+    next = DIAG_SCALE_MISSING;
   } else if (!pn532_on_bus) {
     next = DIAG_PN532_MISSING;
   } else if (!nfc_ok) {
@@ -158,7 +158,7 @@ DiagCode diagnosticsCurrent() {
 int diagBannerString(DiagCode c) {
   switch (c) {
     case DIAG_BUS_EMPTY:          return STR_DIAG_BUS_EMPTY_BANNER;
-    case DIAG_NAU_MISSING:        return STR_DIAG_NAU_MISSING_BANNER;
+    case DIAG_SCALE_MISSING:      return STR_DIAG_NAU_MISSING_BANNER;
     case DIAG_PN532_MISSING:      return STR_DIAG_PN532_MISSING_BANNER;
     case DIAG_PN532_MUTE:         return STR_DIAG_PN532_MUTE_BANNER;
     case DIAG_SCALE_UNCALIBRATED: return STR_DIAG_UNCAL_BANNER;
@@ -171,7 +171,7 @@ int diagBannerString(DiagCode c) {
 int diagTitleString(DiagCode c) {
   switch (c) {
     case DIAG_BUS_EMPTY:          return STR_DIAG_BUS_EMPTY_TITLE;
-    case DIAG_NAU_MISSING:        return STR_DIAG_NAU_MISSING_TITLE;
+    case DIAG_SCALE_MISSING:      return STR_DIAG_NAU_MISSING_TITLE;
     case DIAG_PN532_MISSING:      return STR_DIAG_PN532_MISSING_TITLE;
     case DIAG_PN532_MUTE:         return STR_DIAG_PN532_MUTE_TITLE;
     case DIAG_SCALE_UNCALIBRATED: return STR_DIAG_UNCAL_TITLE;
@@ -184,7 +184,7 @@ int diagTitleString(DiagCode c) {
 int diagTextString(DiagCode c) {
   switch (c) {
     case DIAG_BUS_EMPTY:          return STR_DIAG_BUS_EMPTY_TEXT;
-    case DIAG_NAU_MISSING:        return STR_DIAG_NAU_MISSING_TEXT;
+    case DIAG_SCALE_MISSING:      return STR_DIAG_NAU_MISSING_TEXT;
     case DIAG_PN532_MISSING:      return STR_DIAG_PN532_MISSING_TEXT;
     case DIAG_PN532_MUTE:         return STR_DIAG_PN532_MUTE_TEXT;
     case DIAG_SCALE_UNCALIBRATED: return STR_DIAG_UNCAL_TEXT;
@@ -201,7 +201,7 @@ DiagAction diagAction(DiagCode c) {
     // Everything the user has to fix with their hands gets the same offer:
     // look again once you have touched it.
     case DIAG_BUS_EMPTY:
-    case DIAG_NAU_MISSING:
+    case DIAG_SCALE_MISSING:
     case DIAG_PN532_MISSING:
     case DIAG_PN532_MUTE:         return DIAG_ACT_RECHECK;
     // A swapped pair and a loose wire both mean opening the enclosure. There
@@ -215,7 +215,7 @@ const char *diagName(DiagCode c) {
   switch (c) {
     case DIAG_NONE:               return "none";
     case DIAG_BUS_EMPTY:          return "i2c bus empty";
-    case DIAG_NAU_MISSING:        return "NAU7802 missing";
+    case DIAG_SCALE_MISSING:      return "Scale ADC missing";
     case DIAG_PN532_MISSING:      return "PN532 missing";
     case DIAG_PN532_MUTE:         return "PN532 mute";
     case DIAG_SCALE_UNCALIBRATED: return "scale uncalibrated";

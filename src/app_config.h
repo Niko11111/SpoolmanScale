@@ -69,6 +69,18 @@
 #define I2C_ADDR_PN532      0x24
 #define I2C_ADDR_NAU7802    0x2A
 
+// HX711 builds are selected by the wt32-sc01-plus-hx711 PlatformIO
+// environment. The ordinary environment remains the NAU7802 default.
+#ifndef SCALE_ADC_HX711
+#define SCALE_ADC_HX711 0
+#endif
+
+#if SCALE_ADC_HX711
+#define SCALE_ADC_NAME "HX711"
+#else
+#define SCALE_ADC_NAME "NAU7802"
+#endif
+
 // What a calibration is allowed to produce. A failed I2C read comes back as
 // all ones through Adafruit_BusIO, so an absent ADC delivers a sample of -1
 // for every reading: tare and calibration then agree perfectly and the factor

@@ -241,10 +241,9 @@ void buildFactorScreen() {
       lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_AMBER_LINE), 0);
       lv_obj_add_event_cb(btn, [](lv_event_t *e) {
         if (!lbl_factor_result) return;
-        // Presence asked as well as scale_ready: an ADC that left the bus
-        // reads back as all ones, and tare would store -1 as the zero point.
-        if (scale_ready && scaleHardwarePresent()) {
-          int32_t raw = scaleHardwareReadRaw();
+        // A failed or not-yet-ready conversion must never become a tare value.
+        int32_t raw;
+        if (scale_ready && scaleHardwareReadRaw(&raw)) {
           saveTareOffset(raw);
           scale_weight_g = 0.0f;
           resetScaleFilter();
@@ -319,14 +318,16 @@ void buildFactorScreen() {
   lv_obj_add_event_cb(btn_ok_f, [](lv_event_t *e) {
     if (!lbl_factor_result) return;
     float known_g = atof(factor_input);
+    int32_t raw;
     if (!scale_ready || !scaleHardwarePresent()) {
       lv_label_set_text(lbl_factor_result, T(STR_TARE_NOT_READY));
     } else if (known_g <= 0) {
       lv_label_set_text(lbl_factor_result, T(STR_CAL_ZERO_ERR));
     } else if (known_g < CAL_KNOWN_MIN_G || known_g > CAL_KNOWN_MAX_G) {
       lv_label_set_text(lbl_factor_result, T(STR_CAL_RANGE_ERR));
+    } else if (!scaleHardwareReadRaw(&raw)) {
+      lv_label_set_text(lbl_factor_result, T(STR_TARE_NOT_READY));
     } else {
-      int32_t raw = scaleHardwareReadRaw();
       float factor = (float)(raw - zero_offset) / known_g;
       // The last line of defence. A reading the bus never delivered is -1, and
       // if tare stored -1 too the difference is zero: the factor collapses and

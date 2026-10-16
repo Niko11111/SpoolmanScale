@@ -74,7 +74,7 @@ Over 200 people are running a SpoolmanScale, and it is tested daily against a Sp
 - 🔗 **Third-party spool linking** – place any NTAG sticker or MIFARE Classic card → select vendor and material → pick from a filtered list → linked and done. Snapmaker tags can be read as well (an option in the web settings)
 - ✍️ **Writing NFC tags** – the scale does not just read tags, it writes them, with every backend and without help from the server. Link a spool and the data goes on the tag right away, silently or after a prompt, whichever you prefer. Notices later on when tag and inventory drift apart and offers to put it right. Four formats: OpenSpool, FilaMan, Anycubic ACE, or erase. A spool can carry a tag on each side: right after linking, the scale asks for the second one. Tap the NFC chip in the header to see what is on the tag on the reader
 - 📋 **Copy spool** – running low? Place a new spool on the scale, tap Copy Spool, and SpoolmanScale creates an identical entry, tags the NFC chip and logs the current weight, all in one step
-- ⚖️ **Live weight (NAU7802)** – moving average filter, TARE, live diff against the remaining weight in your database
+- ⚖️ **Live weight (NAU7802 or HX711)** – moving average filter, TARE, live diff against the remaining weight in your database
 - 🔀 **Three backends** – [Spoolman](https://github.com/Donkie/Spoolman), [FilaMan](https://github.com/Fire-Devils/filaman-system) or [BamBuddy](https://github.com/maziggy/BamBuddy), switchable in the settings. Update remaining weight, set initial and spool weight (per spool / filament / vendor), log drying dates, set locations, archive and restore spools. BamBuddy can keep its own inventory or run against a Spoolman server behind it - the scale works out which and writes to the right one
 - 🖨️ **AMS view** – with FilaMan and BamBuddy: every AMS unit with its bays, material, colour, remaining filament, humidity and temperature. Tap a bay and a card shows the spool behind it, and you can record a drying right there, without taking the spool out
 - 📍 **Locations** – assign and view storage locations on the scale, with an optional popup when you take a spool off
@@ -101,7 +101,7 @@ Over 200 people are running a SpoolmanScale, and it is tested daily against a Sp
 | MCU + Display | WT32-SC01 Plus (ESP32-S3, 480×320, ST7796) | [AliExpress](https://de.aliexpress.com/item/1005006050379552.html) |
 | Debug Board (not necessary) | ZXACC-ESPDB | [AliExpress](https://a.aliexpress.com/_Eu5Y0Ug) |
 | NFC Reader | PN532 | [AliExpress](https://a.aliexpress.com/_ExScN8M) |
-| Scale ADC | NAU7802 (Adafruit recommended) | [AliExpress](https://de.aliexpress.com/item/1005011685825986.html) |
+| Scale ADC | NAU7802 or HX711 module | [NAU7802](https://de.aliexpress.com/item/1005011685825986.html) |
 | Load Cell | YZC-133 **2 kg** beam cell (5 kg works too) | [AliExpress](https://a.aliexpress.com/_EuhhVF2) |
 | USB-C Panel Mount 90° | 30 cm, Left/Right Angled, full USB-C PD + data | [AliExpress](https://de.aliexpress.com/item/1005003488021890.html) |
 | Connector Cables | STEMMA QT / JST cables | [AliExpress](https://de.aliexpress.com/item/1005011904682215.html) |
