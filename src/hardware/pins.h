@@ -26,11 +26,10 @@ constexpr int8_t I2C_EXT_SCL = 11;   // PN532 + NAU7802 (NAU7802 profile)
 // a measurement on this very device says the wire was moved - see
 // services/nfc_reset.h.
 constexpr int8_t PN532_RESET_WIRE = 14;   // EXT_IO5, connector pin 7, brown
-// The HX711 build has no placeholder: it always uses PN532_RESET_WIRE, and
-// GPIO12 is the HX711's clock there - see nfcResetPinForBoot().
-#if !SCALE_ADC_HX711
-constexpr int8_t PN532_RESET_SAFE = 12;   // EXT_IO3, pin 5; not wired to PN532 RST in documented layout
-#endif
+// GPIO21 is EXT_IO6, connector pin 8, which the 7-pin cable leaves empty. Not
+// GPIO1/2: those run to the board's RS485 transceiver, and the library drives
+// this pin push-pull on every begin().
+constexpr int8_t PN532_RESET_SAFE = 21;   // Unwired placeholder in both ADC builds
 
 // The PN532's IRQ line is not wired, and in I2C mode the library never reads
 // it: isready() answers from the bus, and the branch that would call
@@ -50,7 +49,7 @@ constexpr int8_t PN532_IRQ_UNUSED = 13;
 
 // HX711 uses the otherwise-unused extension connector signals: GPIO12 on
 // connector pin 5 for SCK and GPIO13 on pin 6 for DOUT. The PN532 driver's
-// IRQ placeholder moves to GPIO2 in that profile; it has no reset placeholder.
+// unwired placeholder pins move to GPIO21/2 in that profile to avoid conflict.
 constexpr int8_t HX711_SCK = 12;
 constexpr int8_t HX711_DOUT = 13;
 

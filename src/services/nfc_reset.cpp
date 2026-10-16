@@ -43,14 +43,7 @@ void nfcResetLoad() {
 }
 
 int8_t nfcResetPinForBoot() {
-#if SCALE_ADC_HX711
-  // Every HX711 scale is a build from after the wiring was corrected, so the
-  // line is trusted without a measurement. GPIO12, the placeholder of the
-  // NAU7802 build, is the HX711's clock in this one.
-  return hw_pins::PN532_RESET_WIRE;
-#else
   return s_verified ? hw_pins::PN532_RESET_WIRE : hw_pins::PN532_RESET_SAFE;
-#endif
 }
 
 bool nfcResetVerified() { return s_verified; }
@@ -89,8 +82,8 @@ bool nfcResetSelfTest() {
 void nfcResetAutoTest() {
   if (s_auto) return;
   nfcResetSelfTest();
-  // Only a probe the reader came back from counts. One that could not even
-  // reach the reader says nothing about the line, so it runs again next boot.
+  // Only a completed probe counts. If the reader did not come back, retry on
+  // a later boot instead of permanently treating an interrupted test as done.
   if (!nfcHardwarePing()) return;
   s_auto = true;
   prefsPutBool(KEY_AUTO, true);
