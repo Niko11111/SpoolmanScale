@@ -67,8 +67,10 @@ jobs:
           fi
       # Here rather than in the house-rules job: both tools measure icons from
       # LVGL's symbol header, and that only exists once the build has unpacked
-      # the library.
+      # the library. Once per run: both builds share lang.cpp, and the tools
+      # look for LVGL under the wt32-sc01-plus environment's libdeps only.
       - name: French column and width budgets
+        if: matrix.env == 'wt32-sc01-plus'
         run: |
           if [ -f tools/lang_fr.py ]; then
             python3 tools/lang_fr.py check
