@@ -154,3 +154,5 @@ extern bool printer_forget_pending;
 // The label of the spool on the pad, from the More info header. Rendered
 // and printed from the loop: the print starts the BLE stack and blocks.
 extern bool print_spool_label_pending;
+// sdfp fork: the same, for the spool's filament label (label service only).
+extern bool print_filament_label_pending;

@@ -2793,6 +2793,16 @@ const char* const STRINGS[][3] = {
   { "Etikett drucken",                 "Print label",                "Imprimer" },  // STR_PRN_LABEL_PRINT
   { "Keine bekannte Spule aufgelegt.", "No known spool on the pad.",
     "Aucune bobine connue posée." },  // STR_PRN_ERR_NO_SPOOL
+  { "Etikett Spule",                   "Spool label",                "Étiq. bobine" },  // STR_PRN_LABEL_SPOOL
+  { "Etikett Filament",                "Filament label",             "Étiq. filament" },  // STR_PRN_LABEL_FILAMENT
+  { "Etikettendienst nicht erreichbar.", "Label service not reachable.",
+    "Service d'étiquettes injoignable." },  // STR_PRN_ERR_LABEL_SVC
+  { "Etikettendienst",                 "Label service",              "Service d'étiquettes" },  // STR_W_P_SVC_TITLE
+  { "Adresse",                         "Address",                    "Adresse" },  // STR_W_P_SVC_ADDR
+  { "Der Dienst, der die Etiketten rendert, z. B. http://192.168.1.20:8710 (sdfp). Gesetzt: Mehr Info bietet ein Spulen- und ein Filament-Etikett. Leer: das eigene Etikett der Waage.",
+    "The service that renders the labels, e.g. http://192.168.1.20:8710 (sdfp). Set: More info offers a spool label and a filament label. Empty: the scale's own label.",
+    "Le service qui génère les étiquettes, p. ex. http://192.168.1.20:8710 (sdfp). Renseigné : Plus d'infos propose une étiquette bobine et une étiquette filament. Vide : l'étiquette de la balance." },  // STR_W_P_SVC_HINT
+  { "Muss mit http:// beginnen.",      "Must start with http://.",   "Doit commencer par http://." },  // STR_W_P_SVC_BAD
   // The captions on a printed label, short: the lines are 16 px on a 40 mm roll
   { "Farbe", "Colour", "Couleur" },  // STR_LBL_L_COLOR
   { "Etikett wird erstellt...",

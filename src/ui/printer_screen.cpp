@@ -16,6 +16,7 @@
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/ble_service.h"
+#include "services/label_fetch.h"
 #include "services/label_printer.h"
 #include "services/label_render.h"
 #include "ui/info_popup.h"
@@ -270,8 +271,11 @@ void handlePrinterDeferredActions() {
     printer_calib_pending = false;
     printFixedLabel(labelRenderCalibration, "calibration page");
   }
-  if (print_spool_label_pending) {
+  if (print_spool_label_pending || print_filament_label_pending) {
+    // sdfp fork: the filament label, and the spool label from a label service.
+    const bool filament = print_filament_label_pending;
     print_spool_label_pending = false;
+    print_filament_label_pending = false;
     printerOffsetFlush();
     const LabelPrinterConfig c = labelPrinterLoadConfig();
     LabelPrintResult result = LP_NO_PRINTER;
@@ -282,24 +286,38 @@ void handlePrinterDeferredActions() {
     if (!labelPrinterConfigured(c)) result = LP_NO_PRINTER;
     else if (!bleEnabled()) result = LP_BLE_OFF;
     else {
-      // What the scan left in the globals, as the backend named it.
-      SpoolLabelData spool{};
-      spool.id = sm_id;
-      snprintf(spool.name, sizeof(spool.name), "%s", sm_filament_name);
-      snprintf(spool.vendor, sizeof(spool.vendor), "%s", sm_vendor_g);
-      // Like the More info card: the backend's material when it named one,
-      // else what the Bambu tag says.
-      snprintf(spool.material, sizeof(spool.material), "%s",
-               sm_material_global[0] ? sm_material_global : g_tag.material);
-      snprintf(spool.color, sizeof(spool.color), "%s", sm_color_global);
-      labelDateFor(sm_id, &spool);
       printCardShow();
       LabelRaster raster{};
-      if (!labelRenderSpool(c, spool, &raster)) result = LP_BAD_RASTER;
-      else result = labelPrinterPrint(c, raster, printCardTick);
+      bool have = false;
+      if (labelServiceConfigured()) {
+        char why[96];
+        have = labelFetchRaster(c, sm_id, filament, &raster, why, sizeof(why));
+        if (!have) logSDf("Printer: label service: %s%s", why,
+                          filament ? "" : " - printing the scale's own label");
+      }
+      if (!have && filament) {
+        result = LP_LABEL_SERVICE;  // no built-in filament label to fall back on
+      } else {
+        if (!have) {
+          // What the scan left in the globals, as the backend named it.
+          SpoolLabelData spool{};
+          spool.id = sm_id;
+          snprintf(spool.name, sizeof(spool.name), "%s", sm_filament_name);
+          snprintf(spool.vendor, sizeof(spool.vendor), "%s", sm_vendor_g);
+          // Like the More info card: the backend's material when it named one,
+          // else what the Bambu tag says.
+          snprintf(spool.material, sizeof(spool.material), "%s",
+                   sm_material_global[0] ? sm_material_global : g_tag.material);
+          snprintf(spool.color, sizeof(spool.color), "%s", sm_color_global);
+          labelDateFor(sm_id, &spool);
+          have = labelRenderSpool(c, spool, &raster);
+        }
+        result = have ? labelPrinterPrint(c, raster, printCardTick) : LP_BAD_RASTER;
+      }
       labelRasterFree(&raster);
     }
-    logSDf("Printer: spool #%d label result=%d", sm_id, (int)result);
+    logSDf("Printer: spool #%d %s label result=%d", sm_id, filament ? "filament" : "spool",
+           (int)result);
     printCardResult(result);
   }
 }

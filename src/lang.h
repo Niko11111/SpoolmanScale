@@ -1306,6 +1306,14 @@ enum StringID {
   STR_W_P_QUEUED,             // a route's answer when the scale took the job
   STR_PRN_LABEL_PRINT,        // the button in the More info header
   STR_PRN_ERR_NO_SPOOL,       // pressed with nothing the backend knows on the pad
+  // sdfp fork: labels from a label service (services/label_fetch.h)
+  STR_PRN_LABEL_SPOOL,        // More info header, left of the X: 130 px button
+  STR_PRN_LABEL_FILAMENT,     // the second one
+  STR_PRN_ERR_LABEL_SVC,      // the filament label, with the service unreachable
+  STR_W_P_SVC_TITLE,          // the web card
+  STR_W_P_SVC_ADDR,
+  STR_W_P_SVC_HINT,
+  STR_W_P_SVC_BAD,            // not an http:// address
   // The captions on a printed label, short: the lines are 16 px on a 40 mm roll
   STR_LBL_L_COLOR,
 

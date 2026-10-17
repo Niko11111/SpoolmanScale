@@ -259,6 +259,7 @@ int labelPrintResultString(LabelPrintResult r) {
     case LP_BLE_CHARACTERISTIC: return STR_PRN_ERR_NOT_PRINTER;
     case LP_BLE_STUCK:          return STR_PRN_ERR_STUCK;
     case LP_SENT_UNCONFIRMED:   return STR_PRN_UNCONF_MSG;
+    case LP_LABEL_SERVICE:      return STR_PRN_ERR_LABEL_SVC;
     default:                    return STR_PRN_ERR_WRITE;
   }
 }

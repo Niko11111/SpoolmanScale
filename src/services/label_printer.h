@@ -72,6 +72,7 @@ enum LabelPrintResult : uint8_t {
   LP_BLE_WRITE,
   LP_BLE_STUCK,
   LP_SENT_UNCONFIRMED,  // all sent, the printer never said done
+  LP_LABEL_SERVICE,     // sdfp fork: the label service gave no label
 };
 
 const LabelPrinterProfile& labelPrinterProfile(LabelPrinterModel model);

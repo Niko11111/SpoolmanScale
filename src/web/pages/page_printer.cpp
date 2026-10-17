@@ -18,6 +18,7 @@
 #include "app/deferred_actions.h"
 #include "hardware/sd_logger.h"
 #include "services/ble_service.h"
+#include "services/label_fetch.h"
 #include "services/label_printer.h"
 #include "ui/ble_devices_screen.h"
 #include "ui/printer_screen.h"
@@ -96,7 +97,9 @@ static String stateJson() {
   j += String((unsigned)labelPrinterContentX(c));
   j += F(",\"cw\":");
   j += String((unsigned)labelPrinterDotsForMm(c.media_width_mm));
-  j += F("},\"lastTest\":");
+  j += F("},\"labelsvc\":\"");
+  j += jsonText(labelServiceUrl());
+  j += F("\",\"lastTest\":");
   const int last = printerLastTestResult();
   if (last < 0) j += F("null");
   else { j += '"'; j += jsonText(T(last)); j += '"'; }
@@ -209,6 +212,18 @@ static String body() {
          "<div class='row'><span class='k'>");
   h += T(STR_W_P_LAST_TEST);
   h += F("</span><span class='v' id='lt'></span></div></div></div>");
+
+  // ---- sdfp fork: the label service (services/label_fetch.h) ---------------
+  h += F("<div class='card wide'><h2>");
+  h += T(STR_W_P_SVC_TITLE);
+  h += F("</h2><div class='field'><label>");
+  h += T(STR_W_P_SVC_ADDR);
+  h += F("</label><div class='inrow'><input id='su' type='url' style='flex:1' "
+         "placeholder='http://192.168.1.20:8710' autocomplete='off'><button id='sb'>");
+  h += T(STR_W_SAVE);
+  h += F("</button></div><span class='hint'>");
+  h += T(STR_W_P_SVC_HINT);
+  h += F("</span><span class='msg' id='su-s'></span></div></div>");
 
   // ---- where the label runs under the head ---------------------------------
   // The strip is the print row, the block on it the label: it moves with
@@ -349,6 +364,7 @@ static String body() {
          "r.appendChild(v);box.appendChild(r);});}"
          "function paint(d){"
          "$('bl').checked=d.ble;"
+         "if(document.activeElement!==$('su'))$('su').value=d.labelsvc||'';"
          "$('pd').textContent=d.printer.configured?((d.printer.name||P.unnamed)+'  '+d.printer.address):P.none;"
          "$('fb').style.display=d.printer.configured?'':'none';"
          "$('pc').style.display=d.printer.configured?'':'none';"
@@ -406,6 +422,8 @@ static String body() {
          "$('xo').addEventListener('change',function(){setOff(Math.round(+$('xo').value||0)*8);});"
          "$('cb').addEventListener('click',function(){"
          "postFlash('/api/printer/calib','','cb-s',4000).then(function(){setTimeout(load,12000);});});"
+         "$('sb').addEventListener('click',function(){"
+         "postFlash('/api/printer/labelsvc',$('su').value.trim(),'su-s',4000).then(load);});"
          "$('fb').addEventListener('click',function(){"
          "postFlash('/api/printer/forget','','pd-s',4000).then(load);});"
          "load();"
@@ -540,6 +558,16 @@ static void routes(WebServer &srv) {
     printer_calib_pending = true;
     logSD("Web: calibration page requested");
     srv.send(200, "text/plain", T(STR_W_P_QUEUED));
+  });
+
+  // sdfp fork: where labels come from (services/label_fetch.h). "" clears it.
+  srv.on("/api/printer/labelsvc", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_PRINTER))) return;
+    if (!labelServiceSetUrl(srv.arg("plain").c_str())) {
+      srv.send(400, "text/plain", T(STR_W_P_SVC_BAD));
+      return;
+    }
+    srv.send(200, "application/json", "{\"ok\":true}");
   });
 
   srv.on("/api/printer/forget", HTTP_POST, [&srv]() {
