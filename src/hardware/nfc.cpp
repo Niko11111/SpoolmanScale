@@ -2,6 +2,7 @@
 
 #include <Adafruit_PN532.h>
 #include <string.h>
+#include <driver/rtc_io.h>
 
 static Adafruit_PN532* nfc = nullptr;
 static constexpr uint8_t MIFARE_SECTOR_READ_ATTEMPTS = 3;
@@ -10,6 +11,7 @@ static constexpr uint8_t MIFARE_SECTOR_READ_ATTEMPTS = 3;
 // hand the wiring in again - see nfcHardwareReinit().
 static TwoWire* nfc_wire = nullptr;
 static int8_t   nfc_reset_pin = -1;
+static gpio_num_t nfc_irq_pin = GPIO_NUM_NC;
 
 bool nfcHardwareBegin(TwoWire* wire, int8_t reset_pin, int8_t irq_pin,
                       uint32_t* firmware_version) {
@@ -17,6 +19,7 @@ bool nfcHardwareBegin(TwoWire* wire, int8_t reset_pin, int8_t irq_pin,
   if (!nfc) return false;
   nfc_wire = wire;
   nfc_reset_pin = reset_pin;
+  nfc_irq_pin = (gpio_num_t)irq_pin;
   nfc->begin();
   delay(100);
   uint32_t version = nfc->getFirmwareVersion();
@@ -123,4 +126,15 @@ bool nfcReadNtagPage(uint8_t page, uint8_t* data) {
 
 bool nfcWriteNtagPage(uint8_t page, uint8_t* data) {
   return nfc && nfc->ntag2xx_WritePage(page, data);
+}
+
+void nfcPrepareDeepSleep() {
+  // The PN532 IRQ signal on this board is asserted while the reader has a tag ready,
+  // and the wake condition is active-low for ESP32 ext1 wakeups.
+  if (nfc_irq_pin == GPIO_NUM_NC) return;
+  rtc_gpio_set_direction(nfc_irq_pin, RTC_GPIO_MODE_INPUT_ONLY); // The PN532's IRQ line is open-drain and has a pullup on the module, so the ESP32 needs to be an input.
+  rtc_gpio_hold_en(nfc_irq_pin); // Hold the pin state during deep sleep.
+  rtc_gpio_pullup_en(nfc_irq_pin); // The PN532's IRQ line is open-drain and has a pullup on the module, so the ESP32 needs a pullup too.
+  rtc_gpio_pulldown_dis(nfc_irq_pin); // The PN532's IRQ line is open-drain and has a pullup on the module, so the ESP32 does not need a pulldown.
+  esp_sleep_enable_ext1_wakeup(1ULL << nfc_irq_pin, ESP_EXT1_WAKEUP_ANY_LOW);
 }

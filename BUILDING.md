@@ -80,6 +80,9 @@ All components connect to the **I/O connector** on the WT32-SC01 Plus using the 
 
 The PN532 and NAU7802 share the same I2C bus (SDA/SCL) and are wired in parallel. **Do not daisy-chain them via the NAU7802's STEMMA QT passthrough** – that port only supplies 3.3 V and the PN532 requires 5 V.
 
+Wiring with the components form 👉 [SpoolmanScale parts list on AliExpress](https://www.aliexpress.com/p/wish-manage/share.html?spm=a2g0o.cart.headerAcount.6.321738dayZTIa0&wishGroupId=800000022363334&smbPageCode=wishlist-amp&spreadId=E95BDFF0E1B4367408F1423D8C0ABF206981C084C10F93E3EE124B0AFA678D69)
+[![](images/SpoolmanScale_Wiring.png)](images/spoolmanscale_assembly_1.jpeg)
+
 ### WT32-SC01 Plus I/O Connector
 
 | Pin | Color | Signal | Connect to |
@@ -89,7 +92,7 @@ The PN532 and NAU7802 share the same I2C bus (SDA/SCL) and are wired in parallel
 | 3 | Yellow | GPIO10 (SDA) | PN532 SDA + NAU7802 SDA |
 | 4 | Green | GPIO11 (SCL) | PN532 SCL + NAU7802 SCL |
 | 5 | Blue | - | unused |
-| 6 | White | - | unused |
+| 6 | White | GPIO13 | PN532 IRQ |
 | 7 | Brown | GPIO14 | PN532 RSTPDN |
 
 ### PN532 – Soldering & Assembly

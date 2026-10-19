@@ -35,7 +35,8 @@ constexpr int8_t PN532_RESET_SAFE = 12;   // EXT_IO3, pin 5, no build ever wired
 // That line reads like a fault and is not one, so the constructor gets a pin
 // that exists and costs nothing: EXT_IO4 on the extension connector, unused by
 // this firmware and an input after reset anyway.
-constexpr int8_t PN532_IRQ_UNUSED = 13;
+// For wakeup from deep sleep PN532 IRQ line can be used when soldered and connected to EXT_IO4.
+constexpr int8_t PN532_IRQ = 13;     // EXT_IO4, connector pin 6, white
 
 constexpr int8_t TOUCH_SDA = 6;      // FT6336U internal board bus
 constexpr int8_t TOUCH_SCL = 5;      // FT6336U internal board bus
