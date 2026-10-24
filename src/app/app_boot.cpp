@@ -197,7 +197,7 @@ void appSetup() {
   Serial.print("Looking for PN532... ");
   uint32_t ver = 0;
   nfcResetLoad();
-  if (nfcHardwareBegin(&I2C_EXT, nfcResetPinForBoot(), hw_pins::PN532_IRQ_UNUSED, &ver)) {
+  if (nfcHardwareBegin(&I2C_EXT, nfcResetPinForBoot(), hw_pins::PN532_IRQ, &ver)) {
     nfc_ok = true;
     Serial.printf("OK (FW %d.%d)\n", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
     logSDf("NFC ready (PN532 FW %d.%d)", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);

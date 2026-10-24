@@ -28,3 +28,5 @@ bool nfcReadMifareSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blo
 bool nfcReadMifareBlock(uint8_t block, uint8_t data[16]);
 bool nfcReadNtagPage(uint8_t page, uint8_t* data);
 bool nfcWriteNtagPage(uint8_t page, uint8_t* data);
+// prepare the PN532 for deep sleep, so that it can wake the ESP32 when a tag is present.
+void nfcPrepareDeepSleep();
