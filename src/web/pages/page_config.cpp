@@ -251,6 +251,18 @@ static String body() {
   h += T(STR_W_SNAPMAKER_HINT);
   h += F("</span><span class='msg' id='sn-s'></span></div>");
 
+  // Creality CFS tags, next to Snapmaker for the same reason: the next tag
+  // reads with it, no restart.
+  h += F("<div class='field'>"
+         "<label class='check'><span class='switch'>"
+         "<input id='cr' type='checkbox'");
+  if (g_creality_tags) h += F(" checked");
+  h += F("><i></i></span>");
+  h += T(STR_W_CREALITY);
+  h += F("</label><span class='hint'>");
+  h += T(STR_W_CREALITY_HINT);
+  h += F("</span><span class='msg' id='cr-s'></span></div>");
+
   // Second switch in the same card, because both answer "what kind of device
   // is this". Unlike every other switch on this page it needs a restart: the
   // home screen reads it once while it is built, so the restart button that
@@ -350,6 +362,11 @@ static String body() {
          "post('/api/snapmaker',want?'1':'0').then(r=>{"
          "if(!r.ok)$('sn').checked=!want;"
          "flash('sn-s',r.ok?WS.ok:WS.err,!r.ok,4000);});});"
+         "$('cr').addEventListener('change',()=>{"
+         "const want=$('cr').checked;"
+         "post('/api/creality',want?'1':'0').then(r=>{"
+         "if(!r.ok)$('cr').checked=!want;"
+         "flash('cr-s',r.ok?WS.ok:WS.err,!r.ok,4000);});});"
          "$('sf-rb').addEventListener('click',doRestart);"
          "$('ll-b').addEventListener('click',setLimits);"
          "$('gn-b').addEventListener('click',setGain);"
@@ -489,6 +506,16 @@ static void routes(WebServer &srv) {
     g_snapmaker_tags = on;
     prefsPutBool("snapmaker", on);
     logSDf("Web: Snapmaker tags -> %s", on ? "ON" : "OFF");
+    srv.send(200, "application/json", on ? "{\"ok\":true,\"v\":1}"
+                                         : "{\"ok\":true,\"v\":0}");
+  });
+
+  srv.on("/api/creality", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
+    const bool on = (srv.arg("plain").toInt() != 0);
+    g_creality_tags = on;
+    prefsPutBool("creality", on);
+    logSDf("Web: Creality tags -> %s", on ? "ON" : "OFF");
     srv.send(200, "application/json", on ? "{\"ok\":true,\"v\":1}"
                                          : "{\"ok\":true,\"v\":0}");
   });

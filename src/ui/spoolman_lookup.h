@@ -24,6 +24,9 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin = LOOKUP_FROM_OTHE
 // Everything that acts on sm_found waits while it is: the verdict is not in,
 // and sm_found says "not found" only because it was reset.
 bool lookupPending();
+// Whether the spool now in sm_id came from a lookup of this tag. A tag placed
+// right after another spool's still sees that spool in sm_id for a pass.
+bool lookupWasFor(const char* uid_str);
 
 // Whether the last verdict was "not in the inventory" beyond doubt: the uid
 // index answered, or the active list and the archive both came in whole.

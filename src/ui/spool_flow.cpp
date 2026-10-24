@@ -30,6 +30,7 @@
 #include "ui/link_wait_card.h"
 #include "ui/spool_flow_internal.h"
 #include "services/tag_write.h"
+#include "services/tag_family.h"
 #include "ui/confirm_popup.h"
 #include "ui/info_popup.h"
 #include "ui/loading_overlay.h"
@@ -100,6 +101,19 @@ void joinMaterialName(const char* material, const char* name, char* out, size_t 
   if (!name) name = "";
   if (!material) material = "";
   if (nameStartsWithMaterial(name, material)) { snprintf(out, out_size, "%s", name); return; }
+  // The material anywhere in the name as a whole word: product names carry
+  // it in the middle - "Hyper PLA Gelb", "Silk PLA Weiss", "High Speed Matte
+  // PLA" - and read "PLA Hyper PLA Gelb" with the material put in front.
+  {
+    const size_t ml = strlen(material);
+    for (const char* q = name; ml && *q; q++) {
+      if (strncasecmp(q, material, ml) != 0) continue;
+      const bool start_ok = (q == name) || q[-1] == ' ' || q[-1] == '-';
+      const char e = q[ml];
+      const bool end_ok = e == '\0' || e == ' ' || e == '-' || e == '+';
+      if (start_ok && end_ok) { snprintf(out, out_size, "%s", name); return; }
+    }
+  }
   for (const char* p = strchr(material, ' '); p; p = strchr(p + 1, ' ')) {
     const char* tail = p + 1;
     const size_t n = strlen(tail);
@@ -1228,6 +1242,12 @@ static void closeLinkOverlays() {
 // handler, and an overlay must never be built out of the callback of the one
 // it covers.
 static int tagwrite_after_link_id = 0;
+// The format that question writes: the setting, or Creality CFS for a blank
+// MIFARE tag (see armLinkFollowUps()).
+static uint8_t tagwrite_after_link_fmt = 0;
+// For a Creality tag that was linked: compare it with the spool before asking
+// (the answer decides between "update", "overwrite" and no question at all).
+static bool tagwrite_after_link_check = false;
 
 // Same idea for the second tag question, and picked up in the same handler -
 // but only once the tag write above is out of the way, or the two would fight
@@ -1272,7 +1292,8 @@ static void fetchSpoolSummary(int spool_id, SpoolSummary &out) {
   const char* material = f["material"]       | "";
   const char* name     = f["name"]           | "";
   const char* color    = f["color_hex"]      | "";
-  snprintf(out.text, sizeof(out.text), "#%d  %s %s  %s", spool_id, vendor, material, name);
+  char joined[64]; joinMaterialName(material, name, joined, sizeof(joined));
+  snprintf(out.text, sizeof(out.text), "#%d  %s  %s", spool_id, vendor, joined);
   snprintf(out.color, sizeof(out.color), "%s", color);
 }
 
@@ -1339,6 +1360,30 @@ static bool s_last_link_ok = false;
 // and the second tag question. Called by doLinkPatch() for a link from the
 // scale, and from the loop for one that arrived from outside - Spoolman's own
 // web page binding the tag that lies on the reader.
+// The tag just linked is a 4 byte MIFARE tag that nothing could read: not
+// recorded as Creality or Bambu, and not decoded as anything this time either.
+static bool blankMifareCandidate() {
+  if (strlen(g_tag.uid_str) != 11) return false;
+  unsigned b[4];
+  if (sscanf(g_tag.uid_str, "%2x:%2x:%2x:%2x", &b[0], &b[1], &b[2], &b[3]) != 4) return false;
+  uint8_t uid[4] = {(uint8_t)b[0], (uint8_t)b[1], (uint8_t)b[2], (uint8_t)b[3]};
+  const TagFamily fam = tagFamilyGet(uid);
+  if (fam == TAG_FAMILY_CREALITY || fam == TAG_FAMILY_BAMBU) return false;
+  // g_tag can still describe the tag read before (the link entry copies only
+  // the UID over), so its decoder counts only when it is about this UID.
+  if (memcmp(g_tag.uid, uid, 4) == 0 && g_tag.decoder[0]) return false;
+  return true;
+}
+
+// The tag just linked is the Creality tag the poll read: same UID, decoded.
+static bool linkedCrealityTag() {
+  if (strlen(g_tag.uid_str) != 11 || strcmp(g_tag.decoder, "Creality") != 0) return false;
+  unsigned b[4];
+  if (sscanf(g_tag.uid_str, "%2x:%2x:%2x:%2x", &b[0], &b[1], &b[2], &b[3]) != 4) return false;
+  const uint8_t uid[4] = {(uint8_t)b[0], (uint8_t)b[1], (uint8_t)b[2], (uint8_t)b[3]};
+  return memcmp(g_tag.uid, uid, 4) == 0;
+}
+
 static void armLinkFollowUps(int spool_id, bool is_bambu) {
   // The spool is known and an NTAG is lying on the reader, so its data could go
   // onto the tag as well. Three things have to hold before that is worth
@@ -1358,9 +1403,32 @@ static void armLinkFollowUps(int spool_id, bool is_bambu) {
     const uint16_t have = tagCachedBytes();
     const bool fits = !TAG_FMT_IS_NDEF(g_tagwrite_fmt) ||
                       have == 0 || have >= TAGWRITE_NDEF_MIN_BYTES;
-    if (fits) tagwrite_after_link_id = spool_id;
+    if (fits) {
+      tagwrite_after_link_id  = spool_id;
+      tagwrite_after_link_fmt = g_tagwrite_fmt;
+      tagwrite_after_link_check = false;
+    }
     else logSDf("Tag write: not asking, %u bytes on the tag is too small for %s",
                 (unsigned)have, tagFormatLabel(g_tagwrite_fmt));
+  } else if (g_creality_tags && !is_bambu && blankMifareCandidate()) {
+    // A 4 byte MIFARE tag that is neither Creality nor Bambu, linked while
+    // Creality tags are on: most likely a blank sticker on a third party
+    // spool, which the CFS can read once it carries Creality's record. Asked
+    // whatever the write setting says, since that setting is about NTAG
+    // records; crealityWriteTag() checks for itself that the tag is blank
+    // and leaves anything else alone.
+    logSDf("Tag write: %s may be a blank MIFARE tag, offering Creality CFS",
+           g_tag.uid_str);
+    tagwrite_after_link_id  = spool_id;
+    tagwrite_after_link_fmt = TAG_FMT_CREALITY;
+    tagwrite_after_link_check = false;
+  } else if (g_creality_tags && !is_bambu && linkedCrealityTag()) {
+    // A Creality tag bound to a spool: when the tag describes another
+    // filament - an original tag on a refilled spool, or a tag of ours whose
+    // spool was changed - the next pass offers to write the spool's data.
+    tagwrite_after_link_id    = spool_id;
+    tagwrite_after_link_fmt   = TAG_FMT_CREALITY;
+    tagwrite_after_link_check = true;
   }
 
   // The tag on the other flange, once the write above has settled. Three
@@ -1373,7 +1441,21 @@ static void armLinkFollowUps(int spool_id, bool is_bambu) {
 
 }
 
+// The UID the link was started for, kept while the user picks a spool. The
+// tag display, and link_tag_uid with it, is cleared a few seconds after the
+// tag stops answering, and a 4 byte tag that refused a key can stop answering
+// while it still lies on the pad: on 13.10.2026 every link of a blank MIFARE
+// tag ended in "no tag UID". The user chose the spool for the tag that was
+// there when they pressed Link, so that is the one bound.
+static char s_link_uid_hold[24] = "";
+
 void doLinkPatch(int spool_id, bool is_bambu) {
+  if (!is_bambu && !link_tag_uid[0] && s_link_uid_hold[0]) {
+    logSDf("Link: %s dropped off the reader while the spool was picked, linking it anyway",
+           s_link_uid_hold);
+    snprintf(link_tag_uid, sizeof(link_tag_uid), "%s", s_link_uid_hold);
+  }
+  s_link_uid_hold[0] = '\0';
   doLinkPatchUid(spool_id, is_bambu, is_bambu ? g_tag.tray_uuid : link_tag_uid);
 }
 
@@ -2502,12 +2584,8 @@ static void linkCopyConfirmFromRow(int cidx) {
   copy_confirm_initial = cs.total;
   copy_confirm_spool_w = cs.spool_weight;
   {
-    bool nm = (cs.material[0] && cs.name[0] &&
-               strncasecmp(cs.name, cs.material, strlen(cs.material)) == 0);
-    if (nm)
-      snprintf(copy_confirm_name, sizeof(copy_confirm_name), "%s (%s)", cs.name, cs.vendor);
-    else
-      snprintf(copy_confirm_name, sizeof(copy_confirm_name), "%s %s (%s)", cs.material, cs.name, cs.vendor);
+    char joined[96]; joinMaterialName(cs.material, cs.name, joined, sizeof(joined));
+    snprintf(copy_confirm_name, sizeof(copy_confirm_name), "%s (%s)", joined, cs.vendor);
   }
   copyLookFromRow(copy_confirm_look, cs);
   copy_confirm_pending = true;
@@ -3580,6 +3658,7 @@ void flowCloseButton(lv_obj_t* parent, lv_event_cb_t cb) {
 
 void showLinkEntryPopup(bool is_bambu) {
   logSDf("SHOW: LinkEntryPopup bambu=%d", (int)is_bambu);
+  snprintf(s_link_uid_hold, sizeof(s_link_uid_hold), "%s", is_bambu ? "" : link_tag_uid);
   link_selected_material[0] = 0;  // reset material selection for each new flow
   link_selected_material_full[0] = 0;
   link_stage3_shown = false;
@@ -3892,8 +3971,16 @@ void handleSpoolFlowDeferredActions() {
     // "Always" skips the question, not the answer: the write is parked the same
     // way and its result still appears, because a tag that silently failed to
     // take the record would be the worst of both.
-    if (g_tagwrite_mode == TAGWRITE_ALWAYS) startTagWriteNoAsk(id);
-    else                                    showTagWriteAskPopup(id);
+    // A CFS write is always asked: it changes the tag's keys for good.
+    if (tagwrite_after_link_fmt == TAG_FMT_CREALITY && tagwrite_after_link_check) {
+      tagwrite_after_link_check = false;
+      bool own = false, differs = false, serial_only = false;
+      if (tagCrealityCheck(id, g_tag.uid_str, &own, &differs, &serial_only) && differs)
+        showTagWriteAskPopupFmt(id, TAG_FMT_CREALITY, own ? 1 : (serial_only ? 3 : 2));
+    }
+    else if (tagwrite_after_link_fmt == TAG_FMT_CREALITY)  showTagWriteAskPopupFmt(id, TAG_FMT_CREALITY);
+    else if (g_tagwrite_mode == TAGWRITE_ALWAYS)      startTagWriteNoAsk(id);
+    else                                              showTagWriteAskPopup(id);
   }
   // Behind the tag write on purpose, and behind whatever it started. The
   // record goes onto the tag that is still lying on the reader, so asking for

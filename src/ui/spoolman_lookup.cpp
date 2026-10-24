@@ -1,3 +1,4 @@
+#include <strings.h>
 #include "spoolman_lookup.h"
 #include "spoolman_lookup_internal.h"
 #include "app/app_state.h"
@@ -781,6 +782,10 @@ void scheduleRescan(const char* uid, const char* format) {
 // cannot reconstruct it: for a Bambu tag it is the tray uuid, for an NTAG the
 // plain uid, and g_tag only carries the former reliably.
 static char s_last_query[48] = {0};
+
+bool lookupWasFor(const char* uid_str) {
+  return uid_str && uid_str[0] && strcasecmp(s_last_query, uid_str) == 0;
+}
 
 // Whether the last lookup ended in a real "not in the inventory", the only
 // answer that makes a later hit a binding made from outside. A lookup that

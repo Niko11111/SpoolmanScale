@@ -791,6 +791,7 @@ enum StringID {
   STR_W_SESSION_COPY,
   STR_W_SESSION_COPIED,
   STR_W_SESSION_COPYFAIL,
+  STR_W_SESSION_OPEN,
   STR_W_TAG_NOTE,
   STR_W_TAG_SIZES,
   STR_W_FM_SETUP,
@@ -1750,7 +1751,6 @@ enum StringID {
   STR_W_P_PICK_HINT,          // the tile without a printer, after a scan found some
   STR_W_P_CHANGE,             // the tile's scan button once there is a printer
   STR_W_P_SPEC_RIBBON,        // a model card's last word: prints through a ribbon
-
   // The card for a spool the inventory does not know
   STR_UNK_ASK,           // the settings row
   STR_UNK_ASK_SUB,       // its subtitle
@@ -1791,6 +1791,20 @@ enum StringID {
   STR_PCP_SENT_TEXT,      // what to do in the browser, quoting FilaMan's own button
   STR_PCP_FAIL_TITLE,     // refused; FilaMan's own reason goes under it
   STR_PCP_NO_ROUTE,       // a FilaMan before 1.4.3
+
+  // Creality CFS tags
+  STR_W_CREALITY,
+  STR_W_CREALITY_HINT,
+  STR_TW_ERR_NOT_BLANK,
+  STR_TW_CFS_ASK_TITLE,
+  STR_TW_CFS_ASK_HINT,
+  STR_TW_CFS_REPLACE,
+  STR_TW_CFS_UPD_TITLE,
+  STR_TW_CFS_UPD_HINT,
+  STR_TW_CFS_OVR_TITLE,
+  STR_TW_CFS_OVR_HINT,
+  STR_TW_CFS_SID_TITLE,
+  STR_TW_CFS_SID_HINT,
 
   STR_COUNT
 };

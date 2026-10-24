@@ -39,6 +39,31 @@ static bool     erase_now_pending = false;   // erase already agreed to, no ques
 static bool     mismatch_ask_pending = false;
 static int      s_spool_id      = 0;
 static AskMode  s_mode          = ASK_WRITE;
+// The format the open question writes: the setting, or Creality CFS for a
+// blank MIFARE tag that was just linked.
+static uint8_t  s_write_fmt     = 0;
+// The tag the CFS write was last offered for, so it is offered once per tag
+// and not on every poll. Cleared when that write found no tag, so putting the
+// spool back offers it again.
+static char     s_cfs_asked_uid[24] = "";
+// 0 = blank tag, 1 = own tag to update, 2 = original tag to overwrite.
+static uint8_t  s_cfs_variant = 0;
+
+// While a CFS write waits for a tag that stopped answering: say so on the
+// busy card, and keep the screen drawing. Runs inside tagWriteTick().
+static void cfsWaitNotice(int phase) {
+  if (phase == 0) tagBusyAskReplace();
+  lv_timer_handler();
+}
+
+static void armCfsTarget() {
+  if (s_write_fmt == TAG_FMT_CREALITY)
+    tagWriteCfsTarget(s_cfs_asked_uid, cfsWaitNotice, s_cfs_variant != 0);
+}
+
+bool tagCfsAskedFor(const char *uid) {
+  return uid && uid[0] && strcmp(s_cfs_asked_uid, uid) == 0;
+}
 // What the tag held when the unlink asked. Taken then and not later, because
 // clearTagDisplay() runs immediately afterwards and sets tag_present false and
 // g_tag.uid_str empty - by the next loop pass refreshCache() has wiped the
@@ -195,7 +220,7 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
       // The erase says what is about to be lost, the write says what is about
       // to be put there - and that is now a setting, not a constant.
       const char *arg = (s_mode == ASK_ERASE) ? s_erase_fmt
-                                              : tagFormatLabel(g_tagwrite_fmt);
+                                              : tagFormatLabel(s_write_fmt);
       snprintf(hb, sizeof(hb), T(hint), arg[0] ? arg : "OpenSpool");
       lv_label_set_text(lbl_hint, hb); }
     // Body text, not a caption: this line carries what is about to be written
@@ -257,10 +282,12 @@ void startTagWriteNoAsk(int spool_id) {
   if (spool_id <= 0 || scr_tag_write) return;
   s_spool_id = spool_id;
   s_mode     = ASK_WRITE;
+  s_write_fmt = g_tagwrite_fmt;
+  s_cfs_variant = 0;
   logSDf("TagWrite: writing spool %d without asking", spool_id);
   // A question about the same tag waiting to be shown is answered by this.
   mismatch_ask_pending = false;
-  if (tagWriteRequest(spool_id, (TagFormat)g_tagwrite_fmt, false)) {
+  if (tagWriteRequest(spool_id, (TagFormat)s_write_fmt, false)) {
     // The same watch a confirmed question sets, so the result popup appears
     // through the one path that already knows how to show it.
     s_watching = true;
@@ -272,11 +299,29 @@ void startTagWriteNoAsk(int spool_id) {
 }
 
 void showTagWriteAskPopup(int spool_id) {
+  showTagWriteAskPopupFmt(spool_id, g_tagwrite_fmt);
+}
+
+void showTagWriteAskPopupFmt(int spool_id, uint8_t fmt, uint8_t variant) {
   if (scr_tag_write || spool_id <= 0) return;
-  s_spool_id = spool_id;
-  s_mode     = ASK_WRITE;
-  logSDf("SHOW: TagWriteAskPopup spool=%d", spool_id);
-  buildAsk(STR_TW_ASK_TITLE, STR_TW_ASK_HINT, STR_TW_BTN_WRITE, STR_TW_BTN_SKIP);
+  s_spool_id  = spool_id;
+  s_mode      = ASK_WRITE;
+  s_write_fmt = fmt;
+  s_cfs_variant = (fmt == TAG_FMT_CREALITY) ? variant : 0;
+  if (fmt == TAG_FMT_CREALITY)
+    snprintf(s_cfs_asked_uid, sizeof(s_cfs_asked_uid), "%s", g_tag.uid_str);
+  logSDf("SHOW: TagWriteAskPopup spool=%d fmt=%s variant=%u", spool_id, tagFormatLabel(fmt),
+         (unsigned)s_cfs_variant);
+  if (fmt == TAG_FMT_CREALITY && variant == 1)
+    buildAsk(STR_TW_CFS_UPD_TITLE, STR_TW_CFS_UPD_HINT, STR_TW_BTN_REWRITE, STR_TW_BTN_SKIP);
+  else if (fmt == TAG_FMT_CREALITY && variant == 2)
+    buildAsk(STR_TW_CFS_OVR_TITLE, STR_TW_CFS_OVR_HINT, STR_TW_BTN_REWRITE, STR_TW_BTN_SKIP);
+  else if (fmt == TAG_FMT_CREALITY && variant == 3)
+    buildAsk(STR_TW_CFS_SID_TITLE, STR_TW_CFS_SID_HINT, STR_TW_BTN_REWRITE, STR_TW_BTN_SKIP);
+  else if (fmt == TAG_FMT_CREALITY)
+    buildAsk(STR_TW_CFS_ASK_TITLE, STR_TW_CFS_ASK_HINT, STR_TW_BTN_WRITE, STR_TW_BTN_SKIP);
+  else
+    buildAsk(STR_TW_ASK_TITLE, STR_TW_ASK_HINT, STR_TW_BTN_WRITE, STR_TW_BTN_SKIP);
 }
 
 // The decision was taken in requestTagEraseAsk(); by now the tag state is gone.
@@ -304,6 +349,8 @@ void askTagEraseFromView() {
 static void showTagMismatchPopup() {
   if (scr_tag_write || !s_mismatch_detail[0]) return;
   s_mode = ASK_REWRITE;
+  s_write_fmt = g_tagwrite_fmt;
+  s_cfs_variant = 0;
   logSDf("SHOW: TagMismatchPopup spool=%d", s_spool_id);
   buildAsk(STR_TW_MISM_TITLE, STR_TW_MISM_HINT, STR_TW_BTN_REWRITE, STR_TW_BTN_KEEP);
 }
@@ -402,7 +449,7 @@ static void queueTagJob() {
   // all from the device.
   const bool queued = (s_mode == ASK_ERASE)
                         ? tagWriteRequestErase(s_erase_uid)
-                        : tagWriteRequest(s_spool_id, (TagFormat)g_tagwrite_fmt, false);
+                        : (armCfsTarget(), tagWriteRequest(s_spool_id, (TagFormat)s_write_fmt, false));
   if (queued) {
     s_watching = true;
     // From here to the result the loop is busy with the tag and the screen
@@ -425,6 +472,7 @@ void handleTagWritePopupDeferredActions() {
     const uint8_t code = tagWriteResultCode();
     tagBusyHide();
     if (code == TW_OK && s_mode != ASK_ERASE) mismatchSettle(g_tag.uid_str, s_spool_id);
+    if (s_write_fmt == TAG_FMT_CREALITY && code == TW_ERR_NO_TAG) s_cfs_asked_uid[0] = '\0';
     showResult(code);
     logSDf("TagWritePopup: finished, mode=%d code=%u", (int)s_mode,
            (unsigned)code);

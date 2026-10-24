@@ -6,6 +6,7 @@
 #include <math.h>
 #include <stdarg.h>
 #include <string.h>
+#include <time.h>
 
 #include "hardware/nfc.h"
 #include "hardware/sd_logger.h"
@@ -14,8 +15,11 @@
 #include "bambu/bambu_scan.h"
 #include "bambu/bambu_tag.h"
 #include "bambu/material_match.h"
+#include "creality/creality_scan.h"
+#include "creality/creality_tag.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/spoolman_api.h"
 #include "services/filaman_api.h"
 #include "services/tag_field.h"
 #include "services/tag_link.h"
@@ -613,6 +617,7 @@ static const char* fmtLabel(TagFormat fmt) {
   switch (fmt) {
     case TAG_FMT_ACE:     return "ACE";
     case TAG_FMT_FILAMAN: return "FilaMan";
+    case TAG_FMT_CREALITY: return "Creality CFS";
     default:              return "OpenSpool";
   }
 }
@@ -626,6 +631,7 @@ const char* tagFormatLabel(uint8_t fmt) {
     case TAG_FMT_ACE:       return "Anycubic ACE";
     case TAG_FMT_FILAMAN:   return "FilaMan";
     case TAG_FMT_ERASE:     return "erase";
+    case TAG_FMT_CREALITY:  return "Creality CFS";
     default:                return "OpenSpool";
   }
 }
@@ -1058,7 +1064,8 @@ static void infoFromMifare(TagInfo *ti) {
     snprintf(ti->fmt, sizeof(ti->fmt), "unsupported");
     return;
   }
-  snprintf(ti->fmt, sizeof(ti->fmt), "%s", bambu ? "Bambu" : "Snapmaker");
+  const bool creality = !bambu && !strcmp(g_tag.decoder, "Creality");
+  snprintf(ti->fmt, sizeof(ti->fmt), "%s", bambu ? "Bambu" : creality ? "Creality" : "Snapmaker");
   // Most Bambu tags carry no vendor string, but a tag that reads with the
   // Bambu keys can only be theirs - the answer scanTick() gives as well.
   copyPrintable(ti->brand, sizeof(ti->brand),
@@ -1150,6 +1157,14 @@ static void refreshCache(bool force = false) {
         (double)g_tag.spool_weight, (double)g_tag.diameter_mm, g_tag.length_m,
         g_tag.dry_temp_c, g_tag.dry_hours,
         g_tag.production_date, countBambuDataBlocksRead(g_tag));
+    } else if (!strcmp(cached_info.fmt, "Creality")) {
+      snprintf(cached_raw, sizeof(cached_raw),
+        "{\"format\":\"Creality CFS\",\"uid\":\"%s\",\"vendor\":\"%s\",\"filament\":\"%s\","
+        "\"filament_id\":\"%s\",\"material\":\"%s\",\"color\":\"#%s\",\"nozzle\":\"%d-%d\","
+        "\"weight_g\":%.0f,\"serial\":\"%s\",\"date\":\"%s\"}",
+        g_tag.uid_str, g_tag.vendor, g_tag.detailed_filament, g_tag.material_id,
+        g_tag.material, chex, g_tag.temp_min, g_tag.temp_max,
+        (double)g_tag.spool_weight, g_tag.serial, g_tag.production_date);
     } else if (!strcmp(cached_info.fmt, "Snapmaker")) {
       snprintf(cached_raw, sizeof(cached_raw),
         "{\"format\":\"Snapmaker\",\"uid\":\"%s\",\"material\":\"%s\",\"color\":\"#%s\","
@@ -1345,16 +1360,251 @@ static bool writeSpoolRecord(int spool_id, TagFormat fmt,
   return true;
 }
 
+// A Creality CFS record onto the blank MIFARE tag on the reader. Its own path:
+// selectWritableTag() turns every 4 byte UID away, and none of the NTAG page
+// code applies. Reports through finish() either way.
+static bool     s_cfs_has_expect = false;
+static uint8_t  s_cfs_expect[4];
+static void   (*s_cfs_wait)(int) = nullptr;
+static bool     s_cfs_overwrite = false;
+
+void tagWriteCfsTarget(const char* uid_str, void (*wait)(int phase), bool overwrite) {
+  unsigned b[4];
+  s_cfs_has_expect = uid_str && sscanf(uid_str, "%2x:%2x:%2x:%2x", &b[0], &b[1], &b[2], &b[3]) == 4;
+  if (s_cfs_has_expect) for (int i = 0; i < 4; i++) s_cfs_expect[i] = (uint8_t)b[i];
+  s_cfs_wait = wait;
+  s_cfs_overwrite = overwrite;
+}
+
+// ------------------------------------------------------------
+//  nfc_uid: the list of tags the scales wrote themselves
+// ------------------------------------------------------------
+// FilaStation's convention, now shared: a UID in the spool's extra field
+// nfc_uid is a tag one of the scales wrote, and both may write it again when
+// the spool changes. Original Creality tags and CFtag tags are not in it and
+// are left alone unless the user explicitly asks. Separators as FilaStation
+// reads them: comma, semicolon, slash, bar, newline; colons, dashes and
+// spaces inside a UID are ignored.
+static void nfcUidText(JsonObjectConst sp, char* out, size_t n) {
+  out[0] = '\0';
+  const char* s = sp["extra"]["nfc_uid"] | (const char*)nullptr;
+  if (!s) return;
+  size_t len = strlen(s);
+  if (len >= 2 && s[0] == '"' && s[len - 1] == '"') { s++; len -= 2; }
+  if (len >= n) len = n - 1;
+  memcpy(out, s, len);
+  out[len] = '\0';
+}
+
+static bool nfcUidListHas(const char* list, const char* hex8) {
+  char tok[24];
+  size_t t = 0;
+  for (const char* p = list; ; p++) {
+    const char c = *p;
+    if (c == '\0' || c == ',' || c == ';' || c == '/' || c == '|' || c == '\n') {
+      tok[t] = '\0';
+      if (t && strcmp(tok, hex8) == 0) return true;
+      t = 0;
+      if (c == '\0') return false;
+    } else if (isxdigit((unsigned char)c) && t < sizeof(tok) - 1) {
+      tok[t++] = (char)toupper((unsigned char)c);
+    }
+  }
+}
+
+static void hex8Of(const uint8_t uid[4], char out[9]) {
+  snprintf(out, 9, "%02X%02X%02X%02X", uid[0], uid[1], uid[2], uid[3]);
+}
+
+// Adds the UID to the spool's nfc_uid list. Spoolman only; the field is
+// created when the server does not have it yet (FilaStation creates it too).
+static void nfcUidAdd(int spool_id, JsonObjectConst sp, const uint8_t uid[4]) {
+  if (backendMode() != BACKEND_SPOOLMAN) return;
+  char hex[9];
+  hex8Of(uid, hex);
+  char list[160];
+  nfcUidText(sp, list, sizeof(list));
+  if (nfcUidListHas(list, hex)) return;
+  char value[180];
+  if (list[0]) snprintf(value, sizeof(value), "%s, %s", list, hex);
+  else         snprintf(value, sizeof(value), "%s", hex);
+  int code = spoolmanPatchExtraField(backendBaseUrl(), spool_id, "nfc_uid", value);
+  if (code < 200 || code >= 300) {
+    spoolmanCreateSpoolField(backendBaseUrl(), "nfc_uid");
+    code = spoolmanPatchExtraField(backendBaseUrl(), spool_id, "nfc_uid", value);
+  }
+  logSDf("CFS write: %s %s nfc_uid of spool %d (HTTP %d)", hex,
+         (code >= 200 && code < 300) ? "added to" : "could not be added to", spool_id, code);
+}
+
+// Takes a UID out of the spool's nfc_uid list again, or empties it (all).
+// An unlink has to: the lookup also searches every extra field, so a UID left
+// in nfc_uid brought spool 9 straight back on 14.10.2026 ("Auto-link") a
+// second after "Alle lösen". Spoolman only.
+void tagNfcUidForget(int spool_id, const char* uid, bool all) {
+  if (backendMode() != BACKEND_SPOOLMAN || spool_id <= 0) return;
+  JsonDocument doc;
+  if (backendGetSpoolJson(backendBaseUrl(), spool_id, doc) != 200 || doc.isNull()) return;
+  char list[160];
+  nfcUidText(doc.as<JsonObjectConst>(), list, sizeof(list));
+  if (!list[0]) return;
+
+  // The UID as the list holds it: hex digits only, upper case.
+  char hex[24];
+  size_t h = 0;
+  for (const char* p = uid ? uid : ""; *p && h < sizeof(hex) - 1; p++)
+    if (isxdigit((unsigned char)*p)) hex[h++] = (char)toupper((unsigned char)*p);
+  hex[h] = '\0';
+
+  char rest[160];
+  rest[0] = '\0';
+  if (!all) {
+    if (!h || !nfcUidListHas(list, hex)) return;
+    char tok[24];
+    size_t t = 0;
+    for (const char* p = list; ; p++) {
+      const char c = *p;
+      if (c == '\0' || c == ',' || c == ';' || c == '/' || c == '|' || c == '\n') {
+        tok[t] = '\0';
+        if (t && strcmp(tok, hex) != 0) {
+          const size_t r = strlen(rest);
+          snprintf(rest + r, sizeof(rest) - r, "%s%s", r ? ", " : "", tok);
+        }
+        t = 0;
+        if (c == '\0') break;
+      } else if (isxdigit((unsigned char)c) && t < sizeof(tok) - 1) {
+        tok[t++] = (char)toupper((unsigned char)c);
+      }
+    }
+  }
+  const int code = spoolmanPatchExtraField(backendBaseUrl(), spool_id, "nfc_uid", rest);
+  logSDf("UNLINK ID=%d nfc_uid '%s' -> '%s' HTTP %d", spool_id, list, rest, code);
+}
+
+// The Creality record the spool stands for right now.
+static bool crealityRecordFor(JsonObjectConst sp, int spool_id, char rec[41]) {
+  CrealityRecordIn in;
+  memset(&in, 0, sizeof(in));
+  in.vendor    = sp["filament"]["vendor"]["name"] | "";
+  in.name      = sp["filament"]["name"] | "";
+  in.material  = sp["filament"]["material"] | "PLA";
+  in.color_hex = sp["filament"]["color_hex"] | "";
+  // What was on the spool when it was new: the spool's own figure first,
+  // then the filament's nominal one. The record carries a length class, not
+  // a weight, so 1 kg and 1.02 kg land on the same code.
+  float net = sp["initial_weight"] | 0.0f;
+  if (net <= 0) net = sp["filament"]["weight"] | 0.0f;
+  in.net_g    = net;
+  in.spool_id = spool_id;
+  struct tm now;
+  if (getLocalTime(&now, 0) && now.tm_year + 1900 >= 2024) {
+    in.month = now.tm_mon + 1;
+    in.day   = now.tm_mday;
+    in.year  = now.tm_year + 1900;
+  }
+  return crealityBuildRecord(in, rec);
+}
+
+bool tagCrealityCheck(int spool_id, const char* uid_str, bool* own, bool* differs,
+                      bool* serial_only) {
+  *own = false;
+  *differs = false;
+  if (serial_only) *serial_only = false;
+  unsigned b[4];
+  if (!uid_str || sscanf(uid_str, "%2x:%2x:%2x:%2x", &b[0], &b[1], &b[2], &b[3]) != 4) return false;
+  const uint8_t uid[4] = {(uint8_t)b[0], (uint8_t)b[1], (uint8_t)b[2], (uint8_t)b[3]};
+  char on_tag[41];
+  if (!crealityLastRecord(uid, on_tag)) return false;
+  JsonDocument doc;
+  if (backendGetSpoolJson(backendBaseUrl(), spool_id, doc) != 200 || doc.isNull()) return false;
+  JsonObjectConst sp = doc.as<JsonObjectConst>();
+  char want[41];
+  if (!crealityRecordFor(sp, spool_id, want)) return false;
+  char list[160], hex[9];
+  nfcUidText(sp, list, sizeof(list));
+  hex8Of(uid, hex);
+  *own = nfcUidListHas(list, hex);
+  // Everything but the date: vendor, batch, filament, colour, length and
+  // serial. The serial is the spool id on a tag a scale wrote; on an original
+  // Creality tag it is Creality's own number, 000001 on every spool seen so
+  // far - and CFSync takes the serial for the Spoolman spool id, so it linked
+  // spool 5's slot to spool 1 on 14.10.2026. serial_only tells that case
+  // apart: the filament agrees, only the id is missing.
+  *differs = memcmp(on_tag + 5, want + 5, 29) != 0;
+  const bool filament_same = memcmp(on_tag + 5, want + 5, 23) == 0;
+  if (serial_only) *serial_only = *differs && filament_same && !*own;
+  logSDf("CFS check: %s spool %d, %s tag (nfc_uid '%s'), tag %.29s, Spoolman %.29s%s", uid_str,
+         spool_id, *own ? "own" : "foreign", sp["extra"]["nfc_uid"].isNull() ? "<none>" : list,
+         on_tag + 5, want + 5, *differs ? " - differs" : "");
+  return true;
+}
+
+static bool writeCrealityJob(int spool_id, char *name, size_t name_len) {
+  name[0] = 0;
+  JsonDocument doc;
+  int code = backendGetSpoolJson(backendBaseUrl(), spool_id, doc);
+  if (code != 200 || doc.isNull()) {
+    char m[96];
+    snprintf(m, sizeof(m), "Spool %d not found on %s (HTTP %d)",
+             spool_id, backendName(), code);
+    finish("error", m, TW_ERR_BACKEND);
+    return false;
+  }
+  JsonObjectConst sp = doc.as<JsonObjectConst>();
+
+  char rec[41];
+  if (!crealityRecordFor(sp, spool_id, rec)) {
+    finish("error", "Could not build a Creality record for this spool", TW_ERR_WRITE);
+    return false;
+  }
+
+  uint8_t uid[4];
+  const CrealityWriteResult r = crealityWriteTag(rec, uid,
+                                                 s_cfs_has_expect ? s_cfs_expect : nullptr,
+                                                 s_cfs_wait, s_cfs_overwrite);
+  s_cfs_has_expect = false;
+  s_cfs_wait = nullptr;
+  s_cfs_overwrite = false;
+  cache_dirty = true;
+  switch (r) {
+    case CREALITY_WRITE_OK:
+      break;
+    case CREALITY_WRITE_NO_TAG:
+      finish("error", "No MIFARE tag on the reader", TW_ERR_NO_TAG);
+      return false;
+    case CREALITY_WRITE_IS_CREALITY:
+      finish("error", "Already a Creality tag, left as it is", TW_ERR_NOT_BLANK);
+      return false;
+    case CREALITY_WRITE_NOT_BLANK:
+      finish("error", "Not a blank tag, left as it is", TW_ERR_NOT_BLANK);
+      return false;
+    case CREALITY_WRITE_VERIFY_FAILED:
+      finish("error", "Written, but it did not read back - try again", TW_ERR_WRITE);
+      return false;
+    default:
+      finish("error", "Write failed - keep the tag still on the reader", TW_ERR_WRITE);
+      return false;
+  }
+  // Ours from now on: both scales may write it again when the spool changes.
+  nfcUidAdd(spool_id, sp, uid);
+  const char *n = sp["filament"]["name"] | "";
+  snprintf(name, name_len, "%s", n[0] ? n : "spool");
+  return true;
+}
+
 // The whole write for a caller that has no parking slot to go through - the
 // device screen and the FilaMan trigger both land here when no record came
 // with the request.
 bool tagWriteSpoolNow(int spool_id, TagFormat fmt) {
   if (spool_id <= 0) return false;
-  uint8_t uid[NFC_UID_MAX], uid_len = 0;
-  if (!selectWritableTag(uid, &uid_len)) return false;
-
   char name[48];
-  if (!writeSpoolRecord(spool_id, fmt, name, sizeof(name))) return false;
+  if (fmt == TAG_FMT_CREALITY) {
+    if (!writeCrealityJob(spool_id, name, sizeof(name))) return false;
+  } else {
+    uint8_t uid[NFC_UID_MAX], uid_len = 0;
+    if (!selectWritableTag(uid, &uid_len)) return false;
+    if (!writeSpoolRecord(spool_id, fmt, name, sizeof(name))) return false;
+  }
 
   char m[128];
   snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", spool_id, name,
@@ -1372,6 +1622,18 @@ void tagWriteTick() {
   scanTick();
   if (!pending) return;
   pending = false;
+
+  if (pending_fmt == TAG_FMT_CREALITY) {
+    // Follows a link that already happened, so there is nothing to link here.
+    char cname[48];
+    if (writeCrealityJob(pending_id, cname, sizeof(cname))) {
+      snprintf(report.name, sizeof(report.name), "%s", cname);
+      char m[128];
+      snprintf(m, sizeof(m), "Wrote spool %d (%s) as Creality CFS", pending_id, cname);
+      finish("ok", m, TW_OK);
+    }
+    return;
+  }
 
   uint8_t uid[NFC_UID_MAX], uid_len = 0;
   if (!selectWritableTag(uid, &uid_len)) return;

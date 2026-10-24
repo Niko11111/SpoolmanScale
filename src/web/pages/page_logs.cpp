@@ -98,7 +98,9 @@ static String body() {
   h += T(STR_W_SESSION_REFRESH);
   h += F("</button><button id='slc' class='quiet'>");
   h += T(STR_W_SESSION_COPY);
-  h += F("</button><span id='sls' class='note' style='margin:0'></span>"
+  h += F("</button><a href='/log/live' target='_blank'><button class='quiet'>");
+  h += T(STR_W_SESSION_OPEN);
+  h += F("</button></a><span id='sls' class='note' style='margin:0'></span>"
          "</div></div>");
   h += screenshotCard();
   h += F("</div>");
@@ -306,7 +308,86 @@ static String body() {
   return h;
 }
 
+
+// The session log on a page of its own: the whole window, a font size that
+// can be turned up, colour for the lines that matter and a filter. The card
+// on /logs is a 340 px box in 12 px type, too small to follow a tag being
+// written (17.10.2026). Same feed as the card, /api/log/session.
+static const char LIVE_HTML[] = R"HTML(<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>%TITLE%</title><style>
+:root{--bg:#111418;--bar:#1b2027;--fg:#d8dee6;--dim:#7d8794;--ok:#5fd38d;--warn:#f0b54a;--err:#ff6b6b;--hl:#3b82f6}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif}
+#bar{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;background:var(--bar);border-bottom:1px solid #2a313b}
+#bar b{font-size:16px;margin-right:8px}
+button,input{font:inherit;font-size:14px;border-radius:6px;border:1px solid #39424e;background:#252c35;color:var(--fg);padding:6px 10px}
+button{cursor:pointer}button.on{background:var(--hl);border-color:var(--hl);color:#fff}
+input{min-width:200px;flex:1;max-width:360px}
+#st{color:var(--dim);font-size:13px;margin-left:auto}
+pre{margin:0;padding:12px 16px 40px;font-family:ui-monospace,Consolas,Menlo,monospace;white-space:pre-wrap;word-break:break-word;line-height:1.45}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.err{color:var(--err)}.ts{color:var(--dim)}
+</style></head><body>
+<div id="bar"><b>%TITLE%</b>
+<button id="sm" title="-">A&minus;</button><button id="lg" title="+">A+</button>
+<button id="fw" class="on">&#9654; Live</button>
+<input id="q" type="search" placeholder="Filter">
+<button id="cp">%COPY%</button>
+<span id="st"></span></div>
+<pre id="out"></pre>
+<script>
+var NL=String.fromCharCode(10),seq=null,lines=[],follow=true,q='',fs=16,MAX=5000;
+try{fs=parseInt(localStorage.getItem('livelogfs'))||16;}catch(e){}
+var out=document.getElementById('out'),st=document.getElementById('st'),fw=document.getElementById('fw');
+function size(d){fs=Math.max(10,Math.min(32,fs+d));out.style.fontSize=fs+'px';
+try{localStorage.setItem('livelogfs',fs);}catch(e){}}
+size(0);
+var ERR=/error|fail|refus|not written|unreadable|abort|did not read back|not found|lost/i,
+OK=/written and verified|wrote spool|HTTP 20\d|-> OK| ok\b|identified|settled/i,
+WARN=/no answer|silent|stopped answering|noisy|waiting|weak|retry|again/i;
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function one(l){var c=ERR.test(l)?'err':(OK.test(l)?'ok':(WARN.test(l)?'warn':''));
+var m=l.match(/^(\[[^\]]*\])(.*)$/),t=m?'<span class="ts">'+esc(m[1])+'</span>'+esc(m[2]):esc(l);
+return c?'<span class="'+c+'">'+t+'</span>':t;}
+function render(){var f=q.toLowerCase(),o=[],n=0;
+for(var i=0;i<lines.length;i++){if(f&&lines[i].toLowerCase().indexOf(f)<0)continue;o.push(one(lines[i]));n++;}
+out.innerHTML=o.join(NL);
+st.textContent=n+(f?' / '+lines.length:'')+' · '+new Date().toLocaleTimeString();
+if(follow)window.scrollTo(0,document.body.scrollHeight);}
+function poll(){
+fetch('/api/log/session'+(seq===null?'':'?since='+seq)).then(function(r){
+seq=parseInt(r.headers.get('X-Log-Seq')||seq||0);var rst=r.headers.get('X-Log-Reset')==='1';
+return r.text().then(function(t){return{t:t,rst:rst};});}).then(function(d){
+if(d.rst)lines=[];
+if(d.t){var a=d.t.split(NL);for(var i=0;i<a.length;i++)if(a[i])lines.push(a[i]);
+if(lines.length>MAX)lines=lines.slice(-MAX);}
+if(d.rst||d.t)render();}).catch(function(){st.textContent='-';});}
+function setFollow(v){follow=v;fw.classList.toggle('on',v);fw.innerHTML=v?'&#9654; Live':'&#10074;&#10074; Pause';
+if(v)window.scrollTo(0,document.body.scrollHeight);}
+fw.onclick=function(){setFollow(!follow);};
+document.getElementById('sm').onclick=function(){size(-2);};
+document.getElementById('lg').onclick=function(){size(2);};
+document.getElementById('q').oninput=function(e){q=e.target.value;render();};
+window.addEventListener('wheel',function(e){if(e.deltaY<0&&follow)setFollow(false);
+else if(!follow&&window.innerHeight+window.scrollY>=document.body.scrollHeight-20)setFollow(true);});
+document.getElementById('cp').onclick=function(){var b=this,t=out.innerText;
+var done=function(ok){b.textContent=ok?'%COPIED%':'%COPYFAIL%';setTimeout(function(){b.textContent='%COPY%';},1500);};
+if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t).then(function(){done(true);},function(){done(false);});return;}
+var x=document.createElement('textarea');x.value=t;document.body.appendChild(x);x.select();
+var ok=false;try{ok=document.execCommand('copy');}catch(e){}document.body.removeChild(x);done(ok);};
+poll();setInterval(function(){if(!document.hidden)poll();},2000);
+</script></body></html>)HTML";
+
 static void routes(WebServer &srv) {
+  srv.on("/log/live", HTTP_GET, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_LOGS))) return;
+    String h(LIVE_HTML);
+    h.replace("%TITLE%",    T(STR_W_C_SESSION));
+    h.replace("%COPYFAIL%", T(STR_W_SESSION_COPYFAIL));
+    h.replace("%COPIED%",   T(STR_W_SESSION_COPIED));
+    h.replace("%COPY%",     T(STR_W_SESSION_COPY));
+    srv.sendHeader("Cache-Control", "no-store");
+    srv.send(200, "text/html; charset=utf-8", h);
+  });
   netProbeRoutes(srv);
   screenshotRoutes(srv);
   // ── SD-Card Log endpoints ─────────────────────────────────
