@@ -14,7 +14,8 @@ enum WeightLook : uint8_t {
   WL_COUNTING,     // lying still: the fill drains, the weight goes out when it is gone
   WL_SENT,         // written, until the spool comes off
   WL_UNCHANGED,    // under AUTO_WEIGHT_MIN_CHANGE_G off the backend: nothing written
-  WL_RISE          // heavier than the backend: nothing written, a tap asks
+  WL_RISE,         // heavier than the backend: nothing written, a tap asks
+  WL_NO_SPOOL      // tag present but the pad too light for its spool: nothing written
 };
 
 // Called once the main screen has built the button and its caption. Adds the
@@ -33,6 +34,10 @@ void weightButtonFill(uint32_t remaining_ms);
 void weightButtonIdle();
 
 WeightLook weightButtonLook();
+
+// Back to the idle look from one that only lasts while the spool lies still
+// (WL_COUNTING, WL_NO_SPOOL): the weight moved or weighing is held off.
+void weightButtonIdleIfWaiting();
 
 // Switches automatic weighing on or off, stores it and repaints the button.
 // The popup's row and the scale menu's row both go through here.

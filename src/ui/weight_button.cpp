@@ -31,7 +31,8 @@ static LookColours coloursFor(WeightLook look) {
     case WL_AUTO:      return { UI_COL_WEIGHT_BG, UI_COL_WEIGHT_BG_PRESSED, UI_COL_WEIGHT_AUTO };
     case WL_COUNTING:  return { UI_COL_WEIGHT_BG, UI_COL_WEIGHT_BG_PRESSED, UI_COL_WEIGHT_COUNT };
     case WL_SENT:      return { UI_COL_WEIGHT_BG, UI_COL_WEIGHT_SENT,       UI_COL_WEIGHT_SENT };
-    case WL_RISE:      return { UI_COL_AMBER_BG,  UI_COL_WARN,              UI_COL_WARN };
+    case WL_RISE:
+    case WL_NO_SPOOL:  return { UI_COL_AMBER_BG,  UI_COL_WARN,              UI_COL_WARN };
     case WL_UNCHANGED:
     case WL_MANUAL:
     default:           return { UI_COL_WEIGHT_BG, UI_COL_WEIGHT_BG_PRESSED, UI_COL_WEIGHT_TEXT };
@@ -58,6 +59,9 @@ static void captionFor(WeightLook look, float grams, char *buf, size_t len) {
     case WL_RISE:
       snprintf(num, sizeof(num), T(STR_WB_RISE), grams);
       snprintf(buf, len, LV_SYMBOL_WARNING "  %s", num);
+      return;
+    case WL_NO_SPOOL:
+      snprintf(buf, len, LV_SYMBOL_WARNING "  %s", T(STR_WB_NO_SPOOL));
       return;
     case WL_MANUAL:
     default:
@@ -125,6 +129,10 @@ void weightButtonIdle() {
 }
 
 WeightLook weightButtonLook() { return s_look; }
+
+void weightButtonIdleIfWaiting() {
+  if (s_look == WL_COUNTING || s_look == WL_NO_SPOOL) weightButtonIdle();
+}
 
 void autoWeightSwitch(bool on) {
   g_auto_weight = on;
