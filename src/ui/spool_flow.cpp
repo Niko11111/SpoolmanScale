@@ -85,36 +85,6 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 // cost 14 kB against the 56 kB free when the picker opens.
 #define LINK_GROUP_MAX 20
 
-// True when the filament name already opens with the material. Spoolman's own
-// naming does this, and BamBuddy's mapping always does ("PETG HF Orange"), so
-// prefixing the material a second time would read "PETG PETG HF Orange".
-bool nameStartsWithMaterial(const char* name, const char* material) {
-  if (!name || !name[0]) return false;
-  if (!material || !material[0]) return true;   // nothing left to prefix with
-  return strncasecmp(name, material, strlen(material)) == 0;
-}
-
-// Material and filament name as one line, without saying anything twice.
-// Besides a name that repeats the whole material, a name may repeat its
-// subtype: Spoolman libraries hold "PLA Tough+" with "Tough+ Cyan" and
-// "PETG Translucent" with "Translucent Gray", which read "PLA Tough+ Tough+
-// Cyan". The words the two share are written once, and only whole words.
-void joinMaterialName(const char* material, const char* name, char* out, size_t out_size) {
-  if (!name) name = "";
-  if (!material) material = "";
-  if (nameStartsWithMaterial(name, material)) { snprintf(out, out_size, "%s", name); return; }
-  for (const char* p = strchr(material, ' '); p; p = strchr(p + 1, ' ')) {
-    const char* tail = p + 1;
-    const size_t n = strlen(tail);
-    if (n && strncasecmp(name, tail, n) == 0 && (name[n] == '\0' || name[n] == ' ')) {
-      snprintf(out, out_size, "%s%s", material, name + n);
-      return;
-    }
-  }
-  // No name: the material alone, without a trailing space.
-  snprintf(out, out_size, "%s%s%s", material, name[0] ? " " : "", name);
-}
-
 // Sort order of the link and copy lists: vendor, material, name, id, all
 // case insensitive except the id. Spools without a vendor go last rather
 // than first, because they are shown as "unknown" and belong at the end of
@@ -1285,7 +1255,9 @@ static void fetchSpoolSummary(int spool_id, SpoolSummary &out) {
   const char* material = f["material"]       | "";
   const char* name     = f["name"]           | "";
   const char* color    = f["color_hex"]      | "";
-  snprintf(out.text, sizeof(out.text), "#%d  %s %s  %s", spool_id, vendor, material, name);
+  char joined[64]; joinMaterialName(material, name, joined, sizeof(joined));
+  char line[160]; snprintf(line, sizeof(line), "#%d  %s  %s", spool_id, vendor, joined);
+  utf8Cut(line, sizeof(out.text) - 1, out.text, sizeof(out.text));
   snprintf(out.color, sizeof(out.color), "%s", color);
 }
 
@@ -2465,12 +2437,10 @@ static void linkCopyConfirmFromRow(int cidx) {
   copy_confirm_initial = cs.total;
   copy_confirm_spool_w = cs.spool_weight;
   {
-    bool nm = (cs.material[0] && cs.name[0] &&
-               strncasecmp(cs.name, cs.material, strlen(cs.material)) == 0);
-    if (nm)
-      snprintf(copy_confirm_name, sizeof(copy_confirm_name), "%s (%s)", cs.name, cs.vendor);
-    else
-      snprintf(copy_confirm_name, sizeof(copy_confirm_name), "%s %s (%s)", cs.material, cs.name, cs.vendor);
+    char joined[96]; joinMaterialName(cs.material, cs.name, joined, sizeof(joined));
+    char full[sizeof(joined) + sizeof(cs.vendor) + 4];
+    snprintf(full, sizeof(full), "%s (%s)", joined, cs.vendor);
+    utf8Cut(full, sizeof(copy_confirm_name) - 1, copy_confirm_name, sizeof(copy_confirm_name));
   }
   copyLookFromRow(copy_confirm_look, cs);
   copy_confirm_pending = true;
