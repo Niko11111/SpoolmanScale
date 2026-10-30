@@ -4241,6 +4241,9 @@ const char* const STRINGS[][3] = {
   { "Ohne Tag findest du sie nur über diese Nummer, mit \"Spule per ID\".",
     "Without a tag, this number is the only way back to it, with \"Spool by ID\".",
     "Sans tag, il faut ce numéro pour la retrouver, via \"Bobine par ID\"." },  // STR_NEWSPOOL_HINT_NOT_SHOWN
+  // Weight button (weight_button.cpp): a tag is read but the pad weighs too
+  // little for its spool, so nothing is written.
+  { "Spule fehlt", "No spool", "Pas de bobine" },  // STR_WB_NO_SPOOL
 };
 
 StringID tagWriteResultString(uint8_t code) {

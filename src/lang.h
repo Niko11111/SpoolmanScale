@@ -1943,6 +1943,8 @@ enum StringID {
   STR_NEWSPOOL_HINT_WRITE,    // its sentence without a printer
   STR_NEWSPOOL_HINT_LABEL,    // its sentence with a label printer
   STR_NEWSPOOL_HINT_NOT_SHOWN,// its sentence when the new spool is not on the display
+  // Weight button: a tag is read but the pad is too light for its spool
+  STR_WB_NO_SPOOL,
   STR_COUNT
 };
 
