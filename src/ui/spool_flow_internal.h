@@ -22,6 +22,7 @@
 #include "services/spool_color.h"
 #include "services/tag_field.h"
 #include "services/tag_uid.h"
+#include "services/text_util.h"
 
 // One row of the link and copy lists, in PSRAM.
 struct UnlinkedSpool {
@@ -97,8 +98,6 @@ struct CopyLook {
 extern CopyLook copy_confirm_look;
 void copyLookFromRow(CopyLook& look, const UnlinkedSpool& s);
 
-bool nameStartsWithMaterial(const char* name, const char* material);
-void joinMaterialName(const char* material, const char* name, char* out, size_t out_size);
 void addListMoreInfo(lv_obj_t* list, StringID str_id);
 void linkPickerReset();
 void linkPickerForCopy(bool archived);
