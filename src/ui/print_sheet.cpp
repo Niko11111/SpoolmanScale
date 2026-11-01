@@ -142,7 +142,8 @@ static void renderPreview() {
   const bool ok = s_kind == LABEL_KIND_FILAMENT ? labelRenderFilament(c, layout, spool, &r)
                                                : labelRenderSpool(c, layout, spool, &r);
   if (ok) showPicture(r, LabelThumbSpec{ labelPrinterContentX(c), r.content_width,
-                                         labelLayoutOption(layout, LO_PORTRAIT),
+                                         labelLayoutOption(layout, LO_PORTRAIT) ||
+                                             labelPrinterIsTape(c.model),
                                          PS_THUMB_MAX_W, PS_THUMB_MAX_H });
   else showMessage(T(STR_W_L_PREVIEW_FAIL));
   labelRasterFree(&r);
@@ -157,6 +158,15 @@ static void styleKind(lv_obj_t* b, bool on) {
   if (l) lv_obj_set_style_text_color(l, lv_color_hex(on ? UI_COL_ACCENT : UI_COL_OFF_TEXT), 0);
 }
 
+// The rows that change our layout: the arrangement and upright or flat.
+static void showLayoutRows(bool show) {
+  lv_obj_t* const rows[] = { s_row_preset, s_row_turn };
+  for (lv_obj_t* r : rows) {
+    if (show) lv_obj_clear_flag(r, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(r, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
 // Everything the sheet says, from what is saved now.
 static void refresh() {
   if (!s_scr) return;
@@ -165,9 +175,9 @@ static void refresh() {
   const LabelLayout l = labelLayoutLoad(s_kind);
   const LabelPrinterConfig c = labelPrinterLoadConfig();
   const LabelPrinterProfile& p = labelPrinterProfile(c.model);
-  // FilaMan's preset has its own layout: the rows that change ours step aside.
-  if (server) { lv_obj_add_flag(s_row_preset, LV_OBJ_FLAG_HIDDEN); lv_obj_add_flag(s_row_turn, LV_OBJ_FLAG_HIDDEN); }
-  else { lv_obj_clear_flag(s_row_preset, LV_OBJ_FLAG_HIDDEN); lv_obj_clear_flag(s_row_turn, LV_OBJ_FLAG_HIDDEN); }
+  // FilaMan's preset has its own layout, and so has a tape printer: the rows
+  // that change ours step aside.
+  showLayoutRows(!server && !labelPrinterIsTape(c.model));
   if (server) lv_obj_clear_flag(s_row_server, LV_OBJ_FLAG_HIDDEN);
   else lv_obj_add_flag(s_row_server, LV_OBJ_FLAG_HIDDEN);
   lv_label_set_text(s_sub_preset, T(presetCaption(l.preset)));

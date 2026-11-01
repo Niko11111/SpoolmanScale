@@ -88,17 +88,30 @@ static const LabelPrinterProfile PROFILE_NIIMBOT_M2 = {
   300, LP_PROTO_NIIMBOT
 };
 
+// NIIMBOT D110 and D110 M: 96 dots, 12 mm, 203 dpi, each on its task from
+// niimbluelib (the D110 M on the V4 task from protocol 4 on). The roll runs
+// lengthwise under the head, so a 12 x 40 label is 96 dots across and 320
+// along the feed, and what is on it is drawn lying and turned
+// (labelPrinterIsTape()). Only 12 x 40, the roll a D110 M reports as
+// T12*40-160 (31.10.2026); 12 mm is all the head prints, a wider roll would
+// print the same 12. Experimental until it has printed.
+static const LabelPrinterProfile PROFILE_NIIMBOT_D110 = {
+  LP_MODEL_NIIMBOT_D110, "NIIMBOT", "D110, D110 M", 12, 40, 12, 12, 40, 40, 96, 96, true, true,
+  203, LP_PROTO_NIIMBOT
+};
+
 const LabelPrinterModel LABEL_PRINTER_MODELS[] = {
   LP_MODEL_M220, LP_MODEL_NIIMBOT_M2, LP_MODEL_M110, LP_MODEL_M110S, LP_MODEL_M100,
-  LP_MODEL_NIIMBOT_B, LP_MODEL_M120, LP_MODEL_M200, LP_MODEL_M221,
+  LP_MODEL_NIIMBOT_B, LP_MODEL_M120, LP_MODEL_M200, LP_MODEL_M221, LP_MODEL_NIIMBOT_D110,
 };
 const int LABEL_PRINTER_MODEL_COUNT = sizeof(LABEL_PRINTER_MODELS) / sizeof(LABEL_PRINTER_MODELS[0]);
 
 // The two sizes printed and checked on the M220 for 0.8.0 (Nikolai,
 // 26.09.2026). 40 x 20 and 30 x 20 leave no room for the code; the larger
 // ones come back with the label presets.
+// 12 x 40 is the D110's tape, which only it takes.
 const LabelMediaSize LABEL_MEDIA_SIZES[] = {
-  {40, 30}, {50, 30},
+  {40, 30}, {50, 30}, {12, 40},
 };
 const int LABEL_MEDIA_SIZE_COUNT = sizeof(LABEL_MEDIA_SIZES) / sizeof(LABEL_MEDIA_SIZES[0]);
 
@@ -148,6 +161,7 @@ const LabelPrinterProfile& labelPrinterProfile(LabelPrinterModel model) {
     case LP_MODEL_M221: return PROFILE_M221;
     case LP_MODEL_NIIMBOT_B:  return PROFILE_NIIMBOT_B;
     case LP_MODEL_NIIMBOT_M2: return PROFILE_NIIMBOT_M2;
+    case LP_MODEL_NIIMBOT_D110: return PROFILE_NIIMBOT_D110;
     default:            return PROFILE_NONE;
   }
 }
@@ -235,6 +249,10 @@ bool labelPrinterConfigured(const LabelPrinterConfig& c) { return c.address[0] !
 
 bool labelPrinterRecommended(LabelPrinterModel model) {
   return model == LP_MODEL_M220 || model == LP_MODEL_NIIMBOT_M2;
+}
+
+bool labelPrinterIsTape(LabelPrinterModel model) {
+  return model == LP_MODEL_NIIMBOT_D110;
 }
 
 bool labelPrinterForget() {
@@ -331,7 +349,9 @@ static LabelPrintResult fromBle(BleWriteResult r) {
 static LabelPrintResult printNiimbot(const LabelPrinterProfile& p, const LabelPrinterConfig& c,
                                      const LabelRaster& image, BleProgressFn progress) {
   NiimbotJobInfo info{};
-  const NiimbotClass cls = p.model == LP_MODEL_NIIMBOT_M2 ? NB_CLASS_M2 : NB_CLASS_B;
+  const NiimbotClass cls = p.model == LP_MODEL_NIIMBOT_M2   ? NB_CLASS_M2
+                          : p.model == LP_MODEL_NIIMBOT_D110 ? NB_CLASS_D110
+                                                             : NB_CLASS_B;
   const NiimbotResult r = niimbotPrint(c.address, image, cls, progress, &info);
   logSDf("Printer: NIIMBOT %s result=%d model=0x%04X transport=%d", p.name, (int)r,
          (unsigned)info.model_id, (int)info.transport);

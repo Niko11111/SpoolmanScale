@@ -73,8 +73,7 @@
 #define NB_STATUS_DATA_MIN_LEN  13  // the status data up to its version bytes
 #define NB_STATUS_DATA_VER_HI   11  // the version as hi * 100 + lo
 #define NB_STATUS_DATA_VER_LO   12
-#define NB_PROTO_V4_FROM       300  // the first status version of protocol 4
-#define NB_PROTO_V3_FROM       204  // and of protocol 3
+#define NB_PAGE_SIZE_V4_LEN    13  // the V4 task's page size: niimbluelib's setPageSize13b
 #define NB_PRINT_STATUS_ERR_LEN 10  // a print status this long carries an error code
 #define NB_PRINT_STATUS_ERR_AT   6
 
@@ -94,8 +93,11 @@ static const NiimbotModelInfo NB_MODELS[] = {
   { 2816, "B203",     NB_TASK_B1,     400, 203, NB_DIR_TOP,  false, true  },
   { 6913, "B2",       NB_TASK_B1,     384, 203, NB_DIR_TOP,  false, true  },
   { 4608, "M2",       NB_TASK_B1,     567, 300, NB_DIR_TOP,  true,  false },
-  { 2304, "D110",     NB_TASK_D110,    96, 203, NB_DIR_LEFT, false, false },
-  { 2305, "D110",     NB_TASK_D110,    96, 203, NB_DIR_LEFT, false, false },
+  { NB_ID_D110_A, "D110", NB_TASK_D110,  96, 203, NB_DIR_LEFT, false, false },
+  { NB_ID_D110_B, "D110", NB_TASK_D110,  96, 203, NB_DIR_LEFT, false, false },
+  // The D110 M: the B1's task, or on protocol 4 the V4 task
+  // (niimbotTaskFor()), as niimbluelib's print_tasks table has it.
+  { NB_ID_D110_M, "D110 M", NB_TASK_B1,  96, 203, NB_DIR_LEFT, false, false },
   {  512, "D11",      NB_TASK_D110,    96, 203, NB_DIR_LEFT, false, false },
   { 2560, "D101",     NB_TASK_B1,     192, 203, NB_DIR_LEFT, false, false },
   { 3584, "B18",      NB_TASK_B1,      96, 203, NB_DIR_LEFT, true,  true  },
@@ -144,6 +146,8 @@ struct NbJob {
   uint32_t t0;
   bool     connect_prefix;      // the 0x03 the app sends before its connect frame
   bool     first_row_logged;
+  uint8_t  proto;               // the protocol version the printer told, 0 when it told none
+  NiimbotTask task;             // the print sequence for this printer, see niimbotTaskFor()
   uint8_t  chunk;               // bytes per third for the row counts, 0 = total mode
   uint16_t tx, rx_frames;
   uint8_t  rx[NB_RX_MAX];
@@ -282,7 +286,8 @@ static void nbLogProtocolVersion(NbJob& job) {
   if (nbRequest1(job, NB_CMD_STATUS_DATA, 1, NB_RPL_STATUS_DATA) != NB_OK ||
       job.len < NB_STATUS_DATA_MIN_LEN) return;
   const unsigned n = job.data[NB_STATUS_DATA_VER_HI] * 100u + job.data[NB_STATUS_DATA_VER_LO];
-  const uint8_t v = n >= NB_PROTO_V4_FROM ? 4 : n >= NB_PROTO_V3_FROM ? 3 : 0;
+  const uint8_t v = niimbotProtocolFromStatus(n);
+  job.proto = v;
   if (job.info) job.info->protocol_version = v;
   logSDf("NIIMBOT: protocol version %u (status %u)", (unsigned)v, n);
 }
@@ -315,13 +320,20 @@ static void nbLogExtras(NbJob& job) {
 }
 
 static const char* taskName(NiimbotTask t) {
-  return t == NB_TASK_B1 ? "B1" : t == NB_TASK_D110 ? "D110" : "B21_V1";
+  return t == NB_TASK_B1 ? "B1" : t == NB_TASK_D110 ? "D110" : t == NB_TASK_V4 ? "V4" : "B21_V1";
 }
 
 static bool classFits(NiimbotClass cls, const NiimbotModelInfo& m) {
+  // The D110 and the D110 M. The D11 and the B18 have the same head, but
+  // nobody has printed on them from the scale; each joins when someone has.
+  if (cls == NB_CLASS_D110) return niimbotIsD110(m.id);
   if (m.dir != NB_DIR_TOP) return false;
   if (cls == NB_CLASS_M2) return m.dpi == 300 && m.head_px <= 568;
   return m.dpi == 203 && m.head_px >= 384 && m.head_px <= 400;
+}
+
+static const char* className(NiimbotClass cls) {
+  return cls == NB_CLASS_M2 ? "M2" : cls == NB_CLASS_D110 ? "D110" : "B";
 }
 
 static NiimbotResult nbCheckModel(NbJob& job, NiimbotClass cls, uint16_t id) {
@@ -331,14 +343,16 @@ static NiimbotResult nbCheckModel(NbJob& job, NiimbotClass cls, uint16_t id) {
     logSDf("NIIMBOT: model id=0x%04X (%u) not in the table, please report it", id, id);
     return NB_MODEL_UNKNOWN;
   }
+  const NiimbotTask task = niimbotTaskFor(m->id, m->task, job.proto);
   logSDf("NIIMBOT: model id=0x%04X %s task=%s%s head=%u dpi=%u dir=%s%s", id, m->name,
-         taskName(m->task), m->task_is_guess ? " (guess)" : "", m->head_px, m->dpi,
+         taskName(task), m->task_is_guess ? " (guess)" : "", m->head_px, m->dpi,
          m->dir == NB_DIR_TOP ? "top" : "left", m->thermal_transfer ? " ribbon" : "");
   if (!classFits(cls, *m)) {
-    logSDf("NIIMBOT: %s is not of the picked class %s", m->name, cls == NB_CLASS_M2 ? "M2" : "B");
+    logSDf("NIIMBOT: %s is not of the picked class %s", m->name, className(cls));
     return NB_MODEL_MISMATCH;
   }
   job.model = m;
+  job.task = task;
   return NB_OK;
 }
 
@@ -356,12 +370,25 @@ static NiimbotResult nbIdentify(NbJob& job, NiimbotClass cls) {
   return nbCheckModel(job, cls, id);
 }
 
+// The V4 task's start: the label type before the density, and a start
+// that carries the speed and one more flag behind the colour, both 0 as the
+// app sends them (niimbluelib's D110MV4PrintTask, printStart9b).
+static NiimbotResult nbInitV4(NbJob& job) {
+  NiimbotResult r = nbRequest1(job, NB_CMD_SET_LABEL_TYPE, NB_LABEL_WITH_GAPS, NB_RPL_SET_LABEL_TYPE);
+  if (r != NB_OK) return r;
+  r = nbRequest1(job, NB_CMD_SET_DENSITY, NB_DENSITY, NB_RPL_SET_DENSITY);
+  if (r != NB_OK) return r;
+  static const uint8_t start[9] = { 0, 1, 0, 0, 0, 0, 0, 0, 0 };
+  return nbRequest(job, NB_CMD_PRINT_START, start, sizeof(start), NB_RPL_PRINT_START);
+}
+
 static NiimbotResult nbInit(NbJob& job) {
+  if (job.task == NB_TASK_V4) return nbInitV4(job);
   NiimbotResult r = nbRequest1(job, NB_CMD_SET_DENSITY, NB_DENSITY, NB_RPL_SET_DENSITY);
   if (r != NB_OK) return r;
   r = nbRequest1(job, NB_CMD_SET_LABEL_TYPE, NB_LABEL_WITH_GAPS, NB_RPL_SET_LABEL_TYPE);
   if (r != NB_OK) return r;
-  if (job.model->task == NB_TASK_B1) {
+  if (job.task == NB_TASK_B1) {
     // One page, single colour: u16 pages, four zero bytes, the colour.
     static const uint8_t start[7] = { 0, 1, 0, 0, 0, 0, 0 };
     return nbRequest(job, NB_CMD_PRINT_START, start, sizeof(start), NB_RPL_PRINT_START);
@@ -369,8 +396,23 @@ static NiimbotResult nbInit(NbJob& job) {
   return nbRequest1(job, NB_CMD_PRINT_START, 1, NB_RPL_PRINT_START);
 }
 
+// The V4 task's page: no page start, a status request it does not wait for
+// (the app sends one there; its reply is skipped like any other), and a
+// 13 byte size: rows, cols, copies, then the cut height, the cut type, a
+// zero, "send all" and the part height, all 0 for one die-cut label.
+static NiimbotResult nbPageStartV4(NbJob& job, uint16_t rows, uint16_t cols) {
+  static const uint8_t status = 1;
+  if (!nbSend(job, NB_CMD_PRINT_STATUS, &status, 1, false)) return NB_TRANSPORT;
+  uint8_t size[NB_PAGE_SIZE_V4_LEN] = {};
+  putU16(size, rows);
+  putU16(size + 2, cols);
+  putU16(size + 4, 1);
+  return nbRequest(job, NB_CMD_PAGE_SIZE, size, sizeof(size), NB_RPL_PAGE_SIZE);
+}
+
 static NiimbotResult nbPageStart(NbJob& job, uint16_t rows, uint16_t cols) {
-  const NiimbotTask task = job.model->task;
+  const NiimbotTask task = job.task;
+  if (task == NB_TASK_V4) return nbPageStartV4(job, rows, cols);
   NiimbotResult r = NB_OK;
   if (task == NB_TASK_D110) r = nbRequest1(job, NB_CMD_PRINT_CLEAR, 1, NB_RPL_PRINT_CLEAR);
   if (r != NB_OK) return r;
@@ -456,7 +498,7 @@ static NiimbotResult nbSendRows(NbJob& job, const LabelRaster& image) {
   const uint8_t nbytes = (uint8_t)((job.model->head_px + 7) / 8);
   const uint8_t copy = image.row_bytes < nbytes ? (uint8_t)image.row_bytes : nbytes;
   const uint8_t third = (uint8_t)(job.model->head_px / 8 / 3);
-  job.chunk = job.model->task != NB_TASK_B21_V1 && nbytes <= third * 3 ? third : 0;
+  job.chunk = job.task != NB_TASK_B21_V1 && nbytes <= third * 3 ? third : 0;
   uint8_t row[NB_DATA_MAX];
   unsigned packets = 0, blank = 0, merged = 0;
   bleTalkSetPhase(BLE_PHASE_SEND);
@@ -519,7 +561,7 @@ static NiimbotResult nbFinishByStatus(NbJob& job) {
 
 static NiimbotResult nbFinish(NbJob& job) {
   bleTalkSetPhase(BLE_PHASE_AWAIT);
-  return job.model->task == NB_TASK_B21_V1 ? nbFinishByEnd(job) : nbFinishByStatus(job);
+  return job.task == NB_TASK_B21_V1 ? nbFinishByEnd(job) : nbFinishByStatus(job);
 }
 
 static NiimbotResult nbRun(NbJob& job, const LabelRaster& image, NiimbotClass cls) {

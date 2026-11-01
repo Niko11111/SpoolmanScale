@@ -112,8 +112,10 @@ static void serverJson(String& j, const LabelPrinterConfig& c, int spool_id) {
   static const char* const PREVIEW_STATES[] = { "none", "loading", "ready", "failed" };
   const FilamanLabelPresetList* list = nullptr;
   const LabelServerListState st = labelServerList(&list);
+  // A tape printer prints its own label, never a preset (labelServerInUse()):
+  // the page shows the scale's preview for it, not the server's.
   j += F(",\"source\":");
-  j += String(labelServerPresetId());
+  j += String(labelPrinterIsTape(c.model) ? 0 : labelServerPresetId());
   j += F(",\"fm\":\"");
   j += LIST_STATES[st];
   j += F("\",\"presets\":[");
@@ -536,6 +538,10 @@ static void scriptFunctions(String& h) {
          "$('lme').textContent=d.options&PB?L.upright:'';"
          "$('ldpi').textContent=d.dpi+' dpi';"
          "if(document.activeElement!==$('lpm'))$('lpm').value=String(d.modelId);"
+         // Only the sizes the picked model takes; disabled as well, for the
+         // browsers that ignore hidden on an option.
+         "$('lps').querySelectorAll('option[data-fit]').forEach(function(o){"
+         "o.hidden=o.disabled=o.dataset.fit.split(' ').indexOf(String(d.modelId))<0;});"
          "if(document.activeElement!==$('lps'))$('lps').value=d.mediaKey;"
          "$('lsa').style.display=d.spool||srv(d)?'none':'';"
          "$('lnp').style.display=d.configured?'none':'';"
@@ -676,7 +682,8 @@ static void sendPreview(WebServer& srv, LabelKind kind) {
     srv.send(409, "text/plain", T(STR_W_L_PREVIEW_FAIL));
     return;
   }
-  sendRasterBmp(srv, r, labelPrinterContentX(c), labelLayoutOption(layout, LO_PORTRAIT));
+  sendRasterBmp(srv, r, labelPrinterContentX(c),
+                labelLayoutOption(layout, LO_PORTRAIT) || labelPrinterIsTape(c.model));
   labelRasterFree(&r);
 }
 

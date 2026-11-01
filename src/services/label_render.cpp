@@ -13,6 +13,7 @@
 #include "services/backend.h"
 #include "services/label_draw.h"
 #include "services/label_facts.h"
+#include "services/label_tape.h"
 #include "services/text_util.h"
 
 using namespace labeldraw;
@@ -592,6 +593,13 @@ bool labelRenderTest(const LabelPrinterConfig& printer, LabelRaster* out) {
   snprintf(d.name, sizeof(d.name), "%s  %ux%u  %s", labelPrinterProfile(printer.model).name,
            (unsigned)printer.media_width_mm, (unsigned)printer.media_length_mm,
            dash ? dash + 1 : FW_VERSION);
+  // The tape has no room for the sentence and the code: the three lines say
+  // what it is, the size and the build in the name, the printer left out.
+  if (labelPrinterIsTape(printer.model)) {
+    snprintf(d.name, sizeof(d.name), "%ux%u  %s", (unsigned)printer.media_width_mm,
+             (unsigned)printer.media_length_mm, dash ? dash + 1 : FW_VERSION);
+    return labelRenderTape(printer, d, false, "test", out);
+  }
   const char* lines[] = { T(STR_LBL_TEST_DONATE) };
   // Always the standard arrangement: the test print checks the printer, not
   // the template.
@@ -608,6 +616,9 @@ static lv_coord_t rulerDot(LabelPrinterModel model, lv_coord_t centre, int v) {
 
 bool labelRenderCalibration(const LabelPrinterConfig& printer, LabelRaster* out) {
   if (!out) return false;
+  // A tape printer's head is as wide as the tape: there is no offset to
+  // read off, and the test label shows where the print sits.
+  if (labelPrinterIsTape(printer.model)) return labelRenderTest(printer, out);
   *out = LabelRaster{};
   const uint16_t content_w = labelPrinterContentWidth(printer.model, printer.media_width_mm);
   const uint16_t h = labelPrinterDotsForMm(printer.model, printer.media_length_mm);
@@ -752,6 +763,8 @@ void labelQrForFilament(int filament_id, char* out, size_t n) {
 
 bool labelRenderFilament(const LabelPrinterConfig& printer, const LabelLayout& layout,
                          const SpoolLabelData& spool, LabelRaster* out) {
+  // The tape's own arrangement, without the spool's number: see label_tape.h.
+  if (labelPrinterIsTape(printer.model)) return labelRenderTape(printer, spool, false, "filament", out);
   char qr[LABEL_QR_LEN];
   labelQrForFilament(spool.filament_id, qr, sizeof(qr));
   // No page to open: the label is laid out as one without a code.
@@ -767,6 +780,8 @@ bool labelRenderFilament(const LabelPrinterConfig& printer, const LabelLayout& l
 
 bool labelRenderSpool(const LabelPrinterConfig& printer, const LabelLayout& layout,
                       const SpoolLabelData& spool, LabelRaster* out) {
+  // The tape's own arrangement: maker, material, name and the number.
+  if (labelPrinterIsTape(printer.model)) return labelRenderTape(printer, spool, true, "spool", out);
   char qr[LABEL_QR_LEN];
   labelQrForSpool(spool.id, qr, sizeof(qr));
   const int capacity = labelFactCapacity(layout, printer.media_width_mm, printer.media_length_mm);
