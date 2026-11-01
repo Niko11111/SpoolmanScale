@@ -27,6 +27,7 @@
 int  labelServerPresetId();
 bool labelServerSetPresetId(int id);
 // Whether a spool label comes from the server: FilaMan, and a preset chosen.
+// Never for a tape printer: that one prints its own fixed label.
 bool labelServerInUse();
 
 enum LabelServerListState : uint8_t {

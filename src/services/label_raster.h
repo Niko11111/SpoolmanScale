@@ -17,9 +17,10 @@
 //  gives them back.
 // ============================================================
 
-// The narrowest label any profile takes, 20 mm at 203 dpi: the M110S sends a
-// row as wide as the label, not the head's 384 dots (issue #55).
-#define LABEL_RASTER_MIN_W  160
+// The narrowest print row any profile sends: the D110's 96 dot head, 12 mm
+// at 203 dpi. Was 160 (20 mm, the M110S's narrowest label, issue #55)
+// before the tape printers.
+#define LABEL_RASTER_MIN_W  96
 #define LABEL_RASTER_MAX_W  1024
 #define LABEL_RASTER_MAX_BYTES (256u * 1024u)
 

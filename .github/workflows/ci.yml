@@ -33,6 +33,10 @@ jobs:
         run: python3 test/test_label_fit.py
       - name: Test label raster crop
         run: python3 test/test_label_raster_crop.py
+      - name: Test label tape maker name
+        run: python3 test/test_label_tape_name.py
+      - name: Test NIIMBOT task selection
+        run: python3 test/test_niimbot_task.py
       - name: Test label empty fields
         run: python3 test/test_label_gaps.py
       - name: Test local date parser

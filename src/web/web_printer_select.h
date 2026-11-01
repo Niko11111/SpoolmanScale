@@ -9,5 +9,6 @@
 // printer page's routes. The current choice is selected.
 void webPrinterModelOptions(String& h, const LabelPrinterConfig& c);
 // A size set elsewhere and not in the table is listed too, selected and
-// inert, so it is shown rather than silently replaced.
+// inert, so it is shown rather than silently replaced. Each size carries
+// data-fit, the models that take it, for the page to hide the others.
 void webPrinterMediaOptions(String& h, const LabelPrinterConfig& c);

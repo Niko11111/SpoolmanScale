@@ -92,6 +92,9 @@ bool labelServerSetPresetId(int id) {
 // preset kept from another server never stands between the user and a label.
 bool labelServerInUse() {
   if (backendMode() != BACKEND_FILAMAN || labelServerPresetId() <= 0) return false;
+  // A tape printer has its own fixed label (services/label_tape.h); a preset
+  // drawn for a label would not fit 12 mm.
+  if (labelPrinterIsTape(labelPrinterLoadConfig().model)) return false;
   return !(s_list_state == LS_ABSENT && s_list_gen == backendGeneration());
 }
 
