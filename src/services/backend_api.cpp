@@ -114,8 +114,8 @@ int backendGetSpoolListJson(const char* base_url, bool allow_archived, JsonDocum
   if (archived_only) allow_archived = true;
   switch (backendMode()) {
     case BACKEND_FILAMAN:
-      // The Spoolman JSON filter does not apply, FilaMan is translated field by
-      // field and only the keys the UI reads are produced anyway.
+      // The Spoolman JSON filter does not apply: FilaMan is translated field by
+      // field, and its raw page has a filter of its own, spoolListFilter().
       (void)filter;
       return filamanGetSpoolListJson(backendBaseUrl(), filamanApiKey(), allow_archived,
                                      doc, nullptr, FILAMAN_LIST_PAGE_ROWS,

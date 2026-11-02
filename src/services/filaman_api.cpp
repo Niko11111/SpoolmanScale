@@ -1571,6 +1571,37 @@ int filamanGetSpoolJson(const char* base_url, const char* api_key, int spool_id,
   return 200;
 }
 
+// What mapSpool() reads of a spool in a list. The rest of a page, a quarter more
+// since FilaMan 2.0 and growing with its filament fields, stays off the heap.
+// test_filaman_list_filter.py fails when mapSpool() reads a field not named here.
+static void spoolListFilter(JsonDocument& filter) {
+  filter["total"] = true;
+  JsonObject s = filter["items"].to<JsonArray>().add<JsonObject>();
+  for (const char* key : { "id", "remaining_weight_g", "empty_spool_weight_g", "initial_total_weight_g",
+                           "status_id", "last_used_at", "created_at", "location_id", "rfid_uid",
+                           "rfid_uid_2", "external_id" })
+    s[key] = true;
+  JsonObject cf = s["custom_fields"].to<JsonObject>();
+  for (const char* key : { "spoolmanscale_tag", "bambu_rfid_tag_1", "bambu_rfid_tag_2", "last_dried" })
+    cf[key] = true;
+  cf["spoolman_extra"]["tag"]        = true;
+  cf["spoolman_extra"]["last_dried"] = true;
+
+  JsonObject f = s["filament"].to<JsonObject>();
+  for (const char* key : { "id", "designation", "material_type", "material_subgroup",
+                           "raw_material_weight_g", "default_spool_weight_g", "manufacturer_id", "shop_url",
+                           FM_DRYING_TEMP_FIELD, FM_DRYING_HOURS_FIELD, FM_FIL_NATIVE_FIELD,
+                           FM_FIL_BED_FIELD })
+    f[key] = true;
+  f["manufacturer"]["name"] = true;
+  f["manufacturer"]["empty_spool_weight_g"] = true;
+  f["colors"].to<JsonArray>().add<JsonObject>()["color"]["hex_code"] = true;
+  JsonObject fcf = f["custom_fields"].to<JsonObject>();
+  for (const char* key : { "article_number", "bambu_product_code", "drying", "temp_nozzle_min",
+                           "temp_nozzle_max", "temp_bed" })
+    fcf[key] = true;
+}
+
 int filamanGetSpoolListJson(const char* base_url, const char* api_key,
                             bool include_archived, JsonDocument& out_doc,
                             const char* search_term, int page_size,
@@ -1596,6 +1627,12 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
   int fetched = 0;
   int total = -1;
   size_t progress_bytes = 0;
+
+  SpiRamAllocator filter_alloc;
+  JsonDocument filter(&filter_alloc);
+  spoolListFilter(filter);
+  if (filter.overflowed()) logSD("FilaMan: spool list filter overflowed, fields will be missing");
+  const auto only_read = DeserializationOption::Filter(filter);
 
   // timeout_ms applies to the whole call, not to each page. Without this a
   // 20 second timeout over 20 pages could block the loop for minutes with
@@ -1634,10 +1671,10 @@ int filamanGetSpoolListJson(const char* base_url, const char* api_key,
     DeserializationError err = DeserializationError::Ok;
     if (httpProgressActive()) {
       HttpProgressStream ps(http.getStream(), progress_bytes);
-      err = deserializeJson(raw, ps);
+      err = deserializeJson(raw, ps, only_read);
       progress_bytes = ps.total();
     } else {
-      err = deserializeJson(raw, http.getStream());
+      err = deserializeJson(raw, http.getStream(), only_read);
     }
     http.end();
     if (err) {
