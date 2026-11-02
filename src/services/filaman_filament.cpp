@@ -16,6 +16,7 @@
 #include "tag_db_match.h"
 
 #define FM_FIL_TIMEOUT_MS   8000
+#define FM_FIL_DRYING_TEXT_MAX  24
 // prepare-filament fetches a new maker's two logos from the FilamentDB, 15 s
 // each at the most; usually it answers within a second.
 #define FM_PREPARE_TIMEOUT_MS  20000
@@ -384,10 +385,13 @@ static void addNativeFields(const TagCreateInput& in, JsonDocument& body) {
     bed["min"] = in.db_bed_temp;
     bed["max"] = in.db_bed_temp;
   }
+  if (in.dry_temp_c > 0) body[FM_DRYING_TEMP_FIELD]  = in.dry_temp_c;
+  if (in.dry_hours > 0)  body[FM_DRYING_HOURS_FIELD] = in.dry_hours;
 }
 
 // FilaMan before 2.0 drops the native fields and answers without them: the
-// temperatures then go where its forms show them, in a write of their own.
+// temperatures and the drying then go where its forms and this scale read them,
+// in a write of their own.
 static void writeLegacyFields(const char* base_url, const char* api_key, int filament_id,
                              const TagCreateInput& in, JsonDocument& sent) {
   JsonDocument body;
@@ -395,13 +399,18 @@ static void writeLegacyFields(const char* base_url, const char* api_key, int fil
   if (in.temp_min > 0)    body["custom_fields"]["temp_nozzle_min"] = in.temp_min;
   if (in.temp_max > 0)    body["custom_fields"]["temp_nozzle_max"] = in.temp_max;
   if (in.db_bed_temp > 0) body["custom_fields"]["temp_bed"] = in.db_bed_temp;
+  if (in.dry_temp_c > 0 && in.dry_hours > 0) {
+    char drying[FM_FIL_DRYING_TEXT_MAX];
+    dryingFormat(in.dry_temp_c, in.dry_hours, drying, sizeof(drying));
+    body["custom_fields"]["drying"] = drying;
+  }
   String payload;
   serializeJson(body, payload);
   const int code = filamanPatchFilament(base_url, api_key, filament_id, payload, FM_FIL_TIMEOUT_MS);
-  logSDf("FilaMan: filament %d temperatures in custom_fields, HTTP %d", filament_id, code);
+  logSDf("FilaMan: filament %d temperatures and drying in custom_fields, HTTP %d", filament_id, code);
 }
 
-// Creates the filament; the answer says where its temperatures belong.
+// Creates the filament; the answer says where its temperatures and drying belong.
 static int postFilament(const char* base_url, const char* api_key, const TagCreateInput& in,
                         JsonDocument& body, int* out_id) {
   String payload;
@@ -411,7 +420,8 @@ static int postFilament(const char* base_url, const char* api_key, const TagCrea
   const int code = filamanPostJson(base_url, api_key, path, payload, answer, FM_FIL_TIMEOUT_MS);
   *out_id = code == 200 ? (answer["id"] | 0) : 0;
   logSDf("FilaMan: POST %s -> HTTP %d, id %d", path, code, *out_id);
-  const bool has_fields = in.temp_min > 0 || in.temp_max > 0 || in.db_bed_temp > 0;
+  const bool has_fields = in.temp_min > 0 || in.temp_max > 0 || in.db_bed_temp > 0 ||
+                          (in.dry_temp_c > 0 && in.dry_hours > 0);
   if (*out_id > 0 && has_fields && !jsonHasKey(answer.as<JsonObjectConst>(), FM_FIL_NATIVE_FIELD))
     writeLegacyFields(base_url, api_key, *out_id, in, body);
   return code;

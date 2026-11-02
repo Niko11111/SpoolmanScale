@@ -314,6 +314,8 @@ static void entryItem(JsonObjectConst f, void* p) {
   e.density        = f["density_g_cm3"] | 0.0f;
   e.extruder_temp  = (int16_t)(f["temp_nozzle_max"] | 0);
   e.bed_temp       = (int16_t)(f["temp_bed"] | 0);
+  e.dry_temp_c     = (int16_t)lroundf(f["dry_temp"] | 0.0f);
+  e.dry_hours      = (int16_t)lroundf(f["dry_time_hours"] | 0.0f);
   if (!e.name[0] || fdbEntryListed(e)) return;
   if (!fdbEntryAdd(e)) ctx->full = true;
 }
@@ -324,7 +326,8 @@ static void entryFilter(JsonDocument& filter) {
   JsonObject f = itemFilter(filter);
   for (const char* key : { "id", "designation", "color_name", "material_subtype", "hex_color",
                            "color_mode", "multi_color_style", "diameter_mm", "density_g_cm3",
-                           "temp_nozzle_max", "temp_bed", "nominal_weight_g" })
+                           "temp_nozzle_max", "temp_bed", "nominal_weight_g", "dry_temp",
+                           "dry_time_hours" })
     f[key] = true;
   f["colors"].to<JsonArray>().add<JsonObject>()["hex_code"] = true;
   f["spool_profile"]["empty_weight_g"] = true;
@@ -415,6 +418,8 @@ static void takeTagEntry(JsonObjectConst f, TagDbEntry* out) {
   out->nozzle_min   = f["temp_nozzle_min"] | 0;
   out->nozzle_max   = f["temp_nozzle_max"] | 0;
   out->bed_temp     = f["temp_bed"] | 0;
+  out->dry_temp_c   = (int)lroundf(f["dry_temp"] | 0.0f);
+  out->dry_hours    = (int)lroundf(f["dry_time_hours"] | 0.0f);
 }
 
 bool filamanFdbFindForTag(const char* base_url, const char* api_key, const TagCreateInput& in,
@@ -424,7 +429,7 @@ bool filamanFdbFindForTag(const char* base_url, const char* api_key, const TagCr
   JsonObject f = itemFilter(filter);
   for (const char* key : { "id", "designation", "color_name", "material_subtype", "hex_color",
                            "diameter_mm", "density_g_cm3", "temp_nozzle_min", "temp_nozzle_max",
-                           "temp_bed", "nominal_weight_g" })
+                           "temp_bed", "nominal_weight_g", "dry_temp", "dry_time_hours" })
     f[key] = true;
   f["material"]["key"]  = true;
   f["material"]["name"] = true;

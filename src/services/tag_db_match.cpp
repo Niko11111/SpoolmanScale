@@ -75,6 +75,8 @@ void tagDbFill(TagCreateInput* in, const TagDbEntry& db) {
   if (in->net_weight_g <= 0) in->net_weight_g = db.net_weight_g;
   if (in->temp_min <= 0)     in->temp_min = db.nozzle_min;
   if (in->temp_max <= 0)     in->temp_max = db.nozzle_max;
+  if (in->dry_temp_c <= 0)   in->dry_temp_c = db.dry_temp_c;
+  if (in->dry_hours <= 0)    in->dry_hours = db.dry_hours;
 }
 
 void tagDbTake(TagCreateInput* in, const TagDbDiff& diff) {

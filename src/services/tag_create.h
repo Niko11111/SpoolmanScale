@@ -74,6 +74,9 @@ struct TagCreateInput {
   float diameter_mm;         // 0 when unknown
   int   temp_min;
   int   temp_max;
+  // The drying the source recommends, each 0 when unknown.
+  int   dry_temp_c;
+  int   dry_hours;
   bool  names_known;         // article and colour name are known
   // Picked from the backend's filament database (services/filament_db.h)
   // rather than read off a tag: the entry's id and name as the database has
@@ -112,6 +115,8 @@ struct TagDbEntry {
   int   nozzle_min;
   int   nozzle_max;
   int   bed_temp;
+  int   dry_temp_c;          // 0 when unknown
+  int   dry_hours;           // 0 when unknown
 };
 
 // Builds the input from the tag that was scanned last (g_tag), through the

@@ -568,6 +568,8 @@ void fdbEntryToInput(const FdbEntry& e, const char* maker, const char* material,
   in->temp_max       = e.extruder_temp;
   in->db_density     = e.density;
   in->db_bed_temp    = e.bed_temp;
+  in->dry_temp_c     = e.dry_temp_c;
+  in->dry_hours      = e.dry_hours;
   in->names_known    = true;
 }
 

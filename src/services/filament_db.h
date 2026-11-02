@@ -87,6 +87,8 @@ struct FdbEntry {
   float    density;
   int16_t  extruder_temp;
   int16_t  bed_temp;
+  int16_t  dry_temp_c;   // 0 when unknown
+  int16_t  dry_hours;    // 0 when unknown
 };
 
 // An empty spool the backend knows by name, for a database whose entries

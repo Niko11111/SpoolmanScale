@@ -81,5 +81,7 @@ bool tagCreateInputFromBambu(TagCreateInput* in) {
   in->diameter_mm    = g_tag.diameter_mm;
   in->temp_min       = g_tag.temp_min;
   in->temp_max       = g_tag.temp_max;
+  in->dry_temp_c     = g_tag.dry_temp_c;
+  in->dry_hours      = g_tag.dry_hours;
   return true;
 }
