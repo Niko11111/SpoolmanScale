@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
+#include <math.h>
 #include <string.h>
 
 #include "hardware/sd_logger.h"
@@ -239,6 +240,25 @@ static void mapDrying(JsonObjectConst fil, JsonObject f) {
   if (drying[0]) f["extra"]["drying"] = drying;
 }
 
+// One end of a temperature range, or the custom field that held it before 2.0.
+static int filamentTemp(JsonVariantConst range, const char* end, JsonVariantConst legacy) {
+  const float native = range[end] | 0.0f;
+  return (int)lroundf(native > 0.0f ? native : (legacy | 0.0f));
+}
+
+// The temperatures on a filament, under the names the label reads: Spoolman's
+// for the nozzle's upper end and the bed, one of the scale's own for the lower.
+static void mapTemps(JsonObjectConst fil, JsonObject f) {
+  JsonVariantConst nozzle = fil[FM_FIL_NATIVE_FIELD], bed = fil[FM_FIL_BED_FIELD];
+  JsonVariantConst cf = fil["custom_fields"];
+  const int t_max = filamentTemp(nozzle, "max", cf["temp_nozzle_max"]);
+  const int t_min = filamentTemp(nozzle, "min", cf["temp_nozzle_min"]);
+  const int t_bed = filamentTemp(bed, "max", cf["temp_bed"]);
+  if (t_max > 0) f["settings_extruder_temp"] = t_max;
+  if (t_min > 0 && t_min < t_max) f["x_extruder_temp_min"] = t_min;
+  if (t_bed > 0) f["settings_bed_temp"] = t_bed;
+}
+
 // ============================================================
 //  TRANSLATION: FilaMan spool  ->  Spoolman spool
 //
@@ -387,6 +407,7 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
     f["spool_weight"] = fil["default_spool_weight_g"]   | 0.0f;
     f["article_number"] = articleNumber(fil);
     mapDrying(fil, f);
+    mapTemps(fil, f);
 
     // FilaMan supports multi colour filaments, so colours are an array and
     // the hex code arrives with a leading '#'. Spoolman has neither.
