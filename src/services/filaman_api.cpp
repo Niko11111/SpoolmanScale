@@ -5,12 +5,12 @@
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
-#include <math.h>
 #include <string.h>
 
 #include "hardware/sd_logger.h"
 #include "services/user_options.h"
 #include "services/backend.h"
+#include "services/filament_field_rules.h"
 #include "services/http_progress.h"
 #include "services/json_util.h"
 #include "services/loop_task.h"
@@ -219,6 +219,26 @@ static const char* articleNumber(JsonObjectConst fil) {
   return "";
 }
 
+#define FM_DRYING_TEXT_MAX     24
+
+// The drying on a filament. FilaMan 2.0 has two fields of its own, and those
+// are what its pages edit, so they win over the text an earlier scan left in
+// custom_fields; every reader here keeps getting the one text. Their keys come
+// even when null, and only from 2.0 on: that tells the writer where to write.
+static void mapDrying(JsonObjectConst fil, JsonObject f) {
+  char text[FM_DRYING_TEXT_MAX] = "";
+  if (jsonHasKey(fil, FM_DRYING_TEMP_FIELD)) {
+    JsonVariantConst temp = fil[FM_DRYING_TEMP_FIELD], hours = fil[FM_DRYING_HOURS_FIELD];
+    JsonObject native = f[DRYING_NATIVE_KEY].to<JsonObject>();
+    if (!temp.isNull())  native[DRYING_NATIVE_TEMP]  = temp.as<float>();
+    if (!hours.isNull()) native[DRYING_NATIVE_HOURS] = hours.as<float>();
+    dryingTextFromNumbers(temp | 0.0f, hours | 0.0f, text, sizeof(text));
+  }
+  const char* legacy = fil["custom_fields"]["drying"] | "";
+  const char* drying = text[0] ? text : legacy;
+  if (drying[0]) f["extra"]["drying"] = drying;
+}
+
 // ============================================================
 //  TRANSLATION: FilaMan spool  ->  Spoolman spool
 //
@@ -366,9 +386,7 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
     f["weight"]       = fil["raw_material_weight_g"]    | 0.0f;
     f["spool_weight"] = fil["default_spool_weight_g"]   | 0.0f;
     f["article_number"] = articleNumber(fil);
-    // The drying the scale took off a Bambu tag, kept on the filament.
-    const char* drying = fil["custom_fields"]["drying"] | (const char*)nullptr;
-    if (drying && drying[0]) f["extra"]["drying"] = drying;
+    mapDrying(fil, f);
 
     // FilaMan supports multi colour filaments, so colours are an array and
     // the hex code arrives with a leading '#'. Spoolman has neither.
@@ -1160,6 +1178,23 @@ int filamanPatchCustomField(const char* base_url, const char* api_key, int spool
   serializeJson(body, payload);
   return patchSpool(base_url, api_key, (String("/api/v1/spools/") + spool_id).c_str(),
                     payload, timeout_ms);
+}
+
+int filamanPatchFilament(const char* base_url, const char* api_key, int filament_id,
+                         const String& payload, uint32_t timeout_ms) {
+  if (filament_id <= 0) return -1;
+  return patchSpool(base_url, api_key, (String("/api/v1/filaments/") + filament_id).c_str(),
+                    payload, timeout_ms);
+}
+
+int filamanPatchFilamentDrying(const char* base_url, const char* api_key, int filament_id,
+                               const DryingFill& fill, uint32_t timeout_ms) {
+  JsonDocument body;
+  if (fill.temp_c > 0) body[FM_DRYING_TEMP_FIELD]  = fill.temp_c;
+  if (fill.hours > 0)  body[FM_DRYING_HOURS_FIELD] = fill.hours;
+  String payload;
+  serializeJson(body, payload);
+  return filamanPatchFilament(base_url, api_key, filament_id, payload, timeout_ms);
 }
 
 // The filament's custom_fields, read, merged and written back whole - the

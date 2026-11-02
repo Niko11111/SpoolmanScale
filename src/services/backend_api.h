@@ -10,6 +10,7 @@ bool backendLastListPartial();
 #include <stdint.h>
 #include "services/ams_slots.h"
 #include "services/backend.h"
+#include "services/filament_field_rules.h"
 #include "services/filaman_labels.h"
 #include "services/spool_detail.h"
 #include "services/tag_create.h"
@@ -412,6 +413,8 @@ int  backendPatchSpoolLocation(const char* base_url, int spool_id,
 #define DRYING_FIELD_NAME  "Drying"
 int  backendPatchFilamentDrying(int filament_id, int spool_id, const char* value,
                                 uint32_t timeout_ms);
+// FilaMan 2.0 keeps it in two fields of its own (filament_field_rules.h).
+int  backendPatchFilamentDryingNative(int filament_id, const DryingFill& fill, uint32_t timeout_ms);
 int  backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* iso_datetime,
        uint32_t timeout_ms = 5000);
 

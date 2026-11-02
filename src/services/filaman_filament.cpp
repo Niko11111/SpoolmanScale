@@ -9,14 +9,17 @@
 #include <strings.h>
 
 #include "../hardware/sd_logger.h"
+#include "filament_field_rules.h"
 #include "filaman_api.h"
 #include "filaman_filament_db.h"
+#include "json_util.h"
 #include "tag_db_match.h"
 
 #define FM_FIL_TIMEOUT_MS   8000
 // prepare-filament fetches a new maker's two logos from the FilamentDB, 15 s
 // each at the most; usually it answers within a second.
 #define FM_PREPARE_TIMEOUT_MS  20000
+
 // FilaMan's page ceiling. Bambu's PLA alone came to 234 filaments on a test
 // instance, so a lookup reads more than one page.
 #define FM_FIL_PAGE_SIZE     200
@@ -356,6 +359,54 @@ static int ensureColors(const char* base_url, const char* api_key, ColorSet* set
   return 200;
 }
 
+// A value left out stays null on the server; FilaMan refuses the whole
+// filament for a range that runs backwards, so such a tag's range stays home.
+static void addNativeFields(const TagCreateInput& in, JsonDocument& body) {
+  if (nozzleRangeAccepted(in.temp_min, in.temp_max)) {
+    JsonObject range = body[FM_FIL_NATIVE_FIELD].to<JsonObject>();
+    if (in.temp_min > 0) range["min"] = in.temp_min;
+    if (in.temp_max > 0) range["max"] = in.temp_max;
+  } else if (in.temp_min > 0) {
+    logSDf("FilaMan: nozzle range %d-%d runs backwards, left out", in.temp_min, in.temp_max);
+  }
+  if (in.db_bed_temp > 0) {
+    JsonObject bed = body[FM_FIL_BED_FIELD].to<JsonObject>();
+    bed["min"] = in.db_bed_temp;
+    bed["max"] = in.db_bed_temp;
+  }
+}
+
+// FilaMan before 2.0 drops the native fields and answers without them: the
+// temperatures then go where its forms show them, in a write of their own.
+static void writeLegacyFields(const char* base_url, const char* api_key, int filament_id,
+                             const TagCreateInput& in, JsonDocument& sent) {
+  JsonDocument body;
+  body["custom_fields"] = sent["custom_fields"];
+  if (in.temp_min > 0)    body["custom_fields"]["temp_nozzle_min"] = in.temp_min;
+  if (in.temp_max > 0)    body["custom_fields"]["temp_nozzle_max"] = in.temp_max;
+  if (in.db_bed_temp > 0) body["custom_fields"]["temp_bed"] = in.db_bed_temp;
+  String payload;
+  serializeJson(body, payload);
+  const int code = filamanPatchFilament(base_url, api_key, filament_id, payload, FM_FIL_TIMEOUT_MS);
+  logSDf("FilaMan: filament %d temperatures in custom_fields, HTTP %d", filament_id, code);
+}
+
+// Creates the filament; the answer says where its temperatures belong.
+static int postFilament(const char* base_url, const char* api_key, const TagCreateInput& in,
+                        JsonDocument& body, int* out_id) {
+  String payload;
+  serializeJson(body, payload);
+  JsonDocument answer;
+  const char* path = "/api/v1/filaments";
+  const int code = filamanPostJson(base_url, api_key, path, payload, answer, FM_FIL_TIMEOUT_MS);
+  *out_id = code == 200 ? (answer["id"] | 0) : 0;
+  logSDf("FilaMan: POST %s -> HTTP %d, id %d", path, code, *out_id);
+  const bool has_fields = in.temp_min > 0 || in.temp_max > 0 || in.db_bed_temp > 0;
+  if (*out_id > 0 && has_fields && !jsonHasKey(answer.as<JsonObjectConst>(), FM_FIL_NATIVE_FIELD))
+    writeLegacyFields(base_url, api_key, *out_id, in, body);
+  return code;
+}
+
 static void filamentBody(const TagCreateInput& in, int vendor_id, const ColorSet& set,
                          JsonDocument& body) {
   char text[64];
@@ -378,10 +429,9 @@ static void filamentBody(const TagCreateInput& in, int vendor_id, const ColorSet
     color["color_id"] = set.id[i];
     color["position"] = i + 1;
   }
-  // The keys FilaMan's FilamentDB import uses, so its forms show them.
-  if (in.article[0])   body["custom_fields"]["article_number"]  = in.article;
-  if (in.temp_min > 0) body["custom_fields"]["temp_nozzle_min"] = in.temp_min;
-  if (in.temp_max > 0) body["custom_fields"]["temp_nozzle_max"] = in.temp_max;
+  // The key FilaMan's FilamentDB import uses, so its forms show it.
+  if (in.article[0]) body["custom_fields"]["article_number"] = in.article;
+  addNativeFields(in, body);
 }
 
 // ------------------------------------------------------------
@@ -459,9 +509,7 @@ static void dbFilamentBody(const TagCreateInput& in, JsonObjectConst prepared, J
   body["custom_fields"]["filamentdb_id"] = atoi(in.db_id);
   // From a tag also its article number, as a filament from the tag alone has.
   if (in.article[0])      body["custom_fields"]["article_number"] = in.article;
-  if (in.temp_min > 0)    body["custom_fields"]["temp_nozzle_min"] = in.temp_min;
-  if (in.temp_max > 0)    body["custom_fields"]["temp_nozzle_max"] = in.temp_max;
-  if (in.db_bed_temp > 0) body["custom_fields"]["temp_bed"] = in.db_bed_temp;
+  addNativeFields(in, body);
 }
 
 static int createDbFilament(const char* base_url, const char* api_key, const TagCreateInput& in,
@@ -480,7 +528,7 @@ static int createDbFilament(const char* base_url, const char* api_key, const Tag
   if (maker_id <= 0) return -1;
   JsonDocument filament;
   dbFilamentBody(in, prepared.as<JsonObjectConst>(), filament);
-  return postForId(base_url, api_key, "/api/v1/filaments", filament, out_filament_id);
+  return postFilament(base_url, api_key, in, filament, out_filament_id);
 }
 
 int filamanCreateTagFilament(const char* base_url, const char* api_key,
@@ -511,5 +559,5 @@ int filamanCreateTagFilament(const char* base_url, const char* api_key,
 
   JsonDocument body;
   filamentBody(in, vendor_id, set, body);
-  return postForId(base_url, api_key, "/api/v1/filaments", body, out_filament_id);
+  return postFilament(base_url, api_key, in, body, out_filament_id);
 }

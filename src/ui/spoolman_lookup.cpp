@@ -1281,6 +1281,7 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   // through this filter read as having no drying advice, and the filament
   // was patched again on each Bambu lookup.
   filter_spool["filament"]["extra"][DRYING_FIELD] = true;
+  filter_spool["filament"][DRYING_NATIVE_KEY] = true;
   filter_spool["extra"][DRYING_FIELD] = true;
   if (filter.overflowed())
     logSD("Backend: scan filter overflowed, fields will be missing");

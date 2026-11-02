@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "services/ams_slots.h"
+#include "services/filament_field_rules.h"
 
 // ============================================================
 //  FILAMAN HTTP LAYER
@@ -20,6 +21,13 @@
 // ============================================================
 
 class HTTPClient;
+
+// A filament's fields of its own from FilaMan 2.0 on. An older server drops
+// them and answers without: only 2.0 sends the first, null or not.
+#define FM_FIL_NATIVE_FIELD    "extruder_temp_range_c"
+#define FM_FIL_BED_FIELD       "bed_temp_range_c"
+#define FM_DRYING_TEMP_FIELD   "drying_temp_c"
+#define FM_DRYING_HOURS_FIELD  "drying_time_hours"
 
 // The Authorization header for the API key, for the FilaMan calls that live
 // in files of their own (services/filaman_labels.cpp).
@@ -178,6 +186,13 @@ void filamanForgetRfidSlot2();
 int filamanLinkRfidUid(const char* base_url, const char* api_key, int spool_id,
                        const char* uuid, char* out_note, size_t note_size,
                        uint32_t timeout_ms = 8000);
+
+// A filament's two native drying fields (FilaMan 2.0); a 0 in fill leaves one alone.
+int filamanPatchFilamentDrying(const char* base_url, const char* api_key, int filament_id,
+                               const DryingFill& fill, uint32_t timeout_ms);
+// A filament PATCH with a body the caller has built.
+int filamanPatchFilament(const char* base_url, const char* api_key, int filament_id,
+                         const String& payload, uint32_t timeout_ms);
 
 // Writes one key inside custom_fields while preserving the others.
 // Costs a GET before the PATCH, which is why nothing else uses this path.

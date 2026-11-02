@@ -1368,6 +1368,12 @@ int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* i
 
 // The drying a Bambu tag recommends, on the filament where there is one. One
 // text field, "55 °C, 8 h", so temperature and time cannot drift apart.
+int backendPatchFilamentDryingNative(int filament_id, const DryingFill& fill, uint32_t timeout_ms) {
+  HttpStallTime stall(__func__);   // the loop stands still for this call
+  if (backendMode() != BACKEND_FILAMAN) return notSupported("PatchFilamentDryingNative");
+  return filamanPatchFilamentDrying(backendBaseUrl(), filamanApiKey(), filament_id, fill, timeout_ms);
+}
+
 int backendPatchFilamentDrying(int filament_id, int spool_id, const char* value,
                                uint32_t timeout_ms) {
   HttpStallTime stall(__func__);   // the loop stands still for this call
