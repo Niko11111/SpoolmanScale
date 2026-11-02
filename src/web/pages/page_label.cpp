@@ -212,6 +212,9 @@ static String stateJson(LabelKind kind) {
   j += F(",\"mediaKey\":\""); j += String((unsigned)c.media_width_mm); j += 'x';
   j += String((unsigned)c.media_length_mm);
   j += F("\",\"dpi\":");    j += String((unsigned)labelPrinterProfile(c.model).dpi);
+  // A tape printer's label is fixed: the template stays in view, out of use.
+  j += F(",\"tape\":");
+  j += labelPrinterIsTape(c.model) ? F("true") : F("false");
   j += F(",\"media\":\"");
   j += String((unsigned)c.media_width_mm); j += F(" x ");
   j += String((unsigned)c.media_length_mm); j += F(" mm\",\"model\":\"");
@@ -268,7 +271,11 @@ static void templateCard(String& h) {
   h += T(STR_W_L_FIL_NO_PAGE);
   h += F("</span></div>");
   sourceRow(h);
-  h += F("<div id='ltpl'><div class='field'><label>");
+  h += F("<div class='field' id='ltp' style='display:none'><span class='hint'>");
+  h += T(STR_W_L_TAPE_FIXED);
+  // A fieldset: disabling it switches off every control inside at once, and
+  // leaves what each one holds for the other printers as it is.
+  h += F("</span></div><fieldset id='ltpl'><div class='field'><label>");
   h += T(STR_W_L_ORIENT);
   h += F("</label><div class='btabs' id='lori'><button class='btab' data-o='0'>");
   h += T(STR_W_L_FLAT);
@@ -319,7 +326,7 @@ static void templateCard(String& h) {
   h += T(STR_W_L_DATE_HINT);
   h += F("</span></div><div class='field'><div class='inrow'><button id='lr' class='quiet'>");
   h += T(STR_W_DEFAULTS);
-  h += F("</button><span class='msg' id='ls-s'></span></div></div></div></div>");
+  h += F("</button><span class='msg' id='ls-s'></span></div></div></fieldset></div>");
 }
 
 // The printer and the stock, to change right here: the same lists and the
@@ -387,6 +394,12 @@ static void styles(String& h) {
          ".lb-ic{height:58px;display:flex;align-items:center;justify-content:center}"
          ".lb-ic svg{display:block}"
          ".lb-sw .check.off{opacity:.45}"
+         "#ltp{margin-bottom:16px}"
+         "#ltpl{border:0;margin:0;padding:0;min-width:0}"
+         // Out of use as one block: the controls' own dimming would multiply
+         // with it and leave them unreadable.
+         "#ltpl:disabled{opacity:.55}"
+         "#ltpl:disabled button:disabled,#ltpl:disabled .check.off{opacity:1}"
          ".lb-gap{display:block;color:var(--ink-soft);font-size:12px}.lb-gap:empty{display:none}"
          "#ltx{margin-top:10px;width:100%;box-sizing:border-box}"
          ".lb-pick{margin-top:12px}.lb-pick select{flex:1;min-width:0}"
@@ -423,7 +436,7 @@ static void scriptTemplate(String& h) {
          "function tiles(d){const up=!!(d.options&PB);"
          "document.querySelectorAll('#lkind .btab').forEach(function(b){b.classList.toggle('on',+b.dataset.k===d.kind);});"
          "$('lkh').style.display=d.kind===1?'':'none';"
-         "$('lfq').style.display=d.kind===1&&!d.filPage?'':'none';"
+         "$('lfq').style.display=d.kind===1&&!d.filPage&&!d.tape?'':'none';"
          // A filament has no date: its option and the hint go with it.
          "$('ldh').style.display=d.kind===1?'none':'';"
          "document.querySelectorAll('#lo input').forEach(function(i){"
@@ -518,12 +531,13 @@ static void scriptFunctions(String& h) {
          "$('lp-s').textContent='';$('lp').src='/api/label/preview.bmp'+q()+'&t='+Date.now();}"
          // The source list, built anew only when the presets or the choice
          // changed; a preset the loaded roll cannot take is listed, not offered.
-         "function srcRow(d){const on=d.fm!=='absent'&&d.fm!=='unknown';"
+         "function srcRow(d){const on=!d.tape&&d.fm!=='absent'&&d.fm!=='unknown';"
          "$('lsrcf').style.display=on?'':'none';"
          // Our own status line only: a "saved" flashed there stays until it fades.
          "const m=$('lsrc-s'),t=d.fm==='loading'?L.srcLoading:(d.fm==='failed'?L.srcFailed:'');"
          "if(t||m.dataset.st)m.textContent=t;m.dataset.st=t;"
          "$('ltpl').style.display=srv(d)?'none':'';$('lsrv').style.display=srv(d)?'':'none';"
+         "$('ltpl').disabled=!!d.tape;$('ltp').style.display=d.tape?'':'none';"
          "const k=d.source+'|'+JSON.stringify(d.presets);if(k===srcKey)return;srcKey=k;"
          "const b=$('lsrc');b.textContent='';"
          "[{id:0,name:L.scale,fit:true}].concat(d.presets).forEach(function(p){"
@@ -535,7 +549,7 @@ static void scriptFunctions(String& h) {
          "setMask('lf',d.fields);setMask('lo',d.options);capRow(d);"
          "if(document.activeElement!==$('ltx'))$('ltx').value=d.text;"
          "$('lsp').textContent=d.spool?(d.spool.text+' \u00b7 #'+d.spool.id+(d.spool.on?'':' '+L.offPad)):'-';"
-         "$('lme').textContent=d.options&PB?L.upright:'';"
+         "$('lme').textContent=d.options&PB&&!d.tape?L.upright:'';"
          "$('ldpi').textContent=d.dpi+' dpi';"
          "if(document.activeElement!==$('lpm'))$('lpm').value=String(d.modelId);"
          // Only the sizes the picked model takes; disabled as well, for the

@@ -4145,6 +4145,9 @@ const char* const STRINGS[][3] = {
     "Utiliser" },  // STR_DENSITY_TAKE
   { "Ändern", "Change",
     "Modifier" },  // STR_DENSITY_CHANGE
+  { "Für das schmale Band gibt es ein festes Etikett: Hersteller, Material, Name, auf dem Spulenetikett dazu die Nummer. Deine Vorlage bleibt gespeichert und gilt wieder, sobald ein anderer Drucker gewählt ist.",
+    "The narrow tape has a fixed label: maker, material, name, and on a spool label its number. Your template stays saved and applies again once another printer is picked.",
+    "Le ruban étroit a une étiquette fixe : fabricant, matière, nom et, sur l'étiquette de bobine, son numéro. Votre modèle reste enregistré et s'applique de nouveau dès qu'une autre imprimante est choisie." },  // STR_W_L_TAPE_FIXED
 };
 
 StringID tagWriteResultString(uint8_t code) {
