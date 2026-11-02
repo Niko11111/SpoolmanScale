@@ -80,8 +80,9 @@
 // id, name, task, head dots, dpi, direction, ribbon, task guessed. Ids and
 // heads from niimbluelib printer_models.ts, the task from its print_tasks
 // table; "guess" where that table has no entry for the id, so the B1's
-// sequence goes as the most common one. The tape printers (LEFT) are here
-// only so a mismatch can say what was found.
+// sequence goes as the most common one. Of the tape printers (LEFT) only the
+// D110 class can be picked; the others are here so a mismatch can say what
+// was found.
 static const NiimbotModelInfo NB_MODELS[] = {
   { 4096, "B1",       NB_TASK_B1,     384, 203, NB_DIR_TOP,  false, false },
   { 4098, "B1 SE",    NB_TASK_B1,     384, 203, NB_DIR_TOP,  false, true  },
@@ -281,8 +282,9 @@ static NiimbotResult nbRequest1(NbJob& job, uint8_t cmd, uint8_t value, uint8_t 
 }
 
 // Newer firmware answers the connect with 3 and tells its protocol version
-// in the status data; nothing here depends on it yet, the log keeps it.
-static void nbLogProtocolVersion(NbJob& job) {
+// in the status data. The D110 M's task depends on it (niimbotTaskFor()), and
+// the log keeps it for the others.
+static void nbReadProtocolVersion(NbJob& job) {
   if (nbRequest1(job, NB_CMD_STATUS_DATA, 1, NB_RPL_STATUS_DATA) != NB_OK ||
       job.len < NB_STATUS_DATA_MIN_LEN) return;
   const unsigned n = job.data[NB_STATUS_DATA_VER_HI] * 100u + job.data[NB_STATUS_DATA_VER_LO];
@@ -305,7 +307,7 @@ static NiimbotResult nbHello(NbJob& job) {
   const uint8_t connect = job.len ? job.data[0] : 0;
   if (job.info) job.info->connect_result = connect;
   logSDf("NIIMBOT: connected, result=%u prefix=%u", (unsigned)connect, (unsigned)job.connect_prefix);
-  if (connect == NB_CONNECTED_V3) nbLogProtocolVersion(job);
+  if (connect == NB_CONNECTED_V3) nbReadProtocolVersion(job);
   return NB_OK;
 }
 

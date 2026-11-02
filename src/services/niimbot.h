@@ -12,11 +12,11 @@
 //  The protocol the NIIMBOT app speaks over BLE, as niimbluelib
 //  documents it (MIT; the facts, none of the code): framed packets
 //  both ways, a model id the printer tells, and a print sequence
-//  that differs by family, its "print task". The scale offers two
-//  classes, the 50 mm direct thermal printers (B1, B21, B203 ...)
-//  the M2, a 300 dpi thermal transfer printer, and the D110 and D110 M,
-//  12 mm tape on a 96 dot head, and the id says
-//  whether the printer at the other end is one of the picked class.
+//  that differs by family, its "print task". The scale offers three
+//  classes: the 50 mm direct thermal printers (B1, B21, B203 ...),
+//  the M2, a 300 dpi thermal transfer printer, and the D110 and
+//  D110 M, 12 mm tape on a 96 dot head. The id says whether the
+//  printer at the other end is one of the picked class.
 //
 //  Every request and reply goes to the SD log by command id: no
 //  NIIMBOT is on the desk here, so a tester's log is all there is.

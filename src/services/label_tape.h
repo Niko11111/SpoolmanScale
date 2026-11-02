@@ -13,7 +13,6 @@
 //  the filament's name on the left, one above the other, each
 //  as large as the height and the width allow, and the spool's
 //  number large on the right, the number alone, behind a rule.
-//  The maker goes on as label_tape_name.h writes it.
 //
 //  The label is drawn lying, as it reads, and turned onto the
 //  roll as an upright label is (LO_PORTRAIT), so the previews

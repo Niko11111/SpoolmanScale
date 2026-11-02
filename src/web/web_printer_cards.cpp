@@ -1,5 +1,7 @@
 #include "web/web_printer_cards.h"
 
+#include "web/web_printer_select.h"
+
 // Last on purpose: T() is a macro, see the pages.
 #include "lang.h"
 
@@ -182,17 +184,6 @@ void webPrinterModelCards(String& h, const LabelPrinterConfig& c) {
   }
 }
 
-// The models that print on this size, space separated for the script.
-static void fitList(String& h, uint16_t w, uint16_t l) {
-  bool first = true;
-  for (int i = 0; i < LABEL_PRINTER_MODEL_COUNT; i++) {
-    if (!labelPrinterTakesMedia(LABEL_PRINTER_MODELS[i], w, l)) continue;
-    if (!first) h += ' ';
-    h += String((int)LABEL_PRINTER_MODELS[i]);
-    first = false;
-  }
-}
-
 // How a size stands in the list: one to pick, one on sale that no layout
 // fits yet (greyed, with its reason), or one kept from elsewhere and not in
 // the table (marked, not offered again).
@@ -207,7 +198,7 @@ static void stockCard(String& h, const LabelMediaSize& s, const LabelPrinterConf
   h += F("' data-v='");
   h += String(s.width_mm); h += 'x'; h += String(s.length_mm);
   h += F("' data-fit='");
-  fitList(h, s.width_mm, s.length_mm);
+  webPrinterFitList(h, s.width_mm, s.length_mm);
   h += F("'");
   if (!labelPrinterTakesMedia(c.model, s.width_mm, s.length_mm)) h += F(" style='display:none'");
   if (kind != STOCK_OFFERED) h += F(" disabled");

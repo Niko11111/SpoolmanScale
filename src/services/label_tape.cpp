@@ -7,7 +7,6 @@
 
 #include "hardware/sd_logger.h"
 #include "services/label_draw.h"
-#include "services/label_tape_name.h"
 
 using namespace labeldraw;
 
@@ -95,8 +94,8 @@ static int drawTapeLines(lv_obj_t* canvas, const TapeArea& a, const char* const*
 // The non-empty ones of maker, material and name, in the order a spool is
 // read by: who made it, what it is, what it is called. An empty one leaves
 // its room to the rest. Returns how many.
-static int tapeLines(const SpoolLabelData& d, const char* vendor, const char* lines[LT_LINES_MAX]) {
-  const char* const wanted[LT_LINES_MAX] = { vendor, d.material, d.name };
+static int tapeLines(const SpoolLabelData& d, const char* lines[LT_LINES_MAX]) {
+  const char* const wanted[LT_LINES_MAX] = { d.vendor, d.material, d.name };
   int n = 0;
   for (const char* t : wanted)
     if (t[0]) lines[n++] = t;
@@ -128,10 +127,8 @@ bool labelRenderTape(const LabelPrinterConfig& printer, const SpoolLabelData& d,
   char id[LT_ID_LEN] = "";
   if (with_id && d.id > 0) snprintf(id, sizeof(id), "%d", d.id);
   drawTapeId(canvas, &a, id);
-  char vendor[LABEL_LINE_LEN];
-  labelTapeVendor(d.vendor, vendor, sizeof(vendor));
   const char* lines[LT_LINES_MAX];
-  const int n = drawTapeLines(canvas, a, lines, tapeLines(d, vendor, lines));
+  const int n = drawTapeLines(canvas, a, lines, tapeLines(d, lines));
 
   setTurned(true);
   const bool ok = packCanvas(canvas, content_w, h, row_w, 0, out);

@@ -18,13 +18,10 @@ void webPrinterModelOptions(String& h, const LabelPrinterConfig& c) {
   }
 }
 
-// The models that take a size, space separated, as the printer page's stock
-// cards carry them: the label page's script hides the sizes the picked model
-// cannot print on (a 12 mm tape size only a D110 takes).
-static void fitList(String& h, const LabelMediaSize& s) {
+void webPrinterFitList(String& h, uint16_t width_mm, uint16_t length_mm) {
   bool first = true;
   for (int i = 0; i < LABEL_PRINTER_MODEL_COUNT; i++) {
-    if (!labelPrinterTakesMedia(LABEL_PRINTER_MODELS[i], s.width_mm, s.length_mm)) continue;
+    if (!labelPrinterTakesMedia(LABEL_PRINTER_MODELS[i], width_mm, length_mm)) continue;
     if (!first) h += ' ';
     h += String((int)LABEL_PRINTER_MODELS[i]);
     first = false;
@@ -40,7 +37,7 @@ void webPrinterMediaOptions(String& h, const LabelPrinterConfig& c) {
     h += F("<option value='");
     h += String(s.width_mm); h += 'x'; h += String(s.length_mm);
     h += F("' data-fit='");
-    fitList(h, s);
+    webPrinterFitList(h, s.width_mm, s.length_mm);
     h += F("'");
     if (cur) h += F(" selected");
     h += F(">");

@@ -12,3 +12,6 @@ void webPrinterModelOptions(String& h, const LabelPrinterConfig& c);
 // inert, so it is shown rather than silently replaced. Each size carries
 // data-fit, the models that take it, for the page to hide the others.
 void webPrinterMediaOptions(String& h, const LabelPrinterConfig& c);
+// The models that take a size, space separated, for a data-fit attribute: a
+// page's script hides what the picked model cannot print on.
+void webPrinterFitList(String& h, uint16_t width_mm, uint16_t length_mm);
