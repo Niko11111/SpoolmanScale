@@ -406,6 +406,7 @@ static void takeTagEntry(JsonObjectConst f, TagDbEntry* out) {
   snprintf(out->color_name, sizeof(out->color_name), "%s", f["color_name"] | "");
   snprintf(out->line, sizeof(out->line), "%s", f["material_subtype"] | "");
   snprintf(out->material_key, sizeof(out->material_key), "%s", f["material"]["key"] | "");
+  snprintf(out->material_name, sizeof(out->material_name), "%s", f["material"]["name"] | "");
   const char* hex = f["hex_color"] | "";
   if (plainHex(hex, out->color_hex, sizeof(out->color_hex)))
     snprintf(out->color_raw, sizeof(out->color_raw), "%s", out->color_hex);
@@ -425,7 +426,8 @@ bool filamanFdbFindForTag(const char* base_url, const char* api_key, const TagCr
                            "diameter_mm", "density_g_cm3", "temp_nozzle_min", "temp_nozzle_max",
                            "temp_bed", "nominal_weight_g" })
     f[key] = true;
-  f["material"]["key"] = true;
+  f["material"]["key"]  = true;
+  f["material"]["name"] = true;
   const String path = String("/api/v1/filamentdb/filaments?manufacturer_name=") + filamanUrlEncode(in.vendor) +
                       "&search=" + filamanUrlEncode(in.article) + "&page_size=" + FM_FDB_TAG_PAGE;
   JsonDocument doc(&s_psram);

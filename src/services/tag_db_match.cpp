@@ -61,8 +61,10 @@ void tagDbFill(TagCreateInput* in, const TagDbEntry& db) {
   snprintf(in->db_line, sizeof(in->db_line), "%s", db.line);
   // The material stays the tag's: a key that names another one (Tough+ Cyan
   // is in the FilamentDB once as PLA, once as PLA+) is not taken over.
-  if (strcasecmp(db.material_key, in->material) == 0)
+  if (strcasecmp(db.material_key, in->material) == 0) {
     snprintf(in->db_material_key, sizeof(in->db_material_key), "%s", db.material_key);
+    snprintf(in->db_material_name, sizeof(in->db_material_name), "%s", db.material_name);
+  }
   // The database's spelling of the colour only when it is the tag's colour.
   const bool same_color = !colorDiffers(*in, db) && in->color_count == 1 && db.color_raw[0];
   if (same_color)    snprintf(in->db_color_hex, sizeof(in->db_color_hex), "%s", db.color_raw);

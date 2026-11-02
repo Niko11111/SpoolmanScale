@@ -58,6 +58,7 @@ struct FilamentHit {
 struct FilamentSearch {
   const TagCreateInput* in;
   char material_type[24]; // FilamentDB entry: the type FilaMan files it under
+  char material_key[24];  // and its key, the type of an import before FilaMan 1.6
   FilamentHit by_article; // lowest id carrying the article number
   FilamentHit by_look;    // lowest id with the colour and the product line
 };
@@ -215,8 +216,11 @@ static void judgeDbFilament(JsonObjectConst fil, FilamentSearch* s) {
     keepLowest(fil, id, designation, &s->by_article);
     return;
   }
-  if (strcasecmp(designation, s->in->db_name) == 0 &&
-      strcasecmp(fil["material_type"] | "", s->material_type) == 0)
+  if (strcasecmp(designation, s->in->db_name) != 0) return;
+  // Filed under either, so a filament of an older import is not made again.
+  const char* type = fil["material_type"] | "";
+  if (strcasecmp(type, s->material_type) == 0 ||
+      (s->material_key[0] && strcasecmp(type, s->material_key) == 0))
     keepLowest(fil, id, designation, &s->by_look);
 }
 
@@ -259,13 +263,18 @@ static int searchFilaments(const char* base_url, const char* api_key, int vendor
   return 0;
 }
 
-// The type FilaMan files a FilamentDB entry under, the way its own import
-// does: the material's key in capitals, "PLA-PLUS" for "PLA+/Pro". The name
-// itself when the key is not known.
-static void dbMaterialType(const TagCreateInput& in, char* out, size_t out_size) {
+// The material's key in the FilamentDB, empty when not known.
+static void dbMaterialKey(const TagCreateInput& in, char* out, size_t out_size) {
   if (in.db_material_key[0]) snprintf(out, out_size, "%s", in.db_material_key);
-  else if (!filamanFdbMaterialKey(in.material, out, out_size)) snprintf(out, out_size, "%s", in.material);
-  for (char* p = out; *p; p++) if (*p >= 'a' && *p <= 'z') *p = (char)(*p - 'a' + 'A');
+  else if (!filamanFdbMaterialKey(in.material, out, out_size)) out[0] = '\0';
+}
+
+// The type FilaMan files a FilamentDB entry under, the way its own import does.
+static void dbMaterialType(const TagCreateInput& in, char* out, size_t out_size) {
+  char key[sizeof(in.db_material_key)];
+  dbMaterialKey(in, key, sizeof(key));
+  const char* name = in.db_material_name[0] ? in.db_material_name : in.material;
+  filamentMaterialType(name, sizeof(in.material), key, out, out_size);
 }
 
 // ------------------------------------------------------------
@@ -291,6 +300,7 @@ void filamanPlanTagFilament(const char* base_url, const char* api_key,
     FilamentSearch s = {};
     s.in = &in;
     dbMaterialType(in, s.material_type, sizeof(s.material_type));
+    dbMaterialKey(in, s.material_key, sizeof(s.material_key));
     if (searchFilaments(base_url, api_key, plan->vendor_id, &s) < 0) {
       plan->state = TFS_FAILED;
       plan->http_code = s_failed_code;
@@ -463,9 +473,9 @@ static void prepareBody(const TagCreateInput& in, JsonDocument& body) {
   }
   body["designation"]   = in.db_name;
   body["material_name"] = in.material;
-  char key[24];
-  if (in.db_material_key[0]) body["material_key"] = in.db_material_key;
-  else if (filamanFdbMaterialKey(in.material, key, sizeof(key))) body["material_key"] = key;
+  char key[sizeof(in.db_material_key)];
+  dbMaterialKey(in, key, sizeof(key));
+  if (key[0]) body["material_key"] = key;
   const char* line = dbLine(in);
   if (line[0]) body["material_subtype"] = line;
   body["diameter_mm"] = in.diameter_mm > 0 ? in.diameter_mm : TAG_CREATE_DIAMETER_MM;

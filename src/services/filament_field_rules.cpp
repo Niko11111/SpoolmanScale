@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 // The same plausibility the tag decoder applies.
 #define DRYING_TEMP_MIN_C     30
@@ -55,4 +56,15 @@ DryingFill dryingFillFromText(bool has_temp, bool has_hours, const char* text) {
 bool nozzleRangeAccepted(int temp_min, int temp_max) {
   if (temp_min <= 0 && temp_max <= 0) return false;
   return temp_min <= 0 || temp_max <= 0 || temp_min <= temp_max;
+}
+
+void filamentMaterialType(const char* name, size_t name_capacity, const char* key,
+                          char* out, size_t n) {
+  const bool may_be_cut = strlen(name) + 1 >= name_capacity;
+  if (name[0] && !(may_be_cut && key[0])) {
+    snprintf(out, n, "%s", name);
+    return;
+  }
+  snprintf(out, n, "%s", key);
+  for (char* p = out; *p; p++) if (*p >= 'a' && *p <= 'z') *p = (char)(*p - 'a' + 'A');
 }

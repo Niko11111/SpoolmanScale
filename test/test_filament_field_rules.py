@@ -45,6 +45,22 @@ int main() {
   moved = dryingFillFromText(false, false, "no drying needed");
   assert(moved.temp_c == 0 && moved.hours == 0);
 
+  // The type: the name as FilaMan's import since 1.6, the key where there is
+  // no name or it may be cut.
+  char type[24];
+  filamentMaterialType("PLA+/Pro", 17, "pla-plus", type, sizeof(type));
+  assert(strcmp(type, "PLA+/Pro") == 0);
+  filamentMaterialType("PA (Nylon)", 17, "pa", type, sizeof(type));
+  assert(strcmp(type, "PA (Nylon)") == 0);
+  filamentMaterialType("PLA", 17, "", type, sizeof(type));
+  assert(strcmp(type, "PLA") == 0);
+  filamentMaterialType("", 17, "pla-plus", type, sizeof(type));
+  assert(strcmp(type, "PLA-PLUS") == 0);
+  filamentMaterialType("Sixteen chars ok", 17, "long-one", type, sizeof(type));
+  assert(strcmp(type, "LONG-ONE") == 0);
+  filamentMaterialType("Sixteen chars ok", 17, "", type, sizeof(type));
+  assert(strcmp(type, "Sixteen chars ok") == 0);
+
   // Only what is empty is filled: 17 filaments on the live data have a time
   // and no temperature.
   DryingFill fill = dryingFillEmpty(false, false, 55, 8);

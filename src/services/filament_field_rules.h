@@ -3,7 +3,7 @@
 #include <stddef.h>
 
 // ============================================================
-//  WHAT A FILAMENT'S DRYING AND TEMPERATURE FIELDS MAY HOLD
+//  WHAT A FILAMENT'S MATERIAL, DRYING AND TEMPERATURE FIELDS MAY HOLD
 //
 //  The rules alone, no network and no JSON, so a host test can run them.
 //  One text field "55 °C, 8 h" on Spoolman and on FilaMan before 2.0, two
@@ -46,3 +46,10 @@ DryingFill dryingFillFromText(bool has_temp, bool has_hours, const char* text);
 // Whether FilaMan 2.0 takes this nozzle range. It refuses the whole filament
 // for one that runs backwards, and a tag can carry that. 0 means not known.
 bool nozzleRangeAccepted(int temp_min, int temp_max);
+
+// The type FilaMan files a FilamentDB material under, the way its import does
+// from 1.6 on: the name ("PLA+/Pro"), before that the key in capitals
+// ("PLA-PLUS"). The key stands in for a name that fills its buffer of
+// name_capacity bytes and may be cut, which would make a type nobody else uses.
+void filamentMaterialType(const char* name, size_t name_capacity, const char* key,
+                          char* out, size_t n);

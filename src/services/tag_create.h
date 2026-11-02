@@ -89,6 +89,8 @@ struct TagCreateInput {
   char  db_color_name[64];
   char  db_line[32];
   char  db_material_key[24];
+  // The name of that material ("PA (Nylon)" for "pa"): the type FilaMan files it under.
+  char  db_material_name[17];
   // g/cm3 typed in on the card when no source had one, 0 until then.
   float user_density;
 };
@@ -102,6 +104,7 @@ struct TagDbEntry {
   char  color_name[64];
   char  line[32];
   char  material_key[24];
+  char  material_name[17];
   char  color_hex[7];        // the single colour, "RRGGBB"; empty when none
   char  color_raw[9];        // the same as the database spells it
   int   net_weight_g;        // 0 when unknown
