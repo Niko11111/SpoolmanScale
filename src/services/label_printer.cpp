@@ -94,15 +94,16 @@ static const LabelPrinterProfile PROFILE_NIIMBOT_M2 = {
 // along the feed, and what is on it is drawn lying and turned
 // (labelPrinterIsTape()). Only 12 x 40, the roll a D110 M reports as
 // T12*40-160 (31.10.2026); 12 mm is all the head prints, a wider roll would
-// print the same 12. Experimental until it has printed.
+// print the same 12. A user printed a test and a spool label on a D110 M
+// (01.11.2026); the D110 shares the renderer but has not been tried.
 static const LabelPrinterProfile PROFILE_NIIMBOT_D110 = {
-  LP_MODEL_NIIMBOT_D110, "NIIMBOT", "D110, D110 M", 12, 40, 12, 12, 40, 40, 96, 96, true, true,
+  LP_MODEL_NIIMBOT_D110, "NIIMBOT", "D110, D110 M", 12, 40, 12, 12, 40, 40, 96, 96, false, true,
   203, LP_PROTO_NIIMBOT
 };
 
 const LabelPrinterModel LABEL_PRINTER_MODELS[] = {
   LP_MODEL_M220, LP_MODEL_NIIMBOT_M2, LP_MODEL_M110, LP_MODEL_M110S, LP_MODEL_M100,
-  LP_MODEL_NIIMBOT_B, LP_MODEL_M120, LP_MODEL_M200, LP_MODEL_M221, LP_MODEL_NIIMBOT_D110,
+  LP_MODEL_NIIMBOT_B, LP_MODEL_NIIMBOT_D110, LP_MODEL_M120, LP_MODEL_M200, LP_MODEL_M221,
 };
 const int LABEL_PRINTER_MODEL_COUNT = sizeof(LABEL_PRINTER_MODELS) / sizeof(LABEL_PRINTER_MODELS[0]);
 
