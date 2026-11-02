@@ -46,6 +46,12 @@ DryingFill dryingFillEmpty(bool has_temp, bool has_hours, int tag_temp_c, int ta
   return { has_temp ? 0 : tag_temp_c, has_hours ? 0 : tag_hours };
 }
 
+DryingFill dryingFillFromText(bool has_temp, bool has_hours, const char* text) {
+  int temp_c = 0, hours = 0;
+  if (!dryingParse(text, &temp_c, &hours)) return { 0, 0 };
+  return dryingFillEmpty(has_temp, has_hours, temp_c, hours);
+}
+
 bool nozzleRangeAccepted(int temp_min, int temp_max) {
   if (temp_min <= 0 && temp_max <= 0) return false;
   return temp_min <= 0 || temp_max <= 0 || temp_min <= temp_max;

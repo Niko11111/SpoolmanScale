@@ -38,6 +38,11 @@ bool dryingTextFromNumbers(float temp_c, float hours, char* out, size_t n);
 // may be somebody's own.
 DryingFill dryingFillEmpty(bool has_temp, bool has_hours, int tag_temp_c, int tag_hours);
 
+// The same for the text an earlier scan left in custom_fields, which moves into
+// the fields FilaMan 2.0 shows. It wins over the tag, it may be somebody's own.
+// A text the parse cannot read fills nothing.
+DryingFill dryingFillFromText(bool has_temp, bool has_hours, const char* text);
+
 // Whether FilaMan 2.0 takes this nozzle range. It refuses the whole filament
 // for one that runs backwards, and a tag can carry that. 0 means not known.
 bool nozzleRangeAccepted(int temp_min, int temp_max);

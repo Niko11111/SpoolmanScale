@@ -53,22 +53,32 @@ void dryingSyncNote(JsonObjectConst spool) {
   // have put their own drying in.
   const char* have = spool["filament"]["extra"]["drying"] | (const char*)nullptr;
   if (!have) have = spool["extra"]["drying"] | "";
-  if (dryingFieldHasText(have)) return;
+  const bool has_text = dryingFieldHasText(have);
+  JsonObjectConst native = spool["filament"][DRYING_NATIVE_KEY];
+  if (has_text && native.isNull()) return;
+
+  // FilaMan 2.0 shows only its two fields, so a text an earlier scan left stays
+  // invisible there: it moves over, and stays as well for a server rolled back.
+  DryingFill fill = {};
+  if (!native.isNull()) {
+    const bool has_temp  = jsonHasKey(native, DRYING_NATIVE_TEMP);
+    const bool has_hours = jsonHasKey(native, DRYING_NATIVE_HOURS);
+    fill = has_text ? dryingFillFromText(has_temp, has_hours, have)
+                    : dryingFillEmpty(has_temp, has_hours, g_tag.dry_temp_c, g_tag.dry_hours);
+    if (fill.temp_c <= 0 && fill.hours <= 0) return;
+  }
 
   char want[DRYING_TEXT_MAX];
-  dryingFormat(g_tag.dry_temp_c, g_tag.dry_hours, want, sizeof(want));
+  if (has_text) snprintf(want, sizeof(want), "%s", have);
+  else          dryingFormat(g_tag.dry_temp_c, g_tag.dry_hours, want, sizeof(want));
   if (key == s_tried_id && strcmp(want, s_tried_value) == 0) return;
 
   s_pending     = true;
   s_filament_id = filament_id;
   s_spool_id    = spool_id;
   snprintf(s_value, sizeof(s_value), "%s", want);
-  JsonObjectConst native = spool["filament"][DRYING_NATIVE_KEY];
   s_native = !native.isNull();
-  if (s_native) {
-    s_fill = dryingFillEmpty(jsonHasKey(native, DRYING_NATIVE_TEMP), jsonHasKey(native, DRYING_NATIVE_HOURS),
-                             g_tag.dry_temp_c, g_tag.dry_hours);
-  }
+  s_fill   = fill;
 }
 
 void dryingSyncTick() {

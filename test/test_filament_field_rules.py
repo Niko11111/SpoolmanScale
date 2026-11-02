@@ -34,6 +34,17 @@ int main() {
   assert(!dryingTextFromNumbers(0.0f, 8.0f, text, sizeof(text)));
   assert(!dryingTextFromNumbers(55.0f, 0.0f, text, sizeof(text)));
 
+  // A text from an earlier scan moves into what is empty; it wins over the tag
+  // because the caller never hands the tag in, and a text it cannot read fills nothing.
+  DryingFill moved = dryingFillFromText(false, false, "55 °C, 8 h");
+  assert(moved.temp_c == 55 && moved.hours == 8);
+  moved = dryingFillFromText(false, true, "55 °C, 8 h");
+  assert(moved.temp_c == 55 && moved.hours == 0);
+  moved = dryingFillFromText(true, true, "55 °C, 8 h");
+  assert(moved.temp_c == 0 && moved.hours == 0);
+  moved = dryingFillFromText(false, false, "no drying needed");
+  assert(moved.temp_c == 0 && moved.hours == 0);
+
   // Only what is empty is filled: 17 filaments on the live data have a time
   // and no temperature.
   DryingFill fill = dryingFillEmpty(false, false, 55, 8);

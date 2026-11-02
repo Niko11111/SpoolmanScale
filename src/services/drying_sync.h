@@ -17,8 +17,10 @@
 //  "[drying:...]" marker in the spool's note on BamBuddy. A value already
 //  there is never overwritten, not even one that differs from the tag, and
 //  nothing is written while tag and spool do not belong together
-//  (tag_spool_match.h). Written once per filament and value in a session; a
-//  failed write is not retried on every scan.
+//  (tag_spool_match.h). On FilaMan 2.0 a text an earlier scan left fills its
+//  empty fields, ahead of the tag, and stays where it is. Written once per
+//  filament and value in a session; a failed write is not retried on every
+//  scan.
 //
 //  The label prints it; More Info has no room for it.
 // ============================================================
