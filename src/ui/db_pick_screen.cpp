@@ -496,8 +496,8 @@ static void showMaterials() {
   const FdbMaker* m = fdbMaker(s_maker);
   if (!m) return;
   setTitle(m->name);
-  uint16_t pairs[FDB_PAIRS_MAX];
-  const int n = fdbPairsOf(s_maker, pairs, FDB_PAIRS_MAX);
+  uint16_t pairs[FDB_MAKER_PAIRS_MAX];
+  const int n = fdbPairsOf(s_maker, pairs, FDB_MAKER_PAIRS_MAX);
   if (n == 0) { showMessage(T(STR_DBPICK_EMPTY)); return; }
   lv_obj_t* body = newBody(DBP_BODY_Y, DBP_BODY_H);
   caption(body, T(STR_MAT_TITLE));

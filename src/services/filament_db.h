@@ -34,11 +34,16 @@
 // ============================================================
 
 // Room for the index and one list. SpoolmanDB has 67 makers and 299 pairs of
-// maker and material, the FilamentDB 311 makers (09.10.2026); the longest
-// list, FilamentDB Polymaker PLA, is 537 entries. An entry is about 260
-// bytes, the full list 156 kB of PSRAM.
+// maker and material, the FilamentDB 311 makers (09.10.2026), Spooly's light
+// form 204 makers and 1334 pairs (03.11.2026), which is why the pairs have room
+// to spare: 2400 of them take 53 kB of PSRAM, while a maker past the limit
+// reads as having no filaments at all. The longest list, FilamentDB Polymaker
+// PLA, is 537 entries. An entry is about 260 bytes, the full list 156 kB of PSRAM.
 #define FDB_MAKERS_MAX      400
-#define FDB_PAIRS_MAX       640
+#define FDB_PAIRS_MAX       2400
+// One maker's materials, as the picker lists them; it holds them on the stack.
+// The most anywhere is 46, Bambu Lab at Spooly (03.11.2026).
+#define FDB_MAKER_PAIRS_MAX 128
 #define FDB_ENTRIES_MAX     600
 // A name in SpoolmanDB is at most 58 bytes, a FilamentDB designation 84
 // (09.10.2026).

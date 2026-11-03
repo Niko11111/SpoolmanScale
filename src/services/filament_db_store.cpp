@@ -14,7 +14,10 @@
 #include "filament_db.h"
 
 // Behind the log ring and the Bambu catalog. 28 kB at the most today
-// (400 makers, 640 pairs), in 32 kB so the database can grow.
+// (400 makers, 640 pairs), in 32 kB so the database can grow. Only an index
+// read from the whole database is kept here, SpoolmanDB's 299 pairs; a light
+// form answers in a fraction of a second and may hold more than fits.
+#define STORE_PAIRS_MAX     640
 #define STORE_OFFSET        (FLASH_LOG_BYTES + BAMBU_CATALOG_BYTES)
 #define STORE_BYTES         (32UL * 1024UL)
 #define STORE_SECTOR        4096UL
@@ -43,7 +46,7 @@ struct StoreHeader {
 };
 static_assert(sizeof(StoreHeader) == 128, "the header is 128 bytes on the device and the host");
 static_assert(sizeof(StoreHeader) + FDB_MAKERS_MAX * sizeof(FdbMaker) +
-              FDB_PAIRS_MAX * sizeof(FdbPair) <= STORE_BYTES, "a full index fits the region");
+              STORE_PAIRS_MAX * sizeof(FdbPair) <= STORE_BYTES, "a full index fits the region");
 
 static const esp_partition_t* dataPartition() {
   const esp_partition_t* p = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
@@ -64,7 +67,7 @@ static uint32_t clockNow() {
 // Why a stored header is not used, or nullptr when it is.
 static const char* headerProblem(const StoreHeader& h, const char* base_url, uint32_t now) {
   if (h.magic != STORE_MAGIC || h.version != STORE_VERSION) return "none";
-  if (h.maker_n == 0 || h.maker_n > FDB_MAKERS_MAX || h.pair_n > FDB_PAIRS_MAX) return "damaged";
+  if (h.maker_n == 0 || h.maker_n > FDB_MAKERS_MAX || h.pair_n > STORE_PAIRS_MAX) return "damaged";
   if (strncmp(h.base_url, base_url, sizeof(h.base_url)) != 0) return "another server";
   if (!now) return "clock not set";
   if (h.stamp < STORE_STAMP_MIN || now < h.stamp || now - h.stamp > STORE_MAX_AGE_S) return "too old";
@@ -119,6 +122,10 @@ void fdbStoreSave(const char* base_url) {
   int pair_n = 0;
   const int maker_n = fdbIndexSnapshot(&makers, &pairs, &pair_n);
   if (maker_n <= 0) return;
+  if (pair_n > STORE_PAIRS_MAX) {
+    logSDf("Filament DB: %d pairs do not fit in flash, not kept", pair_n);
+    return;
+  }
 
   const size_t maker_bytes = (size_t)maker_n * sizeof(FdbMaker);
   const size_t body = bodyBytes(maker_n, pair_n);
