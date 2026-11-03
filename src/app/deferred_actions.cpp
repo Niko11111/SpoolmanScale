@@ -85,3 +85,4 @@ bool print_last_label_pending    = false;
 bool print_last_filament_label_pending = false;
 bool label_dates_pending         = false;
 bool print_own_layout_pending    = false;
+uint8_t weight_write_problem_pending = 0;

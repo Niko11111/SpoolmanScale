@@ -98,7 +98,9 @@
 #include "web/web_jobs.h"
 #include "ui/confirm_popup.h"
 #include "ui/tare_entry.h"
+#include "ui/tare_missing_popup.h"
 #include "ui/weight_popup.h"
+#include "services/weight_write_rules.h"
 #include "ui/ble_devices_screen.h"
 #include "ui/bluetooth_screen.h"
 #include "ui/connection_screen.h"
@@ -1134,6 +1136,12 @@ void appLoop() {
       showInfoPopup(serverRefusalTitleId(refused), serverRefusalTextId(refused), INFO_WARN);
     }
   }
+  if (weight_write_problem_pending != WEIGHT_WRITE_FINE && !isInfoPopupOpen()) {
+    const uint8_t problem = weight_write_problem_pending;
+    weight_write_problem_pending = WEIGHT_WRITE_FINE;
+    if (problem == WEIGHT_WRITE_NO_TARE) showTareMissingPopup();
+    else showInfoPopup(STR_WEIGHT_NOT_SAVED, STR_WEIGHT_NOT_SAVED_TEXT, INFO_WARN);
+  }
   // Right after the card's own handler, so a batch that finished inline (as
   // it does in the simulator) is collected in the pass that started it.
   perfSection("ams");
@@ -1148,6 +1156,7 @@ void appLoop() {
   // typed in takes the entry down unsaved first, and is asked about after.
   tareEntryTick();
   weightPopupTick();
+  tareMissingTick();
   spoolIdPadTick();
   idSpoolTick();
   idSpoolLiftQuestions();

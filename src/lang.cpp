@@ -4158,6 +4158,21 @@ const char* const STRINGS[][3] = {
     "Trop de requêtes" },  // STR_REFUSED_BUSY
   { "Der Server bremst die Waage gerade aus. Bitte später noch einmal versuchen.", "The server is holding the scale back right now. Please try again later.",
     "Le serveur limite la balance pour le moment. Réessayez plus tard." },  // STR_REFUSED_BUSY_TEXT
+  { "Leergewicht fehlt",
+    "Empty weight missing",
+    "Poids à vide absent" },  // STR_TARE_MISSING
+  { "Der Server speichert das Gewicht erst, wenn das Leergewicht dieser Spule bekannt ist.",
+    "The server stores the weight once this spool's empty weight is known.",
+    "Le serveur n'enregistre le poids qu'une fois le poids à vide de cette bobine connu." },  // STR_TARE_MISSING_TEXT
+  { "Eintragen",
+    "Enter it",
+    "Saisir" },  // STR_TARE_MISSING_ENTER
+  { "Gewicht nicht gespeichert",
+    "Weight not saved",
+    "Poids non enregistré" },  // STR_WEIGHT_NOT_SAVED
+  { "Der Server hat das Gewicht nicht angenommen. Bitte noch einmal senden.",
+    "The server did not accept the weight. Please send it again.",
+    "Le serveur n'a pas accepté le poids. Veuillez l'envoyer à nouveau." },  // STR_WEIGHT_NOT_SAVED_TEXT
 };
 
 StringID tagWriteResultString(uint8_t code) {

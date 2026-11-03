@@ -35,6 +35,8 @@ jobs:
         run: python3 test/test_recheck_pace.py
       - name: Test server refusal
         run: python3 test/test_server_refusal.py
+      - name: Test weight write rules
+        run: python3 test/test_weight_write_rules.py
       - name: Test Bluetooth discovery
         run: python3 test/test_ble_discovery.py
       - name: Test FilaMan label orientation

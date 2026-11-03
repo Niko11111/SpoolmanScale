@@ -16,6 +16,7 @@
 #include "spool_flow.h"
 #include "tag_write_popup.h"
 #include "tare_entry.h"
+#include "tare_missing_popup.h"
 #include "services/backend.h"
 #include "services/filaman_api.h"
 #include "services/settings_registry.h"
@@ -35,6 +36,7 @@ bool uiModalWaiting() {
       || isTagWritePopupOpen()
       || isConfirmPopupOpen()
       || isTareEntryOpen()
+      || isTareMissingOpen()
       || isSpoolWeightScopeOpen()
       || isSpoolFlowIdInputOpen()
       || isSpoolFlowLinkEntryOpen()
