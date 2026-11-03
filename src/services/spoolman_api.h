@@ -138,10 +138,8 @@ int spoolmanPatchSpoolRemaining(const char* base_url, int spool_id, float remain
 // initial weight to match, and a reading below the empty weight is clamped to
 // empty rather than going negative.
 //
-// One case it cannot serve: a tare that is only known on the vendor. measure()
-// resolves spool then filament and then defaults to zero, so it would book the
-// core mass as filament. See Donkie/Spoolman#1117 - callers check
-// sm_tare_source before using this.
+// Not every server subtracts the tare the scale did: callers check
+// tareMeasureAgrees() (tare_chain.h) before using this.
 // Brings an archived spool back and records the weight in the same request.
 // Archiving zeroes remaining_weight, so the two belong together: unarchiving
 // alone would leave a full spool on the shelf reading as empty.

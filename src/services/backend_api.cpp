@@ -1143,12 +1143,11 @@ int backendPatchSpoolRemaining(const char* base_url, int spool_id, float remaini
       //
       // The gross value is `remaining + sm_spool_weight`, so it is exactly what
       // the pad showed. Handing it over is only safe while Spoolman resolves
-      // the same tare we did, and it does for the first two levels: spool, then
-      // filament. It does NOT walk up to the vendor - it falls back to zero
-      // there - so a vendor-only tare would come back with the core mass booked
-      // as filament. Donkie/Spoolman#1117. In that case the explicit PATCH
-      // stays, where this firmware has already subtracted the right number.
-      if (measured_g >= 0.0f && sm_tare_source != TARE_VENDOR) {
+      // the same tare we did, which not every server version does for a tare
+      // only on the vendor or for a stored 0 (tareMeasureAgrees()). In those
+      // cases the explicit PATCH stays, where this firmware has already
+      // subtracted the right number.
+      if (measured_g >= 0.0f && tareMeasureAgrees(sm_tare_source, sm_spool_weight)) {
         int code = spoolmanMeasureSpool(base_url, spool_id, measured_g, timeout_ms);
         // 404 or 405 is a server that predates the endpoint, 501 one that
         // speaks Spoolman's API without it (Spoolman itself answers an unknown

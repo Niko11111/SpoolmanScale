@@ -370,7 +370,9 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   if (remaining < 0.0f) remaining = 0.0f;
   dst["remaining_weight"] = remaining;
   dst["used_weight"]      = used;
-  dst["spool_weight"]     = (float)core;
+  // A core of 0 stays out: spoolTare() would read it as a tare of nothing on
+  // record, where BamBuddy only has no core weight for the spool.
+  if (core > 0) dst["spool_weight"] = (float)core;
   dst["initial_weight"]   = (float)label;
 
   dst["archived"] = !src["archived_at"].isNull();
@@ -422,7 +424,7 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   f["id"]           = 0;
   f["material"]     = src["material"] | "";
   f["weight"]       = (float)label;
-  f["spool_weight"] = (float)core;
+  if (core > 0) f["spool_weight"] = (float)core;
   // The maker's article number, Spoolman's article_number.
   const char* article = src["material_number"] | "";
   if (article[0]) f["article_number"] = article;

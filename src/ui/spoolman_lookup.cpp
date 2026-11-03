@@ -1216,6 +1216,7 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) sm_tag_values[i][0] = '\0';
   sm_hw_uid_value[0] = '\0';
   sm_spool_weight = 0;
+  sm_tare_source = TARE_NONE;
   sm_remaining = 0;
   sm_total = 1000;
   lv_timer_handler();
