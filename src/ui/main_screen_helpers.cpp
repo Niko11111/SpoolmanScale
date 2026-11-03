@@ -124,6 +124,12 @@ void paintTagStatus() {
     lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_BAD_TEXT), 0);
     return;
   }
+  // The server answered, but not the question: the spool may well be there.
+  if (!sm_found && lookupFailureText() >= 0) {
+    lv_label_set_text(lbl_status, T(lookupFailureText()));
+    lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_BAD_TEXT), 0);
+    return;
+  }
   // Archived is its own answer: saying "tag detected" in green while the
   // line below reads "Archived" tells the user two different things.
   // Found, but the Bambu tag describes another filament than the spool it is

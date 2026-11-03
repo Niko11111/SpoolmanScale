@@ -323,6 +323,18 @@ static void collect() {
   finishLookup();
 }
 
+// Asked and not answered: the archive can still hold the spool, so "not in the
+// inventory" would be a guess. Named like a failed active list, and no verdict,
+// so the recheck that finds the spool later is not taken for a foreign link.
+static void archiveNoVerdict(int code, int text_id) {
+  s_shadow = SHADOW_NOT_ASKED;
+  paintLookupFailure(code, text_id);
+  sm_found = false;
+  s_verdict_unknown = false;
+  s_verdict_certain = false;
+  updateLinkButton();
+}
+
 void lookupScanTick() {
   if (s_pending) {
     static unsigned long last = 0;
@@ -344,9 +356,8 @@ void lookupScanTick() {
     const WantStage stage = s_want;
     s_want = WANT_NONE;
     if (stage == WANT_ARCHIVE) {
-      lookupResolveArchive(s_lk, nullptr, nullptr);
       // The archive was never read: "not found" without it is no verdict.
-      s_verdict_unknown = false;
+      archiveNoVerdict(0, STR_API_ERROR);
     } else {
       paintLookupFailure(0, STR_API_ERROR);
     }
@@ -875,6 +886,13 @@ void lookupResolveArchive(const LookupCtx& c, JsonDocument* doc2p,
   const InventoryStamp stamp    = c.stamp;
   const int   code2 = r2 ? r2->code : 0;
   const DeserializationError err2 = r2 ? r2->err : DeserializationError::Ok;
+
+  // Without r2 the archive was left out on purpose (lookupArchiveBegin()).
+  if (r2 && (code2 != 200 || err2)) {
+    logSDf("Backend: the archive list failed (HTTP %d, %s), no verdict", code2, err2.c_str());
+    archiveNoVerdict(code2, code2 == -2 ? STR_LINK_JSON_ERR : STR_API_ERROR);
+    return;
+  }
 
   bool archive_whole = false;       // the second half of the scan came in, all of it
   if (code2 == 200) {

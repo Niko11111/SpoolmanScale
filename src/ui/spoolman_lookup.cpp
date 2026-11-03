@@ -808,6 +808,11 @@ bool lookupUnknownIsCertain() { return s_verdict_certain; }
 // spool nobody had been able to ask about.
 static bool s_lost_connection = false;
 
+// The text of a lookup that ended without an answer, -1 otherwise. The status
+// line reads it for the same reason: "API error" below and "not in Spoolman"
+// above told the user two things, and only one was known.
+static int s_failure_text = -1;
+
 // The recheck's pace. The gap is measured from the END of the last probe, 0
 // until the tick has seen the current lookup: measured from its start, a probe
 // that took the whole 5 s connect timeout was already due again on the next
@@ -1001,6 +1006,7 @@ void spoolmanRescanTick() {
 void paintLookupFailure(int code, int fallback_id) {
   const bool no_conn = serverReachIsNetworkFailure(serverReachNote(code, false));
   s_lost_connection = no_conn;
+  s_failure_text = fallback_id;
   lv_label_set_text(lbl_spoolman_weight, T(no_conn ? STR_NO_CONNECTION : fallback_id));
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_BAD_TEXT), 0);
 }
@@ -1162,6 +1168,7 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   s_verdict_unknown = false;
   s_verdict_certain = false;
   s_lost_connection = false;
+  s_failure_text = -1;
   s_recheck_end_ms = 0;
   s_recheck_gap_ms = TAG_RECHECK_MS;
   s_lookup_epoch++;
@@ -1602,3 +1609,4 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
 }
 
 bool lookupLostConnection() { return s_lost_connection; }
+int  lookupFailureText() { return s_failure_text; }

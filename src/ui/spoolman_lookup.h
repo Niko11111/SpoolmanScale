@@ -97,3 +97,5 @@ bool spoolmanTagResolvesAt(const char* base, const char* query, bool* out_unansw
 // opposed to answering that it does not know the tag. The status line says so
 // instead of naming the backend the spool is supposedly missing from.
 bool lookupLostConnection();
+// The string id of a lookup that ended without an answer, -1 otherwise.
+int  lookupFailureText();
