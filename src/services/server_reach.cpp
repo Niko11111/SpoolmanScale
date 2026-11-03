@@ -5,6 +5,7 @@
 
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
+#include "services/server_refusal.h"
 
 static bool s_popup_pending        = false;
 // The placement lookup's one popup per outage has been used up.
@@ -31,6 +32,7 @@ bool serverReachIsNetworkFailure(int code) {
 }
 
 int serverReachNote(int code, bool user_action) {
+  serverRefusalNote(code, user_action);
   if (!serverReachIsNetworkFailure(code)) return code;
 
   if (sm_reachable) {

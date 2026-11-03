@@ -58,6 +58,7 @@
 #include "services/spoolman_actions.h"
 #include "services/backend_api.h"
 #include "services/server_reach.h"
+#include "services/server_refusal.h"
 #include "services/spool_cache.h"
 #include "services/uid_index.h"
 #include "services/dried_batch.h"
@@ -1124,6 +1125,13 @@ void appLoop() {
   if (!isInfoPopupOpen() && serverReachPopupTake()) {
     updateHeaderStatus();
     showInfoPopup(STR_SERVER_DOWN_TITLE, STR_SERVER_DOWN_TEXT, INFO_WARN);
+  }
+  // The server answered and said no, see server_refusal.h. The same wait.
+  if (!isInfoPopupOpen()) {
+    const ServerRefusal refused = serverRefusalPopupTake();
+    if (refused != REFUSAL_NONE) {
+      showInfoPopup(serverRefusalTitleId(refused), serverRefusalTextId(refused), INFO_WARN);
+    }
   }
   // Right after the card's own handler, so a batch that finished inline (as
   // it does in the simulator) is collected in the pass that started it.

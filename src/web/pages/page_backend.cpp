@@ -26,6 +26,7 @@
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/filaman_api.h"
+#include "services/server_refusal.h"
 #include "services/settings_registry.h"
 #include "web/web_access.h"
 #include "web/web_jobs.h"
@@ -655,9 +656,11 @@ static void routes(WebServer &srv) {
                                                                       : STR_SM_AUTH_MISSING)
                              + ", HTTP " + String(r.code) + ")";
       else if (!r.ok)   msg += " (HTTP " + String(r.code) + ")";
+      else if (r.refused) msg += String(" (") + T(serverRefusalTitleId(serverRefusalOf(r.refused)))
+                               + ", HTTP " + String(r.refused) + ")";
       // A key that is simply not entered yet is the normal state halfway
       // through the setup, not a fault, so it is not shown in red.
-      const bool bad = !r.ok && !no_key;
+      const bool bad = (!r.ok && !no_key) || r.refused;
       String j = String("{\"state\":\"done\",\"ok\":") + (r.ok ? "true" : "false") +
                  ",\"bad\":" + (bad ? "true" : "false") +
                  ",\"msg\":\"" + jsonEsc(msg.c_str()) + "\"}";

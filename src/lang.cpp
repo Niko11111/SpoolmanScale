@@ -4148,6 +4148,16 @@ const char* const STRINGS[][3] = {
   { "Für das schmale Band gibt es ein festes Etikett: Hersteller, Material, Name, auf dem Spulenetikett dazu die Nummer. Deine Vorlage bleibt gespeichert und gilt wieder, sobald ein anderer Drucker gewählt ist.",
     "The narrow tape has a fixed label: maker, material, name, and on a spool label its number. Your template stays saved and applies again once another printer is picked.",
     "Le ruban étroit a une étiquette fixe : fabricant, matière, nom et, sur l'étiquette de bobine, son numéro. Votre modèle reste enregistré et s'applique de nouveau dès qu'une autre imprimante est choisie." },  // STR_W_L_TAPE_FIXED
+  { "Der Server nimmt den Zugang nicht an. Bitte die Zugangsdaten prüfen.", "The server does not accept the access. Please check the credentials.",
+    "Le serveur n'accepte pas cet accès. Vérifiez les identifiants." },  // STR_REFUSED_ACCESS_TEXT
+  { "Konto nicht aktiv", "Account not active",
+    "Compte inactif" },  // STR_REFUSED_ACCOUNT
+  { "Der Server lässt dieses Konto gerade nicht zu, zum Beispiel weil es abgelaufen ist.", "The server does not allow this account right now, for example because it has expired.",
+    "Le serveur n'autorise pas ce compte pour le moment, par exemple s'il a expiré." },  // STR_REFUSED_ACCOUNT_TEXT
+  { "Zu viele Anfragen", "Too many requests",
+    "Trop de requêtes" },  // STR_REFUSED_BUSY
+  { "Der Server bremst die Waage gerade aus. Bitte später noch einmal versuchen.", "The server is holding the scale back right now. Please try again later.",
+    "Le serveur limite la balance pour le moment. Réessayez plus tard." },  // STR_REFUSED_BUSY_TEXT
 };
 
 StringID tagWriteResultString(uint8_t code) {

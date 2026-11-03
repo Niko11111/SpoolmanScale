@@ -45,6 +45,7 @@ struct WebJobResult {
   WebJobKind kind;
   bool   ok;
   int    code;        // the HTTP code behind the answer, where there is one
+  int    refused;     // host test: the code a reachable server refused with, else 0
   char   err[80];     // why not, when ok is false
   char   tag[40];     // GH check: the tag found
   char   pub[24];     // GH check: when it was published

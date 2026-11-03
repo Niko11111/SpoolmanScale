@@ -9,6 +9,7 @@
 #include "services/backend_job.h"
 #include "bambu/bambu_catalog.h"
 #include "services/github_release.h"
+#include "services/server_refusal.h"
 #include "services/worker_heap.h"
 #include "web/web_net_probe.h"
 #include "web/web_shell.h"
@@ -50,6 +51,13 @@ static unsigned long        s_done_ms = 0;
 static void runHostTest() {
   s_res.code = backendGetHealthCode(backendBaseUrl(), 4000);
   s_res.ok   = (s_res.code == 200);
+  s_res.refused = 0;
+  // A server may leave /health open, so its answer says nothing about the key.
+  // FilaMan and BamBuddy have their own steps for it during setup.
+  if (!s_res.ok || backendMode() != BACKEND_SPOOLMAN) return;
+  serverRefusalClearSeen();
+  (void)backendCountActiveSpools(backendBaseUrl(), 4000);
+  s_res.refused = serverRefusalSeen();
 }
 
 static void runSpools() {

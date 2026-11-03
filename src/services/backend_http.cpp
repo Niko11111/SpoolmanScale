@@ -1,6 +1,7 @@
 #include "backend_http.h"
 
 #include <Network.h>
+#include <string.h>
 #include <strings.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
@@ -10,6 +11,7 @@
 #include "services/backend.h"
 #include "services/github_release.h"
 #include "services/prefs_store.h"
+#include "services/server_refusal.h"
 #include "services/worker_heap.h"
 
 // Opening the connection ahead of time is a task of its own: the handshake
@@ -333,15 +335,37 @@ void BackendHttp::settle() {
   if (s_pool->available() > 0) s_pool->stop();
 }
 
+// Here because this is the one place that sees the header, whichever backend
+// and whichever request it was. Only for the backend's own address: GitHub says
+// 403 for its rate limit, which is no verdict on the key entered for the server.
+void BackendHttp::noteRefusal() {
+  if (serverRefusalOf(_returnCode) == REFUSAL_NONE) return;
+  if (!strstr(backendBaseUrl(), _host.c_str())) return;
+  serverRefusalRecord(_returnCode, Http::header("Retry-After").c_str());
+}
+
+void BackendHttp::collectHeaders(const char* keys[], size_t count) {
+  static constexpr size_t COLLECT_MAX = 6;
+  const char* all[COLLECT_MAX];
+  size_t n = 0;
+  for (; n < count && n + 1 < COLLECT_MAX; n++) all[n] = keys[n];
+  all[n++] = "Retry-After";
+  Http::collectHeaders(all, n);
+  collecting_ = true;
+}
+
 void BackendHttp::end() {
+  noteRefusal();
   settle();
   Http::end();
 }
 
 bool BackendHttp::begin(const String& url) {
   // Begun again on the same object: the answer before is done with.
+  noteRefusal();
   settle();
   newAnswer();
+  if (!collecting_) collectHeaders(nullptr, 0);
   const bool first = !begun_;
   begun_ = true;
 
@@ -394,6 +418,7 @@ bool BackendHttp::begin(const String& url) {
 }
 
 BackendHttp::~BackendHttp() {
+  noteRefusal();   // end() clears the code, so an answer is only ever noted once
   if (!pooled_) return;
   // An answer not read to its end would be read as the start of the next
   // one: read to its end here, or closed so the next request opens afresh.

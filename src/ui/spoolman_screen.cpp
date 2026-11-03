@@ -15,6 +15,7 @@
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/backend_http.h"
+#include "services/server_refusal.h"
 #include "services/bambuddy_api.h"
 #include "header_status.h"
 #include "services/device_name.h"
@@ -136,6 +137,16 @@ static void setMainContinues(bool cont) {
   }
 }
 
+// The server is there, but will not work with this scale as it is set up.
+static void showRefusedTest(int code) {
+  char buf[64];
+  snprintf(buf, sizeof(buf), "%s (HTTP %d)", T(serverRefusalTitleId(serverRefusalOf(code))), code);
+  showTestResult(SP_TONE_BAD, STR_SP_REACHED, buf);
+  setQuietLater(true);
+  logSDf("Spoolman IP test: server refuses, HTTP %d", code);
+  updateHeaderStatus();
+}
+
 // The address test the save button asks for: health, version, spool count -
 // up to thirteen seconds of requests. Run from appLoop() one pass after the
 // button, never from the button itself, which held the touch panel for the
@@ -207,9 +218,18 @@ static void runAddressTest() {
 
   // Fetch version from /api/v1/info
   char sm_ver[32] = "?";
+  serverRefusalClearSeen();
   backendGetVersion(cfg_spoolman_base, sm_ver, sizeof(sm_ver), 3000);
 
   int spool_count = backendCountActiveSpools(cfg_spoolman_base, 6000);
+
+  // A server may leave /health open, so the answer above says nothing about
+  // the key: these two are the first requests that need one. FilaMan and
+  // BamBuddy have their own steps for it during setup.
+  if (backendMode() == BACKEND_SPOOLMAN && serverRefusalSeen()) {
+    showRefusedTest(serverRefusalSeen());
+    return;
+  }
 
   // A negative count means the question could not be answered, not that
   // there are no spools. In FilaMan that is the normal case during setup,

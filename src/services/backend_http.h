@@ -161,16 +161,21 @@ class BackendHttp : private BackendTlsHolder, public HTTPClient {
   // answer was read before HTTPClient forgets its length.
   String getString();
   void end();
+  // Hide HTTPClient's own: whatever a caller wants to read, Retry-After stays
+  // on the list, because a caller's list would otherwise replace it.
+  void collectHeaders(const char* keys[], size_t count);
   // Never borrow the kept connection: for a diagnostic that measures what a
   // connection of its own costs, and must not move the kept one elsewhere.
   void noPool() { no_pool_ = true; }
  private:
   void newAnswer();
+  void noteRefusal();
   void settle();
   bool answerRead();
   bool pooled_   = false;
   bool no_pool_  = false;
   bool begun_    = false;   // looked the address up already
+  bool collecting_ = false; // Retry-After is on the list of headers to keep
   bool settled_  = false;   // the kept connection's fate for this answer is decided
   bool streamed_ = false;   // the caller read the body through getStream()
   ChunkedStream chunked_;

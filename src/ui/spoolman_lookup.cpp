@@ -32,6 +32,7 @@ bool spoolHasAnyTag(JsonObjectConst spool);
 #include "services/http_progress.h"
 #include "services/recheck_pace.h"
 #include "services/server_reach.h"
+#include "services/server_refusal.h"
 #include "services/spool_cache.h"
 #include "services/spool_tare.h"
 #include "services/spoolman_actions.h"
@@ -861,6 +862,7 @@ bool spoolmanTagResolvesAt(const char* base, const char* query, bool* out_unansw
   DeserializationError err = DeserializationError::Ok;
   bool hit = false;
   int code = 0;
+  const uint32_t refusals_before = serverRefusalCount();
 
   // Every backend has a cheap lookup by tag, so this works for all three. The
   // one split: with Spoolman's own relation selected there is no extra field
@@ -881,7 +883,8 @@ bool spoolmanTagResolvesAt(const char* base, const char* query, bool* out_unansw
 
   // A server that did not answer the first request will not answer the second
   // either, and each of them can hold the loop for the whole connect timeout.
-  if (!hit && !serverReachIsNetworkFailure(code)) {
+  // Nor will one that just refused us.
+  if (!hit && !serverReachIsNetworkFailure(code) && serverRefusalCount() == refusals_before) {
     code = backendFindSpoolByTag(base, query, doc, 5000, &err, &filter);
     if (code == 200 && !err) {
       // Verified exactly: FilaMan's search is a substring match, so an
@@ -894,7 +897,10 @@ bool spoolmanTagResolvesAt(const char* base, const char* query, bool* out_unansw
         }
     }
   }
-  if (out_unanswered) *out_unanswered = !hit && serverReachIsNetworkFailure(code);
+  if (out_unanswered) {
+    *out_unanswered = !hit && (serverReachIsNetworkFailure(code) ||
+                               serverRefusalCount() != refusals_before);
+  }
   return hit;
 }
 
@@ -912,7 +918,7 @@ static bool recheckCollect(bool* out_hit) {
     // the probe, but a server that does not answer needs no more questions.
     s_recheck_gap_ms = s_recheck_gap_ms >= TAG_RECHECK_MAX_MS / 2
                          ? TAG_RECHECK_MAX_MS : s_recheck_gap_ms * 2;
-    logSDf("Recheck: no answer from the backend after %lu ms, next try in %lus",
+    logSDf("Recheck: no usable answer from the backend after %lu ms, next try in %lus",
            (unsigned long)r.ms, (unsigned long)(s_recheck_gap_ms / 1000));
     return false;
   }
@@ -939,6 +945,7 @@ static void recheckLogPhase(RecheckPhase phase) {
 static bool recheckDue() {
   // `| 1` keeps a probe that ends at millis() == 0 from reading as "not seen".
   if (!s_recheck_end_ms) { s_recheck_end_ms = millis() | 1; return false; }
+  if (serverPauseActive()) return false;
   const uint32_t quiet = recheckQuietMs();
   recheckLogPhase(recheckPhase(quiet));
   const uint32_t gap = recheckPacedGap(quiet, s_recheck_gap_ms);
@@ -1035,8 +1042,11 @@ void spoolmanRescanTick() {
 void paintLookupFailure(int code, int fallback_id) {
   const bool no_conn = serverReachIsNetworkFailure(serverReachNote(code, false));
   s_lost_connection = no_conn;
-  s_failure_text = fallback_id;
-  lv_label_set_text(lbl_spoolman_weight, T(no_conn ? STR_NO_CONNECTION : fallback_id));
+  // A server that answered "no" is named for what it said.
+  const ServerRefusal refused = serverRefusalOf(code);
+  const int text_id = refused != REFUSAL_NONE ? serverRefusalTitleId(refused) : fallback_id;
+  s_failure_text = text_id;
+  lv_label_set_text(lbl_spoolman_weight, T(no_conn ? STR_NO_CONNECTION : text_id));
   lv_obj_set_style_text_color(lbl_spoolman_weight, lv_color_hex(UI_COL_BAD_TEXT), 0);
 }
 

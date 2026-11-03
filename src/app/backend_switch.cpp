@@ -22,6 +22,7 @@
 #include "services/ams_assign.h"
 #include "services/ams_pick.h"
 #include "services/location_state.h"
+#include "services/server_refusal.h"
 #include "services/remote_link.h"
 #include "services/server_sets.h"
 #include "services/spool_cache.h"
@@ -44,6 +45,7 @@ void backendApplyHost(const char *host) {
   filamanForgetLocations();
   backendInvalidateExtraFieldCache();
   amsPresenceForget();
+  serverRefusalForget();
   spoolCacheForget("host changed");
   labelSpoolForget();            // the label editor's spool is the old server's
   labelServerForget();           // and so are its presets and preview
@@ -86,6 +88,9 @@ static void leaveServer() {
 
 // ---- caches and sessions that belong to the backend just left ----------
 static void forgetServerCaches(const char *why) {
+  // A refusal or a rate limit was about the old key or the old server.
+  serverRefusalForget();
+
   // Keyed by nothing but a five minute TTL, so it would resolve and write ids
   // belonging to the other instance.
   filamanForgetLocations();
