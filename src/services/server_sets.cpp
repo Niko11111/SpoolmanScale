@@ -7,6 +7,7 @@
 #include "services/ams_source.h"
 #include "services/app_settings.h"
 #include "services/backend.h"
+#include "services/backend_profiles.h"
 #include "services/prefs_store.h"
 #include "services/text_util.h"
 
@@ -35,15 +36,30 @@ static const SetSlot SLOTS[] = {
   { "ams_src_host", "alt_ams_host",  false },
   { "ams_src_key",  "alt_ams_key",   false },
   { "set_name",     "alt_set_name",  false },
+  { "backend_prof", "alt_bk_prof",   true  },
+  { "bp1_ip",       "alt_bp1_ip",    false },
+  { "bp1_auth",     "alt_bp1_auth",  true  },
+  { "bp1_user",     "alt_bp1_user",  false },
+  { "bp1_secret",   "alt_bp1_secret", false },
+  { "bp1_bind",     "alt_bp1_bind",  false },
+  { "bp1_name",     "alt_bp1_name",  false },
+  { "bp1_for",      "alt_bp1_for",   false },
+  { "bp2_auth",     "alt_bp2_auth",  true  },
+  { "bp2_user",     "alt_bp2_user",  false },
+  { "bp2_secret",   "alt_bp2_secret", false },
+  { "bp2_bind",     "alt_bp2_bind",  false },
 };
 static constexpr size_t SLOT_COUNT = sizeof(SLOTS) / sizeof(SLOTS[0]);
 
 enum SlotIndex : uint8_t {
   SLOT_SPOOLMAN, SLOT_FM_HOST, SLOT_FM_KEY, SLOT_FM_DEV, SLOT_BB_HOST, SLOT_BB_KEY,
   SLOT_SM_AUTH, SLOT_SM_USER, SLOT_SM_SECRET, SLOT_SM_BIND, SLOT_AMS_HOST,
-  SLOT_AMS_KEY, SLOT_NAME
+  SLOT_AMS_KEY, SLOT_NAME,
+  SLOT_PROFILE, SLOT_OTHER_IP, SLOT_OTHER_AUTH, SLOT_OTHER_USER, SLOT_OTHER_SECRET,
+  SLOT_OTHER_BIND, SLOT_OTHER_NAME, SLOT_OTHER_FOR,
+  SLOT_SPOOLY_AUTH, SLOT_SPOOLY_USER, SLOT_SPOOLY_SECRET, SLOT_SPOOLY_BIND
 };
-static_assert(SLOT_NAME + 1 == SLOT_COUNT, "SlotIndex and SLOTS are out of step");
+static_assert(SLOT_SPOOLY_BIND + 1 == SLOT_COUNT, "SlotIndex and SLOTS are out of step");
 
 static const char* keyOf(SlotIndex i, bool parked) {
   return parked ? SLOTS[i].parked : SLOTS[i].active;
@@ -52,7 +68,10 @@ static const char* keyOf(SlotIndex i, bool parked) {
 static String readText(SlotIndex i, bool parked) {
   // The Spoolman address has a built-in default that loadPrefs() falls back
   // to while nothing is stored; the active set shows the same.
-  const char* fallback = (!parked && i == SLOT_SPOOLMAN) ? cfg_spoolman_ip : "";
+  // With an online service active the RAM copy holds that service's address,
+  // which must never land in the local server's key.
+  const char* fallback = (!parked && i == SLOT_SPOOLMAN && !backendProfileIsOnline())
+                             ? cfg_spoolman_ip : "";
   return prefsGetString(keyOf(i, parked), fallback);
 }
 
@@ -74,12 +93,20 @@ void serverSetRead(bool parked, ServerSetView* out) {
   out->spoolman_access = prefsGetUChar(keyOf(SLOT_SM_AUTH, parked), SM_AUTH_NONE) != SM_AUTH_NONE &&
                          readText(SLOT_SM_SECRET, parked).length() > 0;
   out->ams_source_key  = readText(SLOT_AMS_KEY, parked).length() > 0;
+  // What the set has chosen, else what it holds. Spooly's address is in the
+  // firmware, so without the choice its key is what says it is in use.
+  const uint8_t chosen = prefsGetUChar(keyOf(SLOT_PROFILE, parked), BP_SPOOLMAN);
+  const String other = readText(SLOT_OTHER_IP, parked);
+  const bool spooly_key = readText(SLOT_SPOOLY_SECRET, parked).length() > 0;
+  const bool spooly = chosen == BP_SPOOLY || (chosen != BP_OTHER && !other.length() && spooly_key);
+  copyText(out->online, sizeof(out->online), spooly ? String(backendProfileNameOf(BP_SPOOLY)) : other);
+  out->online_access = spooly ? spooly_key : readText(SLOT_OTHER_SECRET, parked).length() > 0;
 }
 
 bool serverSetParkedEmpty() {
   ServerSetView v;
   serverSetRead(true, &v);
-  return !v.spoolman[0] && !v.filaman[0] && !v.bambuddy[0] && !v.ams_source[0];
+  return !v.spoolman[0] && !v.filaman[0] && !v.bambuddy[0] && !v.ams_source[0] && !v.online[0];
 }
 
 void serverSetParkedLabel(char* out, size_t out_size) {
@@ -94,6 +121,7 @@ void serverSetParkedLabel(char* out, size_t out_size) {
                    : v.spoolman[0] ? v.spoolman
                    : v.filaman[0]  ? v.filaman
                    : v.bambuddy[0] ? v.bambuddy
+                   : v.online[0]   ? v.online
                                    : v.ams_source;
   snprintf(out, out_size, "%s", pick);
 }

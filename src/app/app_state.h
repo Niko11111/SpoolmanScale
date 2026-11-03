@@ -52,6 +52,7 @@ extern lv_obj_t *scr_main;
 extern lv_obj_t *scr_settings;
 extern lv_obj_t *scr_wifi;
 extern lv_obj_t *scr_backend;
+extern lv_obj_t *scr_online;
 extern lv_obj_t *scr_filaman_options;
 extern lv_obj_t *scr_ams_assign;
 extern lv_obj_t *scr_filaman_fields;

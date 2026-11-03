@@ -36,6 +36,7 @@ lv_obj_t *scr_main   = nullptr;
 lv_obj_t *scr_settings   = nullptr;
 lv_obj_t *scr_wifi       = nullptr;
 lv_obj_t *scr_backend    = nullptr;
+lv_obj_t *scr_online     = nullptr;
 lv_obj_t *scr_filaman_options = nullptr;
 lv_obj_t *scr_ams_assign = nullptr;
 lv_obj_t *scr_filaman_fields = nullptr;

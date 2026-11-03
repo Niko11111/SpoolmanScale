@@ -354,6 +354,8 @@ static const char APP_CSS[] PROGMEM =
       ".btab:hover{background:var(--quiet-hover)}"
       ".btab.on{background:var(--btn);color:var(--accent);"
       "border-color:var(--accent-line);opacity:1;cursor:default}"
+      // Internet, open but not yet the active one.
+      ".btab.open{color:var(--accent);border-color:var(--accent-line)}"
       // The question ask() puts, in the page's own look instead of the
       // browser's box at the top of the window. Centred in the part of the
       // page that is on screen: inside a backend's frame --vis-top and

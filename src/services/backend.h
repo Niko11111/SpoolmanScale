@@ -40,7 +40,9 @@ enum BackendMode : uint8_t {
 void backendLoadSettings();
 
 BackendMode backendMode();
-void        backendSetMode(BackendMode mode);   // persists to NVS
+// Which backend, and on Spoolman's mode which profile (backend_profiles.h).
+// Persists, and reads the address and the access of what is now active.
+void        backendSetSelection(BackendMode mode, uint8_t profile);
 bool        backendIsFilaMan();
 bool        backendIsBamBuddy();
 
@@ -113,6 +115,11 @@ bool        spoolmanAuthSendsTo(const char* url);
 // to the address now set. False, with nothing changed, for a secret longer
 // than SM_SECRET_MAX_LEN.
 bool        spoolmanSetAuth(uint8_t mode, const char* user, const char* secret);
+// The same for an online profile that is not active, from the web form. Its
+// address too, unless the table fixes it. False, with nothing changed, for a
+// secret longer than SM_SECRET_MAX_LEN.
+bool        backendProfileStoreOnline(uint8_t id, const char* addr, uint8_t mode,
+                                      const char* user, const char* secret);
 // One number for what goes out with a request to the address now set, 0 for
 // nothing (access_stamp.h). Different number, possibly a different inventory.
 uint32_t    spoolmanAccessStamp();
@@ -121,8 +128,13 @@ uint32_t    spoolmanAccessStamp();
 // its server. Spoolman and BamBuddy only need a base URL.
 bool backendIsConfigured();
 
-// Product name of the active backend, "Spoolman", "FilaMan" or "BamBuddy".
+// Product name of the active backend, "Spoolman", "FilaMan" or "BamBuddy", or
+// the name of the active online service.
 const char* backendName();
+
+// The credentials of what is active are entered in the browser: a setup step
+// of their own.
+bool backendAuthInBrowser();
 
 // Same for a mode that is not the active one, which the mode selector needs
 // to label and log a button before the switch has happened.
@@ -144,7 +156,7 @@ const BackendInfo* backendInfoList(size_t* count);
 // The row of a mode; the first row for one the table does not know.
 const BackendInfo& backendInfo(BackendMode mode);
 
-// Three letter code for the status bar: "SPM", "FLM", "BBY", and "BBS" for
+// Three letter code for the status bar: "SPM", "SPY", "FLM", "BBY", and "BBS" for
 // BamBuddy with a Spoolman server behind it. Three characters exactly: the
 // header leaves 32 px before the scale reading, which is about four at font
 // 12, so a longer code would push into it.
@@ -192,3 +204,8 @@ void backendStatusLine(char* out, size_t out_size);
 //
 // Usage:  char buf[64]; backendText(T(STR_X), buf, sizeof(buf));
 void backendText(const char* src, char* out, size_t out_size);
+
+// The same, for a text that names Spoolman where the two other backends never
+// reach it: only an online service in Spoolman's mode gets its name in. A plain
+// copy for everyone else. src and out may be the same buffer.
+void backendTextOnline(const char* src, char* out, size_t out_size);

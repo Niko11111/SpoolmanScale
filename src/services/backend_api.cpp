@@ -9,6 +9,7 @@
 #include "hardware/sd_logger.h"
 #include "services/ams_source.h"
 #include "services/backend.h"
+#include "services/backend_profiles.h"
 #include "services/bambuddy_api.h"
 #include "services/bambuddy_device.h"
 #include "services/bambuddy_filament_db.h"
@@ -1447,7 +1448,9 @@ bool backendCanPatchLastDried() {
 // Spoolman itself knows no printers. With an AMS source set up beside it,
 // that server answers for them instead, against the same spool ids.
 static bool spoolmanHasAmsSource() {
-  return backendMode() == BACKEND_SPOOLMAN && amsSourceConfigured();
+  // Its answers are about the spools of the local server. With an online service
+  // active, the same id is somebody else's spool, and a pick would write to it.
+  return backendMode() == BACKEND_SPOOLMAN && !backendProfileIsOnline() && amsSourceConfigured();
 }
 
 bool backendHasAmsView() {

@@ -12,6 +12,7 @@
 #include "app/deferred_actions.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
+#include "services/backend_profiles.h"
 #include "header_status.h"
 #include "lang.h"
 #include "navigation.h"
@@ -164,30 +165,32 @@ static void addWebSetupButton(lv_obj_t *parent, int x) {
 }
 
 // ---- the setup step: one tile per backend --------------------
-#define BK_NOTE_X       14
-#define BK_NOTE_Y       54
 #define BK_LIST_X       12
-#define BK_LIST_Y       80
+#define BK_LIST_Y       52
 #define BK_LIST_W      456
-#define BK_LIST_H      170
-#define BK_TILE_H       52
+#define BK_LIST_H      202   // four tiles without scrolling, up to the bar
+#define BK_TILE_H       46
 #define BK_TILE_GAP      6
 #define BK_MONO         32
+#define BK_MONO_X       12
 #define BK_TEXT_X       58
-#define BK_TEXT_INSET    7
+#define BK_TEXT_INSET    6
 #define BK_DESC_W      350
 #define BK_PILL_PAD_X    7
+#define BK_ONLINE_VALUE_W 400
 
 static void onBackendTile(lv_event_t *e) {
   const BackendMode m = (BackendMode)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
   logSDf("BTN: Backend setup -> %s", backendModeName(m));
   s_pending_mode = m;
-  s_mode_change_pending = (m != backendMode());
+  // On an online service the mode is already Spoolman, and the local server is
+  // still a change.
+  s_mode_change_pending = (m != backendMode()) || backendProfileIsOnline();
   s_then_address = true;
   show_backend_pending = true;   // the switch runs on the loop, then the address
 }
 
-// Self-hosted or online, as a small outline beside the name.
+// What the tile asks of the user, as a small outline beside the name.
 static void addHostingPill(lv_obj_t *tile, lv_obj_t *name, BackendHosting hosting) {
   lv_obj_t *pill = lv_label_create(tile);
   lv_label_set_text(pill, T(hosting == BACKEND_ONLINE ? STR_HOSTING_ONLINE : STR_HOSTING_SELF));
@@ -200,41 +203,46 @@ static void addHostingPill(lv_obj_t *tile, lv_obj_t *name, BackendHosting hostin
   lv_obj_align_to(pill, name, LV_ALIGN_OUT_RIGHT_MID, 8, 0);
 }
 
-static void addBackendTile(lv_obj_t *list, const BackendInfo &b) {
-  const bool active = (b.mode == backendMode());
+struct BackendTile {
+  const char    *name;
+  const char    *mono;       // the first letter, or a symbol
+  int            desc_str;
+  BackendHosting hosting;
+  bool           active;
+};
+
+static lv_obj_t *addBackendTile(lv_obj_t *list, const BackendTile &b) {
   lv_obj_t *t = lv_btn_create(list);
   lv_obj_set_size(t, LV_PCT(100), BK_TILE_H);
   lv_obj_set_style_pad_all(t, 0, 0);
   lv_obj_set_style_radius(t, UI_RADIUS_ROW, 0);
   lv_obj_set_style_shadow_width(t, 0, 0);
-  lv_obj_set_style_bg_color(t, lv_color_hex(active ? UI_COL_PICKED_BG : UI_COL_SURFACE), 0);
+  lv_obj_set_style_bg_color(t, lv_color_hex(b.active ? UI_COL_PICKED_BG : UI_COL_SURFACE), 0);
   lv_obj_set_style_bg_color(t, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
-  lv_obj_set_style_border_width(t, active ? 2 : 1, 0);
-  lv_obj_set_style_border_color(t, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_LINE_SOFT), 0);
-  lv_obj_set_user_data(t, (void *)(intptr_t)b.mode);
-  lv_obj_add_event_cb(t, onBackendTile, LV_EVENT_CLICKED, NULL);
+  lv_obj_set_style_border_width(t, b.active ? 2 : 1, 0);
+  lv_obj_set_style_border_color(t, lv_color_hex(b.active ? UI_COL_ACCENT : UI_COL_LINE_SOFT), 0);
 
   // The first letter in a square, until the backends have icons of their own.
-  const char *name_txt = backendModeName(b.mode);
   lv_obj_t *mono = lv_obj_create(t);
   lv_obj_remove_style_all(mono);
   lv_obj_set_size(mono, BK_MONO, BK_MONO);
   lv_obj_set_style_radius(mono, UI_RADIUS_BTN, 0);
   lv_obj_set_style_bg_opa(mono, LV_OPA_COVER, 0);
-  lv_obj_set_style_bg_color(mono, lv_color_hex(active ? UI_COL_GROUND : UI_COL_ROW), 0);
-  lv_obj_align(mono, LV_ALIGN_LEFT_MID, BK_TEXT_INSET + 5, 0);
-  char letter[2] = { name_txt[0], '\0' };
+  lv_obj_set_style_bg_color(mono, lv_color_hex(b.active ? UI_COL_GROUND : UI_COL_ROW), 0);
+  lv_obj_align(mono, LV_ALIGN_LEFT_MID, BK_MONO_X, 0);
   lv_obj_t *ml = lv_label_create(mono);
-  lv_label_set_text(ml, letter);
+  lv_label_set_text(ml, b.mono);
   lv_obj_set_style_text_font(ml, UI_FONT_BODY, 0);
-  lv_obj_set_style_text_color(ml, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_INK_SOFT), 0);
+  lv_obj_set_style_text_color(ml, lv_color_hex(b.active ? UI_COL_ACCENT : UI_COL_INK_SOFT), 0);
   lv_obj_center(ml);
 
   lv_obj_t *name = lv_label_create(t);
-  lv_label_set_text(name, name_txt);
+  lv_label_set_text(name, b.name);
   lv_obj_set_style_text_font(name, UI_FONT_BODY, 0);
   lv_obj_set_style_text_color(name, lv_color_hex(UI_COL_INK), 0);
-  lv_obj_align(name, LV_ALIGN_TOP_LEFT, BK_TEXT_X, BK_TEXT_INSET);
+  // The active tile's thicker border eats into the room inside it.
+  const int inset = b.active ? BK_TEXT_INSET - 1 : BK_TEXT_INSET;
+  lv_obj_align(name, LV_ALIGN_TOP_LEFT, BK_TEXT_X, inset);
   addHostingPill(t, name, b.hosting);
 
   lv_obj_t *desc = lv_label_create(t);
@@ -243,15 +251,38 @@ static void addBackendTile(lv_obj_t *list, const BackendInfo &b) {
   lv_label_set_text(desc, T(b.desc_str));
   lv_obj_set_style_text_font(desc, UI_FONT_CAPTION, 0);
   lv_obj_set_style_text_color(desc, lv_color_hex(UI_COL_INK_SOFT), 0);
-  lv_obj_align(desc, LV_ALIGN_BOTTOM_LEFT, BK_TEXT_X, -BK_TEXT_INSET);
+  lv_obj_align(desc, LV_ALIGN_BOTTOM_LEFT, BK_TEXT_X, -inset);
 
-  if (active) {
+  if (b.active) {
     lv_obj_t *tick = lv_label_create(t);
     lv_label_set_text(tick, LV_SYMBOL_OK);
     lv_obj_set_style_text_font(tick, UI_FONT_BODY, 0);
     lv_obj_set_style_text_color(tick, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_align(tick, LV_ALIGN_RIGHT_MID, -14, 0);
   }
+  return t;
+}
+
+// A row of the backend table: a tap sets the mode, and the address comes next.
+static void addLocalTile(lv_obj_t *list, const BackendInfo &b) {
+  const char *name = backendModeName(b.mode);
+  char letter[2] = { name[0], '\0' };
+  const BackendTile tile = { name, letter, b.desc_str, b.hosting,
+                             b.mode == backendMode() && !backendProfileIsOnline() };
+  lv_obj_t *t = addBackendTile(list, tile);
+  lv_obj_set_user_data(t, (void *)(intptr_t)b.mode);
+  lv_obj_add_event_cb(t, onBackendTile, LV_EVENT_CLICKED, NULL);
+}
+
+// The tile for the online services: nothing changes until one is picked there.
+static void addInternetTile(lv_obj_t *list) {
+  const BackendTile tile = { T(STR_BACKEND_INTERNET), LV_SYMBOL_WIFI, STR_BACKEND_DESC_INTERNET,
+                             BACKEND_ONLINE, backendProfileIsOnline() };
+  lv_obj_t *t = addBackendTile(list, tile);
+  lv_obj_add_event_cb(t, [](lv_event_t *e) {
+    logSD("BTN: Backend setup -> Internet");
+    show_online_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
 }
 
 // In the setup this is a step, not a settings page: one question, answered
@@ -266,21 +297,8 @@ static void buildBackendSetupStep(lv_obj_t *scr, const char *title) {
     else         showWifiSetupScreen();
   });
 
-  // What every backend here needs, said before the choice rather than
-  // discovered at the address.
-  lv_obj_t *ico = lv_label_create(scr);
-  lv_label_set_text(ico, LV_SYMBOL_DRIVE);
-  lv_obj_set_style_text_font(ico, UI_FONT_SMALL, 0);
-  lv_obj_set_style_text_color(ico, lv_color_hex(UI_COL_WARN), 0);
-  lv_obj_set_pos(ico, BK_NOTE_X, BK_NOTE_Y);
-  lv_obj_t *note = lv_label_create(scr);
-  lv_label_set_text(note, T(STR_SETUP_SERVER_NEEDED));
-  lv_obj_set_style_text_font(note, UI_FONT_SMALL, 0);
-  lv_obj_set_style_text_color(note, lv_color_hex(UI_COL_INK_2), 0);
-  lv_obj_align_to(note, ico, LV_ALIGN_OUT_RIGHT_MID, 8, 0);
-
-  // A list, so a fourth backend or a hosted one scrolls in rather than
-  // squeezing the three that are there.
+  // What each one needs stands on its own tile: "you need a server" above them
+  // all stopped being true with the fourth.
   lv_obj_t *list = lv_obj_create(scr);
   lv_obj_set_size(list, BK_LIST_W, BK_LIST_H);
   lv_obj_set_pos(list, BK_LIST_X, BK_LIST_Y);
@@ -292,13 +310,116 @@ static void buildBackendSetupStep(lv_obj_t *scr, const char *title) {
   lv_obj_set_scroll_dir(list, LV_DIR_VER);
   size_t n = 0;
   const BackendInfo *rows = backendInfoList(&n);
-  for (size_t i = 0; i < n; i++) addBackendTile(list, rows[i]);
+  for (size_t i = 0; i < n; i++) addLocalTile(list, rows[i]);
+  addInternetTile(list);
 
   SetupBar bar = setupActionBar(scr, nullptr, nullptr, T(STR_SETUP_NO_SERVER), [](lv_event_t *e) {
     logSD("BTN: Backend setup -> Docs");
     showQRPopup(QR_DOCS);
   });
   setupBarMainOutline(bar);
+}
+
+// --- mode selector: four segments side by side ---------------------------
+// 480 px wide screen: 12 px margin, four 108 px segments, 8 px between. Font 16:
+// "BamBuddy" measures 93 of 108 px there, in the title font 104.
+#define BK_SEG_W      108
+#define BK_SEG_H       54
+#define BK_SEG_X       12
+#define BK_SEG_Y       54
+#define BK_SEG_STEP   116
+#define BK_SEG_COUNT    3
+
+static void onLocalSegment(lv_event_t *e) {
+  BackendMode m = (BackendMode)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
+  if (m == backendMode() && !backendProfileIsOnline()) return;   // already active
+  logSDf("BTN: Backend -> %s", backendModeName(m));   // m, not the active mode
+  s_pending_mode = m;
+  s_mode_change_pending = true;
+  show_backend_pending = true;                  // rebuild from appLoop()
+}
+
+static lv_obj_t *addSegment(lv_obj_t *scr, int i, const char *text, bool active) {
+  lv_obj_t *b = lv_btn_create(scr);
+  lv_obj_set_size(b, BK_SEG_W, BK_SEG_H);
+  lv_obj_set_pos(b, BK_SEG_X + i * BK_SEG_STEP, BK_SEG_Y);
+  lv_obj_set_style_bg_color(b, lv_color_hex(active ? UI_COL_PICKED_BG : UI_COL_SURFACE), 0);
+  lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(b, UI_RADIUS_ROW, 0);
+  lv_obj_set_style_shadow_width(b, 0, 0);
+  lv_obj_set_style_border_width(b, active ? 2 : 1, 0);
+  lv_obj_set_style_border_color(b, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_LINE_SOFT), 0);
+  lv_obj_t *l = lv_label_create(b);
+  lv_label_set_text(l, text);
+  lv_obj_set_style_text_color(l, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_OFF_TEXT), 0);
+  lv_obj_set_style_text_font(l, UI_FONT_BODY, 0);
+  lv_obj_center(l);
+  return b;
+}
+
+static void addBackendSegments(lv_obj_t *scr) {
+  const bool online = backendProfileIsOnline();
+  static const BackendMode MODES[BK_SEG_COUNT] = { BACKEND_SPOOLMAN, BACKEND_FILAMAN, BACKEND_BAMBUDDY };
+  for (int i = 0; i < BK_SEG_COUNT; i++) {
+    lv_obj_t *b = addSegment(scr, i, backendModeName(MODES[i]), !online && MODES[i] == backendMode());
+    // The mode is stored in user_data so one callback serves every button.
+    lv_obj_set_user_data(b, (void *)(intptr_t)MODES[i]);
+    lv_obj_add_event_cb(b, onLocalSegment, LV_EVENT_CLICKED, NULL);
+  }
+  // Opens a page rather than switching, and the arrow says so. Tappable while
+  // active too: that is the way to the other service.
+  char label[24];
+  snprintf(label, sizeof(label), "%s " LV_SYMBOL_RIGHT, T(STR_BACKEND_INTERNET));
+  lv_obj_add_event_cb(addSegment(scr, BK_SEG_COUNT, label, online), [](lv_event_t *e) {
+    logSD("BTN: Backend -> Internet");
+    show_online_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+}
+
+// What an online service shows instead of the address: which one and where,
+// its key and what the account has to be, then the same pair as FilaMan and
+// BamBuddy.
+static void addOnlineRows(lv_obj_t *scr) {
+  char host[48];
+  backendProfileShortHost(backendHost(), host, sizeof(host));
+  char value[96];
+  snprintf(value, sizeof(value), "%s - %s", backendName(), host[0] ? host : T(STR_BTN_WIFI_NONE));
+  lv_obj_t *row = addNavRow(scr, 122, T(STR_ONLINE_SERVICE), value,
+                            host[0] ? UI_COL_GOOD : UI_COL_WARN, [](lv_event_t *e) {
+    logSD("BTN: Backend -> Online service");
+    show_online_pending = true;
+  });
+  lv_obj_t *value_lbl = lv_obj_get_child(row, 1);
+  lv_label_set_long_mode(value_lbl, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(value_lbl, BK_ONLINE_VALUE_W);
+
+  const bool needs_account = backendProfile(backendProfileId()).account_url[0] != '\0';
+  addCredentialsRow(scr, 190, T(STR_BACKEND_APIKEY), spoolmanAuthActive(),
+                    needs_account ? T(STR_ONLINE_ACCOUNT) : nullptr, false,
+                    needs_account ? T(STR_ONLINE_PRO) : nullptr);
+
+  lv_obj_t *btn_opts = lv_btn_create(scr);
+  lv_obj_set_size(btn_opts, 216, 44);
+  lv_obj_set_pos(btn_opts, 16, 244);
+  lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_bg_color(btn_opts, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn_opts, 8, 0);
+  lv_obj_set_style_shadow_width(btn_opts, 0, 0);
+  lv_obj_set_style_border_width(btn_opts, 1, 0);
+  lv_obj_set_style_border_color(btn_opts, lv_color_hex(UI_COL_LINE), 0);
+  lv_obj_add_event_cb(btn_opts, [](lv_event_t *e) {
+    logSD("BTN: Backend -> Online options");
+    show_spoolman_options_pending = true;
+  }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lbl_opts = lv_label_create(btn_opts);
+  char ob[40];
+  snprintf(ob, sizeof(ob), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_MORE_OPTIONS));
+  lv_label_set_text(lbl_opts, ob);
+  lv_obj_set_style_text_color(lbl_opts, lv_color_hex(UI_COL_INK_2), 0);
+  lv_obj_set_style_text_font(lbl_opts, UI_FONT_BODY, 0);
+  lv_obj_center(lbl_opts);
+
+  addWebSetupButton(scr, 248);
 }
 
 void buildBackendScreen() {
@@ -327,47 +448,13 @@ void buildBackendScreen() {
     show_connection_from_spoolman_pending = true;
   });
 
-  // --- mode selector: three segments side by side ---------------
-  // 480 px wide screen: 12 px margin, three 145 px segments, 10 px between.
-  const int SEG_W = 145, SEG_H = 54, SEG_Y = 54;
   const bool is_filaman = backendIsFilaMan();
+  const bool online = backendProfileIsOnline();
+  addBackendSegments(scr_backend);
 
-  struct Seg { BackendMode mode; int x; };
-  const Seg segs[3] = {
-    { BACKEND_SPOOLMAN,  12 },
-    { BACKEND_FILAMAN,  167 },
-    { BACKEND_BAMBUDDY, 322 }
-  };
-
-  for (int i = 0; i < 3; i++) {
-    const bool active = (segs[i].mode == backendMode());
-
-    lv_obj_t *b = lv_btn_create(scr_backend);
-    lv_obj_set_size(b, SEG_W, SEG_H);
-    lv_obj_set_pos(b, segs[i].x, SEG_Y);
-    lv_obj_set_style_bg_color(b, lv_color_hex(active ? UI_COL_PICKED_BG : UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(b, 10, 0);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_border_width(b, active ? 2 : 1, 0);
-    lv_obj_set_style_border_color(b, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_LINE_SOFT), 0);
-
-    lv_obj_t *l = lv_label_create(b);
-    lv_label_set_text(l, backendModeName(segs[i].mode));
-    lv_obj_set_style_text_color(l, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_OFF_TEXT), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_18, 0);
-    lv_obj_center(l);
-
-    // The mode is stored in user_data so one callback serves every button.
-    lv_obj_set_user_data(b, (void *)(intptr_t)segs[i].mode);
-    lv_obj_add_event_cb(b, [](lv_event_t *e) {
-      BackendMode m = (BackendMode)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
-      if (m == backendMode()) return;               // already active, nothing to do
-      logSDf("BTN: Backend -> %s", backendModeName(m));   // m, not the active mode
-      s_pending_mode = m;
-      s_mode_change_pending = true;
-      show_backend_pending = true;                  // rebuild from appLoop()
-    }, LV_EVENT_CLICKED, NULL);
+  if (online) {
+    addOnlineRows(scr_backend);
+    return;
   }
 
   // --- address row, opens the existing numpad screen -------------

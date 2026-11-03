@@ -16,13 +16,14 @@
 #include "lang.h"
 
 // The rows of the table, one per server a set can point at.
-enum SetRow : uint8_t { ROW_SPOOLMAN, ROW_FILAMAN, ROW_BAMBUDDY, ROW_AMS, ROW_COUNT };
+enum SetRow : uint8_t { ROW_SPOOLMAN, ROW_FILAMAN, ROW_BAMBUDDY, ROW_ONLINE, ROW_AMS, ROW_COUNT };
 
 static const char *hostOf(const ServerSetView &v, SetRow r) {
   switch (r) {
     case ROW_SPOOLMAN: return v.spoolman;
     case ROW_FILAMAN:  return v.filaman;
     case ROW_BAMBUDDY: return v.bambuddy;
+    case ROW_ONLINE:   return v.online;
     default:           return v.ams_source;
   }
 }
@@ -32,6 +33,7 @@ static const char *rowLabel(SetRow r) {
     case ROW_SPOOLMAN: return backendModeName(BACKEND_SPOOLMAN);
     case ROW_FILAMAN:  return backendModeName(BACKEND_FILAMAN);
     case ROW_BAMBUDDY: return backendModeName(BACKEND_BAMBUDDY);
+    case ROW_ONLINE:   return T(STR_BACKEND_INTERNET);
     default:           return T(STR_W_C_AMS_SOURCE);
   }
 }
@@ -57,6 +59,9 @@ static String credentials(const ServerSetView &v, SetRow r) {
       break;
     case ROW_BAMBUDDY:
       if (v.bambuddy_key) addCredential(c, STR_W_APIKEY, true);
+      break;
+    case ROW_ONLINE:
+      if (v.online_access) addCredential(c, STR_W_APIKEY, true);
       break;
     default:
       if (v.ams_source_key) addCredential(c, STR_W_APIKEY, true);

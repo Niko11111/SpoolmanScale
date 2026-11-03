@@ -10,6 +10,7 @@
 #include "hardware/sd_logger.h"
 #include "services/access_stamp.h"
 #include "services/app_settings.h"
+#include "services/backend_profiles.h"
 #include "services/bambuddy_api.h"
 #include "lang.h"
 #include "services/prefs_store.h"
@@ -21,10 +22,6 @@
 #define NVS_FILAMAN_HOST    "filaman_host"
 #define NVS_BAMBUDDY_KEY    "bb_key"
 #define NVS_BAMBUDDY_HOST   "bb_host"
-#define NVS_SM_AUTH         "sm_auth"
-#define NVS_SM_USER         "sm_user"
-#define NVS_SM_SECRET       "sm_secret"
-#define NVS_SM_BIND         "sm_bind"
 
 static BackendMode s_mode = BACKEND_SPOOLMAN;
 static char s_api_key[80]      = "";
@@ -106,6 +103,45 @@ static bool smBoundTo(const char* addr) {
   return strcmp(key, s_sm_bind) == 0;
 }
 
+// The address the Spoolman path talks to, in RAM only. The local server's stays
+// in its own NVS key: an online service never overwrites it, so going back
+// costs nothing, and neither does a firmware that knows no profiles.
+static void setActiveAddress(const char* addr) {
+  snprintf(cfg_spoolman_ip, sizeof(cfg_spoolman_ip), "%s", addr);
+  backendComposeBase(cfg_spoolman_base, sizeof(cfg_spoolman_base), cfg_spoolman_ip);
+}
+
+static void loadProfileAddress() {
+  char addr[sizeof(cfg_spoolman_ip)];
+  backendProfileReadAddress(backendProfileId(), addr, sizeof(addr));
+  setActiveAddress(addr);
+}
+
+static void loadProfileAccess() {
+  const BackendProfileKeys& k = backendProfileKeys(backendProfileId());
+  const uint8_t sm_auth = prefsGetUChar(k.auth, SM_AUTH_NONE);
+  s_sm_auth = (sm_auth <= SM_AUTH_BASIC) ? sm_auth : SM_AUTH_NONE;
+  String sm_user = prefsGetString(k.user, "");
+  copyCredential(s_sm_user, sizeof(s_sm_user), sm_user.c_str());
+  String sm_secret = prefsGetString(k.secret, "");
+  copyCredential(s_sm_secret, sizeof(s_sm_secret), sm_secret.c_str());
+  String sm_bind = prefsGetString(k.bind, "");
+  snprintf(s_sm_bind, sizeof(s_sm_bind), "%s", sm_bind.c_str());
+  // A fixed address can move with an update. The key stays with the service,
+  // whatever its address was when the key was entered.
+  if (s_sm_secret[0] && backendProfile(backendProfileId()).fixed_url[0]) {
+    smBindKey(cfg_spoolman_ip, s_sm_bind, sizeof(s_sm_bind));
+    return;
+  }
+  // A secret stored before it was bound to an address belongs to the one it
+  // has been going to all along.
+  if (s_sm_secret[0] && !prefsHasKey(k.bind)) {
+    smBindKey(cfg_spoolman_ip, s_sm_bind, sizeof(s_sm_bind));
+    prefsPutString(k.bind, s_sm_bind);
+    logSDf("Backend: Spoolman access bound to %s", s_sm_bind[0] ? s_sm_bind : "-");
+  }
+}
+
 void backendLoadSettings() {
   backendTlsLoad();
   uint8_t raw = prefsGetUChar(NVS_BACKEND_MODE, BACKEND_SPOOLMAN);
@@ -129,21 +165,9 @@ void backendLoadSettings() {
   String bb_key = prefsGetString(NVS_BAMBUDDY_KEY, "");
   copyCredential(s_bambuddy_key, sizeof(s_bambuddy_key), bb_key.c_str());
 
-  const uint8_t sm_auth = prefsGetUChar(NVS_SM_AUTH, SM_AUTH_NONE);
-  s_sm_auth = (sm_auth <= SM_AUTH_BASIC) ? sm_auth : SM_AUTH_NONE;
-  String sm_user = prefsGetString(NVS_SM_USER, "");
-  copyCredential(s_sm_user, sizeof(s_sm_user), sm_user.c_str());
-  String sm_secret = prefsGetString(NVS_SM_SECRET, "");
-  copyCredential(s_sm_secret, sizeof(s_sm_secret), sm_secret.c_str());
-  String sm_bind = prefsGetString(NVS_SM_BIND, "");
-  snprintf(s_sm_bind, sizeof(s_sm_bind), "%s", sm_bind.c_str());
-  // A secret stored before it was bound to an address belongs to the one it
-  // has been going to all along. loadPrefs() has read that address already.
-  if (s_sm_secret[0] && !prefsHasKey(NVS_SM_BIND)) {
-    smBindKey(cfg_spoolman_ip, s_sm_bind, sizeof(s_sm_bind));
-    prefsPutString(NVS_SM_BIND, s_sm_bind);
-    logSDf("Backend: Spoolman access bound to %s", s_sm_bind[0] ? s_sm_bind : "-");
-  }
+  backendProfileLoad(s_mode == BACKEND_SPOOLMAN);
+  loadProfileAddress();
+  loadProfileAccess();
 
   String bb_host = prefsGetString(NVS_BAMBUDDY_HOST, "");
   strncpy(s_bambuddy_host, bb_host.c_str(), sizeof(s_bambuddy_host) - 1);
@@ -163,12 +187,15 @@ BackendMode backendMode() { return s_mode; }
 bool backendIsFilaMan()   { return s_mode == BACKEND_FILAMAN; }
 bool backendIsBamBuddy()  { return s_mode == BACKEND_BAMBUDDY; }
 
-void backendSetMode(BackendMode mode) {
+void backendSetSelection(BackendMode mode, uint8_t profile) {
   s_mode = (mode == BACKEND_FILAMAN)  ? BACKEND_FILAMAN
          : (mode == BACKEND_BAMBUDDY) ? BACKEND_BAMBUDDY
                                       : BACKEND_SPOOLMAN;
   prefsPutUChar(NVS_BACKEND_MODE, (uint8_t)s_mode);
-  logSDf("Backend: mode -> %s", backendName());
+  backendProfileStore(s_mode == BACKEND_SPOOLMAN ? profile : (uint8_t)BP_SPOOLMAN);
+  loadProfileAddress();
+  loadProfileAccess();
+  logSDf("Backend: now %s", backendName());
 }
 
 const char* backendBaseUrl() {
@@ -247,9 +274,22 @@ void backendSetHost(const char* host) {
       logSDf("Backend: BamBuddy host -> %s", s_bambuddy_host);
       return;
     default:
-      saveSpoolmanIP(host);   // unchanged path, same NVS key as before
-      return;
+      break;
   }
+  if (!backendProfileIsOnline()) {
+    saveSpoolmanIP(host);   // unchanged path, same NVS key as before
+    return;
+  }
+  // An address from the table is not the user's to change.
+  const BackendProfile& p = backendProfile(backendProfileId());
+  if (p.fixed_url[0]) {
+    logSDf("Backend: the address of %s is fixed, %s not stored", p.key, host);
+    return;
+  }
+  prefsPutString(backendProfileKeys(p.id).ip, host);
+  backendProfileReloadName();
+  setActiveAddress(host);
+  logSDf("Backend: %s host -> %s", p.key, host);
 }
 
 const char* filamanApiKey()      { return s_api_key; }
@@ -306,15 +346,42 @@ bool spoolmanSetAuth(uint8_t mode, const char* user, const char* secret) {
   if (s_sm_auth == SM_AUTH_NONE) { s_sm_user[0] = '\0'; s_sm_secret[0] = '\0'; }
   // No secret, nothing to bind.
   if (!s_sm_secret[0]) s_sm_bind[0] = '\0';
-  prefsPutUChar(NVS_SM_AUTH, s_sm_auth);
-  prefsPutString(NVS_SM_USER, s_sm_user);
-  prefsPutString(NVS_SM_SECRET, s_sm_secret);
-  prefsPutString(NVS_SM_BIND, s_sm_bind);
+  const BackendProfileKeys& k = backendProfileKeys(backendProfileId());
+  prefsPutUChar(k.auth, s_sm_auth);
+  prefsPutString(k.user, s_sm_user);
+  prefsPutString(k.secret, s_sm_secret);
+  prefsPutString(k.bind, s_sm_bind);
   // A connection kept open was made with the old credentials.
   backendConnClose();
   logSDf("Backend: Spoolman access %s",
          spoolmanAuthActive() ? "stored" : spoolmanAuthStored() ? "stored, for another address"
                                                                 : "cleared");
+  return true;
+}
+
+bool backendProfileStoreOnline(uint8_t id, const char* addr, uint8_t mode, const char* user,
+                               const char* secret) {
+  if (id == BP_SPOOLMAN || id >= BP_COUNT) return false;
+  if (secret && credentialLen(secret) > SM_SECRET_MAX_LEN) return false;
+  const BackendProfile& p = backendProfile(id);
+  const BackendProfileKeys& k = backendProfileKeys(id);
+  if (!p.fixed_url[0]) {
+    prefsPutString(k.ip, addr ? addr : "");
+    backendProfileReloadName();
+  }
+  prefsPutUChar(k.auth, (mode <= SM_AUTH_BASIC) ? mode : (uint8_t)SM_AUTH_NONE);
+  char clean_user[sizeof(s_sm_user)];
+  copyCredential(clean_user, sizeof(clean_user), user ? user : "");
+  prefsPutString(k.user, clean_user);
+  if (secret) {
+    char clean_secret[SM_SECRET_MAX_LEN + 1];
+    copyCredential(clean_secret, sizeof(clean_secret), secret);
+    char bind[sizeof(s_sm_bind)];
+    smBindKey(p.fixed_url[0] ? p.fixed_url : addr, bind, sizeof(bind));
+    prefsPutString(k.secret, clean_secret);
+    prefsPutString(k.bind, clean_secret[0] ? bind : "");
+  }
+  logSDf("Backend: access of %s stored", p.key);
   return true;
 }
 
@@ -326,7 +393,13 @@ const char* backendModeName(BackendMode mode) {
   }
 }
 
-const char* backendName() { return backendModeName(s_mode); }
+const char* backendName() {
+  return backendProfileIsOnline() ? backendProfileName() : backendModeName(s_mode);
+}
+
+bool backendAuthInBrowser() {
+  return backendProfileIsOnline() || backendInfo(s_mode).auth_in_browser;
+}
 
 static const BackendInfo BACKEND_INFO[] = {
   { BACKEND_SPOOLMAN, STR_BACKEND_DESC_SPOOLMAN, BACKEND_SELF_HOSTED, false, "7912" },
@@ -352,7 +425,7 @@ const char* backendBadge() {
     // Which database is behind BamBuddy decides where every read and write
     // lands, and it can change while the scale runs - worth the one letter.
     case BACKEND_BAMBUDDY: return (bbInventoryMode() == BB_INV_SPOOLMAN) ? "BBS" : "BBY";
-    default:               return "SPM";
+    default:               return backendProfileBadge();
   }
 }
 
@@ -402,8 +475,8 @@ void backendStatusLine(char* out, size_t out_size) {
       backendIsConfigured() ? "yes" : "no");
   } else {
     static const char* const AUTH[] = { "none", "key", "bearer", "basic" };
-    snprintf(out, out_size, "%s | host=%s | auth=%s | configured=%s",
-      backendName(),
+    snprintf(out, out_size, "%s | profile=%s | host=%s | auth=%s | configured=%s",
+      backendName(), backendProfile(backendProfileId()).key,
       host[0] ? host : "-",
       spoolmanAuthActive() ? AUTH[s_sm_auth] : spoolmanAuthStored() ? "other-address" : "none",
       backendIsConfigured() ? "yes" : "no");
@@ -415,8 +488,10 @@ void backendText(const char* src, char* out, size_t out_size) {
   out[0] = '\0';
   if (!src) return;
 
-  // In Spoolman mode nothing changes, so take the cheap path.
-  if (s_mode == BACKEND_SPOOLMAN) {
+  // In Spoolman mode nothing changes, so take the cheap path. An online service
+  // in that mode has a name of its own.
+  const bool online = backendProfileIsOnline();
+  if (s_mode == BACKEND_SPOOLMAN && !online) {
     strncpy(out, src, out_size - 1);
     out[out_size - 1] = '\0';
     return;
@@ -430,7 +505,10 @@ void backendText(const char* src, char* out, size_t out_size) {
   size_t o = 0;
   for (const char* p = src; *p && o < out_size - 1; ) {
     if (strncmp(p, kNeedle, kNeedleLen) == 0 &&
-        strncmp(p + kNeedleLen, "Scale", 5) != 0) {   // never touch SpoolmanScale
+        strncmp(p + kNeedleLen, "Scale", 5) != 0 &&   // never touch SpoolmanScale
+        // The catalogue keeps its name, whoever is asked for it. Spooly's own
+        // catalogue is SpoolmanDB plus entries of its own.
+        !(online && strncmp(p + kNeedleLen, "DB", 2) == 0)) {
       size_t room = out_size - 1 - o;
       size_t n = (name_len < room) ? name_len : room;
       memcpy(out + o, name, n);
@@ -441,6 +519,18 @@ void backendText(const char* src, char* out, size_t out_size) {
     out[o++] = *p++;
   }
   out[o] = '\0';
+}
+
+void backendTextOnline(const char* src, char* out, size_t out_size) {
+  if (!out || out_size == 0) return;
+  if (backendProfileIsOnline()) {
+    if (src != out) { backendText(src, out, out_size); return; }
+    char copy[160];
+    snprintf(copy, sizeof(copy), "%s", src);
+    backendText(copy, out, out_size);
+    return;
+  }
+  if (src != out) snprintf(out, out_size, "%s", src ? src : "");
 }
 
 bool backendIsConfigured() {

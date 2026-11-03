@@ -1,6 +1,7 @@
 #include "header_status.h"
 #include "app/app_state.h"
 #include "services/backend.h"
+#include "services/backend_profiles.h"
 #include "services/ble_service.h"
 
 #include <Arduino.h>
@@ -138,7 +139,11 @@ void updateHeaderStatus() {
     const char *text = nullptr;
     String ip;
     char host_buf[48];
-    if (g_ip_bar_mode == IP_BAR_DEVICE && wifi_ok) {
+    const bool shows_backend = g_ip_bar_mode == IP_BAR_BACKEND || g_ip_bar_mode == IP_BAR_BACKEND_PORT;
+    const char *named = shows_backend ? backendProfileHeaderName() : nullptr;
+    if (named) {
+      text = named;
+    } else if (g_ip_bar_mode == IP_BAR_DEVICE && wifi_ok) {
       ip = wifiManagerLocalIP().toString();
       text = ip.c_str();
     } else if (g_ip_bar_mode == IP_BAR_MDNS && mdnsRunning()) {

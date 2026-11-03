@@ -33,6 +33,8 @@ jobs:
         run: python3 test/test_native_tag_probe.py
       - name: Test recheck pace
         run: python3 test/test_recheck_pace.py
+      - name: Test server name
+        run: python3 test/test_server_name.py
       - name: Test server refusal
         run: python3 test/test_server_refusal.py
       - name: Test weight write rules

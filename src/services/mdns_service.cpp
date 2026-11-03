@@ -10,9 +10,13 @@
 #include "app_config.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
+#include "services/backend_profiles.h"
 #include "services/device_name.h"
 #include "services/wifi_manager.h"
 #include "web/web_server.h"
+
+// Mode and profile in one number: the TXT record carries the name of either.
+static int backendIdentity() { return (int)backendMode() * BP_COUNT + backendProfileId(); }
 
 static bool s_running       = false;
 static bool s_service_added = false;
@@ -47,7 +51,7 @@ static void addService() {
   MDNS.addServiceTxt("http", "tcp", "id",    wifiManagerDeviceId());
   MDNS.addServiceTxt("http", "tcp", "model", "WT32-SC01-Plus");
   MDNS.addServiceTxt("http", "tcp", "backend", backendName());
-  s_txt_backend = (int)backendMode();
+  s_txt_backend = backendIdentity();
 }
 
 // ESPmDNS has no removeService, so this reaches past it into the IDF
@@ -96,8 +100,8 @@ void mdnsSyncState() {
 
   // A backend switch changes what the record claims. Compared rather than
   // rewritten every pass, because setting a TXT item republishes it.
-  if (s_service_added && s_txt_backend != (int)backendMode()) {
-    s_txt_backend = (int)backendMode();
+  if (s_service_added && s_txt_backend != backendIdentity()) {
+    s_txt_backend = backendIdentity();
     mdns_service_txt_item_set("_http", "_tcp", "backend", backendName());
   }
 }

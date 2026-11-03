@@ -15,7 +15,8 @@
 //  The swap happens in NVS. The owners of the values then read them back
 //  through their own load paths, so every check those apply on the way in
 //  applies here too. The backend mode is not part of a set: which of the
-//  three is active stays where it is.
+//  three is active stays where it is. The online services are: their address
+//  and access, and which of them is chosen (services/backend_profiles.h).
 //
 //  An absent parked key reads as empty, so a scale that never used this has
 //  an empty parked set and nothing changes for it.
@@ -32,11 +33,13 @@ struct ServerSetView {
   char filaman[64];
   char bambuddy[64];
   char ams_source[96];
+  char online[64];        // the service name, or the other service's address
   bool filaman_key;
   bool filaman_device;
   bool bambuddy_key;
   bool spoolman_access;
   bool ams_source_key;
+  bool online_access;
 };
 
 void serverSetRead(bool parked, ServerSetView* out);

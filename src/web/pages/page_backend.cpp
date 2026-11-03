@@ -24,6 +24,7 @@
 #include "services/ams_source.h"
 #include "services/backend_http.h"
 #include "services/backend.h"
+#include "services/backend_profiles.h"
 #include "services/backend_api.h"
 #include "services/filaman_api.h"
 #include "services/server_refusal.h"
@@ -31,6 +32,7 @@
 #include "web/web_access.h"
 #include "web/web_jobs.h"
 #include "web/pages/page_backend_embed.h"
+#include "web/pages/page_backend_online.h"
 #include "web/pages/page_backend_sets.h"
 #include "web/web_shell.h"
 #include "ui/theme.h"
@@ -45,6 +47,7 @@ static const char* label() { return T(STR_W_NAV_BACKEND); }
 
 static String body() {
   const bool creds = backendIsFilaMan() || backendIsBamBuddy();
+  const bool online = backendProfileIsOnline();
 
   String h;
   h.reserve(5900);
@@ -60,7 +63,7 @@ static String body() {
   h += T(STR_W_C_BACKEND);
   h += F("</h2><div class='btabs'>");
   for (uint8_t m = 0; m < 3; m++) {
-    const bool on = (backendMode() == (BackendMode)m);
+    const bool on = !online && backendMode() == (BackendMode)m;
     h += F("<button class='btab");
     if (on) h += F(" on");
     h += F("' data-m='");
@@ -71,9 +74,10 @@ static String body() {
     h += backendModeName((BackendMode)m);
     h += F("</button>");
   }
+  h += backendOnlineTab();
   h += F("</div><span class='msg' id='bm-s'></span>"
-         "<p class='note'>");
-  h += T(STR_W_BACKEND_NOTE);
+         "<p class='note' id='bm-n'>");
+  h += backendOnlineNote();
   h += F("</p>");
   // With the colours following the backend, a switch takes the panel to the
   // new backend's palette on the next boot. Said after the reload that
@@ -93,13 +97,21 @@ static String body() {
   }
   h += F("</div>");
 
+  h += backendOnlineCards();
+
   // ---- address ----------------------------------------------------------
+  // An online service's address belongs to its card above; what is left here
+  // is how the connection is kept.
   h += F("<div class='card wide'><h2>");
   h += T(STR_W_C_BACKEND_ADDR);
-  h += F("</h2><div class='field'><label>");
+  h += F("</h2>");
+  if (online) {
+    h += F("<span class='msg' id='hs-s'></span>");
+  } else {
+  h += F("<div class='field'><label>");
   h += T(STR_W_HOST_LABEL);
   h += F(" &middot; ");
-  h += backendName();
+  h += htmlEsc(backendName());
   h += F("</label><div class='inrow'>"
          "<input id='hs' type='text' maxlength='63' spellcheck='false' value='");
   h += htmlEsc(backendHost());
@@ -111,9 +123,11 @@ static String body() {
   h += T(STR_W_HOST_HINT);
   h += F(" ");
   h += T(STR_W_HOST_PORTHINT);
+  h += F("</span></div>");
+  }
   // Only means anything for an https address, and is shown with every one so
   // the way to a self-signed server is where the address is typed.
-  h += F("</span></div><label class='check' style='margin-top:12px'><span class='switch'>"
+  h += F("<label class='check' style='margin-top:12px'><span class='switch'>"
          "<input id='ti' type='checkbox'");
   if (backendTlsInsecure()) h += F(" checked");
   h += F("><i></i></span>");
@@ -142,7 +156,7 @@ static String body() {
   h += F("</span></span></div></div></div>");
 
   // ---- credentials, only where there are any ----------------------------
-  if (!creds) {
+  if (!creds && !online) {
     // Spoolman needs none, and says so first. Below that the access for the
     // cases that do: Spoolman behind a proxy with a password, or a server
     // that speaks Spoolman's API and wants a key.
@@ -245,6 +259,8 @@ static String body() {
     h += F("'></div></div><div class='inrow'><button id='as-b'>");
     h += T(STR_W_SAVE);
     h += F("</button><span class='msg' id='as-s'></span></div></div>");
+  } else if (online) {
+    // Their key sits on the service's own card.
   } else if (backendIsBamBuddy()) {
     // One key rather than two, and it may legitimately stay empty: an
     // instance with authentication switched off answers without it.
@@ -321,6 +337,9 @@ static String body() {
   h += F(",none:"); h += jsStr(T(STR_W_NO_OPTIONS));
   h += F(",swap:"); h += jsStr(T(STR_W_BACKEND_ASK));
   h += F("};"
+         // Where the answer of the address test goes. An online service's card
+         // sets its own line.
+         "let HM='hs-s';"
          // No ms: these answers stand. /api/host replies with the result of a
          // real health check and /api/filaman/register with the HTTP status of
          // the registration - neither is worth clearing after four seconds.
@@ -332,12 +351,12 @@ static String body() {
          // The test runs on the device's worker; this asks for its answer
          // twice a second for up to twenty seconds.
          "function hostPoll(n){getJson('/api/host').then(function(d){"
-         "if(!d){flash('hs-s',WS.err,true);return;}"
+         "if(!d){flash(HM,WS.err,true);return;}"
          "if(d.state==='running'){if(n<40)setTimeout(function(){hostPoll(n+1);},500);"
-         "else flash('hs-s',WS.err,true);return;}"
+         "else flash(HM,WS.err,true);return;}"
          // bad rather than !ok: a BamBuddy key that is not entered yet leaves
          // the test unfinished without being a fault.
-         "if(d.state==='done')flash('hs-s',d.msg,d.bad);});}"
+         "if(d.state==='done')flash(HM,d.msg,d.bad);});}"
          // A stored key is shown as underscores so its length gives nothing
          // away. Sending those back would overwrite the real one with them.
          "function guard(v){return v.indexOf('_')!==0;}"
@@ -445,7 +464,7 @@ static String body() {
          // doRestart() comes from webShellRestartUi(), on the page only
          // together with the button.
          "if($('bm-rb'))$('bm-rb').addEventListener('click',doRestart);"
-         "document.querySelectorAll('.btab').forEach(b=>{"
+         "document.querySelectorAll('.btab[data-m]').forEach(b=>{"
          "b.addEventListener('click',()=>{"
          "const n=b.textContent;"
          "ask(M.swap.replace('%s',n)).then(ok=>{if(!ok)return;"
@@ -463,8 +482,9 @@ static String body() {
          "d.forEach(x=>c.appendChild(orow(x)));"
          "const m=document.createElement('span');m.className='msg';m.id='os-s';"
          "c.appendChild(m);});}"
-         "load();"
-         "</script>");
+         "load();");
+  h += backendOnlineScript();
+  h += F("</script>");
   return h;
 }
 
@@ -530,6 +550,7 @@ static String settingsJson() {
 
 static void routes(WebServer &srv) {
   backendSetsRoutes(srv);
+  backendOnlineRoutes(srv);
 
   // Switching the backend. Only the intent is recorded: this runs in the loop
   // task, already deep in the WebServer stack, and backendApplyMode() rebuilds
@@ -538,7 +559,8 @@ static void routes(WebServer &srv) {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_BACKEND))) return;
     const long m = srv.arg("plain").toInt();
     if (m < 0 || m > 2) { srv.send(400, "text/plain", T(STR_W_ERROR)); return; }
-    if ((BackendMode)m == backendMode()) {
+    // On an online service the mode is Spoolman already; the local one is a change.
+    if ((BackendMode)m == backendMode() && !backendProfileIsOnline()) {
       srv.send(200, "text/plain", backendName());
       return;
     }

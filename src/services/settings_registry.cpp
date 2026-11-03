@@ -12,6 +12,7 @@
 #include "services/ams_assign.h"
 #include "services/ams_source.h"
 #include "services/backend.h"
+#include "services/backend_profiles.h"
 #include "services/prefs_store.h"
 #include "services/tag_field.h"
 #include "services/user_options.h"
@@ -77,7 +78,7 @@ static bool bbDriedOptOk(uint8_t value) {
 }
 
 // The bay picker on Spoolman needs somewhere to send the answer.
-static bool appliesSmAmsAsk() { return amsSourceConfigured(); }
+static bool appliesSmAmsAsk() { return amsSourceConfigured() && !backendProfileIsOnline(); }
 
 static const uint16_t OPT_BB_DRIED[] = {
   STR_BB_DRIED_OFF, STR_BB_DRIED_SPOOLMAN, STR_BB_DRIED_NOTE
@@ -295,6 +296,7 @@ void settingSubtitle(const SettingDesc &s, char *out, size_t out_size) {
   if (s.sub_fn) {
     strncpy(out, s.sub_fn(), out_size - 1);
     out[out_size - 1] = '\0';
+    backendTextOnline(out, out, out_size);
     return;
   }
 
@@ -311,6 +313,7 @@ void settingSubtitle(const SettingDesc &s, char *out, size_t out_size) {
   else if (sub)        strncpy(out, sub, out_size - 1);
   else if (opt)        strncpy(out, opt, out_size - 1);
   out[out_size - 1] = '\0';
+  backendTextOnline(out, out, out_size);
 }
 
 void settingsLoadAll() {

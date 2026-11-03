@@ -4032,15 +4032,12 @@ const char* const STRINGS[][3] = {
     "Mot de passe erroné ou routeur trop loin." },  // STR_WIFI_FAIL_HINT
   // After a failed connect, the main button, f16.
   { "Passwort ändern", "Change password", "Modifier le mot de passe" },  // STR_WIFI_PASS_AGAIN
-  // Backend step. The note above the tiles f14 on 430 px, the docs button
-  // across the bar f16.
-  { "Dafür brauchst du einen laufenden Server.", "This needs a server that is running.",
-    "Il faut un serveur en marche." },  // STR_SETUP_SERVER_NEEDED
+  // Backend step. The docs button across the bar f16.
   { "Noch keinen Server? Zur Anleitung", "No server yet? See the guide",
     "Pas encore de serveur ? Le guide" },  // STR_SETUP_NO_SERVER
-  // The outline beside a backend's name, f12.
-  { "Selbst gehostet", "Self-hosted", "Auto-hébergé" },  // STR_HOSTING_SELF
-  { "Online",          "Online",      "En ligne" },  // STR_HOSTING_ONLINE
+  // The outline beside a backend's name, f12: what it asks of the user.
+  { "Eigener Server nötig",      "Needs your own server", "Serveur personnel requis" },  // STR_HOSTING_SELF
+  { "Kein eigener Server nötig", "No server of your own", "Sans serveur personnel" },  // STR_HOSTING_ONLINE
   // One line under a backend's name, f12 in 350 px.
   { "Weit verbreitet, für Klipper und OctoPrint", "Widely used, works with Klipper and OctoPrint",
     "Très répandu, pour Klipper et OctoPrint" },  // STR_BACKEND_DESC_SPOOLMAN
@@ -4173,6 +4170,49 @@ const char* const STRINGS[][3] = {
   { "Der Server hat das Gewicht nicht angenommen. Bitte noch einmal senden.",
     "The server did not accept the weight. Please send it again.",
     "Le serveur n'a pas accepté le poids. Veuillez l'envoyer à nouveau." },  // STR_WEIGHT_NOT_SAVED_TEXT
+  // The online services: the Internet button, its page, the web cards.
+  { "Internet", "Internet",
+    "Internet" },  // STR_BACKEND_INTERNET
+  { "Online-Dienste wie Spooly", "Online services such as Spooly",
+    "Services en ligne comme Spooly" },  // STR_BACKEND_DESC_INTERNET
+  { "Online-Dienst wählen", "Choose online service",
+    "Choisir le service en ligne" },  // STR_ONLINE_TITLE
+  { "Anderer Dienst", "Other service",
+    "Autre service" },  // STR_ONLINE_OTHER
+  { "Konto mit Spooly Pro nötig", "Needs an account with Spooly Pro",
+    "Compte Spooly Pro requis" },  // STR_ONLINE_SPOOLY_SUB
+  { "Adresse und Schlüssel im Browser", "Address and key in the browser",
+    "Adresse et clé dans le navigateur" },  // STR_ONLINE_OTHER_SUB
+  { "Die Auswahl stellt um. Adresse und Schlüssel deines lokalen Backends bleiben gespeichert.", "Choosing one switches over. The address and key of your local backend stay stored.",
+    "Le choix bascule la balance. L'adresse et la clé de votre backend local restent enregistrées." },  // STR_ONLINE_NOTE
+  { "Online-Dienst", "Online service",
+    "Service en ligne" },  // STR_ONLINE_SERVICE
+  { "Konto", "Account",
+    "Compte" },  // STR_ONLINE_ACCOUNT
+  { "Spooly Pro nötig", "Needs Spooly Pro",
+    "Spooly Pro requis" },  // STR_ONLINE_PRO
+  { "Aktiv bleibt %s, bis du unten einen Dienst verbindest.", "%s stays active until you connect a service below.",
+    "%s reste actif tant que vous ne connectez pas un service ci-dessous." },  // STR_W_ONLINE_KEEPS
+  { "Aktiv ist %s. Spoolman, FilaMan oder BamBuddy wechseln zurück, dort ist nichts verloren.", "%s is active. Spoolman, FilaMan or BamBuddy switch back, nothing is lost there.",
+    "%s est actif. Spoolman, FilaMan ou BamBuddy ramènent en arrière, rien n'y est perdu." },  // STR_W_ONLINE_ACTIVE
+  { "Die Schnittstelle läuft bei Spooly nur mit einem Pro-Konto.", "Spooly offers this interface with a Pro account only.",
+    "Spooly ne propose cette interface qu'avec un compte Pro." },  // STR_W_ONLINE_PRO
+  { "Den Schlüssel erstellst du in deinem Spooly-Konto.", "You create the key in your Spooly account.",
+    "La clé se crée dans votre compte Spooly." },  // STR_W_ONLINE_KEY_HINT
+  { "Konto anlegen", "Create an account",
+    "Créer un compte" },  // STR_W_ONLINE_ACCOUNT
+  { "Prüfen und verbinden", "Check and connect",
+    "Vérifier et connecter" },  // STR_W_ONLINE_CONNECT
+  { "Jeder Dienst, der die Spoolman-Schnittstelle spricht. Der Name kommt vom Dienst selbst.", "Any service that speaks Spoolman's interface. The name comes from the service itself.",
+    "Tout service qui parle l'interface de Spoolman. Le nom vient du service lui-même." },  // STR_W_ONLINE_OTHER_HINT
+  { "Komplette Adresse", "Full address",
+    "Adresse complète" },  // STR_W_ONLINE_ADDR
+  { "Ohne https:// geht der Schlüssel unverschlüsselt durchs Internet.", "Without https:// the key crosses the internet unencrypted.",
+    "Sans https://, la clé circule en clair sur Internet." },  // STR_W_ONLINE_HTTP
+  { "Ohne https:// geht der Schlüssel unverschlüsselt durchs Internet. Trotzdem verbinden?", "Without https:// the key crosses the internet unencrypted. Connect anyway?",
+    "Sans https://, la clé circule en clair sur Internet. Connecter quand même ?" },  // STR_W_ONLINE_HTTP_ASK
+  { "Für eine neue Adresse trägst du den Schlüssel neu ein.", "A new address needs the key entered again.",
+    "Une nouvelle adresse demande de saisir à nouveau la clé." },  // STR_W_ONLINE_REKEY
 };
 
 StringID tagWriteResultString(uint8_t code) {

@@ -76,6 +76,7 @@ void hideAllOverlays() {
   numPadHide();
   if (scr_lastused)    lv_obj_add_flag(scr_lastused,    LV_OBJ_FLAG_HIDDEN);
   if (scr_backend)     lv_obj_add_flag(scr_backend,     LV_OBJ_FLAG_HIDDEN);
+  if (scr_online)      lv_obj_add_flag(scr_online,      LV_OBJ_FLAG_HIDDEN);
   if (scr_filaman_options) lv_obj_add_flag(scr_filaman_options, LV_OBJ_FLAG_HIDDEN);
   if (scr_ams_assign)      lv_obj_add_flag(scr_ams_assign, LV_OBJ_FLAG_HIDDEN);
   if (scr_filaman_fields)  lv_obj_add_flag(scr_filaman_fields, LV_OBJ_FLAG_HIDDEN);
@@ -154,6 +155,7 @@ static void deleteSecondaryScreens() {
   closeWifiConnectingScreen();
   closeWifiPortalScreen();
   if (scr_backend)  { lv_obj_del(scr_backend);  scr_backend  = nullptr; }
+  if (scr_online)   { lv_obj_del(scr_online);   scr_online   = nullptr; }
   if (scr_web)      { lv_obj_del(scr_web);      scr_web      = nullptr; }
   if (scr_timezone) { lv_obj_del(scr_timezone); scr_timezone = nullptr; }
   closeLanguageScreen();

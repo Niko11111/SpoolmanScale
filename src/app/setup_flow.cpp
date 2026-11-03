@@ -45,7 +45,7 @@ void logSetupBootState(const char *branch) {
 // A backend whose credentials are entered in the browser has that step on
 // top of WiFi, backend, server and scale.
 static bool setupHasCredentialStep() {
-  return backendInfo(backendMode()).auth_in_browser;
+  return backendAuthInBrowser();
 }
 
 #define SETUP_FIXED_STEPS 3   // WiFi, backend, server
@@ -55,11 +55,17 @@ int setupStepCount() {
   return SETUP_FIXED_STEPS + (setupHasCredentialStep() ? 1 : 0) + (g_scale_fitted ? 1 : 0);
 }
 
+int setupStepTotal(SetupStep step) {
+  if (step != SETUP_STEP_ONLINE) return setupStepCount();
+  return SETUP_FIXED_STEPS + 1 + (g_scale_fitted ? 1 : 0);
+}
+
 int setupStepNumber(SetupStep step) {
   switch (step) {
     case SETUP_STEP_WIFI:        return 1;
     case SETUP_STEP_BACKEND:     return 2;
     case SETUP_STEP_SERVER:      return 3;
+    case SETUP_STEP_ONLINE:      return 3;
     case SETUP_STEP_CREDENTIALS: return setupHasCredentialStep() ? 4 : 0;
     case SETUP_STEP_SCALE:       return setupStepCount();
     default:                     return 0;

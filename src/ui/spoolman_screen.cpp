@@ -304,7 +304,7 @@ static void onPadDelete(lv_event_t *e) {
 // Connect, or in the setup after a good answer, on to the next step.
 static void onAddressMain(lv_event_t *e) {
   if (sp_can_continue) {
-    if (backendInfo(backendMode()).auth_in_browser) {
+    if (backendAuthInBrowser()) {
       // Next comes the credential step, and those are entered in a browser.
       showOtaBrowserScreen(WEB_CTX_SETUP);
     } else {

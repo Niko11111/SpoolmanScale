@@ -6,6 +6,7 @@
 
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/backend.h"
 #include "ui/theme.h"
 #include "ui_common.h"
 
@@ -52,7 +53,11 @@ static const char *infoText(int text_id) {
   if (len >= sizeof(s_text_buf))
     logSDf("InfoPopup: text %d is %u bytes, buffer holds %u - truncated",
            text_id, (unsigned)len, (unsigned)(sizeof(s_text_buf) - 1));
-  copyT(s_text_buf, sizeof(s_text_buf), text_id);
+  // Under an online service, its name where the table says Spoolman.
+  backendTextOnline(T(text_id), s_text_buf, sizeof(s_text_buf));
+  if (strlen(s_text_buf) + 1 == sizeof(s_text_buf)) {
+    logSDf("InfoPopup: text %d with the service's name fills the buffer, may be cut", text_id);
+  }
   return s_text_buf;
 }
 

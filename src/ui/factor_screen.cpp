@@ -93,7 +93,7 @@ static void backToScaleMenu() {
 
 void factorBackToSetupStep() {
   closeFactorScreen();
-  if (backendInfo(backendMode()).auth_in_browser) showOtaBrowserScreen(WEB_CTX_SETUP);
+  if (backendAuthInBrowser()) showOtaBrowserScreen(WEB_CTX_SETUP);
   else                                            show_spoolman_pending = true;
 }
 

@@ -32,7 +32,7 @@ void setupHeader(lv_obj_t* scr, const char* title, SetupStep step, lv_event_cb_t
   const int n = setupStepNumber(step);
   if (n <= 0) return;
   char buf[24];
-  snprintf(buf, sizeof(buf), T(STR_SETUP_STEP_OF), n, setupStepCount());
+  snprintf(buf, sizeof(buf), T(STR_SETUP_STEP_OF), n, setupStepTotal(step));
   lv_obj_t* c = lv_label_create(scr);
   lv_label_set_text(c, buf);
   lv_obj_set_style_text_font(c, UI_FONT_SMALL, 0);

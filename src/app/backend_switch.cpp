@@ -27,6 +27,8 @@
 #include "services/server_sets.h"
 #include "services/spool_cache.h"
 #include "services/tag_field.h"
+#include "services/backend_profiles.h"
+#include "services/server_name_rules.h"
 #include "services/user_options.h"
 #include "ui/header_status.h"
 #include "ui/tag_display.h"
@@ -165,21 +167,26 @@ static void clearPanelState() {
   webServerSyncState();
 }
 
-void backendApplyMode(BackendMode mode) {
-  if (mode == backendMode()) return;
+static void applySelection(BackendMode mode, uint8_t profile) {
+  if (mode == backendMode() && profile == backendProfileId()) return;
   s_generation++;
   backendConnClose();   // open to the old backend's server
   // Before the mode changes under it: the rest of a drying batch would
   // otherwise be written through the other backend.
   driedBatchCancel();
 
-  const char *from = backendName();
+  char from[SERVER_NAME_MAX + 1];
+  snprintf(from, sizeof(from), "%s", backendName());
   leaveServer();
-  backendSetMode(mode);
+  backendSetSelection(mode, profile);
   logSDf("Backend: %s -> %s (full reset)", from, backendName());
   forgetServerCaches("backend changed");
   clearPanelState();
 }
+
+void backendApplyMode(BackendMode mode) { applySelection(mode, BP_SPOOLMAN); }
+
+void backendApplyProfile(uint8_t profile) { applySelection(BACKEND_SPOOLMAN, profile); }
 
 bool backendApplyAuth(uint8_t mode, const char *user, const char *secret) {
   const uint32_t before = spoolmanAccessStamp();

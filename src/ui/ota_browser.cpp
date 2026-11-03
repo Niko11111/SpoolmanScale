@@ -12,6 +12,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/backend.h"
+#include "services/backend_profiles.h"
 #include "services/device_name.h"
 #include "web/web_server.h"
 #include "web/web_access.h"
@@ -78,9 +79,17 @@ static bool s_gate_opened = false;
 static bool showsCredentials() {
   // Spoolman has nothing to enter, so the rows are a FilaMan and BamBuddy
   // affair even in the contexts that would otherwise show them.
-  if (backendMode() == BACKEND_SPOOLMAN) return false;
+  if (backendMode() == BACKEND_SPOOLMAN && !backendProfileIsOnline()) return false;
   return s_web_ctx == WEB_CTX_BACKEND || s_web_ctx == WEB_CTX_SETUP ||
          s_web_ctx == WEB_CTX_ADDRESS;
+}
+
+// BamBuddy and an online service ask for a single key, FilaMan for two.
+static bool oneKeyOnly() { return backendIsBamBuddy() || backendProfileIsOnline(); }
+
+static bool activeKeyPresent() {
+  if (backendProfileIsOnline()) return spoolmanAuthActive();
+  return backendIsBamBuddy() ? bambuddyApiKey()[0] != '\0' : filamanApiKey()[0] != '\0';
 }
 
 // Everything except the firmware upload uses the neutral title and skips the
@@ -217,9 +226,8 @@ void refreshWebCredentialRows() {
 
   // BamBuddy has a single key and no second row at all, so the token half
   // stays untouched there.
-  const bool bb = backendIsBamBuddy();
-  bool key_now   = bb ? (bambuddyApiKey()[0] != '\0')
-                      : (filamanApiKey()[0]  != '\0');
+  const bool bb = oneKeyOnly();
+  bool key_now   = activeKeyPresent();
   bool token_now = bb ? false : (filamanDeviceToken()[0] != '\0');
 
   if (key_now != s_key_shown) {
@@ -372,8 +380,8 @@ static void webBuildGatePill(lv_obj_t *scr) {
 // setup the step's bar follows under them: later, or on - both lead to the
 // scale, the rows only say what is still missing.
 static void webBuildCredentials(lv_obj_t *scr) {
-  const bool bb = backendIsBamBuddy();
-  s_key_shown   = bb ? (bambuddyApiKey()[0] != '\0') : (filamanApiKey()[0] != '\0');
+  const bool bb = oneKeyOnly();
+  s_key_shown   = activeKeyPresent();
   s_token_shown = !bb && (filamanDeviceToken()[0] != '\0');
   s_lbl_token_val = nullptr;
 
@@ -439,7 +447,9 @@ static void webBuildHeader(lv_obj_t *scr, const char *title) {
     // A step of the setup: back to the address it follows on from.
     setupHeader(scr, T(STR_SETUP_CREDS_TITLE), SETUP_STEP_CREDENTIALS, [](lv_event_t *e){
       logSD("BTN: Web interface -> Setup: back to the address");
-      show_spoolman_pending = true;
+      // An online service has no address step, its page came before this one.
+      if (backendProfileIsOnline()) show_online_pending = true;
+      else                          show_spoolman_pending = true;
     });
     return;
   }
@@ -489,7 +499,7 @@ void buildOtaBrowserScreen() {
   webWaitForIp();
 
   const int step_id = !showsCredentials() ? STR_OTA_OPEN_BROWSER
-                    : backendIsBamBuddy()  ? STR_WEB_STEP_CREDS_BB
+                    : oneKeyOnly()         ? STR_WEB_STEP_CREDS_BB
                                            : STR_WEB_STEP_CREDS;
   lv_obj_align(webLabel(scr_ota_browser, T(step_id), UI_FONT_SMALL, UI_COL_INK_SOFT), LV_ALIGN_TOP_MID, 0, WEB_STEP_Y);
   // "/" is the status page, so each flow goes to the page that carries its

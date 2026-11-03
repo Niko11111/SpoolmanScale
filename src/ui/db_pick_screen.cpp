@@ -8,6 +8,7 @@
 
 // backend_api.h brings ArduinoJson, whose templates have a parameter T:
 // before lang.h, which defines T().
+#include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/filament_db.h"
 #include "app/app_state.h"
@@ -861,7 +862,8 @@ static void showLoadFailure(FdbJob job, int code) {
   const bool missing   = job == FDB_JOB_INDEX && (code == 404 || code == 405);
   const bool elsewhere = job == FDB_JOB_INDEX && code < 0 &&
                          strcmp(backendFdbBaseUrl(), backendBaseUrl()) != 0;
-  if (missing)        copyT(text, sizeof(text), backendIsFilaMan() ? STR_DBPICK_FM_NO_PLUGIN : STR_DBPICK_NEEDS_NEWER);
+  if (missing)        backendTextOnline(T(backendIsFilaMan() ? STR_DBPICK_FM_NO_PLUGIN : STR_DBPICK_NEEDS_NEWER),
+                                        text, sizeof(text));
   else if (elsewhere) snprintf(text, sizeof(text), T(STR_DBPICK_SM_UNREACHABLE), backendFdbBaseUrl());
   else                snprintf(text, sizeof(text), T(STR_DBPICK_FAILED), code);
   showMessage(text);

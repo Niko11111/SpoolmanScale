@@ -285,6 +285,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   { char sub[48];
     if (tagFieldIsNative()) snprintf(sub, sizeof(sub), "%s - %s", T(STR_TF_NATIVE), T(STR_EF_NATIVE_SUB));
     else                    snprintf(sub, sizeof(sub), "%s", tagFieldKeyName());
+    backendTextOnline(sub, sub, sizeof(sub));
     lv_obj_t *btn = fieldRow(list, LV_SYMBOL_GPS, STR_TAG_FIELD, sub, STR_TAG_FIELD_INFO,
                              FIELD_ROW_TAG);
     lv_obj_add_event_cb(btn, [](lv_event_t *e) {

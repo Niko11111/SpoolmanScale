@@ -17,7 +17,14 @@
 // the caches and the sessions, the screens own what is on the panel. A service
 // calling into the screens would turn the layering upside down, and the device
 // path and the web path both have to take exactly the same steps.
+// Choosing a mode means its plain server: on Spoolman that is the local one,
+// whichever online service was active before.
 void backendApplyMode(BackendMode mode);
+
+// Choosing a server on Spoolman's mode (services/backend_profiles.h). The same
+// reset: the address and the inventory behind it change, and the same spool id
+// is another spool there.
+void backendApplyProfile(uint8_t profile);
 
 // Changing the address of the current backend. The mode stays, but every
 // cache that holds the old server's answers has to go: the FilaMan location

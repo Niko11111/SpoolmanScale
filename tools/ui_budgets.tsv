@@ -447,10 +447,9 @@ STR_WIFI_CONN_DETAIL	12	420	NEVER	src/ui/wifi_connect_view.cpp card line with th
 STR_WIFI_NO_LINK	16	420	DOT	src/ui/wifi_connect_view.cpp card title with the SSID
 STR_WIFI_FAIL_HINT	12	420	NEVER	src/ui/wifi_connect_view.cpp card line
 STR_WIFI_PASS_AGAIN	16	290	NEVER	src/ui/wifi_connect_view.cpp main bar button
-STR_SETUP_SERVER_NEEDED	14	430	NEVER	src/ui/backend_screen.cpp note above the tiles
 STR_SETUP_NO_SERVER	16	440	NEVER	src/ui/backend_screen.cpp bar button
-STR_HOSTING_SELF	12	120	NEVER	src/ui/backend_screen.cpp pill beside the name
-STR_HOSTING_ONLINE	12	120	NEVER	src/ui/backend_screen.cpp pill beside the name
+STR_HOSTING_SELF	12	210	NEVER	src/ui/backend_screen.cpp pill beside the name
+STR_HOSTING_ONLINE	12	210	NEVER	src/ui/backend_screen.cpp pill beside the name
 STR_BACKEND_DESC_SPOOLMAN	12	350	NEVER	src/ui/backend_screen.cpp tile line
 STR_BACKEND_DESC_FILAMAN	12	350	NEVER	src/ui/backend_screen.cpp tile line
 STR_BACKEND_DESC_BAMBUDDY	12	350	NEVER	src/ui/backend_screen.cpp tile line
@@ -493,3 +492,13 @@ STR_ID_PAD_LINK_TITLE	18	330	NEVER	src/ui/num_pad.cpp header title between back 
 STR_ID_PAD_COPY_TITLE	18	330	NEVER	src/ui/num_pad.cpp header title between back and close
 STR_DENSITY_TAKE	18	120	NEVER	src/ui/tag_create_popup.cpp 140 px answer button (TCP_ANSWER_W), 10 px air each side
 STR_DENSITY_CHANGE	14	64	NEVER	src/ui/tag_create_popup.cpp 80 px price button, 8 px air each side
+# --- the online services -----------------------------------------------------
+STR_BACKEND_INTERNET	16	84	NEVER	src/ui/backend_screen.cpp 108 px segment, -4 border, -20 for " >"
+STR_BACKEND_DESC_INTERNET	12	350	NEVER	src/ui/backend_screen.cpp line under the name on the tile
+STR_ONLINE_TITLE	18	340	NEVER	src/ui/online_screen.cpp sub header between back and close
+STR_ONLINE_OTHER	16	320	NEVER	src/ui/online_screen.cpp row title
+STR_ONLINE_SPOOLY_SUB	14	320	NEVER	src/ui/online_screen.cpp row, second line
+STR_ONLINE_OTHER_SUB	14	320	NEVER	src/ui/online_screen.cpp row, second line
+STR_ONLINE_SERVICE	16	380	NEVER	src/ui/backend_screen.cpp address row title
+STR_ONLINE_ACCOUNT	16	200	NEVER	src/ui/backend_screen.cpp second credential column
+STR_ONLINE_PRO	14	200	NEVER	src/ui/backend_screen.cpp second credential column

@@ -104,7 +104,7 @@ void buildLastUsedScreen() {
                        : (used_mode ? T(STR_LASTUSED_DESC_OSM)
                                     : T(STR_LASTUSED_DESC_WEIGHED));
   char desc_buf[280];
-  strncpy(desc_buf, desc, sizeof(desc_buf)-1); desc_buf[sizeof(desc_buf)-1] = 0;
+  backendTextOnline(desc, desc_buf, sizeof(desc_buf));
   lv_label_set_text(lbl_desc, desc_buf);
   lv_obj_set_style_text_color(lbl_desc, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_desc, &lv_font_montserrat_ext_14, 0);

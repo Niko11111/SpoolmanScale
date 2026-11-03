@@ -32,6 +32,7 @@ extern bool show_reboot_pending;
 extern bool live_zone_rebuild_pending;
 extern bool show_lastused_pending;
 extern bool show_backend_pending;
+extern bool show_online_pending;
 
 // Set by the web route, consumed in appLoop(). Not applied in the handler
 // itself: that runs in the loop task, already deep in the WebServer stack, and
@@ -39,6 +40,11 @@ extern bool show_backend_pending;
 // task has 16 kB, and that nesting is what overflowed it before.
 extern bool backend_mode_change_pending;
 extern uint8_t pending_backend_mode;
+// Which online service was asked for (services/backend_profiles.h). From the
+// web only the switch; from the device's page the browser follows in one pass.
+extern bool backend_profile_change_pending;
+extern bool online_pick_pending;
+extern uint8_t pending_backend_profile;
 // The same for exchanging the active server set for the parked one
 // (backendApplySetSwap()), from the web page and later from the device.
 extern bool server_set_swap_pending;

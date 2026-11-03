@@ -24,6 +24,7 @@ enum SetupStep : uint8_t {
   SETUP_STEP_WIFI,
   SETUP_STEP_BACKEND,
   SETUP_STEP_SERVER,
+  SETUP_STEP_ONLINE,        // instead of the server: which service, its key comes next
   SETUP_STEP_CREDENTIALS,
   SETUP_STEP_SCALE
 };
@@ -31,6 +32,9 @@ enum SetupStep : uint8_t {
 // How many numbered steps the chosen backend takes, and where a step falls
 // in them; 0 for a step that is not counted. The scale is always the last.
 int setupStepCount();
+// The same as seen from one step. On the online page nothing is switched yet,
+// and whichever service is picked has the credentials step.
+int setupStepTotal(SetupStep step);
 int setupStepNumber(SetupStep step);
 
 // What the server step found, for the closing summary: the address test got

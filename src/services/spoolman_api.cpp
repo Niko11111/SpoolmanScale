@@ -1,5 +1,6 @@
 #include "spoolman_api.h"
 #include "services/backend.h"
+#include "services/backend_profiles.h"
 #include "services/backend_http.h"
 #include "hardware/sd_logger.h"
 #include "http_progress.h"
@@ -376,6 +377,9 @@ bool spoolmanGetVersion(const char* base_url, char* out_version, size_t out_size
 
   strncpy(out_version, doc["version"] | "?", out_size - 1);
   out_version[out_size - 1] = '\0';
+  // Only the name: server.version is another numbering than the Spoolman API
+  // version this one is compared with. Foreign data, checked where it is kept.
+  backendProfileNoteServer(base_url, doc["server"]["name"] | "");
   return true;
 }
 

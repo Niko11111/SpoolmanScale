@@ -80,6 +80,7 @@
 #include "services/device_name.h"
 #include "services/mdns_service.h"
 #include "services/backend.h"
+#include "services/backend_profiles.h"
 #include "services/breadcrumb.h"
 #include "services/diagnostics.h"
 #include "hardware/i2c_scan.h"
@@ -89,6 +90,7 @@
 #include "ui/ams_assign_screen.h"
 #include "ui/filaman_fields_screen.h"
 #include "ui/backend_screen.h"
+#include "ui/online_screen.h"
 #include "ui/filaman_options_screen.h"
 #include "ui/bag_screen.h"
 #include "ui/bambuddy_options_screen.h"
@@ -910,6 +912,25 @@ void appLoop() {
       show_backend_pending = true;
     }
   }
+  if (backend_profile_change_pending) {
+    backend_profile_change_pending = false;
+    backendApplyProfile(pending_backend_profile);
+    if (scr_backend && !lv_obj_has_flag(scr_backend, LV_OBJ_FLAG_HIDDEN)) {
+      show_backend_pending = true;
+    }
+  }
+  // A row of the online page: the switch, then the browser for the key, in one
+  // pass so the home screen does not flash in between.
+  if (online_pick_pending) {
+    online_pick_pending = false;
+    const bool palette_moves = !setup_active && uiThemeFollowMoves(BACKEND_SPOOLMAN);
+    backendApplyProfile(pending_backend_profile);
+    showOtaBrowserScreen(setup_active ? WEB_CTX_SETUP : WEB_CTX_BACKEND);
+    if (palette_moves) {
+      logSD("Theme: the backend switch moves the palette, restart offered");
+      show_reboot_pending = true;
+    }
+  }
   // The same for the server set: the backend screen shows the new address.
   if (server_set_swap_pending) {
     server_set_swap_pending = false;
@@ -927,6 +948,12 @@ void appLoop() {
     buildBackendScreen();          // releases the previous instance itself
     hideAllOverlays();
     lv_obj_clear_flag(scr_backend, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (show_online_pending) {
+    show_online_pending = false;
+    buildOnlineScreen();           // releases the previous instance itself
+    hideAllOverlays();
+    lv_obj_clear_flag(scr_online, LV_OBJ_FLAG_HIDDEN);
   }
   if (show_filaman_options_pending) {
     show_filaman_options_pending = false;
@@ -1028,6 +1055,11 @@ void appLoop() {
     buildFilaManFieldsScreen();    // releases the previous instance itself
     hideAllOverlays();
     lv_obj_clear_flag(scr_filaman_fields, LV_OBJ_FLAG_HIDDEN);
+  }
+  // An online service has its address on its own page, never on the pad.
+  if (show_spoolman_pending && backendProfileIsOnline()) {
+    show_spoolman_pending = false;
+    show_online_pending = true;
   }
   if (show_spoolman_pending) {
     show_spoolman_pending = false;
@@ -1745,6 +1777,15 @@ void appLoop() {
       sm_reachable = (code == 200);
       if (sm_reachable != was_reachable) updateHeaderStatus();
       if (sm_reachable && !was_reachable) serverReachRestored();
+      // What another service calls itself, asked once per address. The boot and
+      // the address screen ask too, but a switch from the browser passes neither.
+      static uint32_t s_name_asked_for = 0;
+      if (sm_reachable && backendProfileWantsServerName() &&
+          s_name_asked_for != backendGeneration() + 1) {
+        s_name_asked_for = backendGeneration() + 1;
+        char ver[32];
+        backendGetVersion(backendBaseUrl(), ver, sizeof(ver), 3000);
+      }
       // Someone can switch BamBuddy's filament manager while the scale is
       // running. That does not fail on our side, it just starts addressing
       // the other database - so the mode is re-asked here rather than only
