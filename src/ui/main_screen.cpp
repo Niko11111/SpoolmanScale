@@ -371,15 +371,15 @@ void buildUI() {
   lv_obj_set_style_text_font(lbl_id_cap, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_pos(lbl_id_cap, 58, 53);
 
-  // SM-ID value (x=58, y=69) - 46 px reserved, which holds five digits.
-  // The old 34 px ran into "Material" at four.
+  // SM-ID value (x=58, y=69) - 54 px, all there is up to "Material" at 112.
+  // Five digits take up to 53.4 px, "00000"; 46 px held 16388 but cut 16400.
   lbl_spoolman_id = lv_label_create(lv_scr_act());
   lv_label_set_text(lbl_spoolman_id, "?");
   lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_spoolman_id, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_pos(lbl_spoolman_id, 58, 69);
   lv_label_set_long_mode(lbl_spoolman_id, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_spoolman_id, 46);
+  lv_obj_set_width(lbl_spoolman_id, 54);
 
   // Cap: Material (x=112, y=53)
   lv_obj_t *lbl_mat_cap = lv_label_create(lv_scr_act());
