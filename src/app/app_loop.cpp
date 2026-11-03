@@ -98,6 +98,7 @@
 #include "web/web_jobs.h"
 #include "ui/confirm_popup.h"
 #include "ui/tare_entry.h"
+#include "ui/weight_popup.h"
 #include "ui/ble_devices_screen.h"
 #include "ui/bluetooth_screen.h"
 #include "ui/connection_screen.h"
@@ -1146,6 +1147,7 @@ void appLoop() {
   // Before the questions below: a spool lifted while its empty weight is being
   // typed in takes the entry down unsaved first, and is asked about after.
   tareEntryTick();
+  weightPopupTick();
   spoolIdPadTick();
   idSpoolTick();
   idSpoolLiftQuestions();
