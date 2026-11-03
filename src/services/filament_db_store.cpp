@@ -12,13 +12,16 @@
 #include "../hardware/flash_log.h"
 #include "../hardware/sd_logger.h"
 #include "filament_db.h"
+#include "tag_family.h"
 
-// Behind the log ring and the Bambu catalog. 28 kB at the most today
+// Behind the log ring, the Bambu catalog and the tag family memory. Until
+// beta.50 this sat right on top of the tag family memory, and each overwrote
+// the other. 28 kB at the most today
 // (400 makers, 640 pairs), in 32 kB so the database can grow. Only an index
 // read from the whole database is kept here, SpoolmanDB's 299 pairs; a light
 // form answers in a fraction of a second and may hold more than fits.
 #define STORE_PAIRS_MAX     640
-#define STORE_OFFSET        (FLASH_LOG_BYTES + BAMBU_CATALOG_BYTES)
+#define STORE_OFFSET        (FLASH_LOG_BYTES + BAMBU_CATALOG_BYTES + TAG_FAMILY_BYTES)
 #define STORE_BYTES         (32UL * 1024UL)
 #define STORE_SECTOR        4096UL
 #define STORE_MAGIC         0x49424446UL   // "FDBI"
