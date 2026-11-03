@@ -719,7 +719,7 @@ static void routes(WebServer &srv) {
     secret.trim();
     // Refused whole rather than cut: a cut token fails at the server later,
     // with nothing to say why.
-    if (!spoolmanSetAuth((uint8_t)mode, user.c_str(), rest[0] == '1' ? secret.c_str() : nullptr)) {
+    if (!backendApplyAuth((uint8_t)mode, user.c_str(), rest[0] == '1' ? secret.c_str() : nullptr)) {
       char msg[160];
       snprintf(msg, sizeof(msg), T(STR_W_SM_SECRET_LONG), (unsigned)SM_SECRET_MAX_LEN);
       srv.send(400, "text/plain", msg);

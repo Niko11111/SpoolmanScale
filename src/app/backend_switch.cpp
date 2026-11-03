@@ -176,6 +176,26 @@ void backendApplyMode(BackendMode mode) {
   clearPanelState();
 }
 
+bool backendApplyAuth(uint8_t mode, const char *user, const char *secret) {
+  const uint32_t before = spoolmanAccessStamp();
+  if (!spoolmanSetAuth(mode, user, secret)) return false;
+  // Only requests in Spoolman mode carry this access (spoolman_api.cpp): under
+  // another backend the server the scale talks to has not changed.
+  if (backendMode() == BACKEND_SPOOLMAN && spoolmanAccessStamp() != before) {
+    s_generation++;
+    server_access_change_pending = true;
+  }
+  return true;
+}
+
+void backendApplyAccessChange() {
+  logSD("Backend: access changed, what the old access read is let go");
+  driedBatchCancel();
+  leaveServer();
+  forgetServerCaches("access changed");
+  clearPanelState();
+}
+
 bool backendApplySetSwap() {
   s_generation++;
   backendConnClose();   // open to a server of the set being parked

@@ -113,6 +113,9 @@ bool        spoolmanAuthSendsTo(const char* url);
 // to the address now set. False, with nothing changed, for a secret longer
 // than SM_SECRET_MAX_LEN.
 bool        spoolmanSetAuth(uint8_t mode, const char* user, const char* secret);
+// One number for what goes out with a request to the address now set, 0 for
+// nothing (access_stamp.h). Different number, possibly a different inventory.
+uint32_t    spoolmanAccessStamp();
 
 // True when the active backend has everything it needs to talk to
 // its server. Spoolman and BamBuddy only need a base URL.

@@ -42,6 +42,9 @@ extern uint8_t pending_backend_mode;
 // The same for exchanging the active server set for the parked one
 // (backendApplySetSwap()), from the web page and later from the device.
 extern bool server_set_swap_pending;
+// The same for new access to the same address (backendApplyAuth()): a screen
+// to clear, and caches that belong to the account left behind.
+extern bool server_access_change_pending;
 extern bool show_filaman_options_pending;
 extern bool show_ams_assign_pending;
 // The AMS view. A flag rather than a direct call because building it ends in

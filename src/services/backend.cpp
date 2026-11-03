@@ -8,6 +8,7 @@
 
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
+#include "services/access_stamp.h"
 #include "services/app_settings.h"
 #include "services/bambuddy_api.h"
 #include "lang.h"
@@ -284,6 +285,10 @@ const char* spoolmanAuthBoundHost() { return s_sm_bind; }
 bool spoolmanAuthStored() { return s_sm_auth != SM_AUTH_NONE && s_sm_secret[0]; }
 bool spoolmanAuthActive() { return smBoundTo(cfg_spoolman_ip); }
 bool spoolmanAuthSendsTo(const char* url) { return smBoundTo(url); }
+
+uint32_t spoolmanAccessStamp() {
+  return accessStamp(spoolmanAuthActive(), s_sm_auth, s_sm_user, s_sm_secret);
+}
 
 bool spoolmanSetAuth(uint8_t mode, const char* user, const char* secret) {
   if (secret && credentialLen(secret) > SM_SECRET_MAX_LEN) {

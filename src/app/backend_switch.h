@@ -26,6 +26,17 @@ void backendApplyMode(BackendMode mode);
 // instance just left - HTTP 200, wrong shelf.
 void backendApplyHost(const char *host);
 
+// Changing what goes out with a request to Spoolman, from the web page. On a
+// service with accounts the address stays and the inventory behind it does
+// not: spool 5 of the next account is another spool, and a weight written with
+// the old id lands on it. So access that really changed lets go of the same
+// things a change of mode does. Saving the same key again changes nothing.
+// False when the secret does not fit; nothing is changed then. The screen is
+// cleared a loop pass later by backendApplyAccessChange(); the number goes up
+// at once, so a request started from here on counts as the new access.
+bool backendApplyAuth(uint8_t mode, const char *user, const char *secret);
+void backendApplyAccessChange();
+
 // Changing the AMS source beside Spoolman (ams_source.h): a new address, and a
 // new key unless key is nullptr. The presence answer belonged to the old one,
 // so the way into the AMS view is settled again on the next tick. False when a

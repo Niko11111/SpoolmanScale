@@ -18,6 +18,7 @@ bool show_backend_pending = false;
 bool backend_mode_change_pending = false;
 uint8_t pending_backend_mode = 0;
 bool server_set_swap_pending = false;
+bool server_access_change_pending = false;
 bool show_filaman_options_pending = false;
 bool show_ams_assign_pending = false;
 bool show_ams_view_pending = false;

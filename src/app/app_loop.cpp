@@ -914,6 +914,10 @@ void appLoop() {
       show_backend_pending = true;
     }
   }
+  if (server_access_change_pending) {
+    server_access_change_pending = false;
+    backendApplyAccessChange();
+  }
   if (show_backend_pending) {
     show_backend_pending = false;
     buildBackendScreen();          // releases the previous instance itself
