@@ -500,6 +500,7 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
     // FOUND
     sm_found    = true;
     sm_id       = spool["id"] | 0;
+    snprintf(sm_page_url, sizeof(sm_page_url), "%s", backendSpoolLink(spool));
 
     // One-off migration to the plain hex notation. Older firmware wrote an
     // NTAG uid into extra.tag with colons, which is the one notation the

@@ -52,6 +52,7 @@ struct LabelExtras {
   char first[12], added[12];
   int16_t nozzle_min, nozzle_max, bed;
   int16_t dry_c, dry_h;
+  char page_url[LABEL_QR_LEN];
 };
 
 static void extrasInto(SpoolLabelData* d, const LabelExtras& e) {
@@ -60,6 +61,8 @@ static void extrasInto(SpoolLabelData* d, const LabelExtras& e) {
   d->nozzle_min = e.nozzle_min;
   d->nozzle_max = e.nozzle_max;
   d->bed_temp = e.bed;
+  // Known from the scan already; an answer without one takes nothing away.
+  if (e.page_url[0]) snprintf(d->page_url, sizeof(d->page_url), "%s", e.page_url);
   // The backend's drying wins; without one the tag's from the scan stays.
   if (e.dry_c > 0 && e.dry_h > 0) {
     d->dry_temp_c = e.dry_c;
@@ -74,6 +77,7 @@ static LabelExtras extrasOf(const SpoolLabelData& d) {
   e.nozzle_min = d.nozzle_min;
   e.nozzle_max = d.nozzle_max;
   e.bed = d.bed_temp;
+  snprintf(e.page_url, sizeof(e.page_url), "%s", d.page_url);
   e.dry_c = d.dry_temp_c;
   e.dry_h = d.dry_hours;
   return e;
@@ -103,6 +107,7 @@ bool labelSpoolFromScan(SpoolLabelData* out) {
   if (!out || !(sm_found && sm_id > 0)) return false;
   *out = SpoolLabelData{};
   out->id = sm_id;
+  snprintf(out->page_url, sizeof(out->page_url), "%s", sm_page_url);
   out->filament_id = sm_filament_id > 0 ? sm_filament_id : 0;
   snprintf(out->name, sizeof(out->name), "%s", sm_filament_name);
   snprintf(out->vendor, sizeof(out->vendor), "%s", sm_vendor_g);
@@ -191,6 +196,10 @@ static bool fetchDates(const char* base_url, int id, LabelExtras* out) {
   LabelExtras e{};
   isoToDate(doc["first_used"] | "", e.first, sizeof(e.first));
   isoToDate(doc["registered"] | "", e.added, sizeof(e.added));
+  // A server on the Spoolman way may name the spool's page itself. Spooly does:
+  // its link keeps working when its numbers are counted anew, which a link built
+  // from the id would not.
+  snprintf(e.page_url, sizeof(e.page_url), "%s", backendSpoolLink(doc.as<JsonObjectConst>()));
   // Spoolman's filament settings; BamBuddy's range arrives under the same
   // name for its upper end and a name of the scale's own for the lower.
   JsonObjectConst f = doc["filament"];

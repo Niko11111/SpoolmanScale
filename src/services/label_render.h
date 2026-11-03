@@ -48,6 +48,9 @@ struct SpoolLabelData {
   int16_t nozzle_min, nozzle_max, bed_temp;
   // The drying the filament wants, 0 where neither backend nor tag names one.
   int16_t dry_temp_c, dry_hours;
+  // The link the server itself names for this spool, asked with the dates.
+  // Empty where it names none: the QR code is then built from the id.
+  char  page_url[LABEL_QR_LEN];
 };
 
 // The test label for the printer's loaded stock. The raster is allocated in
@@ -76,4 +79,4 @@ void labelQrForSpool(int spool_id, char* out, size_t n);
 bool labelRenderFilament(const LabelPrinterConfig& printer, const LabelLayout& layout,
                          const SpoolLabelData& spool, LabelRaster* out);
 // The filament's page, empty when there is none to open.
-void labelQrForFilament(int filament_id, char* out, size_t n);
+void labelQrForFilament(const SpoolLabelData& spool, char* out, size_t n);

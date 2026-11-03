@@ -728,7 +728,9 @@ static String spoolJson() {
   if (!sm_found || sm_id <= 0) return String("{\"found\":false}");
 
   char url[160];
-  backendSpoolPageUrl(sm_id, url, sizeof(url));
+  // The server's own link where it names one, it knows its pages best.
+  if (sm_page_url[0]) snprintf(url, sizeof(url), "%s", sm_page_url);
+  else                backendSpoolPageUrl(sm_id, url, sizeof(url));
 
   // Only six plain hex digits reach the style attribute the card puts this
   // in. A spool with several colours, or anything odd, shows no chip.

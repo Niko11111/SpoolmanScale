@@ -751,9 +751,13 @@ void labelQrForSpool(int spool_id, char* out, size_t n) {
   else                          snprintf(out, n, "WEB+SPOOLMAN:S-%d", spool_id);
 }
 
-void labelQrForFilament(int filament_id, char* out, size_t n) {
+void labelQrForFilament(const SpoolLabelData& spool, char* out, size_t n) {
   if (!out || !n) return;
   out[0] = '\0';
+  // A server that names its spools' pages itself may have no filament page at
+  // all: Spooly has none, and a code that opens nothing is worse than no code.
+  if (spool.page_url[0]) return;
+  const int filament_id = spool.filament_id;
   const char* base = labelLinkBase();
   // BamBuddy keeps no filament, and a Spoolman with no address has no page.
   if (filament_id <= 0 || backendIsBamBuddy() || !base[0] || strcmp(base, "http://") == 0) return;
@@ -766,7 +770,7 @@ bool labelRenderFilament(const LabelPrinterConfig& printer, const LabelLayout& l
   // The tape's own arrangement, without the spool's number: see label_tape.h.
   if (labelPrinterIsTape(printer.model)) return labelRenderTape(printer, spool, false, "filament", out);
   char qr[LABEL_QR_LEN];
-  labelQrForFilament(spool.filament_id, qr, sizeof(qr));
+  labelQrForFilament(spool, qr, sizeof(qr));
   // No page to open: the label is laid out as one without a code.
   LabelLayout l = layout;
   if (!qr[0]) l.fields &= ~(1u << LF_QR);
@@ -783,7 +787,11 @@ bool labelRenderSpool(const LabelPrinterConfig& printer, const LabelLayout& layo
   // The tape's own arrangement: maker, material, name and the number.
   if (labelPrinterIsTape(printer.model)) return labelRenderTape(printer, spool, true, "spool", out);
   char qr[LABEL_QR_LEN];
-  labelQrForSpool(spool.id, qr, sizeof(qr));
+  if (spool.page_url[0]) {
+    logSDf("Label: spool #%d carries its own link, the QR code uses it", spool.id);
+    snprintf(qr, sizeof(qr), "%s", spool.page_url);
+  }
+  else labelQrForSpool(spool.id, qr, sizeof(qr));
   const int capacity = labelFactCapacity(layout, printer.media_width_mm, printer.media_length_mm);
   LabelFactList l;
   labelSpoolFacts(layout, spool, capacity, &l);

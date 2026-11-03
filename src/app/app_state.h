@@ -1,6 +1,7 @@
 #pragma once
 
 #include "services/tag_field.h"  // TagFieldId, TAG_FIELD_COUNT
+#include "services/spool_link_rules.h"
 #include "services/tag_uid.h"   // CARD_UIDS_MAX
 #include "services/tare_chain.h"  // TareSource
 
@@ -112,6 +113,8 @@ extern bool sm_found;
 extern float sm_remaining;
 extern float sm_total;
 extern float sm_spool_weight;
+// The link the server itself names for this spool, empty where it names none.
+extern char  sm_page_url[SPOOL_LINK_LEN];
 extern uint8_t sm_tare_source;
 extern char sm_last_dried[32];
 // What the matched spool holds in each tag field, indexed by TagFieldId, quote

@@ -631,6 +631,7 @@ void querySpoolmanById(int spool_id) {
 
   sm_found        = true;
   sm_id           = spool["id"] | 0;
+  snprintf(sm_page_url, sizeof(sm_page_url), "%s", backendSpoolLink(spool));
   // One spool, asked for by id: a duplicate count left over from the last
   // scan would keep the status line saying "more than one answered".
   sm_dup_count    = 0;
@@ -1259,6 +1260,7 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   sm_found = false;
   sm_archived = false;
   sm_id = 0;
+  sm_page_url[0] = '\0';
   sm_dup_count = 0;
   tagSpoolLookupClear();
   for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT; i++) sm_tag_values[i][0] = '\0';
@@ -1291,6 +1293,7 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   filter_spool["initial_weight"] = true;
   filter_spool["spool_weight"] = true;
   filter_spool["last_used"] = true;
+  filter_spool["url"] = true;
   filter_spool["location"] = true;
   // Every tag field, not just the selected one: the fallback pass above reads
   // whichever one a spool is actually bound through. The keys come from the

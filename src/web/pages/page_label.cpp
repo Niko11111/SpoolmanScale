@@ -181,7 +181,7 @@ static String stateJson(LabelKind kind) {
   // The preview waits for these; the loop asks the backend, once per spool.
   if (have && !labelSpoolDatesKnown()) label_dates_pending = true;
   char fil_qr[LABEL_QR_LEN];
-  labelQrForFilament(s.filament_id, fil_qr, sizeof(fil_qr));
+  labelQrForFilament(s, fil_qr, sizeof(fil_qr));
   String j;
   j.reserve(1600);
   layoutJson(j, kind, c, fil_qr[0] != '\0');

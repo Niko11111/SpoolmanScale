@@ -7,6 +7,7 @@
 #include "app/app_state.h"
 #include "app_config.h"
 #include "hardware/sd_logger.h"
+#include "services/spool_link_rules.h"
 #include "services/ams_source.h"
 #include "services/backend.h"
 #include "services/backend_profiles.h"
@@ -1331,6 +1332,12 @@ int backendPatchSpoolLocation(const char* base_url, int spool_id, const char* lo
     default:
       return spoolmanPatchSpoolLocation(base_url, spool_id, location_name, timeout_ms);
   }
+}
+
+const char* backendSpoolLink(JsonObjectConst spool) {
+  if (backendMode() != BACKEND_SPOOLMAN) return "";
+  const char* url = spool["url"] | "";
+  return spoolLinkOk(url, SPOOL_LINK_LEN - 1) ? url : "";
 }
 
 int backendPatchSpoolLastDried(const char* base_url, int spool_id, const char* iso_datetime,
