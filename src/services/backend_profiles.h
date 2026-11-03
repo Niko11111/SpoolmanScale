@@ -37,6 +37,11 @@ struct BackendProfile {
   uint8_t     auth_default;  // SpoolmanAuth a new key is stored as
   const char* account_url;   // where an account is made, "" when there is no such page
   int         sub_str;       // the second line on the online page, a StringID
+  // The service keeps tags in its own relation and no tool reads fields beside
+  // it: the choice of tag field, the companion field and the chip uid for
+  // Happy Hare do not apply there. Their stored values stay for the other
+  // profiles.
+  bool        fixed_tags;
 };
 
 // Where a profile keeps what it does not share. Its address is empty for a
@@ -67,6 +72,7 @@ const char* backendProfileBadge();
 // a fixed address goes by its name, its test system with " Dev" after it, so
 // the two are told apart. nullptr for an address the user entered.
 const char* backendProfileHeaderName();
+bool    backendProfileFixedTags();   // see BackendProfile::fixed_tags, no network
 // The display name of a profile that may not be the active one.
 const char* backendProfileNameOf(uint8_t id);
 

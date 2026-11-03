@@ -7,6 +7,7 @@
 // defines the T() macro - ArduinoJson uses T as a template parameter.
 #include "services/backend.h"
 #include "services/backend_api.h"
+#include "services/backend_profiles.h"
 
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
@@ -40,6 +41,9 @@ const TagFieldSpec& tagFieldSpec(uint8_t id) {
 }
 
 uint8_t tagFieldEffective() {
+  // Before the stored choice, which belongs to the other servers: somebody on
+  // extra.tag at home must not write there on a service without such a tool.
+  if (backendProfileFixedTags()) return TAG_FIELD_NATIVE;
   if (g_tag_field >= TAG_FIELD_COUNT) return TAG_FIELD_TAG;
   if (!SPECS[g_tag_field].is_native) return g_tag_field;
   // The mode, and nothing else. This is read from LVGL callbacks and from
@@ -110,6 +114,14 @@ bool tagFieldHoldsSeveral() {
 }
 
 void tagFieldAutoSelect() {
+  // Nothing to decide on such a service, and everything below stores what it
+  // decides: a visit there must not move the choice made for the home server.
+  // The probe stays, it answers the second tag question.
+  if (backendProfileFixedTags()) {
+    backendHasNativeTags();
+    return;
+  }
+
   // Asked before the settled-choice return below, because this is the call
   // that fills the cache tagFieldEffective() reads to fall back off a relation
   // the server does not have. Returning early on a settled choice - which is
@@ -234,7 +246,7 @@ const char* tagFormatName(const char* scanned) {
 // ============================================================
 
 int tagCompanionField() {
-  if (!tagFieldIsNative()) return -1;
+  if (!tagFieldIsNative() || backendProfileFixedTags()) return -1;
   switch (g_tag_comp) {
     case TAG_COMP_TAG:   return TAG_FIELD_TAG;
     case TAG_COMP_NFCID: return TAG_FIELD_NFC_ID;

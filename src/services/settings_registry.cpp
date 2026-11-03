@@ -42,7 +42,11 @@ static bool appliesSecondTag() { return tagFieldHoldsSeveral(); }
 
 // A companion field is a question only beside the native tags: on an extra
 // field as the tag field, that field is the binding and always written.
-static bool appliesTagComp() { return tagFieldIsNative(); }
+static bool appliesTagComp() { return tagFieldIsNative() && !backendProfileFixedTags(); }
+
+// The fields the scale keeps on the server, and the chip uid beside them: on a
+// service that keeps its tags itself there is nothing to choose or to create.
+static bool appliesOwnFields() { return !backendProfileFixedTags(); }
 
 // Indexed by TagCompanion. The field names are what the user sees on the
 // Spoolman side and read the same in every language.
@@ -113,7 +117,7 @@ const SettingDesc SETTINGS[] = {
   { "sp_fields", SET_SUBMENU, SC_SPOOLMAN, nullptr,
     STR_EXTRA_FIELDS_TITLE, 0, 0, LV_SYMBOL_LIST,
     0, 0, nullptr,
-    nullptr, subExtraFields, nullptr, OPEN_SP_EXTRA_FIELDS, nullptr, false },
+    appliesOwnFields, subExtraFields, nullptr, OPEN_SP_EXTRA_FIELDS, nullptr, false },
 
   // The companion field beside the native tags: extra.tag for OpenSpoolman
   // or extra.nfc_id for tools of one's own. Right under the fields because it
@@ -164,9 +168,9 @@ const SettingDesc SETTINGS[] = {
     1, 0, nullptr,
     nullptr, nullptr, nullptr, OPEN_NONE, nullptr, false },
 
-  // Copying the hardware uid into the field Happy Hare reads. Always offered
-  // on Spoolman, unlike the row above: it hangs on no tag field, because it
-  // writes beside the binding rather than into it.
+  // Copying the hardware uid into the field Happy Hare reads. Offered on every
+  // server the user runs, unlike the row above: it hangs on no tag field,
+  // because it writes beside the binding rather than into it.
   //
   // Deliberately not hidden when the server has no rfid_tag field. That would
   // need a probe from inside a screen build, and it would be a dead end - the
@@ -175,7 +179,7 @@ const SettingDesc SETTINGS[] = {
   { "hw_uid_write", SET_BOOL, SC_SPOOLMAN, &g_hw_uid_write,
     STR_HW_UID_WRITE, STR_HW_UID_WRITE_SUB, STR_HW_UID_WRITE_INFO, LV_SYMBOL_UPLOAD,
     0, 0, nullptr,
-    nullptr, nullptr, nullptr, OPEN_NONE, nullptr, false },
+    appliesOwnFields, nullptr, nullptr, OPEN_NONE, nullptr, false },
 
   // ---- FilaMan -----------------------------------------------------------
 

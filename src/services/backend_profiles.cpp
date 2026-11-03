@@ -20,9 +20,9 @@
 #define SPOOLY_ACCOUNT_URL "https://spooly.eu"
 
 static const BackendProfile PROFILES[BP_COUNT] = {
-  { BP_SPOOLMAN, "spoolman", "Spoolman", "SPM",   "",         SM_AUTH_NONE, "",                 0 },
-  { BP_OTHER,    "other",    nullptr,    nullptr, "",         SM_AUTH_KEY,  "",                 STR_ONLINE_OTHER_SUB },
-  { BP_SPOOLY,   "spooly",   "Spooly",   "SPY",   SPOOLY_URL, SM_AUTH_KEY,  SPOOLY_ACCOUNT_URL, STR_ONLINE_SPOOLY_SUB },
+  { BP_SPOOLMAN, "spoolman", "Spoolman", "SPM",   "",         SM_AUTH_NONE, "",                 0,                    false },
+  { BP_OTHER,    "other",    nullptr,    nullptr, "",         SM_AUTH_KEY,  "",                 STR_ONLINE_OTHER_SUB, false },
+  { BP_SPOOLY,   "spooly",   "Spooly",   "SPY",   SPOOLY_URL, SM_AUTH_KEY,  SPOOLY_ACCOUNT_URL, STR_ONLINE_SPOOLY_SUB, true },
 };
 
 static const BackendProfileKeys KEYS[BP_COUNT] = {
@@ -84,6 +84,8 @@ const char* backendProfileBadge() {
   const BackendProfile& p = backendProfile(s_profile);
   return p.badge ? p.badge : s_other_badge;
 }
+
+bool backendProfileFixedTags() { return backendProfile(s_profile).fixed_tags; }
 
 const char* backendProfileHeaderName() {
   const BackendProfile& p = backendProfile(s_profile);

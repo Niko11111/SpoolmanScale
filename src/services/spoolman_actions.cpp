@@ -21,6 +21,7 @@
 #include "ui/date_display.h"
 #include "lang.h"
 #include "services/backend.h"
+#include "services/backend_profiles.h"
 #include "services/server_reach.h"
 #include "services/spool_cache.h"
 #include "services/time_service.h"
@@ -291,6 +292,7 @@ bool syncHwUidField(int spool_id, const char* scanned) {
   // that cannot. This runs on every lookup that found a spool, so a spool
   // whose uids are already on file has to cost nothing at all.
   if (!g_hw_uid_write || spool_id <= 0)  return false;
+  if (backendProfileFixedTags())         return false;   // no Happy Hare reads there
   if (backendMode() != BACKEND_SPOOLMAN) return false;
   if (!wifi_ok)                          return false;
   // Nothing on the reader. There is no uid to report and no spool this could
