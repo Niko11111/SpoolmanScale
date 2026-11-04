@@ -56,6 +56,24 @@ static inline const char* accentFoldFor(const unsigned char* p, size_t len) {
   return NULL;
 }
 
+// Takes the trademark, registered and copyright signs out of `s`, in place.
+// No label font has them and they say nothing on a spool: "Panchroma™ Marble"
+// printed a box after the first word.
+static inline void labelDropMarks(char* s) {
+  if (!s) return;
+  static const char* const MARKS[] = { "\xE2\x84\xA2", "\xC2\xAE", "\xC2\xA9" };
+  char* out = s;
+  for (const char* p = s; *p; ) {
+    bool mark = false;
+    for (const char* m : MARKS) {
+      const size_t len = strlen(m);
+      if (strncmp(p, m, len) == 0) { p += len; mark = true; break; }
+    }
+    if (!mark) *out++ = *p++;
+  }
+  *out = '\0';
+}
+
 // Copies `in` into `out` (n bytes, always NUL-terminated) with the accents
 // folded onto their base letters. True when at least one letter changed.
 // A sequence the room does not hold ends the copy on a character boundary.

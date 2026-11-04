@@ -11,6 +11,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/backend.h"
+#include "services/accent_fold.h"
 #include "services/label_draw.h"
 #include "services/label_facts.h"
 #include "services/label_tape.h"
@@ -765,8 +766,19 @@ void labelQrForFilament(const SpoolLabelData& spool, char* out, size_t n) {
   else                    snprintf(out, n, "%s/filament/show/%d", base, filament_id);
 }
 
+// The spool's texts as a label prints them: see labelDropMarks().
+static SpoolLabelData withoutMarks(const SpoolLabelData& in) {
+  SpoolLabelData d = in;
+  labelDropMarks(d.vendor);
+  labelDropMarks(d.material);
+  labelDropMarks(d.name);
+  labelDropMarks(d.location);
+  return d;
+}
+
 bool labelRenderFilament(const LabelPrinterConfig& printer, const LabelLayout& layout,
-                         const SpoolLabelData& spool, LabelRaster* out) {
+                         const SpoolLabelData& in, LabelRaster* out) {
+  const SpoolLabelData spool = withoutMarks(in);
   // The tape's own arrangement, without the spool's number: see label_tape.h.
   if (labelPrinterIsTape(printer.model)) return labelRenderTape(printer, spool, false, "filament", out);
   char qr[LABEL_QR_LEN];
@@ -783,7 +795,8 @@ bool labelRenderFilament(const LabelPrinterConfig& printer, const LabelLayout& l
 }
 
 bool labelRenderSpool(const LabelPrinterConfig& printer, const LabelLayout& layout,
-                      const SpoolLabelData& spool, LabelRaster* out) {
+                      const SpoolLabelData& in, LabelRaster* out) {
+  const SpoolLabelData spool = withoutMarks(in);
   // The tape's own arrangement: maker, material, name and the number.
   if (labelPrinterIsTape(printer.model)) return labelRenderTape(printer, spool, true, "spool", out);
   char qr[LABEL_QR_LEN];

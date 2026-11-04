@@ -39,6 +39,14 @@ int main() {
   assert(!accentFold("ab", tiny, 1) && tiny[0] == 0);
   assert(!accentFold(nullptr, tiny, sizeof(tiny)) && tiny[0] == 0);
   assert(!accentFold("a", nullptr, 0));
+  // The marks no label font has come out, whatever stands around them.
+  char marks[64] = "Panchroma\xE2\x84\xA2 Marble\xC2\xAE \xC2\xA9 Grün";
+  labelDropMarks(marks);
+  assert(strcmp(marks, "Panchroma Marble  Grün") == 0);
+  char only[8] = "\xE2\x84\xA2";
+  labelDropMarks(only);
+  assert(only[0] == 0);
+  labelDropMarks(nullptr);
   return 0;
 }
 '''
