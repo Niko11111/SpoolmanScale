@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string.h>
+#include <strings.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -187,7 +189,18 @@ int tagCreateTare(const TagCreateInput& in, const TagFilamentPlan& plan,
 
 // Whether text begins with word as a whole word: "Tough Cyan" begins with
 // "Tough", "Tough+ Cyan" does not. Bambu sells both lines.
-bool tagCreateStartsWithWord(const char* text, const char* word);
+inline bool tagCreateStartsWithWord(const char* text, const char* word) {
+  if (!text || !word || !word[0]) return false;
+  const size_t n = strlen(word);
+  if (strncasecmp(text, word, n) != 0) return false;
+  return text[n] == '\0' || text[n] == ' ' || text[n] == '-';
+}
+
+// Whether the colour's name opens with the product line itself, as Bambu Lab's
+// translucent colours do.
+inline bool tagCreateColorCarriesLine(const TagCreateInput& in) {
+  return tagCreateStartsWithWord(in.color_name_en, in.subtype);
+}
 
 // Whether a filament name in the Spoolman style ("Tough+ Cyan", or with the
 // material in front) names the tag's product. The colour is compared by the

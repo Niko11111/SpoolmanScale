@@ -97,13 +97,6 @@ void tagCreateColorList(const TagCreateInput& in, char* out, size_t out_size) {
     o += snprintf(out + o, out_size - o, i ? ",%s" : "%s", in.colors_hex[i]);
 }
 
-bool tagCreateStartsWithWord(const char* text, const char* word) {
-  if (!text || !word || !word[0]) return false;
-  const size_t n = strlen(word);
-  if (strncasecmp(text, word, n) != 0) return false;
-  return text[n] == '\0' || text[n] == ' ' || text[n] == '-';
-}
-
 // "PLA Tough+ Cyan" names the material too; what follows it counts.
 static const char* afterMaterial(const char* name, const char* material) {
   if (!material[0] || !tagCreateStartsWithWord(name, material)) return name;
@@ -182,8 +175,9 @@ static const char* colorWord(const TagCreateInput& in) {
 
 void tagCreateSpoolmanName(const TagCreateInput& in, char* out, size_t out_size) {
   // SpoolmanDB's style: the product line in front, except where it names the
-  // filament by its colour alone.
-  if (in.subtype[0] && !tagCreateNamedByColor(in)) snprintf(out, out_size, "%s %s", in.subtype, colorWord(in));
+  // filament by its colour alone, or the colour's name already opens with the
+  // line ("Translucent Gray", which came out as "Translucent Translucent Gray").
+  if (in.subtype[0] && !tagCreateNamedByColor(in) && !tagCreateColorCarriesLine(in)) snprintf(out, out_size, "%s %s", in.subtype, colorWord(in));
   else                                             snprintf(out, out_size, "%s", colorWord(in));
 }
 
