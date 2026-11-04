@@ -1,7 +1,9 @@
 #include "spoolman_api.h"
+#include "app_config.h"
 #include "services/backend.h"
 #include "services/backend_profiles.h"
 #include "services/backend_http.h"
+#include "services/user_agent_rules.h"
 #include "hardware/sd_logger.h"
 #include "http_progress.h"
 #include "tag_uid.h"
@@ -33,9 +35,17 @@ static bool hasBaseUrl(const char* base_url) {
 // behind it through this file too, and that server has nothing to do with
 // these settings. And only to the address the secret was entered for: a new
 // address gets none until the access is entered again for it.
+//
+// The name goes out with or without access, so that a server can tell a scale
+// from any other ESP32. setUserAgent(), because HTTPClient drops a "User-Agent"
+// given to addHeader() without a word.
 static void smBegin(BackendHttp& http, const String& url) {
   http.begin(url);
-  if (backendMode() != BACKEND_SPOOLMAN || !spoolmanAuthSendsTo(url.c_str())) return;
+  if (backendMode() != BACKEND_SPOOLMAN) return;
+  char user_agent[USER_AGENT_LEN];
+  userAgentFor(FW_VERSION, user_agent, sizeof(user_agent));
+  http.setUserAgent(user_agent);
+  if (!spoolmanAuthSendsTo(url.c_str())) return;
   switch (spoolmanAuthMode()) {
     case SM_AUTH_KEY:
       http.addHeader("X-API-Key", spoolmanAuthSecret());
