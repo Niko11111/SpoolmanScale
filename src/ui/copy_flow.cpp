@@ -30,6 +30,7 @@
 #include "ui/loading_overlay.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/navigation.h"
+#include "ui/price_pad.h"
 #include "ui/spoolman_lookup.h"
 #include "services/spool_tare.h"
 #include "ui/theme.h"
@@ -78,7 +79,7 @@ static bool  copy_fetch_pending      = false;   // copy entry: active or archive
 static bool  copy_fetch_archived     = false;
 static bool  copy_create_pending     = false;   // copy confirm OK
 static int   copy_create_sid = 0, copy_create_fid = 0;
-static float copy_create_ini = 0.0f, copy_create_spw = 0.0f;
+static float copy_create_ini = 0.0f, copy_create_spw = 0.0f, copy_create_price = 0.0f;
 static int   copy_row_refresh_pending = -1;
 static bool  copy_reload_pending      = false;  // "Reload" under the copy list
 // The list on screen is the one the cache holds, so it gets the strip.
@@ -128,7 +129,7 @@ bool finishCopyFlow(int new_spool_id, const char* tray_uuid_override) {
 
 // Creates the new spool from the template, then attaches the tag.
 void doCopySpoolCreate(int template_spool_id, int template_filament_id,
-                       float template_initial, float template_spool_w) {
+                       float template_initial, float template_spool_w, float price) {
   if (!wifi_ok) return;
   // The template's empty spool is one someone stored, at whichever level
   // spoolTare() found it: the reading is weighed against it, and a full copy
@@ -150,9 +151,20 @@ void doCopySpoolCreate(int template_spool_id, int template_filament_id,
     // A spool the kept list does not have, and a row for it cannot be made up
     // from here. The stamp would catch it; BamBuddy has none.
     spoolCacheForget("spool created by copy");
+    // Before the link, which leaves for the main screen. A price that did not
+    // arrive costs the spool nothing, it only has to be said.
+    bool price_lost = false;
+    if (price > 0.0f) {
+      const int pc = backendPatchSpoolPrice(new_id, price, (float)start.initial_g);
+      price_lost = !backendWriteOk(pc);
+      if (price_lost) logSDf("Copy: price %.2f for spool %d -> HTTP %d", price, new_id, pc);
+    }
     // The spool exists either way; a tag that could not be bound has said so
     // on the status line, and that must stay readable.
-    if (finishCopyFlow(new_id)) statusMessageShow(T(STR_COPY_OK), UI_COL_GOOD);
+    if (finishCopyFlow(new_id)) {
+      if (price_lost) statusMessageShow(T(STR_TAGNEW_PRICE_LOST), UI_COL_WARN);
+      else            statusMessageShow(T(STR_COPY_OK), UI_COL_GOOD);
+    }
     return;
   }
   Serial.printf("Copy spool POST failed: HTTP %d\n", code);
@@ -805,15 +817,17 @@ static void copyRowRefresh(int idx) {
 }
 
 void copyCreateRequest(int template_spool_id, int template_filament_id,
-                       float template_initial, float template_spool_w) {
+                       float template_initial, float template_spool_w, float price) {
   copy_create_sid = template_spool_id;
   copy_create_fid = template_filament_id;
   copy_create_ini = template_initial;
   copy_create_spw = template_spool_w;
+  copy_create_price = price;
   copy_create_pending = true;
 }
 
 void copyFlowDeferredActions() {
+  pricePadTick();   // the copy confirmation has one too
   copyFetchTick();
   if (copy_reload_pending) {
     copy_reload_pending = false;
@@ -847,6 +861,7 @@ void copyFlowDeferredActions() {
     closeCopyConfirmPopup();
     closeCopyListPopup();
     closeCopyEntryPopup();
-    doCopySpoolCreate(copy_create_sid, copy_create_fid, copy_create_ini, copy_create_spw);
+    doCopySpoolCreate(copy_create_sid, copy_create_fid, copy_create_ini, copy_create_spw,
+                      copy_create_price);
   }
 }

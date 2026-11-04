@@ -11,6 +11,7 @@
 #include "hardware/sd_logger.h"
 #include "services/spool_start.h"
 #include "lang.h"
+#include "ui/price_pad.h"
 #include "ui/theme.h"
 
 // ============================================================
@@ -25,6 +26,10 @@
 #define COPY_CARD_LINE_H   26
 #define COPY_CARD_SWATCH   18
 #define COPY_CARD_GAP      8
+// The answer row: create and cancel on either side, the price between them,
+// as on the card for a new spool.
+#define COPY_PRICE_W       80
+#define COPY_ANSWER_W      ((UI_POPUP_W - 2 * UI_CARD_ROW_X - 2 * COPY_CARD_GAP - COPY_PRICE_W) / 2)
 
 lv_obj_t *scr_copy_confirm = nullptr;  // confirm popup
 
@@ -34,9 +39,50 @@ static int   copy_template_spool_id    = 0;
 static float copy_template_initial     = 0;
 static float copy_template_spool_w     = 0;
 static char  copy_template_name[64]    = "";
+// What the new spool cost, 0 for none: it is bought now, so the template's says
+// nothing about it.
+static float     s_copy_price     = 0.0f;
+static lv_obj_t *s_lbl_copy_price = nullptr;
 
 void closeCopyConfirmPopup() {
+  closePricePad();
+  s_lbl_copy_price = nullptr;
   releaseScreen(&scr_copy_confirm);
+}
+
+// The price button shows what was typed in, or that there is none yet.
+static void refreshCopyPrice() {
+  if (!s_lbl_copy_price) return;
+  if (s_copy_price <= 0.0f) { lv_label_set_text(s_lbl_copy_price, T(STR_TAGNEW_PRICE_BTN)); return; }
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%.2f", s_copy_price);
+  lv_label_set_text(s_lbl_copy_price, buf);
+}
+
+static void onCopyPrice(float price) {
+  s_copy_price = price;
+  refreshCopyPrice();
+}
+
+static void buildCopyPriceButton(lv_obj_t *box) {
+  lv_obj_t *btn = lv_btn_create(box);
+  lv_obj_set_size(btn, COPY_PRICE_W, UI_POPUP_BTN_H);
+  lv_obj_set_pos(btn, UI_CARD_ROW_X + COPY_ANSWER_W + COPY_CARD_GAP, UI_CARD_ROW_Y);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW), 0);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
+  lv_obj_set_style_border_width(btn, 1, 0);
+  lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_LINE), 0);
+  lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
+  lv_obj_set_style_shadow_width(btn, 0, 0);
+  lv_obj_add_event_cb(btn, [](lv_event_t *) {
+    logSD("BTN: CopyConfirm -> Price");
+    showPricePad(s_copy_price, onCopyPrice);
+  }, LV_EVENT_CLICKED, NULL);
+  s_lbl_copy_price = lv_label_create(btn);
+  lv_obj_set_style_text_color(s_lbl_copy_price, lv_color_hex(UI_COL_INK_2), 0);
+  lv_obj_set_style_text_font(s_lbl_copy_price, UI_FONT_SMALL, 0);
+  lv_obj_center(s_lbl_copy_price);
+  refreshCopyPrice();
 }
 
 // The copy confirmation, on the house card for a question (400 x 260, the
@@ -48,6 +94,7 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
                           float template_remaining, float template_initial, float template_spool_w,
                           const CopyLook* look) {
   closeCopyConfirmPopup();
+  s_copy_price = 0.0f;
   copy_template_spool_id    = template_spool_id;
   copy_template_filament_id = template_filament_id;
   copy_template_initial      = template_initial;
@@ -163,7 +210,7 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
 
   // The answers: create on the left in green, as every confirming answer is.
   lv_obj_t *btn_ok = lv_btn_create(box);
-  lv_obj_set_size(btn_ok, UI_POPUP_BTN_W, UI_POPUP_BTN_H);
+  lv_obj_set_size(btn_ok, COPY_ANSWER_W, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn_ok, UI_CARD_ROW_X, UI_CARD_ROW_Y);
   lv_obj_set_style_bg_color(btn_ok, lv_color_hex(UI_COL_OK_BG), 0);
   lv_obj_set_style_bg_color(btn_ok, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
@@ -173,7 +220,7 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
     // The handler closes the three popups - this button's own among them -
     // and then creates the spool from the loop.
     copyCreateRequest(copy_template_spool_id, copy_template_filament_id,
-                      copy_template_initial, copy_template_spool_w);
+                      copy_template_initial, copy_template_spool_w, s_copy_price);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
   lv_label_set_text(lbl_ok, T(STR_COPY_CARD_CREATE));
@@ -181,9 +228,11 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
   lv_obj_set_style_text_font(lbl_ok, UI_FONT_TITLE, 0);
   lv_obj_center(lbl_ok);
 
+  buildCopyPriceButton(box);
+
   lv_obj_t *btn_no = lv_btn_create(box);
-  lv_obj_set_size(btn_no, UI_POPUP_BTN_W, UI_POPUP_BTN_H);
-  lv_obj_set_pos(btn_no, UI_POPUP_W - UI_POPUP_BTN_W - UI_CARD_ROW_X, UI_CARD_ROW_Y);
+  lv_obj_set_size(btn_no, COPY_ANSWER_W, UI_POPUP_BTN_H);
+  lv_obj_set_pos(btn_no, UI_POPUP_W - COPY_ANSWER_W - UI_CARD_ROW_X, UI_CARD_ROW_Y);
   lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_BAD_BG), 0);
   lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_no, UI_RADIUS_BTN, 0);

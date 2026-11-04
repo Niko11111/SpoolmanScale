@@ -94,7 +94,7 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id, const
                           float template_remaining, float template_initial, float template_spool_w,
                           const CopyLook* look = nullptr);
 void doCopySpoolCreate(int template_spool_id, int template_filament_id,
-                       float template_initial, float template_spool_w);
+                       float template_initial, float template_spool_w, float price);
 
 void hideSpoolFlowOverlays();
 void deleteSpoolFlowOverlays();

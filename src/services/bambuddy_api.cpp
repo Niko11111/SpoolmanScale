@@ -864,6 +864,18 @@ int bbPatchSpoolFields(const char* base_url, const char* api_key, int spool_id,
   return sendJson("PATCH", url, api_key, out, timeout_ms, nullptr);
 }
 
+int bbPatchSpoolCost(const char* base_url, const char* api_key, int spool_id,
+                     float cost_per_kg, uint32_t timeout_ms) {
+  if (!hasBaseUrl(base_url) || spool_id <= 0 || cost_per_kg <= 0.0f) return -1;
+  char url[192];
+  snprintf(url, sizeof(url), "%s%s/spools/%d", base_url, bbInventoryBase(), spool_id);
+  JsonDocument body;
+  body["cost_per_kg"] = roundf(cost_per_kg * 100.0f) / 100.0f;
+  String out;
+  serializeJson(body, out);
+  return sendJson("PATCH", url, api_key, out, timeout_ms, nullptr);
+}
+
 int bbPatchLastDried(const char* base_url, const char* api_key, int spool_id,
                      const char* iso, uint32_t timeout_ms) {
   if (!hasBaseUrl(base_url) || spool_id <= 0 || !iso || !iso[0]) return -1;

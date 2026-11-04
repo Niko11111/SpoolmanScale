@@ -210,6 +210,11 @@ int  bbPatchDryingNote(const char* base_url, const char* api_key, int spool_id,
 int  bbPatchDriedNote(const char* base_url, const char* api_key, int spool_id,
        const char* iso, uint32_t timeout_ms = 8000);
 
+// What a spool cost per kilogram, on a spool that exists. Same route in both
+// inventory modes.
+int  bbPatchSpoolCost(const char* base_url, const char* api_key, int spool_id,
+       float cost_per_kg, uint32_t timeout_ms = 8000);
+
 // Writes BamBuddy's own drying date, last_dried_at (#2863). Only for a server
 // where bbHasDriedField() said yes; BamBuddy clears the temperature and
 // hours of an AMS drying with it, as its own spool form does.

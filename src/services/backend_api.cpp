@@ -929,8 +929,23 @@ static int filamentForSpool(const TagCreateInput& in, const TagFilamentPlan& pla
   return (code == 200 || code == 201) ? -1 : code;
 }
 
+int backendPatchSpoolPrice(int spool_id, float price, float label_weight_g, uint32_t timeout_ms) {
+  HttpStallTime stall(__func__);   // the loop stands still for this call
+  if (price <= 0.0f || spool_id <= 0) return 200;
+  switch (backendMode()) {
+    case BACKEND_FILAMAN:
+      return filamanPatchSpoolPrice(backendBaseUrl(), filamanApiKey(), spool_id, price, timeout_ms);
+    case BACKEND_BAMBUDDY:
+      if (label_weight_g <= 0.0f) return notSupported("PatchSpoolPrice");
+      return bbPatchSpoolCost(backendBaseUrl(), bambuddyApiKey(), spool_id,
+                              price * 1000.0f / label_weight_g, timeout_ms);
+    default:
+      return spoolmanPatchSpoolPrice(backendBaseUrl(), spool_id, price, timeout_ms);
+  }
+}
+
 // The price on a spool that exists now. Its own request: the create calls
-// are shared with the copy flow, which has no price.
+// know no price.
 static void patchSpoolPrice(int spool_id, float price, TagCreateResult* out) {
   if (price <= 0.0f || spool_id <= 0) return;
   const int code = backendIsFilaMan()
