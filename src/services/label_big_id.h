@@ -31,3 +31,8 @@ struct BigIdContent {
 };
 
 void labelDrawBigId(lv_obj_t* canvas, const BigIdBox& box, const BigIdContent& c);
+// The smallest share, in LABEL_ID_SHARE_STEP steps, at which this number is as
+// large as it gets on this label: above it the share changes nothing, the width
+// or the height is used up. 0 when no share applies, with no number to draw or
+// nothing beside it.
+int labelBigIdShareLimit(const BigIdBox& box, const BigIdContent& c);

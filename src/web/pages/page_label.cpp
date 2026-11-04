@@ -205,6 +205,8 @@ static String stateJson(LabelKind kind) {
   // The switches that would print nothing: once the backend has answered,
   // so a value still on its way is not called missing.
   const LabelLayout l = labelLayoutLoad(kind);
+  j += F(",\"idMax\":");
+  j += String(labelIdShareLimit(c, l, s));
   j += F(",\"empty\":");
   j += String((unsigned long)(have && labelSpoolDatesKnown() ? labelEmptyFields(s, l.options) : 0));
   j += F(",\"lacks\":");
@@ -304,7 +306,9 @@ static void templateCard(String& h) {
   h += String(LABEL_ID_SHARE_MIN);
   h += F("' max='");
   h += String(LABEL_ID_SHARE_MAX);
-  h += F("' step='5'><output id='lisv'></output></div></div><div class='field'><label>");
+  h += F("' step='");
+  h += String(LABEL_ID_SHARE_STEP);
+  h += F("'><output id='lisv'></output></div></div><div class='field'><label>");
   h += T(STR_W_L_FIELDS);
   h += F("</label><div id='lf' class='lb-sw'>");
   for (int i = 0; i < FIELD_ROW_COUNT; i++) {
@@ -448,10 +452,13 @@ static void scriptTemplate(String& h) {
          "IC[p][up?1:0].split(' ').forEach(function(t){const v=t.slice(1).split(',');"
          "s+='<rect x=\"'+v[0]+'\" y=\"'+v[1]+'\" width=\"'+v[2]+'\" height=\"'+v[3]+'\" fill=\"currentColor\"'"
          "+(t[0]==='l'?' fill-opacity=\".45\"':'')+'/>';});return s+'</svg>';}"
-         "function tiles(d){const up=!!(d.options&PB);"
-         "$('lish').style.display=bigId(d.preset)?'':'none';"
-         "if(document.activeElement!==$('lis'))$('lis').value=d.idShare;"
-         "$('lisv').textContent=d.idShare+' %';"
+         // The slider ends where the number stops growing, and goes when it
+         // would move nothing. The share saved stays: other numbers may use it.
+         "function shareRow(d){const r=$('lis'),on=bigId(d.preset)&&d.idMax>+r.min;"
+         "$('lish').style.display=on?'':'none';if(!on)return;r.max=d.idMax;"
+         "if(document.activeElement!==r)r.value=Math.min(d.idShare,d.idMax);"
+         "$('lisv').textContent=r.value+' %';}"
+         "function tiles(d){const up=!!(d.options&PB);shareRow(d);"
          "document.querySelectorAll('#lkind .btab').forEach(function(b){b.classList.toggle('on',+b.dataset.k===d.kind);});"
          "$('lkh').style.display=d.kind===1?'':'none';"
          "$('lfq').style.display=d.kind===1&&!d.filPage&&!d.tape?'':'none';"

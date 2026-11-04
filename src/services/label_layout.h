@@ -77,6 +77,7 @@ struct LabelLayout {
 // to the text, so moving this moves the two against each other.
 #define LABEL_ID_SHARE_MIN       30
 #define LABEL_ID_SHARE_MAX       70
+#define LABEL_ID_SHARE_STEP       5
 #define LABEL_ID_SHARE_TOP       60
 #define LABEL_ID_SHARE_SIDE      50
 

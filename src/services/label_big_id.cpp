@@ -123,14 +123,28 @@ static void drawLines(lv_obj_t* canvas, const BigIdBox& a, const BigIdLines& l) 
   }
 }
 
+// The number's height across the top at this share: its width and the height
+// the lines need at the least hold it as well.
+static lv_coord_t topHeight(const BigIdBox& box, const BigIdLines& lines, const char* id, int share) {
+  lv_coord_t room = box.h - linesLeastHeight(lines);
+  if (lines.n) room = LV_MIN(room, box.h * share / 100);
+  return labelDigitsFitHeight(id, box.w, room);
+}
+
+// The number's height at the right edge at this share: the width the text
+// keeps and the label's height hold it as well.
+static lv_coord_t sideHeight(const BigIdBox& box, const char* id, int share) {
+  const lv_coord_t wide = box.w * share / 100;
+  const lv_coord_t most = box.w - dots(LB_TEXT_MIN_W_PX) - 2 * dots(LB_GAP_PX);
+  return labelDigitsFitHeight(id, LV_MIN(wide, most), box.h);
+}
+
 // The number across the top, the lines under it. Alone it stands in the
 // middle of the whole label.
 static void drawOnTop(lv_obj_t* canvas, const BigIdBox& box, const BigIdContent& c, const char* id) {
   BigIdLines lines;
   collectLines(c, box.w, &lines);
-  lv_coord_t room = box.h - linesLeastHeight(lines);
-  if (lines.n) room = LV_MIN(room, box.h * labelIdShareFor(c.layout->id_share, c.layout->preset) / 100);
-  const lv_coord_t height = labelDigitsFitHeight(id, box.w, room);
+  const lv_coord_t height = topHeight(box, lines, id, labelIdShareFor(c.layout->id_share, c.layout->preset));
   const lv_coord_t top = lines.n ? box.y : box.y + (box.h - height) / 2;
   drawBigDigits(canvas, box.x + (box.w - labelDigitsWidth(id, height)) / 2, top, height, id);
   const lv_coord_t used = height ? height + dots(LB_GAP_PX) : 0;
@@ -140,9 +154,7 @@ static void drawOnTop(lv_obj_t* canvas, const BigIdBox& box, const BigIdContent&
 // The number at the right edge, as wide as its share allows and no taller
 // than the label; the lines to its left, in the full height.
 static void drawOnSide(lv_obj_t* canvas, const BigIdBox& box, const BigIdContent& c, const char* id) {
-  const lv_coord_t share = box.w * labelIdShareFor(c.layout->id_share, c.layout->preset) / 100;
-  const lv_coord_t most = box.w - dots(LB_TEXT_MIN_W_PX) - 2 * dots(LB_GAP_PX);
-  const lv_coord_t height = labelDigitsFitHeight(id, LV_MIN(share, most), box.h);
+  const lv_coord_t height = sideHeight(box, id, labelIdShareFor(c.layout->id_share, c.layout->preset));
   const lv_coord_t width = labelDigitsWidth(id, height);
   drawBigDigits(canvas, box.x + box.w - width, box.y + (box.h - height) / 2, height, id);
   const lv_coord_t text_w = box.w - (width ? width + 2 * dots(LB_GAP_PX) : 0);
@@ -151,13 +163,38 @@ static void drawOnSide(lv_obj_t* canvas, const BigIdBox& box, const BigIdContent
   drawLines(canvas, BigIdBox{ box.x, box.y, text_w, box.h }, lines);
 }
 
+static void idText(const BigIdContent& c, char* id, size_t n) {
+  id[0] = '\0';
+  if (c.d->id > 0) snprintf(id, n, "%d", c.d->id);
+}
+
+// Nothing beside the number: it takes the whole label either way.
+static bool hasText(const BigIdContent& c) {
+  return c.n > 0 || (labelLayoutHas(*c.layout, LF_VENDOR) && c.d->vendor[0]) ||
+         (labelLayoutHas(*c.layout, LF_MATERIAL) && c.d->material[0]) ||
+         (labelLayoutHas(*c.layout, LF_NAME) && c.d->name[0]);
+}
+
 void labelDrawBigId(lv_obj_t* canvas, const BigIdBox& box, const BigIdContent& c) {
-  char id[LB_ID_LEN] = "";
-  if (c.d->id > 0) snprintf(id, sizeof(id), "%d", c.d->id);
-  // Nothing beside the number: it takes the whole label either way.
-  const bool any = c.n > 0 || (labelLayoutHas(*c.layout, LF_VENDOR) && c.d->vendor[0]) ||
-                   (labelLayoutHas(*c.layout, LF_MATERIAL) && c.d->material[0]) ||
-                   (labelLayoutHas(*c.layout, LF_NAME) && c.d->name[0]);
-  if (c.layout->preset == LABEL_PRESET_BIG_ID_SIDE && any) drawOnSide(canvas, box, c, id);
+  char id[LB_ID_LEN];
+  idText(c, id, sizeof(id));
+  if (c.layout->preset == LABEL_PRESET_BIG_ID_SIDE && hasText(c)) drawOnSide(canvas, box, c, id);
   else drawOnTop(canvas, box, c, id);
+}
+
+int labelBigIdShareLimit(const BigIdBox& box, const BigIdContent& c) {
+  char id[LB_ID_LEN];
+  idText(c, id, sizeof(id));
+  if (!id[0] || !hasText(c)) return 0;
+  const bool side = c.layout->preset == LABEL_PRESET_BIG_ID_SIDE;
+  BigIdLines lines;
+  lines.n = 0;
+  if (!side) collectLines(c, box.w, &lines);
+  const auto heightAt = [&](int share) {
+    return side ? sideHeight(box, id, share) : topHeight(box, lines, id, share);
+  };
+  const lv_coord_t largest = heightAt(LABEL_ID_SHARE_MAX);
+  for (int share = LABEL_ID_SHARE_MIN; share < LABEL_ID_SHARE_MAX; share += LABEL_ID_SHARE_STEP)
+    if (heightAt(share) >= largest) return share;
+  return LABEL_ID_SHARE_MAX;
 }

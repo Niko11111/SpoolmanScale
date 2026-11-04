@@ -523,6 +523,12 @@ static const lv_font_t* nameWrapFont(const LabelArea& a, bool tall, const LabelC
 }
 
 // Every label the scale prints, laid out as `layout` says.
+// What the big number arrangements fill on a canvas of this size.
+static BigIdBox bigIdBox(lv_coord_t canvas_w, lv_coord_t canvas_h) {
+  const lv_coord_t M = dots(LR_MARGIN_PX);
+  return BigIdBox{ M, M, (lv_coord_t)(canvas_w - 2 * M), (lv_coord_t)(canvas_h - 2 * M) };
+}
+
 static bool renderLabel(const LabelPrinterConfig& printer, const LabelLayout& layout,
                         const LabelContent& c, LabelRaster* out) {
   if (!out || !c.d) return false;
@@ -561,8 +567,7 @@ static bool renderLabel(const LabelPrinterConfig& printer, const LabelLayout& la
   lv_coord_t side_qr = 0;
   LabelBody placed{ 0, true, "lines under the number" };
   if (labelPresetIsBigId(preset)) {
-    labelDrawBigId(canvas, BigIdBox{ M, M, area.w, (lv_coord_t)(ch - 2 * M) },
-                   BigIdContent{ c.d, &layout, c.lines, c.facts, c.n });
+    labelDrawBigId(canvas, bigIdBox(cw, ch), BigIdContent{ c.d, &layout, c.lines, c.facts, c.n });
   } else {
     if (preset == LABEL_PRESET_BIG_QR) {
       side_qr = turned ? drawTopQr(canvas, &area, c) : drawSideQr(canvas, &area, c);
@@ -799,6 +804,22 @@ bool labelRenderFilament(const LabelPrinterConfig& printer, const LabelLayout& l
   const LabelContent c{ &spool, f.line_ptrs, f.n, false,
                         labelLayoutHasCode(l) ? qr : nullptr, "filament", f.facts };
   return renderLabel(printer, l, c, out);
+}
+
+int labelIdShareLimit(const LabelPrinterConfig& printer, const LabelLayout& layout,
+                      const SpoolLabelData& in) {
+  if (!labelPresetIsBigId(layout.preset) || labelPrinterIsTape(printer.model)) return 0;
+  const uint16_t content_w = labelPrinterContentWidth(printer.model, printer.media_width_mm);
+  const uint16_t h = labelPrinterDotsForMm(printer.model, printer.media_length_mm);
+  setDpi(labelPrinterProfile(printer.model).dpi);
+  const bool turned = labelLayoutOption(layout, LO_PORTRAIT);
+  setTurned(turned);
+  const SpoolLabelData spool = withoutMarks(in);
+  const int capacity = labelFactCapacity(layout, printer.media_width_mm, printer.media_length_mm);
+  LabelFactList l;
+  labelSpoolFacts(layout, spool, capacity, &l);
+  return labelBigIdShareLimit(bigIdBox(turned ? h : content_w, turned ? content_w : h),
+                              BigIdContent{ &spool, &layout, l.line_ptrs, l.facts, l.n });
 }
 
 bool labelRenderSpool(const LabelPrinterConfig& printer, const LabelLayout& layout,

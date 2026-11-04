@@ -71,6 +71,10 @@ bool labelRenderSpool(const LabelPrinterConfig& printer, const LabelLayout& layo
 
 // What the QR code on a spool label carries for the active backend: the
 // spool's page on Spoolman, FilaMan and BamBuddy, so a phone opens it.
+// How far the number's share does anything on this printer's label, for this
+// spool: see labelBigIdShareLimit(). 0 outside the big number arrangements.
+int labelIdShareLimit(const LabelPrinterConfig& printer, const LabelLayout& layout,
+                      const SpoolLabelData& spool);
 void labelQrForSpool(int spool_id, char* out, size_t n);
 
 // The filament's label for the spool's filament, with a code to the
