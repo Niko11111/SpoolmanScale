@@ -239,6 +239,7 @@ lv_obj_t *btn_copy = nullptr;
 static bool id_popup_is_bambu = false;  // shared between numpad lambdas
 static bool id_popup_is_copy   = false;  // true = copy flow, false = link flow
 static void idPadSay(const char *text, bool refusal);
+static void showLinkConfirmPopup(int idx);
 static void idPadRelease();
 // Six digits: more spools than any inventory holds.
 #define ID_PAD_MAX_DIGITS 6
@@ -2230,6 +2231,16 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     showWarnPopupA(entered_id, a_tag.c_str(), is_bambu, "", a_add);
     return;
   }
+  // A typed number can be a wrong number, so it gets the question a tap on the
+  // list gets: which spool it is, and whether to link it. It went straight to
+  // the link unless the spool was bound or did not match.
+  for (int i = 0; i < link_spool_count; i++) {
+    if (link_spools[i].id != entered_id) continue;
+    link_flow_is_bambu = is_bambu;
+    showLinkConfirmPopup(i);
+    return;
+  }
+  logSDf("Link by id: no room for the row of spool %d, linked without asking", entered_id);
   doLinkPatch(entered_id, is_bambu);
 }
 
@@ -2461,8 +2472,6 @@ static void linkCopyConfirmFromRow(int cidx) {
   copy_confirm_pending = true;
 }
 
-static void showLinkConfirmPopup(int idx);
-
 // What a tap on a row of the spool list leads to, once the row is true.
 static void linkRowChosen(int idx) {
   if (copy_flow_via_list) linkCopyConfirmFromRow(idx);
@@ -2473,6 +2482,13 @@ static void linkRowChosen(int idx) {
 // under the two lines of spool info, and the room kept under them.
 #define LINK_CONFIRM_ROWS_Y    96
 #define LINK_CONFIRM_ROWS_GAP   6
+// The spool on its two lines, the same room the two wrapped lines had.
+#define LINK_CONFIRM_ROW_W    400
+#define LINK_CONFIRM_ROW_H     22
+#define LINK_CONFIRM_NAME_Y    46
+#define LINK_CONFIRM_WEIGHT_Y  70
+#define LINK_CONFIRM_SWATCH    18
+#define LINK_CONFIRM_SWATCH_GAP 8
 
 static void showLinkConfirmPopup(int idx) {
   if (idx < 0 || idx >= link_spool_count) return;
@@ -2526,20 +2542,41 @@ static void showLinkConfirmPopup(int idx) {
   lv_obj_set_style_text_align(lbl_q, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_q, LV_ALIGN_TOP_MID, 0, 16);
 
-  // Spulen-Info
-  char info[80];
+  // The spool: its colour and name as one centred group, its weight below.
+  lv_obj_t *row = lv_obj_create(box);
+  lv_obj_remove_style_all(row);
+  lv_obj_set_size(row, LINK_CONFIRM_ROW_W, LINK_CONFIRM_ROW_H);
+  lv_obj_align(row, LV_ALIGN_TOP_MID, 0, LINK_CONFIRM_NAME_Y);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(row, LINK_CONFIRM_SWATCH_GAP, 0);
+  lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_clear_flag(row, LV_OBJ_FLAG_CLICKABLE);
+  if (s.color_hex[0]) {
+    lv_obj_t *sw = lv_obj_create(row);
+    lv_obj_set_size(sw, LINK_CONFIRM_SWATCH, LINK_CONFIRM_SWATCH);
+    lv_obj_set_style_radius(sw, 4, 0);
+    lv_obj_set_style_border_width(sw, 1, 0);
+    lv_obj_set_style_border_color(sw, lv_color_hex(UI_COL_POPUP_BORDER), 0);
+    lv_obj_set_style_pad_all(sw, 0, 0);
+    lv_obj_clear_flag(sw, LV_OBJ_FLAG_SCROLLABLE);
+    swatchPaintHex(sw, s.color_hex);
+  }
   char joined[64];
   joinMaterialName(s.material, s.name, joined, sizeof(joined));
-  snprintf(info, sizeof(info), "#%d  %s\n%.0f g / %.0f g",
-    s.id, joined, s.remaining, s.total);
+  char name_line[80];
+  snprintf(name_line, sizeof(name_line), "#%d  %s", s.id, joined);
+  lv_obj_t *lbl_name = labelOneLine(row, name_line, &lv_font_montserrat_ext_16,
+                                    LINK_CONFIRM_ROW_W - LINK_CONFIRM_SWATCH - LINK_CONFIRM_SWATCH_GAP);
+  lv_obj_set_style_text_color(lbl_name, lv_color_hex(UI_COL_INK_2), 0);
+
+  char weight_line[32];
+  snprintf(weight_line, sizeof(weight_line), "%.0f g / %.0f g", s.remaining, s.total);
   lv_obj_t *lbl_info = lv_label_create(box);
-  lv_label_set_text(lbl_info, info);
+  lv_label_set_text(lbl_info, weight_line);
   lv_obj_set_style_text_color(lbl_info, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(lbl_info, &lv_font_montserrat_ext_16, 0);
-  lv_obj_set_style_text_align(lbl_info, LV_TEXT_ALIGN_CENTER, 0);
-  lv_label_set_long_mode(lbl_info, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(lbl_info, 400);
-  lv_obj_align(lbl_info, LV_ALIGN_TOP_MID, 0, 48);
+  lv_obj_align(lbl_info, LV_ALIGN_TOP_MID, 0, LINK_CONFIRM_WEIGHT_Y);
 
   // The tag and the spool side by side, and the buttons below them move down
   // by as much. Built only when there is something to show.
