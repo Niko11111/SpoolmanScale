@@ -203,7 +203,7 @@ static lv_obj_t* label(lv_obj_t* p, const char* text, const lv_font_t* font, uin
 static void centredLine(lv_obj_t* box, const char* text, const lv_font_t* font,
                         uint32_t color, int y) {
   lv_obj_t* l = label(box, text, font, color);
-  lv_obj_set_width(l, UNK_TEXT_W);
+  lv_obj_set_size(l, UNK_TEXT_W, lv_font_get_line_height(font));
   lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
   lv_obj_align(l, LV_ALIGN_TOP_MID, 0, y);
@@ -406,12 +406,13 @@ static void buildOne(lv_obj_t* box) {
   lv_obj_align(l3, LV_ALIGN_TOP_RIGHT, -UNK_X, UNK_LINE1_Y);
   lv_obj_t* l1 = label(r, c.name, UI_FONT_BODY, UI_COL_INK);
   lv_label_set_long_mode(l1, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(l1, UNK_ROW_W - UNK_TEXT_X - UNK_X - UNK_ID_W);
+  // The height too: with only a width a long name wraps onto the line below.
+  lv_obj_set_size(l1, UNK_ROW_W - UNK_TEXT_X - UNK_X - UNK_ID_W, lv_font_get_line_height(UI_FONT_BODY));
   lv_obj_set_pos(l1, UNK_TEXT_X, UNK_LINE1_Y);
   storedText(sub, sizeof(sub), c, true);
   lv_obj_t* l2 = label(r, sub, UI_FONT_SMALL, c.weight_hit ? UI_COL_GOOD : UI_COL_INK_SOFT);
   lv_label_set_long_mode(l2, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(l2, UNK_ROW_W - UNK_TEXT_X - UNK_X);
+  lv_obj_set_size(l2, UNK_ROW_W - UNK_TEXT_X - UNK_X, lv_font_get_line_height(UI_FONT_SMALL));
   lv_obj_set_pos(l2, UNK_TEXT_X, UNK_LINE2_Y);
   answerRow(box, STR_REMOTE_LINK_CONFIRM, UA_LINK_PICK);
 }
