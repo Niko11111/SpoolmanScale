@@ -32,7 +32,7 @@
 // ============================================================
 
 // ---- colours -------------------------------------------------
-#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light, bb_dark, bb_light) extern uint32_t UI_COL_##name;
+#define UI_COLOUR(name, dark, light, sm_dark, sm_light, fm_dark, fm_light, bb_dark, bb_light, sy_dark, sy_light) extern uint32_t UI_COL_##name;
 #include "theme_palette.h"
 #undef UI_COLOUR
 
@@ -56,6 +56,8 @@ enum UiThemeId : uint8_t {
   UI_THEME_FILAMAN_LIGHT  = 5,
   UI_THEME_BAMBUDDY_DARK  = 6,
   UI_THEME_BAMBUDDY_LIGHT = 7,
+  UI_THEME_SPOOLY_DARK    = 8,
+  UI_THEME_SPOOLY_LIGHT   = 9,
   UI_THEME_COUNT
 };
 
@@ -116,7 +118,7 @@ bool uiThemeCustomStore(const UiThemeCustom& c);
 UiThemeId uiThemeResolve(UiThemeId chosen, bool follow);
 // Whether switching to `to` moves the palette the next boot runs into another
 // family. Only with follow on: without it a backend has no say in the colours.
-bool uiThemeFollowMoves(BackendMode to);
+bool uiThemeFollowMoves(BackendMode to, uint8_t to_profile);
 // Whether the stored choice, resolved for the backend now active, differs
 // from the palette running: a restart would change the colours. Only with
 // follow on, for the note after a backend switch.

@@ -10,6 +10,7 @@
 
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
+#include "services/backend_profiles.h"
 #include "ui/theme.h"
 #include "web/web_access.h"
 #include "web/web_shell.h"
@@ -193,6 +194,10 @@ static String body() {
   h += jsStr(T(STR_W_THEME_BAMBUDDY_DARK));
   h += F(",bambuddy_light:");
   h += jsStr(T(STR_W_THEME_BAMBUDDY_LIGHT));
+  h += F(",spooly_dark:");
+  h += jsStr(T(STR_W_THEME_SPOOLY_DARK));
+  h += F(",spooly_light:");
+  h += jsStr(T(STR_W_THEME_SPOOLY_LIGHT));
   h += F("},active:");
   h += jsStr(T(STR_W_THEME_ACTIVE));
   h += F(",later:");
@@ -282,7 +287,7 @@ static String body() {
          // The chosen palette and the own colours over it. CS is what the
          // controls say, CS0 what is stored: Apply is live only in between.
          "var sel=null,stored=null,BASE={},BACKEND='',CS0='',WEBK=['dark','light'],"
-         "CS={accent:null,tone:-1,strength:50,follow:false},DARK={dark:1,spoolman_dark:1,filaman_dark:1,bambuddy_dark:1};"
+         "CS={accent:null,tone:-1,strength:50,follow:false},DARK={dark:1,spoolman_dark:1,filaman_dark:1,bambuddy_dark:1,spooly_dark:1};"
          "var ACC=[['ff9442','orange'],['ff5fa2','pink'],['2563eb','blue'],['8b5cf6','violet'],['e0b100','yellow'],['0e7490','petrol'],['e5484d','red']];"
          // Accent and ground in pairs: the accent, the colour the pair was
          // named after for the ground (shown in the chip only, the scale takes
@@ -296,7 +301,7 @@ static String body() {
          "function key(){return [sel,CS.accent||'-',CS.tone,CS.strength,CS.follow?1:0].join(',');}"
          "function resolved(){var s=sel||'dark';if(!CS.follow)return s;var d=DARK[s]?'_dark':'_light';"
          "if(BACKEND==='filaman')return 'filaman'+d;if(BACKEND==='spoolman')return 'spoolman'+d;"
-         "if(BACKEND==='bambuddy')return 'bambuddy'+d;return d==='_dark'?'dark':'light';}"
+         "if(BACKEND==='bambuddy')return 'bambuddy'+d;if(BACKEND==='spooly')return 'spooly'+d;return d==='_dark'?'dark':'light';}"
          "function paint(el,p){Object.keys(p).forEach(function(k){el.style.setProperty('--'+k,'#'+p[k]);});}"
          "function chip(g,sw,txt,on,fn){var b=document.createElement('button');b.type='button';"
          "b.className='quiet cchip';b.innerHTML='<i style=\"--c:#'+sw+'\"></i>'+(txt?esc(txt):'');"
@@ -421,7 +426,8 @@ static void routes(WebServer &srv) {
     // colours as stored, for the controls.
     const UiThemeCustom own = uiThemeCustomStored();
     json += F("],\"backend\":\"");
-    json += backendIsFilaMan() ? F("filaman") : backendIsBamBuddy() ? F("bambuddy") : F("spoolman");
+    json += backendIsFilaMan() ? F("filaman") : backendIsBamBuddy() ? F("bambuddy")
+            : backendProfileId() == BP_SPOOLY ? F("spooly") : F("spoolman");
     json += F("\",\"custom\":{\"accent\":");
     if (own.has_accent) {
       snprintf(hex, sizeof(hex), "%06lx", (unsigned long)own.accent);

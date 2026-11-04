@@ -2946,8 +2946,8 @@ const char* const STRINGS[][3] = {
     "Couleurs du backend" },  // STR_W_THEME_FOLLOW_H
   { "Farben folgen dem Backend", "Colours follow the backend",
     "Les couleurs suivent le backend" },  // STR_W_THEME_FOLLOW
-  { "Spoolman, FilaMan und BamBuddy bringen je eigene Farben mit. Hell oder dunkel kommt aus deiner Wahl oben.", "Spoolman, FilaMan and BamBuddy each bring their own colours. Light or dark comes from your choice above.",
-    "Spoolman, FilaMan et BamBuddy apportent chacun leurs propres couleurs. Clair ou sombre suit votre choix ci-dessus." },  // STR_W_THEME_FOLLOW_HINT
+  { "Spoolman, FilaMan, BamBuddy und Spooly bringen je eigene Farben mit. Hell oder dunkel kommt aus deiner Wahl oben.", "Spoolman, FilaMan, BamBuddy and Spooly each bring their own colours. Light or dark comes from your choice above.",
+    "Spoolman, FilaMan, BamBuddy et Spooly apportent chacun leurs propres couleurs. Clair ou sombre suit votre choix ci-dessus." },  // STR_W_THEME_FOLLOW_HINT
   { "Theme nach dem Neustart", "Theme after restart",
     "Thème après redémarrage" },  // STR_W_THEME_AFTER
   { "Eigene Farben", "Your own colours",
@@ -4219,6 +4219,10 @@ const char* const STRINGS[][3] = {
     "Numéro à droite" },  // STR_W_L_P_BIG_ID_SIDE
   { "Anteil der Nummer", "Share of the number",
     "Part du numéro" },  // STR_W_L_ID_SHARE
+  { "Spooly dunkel", "Spooly dark",
+    "Spooly sombre" },  // STR_W_THEME_SPOOLY_DARK
+  { "Spooly hell", "Spooly light",
+    "Spooly clair" },  // STR_W_THEME_SPOOLY_LIGHT
 };
 
 StringID tagWriteResultString(uint8_t code) {

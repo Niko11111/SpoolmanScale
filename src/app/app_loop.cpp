@@ -923,7 +923,7 @@ void appLoop() {
   // pass so the home screen does not flash in between.
   if (online_pick_pending) {
     online_pick_pending = false;
-    const bool palette_moves = !setup_active && uiThemeFollowMoves(BACKEND_SPOOLMAN);
+    const bool palette_moves = !setup_active && uiThemeFollowMoves(BACKEND_SPOOLMAN, pending_backend_profile);
     backendApplyProfile(pending_backend_profile);
     showOtaBrowserScreen(setup_active ? WEB_CTX_SETUP : WEB_CTX_BACKEND);
     if (palette_moves) {

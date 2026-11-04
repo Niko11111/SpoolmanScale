@@ -11,6 +11,7 @@
 #include <math.h>
 
 #include "services/backend.h"
+#include "services/backend_profiles.h"
 #include "services/prefs_store.h"
 
 #define PREF_ACCENT    "ui_accent"     // uint32, NO_ACCENT when none
@@ -196,25 +197,29 @@ bool uiThemeCustomStore(const UiThemeCustom& c) {
   return ok;
 }
 
-static UiThemeId resolveFor(UiThemeId chosen, bool follow, BackendMode mode) {
+// A profile runs on BACKEND_SPOOLMAN, so the mode alone cannot tell Spooly from
+// a Spoolman server. Any other online service keeps Spoolman's colours.
+static UiThemeId resolveFor(UiThemeId chosen, bool follow, BackendMode mode, uint8_t profile) {
   if (!follow) return chosen;
   const bool dark = chosen == uiThemeInFamily(chosen, true);
   switch (mode) {
     case BACKEND_FILAMAN:  return dark ? UI_THEME_FILAMAN_DARK  : UI_THEME_FILAMAN_LIGHT;
-    case BACKEND_SPOOLMAN: return dark ? UI_THEME_SPOOLMAN_DARK : UI_THEME_SPOOLMAN_LIGHT;
+    case BACKEND_SPOOLMAN:
+      if (profile == BP_SPOOLY) return dark ? UI_THEME_SPOOLY_DARK : UI_THEME_SPOOLY_LIGHT;
+      return dark ? UI_THEME_SPOOLMAN_DARK : UI_THEME_SPOOLMAN_LIGHT;
     case BACKEND_BAMBUDDY: return dark ? UI_THEME_BAMBUDDY_DARK : UI_THEME_BAMBUDDY_LIGHT;
     default:               return dark ? UI_THEME_DARK          : UI_THEME_LIGHT;
   }
 }
 
 UiThemeId uiThemeResolve(UiThemeId chosen, bool follow) {
-  return resolveFor(chosen, follow, backendMode());
+  return resolveFor(chosen, follow, backendMode(), backendProfileId());
 }
 
-bool uiThemeFollowMoves(BackendMode to) {
+bool uiThemeFollowMoves(BackendMode to, uint8_t to_profile) {
   if (!uiThemeCustomStored().follow) return false;
   const UiThemeId chosen = uiThemeStored();
-  return resolveFor(chosen, true, to) != resolveFor(chosen, true, backendMode());
+  return resolveFor(chosen, true, to, to_profile) != resolveFor(chosen, true, backendMode(), backendProfileId());
 }
 
 bool uiThemeFollowWaits() {

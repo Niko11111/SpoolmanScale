@@ -41,7 +41,7 @@ static void applyPendingModeChange() {
   // the way the language screen offers it; appLoop() opens the question on
   // its next pass, over the rebuilt screen. Asked before the switch, which
   // changes what "the current backend" is.
-  const bool palette_moves = !setup_active && uiThemeFollowMoves(s_pending_mode);
+  const bool palette_moves = !setup_active && uiThemeFollowMoves(s_pending_mode, BP_SPOOLMAN);
   // One switch for both entry points. What it lets go of used to be spelled
   // out here and stopped after three steps - see app/backend_switch.cpp.
   backendApplyMode(s_pending_mode);
