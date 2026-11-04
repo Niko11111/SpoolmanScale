@@ -12,6 +12,7 @@
 #include "lang.h"
 #include "services/backend.h"
 #include "services/accent_fold.h"
+#include "services/label_big_id.h"
 #include "services/label_draw.h"
 #include "services/label_facts.h"
 #include "services/label_tape.h"
@@ -558,16 +559,22 @@ static bool renderLabel(const LabelPrinterConfig& printer, const LabelLayout& la
                   nullptr, !c.qr || !c.qr[0], nullptr };
   LabelContent body = c;
   lv_coord_t side_qr = 0;
-  if (preset == LABEL_PRESET_BIG_QR) {
-    side_qr = turned ? drawTopQr(canvas, &area, c) : drawSideQr(canvas, &area, c);
-    if (side_qr) body.qr = nullptr;
+  LabelBody placed{ 0, true, "lines under the number" };
+  if (labelPresetIsBigId(preset)) {
+    labelDrawBigId(canvas, BigIdBox{ M, M, area.w, (lv_coord_t)(ch - 2 * M) },
+                   BigIdContent{ c.d, &layout, c.lines, c.facts, c.n });
+  } else {
+    if (preset == LABEL_PRESET_BIG_QR) {
+      side_qr = turned ? drawTopQr(canvas, &area, c) : drawSideQr(canvas, &area, c);
+      if (side_qr) body.qr = nullptr;
+    }
+    // The larger sizes need room both ways: a 30 x 40 is tall but narrow, and
+    // there the header blocks would eat what the code needs.
+    const bool tall = ch >= dots(LR_TALL_PX) && area.w + 2 * M >= dots(LR_TALL_PX);
+    area.wrap_font = nameWrapFont(area, tall, body, layout);
+    area.y = drawHead(canvas, area, tall, *c.d, layout);
+    placed = drawBody(canvas, area, tall, body);
   }
-  // The larger sizes need room both ways: a 30 x 40 is tall but narrow, and
-  // there the header blocks would eat what the code needs.
-  const bool tall = ch >= dots(LR_TALL_PX) && area.w + 2 * M >= dots(LR_TALL_PX);
-  area.wrap_font = nameWrapFont(area, tall, body, layout);
-  area.y = drawHead(canvas, area, tall, *c.d, layout);
-  const LabelBody placed = drawBody(canvas, area, tall, body);
 
   const uint16_t x0 = labelPrinterContentX(printer);
   const bool ok = packCanvas(canvas, content_w, h, row_w, x0, out);

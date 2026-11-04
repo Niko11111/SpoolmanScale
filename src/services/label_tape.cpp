@@ -38,20 +38,6 @@ static const lv_font_t* const LT_ID_FONTS[] = {
 // Where the blocks go on the canvas, which is the label as it reads.
 struct TapeArea { lv_coord_t left, right, top, height, canvas_h; };
 
-// The largest font of the list the line fits whole in, no taller than
-// `max_h`; the smallest one no taller than that when none holds it whole,
-// and the line is cut to it.
-static const lv_font_t* tapeFont(const char* text, lv_coord_t w, lv_coord_t max_h,
-                                 const lv_font_t* const* fonts, int count) {
-  const lv_font_t* last = fonts[count - 1];
-  for (int i = 0; i < count; i++) {
-    if (lineHeight(fonts[i]) > max_h) continue;
-    last = fonts[i];
-    if (fitsLine(text, fonts[i], w)) return fonts[i];
-  }
-  return last;
-}
-
 // The number at the right end and the rule before it; the area's right edge
 // moves in past both. Nothing without a number. The number is never cut: a
 // digit short is another spool. Where even the smallest font is wider than
@@ -61,7 +47,7 @@ static void drawTapeId(lv_obj_t* canvas, TapeArea* a, const char* id) {
   const lv_color_t black = lv_color_black();
   const lv_coord_t gap = dots(LT_GAP_PX), rule = dots(LT_RULE_PX);
   const lv_coord_t max_w = (a->right - a->left) * LT_ID_MAX_PCT / 100;
-  const lv_font_t* f = tapeFont(id, max_w, a->height, LT_ID_FONTS, LT_ID_FONT_COUNT);
+  const lv_font_t* f = fitFontUnder(id, max_w, a->height, LT_ID_FONTS, LT_ID_FONT_COUNT);
   const lv_coord_t w = textWidth(id, f) + boldFor(f);
   drawLine(canvas, a->right - w, (a->canvas_h - lineHeight(f)) / 2, w, f, black,
            LV_TEXT_ALIGN_RIGHT, id);
@@ -79,7 +65,7 @@ static int drawTapeLines(lv_obj_t* canvas, const TapeArea& a, const char* const*
   const lv_font_t* fonts[LT_LINES_MAX] = {};
   lv_coord_t used = 0;
   for (int i = 0; i < n; i++) {
-    fonts[i] = tapeFont(lines[i], w, a.height / n, LT_TEXT_FONTS, LT_TEXT_FONT_COUNT);
+    fonts[i] = fitFontUnder(lines[i], w, a.height / n, LT_TEXT_FONTS, LT_TEXT_FONT_COUNT);
     used += lineHeight(fonts[i]);
   }
   const lv_coord_t spare = a.height > used ? (a.height - used) / (n + 1) : 0;

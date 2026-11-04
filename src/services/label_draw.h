@@ -56,6 +56,11 @@ lv_coord_t textWidth(const char* s, const lv_font_t* font);
 // The largest of the fonts that fits the line into the width, the last one
 // when none does; the line is then cut to it.
 const lv_font_t* fitFont(const char* text, lv_coord_t w, const lv_font_t* const* fonts, int count);
+// The largest font of the list the line fits whole in, no taller than
+// `max_h`; the smallest one no taller than that when none holds it whole,
+// and the line is cut to it.
+const lv_font_t* fitFontUnder(const char* text, lv_coord_t w, lv_coord_t max_h,
+                              const lv_font_t* const* fonts, int count);
 // Whether a line fits the width whole in this font, as the font spells it:
 // a font without the supplement spells a line with its accents folded.
 bool fitsLine(const char* text, const lv_font_t* f, lv_coord_t w);
@@ -64,6 +69,9 @@ bool fitsLine(const char* text, const lv_font_t* f, lv_coord_t w);
 // needs more than two.
 bool splitTwoLines(const char* text, const lv_font_t* f, lv_coord_t w, char* first, char* second);
 
+// The first line of a text wrapped to the width, into `first` of LABEL_LINE_LEN
+// bytes. Returns what is left after it, null when there is nothing to break.
+const char* takeLine(const char* text, const lv_font_t* f, lv_coord_t w, char* first);
 // One line, cut on a character boundary to the width. No canvas: nothing is
 // drawn, for a block that is only being measured.
 void drawLine(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y, lv_coord_t w,
@@ -80,6 +88,10 @@ void fillRect(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y, lv_coord_t w, lv_coo
 // out of the log.
 lv_coord_t drawQr(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y, lv_coord_t box,
                   const char* text, bool silent = false);
+// A number from its outlines (label_digits.h): the first ink at x, the top
+// at y, `height` dots tall. Runs straight into the canvas's pixels: a number
+// is thousands of runs, where a QR code is hundreds of rectangles.
+void drawBigDigits(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y, lv_coord_t height, const char* digits);
 // The canvas into the raster, from dot x0 of a row_w print row.
 bool packCanvas(lv_obj_t* canvas, uint16_t content_w, uint16_t h, uint16_t row_w,
                 uint16_t x0, LabelRaster* out);

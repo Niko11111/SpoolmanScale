@@ -77,7 +77,7 @@ static const int OPTION_ROW_COUNT = sizeof(OPTION_ROWS) / sizeof(OPTION_ROWS[0])
 
 static const int PRESET_CAPTIONS[LABEL_PRESET_COUNT] = {
   STR_W_L_P_STANDARD, STR_W_L_P_COMPACT, STR_W_L_P_BIG_QR, STR_W_L_P_MATERIAL_BIG,
-  STR_W_L_P_TEXT_ONLY,
+  STR_W_L_P_TEXT_ONLY, STR_W_L_P_BIG_ID, STR_W_L_P_BIG_ID_SIDE,
 };
 
 // What the preview shows until a spool has been found since boot: a spool
@@ -161,6 +161,8 @@ static void layoutJson(String& j, LabelKind kind, const LabelPrinterConfig& c, b
   j += F(",\"preset\":");   j += String((unsigned)l.preset);
   j += F(",\"fields\":");   j += String((unsigned long)l.fields);
   j += F(",\"options\":");  j += String((unsigned long)l.options);
+  j += F(",\"idSet\":");    j += String((unsigned)l.id_share);
+  j += F(",\"idShare\":");  j += String((unsigned)labelIdShareFor(l.id_share, l.preset));
   const bool code_possible = kind == LABEL_KIND_SPOOL || fil_page;
   if (!code_possible) l.fields &= ~(1u << LF_QR);
   j += F(",\"cap\":");
@@ -295,7 +297,14 @@ static void templateCard(String& h) {
   }
   h += F("</div><span class='hint'>");
   h += T(STR_W_L_ARRANGE_HINT);
-  h += F("</span></div><div class='field'><label>");
+  // How far the big number and the text push against each other.
+  h += F("</span></div><div class='field' id='lish' style='display:none'><label for='lis'>");
+  h += T(STR_W_L_ID_SHARE);
+  h += F("</label><div class='range'><input id='lis' type='range' min='");
+  h += String(LABEL_ID_SHARE_MIN);
+  h += F("' max='");
+  h += String(LABEL_ID_SHARE_MAX);
+  h += F("' step='5'><output id='lisv'></output></div></div><div class='field'><label>");
   h += T(STR_W_L_FIELDS);
   h += F("</label><div id='lf' class='lb-sw'>");
   for (int i = 0; i < FIELD_ROW_COUNT; i++) {
@@ -388,7 +397,7 @@ static void styles(String& h) {
          ".lb-sw .check+.check{margin-top:0}"
          ".lb-note{margin-top:12px}"
          ".lb-print{margin-top:16px}"
-         // Five tiles, three to a row, all as wide as each other.
+         // Seven tiles, three to a row, all as wide as each other.
          "#lpre{display:grid;grid-template-columns:repeat(3,1fr)}"
          ".lb-tile{flex-direction:column;gap:6px;min-width:0;padding:8px 6px}"
          ".lb-ic{height:58px;display:flex;align-items:center;justify-content:center}"
@@ -426,7 +435,13 @@ static void scriptTemplate(String& h) {
          "['b2,2,36,8 l10,12,20,2.5 l6,16,28,2.5 l2,21,16,2 l2,24.5,14,2 q28,19,9,9',"
          "'b2,2,26,8 l7,12,16,2.5 l4,16,22,2.5 l2,21,8,1.5 l2,23.5,14,3 l2,28,8,1.5 q11,31,8,8'],"
          "['l8,2,24,4 b2,8,36,4 l6,14,28,3 l2,19,8,1.5 l2,21.5,14,3 l22,19,8,1.5 l22,21.5,14,3 l2,26,8,1.5',"
-         "'l6,2,18,4 b2,8,26,4 l4,14,22,3 l2,19,8,1.5 l2,21.5,14,3 l2,26,8,1.5 l2,28.5,14,3 l2,33,8,1.5 l2,35.5,14,3']];"
+         "'l6,2,18,4 b2,8,26,4 l4,14,22,3 l2,19,8,1.5 l2,21.5,14,3 l2,26,8,1.5 l2,28.5,14,3 l2,33,8,1.5 l2,35.5,14,3'],"
+         // The big number: three digits as blocks, the lines under them.
+         "['b4,2,9,15 b15.5,2,9,15 b27,2,9,15 l8,19,24,2.5 l4,23,32,2 l4,26,32,2',"
+         "'b3,2,7,13 b11.5,2,7,13 b20,2,7,13 l6,18,18,3 b2,23,26,3 l4,28,22,2 l4,32,22,2 l4,36,22,2'],"
+         // The same with the number on the right, the lines beside it.
+         "['l3,4,17,3 b3,9,17,4 l3,15,17,2 l3,19,14,2 l3,23,16,2 b22,10,7,10 b30.5,10,7,10',"
+         "'l3,6,11,3 b3,11,11,4 l3,17,11,2 l3,21,9,2 l3,25,10,2 l3,29,11,2 b16,15,5,10 b22.5,15,5,10']];"
          "function icon(p,up){const w=up?30:40,h=up?40:30;"
          "let s='<svg viewBox=\"0 0 '+w+' '+h+'\" width=\"'+w*1.4+'\" height=\"'+h*1.4+'\">'"
          "+'<rect x=\".5\" y=\".5\" width=\"'+(w-1)+'\" height=\"'+(h-1)+'\" rx=\"2\" fill=\"none\" stroke=\"currentColor\" stroke-opacity=\".4\"/>';"
@@ -434,6 +449,9 @@ static void scriptTemplate(String& h) {
          "s+='<rect x=\"'+v[0]+'\" y=\"'+v[1]+'\" width=\"'+v[2]+'\" height=\"'+v[3]+'\" fill=\"currentColor\"'"
          "+(t[0]==='l'?' fill-opacity=\".45\"':'')+'/>';});return s+'</svg>';}"
          "function tiles(d){const up=!!(d.options&PB);"
+         "$('lish').style.display=bigId(d.preset)?'':'none';"
+         "if(document.activeElement!==$('lis'))$('lis').value=d.idShare;"
+         "$('lisv').textContent=d.idShare+' %';"
          "document.querySelectorAll('#lkind .btab').forEach(function(b){b.classList.toggle('on',+b.dataset.k===d.kind);});"
          "$('lkh').style.display=d.kind===1?'':'none';"
          "$('lfq').style.display=d.kind===1&&!d.filPage&&!d.tape?'':'none';"
@@ -443,6 +461,7 @@ static void scriptTemplate(String& h) {
          "i.closest('label').style.display=d.kind===1&&+i.dataset.b===DB?'none':'';});"
          "document.querySelectorAll('#lori .btab').forEach(function(b){b.classList.toggle('on',+b.dataset.o===(up?1:0));});"
          "document.querySelectorAll('#lpre .btab').forEach(function(b){"
+         "b.style.display=d.kind===1&&bigId(+b.dataset.p)?'none':'';"
          "b.classList.toggle('on',+b.dataset.p===d.preset);const k=up?'u':'f';if(b.dataset.k===k)return;"
          "b.dataset.k=k;b.querySelector('.lb-ic').innerHTML=icon(+b.dataset.p,up);});}"
          // The line budget: the fact switches that are off close once it is
@@ -454,7 +473,7 @@ static void scriptTemplate(String& h) {
          "m.classList.toggle('bad',n>d.cap);"
          "document.querySelectorAll('#lf input').forEach(function(i){const b=+i.dataset.b;"
          "i.closest('label').style.display=d.kindFields&(1<<b)?'':'none';"
-         "i.disabled=(b===QRB&&!d.hasQr)||(!i.checked&&!!(d.factBits&(1<<b))&&n>=d.cap);"
+         "i.disabled=(b===QRB&&!d.hasQr)||(b===IDB&&bigId(d.preset))||(!i.checked&&!!(d.factBits&(1<<b))&&n>=d.cap);"
          "i.closest('label').classList.toggle('off',i.disabled);"
          // Beside a switch that would print nothing, why.
          "i.closest('label').querySelector('.lb-gap').textContent="
@@ -499,6 +518,12 @@ static void scriptFunctions(String& h) {
   h += jsStr(lacks);
   h += F("};const QRB=");
   h += String((int)LF_QR);
+  h += F(",IDB=");
+  h += String((int)LF_SPOOL_ID);
+  h += F(",BI1=");
+  h += String((int)LABEL_PRESET_BIG_ID);
+  h += F(",BI2=");
+  h += String((int)LABEL_PRESET_BIG_ID_SIDE);
   h += F(",PB=");
   h += String(1u << LO_PORTRAIT);
   h += F(",DB=");
@@ -506,6 +531,7 @@ static void scriptFunctions(String& h) {
   // CSS pixels per millimetre of label in the preview.
   h += F(",PPM=8");
   h += F(";let S=null,shown='',timer=0,srcKey='',K=0;"
+         "function bigId(p){return p===BI1||p===BI2;}"
          // The kind last looked at, per browser: a convenience, not state.
          "try{K=localStorage.getItem('lbkind')==='1'?1:0;}catch(e){}"
          "function q(){return '?kind='+K;}");
@@ -526,7 +552,7 @@ static void scriptFunctions(String& h) {
          // The picture is drawn anew only when something it shows changed.
          "function pic(d){if(srv(d)){picServer(d);return;}"
          "$('lp').parentNode.style.display='';$('lp-s').classList.add('bad');"
-         "const k=[d.kind,d.preset,d.fields,d.options,d.text,d.spool?d.spool.id:0,"
+         "const k=[d.kind,d.preset,d.fields,d.options,d.idShare,d.text,d.spool?d.spool.id:0,"
          "d.dates,d.media,d.model].join('|');if(k===shown)return;shown=k;"
          "$('lp-s').textContent='';$('lp').src='/api/label/preview.bmp'+q()+'&t='+Date.now();}"
          // The source list, built anew only when the presets or the choice
@@ -570,7 +596,7 @@ static void scriptFunctions(String& h) {
          "function load(){if(document.hidden)return;"
          "getJson('/api/label'+q()).then(function(d){if(d&&d.kind===K)paint(d);});}"
          "function save(p,f,o){"
-         "postFlash('/api/label'+q(),p+','+f+','+o,'ls-s',2500).then(load);}");
+         "postFlash('/api/label'+q(),p+','+f+','+o+','+S.idSet,'ls-s',2500).then(load);}");
 }
 
 // Every handler is bound here rather than written into an onclick
@@ -587,6 +613,9 @@ static void scriptBindings(String& h) {
          "(S.options&~PB)|(+b.dataset.o?PB:0));});});"
          "document.querySelectorAll('#lf input,#lo input').forEach(function(i){"
          "i.addEventListener('change',function(){if(!S)return;capRow(S);save(S.preset,mask('lf'),opts());});});"
+         "$('lis').addEventListener('input',function(){$('lisv').textContent=$('lis').value+' %';});"
+         "$('lis').addEventListener('change',function(){if(!S)return;S.idSet=+$('lis').value;"
+         "save(S.preset,S.fields,S.options);});"
          "$('lpm').addEventListener('change',function(){"
          "postFlash('/api/printer/model',$('lpm').value,'lpm-s',2500).then(load);});"
          "$('lps').addEventListener('change',function(){"
@@ -701,7 +730,8 @@ static void sendPreview(WebServer& srv, LabelKind kind) {
   labelRasterFree(&r);
 }
 
-// "preset,fields,options" as numbers; anything unknown in them is dropped.
+// "preset,fields,options,id_share" as numbers; anything unknown in them is
+// dropped, and without the last the arrangement's own share applies.
 static bool parseLayout(const String& v, LabelLayout* out) {
   const int a = v.indexOf(',');
   const int b = a < 0 ? -1 : v.indexOf(',', a + 1);
@@ -710,6 +740,8 @@ static bool parseLayout(const String& v, LabelLayout* out) {
   l.preset = (uint8_t)strtoul(v.c_str(), nullptr, 10);
   l.fields = strtoul(v.c_str() + a + 1, nullptr, 10);
   l.options = strtoul(v.c_str() + b + 1, nullptr, 10);
+  const int c = v.indexOf(',', b + 1);
+  if (c > b) l.id_share = (uint8_t)strtoul(v.c_str() + c + 1, nullptr, 10);
   *out = labelLayoutSanitized(l);
   return true;
 }

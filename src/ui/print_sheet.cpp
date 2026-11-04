@@ -68,7 +68,7 @@ static bool s_reopen_more_info = false;
 static int presetCaption(uint8_t preset) {
   static const int CAPTIONS[LABEL_PRESET_COUNT] = {
     STR_W_L_P_STANDARD, STR_W_L_P_COMPACT, STR_W_L_P_BIG_QR, STR_W_L_P_MATERIAL_BIG,
-    STR_W_L_P_TEXT_ONLY,
+    STR_W_L_P_TEXT_ONLY, STR_W_L_P_BIG_ID, STR_W_L_P_BIG_ID_SIDE,
   };
   return CAPTIONS[preset < LABEL_PRESET_COUNT ? preset : LABEL_PRESET_STANDARD];
 }

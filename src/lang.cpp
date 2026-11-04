@@ -3325,9 +3325,9 @@ const char* const STRINGS[][3] = {
   { "QR groß",
     "Large QR",
     "Grand QR" },  // STR_W_L_P_BIG_QR
-  { "Standard: Hersteller groß oben. Kompakt: Hersteller klein bei den Angaben, der QR-Code wird größer. QR groß: der Code über die ganze Höhe, der Text daneben. Material groß: das Material über ein Viertel der Höhe, der Code klein. Nur Text: kein Code, die Angaben groß, wo Platz ist in zwei Spalten.",
-    "Standard: the vendor large on top. Compact: the vendor small among the details, the QR code grows. Large QR: the code across the full height, the text beside it. Large material: the material across a quarter of the height, the code small. Text only: no code, the details large, in two columns where they fit.",
-    "Standard : le fabricant en grand en haut. Compact : le fabricant en petit parmi les infos, le code QR grandit. Grand QR : le code sur toute la hauteur, le texte à côté. Matière en grand : la matière sur un quart de la hauteur, le code en petit. Texte seul : sans code, les infos en grand, sur deux colonnes si elles tiennent." },  // STR_W_L_ARRANGE_HINT
+  { "Standard: Hersteller groß oben. Kompakt: Hersteller klein bei den Angaben, der QR-Code wird größer. QR groß: der Code über die ganze Höhe, der Text daneben. Material groß: das Material über ein Viertel der Höhe, der Code klein. Nur Text: kein Code, die Angaben groß, wo Platz ist in zwei Spalten. Nummer groß: die Spulennummer so groß, wie sie passt, der Rest darunter. Nummer rechts: dasselbe mit dem Rest links daneben in voller Höhe.",
+    "Standard: the vendor large on top. Compact: the vendor small among the details, the QR code grows. Large QR: the code across the full height, the text beside it. Large material: the material across a quarter of the height, the code small. Text only: no code, the details large, in two columns where they fit. Large number: the spool number as large as it fits, the rest under it. Number right: the same with the rest to its left, at full height.",
+    "Standard : le fabricant en grand en haut. Compact : le fabricant en petit parmi les infos, le code QR grandit. Grand QR : le code sur toute la hauteur, le texte à côté. Matière en grand : la matière sur un quart de la hauteur, le code en petit. Texte seul : sans code, les infos en grand, sur deux colonnes si elles tiennent. Grand numéro : le numéro de bobine aussi grand que possible, le reste en dessous. Numéro à droite : idem, le reste à gauche sur toute la hauteur." },  // STR_W_L_ARRANGE_HINT
   { "Felder",
     "Fields",
     "Champs" },  // STR_W_L_FIELDS
@@ -4213,6 +4213,12 @@ const char* const STRINGS[][3] = {
     "Sans https://, la clé circule en clair sur Internet. Connecter quand même ?" },  // STR_W_ONLINE_HTTP_ASK
   { "Für eine neue Adresse trägst du den Schlüssel neu ein.", "A new address needs the key entered again.",
     "Une nouvelle adresse demande de saisir à nouveau la clé." },  // STR_W_ONLINE_REKEY
+  { "Nummer groß", "Large number",
+    "Grand numéro" },  // STR_W_L_P_BIG_ID
+  { "Nummer rechts", "Number right",
+    "Numéro à droite" },  // STR_W_L_P_BIG_ID_SIDE
+  { "Anteil der Nummer", "Share of the number",
+    "Part du numéro" },  // STR_W_L_ID_SHARE
 };
 
 StringID tagWriteResultString(uint8_t code) {

@@ -9,10 +9,10 @@
 
 // NVS keys, 15 characters at most: the spool's from before, the filament's
 // beside them.
-struct LayoutKeys { const char* version; const char* preset; const char* fields; const char* options; };
+struct LayoutKeys { const char* version; const char* preset; const char* fields; const char* options; const char* id_share; };
 static const LayoutKeys LL_KEYS[LABEL_KIND_COUNT] = {
-  { "lbl_ver",  "lbl_preset",  "lbl_fields",  "lbl_opts" },
-  { "lblf_ver", "lblf_preset", "lblf_fields", "lblf_opts" },
+  { "lbl_ver",  "lbl_preset",  "lbl_fields",  "lbl_opts",  "lbl_idshare" },
+  { "lblf_ver", "lblf_preset", "lblf_fields", "lblf_opts", "lblf_idshare" },
 };
 #define LL_KEY_TEXT    "lbl_text"
 
@@ -49,11 +49,18 @@ static LabelKind knownKind(LabelKind kind) {
   return kind < LABEL_KIND_COUNT ? kind : LABEL_KIND_SPOOL;
 }
 
+// A filament has no spool number to print large.
+static void fitKind(LabelLayout* l, LabelKind kind) {
+  l->fields &= labelKindFields(kind);
+  if (kind == LABEL_KIND_FILAMENT && labelPresetIsBigId(l->preset)) l->preset = LABEL_PRESET_STANDARD;
+}
+
 LabelLayout labelLayoutSanitized(const LabelLayout& in) {
   LabelLayout l = in;
   if (l.preset >= LABEL_PRESET_COUNT) l.preset = LABEL_PRESET_STANDARD;
   l.fields &= FIELD_MASK;
   l.options &= OPTION_MASK;
+  if (l.id_share) l.id_share = labelIdShareFor(l.id_share, l.preset);
   return l;
 }
 
@@ -66,7 +73,7 @@ bool labelLayoutOption(const LabelLayout& layout, LabelOption option) {
 }
 
 bool labelPresetHasQr(uint8_t preset) {
-  return preset != LABEL_PRESET_TEXT_ONLY;
+  return preset != LABEL_PRESET_TEXT_ONLY && !labelPresetIsBigId(preset);
 }
 
 bool labelLayoutHasCode(const LabelLayout& layout) {
@@ -80,20 +87,21 @@ bool labelLayoutHasCode(const LabelLayout& layout) {
 #define LL_LONG_ROLL_MM 50
 enum CapacityRow { CAP_FLAT_40, CAP_FLAT_50, CAP_UPRIGHT_40, CAP_UPRIGHT_50, CAP_ROWS };
 static const uint8_t FACT_CAPACITY[CAP_ROWS][LABEL_PRESET_COUNT] = {
-  // standard, compact, big code, material big, text only (never has a code)
-  { 5, 6, 6, 3, 5 },   // 40 x 30
-  { 5, 6, 6, 3, 5 },   // 50 x 30
-  { 3, 4, 2, 2, 6 },   // 30 x 40
-  { 5, 6, 4, 3, 6 },   // 30 x 50
+  // standard, compact, big code, material big, text only, big number on top,
+  // big number on the right (the last three never have a code)
+  { 5, 6, 6, 3, 5, 3, 3 },   // 40 x 30
+  { 5, 6, 6, 3, 5, 3, 3 },   // 50 x 30
+  { 3, 4, 2, 2, 6, 6, 6 },   // 30 x 40
+  { 5, 6, 4, 3, 6, 6, 6 },   // 30 x 50
 };
 // The same with the code switched off: the facts get its room, in two
 // columns where they fit. Flat, a date line is too wide for half the label,
 // so the sixth line has no room there.
 static const uint8_t FACT_CAPACITY_NO_CODE[CAP_ROWS][LABEL_PRESET_COUNT] = {
-  { 5, 6, 5, 5, 5 },
-  { 5, 6, 5, 5, 5 },
-  { 6, 6, 6, 6, 6 },
-  { 6, 6, 6, 6, 6 },
+  { 5, 6, 5, 5, 5, 3, 3 },
+  { 5, 6, 5, 5, 5, 3, 3 },
+  { 6, 6, 6, 6, 6, 6, 6 },
+  { 6, 6, 6, 6, 6, 6, 6 },
 };
 
 int labelFactCapacity(const LabelLayout& layout, uint16_t width_mm, uint16_t length_mm) {
@@ -114,6 +122,8 @@ uint32_t labelFactFields(uint8_t preset) {
                (1u << LF_DRYING);
   // The compact arrangement sets the maker among the facts.
   if (preset == LABEL_PRESET_COMPACT) m |= 1u << LF_VENDOR;
+  // The big number is the spool's id, and no line besides it.
+  if (labelPresetIsBigId(preset)) m &= ~(1u << LF_SPOOL_ID);
   return m;
 }
 
@@ -127,9 +137,10 @@ LabelLayout labelLayoutLoad(LabelKind kind) {
     l.preset = (uint8_t)prefsGetUInt(k.preset, LABEL_PRESET_STANDARD);
     l.fields = prefsGetUInt(k.fields, l.fields);
     l.options = prefsGetUInt(k.options, 0);
+    l.id_share = (uint8_t)prefsGetUInt(k.id_share, 0);
   }
   s_layout[kind] = labelLayoutSanitized(l);
-  s_layout[kind].fields &= labelKindFields(kind);
+  fitKind(&s_layout[kind], kind);
   s_loaded[kind] = true;
   return s_layout[kind];
 }
@@ -138,11 +149,12 @@ bool labelLayoutSave(const LabelLayout& in, LabelKind kind) {
   kind = knownKind(kind);
   const LayoutKeys& k = LL_KEYS[kind];
   LabelLayout l = labelLayoutSanitized(in);
-  l.fields &= labelKindFields(kind);
+  fitKind(&l, kind);
   bool ok = true;
   ok = prefsPutUInt(k.preset, l.preset) && ok;
   ok = prefsPutUInt(k.fields, l.fields) && ok;
   ok = prefsPutUInt(k.options, l.options) && ok;
+  ok = prefsPutUInt(k.id_share, l.id_share) && ok;
   // Last, so a version only stands next to a complete set.
   ok = prefsPutUInt(k.version, LABEL_LAYOUT_VERSION) && ok;
   if (ok) { s_layout[kind] = l; s_loaded[kind] = true; }

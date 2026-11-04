@@ -115,7 +115,8 @@ void labelSpoolFacts(const LabelLayout& layout, const SpoolLabelData& spool, int
   if (layout.preset == LABEL_PRESET_COMPACT && labelLayoutHas(layout, LF_VENDOR) &&
       spool.vendor[0])
     addFact(out, capacity, LabelFact{ nullptr, spool.vendor });
-  if (labelLayoutHas(layout, LF_SPOOL_ID)) addFact(out, capacity, LabelFact{ backendName(), id });
+  if (labelLayoutHas(layout, LF_SPOOL_ID) && !labelPresetIsBigId(layout.preset))
+    addFact(out, capacity, LabelFact{ backendName(), id });
   if (labelLayoutHas(layout, LF_COLOR) && spool.color[0])
     addFact(out, capacity, LabelFact{ T(STR_LBL_L_COLOR), color });
   if (labelLayoutHas(layout, LF_ARTICLE) && spool.article[0])

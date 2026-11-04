@@ -7,6 +7,7 @@
 
 #include "hardware/sd_logger.h"
 #include "services/accent_fold.h"
+#include "services/label_digits.h"
 #include "services/label_render.h"
 #include "services/text_util.h"
 #include "src/extra/libs/qrcode/qrcodegen.h"
@@ -267,6 +268,29 @@ lv_coord_t drawQr(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y,
   return total;
 }
 
+const lv_font_t* fitFontUnder(const char* text, lv_coord_t w, lv_coord_t max_h,
+                              const lv_font_t* const* fonts, int count) {
+  const lv_font_t* last = fonts[count - 1];
+  for (int i = 0; i < count; i++) {
+    if (lineHeight(fonts[i]) > max_h) continue;
+    last = fonts[i];
+    if (fitsLine(text, fonts[i], w)) return fonts[i];
+  }
+  return last;
+}
+
+static void digitRun(int x, int y, int w, void* ctx) {
+  lv_img_dsc_t* img = (lv_img_dsc_t*)ctx;
+  if (y < 0 || y >= (int)img->header.h) return;
+  for (int i = x < 0 ? 0 : x; i < x + w && i < (int)img->header.w; i++)
+    lv_img_buf_set_px_color(img, i, y, lv_color_black());
+}
+
+void drawBigDigits(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y, lv_coord_t height, const char* digits) {
+  if (!canvas) return;
+  labelDigitsDraw(digits, LabelDigitsAt{ x, y, height }, digitRun, lv_canvas_get_img(canvas));
+}
+
 // Whether a line fits the width whole in this font, as the font spells it.
 bool fitsLine(const char* text, const lv_font_t* f, lv_coord_t w) {
   char plain[LR_SPELL_LEN];
@@ -294,6 +318,19 @@ bool splitTwoLines(const char* text, const lv_font_t* f, lv_coord_t w,
   // The break leaves a space at the end of the first line.
   for (size_t k = strlen(first); k > 0 && first[k - 1] == ' '; k--) first[k - 1] = '\0';
   return fitsLine(first, f, w) && fitsLine(second, f, w);
+}
+
+const char* takeLine(const char* text, const lv_font_t* f, lv_coord_t w, char* first) {
+  if (!canSpell(f, text)) return nullptr;
+  lv_coord_t used = 0;
+  const uint32_t n = _lv_txt_get_next_line(text, sized(f), 0, w - boldFor(f), &used,
+                                           LV_TEXT_FLAG_NONE);
+  if (n == 0 || n >= strlen(text) || n >= LABEL_LINE_LEN) return nullptr;
+  snprintf(first, LABEL_LINE_LEN, "%.*s", (int)n, text);
+  for (size_t k = strlen(first); k > 0 && first[k - 1] == ' '; k--) first[k - 1] = '\0';
+  const char* rest = text + n;
+  while (*rest == ' ') rest++;
+  return *rest ? rest : nullptr;
 }
 
 void setDpi(uint16_t dpi) { s_dpi = dpi; }

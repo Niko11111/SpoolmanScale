@@ -27,6 +27,8 @@ enum LabelPreset : uint8_t {
   LABEL_PRESET_BIG_QR   = 2,   // the code takes the full height, the text a column
   LABEL_PRESET_MATERIAL_BIG = 3, // the material across a third of the label, a small code
   LABEL_PRESET_TEXT_ONLY = 4,  // no code, the facts large, in two columns where they fit
+  LABEL_PRESET_BIG_ID = 5,     // no code, the spool's number as large as it fits, the rest under it
+  LABEL_PRESET_BIG_ID_SIDE = 6, // the same with the number on the right, the rest beside it, full height
   LABEL_PRESET_COUNT
 };
 
@@ -67,7 +69,27 @@ struct LabelLayout {
   uint8_t  preset;
   uint32_t fields;    // bit n set: LabelField n is on the label
   uint32_t options;   // bit n set: LabelOption n applies
+  uint8_t  id_share;  // percent the big number may take, 0: the arrangement's own
 };
+
+// What the big number may take of the label next to the text: of the height
+// with the text under it, of the width with the text beside it. The rest goes
+// to the text, so moving this moves the two against each other.
+#define LABEL_ID_SHARE_MIN       30
+#define LABEL_ID_SHARE_MAX       70
+#define LABEL_ID_SHARE_TOP       60
+#define LABEL_ID_SHARE_SIDE      50
+
+inline bool labelPresetIsBigId(uint8_t preset) {
+  return preset == LABEL_PRESET_BIG_ID || preset == LABEL_PRESET_BIG_ID_SIDE;
+}
+
+// The share to draw with: the one set, inside its range, else the arrangement's.
+inline uint8_t labelIdShareFor(uint8_t set, uint8_t preset) {
+  if (set == 0) return preset == LABEL_PRESET_BIG_ID_SIDE ? LABEL_ID_SHARE_SIDE : LABEL_ID_SHARE_TOP;
+  if (set < LABEL_ID_SHARE_MIN) return LABEL_ID_SHARE_MIN;
+  return set > LABEL_ID_SHARE_MAX ? LABEL_ID_SHARE_MAX : set;
+}
 
 // The spool's: the fields of the label from before on, no option, the
 // standard arrangement. The filament's: maker, material, name, colour,
