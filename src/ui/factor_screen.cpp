@@ -17,6 +17,7 @@
 #include "ota_browser.h"
 #include "scale_menu.h"
 #include "services/backend.h"
+#include "services/cal_factor_rules.h"
 #include "setup_frame.h"
 #include "ui_common.h"
 #include "theme.h"
@@ -276,7 +277,7 @@ static void onCalculate(lv_event_t *e) {
                     raw, zero_offset, known_g, factor);
       lv_label_set_text(lbl_factor_result, T(STR_CAL_IMPLAUSIBLE));
     } else {
-      saveCalFactor(factor);
+      saveCalFactor(calFactorFromMeasured(factor));
       // The filter still holds readings in the old factor's units; step 3
       // would show them settling for a second and a half, on the one screen
       // whose job is to check the reading.
@@ -380,8 +381,8 @@ static void buildCalStep() {
 
 void factorLiveText(char *buf, size_t len, float grams) {
   if (cal_step != CAL_STEP_PLACE) { fmtG(buf, len, grams); return; }
-  // Before the first calibration the factor is 1, so the "grams" are raw
-  // counts: shown as a bare number, still good enough to watch settle.
+  // Before the first calibration the factor is only a guess, so the "grams"
+  // are not grams: shown as a bare number, still good enough to watch settle.
   if (cal_factor == CAL_FACTOR_DEFAULT) {
     snprintf(buf, len, T(STR_CAL_LIVE_RAW), grams);
     return;

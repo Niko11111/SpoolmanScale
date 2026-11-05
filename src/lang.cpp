@@ -2017,19 +2017,21 @@ const char* const STRINGS[][3] = {
     "only hard reset there is.",
     "Le PN532 se signale à l'adresse 0x24, mais ne répond à aucune commande. Il est donc bien réglé en I2C - sinon il ne se signalerait pas du tout - et les fils SDA et SCL sont bons eux aussi.\n\nVérifiez d'abord les deux interrupteurs DIP : pour l'I2C, SW1 doit être sur ON et SW2 sur OFF. Un interrupteur resté entre deux positions est la cause la plus fréquente.\n\nVérifiez ensuite le 5V sur la broche 1. Avec une tension trop faible, la puce se signale sur le bus sans pouvoir fonctionner.\n\nIci, la balance ne peut pas réinitialiser la puce par un signal : le fil orange RST est relié à une sortie du module, et non à son entrée de réinitialisation. Débrancher puis rebrancher est la seule réinitialisation matérielle possible." },  // STR_DIAG_PN532_MUTE_TEXT
 
-  { "Waage nicht kalibriert", "Scale not calibrated", "Balance non étalonnée" },  // STR_DIAG_UNCAL_BANNER
-  { "Waage nicht kalibriert", "Scale not calibrated", "Balance non étalonnée" },  // STR_DIAG_UNCAL_TITLE
-  { "Der angezeigte Wert ist der Rohwert des ADC, nicht Gramm. Deshalb steht "
-    "dort eine sechsstellige Zahl, die von selbst um Hunderte springt.\n\n"
+  { "Nicht kalibriert: Gewicht stimmt nicht", "Not calibrated: weight is wrong",
+    "Non étalonnée : poids inexact" },  // STR_DIAG_UNCAL_BANNER
+  { "Waage nicht kalibriert", "Scale not calibrated",
+    "Balance non étalonnée" },  // STR_DIAG_UNCAL_TITLE
+  { "Das angezeigte Gewicht ist nur ein grober Näherungswert und kann weit "
+    "danebenliegen. Speichere es besser noch nicht im Inventar.\n\n"
     "Das ist kein Defekt und kein Verkabelungsfehler. Die Waage weiß nur noch "
     "nicht, wie viele Messschritte ein Gramm sind.\n\n"
     "Lege ein bekanntes Gewicht auf und kalibriere sie.",
-    "The value on screen is the raw ADC reading, not grams. That is why it is "
-    "a six digit number that jumps by hundreds on its own.\n\n"
+    "The weight on screen is only a rough estimate and can be far off. Better "
+    "not save it to your inventory yet.\n\n"
     "This is neither a defect nor a wiring mistake. The scale simply does not "
     "know yet how many counts make a gram.\n\n"
     "Place a known weight on it and calibrate.",
-    "La valeur affichée est la mesure brute, pas un poids en grammes. C'est pourquoi vous voyez un nombre à six chiffres qui varie tout seul de plusieurs centaines.\n\nCe n'est ni une panne ni une erreur de câblage. La balance ne sait simplement pas encore à combien d'unités brutes correspond un gramme.\n\nPosez un poids connu sur le plateau et étalonnez la balance." },  // STR_DIAG_UNCAL_TEXT
+    "Le poids affiché n'est qu'une estimation grossière et peut être très éloigné de la réalité. Mieux vaut ne pas encore l'enregistrer dans l'inventaire.\n\nCe n'est ni une panne ni une erreur de câblage. La balance ne sait simplement pas encore à combien d'unités brutes correspond un gramme.\n\nPosez un poids connu sur le plateau et étalonnez la balance." },  // STR_DIAG_UNCAL_TEXT
 
   { "Wägezelle verpolt (A+/A-)", "Load cell reversed (A+/A-)",
     "Capteur de pesée inversé (A+/A-)" },  // STR_DIAG_INVERTED_BANNER

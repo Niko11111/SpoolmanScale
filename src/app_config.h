@@ -48,7 +48,16 @@
 #define HDR_AMS_PAD_X        7
 #define HDR_AMS_TOUCH_PAD    8
 
-#define CAL_FACTOR_DEFAULT  1.0f
+// The factor of a scale nobody has calibrated, in counts per gram. A round
+// guess for the 2 kg cell most builds use (about 1075 by calculation): a 1 kg
+// reads roughly double, a 5 kg less than half, and even a 2 kg can be a quarter
+// off. Good enough for the thresholds in grams and to see the cell respond, and
+// never a measurement, which is why the banner says so until it is replaced.
+#define CAL_FACTOR_DEFAULT         1000.0f
+// The factory value of earlier firmware, still in the NVS of a reset device.
+#define CAL_FACTOR_LEGACY_DEFAULT  1.0f
+// How far a calibration that hits the factory value exactly is moved off it.
+#define CAL_FACTOR_MEASURED_STEP   0.01f
 #define SCALE_FILTER_SIZE   8
 
 // The app slot size of the partition table this firmware ships with. A device

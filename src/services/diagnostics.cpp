@@ -103,9 +103,9 @@ void diagnosticsTick() {
   } else if (scale_ready && cal_factor == CAL_FACTOR_DEFAULT) {
     // The exact comparison is sound: the value is assigned literally from this
     // constant in app_state.cpp and app_settings.cpp, and a real calibration
-    // lands between 100 and 2000 counts per gram (see app_config.h). This is
-    // also why there is no "calibrated" flag in NVS - one would read false for
-    // every device that was calibrated before this code existed.
+    // never ends on it (services/cal_factor_rules.h). This is also why there is
+    // no "calibrated" flag in NVS - one would read false for every device that
+    // was calibrated before this code existed.
     next = DIAG_SCALE_UNCALIBRATED;
   } else if (scale_ready && !seen_positive &&
              held(inverted_since, DIAG_INVERTED_SUSTAIN_MS)) {

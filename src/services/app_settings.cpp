@@ -8,6 +8,7 @@
 #include "ams_assign.h"
 #include "app_config.h"
 #include "backend.h"
+#include "cal_factor_rules.h"
 #include "auto_weight_state.h"
 #include "drying_config.h"
 #include "lang.h"
@@ -46,6 +47,12 @@ void loadPrefs() {
     Serial.printf("cal_factor %.6f is unusable, back to %.4f\n",
                   cal_factor, CAL_FACTOR_DEFAULT);
     cal_factor = CAL_FACTOR_DEFAULT;
+    prefsPutFloat("cal_factor", cal_factor);
+  }
+  const float migrated_factor = calFactorFromStored(cal_factor);
+  if (migrated_factor != cal_factor) {
+    Serial.printf("cal_factor %.4f is the old factory value, now %.4f\n", cal_factor, migrated_factor);
+    cal_factor = migrated_factor;
     prefsPutFloat("cal_factor", cal_factor);
   }
   zero_offset = prefsGetInt("zero_offset", 0);

@@ -65,6 +65,8 @@ jobs:
         run: python3 test/test_spool_start.py
       - name: Test tare chain rules
         run: python3 test/test_tare_chain.py
+      - name: Test calibration factor rules
+        run: python3 test/test_cal_factor_rules.py
       - name: Test tag colour name
         run: python3 test/test_tag_color_name.py
       - name: Test backend job rules
