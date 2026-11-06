@@ -12,6 +12,7 @@
 #include "mbedtls/sha256.h"
 
 #include "hardware/sd_logger.h"
+#include "services/notes_cut.h"
 #include "services/ota_state.h"
 
 #define GH_REPO "Niko11111/SpoolmanScale"
@@ -224,10 +225,6 @@ static bool tagLooksSafe(const char *tag) {
   return n < 40;
 }
 
-// Long enough for the release notes this project writes - they run about 5 kB -
-// with room to spare, and short enough that a pasted build log cannot matter.
-#define GH_NOTES_MAX 8000
-
 bool githubReleaseByTag(const char *tag, GithubRelease &out,
                         char *err, size_t err_len) {
   out.tag[0] = out.name[0] = out.published[0] = '\0';
@@ -276,9 +273,13 @@ bool githubReleaseByTag(const char *tag, GithubRelease &out,
   out.published[sizeof(out.published) - 1] = '\0';
   out.prerelease = doc["prerelease"] | false;
 
+  // How much of the notes goes on to the page: services/notes_cut.h.
   const char *b = doc["body"] | "";
-  if (strlen(b) > GH_NOTES_MAX) {
-    out.notes = String(b).substring(0, GH_NOTES_MAX);
+  const size_t body_len = strlen(b);
+  const size_t keep = notesCutLength(b, body_len, GH_NOTES_MAX);
+  if (keep < body_len) {
+    out.notes.reserve(keep + 4);
+    out.notes.concat(b, keep);
     out.notes += "\n...";
   } else {
     out.notes = b;
