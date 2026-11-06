@@ -1935,6 +1935,8 @@ enum StringID {
   STR_W_L_ID_SHARE,
   STR_W_THEME_SPOOLY_DARK,
   STR_W_THEME_SPOOLY_LIGHT,
+  // Weight button: a tag is read but the pad is too light for its spool
+  STR_WB_NO_SPOOL,
   STR_COUNT
 };
 

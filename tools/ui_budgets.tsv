@@ -408,6 +408,7 @@ STR_WEB_QR_HINT	12	456	NEVER	src/ui/ota_browser.cpp under the QR code
 STR_WB_SENT	16	160	NEVER	src/ui/weight_button.cpp main screen button, behind an icon
 STR_WB_UNCHANGED	16	160	NEVER	src/ui/weight_button.cpp main screen button, behind an icon
 STR_WB_RISE	16	160	NEVER	src/ui/weight_button.cpp main screen button, behind an icon
+STR_WB_NO_SPOOL	16	160	NEVER	src/ui/weight_button.cpp main screen button, behind an icon
 STR_WP_RISE_LINE	14	436	NEVER	src/ui/weight_popup.cpp first line, %s = backend name
 STR_WP_SEND	24	390	NEVER	src/ui/weight_popup.cpp large button, behind a tick
 STR_WP_SEND_ANYWAY	24	390	NEVER	src/ui/weight_popup.cpp large button
