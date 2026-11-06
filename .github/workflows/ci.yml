@@ -53,6 +53,8 @@ jobs:
         run: python3 test/test_ble_discovery.py
       - name: Test FilaMan label orientation
         run: python3 test/test_label_fit.py
+      - name: Test AMS grid redraw
+        run: python3 test/test_ams_grid_redraw.py
       - name: Test label raster crop
         run: python3 test/test_label_raster_crop.py
       - name: Test NIIMBOT task selection
