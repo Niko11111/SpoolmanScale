@@ -1,5 +1,6 @@
 #include "second_tag_popup.h"
 #include "app/app_state.h"
+#include "app/app_loop.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -8,6 +9,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/http_progress.h"
+#include "services/tag_field.h"
 #include "services/tag_uid.h"
 #include "ui/spool_flow.h"
 #include "ui_common.h"
@@ -22,6 +24,7 @@
 static lv_obj_t *scr_tag2      = nullptr;
 static lv_obj_t *lbl_tag2_count = nullptr;
 static lv_obj_t *bar_tag2_fill  = nullptr;
+static lv_obj_t *lbl_tag2_prompt = nullptr;
 static lv_coord_t s_fill_w      = -1;   // the width last set, so a pass without a change draws nothing
 
 // Captured when the popup is built. The button callback only raises a flag;
@@ -36,6 +39,13 @@ static bool s_close_pending = false;
 // is a second chip.
 static char s_first_uid[CARD_UIDS_MAX]  = "";
 static char s_second_uid[CARD_UIDS_MAX] = "";
+
+// Whether the first tag was a Bambu tag. A Bambu spool carries a Bambu chip on
+// both flanges, so on such a spool a second tag that settles as anything else
+// was misread, not a sticker (06.11.2026, spool 40: CE4AF87E linked as ntag).
+static bool s_first_bambu = false;
+// The tag the "put it back" line was shown for, so it is said and logged once.
+static char s_unclear_uid[CARD_UIDS_MAX] = "";
 
 static unsigned long s_opened_ms    = 0;
 // What the blocking-time counter stood at when the popup opened, same
@@ -65,6 +75,7 @@ static void closeSecondTagPopup() {
   if (scr_tag2) { lv_obj_del(scr_tag2); scr_tag2 = nullptr; }
   lbl_tag2_count = nullptr;
   bar_tag2_fill  = nullptr;
+  lbl_tag2_prompt = nullptr;
   s_fill_w       = -1;
   s_last_shown_s = -1;
 }
@@ -117,7 +128,10 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   s_link_pending  = false;
   s_close_pending = false;
   s_second_uid[0] = '\0';
+  s_unclear_uid[0] = '\0';
   tagUidNormalize(first_uid, s_first_uid, sizeof(s_first_uid));
+  // g_tag still holds the tag that was just linked.
+  s_first_bambu   = tagIsBambu(g_tag.tray_uuid);
   s_opened_ms     = millis();
   s_opened_stall  = httpStallTotalMs();
   setState(T2_WAITING);
@@ -180,6 +194,7 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   lv_label_set_long_mode(lbl_prompt, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(lbl_prompt, UI_POPUP_W - UI_CARD_TEXT_PAD);
   lv_obj_align(lbl_prompt, LV_ALIGN_TOP_MID, 0, TAG2_PROMPT_Y);
+  lbl_tag2_prompt = lbl_prompt;
 
   // The seconds in words, quietly: the draining button below says the same
   // at a glance, this line says it to anyone who reads.
@@ -275,12 +290,33 @@ void handleSecondTagDeferredActions() {
     // target of this question away with it.
     char now[CARD_UIDS_MAX];
     tagUidNormalize(g_tag.uid_str, now, sizeof(now));
-    if (now[0] && strcmp(now, s_first_uid) != 0) {
+    //
+    // A new UID is not yet an answer. g_tag.uid_str is written on the first
+    // read attempt, while a Bambu tag may still be on its way to its tray
+    // uuid - linked then, it went in as a plain tag (bambu=0). So the tag is
+    // only taken once its read has settled, and only if it settled into
+    // something that can be linked.
+    const TagVerdict verdict = (now[0] && strcmp(now, s_first_uid) != 0)
+                             ? tagSettledVerdict(g_tag.uid_str) : TV_NONE;
+    const bool unclear = verdict == TV_BAMBU_INCOMPLETE ||
+                         (verdict == TV_OTHER && s_first_bambu);
+    if (verdict != TV_NONE && !unclear) {
       strncpy(s_second_uid, g_tag.uid_str, sizeof(s_second_uid) - 1);
       s_second_uid[sizeof(s_second_uid) - 1] = '\0';
       s_link_pending  = true;
       s_close_pending = true;
       setState(T2_LINKING);
+    } else if (unclear && strcmp(now, s_unclear_uid) != 0) {
+      // Not linked, and the question keeps standing: lifting the spool and
+      // putting it back starts a fresh read of the same chip.
+      snprintf(s_unclear_uid, sizeof(s_unclear_uid), "%s", now);
+      logSDf("TAG2: '%s' not linked to spool %d, read as %s - asking to put it back",
+             g_tag.uid_str, s_spool_id,
+             verdict == TV_BAMBU_INCOMPLETE ? "an incomplete Bambu tag" : "no Bambu tag");
+      if (lbl_tag2_prompt) {
+        lv_label_set_text(lbl_tag2_prompt, T(STR_TAG2_UNCLEAR));
+        lv_obj_set_style_text_color(lbl_tag2_prompt, lv_color_hex(UI_COL_WARN), 0);
+      }
     } else if (remainingSeconds() == 0) {
       s_close_pending = true;
       setState(T2_EXPIRED);

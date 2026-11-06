@@ -1016,6 +1016,7 @@ enum StringID {
   // that another spool holds.
   STR_TAG2_LINKED_INFO,
   STR_TAG2_FAILED,
+  STR_TAG2_UNCLEAR,
   STR_TAGMOVE_HINT,
   STR_TAGMOVE_BTN,
   STR_TAGMOVE_FAILED,
