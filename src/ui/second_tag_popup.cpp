@@ -317,6 +317,10 @@ void handleSecondTagDeferredActions() {
         lv_label_set_text(lbl_tag2_prompt, T(STR_TAG2_UNCLEAR));
         lv_obj_set_style_text_color(lbl_tag2_prompt, lv_color_hex(UI_COL_WARN), 0);
       }
+    } else if (verdict == TV_NONE && s_unclear_uid[0]) {
+      // The tag left or is being read again: a second unclear read after
+      // the spool was put back is said and logged again.
+      s_unclear_uid[0] = '\0';
     } else if (remainingSeconds() == 0) {
       s_close_pending = true;
       setState(T2_EXPIRED);
