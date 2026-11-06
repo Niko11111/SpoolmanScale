@@ -326,6 +326,24 @@ static const char* findGeneric(const char* text) {
   return best;
 }
 
+// Generic ids the silk rule below compares and returns.
+static const char GENERIC_PLA_ID[]      = "00001";
+static const char GENERIC_PLA_SILK_ID[] = "00002";
+
+// Spoolman's material field says only "PLA" for a silk filament, so the
+// printer picked the plain PLA profile for "Silk PLA Lila". When the material
+// resolves to plain PLA, the name may narrow it to Generic PLA-Silk. Nothing
+// else is taken from the name: "Matte PLA" with material PETG stays PETG.
+// waage.py on the FilaStation does the same, or each scale would rewrite the
+// other's tags.
+static const char* narrowPlaByName(const char* id, const char* name) {
+  if (!id || strcmp(id, GENERIC_PLA_ID) != 0 || !name || !*name) return id;
+  const char* by_name = findGeneric(name);
+  if (by_name && strcmp(by_name, GENERIC_PLA_SILK_ID) == 0) return GENERIC_PLA_SILK_ID;
+  char n[96]; normName(name, n, sizeof(n));
+  return strstr(n, "SILK") ? GENERIC_PLA_SILK_ID : id;
+}
+
 void crealityFilamentIdFor(const char* vendor, const char* name, const char* material,
                            char out[7]) {
   char v[48]; normName(vendor ? vendor : "", v, sizeof(v));
@@ -346,9 +364,9 @@ void crealityFilamentIdFor(const char* vendor, const char* name, const char* mat
     }
   }
   if (!id) id = findProduct(CREALITY_PRODUCTS, material ? material : "");
-  if (!id) id = findGeneric(material);
+  if (!id) id = narrowPlaByName(findGeneric(material), name);
   if (!id) id = findGeneric(name);
-  if (!id) id = "00001";
+  if (!id) id = GENERIC_PLA_ID;
   snprintf(out, 7, "1%s", id);
 }
 
