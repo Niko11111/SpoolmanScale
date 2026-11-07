@@ -13,14 +13,7 @@
 #include <ArduinoJson.h>
 #include <stddef.h>
 
-// Big enough for "2026-10-06T22:07:00.000000Z".
-#define LAST_DRIED_ISO_MAX  32
-
-// raw as a server stored it, in the form isoDayLocal() reads: surrounding
-// quotes removed (Spoolman JSON-encodes extra values), and a Z added to a
-// date-time that names no zone. A bare date is passed through. Empty out
-// when raw is null or empty.
-void lastDriedUtc(const char* raw, char* out, size_t out_size);
+#include "services/last_dried_rules.h"   // lastDriedUtc(), LAST_DRIED_ISO_MAX
 
 // The later of extra.last_dried and extra.bambu_last_dried_at, each through
 // lastDriedUtc(). Both are UTC once normalised, so the later one is the one
