@@ -1945,6 +1945,9 @@ enum StringID {
   STR_NEWSPOOL_HINT_NOT_SHOWN,// its sentence when the new spool is not on the display
   // Weight button: a tag is read but the pad is too light for its spool
   STR_WB_NO_SPOOL,
+  // Busy card while a MIFARE (CFS) tag is written: title and hint
+  STR_TW_HANDS_OFF,
+  STR_TW_HANDS_OFF_HINT,
   STR_COUNT
 };
 

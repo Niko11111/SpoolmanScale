@@ -23,6 +23,7 @@
 static lv_obj_t *scr_tag_busy = nullptr;
 static lv_obj_t *bar_tag_busy = nullptr;
 static lv_obj_t *lbl_busy_hint = nullptr;
+static bool s_hands_off = false;
 
 // From inside the write, after every page, see tagWriteSetProgress(). Draws
 // on the spot: the loop stands still until the job is done, so nothing else
@@ -37,9 +38,25 @@ static void busyProgress(uint16_t done, uint16_t total) {
   lv_refr_now(NULL);
 }
 
-void tagBusyShow(bool erase) {
+// The card for a MIFARE write: amber like every other "careful" state, the
+// warning as its title. The title stays in the ink colour: amber text on the
+// amber ground of the light palettes reaches only 4.0:1.
+static void paintHandsOff(lv_obj_t *box, lv_obj_t *icon, lv_obj_t *title, lv_obj_t *hint,
+                          lv_obj_t *bar) {
+  lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_AMBER_BG), 0);
+  lv_obj_set_style_border_color(box, lv_color_hex(UI_COL_WARN), 0);
+  lv_label_set_text(icon, LV_SYMBOL_WARNING);
+  lv_label_set_text(title, T(STR_TW_HANDS_OFF));
+  lv_label_set_text(hint, T(STR_TW_HANDS_OFF_HINT));
+  lv_obj_set_style_text_color(hint, lv_color_hex(UI_COL_INK), 0);
+  lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COL_AMBER_LINE), LV_PART_MAIN);
+  lv_obj_set_style_bg_color(bar, lv_color_hex(UI_COL_WARN), LV_PART_INDICATOR);
+}
+
+void tagBusyShow(bool erase, bool hands_off) {
   if (scr_tag_busy) return;
-  logSDf("SHOW: TagBusyPopup %s", erase ? "erase" : "write");
+  s_hands_off = hands_off;
+  logSDf("SHOW: TagBusyPopup %s%s", erase ? "erase" : "write", hands_off ? " (hands off)" : "");
 
   scr_tag_busy = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_tag_busy, LV_HOR_RES, LV_VER_RES);
@@ -99,6 +116,7 @@ void tagBusyShow(bool erase) {
   lv_obj_set_style_radius(bar_tag_busy, BUSY_BAR_H / 2, LV_PART_MAIN);
   lv_obj_set_style_radius(bar_tag_busy, BUSY_BAR_H / 2, LV_PART_INDICATOR);
   tagWriteSetProgress(busyProgress);
+  if (hands_off) paintHandsOff(box, icon, title, hint, bar_tag_busy);
 
   // Now, not at the next lv_timer_handler(): the write starts on the next loop
   // pass and holds the loop until it is done, and a card that is first drawn
@@ -113,6 +131,7 @@ void tagBusyHide() {
   tagWriteSetProgress(nullptr);
   bar_tag_busy = nullptr;
   lbl_busy_hint = nullptr;
+  s_hands_off = false;
   lv_obj_del(scr_tag_busy);
   scr_tag_busy = nullptr;
 }
@@ -120,5 +139,6 @@ void tagBusyHide() {
 void tagBusyAskReplace() {
   if (!lbl_busy_hint) return;
   lv_label_set_text(lbl_busy_hint, T(STR_TW_CFS_REPLACE));
-  lv_obj_set_style_text_color(lbl_busy_hint, lv_color_hex(UI_COL_WARN), 0);
+  // On the amber card amber text would not stand out, see paintHandsOff().
+  lv_obj_set_style_text_color(lbl_busy_hint, lv_color_hex(s_hands_off ? UI_COL_INK : UI_COL_WARN), 0);
 }

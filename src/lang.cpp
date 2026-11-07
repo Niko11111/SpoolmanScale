@@ -4244,6 +4244,12 @@ const char* const STRINGS[][3] = {
   // Weight button (weight_button.cpp): a tag is read but the pad weighs too
   // little for its spool, so nothing is written.
   { "Spule fehlt", "No spool", "Pas de bobine" },  // STR_WB_NO_SPOOL
+  // Busy card while a MIFARE (CFS) tag is written (tag_busy_popup.cpp): a tag
+  // that leaves the field before the last block keeps a half written record.
+  { "Spule nicht berühren", "Do not touch the spool", "Ne touchez pas la bobine" },  // STR_TW_HANDS_OFF
+  { "Der Tag wird geschrieben und danach geprüft. Fertig ist er erst, wenn die Bestätigung kommt.",
+    "The tag is being written and then checked. It is only done once the confirmation appears.",
+    "Le tag est écrit puis vérifié. Il n'est prêt qu'à la confirmation." },  // STR_TW_HANDS_OFF_HINT
 };
 
 StringID tagWriteResultString(uint8_t code) {

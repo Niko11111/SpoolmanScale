@@ -21,8 +21,11 @@
 //  on the spot, because the very next thing the caller does is block.
 // ============================================================
 
-// `erase` picks the wording. Does nothing when the card is already up.
-void tagBusyShow(bool erase);
+// `erase` picks the wording. `hands_off` turns the card amber and its title
+// into "Do not touch the spool": for a MIFARE write (CFS), where a tag that
+// leaves the field before the last block keeps a half written record. Does
+// nothing when the card is already up.
+void tagBusyShow(bool erase, bool hands_off = false);
 
 // Takes it down again. Safe to call when it is not there.
 void tagBusyHide();

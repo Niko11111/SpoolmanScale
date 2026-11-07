@@ -193,6 +193,7 @@ STR_TV_WRITE	16	197	NEVER	src/ui/tag_view.cpp:376 button label with a spool id, 
 STR_TV_ERASE_TITLE	20	360	NEVER	src/ui/tag_write_popup.cpp:163 question title, BOX_W - 40
 STR_TW_BUSY_WRITE	20	360	NEVER	src/ui/tag_busy_popup.cpp:70 card title, UI_POPUP_W - UI_CARD_TEXT_PAD
 STR_TW_BUSY_ERASE	20	360	NEVER	src/ui/tag_busy_popup.cpp:70 card title, UI_POPUP_W - UI_CARD_TEXT_PAD
+STR_TW_HANDS_OFF	20	360	NEVER	src/ui/tag_busy_popup.cpp card title, UI_POPUP_W - UI_CARD_TEXT_PAD
 STR_LIST_RELOAD	14	94	NEVER	src/ui/spool_flow.cpp listReloadStrip: LINK_RELOAD_W 110 button, 8 px air each side
 STR_COPY_CARD_WEIGHT	16	360	NEVER	src/ui/copy_confirm_popup.cpp line 3 of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
 STR_COPY_CARD_CREATE	18	150	NEVER	src/ui/copy_confirm_popup.cpp 170 px answer button, 10 px air each side

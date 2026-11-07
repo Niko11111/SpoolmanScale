@@ -291,7 +291,7 @@ void startTagWriteNoAsk(int spool_id) {
     // The same watch a confirmed question sets, so the result popup appears
     // through the one path that already knows how to show it.
     s_watching = true;
-    tagBusyShow(false);
+    tagBusyShow(false, tagFormatIsMifare(s_write_fmt));
   } else {
     showResult(TW_ERR_WRITE);
     logSD("TagWrite: writer busy, nothing queued");
@@ -455,7 +455,7 @@ static void queueTagJob() {
     // From here to the result the loop is busy with the tag and the screen
     // would say nothing. The question is gone by now, so the pool holds one
     // of the two at a time.
-    tagBusyShow(s_mode == ASK_ERASE);
+    tagBusyShow(s_mode == ASK_ERASE, s_mode != ASK_ERASE && tagFormatIsMifare(s_write_fmt));
   } else {
     // Only reachable when another write is still parked, which the tag page
     // could have started. Saying so beats a popup that closes and does nothing.
