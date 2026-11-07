@@ -49,6 +49,12 @@ jobs:
         run: python3 test/test_server_refusal.py
       - name: Test weight write rules
         run: python3 test/test_weight_write_rules.py
+      - name: Test auto weighing on an empty pad
+        run: python3 test/test_auto_weight_pad.py
+      - name: Test material and name joined once
+        run: python3 test/test_join_material_name.py
+      - name: Test Creality silk PLA
+        run: python3 test/test_creality_silk.py
       - name: Test Bluetooth discovery
         run: python3 test/test_ble_discovery.py
       - name: Test FilaMan label orientation
