@@ -1,5 +1,6 @@
 #pragma once
 
+#include "services/label_layout.h"  // LABEL_NAME_BYTES
 #include "services/tag_field.h"  // TagFieldId, TAG_FIELD_COUNT
 #include "services/spool_link_rules.h"
 #include "services/tag_uid.h"   // CARD_UIDS_MAX
@@ -174,6 +175,13 @@ int smBoundUidCount();
 int smBoundSourceCount();
 extern char sm_article_nr[32];
 extern char sm_filament_name[32];
+// The same name for the label, which wraps it and so has room for all of it.
+// The screens keep the short one: their buffers are sized for it and they end
+// a long name in dots anyway.
+extern char sm_filament_name_label[LABEL_NAME_BYTES];
+// Both of the above, cut on a character boundary.
+void smFilamentNameSet(const char* name);
+void smFilamentNameClear();
 extern char sm_material_global[32];
 extern char sm_vendor_g[32];
 extern char sm_color_global[16];

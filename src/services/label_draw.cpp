@@ -308,13 +308,13 @@ bool splitTwoLines(const char* text, const lv_font_t* f, lv_coord_t w,
   lv_coord_t used = 0;
   const uint32_t n = _lv_txt_get_next_line(text, sized(f), 0, w - boldFor(f), &used,
                                            LV_TEXT_FLAG_NONE);
-  if (n == 0 || n >= strlen(text) || n >= LABEL_LINE_LEN) return false;
-  snprintf(first, LABEL_LINE_LEN, "%.*s", (int)n, text);
+  if (n == 0 || n >= strlen(text) || n >= LABEL_NAME_BYTES) return false;
+  snprintf(first, LABEL_NAME_BYTES, "%.*s", (int)n, text);
   const char* rest = text + n;
   while (*rest == ' ') rest++;
   // Only spaces after the break: that is one line, not two.
   if (!*rest) return false;
-  snprintf(second, LABEL_LINE_LEN, "%s", rest);
+  snprintf(second, LABEL_NAME_BYTES, "%s", rest);
   // The break leaves a space at the end of the first line.
   for (size_t k = strlen(first); k > 0 && first[k - 1] == ' '; k--) first[k - 1] = '\0';
   return fitsLine(first, f, w) && fitsLine(second, f, w);
@@ -325,8 +325,8 @@ const char* takeLine(const char* text, const lv_font_t* f, lv_coord_t w, char* f
   lv_coord_t used = 0;
   const uint32_t n = _lv_txt_get_next_line(text, sized(f), 0, w - boldFor(f), &used,
                                            LV_TEXT_FLAG_NONE);
-  if (n == 0 || n >= strlen(text) || n >= LABEL_LINE_LEN) return nullptr;
-  snprintf(first, LABEL_LINE_LEN, "%.*s", (int)n, text);
+  if (n == 0 || n >= strlen(text) || n >= LABEL_NAME_BYTES) return nullptr;
+  snprintf(first, LABEL_NAME_BYTES, "%.*s", (int)n, text);
   for (size_t k = strlen(first); k > 0 && first[k - 1] == ' '; k--) first[k - 1] = '\0';
   const char* rest = text + n;
   while (*rest == ' ') rest++;

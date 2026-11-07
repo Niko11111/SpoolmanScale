@@ -93,6 +93,9 @@ struct LabelArea {
   bool columns;                  // the facts may stand in two columns
   // A name one line would cut goes on two in this font; null: it is cut.
   const lv_font_t* wrap_font;
+  // A name too long for two lines in the wrap font keeps two all the same,
+  // the second cut, rather than one line cut sooner.
+  bool wrap_cuts;
 };
 
 // One of two columns side by side.
@@ -102,10 +105,16 @@ static lv_coord_t columnWidth(const LabelArea& a) { return (a.w - dots(LR_COLUMN
 struct LabelBody { lv_coord_t qr; bool beside; const char* facts; };
 
 // The name as the area sets it on two lines: one line would cut it even in
-// the wrap font, and it breaks into two that fit. False: one line.
+// the wrap font, and it breaks into two that fit, or the area takes a cut
+// second line. False: one line.
 static bool nameOnTwoLines(const LabelArea& a, const char* name, char* first, char* second) {
-  return a.wrap_font && !fitsLine(name, a.wrap_font, a.w) &&
-         splitTwoLines(name, a.wrap_font, a.w, first, second);
+  if (!a.wrap_font || fitsLine(name, a.wrap_font, a.w)) return false;
+  if (splitTwoLines(name, a.wrap_font, a.w, first, second)) return true;
+  if (!a.wrap_cuts) return false;
+  const char* rest = takeLine(name, a.wrap_font, a.w, first);
+  if (!rest) return false;
+  snprintf(second, LABEL_NAME_BYTES, "%s", rest);
+  return true;
 }
 
 // The filament's name: one line in `f`, as large as it fit; where the area
@@ -115,7 +124,7 @@ static lv_coord_t drawName(lv_obj_t* canvas, const LabelArea& a, lv_coord_t y,
                            const lv_font_t* f, const char* name) {
   const lv_color_t black = lv_color_black();
   const lv_coord_t gap = dots(LR_GAP_PX);
-  char first[LABEL_LINE_LEN], second[LABEL_LINE_LEN];
+  char first[LABEL_NAME_BYTES], second[LABEL_NAME_BYTES];
   const lv_font_t* w = a.wrap_font;
   if (!fitsLine(name, f, a.w) && nameOnTwoLines(a, name, first, second)) {
     drawLine(canvas, a.x, y, a.w, w, black, LV_TEXT_ALIGN_CENTER, first);
@@ -140,7 +149,7 @@ static lv_coord_t drawHeader(lv_obj_t* canvas, const LabelArea& a, bool tall,
     static const lv_font_t* const base[] = { &lv_font_montserrat_ext_36, &lv_font_montserrat_ext_28, &lv_font_montserrat_ext_24 };
     // No 44 px on the larger sizes: that one line cost 85 KB of flash. A
     // name on two lines takes the room of the largest size.
-    char l1[LABEL_LINE_LEN], l2[LABEL_LINE_LEN];
+    char l1[LABEL_NAME_BYTES], l2[LABEL_NAME_BYTES];
     const lv_font_t* f = nameOnTwoLines(a, d.name, l1, l2) ? fitFont(d.vendor, a.w, base + 1, 2)
                                                            : fitFont(d.vendor, a.w, base, 3);
     drawLine(canvas, a.x, y, a.w, f, black, LV_TEXT_ALIGN_CENTER, d.vendor);
@@ -494,9 +503,10 @@ static lv_coord_t bodyCode(const LabelArea& a, bool tall, const LabelContent& c,
 
 // The font a name one line would cut is set in instead, on one line or two;
 // null to cut it as before. The largest of three that leaves every fact
-// whole and the code as large as the cut line did. Measured, nothing drawn.
+// whole and the code as large as the cut line did; with none, the smallest
+// with `cuts` set, if its two lines leave the same. Measured, nothing drawn.
 static const lv_font_t* nameWrapFont(const LabelArea& a, bool tall, const LabelContent& c,
-                                     const LabelLayout& layout) {
+                                     const LabelLayout& layout, bool* cuts) {
   const SpoolLabelData& d = *c.d;
   if (!d.name[0] || !labelLayoutHas(layout, LF_NAME)) return nullptr;
   // The smallest size the header sets the name in on one line.
@@ -508,18 +518,23 @@ static const lv_font_t* nameWrapFont(const LabelArea& a, bool tall, const LabelC
   plain.y = drawHead(nullptr, plain, tall, d, layout);
   bool fits = false;
   const lv_coord_t code = bodyCode(plain, tall, c, &fits);
+  auto holds = [&](const lv_font_t* f, bool cut) {
+    LabelArea trial = a;
+    trial.wrap_font = f;
+    trial.wrap_cuts = cut;
+    trial.y = drawHead(nullptr, trial, tall, d, layout);
+    if (trial.y == plain.y) return false;   // no break that fits two lines
+    const lv_coord_t trial_code = bodyCode(trial, tall, c, &fits);
+    return fits && trial_code >= code;
+  };
   static const lv_font_t* const WRAP_FONTS[] = {
     &lv_font_montserrat_ext_20, &lv_font_montserrat_ext_16, &lv_font_montserrat_ext_14,
   };
-  for (const lv_font_t* f : WRAP_FONTS) {
-    LabelArea trial = a;
-    trial.wrap_font = f;
-    trial.y = drawHead(nullptr, trial, tall, d, layout);
-    if (trial.y == plain.y) continue;   // no break that fits two lines
-    const lv_coord_t trial_code = bodyCode(trial, tall, c, &fits);
-    if (fits && trial_code >= code) return f;
-  }
-  return nullptr;
+  for (const lv_font_t* f : WRAP_FONTS)
+    if (holds(f, false)) return f;
+  const lv_font_t* smallest_wrap = &lv_font_montserrat_ext_14;
+  *cuts = holds(smallest_wrap, true);
+  return *cuts ? smallest_wrap : nullptr;
 }
 
 // Every label the scale prints, laid out as `layout` says.
@@ -576,7 +591,7 @@ static bool renderLabel(const LabelPrinterConfig& printer, const LabelLayout& la
     // The larger sizes need room both ways: a 30 x 40 is tall but narrow, and
     // there the header blocks would eat what the code needs.
     const bool tall = ch >= dots(LR_TALL_PX) && area.w + 2 * M >= dots(LR_TALL_PX);
-    area.wrap_font = nameWrapFont(area, tall, body, layout);
+    area.wrap_font = nameWrapFont(area, tall, body, layout, &area.wrap_cuts);
     area.y = drawHead(canvas, area, tall, *c.d, layout);
     placed = drawBody(canvas, area, tall, body);
   }

@@ -653,8 +653,7 @@ void querySpoolmanById(int spool_id) {
 
   String fil_name = spool["filament"]["name"] | String("");
   fil_name.trim();
-  strncpy(sm_filament_name, fil_name.c_str(), sizeof(sm_filament_name)-1);
-  sm_filament_name[sizeof(sm_filament_name)-1] = '\0';
+  smFilamentNameSet(fil_name.c_str());
 
   // Location - Spoolman gibt location als einfachen String zurück
   sm_location_id = 0;
@@ -1251,7 +1250,7 @@ void querySpoolman(const char* tray_uuid, LookupOrigin origin) {
   }
   sm_last_dried[0] = '\0';
   sm_article_nr[0] = '\0';
-  sm_filament_name[0] = '\0';
+  smFilamentNameClear();
   sm_material_global[0] = '\0';
   sm_color_global[0] = '\0';
   sm_last_used[0] = '\0';

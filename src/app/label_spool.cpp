@@ -109,7 +109,7 @@ bool labelSpoolFromScan(SpoolLabelData* out) {
   out->id = sm_id;
   snprintf(out->page_url, sizeof(out->page_url), "%s", sm_page_url);
   out->filament_id = sm_filament_id > 0 ? sm_filament_id : 0;
-  snprintf(out->name, sizeof(out->name), "%s", sm_filament_name);
+  snprintf(out->name, sizeof(out->name), "%s", sm_filament_name_label);
   snprintf(out->vendor, sizeof(out->vendor), "%s", sm_vendor_g);
   // Like the More info card: the backend's material when it named one,
   // else what the Bambu tag says.

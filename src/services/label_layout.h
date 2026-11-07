@@ -127,6 +127,13 @@ bool labelLayoutSave(const LabelLayout& layout, LabelKind kind = LABEL_KIND_SPOO
 // sign keeps all 40 (64 bytes cut a line of umlauts after 31).
 #define LABEL_FREE_TEXT_CHARS 40
 #define LABEL_FREE_TEXT_BYTES (LABEL_FREE_TEXT_CHARS * 4 + 1)
+
+// Room for the filament's whole name on a label. Spoolman allows 64 characters;
+// the longest of the 8120 names in its filament database takes 61 bytes
+// ("Panchroma(TM) Marble (Formerly PolyTerra(TM) Marble) Slate Grey"), and a
+// trademark sign alone takes three. Stays within what the drawing code can
+// spell in one go (LR_SPELL_LEN).
+#define LABEL_NAME_BYTES 96
 const char* labelLayoutFreeText();
 // Cut to the buffer on a character boundary; false when NVS refused it.
 bool labelLayoutSaveFreeText(const char* text);

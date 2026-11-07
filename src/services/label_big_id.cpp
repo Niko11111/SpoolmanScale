@@ -32,7 +32,7 @@ struct BigIdLine { const char* text; bool band; bool small; };
 struct BigIdLines {
   BigIdLine at[LB_LINES_MAX];
   int n;
-  char name[LB_NAME_LINES - 1][LABEL_LINE_LEN];
+  char name[LB_NAME_LINES - 1][LABEL_NAME_BYTES];
 };
 
 static void addLine(BigIdLines* l, const char* text, bool band, bool small) {

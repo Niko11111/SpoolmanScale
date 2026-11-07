@@ -2,6 +2,7 @@
 
 #include "services/tag_field.h"
 #include "services/tag_uid.h"
+#include "services/text_util.h"
 #include "services/user_options.h"
 
 int     bright_normal   = BRIGHT_NORMAL_DEFAULT;
@@ -146,6 +147,15 @@ int smBoundSourceCount() {
 }
 char  sm_article_nr[32] = "";
 char  sm_filament_name[32] = "";
+char  sm_filament_name_label[LABEL_NAME_BYTES] = "";
+void smFilamentNameSet(const char* name) {
+  utf8Cut(name, sizeof(sm_filament_name) - 1, sm_filament_name, sizeof(sm_filament_name));
+  utf8Cut(name, sizeof(sm_filament_name_label) - 1, sm_filament_name_label, sizeof(sm_filament_name_label));
+}
+void smFilamentNameClear() {
+  sm_filament_name[0] = '\0';
+  sm_filament_name_label[0] = '\0';
+}
 char  sm_material_global[32] = "";
 char  sm_vendor_g[32] = "";
 char  sm_color_global[16] = "";

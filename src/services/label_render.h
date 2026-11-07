@@ -29,7 +29,7 @@
 struct SpoolLabelData {
   int   id;
   int   filament_id;                // 0 where the backend has no filament (BamBuddy)
-  char  name[LABEL_LINE_LEN];       // the filament, as the backend names it
+  char  name[LABEL_NAME_BYTES];     // the filament, as the backend names it
   char  vendor[LABEL_LINE_LEN];
   char  material[LABEL_LINE_LEN];
   char  color[16];                  // hex or a name, whatever the backend gave

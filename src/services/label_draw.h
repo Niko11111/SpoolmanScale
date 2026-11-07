@@ -65,11 +65,11 @@ const lv_font_t* fitFontUnder(const char* text, lv_coord_t w, lv_coord_t max_h,
 // a font without the supplement spells a line with its accents folded.
 bool fitsLine(const char* text, const lv_font_t* f, lv_coord_t w);
 // The text as two lines that each fit the width in this font, broken where
-// LVGL breaks a paragraph; each buffer LABEL_LINE_LEN bytes. False when it
+// LVGL breaks a paragraph; each buffer LABEL_NAME_BYTES bytes. False when it
 // needs more than two.
 bool splitTwoLines(const char* text, const lv_font_t* f, lv_coord_t w, char* first, char* second);
 
-// The first line of a text wrapped to the width, into `first` of LABEL_LINE_LEN
+// The first line of a text wrapped to the width, into `first` of LABEL_NAME_BYTES
 // bytes. Returns what is left after it, null when there is nothing to break.
 const char* takeLine(const char* text, const lv_font_t* f, lv_coord_t w, char* first);
 // One line, cut on a character boundary to the width. No canvas: nothing is

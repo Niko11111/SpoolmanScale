@@ -619,8 +619,7 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
     sm_article_nr[sizeof(sm_article_nr)-1] = '\0';
     String fil_name = spool["filament"]["name"] | String("");
     fil_name.trim();
-    strncpy(sm_filament_name, fil_name.c_str(), sizeof(sm_filament_name)-1);
-    sm_filament_name[sizeof(sm_filament_name)-1] = '\0';
+    smFilamentNameSet(fil_name.c_str());
 
     // Location - einfacher String in Spoolman
     sm_location_name[0] = '\0';
