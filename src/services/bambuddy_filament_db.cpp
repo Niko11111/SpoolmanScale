@@ -29,8 +29,8 @@
 namespace {
 
 // ArduinoJson has to be told to use PSRAM, and the allocator must be defined
-// in every translation unit that needs it. The colours are about 60 kB
-// once filtered.
+// in every translation unit that needs it. The spool catalog and the
+// inventory are read whole; the colours go one at a time (eachColor()).
 struct SpiRamAllocator : ArduinoJson::Allocator {
   void* allocate(size_t size) override {
     void* ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
@@ -50,6 +50,20 @@ SpiRamAllocator s_psram;
 struct ListRead {
   JsonDocument* doc;
   JsonDocument* filter;
+};
+
+struct ColorRead {
+  JsonDocument* filter;
+  FdbElementFn  fn;
+  void*         ctx;
+};
+
+// One maker's material, while its colours are picked out of the catalog.
+struct EntryPick {
+  const char* maker;
+  const char* material;
+  int         no_color;
+  bool        full;
 };
 
 }  // namespace
@@ -134,6 +148,24 @@ static int getList(const char* base_url, const char* api_key, const char* path,
   return code;
 }
 
+static bool readColors(Stream& raw, void* ctx) {
+  ColorRead* r = (ColorRead*)ctx;
+  return fdbEachElement(raw, BB_FDB_TIMEOUT_MS, *r->filter, r->fn, r->ctx);
+}
+
+// The colour catalog, one colour at a time, filtered to the keys given. Never
+// as one document: after a sync from FilamentColors.xyz it holds thousands of
+// colours, see fdbEachElement(). The HTTP code.
+static int eachColor(const char* base_url, const char* api_key,
+                     std::initializer_list<const char*> keys, FdbElementFn fn, void* ctx) {
+  JsonDocument filter;
+  for (const char* key : keys) filter[key] = true;
+  ColorRead r = { &filter, fn, ctx };
+  const int code = bbGetStreamed(base_url, api_key, BB_PATH_COLORS, BB_FDB_TIMEOUT_MS, readColors, &r);
+  if (code != 200) logSDf("Filament DB: BamBuddy %s -> HTTP %d", BB_PATH_COLORS, code);
+  return code;
+}
+
 // ------------------------------------------------------------
 //  The index
 // ------------------------------------------------------------
@@ -164,16 +196,16 @@ static void noteInventory(const char* base_url, const char* api_key) {
   }
 }
 
-int bambuddyFdbLoadIndex(const char* base_url, const char* api_key) {
-  JsonDocument doc(&s_psram);
-  const int code = getList(base_url, api_key, BB_PATH_COLORS, doc, { "manufacturer", "material" });
-  if (code != 200) return code;
+static void indexColor(JsonObjectConst c, void* ctx) {
+  (void)ctx;
   char material[sizeof(FdbPair::material)], line[FDB_LINE_MAX];
-  for (JsonObjectConst c : doc.as<JsonArrayConst>()) {
-    splitAsIndexed(c["material"] | "", material, line, sizeof(line));
-    fdbIndexAdd(c["manufacturer"] | "", material);
-  }
-  doc.clear();
+  splitAsIndexed(c["material"] | "", material, line, sizeof(line));
+  fdbIndexAdd(c["manufacturer"] | "", material);
+}
+
+int bambuddyFdbLoadIndex(const char* base_url, const char* api_key) {
+  const int code = eachColor(base_url, api_key, { "manufacturer", "material" }, indexColor, nullptr);
+  if (code != 200) return code;
   loadCores(base_url, api_key);
   noteInventory(base_url, api_key);
   return 200;
@@ -209,24 +241,27 @@ static bool toEntry(JsonObjectConst c, const char* line, FdbEntry* e) {
   return true;
 }
 
+static void entryColor(JsonObjectConst c, void* ctx) {
+  EntryPick* pick = (EntryPick*)ctx;
+  if (pick->full || strcasecmp(c["manufacturer"] | "", pick->maker) != 0) return;
+  char base[sizeof(FdbPair::material)], line[FDB_LINE_MAX];
+  splitAsIndexed(c["material"] | "", base, line, sizeof(line));
+  if (strcasecmp(base, pick->material) != 0) return;
+  FdbEntry e = {};
+  if (!toEntry(c, line, &e)) { pick->no_color++; return; }
+  if (fdbEntryListed(e)) return;
+  if (!fdbEntryAdd(e)) pick->full = true;
+}
+
 int bambuddyFdbLoadEntries(const char* base_url, const char* api_key,
                            const char* maker, const char* material) {
-  JsonDocument doc(&s_psram);
-  const int code = getList(base_url, api_key, BB_PATH_COLORS, doc,
-                           { "id", "manufacturer", "material", "color_name", "hex_color" });
+  EntryPick pick = { maker, material, 0, false };
+  const int code = eachColor(base_url, api_key,
+                             { "id", "manufacturer", "material", "color_name", "hex_color" },
+                             entryColor, &pick);
   if (code != 200) return code;
-  char base[sizeof(FdbPair::material)], line[FDB_LINE_MAX];
-  int no_color = 0;
-  for (JsonObjectConst c : doc.as<JsonArrayConst>()) {
-    if (strcasecmp(c["manufacturer"] | "", maker) != 0) continue;
-    splitAsIndexed(c["material"] | "", base, line, sizeof(line));
-    if (strcasecmp(base, material) != 0) continue;
-    FdbEntry e = {};
-    if (!toEntry(c, line, &e)) { no_color++; continue; }
-    if (fdbEntryListed(e)) continue;
-    if (!fdbEntryAdd(e)) { logSDf("Filament DB: %s %s cut at %d entries", maker, material, FDB_ENTRIES_MAX); break; }
-  }
-  if (no_color) logSDf("Filament DB: %s %s, %d without a colour left out", maker, material, no_color);
+  if (pick.full) logSDf("Filament DB: %s %s cut at %d entries", maker, material, FDB_ENTRIES_MAX);
+  if (pick.no_color) logSDf("Filament DB: %s %s, %d without a colour left out", maker, material, pick.no_color);
   return 200;
 }
 

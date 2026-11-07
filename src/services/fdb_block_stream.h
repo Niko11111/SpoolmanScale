@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <string.h>
 
 #include "filament_db.h"
@@ -10,8 +11,8 @@
 //
 //  ArduinoJson asks for one byte at a time, and one socket read per byte
 //  made SpoolmanDB's 3 MB a matter of minutes. The backends' database
-//  loaders (spoolman_filament_db.cpp, filaman_filament_db.cpp) put this in
-//  between the socket and the parser.
+//  loaders (spoolman_filament_db.cpp, filaman_filament_db.cpp,
+//  bambuddy_filament_db.cpp) put this in between the socket and the parser.
 // ============================================================
 
 #define FDB_READ_BUF  1024
@@ -53,3 +54,15 @@ class FdbBlockStream : public Stream {
   size_t  len_ = 0;
   size_t  pos_ = 0;
 };
+
+typedef void (*FdbElementFn)(JsonObjectConst e, void* ctx);
+
+// Each object of a JSON array, one at a time, through the filter: the array
+// is never held whole. A whole array in one document gets slow as it grows,
+// not only big: ArduinoJson looks up every new string among all the strings
+// it holds, and BamBuddy's colours after a sync from FilamentColors.xyz -
+// 2501 entries, 3938 different strings (08.11.2026) - kept the loader busy
+// past the task watchdog. False when the body is not such an array or broke
+// off.
+bool fdbEachElement(Stream& raw, uint32_t timeout_ms, JsonDocument& filter,
+                    FdbElementFn fn, void* ctx);

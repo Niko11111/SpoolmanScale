@@ -111,34 +111,6 @@ int spoolmanFdbProbeCode() { return s_probe_code; }
 //  Reading the body
 // ------------------------------------------------------------
 
-static int skipBlanks(Stream& s) {
-  int c;
-  do { c = s.read(); } while (c == ' ' || c == '\n' || c == '\r' || c == '\t');
-  return c;
-}
-
-typedef void (*FdbElementFn)(JsonObjectConst e, void* ctx);
-
-// Each object of a JSON array, one at a time, through the filter: the
-// array is never held whole. False when the body is not such an array or
-// broke off.
-static bool eachElement(Stream& raw, JsonDocument& filter, FdbElementFn fn, void* ctx) {
-  FdbBlockStream s(raw);
-  s.setTimeout(SM_FDB_TIMEOUT_MS);
-  if (skipBlanks(s) != '[') return false;
-  JsonDocument doc;
-  for (;;) {
-    while (s.peek() == ' ' || s.peek() == '\n' || s.peek() == '\r' || s.peek() == '\t') s.read();
-    if (s.peek() == ']') return true;
-    const DeserializationError err = deserializeJson(doc, s, DeserializationOption::Filter(filter));
-    if (err) { logSDf("Filament DB: element did not parse: %s", err.c_str()); return false; }
-    fn(doc.as<JsonObjectConst>(), ctx);
-    const int c = skipBlanks(s);
-    if (c == ']') return true;
-    if (c != ',') return false;
-  }
-}
-
 // An entry without a diameter reads as 1.75 mm (contract 6.4).
 static bool diameterFits(JsonObjectConst e) {
   JsonVariantConst d = e["diameter"];
@@ -203,7 +175,7 @@ static bool readIndex(Stream& body, void* ctx) {
   filter["material"]     = true;
   filter["name"]         = true;
   filter["diameter"]     = true;
-  return eachElement(body, filter, indexElement, ctx);
+  return fdbEachElement(body, SM_FDB_TIMEOUT_MS, filter, indexElement, ctx);
 }
 
 // The makers the inventory has spools by, marked in the index. A failure
@@ -364,7 +336,7 @@ static void entryElement(JsonObjectConst j, void* p) {
 static bool readEntries(Stream& body, void* ctx) {
   JsonDocument filter;
   entryFilter(filter);
-  return eachElement(body, filter, entryElement, ctx);
+  return fdbEachElement(body, SM_FDB_TIMEOUT_MS, filter, entryElement, ctx);
 }
 
 // The light form answers the whole list of one maker and material at once.
@@ -416,7 +388,7 @@ static void eachOfElement(JsonObjectConst e, void* p) {
 static bool readEach(Stream& body, void* ctx) {
   JsonDocument filter;
   entryFilter(filter);
-  return eachElement(body, filter, eachOfElement, ctx);
+  return fdbEachElement(body, SM_FDB_TIMEOUT_MS, filter, eachOfElement, ctx);
 }
 
 int spoolmanFdbEachOf(const char* base_url, const char* maker, const char* material,
