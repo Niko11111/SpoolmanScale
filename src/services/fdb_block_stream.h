@@ -61,7 +61,7 @@ typedef void (*FdbElementFn)(JsonObjectConst e, void* ctx);
 // is never held whole. A whole array in one document gets slow as it grows,
 // not only big: ArduinoJson looks up every new string among all the strings
 // it holds, and BamBuddy's colours after a sync from FilamentColors.xyz -
-// 2501 entries, 3938 different strings (08.11.2026) - kept the loader busy
+// 2501 entries, 3938 different strings (07.11.2026) - kept the loader busy
 // past the task watchdog. False when the body is not such an array or broke
 // off.
 bool fdbEachElement(Stream& raw, uint32_t timeout_ms, JsonDocument& filter,

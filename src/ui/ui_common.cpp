@@ -313,6 +313,28 @@ bool lvPoolHasRoomForRow() {
   return lvMemInternalRoom(LV_ROW_RESERVE_BYTES);
 }
 
+bool lvRoomForRowNoted(LvCutRetry* r) {
+  if (lvPoolHasRoomForRow()) return true;
+  if (!r->cut_ms) r->cut_ms = lv_tick_get() | 1u;   // never 0, which means "none cut"
+  return false;
+}
+
+bool lvCutRetryDue(LvCutRetry* r) {
+  if (!r->cut_ms || r->tries >= LV_CUT_RETRIES) return false;
+  if (lv_tick_elaps(r->cut_ms) < LV_CUT_RETRY_MS) return false;
+  // Still as low as when it was cut: the same list would be cut again, and
+  // a list built again loses its scroll position for nothing.
+  if (!lvPoolHasRoomForRow()) { r->cut_ms = lv_tick_get() | 1u; return false; }
+  r->cut_ms = 0;
+  r->tries++;
+  return true;
+}
+
+void lvCutRetryReset(LvCutRetry* r) {
+  r->cut_ms = 0;
+  r->tries  = 0;
+}
+
 int filamanStatusStrId(int status_id) {
   switch (status_id) {
     case FILAMAN_STATUS_NEW:      return STR_STATUS_NEW;

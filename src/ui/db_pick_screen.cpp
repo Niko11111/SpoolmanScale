@@ -24,9 +24,9 @@
 
 // A list longer than this is cut by colour family first.
 #define DBP_FAMILY_MIN_ROWS   20
-// From this many makers on, a letter shows its makers instead of scrolling
-// to them: the FilamentDB's 311 tiles would not fit the LVGL pool.
-#define DBP_MAKER_FILTER_MIN  100
+// From this many makers on, a letter shows its makers: a tile takes some 330
+// bytes of internal RAM, and SpoolmanDB's 86 did not fit (07.11.2026).
+#define DBP_MAKER_FILTER_MIN  40
 // Product lines a list is cut by (SUNLU PLA in the FilamentDB: 32).
 #define DBP_LINES_MAX         48
 // A load refused while idle (heap, task) is asked again this much later,
@@ -97,6 +97,7 @@ static DbpNav    s_nav = NAV_NONE;
 static int       s_nav_arg = 0;
 static lv_obj_t* s_letter_target[DBP_LETTERS];
 static lv_obj_t* s_letter_btn[DBP_LETTERS];
+static LvCutRetry s_cut = {};   // a list cut for want of room, see rebuildCutList()
 
 // Shared styles. A list of 67 makers is some 140 objects, and every local
 // style property is an allocation of its own in the LVGL pool: with local
@@ -420,7 +421,7 @@ static void addMakers(lv_obj_t* body, bool owned) {
   for (int i = 0; i < fdbMakerCount(); i++) {
     const FdbMaker* m = fdbMaker(i);
     if (m->owned != owned) continue;
-    if (!lvPoolHasRoomForRow()) { logSDf("DbPick: LVGL pool low, makers cut at %d", i); return; }
+    if (!lvRoomForRowNoted(&s_cut)) { logSDf("DbPick: LVGL pool low, makers cut at %d", i); return; }
     lv_obj_t* t = makerTile(body, i, owned);
     if (owned) continue;
     const int letter = letterOf(m->name);
@@ -459,7 +460,7 @@ static void fillFilteredMakers(lv_obj_t* body) {
   for (int i = 0; i < fdbMakerCount(); i++) {
     const FdbMaker* m = fdbMaker(i);
     if (letterOf(m->name) != s_letter) continue;
-    if (!lvPoolHasRoomForRow()) { logSDf("DbPick: LVGL pool low, makers cut at %d", i); break; }
+    if (!lvRoomForRowNoted(&s_cut)) { logSDf("DbPick: LVGL pool low, makers cut at %d", i); break; }
     makerTile(body, i, m->owned);
   }
   caption(body, T(STR_DBPICK_NOT_LISTED));
@@ -503,7 +504,7 @@ static void showMaterials() {
   lv_obj_t* body = newBody(DBP_BODY_Y, DBP_BODY_H);
   caption(body, T(STR_MAT_TITLE));
   for (int i = 0; i < n; i++) {
-    if (!lvPoolHasRoomForRow()) { logSDf("DbPick: LVGL pool low, materials cut at %d", i); break; }
+    if (!lvRoomForRowNoted(&s_cut)) { logSDf("DbPick: LVGL pool low, materials cut at %d", i); break; }
     const FdbPair* p = fdbPair(pairs[i]);
     lv_obj_t* t = tile(body, DBP_TILE_W, DBP_MAT_TILE_H, NAV_MATERIAL, pairs[i]);
     tileText(t, p->material, &s_st_text_body, LV_ALIGN_TOP_MID, 0);
@@ -580,7 +581,7 @@ static void showLines() {
   int total = s_line_rest;
   for (int k = 0; k < s_line_n; k++) {
     total += s_line_count[k];
-    if (!lvPoolHasRoomForRow()) { logSDf("DbPick: LVGL pool low, lines cut at %d", k); break; }
+    if (!lvRoomForRowNoted(&s_cut)) { logSDf("DbPick: LVGL pool low, lines cut at %d", k); break; }
     lv_obj_t* t = tile(body, DBP_TILE_W, DBP_MAT_TILE_H, NAV_LINE, k);
     char text[32];
     fdbLineName(*fdbEntry(s_line_first[k]), T(STR_DBPICK_LINE_OTHER), text, sizeof(text));
@@ -703,7 +704,7 @@ static void showEntries() {
   for (int i = 0; i < fdbEntryCount(); ) {
     const int n = sizesFrom(i);
     if (inFamily(*fdbEntry(i))) {
-      if (!lvPoolHasRoomForRow()) { logSDf("DbPick: LVGL pool low, list cut at %d", rows); break; }
+      if (!lvRoomForRowNoted(&s_cut)) { logSDf("DbPick: LVGL pool low, list cut at %d", rows); break; }
       entryRow(body, i, n);
       rows++;
     }
@@ -930,6 +931,7 @@ static void pickEntry(int i) {
 
 static void runNav(DbpNav nav, int arg) {
   if (nav != NAV_OPEN && !s_scr) return;
+  lvCutRetryReset(&s_cut);
   switch (nav) {
     case NAV_OPEN:     openPicker(); break;
     case NAV_CLOSE:    dbPickClose(); break;
@@ -962,9 +964,20 @@ static void runNav(DbpNav nav, int arg) {
   }
 }
 
+// The step on screen built again, when a low of the heap cut its list.
+static void rebuildCutList() {
+  if (!s_scr || s_size || s_wait != FDB_JOB_NONE || s_nav != NAV_NONE || !lvCutRetryDue(&s_cut)) return;
+  logSDf("DbPick: step %d built again after a cut", (int)s_step);
+  if (s_step == DBP_MAKER) { if (s_letter >= 0) showLetter(s_letter); else showMakers(); }
+  else if (s_step == DBP_MATERIAL) showMaterials();
+  else if (s_step == DBP_LINE)     showLines();
+  else if (s_step == DBP_ENTRIES)  showEntries();
+}
+
 void dbPickTick() {
   dbPickCoreTick();
   collectLoad();
+  rebuildCutList();
   if (s_wait != FDB_JOB_NONE) {
     linkWaitCardBytes(fdbBytes());
     if (linkWaitCardCancelTake()) {

@@ -82,6 +82,24 @@ void logLvMem(const char* tag, int rows);
 #define LV_ROW_RESERVE_BYTES  (3072u * (sizeof(void*) / 4u))
 bool lvPoolHasRoomForRow();
 
+// A list that lvPoolHasRoomForRow() cut short is often cut by a passing low,
+// not by a full pool: a transfer's WiFi buffers hold some 25 kB of the
+// internal heap for a second or two (07.11.2026). A screen notes the cut and
+// builds the list again once there is room, a few times at most.
+#define LV_CUT_RETRY_MS  700
+#define LV_CUT_RETRIES   4
+struct LvCutRetry {
+  uint32_t cut_ms;   // lv_tick_get() when a list was cut, 0: none cut
+  uint8_t  tries;    // lists built again since the last reset
+};
+// lvPoolHasRoomForRow(), noting a refusal in `r`.
+bool lvRoomForRowNoted(LvCutRetry* r);
+// True once for a noted cut at least LV_CUT_RETRY_MS old, when there is room
+// for a row again and tries are left.
+bool lvCutRetryDue(LvCutRetry* r);
+// A list the user asked for: the tries start over.
+void lvCutRetryReset(LvCutRetry* r);
+
 // Neutral grey for a colour swatch with no usable colour behind it.
 #define SWATCH_FALLBACK_COLOR UI_COL_SWATCH_NONE
 
