@@ -50,4 +50,10 @@ constexpr int8_t SD_SCK = 39;
 constexpr int8_t SD_MOSI = 40;
 constexpr int8_t SD_MISO = 38;
 
+// The onboard I2S amplifier and its 2-pin SPK connector, per the
+// WT32-SC01 Plus datasheet. Only driven while a tone plays, see sound.h.
+constexpr int8_t SPK_LRCK = 35;
+constexpr int8_t SPK_BCLK = 36;
+constexpr int8_t SPK_DOUT = 37;
+
 }

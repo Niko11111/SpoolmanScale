@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include "hardware/display.h"
+#include "hardware/sound.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/prefs_store.h"
@@ -27,13 +28,63 @@ static void rebuildDisplayScreen() {
   lv_obj_clear_flag(scr_display, LV_OBJ_FLAG_HIDDEN);
 }
 
+// Which half of the Display/Sound screen is showing. The two share one tile in
+// Settings because there was no room for a fifth one, and the display half
+// already fills its page. Kept across visits, like any other screen state.
+enum { TAB_DISPLAY = 0, TAB_SOUND = 1 };
+static int s_tab = TAB_DISPLAY;
+
+static void buildDisplayTab(lv_obj_t *body);
+static void buildSoundTab(lv_obj_t *scr);
+
+// The two tabs sit in the header between back and close, where the title used
+// to be, so neither half loses a pixel of its page to them.
+static void buildTabs(lv_obj_t *scr) {
+  const int TAB_W = 176, TAB_H = 40, TAB_Y = 4, TAB_GAP = 8;
+  const int x0 = (LV_HOR_RES - 2 * TAB_W - TAB_GAP) / 2;
+  const int ids[2] = { STR_DISPLAY_TITLE, STR_SOUND_TITLE };
+  for (int i = 0; i < 2; i++) {
+    const bool active = (s_tab == i);
+    lv_obj_t *b = lv_btn_create(scr);
+    lv_obj_set_size(b, TAB_W, TAB_H);
+    lv_obj_set_pos(b, x0 + i * (TAB_W + TAB_GAP), TAB_Y);
+    lv_obj_set_style_bg_color(b, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_LINE), 0);
+    lv_obj_set_style_radius(b, UI_RADIUS_BTN, 0);
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_set_style_border_width(b, 0, 0);
+    if (!active) uiSecondaryFill(b);
+    lv_obj_t *l = lv_label_create(b);
+    lv_label_set_text(l, T((StringID)ids[i]));
+    lv_obj_set_style_text_color(l, lv_color_hex(active ? UI_COL_ON_ACCENT : UI_COL_INK_2), 0);
+    lv_obj_set_style_text_font(l, UI_FONT_BODY, 0);
+    lv_obj_center(l);
+    lv_obj_add_event_cb(b, [](lv_event_t *e) {
+      const int tab = (int)(intptr_t)lv_event_get_user_data(e);
+      if (tab == s_tab) return;
+      s_tab = tab;
+      logSDf("UI: Display/Sound tab -> %s", tab == TAB_SOUND ? "Sound" : "Display");
+      rebuildDisplayScreen();
+    }, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+  }
+}
+
 void buildDisplayScreen() {
   logSD("BUILD: DisplayScreen");
   if (sd_verbose) logSD("[verbose] buildDisplayScreen: start");
   releaseScreen(&scr_display);
   scr_display = buildOverlayScreen();
-  buildSubHeader(scr_display, T(STR_DISPLAY_TITLE),
+  addBackButton(scr_display,
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
+  addCloseButton(scr_display);
+  buildTabs(scr_display);
+
+  // The sound half is a plain option list, the way every settings screen
+  // draws its switches.
+  if (s_tab == TAB_SOUND) {
+    buildSoundTab(scr_display);
+    if (sd_verbose) logSD("[verbose] buildDisplayScreen: done");
+    return;
+  }
 
   // Everything below the header sits in one frame, purely so the row
   // coordinates below can be read against a common origin instead of against
@@ -51,6 +102,12 @@ void buildDisplayScreen() {
   lv_obj_set_style_pad_all(body, 0, 0);
   lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE);
 
+  buildDisplayTab(body);
+
+  if (sd_verbose) logSD("[verbose] buildDisplayScreen: done");
+}
+
+static void buildDisplayTab(lv_obj_t *body) {
   // Row coordinates in one place: a stage is a label plus a button row 22 px
   // under it. Collected here so adding a stage does not mean re-deriving every
   // offset below it by hand.
@@ -244,6 +301,101 @@ void buildDisplayScreen() {
       Serial.printf("Sleep timeout: %d min\n", val);
     }, LV_EVENT_CLICKED, (void*)(intptr_t)sleep_vals[i]);
   }
+}
 
-  if (sd_verbose) logSD("[verbose] buildDisplayScreen: done");
+// ---------------------------------------------------------------------------
+//  Sound tab
+// ---------------------------------------------------------------------------
+
+// Remembered across the rebuild a switch causes, so the list does not jump
+// back to the top under the finger that just used it.
+static lv_obj_t *s_sound_list = nullptr;
+static lv_coord_t s_sound_scroll = 0;
+
+// Every switch on this tab rebuilds the screen through releaseScreen(), which
+// frees the old one asynchronously - never under the running callback.
+static void rebuildSoundTab() {
+  s_sound_scroll = s_sound_list ? lv_obj_get_scroll_y(s_sound_list) : 0;
+  rebuildDisplayScreen();
+}
+
+// The NVS write can fail; the switch then still holds for this session.
+static void saveBool(const char *key, bool v) {
+  if (!prefsPutBool(key, v)) logSDf("Sound: saving %s failed, lost on restart", key);
+}
+
+// ON/OFF where the arrow would be, the way addSettingRow() shows a switch.
+static void showOnOff(lv_obj_t *btn, bool on) {
+  lv_obj_t *arr = lv_obj_get_child(btn, -1);
+  if (!arr) return;
+  char buf_v[8];
+  copyT(buf_v, sizeof(buf_v), on ? STR_ON : STR_OFF);
+  lv_label_set_text(arr, buf_v);
+  lv_obj_set_style_text_color(arr, lv_color_hex(on ? UI_COL_ACCENT : UI_COL_CAPTION), 0);
+  lv_obj_set_style_text_font(arr, UI_FONT_SMALL, 0);
+}
+
+static void soundToggleRow(lv_obj_t *list, StringID title, bool on, lv_event_cb_t cb) {
+  char buf_t[48];
+  copyT(buf_t, sizeof(buf_t), title);
+  lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_BELL, buf_t, nullptr, on);
+  showOnOff(btn, on);
+  lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
+}
+
+static void toggleAndSave(bool *value, const char *key) {
+  *value = !*value;
+  saveBool(key, *value);
+  rebuildSoundTab();
+}
+
+// The rows behind the master switch only appear while it is on: with sound
+// off they would be switches that do nothing.
+static void buildSoundEventRows(lv_obj_t *list) {
+  soundToggleRow(list, STR_SND_NFC, g_snd_nfc,
+    [](lv_event_t *e) { toggleAndSave(&g_snd_nfc, "snd_nfc"); });
+  soundToggleRow(list, STR_SND_WRITE, g_snd_write,
+    [](lv_event_t *e) { toggleAndSave(&g_snd_write, "snd_write"); });
+  soundToggleRow(list, STR_SND_WEIGHT, g_snd_weight,
+    [](lv_event_t *e) { toggleAndSave(&g_snd_weight, "snd_weight"); });
+
+  // Volume steps through its three values on each tap and plays the new one,
+  // which doubles as the speaker test.
+  static const StringID VOL_NAMES[SND_VOL_COUNT] = { STR_SND_VOL_LOW, STR_SND_VOL_MED, STR_SND_VOL_HIGH };
+  char buf_t[32], buf_s[32];
+  copyT(buf_t, sizeof(buf_t), STR_SND_VOLUME_LABEL);
+  copyT(buf_s, sizeof(buf_s), VOL_NAMES[g_snd_volume < SND_VOL_COUNT ? g_snd_volume : SND_VOL_MED]);
+  lv_obj_t *vol = makeListBtn(list, LV_SYMBOL_VOLUME_MID, buf_t, buf_s);
+  lv_obj_add_event_cb(vol, [](lv_event_t *e) {
+    g_snd_volume = (uint8_t)((g_snd_volume + 1) % SND_VOL_COUNT);
+    if (!prefsPutUChar("snd_vol", g_snd_volume))
+      logSD("Sound: saving the volume failed, lost on restart");
+    soundPlay(SND_TEST);
+    rebuildSoundTab();
+  }, LV_EVENT_CLICKED, NULL);
+}
+
+static void buildSoundTab(lv_obj_t *scr) {
+  lv_obj_t *list = buildOptionList(scr);
+  s_sound_list = list;
+  char buf_t[32], buf_s[48];
+  copyT(buf_t, sizeof(buf_t), STR_SOUND_TITLE);
+  copyT(buf_s, sizeof(buf_s), STR_SOUND_SUB);
+  lv_obj_t *master = makeListBtn(list, LV_SYMBOL_VOLUME_MAX, buf_t, buf_s, g_sound_on);
+  showOnOff(master, g_sound_on);
+  lv_obj_add_event_cb(master, [](lv_event_t *e) {
+    g_sound_on = !g_sound_on;
+    saveBool("snd_on", g_sound_on);
+    logSDf("Sound: %s", g_sound_on ? "on" : "off");
+    if (g_sound_on) soundPlay(SND_TEST);
+    rebuildSoundTab();
+  }, LV_EVENT_CLICKED, NULL);
+
+  if (g_sound_on) buildSoundEventRows(list);
+
+  if (s_sound_scroll > 0) {
+    lv_obj_update_layout(list);
+    lv_obj_scroll_to_y(list, s_sound_scroll, LV_ANIM_OFF);
+    s_sound_scroll = 0;
+  }
 }
