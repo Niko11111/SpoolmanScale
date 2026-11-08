@@ -23,6 +23,7 @@
 #include "user_options.h"
 #include "web/web_access.h"
 #include "hardware/display.h"
+#include "hardware/sound.h"
 
 
 void loadPrefs() {
@@ -142,6 +143,7 @@ void loadPrefs() {
   g_auto_weight = prefsGetBool("auto_weight", false);
   g_auto_loc_popup = prefsGetBool("auto_loc_popup", false);
   g_auto_tare = prefsGetBool("auto_tare", AUTO_TARE_DEFAULT);
+  soundLoadPrefs();
   // Three states now, where this used to be a yes/no switch. Nobody loses their
   // setting: an installation that had the question turned on comes back as
   // "ask", one that had it off as "off", and the old key is left in NVS rather

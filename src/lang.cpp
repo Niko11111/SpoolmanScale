@@ -73,9 +73,9 @@ const char* const STRINGS[][3] = {
   { "Spulen & Waage",                 "Spools & scale",                 "Bobines et balance" },  // STR_TILE_SCALE
   { "Tags | Trocknung | Kalibrieren", "Tags | Drying | Calibration",
     "Tags | Séchage | Étalonnage" },  // STR_TILE_SCALE_SUB
-  { "Display",                        "Display",                        "Affichage" },  // STR_TILE_DISPLAY
-  { "Helligkeit | Dimmen | Schlaf", "Brightness | Dim | Sleep",
-    "Luminosité | Atténuer | Veille" },  // STR_TILE_DISPLAY_SUB
+  { "Display/Ton",                    "Display/Sound",                  "Affichage/Son" },  // STR_TILE_DISPLAY
+  { "Helligkeit | Schlaf | Ton", "Brightness | Sleep | Sound",
+    "Luminosité | Veille | Son" },  // STR_TILE_DISPLAY_SUB
   { "System",                         "System",                         "Système" },  // STR_TILE_SYSTEM
   { "Web | Update | Sprache | Info", "Web | Update | Language | Info",
     "Web | Mise à jour | Langue | Info" },  // STR_TILE_SYSTEM_SUB
@@ -4225,6 +4225,17 @@ const char* const STRINGS[][3] = {
     "Spooly sombre" },  // STR_W_THEME_SPOOLY_DARK
   { "Spooly hell", "Spooly light",
     "Spooly clair" },  // STR_W_THEME_SPOOLY_LIGHT
+
+  // Sound
+  { "Ton",                           "Sound",                        "Son" },  // STR_SOUND_TITLE
+  { "Lautsprecher am SPK-Anschluss", "Speaker on the SPK connector", "Haut-parleur au port SPK" },  // STR_SOUND_SUB
+  { "Piepen beim Tag-Lesen",         "Beep when a tag is read",      "Bip à la lecture d'un tag" },  // STR_SND_NFC
+  { "Piepen nach Tag-Schreiben",     "Beep when a tag is written",   "Bip après écriture du tag" },  // STR_SND_WRITE
+  { "Piepen bei Auto-Gewicht",       "Beep on auto weight",          "Bip au poids auto" },  // STR_SND_WEIGHT
+  { "Lautstärke",                    "Volume",                       "Volume" },  // STR_SND_VOLUME_LABEL
+  { "Leise",                         "Low",                          "Bas" },  // STR_SND_VOL_LOW
+  { "Mittel",                        "Medium",                       "Moyen" },  // STR_SND_VOL_MED
+  { "Laut",                          "High",                         "Fort" },  // STR_SND_VOL_HIGH
 };
 
 StringID tagWriteResultString(uint8_t code) {
