@@ -22,6 +22,7 @@
 #include "services/mifare_formats.h"
 #include "services/mifare_write.h"
 #include "services/spoolman_actions.h"
+#include "services/spool_temp_rules.h"
 #include "services/tag_field.h"
 #include "services/tag_link.h"
 #include "services/tag_uid.h"
@@ -179,8 +180,9 @@ static void uidToStr(const uint8_t *uid, uint8_t uid_len, char *out, size_t n) {
     u += snprintf(out + u, n - u, i ? ":%02X" : "%02X", uid[i]);
 }
 
-// Neither backend stores print temperatures, so they come from the family the
-// material name starts with. Density is only used to estimate the length.
+// Print temperatures for a spool whose backend entry names none, from the
+// family the material name starts with; the backend's own value goes first
+// (spoolTempTagEnds()). Density is only used to estimate the length.
 //
 // Longer names first where one is a prefix of another: PLA+ before PLA, PETG
 // before nothing else that starts with PET.
@@ -243,16 +245,27 @@ static void buildAce(JsonObjectConst sp, AceFields *f) {
 
   float density = MAT_DENSITY_FALLBACK;
   const MatFamily* fam = matchFamily(material);
+  SpoolTempRange fam_nozzle = {0, 0}, fam_bed = {0, 0};
   if (fam) {
-    f->et_lo = fam->et_lo; f->et_hi = fam->et_hi;
-    f->bed_lo = fam->bed_lo; f->bed_hi = fam->bed_hi;
+    fam_nozzle = {fam->et_lo, fam->et_hi};
+    fam_bed = {fam->bed_lo, fam->bed_hi};
     density = fam->density;
-  } else {
-    // Zero, and the preview shows a dash. A reader can ignore a missing
-    // temperature; a wrong one it cannot.
-    logSDf("tag: material '%s' is in no known family, no temperatures written",
-           material);
   }
+  // What the user entered in the backend is what they print at, so it goes
+  // on the tag before the family's textbook range.
+  JsonObjectConst fil = sp["filament"];
+  const SpoolTempRange nozzle = spoolTempTagEnds(
+      spoolTempRange(fil["x_extruder_temp_min"] | 0, fil["settings_extruder_temp"] | 0),
+      fam_nozzle);
+  const SpoolTempRange bed = spoolTempTagEnds(
+      spoolTempRange(0, fil["settings_bed_temp"] | 0), fam_bed);
+  f->et_lo = (uint16_t)nozzle.lo;  f->et_hi = (uint16_t)nozzle.hi;
+  f->bed_lo = (uint16_t)bed.lo;    f->bed_hi = (uint16_t)bed.hi;
+  // Zero, and the preview shows a dash. A reader can ignore a missing
+  // temperature; a wrong one it cannot.
+  if (!nozzle.hi)
+    logSDf("tag: material '%s' has no temperature in the backend and is in no "
+           "known family, none written", material);
 
   unsigned r = 0, g = 0, b = 0;
   const char *c = sp["filament"]["color_hex"] | "";

@@ -42,6 +42,14 @@ ColorTileSpec mainSwatchTileSpec();
 // answering while tag and spool differ. Once, where the line is built.
 void tagSpoolViewAttach(lv_obj_t* status_label);
 
+// The nozzle temperature once the backend has answered, from the filament's
+// x_extruder_temp_min and settings_extruder_temp (0 for none). The backend
+// wins over the tag on the pad unless it only repeats the tag's upper end;
+// spoolTempShown() holds the rule. `maker_tag` is a Bambu, Creality or
+// Snapmaker tag decoded into g_tag. Nothing known on either side leaves the
+// label as it is.
+void mainShowBackendTemp(int backend_lo, int backend_hi, bool maker_tag);
+
 // Shows or hides every way into the AMS view: the header chip on any device,
 // and on one without a load cell zone 4's right half, which also decides where
 // the note sits as a result.

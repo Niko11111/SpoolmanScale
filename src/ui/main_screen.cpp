@@ -19,6 +19,7 @@
 #include "lang.h"
 #include "services/ams_assign.h"
 #include "services/auto_weight_state.h"
+#include "services/spool_temp_rules.h"
 #include "services/tag_write.h"
 #include "services/user_options.h"
 #include "services/wifi_manager.h"
@@ -120,10 +121,10 @@ void showTagInfoOnDisplay(const TagInfo *ti) {
 
   // Both ends or neither: a range printed from a single value would read as a
   // temperature the tag never carried.
+  // A tag written with one value carries it as both ends and reads "240 °C".
   if (ti->et_lo > 0 && ti->et_hi > 0) {
     char temp_str[24];
-    snprintf(temp_str, sizeof(temp_str), "%u - %u C",
-             (unsigned)ti->et_lo, (unsigned)ti->et_hi);
+    spoolTempFormat(spoolTempRange(ti->et_lo, ti->et_hi), temp_str, sizeof(temp_str));
     lv_label_set_text(lbl_temp, temp_str);
   }
 

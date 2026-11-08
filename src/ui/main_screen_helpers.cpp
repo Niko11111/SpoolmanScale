@@ -16,6 +16,8 @@
 #include "ui/theme.h"
 #include "ui/ui_common.h"
 #include "services/spool_color.h"
+#include "services/spool_temp_rules.h"
+#include "services/tag_write.h"
 #include "hardware/sd_logger.h"
 // After backend_api.h and the ArduinoJson it brings: the T() macro would
 // otherwise expand inside ArduinoJson's own templates.
@@ -82,6 +84,28 @@ void applyTagSpoolView() {
   spoolColorParse(sm_color_global, &server);
   const SpoolColor shown = spoolColorResolve(g_tag.color, server);
   if (shown.valid) mainSwatchPaint(shown, tagSecondColor(shown));
+}
+
+// The range on the tag that lies on the pad: a manufacturer tag decoded into
+// g_tag, an NTAG record from the cache, nothing for a UID-only tag.
+static SpoolTempRange tagTempOnPad(bool maker_tag) {
+  if (maker_tag) return spoolTempRange(g_tag.temp_min, g_tag.temp_max);
+  if (!tagCachedHasRecord()) return spoolTempRange(0, 0);
+  const TagInfo* ti = tagCachedInfo();
+  return spoolTempRange(ti->et_lo, ti->et_hi);
+}
+
+void mainShowBackendTemp(int backend_lo, int backend_hi, bool maker_tag) {
+  if (!lbl_temp) return;
+  const SpoolTempRange backend = spoolTempRange(backend_lo, backend_hi);
+  const SpoolTempRange tag = tagTempOnPad(maker_tag);
+  char text[24];
+  spoolTempFormat(spoolTempShown(backend, tag), text, sizeof(text));
+  // Nothing on either side: the label keeps what the tag pass wrote.
+  if (!text[0]) return;
+  lv_label_set_text(lbl_temp, text);
+  logSDf("UI: temperature %s (backend %d-%d, tag %d-%d)",
+         text, backend.lo, backend.hi, tag.lo, tag.hi);
 }
 
 void tagSpoolViewAttach(lv_obj_t* status_label) {

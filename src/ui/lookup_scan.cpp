@@ -695,6 +695,8 @@ LookupStep lookupResolveActive(const LookupCtx& c, JsonDocument& doc,
     }
     applyServerColor(sm_color, is_bambu_tag);
     if (tagSpoolLookupShowsSpool()) applyTagSpoolView();
+    mainShowBackendTemp(spool["filament"]["x_extruder_temp_min"] | 0,
+                        spool["filament"]["settings_extruder_temp"] | 0, is_bambu_tag);
 
     // Update display - Fix 5: color based on remaining %
     char weight_str[32];
