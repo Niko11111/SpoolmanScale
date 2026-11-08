@@ -46,6 +46,8 @@
 #include "services/user_options.h"
 #include "web/web_access.h"
 #include "services/tag_write.h"
+#include "hardware/sound.h"
+
 #include "services/tag_link.h"
 #include "ui/ota_github.h"
 #include "ui/weight_button.h"
@@ -144,6 +146,21 @@
 #include "ui/spool_id_pad.h"
 #include "app/id_spool.h"
 #include "ui/status_clear.h"
+
+// The tag the read beep last sounded for. Its own marker on purpose: the
+// lookup markers (g_tag.uid_str, ntag_handled_uid) are cleared and rewritten
+// by retries, rereads after a write and tagLookupForget(), and following them
+// would beep on every poll of a Bambu tag still being read, or once more
+// right after the write tone. Cleared when the spool demonstrably left the
+// pad: on removal, or when a placement finds loc_left_pad set.
+static char s_beeped_uid[24] = "";
+
+static void beepOnNewTag(const char *uid_str) {
+  if (strcmp(uid_str, s_beeped_uid) == 0) return;
+  snprintf(s_beeped_uid, sizeof(s_beeped_uid), "%s", uid_str);
+  soundPlay(SND_NFC_READ);
+}
+
 
 namespace {
 constexpr unsigned long NO_TAG_CLEAR_MS = 60000;
@@ -260,9 +277,13 @@ static void autoWeightSettled(float gross) {
   if (unchanged) {
     logSDf("Auto-Weight: spool %d unchanged at %.0f g - not sent", sm_id, netto);
     weightButtonShow(WL_UNCHANGED, netto);
+    // No beep: nothing was updated, and a tag that keeps dropping out under
+    // a spool lying still would otherwise beep on every return.
   } else {
     weightButtonShow(WL_SENT, netto);
-    patchSpoolmanWeight(netto);
+    const int rc = patchSpoolmanWeight(netto);
+    if (backendWriteOk(rc)) soundPlay(SND_WEIGHT_OK);
+    else if (rc != PATCH_WEIGHT_ASKING) soundPlay(SND_WEIGHT_FAIL);
   }
   // Remembered either way, so a yes on removal can still open the window;
   // an unchanged value has not gone out, and a yes is what sends it then.
@@ -2050,6 +2071,7 @@ void appLoop() {
         // Back after it demonstrably left the pad: whatever was answered
         // for it last time was about that trip, this is a new one.
         if (newly_placed && loc_left_pad) g_loc_popup_shown_for_id = -1;
+        if (newly_placed && loc_left_pad) s_beeped_uid[0] = '\0';   // back after it left
         if (newly_placed) loc_left_pad = false;
 
         char uid_str[24];
@@ -2062,6 +2084,7 @@ void appLoop() {
         bool uuid_missing = (strlen(g_tag.tray_uuid) < 32);
         bool contents_incomplete = (bambu_blocks_read < 48);
 
+        beepOnNewTag(uid_str);
         if (uid_changed) {
           Serial.printf("NFC: New 4-byte UID %s\n", uid_str);
           resetActivityTimer();   // a different tag is always news
@@ -2377,6 +2400,7 @@ void appLoop() {
         // Back after it demonstrably left the pad: whatever was answered
         // for it last time was about that trip, this is a new one.
         if (newly_placed && loc_left_pad) g_loc_popup_shown_for_id = -1;
+        if (newly_placed && loc_left_pad) s_beeped_uid[0] = '\0';   // back after it left
         if (newly_placed) loc_left_pad = false;
 
         char uid_str[24];
@@ -2403,6 +2427,7 @@ void appLoop() {
         // actually runs. With no WiFi, or with the manual id input open, it
         // stays empty and every poll would look like a new tag.
         bool uid_changed_ntag = (strcmp(uid_str, ntag_handled_uid) != 0);
+        beepOnNewTag(uid_str);
         if (uid_changed_ntag) {
           logSDf("NFC: NTAG UID=%s", uid_str);
           resetActivityTimer();   // a different tag is always news
@@ -2593,6 +2618,7 @@ void appLoop() {
                      scale_weight_g, loc_weight_ref);
             } else {
               ntag_handled_uid[0] = '\0';
+              s_beeped_uid[0] = '\0';   // put back, it beeps again
               // The spool left before its verdict was in: nothing to paint it
               // on. The inventory still comes in for cache and index. Not in
               // the branch above, where the spool is still there and nothing

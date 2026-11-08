@@ -1935,6 +1935,17 @@ enum StringID {
   STR_W_L_ID_SHARE,
   STR_W_THEME_SPOOLY_DARK,
   STR_W_THEME_SPOOLY_LIGHT,
+
+  // Sound tab of the Display/Sound screen (ui/display_screen.cpp)
+  STR_SOUND_TITLE,            // the tab, and the master switch row
+  STR_SOUND_SUB,              // under the master switch: where the speaker goes
+  STR_SND_NFC,
+  STR_SND_WRITE,
+  STR_SND_WEIGHT,
+  STR_SND_VOLUME_LABEL,
+  STR_SND_VOL_LOW,
+  STR_SND_VOL_MED,
+  STR_SND_VOL_HIGH,
   STR_COUNT
 };
 

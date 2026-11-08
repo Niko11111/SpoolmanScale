@@ -1,4 +1,5 @@
 #include "tag_write.h"
+#include "hardware/sound.h"
 
 #include <ArduinoJson.h>
 #include <lvgl.h>
@@ -136,11 +137,19 @@ bool tagIsWritableNtag() {
 }
 
 static void finish(const char *st, const char *msg, uint8_t code) {
+  // A write that fails and then still links reports "error" twice for the
+  // same job; the job sounds once.
+  const bool repeated = (strcmp(state, st) == 0);
   snprintf(state, sizeof(state), "%s", st);
   snprintf(message, sizeof(message), "%s", msg);
   result = code;
   report.code = code;
   logSDf("TagWrite: %s - %s", st, msg);
+  // Every write and erase ends here, whoever asked for it: the device, the
+  // web page or a FilaMan remote trigger.
+  if (repeated) return;
+  if (strcmp(st, "ok") == 0)         soundPlay(SND_WRITE_OK);
+  else if (strcmp(st, "error") == 0) soundPlay(SND_WRITE_FAIL);
 }
 
 bool tagWriteRequest(int spool_id, TagFormat fmt, bool link) {
