@@ -33,7 +33,7 @@ void clearTagDisplay() {
   lv_label_set_text(lbl_spoolman_id, "?");
   lv_obj_set_style_text_color(lbl_spoolman_id, lv_color_hex(UI_COL_WARN), 0);
   lv_label_set_text(lbl_color, "-");
-  lv_label_set_text(lbl_temp, "-");
+  mainTempSet("-", false);
   lv_label_set_text(lbl_vendor, "-");
   lv_label_set_text(lbl_detail, "-");
   lv_label_set_text(lbl_filament_name, "");

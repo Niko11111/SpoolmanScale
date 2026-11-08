@@ -83,7 +83,7 @@ void updateDisplay() {
   } else {
     copyT(temp_str, sizeof(temp_str), STR_UNKNOWN);
   }
-  lv_label_set_text(lbl_temp, temp_str);
+  mainTempSet(temp_str, false);
 
   bool is_bambu = (strlen(g_tag.tray_uuid) == 32) || (countBambuDataBlocksRead(g_tag) > 0);
 
@@ -124,8 +124,8 @@ void showTagInfoOnDisplay(const TagInfo *ti) {
   // A tag written with one value carries it as both ends and reads "240 °C".
   if (ti->et_lo > 0 && ti->et_hi > 0) {
     char temp_str[24];
-    spoolTempFormat(spoolTempRange(ti->et_lo, ti->et_hi), temp_str, sizeof(temp_str));
-    lv_label_set_text(lbl_temp, temp_str);
+    spoolTempFormat(spoolTempRange(ti->et_lo, ti->et_hi), false, temp_str, sizeof(temp_str));
+    mainTempSet(temp_str, false);
   }
 
   logSDf("Tag: showing %s record from the tag, %s %s",

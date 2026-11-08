@@ -4,7 +4,8 @@
 #include <stdio.h>
 
 // Which nozzle temperature the main screen shows once the backend has
-// answered, which ends a written tag gets, and how a range reads. Pure logic:
+// answered, which ends a written tag gets, and how a range reads. The family
+// table itself is services/material_family.h. Pure logic:
 // no Arduino, no JSON, so a host test can run it (test/test_spool_temp.py).
 //
 // People enter the temperature they want to print at in the backend, so its
@@ -34,10 +35,21 @@ inline SpoolTempRange spoolTempRange(int lo, int hi) {
   return r;
 }
 
-// What the main screen shows: the backend's value, the tag's only when the
-// backend has none.
-inline SpoolTempRange spoolTempShown(SpoolTempRange backend, SpoolTempRange tag) {
-  return backend.hi ? backend : tag;
+// What the main screen shows, and whether it is only a guide value.
+struct SpoolTempChoice {
+  SpoolTempRange range;
+  bool           guide;   // the material family's textbook range
+};
+
+// The backend's value, the tag's when the backend has none, and the material
+// family's as a guide when neither has one: somebody feeding a printer that
+// reads no tag, or heating a nozzle to pull the old filament, still wants a
+// number. The guide is marked so it never passes for a value someone entered.
+inline SpoolTempChoice spoolTempPick(SpoolTempRange backend, SpoolTempRange tag,
+                                     SpoolTempRange family) {
+  if (backend.hi) return {backend, false};
+  if (tag.hi)     return {tag, false};
+  return {family, family.hi != 0};
 }
 
 // The two ends a tag gets: the backend's value where there is one, the
@@ -49,11 +61,14 @@ inline SpoolTempRange spoolTempTagEnds(SpoolTempRange backend, SpoolTempRange fa
   return ends;
 }
 
-// "190 - 230 °C", "240 °C", or "" when nothing is known.
-inline void spoolTempFormat(SpoolTempRange r, char* out, size_t out_size) {
+// "190 - 230 °C", "240 °C", or "" when nothing is known. A guide value gets a
+// leading "~": the colour on screen sets it apart too, but colour alone does
+// not reach everyone.
+inline void spoolTempFormat(SpoolTempRange r, bool guide, char* out, size_t out_size) {
   if (!out || out_size == 0) return;
   out[0] = '\0';
   if (r.hi == 0) return;
-  if (r.lo > 0) snprintf(out, out_size, "%d - %d °C", r.lo, r.hi);
-  else          snprintf(out, out_size, "%d °C", r.hi);
+  const char* mark = guide ? "~" : "";
+  if (r.lo > 0) snprintf(out, out_size, "%s%d - %d °C", mark, r.lo, r.hi);
+  else          snprintf(out, out_size, "%s%d °C", mark, r.hi);
 }

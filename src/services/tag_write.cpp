@@ -20,6 +20,7 @@
 #include "services/backend_api.h"
 #include "services/filaman_api.h"
 #include "services/mifare_formats.h"
+#include "services/material_family.h"
 #include "services/mifare_write.h"
 #include "services/spoolman_actions.h"
 #include "services/spool_temp_rules.h"
@@ -180,58 +181,9 @@ static void uidToStr(const uint8_t *uid, uint8_t uid_len, char *out, size_t n) {
     u += snprintf(out + u, n - u, i ? ":%02X" : "%02X", uid[i]);
 }
 
-// Print temperatures for a spool whose backend entry names none, from the
-// family the material name starts with; the backend's own value goes first
-// (spoolTempTagEnds()). Density is only used to estimate the length.
-//
-// Longer names first where one is a prefix of another: PLA+ before PLA, PETG
-// before nothing else that starts with PET.
-struct MatFamily {
-  const char* name;
-  uint16_t    et_lo, et_hi, bed_lo, bed_hi;
-  float       density;
-};
-static const MatFamily MAT_FAMILIES[] = {
-  { "PETG", 230, 250, 70,  80,  1.27f },
-  { "PLA+", 200, 220, 50,  60,  1.24f },
-  { "PLA",  200, 220, 50,  60,  1.24f },
-  { "ABS",  240, 260, 90, 100,  1.04f },
-  { "ASA",  240, 260, 90, 100,  1.07f },
-  { "TPU",  210, 230, 40,  50,  1.21f },
-  { "TPE",  210, 230, 40,  50,  1.21f },
-  { "HIPS", 230, 245, 90, 110,  1.04f },
-  { "PVA",  190, 210, 50,  60,  1.23f },
-  { "PC",   260, 280, 90, 110,  1.20f },
-  { "PA",   250, 270, 60,  80,  1.14f },
-  { "PP",   220, 240, 60,  80,  0.90f },
-};
+// The family table lives in services/material_family.cpp, shared with the
+// main screen's guide value. Density is only used to estimate the length.
 #define MAT_DENSITY_FALLBACK  1.24f
-
-// The family a material name begins with, or null when none of them fits.
-//
-// A prefix, and it has to end at a boundary: "PC-CF" is PC, "PCTG" is not - it
-// is a copolyester that would print 60 degrees too hot on PC settings. This is
-// also why an unmatched name gets no temperatures at all rather than PLA's:
-// before this, every material outside the list was written to the tag as "PLA"
-// at 200-220 C, which is what a TPE spool on this scale did.
-static const MatFamily* matchFamily(const char *in) {
-  if (!in || !in[0]) return nullptr;
-  char up[40] = {0};
-  for (size_t i = 0; i < sizeof(up) - 1 && in[i]; i++)
-    up[i] = toupper((unsigned char)in[i]);
-
-  for (unsigned i = 0; i < sizeof(MAT_FAMILIES) / sizeof(MAT_FAMILIES[0]); i++) {
-    const char* fam = MAT_FAMILIES[i].name;
-    const size_t n = strlen(fam);
-    if (strncmp(up, fam, n) != 0) continue;
-    const char c = up[n];
-    // End of the name, or a separator - never another letter.
-    if (c == '\0' || c == '-' || c == '+' || c == ' ' || c == '_' ||
-        (c >= '0' && c <= '9'))
-      return &MAT_FAMILIES[i];
-  }
-  return nullptr;
-}
 
 
 static void buildAce(JsonObjectConst sp, AceFields *f) {

@@ -42,13 +42,23 @@ ColorTileSpec mainSwatchTileSpec();
 // answering while tag and spool differ. Once, where the line is built.
 void tagSpoolViewAttach(lv_obj_t* status_label);
 
-// The nozzle temperature once the backend has answered, from the filament's
-// x_extruder_temp_min and settings_extruder_temp (0 for none). The backend
-// wins over the tag on the pad, which counts only when the backend has no
-// value; spoolTempShown() holds the rule. `maker_tag` is a Bambu, Creality or
-// Snapmaker tag decoded into g_tag. Nothing known on either side leaves the
-// label as it is.
-void mainShowBackendTemp(int backend_lo, int backend_hi, bool maker_tag);
+// The temperature label's text and colour, always together, so a guide
+// value's quieter colour never stays behind for the next spool.
+void mainTempSet(const char* text, bool guide);
+
+// What mainShowBackendTemp() needs from the backend's answer.
+struct SpoolTempInput {
+  int         backend_lo;   // x_extruder_temp_min, 0 for none
+  int         backend_hi;   // settings_extruder_temp, 0 for none
+  bool        maker_tag;    // a Bambu, Creality or Snapmaker tag decoded into g_tag
+  const char* material;     // the material on screen, for the family's guide value
+};
+
+// The nozzle temperature once the backend has answered: the backend's value,
+// the tag's on the pad when the backend has none, the material family's as a
+// quieter "~200 - 220 °C" when neither has one. spoolTempPick() holds the
+// rule. Nothing known on any side leaves the label as it is.
+void mainShowBackendTemp(const SpoolTempInput& in);
 
 // Shows or hides every way into the AMS view: the header chip on any device,
 // and on one without a load cell zone 4's right half, which also decides where

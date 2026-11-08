@@ -727,8 +727,9 @@ void querySpoolmanById(int spool_id) {
   }
   applyServerColor(sm_color, is_bambu_tag);
   if (tagSpoolLookupShowsSpool()) applyTagSpoolView();
-  mainShowBackendTemp(spool["filament"]["x_extruder_temp_min"] | 0,
-                      spool["filament"]["settings_extruder_temp"] | 0, is_bambu_tag);
+  mainShowBackendTemp({spool["filament"]["x_extruder_temp_min"] | 0,
+                       spool["filament"]["settings_extruder_temp"] | 0,
+                       is_bambu_tag, sm_material_global});
 
   // Update display labels
   showSpoolRemaining();

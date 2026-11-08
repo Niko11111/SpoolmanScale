@@ -16,6 +16,7 @@
 #include "ui/theme.h"
 #include "ui/ui_common.h"
 #include "services/spool_color.h"
+#include "services/material_family.h"
 #include "services/spool_temp_rules.h"
 #include "services/tag_write.h"
 #include "hardware/sd_logger.h"
@@ -95,17 +96,31 @@ static SpoolTempRange tagTempOnPad(bool maker_tag) {
   return spoolTempRange(ti->et_lo, ti->et_hi);
 }
 
-void mainShowBackendTemp(int backend_lo, int backend_hi, bool maker_tag) {
+// The family's textbook range for a material name, empty outside the table.
+static SpoolTempRange familyTemp(const char* material) {
+  const MatFamily* fam = matchFamily(material);
+  return fam ? spoolTempRange(fam->et_lo, fam->et_hi) : spoolTempRange(0, 0);
+}
+
+void mainTempSet(const char* text, bool guide) {
   if (!lbl_temp) return;
-  const SpoolTempRange backend = spoolTempRange(backend_lo, backend_hi);
-  const SpoolTempRange tag = tagTempOnPad(maker_tag);
-  char text[24];
-  spoolTempFormat(spoolTempShown(backend, tag), text, sizeof(text));
-  // Nothing on either side: the label keeps what the tag pass wrote.
-  if (!text[0]) return;
   lv_label_set_text(lbl_temp, text);
-  logSDf("UI: temperature %s (backend %d-%d, tag %d-%d)",
-         text, backend.lo, backend.hi, tag.lo, tag.hi);
+  lv_obj_set_style_text_color(lbl_temp,
+                              lv_color_hex(guide ? UI_COL_INK_SOFT : UI_COL_INK_2), 0);
+}
+
+void mainShowBackendTemp(const SpoolTempInput& in) {
+  if (!lbl_temp) return;
+  const SpoolTempRange backend = spoolTempRange(in.backend_lo, in.backend_hi);
+  const SpoolTempRange tag = tagTempOnPad(in.maker_tag);
+  const SpoolTempChoice shown = spoolTempPick(backend, tag, familyTemp(in.material));
+  char text[24];
+  spoolTempFormat(shown.range, shown.guide, text, sizeof(text));
+  // Nothing on any side: the label keeps what the tag pass wrote.
+  if (!text[0]) return;
+  mainTempSet(text, shown.guide);
+  logSDf("UI: temperature %s (backend %d-%d, tag %d-%d, material '%s')",
+         text, backend.lo, backend.hi, tag.lo, tag.hi, in.material ? in.material : "");
 }
 
 void tagSpoolViewAttach(lv_obj_t* status_label) {

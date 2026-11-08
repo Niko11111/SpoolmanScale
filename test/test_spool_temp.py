@@ -1,24 +1,33 @@
 """Compile the production rules for the nozzle temperature on the main screen
 and on a written tag, and check them against real spools
-(services/spool_temp_rules.h)."""
+(services/spool_temp_rules.h, services/material_family.cpp)."""
 import subprocess
 import tempfile
 from pathlib import Path
 
 root = Path(__file__).parents[1]
 source = r"""
+#include "services/material_family.h"
 #include "services/spool_temp_rules.h"
 #include <cassert>
 #include <string>
 
-static std::string text(SpoolTempRange r) {
+static SpoolTempRange family(const char* material) {
+  const MatFamily* f = matchFamily(material);
+  return f ? spoolTempRange(f->et_lo, f->et_hi) : spoolTempRange(0, 0);
+}
+
+static std::string pick(int b_lo, int b_hi, int t_lo, int t_hi, const char* material) {
+  const SpoolTempChoice c = spoolTempPick(spoolTempRange(b_lo, b_hi),
+                                          spoolTempRange(t_lo, t_hi), family(material));
   char out[24];
-  spoolTempFormat(r, out, sizeof(out));
+  spoolTempFormat(c.range, c.guide, out, sizeof(out));
   return out;
 }
 
+// Everything below without a material: no guide value can step in.
 static std::string shown(int b_lo, int b_hi, int t_lo, int t_hi) {
-  return text(spoolTempShown(spoolTempRange(b_lo, b_hi), spoolTempRange(t_lo, t_hi)));
+  return pick(b_lo, b_hi, t_lo, t_hi, "");
 }
 
 int main() {
@@ -69,9 +78,27 @@ int main() {
   e = spoolTempTagEnds(spoolTempRange(0, 0), none);
   assert(e.lo == 0 && e.hi == 0);
 
+  // Neither backend nor tag: the family's range as a guide, marked "~".
+  // FilaMan spool 241 after its tag was erased (08.11.2026).
+  assert(pick(0, 0, 0, 0, "PLA") == "~200 - 220 °C");
+  assert(pick(0, 0, 0, 0, "PETG HF") == "~230 - 250 °C");
+  // A real value is never marked, and beats the guide.
+  assert(pick(0, 240, 0, 0, "PETG") == "240 °C");
+  assert(pick(0, 0, 190, 230, "PLA") == "190 - 230 °C");
+  // A material outside the table gets no guide: PCTG is no PC.
+  assert(pick(0, 0, 0, 0, "PCTG").empty());
+  assert(pick(0, 0, 0, 0, "").empty());
+
+  // The family boundary, unchanged from tag_write.cpp.
+  assert(matchFamily("PC-CF") == matchFamily("PC"));
+  assert(matchFamily("PLA+") != nullptr);
+  assert(matchFamily("pla basic") == matchFamily("PLA"));
+  assert(matchFamily("PCTG") == nullptr);
+  assert(matchFamily(nullptr) == nullptr);
+
   // A buffer too small is cut, never overrun.
   char tiny[4];
-  spoolTempFormat(spoolTempRange(190, 230), tiny, sizeof(tiny));
+  spoolTempFormat(spoolTempRange(190, 230), false, tiny, sizeof(tiny));
   assert(std::string(tiny) == "190");
   return 0;
 }
@@ -82,7 +109,9 @@ with tempfile.TemporaryDirectory() as tmp:
     exe = Path(tmp) / "t"
     src.write_text(source)
     subprocess.check_call(["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror",
-                           f"-I{root / 'src'}", str(src), "-o", str(exe)])
+                           f"-I{root / 'src'}", str(src),
+                           str(root / "src" / "services" / "material_family.cpp"),
+                           "-o", str(exe)])
     subprocess.check_call([str(exe)])
 
 print("spool temp: ok")
