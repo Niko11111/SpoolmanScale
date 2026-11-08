@@ -29,9 +29,9 @@ int main() {
   // A range from FilaMan or BamBuddy, with nothing on the tag.
   assert(shown(220, 240, 0, 0) == "220 - 240 °C");
 
-  // A Bambu spool the scale created: Spoolman holds the tag's upper end. The
-  // tag's range stays.
-  assert(shown(0, 230, 190, 230) == "190 - 230 °C");
+  // A Bambu spool the scale created: Spoolman holds the tag's upper end, and
+  // the backend wins even then (decided 08.11.2026: one rule, no exception).
+  assert(shown(0, 230, 190, 230) == "230 °C");
   assert(shown(190, 230, 190, 230) == "190 - 230 °C");
 
   // The same spool with the user's own value: it wins, inside the tag's
@@ -49,7 +49,7 @@ int main() {
   assert(shown(0, 0, 0, 0).empty());
 
   // A tag written with one value as both ends reads as that one value.
-  assert(shown(0, 240, 240, 240) == "240 °C");
+  assert(shown(0, 0, 240, 240) == "240 °C");
 
   // Nonsense is dropped: a lower end above the upper, a value in Fahrenheit.
   assert(shown(260, 240, 0, 0) == "240 °C");

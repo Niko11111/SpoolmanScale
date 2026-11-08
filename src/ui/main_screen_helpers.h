@@ -44,8 +44,8 @@ void tagSpoolViewAttach(lv_obj_t* status_label);
 
 // The nozzle temperature once the backend has answered, from the filament's
 // x_extruder_temp_min and settings_extruder_temp (0 for none). The backend
-// wins over the tag on the pad unless it only repeats the tag's upper end;
-// spoolTempShown() holds the rule. `maker_tag` is a Bambu, Creality or
+// wins over the tag on the pad, which counts only when the backend has no
+// value; spoolTempShown() holds the rule. `maker_tag` is a Bambu, Creality or
 // Snapmaker tag decoded into g_tag. Nothing known on either side leaves the
 // label as it is.
 void mainShowBackendTemp(int backend_lo, int backend_hi, bool maker_tag);

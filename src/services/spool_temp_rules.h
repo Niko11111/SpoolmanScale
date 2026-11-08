@@ -8,10 +8,10 @@
 // no Arduino, no JSON, so a host test can run it (test/test_spool_temp.py).
 //
 // People enter the temperature they want to print at in the backend, so its
-// value wins over the tag's. The one exception is the scale's own echo: a
-// spool created from a Bambu, Creality or Snapmaker tag carries the tag's
-// upper end as its single backend value, and showing "230 °C" there would
-// throw away the range "190 - 230 °C" the tag still holds.
+// value always wins over the tag's, as BamBuddy itself lets a spool's own
+// value win when it fills an AMS slot. A Bambu spool the scale created in
+// Spoolman therefore reads "230 °C", not the tag's "190 - 230 °C": Spoolman
+// holds one value, and the screen shows what the backend says.
 
 // Above any filament's nozzle or bed: a larger value is a typo or a unit mix-up.
 #define SPOOL_TEMP_MAX_C  500
@@ -34,18 +34,10 @@ inline SpoolTempRange spoolTempRange(int lo, int hi) {
   return r;
 }
 
-// Whether the backend only repeats what the tag says: the same upper end, and
-// no lower end of its own or the tag's.
-inline bool spoolTempEchoesTag(SpoolTempRange backend, SpoolTempRange tag) {
-  if (tag.hi == 0 || backend.hi != tag.hi) return false;
-  return backend.lo == 0 || backend.lo == tag.lo;
-}
-
-// What the main screen shows: the backend's value, the tag's when the backend
-// has none or only echoes the tag.
+// What the main screen shows: the backend's value, the tag's only when the
+// backend has none.
 inline SpoolTempRange spoolTempShown(SpoolTempRange backend, SpoolTempRange tag) {
-  if (backend.hi == 0 || spoolTempEchoesTag(backend, tag)) return tag;
-  return backend;
+  return backend.hi ? backend : tag;
 }
 
 // The two ends a tag gets: the backend's value where there is one, the
