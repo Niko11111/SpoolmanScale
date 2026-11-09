@@ -32,6 +32,10 @@ static const char* label() { return T(STR_W_NAV_LOGOS); }
 // hand or uploaded as a file.
 #define LOGO_REPO_URL "https://raw.githubusercontent.com/MarksMakerSpace/filament-profiles/main/logos/label/"
 
+// The same collection as a person browses it, so the hint under the field can
+// be followed: the raw path above serves the browser, this one the reader.
+#define LOGO_REPO_PAGE "https://github.com/MarksMakerSpace/filament-profiles/tree/main/logos/label"
+
 // The page's own look: the preview as paper, the list's rows as lines.
 static void styles(String& h) {
   h += F("<style>"
@@ -71,7 +75,14 @@ static void addCard(String& h) {
   h += T(STR_W_LOGO_FETCH);
   h += F("</button></div><span class='hint'>");
   h += T(STR_W_LOGO_SLUG_HINT);
-  h += F("</span></div><div class='field'><div class='inrow'><label class='filebtn'>");
+  // Where "Fetch" takes the mark from, with the collection one click away:
+  // the field asks for a name a person cannot guess without it.
+  h += F("</span><span class='hint'>");
+  h += T(STR_W_LOGO_SOURCE);
+  h += F(" <a href='" LOGO_REPO_PAGE "' target='_blank' rel='noopener' "
+         "style='color:var(--accent);font-weight:600'>");
+  h += T(STR_W_LOGO_BROWSE);
+  h += F(" &#8599;</a></span></div><div class='field'><div class='inrow'><label class='filebtn'>");
   h += T(STR_W_LOGO_OWN);
   h += F("<input id='lg-file' type='file' accept='image/png,image/jpeg,image/webp'></label></div></div>"
          "<div class='field'><label>");

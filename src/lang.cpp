@@ -4259,6 +4259,10 @@ const char* const STRINGS[][3] = {
     "L'image ne contient aucune zone sombre." },  // STR_W_LOGO_ERR_EMPTY
   { "Bitte zuerst die Marke eintragen.", "Enter the brand first.",
     "Saisissez d'abord la marque." },  // STR_W_LOGO_NEED_BRAND
+  { "Holen nimmt das Bild aus der Sammlung MarksMakerSpace/filament-profiles, Ordner logos/label.",
+    "Fetch takes the mark from the MarksMakerSpace/filament-profiles collection, folder logos/label.",
+    "Récupérer prend le logo dans la collection MarksMakerSpace/filament-profiles, dossier logos/label." },  // STR_W_LOGO_SOURCE
+  { "Sammlung öffnen", "Open the collection", "Ouvrir la collection" },  // STR_W_LOGO_BROWSE
 };
 
 StringID tagWriteResultString(uint8_t code) {
