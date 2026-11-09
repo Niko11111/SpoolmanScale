@@ -102,6 +102,10 @@ struct LabelArea {
   bool wrap_cuts;
   // The header sets its text from the left, as the logo arrangement does.
   bool left;
+  // The arrangement keeps the facts in the type it sets: larger styles are
+  // not tried. The logo arrangement does; the big-code arrangement only
+  // starts at 14 px and may still grow.
+  bool facts_fixed;
 };
 
 // One of two columns side by side.
@@ -455,9 +459,9 @@ static lv_coord_t factsWidth(const LabelContent& c, const FactStyle& s) {
 static bool planLarger(const LabelArea& a, bool tall, const LabelContent& c,
                        const BodyPlan& one, FactsPlan* out) {
   if (c.wrap || !c.facts || c.n == 0) return false;
-  // A fixed fact type - the logo arrangement's small lines, the big-code
-  // arrangement's column - is the arrangement's choice, not a starting point.
-  if (a.facts_font) return false;
+  // A fixed fact type - the logo arrangement's small lines - is the
+  // arrangement's choice, not a starting point.
+  if (a.facts_fixed) return false;
   const bool want_code = c.qr && c.qr[0];
   const lv_coord_t avail_h = a.bottom - a.y;
   for (int i = 0; i < FACT_STYLE_COUNT; i++) {
@@ -668,12 +672,14 @@ static bool renderLabel(const LabelPrinterConfig& printer, const LabelLayout& la
   const lv_coord_t qr_max = labelPrinterDotsForMm(printer.model,
       preset == LABEL_PRESET_MATERIAL_BIG ? LR_QR_SMALL_MM : LR_QR_MAX_MM);
   LabelArea area{ M, M, (lv_coord_t)(cw - 2 * M), (lv_coord_t)(ch - M), qr_max, !standard,
-                  nullptr, !c.qr || !c.qr[0], nullptr, false, preset == LABEL_PRESET_LOGO };
+                  nullptr, !c.qr || !c.qr[0], nullptr, false, preset == LABEL_PRESET_LOGO, false };
   // The logo arrangement keeps its facts small: the reference label sets them
   // in a caption-and-value pair under the maker's own mark, and on 40 x 30 at
   // 203 dpi the large lines were what left the code no room.
-  if (preset == LABEL_PRESET_LOGO)
+  if (preset == LABEL_PRESET_LOGO) {
     area.facts_font = &lv_font_montserrat_ext_14;
+    area.facts_fixed = true;
+  }
   LabelContent body = c;
   lv_coord_t side_qr = 0;
   LabelBody placed{ 0, true, "lines under the number" };
