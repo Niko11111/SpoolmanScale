@@ -147,6 +147,7 @@ UiThemeCustom uiThemeCustomActive();
 #define UI_FONT_TITLE          (&lv_font_montserrat_ext_18)
 #define UI_FONT_HEADLINE       (&lv_font_montserrat_ext_20)
 #define UI_FONT_ICON           (&lv_font_montserrat_ext_24)
+#define UI_FONT_BIG_NUMBER     (&lv_font_montserrat_ext_28)   // a number to copy down, digits only
 
 // ---- shapes --------------------------------------------------
 #define UI_RADIUS_BOX          12   // a popup's box, a settings tile

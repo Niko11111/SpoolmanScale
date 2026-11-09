@@ -4225,6 +4225,22 @@ const char* const STRINGS[][3] = {
     "Spooly sombre" },  // STR_W_THEME_SPOOLY_DARK
   { "Spooly hell", "Spooly light",
     "Spooly clair" },  // STR_W_THEME_SPOOLY_LIGHT
+  { "Neue Spule", "New spool",
+    "Nouvelle bobine" },  // STR_IDPAD_NEW
+  { "Ohne Tag: Vorlage wählen oder neu anlegen",
+    "No tag: pick a template or create a new one",
+    "Sans tag : choisissez un modèle ou créez-en une" },  // STR_COPY_CTX_TAGLESS
+  { "Ohne Tag",       "No tag",        "Sans tag" },  // STR_CTX_NO_TAG
+  { "Spule angelegt", "Spool created", "Bobine créée" },  // STR_NEWSPOOL_DONE
+  { "Ohne Tag findest du sie nur über diese Nummer. Schreib sie auf die Spule.",
+    "Without a tag, this number is the only way back to it. Write it on the spool.",
+    "Sans tag, il faut ce numéro pour la retrouver. Notez-le sur la bobine." },  // STR_NEWSPOOL_HINT_WRITE
+  { "Ohne Tag findest du sie nur über diese Nummer. Das Etikett trägt sie groß.",
+    "Without a tag, this number is the only way back to it. The label shows it large.",
+    "Sans tag, il faut ce numéro pour la retrouver. L'étiquette l'affiche en grand." },  // STR_NEWSPOOL_HINT_LABEL
+  { "Ohne Tag findest du sie nur über diese Nummer, mit \"Spule per ID\".",
+    "Without a tag, this number is the only way back to it, with \"Spool by ID\".",
+    "Sans tag, il faut ce numéro pour la retrouver, via \"Bobine par ID\"." },  // STR_NEWSPOOL_HINT_NOT_SHOWN
 };
 
 StringID tagWriteResultString(uint8_t code) {

@@ -28,6 +28,7 @@
 #include "ui/price_pad.h"
 #include "ui/spool_flow_internal.h"
 #include "ui/tag_db_diff_popup.h"
+#include "ui/new_spool_done_popup.h"
 #include "ui/theme.h"
 #include "ui/ui_common.h"
 
@@ -577,7 +578,10 @@ static void runCreate() {
     closeTagCreatePopup();
     // The spool exists either way; a tag that could not be bound has said so
     // on the status line, and that must stay readable.
-    if (!finishCopyFlow(r.spool_id, link_id)) return;
+    if (!finishCopyFlow(r.spool_id, link_id)) {
+      if (price_lost) newSpoolDonePriceLost();   // without a tag the card says it
+      return;
+    }
     if (price_lost) statusMessageShow(T(STR_TAGNEW_PRICE_LOST), UI_COL_WARN);
     else statusMessageShow(T(with_filament ? STR_TAGNEW_OK_BOTH : STR_NEWTAG_OK), UI_COL_GOOD);
     return;

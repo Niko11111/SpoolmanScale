@@ -37,6 +37,9 @@
 #include "ui/db_pick_screen.h"
 #include "ui/entry_tile.h"
 #include "ui/tag_create_popup.h"
+#include "ui/copy_tagless.h"
+#include "ui/new_spool_done_popup.h"
+#include "app/id_spool.h"
 
 // From ui/spool_flow.cpp, see the same line in spoolman_lookup.cpp: what counts
 // as bound, for the spool cache a download here fills.
@@ -103,7 +106,23 @@ void closeCopyListPopup() {
 }
 
 
+// Without a tag (ui/copy_tagless.h) there is nothing to link: the new spool
+// is shown by its id and a card says its number. Returns false like a link
+// that did not happen, so the callers leave the status line to the id spool.
+static void finishTagless(int new_spool_id) {
+  logSDf("finishCopyFlow: spool=%d without a tag", new_spool_id);
+  linkPickerClose();
+  // Before the card: showMainScreen() hides every overlay.
+  showMainScreen();
+  idSpoolAdopt(new_spool_id);
+  showNewSpoolDone(new_spool_id, idSpoolActive() && sm_id == new_spool_id);
+}
+
 bool finishCopyFlow(int new_spool_id, const char* tray_uuid_override) {
+  if (copyTaglessTake()) {
+    finishTagless(new_spool_id);
+    return false;
+  }
   // Bambu tags: use tray_uuid (long UUID from NFC block 9) - same logic as doLinkPatch
   // NTAG: use link_tag_uid (short UID used as Spoolman key)
   //
@@ -164,6 +183,8 @@ void doCopySpoolCreate(int template_spool_id, int template_filament_id,
     if (finishCopyFlow(new_id)) {
       if (price_lost) statusMessageShow(T(STR_TAGNEW_PRICE_LOST), UI_COL_WARN);
       else            statusMessageShow(T(STR_COPY_OK), UI_COL_GOOD);
+    } else if (price_lost) {
+      newSpoolDonePriceLost();
     }
     return;
   }
@@ -566,7 +587,10 @@ static void copyEntryTiles(bool offer_from_tag, bool offer_from_db) {
   entryBottomRow(scr_copy_entry, id_text, [](lv_event_t *e) {
     link_id_input[0] = '\0';
     showIdInputPopup(strlen(g_tag.tray_uuid) == 32, true);
-  }, [](lv_event_t *e) { closeCopyEntryPopup(); });
+  }, [](lv_event_t *e) {
+    copyTaglessEnd("cancelled");
+    closeCopyEntryPopup();
+  });
 }
 
 // Entry popup: choose ID / Active spools / Archived spools
@@ -595,6 +619,7 @@ void showCopyEntryPopup() {
   // The same as Cancel below.
   flowCloseButton(scr_copy_entry, [](lv_event_t *e) {
     logSD("BTN: CopyEntry -> X");
+    copyTaglessEnd("closed");
     closeCopyEntryPopup();
   });
 
@@ -608,8 +633,10 @@ void showCopyEntryPopup() {
 
   // Context: material info if available
   lv_obj_t *lbl_ctx = lv_label_create(scr_copy_entry);
-  char ctx_buf[56];
-  if (strlen(g_tag.material) > 0) {
+  char ctx_buf[80];   // the tagless line in French needs more than the 56 it had
+  if (copyTaglessActive()) {
+    copyT(ctx_buf, sizeof(ctx_buf), STR_COPY_CTX_TAGLESS);
+  } else if (strlen(g_tag.material) > 0) {
     char fmt_c[48]; backendText(T(STR_LINK_CTX_NOT_IN_SM), fmt_c, sizeof(fmt_c));
     snprintf(ctx_buf, sizeof(ctx_buf), fmt_c, g_tag.material);
   } else if (strlen(link_tag_uid) > 0) {

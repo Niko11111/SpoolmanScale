@@ -14,6 +14,7 @@
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/spool_color.h"
+#include "ui/copy_tagless.h"
 #include "ui/theme.h"
 #include "ui/ui_common.h"
 #include "ui/weight_format.h"
@@ -44,7 +45,7 @@
 #define SIP_ACTION_H (SIP_BOTTOM_Y - SIP_CANCEL_H - SIP_GAP - SIP_ACTION_Y)
 
 enum SipState : uint8_t { SIP_EDIT, SIP_SEARCHING, SIP_FOUND, SIP_NOT_FOUND, SIP_FAILED };
-enum SipAnswer : uint8_t { SIP_NONE, SIP_ACTION, SIP_CANCEL };
+enum SipAnswer : uint8_t { SIP_NONE, SIP_ACTION, SIP_NEW, SIP_CANCEL };
 
 // What the pad shows of a spool it found: just enough to recognise it.
 struct SipSpool {
@@ -68,6 +69,7 @@ static bool       s_search_due = false;
 static int        s_searched_id = 0;
 static SipSpool   s_spool;
 static void     (*s_done)(int) = nullptr;
+static void     (*s_on_new)()  = nullptr;
 
 bool spoolIdPadOpen() { return s_pad != nullptr; }
 
@@ -89,9 +91,12 @@ static void refreshInput() {
 }
 
 // Any edit makes an answer on the right stale: it was for another number.
-static void inputChanged() {
+// An empty field offers a new spool instead of the search, so the button
+// changes too when the field empties or fills.
+static void inputChanged(bool was_empty) {
   refreshInput();
-  if (s_state != SIP_EDIT) {
+  const bool empty_flipped = (was_empty != (s_input[0] == '\0')) && s_on_new;
+  if (s_state != SIP_EDIT || empty_flipped) {
     s_state = SIP_EDIT;
     s_col_dirty = true;
   }
@@ -105,13 +110,13 @@ static void onKey(lv_event_t* e) {
   if (len == 0 && ch[0] == '0') return;   // ids start at 1
   s_input[len] = ch[0];
   s_input[len + 1] = '\0';
-  inputChanged();
+  inputChanged(len == 0);
 }
 
 static void onBackspace(lv_event_t*) {
   const size_t len = strlen(s_input);
   if (len) s_input[len - 1] = '\0';
-  inputChanged();
+  inputChanged(len == 0);
 }
 
 static lv_obj_t* colText(lv_obj_t* parent, const char* text, int y, uint32_t col, const lv_font_t* font,
@@ -198,6 +203,17 @@ static void buildAction(int text_id, uint32_t bg, uint32_t bg_pressed) {
   lv_obj_add_event_cb(b, [](lv_event_t*) { s_answer = SIP_ACTION; }, LV_EVENT_CLICKED, NULL);
 }
 
+// The same place for a new spool, in the house colour: a button that changes
+// its colour with its meaning is seen to change when the first digit lands.
+static void buildNewAction() {
+  lv_obj_t* b = padButton(s_col, 0, SIP_ACTION_Y - SIP_TOP_Y, SIP_COL_W, SIP_ACTION_H, UI_COL_ACCENT,
+                          uiShade(UI_COL_ACCENT, UI_SHADE_PRESSED));
+  char text[48];
+  snprintf(text, sizeof(text), LV_SYMBOL_PLUS " %s", T(STR_IDPAD_NEW));
+  padLabel(b, text, UI_COL_ON_ACCENT, UI_FONT_BODY);
+  lv_obj_add_event_cb(b, [](lv_event_t*) { s_answer = SIP_NEW; }, LV_EVENT_CLICKED, NULL);
+}
+
 // Room for the info text, the longest that lands here, with the backend name
 // substituted and in French.
 #define SIP_TEXT_MAX 224
@@ -209,7 +225,8 @@ static void buildColumn() {
     case SIP_EDIT:
       backendText(T(STR_IDPAD_INFO), buf, sizeof(buf));
       colText(s_col, buf, 0, UI_COL_CAPTION, UI_FONT_CAPTION, LV_LABEL_LONG_WRAP);
-      buildAction(STR_IDPAD_SEARCH, UI_COL_GO_BG, UI_COL_GO_BG_PRESSED);
+      if (!s_input[0] && s_on_new) buildNewAction();
+      else buildAction(STR_IDPAD_SEARCH, UI_COL_GO_BG, UI_COL_GO_BG_PRESSED);
       break;
     case SIP_SEARCHING:
       buildMessageCard(T(STR_IDPAD_SEARCHING), UI_COL_CAPTION, nullptr);
@@ -275,10 +292,11 @@ static void buildCancel() {
   lv_obj_add_event_cb(no, [](lv_event_t*) { s_answer = SIP_CANCEL; }, LV_EVENT_CLICKED, NULL);
 }
 
-void showSpoolIdPad(void (*done)(int spool_id)) {
+void showSpoolIdPad(void (*done)(int spool_id), void (*on_new)()) {
   logSD("SHOW: SpoolIdPad");
   closeSpoolIdPad();
   s_done = done;
+  s_on_new = on_new;
   s_input[0] = '\0';
   s_state = SIP_EDIT;
 
@@ -356,6 +374,12 @@ void spoolIdPadTick() {
     closeSpoolIdPad();
     return;
   }
+  if (answer == SIP_NEW && s_on_new) {
+    void (*on_new)() = s_on_new;
+    closeSpoolIdPad();
+    on_new();
+    return;
+  }
   if (answer == SIP_ACTION) {
     if (s_state == SIP_FOUND) { confirmSpool(); return; }
     startSearch();
@@ -389,7 +413,7 @@ lv_obj_t* buildSpoolByIdButton(lv_obj_t* bar) {
   // Only opens the pad; the spool is fetched from the loop once confirmed.
   lv_obj_add_event_cb(b, [](lv_event_t*) {
     logSD("UI: Button -> Spool by ID");
-    showSpoolIdPad(idSpoolAdopt);
+    showSpoolIdPad(idSpoolAdopt, copyTaglessStart);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t* l = lv_label_create(b);
   char buf[48];

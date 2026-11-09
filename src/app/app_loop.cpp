@@ -101,6 +101,7 @@
 #include "ui/confirm_popup.h"
 #include "ui/tare_entry.h"
 #include "ui/tare_missing_popup.h"
+#include "ui/new_spool_done_popup.h"
 #include "ui/weight_popup.h"
 #include "services/weight_write_rules.h"
 #include "ui/ble_devices_screen.h"
@@ -1189,6 +1190,7 @@ void appLoop() {
   tareEntryTick();
   weightPopupTick();
   tareMissingTick();
+  newSpoolDoneTick();
   spoolIdPadTick();
   idSpoolTick();
   idSpoolLiftQuestions();

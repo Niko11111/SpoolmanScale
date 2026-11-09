@@ -19,6 +19,7 @@
 #include "ui/spool_flow.h"
 #include "ui/spool_flow_internal.h"
 #include "ui/tag_create_popup.h"
+#include "ui/copy_tagless.h"
 #include "ui/theme.h"
 #include "ui/ui_common.h"
 
@@ -151,7 +152,7 @@ static const int FAMILY_TEXT[CF_COUNT] = {
 lv_obj_t* dbPickScreen() { return s_scr; }
 
 bool dbPickOffered() {
-  return strlen(g_tag.tray_uuid) != 32 && link_tag_uid[0] && fdbOffered();
+  return strlen(g_tag.tray_uuid) != 32 && (link_tag_uid[0] || copyTaglessActive()) && fdbOffered();
 }
 
 // ------------------------------------------------------------

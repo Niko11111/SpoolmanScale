@@ -17,6 +17,7 @@
 #include "ui/spool_flow_internal.h"
 #include "ui/spoolman_lookup.h"
 #include "ui/tag_create_popup.h"
+#include "ui/copy_tagless.h"
 #include "ui/theme.h"
 #include "ui/ui_common.h"
 // Last, see the note on ArduinoJson and T() in tag_create_popup.cpp.
@@ -585,6 +586,7 @@ static void runAction() {
     return;
   }
   closeUnknownSpoolPopup();
+  copyTaglessEnd("a tag's flow");
   switch (a) {
     case UA_LINK_PICK:  linkSuggestOpenList(s_action_id);  break;
     case UA_LINK_LIST:  linkSuggestOpenList(0);            break;

@@ -502,3 +502,8 @@ STR_ONLINE_OTHER_SUB	14	320	NEVER	src/ui/online_screen.cpp row, second line
 STR_ONLINE_SERVICE	16	380	NEVER	src/ui/backend_screen.cpp address row title
 STR_ONLINE_ACCOUNT	16	200	NEVER	src/ui/backend_screen.cpp second credential column
 STR_ONLINE_PRO	14	200	NEVER	src/ui/backend_screen.cpp second credential column
+STR_IDPAD_NEW	16	136	NEVER	src/ui/spool_id_pad.cpp action button after a plus sign, 168 px
+STR_COPY_CTX_TAGLESS	14	450	NEVER	src/ui/copy_flow.cpp New / Copy context line
+STR_NEWSPOOL_HINT_WRITE	16	360	WRAP:3	src/ui/new_spool_done_popup.cpp card sentence
+STR_NEWSPOOL_HINT_LABEL	16	360	WRAP:3	src/ui/new_spool_done_popup.cpp card sentence
+STR_NEWSPOOL_HINT_NOT_SHOWN	16	360	WRAP:3	src/ui/new_spool_done_popup.cpp card sentence

@@ -19,7 +19,9 @@
 lv_obj_t* buildSpoolByIdButton(lv_obj_t* bar);
 
 // Opens the pad. `done` gets the confirmed spool id; on Cancel it is not called.
-void showSpoolIdPad(void (*done)(int spool_id));
+// With `on_new`, an empty field offers "+ New spool" in place of the search,
+// and its tap closes the pad and calls `on_new` from the loop.
+void showSpoolIdPad(void (*done)(int spool_id), void (*on_new)() = nullptr);
 
 bool spoolIdPadOpen();
 void closeSpoolIdPad();

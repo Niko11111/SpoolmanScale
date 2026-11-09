@@ -1935,6 +1935,14 @@ enum StringID {
   STR_W_L_ID_SHARE,
   STR_W_THEME_SPOOLY_DARK,
   STR_W_THEME_SPOOLY_LIGHT,
+
+  STR_IDPAD_NEW,              // the pad's action while the field is empty, after a plus sign
+  STR_COPY_CTX_TAGLESS,       // New / Copy opened for a spool without a tag
+  STR_CTX_NO_TAG,             // the copy-by-id pad's first hint line without a tag
+  STR_NEWSPOOL_DONE,          // title of the card after a spool without a tag was created
+  STR_NEWSPOOL_HINT_WRITE,    // its sentence without a printer
+  STR_NEWSPOOL_HINT_LABEL,    // its sentence with a label printer
+  STR_NEWSPOOL_HINT_NOT_SHOWN,// its sentence when the new spool is not on the display
   STR_COUNT
 };
 

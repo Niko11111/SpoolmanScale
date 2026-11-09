@@ -37,6 +37,7 @@
 #include "ui/settings_screen.h"
 #include "ui/spool_flow.h"
 #include "ui/spool_id_pad.h"
+#include "ui/copy_tagless.h"
 #include "ui/theme.h"
 #include "ui_common.h"
 
@@ -900,6 +901,7 @@ void buildUI() {
   lv_obj_add_flag(btn_copy, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_event_cb(btn_copy, [](lv_event_t *e) {
     logSD("UI: Button -> Copy Spool");
+    copyTaglessEnd("a tag's flow");
     showCopyEntryPopup();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_cp = lv_label_create(btn_copy);

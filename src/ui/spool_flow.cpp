@@ -43,6 +43,7 @@
 #include "ui/tag_spool_compare.h"
 #include "ui/theme.h"
 #include "ui/db_pick_screen.h"
+#include "ui/copy_tagless.h"
 #include "ui/tag_create_popup.h"
 #include "ui/unknown_spool_popup.h"
 #include "ui/entry_tile.h"
@@ -2300,6 +2301,7 @@ void showIdInputPopup(bool is_bambu, bool is_copy) {
   // Which tag this is for, then where the id is found.
   char ctx[48];
   if (is_bambu) snprintf(ctx, sizeof(ctx), "Bambu  %s", g_tag.material[0] ? g_tag.material : "Tag");
+  else if (copyTaglessActive()) copyT(ctx, sizeof(ctx), STR_CTX_NO_TAG);
   else          snprintf(ctx, sizeof(ctx), "UID: %.14s", link_tag_uid);
   char where[96];
   backendText(T(STR_ID_PAD_WHERE), where, sizeof(where));
