@@ -34,3 +34,14 @@ bool isHexColorWord(const char* s);
 // "Charcoal (11101" without the closing bracket - after which there was no
 // bracket left to strip and the tile showed the stump.
 void colorNameClean(const char* in, char* out, size_t out_size);
+
+// True when the filament name already opens with the material. Spoolman's own
+// naming does this, and BamBuddy's mapping always does ("PETG HF Orange"), so
+// prefixing the material a second time would read "PETG PETG HF Orange".
+bool nameStartsWithMaterial(const char* name, const char* material);
+
+// Material and filament name as one line, without saying anything twice: a
+// name that holds the whole material as a word anywhere ("Hyper PLA Gelb")
+// stays as it is, and a name that repeats the material's subtype ("PLA
+// Tough+" with "Tough+ Cyan") has the shared words written once.
+void joinMaterialName(const char* material, const char* name, char* out, size_t out_size);
