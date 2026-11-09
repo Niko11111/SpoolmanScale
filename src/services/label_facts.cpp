@@ -18,6 +18,22 @@ static bool isHex6(const char* s) {
   return true;
 }
 
+// The logo arrangement sets the colour beside the material band, so there it
+// is no fact line. Where the band is missing or the colour is a word, the
+// line stays.
+bool labelColorInBand(const LabelLayout& layout, const SpoolLabelData& spool) {
+  return layout.preset == LABEL_PRESET_LOGO && labelLayoutHas(layout, LF_MATERIAL) &&
+         labelLayoutHas(layout, LF_COLOR) && spool.material[0] && isHex6(spool.color);
+}
+
+bool labelColorText(const SpoolLabelData& spool, char* out, size_t n) {
+  if (!out || !n) return false;
+  out[0] = '\0';
+  if (!spool.color[0]) return false;
+  snprintf(out, n, isHex6(spool.color) ? "#%s" : "%s", spool.color);
+  return true;
+}
+
 // The date as the layout wants it: the first use where the backend
 // recorded one, else the day the spool was added; or always the latter.
 // False when the backend gave neither.
@@ -110,14 +126,14 @@ void labelSpoolFacts(const LabelLayout& layout, const SpoolLabelData& spool, int
   char id[12];
   char color[sizeof(spool.color) + 1];
   snprintf(id, sizeof(id), "#%d", spool.id);
-  snprintf(color, sizeof(color), isHex6(spool.color) ? "#%s" : "%s", spool.color);
+  const bool have_color = labelColorText(spool, color, sizeof(color)) && !labelColorInBand(layout, spool);
   // The compact arrangement moves the maker down here, as the first fact.
   if (layout.preset == LABEL_PRESET_COMPACT && labelLayoutHas(layout, LF_VENDOR) &&
       spool.vendor[0])
     addFact(out, capacity, LabelFact{ nullptr, spool.vendor });
   if (labelLayoutHas(layout, LF_SPOOL_ID) && !labelPresetIsBigId(layout.preset))
     addFact(out, capacity, LabelFact{ backendName(), id });
-  if (labelLayoutHas(layout, LF_COLOR) && spool.color[0])
+  if (have_color && labelLayoutHas(layout, LF_COLOR))
     addFact(out, capacity, LabelFact{ T(STR_LBL_L_COLOR), color });
   if (labelLayoutHas(layout, LF_ARTICLE) && spool.article[0])
     addFact(out, capacity, LabelFact{ T(STR_LBL_ARTICLE_NO_SHORT), spool.article });
@@ -131,11 +147,11 @@ void labelFilamentFacts(const LabelLayout& layout, const SpoolLabelData& spool, 
                         LabelFactList* out) {
   *out = LabelFactList{};
   char color[sizeof(spool.color) + 1];
-  snprintf(color, sizeof(color), isHex6(spool.color) ? "#%s" : "%s", spool.color);
+  const bool have_color = labelColorText(spool, color, sizeof(color)) && !labelColorInBand(layout, spool);
   if (layout.preset == LABEL_PRESET_COMPACT && labelLayoutHas(layout, LF_VENDOR) &&
       spool.vendor[0])
     addFact(out, capacity, LabelFact{ nullptr, spool.vendor });
-  if (labelLayoutHas(layout, LF_COLOR) && spool.color[0])
+  if (have_color && labelLayoutHas(layout, LF_COLOR))
     addFact(out, capacity, LabelFact{ T(STR_LBL_L_COLOR), color });
   if (labelLayoutHas(layout, LF_ARTICLE) && spool.article[0])
     addFact(out, capacity, LabelFact{ T(STR_LBL_ARTICLE_NO_SHORT), spool.article });

@@ -15,6 +15,7 @@
 #include "services/label_big_id.h"
 #include "services/label_draw.h"
 #include "services/label_facts.h"
+#include "services/label_logo.h"
 #include "services/label_tape.h"
 #include "services/text_util.h"
 
@@ -36,6 +37,9 @@ using namespace labeldraw;
 #define LR_BAND_THICK_Y    1    // and down
 #define LR_BAND_H_TALL_PX 40
 #define LR_BAND_H_BIG_PX  60    // the material-first band, a quarter of 30 mm
+#define LR_BAND_INSET_PX   3    // the band's line, from its left end
+#define LR_LOGO_BOX_H_PX  40    // the maker's mark, 5 mm across the top
+#define LR_LOGO_BOX_TALL_PX 48
 #define LR_FACT_LINE_PX   22    // one fact line in the 16 px font
 #define LR_FACT_LINE_TALL_PX 28 // one in the 20 px font
 #define LR_FACT_LINE_SMALL_PX 19 // one in the 14 px font, next to a big code
@@ -96,6 +100,12 @@ struct LabelArea {
   // A name too long for two lines in the wrap font keeps two all the same,
   // the second cut, rather than one line cut sooner.
   bool wrap_cuts;
+  // The header sets its text from the left, as the logo arrangement does.
+  bool left;
+  // The arrangement keeps the facts in the type it sets: larger styles are
+  // not tried. The logo arrangement does; the big-code arrangement only
+  // starts at 14 px and may still grow.
+  bool facts_fixed;
 };
 
 // One of two columns side by side.
@@ -124,16 +134,35 @@ static lv_coord_t drawName(lv_obj_t* canvas, const LabelArea& a, lv_coord_t y,
                            const lv_font_t* f, const char* name) {
   const lv_color_t black = lv_color_black();
   const lv_coord_t gap = dots(LR_GAP_PX);
+  const lv_text_align_t align = a.left ? LV_TEXT_ALIGN_LEFT : LV_TEXT_ALIGN_CENTER;
   char first[LABEL_NAME_BYTES], second[LABEL_NAME_BYTES];
   const lv_font_t* w = a.wrap_font;
   if (!fitsLine(name, f, a.w) && nameOnTwoLines(a, name, first, second)) {
-    drawLine(canvas, a.x, y, a.w, w, black, LV_TEXT_ALIGN_CENTER, first);
-    drawLine(canvas, a.x, y + lineHeight(w), a.w, w, black, LV_TEXT_ALIGN_CENTER, second);
+    drawLine(canvas, a.x, y, a.w, w, black, align, first);
+    drawLine(canvas, a.x, y + lineHeight(w), a.w, w, black, align, second);
     return y + 2 * lineHeight(w) + gap;
   }
   if (w && !fitsLine(name, f, a.w) && fitsLine(name, w, a.w)) f = w;
-  drawLine(canvas, a.x, y, a.w, f, black, LV_TEXT_ALIGN_CENTER, name);
+  drawLine(canvas, a.x, y, a.w, f, black, align, name);
   return y + lineHeight(f) + gap;
+}
+
+// The filament's name as the header sets it: one of the sizes that fit the
+// width, the larger ones on a tall label first.
+static const lv_font_t* headerNameFont(const LabelArea& a, bool tall, const char* text) {
+  static const lv_font_t* const base[] = { &lv_font_montserrat_ext_28, &lv_font_montserrat_ext_24, &lv_font_montserrat_ext_20 };
+  static const lv_font_t* const big[]  = { &lv_font_montserrat_ext_36, &lv_font_montserrat_ext_28, &lv_font_montserrat_ext_24, &lv_font_montserrat_ext_20 };
+  return tall ? fitFont(text, a.w, big, 4) : fitFont(text, a.w, base, 3);
+}
+
+// The colour's word under the logo header's band. On the base sizes it starts
+// one step below the other headers' name: the 40 x 30 at 203 dpi needs the
+// height for the code.
+static const lv_font_t* logoTitleFont(const LabelArea& a, bool tall, const char* text) {
+  static const lv_font_t* const base[] = { &lv_font_montserrat_ext_24, &lv_font_montserrat_ext_20 };
+  static const lv_font_t* const big[]  = { &lv_font_montserrat_ext_36, &lv_font_montserrat_ext_28,
+                                           &lv_font_montserrat_ext_24, &lv_font_montserrat_ext_20 };
+  return tall ? fitFont(text, a.w, big, 4) : fitFont(text, a.w, base, 2);
 }
 
 // The header, each block where the layout keeps it: the maker as large as
@@ -171,12 +200,8 @@ static lv_coord_t drawHeader(lv_obj_t* canvas, const LabelArea& a, bool tall,
                  LV_TEXT_ALIGN_CENTER, d.material);
     y += band_h + dots(LR_GAP_PX);
   }
-  if (d.name[0] && labelLayoutHas(layout, LF_NAME)) {
-    static const lv_font_t* const base[] = { &lv_font_montserrat_ext_28, &lv_font_montserrat_ext_24, &lv_font_montserrat_ext_20 };
-    static const lv_font_t* const big[]  = { &lv_font_montserrat_ext_36, &lv_font_montserrat_ext_28, &lv_font_montserrat_ext_24, &lv_font_montserrat_ext_20 };
-    const lv_font_t* f = tall ? fitFont(d.name, a.w, big, 4) : fitFont(d.name, a.w, base, 3);
-    y = drawName(canvas, a, y, f, d.name);
-  }
+  if (d.name[0] && labelLayoutHas(layout, LF_NAME))
+    y = drawName(canvas, a, y, headerNameFont(a, tall, d.name), d.name);
   return y;
 }
 
@@ -211,11 +236,71 @@ static lv_coord_t drawMaterialHeader(lv_obj_t* canvas, const LabelArea& a,
   return y;
 }
 
+// The logo header: the maker's mark across the top, the material band with
+// the colour's hex beside it, the filament's name under it, all from the
+// left. A maker without a stored logo prints its name in the mark's place.
+// Returns the y under it.
+static lv_coord_t drawLogoHeader(lv_obj_t* canvas, const LabelArea& a, bool tall,
+                                 const SpoolLabelData& d, const LabelLayout& layout) {
+  const lv_color_t black = lv_color_black();
+  const lv_coord_t gap = dots(LR_GAP_PX);
+  lv_coord_t y = a.y;
+  if (d.vendor[0] && labelLayoutHas(layout, LF_VENDOR)) {
+    const lv_coord_t box_h = dots(tall ? LR_LOGO_BOX_TALL_PX : LR_LOGO_BOX_H_PX);
+    const LabelLogo* mark = labelLogoFor(d.vendor);
+    if (mark) {
+      const LabelBitmap src{ mark->bits, mark->w, mark->h };
+      const BitmapDots size = bitmapDots(src, a.w, box_h);
+      drawBitmap1bit(canvas, a.x, y + (box_h - size.h) / 2, src, size);
+    } else {
+      static const lv_font_t* const fonts[] = { &lv_font_montserrat_ext_36, &lv_font_montserrat_ext_28,
+                                                &lv_font_montserrat_ext_24, &lv_font_montserrat_ext_20 };
+      const lv_font_t* f = fitFontUnder(d.vendor, a.w, box_h, fonts, 4);
+      drawLine(canvas, a.x, y + (box_h - lineHeight(f)) / 2, a.w, f, black,
+               LV_TEXT_ALIGN_LEFT, d.vendor);
+    }
+    y += box_h + gap;
+  }
+  char hex[sizeof(d.color) + 1];
+  const bool have_hex = labelColorInBand(layout, d) && labelColorText(d, hex, sizeof(hex));
+  if (d.material[0] && labelLayoutHas(layout, LF_MATERIAL)) {
+    const lv_coord_t band_h = dots(tall ? LR_BAND_H_TALL_PX : LR_BAND_H_PX);
+    const lv_font_t* f = tall ? &lv_font_montserrat_ext_28 : LR_BAND_FONT;
+    const lv_font_t* hf = tall ? &lv_font_montserrat_ext_20 : &lv_font_montserrat_ext_16;
+    const lv_coord_t inset = dots(LR_BAND_INSET_PX);
+    // drawLine() adds the font's bold stroke to the text it measures, so the
+    // column keeps that dot as well; without it the last hex digit is cut.
+    const lv_coord_t hex_w = have_hex ? textWidth(hex, hf) + boldFor(hf) + gap : 0;
+    const lv_coord_t band_w = a.w - hex_w;
+    const bool plain = labelLayoutOption(layout, LO_MATERIAL_PLAIN);
+    if (!plain) fillRect(canvas, a.x, y, band_w, band_h, black);
+    const lv_coord_t ty = y + (band_h - lineHeight(f)) / 2;
+    const lv_coord_t thick_x = plain ? 0 : dots(LR_BAND_THICK_X);
+    const lv_coord_t thick_y = plain ? 0 : dots(LR_BAND_THICK_Y);
+    for (lv_coord_t dy = 0; dy <= thick_y; dy++)
+      for (lv_coord_t dx = 0; dx <= thick_x; dx++)
+        drawLine(canvas, a.x + inset + dx, ty + dy, band_w - inset, f,
+                 plain ? black : lv_color_white(), LV_TEXT_ALIGN_LEFT, d.material);
+    if (have_hex)
+      drawLine(canvas, a.x + band_w + gap, y + (band_h - lineHeight(hf)) / 2, hex_w - gap,
+               hf, black, LV_TEXT_ALIGN_RIGHT, hex);
+    y += band_h + gap;
+  }
+  // Under the band the colour's own word where the backend keeps one: the
+  // spool's name repeats the material ("PETG HF Dark Gray"), and the band
+  // already says PETG HF. A maker without the word keeps the whole name.
+  const char* title = d.color_name[0] ? d.color_name : d.name;
+  if (title[0] && labelLayoutHas(layout, LF_NAME))
+    y = drawName(canvas, a, y, logoTitleFont(a, tall, title), title);
+  return y;
+}
+
 // Either header, as the arrangement has it. With no canvas it only measures.
 static lv_coord_t drawHead(lv_obj_t* canvas, const LabelArea& a, bool tall,
                            const SpoolLabelData& d, const LabelLayout& layout) {
-  return layout.preset == LABEL_PRESET_MATERIAL_BIG ? drawMaterialHeader(canvas, a, d, layout)
-                                                    : drawHeader(canvas, a, tall, d, layout);
+  if (layout.preset == LABEL_PRESET_MATERIAL_BIG) return drawMaterialHeader(canvas, a, d, layout);
+  if (layout.preset == LABEL_PRESET_LOGO) return drawLogoHeader(canvas, a, tall, d, layout);
+  return drawHeader(canvas, a, tall, d, layout);
 }
 
 // The width the text keeps next to the code: the fixed minimum, or, where the
@@ -374,6 +459,10 @@ static lv_coord_t factsWidth(const LabelContent& c, const FactStyle& s) {
 static bool planLarger(const LabelArea& a, bool tall, const LabelContent& c,
                        const BodyPlan& one, FactsPlan* out) {
   if (c.wrap || !c.facts || c.n == 0) return false;
+  // A fixed fact type - the logo arrangement's small lines - is the
+  // arrangement's choice, not a starting point.
+  if (a.facts_fixed) return false;
+  const bool want_code = c.qr && c.qr[0];
   const lv_coord_t avail_h = a.bottom - a.y;
   for (int i = 0; i < FACT_STYLE_COUNT; i++) {
     const FactStyle& s = FACT_STYLES[i];
@@ -384,20 +473,26 @@ static bool planLarger(const LabelArea& a, bool tall, const LabelContent& c,
     if (w == 0) continue;
     const lv_coord_t h = factsHeight(c, s, 0, c.n);
     if (w > a.w || h > avail_h) {
-      // Two columns where the arrangement has no code to share the width with.
+      // Two columns where the arrangement has no code to share the width
+      // with; a requested code leaves no width to give away.
+      if (want_code) continue;
       const int half = (c.n + 1) / 2;
       const lv_coord_t h2 = LV_MAX(factsHeight(c, s, 0, half), factsHeight(c, s, half, c.n));
-      if (!a.columns || one.code || c.n < 2 || w > columnWidth(a) || h2 > avail_h) continue;
+      if (!a.columns || c.n < 2 || w > columnWidth(a) || h2 > avail_h) continue;
       *out = FactsPlan{ &s, 0, h2, 2 };
       return true;
     }
+    // A requested code is never traded for larger facts: the style has to
+    // leave a box the code still draws in, and no smaller than the one-line
+    // plan did. Without this, a label whose code did not fit at all grew its
+    // facts and lost the code silently - the 40 x 30 at 203 dpi did.
     lv_coord_t code = 0;
-    if (one.code) {
+    if (want_code) {
       lv_coord_t box = one.beside ? a.w - w - dots(LR_GAP_PX) : avail_h - h - dots(LR_GAP_PX);
       box = LV_MIN(box, one.beside ? avail_h : a.w);
       box = LV_MIN(box, a.qr_max);
       code = box >= dots(LR_QR_MIN_PX) ? drawQr(nullptr, 0, 0, box, c.qr, true) : 0;
-      if (code < one.code) continue;
+      if (!code || code < one.code) continue;
     }
     *out = FactsPlan{ &s, code, h, 1 };
     return true;
@@ -577,7 +672,14 @@ static bool renderLabel(const LabelPrinterConfig& printer, const LabelLayout& la
   const lv_coord_t qr_max = labelPrinterDotsForMm(printer.model,
       preset == LABEL_PRESET_MATERIAL_BIG ? LR_QR_SMALL_MM : LR_QR_MAX_MM);
   LabelArea area{ M, M, (lv_coord_t)(cw - 2 * M), (lv_coord_t)(ch - M), qr_max, !standard,
-                  nullptr, !c.qr || !c.qr[0], nullptr };
+                  nullptr, !c.qr || !c.qr[0], nullptr, false, preset == LABEL_PRESET_LOGO, false };
+  // The logo arrangement keeps its facts small: the reference label sets them
+  // in a caption-and-value pair under the maker's own mark, and on 40 x 30 at
+  // 203 dpi the large lines were what left the code no room.
+  if (preset == LABEL_PRESET_LOGO) {
+    area.facts_font = &lv_font_montserrat_ext_14;
+    area.facts_fixed = true;
+  }
   LabelContent body = c;
   lv_coord_t side_qr = 0;
   LabelBody placed{ 0, true, "lines under the number" };
@@ -766,6 +868,7 @@ bool labelRenderCalibration(const LabelPrinterConfig& printer, LabelRaster* out)
 
 void labelQrForSpool(int spool_id, char* out, size_t n) {
   if (!out || !n) return;
+  out[0] = '\0';
   // FilaMan's label designer defaults its code to /spools/{id}; BamBuddy's
   // labels carry the inventory page. Spoolman's label dialog offers its tag
   // format or the spool page, and its scanner reads both; only the page
@@ -773,10 +876,16 @@ void labelQrForSpool(int spool_id, char* out, size_t n) {
   // (Nikolai, 30.09.2026). The tag format stays for a scale with no address.
   // The address is the server's own for its labels where it has one.
   const char* base = labelLinkBase();
-  if (backendIsFilaMan())       snprintf(out, n, "%s/spools/%d", base, spool_id);
-  else if (backendIsBamBuddy()) snprintf(out, n, "%s/inventory?spool=%d", base, spool_id);
-  else if (base[0] && strcmp(base, "http://") != 0) snprintf(out, n, "%s/spool/show/%d", base, spool_id);
-  else                          snprintf(out, n, "WEB+SPOOLMAN:S-%d", spool_id);
+  const bool have_base = base[0] && strcmp(base, "http://") != 0;
+  if (backendIsFilaMan()) {
+    if (have_base) snprintf(out, n, "%s/spools/%d", base, spool_id);
+  } else if (backendIsBamBuddy()) {
+    if (have_base) snprintf(out, n, "%s/inventory?spool=%d", base, spool_id);
+  } else if (have_base) {
+    snprintf(out, n, "%s/spool/show/%d", base, spool_id);
+  } else {
+    snprintf(out, n, "WEB+SPOOLMAN:S-%d", spool_id);
+  }
 }
 
 void labelQrForFilament(const SpoolLabelData& spool, char* out, size_t n) {
@@ -785,12 +894,19 @@ void labelQrForFilament(const SpoolLabelData& spool, char* out, size_t n) {
   // A server that names its spools' pages itself may have no filament page at
   // all: Spooly has none, and a code that opens nothing is worse than no code.
   if (spool.page_url[0]) return;
-  const int filament_id = spool.filament_id;
   const char* base = labelLinkBase();
-  // BamBuddy keeps no filament, and a Spoolman with no address has no page.
-  if (filament_id <= 0 || backendIsBamBuddy() || !base[0] || strcmp(base, "http://") == 0) return;
-  if (backendIsFilaMan()) snprintf(out, n, "%s/filaments/%d", base, filament_id);
-  else                    snprintf(out, n, "%s/filament/show/%d", base, filament_id);
+  const bool have_base = base[0] && strcmp(base, "http://") != 0;
+  // BamBuddy keeps no filament object: brand, material and colour sit on the
+  // spool. Its inventory is the one page that holds the spools of this
+  // filament, and every other filament's too, so the code opens that.
+  if (backendIsBamBuddy()) {
+    if (have_base) snprintf(out, n, "%s/inventory", base);
+    return;
+  }
+  // A Spoolman with no address has no page either.
+  if (spool.filament_id <= 0 || !have_base) return;
+  if (backendIsFilaMan()) snprintf(out, n, "%s/filaments/%d", base, spool.filament_id);
+  else                    snprintf(out, n, "%s/filament/show/%d", base, spool.filament_id);
 }
 
 // The spool's texts as a label prints them: see labelDropMarks().

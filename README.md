@@ -78,7 +78,7 @@ Questions or trouble? Join the [Discord](https://discord.gg/K3KmKnrWhP), happy t
 - 🌡️ **Drying reminder** – color-coded `last_dried` date showing whether a spool needs drying, with thresholds per material or set manually
 - 📍 **Locations** – assign and view storage locations on the scale, with an optional popup when you take a spool off
 - 🖨️ **AMS view** – with FilaMan and BamBuddy: every AMS unit with its bays, material, colour, remaining filament, humidity and temperature. Tap a bay for the spool behind it, and record a drying right there
-- 🏷️ **Label printing** – print spool and filament labels on Bluetooth label printers (Phomemo M220 and M110S, NIIMBOT B1 and M2, more experimental), with a QR code that opens the spool in your backend. Lay the label out in a first label editor in the browser, or print it on the PC through FilaMan
+- 🏷️ **Label printing** – print spool and filament labels on Bluetooth label printers (Phomemo M220 and M110S, NIIMBOT B1 and M2, more experimental), with a QR code that opens the spool in your backend. Lay the label out in a first label editor in the browser, or print it on the PC through FilaMan. The **With logo** layout prints the maker's mark above the material band, from a logo stored on the scale
 - 🌐 **Web interface** – the scale's own pages, in all three languages, as usable on a phone as on a desktop. See the status, set up backend and printer, lay out labels, read and write tags, pick a theme, follow the log live and update the firmware with the release notes in front of you. Parts you would rather not expose can be switched off one by one. It can also sit inside BamBuddy or FilaMan
 - ⚙️ **On-device setup** – language, Wi-Fi and server address step by step on the touchscreen. Wi-Fi can also come straight from the Web Flasher or from your phone, so there is no long password to type on a small screen
 - 🎨 **Themes** – dark and light, in the look of Spoolman, FilaMan or BamBuddy, with your own accent colour
@@ -88,6 +88,12 @@ Questions or trouble? Join the [Discord](https://discord.gg/K3KmKnrWhP), happy t
 - 🌙 **Power management** – display dimming and deep sleep, and the scale wakes when you touch it or put a spool on
 - 🧾 **Works without a load cell, too** – switch off *Scale fitted* and the device becomes a pure tag terminal: read, link and write tags and set locations, without weights on the screen
 - 🩺 **Easy debugging** – a part defective, or the hardware assembled wrongly? The scale recognises the most common faults, says so in plain words and tells you what to do. If that does not help, the log is within reach in the browser, live if you want, and so are screenshots of the display. Share them in our Discord and you get help as fast as possible
+
+### Label logos
+
+The **With logo** layout prints the maker's mark above the material band. No logo ships in the firmware: they are trademarks, and the scale is GPL. Open **Logos** in the web interface, enter the brand exactly as your backend holds it, and press **Fetch**. The browser takes the mark from the [MarksMakerSpace filament-profiles](https://github.com/MarksMakerSpace/filament-profiles/tree/main/logos/label) collection, cuts it to the one-bit image the printer needs and stores it on the scale. For a maker that is not in the collection, pick your own PNG or JPEG. A spool whose brand has no logo prints the brand name, so nothing here is required.
+
+Step by step, with screenshots: [the manual](https://niko11111.github.io/SpoolmanScale-Docs/).
 
 ---
 

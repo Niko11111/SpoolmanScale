@@ -88,20 +88,20 @@ bool labelLayoutHasCode(const LabelLayout& layout) {
 enum CapacityRow { CAP_FLAT_40, CAP_FLAT_50, CAP_UPRIGHT_40, CAP_UPRIGHT_50, CAP_ROWS };
 static const uint8_t FACT_CAPACITY[CAP_ROWS][LABEL_PRESET_COUNT] = {
   // standard, compact, big code, material big, text only, big number on top,
-  // big number on the right (the last three never have a code)
-  { 5, 6, 6, 3, 5, 3, 3 },   // 40 x 30
-  { 5, 6, 6, 3, 5, 3, 3 },   // 50 x 30
-  { 3, 4, 2, 2, 6, 6, 6 },   // 30 x 40
-  { 5, 6, 4, 3, 6, 6, 6 },   // 30 x 50
+  // big number on the right (those three never have a code), logo
+  { 5, 6, 6, 3, 5, 3, 3, 5 },   // 40 x 30
+  { 5, 6, 6, 3, 5, 3, 3, 5 },   // 50 x 30
+  { 3, 4, 2, 2, 6, 6, 6, 3 },   // 30 x 40
+  { 5, 6, 4, 3, 6, 6, 6, 5 },   // 30 x 50
 };
 // The same with the code switched off: the facts get its room, in two
 // columns where they fit. Flat, a date line is too wide for half the label,
 // so the sixth line has no room there.
 static const uint8_t FACT_CAPACITY_NO_CODE[CAP_ROWS][LABEL_PRESET_COUNT] = {
-  { 5, 6, 5, 5, 5, 3, 3 },
-  { 5, 6, 5, 5, 5, 3, 3 },
-  { 6, 6, 6, 6, 6, 6, 6 },
-  { 6, 6, 6, 6, 6, 6, 6 },
+  { 5, 6, 5, 5, 5, 3, 3, 5 },
+  { 5, 6, 5, 5, 5, 3, 3, 5 },
+  { 6, 6, 6, 6, 6, 6, 6, 6 },
+  { 6, 6, 6, 6, 6, 6, 6, 6 },
 };
 
 int labelFactCapacity(const LabelLayout& layout, uint16_t width_mm, uint16_t length_mm) {

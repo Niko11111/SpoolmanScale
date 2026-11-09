@@ -25,6 +25,7 @@
 
 #define LABEL_LINE_LEN 48
 #define LABEL_QR_LEN  128    // an 80-character server address plus the spool path
+#define LABEL_COLOR_NAME_BYTES 32    // a colour's word, not a sentence
 
 struct SpoolLabelData {
   int   id;
@@ -33,6 +34,10 @@ struct SpoolLabelData {
   char  vendor[LABEL_LINE_LEN];
   char  material[LABEL_LINE_LEN];
   char  color[16];                  // hex or a name, whatever the backend gave
+  // The backend's own word for the colour where it keeps one apart from the
+  // filament's name: BamBuddy's "Dark Gray" in "PETG HF Dark Gray". Empty
+  // where it has none; the logo arrangement then prints the whole name.
+  char  color_name[LABEL_COLOR_NAME_BYTES];
   char  article[32];                // the maker's article number, empty when unknown
   // dd.mm.yyyy, each empty when the backend has none. The layout picks one.
   char  first_used[12];
@@ -78,8 +83,8 @@ int labelIdShareLimit(const LabelPrinterConfig& printer, const LabelLayout& layo
 void labelQrForSpool(int spool_id, char* out, size_t n);
 
 // The filament's label for the spool's filament, with a code to the
-// filament's page where the backend has one: Spoolman and FilaMan, not
-// BamBuddy, whose filament is a few words on the spool.
+// filament's page where the backend has one: Spoolman and FilaMan. BamBuddy
+// has no filament object, so its filament label opens the inventory.
 bool labelRenderFilament(const LabelPrinterConfig& printer, const LabelLayout& layout,
                          const SpoolLabelData& spool, LabelRaster* out);
 // The filament's page, empty when there is none to open.

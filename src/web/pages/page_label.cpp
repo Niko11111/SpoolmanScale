@@ -77,7 +77,7 @@ static const int OPTION_ROW_COUNT = sizeof(OPTION_ROWS) / sizeof(OPTION_ROWS[0])
 
 static const int PRESET_CAPTIONS[LABEL_PRESET_COUNT] = {
   STR_W_L_P_STANDARD, STR_W_L_P_COMPACT, STR_W_L_P_BIG_QR, STR_W_L_P_MATERIAL_BIG,
-  STR_W_L_P_TEXT_ONLY, STR_W_L_P_BIG_ID, STR_W_L_P_BIG_ID_SIDE,
+  STR_W_L_P_TEXT_ONLY, STR_W_L_P_BIG_ID, STR_W_L_P_BIG_ID_SIDE, STR_W_L_P_LOGO,
 };
 
 // What the preview shows until a spool has been found since boot: a spool
@@ -401,7 +401,7 @@ static void styles(String& h) {
          ".lb-sw .check+.check{margin-top:0}"
          ".lb-note{margin-top:12px}"
          ".lb-print{margin-top:16px}"
-         // Seven tiles, three to a row, all as wide as each other.
+         // Eight tiles, three to a row, all as wide as each other.
          "#lpre{display:grid;grid-template-columns:repeat(3,1fr)}"
          ".lb-tile{flex-direction:column;gap:6px;min-width:0;padding:8px 6px}"
          ".lb-ic{height:58px;display:flex;align-items:center;justify-content:center}"
@@ -445,7 +445,11 @@ static void scriptTemplate(String& h) {
          "'b3,2,7,13 b11.5,2,7,13 b20,2,7,13 l6,18,18,3 b2,23,26,3 l4,28,22,2 l4,32,22,2 l4,36,22,2'],"
          // The same with the number on the right, the lines beside it.
          "['l3,4,17,3 b3,9,17,4 l3,15,17,2 l3,19,14,2 l3,23,16,2 b22,10,7,10 b30.5,10,7,10',"
-         "'l3,6,11,3 b3,11,11,4 l3,17,11,2 l3,21,9,2 l3,25,10,2 l3,29,11,2 b16,15,5,10 b22.5,15,5,10']];"
+         "'l3,6,11,3 b3,11,11,4 l3,17,11,2 l3,21,9,2 l3,25,10,2 l3,29,11,2 b16,15,5,10 b22.5,15,5,10'],"
+         // The maker's logo across the top, the band beside the colour, the
+         // name under it, all left.
+         "['b2,2,20,5 b2,8,24,4 l2,13.5,30,3 l2,19,15,2 l2,22,13,2 l2,25,14,2 q26,18,10,10',"
+         "'b2,2,15,4 b2,7,18,4 l2,12.5,24,3 l2,18,12,2 l2,21,10,2 l2,24,11,2 q9,28,12,10']];"
          "function icon(p,up){const w=up?30:40,h=up?40:30;"
          "let s='<svg viewBox=\"0 0 '+w+' '+h+'\" width=\"'+w*1.4+'\" height=\"'+h*1.4+'\">'"
          "+'<rect x=\".5\" y=\".5\" width=\"'+(w-1)+'\" height=\"'+(h-1)+'\" rx=\"2\" fill=\"none\" stroke=\"currentColor\" stroke-opacity=\".4\"/>';"

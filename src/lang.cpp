@@ -4225,6 +4225,44 @@ const char* const STRINGS[][3] = {
     "Spooly sombre" },  // STR_W_THEME_SPOOLY_DARK
   { "Spooly hell", "Spooly light",
     "Spooly clair" },  // STR_W_THEME_SPOOLY_LIGHT
+  { "Mit Logo", "With logo",
+    "Avec logo" },  // STR_W_L_P_LOGO
+  { "Logos", "Logos",
+    "Logos" },  // STR_W_NAV_LOGOS
+  { "Die Logos liegen auf der Waage, nicht in der Firmware. Ein Etikett sucht sie über die Marke, die im Backend steht.",
+    "The logos live on the scale, not in the firmware. A label looks them up by the brand the backend holds.",
+    "Les logos sont sur la balance, pas dans le firmware. Une étiquette les retrouve par la marque enregistrée dans le backend." },  // STR_W_LOGO_INTRO
+  { "Gespeicherte Logos",          "Stored logos",              "Logos enregistrés" },  // STR_W_LOGO_STORED
+  { "Noch kein Logo gespeichert.", "No logo stored yet.",       "Aucun logo enregistré." },  // STR_W_LOGO_NONE
+  { "Logo hinzufügen",             "Add a logo",                "Ajouter un logo" },  // STR_W_LOGO_ADD
+  { "Marke (wie im Backend)", "Brand (as in the backend)",
+    "Marque (comme dans le backend)" },  // STR_W_LOGO_BRAND
+  { "Der Schlüssel entsteht daraus: Kleinbuchstaben und Ziffern, Umlaute aufgelöst.",
+    "The key is made from it: lower case letters and digits, umlauts folded.",
+    "La clé en découle : minuscules et chiffres, trémas développés." },  // STR_W_LOGO_KEY_HINT
+  { "Name im Logo-Repository", "Name in the logo repository", "Nom dans le dépôt de logos" },  // STR_W_LOGO_SLUG
+  { "Leer lassen, dann wird er aus der Marke gebildet; im Repository oft anders, z. B. bambu-lab.",
+    "Leave empty to build it from the brand; the repository often uses another name, e.g. bambu-lab.",
+    "Laisser vide pour le déduire de la marque ; le dépôt utilise souvent un autre nom, p. ex. bambu-lab." },  // STR_W_LOGO_SLUG_HINT
+  { "Holen",        "Fetch",     "Récupérer" },  // STR_W_LOGO_FETCH
+  { "Eigenes Bild", "Own image", "Image personnelle" },  // STR_W_LOGO_OWN
+  { "Speichern",    "Save",      "Enregistrer" },  // STR_W_LOGO_SAVE
+  { "Entfernen",    "Remove",    "Supprimer" },  // STR_W_LOGO_DELETE
+  { "Vorschau",     "Preview",   "Aperçu" },  // STR_W_LOGO_PREVIEW
+  { "Nicht gefunden. Anderen Namen im Repository versuchen oder ein eigenes Bild wählen.",
+    "Not found. Try another name from the repository or pick your own image.",
+    "Introuvable. Essayez un autre nom du dépôt ou choisissez votre propre image." },  // STR_W_LOGO_ERR_FETCH
+  { "Zu groß für ein Logo: höchstens 640 × 640 Pixel und 24 kB.",
+    "Too large for a logo: at most 640 × 640 pixels and 24 kB.",
+    "Trop grand pour un logo : 640 × 640 pixels et 24 ko au plus." },  // STR_W_LOGO_ERR_BIG
+  { "Das Bild enthält keine dunklen Flächen.", "The image has no dark areas.",
+    "L'image ne contient aucune zone sombre." },  // STR_W_LOGO_ERR_EMPTY
+  { "Bitte zuerst die Marke eintragen.", "Enter the brand first.",
+    "Saisissez d'abord la marque." },  // STR_W_LOGO_NEED_BRAND
+  { "Holen nimmt das Bild aus der Sammlung MarksMakerSpace/filament-profiles, Ordner logos/label.",
+    "Fetch takes the mark from the MarksMakerSpace/filament-profiles collection, folder logos/label.",
+    "Récupérer prend le logo dans la collection MarksMakerSpace/filament-profiles, dossier logos/label." },  // STR_W_LOGO_SOURCE
+  { "Sammlung öffnen", "Open the collection", "Ouvrir la collection" },  // STR_W_LOGO_BROWSE
 };
 
 StringID tagWriteResultString(uint8_t code) {

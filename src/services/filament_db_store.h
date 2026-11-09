@@ -18,6 +18,10 @@
 //  Both calls run on the filament database's task, never on the loop.
 // ============================================================
 
+// The room the index owns in the data partition, behind the tag families.
+// Named here because the maker logos are stored behind it (label_logo.cpp).
+#define FILAMENT_DB_STORE_BYTES (32UL * 1024UL)
+
 // Puts the stored index in place, when there is one younger than a week
 // from this server and the clock is set. Makers come back unmarked: whose
 // spools the inventory has is asked again. False when there is none.
