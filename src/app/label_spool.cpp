@@ -53,6 +53,7 @@ struct LabelExtras {
   int16_t nozzle_min, nozzle_max, bed;
   int16_t dry_c, dry_h;
   char page_url[LABEL_QR_LEN];
+  char color_name[LABEL_COLOR_NAME_BYTES];   // the backend's word, empty when none
 };
 
 static void extrasInto(SpoolLabelData* d, const LabelExtras& e) {
@@ -63,6 +64,7 @@ static void extrasInto(SpoolLabelData* d, const LabelExtras& e) {
   d->bed_temp = e.bed;
   // Known from the scan already; an answer without one takes nothing away.
   if (e.page_url[0]) snprintf(d->page_url, sizeof(d->page_url), "%s", e.page_url);
+  snprintf(d->color_name, sizeof(d->color_name), "%s", e.color_name);
   // The backend's drying wins; without one the tag's from the scan stays.
   if (e.dry_c > 0 && e.dry_h > 0) {
     d->dry_temp_c = e.dry_c;
@@ -78,6 +80,7 @@ static LabelExtras extrasOf(const SpoolLabelData& d) {
   e.nozzle_max = d.nozzle_max;
   e.bed = d.bed_temp;
   snprintf(e.page_url, sizeof(e.page_url), "%s", d.page_url);
+  snprintf(e.color_name, sizeof(e.color_name), "%s", d.color_name);
   e.dry_c = d.dry_temp_c;
   e.dry_h = d.dry_hours;
   return e;
@@ -200,6 +203,8 @@ static bool fetchDates(const char* base_url, int id, LabelExtras* out) {
   // its link keeps working when its numbers are counted anew, which a link built
   // from the id would not.
   snprintf(e.page_url, sizeof(e.page_url), "%s", backendSpoolLink(doc.as<JsonObjectConst>()));
+  // BamBuddy's own word for the colour, kept beside the name it joins.
+  snprintf(e.color_name, sizeof(e.color_name), "%s", doc["extra"]["color_name"] | "");
   // Spoolman's filament settings; BamBuddy's range arrives under the same
   // name for its upper end and a name of the scale's own for the lower.
   JsonObjectConst f = doc["filament"];

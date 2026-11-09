@@ -145,10 +145,20 @@ static lv_coord_t drawName(lv_obj_t* canvas, const LabelArea& a, lv_coord_t y,
 
 // The filament's name as the header sets it: one of the sizes that fit the
 // width, the larger ones on a tall label first.
-static const lv_font_t* headerNameFont(const LabelArea& a, bool tall, const SpoolLabelData& d) {
+static const lv_font_t* headerNameFont(const LabelArea& a, bool tall, const char* text) {
   static const lv_font_t* const base[] = { &lv_font_montserrat_ext_28, &lv_font_montserrat_ext_24, &lv_font_montserrat_ext_20 };
   static const lv_font_t* const big[]  = { &lv_font_montserrat_ext_36, &lv_font_montserrat_ext_28, &lv_font_montserrat_ext_24, &lv_font_montserrat_ext_20 };
-  return tall ? fitFont(d.name, a.w, big, 4) : fitFont(d.name, a.w, base, 3);
+  return tall ? fitFont(text, a.w, big, 4) : fitFont(text, a.w, base, 3);
+}
+
+// The colour's word under the logo header's band. On the base sizes it starts
+// one step below the other headers' name: the 40 x 30 at 203 dpi needs the
+// height for the code.
+static const lv_font_t* logoTitleFont(const LabelArea& a, bool tall, const char* text) {
+  static const lv_font_t* const base[] = { &lv_font_montserrat_ext_24, &lv_font_montserrat_ext_20 };
+  static const lv_font_t* const big[]  = { &lv_font_montserrat_ext_36, &lv_font_montserrat_ext_28,
+                                           &lv_font_montserrat_ext_24, &lv_font_montserrat_ext_20 };
+  return tall ? fitFont(text, a.w, big, 4) : fitFont(text, a.w, base, 2);
 }
 
 // The header, each block where the layout keeps it: the maker as large as
@@ -187,7 +197,7 @@ static lv_coord_t drawHeader(lv_obj_t* canvas, const LabelArea& a, bool tall,
     y += band_h + dots(LR_GAP_PX);
   }
   if (d.name[0] && labelLayoutHas(layout, LF_NAME))
-    y = drawName(canvas, a, y, headerNameFont(a, tall, d), d.name);
+    y = drawName(canvas, a, y, headerNameFont(a, tall, d.name), d.name);
   return y;
 }
 
@@ -272,8 +282,12 @@ static lv_coord_t drawLogoHeader(lv_obj_t* canvas, const LabelArea& a, bool tall
                hf, black, LV_TEXT_ALIGN_RIGHT, hex);
     y += band_h + gap;
   }
-  if (d.name[0] && labelLayoutHas(layout, LF_NAME))
-    y = drawName(canvas, a, y, headerNameFont(a, tall, d), d.name);
+  // Under the band the colour's own word where the backend keeps one: the
+  // spool's name repeats the material ("PETG HF Dark Gray"), and the band
+  // already says PETG HF. A maker without the word keeps the whole name.
+  const char* title = d.color_name[0] ? d.color_name : d.name;
+  if (title[0] && labelLayoutHas(layout, LF_NAME))
+    y = drawName(canvas, a, y, logoTitleFont(a, tall, title), title);
   return y;
 }
 
@@ -441,6 +455,10 @@ static lv_coord_t factsWidth(const LabelContent& c, const FactStyle& s) {
 static bool planLarger(const LabelArea& a, bool tall, const LabelContent& c,
                        const BodyPlan& one, FactsPlan* out) {
   if (c.wrap || !c.facts || c.n == 0) return false;
+  // A fixed fact type - the logo arrangement's small lines, the big-code
+  // arrangement's column - is the arrangement's choice, not a starting point.
+  if (a.facts_font) return false;
+  const bool want_code = c.qr && c.qr[0];
   const lv_coord_t avail_h = a.bottom - a.y;
   for (int i = 0; i < FACT_STYLE_COUNT; i++) {
     const FactStyle& s = FACT_STYLES[i];
@@ -451,20 +469,26 @@ static bool planLarger(const LabelArea& a, bool tall, const LabelContent& c,
     if (w == 0) continue;
     const lv_coord_t h = factsHeight(c, s, 0, c.n);
     if (w > a.w || h > avail_h) {
-      // Two columns where the arrangement has no code to share the width with.
+      // Two columns where the arrangement has no code to share the width
+      // with; a requested code leaves no width to give away.
+      if (want_code) continue;
       const int half = (c.n + 1) / 2;
       const lv_coord_t h2 = LV_MAX(factsHeight(c, s, 0, half), factsHeight(c, s, half, c.n));
-      if (!a.columns || one.code || c.n < 2 || w > columnWidth(a) || h2 > avail_h) continue;
+      if (!a.columns || c.n < 2 || w > columnWidth(a) || h2 > avail_h) continue;
       *out = FactsPlan{ &s, 0, h2, 2 };
       return true;
     }
+    // A requested code is never traded for larger facts: the style has to
+    // leave a box the code still draws in, and no smaller than the one-line
+    // plan did. Without this, a label whose code did not fit at all grew its
+    // facts and lost the code silently - the 40 x 30 at 203 dpi did.
     lv_coord_t code = 0;
-    if (one.code) {
+    if (want_code) {
       lv_coord_t box = one.beside ? a.w - w - dots(LR_GAP_PX) : avail_h - h - dots(LR_GAP_PX);
       box = LV_MIN(box, one.beside ? avail_h : a.w);
       box = LV_MIN(box, a.qr_max);
       code = box >= dots(LR_QR_MIN_PX) ? drawQr(nullptr, 0, 0, box, c.qr, true) : 0;
-      if (code < one.code) continue;
+      if (!code || code < one.code) continue;
     }
     *out = FactsPlan{ &s, code, h, 1 };
     return true;
@@ -645,6 +669,11 @@ static bool renderLabel(const LabelPrinterConfig& printer, const LabelLayout& la
       preset == LABEL_PRESET_MATERIAL_BIG ? LR_QR_SMALL_MM : LR_QR_MAX_MM);
   LabelArea area{ M, M, (lv_coord_t)(cw - 2 * M), (lv_coord_t)(ch - M), qr_max, !standard,
                   nullptr, !c.qr || !c.qr[0], nullptr, false, preset == LABEL_PRESET_LOGO };
+  // The logo arrangement keeps its facts small: the reference label sets them
+  // in a caption-and-value pair under the maker's own mark, and on 40 x 30 at
+  // 203 dpi the large lines were what left the code no room.
+  if (preset == LABEL_PRESET_LOGO)
+    area.facts_font = &lv_font_montserrat_ext_14;
   LabelContent body = c;
   lv_coord_t side_qr = 0;
   LabelBody placed{ 0, true, "lines under the number" };

@@ -416,6 +416,12 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
   const char* weighed = src["last_weighed_at"] | (const char*)nullptr;
   if (weighed) extra["last_weighed"] = weighed;
 
+  // The colour's word, kept beside the hex: the label sets it under the
+  // material band where the joined name repeats the material ("PETG HF Dark
+  // Gray"). Absent on an inventory that only numbers its colours.
+  const char* color_name = src["color_name"] | "";
+  if (color_name[0]) extra["color_name"] = color_name;
+
   // BamBuddy has no filament type as an object: brand, material and colour
   // sit on the spool itself. The shape is rebuilt here because the UI reads
   // it, but ids stay 0 - there is nothing on the server to patch, and the
