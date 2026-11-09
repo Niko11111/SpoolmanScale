@@ -92,6 +92,24 @@ lv_coord_t drawQr(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y, lv_coord_t box,
 // at y, `height` dots tall. Runs straight into the canvas's pixels: a number
 // is thousands of runs, where a QR code is hundreds of rectangles.
 void drawBigDigits(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y, lv_coord_t height, const char* digits);
+
+// A bitmap at 1 bit per dot: the most significant bit of a byte is its
+// leftmost dot, every row padded to whole bytes.
+struct LabelBitmap {
+  const uint8_t* bits;
+  int w, h;
+};
+
+// The dots a bitmap takes in a box of box_w x box_h: its aspect kept, and it
+// is never blown up past its own pixels. w or h 0 when it cannot be drawn.
+struct BitmapDots { lv_coord_t w, h; };
+BitmapDots bitmapDots(const LabelBitmap& src, lv_coord_t box_w, lv_coord_t box_h);
+
+// Draws it at x, y in that many dots. Each dot takes the ink of the source
+// area it covers, so a logo shrunk to a third keeps its strokes instead of
+// dropping every other one; half ink or more is black.
+void drawBitmap1bit(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y,
+                    const LabelBitmap& src, BitmapDots size);
 // The canvas into the raster, from dot x0 of a row_w print row.
 bool packCanvas(lv_obj_t* canvas, uint16_t content_w, uint16_t h, uint16_t row_w,
                 uint16_t x0, LabelRaster* out);

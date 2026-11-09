@@ -291,6 +291,58 @@ void drawBigDigits(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y, lv_coord_t heig
   labelDigitsDraw(digits, LabelDigitsAt{ x, y, height }, digitRun, lv_canvas_get_img(canvas));
 }
 
+BitmapDots bitmapDots(const LabelBitmap& src, lv_coord_t box_w, lv_coord_t box_h) {
+  if (!src.bits || src.w <= 0 || src.h <= 0 || box_w <= 0 || box_h <= 0) return BitmapDots{ 0, 0 };
+  int32_t w = box_w, h = box_h;
+  // The box's tighter side sets the scale.
+  if ((int64_t)src.h * box_w <= (int64_t)src.w * box_h)
+    h = (int32_t)(((int64_t)src.h * box_w + src.w / 2) / src.w);
+  else
+    w = (int32_t)(((int64_t)src.w * box_h + src.h / 2) / src.h);
+  if (w > src.w) { w = src.w; h = src.h; }
+  return BitmapDots{ (lv_coord_t)(w > 0 ? w : 1), (lv_coord_t)(h > 0 ? h : 1) };
+}
+
+// The source as the drawing walks it.
+struct BitSource {
+  const uint8_t* bits;
+  int row_bytes;
+};
+
+// Whether half of the source area [sx0, sx1) x [sy0, sy1) is ink.
+static bool halfInk(const BitSource& s, int sx0, int sx1, int sy0, int sy1) {
+  int ink = 0;
+  for (int sy = sy0; sy < sy1; sy++) {
+    const uint8_t* row = s.bits + (size_t)sy * s.row_bytes;
+    for (int sx = sx0; sx < sx1; sx++)
+      ink += (row[sx >> 3] >> (7 - (sx & 7))) & 1;
+  }
+  return ink * 2 >= (sx1 - sx0) * (sy1 - sy0);
+}
+
+void drawBitmap1bit(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y,
+                    const LabelBitmap& src, BitmapDots size) {
+  if (!canvas || !src.bits || size.w <= 0 || size.h <= 0) return;
+  lv_img_dsc_t* img = lv_canvas_get_img(canvas);
+  const BitSource s{ src.bits, (src.w + 7) / 8 };
+  for (lv_coord_t dy = 0; dy < size.h; dy++) {
+    const int py = y + dy;
+    const int sy0 = (int)((int32_t)dy * src.h / size.h);
+    int sy1 = (int)(((int32_t)dy + 1) * src.h / size.h);
+    if (sy1 <= sy0) sy1 = sy0 + 1;
+    if (py < 0 || py >= (int)img->header.h) continue;
+    for (lv_coord_t dx = 0; dx < size.w; dx++) {
+      const int px = x + dx;
+      const int sx0 = (int)((int32_t)dx * src.w / size.w);
+      int sx1 = (int)(((int32_t)dx + 1) * src.w / size.w);
+      if (sx1 <= sx0) sx1 = sx0 + 1;
+      if (px < 0 || px >= (int)img->header.w) continue;
+      if (halfInk(s, sx0, sx1, sy0, sy1))
+        lv_img_buf_set_px_color(img, px, py, lv_color_black());
+    }
+  }
+}
+
 // Whether a line fits the width whole in this font, as the font spells it.
 bool fitsLine(const char* text, const lv_font_t* f, lv_coord_t w) {
   char plain[LR_SPELL_LEN];

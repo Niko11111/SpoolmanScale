@@ -29,6 +29,7 @@ enum LabelPreset : uint8_t {
   LABEL_PRESET_TEXT_ONLY = 4,  // no code, the facts large, in two columns where they fit
   LABEL_PRESET_BIG_ID = 5,     // no code, the spool's number as large as it fits, the rest under it
   LABEL_PRESET_BIG_ID_SIDE = 6, // the same with the number on the right, the rest beside it, full height
+  LABEL_PRESET_LOGO = 7,       // the maker's logo on top, the band beside the colour, the rest left
   LABEL_PRESET_COUNT
 };
 

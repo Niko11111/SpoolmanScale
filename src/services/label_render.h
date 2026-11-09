@@ -78,8 +78,8 @@ int labelIdShareLimit(const LabelPrinterConfig& printer, const LabelLayout& layo
 void labelQrForSpool(int spool_id, char* out, size_t n);
 
 // The filament's label for the spool's filament, with a code to the
-// filament's page where the backend has one: Spoolman and FilaMan, not
-// BamBuddy, whose filament is a few words on the spool.
+// filament's page where the backend has one: Spoolman and FilaMan. BamBuddy
+// has no filament object, so its filament label opens the inventory.
 bool labelRenderFilament(const LabelPrinterConfig& printer, const LabelLayout& layout,
                          const SpoolLabelData& spool, LabelRaster* out);
 // The filament's page, empty when there is none to open.

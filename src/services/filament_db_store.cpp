@@ -22,7 +22,6 @@
 // form answers in a fraction of a second and may hold more than fits.
 #define STORE_PAIRS_MAX     640
 #define STORE_OFFSET        (FLASH_LOG_BYTES + BAMBU_CATALOG_BYTES + TAG_FAMILY_BYTES)
-#define STORE_BYTES         (32UL * 1024UL)
 #define STORE_SECTOR        4096UL
 #define STORE_MAGIC         0x49424446UL   // "FDBI"
 // The records are stored as they lie in memory: a change to FdbMaker or
@@ -49,12 +48,12 @@ struct StoreHeader {
 };
 static_assert(sizeof(StoreHeader) == 128, "the header is 128 bytes on the device and the host");
 static_assert(sizeof(StoreHeader) + FDB_MAKERS_MAX * sizeof(FdbMaker) +
-              STORE_PAIRS_MAX * sizeof(FdbPair) <= STORE_BYTES, "a full index fits the region");
+              STORE_PAIRS_MAX * sizeof(FdbPair) <= FILAMENT_DB_STORE_BYTES, "a full index fits the region");
 
 static const esp_partition_t* dataPartition() {
   const esp_partition_t* p = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
                                                       ESP_PARTITION_SUBTYPE_DATA_SPIFFS, NULL);
-  if (!p || p->size < STORE_OFFSET + STORE_BYTES) return nullptr;
+  if (!p || p->size < STORE_OFFSET + FILAMENT_DB_STORE_BYTES) return nullptr;
   return p;
 }
 
