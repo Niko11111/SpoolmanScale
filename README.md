@@ -50,7 +50,7 @@ Firmware is available via the [Web Flasher](https://niko11111.github.io/Spoolman
   <img src="https://img.shields.io/badge/📖%20Documentation-Full%20Build%20Guide%2C%20Wiring%20%26%20Setup-28d49a?style=for-the-badge&logoColor=white" alt="Documentation"/>
 </a>
 
-Questions or trouble? Join the [Discord](https://discord.gg/K3KmKnrWhP), happy to help.
+Questions or trouble? Join the [Discord](https://discord.gg/K3KmKnrWhP), happy to help. Bugs and feature requests are best as a [GitHub issue](https://github.com/Niko11111/SpoolmanScale/issues). Discord not for you? Email [support@spoolmanscale.com](mailto:support@spoolmanscale.com).
 
 ---
 <div align="center">
@@ -138,7 +138,7 @@ On first boot the scale asks which filament manager you use and then only shows 
 
 **No server yet?** [SpoolmanScale Pro](https://niko11111.github.io/SpoolmanScale-Docs/pro/) turns a Raspberry Pi into one for Spoolman, FilaMan or BamBuddy, with backups and updates from a web page.
 
-*Not available ready-made yet. Looking into kits and pre-built scales in small batches. Interested? Tell us on [Discord](https://discord.gg/K3KmKnrWhP) or [Instagram](https://www.instagram.com/spoolmanscale/): the more people ask, the sooner it can happen. [More in the FAQ](https://niko11111.github.io/SpoolmanScale-Docs/help/faq/#can-i-buy-the-scale-ready-made).*
+*Not available ready-made yet. Looking into kits and pre-built scales in small batches. Interested? Email [support@spoolmanscale.com](mailto:support@spoolmanscale.com): the more people ask, the sooner it can happen. [More in the FAQ](https://niko11111.github.io/SpoolmanScale-Docs/help/faq/#can-i-buy-the-scale-ready-made).*
 
 ### <img src="https://raw.githubusercontent.com/Niko11111/SpoolmanScale/main/images/Logo_Spoolman.png" height="20" align="top"> Spoolman
 
