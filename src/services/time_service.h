@@ -21,6 +21,16 @@ extern const size_t        TZ_COUNT;
 
 void syncNTP();
 
+// Whether the clock holds a real date rather than counting from 1970. Never
+// waits, unlike getLocalTime() with its default timeout.
+bool timeClockSet();
+
+// Sets the clock from an HTTP "Date" header, but only while it is unset: on a
+// network that lets no NTP out, the backend's answers are the only clock
+// there is. Accurate to about a second, which is all the logs and the drying
+// stamps need. NTP, once it answers, takes over. True when the clock was set.
+bool timeSetFromHttpDate(const char* date);
+
 // The stored zone, or the one derived from the language on a device that has
 // never been asked. German means central Europe, everything else means UTC:
 // a language says something about the zone, but not enough to be binding.

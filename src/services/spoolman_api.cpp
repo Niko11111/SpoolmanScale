@@ -3,6 +3,7 @@
 #include "services/backend.h"
 #include "services/backend_profiles.h"
 #include "services/backend_http.h"
+#include "services/time_service.h"
 #include "services/user_agent_rules.h"
 #include "hardware/sd_logger.h"
 #include "http_progress.h"
@@ -358,7 +359,15 @@ int spoolmanGetHealthCode(const char* base_url, uint32_t timeout_ms) {
   BackendHttp http;
   smBegin(http, String(base_url) + "/api/v1/health");
   http.setTimeout(timeout_ms);
+  // The answer's Date header is a clock for networks that let no NTP out: an
+  // IoT VLAN that reaches the Spoolman server and nothing else (10.11.2026).
+  // Only used while the clock is unset, so NTP stays in charge where it works.
+  static const char* DATE_HEADER[] = {"Date"};
+  http.collectHeaders(DATE_HEADER, 1);
   int code = http.GET();
+  if (code > 0 && timeSetFromHttpDate(http.header("Date").c_str())) {
+    logSDf("Time: set from the Date header of %s", base_url);
+  }
   http.end();
   return code;
 }
