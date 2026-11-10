@@ -1,5 +1,6 @@
 #include "time_service.h"
 
+#include <sys/time.h>
 #include <time.h>
 #include <stdio.h>
 #include <string.h>
@@ -100,6 +101,11 @@ const char* timeZoneName() {
   return raw.c_str();
 }
 
+// How long syncNTP() waits for the first answer before it lets boot go on:
+// 30 polls of 100 ms, three seconds. See the comment in syncNTP().
+#define NTP_BOOT_WAIT_POLL_MS 100
+#define NTP_BOOT_WAIT_POLLS   30
+
 void syncNTP() {
   // configTime() takes an offset in seconds and a daylight offset, and builds
   // a TZ string with no switching rules from them - "UTC-1DST" for the
@@ -111,10 +117,17 @@ void syncNTP() {
   const String tz = timeZoneGet();
   configTzTime(tz.c_str(), "pool.ntp.org", "time.nist.gov");
   Serial.printf("NTP sync (TZ=%s)...", tz.c_str());
+  // A short wait, then SNTP carries on in the background and sets the clock
+  // whenever an answer comes. It used to be twenty passes of getLocalTime()
+  // with its default timeout, which waits five seconds by itself while the
+  // clock is unset: 110 s of boot on a network that lets no NTP out, with
+  // WiFi up since second 7 and the screen still saying "connecting"
+  // (10.11.2026). On a network that answers, the first reply comes well
+  // inside these three seconds.
   struct tm ti;
-  for (int i = 0; i < 20; i++) {
-    delay(500);
-    if (getLocalTime(&ti)) {
+  for (int i = 0; i < NTP_BOOT_WAIT_POLLS; i++) {
+    delay(NTP_BOOT_WAIT_POLL_MS);
+    if (getLocalTime(&ti, 0)) {
       Serial.printf("OK! %02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon + 1,
         ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
       return;
@@ -135,6 +148,29 @@ static time_t utcToEpoch(int y, int mo, int d, int h, int mi, int s) {
   unsigned doe = yoe * 365u + yoe / 4u - yoe / 100u + doy;
   long long days = (long long)era * 146097LL + (long long)doe - 719468LL;
   return (time_t)(days * 86400LL + h * 3600LL + mi * 60LL + s);
+}
+
+bool timeClockSet() {
+  const time_t now = time(nullptr);
+  struct tm t;
+  localtime_r(&now, &t);
+  return t.tm_year + 1900 >= 2024;
+}
+
+bool timeSetFromHttpDate(const char* date) {
+  if (timeClockSet() || !date || !*date) return false;
+  // RFC 9110 IMF-fixdate, the only form a server may send:
+  // "Tue, 10 Nov 2026 18:49:48 GMT".
+  static const char* const MONTHS = "JanFebMarAprMayJunJulAugSepOctNovDec";
+  char mon[4] = "";
+  int d, y, h, mi, s;
+  if (sscanf(date, "%*3s, %2d %3s %4d %2d:%2d:%2d", &d, mon, &y, &h, &mi, &s) != 6) return false;
+  const char* m = (strlen(mon) == 3) ? strstr(MONTHS, mon) : nullptr;
+  if (!m || (m - MONTHS) % 3 != 0) return false;
+  if (y < 2024 || d < 1 || d > 31 || h > 23 || mi > 59 || s > 60) return false;
+  struct timeval tv = {};
+  tv.tv_sec = utcToEpoch(y, (int)((m - MONTHS) / 3) + 1, d, h, mi, s);
+  return settimeofday(&tv, nullptr) == 0;
 }
 
 void isoDayLocal(const char* iso, char* out_day, size_t out_size) {
