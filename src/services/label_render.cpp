@@ -605,6 +605,11 @@ static bool renderLabel(const LabelPrinterConfig& printer, const LabelLayout& la
          side_qr ? (int)side_qr : (int)placed.qr,
          side_qr ? (turned ? "top" : "side") : placed.beside ? "beside" : "below",
          placed.facts, ok ? "ok" : "failed");
+  // The measuring calls are silent, so a code that fits nowhere on the label
+  // would otherwise leave only the qr=0 above (11.11.2026).
+  if (c.qr && c.qr[0] && !labelPresetIsBigId(preset) && !side_qr && !placed.qr)
+    logSDf("Label: QR code left off, %u characters do not fit the room beside the text",
+           (unsigned)strlen(c.qr));
   return ok;
 }
 

@@ -220,33 +220,62 @@ void fillRect(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y, lv_coord_t w,
   lv_canvas_draw_rect(canvas, x, y, w, h, &dsc);
 }
 
+// How a code sits in its box: the quiet zone and the dots per module.
+struct QrFit { int quiet; int scale; };
+
+// Whole dots per module for a code of `size` modules in `box` dots: the full
+// quiet zone where it fits, the tight one where not. False when even that
+// leaves a module under the minimum.
+static bool qrFit(int size, lv_coord_t box, QrFit* f) {
+  // At 300 dpi 3 dots would be a module of 0.25 mm: the minimum is a length.
+  const int module_min = dots(LR_QR_MODULE_MIN);
+  f->quiet = LR_QR_QUIET;
+  f->scale = box / (size + 2 * f->quiet);
+  if (f->scale < module_min) {
+    f->quiet = LR_QR_QUIET_TIGHT;
+    f->scale = box / (size + 2 * f->quiet);
+  }
+  return f->scale >= module_min;
+}
+
+// Encodes `text` into `qr` at `ecc` or above (qrcodegen raises it where the
+// version has room) and fits it into `box`. False when it does not encode or
+// fit.
+static bool qrEncodeFit(const char* text, qrcodegen_Ecc ecc, lv_coord_t box, uint8_t* qr,
+                        QrFit* f) {
+  uint8_t tmp[qrcodegen_BUFFER_LEN_FOR_VERSION(LR_QR_MAX_VERSION)];
+  if (!qrcodegen_encodeText(text, tmp, qr, ecc, 1, LR_QR_MAX_VERSION, qrcodegen_Mask_AUTO, true))
+    return false;
+  return qrFit(qrcodegen_getSize(qr), box, f);
+}
+
 // The code, drawn module by module into a box of box x box dots at x, y:
 // whole dots per module, the quiet zone inside the box and white, the rest
 // centred. Returns the edge length used, 0 when it does not fit readably.
 // With no canvas it only measures; `silent` keeps a measurement that tries
 // several boxes out of the log, the drawing call logs what it had to drop.
+//
+// Medium error correction first, low where medium does not fit. A spool page
+// on a public name, "https://spoolman.my-domain.com/spool/show/27", is 44
+// characters: two over what version 3 holds at medium, so it took version 4
+// at 111 dots, and a label with the text column at its widest has 110. The
+// code went missing from most labels without a word (11.11.2026). At low the
+// same address is version 3 again. The measuring call and the drawing call
+// choose alike, because the drawing box is the measured edge.
 lv_coord_t drawQr(lv_obj_t* canvas, lv_coord_t x, lv_coord_t y,
                          lv_coord_t box, const char* text, bool silent) {
-  uint8_t tmp[qrcodegen_BUFFER_LEN_FOR_VERSION(LR_QR_MAX_VERSION)];
   uint8_t qr[qrcodegen_BUFFER_LEN_FOR_VERSION(LR_QR_MAX_VERSION)];
-  if (!qrcodegen_encodeText(text, tmp, qr, qrcodegen_Ecc_MEDIUM, 1,
-                            LR_QR_MAX_VERSION, qrcodegen_Mask_AUTO, true)) {
-    if (!silent) logSDf("Label: QR does not fit version %d: %s", LR_QR_MAX_VERSION, text);
+  QrFit fit{};
+  if (!qrEncodeFit(text, qrcodegen_Ecc_MEDIUM, box, qr, &fit) &&
+      !qrEncodeFit(text, qrcodegen_Ecc_LOW, box, qr, &fit)) {
+    if (silent) return 0;
+    if (qr[0] == 0) logSDf("Label: QR does not fit version %d: %s", LR_QR_MAX_VERSION, text);
+    else logSDf("Label: QR of %d modules does not fit %d dots", qrcodegen_getSize(qr), (int)box);
     return 0;
   }
   const int size = qrcodegen_getSize(qr);
-  int quiet = LR_QR_QUIET;
-  // At 300 dpi 3 dots would be a module of 0.25 mm: the minimum is a length.
-  const int module_min = dots(LR_QR_MODULE_MIN);
-  int scale = box / (size + 2 * quiet);
-  if (scale < module_min) {
-    quiet = LR_QR_QUIET_TIGHT;
-    scale = box / (size + 2 * quiet);
-  }
-  if (scale < module_min) {
-    if (!silent) logSDf("Label: QR of %d modules does not fit %d dots", size, (int)box);
-    return 0;
-  }
+  const int quiet = fit.quiet;
+  const int scale = fit.scale;
   const lv_coord_t total = (size + 2 * quiet) * scale;
   if (!canvas) return total;
   const lv_coord_t ox = x + (box - total) / 2;
