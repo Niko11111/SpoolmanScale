@@ -14,18 +14,21 @@
 // between beeps.
 
 enum SoundEvent : uint8_t {
-  SND_NFC_READ,     // a new tag was placed on the reader
-  SND_WRITE_OK,     // a tag write or erase finished
-  SND_WRITE_FAIL,   // a tag write or erase failed
-  SND_WEIGHT_OK,    // auto weight saved the weight to the backend
-  SND_WEIGHT_FAIL,  // auto weight tried and the backend refused it
-  SND_TEST,         // played when the volume is changed, ignores the event switches
+  SND_NFC_READ,       // a new tag was placed on the reader
+  SND_TAG_UNKNOWN,    // the lookup finished and the tag is not in the inventory
+  SND_WRITE_OK,       // a tag write or erase finished
+  SND_WRITE_FAIL,     // a tag write or erase failed
+  SND_WEIGHT_OK,      // auto weight saved the weight to the backend
+  SND_WEIGHT_MANUAL,  // the weight button saved the weight to the backend
+  SND_WEIGHT_FAIL,    // a weight save tried and the backend refused it
+  SND_TEST,           // played when the volume is changed, ignores the event switches
 };
 
 enum SoundVolume : uint8_t {
   SND_VOL_LOW  = 0,
   SND_VOL_MED  = 1,
   SND_VOL_HIGH = 2,
+  SND_VOL_MAX  = 3,
   SND_VOL_COUNT
 };
 
