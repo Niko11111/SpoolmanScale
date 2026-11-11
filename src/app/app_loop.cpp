@@ -562,6 +562,15 @@ static void amsMainAssignRun() {
   }
 }
 
+// See tagSettledVerdict() in app_loop.h. Written by TagSeen below.
+static char       s_settled_uid[26] = "";
+static TagVerdict s_settled_verdict = TV_NONE;
+
+TagVerdict tagSettledVerdict(const char* uid_str) {
+  if (!uid_str || !uid_str[0] || strcmp(uid_str, s_settled_uid) != 0) return TV_NONE;
+  return s_settled_verdict;
+}
+
 void appLoop() {
   // Overwritten every pass, so a crumb from a marked section only stands while
   // that section runs. Three stores and a short copy into RTC memory.
@@ -1978,12 +1987,20 @@ void appLoop() {
     // so the log reads as "a tag was put on" rather than as a scan trace.
     static char logged_uid[26] = "";
     struct TagSeen {
-      static void note(const char *uid, const char *kind) {
-        if (!uid || !uid[0] || strcmp(logged_uid, uid) == 0) return;
+      static void note(const char *uid, const char *kind, TagVerdict verdict) {
+        if (!uid || !uid[0]) return;
+        // The verdict is kept on every call, the line is written once.
+        snprintf(s_settled_uid, sizeof(s_settled_uid), "%s", uid);
+        s_settled_verdict = verdict;
+        if (strcmp(logged_uid, uid) == 0) return;
         snprintf(logged_uid, sizeof(logged_uid), "%s", uid);
         logSDf("Tag placed: %s (%s)", uid, kind);
       }
-      static void forget() { logged_uid[0] = '\0'; }
+      static void forget() {
+        logged_uid[0] = '\0';
+        s_settled_uid[0] = '\0';
+        s_settled_verdict = TV_NONE;
+      }
     };
 
     static unsigned long last_nfc_check_ms = 0;
@@ -2020,7 +2037,11 @@ void appLoop() {
         // this a tag that keeps failing to authenticate would be re-scanned
         // indefinitely, five seconds per attempt.
         if (tag_absent_since_ms != 0) {
-          if (millis() - tag_absent_since_ms > NFC_RETRY_RESET_ABSENT_MS) {
+          // While the second-tag question stands it asks for exactly that:
+          // lift the spool and put it back for a fresh read. So there any
+          // declared removal counts, not only a long one.
+          if (millis() - tag_absent_since_ms > NFC_RETRY_RESET_ABSENT_MS ||
+              isSecondTagPopupOpen()) {
             nfc_retry_count = 0;
             bambu_uid_probed = false;
             // Back after a long absence: a new placement, even of the same
@@ -2295,7 +2316,13 @@ void appLoop() {
           if (bambu_blocks_read > 0 || nfc_retry_count >= NFC_MAX_RETRIES) {
             TagSeen::note(uid_str, bambu_blocks_read > 0 ? "Bambu"
                                    : creality_decoded    ? "Creality"
-                                   : snapmaker_decoded   ? "Snapmaker" : "MIFARE");
+                                   : snapmaker_decoded   ? "Snapmaker" : "MIFARE",
+                          bambu_blocks_read == 0               ? TV_OTHER
+                          : tagIsBambu(g_tag.tray_uuid)        ? TV_BAMBU
+                          // This branch also runs between two retries, while
+                          // the backoff is not over: no verdict before the
+                          // retries are spent.
+                          : nfc_retry_count >= NFC_MAX_RETRIES ? TV_BAMBU_INCOMPLETE : TV_NONE);
           }
           // What the read attempts came to, once: read in full, or out of
           // retries. Logging only.
@@ -2407,7 +2434,7 @@ void appLoop() {
           uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6]);
 
         Serial.printf("NFC: NTAG UID=%s\n", uid_str);
-        TagSeen::note(uid_str, "NTAG");
+        TagSeen::note(uid_str, "NTAG", TV_OTHER);
 
         // What the block below has already dealt with, which is a different
         // question from what is on screen.

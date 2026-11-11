@@ -4260,6 +4260,12 @@ const char* const STRINGS[][3] = {
     "Laisser" },  // STR_TW_BTN_LEAVE
   { "Anderer Tag auf dem Leser - nicht geschrieben", "A different tag is on the reader - not written",
     "Autre tag sur le lecteur - rien écrit" },  // STR_TW_ERR_OTHER_TAG_W
+  { "Tag nicht sicher gelesen. Spule kurz anheben und genauso wieder hinstellen.",
+    "Tag not read reliably. Lift the spool briefly and put it back the same way.",
+    "Tag mal lu. Soulevez un instant la bobine et reposez-la pareil." },  // STR_TAG2_UNCLEAR
+  { "Tag wird noch gelesen. Spule bitte liegen lassen.",
+    "Tag is still being read. Please leave the spool in place.",
+    "Lecture du tag en cours. Laissez la bobine en place." },  // STR_TAG2_READING
 };
 
 StringID tagWriteResultString(uint8_t code) {

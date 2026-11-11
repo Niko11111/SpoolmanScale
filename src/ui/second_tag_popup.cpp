@@ -1,5 +1,6 @@
 #include "second_tag_popup.h"
 #include "app/app_state.h"
+#include "app/app_loop.h"
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -8,6 +9,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/http_progress.h"
+#include "services/tag_field.h"
 #include "services/tag_uid.h"
 #include "ui/spool_flow.h"
 #include "ui_common.h"
@@ -22,6 +24,7 @@
 static lv_obj_t *scr_tag2      = nullptr;
 static lv_obj_t *lbl_tag2_count = nullptr;
 static lv_obj_t *bar_tag2_fill  = nullptr;
+static lv_obj_t *lbl_tag2_prompt = nullptr;
 static lv_coord_t s_fill_w      = -1;   // the width last set, so a pass without a change draws nothing
 
 // Captured when the popup is built. The button callback only raises a flag;
@@ -36,6 +39,24 @@ static bool s_close_pending = false;
 // is a second chip.
 static char s_first_uid[CARD_UIDS_MAX]  = "";
 static char s_second_uid[CARD_UIDS_MAX] = "";
+
+// Whether the first tag was a Bambu tag. A Bambu spool carries a Bambu chip on
+// both flanges, so on such a spool a second tag that settles as anything else
+// was misread, not a sticker (06.11.2026, spool 40: CE4AF87E linked as ntag).
+static bool s_first_bambu = false;
+// The tag the "put it back" line was shown for, so it is said and logged once.
+static char s_unclear_uid[CARD_UIDS_MAX] = "";
+// When the clock ran out while a new tag was still being read, 0 otherwise.
+// The question then waits for that read instead of expiring under it - a
+// Bambu tag on a weak flange can take its retries well past the 30 s - but
+// only for SECOND_TAG_READ_GRACE_MS, so a read that never settles cannot hold
+// the popup open for good.
+static unsigned long s_grace_since_ms = 0;
+// How often the "put it back" prompt has given the clock a fresh start. A weak
+// chip that drops out and reads unclear again on its own would otherwise keep
+// the question standing for good, with nobody touching the spool.
+static uint8_t s_restarts = 0;
+#define TAG2_MAX_RESTARTS 2
 
 static unsigned long s_opened_ms    = 0;
 // What the blocking-time counter stood at when the popup opened, same
@@ -65,6 +86,7 @@ static void closeSecondTagPopup() {
   if (scr_tag2) { lv_obj_del(scr_tag2); scr_tag2 = nullptr; }
   lbl_tag2_count = nullptr;
   bar_tag2_fill  = nullptr;
+  lbl_tag2_prompt = nullptr;
   s_fill_w       = -1;
   s_last_shown_s = -1;
 }
@@ -101,7 +123,7 @@ static void updateCountdownFill() {
 }
 
 static void updateCountdownLabel() {
-  if (!lbl_tag2_count) return;
+  if (!lbl_tag2_count || s_grace_since_ms) return;
   const int rem = remainingSeconds();
   if (rem == s_last_shown_s) return;   // no repaint between seconds
   s_last_shown_s = rem;
@@ -117,7 +139,12 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   s_link_pending  = false;
   s_close_pending = false;
   s_second_uid[0] = '\0';
+  s_unclear_uid[0] = '\0';
+  s_grace_since_ms = 0;
+  s_restarts = 0;
   tagUidNormalize(first_uid, s_first_uid, sizeof(s_first_uid));
+  // g_tag still holds the tag that was just linked.
+  s_first_bambu   = tagIsBambu(g_tag.tray_uuid);
   s_opened_ms     = millis();
   s_opened_stall  = httpStallTotalMs();
   setState(T2_WAITING);
@@ -180,6 +207,7 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   lv_label_set_long_mode(lbl_prompt, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(lbl_prompt, UI_POPUP_W - UI_CARD_TEXT_PAD);
   lv_obj_align(lbl_prompt, LV_ALIGN_TOP_MID, 0, TAG2_PROMPT_Y);
+  lbl_tag2_prompt = lbl_prompt;
 
   // The seconds in words, quietly: the draining button below says the same
   // at a glance, this line says it to anyone who reads.
@@ -275,16 +303,72 @@ void handleSecondTagDeferredActions() {
     // target of this question away with it.
     char now[CARD_UIDS_MAX];
     tagUidNormalize(g_tag.uid_str, now, sizeof(now));
-    if (now[0] && strcmp(now, s_first_uid) != 0) {
+    //
+    // A new UID is not yet an answer. g_tag.uid_str is written on the first
+    // read attempt, while a Bambu tag may still be on its way to its tray
+    // uuid - linked then, it went in as a plain tag (bambu=0). So the tag is
+    // only taken once its read has settled, and only if it settled into
+    // something that can be linked.
+    const TagVerdict verdict = (now[0] && strcmp(now, s_first_uid) != 0)
+                             ? tagSettledVerdict(g_tag.uid_str) : TV_NONE;
+    const bool unclear = verdict == TV_BAMBU_INCOMPLETE ||
+                         (verdict == TV_OTHER && s_first_bambu);
+    if (verdict != TV_NONE && !unclear) {
       strncpy(s_second_uid, g_tag.uid_str, sizeof(s_second_uid) - 1);
       s_second_uid[sizeof(s_second_uid) - 1] = '\0';
       s_link_pending  = true;
       s_close_pending = true;
       setState(T2_LINKING);
+    } else if (unclear && strcmp(now, s_unclear_uid) != 0) {
+      // Not linked, and the question keeps standing: lifting the spool and
+      // putting it back starts a fresh read of the same chip.
+      snprintf(s_unclear_uid, sizeof(s_unclear_uid), "%s", now);
+      logSDf("TAG2: '%s' not linked to spool %d, read as %s - asking to put it back",
+             g_tag.uid_str, s_spool_id,
+             verdict == TV_BAMBU_INCOMPLETE ? "an incomplete Bambu tag" : "no Bambu tag");
+      if (lbl_tag2_prompt) {
+        lv_label_set_text(lbl_tag2_prompt, T(STR_TAG2_UNCLEAR));
+        lv_obj_set_style_text_color(lbl_tag2_prompt, lv_color_hex(UI_COL_WARN), 0);
+      }
+      // Lifting and putting back takes time of its own, so the question asks
+      // with a full clock again rather than closing under the user's hands -
+      // TAG2_MAX_RESTARTS times per question at most.
+      if (s_restarts < TAG2_MAX_RESTARTS) {
+        s_restarts++;
+        s_opened_ms      = millis();
+        s_opened_stall   = httpStallTotalMs();
+        s_grace_since_ms = 0;
+      }
+    } else if (verdict == TV_NONE && s_unclear_uid[0]) {
+      // The tag left or is being read again: a second unclear read after
+      // the spool was put back is said and logged again.
+      s_unclear_uid[0] = '\0';
     } else if (remainingSeconds() == 0) {
-      s_close_pending = true;
-      setState(T2_EXPIRED);
-      logSDf("TAG2: no second tag for spool %d, question expired", s_spool_id);
+      // A new tag is on the reader but has not settled yet: its read is still
+      // running. Expiring now would throw away the answer that is on its way.
+      // g_tag.uid_str outlives the tag by up to a minute (clearTagDisplay),
+      // so only a tag that is on the reader now counts.
+      const bool reading = tag_present && verdict == TV_NONE && now[0] &&
+                           strcmp(now, s_first_uid) != 0;
+      if (reading && s_grace_since_ms == 0) {
+        s_grace_since_ms = millis();
+        if (s_grace_since_ms == 0) s_grace_since_ms = 1;   // 0 means "not started"
+        logSDf("TAG2: time is up, but '%s' is still being read - waiting up to %lu s for it",
+               g_tag.uid_str, (unsigned long)(SECOND_TAG_READ_GRACE_MS / 1000));
+        if (lbl_tag2_count) lv_label_set_text(lbl_tag2_count, "");   // no "Closes in 0 s"
+        if (lbl_tag2_prompt) {
+          lv_label_set_text(lbl_tag2_prompt, T(STR_TAG2_READING));
+          lv_obj_set_style_text_color(lbl_tag2_prompt, lv_color_hex(UI_COL_WARN), 0);
+        }
+      } else if (!reading || millis() - s_grace_since_ms >= SECOND_TAG_READ_GRACE_MS) {
+        s_close_pending = true;
+        setState(T2_EXPIRED);
+        if (s_grace_since_ms)
+          logSDf("TAG2: no second tag for spool %d, %s", s_spool_id,
+                 reading ? "its read did not settle in time" : "the tag left while it was read");
+        else
+          logSDf("TAG2: no second tag for spool %d, question expired", s_spool_id);
+      }
     }
   }
 
