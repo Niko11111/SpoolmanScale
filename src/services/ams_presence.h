@@ -23,7 +23,19 @@
 // settled. Then rarely: an AMS is bolted on and off in the physical world,
 // not several times an hour.
 #define AMS_PRESENCE_FIRST_MS     20000
-#define AMS_PRESENCE_INTERVAL_MS  300000
+#define AMS_PRESENCE_INTERVAL_MS  300000UL
+
+// An AMS source beside Spoolman that does not answer costs the loop the whole
+// timeout of every request, touch and display standing still. Each pass in a
+// row without an answer doubles the wait, up to an hour; an answer brings back
+// the five minutes.
+#define AMS_PRESENCE_MAX_WAIT_MS  3600000UL
+
+inline uint32_t amsPresenceWaitMs(uint8_t misses) {
+  uint32_t wait = AMS_PRESENCE_INTERVAL_MS;
+  for (uint8_t i = 0; i < misses && wait < AMS_PRESENCE_MAX_WAIT_MS; i++) wait *= 2;
+  return wait < AMS_PRESENCE_MAX_WAIT_MS ? wait : AMS_PRESENCE_MAX_WAIT_MS;
+}
 
 // True when the printer is known to have at least one AMS unit. False while
 // the answer is still unknown, so a way in appears once it is confirmed

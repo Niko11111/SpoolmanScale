@@ -17,6 +17,9 @@ bool          s_known      = false;
 bool          s_has_ams    = false;
 int           s_printer_id = 0;
 unsigned long s_last_ms    = 0;
+// Passes in a row an AMS source beside Spoolman did not answer; see
+// amsPresenceWaitMs().
+uint8_t       s_misses     = 0;
 
 // In BSS, not on the loop task's stack: together they are close to two
 // kilobytes, and ams_slots.h asks for exactly this.
@@ -33,6 +36,16 @@ void amsPresenceForget() {
   s_has_ams    = false;
   s_printer_id = 0;
   s_last_ms    = 0;
+  s_misses     = 0;
+}
+
+// A request that got no answer at all, from an AMS source beside Spoolman:
+// the next pass waits longer. The backend's own AMS keeps its five minutes.
+static void noteMiss(int code) {
+  if (code >= 0 || !backendAmsIsSeparateServer()) return;
+  if (s_misses < UINT8_MAX) s_misses++;
+  logSDf("AMS: source did not answer (HTTP %d), next check in %lu min", code,
+         (unsigned long)(amsPresenceWaitMs(s_misses) / 60000UL));
 }
 
 void amsPresenceTick() {
@@ -53,7 +66,7 @@ void amsPresenceTick() {
     s_last_ms = now - (AMS_PRESENCE_INTERVAL_MS - AMS_PRESENCE_FIRST_MS);
     return;
   }
-  if (now - s_last_ms < AMS_PRESENCE_INTERVAL_MS) return;
+  if (now - s_last_ms < amsPresenceWaitMs(s_misses)) return;
   s_last_ms = now;
 
   // The printer id survives between passes: it changes when somebody adds or
@@ -62,6 +75,7 @@ void amsPresenceTick() {
   if (s_printer_id <= 0) {
     const int code = backendListPrinters(s_printers, 5000);
     if (code != 200 || s_printers.count == 0) {
+      noteMiss(code);
       logSDf("[verbose] AMS: no printer to ask about (HTTP %d)", code);
       return;
     }
@@ -71,12 +85,14 @@ void amsPresenceTick() {
   AmsSlotState& st = s_state;
   const int code = backendGetAmsState(s_printer_id, st, 5000);
   if (code != 200) {
+    noteMiss(code);
     logSDf("[verbose] AMS: presence check failed, HTTP %d", code);
     // A printer that has gone means the id is stale, so the next pass looks
     // it up again rather than asking about something that is not there.
     if (code == 404) s_printer_id = 0;
     return;
   }
+  s_misses = 0;
 
   // The external spool holder is not an AMS. A printer that has only that
   // one would otherwise get a chip leading to a page with a single bay on it.

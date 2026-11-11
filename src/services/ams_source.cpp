@@ -163,7 +163,8 @@ const char* amsSourceServerVersion() { return s_info.version; }
 
 // GET on the prefix itself. A source that does not answer it is still read -
 // the status route is all the view needs - but offered nothing to write.
-static void askWhatItCan(uint32_t timeout_ms) {
+// The HTTP code of the self description, 200 when it was read.
+static int askWhatItCan(uint32_t timeout_ms) {
   char url[sizeof(s_base) + 32];
   snprintf(url, sizeof(url), "%s" AMS_SOURCE_PREFIX, s_base);
 
@@ -171,7 +172,7 @@ static void askWhatItCan(uint32_t timeout_ms) {
   const int code = getJson(url, doc, nullptr, timeout_ms);
   if (code != 200) {
     logSDf("AMS source: no self description (%d), shown read-only", code);
-    return;
+    return code;
   }
   AmsSourceInfo info = {};
   info.contract = doc["version"] | 0;
@@ -187,12 +188,19 @@ static void askWhatItCan(uint32_t timeout_ms) {
   logSDf("AMS source: %s %s, contract %d, assign=%d unassign=%d",
          info.name[0] ? info.name : "?", info.version, info.contract,
          (int)info.can_assign, (int)info.can_unassign);
+  return code;
 }
 
 int amsSourceListPrinters(AmsPrinterList& out, uint32_t timeout_ms) {
   out = AmsPrinterList{};
   if (!amsSourceConfigured()) return -1;
-  if (!s_info.known) askWhatItCan(timeout_ms);
+  if (!s_info.known) {
+    // No answer at all: the printer list would wait out the same timeout a
+    // second time, on the loop. A source without a self description (404)
+    // is only read-only and still lists its printers.
+    const int code = askWhatItCan(timeout_ms);
+    if (code < 0) return code;
+  }
 
   char url[sizeof(s_base) + 48];
   snprintf(url, sizeof(url), "%s" AMS_SOURCE_PREFIX "/printers", s_base);
