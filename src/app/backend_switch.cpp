@@ -27,6 +27,7 @@
 #include "services/server_sets.h"
 #include "services/spool_cache.h"
 #include "services/tag_field.h"
+#include "services/tag_pending.h"
 #include "services/backend_profiles.h"
 #include "services/server_name_rules.h"
 #include "services/user_options.h"
@@ -51,6 +52,7 @@ void backendApplyHost(const char *host) {
   spoolCacheForget("host changed");
   labelSpoolForget();            // the label editor's spool is the old server's
   labelServerForget();           // and so are its presets and preview
+  tagPendingForget();            // its spool id is the old server's
   sm_reachable = false;          // unknown until the new address answers
 }
 
@@ -106,6 +108,10 @@ static void forgetServerCaches(const char *why) {
   // mistake there is here, and this gives the PSRAM back a loop pass later
   // instead of at the next link.
   spoolCacheForget(why);
+
+  // A half written tag remembers a spool id, and finishing it would write that
+  // id's spool from the new server onto it.
+  tagPendingForget();
 
   // Resets the BamBuddy registration and asks the new server whether it keeps
   // its own database or proxies to Spoolman. That answer decides where every

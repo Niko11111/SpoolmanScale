@@ -52,6 +52,7 @@ enum TagWriteResult : uint8_t {
   TW_ERR_WRITE,       // a page write failed part way through
   TW_ERR_OTHER_TAG,   // the erase was asked about another tag than the one lying there
   TW_ERR_NOT_BLANK,   // MIFARE: not on the factory key or not empty, left alone
+  TW_ERR_OTHER_TAG_WRITE,  // the write was for another tag than the one lying there
 };
 
 // How far a write or an erase has come, in pages, for a bar on the device.
@@ -95,6 +96,10 @@ bool tagWriteRequest(int spool_id, TagFormat fmt, bool link);
 // by then; the seconds between question and erase are long enough to swap.
 // An empty uid erases whatever writable tag is on the reader, as before.
 bool tagWriteRequestErase(const char* uid_expected);
+// A write bound to one tag the same way: finishing a write that was cut short
+// on exactly that tag (services/tag_pending.h). A MIFARE format is bound
+// through tagWriteMifareTarget() instead.
+bool tagWriteRequestFor(int spool_id, TagFormat fmt, const char* uid_expected);
 void tagWriteTick();
 
 // The same write without the detour through the parking slot: fetches the

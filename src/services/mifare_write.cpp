@@ -6,6 +6,7 @@
 
 #include "hardware/nfc.h"
 #include "hardware/sd_logger.h"
+#include "services/tag_pending.h"
 
 // The key every MIFARE Classic tag leaves the factory with.
 static const uint8_t FACTORY_KEY[MIFARE_KEY_BYTES] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -167,7 +168,11 @@ static bool findCard(const WriteRun& run, uint8_t uid[NFC_UID_MAX], bool* deferr
   return found;
 }
 
-static bool writeDataBlocks(const MifareWriteJob& job, int* refused_block) {
+// The first block onto the card is where a write can be cut short, so the
+// card's UID is marked unfinished right before it (services/tag_pending.h).
+static bool writeDataBlocks(const WriteRun& run, int* refused_block) {
+  const MifareWriteJob& job = run.job;
+  tagPendingBegin(run.uid, 4);
   for (uint8_t b = 0; b < job.data_blocks; b++) {
     const uint8_t block = firstBlock(job.sector) + b;
     if (!nfcWriteMifareBlock(block, job.data[b])) {
@@ -224,12 +229,12 @@ static MifareWriteResult overwriteData(const WriteRun& run, bool had_record) {
   bool silent = false;
   logSDf("%s write: %s opens with the format's key%s - overwriting as asked",
          job.label, uid_str, had_record ? " and holds a record" : "");
-  bool wrote = writeDataBlocks(job, nullptr);
+  bool wrote = writeDataBlocks(run, nullptr);
   if (!wrote) {
     logSDf("%s write: %s refused the write with key A, trying key B", job.label, uid_str);
     wrote = mifareWakeCard(uid, uid_str, &silent) && !silent &&
             nfcAuthMifareSector(job.sector, key, uid, NFC_KEY_B) &&
-            writeDataBlocks(job, nullptr);
+            writeDataBlocks(run, nullptr);
   }
   if (!wrote) {
     logSDf("%s write: %s refused the overwrite", job.label, uid_str);
@@ -285,9 +290,11 @@ static MifareWriteResult ownKeyInstead(const WriteRun& run) {
     // Opens with the format's key but holds nothing it can read: a write cut
     // short half way, old and new blocks mixed, which neither the printer nor
     // the scale can use. A write asked for this very tag repairs it; a
-    // readable record stays protected unless an overwrite was confirmed.
+    // readable record stays protected unless an overwrite was confirmed, or
+    // this very write was started on the tag before and never read back.
     const bool asked_for_it = run.expect && memcmp(run.expect, uid, 4) == 0;
-    if (run.overwrite || (!rec && asked_for_it)) return overwriteData(run, rec);
+    const bool unfinished = tagPendingResumes(uid, 4);
+    if (run.overwrite || unfinished || (!rec && asked_for_it)) return overwriteData(run, rec);
     logSDf("%s write: %s already opens with the format's key%s - not written",
            job.label, uid_str, rec ? " and holds a record" : "");
     mifareWakeCard(uid, uid_str, &silent);
@@ -328,7 +335,8 @@ static void padSector(const MifareWriteJob& job, const uint8_t uid_in[4], const 
 
 // The sector opened with the factory key: its data blocks must be empty, or
 // already hold this job's own blocks - a write of the same job cut short
-// before the trailer, which is why such a tag can simply be written again.
+// before the trailer, which is why such a tag can simply be written again -
+// or belong to this very write, started on the tag before and never finished.
 // Then the data, then the trailer that locks it to the new key - last.
 // Finally read back the way the printer will.
 static MifareWriteResult writeBlank(const WriteRun& run) {
@@ -339,10 +347,11 @@ static MifareWriteResult writeBlank(const WriteRun& run) {
   memcpy(uid, run.uid, 4);
   bool silent = false;
   const uint8_t first = firstBlock(job.sector);
+  const bool unfinished = tagPendingResumes(uid, 4);
   for (uint8_t b = 0; b < MIFARE_DATA_BLOCKS_MAX; b++) {
     uint8_t old[MIFARE_BLOCK_BYTES];
     const bool readable = nfcReadMifareBlock(first + b, old);
-    const bool resumable = readable && (blockIsBlank(old) ||
+    const bool resumable = readable && (unfinished || blockIsBlank(old) ||
                                         memcmp(old, job.data[b], MIFARE_BLOCK_BYTES) == 0);
     if (!resumable) {
       logSDf("%s write: %s block %u %s - not written", job.label, uid_str,
@@ -352,7 +361,7 @@ static MifareWriteResult writeBlank(const WriteRun& run) {
     }
   }
   int refused = -1;
-  if (!writeDataBlocks(job, &refused)) {
+  if (!writeDataBlocks(run, &refused)) {
     logSDf("%s write: %s block %d refused", job.label, uid_str, refused);
     mifareWakeCard(uid, uid_str, &silent);
     return MIFARE_WRITE_FAILED;

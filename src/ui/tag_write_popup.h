@@ -58,6 +58,11 @@ void tagMismatchTick();
 
 bool isTagWritePopupOpen();
 
+// A tag was put down. When it is the one a write was cut short on
+// (services/tag_pending.h), offers to finish it once the screen is free.
+// Only a compare in RAM otherwise, so the scan pays nothing for it.
+void tagUnfinishedNotice(const uint8_t* uid, uint8_t uid_len, const char* uid_str);
+
 // Closes the overlay once the callback that asked for it has returned, starts
 // the write or the erase, and shows the result when it is done. Called from
 // appLoop() like the other deferred UI work.

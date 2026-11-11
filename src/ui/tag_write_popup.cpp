@@ -7,6 +7,7 @@
 
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/tag_pending.h"
 #include "services/tag_write.h"
 #include "services/user_options.h"
 #include "confirm_popup.h"
@@ -15,6 +16,7 @@
 #include "tag_busy_popup.h"
 #include "tag_display.h"
 #include "spool_flow.h"
+#include "spoolman_lookup.h"
 #include "ui_common.h"
 #include "ui/theme.h"
 
@@ -27,9 +29,10 @@
 #define BTN_H  56
 #define BTN_Y  (BOX_H - BTN_H - 18)
 
-// Which of the two questions is on screen. They differ in their words and in
-// what confirming does, in nothing else - one builder serves both.
-enum AskMode : uint8_t { ASK_WRITE, ASK_ERASE, ASK_REWRITE };
+// Which of the questions is on screen. They differ in their words and in
+// what confirming does, in nothing else - one builder serves them all.
+// ASK_UNFINISHED is a write too: the one services/tag_pending.h remembers.
+enum AskMode : uint8_t { ASK_WRITE, ASK_ERASE, ASK_REWRITE, ASK_UNFINISHED };
 
 static lv_obj_t *scr_tag_write = nullptr;
 static bool     close_pending   = false;
@@ -48,6 +51,15 @@ static uint8_t  s_write_fmt     = 0;
 static char     s_cfs_asked_uid[24] = "";
 // 0 = blank tag, 1 = own tag to update, 2 = original tag to overwrite.
 static uint8_t  s_cfs_variant = 0;
+
+// A tag put down whose write was cut short, waiting for the screen to be free:
+// the lookup of the same placement and any question already up go first.
+#define UNFINISHED_ASK_WAIT_MS  20000UL
+
+static bool          s_unf_ask_pending = false;
+static unsigned long s_unf_since_ms = 0;
+static char          s_unf_uid[26] = "";
+static TagPendingMark s_unf_mark{};
 
 // While a CFS write waits for a tag that stopped answering: say so on the
 // busy card, and keep the screen drawing. Runs inside tagWriteTick().
@@ -439,6 +451,15 @@ void tagWriteAskAnswer(bool yes) {
   close_pending   = true;
 }
 
+// The agreed write as a request. Finishing a cut write goes to that tag and no
+// other: the question may have stood while the spools were swapped.
+static bool requestWrite() {
+  armCfsTarget();
+  if (s_mode == ASK_UNFINISHED)
+    return tagWriteRequestFor(s_spool_id, (TagFormat)s_write_fmt, s_unf_uid);
+  return tagWriteRequest(s_spool_id, (TagFormat)s_write_fmt, false);
+}
+
 // Hands the agreed write or erase to the writer and puts up the busy card.
 // s_mode says which of the two it is.
 static void queueTagJob() {
@@ -449,7 +470,7 @@ static void queueTagJob() {
   // all from the device.
   const bool queued = (s_mode == ASK_ERASE)
                         ? tagWriteRequestErase(s_erase_uid)
-                        : (armCfsTarget(), tagWriteRequest(s_spool_id, (TagFormat)s_write_fmt, false));
+                        : requestWrite();
   if (queued) {
     s_watching = true;
     // From here to the result the loop is busy with the tag and the screen
@@ -464,6 +485,41 @@ static void queueTagJob() {
   }
 }
 
+void tagUnfinishedNotice(const uint8_t* uid, uint8_t uid_len, const char* uid_str) {
+  // Any other tag put down replaces a question still waiting for its turn.
+  s_unf_ask_pending = tagPendingFor(uid, uid_len, &s_unf_mark);
+  if (!s_unf_ask_pending) return;
+  s_unf_since_ms = millis();
+  snprintf(s_unf_uid, sizeof(s_unf_uid), "%s", uid_str ? uid_str : "");
+  logSDf("Tag: %s was left half written (spool %d, %s)", s_unf_uid, s_unf_mark.spool_id,
+         tagFormatLabel(s_unf_mark.fmt));
+}
+
+// Asks once the screen is free, as long as the tag is still lying there.
+static void unfinishedAskTick() {
+  if (!s_unf_ask_pending) return;
+  if (!tag_present || millis() - s_unf_since_ms > UNFINISHED_ASK_WAIT_MS) {
+    s_unf_ask_pending = false;
+    return;
+  }
+  if (scr_tag_write || s_watching || uiModalWaiting() || lookupPending() ||
+      strcmp(tagWriteState(), "pending") == 0) return;
+  s_unf_ask_pending = false;
+  // A question that came up first may have written the tag in the meantime.
+  if (!tagPendingFor(s_unf_mark.uid, s_unf_mark.uid_len, &s_unf_mark)) return;
+  s_spool_id    = s_unf_mark.spool_id;
+  s_mode        = ASK_UNFINISHED;
+  s_write_fmt   = s_unf_mark.fmt;
+  // A CFS write goes to this tag and no other, and finishes over whatever
+  // the cut left on it: the marker is what lets mifareWrite() do that, so no
+  // overwrite is asked for.
+  s_cfs_variant = 0;
+  snprintf(s_cfs_asked_uid, sizeof(s_cfs_asked_uid), "%s", s_unf_uid);
+  mismatch_ask_pending = false;
+  logSDf("SHOW: TagUnfinishedPopup spool=%d fmt=%s", s_spool_id, tagFormatLabel(s_write_fmt));
+  buildAsk(STR_TW_UNF_TITLE, STR_TW_UNF_HINT, STR_TW_BTN_WRITE, STR_TW_BTN_LEAVE);
+}
+
 void handleTagWritePopupDeferredActions() {
   // The result of a write or erase that is already running. tagWriteTick()
   // carries it out on this same loop task, so the state settles within a pass.
@@ -472,6 +528,9 @@ void handleTagWritePopupDeferredActions() {
     const uint8_t code = tagWriteResultCode();
     tagBusyHide();
     if (code == TW_OK && s_mode != ASK_ERASE) mismatchSettle(g_tag.uid_str, s_spool_id);
+    // The screen still shows what the half written tag read as. Cleared, the
+    // next poll reads the finished record like a tag just put down.
+    if (code == TW_OK && s_mode == ASK_UNFINISHED) clearTagDisplay();
     if (s_write_fmt == TAG_FMT_CREALITY && code == TW_ERR_NO_TAG) s_cfs_asked_uid[0] = '\0';
     showResult(code);
     logSDf("TagWritePopup: finished, mode=%d code=%u", (int)s_mode,
@@ -520,6 +579,8 @@ void handleTagWritePopupDeferredActions() {
     if (!s_watching) showTagMismatchPopup();
   }
 
+  unfinishedAskTick();
+
   if (!close_pending) return;
   close_pending = false;
 
@@ -527,6 +588,9 @@ void handleTagWritePopupDeferredActions() {
 
   if (!confirm_pending) {
     logSDf("TagWritePopup: declined, mode=%d", (int)s_mode);
+    // Left as it is on purpose - written elsewhere, or not wanted any more:
+    // asking on every placement from now on would only be in the way.
+    if (s_mode == ASK_UNFINISHED) tagPendingDrop(s_unf_mark.uid, s_unf_mark.uid_len);
     return;
   }
   confirm_pending = false;

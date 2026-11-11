@@ -4250,6 +4250,16 @@ const char* const STRINGS[][3] = {
   { "Der Tag wird geschrieben und danach geprüft. Fertig ist er erst, wenn die Bestätigung kommt.",
     "The tag is being written and then checked. It is only done once the confirmation appears.",
     "Le tag est écrit puis vérifié. Il n'est prêt qu'à la confirmation." },  // STR_TW_HANDS_OFF_HINT
+  // Tag write popup (tag_write_popup.cpp): a tag put down whose write was cut
+  // short and never read back (services/tag_pending.h). %s is the format.
+  { "Tag fertig schreiben?", "Finish writing the tag?", "Terminer le tag ?" },  // STR_TW_UNF_TITLE
+  { "Das Schreiben als %s wurde unterbrochen. Bis es fertig ist, kann der Tag falsch gelesen werden.",
+    "Writing it as %s was cut short. Until it is finished, the tag may read wrong.",
+    "L'écriture en %s a été interrompue. Tant qu'elle n'est pas terminée, le tag peut être mal lu." },  // STR_TW_UNF_HINT
+  { "So lassen", "Leave it",
+    "Laisser" },  // STR_TW_BTN_LEAVE
+  { "Anderer Tag auf dem Leser - nicht geschrieben", "A different tag is on the reader - not written",
+    "Autre tag sur le lecteur - rien écrit" },  // STR_TW_ERR_OTHER_TAG_W
 };
 
 StringID tagWriteResultString(uint8_t code) {
@@ -4260,6 +4270,7 @@ StringID tagWriteResultString(uint8_t code) {
     case TW_ERR_BACKEND:   return STR_TW_ERR_BACKEND;
     case TW_ERR_SPACE:     return STR_TW_ERR_SPACE;
     case TW_ERR_OTHER_TAG: return STR_TW_ERR_OTHER_TAG;
+    case TW_ERR_OTHER_TAG_WRITE: return STR_TW_ERR_OTHER_TAG_W;
     case TW_ERR_NOT_BLANK: return STR_TW_ERR_NOT_BLANK;
     default:               return STR_TW_ERR_WRITE;
   }

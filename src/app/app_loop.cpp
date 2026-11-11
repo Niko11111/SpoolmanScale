@@ -2080,6 +2080,7 @@ void appLoop() {
 
         bool uid_changed = new_placement || (strcmp(uid_str, g_tag.uid_str) != 0);
         new_placement = false;
+        if (newly_placed || uid_changed) tagUnfinishedNotice(uid, 4, uid_str);
         int bambu_blocks_read = countBambuDataBlocksRead(g_tag);
         bool uuid_missing = (strlen(g_tag.tray_uuid) < 32);
         bool contents_incomplete = (bambu_blocks_read < 48);
@@ -2425,6 +2426,7 @@ void appLoop() {
         // actually runs. With no WiFi, or with the manual id input open, it
         // stays empty and every poll would look like a new tag.
         bool uid_changed_ntag = (strcmp(uid_str, ntag_handled_uid) != 0);
+        if (newly_placed || uid_changed_ntag) tagUnfinishedNotice(uid, 7, uid_str);
         if (uid_changed_ntag) {
           logSDf("NFC: NTAG UID=%s", uid_str);
           resetActivityTimer();   // a different tag is always news

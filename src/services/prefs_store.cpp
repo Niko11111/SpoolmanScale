@@ -216,6 +216,21 @@ bool prefsPutBool(const char* key, bool value) {
   return prefsWriteBool(key, value);
 }
 
+bool prefsRemoveKey(const char* key) {
+  for (uint8_t i = 0; i < s_q_len; i++) {
+    if (strcmp(s_q[i].key, key) != 0) continue;
+    memmove(&s_q[i], &s_q[i + 1], sizeof(PrefsQueued) * (s_q_len - i - 1));
+    s_q_len--;
+    break;
+  }
+  Preferences prefs;
+  if (!prefsOpen(prefs, key)) return false;
+  const bool ok = !prefs.isKey(key) || prefs.remove(key);
+  prefs.end();
+  if (!ok) prefsReportFail("remove", key);
+  return ok;
+}
+
 // Preferences::put*() returns the number of bytes written, 0 on failure.
 static bool prefsWriteString(const char* key, const char* value) {
   Preferences prefs;

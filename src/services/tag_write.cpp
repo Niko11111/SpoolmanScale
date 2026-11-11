@@ -26,6 +26,7 @@
 #include "services/spool_temp_rules.h"
 #include "services/tag_field.h"
 #include "services/tag_link.h"
+#include "services/tag_pending.h"
 #include "services/tag_uid.h"
 #include "services/backend.h"
 
@@ -58,7 +59,7 @@ static bool      pending = false;
 static int       pending_id = 0;
 static TagFormat pending_fmt = TAG_FMT_ACE;
 static bool      pending_link = false;
-static char      pending_uid[26] = "";   // the erase's tag, "" for whichever lies there
+static char      pending_uid[26] = "";   // the job's tag, "" for whichever lies there
 static char      state[12] = "idle";
 static char      message[96] = "";
 static uint8_t   result = TW_NONE;
@@ -169,6 +170,12 @@ bool tagWriteRequest(int spool_id, TagFormat fmt, bool link) {
 
 bool tagWriteRequestErase(const char* uid_expected) {
   if (!tagWriteRequest(0, TAG_FMT_ERASE, false)) return false;
+  snprintf(pending_uid, sizeof(pending_uid), "%s", uid_expected ? uid_expected : "");
+  return true;
+}
+
+bool tagWriteRequestFor(int spool_id, TagFormat fmt, const char* uid_expected) {
+  if (!tagWriteRequest(spool_id, fmt, false)) return false;
   snprintf(pending_uid, sizeof(pending_uid), "%s", uid_expected ? uid_expected : "");
   return true;
 }
@@ -370,6 +377,11 @@ static uint16_t           s_pages_total = 0;
 
 void tagWriteSetProgress(TagWriteProgressFn fn) { s_progress = fn; }
 
+// The NTAG selectWritableTag() found: every page below goes onto it, and an
+// armed write marks it unfinished before the first one (services/tag_pending.h).
+static uint8_t s_sel_uid[NFC_UID_MAX];
+static uint8_t s_sel_len = 0;
+
 static void progressBegin(uint16_t total) {
   s_pages_done  = 0;
   s_pages_total = total;
@@ -380,6 +392,7 @@ static bool wrPage(uint8_t page, const uint8_t *d) {
   if (page < 4) return false;          // UID, lock bytes, CC
   uint8_t buf[4];
   memcpy(buf, d, 4);
+  tagPendingBegin(s_sel_uid, s_sel_len);
   if (!nfcWriteNtagPage(page, buf)) return false;
   // After the page, never around it: the listener redraws, and that takes a
   // few milliseconds the chip should not spend waiting in the middle of one.
@@ -685,6 +698,8 @@ bool tagWriteRemotePayload() {
            write_code);
   } else {
     finish("ok", "Wrote the record the filament manager sent", TW_OK);
+    // A whole record, read back: whatever a cut write left on it is gone.
+    tagPendingDone(uid, uid_len);
     ok = true;
   }
 
@@ -1280,6 +1295,8 @@ static bool selectWritableTag(uint8_t *uid, uint8_t *uid_len) {
            TW_ERR_NOT_NTAG);
     return false;
   }
+  memcpy(s_sel_uid, uid, *uid_len);
+  s_sel_len = *uid_len;
   return true;
 }
 
@@ -1310,7 +1327,10 @@ static bool writeSpoolRecord(int spool_id, TagFormat fmt,
   {
     AceFields f;
     buildAce(sp, &f);
+    tagPendingArm(spool_id, (uint8_t)fmt);
     ok = TAG_FMT_IS_NDEF(fmt) ? writeOpenSpool(&f, spool_id, fmt) : writeAce(&f);
+    if (ok) tagPendingDone(s_sel_uid, s_sel_len);
+    tagPendingDisarm();
   }
 
   cache_dirty = true;   // the tag changed under a UID that did not
@@ -1422,8 +1442,11 @@ static bool writeMifareJob(int spool_id, uint8_t fmt, char *name, size_t name_le
   }
   logSDf("%s write: spool %d as %s", job.label, spool_id, text);
   uint8_t uid[4];
+  tagPendingArm(spool_id, fmt);
   const MifareWriteResult r = mifareWrite(job, uid, s_mf_has_expect ? s_mf_expect : nullptr,
                                           s_mf_wait, s_mf_overwrite);
+  if (r == MIFARE_WRITE_OK) tagPendingDone(uid, 4);
+  tagPendingDisarm();
   s_mf_has_expect = false;
   s_mf_wait = nullptr;
   s_mf_overwrite = false;
@@ -1498,10 +1521,22 @@ void tagWriteTick() {
     // asked for the erase. Only on success: a failed erase left the tag as it
     // was, and what is on screen is then still the truth.
     if (erased) erased_flag = true;
+    // Nothing half written is left on it either.
+    if (erased) tagPendingDone(uid, uid_len);
     finish(erased ? "ok" : "error",
            erased ? "Tag erased" : "Erase failed - keep the tag still",
            erased ? TW_OK : TW_ERR_WRITE);
     return;
+  }
+
+  if (pending_uid[0]) {
+    char here[26];
+    uidToStr(uid, uid_len, here, sizeof(here));
+    if (strcmp(pending_uid, here) != 0) {
+      logSDf("TagWrite: write was for %s, %s lies on the reader - not written", pending_uid, here);
+      finish("error", "A different tag is on the reader - nothing written", TW_ERR_OTHER_TAG_WRITE);
+      return;
+    }
   }
 
   char name[48];

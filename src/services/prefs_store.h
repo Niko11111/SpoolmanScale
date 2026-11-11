@@ -29,6 +29,11 @@ bool prefsPutUInt(const char* key, uint32_t value);
 bool prefsPutUChar(const char* key, uint8_t value);
 bool prefsPutBool(const char* key, bool value);
 
+// Takes the key out of NVS. Erasing only marks its entries as gone, so a value
+// that is set and cleared again costs one write, not two. A value parked for
+// the key goes with it. True when the key is gone, also when it never was.
+bool prefsRemoveKey(const char* key);
+
 // ------------------------------------------------------------------
 //  Writes parked while LVGL dispatches events
 //
