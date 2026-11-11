@@ -56,8 +56,10 @@ bool nfcReadPassiveTarget(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms) {
 // unread, the next command would be written over a pending response, which is
 // the likely reason the first field reset (12.10.2026) left the chip hanging.
 // resp_len is the frame length without the leading ready byte; the check is
-// on the response code (command + 1) at frame byte 6.
-static bool rawCommand(uint8_t* cmd, uint8_t cmd_len, uint8_t resp_len) {
+// on the response code (command + 1) at frame byte 6. `status`, when given,
+// receives the byte after it: the card's own answer for InDataExchange.
+static bool rawCommand(uint8_t* cmd, uint8_t cmd_len, uint8_t resp_len,
+                       uint8_t* status = nullptr) {
   if (!nfc || !nfc_wire) return false;
   if (!nfc->sendCommandCheckAck(cmd, cmd_len)) return false;
   uint8_t rx[16] = {0};
@@ -66,8 +68,10 @@ static bool rawCommand(uint8_t* cmd, uint8_t cmd_len, uint8_t resp_len) {
   size_t got = nfc_wire->requestFrom((uint8_t)PN532_I2C_ADDRESS, want);
   for (size_t i = 0; i < got && i < sizeof(rx); i++) rx[i] = nfc_wire->read();
   while (nfc_wire->available()) nfc_wire->read();
-  return got == want && rx[0] == PN532_I2C_READY && rx[6] == 0xD5 &&
-         rx[7] == (uint8_t)(cmd[0] + 1);
+  const bool ok = got == want && rx[0] == PN532_I2C_READY && rx[6] == 0xD5 &&
+                  rx[7] == (uint8_t)(cmd[0] + 1);
+  if (ok && status) *status = rx[8];
+  return ok;
 }
 
 bool nfcInRelease() {
@@ -164,11 +168,18 @@ bool nfcAuthMifareSector(int sector, const uint8_t key[6], const uint8_t uid[4],
                                               key_type == NFC_KEY_A ? 0 : 1, k);
 }
 
+// The library's mifareclassic_WriteDataBlock() returns 1 once the PN532
+// acknowledges the command and never looks at the card's answer, so a block
+// the card refused (wrong key for writing, the tag leaving the field) read as
+// written. The same InDataExchange here, with the status byte checked: 0x00
+// is the card's "done". Response: 00 00 FF 03 FD D5 41 st DCS 00.
 bool nfcWriteMifareBlock(uint8_t block, const uint8_t data[16]) {
   if (!nfc) return false;
-  uint8_t d[16];
-  memcpy(d, data, 16);
-  return nfc->mifareclassic_WriteDataBlock(block, d);
+  uint8_t cmd[4 + 16] = { 0x40, 0x01, 0xA0, block };   // InDataExchange, Tg 1, MIFARE WRITE
+  memcpy(cmd + 4, data, 16);
+  uint8_t status = 0xFF;
+  if (!rawCommand(cmd, sizeof(cmd), 10, &status)) return false;
+  return status == 0x00;
 }
 
 bool nfcReadNtagPage(uint8_t page, uint8_t* data) {
