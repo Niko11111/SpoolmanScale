@@ -18,6 +18,7 @@
 #include "services/nfc_reset.h"
 #include "hardware/scale.h"
 #include "hardware/sd_logger.h"
+#include "hardware/sound.h"
 #include "services/ams_source.h"
 #include "services/app_settings.h"
 #include "services/backend.h"
@@ -147,6 +148,9 @@ void appSetup() {
   // monitor that reads still gets everything.
   Serial.setTxTimeoutMs(0);
 #endif
+  // Before the startup delay: the amplifier clock pins hiss from reset
+  // until something drives them.
+  soundParkClockPins();
   delay(500);
   // Before anything else can leave one of its own: this reads what the
   // previous boot was doing when it stopped. writeBootBlock() prints it.

@@ -9,6 +9,7 @@
 #include "app_config.h"
 #include "display.h"
 #include "sd_logger.h"
+#include "sound.h"
 
 
 static unsigned long last_activity_ms = 0;
@@ -88,6 +89,7 @@ void handlePowerManagement() {
       elapsed >= (unsigned long)sleep_timeout_ms) {
     Serial.println("Deep sleep...");
     logSD("Deep sleep: entering");
+    soundPrepareDeepSleep();
     displayPrepareDeepSleep();
     delay(100);
     esp_deep_sleep_start();

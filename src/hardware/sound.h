@@ -6,12 +6,18 @@
 // and whatever small speaker is plugged into its SPK connector.
 //
 // Off by default: most scales have no speaker fitted, and an option that does
-// nothing until hardware is added should not be on when it arrives.
+// nothing until hardware is added should not be on when it arrives. The
+// Sound switch is that on/off. Volume sits behind it.
 //
 // soundPlay() only queues and returns, so it is safe from any task and costs
 // the loop nothing. A low priority task renders the tone and stops the I2S
 // clock again afterwards, so the amplifier is not left idling and hissing
-// between beeps.
+// between beeps. The task and the I2S channel are created on the first beep.
+//
+// GPIO35 and GPIO36 come out of reset as the I2S clock, and the onboard
+// amplifier hisses until something drives them. soundParkClockPins() drives
+// them, and DOUT, low at boot. soundPrepareDeepSleep() holds that level
+// across deep sleep. Wake is a reset, and the park runs again.
 
 enum SoundEvent : uint8_t {
   SND_NFC_READ,       // a new tag was placed on the reader
@@ -32,7 +38,7 @@ enum SoundVolume : uint8_t {
   SND_VOL_COUNT
 };
 
-extern bool    g_sound_on;      // master switch, NVS "snd_on"
+extern bool    g_sound_on;      // Sound switch, off by default, NVS "snd_on"
 extern bool    g_snd_nfc;       // NVS "snd_nfc"
 extern bool    g_snd_write;     // NVS "snd_write"
 extern bool    g_snd_weight;    // NVS "snd_weight"
@@ -40,6 +46,13 @@ extern uint8_t g_snd_volume;    // SoundVolume, NVS "snd_vol"
 
 // Reads the five values above from NVS. Called from loadPrefs().
 void soundLoadPrefs();
+
+// Drives GPIO35, GPIO36 and GPIO37 low, and releases a hold left by deep
+// sleep. Called at boot, before the startup delay.
+void soundParkClockPins();
+
+// Stops a tone in progress and holds the clock pins low across deep sleep.
+void soundPrepareDeepSleep();
 
 // Plays the tone for e if sound is on and the switch for e is on. Never
 // blocks; a tone that finds the queue full is dropped.

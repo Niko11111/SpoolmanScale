@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <driver/i2s_std.h>
+#include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
@@ -24,6 +25,33 @@ void soundLoadPrefs() {
   g_snd_weight = prefsGetBool("snd_weight", true);
   g_snd_volume = prefsGetUChar("snd_vol", SND_VOL_MED);
   if (g_snd_volume >= SND_VOL_COUNT) g_snd_volume = SND_VOL_MED;
+}
+
+static const int8_t CLOCK_PINS[] = {
+  hw_pins::SPK_LRCK, hw_pins::SPK_BCLK, hw_pins::SPK_DOUT
+};
+static const unsigned CLOCK_PIN_COUNT = sizeof(CLOCK_PINS) / sizeof(CLOCK_PINS[0]);
+
+static void driveClockPinsLow() {
+  for (unsigned i = 0; i < CLOCK_PIN_COUNT; i++) {
+    const gpio_num_t pin = (gpio_num_t)CLOCK_PINS[i];
+    gpio_hold_dis(pin);
+    gpio_reset_pin(pin);
+    gpio_set_direction(pin, GPIO_MODE_OUTPUT);
+    gpio_set_level(pin, 0);
+  }
+}
+
+void soundParkClockPins() {
+  driveClockPinsLow();
+  logSD("Sound: GPIO35, GPIO36 and GPIO37 driven low until the first tone");
+}
+
+static void logInternalHeap(const char *when) {
+  multi_heap_info_t info;
+  heap_caps_get_info(&info, MALLOC_CAP_INTERNAL);
+  logSDf("Sound: internal heap %s, free %u bytes, largest %u",
+         when, (unsigned)info.total_free_bytes, (unsigned)info.largest_free_block);
 }
 
 // 16 kHz is plenty for beeps of at most 2.5 kHz and keeps the DMA buffers small.
@@ -80,6 +108,7 @@ static Tone toneFor(SoundEvent e) {
 static QueueHandle_t     s_queue = nullptr;
 static i2s_chan_handle_t s_tx    = nullptr;
 static bool              s_failed = false;   // I2S would not start; stop trying
+static bool              s_asleep = false;   // deep sleep has taken the pins
 
 static bool i2sStart() {
   if (s_tx) return i2s_channel_enable(s_tx) == ESP_OK;
@@ -110,6 +139,15 @@ static bool i2sStart() {
     return false;
   }
   return i2s_channel_enable(s_tx) == ESP_OK;
+}
+
+void soundPrepareDeepSleep() {
+  s_asleep = true;
+  if (s_tx) i2s_channel_disable(s_tx);
+  driveClockPinsLow();
+  for (unsigned i = 0; i < CLOCK_PIN_COUNT; i++)
+    gpio_hold_en((gpio_num_t)CLOCK_PINS[i]);
+  logSD("Sound: clock pins held low across deep sleep");
 }
 
 static int16_t toneSample(float wave, int16_t amp, float env) {
@@ -146,13 +184,18 @@ static void soundTask(void *) {
   uint8_t ev;
   for (;;) {
     if (xQueueReceive(s_queue, &ev, portMAX_DELAY) != pdTRUE) continue;
-    if (s_failed) continue;
+    if (s_failed || s_asleep) continue;
     if (!i2sStart()) {
       s_failed = true;
       logSD("Sound: I2S could not be started, sound stays silent until reboot");
       continue;
     }
     const int16_t amp = AMPLITUDE[g_snd_volume < SND_VOL_COUNT ? g_snd_volume : SND_VOL_MED];
+    static bool heap_after = false;
+    if (!heap_after) {
+      heap_after = true;
+      logInternalHeap("after the first tone started I2S");
+    }
     // Anything queued while this one plays follows straight on, without
     // stopping the clock in between.
     do {
@@ -175,6 +218,7 @@ static bool ensureStarted() {
   taskEXIT_CRITICAL(&mux);
   if (!mine) return false;   // another task is starting it; this tone is dropped
 
+  logInternalHeap("before the first tone");
   // Set before the task exists: the task reads s_queue the moment it runs.
   s_queue = xQueueCreate(QUEUE_LEN, sizeof(uint8_t));
   // Low priority: a beep is never more important than the loop or the reader.
