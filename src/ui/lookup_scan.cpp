@@ -37,6 +37,7 @@
 
 #include "app_config.h"
 #include "hardware/sd_logger.h"
+#include "hardware/sound.h"
 #include "lang.h"
 
 // From ui/spool_flow.cpp, see the same line in spoolman_lookup.cpp.
@@ -927,6 +928,7 @@ void lookupResolveArchive(const LookupCtx& c, JsonDocument* doc2p,
   // Truly not found
   Serial.println("Backend: spool not found");
   logSD("Backend: spool not found");
+  soundPlay(SND_TAG_UNKNOWN);
   // Only a scan that ran to its end is an answer to hold the index against.
   if (scanned_inventory && archive_whole) {
     uidShadowReport(0, TAG_RANK_NONE, false);

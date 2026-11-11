@@ -4236,6 +4236,7 @@ const char* const STRINGS[][3] = {
   { "Leise",                         "Low",                          "Bas" },  // STR_SND_VOL_LOW
   { "Mittel",                        "Medium",                       "Moyen" },  // STR_SND_VOL_MED
   { "Laut",                          "High",                         "Fort" },  // STR_SND_VOL_HIGH
+  { "Max",                           "Max",                          "Max" },  // STR_SND_VOL_MAX
 };
 
 StringID tagWriteResultString(uint8_t code) {

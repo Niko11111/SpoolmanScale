@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include "hardware/sd_logger.h"
+#include "hardware/sound.h"
 #include "services/ams_assign.h"
 #include "services/ams_pick.h"
 #include "services/auto_weight_state.h"
@@ -95,6 +96,11 @@ static void askFreeTag();
 // question at a time.
 static bool s_ask_free_tag_pending = false;
 
+static void beepForWeightSave(int rc) {
+  if (backendWriteOk(rc)) soundPlay(SND_WEIGHT_MANUAL);
+  else if (rc != PATCH_WEIGHT_ASKING) soundPlay(SND_WEIGHT_FAIL);
+}
+
 void handleConfirmPopupDeferredActions() {
   if (s_ask_free_tag_pending) {
     s_ask_free_tag_pending = false;
@@ -113,7 +119,7 @@ void handleConfirmPopupDeferredActions() {
   }
   switch (job) {
     case CJ_WEIGHT:
-      patchSpoolmanWeight(s_job_value);
+      beepForWeightSave(patchSpoolmanWeight(s_job_value));
       // Remembered so the question can come up on removal. A yes there
       // reports the same weight once more, which is the only way to open the
       // window. The cap check cannot interfere: it is BamBuddy only and
@@ -136,12 +142,12 @@ void handleConfirmPopupDeferredActions() {
       // already leaves the spool at full - the weight write after it is what
       // stamps last_weighed_at and last_scale_weight.
       patchInitialWeight(s_job_value);
-      patchSpoolmanWeight(s_job_value, true);
+      beepForWeightSave(patchSpoolmanWeight(s_job_value, true));
       break;
     case CJ_CAP_KEEP:
       // Written anyway, so the scale and the server agree that a weighing
       // happened. BamBuddy clamps it, which is what the user just accepted.
-      patchSpoolmanWeight(s_job_value, true);
+      beepForWeightSave(patchSpoolmanWeight(s_job_value, true));
       break;
     default: break;
   }

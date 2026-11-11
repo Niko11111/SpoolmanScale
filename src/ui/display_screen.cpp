@@ -359,9 +359,11 @@ static void buildSoundEventRows(lv_obj_t *list) {
   soundToggleRow(list, STR_SND_WEIGHT, g_snd_weight,
     [](lv_event_t *e) { toggleAndSave(&g_snd_weight, "snd_weight"); });
 
-  // Volume steps through its three values on each tap and plays the new one,
+  // Volume steps through its four values on each tap and plays the new one,
   // which doubles as the speaker test.
-  static const StringID VOL_NAMES[SND_VOL_COUNT] = { STR_SND_VOL_LOW, STR_SND_VOL_MED, STR_SND_VOL_HIGH };
+  static const StringID VOL_NAMES[SND_VOL_COUNT] = {
+    STR_SND_VOL_LOW, STR_SND_VOL_MED, STR_SND_VOL_HIGH, STR_SND_VOL_MAX
+  };
   char buf_t[32], buf_s[32];
   copyT(buf_t, sizeof(buf_t), STR_SND_VOLUME_LABEL);
   copyT(buf_s, sizeof(buf_s), VOL_NAMES[g_snd_volume < SND_VOL_COUNT ? g_snd_volume : SND_VOL_MED]);
