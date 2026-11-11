@@ -2136,7 +2136,19 @@ void linkIdLookupAndPatch(int entered_id, bool is_bambu) {
     UnlinkedSpool &s = link_spools[link_spool_count];
     s.id = entered_id;
     s.from_cache = false;   // read from the server a moment ago
-    s.article_hit = false;  // typed in, not offered by the list
+    // Typed in, not offered by the list, but judged as the list judges its
+    // rows: the question behind the number compares the row with the tag
+    // (showLinkConfirmPopup()), and without the article a spool the catalog's
+    // article number vouches for came up as "does not match", while the
+    // warning above (tagSpoolCompareTag()) found the same spool fine. Only in
+    // the Bambu flow, as the list's linkArticleHit() only knows an article
+    // there.
+    {
+      char tag_article[16];
+      tagSpoolTagArticle(tag_article, sizeof(tag_article));
+      const char* sp_article = doc["filament"]["article_number"] | "";
+      s.article_hit = is_bambu && tag_article[0] && strcasecmp(tag_article, sp_article) == 0;
+    }
     // Same rule as the list fetch: too long is stored as empty, never cut.
     linkFillTagValues(s, doc.as<JsonObjectConst>());
     String mat = doc["filament"]["material"] | String("");
