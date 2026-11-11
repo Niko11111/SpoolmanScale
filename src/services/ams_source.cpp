@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <string.h>
+#include <strings.h>
 
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
@@ -74,6 +75,13 @@ bool amsSourceSet(const char* host, const char* key) {
   if (!copyClean(new_host, sizeof(new_host), host)) return false;
   if (key && !copyClean(new_key, sizeof(new_key), key)) return false;
 
+  if (!key && strcasecmp(new_host, s_host) != 0 && s_key[0]) {
+    // The key was entered for the old address. Sent along to the new one it
+    // would reach a host nobody gave it to, as the Spoolman key never does.
+    new_key[0] = '\0';
+    key = new_key;
+    logSD("AMS source: new address, the key entered for the old one is dropped");
+  }
   memcpy(s_host, new_host, sizeof(s_host));
   rebuildBase();
   s_info = AmsSourceInfo{};   // belongs to the address just replaced
@@ -85,6 +93,12 @@ bool amsSourceSet(const char* host, const char* key) {
   logSDf("AMS source: %s, key %s", s_host[0] ? s_host : "off",
          s_key[0] ? "set" : "empty");
   return true;
+}
+
+bool amsSourceHostNeedsKey(const char* host) {
+  char clean[sizeof(s_host)];
+  if (!s_key[0] || !copyClean(clean, sizeof(clean), host) || !clean[0]) return false;
+  return strcasecmp(clean, s_host) != 0;
 }
 
 static void addKey(HTTPClient& http) {

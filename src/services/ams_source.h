@@ -48,8 +48,15 @@ bool        amsSourceHasKey();
 bool amsSourceConfigured();
 
 // Stores a new address, and a new key unless key is nullptr. An empty address
-// switches the source off. False when a value does not fit.
+// switches the source off. False when a value does not fit. The key belongs to
+// the address it was entered for: a changed address with key nullptr drops it,
+// so it is never sent to a host nobody entered it for.
 bool amsSourceSet(const char* host, const char* key);
+
+// Whether storing `host` without a new key would drop a stored key: a key is
+// stored and `host` is another, non-empty address. For a page to ask for the
+// key instead of saving.
+bool amsSourceHostNeedsKey(const char* host);
 
 // What the source said about itself, asked once per address on the first
 // printer list. Until it has answered, nothing is offered that needs a

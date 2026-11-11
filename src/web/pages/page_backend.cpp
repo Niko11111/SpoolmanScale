@@ -774,6 +774,12 @@ static void routes(WebServer &srv) {
     const bool new_key = body[nl + 1] == '1';
     String key = body.substring(nl + 2);
     key.trim();
+    // Same rule as the online cards: a key goes only to the address it was
+    // entered for, so a new address asks for it again instead of saving.
+    if (!new_key && amsSourceHostNeedsKey(host.c_str())) {
+      srv.send(400, "text/plain", T(STR_W_ONLINE_REKEY));
+      return;
+    }
     if (!backendApplyAmsSource(host.c_str(), new_key ? key.c_str() : nullptr)) {
       srv.send(400, "text/plain", T(STR_W_ERROR));
       return;
