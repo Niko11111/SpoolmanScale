@@ -301,8 +301,14 @@ void buildUI() {
   // Bounded so a longer translation can never run into the address on the
   // right. The longest string that lands here is STR_BOOTING at roughly
   // 245 px, so 292 leaves room without reaching the address slot.
+  //
+  // One line high as well: LVGL dots a LONG_DOT label only where its text is
+  // taller than the label (lv_label_refr_text). With the height left to the
+  // text, a longer message wrapped instead and ran in two lines into the
+  // 22 px bar.
   lv_label_set_long_mode(lbl_status, LV_LABEL_LONG_DOT);
   lv_obj_set_width(lbl_status, HDR_STATUS_W);
+  lv_obj_set_height(lbl_status, lv_font_get_line_height(&lv_font_montserrat_ext_14));
   tagSpoolViewAttach(lbl_status);
 
   // Optional address, left of the scan counter. Filled by updateHeaderStatus()
@@ -313,10 +319,12 @@ void buildUI() {
   lv_obj_set_style_text_font(lbl_hdr_ip, &lv_font_montserrat_ext_12, 0);
   // Placed by layoutHeaderChips(), which hangs it off the scan counter so a
   // growing count can never run into it.
-  // Bounded like lbl_status above it. A device name is user supplied, so
-  // unlike an IP address its width is not something to leave to chance.
+  // Bounded like lbl_status above it, one line high for the same reason. A
+  // device name is user supplied, so unlike an IP address its width is not
+  // something to leave to chance.
   lv_label_set_long_mode(lbl_hdr_ip, LV_LABEL_LONG_DOT);
   lv_obj_set_width(lbl_hdr_ip, HDR_IP_W);
+  lv_obj_set_height(lbl_hdr_ip, lv_font_get_line_height(&lv_font_montserrat_ext_12));
   // A fixed width makes the label a box, and text sits left in a box. Without
   // this the address would drift away from the scan counter instead of
   // staying flush against it, which is where it used to sit when the label
