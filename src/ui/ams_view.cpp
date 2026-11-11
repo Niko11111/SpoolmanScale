@@ -124,6 +124,9 @@ static bool s_fetch_pending = false;
 // Weights came in while the detail card stood over the grid. Drawn as soon
 // as the card is gone; without this they would wait for the next fetch.
 static bool s_weights_redraw = false;
+// A weights start was refused only because the task of the printer before was
+// still busy. Made up by the loop once the task is idle (startWeights()).
+static bool s_weights_owed = false;
 static bool s_close_pending = false;
 // The printers, fetched once and kept: their names are what the status line
 // shows, and asking again on every redraw would double the cost of a reload.
@@ -213,6 +216,7 @@ static void closeAmsView() {
   // The card sits on lv_scr_act(), not inside the page, so freeing the page
   // would leave it standing over whatever comes next.
   closeAmsDetailPopup();
+  s_weights_owed = false;   // nothing left to draw the grams on
   releaseScreen(&s_scr);
   s_body     = nullptr;
   s_status   = nullptr;
@@ -948,10 +952,15 @@ static PrinterActivity printerActivity(const char* st) {
   return PRINTER_OTHER;
 }
 
+static bool startWeights();   // defined behind applyWeights()
+
 // Fills the page. Blocks for the length of the request, so the screen is
 // drawn first and pumped, and the screen is checked again afterwards: the
 // user can have tapped back during those milliseconds.
 static void fetchAndDraw() {
+  // Every switch and every reload comes through here, so a start owed for the
+  // page as it was is void whatever way the printer was chosen.
+  s_weights_owed = false;
   if (!s_scr) return;
   setStatus(T(STR_AMSV_LOADING));
 
@@ -1087,7 +1096,7 @@ static void fetchAndDraw() {
   // printer's percentage, the weighed figure sits in the inventory, and
   // fetching it here would hold the first frame for a request per bay. So it
   // is asked for in the background and laid over the tiles when it arrives.
-  amsWeightsStart(s_printer_id, s_state);
+  startWeights();
 }
 
 // Takes what the weight fetch found into the state the grid draws from, and
@@ -1110,6 +1119,37 @@ static bool applyWeights(const AmsWeightsResult& r) {
     }
   }
   return changed;
+}
+
+// Takes a finished weights result: into the grid when it is the shown
+// printer's (applyWeights() ignores another's), and gives the slot back.
+static void collectWeights() {
+  if (amsWeightsState() != AWS_DONE) return;
+  if (s_scr && applyWeights(amsWeightsResult())) s_weights_redraw = true;
+  amsWeightsTake();
+}
+
+// Starts the weights for the state on screen. True when the task was started.
+// A quick printer switch ran fetchAndDraw() while the task of the printer
+// before was still running or its result uncollected (the loop collects after
+// the fetch branch, which returns first). amsWeightsStart() refused, nothing
+// asked again, and the new printer never got its grams. So a finished result is
+// collected first (dropped when it is another printer's), and a start refused
+// because the task is busy is owed: the loop makes it up once the task is idle
+// (handleAmsViewDeferredActions()). The other refusals (heap floor, nothing to
+// weigh, backend, drying batch) are not retried: they have their own reasons
+// and one log line, and a retry every pass would hold the loop. Only "busy" is
+// told apart, by asking before the call, so the signature of amsWeightsStart()
+// stays. test/test_ams_weights_owed.py holds this.
+static bool startWeights() {
+  collectWeights();
+  const bool busy = amsWeightsBusy();
+  if (amsWeightsStart(s_printer_id, s_state)) {
+    s_weights_owed = false;
+    return true;
+  }
+  s_weights_owed = busy;
+  return false;
 }
 
 // The unit's name, the way the unit header writes it: a name the user gave
@@ -1347,9 +1387,15 @@ void handleAmsViewDeferredActions() {
   // The weights that came in behind the first frame. Redrawn only with the
   // page really in front: rebuilding the tiles under an open detail card
   // would hold two sets of them in the pool at once for nothing.
-  if (amsWeightsState() == AWS_DONE) {
-    if (s_scr && applyWeights(amsWeightsResult())) s_weights_redraw = true;
-    amsWeightsTake();
+  collectWeights();
+  // The start a switch could not make because the task was busy (startWeights()),
+  // made up behind the fetch branch, so for a printer that is drawn. The flag is
+  // void on every fetch and when the page closes; the checks guard the same.
+  if (s_weights_owed && s_scr && s_state.valid && s_state.printer_id == s_printer_id &&
+      amsWeightsState() == AWS_IDLE) {
+    if (startWeights()) {
+      logSDf("AMSWEIGHTS: start for printer %d made up after a busy task", s_printer_id);
+    }
   }
   if (s_weights_redraw && !isAmsDetailPopupOpen()) {
     s_weights_redraw = false;
