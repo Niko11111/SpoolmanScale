@@ -11,6 +11,7 @@
 #include "hardware/sd_logger.h"
 #include "hardware/flash_log.h"
 #include "web/web_access.h"
+#include "web/pages/page_logs_live.h"
 #include "web/web_net_probe.h"
 #include "web/web_screenshot.h"
 #include "web/web_shell.h"
@@ -98,6 +99,8 @@ static String body() {
   h += T(STR_W_SESSION_REFRESH);
   h += F("</button><button id='slc' class='quiet'>");
   h += T(STR_W_SESSION_COPY);
+  h += F("</button><button id='slo' class='quiet'>");
+  h += T(STR_W_SESSION_OPEN);
   h += F("</button><span id='sls' class='note' style='margin:0'></span>"
          "</div></div>");
   h += screenshotCard();
@@ -179,6 +182,8 @@ static String body() {
          "function slWatch(){var e=document.getElementById('sl');if(!e)return;"
          "var c=document.getElementById('slc');"
          "if(c)c.addEventListener('click',slCopy);"
+         "var o=document.getElementById('slo');"
+         "if(o)o.addEventListener('click',function(){window.open('/log/live','_blank');});"
          "e.addEventListener('scroll',function(){"
          "if(slAuto){slAuto=false;return;}"
          "if(slFollow){slFollow=false;"
@@ -307,6 +312,7 @@ static String body() {
 }
 
 static void routes(WebServer &srv) {
+  logLiveRoutes(srv);
   netProbeRoutes(srv);
   screenshotRoutes(srv);
   // ── SD-Card Log endpoints ─────────────────────────────────

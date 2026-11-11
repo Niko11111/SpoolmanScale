@@ -4260,6 +4260,14 @@ const char* const STRINGS[][3] = {
     "Laisser" },  // STR_TW_BTN_LEAVE
   { "Anderer Tag auf dem Leser - nicht geschrieben", "A different tag is on the reader - not written",
     "Autre tag sur le lecteur - rien écrit" },  // STR_TW_ERR_OTHER_TAG_W
+  { "Auf eigener Seite öffnen",
+    "Open on its own page",
+    "Ouvrir dans une page à part" },  // STR_W_SESSION_OPEN
+  { "Live",             "Live",         "Direct" },  // STR_W_LIVE_FOLLOW
+  { "Angehalten",       "Paused",       "En pause" },  // STR_W_LIVE_PAUSE
+  { "Filter",           "Filter",       "Filtrer" },  // STR_W_LIVE_FILTER
+  { "Kleinere Schrift", "Smaller text", "Texte plus petit" },  // STR_W_LIVE_SMALLER
+  { "Größere Schrift",  "Larger text",  "Texte plus grand" },  // STR_W_LIVE_LARGER
 };
 
 StringID tagWriteResultString(uint8_t code) {
