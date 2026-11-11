@@ -282,7 +282,12 @@ static MifareWriteResult ownKeyInstead(const WriteRun& run) {
   const int woke = mifareWakeCard(uid, uid_str, &silent);
   if (woke && !silent && nfcReadMifareSector(job.sector, k, uid, blocks, NFC_KEY_A)) {
     const bool rec = job.is_own_record(blocks);
-    if (run.overwrite) return overwriteData(run, rec);
+    // Opens with the format's key but holds nothing it can read: a write cut
+    // short half way, old and new blocks mixed, which neither the printer nor
+    // the scale can use. A write asked for this very tag repairs it; a
+    // readable record stays protected unless an overwrite was confirmed.
+    const bool asked_for_it = run.expect && memcmp(run.expect, uid, 4) == 0;
+    if (run.overwrite || (!rec && asked_for_it)) return overwriteData(run, rec);
     logSDf("%s write: %s already opens with the format's key%s - not written",
            job.label, uid_str, rec ? " and holds a record" : "");
     mifareWakeCard(uid, uid_str, &silent);
@@ -321,10 +326,11 @@ static void padSector(const MifareWriteJob& job, const uint8_t uid_in[4], const 
   }
 }
 
-// The sector opened with the factory key: its data blocks must be empty.
-// Then the data, then the trailer that locks it to the new key - last, so a
-// failure before it leaves a tag that is still on the factory key and can
-// simply be written again. Finally read back the way the printer will.
+// The sector opened with the factory key: its data blocks must be empty, or
+// already hold this job's own blocks - a write of the same job cut short
+// before the trailer, which is why such a tag can simply be written again.
+// Then the data, then the trailer that locks it to the new key - last.
+// Finally read back the way the printer will.
 static MifareWriteResult writeBlank(const WriteRun& run) {
   const MifareWriteJob& job = run.job;
   const char* uid_str = run.uid_str;
@@ -336,7 +342,9 @@ static MifareWriteResult writeBlank(const WriteRun& run) {
   for (uint8_t b = 0; b < MIFARE_DATA_BLOCKS_MAX; b++) {
     uint8_t old[MIFARE_BLOCK_BYTES];
     const bool readable = nfcReadMifareBlock(first + b, old);
-    if (!readable || !blockIsBlank(old)) {
+    const bool resumable = readable && (blockIsBlank(old) ||
+                                        memcmp(old, job.data[b], MIFARE_BLOCK_BYTES) == 0);
+    if (!resumable) {
       logSDf("%s write: %s block %u %s - not written", job.label, uid_str,
              (unsigned)(first + b), readable ? "holds data" : "unreadable");
       mifareWakeCard(uid, uid_str, &silent);
