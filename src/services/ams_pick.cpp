@@ -165,7 +165,7 @@ static void onPicked(int ams_id, int tray_id) {
   int was_ams = -1, was_tray = -1;
   backendFindSpoolSlot(spool_id, printer_id, &was_ams, &was_tray, 6000);
 
-  const int code = serverReachNote(backendAssignAmsSlot(spool_id, printer_id, ams_id, tray_id, 8000), true);
+  const int code = amsReachNote(backendAssignAmsSlot(spool_id, printer_id, ams_id, tray_id, 8000), true);
   amsPickDropPending();
 
   if (code == 200) {

@@ -33,6 +33,12 @@ bool serverReachIsNetworkFailure(int code);
 // `user_action`: false only for the lookup a tag placement starts on its own.
 int serverReachNote(int code, bool user_action);
 
+// The same for an AMS call. With an AMS source beside Spoolman the code is
+// that source's own: a source that is down, offline (502/503) or read-only
+// (403) says nothing about Spoolman, so it is only logged and passed through.
+// FilaMan and BamBuddy keep the AMS themselves, so their codes count.
+int amsReachNote(int code, bool user_action);
+
 // From the health check when the server answers again: the next outage gets
 // its placement popup again.
 void serverReachRestored();

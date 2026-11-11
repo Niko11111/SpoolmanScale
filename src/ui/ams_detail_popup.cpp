@@ -1061,7 +1061,7 @@ void handleAmsDetailDeferredActions() {
   if (s_takeout_pending) {
     s_takeout_pending = false;
     loadingOverlayShow(T(STR_AMSD_SAVING));
-    const int code = serverReachNote(backendUnassignAmsSlot(spool_id, amsViewPrinterId(),
+    const int code = amsReachNote(backendUnassignAmsSlot(spool_id, amsViewPrinterId(),
                                        s_det.ams_id, s_det.tray_id, 8000), true);
     loadingOverlayHide();
     logSDf("AMSDETAIL: spool %d out of bay %d/%d, HTTP %d", spool_id,

@@ -5,6 +5,7 @@
 
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
+#include "services/backend_api.h"
 #include "services/server_refusal.h"
 
 static bool s_popup_pending        = false;
@@ -46,6 +47,12 @@ int serverReachNote(int code, bool user_action) {
     s_placement_popup_used = true;
   }
   s_popup_pending = true;
+  return code;
+}
+
+int amsReachNote(int code, bool user_action) {
+  if (!backendAmsIsSeparateServer()) return serverReachNote(code, user_action);
+  if (code != 200) logSDf("AMS source: HTTP %d, not counted against the backend", code);
   return code;
 }
 

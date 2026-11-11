@@ -967,7 +967,7 @@ static void fetchAndDraw() {
   }
 
   if (s_printers.count == 0) {
-    int code = serverReachNote(backendListPrinters(s_printers, 8000), true);
+    int code = amsReachNote(backendListPrinters(s_printers, 8000), true);
     if (!s_scr) return;
     if (code != 200) {
       setStatusFmt(STR_AMSV_ERR_HTTP, code);
@@ -989,7 +989,7 @@ static void fetchAndDraw() {
     s_printer_id = s_printers.p[s_printer_idx].id;
   }
 
-  int code = serverReachNote(backendGetAmsState(s_printer_id, s_state, 8000), true);
+  int code = amsReachNote(backendGetAmsState(s_printer_id, s_state, 8000), true);
   if (!s_scr) return;
   if (code != 200) {
     setStatusFmt(STR_AMSV_ERR_HTTP, code);

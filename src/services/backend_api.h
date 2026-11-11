@@ -471,6 +471,11 @@ bool backendCanAssignAmsSlot();
 // path yet and nobody has asked for one.
 bool backendCanTakeOutOfAms();
 
+// Whether the AMS calls below go to a server of their own: an AMS source
+// beside Spoolman. Its answers say nothing about the backend, so they stay out
+// of serverReachNote(): use amsReachNote() (services/server_reach.h).
+bool backendAmsIsSeparateServer();
+
 // The printers worth offering. Both backends answer with the active ones.
 int  backendListPrinters(AmsPrinterList& out, uint32_t timeout_ms = 8000);
 

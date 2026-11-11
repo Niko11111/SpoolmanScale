@@ -1492,6 +1492,10 @@ bool backendCanTakeOutOfAms() {
   return spoolmanHasAmsSource() && amsSourceCanUnassign();
 }
 
+bool backendAmsIsSeparateServer() {
+  return spoolmanHasAmsSource();
+}
+
 int backendListPrinters(AmsPrinterList& out, uint32_t timeout_ms) {
   HttpStallTime stall(__func__);   // the loop stands still for this call
   switch (backendMode()) {
