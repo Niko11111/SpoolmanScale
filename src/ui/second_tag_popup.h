@@ -24,6 +24,9 @@
 // finding the second chip and getting it onto the pad is not a two second job,
 // and the only cost of waiting is a popup nobody is looking at.
 #define SECOND_TAG_COUNTDOWN_MS  30000
+// How long the question still waits, once the countdown is over, for a second
+// tag whose read is running: five Bambu retries with their backoff fit in it.
+#define SECOND_TAG_READ_GRACE_MS 30000
 
 // Builds the overlay. Pure LVGL, no HTTP, safe to call from appLoop().
 //

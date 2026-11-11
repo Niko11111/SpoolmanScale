@@ -4263,6 +4263,9 @@ const char* const STRINGS[][3] = {
   { "Tag nicht sicher gelesen. Spule kurz anheben und genauso wieder hinstellen.",
     "Tag not read reliably. Lift the spool briefly and put it back the same way.",
     "Tag mal lu. Soulevez un instant la bobine et reposez-la pareil." },  // STR_TAG2_UNCLEAR
+  { "Tag wird noch gelesen. Spule bitte liegen lassen.",
+    "Tag is still being read. Please leave the spool in place.",
+    "Lecture du tag en cours. Laissez la bobine en place." },  // STR_TAG2_READING
 };
 
 StringID tagWriteResultString(uint8_t code) {

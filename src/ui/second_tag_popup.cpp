@@ -46,6 +46,17 @@ static char s_second_uid[CARD_UIDS_MAX] = "";
 static bool s_first_bambu = false;
 // The tag the "put it back" line was shown for, so it is said and logged once.
 static char s_unclear_uid[CARD_UIDS_MAX] = "";
+// When the clock ran out while a new tag was still being read, 0 otherwise.
+// The question then waits for that read instead of expiring under it - a
+// Bambu tag on a weak flange can take its retries well past the 30 s - but
+// only for SECOND_TAG_READ_GRACE_MS, so a read that never settles cannot hold
+// the popup open for good.
+static unsigned long s_grace_since_ms = 0;
+// How often the "put it back" prompt has given the clock a fresh start. A weak
+// chip that drops out and reads unclear again on its own would otherwise keep
+// the question standing for good, with nobody touching the spool.
+static uint8_t s_restarts = 0;
+#define TAG2_MAX_RESTARTS 2
 
 static unsigned long s_opened_ms    = 0;
 // What the blocking-time counter stood at when the popup opened, same
@@ -112,7 +123,7 @@ static void updateCountdownFill() {
 }
 
 static void updateCountdownLabel() {
-  if (!lbl_tag2_count) return;
+  if (!lbl_tag2_count || s_grace_since_ms) return;
   const int rem = remainingSeconds();
   if (rem == s_last_shown_s) return;   // no repaint between seconds
   s_last_shown_s = rem;
@@ -129,6 +140,8 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   s_close_pending = false;
   s_second_uid[0] = '\0';
   s_unclear_uid[0] = '\0';
+  s_grace_since_ms = 0;
+  s_restarts = 0;
   tagUidNormalize(first_uid, s_first_uid, sizeof(s_first_uid));
   // g_tag still holds the tag that was just linked.
   s_first_bambu   = tagIsBambu(g_tag.tray_uuid);
@@ -317,14 +330,45 @@ void handleSecondTagDeferredActions() {
         lv_label_set_text(lbl_tag2_prompt, T(STR_TAG2_UNCLEAR));
         lv_obj_set_style_text_color(lbl_tag2_prompt, lv_color_hex(UI_COL_WARN), 0);
       }
+      // Lifting and putting back takes time of its own, so the question asks
+      // with a full clock again rather than closing under the user's hands -
+      // TAG2_MAX_RESTARTS times per question at most.
+      if (s_restarts < TAG2_MAX_RESTARTS) {
+        s_restarts++;
+        s_opened_ms      = millis();
+        s_opened_stall   = httpStallTotalMs();
+        s_grace_since_ms = 0;
+      }
     } else if (verdict == TV_NONE && s_unclear_uid[0]) {
       // The tag left or is being read again: a second unclear read after
       // the spool was put back is said and logged again.
       s_unclear_uid[0] = '\0';
     } else if (remainingSeconds() == 0) {
-      s_close_pending = true;
-      setState(T2_EXPIRED);
-      logSDf("TAG2: no second tag for spool %d, question expired", s_spool_id);
+      // A new tag is on the reader but has not settled yet: its read is still
+      // running. Expiring now would throw away the answer that is on its way.
+      // g_tag.uid_str outlives the tag by up to a minute (clearTagDisplay),
+      // so only a tag that is on the reader now counts.
+      const bool reading = tag_present && verdict == TV_NONE && now[0] &&
+                           strcmp(now, s_first_uid) != 0;
+      if (reading && s_grace_since_ms == 0) {
+        s_grace_since_ms = millis();
+        if (s_grace_since_ms == 0) s_grace_since_ms = 1;   // 0 means "not started"
+        logSDf("TAG2: time is up, but '%s' is still being read - waiting up to %lu s for it",
+               g_tag.uid_str, (unsigned long)(SECOND_TAG_READ_GRACE_MS / 1000));
+        if (lbl_tag2_count) lv_label_set_text(lbl_tag2_count, "");   // no "Closes in 0 s"
+        if (lbl_tag2_prompt) {
+          lv_label_set_text(lbl_tag2_prompt, T(STR_TAG2_READING));
+          lv_obj_set_style_text_color(lbl_tag2_prompt, lv_color_hex(UI_COL_WARN), 0);
+        }
+      } else if (!reading || millis() - s_grace_since_ms >= SECOND_TAG_READ_GRACE_MS) {
+        s_close_pending = true;
+        setState(T2_EXPIRED);
+        if (s_grace_since_ms)
+          logSDf("TAG2: no second tag for spool %d, %s", s_spool_id,
+                 reading ? "its read did not settle in time" : "the tag left while it was read");
+        else
+          logSDf("TAG2: no second tag for spool %d, question expired", s_spool_id);
+      }
     }
   }
 
