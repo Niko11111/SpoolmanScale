@@ -105,9 +105,11 @@ static void runSpools() {
 
 static void runGhCheck() {
   s_res.image_size = 0;
+  s_res.image_sha[0] = '\0';
   s_res.ok = githubLatestTag(s_flag, s_res.tag, sizeof(s_res.tag),
                              s_res.pub, sizeof(s_res.pub),
-                             s_res.err, sizeof(s_res.err), &s_res.image_size);
+                             s_res.err, sizeof(s_res.err), &s_res.image_size,
+                             s_res.image_sha, sizeof(s_res.image_sha));
 }
 
 static void runGhNotes() {
@@ -192,6 +194,7 @@ bool webJobStart(WebJobKind kind, const char* arg, bool flag) {
   s_res.err[0] = '\0';
   s_res.tag[0] = '\0';
   s_res.pub[0] = '\0';
+  s_res.image_sha[0] = '\0';
   s_res.body   = "";
   s_arg[0] = '\0';
   if (arg) { strncpy(s_arg, arg, sizeof(s_arg) - 1); s_arg[sizeof(s_arg) - 1] = '\0'; }
