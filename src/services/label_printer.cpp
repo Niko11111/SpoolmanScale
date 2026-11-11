@@ -9,6 +9,7 @@
 #include "services/niimbot.h"
 #include "services/phomemo_m_series.h"
 #include "services/prefs_store.h"
+#include "services/tspl_printer.h"
 
 // The NVS keys. 15 characters at most, and never renamed: they sit in the
 // NVS of every device that ever picked a printer.
@@ -67,6 +68,18 @@ static const LabelPrinterProfile PROFILE_M221 = {
   203, LP_PROTO_PHOMEMO_M220
 };
 
+// PM241-BT and PM245-BT: a 4 x 6 inch shipping label printer, 203 dpi direct thermal, head
+// 108 mm (864 dots), stock 25 to 117 mm wide. It speaks TSPL, and unlike the
+// M-series it has no rolls held against a wall: the printer places the label
+// from SIZE, so the row is as wide as the label and there is no offset to set
+// (base width 0, as on the M110S). Reaches the scale over BLE only, the
+// Phomemo ff00 service. Printed on a PM245-BT (09.11.2026); the PM241-BT is
+// the same class but has not been tried, so the profile stays experimental.
+static const LabelPrinterProfile PROFILE_PM241 = {
+  LP_MODEL_PM241, "Phomemo", "PM241/245-BT", 40, 30, 25, 108, 10, 150, 0, 864, true, true,
+  203, LP_PROTO_TSPL
+};
+
 // NIIMBOT's 50 mm class: B1, B21, B21S and B21 C2B at 384 dots, the B203 at
 // 400, all 203 dpi. The printer says which it is and the driver pads the
 // row. Its standard roll is 50 x 30, of which the 48 mm head prints 48. The
@@ -104,6 +117,7 @@ static const LabelPrinterProfile PROFILE_NIIMBOT_D110 = {
 const LabelPrinterModel LABEL_PRINTER_MODELS[] = {
   LP_MODEL_M220, LP_MODEL_NIIMBOT_M2, LP_MODEL_M110, LP_MODEL_M110S, LP_MODEL_M100,
   LP_MODEL_NIIMBOT_B, LP_MODEL_NIIMBOT_D110, LP_MODEL_M120, LP_MODEL_M200, LP_MODEL_M221,
+  LP_MODEL_PM241,
 };
 const int LABEL_PRINTER_MODEL_COUNT = sizeof(LABEL_PRINTER_MODELS) / sizeof(LABEL_PRINTER_MODELS[0]);
 
@@ -160,6 +174,7 @@ const LabelPrinterProfile& labelPrinterProfile(LabelPrinterModel model) {
     case LP_MODEL_M120: return PROFILE_M120;
     case LP_MODEL_M200: return PROFILE_M200;
     case LP_MODEL_M221: return PROFILE_M221;
+    case LP_MODEL_PM241: return PROFILE_PM241;
     case LP_MODEL_NIIMBOT_B:  return PROFILE_NIIMBOT_B;
     case LP_MODEL_NIIMBOT_M2: return PROFILE_NIIMBOT_M2;
     case LP_MODEL_NIIMBOT_D110: return PROFILE_NIIMBOT_D110;
@@ -385,6 +400,8 @@ LabelPrintResult labelPrinterPrint(const LabelPrinterConfig& c, const LabelRaste
   if (!labelPrinterRasterFits(c.model, image, c.media_width_mm, c.media_length_mm))
     return LP_MEDIA_MISMATCH;
   if (p.protocol == LP_PROTO_NIIMBOT) return printNiimbot(p, c, image, progress);
+  if (p.protocol == LP_PROTO_TSPL)
+    return fromBle(tsplPrint(c.address, image, c.media_width_mm, c.media_length_mm, progress));
   const PhomemoModel pm = p.protocol == LP_PROTO_PHOMEMO_M220 ? PHOMEMO_M220 : PHOMEMO_M110;
   return fromBle(phomemoMSeriesPrint(pm, c.address, image, progress));
 }
