@@ -36,6 +36,25 @@ int main() {
   // Never more than a day, also when the number overflows on the way.
   assert(retryAfterSeconds("86401") == RETRY_AFTER_MAX_S);
   assert(retryAfterSeconds("99999999999999999999") == RETRY_AFTER_MAX_S);
+
+  // The backend itself: same host and same port, the scheme's port when none is named.
+  assert(sameServerAddress("http://192.168.4.100:7912", "192.168.4.100", 7912));
+  assert(sameServerAddress("http://spoolman.local", "spoolman.local", 80));
+  assert(sameServerAddress("https://dev.spooly.eu/api/spoolman", "dev.spooly.eu", 443));
+  assert(sameServerAddress("https://user:pw@host.lan:8443/x", "host.lan", 8443));
+  assert(sameServerAddress("http://Spoolman.Local:7912", "spoolman.local", 7912));
+  // A second service on the backend's machine answers for itself (OpenSpoolman
+  // on :8001 beside Spoolman on :7912), and so does a longer name around it.
+  assert(!sameServerAddress("http://192.168.4.100:7912", "192.168.4.100", 8001));
+  assert(!sameServerAddress("http://192.168.4.100:7912", "192.168.4.10", 7912));
+  assert(!sameServerAddress("http://10.0.0.15:7912", "10.0.0.1", 7912));
+  assert(!sameServerAddress("http://spoolman.local", "spoolman.local", 443));
+  assert(!sameServerAddress("https://api.github.com", "github.com", 443));
+  // Nothing to compare: never the backend.
+  assert(!sameServerAddress("", "192.168.4.100", 80));
+  assert(!sameServerAddress(nullptr, "192.168.4.100", 80));
+  assert(!sameServerAddress("http://192.168.4.100", nullptr, 80));
+  assert(!sameServerAddress("http://192.168.4.100", "", 80));
   return 0;
 }
 """

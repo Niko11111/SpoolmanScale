@@ -340,7 +340,7 @@ void BackendHttp::settle() {
 // 403 for its rate limit, which is no verdict on the key entered for the server.
 void BackendHttp::noteRefusal() {
   if (serverRefusalOf(_returnCode) == REFUSAL_NONE) return;
-  if (!strstr(backendBaseUrl(), _host.c_str())) return;
+  if (!sameServerAddress(backendBaseUrl(), _host.c_str(), _port)) return;
   serverRefusalRecord(_returnCode, Http::header("Retry-After").c_str());
 }
 
