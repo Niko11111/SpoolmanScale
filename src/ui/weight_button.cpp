@@ -9,7 +9,9 @@
 #include "app/id_spool.h"
 #include "hardware/sd_logger.h"
 #include "services/auto_weight_state.h"
+#include "services/backend_api.h"
 #include "services/prefs_store.h"
+#include "services/spoolman_actions.h"
 #include "lang.h"
 #include "theme.h"
 #include "ui_common.h"
@@ -129,6 +131,15 @@ void weightButtonIdle() {
 }
 
 WeightLook weightButtonLook() { return s_look; }
+
+void weightButtonAfterWrite(int code, float grams) {
+  if (backendWriteOk(code) || code == PATCH_WEIGHT_ASKING) {
+    weightButtonShow(WL_SENT, grams);
+    return;
+  }
+  logSDf("Auto-Weight: %.0f g not taken (HTTP %d), button back to idle", grams, code);
+  weightButtonIdle();
+}
 
 void weightButtonIdleIfWaiting() {
   if (s_look == WL_COUNTING || s_look == WL_NO_SPOOL) weightButtonIdle();

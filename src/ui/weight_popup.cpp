@@ -239,14 +239,10 @@ static void wpPrimaryClicked(lv_event_t *e) {
   } else {
     logSDf("UI: weight popup -> send %.0f g for spool %d (bag %s)", g, sm_id, s_bag_on ? "on" : "off");
     confirmQueueWeight(g, s_gross_g - bagG());
-    // Sent by hand: the automatic weighing must not send this spool again,
-    // and a button that said "check" says what happened instead. Only with
-    // the automatic on, which is what puts the button back once the spool
-    // comes off.
-    if (g_auto_weight) {
-      auto_weight_done = true;
-      weightButtonShow(WL_SENT, g);
-    }
+    // Sent by hand: the automatic weighing must not send this spool again.
+    // The button says what happened once the queued write has an answer
+    // (confirm_popup.cpp, CJ_WEIGHT), not before.
+    if (g_auto_weight) auto_weight_done = true;
   }
   closeWeightPopups();
 }

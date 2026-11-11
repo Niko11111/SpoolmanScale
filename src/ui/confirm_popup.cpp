@@ -22,6 +22,7 @@
 #include "app/id_spool.h"
 #include "spoolman_screen.h"
 #include "tare_entry.h"
+#include "weight_button.h"
 #include "weight_popup.h"
 #include "lang.h"
 #include "theme.h"
@@ -88,6 +89,7 @@ static int        s_tare_spool_id = 0;  // the spool the scope question is for
 static int        s_job_spool_id  = 0;  // ... carried with the parked write
 
 static void tareFollowUp();
+static void storeTareJob(ConfirmJob job);
 static void tareDropFollowUp();
 static void askFreeTag();
 // The question follows the archive a pass later: the popup that asked for
@@ -112,8 +114,9 @@ void handleConfirmPopupDeferredActions() {
     return;
   }
   switch (job) {
-    case CJ_WEIGHT:
-      patchSpoolmanWeight(s_job_value);
+    case CJ_WEIGHT: {
+      const int code = patchSpoolmanWeight(s_job_value);
+      if (g_auto_weight) weightButtonAfterWrite(code, s_job_value);
       // Remembered so the question can come up on removal. A yes there
       // reports the same weight once more, which is the only way to open the
       // window. The cap check cannot interfere: it is BamBuddy only and
@@ -121,12 +124,15 @@ void handleConfirmPopupDeferredActions() {
       if (amsAskActive()) amsNoteMeasurement(sm_id, s_job_value, s_job_gross, true);
       if (amsPickActive()) amsPickNote(sm_id, sm_filament_name);
       break;
+    }
     case CJ_INITIAL:
       patchInitialWeight(s_job_value);
       break;
-    case CJ_TARE_SPOOL:    patchSpoolWeight(s_job_value);         tareFollowUp(); break;
-    case CJ_TARE_FILAMENT: patchFilamentSpoolWeight(s_job_value); tareFollowUp(); break;
-    case CJ_TARE_VENDOR:   patchVendorSpoolWeight(s_job_value);   tareFollowUp(); break;
+    case CJ_TARE_SPOOL:
+    case CJ_TARE_FILAMENT:
+    case CJ_TARE_VENDOR:
+      storeTareJob(job);
+      break;
     case CJ_ARCHIVE:
       if (patchArchiveSpool()) s_ask_free_tag_pending = true;
       break;
@@ -208,6 +214,28 @@ static void tareFollowUp() {
 
 static void tareDropFollowUp() {
   s_tare_then_new = false;
+}
+
+// A new empty weight for the spool on the pad makes the automatic weighing
+// before it stale: computed against the old one, or refused for want of one
+// (Spoolman 0.27.1 answers 409, and the card that asks for the empty weight
+// leads here). With the automatic on, the spool is weighed again where it lies.
+static void reweighAfterTare(float tare_before) {
+  if (!g_auto_weight || sm_spool_weight == tare_before) return;
+  auto_weight_done = false;
+  auto_weight_stable_ms = 0;
+  weightButtonIdle();
+  logSDf("Auto-Weight: empty weight %.0f g stored for spool %d, weighing again",
+         sm_spool_weight, sm_id);
+}
+
+static void storeTareJob(ConfirmJob job) {
+  const float before = sm_spool_weight;
+  if (job == CJ_TARE_SPOOL)         patchSpoolWeight(s_job_value);
+  else if (job == CJ_TARE_FILAMENT) patchFilamentSpoolWeight(s_job_value);
+  else                              patchVendorSpoolWeight(s_job_value);
+  tareFollowUp();
+  reweighAfterTare(before);
 }
 
 // Whether New spool has to derive the tare from this reading because nothing

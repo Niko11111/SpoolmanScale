@@ -273,13 +273,13 @@ static void autoWeightSettled(float gross) {
   if (unchanged) {
     logSDf("Auto-Weight: spool %d unchanged at %.0f g - not sent", sm_id, netto);
     weightButtonShow(WL_UNCHANGED, netto);
-  } else {
-    weightButtonShow(WL_SENT, netto);
-    patchSpoolmanWeight(netto);
   }
+  // The button says "sent" only once the server has the weight.
+  const int code = unchanged ? 0 : patchSpoolmanWeight(netto);
+  if (!unchanged) weightButtonAfterWrite(code, netto);
   // Remembered either way, so a yes on removal can still open the window;
-  // an unchanged value has not gone out, and a yes is what sends it then.
-  if (amsAskActive()) amsNoteMeasurement(sm_id, netto, gross, !unchanged);
+  // a value that has not gone out (unchanged, or refused) is sent by that yes.
+  if (amsAskActive()) amsNoteMeasurement(sm_id, netto, gross, !unchanged && backendWriteOk(code));
   if (amsPickActive()) amsPickNote(sm_id, sm_filament_name);
 }
 

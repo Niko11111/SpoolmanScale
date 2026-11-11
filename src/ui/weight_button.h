@@ -35,6 +35,12 @@ void weightButtonIdle();
 
 WeightLook weightButtonLook();
 
+// After a weight write: "sent" only once the server took it (or BamBuddy's
+// label question is up, whose buttons write it). A refusal or a failed
+// request puts the idle look back, so the button never claims a weight the
+// server does not have. `code` is what patchSpoolmanWeight() returned.
+void weightButtonAfterWrite(int code, float grams);
+
 // Back to the idle look from one that only lasts while the spool lies still
 // (WL_COUNTING, WL_NO_SPOOL): the weight moved or weighing is held off.
 void weightButtonIdleIfWaiting();
