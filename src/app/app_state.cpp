@@ -207,7 +207,6 @@ lv_obj_t *lbl_temp;
 lv_obj_t *lbl_detail;
 lv_obj_t *lbl_date;
 lv_obj_t *lbl_spoolman_id;
-lv_obj_t *lbl_scan_count;
 lv_obj_t *lbl_keys;
 lv_obj_t *lbl_raw_info;
 
@@ -228,7 +227,6 @@ lv_obj_t *lbl_hdr_wifi;
 lv_obj_t *lbl_hdr_bt = nullptr;
 lv_obj_t *lbl_hdr_nfc;
 lv_obj_t *lbl_hdr_scl = nullptr;
-lv_obj_t *lbl_hdr_scans;
 lv_obj_t *lbl_hdr_ip = nullptr;
 lv_obj_t *lbl_hdr_sm = nullptr;
 lv_obj_t *lbl_hdr_sd = nullptr;

@@ -56,10 +56,12 @@ static void buildBanner() {
   lv_obj_set_style_text_color(banner_lbl, lv_color_hex(UI_COL_ALERT_TEXT), 0);
   lv_obj_set_style_text_font(banner_lbl, &lv_font_montserrat_ext_14, 0);
   lv_obj_align(banner_lbl, LV_ALIGN_LEFT_MID, 8, 0);
-  // Bounded like every other label in this row. A long translation has to run
-  // out of room rather than off the panel.
+  // Bounded like every other label in this row, one line high: LVGL dots a
+  // label only where its text is taller than the label. A long translation
+  // has to run out of room rather than off the panel or into a second line.
   lv_label_set_long_mode(banner_lbl, LV_LABEL_LONG_DOT);
   lv_obj_set_width(banner_lbl, 464);
+  lv_obj_set_height(banner_lbl, lv_font_get_line_height(&lv_font_montserrat_ext_14));
 }
 
 void updateDiagBanner() {

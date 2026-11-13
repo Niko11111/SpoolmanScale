@@ -250,7 +250,6 @@ extern lv_obj_t *lbl_temp;
 extern lv_obj_t *lbl_detail;
 extern lv_obj_t *lbl_date;
 extern lv_obj_t *lbl_spoolman_id;
-extern lv_obj_t *lbl_scan_count;
 extern lv_obj_t *lbl_keys;
 extern lv_obj_t *lbl_raw_info;
 extern lv_obj_t *lbl_spoolman_weight;
@@ -273,7 +272,6 @@ extern lv_obj_t *lbl_hdr_wifi;
 extern lv_obj_t *lbl_hdr_bt;
 extern lv_obj_t *lbl_hdr_nfc;
 extern lv_obj_t *lbl_hdr_scl;
-extern lv_obj_t *lbl_hdr_scans;
 extern lv_obj_t *lbl_hdr_ip;    // status bar address, left of the scan counter
 extern lv_obj_t *lbl_hdr_sm;
 extern lv_obj_t *lbl_hdr_sd;   // header SD indicator, leftmost chip

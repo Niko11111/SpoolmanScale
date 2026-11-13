@@ -37,6 +37,7 @@
 #include "ui/settings_screen.h"
 #include "ui/spool_flow.h"
 #include "ui/spool_id_pad.h"
+#include "ui/status_scroll.h"
 #include "ui/copy_tagless.h"
 #include "ui/theme.h"
 #include "ui_common.h"
@@ -271,7 +272,7 @@ void buildUI() {
   lv_obj_set_style_text_font(lbl_hdr_sm, &lv_font_montserrat_ext_12, 0);
 
   // ── ZONE 2: Status bar y=26..47 (22px) ──────────────────
-  // dot + status text centered | #scan_count right
+  // dot + status text left | optional address right
   // Fix 9: status bar same color as background - no odd contrast stripe
   lv_obj_t *status_bar = lv_obj_create(lv_scr_act());
   lv_obj_set_size(status_bar, 480, 22);
@@ -297,41 +298,35 @@ void buildUI() {
   lv_label_set_text(lbl_status, T(STR_BOOTING));
   lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_STATUS_BLUE), 0);
   lv_obj_set_style_text_font(lbl_status, &lv_font_montserrat_ext_14, 0);
-  lv_obj_align(lbl_status, LV_ALIGN_LEFT_MID, 24, 0);
-  // Bounded so a longer translation can never run into the address on the
-  // right. The longest string that lands here is STR_BOOTING at roughly
-  // 245 px, so 292 leaves room without reaching the address slot.
-  lv_label_set_long_mode(lbl_status, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(lbl_status, HDR_STATUS_W);
+  lv_obj_align(lbl_status, LV_ALIGN_LEFT_MID, HDR_STATUS_X, 0);
+  // Bounded so it can never run into the address on the right; the address
+  // narrows it while it is shown (HDR_STATUS_W_BESIDE). One line high: LVGL
+  // dots a label only where its text is taller than the label, and with the
+  // height left to the text a long message wrapped into the 22 px bar instead
+  // (reported in #87). A message still too long scrolls (status_scroll.h).
+  lv_obj_set_width(lbl_status, HDR_STATUS_W_FULL);
+  lv_obj_set_height(lbl_status, lv_font_get_line_height(&lv_font_montserrat_ext_14));
+  statusScrollAttach(lbl_status);
   tagSpoolViewAttach(lbl_status);
 
-  // Optional address, left of the scan counter. Filled by updateHeaderStatus()
+  // Optional address at the right end of the bar. Filled by updateHeaderStatus()
   // according to g_ip_bar_mode, hidden while the mode is off.
   lbl_hdr_ip = lv_label_create(status_bar);
   lv_label_set_text(lbl_hdr_ip, "");
   lv_obj_set_style_text_color(lbl_hdr_ip, lv_color_hex(UI_COL_INK_FAINT), 0);
   lv_obj_set_style_text_font(lbl_hdr_ip, &lv_font_montserrat_ext_12, 0);
-  // Placed by layoutHeaderChips(), which hangs it off the scan counter so a
-  // growing count can never run into it.
-  // Bounded like lbl_status above it. A device name is user supplied, so
-  // unlike an IP address its width is not something to leave to chance.
+  // Placed by layoutHeaderChips(), flush with the right end of the row.
+  // Bounded and one line high like lbl_status above it. A device name is user
+  // supplied, so unlike an IP address its width is not something to leave to
+  // chance.
   lv_label_set_long_mode(lbl_hdr_ip, LV_LABEL_LONG_DOT);
   lv_obj_set_width(lbl_hdr_ip, HDR_IP_W);
+  lv_obj_set_height(lbl_hdr_ip, lv_font_get_line_height(&lv_font_montserrat_ext_12));
   // A fixed width makes the label a box, and text sits left in a box. Without
-  // this the address would drift away from the scan counter instead of
-  // staying flush against it, which is where it used to sit when the label
-  // still sized itself to its text.
+  // this the address would drift away from the right edge instead of staying
+  // flush with it.
   lv_obj_set_style_text_align(lbl_hdr_ip, LV_TEXT_ALIGN_RIGHT, 0);
   lv_obj_add_flag(lbl_hdr_ip, LV_OBJ_FLAG_HIDDEN);
-
-  // Scan counter: right side of status bar
-  lbl_hdr_scans = lv_label_create(status_bar);
-  lv_label_set_text(lbl_hdr_scans, "#0");
-  lv_obj_set_style_text_color(lbl_hdr_scans, lv_color_hex(UI_COL_INK_FAINT), 0);
-  lv_obj_set_style_text_font(lbl_hdr_scans, &lv_font_montserrat_ext_12, 0);
-  lv_obj_align(lbl_hdr_scans, LV_ALIGN_RIGHT_MID, -8, 0);
-
-  lbl_scan_count = lbl_hdr_scans;
 
   // Thin separator line
   lv_obj_t *sep1 = lv_obj_create(lv_scr_act());

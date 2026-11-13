@@ -18,18 +18,15 @@
 
 // 192.168.4.100:7913 needs about 113 px in font 12 and the address label is
 // 94 wide, so the port mode gets the room it needs and the status line to its
-// left gives it up - more again when the address carries "https://". Every
-// other mode leaves both as they were.
+// left gives it up - more again when the address carries "https://".
 static void sizeHeaderAddress(const char* text) {
-  int ip_w     = HDR_IP_W;
-  int status_w = HDR_STATUS_W;
+  int ip_w = HDR_IP_W;
   if (g_ip_bar_mode == IP_BAR_BACKEND_PORT) {
     const bool https = (strncmp(text, "https://", 8) == 0);
-    ip_w     = https ? HDR_IP_W_HTTPS     : HDR_IP_W_PORT;
-    status_w = https ? HDR_STATUS_W_HTTPS : HDR_STATUS_W_NARROW;
+    ip_w = https ? HDR_IP_W_HTTPS : HDR_IP_W_PORT;
   }
   lv_obj_set_width(lbl_hdr_ip, ip_w);
-  if (lbl_status) lv_obj_set_width(lbl_status, status_w);
+  if (lbl_status) lv_obj_set_width(lbl_status, HDR_STATUS_W_BESIDE(ip_w));
 }
 
 static lv_color_t wifiColor() {
@@ -71,10 +68,9 @@ void layoutHeaderChips() {
     prev = chain[i];
   }
 
-  // The address follows the scan counter for the same reason: that counter
-  // grows a digit at a time and a fixed offset would eventually collide.
-  if (lbl_hdr_ip && lbl_hdr_scans)
-    lv_obj_align_to(lbl_hdr_ip, lbl_hdr_scans, LV_ALIGN_OUT_LEFT_MID, -HDR_CHIP_GAP, 0);
+  // The address ends where the row ends; the status text left of it takes the
+  // rest (HDR_STATUS_W_BESIDE).
+  if (lbl_hdr_ip) lv_obj_align(lbl_hdr_ip, LV_ALIGN_RIGHT_MID, -HDR_ROW_MARGIN, 0);
 }
 
 void updateHeaderStatus() {
@@ -126,12 +122,6 @@ void updateHeaderStatus() {
     lv_label_set_text(lbl_sm_cap, cap_buf);
   }
 
-  if (lbl_hdr_scans) {
-    char buf[12];
-    snprintf(buf, sizeof(buf), "#%d", scan_count);
-    lv_label_set_text(lbl_hdr_scans, buf);
-  }
-
   // Status bar address. Device mode needs a live link to mean anything, but
   // the backend address stays correct while offline - that something is wrong
   // is already said by the red SPM/FLM above it.
@@ -181,7 +171,7 @@ void updateHeaderStatus() {
       lv_obj_clear_flag(lbl_hdr_ip, LV_OBJ_FLAG_HIDDEN);
     } else {
       lv_obj_add_flag(lbl_hdr_ip, LV_OBJ_FLAG_HIDDEN);
-      if (lbl_status) lv_obj_set_width(lbl_status, HDR_STATUS_W);
+      if (lbl_status) lv_obj_set_width(lbl_status, HDR_STATUS_W_FULL);
     }
   }
 

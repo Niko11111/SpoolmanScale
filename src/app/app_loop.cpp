@@ -143,6 +143,7 @@
 #include "ui/theme.h"
 #include "ui/unknown_spool_popup.h"
 #include "ui/spool_id_pad.h"
+#include "ui/status_scroll.h"
 #include "app/id_spool.h"
 #include "ui/status_clear.h"
 
@@ -1964,6 +1965,8 @@ void appLoop() {
   // pass where the finding has not changed.
   diagnosticsTick();
   updateDiagBanner();
+  // A status message too long for its line scrolls now and then (status_scroll.h).
+  statusScrollTick();
 
   // ============================================================
   //  NFC SCAN LOGIC (0.4.21)
