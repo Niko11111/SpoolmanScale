@@ -24,6 +24,7 @@
 #include "ui/printer_screen.h"
 #include "web/web_access.h"
 #include "web/web_printer_cards.h"
+#include "web/web_printer_select.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
 // parameter, so lang.h has to come after anything that pulls it in.
@@ -166,7 +167,8 @@ static void recommendRow(String& h) {
   }
 }
 
-// Under the models: more to come, and the one limit no driver can lift. The
+// Under the models: more to come, the one limit no driver can lift, and the
+// wish list for a printer or size that is missing. The
 // scale's ESP32-S3 has no Classic Bluetooth radio, so a printer that only
 // speaks Classic (every Brother P-touch) can never be among the cards.
 static void supportedHint(String& h) {
@@ -178,7 +180,9 @@ static void supportedHint(String& h) {
   h += webPrinterDocsUrl();
   h += F("#printer-needs' target='_blank' rel='noopener'>");
   h += T(STR_W_P_NEEDS_LINK);
-  h += F(" &rarr;</a></span>");
+  h += F(" &rarr;</a> &middot; ");
+  webPrinterWishLink(h);
+  h += F("</span>");
 }
 
 // The master switch as a bar across the page. While the switch is on and the

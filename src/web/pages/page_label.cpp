@@ -354,7 +354,10 @@ static void printerRows(String& h, const LabelPrinterConfig& c) {
   h += T(STR_PRN_MEDIA);
   h += F("</label><div class='inrow'><select id='lps'>");
   webPrinterMediaOptions(h, c);
-  h += F("</select><span class='hint' id='lme'></span></div><span class='msg' id='lps-s'></span></div>");
+  h += F("</select><span class='hint' id='lme'></span></div><span class='msg' id='lps-s'></span>"
+         "<span class='hint lb-wish'>");
+  webPrinterWishLink(h);
+  h += F("</span></div>");
 }
 
 // The right card: the label as the scale draws it, what it was drawn for,
@@ -418,6 +421,11 @@ static void styles(String& h) {
          ".lb-pick{margin-top:12px}.lb-pick select{flex:1;min-width:0}"
          // One column on a phone: the preview first, so a switch shows its
          // effect without scrolling.
+         ".lb-wish{display:block;margin-top:6px}.lb-wish a{color:var(--accent)}"
+         // Side by side, the preview stays in sight while the switches on the
+         // left scroll by; a card taller than the window scrolls in itself.
+         "@media(min-width:701px){.lb-prev{position:sticky;top:16px;align-self:start;"
+         "max-height:calc(100vh - 32px);overflow-y:auto}}"
          "@media(max-width:700px){.lb-prev{order:-1}}"
          "@media(max-width:420px){.lb-sw{grid-template-columns:1fr}}"
          "</style>");

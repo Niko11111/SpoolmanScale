@@ -74,6 +74,11 @@
 #define FLASHER_URL "https://niko11111.github.io/SpoolmanScale/"
 // The manual. A German page lives under de/, the English one at the root.
 #define DOCS_URL "https://niko11111.github.io/SpoolmanScale-Docs/"
+// The project's website. Its label printer wish list takes ?fw= with the
+// firmware version and keeps it with the wish.
+#define WEBSITE_URL "https://spoolmanscale.com/"
+#define WEBSITE_WISH_PATH_DE "de/etikettendrucker/"
+#define WEBSITE_WISH_PATH_EN "label-printer/"
 
 // The two chips on I2C_EXT. Named because a bare 0x2A stood in three files and
 // meant nothing to anyone reading a bus scan.

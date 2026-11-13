@@ -1,5 +1,7 @@
 #include "web/web_printer_select.h"
 
+#include "app_config.h"
+
 // Last on purpose: T() is a macro, see the pages.
 #include "lang.h"
 
@@ -49,4 +51,12 @@ void webPrinterMediaOptions(String& h, const LabelPrinterConfig& c) {
     h += F("<option value='' selected disabled>");
     h += String(c.media_width_mm); h += F(" x "); h += String(c.media_length_mm); h += F(" mm</option>");
   }
+}
+
+void webPrinterWishLink(String& h) {
+  h += F("<a href='" WEBSITE_URL);
+  h += g_lang == LANG_DE ? F(WEBSITE_WISH_PATH_DE) : F(WEBSITE_WISH_PATH_EN);
+  h += F("?fw=" FW_VERSION "' target='_blank' rel='noopener'>");
+  h += T(STR_W_P_WISH_LINK);
+  h += F(" &rarr;</a>");
 }

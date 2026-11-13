@@ -4298,6 +4298,9 @@ const char* const STRINGS[][3] = {
   { "Kleinere Schrift", "Smaller text",      "Texte plus petit" },  // STR_W_LIVE_SMALLER
   { "Größere Schrift",  "Larger text",       "Texte plus grand" },  // STR_W_LIVE_LARGER
   { "Vollbild beenden", "Leave full screen", "Quitter le plein écran" },  // STR_W_SESSION_FULL_EXIT
+  // The website's wish list, linked on the printer and the label page
+  { "Drucker oder Etikettengröße fehlt? Hier wünschen", "Printer or label size missing? Request it",
+    "Imprimante ou format d'étiquette manquant ? Demandez-le" },  // STR_W_P_WISH_LINK
 };
 
 StringID tagWriteResultString(uint8_t code) {

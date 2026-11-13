@@ -15,3 +15,7 @@ void webPrinterMediaOptions(String& h, const LabelPrinterConfig& c);
 // The models that take a size, space separated, for a data-fit attribute: a
 // page's script hides what the picked model cannot print on.
 void webPrinterFitList(String& h, uint16_t width_mm, uint16_t length_mm);
+// The website's wish list for a printer or label size the scale lacks, as a
+// link in the page's language (French readers get the English form). It
+// carries only the firmware version: the model picked is not the one missing.
+void webPrinterWishLink(String& h);
