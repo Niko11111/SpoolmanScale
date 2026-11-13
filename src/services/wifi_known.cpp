@@ -21,6 +21,9 @@ static WifiKnownList s_list = {};
 static char s_pref_ssid[WIFI_KNOWN_SSID_BYTES] = "";
 static char s_pref_pass[WIFI_KNOWN_PASS_BYTES] = "";
 static uint32_t s_pref_gen = 0;
+// Forgotten while the scale is on it: not remembered again on the next pass,
+// only once the user chooses it again.
+static char s_forgotten[WIFI_KNOWN_SSID_BYTES] = "";
 
 static void keyOf(char* out, char kind, int i) {
   snprintf(out, WK_KEY_BYTES, "wk_%c%d", kind, i);
@@ -72,6 +75,7 @@ void wifiKnownSetPreferred(const char* ssid, const char* pass) {
   copyStr(s_pref_ssid, sizeof(s_pref_ssid), ssid);
   copyStr(s_pref_pass, sizeof(s_pref_pass), pass);
   s_pref_gen++;
+  s_forgotten[0] = '\0';
 }
 
 const char* wifiPreferredSsid() { return s_pref_ssid; }
@@ -79,7 +83,7 @@ const char* wifiPreferredPass() { return s_pref_pass; }
 uint32_t wifiPreferredGeneration() { return s_pref_gen; }
 
 void wifiKnownNoteConnected() {
-  if (!cfg_wifi_ssid[0]) return;
+  if (!cfg_wifi_ssid[0] || strcmp(s_forgotten, cfg_wifi_ssid) == 0) return;
   if (s_list.n > 0 && strcmp(s_list.e[0].ssid, cfg_wifi_ssid) == 0 &&
       strcmp(s_list.e[0].pass, cfg_wifi_password) == 0) {
     return;
@@ -102,6 +106,7 @@ const WifiKnownList& wifiKnownList() { return s_list; }
 
 bool wifiKnownForgetSsid(const char* ssid) {
   if (!ssid || !wifiKnownForget(s_list, ssid)) return false;
+  copyStr(s_forgotten, sizeof(s_forgotten), ssid);
   saveList();
   logSDf("WiFi: %s forgotten, %d known network(s)", ssid, s_list.n);
   return true;

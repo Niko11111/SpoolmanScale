@@ -4301,6 +4301,27 @@ const char* const STRINGS[][3] = {
   // The website's wish list, linked on the printer and the label page
   { "Drucker oder Etikettengröße fehlt? Hier wünschen", "Printer or label size missing? Request it",
     "Imprimante ou format d'étiquette manquant ? Demandez-le" },  // STR_W_P_WISH_LINK
+  // Remembered WiFi networks: the WiFi list, the saved networks screen and its popup
+  { "gespeichert", "saved",
+    "connu" },  // STR_WIFI_KNOWN_WORD
+  { "Gespeicherte Netze", "Saved networks",
+    "Réseaux connus" },  // STR_WIFI_SAVED_TITLE
+  { "%d gespeichert", "%d saved",
+    "%d connu(s)" },  // STR_WIFI_SAVED_COUNT
+  { "Verbunden, bevorzugt", "Connected, preferred",
+    "Connecté, préféré" },  // STR_WIFI_ST_CONN_PREF
+  { "Bevorzugt", "Preferred",
+    "Préféré" },  // STR_WIFI_ST_PREFERRED
+  { "Gespeichert", "Saved",
+    "Connu" },  // STR_WIFI_ST_SAVED
+  { "Jetzt verbinden", "Connect now",
+    "Se connecter" },  // STR_WIFI_CONNECT_NOW
+  { "Vergessen", "Forget",
+    "Oublier" },  // STR_WIFI_FORGET
+  { "Zum Vergessen erst ein anderes Netz wählen.", "To forget it, choose another network first.",
+    "Pour l'oublier, choisissez un autre réseau." },  // STR_WIFI_PREF_KEEP
+  { "Noch kein Netz gespeichert.", "No network saved yet.",
+    "Aucun réseau connu." },  // STR_WIFI_SAVED_NONE
 };
 
 StringID tagWriteResultString(uint8_t code) {

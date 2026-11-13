@@ -30,6 +30,7 @@
 #include "ui/spoolman_screen.h"
 #include "ui/wifi_info.h"
 #include "ui/wifi_menu_screen.h"
+#include "ui/wifi_saved_screen.h"
 #include "ui/wifi_setup_screen.h"
 #include "ui/wifi_portal_screen.h"
 #include "ui/more_info_screen.h"
@@ -89,6 +90,7 @@ void hideAllOverlays() {
   if (scr_tag_field)     lv_obj_add_flag(scr_tag_field, LV_OBJ_FLAG_HIDDEN);
   if (scr_wifi)        lv_obj_add_flag(scr_wifi,        LV_OBJ_FLAG_HIDDEN);
   if (scr_wifi_menu)   lv_obj_add_flag(scr_wifi_menu,   LV_OBJ_FLAG_HIDDEN);
+  hideWifiSavedScreen();
   if (scr_bluetooth)   lv_obj_add_flag(scr_bluetooth,   LV_OBJ_FLAG_HIDDEN);
   if (scr_ble_devices) lv_obj_add_flag(scr_ble_devices, LV_OBJ_FLAG_HIDDEN);
   if (scr_printer)     lv_obj_add_flag(scr_printer,     LV_OBJ_FLAG_HIDDEN);

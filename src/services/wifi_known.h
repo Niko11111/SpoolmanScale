@@ -30,6 +30,8 @@ uint32_t wifiPreferredGeneration();
 void wifiKnownNoteConnected();
 
 const WifiKnownList& wifiKnownList();
-// True when the network was in the list. The preferred network can be
-// forgotten too; it stays preferred until another is chosen.
+// True when the network was in the list. A network the scale is on stays
+// out of it until the user chooses it again. The preferred network can be
+// forgotten too; it stays preferred until another is chosen, which is why
+// the saved networks screen does not offer it.
 bool wifiKnownForgetSsid(const char* ssid);

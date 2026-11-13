@@ -147,6 +147,7 @@
 #include "app/id_spool.h"
 #include "ui/status_clear.h"
 #include "app/wifi_fallback.h"
+#include "ui/wifi_saved_screen.h"
 
 namespace {
 constexpr unsigned long NO_TAG_CLEAR_MS = 60000;
@@ -793,6 +794,7 @@ void appLoop() {
   // connect in the same pass.
   handleWifiPortalDeferredActions();
   handleWifiSetupDeferredActions();
+  wifiSavedScreenTick();
   handleBluetoothDeferredActions();
   handleBleDevicesDeferredActions();
   handlePrinterDeferredActions();
