@@ -34,6 +34,10 @@ static constexpr unsigned long PUT_DOWN_SETTLE_MS = 700;
 static constexpr int           BLANK_ASK_AGAIN    = 2;
 static constexpr int           PROBE_READ_TRIES   = 2;
 
+// The tag a write was last verified on, until the scan has read it again.
+static uint8_t s_reread_uid[4];
+static bool    s_reread_armed = false;
+
 static uint8_t firstBlock(uint8_t sector)   { return sector * BLOCKS_PER_SECTOR; }
 static uint8_t trailerBlock(uint8_t sector) { return sector * BLOCKS_PER_SECTOR + 3; }
 
@@ -212,8 +216,16 @@ static MifareWriteResult verifyWritten(const WriteRun& run, const uint8_t key[6]
     return MIFARE_WRITE_VERIFY_FAILED;
   }
   tagFamilySet(uid, job.family);
+  memcpy(s_reread_uid, uid, 4);
+  s_reread_armed = true;
   logSDf("%s write: %s written and verified", job.label, uid_str);
   return MIFARE_WRITE_OK;
+}
+
+bool mifareTakeReread(const uint8_t uid[4]) {
+  if (!s_reread_armed || memcmp(uid, s_reread_uid, 4) != 0) return false;
+  s_reread_armed = false;
+  return true;
 }
 
 // New data blocks on a tag that already opens with the format's key and

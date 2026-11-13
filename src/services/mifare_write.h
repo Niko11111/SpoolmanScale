@@ -78,6 +78,12 @@ typedef void (*MifareWaitFn)(int phase);
 MifareWriteResult mifareWrite(const MifareWriteJob& job, uint8_t uid_out[4],
                               const uint8_t* expect, MifareWaitFn wait, bool overwrite);
 
+// True once for the tag a write was just verified on: the scan has to read it
+// again rather than keep the record it decoded before the write. A tag put
+// back within seconds counts as the same placement and is not read again, so
+// the screen showed the old colour after a CFS write (12.11.2026).
+bool mifareTakeReread(const uint8_t uid[4]);
+
 // Gets a card back that a refused key has left unreachable. Returns how it
 // answered: 1 = plain wake, 2 = after the reader released its target,
 // 3..4 = after one or two RF field cycles, 0 = not at all. *reader_silent is
