@@ -47,8 +47,7 @@ static bool    s_held_valid = false;
 static uint8_t firstBlock(uint8_t sector)   { return sector * BLOCKS_PER_SECTOR; }
 static uint8_t trailerBlock(uint8_t sector) { return sector * BLOCKS_PER_SECTOR + 3; }
 
-// A data block nobody has written: all zeros, all FF, or all spaces.
-static bool blockIsBlank(const uint8_t b[MIFARE_BLOCK_BYTES]) {
+bool mifareBlockIsBlank(const uint8_t b[MIFARE_BLOCK_BYTES]) {
   const uint8_t first = b[0];
   if (first != 0x00 && first != 0xFF && first != 0x20) return false;
   for (int i = 1; i < MIFARE_BLOCK_BYTES; i++) if (b[i] != first) return false;
@@ -193,6 +192,17 @@ static bool writeDataBlocks(const WriteRun& run, int* refused_block) {
   return true;
 }
 
+// What the tag is once the job is on it. Still on the factory key - an erase,
+// or a job without a trailer - it is no tag of the format: blank when the
+// blocks are empty, otherwise nothing the scale knows.
+static TagFamily familyAfter(const MifareWriteJob& job, const uint8_t key[MIFARE_KEY_BYTES]) {
+  if (memcmp(key, FACTORY_KEY, MIFARE_KEY_BYTES) != 0) return job.family;
+  for (uint8_t b = 0; b < job.data_blocks; b++) {
+    if (!mifareBlockIsBlank(job.data[b])) return TAG_FAMILY_UNKNOWN;
+  }
+  return TAG_FAMILY_BLANK;
+}
+
 // Reads the sector back with the final key and compares it with the job.
 // A card that has gone quiet after the write is read once it has been put
 // back.
@@ -221,7 +231,7 @@ static MifareWriteResult verifyWritten(const WriteRun& run, const uint8_t key[6]
     logSDf("%s write: %s did not read back as written", job.label, uid_str);
     return MIFARE_WRITE_VERIFY_FAILED;
   }
-  tagFamilySet(uid, job.family);
+  tagFamilySet(uid, familyAfter(job, k));
   memcpy(s_reread_uid, uid, 4);
   s_reread_armed = true;
   if (s_held_valid && memcmp(uid, s_held_uid, 4) == 0) s_held_valid = false;
@@ -346,7 +356,7 @@ static void padSector(const MifareWriteJob& job, const uint8_t uid_in[4], const 
   const uint8_t first = firstBlock(job.pad_sector);
   for (uint8_t b = 0; b < MIFARE_DATA_BLOCKS_MAX; b++) {
     uint8_t d[MIFARE_BLOCK_BYTES];
-    if (!nfcReadMifareBlock(first + b, d) || !blockIsBlank(d)) return;
+    if (!nfcReadMifareBlock(first + b, d) || !mifareBlockIsBlank(d)) return;
   }
   uint8_t pad[MIFARE_BLOCK_BYTES];
   memset(pad, job.pad_byte, sizeof(pad));
@@ -381,7 +391,7 @@ static MifareWriteResult writeBlank(const WriteRun& run) {
     // run.overwrite: the owner was shown what the card holds and said
     // overwrite (tag_write_popup.cpp). The factory key protects nothing, so
     // the answer is the only guard there is.
-    const bool resumable = readable && (run.overwrite || unfinished || blockIsBlank(old) ||
+    const bool resumable = readable && (run.overwrite || unfinished || mifareBlockIsBlank(old) ||
                                         memcmp(old, job.data[b], MIFARE_BLOCK_BYTES) == 0);
     if (!resumable) {
       logSDf("%s write: %s block %u %s - not written", job.label, uid_str,
@@ -466,6 +476,16 @@ MifareWriteResult mifareWrite(const MifareWriteJob& job, uint8_t uid_out[4],
   return writeBlank(run);
 }
 
+MifareWriteResult mifareErase(const MifareWriteJob& format, uint8_t uid_out[4],
+                              const uint8_t* expect, MifareWaitFn wait) {
+  MifareWriteJob job = format;
+  memset(job.data, 0, sizeof(job.data));
+  job.set_trailer = false;
+  job.pad_sector  = 0;
+  logSDf("%s write: erasing sector %u, keys stay as they are", job.label, (unsigned)job.sector);
+  return mifareWrite(job, uid_out, expect, wait, /*overwrite=*/true);
+}
+
 int mifareProbeFactory(const uint8_t uid[4], const char* uid_str) {
   bool silent = false;
   if (!nfcAuthMifareSector(PROBE_SECTOR, FACTORY_KEY, uid, NFC_KEY_A)) {
@@ -488,7 +508,7 @@ int mifareProbeFactory(const uint8_t uid[4], const char* uid_str) {
     int blank = 1;
     for (uint8_t b = 0; b < MIFARE_DATA_BLOCKS_MAX && blank >= 0; b++) {
       if (!nfcReadMifareBlock(firstBlock(PROBE_SECTOR) + b, got[b])) blank = -1;
-      else if (!blockIsBlank(got[b])) blank = 0;
+      else if (!mifareBlockIsBlank(got[b])) blank = 0;
     }
     data = blank;
   }

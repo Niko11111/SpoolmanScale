@@ -2158,14 +2158,21 @@ void appLoop() {
           // that keeps dropping out never runs them out. So the mark is used
           // once and dropped right here.
           if (family == TAG_FAMILY_NOT_CREALITY) tagFamilySet(uid, TAG_FAMILY_UNKNOWN);
+          CrealityScanResult cfs_scan = CREALITY_SCAN_NO_AUTH;
           if (blank_now) {
             // Handled below, like a blank tag found after the Creality probe.
           } else if (creality_first &&
-              scanCrealityTag(uid, uidLen, /*fresh=*/true) == CREALITY_SCAN_OK) {
+              (cfs_scan = scanCrealityTag(uid, uidLen, /*fresh=*/true)) == CREALITY_SCAN_OK) {
             creality_decoded = true;
             tagFamilySet(uid, TAG_FAMILY_CREALITY);
             nfc_retry_count = NFC_MAX_RETRIES;
             last_nfc_check_ms = 0;
+          } else if (cfs_scan == CREALITY_SCAN_EMPTY) {
+            // Opens with the Creality key and holds nothing: a CFS tag the
+            // scale erased. Still Creality's key, so no factory key probe
+            // that it can only refuse; otherwise like a blank sticker.
+            tagFamilySet(uid, TAG_FAMILY_CREALITY);
+            blank_now = true;
           } else if (g_creality_tags && family == TAG_FAMILY_CREALITY &&
                      (factory = mifareProbeFactory(uid, uid_str)) != MIFARE_FACTORY_REFUSED) {
             // Remembered as Creality, but now on the factory key: erased

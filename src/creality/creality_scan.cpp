@@ -21,6 +21,28 @@ void crealityRememberRecord(const uint8_t uid[4], const char rec40[40]) {
   s_rec[40] = '\0';
 }
 
+// See crealityTagEmpty().
+static uint8_t s_empty_uid[4];
+static bool    s_empty_valid = false;
+
+bool crealityTagEmpty(const uint8_t uid[4]) {
+  return s_empty_valid && memcmp(uid, s_empty_uid, 4) == 0;
+}
+
+static void noteEmpty(const uint8_t uid[4], bool empty) {
+  if (empty) {
+    memcpy(s_empty_uid, uid, 4);
+    s_empty_valid = true;
+  } else if (crealityTagEmpty(uid)) {
+    s_empty_valid = false;
+  }
+}
+
+static bool sectorEmpty(const uint8_t blocks[4][16]) {
+  for (int b = 0; b < 3; b++) if (!mifareBlockIsBlank(blocks[b])) return false;
+  return true;
+}
+
 bool crealityLastRecord(const uint8_t uid[4], char out[41]) {
   if (!s_rec[0] || memcmp(uid, s_rec_uid, 4) != 0) return false;
   memcpy(out, s_rec, 41);
@@ -70,10 +92,16 @@ CrealityScanResult scanCrealityTag(uint8_t *uid, uint8_t uid_len, bool fresh) {
          uid_str, ok_a ? "key A" : "key B", ok_a ? woke_a : woke_b,
          (ok_a && fresh) ? ", first try" : "");
 
+  const bool empty = sectorEmpty(blocks);
+  noteEmpty(uid, empty);
   CrealityTag t;
   if (!crealityDecode(blocks, &t)) {
-    logSDf("NFC: %s opens with the Creality key but holds no Creality record", uid_str);
-    return CREALITY_SCAN_GARBLED;
+    logSDf("NFC: %s opens with the Creality key but %s", uid_str,
+           empty ? "sector 1 is empty" : "holds no Creality record");
+    // Woken like after a good read: an empty tag stays on the reader as one.
+    bool silent = false;
+    if (empty) mifareWakeCard(uid, uid_str, &silent);
+    return empty ? CREALITY_SCAN_EMPTY : CREALITY_SCAN_GARBLED;
   }
   {
     uint8_t enc[48], plain[48];

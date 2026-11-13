@@ -3,7 +3,7 @@
 #include "creality/creality_write.h"
 
 static const MifareFormat MIFARE_FORMATS[] = {
-  { TAG_FMT_CREALITY, crealityBuildJob, crealityWritten },
+  { TAG_FMT_CREALITY, crealityBuildJob, crealityWritten, crealityEraseJob },
 };
 
 const MifareFormat* mifareFormatFor(uint8_t fmt) {

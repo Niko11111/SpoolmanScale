@@ -23,3 +23,6 @@ bool crealityRecordForSpool(JsonObjectConst spool, int spool_id, char rec[41]);
 bool crealityBuildJob(JsonObjectConst spool, int spool_id, MifareWriteJob* job,
                       char* text, size_t text_len);
 void crealityWritten(const uint8_t uid[4], const char* text);
+
+// The CFS sector with its key, for mifareErase(): no spool, no record.
+void crealityEraseJob(MifareWriteJob* job);

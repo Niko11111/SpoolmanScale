@@ -79,6 +79,19 @@ typedef void (*MifareWaitFn)(int phase);
 MifareWriteResult mifareWrite(const MifareWriteJob& job, uint8_t uid_out[4],
                               const uint8_t* expect, MifareWaitFn wait, bool overwrite);
 
+// Empties the data blocks of the format's sector and nothing else: zeros
+// through the same door as a write, overwrite included, but never a trailer
+// and never the pad sector. A tag on the format's key keeps that key, one on
+// the factory key keeps the factory key. Putting a key back would mean
+// rewriting the trailer of a tag that holds data, and one wrong byte there
+// makes the tag scrap. Only the job's sector, label, key and family are used;
+// its data is ignored.
+MifareWriteResult mifareErase(const MifareWriteJob& format, uint8_t uid_out[4],
+                              const uint8_t* expect, MifareWaitFn wait);
+
+// A data block nobody has written: all zeros, all FF, or all spaces.
+bool mifareBlockIsBlank(const uint8_t block[MIFARE_BLOCK_BYTES]);
+
 // True once for the tag a write was just verified on: the scan has to read it
 // again rather than keep the record it decoded before the write. A tag put
 // back within seconds counts as the same placement and is not read again, so

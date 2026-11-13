@@ -96,6 +96,10 @@ bool tagWriteRequest(int spool_id, TagFormat fmt, bool link);
 // by then; the seconds between question and erase are long enough to swap.
 // An empty uid erases whatever writable tag is on the reader, as before.
 bool tagWriteRequestErase(const char* uid_expected);
+// A UID as the cache prints it: 11 characters for a 4 byte MIFARE Classic
+// tag, whose erase empties its CFS sector and keeps its key (mifareErase()),
+// 20 for a 7 byte NTAG.
+#define TAG_UID_STR_LEN_MIFARE 11
 // A write bound to one tag the same way: finishing a write that was cut short
 // on exactly that tag (services/tag_pending.h). A MIFARE format is bound
 // through tagWriteMifareTarget() instead.

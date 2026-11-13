@@ -1485,11 +1485,47 @@ bool tagWriteSpoolNow(int spool_id, TagFormat fmt) {
   return true;
 }
 
+// An erase asked for a 4 byte tag: sector 1 emptied through mifareErase(),
+// keys left as they are. The one MIFARE format the scale writes is CFS, so
+// that is the sector and key it empties.
+static void eraseMifareTag() {
+  const MifareFormat* mf = mifareFormatFor(TAG_FMT_CREALITY);
+  MifareWriteJob job;
+  uint8_t uid[4];
+  MifareWriteResult r = MIFARE_WRITE_FAILED;
+  if (mf && mf->erase_job) {
+    mf->erase_job(&job);
+    tagWriteMifareTarget(pending_uid, s_mf_wait, true);   // this tag and no other
+    r = mifareErase(job, uid, s_mf_has_expect ? s_mf_expect : nullptr, s_mf_wait);
+  }
+  s_mf_has_expect = false;
+  s_mf_wait = nullptr;
+  s_mf_overwrite = false;
+  cache_dirty = true;
+  report.erase = true;
+  if (r == MIFARE_WRITE_OK) {
+    erased_flag = true;
+    tagPendingDone(uid, 4);
+    finish("ok", "Tag erased", TW_OK);
+  } else if (r == MIFARE_WRITE_NO_TAG) {
+    finish("error", "No MIFARE tag on the reader - nothing erased", TW_ERR_NO_TAG);
+  } else if (r == MIFARE_WRITE_NOT_BLANK) {
+    finish("error", "This tag cannot be erased here, left as it is", TW_ERR_NOT_BLANK);
+  } else {
+    finish("error", "Erase failed - keep the tag still", TW_ERR_WRITE);
+  }
+}
+
 void tagWriteTick() {
   refreshCache();
   scanTick();
   if (!pending) return;
   pending = false;
+
+  if (pending_fmt == TAG_FMT_ERASE && strlen(pending_uid) == TAG_UID_STR_LEN_MIFARE) {
+    eraseMifareTag();
+    return;
+  }
 
   if (mifareFormatFor(pending_fmt)) {
     // Follows a link that already happened, so there is nothing to link here.

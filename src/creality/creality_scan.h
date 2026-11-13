@@ -4,8 +4,13 @@
 enum CrealityScanResult {
   CREALITY_SCAN_OK,       // sector 1 opened with the UID's key and decoded
   CREALITY_SCAN_NO_AUTH,  // not a Creality tag (or not one written yet)
-  CREALITY_SCAN_GARBLED   // opened, but did not decode to a Creality record
+  CREALITY_SCAN_GARBLED,  // opened, but did not decode to a Creality record
+  CREALITY_SCAN_EMPTY     // opened, and sector 1 is empty: a CFS tag erased
 };
+
+// The tag the last scan opened with the Creality key and found empty, until a
+// scan of it says otherwise. Such a tag takes a CFS write like a blank one.
+bool crealityTagEmpty(const uint8_t uid[4]);
 
 // Reads sector 1 of a 4 byte MIFARE Classic tag with the key Creality derives
 // from its UID and, on success, fills g_tag the way the Snapmaker decoder

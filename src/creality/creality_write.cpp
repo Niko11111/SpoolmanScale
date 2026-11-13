@@ -44,6 +44,16 @@ static bool isCrealityRecord(const uint8_t blocks[MIFARE_DATA_BLOCKS_MAX][MIFARE
   return crealityDecode(blocks, &t);
 }
 
+void crealityEraseJob(MifareWriteJob* job) {
+  memset(job, 0, sizeof(*job));
+  job->label         = "CFS";
+  job->sector        = CFS_SECTOR;
+  job->data_blocks   = MIFARE_DATA_BLOCKS_MAX;
+  job->own_key       = crealityDeriveSectorKey;
+  job->is_own_record = isCrealityRecord;
+  job->family        = TAG_FAMILY_CREALITY;
+}
+
 bool crealityBuildJob(JsonObjectConst sp, int spool_id, MifareWriteJob* job,
                       char* text, size_t text_len) {
   char rec[41];
@@ -51,17 +61,11 @@ bool crealityBuildJob(JsonObjectConst sp, int spool_id, MifareWriteJob* job,
   if (!crealityRecordForSpool(sp, spool_id, rec) || !crealityEncryptRecord(rec, cipher)) {
     return false;
   }
-  memset(job, 0, sizeof(*job));
-  job->label         = "CFS";
-  job->sector        = CFS_SECTOR;
-  job->data_blocks   = MIFARE_DATA_BLOCKS_MAX;
+  crealityEraseJob(job);
   memcpy(job->data, cipher, sizeof(cipher));
-  job->own_key       = crealityDeriveSectorKey;
-  job->is_own_record = isCrealityRecord;
   job->set_trailer   = true;
   job->pad_sector    = CFS_PAD_SECTOR;
   job->pad_byte      = CFS_PAD_BYTE;
-  job->family        = TAG_FAMILY_CREALITY;
   snprintf(text, text_len, "%.40s", rec);
   return true;
 }

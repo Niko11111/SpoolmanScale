@@ -143,21 +143,33 @@ static bool s_watching = false;
 
 bool isTagWritePopupOpen() { return scr_tag_write != nullptr; }
 
+// A CFS record on the tag on the reader: emptied like an NTAG's record, its
+// key left as it is (mifareErase()).
+static bool cfsRecordOnReader() {
+  return g_creality_tags && tagCachedKindCode() == TAG_KIND_MIFARE &&
+         !strcmp(tagCachedInfo()->fmt, "Creality");
+}
+
+// What an erase may touch: an NTAG with a record of ours, or a CFS record.
+static bool eraseWorthAsking() {
+  return (tagIsWritableNtag() && tagCachedHasRecord()) || cfsRecordOnReader();
+}
+
 void requestTagEraseAsk() {
   s_erase_fmt[0] = 0;
   // Only worth asking when there is something to erase. An unlink from the
   // more info screen usually happens with no tag anywhere near the reader, and
   // a tag that carries nothing has nothing to lose.
-  if (!tagIsWritableNtag() || !tagCachedHasRecord()) return;
+  if (!eraseWorthAsking()) return;
   snprintf(s_erase_fmt, sizeof(s_erase_fmt), "%s", tagCachedInfo()->fmt);
   snprintf(s_erase_uid, sizeof(s_erase_uid), "%s", tagCachedUid());
   erase_ask_pending = true;
 }
 
 void requestTagEraseNow(const char* uid) {
-  // The same gate as the question: a Bambu or MIFARE tag, or one carrying
-  // nothing of ours, is left alone even though the user agreed to an erase.
-  if (!tagIsWritableNtag() || !tagCachedHasRecord()) return;
+  // The same gate as the question: a Bambu tag, or one carrying nothing of
+  // ours, is left alone even though the user agreed to an erase.
+  if (!eraseWorthAsking()) return;
   // The question named a tag; the unlink took seconds. Another one by now
   // was never agreed to.
   if (uid && uid[0] && strcmp(uid, tagCachedUid()) != 0) {
@@ -394,7 +406,8 @@ static void showTagEraseAskPopup() {
 }
 
 void askTagEraseFromView() {
-  if (scr_tag_write || !tagIsWritableNtag()) return;
+  // The view offers the erase only where it can be done, CFS tags included.
+  if (scr_tag_write || (!tagIsWritableNtag() && tagCachedKindCode() != TAG_KIND_MIFARE)) return;
   // Kept for the log and for the gate showTagEraseAskPopup() shares; the
   // question itself names no format, it says what erasing does.
   snprintf(s_erase_fmt, sizeof(s_erase_fmt), "%s",
@@ -516,6 +529,9 @@ static void queueTagJob() {
   // unlink. The format is the one set in Settings > Scale; it used to be
   // OpenSpool with no way to say otherwise, which left an ACE user no path at
   // all from the device.
+  // A 4 byte UID is a MIFARE tag: its erase waits for the tag like a CFS write.
+  const bool mifare_erase = (s_mode == ASK_ERASE) && strlen(s_erase_uid) == TAG_UID_STR_LEN_MIFARE;
+  if (mifare_erase) tagWriteMifareTarget(s_erase_uid, cfsWaitNotice, true);
   const bool queued = (s_mode == ASK_ERASE)
                         ? tagWriteRequestErase(s_erase_uid)
                         : requestWrite();
@@ -524,7 +540,8 @@ static void queueTagJob() {
     // From here to the result the loop is busy with the tag and the screen
     // would say nothing. The question is gone by now, so the pool holds one
     // of the two at a time.
-    tagBusyShow(s_mode == ASK_ERASE, s_mode != ASK_ERASE && tagFormatIsMifare(s_write_fmt));
+    tagBusyShow(s_mode == ASK_ERASE,
+                mifare_erase || (s_mode != ASK_ERASE && tagFormatIsMifare(s_write_fmt)));
   } else {
     // Only reachable when another write is still parked, which the tag page
     // could have started. Saying so beats a popup that closes and does nothing.

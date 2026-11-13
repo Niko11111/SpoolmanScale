@@ -6,7 +6,10 @@
 
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
+#include "creality/creality_scan.h"
 #include "hardware/sd_logger.h"
+#include "services/mifare_write.h"
+#include "services/tag_family.h"
 #include "services/tag_write.h"
 #include "services/user_options.h"
 #include "tag_write_popup.h"
@@ -85,6 +88,14 @@ struct Shown {
 };
 static Shown s_shown;
 
+// "AA:BB:CC:DD" as the four bytes of a MIFARE UID.
+static bool uidBytes(const char* str, uint8_t uid[4]) {
+  unsigned b[4];
+  if (sscanf(str, "%2x:%2x:%2x:%2x", &b[0], &b[1], &b[2], &b[3]) != 4) return false;
+  for (int i = 0; i < 4; i++) uid[i] = (uint8_t)b[i];
+  return true;
+}
+
 static void snapshot(Shown* s) {
   memset(s, 0, sizeof(*s));
   snprintf(s->uid, sizeof(s->uid), "%s", tagCachedUid());
@@ -93,6 +104,14 @@ static void snapshot(Shown* s) {
   // memcpy rather than assignment: the whole struct is compared with memcmp,
   // padding included, and the cache clears its padding before it fills.
   memcpy(&s->info, tagCachedInfo(), sizeof(s->info));
+  // The cache calls a MIFARE tag with nothing to decode "unsupported", which
+  // the card words as read only. One known to be empty - a blank sticker, or
+  // a CFS tag erased - is blank here, and the write below is offered for it.
+  uint8_t uid[4];
+  if (s->kind == TAG_KIND_MIFARE && !strcmp(s->info.fmt, "unsupported") &&
+      uidBytes(s->uid, uid) && (tagFamilyGet(uid) == TAG_FAMILY_BLANK || crealityTagEmpty(uid))) {
+    snprintf(s->info.fmt, sizeof(s->info.fmt), "blank");
+  }
   s->reader_ok = nfc_ok;
   s->found     = sm_found && sm_id > 0;
   s->spool_id  = s->found ? sm_id : 0;
@@ -426,13 +445,29 @@ static lv_obj_t* button(lv_obj_t* box, int x, const char* text, bool danger,
   return b;
 }
 
-// Erase and write for an NTAG. A MIFARE tag can only be read, and the row
-// says so instead; with no tag there is nothing to act on.
+// A MIFARE tag the CFS write can take, with Creality tags switched on: one
+// that already carries a CFS record (written again), a blank one, or one on
+// the factory key with data in it (the question says what and asks). Bambu,
+// Snapmaker and anything unread are left to be read only; mifareWrite()
+// refuses a Bambu tag on its own as well.
+static bool cfsWritable(const Shown& s) {
+  if (s.kind != TAG_KIND_MIFARE || !g_creality_tags) return false;
+  if (!strcmp(s.info.fmt, "Creality") || !strcmp(s.info.fmt, "blank")) return true;
+  uint8_t uid[4];
+  uint8_t held[MIFARE_DATA_BLOCKS_MAX][MIFARE_BLOCK_BYTES];
+  return uidBytes(s.uid, uid) && mifareFactoryHeld(uid, held);
+}
+
+// Erase and write for an NTAG and for a MIFARE tag the CFS write can take.
+// Erasing a MIFARE tag empties its data blocks and keeps its keys
+// (mifareErase()). Any other MIFARE tag can only be read, and the row says so
+// instead; with no tag there is nothing to act on.
 static void buildButtons(lv_obj_t* box, const Shown& s) {
   if (!s.reader_ok || !s.uid[0]) return;
   divider(box, TV_DIV2_Y);
 
-  if (s.kind != TAG_KIND_NTAG) {
+  const bool cfs = cfsWritable(s);
+  if (s.kind != TAG_KIND_NTAG && !cfs) {
     lv_obj_t* l = lv_label_create(box);
     if (!l) return;
     lv_label_set_text(l, T(STR_TW_ERR_NOT_NTAG));
@@ -451,13 +486,29 @@ static void buildButtons(lv_obj_t* box, const Shown& s) {
 
   // The same floor the question after a link keeps: an NDEF record does not
   // fit an NTAG213, and offering it there only ends in "needs 176 bytes".
-  const bool fits = !(TAG_FMT_IS_NDEF(g_tagwrite_fmt) && s.bytes &&
-                      s.bytes < TAGWRITE_NDEF_MIN_BYTES);
+  // A CFS record fits every MIFARE Classic 1K.
+  const bool fits = cfs || !(TAG_FMT_IS_NDEF(g_tagwrite_fmt) && s.bytes &&
+                             s.bytes < TAGWRITE_NDEF_MIN_BYTES);
   char write[40];
   if (!s.found)  copyT(write, sizeof(write), STR_TV_NOSPOOL);
   else if (!fits) copyT(write, sizeof(write), STR_TV_TOOSMALL);
   else            snprintf(write, sizeof(write), T(STR_TV_WRITE), s.spool_id);
   button(box, TV_PAD + TV_BTN_W + TV_PAD, write, false, s.found && fits, writeCb);
+}
+
+// The CFS question for the tag on the card, in the words that fit what is on
+// it: a tag of this scale whose spool changed, an original whose serial is not
+// the spool id, or any other record - all three overwrite. A blank or unknown
+// card goes as variant 0, which the question itself turns into "holds data"
+// when the probe found some. Loop only: the check asks the backend.
+static void askCfsWrite(int spool_id, const Shown& s) {
+  uint8_t variant = 0;
+  if (!strcmp(s.info.fmt, "Creality")) {
+    bool own = false, differs = false, serial_only = false;
+    const bool checked = tagCrealityCheck(spool_id, s.uid, &own, &differs, &serial_only);
+    variant = (checked && own) ? 1 : (checked && serial_only) ? 3 : 2;
+  }
+  showTagWriteAskPopupFmt(spool_id, TAG_FMT_CREALITY, variant);
 }
 
 static void build() {
@@ -543,7 +594,8 @@ void handleTagViewDeferredActions() {
     const int id = s_shown.spool_id;
     dropView();
     logSDf("TAGVIEW: write asked, spool %d", id);
-    if (id > 0) showTagWriteAskPopup(id);
+    if (id > 0 && s_shown.kind == TAG_KIND_MIFARE) askCfsWrite(id, s_shown);
+    else if (id > 0)                               showTagWriteAskPopup(id);
     return;
   }
 

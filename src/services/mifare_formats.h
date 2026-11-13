@@ -29,6 +29,8 @@ struct MifareFormat {
                 char* text, size_t text_len);
   // After a verified write: what the read side keeps about the tag.
   void (*written)(const uint8_t uid[4], const char* text);
+  // The format's sector and key without a record, for mifareErase().
+  void (*erase_job)(MifareWriteJob* job);
 };
 
 // The format behind fmt, nullptr when fmt is not a MIFARE format.
