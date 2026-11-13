@@ -80,10 +80,11 @@ bool labelLayoutHasCode(const LabelLayout& layout) {
   return labelLayoutHas(layout, LF_QR) && labelPresetHasQr(layout.preset);
 }
 
-// The rolls come 30 mm along the feed, 40 or 50 across. Measured in the
+// The rolls come 30 mm along the feed, 40, 50 or 60 across. Measured in the
 // simulator on 40 x 30 and 50 x 30, flat and upright, with the longest
 // lines of the fixture spools: what each arrangement prints without a line
 // running into the margin or the code shrinking under its readable size.
+// 60 x 30 takes the 50 mm row: its extra width only widens the lines.
 #define LL_LONG_ROLL_MM 50
 enum CapacityRow { CAP_FLAT_40, CAP_FLAT_50, CAP_UPRIGHT_40, CAP_UPRIGHT_50, CAP_ROWS };
 static const uint8_t FACT_CAPACITY[CAP_ROWS][LABEL_PRESET_COUNT] = {

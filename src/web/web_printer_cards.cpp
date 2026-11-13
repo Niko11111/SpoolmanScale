@@ -106,9 +106,14 @@ static const char PRINTER_CSS[] PROGMEM =
          ".buy:hover{text-decoration:underline}"
          // Shop links are for someone still choosing a printer.
          ".models.has .buy{display:none}"
-         // The fold's line with a chevron of its own: as a flex box the
-         // summary loses the browser's triangle.
-         "#pmf>summary{display:flex;align-items:center;gap:10px;min-height:40px;padding:0;list-style:none}"
+         // The fold's line in the quiet button's look, so a quick glance
+         // does not take the two cards for the whole list. As a flex box the
+         // summary loses the browser's triangle and draws its own chevron.
+         "#pmf>summary{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 14px;list-style:none;"
+         "border-radius:9px;background:var(--quiet);border:1px solid var(--line);color:var(--ink-2);"
+         "font-size:13.5px;font-weight:600}"
+         "#pmf>summary:hover{background:var(--quiet-hover)}"
+         "#pmf>summary .mb{margin-left:auto;font-size:12px;font-weight:400;color:var(--ink-soft)}"
          "#pmf>summary::-webkit-details-marker{display:none}"
          "#pmf>summary:before{content:'';width:6px;height:6px;margin-left:2px;"
          "border-right:2px solid var(--ink-3);border-bottom:2px solid var(--ink-3);transform:rotate(-45deg)}"
@@ -335,6 +340,18 @@ static int restSorted(const LabelPrinterProfile** out) {
   return n;
 }
 
+// The makers in the fold, in its order, so the closed line says whose
+// printers are behind it.
+static void foldBrands(String& h, const LabelPrinterProfile* const* rest, int n) {
+  const char* last = nullptr;
+  for (int i = 0; i < n; i++) {
+    if (last && strcmp(last, rest[i]->brand) == 0) continue;
+    if (last) h += F(", ");
+    last = rest[i]->brand;
+    h += last;
+  }
+}
+
 // Starts open when the current model is in it, so the mark is in sight.
 static void moreModels(String& h, const LabelPrinterConfig& c) {
   const LabelPrinterProfile* rest[PICKER_MODELS_MAX];
@@ -344,8 +361,11 @@ static void moreModels(String& h, const LabelPrinterConfig& c) {
   h += F("><summary>");
   char line[64];
   snprintf(line, sizeof(line), T(STR_W_P_MORE_MODELS_FMT), n);
+  h += F("<span>");
   h += line;
-  h += F("</summary>");
+  h += F("</span><span class='mb'>");
+  foldBrands(h, rest, n);
+  h += F("</span></summary>");
   const char* brand = nullptr;
   for (int i = 0; i < n; i++) {
     if (!brand || strcmp(brand, rest[i]->brand) != 0) {

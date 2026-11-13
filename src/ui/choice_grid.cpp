@@ -16,7 +16,10 @@
 #define CG_CELL_H       72    // caption, value, tag
 #define CG_CELL_H_SHAPE 124   // the same with a label outline above the value
 #define CG_SHAPE_PX_PER_MM_X10 12   // 50 mm draws 60 px
-#define CG_SHAPE_SLOT_PX 62         // the largest outline, 50 mm, and its border
+// The slot holds the largest outline and its border: 60 mm across (the
+// 60 x 30 roll), 50 mm tall (the 50 x 50 one).
+#define CG_SHAPE_SLOT_W_PX 74
+#define CG_SHAPE_SLOT_H_PX 62
 #define CG_SHAPE_LINE_PX 2          // the outline's stroke
 #define CG_CLOSE_SIZE   40
 #define CG_SCREEN_W     480
@@ -68,7 +71,7 @@ static lv_obj_t* addText(lv_obj_t* parent, const char* text, const lv_font_t* fo
 static void addShape(lv_obj_t* card, const ChoiceCard& c, uint32_t colour) {
   lv_obj_t* slot = lv_obj_create(card);
   if (!slot) return;
-  lv_obj_set_size(slot, CG_SHAPE_SLOT_PX, CG_SHAPE_SLOT_PX);
+  lv_obj_set_size(slot, CG_SHAPE_SLOT_W_PX, CG_SHAPE_SLOT_H_PX);
   lv_obj_set_style_bg_opa(slot, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(slot, 0, 0);
   lv_obj_set_style_pad_all(slot, 0, 0);

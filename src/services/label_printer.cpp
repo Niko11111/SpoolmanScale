@@ -126,9 +126,12 @@ const int LABEL_PRINTER_MODEL_COUNT = sizeof(LABEL_PRINTER_MODELS) / sizeof(LABE
 // The two sizes printed and checked on the M220 for 0.8.0 (Nikolai,
 // 26.09.2026). 40 x 20 and 30 x 20 leave no room for the code; the larger
 // ones come back with the label presets.
+// 60 x 30 for the 3 inch heads (M220, M200, M221, PM245-BT), asked for on
+// Discord (13.11.2026): every arrangement renders on it with the 50 mm line
+// budget, flat and upright, checked in the simulator.
 // 12 x 40 is the D110's tape, which only it takes.
 const LabelMediaSize LABEL_MEDIA_SIZES[] = {
-  {40, 30}, {50, 30}, {12, 40},
+  {40, 30}, {50, 30}, {60, 30}, {12, 40},
 };
 const int LABEL_MEDIA_SIZE_COUNT = sizeof(LABEL_MEDIA_SIZES) / sizeof(LABEL_MEDIA_SIZES[0]);
 
