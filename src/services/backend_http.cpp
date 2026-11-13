@@ -10,6 +10,7 @@
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/github_release.h"
+#include "services/host_lookup.h"
 #include "services/prefs_store.h"
 #include "services/server_refusal.h"
 #include "services/worker_heap.h"
@@ -100,15 +101,10 @@ static bool splitHost(const char* url, String& host, uint16_t& port) {
 // resolves here as well, and the second lookup comes out of lwIP's cache.
 // Network.hostByName() answers 1 on success and an lwIP error code otherwise,
 // and core 3's connect() tests it with "!", so a failure went on to 0.0.0.0.
+// A name that failed is answered at once from then on: lwIP takes 7 s to give
+// up on a ".local" server that is gone, see services/host_lookup.h.
 static bool hostResolves(const String& host) {
-  // An IPv6 literal in brackets is the client's to parse; an IPv4 literal
-  // comes back from hostByName() without a lookup.
-  if (host.length() == 0 || host[0] == '[') return true;
-  IPAddress ip;
-  const int r = Network.hostByName(host.c_str(), ip);
-  if (r == 1) return true;
-  logSDf("Backend: %s does not resolve (DNS error %d), request not sent", host.c_str(), r);
-  return false;
+  return hostLookupOk(host.c_str());
 }
 
 // The host of an http or https address: no scheme, user, port or path.

@@ -33,6 +33,8 @@ jobs:
         run: python3 test/test_native_tag_probe.py
       - name: Test recheck pace
         run: python3 test/test_recheck_pace.py
+      - name: Test host lookup rules
+        run: python3 test/test_host_lookup_rules.py
       - name: Test server name
         run: python3 test/test_server_name.py
       - name: Test spool link
