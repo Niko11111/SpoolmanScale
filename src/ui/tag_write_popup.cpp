@@ -5,8 +5,11 @@
 #include <lvgl.h>
 #include <cstring>
 
+#include "creality/creality_tag.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/mifare_data_rules.h"
+#include "services/mifare_write.h"
 #include "services/tag_pending.h"
 #include "services/tag_write.h"
 #include "services/user_options.h"
@@ -49,8 +52,13 @@ static uint8_t  s_write_fmt     = 0;
 // and not on every poll. Cleared when that write found no tag, so putting the
 // spool back offers it again.
 static char     s_cfs_asked_uid[24] = "";
-// 0 = blank tag, 1 = own tag to update, 2 = original tag to overwrite.
+// 0 = blank tag, 1 = own tag to update, 2 = original tag to overwrite,
+// 3 = spool id onto an original tag, CFS_VARIANT_HELD = factory key with data.
 static uint8_t  s_cfs_variant = 0;
+#define CFS_VARIANT_HELD  4
+// What that card holds, said in the question: "an unfinished CFS record (PLA,
+// #1144BB)", "the text \"ACCESS 0815\"".
+static char     s_held_desc[96] = "";
 
 // A tag put down whose write was cut short, waiting for the screen to be free:
 // the lookup of the same placement and any question already up go first.
@@ -232,6 +240,7 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
       // The erase says what is about to be lost, the write says what is about
       // to be put there - and that is now a setting, not a constant.
       const char *arg = (s_mode == ASK_ERASE) ? s_erase_fmt
+                      : (s_cfs_variant == CFS_VARIANT_HELD) ? s_held_desc
                                               : tagFormatLabel(s_write_fmt);
       snprintf(hb, sizeof(hb), T(hint), arg[0] ? arg : "OpenSpool");
       lv_label_set_text(lbl_hint, hb); }
@@ -314,8 +323,45 @@ void showTagWriteAskPopup(int spool_id) {
   showTagWriteAskPopupFmt(spool_id, g_tagwrite_fmt);
 }
 
+// Says what a card that opens with the factory key already holds, from what
+// the probe read (mifareFactoryHeld()). False when the probe found it blank,
+// or never saw it: then it is offered as a blank tag.
+static bool describeHeldData(const char* uid_str, char* out, size_t out_len) {
+  unsigned b[4];
+  if (!uid_str || sscanf(uid_str, "%2x:%2x:%2x:%2x", &b[0], &b[1], &b[2], &b[3]) != 4) return false;
+  const uint8_t uid[4] = {(uint8_t)b[0], (uint8_t)b[1], (uint8_t)b[2], (uint8_t)b[3]};
+  uint8_t held[MIFARE_DATA_BLOCKS_MAX][MIFARE_BLOCK_BYTES];
+  if (!mifareFactoryHeld(uid, held)) return false;
+  // A CFS write cut short before its trailer leaves the encrypted record under
+  // the factory key: the commonest way to end up here.
+  CrealityTag t;
+  if (crealityDecode(held, &t)) {
+    char what[40];
+    if (t.has_color)
+      snprintf(what, sizeof(what), "%s, #%02X%02X%02X",
+               t.material && t.material[0] ? t.material : "?", t.r, t.g, t.b);
+    else
+      snprintf(what, sizeof(what), "%s", t.material && t.material[0] ? t.material : "?");
+    snprintf(out, out_len, T(STR_TW_CFS_DATA_CFS), what);
+    return true;
+  }
+  char text[24];
+  if (mifareDataText(&held[0][0], sizeof(held), text, sizeof(text)))
+    snprintf(out, out_len, T(STR_TW_CFS_DATA_TEXT), text);
+  else
+    copyT(out, out_len, STR_TW_CFS_DATA_UNKNOWN);
+  return true;
+}
+
 void showTagWriteAskPopupFmt(int spool_id, uint8_t fmt, uint8_t variant) {
   if (scr_tag_write || spool_id <= 0) return;
+  // Offered as blank, but the probe found data under the factory key: the
+  // write would refuse it, so the question says what is there and asks.
+  if (fmt == TAG_FMT_CREALITY && variant == 0 &&
+      describeHeldData(g_tag.uid_str, s_held_desc, sizeof(s_held_desc))) {
+    variant = CFS_VARIANT_HELD;
+    logSDf("TagWrite: %s opens with the factory key and holds %s", g_tag.uid_str, s_held_desc);
+  }
   s_spool_id  = spool_id;
   s_mode      = ASK_WRITE;
   s_write_fmt = fmt;
@@ -330,6 +376,8 @@ void showTagWriteAskPopupFmt(int spool_id, uint8_t fmt, uint8_t variant) {
     buildAsk(STR_TW_CFS_OVR_TITLE, STR_TW_CFS_OVR_HINT, STR_TW_BTN_REWRITE, STR_TW_BTN_SKIP);
   else if (fmt == TAG_FMT_CREALITY && variant == 3)
     buildAsk(STR_TW_CFS_SID_TITLE, STR_TW_CFS_SID_HINT, STR_TW_BTN_REWRITE, STR_TW_BTN_SKIP);
+  else if (fmt == TAG_FMT_CREALITY && variant == CFS_VARIANT_HELD)
+    buildAsk(STR_TW_CFS_DATA_TITLE, STR_TW_CFS_DATA_HINT, STR_TW_BTN_OVERWRITE, STR_TW_BTN_SKIP);
   else if (fmt == TAG_FMT_CREALITY)
     buildAsk(STR_TW_CFS_ASK_TITLE, STR_TW_CFS_ASK_HINT, STR_TW_BTN_WRITE, STR_TW_BTN_SKIP);
   else

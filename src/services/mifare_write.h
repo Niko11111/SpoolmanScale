@@ -18,8 +18,9 @@
 //    keys are derived per tag and no format here knows them, so a Bambu tag
 //    could not be opened anyway; the family check makes that explicit.
 //  - Written only when the sector opens with the factory key and its data
-//    blocks are empty, or when it opens with the format's own key and the
-//    caller asked for an overwrite. Anything else is left as it is.
+//    blocks are empty, or when it opens with the factory key or the format's
+//    own key and the caller asked for an overwrite - an answer given after the
+//    owner was shown what is on the card. Anything else is left as it is.
 //  - A sector trailer is written by this file alone, only on a blank tag, and
 //    only with the transport access bits. It goes last, so a write that stops
 //    part way leaves a tag that is still on the factory key.
@@ -83,6 +84,12 @@ MifareWriteResult mifareWrite(const MifareWriteJob& job, uint8_t uid_out[4],
 // back within seconds counts as the same placement and is not read again, so
 // the screen showed the old colour after a CFS write (12.11.2026).
 bool mifareTakeReread(const uint8_t uid[4]);
+
+// Sector 1 of this card as mifareProbeFactory() last found it: opened with the
+// factory key, not blank. False for any other card, or once it was written.
+// What the question before an overwrite shows.
+bool mifareFactoryHeld(const uint8_t uid[4],
+                       uint8_t out[MIFARE_DATA_BLOCKS_MAX][MIFARE_BLOCK_BYTES]);
 
 // Gets a card back that a refused key has left unreachable. Returns how it
 // answered: 1 = plain wake, 2 = after the reader released its target,

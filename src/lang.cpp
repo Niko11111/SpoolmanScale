@@ -4260,6 +4260,20 @@ const char* const STRINGS[][3] = {
     "Laisser" },  // STR_TW_BTN_LEAVE
   { "Anderer Tag auf dem Leser - nicht geschrieben", "A different tag is on the reader - not written",
     "Autre tag sur le lecteur - rien écrit" },  // STR_TW_ERR_OTHER_TAG_W
+  // Tag write popup (tag_write_popup.cpp): a MIFARE card that opens with the
+  // factory key but already holds data. %s in the hint is one of the three
+  // descriptions below; %s in those is the material and colour, or the text.
+  { "Tag enthält Daten", "The tag holds data", "Le tag contient des données" },  // STR_TW_CFS_DATA_TITLE
+  { "Darauf steht %s. Überschreiben macht ihn zum CFS-Tag dieser Spule, das Alte ist dann weg.",
+    "It holds %s. Overwriting makes it this spool's CFS tag, and the old data is gone.",
+    "Il contient %s. L'écraser en fait le tag CFS de cette bobine, et l'ancien contenu est perdu." },  // STR_TW_CFS_DATA_HINT
+  { "ein unfertiger CFS-Datensatz (%s)", "an unfinished CFS record (%s)",
+    "des données CFS inachevées (%s)" },  // STR_TW_CFS_DATA_CFS
+  { "der Text '%s'", "the text '%s'",
+    "le texte '%s'" },  // STR_TW_CFS_DATA_TEXT
+  { "Daten, die die Waage nicht kennt", "data the scale does not recognise",
+    "des données inconnues de la balance" },  // STR_TW_CFS_DATA_UNKNOWN
+  { "Überschreiben",                     "Overwrite",                         "Écraser" },  // STR_TW_BTN_OVERWRITE
 };
 
 StringID tagWriteResultString(uint8_t code) {

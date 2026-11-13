@@ -25,7 +25,10 @@ void showTagWriteAskPopup(int spool_id);
 // The same question for a given TagFormat instead of the one in Settings.
 // TAG_FMT_CREALITY asks in its own words: a blank tag becomes a CFS tag.
 // variant, Creality only: 0 = blank tag, 1 = own tag whose spool changed,
-// 2 = original (or foreign) Creality tag on a spool that was refilled.
+// 2 = original (or foreign) Creality tag on a spool that was refilled,
+// 3 = the spool id onto an original tag. Variant 0 turns into 4 by itself
+// when the probe found data under the factory key: the question then says
+// what is on the card and asks before it is overwritten.
 void showTagWriteAskPopupFmt(int spool_id, uint8_t fmt, uint8_t variant = 0);
 // Whether the CFS write has been offered for this tag UID already.
 bool tagCfsAskedFor(const char *uid);

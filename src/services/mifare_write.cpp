@@ -38,6 +38,12 @@ static constexpr int           PROBE_READ_TRIES   = 2;
 static uint8_t s_reread_uid[4];
 static bool    s_reread_armed = false;
 
+// What the last probe found in sector 1 of a card that opened with the factory
+// key and was not blank, for the question before it is overwritten.
+static uint8_t s_held_uid[4];
+static uint8_t s_held[MIFARE_DATA_BLOCKS_MAX][MIFARE_BLOCK_BYTES];
+static bool    s_held_valid = false;
+
 static uint8_t firstBlock(uint8_t sector)   { return sector * BLOCKS_PER_SECTOR; }
 static uint8_t trailerBlock(uint8_t sector) { return sector * BLOCKS_PER_SECTOR + 3; }
 
@@ -218,6 +224,7 @@ static MifareWriteResult verifyWritten(const WriteRun& run, const uint8_t key[6]
   tagFamilySet(uid, job.family);
   memcpy(s_reread_uid, uid, 4);
   s_reread_armed = true;
+  if (s_held_valid && memcmp(uid, s_held_uid, 4) == 0) s_held_valid = false;
   logSDf("%s write: %s written and verified", job.label, uid_str);
   return MIFARE_WRITE_OK;
 }
@@ -225,6 +232,13 @@ static MifareWriteResult verifyWritten(const WriteRun& run, const uint8_t key[6]
 bool mifareTakeReread(const uint8_t uid[4]) {
   if (!s_reread_armed || memcmp(uid, s_reread_uid, 4) != 0) return false;
   s_reread_armed = false;
+  return true;
+}
+
+bool mifareFactoryHeld(const uint8_t uid[4],
+                       uint8_t out[MIFARE_DATA_BLOCKS_MAX][MIFARE_BLOCK_BYTES]) {
+  if (!s_held_valid || memcmp(uid, s_held_uid, 4) != 0) return false;
+  memcpy(out, s_held, sizeof(s_held));
   return true;
 }
 
@@ -348,7 +362,8 @@ static void padSector(const MifareWriteJob& job, const uint8_t uid_in[4], const 
 // The sector opened with the factory key: its data blocks must be empty, or
 // already hold this job's own blocks - a write of the same job cut short
 // before the trailer, which is why such a tag can simply be written again -
-// or belong to this very write, started on the tag before and never finished.
+// or belong to this very write, started on the tag before and never finished,
+// or the owner confirmed an overwrite after being shown what is there.
 // Then the data, then the trailer that locks it to the new key - last.
 // Finally read back the way the printer will.
 static MifareWriteResult writeBlank(const WriteRun& run) {
@@ -363,7 +378,10 @@ static MifareWriteResult writeBlank(const WriteRun& run) {
   for (uint8_t b = 0; b < MIFARE_DATA_BLOCKS_MAX; b++) {
     uint8_t old[MIFARE_BLOCK_BYTES];
     const bool readable = nfcReadMifareBlock(first + b, old);
-    const bool resumable = readable && (unfinished || blockIsBlank(old) ||
+    // run.overwrite: the owner was shown what the card holds and said
+    // overwrite (tag_write_popup.cpp). The factory key protects nothing, so
+    // the answer is the only guard there is.
+    const bool resumable = readable && (run.overwrite || unfinished || blockIsBlank(old) ||
                                         memcmp(old, job.data[b], MIFARE_BLOCK_BYTES) == 0);
     if (!resumable) {
       logSDf("%s write: %s block %u %s - not written", job.label, uid_str,
@@ -426,7 +444,12 @@ MifareWriteResult mifareWrite(const MifareWriteJob& job, uint8_t uid_out[4],
   }
   bool silent = false;
   MifareWriteResult decided;
-  if (overwrite && overwriteFirst(run, deferred, &silent, &decided)) {
+  // A card the probe has just opened with the factory key is asked that key
+  // first. The format's key first would be refused, and a refusal knocks the
+  // card off the reader until it is put down again (12.11.2026).
+  uint8_t held[MIFARE_DATA_BLOCKS_MAX][MIFARE_BLOCK_BYTES];
+  const bool on_factory_key = mifareFactoryHeld(uid, held);
+  if (overwrite && !on_factory_key && overwriteFirst(run, deferred, &silent, &decided)) {
     return decided;
   }
   bool opened = nfcAuthMifareSector(job.sector, FACTORY_KEY, uid, NFC_KEY_A);
@@ -456,16 +479,24 @@ int mifareProbeFactory(const uint8_t uid[4], const char* uid_str) {
   // opened and then read nothing, and went to the Bambu probe as "holds
   // data"). So a failed read gets one more go after a wake.
   int data = -1;   // -1 unread, 0 holds data, 1 blank
+  // All three blocks even once one holds data: they are what the question
+  // before an overwrite shows (mifareFactoryHeld()).
+  uint8_t got[MIFARE_DATA_BLOCKS_MAX][MIFARE_BLOCK_BYTES];
   for (int attempt = 0; attempt < PROBE_READ_TRIES && data < 0; attempt++) {
     if (attempt > 0 && (!mifareWakeCard(uid, uid_str, &silent) ||
                         !nfcAuthMifareSector(PROBE_SECTOR, FACTORY_KEY, uid, NFC_KEY_A))) break;
     int blank = 1;
-    for (uint8_t b = 0; b < MIFARE_DATA_BLOCKS_MAX && blank == 1; b++) {
-      uint8_t d[MIFARE_BLOCK_BYTES];
-      if (!nfcReadMifareBlock(firstBlock(PROBE_SECTOR) + b, d)) blank = -1;
-      else if (!blockIsBlank(d)) blank = 0;
+    for (uint8_t b = 0; b < MIFARE_DATA_BLOCKS_MAX && blank >= 0; b++) {
+      if (!nfcReadMifareBlock(firstBlock(PROBE_SECTOR) + b, got[b])) blank = -1;
+      else if (!blockIsBlank(got[b])) blank = 0;
     }
     data = blank;
+  }
+  if (memcmp(uid, s_held_uid, 4) == 0) s_held_valid = false;
+  if (data == 0) {
+    memcpy(s_held_uid, uid, 4);
+    memcpy(s_held, got, sizeof(s_held));
+    s_held_valid = true;
   }
   // After an authentication the card does not answer the next poll.
   const int back = silent ? 0 : mifareWakeCard(uid, uid_str, &silent);
