@@ -624,15 +624,19 @@ static void ghCheckFinish(WebServer &srv) {
     srv.send(200, "application/json", reply);
     return;
   }
-  char tag[40], pub[24];
+  char tag[40], pub[24], sha[sizeof(r.image_sha)];
   strncpy(tag, r.tag, sizeof(tag) - 1); tag[sizeof(tag) - 1] = '\0';
   strncpy(pub, r.pub, sizeof(pub) - 1); pub[sizeof(pub) - 1] = '\0';
+  snprintf(sha, sizeof(sha), "%s", r.image_sha);
   const uint32_t image_size = r.image_size;
   webJobTake();
 
   {
     strncpy(gh_latest_version, tag, sizeof(gh_latest_version) - 1);
     gh_latest_version[sizeof(gh_latest_version) - 1] = '\0';
+    // The install checks the image against it (otaExpectedSha()); without the
+    // daily check that was TLS alone.
+    otaRememberSha(tag, sha);
     const uint64_t remote = parseVersion(tag), running = parseVersion(FW_VERSION);
     // Newer but larger than this device's slot: not offered, the way to the
     // flasher instead - the same rule as the device's own check.

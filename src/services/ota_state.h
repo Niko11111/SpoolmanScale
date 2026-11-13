@@ -14,13 +14,19 @@ extern bool gh_prerelease;
 // truncated on the way in and the download URL built from it went to 404.
 extern char gh_latest_version[40];
 
-// The checksum the release workflow published for gh_latest_version, and
-// the tag it belongs to. Only the background check learns it (version.json
-// carries it, the GitHub API does not), so the two are kept as a pair and
+// The checksum published for gh_latest_version, and the tag it belongs to.
+// The background check learns it from version.json, a manual check from the
+// "digest" GitHub gives the release asset; the two are kept as a pair and
 // otaExpectedSha() hands the checksum out only for that tag.
 extern char gh_latest_sha[65];
 extern char gh_latest_sha_tag[40];
 const char* otaExpectedSha(const char *tag);
+
+// Keeps sha as the checksum of tag, for a manual check that found one. An
+// empty sha changes nothing: a checksum the background check already holds
+// for the same tag stays, and any other tag gets none from otaExpectedSha().
+// Loop task only, like the background check's own copy into the pair.
+void otaRememberSha(const char *tag, const char *sha);
 
 // True while doGithubOtaFlash() is writing the new image. The background check
 // must not open a second TLS connection while an image is being flashed.

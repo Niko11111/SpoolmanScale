@@ -11,6 +11,7 @@
 #include "app_config.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
+#include "services/asset_digest.h"
 #include "services/github_release.h"
 #include "services/ota_state.h"
 #include "services/prefs_store.h"
@@ -290,16 +291,19 @@ void doGithubOtaCheck() {
     return;
   }
 
-  char tag[40] = "", cerr[80] = "";
+  char tag[40] = "", cerr[80] = "", sha[ASSET_SHA256_HEX_LEN + 1] = "";
   uint32_t image_size = 0;
   if (!githubLatestTag(gh_prerelease, tag, sizeof(tag), nullptr, 0,
-                       cerr, sizeof(cerr), &image_size)) {
+                       cerr, sizeof(cerr), &image_size, sha, sizeof(sha))) {
     ghShowStatus(GH_LOOK_BAD, cerr[0] ? cerr : T(STR_GH_OTA_FLASH_FAIL));
     return;
   }
 
   strncpy(gh_latest_version, tag, sizeof(gh_latest_version)-1);
   gh_latest_version[sizeof(gh_latest_version)-1] = 0;
+  // The install checks the image against it (otaExpectedSha()); without the
+  // daily check that was TLS alone.
+  otaRememberSha(tag, sha);
   ghShowCheckResult(image_size);
 }
 

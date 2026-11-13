@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <stdint.h>
 
+#include "services/asset_digest.h"
+
 // ============================================================
 //  WEB JOBS
 //
@@ -50,6 +52,7 @@ struct WebJobResult {
   char   tag[40];     // GH check: the tag found
   char   pub[24];     // GH check: when it was published
   uint32_t image_size; // GH check: the firmware image's size, 0 when unknown
+  char   image_sha[ASSET_SHA256_HEX_LEN + 1]; // GH check: its checksum, "" when none
   String body;        // a ready made reply body, for the jobs that have one
 };
 

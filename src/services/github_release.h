@@ -28,10 +28,15 @@ void githubTrust(WiFiClientSecure &client);
 // 0 when it carries none: asked before a download that would not fit the app
 // slot of a device on the old partition table. Handed back rather than kept
 // in a global, because the loop and the web worker both look releases up.
+// image_sha, when given, receives the image's checksum in lower case hex from
+// the asset's "digest", "" when it carries none (services/asset_digest.h);
+// sha_len should be at least ASSET_SHA256_HEX_LEN + 1. The caller hands it to
+// otaRememberSha() for the install, in the loop task.
 bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
                      char *published, size_t pub_len,
                      char *err, size_t err_len,
-                     uint32_t *image_size = nullptr);
+                     uint32_t *image_size = nullptr,
+                     char *image_sha = nullptr, size_t sha_len = 0);
 
 // One release as GitHub describes it. notes is the release body, markdown as
 // written, capped so a long one cannot take the heap with it.
@@ -55,10 +60,11 @@ typedef void (*OtaProgressFn)(uint32_t done, uint32_t total);
 // Downloads the image for a tag and writes it. True means the image is in
 // place and the device is still running - restarting is the caller's call.
 //
-// sha256_hex is the checksum the release workflow published for this tag in
-// version.json, 64 hex characters, or empty when none is known (a tag picked
-// by hand on the GitHub screen). Given, it is checked against what was
-// written, and a mismatch is a refusal. The image is only committed when
+// sha256_hex is the checksum published for this tag, 64 hex characters: from
+// version.json after the daily check, from the asset's digest after a manual
+// one (otaExpectedSha()), or empty when neither had one. Given, it is checked
+// against what was written, and a mismatch is a refusal. The image is only
+// committed when
 // every byte the server announced has arrived: a dropped connection used to
 // finalise a half image and report success.
 //

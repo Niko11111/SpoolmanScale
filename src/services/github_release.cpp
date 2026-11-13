@@ -12,6 +12,7 @@
 #include "mbedtls/sha256.h"
 
 #include "hardware/sd_logger.h"
+#include "services/asset_digest.h"
 #include "services/notes_cut.h"
 #include "services/ota_state.h"
 
@@ -24,6 +25,18 @@ static uint32_t imageSizeOf(JsonVariantConst rel) {
   for (JsonObjectConst a : rel["assets"].as<JsonArrayConst>())
     if (strcmp(a["name"] | "", GH_IMAGE_ASSET) == 0) return a["size"] | 0u;
   return 0;
+}
+
+// The image's checksum out of the same list, "" when the asset carries no
+// digest (services/asset_digest.h).
+static void imageShaOf(JsonVariantConst rel, char *hex, size_t hex_len) {
+  if (!hex || hex_len == 0) return;
+  hex[0] = '\0';
+  for (JsonObjectConst a : rel["assets"].as<JsonArrayConst>())
+    if (strcmp(a["name"] | "", GH_IMAGE_ASSET) == 0) {
+      assetDigestSha256(a["digest"] | "", hex, hex_len);
+      return;
+    }
 }
 
 // No bytes for this long while the socket is still open: the download is
@@ -102,11 +115,14 @@ static int ghApiGet(const String &url, String &body, char *err, size_t err_len) 
 
 bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
                      char *published, size_t pub_len,
-                     char *err, size_t err_len, uint32_t *image_size) {
+                     char *err, size_t err_len, uint32_t *image_size,
+                     char *image_sha, size_t sha_len) {
   if (!tag || tag_len == 0) return false;
   tag[0] = '\0';
   uint32_t found_size = 0;
+  char found_sha[ASSET_SHA256_HEX_LEN + 1] = "";
   if (image_size) *image_size = 0;
+  if (image_sha && sha_len) image_sha[0] = '\0';
   if (published && pub_len) published[0] = '\0';
   if (err && err_len) err[0] = '\0';
 
@@ -136,6 +152,7 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
     f["draft"] = true;
     f["assets"][0]["name"] = true;
     f["assets"][0]["size"] = true;
+    f["assets"][0]["digest"] = true;
 
     JsonDocument doc;
     jerr = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
@@ -155,6 +172,7 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
           }
           found_size = imageSizeOf(rel);
           if (image_size) *image_size = found_size;
+          imageShaOf(rel, found_sha, sizeof(found_sha));
           break;
         }
       }
@@ -165,6 +183,7 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
     filter["published_at"] = true;
     filter["assets"][0]["name"] = true;
     filter["assets"][0]["size"] = true;
+    filter["assets"][0]["digest"] = true;
 
     JsonDocument doc;
     jerr = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
@@ -179,6 +198,7 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
       }
       found_size = imageSizeOf(doc);
       if (image_size) *image_size = found_size;
+      imageShaOf(doc, found_sha, sizeof(found_sha));
     }
   }
 
@@ -188,6 +208,10 @@ bool githubLatestTag(bool prerelease, char *tag, size_t tag_len,
   logSDf("OTA check: HTTP %d len=%d heap %u->%u pre=%d err=%s entries=%d tag='%s' image=%u",
          code, payload_len, (unsigned)heap_before, (unsigned)heap_parse,
          prerelease ? 1 : 0, jerr.c_str(), entries, tag, (unsigned)found_size);
+  // A line of its own: 64 hex digits behind the one above ran past the 160
+  // characters a log line keeps.
+  if (tag[0]) logSDf("OTA check: %s sha256=%s", tag, found_sha[0] ? found_sha : "none");
+  if (image_sha && sha_len) snprintf(image_sha, sha_len, "%s", found_sha);
   Serial.printf("OTA check: len=%d heap %u->%u err=%s entries=%d tag='%s'\n",
                 payload_len, (unsigned)heap_before, (unsigned)heap_parse,
                 jerr.c_str(), entries, tag);
