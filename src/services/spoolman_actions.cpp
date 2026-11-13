@@ -712,6 +712,10 @@ void patchInitialWeight(float initial_w) {
   if (backendWriteOk(code)) {
     sm_remaining = initial_w;
     sm_total = initial_w;
+    // Repainted here like the weight write does: the main screen kept the
+    // old grams, percent and bar until the tag was scanned again.
+    spoolCacheSetRemaining(sm_id, initial_w);
+    showSpoolRemaining();
     Serial.printf("initial_weight OK: %.1fg\n", initial_w);
   } else {
     logSDf("PATCH initial_weight=%.1fg ID=%d HTTP %d", initial_w, sm_id, code);
