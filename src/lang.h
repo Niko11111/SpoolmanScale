@@ -1958,12 +1958,14 @@ enum StringID {
   STR_TW_CFS_DATA_TEXT,
   STR_TW_CFS_DATA_UNKNOWN,
   STR_TW_BTN_OVERWRITE,
-  STR_W_SESSION_OPEN,
+  // Logs page: the session log card, its toolbar and full screen view
+  STR_W_SESSION_FULL,
   STR_W_LIVE_FOLLOW,
   STR_W_LIVE_PAUSE,
   STR_W_LIVE_FILTER,
   STR_W_LIVE_SMALLER,
   STR_W_LIVE_LARGER,
+  STR_W_SESSION_FULL_EXIT,
   STR_COUNT
 };
 

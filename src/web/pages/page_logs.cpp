@@ -11,7 +11,7 @@
 #include "hardware/sd_logger.h"
 #include "hardware/flash_log.h"
 #include "web/web_access.h"
-#include "web/pages/page_logs_live.h"
+#include "web/pages/page_logs_session.h"
 #include "web/web_net_probe.h"
 #include "web/web_screenshot.h"
 #include "web/web_shell.h"
@@ -86,38 +86,11 @@ static String body() {
 
   // Kept separate from the card browser above: this one is always there,
   // with or without a card, and it is the only log most devices have.
-  h += F("<div class='card wide'><h2>");
-  h += T(STR_W_C_SESSION);
-  h += F("</h2><p class='note'>");
-  h += T(STR_W_SESSION_NOTE);
-  h += F("</p><pre id='sl' style='max-height:340px;overflow:auto;"
-         "background:var(--ground);border:1px solid var(--line);border-radius:8px;"
-         "padding:10px;font-size:12px;line-height:1.5;white-space:pre-wrap;"
-         "word-break:break-word;margin:12px 0'></pre>"
-         "<div style='display:flex;gap:12px;align-items:center'>"
-         "<button id='slb' class='quiet' onclick='loadSession(true)'>");
-  h += T(STR_W_SESSION_REFRESH);
-  h += F("</button><button id='slc' class='quiet'>");
-  h += T(STR_W_SESSION_COPY);
-  h += F("</button><button id='slo' class='quiet'>");
-  h += T(STR_W_SESSION_OPEN);
-  h += F("</button><span id='sls' class='note' style='margin:0'></span>"
-         "</div></div>");
+  h += sessionLogCard();
   h += screenshotCard();
   h += F("</div>");
 
-  h += F("<script>const SESSION_EMPTY=");
-  h += jsStr(T(STR_W_SESSION_EMPTY));
-  h += F(",SESSION_BUSY=");    h += jsStr(T(STR_W_SESSION_BUSY));
-  h += F(",SESSION_REFRESH="); h += jsStr(T(STR_W_SESSION_REFRESH));
-  h += F(",SESSION_AT=");      h += jsStr(T(STR_W_SESSION_UPDATED));
-  h += F(",SESSION_LINES=");   h += jsStr(T(STR_W_SESSION_LINES));
-  h += F(",SESSION_PAUSED=");  h += jsStr(T(STR_W_SESSION_PAUSED));
-  h += F(",SESSION_NEW=");     h += jsStr(T(STR_W_SESSION_NEW));
-  h += F(",SESSION_COPY=");    h += jsStr(T(STR_W_SESSION_COPY));
-  h += F(",SESSION_COPIED=");  h += jsStr(T(STR_W_SESSION_COPIED));
-  h += F(",SESSION_COPYFAIL="); h += jsStr(T(STR_W_SESSION_COPYFAIL));
-  h += F(";</script>");
+  h += sessionLogScript();
 
   h += F("<script>const M={view:");
   h += jsStr(T(STR_W_LOG_VIEW));
@@ -141,54 +114,7 @@ static String body() {
          ":(n/1024).toFixed(0)+' KB';}"
          "function say(t){document.getElementById('lg').innerHTML="
          "'<div class=\"note\">'+t+'</div>';}"
-         "var slSeq=0,slFollow=true,slPend=0,slAuto=false,flt='all',last=null;"
-         "function slNote(s,n){if(!s)return;"
-         "s.textContent=slFollow?(SESSION_AT+' '+new Date().toLocaleTimeString()"
-         "+' - '+n+' '+SESSION_LINES)"
-         ":(SESSION_PAUSED+(slPend?' - '+slPend+' '+SESSION_NEW:''));}"
-         "function loadSession(manual){"
-         "var b=document.getElementById('slb'),s=document.getElementById('sls'),"
-         "e=document.getElementById('sl');if(!e)return;"
-         "if(manual){slFollow=true;slPend=0;}"
-         "if(b&&manual){b.disabled=true;b.textContent=SESSION_BUSY;}"
-         "var u='/api/log/session?since='+(manual?0:slSeq);"
-         "fetch(u).then(r=>{slSeq=parseInt(r.headers.get('X-Log-Seq')||slSeq);"
-         "var rst=r.headers.get('X-Log-Reset')==='1';"
-         "return r.text().then(t=>({t:t,rst:rst}));}).then(d=>{"
-         "var stick=slFollow;"
-         "if(d.rst){e.textContent=d.t.trim()?d.t:SESSION_EMPTY;}"
-         "else if(d.t){if(e.textContent===SESSION_EMPTY)e.textContent='';"
-         "e.textContent+=d.t;if(!slFollow)slPend+=d.t.trim().split('\\n').length;}"
-         "if(stick){slAuto=true;e.scrollTop=e.scrollHeight;}"
-         "var all=e.textContent.trim();"
-         "slNote(s,all&&all!==SESSION_EMPTY?all.split('\\n').length:0);"
-         "}).catch(()=>{if(s)s.textContent='-';})"
-         ".finally(()=>{if(b&&manual){b.disabled=false;b.textContent=SESSION_REFRESH;}});}"
-         "function slCopy(){"
-         "var e=document.getElementById('sl'),b=document.getElementById('slc');"
-         "if(!e||!b)return;"
-         "var txt=e.textContent||'';"
-         "var done=function(ok){b.textContent=ok?SESSION_COPIED:SESSION_COPYFAIL;"
-         "setTimeout(function(){b.textContent=SESSION_COPY;},1500);};"
-         "if(navigator.clipboard&&window.isSecureContext){"
-         "navigator.clipboard.writeText(txt).then(function(){done(true);},"
-         "function(){done(false);});return;}"
-         "var t=document.createElement('textarea');t.value=txt;"
-         "t.setAttribute('readonly','');"
-         "t.style.position='fixed';t.style.top='-1000px';"
-         "document.body.appendChild(t);t.select();"
-         "var ok=false;try{ok=document.execCommand('copy');}catch(err){ok=false;}"
-         "document.body.removeChild(t);done(ok);}"
-         "function slWatch(){var e=document.getElementById('sl');if(!e)return;"
-         "var c=document.getElementById('slc');"
-         "if(c)c.addEventListener('click',slCopy);"
-         "var o=document.getElementById('slo');"
-         "if(o)o.addEventListener('click',function(){window.open('/log/live','_blank');});"
-         "e.addEventListener('scroll',function(){"
-         "if(slAuto){slAuto=false;return;}"
-         "if(slFollow){slFollow=false;"
-         "slNote(document.getElementById('sls'),0);}});"
-         "setInterval(function(){if(!document.hidden)loadSession(false);},3000);}"
+         "var flt='all',last=null;"
          // The active choice is the one that is disabled, the way the backend
          // page marks its tabs. A destination the device cannot reach - no
          // card in, or no data partition - is dimmed and refuses the press
@@ -300,7 +226,7 @@ static String body() {
          "b.addEventListener('click',function(){flt=b.dataset.f;render();});});"
          "var da=document.getElementById('da');"
          "if(da)da.addEventListener('click',delAll);}"
-         "bind();loadLogs();loadSession(true);slWatch();"
+         "bind();loadLogs();"
          // Was in the page until beta.33 and fell out of the 720px rebuild
          // without anyone noticing. Back, but idle while the tab sits in the
          // background - a forgotten tab should not poll the scale all day.
@@ -312,7 +238,6 @@ static String body() {
 }
 
 static void routes(WebServer &srv) {
-  logLiveRoutes(srv);
   netProbeRoutes(srv);
   screenshotRoutes(srv);
   // ── SD-Card Log endpoints ─────────────────────────────────
