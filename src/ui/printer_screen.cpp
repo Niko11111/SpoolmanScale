@@ -14,6 +14,7 @@
 #include "services/label_layout.h"
 #include "services/label_printer.h"
 #include "services/label_render.h"
+#include "services/fair_card.h"
 #include "ui/choice_grid.h"
 #include "ui/info_popup.h"
 #include "ui/print_card.h"
@@ -390,6 +391,11 @@ void handlePrinterDeferredActions() {
   if (printer_calib_pending) {
     printer_calib_pending = false;
     printFixedLabel(labelRenderCalibration, "calibration page");
+  }
+  // Formnext 2026 only, removed with 0.8.5.
+  if (print_fair_card_pending) {
+    print_fair_card_pending = false;
+    printFixedLabel(labelRenderFairCard, "fair card");
   }
   if (print_spool_label_pending) {
     print_spool_label_pending = false;

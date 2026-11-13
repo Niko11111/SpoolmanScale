@@ -75,6 +75,7 @@ bool ble_card_forget_printer_pending = false;
 bool show_printer_pending        = false;
 bool printer_test_pending        = false;
 bool printer_calib_pending       = false;
+bool print_fair_card_pending     = false;
 bool show_printer_offset_pending = false;
 bool printer_forget_pending      = false;
 bool printer_toggle_ask_pending  = false;

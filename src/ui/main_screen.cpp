@@ -30,6 +30,7 @@
 #include "ui/dried_action.h"
 #include "ui/update_badges.h"
 #include "ui/tare_mark.h"
+#include "ui/fair_card_hold.h"
 #include "ui/live_zone.h"
 #include "ui/header_status.h"
 #include "ui/main_screen_helpers.h"
@@ -643,6 +644,7 @@ void buildUI() {
     lv_obj_set_style_radius(btn_tare, 8, 0);
     lv_obj_set_style_shadow_width(btn_tare, 0, 0);
     lv_obj_add_event_cb(btn_tare, [](lv_event_t *e) {
+      if (fairCardHoldTookClick()) return;   // Formnext 2026 only
       logSD("UI: Button -> TARE (main)");
       // Presence as well as scale_ready: an ADC that left the bus reads back as
       // all ones, and tare would store -1 as the zero point.
@@ -670,6 +672,7 @@ void buildUI() {
     lv_obj_set_style_text_font(lbl_tare_txt, &lv_font_montserrat_ext_10, 0);
     lv_obj_align(lbl_tare_txt, LV_ALIGN_CENTER, 0, 12);
     tareMarkCreate(btn_tare);   // the "A" while auto-tare is on
+    fairCardHoldAttach(btn_tare);   // Formnext 2026 only, removed with 0.8.5
   } else {
     // The right half of the zone. Left half untouched: remaining, percent and
     // the bar come out of the database and are just as true without a load

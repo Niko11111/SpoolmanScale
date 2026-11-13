@@ -174,6 +174,8 @@ extern bool ble_card_forget_printer_pending;
 extern bool show_printer_pending;
 extern bool printer_test_pending;
 extern bool printer_calib_pending;   // the calibration page, browser or device
+// Formnext 2026 only, removed with 0.8.5: Tare held, the business card.
+extern bool print_fair_card_pending;
 extern bool show_printer_offset_pending;
 extern bool printer_forget_pending;
 extern bool printer_toggle_ask_pending;   // the "show before printing" row

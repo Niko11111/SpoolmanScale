@@ -19,6 +19,7 @@
 #include "app/deferred_actions.h"
 #include "hardware/sd_logger.h"
 #include "services/ble_service.h"
+#include "services/fair_card.h"
 #include "services/label_printer.h"
 #include "ui/ble_devices_screen.h"
 #include "ui/printer_screen.h"
@@ -754,6 +755,19 @@ static void routes(WebServer &srv) {
     printer_calib_pending = true;
     logSD("Web: calibration page requested");
     srv.send(200, "text/plain", T(STR_W_P_QUEUED));
+  });
+
+  // Formnext 2026 only, removed with 0.8.5: the hidden switch for the
+  // business card on a long press of Tare. No page links it; "1" or "0".
+  srv.on("/api/fair-card", HTTP_GET, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_PRINTER))) return;
+    srv.send(200, "application/json", fairCardEnabled() ? "{\"on\":true}" : "{\"on\":false}");
+  });
+  srv.on("/api/fair-card", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_PRINTER))) return;
+    const bool ok = fairCardSetEnabled(srv.arg("plain").toInt() != 0);
+    srv.send(ok ? 200 : 500, "application/json",
+             !ok ? "{\"ok\":false}" : fairCardEnabled() ? "{\"on\":true}" : "{\"on\":false}");
   });
 
   srv.on("/api/printer/forget", HTTP_POST, [&srv]() {
