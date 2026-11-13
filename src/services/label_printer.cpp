@@ -73,11 +73,12 @@ static const LabelPrinterProfile PROFILE_M221 = {
 // M-series it has no rolls held against a wall: the printer places the label
 // from SIZE, so the row is as wide as the label and there is no offset to set
 // (base width 0, as on the M110S). Reaches the scale over BLE only, the
-// Phomemo ff00 service. Printed on a PM245-BT (09.11.2026); the PM241-BT is
-// the same class but has not been tried, so the profile stays experimental.
+// Phomemo ff00 service. A user printed on a PM245-BT (PR #80, 09.11.2026);
+// the PM241-BT is the same class but has not been tried, so only it is
+// marked untried, and the profile itself no longer experimental.
 static const LabelPrinterProfile PROFILE_PM241 = {
-  LP_MODEL_PM241, "Phomemo", "PM241/245-BT", 40, 30, 25, 108, 10, 150, 0, 864, true, true,
-  203, LP_PROTO_TSPL
+  LP_MODEL_PM241, "Phomemo", "PM245-BT, PM241-BT", 40, 30, 25, 108, 10, 150, 0, 864, false, true,
+  203, LP_PROTO_TSPL, "PM241-BT"
 };
 
 // NIIMBOT's 50 mm class: B1, B21, B21S and B21 C2B at 384 dots, the B203 at
@@ -108,10 +109,11 @@ static const LabelPrinterProfile PROFILE_NIIMBOT_M2 = {
 // (labelPrinterIsTape()). Only 12 x 40, the roll a D110 M reports as
 // T12*40-160 (31.10.2026); 12 mm is all the head prints, a wider roll would
 // print the same 12. A user printed a test and a spool label on a D110 M
-// (01.11.2026); the D110 shares the renderer but has not been tried.
+// (01.11.2026); the D110 shares the renderer but has not been tried. The
+// proven one comes first in the name.
 static const LabelPrinterProfile PROFILE_NIIMBOT_D110 = {
-  LP_MODEL_NIIMBOT_D110, "NIIMBOT", "D110, D110 M", 12, 40, 12, 12, 40, 40, 96, 96, false, true,
-  203, LP_PROTO_NIIMBOT
+  LP_MODEL_NIIMBOT_D110, "NIIMBOT", "D110 M, D110", 12, 40, 12, 12, 40, 40, 96, 96, false, true,
+  203, LP_PROTO_NIIMBOT, "D110"
 };
 
 const LabelPrinterModel LABEL_PRINTER_MODELS[] = {

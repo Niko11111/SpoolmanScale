@@ -53,6 +53,10 @@ struct LabelPrinterProfile {
   bool     direct_thermal;
   uint16_t dpi;                 // the head's resolution: 203 or 300
   LabelPrinterProtocol protocol;
+  // Models in the name nobody has printed on yet, written as in the name
+  // and separated the same way (services/printer_names.h); null when every
+  // one has been tried. The browser marks them one by one.
+  const char* untried;
 };
 
 struct LabelPrinterConfig {

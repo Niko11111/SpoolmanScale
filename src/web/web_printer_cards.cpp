@@ -1,5 +1,9 @@
 #include "web/web_printer_cards.h"
 
+#include <string.h>
+
+#include "app_config.h"
+#include "services/printer_names.h"
 #include "web/web_printer_select.h"
 
 // Last on purpose: T() is a macro, see the pages.
@@ -74,18 +78,56 @@ static const char PRINTER_CSS[] PROGMEM =
          "background:var(--accent);color:var(--ground);font-size:11px;font-weight:700}"
          ".pc .mn{font-size:15px;font-weight:600;color:var(--ink)}"
          ".pill.ex{color:var(--ink-soft);border-color:var(--line);background:var(--surface)}"
-         // Models: as many columns as fit at 220 px. The tag sits beside the
-         // brand and the tick beside the name, so the spec line keeps the
-         // card's whole width and the card stays three lines high.
-         ".models{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}"
-         ".models .pc{display:grid;grid-template-columns:1fr auto;grid-template-areas:'br tg' 'mn ck' 'sp sp';"
-         "row-gap:2px;column-gap:8px;align-items:center}"
-         ".models .br{grid-area:br;line-height:17px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}"
-         ".models .mn{grid-area:mn}"
-         ".models .sp{grid-area:sp;font-family:var(--mono);font-size:11.5px;color:var(--ink-soft)}"
-         ".models .tg{grid-area:tg;font-size:10.5px;padding:1px 7px;gap:5px}"
+         // Models: the chosen one as a row, the recommended as cards, the
+         // rest as compact rows under a fold, two columns of them on a desk.
+         ".models{display:flex;flex-direction:column;gap:16px}"
+         ".models .br,.models .gh{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}"
+         ".models .gh{font-size:11px}"
+         ".models .sp{font-family:var(--mono);font-size:11.5px;color:var(--ink-soft)}"
+         ".models .tg{font-size:10.5px;padding:1px 7px;gap:5px}"
          ".models .tg:before{width:5px;height:5px}"
-         ".models .pc.on:after{grid-area:ck;justify-self:end}"
+         ".mcur{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:12px;"
+         "background:var(--surface-2);border:1px solid var(--line-soft)}"
+         ".mcur .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}"
+         ".mcur .nl{display:flex;align-items:center;flex-wrap:wrap;gap:8px}"
+         ".mcur .mn{font-size:16px;font-weight:600;color:var(--ink)}"
+         "#pmp{display:flex;flex-direction:column;gap:16px}"
+         ".recs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px 16px}"
+         ".rc{display:flex;flex-direction:column;gap:4px}"
+         // A card is a button, so the link to the shop sits under it.
+         ".rcd{display:grid;grid-template-columns:1fr auto;grid-template-areas:'br tg' 'mn ck' 'wy wy' 'sp sp';"
+         "row-gap:3px;column-gap:8px;align-items:center;padding:10px 12px 12px}"
+         ".rcd .br{grid-area:br;line-height:17px}.rcd .tg{grid-area:tg}.rcd .sp{grid-area:sp}"
+         ".rcd .mn{grid-area:mn;font-size:16px}"
+         ".rcd .wy{grid-area:wy;font-size:13px;color:var(--ink-2)}"
+         ".rcd.on:after{grid-area:ck;justify-self:end}"
+         ".buy{align-self:flex-start;display:inline-flex;align-items:center;min-height:36px;padding:0 4px;"
+         "font-size:13px;color:var(--accent);text-decoration:none}"
+         ".buy:hover{text-decoration:underline}"
+         // Shop links are for someone still choosing a printer.
+         ".models.has .buy{display:none}"
+         // The fold's line with a chevron of its own: as a flex box the
+         // summary loses the browser's triangle.
+         "#pmf>summary{display:flex;align-items:center;gap:10px;min-height:40px;padding:0;list-style:none}"
+         "#pmf>summary::-webkit-details-marker{display:none}"
+         "#pmf>summary:before{content:'';width:6px;height:6px;margin-left:2px;"
+         "border-right:2px solid var(--ink-3);border-bottom:2px solid var(--ink-3);transform:rotate(-45deg)}"
+         "#pmf[open]>summary:before{transform:rotate(45deg)}"
+         ".grp{display:flex;flex-direction:column;gap:6px;margin-top:12px}"
+         ".mrows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px}"
+         // The tag right after the name, the spec against the right edge, so
+         // the specs line up whether a row is tagged or not.
+         ".mrow{display:grid;grid-template-columns:minmax(0,auto) auto 1fr 18px;grid-template-areas:'mn tg sp ck';"
+         "column-gap:10px;align-items:center;min-height:44px;padding:6px 12px}"
+         ".mrow .mn{grid-area:mn}.mrow .tg{grid-area:tg}"
+         ".mrow .sp{grid-area:sp;white-space:nowrap;justify-self:end}"
+         // The tick's place is kept, so the row does not shift when picked.
+         ".mrow:after{content:'';grid-area:ck;width:18px;height:18px}"
+         // A model in a name that nobody has printed on yet: quieter, and
+         // marked with a short tag right after it.
+         ".ux{color:var(--ink-soft);font-weight:500}"
+         ".pill.xs{font-size:10px;padding:0 5px;margin-left:5px;vertical-align:1px}"
+         ".pill.xs:before{display:none}"
          // Stock: the outline to scale over its size.
          ".stock{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}"
          ".stock .pc{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 10px 12px}"
@@ -150,38 +192,203 @@ static const char PRINTER_CSS[] PROGMEM =
          ".dev{flex-wrap:wrap}.dev .end{width:100%}"
          ".sect{flex-direction:column;align-items:flex-start;gap:2px}.sect .hint{text-align:left}"
          ".stock{grid-template-columns:1fr 1fr}"
+         ".mrows{grid-template-columns:1fr}"
+         ".mrow{grid-template-columns:minmax(0,1fr) auto 18px;grid-template-areas:'mn tg ck' 'sp tg ck';"
+         "row-gap:2px;min-height:56px}"
+         ".mrow .sp{justify-self:start}"
+         ".buy{min-height:44px}"
          ".reclink{flex-direction:column;align-items:flex-start;gap:4px}"
          ".testrow{flex-direction:column;align-items:stretch}}"
          "</style>";
 
 void webPrinterPageStyle(String& h) { h += FPSTR(PRINTER_CSS); }
 
-void webPrinterModelCards(String& h, const LabelPrinterConfig& c) {
+const __FlashStringHelper* webPrinterDocsUrl() {
+  return g_lang == LANG_DE ? F(DOCS_URL "de/use/printers/") : F(DOCS_URL "use/printers/");
+}
+
+// Why a recommended model, and where in the manual it is sold.
+struct RecommendedCard { LabelPrinterModel model; int why; const char* anchor; };
+static const RecommendedCard RECOMMENDED_CARDS[] = {
+  { LP_MODEL_M220,       STR_W_P_WHY_M220, DOCS_ANCHOR_M220 },
+  { LP_MODEL_NIIMBOT_M2, STR_W_P_WHY_M2,   DOCS_ANCHOR_M2 },
+};
+
+static const RecommendedCard* recommendedCard(LabelPrinterModel m) {
+  for (const RecommendedCard& r : RECOMMENDED_CARDS)
+    if (r.model == m) return &r;
+  return nullptr;
+}
+
+// The table holds a dozen models; the fold's lists are sized for more.
+#define PICKER_MODELS_MAX 32
+// Room for one model out of a profile's name, "PM245-BT" and longer.
+#define PICKER_MODEL_NAME_LEN 32
+
+struct NameOut { String* h; int count; };
+
+static void appendModel(const char* model, size_t len, bool untried, void* ctx) {
+  NameOut& o = *static_cast<NameOut*>(ctx);
+  char one[PICKER_MODEL_NAME_LEN];
+  snprintf(one, sizeof(one), "%.*s", (int)len, model);
+  if (o.count++) *o.h += F(PRINTER_NAME_SEPARATOR);
+  if (!untried) { *o.h += one; return; }
+  *o.h += F("<span class='ux'>");
+  *o.h += one;
+  *o.h += F("</span><span class='pill ex xs' title='");
+  *o.h += T(STR_PRN_TAG_EXPERIMENTAL);
+  *o.h += F("'>");
+  *o.h += T(STR_PRN_TAG_UNTRIED_SHORT);
+  *o.h += F("</span>");
+}
+
+// The name, each model in it that nobody has printed on yet marked apart.
+static void modelName(String& h, const LabelPrinterProfile& p) {
+  NameOut o = { &h, 0 };
+  h += F("<span class='mn'>");
+  printerNameEach(p.name, p.untried, appendModel, &o);
+  h += F("</span>");
+}
+
+static void modelSpec(String& h, const LabelPrinterProfile& p) {
+  h += F("<span class='sp'>");
+  if (p.min_width_mm != p.max_width_mm) { h += String(p.min_width_mm); h += '-'; }
+  h += String(p.max_width_mm);
+  h += F(" mm &middot; ");
+  h += String(p.dpi);
+  h += F(" dpi");
+  if (!p.direct_thermal) { h += F(" &middot; "); h += T(STR_W_P_SPEC_RIBBON); }
+  h += F("</span>");
+}
+
+static void modelButton(String& h, const LabelPrinterProfile& p, const LabelPrinterConfig& c,
+                        const __FlashStringHelper* look) {
+  const bool on = p.model == c.model;
+  h += F("<button type='button' class='pc ");
+  h += look;
+  if (on) h += F(" on");
+  h += F("' aria-pressed='");
+  h += on ? F("true") : F("false");
+  h += F("' data-m='");
+  h += String((int)p.model);
+  h += F("' data-b='");
+  h += p.brand;
+  h += F("' data-n='");
+  h += p.name;
+  h += F("'>");
+}
+
+static void recommendedModel(String& h, const LabelPrinterProfile& p, const LabelPrinterConfig& c) {
+  const RecommendedCard* r = recommendedCard(p.model);
+  h += F("<div class='rc'>");
+  modelButton(h, p, c, F("rcd"));
+  h += F("<span class='br'>");
+  h += p.brand;
+  h += F("</span><span class='pill ok tg'>");
+  h += T(STR_PRN_TAG_RECOMMENDED);
+  h += F("</span>");
+  modelName(h, p);
+  if (r) { h += F("<span class='wy'>"); h += T(r->why); h += F("</span>"); }
+  modelSpec(h, p);
+  h += F("</button>");
+  if (r) {
+    h += F("<a class='buy' href='");
+    h += webPrinterDocsUrl();
+    h += r->anchor;
+    h += F("' target='_blank' rel='noopener'>");
+    h += T(STR_W_P_BUY_LINK);
+    h += F(" &rarr;</a>");
+  }
+  h += F("</div>");
+}
+
+static void foldedModel(String& h, const LabelPrinterProfile& p, const LabelPrinterConfig& c) {
+  modelButton(h, p, c, F("mrow"));
+  modelName(h, p);
+  modelSpec(h, p);
+  if (p.experimental) {
+    h += F("<span class='pill ex tg'>");
+    h += T(STR_PRN_TAG_EXPERIMENTAL);
+    h += F("</span>");
+  }
+  h += F("</button>");
+}
+
+// The models that are not recommended, by brand and then by name: the
+// table's own order is the display's and mixes the brands.
+static int restSorted(const LabelPrinterProfile** out) {
+  const char* brands[PICKER_MODELS_MAX];
+  const char* names[PICKER_MODELS_MAX];
+  const LabelPrinterProfile* rest[PICKER_MODELS_MAX];
+  int n = 0;
+  for (int i = 0; i < LABEL_PRINTER_MODEL_COUNT && n < PICKER_MODELS_MAX; i++) {
+    const LabelPrinterProfile& p = labelPrinterProfile(LABEL_PRINTER_MODELS[i]);
+    if (labelPrinterRecommended(p.model)) continue;
+    rest[n] = &p;
+    brands[n] = p.brand;
+    names[n] = p.name;
+    n++;
+  }
+  int order[PICKER_MODELS_MAX];
+  printerSortByBrand(brands, names, order, n);
+  for (int i = 0; i < n; i++) out[i] = rest[order[i]];
+  return n;
+}
+
+// Starts open when the current model is in it, so the mark is in sight.
+static void moreModels(String& h, const LabelPrinterConfig& c) {
+  const LabelPrinterProfile* rest[PICKER_MODELS_MAX];
+  const int n = restSorted(rest);
+  h += F("<details class='more' id='pmf'");
+  if (!labelPrinterRecommended(c.model)) h += F(" open");
+  h += F("><summary>");
+  char line[64];
+  snprintf(line, sizeof(line), T(STR_W_P_MORE_MODELS_FMT), n);
+  h += line;
+  h += F("</summary>");
+  const char* brand = nullptr;
+  for (int i = 0; i < n; i++) {
+    if (!brand || strcmp(brand, rest[i]->brand) != 0) {
+      if (brand) h += F("</div></div>");
+      brand = rest[i]->brand;
+      h += F("<div class='grp'><span class='gh'>");
+      h += brand;
+      h += F("</span><div class='mrows'>");
+    }
+    foldedModel(h, *rest[i], c);
+  }
+  if (brand) h += F("</div></div>");
+  h += F("</details>");
+}
+
+// Filled by the page's script from the marked card, so the two never
+// disagree.
+static void currentModel(String& h, bool have) {
+  h += F("<div class='mcur' id='pmc'");
+  if (!have) h += F(" style='display:none'");
+  h += F("><div class='tx'><span class='br' id='pcb'></span><span class='nl' id='pcn'></span>"
+         "<span class='sp' id='pcs'></span></div>"
+         "<button type='button' class='quiet' id='pmb' aria-expanded='false' aria-controls='pmp'>");
+  h += T(STR_W_P_CHANGE_MODEL);
+  h += F("</button></div>");
+}
+
+void webPrinterModelPicker(String& h, const LabelPrinterConfig& c) {
+  const bool have = labelPrinterConfigured(c);
+  h += F("<div class='models");
+  if (have) h += F(" has");
+  h += F("' id='pm'>");
+  currentModel(h, have);
+  h += F("<div id='pmp'");
+  if (have) h += F(" style='display:none'");
+  h += F("><div class='recs'>");
   for (int i = 0; i < LABEL_PRINTER_MODEL_COUNT; i++) {
     const LabelPrinterProfile& p = labelPrinterProfile(LABEL_PRINTER_MODELS[i]);
-    h += F("<button type='button' class='pc");
-    if (p.model == c.model) h += F(" on");
-    h += F("' data-m='");
-    h += String((int)p.model);
-    h += F("'><span class='br'>");
-    h += p.brand;
-    h += F("</span>");
-    if (labelPrinterRecommended(p.model) || p.experimental) {
-      h += p.experimental ? F("<span class='pill ex tg'>") : F("<span class='pill ok tg'>");
-      h += T(p.experimental ? STR_PRN_TAG_EXPERIMENTAL : STR_PRN_TAG_RECOMMENDED);
-      h += F("</span>");
-    }
-    h += F("<span class='mn'>");
-    h += p.name;
-    h += F("</span><span class='sp'>");
-    if (p.min_width_mm != p.max_width_mm) { h += String(p.min_width_mm); h += '-'; }
-    h += String(p.max_width_mm);
-    h += F(" mm &middot; ");
-    h += String(p.dpi);
-    h += F(" dpi");
-    if (!p.direct_thermal) { h += F(" &middot; "); h += T(STR_W_P_SPEC_RIBBON); }
-    h += F("</span></button>");
+    if (labelPrinterRecommended(p.model)) recommendedModel(h, p, c);
   }
+  h += F("</div>");
+  moreModels(h, c);
+  h += F("</div></div>");
 }
 
 // How a size stands in the list: one to pick, one on sale that no layout

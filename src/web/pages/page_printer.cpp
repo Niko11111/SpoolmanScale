@@ -53,8 +53,8 @@ struct RecText { int text, button; const char* anchor; };
 static const RecText REC_TEXTS[] = {
   { STR_W_P_REC_NONE_TEXT,  STR_W_P_REC_NONE_BTN,   "" },
   { STR_W_P_REC_OTHER_TEXT, STR_W_P_REC_OTHER_BTN,  "" },
-  { STR_W_P_REC_M220_TEXT,  STR_W_P_REC_LABELS_BTN, "#phomemo-m220" },
-  { STR_W_P_REC_M2_TEXT,    STR_W_P_REC_RIBBON_BTN, "#niimbot-m2" },
+  { STR_W_P_REC_M220_TEXT,  STR_W_P_REC_LABELS_BTN, DOCS_ANCHOR_M220 },
+  { STR_W_P_REC_M2_TEXT,    STR_W_P_REC_RIBBON_BTN, DOCS_ANCHOR_M2 },
 };
 
 // The two pictures of the page, in the stroke of the shared look.
@@ -146,12 +146,6 @@ static String stateJson() {
   return j;
 }
 
-// The manual's printers page. The manual has German and English; French
-// readers get the English page.
-static const __FlashStringHelper* docsPrintersUrl() {
-  return g_lang == LANG_DE ? F(DOCS_URL "de/use/printers/") : F(DOCS_URL "use/printers/");
-}
-
 // The way to the manual's page of recommended printers and their labels,
 // where the shop links live: never in the firmware (Nikolai, 21.10.2026).
 static void recommendRow(String& h) {
@@ -164,7 +158,7 @@ static void recommendRow(String& h) {
     h += F("<span>");
     h += T(r.text);
     h += F("</span><a href='");
-    h += docsPrintersUrl();
+    h += webPrinterDocsUrl();
     h += r.anchor;
     h += F("' target='_blank' rel='noopener'>");
     h += T(r.button);
@@ -181,7 +175,7 @@ static void supportedHint(String& h) {
   h += ' ';
   h += T(STR_W_P_BLE_ONLY);
   h += F(" <a href='");
-  h += docsPrintersUrl();
+  h += webPrinterDocsUrl();
   h += F("#printer-needs' target='_blank' rel='noopener'>");
   h += T(STR_W_P_NEEDS_LINK);
   h += F(" &rarr;</a></span>");
@@ -248,15 +242,15 @@ static void deviceTile(String& h, const LabelPrinterConfig& c) {
          "<span class='msg' id='dv-s'></span>");
 }
 
-// Model and label stock as cards, what the model prints with, the limits of
-// the list, and the way to rolls that fit.
+// The model picker, what the model prints with, the limits of the list,
+// the label stock as cards, and the way to rolls that fit.
 static void pickers(String& h, const LabelPrinterConfig& c) {
   const bool thermal = labelPrinterProfile(c.model).direct_thermal;
   h += F("<div class='sect'><h3>");
   h += T(STR_PRN_MODEL);
-  h += F("</h3></div><div class='pick models' id='pm'>");
-  webPrinterModelCards(h, c);
-  h += F("</div><span class='msg' id='pm-s'></span><div class='method");
+  h += F("</h3></div>");
+  webPrinterModelPicker(h, c);
+  h += F("<span class='msg' id='pm-s'></span><div class='method");
   // Heat-sensitive paper says what a dryer does to it; the script follows
   // the model picked.
   if (thermal) h += F(" warm");
@@ -379,6 +373,10 @@ static void scriptStrings(String& h) {
   h += jsStr(T(STR_W_P_CHANGE));
   h += F(",pick:");
   h += jsStr(T(STR_W_P_PICK_HINT));
+  h += F(",changeModel:");
+  h += jsStr(T(STR_W_P_CHANGE_MODEL));
+  h += F(",done:");
+  h += jsStr(T(STR_W_P_MODEL_DONE));
   // Without a printer the tile says what to do and what the scan costs.
   String empty = T(STR_W_P_EMPTY_HINT);
   empty += ' ';
@@ -407,12 +405,11 @@ static void scriptDevice(String& h) {
          "$('bl').checked=d.ble;$('bbt').style.display=need?'none':'';"
          "['bbr','bbp','rb'].forEach(function(i){$(i).style.display=need?'':'none';});}"
          // The model's brand and name come from its card, so the tile and
-         // the cards never disagree.
+         // the picker never disagree.
          "function tile(d){const on=d.printer.configured,m=document.querySelector('#pm .pc.on'),s=$('pds');"
          "$('dt').className='dev'+(on?'':' empty');"
          "$('pd').textContent=on?(d.printer.name||P.unnamed):P.none;"
-         "if(on){s.textContent=d.printer.address+(m?'  \\u00b7  '+m.querySelector('.br').textContent+' '"
-         "+m.querySelector('.mn').textContent:'');"
+         "if(on){s.textContent=d.printer.address+(m?'  \\u00b7  '+m.dataset.b+' '+m.dataset.n:'');"
          "const seen=d.devices.filter(function(x){return x.printer;})[0];if(seen)s.appendChild(sig(seen.rssi));}"
          "else s.textContent=!d.ble?P.off:d.stuck?P.stuck:(d.scanned&&d.devices.length)?P.pick:P.empty;"
          "$('sc').textContent=on?P.change:P.scan;$('sc').className=on?'quiet':'';"
@@ -460,13 +457,33 @@ static void scriptRows(String& h) {
          "return r;}");
 }
 
+// The model picker: with a printer only the row naming its model, the cards
+// behind "Change model"; without one the cards alone. The state says which,
+// so a scan or "Remove printer" switches it without a reload.
+static void scriptPicker(String& h) {
+  h += F("let editing=false,has=$('pm').classList.contains('has');"
+         // The row copies the marked card's name, tag and spec.
+         "function curRow(){const m=document.querySelector('#pm .pc.on'),l=$('pcn');if(!m)return;"
+         "$('pcb').textContent=m.dataset.b;$('pcs').textContent=m.querySelector('.sp').textContent;"
+         "l.textContent='';l.appendChild(m.querySelector('.mn').cloneNode(true));"
+         "const t=m.querySelector('.tg');if(t)l.appendChild(t.cloneNode(true));}"
+         "function view(){if(!has)editing=false;"
+         "$('pm').classList.toggle('has',has);$('pmc').style.display=has?'':'none';"
+         "$('pmp').style.display=!has||editing?'':'none';"
+         "const b=$('pmb');b.textContent=editing?P.done:P.changeModel;"
+         "b.setAttribute('aria-expanded',editing);curRow();}"
+         // A pick closes the picker and hands the focus back to its button.
+         "function closePicker(){if(!editing)return;editing=false;view();$('pmb').focus();}");
+}
+
 // The cards and the rest of the state onto the page.
 static void scriptPaint(String& h) {
   h += F(// Only the sizes the picked model takes; the save puts a size it
          // cannot take back to the model's default, and the next state shows it.
          "function cards(d){const v=d.printer.w+'x'+d.printer.h,m=String(d.printer.model);"
-         "document.querySelectorAll('#pm .pc').forEach(function(b){"
-         "b.classList.toggle('on',b.dataset.m===m);});"
+         "document.querySelectorAll('#pm .pc').forEach(function(b){const on=b.dataset.m===m;"
+         "b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);});"
+         "has=d.printer.configured;view();"
          "document.querySelectorAll('#ps .pc').forEach(function(b){"
          "b.style.display=b.dataset.fit.split(' ').indexOf(m)>=0?'':'none';"
          "b.classList.toggle('on',b.dataset.v===v);});"
@@ -538,9 +555,14 @@ static void scriptHandlers(String& h) {
          "flash('bl-s',r.ok?WS.ok:WS.err,!r.ok,4000);load();});});"
          "$('sc').addEventListener('click',function(){"
          "postFlash('/api/printer/scan','','dv-s',4000).then(function(){setTimeout(load,500);});});"
-         // A card posts what it stands for; the one already picked does nothing.
+         // Opening shows the fold too when the current model is in it.
+         "$('pmb').addEventListener('click',function(){editing=!editing;"
+         "const m=document.querySelector('#pm .pc.on');"
+         "if(editing&&m&&$('pmf').contains(m))$('pmf').open=true;view();});"
+         // A card posts what it stands for; the one already picked only
+         // closes the picker.
          "document.querySelectorAll('#pm .pc').forEach(function(b){"
-         "b.addEventListener('click',function(){if(b.classList.contains('on'))return;"
+         "b.addEventListener('click',function(){closePicker();if(b.classList.contains('on'))return;"
          "postFlash('/api/printer/model',b.dataset.m,'pm-s',4000).then(load);});});"
          "document.querySelectorAll('#ps .pc').forEach(function(b){"
          "b.addEventListener('click',function(){if(b.classList.contains('on'))return;"
@@ -565,7 +587,7 @@ static void scriptHandlers(String& h) {
          "if(!r.ok){flash('rb-s',r.text||WS.err,true,5000);return;}"
          "flash('rb-s',P.restarting,false);"
          "setTimeout(function(){location.reload();},9000);});});"
-         "load();");
+         "curRow();load();");
 }
 
 static void pageScript(String& h) {
@@ -574,6 +596,7 @@ static void pageScript(String& h) {
   scriptDevice(h);
   scriptRows(h);
   scriptPosition(h);
+  scriptPicker(h);
   scriptPaint(h);
   scriptHandlers(h);
   h += F("</script>");

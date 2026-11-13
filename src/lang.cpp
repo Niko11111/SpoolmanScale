@@ -4274,6 +4274,21 @@ const char* const STRINGS[][3] = {
   { "Daten, die die Waage nicht kennt", "data the scale does not recognise",
     "des données inconnues de la balance" },  // STR_TW_CFS_DATA_UNKNOWN
   { "Überschreiben",                     "Overwrite",                         "Écraser" },  // STR_TW_BTN_OVERWRITE
+  // The browser's model picker: the recommended two as cards, the rest folded
+  { "Weitere Modelle (%d)", "More models (%d)",
+    "Autres modèles (%d)" },  // STR_W_P_MORE_MODELS_FMT
+  { "Modell ändern", "Change model",
+    "Changer de modèle" },  // STR_W_P_CHANGE_MODEL
+  { "Fertig", "Done",
+    "Terminé" },  // STR_W_P_MODEL_DONE
+  { "Ohne Farbband, die günstigsten Etiketten.", "No ribbon, the cheapest labels.",
+    "Sans ruban, les étiquettes les moins chères." },  // STR_W_P_WHY_M220
+  { "Mit Farbband: Das Etikett übersteht das Trocknen.", "Ribbon: the label survives drying.",
+    "Avec ruban : l'étiquette résiste au séchage." },  // STR_W_P_WHY_M2
+  { "Details und Bezugsquellen", "Details and where to buy",
+    "Détails et où l'acheter" },  // STR_W_P_BUY_LINK
+  // After a model in a name that nobody has printed on yet
+  { "exp.", "exp.", "exp." },  // STR_PRN_TAG_UNTRIED_SHORT
 };
 
 StringID tagWriteResultString(uint8_t code) {
