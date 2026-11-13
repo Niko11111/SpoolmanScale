@@ -4289,6 +4289,15 @@ const char* const STRINGS[][3] = {
     "Détails et où l'acheter" },  // STR_W_P_BUY_LINK
   // After a model in a name that nobody has printed on yet
   { "exp.", "exp.", "exp." },  // STR_PRN_TAG_UNTRIED_SHORT
+  // Logs page: the session log card (page_logs_session.cpp), its toolbar
+  // and full screen view.
+  { "Vollbild",         "Full screen",       "Plein écran" },  // STR_W_SESSION_FULL
+  { "Live",             "Live",              "Direct" },  // STR_W_LIVE_FOLLOW
+  { "Angehalten",       "Paused",            "En pause" },  // STR_W_LIVE_PAUSE
+  { "Filter",           "Filter",            "Filtrer" },  // STR_W_LIVE_FILTER
+  { "Kleinere Schrift", "Smaller text",      "Texte plus petit" },  // STR_W_LIVE_SMALLER
+  { "Größere Schrift",  "Larger text",       "Texte plus grand" },  // STR_W_LIVE_LARGER
+  { "Vollbild beenden", "Leave full screen", "Quitter le plein écran" },  // STR_W_SESSION_FULL_EXIT
 };
 
 StringID tagWriteResultString(uint8_t code) {

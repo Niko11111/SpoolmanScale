@@ -1965,6 +1965,14 @@ enum StringID {
   STR_W_P_WHY_M2,
   STR_W_P_BUY_LINK,
   STR_PRN_TAG_UNTRIED_SHORT,
+  // Logs page: the session log card, its toolbar and full screen view
+  STR_W_SESSION_FULL,
+  STR_W_LIVE_FOLLOW,
+  STR_W_LIVE_PAUSE,
+  STR_W_LIVE_FILTER,
+  STR_W_LIVE_SMALLER,
+  STR_W_LIVE_LARGER,
+  STR_W_SESSION_FULL_EXIT,
   STR_COUNT
 };
 
