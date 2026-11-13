@@ -231,6 +231,12 @@ int wifiManagerRSSI() {
   return WiFi.RSSI();
 }
 
+void wifiManagerCurrentSsid(char* out, size_t len) {
+  if (!out || len == 0) return;
+  if (WiFi.status() != WL_CONNECTED) { out[0] = '\0'; return; }
+  snprintf(out, len, "%s", WiFi.SSID().c_str());
+}
+
 String wifiManagerMacAddress() {
   return WiFi.macAddress();
 }

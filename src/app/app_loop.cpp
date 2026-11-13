@@ -146,6 +146,7 @@
 #include "ui/status_scroll.h"
 #include "app/id_spool.h"
 #include "ui/status_clear.h"
+#include "app/wifi_fallback.h"
 
 namespace {
 constexpr unsigned long NO_TAG_CLEAR_MS = 60000;
@@ -446,6 +447,8 @@ static void noteWifiDown() {
          reason, wifiManagerReasonName(reason), cfg_wifi_ssid);
 }
 
+static bool wifiRoamQuiet();
+
 static void handleWifiReconnect() {
   if (cfg_wifi_ssid[0] == '\0') return;
   // The browser is trying a network of its own; a begin() with the stored
@@ -460,6 +463,8 @@ static void handleWifiReconnect() {
 
   if (WiFi.status() == WL_CONNECTED) {
     noteWifiUp();
+    // Remembers the network, and looks for the preferred one from another.
+    wifiFallbackTick(true, wifiRoamQuiet());
     // Connected, but boot gave up before the network answered, so nothing that
     // a connection starts has run yet. The guards above apply here as well:
     // each of those flows sets wifi_ok on its own once it succeeds.
@@ -471,6 +476,8 @@ static void handleWifiReconnect() {
   }
 
   noteWifiDown();
+  // Gone for a while: another known network may be in range.
+  if (wifiFallbackTick(false, false)) return;
 
   static unsigned long last_retry_ms = 0;
   if (last_retry_ms != 0 && millis() - last_retry_ms < WIFI_RETRY_INTERVAL_MS) return;
@@ -697,7 +704,8 @@ void appLoop() {
   setupPortalTick();
   perfSection("wifi");
   handleWifiReconnect();
-  wifiRoamTick(wifiRoamQuiet(), cfg_wifi_ssid, cfg_wifi_password);
+  // Not beside a scan of the network switching: both read the same results.
+  if (!wifiFallbackBusy()) wifiRoamTick(wifiRoamQuiet(), cfg_wifi_ssid, cfg_wifi_password);
 
   // OTA web server bedienen wenn aktiv
   perfSection("web");

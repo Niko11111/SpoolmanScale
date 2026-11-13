@@ -36,3 +36,7 @@ void wifiRoamTick(bool quiet, const char* ssid, const char* password);
 // True while a switch is under way. The reconnect watchdog holds off: its own
 // begin() would cancel the association to the chosen access point.
 bool wifiRoamSwitching();
+
+// True while a scan or a switch is under way. The switching between known
+// networks (app/wifi_fallback.cpp) does not start a scan beside it.
+bool wifiRoamBusy();

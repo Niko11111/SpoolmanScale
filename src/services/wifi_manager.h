@@ -73,6 +73,9 @@ IPAddress wifiManagerLocalIP();
 IPAddress wifiManagerGatewayIP();
 IPAddress wifiManagerDNSIP();
 int wifiManagerRSSI();
+// The network the station is on, "" while it is on none. Not cfg_wifi_ssid:
+// during a switch the two differ.
+void wifiManagerCurrentSsid(char* out, size_t len);
 // Station MAC, the address a router needs for a fixed DHCP reservation.
 String wifiManagerMacAddress();
 
