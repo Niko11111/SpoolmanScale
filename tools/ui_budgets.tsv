@@ -509,3 +509,8 @@ STR_COPY_CTX_TAGLESS	14	450	NEVER	src/ui/copy_flow.cpp New / Copy context line
 STR_NEWSPOOL_HINT_WRITE	16	360	WRAP:3	src/ui/new_spool_done_popup.cpp card sentence
 STR_NEWSPOOL_HINT_LABEL	16	360	WRAP:3	src/ui/new_spool_done_popup.cpp card sentence
 STR_NEWSPOOL_HINT_NOT_SHOWN	16	360	WRAP:3	src/ui/new_spool_done_popup.cpp card sentence
+STR_TW_CFS_DATA_TITLE	20	360	NEVER	src/ui/tag_write_popup.cpp buildAsk title, BOX_W - 40
+STR_TW_CFS_DATA_HINT	16	360	WRAP:4	src/ui/tag_write_popup.cpp buildAsk hint, BOX_W - 40, %s is one of the three descriptions
+STR_TW_CFS_DATA_CFS	16	360	NEVER	src/ui/tag_write_popup.cpp description inside STR_TW_CFS_DATA_HINT (a wrapping 360 px line)
+STR_TW_CFS_DATA_TEXT	16	360	NEVER	src/ui/tag_write_popup.cpp description inside STR_TW_CFS_DATA_HINT (a wrapping 360 px line)
+STR_TW_CFS_DATA_UNKNOWN	16	360	NEVER	src/ui/tag_write_popup.cpp description inside STR_TW_CFS_DATA_HINT (a wrapping 360 px line)

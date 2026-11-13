@@ -37,6 +37,8 @@ jobs:
         run: python3 test/test_server_name.py
       - name: Test spool link
         run: python3 test/test_spool_link.py
+      - name: Test link by number judges the article number
+        run: python3 test/test_link_number_article.py
       - name: Test copy list keeps tagged spools
         run: python3 test/test_copy_list_tagged.py
       - name: Test user agent
@@ -49,6 +51,8 @@ jobs:
         run: python3 test/test_server_refusal.py
       - name: Test the unfinished tag write marker
         run: python3 test/test_tag_pending.py
+      - name: Test the text found in a MIFARE card's data
+        run: python3 test/test_mifare_data.py
       - name: Test the AMS presence check's pacing
         run: python3 test/test_ams_presence_pace.py
       - name: Test weight write rules
@@ -67,12 +71,16 @@ jobs:
         run: python3 test/test_ams_grid_redraw.py
       - name: Test label raster crop
         run: python3 test/test_label_raster_crop.py
+      - name: Test AMS weights after a quick printer switch
+        run: python3 test/test_ams_weights_owed.py
       - name: Test NIIMBOT task selection
         run: python3 test/test_niimbot_task.py
       - name: Test label empty fields
         run: python3 test/test_label_gaps.py
       - name: Test local date parser
         run: python3 test/test_local_date.py
+      - name: Test release asset digest
+        run: python3 test/test_asset_digest.py
       - name: Test accent fold
         run: python3 test/test_accent_fold.py
       - name: Test label digits
@@ -81,6 +89,8 @@ jobs:
         run: python3 test/test_notes_cut.py
       - name: Test card uids merge
         run: python3 test/test_card_uids_merge.py
+      - name: Test Spool by ID pad names a refusal
+        run: python3 test/test_id_pad_refusal.py
       - name: Test spool start rules
         run: python3 test/test_spool_start.py
       - name: Test tare chain rules

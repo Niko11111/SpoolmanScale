@@ -358,7 +358,11 @@ void updateCheckTick() {
     // after a reboot as "update available" through updateCheckRestoreBadge().
     const bool keep = update_available && !partitionTagTooBig(gh_latest_version);
     prefsPutString("upd_ver", keep ? gh_latest_version : "");
-    prefsPutString("upd_sha", keep ? gh_latest_sha : "");
+    // The checksum of that version only. A manual check moves gh_latest_version
+    // on and may find no checksum for it, while the pair still holds the one of
+    // an older tag; stored next to the new tag it came back after a reboot as
+    // that tag's checksum, and the install was refused as a mismatch.
+    prefsPutString("upd_sha", keep ? otaExpectedSha(gh_latest_version) : "");
   } else if (answered) {
     // The server answered but NTP has not, so the daily window cannot be
     // measured in wall clock time. Count uptime instead, otherwise the retry

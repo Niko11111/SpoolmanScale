@@ -13,6 +13,8 @@
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/K3KmKnrWhP)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/formfollowsfunction)
 
+🌐 **Everything in one place:** the brand-new SpoolmanScale website, [www.spoolmanscale.com](https://spoolmanscale.com/?ref=github)
+
 **SpoolmanScale** is an ESP32 filament scale with an NFC reader, a touchscreen and open-source firmware. Place a spool on it: the scale reads its tag, pulls the spool from your filament manager and lets you update the weight, log a drying date, set a location or archive it. No phone needed. It also writes NFC tags, creates spools right at the scale and prints labels, and it works with [Spoolman](https://github.com/Donkie/Spoolman), [FilaMan](https://github.com/Fire-Devils/filaman-system) and [BamBuddy](https://github.com/maziggy/BamBuddy), which you can switch between at any time.
 
 Over 200 active users, inventories of more than 300 spools, and only 5-star ratings on MakerWorld.
@@ -93,6 +95,8 @@ Questions or trouble? Join the [Discord](https://discord.gg/K3KmKnrWhP), happy t
 
 ## Hardware
 
+📦 **Don't want to source and solder the parts yourself?** I'm working on a kit, join the waitlist on [www.spoolmanscale.com](https://spoolmanscale.com/?ref=github#kit)
+
 | Component | Model | Link |
 |---|---|---|
 | MCU + Display | WT32-SC01 Plus (ESP32-S3, 480×320, ST7796) | [AliExpress](https://de.aliexpress.com/item/1005006050379552.html) |
@@ -138,7 +142,7 @@ On first boot the scale asks which filament manager you use and then only shows 
 
 **No server yet?** [SpoolmanScale Pro](https://niko11111.github.io/SpoolmanScale-Docs/pro/) turns a Raspberry Pi into one for Spoolman, FilaMan or BamBuddy, with backups and updates from a web page.
 
-*Not available ready-made yet. Looking into kits and pre-built scales in small batches. Interested? Email [support@spoolmanscale.com](mailto:support@spoolmanscale.com): the more people ask, the sooner it can happen. [More in the FAQ](https://niko11111.github.io/SpoolmanScale-Docs/help/faq/#can-i-buy-the-scale-ready-made).*
+*Not available ready-made yet, but I'm working on a kit. Interested? Join the waitlist on [www.spoolmanscale.com](https://spoolmanscale.com/?ref=github#kit): the more people sign up, the sooner it can happen. [More in the FAQ](https://niko11111.github.io/SpoolmanScale-Docs/help/faq/#can-i-buy-the-scale-ready-made).*
 
 ### <img src="https://raw.githubusercontent.com/Niko11111/SpoolmanScale/main/images/Logo_Spoolman.png" height="20" align="top"> Spoolman
 
@@ -199,6 +203,7 @@ Any server that implements the [integration specification](https://github.com/Ni
 
 A lot of my free time has gone into building SpoolmanScale. If you enjoy using it, please help spread the word:
 
+- 🌐 **Visit the website** – everything in one place: [www.spoolmanscale.com](https://spoolmanscale.com/?ref=github)
 - ⭐ **Star this repo on GitHub** – it helps more people discover the project
 - ⭐⭐⭐⭐⭐ **Rate 5 stars & boost on MakerWorld** – every like, rating and boost helps: [makerworld.com/@FormFollowsF](https://makerworld.com/de/models/2713675-spoolmanscale#profileId-3005075)
 - ☕ **Support on Ko-fi** – even a single euro makes a difference: [ko-fi.com/formfollowsfunction](https://ko-fi.com/formfollowsfunction)

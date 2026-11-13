@@ -2078,7 +2078,13 @@ void appLoop() {
         snprintf(uid_str, sizeof(uid_str), "%02X:%02X:%02X:%02X",
           uid[0], uid[1], uid[2], uid[3]);
 
-        bool uid_changed = new_placement || (strcmp(uid_str, g_tag.uid_str) != 0);
+        // Written since it was read: decoded again, like a new placement. The
+        // decode puts the tag's own fields on screen until the backend answers,
+        // so the spool is looked up again too; otherwise "Generic" stayed.
+        const bool reread = mifareTakeReread(uid);
+        if (reread) spoolman_queried_uid[0] = '\0';
+        bool uid_changed = new_placement || reread ||
+                           (strcmp(uid_str, g_tag.uid_str) != 0);
         new_placement = false;
         if (newly_placed || uid_changed) tagUnfinishedNotice(uid, 4, uid_str);
         int bambu_blocks_read = countBambuDataBlocksRead(g_tag);
