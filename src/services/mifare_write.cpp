@@ -360,7 +360,8 @@ static bool overwriteFirst(const WriteRun& run, bool deferred, bool* silent,
   // Only a tag known to carry the format is waited for here: a blank one
   // never opens with this key, and 20 s of "put it back" would be for
   // nothing. A weak tag the scale never settled gets the key again later.
-  if (!ok && wait && tagFamilyGet(u) == job.family) {
+  const bool waited = !ok && wait && tagFamilyGet(u) == job.family;
+  if (waited) {
     logSDf("%s write: %s does not answer with its key, waiting for the spool to be put back",
            job.label, uid_str);
     ok = waitAndRead(run, k, blocks, waitBudget(run));
@@ -371,7 +372,11 @@ static bool overwriteFirst(const WriteRun& run, bool deferred, bool* silent,
   }
   if (!mifareWakeCard(u, uid_str, silent) || *silent) {
     // A reader left silent by a field cycle gets no more commands piled on.
-    if (*silent) {
+    // So does a spool that was just waited for in vain: a second wait of
+    // 20 s would only ask the same again (14.11.2026, spool 23: two
+    // countdowns, 42 s, before "no tag").
+    if (*silent || waited) {
+      if (waited) logSDf("%s write: %s was not put back - not written", job.label, uid_str);
       *out = MIFARE_WRITE_NO_TAG;
       return true;
     }
