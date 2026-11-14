@@ -370,9 +370,13 @@ static bool overwriteFirst(const WriteRun& run, bool deferred, bool* silent,
     return true;
   }
   if (!mifareWakeCard(u, uid_str, silent) || *silent) {
+    // A reader left silent by a field cycle gets no more commands piled on.
+    if (*silent) {
+      *out = MIFARE_WRITE_NO_TAG;
+      return true;
+    }
     // A tag that has gone quiet is asked to be put back rather than given
     // up on: from the tag view that is a weak tag more often than not.
-    *silent = false;
     uint8_t got[NFC_UID_MAX];
     uint8_t got_len = 0;
     if (!waitForCard(got, &got_len, u, wait, waitBudget(run))) {
@@ -506,7 +510,8 @@ static int sectorWritable(const WriteRun& run, bool unfinished,
                           uint8_t old[MIFARE_DATA_BLOCKS_MAX][MIFARE_BLOCK_BYTES]) {
   const MifareWriteJob& job = run.job;
   const int st = readDataBlocks(job.sector, old);
-  if (st != 0 || run.overwrite || unfinished) return st;
+  if (st < 0) return -1;
+  if (st == 1 || run.overwrite || unfinished) return 1;
   for (uint8_t b = 0; b < MIFARE_DATA_BLOCKS_MAX; b++) {
     if (!mifareBlockIsBlank(old[b]) && memcmp(old[b], job.data[b], MIFARE_BLOCK_BYTES) != 0) {
       logSDf("%s write: %s block %u holds data", job.label, run.uid_str,
@@ -517,19 +522,23 @@ static int sectorWritable(const WriteRun& run, bool unfinished,
   return 1;
 }
 
-// sectorWritable() on a tag that may sit weakly: data that may not be
-// written is only believed when the next BLANK_READS_AFTER_DATA reads, each
-// after a fresh wake, do not all say otherwise (see readDataBlocks).
+// sectorWritable() on a tag that may sit weakly: once data that may not be
+// written has been seen in this write (*saw_data, kept across put-backs), it
+// writes only when the next BLANK_READS_AFTER_DATA reads, each after a fresh
+// wake, all say writable (see readDataBlocks).
 static int readForWrite(const WriteRun& run, bool unfinished,
-                        uint8_t old[MIFARE_DATA_BLOCKS_MAX][MIFARE_BLOCK_BYTES], bool* silent) {
+                        uint8_t old[MIFARE_DATA_BLOCKS_MAX][MIFARE_BLOCK_BYTES], bool* silent,
+                        bool* saw_data) {
   int st = sectorWritable(run, unfinished, old);
-  if (st != 0) return st;
+  if (st < 0) return -1;
+  if (st == 1 && !*saw_data) return 1;
+  *saw_data = true;
   for (int n = 0; n < BLANK_READS_AFTER_DATA; n++) {
     if (!reopenFactory(run, silent)) return -1;
     st = sectorWritable(run, unfinished, old);
     if (st != 1) return st;
   }
-  logSDf("%s write: %s read as holding data once, writable on the next %d reads - writing",
+  logSDf("%s write: %s read as holding data before, writable on the next %d reads - writing",
          run.job.label, run.uid_str, BLANK_READS_AFTER_DATA);
   return 1;
 }
@@ -542,7 +551,8 @@ static MifareWriteResult readSectorOrAsk(const WriteRun& run, bool* silent) {
   const MifareWriteJob& job = run.job;
   const bool unfinished = tagPendingResumes(run.uid, 4);
   uint8_t old[MIFARE_DATA_BLOCKS_MAX][MIFARE_BLOCK_BYTES];
-  int st = readForWrite(run, unfinished, old, silent);
+  bool saw_data = false;
+  int st = readForWrite(run, unfinished, old, silent, &saw_data);
   const bool may_retry = run.wait && tagFamilyGet(run.uid) != TAG_FAMILY_BAMBU;
   for (int again = 0; st < 0 && may_retry && again < PUT_BACK_ASKS; again++) {
     logSDf("%s write: %s sector %u did not read - asking for it again (%d/%d)", job.label,
@@ -550,7 +560,7 @@ static MifareWriteResult readSectorOrAsk(const WriteRun& run, bool* silent) {
     *silent = false;
     const PutBack pb = putBackFactory(run);
     if (pb == PUT_BACK_GONE) return MIFARE_WRITE_NO_TAG;
-    if (pb == PUT_BACK_OPENED) st = readForWrite(run, unfinished, old, silent);
+    if (pb == PUT_BACK_OPENED) st = readForWrite(run, unfinished, old, silent, &saw_data);
   }
   if (st == 1) return MIFARE_WRITE_OK;
   logSDf("%s write: %s sector %u %s - not written", job.label, run.uid_str,
@@ -720,6 +730,8 @@ int mifareProbeFactory(const uint8_t uid[4], const char* uid_str) {
     }
     if (data == 0 && ++data_reads >= PROBE_DATA_READS) break;
   }
+  // Data seen once and then no second read: not confirmed, so unread.
+  if (data == 0 && data_reads < PROBE_DATA_READS) data = -1;
   // All three blocks of the read that confirmed the data: they are what the
   // question before an overwrite shows (mifareFactoryHeld()).
   if (memcmp(uid, s_held_uid, 4) == 0) s_held_valid = false;
