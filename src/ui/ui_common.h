@@ -163,6 +163,12 @@ lv_obj_t* uiIconDisc(lv_obj_t* parent, const lv_img_dsc_t* icon, int diameter,
 // colour of text drawn across it.
 uint32_t swatchCenterRgb(const SpoolColor& c);
 
+// Shortens s in place until it fits max_w pixels in font, ending it in "..."
+// when it had to cut, on a UTF-8 boundary. LV_LABEL_LONG_DOT does this for a
+// label of one line; this is for one line among several in a single label,
+// which LVGL cannot dot line by line. The font has no ellipsis glyph.
+void uiFitLine(char* s, size_t n, const lv_font_t* font, lv_coord_t max_w);
+
 // utf8Cut(), isHexColorWord() and colorNameClean() moved to
 // services/text_util.h, which the AMS parsers can reach too. Included
 // above, so the screens that call them need no change.

@@ -1281,6 +1281,13 @@ void bambuStatusFilter(JsonDocument& filter) {
   // "n3f", "ams", "n3s": which hardware the unit is. Only an AMS 2 Pro gets
   // the card's "all spools in this unit" drying answer.
   fu["module_type"] = true;
+  // Bambu's AMS type number, what tells an AMS 3H when module_type is absent.
+  fu["ams_type"]    = true;
+  // The AMS 3H's heated chamber: which bays sit in it and its own readings.
+  // The unit's humidity and temp are the rest of the unit, not the chamber.
+  fu["dryer_slots"]    = true;
+  fu["dryer_humidity"] = true;
+  fu["dryer_temp"]     = true;
   // The running cycle. Without these the view never showed a drying unit on
   // this backend at all, although BamBuddy reports all three.
   fu["dry_status"]      = true;
@@ -1296,8 +1303,8 @@ void bambuStatusFilter(JsonDocument& filter) {
   ft["spool_id"]        = true;
   ft["remain_g"]        = true;
 
-  // Which bay the printer feeds from. Bambu numbers it globally as
-  // ams_id * 4 + slot, so it is resolved back to a pair below.
+  // Which bay the printer feeds from. Bambu numbers it globally
+  // (amsGlobalTrayId), so it is resolved back to a pair below.
   filter["tray_now"] = true;
 
   // The printer's own state word and job percentage. BamBuddy names these
@@ -1317,6 +1324,26 @@ void bambuStatusFilter(JsonDocument& filter) {
   fv["exists"]          = true;
   fv["spool_id"]        = true;
   fv["remain_g"]        = true;
+}
+
+// The heated chamber of an AMS 3H, apart from the unit's own readings. A unit
+// without one leaves the mask at 0 and the view draws no frame.
+static void readDryerChamber(JsonObjectConst u, AmsSlotUnit& dst) {
+  dst.dryer_mask     = 0;
+  dst.dryer_humidity = AMS_HUMIDITY_NA;
+  dst.dryer_temp_c10 = AMS_TEMP_NA;
+  for (JsonVariantConst v : u["dryer_slots"].as<JsonArrayConst>()) {
+    const int bay = v | -1;
+    if (bay >= 0 && bay < AMS_MAX_TRAYS) dst.dryer_mask |= (uint16_t)(1u << bay);
+  }
+  if (!dst.dryer_mask) return;
+  JsonVariantConst hum = u["dryer_humidity"];
+  if (!hum.isNull()) {
+    const int h = hum.as<int>();
+    if (h >= 0 && h <= 100) dst.dryer_humidity = (int8_t)h;
+  }
+  JsonVariantConst tmp = u["dryer_temp"];
+  if (!tmp.isNull()) dst.dryer_temp_c10 = (int16_t)lroundf(tmp.as<float>() * 10.0f);
 }
 
 void bambuStatusToAmsState(JsonObjectConst doc, int printer_id, AmsSlotState& out,
@@ -1355,7 +1382,7 @@ void bambuStatusToAmsState(JsonObjectConst doc, int printer_id, AmsSlotState& ou
     dst = AmsSlotUnit{};
     dst.ams_id = (uint8_t)(u["id"] | 0);
     const char* module_type = u["module_type"] | "";
-    dst.model  = amsModelFromModuleType(module_type);
+    dst.model  = amsModelFromBambu(module_type, u["ams_type"] | -1, dst.ams_id);
     dst.is_ht  = (u["is_ams_ht"] | false) || dst.ams_id >= 128 ||
                  dst.model == AMS_MODEL_AMS_HT;
     // A cycle counts as running on either signal, the same rule FilaMan
@@ -1392,18 +1419,14 @@ void bambuStatusToAmsState(JsonObjectConst doc, int printer_id, AmsSlotState& ou
 
     JsonVariantConst tmp = u["temp"];
     dst.temp_c10 = tmp.isNull() ? AMS_TEMP_NA : (int16_t)lroundf(tmp.as<float>() * 10.0f);
+    readDryerChamber(u, dst);
 
     for (JsonVariantConst tv : u["tray"].as<JsonArrayConst>()) {
       if (dst.tray_count >= AMS_MAX_TRAYS) break;
       JsonObjectConst t = tv.as<JsonObjectConst>();
       const uint8_t tid = (uint8_t)(t["id"] | dst.tray_count);
       fillTray(t, dst.tray[dst.tray_count], tid);
-      // A regular AMS is addressed as ams_id * 4 + slot. An AMS HT numbers
-      // itself from 128 and has one bay, so that product cannot fit the
-      // field; the id itself is what the printer reports for it.
-      const int global = dst.ams_id * 4 + tid;
-      dst.tray[dst.tray_count].active =
-        (tray_now == global) || (dst.is_ht && tray_now == dst.ams_id);
+      dst.tray[dst.tray_count].active = (tray_now == amsGlobalTrayId(dst, tid));
       dst.tray_count++;
     }
     out.unit_count++;
@@ -1533,7 +1556,7 @@ int bbAssignSlot(const char* base_url, const char* api_key, int spool_id,
   // Checked here rather than left to the server: a 422 arrives as a wall of
   // validation JSON, and the one thing worth knowing is that this bay cannot
   // be addressed at all.
-  if (ams_id < 0 || ams_id > 255 || tray_id < 0 || tray_id > 3) {
+  if (!amsBayAssignable(ams_id, tray_id)) {
     logSDf("BamBuddy: bay %d/%d is outside what an assignment accepts",
            ams_id, tray_id);
     return -1;
@@ -1719,9 +1742,13 @@ int bbFindUnitSpools(const char* base_url, const char* api_key, int printer_id,
     if (tray_id < 0 || tray_id >= n || id <= 0) continue;
     out_by_tray[tray_id] = id;
   }
-  logSDf("BamBuddy: unit %d of printer %d holds spools %d/%d/%d/%d", ams_id,
-         printer_id, n > 0 ? out_by_tray[0] : 0, n > 1 ? out_by_tray[1] : 0,
-         n > 2 ? out_by_tray[2] : 0, n > 3 ? out_by_tray[3] : 0);
+  // Every bay the caller asked for: nine on an AMS 3H, not just the first four.
+  char list[AMS_MAX_TRAYS * 8] = "";
+  for (uint8_t i = 0; i < n; i++) {
+    const size_t used = strlen(list);
+    snprintf(list + used, sizeof(list) - used, "%s%d", i ? "/" : "", out_by_tray[i]);
+  }
+  logSDf("BamBuddy: unit %d of printer %d holds spools %s", ams_id, printer_id, list);
   return 200;
 }
 

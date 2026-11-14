@@ -17,6 +17,7 @@
 #include "ui/loading_overlay.h"
 #include "ui/navigation.h"
 #include "ui/theme.h"
+#include "ui/ams_rack.h"
 #include "ui/ui_common.h"
 
 // Last, and after everything that pulls in ArduinoJson: its template
@@ -33,8 +34,18 @@
 #define AMSV_TILE_GAP     6
 #define AMSV_TILE_W       ((480 - AMSV_MARGIN - AMSV_MARGIN_R - 3 * AMSV_TILE_GAP) / 4)
 #define AMSV_TILE_H       58
+// Room kept free left and right of a tile's text, inside its border.
+#define AMSV_TILE_TEXT_PAD 4
 #define AMSV_UNIT_HDR_H   17
-#define AMSV_UNIT_H       (AMSV_UNIT_HDR_H + AMSV_TILE_H + 9)
+// Below the last row of a unit, before the next header.
+#define AMSV_UNIT_FOOT    9
+// The width a regular AMS gets: four tiles across.
+#define AMSV_COLS_REGULAR 4
+// An external holder with more bays than this (an H3C has nine, one per
+// hotend) shows only the bays that hold something.
+#define AMSV_EXT_ALL_MAX  2
+// Room above an AMS 3H's back row for the frame of its chamber (ams_rack.h).
+#define AMSV_RACK_HDR_EXTRA 4
 #define AMSV_BODY_TOP     40
 #define AMSV_HEADLINE_H   24
 // The status row: the printer's name, as a chip when there is more than one
@@ -118,6 +129,9 @@ static AmsViewMode  s_mode      = AMS_VIEW_BROWSE;
 static AmsPickCb    s_cb        = nullptr;
 static char         s_headline[AMSV_HEADLINE_MAX] = "";
 static AmsSlotState s_state;
+// Width of the tiles of the unit being laid out: four across on a regular
+// AMS, five narrower ones on an AMS 3H.
+static int          s_tile_w = AMSV_TILE_W;
 
 static bool s_build_pending = false;
 static bool s_fetch_pending = false;
@@ -398,7 +412,7 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
 
   lv_obj_t* tile = lv_obj_create(parent);
   if (!tile) return nullptr;
-  lv_obj_set_size(tile, AMSV_TILE_W, AMSV_TILE_H);
+  lv_obj_set_size(tile, s_tile_w, AMSV_TILE_H);
   lv_obj_set_pos(tile, x, y);
   lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_radius(tile, 6, 0);
@@ -445,7 +459,8 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
     // should stay visible at a glance.
     copyT(line, sizeof(line), STR_AMSV_EMPTY);
   } else {
-    char name[AMS_NAME_MAX];
+    // Room for the dots uiFitLine() may add.
+    char name[AMS_NAME_MAX + 3];
     strncpy(name, tray.name[0] ? tray.name : T(STR_AMSV_EMPTY), sizeof(name) - 1);
     name[sizeof(name) - 1] = '\0';
 
@@ -471,10 +486,16 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
       strncat(amount, b, sizeof(amount) - strlen(amount) - 1);
     }
 
-    snprintf(line, sizeof(line), "%s\n%s\n%s",
-             name,
-             tray.color_name[0] ? tray.color_name : "-",
-             amount[0]          ? amount          : "-");
+    // Each line cut to the tile with "..." on its own: one label holds all
+    // three, and centred text that overflows lost both of its ends.
+    char color[sizeof(tray.color_name) + 3];
+    snprintf(color, sizeof(color), "%s", tray.color_name[0] ? tray.color_name : "-");
+    if (!amount[0]) snprintf(amount, sizeof(amount), "-");
+    const lv_coord_t text_w = s_tile_w - 2 * AMSV_TILE_TEXT_PAD;
+    uiFitLine(name,   sizeof(name),   &lv_font_montserrat_ext_12, text_w);
+    uiFitLine(color,  sizeof(color),  &lv_font_montserrat_ext_12, text_w);
+    uiFitLine(amount, sizeof(amount), &lv_font_montserrat_ext_12, text_w);
+    snprintf(line, sizeof(line), "%s\n%s\n%s", name, color, amount);
   }
 
   lv_obj_t* lbl = lv_label_create(tile);
@@ -510,6 +531,8 @@ static void buildUnitHeader(lv_obj_t* parent, const AmsSlotUnit& unit,
     title[sizeof(title) - 1] = '\0';
   } else if (unit.is_ext) {
     copyT(title, sizeof(title), STR_AMSV_UNIT_EXT);
+  } else if (unit.model == AMS_MODEL_AMS_3H) {
+    copyT(title, sizeof(title), STR_AMSV_UNIT_3H);
   } else {
     char fmt[24];
     copyT(fmt, sizeof(fmt), unit.is_ht ? STR_AMSV_UNIT_HT : STR_AMSV_UNIT);
@@ -542,8 +565,11 @@ static void buildUnitHeader(lv_obj_t* parent, const AmsSlotUnit& unit,
     strncat(right, tmp, sizeof(right) - strlen(right) - 1);
   }
 
+  // An AMS 3H dries in its chamber only, and says so inside the chamber's
+  // frame (ams_rack.cpp); up here it would read as the whole unit drying.
+  const bool dry_here = unit.drying && !unit.dryer_mask;
   char line[96] = "";
-  if (unit.drying) {
+  if (dry_here) {
     // Only the figures the printer really reported. An AMS HT sends the
     // minutes left and no target temperature at all, and printing it anyway
     // put the sentinel on the screen as "Trocknet -1 °C, 674 min".
@@ -574,9 +600,53 @@ static void buildUnitHeader(lv_obj_t* parent, const AmsSlotUnit& unit,
   if (!r) return;
   lv_label_set_text(r, line);
   lv_obj_set_style_text_color(r,
-    lv_color_hex(unit.drying ? AMSV_COL_WARM : AMSV_COL_MUTED), 0);
+    lv_color_hex(dry_here ? AMSV_COL_WARM : AMSV_COL_MUTED), 0);
   lv_obj_set_style_text_font(r, &lv_font_montserrat_ext_12, 0);
   lv_obj_align(r, LV_ALIGN_TOP_RIGHT, -AMSV_MARGIN_R, y);
+}
+
+static bool bayShown(const AmsSlotUnit& unit, const AmsSlotTray& tray) {
+  if (!unit.is_ext || unit.tray_count <= AMSV_EXT_ALL_MAX) return true;
+  return tray.exists || tray.spool_id > 0;
+}
+
+// The AMS 3H's tiles, built by the same buildTile() as every other bay.
+static lv_obj_t* rackTile(const AmsSlotUnit& unit, const AmsSlotTray& tray,
+                          int x, int y, int w) {
+  s_tile_w = w;
+  return buildTile(s_body, unit, tray, x, y);
+}
+
+// One unit's bays, row by row. Returns the height used, -1 when the pool ran out.
+static int layoutUnitBays(const AmsSlotUnit& unit, int y, int& tiles) {
+  if (amsUnitIsRack(unit)) {
+    const int top = y + AMSV_UNIT_HDR_H + AMSV_RACK_HDR_EXTRA;
+    const AmsRackArea area = { s_body, AMSV_MARGIN, 480 - AMSV_MARGIN_R, top,
+                               AMSV_TILE_H, AMSV_TILE_GAP };
+    const int h = amsRackBuild(area, unit, rackTile, tiles);
+    return h < 0 ? -1 : (top - y) + h;
+  }
+  // An external holder with nine inputs wraps onto more rows of four.
+  const int cols = AMSV_COLS_REGULAR;
+  s_tile_w = AMSV_TILE_W;
+  int col = 0, row = 0;
+  for (uint8_t t = 0; t < unit.tray_count; t++) {
+    if (!bayShown(unit, unit.tray[t])) continue;
+    const int x  = AMSV_MARGIN + col * (s_tile_w + AMSV_TILE_GAP);
+    const int ty = y + AMSV_UNIT_HDR_H + row * (AMSV_TILE_H + AMSV_TILE_GAP);
+    if (!buildTile(s_body, unit, unit.tray[t], x, ty)) return -1;
+    tiles++;
+    if (++col == cols) { col = 0; row++; }
+  }
+  const int rows = row + (col > 0 ? 1 : 0);
+  return AMSV_UNIT_HDR_H + rows * AMSV_TILE_H + (rows - 1) * AMSV_TILE_GAP;
+}
+
+static bool unitHasShownBay(const AmsSlotUnit& unit) {
+  for (uint8_t t = 0; t < unit.tray_count; t++) {
+    if (bayShown(unit, unit.tray[t])) return true;
+  }
+  return false;
 }
 
 // The grid. Kept as its own function because the plan keeps a two step
@@ -590,24 +660,18 @@ static void layoutGrid(const AmsSlotState& st) {
 
   for (uint8_t u = 0; u < st.unit_count; u++) {
     const AmsSlotUnit& unit = st.unit[u];
+    if (!unitHasShownBay(unit)) continue;
     buildUnitHeader(s_body, unit, u, y);
-
-    int x = AMSV_MARGIN;
-    for (uint8_t t = 0; t < unit.tray_count; t++) {
-      lv_obj_t* tile = buildTile(s_body, unit, unit.tray[t], x,
-                                 y + AMSV_UNIT_HDR_H);
-      if (!tile) {
-        // Out of pool. Says so instead of leaving a short grid that looks
-        // like the printer reported fewer bays than it has.
-        setStatus(T(STR_AMSV_ERR_FULL));
-        logSDf("AMSVIEW: pool exhausted after %d tiles", tiles);
-        logLvMem("amsview/post", tiles);
-        return;
-      }
-      tiles++;
-      x += AMSV_TILE_W + AMSV_TILE_GAP;
+    const int used = layoutUnitBays(unit, y, tiles);
+    if (used < 0) {
+      // Out of pool. Says so instead of leaving a short grid that looks
+      // like the printer reported fewer bays than it has.
+      setStatus(T(STR_AMSV_ERR_FULL));
+      logSDf("AMSVIEW: pool exhausted after %d tiles", tiles);
+      logLvMem("amsview/post", tiles);
+      return;
     }
-    y += AMSV_UNIT_H;
+    y += used + AMSV_UNIT_FOOT;
   }
   logLvMem("amsview/post", tiles);
 }
@@ -1160,6 +1224,8 @@ static void unitName(const AmsSlotUnit& unit, char* out, size_t n) {
     snprintf(out, n, "%s", unit.label);
   } else if (unit.is_ext) {
     copyT(out, n, STR_AMSV_UNIT_EXT);
+  } else if (unit.model == AMS_MODEL_AMS_3H) {
+    copyT(out, n, STR_AMSV_UNIT_3H);
   } else {
     char fmt[24];
     copyT(fmt, sizeof(fmt), unit.is_ht ? STR_AMSV_UNIT_HT : STR_AMSV_UNIT);

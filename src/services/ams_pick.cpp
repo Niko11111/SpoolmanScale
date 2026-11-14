@@ -80,7 +80,8 @@ static void offerLocationAfterPick(int spool_id) {
   requestLocationPicker(true);
 }
 
-// The Spoolman location for a bay's unit: "X1C AMS 1", "X1C AMS HT", "X1C Ext".
+// The Spoolman location for a bay's unit: "X1C AMS 1", "X1C AMS HT", "H3C AMS 3H",
+// "X1C Ext".
 // Language neutral on purpose - it lands in the database, where a German and
 // an English scale would otherwise name one shelf twice. One location per
 // unit, not per bay: the bay is what the AMS view is for.
@@ -88,6 +89,7 @@ static void offerLocationAfterPick(int spool_id) {
 void amsLocationName(char* out, size_t n, const char* printer, int ams_id) {
   char unit[16];
   if (ams_id == AMS_EXT_AMS_ID)        snprintf(unit, sizeof(unit), "Ext");
+  else if (ams_id == AMS_3H_UNIT_ID)   snprintf(unit, sizeof(unit), "AMS 3H");
   else if (ams_id == AMS_HT_FIRST_ID)  snprintf(unit, sizeof(unit), "AMS HT");
   else if (ams_id > AMS_HT_FIRST_ID)   snprintf(unit, sizeof(unit), "AMS HT %d", ams_id - AMS_HT_FIRST_ID + 1);
   else                                 snprintf(unit, sizeof(unit), "AMS %d", ams_id + 1);

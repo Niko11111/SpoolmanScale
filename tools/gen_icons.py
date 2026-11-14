@@ -77,6 +77,13 @@ QR = [
     [(14, 21), (14, 18)],
 ]
 
+# A flame: a teardrop with its tip leaning, and a small one inside. Marks the
+# heated chamber of an AMS 3H while it dries.
+FLAME = [
+    [(12, 2.5), (15.5, 6.5), (18, 10.5)] + arc(12, 15, 6, 6, -20, 200, 16)[1:] + [(6.5, 10.5), (9, 7.5), (10.5, 9.5), (12, 2.5)],
+    [(12, 12), (14.2, 15)] + arc(12, 17, 2.4, 2.4, -30, 210, 10)[1:] + [(12, 12)],
+]
+
 # name, strokes, size in pixels, stroke width on the grid
 ICONS = [
     ("ICON_CUP", CUP, 20, 2.4),
@@ -85,6 +92,7 @@ ICONS = [
     ("ICON_CUBE", CUBE, 20, 2.4),
     ("ICON_BOOK", BOOK, 20, 2.4),
     ("ICON_QR", QR, 36, 2.0),
+    ("ICON_FLAME", FLAME, 16, 2.4),
 ]
 
 

@@ -4301,6 +4301,8 @@ const char* const STRINGS[][3] = {
   // The website's wish list, linked on the printer and the label page
   { "Drucker oder Etikettengröße fehlt? Hier wünschen", "Printer or label size missing? Request it",
     "Imprimante ou format d'étiquette manquant ? Demandez-le" },  // STR_W_P_WISH_LINK
+  // The H3C's nine bay unit, by Bambu's own name
+  { "AMS 3H", "AMS 3H", "AMS 3H" },  // STR_AMSV_UNIT_3H
 };
 
 StringID tagWriteResultString(uint8_t code) {

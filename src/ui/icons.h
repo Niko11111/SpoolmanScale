@@ -10,4 +10,5 @@ extern const lv_img_dsc_t ICON_CHAT;   // 20 px
 extern const lv_img_dsc_t ICON_CUBE;   // 20 px
 extern const lv_img_dsc_t ICON_BOOK;   // 20 px
 extern const lv_img_dsc_t ICON_QR;     // 36 px
+extern const lv_img_dsc_t ICON_FLAME;  // 16 px
 

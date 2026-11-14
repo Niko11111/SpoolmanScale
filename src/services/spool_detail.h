@@ -183,5 +183,5 @@ struct AmsUnitSpools {
   uint8_t count;                    // 0 = nothing to offer
 };
 
-static_assert(sizeof(AmsUnitSpools) <= 64,
+static_assert(sizeof(AmsUnitSpools) <= 80,
               "AmsUnitSpools outgrew its budget, check where it is stored");

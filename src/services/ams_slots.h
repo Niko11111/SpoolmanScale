@@ -34,15 +34,15 @@
 // and paying the RAM, not of changing code.
 #define AMS_MAX_UNITS        4
 
-// An AMS HT holds one bay, a regular AMS four. Never assume four, always
-// read tray_count.
-#define AMS_MAX_TRAYS        4
+// An AMS HT holds one bay, a regular AMS four, the H3C's AMS 3H nine. Never
+// assume four, always read tray_count.
+#define AMS_MAX_TRAYS        9
 
 // Bays in the external holder: one on most printers, two on a dual nozzle
 // H2D (Ext-L and Ext-R). They are bays of a single unit, not units of their
 // own - FilaMan reports them exactly that way, as one entry of kind
-// "external" carrying slots 254 and 255.
-#define AMS_MAX_EXT          2
+// "external" carrying slots 254 and 255. An H3C has one per hotend, nine.
+#define AMS_MAX_EXT          9
 
 // The external holder is that one extra unit.
 #define AMS_UNITS_TOTAL      (AMS_MAX_UNITS + 1)
@@ -95,6 +95,7 @@ enum AmsModel : uint8_t {
   AMS_MODEL_AMS_2_PRO,     // "n3f" / "ams_2_pro", four bays and a heater
   AMS_MODEL_AMS_HT,        // "n3s" / "ams_ht", one bay and a heater
   AMS_MODEL_AMS_LITE,      // "ams_lite", the A1's four open bays
+  AMS_MODEL_AMS_3H,        // "n10a", the H3C's unit 32 with nine bays
 };
 
 // A single bay.
@@ -160,6 +161,11 @@ struct AmsSlotUnit {
   bool        humidity_is_level;
   // Stored in the padding the bools above leave, so the unit does not grow.
   AmsModel    model;
+  // The heated chamber of an AMS 3H: which bays sit in it (bit per tray id,
+  // 0 when the unit has none) and its own readings, apart from the unit's.
+  uint16_t    dryer_mask;
+  int16_t     dryer_temp_c10;       // AMS_TEMP_NA when unknown
+  int8_t      dryer_humidity;       // AMS_HUMIDITY_NA when unknown
 };
 
 // The model, from either spelling: Bambu's module name as BamBuddy passes it
@@ -173,7 +179,42 @@ static inline AmsModel amsModelFromModuleType(const char* s) {
   if (strcmp(s, "n3s") == 0 ||
       strcmp(s, "ams_ht") == 0)     return AMS_MODEL_AMS_HT;
   if (strcmp(s, "ams_lite") == 0)   return AMS_MODEL_AMS_LITE;
+  if (strcmp(s, "n10a") == 0)       return AMS_MODEL_AMS_3H;
   return AMS_MODEL_UNKNOWN;
+}
+
+// The H3C's AMS 3H. BamBuddy reports it as unit 32 and names it in
+// module_type; ams_type 6 (Bambu's ZMULTI_A) or the unit id alone is what
+// BamBuddy itself falls back on when the name is missing (utils/tray_ids.py).
+#define AMS_3H_UNIT_ID        32
+#define AMS_TYPE_ZMULTI_A     6
+#define AMS_3H_BAYS           9
+#define AMS_REGULAR_BAYS      4
+// Bambu Studio's global bay numbers, the ones tray_now reports: a regular
+// AMS counts ams_id * 4 + bay, an AMS 3H 28 + bay, an AMS HT its unit id.
+#define AMS_3H_GLOBAL_BASE    28
+
+static inline AmsModel amsModelFromBambu(const char* module_type, int ams_type,
+                                         int ams_id) {
+  const AmsModel m = amsModelFromModuleType(module_type);
+  if (m != AMS_MODEL_UNKNOWN) return m;
+  if (ams_type == AMS_TYPE_ZMULTI_A || ams_id == AMS_3H_UNIT_ID) return AMS_MODEL_AMS_3H;
+  return AMS_MODEL_UNKNOWN;
+}
+
+static inline int amsGlobalTrayId(const AmsSlotUnit& u, int tray_id) {
+  if (u.is_ht) return u.ams_id;
+  if (u.model == AMS_MODEL_AMS_3H) return AMS_3H_GLOBAL_BASE + tray_id;
+  return u.ams_id * AMS_REGULAR_BAYS + tray_id;
+}
+
+// Whether BamBuddy accepts a bay in an assignment: four bays a unit, nine on
+// the AMS 3H and on the external inputs, which an H3C has one per hotend
+// (schemas/spoolman.py).
+static inline bool amsBayAssignable(int ams_id, int tray_id) {
+  if (ams_id < 0 || ams_id > AMS_EXT_AMS_ID || tray_id < 0) return false;
+  const bool nine = (ams_id == AMS_3H_UNIT_ID || ams_id == AMS_EXT_AMS_ID);
+  return tray_id < (nine ? AMS_3H_BAYS : AMS_REGULAR_BAYS);
 }
 
 // Whether a bay's card may offer to record a drying for the whole unit. Only
@@ -223,7 +264,7 @@ struct AmsSlotState {
 // figures and the printer state came in: the struct lives in BSS, not on the
 // loop task's 16 kB stack, and the device has well over 100 kB of internal
 // RAM free - so this is a tripwire against sprawl, not a hardware limit.
-static_assert(sizeof(AmsSlotState) <= 1800,
+static_assert(sizeof(AmsSlotState) <= 4200,
               "AmsSlotState outgrew its budget, check where it is stored");
 
 struct AmsPrinter {

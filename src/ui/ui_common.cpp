@@ -687,3 +687,24 @@ void styleLeaveButton(lv_obj_t* btn, const char* icon) {
   lv_label_set_text(lbl, text);
   lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_INK_2), 0);
 }
+
+static lv_coord_t textWidth(const char* s, const lv_font_t* font) {
+  return lv_txt_get_width(s, (uint32_t)strlen(s), font, 0, LV_TEXT_FLAG_NONE);
+}
+
+void uiFitLine(char* s, size_t n, const lv_font_t* font, lv_coord_t max_w) {
+  if (!s || !font || n == 0 || textWidth(s, font) <= max_w) return;
+  static const char kDots[] = "...";
+  char buf[96];
+  size_t len = strlen(s);
+  while (len > 0) {
+    // Back one character, not one byte.
+    do { len--; } while (len > 0 && ((uint8_t)s[len] & 0xC0) == 0x80);
+    size_t keep = len;
+    while (keep > 0 && s[keep - 1] == ' ') keep--;
+    snprintf(buf, sizeof(buf), "%.*s%s", (int)keep, s, kDots);
+    if (textWidth(buf, font) <= max_w) break;
+  }
+  if (len == 0) snprintf(buf, sizeof(buf), "%s", kDots);
+  snprintf(s, n, "%s", buf);
+}
