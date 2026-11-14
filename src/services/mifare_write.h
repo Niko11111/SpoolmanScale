@@ -60,7 +60,8 @@ struct MifareWriteJob {
 
 enum MifareWriteResult {
   MIFARE_WRITE_OK,
-  MIFARE_WRITE_NO_TAG,         // nothing, or no 4 byte tag, or not the expected one
+  MIFARE_WRITE_NO_TAG,         // nothing, no 4 byte tag, not the expected one, or a
+                               // spool taken away and not put back in time
   MIFARE_WRITE_IS_FORMAT,      // already opens with the format's key: left alone
   MIFARE_WRITE_NOT_BLANK,      // other keys, data in the sector, or a Bambu tag
   MIFARE_WRITE_FAILED,         // refused part way, or an unusable job
@@ -68,14 +69,17 @@ enum MifareWriteResult {
 };
 
 // Called while a write waits for a tag that stopped answering to be put back:
-// phase 0 once, then phase 1 about every 150 ms. Keeps the screen
-// alive and says what to do. nullptr means no waiting.
-typedef void (*MifareWaitFn)(int phase);
+// phase 0 once, then phase 1 about every 150 ms, with the whole seconds this
+// wait may still take. The write runs on the loop task, so this is what keeps
+// the screen drawing and says what the scale is waiting for. nullptr means no
+// waiting.
+typedef void (*MifareWaitFn)(int phase, int seconds_left);
 
 // Puts the job onto the tag on the reader. expect, when not nullptr, is the
 // only UID accepted. overwrite: a tag that already opens with the format's
 // key gets the new blocks too (keys unchanged); only ever on an explicit
-// answer. uid_out receives the UID the write went to.
+// answer. uid_out receives the UID the write went to. All the waiting for a
+// spool to be put back together stays within one minute.
 MifareWriteResult mifareWrite(const MifareWriteJob& job, uint8_t uid_out[4],
                               const uint8_t* expect, MifareWaitFn wait, bool overwrite);
 
@@ -118,7 +122,9 @@ int mifareWakeCard(const uint8_t uid[4], const char* uid_str, bool* reader_silen
 // no UID any more (13.10.2026). The card is left selectable either way.
 enum MifareFactoryProbe {
   MIFARE_FACTORY_REFUSED = 0,  // other keys: the usual probes decide
-  MIFARE_FACTORY_OPENS   = 1,  // factory key, but data in it, or unreadable
+  MIFARE_FACTORY_OPENS   = 1,  // factory key, but data in it on two reads
   MIFARE_FACTORY_BLANK   = 2,  // factory key and empty: ready for a write
+  MIFARE_FACTORY_UNREAD  = 3,  // factory key, but the data blocks did not read:
+                               // a weak read, says nothing about the contents
 };
 int mifareProbeFactory(const uint8_t uid[4], const char* uid_str);

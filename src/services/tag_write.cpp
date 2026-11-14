@@ -1354,7 +1354,7 @@ static uint8_t      s_mf_expect[4];
 static MifareWaitFn s_mf_wait = nullptr;
 static bool         s_mf_overwrite = false;
 
-void tagWriteMifareTarget(const char* uid_str, void (*wait)(int phase), bool overwrite) {
+void tagWriteMifareTarget(const char* uid_str, void (*wait)(int phase, int seconds_left), bool overwrite) {
   unsigned b[4];
   s_mf_has_expect = uid_str && sscanf(uid_str, "%2x:%2x:%2x:%2x", &b[0], &b[1], &b[2], &b[3]) == 4;
   if (s_mf_has_expect) for (int i = 0; i < 4; i++) s_mf_expect[i] = (uint8_t)b[i];

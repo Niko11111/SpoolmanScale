@@ -70,7 +70,7 @@ void tagWriteSetProgress(TagWriteProgressFn fn);
 // write and then forgotten.
 // overwrite: the tag may already carry the format (an own tag whose spool
 // changed, or an original on a refilled spool); only on an explicit answer.
-void tagWriteMifareTarget(const char* uid_str, void (*wait)(int phase), bool overwrite = false);
+void tagWriteMifareTarget(const char* uid_str, void (*wait)(int phase, int seconds_left), bool overwrite = false);
 
 // True for the formats written to a 4 byte MIFARE Classic tag.
 bool tagFormatIsMifare(uint8_t fmt);
