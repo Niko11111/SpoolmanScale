@@ -172,6 +172,7 @@ const char* tagNativeUid(const char* scanned);
 // Spoolman's informational `format` vocabulary. Asked about `scanned` and not
 // about what goes on the wire: the native path sends an 8 character chip uid
 // for a Bambu tag, and a rule reading that length would call it an ntag.
+// The names themselves: services/tag_format_rules.h.
 const char* tagFormatName(const char* scanned);
 
 // ============================================================

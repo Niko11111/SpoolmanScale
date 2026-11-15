@@ -31,6 +31,8 @@ jobs:
         run: python3 test/test_access_stamp.py
       - name: Test native tag probe
         run: python3 test/test_native_tag_probe.py
+      - name: Test tag format rules
+        run: python3 test/test_tag_format_rules.py
       - name: Test recheck pace
         run: python3 test/test_recheck_pace.py
       - name: Test host lookup rules

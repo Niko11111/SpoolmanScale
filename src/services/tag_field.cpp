@@ -13,6 +13,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/prefs_store.h"
+#include "services/tag_format_rules.h"
 #include "services/tag_uid.h"
 #include "services/user_options.h"
 
@@ -238,7 +239,15 @@ const char* tagNativeUid(const char* scanned) {
 }
 
 const char* tagFormatName(const char* scanned) {
-  return tagIsBambu(scanned) ? "bambu" : "ntag";
+  char hex[40];
+  tagUidNormalize(scanned ? scanned : "", hex, sizeof(hex));
+  // g_tag says "Creality" for the tag the last scan decoded, which need not
+  // be the one this link is made with: only the same UID counts.
+  char on_reader[sizeof(g_tag.uid_str)];
+  tagUidNormalize(g_tag.uid_str, on_reader, sizeof(on_reader));
+  const bool creality = strcmp(g_tag.decoder, "Creality") == 0 && hex[0] &&
+                        strcmp(hex, on_reader) == 0;
+  return tagFormatFor(strlen(hex), creality);
 }
 
 // ============================================================
