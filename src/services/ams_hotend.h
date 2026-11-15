@@ -47,6 +47,9 @@ static inline AmsSlotTray* amsHotendTray(AmsSlotState& s, const AmsHotendFeed& f
     AmsSlotUnit& unit = s.unit[u];
     if (unit.is_ext != external) continue;
     if (!external && unit.ams_id != f.ams_id) continue;
+    // An AMS HT has one bay, and firmware numbers it 0 or 1 (FilaMan's display
+    // service accepts both too): its only bay is the one meant either way.
+    if (unit.is_ht && unit.tray_count == 1 && f.tray_id <= 1) return &unit.tray[0];
     const int want = external ? f.ams_id : f.tray_id;
     for (int t = 0; t < unit.tray_count && t < AMS_MAX_TRAYS; t++) {
       if (unit.tray[t].tray_id == want) return &unit.tray[t];

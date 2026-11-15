@@ -78,6 +78,29 @@ int main() {
       for (int t = 0; t < s.unit[u].tray_count; t++)
         assert(s.unit[u].tray[t].hotend == AMS_HOTEND_NONE && !s.unit[u].tray[t].active);
   }
+  // An AMS HT reported as tray 1 (legacy numbering) while its bay is stored
+  // as 0; and an HT flagged as such with an id below 128.
+  {
+    AmsSlotState s = h2d();
+    s.unit[3] = AmsSlotUnit{};
+    s.unit[3].ams_id = 128; s.unit[3].is_ht = true; s.unit[3].tray_count = 1;
+    s.unit[3].tray[0].tray_id = 0;
+    s.unit_count = 4;
+    const AmsHotendFeed feed[2] = {{128, 1}, {-1, -1}};
+    assert(amsApplyHotends(s, feed, 2, 0));
+    assert(s.unit[3].tray[0].hotend == AMS_HOTEND_RIGHT);
+    assert(s.unit[3].tray[0].active);
+  }
+  {
+    AmsSlotState s = h2d();
+    s.unit[3] = AmsSlotUnit{};
+    s.unit[3].ams_id = 5; s.unit[3].is_ht = true; s.unit[3].tray_count = 1;
+    s.unit[3].tray[0].tray_id = 0;
+    s.unit_count = 4;
+    const AmsHotendFeed feed[2] = {{-1, -1}, {5, 0}};
+    assert(amsApplyHotends(s, feed, 2, 1));
+    assert(s.unit[3].tray[0].hotend == AMS_HOTEND_LEFT);
+  }
   // FilaMan's words; an older server sends nothing.
   assert(amsHotendFromWord("left") == AMS_HOTEND_LEFT);
   assert(amsHotendFromWord("right") == AMS_HOTEND_RIGHT);
