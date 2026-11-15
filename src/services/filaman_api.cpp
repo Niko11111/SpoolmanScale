@@ -1860,6 +1860,8 @@ static void buildDisplayFilter(JsonDocument& filter, bool with_slots) {
   sl["material"]          = true;
   sl["spool_id"]          = true;
   sl["remaining_percent"] = true;
+  // "printer" or "filaman": a 0 the printer guessed is not an empty spool.
+  sl["remaining_source"]  = true;
   sl["remaining_grams"]   = true;
   sl["backup_of"]         = true;
   // The nozzle range of whatever sits in the bay. Two more numbers in an
@@ -2098,9 +2100,12 @@ int filamanGetAmsState(const char* base_url, const char* api_key, int printer_id
       // the alpha is gone before it leaves the server.
       if (t.exists) spoolColorParse(sl["color"] | "", &t.color);
 
-      int pct = sl["remaining_percent"] | AMS_REMAIN_NA;
-      if (pct < 0 || pct > 100) pct = AMS_REMAIN_NA;
-      t.remain = (int8_t)pct;
+      // A percentage FilaMan took from the printer is a reading only for a
+      // spool with a chip, and FilaMan's own rfid flag cannot tell: it counts
+      // the 32 zeros Bambu sends for a spool without one as a chip. So a 0
+      // from the printer is "unknown" here; a 0 FilaMan weighed itself stays.
+      const bool from_printer = strcmp(sl["remaining_source"] | "", "printer") == 0;
+      t.remain = amsPrinterRemain(sl["remaining_percent"] | AMS_REMAIN_NA, !from_printer);
 
       int grams = sl["remaining_grams"] | AMS_REMAIN_NA;
       if (grams < 0 || grams > INT16_MAX) grams = AMS_REMAIN_NA;

@@ -230,6 +230,25 @@ static inline bool amsBayAssignable(int ams_id, int tray_id) {
   return tray_id < (nine ? AMS_3H_BAYS : AMS_REGULAR_BAYS);
 }
 
+// A fill level the printer reports, as the bay shows it. Bambu measures only
+// a spool with an RFID chip; for one entered by hand in Bambu Studio it sends
+// 0 on the external holder and -1 in an AMS, and both mean "unknown", not
+// "empty". So 0 counts only when a chip stands behind it. A chip id of zeros
+// is no chip: that is what Bambu sends for a spool without one.
+static inline bool amsChipIdReal(const char* id) {
+  if (!id || !id[0]) return false;
+  for (const char* c = id; *c; c++) {
+    if (*c != '0') return true;
+  }
+  return false;
+}
+
+static inline int8_t amsPrinterRemain(int remain, bool has_chip) {
+  if (remain < 0 || remain > 100) return AMS_REMAIN_NA;
+  if (remain == 0 && !has_chip) return AMS_REMAIN_NA;
+  return (int8_t)remain;
+}
+
 // Whether a bay's card may offer to record a drying for the whole unit. Only
 // an AMS 2 Pro dries four spools at once; an AMS HT holds one, and on the
 // first generation the spools in one unit have nothing in common.

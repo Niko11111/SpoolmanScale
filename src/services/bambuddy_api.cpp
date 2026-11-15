@@ -1247,11 +1247,10 @@ static void fillTray(JsonObjectConst t, AmsSlotTray& out, uint8_t tray_id) {
 
   parseTrayColor(t["tray_color"] | "", out.type, &out.color);
 
-  // Bambu itself sends -1 for "no idea", and anything outside 0..100 is a
-  // value we would only misdraw.
-  int remain = t["remain"] | AMS_REMAIN_NA;
-  if (remain < 0 || remain > 100) remain = AMS_REMAIN_NA;
-  out.remain = (int8_t)remain;
+  // The printer's own reading, which is one only for a spool with a chip:
+  // a spool entered in Bambu Studio by hand reports 0 and is not empty.
+  const bool chip = amsChipIdReal(t["tray_uuid"] | "") || amsChipIdReal(t["tag_uid"] | "");
+  out.remain = amsPrinterRemain(t["remain"] | AMS_REMAIN_NA, chip);
 
   // exists is the authority when the field is there. When it is missing,
   // a bay that names a material is holding one - that is how BamBuddy's own
@@ -1300,6 +1299,9 @@ void bambuStatusFilter(JsonDocument& filter) {
   ft["tray_type"]       = true;
   ft["tray_sub_brands"] = true;
   ft["remain"]          = true;
+  // Whether the spool carries a chip, which decides if remain is a reading.
+  ft["tray_uuid"]       = true;
+  ft["tag_uid"]         = true;
   ft["exists"]          = true;
   ft["spool_id"]        = true;
   ft["remain_g"]        = true;
@@ -1329,6 +1331,8 @@ void bambuStatusFilter(JsonDocument& filter) {
   fv["tray_type"]       = true;
   fv["tray_sub_brands"] = true;
   fv["remain"]          = true;
+  fv["tray_uuid"]       = true;
+  fv["tag_uid"]         = true;
   fv["exists"]          = true;
   fv["spool_id"]        = true;
   fv["remain_g"]        = true;
