@@ -14,6 +14,7 @@
 #include "services/server_reach.h"
 #include "services/prefs_store.h"
 #include "ui/ams_detail_popup.h"
+#include "ui/ams_mark.h"
 #include "ui/loading_overlay.h"
 #include "ui/navigation.h"
 #include "ui/theme.h"
@@ -36,6 +37,18 @@
 #define AMSV_TILE_H       58
 // Room kept free left and right of a tile's text, inside its border.
 #define AMSV_TILE_TEXT_PAD 4
+// Room a corner badge takes from the tile's text: the badge with its inset.
+#define AMSV_MARK_RESERVE 22
+// The bay in use: its frame, and the half-transparent ring around it.
+#define AMSV_MARK_BORDER  3
+#define AMSV_MARK_GLOW    2
+// The filament stroke below the bay being printed from: its width, where it
+// starts (clear of the frame and its ring), and the room a unit gains below
+// its bays so the stroke is long enough to read.
+#define AMSV_FEED_W       3
+#define AMSV_FEED_CLEAR   (AMSV_MARK_GLOW + 1)
+#define AMSV_FEED_EXTRA   8
+#define AMSV_FEED_FILLET  4   // radius where the frame turns into the stroke
 #define AMSV_UNIT_HDR_H   17
 // Below the last row of a unit, before the next header.
 #define AMSV_UNIT_FOOT    9
@@ -132,6 +145,13 @@ static AmsSlotState s_state;
 // Width of the tiles of the unit being laid out: four across on a regular
 // AMS, five narrower ones on an AMS 3H.
 static int          s_tile_w = AMSV_TILE_W;
+// The bay the printer is printing from, noted while its unit is laid out:
+// a short accent stroke then runs down from it, like the filament on its way
+// to the hotend. Drawn by the unit rather than the tile, because whether
+// there is room below a tile is only known once the whole unit stands.
+struct AmsFeedMark { bool set; int x; int top; };
+static AmsFeedMark  s_feed;
+static bool         s_printing = false;
 
 static bool s_build_pending = false;
 static bool s_fetch_pending = false;
@@ -402,6 +422,27 @@ static void tileClicked(lv_event_t* e) {
   s_close_pending = true;
 }
 
+// The bay the printer feeds from gets the heavy accent frame; on a
+// dual-nozzle printer each bay a hotend holds also carries the hotend's
+// letter, filled for the one in use. A single-nozzle printer and the H3C have
+// nothing to tell apart beyond the frame, so they get no badge.
+// Returns the width the text has to leave free for the badge, 0 without.
+static int markBay(lv_obj_t* tile, const AmsSlotTray& tray) {
+  const bool active = tray.active;
+  lv_obj_set_style_border_width(tile, active ? AMSV_MARK_BORDER : 1, 0);
+  lv_obj_set_style_border_color(tile,
+    lv_color_hex(active ? AMSV_COL_ACCENT : AMSV_COL_LINE), 0);
+  if (active) {
+    lv_obj_set_style_outline_width(tile, AMSV_MARK_GLOW, 0);
+    lv_obj_set_style_outline_pad(tile, 1, 0);
+    lv_obj_set_style_outline_color(tile, lv_color_hex(AMSV_COL_ACCENT), 0);
+    lv_obj_set_style_outline_opa(tile, LV_OPA_50, 0);
+  }
+  if (tray.hotend == AMS_HOTEND_NONE) return 0;
+  if (!amsMarkBadge(tile, tray.hotend, active)) return 0;
+  return AMSV_MARK_RESERVE;
+}
+
 // One bay. Two objects: the tile carries the filament colour itself, and a
 // single label carries material and fill level on two lines. Four objects a
 // tile would be 21 kB of pool for a full AMS setup, which is more than the
@@ -425,12 +466,8 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
   if (filled) swatchPaint(tile, tray.color);
   else        lv_obj_set_style_bg_color(tile, lv_color_hex(AMSV_COL_EMPTY), 0);
 
-  // The loaded bay is the one thing on this page that says "this is printing
-  // right now", so it gets the accent border rather than a colour change.
-  const bool active = tray.active;
-  lv_obj_set_style_border_width(tile, active ? 2 : 1, 0);
-  lv_obj_set_style_border_color(tile,
-    lv_color_hex(active ? AMSV_COL_ACCENT : AMSV_COL_LINE), 0);
+  const int reserve = markBay(tile, tray);
+  if (tray.active && s_printing) s_feed = { true, x + s_tile_w / 2, y + AMSV_TILE_H };
 
   uint32_t text_col;
   if (!filled) {
@@ -491,7 +528,7 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
     char color[sizeof(tray.color_name) + 3];
     snprintf(color, sizeof(color), "%s", tray.color_name[0] ? tray.color_name : "-");
     if (!amount[0]) snprintf(amount, sizeof(amount), "-");
-    const lv_coord_t text_w = s_tile_w - 2 * AMSV_TILE_TEXT_PAD;
+    const lv_coord_t text_w = s_tile_w - 2 * AMSV_TILE_TEXT_PAD - reserve;
     uiFitLine(name,   sizeof(name),   &lv_font_montserrat_ext_12, text_w);
     uiFitLine(color,  sizeof(color),  &lv_font_montserrat_ext_12, text_w);
     uiFitLine(amount, sizeof(amount), &lv_font_montserrat_ext_12, text_w);
@@ -504,7 +541,8 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
   lv_obj_set_style_text_color(lbl, lv_color_hex(text_col), 0);
   lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_12, 0);
   lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 0);
+  // Centred in what the badge leaves, so a long name clears it.
+  lv_obj_align(lbl, LV_ALIGN_CENTER, -reserve / 2, 0);
 
   lv_obj_set_user_data(tile, AMSV_KEY(unit.ams_id, tray.tray_id));
   // In a question every bay answers, including the external holder, which
@@ -642,6 +680,46 @@ static int layoutUnitBays(const AmsSlotUnit& unit, int y, int& tiles) {
   return AMSV_UNIT_HDR_H + rows * AMSV_TILE_H + (rows - 1) * AMSV_TILE_GAP;
 }
 
+static bool printerIsPrinting(const char* st);   // behind printerActivity()
+
+// The stroke from the printed bay down to bottom. A regular unit has room
+// only below its last row; in an AMS 3H a back bay sits over the gap between
+// two front bays, so its stroke runs down through that gap.
+// Returns whether it was drawn, so the unit only grows when it was.
+// A plain rectangle on the body: the stroke and its joint are built from these.
+struct FeedRect { int x, y, w, h; };
+
+static lv_obj_t* feedPart(const FeedRect& r, uint32_t col, int radius) {
+  lv_obj_t* o = lv_obj_create(s_body);
+  if (!o) return nullptr;
+  lv_obj_set_size(o, r.w, r.h);
+  lv_obj_set_pos(o, r.x, r.y);
+  lv_obj_set_style_bg_color(o, lv_color_hex(col), 0);
+  lv_obj_set_style_border_width(o, 0, 0);
+  lv_obj_set_style_radius(o, radius, 0);
+  lv_obj_set_style_pad_all(o, 0, 0);
+  lv_obj_clear_flag(o, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+  return o;
+}
+
+static bool drawFeed(const AmsSlotUnit& unit, int unit_bottom, int bottom) {
+  if (!s_feed.set) return false;
+  if (!amsUnitIsRack(unit) && s_feed.top != unit_bottom) return false;
+  const int x   = s_feed.x - AMSV_FEED_W / 2;
+  const int top = s_feed.top;
+  if (!feedPart({x, top, AMSV_FEED_W, bottom - top}, AMSV_COL_ACCENT, 1)) return false;
+  // The joint: a block as wide as the stroke plus a fillet each side, from
+  // the frame through its ring, with two discs of the ground carving the
+  // fillets out of its lower corners. The frame flows into the stroke
+  // instead of the stroke standing against it.
+  const int r   = AMSV_FEED_FILLET;
+  const int y0  = top + AMSV_FEED_CLEAR;
+  feedPart({x - r, top, AMSV_FEED_W + 2 * r, AMSV_FEED_CLEAR + r}, AMSV_COL_ACCENT, 0);
+  feedPart({x - 2 * r, y0, 2 * r, 2 * r}, AMSV_COL_BG, LV_RADIUS_CIRCLE);
+  feedPart({x + AMSV_FEED_W, y0, 2 * r, 2 * r}, AMSV_COL_BG, LV_RADIUS_CIRCLE);
+  return true;
+}
+
 static bool unitHasShownBay(const AmsSlotUnit& unit) {
   for (uint8_t t = 0; t < unit.tray_count; t++) {
     if (bayShown(unit, unit.tray[t])) return true;
@@ -657,11 +735,13 @@ static void layoutGrid(const AmsSlotState& st) {
   logLvMem("amsview/pre", 0);
   int tiles = 0;
   int y = 0;
+  s_printing = printerIsPrinting(st.state);
 
   for (uint8_t u = 0; u < st.unit_count; u++) {
     const AmsSlotUnit& unit = st.unit[u];
     if (!unitHasShownBay(unit)) continue;
     buildUnitHeader(s_body, unit, u, y);
+    s_feed.set = false;
     const int used = layoutUnitBays(unit, y, tiles);
     if (used < 0) {
       // Out of pool. Says so instead of leaving a short grid that looks
@@ -670,6 +750,9 @@ static void layoutGrid(const AmsSlotState& st) {
       logSDf("AMSVIEW: pool exhausted after %d tiles", tiles);
       logLvMem("amsview/post", tiles);
       return;
+    }
+    if (drawFeed(unit, y + used, y + used + AMSV_UNIT_FOOT + AMSV_FEED_EXTRA - 1)) {
+      y += AMSV_FEED_EXTRA;
     }
     y += used + AMSV_UNIT_FOOT;
   }
@@ -1016,6 +1099,10 @@ static PrinterActivity printerActivity(const char* st) {
   return PRINTER_OTHER;
 }
 
+static bool printerIsPrinting(const char* st) {
+  return printerActivity(st) == PRINTER_PRINTING;
+}
+
 static bool startWeights();   // defined behind applyWeights()
 
 // Fills the page. Blocks for the length of the request, so the screen is
@@ -1266,6 +1353,9 @@ static void detailFromTray(const AmsSlotUnit& unit, const AmsSlotTray& tray,
   snprintf(out.printer_type, sizeof(out.printer_type), "%s", tray.type);
   snprintf(out.backup_of, sizeof(out.backup_of), "%s", tray.backup_of);
   snprintf(out.color_name, sizeof(out.color_name), "%s", tray.color_name);
+  out.hotend   = tray.hotend;
+  out.feeding  = tray.active;
+  out.printing = printerIsPrinting(s_state.state);
 
   // The grams the printer reports are a fill level, not a weighing, so they
   // stand in only until the database says otherwise.

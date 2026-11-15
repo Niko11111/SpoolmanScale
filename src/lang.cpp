@@ -4362,6 +4362,22 @@ const char* const STRINGS[][3] = {
     "Formats de tag" },  // STR_W_C_TAG_FORMATS
   { "Netz wählen", "Choose a network",
     "Choisir un réseau" },  // STR_W_WIFI_PICK
+  { "L", "L",
+    "G" },  // STR_AMSV_HOTEND_L
+  { "R", "R",
+    "D" },  // STR_AMSV_HOTEND_R
+  { "Druckt gerade", "Printing now",
+    "Impression en cours" },  // STR_AMSD_PRINTING
+  { "Im Drucker geladen", "Loaded in the printer",
+    "Chargé dans l'imprimante" },  // STR_AMSD_LOADED
+  { "Druckt gerade, linkes Hotend", "Printing now, left hotend",
+    "Impression en cours, buse gauche" },  // STR_AMSD_PRINTING_LEFT
+  { "Druckt gerade, rechtes Hotend", "Printing now, right hotend",
+    "Impression en cours, buse droite" },  // STR_AMSD_PRINTING_RIGHT
+  { "Im linken Hotend geladen", "Loaded in the left hotend",
+    "Chargé dans la buse gauche" },  // STR_AMSD_LOADED_LEFT
+  { "Im rechten Hotend geladen", "Loaded in the right hotend",
+    "Chargé dans la buse droite" },  // STR_AMSD_LOADED_RIGHT
 };
 
 StringID tagWriteResultString(uint8_t code) {

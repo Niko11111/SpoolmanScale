@@ -97,11 +97,18 @@ struct AmsSpoolDetail {
   // single bytes, where it fills padding instead of growing the struct.
   uint8_t  ams_id;
   uint8_t  tray_id;
+  // The printer feeds from this bay, or on a dual-nozzle printer has it
+  // loaded in one of its hotends. printing tells "printing now" from
+  // "loaded": Bambu names the loaded bay while idle too.
+  AmsHotend hotend;
+  bool     feeding;
+  bool     printing;
 };
 
 // Kept in BSS by its one holder, never on the stack: the loop task has 16 kB
-// and already warns about its high water mark.
-static_assert(sizeof(AmsSpoolDetail) <= 260,
+// and already warns about its high water mark. 260 had no padding left; the
+// three in-printer bytes cost one more word.
+static_assert(sizeof(AmsSpoolDetail) <= 264,
               "AmsSpoolDetail outgrew its budget, check where it is stored");
 
 // ------------------------------------------------------------

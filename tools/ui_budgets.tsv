@@ -514,3 +514,17 @@ STR_TW_CFS_DATA_HINT	16	360	WRAP:4	src/ui/tag_write_popup.cpp buildAsk hint, BOX
 STR_TW_CFS_DATA_CFS	16	360	NEVER	src/ui/tag_write_popup.cpp description inside STR_TW_CFS_DATA_HINT (a wrapping 360 px line)
 STR_TW_CFS_DATA_TEXT	16	360	NEVER	src/ui/tag_write_popup.cpp description inside STR_TW_CFS_DATA_HINT (a wrapping 360 px line)
 STR_TW_CFS_DATA_UNKNOWN	16	360	NEVER	src/ui/tag_write_popup.cpp description inside STR_TW_CFS_DATA_HINT (a wrapping 360 px line)
+
+# --- AMS view: the bay in the printer -----------------------------------------
+# The hotend letter in a bay's corner badge. The tile's text leaves
+# AMSV_MARK_RESERVE (22 px) for it: badge padding 2 x 4, border 2, inset 2.
+STR_AMSV_HOTEND_L	12	10	NEVER	src/ui/ams_mark.cpp badge, AMSV_MARK_RESERVE in ams_view.cpp
+STR_AMSV_HOTEND_R	12	10	NEVER	src/ui/ams_mark.cpp badge, AMSV_MARK_RESERVE in ams_view.cpp
+# The detail card's note line, AMSD_BAR_W wide. The in-use text opens it; what
+# follows may ellipsise, the opening must not.
+STR_AMSD_PRINTING	12	444	NEVER	src/ui/ams_detail_popup.cpp note line, AMSD_BAR_W
+STR_AMSD_LOADED	12	444	NEVER	src/ui/ams_detail_popup.cpp note line, AMSD_BAR_W
+STR_AMSD_PRINTING_LEFT	12	444	NEVER	src/ui/ams_detail_popup.cpp note line, AMSD_BAR_W
+STR_AMSD_PRINTING_RIGHT	12	444	NEVER	src/ui/ams_detail_popup.cpp note line, AMSD_BAR_W
+STR_AMSD_LOADED_LEFT	12	444	NEVER	src/ui/ams_detail_popup.cpp note line, AMSD_BAR_W
+STR_AMSD_LOADED_RIGHT	12	444	NEVER	src/ui/ams_detail_popup.cpp note line, AMSD_BAR_W
