@@ -79,7 +79,7 @@ static String body() {
          "<div class='rows' style='margin-top:16px'><div class='row' id='darow'>"
          "<span class='k' id='dsum'></span>"
          "<span class='v'>"
-         "<button id='da' class='danger' disabled></button>"
+         "<button id='da' class='danger' data-ic='rm' disabled></button>"
          "</span></div></div><p class='note'>");
   h += T(STR_W_LOG_NOTE);
   h += F("</p></div>");
@@ -132,35 +132,40 @@ static String body() {
          "b.disabled=b.dataset.f===flt;});}"
          // One row for the ring in flash, then the files on the card. The
          // ring has no name and no date, so it carries its fill instead.
+         // The three actions of a row as icons with their word in title and
+         // aria-label: as words they took 290 px of a 700 px row and pushed
+         // the name onto a line of its own on a phone.
+         "function ib(c,ic,t,x){return '<button class=\"'+c+' ico\" data-ic=\"'+ic"
+         "+'\" title=\"'+t+'\" aria-label=\"'+t+'\"'+(x||'')+'></button>';}"
          "function intRow(d){"
          "return '<div class=\"listrow\"><span class=\"nm\">'+M.intname+'</span>'"
          "+'<span style=\"display:flex;align-items:center;gap:10px\">'"
          "+'<span class=\"sz\">'+M.linesof.replace('{a}',d.int_lines)"
          ".replace('{b}',d.int_max)+'</span>'"
          "+'<a href=\"/api/log?src=int\" target=\"_blank\">'"
-         "+'<button class=\"quiet\">'+M.view+'</button></a>'"
+         "+ib('quiet','eye',M.view)+'</a>'"
          "+'<a href=\"/api/log?src=int&dl=1\" download=\"spoolmanscale-internal.txt\">'"
-         "+'<button class=\"quiet\">'+M.dl+'</button></a>'"
-         "+'<button class=\"danger\" data-cint=\"1\">'+M.del+'</button>'"
+         "+ib('quiet','dl',M.dl)+'</a>'"
+         "+ib('danger','rm',M.del,' data-cint=\"1\"')"
          "+'</span></div>';}"
          "function fileRow(f){"
          "return '<div class=\"listrow\"><span class=\"nm\">'+f.name+'</span>'"
          "+'<span style=\"display:flex;align-items:center;gap:10px\">'"
          "+'<span class=\"sz\">'+kb(f.size)+'</span>'"
          "+'<a href=\"/api/log?file='+encodeURIComponent(f.name)+'\" target=\"_blank\">'"
-         "+'<button class=\"quiet\">'+M.view+'</button></a>'"
+         "+ib('quiet','eye',M.view)+'</a>'"
          // No target=_blank on this one: a new tab suppresses the download
          // hint in some browsers. The download attribute and the header the
          // route sends say the same thing twice, on purpose.
          "+'<a href=\"/api/log?dl=1&file='+encodeURIComponent(f.name)"
          "+'\" download=\"'+f.name+'\">'"
-         "+'<button class=\"quiet\">'+M.dl+'</button></a>'"
+         "+ib('quiet','dl',M.dl)+'</a>'"
          // The name rides in a data attribute and the handler is bound after
          // the rows exist. Threading it through an inline onclick quotes it
          // for C++, for a JS string, for an HTML attribute and for a JS call
          // in that order, and one backslash lost on the way took the entire
          // script block down without a word on the page.
-         "+'<button class=\"danger\" data-del=\"'+f.name+'\">'+M.del+'</button>'"
+         "+ib('danger','rm',M.del,' data-del=\"'+f.name+'\"')"
          "+'</span></div>';}"
          "function render(){var d=last;if(!d)return;"
          "const c=document.getElementById('lg');"

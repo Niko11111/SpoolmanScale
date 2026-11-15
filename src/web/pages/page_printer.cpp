@@ -212,7 +212,7 @@ static void bluetoothBar(String& h) {
   if (!need) h += F(" style='display:none'");
   h += '>';
   h += T(STR_W_P_RESTART_NEEDED);
-  h += F("</span><button id='rb' class='quiet'");
+  h += F("</span><button id='rb' class='quiet' data-ic='pw'");
   if (!need) h += F(" style='display:none'");
   h += '>';
   h += T(STR_W_RESTART);
@@ -237,7 +237,7 @@ static void deviceTile(String& h, const LabelPrinterConfig& c) {
   if (have) h += F(" class='quiet'");
   h += '>';
   h += T(have ? STR_W_P_CHANGE : STR_BT_SCAN_WEB);
-  h += F("</button><button id='fb' class='ghost'");
+  h += F("</button><button id='fb' class='ghost' data-ic='rm'");
   if (!have) h += F(" style='display:none'");
   h += '>';
   h += T(STR_PRN_FORGET);
@@ -282,7 +282,7 @@ static void pickers(String& h, const LabelPrinterConfig& c) {
 }
 
 static void testRow(String& h) {
-  h += F("<div class='testrow'><button id='tb'>");
+  h += F("<div class='testrow'><button id='tb' data-ic='pr'>");
   h += T(STR_PRN_TEST);
   h += F("</button><span class='hint'>");
   h += T(STR_W_P_TEST_HINT);
@@ -325,7 +325,7 @@ static void calibrationCard(String& h, const LabelPrinterConfig& c) {
          "<button class='quiet pp-step' id='xp' aria-label='+1 mm'>+</button>"
          "<span class='suffix'>mm</span></div>"
          "<span class='msg' id='xo-s'></span></div></div>"
-         "<div class='field'><div class='inrow'><button id='cb'>");
+         "<div class='field'><div class='inrow'><button id='cb' data-ic='pr'>");
   h += T(STR_W_P_CAL_PRINT);
   h += F("</button></div><span class='msg' id='cb-s'></span>"
          "<div class='pp-ex'><div class='pp-paper' aria-hidden='true'>"

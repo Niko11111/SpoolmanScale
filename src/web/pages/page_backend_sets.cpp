@@ -136,10 +136,10 @@ static String editFold(const ServerSetView &a, const ServerSetView &p) {
   h += F("</summary>");
   addNameField(h, false, a.name);
   addNameField(h, true, p.name);
-  h += F("<div class='inrow'><button class='quiet' id='sn-b' type='button'>");
+  h += F("<div class='inrow'><button class='quiet' id='sn-b' type='button' data-ic='ok'>");
   h += T(STR_W_SAVE);
   h += F("</button><span class='msg' id='sn-s'></span></div>"
-         "<div class='inrow'><button class='danger' id='ss-d' type='button'>");
+         "<div class='inrow'><button class='danger' id='ss-d' type='button' data-ic='rm'>");
   h += T(STR_W_SETS_DELETE);
   h += F("</button><span class='msg' id='ss-ds'></span></div></details>");
   return h;
@@ -195,7 +195,7 @@ static String offerCard() {
   h += F("</h2><div class='inrow' style='justify-content:space-between'>"
          "<p class='hint' style='flex:1;min-width:220px'>");
   h += T(STR_W_SETS_OFF_HINT);
-  h += F("</p><button class='quiet' id='ss-b' type='button'>");
+  h += F("</p><button class='quiet' id='ss-b' type='button' data-ic='add'>");
   h += T(STR_EF_BTN_CREATE);
   h += F("</button></div><span class='msg' id='ss-s'></span></div>");
   return h;

@@ -146,7 +146,7 @@ static void addDeviceCard(String &h) {
   addSwitch(h, "wk", g_wake_on_load, STR_W_WAKE, STR_W_WAKE_HINT);
   h += F("</div>");
   addSwitch(h, "sf", g_scale_fitted, STR_W_SCALE_FITTED, STR_W_SCALE_FITTED_HINT);
-  h += F("<div><button class='quiet' id='sf-rb'>");
+  h += F("<div><button class='quiet' id='sf-rb' data-ic='pw'>");
   h += T(STR_W_RESTART);
   h += F("</button></div></div></div>");
 }
@@ -159,7 +159,7 @@ static void addNameCard(String &h) {
   h += String(DEVICE_FQDN_MAX);
   h += F("' spellcheck='false' placeholder='scale.home.arpa' value='");
   h += deviceFqdn();
-  h += F("'><button id='hn-b'>");
+  h += F("'><button id='hn-b' data-ic='ok'>");
   h += T(STR_W_SAVE);
   // One message line, not two. It carries the DNS verdict, and a save
   // overwrites it for a moment before the verdict comes back - the two are
@@ -205,7 +205,7 @@ static void addLimitsCard(String &h) {
   h += F("'><span class='hint' style='flex:1'>");
   h += T(STR_W_LIMIT_WARN);
   h += F("</span></div></div>"
-         "<button id='ll-b' class='quiet block'>");
+         "<button id='ll-b' class='quiet block' data-ic='ok'>");
   h += T(STR_W_SAVE);
   h += F("</button><span class='msg' id='ll-s'></span></div>");
 }
@@ -223,7 +223,7 @@ static void addDisplayCard(String &h) {
   h += F("</output></div><span class='hint'>");
   h += T(STR_W_GAIN_HINT);
   h += F("</span></div>"
-         "<button id='gn-b' class='quiet block'>");
+         "<button id='gn-b' class='quiet block' data-ic='ok'>");
   h += T(STR_W_SAVE);
   h += F("</button><span class='msg' id='gn-s'></span></div>");
 }

@@ -90,7 +90,7 @@ static String body() {
     h += T(STR_W_BACKEND_THEME_NOTE);
     h += F("</p>");
     if (can_restart) {
-      h += F("<div class='inrow' style='margin-top:10px'><button class='quiet' id='bm-rb' type='button'>");
+      h += F("<div class='inrow' style='margin-top:10px'><button class='quiet' id='bm-rb' type='button' data-ic='pw'>");
       h += T(STR_W_RESTART);
       h += F("</button></div>");
     }
@@ -116,7 +116,7 @@ static String body() {
          "<input id='hs' type='text' maxlength='63' spellcheck='false' value='");
   h += htmlEsc(backendHost());
   h += F("' placeholder='spoolman.local:7912'>"
-         "<button onclick='setHost()'>");
+         "<button onclick='setHost()' data-ic='ok'>");
   h += T(STR_W_SAVE);
   h += F("</button></div><span class='msg' id='hs-s'></span>"
          "<span class='hint'>");
@@ -193,7 +193,7 @@ static String body() {
     h += F("</label><div class='inrow'><input id='sk' type='password' "
            "autocomplete='new-password' value='");
     h += spoolmanAuthSecret()[0] ? F("________________") : F("");
-    h += F("'></div></div><div class='inrow'><button id='sa-b'>");
+    h += F("'></div></div><div class='inrow'><button id='sa-b' data-ic='ok'>");
     h += T(STR_W_SAVE);
     h += F("</button><span class='msg' id='sa-s'></span></div>");
     // The address changed since the secret was entered: it stays stored, but
@@ -256,7 +256,7 @@ static String body() {
     h += F("</label><div class='inrow'><input id='ak' type='password' "
            "autocomplete='new-password' value='");
     h += amsSourceHasKey() ? F("________________") : F("");
-    h += F("'></div></div><div class='inrow'><button id='as-b'>");
+    h += F("'></div></div><div class='inrow'><button id='as-b' data-ic='ok'>");
     h += T(STR_W_SAVE);
     h += F("</button><span class='msg' id='as-s'></span></div></div>");
   } else if (online) {
@@ -273,7 +273,7 @@ static String body() {
     h += F("</label><div class='inrow'>"
            "<input id='bk' type='password' placeholder='bb_...' value='");
     h += bambuddyApiKey()[0] ? F("________________") : F("");
-    h += F("'><button onclick='setBb()'>");
+    h += F("'><button onclick='setBb()' data-ic='ok'>");
     h += T(STR_W_SAVE);
     h += F("</button></div><span class='msg' id='bk-s'></span></div>"
            "<p class='note'>");
@@ -289,7 +289,7 @@ static String body() {
     h += F("</label><div class='inrow'>"
            "<input id='fk' type='password' placeholder='fm_...' value='");
     h += filamanApiKey()[0] ? F("________________") : F("");
-    h += F("'><button onclick='setKey()'>");
+    h += F("'><button onclick='setKey()' data-ic='ok'>");
     h += T(STR_W_SAVE);
     h += F("</button></div><span class='msg' id='fk-s'></span></div>"
            "<div class='field'><label>");
@@ -298,7 +298,7 @@ static String body() {
     h += T(filamanDeviceToken()[0] ? STR_W_SET : STR_W_UNSET);
     h += F("</label><div class='inrow'>"
            "<input id='fc' type='text' maxlength='12' spellcheck='false' placeholder='ABC123'>"
-           "<button onclick='reg()'>");
+           "<button onclick='reg()' data-ic='add'>");
     h += T(STR_W_REGISTER);
     h += F("</button></div><span class='msg' id='fc-s'></span></div>"
            "<p class='note'>");

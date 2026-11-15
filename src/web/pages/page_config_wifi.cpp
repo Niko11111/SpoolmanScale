@@ -147,13 +147,13 @@ static const char WF_JS[] PROGMEM =
   "'var(--ink-4)')+'></i>';return s+'</span><em>'+r+' dBm</em>';}"
   "function wfRow(n,sub,btns){return '<div class=orow><div class=ol><span class=on>'+wfE(n)+"
   "'</span><span class=os>'+sub+'</span></div><div class=ov>'+btns+'</div></div>';}"
-  "function wfBtn(a,i,t){return '<button class=quiet data-a='+a+' data-i='+i+'>'+t+'</button>';}"
+  "function wfBtn(a,i,t,ic){return '<button class=quiet data-a='+a+' data-i='+i+(ic?' data-ic='+ic:'')+'>'+t+'</button>';}"
   "function wfCur(d){return '<div class=row><span class=k>'+WFT.c+'</span><span class=v>'+"
   "(d.on?wfE(d.on)+wfSig(d.rssi):'-')+'</span></div>';}"
   "function wfState(k){return k.c&&k.p?WFT.cp:k.c?WFT.c:k.p?WFT.p:WFT.sv;}"
   "function wfKnown(d){if(!d.known.length)return '<p class=os>'+WFT.none+'</p>';"
   "return d.known.map((k,i)=>wfRow(k.s,wfState(k),"
-  "(k.c?'':wfBtn('c',i,WFT.go))+(k.p?'':wfBtn('f',i,WFT.forget)))).join('');}"
+  "(k.c?'':wfBtn('c',i,WFT.go))+(k.p?'':wfBtn('f',i,WFT.forget,'rm')))).join('');}"
   "function wfList(d){return d.nets.map((n,i)=>({n:n,i:i})).filter(x=>x.n.s!==d.on);}"
   "function wfHead(d){const s=d.scan;return s==='wait'||s==='run'?WFT.scanning:"
   "s==='fail'?WFT.scanfail:s==='done'&&!wfList(d).length?WFT.nonets:WFT.pick;}"
@@ -225,7 +225,7 @@ String configWifiCard() {
   h += F("</label><div class='inrow'><select id='wf-net' style='flex:1 1 220px'></select>"
          "<button id='wf-go'>");
   h += T(STR_W_WIFI_CONNECT);
-  h += F("</button><button class='quiet' id='wf-scan'>");
+  h += F("</button><button class='quiet' id='wf-scan' data-ic='re'>");
   h += T(STR_W_WIFI_SCAN_BTN);
   h += F("</button></div><div class='inrow' id='wf-pwrow' style='margin-top:10px;display:none'>"
          "<input id='wf-pw' type='password' maxlength='64' autocomplete='off' placeholder='");

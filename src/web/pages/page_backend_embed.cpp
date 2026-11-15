@@ -27,7 +27,7 @@ static String addressLine(const char *addr, bool with_open) {
   const String a = htmlEsc(addr);
   String h = F("<div class='addrline'><span class='mono'>");
   h += a;
-  h += F("</span><button class='quiet' data-copy='");
+  h += F("</span><button class='quiet' data-ic='cp' data-copy='");
   h += a;
   h += F("'>");
   h += T(STR_W_COPY);

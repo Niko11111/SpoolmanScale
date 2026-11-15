@@ -5,6 +5,14 @@
 
 #include "app_config.h"
 
+// A stroke icon as a data URL, for the button icons below: one 24 unit grid,
+// stroke 2, round ends, the same drawing as the screenshot card's icons. The
+// colour is irrelevant - the URL is used as a mask, never painted.
+#define WEB_ICON(path) \
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' " \
+  "fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E" \
+  "%3Cpath d='" path "'/%3E%3C/svg%3E\")"
+
 // One literal in flash. Adjacent string literals are concatenated by the
 // compiler, so the comments between them cost nothing and the rules stay
 // grouped the way they were written.
@@ -240,6 +248,45 @@ static const char APP_CSS[] PROGMEM =
       "button.danger{background:var(--bad-bg);color:var(--bad);border-color:var(--bad-line)}"
       "button.danger:hover{background:var(--bad-hover)}"
       "button.block{width:100%;margin-top:16px}"
+      // Icons on buttons. A button names its icon with data-ic and the sheet
+      // draws it in front of the label: a mask over currentColor, so it takes
+      // the colour of the button it sits in - green, grey, red, dimmed when
+      // disabled - in both themes, and a script that rewrites the label with
+      // textContent cannot wipe it. The pseudo element has no content, so a
+      // screen reader reads the label alone.
+      //
+      // The icon says what kind of action it is, the words say which one, so
+      // the same icon stands for every action of a kind: the tick for every
+      // save, the bin for every delete. Toggles, tabs and Connect stay words.
+      "button[data-ic]{display:inline-flex;align-items:center;justify-content:center;gap:7px}"
+      "button[data-ic][hidden]{display:none}"
+      "button[data-ic]:before{content:'';width:16px;height:16px;flex:none;"
+      "background:currentColor;forced-color-adjust:none;"
+      "-webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat}"
+      // Icon only, for a row of small actions that repeats down a list and
+      // for the tools of the live log. The same 38 px square as the
+      // screenshot card's buttons; title and aria-label carry the word.
+      "button.ico{width:38px;height:38px;padding:0;flex:none}button.ico:before{width:17px;height:17px}"
+      "[data-ic=ok]{--ic:" WEB_ICON("M5 12l5 5 9-10") "}"
+      "[data-ic=rm]{--ic:" WEB_ICON("M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6") "}"
+      "[data-ic=dl]{--ic:" WEB_ICON("M12 3v12M7 10l5 5 5-5M5 21h14") "}"
+      "[data-ic=up]{--ic:" WEB_ICON("M12 15V3M7 8l5-5 5 5M5 21h14") "}"
+      "[data-ic=cp]{--ic:" WEB_ICON("M11 9h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-8"
+                                    "a2 2 0 0 1 2-2zM5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10"
+                                    "a1 1 0 0 1 1 1v1") "}"
+      "[data-ic=pw]{--ic:" WEB_ICON("M12 3v8M6.3 6.3a8 8 0 1 0 11.4 0") "}"
+      "[data-ic=re]{--ic:" WEB_ICON("M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5") "}"
+      "[data-ic=pr]{--ic:" WEB_ICON("M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14"
+                                    "a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M6 14h12v7H6z") "}"
+      "[data-ic=add]{--ic:" WEB_ICON("M12 5v14M5 12h14") "}"
+      "[data-ic=x]{--ic:" WEB_ICON("M6 6l12 12M18 6L6 18") "}"
+      "[data-ic=back]{--ic:" WEB_ICON("M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3") "}"
+      "[data-ic=eye]{--ic:" WEB_ICON("M2 12c2.5-4.5 6-7 10-7s7.5 2.5 10 7c-2.5 4.5-6 7-10 7"
+                                     "s-7.5-2.5-10-7zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z") "}"
+      "[data-ic=tsm]{--ic:" WEB_ICON("M3 19l5-13 5 13M4.6 15h6.8M16 12h6") "}"
+      "[data-ic=tlg]{--ic:" WEB_ICON("M3 19l5-13 5 13M4.6 15h6.8M16 12h6M19 9v6") "}"
+      "[data-ic=full]{--ic:" WEB_ICON("M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5") "}"
+      "[data-ic=unfull]{--ic:" WEB_ICON("M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5") "}"
       // A file input in the page's own button vocabulary. The native control
       // stays in the label, hidden, so the label click opens the picker and
       // the form still posts the file; the chosen name shows beside it.

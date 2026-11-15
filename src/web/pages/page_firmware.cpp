@@ -205,7 +205,7 @@ static String body() {
   h += htmlEsc(T(STR_W_FW_NOFILE));
   h += F("'>");
   h += T(STR_W_FW_NOFILE);
-  h += F("</span><button type='submit' id='fwgo' disabled>");
+  h += F("</span><button type='submit' id='fwgo' data-ic='up' disabled>");
   h += T(STR_W_FW_FLASH);
   h += F("</button></div><span class='hint'>");
   h += T(STR_W_FW_HINT);
@@ -238,12 +238,12 @@ static String body() {
          "<div class='row'><span class='k'>");
   h += T(STR_W_FW_RELEASED);
   h += F("</span><span class='v' id='ghrel'>-</span></div></div>"
-         "<div class='inrow'><button class='quiet' id='ghck' onclick='ghCheck()'>");
+         "<div class='inrow'><button class='quiet' id='ghck' onclick='ghCheck()' data-ic='re'>");
   h += T(STR_W_FW_CHECK);
   // A check that already found something - the daily background one included
   // - leaves the buttons ready, rather than making the visitor repeat it.
   const bool have_latest = (gh_latest_version[0] != '\0');
-  h += F("</button><button id='ghin' onclick='ghInstall()'");
+  h += F("</button><button id='ghin' onclick='ghInstall()' data-ic='dl'");
   if (!(update_available && have_latest)) h += F(" disabled");
   h += F(">");
   h += T(STR_W_FW_INSTALL);

@@ -166,11 +166,11 @@ static String body() {
   h += T(STR_W_THEME_STRENGTH_HINT);
   h += F("</p></div><div class='csec' style='border-bottom:0'><div class='clbl'>");
   h += T(STR_W_THEME_PREVIEW);
-  h += F("</div><div class='cprev' id='cprev'></div><div class='inrow'><button class='quiet' id='creset' type='button'>");
+  h += F("</div><div class='cprev' id='cprev'></div><div class='inrow'><button class='quiet' id='creset' type='button' data-ic='back'>");
   h += T(STR_W_THEME_RESET);
   h += F("</button></div></div></div></div>");
 
-  h += F("<div class='tbar' id='tbar'><button id='tapply' disabled>");
+  h += F("<div class='tbar' id='tbar'><button id='tapply' data-ic='pw' disabled>");
   h += T(STR_W_THEME_APPLY);
   h += F("</button><span class='tdirty'>");
   h += T(STR_W_THEME_UNSAVED);

@@ -104,7 +104,8 @@ static const char SESSION_SCRIPT[] PROGMEM =
   "function slIsFull(){return slEl('slcard').classList.contains('full');}"
   "function slFull(v){slEl('slcard').classList.toggle('full',v);"
   "document.body.style.overflow=v?'hidden':'';"
-  "slEl('slfs').textContent=v?L_FULL_EXIT:L_FULL;if(slFollow)slToEnd();}"
+  "var b=slEl('slfs'),t=v?L_FULL_EXIT:L_FULL;b.title=t;b.setAttribute('aria-label',t);"
+  "b.dataset.ic=v?'unfull':'full';if(slFollow)slToEnd();}"
   "function slWatch(){var e=slEl('sl');if(!e)return;slSize(0);slFwLabel();"
   "slEl('slb').addEventListener('click',function(){loadSession(true);});"
   "slEl('slc').addEventListener('click',slCopy);"
@@ -121,6 +122,22 @@ static const char SESSION_SCRIPT[] PROGMEM =
   "loadSession(true);setInterval(function(){loadSession(false);},SL_POLL_MS);}"
   "slWatch();";
 
+// A tool of the live log as an icon (data-ic, drawn by app.css). The word it
+// stood for goes into title and aria-label: a pointer shows it, a screen
+// reader reads it.
+static void addIconButton(String &h, const char *id, const char *icon, const char *label) {
+  const String text = htmlEsc(label);
+  h += F("<button id='");
+  h += id;
+  h += F("' class='quiet ico' data-ic='");
+  h += icon;
+  h += F("' title='");
+  h += text;
+  h += F("' aria-label='");
+  h += text;
+  h += F("'></button>");
+}
+
 String sessionLogCard() {
   String h;
   h.reserve(1200);
@@ -129,19 +146,18 @@ String sessionLogCard() {
   h += T(STR_W_C_SESSION);
   h += F("</h2><p class='note' id='slnote'>");
   h += T(STR_W_SESSION_NOTE);
-  h += F("</p><div class='sltools'><button id='slsm' class='quiet' title='");
-  h += htmlEsc(T(STR_W_LIVE_SMALLER));
-  h += F("'>A-</button><button id='sllg' class='quiet' title='");
-  h += htmlEsc(T(STR_W_LIVE_LARGER));
-  h += F("'>A+</button><input id='slq' type='text' placeholder='");
+  h += F("</p><div class='sltools'>");
+  addIconButton(h, "slsm", "tsm", T(STR_W_LIVE_SMALLER));
+  addIconButton(h, "sllg", "tlg", T(STR_W_LIVE_LARGER));
+  h += F("<input id='slq' type='text' placeholder='");
   h += htmlEsc(T(STR_W_LIVE_FILTER));
-  h += F("'><button id='slfw' class='quiet'></button><button id='slfs' class='quiet'>");
-  h += T(STR_W_SESSION_FULL);
-  h += F("</button></div><pre id='sl'></pre>"
+  h += F("'><button id='slfw' class='quiet'></button>");
+  addIconButton(h, "slfs", "full", T(STR_W_SESSION_FULL));
+  h += F("</div><pre id='sl'></pre>"
          "<div style='display:flex;flex-wrap:wrap;gap:12px;align-items:center'>"
-         "<button id='slb' class='quiet'>");
+         "<button id='slb' class='quiet' data-ic='re'>");
   h += T(STR_W_SESSION_REFRESH);
-  h += F("</button><button id='slc' class='quiet'>");
+  h += F("</button><button id='slc' class='quiet' data-ic='cp'>");
   h += T(STR_W_SESSION_COPY);
   h += F("</button><span id='sls' class='note' style='margin:0'></span></div></div>");
   return h;

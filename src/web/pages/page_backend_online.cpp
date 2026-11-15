@@ -68,7 +68,7 @@ static void addFixedCard(String &h, const BackendProfile &p) {
   addKeyField(h, p.id, STR_W_ONLINE_KEY_HINT);
   addSendRow(h, p.id);
   if (isActive(p.id)) return;
-  h += F("<div class='inrow'><button class='quiet on-a' type='button' data-u='");
+  h += F("<div class='inrow'><button class='quiet on-a' type='button' data-ic='add' data-u='");
   h += htmlEsc(p.account_url);
   h += F("'>");
   h += T(STR_W_ONLINE_ACCOUNT);

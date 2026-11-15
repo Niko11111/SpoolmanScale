@@ -337,7 +337,7 @@ static void templateCard(String& h) {
   }
   h += F("</div><span class='hint' id='ldh'>");
   h += T(STR_W_L_DATE_HINT);
-  h += F("</span></div><div class='field'><div class='inrow'><button id='lr' class='quiet'>");
+  h += F("</span></div><div class='field'><div class='inrow'><button id='lr' class='quiet' data-ic='back'>");
   h += T(STR_W_DEFAULTS);
   h += F("</button><span class='msg' id='ls-s'></span></div></div></fieldset></div>");
 }
@@ -377,7 +377,7 @@ static void previewCard(String& h) {
   h += T(STR_W_L_NO_PRINTER);
   h += F(" <a href='/printer'>");
   h += T(STR_W_NAV_PRINTER);
-  h += F("</a></div><div class='field lb-print'><div class='inrow'><button id='lpb'>");
+  h += F("</a></div><div class='field lb-print'><div class='inrow'><button id='lpb' data-ic='pr'>");
   h += T(STR_W_L_PRINT);
   h += F("</button><span class='hint' style='flex:1'>");
   h += T(STR_W_L_PRINT_HINT);

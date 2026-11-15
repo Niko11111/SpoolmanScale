@@ -94,7 +94,7 @@ static String body() {
   h += F("</label>"
          "<div class='inrow' style='margin-top:16px'>"
          "<button id='tg-btn' onclick='writeTag()' disabled></button>"
-         "<button id='tg-erase' class='danger' onclick='eraseTag()' disabled>");
+         "<button id='tg-erase' class='danger' onclick='eraseTag()' data-ic='rm' disabled>");
   h += T(STR_W_TAG_ERASE);
   // Binds the tag without writing it: the one way in the browser for a tag
   // that can only be read, and for an NTAG whose contents should stay.
@@ -167,9 +167,9 @@ static String body() {
   h += F("</h3></div>"
          "<pre id='tg-raw-text' style='background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:12px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2);max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin:0'></pre>"
          "<div style='display:flex;justify-content:flex-end;gap:10px;margin-top:14px'>"
-         "<button type='button' id='tg-copy-btn'>");
+         "<button type='button' id='tg-copy-btn' data-ic='cp'>");
   h += T(STR_W_COPY);
-  h += F("</button><button type='button' class='quiet' id='tg-raw-close'>");
+  h += F("</button><button type='button' class='quiet' id='tg-raw-close' data-ic='x'>");
   h += T(STR_BT_CLOSE);
   h += F("</button></div></div></div>");
 

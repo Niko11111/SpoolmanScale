@@ -268,7 +268,7 @@ static String body() {
   // The rescan holds the I2C bus for a moment, so it sits behind the config
   // gate now; the button is only offered where the request would get through.
   if (webGateOpen(GATE_CONFIG)) {
-    h += F("<button class='quiet' id='i2cbtn'>");
+    h += F("<button class='quiet' id='i2cbtn' data-ic='re'>");
     h += T(STR_W_RESCAN);
     h += F("</button>");
   }
@@ -314,7 +314,7 @@ static String body() {
   // ---- device -----------------------------------------------------------
   h += F("<div class='card wide'><h2>");
   h += T(STR_W_C_DEVICE);
-  h += F("</h2><button class='quiet' onclick='doRestart()'>");
+  h += F("</h2><button class='quiet' onclick='doRestart()' data-ic='pw'>");
   h += T(STR_W_RESTART);
   h += F("</button><p class='note'>");
   h += T(STR_W_RESTART_NOTE);

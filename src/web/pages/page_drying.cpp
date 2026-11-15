@@ -80,9 +80,9 @@ static String body() {
          "<span class='hint' style='flex:1'>");
   h += T(STR_W_DRY_MULT_HINT);
   h += F("</span></div></div>"
-         "<div class='inrow' style='margin-top:18px'><button onclick='saveDry()'>");
+         "<div class='inrow' style='margin-top:18px'><button onclick='saveDry()' data-ic='ok'>");
   h += T(STR_W_SAVE);
-  h += F("</button><button class='danger' onclick='resetDry()'>");
+  h += F("</button><button class='danger' onclick='resetDry()' data-ic='back'>");
   h += T(STR_W_DEFAULTS);
   h += F("</button><span class='msg' id='dry-s'></span></div></div></div>");
 
