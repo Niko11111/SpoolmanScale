@@ -48,6 +48,7 @@
 #define AMSV_FEED_W       3
 #define AMSV_FEED_CLEAR   (AMSV_MARK_GLOW + 1)
 #define AMSV_FEED_EXTRA   8
+#define AMSV_FEED_FILLET  4   // radius where the frame turns into the stroke
 #define AMSV_UNIT_HDR_H   17
 // Below the last row of a unit, before the next header.
 #define AMSV_UNIT_FOOT    9
@@ -685,19 +686,37 @@ static bool printerIsPrinting(const char* st);   // behind printerActivity()
 // only below its last row; in an AMS 3H a back bay sits over the gap between
 // two front bays, so its stroke runs down through that gap.
 // Returns whether it was drawn, so the unit only grows when it was.
+// A plain rectangle on the body: the stroke and its joint are built from these.
+struct FeedRect { int x, y, w, h; };
+
+static lv_obj_t* feedPart(const FeedRect& r, uint32_t col, int radius) {
+  lv_obj_t* o = lv_obj_create(s_body);
+  if (!o) return nullptr;
+  lv_obj_set_size(o, r.w, r.h);
+  lv_obj_set_pos(o, r.x, r.y);
+  lv_obj_set_style_bg_color(o, lv_color_hex(col), 0);
+  lv_obj_set_style_border_width(o, 0, 0);
+  lv_obj_set_style_radius(o, radius, 0);
+  lv_obj_set_style_pad_all(o, 0, 0);
+  lv_obj_clear_flag(o, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+  return o;
+}
+
 static bool drawFeed(const AmsSlotUnit& unit, int unit_bottom, int bottom) {
   if (!s_feed.set) return false;
   if (!amsUnitIsRack(unit) && s_feed.top != unit_bottom) return false;
-  lv_obj_t* f = lv_obj_create(s_body);
-  if (!f) return false;
-  const int top = s_feed.top + AMSV_FEED_CLEAR;
-  lv_obj_set_size(f, AMSV_FEED_W, bottom - top);
-  lv_obj_set_pos(f, s_feed.x - AMSV_FEED_W / 2, top);
-  lv_obj_set_style_bg_color(f, lv_color_hex(AMSV_COL_ACCENT), 0);
-  lv_obj_set_style_border_width(f, 0, 0);
-  lv_obj_set_style_radius(f, 1, 0);
-  lv_obj_set_style_pad_all(f, 0, 0);
-  lv_obj_clear_flag(f, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+  const int x   = s_feed.x - AMSV_FEED_W / 2;
+  const int top = s_feed.top;
+  if (!feedPart({x, top, AMSV_FEED_W, bottom - top}, AMSV_COL_ACCENT, 1)) return false;
+  // The joint: a block as wide as the stroke plus a fillet each side, from
+  // the frame through its ring, with two discs of the ground carving the
+  // fillets out of its lower corners. The frame flows into the stroke
+  // instead of the stroke standing against it.
+  const int r   = AMSV_FEED_FILLET;
+  const int y0  = top + AMSV_FEED_CLEAR;
+  feedPart({x - r, top, AMSV_FEED_W + 2 * r, AMSV_FEED_CLEAR + r}, AMSV_COL_ACCENT, 0);
+  feedPart({x - 2 * r, y0, 2 * r, 2 * r}, AMSV_COL_BG, LV_RADIUS_CIRCLE);
+  feedPart({x + AMSV_FEED_W, y0, 2 * r, 2 * r}, AMSV_COL_BG, LV_RADIUS_CIRCLE);
   return true;
 }
 
