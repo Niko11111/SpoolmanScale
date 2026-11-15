@@ -18,6 +18,7 @@
 #include "tare_entry.h"
 #include "tare_missing_popup.h"
 #include "services/backend.h"
+#include "services/backend_job_rules.h"
 #include "services/filaman_api.h"
 #include "services/settings_registry.h"
 #include "theme.h"
@@ -306,11 +307,35 @@ void logLvMem(const char* tag, int rows) {
     (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 }
 
+// One gate for every refusal: a cut list asks again on its retries, so a
+// lasting low would otherwise write a line every LV_CUT_RETRY_MS.
+static LogGate s_row_refusal_gate{};
+
+// Which of the two limits said no, and what the heap looked like then, so a
+// cut list in the field can be told from a passing WiFi low.
+static void logRowRefusal() {
+  if (!logGateDue(&s_row_refusal_gate, lv_tick_get(), LV_ROW_REFUSAL_LOG_MS)) return;
+  const LvMemStats m = lvMemStats();
+  const bool over_budget = m.int_used + LV_ROW_RESERVE_BYTES > LVGL_MEM_INTERNAL_BUDGET;
+  logSDf("LVMEM: row refused (%s), heap=%u largest=%u int=%u ps=%u, %u more since last line",
+         over_budget ? "budget" : "reserve",
+         (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+         (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+         (unsigned)m.int_used, (unsigned)m.ps_used,
+         (unsigned)logGateTakeSuppressed(&s_row_refusal_gate));
+}
+
 bool lvPoolHasRoomForRow() {
   // Fragmentation, the second thing the old pool check watched, is the heap's
   // business now: a row's blocks are small enough for any gap it has, and a
   // block that finds none goes to PSRAM instead of failing.
-  return lvMemInternalRoom(LV_ROW_RESERVE_BYTES);
+  if (lvMemInternalRoom(LV_ROW_RESERVE_BYTES)) {
+    // The low is over: the next one starts with a line of its own.
+    logGateReset(&s_row_refusal_gate);
+    return true;
+  }
+  logRowRefusal();
+  return false;
 }
 
 bool lvRoomForRowNoted(LvCutRetry* r) {

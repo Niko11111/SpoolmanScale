@@ -1,6 +1,7 @@
 #include "ams_view.h"
 
 #include <Arduino.h>
+#include <esp_heap_caps.h>
 #include <lvgl.h>
 #include <string.h>
 
@@ -1424,7 +1425,16 @@ static void openDetail(int ams_id, int tray_id) {
     }
   }
 
-  if (spool_id > 0) backendGetSpoolDetail(spool_id, det);
+  if (spool_id > 0) {
+    // Code, time and heap of the one request behind the card, so a "details
+    // unavailable" in the field says whether the server, the network or the
+    // memory was the cause.
+    const uint32_t started_ms = millis();
+    const int code = backendGetSpoolDetail(spool_id, det);
+    logSDf("AMSVIEW: detail of spool %d, HTTP %d in %lu ms, found=%d heap=%u",
+           spool_id, code, (unsigned long)(millis() - started_ms), (int)det.found,
+           (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+  }
 
   // The printer's word against the database's. The grid above is drawn from
   // the printer and the card from the spool the backend has assigned to the
