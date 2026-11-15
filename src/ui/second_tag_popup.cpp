@@ -41,9 +41,12 @@ static char s_first_uid[CARD_UIDS_MAX]  = "";
 static char s_second_uid[CARD_UIDS_MAX] = "";
 
 // Whether the first tag was a Bambu tag. A Bambu spool carries a Bambu chip on
-// both flanges, so on such a spool a second tag that settles as anything else
-// was misread, not a sticker (06.11.2026, spool 40: CE4AF87E linked as ntag).
+// both flanges, so while this question stands an unknown chip is asked with
+// the Bambu keys first - see secondTagExpectsBambu().
 static bool s_first_bambu = false;
+// Whether the second tag opened with the Bambu keys. Linked by its UID as a
+// Bambu chip then: the tray uuid is on the spool from the first chip already.
+static bool s_second_bambu = false;
 // The tag the "put it back" line was shown for, so it is said and logged once.
 static char s_unclear_uid[CARD_UIDS_MAX] = "";
 // When the clock ran out while a new tag was still being read, 0 otherwise.
@@ -67,6 +70,8 @@ static uint32_t      s_opened_stall = 0;
 static int           s_last_shown_s = -1;
 
 bool isSecondTagPopupOpen() { return scr_tag2 != nullptr; }
+
+bool secondTagExpectsBambu() { return scr_tag2 && s_first_bambu && !s_close_pending; }
 
 static SecondTagState s_state = T2_IDLE;
 static unsigned long  s_state_ms = 0;
@@ -139,6 +144,7 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   s_link_pending  = false;
   s_close_pending = false;
   s_second_uid[0] = '\0';
+  s_second_bambu  = false;
   s_unclear_uid[0] = '\0';
   s_grace_since_ms = 0;
   s_restarts = 0;
@@ -305,17 +311,17 @@ void handleSecondTagDeferredActions() {
     tagUidNormalize(g_tag.uid_str, now, sizeof(now));
     //
     // A new UID is not yet an answer. g_tag.uid_str is written on the first
-    // read attempt, while a Bambu tag may still be on its way to its tray
-    // uuid - linked then, it went in as a plain tag (bambu=0). So the tag is
-    // only taken once its read has settled, and only if it settled into
-    // something that can be linked.
+    // read attempt, before the scale knows whether the chip opens with the
+    // Bambu keys - linked then, a Bambu chip went in as a plain tag (bambu=0).
+    // So the tag is only taken once its read has settled. A chip that never
+    // answered is not taken at all: it is no answer to "Bambu or not".
     const TagVerdict verdict = (now[0] && strcmp(now, s_first_uid) != 0)
                              ? tagSettledVerdict(g_tag.uid_str) : TV_NONE;
-    const bool unclear = verdict == TV_BAMBU_INCOMPLETE ||
-                         (verdict == TV_OTHER && s_first_bambu);
+    const bool unclear = verdict == TV_NO_ANSWER;
     if (verdict != TV_NONE && !unclear) {
       strncpy(s_second_uid, g_tag.uid_str, sizeof(s_second_uid) - 1);
       s_second_uid[sizeof(s_second_uid) - 1] = '\0';
+      s_second_bambu  = verdict == TV_BAMBU;
       s_link_pending  = true;
       s_close_pending = true;
       setState(T2_LINKING);
@@ -323,9 +329,8 @@ void handleSecondTagDeferredActions() {
       // Not linked, and the question keeps standing: lifting the spool and
       // putting it back starts a fresh read of the same chip.
       snprintf(s_unclear_uid, sizeof(s_unclear_uid), "%s", now);
-      logSDf("TAG2: '%s' not linked to spool %d, read as %s - asking to put it back",
-             g_tag.uid_str, s_spool_id,
-             verdict == TV_BAMBU_INCOMPLETE ? "an incomplete Bambu tag" : "no Bambu tag");
+      logSDf("TAG2: '%s' not linked to spool %d, it never answered the Bambu keys - "
+             "asking to put it back", g_tag.uid_str, s_spool_id);
       if (lbl_tag2_prompt) {
         lv_label_set_text(lbl_tag2_prompt, T(STR_TAG2_UNCLEAR));
         lv_obj_set_style_text_color(lbl_tag2_prompt, lv_color_hex(UI_COL_WARN), 0);
@@ -390,5 +395,5 @@ void handleSecondTagDeferredActions() {
     return;
   }
 
-  linkAdditionalTag(spool_id, s_second_uid);
+  linkAdditionalTag(spool_id, s_second_uid, s_second_bambu);
 }

@@ -67,9 +67,11 @@ void doLinkPatch(int spool_id, bool is_bambu);
 // column instead of overwriting the first, and the second tag question itself
 // is suppressed - otherwise answering it would ask it again, forever.
 //
-// `uid` is what the reader reported. Whether the spool is a Bambu one is read
-// off g_tag, not passed in, so there is one source for it rather than two.
-void linkAdditionalTag(int spool_id, const char* uid);
+// `uid` is what the reader reported. A chip whose tray uuid has been read is a
+// Bambu chip by g_tag, as for the first tag. `bambu_chip` says the same for a
+// chip that opened with the Bambu keys before its tray uuid came in: it is
+// linked by its UID as a Bambu chip, the tray uuid being on the spool already.
+void linkAdditionalTag(int spool_id, const char* uid, bool bambu_chip);
 
 // A link made somewhere else resolved the tag on the reader - Spoolman's own
 // web page, say. spoolmanRecheckTick() calls this on the hit; once the loop's

@@ -104,26 +104,62 @@ static bool reselectMifareUid(const uint8_t expected_uid[4], uint16_t timeout_ms
          memcmp(uid, expected_uid, 4) == 0;
 }
 
+// The library answers an authentication with true or false only, and keeps
+// the PN532's response in this buffer of its own (Adafruit PN532, pinned in
+// platformio.ini). Its status byte says why a key failed: the card answered
+// and refused it, or it never answered at all. Read here, never written.
+extern byte pn532_packetbuffer[];
+
+// The PN532's InDataExchange status for a card that took part in the
+// authentication and refused the key ("MIFARE authentication error"). A card
+// that did not answer reports a time out (0x01) instead.
+static constexpr uint8_t PN532_STATUS_AUTH_ERROR = 0x14;
+
+// What the authentications of the last nfcReadMifareSector() came to, see
+// nfcLastSectorRefusedByCard() in nfc.h.
+static bool    s_sector_refused_by_card = false;
+static uint8_t s_last_auth_status = NFC_AUTH_STATUS_NONE;
+
+// The status of the authentication the library has just run, when its buffer
+// holds a response frame (00 00 FF len lcs D5 41 status). When the command was
+// never acknowledged the buffer still holds the command, which starts 0x40.
+static void noteAuthStatus() {
+  const byte* b = pn532_packetbuffer;
+  const bool response = b[0] == 0x00 && b[1] == 0x00 && b[2] == 0xFF &&
+                        b[5] == 0xD5 && b[6] == 0x41;
+  s_last_auth_status = response ? b[7] : NFC_AUTH_STATUS_NONE;
+  if (s_last_auth_status == PN532_STATUS_AUTH_ERROR) s_sector_refused_by_card = true;
+}
+
+static bool authenticateTrailerOnce(uint8_t trailer_block, uint8_t key[6], uint8_t uid[4],
+                                    uint8_t cmd) {
+  if (nfc->mifareclassic_AuthenticateBlock(uid, 4, trailer_block, cmd, key)) return true;
+  noteAuthStatus();
+  return false;
+}
+
 static bool authenticateMifareTrailer(uint8_t trailer_block, uint8_t key[6], uint8_t uid[4],
                                       uint8_t key_type) {
   if (key_type == NFC_KEY_A) {
-    return nfc->mifareclassic_AuthenticateBlock(uid, 4, trailer_block, NFC_KEY_A, key);
+    return authenticateTrailerOnce(trailer_block, key, uid, NFC_KEY_A);
   }
   // Reads as "key B, then key A" and never was: the library turns its key
   // argument into a command with (keyNumber) ? AUTH_B : AUTH_A, and both
   // opcodes passed here are non-zero, so the second call is key B once more.
   // Bambu tags read with key B and have been proven on hardware with exactly
   // these two calls, so they stay as they are.
-  if (nfc->mifareclassic_AuthenticateBlock(uid, 4, trailer_block, MIFARE_CMD_AUTH_B, key)) {
+  if (authenticateTrailerOnce(trailer_block, key, uid, MIFARE_CMD_AUTH_B)) {
     return true;
   }
-  return nfc->mifareclassic_AuthenticateBlock(uid, 4, trailer_block, MIFARE_CMD_AUTH_A, key);
+  return authenticateTrailerOnce(trailer_block, key, uid, MIFARE_CMD_AUTH_A);
 }
 
 bool nfcReadMifareSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blocks[4][16],
                          uint8_t key_type) {
   uint8_t trailer_block = sector * 4 + 3;
 
+  s_sector_refused_by_card = false;
+  s_last_auth_status = NFC_AUTH_STATUS_NONE;
   if (!nfc) return false;
 
   for (uint8_t attempt = 0; attempt < MIFARE_SECTOR_READ_ATTEMPTS; attempt++) {
@@ -153,6 +189,10 @@ bool nfcReadMifareSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blo
   memset(blocks, 0, 4 * 16);
   return false;
 }
+
+bool nfcLastSectorRefusedByCard() { return s_sector_refused_by_card; }
+
+uint8_t nfcLastAuthStatus() { return s_last_auth_status; }
 
 bool nfcReadMifareBlock(uint8_t block, uint8_t data[16]) {
   return nfc && nfc->mifareclassic_ReadDataBlock(block, data);

@@ -35,6 +35,15 @@ bool nfcInRelease();
 // single attempt with key A, which no caller used before Snapmaker tags.
 bool nfcReadMifareSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blocks[4][16],
                          uint8_t key_type = NFC_KEY_B);
+// Whether the card itself refused a key during the last nfcReadMifareSector():
+// it answered the authentication and turned the key down (PN532 status 0x14).
+// False when every attempt went unanswered - a weak or halted card, which may
+// well hold that key. Only what the read already did; no command of its own.
+bool nfcLastSectorRefusedByCard();
+// The PN532 status of the last failed authentication in that read, for the
+// log; NFC_AUTH_STATUS_NONE when none failed or no response frame came back.
+#define NFC_AUTH_STATUS_NONE 0xFF
+uint8_t nfcLastAuthStatus();
 bool nfcReadMifareBlock(uint8_t block, uint8_t data[16]);
 // One authentication of a sector trailer, no retry and no reselect: the
 // Creality writer probes which key a blank tag opens with, and a second try

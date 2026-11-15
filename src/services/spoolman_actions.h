@@ -54,9 +54,13 @@ bool patchSpoolTagTakeNativeMissing();
 // and an unlink that never arrived is not reported as done.
 bool tagBindingFailedOnNetwork();
 
+// `bambu_chip_uid`: `uuid` is the UID of a Bambu chip rather than its tray
+// uuid, for a further chip linked before its tray uuid was read. Spoolman's
+// own tag relation then stores it as format "bambu"; every other field takes
+// the value as it is.
 bool patchSpoolTag(int spool_id, const char* uuid,
                    const char* const* field_values = nullptr,
-                   bool additional = false);
+                   bool additional = false, bool bambu_chip_uid = false);
 
 // Unlink. `all` clears every tag field the spool is bound through; otherwise
 // only `uid` is taken out of the list field that holds it, leaving the other

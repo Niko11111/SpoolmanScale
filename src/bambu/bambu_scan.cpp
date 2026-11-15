@@ -48,6 +48,10 @@ static BambuTagData scan_buf;
 // to write four lines of its own, and a placement takes up to six.
 static int  s_attempts = 0;
 static bool s_probe_refused = false;   // the last attempt stopped at the probe
+// The card itself turned a Bambu key down in the last attempt, rather than
+// never answering. See bambuScanCardRefused() in bambu_scan.h.
+static bool    s_card_refused = false;
+static uint8_t s_auth_status  = NFC_AUTH_STATUS_NONE;   // for the report line
 static char s_attempt_uid[sizeof(g_tag.uid_str)] = "";
 
 BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
@@ -65,6 +69,8 @@ BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
   }
   s_attempts++;
   s_probe_refused = false;
+  s_card_refused = false;
+  s_auth_status = NFC_AUTH_STATUS_NONE;
 
   memset(&scan_buf, 0, sizeof(scan_buf));
   memcpy(scan_buf.uid, uid, 4);
@@ -103,7 +109,11 @@ BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
   for (int sector = 0; sector < 16; sector++) {
     uint8_t sec_blocks[4][16];
     bool ok = readSector(sector, scan_buf.keys[sector], uid, sec_blocks);
-    if (!ok) result = BAMBU_SCAN_PARTIAL;
+    if (!ok) {
+      result = BAMBU_SCAN_PARTIAL;
+      if (nfcLastSectorRefusedByCard()) s_card_refused = true;
+      if (nfcLastAuthStatus() != NFC_AUTH_STATUS_NONE) s_auth_status = nfcLastAuthStatus();
+    }
 
     for (int b = 0; b < 3; b++) {
       int block_num = sector * 4 + b;
@@ -197,6 +207,8 @@ BambuScanResult scanTag(uint8_t *uid, uint8_t uid_len) {
   return result;
 }
 
+bool bambuScanCardRefused() { return s_card_refused; }
+
 void bambuScanReport() {
   if (s_attempts == 0) return;
   const int attempts = s_attempts;
@@ -208,8 +220,13 @@ void bambuScanReport() {
   }
   const int blocks = countBambuDataBlocksRead(g_tag);
   if (blocks == 0) {
-    logSDf("NFC: %s refused the Bambu keys, %d attempt(s)%s", s_attempt_uid, attempts,
-           s_probe_refused ? ", the last stopped at the probe" : "");
+    // Whether the card answered and said no, or never answered: only the
+    // first rules out a Bambu chip (PN532 status 0x14 against 0x01).
+    logSDf("NFC: %s refused the Bambu keys, %d attempt(s)%s, last %s (status 0x%02X)",
+           s_attempt_uid, attempts,
+           s_probe_refused ? ", the last stopped at the probe" : "",
+           s_card_refused ? "refused by the card" : "without an answer from the card",
+           s_auth_status);
     return;
   }
   char rgba[SPOOL_COLOR_HEX_MAX];

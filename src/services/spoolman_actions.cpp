@@ -380,7 +380,7 @@ static void unlinkHwUidField(int spool_id, const char* scanned, bool all) {
 }
 
 bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_values,
-                   bool additional) {
+                   bool additional, bool bambu_chip_uid) {
   // No WiFi is the plainest way of not reaching the server.
   s_net_failed = !wifi_ok;
   if (!wifi_ok) return false;
@@ -420,6 +420,8 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     // found under when it is an unlink and carries none.
     const char* scanned    = clearing ? g_tag.tray_uuid : uuid;
     const char* native_uid = tagNativeUid(scanned);
+    // A chip uid has no tray uuid to tell its format by.
+    const char* format     = (bambu_chip_uid && !clearing) ? "bambu" : tagFormatName(scanned);
 
     if (clearing) {
       unlinkAllNativeTags(spool_id, native_uid);
@@ -431,10 +433,10 @@ bool patchSpoolTag(int spool_id, const char* uuid, const char* const* field_valu
     // identity that makes the spool findable outside this firmware.
     int conflict = 0, conflict_filament = 0;
     int code = noteCode(backendLinkTag(cfg_spoolman_base, spool_id, native_uid,
-                              tagFormatName(scanned), &conflict,
+                              format, &conflict,
                               BACKEND_LINK_TIMEOUT_MS, &conflict_filament));
     logSDf("LINK native ID=%d uuid='%s' format=%s HTTP %d%s",
-           spool_id, native_uid, tagFormatName(scanned), code,
+           spool_id, native_uid, format, code,
            code == 409 ? " CONFLICT" : "");
 
     if (code == 409) {

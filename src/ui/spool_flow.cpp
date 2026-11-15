@@ -1477,8 +1477,11 @@ bool doLinkPatchUid(int spool_id, bool is_bambu, const char* link_uuid) {
   // Both stores go along: the list is appended to when there is one, and the
   // tag field's UID becomes the list's first entry when there is not. Null for
   // an unbound spool, and for every spool at all while the switch is off.
+  // A Bambu link carries the tray uuid, except for a further chip that is
+  // linked by its UID (linkAdditionalTag): the format has to come along then.
+  const bool bambu_chip_uid = is_bambu && !tagIsBambu(link_uuid);
   if (!patchSpoolTag(spool_id, link_uuid, linkTargetValues(spool_id),
-                     s_additional_link)) {
+                     s_additional_link, bambu_chip_uid)) {
     // Nothing was written - the list was full, or the request failed. Saying
     // nothing here would look like a successful link right up to the next scan.
     logSDf("LINK ABORT: tag field of spool %d not written", spool_id);
@@ -1555,21 +1558,27 @@ bool doLinkPatchUid(int spool_id, bool is_bambu, const char* link_uuid) {
   return true;
 }
 
-void linkAdditionalTag(int spool_id, const char* uid) {
+void linkAdditionalTag(int spool_id, const char* uid, bool bambu_chip) {
   if (spool_id <= 0 || !uid || !uid[0]) return;
 
-  // One source for the tag type, the same one doLinkPatch() reads. A Bambu
-  // spool keeps its 32 character tray uuid across both chips, while a second
-  // NTAG cleared the field when it was seen - so the length answers this
-  // without anybody having to carry a flag along.
-  const bool is_bambu = tagIsBambu(g_tag.tray_uuid);
+  // The source doLinkPatch() reads: a Bambu chip read as far as its tray uuid
+  // has the 32 characters in g_tag, while a second NTAG cleared the field
+  // when it was seen.
+  const bool tray_read = tagIsBambu(g_tag.tray_uuid);
+  // A chip that opened with the Bambu keys is a Bambu chip without its tray
+  // uuid too. Waiting for that read linked it as a plain tag (06.11.2026,
+  // spool 40) - and its UID is all that gets stored for it.
+  const bool by_uid = bambu_chip && !tray_read;
+  const bool is_bambu = tray_read || by_uid;
 
   strncpy(link_tag_uid, uid, sizeof(link_tag_uid) - 1);
   link_tag_uid[sizeof(link_tag_uid) - 1] = '\0';
-  logSDf("TAG2: linking '%s' to spool %d (bambu=%d)", uid, spool_id, is_bambu ? 1 : 0);
+  logSDf("TAG2: linking '%s' to spool %d (bambu=%d%s)", uid, spool_id, is_bambu ? 1 : 0,
+         by_uid ? ", by its UID" : "");
 
   s_additional_link = true;
-  doLinkPatch(spool_id, is_bambu);
+  if (by_uid) doLinkPatchUid(spool_id, true, link_tag_uid);
+  else        doLinkPatch(spool_id, is_bambu);
   s_additional_link = false;
 
   if (!s_last_link_ok) {
@@ -1586,7 +1595,8 @@ void linkAdditionalTag(int spool_id, const char* uid) {
   // as well. querySpoolmanById() above refreshed sm_hw_uid_value but does not
   // write, and waiting for the next placement would leave the spool answering
   // at one gate only. Free while the switch is off, which it checks first.
-  syncHwUidField(spool_id, g_tag.tray_uuid);
+  // A chip linked by its UID has no tray uuid in g_tag to name it by.
+  syncHwUidField(spool_id, by_uid ? link_tag_uid : g_tag.tray_uuid);
 
   if (lbl_status) {
     char buf[48];
@@ -1710,7 +1720,7 @@ static void runTagMove() {
     return;
   }
   if (s_move_additional) {
-    linkAdditionalTag(s_move_spool_id, s_move_uid);
+    linkAdditionalTag(s_move_spool_id, s_move_uid, s_move_is_bambu);
   } else {
     strncpy(link_tag_uid, s_move_uid, sizeof(link_tag_uid) - 1);
     link_tag_uid[sizeof(link_tag_uid) - 1] = '\0';

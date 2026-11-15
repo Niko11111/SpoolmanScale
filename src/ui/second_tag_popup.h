@@ -37,6 +37,10 @@ void showSecondTagPopup(int spool_id, const char* first_uid);
 
 bool isSecondTagPopupOpen();
 
+// True while the question stands for a spool whose first tag was a Bambu chip:
+// the NFC loop then tries an unknown chip with the Bambu keys before any other.
+bool secondTagExpectsBambu();
+
 // Watches the reader, ticks the countdown, and links whatever turned up.
 // Called from appLoop(): the link costs HTTP requests, which is exactly what
 // an LVGL callback must not carry.

@@ -2008,6 +2008,7 @@ void appLoop() {
 
     static unsigned long last_nfc_check_ms = 0;
     static bool bambu_uid_probed = false;   // see NFC_UID_PROBE_AFTER_RETRIES
+    static bool bambu_card_refused = false; // the card turned a Bambu key down, see TagVerdict
     static bool snapmaker_decoded = false;  // this placement read as a Snapmaker tag
     static bool creality_decoded = false;   // this placement read as a Creality CFS tag
     static bool blank_mifare = false;       // this placement is a blank MIFARE tag
@@ -2047,6 +2048,7 @@ void appLoop() {
               isSecondTagPopupOpen()) {
             nfc_retry_count = 0;
             bambu_uid_probed = false;
+            bambu_card_refused = false;
             // Back after a long absence: a new placement, even of the same
             // tag. It goes through the family choice below like a new UID;
             // until 12.10.2026 it only re-ran the Bambu scan, so a Creality
@@ -2127,6 +2129,7 @@ void appLoop() {
           nfc_retry_count = 0; nfc_absent_count = 0;
           last_bambu_retry_ms = 0;
           bambu_uid_probed = false;
+          bambu_card_refused = false;
           snapmaker_decoded = false;
           creality_decoded = false;
           blank_mifare = false;
@@ -2146,6 +2149,12 @@ void appLoop() {
           // looks the spool up by its UID. A tag that does not open is woken
           // again inside scanCrealityTag(), so the Bambu scan still finds it.
           TagFamily family = tagFamilyGet(uid);
+          // The second tag of a Bambu spool is asked for: an unknown chip gets
+          // the Bambu keys first, on the card the poll has just selected. The
+          // Creality and factory keys ahead of it knocked a weak Bambu chip off
+          // the reader and took the question's 30 s (07.11.2026, #77).
+          const bool bambu_asked = secondTagExpectsBambu() &&
+              (family == TAG_FAMILY_UNKNOWN || family == TAG_FAMILY_NOT_CREALITY);
           // A tag known to be blank is asked with the factory key first, on
           // the card the poll has just selected, so it never sees a refusal.
           // One that has been written since (FilaStation, CFTag) refuses it
@@ -2158,7 +2167,7 @@ void appLoop() {
           // any wake), so asking it in second place found nothing. A Bambu tag
           // pays one refusal on its first placement; after that its family is
           // stored and it goes straight to the Bambu scan.
-          if (g_creality_tags && family == TAG_FAMILY_NOT_CREALITY) {
+          if (g_creality_tags && family == TAG_FAMILY_NOT_CREALITY && !bambu_asked) {
             factory = mifareProbeFactory(uid, uid_str);
           }
           if (g_creality_tags && family == TAG_FAMILY_BLANK) {
@@ -2169,7 +2178,7 @@ void appLoop() {
             }
           }
           bool blank_now = (factory != MIFARE_FACTORY_REFUSED);
-          const bool creality_first = g_creality_tags &&
+          const bool creality_first = g_creality_tags && !bambu_asked &&
               (family == TAG_FAMILY_UNKNOWN || family == TAG_FAMILY_CREALITY);
           // An unknown tag alternates between placements: Creality first, then
           // Bambu first, then Creality again, until one family reads it. On
@@ -2233,6 +2242,7 @@ void appLoop() {
               tagFamilySet(uid, TAG_FAMILY_NOT_CREALITY);
             }
             scanTag(uid, uidLen);
+            if (bambuScanCardRefused()) bambu_card_refused = true;
             // Remembered as soon as any sector read, not only once the scan
             // has settled on a later poll: on 13.10.2026 a Bambu spool read
             // 6/48 blocks and dropped out before that poll ever came.
@@ -2319,6 +2329,7 @@ void appLoop() {
             }
           } else {
             scanTag(uid, uidLen);
+            if (bambuScanCardRefused()) bambu_card_refused = true;
             if (countBambuDataBlocksRead(g_tag) > 0) tagFamilySet(uid, TAG_FAMILY_BAMBU);
           }
         } else {
@@ -2333,12 +2344,11 @@ void appLoop() {
             TagSeen::note(uid_str, bambu_blocks_read > 0 ? "Bambu"
                                    : creality_decoded    ? "Creality"
                                    : snapmaker_decoded   ? "Snapmaker" : "MIFARE",
-                          bambu_blocks_read == 0               ? TV_OTHER
-                          : tagIsBambu(g_tag.tray_uuid)        ? TV_BAMBU
-                          // This branch also runs between two retries, while
-                          // the backoff is not over: no verdict before the
-                          // retries are spent.
-                          : nfc_retry_count >= NFC_MAX_RETRIES ? TV_BAMBU_INCOMPLETE : TV_NONE);
+                          // A sector that opened is enough, also between two
+                          // retries: the UID is all a link needs.
+                          bambu_blocks_read > 0 ? TV_BAMBU
+                          : (creality_decoded || snapmaker_decoded || blank_mifare ||
+                             bambu_card_refused) ? TV_OTHER : TV_NO_ANSWER);
           }
           // What the read attempts came to, once: read in full, or out of
           // retries. Logging only.
