@@ -29,6 +29,12 @@ static void wifiIpText(char *buf, size_t n) {
   snprintf(buf, n, "%s", T(STR_BTN_WIFI_STATUS_SUB));
 }
 
+// The count the "Saved networks" row shows. A network joined on the setup
+// screen is remembered only once the watchdog runs again, which it does not
+// while the connecting screen is up, so the menu is often built a moment
+// before the list grows.
+static int s_shown_known = -1;
+
 void closeWifiMenuScreen() {
   if (scr_wifi_menu) { lv_obj_del(scr_wifi_menu); scr_wifi_menu = nullptr; }
 }
@@ -68,10 +74,18 @@ void buildWifiMenuScreen() {
     }, LV_EVENT_CLICKED, NULL); }
 
   { char buf_s[40];
-    snprintf(buf_s, sizeof(buf_s), T(STR_WIFI_SAVED_COUNT), wifiKnownList().n);
+    s_shown_known = wifiKnownList().n;
+    snprintf(buf_s, sizeof(buf_s), T(STR_WIFI_SAVED_COUNT), s_shown_known);
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_LIST, T(STR_WIFI_SAVED_TITLE), buf_s);
     lv_obj_add_event_cb(btn, [](lv_event_t *e){
       logSD("BTN: WifiMenu -> Saved networks");
       showWifiSavedScreen();
     }, LV_EVENT_CLICKED, NULL); }
+}
+
+void wifiMenuScreenTick() {
+  if (!scr_wifi_menu || lv_obj_has_flag(scr_wifi_menu, LV_OBJ_FLAG_HIDDEN)) return;
+  if (wifiKnownList().n == s_shown_known) return;
+  // Built again on the loop, which also brings the address row up to date.
+  show_wifi_menu_pending = true;
 }

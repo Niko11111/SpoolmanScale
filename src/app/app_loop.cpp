@@ -70,6 +70,7 @@
 #include "ui/status_picker.h"
 #include "ui/ams_view.h"
 #include "services/wifi_manager.h"
+#include "services/wifi_remote.h"
 #include "services/wifi_roam.h"
 #include "services/backend_job.h"
 #include "services/ams_weights.h"
@@ -461,6 +462,8 @@ static void handleWifiReconnect() {
   // Joining the access point the roaming check chose. A begin() of our own
   // would cancel that; if it fails, the roaming check lets go.
   if (wifiRoamSwitching()) return;
+  // Trying a network chosen in the browser, or scanning for its list.
+  if (wifiRemoteBusy()) return;
 
   if (WiFi.status() == WL_CONNECTED) {
     noteWifiUp();
@@ -504,6 +507,7 @@ static bool wifiRoamQuiet() {
   if (!displayIdleFor(WIFI_ROAM_IDLE_MS)) return false;
   if (webBrowserSeenWithin(WIFI_ROAM_WEB_QUIET_MS)) return false;
   if (improvSerialBusy() || setupPortalActive() || wifiUiVisible()) return false;
+  if (wifiRemoteBusy()) return false;
   if (gh_flash_active || otaWebUploadActive() || updateCheckBusy()) return false;
   if (webJobState() == WJS_RUNNING || backendListBusy()) return false;
   if (amsWeightsBusy() || driedBatchBusy()) return false;
@@ -707,6 +711,9 @@ void appLoop() {
   handleWifiReconnect();
   // Not beside a scan of the network switching: both read the same results.
   if (!wifiFallbackBusy()) wifiRoamTick(wifiRoamQuiet(), cfg_wifi_ssid, cfg_wifi_password);
+  // What the browser asked of the WiFi, once nothing else is on the radio.
+  wifiRemoteTick(!improvSerialBusy() && !setupPortalActive() && !wifiUiVisible() &&
+                 !wifiRoamBusy() && !wifiFallbackBusy());
 
   // OTA web server bedienen wenn aktiv
   perfSection("web");
@@ -795,6 +802,7 @@ void appLoop() {
   handleWifiPortalDeferredActions();
   handleWifiSetupDeferredActions();
   wifiSavedScreenTick();
+  wifiMenuScreenTick();
   handleBluetoothDeferredActions();
   handleBleDevicesDeferredActions();
   handlePrinterDeferredActions();

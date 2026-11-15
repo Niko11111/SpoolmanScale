@@ -55,7 +55,10 @@ int wifiManagerScanSorted(WifiScanEntry *out, int max) {
     WiFi.scanDelete();
     return n;
   }
+  return wifiManagerReadSorted(n, out, max);
+}
 
+int wifiManagerReadSorted(int n, WifiScanEntry *out, int max) {
   // Sorting an index array leaves the scan results where the accessors
   // expect them.
   const int sort_n = n < WIFI_MANAGER_SORT_MAX ? n : WIFI_MANAGER_SORT_MAX;

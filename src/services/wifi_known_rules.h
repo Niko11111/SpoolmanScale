@@ -126,3 +126,36 @@ inline uint32_t wifiReturnNextGap(uint32_t gap, bool failed) {
   if (!failed) return WIFI_RETURN_FIRST_MS;
   return gap >= WIFI_RETURN_MAX_MS / 2 ? WIFI_RETURN_MAX_MS : gap * 2;
 }
+
+// A network chosen in the browser gets this long to come up; past it the
+// scale stays on the one it was on, and the browser finds it there again.
+constexpr uint32_t WIFI_TRY_GIVE_UP_MS = 20UL * 1000UL;
+
+enum WifiTryVerdict : uint8_t { WIFI_TRY_WAIT, WIFI_TRY_UP, WIFI_TRY_FAILED };
+
+// up_since: an address was handed out after the try began. on: the network
+// the station is on. Both count: a wrong password leaves the old link up, and
+// the old link coming back hands out an address too.
+inline WifiTryVerdict wifiTryVerdict(bool up_since, const char* on, const char* wanted,
+                                     uint32_t elapsed_ms) {
+  if (up_since && strcmp(on, wanted) == 0) return WIFI_TRY_UP;
+  return elapsed_ms >= WIFI_TRY_GIVE_UP_MS ? WIFI_TRY_FAILED : WIFI_TRY_WAIT;
+}
+
+// The preferred network, which the list may not hold (forgotten, or never up).
+struct WifiPreferred {
+  const char* ssid;
+  const char* pass;
+};
+
+// The password to try a network with: the one typed, else the stored one of
+// a network the scale knows, else none (an open network). The browser never
+// sees a stored one, so it sends an empty field for a known network.
+inline const char* wifiTryPass(const WifiKnownList& l, const char* ssid, const char* typed,
+                               WifiPreferred pref) {
+  if (typed && typed[0]) return typed;
+  const int at = wifiKnownFind(l, ssid);
+  if (at >= 0) return l.e[at].pass;
+  if (pref.ssid && pref.pass && strcmp(pref.ssid, ssid) == 0) return pref.pass;
+  return "";
+}

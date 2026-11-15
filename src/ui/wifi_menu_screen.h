@@ -11,3 +11,5 @@
 
 void buildWifiMenuScreen();
 void closeWifiMenuScreen();
+// Rebuilds the visible menu once the number of saved networks has changed.
+void wifiMenuScreenTick();

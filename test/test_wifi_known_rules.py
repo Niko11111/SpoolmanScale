@@ -1,7 +1,7 @@
 """Compile the production rules for the remembered WiFi networks and check
 the order of the list, what a full one drops, which network a scale falls
-back to, and how its look for the preferred one stretches
-(services/wifi_known_rules.h)."""
+back to, how its look for the preferred one stretches, and how a network
+chosen in the browser is tried (services/wifi_known_rules.h)."""
 import subprocess
 import tempfile
 from pathlib import Path
@@ -89,6 +89,24 @@ int main() {
   for (int i = 0; i < 10; i++) gap = wifiReturnNextGap(gap, true);
   assert(gap == WIFI_RETURN_MAX_MS);
   assert(wifiReturnNextGap(gap, false) == WIFI_RETURN_FIRST_MS);
+
+  // A network chosen in the browser counts only once the station is on it:
+  // the old link coming back hands out an address too.
+  assert(wifiTryVerdict(true, "New", "New", 1000) == WIFI_TRY_UP);
+  assert(wifiTryVerdict(true, "Old", "New", 1000) == WIFI_TRY_WAIT);
+  assert(wifiTryVerdict(false, "New", "New", 1000) == WIFI_TRY_WAIT);
+  assert(wifiTryVerdict(true, "Old", "New", WIFI_TRY_GIVE_UP_MS) == WIFI_TRY_FAILED);
+  assert(wifiTryVerdict(true, "New", "New", WIFI_TRY_GIVE_UP_MS) == WIFI_TRY_UP);
+
+  // Typed wins; an empty field takes the stored password, the preferred
+  // network's as well when the list does not hold it; else an open network.
+  const WifiPreferred pref = {"Pref", "pp"};
+  assert(strcmp(wifiTryPass(k, "Shop", "typed", pref), "typed") == 0);
+  assert(strcmp(wifiTryPass(k, "Shop", "", pref), "s") == 0);
+  assert(strcmp(wifiTryPass(k, "Shop", nullptr, pref), "s") == 0);
+  assert(strcmp(wifiTryPass(k, "Pref", "", pref), "pp") == 0);
+  assert(strcmp(wifiTryPass(k, "Cafe", "", pref), "") == 0);
+  assert(strcmp(wifiTryPass(k, "Cafe", "", WifiPreferred{nullptr, nullptr}), "") == 0);
   return 0;
 }
 """
