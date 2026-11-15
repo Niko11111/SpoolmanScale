@@ -11,6 +11,7 @@
 #include "services/http_progress.h"
 #include "services/tag_field.h"
 #include "services/tag_uid.h"
+#include "ui/second_tag_rules.h"
 #include "ui/spool_flow.h"
 #include "ui_common.h"
 #include "ui/theme.h"
@@ -49,6 +50,8 @@ static bool s_first_bambu = false;
 static bool s_second_bambu = false;
 // The tag the "put it back" line was shown for, so it is said and logged once.
 static char s_unclear_uid[CARD_UIDS_MAX] = "";
+// The chip that refused the Bambu keys in this question, see tag2Step().
+static char s_refused_uid[CARD_UIDS_MAX] = "";
 // When the clock ran out while a new tag was still being read, 0 otherwise.
 // The question then waits for that read instead of expiring under it - a
 // Bambu tag on a weak flange can take its retries well past the 30 s - but
@@ -146,6 +149,7 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   s_second_uid[0] = '\0';
   s_second_bambu  = false;
   s_unclear_uid[0] = '\0';
+  s_refused_uid[0] = '\0';
   s_grace_since_ms = 0;
   s_restarts = 0;
   tagUidNormalize(first_uid, s_first_uid, sizeof(s_first_uid));
@@ -317,20 +321,34 @@ void handleSecondTagDeferredActions() {
     // answered is not taken at all: it is no answer to "Bambu or not".
     const TagVerdict verdict = (now[0] && strcmp(now, s_first_uid) != 0)
                              ? tagSettledVerdict(g_tag.uid_str) : TV_NONE;
-    const bool unclear = verdict == TV_NO_ANSWER;
-    if (verdict != TV_NONE && !unclear) {
+    // Refused once and lifted since: s_unclear_uid is cleared when it leaves,
+    // so while it still lies there, this is the same refusal.
+    const bool refused_before = s_refused_uid[0] && strcmp(now, s_refused_uid) == 0 &&
+                                strcmp(now, s_unclear_uid) != 0;
+    const Tag2Step step = tag2Step(verdict, s_first_bambu, refused_before);
+    if (step == T2S_LINK) {
+      if (verdict == TV_REFUSED && s_first_bambu)
+        logSDf("TAG2: '%s' refused the Bambu keys again after it was put back - "
+               "linking it as a plain tag", g_tag.uid_str);
       strncpy(s_second_uid, g_tag.uid_str, sizeof(s_second_uid) - 1);
       s_second_uid[sizeof(s_second_uid) - 1] = '\0';
       s_second_bambu  = verdict == TV_BAMBU;
       s_link_pending  = true;
       s_close_pending = true;
       setState(T2_LINKING);
-    } else if (unclear && strcmp(now, s_unclear_uid) != 0) {
+    } else if (step == T2S_ASK_BACK && strcmp(now, s_unclear_uid) != 0) {
       // Not linked, and the question keeps standing: lifting the spool and
       // putting it back starts a fresh read of the same chip.
       snprintf(s_unclear_uid, sizeof(s_unclear_uid), "%s", now);
-      logSDf("TAG2: '%s' not linked to spool %d, it never answered the Bambu keys - "
-             "asking to put it back", g_tag.uid_str, s_spool_id);
+      if (verdict == TV_REFUSED) {
+        snprintf(s_refused_uid, sizeof(s_refused_uid), "%s", now);
+        logSDf("TAG2: '%s' not linked to spool %d yet, it refused the Bambu keys - "
+               "asking to put it back, a second refusal links it as a plain tag",
+               g_tag.uid_str, s_spool_id);
+      } else {
+        logSDf("TAG2: '%s' not linked to spool %d, it never answered the Bambu keys - "
+               "asking to put it back", g_tag.uid_str, s_spool_id);
+      }
       if (lbl_tag2_prompt) {
         lv_label_set_text(lbl_tag2_prompt, T(STR_TAG2_UNCLEAR));
         lv_obj_set_style_text_color(lbl_tag2_prompt, lv_color_hex(UI_COL_WARN), 0);

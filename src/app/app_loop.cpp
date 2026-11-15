@@ -2365,8 +2365,8 @@ void appLoop() {
                           // A sector that opened is enough, also between two
                           // retries: the UID is all a link needs.
                           bambu_blocks_read > 0 ? TV_BAMBU
-                          : (creality_decoded || snapmaker_decoded || blank_mifare ||
-                             bambu_card_refused) ? TV_OTHER : TV_NO_ANSWER);
+                          : (creality_decoded || snapmaker_decoded || blank_mifare) ? TV_OTHER
+                          : bambu_card_refused ? TV_REFUSED : TV_NO_ANSWER);
           }
           // What the read attempts came to, once: read in full, or out of
           // retries. Logging only.
