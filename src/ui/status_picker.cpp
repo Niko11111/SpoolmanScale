@@ -99,7 +99,10 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
   releaseScreen(&s_scr);
   s_cb = cb;
   s_pick_id = 0;
-  if (!lvPoolHasRoomForRow()) return;
+  // No lvPoolHasRoomForRow() here: that limit keeps long lists out of PSRAM,
+  // where they scroll with a stutter. This is one box the user just asked
+  // for, and refusing it left the tap without any answer once the card had
+  // brought internal RAM within a few hundred bytes of the reserve.
 
   // Backdrop
   s_scr = lv_obj_create(lv_scr_act());

@@ -231,7 +231,10 @@ static void oneLine(lv_obj_t* l, int w, const lv_font_t* font);
 
 static void showSpoolAsk(AmsdAsk kind) {
   releaseScreen(&s_ask);
-  if (!lvPoolHasRoomForRow()) return;
+  // No lvPoolHasRoomForRow() here: that limit keeps long lists out of PSRAM,
+  // where they scroll with a stutter. This is one box the user just asked
+  // for, and refusing it left the tap without any answer once the card had
+  // brought internal RAM within a few hundred bytes of the reserve.
   s_ask_kind = kind;
   const bool takeout = (kind == AMSD_ASK_TAKEOUT);
   // Decided once, so the whole box is drawn for one question or the other.
