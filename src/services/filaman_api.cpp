@@ -1,4 +1,5 @@
 #include "filaman_api.h"
+#include "services/ams_hotend.h"
 #include "services/backend_http.h"
 
 #include <Arduino.h>
@@ -1851,6 +1852,9 @@ static void buildDisplayFilter(JsonDocument& filter, bool with_slots) {
   sl["slot"]              = true;
   sl["empty"]             = true;
   sl["active"]            = true;
+  // "left" or "right" on a dual-nozzle printer: the hotend this bay is
+  // loaded in. Absent on servers before the field, null on one nozzle.
+  sl["extruder"]          = true;
   sl["color"]             = true;
   sl["color_name"]        = true;
   sl["material"]          = true;
@@ -2076,6 +2080,7 @@ int filamanGetAmsState(const char* base_url, const char* api_key, int printer_id
       t.tray_id = (uint8_t)(sl["slot"] | dst.tray_count);
       t.exists  = !(sl["empty"] | true);
       t.active  = sl["active"] | false;
+      t.hotend  = amsHotendFromWord(sl["extruder"] | "");
       t.spool_id = sl["spool_id"] | 0;
       strncpy(t.name, sl["material"] | "", sizeof(t.name) - 1);
       // Cleaned here rather than where it is drawn. "Charcoal (11101)" is

@@ -1,5 +1,6 @@
 #include "bambuddy_api.h"
 #include "services/backend_http.h"
+#include "services/ams_hotend.h"
 #include "services/bambu_status.h"
 
 #include <Arduino.h>
@@ -1307,6 +1308,13 @@ void bambuStatusFilter(JsonDocument& filter) {
   // (amsGlobalTrayId), so it is resolved back to a pair below.
   filter["tray_now"] = true;
 
+  // Dual-nozzle printers: the bay each hotend is fed from, keyed "0" (right)
+  // and "1" (left), and the hotend in use. tray_now alone names one hotend.
+  JsonObject fx = filter["extruder_slots"].to<JsonObject>();
+  fx["0"] = true;
+  fx["1"] = true;
+  filter["active_extruder"] = true;
+
   // The printer's own state word and job percentage. BamBuddy names these
   // state and progress and is not asked for them here; an AMS source passes
   // the printer's keys through.
@@ -1344,6 +1352,29 @@ static void readDryerChamber(JsonObjectConst u, AmsSlotUnit& dst) {
   }
   JsonVariantConst tmp = u["dryer_temp"];
   if (!tmp.isNull()) dst.dryer_temp_c10 = (int16_t)lroundf(tmp.as<float>() * 10.0f);
+}
+
+// BamBuddy's extruder_slots: one entry per hotend, the bay it is fed from or
+// nulls, and has_filament. A single-nozzle printer sends one entry or none,
+// which amsApplyHotends() leaves alone.
+static void readHotends(JsonObjectConst doc, AmsSlotState& out) {
+  JsonObjectConst slots = doc["extruder_slots"].as<JsonObjectConst>();
+  if (slots.isNull()) return;
+  AmsHotendFeed feed[AMS_HOTENDS] = {{-1, -1}, {-1, -1}};
+  int count = 0;
+  for (int h = 0; h < AMS_HOTENDS; h++) {
+    char key[4];
+    snprintf(key, sizeof(key), "%d", h);
+    JsonObjectConst e = slots[key].as<JsonObjectConst>();
+    if (e.isNull()) continue;
+    count++;
+    const bool loaded = (e["has_filament"] | false) && !e["ams_id"].isNull() &&
+                        !e["slot_id"].isNull();
+    feed[h].ams_id  = loaded ? (e["ams_id"].as<int>()) : -1;
+    feed[h].tray_id = loaded ? (e["slot_id"].as<int>()) : -1;
+  }
+  const int active = doc["active_extruder"] | -1;
+  amsApplyHotends(out, feed, count, active);
 }
 
 void bambuStatusToAmsState(JsonObjectConst doc, int printer_id, AmsSlotState& out,
@@ -1455,6 +1486,7 @@ void bambuStatusToAmsState(JsonObjectConst doc, int printer_id, AmsSlotState& ou
     out.unit_count++;
   }
 
+  readHotends(doc, out);
   out.valid = true;
 }
 

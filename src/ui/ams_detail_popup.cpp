@@ -23,6 +23,7 @@
 #include "status_picker.h"
 #include "theme.h"
 #include "ui_common.h"
+#include "ui/ams_mark.h"
 #include "ui/color_tile_popup.h"
 
 // Last, and after everything that pulls in ArduinoJson: its template
@@ -623,6 +624,24 @@ static ColorTileSpec amsTileSpec() {
   return ColorTileSpec{s_det.color, SpoolColor{}, name};
 }
 
+// "Printing now" while the printer prints from this bay, "loaded" while it
+// only holds it - Bambu names the loaded bay when idle too - and on a
+// dual-nozzle printer which hotend. False when the bay is not in the printer.
+static bool inUseNote(const AmsSpoolDetail& d, char* out, size_t n) {
+  if (!d.feeding && d.hotend == AMS_HOTEND_NONE) return false;
+  const bool printing = d.feeding && d.printing;
+  int id;
+  if (d.hotend == AMS_HOTEND_LEFT) {
+    id = printing ? STR_AMSD_PRINTING_LEFT : STR_AMSD_LOADED_LEFT;
+  } else if (d.hotend == AMS_HOTEND_RIGHT) {
+    id = printing ? STR_AMSD_PRINTING_RIGHT : STR_AMSD_LOADED_RIGHT;
+  } else {
+    id = printing ? STR_AMSD_PRINTING : STR_AMSD_LOADED;
+  }
+  copyT(out, n, id);
+  return true;
+}
+
 // Swatch, id, material, trade name - what identifies the spool, on one line.
 static void buildIdentity(lv_obj_t* box, const AmsSpoolDetail& d) {
   lv_obj_t* sw = lv_obj_create(box);
@@ -637,6 +656,10 @@ static void buildIdentity(lv_obj_t* box, const AmsSpoolDetail& d) {
     if (d.color.valid) swatchPaint(sw, d.color);
     else lv_obj_set_style_bg_color(sw, lv_color_hex(UI_COL_EMPTY), 0);
     colorTileAttach(sw, amsTileSpec, AMSD_SWATCH_TAP_EXT_PX);
+    // The same badge the grid puts on the bay, so the two read alike.
+    if (d.feeding || d.hotend != AMS_HOTEND_NONE) {
+      amsMarkBadge(sw, d.hotend, d.feeding);
+    }
   }
 
   // The id caption doubles as the place the tag binding is reported: a spool
@@ -812,30 +835,38 @@ static void buildWeight(lv_obj_t* box, const AmsSpoolDetail& d, int reserve_righ
   // showing the wrong spool altogether is the bigger thing to know. It names
   // the fact and leaves the conclusion to the user - a PCTG spool a printer
   // was told to treat as PETG trips this too, and is no fault at all.
+  // The printer's own state goes first: it is the one live fact on the card,
+  // and the rest of the line follows it rather than being pushed out.
   char note[112] = "";
+  const bool in_use = inUseNote(d, note, sizeof(note));
+  char rest[112] = "";
   if (!d.found) {
-    copyT(note, sizeof(note), d.spool_id > 0 ? STR_AMSD_FAIL : STR_AMSD_NO_SPOOL);
+    copyT(rest, sizeof(rest), d.spool_id > 0 ? STR_AMSD_FAIL : STR_AMSD_NO_SPOOL);
   } else if (d.type_conflict) {
     char fmt[72], said[88];
     copyT(fmt, sizeof(fmt), STR_AMSD_TYPE_CONFLICT);
     snprintf(said, sizeof(said), fmt, d.printer_type);
-    snprintf(note, sizeof(note), LV_SYMBOL_WARNING " %s", said);
+    snprintf(rest, sizeof(rest), LV_SYMBOL_WARNING " %s", said);
   } else if (!known) {
-    copyT(note, sizeof(note), STR_AMSD_NO_WEIGHT);
+    copyT(rest, sizeof(rest), STR_AMSD_NO_WEIGHT);
   }
   if (d.backup_of[0]) {
     char fmt[24], b[40];
     copyT(fmt, sizeof(fmt), STR_AMSD_BACKUP);
     snprintf(b, sizeof(b), fmt, d.backup_of);
+    if (rest[0]) strncat(rest, " - ", sizeof(rest) - strlen(rest) - 1);
+    strncat(rest, b, sizeof(rest) - strlen(rest) - 1);
+  }
+  if (rest[0]) {
     if (note[0]) strncat(note, " - ", sizeof(note) - strlen(note) - 1);
-    strncat(note, b, sizeof(note) - strlen(note) - 1);
+    strncat(note, rest, sizeof(note) - strlen(note) - 1);
   }
   if (note[0]) {
     lv_obj_t* n = lv_label_create(box);
     if (n) {
       lv_label_set_text(n, note);
       lv_obj_set_style_text_color(n,
-        lv_color_hex(d.type_conflict ? UI_COL_WARN : UI_COL_INK_SOFT), 0);
+        lv_color_hex(d.type_conflict ? UI_COL_WARN : in_use ? UI_COL_ACCENT : UI_COL_INK_SOFT), 0);
       lv_obj_set_style_text_font(n, UI_FONT_CAPTION, 0);
       // Size before position, and a real height: with LV_SIZE_CONTENT the
       // label grows downwards instead of ellipsising, which is how the second

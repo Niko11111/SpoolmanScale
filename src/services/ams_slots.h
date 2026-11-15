@@ -98,6 +98,16 @@ enum AmsModel : uint8_t {
   AMS_MODEL_AMS_3H,        // "n10a", the H3C's unit 32 with nine bays
 };
 
+// Which hotend a bay is loaded in, on a dual-nozzle printer (H2D, H2C).
+// Zero is "none" so a bay that was cleared with {} is right without a word;
+// single-nozzle printers and the H3C, whose every bay is a hotend of its own,
+// never set anything else.
+enum AmsHotend : uint8_t {
+  AMS_HOTEND_NONE = 0,
+  AMS_HOTEND_RIGHT,        // Bambu's extruder 0, the main one
+  AMS_HOTEND_LEFT,         // Bambu's extruder 1
+};
+
 // A single bay.
 struct AmsSlotTray {
   // Alpha included: a clear spool is 00000000 and is drawn as glass, not as
@@ -132,6 +142,9 @@ struct AmsSlotTray {
   // one thing on the screen that says "this is what is printing right now",
   // and both backends report it.
   bool     active;
+  // On a printer with two hotends, the one this bay is loaded in. Sits in
+  // the padding after the bools, so the bay does not grow.
+  AmsHotend hotend;
 };
 
 // One AMS unit, or one external holder with a single bay.
