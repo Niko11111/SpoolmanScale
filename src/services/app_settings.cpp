@@ -21,6 +21,7 @@
 #include "tag_write.h"
 #include "time_service.h"
 #include "user_options.h"
+#include "wifi_known.h"
 #include "web/web_access.h"
 #include "hardware/display.h"
 
@@ -192,6 +193,7 @@ void saveWifiCredentials(const char* ssid, const char* pass) {
   cfg_wifi_password[sizeof(cfg_wifi_password)-1] = '\0';
   prefsPutString("wifi_ssid", ssid);
   prefsPutString("wifi_pass", pass);
+  wifiKnownSetPreferred(ssid, pass);
   Serial.printf("WiFi saved: SSID=%s\n", ssid);
 }
 

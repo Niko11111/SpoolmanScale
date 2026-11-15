@@ -27,6 +27,9 @@ struct WifiScanEntry {
 // or the negative scan result when the scan failed. Does not reset the radio
 // first: after a failed begin() call wifiManagerPrepareScan() before it.
 int wifiManagerScanSorted(WifiScanEntry *out, int max);
+// The same for a scan already done, with n its network count (more than 0),
+// as an async one leaves it. Clears the results like the above.
+int wifiManagerReadSorted(int n, WifiScanEntry *out, int max);
 
 // The access point of the WiFi setup portal. Access point alone, no station:
 // a station searching for a network drags the channel along and the phone
@@ -73,6 +76,9 @@ IPAddress wifiManagerLocalIP();
 IPAddress wifiManagerGatewayIP();
 IPAddress wifiManagerDNSIP();
 int wifiManagerRSSI();
+// The network the station is on, "" while it is on none. Not cfg_wifi_ssid:
+// during a switch the two differ.
+void wifiManagerCurrentSsid(char* out, size_t len);
 // Station MAC, the address a router needs for a fixed DHCP reservation.
 String wifiManagerMacAddress();
 

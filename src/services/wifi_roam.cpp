@@ -40,6 +40,7 @@ static bool      s_lone        = false;   // the last scan saw no second AP
 static uint8_t   s_target[6]   = {0};
 
 bool wifiRoamSwitching() { return s_state == RS_SWITCHING; }
+bool wifiRoamBusy() { return s_state != RS_IDLE; }
 
 static void sampleSignal(uint32_t now) {
   if (s_last_sample != 0 && now - s_last_sample < WIFI_ROAM_SAMPLE_MS) return;

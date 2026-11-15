@@ -28,6 +28,7 @@
 #include "services/time_service.h"
 #include "services/update_check.h"
 #include "services/wifi_manager.h"
+#include "services/wifi_known.h"
 #include "ui/header_status.h"
 #include "ui/main_screen.h"
 #include "ui/setup_welcome_screen.h"
@@ -166,6 +167,8 @@ void appSetup() {
   // in wifiConnect(). Logs only whether tokens are present, never their values.
   backendLoadSettings();
   amsSourceLoadSettings();
+  // The remembered networks, read beside the stored one; after initSD() as well.
+  wifiKnownBoot();
 
   displayHardwareBegin(resetActivityTimer);
   // The palette, before anything is drawn: every UI_COL_* is read when an

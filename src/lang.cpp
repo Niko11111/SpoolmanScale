@@ -1804,9 +1804,6 @@ const char* const STRINGS[][3] = {
   { "Auf %s umschalten? Die Waage spricht danach mit einem anderen Bestand.",
     "Switch to %s? The scale will talk to a different inventory afterwards.",
     "Basculer vers %s ? La balance dialoguera ensuite avec un autre inventaire." },  // STR_W_BACKEND_ASK
-  { "Panel",
-    "Panel",
-    "Écran" },  // STR_W_C_PANEL
   { "Beim Auflegen aufwachen",
     "Wake when a spool is put down",
     "Réveiller l'écran à la pose d'une bobine" },  // STR_W_WAKE
@@ -3812,11 +3809,11 @@ const char* const STRINGS[][3] = {
     "lecture seule, pas d'affectation" },  // STR_W_AMS_SOURCE_RO
   { "Noch nicht erreicht. Die Waage fragt etwa 20 s nach dem Start und beim Öffnen der AMS-Ansicht.", "Not reached yet. The scale asks about 20 s after starting and when the AMS view opens.",
     "Pas encore joint. La balance interroge environ 20 s après le démarrage et à l'ouverture de la vue AMS." },  // STR_W_AMS_SOURCE_UNSEEN
-  { "Creality-CFS-Tags lesen", "Read Creality CFS tags",
-    "Lire les tags Creality CFS" },  // STR_W_CREALITY
-  { "Liest Creality-CFS-Tags (K2 Plus, K2 Pro, K2 Max, Hi): Material, Farbe und Gewicht. Ein unbekannter 4-Byte-Tag wird zuerst als Creality-Tag versucht, danach als Bambu-Tag. Die Waage merkt sich je Tag, was er ist, und liest ihn beim nächsten Mal direkt.",
-    "Reads Creality CFS tags (K2 Plus, K2 Pro, K2 Max, Hi): material, colour and weight. An unknown 4 byte tag is tried as a Creality tag first, then as a Bambu tag. The scale remembers per tag which it is and reads it directly the next time.",
-    "Lit les tags Creality CFS (K2 Plus, K2 Pro, K2 Max, Hi) : matériau, couleur et poids. Un tag de 4 octets inconnu est d'abord essayé comme tag Creality, puis comme tag Bambu. La balance retient pour chaque tag de quel type il est et le lit directement la fois suivante." },  // STR_W_CREALITY_HINT
+  { "Creality-CFS-Tags lesen und schreiben", "Read and write Creality CFS tags",
+    "Lire et écrire les tags Creality CFS" },  // STR_W_CREALITY
+  { "Liest Creality-CFS-Tags (K2 Plus, K2 Pro, K2 Max, Hi): Material, Farbe und Gewicht. Bietet an, einen leeren MIFARE-Tag mit den Daten der Spule zu beschreiben, damit das CFS ihn erkennt. Ein unbekannter 4-Byte-Tag wird zuerst als Creality-Tag versucht, danach als Bambu-Tag.",
+    "Reads Creality CFS tags (K2 Plus, K2 Pro, K2 Max, Hi): material, colour and weight. Offers to write a blank MIFARE tag with the spool's data so the CFS recognises it. An unknown 4 byte tag is tried as a Creality tag first, then as a Bambu tag.",
+    "Lit les tags Creality CFS (K2 Plus, K2 Pro, K2 Max, Hi) : matériau, couleur et poids. Propose d'écrire les données de la bobine sur un tag MIFARE vierge pour que le CFS le reconnaisse. Un tag de 4 octets inconnu est d'abord essayé comme tag Creality, puis comme tag Bambu." },  // STR_W_CREALITY_HINT
   { "Kein leerer Tag. Er wurde nicht verändert.",
     "Not a blank tag. It was left as it is.",
     "Tag non vierge. Il est resté tel quel." },  // STR_TW_ERR_NOT_BLANK
@@ -4309,6 +4306,62 @@ const char* const STRINGS[][3] = {
   { "Tag wird noch gelesen. Spule bitte liegen lassen.",
     "Tag is still being read. Please leave the spool in place.",
     "Lecture du tag en cours. Laissez la bobine en place." },  // STR_TAG2_READING
+  // Remembered WiFi networks: the WiFi list, the saved networks screen and its popup
+  { "gespeichert", "saved",
+    "connu" },  // STR_WIFI_KNOWN_WORD
+  { "Gespeicherte Netze", "Saved networks",
+    "Réseaux connus" },  // STR_WIFI_SAVED_TITLE
+  { "%d gespeichert", "%d saved",
+    "%d connu(s)" },  // STR_WIFI_SAVED_COUNT
+  { "Verbunden, bevorzugt", "Connected, preferred",
+    "Connecté, préféré" },  // STR_WIFI_ST_CONN_PREF
+  { "Bevorzugt", "Preferred",
+    "Préféré" },  // STR_WIFI_ST_PREFERRED
+  { "Gespeichert", "Saved",
+    "Connu" },  // STR_WIFI_ST_SAVED
+  { "Jetzt verbinden", "Connect now",
+    "Se connecter" },  // STR_WIFI_CONNECT_NOW
+  { "Vergessen", "Forget",
+    "Oublier" },  // STR_WIFI_FORGET
+  { "Zum Vergessen erst ein anderes Netz wählen.", "To forget it, choose another network first.",
+    "Pour l'oublier, choisissez un autre réseau." },  // STR_WIFI_PREF_KEEP
+  { "Noch kein Netz gespeichert.", "No network saved yet.",
+    "Aucun réseau connu." },  // STR_WIFI_SAVED_NONE
+  // The WiFi card on the settings page in the browser
+  { "In Reichweite", "In range",
+    "À portée" },  // STR_W_WIFI_INRANGE
+  { "Netze suchen", "Find networks",
+    "Rechercher les réseaux" },  // STR_W_WIFI_SCAN_BTN
+  { "offen", "open",
+    "ouvert" },  // STR_W_WIFI_OPEN
+  { "Verbinden", "Connect",
+    "Se connecter" },  // STR_W_WIFI_CONNECT
+  { "Mit %s verbinden?\nLiegt %s in einem anderen Netz als dieser Browser, verliert die Seite danach die Verbindung zur Waage.", "Connect to %s?\nIf %s is not the network this browser is on, the page loses the scale afterwards.",
+    "Se connecter à %s ?\nSi %s n'est pas le réseau de ce navigateur, la page perdra ensuite la balance." },  // STR_W_WIFI_ASK
+  { "%s vergessen?\nDie Waage wechselt dann nicht mehr von selbst in dieses Netz.", "Forget %s?\nThe scale then no longer switches to this network by itself.",
+    "Oublier %s ?\nLa balance ne passera plus d'elle-même sur ce réseau." },  // STR_W_WIFI_ASK_FORGET
+  { "Die Waage versucht %s …", "The scale is trying %s …",
+    "La balance essaie %s …" },  // STR_W_WIFI_TRYING
+  { "Liegt %s in einem anderen Netz, ist die Waage danach dort unter %s zu finden.", "If %s is another network, the scale is found there afterwards at %s.",
+    "Si %s est un autre réseau, vous retrouverez ensuite la balance sous %s." },  // STR_W_WIFI_AWAY_NAME
+  { "Liegt %s in einem anderen Netz, steht die neue Adresse danach im WLAN-Menü der Waage.", "If %s is another network, the new address is shown in the scale's WiFi menu afterwards.",
+    "Si %s est un autre réseau, la nouvelle adresse s'affichera ensuite dans le menu WiFi de la balance." },  // STR_W_WIFI_AWAY_MENU
+  { "Verbunden mit %s. Es ist jetzt das bevorzugte Netz.", "Connected to %s. It is the preferred network now.",
+    "Connectée à %s. C'est désormais le réseau préféré." },  // STR_W_WIFI_UP
+  { "%s ging nicht, bitte Passwort und Reichweite prüfen. Die Waage ist wieder in %s.", "%s did not work, please check the password and the range. The scale is back on %s.",
+    "%s n'a pas fonctionné, vérifiez le mot de passe et la portée. La balance est de retour sur %s." },  // STR_W_WIFI_FAIL
+  { "Keine Antwort mehr von der Waage. Sie ist jetzt wohl in %s.", "No answer from the scale any more. It is probably on %s now.",
+    "La balance ne répond plus. Elle est sans doute maintenant sur %s." },  // STR_W_WIFI_GONE
+  { "Ein neues Netz bekommt %d s. Klappt es nicht, bleibt die Waage im bisherigen Netz. Gespeicherte Passwörter verlassen die Waage nicht.", "A new network gets %d s. If it fails, the scale stays on the network it was on. Stored passwords never leave the scale.",
+    "Un nouveau réseau dispose de %d s. En cas d'échec, la balance reste sur le réseau précédent. Les mots de passe enregistrés ne quittent jamais la balance." },  // STR_W_WIFI_HINT
+  { "Die Suche ist fehlgeschlagen. Bitte noch einmal.", "The search failed. Please try again.",
+    "La recherche a échoué. Veuillez réessayer." },  // STR_W_WIFI_SCAN_FAIL
+  { "Die Waage ist gerade mit dem WLAN beschäftigt. Gleich noch einmal versuchen.", "The scale is busy with its WiFi. Please try again in a moment.",
+    "La balance est occupée avec son WiFi. Réessayez dans un instant." },  // STR_W_WIFI_BUSY
+  { "Tag-Formate", "Tag formats",
+    "Formats de tag" },  // STR_W_C_TAG_FORMATS
+  { "Netz wählen", "Choose a network",
+    "Choisir un réseau" },  // STR_W_WIFI_PICK
 };
 
 StringID tagWriteResultString(uint8_t code) {

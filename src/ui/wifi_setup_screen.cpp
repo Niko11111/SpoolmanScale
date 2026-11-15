@@ -13,6 +13,7 @@
 #include "services/app_settings.h"
 #include "services/time_service.h"
 #include "services/wifi_manager.h"
+#include "services/wifi_known.h"
 #include "services/improv_serial.h"
 #include "services/setup_portal.h"
 #include "setup_welcome_screen.h"
@@ -40,6 +41,7 @@
 #define WIFI_ROW_H          44
 #define WIFI_ROW_INSET      14
 #define WIFI_SSID_W        360
+#define WIFI_MARK_GAP       12   // between the tick or "saved" and the signal
 // Under the spinner while there is no list yet, or no network.
 #define WIFI_STATUS_Y      200
 #define WIFI_STATUS_W      440
@@ -262,6 +264,79 @@ void doWifiScan() {
   wifi_scan_started_ms = millis();
 }
 
+// Full SSID per rendered row. The label is LV_LABEL_LONG_DOT at 300 px, so
+// reading the SSID back out of it returned "LongNetworkNam..." and the
+// connection failed for no visible reason. The click handler reads this instead.
+static char row_ssid[WIFI_SCAN_ROWS_MAX][33];
+
+// A known network connects with its stored password, any other one asks.
+static void onScanRowClicked(lv_event_t *e) {
+  lv_obj_t *btn = (lv_obj_t*)lv_event_get_target(e);
+  const char* ssid_str = (const char*)lv_obj_get_user_data(btn);
+  if (!ssid_str) return;
+  const WifiKnownList &known = wifiKnownList();
+  const int at = wifiKnownFind(known, ssid_str);
+  if (at >= 0) {
+    logSDf("BTN: WifiSetup -> known network %s, no password asked", ssid_str);
+    wifiSetupConnectWith(ssid_str, known.e[at].pass);
+    return;
+  }
+  strncpy(wifi_setup_ssid, ssid_str, sizeof(wifi_setup_ssid)-1);
+  wifi_setup_ssid[sizeof(wifi_setup_ssid)-1] = '\0';
+  showWifiPassScreen();
+}
+
+// One network on the list. A tick for the one the scale is on, "saved" for one
+// it knows; both left of the signal so the signal stays in its column.
+static void addScanRow(int slot, const char *ssid, int rssi, bool known, bool connected) {
+  snprintf(row_ssid[slot], sizeof(row_ssid[slot]), "%s", ssid);
+
+  // Signal as the WiFi symbol in its strength's colour: the dBm figure
+  // meant nothing to most, and one label is cheaper than drawn bars.
+  uint32_t sig_color;
+  if      (rssi >= -65) sig_color = UI_COL_GOOD;
+  else if (rssi >= -80) sig_color = UI_COL_WARN;
+  else                  sig_color = UI_COL_SIGNAL_LOW_LIST;
+
+  lv_obj_t *row = lv_btn_create(lbl_wifi_scan_list);
+  lv_obj_set_size(row, LV_PCT(100), WIFI_ROW_H);
+  lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
+  lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
+  lv_obj_set_style_radius(row, UI_RADIUS_ROW, 0);
+  lv_obj_set_style_shadow_width(row, 0, 0);
+  lv_obj_set_style_border_color(row, lv_color_hex(UI_COL_LINE_SOFT), 0);
+  lv_obj_set_style_border_width(row, 1, 0);
+  lv_obj_set_style_pad_all(row, 0, 0);
+  lv_obj_set_user_data(row, row_ssid[slot]);
+
+  lv_obj_t *lbl_sig = lv_label_create(row);
+  lv_label_set_text(lbl_sig, LV_SYMBOL_WIFI);
+  lv_obj_set_style_text_color(lbl_sig, lv_color_hex(sig_color), 0);
+  lv_obj_set_style_text_font(lbl_sig, UI_FONT_BODY, 0);
+  lv_obj_align(lbl_sig, LV_ALIGN_RIGHT_MID, -WIFI_ROW_INSET, 0);
+
+  int ssid_w = WIFI_SSID_W;
+  if (connected || known) {
+    lv_obj_t *mark = lv_label_create(row);
+    lv_label_set_text(mark, connected ? LV_SYMBOL_OK : T(STR_WIFI_KNOWN_WORD));
+    lv_obj_set_style_text_font(mark, connected ? UI_FONT_BODY : UI_FONT_CAPTION, 0);
+    lv_obj_set_style_text_color(mark, lv_color_hex(connected ? UI_COL_ACCENT : UI_COL_CAPTION), 0);
+    lv_obj_align_to(mark, lbl_sig, LV_ALIGN_OUT_LEFT_MID, -WIFI_MARK_GAP, 0);
+    lv_obj_update_layout(mark);
+    ssid_w -= lv_obj_get_width(mark) + WIFI_MARK_GAP;
+  }
+
+  lv_obj_t *lbl_ssid = lv_label_create(row);
+  lv_label_set_text(lbl_ssid, ssid);
+  lv_obj_set_style_text_color(lbl_ssid, lv_color_hex(UI_COL_INK), 0);
+  lv_obj_set_style_text_font(lbl_ssid, UI_FONT_BODY, 0);
+  lv_label_set_long_mode(lbl_ssid, LV_LABEL_LONG_DOT);
+  lv_obj_set_size(lbl_ssid, ssid_w, lv_font_get_line_height(UI_FONT_BODY));
+  lv_obj_align(lbl_ssid, LV_ALIGN_LEFT_MID, WIFI_ROW_INSET, 0);
+
+  lv_obj_add_event_cb(row, onScanRowClicked, LV_EVENT_CLICKED, NULL);
+}
+
 static void finishWifiScan(int n) {
   // The screen may have gone while the scan ran: then only the results go.
   if (!scr_wifi_setup || !lbl_wifi_scan_list || !lbl_wifi_setup_status) {
@@ -282,77 +357,37 @@ static void finishWifiScan(int n) {
 
   lv_label_set_text(lbl_wifi_setup_status, "");
 
-  // Sort strongest first. The body of this loop used to be empty - only
-  // comments - so the list came out in scan order. Sorting an index array keeps
-  // the scan results themselves untouched, so the accessors below still work.
+  // Known networks first, then strongest first. The body of this loop used to
+  // be empty - only comments - so the list came out in scan order. Sorting an
+  // index array keeps the scan results themselves untouched, so the accessors
+  // below still work.
   int sort_n = n < WIFI_SCAN_SORT_MAX ? n : WIFI_SCAN_SORT_MAX;
   static int idx[WIFI_SCAN_SORT_MAX];
-  for (int i = 0; i < sort_n; i++) idx[i] = i;
+  static bool known_at[WIFI_SCAN_SORT_MAX];
+  const WifiKnownList &known = wifiKnownList();
+  for (int i = 0; i < sort_n; i++) {
+    idx[i] = i;
+    known_at[i] = wifiKnownFind(known, wifiManagerScannedSSID(i).c_str()) >= 0;
+  }
   for (int i = 0; i < sort_n - 1; i++) {
     for (int j = 0; j < sort_n - i - 1; j++) {
-      if (wifiManagerScannedRSSI(idx[j]) < wifiManagerScannedRSSI(idx[j + 1])) {
-        int tmp = idx[j]; idx[j] = idx[j + 1]; idx[j + 1] = tmp;
-      }
+      const int a = idx[j], b = idx[j + 1];
+      const bool later = known_at[a] != known_at[b]
+        ? known_at[b]
+        : wifiManagerScannedRSSI(a) < wifiManagerScannedRSSI(b);
+      if (later) { idx[j] = b; idx[j + 1] = a; }
     }
   }
 
-  // Full SSID per rendered row. The label is LV_LABEL_LONG_DOT at 300 px, so
-  // reading the SSID back out of it returned "LongNetworkNam..." and the
-  // connection failed for no visible reason. The click handler reads this instead.
-  static char row_ssid[WIFI_SCAN_ROWS_MAX][33];
-
+  char on[33];
+  wifiManagerCurrentSsid(on, sizeof(on));
   int row_count = 0;
   for (int disp = 0; disp < sort_n && row_count < WIFI_SCAN_ROWS_MAX; disp++) {
-    int i = idx[disp];
-    int rssi = wifiManagerScannedRSSI(i);
-    String ssid = wifiManagerScannedSSID(i);
+    const int i = idx[disp];
+    const String ssid = wifiManagerScannedSSID(i);
     if (ssid.length() == 0) continue;
-
-    int slot = row_count++;
-    strncpy(row_ssid[slot], ssid.c_str(), sizeof(row_ssid[slot])-1);
-    row_ssid[slot][sizeof(row_ssid[slot])-1] = '\0';
-
-    // Signal as the WiFi symbol in its strength's colour: the dBm figure
-    // meant nothing to most, and one label is cheaper than drawn bars.
-    uint32_t sig_color;
-    if      (rssi >= -65) sig_color = UI_COL_GOOD;
-    else if (rssi >= -80) sig_color = UI_COL_WARN;
-    else                  sig_color = UI_COL_SIGNAL_LOW_LIST;
-
-    lv_obj_t *row = lv_btn_create(lbl_wifi_scan_list);
-    lv_obj_set_size(row, LV_PCT(100), WIFI_ROW_H);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(row, UI_RADIUS_ROW, 0);
-    lv_obj_set_style_shadow_width(row, 0, 0);
-    lv_obj_set_style_border_color(row, lv_color_hex(UI_COL_LINE_SOFT), 0);
-    lv_obj_set_style_border_width(row, 1, 0);
-    lv_obj_set_style_pad_all(row, 0, 0);
-    lv_obj_set_user_data(row, row_ssid[slot]);
-
-    lv_obj_t *lbl_ssid = lv_label_create(row);
-    lv_label_set_text(lbl_ssid, ssid.c_str());
-    lv_obj_set_style_text_color(lbl_ssid, lv_color_hex(UI_COL_INK), 0);
-    lv_obj_set_style_text_font(lbl_ssid, UI_FONT_BODY, 0);
-    lv_label_set_long_mode(lbl_ssid, LV_LABEL_LONG_DOT);
-    lv_obj_set_size(lbl_ssid, WIFI_SSID_W, lv_font_get_line_height(UI_FONT_BODY));
-    lv_obj_align(lbl_ssid, LV_ALIGN_LEFT_MID, WIFI_ROW_INSET, 0);
-
-    lv_obj_t *lbl_sig = lv_label_create(row);
-    lv_label_set_text(lbl_sig, LV_SYMBOL_WIFI);
-    lv_obj_set_style_text_color(lbl_sig, lv_color_hex(sig_color), 0);
-    lv_obj_set_style_text_font(lbl_sig, UI_FONT_BODY, 0);
-    lv_obj_align(lbl_sig, LV_ALIGN_RIGHT_MID, -WIFI_ROW_INSET, 0);
-
-    // Click: store SSID → password screen
-    lv_obj_add_event_cb(row, [](lv_event_t *e) {
-      lv_obj_t *btn = (lv_obj_t*)lv_event_get_target(e);
-      const char* ssid_str = (const char*)lv_obj_get_user_data(btn);
-      if (!ssid_str) return;
-      strncpy(wifi_setup_ssid, ssid_str, sizeof(wifi_setup_ssid)-1);
-      wifi_setup_ssid[sizeof(wifi_setup_ssid)-1] = '\0';
-      showWifiPassScreen();
-    }, LV_EVENT_CLICKED, NULL);
+    addScanRow(row_count++, ssid.c_str(), wifiManagerScannedRSSI(i),
+               known_at[i], strcmp(on, ssid.c_str()) == 0);
   }
 
   wifiManagerClearScan();

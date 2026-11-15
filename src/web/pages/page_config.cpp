@@ -1,6 +1,7 @@
-// Settings: the device name, the list limits and the display gain. Three
-// small cards rather than three thin pages - an eighth tab would cost more
-// than it returns.
+// Settings: the tag formats, the device, the WiFi (page_config_wifi.cpp),
+// the device name, the list limits, the display gain and the time zone. Small
+// cards rather than thin pages - an eighth tab would cost more than it
+// returns.
 //
 // The device name came from a page of its own. It belongs here: it is a
 // setting like the others, and the device has no way to type it - the address
@@ -23,6 +24,7 @@
 #include "services/user_options.h"
 #include "services/time_service.h"
 #include "services/wifi_manager.h"
+#include "web/pages/page_config_wifi.h"
 #include "web/web_access.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
@@ -97,11 +99,60 @@ static String nameStateJson() {
   return j;
 }
 
-static String body() {
-  String h;
-  h.reserve(7400);
+// One switch in the shape of every switch on this page: .switch/.check from
+// the stylesheet, rendered with its state rather than filled in by the
+// script - a control that arrives blank and then jumps is worse than one that
+// is a frame late.
+static void addSwitch(String &h, const char *id, bool on, int label, int hint) {
+  h += F("<div class='field'><label class='check'><span class='switch'><input id='");
+  h += id;
+  h += F("' type='checkbox'");
+  if (on) h += F(" checked");
+  h += F("><i></i></span>");
+  h += T(label);
+  h += F("</label><span class='hint'>");
+  h += T(hint);
+  h += F("</span><span class='msg' id='");
+  h += id;
+  h += F("-s'></span>");
+}
 
-  h += F("<div class='grid'><div class='card wide'><h2>");
+// Which foreign tags the reader tries. First on the page: these switches are
+// the ones people come here for, and the list grows with every maker added.
+// Both take effect with the next tag and need no restart.
+static void addTagFormatsCard(String &h) {
+  h += F("<div class='card'><h2>");
+  h += T(STR_W_C_TAG_FORMATS);
+  h += F("</h2>");
+  addSwitch(h, "sn", g_snapmaker_tags, STR_W_SNAPMAKER, STR_W_SNAPMAKER_HINT);
+  h += F("</div>");
+  addSwitch(h, "cr", g_creality_tags, STR_W_CREALITY, STR_W_CREALITY_HINT);
+  h += F("</div></div>");
+}
+
+// What kind of device this is and how it wakes. Waking on load had been
+// documented in user_options.h since it was written and was never switchable:
+// loadPrefs() read it, display_power.cpp acted on it, and no line in the
+// firmware ever wrote it. This is that missing half.
+//
+// Unlike every other switch on this page the scale switch needs a restart:
+// the home screen reads it once while it is built, so the restart button that
+// the status page already offers is repeated here rather than sending the
+// user off to find it. It stays the last thing in the card.
+static void addDeviceCard(String &h) {
+  h += F("<div class='card'><h2>");
+  h += T(STR_W_C_DEVICE);
+  h += F("</h2>");
+  addSwitch(h, "wk", g_wake_on_load, STR_W_WAKE, STR_W_WAKE_HINT);
+  h += F("</div>");
+  addSwitch(h, "sf", g_scale_fitted, STR_W_SCALE_FITTED, STR_W_SCALE_FITTED_HINT);
+  h += F("<div><button class='quiet' id='sf-rb'>");
+  h += T(STR_W_RESTART);
+  h += F("</button></div></div></div>");
+}
+
+static void addNameCard(String &h) {
+  h += F("<div class='card wide'><h2>");
   h += T(STR_W_C_DEVNAME);
   h += F("</h2><div class='field'><div class='inrow'>"
          "<input id='hn' type='text' maxlength='");
@@ -134,21 +185,11 @@ static String body() {
 
   // Second field rather than a second card: it is the same subject, and the
   // switch only makes sense next to the name it applies to.
-  //
-  // Rendered with its state here rather than filled in by the script: a
-  // control that arrives blank and then jumps is worse than one that is a
-  // frame late. The shape is .switch/.check from the stylesheet now - it used
-  // to be an inline style copied between this page and page_tags.cpp.
-  h += F("<div class='field'>"
-         "<label class='check'><span class='switch'>"
-         "<input id='md' type='checkbox'");
-  if (deviceMdnsEnabled()) h += F(" checked");
-  h += F("><i></i></span>");
-  h += T(STR_W_MDNS);
-  h += F("</label><span class='hint'>");
-  h += T(STR_W_MDNS_HINT);
-  h += F("</span><span class='msg' id='md-s'></span></div></div>");
+  addSwitch(h, "md", deviceMdnsEnabled(), STR_W_MDNS, STR_W_MDNS_HINT);
+  h += F("</div></div>");
+}
 
+static void addLimitsCard(String &h) {
   h += F("<div class='card'><h2>");
   h += T(STR_W_C_LIMITS);
   h += F("</h2><div class='field'><label>");
@@ -167,7 +208,9 @@ static String body() {
          "<button id='ll-b' class='quiet block'>");
   h += T(STR_W_SAVE);
   h += F("</button><span class='msg' id='ll-s'></span></div>");
+}
 
+static void addDisplayCard(String &h) {
   h += F("<div class='card'><h2>");
   h += T(STR_W_C_DISPLAY);
   h += F("</h2><div class='field'><label>");
@@ -183,117 +226,58 @@ static String body() {
          "<button id='gn-b' class='quiet block'>");
   h += T(STR_W_SAVE);
   h += F("</button><span class='msg' id='gn-s'></span></div>");
+}
 
-  // The zone the device writes every timestamp in, the SD log and the drying
-  // day count included. It belongs here rather than next to the log: it
-  // changes behaviour, it is not a property of one page.
-  h += F("<div class='card'><h2>");
+// The zone the device writes every timestamp in, the SD log and the drying
+// day count included. It belongs here rather than next to the log: it
+// changes behaviour, it is not a property of one page. Full width and one
+// line, last on the page: set once, and a half card beside a taller one was
+// stretched to three times its height.
+//
+// The value is the index, not the POSIX string. One of those is "<-03>3", and
+// a value carrying angle brackets through an HTML attribute is a fight not
+// worth having when the server has the table anyway.
+static void addTimeZoneCard(String &h) {
+  h += F("<div class='card wide'><h2>");
   h += T(STR_TZ_TITLE);
-  // The index, not the POSIX string. One of those is "<-03>3", and a value
-  // carrying angle brackets through an HTML attribute is a fight not worth
-  // having when the server has the table anyway.
-  h += F("</h2><div class='field'>"
-         "<select id='tz'>");
-  {
-    const int cur = timeZoneIndex();
-    if (cur < 0) {
-      // A zone that is not in the table can only come from a hand written
-      // preference. Shown so it is not silently replaced by the first entry,
-      // and inert so it cannot be picked again.
-      h += F("<option value='-1' selected disabled>");
-      h += timeZoneName();
-      h += F("</option>");
-    }
-    for (size_t i = 0; i < TZ_COUNT; i++) {
-      h += F("<option value='");
-      h += String((unsigned)i);
-      h += F("'");
-      if (cur == (int)i) h += F(" selected");
-      h += F(">");
-      h += TZ_LIST[i].name;
-      h += F(" (");
-      h += TZ_LIST[i].offset;
-      h += F(")</option>");
-    }
+  h += F("</h2><div class='inrow'><select id='tz' style='flex:0 1 340px'>");
+  const int cur = timeZoneIndex();
+  if (cur < 0) {
+    // A zone that is not in the table can only come from a hand written
+    // preference. Shown so it is not silently replaced by the first entry,
+    // and inert so it cannot be picked again.
+    h += F("<option value='-1' selected disabled>");
+    h += timeZoneName();
+    h += F("</option>");
   }
-  h += F("</select><span class='hint'>");
+  for (size_t i = 0; i < TZ_COUNT; i++) {
+    h += F("<option value='");
+    h += String((unsigned)i);
+    h += F("'");
+    if (cur == (int)i) h += F(" selected");
+    h += F(">");
+    h += TZ_LIST[i].name;
+    h += F(" (");
+    h += TZ_LIST[i].offset;
+    h += F(")</option>");
+  }
+  h += F("</select><span class='hint' style='flex:1;margin:0'>");
   h += T(STR_W_TZ_NOTE);
   h += F("</span></div><span class='msg' id='tz-s'></span></div>");
+}
 
-  // ---- how the panel behaves --------------------------------------------
-  // Waking on load had been documented in user_options.h since it was written
-  // and was never switchable: loadPrefs() read it, display_power.cpp acted on
-  // it, and no line in the firmware ever wrote it. This is that missing half.
-  // Half width, next to the time zone: one switch and a line does not need a
-  // row of its own.
-  h += F("<div class='card'><h2>");
-  h += T(STR_W_C_PANEL);
-  h += F("</h2><div class='field'>"
-         "<label class='check'><span class='switch'>"
-         "<input id='wk' type='checkbox'");
-  if (g_wake_on_load) h += F(" checked");
-  h += F("><i></i></span>");
-  h += T(STR_W_WAKE);
-  h += F("</label><span class='hint'>");
-  h += T(STR_W_WAKE_HINT);
-  h += F("</span><span class='msg' id='wk-s'></span></div>");
-
-  // Snapmaker tags, between the two: it takes effect with the next tag and
-  // needs no restart, so it sits above the scale switch, whose restart button
-  // has to stay the last thing in the card.
-  h += F("<div class='field'>"
-         "<label class='check'><span class='switch'>"
-         "<input id='sn' type='checkbox'");
-  if (g_snapmaker_tags) h += F(" checked");
-  h += F("><i></i></span>");
-  h += T(STR_W_SNAPMAKER);
-  h += F("</label><span class='hint'>");
-  h += T(STR_W_SNAPMAKER_HINT);
-  h += F("</span><span class='msg' id='sn-s'></span></div>");
-
-  // Creality CFS tags, next to Snapmaker for the same reason: the next tag
-  // reads with it, no restart.
-  h += F("<div class='field'>"
-         "<label class='check'><span class='switch'>"
-         "<input id='cr' type='checkbox'");
-  if (g_creality_tags) h += F(" checked");
-  h += F("><i></i></span>");
-  h += T(STR_W_CREALITY);
-  h += F("</label><span class='hint'>");
-  h += T(STR_W_CREALITY_HINT);
-  h += F("</span><span class='msg' id='cr-s'></span></div>");
-
-  // Second switch in the same card, because both answer "what kind of device
-  // is this". Unlike every other switch on this page it needs a restart: the
-  // home screen reads it once while it is built, so the restart button that
-  // the status page already offers is repeated here rather than sending the
-  // user off to find it.
-  h += F("<div class='field'>"
-         "<label class='check'><span class='switch'>"
-         "<input id='sf' type='checkbox'");
-  if (g_scale_fitted) h += F(" checked");
-  h += F("><i></i></span>");
-  h += T(STR_W_SCALE_FITTED);
-  h += F("</label><span class='hint'>");
-  h += T(STR_W_SCALE_FITTED_HINT);
-  h += F("</span><span class='msg' id='sf-s'></span>"
-         "<div><button class='quiet' id='sf-rb'>");
-  h += T(STR_W_RESTART);
-  h += F("</button></div></div></div></div>");
-
-  h += webShellRestartUi();
-
-  // Its own script. When the pages were split the shared block stayed behind
-  // on one of them and every Save button here called a function that was no
-  // longer on the page.
-  //
-  // Every handler is bound here rather than written into an onclick attribute:
-  // a page body is JavaScript inside a C++ string literal, and an attribute is
-  // the one place where the two levels of quoting collide.
-  // $, flash, post and postFlash come from /app.js. A save answer stands for
-  // four seconds and then gives the line back to whatever belongs there - for
-  // the name field that is the DNS verdict, which load() repaints, and the
-  // two share one line. That is what flash()'s after() argument is for.
+// Its own script. When the pages were split the shared block stayed behind
+// on one of them and every Save button here called a function that was no
+// longer on the page.
+//
+// Every handler is bound here rather than written into an onclick attribute:
+// a page body is JavaScript inside a C++ string literal, and an attribute is
+// the one place where the two levels of quoting collide.
+// $, flash, post and postFlash come from /app.js. A save answer stands for
+// four seconds and then gives the line back to whatever belongs there - for
+// the name field that is the DNS verdict, which load() repaints, and the
+// two share one line. That is what flash()'s after() argument is for.
+static void addScript(String &h) {
   h += F("<script>");
   h += webShellJsStrings();
   h += F("const M={also:");
@@ -342,40 +326,47 @@ static String body() {
          // button to bind: the select is the control.
          "$('tz').addEventListener('change',()=>{"
          "postFlash('/api/timezone',$('tz').value,'tz-s',4000);});"
-         // Same shape as the mDNS switch: the box already shows what was
-         // asked for, so a failure has to put it back.
-         "$('wk').addEventListener('change',()=>{"
-         "const want=$('wk').checked;"
-         "post('/api/wakeload',want?'1':'0').then(r=>{"
-         "if(!r.ok)$('wk').checked=!want;"
-         "flash('wk-s',r.ok?WS.ok:WS.err,!r.ok,4000);});});"
-         // Same again for the scale switch. doRestart() comes from
-         // webShellRestartUi() above and is bound rather than written into an
-         // onclick attribute.
-         "$('sf').addEventListener('change',()=>{"
-         "const want=$('sf').checked;"
-         "post('/api/scalefitted',want?'1':'0').then(r=>{"
-         "if(!r.ok)$('sf').checked=!want;"
-         "flash('sf-s',r.ok?WS.ok:WS.err,!r.ok,4000);});});"
-         "$('sn').addEventListener('change',()=>{"
-         "const want=$('sn').checked;"
-         "post('/api/snapmaker',want?'1':'0').then(r=>{"
-         "if(!r.ok)$('sn').checked=!want;"
-         "flash('sn-s',r.ok?WS.ok:WS.err,!r.ok,4000);});});"
-         "$('cr').addEventListener('change',()=>{"
-         "const want=$('cr').checked;"
-         "post('/api/creality',want?'1':'0').then(r=>{"
-         "if(!r.ok)$('cr').checked=!want;"
-         "flash('cr-s',r.ok?WS.ok:WS.err,!r.ok,4000);});});"
+         // Same shape as the mDNS switch for the four below: the box already
+         // shows what was asked for, so a failure has to put it back.
+         // doRestart() comes from webShellRestartUi().
+         "function bindSwitch(id,url){$(id).addEventListener('change',()=>{"
+         "const want=$(id).checked;"
+         "post(url,want?'1':'0').then(r=>{"
+         "if(!r.ok)$(id).checked=!want;"
+         "flash(id+'-s',r.ok?WS.ok:WS.err,!r.ok,4000);});});}"
+         "bindSwitch('wk','/api/wakeload');"
+         "bindSwitch('sf','/api/scalefitted');"
+         "bindSwitch('sn','/api/snapmaker');"
+         "bindSwitch('cr','/api/creality');"
          "$('sf-rb').addEventListener('click',doRestart);"
          "$('ll-b').addEventListener('click',setLimits);"
          "$('gn-b').addEventListener('click',setGain);"
          "load();"
          "</script>");
+}
+
+// The order is by how often someone comes for it: the tag switches first,
+// the network next, what is set once and left last.
+static String body() {
+  String h;
+  h.reserve(7400);
+  h += F("<div class='grid'>");
+  addTagFormatsCard(h);
+  addDeviceCard(h);
+  h += configWifiCard();
+  addNameCard(h);
+  addLimitsCard(h);
+  addDisplayCard(h);
+  addTimeZoneCard(h);
+  h += F("</div>");
+  h += webShellRestartUi();
+  addScript(h);
   return h;
 }
 
 static void routes(WebServer &srv) {
+  configWifiRoutes(srv);
+
   srv.on("/api/hostname", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
     srv.send(200, "application/json", nameStateJson());

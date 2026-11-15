@@ -849,7 +849,6 @@ enum StringID {
   // Waking on load. Documented in user_options.h from the day it was written
   // and never switchable - loadPrefs() read it, display_power.cpp acted on it,
   // and nothing ever wrote it.
-  STR_W_C_PANEL,
   STR_W_WAKE,
   STR_W_WAKE_HINT,
 
@@ -1977,6 +1976,33 @@ enum StringID {
   STR_AMSV_UNIT_3H,
   STR_TAG2_UNCLEAR,
   STR_TAG2_READING,
+  STR_WIFI_KNOWN_WORD,
+  STR_WIFI_SAVED_TITLE,
+  STR_WIFI_SAVED_COUNT,
+  STR_WIFI_ST_CONN_PREF,
+  STR_WIFI_ST_PREFERRED,
+  STR_WIFI_ST_SAVED,
+  STR_WIFI_CONNECT_NOW,
+  STR_WIFI_FORGET,
+  STR_WIFI_PREF_KEEP,
+  STR_WIFI_SAVED_NONE,
+  STR_W_WIFI_INRANGE,
+  STR_W_WIFI_SCAN_BTN,
+  STR_W_WIFI_OPEN,
+  STR_W_WIFI_CONNECT,
+  STR_W_WIFI_ASK,
+  STR_W_WIFI_ASK_FORGET,
+  STR_W_WIFI_TRYING,
+  STR_W_WIFI_AWAY_NAME,
+  STR_W_WIFI_AWAY_MENU,
+  STR_W_WIFI_UP,
+  STR_W_WIFI_FAIL,
+  STR_W_WIFI_GONE,
+  STR_W_WIFI_HINT,
+  STR_W_WIFI_SCAN_FAIL,
+  STR_W_WIFI_BUSY,
+  STR_W_C_TAG_FORMATS,
+  STR_W_WIFI_PICK,
   STR_COUNT
 };
 
