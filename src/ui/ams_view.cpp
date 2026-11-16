@@ -1,12 +1,14 @@
 #include "ams_view.h"
 
 #include <Arduino.h>
+#include <esp_heap_caps.h>
 #include <lvgl.h>
 #include <string.h>
 
 #include "app_config.h"
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
+#include "hardware/psram_new.h"
 #include "hardware/sd_logger.h"
 #include "services/ams_weights.h"
 #include "services/backend_api.h"
@@ -141,7 +143,11 @@ static int          s_body_h   = 0;
 static AmsViewMode  s_mode      = AMS_VIEW_BROWSE;
 static AmsPickCb    s_cb        = nullptr;
 static char         s_headline[AMSV_HEADLINE_MAX] = "";
-static AmsSlotState s_state;
+// The printer's answer the page is drawn from. In PSRAM, taken when the page
+// is first built and kept (psram_new.h): 3.7 kB that BSS held for good.
+// buildScreen() sets s_scr only once this exists, so code that has checked
+// s_scr or s_body may use it without a check of its own.
+static AmsSlotState* s_state = nullptr;
 // Width of the tiles of the unit being laid out: four across on a regular
 // AMS, five narrower ones on an AMS 3H.
 static int          s_tile_w = AMSV_TILE_W;
@@ -241,7 +247,7 @@ void requestAmsViewFromScaleMenu() {
 bool isAmsViewOpen() { return s_scr != nullptr; }
 
 int  amsViewPrinterId() { return s_printer_id; }
-const char* amsViewPrinterName() { return s_state.valid ? s_state.printer : ""; }
+const char* amsViewPrinterName() { return s_state && s_state->valid ? s_state->printer : ""; }
 
 // One place that lets go of the page. The fetch pumps LVGL, so the pointers
 // have to be cleared together with the screen: a stale s_body outliving its
@@ -354,8 +360,9 @@ static void setStatusFmt(int str_id, int value) {
 // refresh can reorder the grid between the tap and the answer.
 static const AmsSlotTray* findTray(int ams_id, int tray_id,
                                    const AmsSlotUnit** out_unit) {
-  for (uint8_t u = 0; u < s_state.unit_count; u++) {
-    const AmsSlotUnit& unit = s_state.unit[u];
+  if (!s_state) return nullptr;
+  for (uint8_t u = 0; u < s_state->unit_count; u++) {
+    const AmsSlotUnit& unit = s_state->unit[u];
     if (unit.ams_id != (uint8_t)ams_id) continue;
     for (uint8_t t = 0; t < unit.tray_count; t++) {
       if (unit.tray[t].tray_id != (uint8_t)tray_id) continue;
@@ -372,8 +379,9 @@ static bool trayExists(int ams_id, int tray_id) {
 }
 
 static bool unitIsExt(int ams_id) {
-  for (uint8_t u = 0; u < s_state.unit_count; u++) {
-    if (s_state.unit[u].ams_id == (uint8_t)ams_id) return s_state.unit[u].is_ext;
+  if (!s_state) return false;
+  for (uint8_t u = 0; u < s_state->unit_count; u++) {
+    if (s_state->unit[u].ams_id == (uint8_t)ams_id) return s_state->unit[u].is_ext;
   }
   return false;
 }
@@ -422,6 +430,44 @@ static void tileClicked(lv_event_t* e) {
   s_close_pending = true;
 }
 
+// Shared tile styles, as db_pick_screen.cpp keeps them: a local style
+// property is stored per object, so 20 tiles of an H3C setup held the same
+// radius, padding, frame and font 20 times over. What differs per tile - the
+// filament colour - stays local.
+enum AmsvText { AMSV_TEXT_MUTED, AMSV_TEXT_ON_BRIGHT, AMSV_TEXT_ON_DARK, AMSV_TEXT_KINDS };
+static lv_style_t s_st_tile, s_st_tile_active;
+static lv_style_t s_st_text[AMSV_TEXT_KINDS];
+static bool       s_tile_styles_ready = false;
+
+// Once, after boot: the palette is chosen at boot and fixed until a restart.
+static void initTileStyles() {
+  if (s_tile_styles_ready) return;
+  lv_style_init(&s_st_tile);
+  lv_style_set_radius(&s_st_tile, UI_RADIUS_INPUT);
+  lv_style_set_pad_all(&s_st_tile, 0);
+  lv_style_set_shadow_width(&s_st_tile, 0);
+  lv_style_set_border_width(&s_st_tile, 1);
+  lv_style_set_border_color(&s_st_tile, lv_color_hex(AMSV_COL_LINE));
+  // Added after s_st_tile, so it wins where both say something.
+  lv_style_init(&s_st_tile_active);
+  lv_style_set_border_width(&s_st_tile_active, AMSV_MARK_BORDER);
+  lv_style_set_border_color(&s_st_tile_active, lv_color_hex(AMSV_COL_ACCENT));
+  lv_style_set_outline_width(&s_st_tile_active, AMSV_MARK_GLOW);
+  lv_style_set_outline_pad(&s_st_tile_active, 1);
+  lv_style_set_outline_color(&s_st_tile_active, lv_color_hex(AMSV_COL_ACCENT));
+  lv_style_set_outline_opa(&s_st_tile_active, LV_OPA_50);
+  static const uint32_t text_col[AMSV_TEXT_KINDS] = {
+    AMSV_COL_MUTED, UI_COL_ON_BRIGHT_FILL, UI_COL_ON_DARK_FILL
+  };
+  for (int i = 0; i < AMSV_TEXT_KINDS; i++) {
+    lv_style_init(&s_st_text[i]);
+    lv_style_set_text_color(&s_st_text[i], lv_color_hex(text_col[i]));
+    lv_style_set_text_font(&s_st_text[i], &lv_font_montserrat_ext_12);
+    lv_style_set_text_align(&s_st_text[i], LV_TEXT_ALIGN_CENTER);
+  }
+  s_tile_styles_ready = true;
+}
+
 // The bay the printer feeds from gets the heavy accent frame; on a
 // dual-nozzle printer each bay a hotend holds also carries the hotend's
 // letter, filled for the one in use. A single-nozzle printer and the H3C have
@@ -429,15 +475,7 @@ static void tileClicked(lv_event_t* e) {
 // Returns the width the text has to leave free for the badge, 0 without.
 static int markBay(lv_obj_t* tile, const AmsSlotTray& tray) {
   const bool active = tray.active;
-  lv_obj_set_style_border_width(tile, active ? AMSV_MARK_BORDER : 1, 0);
-  lv_obj_set_style_border_color(tile,
-    lv_color_hex(active ? AMSV_COL_ACCENT : AMSV_COL_LINE), 0);
-  if (active) {
-    lv_obj_set_style_outline_width(tile, AMSV_MARK_GLOW, 0);
-    lv_obj_set_style_outline_pad(tile, 1, 0);
-    lv_obj_set_style_outline_color(tile, lv_color_hex(AMSV_COL_ACCENT), 0);
-    lv_obj_set_style_outline_opa(tile, LV_OPA_50, 0);
-  }
+  if (active) lv_obj_add_style(tile, &s_st_tile_active, 0);
   if (tray.hotend == AMS_HOTEND_NONE) return 0;
   if (!amsMarkBadge(tile, tray.hotend, active)) return 0;
   return AMSV_MARK_RESERVE;
@@ -450,15 +488,14 @@ static int markBay(lv_obj_t* tile, const AmsSlotTray& tray) {
 static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
                            const AmsSlotTray& tray, int x, int y) {
   if (!lvPoolHasRoomForRow()) return nullptr;
+  initTileStyles();
 
   lv_obj_t* tile = lv_obj_create(parent);
   if (!tile) return nullptr;
   lv_obj_set_size(tile, s_tile_w, AMSV_TILE_H);
   lv_obj_set_pos(tile, x, y);
   lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_radius(tile, 6, 0);
-  lv_obj_set_style_pad_all(tile, 0, 0);
-  lv_obj_set_style_shadow_width(tile, 0, 0);
+  lv_obj_add_style(tile, &s_st_tile, 0);
 
   // A see-through filament fades from its hue into the ground, like every
   // other swatch, so a clear spool reads as glass instead of an empty bay.
@@ -469,10 +506,8 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
   const int reserve = markBay(tile, tray);
   if (tray.active && s_printing) s_feed = { true, x + s_tile_w / 2, y + AMSV_TILE_H };
 
-  uint32_t text_col;
-  if (!filled) {
-    text_col = AMSV_COL_MUTED;
-  } else {
+  AmsvText text = AMSV_TEXT_MUTED;
+  if (filled) {
     // Judged where the text sits, the middle of the tile, which on a fade is
     // darker than the hue at the top.
     const uint32_t mid = swatchCenterRgb(tray.color);
@@ -480,7 +515,7 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
     const uint32_t g = (mid >> 8) & 0xFF;
     const uint32_t b = mid & 0xFF;
     const uint32_t luma = (299 * r + 587 * g + 114 * b) / 1000;
-    text_col = (luma > AMSV_LUMA_SWITCH) ? UI_COL_ON_BRIGHT_FILL : UI_COL_ON_DARK_FILL;
+    text = (luma > AMSV_LUMA_SWITCH) ? AMSV_TEXT_ON_BRIGHT : AMSV_TEXT_ON_DARK;
   }
 
   // A filled bay is always three lines, in the same order, with a dash where
@@ -538,9 +573,7 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
   lv_obj_t* lbl = lv_label_create(tile);
   if (!lbl) return tile;
   lv_label_set_text(lbl, line);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(text_col), 0);
-  lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_add_style(lbl, &s_st_text[text], 0);
   // Centred in what the badge leaves, so a long name clears it.
   lv_obj_align(lbl, LV_ALIGN_CENTER, -reserve / 2, 0);
 
@@ -772,7 +805,7 @@ static void redrawGrid() {
   if (!s_body) return;
   const lv_coord_t scroll_y = lv_obj_get_scroll_y(s_body);
   lv_obj_clean(s_body);
-  layoutGrid(s_state);
+  layoutGrid(*s_state);
   lv_obj_update_layout(s_body);
   lv_obj_scroll_to_y(s_body, scroll_y, LV_ANIM_OFF);
 }
@@ -938,6 +971,11 @@ static void nextPrinterCb(lv_event_t* e) {
 
 static void buildScreen() {
   closeAmsView();
+  if (!s_state) s_state = psramNew<AmsSlotState>();
+  if (!s_state) {
+    logSD("AMSVIEW: no memory for the printer state, page not built");
+    return;
+  }
   s_scr = buildOverlayScreen();
   if (!s_scr) return;
 
@@ -1149,7 +1187,7 @@ static void fetchAndDraw() {
     s_printer_id = s_printers.p[s_printer_idx].id;
   }
 
-  int code = amsReachNote(backendGetAmsState(s_printer_id, s_state, 8000), true);
+  int code = amsReachNote(backendGetAmsState(s_printer_id, *s_state, 8000), true);
   if (!s_scr) return;
   if (code != 200) {
     setStatusFmt(STR_AMSV_ERR_HTTP, code);
@@ -1160,7 +1198,7 @@ static void fetchAndDraw() {
   // tiles, and clean() is the only way that also frees them.
   if (s_body) lv_obj_clean(s_body);
 
-  if (s_state.unit_count == 0) {
+  if (s_state->unit_count == 0) {
     setStatus(T(STR_AMSV_NO_AMS));
     return;
   }
@@ -1172,15 +1210,15 @@ static void fetchAndDraw() {
     // What the printer is doing, without its name: offline, a job, a state,
     // or nothing at all.
     char what[48] = "";
-    const PrinterActivity act = printerActivity(s_state.state);
-    if (!s_state.connected) {
+    const PrinterActivity act = printerActivity(s_state->state);
+    if (!s_state->connected) {
       // An offline printer still has a last known state worth showing, so
       // this is a note next to the grid rather than a refusal to draw it.
       // A backend that never said either way gets its own wording: blaming
       // the printer for a driver that has not reported sends the user to
       // the wrong machine.
-      copyT(what, sizeof(what), s_state.conn_known ? STR_AMSV_OFFLINE : STR_AMSV_UNKNOWN);
-    } else if (s_state.job_percent >= 0 &&
+      copyT(what, sizeof(what), s_state->conn_known ? STR_AMSV_OFFLINE : STR_AMSV_UNKNOWN);
+    } else if (s_state->job_percent >= 0 &&
                (act == PRINTER_PRINTING || act == PRINTER_PAUSED)) {
       // The percentage only while it means something. Bambu reports the
       // finished job and its 100 % until the next print starts, and FilaMan
@@ -1188,7 +1226,7 @@ static void fetchAndDraw() {
       // "printing 100%" the whole time.
       char fmt[24];
       copyT(fmt, sizeof(fmt), act == PRINTER_PAUSED ? STR_AMSV_JOB_PAUSED : STR_AMSV_JOB);
-      snprintf(what, sizeof(what), fmt, (int)s_state.job_percent);
+      snprintf(what, sizeof(what), fmt, (int)s_state->job_percent);
     } else if (act == PRINTER_FINISHED) {
       copyT(what, sizeof(what), STR_AMSV_STATE_FINISH);
     } else if (act == PRINTER_FAILED) {
@@ -1197,10 +1235,10 @@ static void fetchAndDraw() {
       copyT(what, sizeof(what), STR_AMSV_STATE_IDLE);
     } else if (act == PRINTER_PREPARING) {
       copyT(what, sizeof(what), STR_AMSV_STATE_PREPARE);
-    } else if (s_state.state[0]) {
+    } else if (s_state->state[0]) {
       // A state this list does not know is shown as the server wrote it,
       // rather than hidden.
-      snprintf(what, sizeof(what), "%s", s_state.state);
+      snprintf(what, sizeof(what), "%s", s_state->state);
     }
 
     // With two or more printers the name is the switch, and looks like one:
@@ -1214,7 +1252,7 @@ static void fetchAndDraw() {
       char fmt[12], n[12], name[48];
       copyT(fmt, sizeof(fmt), STR_AMSV_PRN_OF);
       snprintf(n, sizeof(n), fmt, (int)s_printer_idx + 1, (int)s_printers.count);
-      snprintf(name, sizeof(name), "%s  %s", n, s_state.printer);
+      snprintf(name, sizeof(name), "%s  %s", n, s_state->printer);
       lv_label_set_text(s_printer_lbl, name);
       // Sized to the name. A name of the user's choosing can be long; the chip
       // stops where the status would have no room left, and the label inside
@@ -1235,13 +1273,13 @@ static void fetchAndDraw() {
       lv_obj_clear_flag(s_status, LV_OBJ_FLAG_HIDDEN);
     } else {
       char line[80];
-      if (what[0]) snprintf(line, sizeof(line), "%s - %s", s_state.printer, what);
-      else         snprintf(line, sizeof(line), "%s", s_state.printer);
+      if (what[0]) snprintf(line, sizeof(line), "%s - %s", s_state->printer, what);
+      else         snprintf(line, sizeof(line), "%s", s_state->printer);
       setStatus(line);
     }
   }
 
-  layoutGrid(s_state);
+  layoutGrid(*s_state);
 
   // The grams the grid could not show. BamBuddy's answer carries the
   // printer's percentage, the weighed figure sits in the inventory, and
@@ -1257,8 +1295,8 @@ static bool applyWeights(const AmsWeightsResult& r) {
   bool changed = false;
   for (uint8_t i = 0; i < r.count; i++) {
     if (r.item[i].grams < 0) continue;
-    for (uint8_t u = 0; u < s_state.unit_count; u++) {
-      AmsSlotUnit& unit = s_state.unit[u];
+    for (uint8_t u = 0; u < s_state->unit_count; u++) {
+      AmsSlotUnit& unit = s_state->unit[u];
       if (unit.ams_id != r.item[i].ams_id) continue;
       for (uint8_t t = 0; t < unit.tray_count; t++) {
         AmsSlotTray& tray = unit.tray[t];
@@ -1295,7 +1333,7 @@ static void collectWeights() {
 static bool startWeights() {
   collectWeights();
   const bool busy = amsWeightsBusy();
-  if (amsWeightsStart(s_printer_id, s_state)) {
+  if (amsWeightsStart(s_printer_id, *s_state)) {
     s_weights_owed = false;
     return true;
   }
@@ -1355,7 +1393,7 @@ static void detailFromTray(const AmsSlotUnit& unit, const AmsSlotTray& tray,
   snprintf(out.color_name, sizeof(out.color_name), "%s", tray.color_name);
   out.hotend   = tray.hotend;
   out.feeding  = tray.active;
-  out.printing = printerIsPrinting(s_state.state);
+  out.printing = printerIsPrinting(s_state->state);
 
   // The grams the printer reports are a fill level, not a weighing, so they
   // stand in only until the database says otherwise.
@@ -1424,7 +1462,16 @@ static void openDetail(int ams_id, int tray_id) {
     }
   }
 
-  if (spool_id > 0) backendGetSpoolDetail(spool_id, det);
+  if (spool_id > 0) {
+    // Code, time and heap of the one request behind the card, so a "details
+    // unavailable" in the field says whether the server, the network or the
+    // memory was the cause.
+    const uint32_t started_ms = millis();
+    const int code = backendGetSpoolDetail(spool_id, det);
+    logSDf("AMSVIEW: detail of spool %d, HTTP %d in %lu ms, found=%d heap=%u",
+           spool_id, code, (unsigned long)(millis() - started_ms), (int)det.found,
+           (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+  }
 
   // The printer's word against the database's. The grid above is drawn from
   // the printer and the card from the spool the backend has assigned to the
@@ -1547,7 +1594,7 @@ void handleAmsViewDeferredActions() {
   // The start a switch could not make because the task was busy (startWeights()),
   // made up behind the fetch branch, so for a printer that is drawn. The flag is
   // void on every fetch and when the page closes; the checks guard the same.
-  if (s_weights_owed && s_scr && s_state.valid && s_state.printer_id == s_printer_id &&
+  if (s_weights_owed && s_scr && s_state->valid && s_state->printer_id == s_printer_id &&
       amsWeightsState() == AWS_IDLE) {
     if (startWeights()) {
       logSDf("AMSWEIGHTS: start for printer %d made up after a busy task", s_printer_id);

@@ -80,6 +80,9 @@ void logLvMem(const char* tag, int rows);
 // device and the 64 bit host the simulator runs on, where every object is
 // about twice the size.
 #define LV_ROW_RESERVE_BYTES  (3072u * (sizeof(void*) / 4u))
+// A refusal is logged with the free heap, then at most once per this many ms
+// while the low lasts; the line counts the refusals it stands for.
+#define LV_ROW_REFUSAL_LOG_MS 10000u
 bool lvPoolHasRoomForRow();
 
 // A list that lvPoolHasRoomForRow() cut short is often cut by a passing low,
