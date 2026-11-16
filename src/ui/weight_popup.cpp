@@ -101,6 +101,13 @@ bool isWeightPopupOpen() {
 }
 
 void weightPopupTick() {
+  // The lists were closed by someone else (navigation, a card): the Options
+  // under them were hidden and would stay so.
+  if (s_list_open && !spoolOptionsOpen()) {
+    s_list_open = false;
+    closeWeightPopups();
+    return;
+  }
   if (!isWeightPopupOpen() || sm_id == s_spool_id) return;
   logSDf("UI: weight popup for spool %d closed unsent, spool %d is loaded now", s_spool_id, sm_id);
   closeWeightPopups();
@@ -388,7 +395,9 @@ static int wpTareFrom() {
 // with the new net weight.
 static void wpSpoolListClosed(bool) {
   s_list_open = false;
-  if (spoolChoiceActive(s_list_choice)) {
+  if (spoolChoiceActive(s_list_choice) && sm_id != s_spool_id) {
+    logSDf("UI: empty spool pick for spool %d dropped, spool %d is loaded now", s_spool_id, sm_id);
+  } else if (spoolChoiceActive(s_list_choice)) {
     logSDf("UI: weight options -> empty spool %u g picked for spool %d",
            (unsigned)s_list_choice.weight_g, sm_id);
     patchSpoolWeight((float)s_list_choice.weight_g);

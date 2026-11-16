@@ -1,4 +1,5 @@
 #include "spoolman_filament.h"
+#include "text_util.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -539,7 +540,8 @@ int spoolmanVendorSpools(const char* base_url, SpoolChoice* out, int max, int* n
     spoolChoiceClear(&out[*n]);
     out[*n].weight_g = (uint16_t)weight;
     out[*n].source   = SCS_SERVER;
-    snprintf(out[*n].name, sizeof(out[*n].name), "%s", v["name"] | "");
+    // Cut on a whole character: a tile and the NVS recents show it.
+    utf8Cut(v["name"] | "", sizeof(out[*n].name) - 1, out[*n].name, sizeof(out[*n].name));
     (*n)++;
   }
   return code;

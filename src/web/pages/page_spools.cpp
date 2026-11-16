@@ -32,7 +32,12 @@ static const char* label() { return T(STR_W_NAV_SPOOLS); }
 // the list it starts from and the words it needs.
 static const char SP_JS[] PROGMEM =
   "let spR=[],spG=[];"
-  "function spE(s){const d=document.createElement('div');d.textContent=String(s);return d.innerHTML;}"
+  // Escaped for an attribute too: textContent leaves the double quote, and a
+  // name with one would end the value="..." it is drawn into.
+  "function spE(s){const d=document.createElement('div');d.textContent=String(s);"
+  "return d.innerHTML.replace(/\"/g,'&quot;');}"
+  // The scale counts the name in bytes (SPOOL_CHOICE_NAME_MAX), maxlength in characters.
+  "function spBytes(s){return new TextEncoder().encode(s).length;}"
   "function spF(t,a){let i=0;return t.replace(/%[sd]/g,()=>a[i++]);}"
   "function spLast(){return spG.length?spG[spG.length-1]:null;}"
   "function spSteady(){const g=spLast();return spG.length>=SPT.n&&g>=SPT.min&&"
@@ -63,7 +68,8 @@ static const char SP_JS[] PROGMEM =
   "$('sp-add').addEventListener('click',()=>{if(spR.length<SPT.max){spR.push({n:'',g:''});spDraw();}});"
   "$('sp-save').addEventListener('click',()=>{const out=[];"
   "for(const r of spR){const n=String(r.n).trim(),g=parseInt(r.g,10);if(!n&&r.g==='')continue;"
-  "if(!n||!(g>=SPT.min&&g<=SPT.maxg)){flash('sp-m',SPT.bad,true,6000);return;}out.push({name:n,g:g});}"
+  "if(!n||spBytes(n)>SPT.nmax||!(g>=SPT.min&&g<=SPT.maxg)){flash('sp-m',SPT.bad,true,6000);return;}"
+  "out.push({name:n,g:g});}"
   "postFlash('/api/spools/empty',JSON.stringify({spools:out}),'sp-m',4000);});"
   "spR=SPD.length?SPD.map(s=>({n:s.name,g:s.g})):[{n:'',g:''}];spDraw();spPoll();";
 
@@ -99,6 +105,7 @@ static void wordsJs(String& h) {
   h += F("max:");   h += SPOOL_MINE_MAX;
   h += F(",min:");  h += SPOOL_MINE_MIN_G;
   h += F(",maxg:"); h += SPOOL_MINE_MAX_G;
+  h += F(",nmax:"); h += SPOOL_CHOICE_NAME_MAX - 1;
   h += F(",n:");    h += SP_STEADY_N;
   h += F(",band:"); h += SP_STEADY_G;
   h += F(",poll:"); h += SP_POLL_MS;

@@ -1,4 +1,5 @@
 #include "bambuddy_filament_db.h"
+#include "text_util.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -295,7 +296,8 @@ int bambuddyCatalogSpools(const char* base_url, const char* api_key, SpoolChoice
     out[*n].weight_g   = (uint16_t)weight;
     out[*n].source     = SCS_SERVER;
     out[*n].catalog_id = c["id"] | 0;
-    snprintf(out[*n].name, sizeof(out[*n].name), "%s", c["name"] | "");
+    // Cut on a whole character: a tile and the NVS recents show it.
+    utf8Cut(c["name"] | "", sizeof(out[*n].name) - 1, out[*n].name, sizeof(out[*n].name));
     (*n)++;
   }
   return code;

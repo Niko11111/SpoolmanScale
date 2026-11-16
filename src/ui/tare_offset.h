@@ -7,8 +7,9 @@
 //
 //  For a spool that has no tag and no entry: hold Tare, pick the empty spool
 //  from the same lists a new spool gets (spool_options_popup.h) or type its
-//  weight, and every reading after that leaves it out (g_spool_offset_g).
-//  The pad reads minus that weight while it is empty. A tap on Tare zeroes as
+//  weight, and the main screen's weight leaves it out (g_spool_offset_g)
+//  while no spool with an empty weight of its own is loaded. The pad reads
+//  minus that weight while it is empty. Nothing sent to a backend uses it. A tap on Tare zeroes as
 //  always, and the offset goes with it. The button shows it under its word
 //  TARE.
 // ============================================================

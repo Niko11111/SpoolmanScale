@@ -196,9 +196,11 @@ extern int sm_location_id;
 extern int sm_status_id;
 
 extern float scale_weight_g;
-// Grams taken off every reading on top of the tare, 0 for none: an empty
-// spool set by holding Tare (ui/tare_offset.h), for a spool without a tag.
-// Any tare clears it (saveTareOffset()). Not kept over a restart.
+// Grams taken off the weight the main screen shows while no empty spool is
+// known for what is on the pad, 0 for none: an empty spool set by holding
+// Tare (ui/tare_offset.h), for a spool without a tag. scale_weight_g and
+// everything sent to a backend leave it out. Any tare clears it
+// (saveTareOffset()). Not kept over a restart.
 extern float g_spool_offset_g;
 extern bool scale_ready;
 extern float cal_factor;

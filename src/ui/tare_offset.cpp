@@ -5,7 +5,6 @@
 #include <stdio.h>
 
 #include "app/app_state.h"
-#include "hardware/scale_state.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "ui/spool_options_popup.h"
@@ -27,7 +26,6 @@ static SpoolChoice s_choice;
 static void onListClosed(bool) {
   const float g = spoolChoiceActive(s_choice) ? (float)s_choice.weight_g : 0.0f;
   g_spool_offset_g = g;
-  resetScaleFilter();
   logSDf("UI: Tare held -> empty spool offset %.0f g", g);
 }
 

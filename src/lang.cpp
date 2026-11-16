@@ -4454,8 +4454,8 @@ const char* const STRINGS[][3] = {
     "stable" },  // STR_W_SPOOLS_STEADY
   { "unruhig", "settling",
     "instable" },  // STR_W_SPOOLS_MOVING
-  { "Jede Zeile braucht einen Namen und 10 bis 2000 g.", "Each row needs a name and 10 to 2000 g.",
-    "Chaque ligne demande un nom et 10 à 2000 g." },  // STR_W_SPOOLS_INVALID
+  { "Jede Zeile braucht einen Namen (höchstens 31 Zeichen) und 10 bis 2000 g.", "Each row needs a name (31 characters at most) and 10 to 2000 g.",
+    "Chaque ligne demande un nom (31 caractères au plus) et 10 à 2000 g." },  // STR_W_SPOOLS_INVALID
   { "Meine Spulen", "My spools",
     "Mes bobines" },  // STR_SPICK_MINE
   { "Vom Server", "From the server",

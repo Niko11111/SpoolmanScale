@@ -3,11 +3,13 @@
 #include <Arduino.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 // backend_api.h brings ArduinoJson, whose templates have a parameter T:
 // before lang.h, which defines T().
 #include "services/backend_api.h"
 #include "app/app_state.h"
+#include "app/backend_switch.h"
 #include "app_config.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
@@ -59,10 +61,16 @@ static bool        s_recent_dirty  = false;
 // The user's own, read again for every list: the web page may have changed them.
 static SpoolChoice s_mine[SPOOL_MINE_MAX];
 static int         s_mine_n = 0;
-// The backend's, asked once per opening of the Options: the card's maker first.
+// The backend's, the card's maker first. Kept for SO_SERVER_KEEP_MS per
+// backend: asking blocks the loop, and an unreachable server would freeze
+// the screen for the request's timeout on every opening.
+#define SO_SERVER_KEEP_MS  (5UL * 60UL * 1000UL)
 static SpoolChoice s_server[SPOOL_SERVER_MAX];
 static int         s_server_n = 0;
 static bool        s_server_asked = false;
+static uint32_t    s_server_ms = 0;
+static uint32_t    s_server_gen = 0;
+static char        s_server_maker[SPOOL_CHOICE_NAME_MAX] = "";
 
 bool spoolOptionsOpen() { return s_page != SO_NONE || s_want != SO_NONE; }
 
@@ -71,7 +79,6 @@ void showSpoolOptions(const SpoolOptionsSpec& spec) {
   snprintf(s_maker_name, sizeof(s_maker_name), "%s", spec.maker ? spec.maker : "");
   s_spec.maker = s_maker_name;
   s_then_density = false;
-  s_server_asked = false;
   s_list_only = false;
   s_want = SO_OPTIONS;
 }
@@ -111,7 +118,11 @@ static void choose(const SpoolChoice& chosen) {
   // A copy: `chosen` may be one of the last ones, which the push reorders.
   const SpoolChoice c = chosen;
   *s_spec.choice = c;
-  spoolRecentPush(s_recent, c);
+  // A catalog id belongs to the server it came from; a recent one may be
+  // offered after a backend switch, so it keeps the weight and name only.
+  SpoolChoice recent = c;
+  recent.catalog_id = 0;
+  spoolRecentPush(s_recent, recent);
   s_recent_dirty = true;
   logSDf("SpoolOptions: empty spool %u g (%s)", (unsigned)c.weight_g, c.name[0] ? c.name : "typed");
   s_want = afterList();
@@ -316,10 +327,16 @@ static void showTypedPad() {
 // The backend's empty spools, once per opening: from the loop, the list
 // waits for them. Without WiFi or with a failed answer the section stays away.
 static void askServer() {
-  if (s_server_asked) return;
+  const bool fresh = s_server_asked && s_server_gen == backendGeneration() &&
+                     millis() - s_server_ms < SO_SERVER_KEEP_MS &&
+                     strcmp(s_server_maker, s_spec.maker) == 0;
+  if (fresh) return;
   s_server_asked = true;
+  s_server_ms = millis();
+  s_server_gen = backendGeneration();
+  snprintf(s_server_maker, sizeof(s_server_maker), "%s", s_spec.maker);
   s_server_n = 0;
-  if (!wifi_ok) return;
+  if (!wifi_ok || !sm_reachable) return;
   static SpoolChoice all[SPOOL_SERVER_READ_MAX];
   int n = 0;
   const int code = backendServerSpools(all, SPOOL_SERVER_READ_MAX, &n);

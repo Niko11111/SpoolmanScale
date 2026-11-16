@@ -1504,7 +1504,7 @@ void appLoop() {
   if (scale_ready && millis() - last_scale_ms >= 200 && scaleHardwareAvailable()) {
     last_scale_ms = millis();
     int32_t raw = scaleHardwareReadRaw();
-    float raw_g = (float)(raw - zero_offset) / cal_factor - g_spool_offset_g;
+    float raw_g = (float)(raw - zero_offset) / cal_factor;
 
     // Moving average over SCALE_FILTER_SIZE readings
     scale_filter_buf[scale_filter_idx] = raw_g;
@@ -1597,7 +1597,10 @@ void appLoop() {
       if (netto < 0) netto = 0;
       fmtG(w_str, sizeof(w_str), netto);
     } else {
-      fmtG(w_str, sizeof(w_str), scale_weight_g);
+      // No empty spool known for what is on the pad: the one taken off by
+      // holding Tare, on the number shown only. scale_weight_g stays the
+      // reading, so nothing written to a backend carries it.
+      fmtG(w_str, sizeof(w_str), scale_weight_g - g_spool_offset_g);
     }
     lv_label_set_text(lbl_scale_weight, w_str);
     // Also update live weight in calibration screen if open
