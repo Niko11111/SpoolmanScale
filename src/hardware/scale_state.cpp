@@ -25,6 +25,9 @@ void saveBagWeight(float weight) {
 }
 
 void saveTareOffset(int32_t offset) {
+  // A new zero is the user's "nothing on the pad": an empty spool taken off
+  // on top of the old one would be counted twice.
+  g_spool_offset_g = 0.0f;
   zero_offset = offset;
   prefsPutInt("zero_offset", offset);
   Serial.printf("zero_offset saved: %d\n", offset);

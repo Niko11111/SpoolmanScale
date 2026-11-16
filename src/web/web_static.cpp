@@ -279,6 +279,7 @@ static const char APP_CSS[] PROGMEM =
       "[data-ic=pr]{--ic:" WEB_ICON("M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14"
                                     "a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M6 14h12v7H6z") "}"
       "[data-ic=add]{--ic:" WEB_ICON("M12 5v14M5 12h14") "}"
+      "[data-ic=scale]{--ic:" WEB_ICON("M5 7h14M12 7v3M4 10h16l-1.5 10h-13zM10 15h4") "}"
       "[data-ic=x]{--ic:" WEB_ICON("M6 6l12 12M18 6L6 18") "}"
       "[data-ic=back]{--ic:" WEB_ICON("M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3") "}"
       "[data-ic=eye]{--ic:" WEB_ICON("M2 12c2.5-4.5 6-7 10-7s7.5 2.5 10 7c-2.5 4.5-6 7-10 7"

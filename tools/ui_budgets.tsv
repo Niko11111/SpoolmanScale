@@ -253,7 +253,7 @@ STR_TAGNEW_CREATING	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the 
 STR_TAGNEW_CREATE_FAIL	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
 STR_TAGNEW_FILAMENT_ONLY	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
 STR_TAGNEW_SPOOL_UNSURE	16	360	NEVER	src/ui/tag_create_popup.cpp status line of the card, UI_POPUP_W - UI_CARD_TEXT_PAD
-STR_TAGNEW_PRICE_BTN	14	64	NEVER	src/ui/tag_create_popup.cpp 80 px price button, 8 px air each side
+STR_TAGNEW_PRICE_BTN	16	200	NEVER	src/ui/spool_options_popup.cpp name of the price row
 STR_PRICE_PAD_TITLE	14	460	NEVER	src/ui/price_pad.cpp title above the keypad
 STR_PRICE_PAD_INFO	12	168	WRAP:3	src/ui/price_pad.cpp right column, PP_COL_W
 
@@ -422,13 +422,15 @@ STR_WP_BAG_HINT	12	330	NEVER	src/ui/weight_popup.cpp switch row subtitle
 STR_WP_AUTO_ROW	16	290	NEVER	src/ui/scale_menu.cpp list row with help circle (popup row is wider)
 STR_WP_AUTO_SUB	12	290	NEVER	src/ui/scale_menu.cpp list row with help circle (popup row is wider)
 STR_WP_ARCHIVE	14	90	NEVER	src/ui/weight_popup.cpp 120 px button, behind an icon
-STR_WP_OPTIONS	14	120	NEVER	src/ui/weight_popup.cpp 150 px button, behind an icon
+STR_WP_OPTIONS	14	64	NEVER	src/ui/tag_create_popup.cpp and copy_confirm_popup.cpp 80 px Options button, 8 px air each side (also weight_popup.cpp, 150 px)
 STR_WP_FULL	16	350	NEVER	src/ui/weight_popup.cpp Options row title
 STR_WP_FULL_SUB	12	350	NEVER	src/ui/weight_popup.cpp Options row subtitle
 STR_WP_WEIGH_EMPTY	16	350	NEVER	src/ui/weight_popup.cpp Options row title
 STR_WP_WEIGH_EMPTY_SUB	12	350	NEVER	src/ui/weight_popup.cpp Options row subtitle
 STR_WP_TYPE_EMPTY	16	350	NEVER	src/ui/weight_popup.cpp Options row title
 STR_WP_TYPE_EMPTY_SUB	12	350	NEVER	src/ui/weight_popup.cpp Options row subtitle
+STR_WP_PICK_EMPTY	16	350	NEVER	src/ui/weight_popup.cpp Options row title
+STR_WP_PICK_EMPTY_SUB	12	350	NEVER	src/ui/weight_popup.cpp Options row subtitle
 STR_SW_SCOPE_TITLE	16	432	NEVER	src/ui/confirm_popup.cpp store-as title
 STR_SW_ONLY_SPOOL	16	300	NEVER	src/ui/confirm_popup.cpp store-as row title
 STR_SW_ALL_FILAMENT	16	300	NEVER	src/ui/confirm_popup.cpp store-as row title
@@ -493,7 +495,7 @@ STR_BTN_WIFI_CHANGE	16	134	NEVER	src/ui/wifi_connect_view.cpp quiet bar button
 STR_ID_PAD_LINK_TITLE	18	330	NEVER	src/ui/num_pad.cpp header title between back and close
 STR_ID_PAD_COPY_TITLE	18	330	NEVER	src/ui/num_pad.cpp header title between back and close
 STR_DENSITY_TAKE	18	120	NEVER	src/ui/tag_create_popup.cpp 140 px answer button (TCP_ANSWER_W), 10 px air each side
-STR_DENSITY_CHANGE	14	64	NEVER	src/ui/tag_create_popup.cpp 80 px price button, 8 px air each side
+STR_DENSITY_CHANGE	14	200	NEVER	src/ui/spool_options_popup.cpp value of the density row
 # --- the online services -----------------------------------------------------
 STR_BACKEND_INTERNET	16	84	NEVER	src/ui/backend_screen.cpp 108 px segment, -4 border, -20 for " >"
 STR_BACKEND_DESC_INTERNET	12	350	NEVER	src/ui/backend_screen.cpp line under the name on the tile
@@ -528,3 +530,18 @@ STR_AMSD_PRINTING_LEFT	12	444	NEVER	src/ui/ams_detail_popup.cpp note line, AMSD_
 STR_AMSD_PRINTING_RIGHT	12	444	NEVER	src/ui/ams_detail_popup.cpp note line, AMSD_BAR_W
 STR_AMSD_LOADED_LEFT	12	444	NEVER	src/ui/ams_detail_popup.cpp note line, AMSD_BAR_W
 STR_AMSD_LOADED_RIGHT	12	444	NEVER	src/ui/ams_detail_popup.cpp note line, AMSD_BAR_W
+
+# --- a card's Options and the empty spool lists (464 x 300 popup) --------------
+# Rows 436 px wide: name left, value right in 200 px, chevron. Tiles 214 px,
+# their labels 198 px. Bottom buttons 140 px (124 px with air), the hint beside
+# Back 294 px.
+STR_OPT_PRICE_NONE	14	200	NEVER	src/ui/spool_options_popup.cpp value of the price row
+STR_OPT_SPOOL_SUB	12	260	NEVER	src/ui/spool_options_popup.cpp line under the empty spool row's name
+STR_OPT_DENSITY	16	200	NEVER	src/ui/spool_options_popup.cpp name of the density row
+STR_OPT_DONE	18	400	NEVER	src/ui/spool_options_popup.cpp 436 px Done button
+STR_SPICK_AUTO	16	198	NEVER	src/ui/spool_pick_pages.cpp tile name, 214 px tile
+STR_SPICK_MAKERS	16	124	NEVER	src/ui/spool_pick_pages.cpp 140 px bottom button (also the page title, 436 px)
+STR_SPICK_MAKERS_HINT	12	294	WRAP:2	src/ui/spool_pick_pages.cpp hint beside Back
+STR_SPICK_MAKER_HINT	12	294	WRAP:2	src/ui/spool_pick_pages.cpp hint beside Back
+STR_SPICK_SPOOLS	14	198	NEVER	src/ui/spool_pick_pages.cpp tile weight line
+STR_SPOOL_KIND_ANY	16	198	NEVER	src/ui/spool_pick_pages.cpp tile name, the net weight after it

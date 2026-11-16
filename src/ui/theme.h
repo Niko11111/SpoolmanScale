@@ -164,6 +164,11 @@ UiThemeCustom uiThemeCustomActive();
 #define UI_POPUP_W             400  // a two button question
 #define UI_POPUP_BTN_W         170
 #define UI_POPUP_BTN_H         56
+// The largest popup that still reads as one: 8 px of screen left and right,
+// 10 above and below. Every step under a card's Options has this size, so
+// nothing jumps from one to the next (the AMS detail has it too).
+#define UI_POPUP_LARGE_W       464
+#define UI_POPUP_LARGE_H       300
 
 // ---- the card: question, waiting, result ---------------------
 // One footprint for the three stages of something the user set off: the

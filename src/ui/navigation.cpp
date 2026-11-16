@@ -19,6 +19,7 @@
 #include "ui/language_screen.h"
 #include "ui/nfc_reset_popup.h"
 #include "ui/num_pad.h"
+#include "ui/spool_options_popup.h"
 #include "ui/ota_browser.h"
 #include "ui/ota_github.h"
 #include "ui/pc_print_popup.h"
@@ -75,6 +76,7 @@ void hideAllOverlays() {
   if (scr_ota_github)  lv_obj_add_flag(scr_ota_github,  LV_OBJ_FLAG_HIDDEN);
   if (scr_factor)      lv_obj_add_flag(scr_factor,      LV_OBJ_FLAG_HIDDEN);
   numPadHide();
+  closeSpoolOptions();   // a card's Options or the lists of a Tare hold
   if (scr_lastused)    lv_obj_add_flag(scr_lastused,    LV_OBJ_FLAG_HIDDEN);
   if (scr_backend)     lv_obj_add_flag(scr_backend,     LV_OBJ_FLAG_HIDDEN);
   if (scr_online)      lv_obj_add_flag(scr_online,      LV_OBJ_FLAG_HIDDEN);
@@ -190,6 +192,7 @@ void showMainScreen() {
   lbl_factor_result     = nullptr;   // written by cal_reset_pending from the loop
   lbl_factor_cal_weight = nullptr;
   numPadClose();
+  closeSpoolOptions();
   if (scr_filaman_options) { lv_obj_del(scr_filaman_options); scr_filaman_options = nullptr; }
   if (scr_ams_assign)      { lv_obj_del(scr_ams_assign);      scr_ams_assign      = nullptr; }
   destroyAmsView();

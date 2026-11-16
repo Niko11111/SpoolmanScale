@@ -164,6 +164,7 @@ int   sm_location_id = 0;
 int   sm_status_id = 0;
 
 float scale_weight_g = 0.0f;
+float g_spool_offset_g = 0.0f;
 bool scale_ready = false;
 float cal_factor = CAL_FACTOR_DEFAULT;
 int32_t zero_offset = 0;

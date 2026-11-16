@@ -1538,8 +1538,10 @@ void appLoop() {
     // that is about to use the weight, or the calibration screen, where the
     // zero the user just set has to hold until the factor is computed.
     const bool calibrating = scr_factor && !lv_obj_has_flag(scr_factor, LV_OBJ_FLAG_HIDDEN);
+    // Nor while an empty spool is taken off by hand: the pad then reads near
+    // zero with that very spool on it, and a re-zero would drop the spool.
     scaleAutoTareTick(!tag_present && !aw_adopted && !idSpoolActive() && !calibrating && !isConfirmPopupOpen() &&
-                      !isTareEntryOpen() && !isSpoolWeightScopeOpen(),
+                      !isTareEntryOpen() && !isSpoolWeightScopeOpen() && g_spool_offset_g == 0.0f,
                       scale_filter_full ? (hi - lo) : 0.0f);
 
     // Keep the reference fresh only while the tag is genuinely being read.
@@ -1595,7 +1597,10 @@ void appLoop() {
       if (netto < 0) netto = 0;
       fmtG(w_str, sizeof(w_str), netto);
     } else {
-      fmtG(w_str, sizeof(w_str), scale_weight_g);
+      // No empty spool known for what is on the pad: the one taken off by
+      // holding Tare, on the number shown only. scale_weight_g stays the
+      // reading, so nothing written to a backend carries it.
+      fmtG(w_str, sizeof(w_str), scale_weight_g - g_spool_offset_g);
     }
     lv_label_set_text(lbl_scale_weight, w_str);
     // Also update live weight in calibration screen if open

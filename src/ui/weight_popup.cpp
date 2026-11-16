@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <lvgl.h>
 #include <cstdio>
+#include <math.h>
 
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
@@ -12,6 +13,8 @@
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "confirm_popup.h"
+#include "spool_options_popup.h"
+#include "services/spoolman_actions.h"
 #include "tare_entry.h"
 #include "weight_button.h"
 #include "lang.h"
@@ -39,12 +42,20 @@
 #define WP_BOX_EXTRA     12    // the margin under the last row, and the border
 #define WP_ARCHIVE_W    120
 #define WP_GAP            8
-#define WP_OPT_ROW_Y0    40
-#define WP_OPT_ROW_H     58
-#define WP_OPT_ROW_STEP  64
+// Four rows and Back in the large popup's height (UI_POPUP_LARGE_H): full
+// spool, weigh, type, pick the empty spool.
+#define WP_OPT_ROW_Y0    36
+#define WP_OPT_ROW_H     48
+#define WP_OPT_ROW_STEP  52
+#define WP_OPT_BACK_H    44
+#define WP_OPT_ROWS_TARE 4
+#define WP_OPT_BOX_EXTRA 10
 
 static lv_obj_t *s_popup = nullptr;   // level 1
 static lv_obj_t *s_opts  = nullptr;   // level 2, Options
+// The empty spool lists stand over the Options (spool_options_popup.h).
+static bool       s_list_open = false;
+static SpoolChoice s_list_choice;
 
 // What level 1 repaints in place when a switch changes. Rebuilding would
 // delete the switch from inside its own callback.
@@ -79,6 +90,7 @@ static bool risen() {
 }
 
 void closeWeightPopups() {
+  if (s_list_open) { s_list_open = false; closeSpoolOptions(); }
   releaseScreen(&s_popup);
   releaseScreen(&s_opts);
   s_v = {};
@@ -89,6 +101,13 @@ bool isWeightPopupOpen() {
 }
 
 void weightPopupTick() {
+  // The lists were closed by someone else (navigation, a card): the Options
+  // under them were hidden and would stay so.
+  if (s_list_open && !spoolOptionsOpen()) {
+    s_list_open = false;
+    closeWeightPopups();
+    return;
+  }
   if (!isWeightPopupOpen() || sm_id == s_spool_id) return;
   logSDf("UI: weight popup for spool %d closed unsent, spool %d is loaded now", s_spool_id, sm_id);
   closeWeightPopups();
@@ -364,6 +383,43 @@ static lv_obj_t* wpOptionRow(lv_obj_t *box, int y, const char *icon, int title_i
   return b;
 }
 
+// Where the spool's empty spool weight comes from, for Automatic.
+static int wpTareFrom() {
+  if (sm_tare_source == TARE_FILAMENT) return STR_SPICK_FROM_FILAMENT;
+  if (sm_tare_source == TARE_VENDOR)   return STR_SPICK_FROM_VENDOR;
+  return STR_SPICK_FROM_SPOOL;
+}
+
+// The lists are done, from the loop: a pick goes to this spool only, never to
+// its filament or maker, so no scope is asked; then the weight popup again,
+// with the new net weight.
+static void wpSpoolListClosed(bool) {
+  s_list_open = false;
+  if (spoolChoiceActive(s_list_choice) && sm_id != s_spool_id) {
+    logSDf("UI: empty spool pick for spool %d dropped, spool %d is loaded now", s_spool_id, sm_id);
+  } else if (spoolChoiceActive(s_list_choice)) {
+    logSDf("UI: weight options -> empty spool %u g picked for spool %d",
+           (unsigned)s_list_choice.weight_g, sm_id);
+    patchSpoolWeight((float)s_list_choice.weight_g);
+  }
+  closeWeightPopups();
+  wpOpenLevel1(false);
+}
+
+static void wpOpenSpoolList() {
+  if (s_list_open) return;
+  spoolChoiceClear(&s_list_choice);
+  SpoolOptionsSpec spec = {};
+  spec.card        = s_opts;
+  spec.choice      = &s_list_choice;
+  spec.auto_tare_g = sm_tare_source == TARE_NONE ? 0 : (int)lroundf(sm_spool_weight);
+  spec.auto_from   = wpTareFrom();
+  spec.maker       = sm_vendor_g;
+  spec.on_close    = wpSpoolListClosed;
+  s_list_open = true;
+  showSpoolPickList(spec);
+}
+
 static void wpBuildOptionRows(lv_obj_t *box, bool tare) {
   char sub[64];
   snprintf(sub, sizeof(sub), T(STR_WP_FULL_SUB), confirmNewSpoolShownG(newG()));
@@ -394,14 +450,18 @@ static void wpBuildOptionRows(lv_obj_t *box, bool tare) {
     closeWeightPopups();
     showTareEntryPad();
   }, LV_EVENT_CLICKED, NULL);
+
+  lv_obj_t *pick = wpOptionRow(box, WP_OPT_ROW_Y0 + 3 * WP_OPT_ROW_STEP, LV_SYMBOL_LIST,
+                               STR_WP_PICK_EMPTY, T(STR_WP_PICK_EMPTY_SUB));
+  lv_obj_add_event_cb(pick, [](lv_event_t *e) { wpOpenSpoolList(); }, LV_EVENT_CLICKED, NULL);
 }
 
 static void wpShowOptions() {
   logSD("SHOW: WeightOptions");
   const bool tare = backendCanTareSpool() || backendCanTareFilamentOrVendor();
-  const int back_y = WP_OPT_ROW_Y0 + (tare ? 3 : 1) * WP_OPT_ROW_STEP;
+  const int back_y = WP_OPT_ROW_Y0 + (tare ? WP_OPT_ROWS_TARE : 1) * WP_OPT_ROW_STEP;
   releaseScreen(&s_popup);
-  lv_obj_t *box = uiPopupBox(&s_opts, WP_BOX_W, back_y + WP_BOTTOM_H + WP_BOX_EXTRA);
+  lv_obj_t *box = uiPopupBox(&s_opts, WP_BOX_W, back_y + WP_OPT_BACK_H + WP_OPT_BOX_EXTRA);
 
   lv_obj_set_pos(wpLabel(box, T(STR_WP_OPTIONS), UI_FONT_TITLE, UI_COL_INK), WP_X + 4, 10);
   char buf[48];
@@ -411,7 +471,7 @@ static void wpShowOptions() {
 
   wpBuildOptionRows(box, tare);
 
-  lv_obj_t *back = wpButton(box, WP_X, back_y, WP_INNER_W, WP_BOTTOM_H);
+  lv_obj_t *back = wpButton(box, WP_X, back_y, WP_INNER_W, WP_OPT_BACK_H);
   lv_obj_center(wpLabel(back, T(STR_BACK), UI_FONT_SMALL, UI_COL_INK_2));
   styleLeaveButton(back, LV_SYMBOL_LEFT);
   lv_obj_add_event_cb(back, [](lv_event_t *e) { wpOpenLevel1(false); }, LV_EVENT_CLICKED, NULL);

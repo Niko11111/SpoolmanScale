@@ -1,4 +1,5 @@
 #include "spoolman_filament.h"
+#include "text_util.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -520,5 +521,28 @@ int spoolmanCreateTagFilament(const char* base_url, const TagCreateInput& in,
   const int code = spoolmanPostJson(base_url, "/api/v1/filament", payload, answer, SM_FIL_TIMEOUT_MS);
   *out_filament_id = answer["id"] | 0;
   logSDf("Spoolman: filament \"%s\" created -> HTTP %d, id %d", plan.name, code, *out_filament_id);
+  return code;
+}
+
+int spoolmanVendorSpools(const char* base_url, SpoolChoice* out, int max, int* n) {
+  *n = 0;
+  JsonDocument filter;
+  JsonObject f = filter.to<JsonArray>().add<JsonObject>();
+  f["name"] = true;
+  f["empty_spool_weight"] = true;
+  JsonDocument doc;
+  const int code = spoolmanGetJson(base_url, "/api/v1/vendor", doc, SM_FIL_TIMEOUT_MS, &filter);
+  if (code != 200) { logSDf("Spoolman: vendor spools -> HTTP %d", code); return code; }
+  for (JsonObjectConst v : doc.as<JsonArrayConst>()) {
+    if (*n >= max) break;
+    const int weight = (int)lroundf(v["empty_spool_weight"] | 0.0f);
+    if (weight <= 0 || weight > UINT16_MAX) continue;
+    spoolChoiceClear(&out[*n]);
+    out[*n].weight_g = (uint16_t)weight;
+    out[*n].source   = SCS_SERVER;
+    // Cut on a whole character: a tile and the NVS recents show it.
+    utf8Cut(v["name"] | "", sizeof(out[*n].name) - 1, out[*n].name, sizeof(out[*n].name));
+    (*n)++;
+  }
   return code;
 }

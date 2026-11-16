@@ -4378,6 +4378,96 @@ const char* const STRINGS[][3] = {
     "Chargé dans la buse gauche" },  // STR_AMSD_LOADED_LEFT
   { "Im rechten Hotend geladen", "Loaded in the right hotend",
     "Chargé dans la buse droite" },  // STR_AMSD_LOADED_RIGHT
+  { "keiner", "none",
+    "aucun" },  // STR_OPT_PRICE_NONE
+  { "Leerspule", "Empty spool",
+    "Bobine vide" },  // STR_OPT_SPOOL
+  { "gilt nur für diese Spule", "for this spool only",
+    "pour cette bobine seule" },  // STR_OPT_SPOOL_SUB
+  { "Dichte", "Density",
+    "Densité" },  // STR_OPT_DENSITY
+  { "Fertig", "Done",
+    "Terminé" },  // STR_OPT_DONE
+  { "Welche Leerspule?", "Which empty spool?",
+    "Quelle bobine vide ?" },  // STR_SPICK_TITLE
+  { "Automatisch", "Automatic",
+    "Automatique" },  // STR_SPICK_AUTO
+  { "vom Tag", "from the tag",
+    "du tag" },  // STR_SPICK_FROM_TAG
+  { "aus der Datenbank", "from the database",
+    "de la base" },  // STR_SPICK_FROM_DB
+  { "vom Filament", "from the filament",
+    "du filament" },  // STR_SPICK_FROM_FILAMENT
+  { "von der Marke", "from the brand",
+    "de la marque" },  // STR_SPICK_FROM_VENDOR
+  { "von der Vorlage", "from the template",
+    "du modèle" },  // STR_SPICK_FROM_TEMPLATE
+  { "nicht bekannt", "not known",
+    "inconnu" },  // STR_SPICK_UNKNOWN
+  { "zuletzt", "recent",
+    "récent" },  // STR_SPICK_RECENT
+  { "Eingegeben", "Typed in",
+    "Saisi" },  // STR_SPICK_TYPED_NAME
+  { "Hersteller", "Makers",
+    "Fabricants" },  // STR_SPICK_MAKERS
+  { "Eingeben", "Type in",
+    "Saisir" },  // STR_SPICK_TYPE_BTN
+  { "Aus der SpoolmanDB. Eine Spule: Tippen übernimmt sie.", "From SpoolmanDB. One spool: a tap takes it.",
+    "Issu de SpoolmanDB. Une bobine : un appui la prend." },  // STR_SPICK_MAKERS_HINT
+  { "Die häufigste zuerst, aus der SpoolmanDB.", "The most common first, from SpoolmanDB.",
+    "La plus courante d'abord (SpoolmanDB)." },  // STR_SPICK_MAKER_HINT
+  { "%d Spulen", "%d spools",
+    "%d bobines" },  // STR_SPICK_SPOOLS
+  { "Spule", "Spool",
+    "Bobine" },  // STR_SPOOL_KIND_ANY
+  { "Kunststoff", "Plastic",
+    "Plastique" },  // STR_SPOOL_KIND_PLASTIC
+  { "Karton", "Cardboard",
+    "Carton" },  // STR_SPOOL_KIND_CARDBOARD
+  { "Metall", "Metal",
+    "Métal" },  // STR_SPOOL_KIND_METAL
+  { "Leerspulen", "Empty spools",
+    "Bobines vides" },  // STR_W_NAV_SPOOLS
+  { "Eigene Leerspulen stehen an der Waage beim Anlegen einer Spule unter Optionen > Leerspule. Für Refills auf fremden Spulen, umgespultes Filament und selbst gedruckte Spulen.", "Your own empty spools appear on the scale when a spool is created, under Options > Empty spool. For refills on other makers' spools, respooled filament and printed spools.",
+    "Vos bobines vides apparaissent sur la balance à la création d'une bobine, sous Options > Bobine vide. Pour les recharges sur la bobine d'une autre marque, le filament rebobiné et les bobines imprimées." },  // STR_W_SPOOLS_INTRO
+  { "Name", "Name",
+    "Nom" },  // STR_W_SPOOLS_NAME
+  { "Leergewicht (g)", "Empty weight (g)",
+    "Poids à vide (g)" },  // STR_W_SPOOLS_WEIGHT
+  { "z. B. Sunlu Karton", "e.g. Sunlu cardboard",
+    "p. ex. Sunlu carton" },  // STR_W_SPOOLS_NAME_PH
+  { "Von der Waage", "From the scale",
+    "De la balance" },  // STR_W_SPOOLS_TAKE
+  { "Von der Waage übernommen", "Taken from the scale",
+    "Repris de la balance" },  // STR_W_SPOOLS_TAKEN
+  { "Entfernen", "Remove",
+    "Retirer" },  // STR_W_SPOOLS_REMOVE
+  { "Leerspule hinzufügen", "Add empty spool",
+    "Ajouter une bobine vide" },  // STR_W_SPOOLS_ADD
+  { "%d von %d", "%d of %d",
+    "%d sur %d" },  // STR_W_SPOOLS_COUNT
+  { "Waage leer: zum Übernehmen eine leere Spule auflegen", "Scale empty: put an empty spool on it to take its weight",
+    "Balance vide : posez une bobine vide pour reprendre son poids" },  // STR_W_SPOOLS_EMPTY
+  { "Waage jetzt: %s", "Scale now: %s",
+    "Balance : %s" },  // STR_W_SPOOLS_NOW
+  { "ruhig", "steady",
+    "stable" },  // STR_W_SPOOLS_STEADY
+  { "unruhig", "settling",
+    "instable" },  // STR_W_SPOOLS_MOVING
+  { "Jede Zeile braucht einen Namen (höchstens 31 Zeichen) und 10 bis 2000 g.", "Each row needs a name (31 characters at most) and 10 to 2000 g.",
+    "Chaque ligne demande un nom (31 caractères au plus) et 10 à 2000 g." },  // STR_W_SPOOLS_INVALID
+  { "Meine Spulen", "My spools",
+    "Mes bobines" },  // STR_SPICK_MINE
+  { "Vom Server", "From the server",
+    "Du serveur" },  // STR_SPICK_SERVER
+  { "Leerspule wählen", "Pick the empty spool",
+    "Choisir la bobine vide" },  // STR_WP_PICK_EMPTY
+  { "Aus der Liste, nur für diese Spule", "From the list, for this spool only",
+    "Depuis la liste, pour cette bobine seule" },  // STR_WP_PICK_EMPTY_SUB
+  { "von dieser Spule", "from this spool",
+    "de cette bobine" },  // STR_SPICK_FROM_SPOOL
+  { "Kein Abzug", "No offset",
+    "Sans retrait" },  // STR_SPICK_NO_OFFSET
 };
 
 StringID tagWriteResultString(uint8_t code) {

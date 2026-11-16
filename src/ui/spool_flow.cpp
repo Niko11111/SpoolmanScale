@@ -45,6 +45,8 @@
 #include "ui/db_pick_screen.h"
 #include "ui/copy_tagless.h"
 #include "ui/tag_create_popup.h"
+#include "ui/spool_options_popup.h"
+#include "ui/tare_offset.h"
 #include "ui/unknown_spool_popup.h"
 #include "ui/entry_tile.h"
 #include "ui/ui_common.h"
@@ -3842,6 +3844,10 @@ void handleSpoolFlowDeferredActions() {
   copyFlowDeferredActions();
   // A new spool from the tag: its lookup and its creation.
   tagCreatePopupTick();
+  // The Options of either card: the page that comes next, and the pads.
+  spoolOptionsTick();
+  // The empty spool taken off by hand: the mark on Tare follows it.
+  tareOffsetTick();
   // A new spool from the filament database: its lists as they come in.
   dbPickTick();
   // ---- a tag another spool holds ------------------------------------------

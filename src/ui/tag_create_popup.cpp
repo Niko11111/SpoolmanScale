@@ -27,6 +27,7 @@
 #include "ui/num_pad.h"
 #include "ui/price_pad.h"
 #include "ui/spool_flow_internal.h"
+#include "ui/spool_options_popup.h"
 #include "ui/tag_db_diff_popup.h"
 #include "ui/new_spool_done_popup.h"
 #include "ui/theme.h"
@@ -36,9 +37,12 @@
 #define TCP_LINE_H   26
 #define TCP_SWATCH   18
 #define TCP_GAP       8
-// The answer row: create and cancel on either side, the price between them.
+// The answer row: create and cancel on either side, Options between them.
 #define TCP_PRICE_W  80
 #define TCP_ANSWER_W ((UI_POPUP_W - 2 * UI_CARD_ROW_X - 2 * TCP_GAP - TCP_PRICE_W) / 2)
+// Options with what was set under it as a second line: the two lines' tops.
+#define TCP_OPT_LINE1_Y  9
+#define TCP_OPT_LINE2_Y  29
 // A density typed in when no source had one: "1.24".
 #define TCP_DENSITY_MAX_CHARS  4
 
@@ -48,7 +52,8 @@ enum TcpJob : uint8_t { TCP_IDLE = 0, TCP_PLAN, TCP_CREATE };
 static lv_obj_t*       s_scr    = nullptr;
 static lv_obj_t*       s_status = nullptr;
 static lv_obj_t*       s_btn_ok = nullptr;
-static lv_obj_t*       s_lbl_price = nullptr;
+static lv_obj_t*       s_lbl_opt  = nullptr;   // "Options"
+static lv_obj_t*       s_lbl_opt_value = nullptr;   // what was set under it
 static lv_obj_t*       s_swatch = nullptr;
 static lv_obj_t*       s_meta   = nullptr;
 // Where the tag and the database entry for its filament disagree.
@@ -56,6 +61,11 @@ static TagDbDiff       s_diffs[TAG_DB_DIFFS_MAX];
 static int             s_diff_n = 0;
 // What the spool cost, 0 while none was typed in.
 static float           s_price  = 0.0f;
+// The empty spool picked under Options, inactive for the card's own chain.
+static SpoolChoice     s_choice;
+// Its weight when the Options opened: the label weight is guessed again only
+// when it changed, not off a reading that may have moved since the card.
+static uint16_t        s_choice_was_g = 0;
 static TcpJob          s_job    = TCP_IDLE;
 static TagCreateInput  s_in;
 // The input came from the database picker, not from the tag: its colours are
@@ -85,12 +95,14 @@ void tagCreateEntryTap(lv_event_t*) {
 }
 
 void closeTagCreatePopup() {
+  closeSpoolOptions();
   closePricePad();
   closeTagDbDiffPopup();
   releaseScreen(&s_scr);
   s_status = nullptr;
   s_btn_ok = nullptr;
-  s_lbl_price = nullptr;
+  s_lbl_opt = nullptr;
+  s_lbl_opt_value = nullptr;
   s_swatch = nullptr;
   s_meta = nullptr;
   s_job = TCP_IDLE;
@@ -107,7 +119,8 @@ static uint8_t s_tare_from = TARE_NONE;
 
 static SpoolStart startValues() {
   TareQuality q = TARE_Q_NONE;
-  const int tare = tagCreateTare(s_in, s_plan, &s_tare_from, &q);
+  const int tare = spoolChoiceTare(s_choice, tagCreateTare(s_in, s_plan, &s_tare_from, &q),
+                                   &s_tare_from, &q);
   const float gross = (g_scale_fitted && scale_ready) ? scale_weight_g : 0.0f;
   return spoolStartValues(gross, tare, q, s_label_weight);
 }
@@ -118,7 +131,8 @@ static bool tareInherited() { return s_tare_from == TARE_FILAMENT || s_tare_from
 static int labelWeight() {
   if (s_in.net_weight_g > 0) return s_in.net_weight_g;
   static const int choices[NEWTAG_LABEL_COUNT] = NEWTAG_LABEL_CHOICES;
-  const float netto = scale_weight_g - (float)s_in.spool_weight_g;
+  const int tare = spoolChoiceActive(s_choice) ? s_choice.weight_g : s_in.spool_weight_g;
+  const float netto = scale_weight_g - (float)tare;
   int best = choices[NEWTAG_LABEL_COUNT - 1], best_diff = -1;
   for (int i = 0; i < NEWTAG_LABEL_COUNT; i++) {
     const int diff = (int)fabsf(netto - (float)choices[i]);
@@ -141,7 +155,7 @@ static void showStatus(const char* text, uint32_t color, bool can_create) {
 }
 
 // The plan lacks a density and the table has one for the material: the card
-// offers it, and the price button makes way for changing it.
+// offers it, and the Options offer changing it.
 static bool densityOffered() {
   return s_plan.state == TFS_NEEDS_DENSITY && densityTypical(s_in.material) > 0.0f;
 }
@@ -166,12 +180,12 @@ static void setOkCaption() {
   lv_label_set_text(lv_obj_get_child(s_btn_ok, 0), T(text_id));
 }
 
-static void refreshPrice();
+static void refreshOptions();
 
 static void showPlan() {
   char buf[96];
   setOkCaption();
-  refreshPrice();
+  refreshOptions();
   switch (s_plan.state) {
     case TFS_FOUND:
       snprintf(buf, sizeof(buf), T(STR_TAGNEW_FOUND), s_plan.filament_id);
@@ -336,24 +350,54 @@ static lv_obj_t* answerButton(lv_obj_t* box, int x, int w, bool ok, int text_id)
   return btn;
 }
 
-// The price button shows what was typed in, or that there is none yet.
-static void refreshPrice() {
-  if (!s_lbl_price) return;
-  if (densityOffered()) { lv_label_set_text(s_lbl_price, T(STR_DENSITY_CHANGE)); return; }
-  if (s_price <= 0.0f) { lv_label_set_text(s_lbl_price, T(STR_TAGNEW_PRICE_BTN)); return; }
-  char buf[16];
-  snprintf(buf, sizeof(buf), "%.2f", s_price);
-  lv_label_set_text(s_lbl_price, buf);
-}
-
-static void onPrice(float price) {
-  s_price = price;
-  refreshPrice();
+// Options says what was set under it on a second line: the empty spool
+// picked, else the price; alone in the middle while nothing was.
+static void refreshOptions() {
+  if (!s_lbl_opt || !s_lbl_opt_value) return;
+  char buf[16] = "";
+  uint32_t col = UI_COL_INK_2;
+  if (spoolChoiceActive(s_choice)) { snprintf(buf, sizeof(buf), "%u g", (unsigned)s_choice.weight_g); col = UI_COL_ACCENT; }
+  else if (s_price > 0.0f)         snprintf(buf, sizeof(buf), "%.2f", s_price);
+  lv_label_set_text(s_lbl_opt_value, buf);
+  lv_obj_set_style_text_color(s_lbl_opt_value, lv_color_hex(col), 0);
+  if (buf[0]) lv_obj_align(s_lbl_opt, LV_ALIGN_TOP_MID, 0, TCP_OPT_LINE1_Y);
+  else        lv_obj_center(s_lbl_opt);
 }
 
 static void showDensityPad();
 
-static void buildPriceButton(lv_obj_t* box) {
+// Back from the Options: the card reads its values again.
+static void onOptionsClosed(bool density) {
+  if (s_choice.weight_g != s_choice_was_g) s_label_weight = labelWeight();
+  refreshOptions();
+  refreshMeta();
+  if (density) showDensityPad();
+}
+
+// Where the empty spool the card weighs against comes from, for Automatic.
+static int autoTareFrom(uint8_t from) {
+  if (from == TARE_FILAMENT) return STR_SPICK_FROM_FILAMENT;
+  if (from == TARE_VENDOR)   return STR_SPICK_FROM_VENDOR;
+  return s_picked ? STR_SPICK_FROM_DB : STR_SPICK_FROM_TAG;
+}
+
+static void openOptions() {
+  uint8_t from = TARE_NONE;
+  const int auto_tare = tagCreateTare(s_in, s_plan, &from, nullptr);
+  SpoolOptionsSpec spec = {};
+  spec.card        = s_scr;
+  spec.price       = &s_price;
+  spec.choice      = &s_choice;
+  spec.auto_tare_g = auto_tare;
+  spec.auto_from   = autoTareFrom(from);
+  spec.maker       = s_in.vendor;
+  spec.density     = densityOffered();
+  s_choice_was_g   = s_choice.weight_g;
+  spec.on_close    = onOptionsClosed;
+  showSpoolOptions(spec);
+}
+
+static void buildOptionsButton(lv_obj_t* box) {
   lv_obj_t* btn = lv_btn_create(box);
   lv_obj_set_size(btn, TCP_PRICE_W, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn, UI_CARD_ROW_X + TCP_ANSWER_W + TCP_GAP, UI_CARD_ROW_Y);
@@ -363,21 +407,20 @@ static void buildPriceButton(lv_obj_t* box) {
   lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
+  lv_obj_set_style_pad_all(btn, 0, 0);
   lv_obj_add_event_cb(btn, [](lv_event_t*) {
-    if (s_job != TCP_IDLE) return;
-    if (densityOffered()) {
-      logSD("BTN: TagCreate -> Change density");
-      showDensityPad();
-      return;
-    }
-    logSD("BTN: TagCreate -> Price");
-    showPricePad(s_price, onPrice);
+    if (s_job != TCP_IDLE || spoolOptionsOpen()) return;
+    logSD("BTN: TagCreate -> Options");
+    openOptions();
   }, LV_EVENT_CLICKED, NULL);
-  s_lbl_price = lv_label_create(btn);
-  lv_obj_set_style_text_color(s_lbl_price, lv_color_hex(UI_COL_INK_2), 0);
-  lv_obj_set_style_text_font(s_lbl_price, UI_FONT_SMALL, 0);
-  lv_obj_center(s_lbl_price);
-  refreshPrice();
+  s_lbl_opt = lv_label_create(btn);
+  lv_label_set_text(s_lbl_opt, T(STR_WP_OPTIONS));
+  lv_obj_set_style_text_color(s_lbl_opt, lv_color_hex(UI_COL_INK_2), 0);
+  lv_obj_set_style_text_font(s_lbl_opt, UI_FONT_SMALL, 0);
+  s_lbl_opt_value = lv_label_create(btn);
+  lv_obj_set_style_text_font(s_lbl_opt_value, UI_FONT_CAPTION, 0);
+  lv_obj_align(s_lbl_opt_value, LV_ALIGN_TOP_MID, 0, TCP_OPT_LINE2_Y);
+  refreshOptions();
 }
 
 // Only the plan is asked for: the loop runs it with the density in the
@@ -447,7 +490,7 @@ static void buildAnswers(lv_obj_t* box) {
     s_job = TCP_CREATE;
   }, LV_EVENT_CLICKED, NULL);
 
-  buildPriceButton(box);
+  buildOptionsButton(box);
 
   lv_obj_t* no = answerButton(box, UI_POPUP_W - TCP_ANSWER_W - UI_CARD_ROW_X, TCP_ANSWER_W,
                               false, STR_CANCEL);
@@ -462,6 +505,7 @@ static void buildAnswers(lv_obj_t* box) {
 }
 
 static void buildCard() {
+  spoolChoiceClear(&s_choice);
   s_label_weight = labelWeight();
   s_price = 0.0f;
   tagFilamentPlanClear(&s_plan);
@@ -561,10 +605,15 @@ static void runCreate() {
   }
   TagCreateResult r;
   const SpoolStart start = startValues();
-  logSDf("TagCreate: start %s gross=%.0f tare=%d (%s) label=%d -> initial=%d remaining=%.0f",
+  logSDf("TagCreate: start %s gross=%.0f tare=%d (%s%s) label=%d -> initial=%d remaining=%.0f",
          spoolStartVerdictName(start.verdict), scale_weight_g, start.tare_g,
-         tareSourceName(s_tare_from), s_label_weight, start.initial_g, start.remaining_g);
-  const TagSpoolValues values = { start.initial_g, start.remaining_g, s_price };
+         tareSourceName(s_tare_from), spoolChoiceActive(s_choice) ? ", picked" : "",
+         s_label_weight, start.initial_g, start.remaining_g);
+  TagSpoolValues values = { start.initial_g, start.remaining_g, s_price };
+  if (spoolChoiceActive(s_choice)) {
+    values.chosen_tare_g     = s_choice.weight_g;
+    values.chosen_catalog_id = s_choice.catalog_id;
+  }
   const int code = serverReachNote(backendCreateFromTag(s_in, s_plan, values, &r), true);
   logSDf("TagCreate: HTTP %d, spool %d, filament %d, full %d g, price %.2f, link %s",
          code, r.spool_id, r.filament_id, start.initial_g, s_price, s_in.link_id);
