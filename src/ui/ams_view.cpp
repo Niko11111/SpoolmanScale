@@ -37,6 +37,7 @@
 #define AMSV_TILE_GAP     6
 #define AMSV_TILE_W       ((480 - AMSV_MARGIN - AMSV_MARGIN_R - 3 * AMSV_TILE_GAP) / 4)
 #define AMSV_TILE_H       58
+#define AMSV_TILE_RADIUS  6
 // Room kept free left and right of a tile's text, inside its border.
 #define AMSV_TILE_TEXT_PAD 4
 // Room a corner badge takes from the tile's text: the badge with its inset.
@@ -428,6 +429,44 @@ static void tileClicked(lv_event_t* e) {
   s_close_pending = true;
 }
 
+// Shared tile styles, as db_pick_screen.cpp keeps them: a local style
+// property is stored per object, so 20 tiles of an H3C setup held the same
+// radius, padding, frame and font 20 times over. What differs per tile - the
+// filament colour - stays local.
+enum AmsvText { AMSV_TEXT_MUTED, AMSV_TEXT_ON_BRIGHT, AMSV_TEXT_ON_DARK, AMSV_TEXT_KINDS };
+static lv_style_t s_st_tile, s_st_tile_active;
+static lv_style_t s_st_text[AMSV_TEXT_KINDS];
+static bool       s_tile_styles_ready = false;
+
+// Once, after boot: the palette is chosen at boot and fixed until a restart.
+static void initTileStyles() {
+  if (s_tile_styles_ready) return;
+  lv_style_init(&s_st_tile);
+  lv_style_set_radius(&s_st_tile, AMSV_TILE_RADIUS);
+  lv_style_set_pad_all(&s_st_tile, 0);
+  lv_style_set_shadow_width(&s_st_tile, 0);
+  lv_style_set_border_width(&s_st_tile, 1);
+  lv_style_set_border_color(&s_st_tile, lv_color_hex(AMSV_COL_LINE));
+  // Added after s_st_tile, so it wins where both say something.
+  lv_style_init(&s_st_tile_active);
+  lv_style_set_border_width(&s_st_tile_active, AMSV_MARK_BORDER);
+  lv_style_set_border_color(&s_st_tile_active, lv_color_hex(AMSV_COL_ACCENT));
+  lv_style_set_outline_width(&s_st_tile_active, AMSV_MARK_GLOW);
+  lv_style_set_outline_pad(&s_st_tile_active, 1);
+  lv_style_set_outline_color(&s_st_tile_active, lv_color_hex(AMSV_COL_ACCENT));
+  lv_style_set_outline_opa(&s_st_tile_active, LV_OPA_50);
+  const uint32_t TEXT_COL[AMSV_TEXT_KINDS] = {
+    AMSV_COL_MUTED, UI_COL_ON_BRIGHT_FILL, UI_COL_ON_DARK_FILL
+  };
+  for (int i = 0; i < AMSV_TEXT_KINDS; i++) {
+    lv_style_init(&s_st_text[i]);
+    lv_style_set_text_color(&s_st_text[i], lv_color_hex(TEXT_COL[i]));
+    lv_style_set_text_font(&s_st_text[i], &lv_font_montserrat_ext_12);
+    lv_style_set_text_align(&s_st_text[i], LV_TEXT_ALIGN_CENTER);
+  }
+  s_tile_styles_ready = true;
+}
+
 // The bay the printer feeds from gets the heavy accent frame; on a
 // dual-nozzle printer each bay a hotend holds also carries the hotend's
 // letter, filled for the one in use. A single-nozzle printer and the H3C have
@@ -435,15 +474,7 @@ static void tileClicked(lv_event_t* e) {
 // Returns the width the text has to leave free for the badge, 0 without.
 static int markBay(lv_obj_t* tile, const AmsSlotTray& tray) {
   const bool active = tray.active;
-  lv_obj_set_style_border_width(tile, active ? AMSV_MARK_BORDER : 1, 0);
-  lv_obj_set_style_border_color(tile,
-    lv_color_hex(active ? AMSV_COL_ACCENT : AMSV_COL_LINE), 0);
-  if (active) {
-    lv_obj_set_style_outline_width(tile, AMSV_MARK_GLOW, 0);
-    lv_obj_set_style_outline_pad(tile, 1, 0);
-    lv_obj_set_style_outline_color(tile, lv_color_hex(AMSV_COL_ACCENT), 0);
-    lv_obj_set_style_outline_opa(tile, LV_OPA_50, 0);
-  }
+  if (active) lv_obj_add_style(tile, &s_st_tile_active, 0);
   if (tray.hotend == AMS_HOTEND_NONE) return 0;
   if (!amsMarkBadge(tile, tray.hotend, active)) return 0;
   return AMSV_MARK_RESERVE;
@@ -456,15 +487,14 @@ static int markBay(lv_obj_t* tile, const AmsSlotTray& tray) {
 static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
                            const AmsSlotTray& tray, int x, int y) {
   if (!lvPoolHasRoomForRow()) return nullptr;
+  initTileStyles();
 
   lv_obj_t* tile = lv_obj_create(parent);
   if (!tile) return nullptr;
   lv_obj_set_size(tile, s_tile_w, AMSV_TILE_H);
   lv_obj_set_pos(tile, x, y);
   lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_radius(tile, 6, 0);
-  lv_obj_set_style_pad_all(tile, 0, 0);
-  lv_obj_set_style_shadow_width(tile, 0, 0);
+  lv_obj_add_style(tile, &s_st_tile, 0);
 
   // A see-through filament fades from its hue into the ground, like every
   // other swatch, so a clear spool reads as glass instead of an empty bay.
@@ -475,10 +505,8 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
   const int reserve = markBay(tile, tray);
   if (tray.active && s_printing) s_feed = { true, x + s_tile_w / 2, y + AMSV_TILE_H };
 
-  uint32_t text_col;
-  if (!filled) {
-    text_col = AMSV_COL_MUTED;
-  } else {
+  AmsvText text = AMSV_TEXT_MUTED;
+  if (filled) {
     // Judged where the text sits, the middle of the tile, which on a fade is
     // darker than the hue at the top.
     const uint32_t mid = swatchCenterRgb(tray.color);
@@ -486,7 +514,7 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
     const uint32_t g = (mid >> 8) & 0xFF;
     const uint32_t b = mid & 0xFF;
     const uint32_t luma = (299 * r + 587 * g + 114 * b) / 1000;
-    text_col = (luma > AMSV_LUMA_SWITCH) ? UI_COL_ON_BRIGHT_FILL : UI_COL_ON_DARK_FILL;
+    text = (luma > AMSV_LUMA_SWITCH) ? AMSV_TEXT_ON_BRIGHT : AMSV_TEXT_ON_DARK;
   }
 
   // A filled bay is always three lines, in the same order, with a dash where
@@ -544,9 +572,7 @@ static lv_obj_t* buildTile(lv_obj_t* parent, const AmsSlotUnit& unit,
   lv_obj_t* lbl = lv_label_create(tile);
   if (!lbl) return tile;
   lv_label_set_text(lbl, line);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(text_col), 0);
-  lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_12, 0);
-  lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_add_style(lbl, &s_st_text[text], 0);
   // Centred in what the badge leaves, so a long name clears it.
   lv_obj_align(lbl, LV_ALIGN_CENTER, -reserve / 2, 0);
 
