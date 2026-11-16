@@ -27,6 +27,7 @@
 #include "services/tag_field.h"
 #include "ui/info_popup.h"
 #include "ui/link_wait_card.h"
+#include "ui/list_row.h"
 #include "ui/loading_overlay.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/navigation.h"
@@ -484,25 +485,13 @@ void showCopySpoolList() {
       logSDf("CopySpoolList: LVGL pool low, list cut at %d rows", i);
       break;
     }
-    lv_obj_t *row = lv_btn_create(list);
+    lv_obj_t *row = listRowCreate(list, LR_FRAME_SPOOL, 452, 56);
     if (!row) { logSDf("CopySpoolList: no room for a row, list cut at %d", i); break; }
-    lv_obj_set_size(row, 452, 56);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(row, 6, 0);
-    lv_obj_set_style_shadow_width(row, 0, 0);
-    lv_obj_set_style_border_width(row, 1, 0);
-    lv_obj_set_style_border_color(row, lv_color_hex(UI_COL_LINE_SOFT), 0);
-    lv_obj_set_style_pad_all(row, 0, 0);
 
-    lv_obj_t *lbl_id = lv_label_create(row);
     char id_buf[10]; snprintf(id_buf, sizeof(id_buf), "%d", s.id);
-    lv_label_set_text(lbl_id, id_buf);
-    lv_obj_set_style_text_color(lbl_id, lv_color_hex(UI_COL_ACCENT), 0);
-    lv_obj_set_style_text_font(lbl_id, &lv_font_montserrat_ext_16, 0);
+    lv_obj_t *lbl_id = listRowLabel(row, LR_TEXT_ID, id_buf);
     lv_obj_align(lbl_id, LV_ALIGN_TOP_LEFT, 6, 5);
 
-    lv_obj_t *lbl_name = lv_label_create(row);
     char full_name[64];
     if (s.material[0]) {
       joinMaterialName(s.material, s.name, full_name, sizeof(full_name));
@@ -510,30 +499,18 @@ void showCopySpoolList() {
       strncpy(full_name, s.name, sizeof(full_name)-1);
     }
     full_name[sizeof(full_name)-1] = '\0';
-    lv_label_set_text(lbl_name, full_name);
-    lv_obj_set_style_text_color(lbl_name, lv_color_hex(UI_COL_INK), 0);
-    lv_obj_set_style_text_font(lbl_name, &lv_font_montserrat_ext_16, 0);
+    lv_obj_t *lbl_name = listRowLabel(row, LR_TEXT_NAME, full_name);
     lv_obj_align(lbl_name, LV_ALIGN_TOP_LEFT, 50, 5);
     lv_label_set_long_mode(lbl_name, LV_LABEL_LONG_DOT);
     lv_obj_set_width(lbl_name, 396);
 
-    lv_obj_t *swatch = lv_obj_create(row);
-    lv_obj_set_size(swatch, 14, 14);
+    lv_obj_t *swatch = listRowSwatch(row, s.color_hex);
     lv_obj_align(swatch, LV_ALIGN_BOTTOM_LEFT, 6, -6);
-    lv_obj_set_style_radius(swatch, 3, 0);
-    lv_obj_set_style_border_width(swatch, 1, 0);
-    lv_obj_set_style_border_color(swatch, lv_color_hex(UI_COL_RULE), 0);
-    lv_obj_set_style_pad_all(swatch, 0, 0);
-    lv_obj_clear_flag(swatch, LV_OBJ_FLAG_SCROLLABLE);
-    swatchPaintHex(swatch, s.color_hex);
 
-    lv_obj_t *lbl_rest = lv_label_create(row);
     char rest_buf[24];
     if (s.remaining <= 0 && s.total > 0) snprintf(rest_buf, sizeof(rest_buf), T(STR_NEW_SPOOL_WEIGHT_FMT), s.total);
     else snprintf(rest_buf, sizeof(rest_buf), "%.0f g", s.remaining);
-    lv_label_set_text(lbl_rest, rest_buf);
-    lv_obj_set_style_text_color(lbl_rest, lv_color_hex(UI_COL_CAPTION), 0);
-    lv_obj_set_style_text_font(lbl_rest, &lv_font_montserrat_ext_14, 0);
+    lv_obj_t *lbl_rest = listRowLabel(row, LR_TEXT_WEIGHT, rest_buf);
     lv_obj_align(lbl_rest, LV_ALIGN_BOTTOM_LEFT, 26, -5);
 
     lv_obj_add_event_cb(row, [](lv_event_t *e) {

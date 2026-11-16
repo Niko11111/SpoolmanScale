@@ -28,6 +28,7 @@
 #include "services/backend_job.h"
 #include "app/backend_switch.h"
 #include "ui/link_wait_card.h"
+#include "ui/list_row.h"
 #include "ui/num_pad.h"
 #include "ui/spool_flow_internal.h"
 #include "services/tag_write.h"
@@ -2863,34 +2864,23 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
       logSDf("FilteredSpoolList: LVGL pool low, list cut at %d rows", count);
       break;
     }
-    lv_obj_t *row = lv_btn_create(list);
+    lv_obj_t *row = listRowCreate(list, LR_FRAME_SPOOL, 452, 56);
     if (!row) { logSDf("FilteredSpoolList: no room for a row, list cut at %d", count); break; }
     // Counted once the row exists, so a cut at the very first candidate leaves
     // count == 0 and the "no spools" message below still appears.
     count++;
-    lv_obj_set_size(row, 452, 56);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(row, 6, 0);
-    lv_obj_set_style_shadow_width(row, 0, 0);
     // An article number hit is framed in the house green: the same row, no
     // extra object, which the pool could not spare for every row.
-    lv_obj_set_style_border_width(row, s.article_hit ? 2 : 1, 0);
-    lv_obj_set_style_border_color(row, lv_color_hex(s.article_hit ? UI_COL_GOOD : UI_COL_LINE_SOFT), 0);
-    lv_obj_set_style_pad_all(row, 0, 0);
+    if (s.article_hit) listRowMarkHit(row);
 
     // ── Zeile 1: #ID + Material+Name ──────────────────────
-    lv_obj_t *lbl_id = lv_label_create(row);
     char id_buf[10]; snprintf(id_buf, sizeof(id_buf), "%d", s.id);
-    lv_label_set_text(lbl_id, id_buf);
-    lv_obj_set_style_text_color(lbl_id, lv_color_hex(UI_COL_ACCENT), 0);
-    lv_obj_set_style_text_font(lbl_id, &lv_font_montserrat_ext_16, 0);
+    lv_obj_t *lbl_id = listRowLabel(row, LR_TEXT_ID, id_buf);
     lv_obj_align(lbl_id, LV_ALIGN_TOP_LEFT, 6, 5);
 
     // Material + Name zusammen, abgeschnitten wenn zu lang
     // Avoid duplication when the filament name already starts with the material
     // (Spoolman often stores names like "PLA+ White" while material is "PLA+")
-    lv_obj_t *lbl_name = lv_label_create(row);
     char full_name[64];
     if (s.material[0]) {
       joinMaterialName(s.material, s.name, full_name, sizeof(full_name));
@@ -2898,38 +2888,25 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
       strncpy(full_name, s.name, sizeof(full_name)-1);
     }
     full_name[sizeof(full_name)-1] = '\0';
-    lv_label_set_text(lbl_name, full_name);
-    lv_obj_set_style_text_color(lbl_name, lv_color_hex(UI_COL_INK), 0);
-    lv_obj_set_style_text_font(lbl_name, &lv_font_montserrat_ext_16, 0);
+    lv_obj_t *lbl_name = listRowLabel(row, LR_TEXT_NAME, full_name);
     lv_obj_align(lbl_name, LV_ALIGN_TOP_LEFT, 50, 5);
     lv_label_set_long_mode(lbl_name, LV_LABEL_LONG_DOT);
     lv_obj_set_width(lbl_name, 396);  // volle Breite - kein Hersteller in Zeile 1
 
     // ── Zeile 2: Farbkachel + Gewicht + Hersteller rechts ─
-    // Color tile (14x14px)
-    lv_obj_t *swatch = lv_obj_create(row);
-    lv_obj_set_size(swatch, 14, 14);
+    lv_obj_t *swatch = listRowSwatch(row, s.color_hex);
     lv_obj_align(swatch, LV_ALIGN_BOTTOM_LEFT, 6, -6);
-    lv_obj_set_style_radius(swatch, 3, 0);
-    lv_obj_set_style_border_width(swatch, 1, 0);
-    lv_obj_set_style_border_color(swatch, lv_color_hex(UI_COL_RULE), 0);
-    lv_obj_set_style_pad_all(swatch, 0, 0);
-    lv_obj_clear_flag(swatch, LV_OBJ_FLAG_SCROLLABLE);
-    swatchPaintHex(swatch, s.color_hex);
 
     // Gewicht neben Kachel
-    lv_obj_t *lbl_rest = lv_label_create(row);
     char rest_buf[24];
     if (s.remaining <= 0 && s.total > 0)
       snprintf(rest_buf, sizeof(rest_buf), T(STR_NEW_SPOOL_WEIGHT_FMT), s.total);
     else
       snprintf(rest_buf, sizeof(rest_buf), "%.0f g", s.remaining);
-    lv_label_set_text(lbl_rest, rest_buf);
+    lv_obj_t *lbl_rest = listRowLabel(row, LR_TEXT_WEIGHT, rest_buf);
     // A weight that matches the scale in the house green, on the label that
     // is there anyway: the frame already says "article number".
-    if (weight_hit) weight_hits++;
-    lv_obj_set_style_text_color(lbl_rest, lv_color_hex(weight_hit ? UI_COL_GOOD : UI_COL_CAPTION), 0);
-    lv_obj_set_style_text_font(lbl_rest, &lv_font_montserrat_ext_14, 0);
+    if (weight_hit) { weight_hits++; listRowLabelHit(lbl_rest); }
     lv_obj_align(lbl_rest, LV_ALIGN_BOTTOM_LEFT, 26, -5);
 
     // Click → Sicherheits-Popup
@@ -3140,28 +3117,14 @@ void showMaterialList(const char* vendor_name) {
       logSDf("MaterialList: LVGL pool low, list cut at %d rows", m);
       break;
     }
-    lv_obj_t *row = lv_btn_create(list);
+    lv_obj_t *row = listRowCreate(list, LR_FRAME_SPOOL, 452, 50);
     if (!row) { logSDf("MaterialList: no room for a row, list cut at %d", m); break; }
-    lv_obj_set_size(row, 452, 50);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(row, 6, 0);
-    lv_obj_set_style_shadow_width(row, 0, 0);
-    lv_obj_set_style_border_width(row, 1, 0);
-    lv_obj_set_style_border_color(row, lv_color_hex(UI_COL_LINE_SOFT), 0);
-    lv_obj_set_style_pad_all(row, 0, 0);
 
-    lv_obj_t *lbl_mat = lv_label_create(row);
-    lv_label_set_text(lbl_mat, seen_mats[m]);
-    lv_obj_set_style_text_color(lbl_mat, lv_color_hex(UI_COL_WARN), 0);
-    lv_obj_set_style_text_font(lbl_mat, &lv_font_montserrat_ext_18, 0);
+    lv_obj_t *lbl_mat = listRowLabel(row, LR_TEXT_MATERIAL, seen_mats[m]);
     lv_obj_align(lbl_mat, LV_ALIGN_LEFT_MID, 16, 0);
 
-    lv_obj_t *lbl_cnt = lv_label_create(row);
     char cnt_buf[12]; snprintf(cnt_buf, sizeof(cnt_buf), "%d x", mat_counts[m]);
-    lv_label_set_text(lbl_cnt, cnt_buf);
-    lv_obj_set_style_text_color(lbl_cnt, lv_color_hex(UI_COL_CAPTION), 0);
-    lv_obj_set_style_text_font(lbl_cnt, &lv_font_montserrat_ext_16, 0);
+    lv_obj_t *lbl_cnt = listRowLabel(row, LR_TEXT_COUNT, cnt_buf);
     lv_obj_align(lbl_cnt, LV_ALIGN_RIGHT_MID, -16, 0);
 
     lv_obj_add_event_cb(row, [](lv_event_t *e) {
@@ -3319,30 +3282,16 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
       logSDf("MaterialSubList: LVGL pool low, list cut at %d rows", m);
       break;
     }
-    lv_obj_t *row = lv_btn_create(list);
+    lv_obj_t *row = listRowCreate(list, LR_FRAME_SPOOL, 452, 50);
     if (!row) { logSDf("MaterialSubList: no room for a row, list cut at %d", m); break; }
-    lv_obj_set_size(row, 452, 50);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(row, 6, 0);
-    lv_obj_set_style_shadow_width(row, 0, 0);
-    lv_obj_set_style_border_width(row, 1, 0);
-    lv_obj_set_style_border_color(row, lv_color_hex(UI_COL_LINE_SOFT), 0);
-    lv_obj_set_style_pad_all(row, 0, 0);
 
-    lv_obj_t *lbl_full = lv_label_create(row);
-    lv_label_set_text(lbl_full, seen_full[m]);
-    lv_obj_set_style_text_color(lbl_full, lv_color_hex(UI_COL_WARN), 0);
-    lv_obj_set_style_text_font(lbl_full, &lv_font_montserrat_ext_18, 0);
+    lv_obj_t *lbl_full = listRowLabel(row, LR_TEXT_MATERIAL, seen_full[m]);
     lv_obj_align(lbl_full, LV_ALIGN_LEFT_MID, 16, 0);
     lv_label_set_long_mode(lbl_full, LV_LABEL_LONG_DOT);
     lv_obj_set_width(lbl_full, 340);
 
-    lv_obj_t *lbl_cnt = lv_label_create(row);
     char cnt_buf[12]; snprintf(cnt_buf, sizeof(cnt_buf), "%d x", full_counts[m]);
-    lv_label_set_text(lbl_cnt, cnt_buf);
-    lv_obj_set_style_text_color(lbl_cnt, lv_color_hex(UI_COL_CAPTION), 0);
-    lv_obj_set_style_text_font(lbl_cnt, &lv_font_montserrat_ext_16, 0);
+    lv_obj_t *lbl_cnt = listRowLabel(row, LR_TEXT_COUNT, cnt_buf);
     lv_obj_align(lbl_cnt, LV_ALIGN_RIGHT_MID, -16, 0);
 
     lv_obj_add_event_cb(row, [](lv_event_t *e) {
@@ -3486,30 +3435,16 @@ void showVendorList() {
       logSDf("VendorList: LVGL pool low, list cut at %d rows", v);
       break;
     }
-    lv_obj_t *row = lv_btn_create(list);
+    lv_obj_t *row = listRowCreate(list, LR_FRAME_SPOOL, 452, 50);
     if (!row) { logSDf("VendorList: no room for a row, list cut at %d", v); break; }
-    lv_obj_set_size(row, 452, 50);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(row, 6, 0);
-    lv_obj_set_style_shadow_width(row, 0, 0);
-    lv_obj_set_style_border_width(row, 1, 0);
-    lv_obj_set_style_border_color(row, lv_color_hex(UI_COL_LINE_SOFT), 0);
-    lv_obj_set_style_pad_all(row, 0, 0);
 
-    lv_obj_t *lbl_vnd = lv_label_create(row);
-    lv_label_set_text(lbl_vnd, seen_vendors[v]);
-    lv_obj_set_style_text_color(lbl_vnd, lv_color_hex(UI_COL_INK), 0);
-    lv_obj_set_style_text_font(lbl_vnd, &lv_font_montserrat_ext_18, 0);
+    lv_obj_t *lbl_vnd = listRowLabel(row, LR_TEXT_MAKER, seen_vendors[v]);
     lv_obj_align(lbl_vnd, LV_ALIGN_LEFT_MID, 16, 0);
     lv_label_set_long_mode(lbl_vnd, LV_LABEL_LONG_DOT);
     lv_obj_set_width(lbl_vnd, 320);
 
-    lv_obj_t *lbl_cnt = lv_label_create(row);
     char cnt_buf[12]; snprintf(cnt_buf, sizeof(cnt_buf), "%d x", vendor_counts[v]);
-    lv_label_set_text(lbl_cnt, cnt_buf);
-    lv_obj_set_style_text_color(lbl_cnt, lv_color_hex(UI_COL_CAPTION), 0);
-    lv_obj_set_style_text_font(lbl_cnt, &lv_font_montserrat_ext_16, 0);
+    lv_obj_t *lbl_cnt = listRowLabel(row, LR_TEXT_COUNT, cnt_buf);
     lv_obj_align(lbl_cnt, LV_ALIGN_RIGHT_MID, -16, 0);
 
     lv_obj_add_event_cb(row, [](lv_event_t *e) {

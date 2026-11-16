@@ -34,6 +34,7 @@
 #include "tag_display.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/tag_write_popup.h"
+#include "ui/list_row.h"
 #include "ui/theme.h"
 #include "ui_common.h"
 
@@ -659,24 +660,13 @@ void fetchAndFillLocationList() {
       logSDf("LOC: LVGL pool low, list cut at %d rows", loc_shown);
       break;
     }
-    lv_obj_t *row = lv_btn_create(list);
+    lv_obj_t *row = listRowCreate(list, LR_FRAME_LOCATION, 370, 44);
     if (!row) { logSDf("LOC: no room for a row, list cut at %d", loc_shown); break; }
-    lv_obj_set_size(row, 370, 44);
     const char* current = locTargetCurrent();
     bool is_current = (current[0] && strcmp(loc_name, current) == 0);
-    lv_obj_set_style_bg_color(row, is_current ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_CHIP), 0);
-    lv_obj_set_style_bg_color(row, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(row, is_current ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_DIVIDER), 0);
-    lv_obj_set_style_border_width(row, 1, 0);
-    lv_obj_set_style_radius(row, 6, 0);
-    lv_obj_set_style_shadow_width(row, 0, 0);
-    lv_obj_set_style_pad_bottom(row, 4, 0);
 
-    lv_obj_t *lbl_row = lv_label_create(row);
-    lv_label_set_text(lbl_row, loc_name);
-    lv_obj_set_style_text_color(lbl_row, is_current ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_INK_BRIGHT), 0);
-    lv_obj_set_style_text_font(lbl_row, &lv_font_montserrat_ext_16, 0);
-    lv_obj_set_style_text_align(lbl_row, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_t *lbl_row = listRowLabel(row, LR_TEXT_LOCATION, loc_name);
+    if (is_current) listRowMarkCurrent(row, lbl_row);
     // One line high, so dot mode shortens a long name instead of wrapping it.
     lv_obj_set_size(lbl_row, LOC_ROW_LABEL_W, lv_font_get_line_height(&lv_font_montserrat_ext_16));
     lv_label_set_long_mode(lbl_row, LV_LABEL_LONG_DOT);
