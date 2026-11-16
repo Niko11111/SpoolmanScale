@@ -37,7 +37,6 @@
 #define AMSV_TILE_GAP     6
 #define AMSV_TILE_W       ((480 - AMSV_MARGIN - AMSV_MARGIN_R - 3 * AMSV_TILE_GAP) / 4)
 #define AMSV_TILE_H       58
-#define AMSV_TILE_RADIUS  6
 // Room kept free left and right of a tile's text, inside its border.
 #define AMSV_TILE_TEXT_PAD 4
 // Room a corner badge takes from the tile's text: the badge with its inset.
@@ -146,6 +145,8 @@ static AmsPickCb    s_cb        = nullptr;
 static char         s_headline[AMSV_HEADLINE_MAX] = "";
 // The printer's answer the page is drawn from. In PSRAM, taken when the page
 // is first built and kept (psram_new.h): 3.7 kB that BSS held for good.
+// buildScreen() sets s_scr only once this exists, so code that has checked
+// s_scr or s_body may use it without a check of its own.
 static AmsSlotState* s_state = nullptr;
 // Width of the tiles of the unit being laid out: four across on a regular
 // AMS, five narrower ones on an AMS 3H.
@@ -442,7 +443,7 @@ static bool       s_tile_styles_ready = false;
 static void initTileStyles() {
   if (s_tile_styles_ready) return;
   lv_style_init(&s_st_tile);
-  lv_style_set_radius(&s_st_tile, AMSV_TILE_RADIUS);
+  lv_style_set_radius(&s_st_tile, UI_RADIUS_INPUT);
   lv_style_set_pad_all(&s_st_tile, 0);
   lv_style_set_shadow_width(&s_st_tile, 0);
   lv_style_set_border_width(&s_st_tile, 1);
@@ -455,12 +456,12 @@ static void initTileStyles() {
   lv_style_set_outline_pad(&s_st_tile_active, 1);
   lv_style_set_outline_color(&s_st_tile_active, lv_color_hex(AMSV_COL_ACCENT));
   lv_style_set_outline_opa(&s_st_tile_active, LV_OPA_50);
-  const uint32_t TEXT_COL[AMSV_TEXT_KINDS] = {
+  static const uint32_t text_col[AMSV_TEXT_KINDS] = {
     AMSV_COL_MUTED, UI_COL_ON_BRIGHT_FILL, UI_COL_ON_DARK_FILL
   };
   for (int i = 0; i < AMSV_TEXT_KINDS; i++) {
     lv_style_init(&s_st_text[i]);
-    lv_style_set_text_color(&s_st_text[i], lv_color_hex(TEXT_COL[i]));
+    lv_style_set_text_color(&s_st_text[i], lv_color_hex(text_col[i]));
     lv_style_set_text_font(&s_st_text[i], &lv_font_montserrat_ext_12);
     lv_style_set_text_align(&s_st_text[i], LV_TEXT_ALIGN_CENTER);
   }

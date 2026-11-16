@@ -74,6 +74,12 @@ void amsPresenceTick() {
   // The printer id survives between passes: it changes when somebody adds or
   // removes a printer, not on a timer, and looking it up again every time
   // would double the cost of this check.
+  // Before the printer list, so a scale without the memory asks nothing.
+  if (!s_state) s_state = psramNew<AmsSlotState>();
+  if (!s_state) {
+    logSD("AMS: no memory for the presence check");
+    return;
+  }
   if (s_printer_id <= 0) {
     const int code = backendListPrinters(s_printers, 5000);
     if (code != 200 || s_printers.count == 0) {
@@ -84,11 +90,6 @@ void amsPresenceTick() {
     s_printer_id = s_printers.p[0].id;
   }
 
-  if (!s_state) s_state = psramNew<AmsSlotState>();
-  if (!s_state) {
-    logSD("AMS: no memory for the presence check");
-    return;
-  }
   AmsSlotState& st = *s_state;
   const int code = backendGetAmsState(s_printer_id, st, 5000);
   if (code != 200) {

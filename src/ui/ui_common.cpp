@@ -308,7 +308,8 @@ void logLvMem(const char* tag, int rows) {
 }
 
 // One gate for every refusal: a cut list asks again on its retries, so a
-// lasting low would otherwise write a line every LV_CUT_RETRY_MS.
+// lasting low would otherwise write a line every LV_CUT_RETRY_MS. A row that
+// fits resets it, so each list build that is cut still leaves its one line.
 static LogGate s_row_refusal_gate{};
 
 // Which of the two limits said no, and what the heap looked like then, so a
@@ -316,6 +317,7 @@ static LogGate s_row_refusal_gate{};
 static void logRowRefusal() {
   if (!logGateDue(&s_row_refusal_gate, lv_tick_get(), LV_ROW_REFUSAL_LOG_MS)) return;
   const LvMemStats m = lvMemStats();
+  // The first of the two tests in lvMemInternalRoom() (lvgl_mem.cpp).
   const bool over_budget = m.int_used + LV_ROW_RESERVE_BYTES > LVGL_MEM_INTERNAL_BUDGET;
   logSDf("LVMEM: row refused (%s), heap=%u largest=%u int=%u ps=%u, %u more since last line",
          over_budget ? "budget" : "reserve",

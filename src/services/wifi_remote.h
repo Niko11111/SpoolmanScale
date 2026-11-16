@@ -19,7 +19,8 @@ enum WifiRemoteTry  : uint8_t { WRT_NONE, WRT_WAITING, WRT_TRYING, WRT_UP, WRT_F
 // False while one is under way already.
 bool wifiRemoteScanRequest();
 WifiRemoteScan wifiRemoteScanState();
-// Strongest first, each SSID once. Valid while the state reads WRS_DONE.
+// Strongest first, each SSID once. Valid while the state reads WRS_DONE;
+// nullptr with *n = 0 before the first scan had room for its result.
 const WifiScanEntry* wifiRemoteScanResults(int* n);
 
 // False while a try is under way, or for a name or password that does not
