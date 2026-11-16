@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "app/app_state.h"
+#include "hardware/psram_new.h"
 #include "hardware/sd_logger.h"
 #include "services/app_settings.h"
 #include "services/wifi_known.h"
@@ -18,7 +19,10 @@
 
 static WifiRemoteScan s_scan       = WRS_NONE;
 static uint32_t       s_scan_start = 0;
-static WifiScanEntry  s_nets[WIFI_REMOTE_SCAN_MAX];
+// The browser's scan result, in PSRAM from the first scan on: 0.9 kB that
+// only the WiFi page ever reads.
+struct WifiRemoteNets { WifiScanEntry e[WIFI_REMOTE_SCAN_MAX]; };
+static WifiRemoteNets* s_nets = nullptr;
 static int            s_net_n      = 0;
 
 static WifiRemoteTry s_try        = WRT_NONE;
@@ -38,8 +42,8 @@ bool wifiRemoteScanRequest() {
 WifiRemoteScan wifiRemoteScanState() { return s_scan; }
 
 const WifiScanEntry* wifiRemoteScanResults(int* n) {
-  *n = s_scan == WRS_DONE ? s_net_n : 0;
-  return s_nets;
+  *n = s_scan == WRS_DONE && s_nets ? s_net_n : 0;
+  return s_nets ? s_nets->e : nullptr;
 }
 
 bool wifiRemoteTryRequest(const char* ssid, const char* typed_pass) {
@@ -78,11 +82,13 @@ static void startScan(uint32_t now) {
 static void pollScan(uint32_t now) {
   const int n = wifiManagerScanPoll();
   if (n == -1 && now - s_scan_start < WR_SCAN_TIMEOUT_MS) return;
-  if (n > 0) {
-    s_net_n = wifiManagerReadSorted(n, s_nets, WIFI_REMOTE_SCAN_MAX);
+  if (n > 0 && !s_nets) s_nets = psramNew<WifiRemoteNets>();
+  if (n > 0 && s_nets) {
+    s_net_n = wifiManagerReadSorted(n, s_nets->e, WIFI_REMOTE_SCAN_MAX);
     s_scan = WRS_DONE;
     return;
   }
+  if (n > 0) logSD("WiFi: no memory for the browser scan result");
   wifiManagerClearScan();
   s_net_n = 0;
   // None in range is an answer as well; a scan that failed or hung is not.

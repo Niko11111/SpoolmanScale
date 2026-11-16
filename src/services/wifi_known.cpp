@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "app/app_state.h"
+#include "hardware/psram_new.h"
 #include "hardware/sd_logger.h"
 #include "services/prefs_store.h"
 #include "services/wifi_manager.h"
@@ -17,7 +18,11 @@
 // reports the old link as up.
 #define WK_VERIFY_EVERY_MS 1000UL
 
-static WifiKnownList s_list = {};
+// In PSRAM from wifiKnownBoot() on, before the web server can ask for it.
+// Read on every loop pass while connected, 0.5 kB that internal RAM need not
+// hold; nullptr only when neither heap had room, and then no network is known.
+static WifiKnownList* s_list = nullptr;
+static const WifiKnownList kNoneKnown = {};
 static char s_pref_ssid[WIFI_KNOWN_SSID_BYTES] = "";
 static char s_pref_pass[WIFI_KNOWN_PASS_BYTES] = "";
 static uint32_t s_pref_gen = 0;
@@ -34,7 +39,7 @@ static void copyStr(char* out, size_t n, const char* in) {
 }
 
 static void loadList() {
-  s_list.n = 0;
+  s_list->n = 0;
   const int n = prefsGetInt(WK_KEY_COUNT, 0);
   for (int i = 0; i < n && i < WIFI_KNOWN_MAX; i++) {
     char ks[WK_KEY_BYTES], kp[WK_KEY_BYTES];
@@ -42,7 +47,7 @@ static void loadList() {
     keyOf(kp, 'p', i);
     const String ssid = prefsGetString(ks, "");
     if (ssid.length() == 0 || ssid.length() >= WIFI_KNOWN_SSID_BYTES) continue;
-    WifiKnownEntry& e = s_list.e[s_list.n++];
+    WifiKnownEntry& e = s_list->e[s_list->n++];
     copyStr(e.ssid, sizeof(e.ssid), ssid.c_str());
     copyStr(e.pass, sizeof(e.pass), prefsGetString(kp, "").c_str());
   }
@@ -53,22 +58,27 @@ static void saveList() {
     char ks[WK_KEY_BYTES], kp[WK_KEY_BYTES];
     keyOf(ks, 's', i);
     keyOf(kp, 'p', i);
-    if (i < s_list.n) {
-      prefsPutString(ks, s_list.e[i].ssid);
-      prefsPutString(kp, s_list.e[i].pass);
+    if (i < s_list->n) {
+      prefsPutString(ks, s_list->e[i].ssid);
+      prefsPutString(kp, s_list->e[i].pass);
     } else if (prefsHasKey(ks)) {
       prefsRemoveKey(ks);
       prefsRemoveKey(kp);
     }
   }
-  prefsPutInt(WK_KEY_COUNT, s_list.n);
+  prefsPutInt(WK_KEY_COUNT, s_list->n);
 }
 
 void wifiKnownBoot() {
   copyStr(s_pref_ssid, sizeof(s_pref_ssid), cfg_wifi_ssid);
   copyStr(s_pref_pass, sizeof(s_pref_pass), cfg_wifi_password);
+  s_list = psramNew<WifiKnownList>();
+  if (!s_list) {
+    logSD("WiFi: no memory for the known networks, only the stored one is used");
+    return;
+  }
   loadList();
-  logSDf("WiFi: %d known network(s), preferred %s", s_list.n, s_pref_ssid[0] ? s_pref_ssid : "-");
+  logSDf("WiFi: %d known network(s), preferred %s", s_list->n, s_pref_ssid[0] ? s_pref_ssid : "-");
 }
 
 void wifiKnownSetPreferred(const char* ssid, const char* pass) {
@@ -83,9 +93,9 @@ const char* wifiPreferredPass() { return s_pref_pass; }
 uint32_t wifiPreferredGeneration() { return s_pref_gen; }
 
 void wifiKnownNoteConnected() {
-  if (!cfg_wifi_ssid[0] || strcmp(s_forgotten, cfg_wifi_ssid) == 0) return;
-  if (s_list.n > 0 && strcmp(s_list.e[0].ssid, cfg_wifi_ssid) == 0 &&
-      strcmp(s_list.e[0].pass, cfg_wifi_password) == 0) {
+  if (!s_list || !cfg_wifi_ssid[0] || strcmp(s_forgotten, cfg_wifi_ssid) == 0) return;
+  if (s_list->n > 0 && strcmp(s_list->e[0].ssid, cfg_wifi_ssid) == 0 &&
+      strcmp(s_list->e[0].pass, cfg_wifi_password) == 0) {
     return;
   }
   // Only once the station is on that network: a begin() to a new one with a
@@ -97,17 +107,17 @@ void wifiKnownNoteConnected() {
   char on[WIFI_KNOWN_SSID_BYTES];
   wifiManagerCurrentSsid(on, sizeof(on));
   if (strcmp(on, cfg_wifi_ssid) != 0) return;
-  if (!wifiKnownRemember(s_list, cfg_wifi_ssid, cfg_wifi_password)) return;
+  if (!wifiKnownRemember(*s_list, cfg_wifi_ssid, cfg_wifi_password)) return;
   saveList();
-  logSDf("WiFi: %s remembered, %d known network(s)", cfg_wifi_ssid, s_list.n);
+  logSDf("WiFi: %s remembered, %d known network(s)", cfg_wifi_ssid, s_list->n);
 }
 
-const WifiKnownList& wifiKnownList() { return s_list; }
+const WifiKnownList& wifiKnownList() { return s_list ? *s_list : kNoneKnown; }
 
 bool wifiKnownForgetSsid(const char* ssid) {
-  if (!ssid || !wifiKnownForget(s_list, ssid)) return false;
+  if (!s_list || !ssid || !wifiKnownForget(*s_list, ssid)) return false;
   copyStr(s_forgotten, sizeof(s_forgotten), ssid);
   saveList();
-  logSDf("WiFi: %s forgotten, %d known network(s)", ssid, s_list.n);
+  logSDf("WiFi: %s forgotten, %d known network(s)", ssid, s_list->n);
   return true;
 }

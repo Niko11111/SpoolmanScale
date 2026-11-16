@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "app/app_state.h"
+#include "hardware/psram_new.h"
 #include "hardware/sd_logger.h"
 #include "services/wifi_known.h"
 #include "services/wifi_manager.h"
@@ -35,8 +36,14 @@ static uint32_t s_return_gap     = WIFI_RETURN_FIRST_MS;
 static bool     s_return_pending = false;   // switched back, not up there yet
 static uint32_t s_pref_gen       = 0;
 
-static WifiSeen s_seen[FB_SEEN_MAX];
-static char     s_seen_names[FB_SEEN_MAX][WIFI_KNOWN_SSID_BYTES];
+// What an outage scan found, read only to pick the next network. In PSRAM
+// from the first outage on: 1.3 kB that internal RAM need not hold for a
+// moment that may never come.
+struct FbSeen {
+  WifiSeen e[FB_SEEN_MAX];
+  char     names[FB_SEEN_MAX][WIFI_KNOWN_SSID_BYTES];
+};
+static FbSeen* s_seen = nullptr;
 
 bool wifiFallbackBusy() { return s_state != FB_IDLE; }
 
@@ -69,13 +76,18 @@ static void returnFailed(const char* why) {
 }
 
 static int readSeen(int n) {
+  if (!s_seen) s_seen = psramNew<FbSeen>();
+  if (!s_seen) {
+    logSD("WiFi: no memory for the scan result, staying on the network in use");
+    return 0;
+  }
   int m = 0;
   for (int i = 0; i < n && m < FB_SEEN_MAX; i++) {
     const String ssid = wifiManagerScannedSSID(i);
     if (ssid.length() == 0 || ssid.length() >= WIFI_KNOWN_SSID_BYTES) continue;
-    memcpy(s_seen_names[m], ssid.c_str(), ssid.length() + 1);
-    s_seen[m].ssid = s_seen_names[m];
-    s_seen[m].rssi = wifiManagerScannedRSSI(i);
+    memcpy(s_seen->names[m], ssid.c_str(), ssid.length() + 1);
+    s_seen->e[m].ssid = s_seen->names[m];
+    s_seen->e[m].rssi = wifiManagerScannedRSSI(i);
     m++;
   }
   return m;
@@ -85,7 +97,7 @@ static void evaluateOutageScan(int n, uint32_t now) {
   const int m = n > 0 ? readSeen(n) : 0;
   wifiManagerClearScan();
   const WifiKnownList& l = wifiKnownList();
-  const int pick = wifiKnownPick(l, s_seen, m, wifiPreferredSsid(), cfg_wifi_ssid);
+  const int pick = m > 0 ? wifiKnownPick(l, s_seen->e, m, wifiPreferredSsid(), cfg_wifi_ssid) : -1;
   const unsigned long gone_s = (now - s_outage_since) / 1000UL;
   if (pick < 0) {
     if (!s_said_none) {
