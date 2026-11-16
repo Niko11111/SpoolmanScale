@@ -88,12 +88,12 @@ static void pollScan(uint32_t now) {
     s_scan = WRS_DONE;
     return;
   }
-  if (n > 0) logSD("WiFi: no memory for the browser scan result");
   wifiManagerClearScan();
   s_net_n = 0;
   // None in range is an answer as well; a scan that failed or hung is not.
   s_scan = n == 0 ? WRS_DONE : WRS_FAILED;
-  if (n != 0) logSD("WiFi: browser scan failed or did not finish");
+  if (n > 0) logSD("WiFi: no memory for the browser scan result");
+  else if (n != 0) logSD("WiFi: browser scan failed or did not finish");
 }
 
 static void startTry(uint32_t now) {

@@ -31,6 +31,7 @@ static uint32_t s_outage_since   = 0;
 static bool     s_scanned        = false;   // in this outage
 static uint32_t s_last_scan      = 0;
 static bool     s_said_none      = false;   // in this outage
+static bool     s_said_no_mem    = false;   // in this outage
 static uint32_t s_last_switch    = 0;
 static uint32_t s_return_gap     = WIFI_RETURN_FIRST_MS;
 static bool     s_return_pending = false;   // switched back, not up there yet
@@ -76,11 +77,7 @@ static void returnFailed(const char* why) {
 }
 
 static int readSeen(int n) {
-  if (!s_seen) s_seen = psramNew<FbSeen>();
-  if (!s_seen) {
-    logSD("WiFi: no memory for the scan result, staying on the network in use");
-    return 0;
-  }
+  if (!s_seen) return 0;   // outageTick() makes it before any scan
   int m = 0;
   for (int i = 0; i < n && m < FB_SEEN_MAX; i++) {
     const String ssid = wifiManagerScannedSSID(i);
@@ -156,8 +153,17 @@ static bool outageTick(uint32_t now) {
     s_outage_since = now;
     s_scanned = false;
     s_said_none = false;
+    s_said_no_mem = false;
   }
   if (!hasAlternative()) return false;
+  if (!s_seen) s_seen = psramNew<FbSeen>();
+  if (!s_seen) {
+    // No scan without a place for its result: the radio is not reset for
+    // nothing every rescan, and the network in use keeps being tried.
+    if (!s_said_no_mem) logSD("WiFi: no memory for a network scan, still trying the network in use");
+    s_said_no_mem = true;
+    return false;
+  }
   const uint32_t give_up = s_return_pending ? WIFI_RETURN_GIVE_UP_MS : WIFI_FALLBACK_AFTER_MS;
   if (!wifiFallbackScanDue(now - s_outage_since, give_up, s_scanned, now - s_last_scan)) return false;
   s_scanned = true;
