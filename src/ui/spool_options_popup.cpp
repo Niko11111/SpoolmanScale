@@ -11,6 +11,7 @@
 #include "app/app_state.h"
 #include "app/backend_switch.h"
 #include "app_config.h"
+#include "hardware/psram_new.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/prefs_store.h"
@@ -55,17 +56,23 @@ static bool        s_then_density = false;
 // Opened on the list itself (showSpoolPickList()): it ends where the Options
 // page would come next.
 static bool        s_list_only = false;
-static SpoolChoice s_recent[SPOOL_RECENT_MAX];
+// The three lists a page offers, 1.1 kB in PSRAM from the first opening on:
+// internal RAM need not hold them while no popup stands.
+// recent: the last choices. mine: the user's own, read again for every list,
+// the web page may have changed them. server: the backend's, the card's
+// maker first, kept for SO_SERVER_KEEP_MS per backend: asking blocks the
+// loop, and an unreachable server would freeze the screen for the request's
+// timeout on every opening.
+struct SoLists {
+  SpoolChoice recent[SPOOL_RECENT_MAX];
+  SpoolChoice mine[SPOOL_MINE_MAX];
+  SpoolChoice server[SPOOL_SERVER_MAX];
+};
+static SoLists*    s_lists = nullptr;
 static bool        s_recent_loaded = false;
 static bool        s_recent_dirty  = false;
-// The user's own, read again for every list: the web page may have changed them.
-static SpoolChoice s_mine[SPOOL_MINE_MAX];
 static int         s_mine_n = 0;
-// The backend's, the card's maker first. Kept for SO_SERVER_KEEP_MS per
-// backend: asking blocks the loop, and an unreachable server would freeze
-// the screen for the request's timeout on every opening.
 #define SO_SERVER_KEEP_MS  (5UL * 60UL * 1000UL)
-static SpoolChoice s_server[SPOOL_SERVER_MAX];
 static int         s_server_n = 0;
 static bool        s_server_asked = false;
 static uint32_t    s_server_ms = 0;
@@ -98,14 +105,14 @@ static void loadRecent() {
   if (s_recent_loaded) return;
   s_recent_loaded = true;
   for (int i = 0; i < SPOOL_RECENT_MAX; i++) {
-    if (!spoolChoiceDecode(prefsGetString(RECENT_KEYS[i]).c_str(), &s_recent[i])) spoolChoiceClear(&s_recent[i]);
+    if (!spoolChoiceDecode(prefsGetString(RECENT_KEYS[i]).c_str(), &s_lists->recent[i])) spoolChoiceClear(&s_lists->recent[i]);
   }
 }
 
 static void saveRecent() {
   char line[SPOOL_CHOICE_TEXT_MAX];
   for (int i = 0; i < SPOOL_RECENT_MAX; i++) {
-    if (spoolChoiceActive(s_recent[i]) && spoolChoiceEncode(s_recent[i], line, sizeof(line)))
+    if (spoolChoiceActive(s_lists->recent[i]) && spoolChoiceEncode(s_lists->recent[i], line, sizeof(line)))
       prefsPutString(RECENT_KEYS[i], line);
     else
       prefsRemoveKey(RECENT_KEYS[i]);
@@ -122,7 +129,7 @@ static void choose(const SpoolChoice& chosen) {
   // offered after a backend switch, so it keeps the weight and name only.
   SpoolChoice recent = c;
   recent.catalog_id = 0;
-  spoolRecentPush(s_recent, recent);
+  spoolRecentPush(s_lists->recent, recent);
   s_recent_dirty = true;
   logSDf("SpoolOptions: empty spool %u g (%s)", (unsigned)c.weight_g, c.name[0] ? c.name : "typed");
   s_want = afterList();
@@ -230,11 +237,11 @@ static void onListTap(int tap) {
     return;
   }
   if (tap >= SPICK_TAP_RECENT(0) && tap < SPICK_TAP_RECENT(SPOOL_RECENT_MAX))
-    choose(s_recent[tap - SPICK_TAP_RECENT(0)]);
+    choose(s_lists->recent[tap - SPICK_TAP_RECENT(0)]);
   else if (tap >= SPICK_TAP_MINE(0) && tap < SPICK_TAP_MINE(s_mine_n))
-    choose(s_mine[tap - SPICK_TAP_MINE(0)]);
+    choose(s_lists->mine[tap - SPICK_TAP_MINE(0)]);
   else if (tap >= SPICK_TAP_SERVER(0) && tap < SPICK_TAP_SERVER(s_server_n))
-    choose(s_server[tap - SPICK_TAP_SERVER(0)]);
+    choose(s_lists->server[tap - SPICK_TAP_SERVER(0)]);
 }
 
 static void onMakersTap(int tap) {
@@ -337,10 +344,18 @@ static void askServer() {
   snprintf(s_server_maker, sizeof(s_server_maker), "%s", s_spec.maker);
   s_server_n = 0;
   if (!wifi_ok || !sm_reachable) return;
-  static SpoolChoice all[SPOOL_SERVER_READ_MAX];
+  // Everything the server answered, 2.1 kB, for the length of this call.
+  SpoolChoice* all = static_cast<SpoolChoice*>(psramMalloc(SPOOL_SERVER_READ_MAX * sizeof(SpoolChoice)));
+  if (!all) {
+    // Not kept as an answer: the next opening asks again.
+    s_server_asked = false;
+    logSD("SpoolOptions: no memory for the server's empty spools, section left out");
+    return;
+  }
   int n = 0;
   const int code = backendServerSpools(all, SPOOL_SERVER_READ_MAX, &n);
-  if (code == 200) s_server_n = spoolServerPick(all, n, s_spec.maker, s_server, SPOOL_SERVER_MAX);
+  if (code == 200) s_server_n = spoolServerPick(all, n, s_spec.maker, s_lists->server, SPOOL_SERVER_MAX);
+  free(all);
   logSDf("SpoolOptions: %d empty spool(s) from the server (HTTP %d, %d read)", s_server_n, code, n);
 }
 
@@ -361,10 +376,10 @@ static void buildPage(SoPage page) {
   if (page == SO_OPTIONS) { buildOptions(box); return; }
   if (page == SO_MAKERS)  { spoolPickBuildMakers(box, s_letter, spoolCatalogFindMaker(s_spec.maker), onPickTap); return; }
   if (page == SO_MAKER)   { spoolPickBuildMaker(box, s_maker, s_spec.choice, onPickTap); return; }
-  s_mine_n = spoolMineLoad(s_mine);
+  s_mine_n = spoolMineLoad(s_lists->mine);
   askServer();
-  const SpoolPickList list = { s_spec.choice, s_recent, s_spec.auto_tare_g, s_spec.auto_from,
-                               s_spec.auto_name, s_mine, s_mine_n, s_server, s_server_n };
+  const SpoolPickList list = { s_spec.choice, s_lists->recent, s_spec.auto_tare_g, s_spec.auto_from,
+                               s_spec.auto_name, s_lists->mine, s_mine_n, s_lists->server, s_server_n };
   spoolPickBuildList(box, list, onPickTap);
 }
 
@@ -391,9 +406,18 @@ void closeSpoolOptions() {
 
 void spoolOptionsTick() {
   pricePadTick();
-  if (s_recent_dirty) { s_recent_dirty = false; saveRecent(); }
+  if (s_recent_dirty && s_lists) { s_recent_dirty = false; saveRecent(); }
   if (s_want == s_page && !s_rebuild) return;
   s_rebuild = false;
+  if (!s_lists) s_lists = psramNew<SoLists>();
+  if (!s_lists) {
+    // Only before the first page, so nothing was hidden yet: closed as if
+    // Back had been tapped at once, and the caller keeps its own choice.
+    logSD("SpoolOptions: no memory for the spool lists, page not opened");
+    s_want = SO_NONE;
+    finish();
+    return;
+  }
   const SoPage was = s_page;
   const SoPage want = s_want;
   loadRecent();
