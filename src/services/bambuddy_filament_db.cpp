@@ -281,3 +281,22 @@ void bambuddyFdbCompleteInput(TagCreateInput* in) {
   logSDf("Filament DB: %s \"%s\" %s in the Bambu catalog%s%s", in->product, in->db_color_name,
          hit ? "found" : "not found", hit ? ", article " : "", hit ? in->article : "");
 }
+
+int bambuddyCatalogSpools(const char* base_url, const char* api_key, SpoolChoice* out, int max, int* n) {
+  *n = 0;
+  JsonDocument doc(&s_psram);
+  const int code = getList(base_url, api_key, BB_PATH_CORES, doc, { "id", "name", "weight" });
+  if (code != 200) return code;
+  for (JsonObjectConst c : doc.as<JsonArrayConst>()) {
+    if (*n >= max) break;
+    const int weight = c["weight"] | 0;
+    if (weight <= 0 || weight > UINT16_MAX) continue;
+    spoolChoiceClear(&out[*n]);
+    out[*n].weight_g   = (uint16_t)weight;
+    out[*n].source     = SCS_SERVER;
+    out[*n].catalog_id = c["id"] | 0;
+    snprintf(out[*n].name, sizeof(out[*n].name), "%s", c["name"] | "");
+    (*n)++;
+  }
+  return code;
+}

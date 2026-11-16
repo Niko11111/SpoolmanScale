@@ -12,6 +12,7 @@
 #include "services/spool_start.h"
 #include "lang.h"
 #include "ui/price_pad.h"
+#include "ui/spool_options_popup.h"
 #include "ui/theme.h"
 
 // ============================================================
@@ -26,10 +27,12 @@
 #define COPY_CARD_LINE_H   26
 #define COPY_CARD_SWATCH   18
 #define COPY_CARD_GAP      8
-// The answer row: create and cancel on either side, the price between them,
+// The answer row: create and cancel on either side, Options between them,
 // as on the card for a new spool.
 #define COPY_PRICE_W       80
 #define COPY_ANSWER_W      ((UI_POPUP_W - 2 * UI_CARD_ROW_X - 2 * COPY_CARD_GAP - COPY_PRICE_W) / 2)
+#define COPY_OPT_LINE1_Y   9
+#define COPY_OPT_LINE2_Y   29
 
 lv_obj_t *scr_copy_confirm = nullptr;  // confirm popup
 
@@ -39,32 +42,59 @@ static int   copy_template_spool_id    = 0;
 static float copy_template_initial     = 0;
 static float copy_template_spool_w     = 0;
 static char  copy_template_name[64]    = "";
+// The template's maker, shown first among the makers under Options.
+static char  s_copy_maker[SPOOL_CHOICE_NAME_MAX] = "";
 // What the new spool cost, 0 for none: it is bought now, so the template's says
 // nothing about it.
 static float     s_copy_price     = 0.0f;
-static lv_obj_t *s_lbl_copy_price = nullptr;
+// An empty spool picked under Options, which the new spool is weighed
+// against instead of the template's.
+static SpoolChoice s_copy_choice;
+static lv_obj_t *s_lbl_copy_opt   = nullptr;
+static lv_obj_t *s_lbl_copy_value = nullptr;
+static lv_obj_t *s_lbl_copy_weight = nullptr;
 
 void closeCopyConfirmPopup() {
+  closeSpoolOptions();
   closePricePad();
-  s_lbl_copy_price = nullptr;
+  s_lbl_copy_opt = nullptr;
+  s_lbl_copy_value = nullptr;
+  s_lbl_copy_weight = nullptr;
   releaseScreen(&scr_copy_confirm);
 }
 
-// The price button shows what was typed in, or that there is none yet.
-static void refreshCopyPrice() {
-  if (!s_lbl_copy_price) return;
-  if (s_copy_price <= 0.0f) { lv_label_set_text(s_lbl_copy_price, T(STR_TAGNEW_PRICE_BTN)); return; }
-  char buf[16];
-  snprintf(buf, sizeof(buf), "%.2f", s_copy_price);
-  lv_label_set_text(s_lbl_copy_price, buf);
+// The empty spool the new spool is weighed against: the one picked under
+// Options, else the template's.
+static float copySpoolWeight() {
+  return spoolChoiceActive(s_copy_choice) ? (float)s_copy_choice.weight_g : copy_template_spool_w;
 }
 
-static void onCopyPrice(float price) {
-  s_copy_price = price;
-  refreshCopyPrice();
+// Options says what was set under it on a second line: the empty spool
+// picked, else the price; alone in the middle while nothing was.
+static void refreshCopyOptions() {
+  if (!s_lbl_copy_opt || !s_lbl_copy_value) return;
+  char buf[16] = "";
+  uint32_t col = UI_COL_INK_2;
+  if (spoolChoiceActive(s_copy_choice)) {
+    snprintf(buf, sizeof(buf), "%u g", (unsigned)s_copy_choice.weight_g);
+    col = UI_COL_ACCENT;
+  } else if (s_copy_price > 0.0f) {
+    snprintf(buf, sizeof(buf), "%.2f", s_copy_price);
+  }
+  lv_label_set_text(s_lbl_copy_value, buf);
+  lv_obj_set_style_text_color(s_lbl_copy_value, lv_color_hex(col), 0);
+  if (buf[0]) lv_obj_align(s_lbl_copy_opt, LV_ALIGN_TOP_MID, 0, COPY_OPT_LINE1_Y);
+  else        lv_obj_center(s_lbl_copy_opt);
 }
 
-static void buildCopyPriceButton(lv_obj_t *box) {
+static void refreshCopyWeight();
+
+static void onCopyOptionsClosed(bool) {
+  refreshCopyOptions();
+  refreshCopyWeight();
+}
+
+static void buildCopyOptionsButton(lv_obj_t *box) {
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, COPY_PRICE_W, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn, UI_CARD_ROW_X + COPY_ANSWER_W + COPY_CARD_GAP, UI_CARD_ROW_Y);
@@ -74,15 +104,48 @@ static void buildCopyPriceButton(lv_obj_t *box) {
   lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
+  lv_obj_set_style_pad_all(btn, 0, 0);
   lv_obj_add_event_cb(btn, [](lv_event_t *) {
-    logSD("BTN: CopyConfirm -> Price");
-    showPricePad(s_copy_price, onCopyPrice);
+    if (spoolOptionsOpen()) return;
+    logSD("BTN: CopyConfirm -> Options");
+    SpoolOptionsSpec spec = {};
+    spec.card        = scr_copy_confirm;
+    spec.price       = &s_copy_price;
+    spec.choice      = &s_copy_choice;
+    spec.auto_tare_g = (int)lroundf(copy_template_spool_w);
+    spec.auto_from   = STR_SPICK_FROM_TEMPLATE;
+    spec.maker       = s_copy_maker;
+    spec.on_close    = onCopyOptionsClosed;
+    showSpoolOptions(spec);
   }, LV_EVENT_CLICKED, NULL);
-  s_lbl_copy_price = lv_label_create(btn);
-  lv_obj_set_style_text_color(s_lbl_copy_price, lv_color_hex(UI_COL_INK_2), 0);
-  lv_obj_set_style_text_font(s_lbl_copy_price, UI_FONT_SMALL, 0);
-  lv_obj_center(s_lbl_copy_price);
-  refreshCopyPrice();
+  s_lbl_copy_opt = lv_label_create(btn);
+  lv_label_set_text(s_lbl_copy_opt, T(STR_WP_OPTIONS));
+  lv_obj_set_style_text_color(s_lbl_copy_opt, lv_color_hex(UI_COL_INK_2), 0);
+  lv_obj_set_style_text_font(s_lbl_copy_opt, UI_FONT_SMALL, 0);
+  s_lbl_copy_value = lv_label_create(btn);
+  lv_obj_set_style_text_font(s_lbl_copy_value, UI_FONT_CAPTION, 0);
+  lv_obj_align(s_lbl_copy_value, LV_ALIGN_TOP_MID, 0, COPY_OPT_LINE2_Y);
+  refreshCopyOptions();
+}
+
+// Line 3: what the new spool starts with, as doCopySpoolCreate() will file
+// it (spool_start.h), and the empty spool it is weighed against.
+static void refreshCopyWeight() {
+  if (!s_lbl_copy_weight) return;
+  const float spool_w = copySpoolWeight();
+  const SpoolStart start = spoolStartValues(scale_weight_g, (int)lroundf(spool_w),
+                                            spool_w > 0.0f ? TARE_Q_KNOWN : TARE_Q_NONE,
+                                            (int)lroundf(copy_template_initial));
+  char line3[80];
+  if (start.verdict == START_PARTIAL) {
+    snprintf(line3, sizeof(line3), T(STR_COPY_CARD_WEIGHT), start.remaining_g, spool_w);
+  } else {
+    char weight[64];
+    spoolStartText(start, false, weight, sizeof(weight));
+    if (start.verdict == START_FULL) snprintf(line3, sizeof(line3), T(STR_COPY_CARD_TARE), weight, spool_w);
+    else                             snprintf(line3, sizeof(line3), "%s", weight);
+  }
+  lv_label_set_text(s_lbl_copy_weight, line3);
 }
 
 // The copy confirmation, on the house card for a question (400 x 260, the
@@ -95,6 +158,8 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
                           const CopyLook* look) {
   closeCopyConfirmPopup();
   s_copy_price = 0.0f;
+  spoolChoiceClear(&s_copy_choice);
+  snprintf(s_copy_maker, sizeof(s_copy_maker), "%s", look ? look->vendor : "");
   copy_template_spool_id    = template_spool_id;
   copy_template_filament_id = template_filament_id;
   copy_template_initial      = template_initial;
@@ -186,27 +251,15 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
   lv_obj_set_width(lbl2, UI_POPUP_W - UI_CARD_TEXT_PAD);
   lv_obj_align(lbl2, LV_ALIGN_TOP_MID, 0, UI_CARD_TEXT_Y - 4 + COPY_CARD_LINE_H + 4);
 
-  // Line 3: what the new spool starts with, as doCopySpoolCreate() will file
-  // it (spool_start.h), and the template's empty spool it is weighed against.
-  const SpoolStart start = spoolStartValues(scale_weight_g, (int)lroundf(template_spool_w),
-                                            template_spool_w > 0.0f ? TARE_Q_KNOWN : TARE_Q_NONE,
-                                            (int)lroundf(template_initial));
-  char line3[80];
-  if (start.verdict == START_PARTIAL) {
-    snprintf(line3, sizeof(line3), T(STR_COPY_CARD_WEIGHT), start.remaining_g, template_spool_w);
-  } else {
-    char weight[64];
-    spoolStartText(start, false, weight, sizeof(weight));
-    if (start.verdict == START_FULL) snprintf(line3, sizeof(line3), T(STR_COPY_CARD_TARE), weight, template_spool_w);
-    else                             snprintf(line3, sizeof(line3), "%s", weight);
-  }
+  // Line 3: what the new spool starts with (refreshCopyWeight()).
   lv_obj_t *lbl3 = lv_label_create(box);
-  lv_label_set_text(lbl3, line3);
+  s_lbl_copy_weight = lbl3;
   lv_obj_set_style_text_color(lbl3, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(lbl3, UI_FONT_BODY, 0);
   lv_obj_set_style_text_align(lbl3, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_width(lbl3, UI_POPUP_W - UI_CARD_TEXT_PAD);
   lv_obj_align(lbl3, LV_ALIGN_TOP_MID, 0, UI_CARD_TEXT_Y - 4 + 2 * COPY_CARD_LINE_H + 8);
+  refreshCopyWeight();
 
   // The answers: create on the left in green, as every confirming answer is.
   lv_obj_t *btn_ok = lv_btn_create(box);
@@ -220,7 +273,7 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
     // The handler closes the three popups - this button's own among them -
     // and then creates the spool from the loop.
     copyCreateRequest(copy_template_spool_id, copy_template_filament_id,
-                      copy_template_initial, copy_template_spool_w, s_copy_price);
+                      copy_template_initial, copySpoolWeight(), s_copy_price);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
   lv_label_set_text(lbl_ok, T(STR_COPY_CARD_CREATE));
@@ -228,7 +281,7 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
   lv_obj_set_style_text_font(lbl_ok, UI_FONT_TITLE, 0);
   lv_obj_center(lbl_ok);
 
-  buildCopyPriceButton(box);
+  buildCopyOptionsButton(box);
 
   lv_obj_t *btn_no = lv_btn_create(box);
   lv_obj_set_size(btn_no, COPY_ANSWER_W, UI_POPUP_BTN_H);

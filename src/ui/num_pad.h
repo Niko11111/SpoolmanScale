@@ -40,12 +40,21 @@ struct NumPadSpec {
   // its own button, the pad was gone a frame before that screen existed, and
   // the home screen flashed in between.
   bool replaced_from_loop;
+  // A step under a card's Options rather than a screen of its own: the pad
+  // stands as the large popup (UI_POPUP_LARGE_W x _H) over what is beneath,
+  // with its title on top and Back for a way out. Back calls on_leave.
+  bool popup;
+  // After every key, with what is typed so far; null for none. For a hint
+  // that follows the value (numPadSetHintGood()).
+  void (*on_input)(const char *text);
 };
 
 void showNumPad(const NumPadSpec &spec);
 bool numPadOpen();
 // Replaces the hint, in amber when it refuses what was typed.
 void numPadSetHint(const char *text, bool refusal);
+// Replaces the hint in green: what the value typed so far comes to.
+void numPadSetHintGood(const char *text);
 
 // For navigation: hidden with the other overlays, deleted with them.
 void numPadHide();

@@ -581,3 +581,30 @@ int filamanCreateTagFilament(const char* base_url, const char* api_key,
   filamentBody(in, vendor_id, set, body);
   return postFilament(base_url, api_key, in, body, out_filament_id);
 }
+
+int filamanManufacturerSpools(const char* base_url, const char* api_key,
+                              SpoolChoice* out, int max, int* n) {
+  *n = 0;
+  JsonDocument filter;
+  JsonObject f = filter["items"].to<JsonArray>().add<JsonObject>();
+  f["name"] = true;
+  f["empty_spool_weight_g"] = true;
+  for (int page = 1; page <= FM_FIL_MAX_PAGES && *n < max; page++) {
+    JsonDocument doc(&s_psram);
+    const String path = String("/api/v1/manufacturers?page_size=") + FM_FIL_PAGE_SIZE + "&page=" + page;
+    const int got = readPage(base_url, api_key, path, doc, filter);
+    if (got < 0) { logSDf("FilaMan: manufacturer spools -> HTTP %d", s_failed_code); return s_failed_code; }
+    for (JsonObjectConst m : doc["items"].as<JsonArrayConst>()) {
+      if (*n >= max) break;
+      const int weight = (int)lroundf(m["empty_spool_weight_g"] | 0.0f);
+      if (weight <= 0 || weight > UINT16_MAX) continue;
+      spoolChoiceClear(&out[*n]);
+      out[*n].weight_g = (uint16_t)weight;
+      out[*n].source   = SCS_SERVER;
+      snprintf(out[*n].name, sizeof(out[*n].name), "%s", m["name"] | "");
+      (*n)++;
+    }
+    if (got < FM_FIL_PAGE_SIZE) break;
+  }
+  return 200;
+}

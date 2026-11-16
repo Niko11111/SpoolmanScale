@@ -14,6 +14,7 @@ extern const WebPage PAGE_DRYING;
 extern const WebPage PAGE_BACKEND;
 extern const WebPage PAGE_CONFIG;
 extern const WebPage PAGE_TAGS;
+extern const WebPage PAGE_SPOOLS;
 extern const WebPage PAGE_PRINTER;
 extern const WebPage PAGE_LABEL;
 extern const WebPage PAGE_THEME;
@@ -23,6 +24,7 @@ const WebPage* const WEB_PAGES[] = {
   &PAGE_BACKEND,
   &PAGE_DRYING,
   &PAGE_TAGS,
+  &PAGE_SPOOLS,
   &PAGE_PRINTER,
   &PAGE_LABEL,
   &PAGE_CONFIG,

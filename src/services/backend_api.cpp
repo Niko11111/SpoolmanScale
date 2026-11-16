@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <esp_mac.h>
+#include <math.h>
 #include <string.h>
 
 #include "app/app_state.h"
@@ -766,7 +767,10 @@ int backendCreateSpool(const char* base_url, int template_spool_id, int filament
       // The scale's reading wins over the template for how full the spool is,
       // the template only says how big it is.
       ns.label_weight = tpl["label_weight"] | (int)initial_weight;
-      ns.core_weight  = tpl["core_weight"]  | (int)spool_weight;
+      // The caller's empty spool is the template's (spoolTare()) unless one
+      // was picked under the copy card's Options; either way it is the one
+      // the reading was weighed against.
+      ns.core_weight  = spool_weight > 0.0f ? (int)lroundf(spool_weight) : (tpl["core_weight"] | 0);
       ns.weight_used  = (float)ns.label_weight - remaining_weight;
       if (ns.weight_used < 0.0f) ns.weight_used = 0.0f;
 
@@ -858,9 +862,11 @@ static int bambuddyCreateFromTag(const TagCreateInput& in, const TagFilamentPlan
   ns.rgba            = in.rgba;
   ns.color_name      = plan.name;
   ns.label_weight    = v.label_weight;
-  // BamBuddy subtracts the spool's own core on its side, so the spool gets it.
-  ns.core_weight     = tagCreateTare(in, plan, nullptr, nullptr);
-  ns.core_weight_catalog_id = in.spool_catalog_id;
+  // BamBuddy subtracts the spool's own core on its side, so the spool gets it:
+  // the one picked under Options, else what the chain found.
+  const bool chosen = v.chosen_tare_g > 0;
+  ns.core_weight     = chosen ? v.chosen_tare_g : tagCreateTare(in, plan, nullptr, nullptr);
+  ns.core_weight_catalog_id = chosen ? v.chosen_catalog_id : in.spool_catalog_id;
   ns.nozzle_temp_min = in.temp_min;
   ns.nozzle_temp_max = in.temp_max;
   ns.extra_colors    = colors;
@@ -974,8 +980,10 @@ static int bambuddyCreateUnderSpoolman(const TagCreateInput& in, const TagFilame
   ns.color_name   = tagCreateSpoolColorName(in);
   ns.label_weight = v.label_weight;
   // BamBuddy subtracts the spool's own core on its side, so the spool gets
-  // what it is weighed against, whichever level it came from.
-  ns.core_weight  = tagCreateTare(in, plan, nullptr, nullptr);
+  // what it is weighed against, whichever level it came from, or the one
+  // picked under Options.
+  ns.core_weight  = v.chosen_tare_g > 0 ? v.chosen_tare_g : tagCreateTare(in, plan, nullptr, nullptr);
+  if (v.chosen_tare_g > 0) ns.core_weight_catalog_id = v.chosen_catalog_id;
   if (v.price > 0.0f && v.label_weight > 0) ns.cost_per_kg = v.price * 1000.0f / (float)v.label_weight;
   ns.weight_used  = (float)v.label_weight - v.remaining;
   if (ns.weight_used < 0.0f) ns.weight_used = 0.0f;
@@ -1009,8 +1017,12 @@ int backendCreateFromTag(const TagCreateInput& in, const TagFilamentPlan& plan,
   // copied onto the spool, so a later correction there still reaches it.
   // FilaMan subtracts the spool's own empty weight on its side, so it gets
   // the value whichever level it came from.
+  // An empty spool picked under Options goes to this spool in every case,
+  // never to the filament or the brand: there it would become the default of
+  // every spool of theirs.
   uint8_t tare_from = TARE_NONE;
-  const int tare = tagCreateTare(in, plan, &tare_from, nullptr);
+  int tare = tagCreateTare(in, plan, &tare_from, nullptr);
+  if (v.chosen_tare_g > 0) { tare = v.chosen_tare_g; tare_from = TARE_SPOOL; }
   const bool inherited = tare_from == TARE_FILAMENT || tare_from == TARE_VENDOR;
   const float spool_w = (inherited && !backendIsFilaMan()) ? 0.0f : (float)tare;
   out->spool_sent = true;
@@ -1772,4 +1784,13 @@ int backendLabelPrintRequest(bool filament, int id, char* reason, size_t reason_
   if (backendMode() != BACKEND_FILAMAN) return notSupported(__func__);
   return filamanLabelPrintRequest(backendBaseUrl(), filamanApiKey(), filament, id,
                                   reason, reason_size, timeout_ms);
+}
+
+int backendServerSpools(SpoolChoice* out, int max, int* n) {
+  HttpStallTime stall(__func__);   // the loop stands still for this call
+  *n = 0;
+  if (backendIsFilaMan()) return filamanManufacturerSpools(backendBaseUrl(), filamanApiKey(), out, max, n);
+  if (bambuddyBehindSpoolman()) return spoolmanVendorSpools(bbSpoolmanUrl(), out, max, n);
+  if (backendIsBamBuddy()) return bambuddyCatalogSpools(backendBaseUrl(), bambuddyApiKey(), out, max, n);
+  return spoolmanVendorSpools(backendBaseUrl(), out, max, n);
 }

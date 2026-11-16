@@ -5,6 +5,7 @@
 // A tag not found in a short list is unknown, not absent.
 bool backendLastListPartial();
 
+#include "services/spool_choice.h"
 #include <ArduinoJson.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -300,6 +301,12 @@ struct TagSpoolValues {
   int   label_weight;   // nominal filament weight, g
   float remaining;      // what the spool starts with, g
   float price;          // what it cost, in the backend's currency; 0: not given
+  // The empty spool picked under the card's Options (services/spool_choice.h),
+  // 0 for none. Written to the new spool only, never to its filament or
+  // maker, whatever level the card's own tare came from.
+  int   chosen_tare_g = 0;
+  // BamBuddy's catalog entry for that spool, 0 for none.
+  int   chosen_catalog_id = 0;
 };
 struct TagCreateResult {
   int spool_id;
@@ -310,6 +317,15 @@ struct TagCreateResult {
   // A price was given and did not reach the server; the spool exists.
   bool price_lost;
 };
+// The empty spools the backend keeps for its makers, as choices of source
+// SCS_SERVER: Spoolman's vendors and FilaMan's manufacturers that have an
+// empty spool weight, BamBuddy's spool catalog (with its catalog id), and in
+// BamBuddy's Spoolman mode the vendors of the Spoolman server behind it.
+// Returns the HTTP code, *n how many it wrote. Loop task only.
+int backendServerSpools(SpoolChoice* out, int max, int* n);
+// The simulator's fake reads this to know whether the tree has it.
+#define BACKEND_SERVER_SPOOLS 1
+
 // The values travel as one struct since v0.8.3-beta.17; the simulator's
 // fake reads this to know which signature the tree has.
 #define BACKEND_TAG_SPOOL_VALUES 1

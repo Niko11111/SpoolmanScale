@@ -1,5 +1,6 @@
 #pragma once
 
+#include "services/spool_choice.h"
 #include <stdint.h>
 
 #include "tag_create.h"
@@ -27,3 +28,7 @@ void spoolmanPlanTagFilament(const char* base_url, const TagCreateInput& in,
 // code of the last request, out_filament_id the new filament.
 int spoolmanCreateTagFilament(const char* base_url, const TagCreateInput& in,
                               const TagFilamentPlan& plan, int* out_filament_id);
+
+// The vendors that have an empty spool weight, as choices (SCS_SERVER).
+// Returns the HTTP code, *n how many it wrote.
+int spoolmanVendorSpools(const char* base_url, SpoolChoice* out, int max, int* n);

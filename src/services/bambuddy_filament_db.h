@@ -1,5 +1,6 @@
 #pragma once
 
+#include "services/spool_choice.h"
 #include <stddef.h>
 
 #include "tag_create.h"
@@ -49,3 +50,8 @@ void bambuddyFdbCompleteInput(TagCreateInput* in);
 // its checks.
 void bambuddySplitProduct(const char* product, char* material, size_t material_size,
                           char* line, size_t line_size);
+
+// BamBuddy's spool catalog as choices (SCS_SERVER), each with its catalog id
+// for the new spool's core_weight_catalog_id. Returns the HTTP code, *n how
+// many it wrote.
+int bambuddyCatalogSpools(const char* base_url, const char* api_key, SpoolChoice* out, int max, int* n);
