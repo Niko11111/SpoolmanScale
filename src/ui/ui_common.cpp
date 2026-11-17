@@ -117,41 +117,115 @@ lv_obj_t* addInfoRow(lv_obj_t* parent, int y, const char* label,
   return v;
 }
 
+// The look every makeListBtn() row shares, built once: the palette is chosen
+// at boot and fixed until a restart. A row used to carry about 16 local
+// styles of its own; with 30 rows on a screen that was several kB of the
+// LVGL pool. Positions and widths stay per row, they differ between rows.
+#define LIST_BTN_W            456
+#define LIST_BTN_H            64
+#define LIST_BTN_RADIUS       10
+#define LIST_BTN_HELP_PX      34
+#define LIST_BTN_HELP_HIT_PX  6
+
+static lv_style_t s_lb_frame, s_lb_frame_active, s_lb_pressed;
+static lv_style_t s_lb_icon, s_lb_title, s_lb_sub, s_lb_sub_active, s_lb_arrow;
+static lv_style_t s_lb_help, s_lb_help_pressed, s_lb_help_q;
+static bool       s_lb_ready = false;
+
+static void initListBtnText(lv_style_t* st, const lv_font_t* font, uint32_t colour) {
+  lv_style_init(st);
+  lv_style_set_text_font(st, font);
+  lv_style_set_text_color(st, lv_color_hex(colour));
+}
+
+static void initListBtnHelpStyles() {
+  lv_style_init(&s_lb_help);
+  lv_style_set_bg_opa(&s_lb_help, LV_OPA_TRANSP);
+  lv_style_set_border_color(&s_lb_help, lv_color_hex(UI_COL_ACCENT));
+  lv_style_set_border_width(&s_lb_help, 1);
+  lv_style_set_radius(&s_lb_help, LV_RADIUS_CIRCLE);
+  lv_style_set_shadow_width(&s_lb_help, 0);
+  lv_style_set_pad_all(&s_lb_help, 0);
+  lv_style_init(&s_lb_help_pressed);
+  lv_style_set_bg_color(&s_lb_help_pressed, lv_color_hex(UI_COL_ROW_PRESS_FILL));
+  lv_style_set_bg_opa(&s_lb_help_pressed, LV_OPA_COVER);
+  initListBtnText(&s_lb_help_q, &lv_font_montserrat_ext_16, UI_COL_ACCENT);
+}
+
+static void initListBtnStyles() {
+  if (s_lb_ready) return;
+  lv_style_init(&s_lb_frame);
+  lv_style_set_bg_color(&s_lb_frame, lv_color_hex(UI_COL_ROW));
+  lv_style_set_radius(&s_lb_frame, LIST_BTN_RADIUS);
+  lv_style_set_shadow_width(&s_lb_frame, 0);
+  lv_style_set_border_width(&s_lb_frame, 1);
+  lv_style_set_border_color(&s_lb_frame, lv_color_hex(UI_COL_ROW_PRESSED));
+  lv_style_set_pad_all(&s_lb_frame, 0);
+  lv_style_init(&s_lb_frame_active);
+  lv_style_set_border_color(&s_lb_frame_active, lv_color_hex(UI_COL_ACCENT));
+  lv_style_init(&s_lb_pressed);
+  lv_style_set_bg_color(&s_lb_pressed, lv_color_hex(UI_COL_ROW_PRESS_FILL));
+
+  initListBtnText(&s_lb_icon,       &lv_font_montserrat_ext_20, UI_COL_ACCENT);
+  initListBtnText(&s_lb_title,      &lv_font_montserrat_ext_16, UI_COL_INK);
+  initListBtnText(&s_lb_sub,        &lv_font_montserrat_ext_12, UI_COL_CAPTION);
+  initListBtnText(&s_lb_sub_active, &lv_font_montserrat_ext_12, UI_COL_ACCENT);
+  initListBtnText(&s_lb_arrow,      &lv_font_montserrat_ext_16, UI_COL_INK_FAINT);
+  lv_style_set_text_align(&s_lb_arrow, LV_TEXT_ALIGN_RIGHT);
+  initListBtnHelpStyles();
+  s_lb_ready = true;
+}
+
+// A circled ASCII "?" rather than an icon: FontAwesome's question-circle is
+// in none of the 23 generated fonts and adding it would mean regenerating
+// all of them, while 0x20-0x7F is in every one. The web UI already draws its
+// help trigger exactly like this, so the two match.
+static lv_obj_t* addListBtnHelp(lv_obj_t* btn) {
+  lv_obj_t *help = lv_btn_create(btn);
+  lv_obj_set_size(help, LIST_BTN_HELP_PX, LIST_BTN_HELP_PX);
+  lv_obj_align(help, LV_ALIGN_RIGHT_MID, -56, 0);
+  lv_obj_add_style(help, &s_lb_help, 0);
+  lv_obj_add_style(help, &s_lb_help_pressed, LV_STATE_PRESSED);
+  // Below the 44 px touch minimum by design - a circle that big crowds the
+  // row. The hit area is widened instead, which costs nothing visually.
+  lv_obj_set_ext_click_area(help, LIST_BTN_HELP_HIT_PX);
+  lv_obj_t *q = lv_label_create(help);
+  lv_label_set_text(q, "?");
+  lv_obj_add_style(q, &s_lb_help_q, 0);
+  lv_obj_align(q, LV_ALIGN_CENTER, 0, 0);
+  return help;
+}
+
 lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
                       const char* sub, bool toggle_active,
                       lv_obj_t** out_help) {
+  initListBtnStyles();
   // The help button eats 30 px on the right, so the text has to give way.
   // Only when there is one - a row without help keeps its old width and its
   // old line breaks.
   const int text_w = out_help ? 290 : 320;
+  const bool has_sub = sub && strlen(sub) > 0;
   lv_obj_t *btn = lv_btn_create(list);
-  lv_obj_set_size(btn, 456, 64);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn, 10, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 1, 0);
-  lv_obj_set_style_border_color(btn, toggle_active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_ROW_PRESSED), 0);
-  lv_obj_set_style_pad_all(btn, 0, 0);
+  lv_obj_set_size(btn, LIST_BTN_W, LIST_BTN_H);
+  lv_obj_add_style(btn, &s_lb_frame, 0);
+  if (toggle_active) lv_obj_add_style(btn, &s_lb_frame_active, 0);
+  lv_obj_add_style(btn, &s_lb_pressed, LV_STATE_PRESSED);
 
   lv_obj_t *ico = lv_label_create(btn);
   lv_label_set_text(ico, ico_sym);
-  lv_obj_set_style_text_color(ico, lv_color_hex(UI_COL_ACCENT), 0);
-  lv_obj_set_style_text_font(ico, &lv_font_montserrat_ext_20, 0);
+  lv_obj_add_style(ico, &s_lb_icon, 0);
   lv_obj_align(ico, LV_ALIGN_LEFT_MID, 14, 0);
 
   lv_obj_t *lbl = lv_label_create(btn);
   lv_label_set_text(lbl, title);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_INK), 0);
-  lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
+  lv_obj_add_style(lbl, &s_lb_title, 0);
   lv_obj_set_width(lbl, text_w);
-  lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 52, sub && strlen(sub) > 0 ? -10 : 0);
+  lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 52, has_sub ? -10 : 0);
 
-  if (sub && strlen(sub) > 0) {
+  if (has_sub) {
     lv_obj_t *slbl = lv_label_create(btn);
     lv_label_set_text(slbl, sub);
-    lv_obj_set_style_text_color(slbl, toggle_active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_CAPTION), 0);
-    lv_obj_set_style_text_font(slbl, &lv_font_montserrat_ext_12, 0);
+    lv_obj_add_style(slbl, toggle_active ? &s_lb_sub_active : &s_lb_sub, 0);
     lv_obj_set_width(slbl, text_w);
     lv_obj_align(slbl, LV_ALIGN_LEFT_MID, 52, 12);
   }
@@ -160,38 +234,11 @@ lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
   // with lv_obj_get_child(btn, -1) to turn it into ON/OFF; appending here
   // instead would hand them this button and the toggles would lose their
   // state display.
-  //
-  // A circled ASCII "?" rather than an icon: FontAwesome's question-circle is
-  // in none of the 23 generated fonts and adding it would mean regenerating
-  // all of them, while 0x20-0x7F is in every one. The web UI already draws its
-  // help trigger exactly like this, so the two now match.
-  if (out_help) {
-    lv_obj_t *help = lv_btn_create(btn);
-    lv_obj_set_size(help, 34, 34);
-    lv_obj_align(help, LV_ALIGN_RIGHT_MID, -56, 0);
-    lv_obj_set_style_bg_opa(help, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_bg_color(help, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(help, LV_OPA_COVER, LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(help, lv_color_hex(UI_COL_ACCENT), 0);
-    lv_obj_set_style_border_width(help, 1, 0);
-    lv_obj_set_style_radius(help, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_shadow_width(help, 0, 0);
-    lv_obj_set_style_pad_all(help, 0, 0);
-    // Below the 44 px touch minimum by design - a circle that big crowds the
-    // row. The hit area is widened instead, which costs nothing visually.
-    lv_obj_set_ext_click_area(help, 6);
-    lv_obj_t *q = lv_label_create(help);
-    lv_label_set_text(q, "?");
-    lv_obj_set_style_text_color(q, lv_color_hex(UI_COL_ACCENT), 0);
-    lv_obj_set_style_text_font(q, &lv_font_montserrat_ext_16, 0);
-    lv_obj_align(q, LV_ALIGN_CENTER, 0, 0);
-    *out_help = help;
-  }
+  if (out_help) *out_help = addListBtnHelp(btn);
 
   lv_obj_t *arr = lv_label_create(btn);
   lv_label_set_text(arr, LV_SYMBOL_RIGHT);
-  lv_obj_set_style_text_color(arr, lv_color_hex(UI_COL_INK_FAINT), 0);
-  lv_obj_set_style_text_font(arr, &lv_font_montserrat_ext_16, 0);
+  lv_obj_add_style(arr, &s_lb_arrow, 0);
   lv_obj_align(arr, LV_ALIGN_RIGHT_MID, -14, 0);
   // Bounded, because callers overwrite this with words. Without a width the
   // label is LV_SIZE_CONTENT pinned to the right edge, so it grows leftwards
@@ -199,7 +246,6 @@ lv_obj_t* makeListBtn(lv_obj_t* list, const char* ico_sym, const char* title,
   // text stays right aligned inside the box, so every existing row with its
   // ON/OFF or symbol renders exactly as before.
   lv_obj_set_width(arr, out_help ? 42 : 120);
-  lv_obj_set_style_text_align(arr, LV_TEXT_ALIGN_RIGHT, 0);
   lv_label_set_long_mode(arr, LV_LABEL_LONG_DOT);
   return btn;
 }
