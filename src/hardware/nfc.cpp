@@ -33,8 +33,9 @@ NfcChip nfcChip() { return s_chip; }
 
 const char* nfcChipName() { return s_chip == NFC_CHIP_PN7160 ? "PN7160" : "PN532"; }
 
-uint8_t nfcChipI2cAddress() {
-  return s_chip == NFC_CHIP_PN7160 ? I2C_ADDR_PN7160 : I2C_ADDR_PN532;
+bool nfcChipOnBus(TwoWire& wire) {
+  if (s_chip == NFC_CHIP_PN7160) return pn7160OnBus(&wire);
+  return i2cPresent(wire, I2C_ADDR_PN532);
 }
 
 bool nfcChipCanWrite() { return s_chip == NFC_CHIP_PN532; }

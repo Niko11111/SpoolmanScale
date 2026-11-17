@@ -10,6 +10,7 @@
 #include "hardware/nfc.h"
 #include "hardware/pins.h"
 #include "hardware/sd_logger.h"
+#include "services/nfc_reset.h"
 #include "services/prefs_store.h"
 
 #define KEY_WAKE_TEST "nfc_waketest"   // NVS keys are limited to 15 characters
@@ -26,11 +27,16 @@ void nfcWakeTestSet(bool on) {
 
 // Pin 7 high through the sleep: low, the PN7160 is off and the PN532 powered
 // down, and neither would see a tag. Both GPIOs are RTC pads, so gpio_hold_en()
-// takes the RTC hold, which lasts through deep sleep on its own.
-static void holdReaderPowered() {
+// takes the RTC hold, which lasts through deep sleep on its own. On a PN532
+// only where the reset probe found the wire on RSTPDN: on the old wiring the
+// pin meets a module output (hardware/pins.h), and RSTPDN has the module's
+// own pull-up anyway.
+static bool holdReaderPowered() {
+  if (nfcChip() == NFC_CHIP_PN532 && !nfcResetVerified()) return false;
   pinMode(hw_pins::NFC_VEN, OUTPUT);
   digitalWrite(hw_pins::NFC_VEN, HIGH);
   gpio_hold_en((gpio_num_t)hw_pins::NFC_VEN);
+  return true;
 }
 
 // The PN7160 drives its IRQ push-pull, so the pull-down only keeps an
@@ -58,13 +64,14 @@ void nfcWakeTestBeforeSleep() {
   }
   const bool active_high = nfcChip() == NFC_CHIP_PN7160;
   const bool searching = nfcArmForWake();
-  holdReaderPowered();
+  const bool held = holdReaderPowered();
   const int irq_level = digitalRead(hw_pins::NFC_IRQ);
   const esp_err_t err = armExt1(active_high);
   // The IRQ level before sleeping: already at the wake level, the scale wakes
   // at once, which tells as much as a tag that does not wake it.
-  logSDf("NFC wake test: %s %s, pin 7 held high, IRQ now %s, ext1 GPIO%d %s -> %s (%d)",
-         nfcChipName(), searching ? "searching" : "NOT searching", irq_level ? "high" : "low",
+  logSDf("NFC wake test: %s %s, pin 7 %s, IRQ now %s, ext1 GPIO%d %s -> %s (%d)",
+         nfcChipName(), searching ? "searching" : "NOT searching",
+         held ? "held high" : "not held (PN532 reset wire not verified)", irq_level ? "high" : "low",
          hw_pins::NFC_IRQ, active_high ? "ANY_HIGH" : "ANY_LOW", esp_err_to_name(err), (int)err);
 }
 

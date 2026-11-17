@@ -33,6 +33,7 @@ constexpr uint8_t  BLOCK_BYTES     = 16;
 constexpr uint8_t  KEY_GIVE_UP     = 3;
 constexpr size_t   UID_STR_LEN     = 32;
 constexpr size_t   STATS_JSON_LEN  = 256;
+constexpr uint32_t MS_PER_S        = 1000;
 
 }  // namespace
 
@@ -171,7 +172,7 @@ bool nfcMeasureTick() {
   if (s_state == MeasureState::Pending) begin();
   if (s_state != MeasureState::Running) return false;
   const uint32_t now = millis();
-  if (now - s_started_ms >= (uint32_t)s_seconds * 1000u) {
+  if (now - s_started_ms >= (uint32_t)s_seconds * MS_PER_S) {
     finish();
     return false;
   }

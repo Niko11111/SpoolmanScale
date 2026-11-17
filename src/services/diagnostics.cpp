@@ -79,7 +79,7 @@ void diagnosticsTick() {
   // the scale watchdog every 5 s, so only the reader costs a transaction here.
   // The reader's own address: a PN7160 test board answers at 0x28, and its
   // findings still read "PN532" in the banner for now (Notes, PN7160).
-  pn532_on_bus = i2cPresent(I2C_EXT, nfcChipI2cAddress());
+  pn532_on_bus = nfcChipOnBus(I2C_EXT);
   // A device built without a load cell has no NAU7802 to miss, so its silence
   // is the configuration rather than a finding. Asked as "is one missing" and
   // not as "is one there": the reader's own verdicts below have to go on

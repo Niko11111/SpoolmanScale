@@ -17,7 +17,9 @@ enum NfcChip : uint8_t {
 NfcChip nfcDetectChip(TwoWire* wire);
 NfcChip nfcChip();
 const char* nfcChipName();
-uint8_t nfcChipI2cAddress();
+// Whether the chosen reader acknowledges its address right now. A PN532 gets
+// one probe, as before; a PN7160 a few, since in standby it may refuse once.
+bool nfcChipOnBus(TwoWire& wire);
 // Writing tags is a PN532 feature for now: the PN7160 build only reads.
 bool nfcChipCanWrite();
 

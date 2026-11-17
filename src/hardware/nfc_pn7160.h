@@ -11,6 +11,9 @@
 // and the pin handed back as an input when it does not. A weak pull-up is
 // tried before the pin is driven, see the comment in the .cpp.
 bool pn7160Probe(TwoWire* wire);
+// Whether 0x28 answers, with the same retries as every other bus access here:
+// a chip in standby may refuse its address once.
+bool pn7160OnBus(TwoWire* wire);
 
 // Brings the chip up from VEN: reset, init, the library's RF and power
 // settings, discovery. Returns false and logs the step that failed.

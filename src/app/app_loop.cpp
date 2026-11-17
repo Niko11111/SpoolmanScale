@@ -1965,7 +1965,7 @@ void appLoop() {
     static uint8_t nfc_recover_tries = 0;
     if (!nfc_ok && millis() - last_nfc_recover_ms >= 5000) {
       last_nfc_recover_ms = millis();
-      if (!i2cPresent(I2C_EXT, nfcChipI2cAddress())) {
+      if (!nfcChipOnBus(I2C_EXT)) {
         // Off the bus entirely. Nothing to re-initialise, and the counter is
         // cleared so a reader that is plugged back in gets a full set of
         // attempts rather than the remainder of an old one.

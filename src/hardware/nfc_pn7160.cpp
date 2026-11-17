@@ -42,11 +42,13 @@ constexpr uint8_t  NCI_MT_DATA      = 0x00;
 constexpr size_t   NCI_PAYLOAD_MAX  = 255;
 constexpr size_t   NCI_FRAME_MAX    = NCI_HDR + NCI_PAYLOAD_MAX;
 constexpr uint8_t  NCI_MT_MASK      = 0xE0;
+constexpr uint8_t  NCI_MT_CMD       = 0x20;
 constexpr uint8_t  NCI_MT_RSP       = 0x40;
 constexpr uint8_t  NCI_MT_NTF       = 0x60;
 constexpr uint8_t  NCI_GID_MASK     = 0x0F;
 constexpr uint8_t  NCI_OID_MASK     = 0x3F;
 constexpr uint8_t  NCI_STATUS_OK    = 0x00;
+constexpr size_t   NCI_STATUS_AT    = 3;      // first payload byte of a response
 
 constexpr uint8_t  GID_CORE = 0x00;
 constexpr uint8_t  GID_RF   = 0x01;
@@ -54,12 +56,17 @@ constexpr uint8_t  OID_CORE_RESET          = 0x00;
 constexpr uint8_t  OID_CORE_GENERIC_ERROR  = 0x07;
 constexpr uint8_t  OID_CORE_INTERFACE_ERROR = 0x08;
 constexpr uint8_t  OID_RF_DISCOVER         = 0x03;
+constexpr uint8_t  OID_RF_DISCOVER_SELECT  = 0x04;
 constexpr uint8_t  OID_RF_INTF_ACTIVATED   = 0x05;
 constexpr uint8_t  OID_RF_DEACTIVATE       = 0x06;
 
 constexpr uint8_t  DEACTIVATE_TO_IDLE      = 0x00;
 constexpr uint8_t  DEACTIVATE_TO_DISCOVERY = 0x03;
 constexpr uint8_t  DISCOVER_NTF_MORE       = 0x02;   // last byte: more tags follow
+// RF_DEACTIVATE_NTF: [3] the type. RF_DISCOVER_NTF: [3] discovery id, [4] protocol.
+constexpr size_t   DEACTIVATE_TYPE_AT      = 3;
+constexpr size_t   DISCOVER_ID_AT          = 3;
+constexpr size_t   DISCOVER_PROTO_AT       = 4;
 
 // RF technology and mode, protocol and interface codes (NCI 2.0).
 constexpr uint8_t  TECH_A_POLL       = 0x00;
@@ -80,7 +87,11 @@ constexpr uint8_t  ISO15693_UID_BYTES = 8;
 constexpr uint8_t  MFC_AUTH_REQ       = 0x40;   // answer: 0x40, status
 constexpr uint8_t  MFC_XCHG_REQ       = 0x10;   // answer: 0x10, data, status
 constexpr uint8_t  MFC_KEY_EMBEDDED   = 0x10;   // the key travels in the command
-constexpr uint8_t  MFC_KEY_SELECT_B   = 0x01;
+// Key B is bit 7 of the key selector; bits 0-3 index a key stored in the
+// chip. 0x80 as ESPHome's pn71xx driver has it (MFC_AUTHENTICATE_PARAM_KS_B).
+// The library's example sends 0x11, which never reached key B: its key A,
+// tried first, always opened the FF..FF test card.
+constexpr uint8_t  MFC_KEY_SELECT_B   = 0x80;
 constexpr uint8_t  MFC_KEY_BYTES      = 6;
 constexpr uint8_t  MFC_BLOCK_BYTES    = 16;
 constexpr uint8_t  MFC_BLOCKS_PER_SECTOR = 4;
@@ -112,6 +123,11 @@ const uint8_t CMD_GET_TOTAL_DURATION[] = {0x20, 0x03, 0x02, 0x01, 0x00};
 // Polls NFC-A and NFC-V on every period. The library's own list adds NFC-B
 // and NFC-F, which no spool tag uses and which only make each period longer.
 const uint8_t CMD_RF_DISCOVER[] = {0x21, 0x03, 0x05, 0x02, TECH_A_POLL, 0x01, TECH_V_POLL, 0x01};
+// TOTAL_DURATION, the length of one discovery period: 100 ms (0x0064, LSB
+// first). The library sets 510 ms, after which a tag that was missed once is
+// only polled again half a second later - longer than the PN532 path's poll
+// interval, and in the measurement three misses for one.
+const uint8_t CMD_SET_DISCOVERY_PERIOD[] = {0x20, 0x02, 0x05, 0x01, 0x00, 0x02, 0x64, 0x00};
 
 // VEN timing as the library's hardwareReset() has it.
 constexpr uint16_t VEN_LOW_MS          = 5;
@@ -119,21 +135,29 @@ constexpr uint16_t VEN_SETTLE_MS       = 5;
 // VEN high to the first probe. The library allows 5 ms; unmeasured on our
 // boards, so twice that.
 constexpr uint16_t PROBE_SETTLE_MS     = 10;
-// An NCI chip waking from standby may refuse its address once (NXP's Linux
-// driver retries for the same reason), so every write and probe gets a second go.
-constexpr uint8_t  BUS_TRIES           = 2;
-constexpr uint16_t BUS_RETRY_MS        = 2;
+// An NCI chip waking from standby may refuse its address (NXP's Linux driver
+// retries for the same reason, after a longer pause), so every write and probe
+// gets three goes. Unmeasured: the verbose log counts the retries.
+constexpr uint8_t  BUS_TRIES           = 3;
+constexpr uint16_t BUS_RETRY_MS        = 10;
+// Every loop that reads frames stops after this many: readFrame() still reads
+// what is pending after the deadline, and an IRQ line stuck high would
+// otherwise keep the loop task here.
+constexpr uint8_t  FRAMES_PER_WAIT_MAX = 16;
 constexpr uint16_t CTRL_TIMEOUT_MS     = 20;    // a control response
 constexpr uint16_t RESET_NTF_TIMEOUT_MS = 50;   // the library reads it within 45 ms
 constexpr uint16_t INIT_TIMEOUT_MS     = 150;   // the library's own value for CORE_INIT
 constexpr uint16_t FIELD_OFF_MS        = 20;    // as the PN532's field cycle
 constexpr uint8_t  ARM_DRAIN_FRAMES_MAX = 8;
 // CORE_RESET_NTF: [7] length of the manufacturer data, [8..] the data.
+constexpr size_t   RESET_NTF_NCI_VERSION = 5;
 constexpr size_t   RESET_NTF_INFO_LEN  = 7;
 constexpr size_t   RESET_NTF_INFO      = 8;
 constexpr uint8_t  FW_INFO_MIN         = 4;
 // RF_INTF_ACTIVATED_NTF: [3] discovery id, [4] interface, [5] protocol,
 // [6] technology and mode, [9] length of the technology parameters, [10..].
+constexpr size_t   ACT_PROTOCOL        = 5;
+constexpr size_t   ACT_TECH            = 6;
 constexpr size_t   ACT_PARAMS_LEN      = 9;
 constexpr size_t   ACT_PARAMS          = 10;
 
@@ -194,12 +218,19 @@ static bool parseUid(Target& t, const uint8_t* p, uint8_t len) {
   return false;
 }
 
+// The chip has selected a tag, whatever this host makes of the frame: a
+// frame too short to read still means ACTIVE, with no UID, so the next poll
+// sends the chip back to discovery instead of waiting for a report that
+// already came.
 static void noteActivation() {
-  if (s_frame_len < ACT_PARAMS || ACT_PARAMS + s_frame[ACT_PARAMS_LEN] > s_frame_len) return;
   Target t = {};
-  t.proto = s_frame[5];
-  t.tech  = s_frame[6];
-  if (!parseUid(t, s_frame + ACT_PARAMS, s_frame[ACT_PARAMS_LEN])) {
+  const bool whole = s_frame_len >= ACT_PARAMS &&
+                     ACT_PARAMS + s_frame[ACT_PARAMS_LEN] <= s_frame_len;
+  if (whole) {
+    t.proto = s_frame[ACT_PROTOCOL];
+    t.tech  = s_frame[ACT_TECH];
+  }
+  if (!whole || !parseUid(t, s_frame + ACT_PARAMS, s_frame[ACT_PARAMS_LEN])) {
     logSDf("PN7160: activated a tag it gave no usable UID for (tech 0x%02X, protocol 0x%02X)",
            t.tech, t.proto);
   }
@@ -212,7 +243,8 @@ static void trackRfState() {
   if (isMsg(NCI_MT_NTF, GID_RF, OID_RF_INTF_ACTIVATED)) {
     noteActivation();
   } else if (isMsg(NCI_MT_NTF, GID_RF, OID_RF_DEACTIVATE) && s_frame_len > NCI_HDR) {
-    s_state = (s_frame[3] == DEACTIVATE_TO_DISCOVERY) ? RfState::Discovery : RfState::Idle;
+    s_state = (s_frame[DEACTIVATE_TYPE_AT] == DEACTIVATE_TO_DISCOVERY) ? RfState::Discovery
+                                                                       : RfState::Idle;
   }
 }
 
@@ -228,9 +260,13 @@ static bool readFrame(uint32_t deadline_ms) {
 static bool writeFrame(const uint8_t* frame, uint8_t len) {
   for (uint8_t i = 0; i < BUS_TRIES; i++) {
     // writeData() takes a non-const buffer and only reads it.
-    if (s_lib->writeData(const_cast<uint8_t*>(frame), len) == 0) return true;
+    if (s_lib->writeData(const_cast<uint8_t*>(frame), len) == 0) {
+      if (i > 0 && sd_verbose) logSDf("[verbose] PN7160: write took %u tries", i + 1);
+      return true;
+    }
     delay(BUS_RETRY_MS);
   }
+  logSDf("PN7160: write of %02X %02X not acknowledged after %u tries", frame[0], frame[1], BUS_TRIES);
   return false;
 }
 
@@ -240,14 +276,16 @@ static bool control(const uint8_t* cmd, uint8_t len, uint32_t deadline_ms) {
   if (!s_lib || !writeFrame(cmd, len)) return false;
   const uint8_t gid = cmd[0] & NCI_GID_MASK;
   const uint8_t oid = cmd[1] & NCI_OID_MASK;
-  while (readFrame(deadline_ms)) {
-    if (isMsg(NCI_MT_RSP, gid, oid)) return s_frame_len > NCI_HDR && s_frame[3] == NCI_STATUS_OK;
+  for (uint8_t i = 0; i < FRAMES_PER_WAIT_MAX && readFrame(deadline_ms); i++) {
+    if (isMsg(NCI_MT_RSP, gid, oid)) {
+      return s_frame_len > NCI_STATUS_AT && s_frame[NCI_STATUS_AT] == NCI_STATUS_OK;
+    }
   }
   return false;
 }
 
 static bool awaitNtf(uint8_t gid, uint8_t oid, uint32_t deadline_ms) {
-  while (readFrame(deadline_ms)) {
+  for (uint8_t i = 0; i < FRAMES_PER_WAIT_MAX && readFrame(deadline_ms); i++) {
     if (isMsg(NCI_MT_NTF, gid, oid)) return true;
   }
   return false;
@@ -267,7 +305,8 @@ static void noteFirmware() {
   s_fw_version = ((uint32_t)m[0] << 24) | ((uint32_t)m[2] << 16) |
                  ((uint32_t)m[3] << 8) | m[1];
   logSDf("PN7160: NCI %u.%u, hw 0x%02X, rom 0x%02X, fw %02X.%02X",
-         s_frame[5] >> 4, s_frame[5] & 0x0F, m[0], m[1], m[2], m[3]);
+         s_frame[RESET_NTF_NCI_VERSION] >> 4, s_frame[RESET_NTF_NCI_VERSION] & 0x0F,
+         m[0], m[1], m[2], m[3]);
 }
 
 static void venPulse() {
@@ -303,6 +342,8 @@ static const char* bringUp() {
   if (failed) return failed;
   if (!libOk(s_lib->configureSettings())) return "settings";
   if (!libOk(s_lib->configMode())) return "mode";
+  if (!control(CMD_SET_DISCOVERY_PERIOD, sizeof(CMD_SET_DISCOVERY_PERIOD),
+               deadlineIn(CTRL_TIMEOUT_MS))) return "period";
   if (!startDiscovery(deadlineIn(CTRL_TIMEOUT_MS))) return "discovery";
   return nullptr;
 }
@@ -314,6 +355,8 @@ static bool answersOnBus(TwoWire* wire) {
   }
   return false;
 }
+
+bool pn7160OnBus(TwoWire* wire) { return wire && answersOnBus(wire); }
 
 bool pn7160Probe(TwoWire* wire) {
   if (!wire) return false;
@@ -364,7 +407,7 @@ bool pn7160Ping() {
 }
 
 static bool deactivate(uint8_t type, uint32_t deadline_ms) {
-  const uint8_t cmd[] = {0x21, 0x06, 0x01, type};
+  const uint8_t cmd[] = {NCI_MT_CMD | GID_RF, OID_RF_DEACTIVATE, 1, type};
   if (!control(cmd, sizeof(cmd), deadline_ms)) return false;
   // The notification that confirms it may come after the deadline; it is read
   // with the next frame and says the same.
@@ -385,21 +428,22 @@ static bool rediscover(uint32_t deadline_ms) {
 // is taken, as the PN532 takes the first it finds. Until the activation comes
 // the state is IDLE, so a selection that fails is restarted by the next poll.
 static void selectDiscovered(uint32_t deadline_ms) {
-  const uint8_t id = s_frame[3];
-  const uint8_t proto = s_frame[4];
+  const uint8_t id = s_frame[DISCOVER_ID_AT];
+  const uint8_t proto = s_frame[DISCOVER_PROTO_AT];
   bool more = s_frame[s_frame_len - 1] == DISCOVER_NTF_MORE;
-  while (more && readFrame(deadline_ms)) {
+  for (uint8_t i = 0; more && i < FRAMES_PER_WAIT_MAX && readFrame(deadline_ms); i++) {
     more = isMsg(NCI_MT_NTF, GID_RF, OID_RF_DISCOVER) && s_frame[s_frame_len - 1] == DISCOVER_NTF_MORE;
   }
   const uint8_t intf = (proto == NCI_PROT_MIFARE) ? NCI_INTF_TAGCMD
                      : (proto == NCI_PROT_ISODEP) ? NCI_INTF_ISODEP : NCI_INTF_FRAME;
-  const uint8_t cmd[] = {0x21, 0x04, 0x03, id, proto, intf};
+  const uint8_t cmd[] = {NCI_MT_CMD | GID_RF, OID_RF_DISCOVER_SELECT, 3, id, proto, intf};
   s_state = RfState::Idle;
   control(cmd, sizeof(cmd), deadline_ms);
 }
 
 static void collectActivation(uint32_t deadline_ms) {
-  while (s_state != RfState::Active && readFrame(deadline_ms)) {
+  for (uint8_t i = 0; i < FRAMES_PER_WAIT_MAX && s_state != RfState::Active &&
+                      readFrame(deadline_ms); i++) {
     if (isMsg(NCI_MT_NTF, GID_RF, OID_RF_DISCOVER)) selectDiscovered(deadline_ms);
   }
 }
@@ -464,11 +508,14 @@ static bool exchange(const uint8_t* cmd, uint8_t len, uint8_t resp[NCI_PAYLOAD_M
                      uint8_t* resp_len) {
   *resp_len = 0;
   if (!s_lib || s_state != RfState::Active || len > TAG_CMD_MAX) return false;
+  // A late answer to an exchange that gave up must not pass for this one's.
+  for (uint8_t i = 0; i < FRAMES_PER_WAIT_MAX && readFrame(millis()); i++) {}
+  if (s_state != RfState::Active) return false;
   uint8_t frame[NCI_HDR + TAG_CMD_MAX] = {NCI_MT_DATA, 0x00, len};
   memcpy(frame + NCI_HDR, cmd, len);
   if (!writeFrame(frame, NCI_HDR + len)) return false;
   const uint32_t deadline = deadlineIn(TAG_CMD_TIMEOUT_MS);
-  while (readFrame(deadline)) {
+  for (uint8_t i = 0; i < FRAMES_PER_WAIT_MAX && readFrame(deadline); i++) {
     if (s_state != RfState::Active || isCoreError()) return false;
     if ((s_frame[0] & NCI_MT_MASK) != NCI_MT_DATA) continue;
     // The header's length, unless the read came back shorter than it says.
@@ -567,7 +614,9 @@ bool pn7160ReadVicinityBlock(uint8_t block, uint8_t data[4]) {
 }
 
 // Discovery running, and every frame the chip still holds read, so IRQ only
-// rises again for a tag that comes while the ESP sleeps.
+// rises again for a tag that comes while the ESP sleeps. A tag lying on the
+// reader is selected again at once and leaves IRQ high: false then, and the
+// test has to be run with the reader empty.
 bool pn7160ArmForWake() {
   if (!s_lib || s_state == RfState::Off) return false;
   const uint32_t deadline = deadlineIn(CTRL_TIMEOUT_MS);
