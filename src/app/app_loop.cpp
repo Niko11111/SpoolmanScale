@@ -35,6 +35,7 @@
 #include "hardware/scale_state.h"
 #include "hardware/sd_logger.h"
 #include "hardware/flash_log.h"
+#include "services/nfc_measure.h"
 #include "services/nfc_reset.h"
 #include "ui/reboot_popup.h"
 #include "ui/info_popup.h"
@@ -2008,7 +2009,10 @@ void appLoop() {
   //      Blank (0x00) → show spool list + link
   //      Unknown      → ignore
   // ============================================================
-  if (nfc_ok) {
+  // A read-rate measurement (services/nfc_measure.h) has the reader to itself
+  // while it runs; the scan path picks up again when it is over.
+  const bool nfc_measuring = nfcMeasureTick();
+  if (nfc_ok && !nfc_measuring) {
     // The poll finds the same tag several times a second. This says so once,
     // so the log reads as "a tag was put on" rather than as a scan trace.
     static char logged_uid[26] = "";

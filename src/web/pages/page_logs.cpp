@@ -13,6 +13,7 @@
 #include "web/web_access.h"
 #include "web/pages/page_logs_session.h"
 #include "web/web_net_probe.h"
+#include "web/web_nfc_test.h"
 #include "web/web_screenshot.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
@@ -244,6 +245,7 @@ static String body() {
 
 static void routes(WebServer &srv) {
   netProbeRoutes(srv);
+  nfcTestRoutes(srv);
   screenshotRoutes(srv);
   // ── SD-Card Log endpoints ─────────────────────────────────
   // GET /logs -> JSON list of available log files
