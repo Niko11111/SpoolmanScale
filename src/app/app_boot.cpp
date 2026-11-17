@@ -16,6 +16,7 @@
 #include "hardware/pins.h"
 #include "services/user_options.h"
 #include "services/nfc_reset.h"
+#include "services/nfc_wake_test.h"
 #include "hardware/scale.h"
 #include "hardware/sd_logger.h"
 #include "services/ams_source.h"
@@ -220,6 +221,7 @@ void appSetup() {
 
   delay(500);
 
+  nfcWakeTestAfterBoot();   // releases pin 7 if the wake test held it
   nfcResetLoad();
   if (nfcDetectChip(&I2C_EXT) == NFC_CHIP_PN7160) {
     nfc_ok = beginPn7160Reader();

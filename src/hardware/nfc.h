@@ -92,3 +92,9 @@ bool nfcAuthMifareSector(int sector, const uint8_t key[6], const uint8_t uid[4],
 bool nfcWriteMifareBlock(uint8_t block, const uint8_t data[16]);
 bool nfcReadNtagPage(uint8_t page, uint8_t* data);
 bool nfcWriteNtagPage(uint8_t page, uint8_t* data);
+
+// Leaves the reader searching, for a tag to wake the ESP from deep sleep over
+// its IRQ line (the wake test, services/nfc_wake_test.h). PN532: an
+// InListPassiveTarget whose answer is left pending, so IRQ falls when a card
+// comes. PN7160: discovery with nothing left to read, so IRQ rises then.
+bool nfcArmForWake();

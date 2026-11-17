@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <esp_sleep.h>
 #include <math.h>
+#include "services/nfc_wake_test.h"
 #include "services/user_options.h"
 
 #include "app_config.h"
@@ -12,6 +13,8 @@
 
 
 static unsigned long last_activity_ms = 0;
+// Deep sleep asked for over the web (the NFC wake test), taken on the next pass.
+static bool sleep_now = false;
 static bool is_dimmed = false;
 static bool is_off = false;
 
@@ -62,6 +65,8 @@ void displayNoteWeight(float grams) {
   if (delta >= WEIGHT_WAKE_DELTA_G) resetActivityTimer();
 }
 
+void displayPowerSleepNow() { sleep_now = true; }
+
 void handlePowerManagement() {
   // A tag on the reader is not activity: it used to reset the timer on every
   // poll, so a spool left on the scale kept the panel at full brightness for
@@ -84,10 +89,11 @@ void handlePowerManagement() {
   // A sleep timeout of zero means never. Without the first test the
   // comparison would be true on the very first pass and the scale would drop
   // into deep sleep right after booting.
-  if (sleep_timeout_ms > 0 && !tag_present &&
-      elapsed >= (unsigned long)sleep_timeout_ms) {
+  if (sleep_now || (sleep_timeout_ms > 0 && !tag_present &&
+                    elapsed >= (unsigned long)sleep_timeout_ms)) {
     Serial.println("Deep sleep...");
-    logSD("Deep sleep: entering");
+    logSD(sleep_now ? "Deep sleep: entering, asked for over the web" : "Deep sleep: entering");
+    nfcWakeTestBeforeSleep();   // nothing unless the wake test is switched on
     displayPrepareDeepSleep();
     delay(100);
     esp_deep_sleep_start();

@@ -127,6 +127,7 @@ constexpr uint16_t CTRL_TIMEOUT_MS     = 20;    // a control response
 constexpr uint16_t RESET_NTF_TIMEOUT_MS = 50;   // the library reads it within 45 ms
 constexpr uint16_t INIT_TIMEOUT_MS     = 150;   // the library's own value for CORE_INIT
 constexpr uint16_t FIELD_OFF_MS        = 20;    // as the PN532's field cycle
+constexpr uint8_t  ARM_DRAIN_FRAMES_MAX = 8;
 // CORE_RESET_NTF: [7] length of the manufacturer data, [8..] the data.
 constexpr size_t   RESET_NTF_INFO_LEN  = 7;
 constexpr size_t   RESET_NTF_INFO      = 8;
@@ -563,4 +564,16 @@ bool pn7160ReadVicinityBlock(uint8_t block, uint8_t data[4]) {
   if (n < ISO15693_BLOCK_BYTES + 2 || resp[0] != 0 || resp[n - 1] != TAG_STATUS_OK) return false;
   memcpy(data, resp + 1, ISO15693_BLOCK_BYTES);
   return true;
+}
+
+// Discovery running, and every frame the chip still holds read, so IRQ only
+// rises again for a tag that comes while the ESP sleeps.
+bool pn7160ArmForWake() {
+  if (!s_lib || s_state == RfState::Off) return false;
+  const uint32_t deadline = deadlineIn(CTRL_TIMEOUT_MS);
+  if (s_state != RfState::Discovery && !rediscover(deadline)) return false;
+  // Bounded by count too: readFrame() still reads a pending frame after the
+  // deadline, and a chip that kept sending would hold the loop here.
+  for (uint8_t i = 0; i < ARM_DRAIN_FRAMES_MAX && readFrame(deadline); i++) {}
+  return s_state == RfState::Discovery && digitalRead(hw_pins::NFC_IRQ) != HIGH;
 }

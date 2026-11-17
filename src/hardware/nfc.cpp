@@ -291,3 +291,8 @@ bool nfcWriteNtagPage(uint8_t page, uint8_t* data) {
   if (s_chip == NFC_CHIP_PN7160) return pn7160WriteRefused("NTAG page");
   return nfc && nfc->ntag2xx_WritePage(page, data);
 }
+
+bool nfcArmForWake() {
+  if (s_chip == NFC_CHIP_PN7160) return pn7160ArmForWake();
+  return nfc && nfc->startPassiveTargetIDDetection(PN532_MIFARE_ISO14443A);
+}

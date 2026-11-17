@@ -40,3 +40,7 @@ bool pn7160ReadMifareSector(uint8_t sector, const uint8_t key[6], const uint8_t 
                             uint8_t blocks[4][16], uint8_t key_type);
 bool pn7160ReadNtagPage(uint8_t page, uint8_t data[4]);
 bool pn7160ReadVicinityBlock(uint8_t block, uint8_t data[4]);
+
+// For the wake test: discovery running and nothing left to read, so IRQ is
+// low and rises only for the next tag. False when that state was not reached.
+bool pn7160ArmForWake();
