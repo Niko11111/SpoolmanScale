@@ -47,8 +47,38 @@ static lv_color_t wifiColor() {
 #define HDR_CHIP_MARGIN  8
 #define HDR_CHIP_GAP    10
 
-void layoutHeaderChips() {
-  if (!lbl_hdr_sm) return;
+// Battery glyph steps and warning levels, in percent.
+#define HDR_BAT_FULL_PCT   88
+#define HDR_BAT_3_PCT      63
+#define HDR_BAT_2_PCT      38
+#define HDR_BAT_1_PCT      13
+#define HDR_BAT_WARN_PCT   30
+#define HDR_BAT_BAD_PCT    15
+
+// Percent, glyph and a bolt while charging. Compact leaves the percent out,
+// for a row that would otherwise run into the title.
+static void setBatteryText(bool compact) {
+  const int pct = fuelGaugePercent();
+  const char *icon = LV_SYMBOL_BATTERY_EMPTY;
+  if (pct >= HDR_BAT_FULL_PCT)   icon = LV_SYMBOL_BATTERY_FULL;
+  else if (pct >= HDR_BAT_3_PCT) icon = LV_SYMBOL_BATTERY_3;
+  else if (pct >= HDR_BAT_2_PCT) icon = LV_SYMBOL_BATTERY_2;
+  else if (pct >= HDR_BAT_1_PCT) icon = LV_SYMBOL_BATTERY_1;
+  const char *bolt = fuelGaugeFlow() == FUEL_FLOW_CHARGING ? LV_SYMBOL_CHARGE : "";
+
+  char buf[24];
+  if (compact) snprintf(buf, sizeof(buf), "%s%s", icon, bolt);
+  else         snprintf(buf, sizeof(buf), "%d%% %s%s", pct, icon, bolt);
+  lv_label_set_text(lbl_hdr_bat, buf);
+}
+
+static bool isShown(lv_obj_t *obj) {
+  return obj && !lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN);
+}
+
+// Packs the visible chips right to left from the backend badge and returns
+// the leftmost one.
+static lv_obj_t *packHeaderChips() {
   // A label sized to its content only knows its new width after a layout pass,
   // and lv_obj_align_to() reads that width. Without this the chips would be
   // placed from the previous text.
@@ -66,9 +96,31 @@ void layoutHeaderChips() {
     // hidden label keeps its slot and leaves a hole in the row. That is what
     // the SD icon has been doing on a card-less device, and it is what a chip
     // that comes and goes at runtime would do on every appearance.
-    if (!chain[i] || lv_obj_has_flag(chain[i], LV_OBJ_FLAG_HIDDEN)) continue;
+    if (!isShown(chain[i])) continue;
     lv_obj_align_to(chain[i], prev, LV_ALIGN_OUT_LEFT_MID, -HDR_CHIP_GAP, 0);
     prev = chain[i];
+  }
+  // align_to() wrote the positions; the x read below needs them applied.
+  lv_obj_update_layout(lv_obj_get_parent(lbl_hdr_sm));
+  return prev;
+}
+
+static bool runsIntoTitle(lv_obj_t *leftmost) {
+  if (!lbl_hdr_title || !leftmost) return false;
+  const lv_coord_t title_end = lv_obj_get_x(lbl_hdr_title) + lv_obj_get_width(lbl_hdr_title);
+  return lv_obj_get_x(leftmost) < title_end + HDR_CHIP_GAP;
+}
+
+void layoutHeaderChips() {
+  if (!lbl_hdr_sm) return;
+  // The battery shows its percent while the row has room for it, and drops
+  // it when every chip is on and the row would reach the title.
+  const bool bat = isShown(lbl_hdr_bat) && fuelGaugePresent();
+  if (bat) setBatteryText(false);
+  lv_obj_t *leftmost = packHeaderChips();
+  if (bat && runsIntoTitle(leftmost)) {
+    setBatteryText(true);
+    packHeaderChips();
   }
 
   // The address ends where the row ends; the status text left of it takes the
@@ -76,15 +128,8 @@ void layoutHeaderChips() {
   if (lbl_hdr_ip) lv_obj_align(lbl_hdr_ip, LV_ALIGN_RIGHT_MID, -HDR_ROW_MARGIN, 0);
 }
 
-// Battery glyph steps and warning levels, in percent.
-#define HDR_BAT_FULL_PCT   88
-#define HDR_BAT_3_PCT      63
-#define HDR_BAT_2_PCT      38
-#define HDR_BAT_1_PCT      13
-#define HDR_BAT_WARN_PCT   30
-#define HDR_BAT_BAD_PCT    15
-
-// Percent, glyph and a bolt while charging. Hidden with no gauge on the bus.
+// Colour and visibility. The text is set by layoutHeaderChips(), which runs
+// at the end of updateHeaderStatus() and knows how much room the row has.
 static void updateHeaderBattery() {
   if (!lbl_hdr_bat) return;
   if (!fuelGaugePresent()) {
@@ -93,17 +138,6 @@ static void updateHeaderBattery() {
   }
   const int pct = fuelGaugePercent();
   const FuelGaugeFlow flow = fuelGaugeFlow();
-  const char *icon = LV_SYMBOL_BATTERY_EMPTY;
-  if (pct >= HDR_BAT_FULL_PCT)   icon = LV_SYMBOL_BATTERY_FULL;
-  else if (pct >= HDR_BAT_3_PCT) icon = LV_SYMBOL_BATTERY_3;
-  else if (pct >= HDR_BAT_2_PCT) icon = LV_SYMBOL_BATTERY_2;
-  else if (pct >= HDR_BAT_1_PCT) icon = LV_SYMBOL_BATTERY_1;
-
-  char buf[24];
-  snprintf(buf, sizeof(buf), "%d%% %s%s", pct, icon,
-           flow == FUEL_FLOW_CHARGING ? LV_SYMBOL_CHARGE : "");
-  lv_label_set_text(lbl_hdr_bat, buf);
-
   uint32_t col = UI_COL_CAPTION;
   if (flow == FUEL_FLOW_CHARGING || flow == FUEL_FLOW_FULL) col = UI_COL_GOOD;
   else if (pct <= HDR_BAT_BAD_PCT)  col = UI_COL_BAD;
