@@ -188,6 +188,15 @@ void buildUI() {
   lv_obj_set_style_text_color(lbl_hdr_wifi, lv_color_hex(UI_COL_HDR_OFF), 0);
   lv_obj_set_style_text_font(lbl_hdr_wifi, &lv_font_montserrat_ext_12, 0);
 
+  // Percent and battery glyph, immediately left of the wifi icon. Hidden
+  // until a MAX17048 answers; updateHeaderStatus() fills it and the packing
+  // leaves no hole while it is hidden.
+  lbl_hdr_bat = lv_label_create(hdr);
+  lv_label_set_text(lbl_hdr_bat, "");
+  lv_obj_set_style_text_color(lbl_hdr_bat, lv_color_hex(UI_COL_CAPTION), 0);
+  lv_obj_set_style_text_font(lbl_hdr_bat, &lv_font_montserrat_ext_12, 0);
+  lv_obj_add_flag(lbl_hdr_bat, LV_OBJ_FLAG_HIDDEN);
+
   // Bluetooth, left of WiFi. Hidden while the master switch is off, so a
   // device that never uses BLE never shows it; updateHeaderStatus() follows
   // the switch. Quiet by design: on means allowed, not connected.

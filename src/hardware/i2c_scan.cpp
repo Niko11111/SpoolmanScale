@@ -28,8 +28,9 @@ bool i2cPresent(TwoWire &wire, uint8_t addr) {
 }
 
 const char *i2cKnownName(uint8_t addr) {
-  if (addr == I2C_ADDR_PN532)   return "PN532";
-  if (addr == I2C_ADDR_NAU7802) return "NAU7802";
+  if (addr == I2C_ADDR_PN532)    return "PN532";
+  if (addr == I2C_ADDR_NAU7802)  return "NAU7802";
+  if (addr == I2C_ADDR_MAX17048) return "MAX17048";
   return nullptr;
 }
 

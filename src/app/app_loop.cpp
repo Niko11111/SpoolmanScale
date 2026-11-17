@@ -30,6 +30,7 @@
 #include "services/mifare_write.h"
 #include "services/tag_family.h"
 #include "hardware/display_power.h"
+#include "hardware/fuel_gauge.h"
 #include "hardware/nfc.h"
 #include "hardware/scale.h"
 #include "hardware/scale_state.h"
@@ -868,6 +869,7 @@ void appLoop() {
     i2c_rescan_pending = false;
     i2cScanRefresh(I2C_EXT);
     logSDf("I2C_EXT rescan (diagnosis): %s", i2cScanLast());
+    fuelGaugePoll(true);
     // The second writer of scl_ok, and it has to ask the same question as the
     // 5 s probe: a chip that is wired but switched off in the settings must
     // not come back as present, or the header lights up again.
@@ -1947,6 +1949,10 @@ void appLoop() {
       if (scl_ok != prev) updateHeaderStatus();
     }
   }
+
+  // The fuel gauge shares the external bus and paces itself. A change in
+  // percent or direction is the only reason the header is redrawn here.
+  if (fuelGaugePoll()) updateHeaderStatus();
 
   // The same way back for the reader, and the reason it did not exist before:
   // the reader watchdog further down sits inside `if (nfc_ok)`, so it only ever

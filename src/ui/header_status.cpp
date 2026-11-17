@@ -5,9 +5,11 @@
 #include "services/ble_service.h"
 
 #include <Arduino.h>
+#include <cstdio>
 #include <cstring>
 #include <lvgl.h>
 
+#include "hardware/fuel_gauge.h"
 #include "services/device_name.h"
 #include "services/mdns_service.h"
 #include "services/user_options.h"
@@ -56,7 +58,8 @@ void layoutHeaderChips() {
   lv_obj_t *prev = lbl_hdr_sm;
   // AMS first, so it lands directly left of the backend badge: it belongs to
   // the backend, and the two read as a pair.
-  lv_obj_t *chain[] = { btn_hdr_ams, lbl_hdr_scl, btn_hdr_nfc, lbl_hdr_wifi, lbl_hdr_bt, lbl_hdr_sd };
+  lv_obj_t *chain[] = { btn_hdr_ams, lbl_hdr_scl, btn_hdr_nfc, lbl_hdr_wifi,
+                        lbl_hdr_bat, lbl_hdr_bt, lbl_hdr_sd };
   for (unsigned i = 0; i < sizeof(chain) / sizeof(chain[0]); i++) {
     // Hidden counts as absent. lv_obj_align_to() reads nothing but the
     // reference object's geometry - the hidden flag never reaches it - so a
@@ -73,10 +76,48 @@ void layoutHeaderChips() {
   if (lbl_hdr_ip) lv_obj_align(lbl_hdr_ip, LV_ALIGN_RIGHT_MID, -HDR_ROW_MARGIN, 0);
 }
 
+// Battery glyph steps and warning levels, in percent.
+#define HDR_BAT_FULL_PCT   88
+#define HDR_BAT_3_PCT      63
+#define HDR_BAT_2_PCT      38
+#define HDR_BAT_1_PCT      13
+#define HDR_BAT_WARN_PCT   30
+#define HDR_BAT_BAD_PCT    15
+
+// Percent, glyph and a bolt while charging. Hidden with no gauge on the bus.
+static void updateHeaderBattery() {
+  if (!lbl_hdr_bat) return;
+  if (!fuelGaugePresent()) {
+    lv_obj_add_flag(lbl_hdr_bat, LV_OBJ_FLAG_HIDDEN);
+    return;
+  }
+  const int pct = fuelGaugePercent();
+  const FuelGaugeFlow flow = fuelGaugeFlow();
+  const char *icon = LV_SYMBOL_BATTERY_EMPTY;
+  if (pct >= HDR_BAT_FULL_PCT)   icon = LV_SYMBOL_BATTERY_FULL;
+  else if (pct >= HDR_BAT_3_PCT) icon = LV_SYMBOL_BATTERY_3;
+  else if (pct >= HDR_BAT_2_PCT) icon = LV_SYMBOL_BATTERY_2;
+  else if (pct >= HDR_BAT_1_PCT) icon = LV_SYMBOL_BATTERY_1;
+
+  char buf[24];
+  snprintf(buf, sizeof(buf), "%d%% %s%s", pct, icon,
+           flow == FUEL_FLOW_CHARGING ? LV_SYMBOL_CHARGE : "");
+  lv_label_set_text(lbl_hdr_bat, buf);
+
+  uint32_t col = UI_COL_CAPTION;
+  if (flow == FUEL_FLOW_CHARGING || flow == FUEL_FLOW_FULL) col = UI_COL_GOOD;
+  else if (pct <= HDR_BAT_BAD_PCT)  col = UI_COL_BAD;
+  else if (pct <= HDR_BAT_WARN_PCT) col = UI_COL_WARN;
+  lv_obj_set_style_text_color(lbl_hdr_bat, lv_color_hex(col), 0);
+  lv_obj_clear_flag(lbl_hdr_bat, LV_OBJ_FLAG_HIDDEN);
+}
+
 void updateHeaderStatus() {
   if (!lbl_hdr_wifi) return;
 
   lv_obj_set_style_text_color(lbl_hdr_wifi, wifiColor(), 0);
+
+  updateHeaderBattery();
 
   // Bluetooth follows the master switch: shown while BLE may be used, gone
   // otherwise. The chip chain leaves no hole for a hidden one.
