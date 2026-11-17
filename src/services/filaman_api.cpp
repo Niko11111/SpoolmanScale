@@ -1986,19 +1986,22 @@ int filamanGetAmsState(const char* base_url, const char* api_key, int printer_id
   out.conn_known = !conn.isNull();
   out.connected  = conn | false;
 
+  int left_out = 0;
   for (JsonVariantConst uv : pr["ams"].as<JsonArrayConst>()) {
     JsonObjectConst u = uv.as<JsonObjectConst>();
-    if (out.unit_count >= AMS_UNITS_TOTAL) {
-      logSDf("FilaMan: printer %d has more units than %d, rest ignored",
-             printer_id, AMS_UNITS_TOTAL);
-      break;
+    const char* kind = u["kind"] | "ams";
+    const bool  is_ext = (strcmp(kind, "external") == 0);
+    // Not a break: the external holder comes after the units that did not
+    // fit, and it has a place of its own.
+    if (!amsUnitHasRoom(out, is_ext)) {
+      left_out++;
+      continue;
     }
     AmsSlotUnit& dst = out.unit[out.unit_count];
     dst = AmsSlotUnit{};
 
-    const char* kind = u["kind"] | "ams";
     dst.ams_id = (uint8_t)(u["ams_id"] | 0);
-    dst.is_ext = (strcmp(kind, "external") == 0);
+    dst.is_ext = is_ext;
     dst.is_ht  = (strcmp(kind, "ams_ht") == 0);
     // The model where the display API names it. Up to FilaMan 1.3.7 it does
     // not, and then the kind is all there is: it tells an AMS HT apart, while
@@ -2125,6 +2128,10 @@ int filamanGetAmsState(const char* base_url, const char* api_key, int printer_id
     out.unit_count++;
   }
 
+  if (left_out > 0) {
+    logSDf("FilaMan: printer %d has %d AMS unit(s) beyond the %d shown, left out",
+           printer_id, left_out, AMS_MAX_UNITS);
+  }
   out.ams_exists = (out.unit_count > 0);
   out.valid = true;
   logSDf("FilaMan: AMS of printer %d, %d unit(s), connected=%d",

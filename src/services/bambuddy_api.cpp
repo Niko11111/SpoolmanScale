@@ -1406,12 +1406,12 @@ void bambuStatusToAmsState(JsonObjectConst doc, int printer_id, AmsSlotState& ou
   // 255 is Bambu's "nothing loaded", and so is a missing field.
   const int tray_now = doc["tray_now"] | 255;
 
+  int left_out = 0;
   for (JsonVariantConst uv : doc["ams"].as<JsonArrayConst>()) {
     JsonObjectConst u = uv.as<JsonObjectConst>();
-    if (out.unit_count >= AMS_MAX_UNITS) {
-      logSDf("%s: printer %d reports more than %d AMS units, rest ignored",
-             who, printer_id, AMS_MAX_UNITS);
-      break;
+    if (!amsUnitHasRoom(out, false)) {
+      left_out++;
+      continue;
     }
     AmsSlotUnit& dst = out.unit[out.unit_count];
     dst = AmsSlotUnit{};
@@ -1466,12 +1466,16 @@ void bambuStatusToAmsState(JsonObjectConst doc, int printer_id, AmsSlotState& ou
     }
     out.unit_count++;
   }
+  if (left_out > 0) {
+    logSDf("%s: printer %d has %d AMS unit(s) beyond the %d shown, left out",
+           who, printer_id, left_out, AMS_MAX_UNITS);
+  }
 
   // The external holder is one unit carrying its bays, not one unit per bay:
   // a dual nozzle H2D has two of them side by side, and they belong together
   // on the screen the way the bays of an AMS do.
   JsonArrayConst vt = doc["vt_tray"].as<JsonArrayConst>();
-  if (!vt.isNull() && vt.size() > 0 && out.unit_count < AMS_UNITS_TOTAL) {
+  if (!vt.isNull() && vt.size() > 0 && amsUnitHasRoom(out, true)) {
     AmsSlotUnit& dst = out.unit[out.unit_count];
     dst = AmsSlotUnit{};
     dst.ams_id   = AMS_EXT_AMS_ID;
