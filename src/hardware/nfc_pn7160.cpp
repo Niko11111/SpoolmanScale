@@ -144,8 +144,17 @@ constexpr uint16_t BUS_RETRY_MS        = 10;
 // what is pending after the deadline, and an IRQ line stuck high would
 // otherwise keep the loop task here.
 constexpr uint8_t  FRAMES_PER_WAIT_MAX = 16;
-constexpr uint16_t CTRL_TIMEOUT_MS     = 20;    // a control response
+// A control response. Upper bound, not the usual time: during discovery the
+// chip may answer only after its current poll phase, and the first CORE_RESET
+// and every ping went unanswered within 20 ms on the bench (17.11.2026).
+// A little over one discovery period.
+constexpr uint16_t CTRL_TIMEOUT_MS     = 120;
 constexpr uint16_t RESET_NTF_TIMEOUT_MS = 50;   // the library reads it within 45 ms
+// CORE_RESET is sent again when it goes unanswered: the chip may still be
+// starting after VEN. The library retries too, 3 x 500 ms; 100 ms here.
+constexpr uint8_t  RESET_TRIES         = 3;
+constexpr uint16_t RESET_RETRY_MS      = 100;
+constexpr uint8_t  PEEK_BYTES          = 3;     // an NCI header
 constexpr uint16_t INIT_TIMEOUT_MS     = 150;   // the library's own value for CORE_INIT
 constexpr uint16_t FIELD_OFF_MS        = 20;    // as the PN532's field cycle
 constexpr uint8_t  ARM_DRAIN_FRAMES_MAX = 8;
@@ -174,6 +183,7 @@ struct Target {
 }  // namespace
 
 static Electroniccats_PN7150* s_lib = nullptr;
+static TwoWire* s_wire = nullptr;
 static RfState  s_state = RfState::Off;
 static Target   s_target = {};
 static uint8_t  s_frame[NCI_FRAME_MAX];
@@ -317,12 +327,36 @@ static void venPulse() {
   delay(VEN_SETTLE_MS);
 }
 
+// Why a CORE_RESET went unanswered: the IRQ level, and what the chip hands
+// out when read without waiting for IRQ. A response there with IRQ low means
+// the IRQ wire does not reach GPIO 21; nothing there, the chip did not answer.
+static void logResetSilence(uint8_t attempt) {
+  uint8_t got[PEEK_BYTES] = {0};
+  size_t n = 0;
+  if (s_wire && s_wire->requestFrom((uint8_t)I2C_ADDR_PN7160, PEEK_BYTES) == PEEK_BYTES) {
+    for (; n < PEEK_BYTES && s_wire->available(); n++) got[n] = s_wire->read();
+  }
+  while (s_wire && s_wire->available()) s_wire->read();
+  logSDf("PN7160: CORE_RESET unanswered (try %u), IRQ %s, read without IRQ: %u bytes %02X %02X %02X",
+         attempt, digitalRead(hw_pins::NFC_IRQ) == HIGH ? "high" : "low", (unsigned)n,
+         got[0], got[1], got[2]);
+}
+
+static bool resetChip() {
+  for (uint8_t attempt = 1; attempt <= RESET_TRIES; attempt++) {
+    if (control(CMD_CORE_RESET, sizeof(CMD_CORE_RESET), deadlineIn(CTRL_TIMEOUT_MS))) return true;
+    logResetSilence(attempt);
+    delay(RESET_RETRY_MS);
+  }
+  return false;
+}
+
 // What the library's connectNCI() does, without its two side effects: it
 // restarts the I2C bus (with default pins, unless told otherwise) and waits
 // 3 x 500 ms for a chip that does not answer. Returns the failed step or null.
 static const char* connect() {
   venPulse();
-  if (!control(CMD_CORE_RESET, sizeof(CMD_CORE_RESET), deadlineIn(CTRL_TIMEOUT_MS))) return "reset";
+  if (!resetChip()) return "reset";
   if (awaitNtf(GID_CORE, OID_CORE_RESET, deadlineIn(RESET_NTF_TIMEOUT_MS))) noteFirmware();
   if (!control(CMD_CORE_INIT, sizeof(CMD_CORE_INIT), deadlineIn(INIT_TIMEOUT_MS))) return "init";
   return nullptr;
@@ -381,6 +415,7 @@ bool pn7160Begin(TwoWire* wire, uint32_t* firmware_version) {
                                       PN7160, wire);
   }
   if (!s_lib) return false;
+  s_wire = wire;
   // VCC (MINI) and VANT (module) hang on the 5 V of connector pin 1. The
   // 3.3 V preset is for boards that feed the antenna driver from 3.3 V.
   s_lib->setPn7160FixedVbat3V3(false);
@@ -392,6 +427,12 @@ bool pn7160Reinit(uint32_t* firmware_version) {
   s_state = RfState::Off;
   s_fw_version = 0;
   const char* failed = bringUp();
+  // The first bring-up after power on failed at "settings" on the bench and
+  // the next one worked: one more go at once, not five seconds later.
+  if (failed) {
+    logSDf("PN7160: bring-up failed at %s, trying once more", failed);
+    failed = bringUp();
+  }
   if (failed) {
     s_state = RfState::Off;
     logSDf("PN7160: bring-up failed at %s", failed);
@@ -402,8 +443,15 @@ bool pn7160Reinit(uint32_t* firmware_version) {
 
 bool pn7160Ping() {
   if (!s_lib || s_state == RfState::Off) return false;
-  return control(CMD_GET_TOTAL_DURATION, sizeof(CMD_GET_TOTAL_DURATION),
-                 deadlineIn(CTRL_TIMEOUT_MS));
+  const uint32_t t0 = millis();
+  s_frame_len = 0;
+  if (control(CMD_GET_TOTAL_DURATION, sizeof(CMD_GET_TOTAL_DURATION),
+              deadlineIn(CTRL_TIMEOUT_MS))) return true;
+  // What came back instead, for the bench: nothing, a refusal, or late.
+  logSDf("PN7160: ping unanswered after %lu ms, last frame %u bytes %02X %02X %02X %02X, IRQ %s",
+         (unsigned long)(millis() - t0), (unsigned)s_frame_len, s_frame[0], s_frame[1],
+         s_frame[2], s_frame[3], digitalRead(hw_pins::NFC_IRQ) == HIGH ? "high" : "low");
+  return false;
 }
 
 static bool deactivate(uint8_t type, uint32_t deadline_ms) {
