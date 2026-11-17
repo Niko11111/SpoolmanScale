@@ -33,6 +33,7 @@ constexpr uint8_t  BLOCK_BYTES     = 16;
 constexpr uint8_t  KEY_GIVE_UP     = 3;
 constexpr size_t   UID_STR_LEN     = 32;
 constexpr size_t   STATS_JSON_LEN  = 256;
+constexpr size_t   RF_JSON_LEN     = 320;
 constexpr uint32_t MS_PER_S        = 1000;
 
 }  // namespace
@@ -43,6 +44,9 @@ static uint32_t s_started_ms = 0;
 static uint32_t s_ended_ms = 0;
 static uint32_t s_next_cycle_ms = 0;
 static NfcMeasureStats s_stats = {};
+// Why commands failed during the run (PN7160 only; s_rf_valid false on a PN532).
+static NfcRfCounts s_rf = {};
+static bool s_rf_valid = false;
 
 // The tag of the last read, and what is known about it.
 static uint8_t     s_uid[NFC_UID_MAX];
@@ -145,6 +149,9 @@ static void begin() {
     return;
   }
   s_stats = {};
+  nfcRfCountsTake(nullptr);   // count from here
+  s_rf = {};
+  s_rf_valid = false;
   s_uid_len = 0;
   s_uid_str[0] = '\0';
   s_kind = "none";
@@ -154,9 +161,24 @@ static void begin() {
   logSDf("NFC measure: %s, %u s, started", nfcChipName(), s_seconds);
 }
 
+// The causes in one line, PN7160 only.
+static void logRfCounts() {
+  if (!s_rf_valid) return;
+  logSDf("NFC measure: %s commands %lu, ok %lu, tag status %lu, no answer %lu, dropped %lu, "
+         "rf timeout %lu, corrupted %lu, protocol %lu, activation failed %lu, other %lu, "
+         "reselect missed %lu",
+         nfcChipName(), (unsigned long)s_rf.commands, (unsigned long)s_rf.answered_ok,
+         (unsigned long)s_rf.tag_status, (unsigned long)s_rf.no_answer,
+         (unsigned long)s_rf.dropped, (unsigned long)s_rf.rf_timeout,
+         (unsigned long)s_rf.rf_corrupted, (unsigned long)s_rf.rf_protocol,
+         (unsigned long)s_rf.activation_failed, (unsigned long)s_rf.other_errors,
+         (unsigned long)s_rf.reselect_miss);
+}
+
 static void finish() {
   s_state = MeasureState::Done;
   s_ended_ms = millis();
+  s_rf_valid = nfcRfCountsTake(&s_rf);
   const uint32_t uid_pm = nfcMeasurePerMille(s_stats.uid_reads, s_stats.cycles);
   const uint32_t blk_pm = nfcMeasurePerMille(s_stats.block_reads, s_stats.cycles);
   logSDf("NFC measure: %s, %u s, %lu cycles, UID %lu.%lu %%, block %lu.%lu %%, "
@@ -166,6 +188,7 @@ static void finish() {
          (unsigned long)(blk_pm / 10), (unsigned long)(blk_pm % 10),
          (unsigned long)nfcMeasureAvgMs(s_stats), (unsigned long)s_stats.cycle_ms_max,
          (unsigned long)s_stats.uid_changes, s_uid_str[0] ? s_uid_str : "-", s_kind);
+  logRfCounts();
 }
 
 bool nfcMeasureTick() {
@@ -187,12 +210,14 @@ bool nfcMeasureTick() {
 void nfcMeasureJson(char* out, size_t out_len) {
   char stats[STATS_JSON_LEN];
   nfcMeasureStatsJson(s_stats, stats, sizeof(stats));
+  char rf[RF_JSON_LEN] = "null";
+  if (s_rf_valid) nfcRfCountsJson(s_rf, rf, sizeof(rf));
   uint32_t elapsed = 0;
   if (s_state == MeasureState::Running) elapsed = millis() - s_started_ms;
   if (s_state == MeasureState::Done) elapsed = s_ended_ms - s_started_ms;
   snprintf(out, out_len,
            "{\"state\":\"%s\",\"chip\":\"%s\",\"seconds\":%u,\"elapsed_ms\":%lu,"
-           "\"cycle_ms\":%lu,\"tag\":\"%s\",\"kind\":\"%s\",%s}",
+           "\"cycle_ms\":%lu,\"tag\":\"%s\",\"kind\":\"%s\",%s,\"rf\":%s}",
            stateName(), nfcChipName(), s_seconds, (unsigned long)elapsed,
-           (unsigned long)MEASURE_CYCLE_MS, s_uid_str, s_kind, stats);
+           (unsigned long)MEASURE_CYCLE_MS, s_uid_str, s_kind, stats, rf);
 }

@@ -4,6 +4,8 @@
 #include <Wire.h>
 #include <stdint.h>
 
+#include "hardware/nfc_rf_counts.h"
+
 // Which reader chip sits on the bus. Every function below speaks to the one
 // nfcDetectChip() chose at boot; a PN7160 is driven by hardware/nfc_pn7160.cpp.
 enum NfcChip : uint8_t {
@@ -100,3 +102,7 @@ bool nfcWriteNtagPage(uint8_t page, uint8_t* data);
 // InListPassiveTarget whose answer is left pending, so IRQ falls when a card
 // comes. PN7160: discovery with nothing left to read, so IRQ rises then.
 bool nfcArmForWake();
+
+// How the tag commands since the last call went, by cause (PN7160 only, see
+// nfc_rf_counts.h); then zero. False on a PN532, out left zeroed.
+bool nfcRfCountsTake(NfcRfCounts* out);

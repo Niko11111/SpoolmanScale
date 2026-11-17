@@ -297,3 +297,10 @@ bool nfcArmForWake() {
   if (s_chip == NFC_CHIP_PN7160) return pn7160ArmForWake();
   return nfc && nfc->startPassiveTargetIDDetection(PN532_MIFARE_ISO14443A);
 }
+
+bool nfcRfCountsTake(NfcRfCounts* out) {
+  if (out) *out = {};
+  if (s_chip != NFC_CHIP_PN7160) return false;
+  pn7160RfCountsTake(out);
+  return true;
+}

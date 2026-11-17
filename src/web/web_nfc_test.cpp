@@ -9,7 +9,7 @@
 // Last: T() is a macro, and ArduinoJson uses T as a template parameter.
 #include "lang.h"
 
-#define NFC_TEST_JSON_LEN 512
+#define NFC_TEST_JSON_LEN 1024
 
 static void wakeTestRoutes(WebServer& srv) {
   srv.on("/api/nfc/waketest", HTTP_GET, [&srv]() {

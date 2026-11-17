@@ -26,6 +26,7 @@
 #include "app_config.h"
 #include "hardware/i2c_scan.h"
 #include "hardware/nfc.h"
+#include "hardware/nfc_rf_counts.h"
 #include "hardware/pins.h"
 #include "hardware/sd_logger.h"
 
@@ -189,6 +190,8 @@ static Target   s_target = {};
 static uint8_t  s_frame[NCI_FRAME_MAX];
 static uint32_t s_frame_len = 0;
 static uint32_t s_fw_version = 0;
+// What the exchanges came to since the last pn7160RfCountsTake().
+static NfcRfCounts s_rf = {};
 // The ISO 15693 UID logged last, so a tag lying on the reader is one line.
 static uint8_t  s_vicinity_logged[NFC_UID_MAX];
 
@@ -248,9 +251,23 @@ static void noteActivation() {
   s_state = RfState::Active;
 }
 
+// An error notification, counted by its status wherever it turns up: during
+// a tag command, or from discovery on its own (a tag it could not select).
+static void noteCoreError() {
+  const uint8_t status = s_frame_len > NCI_STATUS_AT ? s_frame[NCI_STATUS_AT] : 0;
+  nfcRfCountError(s_rf, status);
+  if (sd_verbose) {
+    logSDf("[verbose] PN7160: chip reports %s (0x%02X)", nfcRfStatusName(status), status);
+  }
+}
+
+static bool isCoreError();
+
 // Keeps s_state in step with what the chip says happened.
 static void trackRfState() {
-  if (isMsg(NCI_MT_NTF, GID_RF, OID_RF_INTF_ACTIVATED)) {
+  if (isCoreError()) {
+    noteCoreError();
+  } else if (isMsg(NCI_MT_NTF, GID_RF, OID_RF_INTF_ACTIVATED)) {
     noteActivation();
   } else if (isMsg(NCI_MT_NTF, GID_RF, OID_RF_DEACTIVATE) && s_frame_len > NCI_HDR) {
     s_state = (s_frame[DEACTIVATE_TYPE_AT] == DEACTIVATE_TO_DISCOVERY) ? RfState::Discovery
@@ -501,8 +518,10 @@ bool pn7160ReadTarget(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms, uint8
   const uint32_t deadline = deadlineIn(timeout_ms);
   // Discovery that is already running needs no wait: a tag that came meanwhile
   // has raised IRQ. After a restart the tag needs time to be selected again.
+  const bool was_active = s_state == RfState::Active;
   const bool restarted = s_state != RfState::Discovery && rediscover(deadline);
   collectActivation(restarted ? deadline : millis());
+  if (was_active && s_state != RfState::Active) s_rf.reselect_miss++;
   if (s_state != RfState::Active || s_target.uid_len == 0) return false;
   memcpy(uid, s_target.uid, s_target.uid_len);
   *uid_len = s_target.uid_len;
@@ -547,6 +566,24 @@ static bool isCoreError() {
          isMsg(NCI_MT_NTF, GID_CORE, OID_CORE_INTERFACE_ERROR);
 }
 
+static bool noteExchangeFailed(uint8_t cmd0, const char* why, uint32_t* counter) {
+  (*counter)++;
+  if (sd_verbose) logSDf("[verbose] PN7160: tag command 0x%02X failed: %s", cmd0, why);
+  return false;
+}
+
+// Every answer ends in a status byte (Frame and TAG-CMD interfaces alike);
+// not 0 is the tag or the chip turning the command down.
+static void noteAnswer(uint8_t cmd0, const uint8_t* resp, uint8_t n) {
+  const uint8_t status = n ? resp[n - 1] : 0xFF;
+  if (status == TAG_STATUS_OK) {
+    s_rf.answered_ok++;
+    return;
+  }
+  s_rf.tag_status++;
+  if (sd_verbose) logSDf("[verbose] PN7160: tag command 0x%02X answered with status 0x%02X", cmd0, status);
+}
+
 // One command to the selected tag, one answer back. resp is always the full
 // NCI payload size: the length comes from the chip, and the library's
 // readerTagCmd() copies it into whatever it is handed. Credit notifications
@@ -562,17 +599,20 @@ static bool exchange(const uint8_t* cmd, uint8_t len, uint8_t resp[NCI_PAYLOAD_M
   uint8_t frame[NCI_HDR + TAG_CMD_MAX] = {NCI_MT_DATA, 0x00, len};
   memcpy(frame + NCI_HDR, cmd, len);
   if (!writeFrame(frame, NCI_HDR + len)) return false;
+  s_rf.commands++;
   const uint32_t deadline = deadlineIn(TAG_CMD_TIMEOUT_MS);
   for (uint8_t i = 0; i < FRAMES_PER_WAIT_MAX && readFrame(deadline); i++) {
-    if (s_state != RfState::Active || isCoreError()) return false;
+    if (s_state != RfState::Active) return noteExchangeFailed(cmd[0], "tag dropped", &s_rf.dropped);
+    if (isCoreError()) return false;   // counted and logged by trackRfState()
     if ((s_frame[0] & NCI_MT_MASK) != NCI_MT_DATA) continue;
     // The header's length, unless the read came back shorter than it says.
     const uint32_t got = s_frame_len - NCI_HDR;
     *resp_len = (uint8_t)(s_frame[2] < got ? s_frame[2] : got);
     memcpy(resp, s_frame + NCI_HDR, *resp_len);
+    noteAnswer(cmd[0], resp, *resp_len);
     return true;
   }
-  return false;
+  return noteExchangeFailed(cmd[0], "no answer", &s_rf.no_answer);
 }
 
 bool pn7160AuthMifare(uint8_t sector, const uint8_t key[6], uint8_t key_type) {
@@ -673,4 +713,9 @@ bool pn7160ArmForWake() {
   // deadline, and a chip that kept sending would hold the loop here.
   for (uint8_t i = 0; i < ARM_DRAIN_FRAMES_MAX && readFrame(deadline); i++) {}
   return s_state == RfState::Discovery && digitalRead(hw_pins::NFC_IRQ) != HIGH;
+}
+
+void pn7160RfCountsTake(NfcRfCounts* out) {
+  if (out) *out = s_rf;
+  s_rf = {};
 }

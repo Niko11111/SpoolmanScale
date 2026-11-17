@@ -47,3 +47,7 @@ bool pn7160ReadVicinityBlock(uint8_t block, uint8_t data[4]);
 // For the wake test: discovery running and nothing left to read, so IRQ is
 // low and rises only for the next tag. False when that state was not reached.
 bool pn7160ArmForWake();
+
+struct NfcRfCounts;
+// The counters since the last call, then zero.
+void pn7160RfCountsTake(NfcRfCounts* out);
