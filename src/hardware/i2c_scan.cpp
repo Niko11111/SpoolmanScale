@@ -11,6 +11,9 @@
 #define I2C_SCAN_LAST   0x77
 
 static char scan_last[I2C_SCAN_LINE_LEN] = "not scanned";
+// The addresses behind scan_last, for i2cScanSaw().
+static uint8_t scan_found[I2C_SCAN_MAX_FOUND];
+static uint8_t scan_found_n = 0;
 
 uint8_t i2cScan(TwoWire &wire, uint8_t *found, uint8_t max_found) {
   if (!found || max_found == 0) return 0;
@@ -29,14 +32,12 @@ bool i2cPresent(TwoWire &wire, uint8_t addr) {
 
 const char *i2cKnownName(uint8_t addr) {
   if (addr == I2C_ADDR_PN532)   return "PN532";
+  if (addr == I2C_ADDR_PN7160)  return "PN7160";
   if (addr == I2C_ADDR_NAU7802) return "NAU7802";
   return nullptr;
 }
 
-uint8_t i2cScanFormat(TwoWire &wire, char *out, size_t out_len) {
-  uint8_t found[I2C_SCAN_MAX_FOUND];
-  const uint8_t n = i2cScan(wire, found, I2C_SCAN_MAX_FOUND);
-
+static uint8_t formatFound(const uint8_t *found, uint8_t n, char *out, size_t out_len) {
   if (!out || out_len == 0) return n;
   out[0] = '\0';
   if (n == 0) {
@@ -58,8 +59,22 @@ uint8_t i2cScanFormat(TwoWire &wire, char *out, size_t out_len) {
   return n;
 }
 
+uint8_t i2cScanFormat(TwoWire &wire, char *out, size_t out_len) {
+  uint8_t found[I2C_SCAN_MAX_FOUND];
+  const uint8_t n = i2cScan(wire, found, I2C_SCAN_MAX_FOUND);
+  return formatFound(found, n, out, out_len);
+}
+
 void i2cScanRefresh(TwoWire &wire) {
-  i2cScanFormat(wire, scan_last, sizeof(scan_last));
+  scan_found_n = i2cScan(wire, scan_found, I2C_SCAN_MAX_FOUND);
+  formatFound(scan_found, scan_found_n, scan_last, sizeof(scan_last));
+}
+
+bool i2cScanSaw(uint8_t addr) {
+  for (uint8_t i = 0; i < scan_found_n; i++) {
+    if (scan_found[i] == addr) return true;
+  }
+  return false;
 }
 
 const char *i2cScanLast() {

@@ -138,6 +138,27 @@ void wifiConnect() {
 // ============================================================
 //  SETUP
 // ============================================================
+// The PN7160 test reader (Notes, PN7160). Lines of its own, so a log says
+// which chip it came from; the PN532 lines in appSetup() stay as they were.
+// The boot scan ran before VEN was up and cannot have seen the chip, so the
+// bus is scanned once more for the log and the status page.
+static bool beginPn7160Reader() {
+  i2cScanRefresh(I2C_EXT);
+  logSDf("I2C_EXT scan with VEN on: %s", i2cScanLast());
+  Serial.print("Looking for PN7160... ");
+  uint32_t ver = 0;
+  if (!nfcHardwareBegin(&I2C_EXT, hw_pins::NFC_VEN, hw_pins::NFC_IRQ, &ver)) {
+    Serial.printf("ERROR! (bus: %s)\n", i2cScanLast());
+    logSDf("NFC init FAILED (PN7160, bus: %s)", i2cScanLast());
+    return false;
+  }
+  const unsigned fw_major = (ver >> 16) & 0xFF;
+  const unsigned fw_minor = (ver >> 8) & 0xFF;
+  Serial.printf("OK (FW %02X.%02X)\n", fw_major, fw_minor);
+  logSDf("NFC ready (PN7160 FW %02X.%02X)", fw_major, fw_minor);
+  return true;
+}
+
 void appSetup() {
   Serial.begin(115200);
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -199,16 +220,20 @@ void appSetup() {
 
   delay(500);
 
-  Serial.print("Looking for PN532... ");
-  uint32_t ver = 0;
   nfcResetLoad();
-  if (nfcHardwareBegin(&I2C_EXT, nfcResetPinForBoot(), hw_pins::PN532_IRQ_UNUSED, &ver)) {
-    nfc_ok = true;
-    Serial.printf("OK (FW %d.%d)\n", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
-    logSDf("NFC ready (PN532 FW %d.%d)", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
+  if (nfcDetectChip(&I2C_EXT) == NFC_CHIP_PN7160) {
+    nfc_ok = beginPn7160Reader();
   } else {
-    Serial.printf("ERROR! (bus: %s)\n", i2cScanLast());
-    logSDf("NFC init FAILED (bus: %s)", i2cScanLast());
+    Serial.print("Looking for PN532... ");
+    uint32_t ver = 0;
+    if (nfcHardwareBegin(&I2C_EXT, nfcResetPinForBoot(), hw_pins::PN532_IRQ_UNUSED, &ver)) {
+      nfc_ok = true;
+      Serial.printf("OK (FW %d.%d)\n", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
+      logSDf("NFC ready (PN532 FW %d.%d)", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
+    } else {
+      Serial.printf("ERROR! (bus: %s)\n", i2cScanLast());
+      logSDf("NFC init FAILED (bus: %s)", i2cScanLast());
+    }
   }
 
   // A device built without a load cell is not a device with a broken one. The

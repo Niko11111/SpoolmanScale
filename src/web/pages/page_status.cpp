@@ -8,6 +8,7 @@
 #include "app/app_state.h"
 #include "app_config.h"
 #include "hardware/i2c_scan.h"
+#include "hardware/nfc.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/device_name.h"
@@ -78,6 +79,7 @@ static String statusJson() {
     j += ",\"weight\":\"" + jsonEsc(w) + "\"";
   }
   j += ",\"nfc\":" + String(nfc_ok ? "true" : "false");
+  j += ",\"nfc_chip\":\"" + String(nfcChipName()) + "\"";
   j += ",\"i2c\":\"" + jsonEsc(i2cScanLast()) + "\"";
   {
     // Two forms on purpose. "diag" is the code, always English, for whoever is

@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION  "v0.8.4-beta.100"
+#define FW_VERSION  "v0.8.4-beta.101"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -84,6 +84,9 @@
 // meant nothing to anyone reading a bus scan.
 #define I2C_ADDR_PN532      0x24
 #define I2C_ADDR_NAU7802    0x2A
+// The PN7160's factory address. Its solder pads also offer 0x29-0x2B, and 0x2A
+// would collide with the NAU7802: never move it there.
+#define I2C_ADDR_PN7160     0x28
 
 // What a calibration is allowed to produce. A failed I2C read comes back as
 // all ones through Adafruit_BusIO, so an absent ADC delivers a sample of -1

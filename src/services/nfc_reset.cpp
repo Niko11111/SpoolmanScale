@@ -46,6 +46,12 @@ int8_t nfcResetPinForBoot() {
 bool nfcResetVerified() { return s_verified; }
 
 bool nfcResetSelfTest() {
+  // Pin 7 is the PN7160's VEN: holding it low switches the reader off, and the
+  // verdict would be written for a PN532 that is not there.
+  if (nfcChip() == NFC_CHIP_PN7160) {
+    logSD("NFC reset probe: skipped, the reader is a PN7160");
+    return false;
+  }
   const int8_t wire = hw_pins::PN532_RESET_WIRE;
 
   // Open drain: the pin sinks and never sources, so on a device that still has
@@ -85,6 +91,7 @@ void nfcReaderNoteRecovery() {
 }
 
 bool nfcResetHintDue() {
+  if (nfcChip() == NFC_CHIP_PN7160) return false;   // the hint is about the PN532's wire
   if (s_verified) return false;   // nothing left to tell them
   if (s_never)    return false;
   if (!s_recovery) return false;  // the modification would buy them nothing yet

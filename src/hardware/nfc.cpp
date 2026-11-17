@@ -3,6 +3,11 @@
 #include <Adafruit_PN532.h>
 #include <string.h>
 
+#include "app_config.h"
+#include "hardware/i2c_scan.h"
+#include "hardware/nfc_pn7160.h"
+#include "hardware/sd_logger.h"
+
 static Adafruit_PN532* nfc = nullptr;
 static constexpr uint8_t MIFARE_SECTOR_READ_ATTEMPTS = 3;
 
@@ -11,8 +16,39 @@ static constexpr uint8_t MIFARE_SECTOR_READ_ATTEMPTS = 3;
 static TwoWire* nfc_wire = nullptr;
 static int8_t   nfc_reset_pin = -1;
 
+// Which chip every function below talks to. Each one asks it first and hands
+// a PN7160 to hardware/nfc_pn7160.cpp; what follows that line is the PN532
+// path exactly as it was before the PN7160 existed.
+static NfcChip s_chip = NFC_CHIP_PN532;
+
+NfcChip nfcDetectChip(TwoWire* wire) {
+  // A PN532 in the boot scan settles it without a byte more on the bus.
+  if (i2cScanSaw(I2C_ADDR_PN532)) return s_chip = NFC_CHIP_PN532;
+  if (pn7160Probe(wire)) return s_chip = NFC_CHIP_PN7160;
+  // Nothing answers: the PN532 path, which reports the failure as it always has.
+  return s_chip = NFC_CHIP_PN532;
+}
+
+NfcChip nfcChip() { return s_chip; }
+
+const char* nfcChipName() { return s_chip == NFC_CHIP_PN7160 ? "PN7160" : "PN532"; }
+
+uint8_t nfcChipI2cAddress() {
+  return s_chip == NFC_CHIP_PN7160 ? I2C_ADDR_PN7160 : I2C_ADDR_PN532;
+}
+
+bool nfcChipCanWrite() { return s_chip == NFC_CHIP_PN532; }
+
+// The PN7160 build reads only. Every write lands here and says so in the log,
+// so a refused write is never mistaken for a tag that would not take it.
+static bool pn7160WriteRefused(const char* what) {
+  logSDf("NFC: %s not written - writing tags is not supported with the PN7160 in this build", what);
+  return false;
+}
+
 bool nfcHardwareBegin(TwoWire* wire, int8_t reset_pin, int8_t irq_pin,
                       uint32_t* firmware_version) {
+  if (s_chip == NFC_CHIP_PN7160) return pn7160Begin(wire, firmware_version);
   if (!nfc) nfc = new Adafruit_PN532(irq_pin, reset_pin, wire);
   if (!nfc) return false;
   nfc_wire = wire;
@@ -30,12 +66,14 @@ bool nfcHardwareBegin(TwoWire* wire, int8_t reset_pin, int8_t irq_pin,
 // GetFirmwareVersion, which is the same symptom that takes the shared I2C bus
 // (and with it the scale) down with it.
 bool nfcHardwarePing() {
+  if (s_chip == NFC_CHIP_PN7160) return pn7160Ping();
   return nfc && nfc->getFirmwareVersion() != 0;
 }
 
 // Re-runs begin() and SAMConfig() on the existing instance. Returns true once
 // the reader answers again.
 bool nfcHardwareReinit(uint32_t* firmware_version) {
+  if (s_chip == NFC_CHIP_PN7160) return pn7160Reinit(firmware_version);
   if (!nfc) return false;
   nfc->begin();
   delay(100);
@@ -46,7 +84,14 @@ bool nfcHardwareReinit(uint32_t* firmware_version) {
   return true;
 }
 
+bool nfcReadAnyTarget(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms, uint8_t* tech) {
+  if (s_chip == NFC_CHIP_PN7160) return pn7160ReadTarget(uid, uid_len, timeout_ms, tech);
+  if (tech) *tech = NFC_TECH_A;
+  return nfcReadPassiveTarget(uid, uid_len, timeout_ms);
+}
+
 bool nfcReadPassiveTarget(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms) {
+  if (s_chip == NFC_CHIP_PN7160) return pn7160ReadIso14443a(uid, uid_len, timeout_ms);
   return nfc && nfc->readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, uid_len, timeout_ms);
 }
 
@@ -75,12 +120,14 @@ static bool rawCommand(uint8_t* cmd, uint8_t cmd_len, uint8_t resp_len,
 }
 
 bool nfcInRelease() {
+  if (s_chip == NFC_CHIP_PN7160) return pn7160Release();
   // InRelease, Tg 0 = every target. Response: 00 00 FF 03 FD D5 53 st DCS 00.
   uint8_t cmd[2] = { 0x52, 0x00 };
   return rawCommand(cmd, 2, 10);
 }
 
 uint8_t nfcRfFieldCycle() {
+  if (s_chip == NFC_CHIP_PN7160) return pn7160RfFieldCycle();
   if (!nfc) return 0;
   // RFConfiguration, item 1 (RF field). Response: 00 00 FF 02 FE D5 33 F8 00.
   // 20 ms off woke a halted Creality tag about every second time; 100 ms off
@@ -160,6 +207,7 @@ bool nfcReadMifareSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blo
 
   s_sector_refused_by_card = false;
   s_last_auth_status = NFC_AUTH_STATUS_NONE;
+  if (s_chip == NFC_CHIP_PN7160) return false;
   if (!nfc) return false;
 
   for (uint8_t attempt = 0; attempt < MIFARE_SECTOR_READ_ATTEMPTS; attempt++) {
@@ -195,11 +243,13 @@ bool nfcLastSectorRefusedByCard() { return s_sector_refused_by_card; }
 uint8_t nfcLastAuthStatus() { return s_last_auth_status; }
 
 bool nfcReadMifareBlock(uint8_t block, uint8_t data[16]) {
+  if (s_chip == NFC_CHIP_PN7160) return false;
   return nfc && nfc->mifareclassic_ReadDataBlock(block, data);
 }
 
 bool nfcAuthMifareSector(int sector, const uint8_t key[6], const uint8_t uid[4],
                          uint8_t key_type) {
+  if (s_chip == NFC_CHIP_PN7160) return false;
   if (!nfc) return false;
   uint8_t k[6], u[4];
   memcpy(k, key, 6);
@@ -214,6 +264,7 @@ bool nfcAuthMifareSector(int sector, const uint8_t key[6], const uint8_t uid[4],
 // written. The same InDataExchange here, with the status byte checked: 0x00
 // is the card's "done". Response: 00 00 FF 03 FD D5 41 st DCS 00.
 bool nfcWriteMifareBlock(uint8_t block, const uint8_t data[16]) {
+  if (s_chip == NFC_CHIP_PN7160) return pn7160WriteRefused("MIFARE block");
   if (!nfc) return false;
   uint8_t cmd[4 + 16] = { 0x40, 0x01, 0xA0, block };   // InDataExchange, Tg 1, MIFARE WRITE
   memcpy(cmd + 4, data, 16);
@@ -223,6 +274,7 @@ bool nfcWriteMifareBlock(uint8_t block, const uint8_t data[16]) {
 }
 
 bool nfcReadNtagPage(uint8_t page, uint8_t* data) {
+  if (s_chip == NFC_CHIP_PN7160) return false;
   if (!nfc) return false;
   for (int retry = 0; retry < 3; retry++) {
     if (nfc->ntag2xx_ReadPage(page, data)) return true;
@@ -232,5 +284,6 @@ bool nfcReadNtagPage(uint8_t page, uint8_t* data) {
 }
 
 bool nfcWriteNtagPage(uint8_t page, uint8_t* data) {
+  if (s_chip == NFC_CHIP_PN7160) return pn7160WriteRefused("NTAG page");
   return nfc && nfc->ntag2xx_WritePage(page, data);
 }

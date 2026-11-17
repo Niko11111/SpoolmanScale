@@ -37,6 +37,14 @@ constexpr int8_t PN532_RESET_SAFE = 12;   // EXT_IO3, pin 5, no build ever wired
 // this firmware and an input after reset anyway.
 constexpr int8_t PN532_IRQ_UNUSED = 13;
 
+// Each connector pin has one role for every reader; only the chip differs
+// (Notes, PN7160 6.11). Pin 7 is the PN532's RSTPDN (low = power down) and the
+// PN7160's VEN (low = off, high = on). Pin 8 is the reader's IRQ: active low on
+// the PN532, active high on the PN7160, where it is mandatory - an NCI chip
+// raises it while it has something to read. The 7 wire cable leaves pin 8 empty.
+constexpr int8_t NFC_VEN = 14;       // EXT_IO5, connector pin 7, orange
+constexpr int8_t NFC_IRQ = 21;       // EXT_IO6, connector pin 8, violet
+
 constexpr int8_t TOUCH_SDA = 6;      // FT6336U internal board bus
 constexpr int8_t TOUCH_SCL = 5;      // FT6336U internal board bus
 constexpr int8_t TOUCH_INT = 7;      // FT6336U INT for wake-up
