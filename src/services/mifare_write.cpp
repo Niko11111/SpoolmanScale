@@ -635,6 +635,11 @@ static bool openFactory(const WriteRun& run, bool* silent, MifareWriteResult* ou
 
 MifareWriteResult mifareWrite(const MifareWriteJob& job, uint8_t uid_out[4],
                               const uint8_t* expect, MifareWaitFn wait, bool overwrite) {
+  if (!nfcChipCanWrite()) {
+    logSDf("%s write: not written - writing tags is not supported with the %s in this build",
+           job.label ? job.label : "MIFARE", nfcChipName());
+    return MIFARE_WRITE_FAILED;
+  }
   if (!jobUsable(job)) {
     logSD("MIFARE write: the job names a sector or blocks it may not touch - nothing written");
     return MIFARE_WRITE_FAILED;

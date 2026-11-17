@@ -90,6 +90,10 @@ bool nfcReadAnyTarget(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms, uint8
   return nfcReadPassiveTarget(uid, uid_len, timeout_ms);
 }
 
+bool nfcReadVicinityBlock(uint8_t block, uint8_t data[4]) {
+  return s_chip == NFC_CHIP_PN7160 && pn7160ReadVicinityBlock(block, data);
+}
+
 bool nfcReadPassiveTarget(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms) {
   if (s_chip == NFC_CHIP_PN7160) return pn7160ReadIso14443a(uid, uid_len, timeout_ms);
   return nfc && nfc->readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, uid_len, timeout_ms);
@@ -207,7 +211,7 @@ bool nfcReadMifareSector(int sector, uint8_t key[6], uint8_t uid[4], uint8_t blo
 
   s_sector_refused_by_card = false;
   s_last_auth_status = NFC_AUTH_STATUS_NONE;
-  if (s_chip == NFC_CHIP_PN7160) return false;
+  if (s_chip == NFC_CHIP_PN7160) return pn7160ReadMifareSector(sector, key, uid, blocks, key_type);
   if (!nfc) return false;
 
   for (uint8_t attempt = 0; attempt < MIFARE_SECTOR_READ_ATTEMPTS; attempt++) {
@@ -243,13 +247,13 @@ bool nfcLastSectorRefusedByCard() { return s_sector_refused_by_card; }
 uint8_t nfcLastAuthStatus() { return s_last_auth_status; }
 
 bool nfcReadMifareBlock(uint8_t block, uint8_t data[16]) {
-  if (s_chip == NFC_CHIP_PN7160) return false;
+  if (s_chip == NFC_CHIP_PN7160) return pn7160ReadMifareBlock(block, data);
   return nfc && nfc->mifareclassic_ReadDataBlock(block, data);
 }
 
 bool nfcAuthMifareSector(int sector, const uint8_t key[6], const uint8_t uid[4],
                          uint8_t key_type) {
-  if (s_chip == NFC_CHIP_PN7160) return false;
+  if (s_chip == NFC_CHIP_PN7160) return pn7160AuthMifare(sector, key, key_type);
   if (!nfc) return false;
   uint8_t k[6], u[4];
   memcpy(k, key, 6);
@@ -274,7 +278,7 @@ bool nfcWriteMifareBlock(uint8_t block, const uint8_t data[16]) {
 }
 
 bool nfcReadNtagPage(uint8_t page, uint8_t* data) {
-  if (s_chip == NFC_CHIP_PN7160) return false;
+  if (s_chip == NFC_CHIP_PN7160) return pn7160ReadNtagPage(page, data);
   if (!nfc) return false;
   for (int retry = 0; retry < 3; retry++) {
     if (nfc->ntag2xx_ReadPage(page, data)) return true;

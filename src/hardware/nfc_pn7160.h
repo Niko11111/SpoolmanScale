@@ -29,3 +29,14 @@ bool pn7160ReadIso14443a(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms);
 
 uint8_t pn7160RfFieldCycle();
 bool pn7160Release();
+
+// Reads from the tag selected by the last poll. Each is one exchange of at
+// most TAG_CMD_TIMEOUT_MS (see the .cpp). key_type is NFC_KEY_A or NFC_KEY_B.
+bool pn7160AuthMifare(uint8_t sector, const uint8_t key[6], uint8_t key_type);
+bool pn7160ReadMifareBlock(uint8_t block, uint8_t data[16]);
+// nfcReadMifareSector() for the PN7160: up to three attempts, the later ones
+// after a fresh selection of the same UID, as the PN532 path does it.
+bool pn7160ReadMifareSector(uint8_t sector, const uint8_t key[6], const uint8_t uid[4],
+                            uint8_t blocks[4][16], uint8_t key_type);
+bool pn7160ReadNtagPage(uint8_t page, uint8_t data[4]);
+bool pn7160ReadVicinityBlock(uint8_t block, uint8_t data[4]);

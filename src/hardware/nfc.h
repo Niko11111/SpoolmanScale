@@ -45,6 +45,9 @@ bool nfcReadPassiveTarget(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms);
 #define NFC_TECH_A 0   // ISO 14443A: NTAG, MIFARE Classic
 #define NFC_TECH_V 1   // ISO 15693: ICODE SLIX, OpenPrintTag
 bool nfcReadAnyTarget(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms, uint8_t* tech);
+// One 4 byte block (READ SINGLE BLOCK) of the ISO 15693 tag the last poll
+// found. PN7160 only; false on a PN532.
+bool nfcReadVicinityBlock(uint8_t block, uint8_t data[4]);
 // Switches the RF field off and on again, which resets a card that a refused
 // key has left halted (a plain wake no longer reaches it). Returns which steps
 // worked, as NFC_RF_* bits, for the caller's log line.

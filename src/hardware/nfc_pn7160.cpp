@@ -38,6 +38,7 @@ namespace {
 // NCI frame: header (message type and group, opcode, payload length) and up
 // to 255 bytes of payload.
 constexpr uint8_t  NCI_HDR          = 3;
+constexpr uint8_t  NCI_MT_DATA      = 0x00;
 constexpr size_t   NCI_PAYLOAD_MAX  = 255;
 constexpr size_t   NCI_FRAME_MAX    = NCI_HDR + NCI_PAYLOAD_MAX;
 constexpr uint8_t  NCI_MT_MASK      = 0xE0;
@@ -50,6 +51,8 @@ constexpr uint8_t  NCI_STATUS_OK    = 0x00;
 constexpr uint8_t  GID_CORE = 0x00;
 constexpr uint8_t  GID_RF   = 0x01;
 constexpr uint8_t  OID_CORE_RESET          = 0x00;
+constexpr uint8_t  OID_CORE_GENERIC_ERROR  = 0x07;
+constexpr uint8_t  OID_CORE_INTERFACE_ERROR = 0x08;
 constexpr uint8_t  OID_RF_DISCOVER         = 0x03;
 constexpr uint8_t  OID_RF_INTF_ACTIVATED   = 0x05;
 constexpr uint8_t  OID_RF_DEACTIVATE       = 0x06;
@@ -61,12 +64,43 @@ constexpr uint8_t  DISCOVER_NTF_MORE       = 0x02;   // last byte: more tags fol
 // RF technology and mode, protocol and interface codes (NCI 2.0).
 constexpr uint8_t  TECH_A_POLL       = 0x00;
 constexpr uint8_t  TECH_V_POLL       = 0x06;
+constexpr uint8_t  NCI_PROT_T2T      = 0x02;
 constexpr uint8_t  NCI_PROT_ISODEP   = 0x04;
+constexpr uint8_t  NCI_PROT_T5T      = 0x06;
 constexpr uint8_t  NCI_PROT_MIFARE   = 0x80;
 constexpr uint8_t  NCI_INTF_FRAME    = 0x01;
 constexpr uint8_t  NCI_INTF_ISODEP   = 0x02;
 constexpr uint8_t  NCI_INTF_TAGCMD   = 0x80;
 constexpr uint8_t  ISO15693_UID_BYTES = 8;
+
+// Tag commands. MIFARE Classic goes through NXP's TAG-CMD interface, which
+// wraps each command in a request code of its own (PN7160 user manual; the
+// same frames as the library's MifareClassic examples). Its answers end in a
+// status byte, as do the Frame interface's for NTAG and ISO 15693.
+constexpr uint8_t  MFC_AUTH_REQ       = 0x40;   // answer: 0x40, status
+constexpr uint8_t  MFC_XCHG_REQ       = 0x10;   // answer: 0x10, data, status
+constexpr uint8_t  MFC_KEY_EMBEDDED   = 0x10;   // the key travels in the command
+constexpr uint8_t  MFC_KEY_SELECT_B   = 0x01;
+constexpr uint8_t  MFC_KEY_BYTES      = 6;
+constexpr uint8_t  MFC_BLOCK_BYTES    = 16;
+constexpr uint8_t  MFC_BLOCKS_PER_SECTOR = 4;
+constexpr uint8_t  MFC_DATA_BLOCKS    = 3;      // the trailer is not read
+constexpr uint8_t  CMD_READ           = 0x30;   // MIFARE and NTAG READ
+constexpr uint8_t  NTAG_PAGE_BYTES    = 4;
+constexpr uint8_t  NTAG_READ_BYTES    = 16;     // READ returns four pages
+constexpr uint8_t  ISO15693_FLAGS     = 0x02;   // high data rate, not addressed
+constexpr uint8_t  ISO15693_READ_SINGLE = 0x20;
+constexpr uint8_t  ISO15693_BLOCK_BYTES = 4;    // ICODE SLIX and SLIX2
+constexpr uint8_t  TAG_STATUS_OK      = 0x00;
+constexpr uint8_t  TAG_CMD_MAX        = 16;     // longest command sent here
+// One exchange with a tag. A MIFARE authentication is the slowest, a few ms
+// on the air; 100 ms is the PN532 path's fast poll budget.
+constexpr uint16_t TAG_CMD_TIMEOUT_MS = 100;
+// Retry rhythm of a sector read, the PN532 path's numbers.
+constexpr uint8_t  SECTOR_READ_ATTEMPTS = 3;
+constexpr uint16_t RESELECT_PAUSE_MS  = 20;
+constexpr uint16_t RESELECT_TIMEOUT_MS = 120;
+constexpr uint8_t  MIFARE_UID_BYTES   = 4;
 
 // CORE_RESET (reset the configuration too; configureSettings() writes it
 // again) and CORE_INIT in its NCI 2.0 form, as the library sends them.
@@ -413,4 +447,120 @@ bool pn7160Release() {
   if (!s_lib || s_state == RfState::Off) return false;
   if (s_state == RfState::Discovery) return true;   // nothing held
   return rediscover(deadlineIn(CTRL_TIMEOUT_MS));
+}
+
+static bool isCoreError() {
+  return isMsg(NCI_MT_NTF, GID_CORE, OID_CORE_GENERIC_ERROR) ||
+         isMsg(NCI_MT_NTF, GID_CORE, OID_CORE_INTERFACE_ERROR);
+}
+
+// One command to the selected tag, one answer back. resp is always the full
+// NCI payload size: the length comes from the chip, and the library's
+// readerTagCmd() copies it into whatever it is handed. Credit notifications
+// on the way are read and passed over; an error notification or the tag
+// being dropped ends the exchange.
+static bool exchange(const uint8_t* cmd, uint8_t len, uint8_t resp[NCI_PAYLOAD_MAX],
+                     uint8_t* resp_len) {
+  *resp_len = 0;
+  if (!s_lib || s_state != RfState::Active || len > TAG_CMD_MAX) return false;
+  uint8_t frame[NCI_HDR + TAG_CMD_MAX] = {NCI_MT_DATA, 0x00, len};
+  memcpy(frame + NCI_HDR, cmd, len);
+  if (!writeFrame(frame, NCI_HDR + len)) return false;
+  const uint32_t deadline = deadlineIn(TAG_CMD_TIMEOUT_MS);
+  while (readFrame(deadline)) {
+    if (s_state != RfState::Active || isCoreError()) return false;
+    if ((s_frame[0] & NCI_MT_MASK) != NCI_MT_DATA) continue;
+    // The header's length, unless the read came back shorter than it says.
+    const uint32_t got = s_frame_len - NCI_HDR;
+    *resp_len = (uint8_t)(s_frame[2] < got ? s_frame[2] : got);
+    memcpy(resp, s_frame + NCI_HDR, *resp_len);
+    return true;
+  }
+  return false;
+}
+
+bool pn7160AuthMifare(uint8_t sector, const uint8_t key[6], uint8_t key_type) {
+  if (s_target.proto != NCI_PROT_MIFARE) return false;
+  const uint8_t select = MFC_KEY_EMBEDDED | (key_type == NFC_KEY_A ? 0 : MFC_KEY_SELECT_B);
+  uint8_t cmd[3 + MFC_KEY_BYTES] = {MFC_AUTH_REQ, sector, select};
+  memcpy(cmd + 3, key, MFC_KEY_BYTES);
+  uint8_t resp[NCI_PAYLOAD_MAX];
+  uint8_t n = 0;
+  const bool answered = exchange(cmd, sizeof(cmd), resp, &n);
+  const bool ok = answered && n >= 2 && resp[0] == MFC_AUTH_REQ && resp[n - 1] == TAG_STATUS_OK;
+  // Which status means "the card refused the key" is to be read off these
+  // lines on the bench (nfcLastSectorRefusedByCard() stays false until then).
+  if (!ok && sd_verbose) {
+    logSDf("[verbose] PN7160: sector %u key %c %s (status 0x%02X)", sector,
+           key_type == NFC_KEY_A ? 'A' : 'B', answered ? "refused" : "unanswered",
+           answered && n ? resp[n - 1] : 0xFF);
+  }
+  return ok;
+}
+
+bool pn7160ReadMifareBlock(uint8_t block, uint8_t data[16]) {
+  if (s_target.proto != NCI_PROT_MIFARE) return false;
+  const uint8_t cmd[] = {MFC_XCHG_REQ, CMD_READ, block};
+  uint8_t resp[NCI_PAYLOAD_MAX];
+  uint8_t n = 0;
+  if (!exchange(cmd, sizeof(cmd), resp, &n)) return false;
+  if (n < MFC_BLOCK_BYTES + 2 || resp[0] != MFC_XCHG_REQ || resp[n - 1] != TAG_STATUS_OK) return false;
+  memcpy(data, resp + 1, MFC_BLOCK_BYTES);
+  return true;
+}
+
+static bool reselect(const uint8_t uid[4]) {
+  uint8_t got[NFC_UID_MAX] = {0};
+  uint8_t got_len = 0;
+  return pn7160ReadIso14443a(got, &got_len, RESELECT_TIMEOUT_MS) &&
+         got_len == MIFARE_UID_BYTES && memcmp(got, uid, MIFARE_UID_BYTES) == 0;
+}
+
+static bool readDataBlocks(uint8_t sector, uint8_t blocks[4][16]) {
+  for (uint8_t b = 0; b < MFC_DATA_BLOCKS; b++) {
+    if (!pn7160ReadMifareBlock(sector * MFC_BLOCKS_PER_SECTOR + b, blocks[b])) {
+      memset(blocks[b], 0, MFC_BLOCK_BYTES);
+      return false;
+    }
+  }
+  return true;
+}
+
+// The PN532 path tries key B twice within one attempt. Not here: a card that
+// refused a key does not take another until it is selected again, and the
+// attempt loop does exactly that.
+bool pn7160ReadMifareSector(uint8_t sector, const uint8_t key[6], const uint8_t uid[4],
+                            uint8_t blocks[4][16], uint8_t key_type) {
+  for (uint8_t attempt = 0; attempt < SECTOR_READ_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      delay(RESELECT_PAUSE_MS);
+      if (!reselect(uid)) continue;
+    }
+    if (pn7160AuthMifare(sector, key, key_type) && readDataBlocks(sector, blocks)) return true;
+  }
+  memset(blocks, 0, MFC_BLOCKS_PER_SECTOR * MFC_BLOCK_BYTES);
+  return false;
+}
+
+bool pn7160ReadNtagPage(uint8_t page, uint8_t data[4]) {
+  if (s_target.proto != NCI_PROT_T2T) return false;
+  const uint8_t cmd[] = {CMD_READ, page};
+  uint8_t resp[NCI_PAYLOAD_MAX];
+  uint8_t n = 0;
+  if (!exchange(cmd, sizeof(cmd), resp, &n)) return false;
+  if (n < NTAG_READ_BYTES + 1 || resp[n - 1] != TAG_STATUS_OK) return false;
+  memcpy(data, resp, NTAG_PAGE_BYTES);
+  return true;
+}
+
+bool pn7160ReadVicinityBlock(uint8_t block, uint8_t data[4]) {
+  if (s_target.proto != NCI_PROT_T5T) return false;
+  const uint8_t cmd[] = {ISO15693_FLAGS, ISO15693_READ_SINGLE, block};
+  uint8_t resp[NCI_PAYLOAD_MAX];
+  uint8_t n = 0;
+  if (!exchange(cmd, sizeof(cmd), resp, &n)) return false;
+  // Answer: response flags (0 = no error), the block, the interface's status.
+  if (n < ISO15693_BLOCK_BYTES + 2 || resp[0] != 0 || resp[n - 1] != TAG_STATUS_OK) return false;
+  memcpy(data, resp + 1, ISO15693_BLOCK_BYTES);
+  return true;
 }
