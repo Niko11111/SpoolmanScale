@@ -299,6 +299,22 @@ struct AmsSlotState {
 static_assert(sizeof(AmsSlotState) <= 4200,
               "AmsSlotState outgrew its budget, check where it is stored");
 
+// Whether a unit a backend reports still gets a place. AMS and AMS HT units
+// share the AMS_MAX_UNITS places; the external holder has the one place after
+// them to itself. An H2D takes four AMS and up to eight AMS HT, so a printer
+// can report more units than the screen keeps, and the external holder must
+// never be the one that falls off: FilaMan sends it last.
+inline bool amsUnitHasRoom(const AmsSlotState& s, bool is_ext) {
+  if (s.unit_count >= AMS_UNITS_TOTAL) return false;
+  uint8_t ams_units = 0;
+  bool    ext_taken = false;
+  for (int u = 0; u < s.unit_count; u++) {
+    if (s.unit[u].is_ext) ext_taken = true;
+    else                  ams_units++;
+  }
+  return is_ext ? !ext_taken : ams_units < AMS_MAX_UNITS;
+}
+
 struct AmsPrinter {
   int  id;
   char name[AMS_PRINTER_NAME_MAX];
