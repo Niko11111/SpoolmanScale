@@ -31,5 +31,6 @@ void tagBusyShow(bool erase, bool hands_off = false);
 void tagBusyHide();
 
 // Replaces the hint with the request to put the spool back: a CFS write is
-// waiting for a tag that stopped answering.
-void tagBusyAskReplace();
+// waiting for a tag that stopped answering. seconds_left goes under it, so
+// the card says how long the scale still waits; repainted only when it changes.
+void tagBusyAskReplace(int seconds_left);

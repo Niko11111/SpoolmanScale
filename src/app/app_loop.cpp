@@ -2195,7 +2195,11 @@ void appLoop() {
           }
           if (g_creality_tags && family == TAG_FAMILY_BLANK) {
             factory = mifareProbeFactory(uid, uid_str);
-            if (factory != MIFARE_FACTORY_BLANK) {
+            // Only a tag that refused the factory key or showed data has
+            // changed. One that opened and then did not read is the same
+            // blank tag on a weak placement (26.10.2026, 15:C5:C5:11 of spool
+            // 38: forgotten as blank here, so the write was never offered).
+            if (factory != MIFARE_FACTORY_BLANK && factory != MIFARE_FACTORY_UNREAD) {
               tagFamilySet(uid, TAG_FAMILY_UNKNOWN);
               family = TAG_FAMILY_UNKNOWN;
             }

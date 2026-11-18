@@ -24,6 +24,8 @@ static lv_obj_t *scr_tag_busy = nullptr;
 static lv_obj_t *bar_tag_busy = nullptr;
 static lv_obj_t *lbl_busy_hint = nullptr;
 static bool s_hands_off = false;
+// The seconds the put-back request last showed, -1 while it is not shown.
+static int s_ask_shown_s = -1;
 
 // From inside the write, after every page, see tagWriteSetProgress(). Draws
 // on the spot: the loop stands still until the job is done, so nothing else
@@ -132,13 +134,17 @@ void tagBusyHide() {
   bar_tag_busy = nullptr;
   lbl_busy_hint = nullptr;
   s_hands_off = false;
+  s_ask_shown_s = -1;
   lv_obj_del(scr_tag_busy);
   scr_tag_busy = nullptr;
 }
 
-void tagBusyAskReplace() {
-  if (!lbl_busy_hint) return;
-  lv_label_set_text(lbl_busy_hint, T(STR_TW_CFS_REPLACE));
+void tagBusyAskReplace(int seconds_left) {
+  if (!lbl_busy_hint || s_ask_shown_s == seconds_left) return;
+  s_ask_shown_s = seconds_left;
+  char buf[200];
+  snprintf(buf, sizeof(buf), "%s\n%d s", T(STR_TW_CFS_REPLACE), seconds_left);
+  lv_label_set_text(lbl_busy_hint, buf);
   // On the amber card amber text would not stand out, see paintHandsOff().
   lv_obj_set_style_text_color(lbl_busy_hint, lv_color_hex(s_hands_off ? UI_COL_INK : UI_COL_WARN), 0);
 }
