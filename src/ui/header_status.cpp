@@ -5,9 +5,11 @@
 #include "services/ble_service.h"
 
 #include <Arduino.h>
+#include <cstdio>
 #include <cstring>
 #include <lvgl.h>
 
+#include "hardware/fuel_gauge.h"
 #include "services/device_name.h"
 #include "services/mdns_service.h"
 #include "services/user_options.h"
@@ -45,8 +47,41 @@ static lv_color_t wifiColor() {
 #define HDR_CHIP_MARGIN  8
 #define HDR_CHIP_GAP    10
 
-void layoutHeaderChips() {
-  if (!lbl_hdr_sm) return;
+// Battery glyph steps and warning levels, in percent.
+#define HDR_BAT_FULL_PCT   88
+#define HDR_BAT_3_PCT      63
+#define HDR_BAT_2_PCT      38
+#define HDR_BAT_1_PCT      13
+// Colour steps, the same four the WiFi icon uses: green from here up,
+// yellow (WARN), amber (SIGNAL_LOW), and red below HDR_BAT_LOW_PCT.
+#define HDR_BAT_GOOD_PCT   85
+#define HDR_BAT_MID_PCT    50
+#define HDR_BAT_LOW_PCT    25
+
+// Percent, glyph and a bolt while charging. Compact leaves the percent out,
+// for a row that would otherwise run into the title.
+static void setBatteryText(bool compact) {
+  const int pct = fuelGaugePercent();
+  const char *icon = LV_SYMBOL_BATTERY_EMPTY;
+  if (pct >= HDR_BAT_FULL_PCT)   icon = LV_SYMBOL_BATTERY_FULL;
+  else if (pct >= HDR_BAT_3_PCT) icon = LV_SYMBOL_BATTERY_3;
+  else if (pct >= HDR_BAT_2_PCT) icon = LV_SYMBOL_BATTERY_2;
+  else if (pct >= HDR_BAT_1_PCT) icon = LV_SYMBOL_BATTERY_1;
+  const char *bolt = fuelGaugeFlow() == FUEL_FLOW_CHARGING ? LV_SYMBOL_CHARGE : "";
+
+  char buf[24];
+  if (compact) snprintf(buf, sizeof(buf), "%s%s", icon, bolt);
+  else         snprintf(buf, sizeof(buf), "%d%% %s%s", pct, icon, bolt);
+  lv_label_set_text(lbl_hdr_bat, buf);
+}
+
+static bool isShown(lv_obj_t *obj) {
+  return obj && !lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN);
+}
+
+// Packs the visible chips right to left from the backend badge and returns
+// the leftmost one.
+static lv_obj_t *packHeaderChips() {
   // A label sized to its content only knows its new width after a layout pass,
   // and lv_obj_align_to() reads that width. Without this the chips would be
   // placed from the previous text.
@@ -56,16 +91,39 @@ void layoutHeaderChips() {
   lv_obj_t *prev = lbl_hdr_sm;
   // AMS first, so it lands directly left of the backend badge: it belongs to
   // the backend, and the two read as a pair.
-  lv_obj_t *chain[] = { btn_hdr_ams, lbl_hdr_scl, btn_hdr_nfc, lbl_hdr_wifi, lbl_hdr_bt, lbl_hdr_sd };
+  lv_obj_t *chain[] = { btn_hdr_ams, lbl_hdr_scl, btn_hdr_nfc, lbl_hdr_wifi,
+                        lbl_hdr_bat, lbl_hdr_bt, lbl_hdr_sd };
   for (unsigned i = 0; i < sizeof(chain) / sizeof(chain[0]); i++) {
     // Hidden counts as absent. lv_obj_align_to() reads nothing but the
     // reference object's geometry - the hidden flag never reaches it - so a
     // hidden label keeps its slot and leaves a hole in the row. That is what
     // the SD icon has been doing on a card-less device, and it is what a chip
     // that comes and goes at runtime would do on every appearance.
-    if (!chain[i] || lv_obj_has_flag(chain[i], LV_OBJ_FLAG_HIDDEN)) continue;
+    if (!isShown(chain[i])) continue;
     lv_obj_align_to(chain[i], prev, LV_ALIGN_OUT_LEFT_MID, -HDR_CHIP_GAP, 0);
     prev = chain[i];
+  }
+  // align_to() wrote the positions; the x read below needs them applied.
+  lv_obj_update_layout(lv_obj_get_parent(lbl_hdr_sm));
+  return prev;
+}
+
+static bool runsIntoTitle(lv_obj_t *leftmost) {
+  if (!lbl_hdr_title || !leftmost) return false;
+  const lv_coord_t title_end = lv_obj_get_x(lbl_hdr_title) + lv_obj_get_width(lbl_hdr_title);
+  return lv_obj_get_x(leftmost) < title_end + HDR_CHIP_GAP;
+}
+
+void layoutHeaderChips() {
+  if (!lbl_hdr_sm) return;
+  // The battery shows its percent while the row has room for it, and drops
+  // it when every chip is on and the row would reach the title.
+  const bool bat = isShown(lbl_hdr_bat) && fuelGaugePresent();
+  if (bat) setBatteryText(false);
+  lv_obj_t *leftmost = packHeaderChips();
+  if (bat && runsIntoTitle(leftmost)) {
+    setBatteryText(true);
+    packHeaderChips();
   }
 
   // The address ends where the row ends; the status text left of it takes the
@@ -73,10 +131,34 @@ void layoutHeaderChips() {
   if (lbl_hdr_ip) lv_obj_align(lbl_hdr_ip, LV_ALIGN_RIGHT_MID, -HDR_ROW_MARGIN, 0);
 }
 
+// Colour and visibility. The text is set by layoutHeaderChips(), which runs
+// at the end of updateHeaderStatus() and knows how much room the row has.
+static void updateHeaderBattery() {
+  if (!lbl_hdr_bat) return;
+  if (!fuelGaugePresent()) {
+    lv_obj_add_flag(lbl_hdr_bat, LV_OBJ_FLAG_HIDDEN);
+    return;
+  }
+  const int pct = fuelGaugePercent();
+  const FuelGaugeFlow flow = fuelGaugeFlow();
+  uint32_t col = UI_COL_BAD;
+  if (flow == FUEL_FLOW_CHARGING || flow == FUEL_FLOW_FULL || pct >= HDR_BAT_GOOD_PCT) {
+    col = UI_COL_GOOD;
+  } else if (pct >= HDR_BAT_MID_PCT) {
+    col = UI_COL_WARN;
+  } else if (pct >= HDR_BAT_LOW_PCT) {
+    col = UI_COL_SIGNAL_LOW;
+  }
+  lv_obj_set_style_text_color(lbl_hdr_bat, lv_color_hex(col), 0);
+  lv_obj_clear_flag(lbl_hdr_bat, LV_OBJ_FLAG_HIDDEN);
+}
+
 void updateHeaderStatus() {
   if (!lbl_hdr_wifi) return;
 
   lv_obj_set_style_text_color(lbl_hdr_wifi, wifiColor(), 0);
+
+  updateHeaderBattery();
 
   // Bluetooth follows the master switch: shown while BLE may be used, gone
   // otherwise. The chip chain leaves no hole for a hidden one.
