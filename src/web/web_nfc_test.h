@@ -15,4 +15,10 @@
 //                             it changes what deep sleep does.
 // POST /api/nfc/sleep         deep sleep now, so a wake test need not wait out
 //                             the idle timeout. Maintenance gate.
+// GET  /api/nfc/opt           the last ISO 15693 tag read: UID, read report,
+//                             decode result, OpenPrintTag fields, memory as
+//                             hex (openprinttag/opt_scan.h). Maintenance gate.
+// POST /api/nfc/opt/sim?v=sample&s=60  puts a simulated OpenPrintTag on the
+//                             reader for s seconds (1-600); v=off takes it
+//                             away (openprinttag/opt_sim.h). Maintenance gate.
 void nfcTestRoutes(WebServer& srv);

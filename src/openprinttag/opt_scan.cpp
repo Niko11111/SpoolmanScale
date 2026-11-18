@@ -8,6 +8,7 @@
 #include "app/app_state.h"
 #include "hardware/nfc.h"
 #include "hardware/sd_logger.h"
+#include "openprinttag/opt_sim.h"
 #include "services/tag_write.h"
 
 namespace {
@@ -74,6 +75,11 @@ static bool readMemory() {
   const uint32_t t0 = millis();
   s_report = ReadReport{0, 0, 0, -1, false};
   memset(s_mem, 0, sizeof(s_mem));
+  const size_t simulated = optSimMemory(s_uid_wire, s_mem, sizeof(s_mem));
+  if (simulated) {
+    s_report.bytes = s_report.wanted = simulated;
+    return true;
+  }
   bool ok = readBlocks(0, HEAD_BLOCKS, t0);
   if (ok) {
     size_t want = optBytesNeeded(s_mem, HEAD_BYTES);

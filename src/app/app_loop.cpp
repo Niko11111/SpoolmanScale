@@ -37,6 +37,7 @@
 #include "hardware/flash_log.h"
 #include "services/nfc_measure.h"
 #include "openprinttag/opt_scan.h"
+#include "openprinttag/opt_sim.h"
 #include "services/nfc_reset.h"
 #include "ui/reboot_popup.h"
 #include "ui/info_popup.h"
@@ -2061,6 +2062,8 @@ void appLoop() {
       // is the same call as before and tech stays NFC_TECH_A.
       uint8_t tech = NFC_TECH_A;
       bool found = nfcReadAnyTarget(uid, &uidLen, poll_timeout, &tech);
+      // A simulated OpenPrintTag, only while one is armed over the web.
+      if (!found && optSimPoll(uid, &uidLen, &tech)) found = true;
       perfNfcPoll(found, (uint32_t)(millis() - poll_start_ms));
 
       nfc_stat_scans++;
