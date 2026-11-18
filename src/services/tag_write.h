@@ -101,6 +101,9 @@ bool tagWriteRequestErase(const char* uid_expected);
 // tag, whose erase empties its CFS sector and keeps its key (mifareErase()),
 // 20 for a 7 byte NTAG.
 #define TAG_UID_STR_LEN_MIFARE 11
+#define TAG_UID_STR_LEN_NTAG   20
+// An 8 byte ISO 15693 UID (PN7160 only), read-only here.
+#define TAG_UID_STR_LEN_VICINITY 23
 // A write bound to one tag the same way: finishing a write that was cut short
 // on exactly that tag (services/tag_pending.h). A MIFARE format is bound
 // through tagWriteMifareTarget() instead.

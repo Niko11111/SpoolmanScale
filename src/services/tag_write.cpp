@@ -131,11 +131,12 @@ bool tagWriteTakeErased() {
 }
 
 // The tag the main poll is looking at, judged the same way refreshCache()
-// judges it: a 7 byte UID prints as 20 characters, a 4 byte one as 11. Reading
+// judges it: a 7 byte UID prints as 20 characters, a 4 byte one as 11, an 8
+// byte ISO 15693 one as 23 and is no NTAG. Reading
 // the cached scan rather than selecting the tag again is the point - a select
 // here would race the main poll, and the loser gets nothing back.
 bool tagIsWritableNtag() {
-  return tag_present && strlen(g_tag.uid_str) > 14;
+  return tag_present && strlen(g_tag.uid_str) == TAG_UID_STR_LEN_NTAG;
 }
 
 static void finish(const char *st, const char *msg, uint8_t code) {
@@ -1111,7 +1112,7 @@ static void refreshCache(bool force = false) {
     return;
   }
 
-  const bool is_ntag = strlen(g_tag.uid_str) > 14;   // 7 bytes reads as 20 chars
+  const bool is_ntag = strlen(g_tag.uid_str) == TAG_UID_STR_LEN_NTAG;
   snprintf(cached_uid, sizeof(cached_uid), "%s", g_tag.uid_str);
 
   if (!is_ntag) {
