@@ -15,9 +15,11 @@
 //   IDLE       field off (after a field cycle, or a selection that failed)
 //   DISCOVERY  the chip polls the field on its own
 //   ACTIVE     one tag is selected; commands go to it
-// A poll in ACTIVE first drops the tag back to DISCOVERY, and the chip selects
-// it again if it is still there. The PN532 selects anew on every poll as well,
-// and the scan path relies on that after a refused key.
+// A poll in ACTIVE puts an NFC-A tag to sleep and selects it again, which is
+// how NXP re-activates a tag; one that is gone sends the chip back to
+// DISCOVERY. Any other tag goes back to DISCOVERY at once, and the chip
+// selects it again if it is still there. The PN532 selects anew on every poll
+// as well, and the scan path relies on that after a refused key.
 
 #include "nfc_pn7160.h"
 
@@ -62,6 +64,7 @@ constexpr uint8_t  OID_RF_INTF_ACTIVATED   = 0x05;
 constexpr uint8_t  OID_RF_DEACTIVATE       = 0x06;
 
 constexpr uint8_t  DEACTIVATE_TO_IDLE      = 0x00;
+constexpr uint8_t  DEACTIVATE_TO_SLEEP     = 0x01;   // the tag is halted, the chip waits for a select
 constexpr uint8_t  DEACTIVATE_TO_DISCOVERY = 0x03;
 constexpr uint8_t  DISCOVER_NTF_MORE       = 0x02;   // last byte: more tags follow
 // RF_DEACTIVATE_NTF: [3] the type. RF_DISCOVER_NTF: [3] discovery id, [4] protocol.
@@ -166,6 +169,8 @@ constexpr size_t   RESET_NTF_INFO      = 8;
 constexpr uint8_t  FW_INFO_MIN         = 4;
 // RF_INTF_ACTIVATED_NTF: [3] discovery id, [4] interface, [5] protocol,
 // [6] technology and mode, [9] length of the technology parameters, [10..].
+constexpr size_t   ACT_DISCOVERY_ID    = 3;
+constexpr size_t   ACT_INTERFACE       = 4;
 constexpr size_t   ACT_PROTOCOL        = 5;
 constexpr size_t   ACT_TECH            = 6;
 constexpr size_t   ACT_PARAMS_LEN      = 9;
@@ -174,6 +179,8 @@ constexpr size_t   ACT_PARAMS          = 10;
 enum class RfState : uint8_t { Off, Idle, Discovery, Active };
 
 struct Target {
+  uint8_t discovery_id;   // what RF_DISCOVER_SELECT names it by
+  uint8_t intf;
   uint8_t proto;
   uint8_t tech;
   uint8_t sak;
@@ -240,6 +247,8 @@ static void noteActivation() {
   const bool whole = s_frame_len >= ACT_PARAMS &&
                      ACT_PARAMS + s_frame[ACT_PARAMS_LEN] <= s_frame_len;
   if (whole) {
+    t.discovery_id = s_frame[ACT_DISCOVERY_ID];
+    t.intf  = s_frame[ACT_INTERFACE];
     t.proto = s_frame[ACT_PROTOCOL];
     t.tech  = s_frame[ACT_TECH];
   }
@@ -513,13 +522,35 @@ static void collectActivation(uint32_t deadline_ms) {
   }
 }
 
+// The tag selected at the last poll, put to sleep and selected again: RF_DEACTIVATE
+// to sleep, then RF_DISCOVER_SELECT, as the library's readerReActivate() does.
+// The chip wakes the tag with WUPA, which a halted card answers too. Dropped
+// to discovery instead, a MIFARE card lying still on the reader came back only
+// every second poll, and at times not for longer than the scan path's removal
+// delay (bench, 18.11.2026). NFC-A only: the sleep request is HLTA.
+static bool reactivate(uint32_t deadline_ms) {
+  if (s_target.tech != TECH_A_POLL || s_target.uid_len == 0) return false;
+  if (!deactivate(DEACTIVATE_TO_SLEEP, deadline_ms)) return false;
+  // The select is only taken once the chip has said the tag sleeps.
+  if (!awaitNtf(GID_RF, OID_RF_DEACTIVATE, deadline_ms)) return false;
+  const uint8_t cmd[] = {NCI_MT_CMD | GID_RF, OID_RF_DISCOVER_SELECT, 3,
+                         s_target.discovery_id, s_target.proto, s_target.intf};
+  if (!control(cmd, sizeof(cmd), deadline_ms)) return false;
+  collectActivation(deadline_ms);
+  return s_state == RfState::Active;
+}
+
 bool pn7160ReadTarget(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms, uint8_t* tech) {
   if (!s_lib || s_state == RfState::Off || !uid || !uid_len) return false;
   const uint32_t deadline = deadlineIn(timeout_ms);
   // Discovery that is already running needs no wait: a tag that came meanwhile
   // has raised IRQ. After a restart the tag needs time to be selected again.
   const bool was_active = s_state == RfState::Active;
-  const bool restarted = s_state != RfState::Discovery && rediscover(deadline);
+  const bool reselected = was_active && reactivate(deadline);
+  // A tag that did not wake is most likely gone: back to discovery, with the
+  // time a control command needs rather than what is left of this poll's.
+  const uint32_t restart_by = was_active ? deadlineIn(CTRL_TIMEOUT_MS) : deadline;
+  const bool restarted = !reselected && s_state != RfState::Discovery && rediscover(restart_by);
   collectActivation(restarted ? deadline : millis());
   if (was_active && s_state != RfState::Active) s_rf.reselect_miss++;
   if (s_state != RfState::Active || s_target.uid_len == 0) return false;
