@@ -20,6 +20,7 @@
 #include "ui/copy_tagless.h"
 #include "ui/theme.h"
 #include "ui/ui_common.h"
+#include "openprinttag/opt_scan.h"
 // Last, see the note on ArduinoJson and T() in tag_create_popup.cpp.
 #include "lang.h"
 
@@ -343,13 +344,20 @@ static void identityRow(lv_obj_t* box, const char* name, const TagCreateInput* i
   lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK), 0);
 }
 
+// An OpenPrintTag on the reader that this card is about: it names its
+// filament as fully as a Bambu tag, so it is offered "New from tag" too.
+static bool openPrintTagCard() {
+  return !s_bambu && optTagOnReader() && strcmp(g_tag.uid_str, link_tag_uid) == 0;
+}
+
 static void buildHead(lv_obj_t* box) {
   char title[48];
   backendText(T(STR_NOT_IN_SPOOLMAN), title, sizeof(title));
   centredLine(box, title, UI_FONT_HEADLINE, UI_COL_INK, UNK_TITLE_Y);
 
   TagCreateInput in;
-  const bool known = s_bambu && tagCreateInputFromTag(&in);
+  const bool opt = openPrintTagCard();
+  const bool known = (s_bambu || opt) && tagCreateInputFromTag(&in);
   char name[80], meta[96] = "", weight[32];
   if (known && in.product[0])
     joinMaterialName(in.product, in.color_name, name, sizeof(name));
@@ -360,7 +368,7 @@ static void buildHead(lv_obj_t* box) {
   identityRow(box, name, known ? &in : nullptr);
 
   weightPart(weight, sizeof(weight), known ? in.spool_weight_g : 0);
-  if (s_bambu) appendPart(meta, sizeof(meta), known ? in.vendor : g_tag.vendor);
+  if (s_bambu || opt) appendPart(meta, sizeof(meta), known ? in.vendor : g_tag.vendor);
   if (known)   appendPart(meta, sizeof(meta), in.article);
   appendPart(meta, sizeof(meta), weight);
   centredLine(box, meta, UI_FONT_SMALL, UI_COL_INK_SOFT, UNK_META_Y);
@@ -477,8 +485,10 @@ static void tile(lv_obj_t* box, int i, int n, const char* symbol, int text_id, U
 // Every way in, none suggested: the tag says nothing about the spool, or the
 // spool cache could not say which spool it might be.
 static void buildTiles(lv_obj_t* box) {
-  const bool from_tag = s_bambu && tagCreateOffered();
-  const bool from_db  = !s_bambu && dbPickOffered();
+  // An OpenPrintTag takes the third tile for "New from tag", instead of the
+  // database pick: the same layout either way.
+  const bool from_tag = (s_bambu || openPrintTagCard()) && tagCreateOffered();
+  const bool from_db  = !s_bambu && !from_tag && dbPickOffered();
   const int n = (from_tag || from_db) ? 3 : 2;
   int i = 0;
   tile(box, i++, n, LV_SYMBOL_LIST, STR_REMOTE_LINK_CONFIRM, UA_LINK_ENTRY);
