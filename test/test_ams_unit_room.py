@@ -23,28 +23,37 @@ static int feed(AmsSlotState& s, const bool* is_ext, int n) {
   return left_out;
 }
 
+// n units of AMS or AMS HT, then the external holder, as FilaMan sends them.
+static int feedUnitsThenHolder(AmsSlotState& s, int n) {
+  bool units[AMS_UNITS_TOTAL + 4] = {};
+  units[n] = true;
+  return feed(s, units, n + 1);
+}
+
 int main() {
-  // FilaMan, demo printer 4: four AMS, two AMS HT, the external holder last.
+  // Bambu's largest set, four AMS 2 Pro and eight AMS HT on an H2D: all fit.
+  static_assert(AMS_MAX_UNITS >= 12, "the view must hold an H2D's full set");
   {
     AmsSlotState s{};
-    const bool units[] = {false, false, false, false, false, false, true};
-    assert(feed(s, units, 7) == 2);
+    assert(feedUnitsThenHolder(s, 12) == 0);
+    assert(s.unit_count == 13);
+    assert(s.unit[12].is_ext);
+  }
+  // More units than the view holds: the surplus goes, the holder stays.
+  // Before beta.64 the holder was the one cut.
+  {
+    AmsSlotState s{};
+    assert(feedUnitsThenHolder(s, AMS_MAX_UNITS + 2) == 2);
     assert(s.unit_count == AMS_UNITS_TOTAL);
-    assert(s.unit[AMS_UNITS_TOTAL - 1].is_ext);   // the holder kept its place
+    assert(s.unit[AMS_UNITS_TOTAL - 1].is_ext);
   }
-  // Four AMS and one AMS HT: before the fix the holder was the one cut.
+  // The holder first: it takes its place and every unit still fits.
   {
     AmsSlotState s{};
-    const bool units[] = {false, false, false, false, false, true};
-    assert(feed(s, units, 6) == 1);
-    assert(s.unit[4].is_ext);
-  }
-  // The holder first: it takes its place and the four AMS still fit.
-  {
-    AmsSlotState s{};
-    const bool units[] = {true, false, false, false, false};
-    assert(feed(s, units, 5) == 0);
-    assert(s.unit_count == 5);
+    bool units[AMS_UNITS_TOTAL] = {};
+    units[0] = true;
+    assert(feed(s, units, AMS_UNITS_TOTAL) == 0);
+    assert(s.unit_count == AMS_UNITS_TOTAL);
   }
   // A small printer loses nothing, and a second holder never gets a place.
   {
