@@ -124,8 +124,8 @@ SecondTagReport secondTagReport() {
   return r;
 }
 
-// The button's fill, to the pixel. At 376 px over 30 s that is a dozen
-// small redraws a second, each only the strip that changed.
+// The button's fill, to the pixel. Across the button's inner width over 30 s
+// that is a dozen small redraws a second, each only the strip that changed.
 static void updateCountdownFill() {
   uiCountdownFillSet(bar_tag2_fill, s_fill_full, &s_fill_w, remainingMs(),
                      SECOND_TAG_COUNTDOWN_MS);

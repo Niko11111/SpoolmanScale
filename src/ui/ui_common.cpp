@@ -123,7 +123,6 @@ lv_obj_t* addInfoRow(lv_obj_t* parent, int y, const char* label,
 // LVGL pool. Positions and widths stay per row, they differ between rows.
 #define LIST_BTN_W            456
 #define LIST_BTN_H            64
-#define LIST_BTN_RADIUS       10
 #define LIST_BTN_HELP_PX      34
 #define LIST_BTN_HELP_HIT_PX  6
 
@@ -149,14 +148,14 @@ static void initListBtnHelpStyles() {
   lv_style_init(&s_lb_help_pressed);
   lv_style_set_bg_color(&s_lb_help_pressed, lv_color_hex(UI_COL_ROW_PRESS_FILL));
   lv_style_set_bg_opa(&s_lb_help_pressed, LV_OPA_COVER);
-  initListBtnText(&s_lb_help_q, &lv_font_montserrat_ext_16, UI_COL_ACCENT);
+  initListBtnText(&s_lb_help_q, UI_FONT_BODY, UI_COL_ACCENT);
 }
 
 static void initListBtnStyles() {
   if (s_lb_ready) return;
   lv_style_init(&s_lb_frame);
   lv_style_set_bg_color(&s_lb_frame, lv_color_hex(UI_COL_ROW));
-  lv_style_set_radius(&s_lb_frame, LIST_BTN_RADIUS);
+  lv_style_set_radius(&s_lb_frame, UI_RADIUS_ROW);
   lv_style_set_shadow_width(&s_lb_frame, 0);
   lv_style_set_border_width(&s_lb_frame, 1);
   lv_style_set_border_color(&s_lb_frame, lv_color_hex(UI_COL_ROW_PRESSED));
@@ -166,11 +165,11 @@ static void initListBtnStyles() {
   lv_style_init(&s_lb_pressed);
   lv_style_set_bg_color(&s_lb_pressed, lv_color_hex(UI_COL_ROW_PRESS_FILL));
 
-  initListBtnText(&s_lb_icon,       &lv_font_montserrat_ext_20, UI_COL_ACCENT);
-  initListBtnText(&s_lb_title,      &lv_font_montserrat_ext_16, UI_COL_INK);
-  initListBtnText(&s_lb_sub,        &lv_font_montserrat_ext_12, UI_COL_CAPTION);
-  initListBtnText(&s_lb_sub_active, &lv_font_montserrat_ext_12, UI_COL_ACCENT);
-  initListBtnText(&s_lb_arrow,      &lv_font_montserrat_ext_16, UI_COL_INK_FAINT);
+  initListBtnText(&s_lb_icon,       UI_FONT_HEADLINE, UI_COL_ACCENT);
+  initListBtnText(&s_lb_title,      UI_FONT_BODY, UI_COL_INK);
+  initListBtnText(&s_lb_sub,        UI_FONT_CAPTION, UI_COL_CAPTION);
+  initListBtnText(&s_lb_sub_active, UI_FONT_CAPTION, UI_COL_ACCENT);
+  initListBtnText(&s_lb_arrow,      UI_FONT_BODY, UI_COL_INK_FAINT);
   lv_style_set_text_align(&s_lb_arrow, LV_TEXT_ALIGN_RIGHT);
   initListBtnHelpStyles();
   s_lb_ready = true;
@@ -713,6 +712,8 @@ void styleLeaveButton(lv_obj_t* btn, const char* icon) {
   lv_obj_set_style_border_width(btn, UI_LEAVE_BORDER_W, 0);
   lv_obj_set_style_border_color(btn, uiMixRed(UI_COL_BAD_TEXT, UI_COL_ROW, UI_LEAVE_BORDER_RED_PCT), 0);
   lv_obj_set_style_border_opa(btn, LV_OPA_COVER, 0);
+  // The theme's shadow, which callers used to switch off one by one.
+  lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_t* lbl = nullptr;
   for (uint32_t i = 0; i < lv_obj_get_child_cnt(btn) && !lbl; i++) {
     lv_obj_t* c = lv_obj_get_child(btn, i);

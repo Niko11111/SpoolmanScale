@@ -2473,6 +2473,24 @@ static void linkRowChosen(int idx) {
 #define LINK_CONFIRM_WEIGHT_Y  70
 #define LINK_CONFIRM_SWATCH    18
 #define LINK_CONFIRM_SWATCH_GAP 8
+// The house answer row: two equal buttons side by side, the answer first and
+// the way out second. Placed inside the box's border.
+#define LINK_CONFIRM_BOX_W    440
+#define LINK_CONFIRM_BORDER     2
+#define LINK_CONFIRM_BTN_Y    110
+#define LINK_CONFIRM_BTN_GAP   12
+#define LINK_CONFIRM_BTN_W    ((LINK_CONFIRM_BOX_W - 2 * LINK_CONFIRM_BORDER - 2 * UI_CARD_ROW_X - LINK_CONFIRM_BTN_GAP) / 2)
+#define LINK_CONFIRM_BOX_H    (LINK_CONFIRM_BTN_Y + UI_POPUP_BTN_H + UI_CARD_ROW_X + 2 * LINK_CONFIRM_BORDER)
+
+// A caption of the answer row: the popup's title size, and a long one such as
+// "Trotzdem verknüpfen" wraps onto two lines instead of being cut.
+static void linkConfirmCaption(lv_obj_t* lbl) {
+  lv_obj_set_width(lbl, LINK_CONFIRM_BTN_W - 2 * UI_CARD_ROW_X);
+  lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_font(lbl, UI_FONT_TITLE, 0);
+  lv_obj_center(lbl);
+}
 
 static void showLinkConfirmPopup(int idx) {
   if (idx < 0 || idx >= link_spool_count) return;
@@ -2508,11 +2526,11 @@ static void showLinkConfirmPopup(int idx) {
   lv_obj_clear_flag(popup, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *box = lv_obj_create(popup);
-  lv_obj_set_size(box, 440, 220);
+  lv_obj_set_size(box, LINK_CONFIRM_BOX_W, LINK_CONFIRM_BOX_H);
   lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
   lv_obj_set_style_bg_color(box, lv_color_hex(UI_COL_SURFACE), 0);
   lv_obj_set_style_border_color(box, lv_color_hex(mismatch ? UI_COL_BAD_TEXT : UI_COL_GOOD), 0);
-  lv_obj_set_style_border_width(box, 2, 0);
+  lv_obj_set_style_border_width(box, LINK_CONFIRM_BORDER, 0);
   lv_obj_set_style_radius(box, 12, 0);
   lv_obj_set_style_pad_all(box, 0, 0);
   lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
@@ -2568,14 +2586,13 @@ static void showLinkConfirmPopup(int idx) {
   if (mismatch) {
     extra = tagSpoolCompareRows(box, LINK_CONFIRM_ROWS_Y, verdict, s.material,
                                 s.color_hex, s.vendor) + LINK_CONFIRM_ROWS_GAP;
-    lv_obj_set_height(box, 220 + extra);
+    lv_obj_set_height(box, LINK_CONFIRM_BOX_H + extra);
   }
 
-  // Link button - y=110, h=46
   lv_obj_t *btn_yes = lv_btn_create(box);
-  lv_obj_set_size(btn_yes, 420, 46);
-  lv_obj_set_pos(btn_yes, 10, 110 + extra);
-  lv_obj_set_style_radius(btn_yes, 8, 0);
+  lv_obj_set_size(btn_yes, LINK_CONFIRM_BTN_W, UI_POPUP_BTN_H);
+  lv_obj_set_pos(btn_yes, UI_CARD_ROW_X, LINK_CONFIRM_BTN_Y + extra);
+  lv_obj_set_style_radius(btn_yes, UI_RADIUS_BTN, 0);
   lv_obj_set_user_data(btn_yes, (void*)(intptr_t)idx);
   lv_obj_add_event_cb(btn_yes, [](lv_event_t *e) {
     int cidx = (intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
@@ -2611,23 +2628,19 @@ static void showLinkConfirmPopup(int idx) {
   lv_label_set_text(lbl_yes, copy_flow_via_list ? T(STR_BTN_CONFIRMED)
                           : mismatch           ? T(STR_BTN_LINK_ANYWAY)
                                                : T(STR_LINK_OK));
-  lv_obj_set_style_text_font(lbl_yes, &lv_font_montserrat_ext_18, 0);
-  lv_obj_center(lbl_yes);
+  linkConfirmCaption(lbl_yes);
   uiBtnRole(btn_yes, mismatch ? BTN_DANGER : BTN_CONFIRM);
 
-  // Cancel button - y=164 (gap=8 after btn_yes ends at 156)
   lv_obj_t *btn_no = lv_btn_create(box);
-  lv_obj_set_size(btn_no, 420, 40);
-  lv_obj_set_pos(btn_no, 10, 164 + extra);
-  lv_obj_set_style_radius(btn_no, 8, 0);
-  lv_obj_set_style_shadow_width(btn_no, 0, 0);
+  lv_obj_set_size(btn_no, LINK_CONFIRM_BTN_W, UI_POPUP_BTN_H);
+  lv_obj_set_pos(btn_no, UI_CARD_ROW_X + LINK_CONFIRM_BTN_W + LINK_CONFIRM_BTN_GAP, LINK_CONFIRM_BTN_Y + extra);
+  lv_obj_set_style_radius(btn_no, UI_RADIUS_BTN, 0);
   lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
     releaseScreen(&scr_link_confirm);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_no = lv_label_create(btn_no);
   lv_label_set_text(lbl_no, T(STR_CANCEL));
-  lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_14, 0);
-  lv_obj_center(lbl_no);
+  linkConfirmCaption(lbl_no);
   styleLeaveButton(btn_no);
 }
 

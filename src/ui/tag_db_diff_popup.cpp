@@ -104,19 +104,14 @@ static void answer(lv_obj_t* box, int x, bool keep) {
   lv_obj_t* btn = lv_btn_create(box);
   lv_obj_set_size(btn, TDP_BTN_W, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn, x, UI_CARD_ROW_Y);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
-  lv_obj_set_style_border_width(btn, 1, 0);
-  lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_add_event_cb(btn, park, LV_EVENT_CLICKED, (void*)(intptr_t)(keep ? TDP_KEEP : TDP_TAKE));
   lv_obj_t* l = lv_label_create(btn);
   lv_label_set_text(l, T(keep ? STR_TAGDB_KEEP : STR_TAGDB_TAKE));
-  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK), 0);
   lv_obj_set_style_text_font(l, UI_FONT_BODY, 0);
   lv_obj_center(l);
-  if (keep) uiBtnRole(btn, BTN_CONFIRM);
+  uiBtnRole(btn, keep ? BTN_CONFIRM : BTN_NEUTRAL);
 }
 
 static lv_obj_t* buildBox() {

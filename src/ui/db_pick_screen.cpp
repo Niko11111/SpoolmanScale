@@ -762,7 +762,7 @@ static void sizeButton(lv_obj_t* box, const char* text, int y, DbpNav nav, int a
   lv_obj_add_event_cb(b, onNav, LV_EVENT_CLICKED, navData(nav, arg));
   lv_obj_t* l = lv_label_create(b);
   lv_label_set_text(l, text);
-  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK), 0);
+  if (nav == NAV_SIZE) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK), 0);
   lv_obj_set_style_text_font(l, UI_FONT_TITLE, 0);
   lv_obj_center(l);
   if (nav != NAV_SIZE) styleLeaveButton(b);
