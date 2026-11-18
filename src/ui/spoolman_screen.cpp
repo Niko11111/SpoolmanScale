@@ -367,7 +367,7 @@ static void buildLockedColumn(lv_obj_t *scr) {
   lv_obj_align_to(addr, why, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 8);
 
   lv_obj_t *clr = padButton(scr, SP_PAD_X, SP_CARD_Y + SP_CARD_H - SP_KEY_H, SP_PAD_W, SP_KEY_H,
-                            UI_COL_BAD_BG, UI_COL_BAD_BG_PRESSED);
+                            UI_COL_ROW, UI_COL_ROW_PRESS_FILL);
   lv_obj_add_event_cb(clr, [](lv_event_t *e) {
     // Asks, then acts one loop pass later. Nothing is deleted from inside
     // this callback.
@@ -375,7 +375,8 @@ static void buildLockedColumn(lv_obj_t *scr) {
   }, LV_EVENT_CLICKED, NULL);
   char buf_clear[32];
   copyT(buf_clear, sizeof(buf_clear), STR_SP_CLEAR);
-  padLabel(clr, buf_clear, UI_COL_BAD_TEXT, UI_FONT_BODY);
+  padLabel(clr, buf_clear, UI_COL_INK, UI_FONT_BODY);
+  uiBtnRole(clr, BTN_DANGER);
 }
 
 static lv_obj_t *columnLabel(lv_obj_t *scr, const char *text, const lv_font_t *font,

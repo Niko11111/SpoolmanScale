@@ -279,31 +279,14 @@ lv_obj_t* addCloseButton(lv_obj_t *parent) {
   lv_obj_t *btn = lv_btn_create(parent);
   lv_obj_set_size(btn, 44, 44);
   lv_obj_align(btn, LV_ALIGN_TOP_RIGHT, -4, 2);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(btn, 8, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 0, 0);
+  lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
   lv_obj_add_event_cb(btn, [](lv_event_t *e){ logSD("BTN: Close -> Main"); showMainScreen(); }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl = lv_label_create(btn);
   lv_label_set_text(lbl, LV_SYMBOL_CLOSE);
   lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_center(lbl);
+  uiBtnRole(btn, BTN_CLOSE);
   return btn;
-}
-
-void uiSecondaryFill(lv_obj_t *btn) {
-  if (uiThemeIsDark()) {
-    lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_LINE), 0);
-    return;
-  }
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_border_width(btn, 1, 0);
-  lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_ROW_PRESSED), 0);
-  // Under the finger a shade darker than the row, not the dark frame colour
-  // the callers set for the dark palettes: on a light one that flashed black.
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
 }
 
 void uiCountdownFillSet(lv_obj_t *fill, lv_coord_t full_w, lv_coord_t *drawn_w,
@@ -723,17 +706,12 @@ void listBtnTone(lv_obj_t* btn, ListTone tone) {
   if (ttl_lbl) lv_obj_set_style_text_color(ttl_lbl, lv_color_hex(text), 0);
 }
 
-// red_pct of `red`, the rest of `base`.
-static lv_color_t leaveMix(uint32_t red, uint32_t base, int red_pct) {
-  return lv_color_mix(lv_color_hex(red), lv_color_hex(base), (uint8_t)(red_pct * 255 / 100));
-}
-
 void styleLeaveButton(lv_obj_t* btn, const char* icon) {
   if (!btn) return;
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn, UI_LEAVE_BORDER_W, 0);
-  lv_obj_set_style_border_color(btn, leaveMix(UI_COL_BAD_TEXT, UI_COL_ROW, UI_LEAVE_BORDER_RED_PCT), 0);
+  lv_obj_set_style_border_color(btn, uiMixRed(UI_COL_BAD_TEXT, UI_COL_ROW, UI_LEAVE_BORDER_RED_PCT), 0);
   lv_obj_set_style_border_opa(btn, LV_OPA_COVER, 0);
   lv_obj_t* lbl = nullptr;
   for (uint32_t i = 0; i < lv_obj_get_child_cnt(btn) && !lbl; i++) {
@@ -753,7 +731,7 @@ void styleLeaveButton(lv_obj_t* btn, const char* icon) {
   // The icon in red through LVGL's recolour markup, the caption in the
   // label's own colour; one label, so the pair stays centred as before.
   char text[64];
-  const lv_color_t ic = leaveMix(UI_COL_BAD_TEXT, UI_COL_INK_2, UI_LEAVE_ICON_RED_PCT);
+  const lv_color_t ic = uiMixRed(UI_COL_BAD_TEXT, UI_COL_INK_2, UI_LEAVE_ICON_RED_PCT);
   snprintf(text, sizeof(text), "#%06x %s#  %s", (unsigned)(lv_color_to32(ic) & 0xFFFFFFu), icon,
            lv_label_get_text(lbl));
   lv_label_set_recolor(lbl, true);

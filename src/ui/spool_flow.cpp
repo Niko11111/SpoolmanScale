@@ -1675,10 +1675,7 @@ static void showTagMovePopup() {
   lv_obj_t *btn_ok = lv_btn_create(box);
   lv_obj_set_size(btn_ok, btn_w, btn_h);
   lv_obj_set_pos(btn_ok, 12, box_h - btn_h - 18);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(UI_COL_OK_BG), 0);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ok, 8, 0);
-  lv_obj_set_style_shadow_width(btn_ok, 0, 0);
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
     // Flags only: the move costs two requests, and this button sits on the
     // popup that has to go first.
@@ -1687,15 +1684,13 @@ static void showTagMovePopup() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
   { char bb[32]; copyT(bb, sizeof(bb), STR_TAGMOVE_BTN); lv_label_set_text(lbl_ok, bb); }
-  lv_obj_set_style_text_color(lbl_ok, lv_color_hex(UI_COL_OK_TEXT), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_ok);
+  uiBtnRole(btn_ok, BTN_CONFIRM);
 
   lv_obj_t *btn_no = lv_btn_create(box);
   lv_obj_set_size(btn_no, btn_w, btn_h);
   lv_obj_set_pos(btn_no, box_w - btn_w - 12, box_h - btn_h - 18);
-  lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_no, 8, 0);
   lv_obj_set_style_shadow_width(btn_no, 0, 0);
   lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
@@ -1703,7 +1698,6 @@ static void showTagMovePopup() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_no = lv_label_create(btn_no);
   { char cb[32]; copyT(cb, sizeof(cb), STR_CANCEL); lv_label_set_text(lbl_no, cb); }
-  lv_obj_set_style_text_color(lbl_no, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_no);
   styleLeaveButton(btn_no);
@@ -1846,8 +1840,10 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
   lv_obj_set_pos(btn_force, 10, 114);
   // Adding is not the destructive act overwriting is, so it gets the calm
   // green of a normal confirmation rather than the warning amber.
-  lv_obj_set_style_bg_color(btn_force, lv_color_hex(add_mode ? UI_COL_GO_BG : UI_COL_CAUTION_BG), 0);
-  lv_obj_set_style_bg_color(btn_force, lv_color_hex(add_mode ? UI_COL_GO_BG_PRESSED : UI_COL_CAUTION_BG_PRESSED), LV_STATE_PRESSED);
+  if (!add_mode) {
+    lv_obj_set_style_bg_color(btn_force, lv_color_hex(UI_COL_CAUTION_BG), 0);
+    lv_obj_set_style_bg_color(btn_force, lv_color_hex(UI_COL_CAUTION_BG_PRESSED), LV_STATE_PRESSED);
+  }
   lv_obj_set_style_radius(btn_force, 8, 0);
   lv_obj_set_style_shadow_width(btn_force, 0, 0);
   lv_obj_set_style_border_width(btn_force, 0, 0);
@@ -1860,9 +1856,10 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_force = lv_label_create(btn_force);
   lv_label_set_text(lbl_force, T(add_mode ? STR_BTN_ADD_UID : STR_BTN_OVERWRITE));
-  lv_obj_set_style_text_color(lbl_force, lv_color_hex(add_mode ? UI_COL_OK_TEXT_2 : UI_COL_WARN), 0);
+  if (!add_mode) lv_obj_set_style_text_color(lbl_force, lv_color_hex(UI_COL_WARN), 0);
   lv_obj_set_style_text_font(lbl_force, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_force);
+  if (add_mode) uiBtnRole(btn_force, BTN_CONFIRM);
 
   lv_obj_t *btn_retry = lv_btn_create(box);
   lv_obj_set_size(btn_retry, 420, 44);
@@ -1890,18 +1887,14 @@ void showWarnPopupA(int spool_id, const char* existing_tag, bool is_bambu,
   lv_obj_t *btn_cancel = lv_btn_create(box);
   lv_obj_set_size(btn_cancel, 420, 36);
   lv_obj_set_pos(btn_cancel, 10, 218);  // 166+44+8
-  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_cancel, 8, 0);
   lv_obj_set_style_shadow_width(btn_cancel, 0, 0);
-  lv_obj_set_style_border_width(btn_cancel, 0, 0);
   lv_obj_add_event_cb(btn_cancel, [](lv_event_t *e) {
     releaseScreen(&scr_link_warn_a);
     idPadRelease();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_cancel = lv_label_create(btn_cancel);
   lv_label_set_text(lbl_cancel, T(STR_CANCEL));
-  lv_obj_set_style_text_color(lbl_cancel, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(lbl_cancel, &lv_font_montserrat_ext_14, 0);
   lv_obj_center(lbl_cancel);
   styleLeaveButton(btn_cancel);
@@ -1988,11 +1981,7 @@ void showWarnPopupB(int spool_id, bool is_bambu) {
   lv_obj_t *btn_force = lv_btn_create(box);
   lv_obj_set_size(btn_force, 420, 48);
   lv_obj_align(btn_force, LV_ALIGN_TOP_MID, 0, force_y);
-  lv_obj_set_style_bg_color(btn_force, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_force, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_force, 8, 0);
-  lv_obj_set_style_shadow_width(btn_force, 0, 0);
-  lv_obj_set_style_border_width(btn_force, 0, 0);
   lv_obj_add_event_cb(btn_force, [](lv_event_t *e) {
     // A bound spool still gets its own question: this one accepted the
     // difference, that one decides between replacing and adding the tag.
@@ -2009,9 +1998,9 @@ void showWarnPopupB(int spool_id, bool is_bambu) {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_force = lv_label_create(btn_force);
   lv_label_set_text(lbl_force, T(STR_BTN_LINK_ANYWAY));
-  lv_obj_set_style_text_color(lbl_force, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(lbl_force, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_force);
+  uiBtnRole(btn_force, BTN_DANGER);
 
   lv_obj_t *btn_retry = lv_btn_create(box);
   lv_obj_set_size(btn_retry, 420, 44);
@@ -2040,18 +2029,14 @@ void showWarnPopupB(int spool_id, bool is_bambu) {
   lv_obj_t *btn_cancel = lv_btn_create(box);
   lv_obj_set_size(btn_cancel, 420, WARN_B_CANCEL_H);
   lv_obj_align(btn_cancel, LV_ALIGN_TOP_MID, 0, cancel_y);
-  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_ROW), 0);
-  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_QUIET_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_cancel, 8, 0);
   lv_obj_set_style_shadow_width(btn_cancel, 0, 0);
-  lv_obj_set_style_border_width(btn_cancel, 0, 0);
   lv_obj_add_event_cb(btn_cancel, [](lv_event_t *e) {
     releaseScreen(&scr_link_warn_b);
     idPadRelease();
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_cancel = lv_label_create(btn_cancel);
   lv_label_set_text(lbl_cancel, T(STR_CANCEL));
-  lv_obj_set_style_text_color(lbl_cancel, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_cancel, &lv_font_montserrat_ext_14, 0);
   lv_obj_center(lbl_cancel);
   styleLeaveButton(btn_cancel);
@@ -2590,11 +2575,7 @@ static void showLinkConfirmPopup(int idx) {
   lv_obj_t *btn_yes = lv_btn_create(box);
   lv_obj_set_size(btn_yes, 420, 46);
   lv_obj_set_pos(btn_yes, 10, 110 + extra);
-  lv_obj_set_style_bg_color(btn_yes, lv_color_hex(mismatch ? UI_COL_BAD_BG : UI_COL_GO_BG), 0);
-  lv_obj_set_style_bg_color(btn_yes, lv_color_hex(mismatch ? UI_COL_BAD_BG_PRESSED : UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_yes, 8, 0);
-  lv_obj_set_style_shadow_width(btn_yes, 0, 0);
-  lv_obj_set_style_border_width(btn_yes, 0, 0);
   lv_obj_set_user_data(btn_yes, (void*)(intptr_t)idx);
   lv_obj_add_event_cb(btn_yes, [](lv_event_t *e) {
     int cidx = (intptr_t)lv_obj_get_user_data(lv_event_get_target(e));
@@ -2630,25 +2611,21 @@ static void showLinkConfirmPopup(int idx) {
   lv_label_set_text(lbl_yes, copy_flow_via_list ? T(STR_BTN_CONFIRMED)
                           : mismatch           ? T(STR_BTN_LINK_ANYWAY)
                                                : T(STR_LINK_OK));
-  lv_obj_set_style_text_color(lbl_yes, lv_color_hex(mismatch ? UI_COL_BAD_TEXT : UI_COL_OK_TEXT_2), 0);
   lv_obj_set_style_text_font(lbl_yes, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_yes);
+  uiBtnRole(btn_yes, mismatch ? BTN_DANGER : BTN_CONFIRM);
 
   // Cancel button - y=164 (gap=8 after btn_yes ends at 156)
   lv_obj_t *btn_no = lv_btn_create(box);
   lv_obj_set_size(btn_no, 420, 40);
   lv_obj_set_pos(btn_no, 10, 164 + extra);
-  lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_no, 8, 0);
   lv_obj_set_style_shadow_width(btn_no, 0, 0);
-  lv_obj_set_style_border_width(btn_no, 0, 0);
   lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
     releaseScreen(&scr_link_confirm);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_no = lv_label_create(btn_no);
   lv_label_set_text(lbl_no, T(STR_CANCEL));
-  lv_obj_set_style_text_color(lbl_no, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_14, 0);
   lv_obj_center(lbl_no);
   styleLeaveButton(btn_no);
@@ -2765,11 +2742,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   lv_obj_t *btn_hdr_cancel = lv_btn_create(hdr);
   lv_obj_set_size(btn_hdr_cancel, 44, 44);
   lv_obj_align(btn_hdr_cancel, LV_ALIGN_RIGHT_MID, -4, 0);
-  lv_obj_set_style_bg_color(btn_hdr_cancel, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_hdr_cancel, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_hdr_cancel, 8, 0);
-  lv_obj_set_style_shadow_width(btn_hdr_cancel, 0, 0);
-  lv_obj_set_style_border_width(btn_hdr_cancel, 0, 0);
   lv_obj_add_event_cb(btn_hdr_cancel, [](lv_event_t *e) {
     logSD("BTN: SpoolList -> Cancel");
     // Out to the main screen like every other X of the flow. It left the copy
@@ -2785,9 +2758,9 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_hdr_cancel);
     lv_label_set_text(l, LV_SYMBOL_CLOSE);
-    lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_BAD_TEXT), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_18, 0);
     lv_obj_center(l); }
+  uiBtnRole(btn_hdr_cancel, BTN_CLOSE);
 
   // Separator
   lv_obj_t *div = lv_obj_create(scr_link_spools);
@@ -3045,11 +3018,7 @@ void showMaterialList(const char* vendor_name) {
   lv_obj_t *btn_mat_cancel = lv_btn_create(hdr_mat);
   lv_obj_set_size(btn_mat_cancel, 44, 44);
   lv_obj_align(btn_mat_cancel, LV_ALIGN_RIGHT_MID, -4, 0);
-  lv_obj_set_style_bg_color(btn_mat_cancel, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_mat_cancel, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_mat_cancel, 8, 0);
-  lv_obj_set_style_shadow_width(btn_mat_cancel, 0, 0);
-  lv_obj_set_style_border_width(btn_mat_cancel, 0, 0);
   lv_obj_add_event_cb(btn_mat_cancel, [](lv_event_t *e) {
     logSD("BTN: MatList -> Cancel");
     copy_flow_via_list = false;
@@ -3060,8 +3029,8 @@ void showMaterialList(const char* vendor_name) {
     releaseScreen(&scr_copy_entry);
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_mat_cancel); lv_label_set_text(l, LV_SYMBOL_CLOSE);
-    lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_BAD_TEXT), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_18, 0); lv_obj_center(l); }
+  uiBtnRole(btn_mat_cancel, BTN_CLOSE);
   lv_obj_t *div = lv_obj_create(scr_link_mat);
   lv_obj_set_size(div, 480, 1); lv_obj_set_pos(div, 0, 52);
   lv_obj_set_style_bg_color(div, lv_color_hex(UI_COL_LINE), 0);
@@ -3236,11 +3205,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
   lv_obj_t *btn_ms_cancel = lv_btn_create(hdr_ms);
   lv_obj_set_size(btn_ms_cancel, 44, 44);
   lv_obj_align(btn_ms_cancel, LV_ALIGN_RIGHT_MID, -4, 0);
-  lv_obj_set_style_bg_color(btn_ms_cancel, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_ms_cancel, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ms_cancel, 8, 0);
-  lv_obj_set_style_shadow_width(btn_ms_cancel, 0, 0);
-  lv_obj_set_style_border_width(btn_ms_cancel, 0, 0);
   lv_obj_add_event_cb(btn_ms_cancel, [](lv_event_t *e) {
     logSD("BTN: MatSubList -> Cancel");
     copy_flow_via_list = false;
@@ -3251,8 +3216,8 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
     releaseScreen(&scr_copy_entry);
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_ms_cancel); lv_label_set_text(l, LV_SYMBOL_CLOSE);
-    lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_BAD_TEXT), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_18, 0); lv_obj_center(l); }
+  uiBtnRole(btn_ms_cancel, BTN_CLOSE);
 
   lv_obj_t *div = lv_obj_create(scr_link_mat_sub);
   lv_obj_set_size(div, 480, 1); lv_obj_set_pos(div, 0, 52);
@@ -3367,11 +3332,7 @@ void showVendorList() {
   lv_obj_t *btn_vnd_x = lv_btn_create(hdr_vnd);
   lv_obj_set_size(btn_vnd_x, 44, 44);
   lv_obj_align(btn_vnd_x, LV_ALIGN_RIGHT_MID, -4, 0);
-  lv_obj_set_style_bg_color(btn_vnd_x, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_vnd_x, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_vnd_x, 8, 0);
-  lv_obj_set_style_shadow_width(btn_vnd_x, 0, 0);
-  lv_obj_set_style_border_width(btn_vnd_x, 0, 0);
   lv_obj_add_event_cb(btn_vnd_x, [](lv_event_t *e) {
     logSD("BTN: VendorList -> Cancel");
     copy_flow_via_list = false;
@@ -3380,8 +3341,8 @@ void showVendorList() {
     releaseScreen(&scr_copy_entry);
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_vnd_x); lv_label_set_text(l, LV_SYMBOL_CLOSE);
-    lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_BAD_TEXT), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_18, 0); lv_obj_center(l); }
+  uiBtnRole(btn_vnd_x, BTN_CLOSE);
   lv_obj_t *div = lv_obj_create(scr_link_vendor);
   lv_obj_set_size(div, 480, 1); lv_obj_set_pos(div, 0, 52);
   lv_obj_set_style_bg_color(div, lv_color_hex(UI_COL_LINE), 0);
@@ -3484,17 +3445,13 @@ void flowCloseButton(lv_obj_t* parent, lv_event_cb_t cb) {
   lv_obj_t *btn = lv_btn_create(parent);
   lv_obj_set_size(btn, 44, 44);
   lv_obj_set_pos(btn, 480 - 4 - 44, 4);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 0, 0);
   lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
   lv_obj_t *l = lv_label_create(btn);
   lv_label_set_text(l, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(l, UI_FONT_TITLE, 0);
   lv_obj_center(l);
+  uiBtnRole(btn, BTN_CLOSE);
 }
 
 void showLinkEntryPopup(bool is_bambu) {

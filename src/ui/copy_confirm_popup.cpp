@@ -265,10 +265,7 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
   lv_obj_t *btn_ok = lv_btn_create(box);
   lv_obj_set_size(btn_ok, COPY_ANSWER_W, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn_ok, UI_CARD_ROW_X, UI_CARD_ROW_Y);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(UI_COL_OK_BG), 0);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ok, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(btn_ok, 0, 0);
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
     // The handler closes the three popups - this button's own among them -
     // and then creates the spool from the loop.
@@ -277,17 +274,15 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
   lv_label_set_text(lbl_ok, T(STR_COPY_CARD_CREATE));
-  lv_obj_set_style_text_color(lbl_ok, lv_color_hex(UI_COL_OK_TEXT), 0);
   lv_obj_set_style_text_font(lbl_ok, UI_FONT_TITLE, 0);
   lv_obj_center(lbl_ok);
+  uiBtnRole(btn_ok, BTN_CONFIRM);
 
   buildCopyOptionsButton(box);
 
   lv_obj_t *btn_no = lv_btn_create(box);
   lv_obj_set_size(btn_no, COPY_ANSWER_W, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn_no, UI_POPUP_W - COPY_ANSWER_W - UI_CARD_ROW_X, UI_CARD_ROW_Y);
-  lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_no, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(btn_no, 0, 0);
   lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
@@ -299,7 +294,6 @@ void showCopyConfirmPopup(int template_spool_id, int template_filament_id,
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_no = lv_label_create(btn_no);
   lv_label_set_text(lbl_no, T(STR_CANCEL));
-  lv_obj_set_style_text_color(lbl_no, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(lbl_no, UI_FONT_TITLE, 0);
   lv_obj_center(lbl_no);
   styleLeaveButton(btn_no);

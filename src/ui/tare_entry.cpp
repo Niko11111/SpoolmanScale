@@ -100,9 +100,20 @@ static void refreshPad() {
   lv_label_set_text(s_lbl_info, info);
   lv_obj_set_style_text_color(s_lbl_info, lv_color_hex(info_col), 0);
 
-  lv_obj_set_style_bg_color(s_btn_next, lv_color_hex(ok ? UI_COL_OK_BG : UI_COL_SURFACE), 0);
-  lv_obj_set_style_text_color(lv_obj_get_child(s_btn_next, 0),
-                              lv_color_hex(ok ? UI_COL_OK_TEXT : UI_COL_CAPTION), 0);
+  // Ready is the confirm role as built; not ready is the one local look on top.
+  lv_obj_t *next_lbl = lv_obj_get_child(s_btn_next, 0);
+  if (ok) {
+    lv_obj_remove_local_style_prop(s_btn_next, LV_STYLE_BG_COLOR, 0);
+    lv_obj_remove_local_style_prop(s_btn_next, LV_STYLE_BORDER_WIDTH, 0);
+    lv_obj_remove_local_style_prop(s_btn_next, LV_STYLE_BORDER_COLOR, 0);
+    lv_obj_remove_local_style_prop(next_lbl, LV_STYLE_TEXT_COLOR, 0);
+  } else {
+    // The pad keys' outline, so the inert button still reads as a key.
+    lv_obj_set_style_bg_color(s_btn_next, lv_color_hex(UI_COL_SURFACE), 0);
+    lv_obj_set_style_border_width(s_btn_next, 1, 0);
+    lv_obj_set_style_border_color(s_btn_next, lv_color_hex(UI_COL_LINE_SOFT), 0);
+    lv_obj_set_style_text_color(next_lbl, lv_color_hex(UI_COL_CAPTION), 0);
+  }
 }
 
 static void onKey(lv_event_t *e) {
@@ -191,8 +202,9 @@ static void showTarePad() {
 
   char next_buf[32];
   snprintf(next_buf, sizeof(next_buf), "%s  " LV_SYMBOL_RIGHT, T(STR_BTN_NEXT));
-  s_btn_next = padButton(scr, COL_X, NEXT_Y, COL_W, NEXT_H, UI_COL_OK_BG, UI_COL_OK_BG_PRESSED);
-  padLabel(s_btn_next, next_buf, UI_COL_OK_TEXT, UI_FONT_BODY);
+  s_btn_next = padButton(scr, COL_X, NEXT_Y, COL_W, NEXT_H, UI_COL_ROW, UI_COL_ROW_PRESS_FILL);
+  padLabel(s_btn_next, next_buf, UI_COL_INK, UI_FONT_BODY);
+  uiBtnRole(s_btn_next, BTN_CONFIRM);
   lv_obj_add_event_cb(s_btn_next, [](lv_event_t *e) {
     float v = 0.0f;
     if (!inputValue(&v)) return;          // the button is greyed, the press is ignored
@@ -209,9 +221,11 @@ static void showTarePad() {
     showSpoolWeightScope(v, false);
   }, LV_EVENT_CLICKED, NULL);
 
+  // styleLeaveButton sets the fill and the label colour; padButton only needs
+  // a neutral start.
   lv_obj_t *cancel = padButton(scr, COL_X, CANCEL_Y, COL_W, CANCEL_H,
-                               UI_COL_BAD_BG, UI_COL_BAD_BG_PRESSED);
-  padLabel(cancel, T(STR_CANCEL), UI_COL_BAD_TEXT, UI_FONT_SMALL);
+                               UI_COL_ROW, UI_COL_ROW_PRESS_FILL);
+  padLabel(cancel, T(STR_CANCEL), UI_COL_INK_2, UI_FONT_SMALL);
   styleLeaveButton(cancel);
   lv_obj_add_event_cb(cancel, [](lv_event_t *e) { closeTareEntry(); }, LV_EVENT_CLICKED, NULL);
 

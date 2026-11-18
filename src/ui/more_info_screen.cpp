@@ -469,12 +469,7 @@ void showLocationPicker() {
   lv_obj_t *btn_x = lv_btn_create(hdr);
   lv_obj_set_size(btn_x, 40, 40);
   lv_obj_align(btn_x, LV_ALIGN_RIGHT_MID, -4, 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
-  lv_obj_set_style_border_width(btn_x, 1, 0);
-  lv_obj_set_style_border_color(btn_x, lv_color_hex(UI_COL_CLOSE_LINE), 0);
   lv_obj_set_style_radius(btn_x, 8, 0);
-  lv_obj_set_style_shadow_width(btn_x, 0, 0);
   lv_obj_add_event_cb(btn_x, [](lv_event_t *e) {
     // Parked: this button sits on the picker it would delete, and the fetch
     // that fills the list pumps LVGL - a tap here used to rebuild More Info
@@ -483,9 +478,9 @@ void showLocationPicker() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_x = lv_label_create(btn_x);
   lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_color(lbl_x, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_x);
+  uiBtnRole(btn_x, BTN_CLOSE);
 
   // Status label (loading / error)
   lv_obj_t *lbl_loc_status = lv_label_create(box);
@@ -518,10 +513,6 @@ void showLocationPicker() {
     lv_obj_t *btn_c = lv_btn_create(box);
     lv_obj_set_size(btn_c, LOC_CANCEL_W, LOC_CANCEL_H);
     lv_obj_set_pos(btn_c, 10, 270 - LOC_CANCEL_H);
-    lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
-    lv_obj_set_style_border_width(btn_c, 1, 0);
-    lv_obj_set_style_border_color(btn_c, lv_color_hex(UI_COL_LINE), 0);
     lv_obj_set_style_radius(btn_c, UI_RADIUS_BTN, 0);
     lv_obj_set_style_shadow_width(btn_c, 0, 0);
     lv_obj_set_style_pad_all(btn_c, 0, 0);
@@ -541,7 +532,6 @@ void showLocationPicker() {
     loc_cancel_fill_w = LOC_FILL_W;
     lv_obj_t *lbl_c = lv_label_create(btn_c);
     lv_label_set_text(lbl_c, T(STR_CANCEL));
-    lv_obj_set_style_text_color(lbl_c, lv_color_hex(UI_COL_INK_2), 0);
     lv_obj_set_style_text_font(lbl_c, UI_FONT_BODY, 0);
     lv_obj_center(lbl_c);
     styleLeaveButton(btn_c);
@@ -893,20 +883,15 @@ void buildMoreInfoScreen() {
   lv_obj_t *btn_x = lv_btn_create(hdr);
   lv_obj_set_size(btn_x, 44, 44);
   lv_obj_align(btn_x, LV_ALIGN_RIGHT_MID, -10, 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_x, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
-  lv_obj_set_style_border_width(btn_x, 1, 0);
-  lv_obj_set_style_border_color(btn_x, lv_color_hex(UI_COL_CLOSE_LINE), 0);
   lv_obj_set_style_radius(btn_x, 8, 0);
-  lv_obj_set_style_shadow_width(btn_x, 0, 0);
   lv_obj_add_event_cb(btn_x, [](lv_event_t *e) {
     if (scr_more_info) { lv_obj_del(scr_more_info); scr_more_info = nullptr; }
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_x = lv_label_create(btn_x);
   lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_color(lbl_x, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_x);
+  uiBtnRole(btn_x, BTN_CLOSE);
 
   // Header separator (below header, Fix 10: at y=52)
   lv_obj_t *hdiv = lv_obj_create(box);
@@ -1196,12 +1181,7 @@ void buildMoreInfoScreen() {
     lv_obj_t *btn_unlink = lv_btn_create(box);
     lv_obj_set_size(btn_unlink, 104, 34);
     lv_obj_set_pos(btn_unlink, 350, R4);
-    lv_obj_set_style_bg_color(btn_unlink, lv_color_hex(UI_COL_BAD_BG), 0);
-    lv_obj_set_style_bg_color(btn_unlink, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn_unlink, 8, 0);
-    lv_obj_set_style_shadow_width(btn_unlink, 0, 0);
-    lv_obj_set_style_border_width(btn_unlink, 1, 0);
-    lv_obj_set_style_border_color(btn_unlink, lv_color_hex(UI_COL_CLOSE_LINE), 0);
     lv_obj_add_event_cb(btn_unlink, [](lv_event_t *e) {
       // Build confirmation popup on lv_scr_act() so it sits above more_info
       releaseScreen(&s_unlink_popup);
@@ -1280,19 +1260,14 @@ void buildMoreInfoScreen() {
       lv_obj_t *btn_no = lv_btn_create(box2);
       lv_obj_set_size(btn_no, cu_multi ? 396 : 170, 44);
       lv_obj_set_pos(btn_no, 12, cu_multi ? 204 : 154);
-      lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_SURFACE), 0);
-      lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_LINE_SOFT), LV_STATE_PRESSED);
       lv_obj_set_style_radius(btn_no, 8, 0);
       lv_obj_set_style_shadow_width(btn_no, 0, 0);
-      lv_obj_set_style_border_width(btn_no, 1, 0);
-      lv_obj_set_style_border_color(btn_no, lv_color_hex(UI_COL_LINE_SOFT), 0);
       lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
         releaseScreen(&s_unlink_popup);
       }, LV_EVENT_CLICKED, NULL);
       lv_obj_t *lbl_no = lv_label_create(btn_no);
       char buf_no[32]; copyT(buf_no, sizeof(buf_no), STR_CANCEL);
       lv_label_set_text(lbl_no, buf_no);
-      lv_obj_set_style_text_color(lbl_no, lv_color_hex(UI_COL_CAPTION), 0);
       lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_14, 0);
       lv_obj_align(lbl_no, LV_ALIGN_CENTER, 0, 0);
       styleLeaveButton(btn_no);
@@ -1301,12 +1276,7 @@ void buildMoreInfoScreen() {
       lv_obj_t *btn_yes = lv_btn_create(box2);
       lv_obj_set_size(btn_yes, cu_multi ? 196 : 220, 44);
       lv_obj_set_pos(btn_yes, cu_multi ? 12 : 190, cu_multi ? 150 : 154);
-      lv_obj_set_style_bg_color(btn_yes, lv_color_hex(UI_COL_BAD_BG), 0);
-      lv_obj_set_style_bg_color(btn_yes, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
       lv_obj_set_style_radius(btn_yes, 8, 0);
-      lv_obj_set_style_shadow_width(btn_yes, 0, 0);
-      lv_obj_set_style_border_width(btn_yes, 1, 0);
-      lv_obj_set_style_border_color(btn_yes, lv_color_hex(UI_COL_BAD_BG_PRESSED), 0);
       // user_data carries whether this button means "all" or "only this one",
       // so both share the handler below.
       lv_obj_set_user_data(btn_yes, (void *)(intptr_t)(cu_multi ? 0 : 1));
@@ -1315,37 +1285,32 @@ void buildMoreInfoScreen() {
       char buf_yes[48];
       copyT(buf_yes, sizeof(buf_yes), cu_multi ? STR_BTN_UNLINK_ONE : STR_UNLINK_CONFIRM);
       lv_label_set_text(lbl_yes, buf_yes);
-      lv_obj_set_style_text_color(lbl_yes, lv_color_hex(UI_COL_BAD_TEXT), 0);
       lv_obj_set_style_text_font(lbl_yes, &lv_font_montserrat_ext_14, 0);
       lv_obj_align(lbl_yes, LV_ALIGN_CENTER, 0, 0);
+      uiBtnRole(btn_yes, BTN_DANGER);
 
       if (cu_multi) {
         lv_obj_t *btn_all = lv_btn_create(box2);
         lv_obj_set_size(btn_all, 196, 44);
         lv_obj_set_pos(btn_all, 212, 150);
-        lv_obj_set_style_bg_color(btn_all, lv_color_hex(UI_COL_BAD_BG), 0);
-        lv_obj_set_style_bg_color(btn_all, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
         lv_obj_set_style_radius(btn_all, 8, 0);
-        lv_obj_set_style_shadow_width(btn_all, 0, 0);
-        lv_obj_set_style_border_width(btn_all, 1, 0);
-        lv_obj_set_style_border_color(btn_all, lv_color_hex(UI_COL_BAD_BG_PRESSED), 0);
         lv_obj_set_user_data(btn_all, (void *)(intptr_t)1);
         lv_obj_add_event_cb(btn_all, unlinkConfirmCb, LV_EVENT_CLICKED, NULL);
         lv_obj_t *lbl_all = lv_label_create(btn_all);
         char buf_all[48];
         copyT(buf_all, sizeof(buf_all), STR_BTN_UNLINK_ALL);
         lv_label_set_text(lbl_all, buf_all);
-        lv_obj_set_style_text_color(lbl_all, lv_color_hex(UI_COL_BAD_TEXT), 0);
         lv_obj_set_style_text_font(lbl_all, &lv_font_montserrat_ext_14, 0);
         lv_obj_align(lbl_all, LV_ALIGN_CENTER, 0, 0);
+        uiBtnRole(btn_all, BTN_DANGER);
       }
     }, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *lbl_unlink = lv_label_create(btn_unlink);
     char buf_ul[16]; copyT(buf_ul, sizeof(buf_ul), STR_UNLINK_BTN);
     lv_label_set_text(lbl_unlink, buf_ul);
-    lv_obj_set_style_text_color(lbl_unlink, lv_color_hex(UI_COL_BAD_TEXT), 0);
     lv_obj_set_style_text_font(lbl_unlink, &lv_font_montserrat_ext_14, 0);
     lv_obj_align(lbl_unlink, LV_ALIGN_CENTER, 0, 0);
+    uiBtnRole(btn_unlink, BTN_DANGER);
   }
 }

@@ -235,8 +235,9 @@ static void buildAnswers() {
   const int cancel_y = s_geo->keys_y + keys_h - NP_CANCEL_H;
   const int done_h = cancel_y - NP_GAP - done_y;
   lv_obj_t *ok = padButton(s_root, NP_COL_X, done_y, s_geo->col_w, done_h,
-                           UI_COL_OK_BG, UI_COL_OK_BG_PRESSED);
-  padLabel(ok, s_spec.primary, UI_COL_OK_TEXT, UI_FONT_BODY);
+                           UI_COL_ROW, UI_COL_ROW_PRESS_FILL);
+  padLabel(ok, s_spec.primary, UI_COL_INK, UI_FONT_BODY);
+  uiBtnRole(ok, BTN_CONFIRM);
   lv_obj_add_event_cb(ok, onDone, LV_EVENT_CLICKED, NULL);
 
   // In the popup the way out leads back to the step before, not out of it.

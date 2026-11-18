@@ -138,13 +138,7 @@ static void buildResultCard(lv_obj_t *pop, int title_id, int text_id, uint8_t to
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, btn_w, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn, UI_CARD_ROW_X, UI_CARD_ROW_Y);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(done ? UI_COL_OK_BG : UI_COL_LINE), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(done ? UI_COL_OK_BG_PRESSED : UI_COL_POPUP_BORDER),
-                            LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 0, 0);
-  if (!done) uiSecondaryFill(btn);
   lv_obj_set_style_pad_all(btn, 0, 0);
   lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(btn, [](lv_event_t *e) {
@@ -183,9 +177,9 @@ static void buildResultCard(lv_obj_t *pop, int title_id, int text_id, uint8_t to
 
   lv_obj_t *l = lv_label_create(btn);
   lv_label_set_text(l, T(STR_BTN_OK));
-  lv_obj_set_style_text_color(l, lv_color_hex(done ? UI_COL_OK_TEXT : UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(l, UI_FONT_TITLE, 0);
   lv_obj_center(l);
+  uiBtnRole(btn, done ? BTN_CONFIRM : BTN_NEUTRAL);
 }
 
 void showInfoPopup(int title_id, int text_id, uint8_t tone) {
@@ -266,11 +260,8 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, 200, 48);
   lv_obj_set_pos(btn, 120, 188);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, 8, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 0, 0);
-  uiSecondaryFill(btn);
   lv_obj_add_event_cb(btn, [](lv_event_t *e) {
     // Two levels up from the button: box, then the scrim that owns everything.
     // Deleted asynchronously because this runs inside the dispatch of an event
@@ -288,7 +279,6 @@ void showInfoPopup(int title_id, int text_id, uint8_t tone) {
   char bbuf[24];
   copyT(bbuf, sizeof(bbuf), STR_BACK);
   lv_label_set_text(l, bbuf);
-  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(l, LV_ALIGN_CENTER, 0, 0);

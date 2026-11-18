@@ -251,15 +251,10 @@ static lv_obj_t* surface(lv_obj_t* p, int x, int y, int w, int h, bool framed_go
 static lv_obj_t* answer(lv_obj_t* box, int x, int w, int text_id, UnkAction a, bool primary) {
   lv_obj_t* b = surface(box, x, UNK_ANSWER_Y, w, UI_POPUP_BTN_H, false);
   lv_obj_set_style_radius(b, UI_RADIUS_BTN, 0);
-  if (primary) {
-    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_OK_BG), 0);
-    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
-    lv_obj_set_style_border_width(b, 0, 0);
-  }
   lv_obj_add_event_cb(b, onAction, LV_EVENT_CLICKED, (void*)(intptr_t)a);
-  lv_obj_t* l = label(b, T(text_id), primary ? UI_FONT_TITLE : UI_FONT_BODY,
-                      primary ? UI_COL_OK_TEXT : UI_COL_INK_2);
+  lv_obj_t* l = label(b, T(text_id), primary ? UI_FONT_TITLE : UI_FONT_BODY, UI_COL_INK_2);
   lv_obj_center(l);
+  if (primary) uiBtnRole(b, BTN_CONFIRM);
   return b;
 }
 

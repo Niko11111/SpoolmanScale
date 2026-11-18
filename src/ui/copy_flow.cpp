@@ -412,11 +412,7 @@ void showCopySpoolList() {
   lv_obj_t *btn_hdr_cancel = lv_btn_create(hdr);
   lv_obj_set_size(btn_hdr_cancel, 44, 44);
   lv_obj_align(btn_hdr_cancel, LV_ALIGN_RIGHT_MID, -4, 0);
-  lv_obj_set_style_bg_color(btn_hdr_cancel, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_hdr_cancel, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_hdr_cancel, 8, 0);
-  lv_obj_set_style_shadow_width(btn_hdr_cancel, 0, 0);
-  lv_obj_set_style_border_width(btn_hdr_cancel, 0, 0);
   lv_obj_add_event_cb(btn_hdr_cancel, [](lv_event_t *e) {
     logSD("BTN: CopyList -> Cancel");
     closeCopyListPopup();
@@ -424,9 +420,9 @@ void showCopySpoolList() {
   }, LV_EVENT_CLICKED, NULL);
   { lv_obj_t *l = lv_label_create(btn_hdr_cancel);
     lv_label_set_text(l, LV_SYMBOL_CLOSE);
-    lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_BAD_TEXT), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_18, 0);
     lv_obj_center(l); }
+  uiBtnRole(btn_hdr_cancel, BTN_CLOSE);
 
   // Separator
   lv_obj_t *div = lv_obj_create(scr_copy_list);

@@ -268,20 +268,15 @@ static void buildHeader(lv_obj_t* box, const Shown& s) {
   if (!x) return;
   lv_obj_set_size(x, TV_CLOSE, TV_CLOSE);
   lv_obj_align(x, LV_ALIGN_RIGHT_MID, -TV_PAD, 0);
-  lv_obj_set_style_bg_color(x, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(x, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
-  lv_obj_set_style_border_width(x, 1, 0);
-  lv_obj_set_style_border_color(x, lv_color_hex(UI_COL_BAD_BG_PRESSED), 0);
   lv_obj_set_style_radius(x, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(x, 0, 0);
   lv_obj_add_event_cb(x, closeCb, LV_EVENT_CLICKED, nullptr);
   lv_obj_t* xl = lv_label_create(x);
   if (xl) {
     lv_label_set_text(xl, LV_SYMBOL_CLOSE);
-    lv_obj_set_style_text_color(xl, lv_color_hex(UI_COL_BAD_TEXT), 0);
     lv_obj_set_style_text_font(xl, UI_FONT_TITLE, 0);
     lv_obj_center(xl);
   }
+  uiBtnRole(x, BTN_CLOSE);
 }
 
 // Swatch, material and vendor, the main screen's order - what the tag says the
@@ -417,14 +412,6 @@ static lv_obj_t* button(lv_obj_t* box, int x, const char* text, bool danger,
   // one. Not LV_STATE_DISABLED, whose theme filter paints it light grey - the
   // brightest thing on the card for the one thing that does nothing.
   if (enabled) {
-    lv_obj_set_style_bg_color(b, lv_color_hex(danger ? UI_COL_BAD_BG : UI_COL_OK_BG), 0);
-    lv_obj_set_style_bg_color(b, lv_color_hex(danger ? UI_COL_BAD_BG_PRESSED : UI_COL_OK_BG_PRESSED),
-                              LV_STATE_PRESSED);
-    // The close button's frame: without it the dark red of Erase read as
-    // switched off (Nikolai, 25.09.2026); the red one in the signal red.
-    lv_obj_set_style_border_width(b, 1, 0);
-    lv_obj_set_style_border_color(b, lv_color_hex(danger ? UI_COL_BAD : UI_COL_OK_BG_PRESSED), 0);
-    if (danger) lv_obj_set_style_border_opa(b, LV_OPA_60, 0);
     lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, nullptr);
   } else {
     lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_SURFACE), 0);
@@ -436,12 +423,14 @@ static lv_obj_t* button(lv_obj_t* box, int x, const char* text, bool danger,
   lv_obj_t* l = lv_label_create(b);
   if (!l) return b;
   lv_label_set_text(l, text);
-  lv_obj_set_style_text_color(l, lv_color_hex(!enabled ? UI_COL_CAPTION
-                                              : danger ? UI_COL_BAD_TEXT : UI_COL_OK_TEXT), 0);
+  if (!enabled) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(l, UI_FONT_BODY, 0);
   lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
   oneLine(l, TV_BTN_W - 2 * TV_PAD, UI_FONT_BODY);
   lv_obj_center(l);
+  // Red with its edge says "destroys" (Erase), which the dark fill alone did
+  // not: it read as switched off (Nikolai, 25.09.2026).
+  if (enabled) uiBtnRole(b, danger ? BTN_DANGER : BTN_CONFIRM);
   return b;
 }
 

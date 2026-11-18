@@ -335,18 +335,16 @@ static lv_obj_t* answerButton(lv_obj_t* box, int x, int w, bool ok, int text_id)
   lv_obj_t* btn = lv_btn_create(box);
   lv_obj_set_size(btn, w, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn, x, UI_CARD_ROW_Y);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(ok ? UI_COL_OK_BG : UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(ok ? UI_COL_OK_BG_PRESSED : UI_COL_BAD_BG_PRESSED),
-                            LV_STATE_PRESSED);
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_DISABLED_BG), LV_STATE_DISABLED);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_t* lbl = lv_label_create(btn);
   lv_label_set_text(lbl, T(text_id));
-  lv_obj_set_style_text_color(lbl, lv_color_hex(ok ? UI_COL_OK_TEXT : UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_DISABLED_TEXT), LV_STATE_DISABLED);
   lv_obj_set_style_text_font(lbl, UI_FONT_TITLE, 0);
   lv_obj_center(lbl);
+  // The decline is dressed by the caller (styleLeaveButton), not here.
+  if (ok) uiBtnRole(btn, BTN_CONFIRM);
   return btn;
 }
 

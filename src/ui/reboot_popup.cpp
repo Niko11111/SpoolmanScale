@@ -55,11 +55,7 @@ void showRebootPopup(RebootCommitFn commit) {
   lv_obj_t *btn_rb = lv_btn_create(box);
   lv_obj_set_size(btn_rb, 180, 48);
   lv_obj_align(btn_rb, LV_ALIGN_BOTTOM_LEFT, 10, -12);
-  lv_obj_set_style_bg_color(btn_rb, lv_color_hex(UI_COL_GO_BG), 0);
-  lv_obj_set_style_bg_color(btn_rb, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_rb, 8, 0);
-  lv_obj_set_style_shadow_width(btn_rb, 0, 0);
-  lv_obj_set_style_border_width(btn_rb, 0, 0);
   lv_obj_add_event_cb(btn_rb, [](lv_event_t *e){
     logSD("Reboot: user (language/date change)");
     if (s_commit) s_commit();   // the choice this popup was opened for
@@ -68,25 +64,20 @@ void showRebootPopup(RebootCommitFn commit) {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *rb_lbl = lv_label_create(btn_rb);
   lv_label_set_text(rb_lbl, T(STR_REBOOT_BTN));
-  lv_obj_set_style_text_color(rb_lbl, lv_color_hex(UI_COL_OK_TEXT_2), 0);
   lv_obj_set_style_text_font(rb_lbl, &lv_font_montserrat_ext_14, 0);
   lv_obj_center(rb_lbl);
+  uiBtnRole(btn_rb, BTN_CONFIRM);
 
   lv_obj_t *btn_cancel = lv_btn_create(box);
   lv_obj_set_size(btn_cancel, 180, 48);
   lv_obj_align(btn_cancel, LV_ALIGN_BOTTOM_RIGHT, -10, -12);
-  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_cancel, 8, 0);
-  lv_obj_set_style_shadow_width(btn_cancel, 0, 0);
-  lv_obj_set_style_border_width(btn_cancel, 0, 0);
   lv_obj_add_event_cb(btn_cancel, [](lv_event_t *e){
     s_commit = nullptr;         // nothing is written
     releaseScreen(&s_reboot_pop);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *c_lbl = lv_label_create(btn_cancel);
   lv_label_set_text(c_lbl, T(STR_CANCEL));
-  lv_obj_set_style_text_color(c_lbl, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(c_lbl, &lv_font_montserrat_ext_14, 0);
   lv_obj_center(c_lbl);
   styleLeaveButton(btn_cancel);

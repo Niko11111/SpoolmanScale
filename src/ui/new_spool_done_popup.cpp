@@ -40,9 +40,9 @@ static lv_obj_t* cardText(lv_obj_t* box, const char* text, const lv_font_t* font
 
 // The green one goes ahead, the plain one only closes.
 static lv_obj_t* cardButton(lv_obj_t* box, int x, int w, const char* text, bool green) {
-  lv_obj_t* b = padButton(box, x, UI_CARD_ROW_Y, w, UI_POPUP_BTN_H, green ? UI_COL_OK_BG : UI_COL_ROW,
-                          green ? UI_COL_OK_BG_PRESSED : UI_COL_ROW_PRESS_FILL);
+  lv_obj_t* b = padButton(box, x, UI_CARD_ROW_Y, w, UI_POPUP_BTN_H, UI_COL_ROW, UI_COL_ROW_PRESS_FILL);
   padLabel(b, text, UI_COL_INK, UI_FONT_BODY);
+  if (green) uiBtnRole(b, BTN_CONFIRM);
   return b;
 }
 

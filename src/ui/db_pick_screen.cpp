@@ -187,18 +187,18 @@ static lv_obj_t* headButton(lv_obj_t* head, bool close) {
   lv_obj_set_size(b, DBP_HEAD_BTN, DBP_HEAD_BTN);
   if (close) lv_obj_align(b, LV_ALIGN_TOP_RIGHT, -DBP_GAP, DBP_GAP);
   else       lv_obj_set_pos(b, DBP_GAP, DBP_GAP);
-  lv_obj_set_style_bg_color(b, lv_color_hex(close ? UI_COL_BAD_BG : UI_COL_SURFACE), 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(close ? UI_COL_BAD_BG_PRESSED : UI_COL_PRESS_FILL),
-                            LV_STATE_PRESSED);
+  if (!close) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_SURFACE), 0);
+  if (!close) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(b, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(b, 0, 0);
   lv_obj_set_style_border_width(b, 0, 0);
   lv_obj_add_event_cb(b, onNav, LV_EVENT_CLICKED, navData(close ? NAV_CLOSE : NAV_BACK, 0));
   lv_obj_t* l = lv_label_create(b);
   lv_label_set_text(l, close ? LV_SYMBOL_CLOSE : LV_SYMBOL_LEFT);
-  lv_obj_set_style_text_color(l, lv_color_hex(close ? UI_COL_BAD_TEXT : UI_COL_ACCENT), 0);
+  if (!close) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(l, UI_FONT_TITLE, 0);
   lv_obj_center(l);
+  if (close) uiBtnRole(b, BTN_CLOSE);
   return b;
 }
 
@@ -757,13 +757,12 @@ static void sizeButton(lv_obj_t* box, const char* text, int y, DbpNav nav, int a
   lv_obj_align(b, LV_ALIGN_TOP_MID, 0, y);
   lv_obj_set_style_radius(b, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(b, 0, 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(nav == NAV_SIZE ? UI_COL_ROW : UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(nav == NAV_SIZE ? UI_COL_ROW_PRESS_FILL : UI_COL_BAD_BG_PRESSED),
-                            LV_STATE_PRESSED);
+  if (nav == NAV_SIZE) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ROW), 0);
+  if (nav == NAV_SIZE) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_add_event_cb(b, onNav, LV_EVENT_CLICKED, navData(nav, arg));
   lv_obj_t* l = lv_label_create(b);
   lv_label_set_text(l, text);
-  lv_obj_set_style_text_color(l, lv_color_hex(nav == NAV_SIZE ? UI_COL_INK : UI_COL_BAD_TEXT), 0);
+  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK), 0);
   lv_obj_set_style_text_font(l, UI_FONT_TITLE, 0);
   lv_obj_center(l);
   if (nav != NAV_SIZE) styleLeaveButton(b);

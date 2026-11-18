@@ -162,19 +162,14 @@ static void buildHeader(lv_obj_t* box, int title) {
   if (!x) return;
   lv_obj_set_size(x, CG_CLOSE_SIZE, CG_CLOSE_SIZE);
   lv_obj_align(x, LV_ALIGN_RIGHT_MID, -4, 0);
-  lv_obj_set_style_bg_color(x, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(x, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
-  lv_obj_set_style_border_width(x, 1, 0);
-  lv_obj_set_style_border_color(x, lv_color_hex(UI_COL_CLOSE_LINE), 0);
   lv_obj_set_style_radius(x, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(x, 0, 0);
   lv_obj_add_event_cb(x, cancelCb, LV_EVENT_CLICKED, nullptr);
   lv_obj_t* lx = lv_label_create(x);
   if (!lx) return;
   lv_label_set_text(lx, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_color(lx, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(lx, UI_FONT_TITLE, 0);
   lv_obj_center(lx);
+  uiBtnRole(x, BTN_CLOSE);
 }
 
 static lv_obj_t* buildBox(int height) {

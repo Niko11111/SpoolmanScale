@@ -273,11 +273,7 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
   // Green says "this is the good outcome", red "this stops something". For an
   // erase that is backwards: the confirming answer is the destructive one, so
   // it is red, and keeping the tag is the neutral way out.
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(erase ? UI_COL_BAD_BG : UI_COL_OK_BG), 0);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(erase ? UI_COL_BAD_BG_PRESSED : UI_COL_OK_BG_PRESSED),
-                            LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ok, 8, 0);
-  lv_obj_set_style_shadow_width(btn_ok, 0, 0);
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e) {
     // Flags only. The NFC work takes as long as it takes and must not run
     // inside the callback, and the overlay cannot delete itself here.
@@ -289,16 +285,13 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
     if (erase) snprintf(bb, sizeof(bb), LV_SYMBOL_TRASH " %s", T(yes));
     else       copyT(bb, sizeof(bb), yes);
     lv_label_set_text(lbl_ok, bb); }
-  lv_obj_set_style_text_color(lbl_ok, lv_color_hex(erase ? UI_COL_BAD_TEXT : UI_COL_OK_TEXT), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_ok);
+  uiBtnRole(btn_ok, erase ? BTN_DANGER : BTN_CONFIRM);
 
   lv_obj_t *btn_no = lv_btn_create(box);
   lv_obj_set_size(btn_no, BTN_W, BTN_H);
   lv_obj_set_pos(btn_no, BOX_W - BTN_W - 12, BTN_Y);
-  lv_obj_set_style_bg_color(btn_no, lv_color_hex(erase ? UI_COL_LINE : UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_no, lv_color_hex(erase ? UI_COL_POPUP_BORDER : UI_COL_BAD_BG_PRESSED),
-                            LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_no, 8, 0);
   lv_obj_set_style_shadow_width(btn_no, 0, 0);
   lv_obj_add_event_cb(btn_no, [](lv_event_t *e) {
@@ -306,9 +299,10 @@ static void buildAsk(StringID title, StringID hint, StringID yes, StringID no) {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_no = lv_label_create(btn_no);
   { char cb[32]; copyT(cb, sizeof(cb), no); lv_label_set_text(lbl_no, cb); }
-  lv_obj_set_style_text_color(lbl_no, lv_color_hex(erase ? UI_COL_INK_2 : UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(lbl_no, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl_no);
+  // "Not now" and "Keep" are the other fine answer, not a way out of a task.
+  uiBtnRole(btn_no, BTN_NEUTRAL);
 }
 
 void startTagWriteNoAsk(int spool_id) {

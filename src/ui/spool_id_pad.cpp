@@ -200,9 +200,12 @@ static void buildMessageCard(const char* head, uint32_t head_col, const char* hi
 
 // Search and confirm share one button, at one place: what it says follows
 // the state, what it does is decided in the tick.
-static void buildAction(int text_id, uint32_t bg, uint32_t bg_pressed) {
-  lv_obj_t* b = padButton(s_col, 0, SIP_ACTION_Y - SIP_TOP_Y, SIP_COL_W, SIP_ACTION_H, bg, bg_pressed);
-  padLabel(b, T(text_id), UI_COL_OK_TEXT, UI_FONT_BODY);
+static void buildAction(int text_id) {
+  // The fill and the label colour come from the confirm role below.
+  lv_obj_t* b = padButton(s_col, 0, SIP_ACTION_Y - SIP_TOP_Y, SIP_COL_W, SIP_ACTION_H,
+                          UI_COL_ROW, UI_COL_ROW_PRESS_FILL);
+  padLabel(b, T(text_id), UI_COL_INK, UI_FONT_BODY);
+  uiBtnRole(b, BTN_CONFIRM);
   lv_obj_add_event_cb(b, [](lv_event_t*) { s_answer = SIP_ACTION; }, LV_EVENT_CLICKED, NULL);
 }
 
@@ -229,14 +232,14 @@ static void buildColumn() {
       backendText(T(STR_IDPAD_INFO), buf, sizeof(buf));
       colText(s_col, buf, 0, UI_COL_CAPTION, UI_FONT_CAPTION, LV_LABEL_LONG_WRAP);
       if (!s_input[0] && s_on_new) buildNewAction();
-      else buildAction(STR_IDPAD_SEARCH, UI_COL_GO_BG, UI_COL_GO_BG_PRESSED);
+      else buildAction(STR_IDPAD_SEARCH);
       break;
     case SIP_SEARCHING:
       buildMessageCard(T(STR_IDPAD_SEARCHING), UI_COL_CAPTION, nullptr);
       break;
     case SIP_FOUND:
       buildFoundCard();
-      buildAction(STR_IDPAD_THIS_SPOOL, UI_COL_OK_BG, UI_COL_OK_BG_PRESSED);
+      buildAction(STR_IDPAD_THIS_SPOOL);
       break;
     case SIP_NOT_FOUND:
       snprintf(buf, sizeof(buf), T(STR_IDPAD_NOT_FOUND), s_searched_id);
@@ -251,7 +254,7 @@ static void buildColumn() {
         backendText(T(STR_NO_CONNECTION_TO), buf, sizeof(buf));
       }
       buildMessageCard(buf, UI_COL_WARN, nullptr);
-      buildAction(STR_IDPAD_SEARCH, UI_COL_GO_BG, UI_COL_GO_BG_PRESSED);
+      buildAction(STR_IDPAD_SEARCH);
       break;
   }
 }
@@ -295,8 +298,8 @@ static void buildKeys() {
 
 static void buildCancel() {
   lv_obj_t* no = padButton(s_pad, SIP_COL_X, SIP_BOTTOM_Y - SIP_CANCEL_H, SIP_COL_W, SIP_CANCEL_H,
-                           UI_COL_BAD_BG, UI_COL_BAD_BG_PRESSED);
-  padLabel(no, T(STR_CANCEL), UI_COL_BAD_TEXT, UI_FONT_SMALL);
+                           UI_COL_ROW, UI_COL_ROW_PRESS_FILL);
+  padLabel(no, T(STR_CANCEL), UI_COL_INK_2, UI_FONT_SMALL);
   styleLeaveButton(no);
   lv_obj_add_event_cb(no, [](lv_event_t*) { s_answer = SIP_CANCEL; }, LV_EVENT_CLICKED, NULL);
 }

@@ -162,11 +162,7 @@ static void showBleDeviceCard(int index) {
   lv_obj_t *act = lv_btn_create(box);
   lv_obj_set_size(act, btn_w, UI_POPUP_BTN_H);
   lv_obj_set_pos(act, UI_CARD_ROW_X, BLE_CARD_ROW_Y);
-  lv_obj_set_style_bg_color(act, lv_color_hex(is_printer ? UI_COL_LINE : UI_COL_OK_BG), 0);
-  lv_obj_set_style_bg_color(act, lv_color_hex(is_printer ? UI_COL_POPUP_BORDER : UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(act, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(act, 0, 0);
-  lv_obj_set_style_border_width(act, 0, 0);
   lv_obj_set_style_pad_all(act, 0, 0);
   lv_obj_clear_flag(act, LV_OBJ_FLAG_SCROLLABLE);
   if (is_printer) {
@@ -181,18 +177,15 @@ static void showBleDeviceCard(int index) {
   }
   lv_obj_t *al = lv_label_create(act);
   lv_label_set_text(al, T(is_printer ? STR_BT_CARD_FORGET_PRINTER : STR_BT_CARD_USE_PRINTER));
-  lv_obj_set_style_text_color(al, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(al, UI_FONT_TITLE, 0);
   lv_obj_center(al);
+  uiBtnRole(act, is_printer ? BTN_NEUTRAL : BTN_CONFIRM);
 
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, btn_w, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn, UI_CARD_ROW_X + btn_w + BLE_CARD_BTN_GAP, BLE_CARD_ROW_Y);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 0, 0);
-  uiSecondaryFill(btn);
   lv_obj_set_style_pad_all(btn, 0, 0);
   lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(btn, [](lv_event_t *e) {
@@ -201,7 +194,6 @@ static void showBleDeviceCard(int index) {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *l = lv_label_create(btn);
   lv_label_set_text(l, T(STR_BT_CLOSE));
-  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(l, UI_FONT_TITLE, 0);
   lv_obj_center(l);
   styleLeaveButton(btn);
