@@ -16,10 +16,11 @@
 //   DISCOVERY  the chip polls the field on its own
 //   ACTIVE     one tag is selected; commands go to it
 // A poll in ACTIVE keeps a tag that is still there: an NTAG is asked for
-// page 0, a MIFARE Classic card is put to sleep and selected again (how NXP
-// re-activates a tag). One that does not answer, and any other tag, goes back
-// to DISCOVERY, and the chip selects it again if it is still there. The PN532 selects anew on every poll
-// as well, and the scan path relies on that after a refused key.
+// page 0, an ISO 15693 tag for block 0, a MIFARE Classic card is put to sleep
+// and selected again (how NXP re-activates a tag). One that does not answer,
+// and any other tag, goes back to DISCOVERY, and the chip selects it again if
+// it is still there. The PN532 selects anew on every poll as well, and the
+// scan path relies on that after a refused key.
 
 #include "nfc_pn7160.h"
 
@@ -566,11 +567,23 @@ static bool mifareWakes(uint32_t deadline_ms) {
   return s_state == RfState::Active;
 }
 
-// The tag selected at the last poll, kept if it is still there. ISO 15693 and
-// ISO-DEP tags go back to discovery as before: untested on the bench.
+bool pn7160ReadVicinityBlock(uint8_t block, uint8_t data[4]);
+
+// An ISO 15693 tag still selected answers a READ of block 0, as an NTAG does
+// its page 0. Dropped to discovery instead it would be found only every
+// second poll, as a MIFARE card was. Untested on a tag (18.11.2026): one
+// that does not answer falls back to discovery, as before.
+static bool vicinityAnswers() {
+  uint8_t block[ISO15693_BLOCK_BYTES];
+  return pn7160ReadVicinityBlock(0, block);
+}
+
+// The tag selected at the last poll, kept if it is still there. ISO-DEP tags
+// go back to discovery as before.
 static bool keepSelected(uint32_t deadline_ms) {
   if (s_target.uid_len == 0) return false;
   if (s_target.proto == NCI_PROT_T2T) return ntagAnswers();
+  if (s_target.proto == NCI_PROT_T5T) return vicinityAnswers();
   if (s_target.proto == NCI_PROT_MIFARE) return mifareWakes(deadline_ms);
   return false;
 }
@@ -599,7 +612,7 @@ static void noteVicinitySkipped(const uint8_t* uid, uint8_t uid_len) {
   if (memcmp(s_vicinity_logged, uid, uid_len) == 0) return;
   memcpy(s_vicinity_logged, uid, uid_len);
   // Printed most significant byte first, the way the tag's own label has it.
-  logSDf("PN7160: ISO 15693 tag %02X%02X%02X%02X%02X%02X%02X%02X on the reader - not read by the scan path yet",
+  logSDf("PN7160: ISO 15693 tag %02X%02X%02X%02X%02X%02X%02X%02X on the reader - not an ISO 14443A tag, passed over here",
          uid[7], uid[6], uid[5], uid[4], uid[3], uid[2], uid[1], uid[0]);
 }
 
