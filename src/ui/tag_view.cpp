@@ -204,6 +204,7 @@ static const char* formatText(const TagInfo& i) {
 
 static void chipText(char* out, size_t n, uint8_t kind, uint16_t bytes) {
   if (kind == TAG_KIND_MIFARE) { snprintf(out, n, "MIFARE Classic"); return; }
+  if (kind == TAG_KIND_VICINITY) { snprintf(out, n, "ISO 15693"); return; }
   const char* model = bytes == TV_NTAG213_BYTES ? "NTAG213"
                     : bytes == TV_NTAG215_BYTES ? "NTAG215"
                     : bytes == TV_NTAG216_BYTES ? "NTAG216" : "NTAG";

@@ -4500,6 +4500,8 @@ const char* const STRINGS[][3] = {
     "Nom : le nom de couleur passe de la fin du titre à la ligne Couleur. Sans nom de couleur, le code hex est imprimé." },  // STR_W_L_COLOR_HINT
   { "Ungeprüfte Größe.", "Unchecked size.",
     "Format non vérifié." },  // STR_W_P_MEDIA_ST_UNCHECKED_SHORT
+  { "ISO 15693, nur lesbar", "ISO 15693, read-only",
+    "ISO 15693, lecture seule" },  // STR_W_TAG_KIND_VICINITY
 };
 
 StringID tagWriteResultString(uint8_t code) {

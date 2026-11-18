@@ -465,7 +465,7 @@ static String body() {
          "const er=document.getElementById('tg-erase');"
          // The kind alone decides. An NTAG that reports no size is still
          // writable, and the write itself says so if it does not fit.
-         "const ro=tgKindCode===1;"
+         "const ro=tgKindCode===1||tgKindCode===3;"
          // Any tag can be linked, a read-only one included; it needs a spool.
          "const lk=document.getElementById('tg-lnk');"
          "if(lk)lk.disabled=!tgUid||!parseInt(document.getElementById('tg-id').value);"
@@ -676,6 +676,7 @@ static String tagKindLocal() {
   const uint8_t k = tagCachedKindCode();
   if (k == TAG_KIND_NONE) return String("");
   if (k == TAG_KIND_MIFARE) return String(T(STR_W_TAG_KIND_MIFARE));
+  if (k == TAG_KIND_VICINITY) return String(T(STR_W_TAG_KIND_VICINITY));
 
   String out = T(STR_W_TAG_KIND_NTAG);
   const uint16_t b = tagCachedBytes();

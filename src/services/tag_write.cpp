@@ -28,6 +28,7 @@
 #include "services/tag_link.h"
 #include "services/tag_pending.h"
 #include "services/tag_uid.h"
+#include "openprinttag/opt_scan.h"
 #include "services/backend.h"
 
 // ACE page map (DnG-Crafts/ACE-RFID). Pages are 4 bytes.
@@ -1114,6 +1115,18 @@ static void refreshCache(bool force = false) {
 
   const bool is_ntag = strlen(g_tag.uid_str) == TAG_UID_STR_LEN_NTAG;
   snprintf(cached_uid, sizeof(cached_uid), "%s", g_tag.uid_str);
+
+  if (strlen(g_tag.uid_str) == TAG_UID_STR_LEN_VICINITY) {
+    // What the scan path decoded (openprinttag/opt_scan.cpp); nothing is read here.
+    snprintf(cached_kind, sizeof(cached_kind), "ISO 15693, read-only");
+    cached_kindcode = TAG_KIND_VICINITY;
+    cached_content[0] = 0;
+    cached_bytes = 0;
+    optFillTagInfo(&cached_info);
+    if (optTagOnReader()) optSummaryJson(cached_raw, sizeof(cached_raw));
+    else cached_raw[0] = 0;
+    return;
+  }
 
   if (!is_ntag) {
     snprintf(cached_kind, sizeof(cached_kind), "MIFARE Classic, read-only");

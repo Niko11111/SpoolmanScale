@@ -195,6 +195,7 @@ enum TagKind : uint8_t {
   TAG_KIND_NONE   = 0,
   TAG_KIND_MIFARE = 1,   // 4 byte UID, this firmware only reads those
   TAG_KIND_NTAG   = 2,   // 7 byte UID, writable; tagCachedBytes() has the size
+  TAG_KIND_VICINITY = 3, // 8 byte ISO 15693 UID (PN7160), read-only: OpenPrintTag
 };
 uint8_t     tagCachedKindCode();
 const char* tagCachedContent();
