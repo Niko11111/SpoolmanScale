@@ -29,10 +29,12 @@
 //  AMS HT with a single bay is attached.
 // ============================================================
 
-// Bambu allows four AMS units per printer. The reading endpoints of both
-// backends would permit more, so going higher is a matter of raising this
-// and paying the RAM, not of changing code.
-#define AMS_MAX_UNITS        4
+// AMS and AMS HT units a printer may carry, external holder not counted.
+// Bambu's largest set is on the H2D, H2S and H2C: four AMS 2 Pro and eight
+// AMS HT, twelve units and 24 bays. The P2S takes four and four, the X1 and
+// P1 four in all. The view shares the places between AMS and AMS HT, so
+// twelve covers every set Bambu sells.
+#define AMS_MAX_UNITS        12
 
 // An AMS HT holds one bay, a regular AMS four, the H3C's AMS 3H nine. Never
 // assume four, always read tray_count.
@@ -288,15 +290,15 @@ struct AmsSlotState {
   bool        ams_exists;           // the printer reports an AMS at all
 };
 
-// Kept in BSS, never on the stack: the loop task has 16 kB and already warns
-// about its high water mark. The bound is asserted rather than commented so
-// it cannot drift unnoticed when a field is added.
-// The bound is asserted rather than commented so it cannot drift unnoticed
-// when a field is added. Raised from 1200 when the colour name, the drying
-// figures and the printer state came in: the struct lives in BSS, not on the
-// loop task's 16 kB stack, and the device has well over 100 kB of internal
-// RAM free - so this is a tripwire against sprawl, not a hardware limit.
-static_assert(sizeof(AmsSlotState) <= 4200,
+// 9.5 kB with twelve units, measured; the budget leaves a little room.
+#define AMS_SLOT_STATE_BUDGET_BYTES 10000
+
+// Never on the stack: the loop task has 16 kB. The view and the presence
+// check each keep one in PSRAM (psramNew), so the bound is a tripwire against
+// sprawl, not a hardware limit. Asserted rather than commented so it cannot
+// drift unnoticed when a field is added. Raised from 4200 when the view went
+// from four units to twelve.
+static_assert(sizeof(AmsSlotState) <= AMS_SLOT_STATE_BUDGET_BYTES,
               "AmsSlotState outgrew its budget, check where it is stored");
 
 // Whether a unit a backend reports still gets a place. AMS and AMS HT units

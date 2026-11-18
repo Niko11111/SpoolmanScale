@@ -24,7 +24,7 @@
 //  takes the result and redraws.
 // ============================================================
 
-// Four units of four bays plus the external holder.
+// Every bay of every unit plus the external holder.
 #define AMS_WEIGHTS_MAX  (AMS_MAX_UNITS * AMS_MAX_TRAYS + AMS_MAX_EXT)
 
 enum AmsWeightsState : uint8_t {
