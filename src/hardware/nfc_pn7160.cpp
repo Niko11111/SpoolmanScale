@@ -15,10 +15,10 @@
 //   IDLE       field off (after a field cycle, or a selection that failed)
 //   DISCOVERY  the chip polls the field on its own
 //   ACTIVE     one tag is selected; commands go to it
-// A poll in ACTIVE puts an NFC-A tag to sleep and selects it again, which is
-// how NXP re-activates a tag; one that is gone sends the chip back to
-// DISCOVERY. Any other tag goes back to DISCOVERY at once, and the chip
-// selects it again if it is still there. The PN532 selects anew on every poll
+// A poll in ACTIVE keeps a tag that is still there: an NTAG is asked for
+// page 0, a MIFARE Classic card is put to sleep and selected again (how NXP
+// re-activates a tag). One that does not answer, and any other tag, goes back
+// to DISCOVERY, and the chip selects it again if it is still there. The PN532 selects anew on every poll
 // as well, and the scan path relies on that after a refused key.
 
 #include "nfc_pn7160.h"
@@ -522,14 +522,27 @@ static void collectActivation(uint32_t deadline_ms) {
   }
 }
 
-// The tag selected at the last poll, put to sleep and selected again: RF_DEACTIVATE
-// to sleep, then RF_DISCOVER_SELECT, as the library's readerReActivate() does.
-// The chip wakes the tag with WUPA, which a halted card answers too. Dropped
-// to discovery instead, a MIFARE card lying still on the reader came back only
-// every second poll, and at times not for longer than the scan path's removal
-// delay (bench, 18.11.2026). NFC-A only: the sleep request is HLTA.
-static bool reactivate(uint32_t deadline_ms) {
-  if (s_target.tech != TECH_A_POLL || s_target.uid_len == 0) return false;
+static bool exchange(const uint8_t* cmd, uint8_t len, uint8_t resp[NCI_PAYLOAD_MAX],
+                     uint8_t* resp_len);
+
+// An NTAG that is still selected answers a READ of page 0, the presence check
+// Android sends to a Type 2 tag. Put to sleep and selected again it never came
+// back: the chip reported "activation failed" every time (bench, 18.11.2026).
+static bool ntagAnswers() {
+  const uint8_t cmd[] = {CMD_READ, 0};
+  uint8_t resp[NCI_PAYLOAD_MAX];
+  uint8_t n = 0;
+  return exchange(cmd, sizeof(cmd), resp, &n) && n >= NTAG_READ_BYTES + 1 &&
+         resp[n - 1] == TAG_STATUS_OK;
+}
+
+// A MIFARE Classic card takes no READ before it is authenticated, so it is put
+// to sleep and selected again: RF_DEACTIVATE to sleep, then RF_DISCOVER_SELECT,
+// as the library's readerReActivate() does. The chip wakes the card with WUPA,
+// which a halted card answers too. Dropped to discovery instead, a card lying
+// still on the reader came back only every second poll, and at times not
+// within the scan path's removal delay (bench, 18.11.2026).
+static bool mifareWakes(uint32_t deadline_ms) {
   if (!deactivate(DEACTIVATE_TO_SLEEP, deadline_ms)) return false;
   // The select is only taken once the chip has said the tag sleeps.
   if (!awaitNtf(GID_RF, OID_RF_DEACTIVATE, deadline_ms)) return false;
@@ -540,13 +553,22 @@ static bool reactivate(uint32_t deadline_ms) {
   return s_state == RfState::Active;
 }
 
+// The tag selected at the last poll, kept if it is still there. ISO 15693 and
+// ISO-DEP tags go back to discovery as before: untested on the bench.
+static bool keepSelected(uint32_t deadline_ms) {
+  if (s_target.uid_len == 0) return false;
+  if (s_target.proto == NCI_PROT_T2T) return ntagAnswers();
+  if (s_target.proto == NCI_PROT_MIFARE) return mifareWakes(deadline_ms);
+  return false;
+}
+
 bool pn7160ReadTarget(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms, uint8_t* tech) {
   if (!s_lib || s_state == RfState::Off || !uid || !uid_len) return false;
   const uint32_t deadline = deadlineIn(timeout_ms);
   // Discovery that is already running needs no wait: a tag that came meanwhile
   // has raised IRQ. After a restart the tag needs time to be selected again.
   const bool was_active = s_state == RfState::Active;
-  const bool reselected = was_active && reactivate(deadline);
+  const bool reselected = was_active && keepSelected(deadline);
   // A tag that did not wake is most likely gone: back to discovery, with the
   // time a control command needs rather than what is left of this poll's.
   const uint32_t restart_by = was_active ? deadlineIn(CTRL_TIMEOUT_MS) : deadline;
