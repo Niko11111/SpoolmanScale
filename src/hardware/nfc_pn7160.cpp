@@ -105,6 +105,11 @@ constexpr uint8_t  NTAG_PAGE_BYTES    = 4;
 constexpr uint8_t  NTAG_READ_BYTES    = 16;     // READ returns four pages
 constexpr uint8_t  ISO15693_FLAGS     = 0x02;   // high data rate, not addressed
 constexpr uint8_t  ISO15693_READ_SINGLE = 0x20;
+constexpr uint8_t  ISO15693_READ_MULTIPLE = 0x23;   // first block, count - 1
+// Blocks per READ MULTIPLE: 32 bytes, far below the 255-byte NCI payload and
+// what ICODE SLIX2 returns in one go (it allows all 80).
+constexpr uint8_t  ISO15693_CHUNK_BLOCKS = 8;
+constexpr uint16_t ISO15693_BLOCK_LAST = 255;      // block numbers are one byte
 constexpr uint8_t  ISO15693_BLOCK_BYTES = 4;    // ICODE SLIX and SLIX2
 constexpr uint8_t  TAG_STATUS_OK      = 0x00;
 // What the PN7160 reports for a WRITE the tag acknowledged, MIFARE Classic and
@@ -760,6 +765,37 @@ bool pn7160ReadVicinityBlock(uint8_t block, uint8_t data[4]) {
   // Answer: response flags (0 = no error), the block, the interface's status.
   if (n < ISO15693_BLOCK_BYTES + 2 || resp[0] != 0 || resp[n - 1] != TAG_STATUS_OK) return false;
   memcpy(data, resp + 1, ISO15693_BLOCK_BYTES);
+  return true;
+}
+
+// READ MULTIPLE BLOCKS for count (1..ISO15693_CHUNK_BLOCKS) blocks from first.
+static bool readVicinityChunk(uint8_t first, uint8_t count, uint8_t* out) {
+  const uint8_t cmd[] = {ISO15693_FLAGS, ISO15693_READ_MULTIPLE, first, (uint8_t)(count - 1)};
+  uint8_t resp[NCI_PAYLOAD_MAX];
+  uint8_t n = 0;
+  const size_t want = (size_t)count * ISO15693_BLOCK_BYTES;
+  if (!exchange(cmd, sizeof(cmd), resp, &n)) return false;
+  if (n < want + 2 || resp[0] != 0 || resp[n - 1] != TAG_STATUS_OK) return false;
+  memcpy(out, resp + 1, want);
+  return true;
+}
+
+bool pn7160ReadVicinityBlocks(uint8_t first, uint16_t count, uint8_t* out) {
+  if (s_target.proto != NCI_PROT_T5T || count == 0 ||
+      first + count - 1 > ISO15693_BLOCK_LAST) return false;
+  for (uint16_t done = 0; done < count;) {
+    const uint16_t left = count - done;
+    const uint8_t n = left < ISO15693_CHUNK_BLOCKS ? (uint8_t)left : ISO15693_CHUNK_BLOCKS;
+    uint8_t* at = out + (size_t)done * ISO15693_BLOCK_BYTES;
+    const uint8_t block = (uint8_t)(first + done);
+    // A tag without READ MULTIPLE (the CC says so in byte 3) still answers singles.
+    if (!readVicinityChunk(block, n, at)) {
+      for (uint8_t i = 0; i < n; i++) {
+        if (!pn7160ReadVicinityBlock((uint8_t)(block + i), at + i * ISO15693_BLOCK_BYTES)) return false;
+      }
+    }
+    done += n;
+  }
   return true;
 }
 

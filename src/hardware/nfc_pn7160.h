@@ -43,6 +43,7 @@ bool pn7160ReadMifareSector(uint8_t sector, const uint8_t key[6], const uint8_t 
                             uint8_t blocks[4][16], uint8_t key_type);
 bool pn7160ReadNtagPage(uint8_t page, uint8_t data[4]);
 bool pn7160ReadVicinityBlock(uint8_t block, uint8_t data[4]);
+bool pn7160ReadVicinityBlocks(uint8_t first, uint16_t count, uint8_t* out);
 
 // Writes to the tag selected by the last poll, true once the chip reports the
 // tag's acknowledgement. The callers (services/tag_write.cpp,
