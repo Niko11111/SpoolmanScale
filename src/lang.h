@@ -2056,6 +2056,17 @@ enum StringID {
   STR_WP_PICK_EMPTY_SUB,
   STR_SPICK_FROM_SPOOL,
   STR_SPICK_NO_OFFSET,
+  // Sound tab of the Display/Sound screen (ui/display_screen.cpp)
+  STR_SOUND_TITLE,            // the tab, and the master switch row
+  STR_SOUND_SUB,              // under the master switch: where the speaker goes
+  STR_SND_NFC,
+  STR_SND_WRITE,
+  STR_SND_WEIGHT,
+  STR_SND_VOLUME_LABEL,
+  STR_SND_VOL_LOW,
+  STR_SND_VOL_MED,
+  STR_SND_VOL_HIGH,
+  STR_SND_VOL_MAX,
   STR_COUNT
 };
 
