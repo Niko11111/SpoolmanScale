@@ -12,6 +12,7 @@
 #include "bambu/bambu_catalog.h"
 #include "bambu/bambu_tag.h"
 #include "bambu/material_match.h"
+#include "creality/creality_scan.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/list_limits.h"
@@ -1329,13 +1330,17 @@ static bool s_last_link_ok = false;
 // web page binding the tag that lies on the reader.
 // The tag just linked is a 4 byte MIFARE tag that nothing could read: not
 // recorded as Creality or Bambu, and not decoded as anything this time either.
+// A CFS tag erased by the scale counts too: it keeps Creality's key but its
+// sector is empty, and the tag view offers it the write as well. Without it,
+// such a tag linked as the second tag of a spool was never written (18.11.2026).
 static bool blankMifareCandidate() {
   if (strlen(g_tag.uid_str) != 11) return false;
   unsigned b[4];
   if (sscanf(g_tag.uid_str, "%2x:%2x:%2x:%2x", &b[0], &b[1], &b[2], &b[3]) != 4) return false;
   uint8_t uid[4] = {(uint8_t)b[0], (uint8_t)b[1], (uint8_t)b[2], (uint8_t)b[3]};
   const TagFamily fam = tagFamilyGet(uid);
-  if (fam == TAG_FAMILY_CREALITY || fam == TAG_FAMILY_BAMBU) return false;
+  if (fam == TAG_FAMILY_BAMBU) return false;
+  if (fam == TAG_FAMILY_CREALITY && !crealityTagEmpty(uid)) return false;
   // g_tag can still describe the tag read before (the link entry copies only
   // the UID over), so its decoder counts only when it is about this UID.
   if (memcmp(g_tag.uid, uid, 4) == 0 && g_tag.decoder[0]) return false;
