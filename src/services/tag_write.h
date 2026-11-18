@@ -222,8 +222,8 @@ size_t      tagNdefSizeFor(size_t json_len);
 // them against a record built from the backend, and an ACE tag holds no more
 // than 16. Longer on one side only would call every long vendor a mismatch.
 struct TagInfo {
-  char     fmt[12];        // ACE, OpenSpool, blank, unknown; Bambu, Snapmaker,
-                           // unsupported for a MIFARE tag
+  char     fmt[16];        // ACE, OpenSpool, blank, unknown; Bambu, Snapmaker,
+                           // unsupported for a MIFARE tag; OpenPrintTag
   char     tray_uuid[33];  // Bambu only, 32 hex characters
   char     prod_date[16];  // as the tag's decoder left it
   char     sku[17];

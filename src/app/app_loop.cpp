@@ -36,6 +36,7 @@
 #include "hardware/sd_logger.h"
 #include "hardware/flash_log.h"
 #include "services/nfc_measure.h"
+#include "openprinttag/opt_scan.h"
 #include "services/nfc_reset.h"
 #include "ui/reboot_popup.h"
 #include "ui/info_popup.h"
@@ -2042,7 +2043,7 @@ void appLoop() {
     static char cfs_checked_uid[24] = "";   // own CFS tag compared with Spoolman this placement
     static bool new_placement = false;      // same tag back after a long absence
     static unsigned long last_nfc_stats_ms = 0;
-    static uint8_t last_uid_len = 0;   // 4 = Bambu, 7 = NTAG, for the removal delay
+    static uint8_t last_uid_len = 0;   // 4 = Bambu, 7 = NTAG, 8 = ISO 15693, for the removal delay
 
     // Fast re-poll only makes sense while a tag is believed to be on the
     // reader. With nothing on the scale the slow interval is the right one.
@@ -2056,7 +2057,10 @@ void appLoop() {
       uint8_t uid[NFC_UID_MAX], uidLen = 0;
       crumbSet("nfc poll");
       const unsigned long poll_start_ms = millis();
-      bool found = nfcReadPassiveTarget(uid, &uidLen, poll_timeout);
+      // ISO 14443A and, on a PN7160, ISO 15693 (OpenPrintTag). On a PN532 this
+      // is the same call as before and tech stays NFC_TECH_A.
+      uint8_t tech = NFC_TECH_A;
+      bool found = nfcReadAnyTarget(uid, &uidLen, poll_timeout, &tech);
       perfNfcPoll(found, (uint32_t)(millis() - poll_start_ms));
 
       nfc_stat_scans++;
@@ -2577,6 +2581,50 @@ void appLoop() {
           paintTagStatus();
         }
 
+      } else if (found && tech == NFC_TECH_V && uidLen == OPT_UID_BYTES) {
+        // ── ISO 15693 (PN7160 only): OpenPrintTag ──────────────
+        // As the NTAG branch: read once per placement, show what the tag says,
+        // then ask the backend by UID. ntag_handled_uid is the "dealt with"
+        // marker of every non-Bambu tag here, despite its name.
+        last_tag_seen_ms = millis();
+        const bool newly_placed = !tag_present;
+        tag_present = true;
+        nfc_absent_count = 0;
+        if (newly_placed && !weightSaysSpoolStayed()) resetActivityTimer();
+        if (newly_placed && loc_left_pad) g_loc_popup_shown_for_id = -1;
+        if (newly_placed) loc_left_pad = false;
+        uint8_t uid_msb[OPT_UID_BYTES];
+        optUidMsbFirst(uid, uid_msb);
+        char uid_str[24];
+        optUidString(uid_msb, uid_str, sizeof(uid_str));
+        lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
+        lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
+        if (strcmp(uid_str, ntag_handled_uid) == 0) {
+          TagSeen::note(uid_str, optTagOnReader() ? "OpenPrintTag" : "ISO 15693", TV_OTHER);
+          paintTagStatus();
+        } else if (optScanTag(uid, uid_str) == OPT_SCAN_RETRY) {
+          lv_label_set_text(lbl_status, T(STR_READING_TAG));   // read again on the next poll
+        } else {
+          snprintf(ntag_handled_uid, sizeof(ntag_handled_uid), "%s", uid_str);
+          spoolman_queried_uid[0] = '\0';
+          TagSeen::note(uid_str, optTagOnReader() ? "OpenPrintTag" : "ISO 15693", TV_OTHER);
+          resetActivityTimer();   // a different tag is always news
+          // Painted at once rather than through g_tag_ready: that would paint
+          // again on the next pass, over what the lookup below has shown.
+          g_tag_displayed = true;
+          g_tag_shown_ms = millis();
+          updateDisplay();
+          lv_label_set_text(lbl_last_used, "-");
+          lv_label_set_text(lbl_spoolman_dried_val, "-");
+          if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
+          lv_timer_handler();
+          if (wifi_ok && !isSpoolFlowIdInputOpen() && !isSecondTagPopupOpen()) {
+            querySpoolman(uid_str, LOOKUP_FROM_UID);
+            snprintf(spoolman_queried_uid, sizeof(spoolman_queried_uid), "%s", uid_str);
+            if (!lookupPending()) lookupFollowUp(LOOKUP_FROM_UID, uid_str);
+          }
+        }
+
       } else {
         // No tag found
         // A Creality tag that was read and then stops answering is most often
@@ -2656,7 +2704,7 @@ void appLoop() {
           // scan returned - which restarted the retry counter and looped
           // forever on a tag that would not authenticate.
           const unsigned long absent_limit =
-            (last_uid_len == 7) ? NFC_ABSENT_NTAG_MS : NFC_ABSENT_BAMBU_MS;
+            (last_uid_len == 7 || last_uid_len == OPT_UID_BYTES) ? NFC_ABSENT_NTAG_MS : NFC_ABSENT_BAMBU_MS;
           // Unless the scale already says the spool is gone: then the grace
           // period only holds the old spool on the screen, the touch slowed by
           // the fast re-polls, and the location question back by 2.5 s.
