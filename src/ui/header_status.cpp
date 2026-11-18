@@ -52,8 +52,11 @@ static lv_color_t wifiColor() {
 #define HDR_BAT_3_PCT      63
 #define HDR_BAT_2_PCT      38
 #define HDR_BAT_1_PCT      13
-#define HDR_BAT_WARN_PCT   30
-#define HDR_BAT_BAD_PCT    15
+// Colour steps, the same four the WiFi icon uses: green from here up,
+// yellow (WARN), amber (SIGNAL_LOW), and red below HDR_BAT_LOW_PCT.
+#define HDR_BAT_GOOD_PCT   85
+#define HDR_BAT_MID_PCT    50
+#define HDR_BAT_LOW_PCT    25
 
 // Percent, glyph and a bolt while charging. Compact leaves the percent out,
 // for a row that would otherwise run into the title.
@@ -138,10 +141,14 @@ static void updateHeaderBattery() {
   }
   const int pct = fuelGaugePercent();
   const FuelGaugeFlow flow = fuelGaugeFlow();
-  uint32_t col = UI_COL_CAPTION;
-  if (flow == FUEL_FLOW_CHARGING || flow == FUEL_FLOW_FULL) col = UI_COL_GOOD;
-  else if (pct <= HDR_BAT_BAD_PCT)  col = UI_COL_BAD;
-  else if (pct <= HDR_BAT_WARN_PCT) col = UI_COL_WARN;
+  uint32_t col = UI_COL_BAD;
+  if (flow == FUEL_FLOW_CHARGING || flow == FUEL_FLOW_FULL || pct >= HDR_BAT_GOOD_PCT) {
+    col = UI_COL_GOOD;
+  } else if (pct >= HDR_BAT_MID_PCT) {
+    col = UI_COL_WARN;
+  } else if (pct >= HDR_BAT_LOW_PCT) {
+    col = UI_COL_SIGNAL_LOW;
+  }
   lv_obj_set_style_text_color(lbl_hdr_bat, lv_color_hex(col), 0);
   lv_obj_clear_flag(lbl_hdr_bat, LV_OBJ_FLAG_HIDDEN);
 }
