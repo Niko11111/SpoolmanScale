@@ -158,11 +158,7 @@ static void addOwnLayoutButton() {
   lv_obj_t* btn = lv_btn_create(s_box);
   lv_obj_set_size(btn, UI_POPUP_BTN_W, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn, UI_CARD_ROW_X, UI_CARD_ROW_Y);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_OK_BG), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 0, 0);
   lv_obj_set_style_pad_all(btn, 0, 0);
   lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(btn, [](lv_event_t*) {
@@ -171,9 +167,9 @@ static void addOwnLayoutButton() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t* l = lv_label_create(btn);
   lv_label_set_text(l, T(STR_PRN_OWN_LAYOUT));
-  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_OK_TEXT), 0);
   lv_obj_set_style_text_font(l, UI_FONT_TITLE, 0);
   lv_obj_center(l);
+  uiBtnRole(btn, BTN_CONFIRM);
 }
 
 void printCardResult(LabelPrintResult result, const char* detail, bool offer_own_layout) {
@@ -227,13 +223,7 @@ void printCardResult(LabelPrintResult result, const char* detail, bool offer_own
     lv_obj_set_size(btn, UI_POPUP_W - 2 * UI_CARD_ROW_X, UI_POPUP_BTN_H);
     lv_obj_set_pos(btn, UI_CARD_ROW_X, UI_CARD_ROW_Y);
   }
-  lv_obj_set_style_bg_color(btn, lv_color_hex(ok ? UI_COL_OK_BG : UI_COL_LINE), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(ok ? UI_COL_OK_BG_PRESSED : UI_COL_POPUP_BORDER),
-                            LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 0, 0);
-  if (!ok) uiSecondaryFill(btn);
   lv_obj_set_style_pad_all(btn, 0, 0);
   lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(btn, [](lv_event_t*) { s_close_req = true; }, LV_EVENT_CLICKED, NULL);
@@ -268,9 +258,9 @@ void printCardResult(LabelPrintResult result, const char* detail, bool offer_own
 
   s_btn_l = lv_label_create(btn);
   lv_label_set_text(s_btn_l, T(STR_BTN_OK));
-  lv_obj_set_style_text_color(s_btn_l, lv_color_hex(ok ? UI_COL_OK_TEXT : UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(s_btn_l, UI_FONT_TITLE, 0);
   lv_obj_center(s_btn_l);
+  uiBtnRole(btn, ok ? BTN_CONFIRM : BTN_NEUTRAL);
   logSDf("PrintCard: result=%d", (int)result);
 }
 

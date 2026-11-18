@@ -27,6 +27,7 @@ static lv_obj_t *lbl_tag2_count = nullptr;
 static lv_obj_t *bar_tag2_fill  = nullptr;
 static lv_obj_t *lbl_tag2_prompt = nullptr;
 static lv_coord_t s_fill_w      = -1;   // the width last set, so a pass without a change draws nothing
+static lv_coord_t s_fill_full   = 0;    // the fill's full width, inside the button's border
 
 // Captured when the popup is built. The button callback only raises a flag;
 // the link behind it costs HTTP requests and happens one loop pass later.
@@ -123,10 +124,10 @@ SecondTagReport secondTagReport() {
   return r;
 }
 
-// The button's fill, to the pixel. At 376 px over 30 s that is a dozen
-// small redraws a second, each only the strip that changed.
+// The button's fill, to the pixel. Across the button's inner width over 30 s
+// that is a dozen small redraws a second, each only the strip that changed.
 static void updateCountdownFill() {
-  uiCountdownFillSet(bar_tag2_fill, TAG2_BTN_W, &s_fill_w, remainingMs(),
+  uiCountdownFillSet(bar_tag2_fill, s_fill_full, &s_fill_w, remainingMs(),
                      SECOND_TAG_COUNTDOWN_MS);
 }
 
@@ -236,11 +237,7 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   lv_obj_t *btn_done = lv_btn_create(box);
   lv_obj_set_size(btn_done, TAG2_BTN_W, UI_POPUP_BTN_H);
   lv_obj_set_pos(btn_done, UI_CARD_ROW_X, UI_CARD_ROW_Y);
-  lv_obj_set_style_bg_color(btn_done, lv_color_hex(UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_done, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(btn_done, 0, 0);
-  lv_obj_set_style_border_width(btn_done, 0, 0);
-  uiSecondaryFill(btn_done);
   lv_obj_set_style_pad_all(btn_done, 0, 0);
   lv_obj_clear_flag(btn_done, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(btn_done, [](lv_event_t *e) {
@@ -249,26 +246,30 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
     setState(T2_CANCELLED);
   }, LV_EVENT_CLICKED, NULL);
 
+  lv_obj_t *lbl_done = lv_label_create(btn_done);
+  lv_label_set_text(lbl_done, T(STR_TAG2_BTN_DONE));
+  lv_obj_set_style_text_font(lbl_done, UI_FONT_TITLE, 0);
+  lv_obj_center(lbl_done);
+  uiBtnRole(btn_done, BTN_NEUTRAL);
+
   // The countdown as a lighter fill that drains towards the right, behind the
   // label and not clickable. Not an lv_anim like the result's OK: the time a
   // blocking fetch holds the loop does not count against the question, and
   // an animation would run through it and then jump. The width is set from
-  // the same remaining time the question closes on, every loop pass.
+  // the same remaining time the question closes on, every loop pass. Inside
+  // the neutral outline, under the label.
+  const lv_coord_t border = lv_obj_get_style_border_width(btn_done, LV_PART_MAIN);
+  s_fill_full = TAG2_BTN_W - 2 * border;
   bar_tag2_fill = lv_obj_create(btn_done);
   lv_obj_remove_style_all(bar_tag2_fill);
-  lv_obj_set_size(bar_tag2_fill, TAG2_BTN_W, UI_POPUP_BTN_H);
+  lv_obj_set_size(bar_tag2_fill, s_fill_full, UI_POPUP_BTN_H - 2 * border);
   lv_obj_set_pos(bar_tag2_fill, 0, 0);
   lv_obj_set_style_bg_color(bar_tag2_fill, lv_color_hex(UI_COL_COUNTDOWN_FILL), 0);
   lv_obj_set_style_bg_opa(bar_tag2_fill, LV_OPA_COVER, 0);
   lv_obj_set_style_radius(bar_tag2_fill, UI_RADIUS_BTN, 0);
   lv_obj_clear_flag(bar_tag2_fill, LV_OBJ_FLAG_CLICKABLE);
-  s_fill_w = TAG2_BTN_W;
-
-  lv_obj_t *lbl_done = lv_label_create(btn_done);
-  lv_label_set_text(lbl_done, T(STR_TAG2_BTN_DONE));
-  lv_obj_set_style_text_color(lbl_done, lv_color_hex(UI_COL_INK_2), 0);
-  lv_obj_set_style_text_font(lbl_done, UI_FONT_TITLE, 0);
-  lv_obj_center(lbl_done);
+  lv_obj_move_to_index(bar_tag2_fill, 0);
+  s_fill_w = s_fill_full;
 
   logSDf("TAG2: asking for a second tag on spool %d, first is '%s', %lus",
          spool_id, s_first_uid,

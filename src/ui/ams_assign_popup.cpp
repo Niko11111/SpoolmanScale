@@ -20,6 +20,7 @@ static lv_obj_t *scr_ams_popup = nullptr;
 static lv_obj_t *lbl_ams_count = nullptr;
 static lv_obj_t *bar_ams_fill  = nullptr;
 static lv_coord_t s_fill_w     = -1;   // the width last set, so a pass without a change draws nothing
+static lv_coord_t s_fill_full  = 0;    // the fill's full width, inside the button's border
 
 // Yes and No share one size; the fill sits in whichever of the two the
 // countdown answers with.
@@ -78,23 +79,26 @@ static int remainingSeconds() { return (int)((remainingMs() + 999) / 1000); }
 // a blocking fetch does not count against the question, and an animation
 // would run through it and then jump.
 static void updateCountdownFill() {
-  uiCountdownFillSet(bar_ams_fill, AMS_ANSWER_BTN_W, &s_fill_w, remainingMs(),
+  uiCountdownFillSet(bar_ams_fill, s_fill_full, &s_fill_w, remainingMs(),
                      AMS_ASK_COUNTDOWN_MS);
 }
 
 // Behind the label and not clickable, so a tap anywhere on the button still
-// lands on the button. Called before the label is created, which puts it
-// underneath.
+// lands on the button. Called on the finished, styled button: the fill sits
+// inside its border and is moved underneath the label.
 static void addCountdownFill(lv_obj_t *btn, uint32_t color) {
+  const lv_coord_t border = lv_obj_get_style_border_width(btn, LV_PART_MAIN);
+  s_fill_full = AMS_ANSWER_BTN_W - 2 * border;
   bar_ams_fill = lv_obj_create(btn);
   lv_obj_remove_style_all(bar_ams_fill);
-  lv_obj_set_size(bar_ams_fill, AMS_ANSWER_BTN_W, AMS_ANSWER_BTN_H);
+  lv_obj_set_size(bar_ams_fill, s_fill_full, AMS_ANSWER_BTN_H - 2 * border);
   lv_obj_set_pos(bar_ams_fill, 0, 0);
   lv_obj_set_style_bg_color(bar_ams_fill, lv_color_hex(color), 0);
   lv_obj_set_style_bg_opa(bar_ams_fill, LV_OPA_COVER, 0);
   lv_obj_set_style_radius(bar_ams_fill, UI_RADIUS_BTN, 0);
   lv_obj_clear_flag(bar_ams_fill, LV_OBJ_FLAG_CLICKABLE);
-  s_fill_w = AMS_ANSWER_BTN_W;
+  lv_obj_move_to_index(bar_ams_fill, 0);
+  s_fill_w = s_fill_full;
   updateCountdownFill();
 }
 
@@ -205,22 +209,19 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   lv_obj_t *btn_yes = lv_btn_create(box);
   lv_obj_set_size(btn_yes, AMS_ANSWER_BTN_W, AMS_ANSWER_BTN_H);
   lv_obj_set_pos(btn_yes, 12, 156);
-  lv_obj_set_style_bg_color(btn_yes, lv_color_hex(UI_COL_OK_BG), 0);
-  lv_obj_set_style_bg_color(btn_yes, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_yes, 8, 0);
-  lv_obj_set_style_shadow_width(btn_yes, 0, 0);
   lv_obj_set_style_pad_all(btn_yes, 0, 0);
   lv_obj_add_event_cb(btn_yes, [](lv_event_t *e) {
     // No HTTP and no delete in here, both happen one loop pass later.
     s_confirm_pending = true;
     s_close_pending   = true;
   }, LV_EVENT_CLICKED, NULL);
-  if (g_ams_timer_yes) addCountdownFill(btn_yes, UI_COL_OK_BG_PRESSED);
   lv_obj_t *lbl_yes = lv_label_create(btn_yes);
   { char ybuf[24]; copyT(ybuf, sizeof(ybuf), STR_AMS_BTN_YES); lv_label_set_text(lbl_yes, ybuf); }
-  lv_obj_set_style_text_color(lbl_yes, lv_color_hex(UI_COL_AMS_YES_TEXT), 0);
   lv_obj_set_style_text_font(lbl_yes, UI_FONT_SMALL, 0);
   lv_obj_center(lbl_yes);
+  uiBtnRole(btn_yes, BTN_CONFIRM);
+  if (g_ams_timer_yes) addCountdownFill(btn_yes, UI_COL_OK_BG_PRESSED);
 
   lv_obj_t *btn_view = lv_btn_create(box);
   lv_obj_set_size(btn_view, 124, 56);
@@ -244,8 +245,6 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
   lv_obj_t *btn_no = lv_btn_create(box);
   lv_obj_set_size(btn_no, AMS_ANSWER_BTN_W, AMS_ANSWER_BTN_H);
   lv_obj_set_pos(btn_no, 270, 156);
-  lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_no, lv_color_hex(UI_COL_AMS_NO_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_no, 8, 0);
   lv_obj_set_style_shadow_width(btn_no, 0, 0);
   lv_obj_set_style_pad_all(btn_no, 0, 0);
@@ -253,12 +252,12 @@ void showAmsAssignPopup(int spool_id, float netto_g, const char* spool_name,
     s_cancel_pending = true;
     s_close_pending  = true;
   }, LV_EVENT_CLICKED, NULL);
-  if (!g_ams_timer_yes) addCountdownFill(btn_no, UI_COL_BAD_BG_PRESSED);
   lv_obj_t *lbl_no = lv_label_create(btn_no);
   { char nbuf[24]; copyT(nbuf, sizeof(nbuf), STR_AMS_TIMER_NO); lv_label_set_text(lbl_no, nbuf); }
-  lv_obj_set_style_text_color(lbl_no, lv_color_hex(UI_COL_AMS_NO_TEXT), 0);
   lv_obj_set_style_text_font(lbl_no, UI_FONT_SMALL, 0);
   lv_obj_center(lbl_no);
+  styleLeaveButton(btn_no);
+  if (!g_ams_timer_yes) addCountdownFill(btn_no, UI_COL_COUNTDOWN_FILL);
 
   logSDf("AMS: asking for id=%d (%.0fg, %s), %lus, timeout means %s",
          spool_id, netto_g, already_saved ? "saved" : "not written yet",

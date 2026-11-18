@@ -73,19 +73,14 @@ static void showFactoryResetPopup() {
   lv_obj_t *btn_c = lv_btn_create(box);
   lv_obj_set_size(btn_c, 180, 44);
   lv_obj_set_pos(btn_c, 12, 184);
-  lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_SURFACE), 0);
-  lv_obj_set_style_bg_color(btn_c, lv_color_hex(UI_COL_LINE_SOFT), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_c, 8, 0);
   lv_obj_set_style_shadow_width(btn_c, 0, 0);
-  lv_obj_set_style_border_width(btn_c, 1, 0);
-  lv_obj_set_style_border_color(btn_c, lv_color_hex(UI_COL_LINE_SOFT), 0);
   lv_obj_add_event_cb(btn_c, [](lv_event_t *e){
     releaseScreen(&s_reset_pop);
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_c = lv_label_create(btn_c);
   char buf_c[32]; copyT(buf_c, sizeof(buf_c), STR_CANCEL);
   lv_label_set_text(lbl_c, buf_c);
-  lv_obj_set_style_text_color(lbl_c, lv_color_hex(UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_c, &lv_font_montserrat_ext_14, 0);
   lv_obj_align(lbl_c, LV_ALIGN_CENTER, 0, 0);
   styleLeaveButton(btn_c);
@@ -94,12 +89,7 @@ static void showFactoryResetPopup() {
   lv_obj_t *btn_ok = lv_btn_create(box);
   lv_obj_set_size(btn_ok, 228, 44);
   lv_obj_set_pos(btn_ok, 200, 184);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_ok, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ok, 8, 0);
-  lv_obj_set_style_shadow_width(btn_ok, 0, 0);
-  lv_obj_set_style_border_width(btn_ok, 1, 0);
-  lv_obj_set_style_border_color(btn_ok, lv_color_hex(UI_COL_BAD_BG_PRESSED), 0);
   lv_obj_add_event_cb(btn_ok, [](lv_event_t *e){
     logSD("Factory Reset: erasing NVS flash partition");
     Serial.println("Factory Reset: erasing NVS flash partition");
@@ -117,9 +107,9 @@ static void showFactoryResetPopup() {
   lv_obj_t *lbl_ok = lv_label_create(btn_ok);
   char buf_ok[48]; copyT(buf_ok, sizeof(buf_ok), STR_FACTORY_RESET_CONFIRM);
   lv_label_set_text(lbl_ok, buf_ok);
-  lv_obj_set_style_text_color(lbl_ok, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(lbl_ok, &lv_font_montserrat_ext_14, 0);
   lv_obj_align(lbl_ok, LV_ALIGN_CENTER, 0, 0);
+  uiBtnRole(btn_ok, BTN_DANGER);
 }
 
 

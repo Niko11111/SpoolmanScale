@@ -835,12 +835,7 @@ static lv_obj_t* footButton(int x, int str_id, bool primary, lv_event_cb_t cb) {
   if (!b) return nullptr;
   lv_obj_set_size(b, AMSV_FOOT_BTN_W, AMSV_FOOT_BTN_H);
   lv_obj_set_pos(b, x, 320 - AMSV_FOOT_H + (AMSV_FOOT_H - AMSV_FOOT_BTN_H) / 2);
-  lv_obj_set_style_bg_color(b, lv_color_hex(primary ? UI_COL_OK_BG : UI_COL_SURFACE), 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(primary ? UI_COL_OK_BG_PRESSED : UI_COL_PRESS_FILL), LV_STATE_PRESSED);
-  lv_obj_set_style_border_width(b, 1, 0);
-  lv_obj_set_style_border_color(b, lv_color_hex(primary ? UI_COL_OK_BG_PRESSED : UI_COL_LINE), 0);
   lv_obj_set_style_radius(b, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(b, 0, 0);
   // Under the 44 px touch minimum by design, so the strip stays small; the
   // hit area is widened instead.
   lv_obj_set_ext_click_area(b, AMSV_FOOT_BTN_EXT);
@@ -850,10 +845,10 @@ static lv_obj_t* footButton(int x, int str_id, bool primary, lv_event_cb_t cb) {
     char t[24];
     copyT(t, sizeof(t), str_id);
     lv_label_set_text(l, t);
-    lv_obj_set_style_text_color(l, lv_color_hex(primary ? UI_COL_OK_TEXT : UI_COL_INK_2), 0);
     lv_obj_set_style_text_font(l, UI_FONT_SMALL, 0);
     lv_obj_align(l, LV_ALIGN_CENTER, 0, 0);
   }
+  uiBtnRole(b, primary ? BTN_CONFIRM : BTN_NEUTRAL);
   return b;
 }
 
@@ -862,16 +857,18 @@ static lv_obj_t* footButton(int x, int str_id, bool primary, lv_event_cb_t cb) {
 // stay clickable either way, only what a tap means changes.
 static void applyInfoMode() {
   if (s_info_btn) {
-    const bool on = s_info_mode;
-    lv_obj_set_style_border_width(s_info_btn, on ? 2 : 1, 0);
-    lv_obj_set_style_border_color(s_info_btn,
-      lv_color_hex(on ? UI_COL_ACCENT : UI_COL_LINE), 0);
-    lv_obj_set_style_bg_color(s_info_btn,
-      lv_color_hex(on ? UI_COL_GO_BG : UI_COL_SURFACE), 0);
+    // On is the one local look; off hands the button back to its neutral role.
     lv_obj_t* l = lv_obj_get_child(s_info_btn, 0);
-    if (l) {
-      lv_obj_set_style_text_color(l,
-        lv_color_hex(on ? UI_COL_ACCENT : UI_COL_INK_2), 0);
+    if (s_info_mode) {
+      lv_obj_set_style_border_width(s_info_btn, 2, 0);
+      lv_obj_set_style_border_color(s_info_btn, lv_color_hex(UI_COL_ACCENT), 0);
+      lv_obj_set_style_bg_color(s_info_btn, lv_color_hex(UI_COL_GO_BG), 0);
+      if (l) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ACCENT), 0);
+    } else {
+      lv_obj_remove_local_style_prop(s_info_btn, LV_STYLE_BORDER_WIDTH, 0);
+      lv_obj_remove_local_style_prop(s_info_btn, LV_STYLE_BORDER_COLOR, 0);
+      lv_obj_remove_local_style_prop(s_info_btn, LV_STYLE_BG_COLOR, 0);
+      if (l) lv_obj_remove_local_style_prop(l, LV_STYLE_TEXT_COLOR, 0);
     }
   }
   if (s_headline_lbl) {

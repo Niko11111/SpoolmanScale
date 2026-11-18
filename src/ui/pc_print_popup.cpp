@@ -103,16 +103,11 @@ static void styleKind(lv_obj_t* b, bool enabled) {
 
 // Cancel, and OK under a refusal: the print card's quiet button.
 static void styleQuiet(lv_obj_t* b) {
-  lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_LINE), 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
-  uiSecondaryFill(b);
-  setButtonInk(b, UI_COL_INK_2);
+  uiBtnRole(b, BTN_NEUTRAL);
 }
 
 static void styleGood(lv_obj_t* b) {
-  lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_OK_BG), 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
-  setButtonInk(b, UI_COL_OK_TEXT);
+  uiBtnRole(b, BTN_CONFIRM);
 }
 
 // Each stage replaces the one before in the same place.

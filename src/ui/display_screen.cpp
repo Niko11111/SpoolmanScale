@@ -113,15 +113,11 @@ void buildDisplayScreen() {
     const bool allowed = dim_vals[i] == 0 ||
                          ((cur_off == 0 || dim_vals[i] < cur_off) &&
                           (cur_sleep == 0 || dim_vals[i] < cur_sleep));
-    lv_obj_set_style_bg_color(b, active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_LINE), 0);
-    if (!allowed) {
-      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
-      lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
-    }
+    if (active) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ACCENT), 0);
+    if (!allowed) lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_radius(b, 8, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, 0, 0);
-    if (!active) uiSecondaryFill(b);
     char buf[16];
     if (dim_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
@@ -130,11 +126,19 @@ void buildDisplayScreen() {
     }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);
-    lv_obj_set_style_text_color(l, active ? lv_color_hex(UI_COL_ON_ACCENT)
-                                 : (allowed ? lv_color_hex(UI_COL_INK_2)
-                                            : lv_color_hex(UI_COL_UNAVAILABLE)), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
+    if (active) {
+      lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ON_ACCENT), 0);
+    } else {
+      uiBtnRole(b, BTN_NEUTRAL);
+      // After the role, which would drop a dimmed fill and the grey caption.
+      if (!allowed) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_UNAVAILABLE), 0);
+    }
+    if (!allowed) {
+      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
+      lv_obj_set_style_border_opa(b, LV_OPA_60, 0);
+    }
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
       int val = (intptr_t)lv_event_get_user_data(e);
       dim_timeout_ms = val * 60000;
@@ -162,15 +166,11 @@ void buildDisplayScreen() {
     const bool allowed = off_vals[i] == 0 ||
                          ((cur_dim == 0 || off_vals[i] > cur_dim) &&
                           (cur_sleep == 0 || off_vals[i] < cur_sleep));
-    lv_obj_set_style_bg_color(b, active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_LINE), 0);
-    if (!allowed) {
-      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
-      lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
-    }
+    if (active) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ACCENT), 0);
+    if (!allowed) lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_radius(b, 8, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, 0, 0);
-    if (!active) uiSecondaryFill(b);
     char buf[16];
     if (off_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
@@ -179,11 +179,19 @@ void buildDisplayScreen() {
     }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);
-    lv_obj_set_style_text_color(l, active ? lv_color_hex(UI_COL_ON_ACCENT)
-                                 : (allowed ? lv_color_hex(UI_COL_INK_2)
-                                            : lv_color_hex(UI_COL_UNAVAILABLE)), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
+    if (active) {
+      lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ON_ACCENT), 0);
+    } else {
+      uiBtnRole(b, BTN_NEUTRAL);
+      // After the role, which would drop a dimmed fill and the grey caption.
+      if (!allowed) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_UNAVAILABLE), 0);
+    }
+    if (!allowed) {
+      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
+      lv_obj_set_style_border_opa(b, LV_OPA_60, 0);
+    }
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
       int val = (intptr_t)lv_event_get_user_data(e);
       off_timeout_ms = val * 60000;
@@ -214,15 +222,11 @@ void buildDisplayScreen() {
     const bool allowed = sleep_vals[i] == 0 ||
                          ((cur_dim == 0 || sleep_vals[i] > cur_dim) &&
                           (cur_off == 0 || sleep_vals[i] > cur_off));
-    lv_obj_set_style_bg_color(b, active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_LINE), 0);
-    if (!allowed) {
-      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
-      lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
-    }
+    if (active) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ACCENT), 0);
+    if (!allowed) lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_radius(b, 8, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, 0, 0);
-    if (!active) uiSecondaryFill(b);
     char buf[16];
     if (sleep_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
@@ -231,11 +235,19 @@ void buildDisplayScreen() {
     }
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, buf);
-    lv_obj_set_style_text_color(l, active ? lv_color_hex(UI_COL_ON_ACCENT)
-                                 : (allowed ? lv_color_hex(UI_COL_INK_2)
-                                            : lv_color_hex(UI_COL_UNAVAILABLE)), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
+    if (active) {
+      lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ON_ACCENT), 0);
+    } else {
+      uiBtnRole(b, BTN_NEUTRAL);
+      // After the role, which would drop a dimmed fill and the grey caption.
+      if (!allowed) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_UNAVAILABLE), 0);
+    }
+    if (!allowed) {
+      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
+      lv_obj_set_style_border_opa(b, LV_OPA_60, 0);
+    }
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
       int val = (intptr_t)lv_event_get_user_data(e);
       sleep_timeout_ms = val * 60000;

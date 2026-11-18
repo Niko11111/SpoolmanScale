@@ -367,11 +367,11 @@ static void showSpoolAsk(AmsdAsk kind) {
     if (btn) {
       lv_obj_set_size(btn, AMSD_ASK_ALL_W, AMSD_ASK_ALL_H);
       lv_obj_set_pos(btn, AMSD_ASK_BTN_X_L, AMSD_ASK_ALL_Y);
+      lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
       lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_GO_BG), 0);
       lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
       lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_ACCENT), 0);
       lv_obj_set_style_border_width(btn, 1, 0);
-      lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
       lv_obj_set_style_shadow_width(btn, 0, 0);
       lv_obj_add_event_cb(btn, askAllCb, LV_EVENT_CLICKED, nullptr);
       lv_obj_t* l = lv_label_create(btn);
@@ -400,11 +400,6 @@ static void showSpoolAsk(AmsdAsk kind) {
     lv_obj_set_size(btn, AMSD_ASK_BTN_W, AMSD_ASK_BTN_H);
     lv_obj_set_pos(btn, i == 0 ? AMSD_ASK_BTN_X_L : AMSD_ASK_BTN_X_R,
                    box_h - AMSD_ASK_BTN_H - AMSD_ASK_BTN_GAP_B);
-    lv_obj_set_style_bg_color(btn,
-      lv_color_hex(b[i].primary ? UI_COL_OK_BG : UI_COL_BAD_BG), 0);
-    lv_obj_set_style_bg_color(btn,
-      lv_color_hex(b[i].primary ? UI_COL_OK_BG_PRESSED : UI_COL_BAD_BG_PRESSED),
-      LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
     lv_obj_set_style_shadow_width(btn, 0, 0);
     lv_obj_add_event_cb(btn, b[i].cb, LV_EVENT_CLICKED, nullptr);
@@ -413,11 +408,10 @@ static void showSpoolAsk(AmsdAsk kind) {
       char t[24];
       copyT(t, sizeof(t), b[i].str_id);
       lv_label_set_text(l, t);
-      lv_obj_set_style_text_color(l,
-        lv_color_hex(b[i].primary ? UI_COL_OK_TEXT : UI_COL_BAD_TEXT), 0);
       lv_obj_set_style_text_font(l, UI_FONT_TITLE, 0);
       lv_obj_center(l);
-      if (!b[i].primary) styleLeaveButton(btn);
+      if (b[i].primary) uiBtnRole(btn, BTN_CONFIRM);
+      else              styleLeaveButton(btn);
     }
   }
 }
@@ -593,20 +587,15 @@ static void buildHeader(lv_obj_t* box, const AmsSpoolDetail& d) {
   if (!x) return;
   lv_obj_set_size(x, AMSD_CLOSE, AMSD_CLOSE);
   lv_obj_align(x, LV_ALIGN_RIGHT_MID, -AMSD_PAD, 0);
-  lv_obj_set_style_bg_color(x, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(x, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
-  lv_obj_set_style_border_width(x, 1, 0);
-  lv_obj_set_style_border_color(x, lv_color_hex(UI_COL_BAD_BG_PRESSED), 0);
   lv_obj_set_style_radius(x, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(x, 0, 0);
   lv_obj_add_event_cb(x, closeCb, LV_EVENT_CLICKED, nullptr);
   lv_obj_t* xl = lv_label_create(x);
   if (xl) {
     lv_label_set_text(xl, LV_SYMBOL_CLOSE);
-    lv_obj_set_style_text_color(xl, lv_color_hex(UI_COL_BAD_TEXT), 0);
     lv_obj_set_style_text_font(xl, UI_FONT_TITLE, 0);
     lv_obj_center(xl);
   }
+  uiBtnRole(x, BTN_CLOSE);
 }
 
 static void buildDivider(lv_obj_t* box, int y) {

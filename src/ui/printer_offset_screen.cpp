@@ -287,11 +287,7 @@ void buildPrinterOffsetScreen() {
   lv_obj_t* btn = lv_btn_create(s_scr);
   lv_obj_set_size(btn, PO_W, PO_BTN_H);
   lv_obj_set_pos(btn, PO_X, PO_BTN_Y);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_OK_BG), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 0, 0);
   lv_obj_add_event_cb(btn, [](lv_event_t* e) {
     (void)e;
     logSD("BTN: Print position -> calibration page");
@@ -300,8 +296,8 @@ void buildPrinterOffsetScreen() {
   lv_obj_t* bl = lv_label_create(btn);
   lv_label_set_text(bl, T(STR_W_P_CAL_PRINT));
   lv_obj_set_style_text_font(bl, UI_FONT_TITLE, 0);
-  lv_obj_set_style_text_color(bl, lv_color_hex(UI_COL_OK_TEXT), 0);
   lv_obj_center(bl);
+  uiBtnRole(btn, BTN_CONFIRM);
 
   updateView();
 }

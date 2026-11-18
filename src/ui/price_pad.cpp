@@ -128,8 +128,9 @@ static void buildAnswers() {
   const int cancel_y = PP_KEYS_Y + PP_KEYS_H - cancel_h;
   const int ok_h     = cancel_y - PP_GAP - ok_y;
 
-  lv_obj_t* ok = padButton(s_box, PP_COL_X, ok_y, PP_COL_W, ok_h, UI_COL_OK_BG, UI_COL_OK_BG_PRESSED);
-  padLabel(ok, T(STR_BTN_OK), UI_COL_OK_TEXT, UI_FONT_BODY);
+  lv_obj_t* ok = padButton(s_box, PP_COL_X, ok_y, PP_COL_W, ok_h, UI_COL_ROW, UI_COL_ROW_PRESS_FILL);
+  padLabel(ok, T(STR_BTN_OK), UI_COL_INK, UI_FONT_BODY);
+  uiBtnRole(ok, BTN_CONFIRM);
   lv_obj_add_event_cb(ok, [](lv_event_t*) {
     if (s_pad) lv_obj_add_flag(s_pad, LV_OBJ_FLAG_HIDDEN);
     s_answer = PA_OK;

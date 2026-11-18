@@ -156,20 +156,15 @@ void showStatusPicker(int current_status_id, StatusPickCb cb) {
     if (btn_x) {
       lv_obj_set_size(btn_x, 40, 40);
       lv_obj_align(btn_x, LV_ALIGN_RIGHT_MID, -4, 0);
-      lv_obj_set_style_bg_color(btn_x, lv_color_hex(UI_COL_BAD_BG), 0);
-      lv_obj_set_style_bg_color(btn_x, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
-      lv_obj_set_style_border_width(btn_x, 1, 0);
-      lv_obj_set_style_border_color(btn_x, lv_color_hex(UI_COL_CLOSE_LINE), 0);
       lv_obj_set_style_radius(btn_x, 8, 0);
-      lv_obj_set_style_shadow_width(btn_x, 0, 0);
       lv_obj_add_event_cb(btn_x, cancelCb, LV_EVENT_CLICKED, nullptr);
       lv_obj_t* lbl_x = lv_label_create(btn_x);
       if (lbl_x) {
         lv_label_set_text(lbl_x, LV_SYMBOL_CLOSE);
-        lv_obj_set_style_text_color(lbl_x, lv_color_hex(UI_COL_BAD_TEXT), 0);
         lv_obj_set_style_text_font(lbl_x, &lv_font_montserrat_ext_18, 0);
         lv_obj_center(lbl_x);
       }
+      uiBtnRole(btn_x, BTN_CLOSE);
     }
   }
 

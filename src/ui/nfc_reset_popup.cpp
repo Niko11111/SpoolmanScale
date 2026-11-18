@@ -40,24 +40,17 @@ static void mkButton(lv_obj_t *box, int x, int w, int str_id, bool primary,
   lv_obj_t *btn = lv_btn_create(box);
   lv_obj_set_size(btn, w, 48);
   lv_obj_set_pos(btn, x, 230);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(primary ? UI_COL_GO_BG : UI_COL_LINE), 0);
-  lv_obj_set_style_bg_color(btn,
-    lv_color_hex(primary ? UI_COL_GO_BG_PRESSED : UI_COL_POPUP_BORDER), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn, 8, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 0, 0);
-  if (!primary) uiSecondaryFill(btn);
   lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *l = lv_label_create(btn);
   char bbuf[40];
   copyT(bbuf, sizeof(bbuf), str_id);
   lv_label_set_text(l, bbuf);
-  lv_obj_set_style_text_color(l,
-    lv_color_hex(primary ? UI_COL_OK_TEXT_2 : UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(l, LV_ALIGN_CENTER, 0, 0);
+  uiBtnRole(btn, primary ? BTN_CONFIRM : BTN_NEUTRAL);
 }
 
 void showNfcResetHint() {

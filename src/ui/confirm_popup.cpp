@@ -513,10 +513,7 @@ void showConfirmPopup(const char* msg, int action) {
   lv_obj_t *btn_ja = lv_btn_create(box);
   lv_obj_set_size(btn_ja, 170, BTN_H);
   lv_obj_set_pos(btn_ja, 12, BTN_Y);
-  lv_obj_set_style_bg_color(btn_ja, lv_color_hex(UI_COL_OK_BG), 0);
-  lv_obj_set_style_bg_color(btn_ja, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_ja, 8, 0);
-  lv_obj_set_style_shadow_width(btn_ja, 0, 0);
   lv_obj_add_event_cb(btn_ja, [](lv_event_t *e) {
     int act = confirm_action;
     closeConfirmPopup();
@@ -535,14 +532,12 @@ void showConfirmPopup(const char* msg, int action) {
   lv_obj_t *lbl_ja = lv_label_create(btn_ja);
   lv_label_set_text(lbl_ja, T(action == 7 ? STR_BTN_FREE_TAG : STR_BTN_CONFIRMED));
   lv_obj_set_style_text_font(lbl_ja, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_style_text_color(lbl_ja, lv_color_hex(UI_COL_OK_TEXT), 0);
   lv_obj_center(lbl_ja);
+  uiBtnRole(btn_ja, BTN_CONFIRM);
 
   lv_obj_t *btn_nein = lv_btn_create(box);
   lv_obj_set_size(btn_nein, 170, BTN_H);
   lv_obj_set_pos(btn_nein, 218, BTN_Y);
-  lv_obj_set_style_bg_color(btn_nein, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn_nein, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_nein, 8, 0);
   lv_obj_set_style_shadow_width(btn_nein, 0, 0);
   lv_obj_add_event_cb(btn_nein, [](lv_event_t *e){ closeConfirmPopup(); }, LV_EVENT_CLICKED, NULL);
@@ -550,9 +545,9 @@ void showConfirmPopup(const char* msg, int action) {
   // Keeping the tag is a fine answer after an archive, not a cancel.
   lv_label_set_text(lbl_nein, T(action == 7 ? STR_TW_BTN_KEEP : STR_CANCEL));
   lv_obj_set_style_text_font(lbl_nein, &lv_font_montserrat_ext_18, 0);
-  lv_obj_set_style_text_color(lbl_nein, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_center(lbl_nein);
-  if (action != 7) styleLeaveButton(btn_nein);
+  if (action == 7) uiBtnRole(btn_nein, BTN_NEUTRAL);
+  else             styleLeaveButton(btn_nein);
 }
 
 // ============================================================

@@ -62,17 +62,18 @@ static lv_obj_t* barButton(lv_obj_t* scr, int x, int w, bool main) {
   lv_obj_set_pos(b, x, UI_SETUP_BAR_Y);
   lv_obj_set_style_radius(b, UI_RADIUS_ROW, 0);
   lv_obj_set_style_shadow_width(b, 0, 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(main ? UI_COL_ACCENT : UI_COL_SURFACE), 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(main ? UI_COL_GO_BG_PRESSED : UI_COL_PRESS_FILL),
-                            LV_STATE_PRESSED);
-  lv_obj_set_style_border_width(b, main ? 0 : 1, 0);
-  lv_obj_set_style_border_color(b, lv_color_hex(UI_COL_LINE_SOFT), 0);
+  // The quiet one gets its look from the neutral role once its label exists.
+  if (main) {
+    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ACCENT), 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(b, 0, 0);
+  }
   return b;
 }
 
 static lv_obj_t* barLabel(lv_obj_t* b, const char* text, int w, bool main) {
   lv_obj_t* l = setupCenteredLabel(b, text, UI_FONT_BODY, w - SETUP_BTN_LABEL_PAD);
-  lv_obj_set_style_text_color(l, lv_color_hex(main ? UI_COL_ON_ACCENT : UI_COL_INK_SOFT), 0);
+  if (main) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ON_ACCENT), 0);
   lv_obj_center(l);
   return l;
 }
@@ -85,6 +86,7 @@ SetupBar setupActionBar(lv_obj_t* scr, const char* quiet_text, lv_event_cb_t qui
     bar.quiet = barButton(scr, UI_SETUP_BAR_X, UI_SETUP_QUIET_W, false);
     if (quiet_cb) lv_obj_add_event_cb(bar.quiet, quiet_cb, LV_EVENT_CLICKED, NULL);
     barLabel(bar.quiet, quiet_text, UI_SETUP_QUIET_W, false);
+    uiBtnRole(bar.quiet, BTN_NEUTRAL);
     main_x += UI_SETUP_QUIET_W + UI_SETUP_BAR_GAP;
   }
   const int main_w = 480 - UI_SETUP_BAR_X - main_x;

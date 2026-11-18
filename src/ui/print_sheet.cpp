@@ -251,17 +251,12 @@ static void buildTopRow(lv_obj_t* list) {
   lv_obj_t* go = lv_btn_create(row);
   lv_obj_set_size(go, PS_PRINT_W, PS_TOP_H);
   lv_obj_set_pos(go, PS_ROW_W - PS_PRINT_W, 0);
-  lv_obj_set_style_bg_color(go, lv_color_hex(UI_COL_GO_BG), 0);
-  lv_obj_set_style_bg_color(go, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(go, UI_RADIUS_ROW, 0);
-  lv_obj_set_style_shadow_width(go, 0, 0);
-  lv_obj_set_style_border_width(go, 1, 0);
-  lv_obj_set_style_border_color(go, lv_color_hex(UI_COL_GO_BG_PRESSED), 0);
   lv_obj_t* l = lv_label_create(go);
   lv_label_set_text(l, T(STR_PS_PRINT));
   lv_obj_set_style_text_font(l, UI_FONT_HEADLINE, 0);
-  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_OK_TEXT_2), 0);
   lv_obj_center(l);
+  uiBtnRole(go, BTN_CONFIRM);
   lv_obj_add_event_cb(go, [](lv_event_t*) {
     logSD("BTN: Print sheet -> print");
     print_sheet_print_pending = true;

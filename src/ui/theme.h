@@ -160,6 +160,7 @@ UiThemeCustom uiThemeCustomActive();
 #define UI_LEAVE_ICON_RED_PCT   80
 #define UI_RADIUS_INPUT        6
 #define UI_RADIUS_OUTLINE      4    // a label outline drawn to scale
+#define UI_RADIUS_SWATCH       3    // the small colour square in a list row
 #define UI_TOUCH_MIN           44   // the smallest thing a finger is asked to hit
 #define UI_POPUP_W             400  // a two button question
 #define UI_POPUP_BTN_W         170

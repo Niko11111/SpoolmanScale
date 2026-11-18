@@ -247,11 +247,7 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   lv_obj_set_size(btn_extra_fields_create, EF_BTN_W, EF_BTN_H);
   lv_obj_align(btn_extra_fields_create, compact ? LV_ALIGN_RIGHT_MID : LV_ALIGN_BOTTOM_RIGHT,
                -12, compact ? 0 : -12);
-  lv_obj_set_style_bg_color(btn_extra_fields_create, lv_color_hex(UI_COL_OK_BG), 0);
-  lv_obj_set_style_bg_color(btn_extra_fields_create, lv_color_hex(UI_COL_OK_BG_PRESSED), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_extra_fields_create, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(btn_extra_fields_create, 0, 0);
-  lv_obj_set_style_border_width(btn_extra_fields_create, 0, 0);
   lv_obj_add_flag(btn_extra_fields_create, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_event_cb(btn_extra_fields_create, [](lv_event_t *e) {
     logSD("BTN: Extra fields -> create");
@@ -259,9 +255,9 @@ void buildExtraFieldsScreen(bool is_setup_flow) {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_create = lv_label_create(btn_extra_fields_create);
   lv_label_set_text(lbl_create, T(STR_EF_BTN_CREATE));
-  lv_obj_set_style_text_color(lbl_create, lv_color_hex(UI_COL_OK_TEXT), 0);
   lv_obj_set_style_text_font(lbl_create, UI_FONT_BODY, 0);
   lv_obj_center(lbl_create);
+  uiBtnRole(btn_extra_fields_create, BTN_CONFIRM);
 
   // The rows, in the same list idiom as every other option screen. Each
   // arrow carries whether the server has that field. It is filled in by

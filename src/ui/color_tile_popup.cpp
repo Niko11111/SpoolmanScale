@@ -64,18 +64,13 @@ static void buildCloseButton(lv_obj_t* box) {
   lv_obj_t* btn = lv_btn_create(box);
   lv_obj_set_size(btn, UI_TOUCH_MIN, UI_TOUCH_MIN);
   lv_obj_set_pos(btn, CT_BOX_W - CT_PAD - UI_TOUCH_MIN, CT_HDR_Y);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_BAD_BG), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
-  lv_obj_set_style_border_width(btn, 1, 0);
-  lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_CLOSE_LINE), 0);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
   lv_obj_add_event_cb(btn, closeColorTile, LV_EVENT_CLICKED, NULL);
   lv_obj_t* x = lv_label_create(btn);
   lv_label_set_text(x, LV_SYMBOL_CLOSE);
-  lv_obj_set_style_text_color(x, lv_color_hex(UI_COL_BAD_TEXT), 0);
   lv_obj_set_style_text_font(x, UI_FONT_TITLE, 0);
   lv_obj_center(x);
+  uiBtnRole(btn, BTN_CLOSE);
 }
 
 // Name and close button on one row, codes and kind under the tile.

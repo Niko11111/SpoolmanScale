@@ -211,10 +211,10 @@ static void buildOptions(lv_obj_t* box) {
              spoolChoiceActive(*s_spec.choice) ? UI_COL_ACCENT : UI_COL_INK_2, SO_TAP_SPOOL });
   if (s_spec.density)
     row(box, { SO_DENSITY_Y, SO_DENSITY_H, STR_OPT_DENSITY, -1, T(STR_DENSITY_CHANGE), UI_COL_WARN, SO_TAP_DENSITY });
-  lv_obj_t* done = padButton(box, SO_EDGE, SO_DONE_Y, SO_ROW_W, SO_DONE_H, UI_COL_OK_BG, UI_COL_OK_BG_PRESSED);
+  lv_obj_t* done = padButton(box, SO_EDGE, SO_DONE_Y, SO_ROW_W, SO_DONE_H, UI_COL_ROW, UI_COL_ROW_PRESS_FILL);
   lv_obj_set_style_radius(done, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_border_width(done, 0, 0);
-  padLabel(done, T(STR_OPT_DONE), UI_COL_OK_TEXT, UI_FONT_TITLE);
+  padLabel(done, T(STR_OPT_DONE), UI_COL_INK, UI_FONT_TITLE);
+  uiBtnRole(done, BTN_CONFIRM);
   lv_obj_add_event_cb(done, onOptionsTap, LV_EVENT_CLICKED, (void*)(intptr_t)SO_TAP_DONE);
 }
 

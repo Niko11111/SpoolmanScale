@@ -75,19 +75,13 @@ lv_obj_t* entryTile(lv_obj_t* parent, const EntryRect& r, const char* symbol,
 static lv_obj_t* entryLowButton(lv_obj_t* parent, const EntryRect& r, const char* caption,
                                 bool cancel, lv_event_cb_t cb) {
   lv_obj_t* b = entryBase(parent, r, cb);
-  if (cancel) {
-    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_BAD_BG), 0);
-    lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_BAD_BG_PRESSED), LV_STATE_PRESSED);
-    lv_obj_set_style_border_width(b, 0, 0);
-  } else {
-    neutralLook(b);
-  }
+  if (!cancel) neutralLook(b);
   lv_obj_t* l = lv_label_create(b);
   lv_label_set_text(l, caption);
   lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
   lv_obj_set_width(l, r.w - 2 * TILE_TEXT_PAD_X);
   lv_obj_set_style_text_font(l, UI_FONT_BODY, 0);
-  lv_obj_set_style_text_color(l, lv_color_hex(cancel ? UI_COL_BAD_TEXT : UI_COL_INK_2), 0);
+  lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_center(l);
   return b;

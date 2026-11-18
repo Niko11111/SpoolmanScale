@@ -25,15 +25,11 @@ static lv_obj_t* cardText(lv_obj_t *box, const char *text, const lv_font_t *font
   return l;
 }
 
-static lv_obj_t* cardButton(lv_obj_t *box, int x, const char *text, uint32_t fill, uint32_t pressed) {
+static lv_obj_t* cardButton(lv_obj_t *box, int x, const char *text) {
   lv_obj_t *b = lv_btn_create(box);
   lv_obj_set_size(b, UI_POPUP_BTN_W, UI_POPUP_BTN_H);
   lv_obj_set_pos(b, x, UI_CARD_ROW_Y);
-  lv_obj_set_style_bg_color(b, lv_color_hex(fill), 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(pressed), LV_STATE_PRESSED);
   lv_obj_set_style_radius(b, UI_RADIUS_BTN, 0);
-  lv_obj_set_style_shadow_width(b, 0, 0);
-  lv_obj_set_style_border_width(b, 0, 0);
   lv_obj_set_style_pad_all(b, 0, 0);
   lv_obj_clear_flag(b, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_t *l = lv_label_create(b);
@@ -54,14 +50,14 @@ void showTareMissingPopup() {
   cardText(box, T(STR_TARE_MISSING), UI_FONT_HEADLINE, UI_COL_INK, UI_CARD_TITLE_Y);
   cardText(box, T(STR_TARE_MISSING_TEXT), UI_FONT_BODY, UI_COL_INK_2, UI_CARD_TEXT_Y);
 
-  lv_obj_t *enter = cardButton(box, UI_CARD_ROW_X, T(STR_TARE_MISSING_ENTER), UI_COL_OK_BG, UI_COL_OK_BG_PRESSED);
+  lv_obj_t *enter = cardButton(box, UI_CARD_ROW_X, T(STR_TARE_MISSING_ENTER));
+  uiBtnRole(enter, BTN_CONFIRM);
   lv_obj_add_event_cb(enter, [](lv_event_t *e) {
     releaseScreen(&s_popup);
     showTareEntryPad();
   }, LV_EVENT_CLICKED, NULL);
 
-  lv_obj_t *close = cardButton(box, UI_POPUP_W - UI_POPUP_BTN_W - UI_CARD_ROW_X, T(STR_BT_CLOSE),
-                               UI_COL_ROW, UI_COL_ROW_PRESS_FILL);
+  lv_obj_t *close = cardButton(box, UI_POPUP_W - UI_POPUP_BTN_W - UI_CARD_ROW_X, T(STR_BT_CLOSE));
   styleLeaveButton(close);
   lv_obj_add_event_cb(close, [](lv_event_t *e) { releaseScreen(&s_popup); }, LV_EVENT_CLICKED, NULL);
 }
