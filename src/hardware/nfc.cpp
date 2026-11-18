@@ -38,15 +38,6 @@ bool nfcChipOnBus(TwoWire& wire) {
   return i2cPresent(wire, I2C_ADDR_PN532);
 }
 
-bool nfcChipCanWrite() { return s_chip == NFC_CHIP_PN532; }
-
-// The PN7160 build reads only. Every write lands here and says so in the log,
-// so a refused write is never mistaken for a tag that would not take it.
-static bool pn7160WriteRefused(const char* what) {
-  logSDf("NFC: %s not written - writing tags is not supported with the PN7160 in this build", what);
-  return false;
-}
-
 bool nfcHardwareBegin(TwoWire* wire, int8_t reset_pin, int8_t irq_pin,
                       uint32_t* firmware_version) {
   if (s_chip == NFC_CHIP_PN7160) return pn7160Begin(wire, firmware_version);
@@ -269,7 +260,7 @@ bool nfcAuthMifareSector(int sector, const uint8_t key[6], const uint8_t uid[4],
 // written. The same InDataExchange here, with the status byte checked: 0x00
 // is the card's "done". Response: 00 00 FF 03 FD D5 41 st DCS 00.
 bool nfcWriteMifareBlock(uint8_t block, const uint8_t data[16]) {
-  if (s_chip == NFC_CHIP_PN7160) return pn7160WriteRefused("MIFARE block");
+  if (s_chip == NFC_CHIP_PN7160) return pn7160WriteMifareBlock(block, data);
   if (!nfc) return false;
   uint8_t cmd[4 + 16] = { 0x40, 0x01, 0xA0, block };   // InDataExchange, Tg 1, MIFARE WRITE
   memcpy(cmd + 4, data, 16);
@@ -289,7 +280,7 @@ bool nfcReadNtagPage(uint8_t page, uint8_t* data) {
 }
 
 bool nfcWriteNtagPage(uint8_t page, uint8_t* data) {
-  if (s_chip == NFC_CHIP_PN7160) return pn7160WriteRefused("NTAG page");
+  if (s_chip == NFC_CHIP_PN7160) return pn7160WriteNtagPage(page, data);
   return nfc && nfc->ntag2xx_WritePage(page, data);
 }
 

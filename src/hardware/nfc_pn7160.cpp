@@ -107,7 +107,15 @@ constexpr uint8_t  ISO15693_FLAGS     = 0x02;   // high data rate, not addressed
 constexpr uint8_t  ISO15693_READ_SINGLE = 0x20;
 constexpr uint8_t  ISO15693_BLOCK_BYTES = 4;    // ICODE SLIX and SLIX2
 constexpr uint8_t  TAG_STATUS_OK      = 0x00;
-constexpr uint8_t  TAG_CMD_MAX        = 16;     // longest command sent here
+// What the PN7160 reports for a WRITE the tag acknowledged, MIFARE Classic and
+// NTAG alike: the library's write examples check for 0x14 on the PN7160 and
+// 0x00 on the PN7150. Both are taken; the callers read the data back.
+constexpr uint8_t  TAG_STATUS_WRITE_ACK = 0x14;
+constexpr uint8_t  CMD_MFC_WRITE      = 0xA0;   // then the 16 bytes, as a second exchange
+constexpr uint8_t  CMD_NTAG_WRITE     = 0xA2;
+constexpr uint8_t  NTAG_FIRST_WRITABLE_PAGE = 4;
+constexpr uint8_t  MFC_MANUFACTURER_BLOCK = 0;
+constexpr uint8_t  TAG_CMD_MAX        = 1 + 16; // longest command sent here: a block's data
 // One exchange with a tag. A MIFARE authentication is the slowest, a few ms
 // on the air; 100 ms is the PN532 path's fast poll budget.
 constexpr uint16_t TAG_CMD_TIMEOUT_MS = 100;
@@ -626,10 +634,11 @@ static bool noteExchangeFailed(uint8_t cmd0, const char* why, uint32_t* counter)
 }
 
 // Every answer ends in a status byte (Frame and TAG-CMD interfaces alike);
-// not 0 is the tag or the chip turning the command down.
+// not 0 (or a write's acknowledgement) is the tag or the chip turning the
+// command down.
 static void noteAnswer(uint8_t cmd0, const uint8_t* resp, uint8_t n) {
   const uint8_t status = n ? resp[n - 1] : 0xFF;
-  if (status == TAG_STATUS_OK) {
+  if (status == TAG_STATUS_OK || status == TAG_STATUS_WRITE_ACK) {
     s_rf.answered_ok++;
     return;
   }
@@ -752,6 +761,35 @@ bool pn7160ReadVicinityBlock(uint8_t block, uint8_t data[4]) {
   if (n < ISO15693_BLOCK_BYTES + 2 || resp[0] != 0 || resp[n - 1] != TAG_STATUS_OK) return false;
   memcpy(data, resp + 1, ISO15693_BLOCK_BYTES);
   return true;
+}
+
+// One write command, true when the chip passes on the tag's acknowledgement.
+static bool writeAcked(const uint8_t* cmd, uint8_t len) {
+  uint8_t resp[NCI_PAYLOAD_MAX];
+  uint8_t n = 0;
+  if (!exchange(cmd, len, resp, &n) || n == 0) return false;
+  const uint8_t status = resp[n - 1];
+  if (status == TAG_STATUS_OK || status == TAG_STATUS_WRITE_ACK) return true;
+  logSDf("PN7160: write 0x%02X 0x%02X refused, status 0x%02X", cmd[0], cmd[1], status);
+  return false;
+}
+
+bool pn7160WriteNtagPage(uint8_t page, const uint8_t data[4]) {
+  if (s_target.proto != NCI_PROT_T2T || page < NTAG_FIRST_WRITABLE_PAGE) return false;
+  uint8_t cmd[2 + NTAG_PAGE_BYTES] = {CMD_NTAG_WRITE, page};
+  memcpy(cmd + 2, data, NTAG_PAGE_BYTES);
+  return writeAcked(cmd, sizeof(cmd));
+}
+
+// A MIFARE Classic WRITE is two exchanges, each acknowledged by the card:
+// the command with the block number, then the 16 bytes.
+bool pn7160WriteMifareBlock(uint8_t block, const uint8_t data[16]) {
+  if (s_target.proto != NCI_PROT_MIFARE || block == MFC_MANUFACTURER_BLOCK) return false;
+  const uint8_t announce[] = {MFC_XCHG_REQ, CMD_MFC_WRITE, block};
+  if (!writeAcked(announce, sizeof(announce))) return false;
+  uint8_t payload[1 + MFC_BLOCK_BYTES] = {MFC_XCHG_REQ};
+  memcpy(payload + 1, data, MFC_BLOCK_BYTES);
+  return writeAcked(payload, sizeof(payload));
 }
 
 // Discovery running, and every frame the chip still holds read, so IRQ only

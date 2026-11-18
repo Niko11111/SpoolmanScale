@@ -44,6 +44,14 @@ bool pn7160ReadMifareSector(uint8_t sector, const uint8_t key[6], const uint8_t 
 bool pn7160ReadNtagPage(uint8_t page, uint8_t data[4]);
 bool pn7160ReadVicinityBlock(uint8_t block, uint8_t data[4]);
 
+// Writes to the tag selected by the last poll, true once the chip reports the
+// tag's acknowledgement. The callers (services/tag_write.cpp,
+// services/mifare_write.cpp) read the data back themselves. Refused here as a
+// last guard: NTAG pages below 4 (UID, lock bytes, capability container) and
+// MIFARE block 0 (manufacturer block).
+bool pn7160WriteNtagPage(uint8_t page, const uint8_t data[4]);
+bool pn7160WriteMifareBlock(uint8_t block, const uint8_t data[16]);
+
 // For the wake test: discovery running and nothing left to read, so IRQ is
 // low and rises only for the next tag. False when that state was not reached.
 bool pn7160ArmForWake();

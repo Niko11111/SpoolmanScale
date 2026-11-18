@@ -1522,15 +1522,6 @@ void tagWriteTick() {
   if (!pending) return;
   pending = false;
 
-  // The PN7160 test build reads only (Notes, PN7160). Refused here, before
-  // any tag is selected, rather than half way through a write.
-  if (!nfcChipCanWrite()) {
-    logSDf("TagWrite: not written - writing tags is not supported with the %s in this build",
-           nfcChipName());
-    finish("error", "Writing tags is not supported with this reader yet", TW_ERR_WRITE);
-    return;
-  }
-
   if (pending_fmt == TAG_FMT_ERASE && strlen(pending_uid) == TAG_UID_STR_LEN_MIFARE) {
     eraseMifareTag();
     return;
