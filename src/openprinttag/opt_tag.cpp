@@ -236,7 +236,12 @@ static bool readMeta(const uint8_t* p, size_t n, Meta* meta) {
 // A region without a size runs to the next region's start or the payload's end.
 static Region region(int64_t offset, int64_t size, int64_t other_offset, size_t payload_len) {
   Region g = {0, 0, false};
-  if (offset < 0 || (size_t)offset >= payload_len) return g;
+  const int64_t len = (int64_t)payload_len;
+  // Compared as 64-bit first: on the ESP32 size_t is 32 bits, and a cast of a
+  // larger offset would wrap into the payload.
+  if (offset < 0 || offset >= len) return g;
+  if (size > len) size = -1;
+  if (other_offset > len) other_offset = -1;
   g.offset = (size_t)offset;
   size_t end = payload_len;
   if (other_offset > offset && (size_t)other_offset < end) end = (size_t)other_offset;
@@ -273,6 +278,7 @@ static bool findRecord(const uint8_t* m, size_t len, const uint8_t** payload, si
     const size_t len_bytes = (hdr & NDEF_SR) ? 1 : 4;
     if (pos + len_bytes > len) return false;
     for (size_t i = 0; i < len_bytes; i++) payload_len = (payload_len << 8) | m[pos++];
+    if ((hdr & NDEF_IL) && pos >= len) return false;
     const size_t id_len = (hdr & NDEF_IL) ? m[pos++] : 0;
     if (pos > len || len - pos < type_len + id_len || len - pos - type_len - id_len < payload_len) return false;
     const bool match = (hdr & NDEF_TNF) == TNF_MIME && type_len == mime_len &&

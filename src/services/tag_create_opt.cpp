@@ -10,7 +10,8 @@
 bool tagCreateInputFromOpenPrintTag(TagCreateInput* in) {
   if (!optTagOnReader()) return false;
   const OptTag& t = optLastTag();
-  if (!t.brand[0] || t.color_count == 0) return false;
+  // A resin bottle is no spool (material_class 1).
+  if (!t.brand[0] || t.color_count == 0 || t.material_class == OPT_CLASS_RESIN) return false;
 
   snprintf(in->vendor, sizeof(in->vendor), "%s", t.brand);
   snprintf(in->material, sizeof(in->material), "%s", g_tag.material);

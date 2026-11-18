@@ -178,7 +178,10 @@ bool cborText(CborReader& r, char* out, size_t cap) {
   Head h;
   if (cap == 0 || !stringHead(r, MAJOR_TEXT, &h)) return false;
   const size_t len = (size_t)h.arg;
-  const size_t keep = len < cap - 1 ? len : cap - 1;
+  size_t keep = len < cap - 1 ? len : cap - 1;
+  // Cut where a character ends: a UTF-8 continuation byte (10xxxxxx) at the
+  // cut belongs to the character before it.
+  if (keep < len) while (keep > 0 && (r.p[r.pos + keep] & 0xC0) == 0x80) keep--;
   memcpy(out, r.p + r.pos, keep);
   out[keep] = '\0';
   r.pos += len;

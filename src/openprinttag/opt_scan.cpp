@@ -1,6 +1,7 @@
 #include "openprinttag/opt_scan.h"
 
 #include <Arduino.h>
+#include <initializer_list>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -22,9 +23,11 @@ constexpr size_t   HEAD_BYTES = HEAD_BLOCKS * ISO15693_BLOCK;
 // every region is at most 512 bytes. A CC declaring more is cut, and logged.
 constexpr size_t   MEM_MAX = 512;
 // A read that has not finished by then is given up (the tag left mid-read);
-// the next poll tries again, at most READ_RETRIES times for one UID.
+// the next poll tries again, at most READ_RETRIES times for one UID before
+// the tag counts as a plain ISO 15693 tag until it is put down again. A spool
+// set down off centre takes a few polls to settle (some 3 s at 500 ms).
 constexpr uint32_t READ_BUDGET_MS = 1500;
-constexpr uint8_t  READ_RETRIES = 2;
+constexpr uint8_t  READ_RETRIES = 5;
 constexpr uint8_t  READ_CHUNK_BLOCKS = 16;   // per call; the driver splits further
 constexpr int      MINUTES_PER_HOUR = 60;
 constexpr float    MM_PER_M = 1000.0f;
@@ -183,7 +186,10 @@ OptScanResult optScanTag(const uint8_t uid_wire[OPT_UID_BYTES], const char* uid_
   s_result = optDecodeMemory(s_mem, s_report.bytes, &s_tag);
   logSDf("OPT: %s decode: %s", s_uid, optResultName(s_result));
   const bool decoded = s_result == OPT_OK && optMaterialAbbr(s_tag)[0];
-  if (!decoded || sd_verbose) dumpMemory(decoded ? "verbose" : optResultName(s_result));
+  // Always, once per placement, while no real tag has been on the bench: the
+  // first ones are read at a fair without WiFi, so the verbose switch is out
+  // of reach and the dump is all there is to read back at home.
+  dumpMemory(decoded ? "decoded" : optResultName(s_result));
   if (!decoded) {
     fillUidOnly();
     return OPT_SCAN_OTHER;
@@ -237,10 +243,10 @@ void optFillTagInfo(TagInfo* ti) {
   }
 }
 
-// Numbers for JSON: null when not given.
+// Numbers for JSON: null when not given or not a number.
 static void jsonNum(char* out, size_t cap, float v) {
-  if (v < 0) snprintf(out, cap, "null");
-  else snprintf(out, cap, "%.3g", (double)v);
+  if (v < 0 || !isfinite(v)) snprintf(out, cap, "null");
+  else snprintf(out, cap, "%.6g", (double)v);
 }
 
 // Text from the tag goes into JSON by hand: a quote, a backslash or a control
@@ -263,21 +269,22 @@ void optSummaryJson(char* out, size_t cap) {
   if (t.color_count) {
     snprintf(color, sizeof(color), "#%02X%02X%02X", t.colors[0][0], t.colors[0][1], t.colors[0][2]);
   }
-  char brand[OPT_TEXT_BRAND], name[OPT_TEXT_MATERIAL];
+  char brand[OPT_TEXT_BRAND], name[OPT_TEXT_MATERIAL], abbr[OPT_TEXT_ABBR], group[OPT_TEXT_WORKGROUP];
   snprintf(brand, sizeof(brand), "%s", t.brand);
   snprintf(name, sizeof(name), "%s", t.material_name);
-  jsonSafe(brand);
-  jsonSafe(name);
+  snprintf(abbr, sizeof(abbr), "%s", optMaterialAbbr(t));
+  snprintf(group, sizeof(group), "%s", t.workgroup);
+  for (char* s : {brand, name, abbr, group}) jsonSafe(s);
   snprintf(out, cap,
            "{\"format\":\"OpenPrintTag\",\"uid\":\"%s\",\"brand\":\"%s\",\"name\":\"%s\","
            "\"material\":\"%s\",\"color\":\"%s\",\"colors\":%u,\"full_g\":%s,\"spool_g\":%s,"
            "\"consumed_g\":%s,\"remaining_g\":%s,\"density\":%s,\"diameter_mm\":%.2f,"
            "\"nozzle\":\"%d-%d\",\"bed\":\"%d-%d\",\"dry_c\":%d,\"dry_min\":%ld,"
            "\"made\":\"%s\",\"gtin\":%llu,\"tags\":%u,\"workgroup\":\"%s\"}",
-           s_uid, brand, name, optMaterialAbbr(t), color, (unsigned)t.color_count, full, tare,
+           s_uid, brand, name, abbr, color, (unsigned)t.color_count, full, tare,
            used, left, density, (double)t.diameter_mm, t.print_min_c, t.print_max_c,
            t.bed_min_c, t.bed_max_c, t.dry_c, (long)t.dry_minutes, g_tag.production_date,
-           (unsigned long long)t.gtin, (unsigned)t.tag_count, t.workgroup);
+           (unsigned long long)t.gtin, (unsigned)t.tag_count, group);
 }
 
 void optScanJson(char* out, size_t cap) {

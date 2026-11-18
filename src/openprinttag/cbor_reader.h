@@ -36,7 +36,7 @@ bool cborSkip(CborReader& r);
 bool cborInt(CborReader& r, int64_t* out);
 // An integer or a float.
 bool cborNumber(CborReader& r, double* out);
-// A text string, cut to cap - 1 bytes and terminated.
+// A text string, cut to cap - 1 bytes (at a UTF-8 character boundary) and terminated.
 bool cborText(CborReader& r, char* out, size_t cap);
 // A byte string of at most cap bytes; a longer one is skipped and false.
 bool cborBytes(CborReader& r, uint8_t* out, size_t cap, size_t* len);

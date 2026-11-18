@@ -215,6 +215,8 @@ static uint32_t s_fw_version = 0;
 static NfcRfCounts s_rf = {};
 // The ISO 15693 UID logged last, so a tag lying on the reader is one line.
 static uint8_t  s_vicinity_logged[NFC_UID_MAX];
+// The ISO 15693 tag whose first refused read was logged, so one tag is one line.
+static uint8_t  s_vicinity_fail_logged[NFC_UID_MAX];
 
 static bool passed(uint32_t deadline_ms) {
   return (int32_t)(millis() - deadline_ms) >= 0;
@@ -769,28 +771,41 @@ bool pn7160ReadNtagPage(uint8_t page, uint8_t data[4]) {
   return true;
 }
 
-bool pn7160ReadVicinityBlock(uint8_t block, uint8_t data[4]) {
+// The first read a tag turns down, in the normal log: no real ISO 15693 tag
+// had been on the bench when this was written, and the first ones are read
+// where the verbose switch is out of reach.
+static void noteVicinityRefusal(uint8_t command, const uint8_t* resp, uint8_t n) {
+  if (memcmp(s_vicinity_fail_logged, s_target.uid, ISO15693_UID_BYTES) == 0) return;
+  memcpy(s_vicinity_fail_logged, s_target.uid, ISO15693_UID_BYTES);
+  logSDf("PN7160: ISO 15693 command 0x%02X %s, %u bytes, flags 0x%02X, second 0x%02X, last 0x%02X",
+         command, n ? "refused" : "unanswered", (unsigned)n, n ? resp[0] : 0,
+         n > 1 ? resp[1] : 0, n ? resp[n - 1] : 0);
+}
+
+// A read command; the answer is the response flags (0 = no error), the data
+// (want bytes) and the interface's status byte.
+static bool vicinityRead(const uint8_t* cmd, uint8_t len, size_t want, uint8_t* out) {
   if (s_target.proto != NCI_PROT_T5T) return false;
-  const uint8_t cmd[] = {ISO15693_FLAGS, ISO15693_READ_SINGLE, block};
   uint8_t resp[NCI_PAYLOAD_MAX];
   uint8_t n = 0;
-  if (!exchange(cmd, sizeof(cmd), resp, &n)) return false;
-  // Answer: response flags (0 = no error), the block, the interface's status.
-  if (n < ISO15693_BLOCK_BYTES + 2 || resp[0] != 0 || resp[n - 1] != TAG_STATUS_OK) return false;
-  memcpy(data, resp + 1, ISO15693_BLOCK_BYTES);
+  const bool answered = exchange(cmd, len, resp, &n);
+  if (!answered || n < want + 2 || resp[0] != 0 || resp[n - 1] != TAG_STATUS_OK) {
+    noteVicinityRefusal(cmd[1], resp, answered ? n : 0);
+    return false;
+  }
+  memcpy(out, resp + 1, want);
   return true;
+}
+
+bool pn7160ReadVicinityBlock(uint8_t block, uint8_t data[4]) {
+  const uint8_t cmd[] = {ISO15693_FLAGS, ISO15693_READ_SINGLE, block};
+  return vicinityRead(cmd, sizeof(cmd), ISO15693_BLOCK_BYTES, data);
 }
 
 // READ MULTIPLE BLOCKS for count (1..ISO15693_CHUNK_BLOCKS) blocks from first.
 static bool readVicinityChunk(uint8_t first, uint8_t count, uint8_t* out) {
   const uint8_t cmd[] = {ISO15693_FLAGS, ISO15693_READ_MULTIPLE, first, (uint8_t)(count - 1)};
-  uint8_t resp[NCI_PAYLOAD_MAX];
-  uint8_t n = 0;
-  const size_t want = (size_t)count * ISO15693_BLOCK_BYTES;
-  if (!exchange(cmd, sizeof(cmd), resp, &n)) return false;
-  if (n < want + 2 || resp[0] != 0 || resp[n - 1] != TAG_STATUS_OK) return false;
-  memcpy(out, resp + 1, want);
-  return true;
+  return vicinityRead(cmd, sizeof(cmd), (size_t)count * ISO15693_BLOCK_BYTES, out);
 }
 
 bool pn7160ReadVicinityBlocks(uint8_t first, uint16_t count, uint8_t* out) {

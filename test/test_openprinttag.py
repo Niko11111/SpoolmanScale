@@ -167,6 +167,10 @@ static void vector05() {
 
 static void brokenInput() {
   OptTag t;
+  // Region offsets beyond the payload (8-byte CBOR integers): ignored, never
+  // wrapped into it. {0: 4, 2: 0x100000005} then an empty main map.
+  const uint8_t far[] = {0xA2, 0x00, 0x0D, 0x02, 0x1B, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x05, 0xA0};
+  assert(optDecodePayload(far, sizeof(far), &t) == OPT_OK && t.consumed_g < 0);
   uint8_t mem[64] = {0};
   assert(optDecodeMemory(mem, sizeof(mem), &t) == OPT_NO_CC);
   mem[0] = 0xE1; mem[1] = 0x40; mem[2] = 0x08; mem[3] = 0x01;
@@ -200,6 +204,11 @@ static void cborEdges() {
   double d = 0;
   assert(cborNumber(r, &d) && d == 1.5);
   assert(!cborMapNextKey(r, c, &key) && !r.bad && r.pos == sizeof(m));
+  // A text cut to fit ends where a character ends: "Grün" into 4 bytes is "Gr".
+  const uint8_t txt[] = {0x65, 'G', 'r', 0xC3, 0xBC, 'n'};
+  CborReader rt = cborReader(txt, sizeof(txt));
+  char cut[4];
+  assert(cborText(rt, cut, sizeof(cut)) && strcmp(cut, "Gr") == 0 && rt.pos == sizeof(txt));
   // Nesting deeper than allowed is malformed, not a crash.
   uint8_t deep[20];
   memset(deep, 0x81, sizeof(deep));

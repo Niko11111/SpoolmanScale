@@ -23,6 +23,8 @@
 #define OPT_CC_BYTES       4
 #define OPT_UID_BYTES      8
 #define OPT_UID_STR_LEN    23   // "E0:04:01:08:66:2F:6F:BC"
+#define OPT_CLASS_FILAMENT 0    // material_class
+#define OPT_CLASS_RESIN    1
 
 enum OptResult : uint8_t {
   OPT_OK = 0,

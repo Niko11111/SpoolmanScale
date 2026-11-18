@@ -11,6 +11,7 @@
 #include "services/tag_spool_match.h"
 
 #define DRYING_TEXT_MAX       24
+#define DRYING_BAMBU_TRAY_LEN 32
 #define DRYING_WRITE_TIMEOUT  4000
 static bool s_pending     = false;
 static int  s_filament_id = 0;
@@ -37,7 +38,10 @@ void dryingSyncNote(JsonObjectConst spool) {
   // A Bambu tag that said something about drying. The tray UUID is cleared
   // whenever another kind of tag is read, the drying values are not, so it
   // is what keeps an old Bambu reading off an NTAG's spool.
-  if (!g_tag.tray_uuid[0] || g_tag.dry_temp_c <= 0 || g_tag.dry_hours <= 0) return;
+  // Bambu's own 32-character tray UUID: an OpenPrintTag (tray_uuid = its UID)
+  // names drying too, but writing it back was never asked for.
+  if (strlen(g_tag.tray_uuid) != DRYING_BAMBU_TRAY_LEN || g_tag.dry_temp_c <= 0 ||
+      g_tag.dry_hours <= 0) return;
   // A tag linked to the wrong spool would hand its advice to a filament it
   // does not describe. The lookup has judged the pair just before this.
   if (tagSpoolLookupDiffers()) return;
