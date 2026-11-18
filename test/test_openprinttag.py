@@ -207,7 +207,53 @@ static void cborEdges() {
   assert(!cborSkip(rd) && rd.bad);
 }
 
+static void helpers() {
+  // How much to read: the NDEF TLV's end, or what the CC declares.
+  assert(optBytesNeeded(SAMPLE, 32) == 8 + 0x127);
+  assert(optBytesNeeded(V01, 32) == 8 + 0x12F);
+  const uint8_t zero[8] = {0};
+  assert(optBytesNeeded(zero, sizeof(zero)) == 0);
+  const uint8_t nulls[8] = {0xE1, 0x40, 0x27, 0x01, 0x00, 0x00, 0x00, 0x00};
+  assert(optBytesNeeded(nulls, sizeof(nulls)) == 0x27 * 8);
+  const uint8_t short_tlv[8] = {0xE1, 0x40, 0x27, 0x01, 0x03, 0x10, 0xD1, 0x01};
+  assert(optBytesNeeded(short_tlv, sizeof(short_tlv)) == 6 + 0x10);
+  // The UID as the reader hands it over, and as the format prints it.
+  const uint8_t wire[8] = {0xBC, 0x6F, 0x2F, 0x66, 0x08, 0x01, 0x04, 0xE0};
+  uint8_t msb[8];
+  assert(optUidMsbFirst(wire, msb) && msb[0] == 0xE0 && msb[7] == 0xBC);
+  char uid[24];
+  optUidString(msb, uid, sizeof(uid));
+  assert(strcmp(uid, "E0:04:01:08:66:2F:6F:BC") == 0 && strlen(uid) == OPT_UID_STR_LEN);
+  uint8_t back[8];
+  assert(optUidMsbFirst(msb, back) && memcmp(back, msb, 8) == 0);   // already MSB first
+  char tiny[6];
+  optUidString(msb, tiny, sizeof(tiny));
+  assert(strcmp(tiny, "E0:04") == 0);
+  // Colour names.
+  OptTag t;
+  char name[48];
+  assert(decode(SAMPLE, sizeof(SAMPLE), &t) == OPT_OK);
+  optColorName(t, name, sizeof(name));
+  assert(strcmp(name, "Galaxy Black") == 0);
+  assert(decode(V01, sizeof(V01), &t) == OPT_OK);
+  optColorName(t, name, sizeof(name));
+  assert(strcmp(name, "Prusa Galaxy Black") == 0);
+  assert(decode(V04, sizeof(V04), &t) == OPT_OK);
+  optColorName(t, name, sizeof(name));
+  assert(strcmp(name, "CarbonX PEKK-A+CF15 Black") == 0);
+  assert(decode(SAMPLE, sizeof(SAMPLE), &t) == OPT_OK);   // a PLA, so "PLA " is stripped
+  snprintf(t.material_name, sizeof(t.material_name), "PLA Gr\xC3\xBCn");   // "PLA Grün"
+  optColorName(t, name, 4);
+  assert(strcmp(name, "Gr") == 0);                       // never half an umlaut
+  char line[200];
+  assert(decode(SAMPLE, sizeof(SAMPLE), &t) == OPT_OK);
+  optSummary(t, line, sizeof(line));
+  assert(strcmp(line, "Prusament | PLA Galaxy Black | PLA | #3D3E3D | 1000/1012 g, spool 100 g, "
+                      "used - g | 205-220 C, bed 40-60 | made 2025-02-12") == 0);
+}
+
 int main() {
+  helpers();
   sampleTag();
   vector01();
   vector03();

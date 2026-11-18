@@ -21,6 +21,8 @@
 // cannot describe more than 255 * 8.
 #define OPT_MEMORY_MAX     2040
 #define OPT_CC_BYTES       4
+#define OPT_UID_BYTES      8
+#define OPT_UID_STR_LEN    23   // "E0:04:01:08:66:2F:6F:BC"
 
 enum OptResult : uint8_t {
   OPT_OK = 0,
@@ -65,6 +67,12 @@ struct OptTag {
 // it is no CC. The reader reads that much (at most OPT_MEMORY_MAX).
 size_t optMemorySize(const uint8_t cc[OPT_CC_BYTES]);
 
+// How much of the tag to read, given its first bytes (have >= 4): up to the
+// end of the NDEF TLV when its header is among them, else what the CC
+// declares; 0 when block 0 is no CC. Reading only that much spares the
+// blocks after the message, and those past the tag's end.
+size_t optBytesNeeded(const uint8_t* head, size_t have);
+
 // The whole tag as read, block 0 first.
 OptResult optDecodeMemory(const uint8_t* mem, size_t len, OptTag* out);
 // Just the record's payload: the three regions.
@@ -81,3 +89,19 @@ float optFullWeightG(const OptTag& t);
 float optRemainingG(const OptTag& t);
 // "YYYY-MM-DD" in UTC; empty for 0.
 void optFormatDate(int64_t unix_s, char* out, size_t cap);
+
+// An ISO 15693 UID as the reader hands it over (least significant byte first)
+// in the order the format and phones print it, E0 first. False when neither
+// end is E0, the ISO 15693 manufacturer prefix; it is reversed all the same.
+bool optUidMsbFirst(const uint8_t wire[OPT_UID_BYTES], uint8_t out[OPT_UID_BYTES]);
+// "E0:04:01:..." from the MSB-first UID, OPT_UID_STR_LEN characters.
+void optUidString(const uint8_t msb_first[OPT_UID_BYTES], char* out, size_t cap);
+
+// The colour's name: the material name without a leading material word
+// ("PLA Galaxy Black" -> "Galaxy Black"), else the whole name. Cut at a
+// character boundary to fit.
+void optColorName(const OptTag& t, char* out, size_t cap);
+
+// One line for the log: brand, name, material, colour, weights, temperatures,
+// date.
+void optSummary(const OptTag& t, char* out, size_t cap);

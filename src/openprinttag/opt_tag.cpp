@@ -313,6 +313,29 @@ static bool findNdefTlv(const uint8_t* mem, size_t len, size_t* at, size_t* tlv_
   return false;
 }
 
+size_t optBytesNeeded(const uint8_t* head, size_t have) {
+  if (have < OPT_CC_BYTES) return 0;
+  const size_t declared = optMemorySize(head);
+  if (declared == 0) return 0;
+  // Walk the TLVs as far as the bytes at hand reach.
+  size_t pos = OPT_CC_BYTES;
+  while (pos < have) {
+    const uint8_t type = head[pos];
+    if (type == TLV_NULL) { pos++; continue; }
+    if (type == TLV_TERMINATOR || pos + 1 >= have) return declared;
+    size_t n = head[pos + 1];
+    size_t value_at = pos + 2;
+    if (n == TLV_LONG_LENGTH) {
+      if (pos + 4 > have) return declared;
+      n = ((size_t)head[pos + 2] << 8) | head[pos + 3];
+      value_at = pos + 4;
+    }
+    if (type == TLV_NDEF) return value_at + n < declared ? value_at + n : declared;
+    pos = value_at + n;
+  }
+  return declared;
+}
+
 OptResult optDecodeMemory(const uint8_t* mem, size_t len, OptTag* out) {
   clearTag(out);
   if (len < OPT_CC_BYTES || optMemorySize(mem) == 0) return OPT_NO_CC;
@@ -376,4 +399,78 @@ void optFormatDate(int64_t unix_s, char* out, size_t cap) {
   const int64_t month = mp < 10 ? mp + 3 : mp - 9;
   const int64_t year = yoe + era * 400 + (month <= 2 ? 1 : 0);
   snprintf(out, cap, "%04d-%02d-%02d", (int)year, (int)month, (int)day);
+}
+
+// ---- UID, names, the log line -------------------------------------------
+
+static constexpr uint8_t ISO15693_UID_PREFIX = 0xE0;
+
+bool optUidMsbFirst(const uint8_t wire[OPT_UID_BYTES], uint8_t out[OPT_UID_BYTES]) {
+  if (wire[0] == ISO15693_UID_PREFIX && wire[OPT_UID_BYTES - 1] != ISO15693_UID_PREFIX) {
+    memcpy(out, wire, OPT_UID_BYTES);   // already MSB first
+    return true;
+  }
+  for (int i = 0; i < OPT_UID_BYTES; i++) out[i] = wire[OPT_UID_BYTES - 1 - i];
+  return out[0] == ISO15693_UID_PREFIX;
+}
+
+void optUidString(const uint8_t msb_first[OPT_UID_BYTES], char* out, size_t cap) {
+  size_t used = 0;
+  if (cap) out[0] = '\0';
+  for (int i = 0; i < OPT_UID_BYTES; i++) {
+    const size_t step = i ? 3 : 2;            // ":XX" or "XX"
+    if (cap - used <= step) break;            // room for it and the terminator
+    used += (size_t)snprintf(out + used, cap - used, i ? ":%02X" : "%02X", msb_first[i]);
+  }
+}
+
+// Copies at most cap - 1 bytes without splitting a UTF-8 character.
+static void copyCut(char* out, size_t cap, const char* s) {
+  if (cap == 0) return;
+  size_t n = strlen(s);
+  if (n > cap - 1) {
+    n = cap - 1;
+    while (n > 0 && ((uint8_t)s[n] & 0xC0) == 0x80) n--;   // a continuation byte
+  }
+  memcpy(out, s, n);
+  out[n] = '\0';
+}
+
+static bool startsWithWord(const char* s, const char* word) {
+  const size_t n = strlen(word);
+  return n > 0 && strncmp(s, word, n) == 0 && s[n] == ' ';
+}
+
+void optColorName(const OptTag& t, char* out, size_t cap) {
+  const char* name = t.material_name;
+  const char* type = optMaterialTypeName(t.material_type);
+  const char* abbr = optMaterialAbbr(t);
+  if (startsWithWord(name, abbr)) name += strlen(abbr) + 1;
+  else if (type && startsWithWord(name, type)) name += strlen(type) + 1;
+  copyCut(out, cap, name);
+}
+
+// Grams for the log line, "-" when not given.
+static void grams(float g, char* out, size_t cap) {
+  if (g < 0) snprintf(out, cap, "-");
+  else snprintf(out, cap, "%.0f", (double)g);
+}
+
+void optSummary(const OptTag& t, char* out, size_t cap) {
+  char nominal[12], actual[12], spool[12], used[12];
+  grams(t.nominal_weight_g, nominal, sizeof(nominal));
+  grams(t.actual_weight_g, actual, sizeof(actual));
+  grams(t.container_weight_g, spool, sizeof(spool));
+  grams(t.consumed_g, used, sizeof(used));
+  char date[12];
+  optFormatDate(t.manufactured, date, sizeof(date));
+  char color[10] = "-";
+  if (t.color_count) {
+    snprintf(color, sizeof(color), "#%02X%02X%02X", t.colors[0][0], t.colors[0][1], t.colors[0][2]);
+  }
+  snprintf(out, cap,
+           "%s | %s | %s | %s | %s/%s g, spool %s g, used %s g | %d-%d C, bed %d-%d | made %s",
+           t.brand[0] ? t.brand : "-", t.material_name[0] ? t.material_name : "-",
+           optMaterialAbbr(t)[0] ? optMaterialAbbr(t) : "-", color, nominal, actual, spool, used,
+           t.print_min_c, t.print_max_c, t.bed_min_c, t.bed_max_c, date[0] ? date : "-");
 }
