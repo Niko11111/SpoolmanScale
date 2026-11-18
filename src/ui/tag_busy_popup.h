@@ -34,3 +34,7 @@ void tagBusyHide();
 // waiting for a tag that stopped answering. seconds_left goes under it, so
 // the card says how long the scale still waits; repainted only when it changes.
 void tagBusyAskReplace(int seconds_left);
+
+// The tag is back: the hint the card was shown with returns. Does nothing
+// when the request to put the spool back is not shown.
+void tagBusyAskDone();

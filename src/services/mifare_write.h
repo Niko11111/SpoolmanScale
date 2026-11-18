@@ -69,10 +69,12 @@ enum MifareWriteResult {
 };
 
 // Called while a write waits for a tag that stopped answering to be put back:
-// phase 0 once, then phase 1 about every 150 ms, with the whole seconds this
-// wait may still take. The write runs on the loop task, so this is what keeps
-// the screen drawing and says what the scale is waiting for. nullptr means no
-// waiting.
+// MIFARE_WAIT_BEGIN once, then MIFARE_WAIT_TICK about every 150 ms, with the
+// whole seconds this wait may still take, and MIFARE_WAIT_OVER once the tag is
+// back and the write goes on. The write runs on the loop task, so this is what
+// keeps the screen drawing and says what the scale is waiting for. nullptr
+// means no waiting.
+enum MifareWaitPhase { MIFARE_WAIT_BEGIN = 0, MIFARE_WAIT_TICK = 1, MIFARE_WAIT_OVER = 2 };
 typedef void (*MifareWaitFn)(int phase, int seconds_left);
 
 // Puts the job onto the tag on the reader. expect, when not nullptr, is the
@@ -122,7 +124,7 @@ int mifareWakeCard(const uint8_t uid[4], const char* uid_str, bool* reader_silen
 // no UID any more (13.10.2026). The card is left selectable either way.
 enum MifareFactoryProbe {
   MIFARE_FACTORY_REFUSED = 0,  // other keys: the usual probes decide
-  MIFARE_FACTORY_OPENS   = 1,  // factory key, but data in it on two reads
+  MIFARE_FACTORY_OPENS   = 1,  // factory key, but data in it
   MIFARE_FACTORY_BLANK   = 2,  // factory key and empty: ready for a write
   MIFARE_FACTORY_UNREAD  = 3,  // factory key, but the data blocks did not read:
                                // a weak read, says nothing about the contents

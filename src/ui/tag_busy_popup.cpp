@@ -148,3 +148,11 @@ void tagBusyAskReplace(int seconds_left) {
   // On the amber card amber text would not stand out, see paintHandsOff().
   lv_obj_set_style_text_color(lbl_busy_hint, lv_color_hex(s_hands_off ? UI_COL_INK : UI_COL_WARN), 0);
 }
+
+void tagBusyAskDone() {
+  if (!lbl_busy_hint || s_ask_shown_s < 0) return;
+  s_ask_shown_s = -1;
+  // The hint and its colour as tagBusyShow() and paintHandsOff() set them.
+  lv_label_set_text(lbl_busy_hint, T(s_hands_off ? STR_TW_HANDS_OFF_HINT : STR_TW_BUSY_HINT));
+  lv_obj_set_style_text_color(lbl_busy_hint, lv_color_hex(s_hands_off ? UI_COL_INK : UI_COL_INK_2), 0);
+}

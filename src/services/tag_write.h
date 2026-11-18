@@ -66,7 +66,8 @@ void tagWriteSetProgress(TagWriteProgressFn fn);
 // For the next MIFARE write only (Creality CFS and whatever follows it in
 // services/mifare_formats.cpp): the UID it is meant for ("6E:C6:DB:4F", empty
 // for any), and a callback while it waits for a tag that does not answer to
-// be put back - phase 0 once, then 1 about every 150 ms. Both are used by one
+// be put back - MIFARE_WAIT_BEGIN once, then MIFARE_WAIT_TICK about every
+// 150 ms, and MIFARE_WAIT_OVER when the tag is back. Both are used by one
 // write and then forgotten.
 // overwrite: the tag may already carry the format (an own tag whose spool
 // changed, or an original on a refilled spool); only on an explicit answer.

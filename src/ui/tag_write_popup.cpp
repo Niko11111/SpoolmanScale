@@ -70,10 +70,11 @@ static char          s_unf_uid[26] = "";
 static TagPendingMark s_unf_mark{};
 
 // While a CFS write waits for a tag that stopped answering: say so on the
-// busy card, and keep the screen drawing. Runs inside tagWriteTick().
+// busy card, and keep the screen drawing; once the tag is back, the card says
+// again what it said before. Runs inside tagWriteTick().
 static void cfsWaitNotice(int phase, int seconds_left) {
-  (void)phase;
-  tagBusyAskReplace(seconds_left);
+  if (phase == MIFARE_WAIT_OVER) tagBusyAskDone();
+  else tagBusyAskReplace(seconds_left);
   lv_timer_handler();
 }
 
