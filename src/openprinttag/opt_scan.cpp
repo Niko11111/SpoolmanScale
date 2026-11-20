@@ -9,6 +9,7 @@
 #include "app/app_state.h"
 #include "hardware/nfc.h"
 #include "hardware/sd_logger.h"
+#include "openprinttag/opt_resume.h"
 #include "openprinttag/opt_sim.h"
 #include "services/tag_write.h"
 
@@ -28,7 +29,15 @@ constexpr size_t   MEM_MAX = 512;
 // set down off centre takes a few polls to settle (some 3 s at 500 ms).
 constexpr uint32_t READ_BUDGET_MS = 1500;
 constexpr uint8_t  READ_RETRIES = 5;
-constexpr uint8_t  READ_CHUNK_BLOCKS = 16;   // per call; the driver splits further
+// Per call: one READ MULTIPLE of the driver (ISO15693_CHUNK_BLOCKS), so a call
+// that breaks off costs no block an earlier command of it got. At 16 the
+// driver split each call in two, and a failing second half took the first
+// with it (breaks only ever at block 0, 8, 24, 40, 56 on 19.11.2026).
+constexpr uint8_t  READ_CHUNK_BLOCKS = 8;
+// What a broken-off read got stays this long for the same UID, and the next
+// attempt goes on from there (opt_resume.h). Attempts follow each other within
+// one to two seconds, a spool put back down a few seconds later still counts.
+constexpr uint32_t RESUME_KEEP_MS = 5000;
 constexpr int      MINUTES_PER_HOUR = 60;
 constexpr float    MM_PER_M = 1000.0f;
 constexpr size_t   DUMP_BYTES_PER_LINE = 32;
@@ -40,6 +49,7 @@ struct ReadReport {
   uint32_t ms;
   int failed_block;    // -1 none
   bool cut;            // the tag declares more than MEM_MAX
+  int resumed_block;   // -1: read from block 0
 };
 
 }  // namespace
@@ -53,6 +63,8 @@ static uint8_t    s_uid_wire[OPT_UID_BYTES] = {0};
 static uint8_t    s_retries = 0;        // reads that broke off in a row
 static uint8_t    s_retries_used = 0;   // by the last finished read, for the debug route
 static bool       s_read_ok = false;
+static bool       s_partial = false;    // s_mem holds a broken-off read of s_uid
+static uint32_t   s_partial_ms = 0;     // when it ended
 
 const OptTag& optLastTag() { return s_tag; }
 
@@ -73,26 +85,46 @@ static bool readBlocks(uint16_t from, uint16_t to, uint32_t t0) {
   return true;
 }
 
+// The block this read starts at: where the last broken-off read of the same
+// tag stopped, or 0 with the memory cleared.
+static uint16_t startBlock(uint32_t now) {
+  const size_t kept = s_partial ? s_report.bytes : 0;
+  const uint16_t from = optResumeBlock(kept, now - s_partial_ms, RESUME_KEEP_MS, HEAD_BYTES,
+                                       ISO15693_BLOCK);
+  if (from == 0) {
+    s_report = ReadReport{0, 0, 0, -1, false, -1};
+    memset(s_mem, 0, sizeof(s_mem));
+    return 0;
+  }
+  s_report.failed_block = -1;
+  s_report.resumed_block = from;
+  return from;
+}
+
 // The CC and the first TLVs, then up to the end of the NDEF message.
 static bool readMemory() {
   const uint32_t t0 = millis();
-  s_report = ReadReport{0, 0, 0, -1, false};
-  memset(s_mem, 0, sizeof(s_mem));
+  const uint16_t from = startBlock(t0);
   const size_t simulated = optSimMemory(s_uid_wire, s_mem, sizeof(s_mem));
   if (simulated) {
     s_report.bytes = s_report.wanted = simulated;
     return true;
   }
-  bool ok = readBlocks(0, HEAD_BLOCKS, t0);
+  bool ok = from > 0 || readBlocks(0, HEAD_BLOCKS, t0);
   if (ok) {
     size_t want = optBytesNeeded(s_mem, HEAD_BYTES);
     s_report.cut = want > MEM_MAX;
     if (want > MEM_MAX) want = MEM_MAX;
     s_report.wanted = want;
     const uint16_t blocks = (uint16_t)((want + ISO15693_BLOCK - 1) / ISO15693_BLOCK);
-    if (blocks > HEAD_BLOCKS) ok = readBlocks(HEAD_BLOCKS, blocks, t0);
+    const uint16_t next = from > HEAD_BLOCKS ? from : HEAD_BLOCKS;
+    if (blocks > next) ok = readBlocks(next, blocks, t0);
   }
   s_report.ms = millis() - t0;
+  // Kept for the next attempt only with the head whole: without the length
+  // there is nothing to go on from.
+  s_partial = !ok && s_report.bytes >= HEAD_BYTES;
+  s_partial_ms = millis();
   return ok;
 }
 
@@ -111,9 +143,13 @@ static void dumpMemory(const char* why) {
 static void logRead(bool ok) {
   char broke[32] = "";
   if (!ok) snprintf(broke, sizeof(broke), ", broke off at block %d", s_report.failed_block);
-  logSDf("OPT: %s read %u of %u bytes in %lu ms%s, CC %02X %02X %02X %02X", s_uid,
+  char resumed[32] = "";
+  if (s_report.resumed_block >= 0) {
+    snprintf(resumed, sizeof(resumed), ", went on at block %d", s_report.resumed_block);
+  }
+  logSDf("OPT: %s read %u of %u bytes in %lu ms%s%s, CC %02X %02X %02X %02X", s_uid,
          (unsigned)s_report.bytes, (unsigned)s_report.wanted, (unsigned long)s_report.ms,
-         broke, s_mem[0], s_mem[1], s_mem[2], s_mem[3]);
+         resumed, broke, s_mem[0], s_mem[1], s_mem[2], s_mem[3]);
   if (s_report.cut) logSDf("OPT: %s declares more than %u bytes, read the first %u", s_uid,
                            (unsigned)MEM_MAX, (unsigned)MEM_MAX);
 }
@@ -169,6 +205,7 @@ static void startTag(const uint8_t uid_wire[OPT_UID_BYTES], const char* uid_str)
   memcpy(s_uid_wire, uid_wire, OPT_UID_BYTES);
   s_retries = 0;
   s_read_ok = false;
+  s_partial = false;   // what s_mem holds belongs to the tag before
   logSDf("OPT: ISO 15693 tag %s (wire order %02X %02X .. %02X)%s", s_uid, uid_wire[0],
          uid_wire[1], uid_wire[OPT_UID_BYTES - 1],
          uid_wire[OPT_UID_BYTES - 1] == 0xE0 ? "" : ", UID does not start with E0");
