@@ -17,7 +17,8 @@ uint32_t labelEmptyFields(const SpoolLabelData& s, uint32_t options) {
   if (none(s.vendor))   m |= bit(LF_VENDOR);
   if (none(s.material)) m |= bit(LF_MATERIAL);
   if (none(s.name))     m |= bit(LF_NAME);
-  if (none(s.color))    m |= bit(LF_COLOR);
+  if (none(s.color) && (none(s.color_name) || !(options & (1u << LO_COLOR_NAME))))
+    m |= bit(LF_COLOR);
   if (none(s.article))  m |= bit(LF_ARTICLE);
   if (dateMissing(s, options)) m |= bit(LF_DATE);
   if (s.spool_weight_g <= 0) m |= bit(LF_SPOOL_WEIGHT);
@@ -27,6 +28,10 @@ uint32_t labelEmptyFields(const SpoolLabelData& s, uint32_t options) {
   if (none(s.dried))    m |= bit(LF_DRIED);
   if (s.dry_temp_c <= 0 || s.dry_hours <= 0) m |= bit(LF_DRYING);
   return m;
+}
+
+bool labelBackendHasColorName(BackendMode mode) {
+  return mode == BACKEND_BAMBUDDY || mode == BACKEND_FILAMAN;
 }
 
 uint32_t labelBackendLacks(BackendMode mode) {

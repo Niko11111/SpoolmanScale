@@ -35,3 +35,5 @@ void labelSpoolFacts(const LabelLayout& layout, const SpoolLabelData& spool, int
 // The same for the filament's label: only what belongs to the filament.
 void labelFilamentFacts(const LabelLayout& layout, const SpoolLabelData& spool, int capacity,
                         LabelFactList* out);
+// True when the colour line made it into the list, within its budget.
+bool labelFactsHaveColor(const LabelFactList& facts);

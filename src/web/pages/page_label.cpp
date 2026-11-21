@@ -30,6 +30,7 @@
 #include "services/backend.h"
 #include "services/ble_service.h"
 #include "services/label_bmp.h"
+#include "services/label_capacity.h"
 #include "services/label_fit.h"
 #include "services/label_gaps.h"
 #include "services/label_layout.h"
@@ -75,6 +76,20 @@ static const OptionRow OPTION_ROWS[] = {
 };
 static const int OPTION_ROW_COUNT = sizeof(OPTION_ROWS) / sizeof(OPTION_ROWS[0]);
 
+// The colour by its hex code or by the backend's name for it (issue #94):
+// shown while the colour is on and the backend names colours at all.
+static void colorChoice(String& h) {
+  h += F("<div class='field' id='lcn' style='display:none'><label>");
+  h += T(STR_W_L_COLOR_AS);
+  h += F("</label><div class='btabs' id='lcol'><button class='btab' data-c='0'>");
+  h += T(STR_W_L_COLOR_HEX);
+  h += F("</button><button class='btab' data-c='1'>");
+  h += T(STR_W_L_COLOR_NAME);
+  h += F("</button></div><span class='hint'>");
+  h += T(STR_W_L_COLOR_HINT);
+  h += F("</span></div>");
+}
+
 static const int PRESET_CAPTIONS[LABEL_PRESET_COUNT] = {
   STR_W_L_P_STANDARD, STR_W_L_P_COMPACT, STR_W_L_P_BIG_QR, STR_W_L_P_MATERIAL_BIG,
   STR_W_L_P_TEXT_ONLY, STR_W_L_P_BIG_ID, STR_W_L_P_BIG_ID_SIDE,
@@ -87,8 +102,15 @@ static void sampleSpool(SpoolLabelData* d) {
   d->id = 42;
   snprintf(d->vendor, sizeof(d->vendor), "Bambu Lab");
   snprintf(d->material, sizeof(d->material), "PLA");
-  snprintf(d->name, sizeof(d->name), "PLA Basic Jade White");
+  // The title as the backend builds it: BamBuddy appends the colour name
+  // (mapSpool), so the sample shows what its real labels print.
+  snprintf(d->name, sizeof(d->name), "%s",
+           backendMode() == BACKEND_BAMBUDDY ? "PLA Basic Jade White" : "PLA Basic");
   snprintf(d->color, sizeof(d->color), "F2F2E8");
+  // Only where the backend names colours: elsewhere a spool has none, and a
+  // layout keeping the Name choice from another backend prints the hex code.
+  if (labelBackendHasColorName(backendMode()))
+    snprintf(d->color_name, sizeof(d->color_name), "Jade White");
   snprintf(d->article, sizeof(d->article), "10100");
   isoToLabelDate("2026-03-03", d->first_used, sizeof(d->first_used));
   isoToLabelDate("2026-03-01", d->added, sizeof(d->added));
@@ -166,11 +188,13 @@ static void layoutJson(String& j, LabelKind kind, const LabelPrinterConfig& c, b
   const bool code_possible = kind == LABEL_KIND_SPOOL || fil_page;
   if (!code_possible) l.fields &= ~(1u << LF_QR);
   j += F(",\"cap\":");
-  j += String(labelFactCapacity(l, c.media_width_mm, c.media_length_mm));
+  j += String(labelFactCapacityFor(c, l));
   j += F(",\"factBits\":"); j += String((unsigned long)labelFactFields(l.preset));
   j += F(",\"kindFields\":"); j += String((unsigned long)labelKindFields(kind));
   j += F(",\"hasQr\":");
   j += labelPresetHasQr(l.preset) && code_possible ? F("true") : F("false");
+  j += F(",\"colorNames\":");
+  j += labelBackendHasColorName(backendMode()) ? F("true") : F("false");
   j += F(",\"filPage\":");
   j += fil_page ? F("true") : F("false");
 }
@@ -216,6 +240,8 @@ static String stateJson(LabelKind kind) {
   j += F(",\"mediaKey\":\""); j += String((unsigned)c.media_width_mm); j += 'x';
   j += String((unsigned)c.media_length_mm);
   j += F("\",\"dpi\":");    j += String((unsigned)labelPrinterProfile(c.model).dpi);
+  j += F(",\"checked\":");
+  j += labelMediaChecked(c.media_width_mm, c.media_length_mm) ? F("true") : F("false");
   // A tape printer's label is fixed: the template stays in view, out of use.
   j += F(",\"tape\":");
   j += labelPrinterIsTape(c.model) ? F("true") : F("false");
@@ -318,14 +344,17 @@ static void templateCard(String& h) {
     h += T(FIELD_ROWS[i].caption);
     h += F("<small class='lb-gap'></small></span></label>");
   }
-  h += F("</div><span class='hint' id='lcap'></span><span class='msg' id='lcap-s'></span>"
-         "<input id='ltx' type='text' maxlength='");
+  h += F("</div><span class='hint' id='lcap'></span><span class='msg' id='lcap-s'></span></div>");
+  // Beside the colour switch it belongs to, not below the own line's text.
+  colorChoice(h);
+  h += F("<div class='field'><input id='ltx' type='text' maxlength='");
   h += LABEL_FREE_TEXT_CHARS;
   h += F("' autocomplete='off'><span class='hint'>");
   h += T(STR_W_L_TEXT_HINT);
   h += ' ';
   h += T(STR_W_L_CHANGE_HINT);
-  h += F("</span><span class='msg' id='ltx-s'></span></div><div class='field'><label>");
+  h += F("</span><span class='msg' id='ltx-s'></span></div>");
+  h += F("<div class='field'><label>");
   h += T(STR_W_L_OPTIONS);
   h += F("</label><div id='lo'>");
   for (int i = 0; i < OPTION_ROW_COUNT; i++) {
@@ -355,7 +384,9 @@ static void printerRows(String& h, const LabelPrinterConfig& c) {
   h += F("</label><div class='inrow'><select id='lps'>");
   webPrinterMediaOptions(h, c);
   h += F("</select><span class='hint' id='lme'></span></div><span class='msg' id='lps-s'></span>"
-         "<span class='hint lb-wish'>");
+         "<span class='hint' id='lmu' style='display:none'>");
+  h += T(STR_W_LBL_UNCHECKED);
+  h += F("</span><span class='hint lb-wish'>");
   webPrinterWishLink(h);
   h += F("</span></div>");
 }
@@ -417,7 +448,7 @@ static void styles(String& h) {
          "#ltpl:disabled{opacity:.55}"
          "#ltpl:disabled button:disabled,#ltpl:disabled .check.off{opacity:1}"
          ".lb-gap{display:block;color:var(--ink-soft);font-size:12px}.lb-gap:empty{display:none}"
-         "#ltx{margin-top:10px;width:100%;box-sizing:border-box}"
+         "#ltx{width:100%;box-sizing:border-box}"
          ".lb-pick{margin-top:12px}.lb-pick select{flex:1;min-width:0}"
          // One column on a phone: the preview first, so a switch shows its
          // effect without scrolling.
@@ -475,6 +506,9 @@ static void scriptTemplate(String& h) {
          "document.querySelectorAll('#lo input').forEach(function(i){"
          "i.closest('label').style.display=d.kind===1&&+i.dataset.b===DB?'none':'';});"
          "document.querySelectorAll('#lori .btab').forEach(function(b){b.classList.toggle('on',+b.dataset.o===(up?1:0));});"
+         "$('lcn').style.display=d.colorNames&&(d.fields&(1<<CLB))?'':'none';"
+         "document.querySelectorAll('#lcol .btab').forEach(function(b){"
+         "b.classList.toggle('on',+b.dataset.c===(d.options&CB?1:0));});"
          "document.querySelectorAll('#lpre .btab').forEach(function(b){"
          "b.style.display=d.kind===1&&bigId(+b.dataset.p)?'none':'';"
          "b.classList.toggle('on',+b.dataset.p===d.preset);const k=up?'u':'f';if(b.dataset.k===k)return;"
@@ -493,7 +527,7 @@ static void scriptTemplate(String& h) {
          // Beside a switch that would print nothing, why.
          "i.closest('label').querySelector('.lb-gap').textContent="
          "d.lacks&(1<<b)?L.gapB:(d.empty&(1<<b)?L.gapS:'');});}"
-         "function opts(){return mask('lo')|(S.options&PB);}");
+         "function opts(){return mask('lo')|(S.options&(PB|CB));}");
 }
 
 // The state, the preview and the saving; the handlers are bound below.
@@ -543,6 +577,10 @@ static void scriptFunctions(String& h) {
   h += String(1u << LO_PORTRAIT);
   h += F(",DB=");
   h += String((int)LO_DATE_ADDED);
+  h += F(",CB=");
+  h += String(1u << LO_COLOR_NAME);
+  h += F(",CLB=");
+  h += String((int)LF_COLOR);
   // CSS pixels per millimetre of label in the preview.
   h += F(",PPM=8");
   h += F(";let S=null,shown='',timer=0,srcKey='',K=0;"
@@ -598,6 +636,7 @@ static void scriptFunctions(String& h) {
          "$('lps').querySelectorAll('option[data-fit]').forEach(function(o){"
          "o.hidden=o.disabled=o.dataset.fit.split(' ').indexOf(String(d.modelId))<0;});"
          "if(document.activeElement!==$('lps'))$('lps').value=d.mediaKey;"
+         "$('lmu').style.display=d.checked||d.tape?'none':'';"
          "$('lsa').style.display=d.spool||srv(d)?'none':'';"
          "$('lnp').style.display=d.configured?'none':'';"
          "$('lpb').disabled=!d.spool||!d.canPrint;"
@@ -626,6 +665,9 @@ static void scriptBindings(String& h) {
          "document.querySelectorAll('#lori .btab').forEach(function(b){"
          "b.addEventListener('click',function(){if(S)save(S.preset,S.fields,"
          "(S.options&~PB)|(+b.dataset.o?PB:0));});});"
+         "document.querySelectorAll('#lcol .btab').forEach(function(b){"
+         "b.addEventListener('click',function(){if(S)save(S.preset,S.fields,"
+         "(S.options&~CB)|(+b.dataset.c?CB:0));});});"
          "document.querySelectorAll('#lf input,#lo input').forEach(function(i){"
          "i.addEventListener('change',function(){if(!S)return;capRow(S);save(S.preset,mask('lf'),opts());});});"
          "$('lis').addEventListener('input',function(){$('lisv').textContent=$('lis').value+' %';});"

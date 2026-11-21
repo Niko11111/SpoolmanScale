@@ -177,6 +177,12 @@ static void showModelPicker() {
   showChoiceGrid(STR_PRN_MODEL, cards, n, current, 3, modelPicked);
 }
 
+void printerMediaText(char* buf, size_t n, uint16_t width_mm, uint16_t length_mm) {
+  const int used = snprintf(buf, n, T(STR_PRN_MEDIA_FMT), (unsigned)width_mm, (unsigned)length_mm);
+  if (used < 0 || (size_t)used >= n || labelMediaChecked(width_mm, length_mm)) return;
+  snprintf(buf + used, n - used, "  \xE2\x80\xA2  %s", T(STR_PRN_MEDIA_UNCHECKED));
+}
+
 // The sizes offered in the grid, in its order; filled when it opens.
 static LabelMediaSize s_media_offer[CHOICE_GRID_MAX];
 
@@ -189,38 +195,39 @@ static void mediaPicked(int index) {
   saveAndRebuild(c);
 }
 
-static void addMediaCard(ChoiceCard* cards, int* n, const LabelMediaSize& s, bool enabled) {
-  if (*n >= CHOICE_GRID_MAX) return;
+// A size the model takes as a card, drawn to scale; an unchecked one tagged.
+static void addMediaCard(ChoiceCard* cards, int* n, const LabelMediaSize& s, LabelPrinterModel model) {
+  if (*n >= CHOICE_GRID_MAX || !labelPrinterTakesMedia(model, s.width_mm, s.length_mm)) return;
   ChoiceCard& card = cards[*n];
   card.caption = nullptr;   // the outline says enough
   snprintf(card.value, sizeof(card.value), T(STR_PRN_MEDIA_FMT),
            (unsigned)s.width_mm, (unsigned)s.length_mm);
   card.shape_w_mm = s.width_mm;
   card.shape_h_mm = s.length_mm;
-  card.enabled = enabled;
+  card.enabled = true;
+  if (!labelMediaChecked(s.width_mm, s.length_mm)) {
+    card.tag = CHOICE_TAG_WARN;
+    card.tag_text = STR_PRN_MEDIA_UNCHECKED;
+  }
   s_media_offer[*n] = s;
   (*n)++;
 }
 
-// The sizes the model takes, each drawn to scale, then the planned ones it
-// would take, greyed.
+// The checked sizes the model takes, then the own one and the suggested
+// rolls, each drawn to scale. A size of one's own is typed in the browser.
 static void showMediaPicker() {
   const LabelPrinterConfig c = labelPrinterLoadConfig();
   ChoiceCard cards[CHOICE_GRID_MAX] = {};
-  int n = 0, current = -1;
-  for (int i = 0; i < LABEL_MEDIA_SIZE_COUNT; i++) {
-    const LabelMediaSize& s = LABEL_MEDIA_SIZES[i];
-    if (!labelPrinterTakesMedia(c.model, s.width_mm, s.length_mm)) continue;
-    if (s.width_mm == c.media_width_mm && s.length_mm == c.media_length_mm) current = n;
-    addMediaCard(cards, &n, s, true);
-  }
-  for (int i = 0; i < LABEL_MEDIA_PLANNED_COUNT && n < CHOICE_GRID_MAX; i++) {
-    const LabelMediaSize& s = LABEL_MEDIA_SIZES_PLANNED[i];
-    if (!labelPrinterTakesMedia(c.model, s.width_mm, s.length_mm)) continue;
-    cards[n].tag = CHOICE_TAG_WARN;
-    cards[n].tag_text = STR_PRN_MEDIA_NO_LAYOUT;
-    addMediaCard(cards, &n, s, false);
-  }
+  int n = 0;
+  for (int i = 0; i < LABEL_MEDIA_SIZE_COUNT; i++) addMediaCard(cards, &n, LABEL_MEDIA_SIZES[i], c.model);
+  const LabelMediaSize own = labelPrinterCustomMedia();
+  if (own.width_mm && !labelMediaSuggested(own.width_mm, own.length_mm))
+    addMediaCard(cards, &n, own, c.model);
+  for (int i = 0; i < LABEL_MEDIA_SUGGESTED_COUNT; i++) addMediaCard(cards, &n, LABEL_MEDIA_SUGGESTED[i], c.model);
+  int current = -1;
+  for (int i = 0; i < n; i++)
+    if (s_media_offer[i].width_mm == c.media_width_mm && s_media_offer[i].length_mm == c.media_length_mm)
+      current = i;
   // Two or three cards share the width rather than leaving a gap.
   showChoiceGrid(STR_PRN_MEDIA, cards, n, current, n < 3 ? n : 3, mediaPicked);
 }
@@ -274,8 +281,7 @@ void buildPrinterScreen() {
   // thermal paper its "?" says what a dryer does to it.
   { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_PRN_MEDIA);
     char buf_s[48];
-    snprintf(buf_s, sizeof(buf_s), T(STR_PRN_MEDIA_FMT),
-             (unsigned)c.media_width_mm, (unsigned)c.media_length_mm);
+    printerMediaText(buf_s, sizeof(buf_s), c.media_width_mm, c.media_length_mm);
     lv_obj_t *help = nullptr;
     lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_IMAGE, buf_t, buf_s, false,
                                 p.direct_thermal ? &help : nullptr);

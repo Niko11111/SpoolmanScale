@@ -326,7 +326,7 @@ STR_BT_REC_RIBBON	16	320	NEVER	src/ui/bluetooth_screen.cpp makeListBtn title, te
 STR_BT_REC_SUPPLY_SUB	12	320	NEVER	src/ui/bluetooth_screen.cpp makeListBtn sub, text_w 320
 STR_PRN_TAG_RECOMMENDED	12	136	NEVER	src/ui/choice_grid.cpp card tag, 3 columns, text_w 136
 STR_PRN_TAG_EXPERIMENTAL	12	136	NEVER	src/ui/choice_grid.cpp card tag, 3 columns, text_w 136
-STR_PRN_MEDIA_NO_LAYOUT	12	136	NEVER	src/ui/choice_grid.cpp card tag, 3 columns, text_w 136
+STR_PRN_MEDIA_UNCHECKED	12	136	NEVER	src/ui/choice_grid.cpp card tag, 3 columns, text_w 136
 STR_TAG_COMP	16	290	NEVER	src/ui/ui_common.cpp addSettingRow title, makeListBtn text_w 290 beside the help circle
 STR_TAG_COMP	18	376	NEVER	src/ui/tag_companion_screen.cpp sub header title, 480 - 2 * (44 + 2 * 4)
 STR_TAG_COMP_OFF	16	320	NEVER	src/ui/tag_companion_screen.cpp makeListBtn title, text_w 320

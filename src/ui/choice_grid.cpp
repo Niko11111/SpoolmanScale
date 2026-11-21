@@ -79,8 +79,13 @@ static void addShape(lv_obj_t* card, const ChoiceCard& c, uint32_t colour) {
   lv_obj_t* r = lv_obj_create(slot);
   if (!r) return;
   lv_obj_center(r);
-  lv_obj_set_size(r, c.shape_w_mm * CG_SHAPE_PX_PER_MM_X10 / 10,
-                  c.shape_h_mm * CG_SHAPE_PX_PER_MM_X10 / 10);
+  // To scale; a roll that would outgrow the slot (70 x 80 mm is 84 x 96 px)
+  // is drawn smaller in the same proportion, so it still shows.
+  lv_coord_t w = c.shape_w_mm * CG_SHAPE_PX_PER_MM_X10 / 10;
+  lv_coord_t h = c.shape_h_mm * CG_SHAPE_PX_PER_MM_X10 / 10;
+  if (w > CG_SHAPE_SLOT_W_PX) { h = h * CG_SHAPE_SLOT_W_PX / w; w = CG_SHAPE_SLOT_W_PX; }
+  if (h > CG_SHAPE_SLOT_H_PX) { w = w * CG_SHAPE_SLOT_H_PX / h; h = CG_SHAPE_SLOT_H_PX; }
+  lv_obj_set_size(r, w, h);
   lv_obj_set_style_bg_opa(r, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_color(r, lv_color_hex(colour), 0);
   lv_obj_set_style_border_width(r, CG_SHAPE_LINE_PX, 0);

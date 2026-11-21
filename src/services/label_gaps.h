@@ -23,3 +23,7 @@ uint32_t labelEmptyFields(const SpoolLabelData& spool, uint32_t options);
 
 // The fields this backend has no place for at all.
 uint32_t labelBackendLacks(BackendMode mode);
+
+// Whether this backend names a spool's colour, so the label page offers the
+// name next to the hex code: BamBuddy and FilaMan do, Spoolman does not.
+bool labelBackendHasColorName(BackendMode mode);

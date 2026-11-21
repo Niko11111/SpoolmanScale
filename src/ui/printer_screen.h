@@ -1,5 +1,8 @@
 #pragma once
 
+#include <stddef.h>
+#include <stdint.h>
+
 #include "services/label_layout.h"
 
 // ============================================================
@@ -33,3 +36,6 @@ void printerPrintLastLabel(LabelKind kind);
 // The next build of the screen is entered from the print sheet: its back
 // button leads there instead of to the Bluetooth screen.
 void printerScreenFromSheet();
+// The loaded stock as a row shows it, "60 x 40 mm", and on a size nobody has
+// checked "60 x 40 mm  \xE2\x80\xA2  unchecked".
+void printerMediaText(char* buf, size_t n, uint16_t width_mm, uint16_t length_mm);

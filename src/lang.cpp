@@ -3614,8 +3614,6 @@ const char* const STRINGS[][3] = {
     "Recommandée" },  // STR_PRN_TAG_RECOMMENDED
   { "experimentell", "experimental",
     "expérimentale" },  // STR_PRN_TAG_EXPERIMENTAL
-  { "noch keine Vorlage", "no layout yet",
-    "pas encore de modèle" },  // STR_PRN_MEDIA_NO_LAYOUT
   { "Auch in Extra-Feld", "Also in extra field",
     "Aussi dans un champ" },  // STR_TAG_COMP
   { "Nicht jedes Tool kennt die nativen Tags von Spoolman. Hier schreibt die Waage beim Verknüpfen zusätzlich in ein Extra-Feld und legt es an, falls es fehlt.\n\nextra.tag: die UUID einer Bambu-Spule, für OpenSpoolman. Andere Tags betrifft das nicht.\nextra.nfc_id: die UUID einer Bambu-Spule, bei anderen Tags die Chip-UID.\n\nBeim Auflegen füllt die Waage nur ein leeres Feld. Geleert wird es erst, wenn alle Tags der Spule gelöst werden oder der Tag, dessen UID darin steht.",
@@ -4468,6 +4466,40 @@ const char* const STRINGS[][3] = {
     "de cette bobine" },  // STR_SPICK_FROM_SPOOL
   { "Kein Abzug", "No offset",
     "Sans retrait" },  // STR_SPICK_NO_OFFSET
+  { "ungeprüft", "unchecked",
+    "non vérifié" },  // STR_PRN_MEDIA_UNCHECKED
+  { "Andere Größe", "Other size",
+    "Autre format" },  // STR_W_P_MEDIA_OTHER
+  { "Breite", "Width",
+    "Largeur" },  // STR_W_P_MEDIA_WIDTH
+  { "Länge", "Length",
+    "Longueur" },  // STR_W_P_MEDIA_LENGTH
+  { "Übernehmen", "Use",
+    "Utiliser" },  // STR_W_P_MEDIA_USE
+  { "Dieser Drucker nimmt %u bis %u mm Breite und %u bis %u mm Länge.", "This printer takes %u to %u mm across and %u to %u mm along.",
+    "Cette imprimante accepte %u à %u mm de largeur et %u à %u mm de longueur." },  // STR_W_P_MEDIA_RANGE
+  { "Geprüfte Größe.", "Checked size.",
+    "Format vérifié." },  // STR_W_P_MEDIA_ST_CHECKED
+  { "Ungeprüft: Das Etikett wird für diese Größe berechnet. Sieh dir vor dem Druck die Vorschau unter Etiketten an.", "Unchecked: the label is worked out for this size. Look at the preview under Labels before you print.",
+    "Non vérifié : l'étiquette est calculée pour ce format. Regardez l'aperçu sous Étiquettes avant d'imprimer." },  // STR_W_P_MEDIA_ST_UNCHECKED
+  { "Diese Größe nimmt der Drucker nicht.", "The printer does not take this size.",
+    "L'imprimante n'accepte pas ce format." },  // STR_W_P_MEDIA_ST_RANGE
+  { "Zu groß für den Speicher der Waage.", "Too large for the scale's memory.",
+    "Trop grand pour la mémoire de la balance." },  // STR_W_P_MEDIA_ST_LARGE
+  { "Zu klein: Darauf passt kein Etikett mit Kopf und einer Zeile.", "Too small: no label fits on it with its header and one line.",
+    "Trop petit : aucune étiquette n'y tient avec son en-tête et une ligne." },  // STR_W_P_MEDIA_ST_SMALL
+  { "Ungeprüfte Etikettgröße: Die Zeilenzahl ist berechnet. Prüf die Vorschau, bevor du druckst.", "Unchecked label size: the number of lines is worked out. Check the preview before you print.",
+    "Format d'étiquette non vérifié : le nombre de lignes est calculé. Vérifiez l'aperçu avant d'imprimer." },  // STR_W_LBL_UNCHECKED
+  { "Farbe als", "Colour as",
+    "Couleur en" },  // STR_W_L_COLOR_AS
+  { "Hex-Code", "Hex code",
+    "Code hex" },  // STR_W_L_COLOR_HEX
+  { "Name", "Name",
+    "Nom" },  // STR_W_L_COLOR_NAME
+  { "Name: Der Farbname wandert vom Ende des Titels in die Farbzeile. Ohne Farbnamen steht der Hex-Code.", "Name: the colour name moves from the end of the title to the colour line. Without one, the hex code is printed.",
+    "Nom : le nom de couleur passe de la fin du titre à la ligne Couleur. Sans nom de couleur, le code hex est imprimé." },  // STR_W_L_COLOR_HINT
+  { "Ungeprüfte Größe.", "Unchecked size.",
+    "Format non vérifié." },  // STR_W_P_MEDIA_ST_UNCHECKED_SHORT
 };
 
 StringID tagWriteResultString(uint8_t code) {
