@@ -104,7 +104,7 @@ bool nfcWriteNtagPage(uint8_t page, uint8_t* data);
 // InListPassiveTarget whose answer is left pending, so IRQ falls when a card
 // comes. PN7160: discovery with nothing left to read, so IRQ rises then.
 bool nfcArmForWake();
-// After a tag woke the ESP, with the reset wire verified: RSTPDN low for long
+// After a deep-sleep wake, with the reset wire verified: RSTPDN low for long
 // enough to switch the PN532 and its field off, then high again. Without it
 // the PN532 did not start again, or a tag on it stayed silent until it was
 // moved (21.11.2026). Before nfcDetectChip(). False, and the pin untouched,

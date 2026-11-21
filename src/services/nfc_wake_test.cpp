@@ -108,9 +108,10 @@ void nfcWakeTestAfterBoot() {
   gpio_hold_dis((gpio_num_t)hw_pins::NFC_VEN);
   rtc_gpio_deinit((gpio_num_t)hw_pins::NFC_IRQ);
   noteWake(cause);
-  // The check again: only a verified wire may be pulled low (nfcWakeAvailable()).
-  if (cause == ESP_SLEEP_WAKEUP_EXT1 && nfcResetVerified() &&
-      nfcPn532PowerCycle(&I2C_EXT, hw_pins::PN532_RESET_WIRE)) {
+  // After every wake, not only the reader's own: the PN532 was left searching
+  // either way, and a spool put down before a touch woke the scale is just as
+  // silent without it. Only a verified wire may be pulled low.
+  if (nfcResetVerified() && nfcPn532PowerCycle(&I2C_EXT, hw_pins::PN532_RESET_WIRE)) {
     logSD("NFC wake test: PN532 switched off and on over pin 7");
   }
 }

@@ -58,6 +58,10 @@ static void wakeTestRoutes(WebServer& srv) {
       return;
     }
     const bool on = srv.arg("on") == "1";
+    if (on && !nfcWakeAvailable()) {   // as /api/nfcwake on the settings page
+      srv.send(409, "application/json", "{\"error\":\"reset wire not verified\"}");
+      return;
+    }
     nfcWakeTestSet(on);
     srv.send(200, "application/json", on ? "{\"on\":true}" : "{\"on\":false}");
   });
