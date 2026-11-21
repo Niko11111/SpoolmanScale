@@ -27,7 +27,11 @@ const __FlashStringHelper* webPrinterDocsUrl();
 // one starts marked.
 void webPrinterModelPicker(String& h, const LabelPrinterConfig& c);
 
-// A card per label size, its outline drawn to scale, the planned ones greyed.
+// A card per label size, its outline drawn to scale: the checked ones, then
+// the own and the suggested ones marked unchecked, then one for another size.
 // data-fit lists the models that take a size, so the script shows the ones
 // the picked model can print on without asking the scale again.
 void webPrinterStockCards(String& h, const LabelPrinterConfig& c);
+// Under the cards: the two fields for a size of one's own, hidden until its
+// card is tapped, and the line that stands while an unchecked size is loaded.
+void webPrinterStockForm(String& h);

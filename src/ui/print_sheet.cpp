@@ -183,8 +183,7 @@ static void refresh() {
   lv_label_set_text(s_sub_preset, T(presetCaption(l.preset)));
   lv_label_set_text(s_sub_turn, T(labelLayoutOption(l, LO_PORTRAIT) ? STR_W_L_UPRIGHT : STR_W_L_FLAT));
   char buf[64];
-  snprintf(buf, sizeof(buf), T(STR_PRN_MEDIA_FMT), (unsigned)c.media_width_mm,
-           (unsigned)c.media_length_mm);
+  printerMediaText(buf, sizeof(buf), c.media_width_mm, c.media_length_mm);
   lv_label_set_text(s_sub_media, buf);
   snprintf(buf, sizeof(buf), "%s %s  \xE2\x80\xA2  %u dpi", p.brand, p.name, (unsigned)p.dpi);
   lv_label_set_text(s_sub_printer, buf);

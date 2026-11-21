@@ -16,6 +16,9 @@ using namespace labeldraw;
 #define LB_NAME_LINES    3    // a long name in a narrow column
 // Maker, material, the name, the facts each as caption and value.
 #define LB_LINES_MAX    (2 + LB_NAME_LINES + 2 * LABEL_MAX_FACTS)
+// The least height of the number across the top for a label to count as
+// holding its lines: under it the number no longer reads across the room.
+#define LB_NUMBER_MIN_PX 80
 
 // The lines' fonts, largest first, all with a size for a 300 dpi head.
 static const lv_font_t* const LB_FONTS[] = {
@@ -180,6 +183,23 @@ void labelDrawBigId(lv_obj_t* canvas, const BigIdBox& box, const BigIdContent& c
   idText(c, id, sizeof(id));
   if (c.layout->preset == LABEL_PRESET_BIG_ID_SIDE && hasText(c)) drawOnSide(canvas, box, c, id);
   else drawOnTop(canvas, box, c, id);
+}
+
+bool labelBigIdFits(const BigIdBox& box, const BigIdContent& c) {
+  char id[LB_ID_LEN];
+  idText(c, id, sizeof(id));
+  const int share = labelIdShareFor(c.layout->id_share, c.layout->preset);
+  BigIdLines lines;
+  if (c.layout->preset == LABEL_PRESET_BIG_ID_SIDE && hasText(c)) {
+    const lv_coord_t width = labelDigitsWidth(id, sideHeight(box, id, share));
+    collectLines(c, box.w - (width ? width + 2 * dots(LB_GAP_PX) : 0), &lines);
+    return linesLeastHeight(lines) <= box.h;
+  }
+  collectLines(c, box.w, &lines);
+  if (!id[0] || !lines.n) return true;
+  // Under the number the lines always find their least height: the number
+  // gives way. It may not give way below what reads from across the room.
+  return topHeight(box, lines, id, share) >= dots(LB_NUMBER_MIN_PX);
 }
 
 int labelBigIdShareLimit(const BigIdBox& box, const BigIdContent& c) {

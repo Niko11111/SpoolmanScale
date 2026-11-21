@@ -475,6 +475,9 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
     name[sizeof(name) - 1] = '\0';
   }
   f["name"] = name;
+  // The colour name on its own as well, for a label that prints it in place
+  // of the hex code: a field of the scale's own, Spoolman has no such thing.
+  if (colname[0]) f["x_color_name"] = colname;
 
   // rgba is RRGGBBAA, Spoolman wants RRGGBB.
   const char* rgba = src["rgba"] | "";

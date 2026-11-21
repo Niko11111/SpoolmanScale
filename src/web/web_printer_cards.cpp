@@ -140,6 +140,9 @@ static const char PRINTER_CSS[] PROGMEM =
          ".stock .pc.on .shape{border-color:var(--accent);background:var(--btn)}"
          ".stock .pc .mn{font-size:14px}"
          ".stock .nb{font-size:11.5px;color:var(--ink-soft)}"
+         // The own size: an outline of the base roll, dashed, with a plus.
+         ".stock .shape.other{width:60px;height:45px;border-style:dashed;display:grid;place-items:center;"
+         "font-size:20px;color:var(--ink-soft)}"
          ".stock .pc.on:after{position:absolute;right:10px;top:10px}"
          // What the model prints with, warm where heat colours the label.
          ".method{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--surface-2);"
@@ -411,10 +414,9 @@ void webPrinterModelPicker(String& h, const LabelPrinterConfig& c) {
   h += F("</div></div>");
 }
 
-// How a size stands in the list: one to pick, one on sale that no layout
-// fits yet (greyed, with its reason), or one kept from elsewhere and not in
-// the table (marked, not offered again).
-enum StockKind { STOCK_OFFERED, STOCK_PLANNED, STOCK_KEPT };
+// How a size stands in the list: measured and printed, or one the printer
+// takes that nobody has checked yet (the own one and the suggested rolls).
+enum StockKind { STOCK_CHECKED, STOCK_UNCHECKED };
 
 // A size the picked model cannot take starts hidden; the script shows the
 // fitting ones whenever the model changes.
@@ -428,7 +430,6 @@ static void stockCard(String& h, const LabelMediaSize& s, const LabelPrinterConf
   webPrinterFitList(h, s.width_mm, s.length_mm);
   h += F("'");
   if (!labelPrinterTakesMedia(c.model, s.width_mm, s.length_mm)) h += F(" style='display:none'");
-  if (kind != STOCK_OFFERED) h += F(" disabled");
   h += F("><span class='shape' style='width:");
   h += String((int)(s.width_mm * STOCK_SHAPE_PX_PER_MM));
   h += F("px;height:");
@@ -438,25 +439,60 @@ static void stockCard(String& h, const LabelMediaSize& s, const LabelPrinterConf
   snprintf(size, sizeof(size), T(STR_PRN_MEDIA_FMT), (unsigned)s.width_mm, (unsigned)s.length_mm);
   h += size;
   h += F("</span>");
-  if (kind == STOCK_PLANNED) {
+  if (kind == STOCK_UNCHECKED) {
     h += F("<span class='nb'>");
-    h += T(STR_PRN_MEDIA_NO_LAYOUT);
+    h += T(STR_PRN_MEDIA_UNCHECKED);
     h += F("</span>");
   }
   h += F("</button>");
 }
 
+// A model whose limits allow one size only (the D110's 12 x 40) has nothing
+// to type in.
+static bool takesOwnSize(LabelPrinterModel model) {
+  const LabelMediaRange r = labelPrinterMediaRange(model);
+  return r.min_width_mm < r.max_width_mm || r.min_length_mm < r.max_length_mm;
+}
+
+// The card that opens the two fields for a size of one's own.
+static void otherCard(String& h) {
+  h += F("<button type='button' class='pc' id='pso' data-v='' data-fit='");
+  bool first = true;
+  for (int i = 0; i < LABEL_PRINTER_MODEL_COUNT; i++) {
+    if (!takesOwnSize(LABEL_PRINTER_MODELS[i])) continue;
+    if (!first) h += ' ';
+    h += String((int)LABEL_PRINTER_MODELS[i]);
+    first = false;
+  }
+  h += F("'><span class='shape other'>+</span><span class='mn'>");
+  h += T(STR_W_P_MEDIA_OTHER);
+  h += F("</span></button>");
+}
+
 void webPrinterStockCards(String& h, const LabelPrinterConfig& c) {
-  bool listed = false;
-  for (int i = 0; i < LABEL_MEDIA_SIZE_COUNT; i++) {
-    const LabelMediaSize& s = LABEL_MEDIA_SIZES[i];
-    listed = listed || (s.width_mm == c.media_width_mm && s.length_mm == c.media_length_mm);
-    stockCard(h, s, c, STOCK_OFFERED);
-  }
-  if (!listed) {
-    const LabelMediaSize kept = { (uint8_t)c.media_width_mm, (uint8_t)c.media_length_mm };
-    stockCard(h, kept, c, STOCK_KEPT);
-  }
-  for (int i = 0; i < LABEL_MEDIA_PLANNED_COUNT; i++)
-    stockCard(h, LABEL_MEDIA_SIZES_PLANNED[i], c, STOCK_PLANNED);
+  for (int i = 0; i < LABEL_MEDIA_SIZE_COUNT; i++) stockCard(h, LABEL_MEDIA_SIZES[i], c, STOCK_CHECKED);
+  const LabelMediaSize own = labelPrinterCustomMedia();
+  // The own size, unless it is one of the suggested rolls anyway.
+  if (own.width_mm && !labelMediaSuggested(own.width_mm, own.length_mm)) stockCard(h, own, c, STOCK_UNCHECKED);
+  for (int i = 0; i < LABEL_MEDIA_SUGGESTED_COUNT; i++)
+    stockCard(h, LABEL_MEDIA_SUGGESTED[i], c, STOCK_UNCHECKED);
+  otherCard(h);
+}
+
+// Both are fields, so the page's spacing rule sets them off the cards. Shown
+// and hidden through style.display: a field is a flex box, which the hidden
+// attribute would not override.
+void webPrinterStockForm(String& h) {
+  h += F("<div class='field' id='psf' style='display:none'><div class='inrow'><label for='psw'>");
+  h += T(STR_W_P_MEDIA_WIDTH);
+  h += F("</label><input id='psw' type='number' step='1' inputmode='numeric'>"
+         "<span class='suffix'>mm</span><label for='psl'>");
+  h += T(STR_W_P_MEDIA_LENGTH);
+  h += F("</label><input id='psl' type='number' step='1' inputmode='numeric'>"
+         "<span class='suffix'>mm</span><button id='psu'>");
+  h += T(STR_W_P_MEDIA_USE);
+  h += F("</button></div><span class='hint' id='psr'></span><span class='msg' id='psc'></span></div>"
+         "<div class='field' id='psh' style='display:none'><span class='hint'>");
+  h += T(STR_W_P_MEDIA_ST_UNCHECKED);
+  h += F("</span></div>");
 }

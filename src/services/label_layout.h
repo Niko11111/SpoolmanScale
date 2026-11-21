@@ -54,6 +54,9 @@ enum LabelOption : uint8_t {
   // Upright: the label drawn 30 wide and 40 or 50 tall, turned onto the roll.
   // The head starts on the left, as on FilaMan's portrait presets.
   LO_PORTRAIT       = 2,
+  // The colour by the backend's name for it where it has one and the title
+  // does not end with it already, else by its hex code (issue #94).
+  LO_COLOR_NAME     = 3,
   LABEL_OPTION_COUNT
 };
 

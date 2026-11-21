@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "services/ble_service.h"
+#include "services/label_media.h"
 #include "services/label_raster.h"
 
 // ============================================================
@@ -75,15 +76,6 @@ struct LabelPrinterConfig {
 #define LP_OFFSET_RIGHT  LABEL_RASTER_MAX_W
 #define LP_OFFSET_LEFT  (-LABEL_RASTER_MAX_W)
 
-// The label sizes offered on the printer screen: width across the head by
-// length along the feed, in mm. What the vendors sell for these printers.
-struct LabelMediaSize { uint8_t width_mm, length_mm; };
-extern const LabelMediaSize LABEL_MEDIA_SIZES[];
-extern const int LABEL_MEDIA_SIZE_COUNT;
-// Sizes on sale for these printers that no layout of ours fits yet: the
-// printer screen shows them greyed, so the step to them is visible.
-extern const LabelMediaSize LABEL_MEDIA_SIZES_PLANNED[];
-extern const int LABEL_MEDIA_PLANNED_COUNT;
 
 // The models in the order the printer screen's grid and the browser list
 // them: proven first, experimental after. NONE is never in it.
@@ -160,11 +152,20 @@ int labelPrintResultString(LabelPrintResult result);
 // own small arrangement, not the label editor's: see labelRenderSpool().
 bool labelPrinterIsTape(LabelPrinterModel model);
 
-// Whether the model takes label stock of this size.
+// Whether the model takes label stock of this size: in its range, and with a
+// canvas the memory holds.
 bool labelPrinterTakesMedia(LabelPrinterModel model, uint16_t width_mm, uint16_t length_mm);
+// The stock the model takes and how wide its print row gets, for
+// labelMediaStatus().
+LabelMediaRange labelPrinterMediaRange(LabelPrinterModel model);
 
-// The next stock size the model can take, after the current one; the first
-// fitting one when the current one is not in the table. Only the config.
+// The last unchecked size picked, else the one in effect when it is
+// unchecked; 0 x 0 when there is none. Remembered across picks of other sizes.
+LabelMediaSize labelPrinterCustomMedia();
+
+// The next stock size the model can take, after the current one: the checked
+// ones, then the own unchecked one; the first when the current one is in
+// neither. Only the config.
 void labelPrinterNextMedia(LabelPrinterConfig& c);
 
 // Whether "Print label" on the scale shows the print sheet first (preview,

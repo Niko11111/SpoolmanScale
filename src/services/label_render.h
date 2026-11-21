@@ -33,6 +33,9 @@ struct SpoolLabelData {
   char  vendor[LABEL_LINE_LEN];
   char  material[LABEL_LINE_LEN];
   char  color[16];                  // hex or a name, whatever the backend gave
+  // The backend's name for the colour, cleaned (colorNameClean()); empty where
+  // it keeps none, as Spoolman does. LO_COLOR_NAME prints it instead of the hex.
+  char  color_name[LABEL_LINE_LEN];
   char  article[32];                // the maker's article number, empty when unknown
   // dd.mm.yyyy, each empty when the backend has none. The layout picks one.
   char  first_used[12];
@@ -68,6 +71,14 @@ bool labelRenderCalibration(const LabelPrinterConfig& printer, LabelRaster* out)
 // active backend's own scanner reads.
 bool labelRenderSpool(const LabelPrinterConfig& printer, const LabelLayout& layout,
                       const SpoolLabelData& spool, LabelRaster* out);
+
+// The spool's label cut to `lines` fact lines, measured, nothing drawn: how
+// many it holds whole, with its code readable where `code_needed`, -1 when it
+// does not. Without `code_needed` the code may be left off as the renderer
+// leaves it off, the lines laid out as they are then. The count can be
+// smaller than asked when the spool has fewer facts.
+int labelSpoolFitsLines(const LabelPrinterConfig& printer, const LabelLayout& layout,
+                        const SpoolLabelData& spool, int lines, bool code_needed);
 
 // What the QR code on a spool label carries for the active backend: the
 // spool's page on Spoolman, FilaMan and BamBuddy, so a phone opens it.

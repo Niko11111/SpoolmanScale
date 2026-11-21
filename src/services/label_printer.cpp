@@ -19,6 +19,10 @@
 #define LP_KEY_W     "printer_w"
 #define LP_KEY_H     "printer_h"
 #define LP_KEY_ASK   "printer_ask"
+// The last unchecked size picked, which the print sheet's size button keeps
+// in its round next to the checked ones (Nikolai, 18.11.2026).
+#define LP_KEY_CUSTOM_W "printer_cw"
+#define LP_KEY_CUSTOM_L "printer_cl"
 // The offset belongs to one printer, not to the scale: "px" and the device's
 // address without colons, 14 characters. A second printer starts at 0, and
 // the first gets its own back when it is picked again (Nikolai, 30.09.2026).
@@ -123,26 +127,6 @@ const LabelPrinterModel LABEL_PRINTER_MODELS[] = {
 };
 const int LABEL_PRINTER_MODEL_COUNT = sizeof(LABEL_PRINTER_MODELS) / sizeof(LABEL_PRINTER_MODELS[0]);
 
-// The two sizes printed and checked on the M220 for 0.8.0 (Nikolai,
-// 26.09.2026). 40 x 20 and 30 x 20 leave no room for the code; the larger
-// ones come back with the label presets.
-// 60 x 30 for the 3 inch heads (M220, M200, M221, PM245-BT), asked for on
-// Discord (13.11.2026): every arrangement renders on it with the 50 mm line
-// budget, flat and upright, checked in the simulator.
-// 12 x 40 is the D110's tape, which only it takes.
-const LabelMediaSize LABEL_MEDIA_SIZES[] = {
-  {40, 30}, {50, 30}, {60, 30}, {12, 40},
-};
-const int LABEL_MEDIA_SIZE_COUNT = sizeof(LABEL_MEDIA_SIZES) / sizeof(LABEL_MEDIA_SIZES[0]);
-
-// 50 x 50 rolls are sold for the M220, the B1 and the M2, but no layout of
-// ours is drawn for them yet (Nikolai, 22.10.2026).
-const LabelMediaSize LABEL_MEDIA_SIZES_PLANNED[] = {
-  {50, 50},
-};
-const int LABEL_MEDIA_PLANNED_COUNT =
-  sizeof(LABEL_MEDIA_SIZES_PLANNED) / sizeof(LABEL_MEDIA_SIZES_PLANNED[0]);
-
 static LabelPrinterConfig s_config{};
 static bool s_loaded = false;
 // Whether "Print label" opens the print sheet first. Cached like the config.
@@ -187,14 +171,26 @@ const LabelPrinterProfile& labelPrinterProfile(LabelPrinterModel model) {
   }
 }
 
+static LabelMediaRange rangeOf(const LabelPrinterProfile& p) {
+  return LabelMediaRange{ p.min_width_mm, p.max_width_mm, p.min_length_mm, p.max_length_mm,
+                          p.dpi, p.max_raster_width };
+}
+
+// In the profile's range and small enough for the canvas: a size kept from
+// another model or an older firmware may be neither (a 50 x 100 from the B1
+// is 1.3 MB at the M2's 300 dpi).
 static bool mediaFits(const LabelPrinterProfile& p, uint16_t w, uint16_t h) {
-  return p.model != LP_MODEL_NONE &&
-         w >= p.min_width_mm && w <= p.max_width_mm &&
-         h >= p.min_length_mm && h <= p.max_length_mm;
+  if (p.model == LP_MODEL_NONE) return false;
+  const LabelMediaStatus s = labelMediaStatus(rangeOf(p), w, h);
+  return s == LABEL_MEDIA_CHECKED || s == LABEL_MEDIA_UNCHECKED;
 }
 
 bool labelPrinterTakesMedia(LabelPrinterModel model, uint16_t width_mm, uint16_t length_mm) {
   return mediaFits(labelPrinterProfile(model), width_mm, length_mm);
+}
+
+LabelMediaRange labelPrinterMediaRange(LabelPrinterModel model) {
+  return rangeOf(labelPrinterProfile(model));
 }
 
 // What is stored is taken as it is, except for two things that would leave
@@ -257,6 +253,12 @@ bool labelPrinterSaveConfig(const LabelPrinterConfig& in) {
   ok = prefsPutInt(LP_KEY_H, s_want_l) && ok;
   char key[20];
   if (offsetKey(c.address, key, sizeof(key))) ok = prefsPutInt(key, c.x_offset) && ok;
+  // Only a size typed in: a suggested roll has its own card and would push
+  // the typed one out of the cards and the print sheet's round.
+  if (!labelMediaChecked(s_want_w, s_want_l) && !labelMediaSuggested(s_want_w, s_want_l)) {
+    ok = prefsPutInt(LP_KEY_CUSTOM_W, s_want_w) && ok;
+    ok = prefsPutInt(LP_KEY_CUSTOM_L, s_want_l) && ok;
+  }
   if (ok) { s_config = c; s_loaded = true; }
   else { s_want_w = want_w; s_want_l = want_l; }
   logSDf("Printer: config %s %s '%s' %ux%u mm offset %d (%d) %s",
@@ -440,23 +442,33 @@ int labelPrintResultString(LabelPrintResult r) {
   }
 }
 
-// The next stock size the model can take, after the current one; the first
-// fitting one when the current one is not in the table.
+LabelMediaSize labelPrinterCustomMedia() {
+  const int w = prefsGetInt(LP_KEY_CUSTOM_W, 0), l = prefsGetInt(LP_KEY_CUSTOM_L, 0);
+  if (w > 0 && l > 0) return LabelMediaSize{ (uint8_t)w, (uint8_t)l };
+  // Set before the size was remembered: the one in effect, if it is unchecked.
+  const LabelPrinterConfig c = labelPrinterLoadConfig();
+  if (labelMediaChecked(c.media_width_mm, c.media_length_mm)) return LabelMediaSize{ 0, 0 };
+  return LabelMediaSize{ (uint8_t)c.media_width_mm, (uint8_t)c.media_length_mm };
+}
+
+// The round: the checked sizes the model takes, then the own one. A size not
+// in it, the own one forgotten, goes on to the first.
 void labelPrinterNextMedia(LabelPrinterConfig& c) {
-  const LabelPrinterProfile& p = labelPrinterProfile(c.model);
-  int at = -1;
+  LabelMediaSize round[LABEL_MEDIA_SIZE_COUNT + 1];
+  int n = 0;
   for (int i = 0; i < LABEL_MEDIA_SIZE_COUNT; i++)
-    if (LABEL_MEDIA_SIZES[i].width_mm == c.media_width_mm &&
-        LABEL_MEDIA_SIZES[i].length_mm == c.media_length_mm) { at = i; break; }
-  for (int step = 1; step <= LABEL_MEDIA_SIZE_COUNT; step++) {
-    const LabelMediaSize& s = LABEL_MEDIA_SIZES[(at + step) % LABEL_MEDIA_SIZE_COUNT];
-    if (s.width_mm >= p.min_width_mm && s.width_mm <= p.max_width_mm &&
-        s.length_mm >= p.min_length_mm && s.length_mm <= p.max_length_mm) {
-      c.media_width_mm = s.width_mm;
-      c.media_length_mm = s.length_mm;
-      return;
-    }
-  }
+    if (labelPrinterTakesMedia(c.model, LABEL_MEDIA_SIZES[i].width_mm, LABEL_MEDIA_SIZES[i].length_mm))
+      round[n++] = LABEL_MEDIA_SIZES[i];
+  const LabelMediaSize own = labelPrinterCustomMedia();
+  if (own.width_mm && !labelMediaChecked(own.width_mm, own.length_mm) &&
+      labelPrinterTakesMedia(c.model, own.width_mm, own.length_mm))
+    round[n++] = own;
+  if (n == 0) return;
+  int at = -1;
+  for (int i = 0; i < n; i++)
+    if (round[i].width_mm == c.media_width_mm && round[i].length_mm == c.media_length_mm) at = i;
+  c.media_width_mm = round[(at + 1) % n].width_mm;
+  c.media_length_mm = round[(at + 1) % n].length_mm;
 }
 
 bool labelPrinterAskFirst() {

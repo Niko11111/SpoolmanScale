@@ -58,6 +58,20 @@ int main() {
   assert(labelBackendLacks(BACKEND_FILAMAN) == bit(LF_TEMPS));
   assert(labelBackendLacks(BACKEND_SPOOLMAN) == 0);
   assert(labelBackendLacks(BACKEND_BAMBUDDY) == 0);
+
+  // The colour: a name alone fills it as well as the hex code.
+  SpoolLabelData named = full;
+  named.color[0] = '\0';
+  assert(labelEmptyFields(named, 0) == bit(LF_COLOR));
+  snprintf(named.color_name, sizeof(named.color_name), "Jade White");
+  assert(labelEmptyFields(named, 1u << LO_COLOR_NAME) == 0);
+  // Without the option the name is not printed: the line stays empty.
+  assert(labelEmptyFields(named, 0) == bit(LF_COLOR));
+
+  // Only BamBuddy and FilaMan name a colour; Spoolman keeps the hex code.
+  assert(labelBackendHasColorName(BACKEND_BAMBUDDY));
+  assert(labelBackendHasColorName(BACKEND_FILAMAN));
+  assert(!labelBackendHasColorName(BACKEND_SPOOLMAN));
 }
 '''
 with tempfile.TemporaryDirectory() as tmp:

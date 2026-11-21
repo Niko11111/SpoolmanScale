@@ -30,27 +30,30 @@ void webPrinterFitList(String& h, uint16_t width_mm, uint16_t length_mm) {
   }
 }
 
+// One size as an option; an unchecked one says so after its size.
+static void mediaOption(String& h, const LabelMediaSize& s, const LabelPrinterConfig& c) {
+  h += F("<option value='");
+  h += String(s.width_mm); h += 'x'; h += String(s.length_mm);
+  h += F("' data-fit='");
+  webPrinterFitList(h, s.width_mm, s.length_mm);
+  h += F("'");
+  if (s.width_mm == c.media_width_mm && s.length_mm == c.media_length_mm) h += F(" selected");
+  h += F(">");
+  h += String(s.width_mm); h += F(" x "); h += String(s.length_mm); h += F(" mm");
+  if (!labelMediaChecked(s.width_mm, s.length_mm)) {
+    h += F(" (");
+    h += T(STR_PRN_MEDIA_UNCHECKED);
+    h += ')';
+  }
+  h += F("</option>");
+}
+
 void webPrinterMediaOptions(String& h, const LabelPrinterConfig& c) {
-  bool listed = false;
-  for (int i = 0; i < LABEL_MEDIA_SIZE_COUNT; i++) {
-    const LabelMediaSize& s = LABEL_MEDIA_SIZES[i];
-    const bool cur = s.width_mm == c.media_width_mm && s.length_mm == c.media_length_mm;
-    listed = listed || cur;
-    h += F("<option value='");
-    h += String(s.width_mm); h += 'x'; h += String(s.length_mm);
-    h += F("' data-fit='");
-    webPrinterFitList(h, s.width_mm, s.length_mm);
-    h += F("'");
-    if (cur) h += F(" selected");
-    h += F(">");
-    h += String(s.width_mm); h += F(" x "); h += String(s.length_mm); h += F(" mm</option>");
-  }
-  if (!listed) {
-    // A size set elsewhere and not in the table: shown so it is not
-    // silently replaced, inert so it cannot be picked again.
-    h += F("<option value='' selected disabled>");
-    h += String(c.media_width_mm); h += F(" x "); h += String(c.media_length_mm); h += F(" mm</option>");
-  }
+  for (int i = 0; i < LABEL_MEDIA_SIZE_COUNT; i++) mediaOption(h, LABEL_MEDIA_SIZES[i], c);
+  const LabelMediaSize own = labelPrinterCustomMedia();
+  // The own size, unless it is one of the suggested rolls anyway.
+  if (own.width_mm && !labelMediaSuggested(own.width_mm, own.length_mm)) mediaOption(h, own, c);
+  for (int i = 0; i < LABEL_MEDIA_SUGGESTED_COUNT; i++) mediaOption(h, LABEL_MEDIA_SUGGESTED[i], c);
 }
 
 void webPrinterWishLink(String& h) {

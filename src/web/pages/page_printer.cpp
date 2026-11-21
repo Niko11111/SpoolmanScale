@@ -20,6 +20,7 @@
 #include "hardware/sd_logger.h"
 #include "services/ble_service.h"
 #include "services/fair_card.h"
+#include "services/label_capacity.h"
 #include "services/label_printer.h"
 #include "ui/ble_devices_screen.h"
 #include "ui/printer_screen.h"
@@ -76,6 +77,24 @@ static RecVariant recVariant(const LabelPrinterConfig& c) {
   return labelPrinterProfile(c.model).direct_thermal ? REC_LABELS : REC_RIBBON;
 }
 
+// Whether the loaded stock is a checked size, and what the model takes for
+// a size typed into the page: as a sentence and as the inputs' limits.
+static void mediaJson(String& j, const LabelPrinterConfig& c) {
+  const LabelPrinterProfile& prof = labelPrinterProfile(c.model);
+  j += F(",\"checked\":");
+  j += labelMediaChecked(c.media_width_mm, c.media_length_mm) ? F("true") : F("false");
+  char range[160];
+  snprintf(range, sizeof(range), T(STR_W_P_MEDIA_RANGE), (unsigned)prof.min_width_mm,
+           (unsigned)prof.max_width_mm, (unsigned)prof.min_length_mm, (unsigned)prof.max_length_mm);
+  j += F(",\"range\":\"");
+  j += jsonText(range);
+  j += F("\",\"lim\":[");
+  j += String((unsigned)prof.min_width_mm); j += ',';
+  j += String((unsigned)prof.max_width_mm); j += ',';
+  j += String((unsigned)prof.min_length_mm); j += ',';
+  j += String((unsigned)prof.max_length_mm); j += ']';
+}
+
 static String stateJson() {
   const LabelPrinterConfig c = labelPrinterLoadConfig();
   String j;
@@ -123,6 +142,7 @@ static String stateJson() {
   j += String((unsigned)c.media_width_mm);
   j += F(",\"h\":");
   j += String((unsigned)c.media_length_mm);
+  mediaJson(j, c);
   // Where the label runs in the print row, for the strip on the page.
   int16_t lo, hi;
   labelPrinterOffsetRange(c, &lo, &hi);
@@ -278,6 +298,7 @@ static void pickers(String& h, const LabelPrinterConfig& c) {
   h += F("</span></div><div class='pick stock' id='ps'>");
   webPrinterStockCards(h, c);
   h += F("</div><span class='msg' id='ps-s'></span>");
+  webPrinterStockForm(h);
   recommendRow(h);
 }
 
@@ -492,6 +513,10 @@ static void scriptPaint(String& h) {
          "document.querySelectorAll('#ps .pc').forEach(function(b){"
          "b.style.display=b.dataset.fit.split(' ').indexOf(m)>=0?'':'none';"
          "b.classList.toggle('on',b.dataset.v===v);});"
+         "$('psh').style.display=d.printer.checked?'none':'';"
+         "$('psr').textContent=d.printer.range;"
+         "$('psw').min=d.printer.lim[0];$('psw').max=d.printer.lim[1];"
+         "$('psl').min=d.printer.lim[2];$('psl').max=d.printer.lim[3];"
          "$('pmx').classList.toggle('warm',d.printer.thermal);"
          "$('pmd').style.display=d.printer.thermal?'':'none';"
          "$('pmr').style.display=d.printer.thermal?'none':'';}"
@@ -545,6 +570,28 @@ static void scriptPosition(String& h) {
          "function setOff(v){postFlash('/api/printer/offset',String(v),'xo-s',3000).then(load);}");
 }
 
+// The size cards; the plus card opens the fields for a size of one's own,
+// which the scale judges while it is typed and the page shows among the
+// cards once it is saved.
+static void scriptStockHandlers(String& h) {
+  h += F("document.querySelectorAll('#ps .pc').forEach(function(b){"
+         "b.addEventListener('click',function(){if(b.classList.contains('on'))return;"
+         "if(b.id==='pso'){const f=$('psf'),open=f.style.display==='none';"
+         "f.style.display=open?'':'none';if(open)$('psw').focus();return;}"
+         "postFlash('/api/printer/media',b.dataset.v,'ps-s',4000).then(load);});});"
+         // A size of one's own: what the scale makes of it while it is typed,
+         // then saved; the page comes back with its card among the others.
+         "let pst=0;"
+         "function psCheck(){clearTimeout(pst);pst=setTimeout(function(){"
+         "const w=+$('psw').value,l=+$('psl').value;if(!w||!l){$('psc').textContent='';return;}"
+         "getJson('/api/printer/media/check?w='+w+'&l='+l).then(function(r){if(!r)return;"
+         "flash('psc',r.text,r.status>1);});},300);}"
+         "$('psw').addEventListener('input',psCheck);$('psl').addEventListener('input',psCheck);"
+         "$('psu').addEventListener('click',function(){"
+         "postFlash('/api/printer/media',(+$('psw').value)+'x'+(+$('psl').value),'psc',4000)"
+         ".then(function(r){if(r.ok)location.reload();});});");
+}
+
 // Every handler is bound here rather than written into an onclick
 // attribute: a page body is JavaScript inside a C++ string literal, and an
 // attribute is the one place where the two levels of quoting collide.
@@ -569,9 +616,6 @@ static void scriptHandlers(String& h) {
          "document.querySelectorAll('#pm .pc').forEach(function(b){"
          "b.addEventListener('click',function(){closePicker();if(b.classList.contains('on'))return;"
          "postFlash('/api/printer/model',b.dataset.m,'pm-s',4000).then(load);});});"
-         "document.querySelectorAll('#ps .pc').forEach(function(b){"
-         "b.addEventListener('click',function(){if(b.classList.contains('on'))return;"
-         "postFlash('/api/printer/media',b.dataset.v,'ps-s',4000).then(load);});});"
          // The print takes about ten seconds on the scale; the verdict is
          // fetched after that and shown on the last line.
          "$('tb').addEventListener('click',function(){"
@@ -603,6 +647,7 @@ static void pageScript(String& h) {
   scriptPosition(h);
   scriptPicker(h);
   scriptPaint(h);
+  scriptStockHandlers(h);
   scriptHandlers(h);
   h += F("</script>");
 }
@@ -626,6 +671,22 @@ static String body() {
   h += F("</div>");
   pageScript(h);
   return h;
+}
+
+// A size as the page sends it: anything, so out of range before it is cast.
+static LabelMediaStatus mediaStatus(LabelPrinterModel model, long w, long l) {
+  if (w <= 0 || l <= 0 || w > UINT8_MAX || l > UINT8_MAX) return LABEL_MEDIA_OUT_OF_RANGE;
+  return labelMediaStatusFor(model, (uint16_t)w, (uint16_t)l);
+}
+
+static int mediaStatusText(LabelMediaStatus st) {
+  switch (st) {
+    case LABEL_MEDIA_CHECKED:   return STR_W_P_MEDIA_ST_CHECKED;
+    case LABEL_MEDIA_UNCHECKED: return STR_W_P_MEDIA_ST_UNCHECKED_SHORT;
+    case LABEL_MEDIA_TOO_LARGE: return STR_W_P_MEDIA_ST_LARGE;
+    case LABEL_MEDIA_TOO_SMALL: return STR_W_P_MEDIA_ST_SMALL;
+    default:                    return STR_W_P_MEDIA_ST_RANGE;
+  }
 }
 
 static void routes(WebServer &srv) {
@@ -691,7 +752,8 @@ static void routes(WebServer &srv) {
     srv.send(ok ? 200 : 500, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
   });
 
-  // "WxH" in millimetres, checked against what the model takes.
+  // "WxH" in millimetres, checked against what the model takes, what the
+  // memory holds and whether a label fits on it at all.
   srv.on("/api/printer/media", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_PRINTER))) return;
     const String v = srv.arg("plain");
@@ -699,9 +761,10 @@ static void routes(WebServer &srv) {
     const long w = x > 0 ? strtol(v.c_str(), nullptr, 10) : 0;
     const long l = x > 0 ? strtol(v.c_str() + x + 1, nullptr, 10) : 0;
     LabelPrinterConfig c = labelPrinterLoadConfig();
-    const LabelPrinterProfile& p = labelPrinterProfile(c.model);
-    if (w < p.min_width_mm || w > p.max_width_mm || l < p.min_length_mm || l > p.max_length_mm) {
-      srv.send(400, "text/plain", T(STR_PRN_ERR_MEDIA));
+    const LabelMediaStatus st = mediaStatus(c.model, w, l);
+    if (st != LABEL_MEDIA_CHECKED && st != LABEL_MEDIA_UNCHECKED) {
+      logSDf("Web: label stock %ldx%ld mm refused, status %d", w, l, (int)st);
+      srv.send(400, "text/plain", T(mediaStatusText(st)));
       return;
     }
     c.media_width_mm = (uint16_t)w;
@@ -709,6 +772,19 @@ static void routes(WebServer &srv) {
     const bool ok = labelPrinterSaveConfig(c);
     logSDf("Web: label stock -> %ldx%ld mm", w, l);
     srv.send(ok ? 200 : 500, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
+  });
+
+  // What a size typed into the page would be, before it is saved.
+  srv.on("/api/printer/media/check", HTTP_GET, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_PRINTER))) return;
+    const LabelMediaStatus st = mediaStatus(labelPrinterLoadConfig().model,
+                                            srv.arg("w").toInt(), srv.arg("l").toInt());
+    String j = F("{\"status\":");
+    j += String((int)st);
+    j += F(",\"text\":\"");
+    j += jsonText(T(mediaStatusText(st)));
+    j += F("\"}");
+    srv.send(200, "application/json", j);
   });
 
   // Parks the test print; the loop renders and prints it under the overlay

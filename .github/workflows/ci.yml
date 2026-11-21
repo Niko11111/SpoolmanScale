@@ -85,6 +85,10 @@ jobs:
         run: python3 test/test_niimbot_task.py
       - name: Test label empty fields
         run: python3 test/test_label_gaps.py
+      - name: Test label sizes checked and unchecked
+        run: python3 test/test_label_media.py
+      - name: Test label colour name against the title
+        run: python3 test/test_label_color_name.py
       - name: Test local date parser
         run: python3 test/test_local_date.py
       - name: Test release asset digest

@@ -13,6 +13,7 @@
 #include "services/backend.h"
 #include "services/accent_fold.h"
 #include "services/label_big_id.h"
+#include "services/label_capacity.h"
 #include "services/label_draw.h"
 #include "services/label_facts.h"
 #include "services/label_tape.h"
@@ -544,21 +545,76 @@ static BigIdBox bigIdBox(lv_coord_t canvas_w, lv_coord_t canvas_h) {
   return BigIdBox{ M, M, (lv_coord_t)(canvas_w - 2 * M), (lv_coord_t)(canvas_h - 2 * M) };
 }
 
+// The label's size in dots as the printer takes it: across the head, along
+// the feed, the print row. All 0 when the printer has no usable stock.
+struct LabelDots { uint16_t content_w, h, row_w; };
+
+static LabelDots labelDots(const LabelPrinterConfig& printer) {
+  const LabelDots d{ labelPrinterContentWidth(printer.model, printer.media_width_mm),
+                     labelPrinterDotsForMm(printer.model, printer.media_length_mm),
+                     labelPrinterRasterWidth(printer.model, printer.media_width_mm) };
+  if (!d.row_w || !d.h || d.content_w > d.row_w) return LabelDots{ 0, 0, 0 };
+  return d;
+}
+
+// Where the blocks went, and, measured only, whether the label holds what it
+// carries: every fact line whole (whole) and, where it should have one, its
+// code as well (fits).
+struct LabelPlaced { LabelBody body; lv_coord_t side_qr; bool whole; bool fits; };
+
+// Every label the scale prints, laid out as `layout` says on a canvas of
+// cw x ch dots: drawn onto `canvas`, or with none only measured.
+static LabelPlaced layoutLabel(lv_obj_t* canvas, const LabelPrinterConfig& printer,
+                               const LabelLayout& layout, const LabelContent& c,
+                               const lv_area_t& size) {
+  const lv_coord_t cw = lv_area_get_width(&size), ch = lv_area_get_height(&size);
+  const lv_coord_t M = dots(LR_MARGIN_PX);
+  const uint8_t preset = layout.preset;
+  const bool standard = preset == LABEL_PRESET_STANDARD;
+  const lv_coord_t qr_max = labelPrinterDotsForMm(printer.model,
+      preset == LABEL_PRESET_MATERIAL_BIG ? LR_QR_SMALL_MM : LR_QR_MAX_MM);
+  LabelArea area{ M, M, (lv_coord_t)(cw - 2 * M), (lv_coord_t)(ch - M), qr_max, !standard,
+                  nullptr, !c.qr || !c.qr[0], nullptr };
+  LabelContent body = c;
+  LabelPlaced p{ LabelBody{ 0, true, "lines under the number" }, 0, true, true };
+  if (labelPresetIsBigId(preset)) {
+    const BigIdContent big{ c.d, &layout, c.lines, c.facts, c.n };
+    labelDrawBigId(canvas, bigIdBox(cw, ch), big);
+    if (!canvas) p.whole = p.fits = labelBigIdFits(bigIdBox(cw, ch), big);
+    return p;
+  }
+  if (preset == LABEL_PRESET_BIG_QR) {
+    p.side_qr = labelLayoutOption(layout, LO_PORTRAIT) ? drawTopQr(canvas, &area, c)
+                                                      : drawSideQr(canvas, &area, c);
+    if (p.side_qr) body.qr = nullptr;
+  }
+  // The larger sizes need room both ways: a 30 x 40 is tall but narrow, and
+  // there the header blocks would eat what the code needs.
+  const bool tall = ch >= dots(LR_TALL_PX) && area.w + 2 * M >= dots(LR_TALL_PX);
+  area.wrap_font = nameWrapFont(area, tall, body, layout, &area.wrap_cuts);
+  area.y = drawHead(canvas, area, tall, *c.d, layout);
+  p.body = drawBody(canvas, area, tall, body);
+  // Only a measurement reads it, and it costs the code another encoding.
+  if (canvas) return p;
+  bodyCode(area, tall, body, &p.whole);
+  const bool coded = !c.qr || !c.qr[0] || p.side_qr || p.body.qr;
+  p.fits = p.whole && coded;
+  return p;
+}
+
 static bool renderLabel(const LabelPrinterConfig& printer, const LabelLayout& layout,
                         const LabelContent& c, LabelRaster* out) {
   if (!out || !c.d) return false;
   *out = LabelRaster{};
-  const uint16_t content_w = labelPrinterContentWidth(printer.model, printer.media_width_mm);
-  const uint16_t h = labelPrinterDotsForMm(printer.model, printer.media_length_mm);
-  const uint16_t row_w = labelPrinterRasterWidth(printer.model, printer.media_width_mm);
-  if (!row_w || !h || content_w > row_w) return false;
+  const LabelDots d = labelDots(printer);
+  if (!d.row_w) return false;
   setDpi(labelPrinterProfile(printer.model).dpi);
 
   const bool turned = labelLayoutOption(layout, LO_PORTRAIT);
   setTurned(turned);
   // The canvas is the label as it reads: upright, the roll's length across.
-  const uint16_t cw = turned ? h : content_w;
-  const uint16_t ch = turned ? content_w : h;
+  const uint16_t cw = turned ? d.h : d.content_w;
+  const uint16_t ch = turned ? d.content_w : d.h;
   const size_t buf_bytes = LV_CANVAS_BUF_SIZE_TRUE_COLOR(cw, ch);
   void* buf = heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM);
   if (!buf) { logSD("Label: no PSRAM for the canvas"); return false; }
@@ -570,44 +626,22 @@ static bool renderLabel(const LabelPrinterConfig& printer, const LabelLayout& la
   lv_obj_t* canvas = lv_canvas_create(parent);
   lv_canvas_set_buffer(canvas, buf, cw, ch, LV_IMG_CF_TRUE_COLOR);
   lv_canvas_fill_bg(canvas, lv_color_white(), LV_OPA_COVER);
-
-  const lv_coord_t M = dots(LR_MARGIN_PX);
-  const uint8_t preset = layout.preset;
-  const bool standard = preset == LABEL_PRESET_STANDARD;
-  const lv_coord_t qr_max = labelPrinterDotsForMm(printer.model,
-      preset == LABEL_PRESET_MATERIAL_BIG ? LR_QR_SMALL_MM : LR_QR_MAX_MM);
-  LabelArea area{ M, M, (lv_coord_t)(cw - 2 * M), (lv_coord_t)(ch - M), qr_max, !standard,
-                  nullptr, !c.qr || !c.qr[0], nullptr };
-  LabelContent body = c;
-  lv_coord_t side_qr = 0;
-  LabelBody placed{ 0, true, "lines under the number" };
-  if (labelPresetIsBigId(preset)) {
-    labelDrawBigId(canvas, bigIdBox(cw, ch), BigIdContent{ c.d, &layout, c.lines, c.facts, c.n });
-  } else {
-    if (preset == LABEL_PRESET_BIG_QR) {
-      side_qr = turned ? drawTopQr(canvas, &area, c) : drawSideQr(canvas, &area, c);
-      if (side_qr) body.qr = nullptr;
-    }
-    // The larger sizes need room both ways: a 30 x 40 is tall but narrow, and
-    // there the header blocks would eat what the code needs.
-    const bool tall = ch >= dots(LR_TALL_PX) && area.w + 2 * M >= dots(LR_TALL_PX);
-    area.wrap_font = nameWrapFont(area, tall, body, layout, &area.wrap_cuts);
-    area.y = drawHead(canvas, area, tall, *c.d, layout);
-    placed = drawBody(canvas, area, tall, body);
-  }
+  const lv_area_t size{ 0, 0, (lv_coord_t)(cw - 1), (lv_coord_t)(ch - 1) };
+  const LabelPlaced placed = layoutLabel(canvas, printer, layout, c, size);
 
   const uint16_t x0 = labelPrinterContentX(printer);
-  const bool ok = packCanvas(canvas, content_w, h, row_w, x0, out);
+  const bool ok = packCanvas(canvas, d.content_w, d.h, d.row_w, x0, out);
   lv_obj_del(parent);
   heap_caps_free(buf);
+  const lv_coord_t side_qr = placed.side_qr;
   logSDf("Label: %s %ux%u at dot %u of a %u dot row, qr=%d %s, facts in %s, %s", c.what,
-         (unsigned)content_w, (unsigned)h, (unsigned)x0, (unsigned)row_w,
-         side_qr ? (int)side_qr : (int)placed.qr,
-         side_qr ? (turned ? "top" : "side") : placed.beside ? "beside" : "below",
-         placed.facts, ok ? "ok" : "failed");
+         (unsigned)d.content_w, (unsigned)d.h, (unsigned)x0, (unsigned)d.row_w,
+         side_qr ? (int)side_qr : (int)placed.body.qr,
+         side_qr ? (turned ? "top" : "side") : placed.body.beside ? "beside" : "below",
+         placed.body.facts, ok ? "ok" : "failed");
   // The measuring calls are silent, so a code that fits nowhere on the label
   // would otherwise leave only the qr=0 above (11.11.2026).
-  if (c.qr && c.qr[0] && !labelPresetIsBigId(preset) && !side_qr && !placed.qr)
+  if (c.qr && c.qr[0] && !labelPresetIsBigId(layout.preset) && !side_qr && !placed.body.qr)
     logSDf("Label: QR code left off, %u characters do not fit the room beside the text",
            (unsigned)strlen(c.qr));
   return ok;
@@ -808,9 +842,19 @@ static SpoolLabelData withoutMarks(const SpoolLabelData& in) {
   return d;
 }
 
+// Where the colour line prints the colour's name, the title loses it off its
+// end, so "PLA Basic Jade White" reads "PLA Basic" over "Colour: Jade White"
+// (issue #94). Only once the line is on the label: a budget too small for it
+// keeps the title whole. A title that does not end with the name keeps it
+// too: twice, never lost. The tape has no colour line and never gets here.
+static void colorNameOffTitle(SpoolLabelData* d, const LabelLayout& layout, const LabelFactList& facts) {
+  if (!labelLayoutOption(layout, LO_COLOR_NAME) || !d->color_name[0] || !labelFactsHaveColor(facts)) return;
+  d->name[nameColorNameCut(d->name, d->color_name)] = '\0';
+}
+
 bool labelRenderFilament(const LabelPrinterConfig& printer, const LabelLayout& layout,
                          const SpoolLabelData& in, LabelRaster* out) {
-  const SpoolLabelData spool = withoutMarks(in);
+  SpoolLabelData spool = withoutMarks(in);
   // The tape's own arrangement, without the spool's number: see label_tape.h.
   if (labelPrinterIsTape(printer.model)) return labelRenderTape(printer, spool, false, "filament", out);
   char qr[LABEL_QR_LEN];
@@ -818,9 +862,10 @@ bool labelRenderFilament(const LabelPrinterConfig& printer, const LabelLayout& l
   // No page to open: the label is laid out as one without a code.
   LabelLayout l = layout;
   if (!qr[0]) l.fields &= ~(1u << LF_QR);
-  const int capacity = labelFactCapacity(l, printer.media_width_mm, printer.media_length_mm);
+  const int capacity = labelFactCapacityFor(printer, l);
   LabelFactList f;
   labelFilamentFacts(l, spool, capacity, &f);
+  colorNameOffTitle(&spool, l, f);
   const LabelContent c{ &spool, f.line_ptrs, f.n, false,
                         labelLayoutHasCode(l) ? qr : nullptr, "filament", f.facts };
   return renderLabel(printer, l, c, out);
@@ -834,17 +879,18 @@ int labelIdShareLimit(const LabelPrinterConfig& printer, const LabelLayout& layo
   setDpi(labelPrinterProfile(printer.model).dpi);
   const bool turned = labelLayoutOption(layout, LO_PORTRAIT);
   setTurned(turned);
-  const SpoolLabelData spool = withoutMarks(in);
-  const int capacity = labelFactCapacity(layout, printer.media_width_mm, printer.media_length_mm);
+  SpoolLabelData spool = withoutMarks(in);
+  const int capacity = labelFactCapacityFor(printer, layout);
   LabelFactList l;
   labelSpoolFacts(layout, spool, capacity, &l);
+  colorNameOffTitle(&spool, layout, l);
   return labelBigIdShareLimit(bigIdBox(turned ? h : content_w, turned ? content_w : h),
                               BigIdContent{ &spool, &layout, l.line_ptrs, l.facts, l.n });
 }
 
 bool labelRenderSpool(const LabelPrinterConfig& printer, const LabelLayout& layout,
                       const SpoolLabelData& in, LabelRaster* out) {
-  const SpoolLabelData spool = withoutMarks(in);
+  SpoolLabelData spool = withoutMarks(in);
   // The tape's own arrangement: maker, material, name and the number.
   if (labelPrinterIsTape(printer.model)) return labelRenderTape(printer, spool, true, "spool", out);
   char qr[LABEL_QR_LEN];
@@ -853,10 +899,33 @@ bool labelRenderSpool(const LabelPrinterConfig& printer, const LabelLayout& layo
     snprintf(qr, sizeof(qr), "%s", spool.page_url);
   }
   else labelQrForSpool(spool.id, qr, sizeof(qr));
-  const int capacity = labelFactCapacity(layout, printer.media_width_mm, printer.media_length_mm);
+  const int capacity = labelFactCapacityFor(printer, layout);
   LabelFactList l;
   labelSpoolFacts(layout, spool, capacity, &l);
+  colorNameOffTitle(&spool, layout, l);
   const LabelContent c{ &spool, l.line_ptrs, l.n, false,
                         labelLayoutHasCode(layout) ? qr : nullptr, "spool", l.facts };
   return renderLabel(printer, layout, c, out);
+}
+
+int labelSpoolFitsLines(const LabelPrinterConfig& printer, const LabelLayout& layout,
+                        const SpoolLabelData& in, int lines, bool code_needed) {
+  const LabelDots d = labelDots(printer);
+  if (!d.row_w || labelPrinterIsTape(printer.model)) return -1;
+  SpoolLabelData spool = withoutMarks(in);
+  char qr[LABEL_QR_LEN];
+  if (spool.page_url[0]) snprintf(qr, sizeof(qr), "%s", spool.page_url);
+  else labelQrForSpool(spool.id, qr, sizeof(qr));
+  LabelFactList l;
+  labelSpoolFacts(layout, spool, lines, &l);
+  colorNameOffTitle(&spool, layout, l);
+  setDpi(labelPrinterProfile(printer.model).dpi);
+  const bool turned = labelLayoutOption(layout, LO_PORTRAIT);
+  setTurned(turned);
+  const lv_coord_t cw = turned ? d.h : d.content_w, ch = turned ? d.content_w : d.h;
+  const lv_area_t size{ 0, 0, (lv_coord_t)(cw - 1), (lv_coord_t)(ch - 1) };
+  const LabelContent c{ &spool, l.line_ptrs, l.n, false,
+                        labelLayoutHasCode(layout) ? qr : nullptr, "measure", l.facts };
+  const LabelPlaced p = layoutLabel(nullptr, printer, layout, c, size);
+  return (code_needed ? p.fits : p.whole) ? l.n : -1;
 }

@@ -35,6 +35,16 @@ bool isHexColorWord(const char* s);
 // bracket left to strip and the tile showed the stump.
 void colorNameClean(const char* in, char* out, size_t out_size);
 
+// How many bytes of the name stay when its colour name comes off the end,
+// matched word for word: case, accents, hyphens and an article number
+// "(11101)" do not count. "PLA+ High Flow Fire Engine Red" with "Fire Engine
+// Red" keeps "PLA+ High Flow", "PLA Jade-White" with "Jade White" keeps "PLA",
+// "Matte - Charcoal (11101)" with "Charcoal" keeps "Matte". The whole name
+// where it does not end with the colour name ("PLA Weiss" with "White"), or
+// is nothing but it: a label that prints the colour name on its own line
+// takes it out of the title only where the title keeps something.
+size_t nameColorNameCut(const char* name, const char* color);
+
 // True when the filament name already opens with the material. Spoolman's own
 // naming does this, and BamBuddy's mapping always does ("PETG HF Orange"), so
 // prefixing the material a second time would read "PETG PETG HF Orange".

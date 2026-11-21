@@ -260,6 +260,31 @@ static void mapTemps(JsonObjectConst fil, JsonObject f) {
   if (t_bed > 0) f["settings_bed_temp"] = t_bed;
 }
 
+// A colour name as the label keeps it (LABEL_LINE_LEN in label_render.h).
+#define FM_COLOR_NAME_BYTES 48
+
+// The colour's name, under a name of the scale's own: the label prints it in
+// place of the hex code. FilaMan keeps it in three places, each of them
+// sometimes only a hex code ("#000000", "009BD8") or with the article number
+// glued on ("Charcoal (11101)"): the first one that is a name once cleaned.
+// A multi colour filament has no one name.
+static void mapColorName(JsonObjectConst fil, JsonObject f) {
+  JsonArrayConst colors = fil["colors"];
+  if (colors.size() > 1) return;
+  const char* const candidates[] = {
+    colors[0]["display_name_override"] | "",
+    colors[0]["color"]["name"] | "",
+    fil["manufacturer_color_name"] | "",
+  };
+  char name[FM_COLOR_NAME_BYTES];
+  for (const char* c : candidates) {
+    colorNameClean(c, name, sizeof(name));
+    if (!name[0]) continue;
+    f["x_color_name"] = name;
+    return;
+  }
+}
+
 // ============================================================
 //  TRANSLATION: FilaMan spool  ->  Spoolman spool
 //
@@ -421,6 +446,7 @@ static void mapSpool(JsonObjectConst src, JsonObject dst) {
     const char* hex = fil["colors"][0]["color"]["hex_code"] | "";
     if (hex[0] == '#') hex++;
     f["color_hex"] = hex;
+    mapColorName(fil, f);
 
     JsonObject vendor = f["vendor"].to<JsonObject>();
     vendor["id"]   = fil["manufacturer_id"] | 0;
@@ -1602,7 +1628,11 @@ static void spoolListFilter(JsonDocument& filter) {
     f[key] = true;
   f["manufacturer"]["name"] = true;
   f["manufacturer"]["empty_spool_weight_g"] = true;
-  f["colors"].to<JsonArray>().add<JsonObject>()["color"]["hex_code"] = true;
+  JsonObject color = f["colors"].to<JsonArray>().add<JsonObject>();
+  color["color"]["hex_code"] = true;
+  color["color"]["name"] = true;
+  color["display_name_override"] = true;
+  f["manufacturer_color_name"] = true;
   JsonObject fcf = f["custom_fields"].to<JsonObject>();
   for (const char* key : { "article_number", "bambu_product_code", "drying", "temp_nozzle_min",
                            "temp_nozzle_max", "temp_bed" })
