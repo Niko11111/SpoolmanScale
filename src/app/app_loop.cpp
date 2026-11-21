@@ -31,6 +31,7 @@
 #include "services/tag_family.h"
 #include "hardware/display_power.h"
 #include "hardware/nfc.h"
+#include "services/nfc_wake_test.h"
 #include "hardware/scale.h"
 #include "hardware/scale_state.h"
 #include "hardware/sd_logger.h"
@@ -1496,8 +1497,8 @@ void appLoop() {
     scale_weight_g = 0.0f;
     if (lbl_scale_weight) lv_label_set_text(lbl_scale_weight, "---");
     updateHeaderStatus();
-    Serial.println("Scale: NAU7802 stopped answering, readings suspended");
-    logSD("Scale: NAU7802 stopped answering");
+    Serial.printf("Scale: %s stopped answering, readings suspended\n", scaleHardwareName());
+    logSDf("Scale: %s stopped answering", scaleHardwareName());
   }
 
   // NAU7802: read weight every 200ms and update labels.
@@ -1937,8 +1938,8 @@ void appLoop() {
           scale_ready = true;
           scale_lost = false;
           resetScaleFilter();
-          Serial.println("Scale: NAU7802 back on the bus");
-          logSD("Scale: NAU7802 recovered");
+          Serial.printf("Scale: %s back\n", scaleHardwareName());
+          logSDf("Scale: %s recovered", scaleHardwareName());
         } else {
           scl_ok = false;
           Serial.printf("Scale: re-init failed (%u/%u)\n",
@@ -1967,7 +1968,10 @@ void appLoop() {
     static uint8_t nfc_recover_tries = 0;
     if (!nfc_ok && millis() - last_nfc_recover_ms >= 5000) {
       last_nfc_recover_ms = millis();
-      if (!nfcChipOnBus(I2C_EXT)) {
+      // After a tag woke the scale the PN532 may be asleep, and a sleeping
+      // PN532 refuses the address probe; only a real command wakes it, so the
+      // re-init is tried anyway (a restart brought it back, 20.11.2026).
+      if (!nfcChipOnBus(I2C_EXT) && !nfcWakeTestWokeByExt1()) {
         // Off the bus entirely. Nothing to re-initialise, and the counter is
         // cleared so a reader that is plugged back in gets a full set of
         // attempts rather than the remainder of an old one.

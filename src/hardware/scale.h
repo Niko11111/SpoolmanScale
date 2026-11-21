@@ -15,3 +15,6 @@ bool scaleHardwarePresent();
 
 bool scaleHardwareAvailable();
 int32_t scaleHardwareReadRaw();
+// "NAU7802", "HX711" or "no ADC": which one the last scaleHardwareBegin() found,
+// for log lines.
+const char* scaleHardwareName();

@@ -23,8 +23,8 @@ const char* nfcChipName();
 // one probe, as before; a PN7160 a few, since in standby it may refuse once.
 bool nfcChipOnBus(TwoWire& wire);
 
-// irq_pin is not a wire, it is what the library's constructor is given so it
-// does not call pinMode() on an invalid pin - see hw_pins::PN532_IRQ_UNUSED.
+// irq_pin: connector pin 8 (hw_pins::NFC_IRQ); the PN532 library only sets it
+// to input, the wake test reads it in deep sleep.
 // A PN7160 ignores reset_pin and irq_pin and uses hw_pins::NFC_VEN/NFC_IRQ.
 // firmware_version: the PN532's GetFirmwareVersion word; for a PN7160 the same
 // layout built from its CORE_RESET notification (major << 16 | minor << 8).
@@ -104,6 +104,22 @@ bool nfcWriteNtagPage(uint8_t page, uint8_t* data);
 // InListPassiveTarget whose answer is left pending, so IRQ falls when a card
 // comes. PN7160: discovery with nothing left to read, so IRQ rises then.
 bool nfcArmForWake();
+// After a tag woke the ESP: the PN532 still holds the answer to that search,
+// and the reader is brought up with commands written over it. Reads it off the
+// bus once, before nfcDetectChip(), then aborts whatever the chip is still
+// doing; does nothing unless the boot scan saw a PN532. Returns the status
+// byte read (NFC_WAKE_ANSWER_READY: an answer was waiting), or one of the
+// negative codes below.
+#define NFC_WAKE_ANSWER_READY      0x01
+#define NFC_WAKE_ANSWER_NOT_ASKED  (-1)   // no PN532 in the boot scan
+#define NFC_WAKE_ANSWER_NO_BYTES   (-2)   // the read came back empty
+int nfcPn532DropWakeAnswer(TwoWire* wire);
+// The same after a wake, where the reset wire is verified: RSTPDN low for long
+// enough to switch the PN532 and its field off, then high again. The reset
+// probe does this with a tag on the reader and the tag is found again after;
+// reading off and aborting left it silent until moved (21.11.2026). False,
+// and the pin untouched, unless the boot scan saw a PN532.
+bool nfcPn532PowerCycle(TwoWire* wire, int8_t rstpdn_pin);
 
 // How the tag commands since the last call went, by cause (PN7160 only, see
 // nfc_rf_counts.h); then zero. False on a PN532, out left zeroed.

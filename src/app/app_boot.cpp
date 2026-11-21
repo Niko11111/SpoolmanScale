@@ -160,6 +160,30 @@ static bool beginPn7160Reader() {
   return true;
 }
 
+// After a tag woke the scale the PN532 may still be finishing that search, and
+// the first start fails; a restart always brought it back (20.11.2026), so one
+// more attempt after a pause does the same without the restart.
+static constexpr uint32_t PN532_WAKE_RETRY_DELAY_MS = 200;
+
+static bool beginPn532Reader() {
+  Serial.print("Looking for PN532... ");
+  uint32_t ver = 0;
+  bool ok = nfcHardwareBegin(&I2C_EXT, nfcResetPinForBoot(), hw_pins::NFC_IRQ, &ver);
+  if (!ok && nfcWakeTestWokeByExt1()) {
+    logSD("NFC: the PN532 did not start after the wake, trying once more");
+    delay(PN532_WAKE_RETRY_DELAY_MS);
+    ok = nfcHardwareBegin(&I2C_EXT, nfcResetPinForBoot(), hw_pins::NFC_IRQ, &ver);
+  }
+  if (!ok) {
+    Serial.printf("ERROR! (bus: %s)\n", i2cScanLast());
+    logSDf("NFC init FAILED (bus: %s)", i2cScanLast());
+    return false;
+  }
+  Serial.printf("OK (FW %d.%d)\n", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
+  logSDf("NFC ready (PN532 FW %d.%d)", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
+  return true;
+}
+
 void appSetup() {
   Serial.begin(115200);
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -221,21 +245,12 @@ void appSetup() {
 
   delay(500);
 
+  nfcResetLoad();           // before the wake handling, which asks for the verdict
   nfcWakeTestAfterBoot();   // releases pin 7 if the wake test held it
-  nfcResetLoad();
   if (nfcDetectChip(&I2C_EXT) == NFC_CHIP_PN7160) {
     nfc_ok = beginPn7160Reader();
   } else {
-    Serial.print("Looking for PN532... ");
-    uint32_t ver = 0;
-    if (nfcHardwareBegin(&I2C_EXT, nfcResetPinForBoot(), hw_pins::PN532_IRQ_UNUSED, &ver)) {
-      nfc_ok = true;
-      Serial.printf("OK (FW %d.%d)\n", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
-      logSDf("NFC ready (PN532 FW %d.%d)", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
-    } else {
-      Serial.printf("ERROR! (bus: %s)\n", i2cScanLast());
-      logSDf("NFC init FAILED (bus: %s)", i2cScanLast());
-    }
+    nfc_ok = beginPn532Reader();
   }
 
   // A device built without a load cell is not a device with a broken one. The
@@ -244,10 +259,10 @@ void appSetup() {
   // and there is nothing here to wait for. scl_ok and scale_ready stay false,
   // which is what every consumer already asks.
   if (!g_scale_fitted) {
-    Serial.println("Scale switched off in the settings, NAU7802 not probed");
-    logSD("Scale switched off in the settings, NAU7802 not probed");
+    Serial.println("Scale switched off in the settings, no ADC probed");
+    logSD("Scale switched off in the settings, no ADC probed");
   } else {
-    Serial.print("Looking for NAU7802... ");
+    Serial.print("Looking for NAU7802, then HX711... ");
     if (scaleHardwareBegin(&I2C_EXT, [](){
       Serial.print(".");
       delay(100);
@@ -255,13 +270,14 @@ void appSetup() {
     })) {
       scl_ok = true;
       scale_ready = true;
-      Serial.printf("OK! cal_factor=%.4f  zero_offset=%d\n", cal_factor, zero_offset);
-      logSDf("Scale ready (cal=%.4f zero=%d)", cal_factor, zero_offset);
+      Serial.printf("OK! %s cal_factor=%.4f  zero_offset=%d\n", scaleHardwareName(),
+                    cal_factor, zero_offset);
+      logSDf("Scale ready (%s, cal=%.4f zero=%d)", scaleHardwareName(), cal_factor, zero_offset);
     } else {
       // Two ways to land here: the chip did not answer on 0x2A at all, or it
       // answered but never finished calibrating. scaleHardwareBegin() prints
       // which one, so this must not claim a cause of its own.
-      Serial.printf("ERROR! Scale unavailable (NAU7802 on 0x%02X, bus: %s)\n",
+      Serial.printf("ERROR! Scale unavailable (NAU7802 on 0x%02X, HX711 on pins 5/6, bus: %s)\n",
                     I2C_ADDR_NAU7802, i2cScanLast());
       logSDf("Scale init FAILED (bus: %s)", i2cScanLast());
     }

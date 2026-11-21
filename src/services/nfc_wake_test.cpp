@@ -13,12 +13,17 @@
 #include "services/nfc_reset.h"
 #include "services/prefs_store.h"
 
-#define KEY_WAKE_TEST "nfc_waketest"   // NVS keys are limited to 15 characters
+// NVS keys are limited to 15 characters. On unless switched off: a test away
+// from a computer has no way to send the switch. A new key, because the old
+// "nfc_waketest" was left off after the first test (18.11.2026).
+#define KEY_WAKE_TEST "nfc_wake_on"
+#define WAKE_TEST_DEFAULT true
 
 static const size_t WAKE_TEXT_LEN = 48;
 static char s_last_wake[WAKE_TEXT_LEN] = "";
+static bool s_woke_by_ext1 = false;
 
-bool nfcWakeTestEnabled() { return prefsGetBool(KEY_WAKE_TEST, false); }
+bool nfcWakeTestEnabled() { return prefsGetBool(KEY_WAKE_TEST, WAKE_TEST_DEFAULT); }
 
 void nfcWakeTestSet(bool on) {
   prefsPutBool(KEY_WAKE_TEST, on);
@@ -91,6 +96,19 @@ static void noteWake(esp_sleep_wakeup_cause_t cause) {
   }
 }
 
+// Which state the PN532 was found in after the wake, for the next attempt at
+// telling why a reader did not start.
+static void logWakeAnswer(int status) {
+  if (status == NFC_WAKE_ANSWER_NOT_ASKED) return;
+  if (status == NFC_WAKE_ANSWER_READY) {
+    logSD("NFC wake test: the PN532's answer to the search was waiting, read off");
+  } else if (status == NFC_WAKE_ANSWER_NO_BYTES) {
+    logSD("NFC wake test: the PN532 returned no bytes, search aborted");
+  } else {
+    logSDf("NFC wake test: no answer waiting on the PN532 (status 0x%02X), search aborted", status);
+  }
+}
+
 void nfcWakeTestAfterBoot() {
   const esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
   if (cause == ESP_SLEEP_WAKEUP_UNDEFINED) return;   // a cold boot or a reset
@@ -98,6 +116,15 @@ void nfcWakeTestAfterBoot() {
   gpio_hold_dis((gpio_num_t)hw_pins::NFC_VEN);
   rtc_gpio_deinit((gpio_num_t)hw_pins::NFC_IRQ);
   noteWake(cause);
+  if (cause != ESP_SLEEP_WAKEUP_EXT1) return;
+  s_woke_by_ext1 = true;
+  if (!nfcResetVerified()) {
+    logWakeAnswer(nfcPn532DropWakeAnswer(&I2C_EXT));
+  } else if (nfcPn532PowerCycle(&I2C_EXT, hw_pins::PN532_RESET_WIRE)) {
+    logSD("NFC wake test: PN532 switched off and on over pin 7");
+  }
 }
+
+bool nfcWakeTestWokeByExt1() { return s_woke_by_ext1; }
 
 const char* nfcWakeTestLastWake() { return s_last_wake; }

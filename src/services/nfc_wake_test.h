@@ -1,7 +1,7 @@
 #pragma once
 
 // The wake test (Notes, PN7160 6.11): can a tag put on the reader wake the
-// scale from deep sleep over connector pin 8 (GPIO 21)? Off unless switched on
+// scale from deep sleep over connector pin 8 (GPIO 21)? On unless switched off
 // over the web (web/web_nfc_test.cpp); off, nothing here does anything and
 // deep sleep is exactly what it was. Touch (ext0) wakes as before either way.
 //
@@ -23,3 +23,6 @@ void nfcWakeTestBeforeSleep();
 void nfcWakeTestAfterBoot();
 // The cause of the last wake as text for the web ("ext1 GPIO21"), or "".
 const char* nfcWakeTestLastWake();
+// This boot came from an ext1 wake with the test on, so the reader was left
+// searching and may need a second attempt to start.
+bool nfcWakeTestWokeByExt1();
