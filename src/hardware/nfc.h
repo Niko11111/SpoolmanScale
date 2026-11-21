@@ -104,21 +104,11 @@ bool nfcWriteNtagPage(uint8_t page, uint8_t* data);
 // InListPassiveTarget whose answer is left pending, so IRQ falls when a card
 // comes. PN7160: discovery with nothing left to read, so IRQ rises then.
 bool nfcArmForWake();
-// After a tag woke the ESP: the PN532 still holds the answer to that search,
-// and the reader is brought up with commands written over it. Reads it off the
-// bus once, before nfcDetectChip(), then aborts whatever the chip is still
-// doing; does nothing unless the boot scan saw a PN532. Returns the status
-// byte read (NFC_WAKE_ANSWER_READY: an answer was waiting), or one of the
-// negative codes below.
-#define NFC_WAKE_ANSWER_READY      0x01
-#define NFC_WAKE_ANSWER_NOT_ASKED  (-1)   // no PN532 in the boot scan
-#define NFC_WAKE_ANSWER_NO_BYTES   (-2)   // the read came back empty
-int nfcPn532DropWakeAnswer(TwoWire* wire);
-// The same after a wake, where the reset wire is verified: RSTPDN low for long
-// enough to switch the PN532 and its field off, then high again. The reset
-// probe does this with a tag on the reader and the tag is found again after;
-// reading off and aborting left it silent until moved (21.11.2026). False,
-// and the pin untouched, unless the boot scan saw a PN532.
+// After a tag woke the ESP, with the reset wire verified: RSTPDN low for long
+// enough to switch the PN532 and its field off, then high again. Without it
+// the PN532 did not start again, or a tag on it stayed silent until it was
+// moved (21.11.2026). Before nfcDetectChip(). False, and the pin untouched,
+// unless the boot scan saw a PN532.
 bool nfcPn532PowerCycle(TwoWire* wire, int8_t rstpdn_pin);
 
 // How the tag commands since the last call went, by cause (PN7160 only, see

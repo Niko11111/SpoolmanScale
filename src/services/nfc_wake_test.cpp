@@ -21,7 +21,6 @@
 
 static const size_t WAKE_TEXT_LEN = 48;
 static char s_last_wake[WAKE_TEXT_LEN] = "";
-static bool s_woke_by_ext1 = false;
 
 bool nfcWakeTestEnabled() { return prefsGetBool(KEY_WAKE_TEST, WAKE_TEST_DEFAULT); }
 
@@ -32,16 +31,19 @@ void nfcWakeTestSet(bool on) {
 
 // Pin 7 high through the sleep: low, the PN7160 is off and the PN532 powered
 // down, and neither would see a tag. Both GPIOs are RTC pads, so gpio_hold_en()
-// takes the RTC hold, which lasts through deep sleep on its own. On a PN532
-// only where the reset probe found the wire on RSTPDN: on the old wiring the
-// pin meets a module output (hardware/pins.h), and RSTPDN has the module's
-// own pull-up anyway.
-static bool holdReaderPowered() {
-  if (nfcChip() == NFC_CHIP_PN532 && !nfcResetVerified()) return false;
+// takes the RTC hold, which lasts through deep sleep on its own.
+static void holdReaderPowered() {
   pinMode(hw_pins::NFC_VEN, OUTPUT);
   digitalWrite(hw_pins::NFC_VEN, HIGH);
   gpio_hold_en((gpio_num_t)hw_pins::NFC_VEN);
-  return true;
+}
+
+// A PN532 wakes the scale only with RSTPDN on pin 7, verified by the reset
+// probe: after the wake it has to be switched off and on over that wire, or it
+// does not start again (21.11.2026). On the old wiring pin 7 meets a module
+// output (hardware/pins.h) and must not be driven at all.
+static bool readerCanWake() {
+  return nfcChip() == NFC_CHIP_PN7160 || nfcResetVerified();
 }
 
 // The PN7160 drives its IRQ push-pull, so the pull-down only keeps an
@@ -67,16 +69,19 @@ void nfcWakeTestBeforeSleep() {
     logSDf("NFC wake test: the %s is not ready - sleeping without NFC wake", nfcChipName());
     return;
   }
+  if (!readerCanWake()) {
+    logSD("NFC wake test: PN532 reset wire not verified - sleeping without NFC wake");
+    return;
+  }
   const bool active_high = nfcChip() == NFC_CHIP_PN7160;
   const bool searching = nfcArmForWake();
-  const bool held = holdReaderPowered();
+  holdReaderPowered();
   const int irq_level = digitalRead(hw_pins::NFC_IRQ);
   const esp_err_t err = armExt1(active_high);
   // The IRQ level before sleeping: already at the wake level, the scale wakes
   // at once, which tells as much as a tag that does not wake it.
-  logSDf("NFC wake test: %s %s, pin 7 %s, IRQ now %s, ext1 GPIO%d %s -> %s (%d)",
-         nfcChipName(), searching ? "searching" : "NOT searching",
-         held ? "held high" : "not held (PN532 reset wire not verified)", irq_level ? "high" : "low",
+  logSDf("NFC wake test: %s %s, pin 7 held high, IRQ now %s, ext1 GPIO%d %s -> %s (%d)",
+         nfcChipName(), searching ? "searching" : "NOT searching", irq_level ? "high" : "low",
          hw_pins::NFC_IRQ, active_high ? "ANY_HIGH" : "ANY_LOW", esp_err_to_name(err), (int)err);
 }
 
@@ -96,19 +101,6 @@ static void noteWake(esp_sleep_wakeup_cause_t cause) {
   }
 }
 
-// Which state the PN532 was found in after the wake, for the next attempt at
-// telling why a reader did not start.
-static void logWakeAnswer(int status) {
-  if (status == NFC_WAKE_ANSWER_NOT_ASKED) return;
-  if (status == NFC_WAKE_ANSWER_READY) {
-    logSD("NFC wake test: the PN532's answer to the search was waiting, read off");
-  } else if (status == NFC_WAKE_ANSWER_NO_BYTES) {
-    logSD("NFC wake test: the PN532 returned no bytes, search aborted");
-  } else {
-    logSDf("NFC wake test: no answer waiting on the PN532 (status 0x%02X), search aborted", status);
-  }
-}
-
 void nfcWakeTestAfterBoot() {
   const esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
   if (cause == ESP_SLEEP_WAKEUP_UNDEFINED) return;   // a cold boot or a reset
@@ -116,15 +108,11 @@ void nfcWakeTestAfterBoot() {
   gpio_hold_dis((gpio_num_t)hw_pins::NFC_VEN);
   rtc_gpio_deinit((gpio_num_t)hw_pins::NFC_IRQ);
   noteWake(cause);
-  if (cause != ESP_SLEEP_WAKEUP_EXT1) return;
-  s_woke_by_ext1 = true;
-  if (!nfcResetVerified()) {
-    logWakeAnswer(nfcPn532DropWakeAnswer(&I2C_EXT));
-  } else if (nfcPn532PowerCycle(&I2C_EXT, hw_pins::PN532_RESET_WIRE)) {
+  // The check again: only a verified wire may be pulled low (readerCanWake()).
+  if (cause == ESP_SLEEP_WAKEUP_EXT1 && nfcResetVerified() &&
+      nfcPn532PowerCycle(&I2C_EXT, hw_pins::PN532_RESET_WIRE)) {
     logSD("NFC wake test: PN532 switched off and on over pin 7");
   }
 }
-
-bool nfcWakeTestWokeByExt1() { return s_woke_by_ext1; }
 
 const char* nfcWakeTestLastWake() { return s_last_wake; }

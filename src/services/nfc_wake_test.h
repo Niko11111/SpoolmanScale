@@ -8,8 +8,9 @@
 // Before sleeping: the reader is left searching (nfcArmForWake()), pin 7
 // (GPIO 14, the PN532's RSTPDN, the PN7160's VEN) is held high through the
 // sleep, and ext1 waits on GPIO 21 - for a high level on a PN7160, whose IRQ
-// is active high, a low one on a PN532. After waking: the hold is released,
-// the pin handed back, and the cause and pin are logged.
+// is active high, a low one on a PN532. A PN532 is armed only with its reset
+// wire verified. After waking: the hold is released, the pin handed back, the
+// cause and pin are logged, and a PN532 is switched off and on over pin 7.
 
 #include <stdint.h>
 
@@ -23,6 +24,4 @@ void nfcWakeTestBeforeSleep();
 void nfcWakeTestAfterBoot();
 // The cause of the last wake as text for the web ("ext1 GPIO21"), or "".
 const char* nfcWakeTestLastWake();
-// This boot came from an ext1 wake with the test on, so the reader was left
-// searching and may need a second attempt to start.
-bool nfcWakeTestWokeByExt1();
+

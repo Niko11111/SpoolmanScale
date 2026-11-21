@@ -288,38 +288,9 @@ bool nfcWriteNtagPage(uint8_t page, uint8_t* data) {
   return nfc && nfc->ntag2xx_WritePage(page, data);
 }
 
-// An ACK frame sent by the host aborts whatever the PN532 is working on. The
-// loop's scan leaves its search running when it times out, with MxRty 0xFF,
-// so it never ends by itself: a new command then meets a busy chip, which is
-// what "NOT searching" before the first deep sleep was (20.11.2026).
-static const uint8_t PN532_ABORT_FRAME[] = { 0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00 };
-static constexpr uint32_t PN532_ABORT_SETTLE_MS = 5;
-
-static void pn532Abort(TwoWire* wire) {
-  wire->beginTransmission((uint8_t)I2C_ADDR_PN532);
-  wire->write(PN532_ABORT_FRAME, sizeof(PN532_ABORT_FRAME));
-  wire->endTransmission();
-  delay(PN532_ABORT_SETTLE_MS);
-}
-
 bool nfcArmForWake() {
   if (s_chip == NFC_CHIP_PN7160) return pn7160ArmForWake();
-  if (!nfc || !nfc_wire) return false;
-  pn532Abort(nfc_wire);
-  return nfc->startPassiveTargetIDDetection(PN532_MIFARE_ISO14443A);
-}
-
-// InListPassiveTarget with one target and a 10 byte UID is 23 bytes including
-// the ready byte; one read of this many takes the whole answer.
-static constexpr uint8_t PN532_WAKE_ANSWER_READ_LEN = 40;
-
-int nfcPn532DropWakeAnswer(TwoWire* wire) {
-  if (!wire || !i2cScanSaw(I2C_ADDR_PN532)) return NFC_WAKE_ANSWER_NOT_ASKED;
-  const size_t got = wire->requestFrom((uint8_t)I2C_ADDR_PN532, PN532_WAKE_ANSWER_READ_LEN);
-  const int status = got > 0 ? wire->read() : NFC_WAKE_ANSWER_NO_BYTES;
-  while (wire->available()) wire->read();
-  pn532Abort(wire);
-  return status;
+  return nfc && nfc->startPassiveTargetIDDetection(PN532_MIFARE_ISO14443A);
 }
 
 // Long enough for the field to die and every tag in it to lose power, which

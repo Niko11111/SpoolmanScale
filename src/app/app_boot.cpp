@@ -160,21 +160,10 @@ static bool beginPn7160Reader() {
   return true;
 }
 
-// After a tag woke the scale the PN532 may still be finishing that search, and
-// the first start fails; a restart always brought it back (20.11.2026), so one
-// more attempt after a pause does the same without the restart.
-static constexpr uint32_t PN532_WAKE_RETRY_DELAY_MS = 200;
-
 static bool beginPn532Reader() {
   Serial.print("Looking for PN532... ");
   uint32_t ver = 0;
-  bool ok = nfcHardwareBegin(&I2C_EXT, nfcResetPinForBoot(), hw_pins::NFC_IRQ, &ver);
-  if (!ok && nfcWakeTestWokeByExt1()) {
-    logSD("NFC: the PN532 did not start after the wake, trying once more");
-    delay(PN532_WAKE_RETRY_DELAY_MS);
-    ok = nfcHardwareBegin(&I2C_EXT, nfcResetPinForBoot(), hw_pins::NFC_IRQ, &ver);
-  }
-  if (!ok) {
+  if (!nfcHardwareBegin(&I2C_EXT, nfcResetPinForBoot(), hw_pins::NFC_IRQ, &ver)) {
     Serial.printf("ERROR! (bus: %s)\n", i2cScanLast());
     logSDf("NFC init FAILED (bus: %s)", i2cScanLast());
     return false;
