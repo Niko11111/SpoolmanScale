@@ -2,8 +2,8 @@
 
 // The wake test (Notes, PN7160 6.11): can a tag put on the reader wake the
 // scale from deep sleep over connector pin 8 (GPIO 21)? On unless switched off
-// over the web (web/web_nfc_test.cpp); off, nothing here does anything and
-// deep sleep is exactly what it was. Touch (ext0) wakes as before either way.
+// on the settings page (web/pages/page_config.cpp); off, nothing here does
+// anything and deep sleep is exactly what it was. Touch (ext0) wakes as before either way.
 //
 // Before sleeping: the reader is left searching (nfcArmForWake()), pin 7
 // (GPIO 14, the PN532's RSTPDN, the PN7160's VEN) is held high through the
@@ -16,6 +16,10 @@
 
 bool nfcWakeTestEnabled();
 void nfcWakeTestSet(bool on);
+// Whether the reader can wake the scale at all: a PN7160 always, a PN532 only
+// with its reset wire verified (it has to be switched off and on over pin 7
+// after the wake). The settings switch is locked while this is false.
+bool nfcWakeAvailable();
 
 // Right before deep sleep, ahead of displayPrepareDeepSleep().
 void nfcWakeTestBeforeSleep();

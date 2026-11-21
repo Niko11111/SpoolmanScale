@@ -4502,6 +4502,19 @@ const char* const STRINGS[][3] = {
     "Format non vérifié." },  // STR_W_P_MEDIA_ST_UNCHECKED_SHORT
   { "ISO 15693, nur lesbar", "ISO 15693, read-only",
     "ISO 15693, lecture seule" },  // STR_W_TAG_KIND_VICINITY
+  // Settings page, device card: waking from deep sleep by a tag on the reader.
+  { "Per NFC-Tag aus dem Tiefschlaf aufwachen", "Wake from deep sleep by NFC tag",
+    "Sortir de la veille profonde avec un tag NFC" },  // STR_W_NFC_WAKE
+  { "Ein Tag auf dem Reader weckt die Waage, die Spule wird gleich gelesen. Braucht Pin 8 am I/O-Stecker.",
+    "A tag on the reader wakes the scale, and the spool is read straight away. Needs pin 8 of the I/O connector.",
+    "Un tag posé sur le lecteur réveille la balance, et la bobine est lue aussitôt. Nécessite la broche 8 du connecteur E/S." },  // STR_W_NFC_WAKE_HINT
+  // Shown instead of the hint while the switch is locked.
+  { "Mit einem PN532 erst nach geprüftem Reset-Draht: am Gerät unter Einstellungen → System → „NFC-Reset prüfen“.",
+    "With a PN532, only once its reset wire is checked: on the scale under Settings → System → “Check NFC reset”.",
+    "Avec un PN532, seulement après vérification de sa liaison de réinitialisation : sur la balance, Réglages → Système → « Vérifier la réinit. NFC »." },  // STR_W_NFC_WAKE_LOCKED
+  { "Im Tiefschlaf sucht der Reader weiter nach Tags und meldet einen über Pin 8 (IRQ). Dafür braucht es ein 8-poliges Kabel. Ein PN532 braucht dazu seinen Reset-Draht (RSTPDN) an Pin 7: Nach dem Aufwachen schaltet die Waage ihn darüber einmal aus und wieder ein, sonst startet er nicht sauber. Mit einem 7-poligen Kabel bleibt der Schalter wirkungslos. In den Tiefschlaf geht die Waage nur, wenn am Gerät unter Einstellungen → Display eine Zeit dafür eingestellt ist. Antippen des Displays weckt sie weiterhin.",
+    "In deep sleep the reader keeps looking for tags and reports one over pin 8 (IRQ), which takes an 8-wire cable. A PN532 also needs its reset wire (RSTPDN) on pin 7: after waking, the scale switches it off and on once over that wire, or it does not start cleanly. With a 7-wire cable the switch has no effect. The scale only goes into deep sleep when a time is set for it on the scale under Settings → Display. Tapping the display still wakes it.",
+    "En veille profonde, le lecteur continue de chercher des tags et en signale un par la broche 8 (IRQ), ce qui demande un câble à 8 fils. Un PN532 a aussi besoin de sa liaison de réinitialisation (RSTPDN) sur la broche 7 : au réveil, la balance l'éteint et le rallume une fois par cette liaison, sinon il ne démarre pas correctement. Avec un câble à 7 fils, ce réglage n'a aucun effet. La balance ne passe en veille profonde que si une durée est réglée sur la balance, sous Réglages → Affichage. Toucher l'écran la réveille toujours." },  // STR_W_NFC_WAKE_DETAIL
 };
 
 StringID tagWriteResultString(uint8_t code) {

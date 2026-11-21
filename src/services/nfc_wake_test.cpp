@@ -42,7 +42,7 @@ static void holdReaderPowered() {
 // probe: after the wake it has to be switched off and on over that wire, or it
 // does not start again (21.11.2026). On the old wiring pin 7 meets a module
 // output (hardware/pins.h) and must not be driven at all.
-static bool readerCanWake() {
+bool nfcWakeAvailable() {
   return nfcChip() == NFC_CHIP_PN7160 || nfcResetVerified();
 }
 
@@ -69,7 +69,7 @@ void nfcWakeTestBeforeSleep() {
     logSDf("NFC wake test: the %s is not ready - sleeping without NFC wake", nfcChipName());
     return;
   }
-  if (!readerCanWake()) {
+  if (!nfcWakeAvailable()) {
     logSD("NFC wake test: PN532 reset wire not verified - sleeping without NFC wake");
     return;
   }
@@ -108,7 +108,7 @@ void nfcWakeTestAfterBoot() {
   gpio_hold_dis((gpio_num_t)hw_pins::NFC_VEN);
   rtc_gpio_deinit((gpio_num_t)hw_pins::NFC_IRQ);
   noteWake(cause);
-  // The check again: only a verified wire may be pulled low (readerCanWake()).
+  // The check again: only a verified wire may be pulled low (nfcWakeAvailable()).
   if (cause == ESP_SLEEP_WAKEUP_EXT1 && nfcResetVerified() &&
       nfcPn532PowerCycle(&I2C_EXT, hw_pins::PN532_RESET_WIRE)) {
     logSD("NFC wake test: PN532 switched off and on over pin 7");

@@ -19,6 +19,7 @@
 #include "services/device_name.h"
 #include "services/list_limits.h"
 #include "services/mdns_service.h"
+#include "services/nfc_wake_test.h"
 #include "services/prefs_store.h"
 #include "hardware/scale_state.h"
 #include "services/user_options.h"
@@ -130,6 +131,26 @@ static void addTagFormatsCard(String &h) {
   h += F("</div></div>");
 }
 
+// Waking by tag needs pin 8 and, on a PN532, the reset wire verified on the
+// device. Until then the switch is shown but cannot be moved, with the way to
+// the check under it instead of the hint. The longer why folds away, since
+// most people only need the first line (Notes, PN7160 6.11).
+static void addNfcWakeSwitch(String &h) {
+  const bool available = nfcWakeAvailable();
+  h += F("<div class='field'><label class='check'><span class='switch'><input id='nw' type='checkbox'");
+  if (available && nfcWakeTestEnabled()) h += F(" checked");
+  if (!available) h += F(" disabled");
+  h += F("><i></i></span>");
+  h += T(STR_W_NFC_WAKE);
+  h += F("</label><span class='hint'>");
+  h += T(available ? STR_W_NFC_WAKE_HINT : STR_W_NFC_WAKE_LOCKED);
+  h += F("</span><span class='msg' id='nw-s'></span><details class='more'><summary>");
+  h += T(STR_BTN_MORE_INFO);
+  h += F("</summary><p class='hint'>");
+  h += T(STR_W_NFC_WAKE_DETAIL);
+  h += F("</p></details></div>");
+}
+
 // What kind of device this is and how it wakes. Waking on load had been
 // documented in user_options.h since it was written and was never switchable:
 // loadPrefs() read it, display_power.cpp acted on it, and no line in the
@@ -145,6 +166,7 @@ static void addDeviceCard(String &h) {
   h += F("</h2>");
   addSwitch(h, "wk", g_wake_on_load, STR_W_WAKE, STR_W_WAKE_HINT);
   h += F("</div>");
+  addNfcWakeSwitch(h);
   addSwitch(h, "sf", g_scale_fitted, STR_W_SCALE_FITTED, STR_W_SCALE_FITTED_HINT);
   h += F("<div><button class='quiet' id='sf-rb' data-ic='pw'>");
   h += T(STR_W_RESTART);
@@ -335,6 +357,7 @@ static void addScript(String &h) {
          "if(!r.ok)$(id).checked=!want;"
          "flash(id+'-s',r.ok?WS.ok:WS.err,!r.ok,4000);});});}"
          "bindSwitch('wk','/api/wakeload');"
+         "if(!$('nw').disabled)bindSwitch('nw','/api/nfcwake');"
          "bindSwitch('sf','/api/scalefitted');"
          "bindSwitch('sn','/api/snapmaker');"
          "bindSwitch('cr','/api/creality');"
@@ -487,6 +510,20 @@ static void routes(WebServer &srv) {
     g_wake_on_load = on;
     prefsPutBool("wake_load", on);
     logSDf("Web: wake on load -> %s", on ? "ON" : "OFF");
+    srv.send(200, "application/json", on ? "{\"ok\":true,\"v\":1}"
+                                         : "{\"ok\":true,\"v\":0}");
+  });
+
+  // Refused while the page shows the switch locked: a request sent around it
+  // would arm a PN532 whose reset wire has not been checked.
+  srv.on("/api/nfcwake", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
+    const bool on = (srv.arg("plain").toInt() != 0);
+    if (on && !nfcWakeAvailable()) {
+      srv.send(409, "application/json", "{\"ok\":false,\"error\":\"reset wire not verified\"}");
+      return;
+    }
+    nfcWakeTestSet(on);
     srv.send(200, "application/json", on ? "{\"ok\":true,\"v\":1}"
                                          : "{\"ok\":true,\"v\":0}");
   });
