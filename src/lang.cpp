@@ -4515,6 +4515,9 @@ const char* const STRINGS[][3] = {
   { "Im Tiefschlaf sucht der Reader weiter nach Tags und meldet einen über Pin 8 (IRQ). Dafür braucht es ein 8-poliges Kabel. Ein PN532 braucht dazu seinen Reset-Draht (RSTPDN) an Pin 7: Nach dem Aufwachen schaltet die Waage ihn darüber einmal aus und wieder ein, sonst startet er nicht sauber. Mit einem 7-poligen Kabel fehlt Pin 8, dann kann ein Tag die Waage nicht wecken. In den Tiefschlaf geht die Waage nur, wenn am Gerät unter Einstellungen → Display eine Zeit dafür eingestellt ist. Antippen des Displays weckt sie weiterhin.",
     "In deep sleep the reader keeps looking for tags and reports one over pin 8 (IRQ), which takes an 8-wire cable. A PN532 also needs its reset wire (RSTPDN) on pin 7: after waking, the scale switches it off and on once over that wire, or it does not start cleanly. With a 7-wire cable pin 8 is missing, and a tag cannot wake the scale. The scale only goes into deep sleep when a time is set for it on the scale under Settings → Display. Tapping the display still wakes it.",
     "En veille profonde, le lecteur continue de chercher des tags et en signale un par la broche 8 (IRQ), ce qui demande un câble à 8 fils. Un PN532 a aussi besoin de sa liaison de réinitialisation (RSTPDN) sur la broche 7 : au réveil, la balance l'éteint et le rallume une fois par cette liaison, sinon il ne démarre pas correctement. Avec un câble à 7 fils, la broche 8 manque et un tag ne peut pas réveiller la balance. La balance ne passe en veille profonde que si une durée est réglée sur la balance, sous Réglages → Affichage. Toucher l'écran la réveille toujours." },  // STR_W_NFC_WAKE_DETAIL
+  { "Anleitung zum Umlöten, mit Foto", "How to rewire it, with a photo",
+    "Comment déplacer le fil, avec une photo" },  // STR_W_NFC_WAKE_DOCS
+  { "Theme wählen",                    "Choose a theme",                 "Choisir un thème" },  // STR_W_THEME_OPEN
 };
 
 StringID tagWriteResultString(uint8_t code) {

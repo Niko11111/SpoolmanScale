@@ -14,6 +14,7 @@
 #include <WebServer.h>
 
 #include "app/app_state.h"
+#include "app_config.h"
 #include "hardware/display.h"
 #include "hardware/sd_logger.h"
 #include "services/device_name.h"
@@ -131,6 +132,12 @@ static void addTagFormatsCard(String &h) {
   h += F("</div></div>");
 }
 
+// The manual's page on moving the reset wire to RSTPDN, with the photo of
+// the module. French readers get the English page, as the manual has no other.
+static const __FlashStringHelper* nfcResetDocsUrl() {
+  return g_lang == LANG_DE ? F(DOCS_URL "de/help/pn532-reset/") : F(DOCS_URL "help/pn532-reset/");
+}
+
 // Waking by tag needs pin 8 and, on a PN532, the reset wire verified on the
 // device. Until then the switch is shown but cannot be moved, with the way to
 // the check under it instead of the hint. The longer why folds away, since
@@ -148,7 +155,11 @@ static void addNfcWakeSwitch(String &h) {
   h += T(STR_BTN_MORE_INFO);
   h += F("</summary><p class='hint'>");
   h += T(STR_W_NFC_WAKE_DETAIL);
-  h += F("</p></details></div>");
+  h += F("</p><p class='hint'><a class='go' href='");
+  h += nfcResetDocsUrl();
+  h += F("' target='_blank' rel='noopener'>");
+  h += T(STR_W_NFC_WAKE_DOCS);
+  h += F(" &rarr;</a></p></details></div>");
 }
 
 // What kind of device this is and how it wakes. Waking on load had been
@@ -248,6 +259,18 @@ static void addDisplayCard(String &h) {
          "<button id='gn-b' class='quiet block' data-ic='ok'>");
   h += T(STR_W_SAVE);
   h += F("</button><span class='msg' id='gn-s'></span></div>");
+}
+
+// The palette has its own page, reached from here rather than from a tab of
+// its own (web_pages.cpp): same gate, and one tab fewer in the strip.
+static void addThemeCard(String &h) {
+  h += F("<div class='card wide'><h2>");
+  h += T(STR_W_C_THEME);
+  h += F("</h2><div class='inrow'><span class='hint' style='flex:1;margin:0'>");
+  h += T(STR_W_THEME_HINT);
+  h += F("</span><a class='go' href='/theme'>");
+  h += T(STR_W_THEME_OPEN);
+  h += F(" &rarr;</a></div></div>");
 }
 
 // The zone the device writes every timestamp in, the SD log and the drying
@@ -380,6 +403,7 @@ static String body() {
   addNameCard(h);
   addLimitsCard(h);
   addDisplayCard(h);
+  addThemeCard(h);
   addTimeZoneCard(h);
   h += F("</div>");
   h += webShellRestartUi();

@@ -158,14 +158,25 @@ static const char APP_CSS[] PROGMEM =
       "border:1px solid var(--line-soft);border-radius:10px;padding:8px 12px}"
       ".addr b{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--accent)}"
       ".addr i{font-family:var(--mono);font-size:11px;font-style:normal;color:var(--ink-3)}"
-      // nav
+      // nav - ten tabs in three groups (web_pages.cpp). 10 px a side puts 24 px
+      // between two labels, the spacing Apple asks for around controls without
+      // a bezel; a dot sits between tabs of a group, a rule between groups.
+      // French, the widest, needs about 832 of the 848 px row.
       ".nav{display:flex;flex-wrap:wrap;gap:4px;background:var(--surface-2);"
       "border:1px solid var(--line-soft);border-radius:12px;padding:5px}"
-      ".nav a{color:var(--ink-3);text-decoration:none;font-size:13.5px;font-weight:500;"
-      "padding:8px 14px;border-radius:8px;transition:background .14s,color .14s}"
+      ".nav a{position:relative;color:var(--ink-3);text-decoration:none;font-size:13.5px;font-weight:500;"
+      "padding:8px 10px;border-radius:8px;transition:background .14s,color .14s}"
+      ".nav a+a::before{content:'\\00B7';position:absolute;left:-6px;width:8px;top:0;bottom:0;"
+      "display:flex;align-items:center;justify-content:center;color:var(--ink-3);opacity:.6;pointer-events:none}"
+      ".nav a.grp{margin-left:13px}"
+      ".nav a.grp::before{content:'';left:-9px;width:1px;top:8px;bottom:8px;background:var(--line);opacity:1}"
       ".nav a:hover{color:var(--ink-2);background:var(--hover)}"
       ".nav a.on{background:var(--accent-dim);color:var(--ink);"
       "box-shadow:inset 0 0 0 1px var(--accent-line)}"
+      // A link inside a card that leads somewhere: another page or the manual.
+      // Without it the browser's own blue stood on every palette.
+      "a.go{color:var(--accent);font-weight:600;text-decoration:none}"
+      "a.go:hover{text-decoration:underline}"
       // cards
       ".grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}"
       ".card{background:var(--surface);border:1px solid var(--line-soft);"
@@ -348,6 +359,11 @@ static const char APP_CSS[] PROGMEM =
       // wordmark over by 8 px.
       ".head{grid-template-columns:44px 1fr}.mark{width:44px;height:44px}"
       ".addr{grid-column:1/-1}}"
+      // Below the 860 px column plus the body's 20 px a side the strip may
+      // wrap, and a dot or rule would then start the second row. 40 px more
+      // cover a classic scrollbar and fonts wider than the Mac's; the rule
+      // selector is named too, it outranks the dot's.
+      "@media(max-width:939px){.nav a+a::before,.nav a.grp::before{content:none}.nav a.grp{margin-left:0}}"
       // A log row carries three buttons. Below 500 px they take a line of their
       // own under the name rather than squeezing it out.
       "@media(max-width:500px){.listrow{flex-wrap:wrap}"
