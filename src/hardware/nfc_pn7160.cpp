@@ -26,6 +26,8 @@
 
 #include <string.h>
 
+#include <driver/gpio.h>
+
 #include "app_config.h"
 #include "hardware/i2c_scan.h"
 #include "hardware/nfc.h"
@@ -153,6 +155,13 @@ constexpr uint16_t VEN_SETTLE_MS       = 5;
 // VEN high to the first probe. The library allows 5 ms; unmeasured on our
 // boards, so twice that.
 constexpr uint16_t PROBE_SETTLE_MS     = 10;
+// Pad drive while the probe drives VEN high. On scales built before September
+// 2026 pin 7 meets an output of the PN532 module (hardware/pins.h); when that
+// PN532 is broken, unplugged or hung, the probe drives against it. The weakest
+// step (about 5 mA instead of about 20 mA) is still plenty for a CMOS input
+// like VEN. The default step comes back after the probe, either way.
+constexpr gpio_drive_cap_t PROBE_VEN_DRIVE   = GPIO_DRIVE_CAP_0;
+constexpr gpio_drive_cap_t DEFAULT_PIN_DRIVE = GPIO_DRIVE_CAP_2;
 // An NCI chip waking from standby may refuse its address (NXP's Linux driver
 // retries for the same reason, after a longer pause), so every write and probe
 // gets three goes. Unmeasured: the verbose log counts the retries.
@@ -434,6 +443,23 @@ static bool answersOnBus(TwoWire* wire) {
 
 bool pn7160OnBus(TwoWire* wire) { return wire && answersOnBus(wire); }
 
+// Drives VEN high at PROBE_VEN_DRIVE and asks for the chip once. Set after
+// pinMode(), which rewrites the pin's configuration. Leaves the pin high (a
+// PN7160 that answered needs VEN up) and at the default drive again.
+static bool probeWithWeakDrive(TwoWire* wire) {
+  const gpio_num_t ven = (gpio_num_t)hw_pins::NFC_VEN;
+  pinMode(hw_pins::NFC_VEN, OUTPUT);
+  gpio_set_drive_capability(ven, PROBE_VEN_DRIVE);
+  gpio_drive_cap_t applied = DEFAULT_PIN_DRIVE;
+  gpio_get_drive_capability(ven, &applied);
+  logSDf("NFC: PN7160 probe drives pin 7 at drive step %d", (int)applied);
+  digitalWrite(hw_pins::NFC_VEN, HIGH);
+  delay(PROBE_SETTLE_MS);
+  const bool found = answersOnBus(wire);
+  gpio_set_drive_capability(ven, DEFAULT_PIN_DRIVE);
+  return found;
+}
+
 bool pn7160Probe(TwoWire* wire) {
   if (!wire) return false;
   // Pin 7 may still be wired the old PN532 way, to a module output
@@ -442,10 +468,7 @@ bool pn7160Probe(TwoWire* wire) {
   pinMode(hw_pins::NFC_VEN, INPUT_PULLUP);
   delay(PROBE_SETTLE_MS);
   if (answersOnBus(wire)) return true;
-  pinMode(hw_pins::NFC_VEN, OUTPUT);
-  digitalWrite(hw_pins::NFC_VEN, HIGH);
-  delay(PROBE_SETTLE_MS);
-  if (answersOnBus(wire)) return true;
+  if (probeWithWeakDrive(wire)) return true;
   pinMode(hw_pins::NFC_VEN, INPUT);
   return false;
 }
