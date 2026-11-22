@@ -218,6 +218,14 @@ if [ -n "$hits" ]; then bad "nfcWriteMifareBlock outside services/mifare_write.c
 #     before the first page; every record goes through it.
 hits=$(grep -rn 'nfcWriteNtagPage' src | grep -vE '^src/(services/ntag_pages\.cpp|hardware/nfc\.(cpp|h)):' || true)
 if [ -n "$hits" ]; then bad "nfcWriteNtagPage outside services/ntag_pages.cpp:"; echo "$hits" | sed 's/^/        /'; else ok "NTAG pages written only through services/ntag_pages.cpp"; fi
+#     Below that call sit the chip drivers. Reaching them directly would skip
+#     both guards above, so their write calls stay inside the reader layer.
+hits=$(grep -rnE 'pn532Write(NtagPage|MifareBlock)|pn7160Write(NtagPage|MifareBlock)|ntag2xx_WritePage|mifareclassic_WriteDataBlock' src | grep -vE '^src/hardware/nfc(_pn532|_pn7160)?\.(cpp|h):' || true)
+if [ -n "$hits" ]; then bad "chip write call outside hardware/nfc*:"; echo "$hits" | sed 's/^/        /'; else ok "chip write calls only inside hardware/nfc*"; fi
+#     The page and record helpers have external linkage only so the tag files
+#     can share them; the header that declares them belongs to those files.
+hits=$(grep -rln 'tag_write_internal\.h' src | grep -vE '^src/services/(tag_write|ntag_pages|tag_format_ace|tag_format_openspool|tag_inspect)\.cpp$|^src/services/tag_write_internal\.h$' || true)
+if [ -n "$hits" ]; then bad "tag_write_internal.h included outside the tag files:"; echo "$hits" | sed 's/^/        /'; else ok "tag_write_internal.h only in the tag files"; fi
 
 echo
 if [ "$fail" -ne 0 ]; then echo "check.sh: FAILED"; exit 1; fi
