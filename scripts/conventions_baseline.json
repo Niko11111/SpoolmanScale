@@ -10,7 +10,6 @@
     "lines:src/services/backend_api.cpp": 1737,
     "lines:src/services/bambuddy_api.cpp": 1939,
     "lines:src/services/filaman_api.cpp": 2059,
-    "lines:src/services/tag_write.cpp": 1613,
     "lines:src/ui/ams_detail_popup.cpp": 1195,
     "lines:src/ui/ams_view.cpp": 1340,
     "lines:src/ui/more_info_screen.cpp": 1361,

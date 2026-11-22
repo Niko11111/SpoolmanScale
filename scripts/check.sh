@@ -213,6 +213,11 @@ fi
 #     them. The reader layer that defines the call is the only other mention.
 hits=$(grep -rn 'nfcWriteMifareBlock' src | grep -vE '^src/(services/mifare_write\.cpp|hardware/nfc\.(cpp|h)):' || true)
 if [ -n "$hits" ]; then bad "nfcWriteMifareBlock outside services/mifare_write.cpp:"; echo "$hits" | sed 's/^/        /'; else ok "MIFARE blocks written only through services/mifare_write.cpp"; fi
+#     The same for an NTAG page: services/ntag_pages.cpp keeps pages 0-3 (UID,
+#     lock bytes, capability container) whole and marks the tag unfinished
+#     before the first page; every record goes through it.
+hits=$(grep -rn 'nfcWriteNtagPage' src | grep -vE '^src/(services/ntag_pages\.cpp|hardware/nfc\.(cpp|h)):' || true)
+if [ -n "$hits" ]; then bad "nfcWriteNtagPage outside services/ntag_pages.cpp:"; echo "$hits" | sed 's/^/        /'; else ok "NTAG pages written only through services/ntag_pages.cpp"; fi
 
 echo
 if [ "$fail" -ne 0 ]; then echo "check.sh: FAILED"; exit 1; fi
