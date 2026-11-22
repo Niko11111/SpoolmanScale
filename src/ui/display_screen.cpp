@@ -48,16 +48,17 @@ static void buildTabs(lv_obj_t *scr) {
     lv_obj_t *b = lv_btn_create(scr);
     lv_obj_set_size(b, TAB_W, TAB_H);
     lv_obj_set_pos(b, x0 + i * (TAB_W + TAB_GAP), TAB_Y);
-    lv_obj_set_style_bg_color(b, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_LINE), 0);
+    if (active) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_radius(b, UI_RADIUS_BTN, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_border_width(b, 0, 0);
-    if (!active) uiBtnRole(b, BTN_NEUTRAL);
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, T((StringID)ids[i]));
-    lv_obj_set_style_text_color(l, lv_color_hex(active ? UI_COL_ON_ACCENT : UI_COL_INK_2), 0);
     lv_obj_set_style_text_font(l, UI_FONT_BODY, 0);
     lv_obj_center(l);
+    // Same look as the inactive choices on the Display tab.
+    if (active) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ON_ACCENT), 0);
+    else        uiBtnRole(b, BTN_NEUTRAL);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
       const int tab = (int)(intptr_t)lv_event_get_user_data(e);
       if (tab == s_tab) return;
@@ -347,46 +348,110 @@ static void showOnOff(lv_obj_t *btn, bool on) {
   lv_obj_set_style_text_font(arr, UI_FONT_SMALL, 0);
 }
 
-static void soundToggleRow(lv_obj_t *list, StringID title, bool on, lv_event_cb_t cb) {
-  char buf_t[48];
-  copyT(buf_t, sizeof(buf_t), title);
-  lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_BELL, buf_t, nullptr, on);
-  showOnOff(btn, on);
-  lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
-}
+// One switchable event group. Every tone the group can play is listed, so
+// switching it on lets you hear all of them once.
+struct SoundRow {
+  StringID    title;
+  bool       *value;
+  const char *key;
+  SoundEvent  tones[SND_PREVIEW_MAX];
+  uint8_t     count;
+};
 
-static void toggleAndSave(bool *value, const char *key) {
-  *value = !*value;
-  saveBool(key, *value);
+static const SoundRow SOUND_ROWS[] = {
+  { STR_SND_NFC,    &g_snd_nfc,    "snd_nfc",    { SND_NFC_READ, SND_TAG_UNKNOWN }, 2 },
+  { STR_SND_WRITE,  &g_snd_write,  "snd_write",  { SND_WRITE_OK, SND_WRITE_FAIL }, 2 },
+  { STR_SND_WEIGHT, &g_snd_weight, "snd_weight",
+    { SND_WEIGHT_OK, SND_WEIGHT_MANUAL, SND_WEIGHT_FAIL }, 3 },
+  { STR_SND_ASK,    &g_snd_ask,    "snd_ask",    { SND_ASK }, 1 },
+  { STR_SND_PRINT,  &g_snd_print,  "snd_print",  { SND_PRINT_OK, SND_PRINT_FAIL }, 2 },
+  { STR_SND_UPDATE, &g_snd_update, "snd_update", { SND_UPDATE_OK, SND_UPDATE_FAIL }, 2 },
+  { STR_SND_LINK,   &g_snd_link,   "snd_link",   { SND_LINK_LOST }, 1 },
+};
+static const int SOUND_ROW_COUNT = sizeof(SOUND_ROWS) / sizeof(SOUND_ROWS[0]);
+
+static void soundRowClicked(lv_event_t *e) {
+  const int i = (int)(intptr_t)lv_event_get_user_data(e);
+  if (i < 0 || i >= SOUND_ROW_COUNT) return;
+  const SoundRow &row = SOUND_ROWS[i];
+  *row.value = !*row.value;
+  saveBool(row.key, *row.value);
+  if (*row.value) soundPreview(row.tones, row.count);
   rebuildSoundTab();
 }
 
-// The rows behind the master switch only appear while it is on: with sound
-// off they would be switches that do nothing.
-static void buildSoundEventRows(lv_obj_t *list) {
-  soundToggleRow(list, STR_SND_NFC, g_snd_nfc,
-    [](lv_event_t *e) { toggleAndSave(&g_snd_nfc, "snd_nfc"); });
-  soundToggleRow(list, STR_SND_WRITE, g_snd_write,
-    [](lv_event_t *e) { toggleAndSave(&g_snd_write, "snd_write"); });
-  soundToggleRow(list, STR_SND_WEIGHT, g_snd_weight,
-    [](lv_event_t *e) { toggleAndSave(&g_snd_weight, "snd_weight"); });
+// Slider geometry inside a 456 x 64 list row: it starts right of the title
+// and keeps the knob clear of the row's right edge.
+static const int VOL_SLIDER_W         = 250;
+static const int VOL_SLIDER_H         = 20;
+static const int VOL_SLIDER_RIGHT_PX  = 24;
+// The track is 20 px; this makes the touch area 52 px high.
+static const int VOL_SLIDER_EXT_HIT   = 16;
 
-  // Volume steps through its four values on each tap and plays the new one,
-  // which doubles as the speaker test.
-  static const StringID VOL_NAMES[SND_VOL_COUNT] = {
-    STR_SND_VOL_LOW, STR_SND_VOL_MED, STR_SND_VOL_HIGH, STR_SND_VOL_MAX
-  };
-  char buf_t[32], buf_s[32];
+// Left is quiet, right is loud: the slider holds the level above the quietest
+// setting, g_snd_att_db the attenuation below full scale.
+static void buildVolumeRow(lv_obj_t *list) {
+  char buf_t[32];
   copyT(buf_t, sizeof(buf_t), STR_SND_VOLUME_LABEL);
-  copyT(buf_s, sizeof(buf_s), VOL_NAMES[g_snd_volume < SND_VOL_COUNT ? g_snd_volume : SND_VOL_MED]);
-  lv_obj_t *vol = makeListBtn(list, LV_SYMBOL_VOLUME_MID, buf_t, buf_s);
-  lv_obj_add_event_cb(vol, [](lv_event_t *e) {
-    g_snd_volume = (uint8_t)((g_snd_volume + 1) % SND_VOL_COUNT);
-    if (!prefsPutUChar("snd_vol", g_snd_volume))
+  lv_obj_t *row = makeListBtn(list, LV_SYMBOL_VOLUME_MID, buf_t, nullptr);
+  // A frame for the slider, not a button: a tap beside it does nothing.
+  lv_obj_clear_flag(row, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_flag(lv_obj_get_child(row, -1), LV_OBJ_FLAG_HIDDEN);   // the arrow
+
+  lv_obj_t *slider = lv_slider_create(row);
+  lv_obj_set_size(slider, VOL_SLIDER_W, VOL_SLIDER_H);
+  lv_obj_align(slider, LV_ALIGN_RIGHT_MID, -VOL_SLIDER_RIGHT_PX, 0);
+  lv_obj_set_ext_click_area(slider, VOL_SLIDER_EXT_HIT);
+  lv_slider_set_range(slider, 0, SND_ATT_MAX_DB);
+  lv_slider_set_value(slider, SND_ATT_MAX_DB - g_snd_att_db, LV_ANIM_OFF);
+  lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COL_LINE), LV_PART_MAIN);
+  lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COL_ACCENT), LV_PART_INDICATOR);
+  lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COL_ACCENT), LV_PART_KNOB);
+
+  lv_obj_add_event_cb(slider, [](lv_event_t *e) {
+    const int v = lv_slider_get_value(lv_event_get_target(e));
+    g_snd_att_db = (uint8_t)(SND_ATT_MAX_DB - v);
+  }, LV_EVENT_VALUE_CHANGED, NULL);
+  // Saved and heard once, on release: a tone per step while dragging would
+  // overrun the queue and sound like a siren.
+  lv_obj_add_event_cb(slider, [](lv_event_t *e) {
+    if (!prefsPutUChar("snd_att", g_snd_att_db))
       logSD("Sound: saving the volume failed, lost on restart");
+    logSDf("Sound: volume -%u dB", (unsigned)g_snd_att_db);
     soundPlay(SND_TEST);
+  }, LV_EVENT_RELEASED, NULL);
+}
+
+// Switches between the two tone sets and lets you hear the new one.
+static void buildToneSetRow(lv_obj_t *list) {
+  static const SoundEvent SAMPLE[SND_PREVIEW_MAX] = { SND_NFC_READ, SND_TAG_UNKNOWN, SND_WEIGHT_MANUAL };
+  char buf_t[32], buf_s[48];
+  copyT(buf_t, sizeof(buf_t), STR_SND_SET);
+  copyT(buf_s, sizeof(buf_s), g_snd_chime ? STR_SND_SET_CHIME : STR_SND_SET_BEEP);
+  lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_AUDIO, buf_t, buf_s);
+  lv_obj_add_event_cb(btn, [](lv_event_t *e) {
+    g_snd_chime = !g_snd_chime;
+    saveBool("snd_chime", g_snd_chime);
+    logSDf("Sound: tone set %s", g_snd_chime ? "chimes" : "beeps");
+    soundPreview(SAMPLE, SND_PREVIEW_MAX);
     rebuildSoundTab();
   }, LV_EVENT_CLICKED, NULL);
+}
+
+// The rows behind the master switch only appear while it is on: with sound
+// off they would be switches that do nothing. Volume and tone set come
+// first: they shape every tone, and the event rows below run past the screen.
+static void buildSoundEventRows(lv_obj_t *list) {
+  buildVolumeRow(list);
+  buildToneSetRow(list);
+  for (int i = 0; i < SOUND_ROW_COUNT; i++) {
+    char buf_t[48];
+    copyT(buf_t, sizeof(buf_t), SOUND_ROWS[i].title);
+    const bool on = *SOUND_ROWS[i].value;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_BELL, buf_t, nullptr, on);
+    showOnOff(btn, on);
+    lv_obj_add_event_cb(btn, soundRowClicked, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+  }
 }
 
 static void buildSoundTab(lv_obj_t *scr) {

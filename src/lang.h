@@ -2086,10 +2086,13 @@ enum StringID {
   STR_SND_WRITE,
   STR_SND_WEIGHT,
   STR_SND_VOLUME_LABEL,
-  STR_SND_VOL_LOW,
-  STR_SND_VOL_MED,
-  STR_SND_VOL_HIGH,
-  STR_SND_VOL_MAX,
+  STR_SND_SET,                // which tone set plays
+  STR_SND_SET_BEEP,
+  STR_SND_SET_CHIME,
+  STR_SND_ASK,                // a write request from FilaMan or the browser
+  STR_SND_PRINT,
+  STR_SND_UPDATE,
+  STR_SND_LINK,
   STR_COUNT
 };
 

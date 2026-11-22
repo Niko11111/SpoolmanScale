@@ -10,6 +10,7 @@
 #include "app/app_state.h"
 #include "app_config.h"
 #include "hardware/sd_logger.h"
+#include "hardware/sound.h"
 #include "services/github_release.h"
 #include "services/partition_layout.h"
 #include "services/ota_state.h"
@@ -126,6 +127,7 @@ void otaWebGithubTick() {
   if (githubFlashTag(gh_web_flash_tag, otaExpectedSha(gh_web_flash_tag),
                      webFlashProgress, err, sizeof(err))) {
     logSD("Reboot: GitHub update written");
+    soundPlay(SND_UPDATE_OK);   // over well before the restart below
     if (lbl_ota_status) lv_label_set_text(lbl_ota_status, T(STR_OTA_SUCCESS));
     lv_timer_handler();
     delay(1500);
@@ -133,6 +135,7 @@ void otaWebGithubTick() {
   }
   otaGithubOverlayHide();
   logSDf("OTA: install failed - %s", err);
+  soundPlay(SND_UPDATE_FAIL);
   otaBrowserShowUploadFailed();
 }
 
@@ -741,6 +744,8 @@ static void routesTail(WebServer &srv) {
         msg += F("</a></body></html>");
       }
       srv.send(200, "text/html", msg);
+      // The tone plays on its own task and is over before the restart below.
+      soundPlay(ok ? SND_UPDATE_OK : SND_UPDATE_FAIL);
       if (ok) {
         if (lbl_ota_status) lv_label_set_text(lbl_ota_status,
           T(STR_OTA_SUCCESS));

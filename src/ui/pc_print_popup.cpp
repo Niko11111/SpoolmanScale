@@ -6,6 +6,7 @@
 #include "app/app_state.h"
 #include "app/deferred_actions.h"
 #include "hardware/sd_logger.h"
+#include "hardware/sound.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/filaman_labels.h"
@@ -165,6 +166,7 @@ static void showSending() {
 // No countdown on success, unlike the print card: the text is what to do
 // next at the PC, and it has to stand until it was read.
 static void showResult(bool ok, const char* text) {
+  soundPlay(ok ? SND_PRINT_OK : SND_PRINT_FAIL);
   const uint32_t tone = ok ? UI_COL_GOOD : UI_COL_BAD;
   lv_obj_t* box = buildFrame(UI_CARD_H, tone);
   lv_obj_t* icon = lv_label_create(box);

@@ -4520,16 +4520,22 @@ const char* const STRINGS[][3] = {
   { "Theme wählen",                    "Choose a theme",                 "Choisir un thème" },  // STR_W_THEME_OPEN
 
   // Sound
-  { "Ton",                           "Sound",                        "Son" },  // STR_SOUND_TITLE
-  { "Lautsprecher am SPK-Anschluss", "Speaker on the SPK connector", "Haut-parleur au port SPK" },  // STR_SOUND_SUB
-  { "Piepen beim Tag-Lesen",         "Beep when a tag is read",      "Bip à la lecture d'un tag" },  // STR_SND_NFC
-  { "Piepen nach Tag-Schreiben",     "Beep when a tag is written",   "Bip après écriture du tag" },  // STR_SND_WRITE
-  { "Piepen bei Auto-Gewicht",       "Beep on auto weight",          "Bip au poids auto" },  // STR_SND_WEIGHT
-  { "Lautstärke",                    "Volume",                       "Volume" },  // STR_SND_VOLUME_LABEL
-  { "Leise",                         "Low",                          "Bas" },  // STR_SND_VOL_LOW
-  { "Mittel",                        "Medium",                       "Moyen" },  // STR_SND_VOL_MED
-  { "Laut",                          "High",                         "Fort" },  // STR_SND_VOL_HIGH
-  { "Max",                           "Max",                          "Max" },  // STR_SND_VOL_MAX
+  { "Ton",                           "Sound",                          "Son" },  // STR_SOUND_TITLE
+  { "Lautsprecher am SPK-Anschluss", "Speaker on the SPK connector",   "Haut-parleur au port SPK" },  // STR_SOUND_SUB
+  { "Piepen beim Tag-Lesen",         "Beep when a tag is read",        "Bip à la lecture d'un tag" },  // STR_SND_NFC
+  { "Piepen nach Tag-Schreiben", "Beep when a tag is written",
+    "Bip après écriture du tag" },  // STR_SND_WRITE
+  { "Piepen bei Auto-Gewicht",       "Beep on auto weight",            "Bip au poids auto" },  // STR_SND_WEIGHT
+  { "Lautstärke",                    "Volume",                         "Volume" },  // STR_SND_VOLUME_LABEL
+  { "Klang",                         "Tone set",                       "Timbre" },  // STR_SND_SET
+  { "Piepser (kurz und hell)", "Beeps (short and bright)",
+    "Bips (courts et clairs)" },  // STR_SND_SET_BEEP
+  { "Glocke (weich, klingt aus)", "Chimes (soft, ringing out)",
+    "Carillon (doux, résonant)" },  // STR_SND_SET_CHIME
+  { "Piepen bei Schreibauftrag",     "Beep on a write request",        "Bip si écriture demandée" },  // STR_SND_ASK
+  { "Piepen nach Etikettendruck",    "Beep after a label print",       "Bip après impression" },  // STR_SND_PRINT
+  { "Piepen nach Firmware-Update",   "Beep after a firmware update",   "Bip après mise à jour" },  // STR_SND_UPDATE
+  { "Piepen bei Verbindungsabbruch", "Beep when the connection drops", "Bip si connexion perdue" },  // STR_SND_LINK
 };
 
 StringID tagWriteResultString(uint8_t code) {

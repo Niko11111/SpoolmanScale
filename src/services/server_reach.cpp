@@ -2,15 +2,27 @@
 
 #include <Arduino.h>
 #include <HTTPClient.h>   // the HTTPC_ERROR_ codes, nothing is requested here
+#include <WiFi.h>
 
 #include "app/app_state.h"
 #include "hardware/sd_logger.h"
+#include "hardware/sound.h"
 #include "services/backend_api.h"
 #include "services/server_refusal.h"
 
 static bool s_popup_pending        = false;
 // The placement lookup's one popup per outage has been used up.
 static bool s_placement_popup_used = false;
+
+// The backend went from answering to silent. Heard only when nobody is
+// waiting at the display for that request, which shows its own popup, and
+// only while the WiFi is up: a WiFi loss has played the tone already.
+static void announceLost(bool user_action) {
+  if (user_action || WiFi.status() != WL_CONNECTED) return;
+  soundPlay(SND_LINK_LOST);
+}
+
+void serverReachLost() { announceLost(false); }
 
 bool serverReachIsNetworkFailure(int code) {
   switch (code) {
@@ -41,6 +53,7 @@ int serverReachNote(int code, bool user_action) {
     // would otherwise log three lines for one fact.
     logSDf("Server: unreachable (HTTP %d), marked down until it answers", code);
     sm_reachable = false;
+    announceLost(user_action);
   }
   if (!user_action) {
     if (s_placement_popup_used) return code;

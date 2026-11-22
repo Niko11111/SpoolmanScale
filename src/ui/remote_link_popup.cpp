@@ -10,6 +10,7 @@
 #include "app_config.h"
 #include "bambu/bambu_tag.h"
 #include "hardware/sd_logger.h"
+#include "hardware/sound.h"
 #include "lang.h"
 #include "services/backend.h"
 #include "services/user_options.h"
@@ -199,6 +200,8 @@ void showRemoteLinkPopup(int spool_id) {
   logSDf("SHOW: RemoteLinkPopup spool=%d bambu=%d mismatch=%d autolink=%d",
          spool_id, s_is_bambu ? 1 : 0, mismatch ? 1 : 0,
          g_flm_autolink ? 1 : 0);
+  // Asked from FilaMan or the browser: whoever sent it may not be watching.
+  soundPlay(SND_ASK);
 
   scr_remote_link = lv_obj_create(lv_scr_act());
   lv_obj_set_size(scr_remote_link, 480, 320);

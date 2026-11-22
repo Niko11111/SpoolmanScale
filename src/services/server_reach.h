@@ -43,5 +43,8 @@ int amsReachNote(int code, bool user_action);
 // its placement popup again.
 void serverReachRestored();
 
+// From the health check when the server that answered stops answering.
+void serverReachLost();
+
 // For the screen, from the loop. True once per request for the popup.
 bool serverReachPopupTake();

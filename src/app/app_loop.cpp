@@ -465,6 +465,8 @@ static void noteWifiUp() {
 
 static void noteWifiDown() {
   if (wifi_outage) return;
+  // A boot that never got a link is no loss; only a link that was up is.
+  if (wifi_link_up) soundPlay(SND_LINK_LOST);
   wifi_link_up = false;
   wifi_outage = true;
   wifi_outage_start_ms = millis();
@@ -1858,6 +1860,7 @@ void appLoop() {
       sm_reachable = (code == 200);
       if (sm_reachable != was_reachable) updateHeaderStatus();
       if (sm_reachable && !was_reachable) serverReachRestored();
+      if (!sm_reachable && was_reachable) serverReachLost();
       // What another service calls itself, asked once per address. The boot and
       // the address screen ask too, but a switch from the browser passes neither.
       static uint32_t s_name_asked_for = 0;
