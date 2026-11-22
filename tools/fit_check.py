@@ -26,12 +26,12 @@
 # of its sides. The values are mostly negative, so losing them makes text
 # marginally WIDER - the safe direction, but measured rather than assumed.
 #
-# Used as a library by lang_fr.py, and on its own:
+# Used as a library by lang_fr.py and lang_zh.py, and on its own:
 #
 #   python tools/fit_check.py --measure 16 "Étalonnage"
 #   python tools/fit_check.py --grid          the chars-per-budget table
 #   python tools/fit_check.py --gate          every NEVER budget in ui_budgets.tsv
-# ============================================================
+#   python tools/fit_check.py --gate --lang zh
 import argparse
 import pathlib
 import re
@@ -43,7 +43,8 @@ BUDGETS = ROOT / "tools" / "ui_budgets.tsv"
 
 SIZES = (10, 12, 14, 16, 18, 20, 24)
 HOST = "lv_font_montserrat_ext_%d"
-SUPP = "lv_font_fr_supp_%d"
+FR_SUPP = "lv_font_fr_supp_%d"
+ZH_SUPP = "lv_font_zh_supp_%d"
 
 _GLYPH = re.compile(
     r"\{\s*\.bitmap_index\s*=\s*(\d+)\s*,\s*\.adv_w\s*=\s*(\d+)\s*,"
@@ -135,46 +136,45 @@ class Font:
 _CACHE = {}
 
 
-def pair(size):
-    """(host, supplement or None) for a size, read once."""
+def chain(size):
+    """[host, fr_supp?, zh_supp?] for a size, read once."""
     if size not in _CACHE:
-        host = Font(FONTS / ("%s.c" % (HOST % size)))
-        sp = FONTS / ("%s.c" % (SUPP % size))
-        _CACHE[size] = (host, Font(sp) if sp.exists() else None)
+        fonts = [Font(FONTS / ("%s.c" % (HOST % size)))]
+        for pat in (FR_SUPP, ZH_SUPP):
+            p = FONTS / ("%s.c" % (pat % size))
+            if p.exists():
+                fonts.append(Font(p))
+        _CACHE[size] = fonts
     return _CACHE[size]
 
 
 def width(text, size):
-    """Rendered width in whole pixels, exactly as LVGL would measure it.
-
-    Returns (pixels, missing) where missing lists the characters no font in the
-    chain can draw - each of those renders as a hollow rectangle.
-    """
-    host, supp = pair(size)
+    """Rendered width in whole pixels, exactly as LVGL would measure it."""
+    fonts = chain(size)
+    host = fonts[0]
     missing = []
-    resolved = []          # (font, gid) per character, font None when absent
+    resolved = []
     for ch in text:
-        g = host.gid(ch)
-        if g is not None:
-            resolved.append((host, g))
-            continue
-        g = supp.gid(ch) if supp else None
-        if g is not None:
-            resolved.append((supp, g))
-            continue
-        missing.append(ch)
-        resolved.append((None, None))
+        hit = None
+        for f in fonts:
+            g = f.gid(ch)
+            if g is not None:
+                hit = (f, g)
+                break
+        if hit is not None:
+            resolved.append(hit)
+        else:
+            missing.append(ch)
+            resolved.append((None, None))
 
     total = 0
     for i, (font, g) in enumerate(resolved):
         if font is None:
-            # lv_font.c charges the placeholder box: line_height/2 + 2
             total += host.line_height // 2 + 2
             continue
         kv = 0
         if i + 1 < len(resolved):
             nfont, ng = resolved[i + 1]
-            # Kerning only inside one font: a fallback boundary drops it.
             if nfont is font:
                 kv = (font.kern(g, ng) * font.kern_scale) >> 4
         total += (font.adv[g] + kv + 8) >> 4
@@ -185,11 +185,6 @@ def width(text, size):
 #  Budgets
 # --------------------------------------------------------------------------
 def read_budgets():
-    """tools/ui_budgets.tsv -> list of dicts.
-
-    Lives outside src/ on purpose: it is fork bookkeeping, it is never compiled,
-    and upstream never has to see a merge conflict on it.
-    """
     rows = []
     if not BUDGETS.exists():
         return rows
@@ -206,18 +201,10 @@ def read_budgets():
 
 
 def segments(text):
-    """A string split on its hard line breaks - each is measured on its own."""
     return text.split("\\n")
 
 
 def gate(strings, probe=None):
-    """Every NEVER budget must hold. strings: {id: french text}.
-
-    probe() turns a stored value into what the panel really draws - an
-    {LV_SYMBOL_X} marker is seventeen characters here and one glyph there, and
-    measuring the marker was good for a 140 px false alarm. lang_fr supplies it;
-    without it the markers are simply dropped, which is the safe direction.
-    """
     if probe is None:
         probe = lambda t: re.sub(r"\{[A-Za-z_]\w*\}", "", t)
     bad = measured = 0
@@ -228,10 +215,8 @@ def gate(strings, probe=None):
     for b in rows:
         if b["mode"] != "NEVER":
             continue
-        # A row with no French text to measure gates nothing. Skipping it in
-        # silence is how two misspelt ids once sat here under a green summary.
         if not strings.get(b["id"]):
-            print("  %-34s no French text for this id - misspelt, or not translated"
+            print("  %-34s no text for this id - misspelt, or not translated"
                   % b["id"])
             bad += 1
             continue
@@ -253,8 +238,6 @@ FRENCH_FREQ = "eaisnrtoulcdpmvqfbghjxyzwk"
 
 
 def grid():
-    """Characters that fit a budget, per font size. Rough but useful while
-    writing: real checking goes through width() on the actual string."""
     budgets = (42, 46, 84, 94, 124, 132, 144, 170, 204, 228, 262, 290, 320, 360, 464)
     sample = (FRENCH_FREQ * 6)[:60]
     print("  budget ", "".join("%5d" % b for b in budgets))
@@ -265,27 +248,25 @@ def grid():
     print("\n  (frequency-weighted average, spaces excluded - indicative)")
 
 
-def _lang_fr():
-    """lang_fr, imported late: it imports this module in turn, inside check()."""
-    try:
-        import lang_fr
-    except ImportError:
-        sys.path.insert(0, str(ROOT / "tools"))
-        import lang_fr
-    return lang_fr
+def _lang_mod(lang):
+    mod_name = "lang_zh" if lang == "zh" else "lang_fr"
+    sys.path.insert(0, str(ROOT / "tools"))
+    return __import__(mod_name)
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description="Measure text as LVGL would.")
     ap.add_argument("--measure", nargs=2, metavar=("SIZE", "TEXT"))
     ap.add_argument("--grid", action="store_true")
     ap.add_argument("--gate", action="store_true")
+    ap.add_argument("--lang", choices=("fr", "zh"), default="fr",
+                    help="Language table for --gate (default: fr)")
     a = ap.parse_args()
     if a.measure:
-        # Written the way the working file stores it, an {LV_SYMBOL_X} marker is
-        # measured as the icon it stands for, not as seventeen letters.
         size, text = int(a.measure[0]), a.measure[1]
-        w, miss = width(_lang_fr().probe_text(text), size)
+        lang_mod = _lang_mod(a.lang)
+        w, miss = width(lang_mod.probe_text(text), size)
         print("%s  f%d  ->  %d px%s"
               % (repr(text), size, w,
                  "   MISSING: " + " ".join(miss) if miss else ""))
@@ -294,13 +275,13 @@ def main():
         grid()
         return 0
     if a.gate:
-        lang_fr = _lang_fr()
-        strings = lang_fr.french_strings()
-        if not lang_fr.symbol_chars() and any("{LV_SYMBOL_" in s for s in strings.values()):
+        lang_mod = _lang_mod(a.lang)
+        strings = lang_mod.chinese_strings() if a.lang == "zh" else lang_mod.french_strings()
+        if not lang_mod.symbol_chars() and any("{LV_SYMBOL_" in s for s in strings.values()):
             print("  LVGL is not unpacked - build the firmware once; icons would"
                   " count as zero pixels")
             return 1
-        return 0 if gate(strings, lang_fr.probe_text) else 1
+        return 0 if gate(strings, lang_mod.probe_text) else 1
     ap.print_help()
     return 2
 

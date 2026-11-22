@@ -25,7 +25,7 @@ static lv_obj_t *scr_language = nullptr;
 // cancelling the restart left a half translated screen and the new language
 // on the next boot anyway. Each button clears the other's pick: a cancelled
 // choice must not ride along with the next one.
-static int s_pick_lang = -1;   // 0 DE, 1 EN, 2 FR, -1 untouched
+static int s_pick_lang = -1;   // 0 DE, 1 EN, 2 FR, 3 ZH, -1 untouched
 static int s_pick_date = -1;   // a DateFormat, -1 untouched
 
 static void commitLanguageChoice() {
@@ -147,8 +147,9 @@ void showLanguageScreen() {
   // which matters - the time zone row already ends at 302 of 320. The labels
   // lose their "DE " / "EN " prefix to make room; "Deutsch" measures 69 px at
   // this font, "Français" 68, so 148 is comfortable.
-  const int LB_W = 148, LB_H = 52, LB_Y0 = 90;
-  const int LB_X_DE = 8, LB_X_EN = 166, LB_X_FR = 324;
+// Four buttons on one row: 8 px margins, three 8 px gaps -> (480 - 16 - 24) / 4 = 110.
+  const int LB_W = 110, LB_H = 52, LB_Y0 = 90;
+  const int LB_X_DE = 8, LB_X_EN = 126, LB_X_FR = 244, LB_X_ZH = 362;
 
   lv_obj_t *btn_de = lv_btn_create(scr);
   lv_obj_set_size(btn_de, LB_W, LB_H);
@@ -165,7 +166,7 @@ void showLanguageScreen() {
   lv_obj_set_style_text_font(lbl_de, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_de);
   lv_obj_add_event_cb(btn_de, [](lv_event_t *e){
-    s_pick_lang = 0; s_pick_date = -1;
+    s_pick_lang = LANG_DE; s_pick_date = -1;
     Serial.println("Language: German -> Reboot");
     showRebootPopup(commitLanguageChoice);
   }, LV_EVENT_CLICKED, NULL);
@@ -185,7 +186,7 @@ void showLanguageScreen() {
   lv_obj_set_style_text_font(lbl_en, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_en);
   lv_obj_add_event_cb(btn_en, [](lv_event_t *e){
-    s_pick_lang = 1; s_pick_date = -1;
+    s_pick_lang = LANG_EN; s_pick_date = -1;
     Serial.println("Language: English -> Reboot");
     showRebootPopup(commitLanguageChoice);
   }, LV_EVENT_CLICKED, NULL);
@@ -207,8 +208,28 @@ void showLanguageScreen() {
   lv_obj_set_style_text_font(lbl_fr, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_fr);
   lv_obj_add_event_cb(btn_fr, [](lv_event_t *e){
-    s_pick_lang = 2; s_pick_date = -1;
+    s_pick_lang = LANG_FR; s_pick_date = -1;
     Serial.println("Language: French -> Reboot");
+    showRebootPopup(commitLanguageChoice);
+  }, LV_EVENT_CLICKED, NULL);
+
+  lv_obj_t *btn_zh = lv_btn_create(scr);
+  lv_obj_set_size(btn_zh, LB_W, LB_H);
+  lv_obj_set_pos(btn_zh, LB_X_ZH, LB_Y0);
+  bool zh_active = (g_lang == LANG_ZH);
+  lv_obj_set_style_bg_color(btn_zh, lv_color_hex(zh_active ? UI_COL_CHOICE_BG : UI_COL_SURFACE), 0);
+  lv_obj_set_style_radius(btn_zh, 10, 0);
+  lv_obj_set_style_shadow_width(btn_zh, 0, 0);
+  lv_obj_set_style_border_width(btn_zh, 2, 0);
+  lv_obj_set_style_border_color(btn_zh, lv_color_hex(zh_active ? UI_COL_ACCENT : UI_COL_LINE), 0);
+  lv_obj_t *lbl_zh = lv_label_create(btn_zh);
+  lv_label_set_text(lbl_zh, "中文");
+  lv_obj_set_style_text_color(lbl_zh, lv_color_hex(zh_active ? UI_COL_ACCENT : UI_COL_CAPTION), 0);
+  lv_obj_set_style_text_font(lbl_zh, &lv_font_montserrat_ext_16, 0);
+  lv_obj_center(lbl_zh);
+  lv_obj_add_event_cb(btn_zh, [](lv_event_t *e){
+    s_pick_lang = LANG_ZH; s_pick_date = -1;
+    Serial.println("Language: Chinese -> Reboot");
     showRebootPopup(commitLanguageChoice);
   }, LV_EVENT_CLICKED, NULL);
 

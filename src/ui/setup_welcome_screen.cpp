@@ -29,25 +29,22 @@ static const LangRow LANG_ROWS[] = {
   { "English",  LANG_EN },
   { "Deutsch",  LANG_DE },
   { "Français", LANG_FR },
+  { "中文",     LANG_ZH },
 };
 static_assert(sizeof(LANG_ROWS) / sizeof(LANG_ROWS[0]) == LANG_COUNT,
               "LANG_ROWS is out of step with enum Lang");
 
 #define LANG_ROW_X        24
 #define LANG_ROW_W       432
-#define LANG_ROW_H        60
-#define LANG_ROW_Y0       88
-#define LANG_ROW_STEP     70
-#define LANG_LOGO_Y       16
-#define LANG_GREETING_Y   52
+#define LANG_ROW_H        52
+#define LANG_ROW_Y0       72
+#define LANG_ROW_STEP     60
+#define LANG_LOGO_Y       12
+#define LANG_GREETING_Y   44
 #define LANG_TEXT_INSET   18
 
-// Stores the language and restarts at once. Every text after this screen is
-// pulled as its screen is built, and the main screen underneath is already
-// built in the old language, so a restart is the only clean switch. The time
-// zone is asked on the next screen, which already speaks the new language.
 static void onLanguagePicked(lv_event_t *e) {
-  static const char *const LANG_TAG[] = { "DE", "EN", "FR" };
+  static const char *const LANG_TAG[] = { "DE", "EN", "FR", "ZH" };
   static_assert(sizeof(LANG_TAG) / sizeof(LANG_TAG[0]) == LANG_COUNT,
                 "LANG_TAG is out of step with enum Lang");
   const uint8_t lang = (uint8_t)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));

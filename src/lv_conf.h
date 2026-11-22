@@ -452,7 +452,14 @@
     LV_FONT_DECLARE(lv_font_fr_supp_16)  \
     LV_FONT_DECLARE(lv_font_fr_supp_18)  \
     LV_FONT_DECLARE(lv_font_fr_supp_20)  \
-    LV_FONT_DECLARE(lv_font_fr_supp_24)
+    LV_FONT_DECLARE(lv_font_fr_supp_24)  \
+    LV_FONT_DECLARE(lv_font_zh_supp_10)  \
+    LV_FONT_DECLARE(lv_font_zh_supp_12)  \
+    LV_FONT_DECLARE(lv_font_zh_supp_14)  \
+    LV_FONT_DECLARE(lv_font_zh_supp_16)  \
+    LV_FONT_DECLARE(lv_font_zh_supp_18)  \
+    LV_FONT_DECLARE(lv_font_zh_supp_20)  \
+    LV_FONT_DECLARE(lv_font_zh_supp_24)
 
 /*Always set a default font*/
 #define LV_FONT_DEFAULT &lv_font_montserrat_ext_14
@@ -463,7 +470,7 @@
 #define LV_FONT_FMT_TXT_LARGE 0
 
 /*Enables/disables support for compressed fonts.*/
-#define LV_USE_FONT_COMPRESSED 0
+#define LV_USE_FONT_COMPRESSED 1
 
 /*Enable subpixel rendering*/
 #define LV_USE_FONT_SUBPX 0

@@ -10,7 +10,7 @@
 
 // LANG_COUNT is the sentinel loadPrefs() clamps against: the NVS byte is not
 // trustworthy, and an out-of-range value would index a column that is not there.
-enum Lang { LANG_DE = 0, LANG_EN = 1, LANG_FR = 2, LANG_COUNT };
+enum Lang { LANG_DE = 0, LANG_EN = 1, LANG_FR = 2, LANG_ZH = 3, LANG_COUNT };
 extern Lang g_lang;
 
 // Date format, the NVS byte "date_fmt". Unknown values read as DD.MM.YYYY.
@@ -2079,7 +2079,7 @@ enum StringID {
 // the static_assert there can compare the two. Spelled [STR_COUNT][3] here,
 // the definition inherits that bound, a short initializer is padded with
 // nullptr, and nothing complains.
-extern const char* const STRINGS[][3];
+extern const char* const STRINGS[][4];
 
 // Which string explains a TagWriteResult. Lives here rather than in either
 // caller: the device popup and the tag page in the browser say the same thing
