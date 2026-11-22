@@ -444,10 +444,14 @@ static bool answersOnBus(TwoWire* wire) {
 bool pn7160OnBus(TwoWire* wire) { return wire && answersOnBus(wire); }
 
 // Drives VEN high at PROBE_VEN_DRIVE and asks for the chip once. Set after
-// pinMode(), which rewrites the pin's configuration. Leaves the pin high (a
-// PN7160 that answered needs VEN up) and at the default drive again.
+// pinMode(), which rewrites the pin's configuration. The level goes high
+// before the pin becomes an output, so the moment until the weak step holds
+// drives the level an idle PN532 output holds too. A PN7160 that answered
+// keeps VEN high at the default drive; otherwise the pin is an input again
+// before the drive goes back up.
 static bool probeWithWeakDrive(TwoWire* wire) {
   const gpio_num_t ven = (gpio_num_t)hw_pins::NFC_VEN;
+  gpio_set_level(ven, 1);
   pinMode(hw_pins::NFC_VEN, OUTPUT);
   gpio_set_drive_capability(ven, PROBE_VEN_DRIVE);
   gpio_drive_cap_t applied = DEFAULT_PIN_DRIVE;
@@ -456,6 +460,7 @@ static bool probeWithWeakDrive(TwoWire* wire) {
   digitalWrite(hw_pins::NFC_VEN, HIGH);
   delay(PROBE_SETTLE_MS);
   const bool found = answersOnBus(wire);
+  if (!found) pinMode(hw_pins::NFC_VEN, INPUT);
   gpio_set_drive_capability(ven, DEFAULT_PIN_DRIVE);
   return found;
 }

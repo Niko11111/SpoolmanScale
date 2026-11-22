@@ -102,9 +102,19 @@ static void finish(const char *st, const char *msg, uint8_t code) {
 }
 
 // Every job starts here, also one that does not wait for tagWriteTick(), so
-// finish() tells it from the one before. Without it a FilaMan write after an
-// earlier success found "ok" still standing and played no tone (22.11.2026).
-static void jobStart() { snprintf(state, sizeof(state), "pending"); }
+// finish() tells it from the one before and the web page builds its sentence
+// from this job's parts. Without it a FilaMan write after an earlier success
+// found "ok" still standing and played no tone, and after a web erase the tag
+// page called that write "Tag erased" (22.11.2026).
+static void jobStart(int spool_id, TagFormat fmt) {
+  memset(&report, 0, sizeof(report));
+  report.code     = TW_BUSY;
+  report.erase    = (fmt == TAG_FMT_ERASE);
+  report.spool_id = spool_id;
+  report.fmt      = (uint8_t)fmt;
+  result = TW_BUSY;
+  snprintf(state, sizeof(state), "pending");
+}
 
 bool tagWriteRequest(int spool_id, TagFormat fmt, bool link) {
   if (pending) return false;
@@ -114,13 +124,7 @@ bool tagWriteRequest(int spool_id, TagFormat fmt, bool link) {
   pending_link = link;
   pending_uid[0] = 0;
   pending     = true;
-  result      = TW_BUSY;
-  memset(&report, 0, sizeof(report));
-  report.code     = TW_BUSY;
-  report.erase    = (fmt == TAG_FMT_ERASE);
-  report.spool_id = spool_id;
-  report.fmt      = (uint8_t)fmt;
-  jobStart();
+  jobStart(spool_id, fmt);
   if (fmt == TAG_FMT_ERASE)
     snprintf(message, sizeof(message), "Erasing the tag...");
   else
@@ -152,6 +156,10 @@ static char    write_err[80] = "";
 static uint8_t write_code = TW_ERR_WRITE;
 static char    remote_payload[320] = "";
 static char    remote_proto[12] = "";
+// What the web page says the remote write was for: the spool FilaMan named and
+// the filament in its record, since there is no spool fetch on this path.
+static int     remote_spool_id = 0;
+static char    remote_name[48] = "";
 
 void tagWriteFail(uint8_t code, const char *fmt, ...) {
   va_list ap;
@@ -190,6 +198,8 @@ const char* tagFormatLabel(uint8_t fmt) {
 void tagRemotePayloadSet(const char *json, int spool_id) {
   remote_payload[0] = 0;
   remote_proto[0] = 0;
+  remote_spool_id = spool_id;
+  remote_name[0] = 0;
   if (!json || !json[0]) return;
 
   JsonDocument d;
@@ -214,6 +224,14 @@ void tagRemotePayloadSet(const char *json, int spool_id) {
   const char *proto = d["protocol"] | "";
   snprintf(remote_proto, sizeof(remote_proto), "%s",
            strcmp(proto, "filaman") == 0 ? "FilaMan" : "OpenSpool");
+
+  // Both protocols carry OpenSpool's fields; "spool" as the device path says
+  // when the spool has no filament name.
+  const char *brand = d["brand"] | "";
+  const char *type  = d["type"] | "";
+  snprintf(remote_name, sizeof(remote_name), "%s%s%s", brand,
+           (brand[0] && type[0]) ? " " : "", type);
+  if (!remote_name[0]) snprintf(remote_name, sizeof(remote_name), "spool");
 }
 
 const char* tagRemotePayloadProtocol() {
@@ -230,7 +248,9 @@ bool tagRemotePayloadPending() { return remote_payload[0] != 0; }
 // had been written before it.
 bool tagWriteRemotePayload() {
   if (!remote_payload[0]) return false;
-  jobStart();
+  jobStart(remote_spool_id, strcmp(remote_proto, "FilaMan") == 0 ? TAG_FMT_FILAMAN
+                                                                 : TAG_FMT_OPENSPOOL);
+  snprintf(report.name, sizeof(report.name), "%s", remote_name);
   write_err[0] = 0;
   write_code = TW_ERR_WRITE;
 
@@ -516,7 +536,7 @@ static bool writeMifareJob(int spool_id, uint8_t fmt, char *name, size_t name_le
 // with the request.
 bool tagWriteSpoolNow(int spool_id, TagFormat fmt) {
   if (spool_id <= 0) return false;
-  jobStart();
+  jobStart(spool_id, fmt);
   char name[48];
   if (mifareFormatFor(fmt)) {
     if (!writeMifareJob(spool_id, fmt, name, sizeof(name))) return false;
@@ -529,9 +549,6 @@ bool tagWriteSpoolNow(int spool_id, TagFormat fmt) {
   char m[128];
   snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", spool_id, name,
            fmtLabel(fmt));
-  memset(&report, 0, sizeof(report));
-  report.spool_id = spool_id;
-  report.fmt      = (uint8_t)fmt;
   snprintf(report.name, sizeof(report.name), "%s", name);
   finish("ok", m, TW_OK);
   return true;
@@ -573,6 +590,10 @@ void tagWriteTick() {
   scanTick();
   if (!pending) return;
   pending = false;
+  // Again here: a remote or direct write that ran since the request was
+  // parked has ended on a state of its own, and this job must not end silent
+  // on the same one.
+  jobStart(pending_id, pending_fmt);
 
   if (pending_fmt == TAG_FMT_ERASE && strlen(pending_uid) == TAG_UID_STR_LEN_MIFARE) {
     eraseMifareTag();
