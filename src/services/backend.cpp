@@ -451,6 +451,23 @@ bool backendSpoolPageUrl(int spool_id, char* out, size_t out_size) {
   }
 }
 
+bool backendWebUiUrl(char* out, size_t out_size) {
+  if (!out || out_size == 0) return false;
+  out[0] = '\0';
+  // An online service's base is its API, which no person wants to open: its
+  // account page or no link at all.
+  if (backendProfileIsOnline()) {
+    const char* account = backendProfile(backendProfileId()).account_url;
+    if (!account || !account[0]) return false;
+    snprintf(out, out_size, "%s", account);
+    return true;
+  }
+  const char* base = backendBaseUrl();
+  if (!base || !base[0]) return false;
+  snprintf(out, out_size, "%s", base);
+  return true;
+}
+
 void backendStatusLine(char* out, size_t out_size) {
   if (!out || out_size == 0) return;
 

@@ -15,6 +15,10 @@
 //  anything else through its chip uid, Spoolman's own relation,
 //  the list field, the spool cache and the uid index.
 //
+//  The same queue takes the tag off a spool (More Info's unlink),
+//  moves it from the spool that holds it to another, and checks
+//  before a write that links that no other spool holds the tag.
+//
 //  Nothing here touches the reader. The main poll has read the
 //  tag and its uid is in g_tag; linking is a request to the
 //  backend and nothing else. The HTTP handler only parks it,
@@ -32,6 +36,20 @@ enum TagLinkResult : uint8_t {
   TL_NETWORK,     // the server did not answer
   TL_FAILED,      // the server answered and refused
   TL_MISMATCH,    // a Bambu tag that does not describe the spool, nothing written
+  TL_UNLINKED,    // the tag was taken off other_spool
+  TL_NOT_LINKED,  // no spool holds the tag, there was nothing to take off
+  TL_NOT_SHOWN,   // other_spool holds the tag but is not the spool the scale shows
+  TL_ON_FILAMENT, // Spoolman binds the tag to filament other_spool, not to a spool
+  TL_WRITE_REFUSED, // the write could not be parked, another one is running
+  TL_UNLINK_FAILED, // the unlink was sent, and the server still finds other_spool by the tag
+};
+
+// What was asked for. The page words the outcome and the question by it.
+enum TagLinkJob : uint8_t {
+  TLJ_LINK = 0,   // bind the tag to the spool
+  TLJ_MOVE,       // take it off the spool that holds it, then bind or write
+  TLJ_UNLINK,     // take it off whichever spool holds it
+  TLJ_WRITE,      // write and link, once the server says no other spool holds it
 };
 
 // Codes and ids rather than a sentence: this file cannot include lang.h (T()
@@ -44,6 +62,13 @@ struct TagLinkReport {
   // page's question. Data, not a sentence.
   char    tag_desc[40];
   char    spool_desc[64];
+  uint8_t job;          // TagLinkJob
+  int     from_spool;   // TLJ_MOVE: the spool the tag was to be taken off
+  bool    write;        // a write follows the binding check (TLJ_WRITE, or a move for one)
+  uint8_t fmt;          // its TagFormat
+  // TLJ_MOVE: the tag is already off from_spool when what followed failed. It
+  // then belongs to no spool, which the page has to say.
+  bool    unlinked;
 };
 
 // Parks a link of the tag the page showed - uid as tagCachedUid() gave it -
@@ -52,10 +77,35 @@ struct TagLinkReport {
 // (TL_MISMATCH) and the answer was to link it all the same.
 bool tagLinkRequest(int spool_id, const char* uid, bool force = false);
 
+// A write that links, from the tag page. The server is asked first who holds
+// the tag; another spool's tag is not written, the report says TL_HELD and the
+// page asks whether to move it. Otherwise the write is handed to
+// tagWriteRequest() as it always was. fmt is a TagFormat.
+bool tagLinkWriteRequest(int spool_id, const char* uid, uint8_t fmt);
+
+// The page's answer to TL_HELD: take the tag off from_spool, then link it to
+// spool_id, or write and link it when write_fmt is a TagFormat (-1: link
+// only). Refused on the loop when the server names a holder other than
+// from_spool by then. force as for tagLinkRequest().
+bool tagLinkMoveRequest(int spool_id, const char* uid, int from_spool, int write_fmt,
+                        bool force);
+
+// Takes the tag on the reader off whichever spool holds it. Only the spool
+// the scale shows can be unlinked (TL_NOT_SHOWN otherwise): its bindings are
+// the ones the last lookup captured. A Bambu tag takes every binding of its
+// spool with it, both chips carry the same tray uuid.
+bool tagUnlinkRequest(const char* uid);
+
 // From appLoop(), after tagWriteTick(). Waits while a tag write is running.
 void tagLinkTick();
 
 const TagLinkReport* tagLinkReportData();
+
+// A write started from the page speaks for the tag from then on, and the
+// link's last answer steps back so the page shows the write's. The write's
+// state stays "ok" or "error" until the next one, so the page shows a link
+// answer that stands before it. Nothing while a request is parked.
+void tagLinkReportClear();
 
 // The spool a link has just bound, handed out once so the main screen can show
 // it, the way tagWriteTakeLinkedSpool() does for a write. 0 otherwise.

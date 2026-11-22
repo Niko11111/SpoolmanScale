@@ -25,6 +25,7 @@
 #include "web/web_bambu_catalog.h"
 #include "web/web_jobs.h"
 #include "web/web_shell.h"
+#include "web/web_tag_link.h"
 #include "ui/second_tag_popup.h"
 #include "ui/tag_write_popup.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
@@ -93,13 +94,16 @@ static String body() {
   h += T(STR_W_TAG_LINK);
   h += F("</label>"
          "<div class='inrow' style='margin-top:16px'>"
-         "<button id='tg-btn' onclick='writeTag()' disabled></button>"
+         "<button id='tg-btn' onclick='writeTag()' data-ic='wr' disabled></button>"
          "<button id='tg-erase' class='danger' onclick='eraseTag()' data-ic='rm' disabled>");
   h += T(STR_W_TAG_ERASE);
   // Binds the tag without writing it: the one way in the browser for a tag
   // that can only be read, and for an NTAG whose contents should stay.
-  h += F("</button><button id='tg-lnk' class='quiet' disabled>");
+  h += F("</button><button id='tg-lnk' class='quiet' data-ic='ln' disabled>");
   h += T(STR_W_TAG_LINKONLY);
+  // Takes the tag off whichever spool holds it (web_tag_link.cpp).
+  h += F("</button><button id='tg-unl' class='quiet' data-ic='unl' disabled>");
+  h += T(STR_W_TAG_UNLINK);
   h += F("</button></div>"
          // What a write or a link is doing, and then how it ended: a panel of
          // its own with a spinner or a mark, where a small green line beside
@@ -243,6 +247,7 @@ static String body() {
          "loadTagOpts();"
          "</script>");
 
+  h += tagLinkScript();
   h += F("<script>const M={cur:");
   h += jsStr(T(STR_W_TAG_ONTAG));
   h += F(",will:");    h += jsStr(T(STR_W_TAG_WILLBE));
@@ -454,7 +459,7 @@ static String body() {
          "renderCurTag(document.getElementById('tg-cur'));"
          "renderMatchedSpool(document.getElementById('tg-matched'));"
          "renderNewPreview(document.getElementById('tg-new'));}"
-         "function tgSync(){tgDraw();const b=document.getElementById('tg-btn');if(!b)return;"
+         "function tgSync(){tgDraw();tlSync();const b=document.getElementById('tg-btn');if(!b)return;"
          // Said before the write, not after it. The capacity check inside the
          // firmware refuses the same tag, but only once the user has already
          // pressed the button and put the tag on the reader.
@@ -515,25 +520,27 @@ static String body() {
          "d.uid?(M.onread+' '+d.uid+' ('+d.kind+')'):M.notag;"
          "tgUid=d.uid||'';tgCurI=d.uid?d.info:null;tgBytes=d.bytes||0;tgKindCode=d.kindcode||0;"
          "tgBackend=d.backend||'';tgCur=d.content||'';tgRaw=d.raw||'';tgMatched=d.matched;tgAdds=!!d.linkadds;"
-         "tgState=d.state||'idle';tgSync();"
-         // The write first, the link second: a write that links says both in
-         // its one sentence.
+         "tgState=d.state||'idle';tgSync();tlNoWrite(d);"
+         // A running write first. Then the link's answer: one stands only
+         // after the last write, which the scale clears it for, while the
+         // write's own state stays until the next write. A write that links
+         // says both in its one sentence.
          "if(d.state=='pending')stat('busy',d.message,M.keep,true);"
-         "else if(d.state=='ok')stat('ok',d.message,'');"
-         "else if(d.state=='error')stat('bad',d.message,M.retry);"
          "else if(d.linkstate=='pending')stat('busy',d.linkmsg,'',true);"
          "else if(d.linkstate=='ok')stat('ok',d.linkmsg,'');"
          "else if(d.linkstate=='error')stat('bad',d.linkmsg,'');"
+         // Another spool holds the tag: the page asks whether to move it.
+         "else if(d.linkstate=='held'){stat('bad',d.linkmsg,'');tlHeld(d);}"
          // Nothing written yet: the scale asks back. Yes sends the same link
          // again with the mismatch accepted, no leaves it standing as refused.
          "else if(d.linkstate=='mismatch'){stat('bad',d.linkmsg,'');"
          "if(tgMisAsked!==d.linkmsg){tgMisAsked=d.linkmsg;"
          // The poll goes on while the question stands; tgMisAsked keeps it
          // from asking the same twice.
-         "if(d.linkspool){const sp=d.linkspool,u=tgUid;ask(d.linkmsg,M.lnk).then(ok=>{if(!ok)return;"
-         "fetch('/api/tag/link',{method:'POST',body:sp+','+u+',1'})"
-         ".then(r=>r.json()).then(x=>{if(!x.ok)stat('bad',M.lbusy,'');})"
-         ".catch(()=>{});after();});}}}"
+         "if(d.linkspool){const u=tgUid;ask(d.linkmsg,M.lnk).then(ok=>{if(!ok)return;"
+         "tlForce(d,u);after();});}}}"
+         "else if(d.state=='ok')stat('ok',d.message,'');"
+         "else if(d.state=='error')stat('bad',d.message,M.retry);"
          "else stat('','','');"
          "second(d);}).catch(()=>{});}"
          // One panel for whatever runs: a spinner and a moving bar while it
@@ -581,19 +588,21 @@ static String body() {
          "fetch('/api/tag/write',{method:'POST',body:'0,2,0'})"
          ".then(r=>r.json()).then(d=>{if(d.ok)stat('busy',M.queued,M.keep,true);else stat('bad',M.twref,'');})"
          ".catch(()=>{});after();});}"
-         "function writeTag(){const v=parseInt(document.getElementById('tg-id').value);"
+         "function writeTag(){tlAsked='';const v=parseInt(document.getElementById('tg-id').value);"
          "if(!v){stat('bad',M.pickf,'');return;}"
          "const f=document.getElementById('tg-fmt').value;"
          "const l=document.getElementById('tg-link').checked?1:0;"
          "tgWroteId=l?v:0;tgWroteAt=Date.now();tgT2Off=false;"
-         "fetch('/api/tag/write',{method:'POST',body:v+','+f+','+l})"
+         // The tag goes along, so a write that links is checked against the
+         // spool that may hold it before anything is written.
+         "fetch('/api/tag/write',{method:'POST',body:v+','+f+','+l+','+tgUid})"
          ".then(r=>r.json()).then(d=>{if(d.ok)stat('busy',M.queued,M.keep,true);else stat('bad',M.twref,'');})"
          ".catch(()=>{});after();}"
          // The spool already carries a different tag: say what linking does to
          // it before doing it. tgLinked comes from the preview of the picked
          // spool and is empty when that tag is the one on the reader.
          "async function linkTag(){const v=parseInt(document.getElementById('tg-id').value);"
-         "if(!v||!tgUid)return;const u=tgUid;"
+         "if(!v||!tgUid)return;const u=tgUid;tlAsked='';"
          "if(tgLinked&&!await ask((tgAdds?M.ladd:M.lask).replace('%d',v).replace('%s',tgLinked),M.lnk))return;"
          "fetch('/api/tag/link',{method:'POST',body:v+','+u})"
          ".then(r=>r.json()).then(d=>{if(!d.ok)stat('bad',M.lbusy,'');})"
@@ -686,40 +695,6 @@ static String tagKindLocal() {
     out += buf;
   }
   return out;
-}
-
-// Where a link from this page stands, for the poll. OK covers "already bound",
-// which is not a failure: the spool is found by that tag either way.
-static const char* tagLinkStateName() {
-  switch (tagLinkReportData()->code) {
-    case TL_NONE:    return "idle";
-    case TL_BUSY:    return "pending";
-    case TL_OK:
-    case TL_ALREADY: return "ok";
-    case TL_MISMATCH: return "mismatch";
-    default:         return "error";
-  }
-}
-
-// The same for the sentence, which tag_link.cpp cannot build in the user's
-// language.
-static String tagLinkMessageLocal() {
-  const TagLinkReport *r = tagLinkReportData();
-  char buf[192];
-  switch (r->code) {
-    case TL_NONE:    return String("");
-    case TL_BUSY:    snprintf(buf, sizeof(buf), T(STR_W_TL_BUSY), r->spool_id); break;
-    case TL_OK:      snprintf(buf, sizeof(buf), T(STR_W_TL_OK), r->spool_id); break;
-    case TL_ALREADY: snprintf(buf, sizeof(buf), T(STR_W_TL_ALREADY), r->spool_id); break;
-    case TL_HELD:    snprintf(buf, sizeof(buf), T(STR_W_TL_HELD), r->other_spool); break;
-    case TL_MISMATCH: snprintf(buf, sizeof(buf), T(STR_W_TL_MISMATCH), r->spool_id,
-                               r->tag_desc, r->spool_desc); break;
-    case TL_CHANGED: copyT(buf, sizeof(buf), STR_W_TL_CHANGED); break;
-    case TL_NO_TAG:  copyT(buf, sizeof(buf), STR_TW_ERR_NO_TAG); break;
-    case TL_NETWORK: copyT(buf, sizeof(buf), STR_LINK_NO_CONNECTION); break;
-    default:         copyT(buf, sizeof(buf), STR_W_TL_FAILED); break;
-  }
-  return String(buf);
 }
 
 // The spool the scale shows, for the card between the two tag cards. All of
@@ -847,10 +822,8 @@ static void routes(WebServer &srv) {
                "\",\"message\":\"" + jsonEsc(tagWriteMessageLocal().c_str()) +
                "\",\"content\":\"" + jsonEsc(tagCachedContent()) +
                "\",\"raw\":\""     + jsonEsc(tagCachedRaw()) +
-               "\",\"linkspool\":" + String(tagLinkReportData()->spool_id) +
-               ",\"linkstate\":\"" + tagLinkStateName() +
-               "\",\"linkmsg\":\"" + jsonEsc(tagLinkMessageLocal().c_str()) +
-               "\",\"linkadds\":" + (tagLinkKeepsOtherTags() ? "true" : "false") +
+               "\"," + tagLinkPollJson() +
+               ",\"linkadds\":" + (tagLinkKeepsOtherTags() ? "true" : "false") +
                ",\"matched\":" + spoolJson() +
                ",\"t2can\":" + (backendSecondTagKnown() == 1 ? "true" : "false") +
                ",\"t2\":" + secondTagJson() +
@@ -901,24 +874,8 @@ static void routes(WebServer &srv) {
     srv.send(200, "application/json", "{\"ok\":true}");
   });
 
-  // "id,uid" or "id,uid,1": the spool, the tag the page was showing when it
-  // was asked, and whether a Bambu tag that does not match the spool was
-  // accepted. Parked only; tagLinkTick() makes the request on the loop task
-  // and refuses if a different tag lies on the reader by then.
-  srv.on("/api/tag/link", HTTP_POST, [&srv]() {
-    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
-    if (!srv.hasArg("plain")) { srv.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
-    String body = srv.arg("plain");
-    const int c = body.indexOf(',');
-    const int id = body.substring(0, c < 0 ? body.length() : c).toInt();
-    String uid = c < 0 ? String("") : body.substring(c + 1);
-    const int c2 = uid.indexOf(',');
-    const bool force = c2 >= 0 && uid.substring(c2 + 1).toInt() == 1;
-    if (c2 >= 0) uid = uid.substring(0, c2);
-    uid.trim();
-    const bool ok = tagLinkRequest(id, uid.c_str(), force);
-    srv.send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
-  });
+  // Link, move and unlink.
+  tagLinkRoutes(srv);
 
   // "start,<spool>" or "cancel". Parked; the scale opens or closes its own
   // question on the next loop pass, the same one it asks after a link.
@@ -948,7 +905,20 @@ static void routes(WebServer &srv) {
     int id  = body.substring(0, c1 < 0 ? body.length() : c1).toInt();
     int fmt = c1 < 0 ? 0 : body.substring(c1 + 1, c2 < 0 ? body.length() : c2).toInt();
     bool link = c2 >= 0 && body.substring(c2 + 1).toInt() == 1;
-    bool ok = tagWriteRequest(id, fmtFromInt(fmt), link);
+    // "id,fmt,link,uid": a write that links names the tag, and the server is
+    // asked who holds it before it is written (tag_link.cpp). Without the uid
+    // - a page from before, or an erase - it is parked straight away.
+    const int c3 = c2 < 0 ? -1 : body.indexOf(',', c2 + 1);
+    String uid = c3 < 0 ? String("") : body.substring(c3 + 1);
+    uid.trim();
+    // The page knows the tag only from its last poll; clicked before that, it
+    // sends none. The check then goes by the tag on the reader instead of
+    // being skipped.
+    if (link && !uid.length()) uid = tagCachedUid();
+    tagLinkReportClear();
+    bool ok = (link && uid.length())
+      ? tagLinkWriteRequest(id, uid.c_str(), (uint8_t)fmtFromInt(fmt))
+      : tagWriteRequest(id, fmtFromInt(fmt), link);
     srv.send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
   });
 }

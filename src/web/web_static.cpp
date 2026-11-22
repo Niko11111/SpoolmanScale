@@ -269,9 +269,10 @@ static const char APP_CSS[] PROGMEM =
       // The icon says what kind of action it is, the words say which one, so
       // the same icon stands for every action of a kind: the tick for every
       // save, the bin for every delete. Toggles, tabs and Connect stay words.
-      "button[data-ic]{display:inline-flex;align-items:center;justify-content:center;gap:7px}"
+      // The file picker's label is a button to the eye and takes icons the same way.
+      "button[data-ic],.filebtn[data-ic]{display:inline-flex;align-items:center;justify-content:center;gap:7px}"
       "button[data-ic][hidden]{display:none}"
-      "button[data-ic]:before{content:'';width:16px;height:16px;flex:none;"
+      "button[data-ic]:before,.filebtn[data-ic]:before{content:'';width:16px;height:16px;flex:none;"
       "background:currentColor;forced-color-adjust:none;"
       "-webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat}"
       // Icon only, for a row of small actions that repeats down a list and
@@ -299,6 +300,18 @@ static const char APP_CSS[] PROGMEM =
       "[data-ic=tlg]{--ic:" WEB_ICON("M3 19l5-13 5 13M4.6 15h6.8M16 12h6M19 9v6") "}"
       "[data-ic=full]{--ic:" WEB_ICON("M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5") "}"
       "[data-ic=unfull]{--ic:" WEB_ICON("M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5") "}"
+      // Picking a file, and reading a release's notes.
+      "[data-ic=fo]{--ic:" WEB_ICON("M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5"
+                                    "a2 2 0 0 1-2-2z") "}"
+      "[data-ic=nt]{--ic:" WEB_ICON("M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"
+                                    "M14 3v5h5M9 13h6M9 17h4") "}"
+      // Writing a tag, binding it to a spool, and taking it off again.
+      "[data-ic=wr]{--ic:" WEB_ICON("M17 3l4 4L8 20H4v-4zM14 6l4 4") "}"
+      "[data-ic=ln]{--ic:" WEB_ICON("M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7"
+                                    "M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7") "}"
+      "[data-ic=unl]{--ic:" WEB_ICON("M18.8 12.3l1.7-1.7a5 5 0 0 0-7.1-7.1l-1.7 1.7"
+                                     "M5.2 11.7l-1.7 1.7a5 5 0 0 0 7.1 7.1l1.7-1.7"
+                                     "M8 2v3M2 8h3M16 19v3M19 16h3") "}"
       // A file input in the page's own button vocabulary. The native control
       // stays in the label, hidden, so the label click opens the picker and
       // the form still posts the file; the chosen name shows beside it.

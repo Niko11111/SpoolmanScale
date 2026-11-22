@@ -2093,6 +2093,26 @@ enum StringID {
   STR_SND_PRINT,
   STR_SND_UPDATE,
   STR_SND_LINK,
+  // Tag page: unlink and move
+  STR_W_TAG_UNLINK,
+  STR_W_TL_UNLINK_BTN,
+  STR_W_TL_UNLINK_ASK,        // %d = the spool the scale shows for the tag
+  STR_W_TL_UNLINK_ASK_ANY,
+  STR_W_TL_MOVE_ASK,          // %d holder, %d target
+  STR_W_TL_MOVE_ASK_WRITE,    // %d holder, %d target
+  STR_W_TL_UNLINKING,
+  STR_W_TL_CHECKING,
+  STR_W_TL_MOVING,            // %d from, %d to
+  STR_W_TL_UNLINKED,          // %d
+  STR_W_TL_MOVED,             // %d from, %d to
+  STR_W_TL_NOT_LINKED,
+  STR_W_TL_NOT_SHOWN,         // %d = the spool that holds the tag
+  STR_W_TL_ON_FILAMENT,       // %d = the filament
+  STR_W_TL_UNLINK_FAILED,     // %d
+  STR_W_TL_HELD_WRITE,        // %d = the spool that holds the tag
+  // Status and backend pages: the backend's own web interface
+  STR_W_BACKEND_OPEN,         // %s = the backend's name
+  STR_W_TL_HALF_MOVED,        // %d = spool taken off, %s = why the rest failed
   STR_COUNT
 };
 
