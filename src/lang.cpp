@@ -1877,10 +1877,10 @@ const char* const STRINGS[][3] = {
   { "Nach dem Verlinken",     "After linking",          "Après la liaison" },  // STR_W_TAGOPT_ASK
   { "Format",                 "Format",                 "Format" },  // STR_W_TAGOPT_FMT
   { "Gilt für das, was die Waage nach einem Verlinken selbst tut. "
-    "Das Schreiben auf dieser Seite hat seine eigene Formatauswahl.",
-    "Applies to what the scale does on its own after a link. Writing from this "
-    "page has its own format selector.",
-    "Ces réglages concernent ce que la balance fait d'elle-même après avoir lié un tag à une bobine. L'écriture lancée depuis cette page a son propre choix de format, plus haut." },  // STR_W_TAGOPT_NOTE
+    "Das Format ist dasselbe wie beim Schreiben oben.",
+    "Applies to what the scale does on its own after a link. The format is the "
+    "same one the write above uses.",
+    "Ces réglages concernent ce que la balance fait d'elle-même après avoir lié un tag à une bobine. Le format est le même que pour l'écriture plus haut." },  // STR_W_TAGOPT_NOTE
   { "Speichern", "Download", "Enregistrer" },  // STR_W_LOG_DOWNLOAD
   { "Kein Material passte - Filter aufgehoben",
     "No material matched - filter dropped",

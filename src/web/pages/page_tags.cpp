@@ -82,8 +82,9 @@ static String body() {
   h += F("</label><div class='inrow'>"
          "<input id='tg-id' type='number' min='1' oninput='loadPreview()'>"
          "<select id='tg-pick' onchange='pickSpool()' style='min-width:210px'></select>"
-         // OpenSpool first and preselected: it is the format the scale's own
-         // backends read back, where ACE only ever talks to the printer.
+         // The scale's own format setting, the same value as the selector in
+         // the options card below: loadTagOpts() fills both, and a change in
+         // either is saved and shown in the other. OpenSpool until it is read.
          "<select id='tg-fmt' onchange='loadPreview()' style='flex:0 0 auto'>"
          "<option value='1' selected>OpenSpool</option>"
          "<option value='3'>FilaMan</option>"
@@ -123,10 +124,8 @@ static String body() {
   h += T(STR_W_TAG_COMPARE);
   h += F("</p></div>");
 
-  // What the scale does on its own after a link, as opposed to what this page
-  // does when the button above is pressed. Same two settings as Settings >
-  // Scale on the device, and the note says which of the two is which - the
-  // format selector above belongs to the write on this page and nothing else.
+  // What the scale does on its own after a link. Same settings as Settings >
+  // Scale on the device; its format is also the write's format above.
   h += F("<div class='card wide'><h2>");
   h += T(STR_W_C_TAGOPTS);
   h += F("</h2>"
@@ -225,11 +224,19 @@ static String body() {
   h += F("};"
          // All three values in one line, same shape as /api/tag/write above, so
          // the route stays a handful of lines and needs no JSON parser.
-         "function loadTagOpts(){fetch('/api/tagopts').then(r=>r.json()).then(d=>{"
+         // Until the scale's options are read, a save would send the controls'
+         // defaults for the two settings nobody touched.
+         "let toRead=false;"
+         "function loadTagOpts(){fetch('/api/tagopts').then(r=>r.json()).then(d=>{toRead=true;"
          "document.getElementById('to-ask').value=String(d.ask);"
          "document.getElementById('to-mism').checked=!!d.mism;"
          "document.getElementById('to-fmt').value=String(d.fmt);"
+         "toFmtShow();"
          "}).catch(()=>{});}"
+         // The write's selector follows the setting, and the preview with it.
+         "function toFmtShow(){const t=document.getElementById('tg-fmt');"
+         "const v=document.getElementById('to-fmt').value;"
+         "if(t&&t.value!==v){t.value=v;if(typeof loadPreview==='function')loadPreview();}}"
          "function saveTagOpts(){"
          "const a=document.getElementById('to-ask').value;"
          "const m=document.getElementById('to-mism').checked?1:0;"
@@ -244,6 +251,10 @@ static String body() {
          ".catch(()=>{s.textContent=TO.err;loadTagOpts();});}"
          "['to-ask','to-mism','to-fmt'].forEach(function(id){"
          "document.getElementById(id).addEventListener('change',saveTagOpts);});"
+         "document.getElementById('to-fmt').addEventListener('change',toFmtShow);"
+         // A format picked for the write is the scale's format from then on.
+         "document.getElementById('tg-fmt').addEventListener('change',function(){"
+         "document.getElementById('to-fmt').value=this.value;if(toRead)saveTagOpts();});"
          "loadTagOpts();"
          "</script>");
 
