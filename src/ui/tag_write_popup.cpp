@@ -194,9 +194,12 @@ static void showResult(uint8_t code) {
   if (s_mode == ASK_ERASE)
     showInfoPopup(ok ? STR_TW_ERASED : STR_TW_ERASE_FAILED,
                   ok ? STR_TW_ERASED_INFO : tagWriteResultString(code), tone);
+  else if (ok)
+    // The format that went on: a fixed "OpenSpool" here was read after an ACE
+    // or a CFS write as well (22.11.2026).
+    showInfoPopupArg(STR_TW_OK, STR_TW_OK_INFO, tagFormatLabel(s_write_fmt), tone);
   else
-    showInfoPopup(ok ? STR_TW_OK : STR_TW_FAILED,
-                  ok ? STR_TW_OK_INFO : tagWriteResultString(code), tone);
+    showInfoPopup(STR_TW_FAILED, tagWriteResultString(code), tone);
 }
 
 // Title, consequence, and the two answers. Everything else is fixed.

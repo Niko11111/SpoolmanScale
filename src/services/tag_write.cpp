@@ -101,6 +101,11 @@ static void finish(const char *st, const char *msg, uint8_t code) {
   else if (strcmp(st, "error") == 0) soundPlay(SND_WRITE_FAIL);
 }
 
+// Every job starts here, also one that does not wait for tagWriteTick(), so
+// finish() tells it from the one before. Without it a FilaMan write after an
+// earlier success found "ok" still standing and played no tone (22.11.2026).
+static void jobStart() { snprintf(state, sizeof(state), "pending"); }
+
 bool tagWriteRequest(int spool_id, TagFormat fmt, bool link) {
   if (pending) return false;
   if (fmt != TAG_FMT_ERASE && spool_id <= 0) return false;
@@ -115,7 +120,7 @@ bool tagWriteRequest(int spool_id, TagFormat fmt, bool link) {
   report.erase    = (fmt == TAG_FMT_ERASE);
   report.spool_id = spool_id;
   report.fmt      = (uint8_t)fmt;
-  snprintf(state, sizeof(state), "pending");
+  jobStart();
   if (fmt == TAG_FMT_ERASE)
     snprintf(message, sizeof(message), "Erasing the tag...");
   else
@@ -225,6 +230,7 @@ bool tagRemotePayloadPending() { return remote_payload[0] != 0; }
 // had been written before it.
 bool tagWriteRemotePayload() {
   if (!remote_payload[0]) return false;
+  jobStart();
   write_err[0] = 0;
   write_code = TW_ERR_WRITE;
 
@@ -510,6 +516,7 @@ static bool writeMifareJob(int spool_id, uint8_t fmt, char *name, size_t name_le
 // with the request.
 bool tagWriteSpoolNow(int spool_id, TagFormat fmt) {
   if (spool_id <= 0) return false;
+  jobStart();
   char name[48];
   if (mifareFormatFor(fmt)) {
     if (!writeMifareJob(spool_id, fmt, name, sizeof(name))) return false;

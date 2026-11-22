@@ -25,6 +25,10 @@ enum InfoPopupTone : uint8_t {
 
 void showInfoPopup(int title_id, int text_id, uint8_t tone = INFO_PLAIN);
 
+// The same for a text with one %s in it, filled with arg - the format a tag
+// was written in, say. The text is built before this returns.
+void showInfoPopupArg(int title_id, int text_id, const char *arg, uint8_t tone);
+
 // True while one is on screen. It carries a button, so it is waiting for the
 // user exactly like the questions are - see uiModalWaiting(). A success that
 // counts down still counts: it is read during those seconds.

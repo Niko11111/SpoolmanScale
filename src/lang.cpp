@@ -1755,9 +1755,9 @@ const char* const STRINGS[][3] = {
 
   // Results of a write or an erase
   { "Tag nicht beschrieben", "Tag not written", "Tag non écrit" },  // STR_TW_FAILED
-  { "Die Spulendaten stehen jetzt im Format OpenSpool auf dem Tag.",
-    "The spool data is now on the tag, as OpenSpool.",
-    "Les données de la bobine sont maintenant sur le tag, au format OpenSpool." },  // STR_TW_OK_INFO
+  { "Die Spulendaten stehen jetzt im Format %s auf dem Tag.",
+    "The spool data is now on the tag, as %s.",
+    "Les données de la bobine sont maintenant sur le tag, au format %s." },  // STR_TW_OK_INFO
   { "Tag auch löschen?", "Erase the tag too?", "Effacer aussi le tag ?" },  // STR_TW_ERASE_ASK_TITLE
   { "Die Verknüpfung ist gelöst. Der Tag trägt die Spulendaten aber weiter.",
     "The link is gone. The tag still carries the spool data though.",
