@@ -2079,6 +2079,17 @@ enum StringID {
   STR_W_NFC_WAKE_DETAIL,
   STR_W_NFC_WAKE_DOCS,
   STR_W_THEME_OPEN,
+  // Sound tab of the Display/Sound screen (ui/display_screen.cpp)
+  STR_SOUND_TITLE,            // the tab, and the master switch row
+  STR_SOUND_SUB,              // under the master switch: where the speaker goes
+  STR_SND_NFC,
+  STR_SND_WRITE,
+  STR_SND_WEIGHT,
+  STR_SND_VOLUME_LABEL,
+  STR_SND_VOL_LOW,
+  STR_SND_VOL_MED,
+  STR_SND_VOL_HIGH,
+  STR_SND_VOL_MAX,
   STR_COUNT
 };
 

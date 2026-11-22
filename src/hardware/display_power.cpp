@@ -10,6 +10,7 @@
 #include "app_config.h"
 #include "display.h"
 #include "sd_logger.h"
+#include "sound.h"
 
 
 static unsigned long last_activity_ms = 0;
@@ -94,6 +95,7 @@ void handlePowerManagement() {
     Serial.println("Deep sleep...");
     logSD(sleep_now ? "Deep sleep: entering, asked for over the web" : "Deep sleep: entering");
     nfcWakeTestBeforeSleep();   // nothing unless the wake test is switched on
+    soundPrepareDeepSleep();
     displayPrepareDeepSleep();
     delay(100);
     esp_deep_sleep_start();
