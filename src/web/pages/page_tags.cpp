@@ -548,7 +548,7 @@ static String body() {
          "if(tgMisAsked!==d.linkmsg){tgMisAsked=d.linkmsg;"
          // The poll goes on while the question stands; tgMisAsked keeps it
          // from asking the same twice.
-         "if(d.linkspool){const u=tgUid;ask(d.linkmsg,M.lnk).then(ok=>{if(!ok)return;"
+         "if(d.linkspool){const u=tgUid;ask(d.linkmsg,M.lnk,false,'ln').then(ok=>{if(!ok)return;"
          "tlForce(d,u);after();});}}}"
          "else if(d.state=='ok')stat('ok',d.message,'');"
          "else if(d.state=='error')stat('bad',d.message,M.retry);"
@@ -572,13 +572,13 @@ static String body() {
          "h='<div class=\"t2'+(full?' warn':'')+'\"><h3>'+(full?M.askot:M.askw.replace('%d',a.spool))+'</h3>'"
          "+(full?head(i.color,[i.brand,i.material].filter(Boolean).map(esc).join(' '),esc(i.fmt)+(i.color?' - '+esc(i.color):''))"
          "+'<p>'+M.asko.replace('%d',a.spool)+'</p>':'')"
-         "+'<div class=\"inrow\"><button type=\"button\" data-ans=\"1\">'+(full?M.yeso:M.yesw)+'</button>'"
-         "+'<button type=\"button\" class=\"quiet\" data-ans=\"0\">'+M.cancel+'</button></div></div>';}"
+         "+'<div class=\"inrow\"><button type=\"button\" data-ans=\"1\" data-ic=\"wr\">'+(full?M.yeso:M.yesw)+'</button>'"
+         "+'<button type=\"button\" class=\"quiet\" data-ans=\"0\" data-ic=\"x\">'+M.cancel+'</button></div></div>';}"
          "else if(t.st==1){const w=Math.round(100*t.left/30);"
          "h='<div class=\"t2\"><h3>'+M.t2wait+'</h3><p>'+M.t2whint+'</p>'"
          "+'<div class=\"t2cnt\">'+M.t2left.replace('%d',t.left)+'</div>'"
          "+'<div class=\"tgbar drain\"><i style=\"width:'+w+'%\"></i></div>'"
-         "+'<div class=\"inrow\" style=\"margin-top:14px\"><button type=\"button\" class=\"quiet\" data-t2=\"cancel\">'+M.cancel+'</button></div></div>';}"
+         "+'<div class=\"inrow\" style=\"margin-top:14px\"><button type=\"button\" class=\"quiet\" data-t2=\"cancel\" data-ic=\"x\">'+M.cancel+'</button></div></div>';}"
          "else if(t.st==2&&fresh)h='<div class=\"stt busy\"><span class=\"ico\"></span><div>'+M.t2link+'</div></div>';"
          "else if(t.st==3&&fresh)h='<div class=\"stt ok\"><span class=\"ico\">&#10003;</span><div>'+M.t2ok"
          "+'<span class=\"sub\">'+M.t2okh.replace('%d',t.spool)+'</span></div></div>';"
@@ -588,14 +588,14 @@ static String body() {
          // two tags and the scale did not already ask of its own accord.
          "else if(d.state=='ok'&&d.t2can&&tgWroteId&&!tgT2Off&&!(t.st&&t.age<Date.now()-tgWroteAt))"
          "h='<div class=\"t2\"><h3>'+M.t2offer+'</h3><p>'+M.t2hint+'</p>'"
-         "+'<div class=\"inrow\"><button type=\"button\" data-t2=\"start\">'+M.t2start+'</button>'"
-         "+'<button type=\"button\" class=\"quiet\" data-t2=\"off\">'+M.t2done+'</button></div></div>';"
+         "+'<div class=\"inrow\"><button type=\"button\" data-t2=\"start\" data-ic=\"wr\">'+M.t2start+'</button>'"
+         "+'<button type=\"button\" class=\"quiet\" data-t2=\"off\" data-ic=\"ok\">'+M.t2done+'</button></div></div>';"
          // The countdown in whole seconds while the scale waits, not in the
          // three-second steps of the page's own poll.
          "if(t.st==1&&!tgT2Tick)tgT2Tick=setTimeout(()=>{tgT2Tick=0;tgPoll();},1000);"
          "if(el.innerHTML!==h)el.innerHTML=h;}"
          "function after(){setTimeout(tgPoll,700);setTimeout(tgPoll,1500);setTimeout(tgPoll,4000);}"
-         "function eraseTag(){ask(M.eraseq,M.erase,true).then(ok=>{if(!ok)return;"
+         "function eraseTag(){ask(M.eraseq,M.erase,true,'rm').then(ok=>{if(!ok)return;"
          "fetch('/api/tag/write',{method:'POST',body:'0,2,0'})"
          ".then(r=>r.json()).then(d=>{if(d.ok)stat('busy',M.queued,M.keep,true);else stat('bad',M.twref,'');})"
          ".catch(()=>{});after();});}"
@@ -614,7 +614,7 @@ static String body() {
          // spool and is empty when that tag is the one on the reader.
          "async function linkTag(){const v=parseInt(document.getElementById('tg-id').value);"
          "if(!v||!tgUid)return;const u=tgUid;tlAsked='';"
-         "if(tgLinked&&!await ask((tgAdds?M.ladd:M.lask).replace('%d',v).replace('%s',tgLinked),M.lnk))return;"
+         "if(tgLinked&&!await ask((tgAdds?M.ladd:M.lask).replace('%d',v).replace('%s',tgLinked),M.lnk,false,'ln'))return;"
          "fetch('/api/tag/link',{method:'POST',body:v+','+u})"
          ".then(r=>r.json()).then(d=>{if(!d.ok)stat('bad',M.lbusy,'');})"
          ".catch(()=>{});after();}"

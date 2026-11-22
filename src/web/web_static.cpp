@@ -540,8 +540,10 @@ static const char APP_JS[] PROGMEM =
   // and puts the focus on Cancel. The text goes in as text: a tag's contents
   // can be part of it. Built on the first question, so a page that never
   // asks carries nothing; a second question answers the first with no.
+  // ic is the action's icon (data-ic), the tick when left out and none for
+  // "": a dialog's buttons take icons like every other button, Cancel the X.
   "var ASK=null;\n"
-  "function ask(text,yes,danger){"
+  "function ask(text,yes,danger,ic){"
   "if(ASK&&ASK.done)ASK.done(false);"
   "if(!ASK){var b=document.createElement('div');b.className='ask';"
   "b.innerHTML='<div class=\"ac\" role=\"dialog\" aria-modal=\"true\" aria-describedby=\"askt\">'"
@@ -561,6 +563,8 @@ static const char APP_JS[] PROGMEM =
   "var prev=document.activeElement;"
   "ASK.txt.textContent=text;ASK.yes.textContent=yes||WS.yes;ASK.no.textContent=WS.no;"
   "ASK.yes.className=danger?'danger':'';"
+  "if(ic===undefined)ic='ok';if(ic)ASK.yes.dataset.ic=ic;else delete ASK.yes.dataset.ic;"
+  "ASK.no.dataset.ic='x';"
   "ASK.box.classList.add('open');(danger?ASK.no:ASK.yes).focus();"
   "return new Promise(function(res){ASK.done=function(v){ASK.done=null;"
   "ASK.box.classList.remove('open');"

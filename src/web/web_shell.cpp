@@ -400,7 +400,7 @@ String webShellRestartUi() {
   h += F(",reload:"); h += jsStr(T(STR_W_RELOAD));
   h += F("};"
          "async function doRestart(){"
-         "if(!await ask(RT.ask,RT.go))return;"
+         "if(!await ask(RT.ask,RT.go,false,'pw'))return;"
          "let sd=false;"
          "try{sd=(await(await fetch('/status.json',{cache:'no-store'})).json()).sd}catch(e){}"
          "try{await fetch('/api/restart',{method:'POST'})}catch(e){}"

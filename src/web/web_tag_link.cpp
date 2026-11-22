@@ -124,7 +124,7 @@ String tagLinkScript() {
          "const k=[d.linkjob,d.linkspool,d.linkother,tgUid].join(',');if(tlAsked===k)return;tlAsked=k;"
          "const u=tgUid,w=d.linkwrite?d.linkfmt:-1;"
          "const q=(d.linkwrite?TL.mvqw:TL.mvq).replace('%d',d.linkother).replace('%d',d.linkspool);"
-         "ask(q,TL.mvbtn).then(ok=>{if(!ok)return;"
+         "ask(q,TL.mvbtn,false,'ln').then(ok=>{if(!ok)return;"
          "fetch('/api/tag/move',{method:'POST',body:[d.linkspool,u,d.linkother,w,0].join(',')})"
          ".then(r=>r.json()).then(x=>{if(!x.ok)stat('bad',M.lbusy,'');else tlWrote(d);})"
          ".catch(()=>{});after();});}"
@@ -139,7 +139,7 @@ String tagLinkScript() {
          // Whichever spool holds the tag. The scale shows it when it knows it.
          "function tlUnlink(){if(!tgUid)return;const u=tgUid,m=tgMatched;"
          "const q=m&&m.found?TL.unq.replace('%d',m.id):TL.unq0;"
-         "ask(q,TL.unbtn,true).then(ok=>{if(!ok)return;"
+         "ask(q,TL.unbtn,true,'unl').then(ok=>{if(!ok)return;"
          "fetch('/api/tag/unlink',{method:'POST',body:u})"
          ".then(r=>r.json()).then(x=>{if(!x.ok)stat('bad',M.lbusy,'');})"
          ".catch(()=>{});after();});}"
