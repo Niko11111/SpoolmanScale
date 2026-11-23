@@ -4536,6 +4536,9 @@ const char* const STRINGS[][3] = {
   { "Piepen nach Etikettendruck",    "Beep after a label print",       "Bip après impression" },  // STR_SND_PRINT
   { "Piepen nach Firmware-Update",   "Beep after a firmware update",   "Bip après mise à jour" },  // STR_SND_UPDATE
   { "Piepen bei Verbindungsabbruch", "Beep when the connection drops", "Bip si connexion perdue" },  // STR_SND_LINK
+  { "Dieser Bambu-Tag gehört zu einer anderen Spule und wird nicht verknüpft.",
+    "This Bambu tag belongs to another spool and is not linked.",
+    "Ce tag Bambu appartient à une autre bobine, il ne sera pas lié." },  // STR_TAG2_OTHER_SPOOL
 };
 
 StringID tagWriteResultString(uint8_t code) {

@@ -2093,6 +2093,7 @@ enum StringID {
   STR_SND_PRINT,
   STR_SND_UPDATE,
   STR_SND_LINK,
+  STR_TAG2_OTHER_SPOOL,       // a Bambu chip of another spool, not linked as the second tag
   STR_COUNT
 };
 

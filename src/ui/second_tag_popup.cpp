@@ -5,8 +5,11 @@
 #include <Arduino.h>
 #include <lvgl.h>
 #include <cstring>
+#include <strings.h>
 
 #include "hardware/sd_logger.h"
+// Before lang.h: it pulls in ArduinoJson, whose templates T() would rewrite.
+#include "services/tag_spool_match.h"
 #include "lang.h"
 #include "services/http_progress.h"
 #include "services/tag_field.h"
@@ -53,6 +56,22 @@ static bool s_second_bambu = false;
 static char s_unclear_uid[CARD_UIDS_MAX] = "";
 // The chip that refused the Bambu keys in this question, see tag2Step().
 static char s_refused_uid[CARD_UIDS_MAX] = "";
+// The Bambu chip of another spool that turned up in this question, so it is
+// judged, said and logged once while it lies there.
+static char s_other_uid[CARD_UIDS_MAX] = "";
+
+// The spool as the lookup left it when the question opened, the side a Bambu
+// chip is compared against (tag2BambuOtherSpool()). Copied, because the
+// home screen's fields are not this question's to rely on later.
+struct Tag2Spool {
+  char tray[sizeof(g_tag.tray_uuid)];   // the first tag's tray uuid, "" for no Bambu tag
+  char material[32];
+  char name[32];
+  char vendor[32];
+  char color[16];
+  char article[32];
+};
+static Tag2Spool s_spool_seen;
 // When the clock ran out while a new tag was still being read, 0 otherwise.
 // The question then waits for that read instead of expiring under it - a
 // Bambu tag on a weak flange can take its retries well past the 30 s - but
@@ -141,6 +160,40 @@ static void updateCountdownLabel() {
   lv_label_set_text(lbl_tag2_count, buf);
 }
 
+static void noteSpoolSeen() {
+  Tag2Spool& s = s_spool_seen;
+  snprintf(s.tray, sizeof(s.tray), "%s", s_first_bambu ? g_tag.tray_uuid : "");
+  snprintf(s.material, sizeof(s.material), "%s", sm_material_global);
+  snprintf(s.name,     sizeof(s.name),     "%s", sm_filament_name);
+  snprintf(s.vendor,   sizeof(s.vendor),   "%s", sm_vendor_g);
+  snprintf(s.color,    sizeof(s.color),    "%s", sm_color_global);
+  snprintf(s.article,  sizeof(s.article),  "%s", sm_article_nr);
+}
+
+// The Bambu chip on the reader against the spool. Asks the catalog, so only
+// for a chip that read as Bambu, and once per chip (s_other_uid).
+static bool bambuChipOfOtherSpool() {
+  const Tag2Spool& s = s_spool_seen;
+  char tag_article[16];
+  tagSpoolTagArticle(tag_article, sizeof(tag_article));
+  const bool article_match = tag_article[0] && strcasecmp(tag_article, s.article) == 0;
+  const TagSpoolVerdict v = tagSpoolCompare(g_tag.material, g_tag.color_hex, s.material,
+                                            s.name, s.vendor, s.color, article_match);
+  return tag2BambuOtherSpool(s.tray, g_tag.tray_uuid, v.any());
+}
+
+// Not linked, and the question keeps standing for this spool's own tag. The
+// clock runs on: the likely case is a new spool put on the scale while nobody
+// looks, and a question that waits for it would only be in the way.
+static void sayOtherSpool(const char* now) {
+  snprintf(s_other_uid, sizeof(s_other_uid), "%s", now);
+  logSDf("TAG2: '%s' is a Bambu chip of another spool ('%s' %s), not linked to spool %d",
+         g_tag.uid_str, g_tag.material, g_tag.color_hex, s_spool_id);
+  if (!lbl_tag2_prompt) return;
+  lv_label_set_text(lbl_tag2_prompt, T(STR_TAG2_OTHER_SPOOL));
+  lv_obj_set_style_text_color(lbl_tag2_prompt, lv_color_hex(UI_COL_WARN), 0);
+}
+
 void showSecondTagPopup(int spool_id, const char* first_uid) {
   closeSecondTagPopup();
 
@@ -151,11 +204,13 @@ void showSecondTagPopup(int spool_id, const char* first_uid) {
   s_second_bambu  = false;
   s_unclear_uid[0] = '\0';
   s_refused_uid[0] = '\0';
+  s_other_uid[0] = '\0';
   s_grace_since_ms = 0;
   s_restarts = 0;
   tagUidNormalize(first_uid, s_first_uid, sizeof(s_first_uid));
   // g_tag still holds the tag that was just linked.
   s_first_bambu   = tagIsBambu(g_tag.tray_uuid);
+  noteSpoolSeen();
   s_opened_ms     = millis();
   s_opened_stall  = httpStallTotalMs();
   setState(T2_WAITING);
@@ -326,8 +381,12 @@ void handleSecondTagDeferredActions() {
     // so while it still lies there, this is the same refusal.
     const bool refused_before = s_refused_uid[0] && strcmp(now, s_refused_uid) == 0 &&
                                 strcmp(now, s_unclear_uid) != 0;
-    const Tag2Step step = tag2Step(verdict, s_first_bambu, refused_before);
-    if (step == T2S_LINK) {
+    const bool other_spool = verdict == TV_BAMBU &&
+                             (strcmp(now, s_other_uid) == 0 || bambuChipOfOtherSpool());
+    const Tag2Step step = tag2Step(verdict, s_first_bambu, refused_before, other_spool);
+    if (step == T2S_OTHER_SPOOL && strcmp(now, s_other_uid) != 0) {
+      sayOtherSpool(now);
+    } else if (step == T2S_LINK) {
       if (verdict == TV_REFUSED && s_first_bambu)
         logSDf("TAG2: '%s' refused the Bambu keys again after it was put back - "
                "linking it as a plain tag", g_tag.uid_str);
