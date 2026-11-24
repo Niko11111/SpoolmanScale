@@ -23,4 +23,4 @@ enum TagVerdict : uint8_t {
   TV_OTHER,              // NTAG, Creality, Snapmaker, blank
   TV_REFUSED,
 };
-TagVerdict tagSettledVerdict(const char* uid_str);
+TagVerdict tagSettledVerdict(const char* uid_str);   // defined in tag_scan.cpp
