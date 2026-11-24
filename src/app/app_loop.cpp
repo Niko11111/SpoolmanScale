@@ -149,6 +149,8 @@
 #include "app/wifi_fallback.h"
 #include "ui/wifi_saved_screen.h"
 
+using namespace apploop;
+
 
 namespace {
 constexpr unsigned long NO_TAG_CLEAR_MS = 60000;
@@ -165,7 +167,7 @@ constexpr unsigned long LOC_DEBOUNCE_FAST_MS = 500;
 // Weight while the tag was last actually readable. Frozen at the first miss,
 // not at the point where the tag counts as removed: by then the spool may
 // already be off the scale and the reference would have followed it down.
-float loc_weight_ref   = 0.0f;
+float apploop::loc_weight_ref   = 0.0f;
 static bool  loc_weight_valid = false;
 
 // Set on the first sample of a new tag presence, cleared when the tag is
@@ -175,7 +177,7 @@ static unsigned long loc_weight_since_ms = 0;
 // The weight left the pad while the tag was unreadable. Proof that the next
 // placement is a real one, which is what lets the location question be asked
 // again for a spool that was already asked about once.
-bool loc_left_pad = false;
+bool apploop::loc_left_pad = false;
 // The reader lost the tag but the spool stayed: the questions were held back.
 // They stay pending and fire when the weight goes, because the reader, having
 // lost the tag already, will report no removal when the spool is lifted.
@@ -185,7 +187,7 @@ static bool loc_kept = false;
 // on a side-mounted reader stop answering after a few seconds). Released the
 // moment the weight changes or the tag answers again. While set, the weight
 // reference stays frozen at what the pad carried when the tag was last read.
-bool tag_kept_by_weight = false;
+bool apploop::tag_kept_by_weight = false;
 
 // Did the spool actually leave, or did the reader merely lose the tag?
 //
@@ -196,13 +198,13 @@ static bool weightSpeaks() {
   return loc_weight_valid && (loc_weight_ref >= LOC_WEIGHT_MIN_G);
 }
 // Still carrying what it carried while the tag was last readable.
-bool weightSaysSpoolStayed() {
+bool apploop::weightSaysSpoolStayed() {
   if (!weightSpeaks()) return false;
   const float drop = loc_weight_ref - scale_weight_g;
   return (drop < LOC_WEIGHT_TOLERANCE_G) && (drop > -LOC_WEIGHT_TOLERANCE_G);
 }
 // Lost more than half the reference. Nothing but taking the spool off does that.
-bool weightSaysSpoolGone() {
+bool apploop::weightSaysSpoolGone() {
   if (!weightSpeaks()) return false;
   return (loc_weight_ref - scale_weight_g) > loc_weight_ref * LOC_WEIGHT_GONE_FRACTION;
 }
@@ -422,7 +424,7 @@ static bool wifiRoamQuiet() {
 static unsigned long tare_msg_ms = 0;
 lv_obj_t *lbl_ok_ptr = nullptr;
 
-unsigned long last_tag_seen_ms = 0;    // last NFC detection
+unsigned long apploop::last_tag_seen_ms = 0;    // last NFC detection
 static unsigned long last_scale_ms = 0;
 static int  loc_popup_pending_id = -1;              // debounced popup: sm_id scheduled, fires after LOC_DEBOUNCE_MS
 static int  ams_popup_pending_id = -1;              // same, for the AMS question; answered first when both are due
@@ -457,7 +459,7 @@ static void idSpoolLiftQuestions() {
 
 // See app_loop_shared.h. Beside idSpoolLiftQuestions(), which raises the same
 // three questions for a spool shown by its id.
-void onTagRemoved() {
+void apploop::onTagRemoved() {
   // Auto location popup: if enabled, spool is linked, and not shown for this spool yet
   // Debounce: asked LOC_DEBOUNCE_MS after the last read (LOC_DEBOUNCE_FAST_MS with
   // the weight gone) - avoids a spurious removal during an NTAG read

@@ -8,6 +8,10 @@
 
 #include "app/app_loop.h"
 
+// Everything here is internal to the scan, hence its own namespace: the names
+// are short and generic, and nothing outside the three files may reach them.
+namespace tagscan {
+
 constexpr int NFC_MAX_RETRIES = 5;
 
 // ── NFC polling (v0.6.1-beta) ──────────────────────────────────────────────
@@ -93,7 +97,7 @@ extern bool bambu_card_refused;
 extern bool creality_decoded;
 extern bool blank_mifare;
 extern bool new_placement;
-extern char s_beeped_uid[24];
+extern char beeped_uid[24];
 
 void beepOnNewTag(const char *uid_str);
 
@@ -108,3 +112,5 @@ struct TagSeen {
 void tagScanMifare(uint8_t *uid, uint8_t uidLen);
 void tagScanNtag(uint8_t *uid);
 void tagScanIso15693(uint8_t *uid);
+
+}  // namespace tagscan

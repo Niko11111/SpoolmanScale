@@ -11,12 +11,14 @@
 #include "services/spool_temp_rules.h"
 #include "services/tag_write_internal.h"
 
+using namespace tagw;
+
 // The family table lives in services/material_family.cpp, shared with the
 // main screen's guide value. Density is only used to estimate the length.
 #define MAT_DENSITY_FALLBACK  1.24f
 
 
-void buildAce(JsonObjectConst sp, AceFields *f) {
+void tagw::buildAce(JsonObjectConst sp, AceFields *f) {
   memset(f, 0, sizeof(*f));
   // The spool's own material name goes on the tag, not the family it belongs
   // to. Writing the family made a TPE-83A spool arrive as "PLA", and a reader
@@ -70,7 +72,7 @@ void buildAce(JsonObjectConst sp, AceFields *f) {
   snprintf(f->sku, sizeof(f->sku), "SM%d", (int)(sp["id"] | 0));
 }
 
-void aceToInfo(const AceFields *f, TagInfo *ti) {
+void tagw::aceToInfo(const AceFields *f, TagInfo *ti) {
   memset(ti, 0, sizeof(*ti));
   snprintf(ti->fmt, sizeof(ti->fmt), "ACE");
   snprintf(ti->sku, sizeof(ti->sku), "%s", f->sku);
@@ -85,7 +87,7 @@ void aceToInfo(const AceFields *f, TagInfo *ti) {
 }
 
 // One format for both sides, so the page can compare them as plain strings.
-void describeAce(const AceFields *f, char *out, size_t out_len) {
+void tagw::describeAce(const AceFields *f, char *out, size_t out_len) {
   snprintf(out, out_len, "ACE: %s %s, #%02X%02X%02X, %ug, SKU %s",
            f->brand, f->material, f->r, f->g, f->b,
            (unsigned)f->weight_g, f->sku);
@@ -95,7 +97,7 @@ void describeAce(const AceFields *f, char *out, size_t out_len) {
 // pages each, the colour and four pairs of numbers.
 #define ACE_PAGES_WRITTEN  (2 + 3 * 5 + 1 + 4)
 
-bool writeAce(const AceFields *f) {
+bool tagw::writeAce(const AceFields *f) {
   const uint8_t magic[4] = { 0x7B, 0x00, 0x65, 0x00 };
   const uint8_t color[4] = { 0xFF, f->b, f->g, f->r };
   const uint8_t zero[4]  = { 0, 0, 0, 0 };

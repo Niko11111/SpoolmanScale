@@ -11,6 +11,11 @@
 
 #include "services/tag_write.h"
 
+// The helpers behind tag_write.h carry short, generic names (wrPage, readText,
+// appendf), so they live in their own namespace and reach no other file. The
+// #defines below are not scoped by it; only the five tag files include this.
+namespace tagw {
+
 // ACE page map (DnG-Crafts/ACE-RFID). Pages are 4 bytes.
 #define ACE_P_MAGIC     4
 #define ACE_P_SKU       5
@@ -85,3 +90,5 @@ size_t appendf(char *out, size_t out_len, size_t n, const char *fmt, ...)
 // ---- tag_write.cpp
 // Why the page write of the running job failed, reported when the job ends.
 void tagWriteFail(uint8_t code, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+
+}  // namespace tagw

@@ -5,6 +5,8 @@
 // questions a removal raises. Included by app_loop.cpp and the tag_scan files
 // only (check.sh); everything else reaches the loop through app_loop.h.
 
+namespace apploop {
+
 // ── Weight cross-check for the location-on-removal popup ────────
 //
 // The NFC reader loses an NTAG now and then even when the spool has not
@@ -34,3 +36,5 @@ bool weightSaysSpoolGone();
 // the moment it declares the tag removed; asked later by appLoop() once the
 // debounce and the weight agree.
 void onTagRemoved();
+
+}  // namespace apploop

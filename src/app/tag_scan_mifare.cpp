@@ -31,11 +31,14 @@
 #include "ui/theme.h"
 #include "lang.h"
 
+using namespace apploop;
+using namespace tagscan;
+
 static unsigned long last_bambu_retry_ms = 0; // backoff between Bambu re-scans
 static bool snapmaker_decoded = false;  // this placement read as a Snapmaker tag
 static char cfs_checked_uid[24] = "";   // own CFS tag compared with Spoolman this placement
 
-void tagScanMifare(uint8_t *uid, uint8_t uidLen) {
+void tagscan::tagScanMifare(uint8_t *uid, uint8_t uidLen) {
   // ── MIFARE Classic (Bambu) ────────────────────────────
   last_tag_seen_ms = millis();
   const bool newly_placed = !tag_present;
@@ -54,7 +57,7 @@ void tagScanMifare(uint8_t *uid, uint8_t uidLen) {
   // Back after it demonstrably left the pad: whatever was answered
   // for it last time was about that trip, this is a new one.
   if (newly_placed && loc_left_pad) g_loc_popup_shown_for_id = -1;
-  if (newly_placed && loc_left_pad) s_beeped_uid[0] = '\0';   // back after it left
+  if (newly_placed && loc_left_pad) beeped_uid[0] = '\0';   // back after it left
   if (newly_placed) loc_left_pad = false;
 
   char uid_str[24];
@@ -356,10 +359,6 @@ void tagScanMifare(uint8_t *uid, uint8_t uidLen) {
         strncpy(spoolman_queried_uid, g_tag.uid_str, sizeof(spoolman_queried_uid)-1);
         spoolman_queried_uid[sizeof(spoolman_queried_uid)-1] = '\0';
         if (!lookupPending()) lookupFollowUp(LOOKUP_FROM_BAMBU, g_tag.tray_uuid);
-      } else if (!sm_found && !link_popup_dismissed && !isSpoolFlowLinkEntryOpen() &&
-                 wifi_ok && strlen(g_tag.tray_uuid) == 32) {
-        // Auto-popup disabled - user uses the Link/Copy buttons in Zone 5
-        (void)link_tag_first_seen_ms;
       }
       lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
       lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);

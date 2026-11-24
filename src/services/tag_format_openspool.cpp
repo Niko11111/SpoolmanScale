@@ -10,6 +10,8 @@
 #include "hardware/nfc.h"
 #include "services/tag_write_internal.h"
 
+using namespace tagw;
+
 // TLV tag and length, record header with type and payload length, the media
 // type itself, the payload, the terminator - then rounded up to whole 4 byte
 // pages, because that is the unit a write goes in.
@@ -19,7 +21,7 @@ size_t tagNdefSizeFor(size_t json_len) {
 }
 
 // Wraps a JSON document in the NDEF TLV an OpenSpool reader expects.
-bool writeNdefJson(const char *json) {
+bool tagw::writeNdefJson(const char *json) {
   const int n = (int)strlen(json);
   if (n <= 0 || n > NDEF_JSON_MAX) return false;
 
@@ -91,8 +93,8 @@ static const char* protoName(TagFormat fmt) {
 // what OpenSpoolman resolves. spool_id is what FilaMan's own reader looks for -
 // the word sm_id does not appear anywhere in FilaMan, and a record carrying
 // only that one arrives there as spool 0. Neither replaces the other.
-int buildOpenSpoolJson(const AceFields *f, int spool_id, TagFormat fmt,
-                       char *json, size_t json_len) {
+int tagw::buildOpenSpoolJson(const AceFields *f, int spool_id, TagFormat fmt,
+                             char *json, size_t json_len) {
   int n = snprintf(json, json_len,
     "{\"protocol\":\"%s\",\"version\":\"1.0\",\"type\":\"%s\","
     "\"color_hex\":\"%02X%02X%02X\",\"brand\":\"%s\","
@@ -103,7 +105,7 @@ int buildOpenSpoolJson(const AceFields *f, int spool_id, TagFormat fmt,
   return (n > 0 && n < (int)json_len) ? n : 0;
 }
 
-bool writeOpenSpool(const AceFields *f, int spool_id, TagFormat fmt) {
+bool tagw::writeOpenSpool(const AceFields *f, int spool_id, TagFormat fmt) {
   char json[224];
   if (!buildOpenSpoolJson(f, spool_id, fmt, json, sizeof(json))) return false;
   return writeNdefJson(json);
@@ -121,7 +123,7 @@ static bool isSupportedRecord(const char *json) {
 }
 
 // Reads the JSON payload back out of the NDEF wrapper.
-bool readOpenSpool(char *out, size_t out_len) {
+bool tagw::readOpenSpool(char *out, size_t out_len) {
   // Zeroed: only the pages the TLV claims are read, and a record that says it
   // reaches past them must copy zeros, not whatever the stack held before.
   uint8_t buf[240] = {0};
@@ -155,7 +157,7 @@ static uint16_t jsonTemp(JsonVariantConst v) {
   return s[0] ? (uint16_t)atoi(s) : 0;
 }
 
-void describeOpenSpool(const char *json, char *out, size_t out_len, TagInfo *ti) {
+void tagw::describeOpenSpool(const char *json, char *out, size_t out_len, TagInfo *ti) {
   if (ti) { memset(ti, 0, sizeof(*ti)); snprintf(ti->fmt, sizeof(ti->fmt), "OpenSpool"); }
   JsonDocument d;
   if (deserializeJson(d, json)) { snprintf(out, out_len, "OpenSpool: unreadable"); return; }

@@ -9,6 +9,8 @@
 #include "services/tag_pending.h"
 #include "services/tag_write_internal.h"
 
+using namespace tagw;
+
 // Pages of the running job, counted where every one of them passes. A job
 // says how many it is going to write before its first, see progressBegin().
 static TagWriteProgressFn s_progress    = nullptr;
@@ -22,22 +24,22 @@ void tagWriteSetProgress(TagWriteProgressFn fn) { s_progress = fn; }
 static uint8_t s_sel_uid[NFC_UID_MAX];
 static uint8_t s_sel_len = 0;
 
-void ntagPagesSelect(const uint8_t *uid, uint8_t uid_len) {
+void tagw::ntagPagesSelect(const uint8_t *uid, uint8_t uid_len) {
   memcpy(s_sel_uid, uid, uid_len);
   s_sel_len = uid_len;
 }
 
-const uint8_t* ntagPagesUid() { return s_sel_uid; }
+const uint8_t* tagw::ntagPagesUid() { return s_sel_uid; }
 
-uint8_t ntagPagesUidLen() { return s_sel_len; }
+uint8_t tagw::ntagPagesUidLen() { return s_sel_len; }
 
-void progressBegin(uint16_t total) {
+void tagw::progressBegin(uint16_t total) {
   s_pages_done  = 0;
   s_pages_total = total;
   if (s_progress && total) s_progress(0, total);
 }
 
-bool wrPage(uint8_t page, const uint8_t *d) {
+bool tagw::wrPage(uint8_t page, const uint8_t *d) {
   if (page < 4) return false;          // UID, lock bytes, CC
   uint8_t buf[4];
   memcpy(buf, d, 4);
@@ -52,7 +54,7 @@ bool wrPage(uint8_t page, const uint8_t *d) {
 
 // Reads a page back and compares. A write the chip acknowledged is not yet a
 // write that took: a tag drifting off the antenna acks and stores nothing.
-bool rdPageIs(uint8_t page, const uint8_t *expect) {
+bool tagw::rdPageIs(uint8_t page, const uint8_t *expect) {
   uint8_t got[4] = {0};
   return nfcReadNtagPage(page, got) && memcmp(got, expect, 4) == 0;
 }
@@ -67,14 +69,14 @@ bool rdPageIs(uint8_t page, const uint8_t *expect) {
 // is the NDEF area, which is a little smaller than the chip: NTAG213 144 of
 // 144, NTAG215 496 of 504, NTAG216 872 of 888. Those are the numbers the UI
 // shows, because they are what a record actually has to fit into.
-uint16_t tagUserBytes() {
+uint16_t tagw::tagUserBytes() {
   uint8_t cc[4] = {0};
   if (!nfcReadNtagPage(3, cc) || cc[0] != 0xE1 || !cc[2]) return 0;
   return (uint16_t)cc[2] * 8;
 }
 
 // Falls back to the smallest tag, so an unreadable CC never overruns.
-uint8_t lastUserPage() {
+uint8_t tagw::lastUserPage() {
   const uint16_t b = tagUserBytes();
   if (!b) return NTAG_FALLBACK_LAST_PG;
   // In 16 bits. Byte 2 of the CC is whatever the tag says, and from 0x7F up -
@@ -85,7 +87,7 @@ uint8_t lastUserPage() {
   return (uint8_t)last;
 }
 
-bool wrText(uint8_t first, const char *s) {
+bool tagw::wrText(uint8_t first, const char *s) {
   uint8_t buf[16] = {0};
   size_t n = strlen(s);
   if (n > 16) n = 16;
@@ -98,7 +100,7 @@ bool wrText(uint8_t first, const char *s) {
   return wrPage(first + 4, zero);
 }
 
-bool wrU16Pair(uint8_t page, uint16_t a, uint16_t b) {
+bool tagw::wrU16Pair(uint8_t page, uint16_t a, uint16_t b) {
   uint8_t buf[4] = { (uint8_t)(a & 0xFF), (uint8_t)(a >> 8),
                      (uint8_t)(b & 0xFF), (uint8_t)(b >> 8) };
   return wrPage(page, buf);
@@ -106,7 +108,7 @@ bool wrU16Pair(uint8_t page, uint16_t a, uint16_t b) {
 
 // Clears the user pages, whatever the tag has. A fixed upper page would
 // overrun an NTAG213 and report a failed erase after erasing everything.
-bool eraseTag() {
+bool tagw::eraseTag() {
   const uint8_t zero[4] = {0, 0, 0, 0};
   const uint8_t last = lastUserPage();
   progressBegin((uint16_t)(last - NTAG_FIRST_USER_PAGE + 1));
@@ -115,7 +117,7 @@ bool eraseTag() {
   return true;
 }
 
-void readText(uint8_t first, char *out, size_t out_len) {
+void tagw::readText(uint8_t first, char *out, size_t out_len) {
   uint8_t buf[16] = {0};
   for (int i = 0; i < 4; i++)
     if (!nfcReadNtagPage(first + i, buf + i * 4)) { out[0] = 0; return; }
@@ -128,4 +130,4 @@ void readText(uint8_t first, char *out, size_t out_len) {
   out[j] = 0;
 }
 
-uint16_t rdU16(const uint8_t *d) { return (uint16_t)(d[0] | (d[1] << 8)); }
+uint16_t tagw::rdU16(const uint8_t *d) { return (uint16_t)(d[0] | (d[1] << 8)); }

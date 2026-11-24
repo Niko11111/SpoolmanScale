@@ -25,6 +25,8 @@
 #include "services/tag_uid.h"
 #include "services/tag_write_internal.h"
 
+using namespace tagw;
+
 static char      cached_uid[26] = "";
 static char      cached_kind[34] = "";
 // The same statement as a number, because cached_kind is English prose and the
@@ -58,7 +60,7 @@ bool tagCachedHasRecord() {
          strcmp(cached_info.fmt, "unknown") != 0;
 }
 
-void tagCacheMarkDirty() { cache_dirty = true; }
+void tagw::tagCacheMarkDirty() { cache_dirty = true; }
 
 // snprintf returns the length it *would* have written, so adding that up walks
 // the cursor past the end of the buffer the moment anything is truncated:
@@ -68,7 +70,7 @@ void tagCacheMarkDirty() { cache_dirty = true; }
 // The buffers callers pass are big enough for real field sizes, so this was
 // latent rather than live - but it is ten appends in a row in tagInfoJson()
 // and the same shape again in scanTick(), and the data comes off a tag.
-size_t appendf(char *out, size_t out_len, size_t n, const char *fmt, ...) {
+size_t tagw::appendf(char *out, size_t out_len, size_t n, const char *fmt, ...) {
   if (out_len == 0) return 0;
   if (n >= out_len - 1) return out_len - 1;   // already full, nothing more fits
   va_list ap;
@@ -459,7 +461,7 @@ static void infoFromMifare(TagInfo *ti) {
 //
 // force skips the retry gap, for the one caller that runs immediately after a
 // poll and needs the answer in the same pass rather than half a second later.
-void refreshCache(bool force) {
+void tagw::refreshCache(bool force) {
   static unsigned long last_ms = 0;
   static char last_uid[26] = "";
   static uint8_t unreadable = 0;   // reads in a row that described nothing

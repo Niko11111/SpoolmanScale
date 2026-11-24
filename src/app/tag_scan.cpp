@@ -30,17 +30,20 @@
 #include "ui/unknown_spool_popup.h"
 #include "lang.h"
 
+using namespace apploop;
+using namespace tagscan;
+
 // The tag the read beep last sounded for. Its own marker on purpose: the
 // lookup markers (g_tag.uid_str, ntag_handled_uid) are cleared and rewritten
 // by retries, rereads after a write and tagLookupForget(), and following them
 // would beep on every poll of a Bambu tag still being read, or once more
 // right after the write tone. Cleared when the spool demonstrably left the
 // pad: on removal, or when a placement finds loc_left_pad set.
-char s_beeped_uid[24] = "";
+char tagscan::beeped_uid[24] = "";
 
-void beepOnNewTag(const char *uid_str) {
-  if (strcmp(uid_str, s_beeped_uid) == 0) return;
-  snprintf(s_beeped_uid, sizeof(s_beeped_uid), "%s", uid_str);
+void tagscan::beepOnNewTag(const char *uid_str) {
+  if (strcmp(uid_str, beeped_uid) == 0) return;
+  snprintf(beeped_uid, sizeof(beeped_uid), "%s", uid_str);
   soundPlay(SND_NFC_READ);
 }
 
@@ -57,7 +60,7 @@ TagVerdict tagSettledVerdict(const char* uid_str) {
   return s_settled_verdict;
 }
 
-void TagSeen::note(const char *uid, const char *kind, TagVerdict verdict) {
+void tagscan::TagSeen::note(const char *uid, const char *kind, TagVerdict verdict) {
     if (!uid || !uid[0]) return;
     // The verdict is kept on every call, the line is written once.
     snprintf(s_settled_uid, sizeof(s_settled_uid), "%s", uid);
@@ -67,18 +70,18 @@ void TagSeen::note(const char *uid, const char *kind, TagVerdict verdict) {
     logSDf("Tag placed: %s (%s)", uid, kind);
 }
 
-void TagSeen::forget() {
+void tagscan::TagSeen::forget() {
     logged_uid[0] = '\0';
     s_settled_uid[0] = '\0';
     s_settled_verdict = TV_NONE;
 }
 
-unsigned long last_nfc_check_ms = 0;
-bool bambu_uid_probed = false;   // see NFC_UID_PROBE_AFTER_RETRIES
-bool bambu_card_refused = false; // the card turned a Bambu key down, see TagVerdict
-bool creality_decoded = false;   // this placement read as a Creality CFS tag
-bool blank_mifare = false;       // this placement is a blank MIFARE tag
-bool new_placement = false;      // same tag back after a long absence
+unsigned long tagscan::last_nfc_check_ms = 0;
+bool tagscan::bambu_uid_probed = false;   // see NFC_UID_PROBE_AFTER_RETRIES
+bool tagscan::bambu_card_refused = false; // the card turned a Bambu key down, see TagVerdict
+bool tagscan::creality_decoded = false;   // this placement read as a Creality CFS tag
+bool tagscan::blank_mifare = false;       // this placement is a blank MIFARE tag
+bool tagscan::new_placement = false;      // same tag back after a long absence
 static unsigned long last_nfc_stats_ms = 0;
 static uint8_t last_uid_len = 0;   // 4 = Bambu, 7 = NTAG, 8 = ISO 15693, for the removal delay
 
@@ -272,7 +275,7 @@ static void tagScanNoTag() {
                scale_weight_g, loc_weight_ref);
       } else {
         ntag_handled_uid[0] = '\0';
-        s_beeped_uid[0] = '\0';   // put back, it beeps again
+        beeped_uid[0] = '\0';   // put back, it beeps again
         // The spool left before its verdict was in: nothing to paint it
         // on. The inventory still comes in for cache and index. Not in
         // the branch above, where the spool is still there and nothing
@@ -319,12 +322,11 @@ static void tagScanNoTag() {
 
 void tagScanTick() {
   // ============================================================
-  //  NFC SCAN LOGIC (0.4.21)
-  //  - uidLen==4: MIFARE Classic → Bambu flow (unchanged)
-  //  - uidLen==7: NTAG detected:
-  //      "SPSC" magic → SpoolScale tag → querySpoolman by ID
-  //      Blank (0x00) → show spool list + link
-  //      Unknown      → ignore
+  //  NFC SCAN: one poll, then the branch for what answered
+  //  - 4 byte UID: MIFARE Classic (Bambu, Creality, Snapmaker, blank, other)
+  //  - 7 byte UID: NTAG (a record of ours or a foreign one, or blank)
+  //  - ISO 15693 (PN7160 only): OpenPrintTag
+  //  - anything else, or nothing: the no-tag branch
   // ============================================================
   // A read-rate measurement (services/nfc_measure.h) has the reader to itself
   // while it runs; the scan path picks up again when it is over.

@@ -29,6 +29,8 @@
 #include "services/tag_uid.h"
 #include "services/tag_write_internal.h"
 
+using namespace tagw;
+
 // How long the link is given to settle before its one retry.
 #define TAGWRITE_LINK_RETRY_MS  300
 
@@ -161,7 +163,7 @@ static char    remote_proto[12] = "";
 static int     remote_spool_id = 0;
 static char    remote_name[48] = "";
 
-void tagWriteFail(uint8_t code, const char *fmt, ...) {
+void tagw::tagWriteFail(uint8_t code, const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
   vsnprintf(write_err, sizeof(write_err), fmt, ap);
@@ -169,16 +171,8 @@ void tagWriteFail(uint8_t code, const char *fmt, ...) {
   write_code = code;
 }
 
-// What the format is called where a person reads it.
-static const char* fmtLabel(TagFormat fmt) {
-  switch (fmt) {
-    case TAG_FMT_ACE:     return "ACE";
-    case TAG_FMT_FILAMAN: return "FilaMan";
-    case TAG_FMT_CREALITY: return "Creality CFS";
-    default:              return "OpenSpool";
-  }
-}
-
+// What the format is called where a person reads it: display, log and the
+// web page's write report alike.
 const char* tagFormatLabel(uint8_t fmt) {
   switch (fmt) {
     case TAG_FMT_ACE:       return "Anycubic ACE";
@@ -477,7 +471,7 @@ static bool mifareResultReported(MifareWriteResult r, uint8_t fmt) {
       finish("error", "No MIFARE tag on the reader", TW_ERR_NO_TAG);
       return false;
     case MIFARE_WRITE_IS_FORMAT:
-      snprintf(m, sizeof(m), "Already a %s tag, left as it is", fmtLabel((TagFormat)fmt));
+      snprintf(m, sizeof(m), "Already a %s tag, left as it is", tagFormatLabel(fmt));
       finish("error", m, TW_ERR_NOT_BLANK);
       return false;
     case MIFARE_WRITE_NOT_BLANK:
@@ -548,7 +542,7 @@ bool tagWriteSpoolNow(int spool_id, TagFormat fmt) {
 
   char m[128];
   snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", spool_id, name,
-           fmtLabel(fmt));
+           tagFormatLabel(fmt));
   snprintf(report.name, sizeof(report.name), "%s", name);
   finish("ok", m, TW_OK);
   return true;
@@ -606,7 +600,7 @@ void tagWriteTick() {
     if (writeMifareJob(pending_id, pending_fmt, cname, sizeof(cname))) {
       snprintf(report.name, sizeof(report.name), "%s", cname);
       char m[128];
-      snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", pending_id, cname, fmtLabel(pending_fmt));
+      snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", pending_id, cname, tagFormatLabel(pending_fmt));
       finish("ok", m, TW_OK);
     }
     return;
@@ -664,7 +658,7 @@ void tagWriteTick() {
   char m[160];
   if (wrote) {
     snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", pending_id, name,
-             fmtLabel(pending_fmt));
+             tagFormatLabel(pending_fmt));
   } else {
     snprintf(m, sizeof(m), "%s", message);
   }

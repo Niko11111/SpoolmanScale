@@ -27,7 +27,10 @@
 #include "ui/theme.h"
 #include "lang.h"
 
-void tagScanNtag(uint8_t *uid) {
+using namespace apploop;
+using namespace tagscan;
+
+void tagscan::tagScanNtag(uint8_t *uid) {
   // ── NTAG detected ──────────────────────────────────────
   last_tag_seen_ms = millis();
   const bool newly_placed = !tag_present;
@@ -37,7 +40,7 @@ void tagScanNtag(uint8_t *uid) {
   // Back after it demonstrably left the pad: whatever was answered
   // for it last time was about that trip, this is a new one.
   if (newly_placed && loc_left_pad) g_loc_popup_shown_for_id = -1;
-  if (newly_placed && loc_left_pad) s_beeped_uid[0] = '\0';   // back after it left
+  if (newly_placed && loc_left_pad) beeped_uid[0] = '\0';   // back after it left
   if (newly_placed) loc_left_pad = false;
 
   char uid_str[24];
@@ -96,7 +99,7 @@ void tagScanNtag(uint8_t *uid) {
     lv_label_set_text(lbl_detail, "-");
     lv_label_set_text(lbl_last_used, "-");
     lv_label_set_text(lbl_spoolman_dried_val, "-");
-  if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
+    if (lbl_dried_sym) lv_obj_add_flag(lbl_dried_sym, LV_OBJ_FLAG_HIDDEN);
     mainSwatchPaint(SpoolColor{}, nullptr);
     lv_label_set_text(lbl_status, T(STR_READING_TAG));
     lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
@@ -126,14 +129,12 @@ void tagScanNtag(uint8_t *uid) {
       lv_obj_set_style_text_color(lbl_status, lv_color_hex(UI_COL_GOOD), 0);
     }
   } else {
-    // Same UID - show popup after delay if not dismissed
-    // Auto-popup disabled - user uses the Link/Copy buttons in Zone 5
-    (void)link_tag_first_seen_ms;
+    // Same UID, already dealt with: repaint what is known about it.
     paintTagStatus();
   }
 }
 
-void tagScanIso15693(uint8_t *uid) {
+void tagscan::tagScanIso15693(uint8_t *uid) {
   // ── ISO 15693 (PN7160 only): OpenPrintTag ──────────────
   // As the NTAG branch: read once per placement, show what the tag says,
   // then ask the backend by UID. ntag_handled_uid is the "dealt with"
@@ -144,7 +145,7 @@ void tagScanIso15693(uint8_t *uid) {
   nfc_absent_count = 0;
   if (newly_placed && !weightSaysSpoolStayed()) resetActivityTimer();
   if (newly_placed && loc_left_pad) g_loc_popup_shown_for_id = -1;
-  if (newly_placed && loc_left_pad) s_beeped_uid[0] = '\0';   // back after it left
+  if (newly_placed && loc_left_pad) beeped_uid[0] = '\0';   // back after it left
   if (newly_placed) loc_left_pad = false;
   uint8_t uid_msb[OPT_UID_BYTES];
   optUidMsbFirst(uid, uid_msb);
