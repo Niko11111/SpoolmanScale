@@ -32,6 +32,9 @@ int main() {
     for (NiimbotTask t : tasks)
       for (int v = 0; v <= 5; v++) assert(niimbotTaskFor(id, t, (uint8_t)v) == t);
 
+  // The B1 Pro has the V4 task in the table and keeps it at every version.
+  for (int v = 0; v <= 5; v++) assert(niimbotTaskFor(4097, NB_TASK_V4, (uint8_t)v) == NB_TASK_V4);
+
   // The D110 class: the D110's two ids and the D110 M, nothing with the same head.
   assert(niimbotIsD110(NB_ID_D110_A) && niimbotIsD110(NB_ID_D110_B) && niimbotIsD110(NB_ID_D110_M));
   assert(!niimbotIsD110(512));    // D11

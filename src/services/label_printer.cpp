@@ -105,6 +105,16 @@ static const LabelPrinterProfile PROFILE_NIIMBOT_M2 = {
   LP_MODEL_NIIMBOT_M2, "NIIMBOT", "M2", 50, 30, 50, 50, 10, 150, 568, 568, false, false,
   300, LP_PROTO_NIIMBOT
 };
+// NIIMBOT B1 Pro: model id 0x1001, 300 dpi, a 567 dot head, which is 71 bytes
+// and so a 568 dot row, as on the M2. It prints by heat on the paper, no
+// ribbon, so the label does not survive the dryer, and takes rolls from 20 to
+// 50 mm wide like the B1. Its print sequence is the V4 task, the one the D110
+// M has on protocol 4; the B1 Pro itself reports protocol 5. A user printed on
+// one on v0.8.3 and again on dev, v0.8.4-beta.69 (both 24.11.2026).
+static const LabelPrinterProfile PROFILE_NIIMBOT_B1PRO = {
+  LP_MODEL_NIIMBOT_B1PRO, "NIIMBOT", "B1 Pro", 50, 30, 20, 50, 10, 150, 568, 568, false, true,
+  300, LP_PROTO_NIIMBOT
+};
 
 // NIIMBOT D110 and D110 M: 96 dots, 12 mm, 203 dpi, each on its task from
 // niimbluelib (the D110 M on the V4 task from protocol 4 on). The roll runs
@@ -122,7 +132,8 @@ static const LabelPrinterProfile PROFILE_NIIMBOT_D110 = {
 
 const LabelPrinterModel LABEL_PRINTER_MODELS[] = {
   LP_MODEL_M220, LP_MODEL_NIIMBOT_M2, LP_MODEL_M110, LP_MODEL_M110S, LP_MODEL_M100,
-  LP_MODEL_NIIMBOT_B, LP_MODEL_NIIMBOT_D110, LP_MODEL_M120, LP_MODEL_M200, LP_MODEL_M221,
+  LP_MODEL_NIIMBOT_B, LP_MODEL_NIIMBOT_B1PRO, LP_MODEL_NIIMBOT_D110, LP_MODEL_M120,
+  LP_MODEL_M200, LP_MODEL_M221,
   LP_MODEL_PM241,
 };
 const int LABEL_PRINTER_MODEL_COUNT = sizeof(LABEL_PRINTER_MODELS) / sizeof(LABEL_PRINTER_MODELS[0]);
@@ -167,6 +178,7 @@ const LabelPrinterProfile& labelPrinterProfile(LabelPrinterModel model) {
     case LP_MODEL_NIIMBOT_B:  return PROFILE_NIIMBOT_B;
     case LP_MODEL_NIIMBOT_M2: return PROFILE_NIIMBOT_M2;
     case LP_MODEL_NIIMBOT_D110: return PROFILE_NIIMBOT_D110;
+    case LP_MODEL_NIIMBOT_B1PRO: return PROFILE_NIIMBOT_B1PRO;
     default:            return PROFILE_NONE;
   }
 }
@@ -372,9 +384,10 @@ static LabelPrintResult fromBle(BleWriteResult r) {
 static LabelPrintResult printNiimbot(const LabelPrinterProfile& p, const LabelPrinterConfig& c,
                                      const LabelRaster& image, BleProgressFn progress) {
   NiimbotJobInfo info{};
-  const NiimbotClass cls = p.model == LP_MODEL_NIIMBOT_M2   ? NB_CLASS_M2
-                          : p.model == LP_MODEL_NIIMBOT_D110 ? NB_CLASS_D110
-                                                             : NB_CLASS_B;
+  const NiimbotClass cls = p.model == LP_MODEL_NIIMBOT_M2     ? NB_CLASS_M2
+                          : p.model == LP_MODEL_NIIMBOT_D110  ? NB_CLASS_D110
+                          : p.model == LP_MODEL_NIIMBOT_B1PRO ? NB_CLASS_B1_PRO
+                                                              : NB_CLASS_B;
   const NiimbotResult r = niimbotPrint(c.address, image, cls, progress, &info);
   logSDf("Printer: NIIMBOT %s result=%d model=0x%04X transport=%d", p.name, (int)r,
          (unsigned)info.model_id, (int)info.transport);

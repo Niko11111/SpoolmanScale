@@ -60,6 +60,8 @@
 #define NB_RPL_PRINT_STATUS   0xB3
 #define NB_CMD_PRINT_END      0xF3
 #define NB_RPL_PRINT_END      0xF4
+#define NB_CMD_HEARTBEAT      0xDC   // its reply is never waited for here
+#define NB_HEARTBEAT_ADVANCED1   1
 #define NB_RPL_ERROR          0xDB
 #define NB_RPL_NOT_SUPPORTED  0x00
 // The codes an error reply carries.
@@ -85,6 +87,9 @@
 // was found.
 static const NiimbotModelInfo NB_MODELS[] = {
   { 4096, "B1",       NB_TASK_B1,     384, 203, NB_DIR_TOP,  false, false },
+  // The B1 Pro: niimbluelib puts it on the V4 task at every protocol
+  // version, so the table says so directly.
+  { 4097, "B1 Pro",   NB_TASK_V4,     567, 300, NB_DIR_TOP,  false, false },
   { 4098, "B1 SE",    NB_TASK_B1,     384, 203, NB_DIR_TOP,  false, true  },
   {  768, "B21",      NB_TASK_B21_V1, 384, 203, NB_DIR_TOP,  false, false },
   {  771, "B21 C2B",  NB_TASK_B1,     384, 203, NB_DIR_TOP,  false, false },
@@ -330,12 +335,15 @@ static bool classFits(NiimbotClass cls, const NiimbotModelInfo& m) {
   // nobody has printed on them from the scale; each joins when someone has.
   if (cls == NB_CLASS_D110) return niimbotIsD110(m.id);
   if (m.dir != NB_DIR_TOP) return false;
-  if (cls == NB_CLASS_M2) return m.dpi == 300 && m.head_px <= 568;
+  // The two 300 dpi classes differ in how they print: the M2 through a
+  // ribbon, the B1 Pro by heat on the paper alone. Neither takes the other's.
+  if (cls == NB_CLASS_M2) return m.dpi == 300 && m.head_px <= 568 && m.thermal_transfer;
+  if (cls == NB_CLASS_B1_PRO) return m.dpi == 300 && m.head_px <= 568 && !m.thermal_transfer;
   return m.dpi == 203 && m.head_px >= 384 && m.head_px <= 400;
 }
 
 static const char* className(NiimbotClass cls) {
-  return cls == NB_CLASS_M2 ? "M2" : cls == NB_CLASS_D110 ? "D110" : "B";
+  return cls == NB_CLASS_M2 ? "M2" : cls == NB_CLASS_D110 ? "D110" : cls == NB_CLASS_B1_PRO ? "B1 Pro" : "B";
 }
 
 static NiimbotResult nbCheckModel(NbJob& job, NiimbotClass cls, uint16_t id) {
@@ -558,6 +566,14 @@ static NiimbotResult nbFinishByStatus(NbJob& job) {
   }
   if (nbRequest1(job, NB_CMD_PRINT_END, 1, NB_RPL_PRINT_END) != NB_OK)
     logSD("NIIMBOT: print end not acknowledged");
+  // The V4 task's printer drops the first packet after the print end, so the
+  // app sends a heartbeat for it to drop and does not wait for the answer
+  // (niimbluelib's D110MV4PrintTask.printEnd). It does so for every V4
+  // printer, the D110 M included.
+  if (job.task == NB_TASK_V4) {
+    static const uint8_t type = NB_HEARTBEAT_ADVANCED1;
+    nbSend(job, NB_CMD_HEARTBEAT, &type, 1, false);
+  }
   return printed ? NB_OK : NB_UNCONFIRMED;
 }
 
