@@ -424,7 +424,7 @@ lv_obj_t *lbl_ok_ptr = nullptr;
 
 unsigned long last_tag_seen_ms = 0;    // last NFC detection
 static unsigned long last_scale_ms = 0;
-static int  loc_popup_pending_id = -1;              // debounced popup: sm_id scheduled, fires after 1500ms
+static int  loc_popup_pending_id = -1;              // debounced popup: sm_id scheduled, fires after LOC_DEBOUNCE_MS
 static int  ams_popup_pending_id = -1;              // same, for the AMS question; answered first when both are due
 static int  pick_popup_pending_id = -1;             // same, for the AMS bay picker; only one of the three is ever set per backend
 
@@ -459,7 +459,8 @@ static void idSpoolLiftQuestions() {
 // three questions for a spool shown by its id.
 void onTagRemoved() {
   // Auto location popup: if enabled, spool is linked, and not shown for this spool yet
-  // Debounce: only trigger after 1500ms - avoids spurious remove during NTAG read
+  // Debounce: asked LOC_DEBOUNCE_MS after the last read (LOC_DEBOUNCE_FAST_MS with
+  // the weight gone) - avoids a spurious removal during an NTAG read
   // Not for an archived spool: asking where to store something that
   // was just taken out of the inventory is a question about a spool
   // nobody is looking for.

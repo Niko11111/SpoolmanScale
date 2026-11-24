@@ -144,11 +144,15 @@ void tagScanIso15693(uint8_t *uid) {
   nfc_absent_count = 0;
   if (newly_placed && !weightSaysSpoolStayed()) resetActivityTimer();
   if (newly_placed && loc_left_pad) g_loc_popup_shown_for_id = -1;
+  if (newly_placed && loc_left_pad) s_beeped_uid[0] = '\0';   // back after it left
   if (newly_placed) loc_left_pad = false;
   uint8_t uid_msb[OPT_UID_BYTES];
   optUidMsbFirst(uid, uid_msb);
   char uid_str[24];
   optUidString(uid_msb, uid_str, sizeof(uid_str));
+  // Once per placement, like the other two branches. The sound came with PR #79
+  // before this branch existed, and was never added here.
+  beepOnNewTag(uid_str);
   lv_label_set_text(lbl_nfc_dot, LV_SYMBOL_BULLET);
   lv_obj_set_style_text_color(lbl_nfc_dot, lv_color_hex(UI_COL_GOOD), 0);
   if (strcmp(uid_str, ntag_handled_uid) == 0) {
