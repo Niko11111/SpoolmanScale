@@ -276,7 +276,7 @@ extern int s_ams_numpad_value;
 extern lv_obj_t *lbl_nfc_dot;
 extern lv_obj_t *lbl_hdr_wifi;
 extern lv_obj_t *lbl_hdr_title;  // "SpoolmanScale <version>", left end of the header
-extern lv_obj_t *lbl_hdr_bat;  // fuel gauge, left of the wifi icon; hidden when absent
+extern lv_obj_t *lbl_hdr_bat;  // fuel gauge battery, far right; nullptr until a gauge answers
 extern lv_obj_t *lbl_hdr_bt;
 extern lv_obj_t *lbl_hdr_nfc;
 extern lv_obj_t *lbl_hdr_scl;

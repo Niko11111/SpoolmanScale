@@ -14,8 +14,10 @@
 #include <WebServer.h>
 
 #include "app/app_state.h"
+#include "app/deferred_actions.h"
 #include "app_config.h"
 #include "hardware/display.h"
+#include "hardware/fuel_gauge.h"
 #include "hardware/sd_logger.h"
 #include "services/device_name.h"
 #include "services/list_limits.h"
@@ -243,10 +245,17 @@ static void addLimitsCard(String &h) {
   h += F("</button><span class='msg' id='ll-s'></span></div>");
 }
 
+// The battery's switch only on a scale that has had a fuel gauge: on every
+// other one it would be a setting for something that is not there.
 static void addDisplayCard(String &h) {
   h += F("<div class='card'><h2>");
   h += T(STR_W_C_DISPLAY);
-  h += F("</h2><div class='field'><label>");
+  h += F("</h2>");
+  if (fuelGaugeSeen()) {
+    addSwitch(h, "bp", g_bat_percent, STR_W_BAT_PCT, STR_W_BAT_PCT_HINT);
+    h += F("</div>");
+  }
+  h += F("<div class='field'><label>");
   h += T(STR_W_GAIN);
   h += F("</label><div class='range'>"
          "<input id='gn' type='range' min='100' max='300' step='5' value='");
@@ -384,6 +393,7 @@ static void addScript(String &h) {
          "bindSwitch('sf','/api/scalefitted');"
          "bindSwitch('sn','/api/snapmaker');"
          "bindSwitch('cr','/api/creality');"
+         "if($('bp'))bindSwitch('bp','/api/batpercent');"
          "$('sf-rb').addEventListener('click',doRestart);"
          "$('ll-b').addEventListener('click',setLimits);"
          "$('gn-b').addEventListener('click',setGain);"
@@ -568,6 +578,19 @@ static void routes(WebServer &srv) {
     g_creality_tags = on;
     prefsPutBool("creality", on);
     logSDf("Web: Creality tags -> %s", on ? "ON" : "OFF");
+    srv.send(200, "application/json", on ? "{\"ok\":true,\"v\":1}"
+                                         : "{\"ok\":true,\"v\":0}");
+  });
+
+  // The header is redrawn from the loop (header_redraw_pending), not from
+  // inside this handler.
+  srv.on("/api/batpercent", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
+    const bool on = (srv.arg("plain").toInt() != 0);
+    g_bat_percent = on;
+    if (!prefsPutBool("bat_pct", on)) logSD("Web: saving the battery percent switch failed");
+    header_redraw_pending = true;
+    logSDf("Web: battery percent -> %s", on ? "ON" : "OFF");
     srv.send(200, "application/json", on ? "{\"ok\":true,\"v\":1}"
                                          : "{\"ok\":true,\"v\":0}");
   });

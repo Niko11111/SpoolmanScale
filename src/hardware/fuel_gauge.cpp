@@ -108,6 +108,10 @@
 #define FUEL_POLL_PRESENT_MS   5000
 #define FUEL_POLL_ABSENT_MS    30000
 #define FUEL_MISS_LIMIT        3
+// Set the first time a gauge answers. Only a scale that has had one keeps
+// probing every FUEL_POLL_ABSENT_MS while it is missing (a flat cell wakes the
+// chip late); every other scale looks only at boot and on a bus rescan.
+#define FUEL_PREF_SEEN         "fuel_seen"
 
 static bool s_present = false;
 static int s_percent = 0;
@@ -136,7 +140,8 @@ static bool s_top_done = false;
 static bool s_full = false;
 // The chip's reading for a finished charge; 100 until one has been seen.
 static float s_full_soc = FUEL_LEARN_MAX_PCT;
-static bool s_full_loaded = false;
+static bool s_prefs_loaded = false;
+static bool s_seen = false;
 
 bool fuelGaugePresent() { return s_present; }
 int fuelGaugePercent() { return s_percent; }
@@ -430,25 +435,44 @@ static void keepAwake() {
   }
 }
 
+static void loadPrefsOnce() {
+  if (s_prefs_loaded) return;
+  s_prefs_loaded = true;
+  s_seen = prefsGetBool(FUEL_PREF_SEEN, false);
+  const float full = prefsGetFloat(FUEL_PREF_FULL, FUEL_LEARN_MAX_PCT);
+  if (full >= FUEL_LEARN_MIN_PCT && full <= FUEL_LEARN_MAX_PCT) s_full_soc = full;
+}
+
+// Written once per scale, the first time a gauge answers.
+static void noteSeen() {
+  if (s_seen) return;
+  s_seen = true;
+  prefsPutBool(FUEL_PREF_SEEN, true);
+  logSD("Fuel gauge: first seen, probing from now on");
+}
+
+bool fuelGaugeSeen() {
+  loadPrefsOnce();
+  return s_seen;
+}
+
 bool fuelGaugePoll(bool force) {
   const uint32_t now = millis();
   const uint32_t gap = s_present ? FUEL_POLL_PRESENT_MS : FUEL_POLL_ABSENT_MS;
   if (!force && s_last_ms != 0 && (uint32_t)(now - s_last_ms) < gap) return false;
   s_last_ms = now;
 
-  // An address probe only while it is missing. Once it has answered, the
-  // register read is the probe: three misses and the icon goes away.
+  loadPrefsOnce();
+  // An address probe only while it is missing, and outside boot and rescan
+  // only on a scale that has had a gauge. Once it has answered, the register
+  // read is the probe: three misses and the icon goes away.
+  if (!s_present && !force && !s_seen) return false;
   if (!s_present && !i2cPresent(I2C_EXT, I2C_ADDR_MAX17048)) return false;
-
-  if (!s_full_loaded) {
-    s_full_loaded = true;
-    const float full = prefsGetFloat(FUEL_PREF_FULL, FUEL_LEARN_MAX_PCT);
-    if (full >= FUEL_LEARN_MIN_PCT && full <= FUEL_LEARN_MAX_PCT) s_full_soc = full;
-  }
 
   FuelSample sample;
   if (!readSample(&sample)) return countMiss();
   s_misses = 0;
+  noteSeen();
   keepAwake();
 
   const FuelGaugeFlow flow = nextFlow(sample, now);

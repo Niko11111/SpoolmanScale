@@ -2118,6 +2118,9 @@ enum StringID {
   // Status and backend pages: the backend's own web interface
   STR_W_BACKEND_OPEN,         // %s = the backend's name
   STR_W_TL_HALF_MOVED,        // %d = spool taken off, %s = why the rest failed
+  // Settings page: the fuel gauge's battery in the header
+  STR_W_BAT_PCT,
+  STR_W_BAT_PCT_HINT,
   STR_COUNT
 };
 

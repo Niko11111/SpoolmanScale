@@ -13,6 +13,7 @@ bool cal_reset_pending = false;
 bool scale_sub_rebuild_pending = false;
 bool show_reboot_pending = false;
 bool live_zone_rebuild_pending = false;
+bool header_redraw_pending = false;
 bool show_lastused_pending = false;
 bool show_backend_pending = false;
 bool show_online_pending = false;

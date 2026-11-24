@@ -13,12 +13,16 @@ enum FuelGaugeFlow : uint8_t {
 };
 
 bool fuelGaugePresent();
+// Whether a gauge has ever answered on this scale (NVS "fuel_seen"). The
+// settings for the battery are only offered then.
+bool fuelGaugeSeen();
 int fuelGaugePercent();
 FuelGaugeFlow fuelGaugeFlow();
 
 // One read of state-of-charge and charge rate on I2C_EXT. Call from the loop
-// task, which owns that bus. A scale with no gauge is asked only every half
-// minute, so the poll does not sit on the NFC reader's bus for nothing.
-// force ignores that wait, for boot and for a bus rescan. Returns true when
+// task, which owns that bus. A scale that has never had a gauge is asked only
+// with force, at boot and on a bus rescan, so the poll does not sit on the NFC
+// reader's bus for nothing; one that has had one is asked every half minute
+// while it is missing. force also ignores that wait. Returns true when
 // the header's picture of the cell changed.
 bool fuelGaugePoll(bool force = false);

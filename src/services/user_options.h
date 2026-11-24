@@ -70,6 +70,11 @@ extern bool g_flm_tagless;
 // scale that shares a bench with something that knocks it.
 extern bool g_wake_on_load;
 
+// Whether the battery in the header carries its percent. Only means anything
+// on a scale that has had a fuel gauge, which is the only place the switch is
+// shown. On by default: the fill alone says little more than "some left".
+extern bool g_bat_percent;
+
 // Try Snapmaker's keys on a 4 byte tag that refused the Bambu ones. Off by
 // default, and off means not one extra byte goes to the reader: nobody here
 // owns a Snapmaker spool, so the decoding is proven on a contributor's tag

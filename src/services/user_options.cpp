@@ -11,6 +11,7 @@ bool g_flm_autolink = false;
 bool g_flm_tagless = true;
 bool g_flm_remote_write = false;
 bool g_wake_on_load = true;
+bool g_bat_percent = true;
 bool g_snapmaker_tags = false;
 bool g_creality_tags = false;
 uint8_t g_bb_dried_target = BB_DRIED_NOTE;

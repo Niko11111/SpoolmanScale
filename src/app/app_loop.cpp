@@ -869,6 +869,10 @@ void appLoop() {
     live_zone_rebuild_pending = false;
     rebuildLiveZone();
   }
+  if (header_redraw_pending) {
+    header_redraw_pending = false;
+    updateHeaderStatus();
+  }
   // After the rebuild above, never before it: that one hides every overlay.
   if (show_reboot_pending) {
     show_reboot_pending = false;

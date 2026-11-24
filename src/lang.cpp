@@ -4600,6 +4600,12 @@ const char* const STRINGS[][3] = {
   { "Von Spule #%d gelöst, aber nicht umgehängt: %s",
     "Taken off spool #%d, but not moved: %s",
     "Dissocié de la bobine #%d, mais pas déplacé : %s" },  // STR_W_TL_HALF_MOVED
+
+  // Settings page: the fuel gauge's battery in the header
+  { "Akku: Prozent anzeigen", "Battery: show percent", "Batterie : afficher le pourcentage" },  // STR_W_BAT_PCT
+  { "Die Ladung als Zahl im Akku oben rechts. Aus: nur Füllung und Blitz.",
+    "The charge as a number inside the battery at the top right. Off: fill and bolt only.",
+    "La charge en chiffres dans la batterie en haut à droite. Désactivé : remplissage et éclair seulement." },  // STR_W_BAT_PCT_HINT
 };
 
 StringID tagWriteResultString(uint8_t code) {

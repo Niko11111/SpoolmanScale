@@ -105,6 +105,7 @@ void loadPrefs() {
   // device that never touched it follows this default.
   g_whole_gram = prefsGetBool("whole_gram", true);
   g_wake_on_load = prefsGetBool("wake_load", true);
+  g_bat_percent = prefsGetBool("bat_pct", true);
   g_snapmaker_tags = prefsGetBool("snapmaker", false);
   g_creality_tags = prefsGetBool("creality", false);
   g_ble_enabled = prefsGetBool("ble_on", false);
