@@ -47,21 +47,84 @@ static int           s_linked_spool = 0;
 // tag, and goes when it does: left standing, "belongs to spool 7" was still
 // the page's last word about the next tag put down.
 static char          s_answered_uid[26] = "";
+// What the parked request asks for beyond a plain link.
+static uint8_t       s_job          = TLJ_LINK;
+static int           s_from         = 0;
+static bool          s_write        = false;
+static uint8_t       s_fmt          = 0;
 
 // The target's tag fields when it is not the spool on the scale. Static
 // because patchSpoolTag() takes pointers and the values have to outlive the
 // fetch that filled them.
 static char s_fetched[TAG_FIELD_EXTRA_COUNT][CARD_UIDS_MAX];
 
-bool tagLinkRequest(int spool_id, const char* uid, bool force) {
-  if (s_pending || spool_id <= 0 || !uid || !uid[0]) return false;
+static const char* const JOB_NAME[] = { "link", "move", "unlink", "write" };
+
+// Every request parks the same way; what differs is set by the caller after.
+static bool park(uint8_t job, int spool_id, const char* uid) {
+  if (s_pending || !uid || !uid[0]) return false;
+  if (job != TLJ_UNLINK && spool_id <= 0) return false;
   s_pending  = true;
-  s_force    = force;
+  s_job      = job;
+  s_force    = false;
   s_spool_id = spool_id;
+  s_from     = 0;
+  s_write    = false;
+  s_fmt      = 0;
   snprintf(s_uid, sizeof(s_uid), "%s", uid);
   s_report = { TL_BUSY, spool_id, 0, "", "" };
+  s_report.job = job;
+  return true;
+}
+
+// The extras go into the report when the request is parked, so the page's
+// "moving from #N" names the spool while the job still waits for the loop.
+static void reportExtras() {
+  s_report.from_spool = s_from;
+  s_report.write      = s_write;
+  s_report.fmt        = s_fmt;
+}
+
+// One write at a time: a second, parked behind the check while the first
+// still runs, would write the tag twice.
+static bool writeRunning() { return !strcmp(tagWriteState(), "pending"); }
+
+bool tagLinkRequest(int spool_id, const char* uid, bool force) {
+  if (!park(TLJ_LINK, spool_id, uid)) return false;
+  s_force = force;
   logSDf("TagLink: tag %s to spool %d requested%s", s_uid, spool_id,
          force ? " (mismatch accepted)" : "");
+  return true;
+}
+
+bool tagLinkWriteRequest(int spool_id, const char* uid, uint8_t fmt) {
+  if (writeRunning() || !park(TLJ_WRITE, spool_id, uid)) return false;
+  s_write = true;
+  s_fmt   = fmt;
+  reportExtras();
+  logSDf("TagLink: write of tag %s for spool %d requested, holder check first",
+         s_uid, spool_id);
+  return true;
+}
+
+bool tagLinkMoveRequest(int spool_id, const char* uid, int from_spool, int write_fmt,
+                        bool force) {
+  if (from_spool <= 0 || from_spool == spool_id) return false;
+  if (write_fmt >= 0 && writeRunning()) return false;
+  if (!park(TLJ_MOVE, spool_id, uid)) return false;
+  s_from  = from_spool;
+  s_force = force;
+  s_write = write_fmt >= 0;
+  s_fmt   = s_write ? (uint8_t)write_fmt : 0;
+  reportExtras();
+  logSDf("TagLink: move of tag %s from spool %d to %d requested%s", s_uid, from_spool,
+         spool_id, s_write ? " (with write)" : "");
+  return true;
+}
+
+bool tagUnlinkRequest(const char* uid) {
+  if (!park(TLJ_UNLINK, 0, uid)) return false;
+  logSDf("TagLink: unlink of tag %s requested", s_uid);
   return true;
 }
 
@@ -93,6 +156,10 @@ static bool bambuMismatch(int spool_id) {
 }
 
 const TagLinkReport* tagLinkReportData() { return &s_report; }
+
+void tagLinkReportClear() {
+  if (!s_pending) s_report = { TL_NONE, 0, 0 };
+}
 
 int tagLinkTakeLinkedSpool() {
   const int id = s_linked_spool;
@@ -134,41 +201,165 @@ static bool fetchTagValues(int spool_id, const char* values[]) {
 
 static uint8_t bindToSpool(int id, const char* value, int* held_by);
 
-static uint8_t runLink() {
-  const int id = s_spool_id;
+// What every job checks first. TL_NONE when the tag the page asked about is
+// still the one on the reader and the network is up.
+static uint8_t tagStillHere() {
   if (!tag_present || !g_tag.uid_str[0]) return TL_NO_TAG;
   // The page asked about the tag it showed. One put down since would be bound
   // to a spool nobody chose for it.
   if (strcmp(g_tag.uid_str, s_uid) != 0) return TL_CHANGED;
   if (!wifi_ok) return TL_NETWORK;
+  return TL_NONE;
+}
 
-  // What doLinkPatch() binds: a Bambu tag by the tray uuid both chips of the
-  // spool carry, anything else by its chip uid. A bare chip uid for a Bambu
-  // tag would be a binding no other Bambu reader looks for.
+// What doLinkPatch() binds: a Bambu tag by the tray uuid both chips of the
+// spool carry, anything else by its chip uid. A bare chip uid for a Bambu
+// tag would be a binding no other Bambu reader looks for. True for Bambu.
+static bool bindingValue(char* out, size_t out_size) {
   const bool bambu = strlen(g_tag.tray_uuid) == 32;
-  char value[40];
-  snprintf(value, sizeof(value), "%s", bambu ? g_tag.tray_uuid : g_tag.uid_str);
+  snprintf(out, out_size, "%s", bambu ? g_tag.tray_uuid : g_tag.uid_str);
+  return bambu;
+}
 
-  // Who holds the tag now, asked the way the recheck asks and verified the
-  // same way, on every backend. Refused rather than moved: taking a tag off a
-  // spool is a decision, and the page does not ask it (yet).
+// Who holds the tag now, asked the way the recheck asks and verified the
+// same way, on every backend. holder 0: nobody. TL_NETWORK when the server
+// never answered, which is not the same as nobody.
+static uint8_t findHolder(const char* value, int* holder) {
   bool unanswered = false;
-  int holder = 0;
-  if (spoolmanTagResolves(value, &unanswered, &holder)) {
-    if (holder == id) return TL_ALREADY;
-    if (holder > 0) { s_report.other_spool = holder; return TL_HELD; }
+  *holder = 0;
+  if (spoolmanTagResolves(value, &unanswered, holder) && *holder > 0) return TL_NONE;
+  *holder = 0;
+  return unanswered ? TL_NETWORK : TL_NONE;
+}
+
+// The binding and its records, the end of a link and of a move.
+static uint8_t finishBind(const char* value) {
+  int held_by = 0;
+  const uint8_t r = bindToSpool(s_spool_id, value, &held_by);
+  if (r == TL_HELD || r == TL_ON_FILAMENT) s_report.other_spool = held_by;
+  if (r == TL_OK) s_linked_spool = s_spool_id;
+  return r;
+}
+
+// The write itself stays tag_write.cpp's: parked there as the page always
+// parked it, and reported through its own state. TL_NONE hands the page over
+// to that state.
+static uint8_t handToWrite() {
+  if (!tagWriteRequest(s_spool_id, (TagFormat)s_fmt, true)) return TL_WRITE_REFUSED;
+  logSDf("TagLink: tag %s is free for spool %d, write handed on", s_uid, s_spool_id);
+  return TL_NONE;
+}
+
+// Takes the tag on the reader off holder, through the unlink More Info uses.
+// That one reads the bindings the last lookup captured, which belong to the
+// spool the scale shows and to no other. A Bambu tag goes with every binding
+// of its spool: the other chip carries the same tray uuid, and left behind it
+// would keep finding the spool the tag was just taken off.
+static uint8_t unlinkHolder(int holder, bool bambu, const char* value) {
+  if (!sm_found || sm_id != holder) return TL_NOT_SHOWN;
+  unlinkTagOnReader(holder, bambu);
+  if (tagBindingFailedOnNetwork()) return TL_NETWORK;
+  // The kept list still has the spool as bound, as after More Info's unlink.
+  spoolCacheSetBound(holder, false);
+  // The unlink reports no server answer of its own, so the server is asked
+  // whether it still finds the spool. Moved on regardless, the link below
+  // would only run into the same holder again.
+  int still = 0;
+  if (findHolder(value, &still) == TL_NONE && still == holder) {
+    logSDf("TagLink: spool %d still found by tag %s after the unlink", holder, value);
+    return TL_UNLINK_FAILED;
   }
-  if (unanswered) return TL_NETWORK;
+  logSDf("TagLink: tag %s taken off spool %d", value, holder);
+  return TL_UNLINKED;
+}
+
+static uint8_t runLink() {
+  const int id = s_spool_id;
+  uint8_t r = tagStillHere();
+  if (r != TL_NONE) return r;
+  char value[40];
+  const bool bambu = bindingValue(value, sizeof(value));
+
+  // Refused here; the page asks whether to move it and answers with a move.
+  int holder = 0;
+  r = findHolder(value, &holder);
+  if (r != TL_NONE) return r;
+  if (holder == id) return TL_ALREADY;
+  if (holder > 0) { s_report.other_spool = holder; return TL_HELD; }
 
   // Asked once on the page, the way the device's own link asks; the answer
   // comes back as a second request with force set.
   if (bambu && !s_force && bambuMismatch(id)) return TL_MISMATCH;
+  return finishBind(value);
+}
 
-  int held_by = 0;
-  const uint8_t r = bindToSpool(id, value, &held_by);
-  if (r == TL_HELD) s_report.other_spool = held_by;
-  if (r == TL_OK)   s_linked_spool = id;
+// A write that links never writes another spool's tag: asked first, because
+// the link after the write cannot take the tag back off the reader's data.
+static uint8_t runWrite() {
+  uint8_t r = tagStillHere();
+  if (r != TL_NONE) return r;
+  char value[40];
+  bindingValue(value, sizeof(value));
+  int holder = 0;
+  r = findHolder(value, &holder);
+  if (r != TL_NONE) return r;
+  if (holder > 0 && holder != s_spool_id) { s_report.other_spool = holder; return TL_HELD; }
+  return handToWrite();
+}
+
+static uint8_t runMove() {
+  uint8_t r = tagStillHere();
+  if (r != TL_NONE) return r;
+  char value[40];
+  const bool bambu = bindingValue(value, sizeof(value));
+  int holder = 0;
+  r = findHolder(value, &holder);
+  if (r != TL_NONE) return r;
+  if (holder == s_spool_id && !s_write) return TL_ALREADY;
+  // The answer was about from_spool. A third spool is a new question.
+  if (holder > 0 && holder != s_from && holder != s_spool_id) {
+    s_report.other_spool = holder;
+    return TL_HELD;
+  }
+  // Before anything is undone: a "no" to this must leave the tag where it was.
+  if (bambu && !s_write && !s_force && bambuMismatch(s_spool_id)) return TL_MISMATCH;
+  if (holder == s_from) {
+    s_report.other_spool = holder;
+    r = unlinkHolder(holder, bambu, value);
+    if (r != TL_UNLINKED) return r;
+    s_report.unlinked = true;
+  }
+  r = s_write ? handToWrite() : finishBind(value);
+  // Off the old spool and on no new one: the scale looks the tag up again
+  // rather than go on showing the spool it was taken off.
+  if (s_report.unlinked && r != TL_OK && r != TL_NONE) tagLookupForget();
   return r;
+}
+
+static uint8_t runUnlink() {
+  uint8_t r = tagStillHere();
+  if (r != TL_NONE) return r;
+  char value[40];
+  const bool bambu = bindingValue(value, sizeof(value));
+  int holder = 0;
+  r = findHolder(value, &holder);
+  if (r != TL_NONE) return r;
+  if (holder <= 0) return TL_NOT_LINKED;
+  s_report.other_spool = holder;
+  r = unlinkHolder(holder, bambu, value);
+  // The next poll looks the tag up again, as after More Info's unlink, so the
+  // scale stops showing a spool the tag no longer belongs to.
+  if (r == TL_UNLINKED) tagLookupForget();
+  return r;
+}
+
+static uint8_t runJob() {
+  switch (s_job) {
+    case TLJ_MOVE:   return runMove();
+    case TLJ_UNLINK: return runUnlink();
+    case TLJ_WRITE:  return runWrite();
+    default:         return runLink();
+  }
 }
 
 // The binding itself, shared by the page's link and the link a tag write asks
@@ -195,6 +386,13 @@ static uint8_t bindToSpool(int id, const char* value, int* held_by) {
     if (sm_tag_conflict_spool > 0) {
       *held_by = sm_tag_conflict_spool;
       return TL_HELD;
+    }
+    // Spoolman 0.27 binds tags to filaments too. No move from here: the page
+    // names the filament, and Spoolman is where it is let go.
+    if (sm_tag_conflict_filament > 0) {
+      *held_by = sm_tag_conflict_filament;
+      sm_tag_conflict_filament = 0;
+      return TL_ON_FILAMENT;
     }
     return tagBindingFailedOnNetwork() ? TL_NETWORK : TL_FAILED;
   }
@@ -240,10 +438,10 @@ void tagLinkTick() {
   if (lookupPending()) return;
   s_pending = false;
 
-  s_report.code = runLink();
+  s_report.code = runJob();
   // For "changed" that is the new tag, which is the one the message is about.
   snprintf(s_answered_uid, sizeof(s_answered_uid), "%s", tag_present ? g_tag.uid_str : "");
-  logSDf("TagLink: tag %s to spool %d -> result %u%s", s_uid, s_spool_id,
-         (unsigned)s_report.code,
-         s_report.other_spool ? " (held elsewhere)" : "");
+  logSDf("TagLink: %s of tag %s, spool %d -> result %u, other spool %d",
+         JOB_NAME[s_job < sizeof(JOB_NAME) / sizeof(JOB_NAME[0]) ? s_job : 0], s_uid, s_spool_id,
+         (unsigned)s_report.code, s_report.other_spool);
 }

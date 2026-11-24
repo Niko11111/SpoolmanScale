@@ -118,7 +118,7 @@ static const char PRINTER_CSS[] PROGMEM =
          "#pmf>summary:before{content:'';width:6px;height:6px;margin-left:2px;"
          "border-right:2px solid var(--ink-3);border-bottom:2px solid var(--ink-3);transform:rotate(-45deg)}"
          "#pmf[open]>summary:before{transform:rotate(45deg)}"
-         ".grp{display:flex;flex-direction:column;gap:6px;margin-top:12px}"
+         ".pgrp{display:flex;flex-direction:column;gap:6px;margin-top:12px}"
          ".mrows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px}"
          // The tag right after the name, the spec against the right edge, so
          // the specs line up whether a row is tagged or not.
@@ -374,7 +374,7 @@ static void moreModels(String& h, const LabelPrinterConfig& c) {
     if (!brand || strcmp(brand, rest[i]->brand) != 0) {
       if (brand) h += F("</div></div>");
       brand = rest[i]->brand;
-      h += F("<div class='grp'><span class='gh'>");
+      h += F("<div class='pgrp'><span class='gh'>");
       h += brand;
       h += F("</span><div class='mrows'>");
     }

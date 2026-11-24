@@ -16,7 +16,7 @@ void bambuCatalogCard(String& h) {
   h += F("<div class='card wide'><h2>");
   h += T(STR_W_BCAT_TITLE);
   h += F("</h2><div class='inrow'>"
-         "<button id='bc-btn' disabled></button>"
+         "<button id='bc-btn' data-ic='dl' disabled></button>"
          "<span class='msg' id='bc-s'></span></div>"
          "<p class='note' style='margin-top:10px'>");
   h += T(STR_W_BCAT_NOTE);

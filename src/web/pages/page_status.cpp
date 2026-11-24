@@ -121,6 +121,21 @@ static String row(const String &k, const String &v, bool mono = false) {
   return s;
 }
 
+// The backend's name and a link to its own web interface, in a new tab. The
+// page shows the address in the next row already, so the link adds nothing a
+// visitor could not read here.
+static String backendNameWithLink() {
+  String s = htmlEsc(backendName());
+  char url[160];
+  if (!backendWebUiUrl(url, sizeof(url))) return s;
+  s += F(" &middot; <a class='go' href='");
+  s += htmlEsc(url);
+  s += F("' target='_blank' rel='noopener'>");
+  s += T(STR_W_OPEN);
+  s += F(" &#8599;</a>");
+  return s;
+}
+
 static String uptimeText() {
   uint32_t s = millis() / 1000UL;
   uint32_t d = s / 86400UL; s %= 86400UL;
@@ -280,7 +295,7 @@ static String body() {
   h += F("<div class='card w2'><h2>");
   h += T(STR_W_C_INVENTORY);
   h += F("</h2><div class='rows'>");
-  h += row(T(STR_W_R_BACKEND), backendName());
+  h += row(T(STR_W_R_BACKEND), backendNameWithLink());
   h += row(T(STR_W_R_ADDRESS), htmlEsc(backendBaseUrl()), true);
   h += row(T(STR_W_R_REACHABLE), pill(sm_reachable, STR_W_S_YES, STR_W_S_NO));
   h += row(T(STR_W_R_SCANS), String(scan_count));

@@ -189,7 +189,7 @@ static String body() {
   h += F("</span><span class='v' id='fwsince' data-t='");
   h += String((unsigned long)firmwareInstalledAt());
   h += F("'></span></div></div>"
-         "<button class='quiet' id='fwnb' onclick='fwNotes()' disabled>");
+         "<button class='quiet' id='fwnb' onclick='fwNotes()' data-ic='nt' disabled>");
   h += T(STR_W_FW_NOTES);
   h += F("</button>"
          "<pre id='fwn' class='notes'></pre>"
@@ -198,7 +198,7 @@ static String body() {
          "<div class='field'><label>");
   h += T(STR_W_FW_FILE);
   h += F("</label><div class='inrow'>"
-         "<label class='filebtn'>");
+         "<label class='filebtn' data-ic='fo'>");
   h += T(STR_W_FW_CHOOSE);
   // No `required` on the hidden input: the browser cannot point at a hidden
   // control to complain, so the form would just do nothing. The submit button
@@ -250,7 +250,7 @@ static String body() {
   if (!(update_available && have_latest)) h += F(" disabled");
   h += F(">");
   h += T(STR_W_FW_INSTALL);
-  h += F("</button><button class='quiet' id='ghnb' onclick='ghNotes()'");
+  h += F("</button><button class='quiet' id='ghnb' onclick='ghNotes()' data-ic='nt'");
   if (!have_latest) h += F(" disabled");
   h += F(">");
   h += T(STR_W_FW_WHATSNEW);

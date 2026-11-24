@@ -67,6 +67,14 @@ bool patchSpoolTag(int spool_id, const char* uuid,
 // UIDs of that spool alone.
 void unlinkCardUid(int spool_id, const char* uid, bool all);
 
+// Takes the tag on the reader (g_tag) off spool_id, on every backend: Spoolman
+// through unlinkCardUid(), FilaMan and BamBuddy through their one tag place.
+// Reads the bindings the last lookup captured (sm_tag_values and co.), so
+// spool_id has to be the spool the scale shows. Shared by More Info and the
+// tag page. tagBindingFailedOnNetwork() says afterwards whether it arrived.
+// Loop task only.
+void unlinkTagOnReader(int spool_id, bool all);
+
 // nfc_uid: the tags a scale wrote itself. FilaStation's convention, shared:
 // a UID in the spool's extra field nfc_uid is a MIFARE tag one of the scales
 // wrote, and either may write it again when the spool changes. Original tags

@@ -189,8 +189,8 @@ static const char WF_JS[] PROGMEM =
   "wfSel='';$('wf-pw').value='';wfSet(r.json);flash('wf-m',wfF(WFT.trying,[s]));"
   "wfAway(wfD.url?wfF(WFT.awayn,[s,'http://'+wfD.url+'/config']):wfF(WFT.awaym,[s]));"
   "wfWatch(s,Date.now());});}"
-  "function wfAsk(s,pw){ask(wfF(WFT.ask,[s,s]),WFT.go).then(ok=>{if(ok)wfTry(s,pw);});}"
-  "function wfForget(s){ask(wfF(WFT.askf,[s]),WFT.forget,true).then(ok=>{if(!ok)return;"
+  "function wfAsk(s,pw){ask(wfF(WFT.ask,[s,s]),WFT.go,false,'').then(ok=>{if(ok)wfTry(s,pw);});}"
+  "function wfForget(s){ask(wfF(WFT.askf,[s]),WFT.forget,true,'rm').then(ok=>{if(!ok)return;"
   "post('/api/wifi/forget',s).then(r=>{if(r.json)wfSet(r.json);"
   "else flash('wf-m',r.text||WS.err,true);});});}"
   // No question first: nothing reconnects, the next boot just starts there.

@@ -253,7 +253,7 @@ static void deviceTile(String& h, const LabelPrinterConfig& c) {
   h += F("' id='dt'><div class='ic'>");
   h += FPSTR(ICON_PRINTER);
   h += F("</div><div class='tx'><span class='nm' id='pd'></span><span class='sub' id='pds'></span>"
-         "</div><div class='end'><button id='sc'");
+         "</div><div class='end'><button id='sc' data-ic='re'");
   if (have) h += F(" class='quiet'");
   h += '>';
   h += T(have ? STR_W_P_CHANGE : STR_BT_SCAN_WEB);

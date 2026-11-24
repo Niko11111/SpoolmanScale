@@ -1877,10 +1877,10 @@ const char* const STRINGS[][3] = {
   { "Nach dem Verlinken",     "After linking",          "Après la liaison" },  // STR_W_TAGOPT_ASK
   { "Format",                 "Format",                 "Format" },  // STR_W_TAGOPT_FMT
   { "Gilt für das, was die Waage nach einem Verlinken selbst tut. "
-    "Das Schreiben auf dieser Seite hat seine eigene Formatauswahl.",
-    "Applies to what the scale does on its own after a link. Writing from this "
-    "page has its own format selector.",
-    "Ces réglages concernent ce que la balance fait d'elle-même après avoir lié un tag à une bobine. L'écriture lancée depuis cette page a son propre choix de format, plus haut." },  // STR_W_TAGOPT_NOTE
+    "Das Format ist dasselbe wie beim Schreiben oben.",
+    "Applies to what the scale does on its own after a link. The format is the "
+    "same one the write above uses.",
+    "Ces réglages concernent ce que la balance fait d'elle-même après avoir lié un tag à une bobine. Le format est le même que pour l'écriture plus haut." },  // STR_W_TAGOPT_NOTE
   { "Speichern", "Download", "Enregistrer" },  // STR_W_LOG_DOWNLOAD
   { "Kein Material passte - Filter aufgehoben",
     "No material matched - filter dropped",
@@ -4542,6 +4542,64 @@ const char* const STRINGS[][3] = {
 
   // Remembered WiFi networks: the connected one becomes the preferred one
   { "Bevorzugen", "Make preferred", "Préférer" },  // STR_WIFI_PREFER
+
+  // Tag page: unlink and move
+  { "Verknüpfung lösen",
+    "Unlink",
+    "Dissocier" },  // STR_W_TAG_UNLINK
+  { "Lösen",
+    "Unlink",
+    "Dissocier" },  // STR_W_TL_UNLINK_BTN
+  { "Den Tag von Spule #%d lösen? Die Spule wird dann über diesen Tag nicht mehr gefunden. Auf dem Tag selbst ändert sich nichts. Bei einer Bambu-Spule gilt das für beide Chips.",
+    "Unlink the tag from spool #%d? The spool is then no longer found by this tag. Nothing changes on the tag itself. On a Bambu spool this goes for both chips.",
+    "Dissocier le tag de la bobine #%d ? La bobine ne sera plus trouvée par ce tag. Rien ne change sur le tag lui-même. Pour une bobine Bambu, cela vaut pour les deux puces." },  // STR_W_TL_UNLINK_ASK
+  { "Den Tag von der Spule lösen, mit der er verknüpft ist? Auf dem Tag selbst ändert sich nichts.",
+    "Unlink the tag from whichever spool it is linked to? Nothing changes on the tag itself.",
+    "Dissocier le tag de la bobine à laquelle il est lié ? Rien ne change sur le tag lui-même." },  // STR_W_TL_UNLINK_ASK_ANY
+  { "Der Tag gehört Spule #%d. Dort lösen und mit Spule #%d verknüpfen?",
+    "The tag belongs to spool #%d. Unlink it there and link it to spool #%d?",
+    "Le tag appartient à la bobine #%d. Le dissocier de celle-ci et le lier à la bobine #%d ?" },  // STR_W_TL_MOVE_ASK
+  { "Der Tag gehört Spule #%d. Dort lösen, den Tag für Spule #%d beschreiben und verknüpfen?",
+    "The tag belongs to spool #%d. Unlink it there, write it for spool #%d and link it?",
+    "Le tag appartient à la bobine #%d. Le dissocier de celle-ci, l'écrire pour la bobine #%d et le lier ?" },  // STR_W_TL_MOVE_ASK_WRITE
+  { "Löse die Verknüpfung ...",
+    "Unlinking ...",
+    "Dissociation ..." },  // STR_W_TL_UNLINKING
+  { "Prüfe, ob der Tag schon einer Spule gehört ...",
+    "Checking whether the tag already belongs to a spool ...",
+    "Vérification : le tag appartient-il déjà à une bobine ..." },  // STR_W_TL_CHECKING
+  { "Hänge den Tag von Spule #%d nach #%d um ...",
+    "Moving the tag from spool #%d to #%d ...",
+    "Déplacement du tag de la bobine #%d vers #%d ..." },  // STR_W_TL_MOVING
+  { "Der Tag ist von Spule #%d gelöst.",
+    "The tag is unlinked from spool #%d.",
+    "Le tag est dissocié de la bobine #%d." },  // STR_W_TL_UNLINKED
+  { "Der Tag ist von Spule #%d gelöst und mit Spule #%d verknüpft.",
+    "The tag was unlinked from spool #%d and linked to spool #%d.",
+    "Le tag a été dissocié de la bobine #%d et lié à la bobine #%d." },  // STR_W_TL_MOVED
+  { "Der Tag ist mit keiner Spule verknüpft.",
+    "The tag is not linked to any spool.",
+    "Le tag n'est lié à aucune bobine." },  // STR_W_TL_NOT_LINKED
+  { "Der Tag gehört Spule #%d, die Waage zeigt gerade eine andere. Tag kurz abnehmen, wieder auflegen und noch einmal versuchen.",
+    "The tag belongs to spool #%d, but the scale is showing another one. Lift the tag, put it back and try again.",
+    "Le tag appartient à la bobine #%d, mais la balance en affiche une autre. Retirez le tag, reposez-le et réessayez." },  // STR_W_TL_NOT_SHOWN
+  { "Der Tag ist in Spoolman mit Filament #%d verknüpft, nicht mit einer Spule. Lösen geht nur in Spoolman.",
+    "In Spoolman the tag is linked to filament #%d, not to a spool. Only Spoolman can unlink it.",
+    "Dans Spoolman, le tag est lié au filament #%d, pas à une bobine. Seul Spoolman peut le dissocier." },  // STR_W_TL_ON_FILAMENT
+  { "Nicht gelöst: Der Server findet Spule #%d weiter über diesen Tag.",
+    "Not unlinked: the server still finds spool #%d by this tag.",
+    "Non dissocié : le serveur trouve toujours la bobine #%d par ce tag." },  // STR_W_TL_UNLINK_FAILED
+  { "Der Tag gehört Spule #%d. Nichts geschrieben, nichts verknüpft.",
+    "The tag belongs to spool #%d. Nothing written, nothing linked.",
+    "Le tag appartient à la bobine #%d. Rien n'a été écrit ni lié." },  // STR_W_TL_HELD_WRITE
+
+  // Status and backend pages: the backend's own web interface
+  { "%s öffnen", "Open %s", "Ouvrir %s" },  // STR_W_BACKEND_OPEN
+
+  // Web tags page: a move that took the tag off and failed afterwards
+  { "Von Spule #%d gelöst, aber nicht umgehängt: %s",
+    "Taken off spool #%d, but not moved: %s",
+    "Dissocié de la bobine #%d, mais pas déplacé : %s" },  // STR_W_TL_HALF_MOVED
 };
 
 StringID tagWriteResultString(uint8_t code) {
