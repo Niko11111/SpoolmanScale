@@ -173,6 +173,7 @@ void buildUI() {
   lv_obj_set_style_text_color(hdr_lbl, lv_color_hex(UI_COL_INK_FAINT), 0);
   lv_obj_set_style_text_font(hdr_lbl, &lv_font_montserrat_ext_12, 0);
   lv_obj_align(hdr_lbl, LV_ALIGN_LEFT_MID, 8, 0);
+  lbl_hdr_title = hdr_lbl;
 
   // SD card indicator in header - only visible when sd_available.
   // Positions of this and the five chips right of it come from
@@ -187,6 +188,16 @@ void buildUI() {
   lv_label_set_text(lbl_hdr_wifi, LV_SYMBOL_WIFI);
   lv_obj_set_style_text_color(lbl_hdr_wifi, lv_color_hex(UI_COL_HDR_OFF), 0);
   lv_obj_set_style_text_font(lbl_hdr_wifi, &lv_font_montserrat_ext_12, 0);
+
+  // Percent and battery glyph, immediately left of the wifi icon. Hidden
+  // until a MAX17048 answers; updateHeaderStatus() fills it, the packing
+  // leaves no hole while it is hidden, and drops the percent when the row
+  // would otherwise run into the title.
+  lbl_hdr_bat = lv_label_create(hdr);
+  lv_label_set_text(lbl_hdr_bat, "");
+  lv_obj_set_style_text_color(lbl_hdr_bat, lv_color_hex(UI_COL_CAPTION), 0);
+  lv_obj_set_style_text_font(lbl_hdr_bat, &lv_font_montserrat_ext_12, 0);
+  lv_obj_add_flag(lbl_hdr_bat, LV_OBJ_FLAG_HIDDEN);
 
   // Bluetooth, left of WiFi. Hidden while the master switch is off, so a
   // device that never uses BLE never shows it; updateHeaderStatus() follows

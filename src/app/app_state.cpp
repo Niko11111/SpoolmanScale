@@ -225,6 +225,8 @@ int  s_dry_numpad_target = 0;
 int  s_ams_numpad_value = 0;
 lv_obj_t *lbl_nfc_dot;
 lv_obj_t *lbl_hdr_wifi;
+lv_obj_t *lbl_hdr_title = nullptr;
+lv_obj_t *lbl_hdr_bat = nullptr;
 lv_obj_t *lbl_hdr_bt = nullptr;
 lv_obj_t *lbl_hdr_nfc;
 lv_obj_t *lbl_hdr_scl = nullptr;

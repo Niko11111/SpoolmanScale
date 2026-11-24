@@ -11,6 +11,7 @@
 #include "app/setup_flow.h"
 #include "hardware/display.h"
 #include "hardware/display_power.h"
+#include "hardware/fuel_gauge.h"
 #include "hardware/i2c_scan.h"
 #include "hardware/nfc.h"
 #include "hardware/pins.h"
@@ -229,6 +230,9 @@ void appSetup() {
   i2cScanRefresh(I2C_EXT);
   Serial.printf("I2C_EXT scan: %s\n", i2cScanLast());
   logSDf("I2C_EXT scan: %s", i2cScanLast());
+  // Before the header is built, so the first paint already has the percent
+  // when a gauge is on the bus.
+  fuelGaugePoll(true);
 
   // Build UI immediately after display init so the user sees a screen right away.
   // lbl_status shows STR_BOOTING until wifiConnect() completes

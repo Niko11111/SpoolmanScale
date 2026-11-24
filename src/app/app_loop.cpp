@@ -27,6 +27,7 @@
 #include "ui/partition_popup.h"
 #include "bambu/bambu_tag.h"
 #include "hardware/display_power.h"
+#include "hardware/fuel_gauge.h"
 #include "hardware/nfc.h"
 #include "hardware/scale.h"
 #include "hardware/scale_state.h"
@@ -822,6 +823,7 @@ void appLoop() {
     i2c_rescan_pending = false;
     i2cScanRefresh(I2C_EXT);
     logSDf("I2C_EXT rescan (diagnosis): %s", i2cScanLast());
+    fuelGaugePoll(true);
     // The second writer of scl_ok, and it has to ask the same question as the
     // 5 s probe: a chip that is wired but switched off in the settings must
     // not come back as present, or the header lights up again.
@@ -1904,6 +1906,10 @@ void appLoop() {
   }
 
   tagReaderRecoverTick();
+
+  // The fuel gauge shares the external bus and paces itself. A change in
+  // percent or direction is the only reason the header is redrawn here.
+  if (fuelGaugePoll()) updateHeaderStatus();
 
   // What the device would tell its owner if it could talk. Paces itself, so it
   // is called unconditionally; the banner call below is a compare on every

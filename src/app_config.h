@@ -80,13 +80,15 @@
 #define WEBSITE_WISH_PATH_DE "de/etikettendrucker/"
 #define WEBSITE_WISH_PATH_EN "label-printer/"
 
-// The two chips on I2C_EXT. Named because a bare 0x2A stood in three files and
-// meant nothing to anyone reading a bus scan.
+// The chips on I2C_EXT. Named because a bare 0x2A stood in three files and
+// meant nothing to anyone reading a bus scan. The fuel gauge is optional:
+// a scale without one simply has no answer at 0x36.
 #define I2C_ADDR_PN532      0x24
 #define I2C_ADDR_NAU7802    0x2A
 // The PN7160's factory address. Its solder pads also offer 0x29-0x2B, and 0x2A
 // would collide with the NAU7802: never move it there.
 #define I2C_ADDR_PN7160     0x28
+#define I2C_ADDR_MAX17048   0x36
 
 // What a calibration is allowed to produce. A failed I2C read comes back as
 // all ones through Adafruit_BusIO, so an absent ADC delivers a sample of -1
