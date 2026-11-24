@@ -31,7 +31,7 @@ enum LabelPrinterModel : uint8_t {
   LP_MODEL_M110S = 9,         // the M110's bytes, a row as wide as the label
   LP_MODEL_NIIMBOT_D110 = 10, // NIIMBOT D110 and D110 M: 12 mm tape, 96 dots, the label turned
   LP_MODEL_PM241 = 11,        // Phomemo PM241-BT and PM245-BT, 4 x 6 inch shipping label printers, TSPL
-  LP_MODEL_NIIMBOT_B1PRO = 12 // NIIMBOT B1 Pro, 300 dpi, direct thermal, protocol 4
+  LP_MODEL_NIIMBOT_B1PRO = 12 // NIIMBOT B1 Pro, 300 dpi, direct thermal, the V4 print task
 };
 
 // Which bytes a model takes. Phomemo's two preambles share one write-only

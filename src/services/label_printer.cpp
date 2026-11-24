@@ -110,7 +110,7 @@ static const LabelPrinterProfile PROFILE_NIIMBOT_M2 = {
 // ribbon, so the label does not survive the dryer, and takes rolls from 20 to
 // 50 mm wide like the B1. Its print sequence is the V4 task, the one the D110
 // M has on protocol 4; the B1 Pro itself reports protocol 5. A user printed on
-// one on v0.8.3 and again on dev, v0.8.4-beta.69 (both 24.11.2026).
+// one with this change on dev, v0.8.4-beta.69 (24.11.2026).
 static const LabelPrinterProfile PROFILE_NIIMBOT_B1PRO = {
   LP_MODEL_NIIMBOT_B1PRO, "NIIMBOT", "B1 Pro", 50, 30, 20, 50, 10, 150, 568, 568, false, true,
   300, LP_PROTO_NIIMBOT
