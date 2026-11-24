@@ -22,8 +22,10 @@
 #include "time_service.h"
 #include "user_options.h"
 #include "wifi_known.h"
+#include "wifi_manager.h"
 #include "web/web_access.h"
 #include "hardware/display.h"
+#include "hardware/sd_logger.h"
 #include "hardware/sound.h"
 
 
@@ -197,6 +199,17 @@ void saveWifiCredentials(const char* ssid, const char* pass) {
   prefsPutString("wifi_pass", pass);
   wifiKnownSetPreferred(ssid, pass);
   Serial.printf("WiFi saved: SSID=%s\n", ssid);
+}
+
+bool preferConnectedNetwork(const char* ssid) {
+  char on[WIFI_KNOWN_SSID_BYTES];
+  wifiManagerCurrentSsid(on, sizeof(on));
+  const WifiKnownList& l = wifiKnownList();
+  if (!wifiCanPrefer(l, ssid, on, wifiPreferredSsid())) return false;
+  const WifiKnownEntry& e = l.e[wifiKnownFind(l, ssid)];
+  saveWifiCredentials(e.ssid, e.pass);
+  logSDf("WiFi: %s is now the preferred network, the link stays as it is", e.ssid);
+  return true;
 }
 
 void saveSpoolmanIP(const char* ip) {

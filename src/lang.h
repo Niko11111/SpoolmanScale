@@ -2094,6 +2094,9 @@ enum StringID {
   STR_SND_UPDATE,
   STR_SND_LINK,
   STR_TAG2_OTHER_SPOOL,       // a Bambu chip of another spool, not linked as the second tag
+
+  // Remembered WiFi networks: the connected one becomes the preferred one
+  STR_WIFI_PREFER,            // saved networks popup and the browser's WiFi card
   STR_COUNT
 };
 

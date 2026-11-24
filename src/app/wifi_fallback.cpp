@@ -116,6 +116,9 @@ static void evaluateReturnScan(int n, bool quiet, uint32_t now) {
   bool found = false;
   for (int i = 0; i < n && !found; i++) found = wifiManagerScannedSSID(i) == wifiPreferredSsid();
   wifiManagerClearScan();
+  // The network in use was made the preferred one while the scan ran: the
+  // scan found the scale's own network, and a begin() would only drop it.
+  if (onPreferred()) return;
   // Not in range: the next look waits longer. Coming home is not missed by
   // that - the network in use is then the one out of range, and its outage
   // finds the preferred one.

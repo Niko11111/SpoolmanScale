@@ -4539,6 +4539,9 @@ const char* const STRINGS[][3] = {
   { "Dieser Bambu-Tag gehört zu einer anderen Spule und wird nicht verknüpft.",
     "This Bambu tag belongs to another spool and is not linked.",
     "Ce tag Bambu appartient à une autre bobine, il ne sera pas lié." },  // STR_TAG2_OTHER_SPOOL
+
+  // Remembered WiFi networks: the connected one becomes the preferred one
+  { "Bevorzugen", "Make preferred", "Préférer" },  // STR_WIFI_PREFER
 };
 
 StringID tagWriteResultString(uint8_t code) {

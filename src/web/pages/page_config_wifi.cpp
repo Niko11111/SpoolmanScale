@@ -7,6 +7,7 @@
 
 #include "app_config.h"
 #include "hardware/sd_logger.h"
+#include "services/app_settings.h"
 #include "services/device_name.h"
 #include "services/mdns_service.h"
 #include "services/wifi_known.h"
@@ -117,7 +118,7 @@ static String wordsJs() {
   addWord(h, "go", STR_W_WIFI_CONNECT);       addWord(h, "forget", STR_WIFI_FORGET);
   addWord(h, "scanning", STR_WIFI_SCAN);      addWord(h, "scanfail", STR_W_WIFI_SCAN_FAIL);
   addWord(h, "nonets", STR_WIFI_NO_NET);      addWord(h, "saved", STR_WIFI_KNOWN_WORD);
-  addWord(h, "open", STR_W_WIFI_OPEN);
+  addWord(h, "open", STR_W_WIFI_OPEN);        addWord(h, "pref", STR_WIFI_PREFER);
   addWord(h, "ask", STR_W_WIFI_ASK);          addWord(h, "askf", STR_W_WIFI_ASK_FORGET);
   addWord(h, "trying", STR_W_WIFI_TRYING);    addWord(h, "awayn", STR_W_WIFI_AWAY_NAME);
   addWord(h, "awaym", STR_W_WIFI_AWAY_MENU);  addWord(h, "up", STR_W_WIFI_UP);
@@ -153,7 +154,7 @@ static const char WF_JS[] PROGMEM =
   "function wfState(k){return k.c&&k.p?WFT.cp:k.c?WFT.c:k.p?WFT.p:WFT.sv;}"
   "function wfKnown(d){if(!d.known.length)return '<p class=os>'+WFT.none+'</p>';"
   "return d.known.map((k,i)=>wfRow(k.s,wfState(k),"
-  "(k.c?'':wfBtn('c',i,WFT.go))+(k.p?'':wfBtn('f',i,WFT.forget,'rm')))).join('');}"
+  "(k.c?(k.p?'':wfBtn('p',i,WFT.pref,'ok')):wfBtn('c',i,WFT.go,'wifi'))+(k.p?'':wfBtn('f',i,WFT.forget,'rm')))).join('');}"
   "function wfList(d){return d.nets.map((n,i)=>({n:n,i:i})).filter(x=>x.n.s!==d.on);}"
   "function wfHead(d){const s=d.scan;return s==='wait'||s==='run'?WFT.scanning:"
   "s==='fail'?WFT.scanfail:s==='done'&&!wfList(d).length?WFT.nonets:WFT.pick;}"
@@ -192,6 +193,9 @@ static const char WF_JS[] PROGMEM =
   "function wfForget(s){ask(wfF(WFT.askf,[s]),WFT.forget,true).then(ok=>{if(!ok)return;"
   "post('/api/wifi/forget',s).then(r=>{if(r.json)wfSet(r.json);"
   "else flash('wf-m',r.text||WS.err,true);});});}"
+  // No question first: nothing reconnects, the next boot just starts there.
+  "function wfPref(s){post('/api/wifi/prefer',s).then(r=>{if(r.json)wfSet(r.json);"
+  "else flash('wf-m',r.text||WS.err,true);});}"
   // A saved network connects without a password; one in range asks for it
   // only when it is neither saved nor open.
   "function wfGo(){const n=wfNet();if(!n){$('wf-net').focus();return;}"
@@ -199,7 +203,7 @@ static const char WF_JS[] PROGMEM =
   "if(wfNeedsPw(n)&&!pw){$('wf-pw').focus();return;}wfAsk(n.s,pw);}"
   "$('wf').addEventListener('click',e=>{const b=e.target.closest('button[data-a]');"
   "if(!b||!wfD)return;const k=wfD.known[+b.dataset.i];if(!k)return;"
-  "if(b.dataset.a==='f')wfForget(k.s);else wfAsk(k.s,'');});"
+  "if(b.dataset.a==='f')wfForget(k.s);else if(b.dataset.a==='p')wfPref(k.s);else wfAsk(k.s,'');});"
   // Only a pick by hand changes what is remembered: a scan empties the list
   // for a moment, and the choice has to outlive that.
   "$('wf-net').addEventListener('change',()=>{$('wf-pw').value='';const n=wfNet();"
@@ -223,7 +227,7 @@ String configWifiCard() {
   // A basis of 220 px: below that the buttons move to a line of their own
   // rather than squeezing the network names to two letters on a phone.
   h += F("</label><div class='inrow'><select id='wf-net' style='flex:1 1 220px'></select>"
-         "<button id='wf-go'>");
+         "<button id='wf-go' data-ic='wifi'>");
   h += T(STR_W_WIFI_CONNECT);
   h += F("</button><button class='quiet' id='wf-scan' data-ic='re'>");
   h += T(STR_W_WIFI_SCAN_BTN);
@@ -282,6 +286,14 @@ static void handleForget(WebServer &srv) {
   sendState(srv);
 }
 
+// Stored at once, like a forget: the link stays, so nothing waits for the
+// loop. A network the rule refuses leaves the state as it was, and the page
+// draws that.
+static void handlePrefer(WebServer &srv) {
+  preferConnectedNetwork(srv.arg("plain").c_str());
+  sendState(srv);
+}
+
 void configWifiRoutes(WebServer &srv) {
   srv.on("/api/wifi", HTTP_GET, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
@@ -300,5 +312,9 @@ void configWifiRoutes(WebServer &srv) {
   srv.on("/api/wifi/forget", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
     handleForget(srv);
+  });
+  srv.on("/api/wifi/prefer", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
+    handlePrefer(srv);
   });
 }

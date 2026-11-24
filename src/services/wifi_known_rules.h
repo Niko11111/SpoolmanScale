@@ -159,3 +159,14 @@ inline const char* wifiTryPass(const WifiKnownList& l, const char* ssid, const c
   if (pref.ssid && pref.pass && strcmp(pref.ssid, ssid) == 0) return pref.pass;
   return "";
 }
+
+// Whether the user can make a network the preferred one where it stands, with
+// no new connection: the scale is on it (`on`), the list holds its password,
+// and it is not the preferred one already. On a fallback network this is how
+// the next boot starts there (Nikolai, 24.11.2026).
+inline bool wifiCanPrefer(const WifiKnownList& l, const char* ssid, const char* on,
+                          const char* preferred) {
+  if (!ssid || !ssid[0] || !on || strcmp(ssid, on) != 0) return false;
+  if (preferred && strcmp(ssid, preferred) == 0) return false;
+  return wifiKnownFind(l, ssid) >= 0;
+}

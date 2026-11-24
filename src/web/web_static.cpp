@@ -268,7 +268,9 @@ static const char APP_CSS[] PROGMEM =
       //
       // The icon says what kind of action it is, the words say which one, so
       // the same icon stands for every action of a kind: the tick for every
-      // save, the bin for every delete. Toggles, tabs and Connect stay words.
+      // save, the bin for every delete, the WiFi arcs for every Connect to a
+      // network, as on the device (Nikolai, 24.11.2026). Toggles, tabs and
+      // the other Connects stay words.
       "button[data-ic]{display:inline-flex;align-items:center;justify-content:center;gap:7px}"
       "button[data-ic][hidden]{display:none}"
       "button[data-ic]:before{content:'';width:16px;height:16px;flex:none;"
@@ -292,6 +294,8 @@ static const char APP_CSS[] PROGMEM =
       "[data-ic=add]{--ic:" WEB_ICON("M12 5v14M5 12h14") "}"
       "[data-ic=scale]{--ic:" WEB_ICON("M5 7h14M12 7v3M4 10h16l-1.5 10h-13zM10 15h4") "}"
       "[data-ic=x]{--ic:" WEB_ICON("M6 6l12 12M18 6L6 18") "}"
+      "[data-ic=wifi]{--ic:" WEB_ICON("M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0"
+                                      "M8.5 16a5 5 0 0 1 7 0M12 19.5h.01") "}"
       "[data-ic=back]{--ic:" WEB_ICON("M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3") "}"
       "[data-ic=eye]{--ic:" WEB_ICON("M2 12c2.5-4.5 6-7 10-7s7.5 2.5 10 7c-2.5 4.5-6 7-10 7"
                                      "s-7.5-2.5-10-7zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z") "}"
