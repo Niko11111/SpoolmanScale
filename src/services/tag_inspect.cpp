@@ -11,6 +11,7 @@
 #include <strings.h>
 
 #include "hardware/nfc.h"
+#include "hardware/sd_logger.h"
 #include "app/app_state.h"
 #include "bambu/bambu_catalog.h"
 #include "bambu/bambu_scan.h"
@@ -160,6 +161,41 @@ void tagInfoJson(const TagInfo *ti, char *out, size_t out_len) {
   appendf(out, out_len, n, "}");
 }
 
+// The pages of an ACE record. False when one of the number pages did not
+// read: a zero colour and weight would describe a black spool of 0 g, and a
+// new spool could be created from that.
+static bool readAceFields(AceFields *f) {
+  memset(f, 0, sizeof(*f));
+  readText(ACE_P_SKU, f->sku, sizeof(f->sku));
+  readText(ACE_P_BRAND, f->brand, sizeof(f->brand));
+  readText(ACE_P_MATERIAL, f->material, sizeof(f->material));
+  uint8_t col[4] = {0}, wt[4] = {0}, ext[4] = {0}, bed[4] = {0}, dl[4] = {0};
+  if (!nfcReadNtagPage(ACE_P_COLOR, col) || !nfcReadNtagPage(ACE_P_WEIGHT, wt) ||
+      !nfcReadNtagPage(ACE_P_EXTRUDER, ext) || !nfcReadNtagPage(ACE_P_BED, bed) ||
+      !nfcReadNtagPage(ACE_P_DIALEN, dl)) {
+    logSD("Tag: an ACE number page did not read, the record is not taken");
+    return false;
+  }
+  f->r = col[3]; f->g = col[2]; f->b = col[1];
+  f->weight_g = rdU16(wt);
+  f->et_lo = rdU16(ext);     f->et_hi = rdU16(ext + 2);
+  f->bed_lo = rdU16(bed);    f->bed_hi = rdU16(bed + 2);
+  f->dia_x100 = rdU16(dl);   f->length_m = rdU16(dl + 2);
+  return true;
+}
+
+// Page 31 is the filament on a full spool, as buildAce() writes it and as an
+// original Anycubic tag holds it (1000 g on a 1 kg spool, 19.11.2026).
+static void aceRawJson(const AceFields &f) {
+  snprintf(cached_raw, sizeof(cached_raw),
+    "{\"format\":\"Anycubic ACE\",\"sku\":\"%s\",\"brand\":\"%s\",\"material\":\"%s\","
+    "\"color\":\"#%02X%02X%02X\",\"weight_g\":%u,\"nozzle\":\"%u-%u\","
+    "\"bed\":\"%u-%u\",\"diameter_mm\":\"%u.%02u\",\"length_m\":%u}",
+    f.sku, f.brand, f.material, f.r, f.g, f.b, f.weight_g,
+    f.et_lo, f.et_hi, f.bed_lo, f.bed_hi,
+    (unsigned)(f.dia_x100 / 100), (unsigned)(f.dia_x100 % 100), (unsigned)f.length_m);
+}
+
 // false when a page read came back short: the caller must not cache that.
 static bool tagDescribe(char *out, size_t out_len, TagInfo *ti) {
   out[0] = 0;
@@ -169,30 +205,10 @@ static bool tagDescribe(char *out, size_t out_len, TagInfo *ti) {
 
   if (p4[0] == 0x7B && p4[1] == 0x00 && p4[2] == 0x65 && p4[3] == 0x00) {
     AceFields f;
-    memset(&f, 0, sizeof(f));
-    readText(ACE_P_SKU, f.sku, sizeof(f.sku));
-    readText(ACE_P_BRAND, f.brand, sizeof(f.brand));
-    readText(ACE_P_MATERIAL, f.material, sizeof(f.material));
-    uint8_t col[4] = {0}, wt[4] = {0}, ext[4] = {0}, bed[4] = {0}, dl[4] = {0};
-    nfcReadNtagPage(ACE_P_COLOR, col);
-    nfcReadNtagPage(ACE_P_WEIGHT, wt);
-    nfcReadNtagPage(ACE_P_EXTRUDER, ext);
-    nfcReadNtagPage(ACE_P_BED, bed);
-    nfcReadNtagPage(ACE_P_DIALEN, dl);
-    f.r = col[3]; f.g = col[2]; f.b = col[1];
-    f.weight_g = rdU16(wt);
-    f.et_lo = rdU16(ext);     f.et_hi = rdU16(ext + 2);
-    f.bed_lo = rdU16(bed);    f.bed_hi = rdU16(bed + 2);
-    f.dia_x100 = rdU16(dl);   f.length_m = rdU16(dl + 2);
+    if (!readAceFields(&f)) return false;
     describeAce(&f, out, out_len);
     if (ti) aceToInfo(&f, ti);
-    snprintf(cached_raw, sizeof(cached_raw),
-      "{\"format\":\"Anycubic ACE\",\"sku\":\"%s\",\"brand\":\"%s\",\"material\":\"%s\","
-      "\"color\":\"#%02X%02X%02X\",\"empty_weight_g\":%u,\"nozzle\":\"%u-%u\","
-      "\"bed\":\"%u-%u\",\"diameter_mm\":\"%u.%02u\",\"length_m\":%u}",
-      f.sku, f.brand, f.material, f.r, f.g, f.b, f.weight_g,
-      f.et_lo, f.et_hi, f.bed_lo, f.bed_hi,
-      (unsigned)(f.dia_x100 / 100), (unsigned)(f.dia_x100 % 100), (unsigned)f.length_m);
+    aceRawJson(f);
     return f.material[0] && f.brand[0];
   }
 
@@ -479,6 +495,9 @@ void tagw::refreshCache(bool force) {
 
   const bool is_ntag = strlen(g_tag.uid_str) == TAG_UID_STR_LEN_NTAG;
   snprintf(cached_uid, sizeof(cached_uid), "%s", g_tag.uid_str);
+  // The branches below for other tags overwrite cached_info: an NTAG that
+  // comes back after one of them is read again, not taken for described.
+  if (!is_ntag) last_uid[0] = 0;
 
   if (strlen(g_tag.uid_str) == TAG_UID_STR_LEN_VICINITY) {
     // What the scan path decoded (openprinttag/opt_scan.cpp); nothing is read here.
@@ -540,7 +559,14 @@ void tagw::refreshCache(bool force) {
 
   const bool uid_changed = strcmp(last_uid, g_tag.uid_str) != 0;
   const bool changed = uid_changed || cache_dirty;
-  if (uid_changed) { unreadable = 0; cached_raw[0] = 0; }
+  // What the cache holds describes the tag before this one: kept, a failed
+  // first read would show the old record under the new UID.
+  if (uid_changed) {
+    unreadable = 0;
+    cached_raw[0] = 0;
+    cached_content[0] = 0;
+    memset(&cached_info, 0, sizeof(cached_info));
+  }
   if (!changed && cached_content[0]) return;
   // A blank NTAG, or one written by something this firmware does not know,
   // never yields a description. Returning only on content meant such a tag had
@@ -567,6 +593,9 @@ void tagw::refreshCache(bool force) {
   TagInfo ti;
   if (tagDescribe(tmp, sizeof(tmp), &ti) && tmp[0]) {
     snprintf(cached_content, sizeof(cached_content), "%s", tmp);
+    // Every field, once per tag: a tag that was on the reader only once
+    // (another maker's spool at a fair stand) can be read back from the log.
+    if (changed) logSDf("Tag: record %s", cached_raw[0] ? cached_raw : tmp);
     cached_info = ti;
     cache_dirty = false;
     unreadable = 0;

@@ -130,11 +130,14 @@ bool finishCopyFlow(int new_spool_id, const char* tray_uuid_override) {
   // The override exists because g_tag is not permanent: the no-tag timer in
   // app_loop.cpp clears it 60 s after the tag was last seen. A caller that
   // took its own copy earlier hands it in here rather than reading a field
-  // that may have been wiped while a popup was waiting for an answer.
-  const char* tray = (tray_uuid_override && strlen(tray_uuid_override) == 32)
-                     ? tray_uuid_override : g_tag.tray_uuid;
+  // that may have been wiped while a popup was waiting for an answer. That
+  // holds for a short UID as much as for a tray uuid: link_tag_uid is cleared
+  // when a weak tag stops answering, and a spool created from the tag would
+  // then be left without one.
+  const bool given = tray_uuid_override && tray_uuid_override[0];
+  const char* tray = given ? tray_uuid_override : g_tag.tray_uuid;
   bool is_bambu_tag = (strlen(tray) == 32);
-  const char* tag_to_write = is_bambu_tag ? tray : link_tag_uid;
+  const char* tag_to_write = (is_bambu_tag || given) ? tray : link_tag_uid;
   logSDf("finishCopyFlow: spool=%d bambu=%d tag=%s", new_spool_id, (int)is_bambu_tag, tag_to_write);
   // Through the link itself, not beside it: the write with its conflict and
   // network answers, the uid index, the screen, and the questions a link
@@ -625,8 +628,8 @@ void showCopyEntryPopup() {
   lv_obj_set_width(lbl_ctx, 450);
   lv_obj_align(lbl_ctx, LV_ALIGN_TOP_MID, 0, 60);
 
-  // A Bambu tag can become a spool by itself; a blank NTAG through the
-  // filament database. Never both: the one is a Bambu tag, the other not.
+  // A tag one of the input files recognises (tag_create.cpp) can become a
+  // spool by itself; a blank NTAG through the filament database. Never both.
   const bool offer_from_tag = tagCreateOffered();
   const bool offer_from_db  = !offer_from_tag && dbPickOffered();
   copyEntryTiles(offer_from_tag, offer_from_db);
