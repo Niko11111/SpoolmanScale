@@ -49,3 +49,12 @@ bool tagCreateInputFromNtag(TagCreateInput* in) {
   }
   return true;
 }
+
+bool tagOnReaderHoldsForeign() {
+  if (strlen(g_tag.uid_str) != TAG_UID_STR_LEN_NTAG) return false;
+  if (strcmp(tagCachedUid(), g_tag.uid_str) != 0) return true;
+  const TagInfo* ti = tagCachedInfo();
+  if (!ti || !ti->fmt[0]) return true;
+  if (strcmp(ti->fmt, "blank") == 0) return false;
+  return !tagRecordIsOwn(recordOf(ti));
+}

@@ -3838,8 +3838,14 @@ void handleSpoolFlowDeferredActions() {
         showTagWriteAskPopupFmt(id, TAG_FMT_CREALITY, own ? 1 : (serial_only ? 3 : 2));
     }
     else if (tagwrite_after_link_fmt == TAG_FMT_CREALITY)  showTagWriteAskPopupFmt(id, TAG_FMT_CREALITY);
-    else if (g_tagwrite_mode == TAGWRITE_ALWAYS)      startTagWriteNoAsk(id);
-    else                                              showTagWriteAskPopup(id);
+    else if (g_tagwrite_mode != TAGWRITE_ALWAYS)      showTagWriteAskPopup(id);
+    // "Always" is about the scale's own records: a maker's is asked about,
+    // its question says the old content is lost.
+    else if (tagOnReaderHoldsForeign()) {
+      logSD("Tag: holds a record the scale did not write, asked despite \"always\"");
+      showTagWriteAskPopup(id);
+    }
+    else                                              startTagWriteNoAsk(id);
   }
   // Behind the tag write on purpose, and behind whatever it started. The
   // record goes onto the tag that is still lying on the reader, so asking for
