@@ -315,10 +315,12 @@ void filamanPlanTagFilament(const char* base_url, const char* api_key,
     plan->state = TFS_CREATE_DB;
     return;
   }
-  if (!in.names_known || (!in.color_count && !in.clear)) { plan->state = TFS_NEEDS_CATALOG; return; }
-  // The FilamentDB may know the tag's filament by its article number: the
+  if (!tagCreateNamesEnough(in) || (!in.color_count && !in.clear)) { plan->state = TFS_NEEDS_CATALOG; return; }
+  // The FilamentDB may know the tag's filament by its article number, or for
+  // a format without names by the nearest colour in the maker's table: the
   // card then fills in from it what the tag lacks (tag_db_match.h).
-  if (filamanFdbFindForTag(base_url, api_key, in, &plan->db)) {
+  if (filamanFdbFindForTag(base_url, api_key, in, &plan->db) ||
+      filamanFdbNearestForTag(base_url, api_key, in, &plan->db)) {
     plan->db_found = true;
     snprintf(plan->name, sizeof(plan->name), "%s", plan->db.name);
     plan->state = TFS_CREATE_DB;

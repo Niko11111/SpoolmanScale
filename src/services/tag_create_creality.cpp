@@ -57,5 +57,8 @@ bool tagCreateInputFromCreality(TagCreateInput* in) {
   in->diameter_mm    = g_tag.diameter_mm > 0.0f ? g_tag.diameter_mm : TAG_CREATE_DIAMETER_MM;
   in->temp_min       = g_tag.temp_min;
   in->temp_max       = g_tag.temp_max;
+  // A CFS tag names no colour: a filament the database does not know is
+  // created by material and hex.
+  in->names_optional = true;
   return true;
 }

@@ -36,11 +36,18 @@ struct LinkCandidate {
 // returns how many there are in all, -1 when the cache could not serve.
 // Loop task only.
 int linkSuggestCandidates(LinkCandidate* out, int max);
-// The link list for the Bambu tag on the pad, as "Link" opens it. With a
-// spool id from linkSuggestCandidates() the list opens with that spool's
-// confirmation over it, as if its row had been tapped; 0 opens the list
-// alone. Loop task only.
-void linkSuggestOpenList(int pick_spool_id);
+// The spool a tag this scale wrote names (services/tag_create_ntag.h), when
+// the link list holds it unbound and it is still the filament the tag says:
+// 1 with `out` filled, 0 when it is gone, bound or another filament (another
+// server's spool of the same number), -1 when the cache could not serve.
+// The UID it would be linked by is link_tag_uid. Loop task only.
+struct TagOwnSpool;
+int linkSuggestOwnSpool(const TagOwnSpool& tag, LinkCandidate* out);
+// The link list for the tag on the pad, as "Link" opens it: the Bambu list,
+// or for an NTAG every unbound spool. With a spool id from one of the two
+// above the list opens with that spool's confirmation over it, as if its row
+// had been tapped; 0 opens the list alone. Loop task only.
+void linkSuggestOpenList(int pick_spool_id, bool is_bambu = true);
 void closeLinkList();
 void showLinkList();
 void showLinkEntryPopup(bool is_bambu);

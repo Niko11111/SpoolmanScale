@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <math.h>
+#include <new>
 #include <string.h>
 #include <strings.h>
 
@@ -11,6 +12,7 @@
 #include "density_rules.h"
 #include "spoolman_api.h"
 #include "spoolman_filament_db.h"
+#include "tag_color_match.h"
 
 #define SM_FIL_TIMEOUT_MS        8000
 // The database search answers from a file of some 8000 entries.
@@ -119,18 +121,56 @@ static String exactTerm(const char* key, const char* value) {
   return String(key) + "=" + spoolmanUrlEncode((String("\"") + value + "\"").c_str());
 }
 
+// A name searched without regard to case: Spoolman's exact term (in quotes)
+// tells "Anycubic" from the "ANYCUBIC" a SpoolmanDB import made, and the
+// scale filed a second maker beside it. Unquoted the term is a part of the
+// name in any case, so the caller compares the rows itself (strcasecmp). A
+// comma would split the term in two, a quote end it: those stay exact.
+static String caselessTerm(const char* key, const char* value) {
+  if (strpbrk(value, ",\"")) return exactTerm(key, value);
+  return String(key) + "=" + spoolmanUrlEncode(value);
+}
+
 // ------------------------------------------------------------
 //  SpoolmanDB and the material list
 // ------------------------------------------------------------
 
-static bool dbEntryFits(JsonObjectConst e, const TagCreateInput& in) {
+// Maker, material, diameter, weight and product line: everything but the colour.
+static bool dbEntryFitsBesidesColor(JsonObjectConst e, const TagCreateInput& in) {
   if (strcasecmp(e["manufacturer"] | "", in.vendor) != 0) return false;
   if (strcasecmp(e["material"] | "", in.material) != 0) return false;
-  if (!colorsFit(e["color_hex"], in)) return false;
   if (in.diameter_mm > 0 && fabsf((e["diameter"] | 0.0f) - in.diameter_mm) > SM_FIL_DIAMETER_TOL_MM)
     return false;
   if (in.net_weight_g > 0 && (int)lroundf(e["weight"] | 0.0f) != in.net_weight_g) return false;
   return tagCreateNameMatches(e["name"] | "", in);
+}
+
+static bool dbEntryFits(JsonObjectConst e, const TagCreateInput& in) {
+  return colorsFit(e["color_hex"], in) && dbEntryFitsBesidesColor(e, in);
+}
+
+static void matcherBegin(ColorMatcher* mt, const TagCreateInput& in) {
+  const ColorQuery q = { in.color_hex, in.subtype, (uint16_t)in.net_weight_g };
+  tagColorMatchBegin(mt, q);
+}
+
+// Offers one entry to the match; true when it is the nearest so far.
+static bool matcherAdd(ColorMatcher* mt, JsonObjectConst e, const TagCreateInput& in, int index) {
+  if (e["color_hexes"].is<JsonArrayConst>()) return false;   // multi colour
+  if (!dbEntryFitsBesidesColor(e, in)) return false;
+  // Maker, material and line fit already; SpoolmanDB keeps the line in the name.
+  const ColorCandidate c = { e["color_hex"] | "", 1, e["name"] | "", "",
+                             (uint16_t)lroundf(e["weight"] | 0.0f) };
+  return tagColorMatchAdd(mt, c, index);
+}
+
+// Whether the nearest colour counts, said in the log either way.
+static bool matcherSure(const ColorMatcher& mt) {
+  const ColorMatch m = tagColorMatchEnd(mt);
+  char text[TCM_TEXT_MAX];
+  tagColorMatchText(mt, m, text, sizeof(text));
+  if (text[0]) logSDf("Spoolman: %s", text);
+  return m.verdict == CMV_SURE;
 }
 
 // The entry as the card compares it with the tag and fills in from it
@@ -169,22 +209,68 @@ struct DbLookup {
   const TagCreateInput* in;
   TagFilamentPlan*      plan;
   bool                  found;
+  // The nearest colour, for a tag that names none: the list streams past,
+  // so the best entry so far is kept as a plan of its own.
+  bool                  near;
+  ColorMatcher          mt;
+  TagFilamentPlan       near_plan;
+  int                   index;
 };
 
 static void lookupElement(JsonObjectConst e, void* p) {
   DbLookup* l = (DbLookup*)p;
-  if (l->found || !dbEntryFits(e, *l->in)) return;
-  takeDbEntry(e, l->plan);
-  l->found = true;
+  if (l->found) return;
+  if (dbEntryFits(e, *l->in)) {
+    takeDbEntry(e, l->plan);
+    l->found = true;
+    return;
+  }
+  if (l->near && matcherAdd(&l->mt, e, *l->in, l->index)) {
+    tagFilamentPlanClear(&l->near_plan);
+    takeDbEntry(e, &l->near_plan);
+  }
+  l->index++;
 }
 
 // The light form has no word search: the maker's entries of the material,
-// compared one by one as they come.
+// compared one by one as they come. Its list is the maker's whole one, so
+// the nearest colour in it is the nearest there is.
 static bool findInLightList(const char* base_url, const TagCreateInput& in, TagFilamentPlan* plan) {
-  DbLookup l = { &in, plan, false };
-  const int code = spoolmanFdbEachOf(base_url, in.vendor, in.material, lookupElement, &l);
+  // On the heap: the kept plan and the match are larger than a stack frame
+  // of the loop task should carry.
+  DbLookup* l = new (std::nothrow) DbLookup();
+  if (!l) return false;
+  l->in = &in;
+  l->plan = plan;
+  l->near = tagCreateNearestColorAllowed(in);
+  if (l->near) matcherBegin(&l->mt, in);
+  const int code = spoolmanFdbEachOf(base_url, in.vendor, in.material, lookupElement, l);
   if (code != 200) logSDf("Spoolman: filament database list -> HTTP %d", code);
-  return l.found;
+  bool found = l->found;
+  if (!found && code == 200 && l->near && matcherSure(l->mt)) {
+    *plan = l->near_plan;
+    found = true;
+  }
+  delete l;
+  return found;
+}
+
+// The nearest colour among the search's answers. Only from a complete
+// answer: the nearest of a list cut at the limit may not be the nearest.
+static bool findNearestInSearch(JsonArrayConst list, const TagCreateInput& in,
+                                TagFilamentPlan* plan) {
+  if (!tagCreateNearestColorAllowed(in)) return false;
+  if (list.size() >= SM_FIL_DB_LIMIT) {
+    logSDf("Spoolman: %u database entries, the limit - no nearest colour", (unsigned)list.size());
+    return false;
+  }
+  ColorMatcher mt;
+  matcherBegin(&mt, in);
+  int i = 0;
+  for (JsonObjectConst e : list) matcherAdd(&mt, e, in, i++);
+  if (!matcherSure(mt)) return false;
+  takeDbEntry(list[tagColorMatchEnd(mt).best].as<JsonObjectConst>(), plan);
+  return true;
 }
 
 // Looks the product up in the server's filament database. True with plan
@@ -215,7 +301,7 @@ static bool findInDatabase(const char* base_url, const TagCreateInput& in, TagFi
     takeDbEntry(e, plan);
     return true;
   }
-  return false;
+  return findNearestInSearch(doc.as<JsonArrayConst>(), in, plan);
 }
 
 // A filament picked from SpoolmanDB on the scale: the entry is known already,
@@ -365,7 +451,7 @@ static float productDensity(const char* base_url, const TagCreateInput& in) {
 // could not be asked, its code in the plan.
 static int findVendor(const char* base_url, const char* vendor, TagFilamentPlan* plan) {
   JsonDocument doc;
-  const String path = String("/api/v1/vendor?") + exactTerm("name", vendor);
+  const String path = String("/api/v1/vendor?") + caselessTerm("name", vendor);
   const int code = spoolmanGetJson(base_url, path.c_str(), doc, SM_FIL_TIMEOUT_MS);
   if (code != 200) { plan->http_code = code; return -1; }
   for (JsonObjectConst v : doc.as<JsonArrayConst>()) {
@@ -392,7 +478,7 @@ static bool planExisting(const char* base_url, const TagCreateInput& in, TagFila
   if (id == 0 && (in.color_count || in.clear)) {
     // Spoolman's colour filter knows one colour; a multi colour or clear
     // spool is compared here, among the vendor's filaments of the material.
-    String q = exactTerm("vendor.name", in.vendor) + "&" + exactTerm("material", in.material);
+    String q = caselessTerm("vendor.name", in.vendor) + "&" + caselessTerm("material", in.material);
     if (in.color_count == 1) q += String("&color_similarity_threshold=0&color_hex=") + in.color_hex;
     id = findFilament(base_url, q, acceptByLook, in, plan);
   }
@@ -414,9 +500,10 @@ static bool densityOrAsk(const TagCreateInput& in, TagFilamentPlan* plan) {
 }
 
 // A filament from the tag alone: only with names for it (article number and
-// colour), and only with a density, which Spoolman requires.
+// colour, or material and hex where the format has no names), and only with
+// a density, which Spoolman requires.
 static void planFromTag(const char* base_url, const TagCreateInput& in, TagFilamentPlan* plan) {
-  if (!in.names_known || (!in.color_count && !in.clear)) { plan->state = TFS_NEEDS_CATALOG; return; }
+  if (!tagCreateNamesEnough(in) || (!in.color_count && !in.clear)) { plan->state = TFS_NEEDS_CATALOG; return; }
   plan->density = databaseDensity(base_url, in.vendor, in.material);
   if (plan->density <= 0.0f) plan->density = materialDensity(base_url, in.material);
   if (plan->density <= 0.0f) plan->density = productDensity(base_url, in);

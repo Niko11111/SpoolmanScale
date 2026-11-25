@@ -54,6 +54,7 @@
 #include "ui/ui_common.h"
 #include "services/backend.h"
 #include "services/breadcrumb.h"
+#include "services/tag_create_ntag.h"
 #include "services/tag_spool_match.h"
 
 namespace {
@@ -2936,14 +2937,16 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
 //  One rule for both, so the card never suggests what the list would bury.
 // ============================================================
 
-// What showLinkEntryPopup() resets before a Bambu link, without its screen.
-static void linkBambuFlowBegin() {
+// What showLinkEntryPopup() resets before a link, without its screen.
+static void linkSuggestFlowBegin(bool is_bambu) {
   link_selected_material[0] = 0;
   link_selected_material_full[0] = 0;
   link_stage3_shown = false;
-  link_flow_is_bambu = true;
+  link_flow_is_bambu = is_bambu;
   link_id_input[0] = '\0';
   copy_flow_via_list = false;
+  // An NTAG's link holds its UID, as the entry popup does.
+  if (!is_bambu) snprintf(s_link_uid_hold, sizeof(s_link_uid_hold), "%s", link_tag_uid);
 }
 
 static void candidateFromRow(LinkCandidate& c, const UnlinkedSpool& s, bool weight_hit) {
@@ -2957,7 +2960,7 @@ static void candidateFromRow(LinkCandidate& c, const UnlinkedSpool& s, bool weig
 }
 
 int linkSuggestCandidates(LinkCandidate* out, int max) {
-  linkBambuFlowBegin();
+  linkSuggestFlowBegin(true);
   if (fetchAllSpoolsForLink(true, g_tag.material, false, true) != LINK_FETCH_DONE) {
     linkSpoolsFree();
     return -1;
@@ -2982,11 +2985,44 @@ int linkSuggestCandidates(LinkCandidate* out, int max) {
   return total;
 }
 
-void linkSuggestOpenList(int pick_spool_id) {
-  linkBambuFlowBegin();
+// The own tag's record against the row of the spool it names. The material
+// and colour rules of the Bambu comparison; the maker by the record's brand,
+// "Generic" being buildAce()'s word for none, and an ACE brand cut at 16.
+static bool ownTagDiffers(const TagOwnSpool& t, const UnlinkedSpool& s) {
+  const TagSpoolVerdict v = tagSpoolCompare(t.material, t.color_hex, s.material, s.name,
+                                            s.vendor, s.color_hex, false);
+  if (v.material || v.color) return true;
+  if (!t.brand[0] || !s.vendor[0] || strcasecmp(t.brand, "Generic") == 0) return false;
+  return strncasecmp(s.vendor, t.brand, strlen(t.brand)) != 0;
+}
+
+int linkSuggestOwnSpool(const TagOwnSpool& tag, LinkCandidate* out) {
+  linkSuggestFlowBegin(false);
+  if (fetchAllSpoolsForLink(false, "", false, true) != LINK_FETCH_DONE) {
+    linkSpoolsFree();
+    return -1;
+  }
+  const char* why = "not in the list (gone, archived or bound)";
+  int found = 0;
+  for (int i = 0; i < link_spool_count; i++) {
+    const UnlinkedSpool& s = link_spools[i];
+    if (s.id != tag.spool_id) continue;
+    if (!linkRowMatches(s, "", "", "")) break;
+    if (ownTagDiffers(tag, s)) { why = "another filament than the tag's"; break; }
+    candidateFromRow(*out, s, linkWeightHit(s, linkListGross()));
+    found = 1;
+    break;
+  }
+  logSDf("link suggest: the tag names spool %d, %s", tag.spool_id, found ? "offered" : why);
+  linkSpoolsFree();
+  return found;
+}
+
+void linkSuggestOpenList(int pick_spool_id, bool is_bambu) {
+  linkSuggestFlowBegin(is_bambu);
   // The list opens from linkFetchFinish(), now or once the worker has it.
   s_lf_pick_id = pick_spool_id;
-  linkFetchRun(true, g_tag.material, false, LF_NEXT_DIRECT_LIST);
+  linkFetchRun(is_bambu, is_bambu ? g_tag.material : "", false, LF_NEXT_DIRECT_LIST);
 }
 
 // ============================================================

@@ -71,6 +71,10 @@ jobs:
         run: python3 test/test_join_material_name.py
       - name: Test Creality silk PLA
         run: python3 test/test_creality_silk.py
+      - name: Test new spool from another maker's tag
+        run: python3 test/test_tag_create_record.py
+      - name: Test a tag's colour against a maker's colour table
+        run: python3 test/test_tag_color_match.py
       - name: Test Bluetooth discovery
         run: python3 test/test_ble_discovery.py
       - name: Test FilaMan label orientation

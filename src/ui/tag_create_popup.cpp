@@ -55,6 +55,7 @@ static lv_obj_t*       s_btn_ok = nullptr;
 static lv_obj_t*       s_lbl_opt  = nullptr;   // "Options"
 static lv_obj_t*       s_lbl_opt_value = nullptr;   // what was set under it
 static lv_obj_t*       s_swatch = nullptr;
+static lv_obj_t*       s_name   = nullptr;   // the product and colour beside it
 static lv_obj_t*       s_meta   = nullptr;
 // Where the tag and the database entry for its filament disagree.
 static TagDbDiff       s_diffs[TAG_DB_DIFFS_MAX];
@@ -104,6 +105,7 @@ void closeTagCreatePopup() {
   s_lbl_opt = nullptr;
   s_lbl_opt_value = nullptr;
   s_swatch = nullptr;
+  s_name = nullptr;
   s_meta = nullptr;
   s_job = TCP_IDLE;
 }
@@ -252,6 +254,16 @@ static void buildHead(lv_obj_t* box) {
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, UI_CARD_TITLE_Y);
 }
 
+// Product and colour. A tag that names no colour (ACE, OpenSpool, Creality,
+// Snapmaker) takes the name of the database entry it was matched with, once
+// the plan has found one: the entry's own, which holds the line as well -
+// FilaMan's "Matte - Sakura Pink", whose colour name alone drops "Matte".
+static void identityName(char* out, size_t out_size) {
+  const char* color = s_in.color_name[0] ? s_in.color_name
+                    : s_in.db_name[0]    ? s_in.db_name : s_in.db_color_name;
+  joinMaterialName(s_in.product, color, out, out_size);
+}
+
 // Line 1: the colour and the product, as one centred group.
 static void buildIdentity(lv_obj_t* box) {
   lv_obj_t* row = lv_obj_create(box);
@@ -276,8 +288,11 @@ static void buildIdentity(lv_obj_t* box) {
     char rgba[10];
     snprintf(rgba, sizeof(rgba), "%s", s_in.clear ? "FFFFFF00" : s_in.color_hex);
     swatchPaintHex(sw, rgba);
-  } else {
+  } else if (g_tag.color.valid || s_in.color_count == 0) {
     swatchPaint(sw, g_tag.color);
+  } else {
+    // An NTAG of another maker: its colour is in the input, not in g_tag.
+    swatchPaintHex(sw, s_in.color_hex);
   }
   // A gradient or dual colour spool: its first two colours, the way the tag
   // view draws it.
@@ -287,8 +302,9 @@ static void buildIdentity(lv_obj_t* box) {
   }
 
   char name[80];
-  joinMaterialName(s_in.product, s_in.color_name, name, sizeof(name));
+  identityName(name, sizeof(name));
   lv_obj_t* lbl = lv_label_create(row);
+  s_name = lbl;
   lv_label_set_text(lbl, name);
   lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_INK), 0);
   lv_obj_set_style_text_font(lbl, UI_FONT_TITLE, 0);
@@ -558,6 +574,11 @@ static void onDiffAnswer(bool take_db) {
 static void mergeDbEntry() {
   s_diff_n = tagDbCompare(s_in, s_plan.db, s_diffs, TAG_DB_DIFFS_MAX);
   tagDbFill(&s_in, s_plan.db);
+  if (s_name) {
+    char name[80];
+    identityName(name, sizeof(name));
+    lv_label_set_text(s_name, name);
+  }
   // The plan was made from the tag alone; the create asks it again with the
   // entry linked, so the backend writes what the card now holds.
   s_plan_stale = true;
