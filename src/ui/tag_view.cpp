@@ -363,6 +363,11 @@ static void buildGrid(lv_obj_t* box, const Shown& s) {
   // What Bambu calls the colour, from the catalog, and the number it is sold
   // under - the two things a person compares against the box.
   add(T(STR_LBL_L_COLOR), i.color_name, false);
+  // The colour as its value, beside the swatch: what a maker's colour table
+  // and a support question compare against, on tags that name no colour.
+  buf[0] = '\0';
+  if (i.has_color) snprintf(buf, sizeof(buf), "#%02X%02X%02X", i.r, i.g, i.b);
+  add(T(STR_W_TAG_COLOR_HEX), buf, false);
   add(T(STR_LBL_ARTICLE_NO_SHORT), i.article, false);
   rangeText(buf, sizeof(buf), i.et_lo, i.et_hi);   add(T(STR_W_TAG_NOZZLE), buf, false);
   buf[0] = '\0';

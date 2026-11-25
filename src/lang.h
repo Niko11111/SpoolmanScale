@@ -2121,6 +2121,8 @@ enum StringID {
   // Settings page: the fuel gauge's battery in the header
   STR_W_BAT_PCT,
   STR_W_BAT_PCT_HINT,
+  // Tag view: the first colour as its value
+  STR_W_TAG_COLOR_HEX,
   STR_COUNT
 };
 

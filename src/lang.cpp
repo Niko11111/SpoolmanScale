@@ -4606,6 +4606,7 @@ const char* const STRINGS[][3] = {
   { "Die Ladung als Zahl im Akku oben rechts. Aus: nur Füllung und Blitz.",
     "The charge as a number inside the battery at the top right. Off: fill and bolt only.",
     "La charge en chiffres dans la batterie en haut à droite. Désactivé : remplissage et éclair seulement." },  // STR_W_BAT_PCT_HINT
+  { "Farbcode", "Colour code", "Code hex" },  // STR_W_TAG_COLOR_HEX
 };
 
 StringID tagWriteResultString(uint8_t code) {
