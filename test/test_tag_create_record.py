@@ -96,6 +96,13 @@ int main() {
   assert(tagRecordOwnSpoolId(openspool("eSun", "PLA", 0)) == 0);
   assert(tagCreateFromRecord(openspool("eSun", "PLA", 12), &in));
 
+  // A maker by name: any case, and a name cut at 16 as the start of the full one.
+  assert(tagCreateVendorIs("ANYCUBIC", "Anycubic"));
+  assert(!tagCreateVendorIs("Anycubic Pro", "Anycubic"));
+  assert(tagCreateVendorIs("Polymaker Panchroma", "Polymaker Panchr"));
+  assert(!tagCreateVendorIs("Polymaker", "Polymaker Panchr"));
+  assert(!tagCreateVendorIs("Anycubic", ""));
+
   // Formats this file does not know.
   TagRecord other = ace("AC", "PLA", "");
   other.fmt = "blank";

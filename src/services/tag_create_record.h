@@ -44,6 +44,16 @@ int tagRecordOwnSpoolId(const TagRecord& r);
 // Empty in, empty out.
 void tagCreateMakerName(const char* brand, char* out, size_t out_size);
 
+// What a tag record holds of a maker's name at most: an ACE page run, and
+// TagInfo's brand field for every record.
+#define TAG_RECORD_BRAND_MAX  16
+
+// Whether a backend's maker `name` is the maker a tag names: the same name in
+// any case, or for a name cut at TAG_RECORD_BRAND_MAX the one it is the start
+// of ("Polymaker Panchr" for "Polymaker Panchroma"), so a cut name does not
+// file a second maker.
+bool tagCreateVendorIs(const char* name, const char* vendor);
+
 // Material, product and product line from one name: "PLA SnapSpeed" is PLA
 // in the line SnapSpeed, "TPU 95A HF" is TPU in "95A HF", while "PLA-CF" and
 // "PLA+" are base materials of their own and have no line.

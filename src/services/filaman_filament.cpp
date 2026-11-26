@@ -14,6 +14,7 @@
 #include "filaman_api.h"
 #include "filaman_filament_db.h"
 #include "json_util.h"
+#include "tag_create_record.h"
 #include "tag_db_match.h"
 
 #define FM_FIL_TIMEOUT_MS   8000
@@ -100,7 +101,7 @@ static int findManufacturer(const char* base_url, const char* api_key, const cha
     const int n = readPage(base_url, api_key, path, doc, filter);
     if (n < 0) return n;
     for (JsonObjectConst m : doc["items"].as<JsonArrayConst>()) {
-      if (strcasecmp(m["name"] | "", vendor) != 0) continue;
+      if (!tagCreateVendorIs(m["name"] | "", vendor)) continue;
       plan->vendor_spool_weight_g = (int)lroundf(m["empty_spool_weight_g"] | 0.0f);
       return m["id"] | 0;
     }

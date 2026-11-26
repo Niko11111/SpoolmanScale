@@ -51,6 +51,9 @@ bool tagCreateInputFromNtag(TagCreateInput* in) {
 }
 
 bool tagOnReaderHoldsForeign() {
+  // No UID any more (a weak tag, an unlink on the way): nothing says what the
+  // tag holds, so it is asked about.
+  if (!g_tag.uid_str[0]) return true;
   if (strlen(g_tag.uid_str) != TAG_UID_STR_LEN_NTAG) return false;
   if (strcmp(tagCachedUid(), g_tag.uid_str) != 0) return true;
   const TagInfo* ti = tagCachedInfo();

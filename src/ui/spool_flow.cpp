@@ -2988,11 +2988,15 @@ int linkSuggestCandidates(LinkCandidate* out, int max) {
 // The own tag's record against the row of the spool it names. The material
 // and colour rules of the Bambu comparison; the maker by the record's brand,
 // "Generic" being buildAce()'s word for none, and an ACE brand cut at 16.
+// A record with neither a colour nor a maker leaves only the material and a
+// number, and the number may be another server's spool: no suggestion.
 static bool ownTagDiffers(const TagOwnSpool& t, const UnlinkedSpool& s) {
+  const bool brand = t.brand[0] && strcasecmp(t.brand, "Generic") != 0;
+  if (!t.color_hex[0] && !brand) return true;
   const TagSpoolVerdict v = tagSpoolCompare(t.material, t.color_hex, s.material, s.name,
                                             s.vendor, s.color_hex, false);
   if (v.material || v.color) return true;
-  if (!t.brand[0] || !s.vendor[0] || strcasecmp(t.brand, "Generic") == 0) return false;
+  if (!brand || !s.vendor[0]) return false;
   return strncasecmp(s.vendor, t.brand, strlen(t.brand)) != 0;
 }
 
@@ -3007,7 +3011,9 @@ int linkSuggestOwnSpool(const TagOwnSpool& tag, LinkCandidate* out) {
   for (int i = 0; i < link_spool_count; i++) {
     const UnlinkedSpool& s = link_spools[i];
     if (s.id != tag.spool_id) continue;
-    if (!linkRowMatches(s, "", "", "")) break;
+    // Unbound, also where the field takes a list: the card says "this spool
+    // without a tag", and a spool that has one is not that.
+    if (!linkRowMatches(s, "", "", "") || linkSpoolBound(s)) break;
     if (ownTagDiffers(tag, s)) { why = "another filament than the tag's"; break; }
     candidateFromRow(*out, s, linkWeightHit(s, linkListGross()));
     found = 1;

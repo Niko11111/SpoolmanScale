@@ -13,6 +13,7 @@
 #include "spoolman_api.h"
 #include "spoolman_filament_db.h"
 #include "tag_color_match.h"
+#include "tag_create_record.h"
 
 #define SM_FIL_TIMEOUT_MS        8000
 // The database search answers from a file of some 8000 entries.
@@ -455,7 +456,7 @@ static int findVendor(const char* base_url, const char* vendor, TagFilamentPlan*
   const int code = spoolmanGetJson(base_url, path.c_str(), doc, SM_FIL_TIMEOUT_MS);
   if (code != 200) { plan->http_code = code; return -1; }
   for (JsonObjectConst v : doc.as<JsonArrayConst>()) {
-    if (strcasecmp(v["name"] | "", vendor) != 0) continue;
+    if (!tagCreateVendorIs(v["name"] | "", vendor)) continue;
     // The brand's empty spool, for what the new spool is weighed against.
     plan->vendor_spool_weight_g = (int)lroundf(v["empty_spool_weight"] | 0.0f);
     return v["id"] | 0;

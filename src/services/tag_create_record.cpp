@@ -67,6 +67,13 @@ void tagCreateMakerName(const char* brand, char* out, size_t out_size) {
   snprintf(out, out_size, "%s", brand);
 }
 
+bool tagCreateVendorIs(const char* name, const char* vendor) {
+  if (!name || !vendor || !vendor[0]) return false;
+  if (strcasecmp(name, vendor) == 0) return true;
+  return strlen(vendor) == TAG_RECORD_BRAND_MAX &&
+         strncasecmp(name, vendor, TAG_RECORD_BRAND_MAX) == 0;
+}
+
 void tagCreateMaterialAndLine(const char* name, TagCreateInput* in) {
   in->material[0] = in->product[0] = in->subtype[0] = '\0';
   if (!name) return;
