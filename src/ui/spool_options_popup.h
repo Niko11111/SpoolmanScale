@@ -10,8 +10,8 @@
 //  The button between Create and Cancel on the card for a new spool (from a
 //  tag, from the database) and on the copy card. Behind it a popup of the
 //  large size (UI_POPUP_LARGE_W x _H) with what can be set for the one spool
-//  being created: its price, its empty spool, and its density where the card
-//  lacks one. Every step under it - the price pad, the empty spool lists, the
+//  being created: its price, its empty spool, its full weight where the card
+//  offers it, and its density where the card lacks one. Every step under it - the price pad, the empty spool lists, the
 //  pad for a typed weight - has the same size, so nothing jumps between them;
 //  each leads back to the Options, and Done leads back to the card. Cancel
 //  is the card's alone.
@@ -33,6 +33,12 @@ struct SpoolOptionsSpec {
   // "No offset"), 0 for Automatic.
   int          auto_name;
   bool         density;       // the card lacks a density: offer the row
+  // The full weight typed in, 0 for none; changed in place. Null: no row (the
+  // copy card files its template's). full_auto_g is what the card files
+  // without one, full_assumed whether nothing named it.
+  int*         full_g;
+  int          full_auto_g;
+  bool         full_assumed;
   // Done or the density row: the card is shown again with its new values. With
   // `density` set the card opens its density pad next.
   void (*on_close)(bool density);

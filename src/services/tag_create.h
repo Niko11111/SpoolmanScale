@@ -170,6 +170,9 @@ struct TagFilamentPlan {
   // now: the found filament's own (TFS_FOUND) and the brand's. 0 when none.
   int   found_spool_weight_g;
   int   vendor_spool_weight_g;
+  // The found filament's full weight (TFS_FOUND), for a tag that names none.
+  // 0 when it has none on file.
+  int   found_net_weight_g;
   int   extruder_temp;
   int   bed_temp;
   int   http_code;          // TFS_FAILED

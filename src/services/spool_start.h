@@ -59,5 +59,13 @@ struct SpoolStart {
 // widens by START_TARE_DEFAULT_SLACK_G on a default tare.
 SpoolStart spoolStartValues(float gross_g, int tare_g, TareQuality tare_q, int label_g);
 
+// The full weight taken for a spool nothing names one for: a net reading
+// within the full band of a nominal size (NEWTAG_LABEL_CHOICES) is that size,
+// anything else a used spool of NEWTAG_LABEL_ASSUMED_G, or of the smallest
+// size above it that holds the reading (with its band and the default-tare
+// slack, so 1040 g is still a 1000 g spool). NEWTAG_LABEL_ASSUMED_G for no reading
+// (net_g below START_MIN_NET_G, -1 when not weighed).
+int spoolAssumedLabelG(float net_g);
+
 // One word for the log.
 const char* spoolStartVerdictName(StartVerdict v);

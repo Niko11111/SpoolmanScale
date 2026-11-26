@@ -913,9 +913,9 @@ void backendPlanTagFilament(const TagCreateInput& in, TagFilamentPlan* plan) {
   // the filament is then created without one and inherits the brand's, the
   // way the lookup's chain reads it (spoolTare()).
   if (in.spool_weight_default && plan->vendor_spool_weight_g > 0) plan->spool_weight_g = 0;
-  logSDf("Tag create plan: %s %s %s art=%s -> state %d, filament %d \"%s\", tare %d/%d/%d g",
+  logSDf("Tag create plan: %s %s %s art=%s -> state %d, filament %d \"%s\" (%d g), tare %d/%d/%d g",
          in.vendor, in.material, in.subtype, in.article, (int)plan->state,
-         plan->filament_id, plan->name, plan->found_spool_weight_g,
+         plan->filament_id, plan->name, plan->found_net_weight_g, plan->found_spool_weight_g,
          plan->vendor_spool_weight_g, plan->spool_weight_g);
 }
 

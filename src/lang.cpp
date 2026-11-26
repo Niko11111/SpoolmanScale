@@ -4652,6 +4652,15 @@ const char* const STRINGS[][3] = {
   { "Gruppe",        "Workgroup",  "Groupe" },  // STR_TV_WORKGROUP
   { "Eigenschaften", "Properties", "Propriétés" },  // STR_TV_PROPS
   { "Code",          "Code",       "Code" },  // STR_TV_CODE
+  // ── The full weight of a spool created off the pad ──
+  { "(angenommen)", "(assumed)",
+    "(supposé)" },  // STR_TAGNEW_W_ASSUMED
+  { "Füllmenge", "Full weight",
+    "Poids plein" },  // STR_OPT_FULL
+  { "%d g angenommen", "%d g assumed",
+    "%d g supposé" },  // STR_OPT_FULL_ASSUMED
+  { "Filament auf der vollen Spule, %d bis %d g", "Filament on the spool when full, %d to %d g",
+    "Filament de la bobine pleine, %d à %d g" },  // STR_OPT_FULL_RANGE
 };
 
 StringID tagWriteResultString(uint8_t code) {

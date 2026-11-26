@@ -73,7 +73,15 @@ static TagCreateInput  s_in;
 // drawn from the input, the tag on the pad may have none.
 static bool            s_picked = false;
 static TagFilamentPlan s_plan;
+// The full weight the spool is filed with (labelWeight()), whether nothing
+// named it and it is only assumed, and the one typed in under Options, 0
+// while none was.
 static int             s_label_weight = 0;
+static bool            s_label_assumed = false;
+// The assumed weight came off a spool on the pad, not from an empty one.
+static bool            s_label_from_reading = false;
+static int             s_label_typed_g = 0;
+static int             s_label_typed_was_g = 0;
 // Cancel hides the card from its own callback; the loop deletes it.
 static bool            s_close_pending = false;
 // The plan is asked again before a create when it may no longer hold: after
@@ -129,18 +137,36 @@ static SpoolStart startValues() {
 
 static bool tareInherited() { return s_tare_from == TARE_FILAMENT || s_tare_from == TARE_VENDOR; }
 
-// The tag's own net weight; without it the nominal size nearest the reading.
+// The full weight to file: the one typed in under Options, the tag's own
+// (or the database entry's, merged into the input), the found filament's;
+// with none of them, assumed from the reading (spoolAssumedLabelG()).
 static int labelWeight() {
+  s_label_assumed = false;
+  s_label_from_reading = false;
+  if (s_label_typed_g > 0) return s_label_typed_g;
   if (s_in.net_weight_g > 0) return s_in.net_weight_g;
-  static const int choices[NEWTAG_LABEL_COUNT] = NEWTAG_LABEL_CHOICES;
-  const int tare = spoolChoiceActive(s_choice) ? s_choice.weight_g : s_in.spool_weight_g;
-  const float netto = scale_weight_g - (float)tare;
-  int best = choices[NEWTAG_LABEL_COUNT - 1], best_diff = -1;
-  for (int i = 0; i < NEWTAG_LABEL_COUNT; i++) {
-    const int diff = (int)fabsf(netto - (float)choices[i]);
-    if (best_diff < 0 || diff < best_diff) { best_diff = diff; best = choices[i]; }
+  if (s_plan.state == TFS_FOUND && s_plan.found_net_weight_g > 0) return s_plan.found_net_weight_g;
+  s_label_assumed = true;
+  uint8_t from = TARE_NONE;
+  TareQuality q = TARE_Q_NONE;
+  const int tare = spoolChoiceTare(s_choice, tagCreateTare(s_in, s_plan, nullptr, nullptr), &from, &q);
+  const bool weighed = g_scale_fitted && scale_ready && tare > 0;
+  const float net = weighed ? scale_weight_g - (float)tare : -1.0f;
+  s_label_from_reading = net >= START_MIN_NET_G;
+  return spoolAssumedLabelG(net);
+}
+
+// After the plan or a database entry: a weight they name replaces the guess,
+// but a guess made off a spool on the pad stays the one the card showed, not
+// one off a reading that has moved since (the spool lifted before Create).
+static void relabel() {
+  const int was = s_label_weight;
+  const bool keep = s_label_assumed && s_label_from_reading;
+  s_label_weight = labelWeight();
+  if (keep && s_label_assumed) {
+    s_label_weight = was;
+    s_label_from_reading = true;
   }
-  return best;
 }
 
 // ------------------------------------------------------------
@@ -332,6 +358,14 @@ static void refreshMeta() {
   char weight[64], meta[112];
   spoolStartText(start, tareInherited(), weight, sizeof(weight));
   const bool plain = start.verdict == START_FULL || start.verdict == START_PARTIAL;
+  // Only where the line names the assumed weight: a full spool against a
+  // stored empty one files what it reads instead. A line that is a hint
+  // already ("empty spool unknown") would wrap into the status below; the
+  // Options' full weight row says it there in amber.
+  if (s_label_assumed && plain && start.initial_g == start.label_g) {
+    const size_t n = strlen(weight);
+    snprintf(weight + n, sizeof(weight) - n, " %s", T(STR_TAGNEW_W_ASSUMED));
+  }
   if (!plain)               snprintf(meta, sizeof(meta), "%s", weight);
   else if (s_in.article[0]) snprintf(meta, sizeof(meta), "%s | %s | %s", s_in.vendor, s_in.article, weight);
   else                      snprintf(meta, sizeof(meta), "%s | %s", s_in.vendor, weight);
@@ -382,7 +416,11 @@ static void showDensityPad();
 
 // Back from the Options: the card reads its values again.
 static void onOptionsClosed(bool density) {
-  if (s_choice.weight_g != s_choice_was_g) s_label_weight = labelWeight();
+  if (s_choice.weight_g != s_choice_was_g || s_label_typed_g != s_label_typed_was_g) {
+    s_label_weight = labelWeight();
+    if (s_label_typed_g != s_label_typed_was_g)
+      logSDf("TagCreate: full weight %d g typed in", s_label_typed_g);
+  }
   refreshOptions();
   refreshMeta();
   if (density) showDensityPad();
@@ -406,7 +444,11 @@ static void openOptions() {
   spec.auto_from   = autoTareFrom(from);
   spec.maker       = s_in.vendor;
   spec.density     = densityOffered();
+  spec.full_g      = &s_label_typed_g;
+  spec.full_auto_g = s_label_typed_g > 0 ? 0 : s_label_weight;
+  spec.full_assumed = s_label_assumed;
   s_choice_was_g   = s_choice.weight_g;
+  s_label_typed_was_g = s_label_typed_g;
   spec.on_close    = onOptionsClosed;
   showSpoolOptions(spec);
 }
@@ -520,9 +562,10 @@ static void buildAnswers(lv_obj_t* box) {
 
 static void buildCard() {
   spoolChoiceClear(&s_choice);
+  s_label_typed_g = 0;
+  tagFilamentPlanClear(&s_plan);
   s_label_weight = labelWeight();
   s_price = 0.0f;
-  tagFilamentPlanClear(&s_plan);
 
   lv_obj_t* box = buildBox();
   buildHead(box);
@@ -564,7 +607,7 @@ static void onDiffAnswer(bool take_db) {
     tagDbTake(&s_in, s_diffs[i]);
     if (s_diffs[i].field == TDF_COLOR && s_swatch) swatchPaintHex(s_swatch, s_in.color_hex);
   }
-  s_label_weight = labelWeight();
+  relabel();
   refreshMeta();
 }
 
@@ -583,7 +626,7 @@ static void mergeDbEntry() {
   // entry linked, so the backend writes what the card now holds.
   s_plan_stale = true;
   logSDf("TagCreate: database entry #%s merged, %d difference(s)", s_plan.db.id, s_diff_n);
-  s_label_weight = labelWeight();
+  relabel();
   refreshMeta();
   if (s_diff_n > 0) showTagDbDiffPopup(s_diffs, s_diff_n, onDiffAnswer);
 }
@@ -595,7 +638,10 @@ static void runPlan() {
   backendPlanTagFilament(s_in, &s_plan);
   serverReachNote(s_plan.state == TFS_FAILED ? s_plan.http_code : 200, true);
   showPlan();
-  refreshMeta();   // the plan may have brought an empty spool weight
+  // The plan may have brought an empty spool weight and the found filament's
+  // full weight.
+  relabel();
+  refreshMeta();
   if (s_plan.state == TFS_CREATE_DB && s_plan.db_found && !s_in.db_id[0]) mergeDbEntry();
 }
 
@@ -624,10 +670,11 @@ static void runCreate() {
   }
   TagCreateResult r;
   const SpoolStart start = startValues();
-  logSDf("TagCreate: start %s gross=%.0f tare=%d (%s%s) label=%d -> initial=%d remaining=%.0f",
+  logSDf("TagCreate: start %s gross=%.0f tare=%d (%s%s) label=%d%s -> initial=%d remaining=%.0f",
          spoolStartVerdictName(start.verdict), scale_weight_g, start.tare_g,
          tareSourceName(s_tare_from), spoolChoiceActive(s_choice) ? ", picked" : "",
-         s_label_weight, start.initial_g, start.remaining_g);
+         s_label_weight, s_label_assumed ? " (assumed)" : (s_label_typed_g > 0 ? " (typed)" : ""),
+         start.initial_g, start.remaining_g);
   TagSpoolValues values = { start.initial_g, start.remaining_g, s_price };
   if (spoolChoiceActive(s_choice)) {
     values.chosen_tare_g     = s_choice.weight_g;

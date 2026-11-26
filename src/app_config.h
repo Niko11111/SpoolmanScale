@@ -1,6 +1,6 @@
 #pragma once
 
-#define FW_VERSION "v0.8.4-beta.191"
+#define FW_VERSION "v0.8.4-beta.192"
 #define DONATION_URL "ko-fi.com/formfollowsfunction"
 
 // Backlight PWM duty on GPIO45, 8 bit, straight through to LovyanGFX. Not a
@@ -185,11 +185,14 @@
 // empty brand the server would turn into a filament with no vendor at all.
 #define BAMBU_VENDOR_NAME     "Bambu Lab"
 #define BAMBU_CORE_WEIGHT_G      250
-// The nominal filament weights Bambu sells, for a tag that names no net
-// weight of its own (Bambu tags carry theirs): the scale takes whichever is
-// closest to what it reads, which beats guessing 1000 g for a 250 g refill.
-#define NEWTAG_LABEL_COUNT         4
-#define NEWTAG_LABEL_CHOICES  { 250, 500, 750, 1000 }
+// The nominal filament weights spools are sold with, for a spool nothing
+// names a full weight for - no tag weight, no filament on file, no database
+// entry (spoolAssumedLabelG()). A reading within the full band of one size is
+// a full spool of it, so a 250 g refill stays one; anything else is a used
+// spool of NEWTAG_LABEL_ASSUMED_G, most are 1 kg (Nikolai, 26.11.2026).
+#define NEWTAG_LABEL_COUNT         6
+#define NEWTAG_LABEL_CHOICES  { 250, 500, 750, 1000, 2000, 3000 }
+#define NEWTAG_LABEL_ASSUMED_G  1000
 
 // The verbose heartbeat is checked every 5 s but only written when something
 // moved by at least this much, plus one line per keepalive interval so the

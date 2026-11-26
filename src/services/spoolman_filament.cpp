@@ -95,6 +95,8 @@ static int findFilament(const char* base_url, const String& query, FilamentAccep
   // What a spool created under it is weighed against (tagCreateTare()).
   f["spool_weight"]                 = true;
   f["vendor"]["empty_spool_weight"] = true;
+  // And its full weight, for a tag that names none.
+  f["weight"]                       = true;
 
   JsonDocument doc;
   const int code = spoolmanGetJson(base_url, (String("/api/v1/filament?") + query).c_str(),
@@ -111,6 +113,7 @@ static int findFilament(const char* base_url, const String& query, FilamentAccep
       snprintf(plan->name, sizeof(plan->name), "%s", fil["name"] | "");
       plan->found_spool_weight_g  = (int)lroundf(fil["spool_weight"] | 0.0f);
       plan->vendor_spool_weight_g = (int)lroundf(fil["vendor"]["empty_spool_weight"] | 0.0f);
+      plan->found_net_weight_g    = (int)lroundf(fil["weight"] | 0.0f);
     }
   }
   if (hits > 1) logSDf("Spoolman: %d filaments fit %s, taking #%d", hits, query.c_str(), best);
