@@ -248,6 +248,18 @@ struct TagInfo {
   int      spool_id;      // 0 if none
   char     proto[17];     // e.g. "openspool"
   char     version[12];   // e.g. "1.0"
+  // For the tag view only, where a format has them; 0 or empty when not.
+  // OpenPrintTag: the empty spool, the nominal weight beside the actual one
+  // (weight_g), the density in hundredths, the preheat temperature, what
+  // printers recorded as used (aux) and the workgroup that wrote it, and the
+  // format's tags by name. Creality: serial and batch.
+  uint16_t empty_g, nominal_g, density_x100, preheat_c;
+  bool     has_consumed;
+  uint16_t consumed_g;
+  char     workgroup[9];
+  char     props[48];
+  char     serial[8];
+  char     batch[4];
 };
 
 // Serialises a TagInfo as a JSON object, omitting fields the format lacks.

@@ -87,6 +87,11 @@ bool optAuxLocate(const uint8_t* mem, size_t len, size_t* at, size_t* size);
 const char* optResultName(OptResult r);
 // The format's abbreviation for a material_type, or nullptr.
 const char* optMaterialTypeName(int material_type);
+// The display name of one of the format's tags (16 "Matte", 23 "Glitter"), or
+// nullptr for a number it does not name.
+const char* optTagName(uint16_t tag);
+// The tag's tags as "Matte, Glitter", those that do not fit counted as " +N".
+void optTagsText(const OptTag& t, char* out, size_t cap);
 // What to call the material: the tag's own abbreviation, else that of its type.
 const char* optMaterialAbbr(const OptTag& t);
 // The filament on the spool when full: actual, else nominal; below 0 unknown.

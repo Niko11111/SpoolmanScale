@@ -4646,6 +4646,14 @@ const char* const STRINGS[][3] = {
     "Writing broke off. Leave the spool where it is and send the weight "
     "again.",
     "Écriture interrompue. Laissez la bobine en place et renvoyez le poids." },  // STR_OPTW_FAIL_WRITE
+  { "Verbraucht",    "Used",       "Utilisé" },  // STR_TV_CONSUMED
+  { "Rest",          "Left",       "Restant" },  // STR_TV_LEFT
+  { "Vorheizen",     "Preheat",    "Préchauffe" },  // STR_TV_PREHEAT
+  { "Seriennr.",     "Serial no.", "N° de série" },  // STR_TV_SERIAL
+  { "Charge",        "Batch",      "Lot" },  // STR_TV_BATCH
+  { "Gruppe",        "Workgroup",  "Groupe" },  // STR_TV_WORKGROUP
+  { "Eigenschaften", "Properties", "Propriétés" },  // STR_TV_PROPS
+  { "Code",          "Code",       "Code" },  // STR_TV_CODE
 };
 
 StringID tagWriteResultString(uint8_t code) {

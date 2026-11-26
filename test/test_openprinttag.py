@@ -319,8 +319,27 @@ static void auxWrite() {
   assert(optConsumedFor(1000, 1035) == 0);                        // more than full
 }
 
+static void tagNames() {
+  assert(strcmp(optTagName(16), "Matte") == 0 && strcmp(optTagName(23), "Glitter") == 0);
+  assert(strcmp(optTagName(74), "Acetone soluble") == 0);
+  assert(optTagName(18) == nullptr && optTagName(75) == nullptr);
+  OptTag t;
+  assert(decode(SAMPLE, sizeof(SAMPLE), &t) == OPT_OK);
+  char text[48];
+  optTagsText(t, text, sizeof(text));
+  assert(strcmp(text, "Glitter") == 0);
+  t.tag_count = 4;
+  t.tags[0] = 16; t.tags[1] = 18; t.tags[2] = 31; t.tags[3] = 23;   // 18 has no name
+  optTagsText(t, text, sizeof(text));
+  assert(strcmp(text, "Matte, Contains carbon fiber, Glitter") == 0);
+  char small[24];
+  optTagsText(t, small, sizeof(small));
+  assert(strcmp(small, "Matte, Glitter +1") == 0);
+}
+
 int main() {
   helpers();
+  tagNames();
   sampleTag();
   vector01();
   vector03();

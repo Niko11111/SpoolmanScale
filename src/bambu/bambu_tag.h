@@ -54,6 +54,8 @@ struct BambuTagData {
   // Creality only: the six digit serial. FilaStation writes the Spoolman spool
   // id there, Creality's own spools a running number.
   char     serial[8];
+  // Creality only: the batch, three characters.
+  char     batch[4];
 
   bool     spoolman_found;
   int      spoolman_id;

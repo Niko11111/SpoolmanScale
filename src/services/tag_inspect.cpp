@@ -448,6 +448,14 @@ static void infoFromMifare(TagInfo *ti) {
   if (g_tag.temp_min > 0) ti->et_lo = (uint16_t)g_tag.temp_min;
   if (g_tag.temp_max > 0) ti->et_hi = (uint16_t)g_tag.temp_max;
   if (g_tag.spool_weight > 0) ti->weight_g = (uint16_t)g_tag.spool_weight;
+  if (creality) {
+    // Its length and numbers; the diameter is not on the tag, the scan only
+    // assumes 1.75 mm for the CFS.
+    if (g_tag.length_m > 0) ti->length_m = (uint16_t)g_tag.length_m;
+    copyPrintable(ti->code, sizeof(ti->code), g_tag.material_id);
+    copyPrintable(ti->serial, sizeof(ti->serial), g_tag.serial);
+    copyPrintable(ti->batch, sizeof(ti->batch), g_tag.batch);
+  }
   if (!bambu) return;
   if (g_tag.diameter_mm > 0) ti->dia_x100 = (uint16_t)lroundf(g_tag.diameter_mm * 100.0f);
   if (g_tag.length_m > 0)    ti->length_m = (uint16_t)g_tag.length_m;

@@ -387,6 +387,51 @@ const char* optResultName(OptResult r) {
   }
 }
 
+// The format's tags enum by number, its display names (OpenPrintTag
+// specification, data/tags_enum.yaml, 26.11.2026). 18 is deprecated and has
+// none. Shown as the format spells them, like a maker's product names.
+static const char* const TAG_NAMES[] = {
+  "Filtration recommended", "Biocompatible", "Antibacterial", "Air filtering", "Abrasive",
+  "Foaming", "Self-extinguishing", "Paramagnetic", "Radiation shielding", "High temperature",
+  "ESD safe", "Conductive", "Blend", "Water soluble", "IPA soluble", "Limonene soluble", "Matte",
+  "Silk", nullptr, "Translucent", "Transparent", "Iridescent", "Pearlescent", "Glitter",
+  "Glow in the dark", "Neon", "Illuminescent color change", "Temperature color change",
+  "Gradual color change", "Coextruded", "Contains carbon", "Contains carbon fiber",
+  "Contains carbon nano tubes", "Contains glass", "Contains glass fiber", "Contains Kevlar",
+  "Contains stone", "Contains magnetite", "Contains organic material", "Contains cork",
+  "Contains wax", "Contains wood", "Contains bamboo", "Contains pine", "Contains ceramic",
+  "Contains boron carbide", "Contains metal", "Contains bronze", "Contains iron", "Contains steel",
+  "Contains silver", "Contains copper", "Contains aluminium", "Contains brass",
+  "Contains tungsten", "Imitates wood", "Imitates metal", "Imitates marble", "Imitates stone",
+  "Lithophane", "Recycled", "Home compostable", "Industrially compostable", "Bio-based",
+  "Low outgassing", "Without pigments", "Contains algae", "Castable", "Contains PTFE",
+  "Limited edition", "EMI shielding", "High speed", "Contains graphene", "UV resistant",
+  "Acetone soluble"
+};
+constexpr size_t TAG_NAME_COUNT = sizeof(TAG_NAMES) / sizeof(TAG_NAMES[0]);
+
+const char* optTagName(uint16_t tag) {
+  return tag < TAG_NAME_COUNT ? TAG_NAMES[tag] : nullptr;
+}
+
+void optTagsText(const OptTag& t, char* out, size_t cap) {
+  if (!out || !cap) return;
+  out[0] = '\0';
+  size_t len = 0;
+  uint8_t shown = 0, named = 0;
+  for (uint8_t i = 0; i < t.tag_count; i++) {
+    const char* name = optTagName(t.tags[i]);
+    if (!name) continue;
+    named++;
+    const size_t need = (len ? 2 : 0) + strlen(name);
+    // Room kept for " +N" behind it, should a later one not fit.
+    if (len + need + 4 >= cap) continue;
+    len += (size_t)snprintf(out + len, cap - len, "%s%s", len ? ", " : "", name);
+    shown++;
+  }
+  if (shown < named && len + 4 < cap) snprintf(out + len, cap - len, " +%u", (unsigned)(named - shown));
+}
+
 const char* optMaterialTypeName(int material_type) {
   if (material_type < 0 || material_type >= MATERIAL_TYPE_COUNT) return nullptr;
   return MATERIAL_TYPES[material_type];

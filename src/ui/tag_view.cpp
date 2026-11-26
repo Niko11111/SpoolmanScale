@@ -50,7 +50,6 @@
 #define TV_R2           152
 #define TV_R3           194
 #define TV_ROW_STEP     (TV_R2 - TV_R1)   // one row of the scrolling field area
-#define TV_ITEMS_MAX    16
 #define TV_DIV2_Y       238
 #define TV_BTN_Y        246
 #define TV_BTN_H        UI_TOUCH_MIN
@@ -316,6 +315,109 @@ static void buildIdentity(lv_obj_t* box, const Shown& s) {
 // value too long for a column - Bambu's tray UUID - takes a row of its own.
 // A Bambu tag says more than the three rows between the dividers hold, so the
 // rows scroll; the ones a user looks for come first.
+// Lays the fields out as they come: two to a row, a wide one on a row of its
+// own, nothing for an empty value. Placed at once rather than collected first:
+// an OpenPrintTag fills twenty of them.
+struct Grid {
+  lv_obj_t* area;
+  int row, col;
+};
+
+static void place(Grid& g, const char* cap, const char* v, bool wide = false) {
+  if (!v || !v[0]) return;
+  // As long as the longest value, the catalog's colour name. Cut, if ever,
+  // on a character boundary: an accent split in half draws a box.
+  char val[sizeof(TagInfo::color_name)];
+  utf8Cut(v, sizeof(val) - 1, val, sizeof(val));
+  if (wide) {
+    if (g.col) { g.row++; g.col = 0; }
+    cell(g.area, TV_CA, g.row * TV_ROW_STEP, TV_FULL_W, cap, val);
+    g.row++;
+    return;
+  }
+  cell(g.area, g.col ? TV_CB : TV_CA, g.row * TV_ROW_STEP, TV_CW, cap, val);
+  if (g.col) { g.row++; g.col = 0; } else g.col = 1;
+}
+
+static void placeGrams(Grid& g, const char* cap, uint16_t grams) {
+  if (!grams) return;
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%u g", (unsigned)grams);
+  place(g, cap, buf);
+}
+
+// The weights: on the tag when full, and for an OpenPrintTag what printers
+// recorded as used and so what is left, the nominal weight beside the actual
+// one, and the empty spool.
+static void placeWeights(Grid& g, const TagInfo& i) {
+  placeGrams(g, T(STR_W_TAG_WEIGHT), i.weight_g);
+  if (i.has_consumed) {
+    // Shown at 0 g as well: the printer area is there, nothing used yet.
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%u g", (unsigned)i.consumed_g);
+    place(g, T(STR_TV_CONSUMED), buf);
+    const unsigned left = i.weight_g > i.consumed_g ? i.weight_g - i.consumed_g : 0;
+    snprintf(buf, sizeof(buf), "%u g", left);
+    if (i.weight_g) place(g, T(STR_TV_LEFT), buf);
+  }
+  placeGrams(g, T(STR_NEWTAG_LABEL_W), i.nominal_g);
+  placeGrams(g, T(STR_OPT_SPOOL), i.empty_g);
+}
+
+// Every field a format can carry, in the order the view always had, the
+// ones only some formats have beside their kin.
+static void placeCommon(Grid& g, const TagInfo& i) {
+  char buf[24];
+  if (i.spool_id > 0) {
+    snprintf(buf, sizeof(buf), "#%d", i.spool_id);
+    place(g, T(STR_W_TAG_SPOOLID), buf);
+  }
+  // What Bambu calls the colour, from the catalog, and the number it is sold
+  // under - the two things a person compares against the box.
+  place(g, T(STR_LBL_L_COLOR), i.color_name);
+  // The colour as its value, beside the swatch: what a maker's colour table
+  // and a support question compare against, on tags that name no colour.
+  buf[0] = '\0';
+  if (i.has_color) snprintf(buf, sizeof(buf), "#%02X%02X%02X", i.r, i.g, i.b);
+  place(g, T(STR_W_TAG_COLOR_HEX), buf);
+  place(g, T(STR_LBL_ARTICLE_NO_SHORT), i.article);
+  rangeText(buf, sizeof(buf), i.et_lo, i.et_hi);       place(g, T(STR_W_TAG_NOZZLE), buf);
+  rangeText(buf, sizeof(buf), i.preheat_c, 0);         place(g, T(STR_TV_PREHEAT), buf);
+  buf[0] = '\0';
+  if (i.dry_c) snprintf(buf, sizeof(buf), "%u °C, %u h", (unsigned)i.dry_c, (unsigned)i.dry_h);
+  place(g, T(STR_W_TAG_DRY), buf);
+  rangeText(buf, sizeof(buf), i.bed_lo, i.bed_hi);     place(g, T(STR_W_TAG_BED), buf);
+  placeWeights(g, i);
+  buf[0] = '\0';
+  if (i.length_m) snprintf(buf, sizeof(buf), "%u m", (unsigned)i.length_m);
+  place(g, T(STR_W_TAG_LENGTH), buf);
+  buf[0] = '\0';
+  if (i.dia_x100) snprintf(buf, sizeof(buf), "%u.%02u mm",
+                           (unsigned)(i.dia_x100 / 100), (unsigned)(i.dia_x100 % 100));
+  place(g, T(STR_W_TAG_DIA), buf);
+  buf[0] = '\0';
+  if (i.density_x100) snprintf(buf, sizeof(buf), "%u.%02u g/cm3",
+                               (unsigned)(i.density_x100 / 100), (unsigned)(i.density_x100 % 100));
+  place(g, T(STR_OPT_DENSITY), buf);
+}
+
+// The identifiers, the second colour, and the tag's own words.
+static void placeTagWords(Grid& g, const TagInfo& i) {
+  char buf[24];
+  // Bambu's product code by its name; Creality's filament number and an
+  // OpenPrintTag's instance id are a code of their own.
+  place(g, T(strcmp(i.fmt, "Bambu") == 0 ? STR_W_TAG_CODE : STR_TV_CODE), i.code);
+  buf[0] = '\0';
+  if (i.has_color2) snprintf(buf, sizeof(buf), "#%02X%02X%02X", i.r2, i.g2, i.b2);
+  place(g, T(STR_W_TAG_COLOR2), buf);
+  place(g, T(STR_LBL_PRODUCTION_DATE), i.prod_date);
+  place(g, T(STR_W_TAG_SKU), i.sku);
+  place(g, T(STR_TV_SERIAL), i.serial);
+  place(g, T(STR_TV_BATCH), i.batch);
+  place(g, T(STR_TV_WORKGROUP), i.workgroup);
+  place(g, T(STR_TV_PROPS), i.props, true);
+}
+
 static void buildGrid(lv_obj_t* box, const Shown& s) {
   const TagInfo& i = s.info;
 
@@ -343,66 +445,11 @@ static void buildGrid(lv_obj_t* box, const Shown& s) {
   else if (!strcmp(i.fmt, "unsupported")) why = T(STR_W_TAG_NOREC);
   if (why) { note(area, TV_ROW_STEP, why); return; }
 
-  // As long as the longest value, the catalog's colour name. Cut, if ever,
-  // on a character boundary: an accent split in half draws a box.
-  struct Item { const char* cap; char val[sizeof(TagInfo::color_name)]; bool wide; };
-  Item items[TV_ITEMS_MAX];
-  int n = 0;
-  auto add = [&](const char* cap, const char* v, bool wide) {
-    if (!v || !v[0] || n >= TV_ITEMS_MAX) return;
-    items[n].cap = cap;
-    items[n].wide = wide;
-    utf8Cut(v, sizeof(items[n].val) - 1, items[n].val, sizeof(items[n].val));
-    n++;
-  };
-  char buf[24];
-  if (i.spool_id > 0) {
-    snprintf(buf, sizeof(buf), "#%d", i.spool_id);
-    add(T(STR_W_TAG_SPOOLID), buf, false);
-  }
-  // What Bambu calls the colour, from the catalog, and the number it is sold
-  // under - the two things a person compares against the box.
-  add(T(STR_LBL_L_COLOR), i.color_name, false);
-  // The colour as its value, beside the swatch: what a maker's colour table
-  // and a support question compare against, on tags that name no colour.
-  buf[0] = '\0';
-  if (i.has_color) snprintf(buf, sizeof(buf), "#%02X%02X%02X", i.r, i.g, i.b);
-  add(T(STR_W_TAG_COLOR_HEX), buf, false);
-  add(T(STR_LBL_ARTICLE_NO_SHORT), i.article, false);
-  rangeText(buf, sizeof(buf), i.et_lo, i.et_hi);   add(T(STR_W_TAG_NOZZLE), buf, false);
-  buf[0] = '\0';
-  if (i.dry_c) snprintf(buf, sizeof(buf), "%u °C, %u h", (unsigned)i.dry_c, (unsigned)i.dry_h);
-  add(T(STR_W_TAG_DRY), buf, false);
-  rangeText(buf, sizeof(buf), i.bed_lo, i.bed_hi); add(T(STR_W_TAG_BED), buf, false);
-  buf[0] = '\0';
-  if (i.weight_g) snprintf(buf, sizeof(buf), "%u g", (unsigned)i.weight_g);
-  add(T(STR_W_TAG_WEIGHT), buf, false);
-  buf[0] = '\0';
-  if (i.length_m) snprintf(buf, sizeof(buf), "%u m", (unsigned)i.length_m);
-  add(T(STR_W_TAG_LENGTH), buf, false);
-  buf[0] = '\0';
-  if (i.dia_x100) snprintf(buf, sizeof(buf), "%u.%02u mm",
-                           (unsigned)(i.dia_x100 / 100), (unsigned)(i.dia_x100 % 100));
-  add(T(STR_W_TAG_DIA), buf, false);
-  add(T(STR_W_TAG_CODE), i.code, false);
-  buf[0] = '\0';
-  if (i.has_color2) snprintf(buf, sizeof(buf), "#%02X%02X%02X", i.r2, i.g2, i.b2);
-  add(T(STR_W_TAG_COLOR2), buf, false);
-  add(T(STR_LBL_PRODUCTION_DATE), i.prod_date, false);
-  add(T(STR_W_TAG_SKU), i.sku, false);
-  add(T(STR_W_TAG_TRAY), i.tray_uuid, true);
-
-  int row = 1, col = 0;
-  for (int k = 0; k < n; k++) {
-    if (items[k].wide) {
-      if (col) { row++; col = 0; }
-      cell(area, TV_CA, row * TV_ROW_STEP, TV_FULL_W, items[k].cap, items[k].val);
-      row++;
-      continue;
-    }
-    cell(area, col ? TV_CB : TV_CA, row * TV_ROW_STEP, TV_CW, items[k].cap, items[k].val);
-    if (col) { row++; col = 0; } else col = 1;
-  }
+  Grid g = { area, 1, 0 };
+  placeCommon(g, i);
+  placeTagWords(g, i);
+  // Bambu's tray uuid, on a row of its own.
+  place(g, T(STR_W_TAG_TRAY), i.tray_uuid, true);
 }
 
 static lv_obj_t* button(lv_obj_t* box, int x, const char* text, bool danger,

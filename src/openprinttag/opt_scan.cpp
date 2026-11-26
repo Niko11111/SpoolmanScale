@@ -253,6 +253,23 @@ bool optTagOnReader() {
 
 // ---- what the tag page and the debug route show --------------------------
 
+// What only the tag view shows: weights, density, preheat, the aux region's
+// consumed weight and workgroup, and the format's tags by name.
+static void optFillTagExtras(const OptTag& t, TagInfo* ti) {
+  if (t.container_weight_g > 0) ti->empty_g = (uint16_t)lroundf(t.container_weight_g);
+  // The nominal weight only where it is not already the one shown.
+  if (t.nominal_weight_g > 0 && fabsf(t.nominal_weight_g - optFullWeightG(t)) >= 1.0f)
+    ti->nominal_g = (uint16_t)lroundf(t.nominal_weight_g);
+  if (t.density > 0) ti->density_x100 = (uint16_t)lroundf(t.density * 100.0f);
+  if (t.preheat_c > 0) ti->preheat_c = (uint16_t)t.preheat_c;
+  if (t.consumed_g >= 0) {
+    ti->has_consumed = true;
+    ti->consumed_g = t.consumed_g < UINT16_MAX ? (uint16_t)lroundf(t.consumed_g) : UINT16_MAX;
+  }
+  snprintf(ti->workgroup, sizeof(ti->workgroup), "%s", t.workgroup);
+  optTagsText(t, ti->props, sizeof(ti->props));
+}
+
 void optFillTagInfo(TagInfo* ti) {
   memset(ti, 0, sizeof(*ti));
   if (!optTagOnReader()) {
@@ -286,6 +303,7 @@ void optFillTagInfo(TagInfo* ti) {
     ti->dry_c = (uint16_t)t.dry_c;
     ti->dry_h = (uint16_t)g_tag.dry_hours;
   }
+  optFillTagExtras(t, ti);
 }
 
 // Numbers for JSON: null when not given or not a number.
