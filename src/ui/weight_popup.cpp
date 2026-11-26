@@ -319,7 +319,7 @@ static void wpBuildBottom(lv_obj_t *box, int y) {
     lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_SURFACE), 0);
     lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ARCHIVE_BG_PRESSED), LV_STATE_PRESSED);
     // A 1 px outline in the faint tone read as no button at all on the panel.
-    lv_obj_set_style_border_width(b, UI_LEAVE_BORDER_W, 0);
+    lv_obj_set_style_border_width(b, UI_ARCHIVE_BORDER_W, 0);
     lv_obj_set_style_border_color(b, lv_color_hex(UI_COL_ARCHIVE_BG_PRESSED), 0);
     char buf[40];
     snprintf(buf, sizeof(buf), LV_SYMBOL_TRASH "  %s", T(STR_WP_ARCHIVE));

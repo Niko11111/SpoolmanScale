@@ -738,7 +738,7 @@ void styleLeaveButton(lv_obj_t* btn, const char* icon) {
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn, UI_LEAVE_BORDER_W, 0);
-  lv_obj_set_style_border_color(btn, uiMixRed(UI_COL_BAD_TEXT, UI_COL_ROW, UI_LEAVE_BORDER_RED_PCT), 0);
+  lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_border_opa(btn, LV_OPA_COVER, 0);
   // The theme's shadow, which callers used to switch off one by one.
   lv_obj_set_style_shadow_width(btn, 0, 0);
@@ -748,22 +748,18 @@ void styleLeaveButton(lv_obj_t* btn, const char* icon) {
     if (lv_obj_check_type(c, &lv_label_class)) lbl = c;
   }
   if (!lbl) return;
-  // LVGL 8.3 counts the recolour markup below when it shortens a line, so a
-  // caption with room to spare came out as "x ..." (the entry tiles). Sized
-  // to its text instead; the button clips one that really is too long.
+  // The caller sized the label to its caption alone; with the icon in front a
+  // shortening label came out as "x ..." (the entry tiles). Sized to its text
+  // instead; the button clips one that really is too long.
   const lv_label_long_mode_t mode = lv_label_get_long_mode(lbl);
   if (mode == LV_LABEL_LONG_DOT || mode == LV_LABEL_LONG_SCROLL ||
       mode == LV_LABEL_LONG_SCROLL_CIRCULAR) {
     lv_label_set_long_mode(lbl, LV_LABEL_LONG_CLIP);
     lv_obj_set_width(lbl, LV_SIZE_CONTENT);
   }
-  // The icon in red through LVGL's recolour markup, the caption in the
-  // label's own colour; one label, so the pair stays centred as before.
+  // Icon and caption in one label, so the pair stays centred as before.
   char text[64];
-  const lv_color_t ic = uiMixRed(UI_COL_BAD_TEXT, UI_COL_INK_2, UI_LEAVE_ICON_RED_PCT);
-  snprintf(text, sizeof(text), "#%06x %s#  %s", (unsigned)(lv_color_to32(ic) & 0xFFFFFFu), icon,
-           lv_label_get_text(lbl));
-  lv_label_set_recolor(lbl, true);
+  snprintf(text, sizeof(text), "%s  %s", icon, lv_label_get_text(lbl));
   lv_label_set_text(lbl, text);
   lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_INK_2), 0);
 }

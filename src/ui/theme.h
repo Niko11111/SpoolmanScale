@@ -153,11 +153,8 @@ UiThemeCustom uiThemeCustomActive();
 #define UI_RADIUS_BOX          12   // a popup's box, a settings tile
 #define UI_RADIUS_ROW          10   // a settings row
 #define UI_RADIUS_BTN          8
-#define UI_LEAVE_BORDER_W      2    // the red outline of Cancel, Close and Back
-// How much red the outline and the icon carry, the rest is the button's fill
-// and the caption's colour: a hint of the way out, not a warning.
-#define UI_LEAVE_BORDER_RED_PCT 45
-#define UI_LEAVE_ICON_RED_PCT   80
+#define UI_LEAVE_BORDER_W      1    // the fine edge of Cancel, Close and Back
+#define UI_ARCHIVE_BORDER_W    2    // the quiet Archive button in the weight popup
 #define UI_RADIUS_INPUT        6
 #define UI_RADIUS_OUTLINE      4    // a label outline drawn to scale
 #define UI_RADIUS_SWATCH       3    // the small colour square in a list row

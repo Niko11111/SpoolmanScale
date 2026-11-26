@@ -3,11 +3,12 @@
 #include "ui/theme.h"
 
 // The edge of a destructive button: brighter than its fill, so the warning is
-// seen before the caption is read, and unlike the dimmer red outline of the
-// way out.
+// seen before the caption is read, and unlike the close X, which shares the
+// fill but not the edge.
 #define BTN_DANGER_BORDER_W        2
 #define BTN_DANGER_BORDER_RED_PCT  70
 #define BTN_NEUTRAL_BORDER_W       1
+#define BTN_CLOSE_BORDER_W         1
 
 static lv_style_t s_frame[BTN_ROLE_COUNT];
 static lv_style_t s_pressed[BTN_ROLE_COUNT];
@@ -59,10 +60,10 @@ static void initStyles() {
   setBorder(BTN_DANGER, BTN_DANGER_BORDER_W,
             uiMixRed(UI_COL_BAD_TEXT, UI_COL_BAD_BG, BTN_DANGER_BORDER_RED_PCT));
   initNeutral();
-  // The close X wears the way-out look of styleLeaveButton(), icon only.
-  initRole(BTN_CLOSE, UI_COL_ROW, UI_COL_ROW_PRESS_FILL,
-           uiMixRed(UI_COL_BAD_TEXT, UI_COL_INK_2, UI_LEAVE_ICON_RED_PCT));
-  setBorder(BTN_CLOSE, UI_LEAVE_BORDER_W, uiMixRed(UI_COL_BAD_TEXT, UI_COL_ROW, UI_LEAVE_BORDER_RED_PCT));
+  // The close X: the red fill of a destructive button, but its edge in the
+  // pressed tone instead of the bright one, so it stands out without warning.
+  initRole(BTN_CLOSE, UI_COL_BAD_BG, UI_COL_BAD_BG_PRESSED, lv_color_hex(UI_COL_BAD_TEXT));
+  setBorder(BTN_CLOSE, BTN_CLOSE_BORDER_W, lv_color_hex(UI_COL_BAD_BG_PRESSED));
   s_ready = true;
 }
 
