@@ -54,16 +54,12 @@ static void dateFormatButton(lv_obj_t* scr, int x, DateFormat fmt, StringID capt
   lv_obj_set_size(btn, DATE_BTN_W, DATE_BTN_H);
   lv_obj_set_pos(btn, x, DATE_BTN_Y);
   const bool active = (g_date_fmt == fmt);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(active ? UI_COL_CHOICE_BG : UI_COL_SURFACE), 0);
   lv_obj_set_style_radius(btn, 10, 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);
-  lv_obj_set_style_border_width(btn, 2, 0);
-  lv_obj_set_style_border_color(btn, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_LINE), 0);
   lv_obj_t *lbl = lv_label_create(btn);
   lv_label_set_text(lbl, T(caption));
-  lv_obj_set_style_text_color(lbl, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl);
+  uiSegmentLook(btn, active ? SEG_PICKED : SEG_OFF);
   lv_obj_add_event_cb(btn, [](lv_event_t *e){
     s_pick_date = (int)(intptr_t)lv_event_get_user_data(e); s_pick_lang = -1;
     showRebootPopup(commitLanguageChoice);
@@ -154,16 +150,12 @@ void showLanguageScreen() {
   lv_obj_set_size(btn_de, LB_W, LB_H);
   lv_obj_set_pos(btn_de, LB_X_DE, LB_Y0);
   bool de_active = (g_lang == LANG_DE);
-  lv_obj_set_style_bg_color(btn_de, lv_color_hex(de_active ? UI_COL_CHOICE_BG : UI_COL_SURFACE), 0);
   lv_obj_set_style_radius(btn_de, 10, 0);
-  lv_obj_set_style_shadow_width(btn_de, 0, 0);
-  lv_obj_set_style_border_width(btn_de, 2, 0);
-  lv_obj_set_style_border_color(btn_de, lv_color_hex(de_active ? UI_COL_ACCENT : UI_COL_LINE), 0);
   lv_obj_t *lbl_de = lv_label_create(btn_de);
   lv_label_set_text(lbl_de, "Deutsch");
-  lv_obj_set_style_text_color(lbl_de, lv_color_hex(de_active ? UI_COL_ACCENT : UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_de, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_de);
+  uiSegmentLook(btn_de, de_active ? SEG_PICKED : SEG_OFF);
   lv_obj_add_event_cb(btn_de, [](lv_event_t *e){
     s_pick_lang = 0; s_pick_date = -1;
     Serial.println("Language: German -> Reboot");
@@ -174,16 +166,12 @@ void showLanguageScreen() {
   lv_obj_set_size(btn_en, LB_W, LB_H);
   lv_obj_set_pos(btn_en, LB_X_EN, LB_Y0);
   bool en_active = (g_lang == LANG_EN);
-  lv_obj_set_style_bg_color(btn_en, lv_color_hex(en_active ? UI_COL_CHOICE_BG : UI_COL_SURFACE), 0);
   lv_obj_set_style_radius(btn_en, 10, 0);
-  lv_obj_set_style_shadow_width(btn_en, 0, 0);
-  lv_obj_set_style_border_width(btn_en, 2, 0);
-  lv_obj_set_style_border_color(btn_en, lv_color_hex(en_active ? UI_COL_ACCENT : UI_COL_LINE), 0);
   lv_obj_t *lbl_en = lv_label_create(btn_en);
   lv_label_set_text(lbl_en, "English");
-  lv_obj_set_style_text_color(lbl_en, lv_color_hex(en_active ? UI_COL_ACCENT : UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_en, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_en);
+  uiSegmentLook(btn_en, en_active ? SEG_PICKED : SEG_OFF);
   lv_obj_add_event_cb(btn_en, [](lv_event_t *e){
     s_pick_lang = 1; s_pick_date = -1;
     Serial.println("Language: English -> Reboot");
@@ -196,16 +184,12 @@ void showLanguageScreen() {
   lv_obj_set_size(btn_fr, LB_W, LB_H);
   lv_obj_set_pos(btn_fr, LB_X_FR, LB_Y0);
   bool fr_active = (g_lang == LANG_FR);
-  lv_obj_set_style_bg_color(btn_fr, lv_color_hex(fr_active ? UI_COL_CHOICE_BG : UI_COL_SURFACE), 0);
   lv_obj_set_style_radius(btn_fr, 10, 0);
-  lv_obj_set_style_shadow_width(btn_fr, 0, 0);
-  lv_obj_set_style_border_width(btn_fr, 2, 0);
-  lv_obj_set_style_border_color(btn_fr, lv_color_hex(fr_active ? UI_COL_ACCENT : UI_COL_LINE), 0);
   lv_obj_t *lbl_fr = lv_label_create(btn_fr);
   lv_label_set_text(lbl_fr, "Français");
-  lv_obj_set_style_text_color(lbl_fr, lv_color_hex(fr_active ? UI_COL_ACCENT : UI_COL_CAPTION), 0);
   lv_obj_set_style_text_font(lbl_fr, &lv_font_montserrat_ext_16, 0);
   lv_obj_center(lbl_fr);
+  uiSegmentLook(btn_fr, fr_active ? SEG_PICKED : SEG_OFF);
   lv_obj_add_event_cb(btn_fr, [](lv_event_t *e){
     s_pick_lang = 2; s_pick_date = -1;
     Serial.println("Language: French -> Reboot");

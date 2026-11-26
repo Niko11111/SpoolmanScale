@@ -48,17 +48,13 @@ static void buildTabs(lv_obj_t *scr) {
     lv_obj_t *b = lv_btn_create(scr);
     lv_obj_set_size(b, TAB_W, TAB_H);
     lv_obj_set_pos(b, x0 + i * (TAB_W + TAB_GAP), TAB_Y);
-    if (active) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ACCENT), 0);
     lv_obj_set_style_radius(b, UI_RADIUS_BTN, 0);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_border_width(b, 0, 0);
     lv_obj_t *l = lv_label_create(b);
     lv_label_set_text(l, T((StringID)ids[i]));
     lv_obj_set_style_text_font(l, UI_FONT_BODY, 0);
     lv_obj_center(l);
-    // Same look as the inactive choices on the Display tab.
-    if (active) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ON_ACCENT), 0);
-    else        uiBtnRole(b, BTN_NEUTRAL);
+    // The same look as the choices on the Display tab.
+    uiSegmentLook(b, active ? SEG_PICKED : SEG_OFF);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
       const int tab = (int)(intptr_t)lv_event_get_user_data(e);
       if (tab == s_tab) return;
@@ -171,11 +167,7 @@ static void buildDisplayTab(lv_obj_t *body) {
     const bool allowed = dim_vals[i] == 0 ||
                          ((cur_off == 0 || dim_vals[i] < cur_off) &&
                           (cur_sleep == 0 || dim_vals[i] < cur_sleep));
-    if (active) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ACCENT), 0);
-    if (!allowed) lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_radius(b, 8, 0);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_border_width(b, 0, 0);
     char buf[16];
     if (dim_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
@@ -186,17 +178,7 @@ static void buildDisplayTab(lv_obj_t *body) {
     lv_label_set_text(l, buf);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
-    if (active) {
-      lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ON_ACCENT), 0);
-    } else {
-      uiBtnRole(b, BTN_NEUTRAL);
-      // After the role, which would drop a dimmed fill and the grey caption.
-      if (!allowed) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_UNAVAILABLE), 0);
-    }
-    if (!allowed) {
-      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
-      lv_obj_set_style_border_opa(b, LV_OPA_60, 0);
-    }
+    uiSegmentLook(b, active ? SEG_PICKED : allowed ? SEG_OFF : SEG_UNAVAILABLE);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
       int val = (intptr_t)lv_event_get_user_data(e);
       dim_timeout_ms = val * 60000;
@@ -224,11 +206,7 @@ static void buildDisplayTab(lv_obj_t *body) {
     const bool allowed = off_vals[i] == 0 ||
                          ((cur_dim == 0 || off_vals[i] > cur_dim) &&
                           (cur_sleep == 0 || off_vals[i] < cur_sleep));
-    if (active) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ACCENT), 0);
-    if (!allowed) lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_radius(b, 8, 0);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_border_width(b, 0, 0);
     char buf[16];
     if (off_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
@@ -239,17 +217,7 @@ static void buildDisplayTab(lv_obj_t *body) {
     lv_label_set_text(l, buf);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
-    if (active) {
-      lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ON_ACCENT), 0);
-    } else {
-      uiBtnRole(b, BTN_NEUTRAL);
-      // After the role, which would drop a dimmed fill and the grey caption.
-      if (!allowed) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_UNAVAILABLE), 0);
-    }
-    if (!allowed) {
-      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
-      lv_obj_set_style_border_opa(b, LV_OPA_60, 0);
-    }
+    uiSegmentLook(b, active ? SEG_PICKED : allowed ? SEG_OFF : SEG_UNAVAILABLE);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
       int val = (intptr_t)lv_event_get_user_data(e);
       off_timeout_ms = val * 60000;
@@ -280,11 +248,7 @@ static void buildDisplayTab(lv_obj_t *body) {
     const bool allowed = sleep_vals[i] == 0 ||
                          ((cur_dim == 0 || sleep_vals[i] > cur_dim) &&
                           (cur_off == 0 || sleep_vals[i] > cur_off));
-    if (active) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ACCENT), 0);
-    if (!allowed) lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_radius(b, 8, 0);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_border_width(b, 0, 0);
     char buf[16];
     if (sleep_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
@@ -295,17 +259,7 @@ static void buildDisplayTab(lv_obj_t *body) {
     lv_label_set_text(l, buf);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
-    if (active) {
-      lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ON_ACCENT), 0);
-    } else {
-      uiBtnRole(b, BTN_NEUTRAL);
-      // After the role, which would drop a dimmed fill and the grey caption.
-      if (!allowed) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_UNAVAILABLE), 0);
-    }
-    if (!allowed) {
-      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
-      lv_obj_set_style_border_opa(b, LV_OPA_60, 0);
-    }
+    uiSegmentLook(b, active ? SEG_PICKED : allowed ? SEG_OFF : SEG_UNAVAILABLE);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
       int val = (intptr_t)lv_event_get_user_data(e);
       sleep_timeout_ms = val * 60000;

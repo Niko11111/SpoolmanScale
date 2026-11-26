@@ -23,3 +23,13 @@ void uiBtnRole(lv_obj_t* btn, BtnRole role);
 // red_pct of `red`, the rest of `base`: the reddish edge and icon of the way
 // out (here and in styleLeaveButton) and the bright edge of a destructive one.
 lv_color_t uiMixRed(uint32_t red, uint32_t base, int red_pct);
+
+// One segment of a row of choices of which one is picked (Display's minutes,
+// the drying mode, the backend, the date format): the picked one has the
+// picked fill, a green edge and green text, the others are quiet, and an
+// unavailable one is dimmed and takes no tap. One look for every such row, so
+// a choice reads the same on every screen. Like uiBtnRole(), it is given to a
+// finished button and colours the labels on it; size, position, radius and
+// font stay the caller's.
+enum SegState { SEG_OFF, SEG_PICKED, SEG_UNAVAILABLE, SEG_STATE_COUNT };
+void uiSegmentLook(lv_obj_t* btn, SegState state);

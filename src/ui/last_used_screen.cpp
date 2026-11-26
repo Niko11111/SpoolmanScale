@@ -45,14 +45,7 @@ void buildLastUsedScreen() {
   lv_obj_set_size(btn_osm, 210, 50);
   lv_obj_set_pos(btn_osm, 12, 58);
   bool osm_active = (last_used_mode == 0);
-  if (osm_active) {
-    lv_obj_set_style_bg_color(btn_osm, lv_color_hex(UI_COL_GO_BG), 0);
-    lv_obj_set_style_bg_color(btn_osm, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
-    lv_obj_set_style_border_width(btn_osm, 1, 0);
-    lv_obj_set_style_border_color(btn_osm, lv_color_hex(UI_COL_ACCENT), 0);
-  }
   lv_obj_set_style_radius(btn_osm, 8, 0);
-  lv_obj_set_style_shadow_width(btn_osm, 0, 0);
   lv_obj_add_event_cb(btn_osm, [](lv_event_t *e) {
     logSD("BTN: LastUsed -> OSM mode");
     last_used_mode = 0;
@@ -66,24 +59,16 @@ void buildLastUsedScreen() {
   lv_label_set_text(lbl_osm, backendIsFilaMan()  ? T(STR_LASTUSED_OPT_FILAMAN)
                            : backendIsBamBuddy() ? T(STR_LASTUSED_OPT_BAMBUDDY)
                                                  : T(STR_LASTUSED_OPT_OSM));
-  if (osm_active) lv_obj_set_style_text_color(lbl_osm, lv_color_hex(UI_COL_OK_TEXT_2), 0);
   lv_obj_set_style_text_font(lbl_osm, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_osm, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_osm, LV_ALIGN_CENTER, 0, 0);
-  if (!osm_active) uiBtnRole(btn_osm, BTN_NEUTRAL);
+  uiSegmentLook(btn_osm, osm_active ? SEG_PICKED : SEG_OFF);
 
   lv_obj_t *btn_lw = lv_btn_create(scr_lastused);
   lv_obj_set_size(btn_lw, 210, 50);
   lv_obj_set_pos(btn_lw, 238, 58);
   bool lw_active = (last_used_mode == 1);
-  if (lw_active) {
-    lv_obj_set_style_bg_color(btn_lw, lv_color_hex(UI_COL_GO_BG), 0);
-    lv_obj_set_style_bg_color(btn_lw, lv_color_hex(UI_COL_GO_BG_PRESSED), LV_STATE_PRESSED);
-    lv_obj_set_style_border_width(btn_lw, 1, 0);
-    lv_obj_set_style_border_color(btn_lw, lv_color_hex(UI_COL_ACCENT), 0);
-  }
   lv_obj_set_style_radius(btn_lw, 8, 0);
-  lv_obj_set_style_shadow_width(btn_lw, 0, 0);
   lv_obj_add_event_cb(btn_lw, [](lv_event_t *e) {
     logSD("BTN: LastUsed -> Weighed mode");
     last_used_mode = 1;
@@ -93,11 +78,10 @@ void buildLastUsedScreen() {
   }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_lw = lv_label_create(btn_lw);
   lv_label_set_text(lbl_lw, T(STR_LASTUSED_OPT_WEIGHED));
-  if (lw_active) lv_obj_set_style_text_color(lbl_lw, lv_color_hex(UI_COL_OK_TEXT_2), 0);
   lv_obj_set_style_text_font(lbl_lw, &lv_font_montserrat_ext_16, 0);
   lv_obj_set_style_text_align(lbl_lw, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lbl_lw, LV_ALIGN_CENTER, 0, 0);
-  if (!lw_active) uiBtnRole(btn_lw, BTN_NEUTRAL);
+  uiSegmentLook(btn_lw, lw_active ? SEG_PICKED : SEG_OFF);
 
   lv_obj_t *lbl_desc = lv_label_create(scr_lastused);
   const bool used_mode = (last_used_mode == 0);
