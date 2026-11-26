@@ -61,8 +61,7 @@ static lv_obj_t* addText(lv_obj_t* parent, const char* text, const lv_font_t* fo
   lv_obj_set_style_text_font(l, font, 0);
   lv_obj_set_style_text_color(l, lv_color_hex(colour), 0);
   lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_width(l, width);
-  lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+  labelDotLine(l, width);
   return l;
 }
 

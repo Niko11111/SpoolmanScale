@@ -1267,14 +1267,14 @@ static void fetchSpoolSummary(int spool_id, SpoolSummary &out) {
 }
 
 // One spool of the move question: caption column, swatch, words.
-static void moveRow(lv_obj_t *box, int y, StringID caption_id, const SpoolSummary &sum) {
+static void moveRow(lv_obj_t *box, int y, StringID caption_id, const SpoolSummary &sum, int value_x) {
   lv_obj_t *cap = lv_label_create(box);
   { char cb[24]; copyT(cb, sizeof(cb), caption_id);
     lv_label_set_text(cap, cb); }
   lv_obj_set_style_text_color(cap, lv_color_hex(UI_COL_INK_SOFT), 0);
   lv_obj_set_style_text_font(cap, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_pos(cap, 20, y + 2);
-  int x = 20 + 104;
+  int x = value_x;
   if (sum.color[0]) {
     lv_obj_t *sw = lv_obj_create(box);
     lv_obj_remove_style_all(sw);
@@ -1290,10 +1290,9 @@ static void moveRow(lv_obj_t *box, int y, StringID caption_id, const SpoolSummar
   }
   lv_obj_t *l = lv_label_create(box);
   lv_label_set_text(l, sum.text);
-  lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(l, 400 - 20 - x);
   lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+  labelDotLine(l, 400 - 20 - x);
   lv_obj_set_pos(l, x, y);
 }
 
@@ -1666,8 +1665,13 @@ static void showTagMovePopup() {
   lv_obj_align(lbl_q, LV_ALIGN_TOP_MID, 0, 52);
 
   // The two spools, so the decision is between things the user recognises.
-  moveRow(box, 96,  STR_TAGMOVE_FROM, s_move_from_sum);
-  moveRow(box, 124, STR_TAGMOVE_TO,   s_move_to_sum);
+  // The spools start past the longer caption: a fixed 104 px put "Umhängen
+  // zu:" under the swatch, and French "Déplacer vers :" is longer still.
+  const lv_font_t *cap_font = &lv_font_montserrat_ext_14;
+  const int value_x = 20 + 8 + LV_MAX(uiTextWidth(T(STR_TAGMOVE_FROM), cap_font),
+                                      uiTextWidth(T(STR_TAGMOVE_TO), cap_font));
+  moveRow(box, 96,  STR_TAGMOVE_FROM, s_move_from_sum, value_x);
+  moveRow(box, 124, STR_TAGMOVE_TO,   s_move_to_sum,   value_x);
 
   lv_obj_t *lbl_hint = lv_label_create(box);
   { char hb[64]; snprintf(hb, sizeof(hb), T(STR_TAGMOVE_HINT), s_move_from_id);
@@ -2420,17 +2424,15 @@ void listReloadStrip(lv_obj_t* scr, time_t at, uint32_t age_ms, lv_event_cb_t on
   lv_obj_t *btn_reload = lv_btn_create(scr);
   lv_obj_set_size(btn_reload, LINK_RELOAD_W, LINK_RELOAD_H);
   lv_obj_set_pos(btn_reload, 480 - 12 - LINK_RELOAD_W, strip_y + (LINK_STRIP_H - LINK_RELOAD_H) / 2);
-  lv_obj_set_style_bg_color(btn_reload, lv_color_hex(UI_COL_ROW_PRESSED), 0);
-  lv_obj_set_style_bg_color(btn_reload, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_reload, UI_RADIUS_INPUT, 0);
   lv_obj_set_style_shadow_width(btn_reload, 0, 0);
-  lv_obj_set_style_border_width(btn_reload, 0, 0);
   lv_obj_add_event_cb(btn_reload, on_reload, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_reload = lv_label_create(btn_reload);
   lv_label_set_text(lbl_reload, T(STR_LIST_RELOAD));
-  lv_obj_set_style_text_color(lbl_reload, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_reload, UI_FONT_SMALL, 0);
   lv_obj_center(lbl_reload);
+  // Neither go-ahead nor a way out: the quiet outline of the alternative.
+  uiBtnRole(btn_reload, BTN_NEUTRAL);
 }
 
 
@@ -2705,19 +2707,18 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     display_count++;
   }
 
-  char title_buf[48];
+  char title_buf[96];
+  char head[80], count_tail[12];
+  snprintf(count_tail, sizeof(count_tail), " - %d", display_count);
   if (link_flow_is_bambu) {
     snprintf(title_buf, sizeof(title_buf), "Bambu %s - %d",
       g_tag.material[0] ? g_tag.material : "", display_count);
   } else if (material_full && material_full[0]) {
-    char v8[9], m10[11];
-    utf8Cut(vendor_name, 8, v8, sizeof(v8));
-    utf8Cut(material_full, 10, m10, sizeof(m10));
-    snprintf(title_buf, sizeof(title_buf), "%s %s - %d", v8, m10, display_count);
+    snprintf(head, sizeof(head), "%s %s", vendor_name, material_full);
+    uiFitHeaderTitle(title_buf, sizeof(title_buf), head, count_tail, &lv_font_montserrat_ext_16);
   } else if (material_prefix[0]) {
-    char v8[9];
-    utf8Cut(vendor_name, 8, v8, sizeof(v8));
-    snprintf(title_buf, sizeof(title_buf), "%s %.4s - %d", v8, material_prefix, display_count);
+    snprintf(head, sizeof(head), "%s %.4s", vendor_name, material_prefix);
+    uiFitHeaderTitle(title_buf, sizeof(title_buf), head, count_tail, &lv_font_montserrat_ext_16);
   } else {
     snprintf(title_buf, sizeof(title_buf), "%s - %d", T(STR_SPOOLS_ALL), display_count);
   }
@@ -2882,8 +2883,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     full_name[sizeof(full_name)-1] = '\0';
     lv_obj_t *lbl_name = listRowLabel(row, LR_TEXT_NAME, full_name);
     lv_obj_align(lbl_name, LV_ALIGN_TOP_LEFT, 50, 5);
-    lv_label_set_long_mode(lbl_name, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(lbl_name, 396);  // volle Breite - kein Hersteller in Zeile 1
+    labelDotLine(lbl_name, 396);  // full width: no maker on line 1
 
     // ── Zeile 2: Farbkachel + Gewicht + Hersteller rechts ─
     lv_obj_t *swatch = listRowSwatch(row, s.color_hex);
@@ -3044,9 +3044,9 @@ void showMaterialList(const char* vendor_name) {
 
   scr_link_mat = buildLinkOverlay();
 
-  char title_buf[48], v16[17];
-  utf8Cut(vendor_name, 16, v16, sizeof(v16));
-  snprintf(title_buf, sizeof(title_buf), "%s | %s", T(STR_MAT_TITLE), v16);
+  char title_buf[96], head[80];
+  snprintf(head, sizeof(head), "%s | %s", T(STR_MAT_TITLE), vendor_name);
+  uiFitHeaderTitle(title_buf, sizeof(title_buf), head, "", &lv_font_montserrat_ext_16);
 
   // Header with Back + Cancel
   lv_obj_t *hdr_mat = lv_obj_create(scr_link_mat);
@@ -3229,9 +3229,9 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
   releaseScreen(&scr_link_mat_sub);
   scr_link_mat_sub = buildLinkOverlay();
 
-  char title_buf[48], v16[17];
-  utf8Cut(vendor_name, 16, v16, sizeof(v16));
-  snprintf(title_buf, sizeof(title_buf), "%s | %.4s", v16, material_prefix);
+  char title_buf[96], mat_tail[12];
+  snprintf(mat_tail, sizeof(mat_tail), " | %.4s", material_prefix);
+  uiFitHeaderTitle(title_buf, sizeof(title_buf), vendor_name, mat_tail, &lv_font_montserrat_ext_16);
 
   // Header with Back + Cancel
   lv_obj_t *hdr_ms = lv_obj_create(scr_link_mat_sub);
@@ -3312,8 +3312,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
 
     lv_obj_t *lbl_full = listRowLabel(row, LR_TEXT_MATERIAL, seen_full[m]);
     lv_obj_align(lbl_full, LV_ALIGN_LEFT_MID, 16, 0);
-    lv_label_set_long_mode(lbl_full, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(lbl_full, 340);
+    labelDotLine(lbl_full, 340);
 
     char cnt_buf[12]; snprintf(cnt_buf, sizeof(cnt_buf), "%d x", full_counts[m]);
     lv_obj_t *lbl_cnt = listRowLabel(row, LR_TEXT_COUNT, cnt_buf);
@@ -3461,8 +3460,7 @@ void showVendorList() {
 
     lv_obj_t *lbl_vnd = listRowLabel(row, LR_TEXT_MAKER, seen_vendors[v]);
     lv_obj_align(lbl_vnd, LV_ALIGN_LEFT_MID, 16, 0);
-    lv_label_set_long_mode(lbl_vnd, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(lbl_vnd, 320);
+    labelDotLine(lbl_vnd, 320);
 
     char cnt_buf[12]; snprintf(cnt_buf, sizeof(cnt_buf), "%d x", vendor_counts[v]);
     lv_obj_t *lbl_cnt = listRowLabel(row, LR_TEXT_COUNT, cnt_buf);

@@ -268,8 +268,7 @@ static void wpPrimaryClicked(lv_event_t *e) {
 
 static void wpBuildHeaderAndPrimary(lv_obj_t *box) {
   s_v.line1 = wpLabel(box, "", UI_FONT_SMALL, UI_COL_INK_SOFT);
-  lv_label_set_long_mode(s_v.line1, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(s_v.line1, WP_INNER_W);
+  labelDotLine(s_v.line1, WP_INNER_W);
   lv_obj_set_pos(s_v.line1, WP_X, 6);
   s_v.change = wpLabel(box, "", UI_FONT_BODY, UI_COL_INK_2);
   lv_obj_set_pos(s_v.change, WP_X, 28);

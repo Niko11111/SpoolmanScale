@@ -414,10 +414,33 @@ uint32_t filamanStatusColor(int status_id) {
   }
 }
 
+// The "?" circle: 34 px, 12 px left of the 44 px close button at x 432.
+static const lv_coord_t HDR_HELP_PX   = 34;
+static const lv_coord_t HDR_HELP_X_PX = 386;
+static const lv_coord_t HDR_HELP_Y_PX = 5;
+// What a header title keeps clear of the circle.
+static const lv_coord_t HDR_HELP_GAP_PX = 8;
+
+// A title centred on the screen can reach into the circle: the German "Tag
+// nach Verlinken beschreiben" ends on its very edge. A header label that does
+// moves left until it keeps the gap; the back button leaves the room for it.
+static void keepHeaderClearOfHelp(lv_obj_t *scr) {
+  lv_obj_update_layout(scr);
+  const uint32_t n = lv_obj_get_child_cnt(scr);
+  for (uint32_t i = 0; i < n; i++) {
+    lv_obj_t *c = lv_obj_get_child(scr, i);
+    if (!lv_obj_check_type(c, &lv_label_class)) continue;
+    if (lv_obj_get_y(c) > HDR_HELP_Y_PX + HDR_HELP_PX) continue;
+    const lv_coord_t over = lv_obj_get_x(c) + lv_obj_get_width(c) + HDR_HELP_GAP_PX - HDR_HELP_X_PX;
+    if (over > 0) lv_obj_set_x(c, lv_obj_get_x_aligned(c) - over);
+  }
+}
+
 lv_obj_t* addHeaderHelp(lv_obj_t *scr, int title_id, int text_id) {
+  keepHeaderClearOfHelp(scr);
   lv_obj_t *help = lv_btn_create(scr);
-  lv_obj_set_size(help, 34, 34);
-  lv_obj_set_pos(help, 386, 5);
+  lv_obj_set_size(help, HDR_HELP_PX, HDR_HELP_PX);
+  lv_obj_set_pos(help, HDR_HELP_X_PX, HDR_HELP_Y_PX);
   lv_obj_set_style_bg_opa(help, LV_OPA_TRANSP, 0);
   lv_obj_set_style_bg_color(help, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(help, LV_OPA_COVER, LV_STATE_PRESSED);
@@ -603,6 +626,11 @@ lv_obj_t* labelOneLine(lv_obj_t* parent, const char* text, const lv_font_t* font
   return l;
 }
 
+void labelDotLine(lv_obj_t* l, lv_coord_t w) {
+  lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+  lv_obj_set_size(l, w, lv_font_get_line_height(lv_obj_get_style_text_font(l, LV_PART_MAIN)));
+}
+
 lv_obj_t* padButton(lv_obj_t* parent, int x, int y, int w, int h, uint32_t bg, uint32_t bg_pressed) {
   lv_obj_t* b = lv_btn_create(parent);
   lv_obj_set_size(b, w, h);
@@ -740,12 +768,22 @@ void styleLeaveButton(lv_obj_t* btn, const char* icon) {
   lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_INK_2), 0);
 }
 
-static lv_coord_t textWidth(const char* s, const lv_font_t* font) {
+lv_coord_t uiTextWidth(const char* s, const lv_font_t* font) {
   return lv_txt_get_width(s, (uint32_t)strlen(s), font, 0, LV_TEXT_FLAG_NONE);
 }
 
+// A header button is 44 px, 4 px from the edge; the title keeps 8 px from it.
+static const lv_coord_t HDR_TITLE_MAX_W_PX = 480 - 2 * (4 + 44 + 8);
+
+void uiFitHeaderTitle(char* out, size_t n, const char* head, const char* tail, const lv_font_t* font) {
+  char h[80];
+  snprintf(h, sizeof(h), "%s", head);
+  uiFitLine(h, sizeof(h), font, HDR_TITLE_MAX_W_PX - uiTextWidth(tail, font));
+  snprintf(out, n, "%s%s", h, tail);
+}
+
 void uiFitLine(char* s, size_t n, const lv_font_t* font, lv_coord_t max_w) {
-  if (!s || !font || n == 0 || textWidth(s, font) <= max_w) return;
+  if (!s || !font || n == 0 || uiTextWidth(s, font) <= max_w) return;
   static const char kDots[] = "...";
   char buf[96];
   size_t len = strlen(s);
@@ -755,7 +793,7 @@ void uiFitLine(char* s, size_t n, const lv_font_t* font, lv_coord_t max_w) {
     size_t keep = len;
     while (keep > 0 && s[keep - 1] == ' ') keep--;
     snprintf(buf, sizeof(buf), "%.*s%s", (int)keep, s, kDots);
-    if (textWidth(buf, font) <= max_w) break;
+    if (uiTextWidth(buf, font) <= max_w) break;
   }
   if (len == 0) snprintf(buf, sizeof(buf), "%s", kDots);
   snprintf(s, n, "%s", buf);

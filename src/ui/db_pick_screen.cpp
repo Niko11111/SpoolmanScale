@@ -679,9 +679,8 @@ static void entryRow(lv_obj_t* body, int first, int n) {
   fdbEntryDisplayName(*e, fdbMaker(s_maker)->name, s_material, shown, sizeof(shown));
   lv_obj_t* name = lv_label_create(row);
   lv_label_set_text(name, shown);
-  lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(name, DBP_ROW_NAME_W);
   lv_obj_add_style(name, &s_st_text_body, 0);
+  labelDotLine(name, DBP_ROW_NAME_W);
   lv_obj_align(name, LV_ALIGN_LEFT_MID, DBP_ROW_SWATCH + 3 * DBP_GAP, 0);
   char sizes[40];
   sizesText(first, n, sizes, sizeof(sizes));

@@ -2018,8 +2018,8 @@ const char* const STRINGS[][3] = {
     "Non étalonnée : poids inexact" },  // STR_DIAG_UNCAL_BANNER
   { "Waage nicht kalibriert", "Scale not calibrated",
     "Balance non étalonnée" },  // STR_DIAG_UNCAL_TITLE
-  { "Das angezeigte Gewicht ist nur ein grober Näherungswert und kann weit "
-    "danebenliegen. Speichere es besser noch nicht im Inventar.\n\n"
+  { "Das Gewicht ist nur ein grober Näherungswert. Speichere es noch nicht "
+    "im Inventar.\n\n"
     "Das ist kein Defekt und kein Verkabelungsfehler. Die Waage weiß nur noch "
     "nicht, wie viele Messschritte ein Gramm sind.\n\n"
     "Lege ein bekanntes Gewicht auf und kalibriere sie.",
@@ -2028,7 +2028,7 @@ const char* const STRINGS[][3] = {
     "This is neither a defect nor a wiring mistake. The scale simply does not "
     "know yet how many counts make a gram.\n\n"
     "Place a known weight on it and calibrate.",
-    "Le poids affiché n'est qu'une estimation grossière et peut être très éloigné de la réalité. Mieux vaut ne pas encore l'enregistrer dans l'inventaire.\n\nCe n'est ni une panne ni une erreur de câblage. La balance ne sait simplement pas encore à combien d'unités brutes correspond un gramme.\n\nPosez un poids connu sur le plateau et étalonnez la balance." },  // STR_DIAG_UNCAL_TEXT
+    "Le poids affiché n'est qu'une estimation grossière. Mieux vaut ne pas encore l'enregistrer dans l'inventaire.\n\nCe n'est ni une panne ni une erreur de câblage : la balance ne sait pas encore combien d'unités brutes font un gramme.\n\nPosez un poids connu et étalonnez la balance." },  // STR_DIAG_UNCAL_TEXT
 
   { "Wägezelle verpolt (A+/A-)", "Load cell reversed (A+/A-)",
     "Capteur de pesée inversé (A+/A-)" },  // STR_DIAG_INVERTED_BANNER
@@ -2105,13 +2105,11 @@ const char* const STRINGS[][3] = {
     "hardware reset.",
     "Le lecteur a réagi à la liaison. Dès le prochain démarrage, la balance utilisera la réinitialisation matérielle." },  // STR_NFCRST_OK_TEXT
   { "Keine Wirkung", "No effect", "Aucun effet" },  // STR_NFCRST_FAIL_TITLE
-  { "Der Leser hat nichts gemerkt. Der orange Draht liegt noch auf dem alten "
-    "Pad, oder die Lötstelle hat keinen Kontakt.\n\n"
-    "Es ändert sich nichts, die Waage arbeitet weiter wie bisher.",
-    "The reader did not notice. The orange wire is still on the old pad, or "
-    "the joint is not making contact.\n\n"
-    "Nothing changes, the scale carries on as before.",
-    "Le lecteur n'a pas réagi au test de réinitialisation. Soit le fil orange est encore sur l'ancienne pastille, soit la soudure ne fait pas contact.\n\nRien n'est modifié : la balance continue de fonctionner comme avant." },  // STR_NFCRST_FAIL_TEXT
+  { "Der Leser hat nichts gemerkt: Der orange Draht liegt noch auf dem alten "
+    "Pad, oder die Lötstelle hat keinen Kontakt. Die Waage arbeitet weiter wie bisher.",
+    "The reader did not notice: the orange wire is still on the old pad, or "
+    "the joint is not making contact. The scale carries on as before.",
+    "Le lecteur n'a pas réagi : le fil orange est encore sur l'ancienne pastille, ou la soudure ne fait pas contact. La balance continue comme avant." },  // STR_NFCRST_FAIL_TEXT
 
   // ── Hardware UID into extra.rfid_tag ──
   { "Chip-UID mitschreiben",  "Also write the chip UID", "Écrire aussi l'UID de la puce" },  // STR_HW_UID_WRITE

@@ -139,6 +139,12 @@ void spoolStartText(const SpoolStart& s, bool tare_inherited, char* out, size_t 
 // line. The caller sets the colour.
 lv_obj_t* labelOneLine(lv_obj_t* parent, const char* text, const lv_font_t* font, int max_w);
 
+// Makes an existing label one line of width w that ends in dots: the same
+// LV_LABEL_LONG_DOT, plus the fixed height of one line in the label's font,
+// without which LVGL wraps the text onto whatever sits below it. Call it once
+// the font is set, directly or through a style.
+void labelDotLine(lv_obj_t* l, lv_coord_t w);
+
 // A key of the number pads (tare_entry.cpp, price_pad.cpp, spool_id_pad.cpp):
 // a flat button with a soft outline, and its caption centred in it. One look
 // for the three pads.
@@ -166,6 +172,15 @@ uint32_t swatchCenterRgb(const SpoolColor& c);
 // label of one line; this is for one line among several in a single label,
 // which LVGL cannot dot line by line. The font has no ellipsis glyph.
 void uiFitLine(char* s, size_t n, const lv_font_t* font, lv_coord_t max_w);
+
+// The width s takes in font on one line, in pixels.
+lv_coord_t uiTextWidth(const char* s, const lv_font_t* font);
+
+// head and tail as one title line that fits between the 44 px back and close
+// buttons of a header, with only head shortened, so a count or a material at
+// the end stays whole. Cut by width rather than by characters: "Bambu Lab"
+// fits, "Bambu La" was what a cut at eight letters left.
+void uiFitHeaderTitle(char* out, size_t n, const char* head, const char* tail, const lv_font_t* font);
 
 // utf8Cut(), isHexColorWord() and colorNameClean() moved to
 // services/text_util.h, which the AMS parsers can reach too. Included

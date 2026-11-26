@@ -500,8 +500,7 @@ void showCopySpoolList() {
     full_name[sizeof(full_name)-1] = '\0';
     lv_obj_t *lbl_name = listRowLabel(row, LR_TEXT_NAME, full_name);
     lv_obj_align(lbl_name, LV_ALIGN_TOP_LEFT, 50, 5);
-    lv_label_set_long_mode(lbl_name, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(lbl_name, 396);
+    labelDotLine(lbl_name, 396);
 
     lv_obj_t *swatch = listRowSwatch(row, s.color_hex);
     lv_obj_align(swatch, LV_ALIGN_BOTTOM_LEFT, 6, -6);
