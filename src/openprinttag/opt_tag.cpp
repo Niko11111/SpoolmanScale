@@ -354,6 +354,26 @@ OptResult optDecodeMemory(const uint8_t* mem, size_t len, OptTag* out) {
   return optDecodePayload(payload, plen, out);
 }
 
+bool optAuxLocate(const uint8_t* mem, size_t len, size_t* at, size_t* size) {
+  if (len < OPT_CC_BYTES || optMemorySize(mem) == 0) return false;
+  size_t tlv = 0;
+  size_t n = 0;
+  if (!findNdefTlv(mem, len, &tlv, &n)) return false;
+  const uint8_t* payload = nullptr;
+  size_t plen = 0;
+  if (!findRecord(mem + tlv, n, &payload, &plen)) return false;
+  Meta meta;
+  // Only a region the meta names: one guessed from the gaps could be the main
+  // region's tail.
+  if (!readMeta(payload, plen, &meta) || meta.aux_offset < 0) return false;
+  const int64_t main_at = meta.main_offset >= 0 ? meta.main_offset : (int64_t)meta.end;
+  const Region aux = region(meta.aux_offset, meta.aux_size, main_at, plen);
+  if (!aux.present || aux.size == 0) return false;
+  *at = (size_t)(payload - mem) + aux.offset;
+  *size = aux.size;
+  return true;
+}
+
 // ---- reading the result -------------------------------------------------
 
 const char* optResultName(OptResult r) {

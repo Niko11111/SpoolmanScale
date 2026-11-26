@@ -183,6 +183,12 @@ extern uint8_t g_tagwrite_mode;
 // nothing about the spool being wrong.
 extern bool g_tagmismatch_ask;
 
+// After a weight the backend took, the remaining weight goes onto the
+// OpenPrintTag on the reader as well, as consumed_weight in its aux region
+// (openprinttag/opt_write.h). PN7160 only; off by default, since a Prusa
+// printer writes the same field (Nikolai, 26.11.2026).
+extern bool g_opt_write_weight;
+
 // A TagFormat - see services/tag_write.h. OpenSpool by default: it is the
 // record the filament managers read, where ACE only ever talks to the printer.
 extern uint8_t g_tagwrite_fmt;

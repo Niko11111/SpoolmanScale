@@ -4606,7 +4606,46 @@ const char* const STRINGS[][3] = {
   { "Die Ladung als Zahl im Akku oben rechts. Aus: nur Füllung und Blitz.",
     "The charge as a number inside the battery at the top right. Off: fill and bolt only.",
     "La charge en chiffres dans la batterie en haut à droite. Désactivé : remplissage et éclair seulement." },  // STR_W_BAT_PCT_HINT
-  { "Farbcode", "Colour code", "Code hex" },  // STR_W_TAG_COLOR_HEX
+  { "Farbcode",              "Colour code",                 "Code hex" },  // STR_W_TAG_COLOR_HEX
+  { "Rest auf OpenPrintTag", "Remaining onto OpenPrintTag", "Reste sur l'OpenPrintTag" },  // STR_TW_OPT_OPTW
+  { "Bei „Gewicht updaten“, nur PN7160",
+    "With \"Update Weight\", PN7160 only",
+    "À l'envoi du poids, PN7160" },  // STR_TW_OPT_OPTW_SUB
+  { "Nach jedem gesendeten Gewicht schreibt die Waage den Verbrauch auf einen "
+    "OpenPrintTag, so wie es ein Prusa-Drucker tut: Vollgewicht laut Tag minus "
+    "das, was auf der Waage liegt. Beschrieben wird nur der Bereich für "
+    "Druckerdaten, die Daten des Herstellers bleiben unberührt.\n\n"
+    "Braucht den PN7160-Reader. Aus: Der Tag bleibt, wie er ist.",
+    "After every weight it sends, the scale writes what was used onto an "
+    "OpenPrintTag, as a Prusa printer does: the tag's full weight minus what "
+    "lies on the scale. Only the area for printer data is written; the maker's "
+    "data stays untouched.\n\n"
+    "Needs the PN7160 reader. Off: the tag stays as it is.",
+    "Après chaque poids envoyé, la balance écrit la quantité utilisée sur un OpenPrintTag, comme une imprimante Prusa : le poids plein du tag moins ce qui est sur la balance. Seule la zone des imprimantes est écrite ; les données du fabricant restent intactes.\n\nLecteur PN7160 requis. Désactivé : le tag reste tel quel." },  // STR_TW_OPT_OPTW_INFO
+  { "Restgewicht auch auf OpenPrintTag schreiben (bei „Gewicht updaten“)",
+    "Also write the remaining weight onto an OpenPrintTag (with \"Update Weight\")",
+    "Écrire aussi le poids restant sur un OpenPrintTag (avec « Envoyer le poids »)" },  // STR_W_TAGOPT_OPTW
+  { "Tag nicht beschrieben", "Tag not written", "Tag non écrit" },  // STR_OPTW_FAIL_TITLE
+  { "Der Tag ließ sich nicht lesen oder lag nicht mehr auf. Das Gewicht steht "
+    "im Backend, auf dem Tag steht noch der alte Wert.",
+    "The tag could not be read or was no longer on the reader. The weight is in "
+    "the backend; the tag still holds the old value.",
+    "Le tag n'a pas pu être lu ou n'était plus sur le lecteur. Le poids est dans le backend ; le tag garde l'ancienne valeur." },  // STR_OPTW_FAIL_GONE
+  { "Der Tag nennt kein Vollgewicht, ohne das lässt sich der Verbrauch nicht "
+    "rechnen. Das Gewicht steht im Backend.",
+    "The tag names no full weight, so what was used cannot be worked out. The "
+    "weight is in the backend.",
+    "Le tag n'indique pas de poids plein : la quantité utilisée ne peut pas être calculée. Le poids est dans le backend." },  // STR_OPTW_FAIL_FULL
+  { "Der Tag hat keinen Bereich für Druckerdaten, oder der ist voll. Das "
+    "Gewicht steht im Backend.",
+    "The tag has no area for printer data, or it is full. The weight is in the "
+    "backend.",
+    "Le tag n'a pas de zone imprimante, ou elle est pleine. Le poids est dans le backend." },  // STR_OPTW_FAIL_AUX
+  { "Schreiben abgebrochen. Die Spule liegen lassen und das Gewicht noch einmal "
+    "senden.",
+    "Writing broke off. Leave the spool where it is and send the weight "
+    "again.",
+    "Écriture interrompue. Laissez la bobine en place et renvoyez le poids." },  // STR_OPTW_FAIL_WRITE
 };
 
 StringID tagWriteResultString(uint8_t code) {

@@ -57,6 +57,10 @@ bool nfcReadVicinityBlocks(uint8_t first, uint16_t count, uint8_t* out) {
   return s_chip == NFC_CHIP_PN7160 && pn7160ReadVicinityBlocks(first, count, out);
 }
 
+bool nfcWriteVicinityBlock(const uint8_t uid[8], uint8_t block, const uint8_t data[4]) {
+  return s_chip == NFC_CHIP_PN7160 && pn7160WriteVicinityBlock(uid, block, data);
+}
+
 bool nfcReadPassiveTarget(uint8_t* uid, uint8_t* uid_len, uint16_t timeout_ms) {
   if (s_chip == NFC_CHIP_PN7160) return pn7160ReadIso14443a(uid, uid_len, timeout_ms);
   return pn532ReadPassiveTarget(uid, uid_len, timeout_ms);

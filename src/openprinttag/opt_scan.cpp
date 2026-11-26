@@ -65,6 +65,7 @@ static uint8_t    s_retries_used = 0;   // by the last finished read, for the de
 static bool       s_read_ok = false;
 static bool       s_partial = false;    // s_mem holds a broken-off read of s_uid
 static uint32_t   s_partial_ms = 0;     // when it ended
+static bool       s_simulated = false;  // the last read was opt_sim.h's, no tag
 
 const OptTag& optLastTag() { return s_tag; }
 
@@ -106,6 +107,7 @@ static bool readMemory() {
   const uint32_t t0 = millis();
   const uint16_t from = startBlock(t0);
   const size_t simulated = optSimMemory(s_uid_wire, s_mem, sizeof(s_mem));
+  s_simulated = simulated > 0;
   if (simulated) {
     s_report.bytes = s_report.wanted = simulated;
     return true;
@@ -237,6 +239,12 @@ OptScanResult optScanTag(const uint8_t uid_wire[OPT_UID_BYTES], const char* uid_
   fillGTag(s_tag);
   return OPT_SCAN_DECODED;
 }
+
+bool optLastReadSimulated() { return s_simulated; }
+
+void optLastUidWire(uint8_t out[OPT_UID_BYTES]) { memcpy(out, s_uid_wire, OPT_UID_BYTES); }
+
+void optNoteConsumed(float consumed_g) { s_tag.consumed_g = consumed_g; }
 
 bool optTagOnReader() {
   return tag_present && strcmp(g_tag.decoder, OPT_DECODER) == 0 && g_tag.material[0] &&

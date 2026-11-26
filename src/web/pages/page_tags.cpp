@@ -12,6 +12,7 @@
 #include <esp_heap_caps.h>
 
 #include "app/app_state.h"
+#include "hardware/nfc.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
@@ -143,8 +144,16 @@ static String body() {
          "<label class='check' style='margin-top:14px'><span class='switch'>"
          "<input id='to-mism' type='checkbox'><i></i></span>");
   h += T(STR_W_TAGOPT_MISM);
-  h += F("</label>"
-         "<div class='field' style='margin-top:14px'><label>");
+  h += F("</label>");
+  // Only where a PN7160 can read an OpenPrintTag at all; the script below
+  // leaves the field out of a save when the switch is not on the page.
+  if (nfcChip() == NFC_CHIP_PN7160) {
+    h += F("<label class='check' style='margin-top:14px'><span class='switch'>"
+           "<input id='to-optw' type='checkbox'><i></i></span>");
+    h += T(STR_W_TAGOPT_OPTW);
+    h += F("</label>");
+  }
+  h += F("<div class='field' style='margin-top:14px'><label>");
   h += T(STR_W_TAGOPT_FMT);
   h += F("</label><div class='inrow'>"
          "<select id='to-fmt' style='min-width:210px'>"
@@ -230,6 +239,7 @@ static String body() {
          "function loadTagOpts(){fetch('/api/tagopts').then(r=>r.json()).then(d=>{toRead=true;"
          "document.getElementById('to-ask').value=String(d.ask);"
          "document.getElementById('to-mism').checked=!!d.mism;"
+         "const o=document.getElementById('to-optw');if(o)o.checked=!!d.optw;"
          "document.getElementById('to-fmt').value=String(d.fmt);"
          "toFmtShow();"
          "}).catch(()=>{});}"
@@ -242,15 +252,16 @@ static String body() {
          "const m=document.getElementById('to-mism').checked?1:0;"
          "const f=document.getElementById('to-fmt').value;"
          "const s=document.getElementById('to-s');"
-         "fetch('/api/tagopts',{method:'POST',body:a+','+f+','+m})"
+         "const o=document.getElementById('to-optw');"
+         "fetch('/api/tagopts',{method:'POST',body:a+','+f+','+m+(o?','+(o.checked?1:0):'')})"
          ".then(r=>r.json()).then(()=>{s.textContent=TO.saved;"
          "setTimeout(()=>{s.textContent='';},4000);})"
          // The controls already show what was asked for, so a failed write has
          // to put them back rather than leave a switch claiming a state the
          // scale is not in. Re-reading is the shortest way to the truth.
          ".catch(()=>{s.textContent=TO.err;loadTagOpts();});}"
-         "['to-ask','to-mism','to-fmt'].forEach(function(id){"
-         "document.getElementById(id).addEventListener('change',saveTagOpts);});"
+         "['to-ask','to-mism','to-fmt','to-optw'].forEach(function(id){"
+         "const e=document.getElementById(id);if(e)e.addEventListener('change',saveTagOpts);});"
          "document.getElementById('to-fmt').addEventListener('change',toFmtShow);"
          // A format picked for the write is the scale's format from then on.
          "document.getElementById('tg-fmt').addEventListener('change',function(){"
@@ -850,6 +861,7 @@ static void routes(WebServer &srv) {
     srv.send(200, "application/json",
              String("{\"ask\":") + String((int)g_tagwrite_mode) +
              ",\"mism\":" + (g_tagmismatch_ask ? "true" : "false") +
+             ",\"optw\":" + (g_opt_write_weight ? "true" : "false") +
              ",\"fmt\":" + String((int)g_tagwrite_fmt) + "}");
   });
 
@@ -859,6 +871,7 @@ static void routes(WebServer &srv) {
     String body = srv.arg("plain");
     const int c1 = body.indexOf(',');
     const int c2 = c1 < 0 ? -1 : body.indexOf(',', c1 + 1);
+    const int c3 = c2 < 0 ? -1 : body.indexOf(',', c2 + 1);
     // 0 off, 1 ask, 2 write every time. A page from before this was a choice
     // sends 0 or 1, which lands on the same two states it always meant.
     const int mode = body.substring(0, c1 < 0 ? body.length() : c1).toInt();
@@ -875,13 +888,19 @@ static void routes(WebServer &srv) {
     // existed. Leaving the setting alone is the honest reading of a body that
     // does not mention it - turning it off would be a decision nobody made.
     if (c2 >= 0) {
-      g_tagmismatch_ask = body.substring(c2 + 1).toInt() == 1;
+      g_tagmismatch_ask = body.substring(c2 + 1, c3 < 0 ? body.length() : c3).toInt() == 1;
       prefsPutBool("tagmism_ask", g_tagmismatch_ask);
+    }
+    // The OpenPrintTag switch, sent only by a page that shows it (PN7160).
+    if (c3 >= 0) {
+      g_opt_write_weight = body.substring(c3 + 1).toInt() == 1;
+      prefsPutBool("opt_wr_weight", g_opt_write_weight);
     }
     prefsPutUChar("tagwr_mode", g_tagwrite_mode);
     prefsPutUChar("tagwrite_fmt", g_tagwrite_fmt);
-    logSDf("Web: tag write mode=%d mismatch ask=%d format=%s",
-           (int)g_tagwrite_mode, (int)g_tagmismatch_ask, tagFormatLabel(g_tagwrite_fmt));
+    logSDf("Web: tag write mode=%d mismatch ask=%d OpenPrintTag weight=%d format=%s",
+           (int)g_tagwrite_mode, (int)g_tagmismatch_ask, (int)g_opt_write_weight,
+           tagFormatLabel(g_tagwrite_fmt));
     srv.send(200, "application/json", "{\"ok\":true}");
   });
 

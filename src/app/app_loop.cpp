@@ -44,6 +44,7 @@
 #include "services/user_options.h"
 #include "web/web_access.h"
 #include "services/tag_write.h"
+#include "openprinttag/opt_write.h"
 #include "hardware/sound.h"
 
 #include "services/tag_link.h"
@@ -684,6 +685,8 @@ void appLoop() {
   handleOtaServerClient();
   perfSection("tagwrite");
   tagWriteTick();
+  // The remaining weight onto an OpenPrintTag, parked by the weight's send.
+  if (const int why = optWeightWriteTick()) showInfoPopup(STR_OPTW_FAIL_TITLE, why, INFO_WARN);
   tagLinkTick();
   // Says a freshly linked tag once more, so a paired browser opens the spool
   // instead of being left with the unknown-tag toast the first scan produced.

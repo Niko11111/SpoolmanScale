@@ -1,5 +1,7 @@
 """Host test for src/openprinttag/opt_tag.cpp and cbor_reader.cpp: the format's
 own test vectors decode to the values the reference implementation prints.
+And for opt_aux.cpp: a new consumed weight written into their aux regions
+decodes back, with every other field and aux entry as it was.
 
 The vectors are taken from prusa3d/OpenPrintTag at 060e420 (MIT licence,
 Copyright 2025 Prusa Research a.s.): docs_src/sample_data/sample_tag.bin and
@@ -76,6 +78,7 @@ CPP = r"""
 #include <stdio.h>
 #include <string.h>
 #include "openprinttag/opt_tag.h"
+#include "openprinttag/opt_aux.h"
 #include "openprinttag/cbor_reader.h"
 #include "vectors.h"
 
@@ -261,6 +264,61 @@ static void helpers() {
                       "used - g | 205-220 C, bed 40-60 | made 2025-02-12") == 0);
 }
 
+// The aux region of a vector rewritten with consumed, back into its memory;
+// returns where the region starts.
+static size_t writeConsumed(const uint8_t* v, size_t n, uint8_t* mem, uint32_t consumed) {
+  memset(mem, 0, OPT_MEMORY_MAX);
+  memcpy(mem, v, n);
+  const size_t len = optMemorySize(mem);
+  size_t at = 0, size = 0;
+  assert(optAuxLocate(mem, len, &at, &size));
+  static uint8_t region[OPT_MEMORY_MAX];
+  assert(optAuxWithConsumed(mem + at, size, consumed, region));
+  memcpy(mem + at, region, size);
+  return at;
+}
+
+static void auxWrite() {
+  static uint8_t mem[OPT_MEMORY_MAX];
+  OptTag t;
+  // The sample's aux is an empty map (A0): the new one in Prusa's shape.
+  const size_t at = writeConsumed(SAMPLE, sizeof(SAMPLE), mem, 250);
+  const uint8_t want[] = {0xBF, 0x00, 0x18, 0xFA, 0xFF, 0x00};
+  assert(memcmp(mem + at, want, sizeof(want)) == 0);
+  assert(optDecodeMemory(mem, optMemorySize(mem), &t) == OPT_OK);
+  assert(near(t.consumed_g, 250) && near(optRemainingG(t), 1012 - 250));
+  assert(strcmp(t.brand, "Prusament") == 0 && near(t.actual_weight_g, 1012));
+  // Vector 03 carries consumed 444 and the workgroup "myhome": the weight
+  // changes, the workgroup stays.
+  writeConsumed(V03, sizeof(V03), mem, 600);
+  assert(optDecodeMemory(mem, optMemorySize(mem), &t) == OPT_OK);
+  assert(near(t.consumed_g, 600) && strcmp(t.workgroup, "myhome") == 0);
+  assert(strcmp(t.material_name, "PETG Jet Black") == 0);
+  // And once more: no second consumed_weight piles up.
+  static uint8_t again[OPT_MEMORY_MAX];
+  memcpy(again, mem, sizeof(again));
+  writeConsumed(again, optMemorySize(again), mem, 70000);
+  assert(optDecodeMemory(mem, optMemorySize(mem), &t) == OPT_OK);
+  assert(near(t.consumed_g, 70000) && strcmp(t.workgroup, "myhome") == 0);
+
+  uint8_t out[16];
+  const uint8_t zeros[8] = {0};
+  assert(optAuxWithConsumed(zeros, sizeof(zeros), 5, out));      // a fresh region
+  assert(out[0] == 0xBF && out[1] == 0x00 && out[2] == 0x05 && out[3] == 0xFF);
+  const uint8_t not_a_map[4] = {0x01, 0x02, 0x03, 0x04};
+  assert(!optAuxWithConsumed(not_a_map, sizeof(not_a_map), 5, out));
+  assert(!optAuxWithConsumed(zeros, 3, 1000, out));               // does not fit
+  // A map of given length that fills its region: no room for a break, so the
+  // new one keeps a given length too.
+  const uint8_t tight[3] = {0xA1, 0x00, 0x05};
+  assert(optAuxWithConsumed(tight, sizeof(tight), 6, out));
+  assert(out[0] == 0xA1 && out[1] == 0x00 && out[2] == 0x06);
+  assert(!optAuxWithConsumed(zeros, sizeof(zeros), 5, (uint8_t*)zeros));
+
+  assert(optConsumedFor(1000, 812.4f) == 188);
+  assert(optConsumedFor(1000, 1035) == 0);                        // more than full
+}
+
 int main() {
   helpers();
   sampleTag();
@@ -270,6 +328,7 @@ int main() {
   vector05();
   brokenInput();
   cborEdges();
+  auxWrite();
   return 0;
 }
 """
@@ -284,7 +343,8 @@ with tempfile.TemporaryDirectory() as tmp:
     binary = tmp / "t"
     subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror", f"-I{root/'src'}",
                     f"-I{tmp}", str(cpp), str(root / "src/openprinttag/opt_tag.cpp"),
-                    str(root / "src/openprinttag/cbor_reader.cpp"), "-o", str(binary)],
+                    str(root / "src/openprinttag/cbor_reader.cpp"),
+                    str(root / "src/openprinttag/opt_aux.cpp"), "-o", str(binary)],
                    check=True)
     subprocess.run([str(binary)], check=True)
 

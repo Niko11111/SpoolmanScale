@@ -8,6 +8,7 @@
 #include <cstring>
 
 #include "confirm_popup.h"
+#include "hardware/nfc.h"
 #include "hardware/scale_state.h"
 #include "hardware/sd_logger.h"
 #include "services/auto_weight_state.h"
@@ -378,6 +379,33 @@ static void addTagModeRow(lv_obj_t *list, uint8_t value) {
   }, LV_EVENT_CLICKED, NULL);
 }
 
+// The three texts of a switch row: title, subtitle, and the help behind its "?".
+struct TagSwitchText {
+  int title;
+  int sub;
+  int info;
+};
+
+// A row that turns one setting on and off, its state in the place of the arrow.
+static void addTagSwitchRow(lv_obj_t *list, const char *symbol, const TagSwitchText &txt, bool on,
+                            lv_event_cb_t on_tap) {
+  char buf_t[40]; copyT(buf_t, sizeof(buf_t), txt.title);
+  char buf_s[48]; copyT(buf_s, sizeof(buf_s), txt.sub);
+  lv_obj_t *help = nullptr;
+  lv_obj_t *btn = makeListBtn(list, symbol, buf_t, buf_s, on, &help);
+  if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
+                                INFO_POPUP_ARG(txt.title, txt.info));
+  lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
+  if (arr_lbl) {
+    char on_off[8]; copyT(on_off, sizeof(on_off), on ? STR_ON : STR_OFF);
+    lv_label_set_text(arr_lbl, on_off);
+    lv_obj_set_style_text_color(arr_lbl, on ? lv_color_hex(UI_COL_ACCENT)
+                                            : lv_color_hex(UI_COL_CAPTION), 0);
+    lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
+  }
+  lv_obj_add_event_cb(btn, on_tap, LV_EVENT_CLICKED, NULL);
+}
+
 void buildTagWriteScreen() {
   logSD("BUILD: TagWriteScreen");
   releaseScreen(&scr_tagwrite);
@@ -405,26 +433,25 @@ void buildTagWriteScreen() {
   // The second question the scale can ask about a tag, and its own switch: this
   // one is not about a link that just happened but about a tag that has been
   // lying around since something changed, and wanting one is not wanting both.
-  { char buf_t[40]; copyT(buf_t, sizeof(buf_t), STR_TW_OPT_MISM);
-    char buf_s[48]; copyT(buf_s, sizeof(buf_s), STR_TW_OPT_MISM_SUB);
-    lv_obj_t *help = nullptr;
-    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_REFRESH, buf_t, buf_s, g_tagmismatch_ask, &help);
-    if (help) lv_obj_add_event_cb(help, infoPopupEventCb, LV_EVENT_CLICKED,
-                                  INFO_POPUP_ARG(STR_TW_OPT_MISM, STR_TW_OPT_MISM_INFO));
-    lv_obj_t *arr_lbl = lv_obj_get_child(btn, -1);
-    if (arr_lbl) {
-      char on_off[8]; copyT(on_off, sizeof(on_off), g_tagmismatch_ask ? STR_ON : STR_OFF);
-      lv_label_set_text(arr_lbl, on_off);
-      lv_obj_set_style_text_color(arr_lbl, g_tagmismatch_ask ? lv_color_hex(UI_COL_ACCENT)
-                                                             : lv_color_hex(UI_COL_CAPTION), 0);
-      lv_obj_set_style_text_font(arr_lbl, &lv_font_montserrat_ext_14, 0);
-    }
-    lv_obj_add_event_cb(btn, [](lv_event_t *e){
-      g_tagmismatch_ask = !g_tagmismatch_ask;
-      prefsPutBool("tagmism_ask", g_tagmismatch_ask);
-      logSDf("BTN: Tag mismatch -> ask %s", g_tagmismatch_ask ? "on" : "off");
+  addTagSwitchRow(list, LV_SYMBOL_REFRESH, { STR_TW_OPT_MISM, STR_TW_OPT_MISM_SUB, STR_TW_OPT_MISM_INFO },
+                  g_tagmismatch_ask, [](lv_event_t *e){
+    g_tagmismatch_ask = !g_tagmismatch_ask;
+    prefsPutBool("tagmism_ask", g_tagmismatch_ask);
+    logSDf("BTN: Tag mismatch -> ask %s", g_tagmismatch_ask ? "on" : "off");
+    show_tagwrite_pending = true;
+  });
+
+  // The remaining weight onto an OpenPrintTag. Only where a PN7160 can read
+  // one at all: on a PN532 the switch would do nothing.
+  if (nfcChip() == NFC_CHIP_PN7160) {
+    addTagSwitchRow(list, LV_SYMBOL_UPLOAD, { STR_TW_OPT_OPTW, STR_TW_OPT_OPTW_SUB, STR_TW_OPT_OPTW_INFO },
+                    g_opt_write_weight, [](lv_event_t *e){
+      g_opt_write_weight = !g_opt_write_weight;
+      prefsPutBool("opt_wr_weight", g_opt_write_weight);
+      logSDf("BTN: OpenPrintTag weight -> %s", g_opt_write_weight ? "on" : "off");
       show_tagwrite_pending = true;
-    }, LV_EVENT_CLICKED, NULL); }
+    });
+  }
 
   // The format, with its own help. Shown even while the switch is off: it is
   // also what the tag page in the browser writes when nothing else is chosen,

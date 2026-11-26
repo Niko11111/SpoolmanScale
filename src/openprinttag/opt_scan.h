@@ -28,6 +28,14 @@ bool optTagOnReader();
 
 // The last tag read, decoded (valid when optTagOnReader()).
 const OptTag& optLastTag();
+// Whether the last tag read was the simulated one (opt_sim.h): no tag to write.
+bool optLastReadSimulated();
+// The last tag's UID as the reader returned it (LSB first), for a command
+// addressed to that tag alone.
+void optLastUidWire(uint8_t out[OPT_UID_BYTES]);
+// What opt_write.cpp has just written to the tag on the reader, so the screens
+// show the tag as it now is.
+void optNoteConsumed(float consumed_g);
 
 // What the tag page and the tag view show for it.
 void optFillTagInfo(TagInfo* ti);

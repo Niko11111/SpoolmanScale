@@ -79,6 +79,10 @@ size_t optBytesNeeded(const uint8_t* head, size_t have);
 OptResult optDecodeMemory(const uint8_t* mem, size_t len, OptTag* out);
 // Just the record's payload: the three regions.
 OptResult optDecodePayload(const uint8_t* p, size_t len, OptTag* out);
+// Where the aux region lies in the memory as read: its first byte (block 0
+// is byte 0) and its size. False without an OpenPrintTag record or without an
+// aux region its meta names; a writer never invents one (opt_aux.h).
+bool optAuxLocate(const uint8_t* mem, size_t len, size_t* at, size_t* size);
 
 const char* optResultName(OptResult r);
 // The format's abbreviation for a material_type, or nullptr.

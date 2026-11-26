@@ -159,6 +159,7 @@ void loadPrefs() {
   // Short key: NVS takes 15 characters and "tagmismatch_ask" is exactly at the
   // limit, which is no place to be.
   g_tagmismatch_ask = prefsGetBool("tagmism_ask", false);
+  g_opt_write_weight = prefsGetBool("opt_wr_weight", false);
   // Clamped rather than trusted: the value is persisted, and a firmware that
   // once knew a fourth format would otherwise leave one behind that this build
   // cannot write. TAG_FMT_ERASE is deliberately not offered here - erasing is

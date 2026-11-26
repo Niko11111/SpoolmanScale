@@ -29,5 +29,6 @@ bool g_flm_bambu_tags = false;
 bool g_flm_ext_id = true;
 uint8_t g_tagwrite_mode = TAGWRITE_OFF;
 bool g_tagmismatch_ask = false;
+bool g_opt_write_weight = false;
 uint8_t g_tagwrite_fmt = TAG_FMT_OPENSPOOL;
 bool g_ble_enabled = false;

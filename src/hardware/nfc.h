@@ -54,6 +54,11 @@ bool nfcReadVicinityBlock(uint8_t block, uint8_t data[4]);
 // BLOCKS in chunks and READ SINGLE BLOCK where a tag refuses that. PN7160
 // only; false on a PN532, or when any block could not be read.
 bool nfcReadVicinityBlocks(uint8_t first, uint16_t count, uint8_t* out);
+// WRITE SINGLE BLOCK, addressed to the ISO 15693 tag with this UID (as the
+// poll returned it, LSB first): another tag in the field does not take it.
+// PN7160 only; false on a PN532, for block 0, or when the tag refused it.
+// Called only from openprinttag/opt_write.cpp, which reads the block back.
+bool nfcWriteVicinityBlock(const uint8_t uid[8], uint8_t block, const uint8_t data[4]);
 // Switches the RF field off and on again, which resets a card that a refused
 // key has left halted (a plain wake no longer reaches it). Returns which steps
 // worked, as NFC_RF_* bits, for the caller's log line.

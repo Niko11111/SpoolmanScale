@@ -29,6 +29,7 @@
 #include "services/weight_write_rules.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/info_popup.h"
+#include "openprinttag/opt_write.h"
 
 
 
@@ -75,7 +76,9 @@ int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
   // announces it beforehand.
   if (sm_archived) {
     logSDf("Weight on archived spool %d, reactivating instead", sm_id);
-    return reactivateSpool(remaining) ? 200 : PATCH_WEIGHT_NO_TARGET;
+    if (!reactivateSpool(remaining)) return PATCH_WEIGHT_NO_TARGET;
+    optWeightWritePark(remaining < 0 ? 0 : remaining);
+    return 200;
   }
 
   // BamBuddy's own inventory stores what was consumed and derives the rest
@@ -116,6 +119,9 @@ int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
     // is read from the server again before anything is written to it.
     spoolCacheSetRemaining(sm_id, remaining);
     showSpoolRemaining();
+    // The same weight onto an OpenPrintTag, when its switch is on: parked,
+    // the loop writes it (opt_write.h).
+    optWeightWritePark(remaining);
     struct tm* t = nullptr;
     if (last_used_mode == 1 && lbl_last_used) {
       time_t now = time(nullptr);

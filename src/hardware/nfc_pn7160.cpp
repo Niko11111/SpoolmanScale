@@ -109,6 +109,12 @@ constexpr uint8_t  NTAG_READ_BYTES    = 16;     // READ returns four pages
 constexpr uint8_t  ISO15693_FLAGS     = 0x02;   // high data rate, not addressed
 constexpr uint8_t  ISO15693_READ_SINGLE = 0x20;
 constexpr uint8_t  ISO15693_READ_MULTIPLE = 0x23;   // first block, count - 1
+constexpr uint8_t  ISO15693_WRITE_SINGLE = 0x21;    // block, then its 4 bytes
+// High data rate, addressed: the 8 UID bytes follow the command, and only that
+// tag answers.
+constexpr uint8_t  ISO15693_FLAGS_ADDRESSED = 0x22;
+constexpr uint8_t  ISO15693_CC_BLOCK  = 0;       // the capability container
+constexpr uint8_t  ISO15693_ERROR_FLAG = 0x01;   // response flags: an error code follows
 // Blocks per READ MULTIPLE: 32 bytes, far below the 255-byte NCI payload and
 // what ICODE SLIX2 returns in one go (it allows all 80).
 constexpr uint8_t  ISO15693_CHUNK_BLOCKS = 8;
@@ -871,6 +877,27 @@ bool pn7160WriteNtagPage(uint8_t page, const uint8_t data[4]) {
   uint8_t cmd[2 + NTAG_PAGE_BYTES] = {CMD_NTAG_WRITE, page};
   memcpy(cmd + 2, data, NTAG_PAGE_BYTES);
   return writeAcked(cmd, sizeof(cmd));
+}
+
+// WRITE SINGLE BLOCK, addressed to uid (as received, LSB first). The tag
+// answers with its response flags (0: written, else an error code follows,
+// 0x12 for a locked block), the interface adds its status byte.
+bool pn7160WriteVicinityBlock(const uint8_t uid[8], uint8_t block, const uint8_t data[4]) {
+  if (s_target.proto != NCI_PROT_T5T || block == ISO15693_CC_BLOCK) return false;
+  uint8_t cmd[2 + ISO15693_UID_BYTES + 1 + ISO15693_BLOCK_BYTES] = {ISO15693_FLAGS_ADDRESSED,
+                                                                     ISO15693_WRITE_SINGLE};
+  memcpy(cmd + 2, uid, ISO15693_UID_BYTES);
+  cmd[2 + ISO15693_UID_BYTES] = block;
+  memcpy(cmd + 3 + ISO15693_UID_BYTES, data, ISO15693_BLOCK_BYTES);
+  uint8_t resp[NCI_PAYLOAD_MAX];
+  uint8_t n = 0;
+  if (!exchange(cmd, sizeof(cmd), resp, &n) || n < 2) return false;
+  const uint8_t status = resp[n - 1];
+  const bool tag_ok = (resp[0] & ISO15693_ERROR_FLAG) == 0;
+  if (tag_ok && (status == TAG_STATUS_OK || status == TAG_STATUS_WRITE_ACK)) return true;
+  logSDf("PN7160: ISO 15693 write of block %u refused, flags 0x%02X, error 0x%02X, status 0x%02X",
+         block, resp[0], tag_ok ? 0 : resp[1], status);
+  return false;
 }
 
 // A MIFARE Classic WRITE is two exchanges, each acknowledged by the card:

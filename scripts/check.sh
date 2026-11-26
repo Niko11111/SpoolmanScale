@@ -218,9 +218,13 @@ if [ -n "$hits" ]; then bad "nfcWriteMifareBlock outside services/mifare_write.c
 #     before the first page; every record goes through it.
 hits=$(grep -rn 'nfcWriteNtagPage' src | grep -vE '^src/(services/ntag_pages\.cpp|hardware/nfc\.(cpp|h)):' || true)
 if [ -n "$hits" ]; then bad "nfcWriteNtagPage outside services/ntag_pages.cpp:"; echo "$hits" | sed 's/^/        /'; else ok "NTAG pages written only through services/ntag_pages.cpp"; fi
+#     And for an ISO 15693 block: openprinttag/opt_write.cpp writes only an
+#     OpenPrintTag's aux region, the blocks that change, each read back.
+hits=$(grep -rn 'nfcWriteVicinityBlock' src | grep -vE '^src/(openprinttag/opt_write\.cpp|hardware/nfc\.(cpp|h)):' || true)
+if [ -n "$hits" ]; then bad "nfcWriteVicinityBlock outside openprinttag/opt_write.cpp:"; echo "$hits" | sed 's/^/        /'; else ok "ISO 15693 blocks written only through openprinttag/opt_write.cpp"; fi
 #     Below that call sit the chip drivers. Reaching them directly would skip
-#     both guards above, so their write calls stay inside the reader layer.
-hits=$(grep -rnE 'pn532Write(NtagPage|MifareBlock)|pn7160Write(NtagPage|MifareBlock)|ntag2xx_WritePage|mifareclassic_WriteDataBlock' src | grep -vE '^src/hardware/nfc(_pn532|_pn7160)?\.(cpp|h):' || true)
+#     the guards above, so their write calls stay inside the reader layer.
+hits=$(grep -rnE 'pn532Write(NtagPage|MifareBlock)|pn7160Write(NtagPage|MifareBlock|VicinityBlock)|ntag2xx_WritePage|mifareclassic_WriteDataBlock' src | grep -vE '^src/hardware/nfc(_pn532|_pn7160)?\.(cpp|h):' || true)
 if [ -n "$hits" ]; then bad "chip write call outside hardware/nfc*:"; echo "$hits" | sed 's/^/        /'; else ok "chip write calls only inside hardware/nfc*"; fi
 #     The page and record helpers have external linkage only so the tag files
 #     can share them; the header that declares them belongs to those files.
