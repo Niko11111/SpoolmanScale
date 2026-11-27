@@ -42,13 +42,17 @@ struct SpoolOptionsSpec {
   // Done or the density row: the card is shown again with its new values. With
   // `density` set the card opens its density pad next.
   void (*on_close)(bool density);
+  // The close X: whatever the pages were opened from goes as well (the weight
+  // popup's Options). Null where that is the card itself: then on_close(false).
+  void (*on_dismiss)();
 };
 
 // From the card's button. The popup goes up on the loop's next pass.
 void showSpoolOptions(const SpoolOptionsSpec& spec);
 // The empty spool lists alone, for a spool that exists (the weight popup's
 // Options): they open on "Which empty spool?", and a pick, Automatic or Back
-// ends them with on_close(false). `price` may be null; the caller sees in
+// ends them with on_close(false), the close X with on_dismiss() where it is
+// set. `price` may be null; the caller sees in
 // *choice whether one was picked.
 void showSpoolPickList(const SpoolOptionsSpec& spec);
 bool spoolOptionsOpen();

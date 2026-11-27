@@ -42,11 +42,15 @@
 #define WP_BOX_EXTRA     12    // the margin under the last row, and the border
 #define WP_ARCHIVE_W    120
 #define WP_GAP            8
-// Four rows and Back in the large popup's height (UI_POPUP_LARGE_H): full
-// spool, weigh, type, pick the empty spool.
-#define WP_OPT_ROW_Y0    36
-#define WP_OPT_ROW_H     48
-#define WP_OPT_ROW_STEP  52
+// What the close X in the top right corner takes from the header lines.
+#define WP_X_CLEAR      (UI_TOUCH_MIN + UI_CLOSE_X_INSET + WP_GAP)
+#define WP_HEAD_W       (WP_INNER_W + WP_X - WP_X_CLEAR)
+// Four rows and Back under the X, within the screen's height: full spool,
+// weigh, type, pick the empty spool.
+#define WP_OPT_TITLE_Y   14
+#define WP_OPT_ROW_Y0    52
+#define WP_OPT_ROW_H     46
+#define WP_OPT_ROW_STEP  50
 #define WP_OPT_BACK_H    44
 #define WP_OPT_ROWS_TARE 4
 #define WP_OPT_BOX_EXTRA 10
@@ -268,12 +272,13 @@ static void wpPrimaryClicked(lv_event_t *e) {
 
 static void wpBuildHeaderAndPrimary(lv_obj_t *box) {
   s_v.line1 = wpLabel(box, "", UI_FONT_SMALL, UI_COL_INK_SOFT);
-  labelDotLine(s_v.line1, WP_INNER_W);
+  labelDotLine(s_v.line1, WP_HEAD_W);
   lv_obj_set_pos(s_v.line1, WP_X, 6);
   s_v.change = wpLabel(box, "", UI_FONT_BODY, UI_COL_INK_2);
   lv_obj_set_pos(s_v.change, WP_X, 28);
   s_v.diff = wpLabel(box, "", UI_FONT_BODY, UI_COL_INK_SOFT);
-  lv_obj_align(s_v.diff, LV_ALIGN_TOP_RIGHT, -WP_X, 28);
+  lv_obj_align(s_v.diff, LV_ALIGN_TOP_RIGHT, -WP_X_CLEAR, 28);
+  uiPopupCloseX(box, [](lv_event_t *e) { logSD("BTN: WeightPopup -> Close"); closeWeightPopups(); }, NULL);
 
   s_v.primary = wpButton(box, WP_X, WP_PRIMARY_Y, WP_INNER_W, WP_PRIMARY_H);
   lv_obj_set_style_radius(s_v.primary, UI_RADIUS_BOX, 0);
@@ -405,6 +410,13 @@ static void wpSpoolListClosed(bool) {
   wpOpenLevel1(false);
 }
 
+// The close X on a list: the weight popup goes too, nothing was picked.
+static void wpSpoolListDismissed() {
+  s_list_open = false;
+  logSD("UI: weight options -> empty spool lists closed by X");
+  closeWeightPopups();
+}
+
 static void wpOpenSpoolList() {
   if (s_list_open) return;
   spoolChoiceClear(&s_list_choice);
@@ -415,6 +427,7 @@ static void wpOpenSpoolList() {
   spec.auto_from   = wpTareFrom();
   spec.maker       = sm_vendor_g;
   spec.on_close    = wpSpoolListClosed;
+  spec.on_dismiss  = wpSpoolListDismissed;
   s_list_open = true;
   showSpoolPickList(spec);
 }
@@ -462,11 +475,12 @@ static void wpShowOptions() {
   releaseScreen(&s_popup);
   lv_obj_t *box = uiPopupBox(&s_opts, WP_BOX_W, back_y + WP_OPT_BACK_H + WP_OPT_BOX_EXTRA);
 
-  lv_obj_set_pos(wpLabel(box, T(STR_WP_OPTIONS), UI_FONT_TITLE, UI_COL_INK), WP_X + 4, 10);
+  lv_obj_set_pos(wpLabel(box, T(STR_WP_OPTIONS), UI_FONT_TITLE, UI_COL_INK), WP_X + 4, WP_OPT_TITLE_Y);
   char buf[48];
   snprintf(buf, sizeof(buf), "#%d  %s", sm_id, sm_filament_name);
   lv_obj_t *who = wpLabel(box, buf, UI_FONT_SMALL, UI_COL_INK_SOFT);
-  lv_obj_align(who, LV_ALIGN_TOP_RIGHT, -WP_X - 4, 12);
+  lv_obj_align(who, LV_ALIGN_TOP_RIGHT, -WP_X_CLEAR, WP_OPT_TITLE_Y + 2);
+  uiPopupCloseX(box, [](lv_event_t *e) { logSD("BTN: WeightOptions -> Close"); closeWeightPopups(); }, NULL);
 
   wpBuildOptionRows(box, tare);
 

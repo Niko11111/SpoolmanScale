@@ -32,6 +32,8 @@
 #define UNK_ROW_W        412   // what is left between the insets
 #define UNK_GAP            8
 #define UNK_TEXT_W       400
+// The title keeps clear of the close X on both sides, so it stays centred.
+#define UNK_TITLE_W      (UNK_TEXT_W - 2 * (UI_TOUCH_MIN + UNK_GAP))
 #define UNK_TITLE_Y       14
 #define UNK_IDENT_Y       46
 #define UNK_IDENT_H       26
@@ -202,13 +204,14 @@ static lv_obj_t* label(lv_obj_t* p, const char* text, const lv_font_t* font, uin
   return l;
 }
 
-static void centredLine(lv_obj_t* box, const char* text, const lv_font_t* font,
-                        uint32_t color, int y) {
+static lv_obj_t* centredLine(lv_obj_t* box, const char* text, const lv_font_t* font,
+                             uint32_t color, int y) {
   lv_obj_t* l = label(box, text, font, color);
   lv_obj_set_size(l, UNK_TEXT_W, lv_font_get_line_height(font));
   lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
   lv_obj_align(l, LV_ALIGN_TOP_MID, 0, y);
+  return l;
 }
 
 static lv_obj_t* swatch(lv_obj_t* p, int size) {
@@ -360,7 +363,9 @@ static bool cardInput(TagCreateInput* in) {
 static void buildHead(lv_obj_t* box) {
   char title[48];
   backendText(T(STR_NOT_IN_SPOOLMAN), title, sizeof(title));
-  centredLine(box, title, UI_FONT_HEADLINE, UI_COL_INK, UNK_TITLE_Y);
+  lv_obj_set_width(centredLine(box, title, UI_FONT_HEADLINE, UI_COL_INK, UNK_TITLE_Y), UNK_TITLE_W);
+  // The X does what the way out at the bottom does: just weigh, or Cancel.
+  uiPopupCloseX(box, onAction, (void*)(intptr_t)(s_held ? UA_CANCEL : UA_WEIGH));
 
   TagCreateInput in;
   const bool known = cardInput(&in);

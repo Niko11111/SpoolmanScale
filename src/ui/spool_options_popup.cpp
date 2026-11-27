@@ -22,30 +22,30 @@
 #include "ui/theme.h"
 #include "ui/ui_common.h"
 
-// The Options page inside the large popup's 2 px border: up to three rows
-// and Done. Price and empty spool are tall rows, the full weight or the
-// density a short one below them.
+// The Options page inside the large popup's 2 px border: the title and the
+// close X, up to three rows under them and Done. Price and empty spool are
+// tall rows, the full weight or the density a short one below them.
 #define SO_INNER_W     (UI_POPUP_LARGE_W - 4)
 #define SO_EDGE        12
 #define SO_ROW_W       (SO_INNER_W - 2 * SO_EDGE)
-#define SO_TITLE_Y     12
-#define SO_PRICE_Y     48
-#define SO_SPOOL_Y     112
-#define SO_SHORT_Y     176
+#define SO_TITLE_Y     14
+#define SO_PRICE_Y     52
+#define SO_SPOOL_Y     116
+#define SO_SHORT_Y     180
 #define SO_ROW_H       56
 #define SO_SHORT_H     UI_TOUCH_MIN
-#define SO_DONE_Y      228
+#define SO_DONE_Y      232
 #define SO_DONE_H      56
 // Both short rows at once (a card without a density that offers the full
 // weight): four rows, each as short as a finger allows, the spool's with its
 // line under it a little taller.
-#define SO_TIGHT_PRICE_Y    42
-#define SO_TIGHT_SPOOL_Y    90
+#define SO_TIGHT_PRICE_Y    48
+#define SO_TIGHT_SPOOL_Y    96
 #define SO_TIGHT_SPOOL_H    48
-#define SO_TIGHT_FULL_Y     142
-#define SO_TIGHT_DENSITY_Y  190
-#define SO_TIGHT_DONE_Y     240
-#define SO_TIGHT_DONE_H     52
+#define SO_TIGHT_FULL_Y     148
+#define SO_TIGHT_DENSITY_Y  196
+#define SO_TIGHT_DONE_Y     244
+#define SO_TIGHT_DONE_H     48
 #define SO_ROW_PAD     14
 // A row's name and the line under it, from the top of a tall row.
 #define SO_NAME_Y      8
@@ -62,7 +62,7 @@ static const char* const RECENT_KEYS[SPOOL_RECENT_MAX] = { "spool_recent0", "spo
 
 enum SoPage : uint8_t { SO_NONE = 0, SO_OPTIONS, SO_LIST, SO_MAKERS, SO_MAKER, SO_PRICE, SO_TYPED,
                         SO_FULL };
-enum SoTap : uint8_t { SO_TAP_PRICE = 1, SO_TAP_SPOOL, SO_TAP_DENSITY, SO_TAP_FULL, SO_TAP_DONE };
+enum SoTap : uint8_t { SO_TAP_PRICE = 1, SO_TAP_SPOOL, SO_TAP_DENSITY, SO_TAP_FULL, SO_TAP_DONE, SO_TAP_CLOSE };
 
 static SpoolOptionsSpec s_spec = {};
 static char        s_maker_name[SPOOL_CHOICE_NAME_MAX] = "";
@@ -76,6 +76,7 @@ static bool        s_then_density = false;
 // Opened on the list itself (showSpoolPickList()): it ends where the Options
 // page would come next.
 static bool        s_list_only = false;
+static bool        s_dismissed = false;   // left by the close X, not by Done or a pick
 // The three lists a page offers, 1.1 kB in PSRAM from the first opening on:
 // internal RAM need not hold them while no popup stands.
 // recent: the last choices. mine: the user's own, read again for every list,
@@ -107,6 +108,7 @@ void showSpoolOptions(const SpoolOptionsSpec& spec) {
   s_spec.maker = s_maker_name;
   s_then_density = false;
   s_list_only = false;
+  s_dismissed = false;
   s_want = SO_OPTIONS;
 }
 
@@ -164,6 +166,8 @@ static void onOptionsTap(lv_event_t* e) {
     case SO_TAP_SPOOL:   logSD("BTN: Options -> Empty spool");   s_want = SO_LIST;  break;
     case SO_TAP_DENSITY: logSD("BTN: Options -> Density");       s_then_density = true; s_want = SO_NONE; break;
     case SO_TAP_FULL:    logSD("BTN: Options -> Full weight");   s_want = SO_FULL;  break;
+    // What was changed is kept either way: every row writes as it is set.
+    case SO_TAP_CLOSE:   logSD("BTN: Options -> Close");         s_dismissed = true; s_want = SO_NONE; break;
     default:             logSD("BTN: Options -> Done");          s_want = SO_NONE;  break;
   }
 }
@@ -250,6 +254,7 @@ static void fullValue(char* out, size_t out_size, uint32_t* color) {
 
 static void buildOptions(lv_obj_t* box) {
   lv_obj_align(text(box, T(STR_WP_OPTIONS), UI_FONT_HEADLINE, UI_COL_INK), LV_ALIGN_TOP_MID, 0, SO_TITLE_Y);
+  uiPopupCloseX(box, onOptionsTap, (void*)(intptr_t)SO_TAP_CLOSE);
   const OptLayout at = optLayout(s_spec.full_g != nullptr, s_spec.density);
   char value[64];
   if (*s_spec.price > 0.0f) snprintf(value, sizeof(value), "%.2f", *s_spec.price);
@@ -326,6 +331,7 @@ static void onPickTap(int tap) {
   if (tap == SPICK_TAP_CLOSE) {
     // Out of every page at once, Options included, as Done would leave it.
     logSD("BTN: SpoolPick -> Close");
+    s_dismissed = true;
     s_want = SO_NONE;
     return;
   }
@@ -488,11 +494,15 @@ static void buildPage(SoPage page) {
 }
 
 // Done, or the density row: the card comes back and takes it from there.
+// The close X instead ends the caller too where it asked for that.
 static void finish() {
   if (s_spec.card) lv_obj_clear_flag(s_spec.card, LV_OBJ_FLAG_HIDDEN);
   const bool density = s_then_density;
+  const bool dismissed = s_dismissed;
   s_then_density = false;
-  if (s_spec.on_close) s_spec.on_close(density);
+  s_dismissed = false;
+  if (dismissed && s_spec.on_dismiss) s_spec.on_dismiss();
+  else if (s_spec.on_close)           s_spec.on_close(density);
 }
 
 // May come from a handler (the card closes from its own buttons' paths), so
@@ -506,6 +516,7 @@ void closeSpoolOptions() {
   s_rebuild = false;
   s_list_only = false;
   s_then_density = false;
+  s_dismissed = false;
 }
 
 void spoolOptionsTick() {
