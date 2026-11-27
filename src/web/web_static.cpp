@@ -158,14 +158,25 @@ static const char APP_CSS[] PROGMEM =
       "border:1px solid var(--line-soft);border-radius:10px;padding:8px 12px}"
       ".addr b{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--accent)}"
       ".addr i{font-family:var(--mono);font-size:11px;font-style:normal;color:var(--ink-3)}"
-      // nav
+      // nav - ten tabs in three groups (web_pages.cpp). 10 px a side puts 24 px
+      // between two labels, the spacing Apple asks for around controls without
+      // a bezel; a dot sits between tabs of a group, a rule between groups.
+      // French, the widest, needs about 832 of the 848 px row.
       ".nav{display:flex;flex-wrap:wrap;gap:4px;background:var(--surface-2);"
       "border:1px solid var(--line-soft);border-radius:12px;padding:5px}"
-      ".nav a{color:var(--ink-3);text-decoration:none;font-size:13.5px;font-weight:500;"
-      "padding:8px 14px;border-radius:8px;transition:background .14s,color .14s}"
+      ".nav a{position:relative;color:var(--ink-3);text-decoration:none;font-size:13.5px;font-weight:500;"
+      "padding:8px 10px;border-radius:8px;transition:background .14s,color .14s}"
+      ".nav a+a::before{content:'\\00B7';position:absolute;left:-6px;width:8px;top:0;bottom:0;"
+      "display:flex;align-items:center;justify-content:center;color:var(--ink-3);opacity:.6;pointer-events:none}"
+      ".nav a.grp{margin-left:13px}"
+      ".nav a.grp::before{content:'';left:-9px;width:1px;top:8px;bottom:8px;background:var(--line);opacity:1}"
       ".nav a:hover{color:var(--ink-2);background:var(--hover)}"
       ".nav a.on{background:var(--accent-dim);color:var(--ink);"
       "box-shadow:inset 0 0 0 1px var(--accent-line)}"
+      // A link inside a card that leads somewhere: another page or the manual.
+      // Without it the browser's own blue stood on every palette.
+      "a.go{color:var(--accent);font-weight:600;text-decoration:none}"
+      "a.go:hover{text-decoration:underline}"
       // cards
       ".grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}"
       ".card{background:var(--surface);border:1px solid var(--line-soft);"
@@ -257,10 +268,13 @@ static const char APP_CSS[] PROGMEM =
       //
       // The icon says what kind of action it is, the words say which one, so
       // the same icon stands for every action of a kind: the tick for every
-      // save, the bin for every delete. Toggles, tabs and Connect stay words.
-      "button[data-ic]{display:inline-flex;align-items:center;justify-content:center;gap:7px}"
+      // save, the bin for every delete, the WiFi arcs for every Connect to a
+      // network, as on the device (Nikolai, 24.11.2026). Toggles, tabs and
+      // the other Connects stay words. The file picker's label is a button to
+      // the eye and takes icons the same way.
+      "button[data-ic],.filebtn[data-ic]{display:inline-flex;align-items:center;justify-content:center;gap:7px}"
       "button[data-ic][hidden]{display:none}"
-      "button[data-ic]:before{content:'';width:16px;height:16px;flex:none;"
+      "button[data-ic]:before,.filebtn[data-ic]:before{content:'';width:16px;height:16px;flex:none;"
       "background:currentColor;forced-color-adjust:none;"
       "-webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat}"
       // Icon only, for a row of small actions that repeats down a list and
@@ -281,6 +295,8 @@ static const char APP_CSS[] PROGMEM =
       "[data-ic=add]{--ic:" WEB_ICON("M12 5v14M5 12h14") "}"
       "[data-ic=scale]{--ic:" WEB_ICON("M5 7h14M12 7v3M4 10h16l-1.5 10h-13zM10 15h4") "}"
       "[data-ic=x]{--ic:" WEB_ICON("M6 6l12 12M18 6L6 18") "}"
+      "[data-ic=wifi]{--ic:" WEB_ICON("M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0"
+                                      "M8.5 16a5 5 0 0 1 7 0M12 19.5h.01") "}"
       "[data-ic=back]{--ic:" WEB_ICON("M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3") "}"
       "[data-ic=eye]{--ic:" WEB_ICON("M2 12c2.5-4.5 6-7 10-7s7.5 2.5 10 7c-2.5 4.5-6 7-10 7"
                                      "s-7.5-2.5-10-7zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z") "}"
@@ -288,6 +304,18 @@ static const char APP_CSS[] PROGMEM =
       "[data-ic=tlg]{--ic:" WEB_ICON("M3 19l5-13 5 13M4.6 15h6.8M16 12h6M19 9v6") "}"
       "[data-ic=full]{--ic:" WEB_ICON("M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5") "}"
       "[data-ic=unfull]{--ic:" WEB_ICON("M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5") "}"
+      // Picking a file, and reading a release's notes.
+      "[data-ic=fo]{--ic:" WEB_ICON("M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5"
+                                    "a2 2 0 0 1-2-2z") "}"
+      "[data-ic=nt]{--ic:" WEB_ICON("M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"
+                                    "M14 3v5h5M9 13h6M9 17h4") "}"
+      // Writing a tag, binding it to a spool, and taking it off again.
+      "[data-ic=wr]{--ic:" WEB_ICON("M17 3l4 4L8 20H4v-4zM14 6l4 4") "}"
+      "[data-ic=ln]{--ic:" WEB_ICON("M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7"
+                                    "M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7") "}"
+      "[data-ic=unl]{--ic:" WEB_ICON("M18.8 12.3l1.7-1.7a5 5 0 0 0-7.1-7.1l-1.7 1.7"
+                                     "M5.2 11.7l-1.7 1.7a5 5 0 0 0 7.1 7.1l1.7-1.7"
+                                     "M8 2v3M2 8h3M16 19v3M19 16h3") "}"
       // A file input in the page's own button vocabulary. The native control
       // stays in the label, hidden, so the label click opens the picker and
       // the form still posts the file; the chosen name shows beside it.
@@ -348,6 +376,11 @@ static const char APP_CSS[] PROGMEM =
       // wordmark over by 8 px.
       ".head{grid-template-columns:44px 1fr}.mark{width:44px;height:44px}"
       ".addr{grid-column:1/-1}}"
+      // Below the 860 px column plus the body's 20 px a side the strip may
+      // wrap, and a dot or rule would then start the second row. 40 px more
+      // cover a classic scrollbar and fonts wider than the Mac's; the rule
+      // selector is named too, it outranks the dot's.
+      "@media(max-width:939px){.nav a+a::before,.nav a.grp::before{content:none}.nav a.grp{margin-left:0}}"
       // A log row carries three buttons. Below 500 px they take a line of their
       // own under the name rather than squeezing it out.
       "@media(max-width:500px){.listrow{flex-wrap:wrap}"
@@ -511,8 +544,10 @@ static const char APP_JS[] PROGMEM =
   // and puts the focus on Cancel. The text goes in as text: a tag's contents
   // can be part of it. Built on the first question, so a page that never
   // asks carries nothing; a second question answers the first with no.
+  // ic is the action's icon (data-ic), the tick when left out and none for
+  // "": a dialog's buttons take icons like every other button, Cancel the X.
   "var ASK=null;\n"
-  "function ask(text,yes,danger){"
+  "function ask(text,yes,danger,ic){"
   "if(ASK&&ASK.done)ASK.done(false);"
   "if(!ASK){var b=document.createElement('div');b.className='ask';"
   "b.innerHTML='<div class=\"ac\" role=\"dialog\" aria-modal=\"true\" aria-describedby=\"askt\">'"
@@ -532,6 +567,8 @@ static const char APP_JS[] PROGMEM =
   "var prev=document.activeElement;"
   "ASK.txt.textContent=text;ASK.yes.textContent=yes||WS.yes;ASK.no.textContent=WS.no;"
   "ASK.yes.className=danger?'danger':'';"
+  "if(ic===undefined)ic='ok';if(ic)ASK.yes.dataset.ic=ic;else delete ASK.yes.dataset.ic;"
+  "ASK.no.dataset.ic='x';"
   "ASK.box.classList.add('open');(danger?ASK.no:ASK.yes).focus();"
   "return new Promise(function(res){ASK.done=function(v){ASK.done=null;"
   "ASK.box.classList.remove('open');"

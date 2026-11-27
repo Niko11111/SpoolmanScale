@@ -19,9 +19,10 @@ extern const WebPage PAGE_PRINTER;
 extern const WebPage PAGE_LABEL;
 extern const WebPage PAGE_THEME;
 
+// Three groups, by how often a page is opened: the inventory, what goes out
+// to a printer, and the device itself, set up once and serviced now and then.
 const WebPage* const WEB_PAGES[] = {
   &PAGE_STATUS,
-  &PAGE_BACKEND,
   &PAGE_DRYING,
   &PAGE_TAGS,
   &PAGE_SPOOLS,
@@ -29,6 +30,7 @@ const WebPage* const WEB_PAGES[] = {
   &PAGE_LABEL,
   &PAGE_CONFIG,
   &PAGE_THEME,
+  &PAGE_BACKEND,
   &PAGE_LOGS,
   &PAGE_FIRMWARE,
 };
@@ -40,4 +42,16 @@ const char* webPageLabel(const WebPage &p) { return p.label(); }
 bool webPageVisible(const WebPage &p) {
   if (p.applies && !p.applies()) return false;
   return webGateOpen(p.gate);
+}
+
+// Eleven tabs no longer fit one row at 860 px in German or French, so the
+// theme page is reached from a card on the settings page. It keeps its own
+// URL, routes and gate (GATE_CONFIG, the same as its parent's), so a closed
+// switch still hides exactly what it hid before.
+const WebPage* webPageNavParent(const WebPage &p) {
+  return &p == &PAGE_THEME ? &PAGE_CONFIG : nullptr;
+}
+
+bool webPageStartsNavGroup(const WebPage &p) {
+  return &p == &PAGE_PRINTER || &p == &PAGE_CONFIG;
 }

@@ -9,6 +9,7 @@
 #include <lvgl.h>
 
 #include "services/device_name.h"
+#include "ui/header_battery.h"
 #include "services/mdns_service.h"
 #include "services/user_options.h"
 #include "ui/main_screen_helpers.h"
@@ -44,15 +45,27 @@ static lv_color_t wifiColor() {
 // is why this runs after every text change rather than once at build time.
 #define HDR_CHIP_MARGIN  8
 #define HDR_CHIP_GAP    10
+// When the full row would reach the title - a beta's long version string,
+// Bluetooth, an AMS and the battery all at once - the gaps close to this.
+// Six of them give back 12 px, more than that row was short.
+#define HDR_CHIP_GAP_TIGHT 8
 
-void layoutHeaderChips() {
-  if (!lbl_hdr_sm) return;
-  // A label sized to its content only knows its new width after a layout pass,
-  // and lv_obj_align_to() reads that width. Without this the chips would be
-  // placed from the previous text.
-  lv_obj_update_layout(lv_obj_get_parent(lbl_hdr_sm));
+static bool isShown(lv_obj_t *obj) {
+  return obj && !lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN);
+}
 
-  lv_obj_align(lbl_hdr_sm, LV_ALIGN_RIGHT_MID, -HDR_CHIP_MARGIN, 0);
+// Right to left from the battery or the backend badge, gap apart. Returns the
+// leftmost chip placed.
+static lv_obj_t *packHeaderChips(lv_coord_t gap) {
+  // The battery, where there is one, is the last thing on the right, where a
+  // phone or a laptop puts it. Its width never changes, so the badge and the
+  // chips left of it stay where they are when the digits change.
+  if (isShown(lbl_hdr_bat)) {
+    lv_obj_align(lbl_hdr_bat, LV_ALIGN_RIGHT_MID, -HDR_CHIP_MARGIN, 0);
+    lv_obj_align_to(lbl_hdr_sm, lbl_hdr_bat, LV_ALIGN_OUT_LEFT_MID, -gap, 0);
+  } else {
+    lv_obj_align(lbl_hdr_sm, LV_ALIGN_RIGHT_MID, -HDR_CHIP_MARGIN, 0);
+  }
   lv_obj_t *prev = lbl_hdr_sm;
   // AMS first, so it lands directly left of the backend badge: it belongs to
   // the backend, and the two read as a pair.
@@ -63,10 +76,28 @@ void layoutHeaderChips() {
     // hidden label keeps its slot and leaves a hole in the row. That is what
     // the SD icon has been doing on a card-less device, and it is what a chip
     // that comes and goes at runtime would do on every appearance.
-    if (!chain[i] || lv_obj_has_flag(chain[i], LV_OBJ_FLAG_HIDDEN)) continue;
-    lv_obj_align_to(chain[i], prev, LV_ALIGN_OUT_LEFT_MID, -HDR_CHIP_GAP, 0);
+    if (!isShown(chain[i])) continue;
+    lv_obj_align_to(chain[i], prev, LV_ALIGN_OUT_LEFT_MID, -gap, 0);
     prev = chain[i];
   }
+  // align_to() wrote the positions; the x read after this needs them applied.
+  lv_obj_update_layout(lv_obj_get_parent(lbl_hdr_sm));
+  return prev;
+}
+
+static bool reachesTitle(lv_obj_t *leftmost) {
+  if (!lbl_hdr_title || !leftmost) return false;
+  const lv_coord_t title_end = lv_obj_get_x(lbl_hdr_title) + lv_obj_get_width(lbl_hdr_title);
+  return lv_obj_get_x(leftmost) < title_end + HDR_CHIP_GAP;
+}
+
+void layoutHeaderChips() {
+  if (!lbl_hdr_sm) return;
+  // A label sized to its content only knows its new width after a layout pass,
+  // and lv_obj_align_to() reads that width. Without this the chips would be
+  // placed from the previous text.
+  lv_obj_update_layout(lv_obj_get_parent(lbl_hdr_sm));
+  if (reachesTitle(packHeaderChips(HDR_CHIP_GAP))) packHeaderChips(HDR_CHIP_GAP_TIGHT);
 
   // The address ends where the row ends; the status text left of it takes the
   // rest (HDR_STATUS_W_BESIDE).
@@ -77,6 +108,8 @@ void updateHeaderStatus() {
   if (!lbl_hdr_wifi) return;
 
   lv_obj_set_style_text_color(lbl_hdr_wifi, wifiColor(), 0);
+
+  if (lbl_hdr_sm) headerBatteryUpdate(lv_obj_get_parent(lbl_hdr_sm));
 
   // Bluetooth follows the master switch: shown while BLE may be used, gone
   // otherwise. The chip chain leaves no hole for a hidden one.

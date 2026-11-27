@@ -10,6 +10,7 @@
 #include "app/app_state.h"
 #include "app_config.h"
 #include "hardware/sd_logger.h"
+#include "hardware/sound.h"
 #include "services/github_release.h"
 #include "services/partition_layout.h"
 #include "services/ota_state.h"
@@ -126,6 +127,7 @@ void otaWebGithubTick() {
   if (githubFlashTag(gh_web_flash_tag, otaExpectedSha(gh_web_flash_tag),
                      webFlashProgress, err, sizeof(err))) {
     logSD("Reboot: GitHub update written");
+    soundPlay(SND_UPDATE_OK);   // over well before the restart below
     if (lbl_ota_status) lv_label_set_text(lbl_ota_status, T(STR_OTA_SUCCESS));
     lv_timer_handler();
     delay(1500);
@@ -133,6 +135,7 @@ void otaWebGithubTick() {
   }
   otaGithubOverlayHide();
   logSDf("OTA: install failed - %s", err);
+  soundPlay(SND_UPDATE_FAIL);
   otaBrowserShowUploadFailed();
 }
 
@@ -186,7 +189,7 @@ static String body() {
   h += F("</span><span class='v' id='fwsince' data-t='");
   h += String((unsigned long)firmwareInstalledAt());
   h += F("'></span></div></div>"
-         "<button class='quiet' id='fwnb' onclick='fwNotes()' disabled>");
+         "<button class='quiet' id='fwnb' onclick='fwNotes()' data-ic='nt' disabled>");
   h += T(STR_W_FW_NOTES);
   h += F("</button>"
          "<pre id='fwn' class='notes'></pre>"
@@ -195,7 +198,7 @@ static String body() {
          "<div class='field'><label>");
   h += T(STR_W_FW_FILE);
   h += F("</label><div class='inrow'>"
-         "<label class='filebtn'>");
+         "<label class='filebtn' data-ic='fo'>");
   h += T(STR_W_FW_CHOOSE);
   // No `required` on the hidden input: the browser cannot point at a hidden
   // control to complain, so the form would just do nothing. The submit button
@@ -247,7 +250,7 @@ static String body() {
   if (!(update_available && have_latest)) h += F(" disabled");
   h += F(">");
   h += T(STR_W_FW_INSTALL);
-  h += F("</button><button class='quiet' id='ghnb' onclick='ghNotes()'");
+  h += F("</button><button class='quiet' id='ghnb' onclick='ghNotes()' data-ic='nt'");
   if (!have_latest) h += F(" disabled");
   h += F(">");
   h += T(STR_W_FW_WHATSNEW);
@@ -741,6 +744,8 @@ static void routesTail(WebServer &srv) {
         msg += F("</a></body></html>");
       }
       srv.send(200, "text/html", msg);
+      // The tone plays on its own task and is over before the restart below.
+      soundPlay(ok ? SND_UPDATE_OK : SND_UPDATE_FAIL);
       if (ok) {
         if (lbl_ota_status) lv_label_set_text(lbl_ota_status,
           T(STR_OTA_SUCCESS));

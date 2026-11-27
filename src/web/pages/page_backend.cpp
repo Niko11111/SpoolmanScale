@@ -45,6 +45,21 @@
 // FilaMan.
 static const char* label() { return T(STR_W_NAV_BACKEND); }
 
+// The backend's own pages, in a new tab: where the spools are edited. A
+// switch reloads this page, so the link always names the active one.
+static String backendOpenLink() {
+  char url[160];
+  if (!backendWebUiUrl(url, sizeof(url))) return String();
+  char open[64];
+  snprintf(open, sizeof(open), T(STR_W_BACKEND_OPEN), backendName());
+  String h = F("<p class='hint' style='margin-top:12px'><a class='go' href='");
+  h += htmlEsc(url);
+  h += F("' target='_blank' rel='noopener'>");
+  h += htmlEsc(open);
+  h += F(" &#8599;</a></p>");
+  return h;
+}
+
 static String body() {
   const bool creds = backendIsFilaMan() || backendIsBamBuddy();
   const bool online = backendProfileIsOnline();
@@ -79,6 +94,7 @@ static String body() {
          "<p class='note' id='bm-n'>");
   h += backendOnlineNote();
   h += F("</p>");
+  h += backendOpenLink();
   // With the colours following the backend, a switch takes the panel to the
   // new backend's palette on the next boot. Said after the reload that
   // follows a switch, with the restart button when this browser may restart

@@ -8,6 +8,7 @@
 #include "app/app_state.h"
 #include "app_config.h"
 #include "hardware/i2c_scan.h"
+#include "hardware/nfc.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/device_name.h"
@@ -78,6 +79,7 @@ static String statusJson() {
     j += ",\"weight\":\"" + jsonEsc(w) + "\"";
   }
   j += ",\"nfc\":" + String(nfc_ok ? "true" : "false");
+  j += ",\"nfc_chip\":\"" + String(nfcChipName()) + "\"";
   j += ",\"i2c\":\"" + jsonEsc(i2cScanLast()) + "\"";
   {
     // Two forms on purpose. "diag" is the code, always English, for whoever is
@@ -116,6 +118,21 @@ static String row(const String &k, const String &v, bool mono = false) {
   s += mono ? F("</span><span class='v mono'>") : F("</span><span class='v'>");
   s += v;
   s += F("</span></div>");
+  return s;
+}
+
+// The backend's name and a link to its own web interface, in a new tab. The
+// page shows the address in the next row already, so the link adds nothing a
+// visitor could not read here.
+static String backendNameWithLink() {
+  String s = htmlEsc(backendName());
+  char url[160];
+  if (!backendWebUiUrl(url, sizeof(url))) return s;
+  s += F(" &middot; <a class='go' href='");
+  s += htmlEsc(url);
+  s += F("' target='_blank' rel='noopener'>");
+  s += T(STR_W_OPEN);
+  s += F(" &#8599;</a>");
   return s;
 }
 
@@ -278,7 +295,7 @@ static String body() {
   h += F("<div class='card w2'><h2>");
   h += T(STR_W_C_INVENTORY);
   h += F("</h2><div class='rows'>");
-  h += row(T(STR_W_R_BACKEND), backendName());
+  h += row(T(STR_W_R_BACKEND), backendNameWithLink());
   h += row(T(STR_W_R_ADDRESS), htmlEsc(backendBaseUrl()), true);
   h += row(T(STR_W_R_REACHABLE), pill(sm_reachable, STR_W_S_YES, STR_W_S_NO));
   h += row(T(STR_W_R_SCANS), String(scan_count));

@@ -12,6 +12,7 @@
 #include <esp_heap_caps.h>
 
 #include "app/app_state.h"
+#include "hardware/nfc.h"
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
@@ -25,6 +26,7 @@
 #include "web/web_bambu_catalog.h"
 #include "web/web_jobs.h"
 #include "web/web_shell.h"
+#include "web/web_tag_link.h"
 #include "ui/second_tag_popup.h"
 #include "ui/tag_write_popup.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
@@ -81,8 +83,9 @@ static String body() {
   h += F("</label><div class='inrow'>"
          "<input id='tg-id' type='number' min='1' oninput='loadPreview()'>"
          "<select id='tg-pick' onchange='pickSpool()' style='min-width:210px'></select>"
-         // OpenSpool first and preselected: it is the format the scale's own
-         // backends read back, where ACE only ever talks to the printer.
+         // The scale's own format setting, the same value as the selector in
+         // the options card below: loadTagOpts() fills both, and a change in
+         // either is saved and shown in the other. OpenSpool until it is read.
          "<select id='tg-fmt' onchange='loadPreview()' style='flex:0 0 auto'>"
          "<option value='1' selected>OpenSpool</option>"
          "<option value='3'>FilaMan</option>"
@@ -93,13 +96,16 @@ static String body() {
   h += T(STR_W_TAG_LINK);
   h += F("</label>"
          "<div class='inrow' style='margin-top:16px'>"
-         "<button id='tg-btn' onclick='writeTag()' disabled></button>"
+         "<button id='tg-btn' onclick='writeTag()' data-ic='wr' disabled></button>"
          "<button id='tg-erase' class='danger' onclick='eraseTag()' data-ic='rm' disabled>");
   h += T(STR_W_TAG_ERASE);
   // Binds the tag without writing it: the one way in the browser for a tag
   // that can only be read, and for an NTAG whose contents should stay.
-  h += F("</button><button id='tg-lnk' class='quiet' disabled>");
+  h += F("</button><button id='tg-lnk' class='quiet' data-ic='ln' disabled>");
   h += T(STR_W_TAG_LINKONLY);
+  // Takes the tag off whichever spool holds it (web_tag_link.cpp).
+  h += F("</button><button id='tg-unl' class='quiet' data-ic='unl' disabled>");
+  h += T(STR_W_TAG_UNLINK);
   h += F("</button></div>"
          // What a write or a link is doing, and then how it ended: a panel of
          // its own with a spinner or a mark, where a small green line beside
@@ -119,10 +125,8 @@ static String body() {
   h += T(STR_W_TAG_COMPARE);
   h += F("</p></div>");
 
-  // What the scale does on its own after a link, as opposed to what this page
-  // does when the button above is pressed. Same two settings as Settings >
-  // Scale on the device, and the note says which of the two is which - the
-  // format selector above belongs to the write on this page and nothing else.
+  // What the scale does on its own after a link. Same settings as Settings >
+  // Scale on the device; its format is also the write's format above.
   h += F("<div class='card wide'><h2>");
   h += T(STR_W_C_TAGOPTS);
   h += F("</h2>"
@@ -140,8 +144,16 @@ static String body() {
          "<label class='check' style='margin-top:14px'><span class='switch'>"
          "<input id='to-mism' type='checkbox'><i></i></span>");
   h += T(STR_W_TAGOPT_MISM);
-  h += F("</label>"
-         "<div class='field' style='margin-top:14px'><label>");
+  h += F("</label>");
+  // Only where a PN7160 can read an OpenPrintTag at all; the script below
+  // leaves the field out of a save when the switch is not on the page.
+  if (nfcChip() == NFC_CHIP_PN7160) {
+    h += F("<label class='check' style='margin-top:14px'><span class='switch'>"
+           "<input id='to-optw' type='checkbox'><i></i></span>");
+    h += T(STR_W_TAGOPT_OPTW);
+    h += F("</label>");
+  }
+  h += F("<div class='field' style='margin-top:14px'><label>");
   h += T(STR_W_TAGOPT_FMT);
   h += F("</label><div class='inrow'>"
          "<select id='to-fmt' style='min-width:210px'>"
@@ -221,28 +233,43 @@ static String body() {
   h += F("};"
          // All three values in one line, same shape as /api/tag/write above, so
          // the route stays a handful of lines and needs no JSON parser.
-         "function loadTagOpts(){fetch('/api/tagopts').then(r=>r.json()).then(d=>{"
+         // Until the scale's options are read, a save would send the controls'
+         // defaults for the two settings nobody touched.
+         "let toRead=false;"
+         "function loadTagOpts(){fetch('/api/tagopts').then(r=>r.json()).then(d=>{toRead=true;"
          "document.getElementById('to-ask').value=String(d.ask);"
          "document.getElementById('to-mism').checked=!!d.mism;"
+         "const o=document.getElementById('to-optw');if(o)o.checked=!!d.optw;"
          "document.getElementById('to-fmt').value=String(d.fmt);"
+         "toFmtShow();"
          "}).catch(()=>{});}"
+         // The write's selector follows the setting, and the preview with it.
+         "function toFmtShow(){const t=document.getElementById('tg-fmt');"
+         "const v=document.getElementById('to-fmt').value;"
+         "if(t&&t.value!==v){t.value=v;if(typeof loadPreview==='function')loadPreview();}}"
          "function saveTagOpts(){"
          "const a=document.getElementById('to-ask').value;"
          "const m=document.getElementById('to-mism').checked?1:0;"
          "const f=document.getElementById('to-fmt').value;"
          "const s=document.getElementById('to-s');"
-         "fetch('/api/tagopts',{method:'POST',body:a+','+f+','+m})"
+         "const o=document.getElementById('to-optw');"
+         "fetch('/api/tagopts',{method:'POST',body:a+','+f+','+m+(o?','+(o.checked?1:0):'')})"
          ".then(r=>r.json()).then(()=>{s.textContent=TO.saved;"
          "setTimeout(()=>{s.textContent='';},4000);})"
          // The controls already show what was asked for, so a failed write has
          // to put them back rather than leave a switch claiming a state the
          // scale is not in. Re-reading is the shortest way to the truth.
          ".catch(()=>{s.textContent=TO.err;loadTagOpts();});}"
-         "['to-ask','to-mism','to-fmt'].forEach(function(id){"
-         "document.getElementById(id).addEventListener('change',saveTagOpts);});"
+         "['to-ask','to-mism','to-fmt','to-optw'].forEach(function(id){"
+         "const e=document.getElementById(id);if(e)e.addEventListener('change',saveTagOpts);});"
+         "document.getElementById('to-fmt').addEventListener('change',toFmtShow);"
+         // A format picked for the write is the scale's format from then on.
+         "document.getElementById('tg-fmt').addEventListener('change',function(){"
+         "document.getElementById('to-fmt').value=this.value;if(toRead)saveTagOpts();});"
          "loadTagOpts();"
          "</script>");
 
+  h += tagLinkScript();
   h += F("<script>const M={cur:");
   h += jsStr(T(STR_W_TAG_ONTAG));
   h += F(",will:");    h += jsStr(T(STR_W_TAG_WILLBE));
@@ -454,7 +481,7 @@ static String body() {
          "renderCurTag(document.getElementById('tg-cur'));"
          "renderMatchedSpool(document.getElementById('tg-matched'));"
          "renderNewPreview(document.getElementById('tg-new'));}"
-         "function tgSync(){tgDraw();const b=document.getElementById('tg-btn');if(!b)return;"
+         "function tgSync(){tgDraw();tlSync();const b=document.getElementById('tg-btn');if(!b)return;"
          // Said before the write, not after it. The capacity check inside the
          // firmware refuses the same tag, but only once the user has already
          // pressed the button and put the tag on the reader.
@@ -465,7 +492,7 @@ static String body() {
          "const er=document.getElementById('tg-erase');"
          // The kind alone decides. An NTAG that reports no size is still
          // writable, and the write itself says so if it does not fit.
-         "const ro=tgKindCode===1;"
+         "const ro=tgKindCode===1||tgKindCode===3;"
          // Any tag can be linked, a read-only one included; it needs a spool.
          "const lk=document.getElementById('tg-lnk');"
          "if(lk)lk.disabled=!tgUid||!parseInt(document.getElementById('tg-id').value);"
@@ -515,25 +542,27 @@ static String body() {
          "d.uid?(M.onread+' '+d.uid+' ('+d.kind+')'):M.notag;"
          "tgUid=d.uid||'';tgCurI=d.uid?d.info:null;tgBytes=d.bytes||0;tgKindCode=d.kindcode||0;"
          "tgBackend=d.backend||'';tgCur=d.content||'';tgRaw=d.raw||'';tgMatched=d.matched;tgAdds=!!d.linkadds;"
-         "tgState=d.state||'idle';tgSync();"
-         // The write first, the link second: a write that links says both in
-         // its one sentence.
+         "tgState=d.state||'idle';tgSync();tlNoWrite(d);"
+         // A running write first. Then the link's answer: one stands only
+         // after the last write, which the scale clears it for, while the
+         // write's own state stays until the next write. A write that links
+         // says both in its one sentence.
          "if(d.state=='pending')stat('busy',d.message,M.keep,true);"
-         "else if(d.state=='ok')stat('ok',d.message,'');"
-         "else if(d.state=='error')stat('bad',d.message,M.retry);"
          "else if(d.linkstate=='pending')stat('busy',d.linkmsg,'',true);"
          "else if(d.linkstate=='ok')stat('ok',d.linkmsg,'');"
          "else if(d.linkstate=='error')stat('bad',d.linkmsg,'');"
+         // Another spool holds the tag: the page asks whether to move it.
+         "else if(d.linkstate=='held'){stat('bad',d.linkmsg,'');tlHeld(d);}"
          // Nothing written yet: the scale asks back. Yes sends the same link
          // again with the mismatch accepted, no leaves it standing as refused.
          "else if(d.linkstate=='mismatch'){stat('bad',d.linkmsg,'');"
          "if(tgMisAsked!==d.linkmsg){tgMisAsked=d.linkmsg;"
          // The poll goes on while the question stands; tgMisAsked keeps it
          // from asking the same twice.
-         "if(d.linkspool){const sp=d.linkspool,u=tgUid;ask(d.linkmsg,M.lnk).then(ok=>{if(!ok)return;"
-         "fetch('/api/tag/link',{method:'POST',body:sp+','+u+',1'})"
-         ".then(r=>r.json()).then(x=>{if(!x.ok)stat('bad',M.lbusy,'');})"
-         ".catch(()=>{});after();});}}}"
+         "if(d.linkspool){const u=tgUid;ask(d.linkmsg,M.lnk,false,'ln').then(ok=>{if(!ok)return;"
+         "tlForce(d,u);after();});}}}"
+         "else if(d.state=='ok')stat('ok',d.message,'');"
+         "else if(d.state=='error')stat('bad',d.message,M.retry);"
          "else stat('','','');"
          "second(d);}).catch(()=>{});}"
          // One panel for whatever runs: a spinner and a moving bar while it
@@ -554,13 +583,13 @@ static String body() {
          "h='<div class=\"t2'+(full?' warn':'')+'\"><h3>'+(full?M.askot:M.askw.replace('%d',a.spool))+'</h3>'"
          "+(full?head(i.color,[i.brand,i.material].filter(Boolean).map(esc).join(' '),esc(i.fmt)+(i.color?' - '+esc(i.color):''))"
          "+'<p>'+M.asko.replace('%d',a.spool)+'</p>':'')"
-         "+'<div class=\"inrow\"><button type=\"button\" data-ans=\"1\">'+(full?M.yeso:M.yesw)+'</button>'"
-         "+'<button type=\"button\" class=\"quiet\" data-ans=\"0\">'+M.cancel+'</button></div></div>';}"
+         "+'<div class=\"inrow\"><button type=\"button\" data-ans=\"1\" data-ic=\"wr\">'+(full?M.yeso:M.yesw)+'</button>'"
+         "+'<button type=\"button\" class=\"quiet\" data-ans=\"0\" data-ic=\"x\">'+M.cancel+'</button></div></div>';}"
          "else if(t.st==1){const w=Math.round(100*t.left/30);"
          "h='<div class=\"t2\"><h3>'+M.t2wait+'</h3><p>'+M.t2whint+'</p>'"
          "+'<div class=\"t2cnt\">'+M.t2left.replace('%d',t.left)+'</div>'"
          "+'<div class=\"tgbar drain\"><i style=\"width:'+w+'%\"></i></div>'"
-         "+'<div class=\"inrow\" style=\"margin-top:14px\"><button type=\"button\" class=\"quiet\" data-t2=\"cancel\">'+M.cancel+'</button></div></div>';}"
+         "+'<div class=\"inrow\" style=\"margin-top:14px\"><button type=\"button\" class=\"quiet\" data-t2=\"cancel\" data-ic=\"x\">'+M.cancel+'</button></div></div>';}"
          "else if(t.st==2&&fresh)h='<div class=\"stt busy\"><span class=\"ico\"></span><div>'+M.t2link+'</div></div>';"
          "else if(t.st==3&&fresh)h='<div class=\"stt ok\"><span class=\"ico\">&#10003;</span><div>'+M.t2ok"
          "+'<span class=\"sub\">'+M.t2okh.replace('%d',t.spool)+'</span></div></div>';"
@@ -570,31 +599,33 @@ static String body() {
          // two tags and the scale did not already ask of its own accord.
          "else if(d.state=='ok'&&d.t2can&&tgWroteId&&!tgT2Off&&!(t.st&&t.age<Date.now()-tgWroteAt))"
          "h='<div class=\"t2\"><h3>'+M.t2offer+'</h3><p>'+M.t2hint+'</p>'"
-         "+'<div class=\"inrow\"><button type=\"button\" data-t2=\"start\">'+M.t2start+'</button>'"
-         "+'<button type=\"button\" class=\"quiet\" data-t2=\"off\">'+M.t2done+'</button></div></div>';"
+         "+'<div class=\"inrow\"><button type=\"button\" data-t2=\"start\" data-ic=\"wr\">'+M.t2start+'</button>'"
+         "+'<button type=\"button\" class=\"quiet\" data-t2=\"off\" data-ic=\"ok\">'+M.t2done+'</button></div></div>';"
          // The countdown in whole seconds while the scale waits, not in the
          // three-second steps of the page's own poll.
          "if(t.st==1&&!tgT2Tick)tgT2Tick=setTimeout(()=>{tgT2Tick=0;tgPoll();},1000);"
          "if(el.innerHTML!==h)el.innerHTML=h;}"
          "function after(){setTimeout(tgPoll,700);setTimeout(tgPoll,1500);setTimeout(tgPoll,4000);}"
-         "function eraseTag(){ask(M.eraseq,M.erase,true).then(ok=>{if(!ok)return;"
+         "function eraseTag(){ask(M.eraseq,M.erase,true,'rm').then(ok=>{if(!ok)return;"
          "fetch('/api/tag/write',{method:'POST',body:'0,2,0'})"
          ".then(r=>r.json()).then(d=>{if(d.ok)stat('busy',M.queued,M.keep,true);else stat('bad',M.twref,'');})"
          ".catch(()=>{});after();});}"
-         "function writeTag(){const v=parseInt(document.getElementById('tg-id').value);"
+         "function writeTag(){tlAsked='';const v=parseInt(document.getElementById('tg-id').value);"
          "if(!v){stat('bad',M.pickf,'');return;}"
          "const f=document.getElementById('tg-fmt').value;"
          "const l=document.getElementById('tg-link').checked?1:0;"
          "tgWroteId=l?v:0;tgWroteAt=Date.now();tgT2Off=false;"
-         "fetch('/api/tag/write',{method:'POST',body:v+','+f+','+l})"
+         // The tag goes along, so a write that links is checked against the
+         // spool that may hold it before anything is written.
+         "fetch('/api/tag/write',{method:'POST',body:v+','+f+','+l+','+tgUid})"
          ".then(r=>r.json()).then(d=>{if(d.ok)stat('busy',M.queued,M.keep,true);else stat('bad',M.twref,'');})"
          ".catch(()=>{});after();}"
          // The spool already carries a different tag: say what linking does to
          // it before doing it. tgLinked comes from the preview of the picked
          // spool and is empty when that tag is the one on the reader.
          "async function linkTag(){const v=parseInt(document.getElementById('tg-id').value);"
-         "if(!v||!tgUid)return;const u=tgUid;"
-         "if(tgLinked&&!await ask((tgAdds?M.ladd:M.lask).replace('%d',v).replace('%s',tgLinked),M.lnk))return;"
+         "if(!v||!tgUid)return;const u=tgUid;tlAsked='';"
+         "if(tgLinked&&!await ask((tgAdds?M.ladd:M.lask).replace('%d',v).replace('%s',tgLinked),M.lnk,false,'ln'))return;"
          "fetch('/api/tag/link',{method:'POST',body:v+','+u})"
          ".then(r=>r.json()).then(d=>{if(!d.ok)stat('bad',M.lbusy,'');})"
          ".catch(()=>{});after();}"
@@ -676,6 +707,7 @@ static String tagKindLocal() {
   const uint8_t k = tagCachedKindCode();
   if (k == TAG_KIND_NONE) return String("");
   if (k == TAG_KIND_MIFARE) return String(T(STR_W_TAG_KIND_MIFARE));
+  if (k == TAG_KIND_VICINITY) return String(T(STR_W_TAG_KIND_VICINITY));
 
   String out = T(STR_W_TAG_KIND_NTAG);
   const uint16_t b = tagCachedBytes();
@@ -685,40 +717,6 @@ static String tagKindLocal() {
     out += buf;
   }
   return out;
-}
-
-// Where a link from this page stands, for the poll. OK covers "already bound",
-// which is not a failure: the spool is found by that tag either way.
-static const char* tagLinkStateName() {
-  switch (tagLinkReportData()->code) {
-    case TL_NONE:    return "idle";
-    case TL_BUSY:    return "pending";
-    case TL_OK:
-    case TL_ALREADY: return "ok";
-    case TL_MISMATCH: return "mismatch";
-    default:         return "error";
-  }
-}
-
-// The same for the sentence, which tag_link.cpp cannot build in the user's
-// language.
-static String tagLinkMessageLocal() {
-  const TagLinkReport *r = tagLinkReportData();
-  char buf[192];
-  switch (r->code) {
-    case TL_NONE:    return String("");
-    case TL_BUSY:    snprintf(buf, sizeof(buf), T(STR_W_TL_BUSY), r->spool_id); break;
-    case TL_OK:      snprintf(buf, sizeof(buf), T(STR_W_TL_OK), r->spool_id); break;
-    case TL_ALREADY: snprintf(buf, sizeof(buf), T(STR_W_TL_ALREADY), r->spool_id); break;
-    case TL_HELD:    snprintf(buf, sizeof(buf), T(STR_W_TL_HELD), r->other_spool); break;
-    case TL_MISMATCH: snprintf(buf, sizeof(buf), T(STR_W_TL_MISMATCH), r->spool_id,
-                               r->tag_desc, r->spool_desc); break;
-    case TL_CHANGED: copyT(buf, sizeof(buf), STR_W_TL_CHANGED); break;
-    case TL_NO_TAG:  copyT(buf, sizeof(buf), STR_TW_ERR_NO_TAG); break;
-    case TL_NETWORK: copyT(buf, sizeof(buf), STR_LINK_NO_CONNECTION); break;
-    default:         copyT(buf, sizeof(buf), STR_W_TL_FAILED); break;
-  }
-  return String(buf);
 }
 
 // The spool the scale shows, for the card between the two tag cards. All of
@@ -846,10 +844,8 @@ static void routes(WebServer &srv) {
                "\",\"message\":\"" + jsonEsc(tagWriteMessageLocal().c_str()) +
                "\",\"content\":\"" + jsonEsc(tagCachedContent()) +
                "\",\"raw\":\""     + jsonEsc(tagCachedRaw()) +
-               "\",\"linkspool\":" + String(tagLinkReportData()->spool_id) +
-               ",\"linkstate\":\"" + tagLinkStateName() +
-               "\",\"linkmsg\":\"" + jsonEsc(tagLinkMessageLocal().c_str()) +
-               "\",\"linkadds\":" + (tagLinkKeepsOtherTags() ? "true" : "false") +
+               "\"," + tagLinkPollJson() +
+               ",\"linkadds\":" + (tagLinkKeepsOtherTags() ? "true" : "false") +
                ",\"matched\":" + spoolJson() +
                ",\"t2can\":" + (backendSecondTagKnown() == 1 ? "true" : "false") +
                ",\"t2\":" + secondTagJson() +
@@ -865,6 +861,7 @@ static void routes(WebServer &srv) {
     srv.send(200, "application/json",
              String("{\"ask\":") + String((int)g_tagwrite_mode) +
              ",\"mism\":" + (g_tagmismatch_ask ? "true" : "false") +
+             ",\"optw\":" + (g_opt_write_weight ? "true" : "false") +
              ",\"fmt\":" + String((int)g_tagwrite_fmt) + "}");
   });
 
@@ -874,6 +871,7 @@ static void routes(WebServer &srv) {
     String body = srv.arg("plain");
     const int c1 = body.indexOf(',');
     const int c2 = c1 < 0 ? -1 : body.indexOf(',', c1 + 1);
+    const int c3 = c2 < 0 ? -1 : body.indexOf(',', c2 + 1);
     // 0 off, 1 ask, 2 write every time. A page from before this was a choice
     // sends 0 or 1, which lands on the same two states it always meant.
     const int mode = body.substring(0, c1 < 0 ? body.length() : c1).toInt();
@@ -890,34 +888,24 @@ static void routes(WebServer &srv) {
     // existed. Leaving the setting alone is the honest reading of a body that
     // does not mention it - turning it off would be a decision nobody made.
     if (c2 >= 0) {
-      g_tagmismatch_ask = body.substring(c2 + 1).toInt() == 1;
+      g_tagmismatch_ask = body.substring(c2 + 1, c3 < 0 ? body.length() : c3).toInt() == 1;
       prefsPutBool("tagmism_ask", g_tagmismatch_ask);
+    }
+    // The OpenPrintTag switch, sent only by a page that shows it (PN7160).
+    if (c3 >= 0) {
+      g_opt_write_weight = body.substring(c3 + 1).toInt() == 1;
+      prefsPutBool("opt_wr_weight", g_opt_write_weight);
     }
     prefsPutUChar("tagwr_mode", g_tagwrite_mode);
     prefsPutUChar("tagwrite_fmt", g_tagwrite_fmt);
-    logSDf("Web: tag write mode=%d mismatch ask=%d format=%s",
-           (int)g_tagwrite_mode, (int)g_tagmismatch_ask, tagFormatLabel(g_tagwrite_fmt));
+    logSDf("Web: tag write mode=%d mismatch ask=%d OpenPrintTag weight=%d format=%s",
+           (int)g_tagwrite_mode, (int)g_tagmismatch_ask, (int)g_opt_write_weight,
+           tagFormatLabel(g_tagwrite_fmt));
     srv.send(200, "application/json", "{\"ok\":true}");
   });
 
-  // "id,uid" or "id,uid,1": the spool, the tag the page was showing when it
-  // was asked, and whether a Bambu tag that does not match the spool was
-  // accepted. Parked only; tagLinkTick() makes the request on the loop task
-  // and refuses if a different tag lies on the reader by then.
-  srv.on("/api/tag/link", HTTP_POST, [&srv]() {
-    if (!webRequire(srv, GATE_MAINT, T(STR_W_NAV_TAGS))) return;
-    if (!srv.hasArg("plain")) { srv.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
-    String body = srv.arg("plain");
-    const int c = body.indexOf(',');
-    const int id = body.substring(0, c < 0 ? body.length() : c).toInt();
-    String uid = c < 0 ? String("") : body.substring(c + 1);
-    const int c2 = uid.indexOf(',');
-    const bool force = c2 >= 0 && uid.substring(c2 + 1).toInt() == 1;
-    if (c2 >= 0) uid = uid.substring(0, c2);
-    uid.trim();
-    const bool ok = tagLinkRequest(id, uid.c_str(), force);
-    srv.send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
-  });
+  // Link, move and unlink.
+  tagLinkRoutes(srv);
 
   // "start,<spool>" or "cancel". Parked; the scale opens or closes its own
   // question on the next loop pass, the same one it asks after a link.
@@ -947,7 +935,20 @@ static void routes(WebServer &srv) {
     int id  = body.substring(0, c1 < 0 ? body.length() : c1).toInt();
     int fmt = c1 < 0 ? 0 : body.substring(c1 + 1, c2 < 0 ? body.length() : c2).toInt();
     bool link = c2 >= 0 && body.substring(c2 + 1).toInt() == 1;
-    bool ok = tagWriteRequest(id, fmtFromInt(fmt), link);
+    // "id,fmt,link,uid": a write that links names the tag, and the server is
+    // asked who holds it before it is written (tag_link.cpp). Without the uid
+    // - a page from before, or an erase - it is parked straight away.
+    const int c3 = c2 < 0 ? -1 : body.indexOf(',', c2 + 1);
+    String uid = c3 < 0 ? String("") : body.substring(c3 + 1);
+    uid.trim();
+    // The page knows the tag only from its last poll; clicked before that, it
+    // sends none. The check then goes by the tag on the reader instead of
+    // being skipped.
+    if (link && !uid.length()) uid = tagCachedUid();
+    tagLinkReportClear();
+    bool ok = (link && uid.length())
+      ? tagLinkWriteRequest(id, uid.c_str(), (uint8_t)fmtFromInt(fmt))
+      : tagWriteRequest(id, fmtFromInt(fmt), link);
     srv.send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
   });
 }

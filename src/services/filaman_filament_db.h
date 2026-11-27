@@ -52,3 +52,12 @@ bool filamanFdbMaterialKey(const char* material, char* out, size_t out_size);
 // for the plan; one request.
 bool filamanFdbFindForTag(const char* base_url, const char* api_key, const TagCreateInput& in,
                           TagDbEntry* out);
+
+// For a tag whose format names no colour: the entry of the maker's table
+// nearest the tag's one colour, when it is close and no entry of another name
+// comes about as close (tag_color_match.h). The maker's filaments of the
+// material, a page per request (Anycubic PLA: 168 in two pages, 25.11.2026).
+// False when none is sure, or a page could not be read: a missing page could
+// hold the rival. On the loop, for the plan; the verdict goes into the log.
+bool filamanFdbNearestForTag(const char* base_url, const char* api_key, const TagCreateInput& in,
+                             TagDbEntry* out);

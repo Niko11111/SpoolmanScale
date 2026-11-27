@@ -40,3 +40,6 @@ uint8_t i2cScanFormat(TwoWire &wire, char *out, size_t out_len);
 // reader and the ADC would have to wait for.
 void i2cScanRefresh(TwoWire &wire);
 const char *i2cScanLast();
+// Whether that address answered in the last i2cScanRefresh(). No bus traffic:
+// lets the reader choice at boot rest on the scan that already ran.
+bool i2cScanSaw(uint8_t addr);

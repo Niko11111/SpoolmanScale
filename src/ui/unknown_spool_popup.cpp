@@ -11,6 +11,7 @@
 #include "hardware/sd_logger.h"
 #include "services/backend.h"
 #include "services/tag_create.h"
+#include "services/tag_create_ntag.h"
 #include "services/user_options.h"
 #include "ui/db_pick_screen.h"
 #include "ui/spool_flow.h"
@@ -31,6 +32,8 @@
 #define UNK_ROW_W        412   // what is left between the insets
 #define UNK_GAP            8
 #define UNK_TEXT_W       400
+// The title keeps clear of the close X on both sides, so it stays centred.
+#define UNK_TITLE_W      (UNK_TEXT_W - 2 * (UI_TOUCH_MIN + UNK_GAP))
 #define UNK_TITLE_Y       14
 #define UNK_IDENT_Y       46
 #define UNK_IDENT_H       26
@@ -201,13 +204,14 @@ static lv_obj_t* label(lv_obj_t* p, const char* text, const lv_font_t* font, uin
   return l;
 }
 
-static void centredLine(lv_obj_t* box, const char* text, const lv_font_t* font,
-                        uint32_t color, int y) {
+static lv_obj_t* centredLine(lv_obj_t* box, const char* text, const lv_font_t* font,
+                             uint32_t color, int y) {
   lv_obj_t* l = label(box, text, font, color);
   lv_obj_set_size(l, UNK_TEXT_W, lv_font_get_line_height(font));
   lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
   lv_obj_align(l, LV_ALIGN_TOP_MID, 0, y);
+  return l;
 }
 
 static lv_obj_t* swatch(lv_obj_t* p, int size) {
@@ -328,7 +332,10 @@ static void identityRow(lv_obj_t* box, const char* name, const TagCreateInput* i
   lv_obj_clear_flag(row, LV_OBJ_FLAG_CLICKABLE);
 
   lv_obj_t* sw = swatch(row, UNK_SWATCH_HEAD);
-  if (!s_bambu) {
+  if (!s_bambu && in && in->color_count > 0) {
+    // Another maker's tag: its colour is in the input, g_tag has none for an NTAG.
+    swatchPaintHex(sw, in->color_hex);
+  } else if (!s_bambu) {
     swatchUnknown(sw);
   } else {
     swatchPaint(sw, g_tag.color);
@@ -343,13 +350,25 @@ static void identityRow(lv_obj_t* box, const char* name, const TagCreateInput* i
   lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK), 0);
 }
 
+// The tag's own input, when one of the input files recognises it (tag_create.cpp).
+// For a tag other than Bambu only while it is the one this card is about: the
+// card is keyed by link_tag_uid, and the input it offers to create from must
+// be linked to the same tag.
+static bool cardInput(TagCreateInput* in) {
+  if (!tagCreateInputFromTag(in)) return false;
+  if (s_bambu) return true;
+  return strcmp(g_tag.uid_str, link_tag_uid) == 0 && strcmp(in->link_id, link_tag_uid) == 0;
+}
+
 static void buildHead(lv_obj_t* box) {
   char title[48];
   backendText(T(STR_NOT_IN_SPOOLMAN), title, sizeof(title));
-  centredLine(box, title, UI_FONT_HEADLINE, UI_COL_INK, UNK_TITLE_Y);
+  lv_obj_set_width(centredLine(box, title, UI_FONT_HEADLINE, UI_COL_INK, UNK_TITLE_Y), UNK_TITLE_W);
+  // The X does what the way out at the bottom does: just weigh, or Cancel.
+  uiPopupCloseX(box, onAction, (void*)(intptr_t)(s_held ? UA_CANCEL : UA_WEIGH));
 
   TagCreateInput in;
-  const bool known = s_bambu && tagCreateInputFromTag(&in);
+  const bool known = cardInput(&in);
   char name[80], meta[96] = "", weight[32];
   if (known && in.product[0])
     joinMaterialName(in.product, in.color_name, name, sizeof(name));
@@ -360,7 +379,7 @@ static void buildHead(lv_obj_t* box) {
   identityRow(box, name, known ? &in : nullptr);
 
   weightPart(weight, sizeof(weight), known ? in.spool_weight_g : 0);
-  if (s_bambu) appendPart(meta, sizeof(meta), known ? in.vendor : g_tag.vendor);
+  if (s_bambu || known) appendPart(meta, sizeof(meta), known ? in.vendor : g_tag.vendor);
   if (known)   appendPart(meta, sizeof(meta), in.article);
   appendPart(meta, sizeof(meta), weight);
   centredLine(box, meta, UI_FONT_SMALL, UI_COL_INK_SOFT, UNK_META_Y);
@@ -477,8 +496,11 @@ static void tile(lv_obj_t* box, int i, int n, const char* symbol, int text_id, U
 // Every way in, none suggested: the tag says nothing about the spool, or the
 // spool cache could not say which spool it might be.
 static void buildTiles(lv_obj_t* box) {
-  const bool from_tag = s_bambu && tagCreateOffered();
-  const bool from_db  = !s_bambu && dbPickOffered();
+  // A tag an input file recognises takes the third tile for "New from tag",
+  // instead of the database pick: the same layout either way.
+  TagCreateInput in;
+  const bool from_tag = cardInput(&in) && tagCreateOffered();
+  const bool from_db  = !s_bambu && !from_tag && dbPickOffered();
   const int n = (from_tag || from_db) ? 3 : 2;
   int i = 0;
   tile(box, i++, n, LV_SYMBOL_LIST, STR_REMOTE_LINK_CONFIRM, UA_LINK_ENTRY);
@@ -525,11 +547,23 @@ static void buildCard(UnkMode mode) {
 //  The loop's part
 // ------------------------------------------------------------
 
+// A tag this scale wrote names the spool it was written for. When that spool
+// is still on file, unbound and the same filament, linking it again is the
+// suggestion, and "New from tag" waits under "Other ways" (Nikolai,
+// 25.11.2026: both on offer). Anything else gets the tiles.
+static UnkMode ownTagMode() {
+  TagOwnSpool own;
+  if (strcmp(g_tag.uid_str, link_tag_uid) != 0 || !tagOwnSpoolOnReader(&own)) return UNK_TILES;
+  if (linkSuggestOwnSpool(own, &s_cands[0]) != 1) return UNK_TILES;
+  s_cand_total = 1;
+  return UNK_ONE;
+}
+
 // Which card the spool gets. The candidates cost one stamp request and are
 // read from the spool cache, which the lookup's own scan has just filled.
 static UnkMode chooseMode() {
   s_cand_total = 0;
-  if (!s_bambu) return UNK_TILES;
+  if (!s_bambu) return ownTagMode();
   const int total = linkSuggestCandidates(s_cands, UNK_CHIPS);
   if (total < 0) return UNK_TILES;
   s_cand_total = total;
@@ -583,12 +617,12 @@ static void runAction() {
   closeUnknownSpoolPopup();
   copyTaglessEnd("a tag's flow");
   switch (a) {
-    case UA_LINK_PICK:  linkSuggestOpenList(s_action_id);  break;
-    case UA_LINK_LIST:  linkSuggestOpenList(0);            break;
-    case UA_CREATE:     newtag_open_pending = true;        break;
-    case UA_LINK_ENTRY: showLinkEntryPopup(s_bambu);       break;
-    case UA_DB:         dbPickEntryTap(nullptr);           break;
-    case UA_COPY:       showCopyEntryPopup();              break;
+    case UA_LINK_PICK:  linkSuggestOpenList(s_action_id, s_bambu); break;
+    case UA_LINK_LIST:  linkSuggestOpenList(0, s_bambu);           break;
+    case UA_CREATE:     newtag_open_pending = true;                break;
+    case UA_LINK_ENTRY: showLinkEntryPopup(s_bambu);               break;
+    case UA_DB:         dbPickEntryTap(nullptr);                   break;
+    case UA_COPY:       showCopyEntryPopup();                      break;
     default:            break;
   }
 }

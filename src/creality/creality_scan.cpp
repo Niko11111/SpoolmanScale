@@ -114,6 +114,7 @@ CrealityScanResult scanCrealityTag(uint8_t *uid, uint8_t uid_len, bool fresh) {
   snprintf(g_tag.uid_str, sizeof(g_tag.uid_str), "%s", uid_str);
   snprintf(g_tag.decoder, sizeof(g_tag.decoder), "Creality");
   snprintf(g_tag.serial, sizeof(g_tag.serial), "%s", t.serial);
+  snprintf(g_tag.batch, sizeof(g_tag.batch), "%s", t.batch);
 
   // The base material ("PLA", "PETG-CF") is what the link list filters on by
   // its first three letters; the product name goes to detailed_filament.

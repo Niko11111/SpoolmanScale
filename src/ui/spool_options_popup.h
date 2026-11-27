@@ -10,8 +10,8 @@
 //  The button between Create and Cancel on the card for a new spool (from a
 //  tag, from the database) and on the copy card. Behind it a popup of the
 //  large size (UI_POPUP_LARGE_W x _H) with what can be set for the one spool
-//  being created: its price, its empty spool, and its density where the card
-//  lacks one. Every step under it - the price pad, the empty spool lists, the
+//  being created: its price, its empty spool, its full weight where the card
+//  offers it, and its density where the card lacks one. Every step under it - the price pad, the empty spool lists, the
 //  pad for a typed weight - has the same size, so nothing jumps between them;
 //  each leads back to the Options, and Done leads back to the card. Cancel
 //  is the card's alone.
@@ -33,16 +33,26 @@ struct SpoolOptionsSpec {
   // "No offset"), 0 for Automatic.
   int          auto_name;
   bool         density;       // the card lacks a density: offer the row
+  // The full weight typed in, 0 for none; changed in place. Null: no row (the
+  // copy card files its template's). full_auto_g is what the card files
+  // without one, full_assumed whether nothing named it.
+  int*         full_g;
+  int          full_auto_g;
+  bool         full_assumed;
   // Done or the density row: the card is shown again with its new values. With
   // `density` set the card opens its density pad next.
   void (*on_close)(bool density);
+  // The close X: whatever the pages were opened from goes as well (the weight
+  // popup's Options). Null where that is the card itself: then on_close(false).
+  void (*on_dismiss)();
 };
 
 // From the card's button. The popup goes up on the loop's next pass.
 void showSpoolOptions(const SpoolOptionsSpec& spec);
 // The empty spool lists alone, for a spool that exists (the weight popup's
 // Options): they open on "Which empty spool?", and a pick, Automatic or Back
-// ends them with on_close(false). `price` may be null; the caller sees in
+// ends them with on_close(false), the close X with on_dismiss() where it is
+// set. `price` may be null; the caller sees in
 // *choice whether one was picked.
 void showSpoolPickList(const SpoolOptionsSpec& spec);
 bool spoolOptionsOpen();

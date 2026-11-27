@@ -25,17 +25,26 @@ constexpr int8_t I2C_EXT_SCL = 11;   // PN532 + NAU7802 bus
 // a measurement on this very device says the wire was moved - see
 // services/nfc_reset.h.
 constexpr int8_t PN532_RESET_WIRE = 14;   // EXT_IO5, connector pin 7, brown
-constexpr int8_t PN532_RESET_SAFE = 12;   // EXT_IO3, pin 5, no build ever wired it
+// No pin: the library skips its reset pulse for -1. It used to be GPIO12
+// (pin 5), which nothing was wired to, but pin 5 is the HX711's SCK now, and a
+// pulse that ends high powers the HX711 down. The price is one "Invalid pin
+// selected" line from the core's pinMode() at boot, which is no fault.
+constexpr int8_t PN532_RESET_SAFE = -1;
 
-// The PN532's IRQ line is not wired, and in I2C mode the library never reads
-// it: isready() answers from the bus, and the branch that would call
-// digitalRead(_irq) sits behind that check and is unreachable. Its constructor
-// still calls pinMode() on whatever pin number it is handed though, and -1
-// arrives there as 255, which logs "Invalid pin selected" on every single boot.
-// That line reads like a fault and is not one, so the constructor gets a pin
-// that exists and costs nothing: EXT_IO4 on the extension connector, unused by
-// this firmware and an input after reset anyway.
-constexpr int8_t PN532_IRQ_UNUSED = 13;
+// Each connector pin has one role for every reader; only the chip differs
+// (Notes, PN7160 6.11). Pin 7 is the PN532's RSTPDN (low = power down) and the
+// PN7160's VEN (low = off, high = on). Pin 8 is the reader's IRQ: active low on
+// the PN532, active high on the PN7160, where it is mandatory - an NCI chip
+// raises it while it has something to read. The 7 wire cable leaves pin 8 empty.
+// The PN532 library only sets the IRQ pin to input: in I2C mode it asks the
+// bus whether an answer is ready. The wake test reads the line in deep sleep.
+constexpr int8_t NFC_VEN = 14;       // EXT_IO5, connector pin 7, orange
+constexpr int8_t NFC_IRQ = 21;       // EXT_IO6, connector pin 8, violet
+
+// The HX711, tried when no NAU7802 answers on I2C_EXT (hardware/scale.cpp).
+// Side by side on the 7 wire cable, so it needs no 8 pin one (Notes, pin plan).
+constexpr int8_t HX711_SCK  = 12;    // EXT_IO3, connector pin 5
+constexpr int8_t HX711_DOUT = 13;    // EXT_IO4, connector pin 6
 
 constexpr int8_t TOUCH_SDA = 6;      // FT6336U internal board bus
 constexpr int8_t TOUCH_SCL = 5;      // FT6336U internal board bus
@@ -49,5 +58,12 @@ constexpr int8_t SD_CS = 41;
 constexpr int8_t SD_SCK = 39;
 constexpr int8_t SD_MOSI = 40;
 constexpr int8_t SD_MISO = 38;
+
+// The onboard I2S amplifier and its 2-pin SPK connector, per the
+// WT32-SC01 Plus datasheet. Driven low from boot until a tone plays, and
+// held low across deep sleep, see sound.h.
+constexpr int8_t SPK_LRCK = 35;
+constexpr int8_t SPK_BCLK = 36;
+constexpr int8_t SPK_DOUT = 37;
 
 }

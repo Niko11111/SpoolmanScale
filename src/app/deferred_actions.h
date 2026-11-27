@@ -30,6 +30,9 @@ extern bool show_reboot_pending;
 // The bag weight crossed 0 g: the main screen's weight zone swaps between
 // its layout with and without the bag lines.
 extern bool live_zone_rebuild_pending;
+// A setting from the browser changed what the header shows (the battery's
+// percent). Redrawn from the loop, not from inside the web handler.
+extern bool header_redraw_pending;
 extern bool show_lastused_pending;
 extern bool show_backend_pending;
 extern bool show_online_pending;

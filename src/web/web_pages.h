@@ -52,3 +52,12 @@ const char* webPageLabel(const WebPage &p);
 // behind an open gate. A tab leading only to the "switched off" page is worse
 // than no tab.
 bool webPageVisible(const WebPage &p);
+
+// The page whose tab stands for this one, which then has none of its own;
+// null for a page with its own tab. The tab is marked while either is open.
+const WebPage* webPageNavParent(const WebPage &p);
+
+// Whether a new group of tabs begins at this page. The strip draws a rule
+// only between two tabs it actually shows, so a closed switch that empties a
+// group leaves no rule behind.
+bool webPageStartsNavGroup(const WebPage &p);

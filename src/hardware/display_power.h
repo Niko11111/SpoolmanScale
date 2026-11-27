@@ -15,6 +15,9 @@ void resetActivityTimer();
 // screen poked first.
 void displayNoteWeight(float grams);
 void handlePowerManagement();
+// Deep sleep on the next handlePowerManagement(), whatever the timeout says.
+// For the NFC wake test, so a test does not wait out ten idle minutes.
+void displayPowerSleepNow();
 
 // Dimmed or dark, and nobody has touched the screen or moved the weight for
 // at least ms milliseconds. False while the display is at full brightness,

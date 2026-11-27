@@ -54,6 +54,7 @@
 #include "ui/ui_common.h"
 #include "services/backend.h"
 #include "services/breadcrumb.h"
+#include "services/tag_create_ntag.h"
 #include "services/tag_spool_match.h"
 
 namespace {
@@ -1266,14 +1267,14 @@ static void fetchSpoolSummary(int spool_id, SpoolSummary &out) {
 }
 
 // One spool of the move question: caption column, swatch, words.
-static void moveRow(lv_obj_t *box, int y, StringID caption_id, const SpoolSummary &sum) {
+static void moveRow(lv_obj_t *box, int y, StringID caption_id, const SpoolSummary &sum, int value_x) {
   lv_obj_t *cap = lv_label_create(box);
   { char cb[24]; copyT(cb, sizeof(cb), caption_id);
     lv_label_set_text(cap, cb); }
   lv_obj_set_style_text_color(cap, lv_color_hex(UI_COL_INK_SOFT), 0);
   lv_obj_set_style_text_font(cap, &lv_font_montserrat_ext_14, 0);
   lv_obj_set_pos(cap, 20, y + 2);
-  int x = 20 + 104;
+  int x = value_x;
   if (sum.color[0]) {
     lv_obj_t *sw = lv_obj_create(box);
     lv_obj_remove_style_all(sw);
@@ -1289,10 +1290,9 @@ static void moveRow(lv_obj_t *box, int y, StringID caption_id, const SpoolSummar
   }
   lv_obj_t *l = lv_label_create(box);
   lv_label_set_text(l, sum.text);
-  lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(l, 400 - 20 - x);
   lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_INK_2), 0);
   lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_16, 0);
+  labelDotLine(l, 400 - 20 - x);
   lv_obj_set_pos(l, x, y);
 }
 
@@ -1665,8 +1665,13 @@ static void showTagMovePopup() {
   lv_obj_align(lbl_q, LV_ALIGN_TOP_MID, 0, 52);
 
   // The two spools, so the decision is between things the user recognises.
-  moveRow(box, 96,  STR_TAGMOVE_FROM, s_move_from_sum);
-  moveRow(box, 124, STR_TAGMOVE_TO,   s_move_to_sum);
+  // The spools start past the longer caption: a fixed 104 px put "Umhängen
+  // zu:" under the swatch, and French "Déplacer vers :" is longer still.
+  const lv_font_t *cap_font = &lv_font_montserrat_ext_14;
+  const int value_x = 20 + 8 + LV_MAX(uiTextWidth(T(STR_TAGMOVE_FROM), cap_font),
+                                      uiTextWidth(T(STR_TAGMOVE_TO), cap_font));
+  moveRow(box, 96,  STR_TAGMOVE_FROM, s_move_from_sum, value_x);
+  moveRow(box, 124, STR_TAGMOVE_TO,   s_move_to_sum,   value_x);
 
   lv_obj_t *lbl_hint = lv_label_create(box);
   { char hb[64]; snprintf(hb, sizeof(hb), T(STR_TAGMOVE_HINT), s_move_from_id);
@@ -2419,17 +2424,15 @@ void listReloadStrip(lv_obj_t* scr, time_t at, uint32_t age_ms, lv_event_cb_t on
   lv_obj_t *btn_reload = lv_btn_create(scr);
   lv_obj_set_size(btn_reload, LINK_RELOAD_W, LINK_RELOAD_H);
   lv_obj_set_pos(btn_reload, 480 - 12 - LINK_RELOAD_W, strip_y + (LINK_STRIP_H - LINK_RELOAD_H) / 2);
-  lv_obj_set_style_bg_color(btn_reload, lv_color_hex(UI_COL_ROW_PRESSED), 0);
-  lv_obj_set_style_bg_color(btn_reload, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(btn_reload, UI_RADIUS_INPUT, 0);
   lv_obj_set_style_shadow_width(btn_reload, 0, 0);
-  lv_obj_set_style_border_width(btn_reload, 0, 0);
   lv_obj_add_event_cb(btn_reload, on_reload, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl_reload = lv_label_create(btn_reload);
   lv_label_set_text(lbl_reload, T(STR_LIST_RELOAD));
-  lv_obj_set_style_text_color(lbl_reload, lv_color_hex(UI_COL_ACCENT), 0);
   lv_obj_set_style_text_font(lbl_reload, UI_FONT_SMALL, 0);
   lv_obj_center(lbl_reload);
+  // Neither go-ahead nor a way out: the quiet outline of the alternative.
+  uiBtnRole(btn_reload, BTN_NEUTRAL);
 }
 
 
@@ -2704,19 +2707,18 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     display_count++;
   }
 
-  char title_buf[48];
+  char title_buf[96];
+  char head[80], count_tail[12];
+  snprintf(count_tail, sizeof(count_tail), " - %d", display_count);
   if (link_flow_is_bambu) {
     snprintf(title_buf, sizeof(title_buf), "Bambu %s - %d",
       g_tag.material[0] ? g_tag.material : "", display_count);
   } else if (material_full && material_full[0]) {
-    char v8[9], m10[11];
-    utf8Cut(vendor_name, 8, v8, sizeof(v8));
-    utf8Cut(material_full, 10, m10, sizeof(m10));
-    snprintf(title_buf, sizeof(title_buf), "%s %s - %d", v8, m10, display_count);
+    snprintf(head, sizeof(head), "%s %s", vendor_name, material_full);
+    uiFitHeaderTitle(title_buf, sizeof(title_buf), head, count_tail, &lv_font_montserrat_ext_16);
   } else if (material_prefix[0]) {
-    char v8[9];
-    utf8Cut(vendor_name, 8, v8, sizeof(v8));
-    snprintf(title_buf, sizeof(title_buf), "%s %.4s - %d", v8, material_prefix, display_count);
+    snprintf(head, sizeof(head), "%s %.4s", vendor_name, material_prefix);
+    uiFitHeaderTitle(title_buf, sizeof(title_buf), head, count_tail, &lv_font_montserrat_ext_16);
   } else {
     snprintf(title_buf, sizeof(title_buf), "%s - %d", T(STR_SPOOLS_ALL), display_count);
   }
@@ -2881,8 +2883,7 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
     full_name[sizeof(full_name)-1] = '\0';
     lv_obj_t *lbl_name = listRowLabel(row, LR_TEXT_NAME, full_name);
     lv_obj_align(lbl_name, LV_ALIGN_TOP_LEFT, 50, 5);
-    lv_label_set_long_mode(lbl_name, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(lbl_name, 396);  // volle Breite - kein Hersteller in Zeile 1
+    labelDotLine(lbl_name, 396);  // full width: no maker on line 1
 
     // ── Zeile 2: Farbkachel + Gewicht + Hersteller rechts ─
     lv_obj_t *swatch = listRowSwatch(row, s.color_hex);
@@ -2936,14 +2937,16 @@ void showFilteredSpoolList(const char* vendor_name, const char* material_prefix,
 //  One rule for both, so the card never suggests what the list would bury.
 // ============================================================
 
-// What showLinkEntryPopup() resets before a Bambu link, without its screen.
-static void linkBambuFlowBegin() {
+// What showLinkEntryPopup() resets before a link, without its screen.
+static void linkSuggestFlowBegin(bool is_bambu) {
   link_selected_material[0] = 0;
   link_selected_material_full[0] = 0;
   link_stage3_shown = false;
-  link_flow_is_bambu = true;
+  link_flow_is_bambu = is_bambu;
   link_id_input[0] = '\0';
   copy_flow_via_list = false;
+  // An NTAG's link holds its UID, as the entry popup does.
+  if (!is_bambu) snprintf(s_link_uid_hold, sizeof(s_link_uid_hold), "%s", link_tag_uid);
 }
 
 static void candidateFromRow(LinkCandidate& c, const UnlinkedSpool& s, bool weight_hit) {
@@ -2957,7 +2960,7 @@ static void candidateFromRow(LinkCandidate& c, const UnlinkedSpool& s, bool weig
 }
 
 int linkSuggestCandidates(LinkCandidate* out, int max) {
-  linkBambuFlowBegin();
+  linkSuggestFlowBegin(true);
   if (fetchAllSpoolsForLink(true, g_tag.material, false, true) != LINK_FETCH_DONE) {
     linkSpoolsFree();
     return -1;
@@ -2982,11 +2985,50 @@ int linkSuggestCandidates(LinkCandidate* out, int max) {
   return total;
 }
 
-void linkSuggestOpenList(int pick_spool_id) {
-  linkBambuFlowBegin();
+// The own tag's record against the row of the spool it names. The material
+// and colour rules of the Bambu comparison; the maker by the record's brand,
+// "Generic" being buildAce()'s word for none, and an ACE brand cut at 16.
+// A record with neither a colour nor a maker leaves only the material and a
+// number, and the number may be another server's spool: no suggestion.
+static bool ownTagDiffers(const TagOwnSpool& t, const UnlinkedSpool& s) {
+  const bool brand = t.brand[0] && strcasecmp(t.brand, "Generic") != 0;
+  if (!t.color_hex[0] && !brand) return true;
+  const TagSpoolVerdict v = tagSpoolCompare(t.material, t.color_hex, s.material, s.name,
+                                            s.vendor, s.color_hex, false);
+  if (v.material || v.color) return true;
+  if (!brand || !s.vendor[0]) return false;
+  return strncasecmp(s.vendor, t.brand, strlen(t.brand)) != 0;
+}
+
+int linkSuggestOwnSpool(const TagOwnSpool& tag, LinkCandidate* out) {
+  linkSuggestFlowBegin(false);
+  if (fetchAllSpoolsForLink(false, "", false, true) != LINK_FETCH_DONE) {
+    linkSpoolsFree();
+    return -1;
+  }
+  const char* why = "not in the list (gone, archived or bound)";
+  int found = 0;
+  for (int i = 0; i < link_spool_count; i++) {
+    const UnlinkedSpool& s = link_spools[i];
+    if (s.id != tag.spool_id) continue;
+    // Unbound, also where the field takes a list: the card says "this spool
+    // without a tag", and a spool that has one is not that.
+    if (!linkRowMatches(s, "", "", "") || linkSpoolBound(s)) break;
+    if (ownTagDiffers(tag, s)) { why = "another filament than the tag's"; break; }
+    candidateFromRow(*out, s, linkWeightHit(s, linkListGross()));
+    found = 1;
+    break;
+  }
+  logSDf("link suggest: the tag names spool %d, %s", tag.spool_id, found ? "offered" : why);
+  linkSpoolsFree();
+  return found;
+}
+
+void linkSuggestOpenList(int pick_spool_id, bool is_bambu) {
+  linkSuggestFlowBegin(is_bambu);
   // The list opens from linkFetchFinish(), now or once the worker has it.
   s_lf_pick_id = pick_spool_id;
-  linkFetchRun(true, g_tag.material, false, LF_NEXT_DIRECT_LIST);
+  linkFetchRun(is_bambu, is_bambu ? g_tag.material : "", false, LF_NEXT_DIRECT_LIST);
 }
 
 // ============================================================
@@ -3002,9 +3044,9 @@ void showMaterialList(const char* vendor_name) {
 
   scr_link_mat = buildLinkOverlay();
 
-  char title_buf[48], v16[17];
-  utf8Cut(vendor_name, 16, v16, sizeof(v16));
-  snprintf(title_buf, sizeof(title_buf), "%s | %s", T(STR_MAT_TITLE), v16);
+  char title_buf[96], head[80];
+  snprintf(head, sizeof(head), "%s | %s", T(STR_MAT_TITLE), vendor_name);
+  uiFitHeaderTitle(title_buf, sizeof(title_buf), head, "", &lv_font_montserrat_ext_16);
 
   // Header with Back + Cancel
   lv_obj_t *hdr_mat = lv_obj_create(scr_link_mat);
@@ -3187,9 +3229,9 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
   releaseScreen(&scr_link_mat_sub);
   scr_link_mat_sub = buildLinkOverlay();
 
-  char title_buf[48], v16[17];
-  utf8Cut(vendor_name, 16, v16, sizeof(v16));
-  snprintf(title_buf, sizeof(title_buf), "%s | %.4s", v16, material_prefix);
+  char title_buf[96], mat_tail[12];
+  snprintf(mat_tail, sizeof(mat_tail), " | %.4s", material_prefix);
+  uiFitHeaderTitle(title_buf, sizeof(title_buf), vendor_name, mat_tail, &lv_font_montserrat_ext_16);
 
   // Header with Back + Cancel
   lv_obj_t *hdr_ms = lv_obj_create(scr_link_mat_sub);
@@ -3270,8 +3312,7 @@ void showMaterialSubList(const char* vendor_name, const char* material_prefix) {
 
     lv_obj_t *lbl_full = listRowLabel(row, LR_TEXT_MATERIAL, seen_full[m]);
     lv_obj_align(lbl_full, LV_ALIGN_LEFT_MID, 16, 0);
-    lv_label_set_long_mode(lbl_full, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(lbl_full, 340);
+    labelDotLine(lbl_full, 340);
 
     char cnt_buf[12]; snprintf(cnt_buf, sizeof(cnt_buf), "%d x", full_counts[m]);
     lv_obj_t *lbl_cnt = listRowLabel(row, LR_TEXT_COUNT, cnt_buf);
@@ -3419,8 +3460,7 @@ void showVendorList() {
 
     lv_obj_t *lbl_vnd = listRowLabel(row, LR_TEXT_MAKER, seen_vendors[v]);
     lv_obj_align(lbl_vnd, LV_ALIGN_LEFT_MID, 16, 0);
-    lv_label_set_long_mode(lbl_vnd, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(lbl_vnd, 320);
+    labelDotLine(lbl_vnd, 320);
 
     char cnt_buf[12]; snprintf(cnt_buf, sizeof(cnt_buf), "%d x", vendor_counts[v]);
     lv_obj_t *lbl_cnt = listRowLabel(row, LR_TEXT_COUNT, cnt_buf);
@@ -3802,8 +3842,14 @@ void handleSpoolFlowDeferredActions() {
         showTagWriteAskPopupFmt(id, TAG_FMT_CREALITY, own ? 1 : (serial_only ? 3 : 2));
     }
     else if (tagwrite_after_link_fmt == TAG_FMT_CREALITY)  showTagWriteAskPopupFmt(id, TAG_FMT_CREALITY);
-    else if (g_tagwrite_mode == TAGWRITE_ALWAYS)      startTagWriteNoAsk(id);
-    else                                              showTagWriteAskPopup(id);
+    else if (g_tagwrite_mode != TAGWRITE_ALWAYS)      showTagWriteAskPopup(id);
+    // "Always" is about the scale's own records: a maker's is asked about,
+    // its question says the old content is lost.
+    else if (tagOnReaderHoldsForeign()) {
+      logSD("Tag: holds a record the scale did not write, asked despite \"always\"");
+      showTagWriteAskPopup(id);
+    }
+    else                                              startTagWriteNoAsk(id);
   }
   // Behind the tag write on purpose, and behind whatever it started. The
   // record goes onto the tag that is still lying on the reader, so asking for

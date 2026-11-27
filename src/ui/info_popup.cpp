@@ -24,6 +24,8 @@
 // quietly drops the end defeats it. Static storage, so the extra bytes cost
 // nothing that matters.
 #define INFO_TEXT_BUF   1024
+// Results only, which are a sentence or two; the help texts take no %s.
+#define INFO_ARG_TEXT_BUF 256
 #define INFO_TITLE_BUF   48
 
 // How long a success stands before it closes itself. Long enough to read a
@@ -44,17 +46,25 @@ bool isInfoPopupOpen() { return s_info_pop != nullptr; }
 // lv_timer_handler(), and the buffer only has to survive until
 // lv_label_set_text() has copied it into the label's own storage.
 static char s_text_buf[INFO_TEXT_BUF];
+// The %s of the text, set by showInfoPopupArg() for the one popup it builds.
+static const char *s_text_arg = nullptr;
+static char s_arg_buf[INFO_ARG_TEXT_BUF];
 
 // The text by id into s_text_buf. Says so rather than drop the end in silence:
 // a truncated explanation still looks like a finished one on screen, so
 // nothing would ever point at it.
 static const char *infoText(int text_id) {
-  const size_t len = strlen(T(text_id));
+  const char *text = T(text_id);
+  if (s_text_arg) {
+    snprintf(s_arg_buf, sizeof(s_arg_buf), text, s_text_arg);
+    text = s_arg_buf;
+  }
+  const size_t len = strlen(text);
   if (len >= sizeof(s_text_buf))
     logSDf("InfoPopup: text %d is %u bytes, buffer holds %u - truncated",
            text_id, (unsigned)len, (unsigned)(sizeof(s_text_buf) - 1));
   // Under an online service, its name where the table says Spoolman.
-  backendTextOnline(T(text_id), s_text_buf, sizeof(s_text_buf));
+  backendTextOnline(text, s_text_buf, sizeof(s_text_buf));
   if (strlen(s_text_buf) + 1 == sizeof(s_text_buf)) {
     logSDf("InfoPopup: text %d with the service's name fills the buffer, may be cut", text_id);
   }
@@ -180,6 +190,12 @@ static void buildResultCard(lv_obj_t *pop, int title_id, int text_id, uint8_t to
   lv_obj_set_style_text_font(l, UI_FONT_TITLE, 0);
   lv_obj_center(l);
   uiBtnRole(btn, done ? BTN_CONFIRM : BTN_NEUTRAL);
+}
+
+void showInfoPopupArg(int title_id, int text_id, const char *arg, uint8_t tone) {
+  s_text_arg = arg ? arg : "";
+  showInfoPopup(title_id, text_id, tone);
+  s_text_arg = nullptr;
 }
 
 void showInfoPopup(int title_id, int text_id, uint8_t tone) {

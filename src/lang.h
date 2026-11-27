@@ -2072,6 +2072,78 @@ enum StringID {
   STR_W_L_COLOR_NAME,
   STR_W_L_COLOR_HINT,
   STR_W_P_MEDIA_ST_UNCHECKED_SHORT,
+  STR_W_TAG_KIND_VICINITY,
+  STR_W_NFC_WAKE,
+  STR_W_NFC_WAKE_HINT,
+  STR_W_NFC_WAKE_LOCKED,
+  STR_W_NFC_WAKE_DETAIL,
+  STR_W_NFC_WAKE_DOCS,
+  STR_W_THEME_OPEN,
+  // Sound tab of the Display/Sound screen (ui/display_screen.cpp)
+  STR_SOUND_TITLE,            // the tab, and the master switch row
+  STR_SOUND_SUB,              // under the master switch: where the speaker goes
+  STR_SND_NFC,
+  STR_SND_WRITE,
+  STR_SND_WEIGHT,
+  STR_SND_VOLUME_LABEL,
+  STR_SND_SET,                // which tone set plays
+  STR_SND_SET_BEEP,
+  STR_SND_SET_CHIME,
+  STR_SND_ASK,                // a write request from FilaMan or the browser
+  STR_SND_PRINT,
+  STR_SND_UPDATE,
+  STR_SND_LINK,
+  STR_TAG2_OTHER_SPOOL,       // a Bambu chip of another spool, not linked as the second tag
+
+  // Remembered WiFi networks: the connected one becomes the preferred one
+  STR_WIFI_PREFER,            // saved networks popup and the browser's WiFi card
+
+  // Tag page: unlink and move
+  STR_W_TAG_UNLINK,
+  STR_W_TL_UNLINK_BTN,
+  STR_W_TL_UNLINK_ASK,        // %d = the spool the scale shows for the tag
+  STR_W_TL_UNLINK_ASK_ANY,
+  STR_W_TL_MOVE_ASK,          // %d holder, %d target
+  STR_W_TL_MOVE_ASK_WRITE,    // %d holder, %d target
+  STR_W_TL_UNLINKING,
+  STR_W_TL_CHECKING,
+  STR_W_TL_MOVING,            // %d from, %d to
+  STR_W_TL_UNLINKED,          // %d
+  STR_W_TL_MOVED,             // %d from, %d to
+  STR_W_TL_NOT_LINKED,
+  STR_W_TL_NOT_SHOWN,         // %d = the spool that holds the tag
+  STR_W_TL_ON_FILAMENT,       // %d = the filament
+  STR_W_TL_UNLINK_FAILED,     // %d
+  STR_W_TL_HELD_WRITE,        // %d = the spool that holds the tag
+  // Status and backend pages: the backend's own web interface
+  STR_W_BACKEND_OPEN,         // %s = the backend's name
+  STR_W_TL_HALF_MOVED,        // %d = spool taken off, %s = why the rest failed
+  // Settings page: the fuel gauge's battery in the header
+  STR_W_BAT_PCT,
+  STR_W_BAT_PCT_HINT,
+  // Tag view: the first colour as its value
+  STR_W_TAG_COLOR_HEX,
+  STR_TW_OPT_OPTW,
+  STR_TW_OPT_OPTW_SUB,
+  STR_TW_OPT_OPTW_INFO,
+  STR_W_TAGOPT_OPTW,
+  STR_OPTW_FAIL_TITLE,
+  STR_OPTW_FAIL_GONE,
+  STR_OPTW_FAIL_FULL,
+  STR_OPTW_FAIL_AUX,
+  STR_OPTW_FAIL_WRITE,
+  STR_TV_CONSUMED,
+  STR_TV_LEFT,
+  STR_TV_PREHEAT,
+  STR_TV_SERIAL,
+  STR_TV_BATCH,
+  STR_TV_WORKGROUP,
+  STR_TV_PROPS,
+  STR_TV_CODE,
+  STR_TAGNEW_W_ASSUMED,
+  STR_OPT_FULL,
+  STR_OPT_FULL_ASSUMED,
+  STR_OPT_FULL_RANGE,
   STR_COUNT
 };
 

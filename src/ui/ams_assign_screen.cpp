@@ -177,17 +177,12 @@ void buildAmsAssignScreen() {
     lv_obj_t *mb = lv_btn_create(scr_ams_assign);
     lv_obj_set_size(mb, btn_w, btn_h);
     lv_obj_set_pos(mb, btn_x0 + m*(btn_w+btn_gap), btn_y);
-    lv_obj_set_style_bg_color(mb, active ? lv_color_hex(UI_COL_GO_BG) : lv_color_hex(UI_COL_SURFACE), 0);
-    lv_obj_set_style_bg_color(mb, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(mb, active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_ROW_PRESSED), 0);
-    lv_obj_set_style_border_width(mb, 1, 0);
     lv_obj_set_style_radius(mb, 8, 0);
-    lv_obj_set_style_shadow_width(mb, 0, 0);
     lv_obj_t *ml = lv_label_create(mb);
     lv_label_set_text(ml, mode_labels[m]);
-    lv_obj_set_style_text_color(ml, active ? lv_color_hex(UI_COL_ACCENT) : lv_color_hex(UI_COL_CAPTION), 0);
     lv_obj_set_style_text_font(ml, &lv_font_montserrat_ext_16, 0);
     lv_obj_align(ml, LV_ALIGN_CENTER, 0, 0);
+    uiSegmentLook(mb, active ? SEG_PICKED : SEG_OFF);
     lv_obj_set_user_data(mb, (void*)(intptr_t)m);
     lv_obj_add_event_cb(mb, [](lv_event_t *e){
       int new_mode = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(e));

@@ -77,7 +77,9 @@ void diagnosticsTick() {
   // Probed live rather than read from the boot scan, so a connector that is
   // pushed back in takes effect without a restart. 0x2A is already answered by
   // the scale watchdog every 5 s, so only the reader costs a transaction here.
-  pn532_on_bus = i2cPresent(I2C_EXT, I2C_ADDR_PN532);
+  // The reader's own address: a PN7160 test board answers at 0x28, and its
+  // findings still read "PN532" in the banner for now (Notes, PN7160).
+  pn532_on_bus = nfcChipOnBus(I2C_EXT);
   // A device built without a load cell has no NAU7802 to miss, so its silence
   // is the configuration rather than a finding. Asked as "is one missing" and
   // not as "is one there": the reader's own verdicts below have to go on

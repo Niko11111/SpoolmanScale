@@ -1,59 +1,38 @@
+// The one way onto an NFC tag: the jobs the device, the web page and FilaMan
+// park here, carried out from the loop by tagWriteTick(), and FilaMan's scan
+// answered. The pages, the records and what is read back off a tag live in
+// the files beside it (services/tag_write_internal.h).
 #include "tag_write.h"
+#include "hardware/sound.h"
 
 #include <ArduinoJson.h>
 #include <lvgl.h>
-#include <ctype.h>
-#include <math.h>
 #include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include "hardware/nfc.h"
 #include "hardware/sd_logger.h"
 #include "app/app_state.h"
-#include "bambu/bambu_catalog.h"
-#include "bambu/bambu_scan.h"
-#include "bambu/bambu_tag.h"
-#include "bambu/material_match.h"
 #include "creality/creality_scan.h"
 #include "creality/creality_write.h"
 #include "services/backend.h"
 #include "services/backend_api.h"
 #include "services/filaman_api.h"
 #include "services/mifare_formats.h"
-#include "services/material_family.h"
 #include "services/mifare_write.h"
 #include "services/spoolman_actions.h"
-#include "services/spool_temp_rules.h"
-#include "services/tag_field.h"
 #include "services/tag_link.h"
 #include "services/tag_pending.h"
 #include "services/tag_uid.h"
-#include "services/backend.h"
+#include "services/tag_write_internal.h"
 
-// ACE page map (DnG-Crafts/ACE-RFID). Pages are 4 bytes.
-#define ACE_P_MAGIC     4
-#define ACE_P_SKU       5
-#define ACE_P_BRAND    10
-#define ACE_P_MATERIAL 15
-#define ACE_P_COLOR    20
-#define ACE_P_EXTRUDER 24
-#define ACE_P_BED      29
-#define ACE_P_DIALEN   30
-#define ACE_P_WEIGHT   31
+using namespace tagw;
 
 // How long the link is given to settle before its one retry.
 #define TAGWRITE_LINK_RETRY_MS  300
-// Everything from the first user page through the last one ACE touches.
-#define ACE_BYTES      ((ACE_P_WEIGHT - 4 + 1) * 4)
-
-struct AceFields {
-  char     sku[17];
-  char     brand[17];
-  char     material[17];
-  uint8_t  r, g, b;
-  uint16_t et_lo, et_hi, bed_lo, bed_hi;
-  uint16_t dia_x100, length_m, weight_g;
-};
 
 static bool      pending = false;
 static int       pending_id = 0;
@@ -75,41 +54,10 @@ static bool      erased_flag = false;
 // own sentence - see TagWriteReport in the header.
 static TagWriteReport report;
 
-static char      cached_uid[26] = "";
-static char      cached_kind[34] = "";
-// The same statement as a number, because cached_kind is English prose and the
-// web page is translated. 0 nothing, 1 MIFARE Classic read-only, 2 NTAG.
-static uint8_t   cached_kindcode = TAG_KIND_NONE;
-static char      cached_content[128] = "";
-static char      cached_raw[512] = "";
-static TagInfo   cached_info;
-static uint16_t  cached_bytes = 0;
-static bool      cache_dirty = false;
 static bool      scan_pending = false;
 static unsigned long scan_since = 0;
 #define SCAN_WAIT_MS 30000
 
-const char* tagCachedUid()     { return cached_uid; }
-const char* tagCachedKind()    { return cached_kind; }
-const char* tagCachedContent() { return cached_content; }
-const char* tagCachedRaw()     { return cached_raw; }
-const TagInfo* tagCachedInfo() { return &cached_info; }
-uint16_t tagCachedBytes()      { return cached_bytes; }
-uint8_t  tagCachedKindCode()   { return cached_kindcode; }
-
-// "blank" and "unknown" are answers, not records: one says the pages are
-// empty, the other that they hold something no format claims. Neither has a
-// brand or a material to show, and both are asked about in three places.
-//
-// A MIFARE tag never counts. Its fields are cached for the pages that show
-// them, but scanTick() would otherwise answer FilaMan for a Bambu tag from
-// here rather than from g_tag: "PETG Basic" instead of "PETG", black for a
-// clear filament, and no spool id.
-bool tagCachedHasRecord() {
-  return cached_kindcode == TAG_KIND_NTAG &&
-         cached_info.fmt[0] && strcmp(cached_info.fmt, "blank") != 0 &&
-         strcmp(cached_info.fmt, "unknown") != 0;
-}
 void tagScanRequest() { scan_pending = true; scan_since = millis(); }
 
 const TagWriteReport* tagWriteReportData() { return &report; }
@@ -131,19 +79,43 @@ bool tagWriteTakeErased() {
 }
 
 // The tag the main poll is looking at, judged the same way refreshCache()
-// judges it: a 7 byte UID prints as 20 characters, a 4 byte one as 11. Reading
+// judges it: a 7 byte UID prints as 20 characters, a 4 byte one as 11, an 8
+// byte ISO 15693 one as 23 and is no NTAG. Reading
 // the cached scan rather than selecting the tag again is the point - a select
 // here would race the main poll, and the loser gets nothing back.
 bool tagIsWritableNtag() {
-  return tag_present && strlen(g_tag.uid_str) > 14;
+  return tag_present && strlen(g_tag.uid_str) == TAG_UID_STR_LEN_NTAG;
 }
 
 static void finish(const char *st, const char *msg, uint8_t code) {
+  // A write that fails and then still links reports "error" twice for the
+  // same job; the job sounds once.
+  const bool repeated = (strcmp(state, st) == 0);
   snprintf(state, sizeof(state), "%s", st);
   snprintf(message, sizeof(message), "%s", msg);
   result = code;
   report.code = code;
   logSDf("TagWrite: %s - %s", st, msg);
+  // Every write and erase ends here, whoever asked for it: the device, the
+  // web page or a FilaMan remote trigger.
+  if (repeated) return;
+  if (strcmp(st, "ok") == 0)         soundPlay(SND_WRITE_OK);
+  else if (strcmp(st, "error") == 0) soundPlay(SND_WRITE_FAIL);
+}
+
+// Every job starts here, also one that does not wait for tagWriteTick(), so
+// finish() tells it from the one before and the web page builds its sentence
+// from this job's parts. Without it a FilaMan write after an earlier success
+// found "ok" still standing and played no tone, and after a web erase the tag
+// page called that write "Tag erased" (22.11.2026).
+static void jobStart(int spool_id, TagFormat fmt) {
+  memset(&report, 0, sizeof(report));
+  report.code     = TW_BUSY;
+  report.erase    = (fmt == TAG_FMT_ERASE);
+  report.spool_id = spool_id;
+  report.fmt      = (uint8_t)fmt;
+  result = TW_BUSY;
+  snprintf(state, sizeof(state), "pending");
 }
 
 bool tagWriteRequest(int spool_id, TagFormat fmt, bool link) {
@@ -154,13 +126,7 @@ bool tagWriteRequest(int spool_id, TagFormat fmt, bool link) {
   pending_link = link;
   pending_uid[0] = 0;
   pending     = true;
-  result      = TW_BUSY;
-  memset(&report, 0, sizeof(report));
-  report.code     = TW_BUSY;
-  report.erase    = (fmt == TAG_FMT_ERASE);
-  report.spool_id = spool_id;
-  report.fmt      = (uint8_t)fmt;
-  snprintf(state, sizeof(state), "pending");
+  jobStart(spool_id, fmt);
   if (fmt == TAG_FMT_ERASE)
     snprintf(message, sizeof(message), "Erasing the tag...");
   else
@@ -188,423 +154,25 @@ static void uidToStr(const uint8_t *uid, uint8_t uid_len, char *out, size_t n) {
     u += snprintf(out + u, n - u, i ? ":%02X" : "%02X", uid[i]);
 }
 
-// The family table lives in services/material_family.cpp, shared with the
-// main screen's guide value. Density is only used to estimate the length.
-#define MAT_DENSITY_FALLBACK  1.24f
-
-
-static void buildAce(JsonObjectConst sp, AceFields *f) {
-  memset(f, 0, sizeof(*f));
-  // The spool's own material name goes on the tag, not the family it belongs
-  // to. Writing the family made a TPE-83A spool arrive as "PLA", and a reader
-  // has no way of telling that apart from a spool that really is PLA.
-  const char *material = sp["filament"]["material"] | "PLA";
-  if (!material[0]) material = "PLA";
-  snprintf(f->material, sizeof(f->material), "%s", material);
-
-  float density = MAT_DENSITY_FALLBACK;
-  const MatFamily* fam = matchFamily(material);
-  SpoolTempRange fam_nozzle = {0, 0}, fam_bed = {0, 0};
-  if (fam) {
-    fam_nozzle = {fam->et_lo, fam->et_hi};
-    fam_bed = {fam->bed_lo, fam->bed_hi};
-    density = fam->density;
-  }
-  // What the user entered in the backend is what they print at, so it goes
-  // on the tag before the family's textbook range.
-  JsonObjectConst fil = sp["filament"];
-  const SpoolTempRange nozzle = spoolTempTagEnds(
-      spoolTempRange(fil["x_extruder_temp_min"] | 0, fil["settings_extruder_temp"] | 0),
-      fam_nozzle);
-  const SpoolTempRange bed = spoolTempTagEnds(
-      spoolTempRange(0, fil["settings_bed_temp"] | 0), fam_bed);
-  f->et_lo = (uint16_t)nozzle.lo;  f->et_hi = (uint16_t)nozzle.hi;
-  f->bed_lo = (uint16_t)bed.lo;    f->bed_hi = (uint16_t)bed.hi;
-  // Zero, and the preview shows a dash. A reader can ignore a missing
-  // temperature; a wrong one it cannot.
-  if (!nozzle.hi)
-    logSDf("tag: material '%s' has no temperature in the backend and is in no "
-           "known family, none written", material);
-
-  unsigned r = 0, g = 0, b = 0;
-  const char *c = sp["filament"]["color_hex"] | "";
-  if (*c == '#') c++;
-  if (strlen(c) >= 6) sscanf(c, "%02x%02x%02x", &r, &g, &b);
-  f->r = (uint8_t)r; f->g = (uint8_t)g; f->b = (uint8_t)b;
-
-  const float net = sp["filament"]["weight"] | 0.0f;
-  f->weight_g = (uint16_t)(net > 0 ? net : 1000);
-
-  f->dia_x100 = 175;
-  const float radius_cm = (f->dia_x100 / 100.0f) / 20.0f;
-  const float area = 3.14159265f * radius_cm * radius_cm;
-  f->length_m = (uint16_t)((f->weight_g / density) / area / 100.0f);
-
-  snprintf(f->brand, sizeof(f->brand), "%s", sp["filament"]["vendor"]["name"] | "Generic");
-  // Always the backend spool id. The ACE does not validate the SKU and hands
-  // the decoded contents to Klipper without a UID, so this is the only field
-  // that can point back at the spool record.
-  snprintf(f->sku, sizeof(f->sku), "SM%d", (int)(sp["id"] | 0));
-}
-
-static void aceToInfo(const AceFields *f, TagInfo *ti) {
-  memset(ti, 0, sizeof(*ti));
-  snprintf(ti->fmt, sizeof(ti->fmt), "ACE");
-  snprintf(ti->sku, sizeof(ti->sku), "%s", f->sku);
-  snprintf(ti->brand, sizeof(ti->brand), "%s", f->brand);
-  snprintf(ti->material, sizeof(ti->material), "%s", f->material);
-  ti->has_color = true;
-  ti->r = f->r; ti->g = f->g; ti->b = f->b;
-  ti->et_lo = f->et_lo; ti->et_hi = f->et_hi;
-  ti->bed_lo = f->bed_lo; ti->bed_hi = f->bed_hi;
-  ti->dia_x100 = f->dia_x100; ti->length_m = f->length_m;
-  ti->weight_g = f->weight_g;
-}
-
-// snprintf returns the length it *would* have written, so adding that up walks
-// the cursor past the end of the buffer the moment anything is truncated:
-// out + n then points outside it and out_len - n underflows to a huge size_t.
-// This returns what was actually written instead.
-//
-// The buffers callers pass are big enough for real field sizes, so this was
-// latent rather than live - but it is ten appends in a row in tagInfoJson()
-// and the same shape again in scanTick(), and the data comes off a tag.
-static size_t appendf(char *out, size_t out_len, size_t n, const char *fmt, ...)
-    __attribute__((format(printf, 4, 5)));
-
-static size_t appendf(char *out, size_t out_len, size_t n, const char *fmt, ...) {
-  if (out_len == 0) return 0;
-  if (n >= out_len - 1) return out_len - 1;   // already full, nothing more fits
-  va_list ap;
-  va_start(ap, fmt);
-  vsnprintf(out + n, out_len - n, fmt, ap);
-  va_end(ap);
-  return strnlen(out, out_len);
-}
-
-// Every text field here came off a tag or out of a tag's own JSON, so a
-// quotation mark in a brand name is a thing that can arrive. Unescaped it
-// made the reply malformed, and the tag page then stopped updating with no
-// message: r.json() throws and the poll dies.
-//
-// readText() already drops anything outside 0x20..0x7E, so a quote and a
-// backslash are the whole set.
-static void jesc(const char *in, char *out, size_t out_len) {
-  size_t j = 0;
-  for (const char *p = in ? in : ""; *p && j + 2 < out_len; p++) {
-    if (*p == '"' || *p == '\\') out[j++] = '\\';
-    out[j++] = *p;
-  }
-  out[j] = '\0';
-}
-
-void tagInfoJson(const TagInfo *ti, char *out, size_t out_len) {
-  char e[40];
-  jesc(ti->fmt, e, sizeof(e));
-  snprintf(out, out_len, "{\"fmt\":\"%s\"", e);
-  size_t n = strnlen(out, out_len);
-  if (ti->brand[0]) {
-    jesc(ti->brand, e, sizeof(e));
-    n = appendf(out, out_len, n, ",\"brand\":\"%s\"", e);
-  }
-  if (ti->material[0]) {
-    jesc(ti->material, e, sizeof(e));
-    n = appendf(out, out_len, n, ",\"material\":\"%s\"", e);
-  }
-  if (ti->spool_id > 0) n = appendf(out, out_len, n, ",\"spool_id\":%d", ti->spool_id);
-  if (ti->proto[0]) {
-    jesc(ti->proto, e, sizeof(e));
-    n = appendf(out, out_len, n, ",\"proto\":\"%s\"", e);
-  }
-  if (ti->version[0]) {
-    jesc(ti->version, e, sizeof(e));
-    n = appendf(out, out_len, n, ",\"version\":\"%s\"", e);
-  }
-  if (ti->tray_uuid[0]) {
-    jesc(ti->tray_uuid, e, sizeof(e));
-    n = appendf(out, out_len, n, ",\"tray_uuid\":\"%s\"", e);
-  }
-  if (ti->prod_date[0]) {
-    jesc(ti->prod_date, e, sizeof(e));
-    n = appendf(out, out_len, n, ",\"prod_date\":\"%s\"", e);
-  }
-  if (ti->sku[0]) {
-    jesc(ti->sku, e, sizeof(e));
-    n = appendf(out, out_len, n, ",\"sku\":\"%s\"", e);
-  }
-  if (ti->has_color)   n = appendf(out, out_len, n, ",\"color\":\"#%02X%02X%02X\"",
-                                   ti->r, ti->g, ti->b);
-  if (ti->et_hi)       n = appendf(out, out_len, n, ",\"nozzle\":\"%u-%u\"",
-                                   (unsigned)ti->et_lo, (unsigned)ti->et_hi);
-  if (ti->bed_hi)      n = appendf(out, out_len, n, ",\"bed\":\"%u-%u\"",
-                                   (unsigned)ti->bed_lo, (unsigned)ti->bed_hi);
-  if (ti->weight_g)    n = appendf(out, out_len, n, ",\"weight\":%u", (unsigned)ti->weight_g);
-  if (ti->dia_x100)    n = appendf(out, out_len, n, ",\"dia\":\"%u.%02u\"",
-                                   (unsigned)(ti->dia_x100 / 100), (unsigned)(ti->dia_x100 % 100));
-  if (ti->length_m)    n = appendf(out, out_len, n, ",\"len\":%u", (unsigned)ti->length_m);
-  if (ti->code[0]) {
-    jesc(ti->code, e, sizeof(e));
-    n = appendf(out, out_len, n, ",\"code\":\"%s\"", e);
-  }
-  if (ti->dry_c)       n = appendf(out, out_len, n, ",\"dry_c\":%u,\"dry_h\":%u",
-                                   (unsigned)ti->dry_c, (unsigned)ti->dry_h);
-  if (ti->has_color2)  n = appendf(out, out_len, n, ",\"color2\":\"#%02X%02X%02X\"",
-                                   ti->r2, ti->g2, ti->b2);
-  if (ti->color_name[0]) {
-    char en[100];
-    jesc(ti->color_name, en, sizeof(en));
-    n = appendf(out, out_len, n, ",\"cname\":\"%s\"", en);
-  }
-  if (ti->article[0]) {
-    jesc(ti->article, e, sizeof(e));
-    n = appendf(out, out_len, n, ",\"article\":\"%s\"", e);
-  }
-  appendf(out, out_len, n, "}");
-}
-
-// One format for both sides, so the page can compare them as plain strings.
-static void describeAce(const AceFields *f, char *out, size_t out_len) {
-  snprintf(out, out_len, "ACE: %s %s, #%02X%02X%02X, %ug, SKU %s",
-           f->brand, f->material, f->r, f->g, f->b,
-           (unsigned)f->weight_g, f->sku);
-}
-
-// Pages of the running job, counted where every one of them passes. A job
-// says how many it is going to write before its first, see progressBegin().
-static TagWriteProgressFn s_progress    = nullptr;
-static uint16_t           s_pages_done  = 0;
-static uint16_t           s_pages_total = 0;
-
-void tagWriteSetProgress(TagWriteProgressFn fn) { s_progress = fn; }
-
-// The NTAG selectWritableTag() found: every page below goes onto it, and an
-// armed write marks it unfinished before the first one (services/tag_pending.h).
-static uint8_t s_sel_uid[NFC_UID_MAX];
-static uint8_t s_sel_len = 0;
-
-static void progressBegin(uint16_t total) {
-  s_pages_done  = 0;
-  s_pages_total = total;
-  if (s_progress && total) s_progress(0, total);
-}
-
-static bool wrPage(uint8_t page, const uint8_t *d) {
-  if (page < 4) return false;          // UID, lock bytes, CC
-  uint8_t buf[4];
-  memcpy(buf, d, 4);
-  tagPendingBegin(s_sel_uid, s_sel_len);
-  if (!nfcWriteNtagPage(page, buf)) return false;
-  // After the page, never around it: the listener redraws, and that takes a
-  // few milliseconds the chip should not spend waiting in the middle of one.
-  if (s_pages_done < s_pages_total) s_pages_done++;
-  if (s_progress && s_pages_total) s_progress(s_pages_done, s_pages_total);
-  return true;
-}
-
-// Reads a page back and compares. A write the chip acknowledged is not yet a
-// write that took: a tag drifting off the antenna acks and stores nothing.
-static bool rdPageIs(uint8_t page, const uint8_t *expect) {
-  uint8_t got[4] = {0};
-  return nfcReadNtagPage(page, got) && memcmp(got, expect, 4) == 0;
-}
-
-// The last user page an NTAG2xx can have: the library refuses pages from 231
-// on, and the largest tag this firmware writes, an NTAG216, ends at 225.
-#define NTAG_PAGE_MAX         230
-// Without a readable capability container the smallest tag is assumed.
-#define NTAG_FALLBACK_LAST_PG  39
-// The page every record starts on, once the four the chip keeps for itself
-// are past.
-#define NTAG_FIRST_USER_PAGE    4
-
-// Capability container at page 3: byte 2 counts 8 byte blocks. What it reports
-// is the NDEF area, which is a little smaller than the chip: NTAG213 144 of
-// 144, NTAG215 496 of 504, NTAG216 872 of 888. Those are the numbers the UI
-// shows, because they are what a record actually has to fit into.
-static uint16_t tagUserBytes() {
-  uint8_t cc[4] = {0};
-  if (!nfcReadNtagPage(3, cc) || cc[0] != 0xE1 || !cc[2]) return 0;
-  return (uint16_t)cc[2] * 8;
-}
-
-// Falls back to the smallest tag, so an unreadable CC never overruns.
-static uint8_t lastUserPage() {
-  const uint16_t b = tagUserBytes();
-  if (!b) return NTAG_FALLBACK_LAST_PG;
-  // In 16 bits. Byte 2 of the CC is whatever the tag says, and from 0x7F up -
-  // an NTAG I2C plus 2k reports 0xEA - the old 8 bit sum wrapped to page 1,
-  // after which eraseTag() ran no pass at all and reported success.
-  uint16_t last = NTAG_FIRST_USER_PAGE + b / 4 - 1;
-  if (last > NTAG_PAGE_MAX) last = NTAG_PAGE_MAX;
-  return (uint8_t)last;
-}
-
-static bool wrText(uint8_t first, const char *s) {
-  uint8_t buf[16] = {0};
-  size_t n = strlen(s);
-  if (n > 16) n = 16;
-  memcpy(buf, s, n);
-  for (int i = 0; i < 4; i++) if (!wrPage(first + i, buf + i * 4)) return false;
-  // Fields are 16 bytes with a spare page after them. A full length value has
-  // no NUL of its own, so old data left in that page would run the two
-  // together on read.
-  const uint8_t zero[4] = {0, 0, 0, 0};
-  return wrPage(first + 4, zero);
-}
-
-static bool wrU16Pair(uint8_t page, uint16_t a, uint16_t b) {
-  uint8_t buf[4] = { (uint8_t)(a & 0xFF), (uint8_t)(a >> 8),
-                     (uint8_t)(b & 0xFF), (uint8_t)(b >> 8) };
-  return wrPage(page, buf);
-}
-
-// Clears the user pages, whatever the tag has. A fixed upper page would
-// overrun an NTAG213 and report a failed erase after erasing everything.
-static bool eraseTag() {
-  const uint8_t zero[4] = {0, 0, 0, 0};
-  const uint8_t last = lastUserPage();
-  progressBegin((uint16_t)(last - NTAG_FIRST_USER_PAGE + 1));
-  for (uint8_t pg = 4; pg <= last; pg++)
-    if (!wrPage(pg, zero)) return false;
-  return true;
-}
-
-// What writeAce() puts on the tag: the magic page twice, three texts of five
-// pages each, the colour and four pairs of numbers.
-#define ACE_PAGES_WRITTEN  (2 + 3 * 5 + 1 + 4)
-
-static bool writeAce(const AceFields *f) {
-  const uint8_t magic[4] = { 0x7B, 0x00, 0x65, 0x00 };
-  const uint8_t color[4] = { 0xFF, f->b, f->g, f->r };
-  const uint8_t zero[4]  = { 0, 0, 0, 0 };
-  progressBegin(ACE_PAGES_WRITTEN);
-  // The magic page goes last, and is blanked first. The magic used to be
-  // written before the fields, so a spool lifted mid-write left a tag that
-  // announced an ACE record over whatever the pages held before - and the
-  // next scan showed that as a plausible spool. Blank until the last page,
-  // it reads as empty instead.
-  return wrPage(ACE_P_MAGIC, zero)
-      && wrText(ACE_P_SKU, f->sku)
-      && wrText(ACE_P_BRAND, f->brand)
-      && wrText(ACE_P_MATERIAL, f->material)
-      && wrPage(ACE_P_COLOR, color)
-      && wrU16Pair(ACE_P_EXTRUDER, f->et_lo, f->et_hi)
-      && wrU16Pair(ACE_P_BED, f->bed_lo, f->bed_hi)
-      && wrU16Pair(ACE_P_DIALEN, f->dia_x100, f->length_m)
-      && wrU16Pair(ACE_P_WEIGHT, f->weight_g, 0)
-      && wrPage(ACE_P_MAGIC, magic)
-      && rdPageIs(ACE_P_MAGIC, magic)
-      && rdPageIs(ACE_P_COLOR, color);
-}
-
-
-// NDEF on an NTAG: TLV 0x03, length, one application/json record, 0xFE.
-// Record header D2 = MB|ME|SR, TNF 2 (media type).
-//
-// The single byte TLV length field is what caps the payload, not the tag: past
-// 255 total the TLV would need its three byte form, which nothing here writes.
-#define NDEF_JSON_MAX 250
-
-// TLV tag and length, record header with type and payload length, the media
-// type itself, the payload, the terminator - then rounded up to whole 4 byte
-// pages, because that is the unit a write goes in.
-size_t tagNdefSizeFor(size_t json_len) {
-  const size_t n = 2 + 3 + 16 + json_len + 1;
-  return n + ((4 - (n % 4)) % 4);
-}
-
 static char    write_err[80] = "";
 static uint8_t write_code = TW_ERR_WRITE;
 static char    remote_payload[320] = "";
 static char    remote_proto[12] = "";
+// What the web page says the remote write was for: the spool FilaMan named and
+// the filament in its record, since there is no spool fetch on this path.
+static int     remote_spool_id = 0;
+static char    remote_name[48] = "";
 
-// Wraps a JSON document in the NDEF TLV an OpenSpool reader expects.
-static bool writeNdefJson(const char *json) {
-  const int n = (int)strlen(json);
-  if (n <= 0 || n > NDEF_JSON_MAX) return false;
-
-  static const char TYPE[] = "application/json";
-  const uint8_t tlen = sizeof(TYPE) - 1;
-
-  // Settled before a single byte is laid out: the same arithmetic the preview
-  // uses, so a tag the page called too small is exactly the one that fails here.
-  const int i_need = (int)tagNdefSizeFor((size_t)n);
-  {
-    const uint8_t need_last = (uint8_t)(4 + (i_need + 3) / 4 - 1);
-    const uint8_t last = lastUserPage();
-    if (need_last > last) {
-      // Two different faults used to read as one. A tag whose capability
-      // container is blank reports no size at all, and lastUserPage() then
-      // assumes the smallest NTAG - so an NTAG215 with 496 bytes free was
-      // turned away claiming it held 144, which sends the owner looking for a
-      // bigger tag instead of formatting the one in their hand.
-      if (!tagUserBytes())
-        snprintf(write_err, sizeof(write_err),
-                 "Tag reports no size. Format it as NDEF once, then retry");
-      else
-        snprintf(write_err, sizeof(write_err),
-                 "OpenSpool needs %d bytes, this tag holds %u", i_need,
-                 (unsigned)((last - 3) * 4));
-      write_code = TW_ERR_SPACE;
-      return false;
-    }
-  }
-
-  uint8_t buf[288];
-  int i = 0;
-  buf[i++] = 0x03;                       // NDEF message TLV
-  buf[i++] = (uint8_t)(3 + tlen + n);    // record header + type + payload
-  buf[i++] = 0xD2;
-  buf[i++] = tlen;
-  buf[i++] = (uint8_t)n;
-  memcpy(buf + i, TYPE, tlen); i += tlen;
-  memcpy(buf + i, json, n);    i += n;
-  buf[i++] = 0xFE;                       // terminator
-  while (i % 4) buf[i++] = 0x00;
-
-  // The TLV header sits in the first page and is written last, after that
-  // page has been blanked: a tag lifted mid-write then reads as empty, not
-  // as a record whose length byte points into whatever the pages held
-  // before. The header and the last page are read back - the two that
-  // decide whether a reader sees a whole record.
-  const uint8_t zero[4] = { 0, 0, 0, 0 };
-  // Every page of the record, and the first one twice.
-  progressBegin((uint16_t)(i / 4 + 1));
-  if (!wrPage(NTAG_FIRST_USER_PAGE, zero)) return false;
-  for (int off = 4; off < i; off += 4)
-    if (!wrPage((uint8_t)(NTAG_FIRST_USER_PAGE + off / 4), buf + off)) return false;
-  if (!wrPage(NTAG_FIRST_USER_PAGE, buf)) return false;
-
-  const int last_off = i - 4;
-  if (!rdPageIs(NTAG_FIRST_USER_PAGE, buf) ||
-      (last_off > 0 && !rdPageIs((uint8_t)(NTAG_FIRST_USER_PAGE + last_off / 4), buf + last_off))) {
-    snprintf(write_err, sizeof(write_err),
-             "Tag did not keep the record - hold it still and retry");
-    write_code = TW_ERR_WRITE;
-    return false;
-  }
-  return true;
+void tagw::tagWriteFail(uint8_t code, const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(write_err, sizeof(write_err), fmt, ap);
+  va_end(ap);
+  write_code = code;
 }
 
-// Two names for the same number, because two readers look for two different
-// keys. sm_id is the OpenSpool convention this firmware has always written and
-// what OpenSpoolman resolves. spool_id is what FilaMan's own reader looks for -
-// the word sm_id does not appear anywhere in FilaMan, and a record carrying
-// only that one arrives there as spool 0. Neither replaces the other.
-// What the format is called where a person reads it.
-static const char* fmtLabel(TagFormat fmt) {
-  switch (fmt) {
-    case TAG_FMT_ACE:     return "ACE";
-    case TAG_FMT_FILAMAN: return "FilaMan";
-    case TAG_FMT_CREALITY: return "Creality CFS";
-    default:              return "OpenSpool";
-  }
-}
-
-static const char* protoName(TagFormat fmt) {
-  return fmt == TAG_FMT_FILAMAN ? "filaman" : "openspool";
-}
-
+// What the format is called where a person reads it: display, log and the
+// web page's write report alike.
 const char* tagFormatLabel(uint8_t fmt) {
   switch (fmt) {
     case TAG_FMT_ACE:       return "Anycubic ACE";
@@ -613,24 +181,6 @@ const char* tagFormatLabel(uint8_t fmt) {
     case TAG_FMT_CREALITY:  return "Creality CFS";
     default:                return "OpenSpool";
   }
-}
-
-static int buildOpenSpoolJson(const AceFields *f, int spool_id, TagFormat fmt,
-                              char *json, size_t json_len) {
-  int n = snprintf(json, json_len,
-    "{\"protocol\":\"%s\",\"version\":\"1.0\",\"type\":\"%s\","
-    "\"color_hex\":\"%02X%02X%02X\",\"brand\":\"%s\","
-    "\"min_temp\":\"%u\",\"max_temp\":\"%u\","
-    "\"spool_id\":%d,\"sm_id\":%d}",
-    protoName(fmt), f->material, f->r, f->g, f->b, f->brand,
-    (unsigned)f->et_lo, (unsigned)f->et_hi, spool_id, spool_id);
-  return (n > 0 && n < (int)json_len) ? n : 0;
-}
-
-static bool writeOpenSpool(const AceFields *f, int spool_id, TagFormat fmt) {
-  char json[224];
-  if (!buildOpenSpoolJson(f, spool_id, fmt, json, sizeof(json))) return false;
-  return writeNdefJson(json);
 }
 
 // What the server sent is kept exactly as it sent it - spool_id included. An
@@ -642,6 +192,8 @@ static bool writeOpenSpool(const AceFields *f, int spool_id, TagFormat fmt) {
 void tagRemotePayloadSet(const char *json, int spool_id) {
   remote_payload[0] = 0;
   remote_proto[0] = 0;
+  remote_spool_id = spool_id;
+  remote_name[0] = 0;
   if (!json || !json[0]) return;
 
   JsonDocument d;
@@ -666,6 +218,14 @@ void tagRemotePayloadSet(const char *json, int spool_id) {
   const char *proto = d["protocol"] | "";
   snprintf(remote_proto, sizeof(remote_proto), "%s",
            strcmp(proto, "filaman") == 0 ? "FilaMan" : "OpenSpool");
+
+  // Both protocols carry OpenSpool's fields; "spool" as the device path says
+  // when the spool has no filament name.
+  const char *brand = d["brand"] | "";
+  const char *type  = d["type"] | "";
+  snprintf(remote_name, sizeof(remote_name), "%s%s%s", brand,
+           (brand[0] && type[0]) ? " " : "", type);
+  if (!remote_name[0]) snprintf(remote_name, sizeof(remote_name), "spool");
 }
 
 const char* tagRemotePayloadProtocol() {
@@ -682,6 +242,9 @@ bool tagRemotePayloadPending() { return remote_payload[0] != 0; }
 // had been written before it.
 bool tagWriteRemotePayload() {
   if (!remote_payload[0]) return false;
+  jobStart(remote_spool_id, strcmp(remote_proto, "FilaMan") == 0 ? TAG_FMT_FILAMAN
+                                                                 : TAG_FMT_OPENSPOOL);
+  snprintf(report.name, sizeof(report.name), "%s", remote_name);
   write_err[0] = 0;
   write_code = TW_ERR_WRITE;
 
@@ -705,506 +268,9 @@ bool tagWriteRemotePayload() {
 
   remote_payload[0] = 0;
   remote_proto[0] = 0;
-  cache_dirty = true;
+  tagCacheMarkDirty();
   return ok;
 }
-
-// FilaMan can be set to write the record under either of two protocol names,
-// and both hold the same fields - the choice is a label. Reading the value out
-// rather than looking for the bare word anywhere in the record is what keeps a
-// filament brand called Filaman from being taken for a protocol.
-static bool isSupportedRecord(const char *json) {
-  JsonDocument d;
-  if (deserializeJson(d, json)) return false;
-  const char *proto = d["protocol"] | "";
-  return !strcmp(proto, "openspool") || !strcmp(proto, "filaman");
-}
-
-// Reads the JSON payload back out of the NDEF wrapper.
-static bool readOpenSpool(char *out, size_t out_len) {
-  // Zeroed: only the pages the TLV claims are read, and a record that says it
-  // reaches past them must copy zeros, not whatever the stack held before.
-  uint8_t buf[240] = {0};
-  if (!nfcReadNtagPage(4, buf)) return false;
-  if (buf[0] != 0x03) return false;          // not an NDEF TLV, stop here
-  int len = buf[1];
-  const int need = 2 + len;
-  const int pages = (need + 3) / 4;
-  if (pages > (int)sizeof(buf) / 4) return false;
-  for (int p2 = 1; p2 < pages; p2++)
-    if (!nfcReadNtagPage((uint8_t)(4 + p2), buf + p2 * 4)) return false;
-  if (len < 5 || 2 + len > (int)sizeof(buf)) return false;
-  int tlen = buf[3];
-  int plen = buf[4];
-  int start = 5 + tlen;
-  // Within what was read (2 + len), not merely within the buffer.
-  if (plen <= 0 || start + plen > 2 + len) return false;
-  size_t copy = (size_t)plen < out_len - 1 ? (size_t)plen : out_len - 1;
-  memcpy(out, buf + start, copy);
-  out[copy] = 0;
-  return isSupportedRecord(out);
-}
-
-// OpenSpool carries the temperatures as JSON strings - "min_temp":"200" - and
-// that is what this firmware, FilaMan and the OpenSpool tools all write. Read
-// with `| 0` ArduinoJson answers 0 for a string, which is why the preview said
-// "Duese -" next to a tag that plainly carried 200-220 C. Takes either shape.
-static uint16_t jsonTemp(JsonVariantConst v) {
-  if (v.is<unsigned>() || v.is<int>() || v.is<float>()) return (uint16_t)(v | 0);
-  const char* s = v | "";
-  return s[0] ? (uint16_t)atoi(s) : 0;
-}
-
-static void describeOpenSpool(const char *json, char *out, size_t out_len, TagInfo *ti) {
-  if (ti) { memset(ti, 0, sizeof(*ti)); snprintf(ti->fmt, sizeof(ti->fmt), "OpenSpool"); }
-  JsonDocument d;
-  if (deserializeJson(d, json)) { snprintf(out, out_len, "OpenSpool: unreadable"); return; }
-  snprintf(out, out_len, "OpenSpool: %s %s, #%s, %s-%sC",
-           d["brand"] | "?", d["type"] | "?", d["color_hex"] | "?",
-           d["min_temp"] | "?", d["max_temp"] | "?");
-  if (!ti) return;
-  ti->spool_id = d["spool_id"] | (d["sm_id"] | 0);
-  snprintf(ti->proto, sizeof(ti->proto), "%s", d["protocol"] | "");
-  snprintf(ti->version, sizeof(ti->version), "%s", d["version"] | "");
-  snprintf(ti->brand, sizeof(ti->brand), "%s", d["brand"] | "");
-  snprintf(ti->material, sizeof(ti->material), "%s", d["type"] | "");
-  const char *hex = d["color_hex"] | "";
-  if (*hex == '#') hex++;
-  unsigned r = 0, g = 0, b = 0;
-  if (strlen(hex) >= 6 && sscanf(hex, "%02x%02x%02x", &r, &g, &b) == 3) {
-    ti->has_color = true;
-    ti->r = (uint8_t)r; ti->g = (uint8_t)g; ti->b = (uint8_t)b;
-  }
-  ti->et_lo = jsonTemp(d["min_temp"]);
-  ti->et_hi = jsonTemp(d["max_temp"]);
-}
-
-static void readText(uint8_t first, char *out, size_t out_len) {
-  uint8_t buf[16] = {0};
-  for (int i = 0; i < 4; i++)
-    if (!nfcReadNtagPage(first + i, buf + i * 4)) { out[0] = 0; return; }
-  size_t j = 0;
-  for (size_t i = 0; i < 16 && j < out_len - 1; i++) {
-    char c = (char)buf[i];
-    if (c < 0x20 || c > 0x7E) break;
-    out[j++] = c;
-  }
-  out[j] = 0;
-}
-
-static uint16_t rdU16(const uint8_t *d) { return (uint16_t)(d[0] | (d[1] << 8)); }
-
-// false when a page read came back short: the caller must not cache that.
-static bool tagDescribe(char *out, size_t out_len, TagInfo *ti) {
-  out[0] = 0;
-  if (ti) memset(ti, 0, sizeof(*ti));
-  uint8_t p4[4] = {0};
-  if (!nfcReadNtagPage(4, p4)) return false;
-
-  if (p4[0] == 0x7B && p4[1] == 0x00 && p4[2] == 0x65 && p4[3] == 0x00) {
-    AceFields f;
-    memset(&f, 0, sizeof(f));
-    readText(ACE_P_SKU, f.sku, sizeof(f.sku));
-    readText(ACE_P_BRAND, f.brand, sizeof(f.brand));
-    readText(ACE_P_MATERIAL, f.material, sizeof(f.material));
-    uint8_t col[4] = {0}, wt[4] = {0}, ext[4] = {0}, bed[4] = {0}, dl[4] = {0};
-    nfcReadNtagPage(ACE_P_COLOR, col);
-    nfcReadNtagPage(ACE_P_WEIGHT, wt);
-    nfcReadNtagPage(ACE_P_EXTRUDER, ext);
-    nfcReadNtagPage(ACE_P_BED, bed);
-    nfcReadNtagPage(ACE_P_DIALEN, dl);
-    f.r = col[3]; f.g = col[2]; f.b = col[1];
-    f.weight_g = rdU16(wt);
-    f.et_lo = rdU16(ext);     f.et_hi = rdU16(ext + 2);
-    f.bed_lo = rdU16(bed);    f.bed_hi = rdU16(bed + 2);
-    f.dia_x100 = rdU16(dl);   f.length_m = rdU16(dl + 2);
-    describeAce(&f, out, out_len);
-    if (ti) aceToInfo(&f, ti);
-    snprintf(cached_raw, sizeof(cached_raw),
-      "{\"format\":\"Anycubic ACE\",\"sku\":\"%s\",\"brand\":\"%s\",\"material\":\"%s\","
-      "\"color\":\"#%02X%02X%02X\",\"empty_weight_g\":%u,\"nozzle\":\"%u-%u\","
-      "\"bed\":\"%u-%u\",\"diameter_mm\":\"%u.%02u\",\"length_m\":%u}",
-      f.sku, f.brand, f.material, f.r, f.g, f.b, f.weight_g,
-      f.et_lo, f.et_hi, f.bed_lo, f.bed_hi,
-      (unsigned)(f.dia_x100 / 100), (unsigned)(f.dia_x100 % 100), (unsigned)f.length_m);
-    return f.material[0] && f.brand[0];
-  }
-
-  char json[224];
-  json[0] = 0;
-  if (readOpenSpool(json, sizeof(json))) {
-    snprintf(cached_raw, sizeof(cached_raw), "%s", json);
-    describeOpenSpool(json, out, out_len, ti);
-    return true;
-  }
-  if (json[0]) {
-    snprintf(cached_raw, sizeof(cached_raw), "%s", json);
-  }
-  if (p4[0] == 0x03 && !json[0]) return false;
-
-  // A page that will not read is not an empty page. Reporting blank here let
-  // a badly seated tag look erased, and the result was cached as trusted.
-  bool blank = true;
-  for (int pg = 5; pg <= 8 && blank; pg++) {
-    uint8_t d[4] = {0};
-    if (!nfcReadNtagPage(pg, d)) return false;
-    for (int i = 0; i < 4; i++) if (d[i]) { blank = false; break; }
-  }
-  snprintf(out, out_len, "%s", blank ? "blank" : "unrecognised data");
-  if (ti) snprintf(ti->fmt, sizeof(ti->fmt), "%s", blank ? "blank" : "unknown");
-  if (blank) {
-    snprintf(cached_raw, sizeof(cached_raw),
-      "{\"format\":\"NTAG\",\"uid\":\"%s\",\"state\":\"blank\",\"user_bytes\":%u}",
-      g_tag.uid_str, (unsigned)cached_bytes);
-  } else if (!cached_raw[0]) {
-    uint8_t p5[4] = {0}, p6[4] = {0}, p7[4] = {0};
-    nfcReadNtagPage(5, p5); nfcReadNtagPage(6, p6); nfcReadNtagPage(7, p7);
-    snprintf(cached_raw, sizeof(cached_raw),
-      "{\"format\":\"NTAG\",\"uid\":\"%s\",\"state\":\"unrecognised data\","
-      "\"p4_p7_hex\":\"%02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X\"}",
-      g_tag.uid_str,
-      p4[0], p4[1], p4[2], p4[3],
-      p5[0], p5[1], p5[2], p5[3],
-      p6[0], p6[1], p6[2], p6[3],
-      p7[0], p7[1], p7[2], p7[3]);
-  }
-  return true;
-}
-
-bool tagPreview(int spool_id, TagFormat fmt, char *out, size_t out_len,
-                char *linked, size_t linked_len, TagInfo *info, uint16_t *need) {
-  out[0] = 0;
-  linked[0] = 0;
-  if (info) memset(info, 0, sizeof(*info));
-  if (need) *need = 0;
-  if (spool_id <= 0) return false;
-
-  JsonDocument doc;
-  if (backendGetSpoolJson(backendBaseUrl(), spool_id, doc) != 200 || doc.isNull())
-    return false;
-  JsonObjectConst sp = doc.as<JsonObjectConst>();
-
-  // Which tag the spool already carries, and only when that is a *different*
-  // tag than the one on the reader. The caller warns that writing here makes
-  // the old binding stale, and a warning about the tag lying in front of the
-  // user is how that warning stopped meaning anything.
-  //
-  // Every source, not just extra.tag: nfc_id, card_uids and Spoolman's own
-  // relation bind a spool just as well. Normalised on the way out, because
-  // extra fields arrive JSON encoded and still carry their quotes, and because
-  // a UID is written with or without colons depending on who wrote it.
-  linked[0] = 0;
-  {
-    #define TAG_UID_NORM_MAX 48
-    JsonObjectConst extra = sp["extra"];
-    JsonArrayConst  tags  = sp["tags"];
-    const char* here = cached_uid;
-    // A Bambu spool is bound by the tray uuid both of its chips carry, not by
-    // the chip on the reader. Checked as well, or the page calls the very tag
-    // lying there "another tag" - and the link button would ask to replace it.
-    const char* tray = (tag_present && strlen(g_tag.tray_uuid) == 32) ? g_tag.tray_uuid : "";
-    auto isHere = [&](const char* raw) {
-      return raw[0] && ((here[0] && cardUidsContain(raw, here)) ||
-                        (tray[0] && cardUidsContain(raw, tray)));
-    };
-    bool bound_here = false;
-
-    for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT && !bound_here; i++) {
-      if (isHere(extra[tagFieldSpec(i).key] | "")) bound_here = true;
-    }
-    if (!bound_here && !tags.isNull()) {
-      for (JsonObjectConst t : tags) {
-        if (isHere(t["uid"] | "")) { bound_here = true; break; }
-      }
-    }
-
-    if (!bound_here) {
-      char norm[TAG_UID_NORM_MAX];
-      for (uint8_t i = 0; i < TAG_FIELD_EXTRA_COUNT && !linked[0]; i++) {
-        tagUidNormalize(extra[tagFieldSpec(i).key] | "", norm, sizeof(norm));
-        if (norm[0]) snprintf(linked, linked_len, "%s", norm);
-      }
-      if (!linked[0] && !tags.isNull()) {
-        for (JsonObjectConst t : tags) {
-          tagUidNormalize(t["uid"] | "", norm, sizeof(norm));
-          if (norm[0]) { snprintf(linked, linked_len, "%s", norm); break; }
-        }
-      }
-    }
-  }
-
-  if (fmt == TAG_FMT_ERASE) {
-    snprintf(out, out_len, "blank");
-    if (info) snprintf(info->fmt, sizeof(info->fmt), "blank");
-    return true;
-  }
-  AceFields f;
-  buildAce(sp, &f);
-  if (info) {
-    aceToInfo(&f, info);
-    if (TAG_FMT_IS_NDEF(fmt)) {
-      // OpenSpool carries neither the SKU nor the spool geometry.
-      snprintf(info->fmt, sizeof(info->fmt), "%s",
-               fmt == TAG_FMT_FILAMAN ? "FilaMan" : "OpenSpool");
-      info->sku[0] = 0;
-      info->bed_lo = info->bed_hi = 0;
-      info->dia_x100 = info->length_m = info->weight_g = 0;
-      info->spool_id = spool_id;
-      snprintf(info->proto, sizeof(info->proto), "%s", fmt == TAG_FMT_FILAMAN ? "filaman" : "openspool");
-      snprintf(info->version, sizeof(info->version), "1.0");
-    }
-  }
-  if (TAG_FMT_IS_NDEF(fmt)) {
-    // Measured on the record that would really be written, not estimated. The
-    // brand name alone moves this by a dozen bytes, which is the difference
-    // between fitting an NTAG213 and not.
-    if (need) {
-      char json[224];
-      const int n = buildOpenSpoolJson(&f, spool_id, fmt, json, sizeof(json));
-      if (n > 0) *need = (uint16_t)tagNdefSizeFor((size_t)n);
-    }
-    snprintf(out, out_len, "%s: %s %s, #%02X%02X%02X, %u-%uC",
-             fmt == TAG_FMT_FILAMAN ? "FilaMan" : "OpenSpool",
-             f.brand, f.material, f.r, f.g, f.b,
-             (unsigned)f.et_lo, (unsigned)f.et_hi);
-    return true;
-  }
-  if (need) *need = ACE_BYTES;
-  describeAce(&f, out, out_len);
-  return true;
-}
-
-// The threshold the link flow and the remote link popup already judge a colour
-// pair by, so the same two spools are called a mismatch everywhere.
-#define TAG_MISMATCH_COLOR_DIST  120
-
-bool tagDiffersFromSpool(int spool_id, TagFormat fmt, TagInfo *want) {
-  if (!want || spool_id <= 0) return false;
-  if (!tagCachedHasRecord()) return false;
-
-  char out[128], linked[26];
-  if (!tagPreview(spool_id, fmt, out, sizeof(out), linked, sizeof(linked), want))
-    return false;
-
-  const TagInfo *have = &cached_info;
-
-  // Family against family where both are known, so "PLA" and "PLA Basic" agree
-  // and asking about that would be asking about nothing. Where either side is
-  // outside the family list, the names themselves decide - two unknowns are
-  // only the same filament if they are spelled the same.
-  if (have->material[0] && want->material[0]) {
-    const MatFamily* fh = matchFamily(have->material);
-    const MatFamily* fw = matchFamily(want->material);
-    const bool differs = (fh && fw)
-                       ? (fh != fw)
-                       : (strcasecmp(have->material, want->material) != 0);
-    if (differs) return true;
-  }
-
-  // "Generic" is buildAce()'s stand-in for a spool with no vendor. Treating it
-  // as a brand would report every tag that names one as a mismatch.
-  if (have->brand[0] && want->brand[0] && strcasecmp(want->brand, "Generic") != 0 &&
-      strcasecmp(have->brand, want->brand) != 0) return true;
-
-  if (have->has_color && want->has_color && (want->r || want->g || want->b)) {
-    char a[8], b[8];
-    snprintf(a, sizeof(a), "#%02X%02X%02X", have->r, have->g, have->b);
-    snprintf(b, sizeof(b), "#%02X%02X%02X", want->r, want->g, want->b);
-    if (colorDistance(a, b) > TAG_MISMATCH_COLOR_DIST) return true;
-  }
-
-  return false;
-}
-
-// How many reads in a row may describe nothing before a tag is left alone.
-static constexpr uint8_t TAG_UNREADABLE_LIMIT = 3;
-
-// Printable ASCII only, up to the first byte that is not. jesc() relies on
-// that, and readText() guarantees it for an NTAG; the MIFARE decoders copy
-// sector bytes as they come, and one control character in the reply made the
-// tag page's r.json() throw.
-static void copyPrintable(char *out, size_t out_len, const char *in) {
-  size_t j = 0;
-  for (const char *p = in; *p && j + 1 < out_len; p++) {
-    if (*p < 0x20 || *p > 0x7E) break;
-    out[j++] = *p;
-  }
-  out[j] = '\0';
-}
-
-// What a MIFARE tag holds, out of what the main flow already decoded into
-// g_tag, so the tag page and the tag view can show a Bambu or Snapmaker tag
-// the way they show an NTAG record. Nothing here touches the reader.
-//
-// Bambu is told from Snapmaker by the blocks that read with Bambu's keys: the
-// Snapmaker decoder starts from a cleared g_tag and fills none of them.
-static void infoFromMifare(TagInfo *ti) {
-  memset(ti, 0, sizeof(*ti));
-  const bool bambu = countBambuDataBlocksRead(g_tag) > 0;
-  if (!bambu && !g_tag.material[0] && !g_tag.vendor[0]) {
-    snprintf(ti->fmt, sizeof(ti->fmt), "unsupported");
-    return;
-  }
-  const bool creality = !bambu && !strcmp(g_tag.decoder, "Creality");
-  snprintf(ti->fmt, sizeof(ti->fmt), "%s", bambu ? "Bambu" : creality ? "Creality" : "Snapmaker");
-  // Most Bambu tags carry no vendor string, but a tag that reads with the
-  // Bambu keys can only be theirs - the answer scanTick() gives as well.
-  copyPrintable(ti->brand, sizeof(ti->brand),
-                g_tag.vendor[0] ? g_tag.vendor : (bambu ? "Bambu Lab" : ""));
-  copyPrintable(ti->material, sizeof(ti->material), g_tag.material);
-  // The Snapmaker decoder puts the UID there, which says nothing new.
-  if (bambu) copyPrintable(ti->tray_uuid, sizeof(ti->tray_uuid), g_tag.tray_uuid);
-  copyPrintable(ti->prod_date, sizeof(ti->prod_date), g_tag.production_date);
-  // color_hex decides, not color.valid: it is empty for a clear filament,
-  // which names no hue and would otherwise be drawn as black.
-  if (g_tag.color.valid && g_tag.color_hex[0]) {
-    ti->has_color = true;
-    ti->r = (uint8_t)(g_tag.color.rgb >> 16);
-    ti->g = (uint8_t)(g_tag.color.rgb >> 8);
-    ti->b = (uint8_t)g_tag.color.rgb;
-  }
-  if (g_tag.temp_min > 0) ti->et_lo = (uint16_t)g_tag.temp_min;
-  if (g_tag.temp_max > 0) ti->et_hi = (uint16_t)g_tag.temp_max;
-  if (g_tag.spool_weight > 0) ti->weight_g = (uint16_t)g_tag.spool_weight;
-  if (!bambu) return;
-  if (g_tag.diameter_mm > 0) ti->dia_x100 = (uint16_t)lroundf(g_tag.diameter_mm * 100.0f);
-  if (g_tag.length_m > 0)    ti->length_m = (uint16_t)g_tag.length_m;
-  if (g_tag.material_id[0]) {
-    snprintf(ti->code, sizeof(ti->code), g_tag.material_variant_id[0] ? "%s / %s" : "%s",
-             g_tag.material_id, g_tag.material_variant_id);
-  }
-  if (g_tag.dry_temp_c > 0) {
-    ti->dry_c = (uint16_t)g_tag.dry_temp_c;
-    ti->dry_h = (uint16_t)g_tag.dry_hours;
-  }
-  if (g_tag.color_count >= 2 && g_tag.color2.valid) {
-    ti->has_color2 = true;
-    ti->r2 = (uint8_t)(g_tag.color2.rgb >> 16);
-    ti->g2 = (uint8_t)(g_tag.color2.rgb >> 8);
-    ti->b2 = (uint8_t)g_tag.color2.rgb;
-  }
-  BambuCatalogHit hit;
-  if (bambuCatalogFind(g_tag.material_id, g_tag.material_variant_id, g_tag.color, &hit)) {
-    snprintf(ti->color_name, sizeof(ti->color_name), "%s", hit.color_name);
-    snprintf(ti->article, sizeof(ti->article), "%s", hit.article);
-  }
-}
-
-// Uses what the main NFC poll already found. Selecting the tag again here
-// would compete with that poll, and the loser gets nothing back.
-//
-// force skips the retry gap, for the one caller that runs immediately after a
-// poll and needs the answer in the same pass rather than half a second later.
-static void refreshCache(bool force = false) {
-  static unsigned long last_ms = 0;
-  static char last_uid[26] = "";
-  static uint8_t unreadable = 0;   // reads in a row that described nothing
-
-  if (!tag_present) {
-    cached_uid[0] = 0; cached_kind[0] = 0; cached_content[0] = 0;
-    cached_raw[0] = 0;
-    cached_bytes = 0;
-    cached_kindcode = TAG_KIND_NONE;
-    memset(&cached_info, 0, sizeof(cached_info));
-    last_uid[0] = 0;
-    unreadable = 0;
-    return;
-  }
-
-  const bool is_ntag = strlen(g_tag.uid_str) > 14;   // 7 bytes reads as 20 chars
-  snprintf(cached_uid, sizeof(cached_uid), "%s", g_tag.uid_str);
-
-  if (!is_ntag) {
-    snprintf(cached_kind, sizeof(cached_kind), "MIFARE Classic, read-only");
-    cached_kindcode = TAG_KIND_MIFARE;
-    cached_content[0] = 0;
-    cached_bytes = 0;
-    // On every pass: the main poll fills g_tag over several passes while its
-    // retries run, and this is a copy of a few strings, not a read.
-    infoFromMifare(&cached_info);
-    const char *chex = g_tag.color_hex[0] == '#' ? g_tag.color_hex + 1 : g_tag.color_hex;
-    if (!strcmp(cached_info.fmt, "Bambu")) {
-      char c2[SPOOL_COLOR_HEX_MAX] = "";
-      if (g_tag.color_count >= 2) spoolColorFormat(g_tag.color2, c2, sizeof(c2));
-      snprintf(cached_raw, sizeof(cached_raw),
-        "{\"format\":\"Bambu Lab\",\"uid\":\"%s\",\"tray_uuid\":\"%s\",\"vendor\":\"%s\","
-        "\"material\":\"%s\",\"type\":\"%s\",\"material_id\":\"%s\",\"variant_id\":\"%s\","
-        "\"color\":\"#%s\",\"colors\":%d,\"color2\":\"%s\",\"nozzle\":\"%d-%d\","
-        "\"spool_weight_g\":%.0f,\"diameter_mm\":%.2f,\"length_m\":%d,"
-        "\"dry_c\":%d,\"dry_h\":%d,\"production_date\":\"%s\",\"blocks_read\":%d}",
-        g_tag.uid_str, g_tag.tray_uuid, g_tag.vendor, g_tag.material,
-        g_tag.filament_type, g_tag.material_id, g_tag.material_variant_id,
-        chex, (int)g_tag.color_count, c2, g_tag.temp_min, g_tag.temp_max,
-        (double)g_tag.spool_weight, (double)g_tag.diameter_mm, g_tag.length_m,
-        g_tag.dry_temp_c, g_tag.dry_hours,
-        g_tag.production_date, countBambuDataBlocksRead(g_tag));
-    } else if (!strcmp(cached_info.fmt, "Creality")) {
-      snprintf(cached_raw, sizeof(cached_raw),
-        "{\"format\":\"Creality CFS\",\"uid\":\"%s\",\"vendor\":\"%s\",\"filament\":\"%s\","
-        "\"filament_id\":\"%s\",\"material\":\"%s\",\"color\":\"#%s\",\"nozzle\":\"%d-%d\","
-        "\"weight_g\":%.0f,\"serial\":\"%s\",\"date\":\"%s\"}",
-        g_tag.uid_str, g_tag.vendor, g_tag.detailed_filament, g_tag.material_id,
-        g_tag.material, chex, g_tag.temp_min, g_tag.temp_max,
-        (double)g_tag.spool_weight, g_tag.serial, g_tag.production_date);
-    } else if (!strcmp(cached_info.fmt, "Snapmaker")) {
-      snprintf(cached_raw, sizeof(cached_raw),
-        "{\"format\":\"Snapmaker\",\"uid\":\"%s\",\"material\":\"%s\",\"color\":\"#%s\","
-        "\"nozzle\":\"%d-%d\",\"spool_weight_g\":%.0f}",
-        g_tag.uid_str, g_tag.material, chex,
-        g_tag.temp_min, g_tag.temp_max, (double)g_tag.spool_weight);
-    } else {
-      snprintf(cached_raw, sizeof(cached_raw),
-        "{\"format\":\"MIFARE Classic\",\"uid\":\"%s\",\"type\":\"Read-only / Unregistered\",\"sectors\":16,\"blocks\":64}",
-        g_tag.uid_str);
-    }
-    return;
-  }
-
-  const bool uid_changed = strcmp(last_uid, g_tag.uid_str) != 0;
-  const bool changed = uid_changed || cache_dirty;
-  if (uid_changed) { unreadable = 0; cached_raw[0] = 0; }
-  if (!changed && cached_content[0]) return;
-  // A blank NTAG, or one written by something this firmware does not know,
-  // never yields a description. Returning only on content meant such a tag had
-  // its pages read again every 500 ms for as long as it lay there, next to the
-  // main poll and on the same reader. A few tries cover a read that merely
-  // failed, then it is left alone until the tag changes or is written to.
-  if (!changed && unreadable >= TAG_UNREADABLE_LIMIT) return;
-  // Retry gap after a failed read. A forced read has just been handed a freshly
-  // selected tag, so there is nothing to back off from.
-  if (!force && millis() - last_ms < 500) return;
-  last_ms = millis();
-  if (changed) snprintf(last_uid, sizeof(last_uid), "%s", g_tag.uid_str);
-
-  const uint16_t bytes = tagUserBytes();
-  cached_bytes = bytes;
-  cached_kindcode = TAG_KIND_NTAG;
-  if (bytes) snprintf(cached_kind, sizeof(cached_kind), "NTAG, writable, %u bytes",
-                      (unsigned)bytes);
-  else       snprintf(cached_kind, sizeof(cached_kind), "NTAG, writable");
-
-  // A page read that loses the reader returns a short or empty result, so keep
-  // the last good description rather than blanking the page.
-  char tmp[128];
-  TagInfo ti;
-  if (tagDescribe(tmp, sizeof(tmp), &ti) && tmp[0]) {
-    snprintf(cached_content, sizeof(cached_content), "%s", tmp);
-    cached_info = ti;
-    cache_dirty = false;
-    unreadable = 0;
-  } else if (unreadable < TAG_UNREADABLE_LIMIT && ++unreadable >= TAG_UNREADABLE_LIMIT &&
-             cache_dirty) {
-    // Written or erased, and nothing readable came back since. What the cache
-    // still holds describes the tag as it was before, so it goes rather than
-    // being shown as current, and the retrying ends here as well.
-    cached_content[0] = 0;
-    cached_raw[0] = 0;
-    memset(&cached_info, 0, sizeof(cached_info));
-    cache_dirty = false;
-  }
-}
-
-void tagReadInfoNow() { refreshCache(true); }
 
 // Bambu puts the finish in the material, "PETG Basic", while FilaMan keeps it
 // in material_subgroup and matches on "PETG". Only a known finish word is
@@ -1241,7 +307,7 @@ static void scanTick() {
   unsigned tlo = 0, thi = 0;
   int sm = 0;
 
-  const TagInfo *ti = &cached_info;
+  const TagInfo *ti = tagCachedInfo();
   if (tagCachedHasRecord()) {
     snprintf(material, sizeof(material), "%s", ti->material);
     snprintf(brand, sizeof(brand), "%s", ti->brand);
@@ -1295,8 +361,7 @@ static bool selectWritableTag(uint8_t *uid, uint8_t *uid_len) {
            TW_ERR_NOT_NTAG);
     return false;
   }
-  memcpy(s_sel_uid, uid, *uid_len);
-  s_sel_len = *uid_len;
+  ntagPagesSelect(uid, *uid_len);
   return true;
 }
 
@@ -1329,11 +394,11 @@ static bool writeSpoolRecord(int spool_id, TagFormat fmt,
     buildAce(sp, &f);
     tagPendingArm(spool_id, (uint8_t)fmt);
     ok = TAG_FMT_IS_NDEF(fmt) ? writeOpenSpool(&f, spool_id, fmt) : writeAce(&f);
-    if (ok) tagPendingDone(s_sel_uid, s_sel_len);
+    if (ok) tagPendingDone(ntagPagesUid(), ntagPagesUidLen());
     tagPendingDisarm();
   }
 
-  cache_dirty = true;   // the tag changed under a UID that did not
+  tagCacheMarkDirty();   // the tag changed under a UID that did not
 
   if (!ok) {
     finish("error", write_err[0] ? write_err
@@ -1406,7 +471,7 @@ static bool mifareResultReported(MifareWriteResult r, uint8_t fmt) {
       finish("error", "No MIFARE tag on the reader", TW_ERR_NO_TAG);
       return false;
     case MIFARE_WRITE_IS_FORMAT:
-      snprintf(m, sizeof(m), "Already a %s tag, left as it is", fmtLabel((TagFormat)fmt));
+      snprintf(m, sizeof(m), "Already a %s tag, left as it is", tagFormatLabel(fmt));
       finish("error", m, TW_ERR_NOT_BLANK);
       return false;
     case MIFARE_WRITE_NOT_BLANK:
@@ -1450,7 +515,7 @@ static bool writeMifareJob(int spool_id, uint8_t fmt, char *name, size_t name_le
   s_mf_has_expect = false;
   s_mf_wait = nullptr;
   s_mf_overwrite = false;
-  cache_dirty = true;
+  tagCacheMarkDirty();
   if (!mifareResultReported(r, fmt)) return false;
   mf->written(uid, text);
   // Ours from now on: either scale may write it again when the spool changes.
@@ -1465,6 +530,7 @@ static bool writeMifareJob(int spool_id, uint8_t fmt, char *name, size_t name_le
 // with the request.
 bool tagWriteSpoolNow(int spool_id, TagFormat fmt) {
   if (spool_id <= 0) return false;
+  jobStart(spool_id, fmt);
   char name[48];
   if (mifareFormatFor(fmt)) {
     if (!writeMifareJob(spool_id, fmt, name, sizeof(name))) return false;
@@ -1476,10 +542,7 @@ bool tagWriteSpoolNow(int spool_id, TagFormat fmt) {
 
   char m[128];
   snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", spool_id, name,
-           fmtLabel(fmt));
-  memset(&report, 0, sizeof(report));
-  report.spool_id = spool_id;
-  report.fmt      = (uint8_t)fmt;
+           tagFormatLabel(fmt));
   snprintf(report.name, sizeof(report.name), "%s", name);
   finish("ok", m, TW_OK);
   return true;
@@ -1501,7 +564,7 @@ static void eraseMifareTag() {
   s_mf_has_expect = false;
   s_mf_wait = nullptr;
   s_mf_overwrite = false;
-  cache_dirty = true;
+  tagCacheMarkDirty();
   report.erase = true;
   if (r == MIFARE_WRITE_OK) {
     erased_flag = true;
@@ -1521,6 +584,10 @@ void tagWriteTick() {
   scanTick();
   if (!pending) return;
   pending = false;
+  // Again here: a remote or direct write that ran since the request was
+  // parked has ended on a state of its own, and this job must not end silent
+  // on the same one.
+  jobStart(pending_id, pending_fmt);
 
   if (pending_fmt == TAG_FMT_ERASE && strlen(pending_uid) == TAG_UID_STR_LEN_MIFARE) {
     eraseMifareTag();
@@ -1533,7 +600,7 @@ void tagWriteTick() {
     if (writeMifareJob(pending_id, pending_fmt, cname, sizeof(cname))) {
       snprintf(report.name, sizeof(report.name), "%s", cname);
       char m[128];
-      snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", pending_id, cname, fmtLabel(pending_fmt));
+      snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", pending_id, cname, tagFormatLabel(pending_fmt));
       finish("ok", m, TW_OK);
     }
     return;
@@ -1551,7 +618,7 @@ void tagWriteTick() {
       return;
     }
     const bool erased = eraseTag();
-    cache_dirty = true;
+    tagCacheMarkDirty();
     report.erase = true;
     // The screen is still showing the record that was just wiped, whoever
     // asked for the erase. Only on success: a failed erase left the tag as it
@@ -1591,7 +658,7 @@ void tagWriteTick() {
   char m[160];
   if (wrote) {
     snprintf(m, sizeof(m), "Wrote spool %d (%s) as %s", pending_id, name,
-             fmtLabel(pending_fmt));
+             tagFormatLabel(pending_fmt));
   } else {
     snprintf(m, sizeof(m), "%s", message);
   }

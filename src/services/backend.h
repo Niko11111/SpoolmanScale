@@ -177,6 +177,14 @@ void backendCaption(char* out, size_t out_size);
 //              Spoolman server behind it the id is that server's.
 bool backendSpoolPageUrl(int spool_id, char* out, size_t out_size);
 
+// Where a person opens the active backend's own web interface, for the
+// "open" links on the status and backend pages. Spoolman, FilaMan and
+// BamBuddy serve it at the address the scale talks to, the same one the
+// embed card has the backend opened with. An online service goes to its
+// account page instead of to its API. False with out empty when there is no
+// address yet, and for an online service without an account page.
+bool backendWebUiUrl(char* out, size_t out_size);
+
 // One line summary of the active backend for boot logs and diagnostics.
 //
 //   Spoolman | host=192.168.1.50 | configured=yes

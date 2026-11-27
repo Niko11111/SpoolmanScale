@@ -107,6 +107,17 @@ int main() {
   assert(strcmp(wifiTryPass(k, "Pref", "", pref), "pp") == 0);
   assert(strcmp(wifiTryPass(k, "Cafe", "", pref), "") == 0);
   assert(strcmp(wifiTryPass(k, "Cafe", "", WifiPreferred{nullptr, nullptr}), "") == 0);
+
+  // Only the network the scale is on can become the preferred one without a
+  // new connection, and only when it is known and not preferred already.
+  assert(wifiCanPrefer(k, "Shop", "Shop", "Home"));
+  assert(!wifiCanPrefer(k, "Home", "Home", "Home"));
+  assert(!wifiCanPrefer(k, "Guest", "Shop", "Home"));
+  assert(!wifiCanPrefer(k, "Cafe", "Cafe", "Home"));
+  assert(!wifiCanPrefer(k, "Shop", "", "Home"));
+  assert(!wifiCanPrefer(k, "", "", "Home"));
+  assert(!wifiCanPrefer(k, nullptr, "Shop", "Home"));
+  assert(wifiCanPrefer(k, "Shop", "Shop", nullptr));
   return 0;
 }
 """

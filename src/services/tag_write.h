@@ -101,6 +101,9 @@ bool tagWriteRequestErase(const char* uid_expected);
 // tag, whose erase empties its CFS sector and keeps its key (mifareErase()),
 // 20 for a 7 byte NTAG.
 #define TAG_UID_STR_LEN_MIFARE 11
+#define TAG_UID_STR_LEN_NTAG   20
+// An 8 byte ISO 15693 UID (PN7160 only), read-only here.
+#define TAG_UID_STR_LEN_VICINITY 23
 // A write bound to one tag the same way: finishing a write that was cut short
 // on exactly that tag (services/tag_pending.h). A MIFARE format is bound
 // through tagWriteMifareTarget() instead.
@@ -192,6 +195,7 @@ enum TagKind : uint8_t {
   TAG_KIND_NONE   = 0,
   TAG_KIND_MIFARE = 1,   // 4 byte UID, this firmware only reads those
   TAG_KIND_NTAG   = 2,   // 7 byte UID, writable; tagCachedBytes() has the size
+  TAG_KIND_VICINITY = 3, // 8 byte ISO 15693 UID (PN7160), read-only: OpenPrintTag
 };
 uint8_t     tagCachedKindCode();
 const char* tagCachedContent();
@@ -219,8 +223,8 @@ size_t      tagNdefSizeFor(size_t json_len);
 // them against a record built from the backend, and an ACE tag holds no more
 // than 16. Longer on one side only would call every long vendor a mismatch.
 struct TagInfo {
-  char     fmt[12];        // ACE, OpenSpool, blank, unknown; Bambu, Snapmaker,
-                           // unsupported for a MIFARE tag
+  char     fmt[16];        // ACE, OpenSpool, blank, unknown; Bambu, Snapmaker,
+                           // unsupported for a MIFARE tag; OpenPrintTag
   char     tray_uuid[33];  // Bambu only, 32 hex characters
   char     prod_date[16];  // as the tag's decoder left it
   char     sku[17];
@@ -244,6 +248,18 @@ struct TagInfo {
   int      spool_id;      // 0 if none
   char     proto[17];     // e.g. "openspool"
   char     version[12];   // e.g. "1.0"
+  // For the tag view only, where a format has them; 0 or empty when not.
+  // OpenPrintTag: the empty spool, the nominal weight beside the actual one
+  // (weight_g), the density in hundredths, the preheat temperature, what
+  // printers recorded as used (aux) and the workgroup that wrote it, and the
+  // format's tags by name. Creality: serial and batch.
+  uint16_t empty_g, nominal_g, density_x100, preheat_c;
+  bool     has_consumed;
+  uint16_t consumed_g;
+  char     workgroup[9];
+  char     props[48];
+  char     serial[8];
+  char     batch[4];
 };
 
 // Serialises a TagInfo as a JSON object, omitting fields the format lacks.

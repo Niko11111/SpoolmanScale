@@ -43,6 +43,7 @@ images/images_not_for_github/
 !partitions.csv
 !copy_release.py
 !lvgl_speed.py
+!pn7160_lib_filter.py
 !manifest.json
 !version.json
 !README.md

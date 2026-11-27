@@ -10,6 +10,7 @@
 
 #include "app_config.h"
 #include "hardware/sd_logger.h"
+#include "hardware/sound.h"
 #include "lang.h"
 #include "services/asset_digest.h"
 #include "services/github_release.h"
@@ -337,6 +338,7 @@ void doGithubOtaFlash(const char* version) {
   const bool flashed = githubFlashTag(tag, otaExpectedSha(tag), otaGithubOverlayProgress,
                                       ferr, sizeof(ferr));
   if (!flashed) otaGithubOverlayHide();
+  soundPlay(flashed ? SND_UPDATE_OK : SND_UPDATE_FAIL);   // over before the restart
 
   if (flashed) {
     ghShowStatus(GH_LOOK_OK, T(STR_GH_OTA_FLASH_OK));

@@ -5,6 +5,7 @@
 
 #include "app/deferred_actions.h"
 #include "hardware/sd_logger.h"
+#include "hardware/sound.h"
 #include "lang.h"
 #include "services/ble_service.h"
 #include "services/text_util.h"
@@ -178,6 +179,9 @@ void printCardResult(LabelPrintResult result, const char* detail, bool offer_own
 
   const bool ok = (result == LP_OK);
   const bool unconfirmed = (result == LP_SENT_UNCONFIRMED);
+  // Unconfirmed counts as printed: the label went out, only the printer's
+  // answer did not come back.
+  soundPlay(ok || unconfirmed ? SND_PRINT_OK : SND_PRINT_FAIL);
   const char* symbol = ok ? LV_SYMBOL_OK : LV_SYMBOL_WARNING;
   const uint32_t tone = ok ? UI_COL_GOOD : (unconfirmed ? UI_COL_WARN : UI_COL_BAD);
   const int title = ok ? STR_PRN_DONE_TITLE

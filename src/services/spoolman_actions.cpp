@@ -1,5 +1,6 @@
 #include "spoolman_actions.h"
 #include "services/tag_field.h"
+#include "services/filaman_api.h"
 #include "services/tag_uid.h"
 #include "services/user_options.h"
 #include "app/app_state.h"
@@ -28,6 +29,7 @@
 #include "services/weight_write_rules.h"
 #include "ui/main_screen_helpers.h"
 #include "ui/info_popup.h"
+#include "openprinttag/opt_write.h"
 
 
 
@@ -74,7 +76,9 @@ int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
   // announces it beforehand.
   if (sm_archived) {
     logSDf("Weight on archived spool %d, reactivating instead", sm_id);
-    return reactivateSpool(remaining) ? 200 : PATCH_WEIGHT_NO_TARGET;
+    if (!reactivateSpool(remaining)) return PATCH_WEIGHT_NO_TARGET;
+    optWeightWritePark(remaining < 0 ? 0 : remaining);
+    return 200;
   }
 
   // BamBuddy's own inventory stores what was consumed and derives the rest
@@ -115,6 +119,9 @@ int patchSpoolmanWeight(float remaining, bool skip_cap_check) {
     // is read from the server again before anything is written to it.
     spoolCacheSetRemaining(sm_id, remaining);
     showSpoolRemaining();
+    // The same weight onto an OpenPrintTag, when its switch is on: parked,
+    // the loop writes it (opt_write.h).
+    optWeightWritePark(remaining);
     struct tm* t = nullptr;
     if (last_used_mode == 1 && lbl_last_used) {
       time_t now = time(nullptr);
@@ -704,6 +711,37 @@ void unlinkCardUid(int spool_id, const char* uid, bool all) {
   }
 
   unlinkTagFromFields(spool_id, uid);
+}
+
+void unlinkTagOnReader(int spool_id, bool all) {
+  if (backendMode() == BACKEND_SPOOLMAN) {
+    // Only Spoolman has more than one place a binding can sit, so only there
+    // does the unlink have to look. unlinkCardUid() clears whichever fields
+    // hold something and leaves the rest alone - writing a field that is
+    // already empty costs a request and, on a server that does not know the
+    // field, an HTTP 400.
+    //
+    // g_tag.tray_uuid is the identifier the spool was found under: app_loop
+    // puts the plain UID there for NTAGs and for cards with no Bambu data, so
+    // it is the entry to take out of a list.
+    unlinkCardUid(spool_id, g_tag.tray_uuid, all);
+  } else {
+    // FilaMan and BamBuddy keep one tag each in a place of their own, and
+    // patchSpoolTag() with an empty uuid is how both of them unlink.
+    patchSpoolTag(spool_id, "");
+    // FilaMan has more places a binding can hide. The Bambu plugin's fields
+    // would otherwise find the spool on the very next scan and the migration
+    // would write rfid_uid back, so an unlink that looked done did not hold.
+    // Only what this scale itself writes is taken back, see the function.
+    // Not after a request that found no server: this one would only wait out
+    // the same timeout again.
+    if (backendIsFilaMan() && !tagBindingFailedOnNetwork()) {
+      char chip[24];
+      tagUidNormalize(g_tag.uid_str, chip, sizeof(chip));
+      filamanUnlinkBambuFields(backendBaseUrl(), filamanApiKey(), spool_id, chip);
+    }
+    logSDf("Unlink spool ID=%d", spool_id);
+  }
 }
 
 void patchInitialWeight(float initial_w) {

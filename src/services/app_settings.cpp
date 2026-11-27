@@ -22,8 +22,11 @@
 #include "time_service.h"
 #include "user_options.h"
 #include "wifi_known.h"
+#include "wifi_manager.h"
 #include "web/web_access.h"
 #include "hardware/display.h"
+#include "hardware/sd_logger.h"
+#include "hardware/sound.h"
 
 
 void loadPrefs() {
@@ -102,6 +105,7 @@ void loadPrefs() {
   // device that never touched it follows this default.
   g_whole_gram = prefsGetBool("whole_gram", true);
   g_wake_on_load = prefsGetBool("wake_load", true);
+  g_bat_percent = prefsGetBool("bat_pct", true);
   g_snapmaker_tags = prefsGetBool("snapmaker", false);
   g_creality_tags = prefsGetBool("creality", false);
   g_ble_enabled = prefsGetBool("ble_on", false);
@@ -143,6 +147,7 @@ void loadPrefs() {
   g_auto_weight = prefsGetBool("auto_weight", false);
   g_auto_loc_popup = prefsGetBool("auto_loc_popup", false);
   g_auto_tare = prefsGetBool("auto_tare", AUTO_TARE_DEFAULT);
+  soundLoadPrefs();
   // Three states now, where this used to be a yes/no switch. Nobody loses their
   // setting: an installation that had the question turned on comes back as
   // "ask", one that had it off as "off", and the old key is left in NVS rather
@@ -154,6 +159,7 @@ void loadPrefs() {
   // Short key: NVS takes 15 characters and "tagmismatch_ask" is exactly at the
   // limit, which is no place to be.
   g_tagmismatch_ask = prefsGetBool("tagmism_ask", false);
+  g_opt_write_weight = prefsGetBool("opt_wr_weight", false);
   // Clamped rather than trusted: the value is persisted, and a firmware that
   // once knew a fourth format would otherwise leave one behind that this build
   // cannot write. TAG_FMT_ERASE is deliberately not offered here - erasing is
@@ -195,6 +201,17 @@ void saveWifiCredentials(const char* ssid, const char* pass) {
   prefsPutString("wifi_pass", pass);
   wifiKnownSetPreferred(ssid, pass);
   Serial.printf("WiFi saved: SSID=%s\n", ssid);
+}
+
+bool preferConnectedNetwork(const char* ssid) {
+  char on[WIFI_KNOWN_SSID_BYTES];
+  wifiManagerCurrentSsid(on, sizeof(on));
+  const WifiKnownList& l = wifiKnownList();
+  if (!wifiCanPrefer(l, ssid, on, wifiPreferredSsid())) return false;
+  const WifiKnownEntry& e = l.e[wifiKnownFind(l, ssid)];
+  saveWifiCredentials(e.ssid, e.pass);
+  logSDf("WiFi: %s is now the preferred network, the link stays as it is", e.ssid);
+  return true;
 }
 
 void saveSpoolmanIP(const char* ip) {

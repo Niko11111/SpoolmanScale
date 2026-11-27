@@ -13,6 +13,7 @@
 #include "web/web_access.h"
 #include "web/pages/page_logs_session.h"
 #include "web/web_net_probe.h"
+#include "web/web_nfc_test.h"
 #include "web/web_screenshot.h"
 #include "web/web_shell.h"
 // Last on purpose: T() is a macro and ArduinoJson uses T as a template
@@ -209,13 +210,13 @@ static String body() {
          // closed gate answering 403 as text/plain is handled here.
          "function loadLogs(){return getJson('/api/logs').then(d=>{"
          "if(!d){say(M.err);return;}last=d;render();});}"
-         "function delLog(n){ask(M.ask,M.del,true).then(ok=>{if(ok)"
+         "function delLog(n){ask(M.ask,M.del,true,'rm').then(ok=>{if(ok)"
          "post('/api/deletelog?file='+encodeURIComponent(n),'').then(loadLogs);});}"
-         "function clearInt(){ask(M.ask,M.del,true).then(ok=>{if(ok)"
+         "function clearInt(){ask(M.ask,M.del,true,'rm').then(ok=>{if(ok)"
          "post('/api/deletelogs?src=int','').then(loadLogs);});}"
          "function delAll(){"
          "var n=document.querySelectorAll('[data-del]').length;if(!n)return;"
-         "ask(n===1?M.allask1:M.allask.replace('{n}',n),M.del,true).then(ok=>{if(ok)"
+         "ask(n===1?M.allask1:M.allask.replace('{n}',n),M.del,true,'rm').then(ok=>{if(ok)"
          "post('/api/deletelogs?src=sd','').then(loadLogs);});}"
          // Reloads rather than trusting its own answer: a destination can
          // fall back on the device, and the strip has to show where the lines
@@ -244,6 +245,7 @@ static String body() {
 
 static void routes(WebServer &srv) {
   netProbeRoutes(srv);
+  nfcTestRoutes(srv);
   screenshotRoutes(srv);
   // ── SD-Card Log endpoints ─────────────────────────────────
   // GET /logs -> JSON list of available log files

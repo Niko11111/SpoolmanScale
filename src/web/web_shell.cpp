@@ -192,15 +192,34 @@ String webShellHeader() {
   return h;
 }
 
+// The tab of the open page, or of the page it is reached from.
+static bool navTabActive(const WebPage &tab, const char *active) {
+  if (strcmp(tab.path, active) == 0) return true;
+  for (size_t i = 0; i < WEB_PAGE_COUNT; i++) {
+    const WebPage &child = *WEB_PAGES[i];
+    if (webPageNavParent(child) == &tab && strcmp(child.path, active) == 0) return true;
+  }
+  return false;
+}
+
 String webShellNav(const char *active) {
   String n = F("<div class='nav'>");
   // One strip built from the one table. There used to be two of these in two
   // files with two hand kept lists, and they disagreed about BamBuddy.
+  // Class grp puts the group rule before a tab; the counter runs over hidden
+  // pages too, so the rule falls where the group really changes.
+  int group = 0;
+  int last_shown_group = -1;
   for (size_t i = 0; i < WEB_PAGE_COUNT; i++) {
     const WebPage &p = *WEB_PAGES[i];
-    if (!webPageVisible(p)) continue;
-    n += String(F("<a class='")) + (strcmp(p.path, active) == 0 ? "on" : "") +
-         "' href='" + p.path + "'>" + webPageLabel(p) + "</a>";
+    if (webPageStartsNavGroup(p)) group++;
+    if (webPageNavParent(p) || !webPageVisible(p)) continue;
+    const bool new_group = last_shown_group >= 0 && group != last_shown_group;
+    last_shown_group = group;
+    n += F("<a class='");
+    if (navTabActive(p, active)) n += F("on");
+    if (new_group) n += F(" grp");
+    n += String(F("' href='")) + p.path + "'>" + webPageLabel(p) + "</a>";
   }
   n += F("</div>");
   return n;
@@ -291,6 +310,8 @@ static String webShellGateNote() {
   for (size_t i = 0; i < WEB_PAGE_COUNT; i++) {
     const WebPage &p = *WEB_PAGES[i];
     if (p.applies && !p.applies()) continue;
+    // Named through its parent, as in the strip: same gate, one name.
+    if (webPageNavParent(p)) continue;
     if (webGateOpen(p.gate)) continue;
     if (closed.length()) closed += F(", ");
     closed += webPageLabel(p);
@@ -379,7 +400,7 @@ String webShellRestartUi() {
   h += F(",reload:"); h += jsStr(T(STR_W_RELOAD));
   h += F("};"
          "async function doRestart(){"
-         "if(!await ask(RT.ask,RT.go))return;"
+         "if(!await ask(RT.ask,RT.go,false,'pw'))return;"
          "let sd=false;"
          "try{sd=(await(await fetch('/status.json',{cache:'no-store'})).json()).sd}catch(e){}"
          "try{await fetch('/api/restart',{method:'POST'})}catch(e){}"

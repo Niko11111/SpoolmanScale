@@ -53,6 +53,27 @@ int main() {
   // No label: a full reading becomes the full weight on a default core too.
   s = spoolStartValues(1257.0f, 250, TARE_Q_DEFAULT, 0);
   assert(s.verdict == START_FULL && s.initial_g == 1007);
+
+  // A full weight nothing names: a spool that reads as full of one size is
+  // that size, anything else is taken as a used 1 kg spool, or the smallest
+  // size above that holds it (Nikolai, 26.11.2026: 112 g left on a 1 kg
+  // spool was filed as a 250 g one).
+  assert(spoolAssumedLabelG(112.0f) == 1000);
+  assert(spoolAssumedLabelG(620.0f) == 1000);
+  assert(spoolAssumedLabelG(0.0f) == 1000);
+  assert(spoolAssumedLabelG(-1.0f) == 1000);
+  assert(spoolAssumedLabelG(10.0f) == 1000);
+  assert(spoolAssumedLabelG(248.0f) == 250);
+  assert(spoolAssumedLabelG(503.0f) == 500);
+  assert(spoolAssumedLabelG(1007.0f) == 1000);
+  assert(spoolAssumedLabelG(1035.0f) == 1000);   // 1000 + 30 band + 10 slack
+  assert(spoolAssumedLabelG(1040.0f) == 1000);
+  assert(spoolAssumedLabelG(1041.0f) == 2000);
+  assert(spoolAssumedLabelG(265.0f) == 250);     // 250 + its 15 g band
+  assert(spoolAssumedLabelG(266.0f) == 1000);
+  assert(spoolAssumedLabelG(1500.0f) == 2000);
+  assert(spoolAssumedLabelG(2990.0f) == 3000);
+  assert(spoolAssumedLabelG(4200.0f) == 3000);
   return 0;
 }
 """

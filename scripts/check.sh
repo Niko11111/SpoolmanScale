@@ -213,6 +213,29 @@ fi
 #     them. The reader layer that defines the call is the only other mention.
 hits=$(grep -rn 'nfcWriteMifareBlock' src | grep -vE '^src/(services/mifare_write\.cpp|hardware/nfc\.(cpp|h)):' || true)
 if [ -n "$hits" ]; then bad "nfcWriteMifareBlock outside services/mifare_write.cpp:"; echo "$hits" | sed 's/^/        /'; else ok "MIFARE blocks written only through services/mifare_write.cpp"; fi
+#     The same for an NTAG page: services/ntag_pages.cpp keeps pages 0-3 (UID,
+#     lock bytes, capability container) whole and marks the tag unfinished
+#     before the first page; every record goes through it.
+hits=$(grep -rn 'nfcWriteNtagPage' src | grep -vE '^src/(services/ntag_pages\.cpp|hardware/nfc\.(cpp|h)):' || true)
+if [ -n "$hits" ]; then bad "nfcWriteNtagPage outside services/ntag_pages.cpp:"; echo "$hits" | sed 's/^/        /'; else ok "NTAG pages written only through services/ntag_pages.cpp"; fi
+#     And for an ISO 15693 block: openprinttag/opt_write.cpp writes only an
+#     OpenPrintTag's aux region, the blocks that change, each read back.
+hits=$(grep -rn 'nfcWriteVicinityBlock' src | grep -vE '^src/(openprinttag/opt_write\.cpp|hardware/nfc\.(cpp|h)):' || true)
+if [ -n "$hits" ]; then bad "nfcWriteVicinityBlock outside openprinttag/opt_write.cpp:"; echo "$hits" | sed 's/^/        /'; else ok "ISO 15693 blocks written only through openprinttag/opt_write.cpp"; fi
+#     Below that call sit the chip drivers. Reaching them directly would skip
+#     the guards above, so their write calls stay inside the reader layer.
+hits=$(grep -rnE 'pn532Write(NtagPage|MifareBlock)|pn7160Write(NtagPage|MifareBlock|VicinityBlock)|ntag2xx_WritePage|mifareclassic_WriteDataBlock' src | grep -vE '^src/hardware/nfc(_pn532|_pn7160)?\.(cpp|h):' || true)
+if [ -n "$hits" ]; then bad "chip write call outside hardware/nfc*:"; echo "$hits" | sed 's/^/        /'; else ok "chip write calls only inside hardware/nfc*"; fi
+#     The page and record helpers have external linkage only so the tag files
+#     can share them; the header that declares them belongs to those files.
+hits=$(grep -rln 'tag_write_internal\.h' src | grep -vE '^src/services/(tag_write|ntag_pages|tag_format_ace|tag_format_openspool|tag_inspect)\.cpp$|^src/services/tag_write_internal\.h$' || true)
+if [ -n "$hits" ]; then bad "tag_write_internal.h included outside the tag files:"; echo "$hits" | sed 's/^/        /'; else ok "tag_write_internal.h only in the tag files"; fi
+#     The same for the scan: the state the loop shares with it, and the state
+#     its three files share, have external linkage for them alone.
+hits=$(grep -rln 'app_loop_shared\.h' src | grep -vE '^src/app/(app_loop|tag_scan|tag_scan_mifare|tag_scan_ntag)\.cpp$|^src/app/app_loop_shared\.h$' || true)
+if [ -n "$hits" ]; then bad "app_loop_shared.h included outside the loop and the scan:"; echo "$hits" | sed 's/^/        /'; else ok "app_loop_shared.h only in the loop and the scan"; fi
+hits=$(grep -rln 'tag_scan_internal\.h' src | grep -vE '^src/app/(tag_scan|tag_scan_mifare|tag_scan_ntag)\.cpp$|^src/app/tag_scan_internal\.h$' || true)
+if [ -n "$hits" ]; then bad "tag_scan_internal.h included outside the scan files:"; echo "$hits" | sed 's/^/        /'; else ok "tag_scan_internal.h only in the scan files"; fi
 
 echo
 if [ "$fail" -ne 0 ]; then echo "check.sh: FAILED"; exit 1; fi

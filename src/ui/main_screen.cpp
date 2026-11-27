@@ -173,6 +173,7 @@ void buildUI() {
   lv_obj_set_style_text_color(hdr_lbl, lv_color_hex(UI_COL_INK_FAINT), 0);
   lv_obj_set_style_text_font(hdr_lbl, &lv_font_montserrat_ext_12, 0);
   lv_obj_align(hdr_lbl, LV_ALIGN_LEFT_MID, 8, 0);
+  lbl_hdr_title = hdr_lbl;
 
   // SD card indicator in header - only visible when sd_available.
   // Positions of this and the five chips right of it come from
@@ -187,6 +188,9 @@ void buildUI() {
   lv_label_set_text(lbl_hdr_wifi, LV_SYMBOL_WIFI);
   lv_obj_set_style_text_color(lbl_hdr_wifi, lv_color_hex(UI_COL_HDR_OFF), 0);
   lv_obj_set_style_text_font(lbl_hdr_wifi, &lv_font_montserrat_ext_12, 0);
+
+  // No battery here: header_battery.cpp builds it the first time a fuel gauge
+  // answers, so a scale without one carries no object for it.
 
   // Bluetooth, left of WiFi. Hidden while the master switch is off, so a
   // device that never uses BLE never shows it; updateHeaderStatus() follows

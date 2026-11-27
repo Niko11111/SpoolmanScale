@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 #include <esp_heap_caps.h>
 #include <math.h>
+#include <new>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
@@ -13,6 +14,7 @@
 #include "fdb_block_stream.h"
 #include "filaman_api.h"
 #include "filament_db.h"
+#include "tag_color_match.h"
 #include "tag_create.h"
 
 // The proxy asks db.filaman.app on every request and gives it 15 s itself.
@@ -422,17 +424,23 @@ static void takeTagEntry(JsonObjectConst f, TagDbEntry* out) {
   out->dry_hours    = (int)lroundf(f["dry_time_hours"] | 0.0f);
 }
 
+// What takeTagEntry() reads, and the colour mode the nearest colour asks.
+static void tagEntryFilter(JsonDocument& filter) {
+  JsonObject f = itemFilter(filter);
+  for (const char* key : { "id", "designation", "color_name", "material_subtype", "hex_color",
+                           "color_mode", "diameter_mm", "density_g_cm3", "temp_nozzle_min",
+                           "temp_nozzle_max", "temp_bed", "nominal_weight_g", "dry_temp",
+                           "dry_time_hours" })
+    f[key] = true;
+  f["material"]["key"]  = true;
+  f["material"]["name"] = true;
+}
+
 bool filamanFdbFindForTag(const char* base_url, const char* api_key, const TagCreateInput& in,
                           TagDbEntry* out) {
   if (!in.article[0] || !in.vendor[0]) return false;
   JsonDocument filter;
-  JsonObject f = itemFilter(filter);
-  for (const char* key : { "id", "designation", "color_name", "material_subtype", "hex_color",
-                           "diameter_mm", "density_g_cm3", "temp_nozzle_min", "temp_nozzle_max",
-                           "temp_bed", "nominal_weight_g", "dry_temp", "dry_time_hours" })
-    f[key] = true;
-  f["material"]["key"]  = true;
-  f["material"]["name"] = true;
+  tagEntryFilter(filter);
   const String path = String("/api/v1/filamentdb/filaments?manufacturer_name=") + filamanUrlEncode(in.vendor) +
                       "&search=" + filamanUrlEncode(in.article) + "&page_size=" + FM_FDB_TAG_PAGE;
   JsonDocument doc(&s_psram);
@@ -451,4 +459,56 @@ bool filamanFdbFindForTag(const char* base_url, const char* api_key, const TagCr
   logSDf("Filament DB: tag %s %s is #%s \"%s\"%s", in.vendor, in.article, out->id, out->name,
          find.best_material ? "" : " (other material)");
   return true;
+}
+
+// ------------------------------------------------------------
+//  A tag's colour against the maker's table
+// ------------------------------------------------------------
+
+namespace {
+struct NearestFind {
+  ColorMatcher mt;
+  TagDbEntry   best;
+  int          index;
+};
+}  // namespace
+
+static void nearestItem(JsonObjectConst f, void* p) {
+  NearestFind* find = (NearestFind*)p;
+  char hex[8];
+  if (!diameterFits(f) || !plainHex(f["hex_color"] | "", hex, sizeof(hex))) return;
+  // A multi colour entry keeps one averaged value: never the tag's colour.
+  const uint8_t ncolors = strcmp(f["color_mode"] | "", FM_MODE_MULTI) == 0 ? 2 : 1;
+  const ColorCandidate c = { hex, ncolors, f["designation"] | "", f["material_subtype"] | "",
+                             (uint16_t)(f["nominal_weight_g"] | 0) };
+  if (tagColorMatchAdd(&find->mt, c, find->index++)) takeTagEntry(f, &find->best);
+}
+
+bool filamanFdbNearestForTag(const char* base_url, const char* api_key, const TagCreateInput& in,
+                             TagDbEntry* out) {
+  if (!in.vendor[0] || !in.material[0] || !tagCreateNearestColorAllowed(in)) return false;
+  // The index's key where it is loaded; the proxy takes "PLA" for "pla" too.
+  char key[sizeof(FmMaterial::key)];
+  if (!filamanFdbMaterialKey(in.material, key, sizeof(key))) snprintf(key, sizeof(key), "%s", in.material);
+  // Two names of 96 and an entry: off the loop task's stack.
+  NearestFind* find = new (std::nothrow) NearestFind();
+  if (!find) return false;
+  const ColorQuery q = { in.color_hex, in.subtype, (uint16_t)in.net_weight_g };
+  tagColorMatchBegin(&find->mt, q);
+  JsonDocument filter;
+  tagEntryFilter(filter);
+  const FmList list = { base_url, api_key,
+                        String("/api/v1/filamentdb/filaments?manufacturer_name=") + filamanUrlEncode(in.vendor) +
+                          "&material_key=" + filamanUrlEncode(key) + "&page_size=" + FM_FDB_PAGE + "&page=",
+                        FM_FDB_PAGE, &filter, nearestItem, nullptr, find };
+  const int code = eachItem(list, FM_FDB_PAGES_MAX);
+  const ColorMatch m = tagColorMatchEnd(find->mt);
+  char text[TCM_TEXT_MAX];
+  tagColorMatchText(find->mt, m, text, sizeof(text));
+  if (text[0]) logSDf("FilaMan: %s", text);
+  else         logSDf("FilaMan: no colour of %s %s to compare with #%s", in.vendor, key, in.color_hex);
+  const bool sure = code == 200 && m.verdict == CMV_SURE;
+  if (sure) *out = find->best;
+  delete find;
+  return sure;
 }

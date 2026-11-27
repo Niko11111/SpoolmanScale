@@ -14,11 +14,15 @@
 #include <WebServer.h>
 
 #include "app/app_state.h"
+#include "app/deferred_actions.h"
+#include "app_config.h"
 #include "hardware/display.h"
+#include "hardware/fuel_gauge.h"
 #include "hardware/sd_logger.h"
 #include "services/device_name.h"
 #include "services/list_limits.h"
 #include "services/mdns_service.h"
+#include "services/nfc_wake_test.h"
 #include "services/prefs_store.h"
 #include "hardware/scale_state.h"
 #include "services/user_options.h"
@@ -130,6 +134,36 @@ static void addTagFormatsCard(String &h) {
   h += F("</div></div>");
 }
 
+// The manual's page on moving the reset wire to RSTPDN, with the photo of
+// the module. French readers get the English page, as the manual has no other.
+static const __FlashStringHelper* nfcResetDocsUrl() {
+  return g_lang == LANG_DE ? F(DOCS_URL "de/help/pn532-reset/") : F(DOCS_URL "help/pn532-reset/");
+}
+
+// Waking by tag needs pin 8 and, on a PN532, the reset wire verified on the
+// device. Until then the switch is shown but cannot be moved, with the way to
+// the check under it instead of the hint. The longer why folds away, since
+// most people only need the first line (Notes, PN7160 6.11).
+static void addNfcWakeSwitch(String &h) {
+  const bool available = nfcWakeAvailable();
+  h += F("<div class='field'><label class='check'><span class='switch'><input id='nw' type='checkbox'");
+  if (available && nfcWakeTestEnabled()) h += F(" checked");
+  if (!available) h += F(" disabled");
+  h += F("><i></i></span>");
+  h += T(STR_W_NFC_WAKE);
+  h += F("</label><span class='hint'>");
+  h += T(available ? STR_W_NFC_WAKE_HINT : STR_W_NFC_WAKE_LOCKED);
+  h += F("</span><span class='msg' id='nw-s'></span><details class='more'><summary>");
+  h += T(STR_BTN_MORE_INFO);
+  h += F("</summary><p class='hint'>");
+  h += T(STR_W_NFC_WAKE_DETAIL);
+  h += F("</p><p class='hint'><a class='go' href='");
+  h += nfcResetDocsUrl();
+  h += F("' target='_blank' rel='noopener'>");
+  h += T(STR_W_NFC_WAKE_DOCS);
+  h += F(" &rarr;</a></p></details></div>");
+}
+
 // What kind of device this is and how it wakes. Waking on load had been
 // documented in user_options.h since it was written and was never switchable:
 // loadPrefs() read it, display_power.cpp acted on it, and no line in the
@@ -145,6 +179,7 @@ static void addDeviceCard(String &h) {
   h += F("</h2>");
   addSwitch(h, "wk", g_wake_on_load, STR_W_WAKE, STR_W_WAKE_HINT);
   h += F("</div>");
+  addNfcWakeSwitch(h);
   addSwitch(h, "sf", g_scale_fitted, STR_W_SCALE_FITTED, STR_W_SCALE_FITTED_HINT);
   h += F("<div><button class='quiet' id='sf-rb' data-ic='pw'>");
   h += T(STR_W_RESTART);
@@ -210,10 +245,17 @@ static void addLimitsCard(String &h) {
   h += F("</button><span class='msg' id='ll-s'></span></div>");
 }
 
+// The battery's switch only on a scale that has had a fuel gauge: on every
+// other one it would be a setting for something that is not there.
 static void addDisplayCard(String &h) {
   h += F("<div class='card'><h2>");
   h += T(STR_W_C_DISPLAY);
-  h += F("</h2><div class='field'><label>");
+  h += F("</h2>");
+  if (fuelGaugeSeen()) {
+    addSwitch(h, "bp", g_bat_percent, STR_W_BAT_PCT, STR_W_BAT_PCT_HINT);
+    h += F("</div>");
+  }
+  h += F("<div class='field'><label>");
   h += T(STR_W_GAIN);
   h += F("</label><div class='range'>"
          "<input id='gn' type='range' min='100' max='300' step='5' value='");
@@ -226,6 +268,18 @@ static void addDisplayCard(String &h) {
          "<button id='gn-b' class='quiet block' data-ic='ok'>");
   h += T(STR_W_SAVE);
   h += F("</button><span class='msg' id='gn-s'></span></div>");
+}
+
+// The palette has its own page, reached from here rather than from a tab of
+// its own (web_pages.cpp): same gate, and one tab fewer in the strip.
+static void addThemeCard(String &h) {
+  h += F("<div class='card wide'><h2>");
+  h += T(STR_W_C_THEME);
+  h += F("</h2><div class='inrow'><span class='hint' style='flex:1;margin:0'>");
+  h += T(STR_W_THEME_HINT);
+  h += F("</span><a class='go' href='/theme'>");
+  h += T(STR_W_THEME_OPEN);
+  h += F(" &rarr;</a></div></div>");
 }
 
 // The zone the device writes every timestamp in, the SD log and the drying
@@ -335,9 +389,11 @@ static void addScript(String &h) {
          "if(!r.ok)$(id).checked=!want;"
          "flash(id+'-s',r.ok?WS.ok:WS.err,!r.ok,4000);});});}"
          "bindSwitch('wk','/api/wakeload');"
+         "if(!$('nw').disabled)bindSwitch('nw','/api/nfcwake');"
          "bindSwitch('sf','/api/scalefitted');"
          "bindSwitch('sn','/api/snapmaker');"
          "bindSwitch('cr','/api/creality');"
+         "if($('bp'))bindSwitch('bp','/api/batpercent');"
          "$('sf-rb').addEventListener('click',doRestart);"
          "$('ll-b').addEventListener('click',setLimits);"
          "$('gn-b').addEventListener('click',setGain);"
@@ -357,6 +413,7 @@ static String body() {
   addNameCard(h);
   addLimitsCard(h);
   addDisplayCard(h);
+  addThemeCard(h);
   addTimeZoneCard(h);
   h += F("</div>");
   h += webShellRestartUi();
@@ -491,6 +548,20 @@ static void routes(WebServer &srv) {
                                          : "{\"ok\":true,\"v\":0}");
   });
 
+  // Refused while the page shows the switch locked: a request sent around it
+  // would arm a PN532 whose reset wire has not been checked.
+  srv.on("/api/nfcwake", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
+    const bool on = (srv.arg("plain").toInt() != 0);
+    if (on && !nfcWakeAvailable()) {
+      srv.send(409, "application/json", "{\"ok\":false,\"error\":\"reset wire not verified\"}");
+      return;
+    }
+    nfcWakeTestSet(on);
+    srv.send(200, "application/json", on ? "{\"ok\":true,\"v\":1}"
+                                         : "{\"ok\":true,\"v\":0}");
+  });
+
   srv.on("/api/snapmaker", HTTP_POST, [&srv]() {
     if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
     const bool on = (srv.arg("plain").toInt() != 0);
@@ -507,6 +578,19 @@ static void routes(WebServer &srv) {
     g_creality_tags = on;
     prefsPutBool("creality", on);
     logSDf("Web: Creality tags -> %s", on ? "ON" : "OFF");
+    srv.send(200, "application/json", on ? "{\"ok\":true,\"v\":1}"
+                                         : "{\"ok\":true,\"v\":0}");
+  });
+
+  // The header is redrawn from the loop (header_redraw_pending), not from
+  // inside this handler.
+  srv.on("/api/batpercent", HTTP_POST, [&srv]() {
+    if (!webRequire(srv, GATE_CONFIG, T(STR_W_NAV_SETTINGS))) return;
+    const bool on = (srv.arg("plain").toInt() != 0);
+    g_bat_percent = on;
+    if (!prefsPutBool("bat_pct", on)) logSD("Web: saving the battery percent switch failed");
+    header_redraw_pending = true;
+    logSDf("Web: battery percent -> %s", on ? "ON" : "OFF");
     srv.send(200, "application/json", on ? "{\"ok\":true,\"v\":1}"
                                          : "{\"ok\":true,\"v\":0}");
   });

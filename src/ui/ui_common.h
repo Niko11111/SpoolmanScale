@@ -16,6 +16,11 @@ lv_obj_t* addHeaderHelp(lv_obj_t *scr, int title_id, int text_id);
 // Returns the button, for a screen that has more to close than showMainScreen()
 // knows about.
 lv_obj_t* addCloseButton(lv_obj_t *parent);
+// The X of a popup with choices or pages, in its box's top right corner: the
+// look and size of a screen's X, but it only reports the tap. The popup closes
+// itself as a whole (not one page back, that is Back's job) and back to what
+// it was opened from, never to the home screen on its own.
+lv_obj_t* uiPopupCloseX(lv_obj_t* box, lv_event_cb_t cb, void* user_data);
 void buildSubHeader(lv_obj_t *parent, const char *title,
                     lv_event_cb_t back_cb, const char *back_hint = nullptr);
 lv_obj_t* buildOverlayScreen();
@@ -139,6 +144,12 @@ void spoolStartText(const SpoolStart& s, bool tare_inherited, char* out, size_t 
 // line. The caller sets the colour.
 lv_obj_t* labelOneLine(lv_obj_t* parent, const char* text, const lv_font_t* font, int max_w);
 
+// Makes an existing label one line of width w that ends in dots: the same
+// LV_LABEL_LONG_DOT, plus the fixed height of one line in the label's font,
+// without which LVGL wraps the text onto whatever sits below it. Call it once
+// the font is set, directly or through a style.
+void labelDotLine(lv_obj_t* l, lv_coord_t w);
+
 // A key of the number pads (tare_entry.cpp, price_pad.cpp, spool_id_pad.cpp):
 // a flat button with a soft outline, and its caption centred in it. One look
 // for the three pads.
@@ -166,6 +177,15 @@ uint32_t swatchCenterRgb(const SpoolColor& c);
 // label of one line; this is for one line among several in a single label,
 // which LVGL cannot dot line by line. The font has no ellipsis glyph.
 void uiFitLine(char* s, size_t n, const lv_font_t* font, lv_coord_t max_w);
+
+// The width s takes in font on one line, in pixels.
+lv_coord_t uiTextWidth(const char* s, const lv_font_t* font);
+
+// head and tail as one title line that fits between the 44 px back and close
+// buttons of a header, with only head shortened, so a count or a material at
+// the end stays whole. Cut by width rather than by characters: "Bambu Lab"
+// fits, "Bambu La" was what a cut at eight letters left.
+void uiFitHeaderTitle(char* out, size_t n, const char* head, const char* tail, const lv_font_t* font);
 
 // utf8Cut(), isHexColorWord() and colorNameClean() moved to
 // services/text_util.h, which the AMS parsers can reach too. Included
@@ -255,9 +275,9 @@ enum ListTone { TONE_PLAIN, TONE_WARN, TONE_DANGER };
 // Paints a makeListBtn() row amber or red: border, fill, icon and title.
 void listBtnTone(lv_obj_t* btn, ListTone tone);
 
-// Cancel, Close and Back: a reddish outline and icon in front of a neutral
-// caption, so the way out is found without reading it. Quieter than the red
-// fill of a real danger (unlink, factory reset), which has to warn more.
+// Cancel, Close and Back: the row fill with a fine edge in the line tone, so
+// the button stands off any background, and the icon in front of the
+// caption, both neutral. Red stays for what destroys something.
 // Called on a finished button: takes its first label and its fill, so a
 // countdown fill added afterwards keeps working.
 void styleLeaveButton(lv_obj_t* btn, const char* icon = LV_SYMBOL_CLOSE);

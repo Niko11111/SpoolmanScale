@@ -70,6 +70,11 @@ extern bool g_flm_tagless;
 // scale that shares a bench with something that knocks it.
 extern bool g_wake_on_load;
 
+// Whether the battery in the header carries its percent. Only means anything
+// on a scale that has had a fuel gauge, which is the only place the switch is
+// shown. On by default: the fill alone says little more than "some left".
+extern bool g_bat_percent;
+
 // Try Snapmaker's keys on a 4 byte tag that refused the Bambu ones. Off by
 // default, and off means not one extra byte goes to the reader: nobody here
 // owns a Snapmaker spool, so the decoding is proven on a contributor's tag
@@ -177,6 +182,12 @@ extern uint8_t g_tagwrite_mode;
 // and so is the format: an ACE tag read while OpenSpool is selected says
 // nothing about the spool being wrong.
 extern bool g_tagmismatch_ask;
+
+// After a weight the backend took, the remaining weight goes onto the
+// OpenPrintTag on the reader as well, as consumed_weight in its aux region
+// (openprinttag/opt_write.h). PN7160 only; off by default, since a Prusa
+// printer writes the same field (Nikolai, 26.11.2026).
+extern bool g_opt_write_weight;
 
 // A TagFormat - see services/tag_write.h. OpenSpool by default: it is the
 // record the filament managers read, where ACE only ever talks to the printer.

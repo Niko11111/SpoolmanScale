@@ -26,6 +26,9 @@ int main() {
   assert(is(tagFormatFor(8, true), "creality"));
   assert(is(tagFormatFor(8, false), "mifare"));
 
+  // An 8 byte UID is an ISO 15693 tag (PN7160): OpenPrintTag.
+  assert(is(tagFormatFor(16, false), "openprinttag"));
+
   // Anything else keeps the old name.
   assert(is(tagFormatFor(0, false), "ntag"));
   assert(is(tagFormatFor(20, false), "ntag"));

@@ -80,6 +80,10 @@ struct TagCreateInput {
   int   dry_temp_c;
   int   dry_hours;
   bool  names_known;         // article and colour name are known
+  // The tag's format never names them (Creality, Snapmaker, ACE, OpenSpool):
+  // the filament may be created by material and hex alone. Off for Bambu,
+  // whose names come from the catalog and are only missing when it is.
+  bool  names_optional;
   // Picked from the backend's filament database (services/filament_db.h)
   // rather than read off a tag: the entry's id and name as the database has
   // them, and what it says that no tag does. Empty and 0 for a tag.
@@ -166,6 +170,9 @@ struct TagFilamentPlan {
   // now: the found filament's own (TFS_FOUND) and the brand's. 0 when none.
   int   found_spool_weight_g;
   int   vendor_spool_weight_g;
+  // The found filament's full weight (TFS_FOUND), for a tag that names none.
+  // 0 when it has none on file.
+  int   found_net_weight_g;
   int   extruder_temp;
   int   bed_temp;
   int   http_code;          // TFS_FAILED
@@ -225,6 +232,20 @@ bool tagCreateSubgroupMatches(const char* subgroup, const char* designation,
 // Whether text carries the article number in brackets, "Gray (12102)": how
 // the FilamentDB names Bambu colours.
 bool tagCreateArticleInText(const char* text, const char* article);
+
+// Whether the input names its filament well enough to create it from the tag
+// alone: by article and colour name, or by material and hex for a format
+// that never carries names (names_optional).
+inline bool tagCreateNamesEnough(const TagCreateInput& in) {
+  return in.names_known || in.names_optional;
+}
+
+// A tag whose format names no colour (ACE, OpenSpool, Creality, Snapmaker)
+// may take the database's nearest colour, and its name with it, when the
+// exact value is not there (tag_color_match.h). One plain colour only.
+inline bool tagCreateNearestColorAllowed(const TagCreateInput& in) {
+  return in.names_optional && !in.names_known && !in.clear && in.color_count == 1;
+}
 
 // Whether two colours given as hex are the same, with or without "#".
 bool tagCreateSameHex(const char* a, const char* b);

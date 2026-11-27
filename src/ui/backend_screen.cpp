@@ -343,17 +343,12 @@ static lv_obj_t *addSegment(lv_obj_t *scr, int i, const char *text, bool active)
   lv_obj_t *b = lv_btn_create(scr);
   lv_obj_set_size(b, BK_SEG_W, BK_SEG_H);
   lv_obj_set_pos(b, BK_SEG_X + i * BK_SEG_STEP, BK_SEG_Y);
-  lv_obj_set_style_bg_color(b, lv_color_hex(active ? UI_COL_PICKED_BG : UI_COL_SURFACE), 0);
-  lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_radius(b, UI_RADIUS_ROW, 0);
-  lv_obj_set_style_shadow_width(b, 0, 0);
-  lv_obj_set_style_border_width(b, active ? 2 : 1, 0);
-  lv_obj_set_style_border_color(b, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_LINE_SOFT), 0);
   lv_obj_t *l = lv_label_create(b);
   lv_label_set_text(l, text);
-  lv_obj_set_style_text_color(l, lv_color_hex(active ? UI_COL_ACCENT : UI_COL_OFF_TEXT), 0);
   lv_obj_set_style_text_font(l, UI_FONT_BODY, 0);
   lv_obj_center(l);
+  uiSegmentLook(b, active ? SEG_PICKED : SEG_OFF);
   return b;
 }
 

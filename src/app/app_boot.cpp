@@ -11,13 +11,16 @@
 #include "app/setup_flow.h"
 #include "hardware/display.h"
 #include "hardware/display_power.h"
+#include "hardware/fuel_gauge.h"
 #include "hardware/i2c_scan.h"
 #include "hardware/nfc.h"
 #include "hardware/pins.h"
 #include "services/user_options.h"
 #include "services/nfc_reset.h"
+#include "services/nfc_wake_test.h"
 #include "hardware/scale.h"
 #include "hardware/sd_logger.h"
+#include "hardware/sound.h"
 #include "services/ams_source.h"
 #include "services/app_settings.h"
 #include "services/backend.h"
@@ -138,6 +141,40 @@ void wifiConnect() {
 // ============================================================
 //  SETUP
 // ============================================================
+// The PN7160 test reader (Notes, PN7160). Lines of its own, so a log says
+// which chip it came from; the PN532 lines in appSetup() stay as they were.
+// The boot scan ran before VEN was up and cannot have seen the chip, so the
+// bus is scanned once more for the log and the status page.
+static bool beginPn7160Reader() {
+  i2cScanRefresh(I2C_EXT);
+  logSDf("I2C_EXT scan with VEN on: %s", i2cScanLast());
+  Serial.print("Looking for PN7160... ");
+  uint32_t ver = 0;
+  if (!nfcHardwareBegin(&I2C_EXT, hw_pins::NFC_VEN, hw_pins::NFC_IRQ, &ver)) {
+    Serial.printf("ERROR! (bus: %s)\n", i2cScanLast());
+    logSDf("NFC init FAILED (PN7160, bus: %s)", i2cScanLast());
+    return false;
+  }
+  const unsigned fw_major = (ver >> 16) & 0xFF;
+  const unsigned fw_minor = (ver >> 8) & 0xFF;
+  Serial.printf("OK (FW %02X.%02X)\n", fw_major, fw_minor);
+  logSDf("NFC ready (PN7160 FW %02X.%02X)", fw_major, fw_minor);
+  return true;
+}
+
+static bool beginPn532Reader() {
+  Serial.print("Looking for PN532... ");
+  uint32_t ver = 0;
+  if (!nfcHardwareBegin(&I2C_EXT, nfcResetPinForBoot(), hw_pins::NFC_IRQ, &ver)) {
+    Serial.printf("ERROR! (bus: %s)\n", i2cScanLast());
+    logSDf("NFC init FAILED (bus: %s)", i2cScanLast());
+    return false;
+  }
+  Serial.printf("OK (FW %d.%d)\n", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
+  logSDf("NFC ready (PN532 FW %d.%d)", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
+  return true;
+}
+
 void appSetup() {
   Serial.begin(115200);
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -148,6 +185,9 @@ void appSetup() {
   // monitor that reads still gets everything.
   Serial.setTxTimeoutMs(0);
 #endif
+  // Before the startup delay: the amplifier clock pins hiss from reset
+  // until something drives them.
+  soundParkClockPins();
   delay(500);
   // Before anything else can leave one of its own: this reads what the
   // previous boot was doing when it stopped. writeBootBlock() prints it.
@@ -190,6 +230,9 @@ void appSetup() {
   i2cScanRefresh(I2C_EXT);
   Serial.printf("I2C_EXT scan: %s\n", i2cScanLast());
   logSDf("I2C_EXT scan: %s", i2cScanLast());
+  // Before the header is built, so the first paint already has the percent
+  // when a gauge is on the bus.
+  fuelGaugePoll(true);
 
   // Build UI immediately after display init so the user sees a screen right away.
   // lbl_status shows STR_BOOTING until wifiConnect() completes
@@ -199,16 +242,12 @@ void appSetup() {
 
   delay(500);
 
-  Serial.print("Looking for PN532... ");
-  uint32_t ver = 0;
-  nfcResetLoad();
-  if (nfcHardwareBegin(&I2C_EXT, nfcResetPinForBoot(), hw_pins::PN532_IRQ_UNUSED, &ver)) {
-    nfc_ok = true;
-    Serial.printf("OK (FW %d.%d)\n", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
-    logSDf("NFC ready (PN532 FW %d.%d)", (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
+  nfcResetLoad();           // before the wake handling, which asks for the verdict
+  nfcWakeTestAfterBoot();   // releases pin 7 if the wake test held it
+  if (nfcDetectChip(&I2C_EXT) == NFC_CHIP_PN7160) {
+    nfc_ok = beginPn7160Reader();
   } else {
-    Serial.printf("ERROR! (bus: %s)\n", i2cScanLast());
-    logSDf("NFC init FAILED (bus: %s)", i2cScanLast());
+    nfc_ok = beginPn532Reader();
   }
 
   // A device built without a load cell is not a device with a broken one. The
@@ -217,10 +256,10 @@ void appSetup() {
   // and there is nothing here to wait for. scl_ok and scale_ready stay false,
   // which is what every consumer already asks.
   if (!g_scale_fitted) {
-    Serial.println("Scale switched off in the settings, NAU7802 not probed");
-    logSD("Scale switched off in the settings, NAU7802 not probed");
+    Serial.println("Scale switched off in the settings, no ADC probed");
+    logSD("Scale switched off in the settings, no ADC probed");
   } else {
-    Serial.print("Looking for NAU7802... ");
+    Serial.print("Looking for NAU7802, then HX711... ");
     if (scaleHardwareBegin(&I2C_EXT, [](){
       Serial.print(".");
       delay(100);
@@ -228,13 +267,14 @@ void appSetup() {
     })) {
       scl_ok = true;
       scale_ready = true;
-      Serial.printf("OK! cal_factor=%.4f  zero_offset=%d\n", cal_factor, zero_offset);
-      logSDf("Scale ready (cal=%.4f zero=%d)", cal_factor, zero_offset);
+      Serial.printf("OK! %s cal_factor=%.4f  zero_offset=%d\n", scaleHardwareName(),
+                    cal_factor, zero_offset);
+      logSDf("Scale ready (%s, cal=%.4f zero=%d)", scaleHardwareName(), cal_factor, zero_offset);
     } else {
       // Two ways to land here: the chip did not answer on 0x2A at all, or it
       // answered but never finished calibrating. scaleHardwareBegin() prints
       // which one, so this must not claim a cause of its own.
-      Serial.printf("ERROR! Scale unavailable (NAU7802 on 0x%02X, bus: %s)\n",
+      Serial.printf("ERROR! Scale unavailable (NAU7802 on 0x%02X, HX711 on pins 5/6, bus: %s)\n",
                     I2C_ADDR_NAU7802, i2cScanLast());
       logSDf("Scale init FAILED (bus: %s)", i2cScanLast());
     }

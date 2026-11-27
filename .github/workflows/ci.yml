@@ -71,6 +71,10 @@ jobs:
         run: python3 test/test_join_material_name.py
       - name: Test Creality silk PLA
         run: python3 test/test_creality_silk.py
+      - name: Test new spool from another maker's tag
+        run: python3 test/test_tag_create_record.py
+      - name: Test a tag's colour against a maker's colour table
+        run: python3 test/test_tag_color_match.py
       - name: Test Bluetooth discovery
         run: python3 test/test_ble_discovery.py
       - name: Test FilaMan label orientation
@@ -135,6 +139,14 @@ jobs:
         run: python3 test/test_ams_unit_room.py
       - name: Test that a 0 % the printer guesses for a spool without a chip reads as unknown
         run: python3 test/test_ams_printer_remain.py
+      - name: Test NFC measure stats
+        run: python3 test/test_nfc_measure_stats.py
+      - name: Test NFC RF error counts
+        run: python3 test/test_nfc_rf_counts.py
+      - name: Test OpenPrintTag decoding
+        run: python3 test/test_openprinttag.py
+      - name: Test OpenPrintTag read resume
+        run: python3 test/test_opt_resume.py
 
   build:
     name: Build ${{ matrix.env }}

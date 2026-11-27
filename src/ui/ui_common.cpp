@@ -274,17 +274,29 @@ void addBackButton(lv_obj_t *parent, lv_event_cb_t cb) {
   lv_obj_center(lbl);
 }
 
-lv_obj_t* addCloseButton(lv_obj_t *parent) {
+// The X a screen and a popup share: one look and one size wherever it closes.
+static lv_obj_t* closeX(lv_obj_t* parent, lv_coord_t top) {
   lv_obj_t *btn = lv_btn_create(parent);
-  lv_obj_set_size(btn, 44, 44);
-  lv_obj_align(btn, LV_ALIGN_TOP_RIGHT, -4, 2);
+  lv_obj_set_size(btn, UI_TOUCH_MIN, UI_TOUCH_MIN);
+  lv_obj_align(btn, LV_ALIGN_TOP_RIGHT, -UI_CLOSE_X_INSET, top);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
-  lv_obj_add_event_cb(btn, [](lv_event_t *e){ logSD("BTN: Close -> Main"); showMainScreen(); }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl = lv_label_create(btn);
   lv_label_set_text(lbl, LV_SYMBOL_CLOSE);
   lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl);
   uiBtnRole(btn, BTN_CLOSE);
+  return btn;
+}
+
+lv_obj_t* addCloseButton(lv_obj_t *parent) {
+  lv_obj_t *btn = closeX(parent, UI_CLOSE_X_SCREEN_TOP);
+  lv_obj_add_event_cb(btn, [](lv_event_t *e){ logSD("BTN: Close -> Main"); showMainScreen(); }, LV_EVENT_CLICKED, NULL);
+  return btn;
+}
+
+lv_obj_t* uiPopupCloseX(lv_obj_t* box, lv_event_cb_t cb, void* user_data) {
+  lv_obj_t* btn = closeX(box, UI_CLOSE_X_INSET);
+  lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, user_data);
   return btn;
 }
 
@@ -414,10 +426,33 @@ uint32_t filamanStatusColor(int status_id) {
   }
 }
 
+// The "?" circle: 34 px, 12 px left of the 44 px close button at x 432.
+static const lv_coord_t HDR_HELP_PX   = 34;
+static const lv_coord_t HDR_HELP_X_PX = 386;
+static const lv_coord_t HDR_HELP_Y_PX = 5;
+// What a header title keeps clear of the circle.
+static const lv_coord_t HDR_HELP_GAP_PX = 8;
+
+// A title centred on the screen can reach into the circle: the German "Tag
+// nach Verlinken beschreiben" ends on its very edge. A header label that does
+// moves left until it keeps the gap; the back button leaves the room for it.
+static void keepHeaderClearOfHelp(lv_obj_t *scr) {
+  lv_obj_update_layout(scr);
+  const uint32_t n = lv_obj_get_child_cnt(scr);
+  for (uint32_t i = 0; i < n; i++) {
+    lv_obj_t *c = lv_obj_get_child(scr, i);
+    if (!lv_obj_check_type(c, &lv_label_class)) continue;
+    if (lv_obj_get_y(c) > HDR_HELP_Y_PX + HDR_HELP_PX) continue;
+    const lv_coord_t over = lv_obj_get_x(c) + lv_obj_get_width(c) + HDR_HELP_GAP_PX - HDR_HELP_X_PX;
+    if (over > 0) lv_obj_set_x(c, lv_obj_get_x_aligned(c) - over);
+  }
+}
+
 lv_obj_t* addHeaderHelp(lv_obj_t *scr, int title_id, int text_id) {
+  keepHeaderClearOfHelp(scr);
   lv_obj_t *help = lv_btn_create(scr);
-  lv_obj_set_size(help, 34, 34);
-  lv_obj_set_pos(help, 386, 5);
+  lv_obj_set_size(help, HDR_HELP_PX, HDR_HELP_PX);
+  lv_obj_set_pos(help, HDR_HELP_X_PX, HDR_HELP_Y_PX);
   lv_obj_set_style_bg_opa(help, LV_OPA_TRANSP, 0);
   lv_obj_set_style_bg_color(help, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(help, LV_OPA_COVER, LV_STATE_PRESSED);
@@ -603,6 +638,11 @@ lv_obj_t* labelOneLine(lv_obj_t* parent, const char* text, const lv_font_t* font
   return l;
 }
 
+void labelDotLine(lv_obj_t* l, lv_coord_t w) {
+  lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+  lv_obj_set_size(l, w, lv_font_get_line_height(lv_obj_get_style_text_font(l, LV_PART_MAIN)));
+}
+
 lv_obj_t* padButton(lv_obj_t* parent, int x, int y, int w, int h, uint32_t bg, uint32_t bg_pressed) {
   lv_obj_t* b = lv_btn_create(parent);
   lv_obj_set_size(b, w, h);
@@ -710,7 +750,7 @@ void styleLeaveButton(lv_obj_t* btn, const char* icon) {
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW), 0);
   lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COL_ROW_PRESS_FILL), LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn, UI_LEAVE_BORDER_W, 0);
-  lv_obj_set_style_border_color(btn, uiMixRed(UI_COL_BAD_TEXT, UI_COL_ROW, UI_LEAVE_BORDER_RED_PCT), 0);
+  lv_obj_set_style_border_color(btn, lv_color_hex(UI_COL_LINE), 0);
   lv_obj_set_style_border_opa(btn, LV_OPA_COVER, 0);
   // The theme's shadow, which callers used to switch off one by one.
   lv_obj_set_style_shadow_width(btn, 0, 0);
@@ -720,32 +760,38 @@ void styleLeaveButton(lv_obj_t* btn, const char* icon) {
     if (lv_obj_check_type(c, &lv_label_class)) lbl = c;
   }
   if (!lbl) return;
-  // LVGL 8.3 counts the recolour markup below when it shortens a line, so a
-  // caption with room to spare came out as "x ..." (the entry tiles). Sized
-  // to its text instead; the button clips one that really is too long.
+  // The caller sized the label to its caption alone; with the icon in front a
+  // shortening label came out as "x ..." (the entry tiles). Sized to its text
+  // instead; the button clips one that really is too long.
   const lv_label_long_mode_t mode = lv_label_get_long_mode(lbl);
   if (mode == LV_LABEL_LONG_DOT || mode == LV_LABEL_LONG_SCROLL ||
       mode == LV_LABEL_LONG_SCROLL_CIRCULAR) {
     lv_label_set_long_mode(lbl, LV_LABEL_LONG_CLIP);
     lv_obj_set_width(lbl, LV_SIZE_CONTENT);
   }
-  // The icon in red through LVGL's recolour markup, the caption in the
-  // label's own colour; one label, so the pair stays centred as before.
+  // Icon and caption in one label, so the pair stays centred as before.
   char text[64];
-  const lv_color_t ic = uiMixRed(UI_COL_BAD_TEXT, UI_COL_INK_2, UI_LEAVE_ICON_RED_PCT);
-  snprintf(text, sizeof(text), "#%06x %s#  %s", (unsigned)(lv_color_to32(ic) & 0xFFFFFFu), icon,
-           lv_label_get_text(lbl));
-  lv_label_set_recolor(lbl, true);
+  snprintf(text, sizeof(text), "%s  %s", icon, lv_label_get_text(lbl));
   lv_label_set_text(lbl, text);
   lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COL_INK_2), 0);
 }
 
-static lv_coord_t textWidth(const char* s, const lv_font_t* font) {
+lv_coord_t uiTextWidth(const char* s, const lv_font_t* font) {
   return lv_txt_get_width(s, (uint32_t)strlen(s), font, 0, LV_TEXT_FLAG_NONE);
 }
 
+// A header button is 44 px, 4 px from the edge; the title keeps 8 px from it.
+static const lv_coord_t HDR_TITLE_MAX_W_PX = 480 - 2 * (4 + 44 + 8);
+
+void uiFitHeaderTitle(char* out, size_t n, const char* head, const char* tail, const lv_font_t* font) {
+  char h[80];
+  snprintf(h, sizeof(h), "%s", head);
+  uiFitLine(h, sizeof(h), font, HDR_TITLE_MAX_W_PX - uiTextWidth(tail, font));
+  snprintf(out, n, "%s%s", h, tail);
+}
+
 void uiFitLine(char* s, size_t n, const lv_font_t* font, lv_coord_t max_w) {
-  if (!s || !font || n == 0 || textWidth(s, font) <= max_w) return;
+  if (!s || !font || n == 0 || uiTextWidth(s, font) <= max_w) return;
   static const char kDots[] = "...";
   char buf[96];
   size_t len = strlen(s);
@@ -755,7 +801,7 @@ void uiFitLine(char* s, size_t n, const lv_font_t* font, lv_coord_t max_w) {
     size_t keep = len;
     while (keep > 0 && s[keep - 1] == ' ') keep--;
     snprintf(buf, sizeof(buf), "%.*s%s", (int)keep, s, kDots);
-    if (textWidth(buf, font) <= max_w) break;
+    if (uiTextWidth(buf, font) <= max_w) break;
   }
   if (len == 0) snprintf(buf, sizeof(buf), "%s", kDots);
   snprintf(s, n, "%s", buf);

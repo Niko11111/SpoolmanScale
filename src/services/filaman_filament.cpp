@@ -14,6 +14,7 @@
 #include "filaman_api.h"
 #include "filaman_filament_db.h"
 #include "json_util.h"
+#include "tag_create_record.h"
 #include "tag_db_match.h"
 
 #define FM_FIL_TIMEOUT_MS   8000
@@ -56,6 +57,7 @@ struct FilamentHit {
   int  id;                // 0: none yet
   char name[64];
   int  spool_weight_g;    // the filament's default empty spool, 0 when none
+  int  net_weight_g;      // its full weight, 0 when none
 };
 struct FilamentSearch {
   const TagCreateInput* in;
@@ -100,7 +102,7 @@ static int findManufacturer(const char* base_url, const char* api_key, const cha
     const int n = readPage(base_url, api_key, path, doc, filter);
     if (n < 0) return n;
     for (JsonObjectConst m : doc["items"].as<JsonArrayConst>()) {
-      if (strcasecmp(m["name"] | "", vendor) != 0) continue;
+      if (!tagCreateVendorIs(m["name"] | "", vendor)) continue;
       plan->vendor_spool_weight_g = (int)lroundf(m["empty_spool_weight_g"] | 0.0f);
       return m["id"] | 0;
     }
@@ -178,6 +180,7 @@ static void keepLowest(JsonObjectConst fil, int id, const char* name, FilamentHi
   if (best->id != 0 && id >= best->id) return;
   best->id = id;
   best->spool_weight_g = (int)lroundf(fil["default_spool_weight_g"] | 0.0f);
+  best->net_weight_g   = (int)lroundf(fil["raw_material_weight_g"] | 0.0f);
   snprintf(best->name, sizeof(best->name), "%s", name);
 }
 
@@ -235,6 +238,7 @@ static void filamentFilter(JsonDocument& filter) {
   f["manufacturer_color_name"] = true;
   f["shop_url"]                = true;
   f["default_spool_weight_g"]  = true;
+  f["raw_material_weight_g"]   = true;
   f["custom_fields"]["article_number"]     = true;
   f["custom_fields"]["bambu_product_code"] = true;
   f["custom_fields"]["filamentdb_id"]      = true;
@@ -288,6 +292,7 @@ static void planFound(const FilamentSearch& s, TagFilamentPlan* plan) {
   plan->state = TFS_FOUND;
   plan->filament_id = hit.id;
   plan->found_spool_weight_g = hit.spool_weight_g;
+  plan->found_net_weight_g   = hit.net_weight_g;
   snprintf(plan->name, sizeof(plan->name), "%s", hit.name);
 }
 
@@ -315,10 +320,12 @@ void filamanPlanTagFilament(const char* base_url, const char* api_key,
     plan->state = TFS_CREATE_DB;
     return;
   }
-  if (!in.names_known || (!in.color_count && !in.clear)) { plan->state = TFS_NEEDS_CATALOG; return; }
-  // The FilamentDB may know the tag's filament by its article number: the
+  if (!tagCreateNamesEnough(in) || (!in.color_count && !in.clear)) { plan->state = TFS_NEEDS_CATALOG; return; }
+  // The FilamentDB may know the tag's filament by its article number, or for
+  // a format without names by the nearest colour in the maker's table: the
   // card then fills in from it what the tag lacks (tag_db_match.h).
-  if (filamanFdbFindForTag(base_url, api_key, in, &plan->db)) {
+  if (filamanFdbFindForTag(base_url, api_key, in, &plan->db) ||
+      filamanFdbNearestForTag(base_url, api_key, in, &plan->db)) {
     plan->db_found = true;
     snprintf(plan->name, sizeof(plan->name), "%s", plan->db.name);
     plan->state = TFS_CREATE_DB;

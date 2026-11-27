@@ -73,9 +73,9 @@ const char* const STRINGS[][3] = {
   { "Spulen & Waage",                 "Spools & scale",                 "Bobines et balance" },  // STR_TILE_SCALE
   { "Tags | Trocknung | Kalibrieren", "Tags | Drying | Calibration",
     "Tags | Séchage | Étalonnage" },  // STR_TILE_SCALE_SUB
-  { "Display",                        "Display",                        "Affichage" },  // STR_TILE_DISPLAY
-  { "Helligkeit | Dimmen | Schlaf", "Brightness | Dim | Sleep",
-    "Luminosité | Atténuer | Veille" },  // STR_TILE_DISPLAY_SUB
+  { "Display/Ton",                    "Display/Sound",                  "Affichage/Son" },  // STR_TILE_DISPLAY
+  { "Helligkeit | Schlaf | Ton", "Brightness | Sleep | Sound",
+    "Luminosité | Veille | Son" },  // STR_TILE_DISPLAY_SUB
   { "System",                         "System",                         "Système" },  // STR_TILE_SYSTEM
   { "Web | Update | Sprache | Info", "Web | Update | Language | Info",
     "Web | Mise à jour | Langue | Info" },  // STR_TILE_SYSTEM_SUB
@@ -1755,9 +1755,9 @@ const char* const STRINGS[][3] = {
 
   // Results of a write or an erase
   { "Tag nicht beschrieben", "Tag not written", "Tag non écrit" },  // STR_TW_FAILED
-  { "Die Spulendaten stehen jetzt im Format OpenSpool auf dem Tag.",
-    "The spool data is now on the tag, as OpenSpool.",
-    "Les données de la bobine sont maintenant sur le tag, au format OpenSpool." },  // STR_TW_OK_INFO
+  { "Die Spulendaten stehen jetzt im Format %s auf dem Tag.",
+    "The spool data is now on the tag, as %s.",
+    "Les données de la bobine sont maintenant sur le tag, au format %s." },  // STR_TW_OK_INFO
   { "Tag auch löschen?", "Erase the tag too?", "Effacer aussi le tag ?" },  // STR_TW_ERASE_ASK_TITLE
   { "Die Verknüpfung ist gelöst. Der Tag trägt die Spulendaten aber weiter.",
     "The link is gone. The tag still carries the spool data though.",
@@ -1877,10 +1877,10 @@ const char* const STRINGS[][3] = {
   { "Nach dem Verlinken",     "After linking",          "Après la liaison" },  // STR_W_TAGOPT_ASK
   { "Format",                 "Format",                 "Format" },  // STR_W_TAGOPT_FMT
   { "Gilt für das, was die Waage nach einem Verlinken selbst tut. "
-    "Das Schreiben auf dieser Seite hat seine eigene Formatauswahl.",
-    "Applies to what the scale does on its own after a link. Writing from this "
-    "page has its own format selector.",
-    "Ces réglages concernent ce que la balance fait d'elle-même après avoir lié un tag à une bobine. L'écriture lancée depuis cette page a son propre choix de format, plus haut." },  // STR_W_TAGOPT_NOTE
+    "Das Format ist dasselbe wie beim Schreiben oben.",
+    "Applies to what the scale does on its own after a link. The format is the "
+    "same one the write above uses.",
+    "Ces réglages concernent ce que la balance fait d'elle-même après avoir lié un tag à une bobine. Le format est le même que pour l'écriture plus haut." },  // STR_W_TAGOPT_NOTE
   { "Speichern", "Download", "Enregistrer" },  // STR_W_LOG_DOWNLOAD
   { "Kein Material passte - Filter aufgehoben",
     "No material matched - filter dropped",
@@ -2018,8 +2018,8 @@ const char* const STRINGS[][3] = {
     "Non étalonnée : poids inexact" },  // STR_DIAG_UNCAL_BANNER
   { "Waage nicht kalibriert", "Scale not calibrated",
     "Balance non étalonnée" },  // STR_DIAG_UNCAL_TITLE
-  { "Das angezeigte Gewicht ist nur ein grober Näherungswert und kann weit "
-    "danebenliegen. Speichere es besser noch nicht im Inventar.\n\n"
+  { "Das Gewicht ist nur ein grober Näherungswert. Speichere es noch nicht "
+    "im Inventar.\n\n"
     "Das ist kein Defekt und kein Verkabelungsfehler. Die Waage weiß nur noch "
     "nicht, wie viele Messschritte ein Gramm sind.\n\n"
     "Lege ein bekanntes Gewicht auf und kalibriere sie.",
@@ -2028,7 +2028,7 @@ const char* const STRINGS[][3] = {
     "This is neither a defect nor a wiring mistake. The scale simply does not "
     "know yet how many counts make a gram.\n\n"
     "Place a known weight on it and calibrate.",
-    "Le poids affiché n'est qu'une estimation grossière et peut être très éloigné de la réalité. Mieux vaut ne pas encore l'enregistrer dans l'inventaire.\n\nCe n'est ni une panne ni une erreur de câblage. La balance ne sait simplement pas encore à combien d'unités brutes correspond un gramme.\n\nPosez un poids connu sur le plateau et étalonnez la balance." },  // STR_DIAG_UNCAL_TEXT
+    "Le poids affiché n'est qu'une estimation grossière. Mieux vaut ne pas encore l'enregistrer dans l'inventaire.\n\nCe n'est ni une panne ni une erreur de câblage : la balance ne sait pas encore combien d'unités brutes font un gramme.\n\nPosez un poids connu et étalonnez la balance." },  // STR_DIAG_UNCAL_TEXT
 
   { "Wägezelle verpolt (A+/A-)", "Load cell reversed (A+/A-)",
     "Capteur de pesée inversé (A+/A-)" },  // STR_DIAG_INVERTED_BANNER
@@ -2105,13 +2105,11 @@ const char* const STRINGS[][3] = {
     "hardware reset.",
     "Le lecteur a réagi à la liaison. Dès le prochain démarrage, la balance utilisera la réinitialisation matérielle." },  // STR_NFCRST_OK_TEXT
   { "Keine Wirkung", "No effect", "Aucun effet" },  // STR_NFCRST_FAIL_TITLE
-  { "Der Leser hat nichts gemerkt. Der orange Draht liegt noch auf dem alten "
-    "Pad, oder die Lötstelle hat keinen Kontakt.\n\n"
-    "Es ändert sich nichts, die Waage arbeitet weiter wie bisher.",
-    "The reader did not notice. The orange wire is still on the old pad, or "
-    "the joint is not making contact.\n\n"
-    "Nothing changes, the scale carries on as before.",
-    "Le lecteur n'a pas réagi au test de réinitialisation. Soit le fil orange est encore sur l'ancienne pastille, soit la soudure ne fait pas contact.\n\nRien n'est modifié : la balance continue de fonctionner comme avant." },  // STR_NFCRST_FAIL_TEXT
+  { "Der Leser hat nichts gemerkt: Der orange Draht liegt noch auf dem alten "
+    "Pad, oder die Lötstelle hat keinen Kontakt. Die Waage arbeitet weiter wie bisher.",
+    "The reader did not notice: the orange wire is still on the old pad, or "
+    "the joint is not making contact. The scale carries on as before.",
+    "Le lecteur n'a pas réagi : le fil orange est encore sur l'ancienne pastille, ou la soudure ne fait pas contact. La balance continue comme avant." },  // STR_NFCRST_FAIL_TEXT
 
   // ── Hardware UID into extra.rfid_tag ──
   { "Chip-UID mitschreiben",  "Also write the chip UID", "Écrire aussi l'UID de la puce" },  // STR_HW_UID_WRITE
@@ -4500,6 +4498,169 @@ const char* const STRINGS[][3] = {
     "Nom : le nom de couleur passe de la fin du titre à la ligne Couleur. Sans nom de couleur, le code hex est imprimé." },  // STR_W_L_COLOR_HINT
   { "Ungeprüfte Größe.", "Unchecked size.",
     "Format non vérifié." },  // STR_W_P_MEDIA_ST_UNCHECKED_SHORT
+  { "ISO 15693, nur lesbar", "ISO 15693, read-only",
+    "ISO 15693, lecture seule" },  // STR_W_TAG_KIND_VICINITY
+  // Settings page, device card: waking from deep sleep by a tag on the reader.
+  { "Per NFC-Tag aus dem Tiefschlaf aufwachen", "Wake from deep sleep by NFC tag",
+    "Sortir de la veille profonde avec un tag NFC" },  // STR_W_NFC_WAKE
+  { "Ein Tag auf dem Reader weckt die Waage, die Spule wird gleich gelesen. Braucht Pin 8 am I/O-Stecker.",
+    "A tag on the reader wakes the scale, and the spool is read straight away. Needs pin 8 of the I/O connector.",
+    "Un tag posé sur le lecteur réveille la balance, et la bobine est lue aussitôt. Nécessite la broche 8 du connecteur E/S." },  // STR_W_NFC_WAKE_HINT
+  // Shown instead of the hint while the switch is locked.
+  { "Mit einem PN532 erst nach geprüftem Reset-Draht: am Gerät unter Einstellungen → System → „NFC-Reset prüfen“.",
+    "With a PN532, only once its reset wire is checked: on the scale under Settings → System → “Check NFC reset”.",
+    "Avec un PN532, seulement après vérification de sa liaison de réinitialisation : sur la balance, Réglages → Système → « Vérifier la réinit. NFC »." },  // STR_W_NFC_WAKE_LOCKED
+  { "Im Tiefschlaf sucht der Reader weiter nach Tags und meldet einen über Pin 8 (IRQ). Dafür braucht es ein 8-poliges Kabel. Ein PN532 braucht dazu seinen Reset-Draht (RSTPDN) an Pin 7: Nach dem Aufwachen schaltet die Waage ihn darüber einmal aus und wieder ein, sonst startet er nicht sauber. Mit einem 7-poligen Kabel fehlt Pin 8, dann kann ein Tag die Waage nicht wecken. In den Tiefschlaf geht die Waage nur, wenn am Gerät unter Einstellungen → Display eine Zeit dafür eingestellt ist. Antippen des Displays weckt sie weiterhin.",
+    "In deep sleep the reader keeps looking for tags and reports one over pin 8 (IRQ), which takes an 8-wire cable. A PN532 also needs its reset wire (RSTPDN) on pin 7: after waking, the scale switches it off and on once over that wire, or it does not start cleanly. With a 7-wire cable pin 8 is missing, and a tag cannot wake the scale. The scale only goes into deep sleep when a time is set for it on the scale under Settings → Display. Tapping the display still wakes it.",
+    "En veille profonde, le lecteur continue de chercher des tags et en signale un par la broche 8 (IRQ), ce qui demande un câble à 8 fils. Un PN532 a aussi besoin de sa liaison de réinitialisation (RSTPDN) sur la broche 7 : au réveil, la balance l'éteint et le rallume une fois par cette liaison, sinon il ne démarre pas correctement. Avec un câble à 7 fils, la broche 8 manque et un tag ne peut pas réveiller la balance. La balance ne passe en veille profonde que si une durée est réglée sur la balance, sous Réglages → Affichage. Toucher l'écran la réveille toujours." },  // STR_W_NFC_WAKE_DETAIL
+  { "Anleitung zum Umlöten, mit Foto", "How to rewire it, with a photo",
+    "Comment déplacer le fil, avec une photo" },  // STR_W_NFC_WAKE_DOCS
+  { "Theme wählen",                    "Choose a theme",                 "Choisir un thème" },  // STR_W_THEME_OPEN
+
+  // Sound
+  { "Ton",                           "Sound",                          "Son" },  // STR_SOUND_TITLE
+  { "Lautsprecher am SPK-Anschluss", "Speaker on the SPK connector",   "Haut-parleur au port SPK" },  // STR_SOUND_SUB
+  { "Piepen beim Tag-Lesen",         "Beep when a tag is read",        "Bip à la lecture d'un tag" },  // STR_SND_NFC
+  { "Piepen nach Tag-Schreiben", "Beep when a tag is written",
+    "Bip après écriture du tag" },  // STR_SND_WRITE
+  { "Piepen bei Auto-Gewicht",       "Beep on auto weight",            "Bip au poids auto" },  // STR_SND_WEIGHT
+  { "Lautstärke",                    "Volume",                         "Volume" },  // STR_SND_VOLUME_LABEL
+  { "Klang",                         "Tone set",                       "Timbre" },  // STR_SND_SET
+  { "Piepser (kurz und hell)", "Beeps (short and bright)",
+    "Bips (courts et clairs)" },  // STR_SND_SET_BEEP
+  { "Glocke (weich, klingt aus)", "Chimes (soft, ringing out)",
+    "Carillon (doux, résonant)" },  // STR_SND_SET_CHIME
+  { "Piepen bei Schreibauftrag",     "Beep on a write request",        "Bip si écriture demandée" },  // STR_SND_ASK
+  { "Piepen nach Etikettendruck",    "Beep after a label print",       "Bip après impression" },  // STR_SND_PRINT
+  { "Piepen nach Firmware-Update",   "Beep after a firmware update",   "Bip après mise à jour" },  // STR_SND_UPDATE
+  { "Piepen bei Verbindungsabbruch", "Beep when the connection drops", "Bip si connexion perdue" },  // STR_SND_LINK
+  { "Dieser Bambu-Tag gehört zu einer anderen Spule und wird nicht verknüpft.",
+    "This Bambu tag belongs to another spool and is not linked.",
+    "Ce tag Bambu appartient à une autre bobine, il ne sera pas lié." },  // STR_TAG2_OTHER_SPOOL
+
+  // Remembered WiFi networks: the connected one becomes the preferred one
+  { "Bevorzugen", "Make preferred", "Préférer" },  // STR_WIFI_PREFER
+
+  // Tag page: unlink and move
+  { "Verknüpfung lösen",
+    "Unlink",
+    "Dissocier" },  // STR_W_TAG_UNLINK
+  { "Lösen",
+    "Unlink",
+    "Dissocier" },  // STR_W_TL_UNLINK_BTN
+  { "Den Tag von Spule #%d lösen? Die Spule wird dann über diesen Tag nicht mehr gefunden. Auf dem Tag selbst ändert sich nichts. Bei einer Bambu-Spule gilt das für beide Chips.",
+    "Unlink the tag from spool #%d? The spool is then no longer found by this tag. Nothing changes on the tag itself. On a Bambu spool this goes for both chips.",
+    "Dissocier le tag de la bobine #%d ? La bobine ne sera plus trouvée par ce tag. Rien ne change sur le tag lui-même. Pour une bobine Bambu, cela vaut pour les deux puces." },  // STR_W_TL_UNLINK_ASK
+  { "Den Tag von der Spule lösen, mit der er verknüpft ist? Auf dem Tag selbst ändert sich nichts.",
+    "Unlink the tag from whichever spool it is linked to? Nothing changes on the tag itself.",
+    "Dissocier le tag de la bobine à laquelle il est lié ? Rien ne change sur le tag lui-même." },  // STR_W_TL_UNLINK_ASK_ANY
+  { "Der Tag gehört Spule #%d. Dort lösen und mit Spule #%d verknüpfen?",
+    "The tag belongs to spool #%d. Unlink it there and link it to spool #%d?",
+    "Le tag appartient à la bobine #%d. Le dissocier de celle-ci et le lier à la bobine #%d ?" },  // STR_W_TL_MOVE_ASK
+  { "Der Tag gehört Spule #%d. Dort lösen, den Tag für Spule #%d beschreiben und verknüpfen?",
+    "The tag belongs to spool #%d. Unlink it there, write it for spool #%d and link it?",
+    "Le tag appartient à la bobine #%d. Le dissocier de celle-ci, l'écrire pour la bobine #%d et le lier ?" },  // STR_W_TL_MOVE_ASK_WRITE
+  { "Löse die Verknüpfung ...",
+    "Unlinking ...",
+    "Dissociation ..." },  // STR_W_TL_UNLINKING
+  { "Prüfe, ob der Tag schon einer Spule gehört ...",
+    "Checking whether the tag already belongs to a spool ...",
+    "Vérification : le tag appartient-il déjà à une bobine ..." },  // STR_W_TL_CHECKING
+  { "Hänge den Tag von Spule #%d nach #%d um ...",
+    "Moving the tag from spool #%d to #%d ...",
+    "Déplacement du tag de la bobine #%d vers #%d ..." },  // STR_W_TL_MOVING
+  { "Der Tag ist von Spule #%d gelöst.",
+    "The tag is unlinked from spool #%d.",
+    "Le tag est dissocié de la bobine #%d." },  // STR_W_TL_UNLINKED
+  { "Der Tag ist von Spule #%d gelöst und mit Spule #%d verknüpft.",
+    "The tag was unlinked from spool #%d and linked to spool #%d.",
+    "Le tag a été dissocié de la bobine #%d et lié à la bobine #%d." },  // STR_W_TL_MOVED
+  { "Der Tag ist mit keiner Spule verknüpft.",
+    "The tag is not linked to any spool.",
+    "Le tag n'est lié à aucune bobine." },  // STR_W_TL_NOT_LINKED
+  { "Der Tag gehört Spule #%d, die Waage zeigt gerade eine andere. Tag kurz abnehmen, wieder auflegen und noch einmal versuchen.",
+    "The tag belongs to spool #%d, but the scale is showing another one. Lift the tag, put it back and try again.",
+    "Le tag appartient à la bobine #%d, mais la balance en affiche une autre. Retirez le tag, reposez-le et réessayez." },  // STR_W_TL_NOT_SHOWN
+  { "Der Tag ist in Spoolman mit Filament #%d verknüpft, nicht mit einer Spule. Lösen geht nur in Spoolman.",
+    "In Spoolman the tag is linked to filament #%d, not to a spool. Only Spoolman can unlink it.",
+    "Dans Spoolman, le tag est lié au filament #%d, pas à une bobine. Seul Spoolman peut le dissocier." },  // STR_W_TL_ON_FILAMENT
+  { "Nicht gelöst: Der Server findet Spule #%d weiter über diesen Tag.",
+    "Not unlinked: the server still finds spool #%d by this tag.",
+    "Non dissocié : le serveur trouve toujours la bobine #%d par ce tag." },  // STR_W_TL_UNLINK_FAILED
+  { "Der Tag gehört Spule #%d. Nichts geschrieben, nichts verknüpft.",
+    "The tag belongs to spool #%d. Nothing written, nothing linked.",
+    "Le tag appartient à la bobine #%d. Rien n'a été écrit ni lié." },  // STR_W_TL_HELD_WRITE
+
+  // Status and backend pages: the backend's own web interface
+  { "%s öffnen", "Open %s", "Ouvrir %s" },  // STR_W_BACKEND_OPEN
+
+  // Web tags page: a move that took the tag off and failed afterwards
+  { "Von Spule #%d gelöst, aber nicht umgehängt: %s",
+    "Taken off spool #%d, but not moved: %s",
+    "Dissocié de la bobine #%d, mais pas déplacé : %s" },  // STR_W_TL_HALF_MOVED
+
+  // Settings page: the fuel gauge's battery in the header
+  { "Akku: Prozent anzeigen", "Battery: show percent", "Batterie : afficher le pourcentage" },  // STR_W_BAT_PCT
+  { "Die Ladung als Zahl im Akku oben rechts. Aus: nur Füllung und Blitz.",
+    "The charge as a number inside the battery at the top right. Off: fill and bolt only.",
+    "La charge en chiffres dans la batterie en haut à droite. Désactivé : remplissage et éclair seulement." },  // STR_W_BAT_PCT_HINT
+  { "Farbcode",              "Colour code",                 "Code hex" },  // STR_W_TAG_COLOR_HEX
+  { "Rest auf OpenPrintTag", "Remaining onto OpenPrintTag", "Reste sur l'OpenPrintTag" },  // STR_TW_OPT_OPTW
+  { "Bei „Gewicht updaten“, nur PN7160",
+    "With \"Update Weight\", PN7160 only",
+    "À l'envoi du poids, PN7160" },  // STR_TW_OPT_OPTW_SUB
+  { "Nach jedem gesendeten Gewicht schreibt die Waage den Verbrauch auf einen "
+    "OpenPrintTag, so wie es ein Prusa-Drucker tut: Vollgewicht laut Tag minus "
+    "das, was auf der Waage liegt. Beschrieben wird nur der Bereich für "
+    "Druckerdaten, die Daten des Herstellers bleiben unberührt.\n\n"
+    "Braucht den PN7160-Reader. Aus: Der Tag bleibt, wie er ist.",
+    "After every weight it sends, the scale writes what was used onto an "
+    "OpenPrintTag, as a Prusa printer does: the tag's full weight minus what "
+    "lies on the scale. Only the area for printer data is written; the maker's "
+    "data stays untouched.\n\n"
+    "Needs the PN7160 reader. Off: the tag stays as it is.",
+    "Après chaque poids envoyé, la balance écrit la quantité utilisée sur un OpenPrintTag, comme une imprimante Prusa : le poids plein du tag moins ce qui est sur la balance. Seule la zone des imprimantes est écrite ; les données du fabricant restent intactes.\n\nLecteur PN7160 requis. Désactivé : le tag reste tel quel." },  // STR_TW_OPT_OPTW_INFO
+  { "Restgewicht auch auf OpenPrintTag schreiben (bei „Gewicht updaten“)",
+    "Also write the remaining weight onto an OpenPrintTag (with \"Update Weight\")",
+    "Écrire aussi le poids restant sur un OpenPrintTag (avec « Envoyer le poids »)" },  // STR_W_TAGOPT_OPTW
+  { "Tag nicht beschrieben", "Tag not written", "Tag non écrit" },  // STR_OPTW_FAIL_TITLE
+  { "Der Tag ließ sich nicht lesen oder lag nicht mehr auf. Das Gewicht steht "
+    "im Backend, auf dem Tag steht noch der alte Wert.",
+    "The tag could not be read or was no longer on the reader. The weight is in "
+    "the backend; the tag still holds the old value.",
+    "Le tag n'a pas pu être lu ou n'était plus sur le lecteur. Le poids est dans le backend ; le tag garde l'ancienne valeur." },  // STR_OPTW_FAIL_GONE
+  { "Der Tag nennt kein Vollgewicht, ohne das lässt sich der Verbrauch nicht "
+    "rechnen. Das Gewicht steht im Backend.",
+    "The tag names no full weight, so what was used cannot be worked out. The "
+    "weight is in the backend.",
+    "Le tag n'indique pas de poids plein : la quantité utilisée ne peut pas être calculée. Le poids est dans le backend." },  // STR_OPTW_FAIL_FULL
+  { "Der Tag hat keinen Bereich für Druckerdaten, oder der ist voll. Das "
+    "Gewicht steht im Backend.",
+    "The tag has no area for printer data, or it is full. The weight is in the "
+    "backend.",
+    "Le tag n'a pas de zone imprimante, ou elle est pleine. Le poids est dans le backend." },  // STR_OPTW_FAIL_AUX
+  { "Schreiben abgebrochen. Die Spule liegen lassen und das Gewicht noch einmal "
+    "senden.",
+    "Writing broke off. Leave the spool where it is and send the weight "
+    "again.",
+    "Écriture interrompue. Laissez la bobine en place et renvoyez le poids." },  // STR_OPTW_FAIL_WRITE
+  { "Verbraucht",    "Used",       "Utilisé" },  // STR_TV_CONSUMED
+  { "Rest",          "Left",       "Restant" },  // STR_TV_LEFT
+  { "Vorheizen",     "Preheat",    "Préchauffe" },  // STR_TV_PREHEAT
+  { "Seriennr.",     "Serial no.", "N° de série" },  // STR_TV_SERIAL
+  { "Charge",        "Batch",      "Lot" },  // STR_TV_BATCH
+  { "Gruppe",        "Workgroup",  "Groupe" },  // STR_TV_WORKGROUP
+  { "Eigenschaften", "Properties", "Propriétés" },  // STR_TV_PROPS
+  { "Code",          "Code",       "Code" },  // STR_TV_CODE
+  // ── The full weight of a spool created off the pad ──
+  { "(angenommen)", "(assumed)",
+    "(supposé)" },  // STR_TAGNEW_W_ASSUMED
+  { "Füllmenge", "Full weight",
+    "Poids plein" },  // STR_OPT_FULL
+  { "%d g angenommen", "%d g assumed",
+    "%d g supposé" },  // STR_OPT_FULL_ASSUMED
+  { "Filament auf der vollen Spule, %d bis %d g", "Filament on the spool when full, %d to %d g",
+    "Filament de la bobine pleine, %d à %d g" },  // STR_OPT_FULL_RANGE
 };
 
 StringID tagWriteResultString(uint8_t code) {

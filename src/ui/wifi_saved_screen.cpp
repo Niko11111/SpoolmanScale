@@ -9,6 +9,7 @@
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "navigation.h"
+#include "services/app_settings.h"
 #include "services/wifi_known.h"
 #include "services/wifi_manager.h"
 #include "theme.h"
@@ -34,9 +35,11 @@ static lv_obj_t *s_scr   = nullptr;
 static lv_obj_t *s_popup = nullptr;
 // The full SSID per row: a title may be cut with dots on screen.
 static char s_rows[WIFI_KNOWN_MAX][WIFI_KNOWN_SSID_BYTES];
-// The network the popup is about, and a "Forget" parked for the loop.
+// The network the popup is about, and a "Forget" or "Make preferred" parked
+// for the loop: both write NVS and rebuild this screen.
 static char s_pick[WIFI_KNOWN_SSID_BYTES] = "";
 static bool s_forget_pending = false;
+static bool s_prefer_pending = false;
 
 void hideWifiSavedScreen() {
   releaseScreen(&s_popup);
@@ -72,6 +75,12 @@ static void onForget(lv_event_t *e) {
   releaseScreen(&s_popup);
 }
 
+static void onPrefer(lv_event_t *e) {
+  logSDf("BTN: SavedNetworks -> make %s preferred", s_pick);
+  s_prefer_pending = true;
+  releaseScreen(&s_popup);
+}
+
 // One line of the popup across its width, cut with dots where it is longer.
 static void popupLine(lv_obj_t *box, int y, const char *text, const lv_font_t *font, uint32_t col) {
   lv_obj_t *l = lv_label_create(box);
@@ -92,13 +101,15 @@ static lv_obj_t* popupButton(lv_obj_t *box, BtnAt at, const char *text, uint32_t
   return b;
 }
 
-// Connect where the scale is not on it; forget where it is not the
-// preferred one, whose stored choice the next boot would still use.
+// Connect where the scale is not on it, make preferred where it is on it but
+// would boot elsewhere; forget where it is not the preferred one, whose stored
+// choice the next boot would still use.
 static void showNetPopup(const char *ssid) {
   snprintf(s_pick, sizeof(s_pick), "%s", ssid);
   const NetState st = stateOf(ssid);
   const bool connect = !st.connected, forget = !st.preferred;
-  const int n = (connect ? 1 : 0) + (forget ? 1 : 0);
+  const bool prefer = st.connected && !st.preferred;
+  const int n = (connect || prefer ? 1 : 0) + (forget ? 1 : 0);
   const int actions_y = st.preferred ? WS_ACTIONS_Y_NOTE : WS_ACTIONS_Y;
   const int close_y = actions_y + (n ? WS_ROW_STEP : 0);
   lv_obj_t *box = uiPopupBox(&s_popup, WS_BOX_W, close_y + WS_BTN_H + WS_BOX_EXTRA);
@@ -113,6 +124,11 @@ static void showNetPopup(const char *ssid) {
   if (connect) {
     snprintf(buf, sizeof(buf), LV_SYMBOL_WIFI "  %s", T(STR_WIFI_CONNECT_NOW));
     lv_obj_add_event_cb(popupButton(box, {x, actions_y, w}, buf, UI_COL_ACCENT), onConnect, LV_EVENT_CLICKED, NULL);
+    x += w + WS_BTN_GAP;
+  }
+  if (prefer) {
+    snprintf(buf, sizeof(buf), LV_SYMBOL_OK "  %s", T(STR_WIFI_PREFER));
+    lv_obj_add_event_cb(popupButton(box, {x, actions_y, w}, buf, UI_COL_ACCENT), onPrefer, LV_EVENT_CLICKED, NULL);
     x += w + WS_BTN_GAP;
   }
   if (forget) {
@@ -158,9 +174,11 @@ void showWifiSavedScreen() {
 }
 
 void wifiSavedScreenTick() {
-  if (!s_forget_pending) return;
+  if (!s_forget_pending && !s_prefer_pending) return;
+  if (s_forget_pending) wifiKnownForgetSsid(s_pick);
+  if (s_prefer_pending) preferConnectedNetwork(s_pick);
   s_forget_pending = false;
-  wifiKnownForgetSsid(s_pick);
-  // Shown again with the row gone, unless the user has moved on meanwhile.
+  s_prefer_pending = false;
+  // Shown again with the new state, unless the user has moved on meanwhile.
   if (s_scr && !lv_obj_has_flag(s_scr, LV_OBJ_FLAG_HIDDEN)) showWifiSavedScreen();
 }

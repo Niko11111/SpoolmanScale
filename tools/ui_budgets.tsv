@@ -184,6 +184,14 @@ STR_KEY_DEL	18	128	NEVER	src/ui/ams_assign_screen.cpp:126 136 px number pad key,
 # wider than German and English needs its widget here, or check fails.
 STR_TV_UID	12	218	NEVER	src/ui/tag_view.cpp:299 caption of a TV_CW cell (218 px)
 STR_TV_CHIP	12	218	NEVER	src/ui/tag_view.cpp:300 caption of a TV_CW cell (218 px)
+STR_TV_CONSUMED	12	218	NEVER	src/ui/tag_view.cpp place() caption of a TV_CW cell (218 px)
+STR_TV_LEFT	12	218	NEVER	src/ui/tag_view.cpp place() caption of a TV_CW cell (218 px)
+STR_TV_PREHEAT	12	218	NEVER	src/ui/tag_view.cpp place() caption of a TV_CW cell (218 px)
+STR_TV_SERIAL	12	218	NEVER	src/ui/tag_view.cpp place() caption of a TV_CW cell (218 px)
+STR_TV_BATCH	12	218	NEVER	src/ui/tag_view.cpp place() caption of a TV_CW cell (218 px)
+STR_TV_WORKGROUP	12	218	NEVER	src/ui/tag_view.cpp place() caption of a TV_CW cell (218 px)
+STR_TV_PROPS	12	218	NEVER	src/ui/tag_view.cpp place() caption of a TV_CW cell (218 px)
+STR_TV_CODE	12	218	NEVER	src/ui/tag_view.cpp place() caption of a TV_CW cell (218 px)
 STR_TV_FMT_BLANK	16	150	NEVER	src/ui/tag_view.cpp:222 format in the header, oneLine TV_FMT_W
 STR_TV_FMT_UNKNOWN	16	150	NEVER	src/ui/tag_view.cpp:222 format in the header, oneLine TV_FMT_W
 STR_TV_FMT_NONE	16	150	NEVER	src/ui/tag_view.cpp:222 format in the header, oneLine TV_FMT_W

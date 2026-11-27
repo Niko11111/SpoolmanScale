@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include "hardware/display.h"
+#include "hardware/sound.h"
 #include "hardware/sd_logger.h"
 #include "lang.h"
 #include "services/prefs_store.h"
@@ -27,13 +28,60 @@ static void rebuildDisplayScreen() {
   lv_obj_clear_flag(scr_display, LV_OBJ_FLAG_HIDDEN);
 }
 
+// Which half of the Display/Sound screen is showing. The two share one tile in
+// Settings because there was no room for a fifth one, and the display half
+// already fills its page. Kept across visits, like any other screen state.
+enum { TAB_DISPLAY = 0, TAB_SOUND = 1 };
+static int s_tab = TAB_DISPLAY;
+
+static void buildDisplayTab(lv_obj_t *body);
+static void buildSoundTab(lv_obj_t *scr);
+
+// The two tabs sit in the header between back and close, where the title used
+// to be, so neither half loses a pixel of its page to them.
+static void buildTabs(lv_obj_t *scr) {
+  const int TAB_W = 176, TAB_H = 40, TAB_Y = 4, TAB_GAP = 8;
+  const int x0 = (LV_HOR_RES - 2 * TAB_W - TAB_GAP) / 2;
+  const int ids[2] = { STR_DISPLAY_TITLE, STR_SOUND_TITLE };
+  for (int i = 0; i < 2; i++) {
+    const bool active = (s_tab == i);
+    lv_obj_t *b = lv_btn_create(scr);
+    lv_obj_set_size(b, TAB_W, TAB_H);
+    lv_obj_set_pos(b, x0 + i * (TAB_W + TAB_GAP), TAB_Y);
+    lv_obj_set_style_radius(b, UI_RADIUS_BTN, 0);
+    lv_obj_t *l = lv_label_create(b);
+    lv_label_set_text(l, T((StringID)ids[i]));
+    lv_obj_set_style_text_font(l, UI_FONT_BODY, 0);
+    lv_obj_center(l);
+    // The same look as the choices on the Display tab.
+    uiSegmentLook(b, active ? SEG_PICKED : SEG_OFF);
+    lv_obj_add_event_cb(b, [](lv_event_t *e) {
+      const int tab = (int)(intptr_t)lv_event_get_user_data(e);
+      if (tab == s_tab) return;
+      s_tab = tab;
+      logSDf("UI: Display/Sound tab -> %s", tab == TAB_SOUND ? "Sound" : "Display");
+      rebuildDisplayScreen();
+    }, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+  }
+}
+
 void buildDisplayScreen() {
   logSD("BUILD: DisplayScreen");
   if (sd_verbose) logSD("[verbose] buildDisplayScreen: start");
   releaseScreen(&scr_display);
   scr_display = buildOverlayScreen();
-  buildSubHeader(scr_display, T(STR_DISPLAY_TITLE),
+  addBackButton(scr_display,
     [](lv_event_t *e){ logSD("BTN: Back -> Settings"); showSettingsScreen(); });
+  addCloseButton(scr_display);
+  buildTabs(scr_display);
+
+  // The sound half is a plain option list, the way every settings screen
+  // draws its switches.
+  if (s_tab == TAB_SOUND) {
+    buildSoundTab(scr_display);
+    if (sd_verbose) logSD("[verbose] buildDisplayScreen: done");
+    return;
+  }
 
   // Everything below the header sits in one frame, purely so the row
   // coordinates below can be read against a common origin instead of against
@@ -51,6 +99,12 @@ void buildDisplayScreen() {
   lv_obj_set_style_pad_all(body, 0, 0);
   lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE);
 
+  buildDisplayTab(body);
+
+  if (sd_verbose) logSD("[verbose] buildDisplayScreen: done");
+}
+
+static void buildDisplayTab(lv_obj_t *body) {
   // Row coordinates in one place: a stage is a label plus a button row 22 px
   // under it. Collected here so adding a stage does not mean re-deriving every
   // offset below it by hand.
@@ -113,11 +167,7 @@ void buildDisplayScreen() {
     const bool allowed = dim_vals[i] == 0 ||
                          ((cur_off == 0 || dim_vals[i] < cur_off) &&
                           (cur_sleep == 0 || dim_vals[i] < cur_sleep));
-    if (active) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ACCENT), 0);
-    if (!allowed) lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_radius(b, 8, 0);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_border_width(b, 0, 0);
     char buf[16];
     if (dim_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
@@ -128,17 +178,7 @@ void buildDisplayScreen() {
     lv_label_set_text(l, buf);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
-    if (active) {
-      lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ON_ACCENT), 0);
-    } else {
-      uiBtnRole(b, BTN_NEUTRAL);
-      // After the role, which would drop a dimmed fill and the grey caption.
-      if (!allowed) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_UNAVAILABLE), 0);
-    }
-    if (!allowed) {
-      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
-      lv_obj_set_style_border_opa(b, LV_OPA_60, 0);
-    }
+    uiSegmentLook(b, active ? SEG_PICKED : allowed ? SEG_OFF : SEG_UNAVAILABLE);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
       int val = (intptr_t)lv_event_get_user_data(e);
       dim_timeout_ms = val * 60000;
@@ -166,11 +206,7 @@ void buildDisplayScreen() {
     const bool allowed = off_vals[i] == 0 ||
                          ((cur_dim == 0 || off_vals[i] > cur_dim) &&
                           (cur_sleep == 0 || off_vals[i] < cur_sleep));
-    if (active) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ACCENT), 0);
-    if (!allowed) lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_radius(b, 8, 0);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_border_width(b, 0, 0);
     char buf[16];
     if (off_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
@@ -181,17 +217,7 @@ void buildDisplayScreen() {
     lv_label_set_text(l, buf);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
-    if (active) {
-      lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ON_ACCENT), 0);
-    } else {
-      uiBtnRole(b, BTN_NEUTRAL);
-      // After the role, which would drop a dimmed fill and the grey caption.
-      if (!allowed) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_UNAVAILABLE), 0);
-    }
-    if (!allowed) {
-      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
-      lv_obj_set_style_border_opa(b, LV_OPA_60, 0);
-    }
+    uiSegmentLook(b, active ? SEG_PICKED : allowed ? SEG_OFF : SEG_UNAVAILABLE);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
       int val = (intptr_t)lv_event_get_user_data(e);
       off_timeout_ms = val * 60000;
@@ -222,11 +248,7 @@ void buildDisplayScreen() {
     const bool allowed = sleep_vals[i] == 0 ||
                          ((cur_dim == 0 || sleep_vals[i] > cur_dim) &&
                           (cur_off == 0 || sleep_vals[i] > cur_off));
-    if (active) lv_obj_set_style_bg_color(b, lv_color_hex(UI_COL_ACCENT), 0);
-    if (!allowed) lv_obj_clear_flag(b, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_radius(b, 8, 0);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_set_style_border_width(b, 0, 0);
     char buf[16];
     if (sleep_vals[i] == 0) {
       copyT(buf, sizeof(buf), STR_SCREENOFF_NEVER);
@@ -237,17 +259,7 @@ void buildDisplayScreen() {
     lv_label_set_text(l, buf);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_ext_14, 0);
     lv_obj_center(l);
-    if (active) {
-      lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_ON_ACCENT), 0);
-    } else {
-      uiBtnRole(b, BTN_NEUTRAL);
-      // After the role, which would drop a dimmed fill and the grey caption.
-      if (!allowed) lv_obj_set_style_text_color(l, lv_color_hex(UI_COL_UNAVAILABLE), 0);
-    }
-    if (!allowed) {
-      lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
-      lv_obj_set_style_border_opa(b, LV_OPA_60, 0);
-    }
+    uiSegmentLook(b, active ? SEG_PICKED : allowed ? SEG_OFF : SEG_UNAVAILABLE);
     lv_obj_add_event_cb(b, [](lv_event_t *e) {
       int val = (intptr_t)lv_event_get_user_data(e);
       sleep_timeout_ms = val * 60000;
@@ -256,6 +268,167 @@ void buildDisplayScreen() {
       Serial.printf("Sleep timeout: %d min\n", val);
     }, LV_EVENT_CLICKED, (void*)(intptr_t)sleep_vals[i]);
   }
+}
 
-  if (sd_verbose) logSD("[verbose] buildDisplayScreen: done");
+// ---------------------------------------------------------------------------
+//  Sound tab
+// ---------------------------------------------------------------------------
+
+// Remembered across the rebuild a switch causes, so the list does not jump
+// back to the top under the finger that just used it.
+static lv_obj_t *s_sound_list = nullptr;
+static lv_coord_t s_sound_scroll = 0;
+
+// Every switch on this tab rebuilds the screen through releaseScreen(), which
+// frees the old one asynchronously - never under the running callback.
+static void rebuildSoundTab() {
+  s_sound_scroll = s_sound_list ? lv_obj_get_scroll_y(s_sound_list) : 0;
+  rebuildDisplayScreen();
+}
+
+// The NVS write can fail; the switch then still holds for this session.
+static void saveBool(const char *key, bool v) {
+  if (!prefsPutBool(key, v)) logSDf("Sound: saving %s failed, lost on restart", key);
+}
+
+// ON/OFF where the arrow would be, the way addSettingRow() shows a switch.
+static void showOnOff(lv_obj_t *btn, bool on) {
+  lv_obj_t *arr = lv_obj_get_child(btn, -1);
+  if (!arr) return;
+  char buf_v[8];
+  copyT(buf_v, sizeof(buf_v), on ? STR_ON : STR_OFF);
+  lv_label_set_text(arr, buf_v);
+  lv_obj_set_style_text_color(arr, lv_color_hex(on ? UI_COL_ACCENT : UI_COL_CAPTION), 0);
+  lv_obj_set_style_text_font(arr, UI_FONT_SMALL, 0);
+}
+
+// One switchable event group. Every tone the group can play is listed, so
+// switching it on lets you hear all of them once.
+struct SoundRow {
+  StringID    title;
+  bool       *value;
+  const char *key;
+  SoundEvent  tones[SND_PREVIEW_MAX];
+  uint8_t     count;
+};
+
+static const SoundRow SOUND_ROWS[] = {
+  { STR_SND_NFC,    &g_snd_nfc,    "snd_nfc",    { SND_NFC_READ, SND_TAG_UNKNOWN }, 2 },
+  { STR_SND_WRITE,  &g_snd_write,  "snd_write",  { SND_WRITE_OK, SND_WRITE_FAIL }, 2 },
+  { STR_SND_WEIGHT, &g_snd_weight, "snd_weight",
+    { SND_WEIGHT_OK, SND_WEIGHT_MANUAL, SND_WEIGHT_FAIL }, 3 },
+  { STR_SND_ASK,    &g_snd_ask,    "snd_ask",    { SND_ASK }, 1 },
+  { STR_SND_PRINT,  &g_snd_print,  "snd_print",  { SND_PRINT_OK, SND_PRINT_FAIL }, 2 },
+  { STR_SND_UPDATE, &g_snd_update, "snd_update", { SND_UPDATE_OK, SND_UPDATE_FAIL }, 2 },
+  { STR_SND_LINK,   &g_snd_link,   "snd_link",   { SND_LINK_LOST }, 1 },
+};
+static const int SOUND_ROW_COUNT = sizeof(SOUND_ROWS) / sizeof(SOUND_ROWS[0]);
+
+static void soundRowClicked(lv_event_t *e) {
+  const int i = (int)(intptr_t)lv_event_get_user_data(e);
+  if (i < 0 || i >= SOUND_ROW_COUNT) return;
+  const SoundRow &row = SOUND_ROWS[i];
+  *row.value = !*row.value;
+  saveBool(row.key, *row.value);
+  if (*row.value) soundPreview(row.tones, row.count);
+  rebuildSoundTab();
+}
+
+// Slider geometry inside a 456 x 64 list row: it starts right of the title
+// and keeps the knob clear of the row's right edge.
+static const int VOL_SLIDER_W         = 250;
+static const int VOL_SLIDER_H         = 20;
+static const int VOL_SLIDER_RIGHT_PX  = 24;
+// The track is 20 px; this makes the touch area 52 px high.
+static const int VOL_SLIDER_EXT_HIT   = 16;
+
+// Left is quiet, right is loud: the slider holds the level above the quietest
+// setting, g_snd_att_db the attenuation below full scale.
+static void buildVolumeRow(lv_obj_t *list) {
+  char buf_t[32];
+  copyT(buf_t, sizeof(buf_t), STR_SND_VOLUME_LABEL);
+  lv_obj_t *row = makeListBtn(list, LV_SYMBOL_VOLUME_MID, buf_t, nullptr);
+  // A frame for the slider, not a button: a tap beside it does nothing.
+  lv_obj_clear_flag(row, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_flag(lv_obj_get_child(row, -1), LV_OBJ_FLAG_HIDDEN);   // the arrow
+
+  lv_obj_t *slider = lv_slider_create(row);
+  lv_obj_set_size(slider, VOL_SLIDER_W, VOL_SLIDER_H);
+  lv_obj_align(slider, LV_ALIGN_RIGHT_MID, -VOL_SLIDER_RIGHT_PX, 0);
+  lv_obj_set_ext_click_area(slider, VOL_SLIDER_EXT_HIT);
+  lv_slider_set_range(slider, 0, SND_ATT_MAX_DB);
+  lv_slider_set_value(slider, SND_ATT_MAX_DB - g_snd_att_db, LV_ANIM_OFF);
+  lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COL_LINE), LV_PART_MAIN);
+  lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COL_ACCENT), LV_PART_INDICATOR);
+  lv_obj_set_style_bg_color(slider, lv_color_hex(UI_COL_ACCENT), LV_PART_KNOB);
+
+  lv_obj_add_event_cb(slider, [](lv_event_t *e) {
+    const int v = lv_slider_get_value(lv_event_get_target(e));
+    g_snd_att_db = (uint8_t)(SND_ATT_MAX_DB - v);
+  }, LV_EVENT_VALUE_CHANGED, NULL);
+  // Saved and heard once, on release: a tone per step while dragging would
+  // overrun the queue and sound like a siren.
+  lv_obj_add_event_cb(slider, [](lv_event_t *e) {
+    if (!prefsPutUChar("snd_att", g_snd_att_db))
+      logSD("Sound: saving the volume failed, lost on restart");
+    logSDf("Sound: volume -%u dB", (unsigned)g_snd_att_db);
+    soundPlay(SND_TEST);
+  }, LV_EVENT_RELEASED, NULL);
+}
+
+// Switches between the two tone sets and lets you hear the new one.
+static void buildToneSetRow(lv_obj_t *list) {
+  static const SoundEvent SAMPLE[SND_PREVIEW_MAX] = { SND_NFC_READ, SND_TAG_UNKNOWN, SND_WEIGHT_MANUAL };
+  char buf_t[32], buf_s[48];
+  copyT(buf_t, sizeof(buf_t), STR_SND_SET);
+  copyT(buf_s, sizeof(buf_s), g_snd_chime ? STR_SND_SET_CHIME : STR_SND_SET_BEEP);
+  lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_AUDIO, buf_t, buf_s);
+  lv_obj_add_event_cb(btn, [](lv_event_t *e) {
+    g_snd_chime = !g_snd_chime;
+    saveBool("snd_chime", g_snd_chime);
+    logSDf("Sound: tone set %s", g_snd_chime ? "chimes" : "beeps");
+    soundPreview(SAMPLE, SND_PREVIEW_MAX);
+    rebuildSoundTab();
+  }, LV_EVENT_CLICKED, NULL);
+}
+
+// The rows behind the master switch only appear while it is on: with sound
+// off they would be switches that do nothing. Volume and tone set come
+// first: they shape every tone, and the event rows below run past the screen.
+static void buildSoundEventRows(lv_obj_t *list) {
+  buildVolumeRow(list);
+  buildToneSetRow(list);
+  for (int i = 0; i < SOUND_ROW_COUNT; i++) {
+    char buf_t[48];
+    copyT(buf_t, sizeof(buf_t), SOUND_ROWS[i].title);
+    const bool on = *SOUND_ROWS[i].value;
+    lv_obj_t *btn = makeListBtn(list, LV_SYMBOL_BELL, buf_t, nullptr, on);
+    showOnOff(btn, on);
+    lv_obj_add_event_cb(btn, soundRowClicked, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+  }
+}
+
+static void buildSoundTab(lv_obj_t *scr) {
+  lv_obj_t *list = buildOptionList(scr);
+  s_sound_list = list;
+  char buf_t[32], buf_s[48];
+  copyT(buf_t, sizeof(buf_t), STR_SOUND_TITLE);
+  copyT(buf_s, sizeof(buf_s), STR_SOUND_SUB);
+  lv_obj_t *master = makeListBtn(list, LV_SYMBOL_VOLUME_MAX, buf_t, buf_s, g_sound_on);
+  showOnOff(master, g_sound_on);
+  lv_obj_add_event_cb(master, [](lv_event_t *e) {
+    g_sound_on = !g_sound_on;
+    saveBool("snd_on", g_sound_on);
+    logSDf("Sound: %s", g_sound_on ? "on" : "off");
+    if (g_sound_on) soundPlay(SND_TEST);
+    rebuildSoundTab();
+  }, LV_EVENT_CLICKED, NULL);
+
+  if (g_sound_on) buildSoundEventRows(list);
+
+  if (s_sound_scroll > 0) {
+    lv_obj_update_layout(list);
+    lv_obj_scroll_to_y(list, s_sound_scroll, LV_ANIM_OFF);
+    s_sound_scroll = 0;
+  }
 }
