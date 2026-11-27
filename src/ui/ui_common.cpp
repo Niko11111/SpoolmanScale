@@ -274,17 +274,29 @@ void addBackButton(lv_obj_t *parent, lv_event_cb_t cb) {
   lv_obj_center(lbl);
 }
 
-lv_obj_t* addCloseButton(lv_obj_t *parent) {
+// The X a screen and a popup share: one look and one size wherever it closes.
+static lv_obj_t* closeX(lv_obj_t* parent, lv_coord_t top) {
   lv_obj_t *btn = lv_btn_create(parent);
-  lv_obj_set_size(btn, 44, 44);
-  lv_obj_align(btn, LV_ALIGN_TOP_RIGHT, -4, 2);
+  lv_obj_set_size(btn, UI_TOUCH_MIN, UI_TOUCH_MIN);
+  lv_obj_align(btn, LV_ALIGN_TOP_RIGHT, -UI_CLOSE_X_INSET, top);
   lv_obj_set_style_radius(btn, UI_RADIUS_BTN, 0);
-  lv_obj_add_event_cb(btn, [](lv_event_t *e){ logSD("BTN: Close -> Main"); showMainScreen(); }, LV_EVENT_CLICKED, NULL);
   lv_obj_t *lbl = lv_label_create(btn);
   lv_label_set_text(lbl, LV_SYMBOL_CLOSE);
   lv_obj_set_style_text_font(lbl, &lv_font_montserrat_ext_18, 0);
   lv_obj_center(lbl);
   uiBtnRole(btn, BTN_CLOSE);
+  return btn;
+}
+
+lv_obj_t* addCloseButton(lv_obj_t *parent) {
+  lv_obj_t *btn = closeX(parent, UI_CLOSE_X_SCREEN_TOP);
+  lv_obj_add_event_cb(btn, [](lv_event_t *e){ logSD("BTN: Close -> Main"); showMainScreen(); }, LV_EVENT_CLICKED, NULL);
+  return btn;
+}
+
+lv_obj_t* uiPopupCloseX(lv_obj_t* box, lv_event_cb_t cb, void* user_data) {
+  lv_obj_t* btn = closeX(box, UI_CLOSE_X_INSET);
+  lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, user_data);
   return btn;
 }
 

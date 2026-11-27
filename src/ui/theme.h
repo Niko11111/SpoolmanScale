@@ -161,6 +161,8 @@ UiThemeCustom uiThemeCustomActive();
 #define UI_RADIUS_GAUGE        3    // the battery outline in the header
 #define UI_RADIUS_GAUGE_INNER  1    // its fill and its pole
 #define UI_TOUCH_MIN           44   // the smallest thing a finger is asked to hit
+#define UI_CLOSE_X_INSET       4    // the close X from the right edge, and a popup's from the top
+#define UI_CLOSE_X_SCREEN_TOP  2    // a screen's close X from the top, in its header bar
 #define UI_POPUP_W             400  // a two button question
 #define UI_POPUP_BTN_W         170
 #define UI_POPUP_BTN_H         56

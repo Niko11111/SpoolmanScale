@@ -16,6 +16,11 @@ lv_obj_t* addHeaderHelp(lv_obj_t *scr, int title_id, int text_id);
 // Returns the button, for a screen that has more to close than showMainScreen()
 // knows about.
 lv_obj_t* addCloseButton(lv_obj_t *parent);
+// The X of a popup with choices or pages, in its box's top right corner: the
+// look and size of a screen's X, but it only reports the tap. The popup closes
+// itself as a whole (not one page back, that is Back's job) and back to what
+// it was opened from, never to the home screen on its own.
+lv_obj_t* uiPopupCloseX(lv_obj_t* box, lv_event_cb_t cb, void* user_data);
 void buildSubHeader(lv_obj_t *parent, const char *title,
                     lv_event_cb_t back_cb, const char *back_hint = nullptr);
 lv_obj_t* buildOverlayScreen();

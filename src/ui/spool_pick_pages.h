@@ -23,6 +23,7 @@
 #define SPICK_TAP_TYPE    (-2)
 #define SPICK_TAP_BACK    (-3)
 #define SPICK_TAP_KEEP    (-4)   // the choice already made
+#define SPICK_TAP_CLOSE   (-5)   // the X: the whole popup closes, from any page
 #define SPICK_TAP_RECENT(i)  (1 + (i))
 #define SPICK_TAP_MINE(i)    (100 + (i))
 #define SPICK_TAP_SERVER(i)  (200 + (i))

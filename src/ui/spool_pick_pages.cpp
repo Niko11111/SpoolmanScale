@@ -7,14 +7,17 @@
 #include "ui/theme.h"
 #include "ui/ui_common.h"
 
-// The page inside the large popup's 2 px border: the title on top, the tiles
-// in a scrolling area under it, one row of buttons or a hint at the bottom.
+// The page inside the large popup's 2 px border: the title and the close X on
+// top, the tiles in a scrolling area under it, one row of buttons or a hint
+// at the bottom. The title sits on the X's middle.
 #define SPP_INNER_W   (UI_POPUP_LARGE_W - 4)
 #define SPP_EDGE      12
-#define SPP_TITLE_Y   10
-#define SPP_AREA_Y    44
+#define SPP_TITLE_Y   14
+#define SPP_AREA_Y    52
 #define SPP_AREA_W    (SPP_INNER_W - 2 * SPP_EDGE)
-#define SPP_AREA_H    188
+#define SPP_AREA_H    180
+// The title keeps clear of the X on both sides, so it stays centred.
+#define SPP_TITLE_W   (SPP_AREA_W - 2 * (UI_TOUCH_MIN + SPP_GAP))
 #define SPP_GAP       8
 #define SPP_TILE_W    ((SPP_AREA_W - SPP_GAP) / 2)
 #define SPP_TILE_H    52
@@ -47,11 +50,13 @@ static lv_obj_t* label(lv_obj_t* parent, const char* text, const lv_font_t* font
   return l;
 }
 
-static void title(lv_obj_t* box, const char* text) {
+// A page's title and the X that closes the whole popup from any page.
+static void header(lv_obj_t* box, const char* text) {
   lv_obj_t* l = label(box, text, UI_FONT_HEADLINE, UI_COL_INK);
   lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
-  lv_obj_set_style_max_width(l, SPP_AREA_W, 0);
+  lv_obj_set_style_max_width(l, SPP_TITLE_W, 0);
   lv_obj_align(l, LV_ALIGN_TOP_MID, 0, SPP_TITLE_Y);
+  uiPopupCloseX(box, onTap, (void*)(intptr_t)SPICK_TAP_CLOSE);
 }
 
 // The scrolling area the tiles go in.
@@ -210,7 +215,7 @@ static int section(lv_obj_t* a, const SpoolPickList& list, int top, const PickSe
 
 void spoolPickBuildList(lv_obj_t* box, const SpoolPickList& list, SpoolPickTap tap) {
   s_tap = tap;
-  title(box, T(STR_SPICK_TITLE));
+  header(box, T(STR_SPICK_TITLE));
   lv_obj_t* a = area(box);
   const int n = firstSection(a, list);
   const int top = section(a, list, tileY(0, n + 1),
@@ -278,7 +283,7 @@ static void letterStrip(lv_obj_t* box, int letter) {
 
 void spoolPickBuildMakers(lv_obj_t* box, int letter, int mark, SpoolPickTap tap) {
   s_tap = tap;
-  title(box, T(STR_SPICK_MAKERS));
+  header(box, T(STR_SPICK_MAKERS));
   letterStrip(box, letter);
   lv_obj_t* a = areaAt(box, SPP_MAKERS_Y, SPP_MAKERS_H);
   int n = 0;
@@ -291,7 +296,7 @@ void spoolPickBuildMakers(lv_obj_t* box, int letter, int mark, SpoolPickTap tap)
 
 void spoolPickBuildMaker(lv_obj_t* box, int maker, const SpoolChoice* current, SpoolPickTap tap) {
   s_tap = tap;
-  title(box, spoolCatalogMakerName(maker));
+  header(box, spoolCatalogMakerName(maker));
   lv_obj_t* a = area(box);
   char kind[48], weight[16];
   SpoolChoice c;

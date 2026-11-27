@@ -323,6 +323,12 @@ static void onMakerTap(int tap) {
 
 static void onPickTap(int tap) {
   if (s_want != s_page || s_rebuild) return;   // a page is already on its way
+  if (tap == SPICK_TAP_CLOSE) {
+    // Out of every page at once, Options included, as Done would leave it.
+    logSD("BTN: SpoolPick -> Close");
+    s_want = SO_NONE;
+    return;
+  }
   if (s_page == SO_LIST)        onListTap(tap);
   else if (s_page == SO_MAKERS) onMakersTap(tap);
   else if (s_page == SO_MAKER)  onMakerTap(tap);
